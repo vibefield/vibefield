@@ -20611,3 +20611,87 @@ desk-gates row 30's quit run.
 **Owed.**
 - Item 120 (fieldd TC-S3) is the fixer's. HAND (item 117) and IDLE (the 10-26 class) stay their own; neither is
   item 119's.
+
+## SP-1a — a spark's face in the kit: `SparkFace` by seed, status, size and frame; stills on one canvas, live faces on their stage's layer, the flat star from the same DNA; James's engine vendored byte for byte (2026-10-30; `6d7a3eb4c` — the doc `79b96e7cc` and the face `fcb6054ae` on CP-0 `aaa9c22fa`, main `aa2be72c9` merged — lane `sp1/sp1a-main`, in the mini's mint `0b40e56da` over main `5cc2d1108`)
+
+SP here is the sparks' ladder, SP-1a…SP-1d (`draft/compose-plane/thinking-roled-agents.md` §17). It is not the sync
+planes' SP-1…SP-8 or SP-D1…SP-D13.
+
+**What.**
+- **DESIGN.md §2.10 first** (`79b96e7cc`, +33, the doc commit before any code, on CP-0, where §2.10 lives).
+  - "Still and live" is amended: the live layer is one per STAGE (Chat's list, a thread's head, the sheet), never over
+    the window. A window-wide layer would draw a face over a menu or a sheet covering it.
+  - Outside a stage a face is a still. The stills share one off-screen canvas and keep the last 256 pictures. The flat
+    star comes from the same DNA (`agentDNA`'s points and palette).
+  - "Where it lives in code" is amended: the kit's `./spark-face` entry, with ONE adapter (`SparkFaceRenderer`, the flat
+    star, for the catalog and the tests, never the product). The engine is held by its SHA-256 and revision. The kit
+    stays pure at import.
+  - The same day's correction at its source: §2.10 had named `star-spark.js`. The falling star's engine is
+    `star-spark/engine.js`, vendored with its first user, SP-1c's hatch.
+- **The kit's `./spark-face` entry** (`fcb6054ae`; `packages/design-kit/src/spark-face/`, eleven files). It is drawn on
+  CP-0's `SparkFace.seed`.
+  - `vendor/sparks.js` is James's `research/spark` `agent-sparks/sparks.js` at `025b495`, byte for byte (1,196 lines,
+    sha256 `baa846ee…`). biome skips it, `vendor/sparks.d.ts` types it as a module that exports nothing, and
+    `sideEffects` names it.
+  - `engine.ts` is the typed door. It loads the engine, an IIFE that sets `window.Sparklings`, with ONE memoized dynamic
+    import, and tries again after a failed load.
+  - `SparkFace` (seed, status, size, framed, live, label):
+    - a still is drawn once by the window's one off-screen WebGL2 canvas and kept as a picture (256, keyed by
+      everything that changes one);
+    - a live face joins its `SparkStage`;
+    - without WebGL2 it is the flat star (an SVG of its DNA's points, the palette, the disc's gradient, two pill eyes);
+    - while the engine first loads, a framed face is its disc in `--vf-fill`.
+  - `SparkStage` is one canvas over the stage, holding up to 64 faces, each clipped to its scrollport. An
+    IntersectionObserver hides faces off screen, and the rAF loop runs only while a face is on screen.
+  - Reduced motion is the engine's own switch: set aside while the preference holds, restored when it lifts.
+  - The statuses: the nineteen ids and words, and S-4's four that need you (`SPARK_NEEDS_YOU`).
+- **The catalog** (Foundations, beside §2.8's faces; `FoundationsSection.tsx` +94, `foundations.css` +40,
+  `spark-fixtures.ts` +30): the nineteen statuses at 40, the framed and free ladders, a live stage of four, and the
+  flat star. All are the shipping view on fixed seeds. `docs/UI_SYSTEM.md` lists it (+4).
+- **Real vs not yet** (`fcb6054ae`'s own words): everything above is real. No product surface uses the face yet; Chat's
+  list (SP-1b) and the New spark sheet (SP-1c) will.
+
+**Found.**
+- §2.10's code paragraph named `star-spark.js`. It is corrected at its source in the doc commit.
+- No test scanned the kit for hex; only the account's face had a colour row. The spark face now has its own.
+- biome's a11y rule reads a `<canvas>` as focusable. The repo's other canvases carry no aria-hidden, and these follow
+  suit.
+- The `design-system` test prints 136 "not wrapped in act" warnings. The CO lane without SP-1a prints the same 136, so
+  they are not this slice's.
+- **The merge of main `aa2be72c9`** (`6d7a3eb4c`) had two conflicts, both config, each Q19's retirement of Fieldmarks
+  and Face Club (`7aaa9cace`) meeting an SP-1a addition. Main's removals and SP-1a's additions were both kept:
+  - `biome.jsonc`: main dropped the design-kit assets ignore; SP-1a adds `vendor/sparks.js`'s.
+  - `packages/design-kit/package.json`: main dropped `./icons` and `./face-stickers`; SP-1a adds `./spark-face`.
+- **The mint over main `5cc2d1108`** (`0b40e56da`) was a criss-cross: two merge bases, `aa2be72c9` and CP-0's
+  `aaa9c22fa`, merged by ort over their virtual base. The both-sides files were `biome.jsonc`, DESIGN.md and
+  `docs/UI_SYSTEM.md`, with 0 markers.
+- The landed diff (`5cc2d1108`..`0b40e56da`) is 19 files, +2,681 −2. It touches no fieldd file and no lock.
+
+**Validation.**
+- **The lane's tests** (`fcb6054ae`'s message: lane, nice 19, guard clear):
+  - `spark-face.test.tsx`, 12 new rows, all green: the hash and revision; one dynamic import and no static one; the
+    statuses are the engine's own and §2.10's table, read from DESIGN.md; the flat star's disc, points and eyes; its
+    palette; free with no disc; the eyes' scale at 32 and 40 px; aria; the adapter and a stage without WebGL2; reduced
+    motion; no colour literal in the kit's spark-face sources.
+  - Also green: `ui-system-boundaries` 34, `design-system` 8, `glyphs` and `user-face-view` (23 across the three). The
+    kit's `tsc --noEmit` was clean, and biome was clean on every touched file.
+- **The governing doc's as-built note** (`thinking-roled-agents.md` §17, "SP-1a, as built (2026-10-29)"; read, not
+  re-run):
+  - the light pass was green at 16:48:56Z, 203 of 203;
+  - its bundle was `sp1a-fcb6054ae`;
+  - *2026-10-29 16:55:44Z, first sight:* James saw the WebGL2 star in a real window, in the lane's browser catalog
+    (`pnpm dev:design:web`, Foundations → "Spark faces"), and clicked A on the board: "seen and the faces look right".
+    SP-1a stands as built.
+- **Not read:** the light pass against main that `6d7a3eb4c`'s message says "follows when the host is free" (no log of
+  it read here).
+- **Run 14: the mint `0b40e56da` over main `5cc2d1108`.** `pnpm verify` armed at 23:44:49Z (load 1.43) and exited 0 at
+  23:49:17Z (load 8.12): "Successfully ran target test for 28 projects"; vitest 10,300 / 0 / 18 (VF-PM's counts);
+  "cargo test results: ok 31, FAILED 0"; the tree clean. Run 14 was verify only; its logs hold no smoke row. Logs:
+  `lanes/ts6/logs/mini/run14/`.
+- **Landed:** main fast-forwarded `5cc2d1108` → `0b40e56da` at 23:51:00Z, and the push of 23:51:52Z
+  (`5cc2d1108`..`eb3a562ac`) carried it with FG-3a's records (VF-PM).
+
+**Owed.**
+- SP-1b (Chat), SP-1c (the New spark sheet, with the falling star's engine `star-spark/engine.js` and the NS-D3 fold
+  into §2.10's hatch paragraph) and SP-1d (the thread), per §17's ladder. No product surface draws the face until
+  SP-1b.

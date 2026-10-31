@@ -279,7 +279,7 @@
 | AR-7 later slices · AR-S4e3 | AR-7f leak detector, AR-7h bash/fish, AR-7i prewarm (AR-7j is a beta blocker) · S4e3 options, Needs/Needed by, EX6/EX7, other profiles | an AR lane | `thinking-ar7-typed-agents.md` §5.6, `thinking-ar-agents-settings.md` |
 | MV-8b ruling 8 | the transcript-provider migration: puppeteer 0.2.3 still ships adapter-claude's `observation/transcript/provider.ts` | its own track after MV | DECISIONS MV-8b, `docs/agent-plane/architecture.html` |
 | MV · SB | third-party views (MV-D14) · SB-4, SB-6 (after DS); SB's M4/L7/M5/L8 RULED at the built leans (Q14); SB-5 was delivered by PJ-7 (PJ-7's own Q4) | the next MV slot | `design-mv.md`, `thinking-spawn-bloom.md` |
-| CO | composing, characters, the Assistant view (DEFERRED 09-12, FV-D3/D8) · CO-D1…D16 unruled | AR's P0 exit witnessed | `thinking-four-views.md` §5–6, `draft/compose-plane/` |
+| CO | composing, characters, the Assistant view (DEFERRED 09-12, FV-D3/D8) · CO-D1…D16 unruled · re-entered as the compose plane (`draft/compose-plane/thinking-roled-agents.md`, 10-28); James's MT ruling of 10-30 (`draft/thinking-tool-plane.md` MT-D1, ruled 21:19–21:20Z) makes `compose/` the tool plane's first room · CP-0 LANDED 10-30 `b9ca35824` · SP-1a, a spark's face in the kit, LANDED 10-30 `0b40e56da` (the mini's run 14; LANDED "SP-1a") · SP-1b…1d next (`thinking-roled-agents.md` §17) | AR's P0 exit witnessed | `thinking-four-views.md` §5–6, `draft/compose-plane/` |
 | Desk Phase 6 | STRING (ports on objects, ICE's wires, the Wire tool DK-D29) · OBJECT KIT (panel, controls, screens, cables, `process`) · AGENT'S EYES (`canvas.read`/`canvas.render`, MCP canvas tools DK-D26; DT-5's control lane, the reserved `surface.control` scope) · UPLOAD PLANE + the mini-app bridge (SP-D9/SP-D7; UP v0.1 and MB v0.1 drafted 10-01; UP-D1…D8, MB-D1…D9 unruled; AH-D10's cross-device CAS rides it). It replaces the four dogfood packs (Q9); the microservice pack retires or becomes an OBJECT KIT `process` candidate | a thinking doc each; STRING first | `thinking-desk-migration.md`, `thinking-upload-plane.md`, `thinking-mini-app-bridge.md` |
 | Mind map pack | waits for STRING; redesign from Paper & String (MD-1…MD-15); v3's MM-D1…D14 were cut for the pre-desk canvas, MM-D14 moot (DK-D30) | STRING's thinking doc | `draft/mindmap/`, `thinking-mindmap-pack.md`, `predesign-mindmap-evidence.md` |
 | The bare mat's menu | "Paste here", "New note here": unbuilt | a desk lane | DESIGN.md §8, ICE design-015 §7 |
@@ -544,7 +544,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — composing | PARKED (deferred 09-12) | `thinking-four-views.md` §5–6, `draft/compose-plane/` | AR's P0 exit |
+| CO — composing | PARKED (deferred 09-12) · re-entered as the compose plane (10-28): CP-0 LANDED 10-30 `b9ca35824`, SP-1a LANDED 10-30 `0b40e56da`; SP-1b…1d next | `thinking-four-views.md` §5–6, `draft/compose-plane/` | AR's P0 exit |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
