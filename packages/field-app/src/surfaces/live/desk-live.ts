@@ -75,6 +75,8 @@ import type {
 } from "@vibecook/ice/desk/kit";
 import {
   BROWSER_DESK_PROFILE_REF,
+  type CoreSimulatorDeviceTypeIdV1,
+  type CoreSimulatorRuntimeIdV1,
   LIVE_SURFACE_FPS_BUCKETS_V1,
   type LiveSurfaceBrowserEmulationV1,
   type LiveSurfaceBrowserStateV1,
@@ -210,6 +212,12 @@ export interface DeskLiveSimulatorRow {
   readonly condition: LiveSurfaceSimulatorConditionV1 | null;
   readonly acting: LiveSurfaceDeviceVerbV1 | null;
   readonly degraded: boolean;
+  /** PT-S3 (D4) — and the device main ATTACHED, as its facts say it: its name as simctl says it (with no device, its
+   * type's), its type and its runtime (R3: not the binding's where this Mac lacks the bound one) — null: unsaid. Never a
+   * UDID: main's facts carry none. */
+  readonly name: string | null;
+  readonly deviceType: CoreSimulatorDeviceTypeIdV1 | null;
+  readonly runtime: CoreSimulatorRuntimeIdV1 | null;
 }
 
 /** A page's favicon as a face's words carry it (`LiveInfo.extra.favicon`): a key to compare, the image's type, its bytes. */
@@ -1118,7 +1126,16 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         simulator:
           source === "browser"
             ? null
-            : { is: said ?? null, act: null, condition: null, acting: null, degraded: false },
+            : {
+                is: said ?? null,
+                act: null,
+                condition: null,
+                acting: null,
+                degraded: false,
+                name: null,
+                deviceType: null,
+                runtime: null,
+              },
         acts: 0,
       }),
     });
@@ -1823,6 +1840,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
             condition: f?.condition ?? null,
             acting: f?.acting ?? null,
             degraded: f?.degraded === true,
+            // PT-S3 (D4): the device attached, by name — each picked, never the facts whole (they pass unknown keys through)
+            name: f?.name ?? null,
+            deviceType: f?.deviceType ?? null,
+            runtime: f?.runtime ?? null,
           },
           acts: tally.acts,
         };

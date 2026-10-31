@@ -10,7 +10,8 @@
 //  - it is a FACE of the pages' cap: it waits while the pages hold the slots, a page is rested for it in the hand, and a
 //    device that stops gives its slot back;
 //  - its still is filed under its BINDING (R15) — laid into a face reopened on the same device, never into one bound anew —
-//    and never said (`extra.still`, R14).
+//    and never said (`extra.still`, R14);
+//  - PT-S3 (D4): its row names the device main ATTACHED — name, type, runtime, each picked by name from main's facts.
 import {
   LiveSurfaceDeviceVerbV1,
   LiveSurfaceIosSimulatorDeviceSourceV1,
@@ -200,7 +201,16 @@ describe("PT-S2 — a bound Simulator's lane on the desk's LIVE service", () => 
     expect(t.live.faces()[0]).toMatchObject({
       key: PHONE,
       source: "ios-simulator",
-      simulator: { is: null, act: null, condition: null, acting: null, degraded: false },
+      simulator: {
+        is: null,
+        act: null,
+        condition: null,
+        acting: null,
+        degraded: false,
+        name: null,
+        deviceType: null,
+        runtime: null,
+      },
       acts: 0,
     });
     t.live.open("k-page", PAGE, () => {});
@@ -304,6 +314,9 @@ describe("PT-S2 — a bound Simulator's lane on the desk's LIVE service", () => 
       condition: "streaming",
       acting: null,
       degraded: true,
+      name: "iPhone 17 Pro",
+      deviceType: null,
+      runtime: null,
     });
     // off view: at rest (the last frame as a still)
     face.demand(PHONE_UNSEEN);
@@ -332,6 +345,9 @@ describe("PT-S2 — a bound Simulator's lane on the desk's LIVE service", () => 
       condition: "off",
       acting: "boot",
       degraded: false,
+      name: "iPhone 17 Pro",
+      deviceType: null,
+      runtime: null,
     });
     off?.act?.();
     expect(handle.devices).toHaveLength(1);
@@ -441,11 +457,65 @@ describe("PT-S2 — a bound Simulator's lane on the desk's LIVE service", () => 
         rested: false,
         still: null,
         stillAt: null,
-        simulator: { is: "live", act: null, condition: "streaming", acting: null, degraded: false },
+        simulator: {
+          is: "live",
+          act: null,
+          condition: "streaming",
+          acting: null,
+          degraded: false,
+          name: "iPhone 17 Pro",
+          deviceType: null,
+          runtime: null,
+        },
         acts: 0,
       },
     ]);
     expect(live.stats()).toMatchObject({ opened: 1, open: 1, presented: 1, acts: 0, alive: 1 });
+  });
+
+  it("PT-S3 (D4): the row names the device main ATTACHED — its name, its type and its runtime (R3: not the binding's where this Mac lacks it), each null while main has not said it; picked by name, so nothing else main's facts carry reaches a smoke", () => {
+    const { presentation, handle, live } = phone({}, null);
+    const row = () => live.faces()[0]?.simulator;
+    // nothing said yet: no device named
+    expect(row()).toMatchObject({ name: null, deviceType: null, runtime: null });
+    // no device of the type on this Mac: its type's name, nothing attached
+    simSays(presentation, handle, { condition: "no-device", name: "iPhone 17 Pro" });
+    expect(row()).toMatchObject({
+      is: "no-device",
+      act: "create",
+      name: "iPhone 17 Pro",
+      deviceType: null,
+      runtime: null,
+    });
+    // attached — on another runtime than the bound one: the row says what main attached, under the device's own name
+    const udid = "1BD54690-0A1B-4C2D-8E3F-0123456789AB";
+    simSays(presentation, handle, {
+      condition: "off",
+      name: "pts3-a1b2-1",
+      deviceType: SIM.deviceType,
+      runtime: SIM_OTHER.runtime,
+      // a key the contract's passthrough would carry: never the row's
+      stray: udid,
+    });
+    expect(row()).toEqual({
+      is: "off",
+      act: "boot",
+      condition: "off",
+      acting: null,
+      degraded: false,
+      name: "pts3-a1b2-1",
+      deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+      runtime: "com.apple.CoreSimulator.SimRuntime.iOS-18-6",
+    });
+    expect(JSON.stringify(live.faces())).not.toContain(udid);
+    // main says the device no more: none named again
+    simSays(presentation, handle, { condition: "no-simulator" });
+    expect(row()).toMatchObject({
+      is: "no-simulator",
+      name: null,
+      deviceType: null,
+      runtime: null,
+    });
   });
 
   it("the page verbs REFUSE a device — a navigation (counted) and a re-spec; it is called by the device's name as main says it", () => {
