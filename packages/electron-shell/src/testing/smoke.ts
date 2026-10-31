@@ -9781,6 +9781,221 @@ export async function runSmokeGodview(opts: {
     }
     verdict["headKeys"] = headKeys;
 
+    // 11k. THE HUB IN THE HEAD, UNDER GODVIEW'S COVER (HN-8, PL-D1…PL-D3;
+    //      DESIGN.md §8 "The head", the package circle). Under a cover the pill
+    //      is the desk's and hides with it, and Artifacts' door is the package
+    //      circle at the head's left (the terminals' title bar while they are
+    //      maximized). Pressed the way a pointer presses it, it grows the pill's
+    //      sheet on its Artifacts shelf alone: the circle steps aside, on and
+    //      saying Close, and the pill's own sheet stays shut. The shelf is never
+    //      blank — it hosts the Hub's own `hud.side-panel` contribution (the
+    //      Browser plugin's Artifact Hub, once, in this sheet only), or says in
+    //      one of its four waits why none is bound: off, can't run, opening, or
+    //      not starting, the last after the head's own 10 s. The rung waits for
+    //      the shelf to settle past "Opening…", says which it found, and folds
+    //      the sheet back with the sheet's own package, where the circle stood.
+    //      Added 2026-10-31: HN B3's records claimed this witness of the row and
+    //      no rung gave it (LANDED "HN B3", corrected at run 38b). Before 11h,
+    //      which must stay last.
+    const hubInHead: Record<string, string> = {};
+    /** The shelf's four waits as a person reads them (`HeadView`'s words; DESIGN.md §8
+     * "Artifacts"). */
+    const HUB_WAITS = [
+      "Artifacts are off",
+      "Artifacts can't run",
+      "Opening Artifacts…",
+      "Artifacts aren't starting",
+    ] as const;
+    type HubBox = { x: number; y: number; w: number; h: number };
+    type HubFacts = {
+      view: string;
+      circle: { open: boolean; bar: boolean; box: HubBox | null } | null;
+      sheet: { open: boolean; inert: boolean; box: HubBox; name: string | null } | null;
+      /** The pill's own sheet: its `data-open`, or "absent". */
+      pill: string;
+      shown: boolean;
+      /** The Hub's panel stands in the covered sheet's shelf. */
+      hub: boolean;
+      /** Artifact Hubs in the whole page: one while bound, never one in each sheet. */
+      hubs: number;
+      /** The words of the wait the shelf says, or null. */
+      wait: string | null;
+    };
+    /** The covered sheet, its circle and its shelf as the page shows them now. Under a cover
+     * `.vf-head-sheet` is the circle's sheet alone: the pill is `.vf-head-place`. */
+    const HUB_FACTS = `(() => {
+      const box = (el) => {
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return {
+          x: Math.round(r.left),
+          y: Math.round(r.top),
+          w: Math.round(r.width),
+          h: Math.round(r.height),
+        };
+      };
+      const circle = document.querySelector(".vf-package-circle");
+      const sheet = document.querySelector(".vf-head-sheet");
+      const shelf = sheet === null ? null : sheet.querySelector('[data-shelf="artifacts"]');
+      const face =
+        shelf === null ? null : shelf.querySelector(".vf-head-waits-face:not([data-leaving])");
+      const hub =
+        shelf === null ? null : shelf.querySelector('.vf-head-hub [aria-label="Artifact Hub"]');
+      return {
+        view: ${VIEW_NOW},
+        circle: circle === null ? null : {
+          open: circle.getAttribute("data-open") === "true",
+          bar: circle.hasAttribute("data-bar"),
+          box: box(circle.querySelector(".vf-package-button")),
+        },
+        sheet: sheet === null ? null : {
+          open: sheet.getAttribute("data-open") === "true",
+          inert: sheet.hasAttribute("inert"),
+          box: box(sheet),
+          name: sheet.querySelector(".vf-head-sheet-name")?.textContent ?? null,
+        },
+        pill: document.querySelector(".vf-head-place")?.getAttribute("data-open") ?? "absent",
+        shown: shelf !== null && shelf.hasAttribute("data-shown"),
+        hub: hub !== null,
+        hubs: document.querySelectorAll('[aria-label="Artifact Hub"]').length,
+        wait: face === null ? null : (face.textContent ?? "").trim(),
+      };
+    })()`;
+    const hubFacts = async (): Promise<HubFacts> =>
+      (await win.webContents.executeJavaScript(HUB_FACTS)) as HubFacts;
+    const waitSaid = (facts: HubFacts): (typeof HUB_WAITS)[number] | undefined =>
+      HUB_WAITS.find((words) => facts.wait?.startsWith(words) === true);
+    /** A press the way a pointer presses it, at the middle of what `selector` names: moved
+     * there, down, up — a click with a count, so the circle takes it as the pointer's. */
+    const pressAt = async (selector: string): Promise<{ x: number; y: number }> => {
+      const at = (await win.webContents.executeJavaScript(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)});
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      })()`)) as { x: number; y: number } | null;
+      if (at === null) throw new Error(`no ${selector} to press under Godview`);
+      win.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
+      await sleep(40);
+      win.webContents.sendInputEvent({
+        type: "mouseDown",
+        x: at.x,
+        y: at.y,
+        button: "left",
+        clickCount: 1,
+      });
+      await sleep(50);
+      win.webContents.sendInputEvent({
+        type: "mouseUp",
+        x: at.x,
+        y: at.y,
+        button: "left",
+        clickCount: 1,
+      });
+      return at;
+    };
+    const shut = await hubFacts();
+    const circle = shut.circle;
+    if (shut.view !== "godview") throw new Error(`11k began outside Godview: ${shut.view}`);
+    if (circle === null || circle.box === null) {
+      throw new Error(`Godview's head has no package circle: ${JSON.stringify(shut)}`);
+    }
+    if (circle.open || shut.sheet?.open === true) {
+      throw new Error(`the covered sheet was already open: ${JSON.stringify(shut)}`);
+    }
+    const circleBox = circle.box;
+    const circleAt = await pressAt(".vf-package-circle .vf-package-button");
+    await untilRenderer(
+      win,
+      "the circle's sheet grown on Artifacts",
+      `(() => { const f = ${HUB_FACTS};
+        return f.sheet !== null && f.sheet.open && !f.sheet.inert && f.shown
+          ? "ok" : JSON.stringify(f); })()`,
+      5_000,
+    );
+    // It grows over its 600ms (the island curve): read it once it has.
+    await sleep(800);
+    const grown = await hubFacts();
+    if (grown.sheet === null || grown.circle === null) {
+      throw new Error(`the covered sheet went as it grew: ${JSON.stringify(grown)}`);
+    }
+    if (!grown.circle.open) {
+      throw new Error(`the circle did not step aside for its sheet: ${JSON.stringify(grown)}`);
+    }
+    if (grown.pill !== "false") {
+      throw new Error(`the pill's own sheet opened under Godview: ${JSON.stringify(grown)}`);
+    }
+    if (grown.sheet.name !== "Artifacts") {
+      throw new Error(`the covered sheet is not Artifacts': ${JSON.stringify(grown)}`);
+    }
+    // Grown, not its size: DESIGN.md §8 holds the size, and the catalog's plates draw it.
+    if (grown.sheet.box.w < circleBox.w * 4 || grown.sheet.box.h < circleBox.h * 4) {
+      throw new Error(
+        `the sheet did not grow out of the circle: ${JSON.stringify(circleBox)} → ` +
+          JSON.stringify(grown.sheet.box),
+      );
+    }
+    const sheetBox = grown.sheet.box;
+    // The shelf settles: the Hub binds, or a wait stands. "Opening…" is a passage — the
+    // head turns it to "not starting" after its own 10 s (`HUB_START_BOUND_MS`) — so it is
+    // waited past.
+    const settleBy = Date.now() + 15_000;
+    let shelf = grown;
+    let said = waitSaid(shelf);
+    while (
+      !shelf.hub &&
+      (said === undefined || said === "Opening Artifacts…") &&
+      Date.now() < settleBy
+    ) {
+      await sleep(250);
+      shelf = await hubFacts();
+      said = waitSaid(shelf);
+    }
+    if (shelf.hub) {
+      if (shelf.hubs !== 1) {
+        throw new Error(
+          `${shelf.hubs} Artifact Hubs in the page, not one: ${JSON.stringify(shelf)}`,
+        );
+      }
+      hubInHead["the shelf"] = 'the Hub bound: its "Artifact Hub" in the shelf, once in the page';
+    } else if (said === undefined) {
+      throw new Error(
+        `the Artifacts shelf said nothing, neither the Hub nor a wait: ${JSON.stringify(shelf)}`,
+      );
+    } else if (said === "Opening Artifacts…") {
+      throw new Error(
+        `the shelf still said "${said}" after 15 s, past the head's own 10 s: ` +
+          JSON.stringify(shelf),
+      );
+    } else {
+      hubInHead["the shelf"] = `no Hub bound, and the shelf said why: "${said}"`;
+    }
+    // The sheet's own package ("Close  Esc"), where the circle stood, folds it into the circle.
+    const packAt = await pressAt(".vf-head-sheet .vf-head-pack");
+    await untilRenderer(
+      win,
+      "the sheet folded back into the circle",
+      `(() => { const f = ${HUB_FACTS};
+        const shut = f.sheet !== null && !f.sheet.open && f.sheet.inert;
+        return shut && f.circle !== null && !f.circle.open ? "ok" : JSON.stringify(f); })()`,
+      5_000,
+    );
+    const folded = await hubFacts();
+    if (folded.view !== "godview") {
+      throw new Error(`the Artifacts sheet moved the window: ${folded.view}`);
+    }
+    hubInHead["the circle"] =
+      `under Godview at ${circleBox.x},${circleBox.y}, ${circleBox.w} × ${circleBox.h}` +
+      `${circle.bar ? " in the terminals' bar" : ""}; pressed by the pointer at ` +
+      `${circleAt.x},${circleAt.y}`;
+    hubInHead["the sheet"] =
+      `grew on Artifacts to ${sheetBox.w} × ${sheetBox.h}; the circle stepped aside, and the ` +
+      `pill's own sheet stayed shut`;
+    hubInHead["the fold"] =
+      `the sheet's own package at ${packAt.x},${packAt.y} folded it into the circle; ` +
+      "still in Godview";
+    verdict["hubInHead"] = hubInHead;
+
     // 11h. THE LINE'S KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-2,
     //      §11) — the probes B and ⌘T owe before they ship, in 11g's form: a
     //      pane holds focus, the ear listens at every pane input, each key is
