@@ -164,7 +164,7 @@
   the Hub in tiles; the edges leave the frame), as the mint `e31e55ecd`, run 28, verify only (LANDED "HN B3"). The
   track is built: all sixteen marks.
 - Next: nothing built is left. The record's as-built lines and its Status flip go to the next draft queue.
-- Owed: HN's smoke:godview rungs on James's console window, after item 124's fix (§5; smoke:canvas's are paid, run
+- Owed: HN's smoke:godview rungs on James's console window, now that item 124 is fixed (`5321b12ac`, 10-31) (§5; smoke:canvas's are paid, run
   30b's and item 123's four HAND rows at run 35b); D10, one caption style for both of the
   sheet's shelves as the page drew (§9); a card dropped on the desk is not smoke-covered
   in Electron; G30 (⌘C in a pane) and RO-31 (Copy in History) upstream (§7).
@@ -434,7 +434,7 @@
   (IOS-8f) (and PJ-7 run 3's n/a cases, if 10-19's round missed them).
 - HN's smoke:godview rungs on his console window, after item 124's fix: the re-aimed 11h (a card played into a real
   pane), 11j (a program's OSC 52 reaching main's copy door, no card) and the Hub in the head (LANDED "HN B1", "HN
-  B2", "HN B3"). Run 35b (M35 `733f24ed5`) went red before them at QL-2's launch rung (item 124, cp-landing's).
+  B2", "HN B3"). Run 35b (M35 `733f24ed5`) went red before them at QL-2's launch rung (item 124, fixed 10-31 by `5321b12ac`, LANDED "Item 124"; the launch rung's own witness is owed to the same window).
   smoke:canvas's HN rows are paid: run 30b's, and the four HAND rows at run 35b (item 123). *Corrected
   2026-10-31 (item 123): this line said "HN B1's and B2's" and "runs 22 and 26" while it listed B3's rows too.*
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.

@@ -22042,6 +22042,12 @@ first room. cp-landing built it on the MT lead's build note (signed 2026-10-30 2
     provisional, by the MT lead's ruling 7, pending the history room's eval.
   - It never refuses a launch: an agent that cannot take the briefing, or a door that does not answer, means no
     briefing.
+  > **Correction (2026-10-31, item 124; LANDED "Item 124"):** "It never refuses a launch" held only for an agent that
+  > does not DECLARE the briefing, and fieldd's gate read only that declaration. An executable lacking a field its agent
+  > declares refused the launch itself: puppeteer's Claude adapter probes `claude --help` and refused every briefed
+  > birth of a Claude without `--mcp-config` (`UNSUPPORTED_LAUNCH_FIELD`). So from this entry until item 124, such a
+  > Claude could start no agent. Since item 124 such a birth is made once more without the briefing, and says so
+  > (`door: "off"`).
   - LANDED "CP-1d" said ordinary runs carry no briefing. That was true when it landed. Since this entry they carry the
     plane's.
 - **Walls:** R29 is re-aimed at `packages/fieldd/src/tool-plane`. R30 is new: the rooms import no Electron, no plugin
@@ -22935,3 +22941,54 @@ One commit, `098ae53d1` on `2eb42abd8`, 16 files, +368 −35:
 - PG-1e0 (the projection bench, then 1e1 or 1e2 by the numbers), with PG-1f (the PU-I petition and its pin test).
 - The F-H2 rider, the old owner's fallback (a design question) and the kit comment at `AgentTerminalFace.swift`.
 - Items 109 and 110; the cap read on the phone under the link conditioner (PG-9).
+
+## Item 124 — a birth whose executable takes no door is made once more without the briefing, and says so: from MT-0 until this fix a Claude without `--mcp-config` could start no agent, and `smoke:godview` row 23 was red with it (2026-10-31; `7f640eaf0` on main `904bd1029`, lane `fix/item124-door-launch`, in the mini's mint `5321b12ac` over main `90089dd63`)
+
+VF-PM filed it at 05:59Z. It was witnessed on James's open console: 35b on M35 `733f24ed5`, exit 2 at 05:52:34Z, "the launch
+did not go home on the agent's first frame". The kept HOME's fieldd.ndjson named it: "This Claude executable does not
+support launch field: mcpServers." VF-PM ruled the shape at 06:07Z.
+
+**The finding, plainly.** From MT-0 (`6cb570308`, 2026-10-30) every plain run carries the tool plane's door. puppeteer's
+Claude adapter (0.3.2) probes the executable itself (`claude --help`, for `--mcp-config`, `--allowedTools`,
+`--append-system-prompt-file` and `--system-prompt-snapshot`). It refuses a launch whose briefing carries a field the
+binary does not advertise (`AGENT_LAUNCH_REFUSED`, refusal `UNSUPPORTED_LAUNCH_FIELD`) before any process starts.
+fieldd's own gate read the agent's DECLARED capability, never the executable's. So a Claude older than `--mcp-config`
+could start NO agent, deterministically.
+- It stood unseen from MT-0's landing until this fix: row 23 had not run since rows 17 and 23 went owed. The smoke's stub
+  is that Claude, since its `--help` named none of the four flags. verify never runs the row.
+- The runtime exposes no detection API at 0.3.2, and walls R20–R22 keep fieldd off the adapter. So the fix catches the
+  refusal; it cannot ask first.
+
+**What.**
+- **The seam** (`fieldd/src/agent-door-launch.ts`, `birthWithDoor`): a briefed birth refused for the door, read by its
+  codes and never its words, launches ONCE more with no briefing, each attempt its own creation request. A second
+  refusal is the launch's own and surfaces as before. Nothing loops.
+- **Every briefed birth** goes through it (`AgentRuntimeService.briefedBirth`): `spawn`, the native `resume`, and
+  `resumeFromRecord`. That last covers a spark's open and replacement, and a plain run's resume-when-idle. A spark
+  relaunched this way still thinks with its folder's `CLAUDE.md`, which Claude reads itself. Its tools are off for this
+  process.
+- **Its facts, never silent:**
+  - the fold's row says `door: "off"` (`AgentSessionSummary.door`, optional and OPEN; on the summary only, never in the
+    signed record, so the next birth is briefed afresh);
+  - the ledger writes `tools.door.withheld` {provider, spark?, refusal}, around the second attempt and with its outcome;
+  - the log carries the WARN `fieldd.agents.door_withheld` with puppeteer's own sentence.
+- **The harness:** the smoke's stub (`typed-agent.ts`'s `STUB_HELP`) declares the four flags a current Claude declares,
+  so row 23's launch rung walks the door path. A stub-as-old-Claude smoke row is possible; it is not owed.
+- **The docs:** `spark-briefings.md` gets a dated correction at the source of "the check comes first", and MT-0's entry
+  above gets one under its "It never refuses a launch".
+
+**Not yet.**
+- No pixel reads `door: "off"`: Chat's and Godview's reading come with their UI slice, DESIGN.md first.
+- The field row does not carry it, so nothing collides with SP-1b's (`spark`, `origin`) or the fixer's (`stop`)
+  `AgentFieldRow` widenings.
+
+**Validation.**
+- **In the lane** (nice 19, guard clear):
+  - `fieldd/test/agent-door-launch.test.ts` (5). RED-FIRST by mutation: with the pre-fix birth (the refusal surfaces), 2
+    of 5 fail; restored byte for byte, 5/5.
+  - contracts' `agent-session.test.ts`: the door-off golden (`agent-session-summary.door-off.json`); the tolerant
+    reader's row; an OPEN word; the record keeps no `door`.
+- **The lane light** (`lanes/item124/logs/light-7f640eaf0.out`): `== item124-light GREEN 06:17:04Z; HEAD 7f640eaf0`, on the first run (06:15:54–06:17:04Z, nice 19, guard clear). preflight, walls, biome, tsc for contracts, fieldd and electron-shell, and `pnpm gen` (no diff) were all 0. contracts: 54 files, 1401/1401. fieldd: agent-door-launch, agent-field, agent-briefing, agent-desk, tool-plane-door and tool-plane-service, 87/87, under the lane config with no globalSetup. electron-shell: typed-agent 11/11.
+- **Run 38:** the mint `5321b12ac` (tree `9efe3a6d1`) over main `90089dd63`, with no both-sides files. `pnpm verify` armed at 06:36:14Z and exited 0 at 06:41:01Z (287 s), HEAD `5321b12ac`. Test Files 823 passed (+1, agent-door-launch) | 3 skipped; Tests 11,039 passed (11,031 plus this item's 8) | 0 failed | 18 skipped; cargo 33 `test result: ok.` (532/0/14); gen:check clean; preflight's standing R23 `acp` WARN only; check:ios-fixtures 185 identical. The rows: agent-door-launch 5 (new), agent-briefing 18, agent-runtime 39, agent-session 59 + 2 skipped, and contracts' agent-session 28 (the door-off golden). The lottery rows were all green, with no re-run (VF-PM's read of the mini's `lanes/ts6/logs/mini/run38/`).
+- **Landed:** main fast-forwarded to `5321b12ac` at 2026-10-31T06:42:58Z by land-stack.sh (the fixer, on VF-PM's GO): `90089dd63..5321b12ac`, 9 files, +368 −47.
+- **The smoke's witness** (row 23's launch rung on the door path) is the next console window, James's hand: armed on M38 at 06:41:32Z (its keeper 06:41:31Z) behind the idle gate, on James's open console, smoke:canvas first and then smoke:godview. Its verdict is owed to the desk-gates ledger, in a later commit of a1's or VF-PM's.
