@@ -273,7 +273,68 @@
   color: var(--vf-text-secondary);
 }
 
-/* M6: fades only, halved. No settle, no travel, no dip. */
+/* CH-D4 — a spark needs you: Chat's cell takes the orange dot, 6, 9 in from the
+   cell's right and 5 down (DESIGN.md §8 "Chat's list"). */
+.vf-views-dot {
+  position: absolute;
+  top: 5px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vf-orange);
+  pointer-events: none;
+}
+
+/* "Vela needs you" — over Chat's cell (the track's fourth: 3 + 3 × 48 + 23 from
+   the track's left, which stands 6 in from the line's), 10 above the line (the
+   track is 42 tall, centred in the line's 52), for 2.4s: its face at 18, then
+   the words in the attention ink (CH-D4). */
+.vf-views-note {
+  position: absolute;
+  bottom: calc(100% + 15px);
+  left: 170px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  color: var(--vf-ink-attention);
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: vf-views-note 2400ms ease both;
+}
+
+@keyframes vf-views-note {
+  0% {
+    opacity: 0;
+    translate: 0 4px;
+  }
+
+  10% {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* M6: fades only, halved. No settle, no travel, no dip; the note still says
+   its words, without rising. */
 @media (prefers-reduced-motion: reduce) {
   .vf-cover,
   .vf-cover[data-cover="up"] {
@@ -310,5 +371,20 @@
 
   .vf-views-thumb-face[data-dip] {
     animation: none;
+  }
+
+  @keyframes vf-views-note {
+    0% {
+      opacity: 0;
+    }
+
+    10%,
+    80% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0;
+    }
   }
 }

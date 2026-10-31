@@ -106,6 +106,28 @@ describe("UI system ownership boundaries", () => {
     );
     // HN-8 (PL-D2): the package circle's plates stage it, and never restyle it
     expect(catalogCss).not.toMatch(/^\.vf-package-/m);
+    // SP-1b: Chat's plate is a box on the frame's ground; the panel's rules are the product's
+    expect(catalogCss).not.toMatch(/^\.vf-chat(?:\b|-)/m);
+  });
+
+  it("keeps Chat's fixture an ADAPTER — the product's reading over fixture sparks and rows, never the panel's markup (SP-1b)", () => {
+    // The catalog stands in for what fieldd answers — the sparks it keeps and the field board's rows — and runs them
+    // through the PRODUCT's own reading (`sparkEntriesOf`); the panel it mounts is the shipping one. Never the
+    // panel's classes, never a stylesheet, never the product's doors, its feed or the host.
+    const preview = source("design-system/ChatPreview.tsx");
+    const fixtures = source("design-system/chat-fixtures.ts");
+    expect(preview).toMatch(/<ChatPanelView\s/u);
+    expect(fixtures).toContain("sparkEntriesOf");
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/className="vf-chat/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("sparksPortOver");
+      expect(file).not.toContain("startSparksFeed");
+    }
+    // the frame's cover mounts the same preview, as it mounts History's
+    expect(source("design-system/ViewFramePreview.tsx")).toContain("<ChatPreview");
   });
 
   it("keeps the face's own styling free of colour literals of any spelling (UA-7)", () => {
@@ -888,6 +910,9 @@ describe("UI system ownership boundaries", () => {
       "field/desk/pegboard/PegboardView.tsx",
       "field/desk/peers/PeersOnTheMat.tsx",
       "field/desk/peers/PeersView.tsx",
+      // SP-1b — Chat
+      "chat/ChatView.tsx",
+      "chat/ChatPanelView.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -926,6 +951,7 @@ describe("UI system ownership boundaries", () => {
       "field/desk/bar/selection-bar.css",
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",
+      "chat/chat.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }

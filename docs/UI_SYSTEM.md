@@ -83,8 +83,12 @@ The catalog currently mounts these shipping views directly:
   surfaces wear, a live `SparkStage`, and the flat star through the face's one adapter
   (`SparkFaceRenderer`), all on fixed seeds (`spark-fixtures.ts`)
 - the view frame (One Frame FR-1): the views track in every state the design's plates show — at
-  rest, ⌘ held, Godview, History, importing, Chat, Windows' keys — and the cover rising,
-  swapping and lowering over a field with Godview's stage and History's room, on fixture state
+  rest, ⌘ held, Godview, History, importing, Chat, a spark that needs you (the cell's dot and its
+  note), Windows' keys — and the cover rising, swapping and lowering over a field with Godview's
+  stage, History's room and Chat, on fixture state
+- Chat (SP-1b, DESIGN.md §8 "Chat's list"): the shipping `ChatPanelView` over the product's own
+  reading (`sparkEntriesOf`) of fixture sparks and field rows (`chat-fixtures.ts`) — the list, a
+  spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
   waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the
