@@ -279,8 +279,10 @@ export function commandEnv(mode, env, door) {
 // ─── the preflight: FAILS LOUD ────────────────────────────────────────────────────────────────────────────────────────
 
 const NATIVE_FIX = "pnpm --filter @vibefield/desktop build:live-surfaces-native";
-// the root has no `build:all`; the desktop's is the one smoke:canvas runs
-const BUILD_FIX = "pnpm --filter @vibefield/desktop build:all";
+// the root has no `build:all`; the desktop's is the one smoke:canvas runs. Past nx's cache: a build nx serves from its
+// local cache leaves the outputs' mtimes as they were, and `gen` (or a checkout) moves a source's mtime with its bytes
+// unchanged — a plain build:all would never clear an "older than"
+const BUILD_FIX = "pnpm --filter @vibefield/desktop build:all --skip-nx-cache";
 
 /** The newest mtime under `path` — a file's own, a directory's newest file at any depth (`.DS_Store` aside); null when
  * absent or empty. */

@@ -466,8 +466,14 @@ test("distFresh: the plugin's dist and the shell's dist stale or missing, or a s
   const stalePlugin = distFresh({ ...FRESH_DIST, plugin: 50 });
   assert.deepEqual(
     stalePlugin.map((f) => [f.what, f.fix]),
-    [["plugins/simulator/dist", "pnpm --filter @vibefield/desktop build:all"]],
+    [["plugins/simulator/dist", "pnpm --filter @vibefield/desktop build:all --skip-nx-cache"]],
   );
+  // the light's find: `gen` rewrites a generated source byte-for-byte (its mtime moves, its content does not), and a
+  // build:all nx serves from its local cache leaves the outputs' mtimes as they were, so a plain build:all never
+  // clears an "older" — every build fix forces the build past the cache
+  const everyFix = distFresh({ ...FRESH_DIST, plugin: null, main: 150, smoke: null, renderer: 10 });
+  assert.ok(everyFix.length >= 4);
+  for (const f of everyFix) assert.match(f.fix, / build:all --skip-nx-cache$/u);
   const staleShell = distFresh({ ...FRESH_DIST, main: 150, renderer: null });
   assert.deepEqual(
     staleShell.map((f) => [f.what, f.why.split(" ")[0]]),
