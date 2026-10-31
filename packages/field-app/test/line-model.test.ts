@@ -67,7 +67,7 @@ describe("the view's one act (FR-3, FC-D3)", () => {
     expect(createActOf("canvas", "mac", "vibe-field")?.title).toBeUndefined();
   });
 
-  it("draws no act for the Assistant, which is not built — never Canvas's Objects in its place (FC-D2)", () => {
+  it("draws no act for Chat until its sheet brings New spark (SP-1c) — never Canvas's Objects in its place", () => {
     expect(createActOf("assistant", "mac")).toBeNull();
     expect(createActOf("assistant", "other", "vibe-field")).toBeNull();
   });

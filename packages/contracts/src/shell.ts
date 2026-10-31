@@ -151,17 +151,11 @@ export type ShellCommandRequest = z.infer<typeof ShellCommandRequest>;
 
 /** The frame's four views (One Frame FR-1; FC-D2, FV-D7), in the views
  * track's order. The canvas is the ground floor (FV-D1) and the others are
- * drawn as one cover over it. The Assistant's cell exists and waits: it is not
- * built, so no window is ever in it ({@link frameViewBuilt}). */
+ * drawn as one cover over it. The fourth is Chat (SP-1b, 2026-10-31), whose
+ * wire id stays `assistant`. Every view is built: FC-D2's waiting cell retired
+ * with SP-1b, and with it the predicate main and the frame asked of it. */
 export const FrameView = z.enum(["canvas", "godview", "history", "assistant"]);
 export type FrameView = z.infer<typeof FrameView>;
-
-/** Whether a view can be the active one yet — every view but the Assistant
- * (FC-D2: its cell is drawn, faint, "not built yet"). Main refuses the rest,
- * and the frame says so instead of asking. */
-export function frameViewBuilt(view: FrameView): boolean {
-  return view !== "assistant";
-}
 
 /** main → renderer: THIS window's active view (FR-1; GT-D2's Godview bit,
  * grown into the four views and retired into them).

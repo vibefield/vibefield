@@ -1,6 +1,6 @@
 import type { FrameView, ScreenshotCaptureResult } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
-import { type ReactElement, useEffect, useState } from "react";
+import { type ReactElement, useState } from "react";
 import { Composer, type ComposerHost } from "../frame/Composer";
 import { ComposerLineView } from "../frame/ComposerLine";
 import type { FrameSurface } from "../frame/frame-surface";
@@ -43,9 +43,9 @@ export const FIXTURE_CAPTURE_HOST: ComposerHost = {
 
 /** The states the One Frame page's Chrome & Composer plates show for the
  * frame (`data-state`): at rest on the canvas, ⌘ held, Godview, History, the
- * arc while History imports (AO-4b), and ⌘4's note — each in the catalog's
+ * arc while History imports (AO-4b), and Chat (SP-1b) — each in the catalog's
  * light and dark. */
-export const FRAME_STATES = ["rest", "cmd", "gv", "hx", "import", "note"] as const;
+export const FRAME_STATES = ["rest", "cmd", "gv", "hx", "import", "chat"] as const;
 export type FrameState = (typeof FRAME_STATES)[number];
 
 const STATE_LABEL: Record<FrameState, string> = {
@@ -54,7 +54,7 @@ const STATE_LABEL: Record<FrameState, string> = {
   gv: "Godview",
   hx: "History",
   import: "Importing",
-  note: "⌘4 waits",
+  chat: "Chat",
 };
 
 const VIEW_OF: Record<FrameState, FrameView> = {
@@ -63,7 +63,15 @@ const VIEW_OF: Record<FrameState, FrameView> = {
   gv: "godview",
   hx: "history",
   import: "canvas",
-  note: "canvas",
+  chat: "assistant",
+};
+
+/** The state a cell's view opens, as the controls name it. */
+const STATE_OF: Record<FrameView, FrameState> = {
+  canvas: "rest",
+  godview: "gv",
+  history: "hx",
+  assistant: "chat",
 };
 
 /** One state of the track, at the line's left end — the page's §04 plates,
@@ -75,15 +83,6 @@ export function ViewsTrackSpecimen({
   state: FrameState;
   keys?: ViewKeys;
 }): ReactElement {
-  // The note lives 1.4s and goes, as it does in the product; on a plate it is
-  // said again every 1.6s — the controller's timing in fixture — so the state
-  // can be looked at rather than caught.
-  const [said, setSaid] = useState(1);
-  useEffect(() => {
-    if (state !== "note") return;
-    const timer = window.setInterval(() => setSaid((count) => count + 1), 1_600);
-    return () => window.clearInterval(timer);
-  }, [state]);
   return (
     <div className="vf-ds-views-plate" data-state={state}>
       <div className="vf-ds-line-stage">
@@ -96,7 +95,6 @@ export function ViewsTrackSpecimen({
               view={VIEW_OF[state]}
               keys={keys}
               held={state === "cmd"}
-              note={state === "note" ? said : null}
               importing={state === "import"}
             />
           }
@@ -115,7 +113,6 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
   const [shown, setShown] = useState<FrameView>("canvas");
   const [cover, setCover] = useState<CoverState>(() => coverAt("canvas"));
   const [press, setPress] = useState<ViewKeyPress | null>(null);
-  const [note, setNote] = useState<number | null>(null);
   const [surface, setSurface] = useState<FrameSurface | null>(null);
 
   // The owner, in fixture: the window moves as soon as it is asked.
@@ -124,18 +121,8 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
     setCover(coverAfter(cover, shown, view));
   }
 
-  useEffect(() => {
-    if (note === null) return;
-    const timer = window.setTimeout(() => setNote(null), 1_400);
-    return () => window.clearTimeout(timer);
-  }, [note]);
-
   const choose = (next: FrameState): void => {
     setState(next);
-    if (next === "note") {
-      setNote((seq) => (seq ?? 0) + 1);
-      return;
-    }
     const target = VIEW_OF[next];
     setPress((last) => ({ seq: (last?.seq ?? 0) + 1, moved: target !== view }));
     setView(target);
@@ -197,12 +184,8 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
               keys={keys === "Mac" ? "mac" : "other"}
               held={state === "cmd"}
               press={press}
-              note={note}
               importing={state === "import"}
-              onSelect={(asked) => {
-                if (asked === "assistant") choose("note");
-                else choose(asked === "canvas" ? "rest" : asked === "godview" ? "gv" : "hx");
-              }}
+              onSelect={(asked) => choose(STATE_OF[asked])}
             />
           }
         />

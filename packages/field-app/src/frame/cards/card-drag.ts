@@ -1,4 +1,4 @@
-import { FrameView, frameViewBuilt } from "@vibefield/contracts";
+import { FrameView } from "@vibefield/contracts";
 import { useSyncExternalStore } from "react";
 import { getRendererLogger } from "../../logging";
 import { sayOnLine } from "../line-door";
@@ -234,10 +234,10 @@ function overLine(x: number, y: number): boolean {
   return r.width > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
 }
 
-/** The view's cell on top at the pointer — not one that waits ("not built yet"). */
+/** The view's cell on top at the pointer. */
 function viewCellAt(top: Element | null): { view: FrameView; box: CardBox } | null {
   const cell = top?.closest<HTMLElement>(VIEW_CELL_SELECTOR) ?? null;
-  if (cell === null || cell.getAttribute("aria-disabled") === "true") return null;
+  if (cell === null) return null;
   const view = FrameView.safeParse(cell.dataset.view);
   const box = boxOf(cell.getBoundingClientRect());
   return view.success && box !== null ? { view: view.data, box } : null;
@@ -250,12 +250,12 @@ function stopSpring(drag: LiveDrag): void {
 }
 
 /** HN-D6 — over a view's cell its clock runs: held SPRING_LOAD_MS, that view opens under the
- * card, once per hover; leaving the cell resets it. The cell of the view already open, or of
- * one not built, opens nothing. */
+ * card, once per hover; leaving the cell resets it. The cell of the view already open opens
+ * nothing. */
 function springAt(drag: LiveDrag, cell: { view: FrameView; box: CardBox } | null): void {
   if (drag.spring !== null && cell !== null && drag.spring.view === cell.view) return;
   stopSpring(drag);
-  if (cell === null || cell.view === getActiveView() || !frameViewBuilt(cell.view)) return;
+  if (cell === null || cell.view === getActiveView()) return;
   const spring: Spring = {
     view: cell.view,
     box: cell.box,

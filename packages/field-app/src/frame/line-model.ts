@@ -26,11 +26,10 @@ function newTerminalAct(keys: ViewKeys): CreateAct {
   return { glyph: "start", name: "New terminal", key: keys === "mac" ? "⌘T" : "Ctrl+T" };
 }
 
-/** The view's one act, or null where the view has none on the line yet: the
- * Assistant is not built (FC-D2), so no window is ever in it, and its act comes
- * with Chat (SP-1) — never Canvas's Objects drawn in its place. `project`: the
- * project History's room shows (its name), where History's create opens its
- * terminal — History's line door says so. */
+/** The view's one act, or null where the view has none on the line yet: Chat's,
+ * New spark (⌘N), comes with its sheet (SP-1c) — never Canvas's Objects drawn
+ * in its place. `project`: the project History's room shows (its name), where
+ * History's create opens its terminal — History's line door says so. */
 export function createActOf(
   view: FrameView,
   keys: ViewKeys,

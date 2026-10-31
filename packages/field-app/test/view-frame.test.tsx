@@ -209,7 +209,7 @@ describe("the view's mirror (one owner, main's)", () => {
 });
 
 describe("the views track (DESIGN.md §8)", () => {
-  it("draws four cells, each printing its key under its glyph, the Assistant waiting", () => {
+  it("draws four cells, each printing its key under its glyph — Chat the fourth (SP-1b)", () => {
     mountFrame();
     const cells = [...track().querySelectorAll<HTMLButtonElement>(".vf-views-cell")];
     expect(cells.map((button) => button.dataset.view)).toEqual([
@@ -233,8 +233,9 @@ describe("the views track (DESIGN.md §8)", () => {
     expect(cell("godview").getAttribute("aria-keyshortcuts")).toBe("Meta+2");
     expect(cell("godview").title).toBe("Godview  ⌘2");
     expect(cell("canvas").getAttribute("aria-pressed")).toBe("true");
-    expect(cell("assistant").getAttribute("aria-disabled")).toBe("true");
-    expect(cell("assistant").getAttribute("aria-label")).toBe("Assistant, not built yet");
+    expect(cell("assistant").getAttribute("aria-pressed")).toBe("false");
+    expect(cell("assistant").getAttribute("aria-label")).toBe("Chat");
+    expect(cell("assistant").title).toBe("Chat  ⌘4");
   });
 
   it("prints Ctrl off the Mac (FC-D4: Ctrl+1…4 on Windows)", () => {
@@ -255,11 +256,11 @@ describe("the views track (DESIGN.md §8)", () => {
     expect(asked).toEqual(["godview", "history"]);
   });
 
-  it("answers the waiting cell with its note, and asks nothing", () => {
+  it("asks the owner for Chat as for any view — no cell waits (SP-1b)", () => {
     mountFrame();
     act(() => cell("assistant").click());
-    expect(asked).toEqual([]);
-    expect(track().querySelector(".vf-views-note")?.textContent).toBe("Assistant · not built yet");
+    expect(asked).toEqual(["assistant"]);
+    expect(track().querySelector(".vf-views-note")).toBeNull();
   });
 });
 
@@ -348,21 +349,12 @@ describe("⌘1–⌘4, the product chords (GT-D21, FC-D4)", () => {
     expect(track().querySelector(".vf-views-thumb-face")?.getAttribute("data-dip")).toBe("landed");
   });
 
-  it("⌘4 says the Assistant waits, for 1.4s, and moves nothing", () => {
-    vi.useFakeTimers();
+  it("⌘4 opens Chat from inside a focused pane, and the pane never hears it (SP-1b)", () => {
     mountFrame();
     const { heard } = focusedPane();
     press(pane as HTMLElement, command("4"));
-    expect(asked).toEqual([]);
+    expect(asked).toEqual(["assistant"]);
     expect(heard).toEqual([]);
-    expect(track().querySelector(".vf-views-note")?.textContent).toBe("Assistant · not built yet");
-    act(() => {
-      vi.advanceTimersByTime(1_399);
-    });
-    expect(track().querySelector(".vf-views-note")).not.toBeNull();
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
     expect(track().querySelector(".vf-views-note")).toBeNull();
   });
 

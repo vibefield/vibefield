@@ -1,4 +1,4 @@
-import { type FrameView, frameViewBuilt } from "@vibefield/contracts";
+import type { FrameView } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { CSSProperties, KeyboardEvent, ReactElement } from "react";
 import { FRAME_VIEWS, type ViewKeys, viewKeyLabel, viewKeyParts, viewKeyShortcut } from "./views";
@@ -27,11 +27,7 @@ export interface ViewsTrackViewProps {
   held?: boolean;
   /** The last press of a view's key, or null before the first. */
   press?: ViewKeyPress | null;
-  /** While non-null, the waiting cell says so ("Assistant · not built yet");
-   * a new number says it again. */
-  note?: number | null;
-  /** A cell was chosen — by a click, Enter or Space. The waiting cell is
-   * chosen too: the controller answers it with the note. */
+  /** A cell was chosen — by a click, Enter or Space. */
   onSelect?: (view: FrameView) => void;
   /** AO-4b — History imports (`history/first-reading.ts`): its cell carries
    * the arc (DESIGN.md §6) and its name says so, "History, importing". */
@@ -50,7 +46,6 @@ export function ViewsTrackView({
   keys,
   held = false,
   press = null,
-  note = null,
   onSelect,
   importing = false,
 }: ViewsTrackViewProps): ReactElement {
@@ -85,8 +80,7 @@ export function ViewsTrackView({
           />
         </span>
         {FRAME_VIEWS.map((cell) => {
-          const built = frameViewBuilt(cell.view);
-          const on = built && cell.view === view;
+          const on = cell.view === view;
           const arc = importing && cell.view === "history";
           const { modifier, digit } = viewKeyParts(cell, keys);
           return (
@@ -96,18 +90,10 @@ export function ViewsTrackView({
               className="vf-views-cell"
               data-view={cell.view}
               {...(on ? { "data-on": "true" } : {})}
-              {...(built ? { "aria-pressed": on } : { "aria-disabled": true })}
-              aria-label={
-                built
-                  ? arc
-                    ? `${cell.name}, importing`
-                    : cell.name
-                  : `${cell.name}, not built yet`
-              }
+              aria-pressed={on}
+              aria-label={arc ? `${cell.name}, importing` : cell.name}
               aria-keyshortcuts={viewKeyShortcut(cell, keys)}
-              title={
-                built ? `${cell.name}  ${viewKeyLabel(cell, keys)}` : `${cell.name} — not built yet`
-              }
+              title={`${cell.name}  ${viewKeyLabel(cell, keys)}`}
               onClick={() => onSelect?.(cell.view)}
               onKeyDown={(event) => onKeyDown(event, cell.view)}
             >
@@ -125,11 +111,6 @@ export function ViewsTrackView({
           );
         })}
       </div>
-      {note === null ? null : (
-        <div key={note} className="vf-views-note" role="status">
-          Assistant · not built yet
-        </div>
-      )}
     </div>
   );
 }

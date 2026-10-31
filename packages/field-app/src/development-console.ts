@@ -357,8 +357,7 @@ export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {
  * view it names, the view the window was in, and what the frame did with it.
  *
  * The delivery probe's ear at the FRAME. A chord can be caught and change
- * nothing a harness can see — ⌘2 inside Godview, ⌘4 while the Assistant waits —
- * so the frame says what it heard, and the probe sets that beside the pane's
+ * nothing a harness can see — ⌘2 inside Godview — so the frame says what it heard, and the probe sets that beside the pane's
  * own ear (which must stay deaf) and the view the window ends in. Emitted from
  * the frame's own handler, never from a harness's wishes, and only in the
  * godview smoke's modes. */
@@ -367,8 +366,8 @@ export interface ViewKeyFacts {
   view: string;
   from: string;
   /** "moved": the frame asked for another view; "stayed": the window was
-   * already there; "waits": the view is not built (its note said so). */
-  outcome: "moved" | "stayed" | "waits";
+   * already there. */
+  outcome: "moved" | "stayed";
 }
 
 export function emitViewKeyMarker(facts: ViewKeyFacts): void {

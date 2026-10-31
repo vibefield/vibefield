@@ -6,7 +6,7 @@ import { ViewRegistry, ViewWindowState } from "../src/main/view";
 
 // Main owns each window's view (One Frame FR-1 — GT-D2's Godview bit, grown
 // into the frame's four views). These lock the consequences: a request names a
-// view, the Assistant waits, every answer reaches both the page and the menu,
+// view, Chat's included, every answer reaches both the page and the menu,
 // and a destroyed window is never written to.
 
 interface FakeContents {
@@ -43,16 +43,17 @@ describe("ViewWindowState", () => {
     expect(state.set("canvas").view).toBe("canvas");
   });
 
-  it("refuses the Assistant while it waits, and answers with where the window is (FC-D2)", () => {
+  it("goes to Chat as to any view, and answers with where the window is (SP-1b)", () => {
     const onChanged = vi.fn();
     const { contents, fake } = fakeContents();
     const state = new ViewWindowState(contents, { onChanged });
     state.set("godview");
     fake.sent.length = 0;
-    expect(state.set("assistant")).toEqual({ view: "godview" });
-    // still answered, so a page that asked is never left waiting
-    expect(fake.sent).toEqual([{ channel: IPC_CHANNELS.viewState, payload: { view: "godview" } }]);
-    expect(onChanged).toHaveBeenLastCalledWith({ view: "godview" }, contents);
+    expect(state.set("assistant")).toEqual({ view: "assistant" });
+    expect(fake.sent).toEqual([
+      { channel: IPC_CHANNELS.viewState, payload: { view: "assistant" } },
+    ]);
+    expect(onChanged).toHaveBeenLastCalledWith({ view: "assistant" }, contents);
   });
 
   it("publishes to the renderer on every request, changed or not", () => {

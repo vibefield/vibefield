@@ -115,15 +115,20 @@ describe("buildAppMenu", () => {
   });
 
   it.each(PLATFORMS)(
-    "keeps the Assistant present and waiting, its key still said (%s)",
+    "names the fourth view Chat and asks for it as for the others (%s)",
     (platform) => {
+      asked.length = 0;
       const item = find(
         buildAppMenu(platform, { view: "canvas" }, actions),
         VIEW_ITEM_IDS.assistant,
       );
-      expect(item).toMatchObject({ enabled: false, accelerator: "CommandOrControl+4" });
-      expect(item?.label).toBe("Assistant · not built yet");
-      expect(item?.click).toBeUndefined();
+      expect(item).toMatchObject({
+        enabled: true,
+        label: "Chat",
+        accelerator: "CommandOrControl+4",
+      });
+      item?.click?.();
+      expect(asked).toEqual(["assistant"]);
     },
   );
 

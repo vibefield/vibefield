@@ -208,8 +208,8 @@ export function ChromeSection({
           <ViewsTrackSpecimen state="rest" keys="other" />
         </div>
         <p className="vf-ds-stage-caption">
-          Every state the page's plates show for the track — at rest, ⌘ held, Godview, History, ⌘4's
-          note, and the keys as Windows prints them — in this page's theme.
+          Every state the page's plates show for the track — at rest, ⌘ held, Godview, History,
+          importing, Chat, and the keys as Windows prints them — in this page's theme.
         </p>
       </Specimen>
 

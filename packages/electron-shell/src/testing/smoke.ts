@@ -8817,15 +8817,16 @@ export async function runSmokeGodview(opts: {
     //      pressed the way a keyboard presses it. Three facts per key: the
     //      FRAME heard it (its VIEW_KEY line says what it did), the PANE never
     //      did (ghostty's goto_tab), and the window ends in the view the key
-    //      names. ⌘2 and ⌘4 move nothing a screen shows from here — the window
-    //      is already in Godview, and the Assistant waits — so for them the
-    //      frame's own line is the proof of delivery. `sendInputEvent`, like
+    //      names. ⌘2 moves nothing a screen shows from here — the window is
+    //      already in Godview — so for it the frame's own line is the proof of
+    //      delivery; ⌘4 opens Chat (SP-1b), under which the pane lets go of
+    //      the keyboard, as it does under History. `sendInputEvent`, like
     //      11e's keys: below AppKit's key-equivalent dispatch, so this is the
     //      page's road; the View menu's darwin accelerators stand behind it and
     //      are not what this row measures.
     const viewKeyFromPane = async (
       view: FrameView,
-      want: { outcome: "moved" | "stayed" | "waits"; endsIn: FrameView },
+      want: { outcome: "moved" | "stayed"; endsIn: FrameView },
     ): Promise<string> => {
       const digit = VIEW_DIGIT[view];
       await focusDeck(win);
@@ -8853,12 +8854,19 @@ export async function runSmokeGodview(opts: {
       return `${facts.from} → ${want.endsIn} (${facts.outcome}); the pane never heard it`;
     };
     const viewKeys: Record<string, string> = {};
-    viewKeys["4"] = await viewKeyFromPane("assistant", { outcome: "waits", endsIn: "godview" });
+    viewKeys["4"] = await viewKeyFromPane("assistant", { outcome: "moved", endsIn: "assistant" });
     await untilRenderer(
       win,
-      "the Assistant's note over its cell",
-      `(document.querySelector(".vf-views-note")?.textContent ?? "").includes("not built yet") ? "ok" : "no note"`,
+      "the pane letting go of the keyboard under Chat",
+      `document.activeElement?.classList.contains("terminal-input") ? "still focused" : "ok"`,
       5_000,
+    );
+    pressViewKey(win, "godview");
+    await untilRenderer(
+      win,
+      "⌘2 out of Chat",
+      `${VIEW_NOW} === "godview" ? "ok" : ${VIEW_NOW}`,
+      10_000,
     );
     viewKeys["2"] = await viewKeyFromPane("godview", { outcome: "stayed", endsIn: "godview" });
     viewKeys["3"] = await viewKeyFromPane("history", { outcome: "moved", endsIn: "history" });

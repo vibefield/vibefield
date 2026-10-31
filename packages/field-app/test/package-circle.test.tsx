@@ -139,7 +139,7 @@ const placeOf = (selector: string): [string | null, string | null] => {
 };
 
 describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
-  it("stands under a cover alone — Godview, History, the Assistant's cell once built — and on Canvas the pill holds the package", () => {
+  it("stands under a cover alone — Godview, History and Chat — and on Canvas the pill holds the package", () => {
     mount();
     expect(circle()).toBeNull();
     act(() => setViewNow?.("godview"));

@@ -244,7 +244,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       [...(container?.querySelectorAll(".vf-ds-views-plate") ?? [])].map((plate) =>
         plate.getAttribute("data-state"),
       ),
-    ).toEqual(["rest", "cmd", "gv", "hx", "import", "note", "rest"]);
+    ).toEqual(["rest", "cmd", "gv", "hx", "import", "chat", "rest"]);
     // AO-4b — History's arc on the shipping track, on the canvas while it imports
     const importing = container?.querySelector('.vf-ds-views-plate[data-state="import"]');
     expect(

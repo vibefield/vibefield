@@ -1,4 +1,4 @@
-import { type FrameView, frameViewBuilt } from "@vibefield/contracts";
+import type { FrameView } from "@vibefield/contracts";
 import type { GlyphName } from "@vibefield/design-kit/glyphs";
 import { createActOf } from "./line-model";
 import { FRAME_VIEWS, type ViewKeys, viewKeyLabel } from "./views";
@@ -76,12 +76,12 @@ export function frameActGroups(
     name: cell.name,
     glyph: cell.glyph,
     key: viewKeyLabel(cell, keys),
-    waits: frameViewBuilt(cell.view) ? null : "not built yet",
+    waits: null,
     run: { kind: "view", view: cell.view },
   }));
   // The line's create, as the line names and keys it in this view (FC-D3) —
   // New terminal ⌘T in Godview and in History (HN-7) — no row where the view
-  // has no act on the line (the Assistant's, unbuilt).
+  // has no act on the line (Chat's, until its New spark comes with SP-1c).
   const create = createActOf(view, keys);
   const onView: FrameAct[] =
     create === null

@@ -113,7 +113,7 @@ const VIEW_LABELS: Readonly<Record<FrameView, string>> = {
   canvas: "Canvas",
   godview: "Godview",
   history: "History",
-  assistant: "Assistant",
+  assistant: "Chat",
 };
 
 const VIEW_ORDER: readonly FrameView[] = ["canvas", "godview", "history", "assistant"];
@@ -195,26 +195,24 @@ function zoomItems(
 }
 
 /** The four views, as radio items: main knows which one is on (§9 voice: a
- * state we hold is stated, not implied). The Assistant waits (FC-D2) — present,
- * disabled, its key still said, the way a disabled Take Screenshot keeps its
- * chord. */
+ * state we hold is stated, not implied). Chat is the fourth (SP-1b), and runs
+ * as the others do. */
 function viewItems(
   platform: MenuPlatform,
   state: AppMenuState,
   actions: AppMenuActions,
 ): AppMenuItem[] {
   return VIEW_ORDER.map((view) => {
-    const built = view !== "assistant";
     const setView = actions.setView;
     return {
       id: VIEW_ITEM_IDS[view],
       type: "radio",
-      label: built ? VIEW_LABELS[view] : `${VIEW_LABELS[view]} · not built yet`,
+      label: VIEW_LABELS[view],
       accelerator: viewAccelerator(view),
       ...(platform === "darwin" ? {} : { registerAccelerator: false }),
       checked: state.view === view,
-      enabled: built && setView !== undefined,
-      ...(built && setView !== undefined ? { click: () => setView(view) } : {}),
+      enabled: setView !== undefined,
+      ...(setView !== undefined ? { click: () => setView(view) } : {}),
     };
   });
 }

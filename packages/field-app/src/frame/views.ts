@@ -2,8 +2,9 @@ import type { FrameView, ShellPlatform } from "@vibefield/contracts";
 import type { GlyphName } from "@vibefield/design-kit/glyphs";
 
 // The frame's four views as the views track draws them (One Frame FR-1;
-// DESIGN.md §8 "The views track", §10). FC-D2: four cells, the Assistant's
-// waiting. FC-D4: ⌘1–⌘4 and nothing else — Ctrl 1–4 off the Mac.
+// DESIGN.md §8 "The views track", §10). FC-D2: four cells; the fourth is Chat,
+// built since SP-1b (its wire id stays `assistant`). FC-D4: ⌘1–⌘4 and nothing
+// else — Ctrl 1–4 off the Mac.
 
 export interface FrameViewCell {
   readonly view: FrameView;
@@ -17,7 +18,7 @@ export const FRAME_VIEWS: readonly FrameViewCell[] = [
   { view: "canvas", name: "Canvas", glyph: "canvas", digit: "1" },
   { view: "godview", name: "Godview", glyph: "panes", digit: "2" },
   { view: "history", name: "History", glyph: "history", digit: "3" },
-  { view: "assistant", name: "Assistant", glyph: "message", digit: "4" },
+  { view: "assistant", name: "Chat", glyph: "message", digit: "4" },
 ];
 
 /** How the keys are printed and pressed: ⌘ on the Mac, Ctrl elsewhere. Never
