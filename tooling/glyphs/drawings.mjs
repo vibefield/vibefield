@@ -748,8 +748,8 @@ export const DRAWINGS = {
   },
   sparkle: {
     label: "Sparkle",
-    group: "studio",
-    role: "Studio's fallback tile",
+    group: "actions",
+    role: "New spark, Chat's create on the line (⌘N, SP-1c); the catalog's callout",
     instrument: {
       s: `${P(SPARK)}${P("M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8Z")}`,
     },

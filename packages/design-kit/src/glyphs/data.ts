@@ -87,7 +87,7 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   importing: {"label":"Importing","group":"signals","role":"History's arc while it imports: a fifth of the dial `history` draws, turned over the History cell by the host"},
   document: {"label":"Document","group":"studio","role":"Studio catalog tile"},
   layers: {"label":"Layers","group":"studio","role":"Studio catalog tile"},
-  sparkle: {"label":"Sparkle","group":"studio","role":"Studio's fallback tile"},
+  sparkle: {"label":"Sparkle","group":"actions","role":"New spark, Chat's create on the line (⌘N, SP-1c); the catalog's callout"},
 };
 
 export const GLYPHS: Readonly<Record<GlyphName, GlyphDrawing>> = {
