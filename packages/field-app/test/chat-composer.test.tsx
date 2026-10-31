@@ -16,7 +16,7 @@ import {
   type AgentProfileSet,
   type SparkSummary,
 } from "@vibefield/contracts";
-import { act, type ReactElement, useState } from "react";
+import { act, type ReactElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatComposer, type ComposerPort } from "../src/chat/ChatComposer";
@@ -31,6 +31,23 @@ import { CardTargets } from "../src/frame/cards/card-targets";
 import type { FrameSurface } from "../src/frame/frame-surface";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** Send's road under Chat's own controller (`ChatView`), scripted: what each send was handed, and what it comes to.
+ * The composer mounted alone is handed its `send`; the road itself is `thread-send.test.ts`'s. */
+const road = vi.hoisted(() => ({
+  sent: [] as string[],
+  outcome: (): Promise<ThreadSendOutcome> => Promise.resolve({ state: "pasted" }),
+}));
+vi.mock("../src/chat/thread-send", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/chat/thread-send")>();
+  return {
+    ...actual,
+    sendToThread: (_deps: unknown, text: string) => {
+      road.sent.push(text);
+      return road.outcome();
+    },
+  };
+});
 
 const [A, B] = [AGENT_CATALOG[0], AGENT_CATALOG[1]];
 const AT = "2026-10-31T05:00:00.000Z";
@@ -172,6 +189,8 @@ let setSurfaceNow: ((next: FrameSurface | null) => void) | null = null;
 
 beforeEach(() => {
   surfaceNow = null;
+  road.sent = [];
+  road.outcome = () => Promise.resolve({ state: "pasted" });
 });
 
 afterEach(() => {
@@ -186,10 +205,12 @@ afterEach(() => {
 interface Mounted {
   readonly send: ReturnType<typeof vi.fn>;
   readonly said: string[];
+  /** the thread's draft as it stood after each change */
   readonly parked: (readonly DraftPart[])[];
 }
 
-/** The composer under FieldView's place (the one owner of the open surface), over a running feed. */
+/** The composer under FieldView's place (the one owner of the open surface), over a running feed, its draft kept as
+ * Chat keeps a thread's (one copy: what the composer parks, and a send's clearing). */
 async function mountComposer(
   outcome: () => Promise<ThreadSendOutcome> = async () => ({ state: "pasted" }),
   parked: readonly DraftPart[] = [],
@@ -204,12 +225,16 @@ async function mountComposer(
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     surfaceNow = surface;
     setSurfaceNow = setSurface;
+    const [draft, setDraft] = useState(parked);
+    useEffect(() => {
+      parks.push(draft);
+    }, [draft]);
     return (
       <ChatComposer
         entry={entry as NonNullable<typeof entry>}
         active
-        parked={parked}
-        onPark={(parts) => parks.push(parts)}
+        parked={draft}
+        onPark={setDraft}
         surface={surface}
         onSurfaceChange={setSurface}
         port={port}
@@ -576,7 +601,8 @@ describe("the draft is the thread's (DESIGN.md §8 \"Chat's composer\")", () => 
     expect(host?.querySelector(".vf-chat-ph")).toBeNull();
   });
 
-  it("keeps each spark's own draft when another thread is chosen, and finds it on coming back", async () => {
+  /** Chat as the frame mounts it, over a feed of Vela and Juno, Vela's thread shown. */
+  async function mountChat(): Promise<void> {
     stopFeed = startSparksFeed(feed([VELA, JUNO]));
     function Owner(): ReactElement {
       const [surface, setSurface] = useState<FrameSurface | null>(null);
@@ -588,16 +614,79 @@ describe("the draft is the thread's (DESIGN.md §8 \"Chat's composer\")", () => 
     await act(async () => root?.render(<Owner />));
     await settle();
     expect(q(".vf-chat-thread").getAttribute("aria-label")).toBe("Vela's thread");
-    typeText("for Vela");
-    const row = (id: string) => q<HTMLButtonElement>(`.vf-chat-row[data-spark="${id}"]`);
-    act(() => row("sp-juno0001").click());
+  }
+  const choose = async (id: string): Promise<void> => {
+    act(() => q<HTMLButtonElement>(`.vf-chat-row[data-spark="${id}"]`).click());
     await settle();
+  };
+
+  it("keeps each spark's own draft when another thread is chosen, and finds it on coming back", async () => {
+    await mountChat();
+    typeText("for Vela");
+    await choose("sp-juno0001");
     expect(q(".vf-chat-thread").getAttribute("aria-label")).toBe("Juno's thread");
     expect(editor().textContent).toBe("");
     expect(q(".vf-chat-ph").textContent).toBe("Message Juno…");
-    act(() => row("sp-vela0001").click());
-    await settle();
+    await choose("sp-vela0001");
     expect(editor().textContent).toBe("for Vela");
+  });
+
+  it("is never drawn again by its own parking: what is typed comes back from the thread as itself", async () => {
+    await mountChat();
+    const drawn = editor();
+    typeText("for Vela");
+    await settle();
+    typeOn(", and the docs");
+    await settle();
+    // the thread kept each change and handed it back; the editor the person types in is the one still standing
+    expect(editor()).toBe(drawn);
+    expect(editor().textContent).toBe("for Vela, and the docs");
+  });
+
+  /** A send held open, as one into a spark being woken waits up to 20 s; `finish` says what it came to. */
+  function holdSends(): { finish: (outcome: ThreadSendOutcome) => void } {
+    const held = { finish: (_outcome: ThreadSendOutcome): void => undefined };
+    road.outcome = () =>
+      new Promise((resolve) => {
+        held.finish = resolve;
+      });
+    return held;
+  }
+
+  it("clears what a send carried even when its thread was left and chosen again while it ran (correctness-2)", async () => {
+    const held = holdSends();
+    await mountChat();
+    typeText("look at the failing test");
+    press(editor(), { key: "Enter" });
+    expect(road.sent).toEqual(["look at the failing test"]);
+    // while it runs, Juno's thread, then Vela's again: Vela's composer is drawn afresh from the thread's draft
+    await choose("sp-juno0001");
+    await choose("sp-vela0001");
+    expect(editor().textContent).toBe("look at the failing test");
+    await act(async () => held.finish({ state: "pasted" }));
+    await settle();
+    // DESIGN.md §8 "Chat's composer": "Sent, the words and chips it carried are cleared" — in the composer standing
+    // now, so a second Send never pastes them again
+    expect(editor().textContent).toBe("");
+    expect(q(".vf-chat-ph").textContent).toBe("Message Vela…");
+  });
+
+  it("keeps what was typed in the thread's composer drawn afresh while the send ran: only what it carried goes", async () => {
+    const held = holdSends();
+    await mountChat();
+    typeText("look at the failing test");
+    press(editor(), { key: "Enter" });
+    await choose("sp-juno0001");
+    await choose("sp-vela0001");
+    // the thread's draft as it stands now holds more than was sent
+    typeOn(" and fix it");
+    await act(async () => held.finish({ state: "pasted" }));
+    await settle();
+    expect(editor().textContent).toBe("and fix it");
+    // and leaving and coming back finds the same
+    await choose("sp-juno0001");
+    await choose("sp-vela0001");
+    expect(editor().textContent).toBe("and fix it");
   });
 });
 

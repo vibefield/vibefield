@@ -222,15 +222,36 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
 
   it("says an awake spark whose terminal was not named in the 20 s is off the floor — never that it didn't wake", async () => {
     const heard = vi.fn(async () => true);
-    for (const report of [null, { state: "finding", door: null } as const]) {
-      const outcome = await sendToThread(deps({ heard, pane: async () => report }), "hi", []);
-      expect(outcome).toEqual({ state: "off-floor" });
-      expect(sendNote(outcome, "Vela")).toBe(
-        "Not sent — Vela's terminal is not on this desktop's floor",
-      );
-    }
+    const outcome = await sendToThread(
+      deps({ heard, pane: async () => ({ state: "finding", door: null }) }),
+      "hi",
+      [],
+    );
+    expect(outcome).toEqual({ state: "off-floor" });
+    expect(sendNote(outcome, "Vela")).toBe(
+      "Not sent — Vela's terminal is not on this desktop's floor",
+    );
     // its terminal not named, it is not asked whether it was heard: no wake, no "didn't wake"
     expect(heard).not.toHaveBeenCalled();
+  });
+
+  it("says a thread left before its pane was ready as left — never off the floor, where its terminal may stand", async () => {
+    // no pane of the thread on screen when the 20 s ran out: Chat was left, or another thread chosen, while the send
+    // waited — for an awake spark's pane being found, or for a woken one's to appear
+    for (const needsWake of [false, true]) {
+      const heard = vi.fn(async () => true);
+      const outcome = await sendToThread(
+        deps({ needsWake, heard, pane: async () => null }),
+        "hi",
+        [],
+      );
+      expect(outcome, `needsWake ${needsWake}`).toEqual({ state: "thread-left" });
+      expect(sendNote(outcome, "Vela")).toBe(
+        "Not sent — you left Vela's thread before its pane was ready",
+      );
+      // no pane, no paste: it is not asked again whether it was heard
+      expect(heard).toHaveBeenCalledTimes(needsWake ? 1 : 0);
+    }
   });
 
   it("refuses at once where the pane's place already says why: off the floor, a fault, no terminals", async () => {
@@ -298,6 +319,25 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
       [],
     );
     expect(late).toEqual({ state: "waiting-on-you" });
+    expect(door.pasted).toEqual([]);
+  });
+
+  it("reads the need again after the pane's input wait, just before the paste: a menu put up meanwhile gets no paste", async () => {
+    let waiting = false;
+    // the input opens just as the agent puts up a permission menu (Needs your OK): the wait is when a woken or
+    // just-started agent asks first
+    const door = doorOf({
+      whenInputOpen: async () => {
+        waiting = true;
+        return true;
+      },
+    });
+    const outcome = await sendToThread(
+      deps({ needsYou: () => waiting, pane: async () => live(door) }),
+      "yes, and push it",
+      [],
+    );
+    expect(outcome).toEqual({ state: "waiting-on-you" });
     expect(door.pasted).toEqual([]);
   });
 
@@ -384,6 +424,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
       { state: "too-large", refusal },
       { state: "no-wake" },
       { state: "off-floor" },
+      { state: "thread-left" },
       { state: "no-terminals" },
     ];
     for (const outcome of outcomes) {

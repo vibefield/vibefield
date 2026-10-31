@@ -28,6 +28,9 @@ export type ThreadSendOutcome =
   | { readonly state: "no-wake" }
   /** the floor holds no such terminal, or none was named in the 20 s */
   | { readonly state: "off-floor" }
+  /** no pane of its thread was on screen when the 20 s ran out: Chat was left, or another thread chosen, while the
+   * pane was being found or had not appeared — and a pane is found only while its thread is shown */
+  | { readonly state: "thread-left" }
   /** the floor did not answer, or this window's terminals could not start, in their own words */
   | { readonly state: "fault"; readonly reason: string }
   /** a window with no terminals (the catalog, a browser) */
@@ -41,7 +44,8 @@ export type ThreadSendOutcome =
 export interface ThreadSendDeps {
   /** this window holds a terminal pool (`terminalPoolConfigured`); without one there is no pane to paste into */
   readonly terminals: boolean;
-  /** the spark waits on the person, as the feed reads it now (asked before the wake and again before the paste) */
+  /** the spark waits on the person, as the feed reads it now (asked as Send starts, and again after the last wait,
+   * just before the paste) */
   needsYou(): boolean;
   /** asleep, or not started: Send wakes it first */
   readonly needsWake: boolean;
@@ -101,10 +105,12 @@ async function sendSteps(
     if (!(await deps.heard(left()))) return { state: "no-wake" };
   }
   const report = await deps.pane(left());
-  if (report === null || report.door === null) {
-    if (report?.state === "fault") return { state: "fault", reason: report.reason };
-    if (report?.state === "no-terminals") return { state: "no-terminals" };
-    // not on the floor; or still being found, or never mounted, when the 20 s ran out: not named in them
+  // no pane of the thread on screen at the 20 s: the person left it, and its pane is found only while it is shown
+  if (report === null) return { state: "thread-left" };
+  if (report.door === null) {
+    if (report.state === "fault") return { state: "fault", reason: report.reason };
+    if (report.state === "no-terminals") return { state: "no-terminals" };
+    // not on the floor; or still being found when the 20 s ran out: not named in them
     return { state: "off-floor" };
   }
   // nothing is pasted into a spark before it is heard (R-4): just hatched, its program may not have asked for bracketed
@@ -112,8 +118,10 @@ async function sendSteps(
   // not heard in the 20 s is not taking input — never "didn't wake", which is said only of a spark this send woke.
   if (!(await deps.heard(left()))) return { state: "not-taking" };
   const door = report.door;
-  if (deps.needsYou()) return { state: "waiting-on-you" };
   if (!(await door.whenInputOpen(PANE_INPUT_WAIT_MS))) return { state: "not-taking" };
+  // read again after the last wait, just before the paste: a woken or just-started agent puts up its first menu (a
+  // trust or permission ask) as its input opens, and a menu reads pasted characters as its choices
+  if (deps.needsYou()) return { state: "waiting-on-you" };
   // D6 — a paste too large for the terminal is refused INSIDE the call: heard here, it is this send's outcome, and
   // the line's hearer leaves it to it (claimed: said once, HN-L5)
   const heard: { refusal: RoutedInputRefusal | null } = { refusal: null };
@@ -149,6 +157,8 @@ export function sendNote(outcome: ThreadSendOutcome, name: string): string {
       return `Not sent — ${name} didn't wake in 20 seconds`;
     case "off-floor":
       return `Not sent — ${name}'s terminal is not on this desktop's floor`;
+    case "thread-left":
+      return `Not sent — you left ${name}'s thread before its pane was ready`;
     case "fault":
       return `Couldn't find ${pane}: ${outcome.reason}`;
     case "no-terminals":

@@ -10,6 +10,7 @@ import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatComposer, type ComposerPort } from "../src/chat/ChatComposer";
+import type { DraftPart } from "../src/chat/composer-draft";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import {
   type CardLetGo,
@@ -96,12 +97,14 @@ async function mount(
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [active, setActive] = useState(true);
     setActiveNow = setActive;
+    // the thread's draft, kept as Chat keeps it (one copy)
+    const [draft, setDraft] = useState<readonly DraftPart[]>([]);
     return (
       <ChatComposer
         entry={entry as NonNullable<typeof entry>}
         active={active}
-        parked={[]}
-        onPark={() => undefined}
+        parked={draft}
+        onPark={setDraft}
         surface={surface}
         onSurfaceChange={setSurface}
         port={port}

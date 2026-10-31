@@ -1,5 +1,12 @@
 import type { SparkId } from "@vibefield/contracts";
-import { type ReactElement, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactElement,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { FrameSurface } from "../frame/frame-surface";
 import { sayOnLine } from "../frame/line-door";
 import { stillKept } from "../host";
@@ -69,10 +76,16 @@ export function ChatView({
     return () => window.clearInterval(timer);
   }, [active]);
 
-  // each thread's draft, for the window's life and written nowhere (HN-D9's rule): state, so what reads it redraws
+  // each thread's draft, for the window's life and written nowhere (HN-D9's rule): state, so what reads it redraws.
+  // It is the one copy: the composer parks each change here, and a send's clearing is made here, to the draft as the
+  // thread holds it when the send is pasted — whichever composer is drawn for the thread by then follows it.
   const [drafts, setDrafts] = useState<ReadonlyMap<SparkId, readonly DraftPart[]>>(() => new Map());
-  const park = useCallback((spark: SparkId, parts: readonly DraftPart[]) => {
-    setDrafts((held) => (held.get(spark) === parts ? held : new Map(held).set(spark, parts)));
+  const park = useCallback((spark: SparkId, next: SetStateAction<readonly DraftPart[]>) => {
+    setDrafts((held) => {
+      const now = held.get(spark) ?? NO_DRAFT;
+      const parts = typeof next === "function" ? next(now) : next;
+      return parts === now ? held : new Map(held).set(spark, parts);
+    });
   }, []);
 
   // the threads whose hello has left for the window's life (DESIGN.md §8 "Chat's thread", when they show): the pane took
@@ -195,7 +208,7 @@ export function ChatView({
         entry={shown}
         active={active}
         parked={drafts.get(shown.spark.id) ?? NO_DRAFT}
-        onPark={(parts) => park(shown.spark.id, parts)}
+        onPark={(next) => park(shown.spark.id, next)}
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         port={port}

@@ -53,7 +53,7 @@ export function sparkPaneOf(spark: SparkId): SparkPaneReport | null {
 /** For Send (DESIGN.md §8 "Chat's composer"): `spark`'s thread pane once it has settled — live, or a place that says
  * why there is none (not on this floor, a fault, no terminals) — heard as it is published, never polled. After
  * `timeoutMs` it answers how the pane stands then: still being found, or null while none of its thread is on screen
- * (a spark just woken whose pane has not mounted yet). */
+ * (Chat left, or another thread shown, before its pane settled: Send says the thread was left). */
 export function whenSparkPane(spark: SparkId, timeoutMs: number): Promise<SparkPaneReport | null> {
   const settled = (): SparkPaneReport | null => {
     const report = sparkPaneOf(spark);

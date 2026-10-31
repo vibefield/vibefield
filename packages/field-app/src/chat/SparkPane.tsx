@@ -170,11 +170,13 @@ function FloorSparkPane({
   useTerminalSessionViews(found === null ? [] : [found.id], active ? "live" : "none");
   const look = useDeckPaneLook(useGodviewTheme());
 
-  // the pane holds the keyboard: a press or a focus in it, or Send's paste; never while Chat is not the view
+  // the pane holds the keyboard: a press or a focus in it, or Send's paste — only while Chat is the view. It is let go
+  // at the render that finds Chat gone, as `claims` is taken at the one that finds it shown, so a focus or a paste
+  // that lands under another view's cover leaves nothing held for Chat's next show (LEANS Q4)
   const [holds, setHolds] = useState(false);
-  useEffect(() => {
-    if (!active) setHolds(false);
-  }, [active]);
+  if (!active && holds) setHolds(false);
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const onKeyboardRef = useRef(onKeyboard);
   onKeyboardRef.current = onKeyboard;
   useEffect(() => {
@@ -197,13 +199,16 @@ function FloorSparkPane({
       paste: (text) => {
         const input = box.current?.querySelector("textarea") ?? null;
         if (input === null || runtime.routedActivation(id)?.inputAllowed !== true) return false;
-        // The pane takes the keyboard, and with it the session's size, BEFORE the text lands (DESIGN.md §8 "Chat's
-        // composer"): the surface takes the seat in its own focus report once its `active` and its input's focus
-        // have committed, so both are flushed before the paste is dispatched.
-        flushSync(() => {
-          setHolds(true);
-          input.focus();
-        });
+        // Shown, the pane takes the keyboard, and with it the session's size, BEFORE the text lands (DESIGN.md §8
+        // "Chat's composer"): the surface takes the seat in its own focus report once its `active` and its input's
+        // focus have committed, so both are flushed before the paste is dispatched. A paste that lands after Chat
+        // stopped being the view (Send's wait outlived it) takes neither (§8 "Chat's thread").
+        if (activeRef.current) {
+          flushSync(() => {
+            setHolds(true);
+            input.focus();
+          });
+        }
         return pasteIntoInput(input, text);
       },
     };

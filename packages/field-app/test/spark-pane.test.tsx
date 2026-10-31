@@ -389,6 +389,29 @@ describe("the pane takes the session's size when it takes the keyboard, never at
     expect(calls("setFocused").at(-1)?.args[2]).toBe(false);
     elsewhere.remove();
   });
+
+  it("holds the keyboard only while Chat is the view: a paste that lands once Chat is hidden takes neither it nor the size, then or on coming back", async () => {
+    activations.set("pty-vela", { inputAllowed: true });
+    const onKeyboard = vi.fn();
+    await mountPane({ onKeyboard });
+    // Send read the live door while Chat showed it…
+    const door = sparkPaneOf("sp-vela0001")?.door;
+    expect(door).toBeTruthy();
+    // …and the person went to another view while it waited (to be heard, then the input's 1.5 s)
+    await mountPane({ active: false, onKeyboard });
+    await act(async () => {
+      door?.paste("look at the failing test");
+      await settle();
+    });
+    // the text goes in by the road, as the send asked; the keyboard is not taken under another view's cover
+    expect(calls("paste").map((call) => call.args.at(-1))).toContain("look at the failing test");
+    expect(calls("takeResizeControl")).toEqual([]);
+    expect(onKeyboard).not.toHaveBeenCalled();
+    // back in Chat with no press in the pane and no send from it: still not held, so no seat taken (LEANS Q4)
+    await mountPane({ active: true, onKeyboard });
+    expect(calls("takeResizeControl")).toEqual([]);
+    expect(onKeyboard).not.toHaveBeenCalled();
+  });
 });
 
 describe("the pane's door, for Send (thread-pane-door.ts)", () => {

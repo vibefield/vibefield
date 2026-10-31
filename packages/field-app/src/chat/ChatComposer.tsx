@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type ReactElement,
+  type SetStateAction,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -69,8 +70,10 @@ import { sendNote, type ThreadSendOutcome } from "./thread-send";
 // chip landing, an @ taken, a model chosen, a send — by handing the view a new seed and a new revision, after which
 // the caret is put where the change leaves it. Restored from the line's controller in git
 // (`0e2ad08bc:packages/field-app/src/frame/Composer.tsx`, its editor, @ and send halves); its create, its keys, Send
-// to…'s landing and its clipboard road did not come back. The draft is the thread's: every change of it is parked with
-// Chat (`onPark`), and on unmount, so leaving the thread or Chat keeps it.
+// to…'s landing and its clipboard road did not come back. The draft is the thread's, and Chat keeps it (`parked`, the
+// one copy): every change of it is parked there (`onPark`), and on unmount, so leaving the thread or Chat keeps it; a
+// send's clearing is made there, to the draft as the thread holds it then; and the editor follows a draft the thread
+// holds that this composer did not write — a send that was pasted after the thread was left and chosen again.
 
 /** What @'s rows read: the agents and profiles fieldd offers, and an agent's own picker (the New spark sheet's doors). */
 export type ComposerPort = Pick<NewSparkPort, "providers" | "profileSets" | "models">;
@@ -80,10 +83,12 @@ export interface ChatComposerProps {
   entry: SparkEntry;
   /** Chat is the view: the composer is the hand's place for cards while it is */
   active: boolean;
-  /** the draft as the thread last left it */
+  /** the thread's draft as Chat keeps it: drawn at mount, and followed when it changes from outside. It is the one
+   * copy, so an array this composer did not park is a new draft: hand back what `onPark` kept, never a fresh one */
   parked: readonly DraftPart[];
-  /** the draft changed (and on unmount): the thread keeps it */
-  onPark: (parts: readonly DraftPart[]) => void;
+  /** the draft changed here (and on unmount), or — a function of the thread's draft as it stands — a send's clearing:
+   * the thread keeps the result */
+  onPark: (next: SetStateAction<readonly DraftPart[]>) => void;
   /** the frame's open surface, from its one owner */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
@@ -155,14 +160,21 @@ export function ChatComposer({
   const sending = useRef(false);
   const live = useRef(true);
 
-  // ── THE DRAFT IS THE THREAD'S: parked on every change, and as the composer goes ──
+  // ── THE DRAFT IS THE THREAD'S: parked on every change, and as the composer goes; followed when it changes from
+  // outside ──
   const onParkRef = useRef(onPark);
   onParkRef.current = onPark;
   const partsRef = useRef(parts);
   partsRef.current = parts;
-  useEffect(() => {
-    onParkRef.current(parts);
-  }, [parts]);
+  /** the drafts this composer parked, or took from the thread: the thread handing one back is no change to follow,
+   * however its parks and its keystrokes interleave */
+  const known = useRef(new WeakSet<readonly DraftPart[]>([parked]));
+  const park = useCallback((next: readonly DraftPart[]) => {
+    if (known.current.has(next)) return;
+    known.current.add(next);
+    onParkRef.current(next);
+  }, []);
+  useEffect(() => park(parts), [park, parts]);
   const surfaceRef = useRef(surface);
   surfaceRef.current = surface;
   const onSurfaceChangeRef = useRef(onSurfaceChange);
@@ -171,11 +183,11 @@ export function ChatComposer({
     live.current = true;
     return () => {
       live.current = false;
-      onParkRef.current(partsRef.current);
+      park(partsRef.current);
       // a thread left with @ open leaves no @ standing over the next
       if (surfaceRef.current === "at") onSurfaceChangeRef.current(null);
     };
-  }, []);
+  }, [park]);
 
   // ── WHAT @ OFFERS: read on Chat's first show and again each time @ opens (an agent's picker as its menu opens) ──
   const [asks, setAsks] = useState(0);
@@ -277,6 +289,15 @@ export function ChatComposer({
     editor.focus();
     placeCaret(editor, caret);
   }, [revision]);
+
+  // The thread's draft changed from outside — a send pasted after this composer was drawn again in its place cleared
+  // what it carried: the editor follows it, the keyboard left where it is.
+  useEffect(() => {
+    if (known.current.has(parked)) return;
+    known.current.add(parked);
+    chips.current = chipsOf(parked);
+    redraw(parked, null);
+  }, [parked, redraw]);
 
   // the caret the draft last held: where a card played on the composer lands
   useEffect(() => {
@@ -467,15 +488,13 @@ export function ChatComposer({
     }
     say(sendNote(outcome, name));
     if (outcome.state !== "pasted") return;
-    // sent: what it carried is cleared, and what was typed or added while it ran stays; the keyboard stays in the
-    // pane, where Return sends it
-    const rest = draftAfterSend(sent, partsRef.current);
-    // changed within what was sent, the draft stays as it stands
-    if (rest === partsRef.current) return;
-    chips.current = chipsOf(rest);
-    if (live.current) redraw(rest, null);
-    else onParkRef.current(rest);
-  }, [name, parts, redraw, say, send, threadSending]);
+    // Sent: what it carried leaves the thread's draft as the thread holds it now — this editor's, parked first, or,
+    // if the thread was left and chosen again while it ran, the one drawn in its place — and what was typed or added
+    // meanwhile stays (changed within what was sent, it stays whole). The editor standing follows; the keyboard stays
+    // in the pane, where Return sends it.
+    if (live.current) park(partsRef.current);
+    onParkRef.current((now) => draftAfterSend(sent, now));
+  }, [park, parts, name, say, send, threadSending]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
