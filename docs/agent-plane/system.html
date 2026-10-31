@@ -1708,8 +1708,10 @@
                 <h3>Carrier 1 · the door</h3>
                 <p>
                   <code>agent.subscribe {projection: "field"}</code> answers a snapshot then deltas, at a
-                  per-subscriber trailing-edge floor. The door is never capped: it carries the whole
-                  board.
+                  per-subscriber trailing-edge floor. The door is never capped in rows: it carries the whole
+                  board. <em>Since PG-1c (2026-10-31, <code>1790be95f</code>):</em> a phone that falls behind is held
+                  in bytes, never cut. Once 256 KiB is queued on its connection, its mesh board's deltas stop, and at
+                  half it is sent the whole board, once (api, Subscriptions).
                 </p>
                 <span class="badge tone-built">Built</span>
               </div>
@@ -1766,7 +1768,11 @@
               <em>Corrected 2026-10-29 (PG, C6):</em> these gates went with the publisher at DS-D14 (2026-10-01);
               no slice is written now. The terminal join's gate lives on in the door's own cut
               (<code>attachableRows</code>, F-M4), and the door compares the caller's WhoIs login to the stored link
-              before it answers.
+              before it answers. <em>Since PG-1a (2026-10-31, <code>e9a57b4b6</code>):</em> the same gate withdraws
+              the model row's promise with the join. While this device's terminal doors are down, a desk row's
+              <code>monitorRow.attachable</code>, and <code>.writable</code> where declared, read false, so a peer
+              window reading it no longer raises the deck on a run it cannot attach. An owner older than PG-1a still
+              promises, and its readers keep the run-id fallback.
             </p>
             <div class="callout foundation">
               <strong>The store's audience is the tailscale login.</strong>
@@ -1844,7 +1850,8 @@
                 <code>b7ebb444</code>.
                 <em>Corrected 2026-10-29 (PG, C6):</em> the lower carrier, the <code>field.agents.v1</code> slice,
                 retired on 2026-10-01 (DS-D14); the door is the field's one carrier, which the phone reads through its
-                home desktop (DS-8).
+                home desktop (DS-8). The upper carrier's "never capped" means in rows: since PG-1c (2026-10-31) a
+                phone's mesh board is held in bytes, never cut.
               </figcaption>
             </figure>
           </section>

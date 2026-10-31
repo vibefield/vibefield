@@ -2130,7 +2130,8 @@
                 <p>
                   Control-rate JSON rides the product API; high-rate or bulk traffic rides a ticketed direct route.
                   Applied here: terminal frames go from the floor's cell to the renderer's terminal runtime and never
-                  transit fieldd; monitor deltas coalesce to at most one frame per tick per connection; and rosetta's
+                  transit fieldd; monitor deltas coalesce to at most one frame per tick per connection, and a phone whose
+                  connection falls 256 KiB behind is sent its mesh board as it is, never the backlog (PG-1c); and rosetta's
                   inline images, which are content-addressed bytes, are why the history data plane must be direct rather
                   than proxied.
                 </p>

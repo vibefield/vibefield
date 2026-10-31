@@ -1260,7 +1260,7 @@
             <h3>Subscriptions</h3>
             <p class="section-note">
               A subscription answers a snapshot on open and frames thereafter, over the same wire shape as
-              a local subscription even when it is proxied. Three rules bound them.
+              a local subscription even when it is proxied. These rules bound them.
             </p>
             <div class="cards">
               <div class="card">
@@ -1293,6 +1293,21 @@
                   as long as the socket lives, so one <code>agent.observe</code> holder in a loop could
                   otherwise buy the whole tick budget. Past the bound the caller gets
                   <code>RESOURCE_EXHAUSTED</code> and keeps everything it already had.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Bounded in bytes, and a phone held short of the shed</h3>
+                <p>
+                  A send that would take a connection's queued bytes past 128 MiB
+                  (<code>MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES</code>) closes it <code>1013</code>, "client is
+                  not keeping up". A phone's subscription (the <code>tailnet</code> principal) whose producer can
+                  resync, today the mesh board (<code>agent.subscribe {scope: "mesh"}</code>), is held before that:
+                  once its connection's queue reaches 256 KiB (<code>PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES</code>),
+                  its deltas stop, and when the queue drains to half it is sent ONE fresh snapshot, the board as it
+                  is, never the backlog. Its own snapshots are never held, nor counted toward holding it. A peer
+                  daemon on the same door, loopback windows and every subscription without a resync keep the shed
+                  alone.
+                  <em>Added 2026-10-31 (PG-1c, landed in <code>1790be95f</code>; PG-D11 A).</em>
                 </p>
               </div>
             </div>
@@ -2056,7 +2071,7 @@
                   <tr><td><span class="route">publishedAt · expiresAt</span></td><td><p>the honesty clause. A slice expires 30 s after it is written and a live publisher refreshes it every 10 s while it has rows; a graceful stop publishes empty rows with the clock already past, so a desktop that died fades rather than haunting every phone. Writes coalesce at 250 ms, the phone's foreground cadence.</p></td></tr>
                   <tr><td><span class="route">revision</span></td><td><p>the board's own counter, which orders frames</p></td></tr>
                   <tr><td><span class="route">rows</span></td><td><p><code>AgentFieldRow[]</code> — identity, status and clocks, liveness, blocker shapes, two usage numbers, a context percentage, model and effort, the folder name, the terminal join, and since PJ-7 the conversation's provider-native id (<code>nativeSessionId</code>, the fold's <code>sessionId</code>; never the folder)</p></td></tr>
-                  <tr><td><span class="route">omitted</span></td><td><p>how many rows the byte cap left out, absent when the board is whole. The door is never capped; only the slice is.</p></td></tr>
+                  <tr><td><span class="route">omitted</span></td><td><p>how many rows the byte cap left out, absent when the board is whole. The door is never capped in rows; only the slice is. <em>Since PG-1c (2026-10-31):</em> a phone's mesh board is held in bytes, never cut (Subscriptions, above).</p></td></tr>
                 </tbody>
               </table>
             </div>
