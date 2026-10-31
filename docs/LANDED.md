@@ -22866,6 +22866,10 @@ that read packages, never the reverse.
   read).
 
 **Owed.** A fresh floor's two cells' hello times, measured idle and under burners (item 122's floor half).
+  > **Partly paid (2026-10-31, the fixer; VF-PM's ruling 11:12Z, its shape 13:56Z):** the burners were replaced by a
+  > real verify's fan-out. The floor half was measured idle (1), beside one fieldd suite (2b, an idle-class reading)
+  > and on the ramp of run 53's verify on the mini (2a). The peak reading was refused: the fan-out ended first. It
+  > stays owed. See LANDED "item 122's floor half, measured".
 
 ## PG-1d — a gate flip re-presents the board: every live field and desk board sends one snapshot at its current revision when the doors' gate flips, and the hub takes its own board's snapshot (F-M4's residual) (PG-D9 A) (2026-10-31; `38f722c3b`, the merge of main `db8733770` into `098ae53d1` on `2eb42abd8`, lane `pg/1d-represent`)
 
@@ -24185,3 +24189,63 @@ a declared skip that the row prints".
   A2's (the skip line, with the list's first measured numbers).
 - desk-gates row 32's status column, at the records after run53b.
 - James's look and FG-5's cut, as FG-6's entry says.
+
+## item 122's floor half, measured — a fresh floor's two class cells say hello in tens of ms against the shared 15 s, idle and on the mini's fan-out ramp; the peak is owed (2026-10-31; a measurement, no code; `records/item122/hello122.sh`)
+
+The floor half of item 122, owed by item 122b's entry ("measured idle and under burners"). VF-PM ruled its shape at
+11:12Z: (1) idle on this Mac, (2b) beside one real fieldd suite here, and (2a) on the mini beside the next real mint's
+verify fan-out. No synthetic burners: they would be "a lie about the reds". VF-PM recorded (2b) as idle-class at
+11:16Z, and (2a)'s first pass as the ramp, not the loaded reading, at 14:26Z.
+
+**The question.** Run 27b's terminal-seam row was refused `absent` after 15,495 ms, at the fan-out's peak (load
+48.71). Item 122 made the seam's boot wait for the floor's terminal endpoints. Left open was whether a cell's hello
+itself can come near the 15 s that both the floor's hello deadline and fieldd's birth wait give it
+(`CELL_SUPERVISION.HELLO_DEADLINE_MS`). **It is still open:** no reading here was taken under a loaded queue.
+
+**How.** N sequential fresh floors, each under its own data root, with the env the fieldd suites give it. Each row
+times the ms from the floor's spawn (wall clock) to each class cell's `field_native.terminal.cell_serving`, the
+floor's first log event, and load1 at the row. Each floor is stopped by its PID (SIGTERM 10 s, then SIGKILL as the
+suites do), and both cell pids are proven gone, or the run stops. Run 1 is the cold start; runs 2…N are warm.
+- The harness: `records/item122/hello122.sh` (sha16 `b2190190ccf03b15`) and `hello122-wait.py`
+  (`ac1c909b8071b8f3`).
+- The mini's copy: `hello122p2.sh` (sha256 `1f6be852…`). It takes the binary verify built and builds nothing. It
+  moves its floors' logs into the run's folder and deletes nothing.
+
+**Read** (ms; the agent cell, then the interactive cell; missed = no hello within 30 s):
+
+| reading | where | load1 | cold (run 1) | warm p50 | warm p90 | warm max | missed |
+|---|---|---|---|---|---|---|---|
+| (1) idle, 11:12:06–44Z, n = 20 | this Mac, lane at `62fa4d718` | 6.55–6.65 | 1,484 / 1,484 | 43 / 42 | 67 / 62 | 83 / 82 | 0 |
+| (2b) beside `agent-session.test.ts`, 11:13:40–55Z, n = 20 | this Mac, the same binary | 5.14–5.45 | 1,339 / 1,339 | 45 / 46 | 59 / 60 | 90 / 90 | 0 |
+| (2a) the ramp of run 53's verify fan-out, 14:22:28–43Z, n = 20 | the mini, M53 `618b35429` | 5.54–5.73 | 41 / 42 | 38 / 37 | 53 / 55 | 67 / 67 | 0 |
+| (2a) the peak | the mini | — | refused: the fan-out ended first | | | | owed |
+
+- (2b)'s suite ran at nice 19 and passed: 62 passed, 2 skipped. Its load stayed below (1)'s, so it is an idle-class
+  reading, not a loaded one.
+- a9 ran (2a), with the shas checked on the mini, on the field-native that run 53's verify built (`target/debug`,
+  `b482235e…`).
+  - **The ramp** was armed 15 s after the fan-out was seen (14:22:13Z). Its 15 s sat in the fan-out's first
+    half-minute, on a near-idle queue: load1 fell from 5.71 to 5.54. It is recorded as the ramp, not as the loaded
+    reading.
+  - **The peak** came the next minute: load1 45.75 at 14:23:44Z. VF-PM GO'd a second pass (`loaded-b-run53`) at
+    14:24Z. Its companion (`run53-hello-b.sh`) refuses once verify.log holds the fan-out's end line, and it refused
+    at 14:24:50Z ("the fan-out has ended: NOT RUN"). By VF-PM's read, verify.log's :13032 already said "Successfully
+    ran target test for 28 projects": the fan-out had run about 2.5 minutes from 14:22:13Z.
+- The floor's own first event after its spawn, as the tsv's `firstEventMs` column has it: (1) cold 540 ms, warm
+  13–23 ms; (2b) cold 485 ms, warm 12–17 ms; (2a)'s ramp cold 13 ms, warm 9–18 ms. The 11:12Z message to VF-PM had
+  "13–16 ms" for (1).
+- The mini shows no cold step (run 1 at 41 / 42 ms), where this Mac's run 1 read 1,484 in (1) and 1,339 in (2b) on
+  the same binary. On this Mac, run 1 came directly after the script's own `cargo build -p field-native`: a relink in
+  (1), and a no-op in (2b) (the same mtime and sha16, a minute after (1)'s 20 runs). The mini's copy builds nothing.
+  The cold step is observed and not studied; it is far under 15 s either way.
+- The rows: this Mac's `records/item122/hello122-{idle,loaded-b}.tsv`; the mini's
+  `logs/run53/hello122-loaded-a-run53.tsv` (sha16 `5c40d101e1b3060b`), with each floor's logs beside it, and
+  `run53-hello-b.out`, which holds the peak's refusal. They are copied home to `lanes/ts6/logs/mini/run53/`.
+
+**What it says.** Idle, idle-class and on the ramp, every warm hello came in at 90 ms or less and the slowest cold
+one at 1,484 ms, against 15,000 ms; no reading missed. None of them was taken under load, so they do not say what a
+cell's hello does at run 27b's load, and the 15 s budget is not moved.
+
+**Owed.** The peak: the same pass beside the next real mint's verify, with the companion gated on load1 ≥ 30 inside
+the fan-out (a9 writes the gate). If a loaded max nears 15 s, a new item on the hello budget is filed in fixer-items
+at the next draft queue, with no fix in that entry.
