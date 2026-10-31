@@ -4560,6 +4560,32 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   takes nothing while it is away. When it comes back it is presented again, and a presented card
   takes the seat (DS-4b), so the readout shows only while another device holds the seat as the card
   sits on the screen.
+- **The phone's Settings** (IOS-10a, built 2026-10-31 from the design page *Settings in a Pocket*,
+  revised 2026-10-31; its eight marks are unpicked and stand at their leans: History's heads, bare
+  glyphs, the ink switch). A sheet on paper (`--vf-chrome-solid`, opaque: a page to read, not glass),
+  headed by you, as the desktop's Settings is (*The Me menu*): your face at 60 pt, tilted (§2.8), your
+  name, and your login in mono open **Account**; signed out, the head is **Continue with Tailscale**.
+  iOS's own parts speak the chrome family's voice: a navigation stack with the system's large and
+  inline titles, back and close; inset-grouped lists whose rows sit on `--vf-fill` tiles; History's
+  group head (11 medium, uppercase, 0.08em, the ramp's faint step) with *Fact labels* on its right;
+  §13's glyphs bare in the secondary ink, a desktop its OS mark at 19 pt; the design kit's switch (an
+  ink track, the knob its inverse, because green says healthy, §2.5); every size a text style, so the
+  pages move with the reader's text size. **Your desktops** are glances in the corner's words: the
+  home says **Connected · your field comes through it**, a sleeping one **Asleep · last heard
+  yesterday, 18:02**, grey and never "offline" (§9); a desktop's page says what it runs on, whether it
+  serves its terminals, and what the phone can do with it, with **Answer approvals** dotted **Not
+  yet**. **Account** holds your face and whose word it is (**From studio**, **This phone** while
+  dealt, **No desktop yet** dashed), Tailscale's card (its mark at 56, the state in §9's words:
+  **Connected**, **Sign in to Tailscale again**, **Waiting for approval**), Network details (this
+  phone's machine name in mono with Copy, the tailnet) and Sign out, confirmed in the corner's words.
+  Under **This phone**, **Appearance** is the Mac's three, **Light · Dark · Auto**, worn by the window,
+  so the field, History and every sheet change with it; **Terminal** is the terminal sheet re-voiced
+  in the desktop's Look words (Theme, its 602 searchable; Background opacity; Font size; Effects, each
+  with its licence; Animate effects). **About** gives the version, your desktops, Acknowledgements,
+  and Tailscale's trademark line, which left the terminal sheet's foot. The corner's **Settings…**
+  opens the root and *you* open Account; the card's `···` opens Terminal, Settings one step back.
+  Not yet drawn: Field, Keyboard, Notifications, Privacy & data, Developer, a desktop's agents and
+  History, and its VibeField version.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
