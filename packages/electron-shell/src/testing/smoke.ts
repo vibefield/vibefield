@@ -9996,6 +9996,192 @@ export async function runSmokeGodview(opts: {
       "still in Godview";
     verdict["hubInHead"] = hubInHead;
 
+    // 11l. CHAT'S NEW SPARK, ⌘N (SP-1c; DESIGN.md §8 "The New spark sheet") — the
+    //      line's create in Chat, pressed the way a keyboard presses it (⌘N, Ctrl+N
+    //      off the Mac), and the LINE says what it took: its LINE_KEY line, as B's
+    //      and ⌘T's say. In Chat the line takes ⌘N on the window's capture phase, so
+    //      focus never decides it; in Godview it is never pressed, because there a
+    //      focused pane's ghostty keeps ⌘N (new_window). Open: LINE_KEY "opened",
+    //      the sheet a modal dialog portaled to the body, the field behind it inert
+    //      and receded, the name field holding the keyboard and a suggested star
+    //      name, the create on and saying Close, the hatch in one of its states. ⌘N
+    //      again: LINE_KEY "closed", the sheet gone after its 240ms leave, the field
+    //      live again. Esc folds it too, and says no LINE_KEY; on Canvas ⌘N does
+    //      nothing. Create is never pressed: it hatches a real spark through the
+    //      run's fieldd. Back to Godview's deck for 11h, which must stay last.
+    const newSpark: Record<string, string> = {};
+    /** The key as the line names it in its LINE_KEY line: ⌘N on the Mac, Ctrl+N elsewhere. */
+    const NEW_SPARK_KEY = process.platform === "darwin" ? "⌘N" : "Ctrl+N";
+    type LineKeyFacts = { key: string; view: string; outcome: string };
+    type SparkFacts = {
+      view: string;
+      /** The sheet's layer under the body: its `data-open`, or null while there is none. */
+      layer: string | null;
+      dialog: boolean;
+      fieldInert: boolean | null;
+      recede: string | null;
+      nameFocused: boolean;
+      name: string | null;
+      create: { expanded: string | null; label: string | null; keys: string | null } | null;
+      hatch: string | null;
+    };
+    /** Every LINE_KEY line, as said: an absence is read by its count. */
+    const lineKeysSaid: string[] = [];
+    const hearLineKeys = (...args: unknown[]): void => {
+      for (const arg of args) {
+        const text = consoleText(arg);
+        if (text.startsWith("LINE_KEY ")) lineKeysSaid.push(text.slice("LINE_KEY ".length));
+      }
+    };
+    /** The New spark sheet and what stands behind it, as the page shows them now. */
+    const SPARK_FACTS = `(() => {
+      const layer = document.querySelector("body > .vf-new-spark");
+      const dialog = layer === null ? null : layer.querySelector(
+        'section.vf-new-spark-sheet[role="dialog"][aria-modal="true"][aria-label="New spark"]',
+      );
+      const name = layer === null ? null : layer.querySelector("input.vf-new-spark-name");
+      const hatch = layer === null ? null : layer.querySelector(".vf-spark-hatch");
+      const create = document.querySelector('button.vf-line-create[data-view="assistant"]');
+      const field = document.querySelector(".field-wrap");
+      return {
+        view: ${VIEW_NOW},
+        layer: layer === null ? null : layer.getAttribute("data-open"),
+        dialog: dialog !== null,
+        fieldInert: field === null ? null : field.hasAttribute("inert"),
+        recede: document.querySelector(".field-recede")?.getAttribute("data-peek-recede") ?? null,
+        nameFocused: name !== null && document.activeElement === name,
+        name: name === null ? null : name.value,
+        create: create === null ? null : {
+          expanded: create.getAttribute("aria-expanded"),
+          label: create.getAttribute("aria-label"),
+          keys: create.getAttribute("aria-keyshortcuts"),
+        },
+        hatch: hatch === null ? null : hatch.getAttribute("data-hatch"),
+      };
+    })()`;
+    const sparkFacts = async (): Promise<SparkFacts> =>
+      (await win.webContents.executeJavaScript(SPARK_FACTS)) as SparkFacts;
+    const SPARK_OPEN = `(() => { const f = ${SPARK_FACTS};
+      const open = f.layer === "true" && f.dialog && f.fieldInert === true;
+      return open && f.nameFocused && (f.name ?? "") !== "" && f.hatch !== null
+        ? "ok" : JSON.stringify(f); })()`;
+    const SPARK_GONE = `(() => { const f = ${SPARK_FACTS};
+      return f.layer === null && f.fieldInert === false ? "ok" : JSON.stringify(f); })()`;
+    /** ⌘N as a keyboard presses it, and the LINE_KEY the line says for it. */
+    const newSparkKey = async (): Promise<LineKeyFacts> => {
+      const heard = waitForConsole(win, "LINE_KEY ", 10_000);
+      pressProductChord(win, "n");
+      return JSON.parse(await heard) as LineKeyFacts;
+    };
+    const openSheet = async (label: string): Promise<SparkFacts> => {
+      const said = await newSparkKey();
+      if (said.key !== NEW_SPARK_KEY || said.view !== "assistant" || said.outcome !== "opened") {
+        throw new Error(`${label} was heard as ${JSON.stringify(said)}`);
+      }
+      await untilRenderer(
+        win,
+        `${label}: the New spark sheet open over the field`,
+        SPARK_OPEN,
+        5_000,
+      );
+      return sparkFacts();
+    };
+    win.webContents.on("console-message", hearLineKeys);
+    try {
+      pressViewKey(win, "assistant");
+      await untilRenderer(
+        win,
+        "⌘4 to Chat",
+        `${VIEW_NOW} === "assistant" ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      await untilRenderer(
+        win,
+        "the pane letting go of the keyboard under Chat",
+        `document.activeElement?.classList.contains("terminal-input") ? "still focused" : "ok"`,
+        5_000,
+      );
+      const before = await sparkFacts();
+      if (before.layer !== null || before.fieldInert !== false || before.create === null) {
+        throw new Error(`Chat was not ready for ⌘N: ${JSON.stringify(before)}`);
+      }
+
+      // ⌘N opens the sheet.
+      const open = await openSheet("⌘N in Chat");
+      if (open.create?.expanded !== "true" || open.create.label !== "Close the sheet") {
+        throw new Error(`Chat's create did not turn to Close: ${JSON.stringify(open)}`);
+      }
+      if (open.recede !== "true") {
+        throw new Error(`the field did not recede behind the sheet: ${JSON.stringify(open)}`);
+      }
+      if (open.hatch === null || !["loading", "live", "flat"].includes(open.hatch)) {
+        throw new Error(`the sheet's hatch is in no state of its own: ${JSON.stringify(open)}`);
+      }
+      newSpark["⌘N"] =
+        `opened (LINE_KEY): a modal "New spark" over the field, which is inert and receded; the ` +
+        `name field holds the keyboard and "${open.name}"; the create says ` +
+        `"${open.create.label}"; the hatch ${open.hatch}`;
+
+      // ⌘N again closes it.
+      const closed = await newSparkKey();
+      if (
+        closed.key !== NEW_SPARK_KEY ||
+        closed.view !== "assistant" ||
+        closed.outcome !== "closed"
+      ) {
+        throw new Error(`⌘N again in Chat was heard as ${JSON.stringify(closed)}`);
+      }
+      await untilRenderer(win, "the New spark sheet gone after its leave", SPARK_GONE, 2_000);
+      const shut = await sparkFacts();
+      if (shut.create?.expanded !== "false" || shut.create.label !== "New spark") {
+        throw new Error(`Chat's create did not turn back to New spark: ${JSON.stringify(shut)}`);
+      }
+      newSpark["⌘N again"] =
+        `closed (LINE_KEY): the sheet gone and the field live; the create says ` +
+        `"${shut.create.label}" (${shut.create.keys ?? "no keys said"})`;
+
+      // Esc folds it too, and the line says nothing.
+      await openSheet("⌘N in Chat, before Esc");
+      const saidBeforeEsc = lineKeysSaid.length;
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await untilRenderer(win, "Esc folding the New spark sheet", SPARK_GONE, 2_000);
+      await sleep(1_000);
+      if (lineKeysSaid.length > saidBeforeEsc) {
+        throw new Error(`Esc said a LINE_KEY: ${lineKeysSaid.slice(saidBeforeEsc).join(" · ")}`);
+      }
+      newSpark["Esc"] = "folded the sheet, and the line said no LINE_KEY";
+
+      // On Canvas ⌘N does nothing. An absence is watched for a while (⇧⇧'s rule).
+      pressViewKey(win, "canvas");
+      await untilRenderer(
+        win,
+        "⌘1 to the canvas",
+        `${VIEW_NOW} === "canvas" ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+      const saidOnCanvas = lineKeysSaid.length;
+      pressProductChord(win, "n");
+      await sleep(1_500);
+      const canvas = await sparkFacts();
+      if (lineKeysSaid.length > saidOnCanvas || canvas.layer !== null) {
+        throw new Error(
+          `⌘N on the canvas did something: ${lineKeysSaid.slice(saidOnCanvas).join(" · ")} · ` +
+            JSON.stringify(canvas),
+        );
+      }
+      if (canvas.view !== "canvas") {
+        throw new Error(`⌘N moved the window off the canvas: ${canvas.view}`);
+      }
+      newSpark["on the canvas"] = "⌘N did nothing: no LINE_KEY, no sheet";
+      pressViewKey(win, "godview");
+      await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
+    } finally {
+      win.webContents.off("console-message", hearLineKeys);
+    }
+    verdict["newSpark"] = newSpark;
+
     // 11h. THE LINE'S KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-2,
     //      §11) — the probes B and ⌘T owe before they ship, in 11g's form: a
     //      pane holds focus, the ear listens at every pane input, each key is
