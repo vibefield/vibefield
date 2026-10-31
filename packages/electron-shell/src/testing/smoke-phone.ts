@@ -935,6 +935,8 @@ export interface IdleSeen {
   readonly asleep: readonly boolean[];
   readonly steps: number;
   readonly presented: number;
+  /** the desk asleep again after the far ask's camera move, before the wake's baseline (R18) */
+  readonly rearmed: boolean;
   readonly wake: { readonly presented: number; readonly arrivals: number };
 }
 
@@ -944,6 +946,10 @@ export function judgeIdle(s: IdleSeen): string[] {
     out.push(`SIM-IDLE: the desk was not asleep through the window (${JSON.stringify(s.asleep)})`);
   if (s.steps !== 0) out.push(`SIM-IDLE: the loop stepped ${s.steps} times over a static screen`);
   if (s.presented !== 0) out.push(`SIM-IDLE: ${s.presented} frames presented over a static screen`);
+  if (!s.rearmed)
+    out.push(
+      "SIM-IDLE: the desk never slept again after the far ask's camera move — the wake window would read the wire's reconfiguration, not motion",
+    );
   if (s.wake.presented < 1 || s.wake.arrivals < 1)
     out.push(
       `SIM-IDLE: motion did not wake it within 2 s (presented +${s.wake.presented}, arrivals +${s.wake.arrivals})`,
@@ -2421,7 +2427,17 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       await zoomFar(p);
       const far = (await faceOf(p))?.wire ?? null;
       await view([p]);
-      await sleep(1_500);
+      // the move re-asks the wire (far → near): a reconfiguration frame inside the wake window would count as motion,
+      // so the baseline waits ≥ 3 s and for the desk asleep again (R18)
+      await sleep(3_000);
+      const rearmed = await until(
+        "the desk asleep again",
+        15_000,
+        "globalThis.__vfDesk.rest().asleep === true",
+      ).then(
+        () => true,
+        () => false,
+      );
       // motion wakes it: presents and arrivals within 2 s of the page asked to move
       const f0 = await faceOf(p);
       const s0 = (await stats())?.presented ?? 0;
@@ -2440,6 +2456,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         asleep,
         steps: r1.steps - r0.steps,
         presented: p1 - p0,
+        rearmed,
         wake: { presented: s1 - s0, arrivals: (f1?.arrivals ?? 0) - (f0?.arrivals ?? 0) },
       };
       return {

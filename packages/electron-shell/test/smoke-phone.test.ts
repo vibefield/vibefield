@@ -41,6 +41,7 @@ import {
   isOwnDevice,
   judgeCap,
   judgeGone,
+  judgeIdle,
   judgeLive,
   judgeLiveProven,
   judgeNoDevice,
@@ -639,6 +640,24 @@ describe("PT-S3 — the rows' judges", () => {
     expect(judgeCap({ ...cap, surfaces: ["s-9", "s-10"] }).join(" ")).toMatch(/surface changed/u);
     expect(judgeCap({ ...cap, surfaces: [null, null] }).join(" ")).toMatch(/surface changed/u);
     expect(judgeCap({ ...cap, cap: 6 }).join(" ")).toMatch(/not 1/u);
+  });
+
+  it("SIM-IDLE: asleep over a static screen; the wake's baseline only once the desk slept again after the camera move (R18)", () => {
+    const idle = {
+      proof,
+      asleep: [true, true, true, true, true, true],
+      steps: 0,
+      presented: 0,
+      rearmed: true,
+      wake: { presented: 3, arrivals: 4 },
+    };
+    expect(judgeIdle(idle)).toEqual([]);
+    // the far ask's move re-asks the wire: a reconfiguration frame inside the window is not motion
+    expect(judgeIdle({ ...idle, rearmed: false }).join(" ")).toMatch(/never slept again/u);
+    expect(judgeIdle({ ...idle, wake: { presented: 0, arrivals: 0 } }).join(" ")).toMatch(
+      /motion did not wake it/u,
+    );
+    expect(judgeIdle({ ...idle, steps: 2 }).join(" ")).toMatch(/stepped 2 times/u);
   });
 
   it("SIM-RELOAD: a session MADE is red even when the face looks right; SIM-GONE: each count one fewer, the device still booted", () => {
