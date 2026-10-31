@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentOffers } from "./agent-catalog";
 import { AgentPersona, AgentProfileId, AgentProfileSetId, AgentProviderId } from "./agent-index";
+import { TerminalWorkloadClass } from "./envelope";
 import { PlaceRef } from "./project-places";
 import { TerminalCreateOpenResult } from "./terminal-pipeline";
 
@@ -334,6 +335,21 @@ export const AgentSessionAttach = z
   .passthrough();
 export type AgentSessionAttach = z.infer<typeof AgentSessionAttach>;
 
+/** Item 121 (James A, 2026-10-31) — the cell a run's PTY was born on, when it
+ * was not the agent cell: TC-D4's fallback lands an agent birth on the
+ * interactive cell while no agent cell is up. fieldd stamps it from the route
+ * row it chose, under the record's HMAC, so AR-4b's cell rule can admit a
+ * re-attach on exactly that cell and terminal after a fieldd restart, and
+ * nothing else. Passthrough, like `attach`: a key a newer fieldd adds reaches
+ * an older reader whole. */
+export const AgentSessionPlacement = z
+  .object({
+    cellBootId: z.string().min(1),
+    workloadClass: TerminalWorkloadClass,
+  })
+  .passthrough();
+export type AgentSessionPlacement = z.infer<typeof AgentSessionPlacement>;
+
 /** One managed session's record: puppeteer's OPAQUE continuation (persisted,
  * never inspected — its `state` is adapter-versioned and credential-free by
  * puppeteer's contract) beside the launch facts fieldd itself chose, and the
@@ -383,6 +399,10 @@ export const AgentSessionRecord = z
      * a run whose adapter reported none, and on every record before the
      * re-attach study's Step 1: such a record verifies as it did. */
     attach: AgentSessionAttach.optional(),
+    /** Item 121 — the non-agent cell the PTY was born on
+     * (`AgentSessionPlacement`). Absent on a birth on the agent cell, and on
+     * every record before item 121: those verify and re-attach as they did. */
+    placement: AgentSessionPlacement.optional(),
     /** AR-4 — what the last fieldd boot did with a live terminal: attached at
      * the next epoch, failed (the reason), unsupported by the adapter, or
      * resumed into a new run — `replacedBy` names the successor run (AR-4b;

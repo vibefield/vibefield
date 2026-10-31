@@ -16,6 +16,7 @@ import {
   AgentMonitorMirror,
   type AgentSessionAttach,
   type AgentSessionOrigin,
+  type AgentSessionPlacement,
   type AgentSessionRecord,
   AgentSessionRecord as AgentSessionRecordSchema,
   type AgentSessionSummary,
@@ -337,6 +338,9 @@ export function recordForRun(input: {
   /** RA-D3 — the adapter's attach record (opaque; the same custody as the
    * ingress bearer), the latest it reported before the launch */
   attach?: AgentSessionAttach | undefined;
+  /** Item 121 — the non-agent cell the run's PTY was born on (TC-D4's
+   * fallback), signed with the rest so AR-4b's cell rule can admit it */
+  placement?: AgentSessionPlacement | undefined;
   /** AR-4 — the floor session this run replaced at a resume-when-idle */
   replaced?: string | undefined;
   /** AR-7 — a run ADOPTED in a terminal the person's own shell owns: the
@@ -372,6 +376,14 @@ export function recordForRun(input: {
       ? { ingress: { port: input.ingress.port, token: input.ingress.token } }
       : {}),
     ...(input.attach !== undefined ? { attach: input.attach } : {}),
+    ...(input.placement !== undefined
+      ? {
+          placement: {
+            cellBootId: input.placement.cellBootId,
+            workloadClass: input.placement.workloadClass,
+          },
+        }
+      : {}),
     ...(input.replaced !== undefined ? { replaced: input.replaced } : {}),
     createdAt: input.now,
     updatedAt: input.now,
