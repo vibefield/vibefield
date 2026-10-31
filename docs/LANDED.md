@@ -20904,3 +20904,358 @@ manifest's scopes and the attach.
 - **PT-S4, touch,** through serve-sim: an EL8 pin event, loopback only, never `--allow-exec`.
 - The lane's records (the light log, the landing log's entries) go to the next draft queue, not main.
 - The lane `/Volumes/SamsungRed/lanes/pts2` holds about 3.7 GB. Reclaiming it is James's.
+
+## PG-1a…1c — the desktop's efficiencies first: the model's attach promise withdrawn with the join (1a); the mesh relay reads each peer row's key alone, and the window screens each desktop (1b); a phone behind the door's 256 KiB cap gets the board as it is (1c) (PG-D9 A, PG-D11 A) (2026-10-31; `1790be95f`, the merge of main `204240a7b` into `83e08f1e1` on item 100's `a025af02e`, lane `pg/1c-tailnet-backpressure`)
+
+**What.** James opened the track in chat on 2026-10-29 (07:24Z and 07:25Z: "full godview experience on phone", over
+the backend model, aligned with the sync-plane design). He ruled the slate on the page *The Phone's Godview*
+(https://claude.ai/artifact/AAYgPk8oLbw7RZkanc4mhF) between 08:17:14Z and 08:30:42Z: all ten (a), nine at their
+leans. PG-D9 (a) puts the audit's efficiencies first, as desktop gains of their own, before any phone replica. He
+ruled PG-D11 A on the PM board at 16:22:36Z. VF-PM sliced PG-1 at the leans (13:16Z, the brief
+`lanes/ios/PG1-BRIEF.md`). Five commits on item 100's `a025af02e`, 17 files, +1312 −37:
+- **PG-1a (`e9a57b4b6`): F-M4 on the model's promise.** While this device's terminal doors were unpublished,
+  `attachableRows` withheld the desk row's `terminal` join but passed the backend's own `monitorRow.attachable` and
+  `.writable`. A peer window read `attachable: true` with no join, fell back to the run id and asked the owner for a
+  session its floor may not hold. `withholdAttachPromise` now says `attachable: false`, and `writable: false` where
+  declared, while the doors are down, with the keys in order. No wire shape, contract, gen or kit change: the values
+  move.
+- **PG-1b (`f2d76f7bf`, `8a3b64ced`): the key-only relay, and the window's screen.**
+  - The mesh relay (PG-L4.1) parsed every peer frame as whole field rows though it reads only the key, so one row this
+    build could not read refused or resynced the whole desktop. It now parses `AgentBoardKeySnapshot` and
+    `AgentBoardKeyDelta`, over contracts' additive, TS-only `AgentBoardRowKey {runtimeRunId, revision}`, and every
+    envelope rule stands. No wire bytes change.
+  - The window (admitted into 1b by VF-PM, 13:16Z): `godview/monitor/board-screen.ts` reads each row alone before the
+    envelope. An unreadable row is dropped, and its desktop reads as another version while it holds one; its readable
+    rows stand, with no gap and no reopen.
+  - The review's three (`8a3b64ced`): the contracts test's optional epoch under `exactOptionalPropertyTypes`; a shown
+    row that turns unreadable leaves the board; "another version" is stamped now.
+- **PG-1c (`2392b0ef8`, `83e08f1e1`): tailnet backpressure (PG-D11 A).**
+  - The number, in one place: `PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES = 256 * 1024`; the drain point is derived at
+    half.
+  - The door (`product-api.ts`): a `tailnet` principal's subscription that declares a `resync` is held once the
+    connection's queue reaches the cap. Its deltas stop, sticky until a resync; snapshots are never held. Every
+    write's callback is the drain check, and at half the cap ONE fresh snapshot is sent. A resync that throws closes
+    the connection.
+  - Who and what (VF-PM, 14:15Z): the phone alone (the `tailnet` principal) and the mesh board alone
+    (`MeshBoard.subscribe`'s install; its resync is the open a reader joining now would get, at the owners'
+    revisions). A peer daemon on the same door, and loopback, keep the 128 MiB shed.
+  - The review's five (`83e08f1e1`): a board past the cap held itself in a loop, so its own queued snapshots now never
+    count (`Hold.inflight`); the install moved onto the board, so a deleted daemon line fails a row; a red-first row
+    that was green at the parent; the registry's note.
+  - The kit (EL9, one test row): `aMidStreamMeshSnapshotReplacesTheBoardWithoutAskingAgain` pins the phone's routing
+    of a mid-stream snapshot. No kit product change.
+
+**Found:**
+- F-M4's promise gap (1a) and a single unreadable peer row refusing a whole desktop at the relay (1b): the two defects
+  the slices fix.
+- 1c's first cut held a board past the cap in a loop with its own snapshots (the review, from two lenses).
+- The phone's History tail and `project.subscribe` stay on the shed, each its own item, both reachable today: 109 (a
+  tail reset's hole below the newest 100 rows) and 110 (the phone's no-op snapshot).
+- The first kit try (10-29 14:35Z) named the test FILE in `-only-testing`, matched nothing, and exited 0 with
+  "Executed 0 tests": a false green, caught because the script grepped for the row. `pg1c-kit.sh` now names the
+  `@Suite` and requires the named row to run and pass.
+- Main gained PT-S2 (`e4aa3d367`) between the first simulated mint and run 18, touching `daemon.ts` and
+  `product-api.ts` beside PG-1, so the light was run again on the real pairing.
+
+**Validation.**
+- **The lane:** `/Volumes/SamsungRed/lanes/ios` (the worktree `vibe-field`), 1a → 1b → 1c as one line on item 100,
+  tip `83e08f1e1` on `pg/1c-tailnet-backpressure`.
+- **The light and red-first, 10-29, at each slice's tip** (`pg1-light.sh`, at nice 19 under the guard: the green half
+  at the slice's tip, then the slice's tests on its parent, which must go red):
+  - 1a at `e9a57b4b6`: red at `a025af02e` (fieldd, 3 of 52); green 13:39:16Z (contracts 35, fieldd 81 in 5 files,
+    field-app 21).
+  - 1b at its first cut `4d3053fe0` (1b alone on item 100): red in contracts (3 of 38), fieldd (3 of 25) and
+    field-app (1 of 13); green 13:40:14Z (contracts 38, fieldd 82, field-app 29).
+  - 1c at `83e08f1e1`: red at `8a3b64ced` in contracts (1 of 44) and fieldd (9 of 37); green 14:33:50Z (contracts 82,
+    fieldd 104 in 7 files, field-app 29).
+  Logs: `lanes/ios/logs/pg1-light-*`, `pg1-light-run.out`, `pg1c-run.out`.
+- **The kit row at `83e08f1e1`** (Xcode 26.6, the iPhone 17 Pro simulator): build-for-testing, then
+  `FieldLinkHomeFieldTests` 6 of 6 with the named row passed, 14:36:55Z. Logs: `lanes/ios/logs/kit-83e08f1e1/`.
+- **The sim light, 10-31 00:41:19Z,** over a simulated mint: main `265325d09` + item 105 `f948f0088`, then
+  `83e08f1e1` (`pg/sim-run18`, `25ff2105b`, tree `824068067`, never pushed), because item 105 and PG-1 share four
+  files. Preflight, the walls, the iOS fixtures, biome and the three typechecks; contracts 92, fieldd 128 (8 files,
+  item 105's `index-activity-doors` among them), field-app 29. Logs: `lanes/ios/logs/pg1-sim-light-25ff2105b*`.
+- **The light on the real pairing `a3e35579f`, 01:02:30Z** (`204240a7b` + `83e08f1e1`, tree `621b2400f`, M18's): the
+  same rows, green. Its typecheck covers PT-S2's `daemon.ts` and `product-api.ts` beside PG-1's. Logs:
+  `lanes/ios/logs/pg1-sim-light-a3e35579f*`.
+- **Kit row on the real pairing `a3e35579f`, this Mac, 01:04:56Z:** build-for-testing exit 0, then
+  `FieldLinkHomeFieldTests` 6 of 6 with the named row passed. Logs: `lanes/ios/logs/kit-a3e35579f/`.
+- **No verify on this Mac** (James, 2026-10-29 09:05Z: the Mac mini's verify lane).
+- **The landed tip** is `1790be95f` (M18): main `204240a7b` merged into `83e08f1e1` by a9, tree `621b2400f`. Six files
+  sit on both sides (contracts' `agent-field.ts`, `registries.ts` and `registry.test.ts`; fieldd's `agent-field.ts`,
+  `daemon.ts` and `product-api.ts`), each ours + theirs − base exactly, with 0 markers. The bundle
+  `lanes/ios/pg1-83e08f1e1.bundle` (sha256 `1cd7949f…`) requires item 100's `a025af02e` alone.
+- **The mini, run 18, `pnpm verify` at `1790be95f`:** exit 0, armed 01:01:04Z, done 01:05:39Z (load 1.82 → 9.28),
+  whole: preflight through `gen:check`.
+  - `pnpm test` ran 28 projects: vitest 10,464 passed, 0 failed, 18 skipped. Contracts 1340, field-app 3040, fieldd
+    2655 + 11 skipped, electron-shell 2174 + 3 skipped; `tailnet-backpressure` (10) and `board-screen` (7) among them.
+  - `pnpm test:rust`: 499 passed, 0 failed, 14 ignored, over 31 binaries. The tree was clean after, with no stub left.
+  Logs: `lanes/ts6/logs/mini/run18/`.
+- **Landed:** main fast-forwarded `204240a7b` → `1790be95f` at 01:07:32Z on VF-PM's GO, and was pushed at 01:08:04Z.
+
+**Records.** The design record is `draft/thinking-phone-godview.md` (§7 the ruled table, §8 the ladder, each rung as
+built). Its §8 "NOT LANDED" and the PG-D11 clauses at design-06, thinking-sync-planes and thinking-upload-plane ride
+the next draft queue. DECISIONS gains the PG row, and ROADMAP the PG track.
+
+**Owed.**
+- PG-1d (re-present an unchanged row when the doors' gate flips: F-M4's residual), PG-1e0 (the projection bench, then
+  1e1 or 1e2 by the numbers) and PG-1f (the puppeteer-monitor step-idle petition and its pin test). A new reader of an
+  old owner keeps the run-id fallback: a PG-1d candidate, and a design question.
+- PG-0, the records at their sources (`860a2449f`, queued). Then the agent-plane pages' clauses (api.html's
+  subscription byte bound, system.html's "never capped", the model's promise), which follow PG-0's edit of api.html.
+- The cap read on the phone under the Network Link Conditioner (PG-9): `bufferedAmount` is fieldd's own queue, and
+  the sidecar's and tsnet's buffers lie past it.
+- Items 109 and 110.
+
+## CP-0 — the compose plane's record: `compose.ts` (a spark, the 20-verb catalog, CP-1's six read verbs), a run's origin, the `compose.sparks` doors and DESIGN.md §2.10's spark faces (2026-10-30; `b9ca35824`, the merge of main `401fb238e` into `aaa9c22fa`, lane `co/cp0`)
+
+**What.**
+- This is the compose plane, version 2. James ruled it on its page on 2026-10-29, 09:42–09:57Z: all fifteen CP marks,
+  each on its lean (`draft/compose-plane/v2/`; the study's §15 and §16). Contracts came first, and nothing served them
+  yet.
+- `packages/contracts/src/compose.ts` is TS-only, by the agent plane's rule (`gen-jsonschema.ts`:8-11). It holds:
+  - `SparkRecord` and `SparkSummary`. A spark's face is a seed of its own (NS-D2, ruled B). It has its profiles, and
+    the one it thinks under must be one of them (NS-D5). A refinement holds that on both the record and the hatch
+    params.
+  - The params and results of the window's doors: `compose.sparks.list`, `.hatch` and `.open`.
+  - `COMPOSE_VERBS`: round 2's seven families plus `flow_propose`, 20 verbs. Each carries its slice (CP-1…CP-4),
+    whether it only reads, and the description a model reads. There is no approve verb (CP-L4).
+  - The inputs and outputs of CP-1's six read verbs (`COMPOSE_VERB_SCHEMAS`): agents_available, projects_list,
+    agents_list, agent_read, history_search and history_read.
+- `agent-session.ts`:
+  - It adds `SparkId` and `AgentSessionOrigin` (CP-D15: you, a spark or a flow's step). The origin is OPEN like
+    `spawnedBy`, and an absent one reads `you`.
+  - `origin` and `spark` join the record and the row. Both are optional, so a signed record without them verifies as
+    before.
+- `methods.ts`: `compose.sparks.{list,hatch,open}` under `agents.manage`, `local`.
+  - The window holds that scope; no tailnet preset or plugin eligibility table does.
+  - A spark's tools are not METHODS rows. They are compose.ts's catalog, served by fieldd's MCP server.
+- Ten fixtures, each mapped in `fixtures.test.ts`:
+  - the seven compose rows: `compose-agent-read`, `compose-agents-available`, `compose-agents-list`,
+    `compose-history-search`, `compose-spark-record`, `compose-sparks-hatch-params` and `compose-sparks-list`, each
+    `.valid`;
+  - three spark session variants: `agent-session-record.spark`, `agent-session-record.spark-started` and
+    `agent-session-summary.spark`.
+- `compose.test.ts` holds:
+  - the catalog: names, families, slices, no approve verb, and schemas for exactly CP-1's verbs;
+  - a spark's profile rule, its face seed's range and its one-line name;
+  - origin's OPEN reading.
+- DESIGN.md §2.10 is a spark's face, James's mouthless star set:
+  - S-1…S-5 and the nineteen statuses;
+  - framed and free, the sizes per surface (the EW-D1 and FL-D2 rows marked proposed), still and live;
+  - the flat star without WebGL2, reduced motion, and the hatch (NS-D3 was open then);
+  - the engine vendored byte for byte, with its palettes as the one hex allowed outside tokens.css.
+
+**Stubbed.**
+- fieldd served no compose door, and answered none of the three `compose.sparks` rows. Those are later slices:
+  - CP-1a: the floor's door;
+  - CP-1b: fieldd's door;
+  - CP-1c: the sparks;
+  - CP-1d: the briefing.
+- CP-0's measurement (in the lane, 2026-10-29; the study's §16.1) is why CP-1d exists.
+  - Under puppeteer 0.3.0's managed launch, Claude Code 2.1.312 held a spark folder's `.mcp.json` server behind its
+    approval screen, despite a folder-local `enabledMcpjsonServers`.
+  - So James ruled route A on the board (16:15:50Z): puppeteer passes the spark's server and allowance at launch (PU-F,
+    released in puppeteer 0.3.2).
+
+**Validation.**
+- **The light pass** ran in `lanes/co` on this Mac, 2026-10-29 11:11:13–11:12:15Z, on base `e23fa8a1f`, each row
+  alone (logs: `lanes/co/logs/light-aaa9c22fa/`).
+  - preflight 0, `check:walls` 0, and biome on the touched files 0.
+  - tsc contracts 0 and tsc fieldd 0.
+  - contracts 563/563 (4 files) and field-app's DESIGN.md readers 112/112 (4 files).
+  - Bundle: `lanes/co/cp0-aaa9c22fa.bundle` (sha256 `4ae0414d…`).
+- **The mint.**
+  - The first, `bdc67871e` over main `99a2cdd53`, went stale when TS-7 (run 4) landed before it ran. It is kept at
+    `mint/run5-stale-bdc67871e`, with its logs under `lanes/ts6/logs/mini/run5/stale/`.
+  - The second, `b9ca35824`, is `aaa9c22fa` over main `401fb238e` (TS-7, James's PR #2, and his PRC-6 docs commit).
+  - Three files changed on both sides. Each was resolved as ours + theirs − base, with 0 markers:
+    - DESIGN.md: §2.10 beside AU-0's, TS-6's, Q19's and TS-7's sections;
+    - `contracts/src/index.ts`: CP-0's export beside TS-7b's phone code;
+    - `contracts/test/fixtures.test.ts`: CP-0's rows beside TS-6's, AR-6's and AU-1's.
+- **Run 5** was on the mini, on VF-PM's GO at 18:24Z (logs: `lanes/ts6/logs/mini/run5/`).
+  - The host: Apple M4, 16 GiB, macOS 26.7.2 (25G332); node 26.5.0, pnpm 11.13.1, rustc 1.99.1.
+  - preflight 0, with one WARN: R23, the candidate `acp` could offer `spawn`, and the pin implements `createSession`.
+  - `pnpm verify` armed at 18:24:28Z and exited 0 at 18:28:51Z, on `b9ca35824` (tree `d0195a2cc`).
+  - Its counts: typecheck 27 projects; vitest 9,861 passed, 0 failed, 17 skipped; cargo 31 binaries ok, 499 passed,
+    0 failed, 14 ignored. The tree was clean after.
+- **Landed:** main fast-forwarded to `b9ca35824` on 2026-10-30. Main's next commit, `7b25bb348` (18:39:01Z), sits on
+  it.
+
+**Owed.**
+- The rest of the foundation landed as ONE candidate (VF-PM, 2026-10-30 23:34Z): `co/cp1-docs-main` `83065f58d`, in
+  the mini's mint `67cf9f1cd` (run 20; LANDED "CP-1a…1c", the next entry). It holds:
+  - CP-1a: the floor's door and its walk;
+  - CP-1b: fieldd's `vibefield` server and the six read verbs;
+  - CP-1c: the signed sparks and their three doors;
+  - the stack's docs.
+- Then CP-1d: PR #4, the briefing on puppeteer 0.3.2.
+- MT-0, the tool plane's first slice (`draft/thinking-tool-plane.md`, ruled 2026-10-30):
+  - compose.ts's verb table becomes `contracts/src/tools.ts`'s catalog;
+  - CP-0's header law, "Plain agents hold no door (CP-L1)", takes MT-D2's dated narrowing then.
+- The Sparks marks' DECISIONS row is owed with SP-1b's records (VF-PM, 2026-10-31 01:01Z). These are James's round-2
+  Sparks rulings: CH-D1…D5, NS-D1…D6, TL-D1…D5, FL-D1…D6 and EW-D1…D3. The page's 22 picks were made on 2026-10-30,
+  18:41–18:48Z, on v8. The CO-D and CP rows ride this records commit.
+
+## CP-1a…1c — the compose plane's door: the floor's `door.sock` names each caller by the kernel and walks it to its pane, fieldd's `vibefield` MCP server serves a spark the six read verbs under its Agent Profiles, and each spark is a signed record with a folder of its own and the window's three doors (2026-10-31; `83065f58d` — CP-1a `8cf8013b2`, CP-1b `3e93ba71f`, CP-1c `1060d4b28` and the docs `a44f43dfd`, merged over main `bef070265` — lane `co/cp1-docs-main`, in the mini's mint `67cf9f1cd` over main `aca3794ce`)
+
+The compose plane, version 2 (ruled 2026-10-29; `draft/compose-plane/thinking-roled-agents.md` §15 and §16), after
+CP-0's record. CP-1a is the fixer's, CP-1b and CP-1c are the CO lane's, and the four landed as one candidate (VF-PM,
+2026-10-30 23:34Z).
+
+**What.**
+- **CP-1a, the floor's door** (`6b64620c8`, `44d706e10`, `ec87e42cd`, `5aa290200`; onto main `53894f1e7`; `8cf8013b2`).
+  Identity comes from the process, with no token (CP-L3, CP-D1).
+  - Contracts:
+    - `SOCKETS.DOOR` is `door.sock`, and `LAYOUT.DOOR_SOCKET` is `native/run/door.sock`.
+    - `NATIVE_DOOR` holds the numbers: 64 doors open, 256 KiB held per door and 4 MiB in all, a walk of 32 parents,
+      the 60 s birth rule, starts compared at whole seconds, and `LINE_MAX_BYTES` 8 MiB, the one bound both line
+      readers keep.
+    - mgmt.ts gains the caller, the pane, the open and closed door, the snapshot, and the three verbs
+      `native.door.subscribe`, `.close` and `.info`. `MeshLaneProtocol` gains `mcp`.
+    - Ten `native-door-*` fixtures are parsed on both sides (`fixture_parity.rs` `native_door_fixtures`).
+  - `services/door/peer.rs`: the kernel names a connection.
+    - On macOS it reads the holder's pid (`LOCAL_PEERPID`) and the effective pid (`LOCAL_PEEREPID`); they differ only
+      for a delegated socket, which the door refuses. The uid and the process's parent and start come from
+      `proc_pidinfo`, or from `/proc` on Linux.
+  - `services/door/walk.rs`: THE FLOOR WALKS.
+    - It goes from the caller up at most 32 parents to the first pane whose root it reaches, and answers
+      `{terminalSessionId, depth}`.
+    - A pid is a root only when its process started within 60 s of the pane's `createdAt`.
+    - Since `8cf8013b2`, a row the floor lists `exited` (AR-6) is no root.
+  - The door unit binds `door.sock` at 0600 inside the 0700 run dir. Windows reports it `disabled`.
+    - It refuses, in order: `refused-uid`, `delegated`, `peer-gone`, and `limit` for the 65th door. A refused caller
+      opens no lane, is never announced, and is logged at most once a second per reason.
+    - A caller found in no pane is walked once more after a reconcile, within 2 s.
+    - Each door is a local lane (`mcp`). `native.mesh.lane.subscribe` never lists it, and `mesh.lane.close` refuses it.
+    - A door outlives fieldd: its bytes are held in order while fieldd is away, and a door past its bound is closed
+      `held-too-long`.
+    - The door stream is a snapshot, then deltas. A backlog is coalesced into one `.snapshot` rather than closing mgmt
+      (`MgmtOutbox::offer_rebuildable`, EL7).
+  - `field-native door --endpoint <path>` (`door_bridge.rs`) is the stdio bridge an agent runs.
+    - It reads no environment and binds nothing. It passes whole lines both ways, and exits 4 past the bound.
+    - It dials a restarted floor again (250 ms doubling, 60 s in all). Its exits are 0, 2 (usage), 3 (unreachable) and 4.
+- **CP-1b, fieldd's door** (`427480652`, `3e93ba71f`):
+  - `compose/mcp.ts` is a hand-written MCP server for one connection at a time. It speaks 2026-07-28 (`server/discover`,
+    `_meta` on every request, -32022 for another revision, `resultType`, private `ttlMs`) and the `initialize`
+    handshake before it. Claude Code 2.1.312's measured frames are its tests' frames.
+  - `compose/door.ts` subscribes to the floor's door stream and claims each door's lane. It splits the floor's raw
+    chunks on newlines and answers each line in order. It closes a door past `LINE_MAX_BYTES`, and is quiet on a
+    floor without a door.
+  - `compose/verbs.ts` holds the six read verbs to the spark's profiles (TL-D5): `agents_available`, `projects_list`,
+    `agents_list`, `agent_read`, `history_search` and `history_read`. Another profile's session never shows.
+    History asks rosetta once per runtime the profiles hold.
+  - `compose/index.ts` (`ComposeService`) names the caller: pane, then run, then the spark it is.
+    - Each call is parsed by its schema and written through `audit.required` as `compose.<verb>` before it runs.
+    - A plain caller's door leaves one `compose.door.plain` line.
+  - Contracts: `gen/compose-tools.ts` (the tools' JSON Schema, under gen:schema and gen:check), and
+    `IndexSearchParams.runtime`. agent-runtime.ts: `runForTerminal`.
+  - Wall R29: `packages/fieldd/src/compose` imports no `@vibefield/puppeteer-*` and no `@vibefield/rosetta-*`.
+  - The lane link redials (`3e93ba71f`). It was dialed once per boot, so after a floor restart or a dropped socket
+    every lane's bytes went nowhere until fieldd restarted. That was doc sync's gap as well.
+- **CP-1c, the sparks** (`f98d0d2b0`, `1060d4b28`):
+  - A run carries its `origin` and its `spark` onto its signed record and its row, and a resume keeps both (CR-D11).
+    - Both sit under the record's HMAC, so an agent that writes `spark` into its record fails verification.
+    - `runForTerminal` reads verified records only.
+  - LAYOUT gains three rows: `SPARKS_DIR` (the records, 0600 in 0700), `SPARKS_KEY_FILE` (made once, never
+    overwritten) and `SPARK_HOMES_DIR` (each spark's folder).
+  - `SparkStore`: each record is signed (HMAC-SHA256 over `canonicalJson`).
+    - A record that does not verify, does not parse or that other users can read is set aside, never served.
+    - Names are unique per user without case. Ids are `sp-` plus 16 hex. A folder's slug comes from the name, with
+      accents folded.
+  - `SparkService`:
+    - hatch refuses an unknown profile, a profile with no sign-in for its agent, and a name taken. Otherwise it writes
+      the record, makes the folder and its brief (CLAUDE.md, the person's after hatch), and starts the session with
+      origin `you`.
+    - open answers a live spark, resumes a sleeping one in its last session, or starts it again in its folder.
+  - `compose.sparks.list`, `.hatch` and `.open` answer the window only. hatch and open are audited
+    (`compose.spark.hatch`, `.open`).
+  - The route to the `vibefield` server is the board's `co-spark-door-route`. `LAUNCH_ROUTE` (A, ruled 2026-10-29
+    16:15:50Z) is wired. `folderRoute` (B, a folder's own `.mcp.json`) is built and tested, not wired.
+- **The docs** (`a44f43dfd`):
+  - `api.html` lists `compose.sparks.*`, the `vibefield` MCP door with its six tools, and `native.door.*` with the
+    bridge. "Thirty-six doors" gets a dated correction.
+  - `architecture.html` gains two seams rows, the floor's door and fieldd's door.
+
+**Real vs not yet.**
+- Real:
+  - the floor's door on a real floor and kernel (`tests/door.rs` 8 rows, `tests/door_bridge.rs` 9);
+  - fieldd's server, door and verbs (fieldd's units, the floor faked);
+  - the signed sparks and their three doors.
+- Not yet:
+  - **No launch hands an agent the `vibefield` server.** `LAUNCH_ROUTE` does nothing until CP-1d carries the server
+    at launch (PR #4, puppeteer 0.3.2's per-run briefing). Until then a spark hatches and thinks without tools, and no
+    agent in the product reaches the door.
+  - No window calls `compose.sparks.*` yet: that is SP-1b and SP-1c.
+  - A plain run is served nothing, until MT-0.
+- Unproven on this Mac: the delegated-socket refusal. `SO_DELEGATED` is privileged, so that row runs on injected facts.
+  The Linux arm compiles only on Linux.
+
+**Found.**
+- The bridge installed a client's delivery slot before queueing its `HELLO_OK`, so an inbound byte could reach a
+  client ahead of its own ack. It was fixed at its cause (`ec87e42cd`).
+- AR-6's kept panes, listed `exited`, read as live pane roots after CP-1a's merge of main. A husk's pid reused inside
+  the birth rule would have named its dead pane. It was fixed red-first (`8cf8013b2`; red 2026-10-30 17:50:45Z,
+  `left: [rooted 500, husk 600]`).
+- CP-1c's first light was red at 2026-10-29 12:40:23Z on the slug row (`'u-ni-code-star'`, not `'unicode-star'`).
+  NFKD splits a letter from its combining marks, and the marks were hyphenated. They are stripped (`\p{M}`) first now.
+- mgmt.ts's `NativeDoorInfoResult` says fieldd writes the bridge into a spark's `.mcp.json` at every launch. Only
+  route B would, and B is not wired. The dated erratum rides MT-0.
+- The merges:
+  - CP-1b onto CP-1a was clean (`803a57d46`).
+  - Over main `bef070265` there was one conflict (`20ced228a`): daemon.ts's boot-env import, where PR #5's
+    `splitPathList` (`0cfb25c5b`) met CP-1b's compose import. Both were kept.
+  - `78796f435` and `83065f58d` were clean, with 0 markers.
+  - The mint (`67cf9f1cd`) changed three files on both sides: `contracts/src/methods.ts`, `contracts/src/registries.ts`
+    and `fieldd/src/daemon.ts`. Its tree `0d1c873d5` equals merge-tree's.
+  - The landed diff (`bef070265`..`83065f58d`) is 112 files, +21,478 −5,044. 47 of the files are generated JSON
+    schemas. It changes no lock and no pin: contracts' `package.json` gains only the `./compose-tools` export and
+    gen:schema's third generator.
+
+**Validation.**
+- No lane light at 83065f58d; the parts' lights 10-29 12:23:31Z (3e93ba71f) and 12:43:54Z (1060d4b28); CP-1a's rows
+  10-29 12:18:47Z and 10-30 17:52Z; the re-merge check GREEN 10-30 23:30:45Z (tsc and the touched units, not a light);
+  run 20 the first full gate. The law is a lane light before the mint, and run 20 is its recorded exception (VF-PM,
+  2026-10-31 01:17Z).
+- **CP-1a, the fixer's rows** (`lanes/cp1a/logs/`):
+  - At `5aa290200`, 2026-10-29 11:49:59–11:52:45Z: fmt 0, clippy `-D warnings` 0, the whole `cargo test -p
+    field-native` (lib 312, door 8, door_bridge 9, every suite ok), contracts tsc 0 and its tests 0, biome 0, and
+    gen:check.
+  - The gate rows, ending 12:18:47Z: preflight OK with 1 warning, walls 0, deps 0.
+  - Red-first by mutation (`mutate-c3.sh`, `mutate-c4.sh`): each mutant turned exactly its own row red.
+  - At `8cf8013b2`, 2026-10-30 17:52:23Z: fmt 0, the new row 1/1, `--lib services::door` 13/13. Clippy, the whole
+    suite, gen:check and the TS rows were not run after the main merge.
+- **CP-1b's light** (`lanes/co/logs/light-3e93ba71f/`): `== co-light GREEN 12:23:31Z; HEAD 3e93ba71f` (2026-10-29,
+  base `5aa290200`). Its rows: preflight 0, walls 0, biome 0 on 20 files, tsc contracts and fieldd 0, gen fresh, the
+  lane link's redial row, contracts 554/554, and fieldd 43 passed with 1 skipped.
+- **CP-1c's light** (`light-1060d4b28/`): `== co-light GREEN 12:43:54Z; HEAD 1060d4b28` (2026-10-29, base
+  `3e93ba71f`). Its rows are the same, with biome on 8 files, plus `cargo test --test layout_vector` 0 in the lane's
+  own target. Contracts 520/520, and fieldd 66 passed with 2 skipped.
+- **The docs commit** had no light. Its checks were merge-tree and the pages' tag balance; no gate reads the pages.
+- **The re-merge check** (`co-remerge-check.sh`, 2026-10-30 23:28:27–23:30:45Z), on `20ced228a` and `78796f435`: tsc
+  contracts and fieldd 0 on each. CP-1b: contracts 576/576, fieldd 43 passed with 1 skipped, the redial row 0. CP-1c:
+  contracts 540/540, fieldd 67 passed with 2 skipped. Its header says what it is: "Not a light pass: no preflight,
+  walls, biome or gen rows."
+- **Run 20: the mint `67cf9f1cd` over main `aca3794ce`.**
+  - a9's re-check: clean, three both-sides files, gen freshness a real row through the `compose-tools` export, and
+    field-native rebuilt (+1.4 MB, CP-1a's door).
+  - The host: Apple M4, 16 GiB, macOS 26.7.2 (25G332); node 26.5.0, pnpm 11.13.1, rustc 1.99.1.
+  - `pnpm verify` armed at 01:15:23Z (load 1.15) and exited 0 at 01:19:58Z (load 9.94), on `67cf9f1cd`.
+  - Its counts: "Successfully ran target test for 28 projects"; vitest 10,516 passed, 0 failed, 18 skipped (+52 tests,
+    +6 files); "cargo test results: ok 33, FAILED 0", with 532 passed and 14 ignored (VF-PM's counts, 01:22Z). CP-1a's
+    `door` and `door_bridge` are the two new binaries. gen freshness passed with the compose-tools generator live.
+  - The tree was clean after, with no stubs left. HID idle went from 395 to 671 s: no hand touched the mini. Verify
+    only; the logs hold no smoke row. Logs: `lanes/ts6/logs/mini/run20/`.
+- **Landed:** main fast-forwarded `aca3794ce` → `67cf9f1cd` at 01:22:03Z (main's reflog; the fixer, on VF-PM's GO), and
+  VF-PM's push of 01:22Z (`aca3794ce`..`67cf9f1cd`) carried it, origin equal to local.
+
+**Owed.**
+- **CP-1d**, James's PR #4, retargeted onto main after this. It gives every birth its briefing; until it lands no agent
+  holds the door.
+- **MT-0**, the tool plane's first slice, drafted on PR #4's tip (`lanes/mt/mt0`). It turns `compose/` into
+  `tool-plane/` and compose.ts's verb table into `contracts/src/tools.ts`, and serves a plain run its rows. It also
+  carries mgmt.ts's dated erratum.
+- **SP-1b and SP-1c** (renderer only, on James's go), then SP-1d.
+- At the next draft queue: the dated as-built lines in `thinking-roled-agents.md` §16 (CP-1a's walk past an exited
+  pane, the stack as landed) and §17.
+- `system.html` lacks `ComposeService` and `SparkService` (cp-landing's, once CP-1d's shape is final).
