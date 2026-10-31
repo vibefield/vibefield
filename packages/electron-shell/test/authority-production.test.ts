@@ -202,3 +202,70 @@ describe("createProductionLiveSurfaceSupport — main's ONE simctl (PT-S3 P1)", 
     }
   });
 });
+
+/** PT-S2: a phone bound by its device type and runtime — never a UDID */
+const PHONE_SOURCE = {
+  kind: "ios-simulator-device",
+  binding: { deviceType: PRO, runtime: IOS_26_5 },
+  crop: { mode: "auto" },
+} as const;
+
+const FRESH = {
+  sessions: 0,
+  sessionsMade: 0,
+  captureReady: false,
+  helperPresent: false,
+  helper: null,
+  vetted: null,
+} as const;
+
+describe("createProductionLiveSurfaceSupport — main's simulator census (PT-S3 D1)", () => {
+  it("a fresh census is zero or null, and READS: no simctl, no capture stack, nothing spawned or loaded", () => {
+    const support = createProductionLiveSurfaceSupport({ capture: CAPTURE });
+    expect(support.census()).toEqual(FRESH);
+    expect(support.census()).toEqual(FRESH);
+    expect(fakes.execs).toEqual([]);
+    expect(fakes.loads).toEqual([]);
+    // a shell with no capture half says the same
+    expect(createProductionLiveSurfaceSupport({ capture: null }).census()).toEqual(FRESH);
+  });
+
+  it("reads what was made: the helper on disk before any stack, a phone's session, the stack once built, the vetted directory", async () => {
+    const helperPath = join(root, "live-surface-capture-helper");
+    writeFileSync(helperPath, "");
+    const vetted = developerDir();
+    fakes.adapter = refusingAdapter();
+    fakes.answer = (file, args) => {
+      if (file === XCODE_SELECT) return `${vetted}\n`;
+      if (file === XCRUN && args[1] === "list") return LIST;
+      return undefined;
+    };
+    const support = createProductionLiveSurfaceSupport({ capture: { ...CAPTURE, helperPath } });
+    try {
+      // the helper is on disk; the stack that would spawn it is not built
+      expect(support.census()).toEqual({ ...FRESH, helperPresent: true });
+      // a phone's session is made at mint, its ONE inner with it; it looks only under a face
+      support.factories.iosSimulatorDevice("simdev_surface_000000000a", PHONE_SOURCE);
+      expect(support.census()).toEqual({
+        ...FRESH,
+        sessions: 1,
+        sessionsMade: 1,
+        helperPresent: true,
+      });
+      expect(fakes.execs).toEqual([]);
+      expect(fakes.loads).toEqual([]);
+      await support.enumeration.bootedSimulators();
+      expect(support.census()).toEqual({
+        sessions: 1,
+        sessionsMade: 1,
+        captureReady: true,
+        helperPresent: true,
+        helper: { helperStarts: 0, helperExits: 0, activeSessions: 0, framesReceived: 0 },
+        vetted: "xcode-select",
+      });
+    } finally {
+      await support.dispose();
+    }
+    expect(support.census()).toEqual({ ...FRESH, helperPresent: true });
+  });
+});

@@ -46,6 +46,7 @@ import {
 import { CLOSE_WINDOW_ITEM_ID, ZOOM_ITEM_IDS } from "../main/app-menu-model";
 import { APP_ORIGIN } from "../main/app-protocol";
 import type { WindowRendererBoundary } from "../main/bootstrap";
+import type { LiveSurfaceSimulatorCensus } from "../main/live-surfaces/authority";
 import { BrowserControlTargetRegistry } from "../main/live-surfaces/browser-control-target";
 import { ElectronBrowserSurfaceNative } from "../main/live-surfaces/browser-electron-native";
 import { BrowserLiveSurfaceRuntime } from "../main/live-surfaces/browser-producer";
@@ -1052,6 +1053,8 @@ export interface LiveCensus {
   readonly childSessions: number;
   /** PT-6a (M14 — R3): and each page's by its SURFACE (FRAME-SESSIONS reads its own pane's: another page's never moves it) */
   readonly childSessionsBy?: Readonly<Record<string, number>>;
+  /** PT-S3 (D1): main's bound simulators, counted — the phone rows' sessions, inners made, helper and vetted directory */
+  readonly simulator?: LiveSurfaceSimulatorCensus;
 }
 
 export async function runSmokeCanvas(opts: {

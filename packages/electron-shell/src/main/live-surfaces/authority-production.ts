@@ -4,6 +4,7 @@ import type { Logger } from "@vibefield/logging";
 import type {
   LiveSurfaceEnumerationSources,
   LiveSurfaceRuntimeFactories,
+  LiveSurfaceSimulatorCensus,
   LiveSurfaceSimulatorDeviceSource,
 } from "./authority";
 import { clearBrowsingData } from "./browser-data";
@@ -45,6 +46,9 @@ export interface ProductionLiveSurfaceSupport {
   /** BP-D4 — Settings' "Clear browsing data": this shell's persistent profiles cleared, their open pages reloaded
    * (`browser-data.ts`). */
   clearBrowsingData(): Promise<BrowserDataClearResult>;
+  /** PT-S3 (D1) — main's simulator census (the authority's `state().simulator`): it READS what was made and never makes
+   * — no simctl, no capture stack, no session, no spawn, no load. */
+  census(): LiveSurfaceSimulatorCensus;
   dispose(): Promise<void>;
 }
 
@@ -223,6 +227,26 @@ export function createProductionLiveSurfaceSupport(opts: {
         { ...result },
       );
       return result;
+    },
+    census: () => {
+      // reads only: each `?.` is a thing not yet made, and stays unmade
+      const stats = captureStack?.supervisor.stats;
+      return {
+        sessions: simulatorSessions?.size ?? 0,
+        sessionsMade: simulatorSessions?.sessionsMade ?? 0,
+        captureReady: captureStack !== null,
+        helperPresent: opts.capture !== null && existsSync(opts.capture.helperPath),
+        helper:
+          stats === undefined
+            ? null
+            : {
+                helperStarts: stats.helperStarts,
+                helperExits: stats.helperExits,
+                activeSessions: stats.activeSessions,
+                framesReceived: stats.framesReceived,
+              },
+        vetted: simctl?.vetted() ?? null,
+      };
     },
     dispose: async () => {
       disposed = true;

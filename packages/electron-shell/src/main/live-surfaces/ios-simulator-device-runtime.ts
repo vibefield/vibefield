@@ -947,6 +947,8 @@ class BoundSimulatorSurface implements IosSimulatorDeviceLiveSurfaceRuntime {
 export class SimulatorDeviceSessions {
   readonly #options: SimulatorDeviceSessionsOptions;
   readonly #sessions = new Set<DeviceSession>();
+  /** PT-S3 (D1): every session ever made — each makes its ONE inner at birth, so this counts inners made (R7) */
+  #sessionsMade = 0;
   #attachments = 0;
   #disposed = false;
   readonly #pool: SessionPool = {
@@ -966,6 +968,7 @@ export class SimulatorDeviceSessions {
     split: (member) => {
       // its own binding's session — pristine, so its first look may join the one streaming what it picks (R3)
       const session = new DeviceSession(this.#pool, this.#options, member.surfaceId, member.source);
+      this.#sessionsMade += 1;
       this.#sessions.add(session);
       member.session = session;
       member.strayed = false;
@@ -997,11 +1000,18 @@ export class SimulatorDeviceSessions {
     return this.#sessions.size;
   }
 
+  /** PT-S3 (D1) — the sessions EVER made, those R3 joined away or split off included: the inners made (R7). A renderer
+   * reload that re-binds the same runtimes leaves it where it was. */
+  get sessionsMade(): number {
+    return this.#sessionsMade;
+  }
+
   open(surfaceId: string, rawSource: SimulatorDeviceSource): IosSimulatorDeviceLiveSurfaceRuntime {
     if (this.#disposed) throw new Error("bound Simulator sessions are closed");
     const id = LiveSurfaceIdV1.parse(surfaceId);
     const source = LiveSurfaceIosSimulatorDeviceSourceV1.parse(rawSource);
     const session = new DeviceSession(this.#pool, this.#options, id, source);
+    this.#sessionsMade += 1;
     this.#sessions.add(session);
     const member: SessionMember = { surfaceId: id, source, session, strayed: false };
     session.members.add(member);

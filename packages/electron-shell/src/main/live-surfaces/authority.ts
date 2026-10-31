@@ -23,6 +23,7 @@ import {
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import type { LiveSurfaceRuntimeAuthority } from "./runtime";
+import type { SimctlVetted } from "./simctl";
 import type { LiveSurfaceWindowHost } from "./window-host";
 
 // DT-1c (thinking-devtools-pack.md DT-D2) — the production live-surface
@@ -111,6 +112,28 @@ export interface LiveSurfaceSimulatorDeviceSource {
   runtimes?(): Promise<readonly string[]>;
 }
 
+/** PT-S3 (D1) — main's bound simulators, COUNTED (never a UDID, never a name): what a phone row reads beside the runtimes.
+ * Its source READS and never makes — a census builds no simctl, no capture stack, no session, and spawns nothing. */
+export interface LiveSurfaceSimulatorCensus {
+  /** the device sessions alive — one a device streamed, after R3's joins */
+  readonly sessions: number;
+  /** every device session ever made, each with its ONE inner (R7): a reload that re-binds moves nothing */
+  readonly sessionsMade: number;
+  /** the capture stack WAS built (its adapter loaded) — a census never builds it */
+  readonly captureReady: boolean;
+  /** the SCK helper's binary is on disk: the stack spawns it lazily, so `captureReady` alone never proves it */
+  readonly helperPresent: boolean;
+  /** the helper supervisor's counts — null while no capture stack was built */
+  readonly helper: {
+    readonly helperStarts: number;
+    readonly helperExits: number;
+    readonly activeSessions: number;
+    readonly framesReceived: number;
+  } | null;
+  /** which answer main's simctl probe vetted (P1) — null: none yet, or no Simulator here */
+  readonly vetted: SimctlVetted | null;
+}
+
 export interface LiveSurfaceAuthorityDeps {
   resolveWindow(identity: RendererParticipantIdentity): { webContentsId: number } | null;
   hostFor(webContentsId: number): Pick<LiveSurfaceWindowHost, "issue"> | null;
@@ -118,6 +141,8 @@ export interface LiveSurfaceAuthorityDeps {
   enumeration: LiveSurfaceEnumerationSources | null;
   /** PT-S2 (R11): absent or null — the attach's device list is UNAVAILABLE */
   simulatorDevices?: LiveSurfaceSimulatorDeviceSource | null;
+  /** PT-S3 (D1): main's simulator census, which `state()` carries as `simulator` — absent: `state()` says none */
+  simulatorCensus?: () => LiveSurfaceSimulatorCensus;
   logger?: Logger;
   limits?: { maxRuntimes?: number; maxPerParticipant?: number };
   randomId?: () => string;
@@ -381,7 +406,8 @@ export class LiveSurfaceAuthority {
    * browser pages took — each runtime's `stats.emulations`, those let go included: MAIN's own count of the switches its
    * runtimes accepted (a switch asked of a born, live page is told at once; one asked of a window not yet born, at its
    * birth; one that moves the density remakes the window). The smoke's TAPS-PENDING reads it of a born, live page — where a
-   * moved count is a device command sent; the desk's own count moves when its lane takes the write, sent or not. */
+   * moved count is a device command sent; the desk's own count moves when its lane takes the write, sent or not. PT-S3
+   * (D1): and main's simulator census, when the authority was given one (`simulatorCensus`). */
   state(): {
     runtimes: number;
     owners: number;
@@ -391,6 +417,7 @@ export class LiveSurfaceAuthority {
     pullOnly: number;
     childSessions: number;
     childSessionsBy: Record<string, number>;
+    simulator?: LiveSurfaceSimulatorCensus;
   } {
     let owners = 0;
     let emulations = this.#emulationsGone;
@@ -417,6 +444,7 @@ export class LiveSurfaceAuthority {
         childSessionsBy[surfaceId] = sessions;
       }
     }
+    const simulator = this.#deps.simulatorCensus?.();
     return {
       runtimes: this.#bySurfaceId.size,
       owners,
@@ -426,6 +454,7 @@ export class LiveSurfaceAuthority {
       pullOnly,
       childSessions,
       childSessionsBy,
+      ...(simulator === undefined ? {} : { simulator }),
     };
   }
 

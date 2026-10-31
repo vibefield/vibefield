@@ -1169,6 +1169,8 @@ async function main(
         resources.macosLiveSurfaceCapture === null ? null : liveSurfaceSupport.enumeration,
       // PT-S2 (R11): answered everywhere — a shell with no capture half lists no device
       simulatorDevices: liveSurfaceSupport.simulatorDevices,
+      // PT-S3 (D1): main's simulator census on `state()` — counts only, read and never made
+      simulatorCensus: liveSurfaceSupport.census,
       logger: logger.child({ component: "live-surfaces.authority" }),
     });
     const shellProvider = new RecoveringShellProvider(

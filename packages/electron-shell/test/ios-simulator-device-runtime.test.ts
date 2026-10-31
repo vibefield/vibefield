@@ -777,6 +777,8 @@ describe("IosSimulatorDeviceLiveSurfaceRuntime — never a UDID, one stream a de
     );
     await settle();
     expect(sessions.size).toBe(1);
+    // PT-S3 (D1): the joiner made its own session — its ONE inner — at open, and left it for the shared one (R7)
+    expect(sessions.sessionsMade).toBe(2);
     expect(b.latest()).toMatchObject({
       surfaceId: SURFACE_B,
       simulator: { condition: "streaming", runtime: IOS_26_5 },
@@ -797,6 +799,7 @@ describe("IosSimulatorDeviceLiveSurfaceRuntime — never a UDID, one stream a de
     // the first phone closing keeps the second's stream
     exact.dispose();
     expect(sessions.size).toBe(1);
+    expect(sessions.sessionsMade).toBe(2);
     request.onFrame(captureFrame(request.producerEpoch, 2n));
     expect(b.frames).toHaveLength(2);
   });
@@ -810,6 +813,7 @@ describe("IosSimulatorDeviceLiveSurfaceRuntime — never a UDID, one stream a de
     const b = attach(second, "attachment_simdev_000b");
     await settle();
     expect(sessions.size).toBe(1);
+    expect(sessions.sessionsMade).toBe(2);
     expect(b.latest().simulator).toMatchObject({ condition: "streaming", runtime: IOS_26_5 });
 
     // the 26.5 device shuts down and a 17 Pro on the second binding's own runtime boots: the bindings part
@@ -827,6 +831,8 @@ describe("IosSimulatorDeviceLiveSurfaceRuntime — never a UDID, one stream a de
     // its face detached, it leaves; attached again, it is its own binding's device — the first phone's never moved
     b.attachment.dispose();
     expect(sessions.size).toBe(2);
+    // PT-S3 (D1): a split makes one session — one inner — more
+    expect(sessions.sessionsMade).toBe(3);
     const again = attach(second, "attachment_simdev_000c");
     await settle();
     expect(again.latest().simulator).toMatchObject({ condition: "streaming", runtime: IOS_26_1 });

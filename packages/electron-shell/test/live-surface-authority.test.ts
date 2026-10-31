@@ -10,6 +10,7 @@ import {
   LiveSurfaceAuthority,
   type LiveSurfaceAuthorityDeps,
   type LiveSurfaceRuntimeHandle,
+  type LiveSurfaceSimulatorCensus,
 } from "../src/main/live-surfaces/authority";
 
 interface IssuedBinding {
@@ -339,6 +340,31 @@ describe("LiveSurfaceAuthority", () => {
       released: true,
     });
     expect(authority.state().childSessionsBy).toEqual({ [a.surfaceId]: 2 });
+  });
+
+  it("PT-S3 (D1): the census carries main's simulator census as `simulator` — read afresh at each state(), never before — and says none without the dep", () => {
+    const census: LiveSurfaceSimulatorCensus = {
+      sessions: 1,
+      sessionsMade: 2,
+      captureReady: true,
+      helperPresent: true,
+      helper: { helperStarts: 1, helperExits: 0, activeSessions: 1, framesReceived: 12 },
+      vetted: "fallback",
+    };
+    let reads = 0;
+    const { authority } = fixture({
+      simulatorCensus: () => {
+        reads += 1;
+        return { ...census, sessionsMade: census.sessionsMade + reads - 1 };
+      },
+    });
+    expect(reads).toBe(0);
+    expect(authority.state().simulator).toEqual(census);
+    expect(authority.state().simulator?.sessionsMade).toBe(3);
+    expect(reads).toBe(2);
+
+    const { authority: bare } = fixture();
+    expect(bare.state()).not.toHaveProperty("simulator");
   });
 
   it("mints a browser runtime and issues a window-bound interaction ticket", () => {
