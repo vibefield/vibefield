@@ -24273,6 +24273,18 @@ at the next draft queue, with no fix in that entry.
   > load1 6.39; waiting for load1 >= 30", "15:20:43Z load1 33.65 >= 30 inside the fan-out", then "someone at the
   > console (unlocked, HID idle 60s): NOT RUN". James was at the mini, so no floor ran. The peak stays owed; the third
   > try runs beside SP-1d's verify.
+  > **The peak, read on the third try (2026-10-31, the fixer; VF-PM's word 15:55Z):** a9's `hello-peak.sh` armed
+  > at load1 34.09 inside run 55's verify fan-out on the mini (M55 `5fb101980`, FG-5's hand-over; the console locked,
+  > HID idle 1,720 s). It ran `hello122p2.sh` on that verify's field-native (`b482235e…`): n = 20, 15:48:23–39Z, with
+  > load1 34.09–42.52. The fan-out's end line was not yet seen when it finished. The agent cell: cold 192 ms, warm p50
+  > 73, p90 130, max 201. The interactive cell: cold 192, warm p50 75, p90 139, max 201. Missed 0, and every floor was
+  > stopped by SIGTERM. The floor's first event: cold 165 ms, warm 14–176 ms. The source is
+  > `logs/run55/hello122-loaded-peak-run55.tsv` (sha16 `908d617322a6bcf2`) and `run55-hello-peak.out`, copied home to
+  > `lanes/ts6/logs/mini/run55/`.
+  > **The question, answered:** at load1 up to 42.52, near run 27b's 48.71, a cell's hello stayed at or under 201 ms,
+  > about 75× under the 15 s budget. The reading does not support a hello near 15 s, so item 122's endpoints wait
+  > stands as the fix. The budget is not moved and no new item is filed. "It is still open" above stood until this
+  > reading, and the block above said the third try would run beside SP-1d's verify: it ran beside M55's.
 
 ## FG-6's follow-up 2 and class C — a walk that stops says what it had found, and the add holding a login stands whole above the cards' fade: the glass terminal 170, ruled by James, and a Cancel red that says what it saw (desk-gates row 32, green on M54)
 
