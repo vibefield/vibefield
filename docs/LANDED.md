@@ -24975,3 +24975,57 @@ with the fixer's item 129 on top, `2d2f41046`; Checks), in the commit's own orde
   pane or in a state the walk does not stand on.
 - FG-6's remaining gates, in the ruled order: the catalog over the field's still (a fixture adapter, never a copy),
   then the field's glass against the CSS glass on a frozen frame (a test-only seam, ruled on its own).
+
+## Item 129 — the catalog's Hub wait is read under a frozen clock: main's GitHub macOS verify was red five pushes in a row on the page's Artifacts row, the catalog's real 10 s bound crossed before the click on GitHub's runner; HN-8's design kept (2026-10-31; `2d2f41046`, re-cut onto a5's judge `6adf58dd3` on main `bd9ecd159`, lane `item129/hub-wait-clock`; the stacked mint M59, run 59)
+
+VF-PM handed it to a1 at 18:51Z; a1 had not taken it by 19:17Z, when VF-PM gave it to the fixer. The clause the row
+tested is HN-8's (a1's). Main's GitHub macOS verify
+was red on five consecutive push-event runs, `e4b882f5a` (14:42Z) through `bd9ecd159`: 41211407418, 41217367766,
+41221716774, 41224936723 and 41230000358. The last green was `2f71beb2e` at 13:52Z. Every one failed on ONE assertion,
+field-app's `test/design-system.test.tsx:693` ("design system page › exposes theme and representative component-state
+controls"): after clicking `.vf-head-pack` it expected "Opening Artifacts…" and read "Artifacts aren't starting — Turn
+the Browser plugin off and on in Settings › Plugins."
+
+**The finding, plainly.** The catalog's playground mounts the shipping head on its real controller (`HeadLive`), and
+no plugin host runs in the catalog. So its Artifacts shelf waits on HN-8's real bound: `useHubWaits` arms a 10 s
+`setTimeout` (`HUB_START_BOUND_MS`) from the playground's mount, and past it the shelf says the Hub isn't starting.
+That is HN-8's ruled behaviour (`HeadLive`'s own doc: "past 10 s says the Hub isn't starting, as a window's would").
+The page renders whole in each row's `beforeEach`. On GitHub's loaded runner (field-app's vitest 489 s, 210 s of
+setup) the render and the row's earlier acts outlasted 10 s before the click, so the row read the later words.
+- The mini was green on every one of those commits: **the mini's green is not GitHub's.**
+- Nothing in `HeadView` or the test changed between the last green and the first red.
+- The row asserted a clock's words without holding the clock.
+
+**What** (`2d2f41046`, first cut `78f12bd17` on `bd9ecd159`; test files only, 2 files +31 −4):
+- **HN-8's design kept.** The adapter does not hold the wait, and the shipping `Head` takes no new seam for the
+  catalog.
+- **The page row** (`design-system.test.tsx`) keeps what real time can prove. The package turns the SAME sheet to
+  Artifacts in place (`data-open` stays true), and the shown shelf holds the Hub's wait (`.vf-head-waits`) and no Hub
+  (`[data-vf-plugin]`). Its comment says why the words are not read there. File-wide fake timers were not an option:
+  the page renders under real time for all eight rows, and two of them wait on real timers.
+- **The words, under a frozen clock** (`head.test.tsx`, a new row beside the bound's own): the catalog's `HeadLive`
+  over its fixture doors, the registry mock at null (no plugin host, the catalog's case), `vi.useFakeTimers()`. It
+  reads "Opening Artifacts…" at `HUB_START_BOUND_MS` − 1 and "Artifacts aren't starting" at the bound.
+
+**The light** (lane `item118/vibe-field` on this Mac at nice 19, 19:25:33 → 19:27:53Z, load 39.7 → 94.5; the vitest
+lane from a5's release, with cp-landing's HOLD kept through it; `lanes/records/item129/item129-light.sh`):
+- **R1, in CI's shape** (`HUB_START_BOUND_MS` at 1 ms, the bound crossed before the click):
+  - the OLD page row red with GitHub's own failure: `Expected: "Opening Artifacts…"`, `Received: "Artifacts aren't
+    startingTurn the Browser plugin off and on in Settings › Plugins."`;
+  - the NEW page row green under the same mutation.
+- **R2:** with `useHubWaits`' stall timer inert, the new `HeadLive` row red (`Expected: "Artifacts aren't starting"`,
+  `Received: "Opening Artifacts…"`); restored, green.
+- biome on the two files: clean. `check:walls`: total 0. The field-app typecheck: 0.
+- **field-app whole:** 267 files passed, 1 skipped; 3,485 tests passed, 3 skipped, in 86 s.
+  `design-system.test.tsx` 8/8 in 42.1 s (a5's baseline 48.2 s); `head.test.tsx` 96/96.
+
+**Run 59** (the mini, on the stacked mint: a5's FG-O2 judge `6adf58dd3`, then this): verify exit 0 at 19:35:59Z,
+the tree clean, stubs 0. VF-PM's stripped read (13,833 lines) found 0 FAIL rows. Typecheck and test ran for 28
+projects. Vitest 11,372 passed, 18 skipped, 0 failed: four more than run 58, among them `head.test.tsx`'s new row
+(96), with `design-system.test.tsx` 8/8. `test result: ok.` ×33; MaxListeners 0; the bundle 911.0 / 240.6 KB.
+
+**Owed:** the proof is main's next push-event GitHub macOS verify green, on the push that carries this landing.
+Then VF-PM re-runs PR #7's verify.
+
+**Landed:** local main fast-forwarded `bd9ecd159` → `2d2f41046` (a5's judge, then this) at 2026-10-31T19:38:05Z by
+`land-stack4.sh`, on VF-PM's GO.
