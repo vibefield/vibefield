@@ -14,6 +14,7 @@ import {
   type AgentSessionOrigin,
   type AgentSessionSummary,
   type AgentSessionTerminal,
+  type AgentStopState,
   type AgentSubscribeParams,
   MONITOR_AUDIENCE,
   type MonitorAudience,
@@ -408,8 +409,9 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
     // riding its passthrough reaches the wire.
     ...(summary.spark !== undefined ? { spark: summary.spark } : {}),
     ...(summary.origin !== undefined ? { origin: originOf(summary.origin) } : {}),
-    // DS-D5 — the person's Stop, on every audience's row: a stage and its clocks, content-free
-    ...(summary.stop !== undefined ? { stop: summary.stop } : {}),
+    // DS-D5 — the person's Stop, on every audience's row: a stage and its clocks, content-free,
+    // REBUILT from its named fields as the origin is, so nothing riding its passthrough travels
+    ...(summary.stop !== undefined ? { stop: stopOf(summary.stop) } : {}),
   };
 }
 
@@ -420,6 +422,16 @@ function originOf(origin: AgentSessionOrigin): AgentSessionOrigin {
     ...(origin.spark !== undefined ? { spark: origin.spark } : {}),
     ...(origin.run !== undefined ? { run: origin.run } : {}),
     ...(origin.call !== undefined ? { call: origin.call } : {}),
+  };
+}
+
+/** DS-D5's Stop as the field row carries it: its named fields, and only those. */
+function stopOf(stop: AgentStopState): AgentStopState {
+  return {
+    sentAt: stop.sentAt,
+    stage: stop.stage,
+    ...(stop.heardBy !== undefined ? { heardBy: stop.heardBy } : {}),
+    ...(stop.unheardAt !== undefined ? { unheardAt: stop.unheardAt } : {}),
   };
 }
 

@@ -283,6 +283,27 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     expect(plain).not.toContain("origin");
   });
 
+  it("DS-D5 — carries the person's Stop, rebuilt from its named fields", () => {
+    const stop = {
+      sentAt: "2026-09-13T10:05:30.000Z",
+      stage: "resent",
+      unheardAt: "2026-09-13T10:05:36.000Z",
+    };
+    const held = projectFieldRow({
+      ...summary({}),
+      stop: { ...stop, note: "rides the passthrough" },
+    });
+    // rebuilt, never spread: a key the contract does not name stays home
+    expect(held.stop).toEqual(stop);
+    const heard = projectFieldRow({
+      ...summary({}),
+      stop: { sentAt: stop.sentAt, stage: "heard", heardBy: "status" },
+    });
+    expect(heard.stop).toEqual({ sentAt: stop.sentAt, stage: "heard", heardBy: "status" });
+    // a run with no Stop carries no key at all
+    expect(Object.keys(projectFieldRow(summary({})))).not.toContain("stop");
+  });
+
   it("names the FOLDER and never the path (EL7 B1), honestly about git", () => {
     // The path carried the OS username and the shape of a person's disk to
     // every tailnet node the app admits; a card only ever drew the basename.
