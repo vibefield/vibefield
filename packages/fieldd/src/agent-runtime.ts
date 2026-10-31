@@ -708,6 +708,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * synchronously. */
   private activePersonas = new Set<string>();
   private readonly subscribers = new Set<(rows: AgentListResult) => void>();
+  /** CP-2 — the input queue and the waker hear each live run's monitor row, and each run's end. */
+  private readonly runMonitorListeners = new Set<
+    (runtimeRunId: string, mirror: AgentMonitorMirror | undefined) => void
+  >();
+  private readonly runEndedListeners = new Set<(runtimeRunId: string) => void>();
   private publishTimer: NodeJS.Timeout | null = null;
   private disposed = false;
 
@@ -1851,6 +1856,52 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       ...(result.accepted ? {} : { reason: result.reason }),
     });
     return result.accepted ? { accepted: true } : { accepted: false, reason: result.reason };
+  }
+
+  /** CP-2 — the input queue's delivery (CP-L5): paste and submit one input into a live run, with puppeteer's receipt
+   * in its own words. A run that is not live under this daemon is a rejection, so the input waits. */
+  async submit(
+    runtimeRunId: string,
+    text: string,
+  ): Promise<{ status: "confirmed" | "rejected" | "uncertain"; reason?: string }> {
+    const entry = this.managed.get(runtimeRunId);
+    if (entry === undefined || entry.exiting) return { status: "rejected", reason: "not-live" };
+    const receipt = await entry.agent.submitPrompt({ text, mode: "paste-and-submit" });
+    return receipt.status === "confirmed"
+      ? { status: "confirmed" }
+      : { status: receipt.status, reason: receipt.reason };
+  }
+
+  /** CP-2 — a live run's monitor row: the input queue's idle test and the waker's state. */
+  monitorOf(runtimeRunId: string): AgentMonitorMirror | undefined {
+    return this.managed.get(runtimeRunId)?.mirror;
+  }
+
+  /** CP-2 — the run is live under this daemon: it can take input, a stop or an end. */
+  isLive(runtimeRunId: string): boolean {
+    const entry = this.managed.get(runtimeRunId);
+    return entry !== undefined && !entry.exiting;
+  }
+
+  /** CP-2 — every change of a live run's monitor row, once fieldd has folded it. */
+  onRunMonitor(
+    listener: (runtimeRunId: string, mirror: AgentMonitorMirror | undefined) => void,
+  ): () => void {
+    this.runMonitorListeners.add(listener);
+    return () => this.runMonitorListeners.delete(listener);
+  }
+
+  /** CP-2 — a managed run ended: the floor heard its PTY's exit (never a fieldd stop, which runs outlive). */
+  onRunEnded(listener: (runtimeRunId: string) => void): () => void {
+    this.runEndedListeners.add(listener);
+    return () => this.runEndedListeners.delete(listener);
+  }
+
+  /** CP-2 — agent_stop: end a live run through the floor's own terminate, as the person's Stop does. */
+  async endRun(runtimeRunId: string): Promise<void> {
+    const entry = this.managed.get(runtimeRunId);
+    if (entry === undefined || entry.exiting) return;
+    await this.terminateLive(this.requireTerminals(), entry.info.terminalSessionId);
   }
 
   /** The persona login pane: the vendor's own interactive login in a PTY
@@ -4093,6 +4144,34 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (entry === undefined) return;
     this.applyMonitor(entry, state);
     this.publish();
+    for (const listener of this.runMonitorListeners) {
+      try {
+        listener(state.runtimeRunId, entry.mirror);
+      } catch (err) {
+        this.logger.warn(
+          "fieldd.agents.monitor_listener_failed",
+          "A run's monitor listener threw",
+          {
+            runtimeRunId: state.runtimeRunId,
+            reason: (err as Error).message,
+          },
+        );
+      }
+    }
+  }
+
+  /** CP-2 — a managed run left this daemon: its listeners hear it once. */
+  private ended(runtimeRunId: string): void {
+    for (const listener of this.runEndedListeners) {
+      try {
+        listener(runtimeRunId);
+      } catch (err) {
+        this.logger.warn("fieldd.agents.ended_listener_failed", "A run's end listener threw", {
+          runtimeRunId,
+          reason: (err as Error).message,
+        });
+      }
+    }
   }
 
   private applyMonitor(entry: ManagedEntry, state: AgentMonitorState): void {
@@ -4152,6 +4231,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.terminalHost?.forget(entry.info.terminalSessionId);
     if (entry.info.profileId !== undefined) void this.profiles.sweep();
     this.publish();
+    // not `ended`: puppeteer also withdraws every run while the runtime is disposing (a fieldd stop), and the runs
+    // live on (AR-4); only the floor's exit, below, ends one
   }
 
   private async closeRun(
@@ -4228,6 +4309,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
     this.terminalHost?.forget(entry.info.terminalSessionId);
+    this.ended(runtimeRunId);
     // MF-1f — the process is over, but the PANE may not be: while the floor
     // still lists this PTY the deck is showing it, so the row stays (carrying
     // the mirror's last state and the resume verb) until the pane goes.

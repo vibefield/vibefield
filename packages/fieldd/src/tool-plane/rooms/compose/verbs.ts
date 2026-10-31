@@ -18,7 +18,6 @@ import type {
   ComposeTurn,
   IndexSearchResult,
   IndexTimelineResult,
-  ServedToolName,
 } from "@vibefield/contracts";
 import { RpcCallError } from "../../../native-link";
 
@@ -89,10 +88,22 @@ export interface ComposeVerbs {
   history_read(caller: VerbCaller, input: ComposeHistoryReadInput): Promise<ComposeReadOutput>;
 }
 
-/** Run a served row's verb on input its own schema has already parsed (the one place the union is widened). */
+export type ComposeVerbName = keyof ComposeVerbs;
+const COMPOSE_VERBS: readonly ComposeVerbName[] = [
+  "agents_available",
+  "projects_list",
+  "agents_list",
+  "agent_read",
+  "history_search",
+  "history_read",
+];
+export const isComposeVerb = (name: string): name is ComposeVerbName =>
+  (COMPOSE_VERBS as readonly string[]).includes(name);
+
+/** Run a compose verb on input its own schema has already parsed (the one place the union is widened). */
 export function runVerb(
   verbs: ComposeVerbs,
-  name: ServedToolName,
+  name: ComposeVerbName,
   caller: VerbCaller,
   input: unknown,
 ) {

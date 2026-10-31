@@ -97,6 +97,10 @@
   "SPARK_HOMES_DIR": [
     "sparks"
   ],
+  "AGENT_INPUTS_DIR": [
+    "fieldd",
+    "inputs"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"

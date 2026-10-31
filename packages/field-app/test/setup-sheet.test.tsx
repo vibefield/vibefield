@@ -143,7 +143,19 @@ describe("Finish setting up's sheet (AO-D10)", () => {
       /\.vf-wizard-shell\[data-size="sheet"\] \{\s*inset: 0;\s*width: min\(calc\(100vw - 2rem\), 44rem\);\s*height: min\(calc\(100vh - 2rem\), 32rem\);\s*margin: auto;\s*\}/,
     );
     expect(WIZARD_CSS).toMatch(
-      /\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-frame \{\s*inset: calc\(1px \+ clamp\(2rem, 5vw, 4rem\)\);\s*\}/,
+      /\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-frame \{\s*inset: calc\(1px \+ clamp\(2rem, 5vw, 4rem\)\);/,
+    );
+    // and its panes as they stood (FG-4a): with no band to name the step, the pane's eyebrow; centred in the
+    // sheet, SAFE, so a tall pane overflows downward only; 30rem at most, 20 between its parts; rising in
+    expect(glass?.querySelector(".vf-wizard-pane-head > span")?.textContent).toBe("Your devices");
+    expect(WIZARD_CSS).toMatch(
+      /\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-frame \{[^}]*display: flex;\s*align-items: safe center;\s*justify-content: center;\s*overflow-y: auto;\s*\}/,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-pane \{\s*position: relative;\s*inset: auto;\s*width: 100%;\s*max-width: 30rem;\s*gap: 20px;\s*animation: vf-wizard-in 320ms var\(--vf-ease-island\) both;\s*\}/,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-pane-body:empty,\n\.vf-wizard-shell\[data-size="sheet"\] \.vf-wizard-later:empty \{\s*display: none;/,
     );
   });
 

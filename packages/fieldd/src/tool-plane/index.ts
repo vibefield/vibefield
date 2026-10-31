@@ -18,9 +18,18 @@ import type { McpCallResult, McpServerOptions, McpTool } from "./mcp";
 import {
   type ComposeVerbs,
   createComposeVerbs,
+  isComposeVerb,
   runVerb,
   type VerbDeps,
 } from "./rooms/compose/verbs";
+import {
+  createTalkVerbs,
+  isTalkVerb,
+  runTalk,
+  type TalkDeps,
+  type TalkVerbName,
+  type TalkVerbs,
+} from "./rooms/talk/verbs";
 
 // MT-0 — the tool plane in fieldd (`draft/thinking-tool-plane.md`, ruled 2026-10-30; CP-1b's compose door,
 // generalised). One door and one catalog (MT-L1): every caller fieldd can name reaches the `vibefield` MCP server through
@@ -28,7 +37,9 @@ import {
 // plain run the `agent` rows; a pane, a caller outside every pane and an unsettled run are listed nothing and leave one
 // audit line. Each call is held to its row again whatever the list showed (MT-L2), parsed by the row's schema, held to
 // the caller's Agent Profiles by its room, and written to the audit log before it acts (CP-L6). A refusal is a tool
-// result with a fact the model can act on, never a protocol error (the study's §8).
+// result with a fact the model can act on, never a protocol error (the study's §8). CP-2 (ruled 2026-10-31) adds the
+// talk room: a spark's six acting rows (start, watch, send, interrupt, stop), each answered by `rooms/talk/` and
+// recorded as sent on the person's behalf.
 
 /** The audit seam (audit-service.ts `required`), as the plane calls it. */
 export interface ToolPlaneAudit {
@@ -61,6 +72,8 @@ export interface ToolPlaneServiceOptions {
   /** A spark's record, when it verifies (CP-1c's store). */
   spark(id: SparkId): SparkRecord | undefined;
   readonly verbs: VerbDeps;
+  /** CP-2's talk room (start, watch, send, interrupt, stop); absent, its rows answer `unavailable`. */
+  readonly talk?: TalkDeps;
   readonly audit: ToolPlaneAudit;
   /** fieldd's version, for the server's `serverInfo`. */
   readonly version: string;
@@ -171,14 +184,32 @@ const FACT_OF: Readonly<Record<string, string>> = {
   UNAVAILABLE: "unavailable",
 };
 
+/** The facts a room may name itself in a refusal's `details.fact` (the talk room's `forbidden` and `limit`). */
+const FACTS = new Set([
+  "unknown-tool",
+  "forbidden",
+  "bad-input",
+  "outside",
+  "not-found",
+  "unavailable",
+  "limit",
+  "failed",
+]);
+const factOf = (err: RpcCallError): string => {
+  const named = (err.details as { fact?: unknown } | undefined)?.fact;
+  return typeof named === "string" && FACTS.has(named) ? named : (FACT_OF[err.kind] ?? "failed");
+};
+
 export class ToolPlaneService {
   readonly #door: DoorService;
   readonly #verbs: ComposeVerbs;
+  readonly #talk: TalkVerbs | undefined;
   readonly #logger: Logger;
 
   constructor(private readonly opts: ToolPlaneServiceOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
     this.#verbs = createComposeVerbs(opts.verbs);
+    this.#talk = opts.talk ? createTalkVerbs(opts.talk) : undefined;
     this.#door = new DoorService({
       native: opts.native,
       lanes: opts.lanes,
@@ -284,6 +315,11 @@ export class ToolPlaneService {
     }
     // Listed a row, so a spark or a settled run: a caller with profiles.
     const held = caller.kind === "spark" || caller.kind === "run" ? caller : { profiles: [] };
+    const room = (): Promise<unknown> => {
+      if (isComposeVerb(name)) return runVerb(this.#verbs, name, held, parsed.data);
+      if (isTalkVerb(name)) return this.#runTalk(caller, name, parsed.data);
+      throw new RpcCallError("UNAVAILABLE", `${name} has no room in this daemon`, false);
+    };
     try {
       const out = await this.opts.audit.required(
         ctxFor(caller),
@@ -293,15 +329,43 @@ export class ToolPlaneService {
           attrs: {
             ...attrs,
             ...(typeof args.session === "string" ? { session: args.session } : {}),
+            // CP-L6: a spark's call is the person's, by proxy (CP-D2, CO-D7), and the line says so
+            ...(caller.kind === "spark" ? { onBehalf: "you" } : {}),
           },
         },
-        () => runVerb(this.#verbs, name, held, parsed.data),
+        room,
         () => ({ outcome: "succeeded" }),
       );
       return { structured: out, text: JSON.stringify(out) };
     } catch (err) {
-      if (err instanceof RpcCallError) return refusal(FACT_OF[err.kind] ?? "failed", err.message);
+      if (err instanceof RpcCallError) return refusal(factOf(err), err.message);
       throw err;
     }
+  }
+
+  /** A talk row's call: a spark's alone (its audience), answered with its record's facts (name, folder, profile). */
+  #runTalk(caller: DoorCaller, name: TalkVerbName, input: unknown): Promise<unknown> {
+    if (caller.kind !== "spark")
+      throw new RpcCallError("PRECONDITION_FAILED", `${name} is a spark's`, false, {
+        fact: "forbidden",
+      });
+    if (this.#talk === undefined)
+      throw new RpcCallError("UNAVAILABLE", "the talk room is not running", true);
+    const spark = this.opts.spark(caller.sparkId);
+    if (spark === undefined)
+      throw new RpcCallError("UNAVAILABLE", "the spark's record is unavailable", true);
+    return runTalk(
+      this.#talk,
+      name,
+      {
+        sparkId: spark.id,
+        name: spark.name,
+        runtimeRunId: caller.runtimeRunId,
+        profiles: caller.profiles,
+        folder: spark.folder,
+        thinksUnder: spark.thinksUnder,
+      },
+      input,
+    );
   }
 }

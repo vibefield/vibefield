@@ -25,6 +25,32 @@ the run starts with no briefing. The check comes first, because the runtime refu
 pane is adopted by puppeteer's spawn-through, which applies no briefing at 0.3.2, so it holds no door until petition
 PU-J.
 
+## The talk room (CP-2)
+
+A spark's door also serves CP-2's six rows (`draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31): `agent_spawn`,
+`agent_watch` and `agent_unwatch`, and `agent_send`, `agent_interrupt` and `agent_stop`. The talk room
+(`fieldd/src/tool-plane/rooms/talk/`) answers them. Every call is held to the spark's profiles and to CP-D5 and CP-D6's
+reach, and is written to the audit log before it acts.
+
+- **One queue per session** (`fieldd/src/agent-input-queue.ts`; CP-L5). `agent_send` and a spawn's tasks join it, and
+  so do fieldd's own wakes. The head is delivered when the session's monitor reads idle with no blocker, through
+  puppeteer's `submitPrompt`, one input per idle moment.
+- **Marked by source** (CP2-D1). A spark's words land as "Vela (your spark) on your behalf:" and then the words. A wake
+  lands as "VibeField: …". The words count as the person's, by proxy (CP-D2), but no wording is a boundary. The door's
+  naming, the holds and the record are.
+- **Receipts** (CP2-D2). A rejected delivery (a dialog open, another injection, or the person's keystrokes overtaking it)
+  waits for the next idle. An uncertain one is never resent, and its sender is told on its next wake.
+- **Kept** (CP2-D3). Each session's queue is one file under `LAYOUT.AGENT_INPUTS_DIR` (0600 in 0700), so it outlives a
+  fieldd restart.
+- **Wakes** (CP2-D6, `fieldd/src/agent-waker.ts`). They come from the monitor rows fieldd already hears: a run finished,
+  is asking, failed, or ended. They wake the spark that started it and the sparks watching it, and a spark with no live
+  session keeps its wakes until one opens.
+- **Not yet:**
+  - CP2-D7's "wait for his quiet" needs the time of the person's last keystroke in the pane, which the floor does not
+    give fieldd. Until it does, the terminal service's ordering against accepted human input is the guard (the mark's
+    B).
+  - CP-D7's cap past 8 live agents is refused as `limit`. Its needs-you card comes with CP-3.
+
 ## Process identity is a separate prerequisite
 
 The current native door authenticates a process by its terminal ancestry. CP-1d therefore requires all three briefing fields and `mcpServerProcess === "terminal"`. There are no vendor-id branches in this policy. Claude's adapter declares this topology. Codex's app-server and Grok's shared leader start MCP children under helpers, and ACP delegates their ownership externally. They remain refused until the door has a trusted process-to-run association for those topologies.

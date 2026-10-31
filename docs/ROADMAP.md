@@ -81,12 +81,17 @@
   fit, its layers, the steps' band, the frame), as the mint `5cc2d1108`, run 13 on the Mac mini: verify green, and
   `smoke:canvas` (on run 12's mint) red only on items 117 and 119 and a hand at the mini.
 - Landed 10-31: **FG-3b** (`be1dd92ad`, the field drawing the glass in its own frame, FG-D24: its shadow, frost, tint
-  and grain read off the glass's own layers), as the mint `c8e4c55eb`, run 30 on the Mac mini: verify green (LANDED
-  "FG-1", "FG-2", "FG-3a", "FG-3b").
-- Next: **FG-4** (the panes in the frame, and the logo) → FG-5 (the hand-over) → FG-6 (the gates: the catalog, a
+  and grain read off the glass's own layers), as the mint `c8e4c55eb`, run 30 on the Mac mini: verify green; **FG-4a**
+  (`fc1fc0f75`, the panes in the frame: head at 96, actions on the foot, no eyebrow on the glass, the old pane out
+  first, and only a list scrolls, within itself), as the mint `733f24ed5`, run 35 on the Mac mini: verify green
+  (LANDED "FG-1", "FG-2", "FG-3a", "FG-3b", "FG-4a").
+- Next: **FG-4b** (the holds and the logo: a load as the logo and one line, the welcome's title card, Setting up's one
+  line, the band's fill, the logo drawn by the field) → FG-5 (the hand-over) → FG-6 (the gates: the catalog, a
   `smoke:first-run` row that judges the field's mode at boot, live or its still, and its own live pass with the new
   canvas usage in Electron, which no smoke judged at FG-3b; contrast). Each verifies on the Mac mini.
-- Owed: FG-O7 (§9) at FG-4.
+- Owed: at FG-4b's console window, FG-4a's pixel witness (Agents with nine installed, History with six rows, Profiles'
+  add with its login) beside `smoke:canvas` and `smoke:canvas:no-webgpu`. FG-O7 (§9) is ruled (a) at the lean and is
+  built with FG-4b.
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
 - Landed: AL-1…AL-3 (`7ebb1eeda` · `5eea4b2d5` · `697beb199`; AL-4 folded in), AL-5, AL-7, AL-8a, **AL-9** (`933d2fba3`,
@@ -155,8 +160,8 @@
   the Hub in tiles; the edges leave the frame), as the mint `e31e55ecd`, run 28, verify only (LANDED "HN B3"). The
   track is built: all sixteen marks.
 - Next: nothing built is left. The record's as-built lines and its Status flip go to the next draft queue.
-- Owed: HN's smoke:godview rungs on James's console window (§5; smoke:canvas's ran at run 30b, and item 123's
-  four HAND rows wait for the unlock on `aeb2e8712`); D10, one caption style for both of the
+- Owed: HN's smoke:godview rungs on James's console window, after item 124's fix (§5; smoke:canvas's are paid, run
+  30b's and item 123's four HAND rows at run 35b); D10, one caption style for both of the
   sheet's shelves as the page drew (§9); a card dropped on the desk is not smoke-covered
   in Electron; G30 (⌘C in a pane) and RO-31 (Copy in History) upstream (§7).
 
@@ -241,10 +246,13 @@
 - **MT-0, the tool plane's first slice**: LANDED 10-31 (`b3a0cc95a`, the mini's run 29; LANDED "MT-0").
   - `contracts/src/tools.ts` is the one catalog, with audience and scope columns, and `fieldd/src/tool-plane/` serves
     each caller its rows: a spark every served row, a plain run History and the projects list, by its own briefing.
+- **CP-2, start and talk**: LANDED 10-31 (`b4357a345`, the mini's run 33; LANDED "CP-2").
+  - A spark starts agents one level deep, watches them and talks to them through each session's one input queue; its
+    words land at the session's idle, marked as its own and sent on the person's behalf (CP2-D1).
+  - CP2-D7's quiet wait waits on a floor fact (the person's last keystroke); the ordering guard stands meanwhile.
 - Next, in order:
   - **SP-1b** (Chat's list) and **SP-1c** (the New spark sheet): renderer only, on James's go.
   - **SP-1d**: the thread and Chat's composer (HN B1 and B2 landed 10-31).
-  - **CP-2**: start and talk (`rooms/talk/`).
   - **CP-3**: the person (`ask_user`, `notify`).
   - **CP-4**: flows and the desk applier.
   - **CP-5**, which is MT-7: Codex and Grok, once their MCP processes can be named.
@@ -269,25 +277,26 @@
   `0b4cb2ff0`: 94, 86, 90, 96's first half, 93, 97, 92 and 101; and the shell lease's cleanup race (`2422bdf5c`).
   Then items 102 (`4e07f0308`, in the mint `cbc376da5`) and 118 (`9e0457b3c`, in `7b143fc51`); and 118's slice 2
   with item 122 and item 121's evidence (`41f27d8cc`, `e3b70d38b`, `0543de224`), the mint `cf0a2982d`.
-- Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner) with its sibling
-  TC-S3, now item 120 (`terminal-service.test.ts`, 99 against ≥100, red at AO-6b3's verify; studied 10-31: a
-  same-duration probe timer armed before the create, never slack) · item 71 (persona refresh window) · item
+  Then items 120 (`dd8d5e84d`) and 93's zombie half (`dc2d54a4c`), the mint `b6363425b`.
+  Then items 116 (`684fd4dae`, one smoke census) and 122b (`198fee645`, the remote door's endpoints wait), the
+  mint `06e1385d7`.
+- Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner; its sibling
+  TC-S3, item 120, landed in run 34) · item 71 (persona refresh window) · item
   73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1 port forward before
   the main world, live-surfaces) · the sibling 5 s waits (§6 Gates) · item 91 (MF-1's field-projection row judges a
   board settled from one pair of 750 ms readings, `agent-session.test.ts:2835`; red in item 87's first verify at load
-  257; its red-first inverted on 10-29, so a read comes first) · item 116 (item 93's twin: electron-shell's
-  `stopRunDaemons`, `src/testing/smoke-daemons.ts`, reads the whole process table twice per 100 ms poll, in macOS's `ps`
-  spelling alone, so a Linux smoke reads nothing; one census, after PR #8) · item 117 (the smoke:canvas HAND bar-return
-  class on the mini, 250 ms vs 200 ± 40; filed from FG's run 7, `lanes/records/item117`; after 116) · item 96's own half
+  257; its red-first inverted on 10-29, so a read comes first) · item 117 (the smoke:canvas HAND bar-return
+  class on the mini, 250 ms vs 200 ± 40; filed from FG's run 7, `lanes/records/item117`) · item 96's own half
   (the parts alone ×N and on CI; which of the 13 bare `30_000` rows keep a named constant; the one row still past a
   second) · item 111 (the Artifact panel's Copy does nothing in the app: a plugin's web clipboard write under the empty
   grant set, item 102's class; an SDK clipboard-write door over HN B2's host copy door (landed) unless HN B3 claims
   it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against
   one new contracts constant, its literal ruled alone; HN B2 is in) · item 115 (`pnpm dev`'s nx watcher outlives a
   runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112) ·
-  item 93's zombie half (a `Z <defunct>` answers `kill(pid, 0)`; `alive()` judges Z dead) · item 121's study (RA-D7's
-  refused re-attach: TC-D4's interactive fallback against AR-4b's cell rule, the RA owner's product question) · item
-  122's study (three more real-floor test files with no endpoints wait).
+  item 121 (RA-D7's refused re-attach: TC-D4's interactive fallback against AR-4b's cell rule; James ruled A on
+  10-31, re-attach a fallback-born run when fieldd's own record stamps its placement, the placement audited and the
+  row showing the cell; after durable Stop) · item 122's floor half (a fresh floor's two class cells' hello times,
+  idle and under burners; its study found one test exposure, landed as 122b).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
   dial under load. k1 is separate: `test-without-building` cold-boots a Shutdown simulator, and pre-booting it
@@ -419,11 +428,10 @@
   the tab bar as an obstacle, the reconnect banner across a fieldd bounce, the attached-but-unlisted card, an overload
   refusal said in the connecting face, C1's swipe after a reopen, the corner wearing its home desktop's face and name
   (IOS-8f) (and PJ-7 run 3's n/a cases, if 10-19's round missed them).
-- HN's smoke:godview rungs on his console window (runs 22, 26 and 28 were verify only, the console locked): the
-  re-aimed 11h (a card played into a real pane), 11j (a program's OSC 52 reaching main's copy door, no card) and the
-  Hub in the head (LANDED "HN B1", "HN B2", "HN B3"). smoke:canvas's HN rows ran green at run 30b (M30
-  `c8e4c55eb`), but for the four HAND rows, whose judge still expected Send to… (item 123, fixed in `aeb2e8712`,
-  run 32; its smoke:canvas witness waits for the unlock, 32b skipped). *Corrected
+- HN's smoke:godview rungs on his console window, after item 124's fix: the re-aimed 11h (a card played into a real
+  pane), 11j (a program's OSC 52 reaching main's copy door, no card) and the Hub in the head (LANDED "HN B1", "HN
+  B2", "HN B3"). Run 35b (M35 `733f24ed5`) went red before them at QL-2's launch rung (item 124, cp-landing's).
+  smoke:canvas's HN rows are paid: run 30b's, and the four HAND rows at run 35b (item 123). *Corrected
   2026-10-31 (item 123): this line said "HN B1's and B2's" and "runs 22 and 26" while it listed B3's rows too.*
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.
 
@@ -440,9 +448,10 @@
   stack): Animate effects only where it means something; licences visible.
 - Godview round 3 on a real window: the lights' move, a real fling, launch's first call, ⌘W on the last pane (re-read
   after AL-9), other heights. Fold into QA wave 1 if the plan covers it.
-- The Setup Assistant's glass on the field (FG-3a; drawn by the field since FG-3b): the forming, the fit in a small
-  window, the steps' band, both themes, and the hand-off's frame or two as it forms; the sheet's scrim close by hand
-  (FG-D27).
+- The Setup Assistant's glass on the field (FG-3a; drawn by the field since FG-3b; its panes in the frame since FG-4a):
+  the forming, the fit in a small window, the steps' band, both themes, and the hand-off's frame or two as it forms;
+  each pane's head and actions at one height, a long list's scroll under its fade, Profiles' login whole above it; the
+  sheet's scrim close by hand (FG-D27).
 - Cards in Hand's B1: the hand at the window's foot (a capture dealt, a card held and reached, ⇧⌘V's list), the line
   `[views] snapshot create`, the desk's Copy ⌘C, a card played into a pane and onto the desk.
 - Cards in Hand's B2: Settings', History's and the Setup Assistant's copies dealt into the hand from their buttons; a
@@ -614,7 +623,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8, after its live probe) |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
-| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-4 |
+| FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b and FG-4a 10-31 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13 | FG-4b |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
 | PG — the phone's Godview | ACTIVE; PG-1a…1c landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-0 (queued); PG-1d → PG-1e0 |
@@ -646,7 +655,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d and MT-0 landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | SP-1b/1c → CP-2 |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0 and CP-2 landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | SP-1b/1c → CP-3 |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
@@ -685,7 +694,8 @@ D-1 and D-10, he ruled A the same morning (DECISIONS' compact row). What stays o
 2. **Who runs RD-4's pipelines** (`draft/handover/2026-10-15-rd4-james-pipelines.md`). No lean.
 3. **FG-O7, the way out of a long load** (`draft/thinking-first-run-glass.md` §8): Opening Tailscale's Cancel shows
    only after 6 s, where TS shows it beside its pill from the start. Lean (the page's): after 6 s, by James's round-3
-   words on loads ("nothing more"). Asked at FG-4.
+   words on loads ("nothing more"). *Ruled (a) at the lean, 2026-10-31 04:15Z (VF-PM; James may overturn): Cancel
+   shows under the line after 6 s. Built with FG-4b.*
 4. **HN's D10, the sheet's two shelf headers** (`draft/thinking-cards-in-hand.md`; B3's design review): the page drew
    one caption style for both of the pill's sheet's shelves, and the build keeps each shelf's own header, as the doc
    allows. Lean: as built.

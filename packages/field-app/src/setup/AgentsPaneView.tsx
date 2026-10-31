@@ -1,13 +1,7 @@
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import { type ReactElement, useId } from "react";
-import {
-  BackAction,
-  factCls,
-  primaryCls,
-  quietCls,
-  WizardPane,
-} from "../boot/onboarding/wizard-ui";
+import { BackAction, primaryCls, quietCls, WizardPane } from "../boot/onboarding/wizard-ui";
 import type { AgentsPaneModel, AgentsPaneRow } from "./agents-pane";
 import { AGENTS_WORDS } from "./agents-words";
 import "./agents-pane.css";
@@ -30,13 +24,16 @@ function AgentsPaneRows({
   rows,
   label,
   id,
+  columns,
 }: {
   rows: readonly AgentsPaneRow[];
   label: string;
   id?: string | undefined;
+  /** More agents opens in two columns, so the pane fits the glass (FG-D19 A). */
+  columns?: 2 | undefined;
 }): ReactElement {
   return (
-    <ul id={id} className="vf-agents-pane-rows" aria-label={label}>
+    <ul id={id} className="vf-agents-pane-rows" aria-label={label} data-columns={columns}>
       {rows.map((row) => (
         <li key={row.provider} className="vf-agents-pane-row" data-state={row.state}>
           <span className="vf-agents-pane-mark" aria-hidden="true">
@@ -105,7 +102,9 @@ export function AgentsPaneBody({
             {AGENTS_WORDS.more}
             <FieldGlyph name="chevron" size={12} />
           </button>
-          {moreOpen && <AgentsPaneRows id={moreId} rows={model.more} label={AGENTS_WORDS.more} />}
+          {moreOpen && (
+            <AgentsPaneRows id={moreId} rows={model.more} label={AGENTS_WORDS.more} columns={2} />
+          )}
         </>
       )}
       {model.first && (
@@ -159,6 +158,7 @@ export function AgentsWizardPaneView({
       eyebrow={AGENTS_WORDS.eyebrow}
       title={agentsTitle(inventory)}
       voice={agentsVoice(inventory)}
+      later={first ? AGENTS_WORDS.later : undefined}
       onSubmit={onContinue}
       actions={
         <>
@@ -176,7 +176,6 @@ export function AgentsWizardPaneView({
         lookingAgain={lookingAgain}
         onLookAgain={onLookAgain}
       />
-      {first && <p className={factCls}>{AGENTS_WORDS.later}</p>}
     </WizardPane>
   );
 }

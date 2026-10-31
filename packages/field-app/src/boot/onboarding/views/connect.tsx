@@ -21,6 +21,7 @@ import type { FieldUserFace } from "../../../host";
 import {
   BackAction,
   factCls,
+  LATER_ON_DEVICES,
   primaryCls,
   quietCls,
   SkipAction,
@@ -212,6 +213,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title="Your field, on every device."
           onSubmit={props.onContinue}
           actions={
@@ -246,7 +248,9 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title={title}
+          later={LATER_ON_DEVICES}
           onSubmit={() => {
             // a refused sign-in kept its identity, so asking again with it lands
             // on the same account: "Use another account" starts over
@@ -317,6 +321,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
         return (
           <WizardPane
             eyebrow="Your devices"
+            track="ts"
             title="VibeField's network part is missing."
             voice="Reinstall VibeField to connect. Everything local keeps working."
             onSubmit={props.onSkip}
@@ -337,6 +342,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title={opening ? LINK_ACT_PENDING_LABEL : "Finish in your browser."}
           voice={
             opening
@@ -395,6 +401,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title="Waiting for approval."
           voice={
             <>
@@ -440,7 +447,9 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title="Your network requires device logs."
+          later={LATER_ON_DEVICES}
           voice="Your Tailscale network's admin turned on network logging, which needs every device to send its logs to Tailscale. VibeField sends none, so this Mac can't join this network."
           onSubmit={props.onSendLogs}
           actions={
@@ -469,6 +478,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
         return (
           <WizardPane
             eyebrow="Your devices"
+            track="ts"
             title="Connected, not yet trusted."
             voice="Your network uses Tailnet Lock. Until a device that can sign trusts this Mac, it can't reach your other devices, and they can't reach it."
             onSubmit={props.onContinue}
@@ -515,6 +525,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title="Connected."
           voice={
             <>
@@ -567,6 +578,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       return (
         <WizardPane
           eyebrow="Your devices"
+          track="ts"
           title={
             face.reason === "removed"
               ? "This Mac was removed from your network."

@@ -101,8 +101,9 @@ function ThisMacRows({
   );
 }
 
-/** The login in the pane; it comes into view as it opens (the glass scrolls a
- * tall pane, and the login is the one thing the person must see). */
+/** The login in the pane; it comes into view as it opens (on the glass the
+ * cards scroll within themselves, and the login is the one thing the person
+ * must see). */
 function SignInSlot({ signIn }: { signIn: PaneSignIn }): ReactElement {
   const slot = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -152,8 +153,8 @@ function AddProfileCard({
   useEffect(() => {
     if (naming) name.current?.focus();
   }, [naming]);
-  // the glass scrolls a tall pane: each step of the add, the login above all,
-  // comes into view as it opens
+  // on the glass the cards scroll within themselves: each step of the add, the
+  // login above all, comes into view as it opens
   const shown = step.kind;
   useEffect(() => {
     if (shown !== "offer") grown.current?.scrollIntoView?.({ block: "nearest" });
@@ -395,6 +396,7 @@ export function ProfilesWizardPaneView({
       eyebrow={PROFILES_WORDS.eyebrow}
       title={PROFILES_WORDS.title}
       voice={PROFILES_WORDS.voice}
+      later={holding ? PROFILES_WORDS.finishFirst : PROFILES_WORDS.later}
       onSubmit={() => {
         if (!holding) onContinue();
       }}
@@ -408,7 +410,6 @@ export function ProfilesWizardPaneView({
       }
     >
       {body}
-      <p className={factCls}>{holding ? PROFILES_WORDS.finishFirst : PROFILES_WORDS.later}</p>
     </WizardPane>
   );
 }

@@ -4,8 +4,13 @@
  * asked, every one waited for, what outlives the bound killed; Electron and its own Chromium children never the teardown's.
  * And the home a green run removes whole.
  */
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { type Ps, type PsSpelling, psTables } from "../src/testing/smoke-census.mjs";
 import {
+  censusDeps,
+  listRunProcesses,
   processName,
   RUN_STOP,
   type RunProcess,
@@ -66,6 +71,30 @@ describe("the run's processes — by the mark in their environment, named by the
     expect(processName("/a/Crashpad/chrome_crashpad_handler --database=x")).toBe("electron-helper");
     expect(processName("/bin/zsh -l")).toBe("zsh");
   });
+
+  // Item 116 — the teardown's own copy named a packaged app's Chromium children by their first word ("VibeField"): the
+  // two copies' drift, latent here (the testing bundle never ships, so this teardown never runs in a packaged app), and
+  // gone with the one census, which names them as Electron's as the launcher's row always did.
+  it("names a packaged app's own Chromium children as Electron's, and its fieldd by its place (item 116)", () => {
+    expect(
+      processName(
+        "/Applications/VibeField.app/Contents/Frameworks/VibeField Helper (Renderer).app/Contents/MacOS/VibeField Helper (Renderer) --type=renderer",
+      ),
+    ).toBe("electron-helper");
+    expect(processName("/Applications/VibeField.app/Contents/Resources/bin/fieldd --serve")).toBe(
+      "fieldd",
+    );
+  });
+
+  it("is the launcher's census, one copy (item 116)", async () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const launcher = await import(
+      pathToFileURL(resolve(here, "../../../apps/desktop/packaging/smoke-daemons.mjs")).href
+    );
+    expect(listRunProcesses).toBe(launcher.listRunProcesses);
+    expect(processName).toBe(launcher.processName);
+    expect(runProcesses).toBe(launcher.runProcesses);
+  });
 });
 
 /** A fake machine: each process lives until its `until` (ms on the fake clock), or until it is killed; a SIGTERM to one
@@ -75,6 +104,8 @@ function machine(procs: { p: RunProcess; until: number; drainOnTerm?: number }[]
   const signals: [number, string][] = [];
   const deps: StopRunDeps = {
     list: () => procs.filter((x) => x.until > clock).map((x) => x.p),
+    still: (_mark, pids) =>
+      pids.filter((pid) => procs.some((x) => x.p.pid === pid && x.until > clock)),
     signal: (pid, signal) => {
       signals.push([pid, signal]);
       const x = procs.find((y) => y.p.pid === pid);
@@ -157,6 +188,75 @@ describe("stopRunDaemons — the teardown asks what nothing asked, and WAITS for
       [303, "SIGKILL"],
     ]);
   });
+});
+
+describe("item 116 — the teardown's census: one whole-table look, then each pid alone, in the platform's spelling", () => {
+  const mark = "vf-smoke-profile-x";
+  /** A fake host whose `ps` answers from its table and counts every read; field-native drains 4.1 s after its ask. */
+  function host(spelling: PsSpelling) {
+    let clock = 0;
+    let nativeUntil = 1e9;
+    const reads: string[][] = [];
+    const procs = () =>
+      [
+        { pid: 100, ppid: 1, command: ELECTRON, until: 1e9 },
+        { pid: 103, ppid: 1, command: "/r/target/debug/field-native", until: nativeUntil },
+        {
+          pid: 104,
+          ppid: 103,
+          command: "/r/target/debug/field-terminal-host",
+          until: nativeUntil - 100,
+        },
+      ].filter((p) => p.until > clock);
+    const ps: Ps = (args) => {
+      reads.push(args);
+      const flags = JSON.stringify(args.slice(0, args.indexOf("-o")));
+      const env =
+        flags === JSON.stringify(spelling.table) || flags === JSON.stringify(spelling.oneWithEnv);
+      const line = (p: { pid: number; ppid: number; command: string }): string =>
+        `  ${p.pid} ${p.ppid} ${p.command}${env ? ` VF_SMOKE_RUN=${mark} HOME=/u` : ""}`;
+      const at = args.indexOf("-p");
+      if (at === -1) return procs().map(line).join("\n");
+      const one = procs().find((p) => p.pid === Number(args[at + 1]));
+      if (one === undefined) throw Object.assign(new Error("ps: no such pid"), { status: 1 });
+      return line(one);
+    };
+    const deps: StopRunDeps = {
+      ...censusDeps(ps, spelling),
+      signal: (pid, signal) => {
+        if (pid === 103 && signal === "SIGTERM") nativeUntil = Math.min(nativeUntil, clock + 4_100);
+      },
+      sleep: async (ms) => {
+        clock += ms;
+      },
+      now: () => clock,
+    };
+    return { deps, reads };
+  }
+
+  it.each([
+    ["darwin", ["-axww", "-E"]],
+    ["linux", ["axwwe"]],
+  ] as const)(
+    "on %s: the run found by ONE whole-table read in its own spelling, every wait by pid",
+    async (platform, table) => {
+      const spelling = psTables(platform);
+      const h = host(spelling);
+      const stopped = await stopRunDaemons(mark, 100, h.deps);
+      expect(stopped.found).toEqual([
+        { pid: 103, name: "field-native" },
+        { pid: 104, name: "field-terminal-host" },
+      ]);
+      expect(stopped.asked).toEqual([103]);
+      expect(stopped.killed).toEqual([]);
+      expect(stopped.left).toEqual([]);
+      expect(stopped.waitedMs).toBeGreaterThanOrEqual(4_100);
+      const whole = h.reads.filter((args) => !args.includes("-p"));
+      expect(whole).toEqual([[...table, "-o", "pid=,ppid=,command="]]);
+      // a 4.1 s drain at 100 ms polls: every look after the first asked its pids alone
+      expect(h.reads.length).toBeGreaterThan(40);
+    },
+  );
 });
 
 describe("smokeHome — the vf-smoke-* root above the user root, and nothing else", () => {

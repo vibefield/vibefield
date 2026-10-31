@@ -8,6 +8,7 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WizardShellView, type WizardSize } from "../src/boot/onboarding/wizard-ui";
 import { HistoryConsent } from "../src/history/HistoryConsent";
 import { type FieldHost, setHost } from "../src/host";
 import { enrollmentFor } from "../src/setup/consent-act";
@@ -47,6 +48,46 @@ const CATALOG = JSON.parse(
     "utf8",
   ),
 ) as unknown;
+
+/** Every kind the catalog brings history in for, with its agent (nine today). */
+const HISTORY_KINDS = (
+  CATALOG as {
+    catalog: {
+      id: string;
+      offers: { history?: boolean };
+      seams: { rosetta: { kind: string } | null };
+    }[];
+  }
+).catalog.flatMap((row) =>
+  row.offers.history === true && row.seams.rosetta !== null
+    ? [[row.seams.rosetta.kind, row.id] as const]
+    : [],
+);
+
+const HISTORY_CSS = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "../src/setup/history-consent.css"),
+  "utf8",
+);
+
+/** The glass's rule for a list that can outgrow its pane's body (DESIGN.md §4
+ * `--vf-scroll-fade`, the face deck's): it scrolls within itself, edge-faded,
+ * with no scrollbar, and gives back the 4 that keep a focus ring in its clip. */
+const scrollsWithin = (list: string): string =>
+  [
+    `.vf-wizard-shell[data-size="glass"] ${list} {`,
+    "  min-height: 0;",
+    "  margin: -4px -4px 0;",
+    "  padding: 4px 4px var(--vf-scroll-fade);",
+    "  overflow-y: auto;",
+    "  scroll-padding-bottom: var(--vf-scroll-fade);",
+    "  mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);",
+    "  scrollbar-width: none;",
+    "}",
+    "",
+    `.vf-wizard-shell[data-size="glass"] ${list}::-webkit-scrollbar {`,
+    "  display: none;",
+    "}",
+  ].join("\n");
 
 const discovery = (
   kind: string,
@@ -133,12 +174,13 @@ beforeEach(() => {
     completeClose: () => undefined,
   });
 });
-afterEach(async () => {
+async function unmount(): Promise<void> {
   await act(async () => root?.unmount());
   root = null;
   container?.remove();
   container = null;
-});
+}
+afterEach(unmount);
 
 function fieldd(discoveries: unknown = DISCOVERIES): FielddClient {
   return {
@@ -164,18 +206,32 @@ async function answered(): Promise<void> {
   }
 }
 
-async function mountPane(client: FielddClient, onDone = vi.fn()): Promise<typeof onDone> {
+/** The pane alone, or in a shell of `frame`'s size: the glass, as the wizard
+ * stands it, or Finish setting up's sheet. */
+async function mountPane(
+  client: FielddClient,
+  onDone = vi.fn(),
+  frame?: WizardSize,
+): Promise<typeof onDone> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   // The pane says "last used" against the suite's NOW, as the census's fixtures
   // are, never the wall clock: "today" was true on 2026-10-27 alone (item 84).
+  const pane = createElement(HistoryWizardPane, { onDone, now: NOW });
   await act(async () => {
     root?.render(
       createElement(
         FielddProvider,
         { client },
-        createElement(HistoryWizardPane, { onDone, now: NOW }),
+        frame === undefined
+          ? pane
+          : createElement(WizardShellView, {
+              dark: false,
+              onToggleTheme: () => undefined,
+              size: frame,
+              children: pane,
+            }),
       ),
     );
   });
@@ -248,7 +304,10 @@ describe("the History pane (AO-3)", () => {
   it("puts it off with Not now: nothing read, the step later, its home named", async () => {
     const client = fieldd();
     const onDone = await mountPane(client);
-    expect(container?.textContent).toContain("Bring it in anytime from History.");
+    // its home is the pane's later line, under the actions (FG-L3)
+    expect(container?.querySelector(".vf-wizard-later")?.textContent).toBe(
+      "Bring it in anytime from History.",
+    );
     await act(async () => button("Not now").click());
     expect(client.request).not.toHaveBeenCalledWith("index.enroll", expect.anything());
     expect(client.request).not.toHaveBeenCalledWith("setup.moment", expect.anything());
@@ -265,6 +324,37 @@ describe("the History pane (AO-3)", () => {
     );
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(onDone).toHaveBeenCalledWith("skipped");
+  });
+
+  it("scrolls its rows within themselves on the glass alone, the two sentences standing under them (FG-L3)", async () => {
+    // every agent that brings history in has some: nine rows today; from six, with a switch on, they
+    // are 354 in a body of 322 by the CSS's own numbers (happy-dom lays nothing out; the pixels are
+    // FG-4b's console rows)
+    const every = {
+      discoveries: HISTORY_KINDS.map(([kind, agent]) => discovery(kind, agent, 1_000_000_000)),
+    };
+    const glassRows = '.vf-wizard-shell[data-size="glass"] .vf-history-consent-rows';
+    await mountPane(fieldd(every), vi.fn(), "glass");
+    const rows = container?.querySelector(".vf-history-consent-rows");
+    expect(rows?.querySelectorAll(".vf-history-consent-row")).toHaveLength(HISTORY_KINDS.length);
+    expect(rows?.matches(glassRows)).toBe(true);
+    expect(HISTORY_CSS).toContain(scrollsWithin(".vf-history-consent-rows"));
+    // the rows scroll; the sentences stand under them, outside the scroll, and Bring in history on the foot
+    const body = container?.querySelector(".vf-wizard-pane-body");
+    expect(Array.from(body?.children ?? [], (part) => part.className)).toEqual([
+      "vf-history-consent-rows",
+      "vf-history-consent-summary",
+    ]);
+    expect(
+      container?.querySelector('.vf-wizard-pane-foot button[type="submit"]')?.textContent,
+    ).toBe("Bring in history");
+    // only the glass bounds them: Finish setting up's sheet keeps them whole, and so does every host
+    // without the glass (History's room, Settings → History)
+    for (const frame of ["sheet", undefined] as const) {
+      await unmount();
+      await mountPane(fieldd(every), vi.fn(), frame);
+      expect(container?.querySelector(".vf-history-consent-rows")?.matches(glassRows)).toBe(false);
+    }
   });
 });
 
