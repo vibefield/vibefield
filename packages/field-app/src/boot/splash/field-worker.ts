@@ -1,4 +1,5 @@
 import type { FieldFromWorker, FieldToWorker } from "./field-door";
+import { type FieldHold, fieldHold } from "./field-hold";
 import { type MarkFade, markFade } from "./field-mark";
 import { createGlassPass, type GlassPass } from "./glass-pass";
 import { createSplash, type Splash, SplashUnavailable } from "./vibefield-splash.js";
@@ -6,7 +7,8 @@ import { createSplash, type Splash, SplashUnavailable } from "./vibefield-splash
 // The field in a worker (DESIGN.md §8 "The boot splash"; track FG): the website's splash drawing
 // into the boot's canvas through an OffscreenCanvas, so the boot's work on the main thread can't
 // stall it. The website's loading-window.worker.js (vibefield-dotdev), typed, with the mark's fade
-// (field-mark.ts), and since FG-3b the Setup Assistant's glass as a pass of its frames (glass-pass.ts).
+// (field-mark.ts), since FG-3b the Setup Assistant's glass as a pass of its frames (glass-pass.ts),
+// and since FG-6's frozen frame its hold on one frame (field-hold.ts).
 //
 // The vendored module runs as it is. It reads three things a worker lacks, so they stand in: a
 // ResizeObserver the page feeds sizes to, document.hidden and its event, and the pixel ratio. It
@@ -65,6 +67,7 @@ let splash: Splash | null = null;
 let device: GPUDevice | null = null;
 let mark: MarkFade | null = null;
 let glass: GlassPass | null = null;
+let hold: FieldHold | null = null;
 
 scope.onmessage = async ({ data }) => {
   if (data.type === "start") {
@@ -96,7 +99,8 @@ scope.onmessage = async ({ data }) => {
         post: glass,
       });
       resize(data);
-      splash.start();
+      hold = fieldHold(splash, data.reducedMotion);
+      hold.start();
       mark = markFade(splash);
       scope.postMessage({ type: "ready" });
     } catch (error) {
@@ -120,15 +124,22 @@ scope.onmessage = async ({ data }) => {
     mark?.to(data.to, data.ms);
   } else if (data.type === "reveal") {
     mark?.cancel();
+    hold?.thaw();
     const opened = splash === null ? false : await splash.reveal(data.options);
     scope.postMessage({ type: "revealed", id: data.id, opened });
   } else if (data.type === "glass") {
     glass?.setLook(data.glass?.look ?? null);
     glass?.setPose(data.glass?.pose ?? null);
     splash?.redraw();
+  } else if (data.type === "freeze") {
+    hold?.freeze();
+    scope.postMessage({ type: "frozen" });
+  } else if (data.type === "thaw") {
+    hold?.thaw();
   } else if (data.type === "destroy") {
     mark?.cancel();
     mark = null;
+    hold = null;
     glass?.destroy();
     glass = null;
     splash?.destroy();

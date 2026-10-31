@@ -17,7 +17,8 @@ import {
 // glass"): the glass standing on the live field hands the field its look and where it stands, and the field says
 // whether it draws it, so the browser stands its own frost down. FieldLayer keeps one for its field and hands it to
 // what stands on the field; wizard-ui.tsx's glass follows it (`useFieldGlass`). Off the field, or with nothing under
-// it but the field's still, the browser draws the whole glass, as it did before FG-3b.
+// it but the field's still, the browser draws the whole glass, as it did before FG-3b. FG-6's frozen frame holds the
+// glass off the field for a harness (`hold`), so the browser draws it over the same field.
 
 /** The glass's side of the hold. */
 export interface FieldGlass {
@@ -40,13 +41,19 @@ export interface FieldGlassHost extends FieldGlass {
   report(drawn: boolean): void;
   /** The field became its still, or never was. */
   stillness(still: boolean): void;
+  /** While `off`, the glass is held off the field (FG-6's frozen frame): the door is handed none, so the field draws
+   * none and the browser draws the whole glass, and what the glass sets meanwhile is kept for the door once it lets
+   * go. */
+  hold(off: boolean): void;
 }
 
 export function createFieldGlass(field: () => Element | null): FieldGlassHost {
   let door: { glass(glass: GlassState | null): void } | null = null;
   let kept: GlassState | null = null;
+  let off = false;
   let drawn = false;
   let still = false;
+  const hand = (): void => door?.glass(off ? null : kept);
   const listeners = new Set<() => void>();
   const tell = (): void => {
     for (const listener of listeners) listener();
@@ -59,7 +66,7 @@ export function createFieldGlass(field: () => Element | null): FieldGlassHost {
   return {
     set(glass) {
       kept = glass;
-      door?.glass(glass);
+      hand();
     },
     box: () => field()?.getBoundingClientRect() ?? null,
     drawn: () => drawn,
@@ -71,7 +78,7 @@ export function createFieldGlass(field: () => Element | null): FieldGlassHost {
     attach(next) {
       door = next;
       if (next === null) say(false);
-      else next.glass(kept);
+      else hand();
     },
     report(next) {
       // a door already gone says nothing the field still draws
@@ -81,6 +88,11 @@ export function createFieldGlass(field: () => Element | null): FieldGlassHost {
       if (next === still) return;
       still = next;
       tell();
+    },
+    hold(next) {
+      if (next === off) return;
+      off = next;
+      hand();
     },
   };
 }

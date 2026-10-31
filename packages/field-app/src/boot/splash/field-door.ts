@@ -1,4 +1,5 @@
 import { getRendererLogger } from "../../logging";
+import { fieldHold } from "./field-hold";
 import { markFade } from "./field-mark";
 import type { GlassState } from "./glass-look";
 import type { Splash, SplashRevealOptions } from "./vibefield-splash.js";
@@ -13,6 +14,8 @@ import type { Splash, SplashRevealOptions } from "./vibefield-splash.js";
 // `?field=still` and `?field=main` force the still and the main thread (the website's `?splash=`).
 // Since FG-3b the door carries the Setup Assistant's glass to the field (FG-D24, glass-pass.ts): what
 // to draw goes in, and whether the field draws it comes out, so the browser can stand its own down.
+// Since FG-6's frozen frame it holds the field on one frame for a harness, and lets it run on
+// (field-hold.ts).
 
 /** The website's desktop budget (lib/loading-window.js BUDGET.desktop): the device pixels the
  * field's backing store stops at, so it leaves the GPU room for the desk composing behind it. */
@@ -49,6 +52,12 @@ export interface FieldDoor {
   reveal(options?: FieldRevealOptions): Promise<boolean>;
   /** The Setup Assistant's glass, drawn by the field in its own frame (FG-3b); null draws none. */
   glass(glass: GlassState | null): void;
+  /** The field held on the frame it last drew (FG-6's frozen frame), a glass handed in meanwhile
+   * drawn over it: true once it is held, false where nothing runs to hold (the still, or a door
+   * gone). A reveal runs it on. */
+  freeze(): Promise<boolean>;
+  /** The held field run on from where it was held. */
+  thaw(): void;
   destroy(): void;
 }
 
@@ -68,6 +77,8 @@ export type FieldToWorker =
   | { type: "mark"; to: number; ms: number }
   | { type: "reveal"; id: number; options: FieldRevealOptions }
   | { type: "glass"; glass: GlassState | null }
+  | { type: "freeze" }
+  | { type: "thaw" }
   | { type: "destroy" };
 
 export type FieldFromWorker =
@@ -77,6 +88,7 @@ export type FieldFromWorker =
   | { type: "revealed"; id: number; opened: boolean }
   | { type: "glass-drawn"; drawn: boolean }
   | { type: "glass-failed"; message: string }
+  | { type: "frozen" }
   | { type: "destroyed" };
 
 type SplashModule = typeof import("./vibefield-splash.js");
@@ -168,7 +180,16 @@ class FieldUnavailable extends Error {
 }
 
 function still(reason: string): FieldDoor {
-  return { mode: "still", reason, mark() {}, reveal: async () => false, glass() {}, destroy() {} };
+  return {
+    mode: "still",
+    reason,
+    mark() {},
+    reveal: async () => false,
+    glass() {},
+    freeze: async () => false,
+    thaw() {},
+    destroy() {},
+  };
 }
 
 async function inWorker(
@@ -187,6 +208,7 @@ async function inWorker(
     dpr: devicePixelRatio || 1,
   });
   const reveals = new Map<number, (opened: boolean) => void>();
+  const freezes: ((held: boolean) => void)[] = [];
   const started = new Promise<void>((resolve, reject) => {
     worker.onerror = (event) => reject(new Error(event.message || "The field's worker failed"));
     worker.onmessage = ({ data }: MessageEvent<FieldFromWorker>) => {
@@ -198,6 +220,7 @@ async function inWorker(
         reveals.delete(data.id);
       } else if (data.type === "glass-drawn") onGlass?.(data.drawn);
       else if (data.type === "glass-failed") glassFailed(data.message);
+      else if (data.type === "frozen") for (const resolve of freezes.splice(0)) resolve(true);
     };
   });
   const offscreen = canvas.transferControlToOffscreen();
@@ -230,11 +253,22 @@ async function inWorker(
     glass(state) {
       if (!gone) post({ type: "glass", glass: state });
     },
+    freeze() {
+      if (gone) return Promise.resolve(false);
+      return new Promise((resolve) => {
+        freezes.push(resolve);
+        post({ type: "freeze" });
+      });
+    },
+    thaw() {
+      if (!gone) post({ type: "thaw" });
+    },
     destroy() {
       if (gone) return;
       gone = true;
       for (const resolve of reveals.values()) resolve(false);
       reveals.clear();
+      for (const resolve of freezes.splice(0)) resolve(false);
       observer.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
       post({ type: "destroy" });
@@ -281,7 +315,8 @@ async function onMainThread(
       post: glass,
     });
     drawing = splash;
-    splash.start();
+    const hold = fieldHold(splash, settings.reducedMotion);
+    hold.start();
     const mark = markFade(splash);
     const owned = device;
     let gone = false;
@@ -293,6 +328,7 @@ async function onMainThread(
       reveal(options = {}) {
         if (gone) return Promise.resolve(false);
         mark.cancel();
+        hold.thaw();
         return splash.reveal(options);
       },
       glass(state) {
@@ -300,6 +336,14 @@ async function onMainThread(
         glass.setLook(state?.look ?? null);
         glass.setPose(state?.pose ?? null);
         splash.redraw();
+      },
+      freeze() {
+        if (gone) return Promise.resolve(false);
+        hold.freeze();
+        return Promise.resolve(true);
+      },
+      thaw() {
+        if (!gone) hold.thaw();
       },
       destroy() {
         if (gone) return;

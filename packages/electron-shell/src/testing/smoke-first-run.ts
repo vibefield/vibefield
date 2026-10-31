@@ -20,6 +20,11 @@
 //     - on the live field the field draws it (`data-glass="field"`, the page's own logo hidden); over the still the
 //       page's logo stands;
 //     - in the pixels the mark stands at that centre: darker than its glass by day (inverted on milk), lighter by night.
+//   · THE FROZEN FRAME (FG-6's last gate; DESIGN.md §8 "Held to the browser's glass"), there on the live field: the
+//     field held on one frame through its door (`window.__vfField`), the glass captured as the field draws it, as the
+//     browser does, and as the field does again. The field's two captures agree, so it held; then the field's glass
+//     stands within §8's bars of the browser's inside the glass, in the ring of its shadow and on the logo. Every
+//     number is printed and the three stills kept; over the still nothing compares, and the walk says so.
 //   · THE HOLDS (FG-L5, FG-D20; DESIGN.md §6): every load that began to show stood its floor from its fade in, with the
 //     logo, and a line hold said one line.
 //   · THE FRAME (FG-4a, FG-L3): on Agents with More open, the list outgrows its body and scrolls within itself under its
@@ -120,6 +125,19 @@ export const FIRST_RUN = {
   restMs: 1_900,
   /** FG-O3's readings of the GPU's load, one this often */
   gpuEveryMs: 100,
+  /** FG-6's frozen frame (DESIGN.md §8 "Held to the browser's glass"): a switch of the glass said, its capture waits
+   * this long for the compositor's frames */
+  frozenSettleMs: 250,
+  /** inside the glass starts this far in from its edge, past its two hairlines, in the glass's own px */
+  frozenEdge: 3,
+  /** the shadow's ring: this far out from the glass's edge, in the glass's own px (`--vf-shadow-wizard-field` casts
+   * 40 down and blurs 120, so the ring holds its near, dense part) */
+  frozenRing: 64,
+  /** the field held: its two captures with the field's glass apart by at most this, a channel's mean of 255 */
+  frozenHeld: 0.1,
+  /** DESIGN.md §8's bars: the field's glass and the browser's apart by at most this in each region, a channel's mean
+   * of 255 (FG-D24's A/B measured about 1, 0.3 and 2.5) */
+  frozen: { inside: 2, shadow: 1, logo: 6 },
 } as const;
 
 /** The field's mark (`boot/splash/field-mark.ts` FIELD_MARK) and the stills it is drawn on (FIELD_STILLS): the
@@ -1046,6 +1064,21 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
         dark: matchMedia("(prefers-color-scheme: dark)").matches,
       };
     },
+    /** the glass as it stands (FG-6's frozen frame): its box, its corners' radius and its fit, who draws it, and the
+     * logo's box, in CSS px of the window */
+    glass: () => {
+      const shell = shellOf();
+      if (shell === null) return null;
+      const fit = shell.getBoundingClientRect().width / shell.offsetWidth;
+      return {
+        box: box(shell),
+        radius: Number.parseFloat(getComputedStyle(shell).borderTopLeftRadius) * fit,
+        fit,
+        drawn: shell.getAttribute("data-glass"),
+        logo: box(shell.querySelector(".vf-wizard-logo")),
+        view: { width: innerWidth, height: innerHeight },
+      };
+    },
     /** the frame, the standing pane's head and foot, its primary action, and the list that scrolls in its body */
     frame: () => {
       const shell = shellOf();
@@ -1343,6 +1376,130 @@ export function judgeLogo(
   return problems;
 }
 
+/** The glass as the page reads it on the held frame (FG-6's frozen frame), in CSS px of the window: its box, its
+ * corners' radius and its fit, who draws it (`data-glass`), and the logo's box. */
+export interface GlassSeen {
+  readonly box: Box;
+  readonly radius: number;
+  readonly fit: number;
+  readonly drawn: string | null;
+  readonly logo: Box | null;
+  readonly view: { readonly width: number; readonly height: number };
+}
+
+/** Where the frozen frame sets the field's glass beside the browser's. */
+export type FrozenRegion = "inside" | "shadow" | "logo";
+
+const FROZEN_WHERE: Readonly<Record<FrozenRegion, string>> = {
+  inside: "inside the glass",
+  shadow: "in its shadow",
+  logo: "on the logo",
+};
+
+/** Where a point of the window (CSS px) falls on the glass: on the logo (its box), inside the glass past its edge's
+ * two hairlines, in the ring of its shadow out from its edge, or on none of them (its edge, the field beyond). */
+export function frozenRegion(seen: GlassSeen, x: number, y: number): FrozenRegion | null {
+  const { box, radius, fit, logo } = seen;
+  if (
+    logo !== null &&
+    x >= logo.x &&
+    x < logo.x + logo.width &&
+    y >= logo.y &&
+    y < logo.y + logo.height
+  ) {
+    return "logo";
+  }
+  // how far the point stands out from the glass's rounded edge: less than 0 inside it
+  const qx = Math.abs(x - (box.x + box.width / 2)) - (box.width / 2 - radius);
+  const qy = Math.abs(y - (box.y + box.height / 2)) - (box.height / 2 - radius);
+  const out = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+  if (out <= -FIRST_RUN.frozenEdge * fit) return "inside";
+  if (out > 1 && out <= FIRST_RUN.frozenRing * fit) return "shadow";
+  return null;
+}
+
+/** FG-6's frozen frame read off its three captures: `held`, the field's two captures apart over the whole window; then
+ * the field's glass against the browser's in each region (`frozenRegion`, at each px's centre), with its px. Each is a
+ * channel's mean difference, of 255. */
+export interface FrozenReading {
+  readonly held: number;
+  readonly regions: Readonly<Record<FrozenRegion, { readonly diff: number; readonly px: number }>>;
+}
+
+/** Read the frozen frame (`FrozenReading`) off three captures of the whole window (BGRA, Electron's `toBitmap`, at the
+ * screen's density): the field's glass, the browser's, and the field's again. Null when one is no picture of the
+ * window `seen` read. */
+export function readFrozen(
+  byField: Uint8Array,
+  byBrowser: Uint8Array,
+  again: Uint8Array,
+  seen: GlassSeen,
+): FrozenReading | null {
+  const pixels = byField.length / 4;
+  const { width, height } = seen.view;
+  if (width <= 0 || height <= 0 || pixels <= 0) return null;
+  if (byBrowser.length !== byField.length || again.length !== byField.length) return null;
+  const scale = Math.sqrt(pixels / (width * height));
+  const w = Math.round(width * scale);
+  const h = Math.round(height * scale);
+  if (w * h !== pixels) return null;
+  const apart = (a: Uint8Array, b: Uint8Array, i: number): number =>
+    (Math.abs((a[i] as number) - (b[i] as number)) +
+      Math.abs((a[i + 1] as number) - (b[i + 1] as number)) +
+      Math.abs((a[i + 2] as number) - (b[i + 2] as number))) /
+    3;
+  let held = 0;
+  const sums: Record<FrozenRegion, { sum: number; px: number }> = {
+    inside: { sum: 0, px: 0 },
+    shadow: { sum: 0, px: 0 },
+    logo: { sum: 0, px: 0 },
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      held += apart(byField, again, i);
+      const region = frozenRegion(seen, (x + 0.5) / scale, (y + 0.5) / scale);
+      if (region === null) continue;
+      sums[region].sum += apart(byField, byBrowser, i);
+      sums[region].px += 1;
+    }
+  }
+  const mean = (sum: number, px: number): number =>
+    px === 0 ? 0 : Math.round((sum / px) * 100) / 100;
+  const region = (name: FrozenRegion) => ({
+    diff: mean(sums[name].sum, sums[name].px),
+    px: sums[name].px,
+  });
+  return {
+    held: mean(held, pixels),
+    regions: { inside: region("inside"), shadow: region("shadow"), logo: region("logo") },
+  };
+}
+
+/** FG-6's frozen frame judged (DESIGN.md §8 "Held to the browser's glass"): the field held its frame, and on it the
+ * field's glass stands within §8's bars of the browser's in each region. A frame not held is said alone, since what
+ * differs then is no longer one frame. */
+export function judgeFrozen(reading: FrozenReading | null): string[] {
+  if (reading === null) return ["the frozen frame's captures are no picture of the window"];
+  if (reading.held > FIRST_RUN.frozenHeld) {
+    return [
+      `the field did not hold its frame: its two captures with the field's glass differ by ${reading.held} (at most ${FIRST_RUN.frozenHeld})`,
+    ];
+  }
+  const problems: string[] = [];
+  for (const name of ["inside", "shadow", "logo"] as const) {
+    const { diff, px } = reading.regions[name];
+    const bar = FIRST_RUN.frozen[name];
+    if (px === 0) problems.push(`the frozen frame has no px ${FROZEN_WHERE[name]}`);
+    else if (diff > bar) {
+      problems.push(
+        `on the frozen frame the field's glass differs from the browser's by ${diff} ${FROZEN_WHERE[name]}, over DESIGN.md §8's ${bar}`,
+      );
+    }
+  }
+  return problems;
+}
+
 /** What the walk needs. */
 export interface FirstRunDriver {
   readonly win: BrowserWindow;
@@ -1396,6 +1553,12 @@ export async function firstRunRows(
       `globalThis.__vfFirstRun?.${call} ?? null`,
       true,
     )) as T;
+  // the live field's door (FG-6's frozen frame): `window.__vfField`, while the field's door is open on the GPU
+  const field = async <T>(call: string): Promise<T | null> =>
+    (await d.win.webContents.executeJavaScript(
+      `globalThis.__vfField?.${call} ?? null`,
+      true,
+    )) as T | null;
   const until = async <T>(
     what: string,
     ms: number,
@@ -1444,6 +1607,18 @@ export async function firstRunRows(
     const before = await page<InksSeen | null>("inks()");
     const bitmap = await capture(name);
     cutFrom(bitmap, await page<InksSeen | null>("inks()"), ["words"], before);
+  };
+  // FG-6's frozen frame: the glass on the held frame drawn by the field, or held off it and drawn by the browser, once
+  // the page says so (`data-glass`) and the compositor has had its frames
+  const glassBy = async (byField: boolean): Promise<void> => {
+    await field(`glass(${byField})`);
+    const want = byField ? "field" : null;
+    await until(
+      `the glass drawn by the ${byField ? "field" : "browser"} on the held frame`,
+      5_000,
+      async () => ((await page<GlassSeen | null>("glass()"))?.drawn === want ? true : null),
+    );
+    await sleep(FIRST_RUN.frozenSettleMs);
   };
   const target = (spec: ControlSpec): Promise<Target | null> =>
     page<Target | null>(`target(${JSON.stringify(spec)})`);
@@ -1573,6 +1748,32 @@ export async function firstRunRows(
       mark === null ? null : { ...mark, at: { x: region.x + mark.at.x, y: region.y + mark.at.y } };
     facts["logo"] = { box: logo.box, glass: logo.glass, ink };
     problems.push(...judgeLogo(logo, walk, ink));
+    // FG-6's frozen frame (DESIGN.md §8 "Held to the browser's glass"), the welcome's glass at rest with its logo
+    // whole: the live field held on one frame through its door, the glass captured as the field draws it, as the
+    // browser does, and as the field does again, then the field let go
+    if (!walk.webgpu) {
+      facts["frozen"] = "nothing to compare: over the still the browser draws the whole glass";
+    } else if ((await field<boolean>("freeze()")) !== true) {
+      problems.push("on the live field the field's door held no frame (window.__vfField)");
+    } else {
+      try {
+        await glassBy(true);
+        const seen = await until("the glass on the held frame", 5_000, () =>
+          page<GlassSeen | null>("glass()"),
+        );
+        const byField = await capture("frozen-field");
+        await glassBy(false);
+        const byBrowser = await capture("frozen-browser");
+        await glassBy(true);
+        const again = await capture("frozen-field-again");
+        const reading = readFrozen(byField, byBrowser, again, seen);
+        facts["frozen"] = reading;
+        problems.push(...judgeFrozen(reading));
+      } finally {
+        await field("glass(true)");
+        await field("thaw()");
+      }
+    }
     await press({ text: "Get started" }, "Get started");
 
     // 2 · You: a name typed into its field

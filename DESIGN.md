@@ -2942,7 +2942,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   milk (`invert(1) hue-rotate(180deg)`, its colours kept). **Drawn by the field** (FG-D24): over the live
   field the glass's shadow, frost, tint, grain and logo are a pass of the field's own frame, read from
   §5's tokens, so the window draws the field once; the two hairlines stay the browser's, at the screen's
-  own pixels; over the still the browser draws the whole glass. *Status 2026-10-29: ruled, to be built —
+  own pixels; over the still the browser draws the whole glass. **Held to the browser's glass** (FG-6's
+  frozen frame; ruled 2026-10-31 at the lean, James's to overturn): on one held frame of the live field, the
+  field's glass and the browser's differ by a mean of at most 2 inside the glass, 1 in its shadow and 6 on the
+  logo (of 255, a channel's), where FG-D24's A/B measured about 1, 0.3 and 2.5; row 32 holds the field's glass
+  to it (`docs/desk-gates.md`). *Status 2026-10-29: ruled, to be built —
   the glass, the steps, the frame and the logo at FG-3, the panes in the frame at FG-4 (after TS-6 and
   TS-7 land), the hand-over at FG-5, the gates at FG-6 (the record's §7). Until each lands, the Setup
   Assistant ships as "The Setup Assistant's agent chapter" and the Connect pane describe it.*

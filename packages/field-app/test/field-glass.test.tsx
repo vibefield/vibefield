@@ -4,18 +4,49 @@
  * own layers down only once the field says it draws them. happy-dom computes no CSS and runs no animations, so the
  * rows hand the glass the computed style a browser would, and run its frames by hand. FG-4b: the logo — its filter
  * in the look and its fade in the pose, followed through its fades — and the field's still, which sizes it. FG-6: the
- * field's still where its page asks for it, which the catalog stands the glass on.
+ * field's still where its page asks for it, which the catalog stands the glass on; and FG-6's frozen frame, the glass
+ * held off the field and the live field's door for a harness (`window.__vfField`).
  */
-import { act, type ReactElement } from "react";
+import { act, createRef, type ReactElement, type Ref } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FieldLayer } from "../src/boot/FieldLayer";
+import { type FieldHandle, FieldLayer, type VfFieldDoor } from "../src/boot/FieldLayer";
 import { createFieldGlass, FieldGlassContext, useFieldStill } from "../src/boot/field-glass";
 import { type WizardGround, WizardShellView } from "../src/boot/onboarding/wizard-ui";
 import { fieldPlan } from "../src/boot/splash/field-door";
 import type { GlassState } from "../src/boot/splash/glass-look";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** FG-6's frozen frame's rows hand FieldLayer a live door of their own; every other row keeps the real one, which
+ * happy-dom (no WebGPU) opens as the still. */
+const live = vi.hoisted(() => ({
+  door: null as null | ReturnType<typeof liveDoor>,
+}));
+
+vi.mock("../src/boot/splash/field-door", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/boot/splash/field-door")>();
+  return {
+    ...real,
+    fieldPlan: (env?: Parameters<typeof real.fieldPlan>[0]) =>
+      live.door === null ? real.fieldPlan(env) : { gpu: {} as GPU, mainThread: false },
+    openFieldDoor: async (...args: Parameters<typeof real.openFieldDoor>) =>
+      live.door ?? real.openFieldDoor(...args),
+  };
+});
+
+/** A live door, its every call recorded; its reveal opens the window. */
+function liveDoor() {
+  return {
+    mode: "worker" as const,
+    mark: vi.fn<(to: number, ms: number) => void>(),
+    reveal: vi.fn<(options?: object) => Promise<boolean>>(async () => true),
+    glass: vi.fn<(glass: GlassState | null) => void>(),
+    freeze: vi.fn<() => Promise<boolean>>(async () => true),
+    thaw: vi.fn<() => void>(),
+    destroy: vi.fn<() => void>(),
+  };
+}
 
 /** Chrome's serialization of `--vf-shadow-wizard-field` (DESIGN.md §5). */
 const FIELD_SHADOW =
@@ -102,6 +133,7 @@ afterEach(async () => {
   root = null;
   host?.remove();
   host = null;
+  live.door = null;
   delete (HTMLElement.prototype as unknown as { getAnimations?: unknown }).getAnimations;
   document.documentElement.removeAttribute("data-theme");
   vi.unstubAllGlobals();
@@ -177,6 +209,28 @@ describe("the field's hold on the glass", () => {
     hold.report(true);
     expect(hold.drawn()).toBe(false);
     expect(heard).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds the glass off the field: the door is handed none, and once it lets go what the glass set meanwhile (FG-6's frozen frame)", () => {
+    const { hold, door, last } = heldField();
+    const state = { look: {}, pose: {} } as unknown as GlassState;
+    hold.set(state);
+    hold.hold(true);
+    expect(last()).toBeNull();
+    const moved = { look: {}, pose: { x: 1 } } as unknown as GlassState;
+    hold.set(moved);
+    expect(last()).toBeNull();
+    hold.hold(true);
+    expect(door.glass).toHaveBeenCalledTimes(3);
+    hold.hold(false);
+    expect(last()).toBe(moved);
+    expect(door.glass).toHaveBeenCalledTimes(4);
+
+    // a door that opens while the glass is held off is handed none
+    hold.hold(true);
+    const next = { glass: vi.fn<(glass: GlassState | null) => void>() };
+    hold.attach(next);
+    expect(next.glass.mock.calls).toEqual([[null]]);
   });
 
   it("measures the glass from the field's own box", () => {
@@ -448,5 +502,64 @@ describe("the glass on the field", () => {
 
     const alone = mount(glassOn("field", null));
     expect(alone.hasAttribute("data-glass")).toBe(false);
+  });
+});
+
+describe("the live field's door for a harness (FG-6's frozen frame)", () => {
+  const scope = globalThis as { __vfField?: VfFieldDoor };
+  const layer = (handleRef: Ref<FieldHandle> = null) => (
+    <FieldLayer mark={false} handleRef={handleRef}>
+      <WizardShellView dark={false} onToggleTheme={() => {}} ground="field">
+        <p>a pane</p>
+      </WizardShellView>
+    </FieldLayer>
+  );
+
+  it("is window.__vfField while the live field's door is open: it holds the field and the glass off it, and goes with the tear", async () => {
+    const door = liveDoor();
+    live.door = door;
+    const handle = createRef<FieldHandle>();
+    mount(layer(handle));
+    expect(scope.__vfField).toBeUndefined();
+    await act(async () => {}); // the field's door opens
+    const field = scope.__vfField;
+    expect(field?.mode).toBe("worker");
+    const kept = door.glass.mock.calls.at(-1)?.[0];
+    expect(kept?.pose).toMatchObject({ x: 600, y: 400 });
+    expect(await field?.freeze()).toBe(true);
+    expect(door.freeze).toHaveBeenCalledTimes(1);
+    // the glass held off the field: the door handed none, then the glass it had
+    field?.glass(false);
+    expect(door.glass.mock.calls.at(-1)).toEqual([null]);
+    field?.glass(true);
+    expect(door.glass.mock.calls.at(-1)).toEqual([kept]);
+    field?.thaw();
+    expect(door.thaw).toHaveBeenCalledTimes(1);
+    // the tear open, the door goes, and the harness's door with it
+    await act(async () => {
+      await handle.current?.tear(false);
+    });
+    expect(door.destroy).toHaveBeenCalledTimes(1);
+    expect(scope.__vfField).toBeUndefined();
+  });
+
+  it("is never there over the field's still, and goes when the layer does", async () => {
+    mount(layer());
+    await act(async () => {});
+    expect(host?.querySelector(".vf-field")?.getAttribute("data-field")).toBe("still");
+    expect(scope.__vfField).toBeUndefined();
+    await act(async () => root?.unmount());
+    root = null;
+    host?.remove();
+
+    const door = liveDoor();
+    live.door = door;
+    mount(layer());
+    await act(async () => {});
+    expect(scope.__vfField).toBeDefined();
+    await act(async () => root?.unmount());
+    root = null;
+    expect(door.destroy).toHaveBeenCalledTimes(1);
+    expect(scope.__vfField).toBeUndefined();
   });
 });
