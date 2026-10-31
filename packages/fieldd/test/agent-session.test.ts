@@ -92,6 +92,7 @@ import type {
 } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
+import { markedText } from "../src/agent-input-queue";
 import { EXIT_GRACE_MS } from "../src/agent-runtime";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
@@ -1508,6 +1509,10 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(doorProof.listed.tools.map((tool: { name: string }) => tool.name)).toContain(
       "agents_list",
     );
+    // CP-2: a spark's door lists the talk room's rows too, over the real door
+    expect(doorProof.listed.tools.map((tool: { name: string }) => tool.name)).toEqual(
+      expect.arrayContaining(["agent_spawn", "agent_send", "agent_interrupt", "agent_stop"]),
+    );
     expect(doorProof.called.isError).not.toBe(true);
 
     await win.call("terminal.terminate", { sessionId: first.runtimeSessionId });
@@ -1560,6 +1565,50 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(plainProof.called.structuredContent?.fact).toBe("forbidden");
     await win.call("terminal.terminate", { sessionId: ordinary.terminal.sessionId });
   }, 90_000);
+
+  // CP-2 — the talk room's two ports on the real floor. The queue's idle gate is agent-input-queue.test.ts's: the
+  // scripted agent observes only its terminal, so its monitor never says idle on cue, and this row witnesses what the
+  // queue hands the floor, not when.
+  it("CP-2 — a spark's marked words are pasted into a real run and read by its PTY, and agent_stop's end reaches the floor", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, sessions } = box;
+    const win = await window(daemon, DECK, "cp2");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      title: "a talk target",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+    // the bytes reach the process once it IS `cat` (item 118)
+    await catReady(box, spawned.terminal.sessionId);
+    expect(daemon.agents.isLive(runId)).toBe(true);
+    const text = markedText({
+      id: "x",
+      text: "cp2-delivered",
+      from: { kind: "spark", spark: "sp-vela00000000000", name: "Vela" },
+      at: new Date().toISOString(),
+    });
+    expect(await daemon.agents.submit(runId, text)).toEqual({ status: "confirmed" });
+    const typed = await poll(async () => {
+      const path = sessions[0]?.typedOut;
+      if (path === undefined || !existsSync(path)) return undefined;
+      const read = readFileSync(path, "utf8");
+      return read.includes("cp2-delivered") ? read : undefined;
+    }, 10_000);
+    expect(typed).toContain("Vela (your spark) on your behalf:");
+    await daemon.agents.endRun(runId);
+    await poll(
+      async () => {
+        const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = rows.find((r) => r.runtimeRunId === runId);
+        return row === undefined || row.continuation?.exited === true ? true : undefined;
+      },
+      15_000,
+      "the ended run read as exited",
+    );
+    expect(daemon.agents.isLive(runId)).toBe(false);
+  }, 60_000);
 
   it("spawn: a PTY on the agent cell with a CLEAN environment; the fold's row, the record (0600), the ticket, the audit; automation through the host; exit withdraws the row and stamps the record; resume continues from the record; a live run refuses to be resumed", async () => {
     const { daemon, dataDir, envOut, sessions } = await setup({ floor: "real" });

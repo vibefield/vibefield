@@ -1616,6 +1616,9 @@ export const LAYOUT = {
   /** CP-1c — each spark's own folder, `sparks/<slug>/`, made when it hatches: where its session works, with the
    * CLAUDE.md written for it. The person's, to open in Finder; fieldd's records never live in it. */
   SPARK_HOMES_DIR: ["sparks"],
+  /** CP-2 (CP2-D3) — each session's input queue, one file per run, 0600 in a 0700 directory: a spark's words and
+   * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. */
+  AGENT_INPUTS_DIR: ["fieldd", "inputs"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
