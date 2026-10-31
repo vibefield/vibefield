@@ -43,6 +43,10 @@
     );
   --vf-mat-lattice-size: 100px 100px, 100px 100px, 25px 25px, 25px 25px;
   --vf-mat-ink: rgb(255 255 255 / 60%);
+  /* §2.1 the field (track FG): the first face's ground — the website's splash, before its first frame and under its
+     still — and the words that stand on it. One value in both themes: the field is the dark in both. */
+  --vf-field-ground: #04050f;
+  --vf-field-ink: rgb(255 255 255 / 56%);
   /* §2.2 Surfaces */
   --vf-card: #1c1c1e;
   --vf-card-deep: #000000;
@@ -68,9 +72,15 @@
   --vf-chrome-surface-hover: rgb(255 255 255 / 78%);
   --vf-field-surface: rgb(255 255 255 / 60%);
   --vf-wizard-surface: rgb(255 255 255 / 55%);
+  /* §5 the Setup Assistant on the field (track FG, FG-D15 C): its edge and the edge's top light; the grain
+     over its frost (one value in both themes), so the blur never bands */
+  --vf-wizard-edge: rgb(255 255 255 / 60%);
+  --vf-wizard-edge-light: rgb(255 255 255 / 75%);
+  --vf-wizard-grain: 0.03;
   --vf-backdrop-dim: rgb(0 0 0 / 10%);
   /* §5 the search scrim (the Peek, §8 "Search"; K7): darker than the backdrop
-     dim, under a blur of 18 — the window blurred and dimmed */
+     dim, under a blur of 18 — the window blurred and dimmed. The phone wears its
+     dim alone under a door over a live field (§9, TS-D22; ChromePalette.searchScrim) */
   --vf-search-scrim: rgb(0 0 0 / 16%);
 
   /* §2.5 State & system color */
@@ -335,6 +345,9 @@
   --vf-drop-edge: drop-shadow(20px 0 40px rgb(0 0 0 / 8%));
   --vf-shadow-dialog: 0 42px 100px rgb(0 0 0 / 18%), 0 12px 36px rgb(0 0 0 / 10%);
   --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 8%);
+  /* §5 (track FG): the Setup Assistant's shadow on the field, in the field's ground — one value in both themes,
+     since the field is the dark in both */
+  --vf-shadow-wizard-field: 0 40px 120px rgb(4 5 15 / 55%), 0 12px 32px rgb(4 5 15 / 28%);
   /* §5 the search popup (the Peek, §8 "Search"; GV-D8) — its ring is the strong hairline */
   --vf-shadow-search: 0 40px 100px rgb(0 0 0 / 24%), 0 12px 30px rgb(0 0 0 / 10%);
 
@@ -384,6 +397,8 @@
   --vf-chrome-surface-hover: rgb(255 255 255 / 8%);
   --vf-field-surface: rgb(255 255 255 / 6%);
   --vf-wizard-surface: rgb(28 28 30 / 55%);
+  --vf-wizard-edge: rgb(255 255 255 / 12%);
+  --vf-wizard-edge-light: rgb(255 255 255 / 8%);
   --vf-backdrop-dim: rgb(0 0 0 / 40%);
   --vf-search-scrim: rgb(0 0 0 / 46%);
   --vf-shadow-island: 0 8px 30px rgb(0 0 0 / 40%);

@@ -9,10 +9,14 @@ import {
   type ShellSurfacesMintResult,
   type ShellSurfacesReleaseParams,
   type ShellSurfacesReleaseResult,
+  type ShellSurfacesSimulatorDevicesParams,
+  type ShellSurfacesSimulatorDevicesResult,
   SurfaceCloseParamsV1,
   SurfaceCloseResultV1,
   SurfaceOpenParamsV1,
   SurfaceOpenResultV1,
+  SurfaceSimulatorDevicesParamsV1,
+  SurfaceSimulatorDevicesResultV1,
   SurfaceSourcesParamsV1,
   SurfaceSourcesResultV1,
 } from "@vibefield/contracts";
@@ -41,6 +45,9 @@ const SURFACE_KIND_SCOPE: Readonly<Record<LiveSurfaceSourceKindV1, Scope>> = {
   browser: "surface.browser",
   "sck-window": "surface.capture",
   "ios-simulator": "surface.capture",
+  // PT-S2 (R1): a phone bound by its device type and runtime is the Simulator's window captured, whatever main resolves
+  // the binding to on this Mac — the same Screen Recording gravity as the UDID-keyed kind.
+  "ios-simulator-device": "surface.capture",
 };
 
 /** How many `surface.open` answers are remembered for idempotent retries.
@@ -50,13 +57,16 @@ const SURFACE_KIND_SCOPE: Readonly<Record<LiveSurfaceSourceKindV1, Scope>> = {
  * retry arrives within seconds; this bounds a caller that never stops asking. */
 const OPEN_REPLAY_MEMORY = 64;
 
-/** The four DT-1a authority helpers, narrowed. `ProductApi` satisfies this
+/** The four DT-1a authority helpers, narrowed — and PT-S2's device list. `ProductApi` satisfies this
  * structurally; tests pass a fake and never a real broker. */
 export interface SurfaceAuthority {
   surfaceAuthorityAvailable(): boolean;
   surfacesEnumerate(params: ShellSurfacesEnumerateParams): Promise<ShellSurfacesEnumerateResult>;
   surfacesMint(params: ShellSurfacesMintParams): Promise<ShellSurfacesMintResult>;
   surfacesRelease(params: ShellSurfacesReleaseParams): Promise<ShellSurfacesReleaseResult>;
+  surfacesSimulatorDevices(
+    params: ShellSurfacesSimulatorDevicesParams,
+  ): Promise<ShellSurfacesSimulatorDevicesResult>;
 }
 
 /** The slice of AuditService this door needs: attempt → effect → outcome. */
@@ -79,6 +89,8 @@ export interface SurfaceService {
   sources(ctx: CallerContext, params: unknown): Promise<SurfaceSourcesResultV1>;
   open(ctx: CallerContext, params: unknown): Promise<SurfaceOpenResultV1>;
   close(ctx: CallerContext, params: unknown): Promise<SurfaceCloseResultV1>;
+  /** PT-S2 (R11) — `surface.simulator.devices`: the attach's device list. */
+  simulatorDevices(ctx: CallerContext, params: unknown): Promise<SurfaceSimulatorDevicesResultV1>;
 }
 
 function authorityUnavailable(): RpcCallError {
@@ -193,6 +205,28 @@ export function createSurfaceService(options: SurfaceServiceOptions): SurfaceSer
         .surfacesEnumerate({ kind: parsed.data.kind })
         .catch(throughSurfaces);
       return SurfaceSourcesResultV1.parse(enumerated);
+    },
+
+    // PT-S2 (R11) — the attach's device list. Shaped as `sources` is: a read of what this device could show, so no
+    // principal fact is read and the registry's `surface.capture` row is the whole policy (no window: a list binds
+    // nothing; a phone's own open still pays the matrix's scope). Main answers REDACTED rows — the ids a binding is made
+    // of, never a UDID — and this door re-parses them, so a row main got wrong is refused here, not handed on.
+    async simulatorDevices(_ctx, params) {
+      // a bare call (no params at all) asks the same nothing as `{}`
+      const parsed = SurfaceSimulatorDevicesParamsV1.safeParse(params ?? {});
+      if (!parsed.success) {
+        throw new RpcCallError("PRECONDITION_FAILED", "expected {}", false);
+      }
+      if (!api.surfaceAuthorityAvailable()) {
+        logger.info(
+          "fieldd.surfaces.authority_unavailable",
+          "A simulator device list arrived with no live-surface authority registered",
+          { kind: "ios-simulator-device" },
+        );
+        throw authorityUnavailable();
+      }
+      const listed = await api.surfacesSimulatorDevices({}).catch(throughSurfaces);
+      return SurfaceSimulatorDevicesResultV1.parse(listed);
     },
 
     async open(ctx, params) {

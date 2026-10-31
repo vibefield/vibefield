@@ -54,7 +54,9 @@ import {
   SettingsSwitch,
 } from "./settings-ui";
 import { TerminalSettings } from "./terminal/TerminalSettings";
+import { UpdatesDevicesSection } from "./UpdatesDevicesSection";
 import { UpdatesDoctorSection, UpdatesSection } from "./UpdatesSection";
+import { updateWaits } from "./update-words";
 
 const LazyDiagnosticsSection = lazy(() =>
   import("./DiagnosticsSection").then((module) => ({
@@ -78,6 +80,9 @@ interface SettingsPanelProps {
   /** Where Agent Profiles opens: the limit moment opens it on New profile…
    * (AO-6b); This Mac's page otherwise. */
   initialProfiles?: ProfilesRoute;
+  /** AU-6 (LC-7) — the Me row's What's new: Settings → Updates opens at the
+   * release's notes, on its first showing only. */
+  updatesAtNotes?: boolean;
   /** ICE's devtools, which left the corner for Settings → Advanced (One Frame
    * FC-D12): shown in development builds only, and only where a host lends
    * the switch. */
@@ -178,6 +183,7 @@ export function SettingsPanel({
   onConnectTaken,
   initialPage = "general",
   initialProfiles,
+  updatesAtNotes = false,
   devtools,
   onClose,
 }: SettingsPanelProps): ReactElement {
@@ -489,8 +495,6 @@ export function SettingsPanel({
           desktopState={desktopState}
           onSettingsChanged={markSettingsChanged}
         />
-        {/* WP12d (L3c-ii, §13 C3) — the update card, after Desktop for now */}
-        <UpdatesSection desktopState={desktopState} />
         {/* BP-D4 — the desk browser's data: Clear browsing data */}
         <BrowserDataSection />
         <SettingsSection
@@ -635,6 +639,25 @@ export function SettingsPanel({
     // GT-7: one page over two owners — this window's look and this Mac's
     // config.ghostty — each section saying which it is (GT-D18).
     pageContent = <TerminalSettings rootRequest={pageRequest} onSubpage={setTerminalSubpage} />;
+  } else if (activePage === "updates") {
+    // AU-3 (AU-D8 A) — the updater's own page: two controllers apart, so the updater's half
+    // works with fieldd broken and the devices' half waits on fieldd alone; "alone" is said
+    // only once the link is known
+    pageContent = (
+      <div className="space-y-4">
+        <UpdatesSection
+          desktopState={desktopState}
+          onOpenDiagnostics={() => selectPage("diagnostics")}
+          // AU-6 (LC-7) — the Me row's What's new opens the page at the release's notes; a press on the rail (any
+          // `selectPage`) moves past the opening, so a return to the page opens at its top
+          atNotes={updatesAtNotes && pageRequest === 0}
+        />
+        <UpdatesDevicesSection
+          current={desktopState?.update?.currentVersion}
+          linked={link.status === "live" ? linked : undefined}
+        />
+      </div>
+    );
   } else if (activePage === "diagnostics") {
     pageContent = (
       <div className="space-y-4">
@@ -757,6 +780,12 @@ export function SettingsPanel({
         account={accountHead}
         finish={finishSetup}
         profiles={profilesNav}
+        // AU-3 (AU-D2 A) — the Updates nav row's cyan mark while an install waits on you
+        pageMarks={
+          updateWaits(desktopState?.update)
+            ? { updates: "an update is ready to install" }
+            : undefined
+        }
         head={activePage === "profiles" ? profilesHead : null}
         subpage={
           activePage === "agents"

@@ -1,7 +1,7 @@
 import {
   AGENT_FIELD,
-  AgentFieldDelta,
-  AgentFieldSnapshot,
+  AgentBoardKeyDelta,
+  AgentBoardKeySnapshot,
   type DeviceInfo,
   type RowsDeviceState,
 } from "@vibefield/contracts";
@@ -74,7 +74,12 @@ export function upstreamFloor(projection: BoardProjection, floor: number): numbe
 /** A row as the board holds it: keyed, and otherwise the owner's. A field or
  * desk row (a peer's), or a model-board row (this desktop's own — an
  * `AgentDeskTerminalRow` is no field row, which is why the hub reads nothing
- * but the key). */
+ * but the key). PG-1b: a peer's frames are now PARSED by the key alone too
+ * (`AgentBoardKeySnapshot`/`AgentBoardKeyDelta`), where they used to be held to
+ * the whole field row. That refused a whole desktop for one row this build
+ * could not read, and it was what forced a desk row to carry the field row
+ * beside its model row. The relay logs no unknown fields: it is no business
+ * reader, and every fact past the key is the owner's, for each reader to judge. */
 export type BoardRow = { runtimeRunId: string } & Record<string, unknown>;
 export type BoardSnapshot = { epoch: string; revision: number; rows: BoardRow[] };
 export type BoardDelta = {
@@ -238,6 +243,14 @@ const REFUSALS = new Set(["INCOMPATIBLE", "FORBIDDEN_SCOPE", "PRECONDITION_FAILE
 
 type Member = (frame: MeshBoardFrame) => void;
 
+/** A reader of the mesh board: its open, the open a reader joining now would
+ * get (PG-1c's resync), and its leaving. */
+export interface MeshBoardReader {
+  readonly open: MeshBoardOpen;
+  readonly current: () => MeshBoardOpen;
+  readonly dispose: () => void;
+}
+
 /** Each desktop's LAST board at one projection, beyond any one hub's life
  * (DS-L8): a reader who arrives after the last one left — Godview reopened
  * while a laptop sleeps — is still answered with that desktop's board, greyed
@@ -292,12 +305,17 @@ class BoardHub {
 
   /** A reader joins: it is answered with every device as the hub holds it,
    * and hears every later frame. */
-  join(member: Member): { open: MeshBoardOpen; dispose: () => void } {
+  join(member: Member): MeshBoardReader {
     const open = this.#openAnswer();
     this.#members.add(member);
     let left = false;
     return {
       open,
+      // PG-1c — the hub applies each frame and broadcasts it in one call, so
+      // this equals the state after the last frame the member was sent, and
+      // the next frame chains from it: owners' epochs and revisions as held,
+      // no owner re-asked (DS-L2)
+      current: () => this.#openAnswer(),
       dispose: () => {
         if (left) return;
         left = true;
@@ -582,7 +600,7 @@ class BoardHub {
     if (this.#disposed || generation !== peer.generation) return;
     const now = this.opts.now();
     if (kind === "snapshot") {
-      const parsed = AgentFieldSnapshot.safeParse(payload);
+      const parsed = AgentBoardKeySnapshot.safeParse(payload);
       if (!parsed.success) {
         this.#refuse(peer, `an unreadable board: ${parsed.error.issues[0]?.message ?? "invalid"}`);
         return;
@@ -602,7 +620,7 @@ class BoardHub {
       this.#setState(peer, "live");
       return;
     }
-    const parsed = AgentFieldDelta.safeParse(payload);
+    const parsed = AgentBoardKeyDelta.safeParse(payload);
     if (!parsed.success) {
       this.#resync(peer, `an unreadable delta: ${parsed.error.issues[0]?.message ?? "invalid"}`);
       return;
@@ -661,7 +679,7 @@ export class MeshBoard {
     projection: BoardProjection,
     minIntervalMs: number,
     emit: (frame: MeshBoardFrame) => void,
-  ): { open: MeshBoardOpen; dispose: () => void } {
+  ): MeshBoardReader {
     if (this.#disposed)
       throw new RpcCallError("UNAVAILABLE", "the mesh board is stopping", true, {
         service: "mesh-board",
@@ -692,6 +710,23 @@ export class MeshBoard {
       this.#hubs.set(key, hub);
     }
     return hub.join(emit);
+  }
+
+  /** The door's install for `agent.subscribe {scope: "mesh"}`: the open as its
+   * snapshot, every per-device frame (a device's delta, reset or state) a
+   * `.delta`, and PG-1c's resync, the whole mesh as it stands now as ONE
+   * `.snapshot`, which the next frame continues. */
+  subscribe(
+    projection: BoardProjection,
+    minIntervalMs: number,
+    emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
+  ): { snapshot: MeshBoardOpen; resync: () => void; dispose: () => void } {
+    const reader = this.open(projection, minIntervalMs, (frame) => emit(frame, "delta"));
+    return {
+      snapshot: reader.open,
+      resync: () => emit(reader.current(), "snapshot"),
+      dispose: reader.dispose,
+    };
   }
 
   /** How many hubs are standing — each one is a set of open upstreams. */

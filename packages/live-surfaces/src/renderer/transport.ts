@@ -1,6 +1,7 @@
 import {
   type LiveSurfaceAttachTicketV1,
   LiveSurfaceDemandV1,
+  LiveSurfaceDeviceCommandV1,
   LiveSurfaceFrameEnvelopeV1,
   LiveSurfaceHostControlMessageV1,
   LiveSurfaceInputEventV1,
@@ -56,7 +57,8 @@ function errorFromHost(message: string): Error {
 /** Renderer-local handle. It owns no source and exposes no SEMANTIC browser
  * control (CDP sessions, DOM access — the DT-5 broker lane): what it carries
  * beyond frames is human interaction only — demand, input events, navigation
- * commands — all ops-gated main-side by the ticket that minted it. */
+ * commands, (PT-S2) a bound Simulator's device acts — all ops-gated main-side
+ * by the ticket that minted it. */
 export class LiveSurfaceRendererAttachment<
   TFrame extends LiveSurfaceClosableFrame = LiveSurfaceClosableFrame,
 > {
@@ -189,6 +191,29 @@ export class LiveSurfaceRendererAttachment<
         type: "navigate",
         attachmentId: this.attachmentId,
         navigation,
+      });
+    } catch {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * PT-S2 — fire one device ACT (a bound Simulator's face: boot it, create it,
+   * show its window, try again, the system's settings) on its own control
+   * message, never a navigation. The verb alone: the device and its UDID are
+   * main's, which runs it only for a ticket minted with the `device` operation.
+   * Same soft-fail contract.
+   */
+  sendDevice(command: LiveSurfaceDeviceCommandV1): boolean {
+    if (this.#closed) return false;
+    const device = LiveSurfaceDeviceCommandV1.parse(command);
+    try {
+      this.sendControl({
+        v: 1,
+        type: "device",
+        attachmentId: this.attachmentId,
+        command: device,
       });
     } catch {
       return false;

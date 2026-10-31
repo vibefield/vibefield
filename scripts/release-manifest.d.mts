@@ -13,6 +13,8 @@ export declare function mergeManifest(input: {
   commit: string;
   builds: Record<string, PlaneHashes>;
   previous: { tag: string; builds?: Record<string, Partial<PlaneHashes>> } | null;
+  /** AU-6 — the release's notes (release-notes.mjs's output); their `since.tag` must be `previous`'s tag */
+  notes?: unknown;
 }): {
   schemaVersion: 1;
   version: string;
@@ -22,4 +24,5 @@ export declare function mergeManifest(input: {
   builds: Record<string, PlaneHashes>;
   touched: Plane[];
   previous: string | null;
+  notes?: unknown;
 };

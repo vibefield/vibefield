@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="API design of VibeField's agent plane: door conventions (zod-first contracts, tolerant reader, scopes, locality, errors, subscriptions, tickets, audit), the catalogue of every agent, agents, index and agent-relevant terminal door, the field.agents.v1 mesh store, and each door mapped to the puppeteer or rosetta surface it wraps."
+      content="API design of VibeField's agent plane: door conventions (zod-first contracts, tolerant reader, scopes, locality, errors, subscriptions, tickets, audit), the catalogue of every agent, agents, index and agent-relevant terminal door, the field.agents.v1 mesh store (retired 2026-10-01, DS-D14), and each door mapped to the puppeteer or rosetta surface it wraps."
     />
     <title>The doors — API design of the agent plane</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -1260,7 +1260,7 @@
             <h3>Subscriptions</h3>
             <p class="section-note">
               A subscription answers a snapshot on open and frames thereafter, over the same wire shape as
-              a local subscription even when it is proxied. Three rules bound them.
+              a local subscription even when it is proxied. These rules bound them.
             </p>
             <div class="cards">
               <div class="card">
@@ -1293,6 +1293,21 @@
                   as long as the socket lives, so one <code>agent.observe</code> holder in a loop could
                   otherwise buy the whole tick budget. Past the bound the caller gets
                   <code>RESOURCE_EXHAUSTED</code> and keeps everything it already had.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Bounded in bytes, and a phone held short of the shed</h3>
+                <p>
+                  A send that would take a connection's queued bytes past 128 MiB
+                  (<code>MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES</code>) closes it <code>1013</code>, "client is
+                  not keeping up". A phone's subscription (the <code>tailnet</code> principal) whose producer can
+                  resync, today the mesh board (<code>agent.subscribe {scope: "mesh"}</code>), is held before that:
+                  once its connection's queue reaches 256 KiB (<code>PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES</code>),
+                  its deltas stop, and when the queue drains to half it is sent ONE fresh snapshot, the board as it
+                  is, never the backlog. Its own snapshots are never held, nor counted toward holding it. A peer
+                  daemon on the same door, loopback windows and every subscription without a resync keep the shed
+                  alone.
+                  <em>Added 2026-10-31 (PG-1c, landed in <code>1790be95f</code>; PG-D11 A).</em>
                 </p>
               </div>
             </div>
@@ -1485,6 +1500,12 @@
               the consent the caller had to be granted; the columns after it say what the door does with
               it.
             </p>
+            <p class="section-note">
+              <em>Corrected 2026-10-30 (CO, adding the compose plane's doors below):</em> the count is stale. The
+              families below have grown well past thirty-six, and this page no longer keeps a total. The terminal
+              rows that are routed rather than <code>local</code> say so in their own note, and the floor's door
+              (<code>native.door.*</code>) is listed here though it is mgmt, not product.
+            </p>
 
             <h3 id="cat-agent">agent.* — managed sessions and the fold</h3>
             <p class="section-note">
@@ -1588,7 +1609,12 @@
                       leaves for every screen, while the fold's row, the record and the frame's resume verb stay. Only
                       a screen this desktop's own window opened looks for the person: a plugin's, under the same scope,
                       clears marks and acknowledges nothing. The window reports a failed row only by its pane, focused
-                      with the terminals up, never because it was pointed at.</p></td>
+                      with the terminals up, never because it was pointed at.
+                      <em>Amended 2026-10-29 (James, PG-D6 (a); <code>draft/thinking-phone-godview.md</code> §6 item 8):
+                      the door becomes <code>federate</code>, routed by <code>device</code> through the home with
+                      <code>onBehalfOf</code>, and any connection holding a model-bearing board (local or remote) is a
+                      screen, so the phone is one and unread stays the owner's mark. Not built: as built it is local only,
+                      and a phone holds no <code>model</code> board, so it cannot report until PG-2 and PG-3.</em></p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>agent-model-daemon.test.ts</code>, <code>agent-monitor.test.ts</code></p></td>
                   </tr>
@@ -1630,6 +1656,14 @@
               complete <code>monitorRow</code>, bare terminals, and the run's optional <code>local</code> facts at the
               16 ms floor, with urgent changes ahead of it. Other desktops contribute their owner's <code>desk</code> cut.
               The model projection is refused to peers and phones; the phone continues to read <code>field</code>.
+              <em>Amended 2026-10-29 (James, PG-D1 (a), PG-D2 (a), PG-D5 (a), PG-D8 (a); <code>draft/thinking-phone-godview.md</code>
+              §6):</em> <code>model</code> stays refused to them, but the phone and a peer desktop's windows will read the
+              model's REMOTE cut — <code>{runtimeRunId, revision, device, terminal?, nativeSessionId?, monitorRow}</code>,
+              cut by the owner: no <code>project.seq</code>, never <code>local</code>, texts bounded at
+              <code>AGENT_FIELD.DESK_TEXT_CHARS</code> (280), bare terminals included. <code>desk</code> slims into it,
+              peer windows keep the 100 ms floor, and the phone's is 1 s with a 250 ms urgent edge. None of it is built:
+              as built a peer's rows still arrive as <code>desk</code> and the phone still reads <code>field</code>,
+              until PG-2 (the cut) and PG-3 (the phone's replica).
             </p>
             <p>
               <code>AgentModelLocalFacts</code> carries only what this window's chrome needs: <code>nativeSessionId</code>,
@@ -1813,6 +1847,136 @@
               set, so the same set twice writes nothing and restarts nothing.
             </p>
 
+            <h3 id="cat-compose">compose.sparks.* — the window's doors to the sparks</h3>
+            <p class="section-note">
+              The compose plane, version 2 (ruled 2026-10-29; <code>packages/contracts/src/compose.ts</code>). A spark
+              is an agent of the person's that may start agents. fieldd keeps it as a signed record
+              (<code>LAYOUT.SPARKS_DIR</code>, an HMAC-SHA256 under <code>SPARKS_KEY_FILE</code>'s secret) outside its
+              own folder (<code>LAYOUT.SPARK_HOMES_DIR</code>), so an agent that edits files cannot widen its Agent
+              Profiles. Chat's list, the New spark sheet and waking a spark call these three doors. They hold
+              <code>agents.manage</code>, like the other acts a person takes on this machine's agents: hatching an
+              agent that may start agents is not a plugin's call to make. All three are <code>local</code>, because a
+              spark lives on the desktop that hatched it. A refusal is <code>PRECONDITION_FAILED</code> with its
+              <code>reason</code> in the details, for the sheet to put into words. CP-1c <code>f98d0d2b</code> ·
+              <code>1060d4b2</code>.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Door</th><th>Params → result</th><th>Scope</th><th>Idem</th><th>Wraps upstream</th><th>Status</th><th>Witness</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="route">compose.sparks.list</span></td>
+                    <td><p><code>—</code> → <code>ComposeSparksListResult {sparks: SparkSummary[]}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>nothing upstream: fieldd's verified records, each joined to the fold's runs. A summary carries its session's <code>runtimeRunId</code>, its pane while it has one, and <code>live</code> (awake while its process runs, asleep otherwise, CP-D14). A record that is unsigned, does not verify, does not parse, or is exposed to other users is set aside and never served.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>compose-sparks.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">compose.sparks.hatch</span></td>
+                    <td><p><code>ComposeSparksHatchParams {name, face, agent, modelSelection?, profiles, thinksUnder}</code> → <code>ComposeSparksHatchResult {spark}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p><strong>no</strong></p></td>
+                    <td><p>the New spark sheet's answers (NS-D1, NS-D2 B, NS-D5). Refused before anything is written: a profile that does not exist (<code>{reason: "unknown-profile", profile}</code>), a <code>thinksUnder</code> profile with no sign-in for the agent (<code>{reason: "no-sign-in", agent, profile}</code>), and a name another spark holds (<code>{reason: "name-taken"}</code>). Then fieldd writes the record and makes the folder with its brief (<code>CLAUDE.md</code>, written once and the person's to edit after). The spark's session is born as <code>agent.spawn</code>'s is (<code>runtime.spawn()</code>), in the folder, under <code>thinksUnder</code>'s sign-in and with the spark's model, its origin <code>you</code> and the spark's id on its signed session record.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>compose-sparks.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">compose.sparks.open</span></td>
+                    <td><p><code>ComposeSparksOpenParams {spark}</code> → <code>ComposeSparksOpenResult {spark}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>compose-sparks.test.ts</code></p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 id="cat-compose-door">The <code>vibefield</code> MCP door — a spark's tools</h3>
+            <p class="section-note">
+              These are not METHODS rows. A spark's tools are compose.ts's verb catalog (<code>COMPOSE_VERBS</code>,
+              projected as <code>@vibefield/contracts/compose-tools</code>), served by fieldd's hand-written MCP server
+              (<code>packages/fieldd/src/compose/</code>), and their names are a tool's, never a dotted method's. The
+              spark's agent runs the floor's bridge, <code>field-native door --endpoint &lt;path&gt;</code>, as an MCP
+              stdio server, and its lines reach fieldd through the floor's door (<a href="#cat-door">below</a>) on a
+              lane of their own. One connection serves two eras, as the 2026-07-28 revision allows. In
+              <code>2026-07-28</code>, which is stateless, every request carries <code>_meta</code>,
+              <code>server/discover</code> is answered, every result says <code>resultType</code>, and a list gives
+              <code>ttlMs</code> with <code>cacheScope: "private"</code>. The handshake before it serves
+              <code>2025-11-25</code>, <code>2025-06-18</code> and <code>2025-03-26</code>. Claude Code 2.1.312 opens
+              with <code>server/discover</code> (measured 2026-10-29).
+            </p>
+            <p class="section-note">
+              Who is served is decided without a token (CP-D1): the floor's walk names the pane, and fieldd maps the
+              pane to its run. A spark's own session, known by its signed record, is listed the tools below. Another
+              run, a pane with no run, and a caller outside every pane are listed none, and each such door leaves one
+              audit line (<code>compose.door.plain</code>, outcome <code>denied</code>). Every call is held to the
+              spark's Agent Profiles (TL-D5) and checked against its input schema; a bad input answers
+              <code>isError</code> with the field that failed. Each call is written to the audit log as
+              <code>compose.&lt;tool&gt;</code> before it acts (CP-L6), under the principal <code>mcp-agent</code> with
+              the run's id. The door knows no vendor (AR-L1): any agent that speaks MCP over stdio is served the same
+              way. The later families (<code>talk</code>, <code>flows</code>, <code>canvas</code>, <code>you</code>,
+              and <code>agent_spawn</code> with the watches) are in the catalog and are served when their slices
+              (CP-2…CP-4) build them. A spark's agent is handed the bridge at launch by the agent runtime's per-run
+              briefing (CP-1d). Until then a spark hatches and thinks without tools (route A, ruled on the board
+              2026-10-29). CP-1b <code>42748065</code> · <code>3e93ba71</code>.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Tool</th><th>Family</th><th>Answers</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="route">agents_available</span></td><td><p><code>agents</code></p></td><td><p>The agents the spark can start: each signed in under its Agent Profiles, with its models and their efforts.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">projects_list</span></td><td><p><code>agents</code></p></td><td><p>The person's projects, each with its name and the folders it has on this desktop.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents_list</span></td><td><p><code>watch</code></p></td><td><p>The sessions under its profiles: each one's agent, state, folder, model, cost, and who started it.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agent_read</span></td><td><p><code>watch</code></p></td><td><p>One session's latest turns, bounded; <code>before</code> pages back.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">history_search</span></td><td><p><code>history</code></p></td><td><p>Past sessions under its profiles, asked once per runtime with the hits merged: the matching turns with their session, agent, folder and time.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">history_read</span></td><td><p><code>history</code></p></td><td><p>A past session's turns from History, bounded; <code>before</code> pages back.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 id="cat-door">native.door.* — the floor's door (mgmt)</h3>
+            <p class="section-note">
+              These are not product doors. They are three verbs on the management channel, fieldd's own link to the
+              floor, which no other caller reaches (scope <code>null</code>, <code>local</code>). field-native hosts
+              the door, <code>door.sock</code> (<code>SOCKETS.DOOR</code>), 0600 in its 0700 run dir. The kernel names
+              each caller: its real pid (macOS <code>LOCAL_PEERPID</code>, never the effective pid a delegated socket
+              reports; Linux <code>SO_PEERCRED</code>), its uid, which must be the floor's own, and its start. The floor
+              walks the caller's parents, at most <code>NATIVE_DOOR.WALK_MAX_STEPS</code> (32), to the first live
+              pane's own root process that started within <code>ROOT_BIRTH_TOLERANCE_MS</code> (60 s) of the pane's
+              <code>createdAt</code>. The bytes ride a meshdata lane of their own (<code>protocol: "mcp"</code>,
+              <code>peer: "door:&lt;connId&gt;"</code>), never mgmt (EL2), and the floor parses no message. A door
+              refused at accept (<code>refused-uid</code>, <code>delegated</code>, <code>peer-gone</code>,
+              <code>limit</code>) opened no lane, so the floor logs it and never announces it. A door outlives fieldd.
+              The floor keeps it, accepts new ones, and holds their inbound bytes to <code>NATIVE_DOOR</code>'s bounds
+              (64 open, 256 KiB per door, 4 MiB in all). The next subscribe's snapshot re-announces each door, and its
+              lane resumes. CP-1a <code>6b64620c</code> … <code>5aa29020</code>.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Verb</th><th>Params → result</th><th>Idem</th><th>What it is for</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="route">native.door.subscribe</span></td><td><p><code>{}</code> → <code>NativeDoorSubscribeResult {subId, snapshot}</code>, then <code>native.door.snapshot</code> and <code>native.door.delta</code></p></td><td><p>yes</p></td><td><p>The door's one announcement, snapshot then delta. Each open door has the floor's <code>connId</code> (unique for its boot), its <code>laneId</code>, its <code>caller {pid, startedAtMs}</code>, and the <code>pane {terminalSessionId, depth}</code> the floor walked to. The pane is absent for a caller outside every pane, whose door still opens. A close says its <code>reason</code> (<code>eof</code>, <code>held-too-long</code>, <code>closed-by-fieldd</code>, an open vocabulary). <code>native.mesh.lane.subscribe</code> never announces a door's lane. A backlog coalesces into one snapshot, because the mgmt outbox closes on overflow and a same-uid caller looping on connect must not reach it (EL7).</p></td></tr>
+                  <tr><td><span class="route">native.door.close</span></td><td><p><code>NativeDoorCloseParams {connId, reason?}</code> → <code>{closed}</code></p></td><td><p>yes</p></td><td><p>fieldd closes a door, and its delta then says <code>closed-by-fieldd</code> or the reason given. A door already gone answers <code>closed: false</code>, never an error.</p></td></tr>
+                  <tr><td><span class="route">native.door.info</span></td><td><p><code>{}</code> → <code>NativeDoorInfoResult {endpoint, command, args}</code></p></td><td><p>yes</p></td><td><p>The bridge a spark's agent runs: the door's absolute path, the floor's own executable, and <code>["door", "--endpoint", &lt;endpoint&gt;]</code>. It is asked at every launch, so an app update or a dev target never leaves a stale path. A platform with no door answers <code>UNAVAILABLE {service: "door"}</code>; on Windows, a named pipe's client pid is outside CP-1a.</p></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="contract-caption">
+              The bridge, <code>field-native door --endpoint &lt;path&gt;</code>, proves nothing and carries nothing
+              but bytes. It reads no environment and touches no data dir, because the floor names the caller by the
+              kernel's word. It carries whole lines only, both ways, up to <code>NATIVE_DOOR.LINE_MAX_BYTES</code>
+              (8 MiB, its newline included), and fieldd's line reader holds the same bound. On a floor restart it
+              dials again while its stdin stays open, spending one budget of doubling delays. The new connection is a
+              new door, walked again to the same pane. It exits 0 when stdin closes or stdout goes, 2 on a usage error,
+              3 when the door is unreachable at the first dial or for a whole budget, and 4 on a longer line.
+            </p>
+
             <h3 id="cat-terminal">terminal.* — the agent-relevant subset</h3>
             <p class="section-note">
               The terminal family is not the agent plane's, but five of its rows are how an agent's pane
@@ -1877,6 +2041,9 @@
               tailscale login the account is bound to is what scopes the store and gates the node. A
               desktop that is not linked publishes no agent field and admits no peer. The account surface
               is documented with the account foundation, not here.
+              <em>Corrected 2026-10-29 (PG, C6):</em> no desktop has published the agent field to a store since
+              DS-D14 retired <code>field.agents.v1</code> (2026-10-01); the field rides the door alone, which compares
+              the caller's WhoIs login to the stored link before it answers.
             </p>
           </section>
 
@@ -1886,6 +2053,14 @@
               <code>field.agents.v1</code> is the agent plane's second carrier — the same field rows the
               door serves, replicated by the mesh so a phone gets every desktop's board with no fieldd in
               its read path. One slice per device, keyed by the publisher's authenticated device id.
+              <em>Corrected 2026-10-29 (PG, C6):</em> this carrier is retired. DS-D14 (ruled 2026-09-30) retired it
+              on 2026-10-01 (<code>a6a1bfa1</code>, landed with DS wave 3): no daemon publishes
+              <code>field.agents.v1</code> and no phone reads it. The door is the field's one carrier, and the phone
+              reads it through its home desktop's mesh board
+              (<code>agent.subscribe {projection: "field", scope: "mesh"}</code>, DS-8). The store id and
+              <code>AgentFieldSlice</code> stay in contracts marked RETIRED — the floor's slice cap names the id, and an
+              older desktop may still publish one — so the slice table below is the record of its shape; the revision
+              rule and what the phone never receives still hold for the door's <code>field</code> row.
             </p>
             <div class="table-wrap">
               <table class="reference-table">
@@ -1896,7 +2071,7 @@
                   <tr><td><span class="route">publishedAt · expiresAt</span></td><td><p>the honesty clause. A slice expires 30 s after it is written and a live publisher refreshes it every 10 s while it has rows; a graceful stop publishes empty rows with the clock already past, so a desktop that died fades rather than haunting every phone. Writes coalesce at 250 ms, the phone's foreground cadence.</p></td></tr>
                   <tr><td><span class="route">revision</span></td><td><p>the board's own counter, which orders frames</p></td></tr>
                   <tr><td><span class="route">rows</span></td><td><p><code>AgentFieldRow[]</code> — identity, status and clocks, liveness, blocker shapes, two usage numbers, a context percentage, model and effort, the folder name, the terminal join, and since PJ-7 the conversation's provider-native id (<code>nativeSessionId</code>, the fold's <code>sessionId</code>; never the folder)</p></td></tr>
-                  <tr><td><span class="route">omitted</span></td><td><p>how many rows the byte cap left out, absent when the board is whole. The door is never capped; only the slice is.</p></td></tr>
+                  <tr><td><span class="route">omitted</span></td><td><p>how many rows the byte cap left out, absent when the board is whole. The door is never capped in rows; only the slice is. <em>Since PG-1c (2026-10-31):</em> a phone's mesh board is held in bytes, never cut (Subscriptions, above).</p></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1919,6 +2094,13 @@
               projected yet — the field row's <code>usage</code> is rebuilt from exactly
               <code>cumulativeTokens</code> and <code>burnRatePerMin</code>.
               <span class="badge tone-owed">Owed</span>
+              <em>Amended 2026-10-29 (James, PG-D1 (a), PG-D2 (a); <code>draft/thinking-phone-godview.md</code>
+              §6):</em> this list is the <code>field</code> row's, and binds the phone only while it reads
+              <code>field</code>. Its Godview will read the model's remote cut (<a href="#monitor-model">above</a>),
+              which carries the reply line and a blocker's question bounded at 280 characters, and <code>cost</code>
+              with its series and burn rate — the owed item's answer, superseding Q13's <code>desk</code> door of
+              2026-10-28. The remote cut never carries the mirror, the absolute path, <code>project.seq</code> or
+              <code>local</code>. As built the phone's rows carry none of it until PG-2 and PG-3.
             </p>
             <div class="callout foundation">
               <strong>Login scope is a transport guarantee, and not a licence to stop thinking.</strong>

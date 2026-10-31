@@ -2,15 +2,17 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { UpdateCheckResult, UpdateConsentWords, UpdateView } from "@vibefield/contracts";
 import { effectiveFaces } from "@vibefield/contracts/user-face";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MeMenu, MeMenuView, type MeMenuViewProps } from "../src/account/MeMenu";
+import { MeMenu, type MeMenuUpdate, MeMenuView, type MeMenuViewProps } from "../src/account/MeMenu";
 import type { AccountMe, AccountPerson } from "../src/account/use-account";
-import { type FieldHost, setHost } from "../src/host";
+import { type FieldHost, type FieldUpdatesHost, setHost } from "../src/host";
+import { meUpdateRow } from "../src/panels/update-words";
 
 // UA-D19 — the Me menu (DESIGN.md §8). What these pin is the part a user
 // feels without reading: the face is the one door, the menu reads bottom-up
@@ -445,6 +447,353 @@ describe("MeMenuView", () => {
   });
 });
 
+// AU-2 — the corner's update (DESIGN.md §8 "The Me menu"; renderer.md §2.2): the row the menu always carries,
+// nearest the face, acting in place; the dot beside the face; main's question grown into the panel.
+const CURRENT = "0.1.0-nightly.20261027";
+const NEXT = "0.1.0-nightly.20261028";
+const IDLE: UpdateView = {
+  phase: "idle",
+  channel: "nightly",
+  buildChannel: "nightly",
+  enabled: true,
+  lastCheckAt: null,
+  applyWired: true,
+  currentVersion: CURRENT,
+};
+const STAGED: UpdateView = { ...IDLE, phase: "staged", version: NEXT, sessions: 0 };
+const CONSENT: UpdateConsentWords = {
+  message: "Updating ends 7 terminal sessions",
+  lead: "The Oct 28 nightly replaces the terminal service, which ends:",
+  listed: [
+    "claude — ~/Projects/vibe-field",
+    "codex — ~/Projects/puppeteer",
+    "pnpm dev — ~/Projects/vibe-field",
+    "zsh — ~/Projects/rosetta",
+    "untitled session",
+  ],
+  more: 2,
+  confirm: "End 7 sessions and update",
+};
+const WAITING: AccountPerson[] = OTHERS.map((person, index) =>
+  index === 0 ? { ...person, waiting: 2 } : person,
+);
+const updateRow = (): HTMLElement | null =>
+  container?.querySelector<HTMLElement>("[data-me-update]") ?? null;
+const mark = (): Element | null => container?.querySelector(".vf-me-mark") ?? null;
+const settle = (): Promise<void> => new Promise((done) => setTimeout(done, 0));
+/** AU-D6 (§6) — one swap beat (the view's 120ms) and a margin: the face going out is gone. */
+const beat = async (): Promise<void> => {
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 160));
+  });
+};
+
+describe("MeMenuView — the update row, the dot and the question (AU-2)", () => {
+  /** What the controller hands the view, built by the shipping words. */
+  const updateOf = (view: UpdateView | null, extra: Partial<MeMenuUpdate> = {}): MeMenuUpdate => ({
+    row: meUpdateRow({ view, local: { kind: "rest" }, now: Date.now() }),
+    mark: view?.phase === "staged",
+    ...extra,
+  });
+
+  type UpdateSpies = Spies & {
+    onUpdate: ReturnType<typeof vi.fn>;
+    onUpdateConfirm: ReturnType<typeof vi.fn>;
+    onUpdateCancel: ReturnType<typeof vi.fn>;
+  };
+  type Props = { update?: MeMenuUpdate | undefined; others?: AccountPerson[] };
+  const hold: { push?: (next: Props) => void } = {};
+  /** The view as the controller re-renders it: its update and its people move from outside. */
+  async function mountUpdating(
+    update: MeMenuUpdate | undefined,
+    { open = false, notice = null }: { open?: boolean; notice?: string | null } = {},
+  ): Promise<UpdateSpies> {
+    const spies: UpdateSpies = {
+      onOpenSettings: vi.fn(),
+      onOpenAccount: vi.fn(),
+      onLink: vi.fn(),
+      onSwitch: vi.fn(),
+      onNewUser: vi.fn(),
+      onOpenChange: vi.fn(),
+      onUpdate: vi.fn(),
+      onUpdateConfirm: vi.fn(),
+      onUpdateCancel: vi.fn(),
+    };
+    function Harness(): ReactElement {
+      const [props, setProps] = useState<Props>({ update, others: OTHERS });
+      const [isOpen, setOpen] = useState(open);
+      hold.push = (next) => setProps((current) => ({ ...current, ...next }));
+      return createElement(MeMenuView, {
+        me: ME,
+        others: props.others ?? OTHERS,
+        open: isOpen,
+        onOpenChange: (next: boolean) => {
+          spies.onOpenChange(next);
+          setOpen(next);
+        },
+        onOpenSettings: spies.onOpenSettings,
+        onOpenAccount: spies.onOpenAccount,
+        onLink: spies.onLink,
+        onSwitch: spies.onSwitch,
+        onNewUser: spies.onNewUser,
+        notice,
+        update: props.update,
+        onUpdate: spies.onUpdate,
+        onUpdateConfirm: spies.onUpdateConfirm,
+        onUpdateCancel: spies.onUpdateCancel,
+      });
+    }
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => root?.render(createElement(Harness)));
+    return spies;
+  }
+  const rerender = async (next: Props): Promise<void> => {
+    await act(async () => hold.push?.(next));
+  };
+
+  it("carries the row nearest the face, under Settings…, and Return still lands on Settings… (AU-D5)", async () => {
+    const spies = await mountUpdating(updateOf(IDLE));
+    await act(async () => {
+      face().dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    });
+    const labels = items().map((node) => node.textContent ?? "");
+    expect(labels).toHaveLength(6);
+    expect(labels[3]).toContain("Settings…");
+    expect(labels[4]).toBe("Check for updatesYou're on the Oct 27 nightly");
+    expect(labels[5]).toContain("James");
+    const list = container?.querySelector(".vf-me-list");
+    expect(list?.lastElementChild?.classList.contains("vf-me-you")).toBe(true);
+    // the keyboard lands on Settings… — never the row nearer it, so a double Return never restarts
+    expect(document.activeElement).toBe(item("Settings…"));
+    await key(document.activeElement as Element, "ArrowDown");
+    expect(document.activeElement).toBe(updateRow());
+    await key(document.activeElement as Element, "ArrowDown");
+    expect(document.activeElement).toBe(item("James"));
+    expect(spies.onUpdate).not.toHaveBeenCalled();
+    // the act's glyph in the 44px column: reset at rest
+    expect(updateRow()?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("reset");
+  });
+
+  it("checks in place: the click asks, and the menu stays open", async () => {
+    const spies = await mountUpdating(updateOf(IDLE), { open: true });
+    await act(async () => updateRow()?.click());
+    expect(spies.onUpdate).toHaveBeenCalledWith("check");
+    expect(spies.onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("dims a row that can't act now: aria-disabled, never disabled, and a click does nothing", async () => {
+    const spies = await mountUpdating(updateOf(null), { open: true });
+    const row = updateRow() as HTMLElement;
+    expect(row.textContent).toBe("Check for updatesThis build doesn't update itself");
+    expect(row.getAttribute("aria-disabled")).toBe("true");
+    expect(row.hasAttribute("disabled")).toBe(false);
+    row.focus();
+    await act(async () => row.click());
+    expect(spies.onUpdate).not.toHaveBeenCalled();
+    expect(spies.onOpenChange).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(row);
+  });
+
+  it("opens Settings → Updates folded first, focus back on the face", async () => {
+    const downloading: UpdateView = { ...IDLE, phase: "downloading", version: NEXT, percent: 42 };
+    const spies = await mountUpdating(updateOf(downloading), { open: true });
+    const bar = updateRow()?.querySelector<HTMLElement>(".vf-me-update-bar > span");
+    expect(bar?.style.width).toBe("42%");
+    await act(async () => updateRow()?.click());
+    expect(spies.onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(spies.onUpdate).toHaveBeenCalledWith("open");
+    expect(spies.onOpenChange.mock.invocationCallOrder[0]).toBeLessThan(
+      spies.onUpdate.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(document.activeElement).toBe(face());
+  });
+
+  it("opens Settings → Updates at the notes from What's new, folded first (AU-6, LC-7)", async () => {
+    const installed: UpdateView = {
+      ...IDLE,
+      currentVersion: NEXT,
+      lastApply: {
+        version: NEXT,
+        from: CURRENT,
+        outcome: "installed",
+        at: Date.now() - 60_000,
+        notes: {
+          version: NEXT,
+          body: { kind: "written", since: null, lines: ["Updates wait for you."] },
+        },
+      },
+    };
+    const spies = await mountUpdating(updateOf(installed), { open: true });
+    expect(updateRow()?.textContent).toMatch(/^What's newUpdated (today|yesterday)$/u);
+    await act(async () => updateRow()?.click());
+    expect(spies.onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(spies.onUpdate).toHaveBeenCalledWith("notes");
+    expect(spies.onOpenChange.mock.invocationCallOrder[0]).toBeLessThan(
+      spies.onUpdate.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it("wears the dot beside the face while an install waits, and a waiting count outranks it (I-5)", async () => {
+    await mountUpdating(updateOf(STAGED, { markTitle: "the Oct 28 nightly is ready" }));
+    expect(mark()).not.toBeNull();
+    expect(face().contains(mark())).toBe(false);
+    expect(mark()?.getAttribute("aria-hidden")).toBe("true");
+    expect(face().getAttribute("title")).toBe("James · Account · the Oct 28 nightly is ready");
+    expect(face().getAttribute("aria-label")).toBe(
+      "James: account menu, an update is ready to install",
+    );
+    await rerender({ others: WAITING });
+    expect(container?.querySelector(".vf-me-badge")?.textContent).toBe("2");
+    expect(mark()).toBeNull();
+    expect(face().getAttribute("aria-label")).toBe(
+      "James: account menu, 2 waiting in another user, an update is ready to install",
+    );
+    // no update waiting: no dot, no clause
+    await rerender({ update: updateOf(IDLE), others: OTHERS });
+    expect(mark()).toBeNull();
+    expect(face().getAttribute("title")).toBe("James · Account");
+  });
+
+  it("pops the dot in once — never on the first render, never back from a count — and never pulses", async () => {
+    await mountUpdating(updateOf(STAGED));
+    expect(mark()?.hasAttribute("data-pop")).toBe(false);
+    await rerender({ update: updateOf(IDLE) });
+    expect(mark()).toBeNull();
+    await rerender({ update: updateOf(STAGED) });
+    expect(mark()?.hasAttribute("data-pop")).toBe(true);
+    await rerender({ others: WAITING });
+    expect(mark()).toBeNull();
+    await rerender({ others: OTHERS });
+    expect(mark()).not.toBeNull();
+    expect(mark()?.hasAttribute("data-pop")).toBe(false);
+  });
+
+  it("never pops a dot already waiting when the desktop's state lands after the account (renderer.md §2.2)", async () => {
+    // the corner knows the account first: no update yet, so no row and no dot
+    await mountUpdating(undefined);
+    expect(mark()).toBeNull();
+    await rerender({ update: updateOf(STAGED) });
+    expect(mark()).not.toBeNull();
+    expect(mark()?.hasAttribute("data-pop")).toBe(false);
+    // an install that comes to wait later still pops
+    await rerender({ update: updateOf(IDLE) });
+    await rerender({ update: updateOf(STAGED) });
+    expect(mark()?.hasAttribute("data-pop")).toBe(true);
+  });
+
+  it("grows into main's question at 320: Cancel first and focused, Esc and Tab keep the menu (AU-D6, LC-9)", async () => {
+    const ends = updateOf({ ...STAGED, sessions: 7 });
+    const spies = await mountUpdating(ends, { open: true });
+    await rerender({ update: { ...ends, ask: { words: CONSENT, busy: false } } });
+    // §6 — the panel grows at once, and the rows fade for one beat before the question is drawn
+    const list = container?.querySelector<HTMLElement>(".vf-me-list");
+    const panel = container?.querySelector<HTMLElement>(".vf-me-panel");
+    expect(panel?.style.getPropertyValue("--vf-me-width")).toBe("320px");
+    expect(list?.hasAttribute("data-leaving")).toBe(true);
+    expect(updateRow()).not.toBeNull();
+    expect(container?.querySelector('[role="alertdialog"]')).toBeNull();
+    await beat();
+    expect(list?.hasAttribute("data-leaving")).toBe(false);
+    const dialog = container?.querySelector<HTMLElement>('[role="alertdialog"]');
+    expect(dialog?.querySelector(".vf-me-ask-question")?.textContent).toBe(CONSENT.message);
+    expect(dialog?.querySelector(".vf-me-ask-lead")?.textContent).toBe(CONSENT.lead);
+    expect(Array.from(dialog?.querySelectorAll("li") ?? []).map((li) => li.textContent)).toEqual([
+      ...CONSENT.listed,
+      "and 2 more",
+    ]);
+    const acts = Array.from(dialog?.querySelectorAll("button") ?? []);
+    expect(acts.map((button) => button.textContent)).toEqual([
+      "Cancel",
+      "End 7 sessions and update",
+    ]);
+    expect(acts[1]?.getAttribute("data-variant")).toBe("danger");
+    expect(document.activeElement).toBe(acts[0]);
+    // a menu holding an alertdialog is no menu
+    expect(container?.querySelector('[role="menu"]')).toBeNull();
+    expect(panel?.style.getPropertyValue("--vf-me-width")).toBe("320px");
+    // Tab walks Cancel ↔ the act and never folds
+    acts[1]?.focus();
+    await key(acts[1] as HTMLElement, "Tab");
+    expect(document.activeElement).toBe(acts[0]);
+    expect(spies.onOpenChange).not.toHaveBeenCalled();
+    // the act confirms the snapshot it shows
+    await act(async () => acts[1]?.click());
+    expect(spies.onUpdateConfirm).toHaveBeenCalledTimes(1);
+    // Esc goes back to the rows, never folds; focus on the row when they return
+    await key(document.activeElement as Element, "Escape");
+    expect(spies.onUpdateCancel).toHaveBeenCalledTimes(1);
+    expect(spies.onOpenChange).not.toHaveBeenCalled();
+    await rerender({ update: ends });
+    // Esc reverses it: the question fades for its beat, then the rows rise back
+    expect(panel?.style.getPropertyValue("--vf-me-width")).toBe("256px");
+    expect(container?.querySelector('[role="alertdialog"]')).not.toBeNull();
+    expect(list?.hasAttribute("data-leaving")).toBe(true);
+    await beat();
+    expect(container?.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(list?.hasAttribute("data-returning")).toBe(true);
+    expect(document.activeElement).toBe(updateRow());
+    // a second Esc folds the menu
+    await key(document.activeElement as Element, "Escape");
+    expect(spies.onOpenChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("holds the question while its confirm is in flight: nothing to press, Esc does nothing", async () => {
+    const ends = updateOf({ ...STAGED, sessions: 7 });
+    const spies = await mountUpdating(ends, { open: true });
+    await rerender({ update: { ...ends, ask: { words: CONSENT, busy: true } } });
+    await beat();
+    const acts = Array.from(
+      container?.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button') ?? [],
+    );
+    expect(acts).toHaveLength(2);
+    expect(acts.every((button) => button.disabled)).toBe(true);
+    await key(document.body, "Escape");
+    expect(spies.onUpdateCancel).not.toHaveBeenCalled();
+    expect(spies.onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("says the install that didn't take in the notice row — and a refusal outranks it (AU-D11)", async () => {
+    const said =
+      "The Oct 28 nightly didn't install when VibeField restarted. It's ready to try again.";
+    await mountUpdating(updateOf(STAGED, { notice: said }), { open: true });
+    expect(container?.querySelector(".vf-me-notice")?.textContent).toBe(said);
+    expect(container?.querySelector('[role="status"]')?.textContent).toBe(said);
+    await act(async () => root?.unmount());
+    container?.remove();
+    const refusal = "VibeField didn't download the update. That version is no longer available.";
+    await mountUpdating(updateOf(STAGED, { notice: said }), { open: true, notice: refusal });
+    const notices = container?.querySelectorAll(".vf-me-notice");
+    expect(notices?.length).toBe(1);
+    expect(notices?.[0]?.textContent).toBe(refusal);
+  });
+
+  it("draws the dot 10px beside the face, ringed in the ground, popping once and never pulsing", () => {
+    const dot = ruleOf(ME_CSS, ".vf-me-mark");
+    expect(dot).toContain("top: 1px;");
+    expect(dot).toContain("right: -3px;");
+    expect(dot).toContain("width: 10px;");
+    expect(dot).toContain("background: var(--vf-cyan);");
+    expect(dot).toContain("box-shadow: 0 0 0 2px var(--vf-canvas-bg);");
+    expect(ME_CSS).not.toMatch(/vf-me-mark[^}]*infinite/u);
+    expect(ME_CSS).not.toContain("infinite");
+    expect(ruleOf(ME_CSS, ".vf-me[data-open] .vf-me-mark")).toContain("opacity: 0;");
+    expect(ruleOf(ME_CSS, ".vf-me-mark[data-pop]")).toContain("280ms var(--vf-ease-pop)");
+    const reduced = ME_CSS.slice(ME_CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(ruleOf(reduced, ".vf-me-mark[data-pop]")).toContain("vf-me-fade-in 120ms");
+    expect(ruleOf(reduced, ".vf-me-ask > *")).toContain("vf-me-fade-in 120ms");
+    // §6 — the face going out fades over 120ms plain `ease` before the other is drawn
+    expect(ruleOf(ME_CSS, ".vf-me[data-open] .vf-me-list[data-leaving] > *")).toContain(
+      "transition: opacity 120ms ease;",
+    );
+    // the notice row reads in the attention ink (§2.5; the orange fill until AU-2)
+    expect(ruleOf(ME_CSS, ".vf-me-notice")).toContain("color: var(--vf-ink-attention);");
+    // the row's end dot ties it to the face's
+    expect(ruleOf(ME_CSS, ".vf-me-update-dot")).toContain("background: var(--vf-cyan);");
+  });
+});
+
 describe("MeMenu (controller)", () => {
   const baseHost = (extra: Partial<FieldHost>): void =>
     setHost({
@@ -752,5 +1101,375 @@ describe("MeMenu (controller)", () => {
     expect(gear).not.toBeNull();
     await act(async () => gear?.click());
     expect(onOpenSettings).toHaveBeenCalledWith("general");
+  });
+
+  // AU-2 — the row's acts, run by the controller over the host's update doors (the same prepare and
+  // confirm Settings → Updates runs, AU-L4), its flow inside one open, and the dot.
+  describe("the update row", () => {
+    const TOKEN = "token-0123456789abcdef";
+    const ROSTER = (): Promise<{ attachedUserId: string; users: typeof USERS }> =>
+      Promise.resolve({ attachedUserId: "me", users: USERS });
+    const ENDS: UpdateConsentWords = {
+      message: "Updating ends 2 terminal sessions",
+      lead: "The Oct 28 nightly replaces the terminal service, which ends:",
+      listed: ["claude — ~/Projects/vibe-field", "zsh — ~/Projects/rosetta"],
+      more: 0,
+      confirm: "End 2 sessions and update",
+    };
+
+    type FakeUpdates = FieldUpdatesHost & Record<keyof FieldUpdatesHost, ReturnType<typeof vi.fn>>;
+    /** The host's update doors; a test hands its own answers (untyped: what main would answer). */
+    function fakeUpdates(over: Partial<Record<keyof FieldUpdatesHost, unknown>> = {}): FakeUpdates {
+      return {
+        check: vi.fn(async () => ({ outcome: "up-to-date" })),
+        setEnabled: vi.fn(async () => undefined),
+        setChannel: vi.fn(async () => undefined),
+        decline: vi.fn(async () => undefined),
+        download: vi.fn(async () => ({ ok: true })),
+        prepareRestart: vi.fn(async () => ({
+          ok: true,
+          token: TOKEN,
+          version: NEXT,
+          keepsSessions: false,
+          sessions: [
+            { sessionId: "s1", title: "claude", cwd: "~/Projects/vibe-field" },
+            { sessionId: "s2", title: "zsh", cwd: "~/Projects/rosetta" },
+          ],
+          expiresAt: 1,
+          consent: ENDS,
+        })),
+        confirmRestart: vi.fn(async () => ({ ok: true })),
+        doctor: vi.fn(async () => ({ lines: [] })),
+        moveToApplications: vi.fn(async () => ({ ok: true, outcome: "proceed" })),
+        ...over,
+      } as never;
+    }
+
+    function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+      let resolve: (value: T) => void = () => undefined;
+      const promise = new Promise<T>((done) => {
+        resolve = done;
+      });
+      return { promise, resolve };
+    }
+
+    type State = { update?: UpdateView | null | undefined; open?: boolean };
+    type Mounted = {
+      onOpenSettings: ReturnType<typeof vi.fn>;
+      onOpenChange: ReturnType<typeof vi.fn>;
+    };
+    const hold: { push?: (next: State) => void } = {};
+    /** The controller as ChromeLayer holds it: the open state and the desktop's update move from outside. */
+    async function mountUpdate(
+      update: UpdateView | null | undefined,
+      open = true,
+    ): Promise<Mounted> {
+      const onOpenSettings = vi.fn();
+      const onOpenChange = vi.fn();
+      const client = fieldd();
+      function Harness(): ReactElement {
+        const [state, setState] = useState<State>({ update, open });
+        hold.push = (next) => setState((current) => ({ ...current, ...next }));
+        return createElement(
+          FielddProvider,
+          { client },
+          createElement(MeMenu, {
+            open: state.open === true,
+            onOpenChange: (next: boolean) => {
+              onOpenChange(next);
+              setState((current) => ({ ...current, open: next }));
+            },
+            onOpenSettings,
+            update: state.update,
+          }),
+        );
+      }
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+      await act(async () => {
+        root?.render(createElement(Harness));
+        await settle();
+      });
+      return { onOpenSettings, onOpenChange };
+    }
+    const set = async (next: State): Promise<void> => {
+      await act(async () => {
+        hold.push?.(next);
+        await settle();
+      });
+    };
+    const click = async (target: HTMLElement | null | undefined): Promise<void> => {
+      await act(async () => {
+        target?.click();
+        await settle();
+      });
+    };
+    const rowText = (): string => updateRow()?.textContent ?? "";
+
+    it("carries no row until the desktop's state is known, and the dimmed row where no updater runs", async () => {
+      baseHost({ usersList: vi.fn(ROSTER), updates: fakeUpdates() });
+      await mountUpdate(undefined);
+      expect(updateRow()).toBeNull();
+      await set({ update: null });
+      expect(updateRow()?.getAttribute("aria-disabled")).toBe("true");
+      expect(rowText()).toBe("Check for updatesThis build doesn't update itself");
+    });
+
+    it("reads a host with no updater doors as a build that doesn't update itself", async () => {
+      baseHost({ usersList: vi.fn(ROSTER) });
+      await mountUpdate(IDLE);
+      expect(rowText()).toBe("Check for updatesThis build doesn't update itself");
+      expect(updateRow()?.getAttribute("aria-disabled")).toBe("true");
+    });
+
+    it("checks in place, answers in place, and the next open reads the resting row (LC-5)", async () => {
+      const answer = deferred<UpdateCheckResult>();
+      const updates = fakeUpdates({ check: vi.fn(() => answer.promise) });
+      baseHost({ usersList: vi.fn(ROSTER), updates });
+      const { onOpenChange } = await mountUpdate(IDLE);
+      await click(updateRow());
+      expect(updates.check).toHaveBeenCalledTimes(1);
+      expect(rowText()).toBe("Checking for updates…You're on the Oct 27 nightly");
+      expect(updateRow()?.getAttribute("aria-disabled")).toBe("true");
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
+      await act(async () => {
+        answer.resolve({ outcome: "up-to-date" });
+        await settle();
+      });
+      expect(rowText()).toBe("VibeField is up to dateYou're on the Oct 27 nightly");
+      expect(container?.querySelector('[role="status"]')?.textContent).toBe(
+        "VibeField is up to date",
+      );
+      await set({ open: false });
+      await set({ open: true });
+      expect(rowText()).toBe("Check for updatesYou're on the Oct 27 nightly");
+    });
+
+    it("never says up to date for a held answer", async () => {
+      const updates = fakeUpdates({ check: vi.fn(async () => ({ outcome: "held" })) });
+      baseHost({ usersList: vi.fn(ROSTER), updates });
+      await mountUpdate(IDLE);
+      await click(updateRow());
+      expect(rowText()).toBe("Check for updatesYou're on the Oct 27 nightly");
+    });
+
+    it("drops an answer that comes after the menu folds (the generation guard)", async () => {
+      const answer = deferred<UpdateCheckResult>();
+      const updates = fakeUpdates({ check: vi.fn(() => answer.promise) });
+      baseHost({ usersList: vi.fn(ROSTER), updates });
+      await mountUpdate(IDLE);
+      await click(updateRow());
+      await set({ open: false });
+      await act(async () => {
+        answer.resolve({ outcome: "up-to-date" });
+        await settle();
+      });
+      await set({ open: true });
+      expect(rowText()).toBe("Check for updatesYou're on the Oct 27 nightly");
+    });
+
+    it("shows the download in place when the check finds one", async () => {
+      const answer = deferred<UpdateCheckResult>();
+      const updates = fakeUpdates({ check: vi.fn(() => answer.promise) });
+      baseHost({ usersList: vi.fn(ROSTER), updates });
+      await mountUpdate(IDLE);
+      await click(updateRow());
+      await set({ update: { ...IDLE, phase: "downloading", version: NEXT, percent: 5 } });
+      expect(rowText()).toBe("Downloading update5% downloaded");
+      await act(async () => {
+        answer.resolve({ outcome: "found", version: NEXT });
+        await settle();
+      });
+      expect(rowText()).toBe("Downloading update5% downloaded");
+    });
+
+    it("restarts on the one click when nothing ends, and the dot goes with it", async () => {
+      const updates = fakeUpdates({
+        prepareRestart: vi.fn(async () => ({
+          ok: true,
+          token: TOKEN,
+          version: NEXT,
+          keepsSessions: true,
+          sessions: [],
+          expiresAt: 1,
+        })),
+      });
+      baseHost({ usersList: vi.fn(ROSTER), updates });
+      await mountUpdate(STAGED);
+      const face = container?.querySelector(".vf-me-face");
+      expect(face?.getAttribute("title")).toBe("James · Account · the Oct 28 nightly is ready");
+      expect(mark()).not.toBeNull();
+      expect(rowText()).toBe("Restart to updateYour sessions keep running");
+      await click(updateRow());
+      expect(updates.prepareRestart).toHaveBeenCalledTimes(1);
+      expect(updates.confirmRestart).toHaveBeenCalledWith(TOKEN);
+      expect(rowText()).toBe("Restarting…VibeField opens again");
+      expect(mark()).toBeNull();
+    });
+
+    it("asks in main's words when the restart ends sessions: Cancel confirms nothing, the act confirms it", async () => {
+      const updates = fakeUpdates();
+      baseHost({ usersList: vi.fn(ROSTER), updates });
+      const { onOpenChange } = await mountUpdate({ ...STAGED, sessions: 2 });
+      expect(rowText()).toBe("Restart to update…Ends 2 terminal sessions");
+      await click(updateRow());
+      // the rows fade for one beat, then the question is drawn (§6)
+      await beat();
+      const question = (): HTMLElement | null =>
+        container?.querySelector<HTMLElement>('[role="alertdialog"]') ?? null;
+      const acts = (): HTMLButtonElement[] =>
+        Array.from(question()?.querySelectorAll("button") ?? []);
+      expect(question()?.textContent).toContain("Updating ends 2 terminal sessions");
+      expect(acts().map((button) => button.textContent)).toEqual([
+        "Cancel",
+        "End 2 sessions and update",
+      ]);
+      expect(document.activeElement).toBe(acts()[0]);
+      await click(acts()[0]);
+      await beat();
+      expect(question()).toBeNull();
+      expect(updates.confirmRestart).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(updateRow());
+      await click(updateRow());
+      await beat();
+      await click(acts()[1]);
+      expect(updates.confirmRestart).toHaveBeenCalledWith(TOKEN);
+      await beat();
+      expect(rowText()).toBe("Restarting…VibeField opens again");
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    });
+
+    it("reopened inside the fold, draws its rows and lands on Settings… — never the last open's question (AU-D5)", async () => {
+      const updates = fakeUpdates();
+      baseHost({ usersList: vi.fn(ROSTER), updates });
+      await mountUpdate({ ...STAGED, sessions: 2 });
+      await click(updateRow());
+      await beat();
+      expect(container?.querySelector('[role="alertdialog"]')).not.toBeNull();
+      // the face folds the menu on the question, and Return on it reopens it inside the 700ms fold
+      const face = container?.querySelector<HTMLButtonElement>(".vf-me-face");
+      await act(async () => {
+        face?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+        await settle();
+      });
+      await act(async () => {
+        face?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+        await settle();
+      });
+      expect(container?.querySelector('[role="alertdialog"]')).toBeNull();
+      expect(updateRow()).not.toBeNull();
+      expect(document.activeElement).toBe(item("Settings…"));
+      // nothing moves focus late: a second Return opens Settings, never the restart
+      await beat();
+      expect(document.activeElement).toBe(item("Settings…"));
+      expect(updates.prepareRestart).toHaveBeenCalledTimes(1);
+      expect(updates.confirmRestart).not.toHaveBeenCalled();
+    });
+
+    it("says a refused prepare at the menu's top in main's words, and stays open (P15)", async () => {
+      const words = {
+        message: "VibeField didn't install the update",
+        detail: "VibeField couldn't reach the update policy. Try again when online.",
+      };
+      const updates = fakeUpdates({
+        prepareRestart: vi.fn(async () => ({ ok: false, reason: "policy-unreachable", words })),
+      });
+      baseHost({ usersList: vi.fn(ROSTER), updates });
+      const { onOpenChange } = await mountUpdate({ ...STAGED, sessions: 2 });
+      await click(updateRow());
+      expect(container?.querySelector(".vf-me-notice")?.textContent).toBe(
+        "VibeField didn't install the update. VibeField couldn't reach the update policy. Try again when online.",
+      );
+      expect(container?.querySelector('[role="alertdialog"]')).toBeNull();
+      expect(rowText()).toBe("Restart to update…Ends 2 terminal sessions");
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    });
+
+    it("downloads in place with automatic updates off, and the menu stays open (LC-6)", async () => {
+      const updates = fakeUpdates();
+      baseHost({ usersList: vi.fn(ROSTER), updates });
+      const off: UpdateView = { ...IDLE, enabled: false, phase: "available", version: NEXT };
+      const { onOpenChange } = await mountUpdate(off);
+      expect(rowText()).toBe("Download updateAutomatic updates are off");
+      await click(updateRow());
+      expect(updates.download).toHaveBeenCalledWith(NEXT);
+      expect(rowText()).toBe("Download updateStarting the download…");
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
+      await set({ update: { ...off, phase: "downloading", percent: 1 } });
+      expect(rowText()).toBe("Downloading update1% downloaded");
+    });
+
+    it("says a Download main refused without words, and the row is the Download row again", async () => {
+      const updates = fakeUpdates({
+        download: vi.fn(async () => ({ ok: false, reason: "not-available" })),
+      });
+      baseHost({ usersList: vi.fn(ROSTER), updates });
+      await mountUpdate({ ...IDLE, enabled: false, phase: "available", version: NEXT });
+      await click(updateRow());
+      expect(container?.querySelector(".vf-me-notice")?.textContent).toBe(
+        "VibeField didn't download the update. That version is no longer available.",
+      );
+      expect(rowText()).toBe("Download updateAutomatic updates are off");
+    });
+
+    it("opens Settings → Updates at the notes from What's new, folding the menu (AU-6, LC-7)", async () => {
+      baseHost({ usersList: vi.fn(ROSTER), updates: fakeUpdates() });
+      const { onOpenSettings, onOpenChange } = await mountUpdate({
+        ...IDLE,
+        currentVersion: NEXT,
+        lastApply: {
+          version: NEXT,
+          from: CURRENT,
+          outcome: "installed",
+          at: Date.now() - 60_000,
+          trigger: "restart",
+          notes: {
+            version: NEXT,
+            body: { kind: "written", since: null, lines: ["Updates wait for you."] },
+          },
+        },
+      });
+      expect(rowText()).toMatch(/^What's newUpdated (today|yesterday)$/u);
+      await click(updateRow());
+      expect(onOpenSettings).toHaveBeenCalledWith("whats-new");
+      expect(onOpenSettings).not.toHaveBeenCalledWith("updates");
+      expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    });
+
+    it("opens Settings → Updates from a download, folding the menu", async () => {
+      baseHost({ usersList: vi.fn(ROSTER), updates: fakeUpdates() });
+      const { onOpenSettings, onOpenChange } = await mountUpdate({
+        ...IDLE,
+        phase: "downloading",
+        version: NEXT,
+        percent: 42,
+      });
+      await click(updateRow());
+      expect(onOpenSettings).toHaveBeenCalledWith("updates");
+      expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    });
+
+    it("says an install that didn't take once per window, then the ready row stands (AU-G7, LC-8)", async () => {
+      baseHost({ usersList: vi.fn(ROSTER), updates: fakeUpdates() });
+      await mountUpdate({
+        ...STAGED,
+        lastApply: {
+          version: NEXT,
+          from: CURRENT,
+          outcome: "not-applied",
+          at: Date.now() - 60_000,
+          trigger: "restart",
+          thisLaunch: true,
+        },
+      });
+      expect(container?.querySelector(".vf-me-notice")?.textContent).toBe(
+        "The Oct 28 nightly didn't install when VibeField restarted. It's ready to try again.",
+      );
+      expect(rowText()).toBe("Restart to updateYour sessions keep running");
+      await set({ open: false });
+      await set({ open: true });
+      expect(container?.querySelector(".vf-me-notice")).toBeNull();
+    });
   });
 });

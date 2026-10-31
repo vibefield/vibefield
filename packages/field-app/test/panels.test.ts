@@ -90,6 +90,9 @@ describe("widgetlab panels", () => {
     expect(container?.textContent).toContain("Desktop behavior");
     expect(container?.textContent).toContain("Settings history");
     expect(container?.textContent).not.toContain("World grid");
+    // AU-3 (AU-D8 A) — the update card left General for a page of its own
+    expect(container?.textContent).not.toContain("Automatic updates");
+    expect(container?.textContent).not.toContain("This build doesn't update itself");
 
     const category = (name: string): HTMLButtonElement | undefined =>
       Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
@@ -102,6 +105,7 @@ describe("widgetlab panels", () => {
     expect(category("Plugins")).toBeDefined();
     expect(category("Devices")).toBeDefined();
     expect(category("Mesh")).toBeUndefined();
+    expect(category("Updates")).toBeDefined();
     expect(category("Diagnostics")).toBeDefined();
     expect(category("Advanced")).toBeDefined();
 
@@ -139,6 +143,14 @@ describe("widgetlab panels", () => {
     const buttons = Array.from(container?.querySelectorAll("button") ?? []);
     const stress = buttons.find((b) => b.textContent === "+50");
     expect(stress?.disabled).toBe(true);
+
+    act(() => category("Updates")?.click());
+    // AU-3 — no updater in this host: the page says so, and Your devices stands under it on fieldd's roster
+    expect(container?.textContent).toContain("This build doesn't update itself");
+    expect(container?.textContent).toContain("Your devices");
+    expect(container?.textContent).toContain(
+      "Each desktop updates itself. This is where they stand.",
+    );
 
     act(() => category("Devices")?.click());
     // TS-3a (TS-D3) — Devices absorbs Mesh: the card, your devices, and

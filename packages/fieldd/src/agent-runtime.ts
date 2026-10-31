@@ -35,6 +35,7 @@ import {
   type AgentResumeParams,
   type AgentResumeRunParams,
   AgentSessionAttach,
+  type AgentSessionOrigin,
   type AgentSessionRecord,
   type AgentSessionSummary,
   type AgentSpawnParams,
@@ -48,6 +49,7 @@ import {
   isAgentResumeRun,
   LAYOUT,
   type PlaceRef,
+  type SparkId,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
@@ -59,6 +61,7 @@ import type {
   AgentHost,
   AgentInstallation,
   AgentMonitorState,
+  AgentRunBriefing,
   BoundIngress,
   HostIngress,
 } from "@vibefield/puppeteer-core";
@@ -162,7 +165,16 @@ import { bornWithoutTicket, type TerminalService } from "./terminal-service";
 // continuation beside the launch facts (`agents/sessions/<run>.json`) so an
 // exited session resumes from the record (`agent.resume`) and AR-4 can
 // re-attach across a fieldd restart. The floor's `session-exited` is
-// puppeteer's `handleProcessExit`; the inventory diff is the backstop.
+// puppeteer's `handleProcessExit`; the inventory is the backstop (a row that
+// left it, or one it lists `exited`).
+//
+// CORRECTED 2026-10-29 (item 97): this said "the inventory diff is the
+// backstop", a row that LEAVES the inventory. MF-1g keeps an agent's pane
+// (`keep-until-explicit-close`), so its PTY stays listed after the process
+// ends, and a run whose `session-exited` never reached fieldd stayed live for
+// good: AR-6-0 reddened that way three times after item 87. The floor now
+// lists such a husk `exited` (ObservedTerminal.exited), and the backstop reads
+// that as it reads a row's leaving.
 //
 // STABLE INGRESS (AR-4; PU-1 upstream as landed 2026-09-12; AR-D6 as
 // amended): a managed session OUTLIVES fieldd. Every birth names a creation
@@ -254,11 +266,12 @@ export function noTerminalHost(): AgentHost {
  * registry's number, so `agent.subscribe`'s descriptor (methods.ts) and this
  * tick cannot drift apart. */
 const PUBLISH_TICK_MS = AGENT_FIELD.FULL_TICK_MS;
-/** The inventory backstop's grace: a PTY that left the inventory is closed
- * as an unknown exit only after the floor's own `session-exited` — which
- * carries the real outcome and code — has had one bounded turn to arrive
- * (puppeteer's Godview keeps the same grace for its PID poller). */
-const EXIT_GRACE_MS = 1_500;
+/** The inventory backstop's grace: a PTY that left the inventory, or that it
+ * lists `exited` (item 97), is closed as an unknown exit only after the
+ * floor's own `session-exited` — which carries the real outcome and code — has
+ * had one bounded turn to arrive (puppeteer's Godview keeps the same grace for
+ * its PID poller). Exported for the rows that wait on the backstop. */
+export const EXIT_GRACE_MS = 1_500;
 /** Item 59 — the floor's termination ladder, upstream's own (native-floor
  * §4.4; `TerminalService.terminate`): an interrupt, 2 s, SIGTERM to the process
  * group, 2 s, SIGKILL, and the reap. A shell that ignores SIGTERM, as an
@@ -400,6 +413,8 @@ export interface AgentRuntimeServiceOptions {
   deviceId?: () => string;
   /** test seam: compose providers beside (or instead of) puppeteer's built-ins */
   providers?: (builtin: AgentProvider[]) => AgentProvider[];
+  /** CP-1d — rebuild a spark's briefing for each birth, from its signed record and the current native door. */
+  sparkBriefing?: (spark: SparkId, provider: string) => Promise<AgentRunBriefing>;
   /** AC-3 test seam: the catalog (default: THE table, `AGENT_CATALOG`) — a
    * test composes rows for its scripted provider beside the real ones, which
    * is how the catalog's rules are exercised without a vendor literal */
@@ -410,6 +425,10 @@ export interface AgentRuntimeServiceOptions {
   home?: string;
   /** test seam: the PATH the install inventory searches (default: the process PATH) */
   searchPath?: string;
+  /** test seam: the home the install inventory searches each provider's install
+   * directories under (default: os.homedir()); the daemon isolates it whenever
+   * it isolates the search path */
+  installHome?: string;
   /** test seam: the fetch release detectors use (default: global fetch) */
   fetchFn?: typeof fetch;
   /** Show in Finder: the shell provider's internal door, LATE-BOUND (the
@@ -498,6 +517,10 @@ interface ManagedEntry {
   typed?: { pid: number; startedAt: string } | undefined;
   /** AR-7 — stops the watch on that pid */
   unwatch?: (() => void) | undefined;
+  /** CP-D15 — who started the run, as its record says (absent reads `you`) */
+  origin?: AgentSessionOrigin | undefined;
+  /** CP-1c — the spark this run is the own session of */
+  spark?: SparkId | undefined;
 }
 
 /** AR-4 — a run whose PTY outlived a fieldd that could NOT re-attach to it:
@@ -566,6 +589,17 @@ interface AwaitingBoot {
  * or session id — letters, digits, `.`, `_`, `:` and `-`, never led by `-`
  * (which an adapter's CLI would read as a flag). */
 const NATIVE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
+
+/** Item 97 — the row of a PTY whose process still runs, or none: a row the
+ * floor lists `exited` is a kept pane's husk, which the boot reads as it reads
+ * a PTY that did not survive (`reattach`, `sweepAwaiting`). */
+function runningRowOf(
+  rows: ReadonlyMap<string, TerminalInfo>,
+  terminalId: string | undefined,
+): TerminalInfo | undefined {
+  const row = terminalId === undefined ? undefined : rows.get(terminalId);
+  return row?.exited === true ? undefined : row;
+}
 
 function isDirectory(path: string): boolean {
   try {
@@ -772,6 +806,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           : {}),
         ...(opts.fetchFn !== undefined ? { fetch: opts.fetchFn } : {}),
         ...(opts.searchPath !== undefined ? { searchPath: opts.searchPath } : {}),
+        ...(opts.installHome !== undefined ? { home: opts.installHome } : {}),
       },
       // PF5's tick: the fold publishes one frame per tick anyway, so the
       // runtime's own coalescing matches it rather than adding a 100 ms stage
@@ -901,7 +936,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * and its personas. A provider the runtime composes with no visible row is
    * absent; a row the runtime does not compose is listed unavailable. */
   async providers(): Promise<AgentProvidersResult> {
-    const composed = new Set(this.runtime.providers().map((p) => p.id));
+    const composed = new Map(this.runtime.providers().map((p) => [p.id, p]));
     const launch = new Map(this.runtime.launchProviders().map((p) => [p.id, p]));
     let installs: readonly AgentInstallation[] = [];
     try {
@@ -925,11 +960,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       }
       const state = history.get(row.id);
       const lastLaunchedAt = launched.get(row.id);
+      const briefing = composed.get(row.id)?.briefing;
       providers.push({
         id: row.id,
         label: row.label,
         available: composed.has(row.id) && installs.some((install) => install.provider === row.id),
         resumable: row.offers.resume && launch.get(row.id)?.resume === true,
+        ...(briefing === undefined ? {} : { briefing: { ...briefing } }),
         personas,
         status: row.status,
         offers: this.offersHere(row),
@@ -1172,6 +1209,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     /** D2 — who a FORWARDED birth is for (the owner's `ctx.onBehalfOf`): the
      * ticket's rights follow it (`rightsFor`). */
     forwardedFor?: ForwardedFor,
+    /** CP-1c — the compose plane's own facts about the run, never a door's params: who started it (CP-D15) and the
+     * spark it is the own session of. Both go on the record, under its signature. */
+    compose?: { readonly origin?: AgentSessionOrigin; readonly spark?: SparkId },
   ): Promise<AgentSpawnResult> {
     this.requireOffered(params.provider, "spawn");
     // PJ-7 — a place by ref is resolved here, before the floor is asked
@@ -1181,9 +1221,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const cwd = place?.path ?? params.cwd ?? this.home;
     const identity = this.identity();
     const entry = await this.creation(params.profileId ?? null, async () => {
+      const briefing = await this.briefingForSpark(compose?.spark, params.provider);
       const result = await this.runtime.spawn({
         agent: params.provider,
         cwd,
+        ...briefing,
         ...(params.title !== undefined ? { title: params.title } : {}),
         ...(params.profileId !== undefined ? { profile: params.profileId } : {}),
         // AR-S5 — that profile's sign-in for the agent; puppeteer refuses a
@@ -1218,6 +1260,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
               },
             }
           : {}),
+        ...(compose?.origin !== undefined ? { origin: compose.origin } : {}),
+        ...(compose?.spark !== undefined ? { spark: compose.spark } : {}),
       });
     });
     return this.ticketed(entry, principal, terminals, forwardedFor);
@@ -1424,9 +1468,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const identity = this.identity();
     // PJ-6 (Q4) — a conversation a run of ours launched at a model resumes at
     // it, in the account the index files it under
-    const launched = this.launchedSelection(params.provider, params.nativeSessionId, profileId);
+    const { record: previous, modelSelection: launched } = this.launchedContext(
+      params.provider,
+      params.nativeSessionId,
+      profileId,
+    );
     const selection = this.resumeSelection(params.provider, launched);
     const entry = await this.creation(profileId ?? null, async () => {
+      const briefing = await this.briefingForSpark(previous?.spark, params.provider);
       const result = await this.runtime.resume({
         continuation: {
           providerId: params.provider,
@@ -1434,6 +1483,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           implementation: "native",
         },
         cwd,
+        ...briefing,
         ...(params.title !== undefined ? { title: params.title } : {}),
         ...(profileId !== undefined ? { profile: profileId } : {}),
         creationRequestId: identity.creationRequestId,
@@ -1447,6 +1497,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         title: params.title,
         ...identity.launched(),
         ...(launched !== undefined ? { modelSelection: launched } : {}),
+        ...(previous?.spark !== undefined ? { spark: previous.spark } : {}),
+        ...(previous?.origin !== undefined ? { origin: previous.origin } : {}),
       });
     });
     return {
@@ -1872,6 +1924,18 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return { sessions: rows.map((r) => r.row) };
   }
 
+  /** CP-1b (the compose plane, version 2; CP-D1) — the run a pane holds, for the `vibefield` door. The floor walks a
+   * caller to its pane; fieldd maps the pane to its run here and never walks itself. Managed and pending runs only:
+   * an exited run's pane holds no process that could have called. `spark` is set when the run is a spark's own
+   * session, as its record says (CP-1c writes it at hatch). */
+  runForTerminal(terminalSessionId: string): { runtimeRunId: string; spark?: SparkId } | undefined {
+    const runtimeRunId = this.byTerminal.get(terminalSessionId);
+    if (runtimeRunId === undefined) return undefined;
+    if (!this.managed.has(runtimeRunId) && !this.pending.has(runtimeRunId)) return undefined;
+    const spark = this.records.read(runtimeRunId)?.spark;
+    return { runtimeRunId, ...(spark ? { spark } : {}) };
+  }
+
   /** `agent.subscribe`: full snapshots, at most one per tick. */
   subscribe(emit: (rows: AgentListResult) => void): () => void {
     this.subscribers.add(emit);
@@ -1913,7 +1977,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       requestedTermination: event.requestedTermination,
     };
     if (this.pending.has(runtimeRunId)) {
-      this.closePending(runtimeRunId, exit);
+      this.closePending(runtimeRunId, exit, "exit");
       return;
     }
     await this.closeRun(runtimeRunId, exit);
@@ -1947,7 +2011,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** The floor's inventory (TerminalService `onInventory`): the join for the
    * row's cell, and the exit backstop — a terminal the inventory carried and
-   * no longer does is gone, whether or not its cell's connection said so. */
+   * no longer does is gone, whether or not its cell's connection said so, and
+   * so is one it still lists `exited` (item 97: a kept pane whose process
+   * ended, from which no exit event will come again). A husk's row still
+   * joins its cell; only its liveness is read as ended. */
   handleInventory(terminals: readonly TerminalInfo[]): void {
     const rows = new Map(terminals.map((row) => [row.sessionId, row]));
     // AR-4 — the FIRST inventory of a boot is the re-attach: the records left
@@ -1967,16 +2034,22 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           changed = true;
         entry.seenInInventory = true;
         entry.terminal = row;
+      }
+      if (row !== undefined && row.exited !== true) {
         if (entry.backstop !== undefined) {
           clearTimeout(entry.backstop);
           entry.backstop = undefined;
         }
       } else if (entry.seenInInventory && !entry.resuming && entry.backstop === undefined) {
-        // a pending PTY that left: the process ended on its own — stamped
-        // after the same grace the attached runs get
+        // a pending PTY that left, or is listed exited: the process ended on
+        // its own — stamped after the same grace the attached runs get
         entry.backstop = setTimeout(() => {
           entry.backstop = undefined;
-          this.closePending(runtimeRunId, { exitCode: null, signal: null, reason: "unknown" });
+          this.closePending(
+            runtimeRunId,
+            { exitCode: null, signal: null, reason: "unknown" },
+            "exit",
+          );
         }, this.exitGraceMs(id));
         entry.backstop.unref();
       }
@@ -1988,12 +2061,16 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           changed = true;
         entry.seenInInventory = true;
         entry.terminal = row;
+      }
+      if (row !== undefined && row.exited !== true) {
         if (entry.backstop !== undefined) {
           // listed again: a reading that briefly lacked it, not an exit
           clearTimeout(entry.backstop);
           entry.backstop = undefined;
         }
       } else if (entry.seenInInventory && !entry.exiting && entry.backstop === undefined) {
+        // left, or listed exited (item 97): the floor's own exit gets the
+        // grace to carry the real outcome first
         entry.backstop = setTimeout(() => {
           entry.backstop = undefined;
           void this.closeRun(runtimeRunId, { exitCode: null, signal: null, reason: "unknown" });
@@ -2431,6 +2508,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       recipe?: LaunchRecipe | undefined;
       /** PJ-7 — the place a launch by place resolved (its placeId) */
       place?: string | undefined;
+      /** CP-D15 — who started it (a spark's `agent_spawn`, a flow's step); kept on the record */
+      origin?: AgentSessionOrigin | undefined;
+      /** CP-1c — the spark it is the own session of; kept on the record, and a resume keeps it */
+      spark?: SparkId | undefined;
     },
   ): ManagedEntry {
     const info = agent.info;
@@ -2448,6 +2529,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           replaced: launch.replaced,
           adopted: launch.adopted?.process,
           modelSelection: launch.modelSelection,
+          origin: launch.origin,
+          spark: launch.spark,
         }),
       );
     } else {
@@ -2496,6 +2579,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         (launch.reattached !== undefined && isTypedRun(launch.reattached.record)
           ? launch.reattached.record.process
           : undefined),
+      origin: launch.origin ?? launch.reattached?.record.origin,
+      spark: launch.spark ?? launch.reattached?.record.spark,
     };
     if (this.disposed) {
       // the service stopped while this run was being born or attached: the
@@ -2740,6 +2825,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     record: AgentSessionRecord,
     cwdOverride: string | undefined,
     replaced: string | undefined,
+    preparedBriefing?: AgentRunBriefing,
   ): Promise<ManagedEntry> {
     const continuation = continuationOf(record);
     const cwd = cwdOverride ?? record.cwd;
@@ -2748,9 +2834,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // the account it was launched in rides with it (discovery runs there)
     const selection = this.resumeSelection(record.provider, record.modelSelection);
     return this.creation(record.profileId ?? null, async () => {
+      const briefing =
+        preparedBriefing ?? (await this.briefingForSpark(record.spark, record.provider));
       const result = await this.runtime.resume({
         continuation,
         cwd,
+        ...briefing,
         ...(record.title !== undefined ? { title: record.title } : {}),
         ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
         workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
@@ -2768,8 +2857,24 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         // the successor keeps the session's launch model, so its own resume
         // starts there too
         ...(record.modelSelection !== undefined ? { modelSelection: record.modelSelection } : {}),
+        // CP-1c — and who started it, and the spark it is: a spark woken in its last session is still that spark
+        ...(record.origin !== undefined ? { origin: record.origin } : {}),
+        ...(record.spark !== undefined ? { spark: record.spark } : {}),
       });
     });
+  }
+
+  private async briefingForSpark(
+    spark: SparkId | undefined,
+    provider: string,
+  ): Promise<AgentRunBriefing> {
+    if (spark === undefined) return {};
+    if (!this.opts.sparkBriefing)
+      throw new RpcCallError("UNAVAILABLE", "the spark's briefing is unavailable", true, {
+        service: "compose",
+        state: "briefing-unavailable",
+      });
+    return this.opts.sparkBriefing(spark, provider);
   }
 
   /** PJ-6 (Q4) — what a resume of a session launched at `launched` passes and
@@ -2798,32 +2903,39 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
   }
 
-  /** PJ-6 (Q4) — the model a conversation's newest run of ours was launched
-   * at, in the account the resume names: a native resume of a session fieldd
-   * launched starts where its record says it did. Verified records only. */
-  private launchedSelection(
+  /** The newest verified record keeps the native conversation's origin and spark identity. PJ-6's existing model
+   * rule remains the most recent recorded selection, including when a later record has none. */
+  private launchedContext(
     provider: string,
     nativeSessionId: string,
     profileId: string | undefined,
-  ): AgentModelSelection | undefined {
+  ): {
+    record: AgentSessionRecord | undefined;
+    modelSelection: AgentModelSelection | undefined;
+  } {
     let records: AgentSessionRecord[];
     try {
       records = this.records.list();
     } catch {
-      return undefined;
+      return { record: undefined, modelSelection: undefined };
     }
     let newest: AgentSessionRecord | undefined;
+    let selected: AgentSessionRecord | undefined;
     for (const record of records) {
       if (
         record.continuation.providerId !== provider ||
         record.continuation.nativeSessionId !== nativeSessionId ||
-        record.profileId !== profileId ||
-        record.modelSelection === undefined
+        record.profileId !== profileId
       )
         continue;
       if (newest === undefined || record.createdAt > newest.createdAt) newest = record;
+      if (
+        record.modelSelection !== undefined &&
+        (selected === undefined || record.createdAt > selected.createdAt)
+      )
+        selected = record;
     }
-    return newest?.modelSelection;
+    return { record: newest, modelSelection: selected?.modelSelection };
   }
 
   // ── internals: the re-attach (AR-4) ──
@@ -2876,7 +2988,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       }
       if (this.managed.has(record.runtimeRunId) || this.pending.has(record.runtimeRunId)) continue;
       const terminalId = record.terminalSessionId;
-      const row = terminalId === undefined ? undefined : rows.get(terminalId);
+      // item 97 — a pane listed `exited` is a husk: its process ended while no
+      // fieldd was here, and no exit event will come for it, so it waits the
+      // boot's grace as a PTY that did not survive does
+      const row = runningRowOf(rows, terminalId);
       if (row === undefined || terminalId === undefined) {
         this.awaitBoot(record);
         continue;
@@ -2939,7 +3054,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     for (const [runtimeRunId, waiting] of [...this.awaitingBoot]) {
       const { record } = waiting;
       const terminalId = record.terminalSessionId;
-      const row = terminalId === undefined ? undefined : rows.get(terminalId);
+      const row = runningRowOf(rows, terminalId);
       if (row !== undefined && terminalId !== undefined) {
         this.awaitingBoot.delete(runtimeRunId);
         void this.attachRecord(record, row, terminalId).catch((error: unknown) => {
@@ -2958,19 +3073,32 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       }
       this.awaitingBoot.delete(runtimeRunId);
       // the PTY did not outlive the gap (the floor restarted too, or the
-      // process ended while no fieldd was there to see it): an unknown exit —
-      // the record resumes from the door like any other
+      // process ended while no fieldd was there to see it, its pane kept and
+      // listed `exited` — item 97): an unknown exit — the record resumes from
+      // the door like any other
       this.records.stampExit(runtimeRunId, {
         at: this.now().toISOString(),
         exitCode: null,
         signal: null,
         reason: "unknown",
       });
+      // item 97 — the pane survived and its process did not
+      const husk = terminalId === undefined ? undefined : rows.get(terminalId);
       this.logger.info(
         "fieldd.agents.session_gone",
         "A managed session's PTY did not survive the restart; its record is stamped",
-        { runtimeRunId, provider: record.provider },
+        {
+          runtimeRunId,
+          provider: record.provider,
+          ...(husk !== undefined ? { pane: "listed-exited" } : {}),
+        },
       );
+      // MF-1f — a husk is a dead pane the deck still shows, so its row comes
+      // back exited on THIS boot, the resume verb over its final screen, as
+      // `reattach` returns a stamped record's row on the next one
+      if (husk !== undefined && terminalId !== undefined) {
+        if (this.keepExitedRow(runtimeRunId, terminalId, husk)) this.publish();
+      }
       if (record.profileId !== undefined) void this.profiles.sweep();
     }
     // one line as the sweep begins to wait, none while it goes on waiting
@@ -3572,6 +3700,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
     const oldId = record.terminalSessionId;
     const work = async (): Promise<ManagedEntry> => {
+      let briefing: AgentRunBriefing;
       // ── before the point of no return: every throw restores the entry ──
       try {
         const terminals = this.requireTerminals();
@@ -3585,6 +3714,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           how === "manual" ? "agent.resume" : "resume-when-idle",
         );
         if (stale !== undefined) throw stale;
+        // CP-1d — an unreadable spark record/brief or unsupported door must not cost the pending run its PTY.
+        // Keep this one prepared briefing for the replacement; never perform a second read after ending it.
+        briefing = await this.briefingForSpark(record.spark, record.provider);
         if (oldId !== undefined) {
           const row = this.listed(terminals, oldId) ? terminals.get(oldId) : undefined;
           if (row !== undefined) {
@@ -3636,7 +3768,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // 2. the new run: the vendor's own conversation continued in a new PTY
       let next: ManagedEntry;
       try {
-        next = await this.resumeFromRecord(record, cwdOverride, oldId);
+        next = await this.resumeFromRecord(record, cwdOverride, oldId, briefing);
       } catch (error) {
         // the old PTY is gone; the resume did not happen — the record says
         // exactly that, and the door's ordinary resume takes it next
@@ -3698,9 +3830,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }));
   }
 
+  /** A pending run leaves, its record stamped with `exit`. `after` says why: an `exit` of its
+   * process (the floor's, heard, or the inventory's backstop) keeps the row exited over the pane
+   * while the floor lists it (MF-1f, item 97); a withdrawal or a supersession never does. */
   private closePending(
     runtimeRunId: string,
     exit: { exitCode: number | null; signal: string | null; reason: string },
+    after: "exit" | "withdrawn" = "withdrawn",
   ): void {
     const entry = this.pending.get(runtimeRunId);
     if (entry === undefined || entry.resuming) return;
@@ -3713,6 +3849,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (entry.record.terminalSessionId !== undefined)
       this.byTerminal.delete(entry.record.terminalSessionId);
     this.records.stampExit(runtimeRunId, { at: this.now().toISOString(), ...exit });
+    // MF-1f — the pane is kept (MF-1g), so the row stays over it, exited: the floor's own
+    // listing is the evidence, as `holdExited` reads it for an attached run
+    const pane = entry.record.terminalSessionId;
+    const terminals = this.opts.terminals?.() ?? null;
+    if (after === "exit" && pane !== undefined && terminals?.observation() !== undefined) {
+      const row = terminals.get(pane);
+      if (row !== undefined) this.keepExitedRow(runtimeRunId, pane, row);
+    }
     if (entry.record.profileId !== undefined) void this.profiles.sweep();
     this.logger.info("fieldd.agents.session_exited", "Pending managed session's PTY exited", {
       runtimeRunId,
@@ -3805,6 +3949,27 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       terminal: entry.terminal,
       since: this.now().toISOString(),
     });
+  }
+
+  /** MF-1f for a run this fieldd did not hold attached (item 97): a record stamped with its exit
+   * while the floor lists its pane gets its exited row from the record, as `reattach` builds one.
+   * Never a typed run's (AR-7: its pane is the person's live shell), never a record gone. Answers
+   * whether the row was kept. */
+  private keepExitedRow(
+    runtimeRunId: string,
+    terminalSessionId: string,
+    terminal: TerminalInfo,
+  ): boolean {
+    if (this.disposed) return false;
+    const record = this.records.read(runtimeRunId);
+    if (record === undefined || isTypedRun(record)) return false;
+    this.exited.set(runtimeRunId, {
+      record,
+      terminalSessionId,
+      terminal,
+      since: this.now().toISOString(),
+    });
+    return true;
   }
 
   /** Withdraw an exited row and say why. Answers whether it was there. */
@@ -4164,6 +4329,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         },
         replaced: entry.replaced,
         ...(entry.typed !== undefined ? { spawnedBy: SPAWNED_BY_SHELL } : {}),
+        origin: entry.origin,
+        spark: entry.spark,
         stopKey: stopKeyOf(entry.agent.turnStop),
         createdAt: entry.createdAt,
         stateChangedAt: entry.stateChangedAt,

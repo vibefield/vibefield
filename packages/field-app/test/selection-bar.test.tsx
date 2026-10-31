@@ -43,7 +43,7 @@ const restingAnchor = (over: Partial<SelectionAnchor> = {}): SelectionAnchor => 
   gesturing: false,
   editing: false,
   view: VIEW,
-  rulers: { margin: 60, band: 26 },
+  rulers: { margin: 0, band: 26 },
   ...over,
 });
 

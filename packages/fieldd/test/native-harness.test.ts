@@ -294,6 +294,45 @@ describe("a stalled real-floor wait says which step stalled", () => {
     expect(lines).toContain("  +1158 floor field_native.lifecycle.ready");
   });
 
+  it("item 97 — a wait's witness is asked once, at the deadline, and its word follows what the row saw", async () => {
+    let asked = 0;
+    const error = await waitWithEvidence(
+      "the run's exit",
+      (seen) => {
+        seen({ exited: false });
+        return undefined;
+      },
+      30,
+      () => undefined,
+      5,
+      async () => {
+        asked += 1;
+        return "the floor's row for pane p1: not listed";
+      },
+    ).catch((e: unknown) => e as Error);
+    expect(asked).toBe(1);
+    expect((error as Error).message.split("\n")).toEqual([
+      "the run's exit did not hold within 30 ms",
+      'the row last saw: {"exited":false}',
+      "the floor's row for pane p1: not listed",
+      "no floor scene was recorded for this row",
+    ]);
+    // a witness that fails says so in its place, and the wait's own error still stands
+    const failed = await waitWithEvidence(
+      "the run's exit",
+      () => undefined,
+      1,
+      () => undefined,
+      1,
+      async () => {
+        throw new Error("lsof is not here");
+      },
+    ).catch((e: unknown) => e as Error);
+    expect((failed as Error).message.split("\n")[2]).toBe(
+      "the row's witness failed: lsof is not here",
+    );
+  });
+
   it("item 68 — a row that reported nothing, with no scene recorded, says both", async () => {
     const error = await waitWithEvidence(
       "nothing",

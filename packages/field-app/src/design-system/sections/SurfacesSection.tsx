@@ -16,7 +16,9 @@ import {
   type SettingsSubpage,
 } from "../../panels/SettingsDialog";
 import { buttonCls } from "../../panels/settings-ui";
+import { UpdatesDevicesView } from "../../panels/UpdatesDevicesSection";
 import { UpdatesDoctorView, UpdatesSectionView } from "../../panels/UpdatesSection";
+import { updateWaits } from "../../panels/update-words";
 import { finishSetupRows } from "../../setup/ledger";
 import { AgentsSettingsPreview } from "../AgentsSettingsPreview";
 import {
@@ -44,7 +46,9 @@ import {
 import { TerminalSettingsPreview } from "../TerminalSettingsPreview";
 import { TERMINAL_FIXTURE_STATES, type TerminalFixtureState } from "../terminal-settings-fixtures";
 import {
+  UPDATES_DEVICES_FIXTURE,
   UPDATES_DOCTOR_FIXTURE,
+  UPDATES_EDGE_STATES,
   UPDATES_FIXTURE_NOW,
   UPDATES_HELD_STATES,
   UPDATES_PATH_STATES,
@@ -169,15 +173,27 @@ export function SurfacesSection(): ReactElement {
       </Specimen>
 
       <Specimen
-        title="Updates — Settings › General: the update's path"
+        title="Settings → Updates — on the path, and Your devices"
         source="panels/UpdatesSection.tsx"
         bleed
       >
-        <UpdatesSettingsSpecimen states={UPDATES_PATH_STATES} label="Update card state" />
+        <UpdatesSettingsSpecimen states={UPDATES_PATH_STATES} label="Updates page state" />
       </Specimen>
 
-      <Specimen title="Updates — held, honest, and absent" source="panels/UpdatesSection.tsx" bleed>
-        <UpdatesSettingsSpecimen states={UPDATES_HELD_STATES} label="Update card held state" />
+      <Specimen
+        title="Settings → Updates — at the edges: your choices, and an install that didn't take"
+        source="panels/UpdatesSection.tsx"
+        bleed
+      >
+        <UpdatesSettingsSpecimen states={UPDATES_EDGE_STATES} label="Updates page edge state" />
+      </Specimen>
+
+      <Specimen
+        title="Settings → Updates — held, honest, and absent"
+        source="panels/UpdatesSection.tsx"
+        bleed
+      >
+        <UpdatesSettingsSpecimen states={UPDATES_HELD_STATES} label="Updates page held state" />
       </Specimen>
 
       <Specimen title="Updater — Settings › Diagnostics" source="panels/UpdatesSection.tsx" bleed>
@@ -366,8 +382,9 @@ function TerminalSettingsSpecimen(): ReactElement {
   );
 }
 
-/** Settings › General's update card in the shipping dialog (WP12d L3c-ii, §13 C5): `UpdatesSectionView` over the
- * projections and answers main gives, every production state, never a replica. */
+/** Settings → Updates in the shipping dialog (WP12d L3c-ii, §13 C5; AU-3): `UpdatesSectionView` over the projections
+ * and answers main gives, every production state, never a replica; the Updates nav row wears its mark while an install
+ * waits, and Your devices stands under the page over the fixture roster. */
 function UpdatesSettingsSpecimen({
   states,
   label,
@@ -384,7 +401,7 @@ function UpdatesSettingsSpecimen({
       </div>
       <SettingsDialog
         className="vf-ds-settings-dialog"
-        activePage="general"
+        activePage="updates"
         onSelectPage={() => undefined}
         onClose={() => undefined}
         onUndo={() => undefined}
@@ -394,8 +411,16 @@ function UpdatesSettingsSpecimen({
         redoAvailable={false}
         account={{ me: FIXTURE_ME, others: FIXTURE_OTHERS_WAITING, onSwitch: () => undefined }}
         subpage={null}
+        pageMarks={
+          updateWaits(updatesFixture(state).view)
+            ? { updates: "an update is ready to install" }
+            : undefined
+        }
       >
-        <UpdatesSectionView key={state} now={UPDATES_FIXTURE_NOW} {...updatesFixture(state)} />
+        <div className="space-y-4">
+          <UpdatesSectionView key={state} now={UPDATES_FIXTURE_NOW} {...updatesFixture(state)} />
+          <UpdatesDevicesView state={UPDATES_DEVICES_FIXTURE} />
+        </div>
       </SettingsDialog>
     </div>
   );

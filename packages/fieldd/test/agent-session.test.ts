@@ -26,7 +26,7 @@
 // parsed rather than grepped, a window in which nothing changed also carries
 // the poller's own request count, and the index is asked with a canonical row
 // and a decoy beside it.
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -59,9 +59,12 @@ import {
   type AgentsProfilesDeleteResult,
   type AgentsProfilesListResult,
   type AgentsProfilesLoginResult,
+  type ComposeSparksHatchResult,
   LAYOUT,
   type PlaceFacts,
   SOCKETS,
+  type SparkRecord,
+  TERMINAL_INVENTORY,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import {
@@ -70,9 +73,11 @@ import {
   type AgentAttachNext,
   type AgentAttachRecord,
   AgentAttachRefusedError,
+  type AgentBriefingCapabilities,
   type AgentHost,
   type AgentModelService,
   type AgentProfile,
+  type AgentRunBriefing,
   type AgentTurnStopService,
   type BoundIngress,
   defineModelService,
@@ -87,6 +92,8 @@ import type {
 } from "@vibefield/puppeteer-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
+import { EXIT_GRACE_MS } from "../src/agent-runtime";
+import { SparkStore } from "../src/compose/sparks";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
@@ -174,6 +181,7 @@ interface ScriptedSession {
   bornAt: number;
   /** where this run's `cat` writes whatever is typed into its PTY */
   typedOut: string;
+  briefing: AgentRunBriefing;
 }
 /** AR-4 — what the scripted adapter was asked to attach to. */
 interface ScriptedAttach {
@@ -189,6 +197,36 @@ interface ScriptedAttach {
 /** Step 1 — what the scripted codec captures for every launch (`facts`): a
  * stand-in for a typed root an attach must hand back */
 const SCRIPTED_STATE = JSON.stringify({ root: "scripted-root" });
+const SPARK_BRIEFING: AgentBriefingCapabilities = {
+  mcpServers: true,
+  allowTools: true,
+  instructions: true,
+  mcpServerProcess: "terminal",
+};
+
+/** An older CP-1c run already belonged to a spark but was born before the briefing shipped. */
+function keepLegacySpark(box: Box, runId: string): SparkRecord {
+  const spark: SparkRecord = {
+    format: 1,
+    id: "sp-7k2m9q4x",
+    name: "Vela",
+    face: { seed: 7 },
+    agent: "scripted",
+    profiles: ["native"],
+    thinksUnder: "native",
+    folder: box.envOut,
+    createdAt: "2026-10-29T12:00:00.000Z",
+    updatedAt: "2026-10-29T12:00:00.000Z",
+  };
+  const store = new SparkStore({
+    dir: join(box.dataDir, ...LAYOUT.SPARKS_DIR),
+    keyPath: join(box.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+  });
+  store.write(spark);
+  writeFileSync(join(spark.folder, "CLAUDE.md"), "The legacy spark's fresh briefing.");
+  box.records.write({ ...readRecord(box.dataDir, runId), spark: spark.id, origin: { by: "you" } });
+  return spark;
+}
 
 /** The text the scripted turn stop types: a line, because the PTY's `cat`
  * reads in canonical mode and a lone key byte would never reach its file. */
@@ -407,11 +445,17 @@ function scriptedProvider(
      * captures `SCRIPTED_STATE`) and an attach record, reported before the
      * launch (`endpoint-<n>`) and again by each attach (`<handed>-attached`) */
     facts?: boolean;
+    briefing?: AgentBriefingCapabilities;
+    exerciseDoor?: boolean;
   } = {},
 ): AgentProvider {
   let counter = 0;
   return {
-    descriptor: { id: "scripted", label: "Scripted" },
+    descriptor: {
+      id: "scripted",
+      label: "Scripted",
+      ...(extra.briefing === undefined ? {} : { briefing: extra.briefing }),
+    },
     ...(extra.facts === true
       ? {
           launch: {
@@ -449,6 +493,13 @@ function scriptedProvider(
           secret: `nonce-${n}`,
         });
       }
+      const doorRecipe = extra.exerciseDoor && options.mcpServers?.vibefield;
+      const briefingFile = join(envOut, `session-${n}.briefing.json`);
+      if (doorRecipe)
+        writeFileSync(
+          briefingFile,
+          JSON.stringify({ server: doorRecipe, output: join(envOut, `session-${n}.tools.json`) }),
+        );
       const { runtimeSessionId } = await options.host.spawnTerminal({
         command: "/bin/sh",
         // the environment lands ATOMICALLY (written beside, then renamed): the
@@ -459,6 +510,12 @@ function scriptedProvider(
           extra.program ??
             `env > "$SCRIPTED_ENV_OUT.part" && mv "$SCRIPTED_ENV_OUT.part" "$SCRIPTED_ENV_OUT"; exec /bin/cat >> "$SCRIPTED_TYPED_OUT"`,
         ],
+        ...(doorRecipe
+          ? {
+              command: process.execPath,
+              args: [join(FIXTURES, "spark-mcp-client.mjs"), briefingFile],
+            }
+          : {}),
         cwd: options.cwd,
         env: {
           // AR-S4d — a host's launch values, beneath the adapter's own, as the built-ins merge them
@@ -480,6 +537,11 @@ function scriptedProvider(
         ingress,
         bornAt,
         typedOut,
+        briefing: {
+          ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
+          ...(options.allowTools === undefined ? {} : { allowTools: options.allowTools }),
+          ...(options.instructions === undefined ? {} : { instructions: options.instructions }),
+        },
       });
       return scriptedBinding(options.host, runtimeSessionId, sessionId, extra.turnStops);
     },
@@ -549,6 +611,8 @@ interface Box {
 
 interface SetupConfig {
   floor: "mock" | "real";
+  briefing?: AgentBriefingCapabilities;
+  exerciseDoor?: boolean;
   /** AR-S4d — the keychain fieldd keeps server values in (default: a map; never the machine's) */
   secretStore?: SecretStore;
   realAgent?: boolean;
@@ -700,6 +764,8 @@ async function setup(config: SetupConfig): Promise<Box> {
             : undefined,
           {
             profiles: config.profiles === true,
+            ...(config.briefing === undefined ? {} : { briefing: config.briefing }),
+            ...(config.exerciseDoor === undefined ? {} : { exerciseDoor: config.exerciseDoor }),
             seen,
             ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
             models,
@@ -796,13 +862,111 @@ const DECK = ["agent.spawn", "agent.observe", "terminal.attach", "index.read"];
 const FIELD_ROW_KEYS = Object.keys(AgentFieldRow.shape);
 
 /** Every wait in this suite (item 68): at its deadline it says what was awaited, what the row last `seen`, and the
- * row's floor and fieldd logs with the link view (`waitWithEvidence`). The budgets are the rows' own. */
+ * row's floor and fieldd logs with the link view (`waitWithEvidence`), and a `witness`'s word when one is given
+ * (item 97: asked once, at the deadline). The budgets are the rows' own. */
 async function poll<T>(
   fn: (seen: (value: unknown) => void) => Promise<T | undefined>,
   ms: number,
   what = "the row's condition",
+  witness?: () => Promise<string>,
 ): Promise<T> {
-  return await waitWithEvidence(what, fn, ms, () => scene);
+  return await waitWithEvidence(what, fn, ms, () => scene, 100, witness);
+}
+
+/** What an interrupted run's HEARD exit has to read exited in (AR-6-0, MF-1g's `endedRun`): the floor's
+ * interrupt, `cat`'s end, the floor's `session-exited` and the fold, on a loaded host. */
+const INTERRUPTED_EXIT_MS = 15_000;
+
+/** Item 97 — the same exit, never heard. On top of the heard budget, two things:
+ * - the floor's next reconcile lists the kept pane `exited`: the exit itself asks for one at once, and the
+ *   backstop period bounds it;
+ * - fieldd's backstop then waits its grace for an exit event that will not come. */
+const LOST_EXIT_MS = INTERRUPTED_EXIT_MS + TERMINAL_INVENTORY.BACKSTOP_MS + EXIT_GRACE_MS;
+
+/** Item 97 — what a lost exit leaves, for an exit wait's deadline (`poll`'s witness). Three things:
+ * - the floor's own row for the pane: its cell's list, through `runtimeSessions`, listed or not, and whether it
+ *   says the process exited;
+ * - whether fieldd's terminal service heard the floor's `session-exited` (`exitOf`);
+ * - what still holds the run's typed-out file (`lsof -t`, each holder with its `ps` state). That is the scripted
+ *   `cat` the interrupt should have ended.
+ *
+ * Between them they name the case: the interrupt never ended `cat` (it still holds the file); `cat` ended and the
+ * floor never saw it (its row is not `exited`); or the floor saw it and fieldd never heard. */
+function exitWitness(box: Box, paneId: string): () => Promise<string> {
+  return async () => {
+    const floorRow = await box.daemon.terminals.runtimeSessions().then(
+      ({ sessions }) => {
+        const row = sessions.find((session) => session.id === paneId);
+        if (row === undefined) return "not listed";
+        const { exited, exitOutcome, exitCode, exitSignal, pid } = row;
+        return JSON.stringify({ exited, exitOutcome, exitCode, exitSignal, pid });
+      },
+      (error: unknown) => `unread (${error instanceof Error ? error.message : String(error)})`,
+    );
+    const heard = box.daemon.terminals.exitOf(paneId);
+    const typedOut = box.sessions.find((s) => s.runtimeSessionId === paneId)?.typedOut;
+    return [
+      `the floor's row for pane ${paneId}: ${floorRow}`,
+      `fieldd heard its exit: ${heard === undefined ? "no" : JSON.stringify({ exitOutcome: heard.exitOutcome, exitCode: heard.exitCode })}`,
+      typedOut === undefined
+        ? "no typed-out file names this pane"
+        : `holding ${typedOut}: ${holdersOf(typedOut)}`,
+    ].join("\n");
+  };
+}
+
+/** The processes holding `path` open (`lsof -t`, which exits 1 when none does), each with its `ps` state. */
+function holdersOf(path: string): string {
+  let pids: string[];
+  try {
+    pids = execFileSync("lsof", ["-t", path], { encoding: "utf8" }).split("\n").filter(Boolean);
+  } catch (error) {
+    if ((error as { status?: number }).status === 1) return "nothing";
+    return `unread (${error instanceof Error ? error.message : String(error)})`;
+  }
+  return pids
+    .map((pid) => {
+      try {
+        return execFileSync("ps", ["-o", "pid=,stat=,command=", "-p", pid], {
+          encoding: "utf8",
+        }).trim();
+      } catch {
+        return `${pid} (gone)`;
+      }
+    })
+    .join("; ");
+}
+
+/** Item 118 — the scripted pane's prologue's budget on a loaded host: the cell join's (`joinedRow`). */
+const CAT_READY_MS = 15_000;
+
+/** Item 118 — a row that ends the scripted run with the floor's ⌃C first reads that the pane's process IS `cat`.
+ * The program is `/bin/sh -c 'env > … && mv …; exec /bin/cat >> …'`, and macOS's `/bin/sh` is bash 3.2: a ⌃C that
+ * meets `env` or `mv` as it exits cannot kill it, the waiting shell reads a normal exit and goes on to the exec, and the
+ * `cat` after it lives (the floor's row `exited:false`, its pid holding the typed-out file as `/bin/cat`; reproduced
+ * under a PTY in 14 of 456 trials). The cell join says nothing about where the shell is, so the ⌃C waits for the exec:
+ * the floor's own pid for the pane, read by `ps`, names `cat`, and then there is no shell left to swallow it. */
+async function catReady(box: Box, paneId: string): Promise<void> {
+  await poll(
+    async (seen) => {
+      const { sessions } = await box.daemon.terminals.runtimeSessions();
+      const pid = sessions.find((session) => session.id === paneId)?.pid;
+      const image = typeof pid === "number" ? imageOf(pid) : undefined;
+      seen({ pid: pid ?? null, image: image ?? null });
+      return image !== undefined && /(^|\/)cat$/.test(image) ? image : undefined;
+    },
+    CAT_READY_MS,
+    "the scripted pane's process to be `cat`, its prologue done",
+  );
+}
+
+/** The executable a pid runs now (`ps -o comm=`), or undefined once it is gone. */
+function imageOf(pid: number): string | undefined {
+  try {
+    return execFileSync("ps", ["-o", "comm=", "-p", String(pid)], { encoding: "utf8" }).trim();
+  } catch {
+    return undefined;
+  }
 }
 
 const mode = (path: string) => statSync(path).mode & 0o777;
@@ -1307,6 +1471,76 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
 });
 
 describe("managed sessions over the REAL floor (field-native)", () => {
+  it("CP-1d — hatch and run-id resume carry a fresh briefing, while ordinary runs carry none", async () => {
+    const briefing: AgentBriefingCapabilities = {
+      mcpServers: true,
+      allowTools: true,
+      instructions: true,
+      mcpServerProcess: "terminal",
+    };
+    const box = await setup({ floor: "real", profiles: true, briefing, exerciseDoor: true });
+    const { daemon, dataDir, sessions } = box;
+    const win = await window(daemon, [...DECK, "agents.manage"], "cp1d");
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    const providers = (await win.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.providers.find((p) => p.id === "scripted")?.briefing).toEqual(briefing);
+    const { spark } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const runId = spark.session!.runtimeRunId;
+    const first = sessions[0]!;
+    expect(first.briefing.allowTools).toEqual(["vibefield/*"]);
+    expect(first.briefing.instructions).toContain("You are Vela");
+    expect(first.briefing.mcpServers?.vibefield?.command).toBe(BIN);
+    expect(first.briefing.mcpServers?.vibefield?.args).toContain("door");
+    expect(first.briefing.mcpServers?.vibefield).not.toHaveProperty("env");
+    expect(existsSync(join(spark.folder, ".mcp.json"))).toBe(false);
+    expect(readRecord(dataDir, runId).spark).toBe(spark.id);
+    const doorProof = await poll(async () => {
+      const path = join(box.envOut, "session-1.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(doorProof.error).toBeUndefined();
+    expect(doorProof.listed.tools.map((tool: { name: string }) => tool.name)).toContain(
+      "agents_list",
+    );
+    expect(doorProof.called.isError).not.toBe(true);
+
+    await win.call("terminal.terminate", { sessionId: first.runtimeSessionId });
+    await poll(async () => (readRecord(dataDir, runId).exited ? true : undefined), 15_000);
+    const revised = "CP1d edited brief, supplied anew on resume.";
+    writeFileSync(join(spark.folder, "CLAUDE.md"), revised);
+    const resumed = (await born(win, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    expect(sessions[1]?.briefing.instructions).toBe(revised);
+    expect(sessions[1]?.briefing.allowTools).toEqual(["vibefield/*"]);
+    expect(sessions[1]?.resume).toBe(first.sessionId);
+    const resumedProof = await poll(async () => {
+      const path = join(box.envOut, "session-2.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(resumedProof.error).toBeUndefined();
+    expect(resumedProof.listed.tools.map((tool: { name: string }) => tool.name)).toContain(
+      "agents_list",
+    );
+    const record = readRecord(dataDir, resumed.session.runtimeRunId);
+    expect(record.spark).toBe(spark.id);
+    expect(record.origin).toEqual({ by: "you" });
+    expect(JSON.stringify(record)).not.toContain(revised);
+    expect(JSON.stringify(record)).not.toContain("mcpServers");
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+
+    const ordinary = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    expect(sessions[2]?.briefing).toEqual({});
+    await win.call("terminal.terminate", { sessionId: ordinary.terminal.sessionId });
+  }, 90_000);
+
   it("spawn: a PTY on the agent cell with a CLEAN environment; the fold's row, the record (0600), the ticket, the audit; automation through the host; exit withdraws the row and stamps the record; resume continues from the record; a live run refuses to be resumed", async () => {
     const { daemon, dataDir, envOut, sessions } = await setup({ floor: "real" });
     const win = await window(daemon, DECK, "r1");
@@ -1513,7 +1747,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
   }, 90_000);
 
   it("QL-D10 — a conversation resumed by its native id: refused while a run continues it; then a new run on puppeteer's continuation, recorded and audited, answered like a spawn; the exited record no longer resumes beside it", async () => {
-    const box = await setup({ floor: "real", catalog: FILED_CATALOG });
+    const box = await setup({ floor: "real", catalog: FILED_CATALOG, briefing: SPARK_BRIEFING });
     const { daemon, dataDir, envOut, sessions, records } = box;
     const win = await window(daemon, DECK, "qn3");
     const spawned = (await born(win, "agent.spawn", {
@@ -1552,6 +1786,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       15_000,
     );
 
+    const spark = keepLegacySpark(box, spawned.session.runtimeRunId);
     const resumed = (await born(win, "agent.resume", {
       provider: "scripted",
       nativeSessionId: conversation,
@@ -1565,6 +1800,9 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     // the adapter was asked to CONTINUE the conversation, in the folder named
     expect(sessions).toHaveLength(2);
     expect(sessions[1]?.resume).toBe(conversation);
+    expect(sessions[1]?.briefing.instructions).toBe("The legacy spark's fresh briefing.");
+    expect(readRecord(dataDir, resumed.session.runtimeRunId).spark).toBe(spark.id);
+    expect(readRecord(dataDir, resumed.session.runtimeRunId).origin).toEqual({ by: "you" });
     // the same routed ticket a spawn answers: the pane mounts it the same way
     expect(resumed.terminal.endpoints.controlUrl).toMatch(/^ws:/);
     expect(resumed.terminal).toHaveProperty("attachGrant");
@@ -2779,6 +3017,8 @@ describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
     await joinedRow(win, runId);
+    // item 118 — the ⌃C below must meet `cat`, never the shell's prologue
+    await catReady(box, spawned.terminal.sessionId);
 
     // the SNAPSHOT is the live board, not an empty one
     // the floor this subscriber asks for IS the registry's default; naming the
@@ -2924,13 +3164,19 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
     await joinedRow(win, runId);
-    // the scripted PTY's `cat` dies of the floor's own interrupt
+    // the scripted PTY's `cat` dies of the floor's own interrupt, once it IS `cat` (item 118)
+    await catReady(box, spawned.terminal.sessionId);
     expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
-    await poll(async () => {
-      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
-      const row = sessions.find((r) => r.runtimeRunId === runId);
-      return row?.continuation?.exited === true ? row : undefined;
-    }, 15_000);
+    await poll(
+      async () => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = sessions.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      INTERRUPTED_EXIT_MS,
+      "the interrupted run read as exited",
+      exitWitness(box, spawned.terminal.sessionId),
+    );
     return { runId, paneId: spawned.terminal.sessionId };
   }
 
@@ -3160,6 +3406,11 @@ describe("item 81 — an exit that comes before its pane is registered", () => {
 });
 
 describe("item 87 — a run's exit is not held by its workspace's cleanup", () => {
+  /** How long the stalled git holds the cleanup: the bound of what these rows prove. An exit read
+   * inside it was published before the cleanup ended, and the rows stop the git long before it
+   * ends by itself. */
+  const STALLED_GIT_MS = 30_000;
+
   /** A `git` that does not answer: puppeteer finalizes a run's workspace when its process exits, and
    * every git call there is unbounded (puppeteer-workspaces 0.3.0, `git.js`). First on the
    * in-process fieldd's PATH, it stalls that cleanup the way a loaded host can. Each call leaves its
@@ -3168,9 +3419,11 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
     const dir = join(root, "stalled-git");
     const pids = join(dir, "pids");
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "git"), `#!/bin/sh\necho $$ >> "${pids}"\nexec sleep 30\n`, {
-      mode: 0o755,
-    });
+    writeFileSync(
+      join(dir, "git"),
+      `#!/bin/sh\necho $$ >> "${pids}"\nexec sleep ${STALLED_GIT_MS / 1000}\n`,
+      { mode: 0o755 },
+    );
     return {
       dir,
       called: () => existsSync(pids),
@@ -3229,8 +3482,10 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
           seen({ continuation: found?.continuation ?? null, gitCalled: git.called() });
           return found?.continuation?.exited === true ? found : undefined;
         },
-        5_000,
+        // item 101 — the heard exit's own budget, as AR-6-0's: the cleanup's stall is STALLED_GIT_MS
+        INTERRUPTED_EXIT_MS,
         "the exited row of a run whose workspace cleanup is stalled",
+        exitWitness(box, spawned.terminal.sessionId),
       );
       // exited at once, and not yet resumable: the cleanup still holds the old run's workspace
       expect(row.continuation).toMatchObject({ persisted: true, exited: true, resumable: false });
@@ -3312,8 +3567,10 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
           seen(found?.continuation ?? null);
           return found?.continuation?.exited === true ? found : undefined;
         },
-        5_000,
+        // item 101 — the heard exit's own budget, as AR-6-0's: the cleanup's stall is STALLED_GIT_MS
+        INTERRUPTED_EXIT_MS,
         "the exited row of a run whose workspace cleanup is stalled",
+        exitWitness(box, spawned.terminal.sessionId),
       );
       const askedAt = Date.now();
       const refused = await win.callErr("agent.resume", { runtimeRunId: runId });
@@ -3347,7 +3604,8 @@ describe("item 87 — a run's exit is not held by its workspace's cleanup", () =
 
 describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
   it("interrupts a live run through the floor, is refused for an exited or unknown one, needs agent.control, and lands in the ledger", async () => {
-    const { daemon, dataDir, envOut } = await setup({ floor: "real" });
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, envOut } = box;
     // the deck's own scopes do NOT include agent.control — the fold's reader
     // is not, by that fact, allowed to steer what it is watching
     const watcher = await window(daemon, DECK, "i0");
@@ -3382,6 +3640,8 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     // Q08 — this adapter names no turn stop, so the verb is still the floor's
     // ⌃C, and the row says that key rather than none
     expect(tagged.stopKey).toBe("ctrl-c");
+    // item 118 — and the pane's process is `cat` by now: a ⌃C into the shell's prologue is swallowed
+    await catReady(box, spawned.terminal.sessionId);
 
     // ── the act: the floor takes it, and the scripted PTY's `cat` dies of it ──
     // `accepted` is the FLOOR's word — that the interrupt reached the PTY's
@@ -3391,11 +3651,16 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
 
     // MF-1g — the row does not leave: the agent is over, its PANE is not, and
     // the card keeps the resume verb over its final screen.
-    await poll(async () => {
-      const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
-      const row = rows.find((r) => r.runtimeRunId === runId);
-      return row?.continuation?.exited === true ? row : undefined;
-    }, 15_000);
+    await poll(
+      async () => {
+        const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = rows.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      INTERRUPTED_EXIT_MS,
+      "the interrupted run read as exited",
+      exitWitness(box, spawned.terminal.sessionId),
+    );
     const exited = await poll(async () => {
       const record = readRecord(dataDir, runId);
       return record.exited !== undefined ? record : undefined;
@@ -3487,6 +3752,57 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     );
     expect(act.outcome.outcome).toBe("succeeded");
     expect(act.outcome.attrs?.["accepted"]).toBe(true);
+  }, 120_000);
+});
+
+// Item 97 — an exit fieldd never heard. AR-6-0 reddened three times after item 87 with its run never
+// reading exited and no `fieldd.agents.exit_heard` in the log. The floor's `session-exited` is the one
+// word of an exit fieldd hears, and MF-1g keeps an agent's pane, so the husk stays listed and the old
+// backstop (a row that LEAVES the inventory) never fired. The floor now lists the husk `exited`, and the
+// backstop reads that as an exit after its grace. This row drops the exit at fieldd's own door, for one
+// pane, on the real floor: the Rust half (the floor's row) and fieldd's half (the backstop) end to end.
+describe("item 97 — an exit fieldd never heard (the real floor)", () => {
+  it("a run whose session-exited is lost still reads exited: the floor lists its kept pane exited, and the backstop closes the run after its grace", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, envOut } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "i97");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    await joinedRow(win, runId);
+    // item 118 — the ⌃C below must meet `cat`, never the shell's prologue
+    await catReady(box, paneId);
+
+    // fieldd deaf at its own door, for this pane alone: daemon.ts hands each `session-exited` to the
+    // runtime by this property, so the floor's exit is dropped where fieldd would have heard it
+    const heard = daemon.agents.handleTerminalExit.bind(daemon.agents);
+    vi.spyOn(daemon.agents, "handleTerminalExit").mockImplementation(async (event) => {
+      if (event.sessionId !== paneId) await heard(event);
+    });
+
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+    await poll(
+      async () => {
+        const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+        const row = sessions.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.exited === true ? row : undefined;
+      },
+      LOST_EXIT_MS,
+      "the run whose exit was lost read as exited",
+      exitWitness(box, paneId),
+    );
+    // the backstop's word, never the floor's outcome: nothing carried the exit but the row
+    const record = await poll(async () => {
+      const read = readRecord(dataDir, runId);
+      return read.exited !== undefined ? read : undefined;
+    }, 10_000);
+    expect(record.exited).toMatchObject({ exitCode: null, signal: null, reason: "unknown" });
+    // the pane is kept, and the floor's own row for it says the process ended
+    expect(daemon.terminals.get(paneId)?.exited).toBe(true);
+    expect(await listed(win, paneId)).toBe(true);
   }, 120_000);
 });
 
@@ -3783,8 +4099,9 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     const nativeId = spawned.session.sessionId;
     await joinedRow(win1, runId);
     await first.daemon.stop();
+    const spark = keepLegacySpark(first, runId);
 
-    const second = await setup({ floor: "real", restartOf: first });
+    const second = await setup({ floor: "real", restartOf: first, briefing: SPARK_BRIEFING });
     const win2 = await window(second.daemon, DECK, "pe2");
     const pending = await poll(async () => {
       const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
@@ -3834,6 +4151,15 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect((blind.data?.details as { state?: string } | undefined)?.state).toBe("not-alive");
     expect(await listed(win2, ptyId)).toBe(true); // and the PTY is untouched
 
+    // CP-1d: preparation must finish before the pending process is terminated.
+    rmSync(join(spark.folder, "CLAUDE.md"));
+    await expect(
+      second.daemon.agents.resume({ runtimeRunId: runId }, { kind: "local-token" }),
+    ).rejects.toMatchObject({ details: { reason: "spark-brief-unavailable" } });
+    expect(await listed(win2, ptyId)).toBe(true);
+    expect(first.sessions).toHaveLength(1);
+    writeFileSync(join(spark.folder, "CLAUDE.md"), "Ready for the pending replacement.");
+
     // ── the replacement by hand ──
     // A second window watches the floor's listing for the whole of the resume:
     // the claim ("the old PTY leaves FIRST, and is gone before the new run is
@@ -3860,6 +4186,8 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(resumed.session.continuation).toEqual({ persisted: true, resumable: false });
     expect(first.sessions).toHaveLength(2);
     expect(first.sessions[1]?.resume).toBe(nativeId);
+    expect(first.sessions[1]?.briefing.instructions).toBe("Ready for the pending replacement.");
+    expect(readRecord(first.dataDir, resumed.session.runtimeRunId).spark).toBe(spark.id);
     // the old PTY is gone before the new run was born; the records say what happened
     await untilListed(win2, ptyId, false);
     const old = readRecord(first.dataDir, runId);

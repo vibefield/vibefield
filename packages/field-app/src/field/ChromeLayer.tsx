@@ -400,6 +400,15 @@ export function ChromeLayer({
           open={meOpen}
           onOpenChange={onMeOpenChange}
           onOpenSettings={openSettings}
+          // AU-2 — the update row: null where no updater runs (R1), absent
+          // until the desktop's state arrives (no row yet)
+          update={
+            getHost().updates === undefined
+              ? null
+              : desktopState === null
+                ? undefined
+                : (desktopState.update ?? null)
+          }
           shortcut={getHost().platform === "darwin" ? "⌘," : "Ctrl+,"}
         />
       </div>
@@ -416,6 +425,7 @@ export function ChromeLayer({
           onConnectTaken={() => setShellPresentation((state) => ({ ...state, connect: false }))}
           initialPage={opening.page}
           {...(opening.profiles !== undefined ? { initialProfiles: opening.profiles } : {})}
+          {...(opening.atNotes === true ? { updatesAtNotes: true } : {})}
           devtools={{ open: showEcs, onToggle: () => chrome.setShowEcs((open) => !open) }}
           onClose={() => {
             setShellPresentation((state) => ({ ...state, target: "general", connect: false }));

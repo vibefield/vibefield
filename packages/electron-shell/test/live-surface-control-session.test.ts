@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import type {
   LiveSurfaceDemandV1,
+  LiveSurfaceDeviceCommandV1,
   LiveSurfaceInputEventV1,
   LiveSurfaceNavigationCommandV1,
   LiveSurfaceRuntimeSummaryV1,
@@ -73,6 +74,10 @@ class FakeAuthority implements LiveSurfaceRuntimeAuthority {
    * default (false) models a view-only runtime with no lane at all. */
   withInputLane = false;
   inputThrows = false;
+  /** PT-S2: a bound simulator's runtime carries `device`; every other runtime has no such member. */
+  readonly devices: LiveSurfaceDeviceCommandV1[] = [];
+  withDeviceLane = false;
+  deviceThrows = false;
 
   attach(context: LiveSurfaceRuntimeAttachContext) {
     this.context = context;
@@ -88,6 +93,14 @@ class FakeAuthority implements LiveSurfaceRuntimeAuthority {
             },
             navigate: (command: LiveSurfaceNavigationCommandV1) => {
               this.navigations.push(command);
+            },
+          }
+        : {}),
+      ...(this.withDeviceLane
+        ? {
+            device: (command: LiveSurfaceDeviceCommandV1) => {
+              if (this.deviceThrows) throw new Error("runtime device fault");
+              this.devices.push(command);
             },
           }
         : {}),
@@ -793,6 +806,121 @@ describe("LiveSurfaceControlSession", () => {
     expect(navigation.session.closed).toBe(true);
     expect(navigation.protocolFaults).toEqual(["navigation arrived without its operation grant"]);
     expect(navigation.authority.navigations).toEqual([]);
+  });
+
+  it("PT-S2: forwards a granted device act, and fails the generation closed on one without its grant", () => {
+    const granted = setup(
+      undefined,
+      (authority) => {
+        authority.withDeviceLane = true;
+      },
+      ["view", "device"],
+    );
+    attach(granted);
+    for (const verb of ["boot", "create", "show", "retry", "open-settings"] as const) {
+      granted.port.receive({
+        v: 1,
+        type: "device",
+        attachmentId: "attachment_0123456789abcdef",
+        command: { verb },
+      });
+    }
+    expect(granted.protocolFaults).toEqual([]);
+    expect(granted.session.closed).toBe(false);
+    expect(granted.authority.devices.map((command) => command.verb)).toEqual([
+      "boot",
+      "create",
+      "show",
+      "retry",
+      "open-settings",
+    ]);
+
+    // a browser's grant (navigate) is not a device's: an act without its own grant is not our renderer
+    const ungranted = setup(
+      undefined,
+      (authority) => {
+        authority.withDeviceLane = true;
+      },
+      ["view", "pointer", "keyboard", "navigate"],
+    );
+    attach(ungranted);
+    ungranted.port.receive({
+      v: 1,
+      type: "device",
+      attachmentId: "attachment_0123456789abcdef",
+      command: { verb: "boot" },
+    });
+    expect(ungranted.session.closed).toBe(true);
+    expect(ungranted.protocolFaults).toEqual(["device act arrived without its operation grant"]);
+    expect(ungranted.authority.devices).toEqual([]);
+
+    // a verb off the contract is refused at the parse, before any gate
+    const unknownVerb = setup(
+      undefined,
+      (authority) => {
+        authority.withDeviceLane = true;
+      },
+      ["view", "device"],
+    );
+    attach(unknownVerb);
+    unknownVerb.port.receive({
+      v: 1,
+      type: "device",
+      attachmentId: "attachment_0123456789abcdef",
+      command: { verb: "erase" },
+    });
+    expect(unknownVerb.session.closed).toBe(true);
+    expect(unknownVerb.protocolFaults).toEqual(["malformed renderer control message"]);
+    expect(unknownVerb.authority.devices).toEqual([]);
+  });
+
+  it("PT-S2: drops a device act for an unknown attachment or a runtime without the member, and faults one that throws", () => {
+    const raced = setup(
+      undefined,
+      (authority) => {
+        authority.withDeviceLane = true;
+      },
+      ["view", "device"],
+    );
+    attach(raced);
+    raced.port.receive({
+      v: 1,
+      type: "device",
+      attachmentId: "attachment_9999999999999999",
+      command: { verb: "show" },
+    });
+    expect(raced.session.closed).toBe(false);
+    expect(raced.protocolFaults).toEqual([]);
+    expect(raced.authority.devices).toEqual([]);
+
+    const memberless = setup(undefined, undefined, ["view", "device"]);
+    attach(memberless);
+    memberless.port.receive({
+      v: 1,
+      type: "device",
+      attachmentId: "attachment_0123456789abcdef",
+      command: { verb: "retry" },
+    });
+    expect(memberless.session.closed).toBe(false);
+    expect(memberless.protocolFaults).toEqual([]);
+
+    const throwing = setup(
+      undefined,
+      (authority) => {
+        authority.withDeviceLane = true;
+        authority.deviceThrows = true;
+      },
+      ["view", "device"],
+    );
+    attach(throwing);
+    throwing.port.receive({
+      v: 1,
+      type: "device",
+      attachmentId: "attachment_0123456789abcdef",
+      command: { verb: "boot" },
+    });
+    expect(throwing.session.closed).toBe(true);
+    expect(throwing.protocolFaults).toEqual(["runtime rejected a validated device act"]);
   });
 
   it("drops granted input on a runtime with no lane, and faults a runtime that throws", () => {

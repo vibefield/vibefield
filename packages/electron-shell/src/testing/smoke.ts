@@ -472,6 +472,21 @@ async function waitForFrameDrawn(win: BrowserWindow, what: string): Promise<void
   await waitForRendererFact(win, what, 10_000, `globalThis.__vfDesk.perf().frames > ${from}`);
 }
 
+/** FG-2 — THE BOOT'S REVEAL, before a row's first press or still: DESK_READY is said beneath the boot's splash, and a
+ * returning boot (every smoke's: its user is minted onboarded) holds the splash until it hands over — its floor (700ms
+ * from its first frame), then, where the field is live, the tear (240ms of words, the field opening ~1.9 s, bounded at
+ * 2.9 s). Until then the desk takes no press. The word is the reveal law's own mark (field-app `boot/machine.ts`); before
+ * FG-2 it followed the stable desk at once, and the rows leaned on that. */
+async function bootRevealed(win: BrowserWindow, what: string): Promise<void> {
+  await waitForRendererFact(
+    win,
+    what,
+    30_000,
+    `performance.getEntriesByName("vf:renderer:interactive", "mark").length > 0`,
+    `performance.getEntriesByType("mark").map((m) => m.name)`,
+  );
+}
+
 /** DK-11 — a frame-counting row's window, judged once its last sample is taken: null, or the named cause. */
 async function windowHidden(
   win: BrowserWindow,
@@ -1118,7 +1133,11 @@ export async function runSmokeCanvas(opts: {
       deskSaid.stop();
       if (!gpu)
         problems.push("the try board needs the GPU: a kind draws only on the host's device");
-      else problems.push(...(await tryBoardRows(win, types, shotDir, (line) => console.log(line))));
+      else {
+        // FG-2: the board's stills are the author's, taken on the revealed desk, never through the boot's tear
+        await bootRevealed(win, "the try board's desk revealed");
+        problems.push(...(await tryBoardRows(win, types, shotDir, (line) => console.log(line))));
+      }
       if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
       if (problems.length > 0) throw new Error(problems.join(" · "));
       ok = true;
@@ -1223,6 +1242,9 @@ export async function runSmokeCanvas(opts: {
       );
       if (win.webContents.isCrashed()) problems.push("the renderer crashed");
     } else if (gpu) {
+      // FG-2: the rows start on the revealed desk, as they did while the reveal followed the stable desk at once (the
+      // theme stills are the grader's)
+      await bootRevealed(win, "the boot's reveal");
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
@@ -1417,6 +1439,7 @@ export async function runSmokeCanvas(opts: {
                 const ready = waitForConsole(peer, "DESK_READY ", 60_000);
                 await loadRenderer(peer, "smoke-canvas", opts.viteUrl, { presenceRelay: "1" });
                 await ready;
+                await bootRevealed(peer, "the peer's desk revealed");
                 await sleep(800);
                 return peer;
               },
@@ -1881,8 +1904,9 @@ async function deskRefusalRow(win: BrowserWindow, viteUrl: string): Promise<stri
  * PT-2 — the live page's rows (testing/smoke-live-pane.ts) over the smoke's own fixture page on 127.0.0.1, served for the rows
  * and closed after them; the window's RENDERER REPLACED for the RELOAD row (`loadRenderer`, the same webContents — so the same
  * participant, a new document — as the retry row replaces it, with the window's doors and without the first board's seeding,
- * which a bare `webContents.reload()` would ask again), answered once the desk says DESK_READY again. DESK_READY is said beneath
- * the boot's splash, so the rows wait for it to lift before they press.
+ * which a bare `webContents.reload()` would ask again), answered once the desk says DESK_READY again and the boot has revealed
+ * it (`bootRevealed`, FG-2: DESK_READY is said beneath the boot's splash, which a returning boot holds through its floor and
+ * its tear); the rows still wait for the splash to lift before they press.
  */
 async function liveRows(
   win: BrowserWindow,
@@ -1903,6 +1927,7 @@ async function liveRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -1948,6 +1973,7 @@ async function useRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -1989,6 +2015,7 @@ async function deviceRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -2048,6 +2075,7 @@ async function honestRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -2112,6 +2140,7 @@ async function stillRows(
         await loadRenderer(win, "smoke-canvas", opts.viteUrl, doors);
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -2147,6 +2176,7 @@ async function stillRows(
         const ready = waitForConsole(peer, "DESK_READY ", 60_000);
         await loadRenderer(peer, "smoke-canvas", opts.viteUrl, { docRelay: "1" });
         await ready;
+        await bootRevealed(peer, "the peer's desk revealed");
         await sleep(800);
         return peer;
       },
@@ -2181,6 +2211,7 @@ async function firstRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, doors);
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -2230,6 +2261,7 @@ async function framesRows(
         await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
         try {
           await ready;
+          await bootRevealed(win, "the reloaded desk revealed");
           return true;
         } catch {
           return false;
@@ -2281,6 +2313,8 @@ async function deskRetryRow(win: BrowserWindow, viteUrl: string): Promise<string
     if (log.said.includes("DESK_UNAVAILABLE")) problems.push("the card was said before the retry");
     if (facts.mount !== 1) problems.push(`the desk drew on mount ${facts.mount}, not the retry's`);
     if (card) problems.push("the unavailable card is in the DOM after the retry drew");
+    // FG-2: the rows after this one press on the desk the retry drew, so on its revealed desk
+    await bootRevealed(win, "the retried desk revealed");
   } finally {
     log.stop();
   }

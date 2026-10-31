@@ -9,7 +9,8 @@ export const BAR = {
   height: 40,
   /** its foot above the brackets (the anchor's box: 6 out for one object, the union's 10 out for several) */
   above: 10,
-  /** the SAFE TOP — the rulers' band (they end at 86) plus 8: a bar whose top would cross it stands below */
+  /** the SAFE TOP — a bar whose top would cross it stands below. It was the rulers' band (ending at 86 at their margin of
+   * 60) plus 8; the rulers print at the window's edges since 2026-10-29 and it stays 94, clear of the head's controls */
   safeTop: 94,
   /** kept from each side: 16 since the edges left (HN-8) — the notch's 26 + 16 until then */
   sides: 16,

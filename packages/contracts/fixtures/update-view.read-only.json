@@ -1,0 +1,10 @@
+{
+  "phase": "idle",
+  "channel": "nightly",
+  "buildChannel": "nightly",
+  "enabled": true,
+  "lastCheckAt": null,
+  "applyWired": true,
+  "currentVersion": "0.1.0-nightly.20261027",
+  "location": "read-only"
+}
