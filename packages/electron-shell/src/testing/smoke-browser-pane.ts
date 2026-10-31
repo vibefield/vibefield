@@ -353,10 +353,11 @@ const BARE = (region: number): string => `(() => {
   return null;
 })()`;
 
-/** Every object's world rect on the board but the panes' (the door's census, each type's rows). */
-const OTHERS = `(() => {
-  const d = globalThis.__vfDesk; const out = [];
-  for (const type of Object.keys(d.census())) if (type !== ${JSON.stringify("vibefield.browser-pane")}) for (const o of d.objects(type)) out.push(o.rect);
+/** Every object's world rect on the board but those of the types `beside` (the door's census, each type's rows) — the
+ * pane's: every object but the panes'. */
+const OTHERS = (beside: readonly string[]): string => `(() => {
+  const d = globalThis.__vfDesk; const out = []; const beside = new Set(${JSON.stringify(beside)});
+  for (const type of Object.keys(d.census())) if (!beside.has(type)) for (const o of d.objects(type)) out.push(o.rect);
   return out;
 })()`;
 
@@ -383,8 +384,9 @@ export const BARE_FOR = (dx: number, dy: number): string => `(() => {
 export const overlaps = (a: DoorRect, b: DoorRect): boolean =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-/** A region of the desk captured without the marks, read back as a face (in the renderer: a bitmap never crosses). */
-const FACE = (rect: {
+/** A region of the desk captured without the marks, read back as a face (in the renderer: a bitmap never crosses) — its
+ * distinct colours at 5 bits a channel, its luma range and mean; never a hash (PT-S3: the phone's glass reads it too). */
+export const FACE = (rect: {
   x: number;
   y: number;
   width: number;
@@ -603,14 +605,56 @@ export interface LaidAt {
 /**
  * CLEAR GROUND then LAID (the header's first row): the pane taken off the pegboard by the pointer and dropped alone on clear
  * ground at actual size. `onPane` hears the new pane the moment it is found, so a later step that throws leaves it to the
- * caller to delete.
+ * caller to delete. `layObject` with the pane's facts.
  */
 export async function layPane(
   h: PaneHands,
   before: number,
   onPane: (e: number) => void,
 ): Promise<LaidAt & { readonly laid: PaneSeen["laid"]; readonly pane: number | undefined }> {
-  const { js, until, drag, key, pressSelector, census, rows, deskAt } = h;
+  const at = await layObject(
+    h,
+    { type: PANE.type, category: PANE.category, half: PANE_HALF, label: "Browser" },
+    before,
+    onPane,
+  );
+  return { laid: at.laid, pane: at.object, view: at.view, deskOff: at.deskOff };
+}
+
+/** A kind as `layObject` takes it off the pegboard: its type, the chip it hangs under, half the size it is laid at (world
+ * units), what the rows call it, and the types whose objects its clear ground may lie near (default: its own). */
+export interface LayKind {
+  readonly type: string;
+  readonly category: string;
+  readonly half: { readonly w: number; readonly h: number };
+  readonly label: string;
+  readonly beside?: readonly string[];
+}
+
+/**
+ * CLEAR GROUND then LAID for any kind on the pegboard (PT-S3: the phone on its `devices` chip, as the pane on `portals`):
+ * the specimen of `kind.type` taken off its chip by the pointer and dropped alone on clear ground at actual size. `before`
+ * is the census of that type; `onObject` hears the new object the moment it is found. `hung` is the types the chip hung at
+ * the take.
+ */
+export async function layObject(
+  h: PaneHands,
+  kind: LayKind,
+  before: number,
+  onObject: (e: number) => void,
+): Promise<
+  LaidAt & {
+    readonly laid: PaneSeen["laid"];
+    readonly object: number | undefined;
+    readonly hung: readonly string[];
+  }
+> {
+  const { js, until, drag, key, pressSelector, deskAt } = h;
+  const census = async (): Promise<number> =>
+    (await js<Record<string, number>>("globalThis.__vfDesk.census()"))[kind.type] ?? 0;
+  const rows = (): Promise<PaneRow[]> =>
+    js(`globalThis.__vfDesk.objects(${JSON.stringify(kind.type)})`);
+  const othersRead = OTHERS(kind.beside ?? [kind.type]);
 
   // ── CLEAR GROUND: actual size (⌘0, the head's zoom act), then the view panned — drags on the bare mat (or a calendar's
   // paper: a press there pans too), each held before its release so no inertia carries the pan on — until the drop point
@@ -630,12 +674,12 @@ export async function layPane(
     `(() => { const r = document.querySelector("[data-desk]").getBoundingClientRect(); return { w: r.width, h: r.height }; })()`,
   );
   const drop = { x: Math.round(deskSize.w / 2), y: Math.round(deskSize.h * 0.36) };
-  const others = await js<DoorRect[]>(OTHERS);
+  const others = await js<DoorRect[]>(othersRead);
   // every object's rect, in whichever canvas it lies (a mini mat's inside included) — the union only grows by them
   const right = Math.max(...others.map((r) => r.x + r.w));
   const top = Math.min(...others.map((r) => r.y));
   const foot = Math.max(...others.map((r) => r.y + r.h));
-  const ground = { x: right + 600 + PANE_HALF.w, y: (top + foot) / 2 };
+  const ground = { x: right + 600 + kind.half.w, y: (top + foot) / 2 };
   /** Where the ground stands on screen against the drop point (desk CSS px). */
   const offBy = async (): Promise<{ dx: number; dy: number }> => {
     const c = await js<{ x: number; y: number; zoom: number }>("globalThis.__vfDesk.camera()");
@@ -658,7 +702,7 @@ export async function layPane(
   if (Math.hypot(off.dx, off.dy) > 60)
     throw new Error(`the view never reached the clear ground (${JSON.stringify(off)} to go)`);
 
-  // ── LAID: the Browser specimen taken off the PORTALS chip by the pointer, dropped on the clear ground ────────────
+  // ── LAID: the specimen (the pane's: Browser) taken off its chip (PORTALS) by the pointer, dropped on the clear ground ──
   const known = new Set((await rows()).map((r) => r.entity));
   await pressSelector(".vf-line-create");
   await until("the board out", 5_000, "globalThis.__vfDesk.pegboard()?.anchor.open === true");
@@ -671,12 +715,12 @@ export async function layPane(
     );
   await slid();
   await sleep(200);
-  await pressSelector(`.vf-pegboard-track button[data-id="${PANE.category}"]`);
+  await pressSelector(`.vf-pegboard-track button[data-id="${kind.category}"]`);
   try {
     await until(
-      "the board on its portals",
+      `the board on its ${kind.category}`,
       5_000,
-      `globalThis.__vfDesk.pegboard()?.anchor.category === ${JSON.stringify(PANE.category)}`,
+      `globalThis.__vfDesk.pegboard()?.anchor.category === ${JSON.stringify(kind.category)}`,
     );
   } catch (error) {
     const chips =
@@ -694,9 +738,9 @@ export async function layPane(
     specimens: { type: string; object: Rect }[];
     desk: { left: number; top: number };
   } | null>(READ_BOARD);
-  const hung = board?.specimens.find((s) => s.type === PANE.type);
+  const hung = board?.specimens.find((s) => s.type === kind.type);
   if (board === null || hung === undefined)
-    throw new Error("the board hangs no Browser on its portals chip");
+    throw new Error(`the board hangs no ${kind.label} on its ${kind.category} chip`);
   await drag(
     {
       x: board.desk.left + (hung.object.x0 + hung.object.x1) / 2,
@@ -709,21 +753,21 @@ export async function layPane(
   const deadline = Date.now() + 5_000;
   while ((await census()) === before && Date.now() < deadline) await sleep(60);
   await sleep(700);
-  const pane = (await rows()).find((r) => !known.has(r.entity))?.entity;
-  if (pane !== undefined) onPane(pane);
-  const laidAt = (await rows()).find((r) => r.entity === pane)?.rect;
-  const othersNow = await js<DoorRect[]>(OTHERS);
+  const object = (await rows()).find((r) => !known.has(r.entity))?.entity;
+  if (object !== undefined) onObject(object);
+  const laidAt = (await rows()).find((r) => r.entity === object)?.rect;
+  const othersNow = await js<DoorRect[]>(othersRead);
   const laid: PaneSeen["laid"] = {
     before,
     after: await census(),
     selected: await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0"),
     faulted: await js<boolean>(
-      `(globalThis.__vfDesk.status().faults ?? []).some((f) => f.kind === ${JSON.stringify(PANE.type)})`,
+      `(globalThis.__vfDesk.status().faults ?? []).some((f) => f.kind === ${JSON.stringify(kind.type)})`,
     ),
     folded: await js<boolean>("globalThis.__vfDesk.pegboard()?.anchor.open === false"),
     alone: laidAt !== undefined && !othersNow.some((r) => overlaps(laidAt, r)),
   };
-  return { laid, pane, view, deskOff };
+  return { laid, object, view, deskOff, hung: board.specimens.map((s) => s.type) };
 }
 
 /** The laid pane brought to the middle of the view by drags on the bare mat (the FACE row's first step). */
