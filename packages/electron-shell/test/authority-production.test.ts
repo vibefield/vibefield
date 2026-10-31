@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProductionLiveSurfaceSupport } from "../src/main/live-surfaces/authority-production";
+import { SimctlUnavailableError } from "../src/main/live-surfaces/simctl";
 
 // PT-S3 — main's production live-surface support with NOTHING real beneath it: `node:child_process` refuses every spawn
 // unless a row scripts an in-process answer to `execFile`, the native adapter's loader is a fake that counts its loads,
@@ -164,6 +165,40 @@ describe("createProductionLiveSurfaceSupport — main's ONE simctl (PT-S3 P1)", 
       expect(fakes.loads).toEqual([CAPTURE.adapterPath]);
     } finally {
       await support.dispose();
+    }
+  });
+
+  it("P2: a smoke's candidates reach the shared simctl — an empty directory is no Simulator with nothing spawned, and one that holds simctl pins the list", async () => {
+    const empty = join(root, "empty");
+    mkdirSync(empty);
+    fakes.adapter = refusingAdapter();
+    const none = createProductionLiveSurfaceSupport({
+      capture: CAPTURE,
+      simctlCandidates: [empty],
+    });
+    try {
+      expect(await none.simulatorDevices.list()).toEqual([]);
+      await expect(none.enumeration.bootedSimulators()).rejects.toBeInstanceOf(
+        SimctlUnavailableError,
+      );
+      expect(fakes.execs).toEqual([]);
+    } finally {
+      await none.dispose();
+    }
+
+    const vetted = developerDir();
+    fakes.answer = (file, args) => (file === XCRUN && args[1] === "list" ? LIST : undefined);
+    const smoke = createProductionLiveSurfaceSupport({
+      capture: CAPTURE,
+      simctlCandidates: [vetted],
+    });
+    try {
+      expect(await smoke.simulatorDevices.list()).toHaveLength(1);
+      expect(fakes.execs).toEqual([
+        { file: XCRUN, args: ["simctl", "list", "--json"], developerDir: vetted },
+      ]);
+    } finally {
+      await smoke.dispose();
     }
   });
 });

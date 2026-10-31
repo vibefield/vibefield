@@ -74,6 +74,18 @@ export function mintsOnboarded(mode: ShellMode): boolean {
   return isSmokeLike(mode) && !answersSetup(mode);
 }
 
+/** PT-S3 (P2) — a smoke's simctl developer directory, `VF_SMOKE_SIMCTL_DEVELOPER_DIR`: main's simctl probe then vets it
+ * ALONE, asking xcode-select nothing (`simctl.ts`), so a phone row can witness `no-simulator` on a Mac that has a
+ * Simulator — an empty directory holds no simctl. Read beside the mode, as `rendererPolicyMode` reads its lab's flag, and
+ * only in a smoke-like mode: production and dev never read it, whatever the environment says. Set, it is the smoke's
+ * word even when empty (which vets nothing). */
+export function smokeSimctlDeveloperDir(
+  mode: ShellMode,
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  return isSmokeLike(mode) ? env["VF_SMOKE_SIMCTL_DEVELOPER_DIR"] : undefined;
+}
+
 /** Whether the mode keeps hardware acceleration. Main disables it for every other
  * smoke-like mode: a smoke must run over ssh and on a GPU-less runner, where Chromium's
  * GPU init fails outright. The labs measure the GPU path itself (MV-0: the Godview perf lab

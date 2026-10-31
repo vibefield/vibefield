@@ -119,6 +119,7 @@ import {
   mintsOnboarded,
   parseMode,
   rendererPolicyMode,
+  smokeSimctlDeveloperDir,
 } from "./modes";
 import { readCensus, requestConsentedStop } from "./pair-stop";
 import { installPluginProtocol } from "./plugin-protocol";
@@ -182,6 +183,9 @@ import { createMainWindow, loadRenderer } from "./windows";
 
 const MODE = parseMode(process.argv);
 const RENDERER_POLICY_MODE = rendererPolicyMode(MODE, process.env["VF_GODVIEW_LAB_RENDERER"]);
+// PT-S3 (P2) — a smoke's simctl developer directory, parsed once, beside the mode: read ONLY in a smoke-like mode
+// (`modes.ts`), so production's simctl always asks xcode-select
+const SMOKE_SIMCTL_DEVELOPER_DIR = smokeSimctlDeveloperDir(MODE, process.env);
 // TP-S3a — the direct terminal door (TP-D1 as ratified): a rollback flag, OFF
 // until S3e; it widens the production CSP to the cells' loopback ports and, at
 // S3b, routes the pool's transport. Parsed once, beside the mode.
@@ -1137,6 +1141,10 @@ async function main(
         harnessShellOpens.opened.push(url);
         return Promise.resolve();
       },
+      // PT-S3 (P2): a smoke's simctl developer directory, the probe's ONLY candidate (SIM-NONE points it at an empty one)
+      ...(SMOKE_SIMCTL_DEVELOPER_DIR === undefined
+        ? {}
+        : { simctlCandidates: [SMOKE_SIMCTL_DEVELOPER_DIR] }),
       logger: logger.child({ component: "live-surfaces.capture" }),
     });
     if (!app.isPackaged && process.env["FIELDD_DATA_DIR"] === undefined && !isSmokeLike(MODE)) {

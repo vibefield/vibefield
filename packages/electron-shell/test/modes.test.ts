@@ -9,6 +9,7 @@ import {
   rendererPolicyMode,
   type ShellMode,
   shutdownPolicy,
+  smokeSimctlDeveloperDir,
 } from "../src/main/modes";
 
 // Mode selection is parsed ONCE (ESR §5.2.6). These lock the precedence, the
@@ -222,4 +223,26 @@ describe("the worker lab's renderer policy", () => {
     "ignores the lab override in %s",
     (mode) => expect(rendererPolicyMode(mode, "dev")).toBe(mode),
   );
+});
+
+describe("PT-S3 (P2): a smoke's simctl developer directory", () => {
+  // SIM-NONE points main's simctl probe at an empty directory to witness `no-simulator` on a Mac with a Simulator; the
+  // variable is a smoke's word only — production's probe always asks xcode-select.
+  const env = { VF_SMOKE_SIMCTL_DEVELOPER_DIR: "/var/empty" };
+
+  it("smoke-canvas — the phone rows' mode — reads it, and nothing when it is unset", () => {
+    expect(smokeSimctlDeveloperDir(parseMode(["--smoke-canvas", "--phone"]), env)).toBe(
+      "/var/empty",
+    );
+    expect(smokeSimctlDeveloperDir("smoke-canvas", {})).toBeUndefined();
+  });
+
+  it("production and dev ignore it, whatever the environment says", () => {
+    expect(smokeSimctlDeveloperDir("production", env)).toBeUndefined();
+    expect(smokeSimctlDeveloperDir("dev", env)).toBeUndefined();
+  });
+
+  it.each(ALL_MODES)("%s reads it exactly when it is smoke-like", (mode) => {
+    expect(smokeSimctlDeveloperDir(mode, env)).toBe(isSmokeLike(mode) ? "/var/empty" : undefined);
+  });
 });

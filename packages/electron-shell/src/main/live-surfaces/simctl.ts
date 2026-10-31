@@ -59,9 +59,9 @@ export const SIMCTL_TIMEOUTS_MS = {
 export const SIMCTL_VERBS = ["list", "boot", "shutdown", "create"] as const;
 export type SimctlVerb = (typeof SIMCTL_VERBS)[number];
 
-/** PT-S3 (P1) — which answer the probe vetted: xcode-select's own, or the default Xcode's when xcode-select named a
- * directory without simctl (R5′). */
-export type SimctlVetted = "xcode-select" | "fallback";
+/** PT-S3 (P1, P2) — which answer the probe vetted: xcode-select's own, the default Xcode's when xcode-select named a
+ * directory without simctl (R5′), or a smoke's candidate (`SimctlServiceOptions.candidates`). */
+export type SimctlVetted = "xcode-select" | "fallback" | "override";
 
 /** One spawn of a fixed binary. `developerDir` rides as `DEVELOPER_DIR` (absent only for the probe itself). */
 export interface SimctlExecRequest {
@@ -440,6 +440,10 @@ export interface SimctlServiceOptions {
   /** the probe's file check (simctl inside the developer directory) */
   readonly exists?: (path: string) => boolean;
   readonly now?: () => number;
+  /** PT-S3 (P2) — a SMOKE's developer directories (`modes.ts` `smokeSimctlDeveloperDir`): given, the probe asks
+   * xcode-select nothing and vets only these, in order, under the same checks (`override`); none passing is no Simulator.
+   * Production passes none. */
+  readonly candidates?: readonly string[];
 }
 
 /** PT-S2 — main's ONE simctl, shared by every bound phone, the inner resolvers and the attach's list. */
@@ -447,6 +451,7 @@ export class SimctlService implements SimulatorDeviceCatalog {
   readonly #exec: SimctlExec;
   readonly #exists: (path: string) => boolean;
   readonly #now: () => number;
+  readonly #candidates: readonly string[] | null;
   #developerDir: string | null = null;
   /** which answer vetted `#developerDir` (P1) — meaningful only while it is held */
   #vettedBy: SimctlVetted | null = null;
@@ -462,6 +467,7 @@ export class SimctlService implements SimulatorDeviceCatalog {
     this.#exec = options.exec ?? defaultExec;
     this.#exists = options.exists ?? existsSync;
     this.#now = options.now ?? Date.now;
+    this.#candidates = options.candidates === undefined ? null : [...options.candidates];
   }
 
   /** R5: the developer directory that holds simctl, or `SimctlUnavailableError` — before ANY xcrun. */
@@ -656,11 +662,18 @@ export class SimctlService implements SimulatorDeviceCatalog {
   }
 
   /** R5′: xcode-select's answer when it holds simctl; when it is a well-formed directory WITHOUT simctl, the default
-   * Xcode's when THAT holds simctl; else none. A failed spawn or a garbage answer is none — never the fallback. */
+   * Xcode's when THAT holds simctl; else none. A failed spawn or a garbage answer is none — never the fallback. P2: a
+   * smoke's candidates instead, when given — the first that passes the same checks, and xcode-select never asked. */
   private async selected(): Promise<{
     readonly developerDir: string;
     readonly by: SimctlVetted;
   } | null> {
+    if (this.#candidates !== null) {
+      const found = this.#candidates.find(
+        (candidate) => wellFormedDeveloperDir(candidate) && this.holdsSimctl(candidate),
+      );
+      return found === undefined ? null : { developerDir: found, by: "override" };
+    }
     let answer: string;
     try {
       answer = (

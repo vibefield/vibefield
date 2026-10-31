@@ -67,6 +67,9 @@ export function createProductionLiveSurfaceSupport(opts: {
   /** PT-S2 (R4): a bound phone's Open Settings — main's fixed Screen Recording address, behind the harness's gate
    * (`main/index.ts`: a smoke records it, never opens System Settings). Absent: the act does nothing. */
   openSettings?: () => Promise<void>;
+  /** PT-S3 (P2) — a SMOKE's simctl developer directories (`main/index.ts`: `smokeSimctlDeveloperDir`, read only in a
+   * smoke-like mode): the probe vets these alone and asks xcode-select nothing. Absent (production): xcode-select's. */
+  simctlCandidates?: readonly string[];
   logger?: Logger;
 }): ProductionLiveSurfaceSupport {
   let browserNative: ElectronBrowserSurfaceNative | null = null;
@@ -83,7 +86,11 @@ export function createProductionLiveSurfaceSupport(opts: {
   };
 
   const ensureSimctl = (): SimctlService => {
-    if (simctl === null) simctl = new SimctlService();
+    if (simctl === null) {
+      simctl = new SimctlService(
+        opts.simctlCandidates === undefined ? {} : { candidates: opts.simctlCandidates },
+      );
+    }
     return simctl;
   };
 

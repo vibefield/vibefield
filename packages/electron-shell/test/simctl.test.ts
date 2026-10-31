@@ -97,6 +97,8 @@ interface HarnessOptions {
   /** PT-S3 (P1): the developer directories that hold simctl — default: the selected one (none when `simctlInstalled` is
    * false) */
   readonly holdsSimctl?: readonly string[];
+  /** PT-S3 (P2): a smoke's developer directories, vetted in xcode-select's place */
+  readonly candidates?: readonly string[];
 }
 
 function harness(options: HarnessOptions = {}) {
@@ -124,6 +126,7 @@ function harness(options: HarnessOptions = {}) {
       return [...holding].some((dir) => path === `${dir}/usr/bin/simctl`);
     },
     now: () => clock.now,
+    ...(options.candidates === undefined ? {} : { candidates: options.candidates }),
   });
   return {
     calls,
@@ -493,6 +496,35 @@ describe("SimctlService", () => {
       expect(checked).toEqual([]);
       expect(service.vetted()).toBeNull();
     }
+  });
+
+  it("P2: a smoke's candidates — xcode-select is never asked; the first that holds simctl is vetted `override`, and pins every xcrun and Show it", async () => {
+    const { calls, checked, service, probes, xcrun } = harness({
+      developerDir: CLT,
+      holdsSimctl: [CLT, DEVELOPER_DIR],
+      candidates: ["/var/empty", "relative/Developer", DEVELOPER_DIR],
+    });
+    await service.list();
+    await service.show(UDID_A);
+    expect(service.vetted()).toBe("override");
+    expect(probes()).toEqual([]);
+    // the relative one is refused before any file check, as a garbage xcode-select answer is
+    expect(checked).toEqual(["/var/empty/usr/bin/simctl", `${DEVELOPER_DIR}/usr/bin/simctl`]);
+    expect(xcrun("list")[0]?.developerDir).toBe(DEVELOPER_DIR);
+    expect(calls.at(-1)?.args[1]).toBe(`${DEVELOPER_DIR}/Applications/Simulator.app`);
+  });
+
+  it("P2: an empty candidate directory is no Simulator — `vetted` null, nothing spawned at all, though xcode-select would name an Xcode that holds simctl", async () => {
+    const { calls, checked, clock, service } = harness({ candidates: ["/var/empty"] });
+    await expect(service.list()).rejects.toBeInstanceOf(SimctlUnavailableError);
+    await expect(service.show(UDID_A)).rejects.toBeInstanceOf(SimctlUnavailableError);
+    expect(await service.deviceRows()).toEqual([]);
+    expect(service.vetted()).toBeNull();
+    // asked again after the retry window, the same candidates — never xcode-select, never the default Xcode
+    clock.now += 30_000;
+    await expect(service.list()).rejects.toBeInstanceOf(SimctlUnavailableError);
+    expect(checked).toEqual(["/var/empty/usr/bin/simctl", "/var/empty/usr/bin/simctl"]);
+    expect(calls).toEqual([]);
   });
 
   it("re-probes after a list fails (Xcode moved), and keeps the probe while lists succeed", async () => {
