@@ -786,7 +786,8 @@ export function judgeLive(s: LiveSeen): string[] {
   return out;
 }
 
-/** SIM-USE: in hand at native 60, View only and the device's name in the bar, nothing reaching iOS. */
+/** SIM-USE: LIVE-PROVEN in hand (on `/motion`), asked at native 60, View only and the device's name in the bar, nothing
+ * reaching iOS (on `/still`). */
 export interface UseSeen {
   readonly held: boolean;
   readonly wire: PhoneFace["wire"];
@@ -799,14 +800,20 @@ export interface UseSeen {
   readonly calls: { readonly before: Counts | null; readonly after: Counts | null };
   readonly rowInputs: number;
   readonly down: boolean;
+  /** LIVE-PROVEN in hand on `/motion`, before the input half on `/still` (R-7; null: never in hand) */
+  readonly proof: LiveProof | null;
 }
 
 export function judgeUse(s: UseSeen): {
   readonly problems: string[];
   readonly void: string | null;
 } {
-  if (s.loaded < 1) return { problems: [], void: "the /still page never beaconed /loaded" };
-  const out: string[] = [];
+  // §4's nine states: SIM-USE witnesses `live` — a dead stream in hand is red, never VOIDed by the input half's beacon
+  const out = judgeLiveProven("SIM-USE (in hand)", s.proof);
+  if (s.loaded < 1)
+    return out.length > 0
+      ? { problems: out, void: null }
+      : { problems: [], void: "the /still page never beaconed /loaded" };
   if (!s.held) out.push("SIM-USE: ⏎ never put the phone in hand");
   const w = s.wire;
   if (w === null) out.push("SIM-USE: no demand on the wire in hand");
@@ -2337,13 +2344,10 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const q = nonce();
       const staged0 = await ensure(1, "Booted");
       if (staged0 !== null) return { problems: [], staging: staged0 };
-      await openUrl(1, "/still", q);
+      // §4's nine states name SIM-USE a witness of `live`: LIVE-PROVEN in hand on /motion FIRST — /still is a static
+      // page, where presents and the helper's frames may never come — then the input half on /still (R-7)
+      await openUrl(1, "/motion", nonce());
       await view([p]);
-      const loaded = (await door.count("/loaded", q)) ?? 0;
-      if (native === null) {
-        const shot = await deviceShot(1, `sim-use-${q}.png`, null);
-        if (shot !== null) native = [shot.width, shot.height];
-      }
       const name = env.runId === null ? "" : ownName(env.runId, 1);
       let held = false;
       try {
@@ -2351,6 +2355,17 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         held = true;
       } catch {
         /* said by the judge */
+      }
+      const proof = held ? await liveProven(p) : null;
+      await openUrl(1, "/still", q);
+      let loaded = 0;
+      for (let i = 0; i < 10 && loaded < 1; i += 1) {
+        loaded = (await door.count("/loaded", q)) ?? 0;
+        if (loaded < 1) await sleep(300);
+      }
+      if (native === null) {
+        const shot = await deviceShot(1, `sim-use-${q}.png`, null);
+        if (shot !== null) native = [shot.width, shot.height];
       }
       await sleep(1_200);
       const f = await faceOf(p);
@@ -2381,6 +2396,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         calls: { before: calls0, after: calls() },
         rowInputs: f?.inputs ?? 0,
         down: await putDown(),
+        proof,
       };
       const j = judgeUse(seen);
       return { problems: j.problems, void: j.void, seen };

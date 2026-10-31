@@ -712,8 +712,25 @@ describe("PT-S3 — the rows' judges", () => {
       calls: { before: { boot: 1 }, after: { boot: 1 } },
       rowInputs: 0,
       down: true,
+      proof,
     };
     expect(judgeUse(seen)).toEqual({ problems: [], void: null });
+    // §4's nine states: SIM-USE witnesses `live` — LIVE-PROVEN in hand, on /motion, before the input half (R-7)
+    const dead = { ...proof, ms: null, presented: 0, frames: 0, after: [] };
+    expect(judgeUse({ ...seen, proof: dead }).problems.join(" ")).toMatch(
+      /SIM-USE \(in hand\): 0 frames presented, not 3/u,
+    );
+    expect(judgeUse({ ...seen, proof: null }).problems).toEqual([
+      "SIM-USE (in hand): never read for LIVE-PROVEN",
+    ]);
+    // a dead stream in hand is red, never VOIDed by the input half's missing beacon
+    expect(judgeUse({ ...seen, proof: dead, loaded: 0 }).void).toBeNull();
+    expect(judgeUse({ ...seen, proof: dead, loaded: 0 }).problems.length).toBeGreaterThan(0);
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-USE")?.body ?? "";
+    const motion = body.indexOf('openUrl(1, "/motion"');
+    expect(motion).toBeGreaterThanOrEqual(0);
+    expect(body.indexOf("liveProven(p)")).toBeGreaterThan(motion);
+    expect(body.indexOf('openUrl(1, "/still"')).toBeGreaterThan(body.indexOf("liveProven(p)"));
     expect(judgeUse({ ...seen, native: [603, 1278] }).problems.join(" ")).toMatch(
       /not the device's 603 × 1278/u,
     );
