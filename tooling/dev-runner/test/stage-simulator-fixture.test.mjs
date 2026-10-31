@@ -1598,6 +1598,39 @@ test("doorRow: a press with no input said before is the run's first input; END i
   assert.equal(host.hid.length, 2);
 });
 
+test("doorRow end: a row ENDED on a stop is VOID in the run's record — RM4.5's own input, and a run stopped mid-row (R9)", async () => {
+  // RM4.5: the first input row's reset STOPS the run, and the row's reads are not judged
+  const own = ownRun();
+  own.last = sample(0, 300);
+  const host = fakeHost({ samples: [sample(10, 310), sample(40, 2)] });
+  await doorRow({ name: "SIM-STAGED", phase: "begin" }, own, host.deps);
+  await doorRow({ name: "SIM-STAGED", phase: "input" }, own, host.deps);
+  const end = await doorRow({ name: "SIM-STAGED", phase: "end" }, own, host.deps);
+  assert.equal(end.body.stop, true);
+  assert.deepEqual(own.voids, [
+    { name: "SIM-STAGED", why: "HID moved by the run's own input — RM4.5" },
+  ]);
+  // the run stopped mid-row (the press gate refused): its END still closes the row, and the row is VOID
+  const mid = ownRun();
+  mid.last = sample(0, 300);
+  const gated = fakeHost({ samples: [sample(10, 310), sample(20, 320)] });
+  await doorRow({ name: "SIM-LIVE", phase: "begin" }, mid, gated.deps);
+  await doorRow(
+    { name: "SIM-LIVE", phase: "press", act: "create", device: `pts3-${RUN}-1` },
+    mid,
+    gated.deps,
+  );
+  const closed = await doorRow({ name: "SIM-LIVE", phase: "end" }, mid, gated.deps);
+  assert.equal(closed.body.stop, true);
+  assert.equal(mid.voids.length, 1);
+  assert.equal(mid.voids[0].name, "SIM-LIVE");
+  assert.match(
+    mid.voids[0].why,
+    /^stopped mid-row: SIM-LIVE: the press gate: it refuses act create/u,
+  );
+  assert.ok(gated.said.includes(`PHONE_ROW SIM-LIVE VOID: ${mid.voids[0].why}`));
+});
+
 test("doorRow input: L2's FIRST input row is SIM-STAGED's lay (a drag, no press gate) — its reset is RM4.5, never a hand (S3)", async () => {
   const run = ownRun();
   run.last = sample(0, 300);

@@ -1267,17 +1267,25 @@ export async function doorRow(body, run, deps) {
   run.last = sample;
   run.open = null;
   run.served += 1;
+  // a row ENDED on a stop is VOID in the run's record: its reads are not judged
+  const voided = (why) => {
+    run.voids.push({ name, why });
+    deps.say(`PHONE_ROW ${name} VOID: ${why}`);
+  };
   if (verdict.stop) {
     run.ownInput = true;
     stopRun(run, deps, `${name}: ${verdict.why}`);
+    voided(verdict.why);
     return json(409, { stop: true, why: verdict.why });
   }
   if (verdict.void) {
     if (verdict.hand) run.hands += 1;
-    run.voids.push({ name, why: verdict.why });
-    deps.say(`PHONE_ROW ${name} VOID: ${verdict.why}`);
+    voided(verdict.why);
   }
-  if (run.stopped !== null) return json(409, { stop: true, why: run.stopped.why });
+  if (run.stopped !== null) {
+    if (!verdict.void) voided(`stopped mid-row: ${run.stopped.why}`);
+    return json(409, { stop: true, why: run.stopped.why });
+  }
   return json(200, verdict.void ? { go: true, void: verdict.why } : { go: true });
 }
 

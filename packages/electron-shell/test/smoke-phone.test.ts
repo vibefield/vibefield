@@ -33,6 +33,7 @@ import {
   bandColour,
   bandNonce,
   bindingRead,
+  endVoid,
   glassRect,
   idleWait,
   isOwnDevice,
@@ -647,6 +648,23 @@ describe("PT-S3 — the rows' marks, and which are problems", () => {
       mark: "VOID",
       why: "HID: a hand",
     });
+  });
+
+  it("a row's void: its body's, else the door END's — an HID void, or a stop at END (RM4.5, a run stopped mid-row) (R9)", () => {
+    const go = { go: true, void: null, stop: null };
+    expect(endVoid(undefined, go)).toBeNull();
+    expect(endVoid(null, go)).toBeNull();
+    expect(endVoid("STOPPED: the fence", { ...go, stop: "x" })).toBe("STOPPED: the fence");
+    expect(endVoid(null, { ...go, void: "a hand at the Mac mid-row" })).toBe(
+      "HID: a hand at the Mac mid-row",
+    );
+    expect(
+      endVoid(null, { go: false, void: null, stop: "HID moved by the run's own input — RM4.5" }),
+    ).toBe("STOPPED at END: HID moved by the run's own input — RM4.5");
+    // so the row cannot read green
+    expect(rowMark([], { void: endVoid(null, { go: false, void: null, stop: "x" }) }).mark).toBe(
+      "VOID",
+    );
   });
 
   it("hands smoke:canvas a MUST red, VOID or unstaged — never SIM-P1 on an Xcode host, a RECORDED row, NICE or OBSERVATION", () => {

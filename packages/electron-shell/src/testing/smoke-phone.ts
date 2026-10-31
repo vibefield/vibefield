@@ -1014,6 +1014,14 @@ export function rowMark(
   return { mark: problems.length === 0 ? "green" : "red", why: null };
 }
 
+/** A row's void: its body's own, else the door END's — an HID void, or a stop answered at END (RM4.5's own input, a
+ * run stopped mid-row), so a row the door closed on a stop never reads green (R9). */
+export function endVoid(bodyVoid: string | null | undefined, end: DoorRow): string | null {
+  if (bodyVoid !== undefined && bodyVoid !== null) return bodyVoid;
+  if (end.void !== null) return `HID: ${end.void}`;
+  return end.stop === null ? null : `STOPPED at END: ${end.stop}`;
+}
+
 /** What the rows hand smoke:canvas as problems: a MUST row red, VOID or not staged — but SIM-P1's VOID on an Xcode-selected
  * host, and the RECORDED rows' findings; NICE and OBSERVATION rows are printed, never problems. */
 export function phoneProblems(rows: readonly PhoneRowResult[]): string[] {
@@ -1673,7 +1681,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     const end = await door.row(name, "end");
     served += 1;
     if (end.stop !== null && stopped === null) stopped = `${name}: ${end.stop}`;
-    const voidWhy = out.void ?? (end.void === null ? null : `HID: ${end.void}`);
+    const voidWhy = endVoid(out.void, end);
     const r: PhoneRowResult = {
       name,
       klass,
