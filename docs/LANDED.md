@@ -21995,3 +21995,102 @@ Mac mini, verify only).
 - At the next draft queue: the record's B3 as-built lines and, the track being built, `thinking-cards-in-hand.md`'s
   Status header flipped (§6).
 - Track HN is complete: B1, B2 and B3, all sixteen marks built.
+
+## MT-0 — the tool plane's first slice: one catalog (`contracts/src/tools.ts`, every tool a row with its audience and scope) and one door (`fieldd/src/tool-plane/`), serving a spark every served row and a plain run History and the projects list, through a briefing at every birth (2026-10-31; `05ccdae4b` — the code `6cb570308` and the docs `05ccdae4b` on main `8843020e9` — lane `mt/0-main`, in the mini's mint `b3a0cc95a` over main `4a638384e`)
+
+The tool plane (`draft/thinking-tool-plane.md`: MT-L1…L6 and MT-D1…D12, ruled 2026-10-30 21:19–21:20Z;
+`draft/tool-plane/IMPLEMENTATION.md`, the plan). CP-1b's compose door becomes the plane's one door, and compose its
+first room. cp-landing built it on the MT lead's build note (signed 2026-10-30 23:35Z). The lead's session
+(vibe-field-dc) had ended before the light, so VF-PM read the changed real-floor row in its place (02:50Z).
+
+**What.**
+- **One catalog** (`contracts/src/tools.ts`): 20 rows, each `<noun>_<verb>`.
+  - Each row has its family, its audience (`agent` or `spark`), its scope (profiles, device, object, self), its slice,
+    whether it only reads, and the description a model reads.
+  - `TOOL_SCHEMAS` holds the six CP-1 rows. Served means a row has schemas.
+  - `gen/tools.ts` (`SERVED_TOOLS`, from `scripts/gen-tools.ts`) carries all four annotations on every row, and is
+    exported as `@vibefield/contracts/tools` in place of `./compose-tools`.
+  - `test/tools.test.ts` is the catalog's lint.
+  - compose.ts's verb table moves into it. Its header law takes MT-D2's dated narrowing.
+- **One door, rooms by audience** (`fieldd/src/tool-plane/`, from `compose/` by git mv; compose is `rooms/compose/`):
+  - A spark is listed every served row, and a settled plain run the `agent` rows: `history_search`, `history_read` and
+    `projects_list`. Anything else is listed nothing.
+  - **The settle rule:** a caller is settled only on positive evidence, either a verified record naming no spark or a
+    spark that verifies.
+    - An unsettled caller (a pane, the outside, or a run whose record does not verify or names an unverified spark) is
+      served nothing.
+    - It is asked again at most once a second and answered `ttlMs: 0`, and it leaves one plain audit line per door.
+  - **Every call is held to its row again** (MT-L2), in order: unknown-tool, forbidden, bad-input, then the audit line
+    `tools.<name>` before it acts (CP-L6), then the room, held to the caller's own profiles.
+    - A refusal is the tool's own result with `structuredContent.fact`. The facts are unknown-tool, forbidden,
+      bad-input, outside, not-found, unavailable and failed.
+  - The server's instructions are built per caller from its rows. An unnamed caller gets one line.
+- **A briefing at every birth, by audience** (`fieldd/src/agent-briefing.ts`, formerly `agent-spark-briefing.ts`):
+  - A spark's briefing is as CP-1d built it.
+  - A plain run gets the door and its read-only `agent` rows by name (MT-D7, MT-D9), with no instructions. That part is
+    provisional, by the MT lead's ruling 7, pending the history room's eval.
+  - It never refuses a launch: an agent that cannot take the briefing, or a door that does not answer, means no
+    briefing.
+  - LANDED "CP-1d" said ordinary runs carry no briefing. That was true when it landed. Since this entry they carry the
+    plane's.
+- **Walls:** R29 is re-aimed at `packages/fieldd/src/tool-plane`. R30 is new: the rooms import no Electron, no plugin
+  package, no field-app or electron-shell, and nothing under `plugins/`.
+- **Docs** (`05ccdae4b`):
+  - `api.html`'s door is now the catalog table over all 20 rows.
+  - `architecture.html` gains the plane's seams row.
+  - `AGENT_PLANE.md` indexes the plane.
+  - `spark-briefings.md` becomes "Run briefings", with plain runs, and carries a dated correction.
+- `contracts/src/mgmt.ts`: `NativeDoorInfoResult` is the command a run's briefing names, a spark's and since MT-0 a
+  plain run's. CP-1d's dated correction is kept.
+
+**Real vs not yet.**
+- Real:
+  - the plane end to end in fieldd's units, with the floor faked;
+  - agent-session's real-floor row: an ordinary run's briefing allows exactly the three read-only rows, and over the
+    REAL door it is listed exactly those three. A spark's row answers it `forbidden`.
+- Not yet:
+  - the eval runner (`packages/fieldd/evals`, desk-gates row 32), which needs James's one sign-in;
+  - a typed launch, which puppeteer adopts in a managed pane, holds no door until petition PU-J (MT-D9's erratum,
+    2026-10-30 21:45Z);
+  - Codex and Grok, until CP-5, which is MT-7: in 0.3.2 their MCP process is a helper;
+  - the other rooms (desk, artifacts, pages, notify, ask), each its own slice.
+
+**Found.**
+- The rebuild onto main `8843020e9` (CP-1d landed) had three conflicts, each resolved at its cause:
+  - mgmt.ts's comment: CP-1d's correction kept, MT-0's widening added;
+  - the imports in `daemon.ts` and `agent-session.test.ts`: main's `userMe` and `EXIT_GRACE_MS` beside the
+    tool-plane paths.
+- CP-1d's real-floor row asserted that an ordinary run's briefing is `{}`. MT-D7/D9 change that on purpose, and the
+  row now asserts the plane's behaviour.
+- A fieldd vitest run in the lane without `CARGO_TARGET_DIR` built field-native into the lane (2.3 GiB, 2026-10-30
+  23:52Z), because fieldd's globalSetup builds it every run. The lane rule since then: `CARGO_TARGET_DIR` is set at a
+  lane's birth, always (VF-PM, 2026-10-31 00:02Z).
+- The lane's first `pnpm exec` after the rebase auto-installed 2 packages, the lock having moved with main. It
+  downloaded none.
+- PJ-6's `agent.models` row, red in that 23:52Z run, was green in the light: load or the in-flight build, not MT-0.
+
+**Validation.**
+- **The lane light** (`lanes/mt/logs/light-mt0.out`; `mt0-light.sh`, co-light's rows, with
+  `CARGO_TARGET_DIR=/Volumes/SamsungRed/rust/mt0`; 2026-10-31 02:45:13–02:47:57Z, load 16–28):
+  - preflight, walls, biome, tsc contracts and fieldd, and gen fresh: all 0.
+  - contracts: "Test Files 4 passed (4) Tests 585 passed (585)".
+  - fieldd: "Test Files 10 passed (10) Tests 174 passed | 5 skipped (179)". The 5 skips are opt-in: three need the real
+    rosettad, two the real Claude.
+  - `== mt0-light GREEN 02:47:57Z; HEAD 05ccdae4b`, and the tree was clean after.
+- **Run 29: the mint `b3a0cc95a`, a fresh merge of `05ccdae4b` over main `4a638384e`** (HN B3, landed by run 28, and
+  HN B2's records).
+  - Its tree, `87cc176da`, equals the lane's rehearsal. The one both-sides file was `check-import-boundaries.mjs`,
+    beside HN B3's widening. It merged with R25 ×20, R29 ×3 and R30 ×3 (a9's count) and 0 markers.
+  - `pnpm verify` armed at 03:11:55Z and exited 0 at 03:16:36Z (VF-PM's GO). Its counts: 10,960 passed, 0 failed, 18 skipped over 816 files; cargo 33/0 (532 passed, 14 ignored); typecheck and test for 28 projects (VF-PM's counts).
+- **Landed:** main fast-forwarded `4a638384e` → `b3a0cc95a` at 03:17:59Z (the fixer, on VF-PM's GO).
+
+**Owed.**
+- The eval runner (James's sign-in), and with it the plain run's instructions, provisional until the history room's
+  sentinel.
+- At the next draft queue:
+  - petition PU-J;
+  - the v2 page's law card note (TL-D2 and CP-L1 narrowed by MT-D2; `thinking-roled-agents.md` §14 and §15 carry
+    theirs already);
+  - design-01 §5.3's pin-note;
+  - the plan's as-built line.
+- The plugin spec's `contributes.tools[]` at MT-6.
