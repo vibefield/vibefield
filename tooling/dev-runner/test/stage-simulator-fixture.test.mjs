@@ -35,6 +35,7 @@ const {
   doorRow,
   endVerdict,
   enumVerdict,
+  fenceAgain,
   fenceClear,
   handleDoor,
   hidLines,
@@ -2137,7 +2138,7 @@ test("othersCompare and restoredVerdict: the non-own set unchanged, own devices 
     perfLock: "removed",
     crash: { new: [] },
   };
-  assert.deepEqual(restoredVerdict(good), { ok: true, why: [] });
+  assert.deepEqual(restoredVerdict(good), { ok: true, why: [], ownOk: true, foreign: [] });
   const red = (change, why) => {
     const v = restoredVerdict({ ...good, ...change });
     assert.equal(v.ok, false);
@@ -2164,6 +2165,147 @@ test("othersCompare and restoredVerdict: the non-own set unchanged, own devices 
     restoredVerdict({ ...good, simulator: { launchedByRun: false, quit: "refused: x" } }).ok,
     true,
   );
+});
+
+test("restoredVerdict: restoration judged on the run's OWN side — another's change keeps HOST_RESTORED red, as an OBSERVATION (S-1)", () => {
+  const good = {
+    run: RUN,
+    own: { form: "deleted", left: 0, shutdown: true },
+    simulator: { launchedByRun: true, quit: "quit", foreign: false },
+    helperLeft: 0,
+    others: { unchanged: true },
+    perfLock: "removed",
+    crash: { new: [] },
+  };
+  assert.deepEqual(restoredVerdict(good), { ok: true, why: [], ownOk: true, foreign: [] });
+  const judged = (change) => restoredVerdict({ ...good, ...change });
+  // another's: the non-own set changed; an app proven another's; the run's own app kept from its quit beside another's
+  // booted device — RM4.3 keeps the read red, and the run's own side is restored
+  for (const change of [
+    { others: { unchanged: false } },
+    {
+      simulator: {
+        launchedByRun: true,
+        quit: "refused: the run launched no Simulator.app since its last quit",
+        foreign: true,
+      },
+    },
+    {
+      simulator: {
+        launchedByRun: true,
+        quit: "left running beside a foreign booted device (a quit could take it down, P5)",
+        foreign: true,
+      },
+    },
+  ]) {
+    const v = judged(change);
+    assert.equal(v.ok, false, JSON.stringify(change));
+    assert.equal(v.ownOk, true, JSON.stringify(change));
+    assert.equal(v.foreign.length, 1, JSON.stringify(change));
+  }
+  // the proof's own word: three cases PROVE the one Simulator running another's; two Simulators, another executable or
+  // an unreadable start prove nothing — the run's may be among them
+  const proof = {
+    pids: [4242],
+    comm: SIM_EXE,
+    lstart: lstartOf(ARMED + 60_000),
+    devDir: XCODE_DEVELOPER_DIR,
+    armedAt: ARMED,
+    launchedAt: ARMED + 30_000,
+  };
+  for (const change of [
+    { lstart: lstartOf(ARMED - 60_000) },
+    { launchedAt: null },
+    { launchedAt: ARMED + 120_000 },
+  ])
+    assert.equal(simulatorProof({ ...proof, ...change }).foreign, true, JSON.stringify(change));
+  for (const change of [{ pids: [4242, 4243] }, { comm: "/x/Simulator" }, { lstart: "" }, {}])
+    assert.notEqual(simulatorProof({ ...proof, ...change }).foreign, true, JSON.stringify(change));
+  // the run's own: each one unrestores its own side — an app the proof cannot place (two Simulators, an unreadable start)
+  // may be the run's, so it stays the run's
+  for (const change of [
+    { own: { form: "deleted", left: 1, shutdown: true } },
+    { own: { form: "kept", left: 3, shutdown: false } },
+    {
+      simulator: {
+        launchedByRun: true,
+        quit: "refused: 2 Simulator processes run",
+        foreign: false,
+      },
+    },
+    { simulator: { launchedByRun: true, quit: "outlived SIGTERM by 10 s", foreign: false } },
+    { helperLeft: 1 },
+    { others: null },
+    { perfLock: "left" },
+    { crash: { new: ["Simulator-2026-10-31-040501.ips"] } },
+  ]) {
+    const v = judged(change);
+    assert.equal(v.ok, false, JSON.stringify(change));
+    assert.equal(v.ownOk, false, JSON.stringify(change));
+    assert.deepEqual(v.foreign, [], JSON.stringify(change));
+  }
+});
+
+test("a foreign device booted mid-run: the fence STOPS, teardown touches the run's own only, the exit is 75 — said as an OBSERVATION (S-1)", async () => {
+  const ctx = {
+    deleteDevices: false,
+    defaultsBefore: "",
+    crashDir: join(FIXTURES, "no-crash-reports-here"),
+    crashBefore: [],
+  };
+  const exitOf = (run, verdict) =>
+    launchExit({
+      signal: null,
+      stopped: run.stopped,
+      deadlineHit: false,
+      code: 0,
+      restored: verdict.ownOk,
+    });
+  const observed = (host) => host.said.filter((line) => line.startsWith("PHONE_OBSERVATION "));
+  const booted = hostList([{ udid: FOREIGN, state: "Booted" }]);
+  // the fence at a press: another's device booted since ARMED — the run STOPS, its own devices shut and kept
+  const run = ownRun();
+  run.othersAtArm.set(FOREIGN, "Shutdown");
+  const host = fakeHost({ list: booted });
+  assert.equal((await fenceAgain(run, host.deps)).stop, true);
+  const verdict = await restoreHost(run, host.deps, ctx);
+  assert.deepEqual(exitOf(run, verdict), { code: NOT_ARMED, lines: [] });
+  const restored = host.said.find((line) => line.startsWith("PHONE_HOST_RESTORED "));
+  assert.match(restored, /"ok":false/u);
+  assert.match(restored, /another device changed/u);
+  assert.equal(observed(host).length, 1);
+  assert.match(observed(host)[0], /another device changed/u);
+  // never a simctl act on another's device
+  assert.ok(!host.calls.some((c) => c.args?.some((a) => String(a).includes(FOREIGN))));
+  // the run's own Simulator.app, kept from its quit by that device: never SIGTERMed, named left running — and still 75
+  const beside = ownRun();
+  beside.othersAtArm.set(FOREIGN, "Shutdown");
+  beside.simulator.shown = 1;
+  beside.simulator.launchedAt = ARMED + 30_000;
+  const next = fakeHost({ list: booted, pgrep: "4242" });
+  await fenceAgain(beside, next.deps);
+  const left = await restoreHost(beside, next.deps, ctx);
+  assert.deepEqual(next.killed, []);
+  assert.deepEqual(exitOf(beside, left), { code: NOT_ARMED, lines: [] });
+  assert.match(observed(next)[0], /left running beside a foreign booted device/u);
+  // S-1b: the run quit its own app; another's Simulator.app then halts the press gate — no red of the run's own side
+  const after = ownRun();
+  after.othersAtArm.set(FOREIGN, "Shutdown");
+  after.simulator.shown = 1;
+  after.simulator.quits = 1;
+  after.last = sample(0, 300);
+  const theirs = fakeHost({ samples: [sample(10, 310)], pgrep: "777" });
+  await doorRow({ name: "SIM-SHOW-RUNNING", phase: "begin" }, after, theirs.deps);
+  await doorRow(
+    { name: "SIM-SHOW-RUNNING", phase: "press", act: "show", device: `pts3-${RUN}-3` },
+    after,
+    theirs.deps,
+  );
+  assert.match(after.stopped.why, /not proven the run's/u);
+  const quiet = await restoreHost(after, theirs.deps, ctx);
+  assert.deepEqual(theirs.killed, []);
+  assert.deepEqual(exitOf(after, quiet), { code: NOT_ARMED, lines: [] });
+  assert.match(observed(theirs)[0], /launched no Simulator\.app since its last quit/u);
 });
 
 // ─── the responsible app, ENUM and the cost sampler ───────────────────────────────────────────────────────────────────

@@ -22,7 +22,8 @@
 // STOPPED (a hand, a locked console, a foreign device booted mid-run, a Simulator.app not proven the run's) over a
 // restored host — a DETERMINISTIC stop (RM4.5's own-input reset; the press gate refusing an act or a device not the
 // run's) is 1 and PHONE_STOP_FINAL, and a STOP whose teardown left the host unrestored is 1 and PHONE_STOP_UNRESTORED;
-// 128+n on a signal.
+// 128+n on a signal. "Restored" is the run's OWN side: another's change (a device booted, an app it started) keeps
+// PHONE_HOST_RESTORED red and is said as a PHONE_OBSERVATION, never judged as the run's.
 //
 // THE SMOKE'S SIDE (`es/testing/smoke-phone.ts`). The command's env carries `VF_PHONE_HOST` (`http://127.0.0.1:<port>`),
 // `VF_PHONE_TOKEN`, `VF_PHONE_MODE`, `VF_PHONE_RUNTIME` (the ONE iOS runtime the stage picked: never a literal, RM4.1),
@@ -840,11 +841,19 @@ export function simulatorProof({
     };
   const started = parseLstart(lstart);
   if (started === null) return { running: 1, own: false, why: "its start is unreadable" };
-  if (started < armedAt) return { running: 1, own: false, why: "it started before ARMED" };
+  // the three below PROVE it another's (`foreign`): the one Simulator running, and not the run's — so the run's own is
+  // not running. Two Simulators, another executable or an unreadable start prove nothing: the run's may be among them
+  if (started < armedAt)
+    return { running: 1, own: false, foreign: true, why: "it started before ARMED" };
   if (launchedAt === null || launchedAt === undefined)
-    return { running: 1, own: false, why: "the run launched no Simulator.app since its last quit" };
+    return {
+      running: 1,
+      own: false,
+      foreign: true,
+      why: "the run launched no Simulator.app since its last quit",
+    };
   if (started < launchedAt - 1_000)
-    return { running: 1, own: false, why: "it started before the run's launch" };
+    return { running: 1, own: false, foreign: true, why: "it started before the run's launch" };
   return { running: 1, own: true, pid: pids[0] };
 }
 
@@ -1478,21 +1487,27 @@ export function defaultsChange(before, after, scrub) {
 }
 
 /** HOST-RESTORED, judged: own devices gone (under the flag) or kept shut down; Simulator.app quit where the run launched
- * it; no helper of this lane; others unchanged; the lock given back; no new crash report. */
+ * it; no helper of this lane; others unchanged; the lock given back; no new crash report. `ok` is RM4.3's read, every
+ * reason counted. RESTORATION — what the exit judges — is the run's OWN side alone (`ownOk`, RM6 S-1): `foreign` holds
+ * what another did (the non-own set changed; a Simulator.app proven another's, or the run's own kept from its quit beside
+ * another's booted device, P5), said as an OBSERVATION. A list unreadable, or an app the proof cannot place, stays the
+ * run's own: nothing proves it restored. */
 export function restoredVerdict(r) {
-  const why = [];
+  const own = [];
+  const foreign = [];
   if (r.own.form === "deleted" && r.own.left > 0)
-    why.push(`${r.own.left} pts3-${r.run}-* device(s) left`);
-  if (r.own.form === "kept" && !r.own.shutdown) why.push("an own device is not shut down");
+    own.push(`${r.own.left} pts3-${r.run}-* device(s) left`);
+  if (r.own.form === "kept" && !r.own.shutdown) own.push("an own device is not shut down");
   if (r.simulator.launchedByRun && !["quit", "not-running"].includes(r.simulator.quit))
-    why.push(`Simulator.app: ${r.simulator.quit}`);
+    (r.simulator.foreign === true ? foreign : own).push(`Simulator.app: ${r.simulator.quit}`);
   if (r.helperLeft !== 0)
-    why.push(`${r.helperLeft} live-surface-capture-helper(s) of this lane left`);
-  if (r.others !== null && !r.others.unchanged) why.push("another device changed");
-  if (r.others === null) why.push("the host's list unreadable at teardown");
-  if (r.perfLock === "left") why.push("PERF.lock left held");
-  if (r.crash.new.length > 0) why.push(`a new crash report: ${r.crash.new.join(", ")}`);
-  return { ok: why.length === 0, why };
+    own.push(`${r.helperLeft} live-surface-capture-helper(s) of this lane left`);
+  if (r.others !== null && !r.others.unchanged) foreign.push("another device changed");
+  if (r.others === null) own.push("the host's list unreadable at teardown");
+  if (r.perfLock === "left") own.push("PERF.lock left held");
+  if (r.crash.new.length > 0) own.push(`a new crash report: ${r.crash.new.join(", ")}`);
+  const why = [...own, ...foreign];
+  return { ok: why.length === 0, why, ownOk: own.length === 0, foreign };
 }
 
 /** The newest report names in macOS's DiagnosticReports; the names only. */
@@ -1935,20 +1950,27 @@ async function makeOwnDevices(run, deps) {
   }
 }
 
-/** TEARDOWN: the plan run, then HOST-RESTORED read and said. Never throws: a throw is said, and the host is not restored. */
+/** TEARDOWN: the plan run, then HOST-RESTORED read and said. Never throws: a throw is said, and neither the host nor the
+ * run's own side is restored. Answers `restoredVerdict`'s verdict. */
 async function teardown(run, deps, ctx) {
   try {
     return await restoreHost(run, deps, ctx);
   } catch (error) {
+    const why = [`teardown threw: ${error instanceof Error ? error.message : String(error)}`];
     deps.say(
-      `PHONE_HOST_RESTORED ${JSON.stringify({ run: run.runId, mode: run.mode, ok: false, why: [`teardown threw: ${error instanceof Error ? error.message : String(error)}`] })}`,
+      `PHONE_HOST_RESTORED ${JSON.stringify({ run: run.runId, mode: run.mode, ok: false, why })}`,
     );
-    return false;
+    return { ok: false, why, ownOk: false, foreign: [] };
   }
 }
 
+/** Teardown's word for the run's OWN Simulator.app kept from its quit by another's booted device (P5): left running. */
+const BESIDE_FOREIGN =
+  "left running beside a foreign booted device (a quit could take it down, P5)";
+
 /** The plan run against the host now: each own device's name read again right before its step (RM2); HOST-RESTORED
- * said; true when restored. Exported for its units (deps-injected, as `doorAct` is). */
+ * said, and another's change said as an OBSERVATION (RM6 S-1); answers `restoredVerdict`'s verdict — its `ownOk` is
+ * what the exit judges. Exported for its units (deps-injected, as `doorAct` is). */
 export async function restoreHost(run, deps, ctx) {
   const findings = [];
   let list = run.devDir === null ? null : await readList(run, deps);
@@ -1962,6 +1984,8 @@ export async function restoreHost(run, deps, ctx) {
   const app = run.devDir === null ? { running: 0, own: false } : await simulatorSettled(run, deps);
   const fence = list === null ? { clear: false, busy: -1 } : fenceClear(list, ownUdids(run));
   let quit = app.running === 0 ? "not-running" : "stayed";
+  // another's doing: the run's own app kept from its quit by another's booted device, or an app proven another's
+  let quitForeign = false;
   for (const step of teardownPlan({
     own,
     deleteDevices: ctx.deleteDevices,
@@ -1969,13 +1993,14 @@ export async function restoreHost(run, deps, ctx) {
     fence,
   })) {
     if (step.skip !== undefined) {
-      quit = `refused: ${step.why}`;
+      const beside = fence.busy > 0 && app.own;
+      quit = beside ? BESIDE_FOREIGN : `refused: ${step.why}`;
+      quitForeign = beside || app.foreign === true;
       findings.push(`quit-app skipped: ${step.why}`);
       continue;
     }
     if (step.do === "quit-app") {
-      const r = await quitAppNow(run, deps);
-      quit = r;
+      ({ word: quit, foreign: quitForeign } = await quitAppNow(run, deps));
       continue;
     }
     const device = run.own.get(step.n);
@@ -2022,7 +2047,7 @@ export async function restoreHost(run, deps, ctx) {
       left,
       shutdown: ownStates.every((d) => d.state === "Shutdown"),
     },
-    simulator: { launchedByRun: launchesOf(run) > 0, quit },
+    simulator: { launchedByRun: launchesOf(run) > 0, quit, foreign: quitForeign },
     helperLeft,
     others: list === null ? null : othersCompare(run.othersAtArm, list, ownUdids(run)),
     defaults: { changed: defaults.changed },
@@ -2035,21 +2060,28 @@ export async function restoreHost(run, deps, ctx) {
   };
   const verdict = restoredVerdict(restored);
   deps.say(
-    `PHONE_HOST_RESTORED ${JSON.stringify({ ...restored, ok: verdict.ok, why: verdict.why })}`,
+    `PHONE_HOST_RESTORED ${JSON.stringify({ ...restored, ok: verdict.ok, ownOk: verdict.ownOk, why: verdict.why })}`,
   );
-  return verdict.ok;
+  // RM4.3 keeps the read above red; the run never touched what another did, and its exit judges its own side alone
+  if (verdict.foreign.length > 0)
+    deps.say(
+      `PHONE_OBSERVATION the host changed by another during the run, never touched by it: ${verdict.foreign.join("; ")} — the run's own side is ${verdict.ownOk ? "restored" : "NOT restored"}`,
+    );
+  return verdict;
 }
 
-/** Teardown's quit: proven, SIGTERM, ≤ 10 s; the word it ends on. */
+/** Teardown's quit: proven, SIGTERM, ≤ 10 s. Answers the word it ends on, and whether another's doing kept it (an app
+ * proven another's). */
 async function quitAppNow(run, deps) {
   const proof = await simulatorNow(run, deps);
-  if (proof.running === 0) return "not-running";
-  if (!proof.own) return `refused: ${proof.why}`;
+  if (proof.running === 0) return { word: "not-running", foreign: false };
+  if (!proof.own) return { word: `refused: ${proof.why}`, foreign: proof.foreign === true };
   deps.kill(proof.pid, "SIGTERM");
   run.simulator.quits += 1;
-  if (!(await waitGone(proof.pid, deps, 10_000))) return "outlived SIGTERM by 10 s";
+  if (!(await waitGone(proof.pid, deps, 10_000)))
+    return { word: "outlived SIGTERM by 10 s", foreign: false };
   launchSpent(run);
-  return "quit";
+  return { word: "quit", foreign: false };
 }
 
 function say(line) {
@@ -2272,12 +2304,16 @@ async function launch(mode, command, opts) {
   } finally {
     clearTimeout(stopTimer);
     if (door !== null) await door.close();
-    restored = await teardown(run, deps, {
-      deleteDevices: opts.deleteDevices,
-      defaultsBefore,
-      crashDir,
-      crashBefore,
-    });
+    // restoration, for the exit, is the run's OWN side (RM6 S-1): another's change is said, and never relaunched over
+    // by this run's verdict
+    restored = (
+      await teardown(run, deps, {
+        deleteDevices: opts.deleteDevices,
+        defaultsBefore,
+        crashDir,
+        crashBefore,
+      })
+    ).ownOk;
     const end = await probeHid(deps);
     deps.hid(hidLine(end, { end: true }));
     deps.say(
@@ -2302,12 +2338,14 @@ async function launch(mode, command, opts) {
   return exit.code;
 }
 
-/** A launch's exit, and the lines it says: 128+n on a signal. A STOP (`stopped`: the run's `{why, final}`, or null) is 75
- * — "NOT ARMED: relaunch later" (§6.3) — only when it is TRANSIENT (a hand at a begin, a locked console, the fence, a
- * Simulator.app not proven the run's) over a restored host. A DETERMINISTIC stop (`final`: RM4.5's own-input reset, the
- * press gate refusing an act or a device) would repeat on a relaunch: 1 and PHONE_STOP_FINAL <why> (RM6 S-3). A STOP
- * that left the host unrestored (an own device booted, Simulator.app refused) is 1 and PHONE_STOP_UNRESTORED, so no
- * caller relaunches over it. Past the deadline 1; else the command's code, 1 for its 0 over an unrestored host. */
+/** A launch's exit, and the lines it says: 128+n on a signal. `restored` is the run's OWN side (`restoredVerdict`'s
+ * `ownOk`, RM6 S-1): another's change never decides it. A STOP (`stopped`: the run's `{why, final}`, or null) is 75 —
+ * "NOT ARMED: relaunch later" (§6.3) — only when it is TRANSIENT (a hand at a begin, a locked console, the fence, a
+ * Simulator.app not proven the run's) over a restored own side. A DETERMINISTIC stop (`final`: RM4.5's own-input reset,
+ * the press gate refusing an act or a device) would repeat on a relaunch: 1 and PHONE_STOP_FINAL <why> (RM6 S-3). A
+ * STOP that left the run's own side unrestored (an own device booted, its app not quit, its lock left) is 1 and
+ * PHONE_STOP_UNRESTORED, so no caller relaunches over it. Past the deadline 1; else the command's code, 1 for its 0
+ * over an unrestored own side. */
 export function launchExit({ signal, stopped, deadlineHit, code, restored }) {
   if (signal !== null) return { code: 128 + signal, lines: [] };
   if (stopped) {
@@ -2315,7 +2353,7 @@ export function launchExit({ signal, stopped, deadlineHit, code, restored }) {
     if (stopped.final) lines.push(`PHONE_STOP_FINAL ${stopped.why}`);
     if (!restored)
       lines.push(
-        "PHONE_STOP_UNRESTORED the run stopped and its teardown left the host unrestored (PHONE_HOST_RESTORED): restore it by hand before any relaunch",
+        "PHONE_STOP_UNRESTORED the run stopped and its teardown left the run's OWN side unrestored (PHONE_HOST_RESTORED's why): restore its own devices, app or lock by hand before any relaunch — never another's device",
       );
     return { code: lines.length === 0 ? NOT_ARMED : 1, lines };
   }
