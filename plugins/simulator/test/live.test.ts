@@ -221,7 +221,7 @@ describe("the phone's live screen — its faces", () => {
     expect(t.pass.forgot).toEqual([1]);
   });
 
-  it("charges nothing for the face's own texture — the host's to keep and let go (the cap shared with panes is PT-S2's)", () => {
+  it("charges nothing for the face's own texture — the host's to keep and let go (the cap it shares with panes is the host's too)", () => {
     const t = fakeHost();
     const local = createSimulatorLocal(t.host);
     local.face(e1, SPEC, NATIVE);
