@@ -1070,6 +1070,9 @@ export async function runSmokeCanvas(opts: {
    * PT-5c2 (F4) TAPS-PENDING's guard its count of the device switches main accepted (PT-5d, G7: named here, so a census
    * built to this type keeps it). */
   liveSurfaces?: () => LiveCensus | null;
+  /** PT-S3 (D3) — what main's OS opener was handed, as the godview smoke is handed it (GT-8b: a harness records instead
+   * of opening — main's `harnessShellOpens`): a phone's Open Settings is read here, and nothing opens (smoke-opens.ts). */
+  shellOpens?: { readonly opened: readonly string[]; readonly revealed: readonly string[] };
   /** HN-3 (R-T 4) — the words main's copy door KEPT in place of the system clipboard, a marked run's (main/index.ts);
    * absent in an unmarked run, whose copy door writes the real one. */
   copies?: readonly string[];

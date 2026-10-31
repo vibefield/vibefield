@@ -2035,6 +2035,8 @@ async function main(
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
       beforeExit: closeEvidence,
+      // PT-S3 (D3): the opener's record, as the godview smoke gets it — a phone's Open Settings is read there
+      ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
       ...(harnessCopies === null ? {} : { copies: harnessCopies }),
       ...(harnessPictures === null ? {} : { pictures: harnessPictures }),
       onWindow: (window) => {
