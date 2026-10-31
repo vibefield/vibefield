@@ -488,7 +488,7 @@ test("launchChecks: in a launch, no shot dir or a helper ENUM never proved is re
   );
 });
 
-test("launchChecks: right before the command, the responsible app is the one ENUM proved — or refused, naming both (S5)", () => {
+test("launchChecks: right after the arm, the responsible app is the one ENUM proved — or refused, naming both (S5)", () => {
   const term = "/System/Applications/Utilities/Terminal.app";
   const code = "/Applications/Claude.app";
   const at = { shotDir: SHOTS, helperSha: "ab", enumSha: "ab" };
@@ -505,6 +505,33 @@ test("launchChecks: right before the command, the responsible app is the one ENU
     /recorded no responsible app/u,
   );
   assert.match(launchChecks({ ...at, app: null, enumApp: term })[0].why, /none inferred/u);
+});
+
+/** `launch()`'s own text, from its head to the next top-level function: it runs on the host's real deps, so no unit drives
+ * it, and its ORDER is held from its source (RM6's P-1 way). */
+const launchSource = () => {
+  const source = readFileSync(
+    join(import.meta.dirname, "../../../scripts/stage-simulator-fixture.mjs"),
+    "utf8",
+  );
+  const head = source.indexOf("\nasync function launch(");
+  assert.ok(head >= 0, "launch() is in the stage");
+  const end = source.indexOf("\n}\n", head);
+  return source.slice(head, end);
+};
+
+test("launch: the responsible app is checked right after the arm infers it — BEFORE the lock is held or a device made (S-5)", () => {
+  const launch = launchSource();
+  const armed = launch.indexOf("await arm(");
+  const check = launch.indexOf("app: armed.app");
+  const lock = launch.indexOf("holdPerfLock(run");
+  const make = launch.indexOf("makeOwnDevices(run, deps)");
+  assert.ok(armed > 0 && lock > armed && make > lock, "arm, then the lock, then the devices");
+  // a refusal there leaves nothing behind: no `simctl create`, no lock — and the check is made once
+  assert.ok(check > armed, "the app is checked after the arm infers it");
+  assert.ok(check < lock, "and before the lock is held");
+  assert.ok(check < make, "and before the run's devices are made");
+  assert.equal(launch.indexOf("app: armed.app", check + 1), -1, "once");
 });
 
 test("launchExit: a STOP reads 75 (relaunch later) only when the host is restored; unrestored, 1 and a line (S8)", () => {

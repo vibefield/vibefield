@@ -354,9 +354,10 @@ export function distFresh({
   return fails;
 }
 
-/** Inside a launch, right before the command: the shot dir set, the helper ENUM proved, and — once the arm has
- * inferred it (`app` given) — the responsible app ENUM proved (§6: "ENUM by the same app as L1 and L2"; TCC follows
- * the responsible process, so another app's first ScreenCaptureKit call could raise a prompt on an unattended screen). */
+/** Inside a launch, before the arm and again right before the command: the shot dir set, the helper ENUM proved; and
+ * right after the arm has inferred it (`app` given), before any lock or device (RM6 S-5) — the responsible app ENUM
+ * proved (§6: "ENUM by the same app as L1 and L2"; TCC follows the responsible process, so another app's first
+ * ScreenCaptureKit call could raise a prompt on an unattended screen). */
 export function launchChecks({ shotDir, helperSha, enumSha, app, enumApp = null }) {
   const fails = [];
   if (typeof shotDir !== "string" || shotDir.length === 0)
@@ -2229,6 +2230,21 @@ async function launch(mode, command, opts) {
     cpuGate: mode === "cost",
     rules: opts.rules,
   });
+  // the responsible app (S5), the moment the arm has inferred it — BEFORE the lock is held or any device made (RM6
+  // S-5): a launch from an app ENUM never proved refuses with nothing to undo (no `simctl create`, no lock)
+  if (mode !== "enum" && armed.gate.armed && signalled === null) {
+    const wrongApp = launchChecks({
+      shotDir: opts.shotDir,
+      helperSha,
+      enumSha: record.sha256,
+      app: armed.app,
+      enumApp: typeof record.responsible === "string" ? record.responsible : null,
+    });
+    if (wrongApp.length > 0) {
+      for (const line of preflightLines(wrongApp)) deps.say(line);
+      return 1;
+    }
+  }
   const holdsLock = mode === "devices" || mode === "cost";
   if (armed.gate.armed && holdsLock && !holdPerfLock(run, deps, opts.rules.perfLock))
     armed.gate.why.push(`${opts.rules.perfLock} could not be held`);
@@ -2277,7 +2293,7 @@ async function launch(mode, command, opts) {
       deps.say(
         `PHONE_COMMAND_ENV ${JSON.stringify({ DEVELOPER_DIR: env.DEVELOPER_DIR === undefined ? "absent" : "SET", VF_SMOKE_SIMCTL_DEVELOPER_DIR: env.VF_SMOKE_SIMCTL_DEVELOPER_DIR ?? "absent", VF_PHONE_MODE: mode, VF_PHONE_RUNTIME: run.runtime, VF_PHONE_DEVICES: env.VF_PHONE_DEVICES, VF_PHONE_DEVDIR_BY: env.VF_PHONE_DEVDIR_BY, VF_SMOKE_SHOT_DIR: env.VF_SMOKE_SHOT_DIR })}`,
       );
-      // the preflight again, right before the command
+      // the preflight again, right before the command: the files and the helper's sha (the app was checked at the arm)
       const again = readFiles();
       const late = [
         ...nativeFresh(again.native),
@@ -2286,8 +2302,6 @@ async function launch(mode, command, opts) {
           shotDir: env.VF_SMOKE_SHOT_DIR,
           helperSha: sha256File(PATHS.helper),
           enumSha: record.sha256,
-          app: armed.app,
-          enumApp: typeof record.responsible === "string" ? record.responsible : null,
         }),
       ];
       if (late.length > 0) {
