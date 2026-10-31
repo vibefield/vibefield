@@ -1,10 +1,18 @@
 import type { z } from "zod";
 import {
+  ComposeAgentInterruptOutput,
   ComposeAgentReadInput,
+  ComposeAgentSendInput,
+  ComposeAgentSendOutput,
+  ComposeAgentSessionInput,
+  ComposeAgentSpawnInput,
+  ComposeAgentSpawnOutput,
+  ComposeAgentStopOutput,
   ComposeAgentsAvailableInput,
   ComposeAgentsAvailableOutput,
   ComposeAgentsListInput,
   ComposeAgentsListOutput,
+  ComposeAgentWatchOutput,
   ComposeHistoryReadInput,
   ComposeHistorySearchInput,
   ComposeHistorySearchOutput,
@@ -151,7 +159,7 @@ export const TOOLS: readonly ToolDef[] = [
     idempotent: false,
     slice: "CP-2",
     description:
-      "Send words to a session the user or you started. They wait for its next idle moment and land there as the user's words.",
+      "Send words to a session the user or you started. They wait for its next idle moment and land there marked as yours, sent on the user's behalf.",
   },
   {
     name: "agent_interrupt",
@@ -306,6 +314,13 @@ export const TOOL_SCHEMAS = {
   history_search: { input: ComposeHistorySearchInput, output: ComposeHistorySearchOutput },
   history_read: { input: ComposeHistoryReadInput, output: ComposeReadOutput },
   projects_list: { input: ComposeProjectsListInput, output: ComposeProjectsListOutput },
+  // CP-2 (start and talk; `draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31)
+  agent_spawn: { input: ComposeAgentSpawnInput, output: ComposeAgentSpawnOutput },
+  agent_watch: { input: ComposeAgentSessionInput, output: ComposeAgentWatchOutput },
+  agent_unwatch: { input: ComposeAgentSessionInput, output: ComposeAgentWatchOutput },
+  agent_send: { input: ComposeAgentSendInput, output: ComposeAgentSendOutput },
+  agent_interrupt: { input: ComposeAgentSessionInput, output: ComposeAgentInterruptOutput },
+  agent_stop: { input: ComposeAgentSessionInput, output: ComposeAgentStopOutput },
 } as const satisfies Record<string, { input: z.ZodTypeAny; output: z.ZodTypeAny }>;
 
 export type ServedToolName = keyof typeof TOOL_SCHEMAS;

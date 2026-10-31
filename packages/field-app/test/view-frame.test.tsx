@@ -6,12 +6,19 @@
  * `electron-shell/test/view-state.test.ts`; the delivery of ⌘1–⌘4 from a
  * focused terminal pane in a live window is the godview smoke's row 11g.
  */
-import type { FrameView, FrameViewState, FrameZoomAct } from "@vibefield/contracts";
+import type {
+  AgentFieldRow,
+  FrameView,
+  FrameViewState,
+  FrameZoomAct,
+  SparkSummary,
+} from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import { ViewFrame } from "../src/frame/ViewFrame";
 import {
   getActiveView,
@@ -209,7 +216,7 @@ describe("the view's mirror (one owner, main's)", () => {
 });
 
 describe("the views track (DESIGN.md §8)", () => {
-  it("draws four cells, each printing its key under its glyph, the Assistant waiting", () => {
+  it("draws four cells, each printing its key under its glyph — Chat the fourth (SP-1b)", () => {
     mountFrame();
     const cells = [...track().querySelectorAll<HTMLButtonElement>(".vf-views-cell")];
     expect(cells.map((button) => button.dataset.view)).toEqual([
@@ -233,8 +240,9 @@ describe("the views track (DESIGN.md §8)", () => {
     expect(cell("godview").getAttribute("aria-keyshortcuts")).toBe("Meta+2");
     expect(cell("godview").title).toBe("Godview  ⌘2");
     expect(cell("canvas").getAttribute("aria-pressed")).toBe("true");
-    expect(cell("assistant").getAttribute("aria-disabled")).toBe("true");
-    expect(cell("assistant").getAttribute("aria-label")).toBe("Assistant, not built yet");
+    expect(cell("assistant").getAttribute("aria-pressed")).toBe("false");
+    expect(cell("assistant").getAttribute("aria-label")).toBe("Chat");
+    expect(cell("assistant").title).toBe("Chat  ⌘4");
   });
 
   it("prints Ctrl off the Mac (FC-D4: Ctrl+1…4 on Windows)", () => {
@@ -255,11 +263,11 @@ describe("the views track (DESIGN.md §8)", () => {
     expect(asked).toEqual(["godview", "history"]);
   });
 
-  it("answers the waiting cell with its note, and asks nothing", () => {
+  it("asks the owner for Chat as for any view — no cell waits (SP-1b)", () => {
     mountFrame();
     act(() => cell("assistant").click());
-    expect(asked).toEqual([]);
-    expect(track().querySelector(".vf-views-note")?.textContent).toBe("Assistant · not built yet");
+    expect(asked).toEqual(["assistant"]);
+    expect(track().querySelector(".vf-views-note")).toBeNull();
   });
 });
 
@@ -348,21 +356,12 @@ describe("⌘1–⌘4, the product chords (GT-D21, FC-D4)", () => {
     expect(track().querySelector(".vf-views-thumb-face")?.getAttribute("data-dip")).toBe("landed");
   });
 
-  it("⌘4 says the Assistant waits, for 1.4s, and moves nothing", () => {
-    vi.useFakeTimers();
+  it("⌘4 opens Chat from inside a focused pane, and the pane never hears it (SP-1b)", () => {
     mountFrame();
     const { heard } = focusedPane();
     press(pane as HTMLElement, command("4"));
-    expect(asked).toEqual([]);
+    expect(asked).toEqual(["assistant"]);
     expect(heard).toEqual([]);
-    expect(track().querySelector(".vf-views-note")?.textContent).toBe("Assistant · not built yet");
-    act(() => {
-      vi.advanceTimersByTime(1_399);
-    });
-    expect(track().querySelector(".vf-views-note")).not.toBeNull();
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
     expect(track().querySelector(".vf-views-note")).toBeNull();
   });
 
@@ -566,5 +565,111 @@ describe("the View menu's zoom door (One Frame FR-4, 3b)", () => {
     expect(() => subscribeMenuZoom(() => undefined)()).not.toThrow();
     installHost(undefined, undefined);
     expect(() => subscribeMenuZoom(() => undefined)()).not.toThrow();
+  });
+});
+
+describe('a spark that needs you, from another view (CH-D4; DESIGN.md §8 "Chat\'s list")', () => {
+  const AT = "2026-10-31T05:00:00.000Z";
+  const vela: SparkSummary = {
+    id: "sp-vela0001",
+    name: "Vela",
+    face: { seed: 7 },
+    agent: "claude",
+    profiles: ["this-mac"],
+    thinksUnder: "this-mac",
+    folder: "/f/vela",
+    createdAt: AT,
+    updatedAt: AT,
+    session: { runtimeRunId: "run-vela", live: true },
+  };
+  const velaRow = (asking: boolean, revision: number): AgentFieldRow => ({
+    runtimeRunId: "run-vela",
+    revision,
+    kind: "claude",
+    label: "Claude Code",
+    tier: "managed",
+    device: "dev-1",
+    status: asking ? "blocked" : "idle",
+    statusSince: AT,
+    stateChangedAt: AT,
+    createdAt: AT,
+    alive: true,
+    blockers: asking ? [{ id: "q-1", kind: "question", since: AT }] : [],
+    spark: "sp-vela0001",
+  });
+  let frame: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
+  let revision = 0;
+  let stop: (() => void) | null = null;
+  afterEach(() => {
+    stop?.();
+    stop = null;
+    frame = null;
+  });
+
+  /** The window's feed over a port the test moves: Vela, asking or not from the first reading. */
+  async function feed(asking: boolean): Promise<void> {
+    revision = 1;
+    const port: SparksPort = {
+      list: async () => [vela],
+      watch: async (onFrame) => {
+        frame = onFrame;
+        onFrame({ revision, rows: [velaRow(asking, revision)] }, "snapshot");
+        return () => undefined;
+      },
+      open: async () => vela,
+    };
+    stop = startSparksFeed(port);
+    await act(async () => undefined);
+  }
+  const say = (asking: boolean): Promise<void> =>
+    act(async () => {
+      const since = revision;
+      revision += 1;
+      frame?.({ since, revision, upserts: [velaRow(asking, revision)], removed: [] }, "delta");
+    });
+  const note = (): HTMLElement | null => track().querySelector<HTMLElement>(".vf-views-note");
+  const dot = (): Element | null => cell("assistant").querySelector(".vf-views-dot");
+
+  it("puts the orange dot on Chat's cell, and says it over the cell for 2.4s when a spark starts to need you", async () => {
+    await feed(false);
+    mountFrame();
+    to("godview");
+    expect(dot()).toBeNull();
+    expect(note()).toBeNull();
+    vi.useFakeTimers();
+    await say(true);
+    expect(dot()).not.toBeNull();
+    expect(cell("assistant").getAttribute("aria-label")).toBe("Chat, a spark needs you");
+    expect(note()?.textContent).toBe("Vela needs you");
+    expect(note()?.querySelector(".vf-spark-face")).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(2_399);
+    });
+    expect(note()).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(note()).toBeNull();
+    // the dot lasts while the need does (SP-1b; the thread's "until you open it" is SP-1d's)
+    expect(dot()).not.toBeNull();
+    await say(false);
+    expect(dot()).toBeNull();
+    expect(cell("assistant").getAttribute("aria-label")).toBe("Chat");
+  });
+
+  it("says nothing of what needed you before the first reading, and nothing at all in Chat", async () => {
+    await feed(true);
+    mountFrame();
+    to("godview");
+    // the dot says it; no note was earned
+    expect(dot()).not.toBeNull();
+    expect(note()).toBeNull();
+    // in Chat the row says it: no dot on the cell that is on, and no note
+    to("assistant");
+    expect(dot()).toBeNull();
+    await say(false);
+    await say(true);
+    expect(note()).toBeNull();
+    expect(dot()).toBeNull();
   });
 });

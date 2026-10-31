@@ -1,5 +1,6 @@
-import { type FrameView, frameViewBuilt } from "@vibefield/contracts";
+import type { FrameView } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import { SparkFace, type SparkStatus } from "@vibefield/design-kit/spark-face";
 import type { CSSProperties, KeyboardEvent, ReactElement } from "react";
 import { FRAME_VIEWS, type ViewKeys, viewKeyLabel, viewKeyParts, viewKeyShortcut } from "./views";
 import "./view-frame.css";
@@ -18,6 +19,15 @@ export interface ViewKeyPress {
   readonly moved: boolean;
 }
 
+/** CH-D4 — a spark that started to need you while the window is in another view, as the note over Chat's cell
+ * says it (DESIGN.md §8 "Chat's list"). `seq` counts the notes, so a spark that asks again says it again. */
+export interface ViewsNote {
+  readonly seq: number;
+  readonly name: string;
+  readonly seed: number;
+  readonly status: SparkStatus;
+}
+
 export interface ViewsTrackViewProps {
   /** The window's view: the cell the thumb sits under. */
   view: FrameView;
@@ -27,12 +37,12 @@ export interface ViewsTrackViewProps {
   held?: boolean;
   /** The last press of a view's key, or null before the first. */
   press?: ViewKeyPress | null;
-  /** While non-null, the waiting cell says so ("Assistant · not built yet");
-   * a new number says it again. */
-  note?: number | null;
-  /** A cell was chosen — by a click, Enter or Space. The waiting cell is
-   * chosen too: the controller answers it with the note. */
+  /** A cell was chosen — by a click, Enter or Space. */
   onSelect?: (view: FrameView) => void;
+  /** CH-D4 — a spark needs you and the window is in another view: Chat's cell takes the orange dot. */
+  needs?: boolean;
+  /** CH-D4 — the note over Chat's cell, for 2.4 s, or null. */
+  note?: ViewsNote | null;
   /** AO-4b — History imports (`history/first-reading.ts`): its cell carries
    * the arc (DESIGN.md §6) and its name says so, "History, importing". */
   importing?: boolean;
@@ -50,9 +60,10 @@ export function ViewsTrackView({
   keys,
   held = false,
   press = null,
-  note = null,
   onSelect,
   importing = false,
+  needs = false,
+  note = null,
 }: ViewsTrackViewProps): ReactElement {
   const index = Math.max(
     0,
@@ -85,9 +96,9 @@ export function ViewsTrackView({
           />
         </span>
         {FRAME_VIEWS.map((cell) => {
-          const built = frameViewBuilt(cell.view);
-          const on = built && cell.view === view;
+          const on = cell.view === view;
           const arc = importing && cell.view === "history";
+          const dot = needs && cell.view === "assistant";
           const { modifier, digit } = viewKeyParts(cell, keys);
           return (
             <button
@@ -96,18 +107,16 @@ export function ViewsTrackView({
               className="vf-views-cell"
               data-view={cell.view}
               {...(on ? { "data-on": "true" } : {})}
-              {...(built ? { "aria-pressed": on } : { "aria-disabled": true })}
+              aria-pressed={on}
               aria-label={
-                built
-                  ? arc
-                    ? `${cell.name}, importing`
+                arc
+                  ? `${cell.name}, importing`
+                  : dot
+                    ? `${cell.name}, a spark needs you`
                     : cell.name
-                  : `${cell.name}, not built yet`
               }
               aria-keyshortcuts={viewKeyShortcut(cell, keys)}
-              title={
-                built ? `${cell.name}  ${viewKeyLabel(cell, keys)}` : `${cell.name} — not built yet`
-              }
+              title={`${cell.name}  ${viewKeyLabel(cell, keys)}`}
               onClick={() => onSelect?.(cell.view)}
               onKeyDown={(event) => onKeyDown(event, cell.view)}
             >
@@ -121,13 +130,15 @@ export function ViewsTrackView({
                 <span>{modifier}</span>
                 <b>{digit}</b>
               </kbd>
+              {dot ? <span className="vf-views-dot" aria-hidden="true" /> : null}
             </button>
           );
         })}
       </div>
       {note === null ? null : (
-        <div key={note} className="vf-views-note" role="status">
-          Assistant · not built yet
+        <div key={note.seq} className="vf-views-note" role="status">
+          <SparkFace seed={note.seed} status={note.status} size={18} />
+          {`${note.name} needs you`}
         </div>
       )}
     </div>

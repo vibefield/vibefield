@@ -202,6 +202,7 @@ import {
   clipRecordedLanes,
   createFieldSubscription,
   deskProjector,
+  type FieldSubscription,
   malformedBoardAsk,
   projectFieldRow,
   refuseBoardAsk,
@@ -213,11 +214,13 @@ import {
   type ShellIntegration,
 } from "./agent-gateway";
 import { DEFAULT_SEARCH_LIMIT, EnrollmentStore, IndexService } from "./agent-index";
+import { AgentInputQueues } from "./agent-input-queue";
 import { LastRunKeeper, modelBoardSource } from "./agent-last-run";
 import { createModelSubscription } from "./agent-model-board";
 import { type AgentMonitorService, createAgentMonitorService } from "./agent-monitor";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
+import { AgentWaker, isIdleRow } from "./agent-waker";
 import {
   DEFAULT_APP_PREFERENCES,
   effectiveAppPreferences,
@@ -261,7 +264,13 @@ import {
 } from "./library-doc";
 import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
-import { type BoardDelta, type BoardProjection, type LocalBoard, MeshBoard } from "./mesh-board";
+import {
+  type BoardDelta,
+  type BoardProjection,
+  type LocalBoard,
+  type LocalBoardSnapshot,
+  MeshBoard,
+} from "./mesh-board";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import { MeshClient, meshNodeUp, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
@@ -337,6 +346,7 @@ import {
 } from "./terminal-service";
 import { TokenService } from "./token-service";
 import { composeProjects, ToolPlaneService } from "./tool-plane";
+import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
 import { SparkService, SparkStore } from "./tool-plane/sparks";
 import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
@@ -2758,6 +2768,126 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       now: () => new Date(),
       logger: logger.child({ component: "compose.sparks" }),
     });
+    // CP-2 (`draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31) — every session's one input queue (CP-L5), kept
+    // under LAYOUT.AGENT_INPUTS_DIR across a restart (CP2-D3), and the waker that tells a spark what its runs did (CP-D4,
+    // CP2-D6). A spark's words land marked as its own and sent on the person's behalf (CP2-D1), at the session's idle.
+    const runRow = (runtimeRunId: string) =>
+      agents.list().sessions.find((row) => row.runtimeRunId === runtimeRunId);
+    const sparkSessionOf = (sparkId: string): string | undefined =>
+      agents.list().sessions.find((row) => row.spark === sparkId && agents.isLive(row.runtimeRunId))
+        ?.runtimeRunId;
+    const inputs = new AgentInputQueues({
+      dir: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_DIR),
+      deliver: (runtimeRunId, text) => agents.submit(runtimeRunId, text),
+      isIdle: (runtimeRunId) => isIdleRow(agents.monitorOf(runtimeRunId)),
+      onOutcome: (runtimeRunId, input, outcome, reason) => {
+        if (input.from.kind !== "spark") return;
+        // CP2-D2: an uncertain delivery is never sent again, and its sender is told
+        if (outcome === "uncertain") waker.uncertain(input.from.spark, runtimeRunId);
+        if (outcome === "waiting") return;
+        // CP-L6: what became of a spark's words, written down as the spark's
+        const spark = input.from.spark;
+        void audit
+          .required(
+            {
+              principal: {
+                kind: "mcp-agent",
+                sessionId: sparkSessionOf(spark) ?? `spark:${spark}`,
+                scopes: [],
+              },
+              transport: "mcp",
+              receivedAt: Date.now(),
+            },
+            {
+              action: "tools.agent_send.delivery",
+              target: { kind: "run", id: runtimeRunId },
+              attrs: { spark, outcome, onBehalf: "you", ...(reason ? { reason } : {}) },
+            },
+            () => undefined,
+            () => ({ outcome: outcome === "delivered" ? "succeeded" : "failed" }),
+          )
+          .catch((err: unknown) =>
+            logger.warn(
+              "fieldd.inputs.audit_failed",
+              "A delivery's audit line could not be written",
+              {
+                reason: (err as Error).message,
+              },
+            ),
+          );
+      },
+      logger: logger.child({ component: "inputs" }),
+    });
+    const waker = new AgentWaker({
+      queues: inputs,
+      spawnerOf: (runtimeRunId) => {
+        const origin = runRow(runtimeRunId)?.origin;
+        return origin?.by === "spark" ? origin.spark : undefined;
+      },
+      sparkSession: sparkSessionOf,
+      label: (runtimeRunId) => {
+        const row = runRow(runtimeRunId);
+        return (
+          row?.title ??
+          (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === row?.provider)
+            ?.label ??
+          runtimeRunId
+        );
+      },
+      logger: logger.child({ component: "waker" }),
+    });
+    agents.onRunMonitor((runtimeRunId, mirror) => {
+      waker.onMonitor(runtimeRunId, mirror);
+      // a spark whose own session is live again takes the wakes held for it
+      const sparkOf = runRow(runtimeRunId)?.spark;
+      if (sparkOf !== undefined) waker.onSparkLive(sparkOf, runtimeRunId);
+      void inputs.poke(runtimeRunId);
+    });
+    agents.onRunEnded((runtimeRunId) => {
+      waker.onEnded(runtimeRunId);
+      inputs.forget(runtimeRunId);
+    });
+    const kept = inputs.restore();
+    if (kept > 0)
+      logger.info("fieldd.inputs.restored", "Kept inputs wait for their sessions", { kept });
+    const talkSession = (row: ReturnType<typeof runRow>): TalkSession | undefined =>
+      row === undefined
+        ? undefined
+        : {
+            runtimeRunId: row.runtimeRunId,
+            profileSet: row.profileSet,
+            origin: row.origin,
+            spark: row.spark,
+            live: agents.isLive(row.runtimeRunId),
+          };
+    const talk: TalkDeps = {
+      session: (runtimeRunId) => talkSession(runRow(runtimeRunId)),
+      sessions: () =>
+        agents
+          .list()
+          .sessions.map((row) => talkSession(row))
+          .filter((s): s is TalkSession => s !== undefined),
+      spawn: async (launch, spark) => {
+        const result = await agents.spawn(
+          {
+            provider: launch.agent,
+            cwd: launch.cwd,
+            profileSet: launch.profileSet,
+            ...(launch.model !== undefined ? { modelSelection: launch.model } : {}),
+          },
+          // the spark's own door principal: a run's ticket rights follow it (read only), never the person's
+          { kind: "mcp-agent" },
+          undefined,
+          { origin: { by: "spark", spark } },
+        );
+        return { runtimeRunId: result.session.runtimeRunId };
+      },
+      enqueue: (runtimeRunId, text, from) =>
+        inputs.enqueue(runtimeRunId, text, { kind: "spark", spark: from.spark, name: from.name }),
+      interrupt: (runtimeRunId) => agents.interrupt({ runtimeRunId }),
+      end: (runtimeRunId) => agents.endRun(runtimeRunId),
+      watch: (spark, runtimeRunId, on) => waker.watch(spark, runtimeRunId, on),
+    };
     toolPlane = new ToolPlaneService({
       native,
       lanes: laneLink,
@@ -2795,6 +2925,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         search: (q, runtime, limit, afterMs) =>
           index.search({ q, runtime, limit, ...(afterMs !== undefined ? { afterMs } : {}) }),
       },
+      talk,
       audit,
       version: FIELDD_VERSION,
       logger: logger.child({ component: "compose" }),
@@ -3685,12 +3816,31 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // a revision of one chain for a revision of another.
     let boardChains = 0;
     const nextBoardEpoch = (): string => `${bootId}.${++boardChains}`;
+    // PG-1d (F-M4's residual) — every live field and desk board of this device
+    // is re-presented when the doors' gate flips: ONE snapshot at the board's
+    // current revision (its reader's own unless a change waiting out the floor
+    // is folded in), its rows shaped by the gate as it reads now. The flip
+    // is read off the gate itself, never off one event: a re-pair to the same
+    // floor reopens it at `connected` (its hello's `terminal-endpoints` fires
+    // while the link is still down), and a link lost with nothing held closes
+    // it with no `terminal-endpoints` at all (`native-link.ts`).
+    const gatedBoards = new Set<FieldSubscription>();
+    let presentedGate = native.terminalMeshPublished();
+    const representOnGateFlip = (): void => {
+      const gate = native.terminalMeshPublished();
+      if (gate === presentedGate) return;
+      presentedGate = gate;
+      for (const board of gatedBoards) board.represent();
+    };
+    for (const event of ["terminal-endpoints", "connected", "reconnecting", "closed", "superseded"])
+      native.on(event, representOnGateFlip);
     /** One board of THIS device at a projection and a floor: a snapshot on its
-     * own chain, then deltas through `emit` (`createFieldSubscription`). */
+     * own chain, then its frames through `emit` (`createFieldSubscription`): its
+     * deltas, and (PG-1d) a snapshot when it is re-presented or repaired. */
     const openLocalBoard = (
       projection: BoardProjection,
       minIntervalMs: number,
-      emit: (delta: BoardDelta) => void,
+      emit: (frame: BoardDelta | LocalBoardSnapshot, kind?: "delta" | "snapshot") => void,
       heartbeatMs?: number,
     ): LocalBoard => {
       const epoch = nextBoardEpoch();
@@ -3754,7 +3904,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             error: error instanceof Error ? error.message : String(error),
           }),
       });
-      return { snapshot: { ...board.snapshot, epoch }, dispose: board.dispose };
+      gatedBoards.add(board);
+      return {
+        snapshot: { ...board.snapshot, epoch },
+        dispose: () => {
+          gatedBoards.delete(board);
+          board.dispose();
+        },
+      };
     };
     /** DS-3 — the mesh board; built once PeerLink and the federated manager
      * exist (below). Null only in the window before that. */
@@ -3855,7 +4012,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             },
           };
         }
-        const board = openLocalBoard(projection, floor, (delta) => emit(delta), heartbeatMs);
+        // `.delta` carries the board's deltas; `.snapshot` (PG-1d) its
+        // re-present on a gate flip (or a repair), at its current revision
+        const board = openLocalBoard(
+          projection,
+          floor,
+          (frame, kind) => emit(frame, kind),
+          heartbeatMs,
+        );
         return {
           snapshot: board.snapshot,
           dispose: () => {

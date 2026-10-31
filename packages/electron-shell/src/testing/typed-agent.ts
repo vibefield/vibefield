@@ -73,7 +73,11 @@ const KIT_VARIABLE_PREFIX = "PUPPETEER_SHIM_";
 const STUB_VERSION = "0.0.0-smoke (the godview smoke's typed-agent stub)";
 
 /** What the stub prints for `--help`: the managed launch's own options, which
- * the launch's probe looks for before it will prepare a session. */
+ * the launch's probe looks for before it will prepare a session — the door's
+ * four among them (item 124, 2026-10-31): a current Claude declares them, so
+ * every birth's briefing passes the probe and the row walks the door path. A
+ * stub without them is a Claude older than `--mcp-config`, whose births
+ * fieldd makes without their briefing (`fieldd/src/agent-door-launch.ts`). */
 const STUB_HELP = `Usage: typed-agent [options] [prompt]
 
 The godview smoke's stand-in for an agent's CLI. It takes the managed launch's
@@ -88,6 +92,12 @@ Options:
   -n, --name <name>            the session's name
   --model <model>              the model
   --effort <level>             the effort
+  --mcp-config <configs...>    the session's MCP servers
+  --allowedTools <tools...>    the tools it may use without asking
+  --append-system-prompt-file <file>
+                               instructions appended to its system prompt
+  --system-prompt-snapshot <mode>
+                               whether its system prompt is snapshotted
   -v, --version                print the version
   -h, --help                   print this help
 `;

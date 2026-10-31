@@ -88,6 +88,7 @@ import {
   DistributionRecordStore,
   type RevealPath,
 } from "./agent-distribution";
+import { birthWithDoor, refusedTheDoor, UNSUPPORTED_LAUNCH_FIELD } from "./agent-door-launch";
 import { AgentExtensionStore } from "./agent-extension-store";
 import { AgentExtensionService } from "./agent-extensions";
 import { createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
@@ -524,7 +525,13 @@ interface ManagedEntry {
   origin?: AgentSessionOrigin | undefined;
   /** CP-1c — the spark this run is the own session of */
   spark?: SparkId | undefined;
+  /** Item 124 — this process was born without its briefing: its executable takes no door. A fact of the process,
+   * never of the record (the briefing never is), so a later birth briefs it afresh. */
+  door?: "off" | undefined;
 }
+
+/** Item 124 — one birth's identity (`AgentRuntimeService.identity`): each attempt of a briefed birth has its own. */
+type BirthIdentity = ReturnType<AgentRuntimeService["identity"]>;
 
 /** AR-4 — a run whose PTY outlived a fieldd that could NOT re-attach to it:
  * held in the fold as a pending row (live, unobserved) until its
@@ -708,6 +715,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * synchronously. */
   private activePersonas = new Set<string>();
   private readonly subscribers = new Set<(rows: AgentListResult) => void>();
+  /** CP-2 — the input queue and the waker hear each live run's monitor row, and each run's end. */
+  private readonly runMonitorListeners = new Set<
+    (runtimeRunId: string, mirror: AgentMonitorMirror | undefined) => void
+  >();
+  private readonly runEndedListeners = new Set<(runtimeRunId: string) => void>();
   private publishTimer: NodeJS.Timeout | null = null;
   private disposed = false;
 
@@ -1222,26 +1234,30 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       params.place !== undefined ? this.placeFolder(params.provider, params.place) : null;
     const terminals = this.requireTerminals();
     const cwd = place?.path ?? params.cwd ?? this.home;
-    const identity = this.identity();
     const entry = await this.creation(params.profileId ?? null, async () => {
       const briefing = await this.briefingFor(compose?.spark, params.provider);
-      const result = await this.runtime.spawn({
-        agent: params.provider,
-        cwd,
-        ...briefing,
-        ...(params.title !== undefined ? { title: params.title } : {}),
-        ...(params.profileId !== undefined ? { profile: params.profileId } : {}),
-        // AR-S5 — that profile's sign-in for the agent; puppeteer refuses a
-        // profile that holds none, and a plain spawn takes the default's
-        ...(params.profileSet !== undefined ? { profileSet: params.profileSet } : {}),
-        // PJ-6 — the model and its controls, opaque: puppeteer discovers again
-        // in the run's account and folder, validates, and translates
-        ...(params.modelSelection !== undefined
-          ? { modelSelection: modelSelectionOf(params.modelSelection) }
-          : {}),
-        creationRequestId: identity.creationRequestId,
-        ingress: identity.ingress,
-      });
+      const { result, identity, withheld } = await this.briefedBirth(
+        briefing,
+        { provider: params.provider, spark: compose?.spark },
+        (attempt, identity) =>
+          this.runtime.spawn({
+            agent: params.provider,
+            cwd,
+            ...attempt,
+            ...(params.title !== undefined ? { title: params.title } : {}),
+            ...(params.profileId !== undefined ? { profile: params.profileId } : {}),
+            // AR-S5 — that profile's sign-in for the agent; puppeteer refuses a
+            // profile that holds none, and a plain spawn takes the default's
+            ...(params.profileSet !== undefined ? { profileSet: params.profileSet } : {}),
+            // PJ-6 — the model and its controls, opaque: puppeteer discovers again
+            // in the run's account and folder, validates, and translates
+            ...(params.modelSelection !== undefined
+              ? { modelSelection: modelSelectionOf(params.modelSelection) }
+              : {}),
+            creationRequestId: identity.creationRequestId,
+            ingress: identity.ingress,
+          }),
+      );
       if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
       // PJ-6 — CONFIRMED: the run is born. Its record keeps the selection (a
       // Resume starts at it again, Q4) and its project takes the recipe
@@ -1252,6 +1268,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         cwd,
         title: params.title,
         ...identity.launched(),
+        ...(withheld ? { door: "off" as const } : {}),
         ...(place !== null ? { place: place.placeId } : {}),
         ...(selection !== undefined ? { modelSelection: selection } : {}),
         ...(profileSet !== undefined
@@ -1468,7 +1485,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
     }
     if (params.cwd === undefined) this.requireConversationFolder(params.provider, cwd);
-    const identity = this.identity();
     // PJ-6 (Q4) — a conversation a run of ours launched at a model resumes at
     // it, in the account the index files it under
     const { record: previous, modelSelection: launched } = this.launchedContext(
@@ -1479,26 +1495,32 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const selection = this.resumeSelection(params.provider, launched);
     const entry = await this.creation(profileId ?? null, async () => {
       const briefing = await this.briefingFor(previous?.spark, params.provider);
-      const result = await this.runtime.resume({
-        continuation: {
-          providerId: params.provider,
-          nativeSessionId: params.nativeSessionId,
-          implementation: "native",
-        },
-        cwd,
-        ...briefing,
-        ...(params.title !== undefined ? { title: params.title } : {}),
-        ...(profileId !== undefined ? { profile: profileId } : {}),
-        creationRequestId: identity.creationRequestId,
-        ingress: identity.ingress,
-        ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
-      });
+      const { result, identity, withheld } = await this.briefedBirth(
+        briefing,
+        { provider: params.provider, spark: previous?.spark },
+        (attempt, identity) =>
+          this.runtime.resume({
+            continuation: {
+              providerId: params.provider,
+              nativeSessionId: params.nativeSessionId,
+              implementation: "native",
+            },
+            cwd,
+            ...attempt,
+            ...(params.title !== undefined ? { title: params.title } : {}),
+            ...(profileId !== undefined ? { profile: profileId } : {}),
+            creationRequestId: identity.creationRequestId,
+            ingress: identity.ingress,
+            ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
+          }),
+      );
       if (isSessionFailure(result))
         throw this.sessionFailureToError(result, params.provider, "resume");
       return this.enter(result, {
         cwd,
         title: params.title,
         ...identity.launched(),
+        ...(withheld ? { door: "off" as const } : {}),
         ...(launched !== undefined ? { modelSelection: launched } : {}),
         ...(previous?.spark !== undefined ? { spark: previous.spark } : {}),
         ...(previous?.origin !== undefined ? { origin: previous.origin } : {}),
@@ -1851,6 +1873,52 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       ...(result.accepted ? {} : { reason: result.reason }),
     });
     return result.accepted ? { accepted: true } : { accepted: false, reason: result.reason };
+  }
+
+  /** CP-2 — the input queue's delivery (CP-L5): paste and submit one input into a live run, with puppeteer's receipt
+   * in its own words. A run that is not live under this daemon is a rejection, so the input waits. */
+  async submit(
+    runtimeRunId: string,
+    text: string,
+  ): Promise<{ status: "confirmed" | "rejected" | "uncertain"; reason?: string }> {
+    const entry = this.managed.get(runtimeRunId);
+    if (entry === undefined || entry.exiting) return { status: "rejected", reason: "not-live" };
+    const receipt = await entry.agent.submitPrompt({ text, mode: "paste-and-submit" });
+    return receipt.status === "confirmed"
+      ? { status: "confirmed" }
+      : { status: receipt.status, reason: receipt.reason };
+  }
+
+  /** CP-2 — a live run's monitor row: the input queue's idle test and the waker's state. */
+  monitorOf(runtimeRunId: string): AgentMonitorMirror | undefined {
+    return this.managed.get(runtimeRunId)?.mirror;
+  }
+
+  /** CP-2 — the run is live under this daemon: it can take input, a stop or an end. */
+  isLive(runtimeRunId: string): boolean {
+    const entry = this.managed.get(runtimeRunId);
+    return entry !== undefined && !entry.exiting;
+  }
+
+  /** CP-2 — every change of a live run's monitor row, once fieldd has folded it. */
+  onRunMonitor(
+    listener: (runtimeRunId: string, mirror: AgentMonitorMirror | undefined) => void,
+  ): () => void {
+    this.runMonitorListeners.add(listener);
+    return () => this.runMonitorListeners.delete(listener);
+  }
+
+  /** CP-2 — a managed run ended: the floor heard its PTY's exit (never a fieldd stop, which runs outlive). */
+  onRunEnded(listener: (runtimeRunId: string) => void): () => void {
+    this.runEndedListeners.add(listener);
+    return () => this.runEndedListeners.delete(listener);
+  }
+
+  /** CP-2 — agent_stop: end a live run through the floor's own terminate, as the person's Stop does. */
+  async endRun(runtimeRunId: string): Promise<void> {
+    const entry = this.managed.get(runtimeRunId);
+    if (entry === undefined || entry.exiting) return;
+    await this.terminateLive(this.requireTerminals(), entry.info.terminalSessionId);
   }
 
   /** The persona login pane: the vendor's own interactive login in a PTY
@@ -2523,6 +2591,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       origin?: AgentSessionOrigin | undefined;
       /** CP-1c — the spark it is the own session of; kept on the record, and a resume keeps it */
       spark?: SparkId | undefined;
+      /** Item 124 — born without its briefing; the fold's row says so, the record never does */
+      door?: "off" | undefined;
     },
   ): ManagedEntry {
     const info = agent.info;
@@ -2592,6 +2662,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           : undefined),
       origin: launch.origin ?? launch.reattached?.record.origin,
       spark: launch.spark ?? launch.reattached?.record.spark,
+      door: launch.door,
     };
     if (this.disposed) {
       // the service stopped while this run was being born or attached: the
@@ -2840,29 +2911,34 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   ): Promise<ManagedEntry> {
     const continuation = continuationOf(record);
     const cwd = cwdOverride ?? record.cwd;
-    const identity = this.identity();
     // PJ-6 (Q4) — the session's own launch model, where its resume takes one;
     // the account it was launched in rides with it (discovery runs there)
     const selection = this.resumeSelection(record.provider, record.modelSelection);
     return this.creation(record.profileId ?? null, async () => {
       const briefing = preparedBriefing ?? (await this.briefingFor(record.spark, record.provider));
-      const result = await this.runtime.resume({
-        continuation,
-        cwd,
-        ...briefing,
-        ...(record.title !== undefined ? { title: record.title } : {}),
-        ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
-        workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
-        creationRequestId: identity.creationRequestId,
-        ingress: identity.ingress,
-        ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
-      });
+      const { result, identity, withheld } = await this.briefedBirth(
+        briefing,
+        { provider: record.provider, spark: record.spark },
+        (attempt, identity) =>
+          this.runtime.resume({
+            continuation,
+            cwd,
+            ...attempt,
+            ...(record.title !== undefined ? { title: record.title } : {}),
+            ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
+            workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
+            creationRequestId: identity.creationRequestId,
+            ingress: identity.ingress,
+            ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
+          }),
+      );
       if (isSessionFailure(result))
         throw this.sessionFailureToError(result, record.provider, "resume");
       return this.enter(result, {
         cwd,
         title: record.title,
         ...identity.launched(),
+        ...(withheld ? { door: "off" as const } : {}),
         replaced,
         // the successor keeps the session's launch model, so its own resume
         // starts there too
@@ -2872,6 +2948,57 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(record.spark !== undefined ? { spark: record.spark } : {}),
       });
     });
+  }
+
+  /** ITEM 124 — a briefed birth (`agent-door-launch.ts`). Refused for the door by its executable
+   * (`UNSUPPORTED_LAUNCH_FIELD`), it is made once more without the briefing: in the ledger as the daemon's own act
+   * (`tools.door.withheld`), and in the log in puppeteer's own sentence. Each attempt is its own identity, so the
+   * second is a fresh creation request; the answer names the attempt that answered. */
+  private async briefedBirth(
+    briefing: AgentRunBriefing,
+    context: { readonly provider: string; readonly spark?: SparkId | undefined },
+    launch: (briefing: AgentRunBriefing, identity: BirthIdentity) => Promise<SpawnAgentResult>,
+  ): Promise<{
+    readonly result: SpawnAgentResult;
+    readonly identity: BirthIdentity;
+    readonly withheld: boolean;
+  }> {
+    const born = await birthWithDoor(
+      briefing,
+      async (attempt) => {
+        const identity = this.identity();
+        return { result: await launch(attempt, identity), identity };
+      },
+      (attempt) => refusedTheDoor(attempt.result),
+      (refused, again) => {
+        const failure = isSessionFailure(refused.result) ? refused.result : undefined;
+        const spark = context.spark !== undefined ? { spark: context.spark } : {};
+        this.logger.warn(
+          "fieldd.agents.door_withheld",
+          "The agent's executable takes no door; the run starts without it",
+          {
+            provider: context.provider,
+            ...spark,
+            ...(failure !== undefined
+              ? { runtimeRunId: failure.runtimeRunId, error: failure.error.message }
+              : {}),
+          },
+        );
+        return this.audited(
+          {
+            action: "tools.door.withheld",
+            target: { kind: "agent-session", id: failure?.runtimeRunId ?? context.provider },
+            attrs: { provider: context.provider, ...spark, refusal: UNSUPPORTED_LAUNCH_FIELD },
+          },
+          again,
+          (attempt) =>
+            isSessionFailure(attempt.result)
+              ? { outcome: "failed", reasonCode: attempt.result.error.code }
+              : { outcome: "succeeded", attrs: { runtimeRunId: attempt.result.info.runtimeRunId } },
+        );
+      },
+    );
+    return { ...born.born, withheld: born.withheld };
   }
 
   /** Every birth's briefing (MT-D9): a spark's from its record, refusing when it cannot be delivered (CP-1d); a plain
@@ -4093,6 +4220,34 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (entry === undefined) return;
     this.applyMonitor(entry, state);
     this.publish();
+    for (const listener of this.runMonitorListeners) {
+      try {
+        listener(state.runtimeRunId, entry.mirror);
+      } catch (err) {
+        this.logger.warn(
+          "fieldd.agents.monitor_listener_failed",
+          "A run's monitor listener threw",
+          {
+            runtimeRunId: state.runtimeRunId,
+            reason: (err as Error).message,
+          },
+        );
+      }
+    }
+  }
+
+  /** CP-2 — a managed run left this daemon: its listeners hear it once. */
+  private ended(runtimeRunId: string): void {
+    for (const listener of this.runEndedListeners) {
+      try {
+        listener(runtimeRunId);
+      } catch (err) {
+        this.logger.warn("fieldd.agents.ended_listener_failed", "A run's end listener threw", {
+          runtimeRunId,
+          reason: (err as Error).message,
+        });
+      }
+    }
   }
 
   private applyMonitor(entry: ManagedEntry, state: AgentMonitorState): void {
@@ -4152,6 +4307,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.terminalHost?.forget(entry.info.terminalSessionId);
     if (entry.info.profileId !== undefined) void this.profiles.sweep();
     this.publish();
+    // not `ended`: puppeteer also withdraws every run while the runtime is disposing (a fieldd stop), and the runs
+    // live on (AR-4); only the floor's exit, below, ends one
   }
 
   private async closeRun(
@@ -4228,6 +4385,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
     this.terminalHost?.forget(entry.info.terminalSessionId);
+    this.ended(runtimeRunId);
     // MF-1f — the process is over, but the PANE may not be: while the floor
     // still lists this PTY the deck is showing it, so the row stays (carrying
     // the mirror's last state and the resume verb) until the pane goes.
@@ -4343,6 +4501,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(entry.typed !== undefined ? { spawnedBy: SPAWNED_BY_SHELL } : {}),
         origin: entry.origin,
         spark: entry.spark,
+        door: entry.door,
         stopKey: stopKeyOf(entry.agent.turnStop),
         createdAt: entry.createdAt,
         stateChangedAt: entry.stateChangedAt,

@@ -27,7 +27,6 @@ import {
   FrameViewSetRequest,
   FrameViewState,
   FrameZoomRequest,
-  frameViewBuilt,
   GodviewDeckSetRequest,
   GodviewDeckState,
   isUnambiguousLinkText,
@@ -518,8 +517,8 @@ describe("the frame's active view (FR-1)", () => {
     expect(FrameZoomRequest.safeParse({}).success).toBe(false);
   });
 
-  it("keeps the Assistant's cell waiting: every view but it is built (FC-D2)", () => {
-    expect(FrameView.options.filter(frameViewBuilt)).toEqual(["canvas", "godview", "history"]);
+  it("names the four views in the track's order, Chat by its wire id (SP-1b: every view is built)", () => {
+    expect(FrameView.options).toEqual(["canvas", "godview", "history", "assistant"]);
   });
 
   it("passes unknown fields through, like every other inbound shape (EL9)", () => {

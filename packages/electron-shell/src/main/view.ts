@@ -2,7 +2,6 @@ import {
   type FrameView,
   type FrameViewState,
   FrameViewState as FrameViewStateSchema,
-  frameViewBuilt,
   IPC_CHANNELS,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
@@ -50,16 +49,11 @@ export class ViewWindowState {
     return { view: this.view };
   }
 
-  /** Go to a view. A view that is not built (the Assistant, FC-D2) is refused
-   * and the window stays where it is — the answer is the unchanged state. */
+  /** Go to a view. Every view is built (SP-1b retired FC-D2's waiting
+   * Assistant), and asking for the one the window is in changes nothing;
+   * either way the answer is the state. */
   set(next: FrameView): FrameViewState {
-    if (!frameViewBuilt(next)) {
-      this.opts.logger?.info(
-        "desktop.view.refused",
-        "A window was asked for a view that is not built yet",
-        { webContentsId: this.target.id, view: next },
-      );
-    } else if (next !== this.view) {
+    if (next !== this.view) {
       const from = this.view;
       this.view = next;
       this.opts.logger?.info("desktop.view.changed", "A window changed its view", {

@@ -1398,3 +1398,14 @@
 .vf-ds-stage-board .vf-pegboard {
   pointer-events: none;
 }
+
+/* Chat on fixtures (SP-1b): one plate at the frame stage's size, on the canvas's
+   ground, so the panel stands where the cover holds it — the head band above, the
+   reserve below. The panel's own rules are the product's. */
+.vf-ds-chat-plate {
+  position: relative;
+  isolation: isolate;
+  height: 640px;
+  overflow: hidden;
+  background: var(--vf-canvas-bg);
+}

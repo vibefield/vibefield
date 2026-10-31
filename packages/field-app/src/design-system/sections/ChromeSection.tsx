@@ -37,6 +37,7 @@ import {
   FROM_REACHED,
   WAITING_FIXTURES,
 } from "../CardsPreview";
+import { ChatSpecimen } from "../ChatPreview";
 import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { DeskPreview } from "../DeskPreview";
@@ -196,10 +197,11 @@ export function ChromeSection({
       >
         <ViewFramePreview dark={dark} />
         <p className="vf-ds-stage-caption">
-          The canvas is the ground floor; Godview and History are one cover over it, each on its own
-          ground at the covers' 72% glass, their content ending 88 above the foot. The track stands
-          above every view at the line's left end, each key printed under its glyph. Pick a state,
-          or click a cell: the cover rises, swaps in place and lowers, and only the thumb travels.
+          The canvas is the ground floor; Godview, History and Chat are one cover over it, each on
+          its own ground at the covers' 72% glass, their content ending 88 above the foot. The track
+          stands above every view at the line's left end, each key printed under its glyph. Pick a
+          state, or click a cell: the cover rises, swaps in place and lowers, and only the thumb
+          travels.
         </p>
         <div className="vf-ds-views-plates">
           {FRAME_STATES.map((state) => (
@@ -208,8 +210,23 @@ export function ChromeSection({
           <ViewsTrackSpecimen state="rest" keys="other" />
         </div>
         <p className="vf-ds-stage-caption">
-          Every state the page's plates show for the track — at rest, ⌘ held, Godview, History, ⌘4's
-          note, and the keys as Windows prints them — in this page's theme.
+          Every state the page's plates show for the track — at rest, ⌘ held, Godview, History,
+          importing, Chat, a spark that needs you (the cell's dot and the note over it), and the
+          keys as Windows prints them — in this page's theme.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="Chat — the sparks, newest activity first"
+        source="chat/ChatPanelView.tsx · DESIGN.md §8 “Chat's list”, §2.10"
+        bleed
+      >
+        <ChatSpecimen />
+        <p className="vf-ds-stage-caption">
+          The fourth view (SP-1b): the sparks fieldd keeps, each a face, a name and its status word;
+          Asking you, Needs your OK and Stuck in the attention ink with the orange dot. Until the
+          thread comes (SP-1d) its column holds the chosen spark's head and one honest line with its
+          one act. Fixture sparks and rows, read by the product's own reading.
         </p>
       </Specimen>
 

@@ -198,7 +198,7 @@ describe("a window's lights, composed with the view main owns", () => {
     for (const view of VIEWS) {
       for (const deck of DECKS) {
         const win = shell().open();
-        // the Assistant is refused (FC-D2), so that window stays on the canvas
+        // every view is held as asked, Chat's too (SP-1b); only Godview's lights can go to the bar
         const held = win.view(view).view;
         const answer = win.say(deck);
         const onBar = held === "godview" && deck === "maximized";

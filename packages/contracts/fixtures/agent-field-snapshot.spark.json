@@ -1,0 +1,81 @@
+{
+  "//": "SP-1b (track CO) — Chat reads a spark's status from the field row: the spark's own session carries `spark`, and every run fieldd launched carries who started it, `origin` (CP-D15). Both are static for a run's life. A run that is neither carries neither, as every row from before SP-1b does.",
+  "epoch": "fieldd-5d1e2a7c90b3f418.3",
+  "revision": 31,
+  "rows": [
+    {
+      "runtimeRunId": "run-vela",
+      "revision": 6,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "idle",
+      "statusSince": "2026-10-31T05:20:12.000Z",
+      "stateChangedAt": "2026-10-31T05:20:12.000Z",
+      "createdAt": "2026-10-31T05:02:40.000Z",
+      "lastActivityAt": "2026-10-31T05:20:12.000Z",
+      "alive": true,
+      "blockers": [],
+      "spark": "sp-vela01",
+      "origin": {
+        "by": "you"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-6b10",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-vela-agent",
+      "revision": 3,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "working",
+      "statusSince": "2026-10-31T05:21:02.000Z",
+      "stateChangedAt": "2026-10-31T05:21:02.000Z",
+      "createdAt": "2026-10-31T05:20:58.000Z",
+      "lastActivityAt": "2026-10-31T05:21:30.000Z",
+      "alive": true,
+      "blockers": [],
+      "origin": {
+        "by": "spark",
+        "spark": "sp-vela01"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-6b11",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-plain",
+      "revision": 9,
+      "kind": "codex",
+      "label": "Codex",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "blocked",
+      "statusSince": "2026-10-31T05:19:40.000Z",
+      "stateChangedAt": "2026-10-31T05:19:40.000Z",
+      "createdAt": "2026-10-31T04:58:10.000Z",
+      "alive": true,
+      "blockers": [
+        {
+          "id": "perm-9",
+          "kind": "permission",
+          "since": "2026-10-31T05:19:40.000Z",
+          "tool": "Bash"
+        }
+      ],
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-6b02",
+        "workloadClass": "agent"
+      }
+    }
+  ]
+}

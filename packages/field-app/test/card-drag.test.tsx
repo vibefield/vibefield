@@ -385,10 +385,10 @@ describe("the one drag machine (HN-4)", () => {
       return boxed(cell, box);
     };
     const godview = cellNamed("Godview", new DOMRect(130, 716, 46, 36));
-    const assistant = cellNamed("Assistant, not built yet", new DOMRect(226, 716, 46, 36));
+    const chat = cellNamed("Chat", new DOMRect(226, 716, 46, 36));
     // under a point on a cell: its glyph, the cell, the page
     hits((x, y) => {
-      for (const cell of [godview, assistant]) {
+      for (const cell of [godview, chat]) {
         const r = cell.getBoundingClientRect();
         if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) {
           return [cell.querySelector(".vf-views-glyph") ?? cell, cell, document.body];
@@ -425,16 +425,17 @@ describe("the one drag machine (HN-4)", () => {
     await advance(SPRING_LOAD_MS);
     expect(viewAsked).toEqual(["godview", "godview"]);
 
-    // the view already open opens nothing, nor does the cell that waits ("not built yet")
+    // the view already open opens nothing; Chat's cell, held, opens Chat (SP-1b: none waits)
     act(() => pointer("pointermove", 7, 600, 400));
     act(() => viewHeard?.({ view: "godview" }));
     act(() => pointer("pointermove", 7, 150, 730));
     expect(getCarriedCard()?.opening).toBeNull();
     act(() => pointer("pointermove", 7, 600, 400));
     act(() => pointer("pointermove", 7, 250, 730));
-    expect(getCarriedCard()?.opening).toBeNull();
-    await advance(SPRING_LOAD_MS * 2);
-    expect(viewAsked).toEqual(["godview", "godview"]);
+    expect(getCarriedCard()?.opening).toEqual({ view: "assistant", progress: 0 });
+    expect(labelShown()).toBe("Opening Chat");
+    await advance(SPRING_LOAD_MS);
+    expect(viewAsked).toEqual(["godview", "godview", "assistant"]);
 
     // let go over a cell: nothing plays, it goes home
     act(() => pointer("pointerup", 7, 150, 730));

@@ -18,7 +18,13 @@ import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import type { ServeSpec } from "../src/mesh-client";
 import { terminalServeSpec } from "../src/terminal-serve";
-import { killDaemonTree, nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
+import {
+  killDaemonTree,
+  nativeBinPath,
+  shortTmpRoot,
+  waitForMgmtEndpoint,
+  waitWithEvidence,
+} from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
 // TM-2 — THE END-TO-END WITNESS: a real floor, a real cell, a real ticket, and
@@ -233,8 +239,24 @@ async function boot(): Promise<{ daemon: FielddDaemon; dataDir: string }> {
   });
   children.push(child);
   await waitForMgmtEndpoint(dataDir, 20_000);
-  const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+  // the daemon's own log beside the floor's, so the wait below gives up with both halves of the evidence
+  const daemon = await bootstrap({
+    logRoot: join(dataDir, "logs"),
+    dataDir,
+    controlPort: 0,
+    dataPort: 0,
+  });
   cleanup.push(() => daemon.stop());
+  // Item 122 (its study, 2026-10-31) — the floor's terminal endpoints reach the daemon over the management link AFTER
+  // `bootstrap` resolves, and the row creates at once after its hello, so a cell slower than fieldd's 15 s birth wait
+  // is refused UNAVAILABLE "the terminal floor is not available" (terminal-seam's run 27b red; its fix `e3b70d38b`).
+  // Wait for them as that helper does: 30 s, inside the row's 120 s, failing HERE with the floor's evidence.
+  await waitWithEvidence(
+    "the floor's terminal endpoints reaching the daemon",
+    () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
+    30_000,
+    () => ({ dataDir, spawnedAt: undefined, link: daemon.native }),
+  );
   return { daemon, dataDir };
 }
 

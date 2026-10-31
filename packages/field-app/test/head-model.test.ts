@@ -134,7 +134,7 @@ describe("the palette's table of the frame's acts (One Frame §7)", () => {
 
   it("lists Views ⌘1–⌘4, Canvas's create and its zoom, and Settings — every act with its key", () => {
     expect(rows("canvas", "mac")).toEqual([
-      ["Views", ["Canvas ⌘1", "Godview ⌘2", "History ⌘3", "Assistant ⌘4"]],
+      ["Views", ["Canvas ⌘1", "Godview ⌘2", "History ⌘3", "Chat ⌘4"]],
       [
         "On this view",
         ["Objects B", "Zoom in ⌘+", "Zoom out ⌘−", "Zoom to fit ⇧1", "Actual size ⌘0"],
@@ -223,11 +223,11 @@ describe("the palette's table of the frame's acts (One Frame §7)", () => {
     ]);
   });
 
-  it("says the waiting Assistant waits, and the keys the Windows way", () => {
+  it("says every view runs, Chat's too (SP-1b), and the keys the Windows way", () => {
     const views = frameActGroups("canvas", "other")[0]?.acts ?? [];
-    expect(views.find((act) => act.id === "view-assistant")?.waits).toBe("not built yet");
+    expect(views.map((act) => act.waits)).toEqual([null, null, null, null]);
     expect(rows("canvas", "other")).toEqual([
-      ["Views", ["Canvas Ctrl+1", "Godview Ctrl+2", "History Ctrl+3", "Assistant Ctrl+4"]],
+      ["Views", ["Canvas Ctrl+1", "Godview Ctrl+2", "History Ctrl+3", "Chat Ctrl+4"]],
       [
         "On this view",
         [

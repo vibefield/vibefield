@@ -133,7 +133,7 @@
 
 /* A create that waits (Godview's, while the deck has no connection) — or
    Objects while an object is in hand, "Put it down first" (DK-13, R14): faint
-   by ink, as the Assistant's cell is, and still. */
+   by ink, and still. */
 .vf-line-create[aria-disabled="true"],
 .vf-line-create[aria-disabled="true"]:hover {
   color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);

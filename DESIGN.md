@@ -611,8 +611,8 @@ text belongs to Ghosttea's renderer, not CSS.
 |---|---|---|
 | **Eyebrow** | 10–11px · medium · uppercase · `tracking-wider` (0.05–0.08em) · 60–80% opacity | section labels, the switch's "Switching to" (§8) |
 | **Label** | 11–13px · medium | buttons, chips, badges, row names |
-| **Body** | 13–14px · regular · 1.45 line height | Chat's draft (14, §8; the line's until HN-2), notes, prose, settings |
-| **Title** | 12px · semibold | row titles |
+| **Body** | 12–14px · regular · 1.45 line height | Chat's draft (14, §8; the line's until HN-2), notes, prose, settings; a spark's status word in Chat's rows and its thread's head (12, §8 "Chat's list") |
+| **Title** | 12–15px · semibold | row titles; in Chat (§8 "Chat's list"), a spark's name in its row (14), the list's head and the thread's head (15) |
 | **Data numeral** | 28–34px · **light** · `tabular-nums` · `leading-none` | the hero number — no desktop surface draws one today |
 | **Data small** | 12px · medium · `tabular-nums` | times, counts, sizes |
 | **Caption** | 9–10px · 40% opacity | sub-labels, the fields' time captions (10px, §8); *the clipboard's day captions and its notch's count (9px mono) left with the left tray at HN-1, recorded here at HN-8 (2026-10-30)* |
@@ -1318,7 +1318,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
 - **The views track** (One Frame FR-1; FC-D2, FC-D4, FC-D11, FC-D17 ruled 2026-10-01; built
   2026-10-03): the frame's way to each view (§10), the segmented control at the line's left end.
   Four cells — Canvas (`canvas`), Godview (`panes`), History (`history`), and Assistant (`message`),
-  whose cell waits, faint by ink (the faint text at 55%), named "not built yet" — each **printing
+  whose cell waits, faint by ink (the faint text at 55%), named "not built yet" *(amended 2026-10-31, SP-1b: the fourth
+  cell is **Chat**, built — §8 "Chat's list"; it takes the orange dot when a spark needs you, and nothing waits)* — each **printing
   its key under its glyph**, the way a Mac keyboard prints F1 under its brightness mark. Cells
   46 × 36 on a 48 pitch (the track 196: padding 3, gap 2), the glyph 15 (the views' glyphs at rest
   tertiary, secondary under the pointer, primary on the cell that is on), the key 3 below it at 9 —
@@ -1332,7 +1333,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   45%, in 160ms. **⌘ + a digit** presses its cell: the thumb slides and lands with a 1px dip (240ms,
   the lift curve); ⌘4 says "Assistant · not built yet" over its cell for 1.4s — solid chrome, 12px
   medium in secondary ink, the strong hairline ring and the island shadow, rising 4px as it fades
-  in — and nothing moves. On Windows the keys read Ctrl 1…Ctrl 4. A cell carries its key in its
+  in — and nothing moves. *(Amended 2026-10-31, SP-1b: ⌘4 opens Chat as the other keys open their views. The note over
+  the fourth cell, in this recipe, now says that a spark needs you, for 2.4 s: §8 "Chat's list".)* On Windows the keys read Ctrl 1…Ctrl 4. A cell carries its key in its
   tooltip and its accessible name (`aria-keyshortcuts`); how the keys reach the frame is §10's.
   *As built (FR-1):* until the line exists the track sits alone in the line's material (§5) — a
   208 × 52 pill, padding 5 × 6, at the line's left end (§10) — so the line can grow around it
@@ -1422,8 +1424,61 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and the hand raised or a card picked up fold them.
   *Since FR-3 (2026-10-03) the owner is the frame's, not the line's (the head, below); @'s list, the
   line's other surface, left with the draft at HN-2.*
+- **Chat's list — the sparks, newest activity first** (SP-1b; CH-D1, CH-D3 and CH-D4 ruled A by James on 2026-10-30, on
+  the Sparks page, whose plates `ch-view`, `ch-needs` and `ch-away` this follows; `draft/compose-plane/
+  thinking-roled-agents.md` §17). The fourth view is **Chat**: the views track's fourth cell, its glyph `message`, built
+  since SP-1b (its wire id stays `assistant`).
+  - **The panel:** Chat is one panel on the cover: solid chrome, corners 22, the hairline ring and the island shadow.
+    It stands from the head band's foot to the reserve (FC-D15), 8 in from the window's sides, over the view's own
+    ground at the covers' 72% glass (FC-D16). It holds the list's column, 272 wide with the hairline at its right, and
+    the thread's column beside it. It is the faces' stage (§2.10).
+  - **The list holds** the sparks fieldd keeps (`compose.sparks.list`), one row each, newest activity first, and nothing
+    else. Agents live in Godview (CH-D1). Its head is 60 tall (padding 4 22 0): **Sparks** at 15 semibold, then their
+    count in data small, tertiary.
+  - **The row:** 64 tall, corners 16, padding 0 12 0 10; the rows sit 2 apart inside the column's 10.
+    - The face at 40, framed, live while it works (§2.10's table), and the words 12 after it.
+    - The name, 14 semibold in primary ink. At the row's right, the time of its last activity in data small, tertiary:
+      "now", a time today by the window's own clock ("9:41 AM"), a weekday this week ("Tue"), else the date
+      ("Oct 12").
+    - Under the name, the status word, 12 regular in tertiary ink, cut with an ellipsis (S-3).
+    - Under the pointer the row takes the foreground at 4%; the chosen row takes the ready fill.
+  - **Needs you (S-4):**
+    - Asking you, Needs your OK and Stuck turn the row's word to `--vf-ink-attention`. An 8 dot in `--vf-orange` stands
+      at the row's right, 12 in and 15 up from its foot.
+    - Chat's cell in the track takes the same dot, 6, 9 in from the cell's right and 5 down, while a spark needs you
+      and the window is in another view.
+    - When a spark starts to need you in another view, the views track's note (above) says so over Chat's cell for
+      2.4 s: its face at 18, framed, then "Vela needs you" in the attention ink.
+    - The face itself never turns orange.
+    - *At SP-1b a dot lasts while the need does. With the thread (SP-1d) it lasts until you open the thread, and unread,
+      the same dot in `--vf-cyan`, comes with it: until there is a thread there is nothing to read.*
+  - **The status, as SP-1b reads it:** from the spark's own run row (`agent.subscribe {projection: "field"}`, by the
+    row's `spark`) and its agents' rows (by their `origin`). The first that holds is the word:
+    - no session yet: Hello;
+    - its session not running: Asleep (CP-D14);
+    - a blocker on its own row: a permission is Needs your OK, a question is Asking you, anything else is Stuck;
+    - an agent it started at work: Running (CH-D3: "Lyra's face is working because its agents are");
+    - its own run working: Thinking; idle: Ready; not heard from yet: Hello.
+    - The other statuses (Listening, Planning, Searching, Reading, Watching, Done, Shipped, Failed, Thanked, Offline)
+      arrive with the slices that report them, never from a guess. *Rate limited has no signal yet: puppeteer 0.3.2's
+      blockers are a permission, a question or a failure. The slice that reports a limit brings it.*
+  - **The thread's column at SP-1b:** the chosen spark's head, 72 tall (padding 0 18 0 24, the hairline at its foot):
+    the face at 40, framed and live, the name 15 semibold, and the status word under it (12, tertiary). Under the head
+    is one line in secondary ink with one act:
+    - awake: "Vela's pane is in Godview", and **Show**, which goes to it there (History's Jump to);
+    - asleep: "Vela is asleep", and **Wake** (`compose.sparks.open`);
+    - no session yet: "Vela hasn't started yet", with no act.
+    - While its act runs it reads "Showing…" or "Waking…". Refused, the line says so in fieldd's words ("Couldn't show
+      Vela's pane: …", "Couldn't wake Vela: …"), and the act stays.
+    - No thread is drawn in its place: SP-1d mounts the spark's pane there, then its composer.
+  - **Empty, opening, unavailable:** "No sparks yet"; "Opening Chat…" while the list is first read; "Chat can't read
+    your sparks", with fieldd's words under it, when it cannot be read. Each is secondary, centred in the panel, and
+    never a blank.
+  - **No create yet.** Chat's line holds the views and the snapshot. Its create, **New spark** (⌘N, `sparkle`), comes
+    with its sheet in SP-1c.
 - **Chat's composer — the line's draft, moved into the thread** (LN-D3 ruled by James 2026-10-29,
-  Cards in Hand; **not built — CO's SP-1d builds it**, with the Assistant's cell becoming Chat. The
+  Cards in Hand; **not built — CO's SP-1d builds it**, with the Assistant's cell becoming Chat *(the cell became Chat
+  at SP-1b, 2026-10-31, §8 "Chat's list"; the composer is still SP-1d's)*. The
   lane that deleted the line's composer carries its canon here (VF-PM 2026-10-29 16:23Z); SP-1b and
   SP-1d link to this entry, and CO's rulings, `draft/compose-plane/`, decide what it does not): a
   composer at the foot of Chat's open thread, scoped to the spark that thread is — the draft, @, the
@@ -1723,7 +1778,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     under the cover.)*
   - **The package circle** (PL-D2 — "Agents start their servers in Godview. Publishing one shouldn't
     need a trip to the desk."; built at HN-8): under a cover — Godview, History and, once it is
-    built, Chat (the Assistant's cell) — **a lone package circle** stands at the head's left: a 40
+    built, Chat (the Assistant's cell; *built since SP-1b, 2026-10-31*) — **a lone package circle** stands at the head's left: a 40
     glass circle (the line's glass, §5) **at x 96**, `top-2`, on the lights' axis — the left slot's
     start, mirroring search's circle at the right end (§8 "Search — the Peek") — holding `package`
     18 in secondary ink (primary under the pointer), above the cover with the line and the corner
@@ -1764,7 +1819,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     8 above. Its field heads it: 46 tall, `search` 16 in secondary ink and the words at 14 (§3;
     the page drew 15, F15) under the strong hairline — "Type a command or a view…". Below it every
     act, **its key at the row's end**: **Views** — Canvas ⌘1 · Godview ⌘2 · History ⌘3 ·
-    Assistant ⌘4, which waits ("not built yet"); **On this view** — the line's create (Objects B
+    Assistant ⌘4, which waits ("not built yet") *(Chat ⌘4 since SP-1b, 2026-10-31, which runs as the others do)*;
+    **On this view** — the line's create (Objects B
     on Canvas, New terminal ⌘T in Godview and in History), in History the chosen session's **Resume
     this session**, waiting until a session is chosen — **Jump to this session** while it runs here,
     by the room's reading (the line's own until HN-7), on Canvas
@@ -4789,6 +4845,9 @@ master are governed by `apps/desktop/packaging/icons/README.md`.
 ---
 
 ## 13. Glyphs — the chrome's icon law
+
+*(2026-10-31, SP-1b: Chat's cell keeps `message`, and the New spark button takes `sparkle`, which is already among the 64.
+So the `kindle` that `thinking-roled-agents.md` §17 named is not added.)*
 
 **Chosen 2026-09-24 (James, from the Field Glyphs page; `tooling/glyphs/picks.json` is the record).**
 Every functional icon the chrome draws — the line's create and the views track, the head's name

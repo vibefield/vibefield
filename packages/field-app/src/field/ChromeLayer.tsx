@@ -2,6 +2,7 @@ import type { CanvasEngine } from "@vibecook/ice";
 import { attachDevtools } from "@vibecook/ice/devtools";
 import { useFrameFreeze } from "@vibecook/ice/react";
 import type { DesktopShellState, ShellCommand } from "@vibefield/contracts";
+import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type Dispatch,
   type ReactElement,
@@ -16,6 +17,8 @@ import {
 import { MeMenu } from "../account/MeMenu";
 import { useSyncQuestion } from "../account/sync-question";
 import { isSwitchCovering, useSwitchState } from "../boot/switch";
+import { ChatView } from "../chat/ChatView";
+import { sparksPortOver, startSparksFeed } from "../chat/sparks-feed";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
 import { Cards } from "../frame/cards/Cards";
@@ -140,6 +143,12 @@ export function ChromeLayer({
   // the frame's Peek (below) since 2026-10-08, so the room is handed nothing of
   // the frame's open surface any more.
   const historyView = useCallback((active: boolean) => <HistoryView active={active} />, []);
+  // Chat's view in the cover (SP-1b): the sparks' list over the window's one feed, which runs for the window's life
+  // (`chat/sparks-feed.ts`) so Chat's cell hears a spark that needs you from any view. Only what reads the feed
+  // redraws when the board moves; this layer never does.
+  const fieldd = useFielddClient();
+  useEffect(() => startSparksFeed(sparksPortOver(fieldd)), [fieldd]);
+  const chatView = useCallback((active: boolean) => <ChatView active={active} />, []);
   // The room is its own chunk (DESIGN.md §8 "History"): fetched when the window
   // is next idle after the chrome has mounted — after the canvas has drawn,
   // never on its path — so the first ⌘3 finds it here. Code only: the room
@@ -456,13 +465,14 @@ export function ChromeLayer({
       />
 
       {/* THE FRAME (One Frame FR-1, DESIGN.md §10): the cover the covered views
-          live in — Godview, History — over every piece of the canvas's own
+          live in — Godview, History, Chat — over every piece of the canvas's own
           chrome, and the views track standing above the cover. Below Settings,
           the palette and the loading veil: a document that is still opening
           owns the window more than any view does. */}
       <ViewFrame
         godview={<GodviewOverlay openNewProfile={showSettings ? undefined : openNewProfile} />}
         history={historyView}
+        chat={chatView}
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         lineActs={lineActs}

@@ -261,42 +261,45 @@
 }
 
 /* ⌘ held alone for 400ms: the keys light up and the glyphs step back. */
-.vf-views-line[data-held] .vf-views-cell:not([aria-disabled]) .vf-views-glyph {
+.vf-views-line[data-held] .vf-views-cell .vf-views-glyph {
   opacity: 0.45;
 }
 
-.vf-views-line[data-held] .vf-views-cell:not([aria-disabled]) .vf-views-key {
+.vf-views-line[data-held] .vf-views-cell .vf-views-key {
   color: var(--vf-text-primary);
 }
 
-.vf-views-line[data-held] .vf-views-cell:not([aria-disabled]) .vf-views-key span {
+.vf-views-line[data-held] .vf-views-cell .vf-views-key span {
   color: var(--vf-text-secondary);
 }
 
-/* The Assistant waits (FC-D2): faint by ink, its key with it, so it reads as
-   a key that is not wired rather than a hole in the track. */
-.vf-views-cell[aria-disabled="true"],
-.vf-views-cell[aria-disabled="true"]:hover,
-.vf-views-cell[aria-disabled="true"] .vf-views-key,
-.vf-views-cell[aria-disabled="true"] .vf-views-key span {
-  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
+/* CH-D4 — a spark needs you: Chat's cell takes the orange dot, 6, 9 in from the
+   cell's right and 5 down (DESIGN.md §8 "Chat's list"). */
+.vf-views-dot {
+  position: absolute;
+  top: 5px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vf-orange);
+  pointer-events: none;
 }
 
-.vf-views-cell[aria-disabled="true"] {
-  cursor: default;
-}
-
-/* "Assistant · not built yet" — over the waiting cell (the track's fourth:
-   3 + 3 × 48 + 23 from the track's left, which stands 6 in from the line's),
-   10 above the line (the track is 42 tall, centred in the line's 52), for
-   1.4s. */
+/* "Vela needs you" — over Chat's cell (the track's fourth: 3 + 3 × 48 + 23 from
+   the track's left, which stands 6 in from the line's), 10 above the line (the
+   track is 42 tall, centred in the line's 52), for 2.4s: its face at 18, then
+   the words in the attention ink (CH-D4). */
 .vf-views-note {
   position: absolute;
   bottom: calc(100% + 15px);
   left: 170px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   padding: 7px 10px;
   border-radius: 10px;
-  color: var(--vf-text-secondary);
+  color: var(--vf-ink-attention);
   background: var(--vf-chrome-solid);
   box-shadow:
     0 0 0 1px var(--vf-hairline-strong),
@@ -307,7 +310,7 @@
   white-space: nowrap;
   pointer-events: none;
   transform: translateX(-50%);
-  animation: vf-views-note 1400ms ease both;
+  animation: vf-views-note 2400ms ease both;
 }
 
 @keyframes vf-views-note {

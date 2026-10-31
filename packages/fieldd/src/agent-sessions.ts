@@ -453,6 +453,8 @@ export interface SummarizeInput {
   origin?: AgentSessionOrigin | undefined;
   /** CP-1c — the spark this run is the own session of */
   spark?: SparkId | undefined;
+  /** Item 124 — this process was born without its briefing (its executable takes no door) */
+  door?: "off" | undefined;
 }
 
 /** Q08 — the floor's own interrupt, which is ⌃C (ghosttea encodes it `\x03`),
@@ -507,6 +509,7 @@ export function summarizeManaged(input: SummarizeInput): AgentSessionSummary {
     ...(input.stopKey !== undefined ? { stopKey: input.stopKey } : {}),
     ...(input.origin !== undefined ? { origin: input.origin } : {}),
     ...(input.spark !== undefined ? { spark: input.spark } : {}),
+    ...(input.door !== undefined ? { door: input.door } : {}),
   };
 }
 

@@ -5,8 +5,9 @@ import { Composer, type ComposerHost } from "../frame/Composer";
 import { ComposerLineView } from "../frame/ComposerLine";
 import type { FrameSurface } from "../frame/frame-surface";
 import { type CoverState, coverAfter, coverAt, ViewCoverView } from "../frame/ViewCover";
-import { type ViewKeyPress, ViewsTrackView } from "../frame/ViewsTrack";
+import { type ViewKeyPress, type ViewsNote, ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
+import { ChatPreview } from "./ChatPreview";
 import {
   FIXTURE_HISTORY_DOOR,
   FIXTURE_HISTORY_PROJECT,
@@ -43,9 +44,10 @@ export const FIXTURE_CAPTURE_HOST: ComposerHost = {
 
 /** The states the One Frame page's Chrome & Composer plates show for the
  * frame (`data-state`): at rest on the canvas, ⌘ held, Godview, History, the
- * arc while History imports (AO-4b), and ⌘4's note — each in the catalog's
+ * arc while History imports (AO-4b), Chat (SP-1b), and a spark that needs you
+ * from Godview (CH-D4, the Sparks page's `ch-away`) — each in the catalog's
  * light and dark. */
-export const FRAME_STATES = ["rest", "cmd", "gv", "hx", "import", "note"] as const;
+export const FRAME_STATES = ["rest", "cmd", "gv", "hx", "import", "chat", "needs"] as const;
 export type FrameState = (typeof FRAME_STATES)[number];
 
 const STATE_LABEL: Record<FrameState, string> = {
@@ -54,7 +56,8 @@ const STATE_LABEL: Record<FrameState, string> = {
   gv: "Godview",
   hx: "History",
   import: "Importing",
-  note: "⌘4 waits",
+  chat: "Chat",
+  needs: "Needs you",
 };
 
 const VIEW_OF: Record<FrameState, FrameView> = {
@@ -63,7 +66,19 @@ const VIEW_OF: Record<FrameState, FrameView> = {
   gv: "godview",
   hx: "history",
   import: "canvas",
-  note: "canvas",
+  chat: "assistant",
+  needs: "godview",
+};
+
+/** The note the `needs` plate says: Vela asking you, from another view (CH-D4). */
+const FIXTURE_NOTE = (seq: number): ViewsNote => ({ seq, name: "Vela", seed: 7, status: "asking" });
+
+/** The state a cell's view opens, as the controls name it. */
+const STATE_OF: Record<FrameView, FrameState> = {
+  canvas: "rest",
+  godview: "gv",
+  history: "hx",
+  assistant: "chat",
 };
 
 /** One state of the track, at the line's left end — the page's §04 plates,
@@ -75,13 +90,13 @@ export function ViewsTrackSpecimen({
   state: FrameState;
   keys?: ViewKeys;
 }): ReactElement {
-  // The note lives 1.4s and goes, as it does in the product; on a plate it is
-  // said again every 1.6s — the controller's timing in fixture — so the state
+  // The note lives 2.4s and goes, as it does in the product; on a plate it is
+  // said again every 2.6s — the controller's timing in fixture — so the state
   // can be looked at rather than caught.
   const [said, setSaid] = useState(1);
   useEffect(() => {
-    if (state !== "note") return;
-    const timer = window.setInterval(() => setSaid((count) => count + 1), 1_600);
+    if (state !== "needs") return;
+    const timer = window.setInterval(() => setSaid((count) => count + 1), 2_600);
     return () => window.clearInterval(timer);
   }, [state]);
   return (
@@ -96,8 +111,9 @@ export function ViewsTrackSpecimen({
               view={VIEW_OF[state]}
               keys={keys}
               held={state === "cmd"}
-              note={state === "note" ? said : null}
               importing={state === "import"}
+              needs={state === "needs"}
+              note={state === "needs" ? FIXTURE_NOTE(said) : null}
             />
           }
         />
@@ -115,7 +131,7 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
   const [shown, setShown] = useState<FrameView>("canvas");
   const [cover, setCover] = useState<CoverState>(() => coverAt("canvas"));
   const [press, setPress] = useState<ViewKeyPress | null>(null);
-  const [note, setNote] = useState<number | null>(null);
+  const [note, setNote] = useState<ViewsNote | null>(null);
   const [surface, setSurface] = useState<FrameSurface | null>(null);
 
   // The owner, in fixture: the window moves as soon as it is asked.
@@ -126,16 +142,13 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
 
   useEffect(() => {
     if (note === null) return;
-    const timer = window.setTimeout(() => setNote(null), 1_400);
+    const timer = window.setTimeout(() => setNote(null), 2_400);
     return () => window.clearTimeout(timer);
   }, [note]);
 
   const choose = (next: FrameState): void => {
     setState(next);
-    if (next === "note") {
-      setNote((seq) => (seq ?? 0) + 1);
-      return;
-    }
+    if (next === "needs") setNote((last) => FIXTURE_NOTE((last?.seq ?? 0) + 1));
     const target = VIEW_OF[next];
     setPress((last) => ({ seq: (last?.seq ?? 0) + 1, moved: target !== view }));
     setView(target);
@@ -180,6 +193,7 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
           motion={cover.motion}
           godview={<GodviewPreview theme={dark ? "dark" : "light"} />}
           history={<HistoryPreview />}
+          chat={<ChatPreview />}
         />
         <StageBoard open={surface === "objects"} />
         <Composer
@@ -197,12 +211,10 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
               keys={keys === "Mac" ? "mac" : "other"}
               held={state === "cmd"}
               press={press}
-              note={note}
               importing={state === "import"}
-              onSelect={(asked) => {
-                if (asked === "assistant") choose("note");
-                else choose(asked === "canvas" ? "rest" : asked === "godview" ? "gv" : "hx");
-              }}
+              needs={state === "needs"}
+              note={note}
+              onSelect={(asked) => choose(STATE_OF[asked])}
             />
           }
         />

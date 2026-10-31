@@ -1,0 +1,25 @@
+{
+  "//": "Item 124 — a run born without its briefing: its executable refused a field of it (puppeteer's UNSUPPORTED_LAUNCH_FIELD, a Claude older than --mcp-config), so fieldd started it once more with none. The row says the door is off for this process; the signed record never does.",
+  "sessionId": "native-24",
+  "sessionIdBasis": "configured",
+  "kind": "claude",
+  "label": "Claude Code",
+  "device": "dev-3c4d",
+  "tier": "managed",
+  "runtimeRunId": "run-24",
+  "runtimeEpoch": 1,
+  "terminal": {
+    "hosted": "local",
+    "runtimeSessionId": "sess-01JB7Q4D",
+    "workloadClass": "agent"
+  },
+  "status": "idle",
+  "observationLevel": "native-hooks",
+  "createdAt": "2026-10-31T06:00:00.000Z",
+  "stateChangedAt": "2026-10-31T06:00:02.000Z",
+  "continuation": {
+    "persisted": true,
+    "resumable": false
+  },
+  "door": "off"
+}

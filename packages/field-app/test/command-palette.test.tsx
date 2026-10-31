@@ -138,7 +138,7 @@ describe("the palette (One Frame §7)", () => {
       "Canvas ⌘1",
       "Godview ⌘2",
       "History ⌘3",
-      "Assistant ⌘4",
+      "Chat ⌘4",
       "# On this view",
       "Objects B",
       "Zoom in ⌘+",
@@ -241,14 +241,14 @@ describe("the palette (One Frame §7)", () => {
     );
   });
 
-  it("draws a waiting act and never runs it: the Assistant says it is not built yet", () => {
+  it("runs Chat's act as it runs any view's (SP-1b: no view waits)", () => {
     const { onAct, onClose } = mount();
-    const assistant = $('[data-row="view-assistant"]') as HTMLButtonElement;
-    expect(assistant.getAttribute("aria-disabled")).toBe("true");
-    expect(assistant.textContent).toContain("not built yet");
-    act(() => assistant.click());
-    expect(onAct).not.toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
+    const chat = $('[data-row="view-assistant"]') as HTMLButtonElement;
+    expect(chat.hasAttribute("aria-disabled")).toBe(false);
+    expect(chat.textContent).toBe("Chat⌘4");
+    act(() => chat.click());
+    expect(onAct).toHaveBeenCalledWith({ kind: "view", view: "assistant" });
+    expect(onClose).toHaveBeenCalled();
   });
 
   it("runs the hot row on Return through the frame's doors, and closes", () => {
@@ -260,12 +260,16 @@ describe("the palette (One Frame §7)", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("walks only the rows that can run: ↓ from History skips the waiting Assistant", () => {
-    mount();
+  it("walks only the rows that can run: ↓ through Chat and the create skips Godview's waiting System control", () => {
+    mount({ view: "godview" });
     for (let i = 0; i < 3; i++) press(field(), { key: "ArrowDown" });
+    expect($("[data-hot]")?.getAttribute("data-row")).toBe("view-assistant");
+    press(field(), { key: "ArrowDown" });
     expect($("[data-hot]")?.getAttribute("data-row")).toBe("create");
+    press(field(), { key: "ArrowDown" });
+    expect($("[data-hot]")?.getAttribute("data-row")).toBe("settings");
     press(field(), { key: "ArrowUp" });
-    expect($("[data-hot]")?.getAttribute("data-row")).toBe("view-history");
+    expect($("[data-hot]")?.getAttribute("data-row")).toBe("create");
   });
 
   it("filters every group as you type, and a click runs a row", () => {
