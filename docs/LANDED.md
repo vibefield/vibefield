@@ -23373,3 +23373,88 @@ James's first sight: `pnpm dev`, then ⌘4 or the views track's fourth cell.
   `"//"` line), on this landing, lit on the touched rows. fd's kit half is then re-cut on it (the mirror's bytes
   change), and the two land as one mint.
 - Item 121's slice (James's A, 05:52:14Z), then item 125.
+
+## SP-1c — the New spark sheet: Chat's create (⌘N) asks a name, an agent and the profiles a spark works in, deals it a face apart from its name, and hatches it; the hatch's star falls and bursts, the face is born where it landed and flies to its row in Chat (2026-10-31; `90500b731` — the doc `4c94402eb`, the kit's hatch `92b0fd68d` and the sheet `90500b731` on SP-1b's tip `e1aee11f0` — lane `co/sp1c`, in the mini's mint `ec2d296ef` over main `7cbd2b59f`)
+
+James clicked A on `cp-next-slice-2` at 05:36:48Z (SP-1b, then SP-1c). It is `thinking-roled-agents.md` §17's SP-1c, on
+the Sparks page's rulings NS-D1 A, NS-D2 B, NS-D3 A and NS-D5 (James, 2026-10-30).
+
+**What.**
+- **DESIGN.md first** (`4c94402eb`): §8 "The New spark sheet" (its door, the sheet, the sky, the name, ↻ Another face,
+  the agent and its menu, the profiles, the foot, Create's refusals, reduced motion); §2.10's hatch, with NS-D3 ruled;
+  the line's Chat create; `--vf-spark-night`; `new-spark` among the one owner's surfaces.
+- **The kit's hatch** (`92b0fd68d`, 10 files):
+  - James's `research/spark` `star-spark/engine.js` at `025b495`, vendored byte for byte as
+    `spark-face/vendor/star-spark.js` (sha256 e4c142f2…), loaded once on demand (`loadStarSpark`), a side effect the
+    kit names.
+  - `SparkHatch`: the sky (the star engine's own night with bloom) and the face (born at the impact). A new `play`
+    deals it again; `fly(target)` carries the face across the window to a framed slot.
+  - Never a blank: without WebGL2 it is the flat star on `--vf-spark-night`. With reduced motion no star falls and
+    nothing flies.
+- **The sheet** (`90500b731`, 25 files):
+  - Its door: Chat's line create is New spark, ⌘N (Ctrl+N off the Mac) with the sparkle, a product chord kept "while
+    Chat is the view" over Ghostty's new_window. `createActOf` is total, so the line's and palette's null branches
+    went.
+  - It is drawn outside the field, as the Peek is. The field goes inert and recedes to 0.98 under it (`field.tsx`'s
+    modal, the Peek's own `data-peek-recede`). It rises in 560 ms on the island curve and leaves in 240 ms on the
+    retract curve. Each opening is a sheet of its own.
+  - The model (`chat/new-spark.ts`):
+    - the first star name no spark holds, and a face dealt apart from it;
+    - the agents that can be a spark (`agent.providers[].briefing`: all three fields and a terminal process), the
+      rest disabled with why;
+    - the agent menu, its own model first, then its picker (`agent.models`, read once), with Effort as a segmented
+      control;
+    - the profiles row, the one it thinks under locked, and the reach line, "Sees N sessions · starts …";
+    - a refusal placed by fieldd's reason.
+  - Create calls `compose.sparks.hatch`. Hatched, the list reads its records again, Chat chooses the new spark, the
+    face flies to its row, and the sheet folds.
+  - The catalog: the shipping sheet over a fixture port, live, with Chat receding behind it, plus three still states
+    as the shipping view over the product's readings. The boundaries gate holds the adapter.
+
+**Real vs not yet.**
+- Real: the sheet, its doors (`agent.providers`, `agents.profileSets.list`, `agent.models`, `compose.sparks.hatch`),
+  the hatch, the flight, Chat's choice of the new spark.
+- Not yet:
+  - the thread's first words (NS-D4: Hello and three starters), SP-1d's;
+  - Codex and Grok as sparks: they are listed, disabled, with "can't take VibeField's tools yet" (CP-5, MT-7).
+
+**Found.**
+- The hatch's first deal ran before its engines existed, so the star would never have fallen on open. The engines now
+  deal the current face as they open.
+- `AgentFieldRow` carries the persona a run is (`profileId`), not its profile set (that is `MonitorAgentRow`'s). "Sees N
+  sessions" therefore counts the field board's live sessions by persona, with an agent's own folder counted for a native
+  profile, and the window's one feed keeps that tally.
+- `createActOf` is total now: every view has its create, so the line's and the palette's "no create" branches were
+  dead and went. DESIGN.md's "No create yet" for Chat carries its dated "Built at SP-1c" line at its source.
+- The kit's colour-literal sweep reads every `.ts` and `.css` under `spark-face/`, the vendored engine's `.d.ts`
+  included.
+- *2026-10-31 09:23Z, after the mint:* Esc did not fold the sheet with the keyboard on the body.
+  - Under a cover, ViewFrame stops every keydown aimed at the body on the window's capture phase
+    (`frame/ViewFrame.tsx` :167–177), and the sheet heard Esc on the bubble phase.
+  - It was found while checking a1's ⌘N rung, in its body-focus case. The normal path was unaffected: the name holds
+    the keyboard as the sheet opens, and Cancel, the scrim and ⌘N always folded it.
+  - The fix is owed to the follow-up named under Owed: the Peek's pattern, Esc on the window's capture phase.
+
+**Validation.**
+- **The lane light** (`lanes/sp1c/logs/light-4a297b8d8.out`, on the tip's tree `be8f41701`; the amend to `90500b731`
+  touched only the message): GREEN 07:54:39Z. preflight, walls, biome, tsc for design-kit, field-app and
+  electron-shell, then field-app's whole suite: 265 files passed | 1 skipped, 3414 tests passed | 3 skipped (+27 over
+  SP-1b's tip: new-spark 13, new-spark-sheet 8, spark-face 4, product-chords 1, ui-system-boundaries 1).
+- **Run 42:** the mint `ec2d296ef` (tree `37e24a74c`, which is the lane's merge-tree) over main `7cbd2b59f`. Two
+  files changed on both sides (DESIGN.md and the kit's `tokens.css`), each side its own hunks, none by hand. `pnpm
+  verify` GREEN at 09:20:53Z in 289 s.
+  - Tests 11,175 passed | 0 failed | 18 skipped; cargo 33 `test result: ok.`, FAILED 0; biome 2,922 files clean,
+    the vendored engine's ignore holding.
+  - field-app 3,476 passed, among them new-spark-sheet 8, new-spark 13, spark-face 16, product-chords 8,
+    line-model 18 and ui-system-boundaries 40 (VF-PM's read of the mini's run).
+- **Landed:** main fast-forwarded to `ec2d296ef` at 2026-10-31T09:22:17Z: `7cbd2b59f..ec2d296ef`, 36 files, +3658
+  −89.
+
+**Owed.**
+- The follow-up "SP-1c: Esc folds the sheet from anywhere under a cover" (`3a6353c40`, on `90500b731`), its own small
+  mint after push 23.
+- The draft corpus's "as built" (thinking-roled-agents.md §17) and its status lines, at the next draft queue.
+- The ⌘N rung is a1's, in the smoke:godview lane (VF-PM 09:15Z; the facts sent 09:16Z). The line emits LINE_KEY
+  {key "⌘N", view "assistant", outcome "opened"/"closed"} for it.
+
+James's first sight: `pnpm dev`, ⌘4 for Chat, then ⌘N or the line's sparkle.

@@ -216,6 +216,27 @@ describe("the New spark sheet", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("folds on Esc from anywhere under a cover — even a key aimed at the body, which the frame stops there", async () => {
+    // a stand-in for ViewFrame's stopper (`frame/ViewFrame.tsx`): under a cover, every keydown aimed at the document's
+    // body stops on the window's capture phase, so nothing in the covered field can hold the keyboard
+    const stopper = (event: KeyboardEvent): void => {
+      if (event.target === document.body) event.stopPropagation();
+    };
+    window.addEventListener("keydown", stopper, true);
+    try {
+      const onClose = await open(portOf());
+      // a click on the sheet's blank space leaves the keyboard on the body
+      (document.activeElement as HTMLElement | null)?.blur();
+      expect(document.activeElement).toBe(document.body);
+      await act(async () =>
+        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+      );
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("keydown", stopper, true);
+    }
+  });
+
   it("folds the menu on Esc first, then the sheet", async () => {
     const port = portOf();
     const onClose = await open(port);
