@@ -3,13 +3,16 @@
  * Assistant's glass"): the glass on the live field hands the field its look and its pose, and the browser stands its
  * own layers down only once the field says it draws them. happy-dom computes no CSS and runs no animations, so the
  * rows hand the glass the computed style a browser would, and run its frames by hand. FG-4b: the logo — its filter
- * in the look and its fade in the pose, followed through its fades — and the field's still, which sizes it.
+ * in the look and its fade in the pose, followed through its fades — and the field's still, which sizes it. FG-6: the
+ * field's still where its page asks for it, which the catalog stands the glass on.
  */
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FieldLayer } from "../src/boot/FieldLayer";
 import { createFieldGlass, FieldGlassContext, useFieldStill } from "../src/boot/field-glass";
 import { type WizardGround, WizardShellView } from "../src/boot/onboarding/wizard-ui";
+import { fieldPlan } from "../src/boot/splash/field-door";
 import type { GlassState } from "../src/boot/splash/glass-look";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -254,6 +257,36 @@ describe("the field's still (FG-4b)", () => {
     expect(ground?.style.getPropertyValue("--vf-wizard-logo-width")).toBe("160px");
     expect(ground?.style.getPropertyValue("--vf-wizard-logo-height")).toBe("96.25px");
   });
+
+  it("is the still from the first frame where its page asks for it, though the page has WebGPU: no door, the browser's glass over it (FG-6, the catalog)", () => {
+    const seen: boolean[] = [];
+    function Reader(): ReactElement {
+      const still = useFieldStill();
+      seen.push(still);
+      return <p>{String(still)}</p>;
+    }
+    // a page with WebGPU, where the field would wake and open its door but for its page's word
+    Object.defineProperty(navigator, "gpu", { configurable: true, value: {} });
+    try {
+      expect("still" in fieldPlan()).toBe(false);
+      const glass = mount(
+        <FieldLayer mark={false} page={{ search: "?field=still" }}>
+          <WizardShellView dark={false} onToggleTheme={() => {}} ground="field">
+            <Reader />
+          </WizardShellView>
+        </FieldLayer>,
+      );
+      const field = host?.querySelector(".vf-field");
+      expect(field?.getAttribute("data-field")).toBe("still");
+      expect(field?.getAttribute("data-mark")).toBe("hidden");
+      expect(field?.querySelector(".vf-field-canvas")).toBeNull();
+      // the logo takes the still's own mark, and the browser draws the whole glass
+      expect(seen.at(-1)).toBe(true);
+      expect(glass.hasAttribute("data-glass")).toBe(false);
+    } finally {
+      Reflect.deleteProperty(navigator, "gpu");
+    }
+  });
 });
 
 describe("the glass on the field", () => {
@@ -404,7 +437,7 @@ describe("the glass on the field", () => {
     expect(door.glass).toHaveBeenCalled();
   });
 
-  it("is never the field's over the app (Finish setting up's sheet), nor with no field under it (the catalog)", () => {
+  it("is never the field's over the app (Finish setting up's sheet), nor with no field under it", () => {
     const { hold, door } = heldField();
     const overApp = mount(glassOn("app", hold));
     expect(door.glass).not.toHaveBeenCalled();

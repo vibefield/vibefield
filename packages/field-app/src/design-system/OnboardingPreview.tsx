@@ -4,6 +4,7 @@ import { createContext, type ReactElement, type ReactNode, useContext, useState 
 import type { DoorDevice } from "../account/door/door-parts";
 import { faceKey } from "../account/faces";
 import { type LinkBeginStep, type LinkFace, linkFace, type UserLinkStatus } from "../account/link";
+import { FieldLayer } from "../boot/FieldLayer";
 import { historySetupPhase } from "../boot/onboarding/history-line";
 import { type ConnectAside, OnboardingConnectPaneView } from "../boot/onboarding/views/connect";
 import { OnboardingFieldPaneView } from "../boot/onboarding/views/field";
@@ -54,6 +55,11 @@ import {
 } from "./profiles-fixtures";
 
 const noop = (): void => undefined;
+
+/** FG-6 — the page each frame's field reads: one asking for the field's still (`?field=still`), as
+ * a window that can't run the field stands it, so every state is drawn over the same picture and no
+ * frame opens WebGPU. */
+const STILL_PAGE = { search: "?field=still" } as const;
 
 /** TS-2 — every face the Connect pane shows, each from a wire snapshot through
  * the production `linkFace` (the daemon's words). The second control is what a
@@ -277,7 +283,7 @@ export function OnboardingPreview({
         <OnboardingGroup
           eyebrow="Fresh user path"
           title="Every pane in the shipping sequence"
-          description="These are the exact production views in flow order. The catalog only supplies deterministic data and keeps timed panes from advancing."
+          description="These are the exact production views in flow order, on the shipping glass over the field's still. The catalog only supplies deterministic data and keeps timed panes from advancing."
         >
           <OnboardingFrame
             index="01"
@@ -743,9 +749,11 @@ function OnboardingFrame({
         {controls !== undefined && <div className="vf-ds-onboarding-controls">{controls}</div>}
       </header>
       <div className="vf-ds-onboarding-production">
-        <WizardShellView dark={theme.dark} onToggleTheme={theme.onToggleTheme}>
-          {children}
-        </WizardShellView>
+        <FieldLayer mark={false} page={STILL_PAGE}>
+          <WizardShellView dark={theme.dark} onToggleTheme={theme.onToggleTheme} ground="field">
+            {children}
+          </WizardShellView>
+        </FieldLayer>
       </div>
     </article>
   );

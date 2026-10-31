@@ -784,6 +784,14 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       expect(container?.querySelector(`[data-onboarding-preview="${state}"]`)).not.toBeNull();
     }
     expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(13);
+    // FG-6: every frame stands the shipping glass on the shipping field, over the field's still as
+    // a window that can't run the field stands it — no canvas, and the browser's glass over it.
+    expect(
+      container?.querySelectorAll('.vf-ds-onboarding-production > .vf-field[data-field="still"]'),
+    ).toHaveLength(13);
+    expect(container?.querySelectorAll('.vf-wizard-shell[data-ground="field"]')).toHaveLength(13);
+    expect(container?.querySelector(".vf-ds-onboarding-production .vf-field-canvas")).toBeNull();
+    expect(container?.querySelector(".vf-ds-onboarding-production [data-glass]")).toBeNull();
     expect(container?.querySelector(".vf-ds-field-stage .vf-head-zoom")).not.toBeNull();
     expect(container?.querySelector("[data-ground-workbench]")).not.toBeNull();
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();

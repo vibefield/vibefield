@@ -670,14 +670,18 @@
   width: min(100%, 620px);
 }
 
+/* FG-6 — the first run's frames: the shipping glass on the shipping field, over the
+   field's still (DESIGN.md §2.1; OnboardingPreview's FieldLayer). The box is the
+   window it stands in: positioned and isolated, so the field's layer (boot.css)
+   fills it and stays under the glass inside it, on the field's own ground. */
 .vf-ds-onboarding-production {
+  position: relative;
+  isolation: isolate;
   display: grid;
   height: 568px;
   overflow: auto;
   place-items: center;
-  background-color: var(--vf-mat-ground);
-  background-image: var(--vf-mat-lattice);
-  background-size: var(--vf-mat-lattice-size);
+  background-color: var(--vf-field-ground);
 }
 
 .vf-ds-godview-frame {
