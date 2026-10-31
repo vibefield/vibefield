@@ -1783,16 +1783,23 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       why: null,
     });
   } finally {
-    try {
+    // the board as it was found — each restore its own step, so one that throws never skips the rest (R10)
+    const restore = async (step: () => Promise<unknown> | unknown): Promise<void> => {
+      try {
+        await step();
+      } catch {
+        /* the board as found is checked below */
+      }
+    };
+    await restore(async () => {
       if (await js<boolean>("globalThis.__vfDesk.held() !== null")) await putDown();
-      await js(`globalThis.__vfDesk.liveCap(${capWas ?? 6})`);
-      await js("globalThis.__vfDesk.liveGrace(null)");
-      for (const k of [...laid]) await remove(k);
-      d.fixture.setPlaying(false);
-      await js(`globalThis.__vfDesk.ambient(${JSON.stringify(ambient)})`);
-    } catch {
-      /* the board as found is checked below */
-    }
+    });
+    await restore(() => js(`globalThis.__vfDesk.liveCap(${capWas ?? 6})`));
+    await restore(() => js("globalThis.__vfDesk.liveGrace(null)"));
+    for (const k of [...laid]) await restore(() => remove(k));
+    await restore(() => d.fixture.setPlaying(false));
+    // the wind last, whatever came before it
+    await restore(() => js(`globalThis.__vfDesk.ambient(${JSON.stringify(ambient)})`));
     const phonesAfter = (await objectsOf(PHONE.type).catch(() => [])).length;
     if (phonesAfter !== phonesBefore)
       results.push({
