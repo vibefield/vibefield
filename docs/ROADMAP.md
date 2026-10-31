@@ -303,7 +303,9 @@
   Then items 116 (`684fd4dae`, one smoke census) and 122b (`198fee645`, the remote door's endpoints wait), the
   mint `06e1385d7`. Then ST, the durable Stop (`9196da93f`, `69f9414f3`, `7de74165b`, `7cbd2b59f`), landed as its
   rebased tip itself, run 41 (LANDED "ST"; DECISIONS ST-D1…D8, written DS-D1…D8 until 10-31 07:52Z). Then ST's
-  rename (`cc99532f6`) with fd's kit half (`e45142626`), the mint `f2c695b69`, run 45.
+  rename (`cc99532f6`) with fd's kit half (`e45142626`), the mint `f2c695b69`, run 45. Then items 121 (`624c11443`,
+  a fallback-born run re-attaches on its signed placement; the mint `4c86c2923`, run 49) and 125 (`62fa4d718`,
+  `agent-status.ts` retired; the mint `3798a5fc1`, run 51).
 - Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner; its sibling
   TC-S3, item 120, landed in run 34) · item 71 (persona refresh window) · item
   73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1 port forward before
@@ -317,12 +319,9 @@
   it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against
   one new contracts constant, its literal ruled alone; HN B2 is in) · item 115 (`pnpm dev`'s nx watcher outlives a
   runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112) ·
-  item 121 (RA-D7's refused re-attach: TC-D4's interactive fallback against AR-4b's cell rule; James ruled A on
-  10-31, re-attach a fallback-born run when fieldd's own record stamps its placement, the placement audited and the
-  row showing the cell; next, ST having landed) · item 125 (retire `agent-status.ts`' other six exports and their
-  tests) · item 126 (fd's: FakeCellDoorTests' stale-route row times out under heavy load) · item 122's floor
+  item 126 (fd's: FakeCellDoorTests' stale-route row times out under heavy load) · item 122's floor
   half (a fresh floor's two class cells' hello times, idle and under burners; its study found one test exposure,
-  landed as 122b).
+  landed as 122b; next).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
   dial under load. k1 is separate: `test-without-building` cold-boots a Shutdown simulator, and pre-booting it

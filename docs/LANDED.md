@@ -23603,3 +23603,101 @@ load1 13.8 → 10.5, nothing compiling). Two runs: 5 ABAB rounds, then 10.
 **Records.** The design record's §8 ("1e0 as measured") goes in at the next draft queue.
 
 **Owed.** PG-1f, the PU-I petition: draft-only, and its pin test waits on the puppeteer 0.3.1 EL8. Then PG-2.
+
+## Item 121 — a run TC-D4's fallback put on the interactive cell re-attaches on its own signed placement: the birth stamps its cell into the record, and AR-4b's cell rule admits it there and nowhere else (2026-10-31; `624c11443` on main `8b5c6ce5e`, lane `fix/item121-placement`, in the mini's mint `4c86c2923` over main `7310560ea`)
+
+The fixer filed it at 02:57Z, from run 27's red RA-D7 row (VF-PM's word, 02:53Z). Its study (`lanes/records/item121/study.md`)
+named the class: TC-D4's interactive fallback against AR-4b's cell rule. James ruled A at 05:52:14Z: re-attach a
+fallback-born run when fieldd's own record stamps its placement, with the placement audited and the row showing the
+cell. VF-PM ruled the slice's shape at 09:57Z: the test seam (a), and all three adversaries, each red-first and each
+refused.
+
+**The finding, plainly.** The floor gives each class cell 15 s to say hello. An agent birth that finds no agent cell
+within that budget lands on the interactive cell (TC-D4: class is a placement hint, never a failure domain). AR-4b's
+cell rule re-attached only PTYs on the agent cell. So after any fieldd restart, a run fieldd itself spawned on the
+fallback was refused as if it were a shell of the person's:
+- the boot's re-attach logged `fieldd.agents.reattach_refused_cell` and held nothing (the refusal is final);
+- `agent.resume` refused to end its PTY (PRECONDITION_FAILED, `not-agent-cell`).
+
+**What.**
+- **The record** (contracts `AgentSessionPlacement {cellBootId, workloadClass}`, passthrough): the optional
+  `placement` names the non-agent cell the PTY was born on, under the record's HMAC. Golden
+  `agent-session-record.placed.json`. Absent means a birth on the agent cell, or a record from before item 121; those
+  read and re-attach as before.
+- **The birth** (`terminal-service.ts`): the chosen route row's class rides `CellTarget`, and `spawn` answers
+  `placement` when the cell is a classed cell other than the agent's. `fieldd.terminal.class_cell_absent` is logged at
+  info (it was debug).
+- **The stamp** (`agent-runtime.ts` `enter()`): a fresh birth's record carries it (a spawn or a resume; never an
+  adoption or a re-attach). The ledger writes `agent.session.placed` as the system actor, `{sessionId, cellBootId,
+  workloadClass, fallbackFrom: "agent"}`, beside `fieldd.agents.session_placed` at info. A ledger that refuses is
+  logged (`placement_unledgered`) and never fails the birth. The action is a literal beside its seven
+  `agent.session.*` siblings: fieldd keeps action registries only for actions another process appends through R17's
+  allow-list (VF-PM, 10:19Z).
+- **The rule** (`agent-placement.ts`, the pure `cellAdmits`): the agent cell admits by construction. Any other cell
+  admits only on a verified record whose placement names THIS terminal on exactly that cell. Its refusals are
+  `unverified`, `no-placement`, `other-terminal` and `other-cell`. The boot's re-attach and `agent.resume` both read
+  it, through `cellVerdict`. The refusal log carries `why`, and the re-attach's audit carries `placement`.
+- **The row** says which cell it is on through the terminal join's existing `{cellBootId, workloadClass}`
+  ("interactive"). No new field.
+- **The test seam** `TerminalServiceOptions.classRoutes` (daemon `terminalClassRoutes`), beside `birthWaitMs`: the
+  route snapshot class placement reads. A test hides the agent cell from placement while the floor runs both cells.
+  Unset, it is the snapshot itself; per-session ops never read it.
+
+**Found.** A held run's in-memory record (`PendingEntry.record`, which G5's retry and `agent.resume` read) keeps the
+signature it was read with, from before its hold re-signed the record on disk. The rule on that copy refused a
+legitimate held run as `unverified`: the resume row's first light failed with "the session's terminal is not on the
+agent cell". So `cellVerdict` judges the record as it stands on disk (`records.read` answers only a record that
+verifies), and a G5 row was added for it.
+
+**Not yet.** A fallback-born run's pane says nothing of its cell yet; the row reads `workloadClass: "interactive"`. TC-D4
+is unchanged.
+
+**Validation.**
+- **In the lane** (nice 19, guard clear):
+  - typecheck (contracts, fieldd) and biome on the twelve files; `check:walls` clean;
+  - `pnpm gen` exit 0, with gen:check's paths unchanged (the session record is TS-only);
+  - `check:ios-fixtures`: "186 copies identical" (the new golden is in none of its sets);
+  - contracts `agent-session.test.ts` 32/32; fieldd `agent-placement.test.ts` (new) 6/6;
+  - the six affected fieldd files: 225 passed, 4 skipped, 0 failed.
+- **The six real-floor rows** (fieldd `agent-session.test.ts`, "item 121 — …"):
+  - admitted, with the record, the ledger and the log;
+  - held pending, then `agent.resume` ends the PTY on the placement, and the successor (on the agent cell) carries
+    none;
+  - G5's retry takes the held run back on the placement;
+  - the three adversaries, each refused with the PTY left running and no re-attach in the ledger: no placement
+    (`no-placement`); a placement written onto the record on disk (`session_record_forged`, set aside, never reaching
+    the cell rule); a signed placement naming the agent cell's boot id (`other-cell`).
+- **The witnesses** (`lanes/records/item121/w121.sh`, output `w121.out`, 10:23:27Z–10:27:14Z). The twelve files were
+  restored after each part (fp `64691b2ba7556e5e` before and after).
+  - Red at the parent's product with the test seam alone (`8b5c6ce5e` plus `classRoutes`): 6 failed. The admitted,
+    resume and G5 rows each fail on the boot's `reattach_refused_cell workloadClass="interactive"`; the three adversary
+    rows have no placement to tamper with.
+  - One probe per adversary, 1 failed each (the record admitted):
+    - (i) the rule admits a verified record with no placement: `reattach_refused_cell` never comes;
+    - (ii) the store keeps a record that does not verify, and the rule takes it as verified: `session_record_forged`
+      never comes;
+    - (iii) the rule no longer compares the boot id: `reattach_refused_cell` never comes.
+  - The held copy (the rule on the caller's copy, as first written): 2 failed, refused `why="unverified"`.
+  - The tip: 12 passed, 64 skipped.
+- **Run 49:** the mint `4c86c2923` (tree `f1a4e1af9`; `624c11443` × main `7310560ea`). `pnpm verify` exited 0 at
+  10:37:30Z (292 s). Tests 11,234 passed (+15: the placed golden in the fixture sweep +1, contracts' agent-session +2,
+  agent-placement 6 new, fieldd's agent-session +6) | 0 failed | 18 skipped; cargo 33 `test result: ok.`, 0 FAILED;
+  typecheck and test for 28 projects; gen:check clean (the TS-only placement moved nothing); check:ios-fixtures 186
+  identical; the tree clean after verify (VF-PM's read of the mini's run 49, 10:38:47Z).
+- **Landed:** main fast-forwarded to `4c86c2923` at 2026-10-31T10:39:34Z by land-stack.sh (the fixer, on VF-PM's GO):
+  `7310560ea..4c86c2923`, 12 files, +677 −30.
+
+## Item 125 — field-app's `agent-status.ts` retired: its six remaining exports had no caller outside their own suite (2026-10-31; `62fa4d718` on main `7310560ea`, lane `fix/item125-agent-status`, in the mini's mint `3798a5fc1` over main `5aa41562f`)
+
+- **What went:** the module whole, with `classifyAgentStatus`, `classifyTerminalStatus` (a re-export), `projectPath`,
+  `projectLabel`, `projectKey`, `providerLabel` and their seven rows in `godview-monitor-status.test.ts`. ST retired
+  `agentDetail` and `blockerTool` beside them; Godview's rows are puppeteer's model backend's.
+- **The one import:** `pane-frame-facts.ts`'s `AgentVisualStatus` type now comes from `@vibefield/puppeteer-views`.
+- **The proof:** field-app typecheck exit 0 with the module gone; it is a retirement, so no red-first. Biome, field-app's
+  godview-monitor-status, godview-pane-frame-facts and ui-system-boundaries (57 passed), the walls and retired were clean.
+- **Dated notes:** the suite's header (its GT-6 row and `folderName`'s stay), and two fieldd comments that cited the
+  module as their rule's source (`agent-monitor.ts`, `agent-model-differential.test.ts`).
+- **Untouched:** the iOS kit's own Swift `classifyAgentStatus`, and fieldd's `projects/normalize.ts` `projectKey`.
+- **Run 51 and the landing:** the mint `3798a5fc1` (tree `85f98525c`), verify exit 0 at 10:54:03Z (293 s; Tests
+  11,230/0/18, −7 the retired rows; cargo 33 ok; ios fixtures 186; VF-PM's read 10:54:30Z). main fast-forwarded to it
+  at 2026-10-31T10:55:05Z (land-stack.sh, the fixer, on VF-PM's GO): `5aa41562f..3798a5fc1`, 5 files, +19 −180.
