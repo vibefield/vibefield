@@ -154,10 +154,21 @@ function AddProfileCard({
     if (naming) name.current?.focus();
   }, [naming]);
   // on the glass the cards scroll within themselves: each step of the add, the
-  // login above all, comes into view as it opens
+  // login above all, comes into view as it opens, and again when a card is set
+  // in above it. The new profile's own card lands when the feed answers, on its
+  // own clock: a warm Mac opens the login first, and the card pushed its Cancel
+  // under the pane's foot (row 32 at run52b).
   const shown = step.kind;
   useEffect(() => {
-    if (shown !== "offer") grown.current?.scrollIntoView?.({ block: "nearest" });
+    const at = grown.current;
+    if (shown === "offer" || at === null) return;
+    const intoView = (): void => at.scrollIntoView?.({ block: "nearest" });
+    intoView();
+    const cards = at.parentElement;
+    if (cards === null || typeof MutationObserver === "undefined") return;
+    const setIn = new MutationObserver(intoView);
+    setIn.observe(cards, { childList: true });
+    return () => setIn.disconnect();
   }, [shown]);
   if (step.kind === "offer") {
     // named by its title; the offer is its description, not its name

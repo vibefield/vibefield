@@ -350,6 +350,20 @@ async function frame(sets: AgentProfileSet[]): Promise<void> {
 
 /** Add a profile… → "Work" → Claude Code: the login opens in the pane. */
 async function addWork(client: FielddClient): Promise<void> {
+  await openWork(client);
+  // the login is open in its profile's folder
+  await frame([
+    THIS_MAC,
+    {
+      ...WORK_SET,
+      personas: [workPersona({ signingIn: { sessionId: "login-work", since: LATER } })],
+    },
+  ]);
+}
+
+/** As `addWork`, short of the feed's answer: the login is open, and the feed
+ * has not yet said the new profile is there. */
+async function openWork(client: FielddClient): Promise<void> {
   await click("Add a profile…");
   // the card grows into the pane: This Mac folds to its agents' names
   expect(container?.querySelector(".vf-profiles-pane-row")).toBeNull();
@@ -371,14 +385,6 @@ async function addWork(client: FielddClient): Promise<void> {
     profileId: "p-work-claude",
   });
   expect(container?.querySelector('[data-signin-terminal="login-work"]')).not.toBeNull();
-  // the login is open in its profile's folder
-  await frame([
-    THIS_MAC,
-    {
-      ...WORK_SET,
-      personas: [workPersona({ signingIn: { sessionId: "login-work", since: LATER } })],
-    },
-  ]);
 }
 
 describe("the Profiles pane on the wizard's glass", () => {
@@ -536,6 +542,47 @@ describe("the Profiles pane on the wizard's glass", () => {
         '.vf-wizard-shell[data-size="glass"] .vf-profiles-pane {\n  min-height: 0;\n}',
       );
       expect(PROFILES_CSS).toContain(scrollsWithin(".vf-profiles-pane-cards"));
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(proto, "scrollIntoView");
+      else proto.scrollIntoView = original;
+    }
+  });
+
+  it("brings the login into view again when its profile's own card lands above it after the login opened (row 32 at run52b, class B)", async () => {
+    // the feed answers on its own clock: on a warm Mac the login opens first, and the new
+    // profile's card, set in above it after, pushed the login's Cancel under the pane's foot
+    const proto: { scrollIntoView?: (options?: unknown) => void } = Element.prototype as never;
+    const original = proto.scrollIntoView;
+    const scrolled: Element[] = [];
+    proto.scrollIntoView = function (this: Element): void {
+      scrolled.push(this);
+    };
+    try {
+      const client = daemon(feedOf([THIS_MAC]), [install("claude"), install("codex")]);
+      await mount(client, vi.fn(), true);
+      await openWork(client);
+      const cards = container?.querySelector(".vf-profiles-pane-cards");
+      expect(cards?.querySelector('section[aria-label="Work"]')).toBeNull();
+      const opened = scrolled.length;
+      await frame([
+        THIS_MAC,
+        {
+          ...WORK_SET,
+          personas: [workPersona({ signingIn: { sessionId: "login-work", since: LATER } })],
+        },
+      ]);
+      // the new profile's card stands above the open login…
+      const work = cards?.querySelector('section[aria-label="Work"]');
+      const login = cards?.querySelector('[data-signin-terminal="login-work"]');
+      expect(work).not.toBeNull();
+      expect(login).not.toBeNull();
+      expect(
+        (work?.compareDocumentPosition(login as Node) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      // …and the login came into view again once it landed
+      const since = scrolled.slice(opened);
+      expect(since.length).toBeGreaterThan(0);
+      expect(since.at(-1)?.contains(login as Node)).toBe(true);
     } finally {
       if (original === undefined) Reflect.deleteProperty(proto, "scrollIntoView");
       else proto.scrollIntoView = original;
