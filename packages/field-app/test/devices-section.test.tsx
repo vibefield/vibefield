@@ -6,6 +6,7 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, type ComponentProps, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, setHost } from "../src/host";
 import {
   CONNECT_ASKS_LINE,
@@ -801,5 +802,93 @@ describe("Settings → Devices: asking again after Not now (TS-4; TS-D7)", () =>
       root = null;
       container?.remove();
     }
+  });
+});
+
+describe("Settings → Devices: a copy deals a card from its button (HN-5)", () => {
+  /** A host with the copy door: what it was given, and whether it takes it. */
+  function withCopy(takes: boolean): string[] {
+    const copied: string[] = [];
+    setHost({
+      logger: noopLogger,
+      getConnection: async () => ({ port: 1, token: "test" }),
+      onPrepareClose: () => () => undefined,
+      completeClose: () => undefined,
+      diagnostics: {
+        copyText: async (words: string) => {
+          copied.push(words);
+          if (!takes) throw new Error("clipboard text is invalid or too large");
+        },
+      } as unknown as NonNullable<FieldHost["diagnostics"]>,
+    });
+    return copied;
+  }
+
+  /** The button's box, as the page lays it out. */
+  const boxed = (label: string, box: { left: number; top: number }): HTMLButtonElement => {
+    const pressed = button(label);
+    if (pressed === undefined) throw new Error(`no ${label} button`);
+    vi.spyOn(pressed, "getBoundingClientRect").mockReturnValue({
+      ...box,
+      width: 64,
+      height: 24,
+    } as DOMRect);
+    return pressed;
+  };
+
+  const settle = async (): Promise<void> => {
+    for (let turn = 0; turn < 30; turn += 1) await Promise.resolve();
+  };
+
+  afterEach(() => {
+    for (const card of cardsStore.snapshot().cards) cardsStore.remove(card.id);
+  });
+
+  it("the machine's name: on the clipboard first, then a text card from Copy's box", async () => {
+    const copied = withCopy(true);
+    await mount(client({ link: LINKED() }));
+    const copy = boxed("Copy", { left: 520, top: 300 });
+    await act(async () => copy.click());
+    await act(settle);
+    expect(copied).toEqual(["truffle-vibefield-studio"]);
+    const card = cardsStore.snapshot().cards.at(-1);
+    expect(card).toMatchObject({
+      kind: "text",
+      paste: "truffle-vibefield-studio",
+      origin: { view: "canvas", place: "Settings", how: "copy" },
+    });
+    expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual({
+      left: 520,
+      top: 300,
+      width: 64,
+      height: 24,
+    });
+    expect(button("Copied")).not.toBeUndefined();
+  });
+
+  it("the sign-in link, dealt from Copy link's box", async () => {
+    const copied = withCopy(true);
+    const authUrl = "https://login.tailscale.com/a/abc";
+    await mount(
+      client({ link: { ...OFFLINE, meshEnabled: true, linkState: "capturing", authUrl } }),
+    );
+    await act(async () => boxed("Copy link", { left: 610, top: 180 }).click());
+    await act(settle);
+    expect(copied).toEqual([authUrl]);
+    const card = cardsStore.snapshot().cards.at(-1);
+    expect(card).toMatchObject({ kind: "text", paste: authUrl, origin: { place: "Settings" } });
+    expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toMatchObject({
+      left: 610,
+      top: 180,
+    });
+  });
+
+  it("a refused copy deals nothing, and the button says so in its own words", async () => {
+    withCopy(false);
+    await mount(client({ link: LINKED() }));
+    await act(async () => boxed("Copy", { left: 520, top: 300 }).click());
+    await act(settle);
+    expect(cardsStore.snapshot().cards).toEqual([]);
+    expect(button("Couldn't copy")).not.toBeUndefined();
   });
 });

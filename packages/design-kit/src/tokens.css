@@ -337,7 +337,9 @@
   --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 8%);
   /* §5 (2026-09-23, edge trays): the side panel's shadow cast the other way, for a
      panel entering from the LEFT; and the island / edge recipes as drop-shadow
-     filters, for chrome whose silhouette is a path (the notch and its drawer). */
+     filters, for chrome whose silhouette is a path (the notch and its drawer).
+     No wearer since the edges left the frame (HN-8): they stand until a token
+     pass removes them, doc first (§5's edge-tray row). */
   --vf-shadow-edge: 20px 0 40px rgb(0 0 0 / 8%);
   --vf-drop-island: drop-shadow(0 8px 30px rgb(0 0 0 / 8%));
   --vf-drop-edge: drop-shadow(20px 0 40px rgb(0 0 0 / 8%));

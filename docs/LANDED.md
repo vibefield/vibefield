@@ -21757,3 +21757,126 @@ untouched. The PR is his to close after this landing.
 - James closes PR #4.
 - MT-0 rebases onto this, then runs the fieldd rows it has been holding back, and is lit.
 - PU-J, at the next draft queue.
+
+## HN B2 — every copy deals a card: the picture's write half, Settings', History's and the Setup Assistant's copies, another app's paste and drag, and History's New terminal (HN-5…HN-7 and LC-17, 2026-10-31)
+
+Track HN, *Cards in Hand*, batch B2 of three (`draft/thinking-cards-in-hand.md` §6). The doc moved first. Three
+code-only builders built it on 10-30 (W2-copy, W2-outside, W2-history), then three read-only lenses reviewed it and a fix
+pass followed. It was light-green at `16df734bd` (10-30 18:38Z) and landed in the mint M26 `e71f2d332` (run 26 on the Mac
+mini, verify only).
+
+**What.**
+- **HN-5…HN-7, the doc first** (`a7de38b5f`, then `575f95e60`, `690a740df`, `41a68def8`, `9f86e35f1`, `55994ea9f`,
+  `58a101ca2`, `9fed36cad`).
+  - Every copy inside VibeField deals a card and reaches the system clipboard. A program's write deals none.
+  - Another app's paste and drag come in as cards.
+  - History's create is New terminal.
+  - The fix pass's design calls: sizes as §9 counts, ⌘V says only what is known, a copy under a sheet, more than
+    twelve, and bounds on what comes in.
+- **HN-5, copies inside** (HN-D2, HN-L1; LC-9, LC-13, LC-14, LC-18, LC-19, LC-22).
+  - **One copy door**, `frame/cards/copy-door.ts`. `copyToHand` writes the system clipboard first, then deals the card
+    from its source's box; a refusal deals nothing and says why in the source's own place.
+    - Words go through the host's copy door, `SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES`, 64 KiB, the copy door's one
+      literal moved from main.
+    - A picture goes through the new picture door.
+    - The browser catalog keeps the web's own write.
+  - **The picture's write half**: `IPC_CHANNELS.clipboardWriteImage`, in item 102's `main/clipboard-door.ts` beside its
+    read.
+    - It takes a registered product window's PNG, bounded by `SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES` (the kept still's
+      cap) and decoded before it is written.
+    - It asks no focus (LC-18) and writes ONE item with the copy's words beside the picture (LC-19).
+    - A typed result, `ClipboardWriteImageResult`, carries a refusal as a `ClipboardCopyRefusal`, and a marked run
+      records instead of writing.
+  - **The sources**, each dealing from its button's box:
+    - the desk's Copy, with a picture's PNG through the picture door;
+    - Settings' sign-in link, a device's name and a diagnostics record;
+    - History's workspace copy port;
+    - the Setup Assistant's copies.
+    - Every sheet's copy is ONE `CopyButton` (`frame/cards/CopyButton.tsx`), saying "Copied" or "Couldn't copy".
+  - **A terminal's OSC 52** reaches the system clipboard through the host's copy door and deals no card: a program's
+    write is not the person's copy (LC-14). ghosttea is handed `programClipboardWriter`.
+- **HN-6, from another app** (HN-D2, HN-D10, HN-L3; LC-8, LC-21, LC-23, LC-24; `frame/cards/cards-outside.ts`,
+  `caret.ts`).
+  - ⌘V with no caret deals a card for each thing the paste holds, files first. A paste the newest card already is
+    lifts it instead (HN-D10).
+  - A drag in is a waiting card, carried by B1's machine until the drop fills it. `endCardDrag(x, y, filled?)` answers
+    played, home, hand, refused or none.
+  - A field keeps its own paste and drop (HN-L3), through one predicate, `placeFor`.
+  - The preload names a file by its path (`webUtils.getPathForFile`), with no IPC channel.
+  - A paste's provenance says its act alone: "⌘V · just now", "Ctrl+V · just now" off the Mac (LC-21).
+  - A picture past the still's cap comes in as its file. Pixels past it with no file, and words past one paste's read,
+    are not brought in, and the hand says so in its sizes (`format/bytes.ts`'s `sizeWords`, §9).
+- **HN-7, History's New terminal** (LN-D2).
+  - The deck's birth takes a folder: `newTerminal(cwd?)` → the monitor door → `PendingBirth.cwd`, and the reuse of a
+    waiting shell is skipped when a folder is asked.
+  - History's door opens New terminal in the project the room shows, found as New agent finds it. Another desktop is
+    named in words ("vibe-field is on Mac mini"). It asks Godview's deck first and moves the window only once the
+    terminal opened.
+  - ⌘T in History, with "New terminal in <project>" in its tooltip. Resume and Jump to stay on the room's rows.
+- **LC-17's follow-ups**:
+  - the still scheme streams the handle it judged (`93bd8568e`);
+  - smoke:canvas's DROP row lets a card go on the desk's clear ground, placed there as a note (`e85a3ff0e`);
+  - a test pins the snapshot's fill to its own press (`97ba5d75c`);
+  - reduced motion stills the hand's step and the cards' gloss (`44fd7824a`).
+- **The smokes.**
+  - smoke:godview's 11j: a program's OSC 52 printed in a pane reaches main's copy door, read from the marked run's
+    `harnessCopies` and never the person's clipboard, and deals no card.
+  - smoke:canvas's picture rows (CLOCK, TWO, HAND, MISSING) each judge that their PNG reached the picture door and was
+    taken (`judgePictured`), and the DROP row is as above.
+
+**Onto main.**
+- **Over `23e9c2538`**, HN B1 as landed (`c6f67d90c`).
+  - Two conflicts:
+    - shell.test.ts's count is in item 102's one literal, `toHaveLength(36)`: base 30, HN B1 2, AU 2, item 102 1
+      (clipboardRead), HN-5 1 (clipboardWriteImage).
+    - onboarding-wizard.test.tsx's import, in biome's order.
+  - Then `9f458204a` fixed **a semantic conflict the textual merge passed: two homes for one component**.
+    - AU-3 and HN-5 had each moved Settings → Devices' local `CopyButton` out, AU-3 to `panels/settings-ui.tsx` and HN-5
+      to `frame/cards/CopyButton.tsx`. DevicesSection imported both (biome's noRedeclare). AU-3's Updates head still
+      called `copyText(version)` in the one-argument form HN-5 had changed.
+    - The fix at the cause is one `CopyButton`, HN-5's: Settings → Updates' "Copy the exact version" is dealt into the
+      hand through `copyText(version, COPY_PLACES.settings, from)`.
+    - DESIGN.md §8 "The hand — the clipboard you can see", "Where cards come from", gains "the exact version"
+      (DESIGN.md:1480–1481 at `9f458204a`).
+- **Over `cf4335ab9`**, item 102 and AU B4 (`28bee8399`), **from the base `cbc376da5`, not git's own `23e9c2538`.**
+  - B2's line carried item 102 as `0c783a22d`, a cherry-pick of the `4e07f0308` that landed. `git range-diff` shows the
+    same patch, with only its context and the count differing. So the default base met item 102 twice: fourteen
+    conflicts, two of them add/add.
+  - `cbc376da5` (B1's main with item 102 landed, an ancestor of main) leaves each side's changes its own. Made by
+    `merge-tree --write-tree --merge-base=cbc376da5`, read-tree, the four blocks, write-tree `f503a2ba3`, and commit-tree
+    with parents `9f458204a` and `cf4335ab9`, as its body says.
+  - One conflict, UpdatesSection.tsx, with four blocks kept both: AU B4's `bar-motion` import before B2's `frame/cards`
+    ones, `buttonCls` alone in settings-ui's list, and B2's `onCopyVersion` then AU-6's `atNotes` in the props and the
+    controller.
+  - The proofs (VF-PM's read, 02:29Z):
+    - The patch over `cf4335ab9` is byte-identical to the patch over `cbc376da5` on the 107 files only B2 touched.
+    - Item 102's 21 files hold 69 hunks, all B2's.
+    - The count stays 36, with item 102's 35 and HN-5's one.
+  - `e0fb8dbc5`, the same merge before its body named its commands, was never shared and is kept in the lane.
+- **At the mint:** a9's mint merged main `8843020e9` (CP-1d and two records commits) with no conflict. Its tree,
+  `36cbbe72d`, equals VF-PM's rehearsal.
+
+**Gates.**
+- The light at `16df734bd` (10-30 18:38Z, this Mac, beside James's gates on his "run besides") was green: contracts 986,
+  electron-shell 295, field-app 1,614, fieldd 71 and browser-pane 24. Its reds were fixed at the cause along the way: R6
+  raw channel strings (`5b7a5474a`), biome's format (`bd9645a38`), Head.tsx's TS-6 × HN-1 (`55a4b11f4`) and the
+  selection bar's Copy tests waiting for the clipboard (`16df734bd`).
+- The light over `23e9c2538` at `9f458204a` (10-31 02:17:28Z, the lane, nice 19 under the guard) was green: contracts 29
+  files and 539 tests, electron-shell 23 and 222, field-app 95 and 1,797, fieldd 8 and 171. Run 1 was red at biome only,
+  on the semantic conflict above.
+- The light over `cf4335ab9` at `28bee8399` (02:27:46Z) was green: contracts 29 and 539, electron-shell 22 and 207,
+  field-app 92 and 1,680, 143 suites in all. fieldd's left the set, since item 102's fieldd files are main's now.
+- **Run 26: the mint `e71f2d332`**, which merges `28bee8399` and main `8843020e9`. Verify armed at 02:39:46Z and
+  exited 0 at 02:44:33Z: vitest 10,877 passed, 0 failed and 18 skipped across 814 files, and cargo 33 binaries ok,
+  0 FAILED (VF-PM's counts). Verify only.
+- **Not run at the landing:** the desk smokes, smoke:canvas's picture Copy and DROP rows and smoke:godview's 11j (OSC
+  52). They are a recorded debt for James's console window, as B1's were.
+- **Landed:** main fast-forwarded `8843020e9` → `e71f2d332` at 02:46:08Z on VF-PM's GO, and VF-PM pushed it.
+
+**Owed.**
+- The desk smoke rows above, on James's console window.
+- Upstream: G30 (⌘C in a pane: ghosttea's routed `copySelection` answers nothing) and RO-31 (Copy in History's room).
+- At the next draft queue: design-03 §5.1's write half and ESR §6.2's new channel row, plus the record's B2 as-built
+  lines (`thinking-cards-in-hand.md` §6).
+- **B3** (HN-8, Artifacts in the head) is light-green at `0874e0ac4`. It carries `0c783a22d` too, and re-merges after
+  B2 lands, when git's own base serves.

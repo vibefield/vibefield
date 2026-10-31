@@ -954,6 +954,54 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     expect(claimed).toEqual([true, true]);
     expect(refusalClaimed()).toBe(false);
   });
+
+  it("gives a pane nothing for a file with no path — one a page made (HN-6) — and says so, never ''", async () => {
+    const { root } = deckOf();
+    const door = doorOf();
+    const target = paneCardTarget({ root: () => root, door: () => door });
+    const loose: Card = { ...FILE, origin: { view: "outside", how: "drag" }, paste: "" };
+    expect(paneTextOf(loose)).toBeNull();
+    expect(target.answer(loose, { x: 300, y: 300 })).toMatchObject({
+      ok: false,
+      label: "A file with no path can't be pasted yet",
+    });
+    await expect(target.play(loose, { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: "A file with no path can't be pasted yet",
+    });
+    expect(door.pasted).toEqual([]);
+  });
+
+  it("never asks main about a still for a picture brought in from another app: its path is the person's own file (HN-6)", async () => {
+    const { root } = deckOf();
+    const door = doorOf();
+    const asked: string[] = [];
+    const target = paneCardTarget({
+      root: () => root,
+      door: () => door,
+      host: {
+        screenshotStillKept: async (path) => {
+          asked.push(path);
+          return false;
+        },
+      },
+    });
+    const photo: PictCard = {
+      ...SNAPSHOT,
+      id: "card-pict-photo",
+      origin: { view: "outside", how: "drag" },
+      title: "photo.jpg",
+      path: "/Users/me/My Pictures/photo.jpg",
+      paste: "/Users/me/My Pictures/photo.jpg",
+    };
+    await expect(target.play(photo, { x: 300, y: 300 })).resolves.toEqual({
+      ok: true,
+      note: OUTCOME_WORDS.pasted("vibe-field"),
+    });
+    // asked, a .jpg failed the still's own schema and a Finder .png read as a lost snapshot
+    expect(asked).toEqual([]);
+    expect(door.pasted).toEqual([["pane-1", "'/Users/me/My Pictures/photo.jpg'"]]);
+  });
 });
 
 // ── The desk ────────────────────────────────────────────────────────────────

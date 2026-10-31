@@ -6,7 +6,7 @@
  * room through `room-chunk.tsx`'s one dynamic import — with that import held
  * at a gate: nothing asks for the room before History opens; the first ⌘3
  * asks, and while the chunk is on its way the view is the cover's glass with
- * the room's edges saying "Opening History", the line's door already lent;
+ * the room's edges saying "Opening History", History's door already lent;
  * once it lands the room takes the face's place, and from then on it stays.
  * A place the frame's Peek asks for before the room is here (`open-at.ts`,
  * 2026-10-08) is where the room opens once it lands; the room draws no search
@@ -23,7 +23,12 @@ import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FrameSurface } from "../src/frame/frame-surface";
-import { resetGodviewLineDoorForTest, resetHistoryLineDoorForTest } from "../src/frame/line-door";
+import {
+  chosenSessionWaits,
+  getHistoryLineDoor,
+  resetGodviewLineDoorForTest,
+  resetHistoryLineDoorForTest,
+} from "../src/frame/line-door";
 import { ViewFrame } from "../src/frame/ViewFrame";
 import { resetActiveViewForTest } from "../src/frame/view-state";
 import { HistoryView } from "../src/history/HistoryView";
@@ -54,6 +59,10 @@ vi.mock("../src/history/HistoryRoomView", async (importOriginal) => {
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "fixtures");
 const fixture = (name: string): Record<string, unknown> =>
   JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
+const VIEW_CSS = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "history", "history-room-view.css"),
+  "utf8",
+);
 
 let publish: ((state: FrameViewState) => void) | null = null;
 let root: Root | null = null;
@@ -198,18 +207,25 @@ describe("History's room, its own chunk (2026-10-04)", () => {
     );
     expect(face.style.getPropertyValue("--vf-history-reserve")).toBe("88px");
     expect(face.style.getPropertyValue("--vf-history-head")).toBe("52px");
-    expect(face.style.getPropertyValue("--vf-history-edge")).toBe("8px");
+    // HN-8: no side to project — the face runs to the window's sides, the 8 it
+    // kept clear for the notches' slivers gone with the edges (DESIGN.md §10).
+    expect(face.style.getPropertyValue("--vf-history-edge")).toBe("");
+    expect(VIEW_CSS).toMatch(/\.vf-history-face \{[^}]*inset: var\(--vf-history-head\) 0 0;/u);
     const words = face.querySelector<HTMLElement>(".vf-history-room > .vf-history-face[data-late]");
     expect(words?.getAttribute("role")).toBe("status");
     // AO-6 — the title says it all; no machinery under it (DESIGN.md §9)
     expect(words?.querySelector(".vf-ui-empty-state__title")?.textContent).toBe("Opening History…");
     expect(words?.querySelector(".vf-ui-empty-state__description")).toBeNull();
     expect(historySlot()?.querySelector(".ah-frame")).toBeNull();
-    // The controller is here before the room: the line already holds History's
-    // create, waiting for a choice.
+    // The controller is here before the room: History's door is already lent —
+    // the line holds History's create, New terminal (HN-7), ready with no
+    // project shown yet, and the chosen session's act waits for a choice.
+    expect(getHistoryLineDoor()).not.toBeNull();
+    expect(getHistoryLineDoor()?.project).toBeNull();
     const create = host?.querySelector<HTMLButtonElement>(".vf-line-create");
-    expect(create?.getAttribute("aria-disabled")).toBe("true");
-    expect(create?.title).toContain("choose a session first");
+    expect(create?.getAttribute("aria-label")).toBe("New terminal");
+    expect(create?.hasAttribute("aria-disabled")).toBe(false);
+    expect(chosenSessionWaits(getHistoryLineDoor())).toBe("choose a session first");
     // The Peek asks for a place before the room is here (a pick made while
     // the chunk is on its way): the door holds it for the room.
     const chosen = (fixture("index-sessions.keyed.json").rows as Array<{ sessionId: string }>)[0];
@@ -223,6 +239,10 @@ describe("History's room, its own chunk (2026-10-04)", () => {
       30_000,
     );
     expect(frame.getAttribute("data-ah-surface")).toBe("host");
+    // …its one inset the head's band: the room runs to the window's sides (HN-8).
+    expect(frame.style.getPropertyValue("--ah-inset-top")).toBe("52px");
+    expect(frame.style.getPropertyValue("--ah-inset-left")).toBe("");
+    expect(frame.style.getPropertyValue("--ah-inset-right")).toBe("");
     expect(historySlot()?.querySelector("[data-face]")).toBeNull();
     expect(historySlot()?.textContent).not.toContain("Opening History");
 

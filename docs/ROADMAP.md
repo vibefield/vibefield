@@ -145,14 +145,14 @@
   the page.
 - Landed 10-31: **B1** — HN-0 (`0e2ad08bc`: DESIGN.md first) and HN-1…HN-4 (`6835b5398`: the hand at the window's
   foot, the line `[views] snapshot create`, the desk's Copy ⌘C, a card played into a pane or onto the desk), as the
-  mint `23e9c2538`, run 22, verify only (LANDED "HN B1").
-- Next: **B2** — HN-5 (every copy inside VibeField is dealt to the hand; a picture reaches the system clipboard through
-  the host's door), HN-6 (another app's paste and drag) and HN-7 (History's New terminal ⌘T, LN-D2), with LC-17's
-  follow-ups: light-green at `16df734bd`, after item 102 (the channel recount 34 → 35), re-merged with main. Then
-  **B3** — HN-8, Artifacts in the head (PL-D1…D3: the pill's package, the covered views' circle, the Hub's tiles on
-  the sheet's Artifacts shelf; the right edge's tray retires): light-green at `0874e0ac4`.
-- Owed: B1's desk smoke rows on James's console window (§5); a card dropped on the desk is not smoke-covered in
-  Electron; G30 (⌘C in a pane) and RO-31 (Copy in History) upstream (§7).
+  mint `23e9c2538`, run 22, verify only (LANDED "HN B1"). **B2** — HN-5…HN-7 and LC-17's follow-ups (the doc
+  `a7de38b5f`: every copy deals a card and reaches the system clipboard, the picture's write half; another app's
+  paste and drag; History's New terminal ⌘T), as the mint `e71f2d332`, run 26, verify only (LANDED "HN B2").
+- Next: **B3** — HN-8, Artifacts in the head (PL-D1…D3: the pill's package, the covered views' circle, the Hub's
+  tiles on the sheet's Artifacts shelf; the right edge's tray retires): light-green at `0874e0ac4`, re-merged over
+  main from git's own base, run 28.
+- Owed: B1's and B2's desk smoke rows on James's console window (§5); a card dropped on the desk is not smoke-covered
+  in Electron; G30 (⌘C in a pane) and RO-31 (Copy in History) upstream (§7).
 
 **QW1 — the Godview swarm QA, fix wave 1** · vibe-field-d4 · law `draft/testing/godview-swarm-qa-plan.md` v0.3 §12.1, `draft/thinking-ar-reattach.md` §6
 - Ruled: the plan (A01–A27, X01–X26, Q01–Q21; page 3ZrkUWG4) and re-attach's RA-D1…RA-D9 (10-27, every pick at the
@@ -237,7 +237,7 @@
     `fieldd/src/tool-plane/` serving each caller its rows; a plain run gets History and the projects list. It is drafted
     on PR #4's tip; it rebases onto CP-1d and is lit.
   - **SP-1b** (Chat's list) and **SP-1c** (the New spark sheet): renderer only, on James's go.
-  - **SP-1d**: the thread and Chat's composer, after HN B2 (HN B1 landed 10-31).
+  - **SP-1d**: the thread and Chat's composer (HN B1 and B2 landed 10-31).
   - **CP-2**: start and talk (`rooms/talk/`).
   - **CP-3**: the person (`ask_user`, `notify`).
   - **CP-4**: flows and the desk applier.
@@ -272,9 +272,9 @@
   class on the mini, 250 ms vs 200 ± 40; filed from FG's run 7, `lanes/records/item117`; after 116) · item 96's own half
   (the parts alone ×N and on CI; which of the 13 bare `30_000` rows keep a named constant; the one row still past a
   second) · item 111 (the Artifact panel's Copy does nothing in the app: a plugin's web clipboard write under the empty
-  grant set, item 102's class; an SDK clipboard-write door over HN B2's host copy door, after HN B2 unless HN B3 claims
+  grant set, item 102's class; an SDK clipboard-write door over HN B2's host copy door (landed) unless HN B3 claims
   it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against
-  one new contracts constant, its literal ruled alone; after HN B2) · item 115 (`pnpm dev`'s nx watcher outlives a
+  one new contracts constant, its literal ruled alone; HN B2 is in) · item 115 (`pnpm dev`'s nx watcher outlives a
   runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
   `.serialized`, because each row's 1 s deadline covers the dial too and rows started together stampeded the loopback
@@ -407,8 +407,10 @@
   the tab bar as an obstacle, the reconnect banner across a fieldd bounce, the attached-but-unlisted card, an overload
   refusal said in the connecting face, C1's swipe after a reopen, the corner wearing its home desktop's face and name
   (IOS-8f) (and PJ-7 run 3's n/a cases, if 10-19's round missed them).
-- HN B1's desk smoke rows on his console window (run 22 was verify only, the console locked): smoke:godview's
-  re-aimed 11h rung (a card played into a real pane) and smoke:canvas's Copy rows (LANDED "HN B1").
+- HN B1's and B2's desk smoke rows on his console window (runs 22 and 26 were verify only, the console locked):
+  smoke:godview's re-aimed 11h rung (a card played into a real pane) and 11j (a program's OSC 52 reaching main's
+  copy door, no card), and smoke:canvas's Copy rows, its picture Copy rows (CLOCK, TWO, HAND, MISSING) and DROP
+  (LANDED "HN B1", "HN B2").
 - AR-7: his daily dogfood · AR7-D2's 8 s kit wait, measured on a pair bounce.
 
 **Eyeballs (both themes)**
@@ -428,6 +430,9 @@
   sheet's scrim close by hand (FG-D27).
 - Cards in Hand's B1: the hand at the window's foot (a capture dealt, a card held and reached, ⇧⌘V's list), the line
   `[views] snapshot create`, the desk's Copy ⌘C, a card played into a pane and onto the desk.
+- Cards in Hand's B2: Settings', History's and the Setup Assistant's copies dealt into the hand from their buttons; a
+  picture copied with its words; ⌘V with no caret and a drag from another app; History's New terminal ⌘T in the
+  project it shows.
 
 **Releases, edits and chores**
 - Releases: puppeteer 0.3.0 PUBLISHED 10-28 08:19Z and pinned (`1469639a6`, with QW1 stack B) · a later puppeteer
@@ -596,7 +601,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
 | PG — the phone's Godview | ACTIVE; PG-1a…1c landed 10-31 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-0 (queued); PG-1d → PG-1e0 |
-| HN — Cards in Hand | ACTIVE; B1 (HN-0…HN-4) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | B2 (HN-5…HN-7), after item 102; then B3 (HN-8) |
+| HN — Cards in Hand | ACTIVE; B1 (HN-0…HN-4) and B2 (HN-5…HN-7) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | B3 (HN-8), run 28 |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
 | EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); Swift rejoin; mille's release |

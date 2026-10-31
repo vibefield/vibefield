@@ -15,6 +15,8 @@ import {
   type LinkFace,
   unlinkedWord,
 } from "../../../account/link";
+import { CopyButton } from "../../../frame/cards/CopyButton";
+import type { DealFrom } from "../../../frame/cards/cards-store";
 import type { FieldUserFace } from "../../../host";
 import {
   BackAction,
@@ -64,9 +66,10 @@ export interface ConnectPaneProps {
   onSendLogs: () => void;
   onCancel: () => void;
   onOpenAgain: () => void;
-  onCopyLink: () => Promise<boolean>;
+  /** HN-5 — a copy deals a card from the button pressed: `from` is its box, under the glass */
+  onCopyLink: (from: DealFrom | null) => Promise<boolean>;
   /** "Copy a request for your admin": the machine and the console, as text */
-  onCopyText: (text: string) => Promise<boolean>;
+  onCopyText: (text: string, from: DealFrom | null) => Promise<boolean>;
   /** "Not this account? Sign in again" and "Use another account": leave this
    * sign-in (unlink archives its identity, so the next sign-in can choose any
    * account — a capture waiting on approval comes back to the same network
@@ -99,27 +102,6 @@ function Reasons(): ReactElement {
         </li>
       ))}
     </ul>
-  );
-}
-
-/** A button that says it worked, for two seconds, in its own words. */
-function CopyButton({
-  label,
-  copy,
-}: {
-  label: string;
-  copy: () => Promise<boolean>;
-}): ReactElement {
-  const [done, setDone] = useState<null | boolean>(null);
-  useEffect(() => {
-    if (done === null) return;
-    const timer = setTimeout(() => setDone(null), 2000);
-    return () => clearTimeout(timer);
-  }, [done]);
-  return (
-    <button type="button" className={quietCls} onClick={() => void copy().then(setDone)}>
-      {done === true ? "Copied" : done === false ? "Couldn't copy" : label}
-    </button>
   );
 }
 
@@ -288,7 +270,11 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
                 </button>
               )}
               {refusal?.state === "link_corrupt" && (
-                <CopyButton label="Copy path" copy={() => props.onCopyText(refusal.detail)} />
+                <CopyButton
+                  label="Copy path"
+                  copy={(from) => props.onCopyText(refusal.detail, from)}
+                  className={quietCls}
+                />
               )}
               <SkipAction label="Not now" onSkip={props.onSkip} />
               {refusal === null && aside === "constellation" && (
@@ -367,7 +353,9 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
                   Open again
                 </button>
               )}
-              {!opening && <CopyButton label="Copy link" copy={props.onCopyLink} />}
+              {!opening && (
+                <CopyButton label="Copy link" copy={props.onCopyLink} className={quietCls} />
+              )}
               {!opening && aside !== "phone" && (
                 <button type="button" className={quietCls} onClick={() => setAside("phone")}>
                   Sign in on your phone
@@ -422,7 +410,8 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
               </button>
               <CopyButton
                 label="Copy a request for your admin"
-                copy={() => props.onCopyText(request)}
+                copy={(from) => props.onCopyText(request, from)}
+                className={quietCls}
               />
               <button type="button" className={quietCls} onClick={props.onSignInAgain}>
                 Use another account
@@ -489,7 +478,11 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
                   Continue
                 </button>
                 {machine !== null && (
-                  <CopyButton label="Copy" copy={() => props.onCopyText(machine)} />
+                  <CopyButton
+                    label="Copy"
+                    copy={(from) => props.onCopyText(machine, from)}
+                    className={quietCls}
+                  />
                 )}
                 {face.adminUrl !== null && (
                   <a className={quietCls} href={face.adminUrl} target="_blank" rel="noreferrer">

@@ -2,6 +2,7 @@ import type { FrameView } from "@vibefield/contracts";
 import { type ReactElement, useEffect, useState } from "react";
 import { ComposerLineView, type LineNote } from "../frame/ComposerLine";
 import {
+  type HistoryLineDoor,
   inputRefusalNote,
   type LinePane,
   type LineViewDoor,
@@ -23,8 +24,9 @@ import type { RoutedInputRefusal } from "../terminal/pool";
 /** The states the line's plates show: at rest; the snapshot under the pointer,
  * in flight (the tool up) and waiting on a host with no capture door; Objects
  * out; an object in hand (the create faint — DK-13, R14); Godview's create and
- * History's; and the note at its two anchors — a new terminal said over the
- * create, and a paste too large for its pane (D6) said from the line's left. */
+ * History's (New terminal in the project the room shows, HN-7); and the note at
+ * its two anchors — a new terminal said over the create, and a paste too large
+ * for its pane (D6) said from the line's left. */
 export const LINE_STATES = [
   "rest",
   "snap-hover",
@@ -104,6 +106,23 @@ export const FIXTURE_LINE_DOOR: LineViewDoor = {
   reveal: async () => ({ state: "opened" }),
 };
 
+/** The project the fixture room shows — the room demo's first, where its chosen
+ * session ran — as History's door names it to the line (HN-7). */
+export const FIXTURE_HISTORY_PROJECT = "vibe-field";
+
+/** What History lends the line, in fixture (HN-7, LN-D2): the room shows
+ * vibe-field, whose New terminal opens; no session is chosen, so the chosen
+ * session's act (the palette's) waits for one. */
+export const FIXTURE_HISTORY_DOOR: HistoryLineDoor = {
+  chosen: null,
+  waits: null,
+  live: false,
+  resume: async () => ({ state: "resumed" }),
+  jump: async () => ({ state: "jumped" }),
+  project: FIXTURE_HISTORY_PROJECT,
+  newTerminal: async () => ({ state: "opened" }),
+};
+
 /** What the frame says on a plate, in the product's own words. */
 function noteOf(state: LineState, seq: number): LineNote | null {
   if (state === "opened") {
@@ -140,7 +159,7 @@ export function ComposerLinePlate({
         track={<ViewsTrackView view={view} keys={keys} />}
         objectsOpen={state === "objects"}
         createHeld={state === "held"}
-        createWaits={view === "history" ? "choose a session first" : null}
+        createProject={view === "history" ? FIXTURE_HISTORY_PROJECT : null}
         snapshotWaits={state === "snap-waits" ? SNAPSHOT_NO_DOOR : null}
         snapshotOn={state === "snap-on"}
         snapshotHot={state === "snap-hover"}

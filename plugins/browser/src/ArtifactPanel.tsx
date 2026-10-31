@@ -3,7 +3,7 @@ import {
   type ArtifactView,
   ArtifactView as ArtifactViewSchema,
 } from "@vibefield/contracts";
-import type { PluginProductClient, PluginSurfaceProps } from "@vibefield/plugin-sdk";
+import type { PluginProductClient } from "@vibefield/plugin-sdk";
 import {
   EmptyState,
   FieldGlyph,
@@ -119,13 +119,10 @@ type CatalogState =
   | { phase: "live"; artifacts: ArtifactView[] }
   | { phase: "error"; message: string };
 
-export function ArtifactPanel({
-  client,
-  surface,
-}: {
-  client: PluginProductClient;
-  surface: PluginSurfaceProps;
-}): ReactElement {
+/** The Artifact Hub, the `hud.side-panel` contribution — hosted since HN-8 on the Artifacts shelf
+ * of VibeField's pill's sheet, whose Escape, dim and button close it: it draws no close of its own
+ * (VibeField DESIGN.md §8 "Artifacts — the Artifacts shelf's contents"). */
+export function ArtifactPanel({ client }: { client: PluginProductClient }): ReactElement {
   const [catalog, setCatalog] = useState<CatalogState>({ phase: "loading" });
   const [subscriptionEpoch, setSubscriptionEpoch] = useState(0);
   const [screen, setScreen] = useState<Screen>({ kind: "catalog" });
@@ -195,6 +192,15 @@ export function ArtifactPanel({
     setMutationError(null);
     setConfirmRemove(null);
     setScreen({ kind: "catalog" });
+  }, []);
+
+  // The Add act, under its one name (HN-8, ruling 11): the Publish… tile in the tile form, the
+  // empty catalog's Publish… and the list form's round plus all change the panel in place to its
+  // step, "Publish", and the two choices.
+  const beginAdd = useCallback(() => {
+    setMutationError(null);
+    setConfirmRemove(null);
+    setScreen({ kind: "choose" });
   }, []);
 
   const publish = useCallback(
@@ -400,23 +406,31 @@ export function ArtifactPanel({
       );
     }
     if (artifacts.length === 0) {
+      // The empty catalog draws no Publish… tile, so its one button is the act, in the act's name:
+      // one Publish… on screen (VibeField DESIGN.md §8 "Artifacts").
       return (
-        <QuietState title="No artifacts yet" detail="Add a proxy or folder">
+        <QuietState title="No artifacts yet" detail="Publish a proxy or a folder">
           <UiButton
             variant="primary"
             className="vf-artifact-button"
-            onClick={() => {
-              setConfirmRemove(null);
-              setScreen({ kind: "choose" });
-            }}
+            disabled={pending !== null}
+            onClick={beginAdd}
           >
-            Add artifact
+            Publish…
           </UiButton>
         </QuietState>
       );
     }
     return (
       <ul className="vf-artifact-list" aria-label="Artifacts">
+        {/* Publish… — the Add act as the first tile, in words, where the shelf lays the catalog
+            out as tiles (PL-D3); the list form keeps the header's round plus, and its stylesheet
+            shows one of the two. */}
+        <li className="vf-artifact-publish">
+          <button type="button" disabled={pending !== null} onClick={beginAdd}>
+            Publish…
+          </button>
+        </li>
         {artifacts.map((artifact) => (
           <ArtifactRow
             key={artifact.artifactKey}
@@ -441,6 +455,7 @@ export function ArtifactPanel({
     );
   }, [
     artifacts,
+    beginAdd,
     catalog,
     chooseFolder,
     confirmRemove,
@@ -470,11 +485,7 @@ export function ArtifactPanel({
             disabled={pending !== null}
             aria-label="Add artifact"
             title="Add artifact"
-            onClick={() => {
-              setMutationError(null);
-              setConfirmRemove(null);
-              setScreen({ kind: "choose" });
-            }}
+            onClick={beginAdd}
           >
             <FieldGlyph name="plus" size={18} />
           </button>
@@ -488,12 +499,6 @@ export function ArtifactPanel({
       )}
 
       {content}
-
-      {surface.slot === "hud.side-panel" && (
-        <button type="button" className="vf-artifact-close" onClick={surface.requestClose}>
-          Close panel
-        </button>
-      )}
     </section>
   );
 }
@@ -532,27 +537,31 @@ function AddChoice({
   return (
     <div className="vf-artifact-flow">
       <FlowHeading
-        title="Add artifact"
+        title="Publish"
         detail="Choose what this computer should share."
         onBack={onBack}
         disabled={pending}
       />
-      <button type="button" className="vf-artifact-choice" onClick={onProxy} disabled={pending}>
-        <ChoiceIcon kind="proxy" />
-        <span>
-          <strong>Proxy</strong>
-          <small>Share a local site already running on this computer.</small>
-        </span>
-        <Chevron />
-      </button>
-      <button type="button" className="vf-artifact-choice" onClick={onFolder} disabled={pending}>
-        <ChoiceIcon kind="folder" />
-        <span>
-          <strong>Folder</strong>
-          <small>Serve a folder as a website with Truffle.</small>
-        </span>
-        <Chevron />
-      </button>
+      {/* Proxy and Folder: two rows in the list form, two cards side by side in the tile form
+          (the ruled page's drawing; VibeField DESIGN.md §8 "Artifacts"). */}
+      <div className="vf-artifact-choices">
+        <button type="button" className="vf-artifact-choice" onClick={onProxy} disabled={pending}>
+          <ChoiceIcon kind="proxy" />
+          <span>
+            <strong>Proxy</strong>
+            <small>Share a local site already running on this computer.</small>
+          </span>
+          <Chevron />
+        </button>
+        <button type="button" className="vf-artifact-choice" onClick={onFolder} disabled={pending}>
+          <ChoiceIcon kind="folder" />
+          <span>
+            <strong>Folder</strong>
+            <small>Serve a folder as a website with Truffle.</small>
+          </span>
+          <Chevron />
+        </button>
+      </div>
       {pending && <p className="vf-artifact-pending">Waiting for folder…</p>}
     </div>
   );

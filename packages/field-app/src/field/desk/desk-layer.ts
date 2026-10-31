@@ -26,9 +26,9 @@ import { deskBlobs } from "./desk-blobs";
 /**
  * THE GRID (DESIGN.md §2.1 as DK-0d wrote it, §10): the engine's own fade-in law and mat, with the
  * rulers PRINTED at a margin of 0 — no unprinted mat between the window's edge and the rulers' frame:
- * the frame stands on the window's four edges, and the head's controls and the notch stand over the
- * bands (2026-10-29; the margin was 60, which kept the top ruler below the head's strip and the left
- * one clear of the notch, and left a gap of bare mat around the frame).
+ * the frame stands on the window's four edges, and the head's controls stand over the bands
+ * (2026-10-29; the margin was 60, which kept the top ruler below the head's strip and the left
+ * one clear of the notch, which left with HN-1, and left a gap of bare mat around the frame).
  */
 /**
  * THE HAND'S RESERVES (DESIGN.md §8 "Tools in hand"; ICE I20 — `deskLayer({ hold })`): the held object's reading fit

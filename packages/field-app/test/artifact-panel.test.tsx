@@ -46,12 +46,7 @@ async function mount(productClient: PluginProductClient): Promise<void> {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(
-      <ArtifactPanel
-        client={productClient}
-        surface={{ slot: "hud.side-panel", windowId: "field", requestClose: vi.fn() }}
-      />,
-    );
+    root?.render(<ArtifactPanel client={productClient} />);
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -162,6 +157,62 @@ describe("ArtifactPanel", () => {
     expect(container?.textContent).toContain(
       "That folder cannot be served. Choose another folder.",
     );
+  });
+
+  it("puts Publish… first in the catalog, in words, and turns the panel in place to its step, Publish — Proxy and Folder, its two cards (HN-8, PL-D3; ruling 11)", async () => {
+    await mount(client([ARTIFACT]));
+    const tiles = [...(container?.querySelectorAll(".vf-artifact-list > li") ?? [])];
+    expect(tiles.map((tile) => tile.className)).toEqual(["vf-artifact-publish", "vf-artifact-row"]);
+    const publish = tiles[0]?.querySelector("button");
+    expect(publish?.textContent).toBe("Publish…");
+    act(() => publish?.click());
+    expect(container?.querySelector(".vf-artifact-list")).toBeNull();
+    // the act's one name: the step is headed "Publish", never "Add artifact"
+    const heading = (): Element | null | undefined =>
+      container?.querySelector(".vf-artifact-flow-heading");
+    expect(heading()?.querySelector("strong")?.textContent).toBe("Publish");
+    expect(heading()?.querySelector("small")?.textContent).toBe(
+      "Choose what this computer should share.",
+    );
+    expect(container?.textContent).not.toContain("Add artifact");
+    // its two choices stand together, the pair the tile form lays side by side as cards
+    expect(
+      [...(container?.querySelectorAll(".vf-artifact-choices > .vf-artifact-choice") ?? [])].map(
+        (choice) => choice.querySelector("strong")?.textContent,
+      ),
+    ).toEqual(["Proxy", "Folder"]);
+    expect(button("Proxy")).not.toBeNull();
+    expect(button("Folder")).not.toBeNull();
+    // the round plus it stands for in the tile form is the same act, the list's: it keeps its own
+    // name and opens the same step
+    act(() => button("Back").click());
+    act(() => button("Add artifact").click());
+    expect(heading()?.querySelector("strong")?.textContent).toBe("Publish");
+    expect(button("Proxy")).not.toBeNull();
+  });
+
+  it("says an empty catalog in the act's name — Publish a proxy or a folder — with one Publish…, which opens the step (HN-8, ruling 11)", async () => {
+    await mount(client([]));
+    const quiet = container?.querySelector(".vf-artifact-quiet");
+    expect(quiet?.querySelector(".vf-ui-empty-state__title")?.textContent).toBe("No artifacts yet");
+    expect(quiet?.querySelector(".vf-ui-empty-state__description")?.textContent).toBe(
+      "Publish a proxy or a folder",
+    );
+    const buttons = [...(quiet?.querySelectorAll("button") ?? [])];
+    expect(buttons.map((found) => found.textContent)).toEqual(["Publish…"]);
+    // the empty catalog draws no Publish… tile beside it: one Publish… on screen
+    expect(container?.querySelector(".vf-artifact-publish")).toBeNull();
+    act(() => buttons[0]?.click());
+    expect(container?.querySelector(".vf-artifact-flow-heading strong")?.textContent).toBe(
+      "Publish",
+    );
+    expect(button("Proxy")).not.toBeNull();
+  });
+
+  it("draws no close of its own: the shelf's Escape, its dim and its button close it (HN-8)", async () => {
+    await mount(client([ARTIFACT]));
+    expect(container?.textContent).not.toContain("Close panel");
+    expect(container?.querySelector(".vf-artifact-close")).toBeNull();
   });
 
   it("opens the exact validated catalog URL and renders provider loss honestly", async () => {

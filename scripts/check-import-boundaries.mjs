@@ -706,6 +706,14 @@ const RETIRED_MODULE_NAMES = new Set([
   "send-face",
   "smoke-line-send",
   "smoke-send-to",
+  // HN-8 (Artifacts in the head, 2026-10-30): the edge tray — its controllers and view, its
+  // notch's path and its sheet — and the catalog's plates of it, retired with the edges
+  // (PL-D1…PL-D3: Artifacts into the pill's sheet and the covered views' circle)
+  "EdgeTray",
+  "EdgeTrayView",
+  "notch-path",
+  "edge-tray",
+  "EdgesPreview",
 ]);
 // A deleted DIRECTORY or a generic name, held by its path where it lived.
 function retiredRelative(spec, rel) {
@@ -1248,6 +1256,12 @@ function runSelfTest() {
       id: "R25",
       file: "packages/electron-shell/src/testing/uses-send-rows.ts",
       body: 'import { sendToRows } from "./smoke-send-to";\nexport const r = sendToRows;\n',
+    },
+    // HN-8 (R25) — the edge tray imported again: its view from the frame.
+    {
+      id: "R25",
+      file: "packages/field-app/src/frame/uses-edge-tray.tsx",
+      body: 'import { EdgeTrayView } from "../hud/edge-tray/EdgeTrayView";\nexport const e = EdgeTrayView;\n',
     },
     // P2 (R26) — the Peek's watch-only pane, reached from anywhere but the Peek: the desk,
     // Godview's deck, History, the canvas — by its directory or its module's name.

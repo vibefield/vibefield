@@ -195,6 +195,46 @@ describe("the glyph set", () => {
     expect(redo.firstElementChild?.getAttribute("transform")).toBe("matrix(-1 0 0 1 24 0)");
   });
 
+  // the tests lens's 5: a role is the catalog's tooltip for its glyph and says where the chrome
+  // draws it — since HN-7 the line's create is `start` in Godview and in History, and `resume` the
+  // chosen session's act; "the composer" alone is Chat's since LN-D3, so a role names the line, or
+  // the phone's composer (DESIGN.md §13), by name. Read from the kit's data, which
+  // tooling/glyphs/build.mjs writes from drawings.mjs.
+  it("says where each glyph is drawn as the chrome draws it since HN-7 — the line, never a bare composer", () => {
+    expect({
+      plus: GLYPH_META.plus.role,
+      close: GLYPH_META.close.role,
+      return: GLYPH_META.return.role,
+      start: GLYPH_META.start.role,
+      resume: GLYPH_META.resume.role,
+    }).toEqual({
+      plus: "Objects — the line's create on Canvas, the one bare plus on screen; New profile inside its sheet",
+      close: "Close settings, stop loading; the line's plus turned 135°",
+      return: "Enter on the phone's composer and keypad; a snippet that sends Enter",
+      start:
+        "The line's create in Godview and History: a session started, the window holding a plus",
+      resume:
+        "The chosen session's act on its row, ④'s head and the palette: a past session resumed, the window holding play",
+    });
+  });
+
+  // HN-8 (§13; the design lens's D13): `package` is Artifacts' — the pill's button and the covered
+  // views' circle, folded into the terminals' title bar with search — and `sidepanel`, the Hub
+  // side panel's toggle until FR-4, is drawn nowhere now; the catalog's name and tooltip for each
+  // say so. Read from the kit's data, which tooling/glyphs/build.mjs writes from drawings.mjs.
+  it("names `package` Artifacts' where the head draws it, and `sidepanel` drawn nowhere (HN-8)", () => {
+    expect(GLYPH_META.package).toEqual({
+      label: "Artifacts",
+      group: "objects",
+      role: "Artifacts: the pill's package button and the covered views' circle, folded into the terminals' title bar with search",
+    });
+    expect(GLYPH_META.sidepanel).toEqual({
+      label: "Side panel",
+      group: "objects",
+      role: "Drawn nowhere in the product: the Hub side panel's toggle until FR-4, kept in the set until a glyph pass retires it",
+    });
+  });
+
   it("keeps the committed drawings and the phone's template assets fresh", () => {
     // The generator is the source; data.ts and FieldGlyphs.xcassets are its
     // outputs. A drawing edited by hand in either place fails here.
@@ -235,9 +275,10 @@ describe("the glyph set", () => {
 
   it("refuses an inline <svg> icon in product code (the silhouettes are the allowlist)", () => {
     // Product code draws icons through FieldGlyph. What may still be an inline
-    // <svg> is geometry that is not an icon: the edge tray's notch and drawer
-    // are chrome silhouettes drawn from the wall (DESIGN.md §8), and the OS
-    // marks are their owners' marks, kept exact like the vendor marks (§13).
+    // <svg> is geometry that is not an icon: the OS marks are their owners'
+    // marks, kept exact like the vendor marks (§13). The edge tray's notch and
+    // drawer, chrome silhouettes drawn from the wall, left with the edges at
+    // HN-8 (DESIGN.md §8 "Edge trays", retired), and their two with them.
     // The catalog (design-system/) is a harness and keeps its own fixtures.
     // DK-11 (R2): the desk bar's ONE path renderer for a kind's own drawing —
     // one component, one <svg> — and no other file of the bar's. DK-16 (R17):
@@ -248,7 +289,6 @@ describe("the glyph set", () => {
       ["field/desk/bar/KindGlyph.tsx", 1],
       ["field/desk/peers/PeersView.tsx", 1],
       ["godview/os-marks.tsx", 1],
-      ["hud/edge-tray/EdgeTrayView.tsx", 2],
     ]);
     const found = new Map<string, number>();
     const visit = (base: string, relativeDir: string, skip: (rel: string) => boolean): void => {

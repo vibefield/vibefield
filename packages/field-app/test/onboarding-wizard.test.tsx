@@ -13,6 +13,7 @@ import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootOnboarding, BootView } from "../src/boot/machine";
 import { OnboardingWizard } from "../src/boot/onboarding/OnboardingWizard";
 import { glassFit } from "../src/boot/onboarding/wizard-ui";
+import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } from "../src/host";
 
 // UA-3w — the Setup Assistant (spec §6). The cases that matter are the ones
@@ -1095,6 +1096,57 @@ describe("Setup Assistant", () => {
     expect(button("Copy a request for your admin")).not.toBeUndefined();
     await click("Tell me when it's approved");
     expect(title()).not.toBe("Waiting for approval.");
+  });
+
+  it("deals a copy from its button's box, under the glass (HN-5)", async () => {
+    // DESIGN.md §8 "Copy" (LC-22): a copy made under a sheet is dealt into the hand under it,
+    // from the button pressed, and the button's "Copied" is its sign while the sheet stands
+    const copied: string[] = [];
+    host(
+      vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile),
+      {
+        diagnostics: {
+          copyText: async (words: string) => {
+            copied.push(words);
+          },
+        } as unknown as NonNullable<FieldHost["diagnostics"]>,
+      },
+    );
+    const admin = "https://login.tailscale.com/admin/machines";
+    await mount({
+      fieldd: client({
+        link: {
+          ...NO_LINK,
+          meshEnabled: true,
+          nodeState: "NeedsMachineAuth",
+          linkState: "awaiting_approval",
+          machineName: "truffle-vibefield-studio",
+          adminUrl: admin,
+        },
+      }),
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+
+    const copy = button("Copy a request for your admin");
+    const box = { left: 420, top: 560, width: 220, height: 32 };
+    vi.spyOn(copy, "getBoundingClientRect").mockReturnValue(box as DOMRect);
+    await act(async () => {
+      copy.click();
+      for (let hop = 0; hop < 30; hop += 1) await Promise.resolve();
+    });
+    expect(copied).toEqual([
+      `Please approve truffle-vibefield-studio in the Tailscale admin console: ${admin}`,
+    ]);
+    const card = cardsStore.snapshot().cards.at(-1);
+    expect(card).toMatchObject({
+      kind: "text",
+      paste: copied[0],
+      origin: { place: "Setup Assistant", how: "copy" },
+    });
+    expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual(box);
+    expect(button("Copied")).not.toBeUndefined();
+    if (card !== undefined) cardsStore.remove(card.id);
   });
 
   it("says what capture is waiting on before the node offers an address", async () => {

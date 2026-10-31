@@ -1,5 +1,11 @@
-import type { FrameView, ScreenshotCaptureError } from "@vibefield/contracts";
+import type {
+  ClipboardCopyTooLarge,
+  FrameView,
+  ScreenshotCaptureError,
+} from "@vibefield/contracts";
+import { sizeWords } from "../../format/bytes";
 import { relativeTime } from "../../format/relative-time";
+import type { ViewKeys } from "../views";
 import type { AgentCard, Card, CardOrigin } from "./cards-model";
 
 /**
@@ -17,22 +23,36 @@ const VIEW_NAMES: Readonly<Record<FrameView | "outside", string>> = {
   outside: "Another app",
 };
 
-const HOW_WORDS: Readonly<Record<CardOrigin["how"], string | null>> = {
-  copy: null,
-  snapshot: "snapshot",
-  paste: "⌘V",
-  drag: "dragged in",
-};
+/** How a card came in, after its view — a copy says nothing more, its view and place say where.
+ * A paste says its key, spelled as the frame spells its keys for the platform (`views.ts`, the
+ * line's ⌘T): "⌘V" on the Mac, "Ctrl+V" elsewhere. PURE. */
+function howWords(how: CardOrigin["how"], keys: ViewKeys): string | null {
+  switch (how) {
+    case "copy":
+      return null;
+    case "snapshot":
+      return "snapshot";
+    case "paste":
+      return keys === "mac" ? "⌘V" : "Ctrl+V";
+    case "drag":
+      return "dragged in";
+  }
+}
 
 export function viewName(view: FrameView | "outside"): string {
   return VIEW_NAMES[view];
 }
 
 /** Where a card came from, as the line over it says: "Godview · claude·2 ·
- * 2m ago", "Canvas · snapshot · just now", "Another app · ⌘V · just now". */
-export function provenance(card: Card, now: number): string {
-  const how = HOW_WORDS[card.origin.how];
-  return [viewName(card.origin.view), card.origin.place ?? how, relativeTime(card.at, now)]
+ * 2m ago", "Canvas · snapshot · just now", "Another app · dragged in · just
+ * now" — and a paste with no caret by its act alone, "⌘V · just now": where
+ * its words were copied is not known, since a pane's and a field's own copies
+ * and a program's OSC 52 reach the clipboard with no card (LC-21). The key is
+ * the platform's (`keys`): "Ctrl+V · just now" off the Mac. */
+export function provenance(card: Card, now: number, keys: ViewKeys): string {
+  const { origin } = card;
+  const view = origin.how === "paste" ? null : viewName(origin.view);
+  return [view, origin.place ?? howWords(origin.how, keys), relativeTime(card.at, now)]
     .filter((part): part is string => part !== null && part !== undefined && part !== "")
     .join(" · ");
 }
@@ -118,6 +138,37 @@ export const WAITING_WORDS = {
   letGo: "Let go to see it",
 } as const;
 
+/** What another app hands over, once it is brought in (HN-6; DESIGN.md §8 "The hand", brought
+ * in): a file's facts when its first lines are not words, the kind's own name for a thing that
+ * came with none, what a pane says to a file with no path, and the line's notes for a drop that
+ * held nothing a card can be, for words or pixels past what a card holds, and for more than the
+ * hand holds. Sizes as §9 counts them (`sizeWords`). */
+export const OUTSIDE_WORDS = {
+  /** "PDF · 2.4 MB": the kind its name says, then its size as Finder counts it — a size alone,
+   * so to the nearest: "BIN · 1 byte", and never "1000 KB" */
+  facts: (kind: string | null, bytes: number) => {
+    const size = sizeWords(bytes);
+    return kind === null ? size : `${kind} · ${size}`;
+  },
+  picture: "Picture",
+  file: "File",
+  /** HN-L5 — a file plays into a pane as its path; one with none (a file a page made) has
+   * nothing to give */
+  fileNoPath: "A file with no path can't be pasted yet",
+  nothing: "Not brought in — it held no words, picture or file",
+  /** LC-24 — words past what one paste reads, or pixels past the still's cap with no path to
+   * come in as (one with a path comes in as its file): its size rounded up and the bound down,
+   * so the two never read as equal (§9) */
+  tooLarge: (what: "words" | "picture", bytes: number, bound: number) => {
+    const holds = what === "words" ? "the words hold" : "the picture holds";
+    const size = sizeWords(bytes, Math.ceil);
+    const most = sizeWords(bound, Math.floor);
+    return `Not brought in — ${holds} ${size}; a card holds at most ${most}`;
+  },
+  /** LC-23 — more at once than the hand holds: the first twelve came in (HN-D8) */
+  capped: (kept: number, of: number) => `${kept} of ${of} brought in — the hand holds twelve`,
+} as const;
+
 /** The raised hand and a card picked up (HN-D5). */
 export const HAND_WORDS = {
   raise: "Your hand  ⇧⌘V",
@@ -171,4 +222,53 @@ export function captureRefusal(error: ScreenshotCaptureError): string {
 export const COPY_WORDS = {
   offScreen: "Not copied — it is off the screen",
   notDrawn: "Not copied — the desk could not draw it",
+} as const;
+
+/** HN-5 — a copy the system clipboard did not take deals no card (copy-door.ts), and says why
+ * after "Not copied —", as the desk's Copy says its own (DESIGN.md §8 "Copy"). A refusal a door
+ * typed, and the copy door's own check of both bounds, say their terms: a size against its bound
+ * as §9 counts them, the size rounded up and the bound down, so the two never read as equal.
+ * Anything else is said in the door's one sentence, and the error a bridge threw is only logged:
+ * a refusal never repeats it. */
+export const COPY_DOOR_WORDS = {
+  /** the words' door, or the page's own clipboard, did not take them, and typed no terms */
+  words: "the clipboard did not take the words",
+  /** the picture's door, or the page's own clipboard (the browser catalog's), did not take it,
+   * and typed no terms */
+  picture: "the clipboard did not take the picture",
+  /** main found no picture in the PNG it was given */
+  unread: "the picture could not be read",
+  /** past its bound — "the words hold 80 KB; the clipboard takes at most 65 KB", the picture's
+   * alike — or words within the clipboard's bound whose request the words' door cannot carry,
+   * both figures as sent: "the words hold 66 KB as sent; a copy sends at most 65 KB" */
+  tooLarge: (what: ClipboardCopyTooLarge["what"], bytes: number, max: number): string => {
+    const size = sizeWords(bytes, Math.ceil);
+    const bound = sizeWords(max, Math.floor);
+    switch (what) {
+      case "words":
+        return `the words hold ${size}; the clipboard takes at most ${bound}`;
+      case "picture":
+        return `the picture holds ${size}; the clipboard takes at most ${bound}`;
+      case "words-as-sent":
+        return `the words hold ${size} as sent; a copy sends at most ${bound}`;
+    }
+  },
+  /** a refusal as the line says it */
+  refused: (reason: string) => `Not copied — ${reason}`,
+} as const;
+
+/** HN-5 — a copy made in Settings or the Setup Assistant keeps its button's own words, said on
+ * the button for two seconds (DESIGN.md §8 "Copy"): under the sheet, "Copied" is the copy's sign
+ * while the sheet stands. */
+export const COPY_BUTTON_WORDS = {
+  copied: "Copied",
+  refused: "Couldn't copy",
+} as const;
+
+/** HN-5 — the place a copy was made when it is a sheet over the view, not the view's own
+ * surface: its card's provenance names it after the view under it ("Canvas · Settings · just
+ * now"). History's own copies name History alone. */
+export const COPY_PLACES = {
+  settings: "Settings",
+  setup: "Setup Assistant",
 } as const;

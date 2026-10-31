@@ -216,6 +216,54 @@ describe("the hand's lab door: a smoke's hands (R-T 2)", () => {
     expect(door.pasted).toEqual([]);
   });
 
+  it("plays the newest card let go at a window point, through whatever place a drop finds there (LC-17)", async () => {
+    const store = new CardStore(() => 7_000);
+    const targets = new CardTargets();
+    const ground = boxed(document.createElement("div"), new DOMRect(0, 52, 1180, 640));
+    document.body.append(ground);
+    stage.push(ground);
+    const placed: Array<[string, { x: number; y: number }]> = [];
+    targets.register({
+      id: "desk",
+      kind: "desk",
+      layer: 10,
+      rect: () => ground.getBoundingClientRect(),
+      element: () => ground,
+      answer: () => ({ ok: true, label: "Place as a note" }),
+      play: async (card, at) => {
+        placed.push([card.kind, at]);
+        return { ok: true, note: "Placed as a note" };
+      },
+    });
+    const lab = cardsLab({ store, targets });
+    const said: string[] = [];
+    const stop = hearLineSays((note) => said.push(note));
+    expect((await lab.playAt(400, 300)).refused).toBe("the hand holds no card");
+    lab.deal(LINE);
+    onTop(ground);
+    expect(await lab.playAt(400, 300)).toEqual({
+      at: { x: 400, y: 300 },
+      target: "desk",
+      answer: { ok: true, label: "Place as a note" },
+      played: { ok: true, note: "Placed as a note" },
+      refused: null,
+    });
+    expect(placed).toEqual([["text", { x: 400, y: 300 }]]);
+    expect(said).toEqual(["Placed as a note"]);
+    // a card is never spent (HN-L2): it is still the hand's newest
+    expect(store.newest()?.kind).toBe("text");
+    // under the line's glass, nothing of the desk is on top: no place takes it
+    const glass = document.createElement("div");
+    glass.className = "vf-line";
+    document.body.append(glass);
+    stage.push(glass);
+    onTop(glass);
+    expect((await lab.playAt(400, 300)).refused).toBe(
+      "no place takes a card there — div.vf-line is on top",
+    );
+    stop();
+  });
+
   it("empties the hand: nothing held, the hand lowered, every card gone — and says how many", () => {
     const store = new CardStore(() => 7_000);
     const lab = cardsLab({ store, targets: new CardTargets(), door: () => null });

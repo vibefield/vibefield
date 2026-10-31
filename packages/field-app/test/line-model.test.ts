@@ -44,26 +44,32 @@ describe("the view's one act (FR-3, FC-D3)", () => {
       key: "⌘T",
     });
     expect(createActOf("godview", "other")?.key).toBe("Ctrl+T");
+    // HN-7 (LN-D2): History's create is Godview's — its glyph, its name, its key
     expect(createActOf("history", "mac")).toEqual({
-      glyph: "resume",
-      name: "Resume this session",
-      key: null,
+      glyph: "start",
+      name: "New terminal",
+      key: "⌘T",
     });
+    expect(createActOf("history", "other")?.key).toBe("Ctrl+T");
   });
 
-  it("makes History's create Jump to while the chosen session runs here, and only History's (P3)", () => {
-    expect(createActOf("history", "mac", true)).toEqual({
-      glyph: "jump",
-      name: "Jump to this session",
-      key: null,
+  it("names the project History shows in its create's tooltip, and only History's (HN-7)", () => {
+    // DESIGN.md §8 "The line": "New terminal in vibe-field ⌘T" — the act keeps its name
+    expect(createActOf("history", "mac", "vibe-field")).toEqual({
+      glyph: "start",
+      name: "New terminal",
+      key: "⌘T",
+      title: "New terminal in vibe-field",
     });
-    expect(createActOf("godview", "mac", true)?.glyph).toBe("start");
-    expect(createActOf("canvas", "mac", true)?.glyph).toBe("plus");
+    // the project is History's alone to name; Resume and Jump to, its create until HN-7, are
+    // the chosen session's acts now (`chosenSessionAct`, head-model.test.ts)
+    expect(createActOf("godview", "mac", "vibe-field")).toEqual(createActOf("godview", "mac"));
+    expect(createActOf("canvas", "mac", "vibe-field")?.title).toBeUndefined();
   });
 
   it("draws no act for the Assistant, which is not built — never Canvas's Objects in its place (FC-D2)", () => {
     expect(createActOf("assistant", "mac")).toBeNull();
-    expect(createActOf("assistant", "other", true)).toBeNull();
+    expect(createActOf("assistant", "other", "vibe-field")).toBeNull();
   });
 
   it("spells every key the line says as aria-keyshortcuts reads it", () => {

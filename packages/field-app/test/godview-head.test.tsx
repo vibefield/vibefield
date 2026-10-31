@@ -473,14 +473,15 @@ describe("the head's stylesheet, held to DESIGN.md's entry", () => {
     expect(sheet.match(/var\(--vf-ease-[a-z]+\)/g)).toEqual(["var(--vf-ease-island)"]);
   });
 
-  it("puts the row on the frame's head row: 40 at top 8, centred, one gap from the lights' slot and from the search button", () => {
+  it("puts the row on the frame's head row: 40 at top 8, centred, one gap from the package circle and from the search button", () => {
     const room = rule(".vf-stories");
     expect(room).toContain("top: 8px");
     expect(room).toContain("height: 40px");
     expect(room).toContain("justify-content: center");
-    // the wider end on both sides: 96 + 12, or 16 + the Peek's own measure + 12
+    // the wider end on both sides: the package circle's 96 + 40 + 12 (PL-D2, HN-8 — the lights'
+    // slot's 96 + 12 until then), or 16 + the Peek's own measure + 12
     expect(room).toContain(
-      "--vf-stories-side: max(96px + 12px, 16px + var(--vf-peek-find-width, 40px) + 12px)",
+      "--vf-stories-side: max(96px + 40px + 12px, 16px + var(--vf-peek-find-width, 40px) + 12px)",
     );
     expect(room).toContain("right: var(--vf-stories-side)");
     expect(room).toContain("left: var(--vf-stories-side)");

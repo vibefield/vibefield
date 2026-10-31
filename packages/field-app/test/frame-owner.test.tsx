@@ -3,11 +3,13 @@
  * One Frame FR-3 (FR-4, "one surface at a time") — the frame's ONE owner of the
  * open surface, renamed from the line's when the head's three joined: Objects,
  * the fields explorer, the zoom's menu and the palette are one value,
- * so opening any one folds the rest by construction. A stateful harness stands
+ * so opening any one folds the rest by construction — and since HN-8 the pill's
+ * sheet is one of them on two shelves, Fields and Artifacts. A stateful harness stands
  * where FieldView does and mounts the shipping head, line and palette on it,
- * with ChromeLayer's one piece of glue — the palette's create row run through
- * the line's own create (`LineActs`), so the two doors to one act are one
- * implementation and speak with one note.
+ * with ChromeLayer's glue — the palette's create row run through the line's
+ * own create (`LineActs`), so the two doors to one act are one implementation
+ * and speak with one note, and History's chosen-session row through History's
+ * door (`runChosenSession`, HN-7), said on the same line.
  */
 import { createCanvasEngine } from "@vibecook/ice";
 import type { FrameView } from "@vibefield/contracts";
@@ -20,9 +22,15 @@ import { Composer, type LineActs } from "../src/frame/Composer";
 import { Cards } from "../src/frame/cards/Cards";
 import { CardStore } from "../src/frame/cards/cards-store";
 import { type FrameSurface, foldSurface } from "../src/frame/frame-surface";
-import { Head } from "../src/frame/Head";
+import { Head, useShownShelf } from "../src/frame/Head";
 import type { HeadCanvas, HeadCrumb } from "../src/frame/head-canvas";
-import type { LineViewDoor } from "../src/frame/line-door";
+import {
+  type HistoryLineDoor,
+  type LineViewDoor,
+  publishHistoryLineDoor,
+  resetHistoryLineDoorForTest,
+  runChosenSession,
+} from "../src/frame/line-door";
 import type { FrameActRun } from "../src/frame/palette-acts";
 import { ViewsTrackView } from "../src/frame/ViewsTrack";
 import { type FieldHost, setHost } from "../src/host";
@@ -100,6 +108,7 @@ afterEach(() => {
   host = null;
   dispose = null;
   surfaceNow = null;
+  resetHistoryLineDoorForTest();
 });
 
 function mount(door: LineViewDoor | null = null): void {
@@ -109,14 +118,18 @@ function mount(door: LineViewDoor | null = null): void {
     // FieldView's place: the frame's one owner of the open surface.
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [view, setView] = useState<FrameView>("canvas");
+    // …and its one reading of the shelf the pill's sheet shows (HN-8), handed to the head
+    const shelf = useShownShelf(surface, view);
     const lineActs = useRef<LineActs | null>(null);
     const [cards] = useState(() => new CardStore(() => 0));
     surfaceNow = surface;
     setSurfaceNow = setSurface;
     setViewNow = setView;
-    // ChromeLayer's glue for the palette's frame acts (the create row here).
+    // ChromeLayer's glue for the palette's frame acts (the create row, and
+    // History's chosen session through its door, here).
     const onAct = (run: FrameActRun): void => {
       if (run.kind === "create") lineActs.current?.create();
+      if (run.kind === "chosen-session") void runChosenSession();
     };
     return (
       <>
@@ -126,8 +139,10 @@ function mount(door: LineViewDoor | null = null): void {
           view={view}
           keys="mac"
           surface={surface}
+          shelf={shelf}
           onSurfaceChange={setSurface}
           bindKeys={false}
+          windowId="field"
         />
         <Composer
           view={view}
@@ -248,6 +263,33 @@ describe("the frame's one owner of the open surface", () => {
     expect($(".vf-head-zoom-menu")).toBeNull();
   });
 
+  it("holds the pill's sheet as ONE surface on two shelves — turning it folds nothing, and it folds and is folded by the rest (HN-8)", () => {
+    mount();
+    click(".vf-head-zoom");
+    expect(surfaceNow).toBe("zoom");
+    // the package opens the sheet on Artifacts, folding the zoom's menu
+    click(".vf-head-pack");
+    expect(surfaceNow).toBe("artifacts");
+    expect($(".vf-head-zoom-menu")).toBeNull();
+    expect($("[data-head-place]")?.dataset.open).toBe("true");
+    // the chevron turns the same sheet to Fields: one value, still open
+    click('.vf-head-chev[aria-label="Fields"]');
+    expect(surfaceNow).toBe("fields");
+    expect($("[data-head-place]")?.dataset.open).toBe("true");
+    click(".vf-me-face");
+    expect(surfaceNow).toBe("me");
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    click(".vf-head-pack");
+    expect(surfaceNow).toBe("artifacts");
+    expect($(".vf-me")?.hasAttribute("data-open")).toBe(false);
+    click(".vf-line-create");
+    expect(surfaceNow).toBe("objects");
+    expect($("[data-head-place]")?.dataset.open).toBe("false");
+    act(() => setSurfaceNow?.("artifacts"));
+    act(() => setViewNow?.("godview"));
+    expect(surfaceNow).toBeNull();
+  });
+
   it("folds whatever is open when the view changes — a change of place", () => {
     mount();
     click(".vf-head-zoom");
@@ -285,5 +327,44 @@ describe("the frame's one owner of the open surface", () => {
     expect(newTerminal).toHaveBeenCalledOnce();
     expect(surfaceNow).toBeNull();
     expect($(".vf-line-note")?.textContent).toBe("Terminal opened in the active pane");
+  });
+
+  it("runs History's two rows: New terminal through the line, the chosen session's Resume through History's door — each said on the line (HN-7)", async () => {
+    const newTerminal = vi.fn(async () => ({ state: "opened" as const }));
+    const resume = vi.fn(async () => ({ state: "resumed" as const }));
+    const door: HistoryLineDoor = {
+      chosen: "ses-1",
+      waits: null,
+      live: false,
+      resume,
+      jump: async () => ({ state: "jumped" }),
+      project: "vibe-field",
+      newTerminal,
+    };
+    act(() => publishHistoryLineDoor(door));
+    mount();
+    act(() => setViewNow?.("history"));
+    // the line's create names the project the room shows
+    expect($(".vf-line-create")?.getAttribute("title")).toBe("New terminal in vibe-field  ⌘T");
+    act(() => setSurfaceNow?.("palette"));
+    expect($('[data-row="create"]')?.textContent).toContain("New terminal");
+    expect($('[data-row="chosen-session"]')?.textContent).toContain("Resume this session");
+    await act(async () => {
+      $('[data-row="create"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(newTerminal).toHaveBeenCalledOnce();
+    expect(resume).not.toHaveBeenCalled();
+    expect(surfaceNow).toBeNull();
+    expect($(".vf-line-note")?.textContent).toBe("Terminal opened in the active pane");
+    // the chosen session's act — the line's create until HN-7 — from its palette row
+    act(() => setSurfaceNow?.("palette"));
+    await act(async () => {
+      $('[data-row="chosen-session"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(resume).toHaveBeenCalledOnce();
+    expect(newTerminal).toHaveBeenCalledOnce();
+    expect(surfaceNow).toBeNull();
+    expect($(".vf-line-note")?.textContent).toBe("Resumed in the active pane");
+    expect($(".vf-line-note")?.getAttribute("data-at")).toBe("create");
   });
 });

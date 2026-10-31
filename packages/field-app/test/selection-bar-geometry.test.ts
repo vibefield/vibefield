@@ -2,10 +2,11 @@
 /**
  * DK-11 — WHERE THE SELECTION BAR STANDS, AND HOW IT GROWS (field/desk/bar/bar-geometry.ts; DESIGN.md §8 "The selection
  * bar" — Place; "The bar grown"; §10 "The mat's places"; R6, R7). At the default window (1180 × 780): centred over the
- * brackets with its foot 10 above them; 10 below them when its top would cross the safe top (94), clamped there; 42
+ * brackets with its foot 10 above them; 10 below them when its top would cross the safe top (94), clamped there; 16
  * from each side; its top never below 660; no bar for a selection wholly off-screen. Grown: at least 244 wide (the
- * bar's width when wider), centred on the bar, 42 from the sides; up from its row, or down when the top would cross
- * 94; when it fits neither way the list scrolls, clamped between 94 and the line's reserve (700).
+ * bar's width when wider), centred on the bar, 16 from the sides; up from its row, or down when the top would cross
+ * 94; when it fits neither way the list scrolls, clamped between 94 and the line's reserve (700). The sides were 42
+ * — the notch's 26 + 16 — until the edges left the frame (HN-8).
  */
 import { describe, expect, it } from "vitest";
 import { BAR, growMenu, HAND, placeBar, placeHand } from "../src/field/desk/bar/bar-geometry";
@@ -38,9 +39,10 @@ describe("where the selection bar stands (R7)", () => {
     expect(BAR.safeTop).toBe(94);
   });
 
-  it("kept 42 from each side, whatever the selection's x", () => {
-    expect(placeBar(one({ x0: -100, y0: 300, x1: 60, y1: 400 }), 260)?.x).toBe(42);
-    expect(placeBar(one({ x0: 1100, y0: 300, x1: 1300, y1: 400 }), 260)?.x).toBe(1180 - 42 - 260);
+  it("kept 16 from each side, whatever the selection's x — no notch to clear since HN-8", () => {
+    expect(BAR.sides).toBe(16);
+    expect(placeBar(one({ x0: -100, y0: 300, x1: 60, y1: 400 }), 260)?.x).toBe(16);
+    expect(placeBar(one({ x0: 1100, y0: 300, x1: 1300, y1: 400 }), 260)?.x).toBe(1180 - 16 - 260);
   });
 
   it("its top never lower than 660 — its foot 8 above the line's top (708)", () => {
@@ -74,8 +76,9 @@ describe("the bar grown (R6, R20)", () => {
     });
   });
 
-  it("kept 42 from the sides", () => {
-    expect(growMenu({ x: 42, y: 400, width: 200 }, 200, view).x).toBe(42);
+  it("kept 16 from the sides, as the bar is", () => {
+    expect(growMenu({ x: 16, y: 400, width: 200 }, 200, view).x).toBe(16);
+    expect(growMenu({ x: 1180 - 16 - 200, y: 400, width: 200 }, 200, view).x).toBe(1180 - 16 - 244);
   });
 
   it("UPWARD from the bar's row while its top stays under the safe top; DOWNWARD when it would cross 94", () => {
@@ -115,8 +118,8 @@ describe("where the tools in hand stand, and what the layer reserves for them (D
   it("under the head — top y 64, its centre 84 — centred on the window, whatever the selection's box", () => {
     expect(placeHand(view, 420)).toEqual({ x: (1180 - 420) / 2, y: 64, below: false });
     expect(HAND.top + BAR.height / 2).toBe(84);
-    // a window narrower than the bar and its sides keeps 42 from the left
-    expect(placeHand({ width: 400, height: 780 }, 420).x).toBe(42);
+    // a window narrower than the bar and its sides keeps 16 from the left
+    expect(placeHand({ width: 400, height: 780 }, 420).x).toBe(16);
   });
 
   it("the layer keeps 116 above the held object (the bar's foot and 12) and 100 below it (the line's 88 and 12), the travel 560", () => {

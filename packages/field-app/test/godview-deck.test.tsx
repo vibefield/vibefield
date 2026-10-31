@@ -1707,6 +1707,9 @@ describe("a session opens in the focused pane (GV-D4, re-ruled 2026-10-18)", () 
     calls
       .filter(([method]) => method === "terminal.terminate")
       .map(([, params]) => (params as { sessionId: string }).sessionId);
+  /** What each of fieldd's births was asked: its folder among them. */
+  const creates = (): unknown[] =>
+    calls.filter(([method]) => method === "terminal.create").map(([, params]) => params);
 
   it("two panes: it takes the FOCUSED pane, no pane is added, and the session it showed runs on", async () => {
     const store = workspaceProbe({ panes: TWO, activePaneId: "pane-1" });
@@ -1904,6 +1907,30 @@ describe("a session opens in the focused pane (GV-D4, re-ruled 2026-10-18)", () 
 
     await dispose();
   });
+
+  // HN-7 (LN-D2): History's New terminal is the line door's new terminal, asked in the folder
+  // of the project History shows — the deck's birth takes it; Godview's own asks none.
+  it("History's New terminal asks a folder: the shell is born there, in the focused pane — and Godview's asks none", async () => {
+    const store = workspaceProbe({ panes: TWO, activePaneId: "pane-2" });
+    const { dispose } = await mountDeckWithDoor(store);
+    const folder = "/Users/me/Projects/vibe-field";
+
+    const asked = await act(async () => lineDoor().newTerminal({ cwd: folder }));
+    expect(asked).toEqual({ state: "opened", placement: "replace" });
+    // fieldd's birth carries the folder asked for, never the focused pane's
+    expect(creates().at(-1)).toEqual({ cwd: folder, workloadClass: "interactive" });
+    expect(store.panes).toHaveLength(2);
+    expect(store.showing("pane-2")).not.toBe("other-pty");
+    expect(store.showing("pane-1")).toBe("user-pty");
+
+    // asked with none, as Godview's create: the focused pane's folder — the probe's sessions
+    // name none — else the window's home
+    const plain = await act(async () => lineDoor().newTerminal());
+    expect(plain).toEqual({ state: "opened", placement: "replace" });
+    expect(creates().at(-1)).toEqual({ cwd: "/home/tester", workloadClass: "interactive" });
+
+    await dispose();
+  });
 });
 
 // W7 — GV-D5 and N14 (a), James 2026-10-11 (DESIGN.md §8 "Godview opens on the
@@ -2089,6 +2116,38 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
     expect(outcome).toEqual({ state: "mounted", sessionId: born, profileSet: "work" });
     expect(store.log).toEqual([`create:${born}`]);
     expect(store.panes.map((pane) => pane.session.id)).toEqual([born]);
+    await dispose();
+  });
+
+  // HN-7 (LN-D2): History's New terminal is often the first call after a launch — the window
+  // moves to Godview for it — and asks a folder. The opening shell sits in another one, so it
+  // never answers such an ask: the asked shell is born in its place (and the opening one, never
+  // used, released, as under an Agent Profile).
+  it("L20: asked in a folder (History's New terminal, HN-7), the terminal is born there, in the opening shell's place", async () => {
+    const store = workspaceProbe({ panes: [OPENING], activePaneId: "pane-1" });
+    const deck = await mountUncalled();
+    const door = deck.door();
+    if (door === null) throw new Error("the uncalled deck handed no door over");
+    createdHere("opening-pty");
+    const folder = "/Users/me/Projects/vibe-field";
+    let outcome: unknown = null;
+    const creating = door.createTerminal({ cwd: folder }).then((answer) => {
+      outcome = answer;
+    });
+    await deck.call();
+    const dispose = await probeOn(store);
+    await act(async () => {
+      await creating;
+    });
+    const born = (outcome as { sessionId: string }).sessionId;
+    expect(born).not.toBe("opening-pty");
+    expect(outcome).toEqual({ state: "mounted", sessionId: born });
+    expect(store.log).toEqual([`create:${born}`]);
+    expect(store.panes.map((pane) => pane.session.id)).toEqual([born]);
+    const births = calls.filter(([method]) => method === "terminal.create");
+    expect(births.map(([, params]) => params)).toEqual([
+      { cwd: folder, workloadClass: "interactive" },
+    ]);
     await dispose();
   });
 
@@ -2302,6 +2361,25 @@ describe("⌘W on the last pane goes to the terminals' owner (N16 (a))", () => {
       await dispose();
     });
 
+    // HN-7: the fresh shell sits in the closed session's folder — an ask for another (History's
+    // New terminal) is born in its place, by the rule, and the fresh shell, never used, released
+    it("a new terminal asked in a folder after it is born there, in the empty pane's place — the fresh shell released (HN-7)", async () => {
+      const { store, door, dispose } = await lastPane(bornSummary("user-pty"));
+      await closeLast(store, "user-pty");
+      const fresh = store.panes[0]?.session.id as string;
+      const before = creates().length;
+      const folder = "/Users/me/Projects/vibe-field";
+      const outcome = await act(async () => door.createTerminal({ cwd: folder }));
+      expect(outcome).toMatchObject({ state: "mounted", placement: "replace" });
+      const born = (outcome as { sessionId: string }).sessionId;
+      expect(born).not.toBe(fresh);
+      expect(creates().slice(before)).toEqual([{ cwd: folder, workloadClass: "interactive" }]);
+      expect(store.panes.map((pane) => pane.session.id)).toEqual([born]);
+      await settle();
+      expect(terminated()).toContain(fresh);
+      await dispose();
+    });
+
     it("a refused shell: the terminals still go away, the pane keeps its session, and the line says so in fieldd's words", async () => {
       const answer = fieldd.request;
       vi.spyOn(fieldd, "request").mockImplementation(
@@ -2414,8 +2492,9 @@ describe("the closing verbs put the terminals away and swap no session (AL-9, AL
 // back. Every caller reaches the deck through one of its doors — a body, a list
 // row, a rain column, a timeline lane and a spend row through the monitor's
 // select (`mountLocal`, a peer's `attach`); the swarm's bloom birth through
-// `createTerminal`; the line's New terminal (⌘T), History's Resume, New agent
-// and Jump to, and search's result through the line's door — so the deck's
+// `createTerminal`; the line's New terminal (⌘T, and History's in its folder,
+// HN-7), History's Resume, New agent and Jump to, and search's result through
+// the line's door — so the deck's
 // door verbs are where the call is heard: each asks the frame's deck door for
 // the terminals (`askGodviewDeckUp`), which the overlay answers. A hand-over
 // (`replacing`) selects nothing: the fold moving a PTY in place is no call.
@@ -2454,8 +2533,9 @@ describe("every caller brings the terminals up (GV-D5, GV-D6)", () => {
     );
     // the swarm's hold: the bloom's birth
     await call("bloom", () => door.createTerminal());
-    // the line's New terminal (⌘T)
+    // the line's New terminal (⌘T), and History's in the folder of the project it shows (HN-7)
     await call("new terminal", () => lineDoor().newTerminal());
+    await call("history's new terminal", () => lineDoor().newTerminal({ cwd: "/repo/api" }));
     // History's Resume and New agent: a create ticket, placed
     floor = [...floor, { sessionId: "resumed-pty" }];
     await call("resume", () =>
@@ -2474,6 +2554,7 @@ describe("every caller brings the terminals up (GV-D5, GV-D6)", () => {
       "attach",
       "bloom",
       "new terminal",
+      "history's new terminal",
       "resume",
       "jump to",
     ]);

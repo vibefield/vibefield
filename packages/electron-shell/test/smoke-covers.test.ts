@@ -4,6 +4,7 @@
  * desk and never a blank frame, the hold, the recede, a re-capture's order, and thaw first on the way back.
  */
 import { describe, expect, it } from "vitest";
+import { HEAD_LIGHTS } from "../src/main/window-lights";
 import {
   alphaOf,
   COVERS,
@@ -20,6 +21,7 @@ import {
   judgeRecede,
   judgeRise,
   LOST_NOTICE,
+  RIM_STRIP,
   scaleOf,
 } from "../src/testing/smoke-covers";
 import type { StillnessSample } from "../src/testing/smoke-stillness";
@@ -380,6 +382,19 @@ describe("the readings", () => {
     expect(alphaOf("color(srgb 0.109804 0.109804 0.117647 / 0.72)")).toBe(0.72);
     expect(alphaOf("rgba(28, 28, 30, 0.72)")).toBe(0.72);
     expect(alphaOf("rgb(61, 90, 48)")).toBe(1);
+  });
+});
+
+describe("the rim's strip (DK-16) — where no view draws since the edges left the frame (HN-8, B9)", () => {
+  it("reads the head band left of the window's lights, inside the 1 % the receded still leaves at the left", () => {
+    expect(RIM_STRIP).toEqual({ x: 1, y: 4, width: 6, height: 20 });
+    // the head band (0–52, FC-D6): no covered view draws there, only the lights at its left
+    expect(RIM_STRIP.y + RIM_STRIP.height).toBeLessThanOrEqual(52);
+    expect(RIM_STRIP.x + RIM_STRIP.width).toBeLessThanOrEqual(HEAD_LIGHTS.x);
+    // the still at 0.98 bares 1 % of the window at each side: 11.8 px at the default 1180
+    expect(RIM_STRIP.x + RIM_STRIP.width).toBeLessThanOrEqual(
+      (1180 * (1 - COVERS.recedeScale)) / 2,
+    );
   });
 });
 

@@ -1,7 +1,7 @@
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { EmptyState, UiButton } from "@vibefield/design-kit/primitives";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import { COVER_EDGE_CLEAR_PX, COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
+import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
 import "./history-room-view.css";
 
 // HISTORY BEFORE ITS ROOM (2026-10-04; DESIGN.md §8 "History" — "Its first
@@ -30,7 +30,6 @@ function HistoryGlass({
         {
           "--vf-history-reserve": `${COVER_RESERVE_PX}px`,
           "--vf-history-head": `${HEAD_BAND_PX}px`,
-          "--vf-history-edge": `${COVER_EDGE_CLEAR_PX}px`,
         } as CSSProperties
       }
     >

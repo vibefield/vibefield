@@ -6,7 +6,7 @@
  *
  * Where it stands and how wide its glass is are written by the view (a transform placing its centre, and a width,
  * imperatively, on each publish); everything it looks like is here. Over the desk and under the frame (§10): above the canvas, below the head (50), the attention stack and
- * the old sheet (40, 50), the cover (60), the status line (61) and the line, the edges and the corner (62).
+ * the old sheet (40, 50), the cover (60), the status line (61) and the line and the corner (62).
  *
  * The material lives on `.vf-bar-panel`, which grows from the bar's own row to the menu (R6, R20): its insets
  * come from the view (`--vf-bar-grow-*`). The list stands at its grown place (`--vf-bar-list-*`) — the rows fade
@@ -287,7 +287,8 @@
   transform: scale(1.18);
 }
 
-/* the one in hand wears a 1.5 px foreground ring 2 px off the dot — the notch pin's ring */
+/* the one in hand wears a 1.5 px foreground ring 2 px off the dot — the ring the notch's pin wore
+   (DESIGN.md §8 "Edge trays", retired at HN-8) */
 .vf-bar-dot[data-on] .vf-bar-dot-ink::after {
   position: absolute;
   inset: -3.5px;

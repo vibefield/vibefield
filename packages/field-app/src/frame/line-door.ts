@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from "react";
+import { sizeWords } from "../format/bytes";
 import type { DeckPlaced } from "../godview/deck-placement";
 import type { RoutedInputRefusal } from "../terminal/pool";
 
 // WHAT GODVIEW LENDS THE FRAME (One Frame FR-2; DESIGN.md §8 "The line").
 // The line is the frame's and Godview is a view below it, but some of the
 // frame's acts only Godview can do: the line's create — a new terminal, as the
-// swarm's hold makes one — History's Resume and Jump to, and a paste into a
+// swarm's hold makes one, in Godview and (in the folder of the project the room
+// shows, HN-7) in History — History's Resume and Jump to, and a paste into a
 // pane (a card played onto it, HN-D4; the interim send that pasted from the
 // line's draft left with the draft, LN-D3). They live where a pane and its
 // session meet, which is the deck, so the deck publishes this door and the
@@ -43,6 +45,14 @@ export type NewTerminalOutcome =
   | { readonly state: "opened"; readonly placement?: DeckPlaced }
   | { readonly state: "refused"; readonly reason: string };
 
+/** HN-7 — where a new terminal is asked to open. */
+export interface NewTerminalOptions {
+  /** The folder its shell is born in: History's New terminal asks for the
+   * folder of the project the room shows (LN-D2). Absent: the focused pane's,
+   * as Godview's create opens one. */
+  readonly cwd?: string;
+}
+
 export interface LineViewDoor {
   /** The panes in the deck, the active one first. */
   readonly panes: readonly LinePane[];
@@ -50,8 +60,9 @@ export interface LineViewDoor {
   readonly onScreen: boolean;
   /** A fresh shell, which shows its launcher: what the swarm's hold does
    * without a spot to land on — in the focused pane, whose session runs on
-   * (GV-D4, re-ruled 2026-10-18). */
-  newTerminal(): Promise<NewTerminalOutcome>;
+   * (GV-D4, re-ruled 2026-10-18). Asked for in a folder (HN-7), it is born
+   * there, never a waiting shell reused: one sits in another folder. */
+  newTerminal(options?: NewTerminalOptions): Promise<NewTerminalOutcome>;
   /** HN-4 — paste `text` into ONE pane, the pane a card is let go on (DESIGN.md
    * §8 "The hand", where cards go): the road ⌘V takes, so the pane brackets it
    * and nothing presses Return. True when the pane took it; false, with nothing
@@ -194,7 +205,8 @@ export function lateReason(verb: "took" | "showed", timeoutMs: number): string {
 
 /** Wait (bounded) for a deck that can place — History's Resume (and Jump to)
  * asks the frame for Godview, whose deck mounts on its first open and
- * publishes its door a moment later. Null when none came in `timeoutMs`. */
+ * publishes its door a moment later. Null when none came in `timeoutMs`; 0
+ * reads the deck up now (History's New terminal asks it first, HN-7). */
 export function whenGodviewCanPlace(timeoutMs: number): Promise<LineViewDoor | null> {
   const ready = (): LineViewDoor | null => (godview?.canPlace === true ? godview : null);
   const now = ready();
@@ -214,11 +226,15 @@ export function whenGodviewCanPlace(timeoutMs: number): Promise<LineViewDoor | n
   });
 }
 
-// ── WHAT HISTORY LENDS THE LINE (AR-8c; DESIGN.md §8 "History — Resume") ────
-// History's create is Resume: it continues the session the room has chosen —
-// or, while that session runs on this desktop, Jump to (P3): it shows the pane
-// the run is in. The room is rosetta's and reports its selection to History's
-// controller, which publishes this door; the line reads it the way it reads
+// ── WHAT HISTORY LENDS THE FRAME (AR-8c, HN-7; DESIGN.md §8 "History") ──────
+// History's create is New terminal (LN-D2, HN-7): a fresh shell in the folder
+// of the project the room shows, opened by Godview's deck and shown there. The
+// chosen session's act is Resume: it continues the session the room has chosen
+// — or, while that session runs on this desktop, Jump to (P3): it shows the
+// pane the run is in. It was the line's create until HN-7, and is the palette's
+// History row since (`runChosenSession`), with the same reading and the same
+// words. The room is rosetta's and reports what it shows to History's
+// controller, which publishes this door; the frame reads it the way it reads
 // Godview's.
 
 /** What a Resume came to, said on the line. `running`: the session runs here,
@@ -249,7 +265,7 @@ export interface HistoryLineDoor {
    * folder is gone, an agent that cannot resume here) — or null. */
   readonly waits: string | null;
   /** P3 — the chosen session runs on this desktop, by the last `agent.list`
-   * answer (kept while a new one is on its way): the create is Jump to. */
+   * answer (kept while a new one is on its way): its act is Jump to. */
   readonly live: boolean;
   /** Resume the chosen session in its own agent, placed as the swarm's open
    * places a session (GV-D4: in the focused pane), and show it (the frame
@@ -258,6 +274,17 @@ export interface HistoryLineDoor {
   /** P3 — show the chosen session where it runs (the frame moves to Godview,
    * whose deck shows it in the focused pane). */
   jump(): Promise<JumpOutcome>;
+  /** HN-7 — the project the room shows, by its name ("vibe-field"), or null
+   * while it shows none: the create's tooltip names it. */
+  readonly project: string | null;
+  /** HN-7 (LN-D2) — History's create: a fresh shell in the folder of the
+   * project the room shows, found as New agent finds it, placed as Godview's
+   * create places one (GV-D4: in the focused pane), the frame moving to Godview
+   * to show it — once it opened, when the deck was up and asked first; with no
+   * project shown, as Godview's create opens one. A folder not mounted or gone
+   * is refused in New agent's words, one on another desktop by the desktop it
+   * is on ("vibe-field is on Mac mini"), and the frame stays. */
+  newTerminal(): Promise<NewTerminalOutcome>;
 }
 
 let history: HistoryLineDoor | null = null;
@@ -314,12 +341,28 @@ export function jumpNote(outcome: JumpOutcome): string {
   }
 }
 
-/** Why History's create waits, or null when it can be pressed. Jump to never
+/** Why the chosen session's act waits, or null when it can run. Jump to never
  * waits on the launcher's reading: a running session is shown even where it
  * could not be resumed. */
-export function historyCreateWaits(door: HistoryLineDoor | null): string | null {
+export function chosenSessionWaits(door: HistoryLineDoor | null): string | null {
   if (door === null || door.chosen === null) return "choose a session first";
   return door.live ? null : door.waits;
+}
+
+/** The chosen session's act — Resume, or Jump to while it runs here (P3) — as
+ * the palette's History row runs it (HN-7; the line's create ran it until
+ * then): waiting, it says why in Resume's words; run, it says what came of it.
+ * Said where History's acts say theirs — centred over the create, in History or
+ * in Godview once the frame has moved there to show the pane (PJ-4). */
+export async function runChosenSession(
+  door: HistoryLineDoor | null = getHistoryLineDoor(),
+): Promise<void> {
+  const waits = chosenSessionWaits(door);
+  if (door === null || waits !== null) {
+    sayOnHistoryLine(resumeNote({ state: "refused", reason: waits ?? "choose a session first" }));
+    return;
+  }
+  sayOnHistoryLine(door.live ? jumpNote(await door.jump()) : resumeNote(await door.resume()));
 }
 
 /** Test seam. */
@@ -393,20 +436,6 @@ export function hearLineSays(hear: (text: string) => void): () => void {
 // the note an act's outcome is said in (DESIGN.md §8 "The line"): what
 // happened, with its numbers — which are what to do instead — in under 70
 // characters beside the pane's name, so it is read before the note fades.
-
-/** A size in the note's words, counted in thousands as Finder counts it
- * (DESIGN.md §9): bytes below a kilobyte, whole KB below a megabyte, then MB
- * and GB to a tenth. `round` says which way — a size is rounded up and what
- * fits of it down, so the two never read as equal. The unit is chosen after
- * the rounding: 999,999 bytes rounded up is "1 MB", never "1000 KB". */
-function sizeWords(bytes: number, round: (value: number) => number): string {
-  if (bytes < 1_000) return bytes === 1 ? "1 byte" : `${bytes} bytes`;
-  const kb = round(bytes / 1_000);
-  if (kb < 1_000) return `${kb} KB`;
-  const mb = round(bytes / 100_000) / 10;
-  if (mb < 1_000) return `${mb} MB`;
-  return `${round(bytes / 100_000_000) / 10} GB`;
-}
 
 /** Why a terminal refused an input, in numbers: its size, and how much of it
  * one paste (or typed text) carries — both the text's own bytes, so "of it":

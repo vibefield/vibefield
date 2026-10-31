@@ -329,6 +329,66 @@ export const ClipboardReadResult = z.discriminatedUnion("status", [
 export type ClipboardReadResult = z.infer<typeof ClipboardReadResult>;
 export type ClipboardReadRefusal = Extract<ClipboardReadResult, { status: "refused" }>["reason"];
 
+/** main → renderer: a copy's picture put on the system clipboard, with its words when
+ * the copy has any (`IPC_CHANNELS.clipboardWriteImage`; HN-5, LC-19), or why it was
+ * not. The request is the PNG's bytes themselves and the words beside them, the
+ * invoke's two arguments, checked in main: neither is a field here. Each refusal is
+ * an honest state of a product window's copy, and nothing of it is written:
+ *  · `too-large` — the bytes are over `SHELL_CLIPBOARD.WRITE_IMAGE_MAX_BYTES`, or
+ *    the words over `SHELL_CLIPBOARD.WRITE_TEXT_MAX_BYTES`; refused whole with the
+ *    size that was too large, never cut;
+ *  · `not-an-image` — the bytes decode to no picture.
+ * No focus is asked (LC-18): a write reads nothing, and the words' copy door asks
+ * none. A sender this shell did not register, or a request that is not bytes and
+ * words, is no state of a product window: main throws for it and writes nothing. */
+export const ClipboardWriteImageResult = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("written") }).passthrough(),
+  z
+    .object({
+      status: z.literal("refused"),
+      reason: z.enum(["too-large", "not-an-image"]),
+      bytes: z.number().int().min(0).optional(),
+    })
+    .passthrough(),
+]);
+export type ClipboardWriteImageResult = z.infer<typeof ClipboardWriteImageResult>;
+export type ClipboardWriteImageRefusal = Extract<
+  ClipboardWriteImageResult,
+  { status: "refused" }
+>["reason"];
+
+/** preload → page: why a copy's write was refused, typed (HN-5) — the one shape both copy
+ * doors reject with, the words' (`copyText`, over the diagnostics port) and the picture's
+ * (`writeImage`), for the page to say in Copy's voice, its sizes as §9 counts them, and never
+ * a bridge's error (DESIGN.md §8 "Copy"). A plain record, never an Error: the context bridge
+ * carries an Error across as its message alone, so a refusal's terms would not reach the page.
+ *  · `too-large` — `bytes` is past `max`: the words' UTF-8 (`words`) or the picture's PNG
+ *    (`picture`) against the clipboard's bound (`SHELL_CLIPBOARD`), or the words as the words'
+ *    door sends them (`words-as-sent`) against what one request carries of them, the port's
+ *    cap (`LOG_TRANSPORT_LIMITS.DIAGNOSTIC_PORT_REQUEST_BYTES`) less its envelope. JSON spends
+ *    two bytes on a line break and six on a control character, so words within the clipboard's
+ *    bound can be past the port's. A size within its bound is no refusal of this kind;
+ *  · `not-an-image` — main found no picture in the PNG it was given. */
+export const ClipboardCopyRefusal = z
+  .discriminatedUnion("reason", [
+    z
+      .object({
+        reason: z.literal("too-large"),
+        what: z.enum(["words", "picture", "words-as-sent"]),
+        bytes: z.number().int().min(0),
+        max: z.number().int().min(0),
+      })
+      .passthrough(),
+    z.object({ reason: z.literal("not-an-image") }).passthrough(),
+  ])
+  .refine(
+    (refusal) => refusal.reason !== "too-large" || refusal.bytes > refusal.max,
+    "a size refused as too large is past its bound",
+  );
+export type ClipboardCopyRefusal = z.infer<typeof ClipboardCopyRefusal>;
+/** A copy past its bound: the refusal's `too-large` arm, which the copy door says in sizes. */
+export type ClipboardCopyTooLarge = Extract<ClipboardCopyRefusal, { reason: "too-large" }>;
+
 /** Item 102 — the read door's audit action, appended by main through fieldd's
  * `audit.append` (wall R17), which admits only registered shell-owned actions. One
  * outcome for every answer and every refusal, with the bytes and the asking page's

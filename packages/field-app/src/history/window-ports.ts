@@ -1,3 +1,5 @@
+import { COPY_DOOR_WORDS } from "../frame/cards/cards-words";
+import { copyWords } from "../frame/cards/copy-door";
 import { getHost } from "../host";
 import { terminalBootstrapHome } from "../terminal/pool";
 import {
@@ -30,19 +32,24 @@ export function windowHistoryPorts(
   return held.ports;
 }
 
+/** HN-5 — a copy History's room makes through its workspace port (a file's path, from its
+ * room or the Peek's reader of it) is a copy like any other: on the system clipboard through
+ * the one copy door, then a text card in the hand (DESIGN.md §8 "The hand"). No button's box
+ * reaches the port, so the card rises into its place, and it says History, where it came
+ * from. The room keeps its own receipts ("Path copied"); a refusal rejects with Copy's whole
+ * sentence, which the room says as the file action's receipt (DESIGN.md §8 "Copy"). */
+export async function copyFromHistory(text: string): Promise<void> {
+  const copied = await copyWords(text, { view: "history", how: "copy" }, null);
+  if (!copied.ok) throw new Error(COPY_DOOR_WORDS.refused(copied.reason));
+}
+
 /** The product's ports for this window: the platform from the preload, the
- * home from the window's bootstrap (AR-8 L2), the clipboard the host's. */
+ * home from the window's bootstrap (AR-8 L2), its copies the copy door's. */
 export function productHistoryPorts(client: HistoryDoorClient): HistoryPorts {
   return windowHistoryPorts(client, () => ({
     platform: getHost().platform ?? null,
     home: terminalBootstrapHome(),
-    workspace: {
-      copyText: async (text) => {
-        const diagnostics = getHost().diagnostics;
-        if (diagnostics) await diagnostics.copyText(text);
-        else await navigator.clipboard.writeText(text);
-      },
-    },
+    workspace: { copyText: copyFromHistory },
   }));
 }
 

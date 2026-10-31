@@ -2,7 +2,7 @@
  * The board is the DESK's (drawn on the GPU behind the line, its lay keeping 88 at the foot); over it VibeField draws
  * screen-space chrome, lit by nothing and following the theme — it stands over the desk and under the frame (§10):
  * above the canvas, with the selection bar (30), below the head (50), the cover (60), the status line (61) and the
- * line, the edges and the corner (62). Where the filters and the ring stand is written by the controller on each
+ * line and the corner (62). Where the filters and the ring stand is written by the controller on each
  * publish of the tray (a transform, a width, an opacity); everything they look like is here. Chrome does not dim by
  * night: the anchor's `night` is never read. */
 
