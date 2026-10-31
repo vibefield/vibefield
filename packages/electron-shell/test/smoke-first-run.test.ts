@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { BrowserWindow } from "electron";
 import { describe, expect, it } from "vitest";
 import {
   expectedLogoBox,
@@ -11,6 +12,7 @@ import {
   FIRST_RUN_WALKS,
   type FirstRunRecord,
   type FrameSeen,
+  firstRunRows,
   judgeBand,
   judgeFrame,
   judgeHolds,
@@ -25,6 +27,7 @@ import {
   shotDirRefusal,
   WALKED_FACES,
 } from "../src/testing/smoke-first-run";
+import type { StagedTypedAgent } from "../src/testing/typed-agent";
 import { fakeElectron } from "./fake-electron";
 
 // FG — the first-run smoke's judges (desk-gates row 32), its harness copy of the field's mark, and its launcher. The
@@ -488,6 +491,91 @@ describe("the frame (FG-4a, FG-L3)", () => {
       "a press at the login's Cancel does not reach it",
     ]);
     expect(judgeSignIn({ ...signIn, cancel: null })).toEqual(["the login has no Cancel"]);
+  });
+});
+
+describe("a walk that stops (firstRunRows)", () => {
+  it("says every problem it found before its stop, the stop last, and reads nothing after the walk (row 32 at run52b)", async () => {
+    // a window the walk drives with no Electron: the welcome stands with its logo whole on the day's milk, the mark
+    // drawn 10 px right of the window's centre, and the next pane's read rejects, as a renderer gone would
+    const viewport = { width: 1180, height: 748 };
+    const size = expectedLogoBox(viewport.width, viewport.height, false);
+    const logo: LogoSeen = {
+      shown: "shown",
+      glass: "field",
+      level: 1,
+      visibility: "hidden",
+      box: { x: 590 - size.width / 2, y: 374 - size.height / 2, ...size },
+      viewport,
+      dark: false,
+    };
+    const calls: string[] = [];
+    let standing = 0;
+    const answer = (call: string): unknown => {
+      calls.push(call);
+      if (call.includes("standing()")) {
+        standing += 1;
+        if (standing > 1) throw new Error("the renderer went away");
+        return "welcome";
+      }
+      if (call.includes("logo()")) return logo;
+      if (call.includes("target(")) return { hit: true, x: 590, y: 600 };
+      return null;
+    };
+    const image = (rect?: { x: number; y: number; width: number; height: number }) => ({
+      toPNG: () => Buffer.alloc(0),
+      toBitmap: () =>
+        Buffer.from(
+          rect === undefined
+            ? new Uint8Array(4)
+            : capture(rect.width, rect.height, 1, 230, {
+                x0: 600 - rect.x - 10,
+                x1: 600 - rect.x + 10,
+                y0: 374 - rect.y - 10,
+                y1: 374 - rect.y + 10,
+                level: 40,
+              }),
+        ),
+    });
+    const win = {
+      loadURL: async () => undefined,
+      isDestroyed: () => false,
+      capturePage: async (rect?: { x: number; y: number; width: number; height: number }) =>
+        image(rect),
+      webContents: {
+        debugger: { attach: () => undefined, sendCommand: async () => ({}) },
+        executeJavaScript: async (code: string) => answer(code),
+        sendInputEvent: () => undefined,
+      },
+    } as unknown as BrowserWindow;
+    const shotDir = mkdtempSync(join(tmpdir(), "fg-walk-stops-"));
+    const said: string[] = [];
+    try {
+      const { facts, problems } = await firstRunRows({
+        win,
+        viteUrl: "http://127.0.0.1:5173/",
+        walk: "day",
+        shotDir,
+        staged: {} as StagedTypedAgent,
+        users: { root: shotDir, userId: "ada" },
+        say: (line) => said.push(line),
+      });
+      expect(problems).toEqual([
+        "the mark's ink centres at 600.0, 374.0, not the window's 590, 374",
+        "the walk stopped at you: the renderer went away",
+      ]);
+      expect(facts["stoppedAt"]).toBe("you");
+      // the still of where it stood, and no read after the walk: the recorder, the holds, the band, users.json
+      expect(facts["shots"]).toEqual([
+        "01-welcome.png",
+        "02-welcome-logo.png",
+        "03-at-failure.png",
+      ]);
+      expect(calls.some((call) => call.includes("read()"))).toBe(false);
+      expect(said.at(-1)).toBe("SMOKE_FIRST_RUN_STEP day you");
+    } finally {
+      rmSync(shotDir, { recursive: true, force: true });
+    }
   });
 });
 

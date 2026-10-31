@@ -725,7 +725,8 @@ const PRIMARY: ControlSpec = { selector: ".vf-wizard-actions button[type=submit]
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** The walk, from a fresh page to the desk: facts for the verdict line, and every problem in words. A step that
- * never comes throws, with a still of where the walk stood. */
+ * never comes stops the walk, with a still of where it stood: the stop is its last problem, after every one it had
+ * found, and nothing after the walk is read. */
 export async function firstRunRows(
   d: FirstRunDriver,
 ): Promise<{ facts: Record<string, unknown>; problems: string[] }> {
@@ -800,7 +801,11 @@ export async function firstRunRows(
   };
   const count = (selector: string): Promise<number> =>
     page<number>(`count(${JSON.stringify(selector)})`);
-  const step = (name: string): void => d.say(`SMOKE_FIRST_RUN_STEP ${d.walk} ${name}`);
+  let at = "";
+  const step = (name: string): void => {
+    at = name;
+    d.say(`SMOKE_FIRST_RUN_STEP ${d.walk} ${name}`);
+  };
 
   mkdirSync(d.shotDir, { recursive: true });
   try {
@@ -985,7 +990,13 @@ export async function firstRunRows(
     if (!welcomed) problems.push("Setting up's line never said the welcome");
   } catch (error) {
     if (!d.win.isDestroyed()) await capture("at-failure").catch(() => undefined);
-    throw error;
+    // said with what the walk had found before it, never alone: at run52b night and no-webgpu stopped at the login's
+    // Cancel, and the reds they had found on the welcome and on Agents were never said
+    facts["stoppedAt"] = at;
+    problems.push(
+      `the walk stopped at ${at}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return { facts, problems };
   }
 
   const record = await until("the recorder's reading", 5_000, () =>

@@ -1686,7 +1686,8 @@ export async function runSmokeFirstRun(opts: {
       `SMOKE_FIRST_RUN ${JSON.stringify({ ...facts, shotDir, shellOpens: opens ?? null, isolation: focused })}`,
     );
     if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
-    if (win.webContents.isCrashed()) problems.push("the renderer crashed");
+    // a walk that stopped comes back with what it found, and its window may be gone: never lose them to this read
+    if (!win.isDestroyed() && win.webContents.isCrashed()) problems.push("the renderer crashed");
     if (problems.length > 0) throw new Error(problems.join(" · "));
     console.log(`SMOKE_FIRST_RUN_OK ${walk}`);
     ok = true;
