@@ -227,13 +227,15 @@
   - fieldd's hand-written `vibefield` MCP server speaks 2026-07-28 and the handshake before it. It serves a spark the six
     read verbs, each held to its Agent Profiles and audited before it acts.
   - Each spark is a signed record with a folder of its own and the window's three doors.
-  - No launch hands an agent the server yet, so no agent holds the door until CP-1d.
+- **CP-1d, the briefing at every birth**: James's PR #4, re-cut onto main through the train on his "A" (10-31
+  02:11:50Z), LANDED 10-31 (`ef5fb6161`, the mini's run 25; LANDED "CP-1d").
+  - puppeteer 0.3.2's per-run `mcpServers`, `allowTools` and `instructions` carry the `vibefield` server and the
+    spark's brief at hatch, at both resumes and at a pending run's replacement, so a spark's own session holds the door.
+  - Claude only, until CP-5: in 0.3.2 only the Claude adapter declares a terminal MCP process.
 - Next, in order:
-  - **CP-1d**, James's PR #4: the briefing at every birth, through puppeteer 0.3.2's per-run `mcpServers`, `allowTools`
-    and `instructions`. Claude only, until CP-5.
   - **MT-0**, the tool plane: `contracts/src/tools.ts`, one catalog with audience and scope columns, and
     `fieldd/src/tool-plane/` serving each caller its rows; a plain run gets History and the projects list. It is drafted
-    on PR #4's tip and is lit after that lands.
+    on PR #4's tip; it rebases onto CP-1d and is lit.
   - **SP-1b** (Chat's list) and **SP-1c** (the New spark sheet): renderer only, on James's go.
   - **SP-1d**: the thread and Chat's composer, after HN B2 (HN B1 landed 10-31).
   - **CP-2**: start and talk (`rooms/talk/`).
@@ -622,7 +624,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a and CP-1a…1c landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | CP-1d (PR #4) → MT-0 → SP-1b/1c |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c and CP-1d landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | MT-0 → SP-1b/1c → CP-2 |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**

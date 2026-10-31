@@ -21670,3 +21670,90 @@ it changed after.
 - LC-54 (the GitHub release page saying the same lines) is James's to ask for. AU-6a's body calls LC-53 (the card's
   words beyond DESIGN.md §8) open for James. He ruled it at the leans on the PM board, 2026-10-29 16:19:25Z, after
   the commit (DECISIONS' AU row; the date is the record's §10, round 7).
+
+## CP-1d — a spark carries its door and its brief on every birth: puppeteer 0.3.2's per-run briefing names the `vibefield` server, its allowance and the spark's brief at hatch, at both resumes and at a pending run's replacement; PR #4's slice, re-cut onto main through the train (2026-10-31; `9eabb5b33` — `57f1d7431`, James's `352f19b26` cherry-picked alone, and `9eabb5b33`, the comment's correction, on main `23e9c2538` — lane `co/cp1d-main`, in the mini's mint `ef5fb6161` over main `34174e787`)
+
+James wrote CP-1d as PR #4 (`cb61f29de`), stacked on `stack/cp1d-prerequisites`. On 2026-10-31 at 02:11:50Z James chose
+A: the slice goes through the train like CP-1a…1c, re-cut onto main in the CO lane, with his branch and his PR
+untouched. The PR is his to close after this landing.
+
+**What.**
+- **The briefing** (`fieldd/src/agent-spark-briefing.ts`, new).
+  - It is built from three things: the verified spark record, the spark's editable brief as it reads at that moment
+    (`CLAUDE.md` in its folder), and a fresh `native.door.info`.
+  - It passes the `vibefield` server, its tool allowance and the instructions at every birth `agent-runtime.ts` makes:
+    hatch, a run-id resume, a resume by the recorded native id, and a pending run's replacement.
+  - It is prepared and validated before a pending terminal ends, so a missing or invalid brief keeps that terminal.
+  - A spark's identity and origin stay in the signed session records. No MCP configuration and no instructions are
+    persisted there. Ordinary runs receive no briefing.
+- **Support is read from the agent, never from its id.** The provider row gains an optional `briefing` declaration
+  (`mcpServers`, `allowTools`, `instructions`, `mcpServerProcess`; `contracts/src/agent-session.ts`, its fixture in
+  `agent-providers.valid.json`).
+  - All three fields and a terminal MCP process are required, with no vendor branch. A helper or external MCP
+    process needs a trusted identity of its own.
+  - An unsupported hatch is refused before its folder or its record is written.
+- **The void launch route and the folder `.mcp.json` alternative retire.** `compose/sparks.ts`'s `LAUNCH_ROUTE` and
+  `folderRoute` are gone. The handoff lives outside `compose/`, so wall R29 holds.
+- **The docs:** `docs/agent-plane/spark-briefings.md` (new), and a line each in `AGENT_PLANE.md` and
+  `architecture.html`.
+- **The erratum at its source** (`9eabb5b33`). `contracts/src/mgmt.ts` `NativeDoorInfoResult` said fieldd writes the
+  bridge command into a spark's `.mcp.json` at every launch. That was route B's, which was never wired. The comment now
+  says the command is what a spark's briefing names, with a dated "Corrected 2026-10-31 (CP-1d)" line.
+
+**Real vs not yet.**
+- Real: real native-terminal witnesses (`agent-session.test.ts`, with the scripted MCP client `spark-mcp-client.mjs`)
+  launch the briefing's bridge, list the tools and call `agents_list` on fresh and resumed runs. So since this landing
+  a spark's own session holds the door.
+- Not yet:
+  - Claude only, until CP-5. In puppeteer 0.3.2 only `adapter-claude` declares `mcpServerProcess: 'terminal'`; Codex
+    and Grok declare `'helper'` and ACP `'external'`, so their hatch is refused as `spark-door-identity-unsupported`
+    (read in the pinned packages, 2026-10-31). Claude Code's and Codex's native delivery has its own isolated proof
+    upstream (PU-F); fieldd's witness uses a scripted provider.
+  - A plain run gets nothing until MT-0.
+  - A typed launch that puppeteer adopts in a managed pane holds no door until petition PU-J.
+
+**Found.**
+- The re-cut had one conflict, in `fieldd/test/agent-session.test.ts`'s imports. Main had added `TERMINAL_INVENTORY`
+  and `EXIT_GRACE_MS`, and the slice `SparkRecord` and `SparkStore`. Both were kept, in biome's order.
+- No lock and no pin moved. The slice's parent, `8308cb8a4` (the EL8 to Puppeteer 0.3.2), had reached main through
+  PR #5, and `72a7145df` (PR #4's Linux CI repair) is main's own.
+- The landed diff (`23e9c2538`..`9eabb5b33`) is 14 files, +581 −93: the slice's 13 files exactly as PR #4 has them,
+  plus `mgmt.ts`.
+
+**Validation.**
+- **PR #4's own** (`352f19b26`'s message, James's): a full `pnpm verify` against npm 0.3.2 passed, with 9,765 Vitest,
+  257 Node and 525 Rust tests. Read, not re-run.
+- **The re-cut's lane light**, at `9eabb5b33` on base `23e9c2538`, in `lanes/co` (`CARGO_TARGET_DIR=/Volumes/SamsungRed/rust/co`):
+  - The first run (`lanes/co/logs/light-cp1d.out`, 2026-10-31 02:13:30–02:15:56Z, load 54–64) was green on every row
+    but one. preflight, walls, biome, tsc contracts and fieldd, and gen fresh were all 0, and contracts 551/551. fieldd
+    was "1 failed | 127 passed | 4 skipped (132)".
+  - The red was item 87's "a resume while the cleanup is pending …" (`agent-session.test.ts` :3560): "the exited row of
+    a run whose workspace cleanup is stalled did not hold within 15000 ms". The floor's row read `exited:false`, with
+    its pid holding the typed-out file as `/bin/cat`. The ^C came 13 ms after `session_started`.
+  - That is **item 118's third witness**, at a site its fix (`9e0457b3c`) did not cover. Item 87's two stall rows
+    (:3475, :3560) interrupt with no `catReady`. Their fix is item 118's follow-up, the fixer's own commit (VF-PM,
+    02:18Z), not CP-1d's. The log is kept at `lanes/co/logs/light-cp1d-run1/vt-fieldd.log`.
+  - The one lottery re-run (`light-cp1d-2.out`, 02:18:01–02:20:02Z, load 15–21) is the light that stands:
+    `== co-light GREEN 02:20:02Z; HEAD 9eabb5b33`. Every row was 0. Contracts were 551/551 (3 files), and fieldd
+    "Test Files 7 passed (7) Tests 128 passed | 4 skipped (132)". The 4 skips are opt-in: two need the real rosettad,
+    two the real Claude.
+  - CP-1d's own witness ran on the REAL floor: "CP-1d — hatch and run-id resume carry a fresh briefing, while ordinary
+    runs carry none", passing in 3646 ms. All 11 `agent-spark-briefing` rows and compose-sparks' 9 passed.
+- **Run 25: the mint `ef5fb6161` (`9eabb5b33` × main `34174e787`).**
+  - VF-PM's rehearsal and the lane's agreed before the mint: `merge-tree --write-tree 34174e787 9eabb5b33` was clean,
+    tree `1289396c6`. The one both-sides file was `architecture.html`, beside PG-0's and the PG-1 clauses' rows.
+  - The host: Apple M4, 16 GiB, macOS 26.7.2 (25G332); node 26.5.0, pnpm 11.13.1, rustc 1.99.1.
+  - `pnpm verify` armed at 02:28:15Z (load 1.54) and exited 0 at 02:32:52Z (load 9.51).
+  - Its counts: "Successfully ran target test for 28 projects"; vitest 10,727 passed, 0 failed, 18 skipped across 806
+    files, one more file than before (`agent-spark-briefing`); "cargo test results: ok 33, FAILED 0".
+  - The real-floor witness passed in 1,153 ms, `agent-spark-briefing` 11 of 11, and compose-sparks 9 (VF-PM's counts,
+    02:34Z).
+  - The tree was clean after, with no stubs left, and no hand touched the console. Verify only. Logs:
+    `lanes/ts6/logs/mini/run25/`.
+- **Landed:** main fast-forwarded `34174e787` → `ef5fb6161` at 02:35:38Z (main's reflog; the fixer, on VF-PM's GO).
+  AU B4's records (`16814dea5`) landed on it at 02:35:54Z, before this entry.
+
+**Owed.**
+- James closes PR #4.
+- MT-0 rebases onto this, then runs the fieldd rows it has been holding back, and is lit.
+- PU-J, at the next draft queue.
