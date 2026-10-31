@@ -1470,6 +1470,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       Chat is the view and it is the one shown, and opening it reads it. In another view Chat's cell takes the orange
       dot while a needs-you dot stands, else the cyan one while a thread is unread, its accessible name "Chat, a thread
       is unread". Both are kept for the window's life and written nowhere (HN-D9's rule).
+    - *Added 2026-10-31 (SP-1d's critique, rulings-9):* the dot is a picture, so a dot that outlasts the status word is
+      said in the row's accessible name, right after the status word, in a word only a screen reader reads: "unread",
+      or "needed you" for a needs-you dot whose need has ended ("Asleep, needed you", "Ready, unread"). A need standing
+      now is said by its own word (Asking you), so it adds none (S-3).
   - **The status, as SP-1b reads it:** from the spark's own run row (`agent.subscribe {projection: "field"}`, by the
     row's `spark`) and its agents' rows (by their `origin`). The first that holds is the word:
     - no session yet: Hello;
@@ -1548,7 +1552,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the deck's pane and the hand ruled by VF-PM 2026-10-31 16:35Z, James's to overturn). The thread is the spark's own
   session, in its own terminal, in Chat's thread column. No messages are drawn: the pane is the transcript. The live
   cards (CH-D2) are not drawn at SP-1d. They come with **SP-1e**, which writes their entry here first, with their data:
-  a job that groups a spark's spawns, and a door that lists its watches.
+  a job that groups a spark's spawns, and a door that lists its watches. *Chat's thread pane takes no card at SP-1d: it
+  joins the places that take one with SP-1e (2026-10-31, SP-1d's critique, rulings-8).*
   - **The column is a fixed box:** the head, the pane, then the foot, in one column centred under the head, as wide as
     the composer: 640, or the thread's width less 56 where that is narrower.
     - The head stays SP-1b's (72): the face at 40, framed and live, the name and the status word. It is the pane's head.
@@ -1972,7 +1977,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     says "Not pasted — that snapshot is no longer kept". **The desk** (Canvas) takes text as a note and a picture as a print, where you let go
     (HN-D7); a file or an agent says the desk can't hold it yet. **Chat's composer** takes a card as a
     chip (§8 "Chat's composer"): "Add to your message to Vela", then "Added to your message to
-    Vela". Over the line the carried card ducks to 0.55; **held over a view's
+    Vela". *Chat's thread pane takes no card at SP-1d: it joins the places that take one with SP-1e
+    (2026-10-31, SP-1d's critique, rulings-8).* Over the line the carried card ducks to 0.55; **held over a view's
     cell for 520ms** (HN-D6) that view opens under it, the cell saying "Opening Godview" with its
     progress — copy in History and play in Godview in one drag.
   - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its notebook — it flies
@@ -4987,6 +4993,8 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   terminal is not on this desktop's floor" · "Not sent — you left Vela's thread before its pane was ready" · "Not sent
   — this window has no terminals" · "Couldn't wake Vela: …" · "Couldn't send to Vela: …". A card's: "Add to your
   message to Vela" · "Added to your message to Vela".
+- A row's lasting mark, in its accessible name after the status word: "unread" · "needed you" ("Asleep, needed you",
+  "Ready, unread").
 - A session's handle: its folder's name, which is the board's project, else the agent's label for a run that names no
   folder, with @'s ordinal where two share it ("vibe-field·2", "Claude Code·2"). Its chip pastes "Claude Code in
   vibe-field (session ‹its run›)", or "Claude Code (session ‹its run›)" with no folder.

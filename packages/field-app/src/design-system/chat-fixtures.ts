@@ -3,12 +3,20 @@ import {
   type AgentFieldRow,
   type AgentModelChoice,
   type AgentModelSelection,
+  type AgentProfileSet,
   type SparkSummary,
 } from "@vibefield/contracts";
-import { atDefaultHot, atRowsOf } from "../chat/at-rows";
-import type { ChatComposerViewProps } from "../chat/ChatComposerView";
-import type { AgentChip, CardChip, DraftPart, SessionChip } from "../chat/composer-draft";
-import { agentMenuOf, effortOf, modelWords } from "../chat/new-spark";
+import { type AtSources, atDefaultHot, atRowsOf } from "../chat/at-rows";
+import { type AtShown, type ChatComposerViewProps, menuRowId } from "../chat/ChatComposerView";
+import {
+  type AgentChip,
+  type CardChip,
+  type DraftPart,
+  draftBlank,
+  draftSendable,
+  type SessionChip,
+} from "../chat/composer-draft";
+import { agentMenuOf, effortOf, type ModelsReading, modelWords } from "../chat/new-spark";
 import { sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
 import type { ThreadLatches } from "../chat/thread-marks";
@@ -19,10 +27,10 @@ import { FIXTURE_NATIVE, FIXTURE_WORK } from "./profiles-fixtures";
 import { FIXTURE_HATCHED, FIXTURE_SPARKS } from "./spark-fixtures";
 
 // Chat's fixture ADAPTER (SP-1b, SP-1d; docs/UI_SYSTEM.md): what fieldd would answer — the sparks it keeps, the field
-// board's rows, the agents and Agent Profiles it offers, an agent's picker — run through the PRODUCT's own readings
-// (`sparkEntriesOf`, @'s `atRowsOf`, the agent menu's `agentMenuOf` and `effortOf`), so the catalog draws what the
-// window would, never a copy of its words. Fixed seeds (`spark-fixtures.ts`) and a fixed clock, so every plate deals
-// the same faces and says the same times.
+// board's rows, the agents and Agent Profiles it offers, an agent's picker, or that it is not answering — run through
+// the PRODUCT's own readings (`sparkEntriesOf`, @'s `atRowsOf`, the agent menu's `agentMenuOf` and `effortOf`, the
+// draft's `draftBlank` and `draftSendable`), so the catalog draws what the window would, never a copy of its words.
+// Fixed seeds (`spark-fixtures.ts`) and a fixed clock, so every plate deals the same faces and says the same times.
 
 /** The catalog's clock: a Saturday morning, 9:41 local. */
 export const FIXTURE_NOW = new Date(2026, 9, 31, 9, 41).getTime();
@@ -37,7 +45,11 @@ const seedOf = (name: string): number =>
 const AGENT = AGENT_CATALOG[0];
 
 /** The fixture sparks work in This Mac and Work, so @'s agents say their profile (the profiles' own fixtures). */
-const PROFILES = [FIXTURE_NATIVE.id, FIXTURE_WORK.id];
+const PROFILE_SETS: readonly AgentProfileSet[] = [FIXTURE_NATIVE, FIXTURE_WORK];
+const PROFILES = PROFILE_SETS.map((set) => set.id);
+
+/** What a read says when fieldd is not answering: Chat's list's, and an agent's picker's. */
+const FIELDD_GONE = "fieldd is not answering (the daemon is restarting)";
 
 function spark(id: string, name: string, session: SparkSummary["session"]): SparkSummary {
   return {
@@ -171,9 +183,17 @@ const HATCHED_RUN = row({
 export const CHAT_STATES = [
   "list",
   "hello",
+  "starting",
   "typing",
+  "sending",
   "at",
+  "at-reading",
+  "at-none",
+  "at-empty",
+  "at-failed",
   "menu",
+  "menu-reading",
+  "menu-failed",
   "chips",
   "finding",
   "gone",
@@ -188,9 +208,17 @@ export type ChatState = (typeof CHAT_STATES)[number];
 export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   list: "Sparks",
   hello: "A new spark",
+  starting: "A starter sending",
   typing: "Typing",
+  sending: "Sending",
   at: "@",
+  "at-reading": "@ reading",
+  "at-none": "@ no match",
+  "at-empty": "@ nothing to add",
+  "at-failed": "@ can't read",
   menu: "An agent's model",
+  "menu-reading": "Its picker reading",
+  "menu-failed": "Its picker failed",
   chips: "Chips",
   finding: "Finding",
   gone: "Off the floor",
@@ -215,8 +243,15 @@ export function chatReadingOf(state: ChatState): SparksReading {
   switch (state) {
     case "list":
     case "typing":
+    case "sending":
     case "at":
+    case "at-reading":
+    case "at-none":
+    case "at-empty":
+    case "at-failed":
     case "menu":
+    case "menu-reading":
+    case "menu-failed":
     case "chips":
     case "finding":
     case "gone":
@@ -224,6 +259,7 @@ export function chatReadingOf(state: ChatState): SparksReading {
     case "asleep":
       return { state: "ready", entries: sparkEntriesOf(SPARKS, ROWS) };
     case "hello":
+    case "starting":
       return {
         state: "ready",
         entries: sparkEntriesOf([HATCHED, ...SPARKS], [HATCHED_RUN, ...ROWS]),
@@ -233,7 +269,7 @@ export function chatReadingOf(state: ChatState): SparksReading {
     case "opening":
       return { state: "opening" };
     case "unavailable":
-      return { state: "unavailable", reason: "fieldd is not answering (the daemon is restarting)" };
+      return { state: "unavailable", reason: FIELDD_GONE };
   }
 }
 
@@ -246,9 +282,17 @@ export const CHAT_LATCHES: ThreadLatches = { needs: new Set(), unread: new Set([
 export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   list: null,
   hello: HATCHED.id,
+  starting: HATCHED.id,
   typing: "sp-juno0001",
+  sending: "sp-juno0001",
   at: "sp-juno0001",
+  "at-reading": "sp-juno0001",
+  "at-none": "sp-juno0001",
+  "at-empty": "sp-juno0001",
+  "at-failed": "sp-juno0001",
   menu: "sp-juno0001",
+  "menu-reading": "sp-juno0001",
+  "menu-failed": "sp-juno0001",
   chips: "sp-juno0001",
   finding: "sp-juno0001",
   gone: "sp-juno0001",
@@ -259,11 +303,15 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   unavailable: null,
 };
 
+/** The plates whose thread has a send under way (DESIGN.md §8 "Chat's thread"): Send's, over the draft it carries, or
+ * a starter's, its hello's starters waiting. The thread takes one send at a time, so on both its send waits, busy. */
+export const CHAT_SENDING: ReadonlySet<ChatState> = new Set(["starting", "sending"]);
+
 // ── the composer's plates (SP-1d; DESIGN.md §8 "Chat's composer") ──
 
 const JUNO = SPARKS[2] as SparkSummary;
 
-/** The fixture agent's picker, as `agent.models` would answer it: two models, the first with Effort. */
+/** The fixture agent's picker models: two, the first with Effort. */
 const DEEP: AgentModelChoice = {
   id: "deep",
   label: "Deep",
@@ -284,14 +332,39 @@ const DEEP: AgentModelChoice = {
 const QUICK: AgentModelChoice = { id: "quick", label: "Quick", controls: [] };
 const CHOSEN: AgentModelSelection = { modelId: DEEP.id, controls: { effort: "high" } };
 
-/** The fixture agent taken from @, started under This Mac, at Deep and High once its menu chose them. */
-const AGENT_CHIP: AgentChip = {
+/** The fixture agent's picker as `agent.models` answers it, read. */
+const PICKER: ModelsReading = {
+  state: "read",
+  answer: {
+    provider: AGENT.id,
+    profileSet: FIXTURE_NATIVE.id,
+    catalog: {
+      provider: AGENT.id,
+      cwd: "/fixture",
+      observedAt: minutesAgo(4),
+      source: { kind: "native-protocol", freshness: "live" },
+      completeness: "complete",
+      customModels: false,
+      models: [DEEP, QUICK],
+    },
+    refreshing: false,
+  },
+};
+
+/** The fixture agent just taken from @, started under This Mac: untouched, at its own model and effort. */
+const TAKEN_CHIP: AgentChip = {
   id: "chip-agent",
   kind: "agent",
   agent: AGENT.id,
   label: AGENT.label,
   profile: { id: FIXTURE_NATIVE.id, name: FIXTURE_NATIVE.label },
   named: true,
+  model: null,
+};
+
+/** …and at Deep and High once its menu chose them. */
+const AGENT_CHIP: AgentChip = {
+  ...TAKEN_CHIP,
   model: { selection: CHOSEN, words: modelWords(DEEP, CHOSEN) },
 };
 
@@ -325,73 +398,97 @@ const CARD_CHIP: CardChip = {
 
 const words = (text: string): DraftPart => ({ kind: "text", text });
 
-/** @'s list on Juno's thread: both groups, read by the product's own `atRowsOf`. */
-const AT_LIST = atRowsOf({
-  spark: JUNO,
-  query: "",
-  sets: [FIXTURE_NATIVE, FIXTURE_WORK],
-  rows: ROWS,
-});
+type ComposerPlate = Omit<ChatComposerViewProps, "name">;
+
+/** A plate's draft as the composer's controller hands it to its view: blank and armed by the product's own
+ * `draftBlank` and `draftSendable`, an open @'s query never what Send would carry; and @'s box over it, if open. */
+function drafted(
+  seed: readonly DraftPart[],
+  at: AtShown | null = null,
+  query: string | null = null,
+): ComposerPlate {
+  return {
+    seed,
+    blank: draftBlank(seed),
+    armed: draftSendable(seed, query === null ? null : `@${query}`),
+    at,
+  };
+}
+
+/** @ open on Juno's thread after "Ask ", its list the product's own `atRowsOf` over `query`, what fieldd answers of
+ * the spark's profiles (or null before it has, or "failed"), and the board's rows. */
+function asked(
+  query: string,
+  sets: AtSources["sets"],
+  rows: readonly AgentFieldRow[] = ROWS,
+): ComposerPlate {
+  const list = atRowsOf({ spark: JUNO, query, sets, rows });
+  return drafted(
+    [words(`Ask @${query}`)],
+    { kind: "rows", left: 32, list, hot: atDefaultHot(list) },
+    query,
+  );
+}
+
+/** This Mac and Work before anyone signs in to either: no persona in them. */
+const SIGNED_OUT: readonly AgentProfileSet[] = PROFILE_SETS.map((set) => ({
+  ...set,
+  personas: [],
+}));
+
+/** The board with none of your own sessions on it: the sparks' own runs and the agent Lyra started. */
+const SPARKS_RUNS = ROWS.filter((row) => row.spark !== undefined || row.origin?.by === "spark");
+
+/** "Start " and the agent's chip, its menu open in @'s box as the controller reads it for that chip: the New spark
+ * sheet's `agentMenuOf` for the one agent, the profile on its head (Juno has two), and Effort under a chosen model
+ * that has one. */
+function started(chip: AgentChip, picker: ModelsReading): ComposerPlate {
+  const selection = chip.model?.selection;
+  const model =
+    picker.state === "read"
+      ? picker.answer.catalog?.models.find((choice) => choice.id === selection?.modelId)
+      : undefined;
+  return drafted([words("Start "), { kind: "chip", chip }, words(" ")], {
+    kind: "menu",
+    left: 46,
+    rows: agentMenuOf(
+      [{ id: chip.agent, label: chip.label, takes: true }],
+      chip.agent,
+      picker,
+      selection,
+      chip.named ? chip.profile.name : undefined,
+    ),
+    effort: effortOf(model, selection),
+    hot: menuRowId(selection?.modelId ?? null),
+  });
+}
+
+/** The question typed on Juno's thread, at rest and while its send runs. */
+const ASKED: readonly DraftPart[] = [words("Why does the composer test fail on main?")];
 
 /** The composer on each plate: the shipping view's props, made by the product's own readings of the fixtures. At rest
- * where a plate names none. */
-export const CHAT_COMPOSER: Partial<Record<ChatState, Omit<ChatComposerViewProps, "name">>> = {
-  typing: {
-    seed: [words("Why does the composer test fail on main?")],
-    blank: false,
-    armed: true,
-  },
-  at: {
-    seed: [words("Ask @")],
-    blank: false,
-    armed: false,
-    at: { kind: "rows", left: 32, list: AT_LIST, hot: atDefaultHot(AT_LIST) },
-  },
-  menu: {
-    seed: [words("Start "), { kind: "chip", chip: AGENT_CHIP }, words(" ")],
-    blank: false,
-    armed: true,
-    at: {
-      kind: "menu",
-      left: 46,
-      rows: agentMenuOf(
-        [{ id: AGENT.id, label: AGENT.label, takes: true }],
-        AGENT.id,
-        {
-          state: "read",
-          answer: {
-            provider: AGENT.id,
-            profileSet: FIXTURE_NATIVE.id,
-            catalog: {
-              provider: AGENT.id,
-              cwd: "/fixture",
-              observedAt: minutesAgo(4),
-              source: { kind: "native-protocol", freshness: "live" },
-              completeness: "complete",
-              customModels: false,
-              models: [DEEP, QUICK],
-            },
-            refreshing: false,
-          },
-        },
-        CHOSEN,
-        FIXTURE_NATIVE.label,
-      ),
-      effort: effortOf(DEEP, CHOSEN),
-      hot: DEEP.id,
-    },
-  },
-  chips: {
-    seed: [
-      words("Have "),
-      { kind: "chip", chip: AGENT_CHIP },
-      words(" review "),
-      { kind: "chip", chip: SESSION_CHIP },
-      words(" against "),
-      { kind: "chip", chip: CARD_CHIP },
-      words(" "),
-    ],
-    blank: false,
-    armed: true,
-  },
+ * where a plate names none; its send busy where `CHAT_SENDING` says a send runs. */
+export const CHAT_COMPOSER: Partial<Record<ChatState, ComposerPlate>> = {
+  typing: drafted(ASKED),
+  sending: drafted(ASKED),
+  // @'s list: both groups; still being read; nothing called what follows the @; nothing to add (no sign-in, none of
+  // your sessions); and the spark's profiles not read
+  at: asked("", PROFILE_SETS),
+  "at-reading": asked("", null),
+  "at-none": asked("docs", PROFILE_SETS),
+  "at-empty": asked("", SIGNED_OUT, SPARKS_RUNS),
+  "at-failed": asked("", "failed"),
+  // an agent's menu: its picker read and a model chosen; just taken, its picker being read; its picker not read
+  menu: started(AGENT_CHIP, PICKER),
+  "menu-reading": started(TAKEN_CHIP, { state: "reading" }),
+  "menu-failed": started(TAKEN_CHIP, { state: "failed", words: FIELDD_GONE }),
+  chips: drafted([
+    words("Have "),
+    { kind: "chip", chip: AGENT_CHIP },
+    words(" review "),
+    { kind: "chip", chip: SESSION_CHIP },
+    words(" against "),
+    { kind: "chip", chip: CARD_CHIP },
+    words(" "),
+  ]),
 };

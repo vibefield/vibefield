@@ -442,6 +442,15 @@ describe("the catalog's hello plate (docs/UI_SYSTEM.md: the shipping view on fix
       expect(hello(), state).toBeNull();
     }
   });
+
+  it("draws the starters waiting while a starter's send runs, and at rest on the hello's own plate", async () => {
+    await plate("starting");
+    expect(words($(".vf-chat-hello-words"))).toBe(helloWords("Polaris"));
+    expect($(".vf-chat-starters")?.getAttribute("aria-busy")).toBe("true");
+    expect(starters()).toHaveLength(3);
+    await plate("hello");
+    expect($(".vf-chat-starters")?.hasAttribute("aria-busy")).toBe(false);
+  });
 });
 
 describe("the hello's words are DESIGN.md's (§8 \"Chat's thread\", §9 \"Chat's words\")", () => {

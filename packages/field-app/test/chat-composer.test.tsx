@@ -753,6 +753,49 @@ describe("the catalog's composer plates (docs/UI_SYSTEM.md: the shipping view on
     expect(editor().querySelectorAll(".vf-chat-chip")).toHaveLength(3);
     expect(chipLabels()).toContain("vibe-field·2");
   });
+
+  it("draws @'s quiet states, an agent's menu being read and refused, and a send under way, in the composer's own parts", async () => {
+    // @ while what it offers is read: the first group's eyebrow over its word, no row
+    await plate("at-reading");
+    expect(menu()?.dataset.at).toBe("rows");
+    expect(words(menu())).toBe("Start an agent Reading its agents…");
+    expect(menu()?.querySelector(".vf-chat-at-row")).toBeNull();
+    // nothing matches what follows the @
+    await plate("at-none");
+    expect(words(menu())).toBe('Nothing called "docs"');
+    expect(menu()?.querySelector(".vf-chat-at-row")).toBeNull();
+    // the spark's profiles hold no sign-in and run none of your sessions
+    await plate("at-empty");
+    expect(words(menu())).toBe("Nothing to add from Juno's profiles");
+    // its profiles can't be read: the New spark sheet's own sentence
+    await plate("at-failed");
+    expect(words(menu())).toBe(CANNOT_LIST_AGENTS);
+
+    // an agent just taken, its menu open while its picker is read: Its own model, then the word in the picker's place
+    await plate("menu-reading");
+    expect(menu()?.dataset.at).toBe("menu");
+    expect(words(menu())).toContain(`Its own model Reading ${A.label}'s models…`);
+    expect(menu()?.querySelector('[data-kind="model"]')?.getAttribute("aria-checked")).toBe("true");
+    // …and a picker that can't be read says why, in the words its read failed with
+    await plate("menu-failed");
+    expect(words(menu())).toContain(
+      "Its own model fieldd is not answering (the daemon is restarting)",
+    );
+    expect(menu()?.querySelectorAll('[data-kind="model"]')).toHaveLength(1);
+
+    // a send under way: send waits, busy, over the draft it carries
+    await plate("sending");
+    expect(editor().textContent).toBe("Why does the composer test fail on main?");
+    expect(send().hasAttribute("data-armed")).toBe(true);
+    expect(send().getAttribute("aria-busy")).toBe("true");
+    // …and a starter's: the thread takes one send at a time, so send waits too
+    await plate("starting");
+    expect(send().getAttribute("aria-busy")).toBe("true");
+    for (const state of ["typing", "at", "chips"] as const) {
+      await plate(state);
+      expect(send().hasAttribute("aria-busy"), state).toBe(false);
+    }
+  });
 });
 
 describe("the composer's words are DESIGN.md's (§8 \"Chat's composer\", §9 \"Chat's words\")", () => {

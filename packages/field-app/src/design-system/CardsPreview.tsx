@@ -12,7 +12,9 @@ import {
   type Card,
   type CardOrigin,
   type CardWindow,
+  CHAT_REACH,
   type FileCard,
+  HAND_REACH,
   layoutCards,
   layoutRaised,
   type MsgCard,
@@ -215,8 +217,8 @@ export const FROM_FIXTURES: readonly Card[] = [
  * History's room made. */
 export const FROM_REACHED = ["fx-from-paste", "fx-from-settings", "fx-from-history"] as const;
 
-/** The page's hand plates, in its order. */
-export const CARDS_STATES = ["rest", "reached", "raised", "held", "carried"] as const;
+/** The page's hand plates, in its order: `chat` is the reach while Chat shows (SP-1d), the product's `CHAT_REACH`. */
+export const CARDS_STATES = ["rest", "reached", "chat", "raised", "held", "carried"] as const;
 export type CardsState = (typeof CARDS_STATES)[number];
 
 /** A plate is the window's foot at this size (the held card's, the window's middle). */
@@ -266,9 +268,10 @@ export function CardsPlate({ state }: { state: CardsState }): ReactElement {
   const raised = state === "raised";
   const lay = raised ? layoutRaised : layoutCards;
   const layout = lay(CARD_FIXTURES.length, win, CARDS_LINE_RIGHT);
-  // reached: the pointer on the third card's middle, as the product measures it
+  // reached, in any view or in Chat: the pointer on the third card's middle, as the product measures it
+  const reaching = state === "reached" || state === "chat";
   const third = layout.slots[2];
-  const pointerX = state === "reached" && third !== undefined ? third.x + CARD_W / 2 : null;
+  const pointerX = reaching && third !== undefined ? third.x + CARD_W / 2 : null;
   const lifts = reachLift(layout.slots, pointerX);
   const held: HeldCard | null = state === "held" ? { card: TEXT, phase: "up" } : null;
   const carried = state === "carried" ? CARRIED : null;
@@ -283,6 +286,7 @@ export function CardsPlate({ state }: { state: CardsState }): ReactElement {
         cards={CARD_FIXTURES}
         layout={layout}
         lifts={lifts}
+        reach={state === "chat" ? CHAT_REACH : HAND_REACH}
         reached={reachedIndex(lifts)}
         raised={raised}
         focus={raised ? 3 : -1}

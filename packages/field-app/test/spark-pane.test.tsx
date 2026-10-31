@@ -473,12 +473,13 @@ describe("when there is no pane to draw, its place says why, never a blank", () 
   });
 
   it("a session the floor does not hold is not on this desktop's floor once the floor answers, and asks for no demand", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     sessions = [];
     await mountPane();
     // the pool's join asks the floor a few times over ~100 ms before it answers "no such session" (an inventory that
     // lags a birth): no 20 s wait
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await vi.advanceTimersByTimeAsync(200);
     });
     expect(pane().getAttribute("data-pane-state")).toBe("gone");
     expect(pane().textContent).toBe("Vela's terminal is not on this desktop's floor.");
@@ -487,10 +488,11 @@ describe("when there is no pane to draw, its place says why, never a blank", () 
   });
 
   it("a session the floor lists later, once its sessions are read again, mounts", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     sessions = [];
     await mountPane();
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await vi.advanceTimersByTimeAsync(200);
     });
     expect(pane().getAttribute("data-pane-state")).toBe("gone");
     // the deck reads the floor's sessions again, and the spark's terminal is there now

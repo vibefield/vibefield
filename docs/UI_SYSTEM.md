@@ -100,12 +100,22 @@ The catalog currently mounts these shipping views directly:
   - the composer: the shipping `ChatComposerView` at the thread's foot, its `AtRowsView` over
     fixture agents, profiles and rows read by the product's own `atRowsOf`, and an agent's menu
     read by the New spark sheet's own `agentMenuOf` — at rest, typing, @ open on both groups, an
-    agent's model and Effort, and the chips an agent, a session and a card make. Never its
-    controller (`ChatComposer`), which registers the hand's place and sends;
+    agent's model and Effort, and the chips an agent, a session and a card make; its blank and
+    armed read by the draft's own `draftBlank` and `draftSendable`. Never its controller
+    (`ChatComposer`), which registers the hand's place and sends;
+  - the composer's quiet and busy states (SP-1d's critique, rulings-5), each the same readings
+    over a fixture that puts it there: @ while its profiles are read (`sets` null), when nothing
+    is called what follows the @, with nothing to add (This Mac and Work with no sign-in, and
+    none of your sessions on the board), and when the profiles can't be read (`"failed"`, the New
+    spark sheet's sentence); an agent just taken, its menu while its picker is read and when the
+    read fails; and a send under way, Send's over its draft and a starter's, one fact
+    (`CHAT_SENDING`) handed to the panel's `sending` and the composer's `busy`, as Chat's
+    controller hands its thread's one send to both;
   - the hello: what stands in the thread over its pane is the product's own `threadItemsOf` over
     the shown spark and the plate's draft, drawn by the shipping `ThreadItemsView` inside the
     panel — a spark just hatched saying hello with its three starters, which send nothing there,
-    and none where the shown spark has had a turn
+    the same starters waiting while a starter's send runs, and none where the shown spark has
+    had a turn
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
   waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the
@@ -115,8 +125,9 @@ The catalog currently mounts these shipping views directly:
   Chat's composer at SP-1d, as `AtRowsView` (above), never on the line
 - the hand (Cards in Hand, HN-1): the shipping `CardsView` and `CardFace` over fixture cards
   (`CardsPreview`) — the six faces in both lights, the fan at rest, a card reached with its ×, the
-  hand raised with a card in the keyboard's focus, a card picked up over its scrim, and a card from
-  another app still waiting
+  same card reached while Chat shows (SP-1d: the product's `CHAT_REACH`, its tip risen to the
+  panel's foot), the hand raised with a card in the keyboard's focus, a card picked up over its
+  scrim, and a card from another app still waiting
 - the head (One Frame FR-3; its package and the pill's sheet on two shelves since HN-8, PL-D1 and
   PL-D2): `HeadView` in every state the page's head plates draw — the field's name at its top, the
   package after the chevron's rule and, in a plate of its own, its standing dot, the crumbs folded

@@ -162,6 +162,11 @@ describe("UI system ownership boundaries", () => {
     expect(preview).toMatch(/<ChatComposerView\s/u);
     expect(fixtures).toContain("atRowsOf");
     expect(fixtures).toContain("agentMenuOf");
+    // rulings-5: a plate's blank and armed are the draft's own readings, and a send under way is one fact handed to
+    // the panel and the composer, never a busy drawn on one of them alone
+    expect(fixtures).toContain("draftBlank");
+    expect(fixtures).toContain("draftSendable");
+    expect(preview).toContain("CHAT_SENDING");
     for (const file of [preview, fixtures]) {
       expect(file).not.toMatch(/<ChatComposer[\s/>]/u);
       expect(file).not.toMatch(/from "\.\.\/chat\/ChatComposer"/u);
@@ -616,6 +621,9 @@ describe("UI system ownership boundaries", () => {
     for (const model of ["reachLift(", "reachedIndex(", "textCardOf(", "termCardOf("])
       expect(fixture).toContain(model);
     expect(fixture).toMatch(/raised \? layoutRaised : layoutCards/u);
+    // SP-1d: the reach in Chat is the product's own, never its 20 copied
+    expect(fixture).toMatch(/reach=\{[^}]*CHAT_REACH/u);
+    expect(fixture).not.toMatch(/(?:lift|band): \d/u);
     expect(fixture).not.toMatch(/className="[^"]*vf-cards?(?:-|\b)/u);
     expect(fixture).not.toContain("<style");
     for (const door of [/\bgetHost\b/u, /\bcardsStore\b/u, /\buseCards\b/u, /<Cards\s/u])

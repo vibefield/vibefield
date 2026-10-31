@@ -14,16 +14,16 @@ import { activityWords, type SparkEntry } from "./spark-status";
 import type { SparksReading } from "./sparks-feed";
 import { ThreadItemsView } from "./ThreadItemsView";
 import type { ThreadItem } from "./thread-items";
-import { NO_LATCHES, type ThreadMark, threadMarksOf } from "./thread-marks";
+import { lastingMarkOf, NO_LATCHES, type ThreadMark, threadMarksOf } from "./thread-marks";
 import "./chat.css";
 
 // CHAT, THE PANEL (SP-1b, SP-1d; DESIGN.md §8 "Chat's list", "Chat's thread"; the Sparks page's `ch-view`,
 // `ch-needs`) — controller-free, so the catalog mounts this exact markup on fixtures. The list's column holds the
 // sparks fieldd keeps, newest activity first (CH-D1); a row is the face, the name and the status word (CH-D3); the
 // needs-you three take the attention ink (CH-D4), and a row wears its thread's mark: the orange dot, or unread's cyan
-// one (SP-1d). The thread's column is a fixed box: the chosen spark's head, then its own pane (the controller's
-// `SparkPane`, handed in) — or, asleep or not started, one honest line with its one act — then the thread's foot: its
-// composer, handed in, and its items standing over the pane.
+// one, said in the row's name too where it outlasts the word (SP-1d). The thread's column is a fixed box: the chosen
+// spark's head, then its own pane (the controller's `SparkPane`, handed in) — or, asleep or not started, one honest
+// line with its one act — then the thread's foot: its composer, handed in, and its items standing over the pane.
 
 /** What the chosen spark's act is doing: at rest, under way, or refused in fieldd's words. */
 export type ChatAct =
@@ -194,6 +194,7 @@ function SparkRow({
   onChoose: ((spark: SparkId) => void) | undefined;
 }): ReactElement {
   const { spark, status, needsYou } = entry;
+  const lasting = lastingMarkOf(entry, mark);
   return (
     <button
       type="button"
@@ -213,6 +214,8 @@ function SparkRow({
         <span className="vf-chat-row-status" {...(needsYou ? { "data-tone": "attention" } : {})}>
           {sparkStatusWord(status)}
         </span>
+        {/* the dot is a picture: what it says beyond the word is in the row's name ("Asleep, needed you") */}
+        {lasting === null ? null : <span className="sr-only">{`, ${lasting}`}</span>}
       </span>
       {mark === null ? null : (
         <span className="vf-chat-row-dot" data-mark={mark} aria-hidden="true" />

@@ -10,6 +10,7 @@ import type {
   DesignSystemStudioController,
   DesignSystemStudioState,
 } from "../src/design-system/studio-controller";
+import { CHAT_REACH, HAND_REACH } from "../src/frame/cards/cards-model";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -606,6 +607,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(cardPlates.map((p) => p.dataset.state)).toEqual([
       "rest",
       "reached",
+      "chat",
       "raised",
       "held",
       "carried",
@@ -620,6 +622,20 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     const reached = cardPlate("reached");
     expect(reached?.querySelectorAll(".vf-card-x")).toHaveLength(1);
     expect(reached?.querySelector(".vf-cards-label")?.textContent).toBe("Godview · swarm · 5m ago");
+    // …and the same reach while Chat shows (SP-1d; the product's CHAT_REACH): the third card rises only its tip to
+    // the panel's foot, never over the composer, where every other view lifts it whole
+    const thirdY = (state: string): number =>
+      Number.parseFloat(
+        cardPlate(state)
+          ?.querySelector<HTMLElement>('[data-slot="fx-agent"] .vf-cards-lift')
+          ?.style.getPropertyValue("--vf-cards-y") ?? "",
+      );
+    expect(thirdY("rest") - thirdY("reached")).toBeCloseTo(HAND_REACH.lift, 1);
+    expect(thirdY("rest") - thirdY("chat")).toBeCloseTo(CHAT_REACH.lift, 1);
+    expect(cardPlate("chat")?.querySelectorAll(".vf-card-x")).toHaveLength(1);
+    expect(cardPlate("chat")?.querySelector(".vf-cards-label")?.textContent).toBe(
+      "Godview · swarm · 5m ago",
+    );
     const raisedFan = cardPlate("raised")?.querySelector(".vf-cards");
     expect(raisedFan?.getAttribute("role")).toBe("listbox");
     expect(raisedFan?.querySelector("[data-focus]")?.getAttribute("data-slot")).toBe("fx-term");

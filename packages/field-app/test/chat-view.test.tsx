@@ -20,7 +20,7 @@ import { type ChatAct, ChatPanelView } from "../src/chat/ChatPanelView";
 import { ChatView } from "../src/chat/ChatView";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import { FieldBoard, type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
-import type { ThreadMark } from "../src/chat/thread-marks";
+import { THREAD_MARK_WORDS, type ThreadMark } from "../src/chat/thread-marks";
 import { sparkPaneOf } from "../src/chat/thread-pane-door";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import type { FrameSurface } from "../src/frame/frame-surface";
@@ -206,6 +206,39 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     expect(css).toMatch(/\.vf-chat-row-dot \{[^}]*background: var\(--vf-orange\)/);
     expect(css).toMatch(
       /\.vf-chat-row-dot\[data-mark="unread"\] \{[^}]*background: var\(--vf-cyan\)/,
+    );
+  });
+
+  it("says a dot that outlasts the status word in the row's accessible name: unread, or needed you (SP-1d)", () => {
+    const LYRA = spark("sp-lyra0001", "Lyra");
+    const NOVA_NEW = spark("sp-nova0001", "Nova");
+    mount(
+      <ChatPanelView
+        reading={ready([VELA, KIWI, LYRA, NOVA_NEW], [VELA_ASKS])}
+        chosen={null}
+        now={NOW}
+        marks={
+          new Map<string, ThreadMark>([
+            ["sp-vela0001", "needs"],
+            ["sp-kiwi0001", "needs"],
+            ["sp-lyra0001", "unread"],
+          ])
+        }
+      />,
+    );
+    const row = (id: string): HTMLElement | null => $(`.vf-chat-row[data-spark="${id}"]`);
+    /** The word only a screen reader reads, right after the status word, inside the row's button. */
+    const lasting = (id: string): string | null =>
+      row(id)?.querySelector(".vf-chat-row-status + .sr-only")?.textContent ?? null;
+    // Kiwi's need has ended (asleep since): its word says Asleep, so the dot's need is said after it
+    expect(lasting("sp-kiwi0001")).toBe(", needed you");
+    expect(lasting("sp-lyra0001")).toBe(", unread");
+    // Vela's need stands: its word already says it, so nothing is added; a row with no dot adds nothing
+    expect(row("sp-vela0001")?.querySelector(".sr-only")).toBeNull();
+    expect(row("sp-nova0001")?.querySelector(".sr-only")).toBeNull();
+    // the dot itself stays a picture: the words are the name's
+    expect(row("sp-kiwi0001")?.querySelector(".vf-chat-row-dot")?.getAttribute("aria-hidden")).toBe(
+      "true",
     );
   });
 
@@ -608,6 +641,9 @@ describe("Chat's words are DESIGN.md's (§8 \"Chat's list\", \"Chat's thread\")"
       "Vela's terminal is not on this desktop's floor.",
       "Couldn't find Vela's pane: …",
       NO_TERMINALS,
+      // a row's lasting mark, after its status word (SP-1d)
+      `"Asleep, ${THREAD_MARK_WORDS.needs}"`,
+      `"Ready, ${THREAD_MARK_WORDS.unread}"`,
     ]) {
       expect(design, said).toContain(said);
     }

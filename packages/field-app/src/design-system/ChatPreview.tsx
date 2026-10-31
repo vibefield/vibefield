@@ -12,6 +12,7 @@ import {
   CHAT_COMPOSER,
   CHAT_LATCHES,
   CHAT_PANE,
+  CHAT_SENDING,
   CHAT_STATE_LABEL,
   CHAT_STATES,
   type ChatState,
@@ -25,8 +26,9 @@ import {
 // so the pane's place shows the shipping `SparkPaneView`'s words, never the live pane. The thread's composer is the
 // shipping `ChatComposerView` on the plate's fixture draft and @ rows, never its controller. What stands in the thread
 // over its pane is the product's own reading (`threadItemsOf`) of the shown spark and the plate's draft: a new spark's
-// hello, whose starters send nothing here. Each row's mark is the product's own reading (`threadMarksOf`) of what the
-// plates' window saw off screen. The markup and the CSS are the product's.
+// hello, whose starters send nothing here. A plate whose thread has a send under way (`CHAT_SENDING`) hands that one
+// fact to both, as Chat's controller does: the starters wait and send is busy. Each row's mark is the product's own
+// reading (`threadMarksOf`) of what the plates' window saw off screen. The markup and the CSS are the product's.
 
 /** One of Chat's states, in the cover's place, on the frame's ground. */
 export function ChatPreview({
@@ -45,8 +47,11 @@ export function ChatPreview({
       <SparkPaneView name={shown.spark.name} {...place} />
     );
   const drafted = CHAT_COMPOSER[state];
+  const sending = CHAT_SENDING.has(state);
   const composer =
-    shown === undefined ? undefined : <ChatComposerView name={shown.spark.name} {...drafted} />;
+    shown === undefined ? undefined : (
+      <ChatComposerView name={shown.spark.name} {...drafted} busy={sending} />
+    );
   // a catalog window has sent nothing, and its pane holds no keyboard: the hello leaves only for a draft
   const items =
     shown === undefined
@@ -62,6 +67,7 @@ export function ChatPreview({
       onChoose={setChosen}
       {...(pane === undefined ? {} : { pane })}
       items={items}
+      sending={sending}
       {...(composer === undefined ? {} : { composer })}
       {...(locale === undefined ? {} : { locale })}
     />
