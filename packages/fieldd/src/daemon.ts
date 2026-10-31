@@ -343,6 +343,7 @@ import {
   type TerminalInventoryTimings,
   type TerminalProfileBinding,
   TerminalService,
+  type TerminalServiceOptions,
 } from "./terminal-service";
 import { TokenService } from "./token-service";
 import { composeProjects, ToolPlaneService } from "./tool-plane";
@@ -395,6 +396,9 @@ export interface FielddConfig {
   /** TC-S2 test seam: the terminal cell-birth wait budget (production
    * defaults to the cell's genned hello deadline). */
   terminalBirthWaitMs?: number;
+  /** Item 121 test seam: the route snapshot class placement reads
+   * (`TerminalServiceOptions.classRoutes`; production: the snapshot itself). */
+  terminalClassRoutes?: TerminalServiceOptions["classRoutes"];
   /** IL-D4 test seam: fieldd's own half of the inventory bound, over
    * `TERMINAL_INVENTORY` (a row runs a 10 s bound in a fraction of a second).
    * The tick bound it shares with the supervision is `nativeSupervisionTimings`'
@@ -1865,6 +1869,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       logger: logger.child({ component: "terminal.service" }),
       ...(config.terminalBirthWaitMs !== undefined
         ? { birthWaitMs: config.terminalBirthWaitMs }
+        : {}),
+      ...(config.terminalClassRoutes !== undefined
+        ? { classRoutes: config.terminalClassRoutes }
         : {}),
       remoteCellRewriter: config.terminalRemoteCellRewriter ?? {
         rewrite: (deviceId, endpoints) =>

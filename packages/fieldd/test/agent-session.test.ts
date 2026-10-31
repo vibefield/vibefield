@@ -66,6 +66,7 @@ import {
   type SparkRecord,
   TERMINAL_INVENTORY,
   type TerminalInfo,
+  type TerminalRouteSnapshot,
 } from "@vibefield/contracts";
 import {
   type AccountUsageService,
@@ -676,6 +677,8 @@ interface SetupConfig {
   observed?: boolean;
   /** ST — how long a sent Stop waits to be heard (default: `AGENT_STOP.HEARD_WITHIN_MS`) */
   stopHeardWithinMs?: number;
+  /** item 121 — the route snapshot THIS boot's class placement reads (default: the snapshot itself) */
+  classRoutes?: (routes: TerminalRouteSnapshot) => TerminalRouteSnapshot;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -819,8 +822,12 @@ async function setup(config: SetupConfig): Promise<Box> {
     // /System, /Library and /private exclusion is the browse exports' (and
     // `/` everyone's), so no rule needs lifting here (2026-10-07: this note
     // said one was).
-    // no floor: a spawn must refuse quickly, not wait a cell's whole birth budget
-    ...(config.floor === "mock" ? { terminalBirthWaitMs: 300 } : {}),
+    // no floor: a spawn must refuse quickly, not wait a cell's whole birth budget; nor, item 121, for a class
+    // placement cannot see (the hidden cell is up, so the budget would only ever run out)
+    ...(config.floor === "mock" || config.classRoutes !== undefined
+      ? { terminalBirthWaitMs: 300 }
+      : {}),
+    ...(config.classRoutes !== undefined ? { terminalClassRoutes: config.classRoutes } : {}),
   });
   cleanup.push(() => daemon.stop().catch(() => undefined));
   scene = { dataDir, spawnedAt, link: daemon.native };
@@ -5233,3 +5240,263 @@ describe.skipIf(!REAL_AGENT)(
     }, 300_000);
   },
 );
+
+/** Item 121 — class placement with the agent cell hidden: TC-D4's fallback, made certain while the floor runs both
+ * cells (the agent cell is up and serving; only placement does not see it). */
+const NO_AGENT_CELL = (routes: TerminalRouteSnapshot): TerminalRouteSnapshot => ({
+  ...routes,
+  cells: routes.cells.filter((cell) => cell.workloadClass !== "agent"),
+});
+
+describe("item 121 — a run TC-D4's fallback put on the interactive cell re-attaches on its own signed placement", () => {
+  /** The events this row's fieldd logged, every boot of it, in order. */
+  const fielddEvents = (box: Box): Array<{ event: string; attrs: Record<string, unknown> }> => {
+    const file = join(box.dataDir, "logs", "system", "fieldd.ndjson");
+    if (!existsSync(file)) return [];
+    return readFileSync(file, "utf8")
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .map((line) => JSON.parse(line) as { event: string; attrs?: Record<string, unknown> })
+      .map((record) => ({ event: record.event, attrs: record.attrs ?? {} }));
+  };
+
+  /** One scripted run born where the fallback put it. The interactive cell is in the snapshot first, so placement has
+   * a cell to fall back to (the legacy mirror would name none), and the run's row is joined to its cell. */
+  async function fallbackRun(box: Box, suffix: string) {
+    await poll(
+      async (seen) => {
+        const cells = box.daemon.native.terminalRoutes?.cells ?? [];
+        seen(cells.map((cell) => cell.workloadClass ?? "?"));
+        return cells.some((cell) => cell.workloadClass === "interactive") ? true : undefined;
+      },
+      30_000,
+      "the floor's interactive cell in the route snapshot",
+    );
+    const win = await window(box.daemon, DECK, suffix);
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      title: "fell back",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const row = await joinedRow(win, runId);
+    return { runId, ptyId: spawned.terminal.sessionId, row };
+  }
+
+  /** The next boot's word on a record it would not act on: the event it logged for that run. */
+  async function refusal(box: Box, runId: string, event: string) {
+    return await poll(
+      async (seen) => {
+        const mine = fielddEvents(box).filter((e) => e.attrs["runtimeRunId"] === runId);
+        seen(mine.map((e) => e.event));
+        return mine.find((e) => e.event === event);
+      },
+      20_000,
+      `the restart's ${event} for the run`,
+    );
+  }
+
+  /** What a refusal leaves: the PTY running (a refusal ends nothing), no re-attach in the ledger, no re-attached row. */
+  async function untouched(box: Box, runId: string, ptyId: string): Promise<void> {
+    const win = await window(box.daemon, DECK, `${runId.slice(-6)}-after`);
+    expect(await listed(win, ptyId), "the refused record's PTY still runs").toBe(true);
+    expect(
+      auditEntries(box.dataDir).some(
+        (entry) => entry.action === "agent.session.reattach" && entry.target.id === runId,
+      ),
+      "no re-attach was attempted",
+    ).toBe(false);
+    const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+    expect(sessions.find((r) => r.runtimeRunId === runId)?.continuation?.reattached).not.toBe(true);
+  }
+
+  it("is born on the interactive cell with the cell signed into its record and the placement in the ledger; the next boot re-attaches it on that proof, the same PTY at the next epoch", async () => {
+    const first = await setup({ floor: "real", attach: true, classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId, row: bornRow } = await fallbackRun(first, "pl1");
+    // the row says which cell it is on (no new field: the terminal's class is the one the inventory tagged)
+    expect(bornRow.terminal?.workloadClass).toBe("interactive");
+    const cellBootId = bornRow.terminal?.cellBootId;
+    await first.daemon.stop();
+
+    const second = await setup({ floor: "real", attach: true, restartOf: first });
+    const win2 = await window(second.daemon, DECK, "pl2");
+    const row = await poll(
+      async (seen) => {
+        const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        seen(found?.continuation ?? "not listed");
+        return found?.continuation?.reattached === true ? found : undefined;
+      },
+      20_000,
+      "the fallback-born run re-attached by the next boot",
+    );
+    expect(row.runtimeEpoch).toBe(2);
+    expect(row.terminal).toMatchObject({
+      hosted: "local",
+      runtimeSessionId: ptyId,
+      cellBootId,
+      workloadClass: "interactive",
+    });
+    expect(first.attached[0]).toMatchObject({ runtimeSessionId: ptyId });
+    // the record: the cell fieldd stamped at the birth, kept through the re-attach, under the record's signature
+    const record = readRecord(first.dataDir, runId);
+    expect(record.placement).toEqual({ cellBootId, workloadClass: "interactive" });
+    expect(first.records.verifies(record)).toBe(true);
+    expect(record.reattach).toMatchObject({ state: "attached" });
+    // the ledger: the birth's placement as the daemon's own act, and the re-attach that stood on it
+    const placed = await auditAct(
+      first.dataDir,
+      (entry) => entry.action === "agent.session.placed" && entry.target.id === runId,
+    );
+    expect(placed.attempt.actor.kind).toBe("system");
+    expect(placed.attempt.attrs).toMatchObject({
+      sessionId: ptyId,
+      cellBootId,
+      workloadClass: "interactive",
+      fallbackFrom: "agent",
+    });
+    expect(placed.outcome.outcome).toBe("succeeded");
+    const reattached = await auditAct(
+      first.dataDir,
+      (entry) => entry.action === "agent.session.reattach" && entry.target.id === runId,
+    );
+    expect(reattached.attempt.attrs).toMatchObject({ sessionId: ptyId, placement: "interactive" });
+    expect(reattached.outcome.outcome).toBe("succeeded");
+    // the log says where the birth landed, and that it was said once the class's own cell was not found
+    expect(
+      fielddEvents(first).find((e) => e.event === "fieldd.terminal.class_cell_absent")?.attrs,
+    ).toMatchObject({ workloadClass: "agent" });
+    expect(
+      fielddEvents(first).find((e) => e.event === "fieldd.agents.session_placed")?.attrs,
+    ).toMatchObject({ runtimeRunId: runId, cellBootId, workloadClass: "interactive" });
+  }, 150_000);
+
+  it("a fallback-born run its adapter cannot attach is held pending, and agent.resume ends its PTY on the placement; the successor, born where placement now finds the agent cell, carries none", async () => {
+    const first = await setup({ floor: "real", classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId } = await fallbackRun(first, "pl3");
+    await first.daemon.stop();
+
+    const second = await setup({ floor: "real", restartOf: first });
+    const win2 = await window(second.daemon, [...DECK, "agent.control"], "pl4");
+    const pending = await poll(
+      async (seen) => {
+        const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        seen(found?.continuation ?? "not listed");
+        return found?.continuation?.pending !== undefined ? found : undefined;
+      },
+      20_000,
+      "the fallback-born run held pending by the next boot",
+    );
+    expect(pending.terminal).toMatchObject({
+      runtimeSessionId: ptyId,
+      workloadClass: "interactive",
+    });
+    const resumed = (await born(win2, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    expect(resumed.session.terminal).toMatchObject({ hosted: "local", replaced: ptyId });
+    await untilListed(win2, ptyId, false);
+    expect(readRecord(first.dataDir, runId).exited?.reason).toBe("replaced");
+    const successor = await joinedRow(win2, resumed.session.runtimeRunId);
+    expect(successor.terminal?.workloadClass).toBe("agent");
+    expect(readRecord(first.dataDir, resumed.session.runtimeRunId).placement).toBeUndefined();
+  }, 150_000);
+
+  it("G5 — a fallback-born run whose attach the adapter calls transient is held, and the retry takes it back on the placement the record on disk still verifies", async () => {
+    const first = await setup({ floor: "real", attach: true, classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId } = await fallbackRun(first, "pl8");
+    await first.daemon.stop();
+
+    // the hold re-signs the record on disk; the retry reads the held run's own copy, signed before it
+    const second = await setup({
+      floor: "real",
+      attach: true,
+      restartOf: first,
+      attachRefusals: ["retry"],
+    });
+    const win2 = await window(second.daemon, DECK, "pl9");
+    const row = await poll(
+      async (seen) => {
+        const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        seen(found?.continuation ?? "not listed");
+        return found?.continuation?.reattached === true ? found : undefined;
+      },
+      20_000,
+      "the fallback-born run re-attached by the retry",
+    );
+    expect(row.terminal).toMatchObject({ runtimeSessionId: ptyId, workloadClass: "interactive" });
+    expect(first.attached.map((a) => a.runtimeSessionId)).toEqual([ptyId, ptyId]);
+    expect(readRecord(first.dataDir, runId).reattach).toMatchObject({ state: "attached" });
+  }, 150_000);
+
+  it("refuses a record that names an interactive-cell PTY with no placement: a shell of the person's, as AR-4b refused it", async () => {
+    const first = await setup({ floor: "real", attach: true, classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId } = await fallbackRun(first, "pl5");
+    await first.daemon.stop();
+    // signed with the daemon's own key, and saying nothing of a cell: every record before item 121, and every record
+    // that names a terminal fieldd never spawned
+    const {
+      placement: _placement,
+      signature: _signature,
+      ...bare
+    } = readRecord(first.dataDir, runId);
+    first.records.write(bare);
+
+    const second = await setup({ floor: "real", attach: true, restartOf: first });
+    const refused = await refusal(second, runId, "fieldd.agents.reattach_refused_cell");
+    expect(refused.attrs).toMatchObject({
+      sessionId: ptyId,
+      why: "no-placement",
+      workloadClass: "interactive",
+    });
+    await untouched(second, runId, ptyId);
+  }, 150_000);
+
+  it("refuses a placement written onto the record on disk: the signature no longer verifies, and the record is set aside", async () => {
+    const first = await setup({ floor: "real", attach: true, classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId } = await fallbackRun(first, "pl6");
+    await first.daemon.stop();
+    // a same-uid writer (EL7) adds the placement the run was born with to a signed record that lacks it: every key
+    // right, and no key to sign them with
+    const { placement, signature: _signature, ...bare } = readRecord(first.dataDir, runId);
+    first.records.write(bare);
+    const path = first.records.path(runId);
+    writeFileSync(
+      path,
+      `${JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), placement }, null, 2)}\n`,
+    );
+
+    const second = await setup({ floor: "real", attach: true, restartOf: first });
+    await refusal(second, runId, "fieldd.agents.session_record_forged");
+    expect(
+      fielddEvents(second).some(
+        (e) =>
+          e.event === "fieldd.agents.reattach_refused_cell" && e.attrs["runtimeRunId"] === runId,
+      ),
+      "a forged record never reaches the cell rule",
+    ).toBe(false);
+    await untouched(second, runId, ptyId);
+  }, 150_000);
+
+  it("refuses a signed placement naming another cell than the one the PTY is on", async () => {
+    const first = await setup({ floor: "real", attach: true, classRoutes: NO_AGENT_CELL });
+    const { runId, ptyId } = await fallbackRun(first, "pl7");
+    // the floor's other cell, real and up: the agent cell placement did not see
+    const agentCell = first.daemon.native.terminalRoutes?.cells.find(
+      (cell) => cell.workloadClass === "agent",
+    );
+    expect(agentCell, "the floor runs its agent cell").toBeDefined();
+    await first.daemon.stop();
+    const record = readRecord(first.dataDir, runId);
+    expect(record.placement).toBeDefined();
+    first.records.write({
+      ...record,
+      placement: { cellBootId: agentCell?.cellBootId ?? "", workloadClass: "interactive" },
+    });
+
+    const second = await setup({ floor: "real", attach: true, restartOf: first });
+    const refused = await refusal(second, runId, "fieldd.agents.reattach_refused_cell");
+    expect(refused.attrs).toMatchObject({ sessionId: ptyId, why: "other-cell" });
+    await untouched(second, runId, ptyId);
+  }, 150_000);
+});

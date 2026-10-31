@@ -37,6 +37,7 @@ import {
   type AgentResumeRunParams,
   AgentSessionAttach,
   type AgentSessionOrigin,
+  type AgentSessionPlacement,
   type AgentSessionRecord,
   type AgentSessionSummary,
   type AgentSpawnParams,
@@ -96,6 +97,7 @@ import { AgentExtensionService } from "./agent-extensions";
 import { createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
 import type { IndexService } from "./agent-index";
 import { AgentModelCatalogs } from "./agent-models";
+import { type CellVerdict, cellAdmits } from "./agent-placement";
 import {
   AgentProfileService,
   failureToError,
@@ -2722,6 +2724,43 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.records.write({ ...record, attach, updatedAt: this.now().toISOString() });
   }
 
+  /** Item 121 — a run born where TC-D4's fallback put it, off the agent cell:
+   * its record now names the cell AR-4b's rule admits it on after a restart,
+   * and the ledger says so as the daemon's own act. The record is written
+   * first; a ledger that cannot take the entry is logged, never the birth's
+   * failure. */
+  private ledgerPlacement(info: AgentSessionInfo, placement: AgentSessionPlacement): void {
+    const attrs = {
+      sessionId: info.terminalSessionId,
+      cellBootId: placement.cellBootId,
+      workloadClass: placement.workloadClass,
+      fallbackFrom: "agent",
+    };
+    this.logger.info(
+      "fieldd.agents.session_placed",
+      "An agent run was born off the agent cell; its record names the cell it re-attaches on",
+      { runtimeRunId: info.runtimeRunId, ...attrs },
+    );
+    this.audited(
+      {
+        action: "agent.session.placed",
+        target: { kind: "agent-session", id: info.runtimeRunId },
+        attrs,
+      },
+      async () => placement,
+      () => ({ outcome: "succeeded" }),
+    ).catch((error: unknown) => {
+      this.logger.warn(
+        "fieldd.agents.placement_unledgered",
+        "The ledger did not take a run's placement; its record still carries it",
+        {
+          runtimeRunId: info.runtimeRunId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    });
+  }
+
   /** A run puppeteer just started (spawned, resumed, or — AR-4 — re-attached)
    * enters the fold: its record written (or, re-attached, brought to the new
    * epoch), its row published. */
@@ -2763,6 +2802,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const info = agent.info;
     const now = this.now().toISOString();
     if (launch.reattached === undefined) {
+      // item 121 — a PTY TC-D4's fallback put off the agent cell (spawned or
+      // resumed; an adopted run's terminal is the person's shell, never ours)
+      const placement =
+        launch.adopted === undefined
+          ? this.terminalHost?.born(info.terminalSessionId)?.placement
+          : undefined;
       this.records.write(
         recordForRun({
           info,
@@ -2772,6 +2817,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           creationRequestId: launch.creationRequestId,
           ingress: launch.ingress,
           attach: launch.attach,
+          placement,
           replaced: launch.replaced,
           adopted: launch.adopted?.process,
           modelSelection: launch.modelSelection,
@@ -2779,6 +2825,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           spark: launch.spark,
         }),
       );
+      if (placement !== undefined) this.ledgerPlacement(info, placement);
     } else {
       // the record as it stands on disk: an attach record the adapter reported
       // while it attached is already there, and the boot's copy predates it
@@ -3416,6 +3463,25 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.sweepDeferred = deferred > 0;
   }
 
+  /** Item 121 — AR-4b's cell rule (`cellAdmits`) on the record as it stands on
+   * disk, which `read` answers only when it verifies. Not the caller's copy: a
+   * held run's (`PendingEntry.record`, which G5's retry and `agent.resume`
+   * read) keeps the signature it was read with, from before its hold re-signed
+   * the record. */
+  private cellVerdict(
+    record: AgentSessionRecord,
+    terminalId: string,
+    row: TerminalInfo,
+  ): CellVerdict {
+    const signed = this.records.read(record.runtimeRunId);
+    return cellAdmits({
+      record: signed ?? record,
+      verified: signed !== undefined,
+      terminalId,
+      row,
+    });
+  }
+
   /** One record, one live PTY: puppeteer's `attach` at the claim's epoch, or a
    * pending row when the adapter cannot. The fold is updated INSIDE the audited
    * act, so a ledger that fails after the effect leaves nothing orphaned.
@@ -3433,22 +3499,28 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // one. Its record is trusted on its OWN proof (`typedRunProof`), and
       // what passes is only ever attached to — never replaced.
       if (!(await this.provesTyped(record, row, terminalId))) return;
-    } else if (row.cell?.workloadClass !== "agent") {
-      // EL7 (AR-4b): the daemon re-attaches only to PTYs born on the agent
-      // cell. A record naming any other terminal — a shell of the user's —
-      // is not a run this daemon ever spawned, whatever the file says.
-      this.logger.warn(
-        "fieldd.agents.reattach_refused_cell",
-        "A session record names a terminal that is not on the agent cell; not attached, not held",
-        {
-          runtimeRunId: record.runtimeRunId,
-          sessionId: terminalId,
-          ...(row.cell?.workloadClass !== undefined
-            ? { workloadClass: row.cell.workloadClass }
-            : {}),
-        },
-      );
-      return;
+    } else {
+      // EL7 (AR-4b): the daemon re-attaches only to PTYs it spawned — born on
+      // the agent cell, or (item 121) on the cell its own signed record says
+      // TC-D4's fallback put this terminal on (`agent-placement.ts`). A record
+      // naming any other terminal — a shell of the user's — is not a run this
+      // daemon ever spawned, whatever the file says.
+      const verdict = this.cellVerdict(record, terminalId, row);
+      if (!verdict.admits) {
+        this.logger.warn(
+          "fieldd.agents.reattach_refused_cell",
+          "A session record names a terminal that is not on the agent cell; not attached, not held",
+          {
+            runtimeRunId: record.runtimeRunId,
+            sessionId: terminalId,
+            why: verdict.why,
+            ...(row.cell?.workloadClass !== undefined
+              ? { workloadClass: row.cell.workloadClass }
+              : {}),
+          },
+        );
+        return;
+      }
     }
     if (record.profileId !== undefined && this.profiles.isDeleting(record.profileId)) {
       this.logger.info(
@@ -3503,6 +3575,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         provider: record.provider,
         sessionId: terminalId,
         runtimeEpoch: expectedEpoch,
+        // item 121 — admitted off the agent cell, on its signed placement
+        ...(record.placement !== undefined && row.cell?.workloadClass !== "agent"
+          ? { placement: record.placement.workloadClass }
+          : {}),
       },
     };
     await this.audited(
@@ -4024,7 +4100,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         if (oldId !== undefined) {
           const row = this.listed(terminals, oldId) ? terminals.get(oldId) : undefined;
           if (row !== undefined) {
-            if (row.cell?.workloadClass !== "agent") {
+            // AR-4b's cell rule, as the boot's re-attach reads it (item 121)
+            if (!this.cellVerdict(record, oldId, row).admits) {
               throw new RpcCallError(
                 "PRECONDITION_FAILED",
                 "the session's terminal is not on the agent cell; it is not this daemon's to end",
