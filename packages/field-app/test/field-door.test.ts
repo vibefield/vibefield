@@ -2,7 +2,8 @@
  * Track FG — the field's door (DESIGN.md §8 "The boot splash"): the website's loading window, ported. The PAGE's
  * WebGPU is read first (a smoke's `--smoke-no-webgpu` takes it per document, and a worker would still find its own),
  * then the worker runs the field, then the main thread, then the still. happy-dom has neither WebGPU nor a worker,
- * so every branch runs on fakes the door is handed.
+ * so every branch runs on fakes the door is handed. Since FG-3b the door carries the Setup Assistant's glass to the
+ * field and the field's word on it back (FG-D24).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -16,6 +17,8 @@ import {
   tearLook,
 } from "../src/boot/splash/field-door";
 import { ease, markFade } from "../src/boot/splash/field-mark";
+import type { GlassState } from "../src/boot/splash/glass-look";
+import type * as GlassModule from "../src/boot/splash/glass-pass";
 import type * as SplashModule from "../src/boot/splash/vibefield-splash.js";
 import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 
@@ -77,6 +80,7 @@ function fakeSplash(fail?: Error) {
     started: 0,
     setReveal: [] as [number, unknown][],
     reveals: [] as unknown[],
+    redrawn: 0,
     destroyed: 0,
   };
   const module = {
@@ -96,6 +100,9 @@ function fakeSplash(fail?: Error) {
           calls.reveals.push(options);
           return true;
         },
+        redraw() {
+          calls.redrawn++;
+        },
         destroy() {
           calls.destroyed++;
         },
@@ -104,6 +111,37 @@ function fakeSplash(fail?: Error) {
   } as unknown as typeof SplashModule;
   return { module, calls };
 }
+
+/** The glass's pass as the door makes it on the main thread: what it is handed, and the hooks it was given. */
+function fakeGlass() {
+  const calls = {
+    looks: [] as unknown[],
+    poses: [] as unknown[],
+    destroyed: 0,
+    hooks: null as GlassModule.GlassPassHooks | null,
+  };
+  const pass = {
+    setLook: (look: unknown) => void calls.looks.push(look),
+    setPose: (pose: unknown) => void calls.poses.push(pose),
+    encode() {},
+    destroy() {
+      calls.destroyed++;
+    },
+  };
+  const module = {
+    createGlassPass(_device: unknown, _gpu: unknown, hooks: GlassModule.GlassPassHooks) {
+      calls.hooks = hooks;
+      return pass;
+    },
+  } as unknown as typeof GlassModule;
+  return { module, pass, calls };
+}
+
+/** A glass on the field, as glass-look.ts reads it. */
+const GLASS: GlassState = {
+  look: { tint: [1, 1, 1, 0.55], blur: 32, saturate: 1.12, grain: 0.03, radius: 32, shadows: [] },
+  pose: { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, rise: 1 },
+};
 
 /** The field's container with its still mark, as FieldLayer draws them. */
 function stage(): { container: HTMLDivElement; mark: HTMLDivElement } {
@@ -169,6 +207,8 @@ describe("the field's door", () => {
     expect(door.reason).toBe("forced");
     expect(container.querySelector("canvas")).toBeNull();
     expect(await door.reveal()).toBe(false);
+    // the browser draws the glass over the still
+    door.glass(GLASS);
   });
 
   it("runs the field in a worker: the website's budget and power, the page's size, its canvas under the still mark", async () => {
@@ -221,6 +261,41 @@ describe("the field's door", () => {
     vi.advanceTimersByTime(250);
     expect(worker.terminated).toBe(true);
     door.mark(1, 400);
+    expect(worker.last()).toEqual({ type: "destroy" });
+  });
+
+  it("carries the glass to the worker, and the field's word on it back (FG-3b)", async () => {
+    const warned = captureWarnings();
+    const worker = new FakeWorker((m) =>
+      m.type === "start"
+        ? { type: "ready" }
+        : m.type === "glass"
+          ? { type: "glass-drawn", drawn: m.glass !== null }
+          : null,
+    );
+    const onGlass = vi.fn<(drawn: boolean) => void>();
+    const { container, mark } = stage();
+    const door = await openFieldDoor(
+      container,
+      mark,
+      { reducedMotion: false, onGlass },
+      { search: "", gpu: fakeGpu().gpu, worker: () => worker as unknown as Worker },
+    );
+    door.glass(GLASS);
+    expect(worker.last()).toEqual({ type: "glass", glass: GLASS });
+    await vi.waitFor(() => expect(onGlass.mock.calls).toEqual([[true]]));
+    door.glass(null);
+    expect(worker.last()).toEqual({ type: "glass", glass: null });
+    await vi.waitFor(() => expect(onGlass.mock.calls).toEqual([[true], [false]]));
+
+    // a pass the field can't make is logged, and the browser keeps the glass
+    worker.onmessage?.({
+      data: { type: "glass-failed", message: "WGSL failed" },
+    } as MessageEvent<FieldFromWorker>);
+    expect(warned).toEqual([["renderer.boot.field_glass", { message: "WGSL failed" }]]);
+
+    door.destroy();
+    door.glass(GLASS);
     expect(worker.last()).toEqual({ type: "destroy" });
   });
 
@@ -284,6 +359,47 @@ describe("the field's door", () => {
     expect(calls.destroyed).toBe(1);
     expect(device.destroyed).toBe(1);
     expect(container.querySelector("canvas")).toBeNull();
+  });
+
+  it("draws the glass on the main thread as the splash's own post, and lets it go with the door (FG-3b)", async () => {
+    const warned = captureWarnings();
+    const { module, calls } = fakeSplash();
+    const glass = fakeGlass();
+    const onGlass = vi.fn<(drawn: boolean) => void>();
+    const { container, mark } = stage();
+    const door = await openFieldDoor(
+      container,
+      mark,
+      { reducedMotion: true, onGlass },
+      {
+        search: "?field=main",
+        gpu: fakeGpu().gpu,
+        splash: async () => module,
+        glass: async () => glass.module,
+      },
+    );
+    expect(door.mode).toBe("main");
+    expect(calls.created).toEqual([expect.objectContaining({ post: glass.pass })]);
+
+    // handed a glass, the pass takes it and the field draws a frame, its loop asleep under reduced motion
+    door.glass(GLASS);
+    expect(glass.calls.looks).toEqual([GLASS.look]);
+    expect(glass.calls.poses).toEqual([GLASS.pose]);
+    expect(calls.redrawn).toBe(1);
+    glass.calls.hooks?.frame();
+    expect(calls.redrawn).toBe(2);
+    glass.calls.hooks?.drawn(true);
+    expect(onGlass.mock.calls).toEqual([[true]]);
+    glass.calls.hooks?.failed("WGSL failed");
+    expect(warned).toEqual([["renderer.boot.field_glass", { message: "WGSL failed" }]]);
+    door.glass(null);
+    expect(glass.calls.looks).toEqual([GLASS.look, null]);
+
+    door.destroy();
+    expect(glass.calls.destroyed).toBe(1);
+    expect(calls.destroyed).toBe(1);
+    door.glass(GLASS);
+    expect(glass.calls.looks).toHaveLength(2);
   });
 
   it("skips the worker for ?field=main", async () => {

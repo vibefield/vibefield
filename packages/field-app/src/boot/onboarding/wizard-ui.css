@@ -61,10 +61,10 @@
 }
 
 .vf-wizard-glass-frost {
-  -webkit-backdrop-filter: blur(calc(32px * var(--vf-glass-frost)))
-    saturate(calc(1 + 0.12 * var(--vf-glass-frost)));
-  backdrop-filter: blur(calc(32px * var(--vf-glass-frost)))
-    saturate(calc(1 + 0.12 * var(--vf-glass-frost)));
+  -webkit-backdrop-filter: blur(calc(var(--vf-wizard-blur) * var(--vf-glass-frost)))
+    saturate(calc(1 + (var(--vf-wizard-saturate) - 1) * var(--vf-glass-frost)));
+  backdrop-filter: blur(calc(var(--vf-wizard-blur) * var(--vf-glass-frost)))
+    saturate(calc(1 + (var(--vf-wizard-saturate) - 1) * var(--vf-glass-frost)));
 }
 
 .vf-wizard-glass-frost::after {
@@ -101,6 +101,21 @@
   box-shadow:
     inset 0 0 0 1px var(--vf-wizard-edge),
     inset 0 1px 0 var(--vf-wizard-edge-light);
+}
+
+/* Drawn by the field (FG-3b, FG-D24): over the live field its own frame casts the shadow and frosts, tints and grains
+   the glass (glass-pass.ts), so nothing blurs the field but the field, and the browser draws only the edge. The
+   layers keep their style, which is the recipe the field reads (glass-look.ts), and stand down only once the field
+   says it draws them (`data-glass`, field-glass.ts); over the field's still they draw the whole glass. */
+.vf-wizard-shell[data-glass="field"] .vf-wizard-glass-shadow,
+.vf-wizard-shell[data-glass="field"] .vf-wizard-glass-frost,
+.vf-wizard-shell[data-glass="field"] .vf-wizard-glass-grain {
+  visibility: hidden;
+}
+
+.vf-wizard-shell[data-glass="field"] .vf-wizard-glass-frost {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* The steps (FG-D22 A, FG-D23 A; DESIGN.md §8): the chapter along the glass's top 72, a segment a step, 76 × 3 with a

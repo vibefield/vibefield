@@ -1287,10 +1287,14 @@ describe("Setup Assistant", () => {
     expect(WIZARD_CSS).toMatch(
       /\.vf-wizard-frame \{[^}]*top: 96px;\s*right: 160px;\s*bottom: 40px;\s*left: 160px;/,
     );
-    // §5's tier at full frost: the surface over blur(32px) saturate(1.12)
+    // §5's tier at full frost: the surface over the frost's blur and saturation, both tokens (FG-3b)
     expect(WIZARD_CSS).toContain("background: var(--vf-wizard-surface)");
-    expect(WIZARD_CSS).toContain("backdrop-filter: blur(calc(32px * var(--vf-glass-frost)))");
-    expect(WIZARD_CSS).toContain("saturate(calc(1 + 0.12 * var(--vf-glass-frost)))");
+    expect(WIZARD_CSS).toContain(
+      "backdrop-filter: blur(calc(var(--vf-wizard-blur) * var(--vf-glass-frost)))",
+    );
+    expect(WIZARD_CSS).toContain(
+      "saturate(calc(1 + (var(--vf-wizard-saturate) - 1) * var(--vf-glass-frost)))",
+    );
     // on the field: the edge and its light, the field's own shadow, and the grain
     expect(WIZARD_CSS).toContain("box-shadow: var(--vf-shadow-wizard-field)");
     expect(WIZARD_CSS).toContain("inset 0 0 0 1px var(--vf-wizard-edge),");
@@ -1302,8 +1306,10 @@ describe("Setup Assistant", () => {
     expect(container?.querySelector("form.vf-wizard-pane")).not.toBeNull();
   });
 
-  it("projects the glass's field tokens from DESIGN.md §5, one shadow and one grain for both themes", () => {
+  it("projects the glass's tokens from DESIGN.md §5: one frost, and on the field one shadow and one grain, for both themes", () => {
     const [day = "", night = ""] = TOKENS.split("\n.dark {");
+    expect(day).toContain("--vf-wizard-blur: 32px;");
+    expect(day).toContain("--vf-wizard-saturate: 1.12;");
     expect(day).toContain("--vf-wizard-edge: rgb(255 255 255 / 60%);");
     expect(day).toContain("--vf-wizard-edge-light: rgb(255 255 255 / 75%);");
     expect(day).toContain("--vf-wizard-grain: 0.03;");
@@ -1312,9 +1318,26 @@ describe("Setup Assistant", () => {
     );
     expect(night).toContain("--vf-wizard-edge: rgb(255 255 255 / 12%);");
     expect(night).toContain("--vf-wizard-edge-light: rgb(255 255 255 / 8%);");
-    // the field is the dark in both themes, so its shadow and the grain never change
+    // the field is the dark in both themes, so its shadow and the grain never change; nor does the frost
     expect(night).not.toContain("--vf-shadow-wizard-field");
     expect(night).not.toContain("--vf-wizard-grain");
+    expect(night).not.toContain("--vf-wizard-blur");
+    expect(night).not.toContain("--vf-wizard-saturate");
+  });
+
+  it("stands the browser's glass down where the field draws it, keeping the edge (FG-3b, FG-D24)", () => {
+    // the shadow, the frost (its tint is its ::after) and the grain, hidden but keeping their style, which is the
+    // recipe the field reads; the frost's backdrop filter off, so nothing blurs the field but the field
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-shadow,\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-frost,\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-grain \{\s*visibility: hidden;\s*\}/u,
+    );
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell\[data-glass="field"\] \.vf-wizard-glass-frost \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;\s*\}/u,
+    );
+    // the edge and its light stay the browser's, at the screen's own pixels
+    expect(WIZARD_CSS).not.toMatch(/data-glass="field"\] \.vf-wizard-glass-edge/u);
+    // nothing else answers to the attribute
+    expect(WIZARD_CSS.match(/\[data-glass="field"\]/gu)).toHaveLength(4);
   });
 
   it("scales the glass as one picture to fit its ground, never reflowing it (FG-L2)", async () => {

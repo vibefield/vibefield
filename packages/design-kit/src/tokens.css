@@ -72,6 +72,10 @@
   --vf-chrome-surface-hover: rgb(255 255 255 / 78%);
   --vf-field-surface: rgb(255 255 255 / 60%);
   --vf-wizard-surface: rgb(255 255 255 / 55%);
+  /* §5 the Setup Assistant's frost under its surface (one value in both themes): the blur and the saturation, which
+     the field reads off the glass where it draws the frost itself (track FG, FG-3b, FG-D24) */
+  --vf-wizard-blur: 32px;
+  --vf-wizard-saturate: 1.12;
   /* §5 the Setup Assistant on the field (track FG, FG-D15 C): its edge and the edge's top light; the grain
      over its frost (one value in both themes), so the blur never bands */
   --vf-wizard-edge: rgb(255 255 255 / 60%);
