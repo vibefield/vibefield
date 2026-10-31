@@ -24187,6 +24187,24 @@ a declared skip that the row prints".
   runs by itself while the console stands unlocked and idle, else at James's next unlock, and its stills come home
   under run53b. It is B's witness (Cancel reached on all three walks), A1's (the mark within 3 px by its extent) and
   A2's (the skip line, with the list's first measured numbers).
+  > **Run (2026-10-31, row 32 alone on M53 on the Mac mini, run53b): RED in one class, C; B, A1 and A2 proven.** The
+  > gate opened at 14:39:04Z on James's 14:36Z unlock, and `pnpm smoke:first-run` exited 1 at 14:39:56Z (52 s), with
+  > nobody at the console (the HID read armed at 162, 214 at its end). FIRST_RUN_VERDICT: day, night and no-webgpu
+  > each red in 16 s (40 at run52b), code 2, not timed out, nothing left and its profile removed. Every walk went the
+  > whole way to the desk, 13 stills each (39).
+  > - B: a press reached the login's Cancel on all three walks, and Cancel ended the login.
+  > - A1: by its extent the mark's ink centres at 591, 373 by day, 590.5, 373 by night and 590, 374 over the still,
+  >   against the window's 590, 374 and the slack of 3.
+  > - A2: `SMOKE_FIRST_RUN_SKIP <walk> Agents: the list fits its body (327 in 326), …`, once on each walk.
+  > - C, the one red, on all three: `the login's Cancel is not in view above the list's fade`, with no numbers. On
+  >   the 08 stills the cards stand 298.2 tall, their fade's top at 524.9 by the mask's gradient, and the add
+  >   holding the login is 289.2 at the 190 terminal. `nearest` set its head on the cards' top, which left Cancel's
+  >   foot 1.3 under the fade's top, against judgeSignIn's half-px slack. DESIGN.md §4's sum (269.5 in 278.2) had
+  >   left out the add's own padding of 10 above and below. At run52b the day walk's scroll had rounded 1 px the
+  >   other way.
+  > James's look at the 39 stills was paid at 15:02Z ("contact-sheet-run53b.png looks good to me"). C is taken by
+  > FG-6's follow-up 2 and class C (M54): the glass terminal at 170, ruled by James at 15:07Z. Row 32's first green
+  > came on M54 at run54b (15:24:54Z; that entry's Checks), and desk-gates row 32's verdict cell is written with it.
 - desk-gates row 32's status column, at the records after run53b.
 - James's look and FG-5's cut, as FG-6's entry says.
 
@@ -24249,3 +24267,87 @@ cell's hello does at run 27b's load, and the 15 s budget is not moved.
 **Owed.** The peak: the same pass beside the next real mint's verify, with the companion gated on load1 ≥ 30 inside
 the fan-out (a9 writes the gate). If a loaded max nears 15 s, a new item on the hello budget is filed in fixer-items
 at the next draft queue, with no fix in that entry.
+
+## FG-6's follow-up 2 and class C — a walk that stops says what it had found, and the add holding a login stands whole above the cards' fade: the glass terminal 170, ruled by James, and a Cancel red that says what it saw (desk-gates row 32, green on M54)
+
+**Why.** Row 32 alone on M53 (run53b, James's 14:36Z unlock) went red in one class, C: the login's Cancel stood
+under the cards' fade (the `  >` block in "FG-6's follow-up slice"). At 14:42Z VF-PM gave C to a5 in one slice with
+follow-up 2, which had been found cutting that entry's records: a walk that throws prints only its throw. a5
+measured C from the stills (14:56Z). VF-PM ruled the fix at the lean (14:57Z: C, the terminal at 170), and James
+ruled it at 15:07Z ("go with your lean", after the 190-vs-170 visual, `lanes/fg/signin-190-vs-170.png`).
+
+**What landed.**
+- Follow-up 2, in the row (`c92a48a13`, `firstRunRows`): a step that never comes no longer throws.
+  - The walk keeps its still of where it stood and says `the walk stopped at <step>: <why>` after every problem it
+    had found. It records `stoppedAt` and reads nothing after the walk (the recorder, the holds, the band,
+    users.json).
+  - `runSmokeFirstRun` throws the joined problems as before, so the failed line carries them in order, the stop
+    last. Its crash read is guarded, since a stopped walk's window may be gone.
+  - Row 32's text says how a stopped walk reports.
+- Class C (`09631d7d0`), DESIGN.md first (docs/UI_SYSTEM.md):
+  - DESIGN.md §4's `--vf-glass-signin-height` goes 190 → 170. The sum now counts the login's card and the add's
+    padding of 10 above and below, 269.5 in the 278.2: its head 8.7 under the cards' top and Cancel 10 above the
+    fade, with no scroll and `nearest` unchanged. A dated correction stands in the row, and §8's FG-4a passage gets
+    the same.
+  - Then tokens.css (170; its comment was a fourth source of the sum and is corrected with the value),
+    profiles-pane.css's comment (a dated correction), the row's 190, the FG-4a test (now on the add's login, its
+    sum asserted before the number) and row 32's text.
+  - judgeSignIn's rule and slack are unchanged: the check was right, since §4's fade row designs no overlap for what
+    a scroll brings into view. Its failed line now says what the row saw (`Cancel at x, y, w × h, the list at x, y,
+    w × h, its fade's top at Y: Cancel's foot N under it`). The walk's facts carry `login.cancelClear`, Cancel's
+    foot to the fade's top (under it, less than 0).
+- 8 files, +203 −46.
+
+**Checks.**
+- Red first, on the committed tests: each fix set aside, its rows run, then the fix restored byte for byte (sha
+  checked; `lanes/fg2/light2.out`, `lanes/fg2/light3.out`).
+  - Follow-up 2: `Error: the renderer went away ❯ test/smoke-first-run.test.ts:518:33` (1 failed, 21 passed), then
+    22/22.
+  - C, the product (DESIGN.md and tokens.css at HEAD): `expected 289.5 to be less than or equal to 278.2 ❯
+    test/profiles-pane.test.tsx:632:41` (1 failed, 12 passed), then 13/13.
+  - C, the line (the judge at 170 before its numbers): it expected the numbered line and received `the login's
+    Cancel is not in view above the list's fade` (`:496:71`; 1 failed, 22 passed), then 23/23.
+- The lane's light (15:05–15:10Z, nice 19 under the guard), all green:
+  - `git diff --check`; biome on the five touched code and CSS files (its one info is HEAD's);
+  - electron-shell's and field-app's typecheck; ui-system-boundaries 40/40;
+  - field-app's whole vitest: 267 files (1 skipped), 3470 passed, 3 skipped;
+  - electron-shell's whole vitest: 158 files, 2401 passed, 3 skipped.
+  - DESIGN.md's two ruling clauses were worded after those runs, once James had ruled. profiles-pane and
+    ui-system-boundaries re-ran on that wording, 53/53.
+- VF-PM's read (15:14Z): check clean, no markers, no pin, lock or package.json, nothing in draft/. Main
+  `e4b882f5a` is not in the tip (its two commits since the base are docs-only), so the mint is the merge shape:
+  merge-tree `3d90a7cb7`.
+- **Run 54:** M54 is the merge `2ebc24fd3`: `09631d7d0` over `e4b882f5a`, both its parents.
+  - `pnpm verify` armed at 15:18:49Z and went green at 15:23:39Z (exit 0).
+    - vitest: 11,331 passed, 0 failed, 18 skipped. That is the slice's +2 over run 53: smoke-first-run's two rows
+      (21 → 23).
+    - cargo: `test result: ok.` × 33. typecheck and test ran for 28 projects. MaxListeners 0, the tree clean, and
+      no stubs.
+  - Row 32 alone on M54 (run54b): **GREEN, its first.** Its gate opened by itself at 15:24:01Z (the console
+    unlocked and idle 258 s, and nobody touched it during the row), and `pnpm smoke:first-run` exited 0 at
+    15:24:54Z (52 s). FIRST_RUN_VERDICT: day, night and no-webgpu each green in 16 s, code 0, nothing left and its
+    profile removed. Every walk took all nine steps, 13 stills each (39, `lanes/ts6/logs/mini/run54b/first-run-shots`;
+    the log's sha256 `a56aaecf0c2f0b7a…`).
+    - C: the walk's `login` fact is `{"terminal":170,"cancelHit":true,"cancelClear":9.71875}` on all three
+      walks: Cancel reached, its foot 9.7 above the fade's top, where the sum puts it at 10.
+    - B, A1 and A2 again: a press reached the login's Cancel on every walk; the mark's ink at 591, 373 by day,
+      590.5, 373 by night and 590, 374 over the still, as at run53b; Agents' skip `(327 in 326)` once on each walk.
+- **Landed:** main fast-forwarded `e4b882f5a` → `2ebc24fd3` at 2026-10-31 15:25:00Z on VF-PM's GO (land-stack3's
+  first run, the ff path, no lock wait): 8 files, +203 −46, tree `3d90a7cb7`, VF-PM's merge-tree.
+
+**Found while building.**
+- DESIGN.md's sum for a login on the glass left out the add's padding. Four sources carried it (§4's row, §8,
+  profiles-pane.css and tokens.css's comment), and each is corrected at its source. DECISIONS' FG row moves with
+  this entry.
+- The add comes into view by CSSOM's `nearest`, which aligns a box taller than its snapport by its head, so a card
+  that does not fit leaves its foot (Cancel) under the fade. The fit is the fix, not the scroll.
+- At run52b the day walk passed C's check because its scroll rounded 1 px the other way. At run53b the three walks,
+  each with the observer's re-scroll, were deterministic.
+
+**Owed.**
+- **Paid (2026-10-31, run54b, 15:24:54Z):** row 32's first green on M54, in Checks, C's witness with B, A1 and A2
+  again. With James's look at 15:02Z, FG-5's gate is met, and its cut is the next FG step (VF-PM 15:27Z).
+- A login opened from This Mac's row is not walked by row 32. It comes into view by its own SignInSlot (`nearest`
+  on its 249.5 card, which fits), so Cancel's foot stands on the fade's top at zero margin. The fix would be a
+  margin of 10 like the add's, or the slot's `nearest` on the add's rule (VF-PM 15:14Z). It joins the eye list for
+  James's own look.
