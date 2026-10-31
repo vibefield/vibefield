@@ -351,7 +351,10 @@
   it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against
   one new contracts constant, its literal ruled alone; HN B2 is in) · item 115 (`pnpm dev`'s nx watcher outlives a
   runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112) ·
-  item 126 (fd's: FakeCellDoorTests' stale-route row times out under heavy load) · item 122's floor half (paid: idle,
+  item 126 (fd's: FakeCellDoorTests' stale-route row times out under heavy load) · item 128 (row 26's new
+  hidden-Studio step cannot pass on a locked screen: a hidden window's page never goes `hidden` there; the unlocked
+  control owed on James's word, then an arming condition for row 26 or a witness that is not `visibilityState`;
+  LANDED "PR #6 landed through the train") · item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
 - **Item 77b**, FieldTerminalTests' 60 s block. The 5 s shape is fixed: (d) `b1e9bf53d` runs AttachDeadlineTests
@@ -608,7 +611,7 @@
 - `STORES.AGENT_FIELD` and its shapes stay "never a new reader or writer" (`registries.ts:150-160`); their deletion rides DS.
 
 **PORTALS (the pane's carried debts, then PT-S1's)** — `thinking-portals.md` §4; LANDED "PT-S1"
-- `smoke:studio` reds when its window is covered: give Studio's acceptance window DK-11's frames.
+- `smoke:studio` reds when its window is covered: give Studio's acceptance window DK-11's frames. *Note 2026-10-31 (PR #6): DK-11's frames (`backgroundThrottling: false`) keep a covered page visible, while `UI_SYSTEM.md` now keeps Studio's throttling on and row 26 waits for the page hidden; shape this with item 128.*
 - The SLEEP row's judge (M1, L1, L2, L3) · B5 the still sweep · R5 a refusal's load stamp · V7 a failed page re-asked · pressable shadow-hosted frames (V2–V5).
 - IDLE counts ICE's HoldPass and mat submits outside `perf().frames`: settle on ICE's idle, or ICE reports its hold pass (harness + ICE owners).
 - NO-DOCUMENT's ↻ missed its new window once (smoke:canvas, 10-26) · a typed address may not draw while typed (PLAUSIBLE) · M18: host clicks miss by ≤4 CSS px (measure).

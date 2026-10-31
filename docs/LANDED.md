@@ -24729,3 +24729,107 @@ frost, and a little lower by night. VF-PM ruled the build at 16:51Z, after FG-6c
 - FG-6's remaining gates, in the ruled order: the catalog over the field's still (a fixture adapter, never a copy),
   then the field's glass against the CSS glass on a frozen frame (a test-only seam, ruled on its own).
 - The thinking doc's §8 holds FG-O2 and FG-O3 open. Their lines move at the next draft queue the PM opens.
+
+## PR #6 landed through the train — Dawn kept alive through its device's loss, a hidden Studio's appearance published, and the smoke's tap in one turn (James's `2b1bb87ec`, re-cut whole as `a8bdb8057`, the mint itself, run 58; 2026-10-29 → 10-31)
+
+**What landed:** James's PR #6 (`fix/dawn-studio-smoke`, head `dbf3a5a43`), as one commit on main `ce8864e86`:
+`a8bdb8057` is his `2b1bb87ec` re-cut whole, with his authorship and message verbatim (11 files, +204 −14). The PR
+names three independent lifecycle and timing defects that made the desktop gates fail:
+- **Dawn's lifetime** (`apps/plugin-playground/src/still.ts`, `cli.ts`). A still's GPU holds Dawn's instance (the
+  object `create([])` returns) through `device.lost` and the next event-loop turn, then releases it. Before, Dawn could
+  process events after its owner was collected. `destroy()` is asynchronous and idempotent, and the CLI awaits it at
+  both call sites. The regression is a child process (`test/fixtures/still-gpu-lifetime.mjs`, run with
+  `--expose-gc`): 12 forced-GC create/destroy cycles, then a natural exit. Its row is in `still.dawn.test.ts`, so row
+  15, outside `pnpm verify`.
+- **A hidden Studio's publishing** (`studio/publish-scheduler.ts`, new; `studio-preload.ts`):
+  - An appearance proposal publishes on the next animation frame or after 100 ms, whichever comes first. The losing
+    callback is cancelled and a stale one ignored, so the latest snapshot still wins. Before, a frame-only publisher
+    stranded its snapshot while Studio was covered or hidden.
+  - Two scheduler rows (`test/studio-publish-scheduler.test.ts`).
+  - The physical acceptance (`physical-acceptance.ts`) now hides Studio and waits for `document.visibilityState ===
+    "hidden"` before it publishes. It shows Studio again (inactive) before the product reloads, and reports
+    `publishedWhileHidden`.
+  - `docs/UI_SYSTEM.md` states the rule: transport keeps progressing without a repaint, and Studio's background
+    throttling stays on. desk-gates row 26's "What it proves" names the hidden edit.
+- **The smoke's tap** (`testing/smoke-tools-in-hand.ts`). The tools-in-hand tap sends its mouse-down and mouse-up in
+  one main-process turn. The 50 ms timer between them could stretch past ICE's 250 ms tap limit under load and become
+  a hold.
+
+**The re-cut.** PR #6's head carried three commits past main's merge base:
+- `2b1bb87ec`, the fix;
+- `4c092d92d`, which merged PR #8's Linux CI fix `72a7145df` into it;
+- `dbf3a5a43`, which merged main `0765b2fba`.
+
+`72a7145df` was already on main through PR #8's merge (GitHub's `2d455ce1c`, with PR #5's `26af57a2d`; LANDED
+"DK-18 — PR #8"). Picked again, it conflicted in `smoke-daemons.mjs` and auto-merged a second, old-spelling
+`psTables` row into `smoke-profile.test.ts`: the silent double that PR #8's entry names. So it was skipped as
+empty, and the two merges carry nothing of their own. The re-cut's tree (`03cf6f5e6`) equals
+`git merge-tree --write-tree ce8864e86 dbf3a5a43`.
+*Corrected 2026-10-31 (at its landing): VF-PM's train brief (17:20Z) said "none of its commits is on main".
+`72a7145df` is, through PR #8's merge. The fixer found it at the re-cut, and VF-PM accepted it at 17:31Z. The
+fixer's first account (17:29:44Z) named PR #3's line, corrected to PR #8's at 17:53Z; PR #3's copy of the fix is
+`f5bfa0c32`.*
+
+**The light**, in the fixer's lane (`lanes/item118/vibe-field`, `train/pr6`) on this Mac at nice 19, 17:32:29 →
+17:35:26Z (load 15.5 → 24.5), with the vitest lane by cp-landing's yield (`lanes/records/pr6/pr6-light.sh`):
+- **Red-firsts:**
+  - The scheduler without its timer fallback: "delivers the latest command with no frames, and ignores a stale frame
+    after fallback" red (`expected [] to deeply equal [ { type: 'appearance.clear', … } ]`), the coalescing row
+    green.
+  - `still.ts` at main's: the lifetime row red. Its child failed, and vitest names no signal.
+  - Both green restored.
+- biome on the nine code files, and `check:walls`: clean. The plugin-playground and electron-shell typechecks: 0.
+- The two packages whole: plugin-playground 6 files, 68/68; electron-shell 160 files, 2,424 passed, 3 skipped.
+- `pnpm still` (row 15): 19/19. That covers the lifetime row and every kind held to its golden; no golden was
+  written.
+
+**Run 58** (the mini, on the mint itself, armed 17:42:41Z): verify exit 0 at 17:47:28Z, the tree clean, stubs 0.
+Typecheck and test ran for 28 projects. VF-PM's stripped read (17:48:43Z, 13,820 lines) found 0 FAIL rows. Vitest
+11,368 passed, 18 skipped, 0 failed: two more than run 57, the scheduler's rows. `test result: ok.` ×33;
+MaxListeners 0; the bundle unchanged.
+
+**The desk rows:**
+- **Row 26, `smoke:studio`: RED on this Mac.** The run was 17:39:30 → 17:41:09Z, the fixer's lane on `a8bdb8057`,
+  the screen locked (HID idle 1,272 s), load 34.5 → 41.1. The verdict line: `STUDIO_PHYSICAL failed: Studio to become
+  hidden timed out after 20000ms`, at the PR's new step. Every step before it passed. `SMOKE_DAEMONS` left `[]`, and
+  the root `/tmp/vf-studio-1sbFyH` was kept for its logs. It was not re-run.
+- **Item 128** (filed 17:46Z): on a locked macOS session, a hidden window's page never goes `hidden`.
+  - The probe: `lanes/records/pr6/vis-probe.sh`, the lane's Electron 43.1.1 / Chrome 150, no product code, no input,
+    17:44:16 → 17:44:42Z, locked. One plain window was shown inactive, then hidden with `hide()`. For 20 s, every
+    `executeJavaScript('document.visibilityState')` resolved in 0–12 ms and read `visible`, and no
+    `visibilitychange` fired. The renderer was awake; the state never went hidden.
+  - So the step cannot pass with the screen locked. James's own physical gate passed it on his original branch
+    `c10617873` ("appearance published while hidden, replayed after reload, and restored on close", PR #6's body).
+  - **The unlocked control is OWED**, on James's word that he is at this Mac: the probe again, then row 26 once on
+    `a8bdb8057`. Then either row 26 takes an arming condition (an unlocked screen, like the mini's rows), or the step
+    takes a witness that is not `visibilityState`.
+- **Row 17, `smoke:canvas`, on M58** (run58b, the mini, its console chain opened 17:47:53Z; exit 2 at 18:02:52Z,
+  897 s, unattended, the tree clean after): red by item 117 alone. HAND_BACK read whiteboard 250.6, calendar 249.0 and
+  clock 250.5 ms (notebook 233.4) against 200 ± 40: the mini's 15-frame bar-return step on three specimens. PR #6's
+  one hunk in the tap helper (the 50 ms sleep between a tap's down and up removed) does not touch that judge
+  (`backMs` 200, `SLACK_MS` 40), so 117's reds were never this PR's. No tap became a hold in the run. **Paid for the
+  landing with 117 cited**, as at M54–M56 (VF-PM's ruling, 18:04Z).
+  - COVER HISTORY was green on its re-run: captured 20 / swapped 20 / frozen 20 / parked 26 ms, the first frame up on
+    a visible canvas, `beforeSwap` 1; COVER_GODVIEW 22 / 23 / 23 / 27 ms, `beforeSwap` 1. M57's cover red was the
+    observer's first-sample race, the host flake the records already name, and not deterministic. Nothing goes to a5.
+  - The log: `lanes/ts6/logs/mini/run58b/smoke:canvas.log` (sha256 `662881aaebce06a3…`).
+- **Row 23, `smoke:godview`, on M58: GREEN** (run58b, exit 0 at 18:04:59Z, 127 s, untouched, the tree clean after,
+  daemons left `[]`; the chain done 18:04:59Z):
+  - 11k: the Hub bound once in the shelf (the circle at 96,8, 40 × 40); its sheet grew on Artifacts to 544 × 420 and
+    folded back.
+  - 11l: ⌘N opened and closed "New spark"; Esc, and Esc from the body, folded it; ⌘N on the canvas did nothing.
+  - 11h: B went to the focused pane; the paste card ran only on the pane's own Return; ⌘T opened a new shell; B on the
+    canvas raised Objects and put it away.
+  - The log: `lanes/ts6/logs/mini/run58b/smoke:godview.log` (sha256 `b8ce3734dd39065c…`).
+- **The tally:** verify GREEN (run 58); row 23 GREEN; row 17 RED on item 117 alone, paid; row 26 RED on the locked
+  screen (item 128, the unlocked control owed).
+
+**Not here:**
+- ROADMAP's PORTALS line "`smoke:studio` reds when its window is covered: give Studio's acceptance window DK-11's
+  frames". DK-11's frames are `backgroundThrottling: false`, which by `window-policy.ts`'s own measurement keeps a
+  covered page visible. `UI_SYSTEM.md` now keeps Studio's throttling on, and row 26 now needs the page hidden. The
+  line stands, with a dated note sending it to item 128.
+- DECISIONS: no row moves. The PR's one rule lives in its owning doc, `UI_SYSTEM.md`.
+
+**Landed:** local main fast-forwarded `ce8864e86` → `a8bdb8057` at 2026-10-31T18:06:54Z by `land-stack4.sh`, on VF-PM's
+GO. VF-PM closes PR #6 naming the sha.
