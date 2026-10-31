@@ -16,6 +16,8 @@
 //   VF_PHONE_DEADLINE_MS       past it the command is stopped and the host restored (default 30 min)
 //   VF_PHONE_DELETE_DEVICES=1  teardown (and --sweep) DELETES the run's own devices; unset, they are KEPT, shut down and
 //                              named (P5's default; the console runs set it on James's word, brief §13 RM2)
+//   VF_PHONE_GUARD_AWK, VF_PHONE_PERF_LOCK, VF_PHONE_DISK_FLOORS (`<path>:<GiB>[,…]`)
+//                              another host's house rules (the mini's); unset, this Mac's. PHONE_HOUSE_RULES says which
 // Exit: the command's own code; 1 for a red preflight, rows record or restore; 2 for a usage error; 75 NOT ARMED or
 // STOPPED (a hand, a foreign device booted mid-run, a Simulator.app not proven the run's); 128+n on a signal.
 //
@@ -45,7 +47,7 @@
 //                                                booted set ⊆ the run's own — and `device` Booted; never a launch
 // and it prints `PHONE_ROWS_BEGIN mode=<m>` first, `PHONE_ROWS_END n=<k>` last (k = the rows it opened and closed).
 //
-// Lines a reader greps: PHONE_PREFLIGHT, NOT ARMED, ARMED, PHONE_CRASH_BEFORE, PHONE_XCODE_SELECT, PHONE_DEVICE,
+// Lines a reader greps: PHONE_PREFLIGHT, PHONE_HOUSE_RULES, NOT ARMED, ARMED, PHONE_CRASH_BEFORE, PHONE_XCODE_SELECT, PHONE_DEVICE,
 // PHONE_COMMAND_ENV, PHONE_ROW, PHONE_STOP, PHONE_ROWS, PHONE_COST_SAMPLE, PHONE_ENUM, RESPONSIBLE, HID:, PHONE_REDACTED,
 // PHONE_OBSERVATION, PHONE_HOST_RESTORED, PHONE_SWEEP. Every line — the command's stdout and stderr, and the stage's own —
 // passes the redactor LINE-BUFFERED: the run's UDIDs read `<pts3-dev-n>`, every other device's `<host-dev-k>`.
@@ -98,7 +100,7 @@ const AWK = "/usr/bin/awk";
 const CAFFEINATE = "/usr/bin/caffeinate";
 const DEFAULTS = "/usr/bin/defaults";
 
-// The lane's house rules (brief §1): this Mac's lock, guard and disk floors.
+// The lane's house rules (brief §1): this Mac's lock, guard and disk floors — the defaults `houseRules` reads over.
 const LANES = "/Volumes/SamsungRed/lanes";
 export const PERF_LOCK = `${LANES}/PERF.lock`;
 export const GUARD_AWK = `${LANES}/guard/guard-stop.awk`;
@@ -106,6 +108,39 @@ export const DISK_FLOORS = [
   { path: "/Volumes/SamsungRed", gib: 15 },
   { path: "/", gib: 10 },
 ];
+const RULE_KEYS = ["VF_PHONE_GUARD_AWK", "VF_PHONE_PERF_LOCK", "VF_PHONE_DISK_FLOORS"];
+
+/** The host's house rules: this Mac's by default; another host's (the mini's, before ENUM there and L3 — RM1 Q10/Q12,
+ * §6.8) by env — `VF_PHONE_GUARD_AWK`, `VF_PHONE_PERF_LOCK` (absolute paths), `VF_PHONE_DISK_FLOORS`
+ * (`<absolute path>:<GiB>[,…]`). `by` says which set armed; each wrong one is said. */
+export function houseRules(env) {
+  const errors = [];
+  const given = (key) => typeof env[key] === "string" && env[key] !== "";
+  const path = (key, fallback) => {
+    if (!given(key)) return fallback;
+    if (isAbsolute(env[key])) return env[key];
+    errors.push(`${key} must be an absolute path`);
+    return fallback;
+  };
+  const guardAwk = path("VF_PHONE_GUARD_AWK", GUARD_AWK);
+  const perfLock = path("VF_PHONE_PERF_LOCK", PERF_LOCK);
+  let diskFloors = DISK_FLOORS;
+  if (given("VF_PHONE_DISK_FLOORS")) {
+    const floors = env.VF_PHONE_DISK_FLOORS.split(",").map((part) => {
+      const m = /^(\/[^:]*):(\d+)$/u.exec(part.trim());
+      return m === null || Number(m[2]) <= 0 ? null : { path: m[1], gib: Number(m[2]) };
+    });
+    if (floors.includes(null))
+      errors.push("VF_PHONE_DISK_FLOORS is <absolute path>:<GiB, > 0>[,…] (e.g. /:10)");
+    else diskFloors = floors;
+  }
+  const from = RULE_KEYS.filter(given);
+  const by = from.length === 0 ? "this Mac's defaults" : `env (${from.join(", ")})`;
+  return { guardAwk, perfLock, diskFloors, by, errors };
+}
+
+export const rulesLine = (rules) =>
+  `PHONE_HOUSE_RULES ${JSON.stringify({ by: rules.by, guard: rules.guardAwk, perfLock: rules.perfLock, disks: rules.diskFloors.map((d) => `${d.path}:${d.gib}`) })}`;
 
 export const PATHS = {
   helper: join(ROOT, "apps/desktop/build/native/macos/live-surface-capture-helper"),
@@ -180,9 +215,12 @@ export function readOptions(env) {
   const del = env.VF_PHONE_DELETE_DEVICES;
   if (del !== undefined && del !== "" && del !== "0" && del !== "1")
     errors.push("VF_PHONE_DELETE_DEVICES is 1 (delete the run's own devices) or unset (keep them)");
+  const { errors: ruleErrors, ...rules } = houseRules(env);
+  errors.push(...ruleErrors);
   const runDir = typeof hidLog === "string" && isAbsolute(hidLog) ? dirname(hidLog) : null;
   return {
     run,
+    rules,
     hidLog,
     deadlineMs,
     deleteDevices: del === "1",
@@ -562,9 +600,9 @@ export function armGate(r) {
         why.push(`someone is at the Mac (HID idle ${r.hid.idle}s < ${HID_IDLE_FLOOR_S}s)`);
     }
   }
-  if (r.guard === null) why.push(`the guard is unreadable (${GUARD_AWK})`);
+  if (r.guard === null) why.push(`the guard is unreadable (${r.rules?.guardAwk ?? GUARD_AWK})`);
   else if (r.guard > 0) why.push(`the guard stops on ${r.guard} process(es) (James's dev app?)`);
-  if (r.perfLock) why.push(`${PERF_LOCK} is held`);
+  if (r.perfLock) why.push(`${r.rules?.perfLock ?? PERF_LOCK} is held`);
   for (const disk of r.disks)
     if (disk.freeGiB === null || disk.freeGiB < disk.gib)
       why.push(`${disk.path} has ${disk.freeGiB ?? "?"} GiB free (< ${disk.gib})`);
@@ -1708,11 +1746,11 @@ async function pgrep(deps, name) {
 }
 
 /** The guard by its intent (§1): `ps -axo pid=,command=` through guard-stop.awk — its count only, the table never said. */
-async function guardHits(deps) {
-  if (!existsSync(GUARD_AWK)) return null;
+async function guardHits(deps, guardAwk) {
+  if (!existsSync(guardAwk)) return null;
   const table = await deps.exec(PS, ["-axo", "pid=,command="], { timeoutMs: 15_000 });
   if (table.code !== 0) return null;
-  const hits = await deps.exec(AWK, ["-f", GUARD_AWK], { input: table.stdout, timeoutMs: 15_000 });
+  const hits = await deps.exec(AWK, ["-f", guardAwk], { input: table.stdout, timeoutMs: 15_000 });
   if (hits.code !== 0) return null;
   return hits.stdout.split("\n").filter((line) => line.trim().length > 0).length;
 }
@@ -1766,16 +1804,18 @@ export function newRun(mode, opts, redactor) {
     loaded: new Map(),
     inputs: new Map(),
     perfLock: null,
+    perfLockPath: null,
   };
 }
 
 /** ARM: every gate read, then judged once. Answers the reads the run keeps. */
-async function arm(run, deps, { hidWaived, cpuGate }) {
+async function arm(run, deps, { hidWaived, cpuGate, rules }) {
   const hid = await probeHid(deps);
   deps.hid(hidLine(hid));
-  const guard = await guardHits(deps);
-  const perfLock = existsLink(PERF_LOCK);
-  const disks = DISK_FLOORS.map((d) => ({ ...d, freeGiB: freeGiB(d.path) }));
+  deps.say(rulesLine(rules));
+  const guard = await guardHits(deps, rules.guardAwk);
+  const perfLock = existsLink(rules.perfLock);
+  const disks = rules.diskFloors.map((d) => ({ ...d, freeGiB: freeGiB(d.path) }));
   const simulator = await pgrep(deps, "Simulator");
   const xcodebuild = await pgrep(deps, "xcodebuild");
   const simctlPids = await pgrep(deps, "simctl");
@@ -1813,6 +1853,7 @@ async function arm(run, deps, { hidWaived, cpuGate }) {
     cpuIdle = cpuIdleBetween(before, cpus());
   }
   const gate = armGate({
+    rules,
     hidWaived,
     requireApp: hidWaived,
     hid,
@@ -1833,11 +1874,12 @@ async function arm(run, deps, { hidWaived, cpuGate }) {
 }
 
 /** The PERF lock, held as a file naming pts3 (RM1 Q13) — created exclusively; removed only while it is still ours. */
-function holdPerfLock(run, deps) {
+function holdPerfLock(run, deps, path) {
   const text = `pts3 ${run.runId} ${run.mode} ${new Date(deps.now()).toISOString()} pid ${process.pid}\n`;
   try {
-    writeFileSync(PERF_LOCK, text, { flag: "wx" });
+    writeFileSync(path, text, { flag: "wx" });
     run.perfLock = text;
+    run.perfLockPath = path;
     return true;
   } catch {
     return false;
@@ -1847,8 +1889,8 @@ function holdPerfLock(run, deps) {
 function releasePerfLock(run) {
   if (run.perfLock === null) return "not-held";
   try {
-    if (readFileSync(PERF_LOCK, "utf8") !== run.perfLock) return "left";
-    unlinkSync(PERF_LOCK);
+    if (readFileSync(run.perfLockPath, "utf8") !== run.perfLock) return "left";
+    unlinkSync(run.perfLockPath);
     return "removed";
   } catch (error) {
     return error?.code === "ENOENT" ? "removed" : "left";
@@ -1996,12 +2038,13 @@ async function preflightOnly() {
 }
 
 /** `--sweep <runId>`: exactly `pts3-<runId>-n`, shut down; deleted only under the flag, each name checked right before. */
-async function sweep(runId, env) {
+async function sweep(runId, env, rules) {
   const redactor = createRedactor();
   const deps = hostDeps(redactor);
-  const guard = await guardHits(deps);
-  if (guard !== 0 || existsLink(PERF_LOCK)) {
-    deps.say(`NOT ARMED: ${guard === 0 ? `${PERF_LOCK} is held` : "the guard is not clear"}`);
+  deps.say(rulesLine(rules));
+  const guard = await guardHits(deps, rules.guardAwk);
+  if (guard !== 0 || existsLink(rules.perfLock)) {
+    deps.say(`NOT ARMED: ${guard === 0 ? `${rules.perfLock} is held` : "the guard is not clear"}`);
     return NOT_ARMED;
   }
   const select = await deps.exec(XCODE_SELECT, ["-p"], {
@@ -2099,10 +2142,14 @@ async function launch(mode, command, opts) {
 
   const crashDir = join(homedir(), "Library/Logs/DiagnosticReports");
   const crashBefore = crashReports(crashDir);
-  const armed = await arm(run, deps, { hidWaived: mode === "enum", cpuGate: mode === "cost" });
+  const armed = await arm(run, deps, {
+    hidWaived: mode === "enum",
+    cpuGate: mode === "cost",
+    rules: opts.rules,
+  });
   const holdsLock = mode === "devices" || mode === "cost";
-  if (armed.gate.armed && holdsLock && !holdPerfLock(run, deps))
-    armed.gate.why.push(`${PERF_LOCK} could not be held`);
+  if (armed.gate.armed && holdsLock && !holdPerfLock(run, deps, opts.rules.perfLock))
+    armed.gate.why.push(`${opts.rules.perfLock} could not be held`);
   if (!armed.gate.armed || armed.gate.why.length > 0 || signalled !== null) {
     deps.say(
       `NOT ARMED: ${[...armed.gate.why, ...(signalled ? [`a ${signalled}`] : [])].join("; ")}`,
@@ -2120,7 +2167,7 @@ async function launch(mode, command, opts) {
   const newestCrash = crashBefore.reduce((a, b) => (a === null || b.at > a.at ? b : a), null);
   deps.say(`PHONE_CRASH_BEFORE ${newestCrash === null ? "none" : newestCrash.name}`);
   deps.say(
-    `ARMED ${new Date(run.armedAt).toISOString()}: ${mode} run ${run.runId}; HID idle ${armed.hid.idle}s, locked ${armed.hid.locked}${mode === "enum" ? " (the gate waived: James is at the screen)" : ""}; developer dir ${run.devDir} (${armed.developerDir.by}); runtime ${run.runtime}; types ${run.types.slice(0, 3).join(" ")} | ${run.types[3]}${holdsLock ? `; holds ${PERF_LOCK}` : ""}`,
+    `ARMED ${new Date(run.armedAt).toISOString()}: ${mode} run ${run.runId}; HID idle ${armed.hid.idle}s, locked ${armed.hid.locked}${mode === "enum" ? " (the gate waived: James is at the screen)" : ""}; developer dir ${run.devDir} (${armed.developerDir.by}); runtime ${run.runtime}; types ${run.types.slice(0, 3).join(" ")} | ${run.types[3]}${holdsLock ? `; holds ${opts.rules.perfLock}` : ""}`,
   );
   deps.exec(CAFFEINATE, ["-d", "-i", "-w", String(process.pid)], {
     timeoutMs: opts.deadlineMs + 3_600_000,
@@ -2291,15 +2338,17 @@ async function main() {
   }
   if (args.mode === "preflight") return preflightOnly();
   if (args.mode === "sweep") {
-    // the sweep takes its run id as its argument; of the ENV options only the delete flag
-    const flag = readOptions(process.env).errors.find((e) =>
+    // the sweep takes its run id as its argument; of the ENV options only the delete flag and the house rules
+    const rules = houseRules(process.env);
+    const flag = readOptions(process.env).errors.filter((e) =>
       e.startsWith("VF_PHONE_DELETE_DEVICES"),
     );
-    if (flag !== undefined) {
-      process.stderr.write(`${flag}\n`);
+    const wrong = [...flag, ...rules.errors];
+    if (wrong.length > 0) {
+      process.stderr.write(`${wrong.join("\n")}\n`);
       return 2;
     }
-    return sweep(args.runId, process.env);
+    return sweep(args.runId, process.env, rules);
   }
   const opts = readOptions(process.env);
   if (opts.errors.length > 0) {

@@ -39,6 +39,7 @@ const {
   handleDoor,
   hidLines,
   hidSummary,
+  houseRules,
   isOwnName,
   launchChecks,
   MODE_ROWS_FLOOR,
@@ -252,6 +253,61 @@ test("parseArgs: a launch takes its mode and a command after --; enum, --preflig
     assert.match(parseArgs(bad).error, /^usage:/u, JSON.stringify(bad));
   assert.match(parseArgs(["--sweep", "L2"]).error, /--sweep takes a run id/u);
   assert.match(parseArgs(["--sweep"]).error, /^usage:/u);
+});
+
+test("houseRules: this Mac's guard, lock and floors by default; another host's by env, each named; a wrong one said (S4)", () => {
+  const mac = houseRules({});
+  assert.deepEqual(mac.errors, []);
+  assert.equal(mac.by, "this Mac's defaults");
+  assert.equal(mac.guardAwk, "/Volumes/SamsungRed/lanes/guard/guard-stop.awk");
+  assert.equal(mac.perfLock, "/Volumes/SamsungRed/lanes/PERF.lock");
+  assert.deepEqual(mac.diskFloors, [
+    { path: "/Volumes/SamsungRed", gib: 15 },
+    { path: "/", gib: 10 },
+  ]);
+  const mini = houseRules({
+    VF_PHONE_GUARD_AWK: "/Users/mini/lanes/guard-stop.awk",
+    VF_PHONE_PERF_LOCK: "/Users/mini/lanes/PERF.lock",
+    VF_PHONE_DISK_FLOORS: "/:20",
+  });
+  assert.deepEqual(mini.errors, []);
+  assert.equal(mini.guardAwk, "/Users/mini/lanes/guard-stop.awk");
+  assert.equal(mini.perfLock, "/Users/mini/lanes/PERF.lock");
+  assert.deepEqual(mini.diskFloors, [{ path: "/", gib: 20 }]);
+  assert.match(mini.by, /env \(VF_PHONE_GUARD_AWK, VF_PHONE_PERF_LOCK, VF_PHONE_DISK_FLOORS\)/u);
+  // one taken by env, the rest this Mac's
+  const one = houseRules({ VF_PHONE_DISK_FLOORS: "/:10,/Volumes/Other:5" });
+  assert.equal(one.perfLock, mac.perfLock);
+  assert.deepEqual(one.diskFloors.at(-1), { path: "/Volumes/Other", gib: 5 });
+  assert.equal(one.by, "env (VF_PHONE_DISK_FLOORS)");
+  const bad = houseRules({
+    VF_PHONE_GUARD_AWK: "guard-stop.awk",
+    VF_PHONE_PERF_LOCK: "PERF.lock",
+    VF_PHONE_DISK_FLOORS: "/:ten",
+  });
+  assert.equal(bad.errors.length, 3);
+  assert.match(bad.errors.join("\n"), /VF_PHONE_GUARD_AWK must be an absolute path/u);
+  assert.match(bad.errors.join("\n"), /VF_PHONE_DISK_FLOORS is/u);
+  assert.match(houseRules({ VF_PHONE_DISK_FLOORS: "/:0" }).errors[0], /VF_PHONE_DISK_FLOORS/u);
+  // a launch takes them with its options; armGate names the set's own paths
+  const opts = readOptions({
+    VF_PHONE_RUN: "l3-t1",
+    VF_PHONE_HID_LOG: "/lanes/pts3/logs/l3-t1/l3-t1-hid.log",
+    VF_PHONE_PERF_LOCK: "/Users/mini/lanes/PERF.lock",
+  });
+  assert.deepEqual(opts.errors, []);
+  assert.equal(opts.rules.perfLock, "/Users/mini/lanes/PERF.lock");
+  assert.deepEqual(
+    readOptions({ VF_PHONE_RUN: "l3-t1", VF_PHONE_HID_LOG: "/l/h.log", VF_PHONE_PERF_LOCK: "x" })
+      .errors,
+    ["VF_PHONE_PERF_LOCK must be an absolute path"],
+  );
+  assert.deepEqual(armGate({ ...CLEAR, rules: opts.rules, perfLock: true }).why, [
+    "/Users/mini/lanes/PERF.lock is held",
+  ]);
+  assert.deepEqual(armGate({ ...CLEAR, rules: mini, guard: null }).why, [
+    "the guard is unreadable (/Users/mini/lanes/guard-stop.awk)",
+  ]);
 });
 
 test("readOptions: the run, the HID log, a 30-minute deadline by default, and KEEP unless the delete flag is 1", () => {
