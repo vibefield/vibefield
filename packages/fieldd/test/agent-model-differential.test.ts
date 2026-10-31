@@ -102,8 +102,9 @@ describe("the differential — the desk projection and the model's row say the s
       // the project. DIFFERENCE for a row with no mirror: the field/desk row
       // names the project only from the OBSERVED directory (it carries no path,
       // EL7 B1, and no workspace), so a pending or unobserved row has none; the
-      // model follows the WINDOW's own rule (`agent-status.ts` `projectLabel`):
-      // the observed directory, else the workspace's, else the provider's label.
+      // model follows the rule the WINDOW's `projectLabel` wrote (`agent-status.ts`,
+      // retired unused at item 125, 2026-10-31): the observed directory, else the
+      // workspace's, else the provider's label.
       // The window drew "repo" for that row before, and still does.
       if (desk.project?.name !== undefined)
         expect(model.project.name, name).toBe(desk.project.name);
