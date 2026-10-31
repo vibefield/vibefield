@@ -458,6 +458,39 @@ export const AgentFieldDelta = z
   .passthrough();
 export type AgentFieldDelta = z.infer<typeof AgentFieldDelta>;
 
+/** PG-1b (PG-L4.1, 2026-10-29) — the RELAY's reading of every board it carries
+ * (`field`, `desk`, and PG-2's `remote`): each row's KEY and the owner's stamp,
+ * nothing else. Every other fact is the owner's and passes through untouched
+ * (DS-L2: one owner per row, the relay copies; DS-D4: multiplexed, never
+ * re-folded), so a peer whose rows this build's field schema cannot read is
+ * still relayed, and each reader decides what it can read (a window per desktop,
+ * `godview/monitor/board-screen.ts`; the phone per row). It is not a business
+ * reader, so it logs no unknown fields: every field it does not read is
+ * someone else's. The envelopes are `AgentFieldSnapshot`'s and
+ * `AgentFieldDelta`'s with the row swapped for its key. */
+export const AgentBoardRowKey = z
+  .object({ runtimeRunId: z.string().min(1), revision: z.number().int() })
+  .passthrough();
+export type AgentBoardRowKey = z.infer<typeof AgentBoardRowKey>;
+export const AgentBoardKeySnapshot = z
+  .object({
+    epoch: RowsEpoch.optional(),
+    revision: z.number().int(),
+    rows: z.array(AgentBoardRowKey),
+  })
+  .passthrough();
+export type AgentBoardKeySnapshot = z.infer<typeof AgentBoardKeySnapshot>;
+export const AgentBoardKeyDelta = z
+  .object({
+    epoch: RowsEpoch.optional(),
+    since: z.number().int(),
+    revision: z.number().int(),
+    upserts: z.array(AgentBoardRowKey),
+    removed: z.array(z.string()),
+  })
+  .passthrough();
+export type AgentBoardKeyDelta = z.infer<typeof AgentBoardKeyDelta>;
+
 /** DS-3 — the OPEN answer of `agent.subscribe {scope: "mesh"}` (DS-D4): every
  * self desktop the roster lists, each with its state, when that was
  * established, and — once it has answered — its own board at its own
@@ -466,7 +499,13 @@ export type AgentFieldDelta = z.infer<typeof AgentFieldDelta>;
  * numbered them. A `desk` board's rows are `AgentDeskRow`s, which parse here
  * as field rows with the rest passed through. The ANSWERING desktop is listed
  * first — always present, always `live` — so a reader without a roster still
- * knows which board is its own. */
+ * knows which board is its own.
+ *
+ * The same open also arrives MID-STREAM as the subscription's `.snapshot`: the
+ * client's own replay after a reconnect, and the door's resync of a phone that
+ * fell behind its cap (PG-1c, `PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES`). The
+ * reader replaces its whole board, each device at its owner's `{epoch,
+ * revision}`, and the next delta continues from there. */
 export const AgentMeshOpen = meshRowsOpen(AgentFieldRow);
 /** One device's entry in the open. Written out rather than inferred: the
  * passthrough inference gives every arm a string index signature, and a

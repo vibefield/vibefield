@@ -20695,3 +20695,212 @@ planes' SP-1…SP-8 or SP-D1…SP-D13.
 - SP-1b (Chat), SP-1c (the New spark sheet, with the falling star's engine `star-spark/engine.js` and the NS-D3 fold
   into §2.10's hatch paragraph) and SP-1d (the thread), per §17's ladder. No product surface draws the face until
   SP-1b.
+
+## PT-S2 — the phone's producer: a phone on the desk bound to a real iOS Simulator device of this Mac's own, its live screen wired through LSF-5's ScreenCaptureKit capture (its desk witness PT-S3's), its nine faces said from main's facts, and Attach and Finish on its menu; bound by model and iOS, never a UDID (2026-10-31; `762f24978`, lane `portals/pt-s2`, 23 commits on `f21d45cfa`, PT-S1's fix `b72c46dfd` merged as `9bc80f6e1` (the brief's mid-slice M1) and main `097edb32c` merged as `762f24978`, in the mini's mint `e4aa3d367`, run 16, over main `265325d09`; James's word 2026-10-30 18:25Z; the brief's R1–R16 at the orchestrator's leans)
+
+**Why:** the PT-S ladder's second rung (PORTALS, track PT). The design `draft/portals-maps/PT-S-the-simulator.md` §5:
+PT-S1 the kind, PT-S2 the producer, PT-S3 the gates, PT-S4 touch. PT-S1 landed 2026-10-30 (`1de84540b`, LANDED §PT-S1)
+with the fixture as its frame-source seam's only source, no simulator spec routed by desk-live, and no capability.
+PT-S2 wires LSF-5's ScreenCaptureKit producer, already in the main process, behind that seam (the design's §2, amended
+2026-10-29), with `simctl`, the binding → this Mac's device, the nine states and their acts, the demand, the cap, the
+manifest's scopes and the attach.
+- It was built CODE-ONLY, on James's word, 2026-10-30 18:25Z: "can we continue on implementation and defer testing?"
+  No install, typecheck, tests, build, smoke, cargo, xcodebuild, simctl or Electron ran on the host until VF-PM granted
+  the light.
+- VF-PM's bounds (18:27Z): at most 3 agents, at nice 19; nothing touches `lanes/pts`; delete nothing.
+- Brief: `draft/portals-maps/briefs/PT-S2-the-producer.md`: parts 1–4, the rulings R1–R16 written before the build at
+  the orchestrator's leans (none is James's), and the mid-slice ruling M1. Its three maps (main, host, plugin) are in
+  the orchestrator's scratchpad, dev-local.
+
+**What landed** (by part and commit subject; against main 58 files, +7,783 −360; no lock, sibling-pin or Rust change):
+- **Contracts first** ("PT-S2 (contracts)" `329a0bb7b`; "(review, contracts)" `a87ffaab2`, `527be1541`).
+  `packages/contracts/src/live-surfaces.ts`, and `shell.ts` in the two review commits, with their tests:
+  - the source `ios-simulator-device` `{ kind, binding, crop }`, a new union member (R1). The UDID-keyed
+    `ios-simulator` source is unchanged, for the lab and the resolver;
+  - `LiveSurfaceSimulatorStateV1` on `summary.simulator?`: its `condition` no-simulator · no-permission · no-device ·
+    off · booting · no-window · streaming · stopped, plus `name?`, `deviceType?`, `runtime?`, `acting?` and
+    `degraded?` (R2: main reports FACTS);
+  - `LiveSurfaceDeviceVerbV1` (boot | create | show | retry | open-settings) and `LiveSurfaceDeviceCommandV1`
+    `{ verb }`, on a `{ type: "device" }` control message;
+  - `LiveSurfaceSimulatorDeviceRowV1` `{ deviceType, runtime, name, booted }`;
+  - a `udid` key REFUSED on the source, the state and the row; the name bounded at 128;
+  - `SurfaceSimulatorDevicesParamsV1`/`ResultV1`, with `runtimes?` (`MAX_SIMULATOR_DEVICES` 256,
+    `MAX_SIMULATOR_RUNTIMES` 64; `runtimes` with `527be1541`, on the shell's result too);
+  - `SIMULATOR_DEVICES_DEADLINE_MS` raised 10 → 15 s in `shell.ts` (`a87ffaab2`).
+- **fieldd** ("PT-S2 (fieldd)" `268e4e519`; "(review, fieldd)" `a9ba7e925`): the shell method
+  `surface.simulator.devices` (its row in `contracts/src/methods.ts`) through `shell.surfaces.simulatorDevices`
+  (`contracts/src/shell.ts`, its deadline then 10 s); `SURFACE_KIND_SCOPE` names the new kind under `surface.capture`;
+  the device-list method passes main's rows and runtimes re-parsed (`surface-service.ts`, `shell-provider.ts`,
+  `product-api.ts`, `daemon.ts`).
+- **Main** (four "PT-S2 (main)" commits `2c3d9ac28`, `0a472b7a9`, `5c8da6b2e`, `be15a1946`; "(review, main)"
+  `192384887`, `fb70b756e`; "(grade, main)" `77c501ba4`), in `packages/electron-shell/src/main/` (all but two under
+  `live-surfaces/`):
+  - `simctl.ts`, new: one exec seam with an allow-list (list, boot, create, shutdown, which no act reaches, and show);
+    the `xcode-select -p` probe before any xcrun, cached 30 s, with `DEVELOPER_DIR` pinned; one shared list per tick
+    (R8); `pickDevice` in R3's order. Show opens `$(xcode-select -p)/Applications/Simulator.app --args
+    -CurrentDeviceUDID <udid>`.
+  - `ios-simulator-device-runtime.ts`, new: the condition machine over ONE inner Simulator runtime (R7); demand withheld
+    until streaming; single-flight acts that settle on a fresh CoreSimulator read (R4); R3's sharing of one device
+    between bindings that agree, split at idle when they part, and re-keyed when its opener leaves; no Accessibility is
+    streaming with `degraded: true`, still live (R6).
+  - `SckCaptureClientError` gains a typed `reason` (`sck-producer.ts`, `ios-simulator-producer.ts`).
+  - The authority's canonical key `simdev\0deviceType\0runtime\0crop`, deduped even with a `reuseKey` (R10); a `device`
+    ticket op (`ticket-table.ts`); `case "device"` in `control-session.ts`; `runtime-support.ts`'s kind.
+  - Production (`authority-production.ts`, and the two outside `live-surfaces/`: `shell-provider.ts` and `index.ts`):
+    a lazy simctl; a mint on non-darwin reports `no-simulator` (R5); Open Settings opens the Screen Recording pane
+    through `harnessShellOpens`.
+- **The renderer** ("PT-S2 (renderer)" `c7385c092`, `5ff8892f1`; "(review, renderer)" `cd8436ea4`):
+  - `transport.sendDevice` (`packages/live-surfaces/src/renderer/transport.ts`), `SurfaceHandle.device`
+    (`surface-pool.ts`), and `live-gate.ts`'s `SIMULATOR_SCOPES`;
+  - `desk-live.ts`'s simulator lane beside the browser's, sharing the closure's helpers (the seat, the still clock, the
+    stills), the six-face cap (R10 counts faces) and the stills (R14: no `extra.still`; R15: a rebind's still only for
+    the same binding);
+  - `surfaces/live/simulator-face.ts`, new: main's facts mapped to the SDK's nine words and each state's one act (R2);
+  - a phone's pool key carries its binding;
+  - the kind's live ask stays on the wire while main holds a non-streaming device (the blocker's fix).
+- **The attach** ("PT-S2 (design)" `43c63f0b7`, `13e4eec8a`; "(door, SDK)" `e2a8a24b5`; "(host, devices)"
+  `0b0d78a5f`, `87263f38a`; "(plugin)" `07d77dda7`; "(review, design)" `bb90b8e78`; "(review, host, devices)"
+  `fcada4643`):
+  - DESIGN.md §9 first: "The phone's two acts on the selection menu", **Attach** and **Finish**, one undo step for each
+    phone an act changes. The words landed before any code quoted them;
+  - the SDK's `SIMULATOR_DEVICES = serviceKey("vibefield.simulator.devices")` (`plugin-sdk/src/desk.ts`), with a
+    synchronous `attachable(preferDeviceType)` and `LiveSimulatorBinding`, and its wall row in `desk-door.test.ts`;
+  - lent at `desk-layer.ts` beside `BROWSER_NAVIGATION` (`surfaces/live/simulator-devices.ts`, new, watched from
+    `CanvasStage.tsx`). The list is read only while a phone stands: a look every 2 s, a read at most every 5 s;
+  - the plugin's capabilities `["surface.attach", "surface.capture"]` in `manifest.ts`, hand-written into
+    `vibefield.plugin.json` (byte-equal to the emission at the light);
+  - `attach.ts`, new, with `PHONE_ACTS` (attach, finish), its menu and its drivers (`object.ts`, `local.ts`,
+    `index.ts`);
+  - R11's pick: the booted device of the phone's own model, else the first booted iPhone, else its own model on the
+    newest INSTALLED iOS runtime. No free Model act.
+- **Units:** six new files (`simctl.test.ts`, `ios-simulator-device-runtime.test.ts`, `desk-layer-services.test.ts`,
+  `desk-live-simulator.test.ts`, `simulator-devices.test.ts`, `attach.test.ts`), and rows in the authority,
+  control-session, producer, shell-provider, contracts, fieldd surface-service, transport, live-gate, pool, door,
+  kind and manifest tests.
+- **Untouched:** `BUNDLED_PLUGINS` (R13, James's open call) and the dev bundled set (owed under a PM grant, R13). No
+  live-texture charging (R12).
+  R9 (12 fps arriving as 10 through the buckets) is unchanged code, unwitnessed.
+
+**The deviations the builders named** (the main ones; all are in the commits):
+- **Contracts:**
+  - the condition and the command take the brief's shape, not the map's;
+  - `acting` is typed by a new `LiveSurfaceDeviceVerbV1`;
+  - the state's `name`, `deviceType` and `runtime` are optional;
+  - a `udid` key is refused on the source, the state and the row, and the name is bounded at 128.
+- **Main:**
+  - "Create it" avoids ALL existing device names, not only the booted ones;
+  - Show and retry are offered whenever the device is booted;
+  - an unknown window verdict reads as streaming once the inner streams;
+  - the device list returns `[]` on a Mac without Xcode, not UNAVAILABLE;
+  - R3 joins only a pristine inner (revision 0): two sessions that converge on one device AFTER both have published
+    keep two streams.
+- **The renderer:** a phone's pool key carries its binding, so a rebind is a new lane and never re-takes the old
+  device's attachment; the live gate takes a source word; acts are withheld while main is acting.
+- **The attach:**
+  - DESIGN.md §9 took two commits at the build: the words first (`43c63f0b7`), then two claims said exactly
+    (`13e4eec8a`), both before any code quoted them;
+  - the menu acts carry no glyph, so the bar prints §9's words;
+  - the host finds "a phone stands" by the plugin's grants, never its type name.
+- **The fix round:** `runtimes` is optional on the device list's result, and absent means unsaid; the R3 split happens
+  only at idle, never under a face.
+- **Hand-written, as the brief asks:** `plugins/simulator/vibefield.plugin.json`'s capabilities, reproduced byte for
+  byte by the light's `gen:manifest`. `docs/plugin-authoring` did not move: `SIMULATOR_DEVICES` is outside every docs
+  region.
+
+**Validation** (the build CODE-ONLY; the light on this Mac; verify on the mini):
+- **The build:** workflow `wf_76529ded-ec6`, one run, about 2 h 7 min, 8 agents: contracts → main ∥ renderer → attach
+  → three review lenses (main, renderer, plugin) → one fixer.
+- **The review found 6, one a BLOCKER.** All 6 were fixed in 8 commits (`cd8436ea4`…`fcada4643`):
+  - **the blocker:** the renderer stopped the kind's live ask under any non-streaming condition, so Show it, Try again
+    and a Screen Recording grant could never return to streaming (`cd8436ea4`);
+  - an act's `finally` re-planned from a pre-act pick, so a second "Create it" could make a twin (`192384887`);
+  - R3's joined binding was never re-picked by its own binding (`192384887`);
+  - `SIMULATOR_DEVICES_DEADLINE_MS` at 10 s was below main's 13 s worst case; it is 15 s (`a87ffaab2`);
+  - F5 and F6: Attach's third pick used device rows rather than installed runtimes (`bb90b8e78`, `527be1541`,
+    `fb70b756e`, `a9ba7e925`, `fcada4643`).
+- **Lint:** biome check was clean on all 57 changed files before the grade (20:57Z).
+- **The grade** (`wf_97ad4464-8d9`, read-only; three lenses, each with a skeptic: compile and units by eye; the fix
+  round; brief and walls). 1 minor finding survived, fixround-1: a shared R3 session kept picking by its departed
+  opener's binding. Fixed in `77c501ba4`, with one unit row.
+- **The merges.**
+  - `9bc80f6e1` merges `b72c46dfd`, PT-S1's build-edges fix (field-app's devDependency on the simulator plugin and 3
+    lock lines). Taken by merge, never re-typed (the mid-slice ruling M1).
+  - `762f24978` merges main `097edb32c` (PT-S1 landed as M10 `1de84540b`, AU B3 M11 `20783c656`, and the records):
+    parents `77c501ba4` + `097edb32c`, base `b72c46dfd`. Five files changed on both sides, all auto-merged with 0
+    markers, each kept whole by line count: DESIGN.md, `contracts/src/methods.ts`, `contracts/test/shell.test.ts`,
+    `electron-shell/src/main/index.ts` and `fieldd/src/daemon.ts`. VF-PM read it and accepted it at 21:37Z.
+- **The light** (this Mac, VF-PM's grant 21:12Z; `762f24978`; 21:37:26–21:46:28Z; each row alone; ALL GREEN):
+  - `git diff --check 097edb32c HEAD`: no whitespace errors;
+  - (a) `pnpm typecheck`: "NX Successfully ran target typecheck for 28 projects";
+  - (b) the units by file, none skipped: contracts 2 files, 77 tests; electron-shell 7 files, 269; fieldd 1 file, 35;
+    live-surfaces 1 file, 12; plugin-sdk 1 file, 12; field-app 6 files, 97; plugin-simulator 4 files, 64.
+    fixround-1's row passed by name ("R3 picks by a binding a member HOLDS: …"), and law.test's installed-iPhones row
+    ran on Xcode 17F113;
+  - (b) the whole suites: contracts 52 files, 1333 tests; electron-shell 149 files, 2174 passed + 3 skipped; fieldd
+    206 files + 3 skipped, 2611 passed + 29 skipped; live-surfaces 8 files, 39 tests; plugin-sdk 10 files, 87 tests;
+    field-app 237 files + 1 skipped, 3004 passed + 3 skipped; plugin-simulator 13 files, 131 tests;
+  - (c) `check:walls`: "check-import-boundaries: clean";
+  - (d) `check:deps`: "check-single-copy: ok …". Green in a lane for the first time: the lane had its OWN
+    `../mille-pin`, a local clone at `c8160d585` prepared from the lane by `siblings.mjs install-js/build-js mille`, so
+    mille's host peers link into the lane's tree;
+  - (e) `gen:check`: clean. The plugin's `gen:manifest` reproduced the hand-written `vibefield.plugin.json` byte for
+    byte;
+  - the tree was clean after.
+  - Lane prep: its own mille-pin (320 MB); a read-only rosetta-pin link; `target` → `/Volumes/SamsungRed/rust/pts2`,
+    its own cargo target, where field-native was cold-built in 2m30s (2.5 GB with mille's napi); the frozen offline
+    install, 6 s.
+- **The mint, run 16:** M16 `e4aa3d367`, "Merge main 265325d09 into portals/pt-s2 — PT-S2 over main 265325d09: AU B3,
+  PR #3's rulers, FG-3a, SP-1a, item 119's rows fix and the records". 58 files, +7,783 −360; its tree `158a48c7c`
+  equals the merge-tree.
+  - The orchestrator's preview (merge-tree `762f24978` × `265325d09`, 00:32Z): 0 conflicts. Two files changed on both
+    sides since `097edb32c`, both kept whole (merged = ours + theirs − base per line, 0 mismatched): DESIGN.md
+    4395 base / 4407 / 4441 → 4453; `field/desk/desk-layer.ts` 110 / 120 / 112 → 122, where main's hunk is
+    `5dcf72205`'s ruler margin 60 → 0.
+  - The bundle: `lanes/pts2/pts2-762f24978.bundle` (sha256 `585ee3f0…`), cut `^265325d09`, 25 commits, requiring
+    `b72c46dfd`, `f21d45cfa` and `097edb32c`, all on main.
+  - GREEN on the mini at 00:38:54Z: verify 0 FAIL, 10,423 passed / 0 / 18 skipped, +120 tests and +6 files over run
+    15b, all PT-S2's own; cargo 31 ok / 0; gen freshness passed with PT-S2's contracts change.
+  - No smoke row: PT-S2's desk evidence is PT-S3's live run.
+- **Landed:** main fast-forwarded `265325d09` → `e4aa3d367` at 00:43:46Z, and was pushed at 00:44Z as
+  `265325d09..e9a400fef`, with bb's item 119 records (`e9a400fef`) on top.
+
+**The rulings that governed** (the brief's, written 2026-10-30 at the orchestrator's leans; as built):
+- **R1, the source:** a new union member `ios-simulator-device`, not `ios-simulator` with a refine.
+- **R2, the words:** main reports facts (`summary.simulator.condition`); `simulator-face.ts` maps them to the SDK's
+  nine.
+- **R3, the resolution:** exact type and runtime → the same type on any runtime, booted first, then the newest →
+  `no-device`; bindings that agree share one inner runtime, and a shared session picks by a binding a member holds.
+- **R4, the acts:** Boot is boot then show; Create it is create, boot and show in one act; Try again is show when booted
+  with no window; each act single-flight, `acting` said while it runs.
+- **R5, no Simulator:** the `xcode-select -p` probe before any xcrun; a non-darwin or helper-less shell mints and says
+  `no-simulator`.
+- **R6, no Accessibility:** `streaming` with `degraded: true`, still live, not a tenth state.
+- **R7, the inner runtime:** one inner SCK runtime per surface for its life (its letter is named for PT-S3, below).
+- **R8, the cost:** one `simctl list --json` snapshot per tick, shared across every surface.
+- **R9, the rate:** 12 fps arrives as 10 through `liveDemandIntent`'s buckets, accepted for v1; unchanged, unwitnessed.
+- **R10, the cap:** it counts faces, six in all; main's canonical key dedupes a stream even with a `reuseKey` (the
+  brief said one stream per device; R3's pristine-only join can leave two).
+- **R11, the attach:** one "Attach" plus "Finish", over the synchronous `SIMULATOR_DEVICES`; no free Model act.
+- **R12:** the phone charges no live texture to the desk budget; the six-face cap bounds it.
+- **R13:** `BUNDLED_PLUGINS` untouched, the call James's and still open; the dev bundled set (`field-engine.ts`,
+  field-app's `package.json`) untouched too, since it needs an install (the brief: owed under a PM grant).
+- **R14:** no `extra.still` on the simulator route.
+- **R15, the rebind:** a reopened face takes the key's last still only when it was taken on the same binding.
+- **R16, rotation:** a Simulator rotated by hand shows cropped sideways in v1; rotation input is PT-S4's.
+- **M1 (2026-10-30 19:05Z, from VF-PM):** no builder touched field-app's `package.json` or `pnpm-lock.yaml`; PT-S1's
+  fix came by the orchestrator's merge `9bc80f6e1`.
+
+**Not witnessed** (named, not found; for PT-S3's live run):
+1. `show`'s launch arguments reach only a FRESH Simulator.app launch. It may not reopen a closed device window while
+   Simulator.app runs (the orchestrator's main map's risk 5, not the brief's ruling R5).
+2. R7's letter: a split gives a surface a second inner runtime, only with no face attached.
+3. Unseen: real Simulator pixels on the desk, the Screen Recording and Accessibility flows, and the fps buckets.
+
+**Owed:**
+- A stale comment in `plugins/simulator/src/live.ts:17-20`, "(the cap shared with panes is PT-S2's)": the cap is built
+  now. A one-line follow-up.
+- Whether the phone joins `BUNDLED_PLUGINS`: James's (ROADMAP §5).
+- **PT-S3, the gates,** and the live witness of the three above.
+- **PT-S4, touch,** through serve-sim: an EL8 pin event, loopback only, never `--allow-exec`.
+- The lane's records (the light log, the landing log's entries) go to the next draft queue, not main.
+- The lane `/Volumes/SamsungRed/lanes/pts2` holds about 3.7 GB. Reclaiming it is James's.

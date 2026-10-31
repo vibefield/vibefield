@@ -100,6 +100,8 @@ async function fakeBridge(): Promise<{
   pairingFile: string;
   sendData: (laneId: number, payload: Uint8Array) => void;
   received: () => { laneId: number; payload: Uint8Array }[];
+  /** drop the connected client's socket, as a floor going away would */
+  drop: () => void;
 }> {
   const dir = tmp("fake");
   // The fake binds the endpoint the real bridge would, by the same law (WIN-D1):
@@ -163,6 +165,7 @@ async function fakeBridge(): Promise<{
     sendData: (laneId, payload) =>
       client?.write(encodeMeshDataFrame(MESHDATA_FRAME.DATA, laneId, payload)),
     received: () => received,
+    drop: () => client?.destroy(),
   };
 }
 
@@ -284,6 +287,30 @@ describe("MeshLaneLink ⇄ the real Rust bridge", () => {
     for (const c of children) c.kill("SIGKILL");
     await gone;
     expect(l.connected).toBe(false);
+  }, 30_000);
+});
+
+describe("CP-1b — a dropped link dials again; a closed one stays closed", () => {
+  it("is not closed when its socket drops: connect() dials it again, and its lanes keep their handlers", async () => {
+    // The daemon's redial (daemon.ts, CP-1b) reads `closed` before it dials: a dropped socket is a link to dial
+    // again, which a floor restart under a spark's door makes routine; close() is the daemon's own end.
+    const bridge = await fakeBridge();
+    const l = link(bridge);
+    await l.connect();
+    const seen: string[] = [];
+    l.onLane(9, (p) => seen.push(text(p)));
+    const gone = new Promise<void>((resolve) => l.once("disconnected", () => resolve()));
+    bridge.drop();
+    await gone;
+    expect(l.connected).toBe(false);
+    expect(l.closed).toBe(false);
+    await l.connect();
+    expect(l.connected).toBe(true);
+    bridge.sendData(9, bytes("after"));
+    await tick();
+    expect(seen).toEqual(["after"]);
+    l.close();
+    expect(l.closed).toBe(true);
   }, 30_000);
 });
 

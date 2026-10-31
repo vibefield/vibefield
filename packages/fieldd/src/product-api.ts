@@ -62,6 +62,9 @@ const WS_OPEN = 1;
 const PRODUCT_WS_MAX_INBOUND_BYTES = PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES;
 const PRODUCT_WS_MAX_OUTBOUND_BYTES = MESH_CONTROL_LIMITS.PRODUCT_FRAME_BYTES;
 const PRODUCT_WS_MAX_BUFFERED_BYTES = MESH_CONTROL_LIMITS.PRODUCT_QUEUED_BYTES;
+// PG-1c — a phone's subscription that can resync is held past this, and
+// re-snapshotted once its queue drains to half of it
+const TAILNET_QUEUED_BYTES = PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES;
 const SOURCE_LOCAL_ARTIFACT_METHODS = new Set([
   "artifact.publish",
   "artifact.update",
@@ -79,6 +82,42 @@ export interface SubscriptionInstall {
   /** Called only after ProductAPI installed disposal and sent the subscribe reply. Producers use
    * this to flush events that raced registration without delivering a delta before its subId. */
   readonly start?: () => void;
+  /** PG-1c — re-emit this subscriber's whole current value as ONE `snapshot`
+   * frame, synchronously through the same emit, so the next delta chains from
+   * it. A producer that declares it lets the door stop sending a phone's
+   * deltas once that connection's queue reaches `TAILNET_QUEUED_BYTES`, and
+   * re-snapshot it when the queue drains to half; without it the subscription
+   * keeps the 128 MiB shed. */
+  readonly resync?: () => void;
+}
+
+/** PG-1c — a phone's subscription that can resync: its deltas stop while it is
+ * `behind`, and its producer's resync answers the drain. `inflight` is the
+ * bytes of its own snapshots (its open, each resync) still queued: they never
+ * count toward holding it, or a board past the cap would hold itself again with
+ * every snapshot and never come back to deltas. */
+interface Hold {
+  behind: boolean;
+  inflight: number;
+  readonly resync: () => void;
+}
+
+/** PG-1c — a write its caller counts: its bytes as queued, and as landed. */
+interface WriteTrack {
+  sent(bytes: number): void;
+  landed(bytes: number): void;
+}
+
+/** A hold's own snapshots, counted while they are queued. */
+function ownSnapshots(hold: Hold): WriteTrack {
+  return {
+    sent: (bytes) => {
+      hold.inflight += bytes;
+    },
+    landed: (bytes) => {
+      hold.inflight -= bytes;
+    },
+  };
 }
 
 export type SubscriptionHandler = (
@@ -227,6 +266,8 @@ export class ProductApi extends EventEmitter {
   private readonly shellProvider = new ShellProviderBroker();
   /** live authed connections — the §15.4 revocation path closes by principal */
   private readonly liveConns = new Set<{ ws: WebSocket; state: ConnState }>();
+  /** PG-1c — per connection, its phone subscriptions that can resync */
+  private readonly holds = new WeakMap<WebSocket, Map<string, Hold>>();
 
   /** §15.4 — sever every connection whose principal IS this plugin: leases are
    * already revoked by the caller, so a reconnect dies at hello; live subs die
@@ -609,6 +650,7 @@ export class ProductApi extends EventEmitter {
       this.shellProvider.withdraw(state.shellTransport);
       for (const dispose of state.subs.values()) dispose();
       state.subs.clear();
+      this.holds.delete(ws);
       this.opts.onConnectionClosed?.(state.connectionId);
     });
   }
@@ -658,8 +700,8 @@ export class ProductApi extends EventEmitter {
     const id = msg["id"];
     const method = String(msg["method"] ?? "");
     const params = msg["params"];
-    const reply = (v: unknown) => {
-      if (id !== undefined && id !== null) this.sendBounded(ws, v);
+    const reply = (v: unknown, track?: WriteTrack) => {
+      if (id !== undefined && id !== null) this.sendBounded(ws, v, track);
     };
 
     if (method === "system.hello") {
@@ -1249,7 +1291,7 @@ export class ProductApi extends EventEmitter {
     params: unknown,
     handler: Handler | undefined,
     subHandler: SubscriptionHandler | undefined,
-    reply: (v: unknown) => void,
+    reply: (v: unknown, track?: WriteTrack) => void,
     // DS-2 — this CALL's context (a peer's recorded provenance rides it; the
     // connection's own context otherwise) and, for a peer's keyed mutation,
     // the key its receipt is journaled under. Trailing, so the positional
@@ -1268,20 +1310,47 @@ export class ProductApi extends EventEmitter {
       const subId = `ps-${this.nextSubId++}`;
       const base = method.replace(/\.subscribe$/, "");
       let active = true;
+      let hold: Hold | null = null;
       const emit = (payload: unknown, kind: "delta" | "snapshot" = "delta") => {
-        if (active && ws.readyState === WS_OPEN)
-          this.sendBounded(ws, {
-            jsonrpc: "2.0",
-            method: `${base}.${kind}`,
-            params: { subId, payload },
-          });
+        if (!active || ws.readyState !== WS_OPEN) return;
+        // PG-1c — a phone behind the cap misses deltas, never a snapshot (one
+        // restates everything, and a paged run stays whole). The hold sticks
+        // until the drain's resync, so the phone's chain never breaks.
+        if (hold !== null && kind === "delta") {
+          if (hold.behind) return;
+          if (ws.bufferedAmount - hold.inflight >= TAILNET_QUEUED_BYTES) {
+            hold.behind = true;
+            return;
+          }
+        }
+        this.sendBounded(
+          ws,
+          { jsonrpc: "2.0", method: `${base}.${kind}`, params: { subId, payload } },
+          hold !== null && kind === "snapshot" ? ownSnapshots(hold) : undefined,
+        );
       };
-      const { snapshot, dispose, start } = await subHandler(ctx, params, emit);
+      const { snapshot, dispose, start, resync } = await subHandler(ctx, params, emit);
+      // the phone alone (the `tailnet` principal, as `tailnet-rows.ts` bounds
+      // it): a peer daemon on the same door keeps the shed and its heartbeats
+      if (resync !== undefined && ctx.principal.kind === "tailnet") {
+        hold = { behind: false, inflight: 0, resync };
+        let held = this.holds.get(ws);
+        if (held === undefined) {
+          held = new Map();
+          this.holds.set(ws, held);
+        }
+        held.set(subId, hold);
+      }
       state.subs.set(subId, () => {
         active = false;
+        this.holds.get(ws)?.delete(subId);
         dispose();
       });
-      reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
+      // the open is the hold's own snapshot too
+      reply(
+        { jsonrpc: "2.0", id, result: { subId, snapshot } },
+        hold !== null ? ownSnapshots(hold) : undefined,
+      );
       try {
         start?.();
       } catch {
@@ -1348,8 +1417,9 @@ export class ProductApi extends EventEmitter {
 
   /** Bound both a single projection and the ws library's queued bytes. On
    * overload the connection is shed; reconnect gives state subscriptions a
-   * fresh authoritative snapshot instead of retaining an unbounded delta tail. */
-  private sendBounded(ws: WebSocket, value: unknown): boolean {
+   * fresh authoritative snapshot instead of retaining an unbounded delta tail.
+   * A `track` counts this write's bytes as queued and again as landed (PG-1c). */
+  private sendBounded(ws: WebSocket, value: unknown, track?: WriteTrack): boolean {
     if (ws.readyState !== WS_OPEN) return false;
     let encoded: string;
     try {
@@ -1366,10 +1436,39 @@ export class ProductApi extends EventEmitter {
       ws.close(1013, "client is not keeping up");
       return false;
     }
+    track?.sent(bytes);
     ws.send(encoded, (error) => {
-      if (error) ws.terminate();
+      if (error) {
+        ws.terminate();
+        return;
+      }
+      track?.landed(bytes);
+      this.drained(ws);
     });
     return true;
+  }
+
+  /** PG-1c — after each write. A held connection always has writes pending, so
+   * its last one lands here: once the queue is at half the cap, each
+   * subscription held behind it is re-snapshotted, one at a time, re-reading
+   * the queue between them (the rest wait for the next write). The hold clears
+   * before the resync, whose snapshot is the chain's new head. */
+  private drained(ws: WebSocket): void {
+    const held = this.holds.get(ws);
+    if (held === undefined) return;
+    for (const hold of held.values()) {
+      if (ws.bufferedAmount > TAILNET_QUEUED_BYTES / 2) return;
+      if (!hold.behind) continue;
+      hold.behind = false;
+      try {
+        hold.resync();
+      } catch {
+        // a producer that cannot restate its value leaves the phone a gap it
+        // cannot see: the connection goes, and the redial opens fresh
+        ws.terminate();
+        return;
+      }
+    }
   }
 
   /** EL7 — a connection's subscription budget. A subscription is recurring WORK

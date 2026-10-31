@@ -192,6 +192,36 @@ describe("the two cuts of the model's row (M16, M21)", () => {
     expect(desk.monitorRow).toMatchObject({ attachable: false, writable: false });
     monitor.service.dispose();
   });
+
+  it("F-M4 (PG-1a) — an owner whose doors are down withholds the model's attach promise with the join on its desk cut", async () => {
+    const monitor = await testMonitor({ summaries: [working] });
+    // the backend promises an attach: a PTY is named (M41)
+    expect(monitor.row("run-working")).toMatchObject({ attachable: true, writable: true });
+    const cut = (published: boolean) =>
+      createFieldSubscription({
+        list: () => monitor.fold.list(),
+        subscribe: (fn) => monitor.fold.subscribe(fn),
+        emit: () => {},
+        project: deskProjector((id) => monitor.service.rowForRun(id)),
+        minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+        epoch: published ? "boot.up" : "boot.down",
+        terminalPublished: () => published,
+      });
+    const up = cut(true);
+    const down = cut(false);
+    const open = AgentDeskRow.parse(up.snapshot.rows[0]);
+    const held = AgentDeskRow.parse(down.snapshot.rows[0]);
+    expect(open.terminal).toBeDefined();
+    expect(open.monitorRow).toMatchObject({ attachable: true, writable: true });
+    // doors down: neither the join nor the model's word promises a tap
+    expect(held.terminal).toBeUndefined();
+    expect(held.monitorRow).toMatchObject({ attachable: false, writable: false });
+    // and nothing else of the model's row moves
+    expect({ ...held.monitorRow, attachable: true, writable: true }).toEqual(open.monitorRow);
+    up.dispose();
+    down.dispose();
+    monitor.service.dispose();
+  });
 });
 
 describe("who may ask the model board (MV-D18, M16, L8)", () => {

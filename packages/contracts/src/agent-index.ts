@@ -857,6 +857,9 @@ export const IndexSearchParams = z
     /** widen word fragments to the tokens they begin (on by default) */
     prefix: z.boolean().optional(),
     kind: z.enum(["user", "agent"]).optional(),
+    /** CP-1b — only this runtime's rows (rosetta's `runtime`, one concrete runtime id per request): the compose plane
+     * holds a spark's History search to the runtimes its Agent Profiles hold. Absent: every runtime. */
+    runtime: z.string().min(1).max(256).optional(),
     /** DS-6 — `local` (the default): this desktop's index. `mesh`: ASK every
      * awake self desktop (search by asking, DS-D8) and merge the answers by
      * TIME, never by score (scores are per index, §1.6); `sources` says who
