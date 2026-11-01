@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { DesktopShellState } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
@@ -82,7 +85,8 @@ describe("DesktopSection", () => {
 
   it("hides the inapplicable close behavior on macOS", async () => {
     await mount(client({ showTray: true, backgroundShell: true }), "darwin");
-    expect(container?.querySelectorAll('[role="switch"]')).toHaveLength(3);
+    // AL-6 — the fourth is macOS's own Keep running when VibeField quits
+    expect(container?.querySelectorAll('[role="switch"]')).toHaveLength(4);
     expect(container?.textContent).not.toContain("Keep running after window closes");
   });
 
@@ -99,6 +103,37 @@ describe("DesktopSection", () => {
       key: "desktop.confirmQuit",
       value: false,
     });
+  });
+
+  // AL-6 (AL-D2) — macOS alone: off by default, and its switch writes only its own key
+  it("offers Keep running when VibeField quits on macOS alone, off by default, and writes only its key", async () => {
+    const fieldd = client({ showTray: false, backgroundShell: true });
+    await mount(fieldd, "darwin");
+    const keep = container?.querySelector<HTMLButtonElement>(
+      '[role="switch"][aria-label="Keep running when VibeField quits"]',
+    );
+    expect(keep?.getAttribute("aria-checked")).toBe("false");
+    // the status item is forced while it runs this way, so a hidden one never disables it
+    expect(keep?.disabled).toBe(false);
+    // the row's words are DESIGN.md §9's, quoted there
+    const words =
+      "Quitting closes the windows and keeps VibeField in the menu bar, with its terminal sessions running. Quit VibeField in the menu bar quits it.";
+    expect(container?.textContent).toContain(words);
+    const design = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../../../DESIGN.md"),
+      "utf8",
+    ).replace(/\s+/g, " ");
+    expect(design).toContain(`"${words}"`);
+    await act(async () => keep?.click());
+    expect(fieldd.request).toHaveBeenCalledWith("storage.appPreferences.set", {
+      key: "desktop.keepRunningOnQuit",
+      value: true,
+    });
+    act(() => root?.unmount());
+    root = null;
+    container?.remove();
+    await mount(client({ showTray: true, backgroundShell: true }), "win32");
+    expect(container?.textContent).not.toContain("Keep running when VibeField quits");
   });
 
   it("defaults the global shortcut on, exposes conflicts, and writes its preference", async () => {

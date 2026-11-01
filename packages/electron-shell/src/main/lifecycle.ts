@@ -70,6 +70,9 @@ export interface LifecycleFlow extends QuitFlow {
   quitThen(after: () => Promise<boolean>): Promise<"proceed" | "cancel" | "busy">;
   /** AU-7 (LC-25) — a move waits for the quit: nothing stages an install while it does (an update's quit is refused) */
   readonly movePending: boolean;
+  /** AL-6 (AL-D2) — the status item's Quit VibeField: a quit through the gate even while Keep running when VibeField
+   * quits is on, which a person's other quits (⌘Q, the Dock, the menu) would put in the background instead. */
+  quitFully(): void;
 }
 
 export function installLifecycle(opts: {
@@ -91,6 +94,12 @@ export function installLifecycle(opts: {
    * by the caller like `getQuitGate`; its own bounds hold it: a 3 s policy read, a 30 s stage). `ended` = the sessions
    * the stop ended with consent. Absent = nothing installs on a quit. */
   installOnQuit?: (context: { readonly ended: number }) => Promise<void>;
+  /** AL-6 (AL-D2, §5.8) — a person's quit with Keep running when VibeField quits on: the caller closes the windows and
+   * keeps VibeField in the menu bar, stopping nothing. true = it did, and the quit is absorbed; false = it may not (the
+   * preference is off, not macOS, no status item to stay in), and the quit goes on. Never asked for a quit that is not
+   * a plain person's quit: the status item's (`quitFully`), a signal's, an update's, a move's, the OS ending the session.
+   * Absent = never. */
+  keepRunningOnQuit?: () => boolean;
 }): LifecycleFlow {
   const logger = opts.logger.child({ component: "lifecycle" });
   const flow = createQuitFlow({
@@ -139,6 +148,8 @@ export function installLifecycle(opts: {
   let restarting = false;
   let osSessionEnding = false;
   let stopping = false;
+  /** AL-6 — this quit is the status item's Quit VibeField: it never goes to the background */
+  let fullQuit = false;
   /** AU-7 — a move to Applications waiting for its quit; `answer` until the gate decides */
   let move: {
     readonly after: () => Promise<boolean>;
@@ -156,6 +167,7 @@ export function installLifecycle(opts: {
     quitObserved = false;
     gate = "open";
     move = null;
+    fullQuit = false;
   };
   /** AU-7 — the gate decided a move's quit (or there was no gate to ask): its door answers now; a Cancel drops it. */
   const answerMove = (decision: "proceed" | "cancel"): void => {
@@ -326,6 +338,27 @@ export function installLifecycle(opts: {
       event.preventDefault(); // ⌘Q again while the box is up: the box answers it
       return;
     }
+    // AL-6 — a plain person's quit with Keep running on: the windows close, VibeField stays in the menu bar, nothing
+    // stops, and nothing is marked as quitting
+    if (
+      gate === "open" &&
+      !fullQuit &&
+      !restarting &&
+      !flow.updateArmed &&
+      !osSessionEnding &&
+      !stopping &&
+      move === null &&
+      !quitAfterPrimaryCloses &&
+      !replayingNativeQuit &&
+      (opts.keepRunningOnQuit?.() ?? false)
+    ) {
+      event.preventDefault();
+      logger.info(
+        "desktop.lifecycle.quit_keeps_running",
+        "Keep running when VibeField quits: the windows close and VibeField stays in the menu bar",
+      );
+      return;
+    }
     if (gate === "open" && quitGate !== null && !restarting && !flow.updateArmed) {
       event.preventDefault();
       gate = "deciding";
@@ -333,6 +366,7 @@ export function installLifecycle(opts: {
         (decision) => {
           if (quitForSignal()) return;
           gate = decision === "proceed" ? "decided" : "open";
+          if (decision !== "proceed") fullQuit = false;
           answerMove(decision);
           if (decision === "proceed") setImmediate(() => app.quit());
         },
@@ -414,6 +448,10 @@ export function installLifecycle(opts: {
     },
     get movePending() {
       return move !== null;
+    },
+    quitFully() {
+      fullQuit = true;
+      app.quit();
     },
     resetAfterAbortedQuit() {
       resetQuitState();

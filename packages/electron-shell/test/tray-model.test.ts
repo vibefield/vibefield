@@ -71,6 +71,26 @@ describe("buildTrayMenu", () => {
     expect(byId(menu, "show-tray").checked).toBe(true);
   });
 
+  // AL-6 (AL-D2, §5.8) — a quit that kept VibeField running: the status item says so first, inert
+  it("says first that VibeField is running in the background, and only then", () => {
+    const menu = buildTrayMenu(
+      snapshot({ inBackground: true, windowOpen: false }),
+      actions(),
+      "darwin",
+    );
+    expect(menu[0]).toMatchObject({
+      id: "background",
+      label: "VibeField is running in the background",
+    });
+    expect(menu[0]?.click).toBeUndefined();
+    expect(menu[1]?.type).toBe("separator");
+    expect(menu[2]?.id).toBe("open");
+    expect(byId(menu, "quit").label).toBe("Quit VibeField");
+    expect(
+      buildTrayMenu(snapshot(), actions(), "darwin").some((item) => item.id === "background"),
+    ).toBe(false);
+  });
+
   it("omits the inapplicable background toggle on macOS", () => {
     const menu = buildTrayMenu(snapshot(), actions(), "darwin");
     expect(menu.some((item) => item.id === "background-shell")).toBe(false);

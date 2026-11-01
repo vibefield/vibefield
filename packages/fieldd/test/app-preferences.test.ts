@@ -25,6 +25,7 @@ describe("app preferences", () => {
       syncPosture: "automatic",
       confirmQuit: true,
       connectAsks: true,
+      keepRunningOnQuit: false,
     });
   });
 
@@ -36,6 +37,18 @@ describe("app preferences", () => {
     expect(effectiveAppPreferences({ [APP_PREFERENCE_KEYS.CONFIRM_QUIT]: "no" }).confirmQuit).toBe(
       true,
     );
+  });
+
+  it("quits on a quit by default; keeps running only when the person turned it on (AL-6)", () => {
+    expect(effectiveAppPreferences({}).keepRunningOnQuit).toBe(false);
+    expect(
+      effectiveAppPreferences({ [APP_PREFERENCE_KEYS.KEEP_RUNNING_ON_QUIT]: true })
+        .keepRunningOnQuit,
+    ).toBe(true);
+    expect(
+      effectiveAppPreferences({ [APP_PREFERENCE_KEYS.KEEP_RUNNING_ON_QUIT]: "yes" })
+        .keepRunningOnQuit,
+    ).toBe(false);
   });
 
   it("asks again after Not now by default, until the switch is turned off (TS-4)", () => {

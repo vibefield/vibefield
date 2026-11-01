@@ -61,6 +61,9 @@ export interface TraySnapshot {
    * Devices…. Absent or false hides the row (older callers, tests, a link not
    * read yet). */
   readonly connectDevices?: boolean;
+  /** AL-6 (AL-D2, §5.8) — a person's quit kept VibeField running (Keep running when VibeField quits): no window, no
+   * Dock icon, and the status item says so first. Absent or false hides the row. */
+  readonly inBackground?: boolean;
 }
 
 export type TrayPlatform = "darwin" | "win32" | "linux" | "other";
@@ -234,6 +237,16 @@ export function buildTrayMenu(
 ): readonly TrayMenuItem[] {
   const actionable = !snapshot.quitting;
   const items: TrayMenuItem[] = [
+    ...(snapshot.inBackground === true
+      ? [
+          {
+            id: "background",
+            label: "VibeField is running in the background",
+            ...availability(platform, false),
+          },
+          { type: "separator" } satisfies TrayMenuItem,
+        ]
+      : []),
     {
       id: "open",
       label: "Open VibeField",
