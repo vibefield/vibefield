@@ -62,6 +62,7 @@
             "runtimeRunId": "run-h-partial",
             "revision": 12,
             "device": "dev-01HQ9S7UD1",
+            "terminal": { "hosted": "none" },
             "nativeSessionId": "0e4b7d19-6a2c-4c85-b1f3-5d8e2a9c7b40",
             "monitorRow": {
               "id": "run-h-partial",
@@ -140,6 +141,7 @@
             "runtimeRunId": "run-h-nocwd",
             "revision": 3,
             "device": "dev-01HQ9S7UD1",
+            "terminal": { "hosted": "none" },
             "nativeSessionId": "4f8a2c6e-1d3b-4e7a-9c5f-8b2d6e0a4c19",
             "monitorRow": {
               "id": "run-h-nocwd",
@@ -170,6 +172,7 @@
             "runtimeRunId": "run-h-root",
             "revision": 2,
             "device": "dev-01HQ9S7UD1",
+            "terminal": { "hosted": "none" },
             "nativeSessionId": "9b1d5f3a-7e2c-4a68-b0d4-3c9e7a1f5b82",
             "monitorRow": {
               "id": "run-h-root",
@@ -201,6 +204,7 @@
             "runtimeRunId": "run-h-quiet",
             "revision": 9,
             "device": "dev-01HQ9S7UD1",
+            "terminal": { "hosted": "none" },
             "nativeSessionId": "2a6c0e4b-8d1f-4b39-a7e5-6f0b3d8c2a71",
             "monitorRow": {
               "id": "run-h-quiet",
@@ -328,6 +332,7 @@
             "runtimeRunId": "run-p-done",
             "revision": 11,
             "device": "dev-01HQ9S7XZ2",
+            "terminal": { "hosted": "none" },
             "nativeSessionId": "c3a7e1b5-9f2d-4c60-8e4a-7b1f5d3c9e06",
             "monitorRow": {
               "id": "run-p-done",
@@ -375,6 +380,7 @@
             "runtimeRunId": "run-a-idle",
             "revision": 4,
             "device": "dev-01HQ9S7Y44",
+            "terminal": { "hosted": "none" },
             "nativeSessionId": "8d2f6b0a-4c7e-4a19-b3d5-0e6a2c8f4b73",
             "monitorRow": {
               "id": "run-a-idle",

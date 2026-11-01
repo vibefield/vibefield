@@ -17,7 +17,8 @@
       "blockers": [],
       "context": { "usedPercent": 12 },
       "model": { "id": "claude-sonnet-5-5", "displayName": "Sonnet 5.5" },
-      "nativeSessionId": "4f8a2c6e-1d3b-4e7a-9c5f-8b2d6e0a4c19"
+      "nativeSessionId": "4f8a2c6e-1d3b-4e7a-9c5f-8b2d6e0a4c19",
+      "terminal": { "hosted": "none" }
     },
     {
       "runtimeRunId": "run-h-root",
@@ -35,7 +36,8 @@
       "context": { "usedPercent": 5 },
       "model": { "id": "claude-opus-5-5", "displayName": "Opus 5.5" },
       "effort": { "value": "low", "intent": "configured" },
-      "nativeSessionId": "9b1d5f3a-7e2c-4a68-b0d4-3c9e7a1f5b82"
+      "nativeSessionId": "9b1d5f3a-7e2c-4a68-b0d4-3c9e7a1f5b82",
+      "terminal": { "hosted": "none" }
     }
   ]
 }
