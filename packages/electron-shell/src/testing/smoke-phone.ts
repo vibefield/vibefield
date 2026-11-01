@@ -826,6 +826,20 @@ export function stimulusStaging(pages: readonly Stimulus[]): string | null {
   return null;
 }
 
+/** The device after the face's Boot pressed in hand (`bringLive`, G3), by its LAST state within the readiness bound: not
+ * ready — `Booting`, or the door's `failed`/`unanswered` — is the stage's (STAGING NOT MET); any other — `Shutdown`,
+ * `ShuttingDown` — is the product's: its Boot left the device down. Null: Booted. */
+export function afterFaceBoot(
+  state: string,
+): { readonly staging: string } | { readonly problem: string } | null {
+  if (state === "Booted") return null;
+  if (state === "Booting" || state === "failed" || state === "unanswered")
+    return {
+      staging: `after the face's Boot the device reads ${state}, not Booted within ${PHONE_BOUNDS.ready} ms`,
+    };
+  return { problem: `the face's Boot left the device ${state}` };
+}
+
 /** SIM-LIVE's device screenshot (T2), judged AFTER φP's LIVE-PROVEN (G1): a red proof is the row's problem whatever the
  * shot did. Then: no VF_SMOKE_SHOT_DIR is RED (§2: a row that needs the shot dir FAILS without it); the door's screenshot
  * not `written` is the stage's verb failing (run 1101's out:56, exit 1) — STAGING NOT MET; one written but unread is red;
@@ -2092,9 +2106,18 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       await pickUp(k);
       await pressAct(row, k, n, act);
       if (act === "boot") {
-        const deadline = Date.now() + PHONE_BOUNDS.boot;
-        while (Date.now() < deadline && (await doorAct("state", n)).state !== "Booted")
+        // the LAST state within the readiness bound (G3): not ready is the stage's, a device left down the product's
+        const deadline = Date.now() + PHONE_BOUNDS.ready;
+        let state = (await doorAct("state", n)).state;
+        while (Date.now() < deadline && state !== "Booted") {
           await sleep(1_000);
+          state = (await doorAct("state", n)).state;
+        }
+        const left = afterFaceBoot(state);
+        if (left !== null) {
+          if ("staging" in left) throw new Unstaged(left.staging);
+          throw new Error(left.problem);
+        }
         page = await openProven(n, "/motion", q);
         const unbooted = stimulusStaging([page]);
         // the row's runner puts the phone down after a throw (R6)

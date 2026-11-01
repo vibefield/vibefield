@@ -31,6 +31,7 @@ import { dimmed } from "../src/testing/smoke-last-still";
 import {
   actOrStop,
   actScan,
+  afterFaceBoot,
   BAND_PALETTE,
   BAND_TOL,
   bandColour,
@@ -1603,6 +1604,28 @@ describe("PT-S3 — the stimulus PROVEN: an unproven page or a failed door verb 
     );
   });
 
+  it("bringLive after the face's Boot: not ready (Booting, failed, unanswered) is STAGING NOT MET; Shutdown or ShuttingDown is the product's PROBLEM (G3)", () => {
+    expect(afterFaceBoot("Booted")).toBeNull();
+    for (const state of ["Booting", "failed", "unanswered"])
+      expect(afterFaceBoot(state)).toEqual({
+        staging: `after the face's Boot the device reads ${state}, not Booted within 180000 ms`,
+      });
+    for (const state of ["Shutdown", "ShuttingDown"])
+      expect(afterFaceBoot(state)).toEqual({ problem: `the face's Boot left the device ${state}` });
+    // the row keeps the LAST state read, polls within the readiness bound, and asks afterFaceBoot of it
+    const bl = SOURCE.slice(
+      SOURCE.indexOf("  const bringLive = async ("),
+      SOURCE.indexOf("  /** The far ask's size"),
+    );
+    const boot = bl.slice(bl.indexOf('if (act === "boot") {'));
+    expect(boot).toMatch(/const deadline = Date\.now\(\) \+ PHONE_BOUNDS\.ready;/u);
+    expect(boot).toMatch(/let state = \(await doorAct\("state", n\)\)\.state;/u);
+    expect(boot.indexOf("const left = afterFaceBoot(state);")).toBeGreaterThan(0);
+    expect(boot.indexOf("const left = afterFaceBoot(state);")).toBeLessThan(
+      boot.indexOf("openProven("),
+    );
+  });
+
   /** The runner as its source must hold it: no bare openUrl in the three rows or bringLive; each page proven and checked
    * BEFORE what it stages; an Unstaged thrown by bringLive is the row's staging, never a red. */
   const stagedHeld = (src: string): void => {
@@ -1615,7 +1638,8 @@ describe("PT-S3 — the stimulus PROVEN: an unproven page or a failed door verb 
     );
     expect(bl).not.toMatch(/\bopenUrl\(/u);
     expect(bl.match(/page = await openProven\(n, "\/motion", q\);/gu)).toHaveLength(2);
-    expect(bl.match(/throw new Unstaged\(/gu)?.length).toBe(3);
+    // the ensure, the page, the face's Boot not ready (G3), the page after it
+    expect(bl.match(/throw new Unstaged\(/gu)?.length).toBe(4);
     const firstCheck = bl.indexOf("stimulusStaging([page])");
     expect(firstCheck).toBeGreaterThan(0);
     expect(firstCheck).toBeLessThan(bl.indexOf("await view([k]);"));
