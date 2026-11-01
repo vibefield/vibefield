@@ -49,7 +49,8 @@ const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.la
 // the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
 // kit's own test reads too. PG-3a: the phone's parity goldens, the home's window over the witness
 // remote goldens (field-app computes them, `phone:goldens`), which the kit's fold and body model are
-// held to; PG-3c adds the copies (Tests/FieldMeshTests, Tests/FieldAgentsTests), inert until then.
+// held to. PG-3c mirrors phone-fold (Tests/FieldMeshTests); phone-body mirrors at 3e, with its body
+// model (FieldAgentsTests reads no FieldProduct).
 const OTHER_ORIGINS = new Map([
   ["project-ink.golden.json", join(root, "packages/design-kit/fixtures/project-ink.golden.json")],
   [
@@ -153,6 +154,22 @@ const tpFixtures = [
   "tp-cell-activation-status.exited.json",
   "tp-cell-activation-status.removed.json",
 ];
+// PG-3c — the remote cut the phone will read (`AgentRemoteRow`, its mesh open and frames) and
+// PG-3a's witness goldens, which the kit's fold (3d) and the home's window are both held to.
+// 3b's agent-report-shown.* join at 3e, with the reader that sends them.
+const remoteWitness = [
+  "agent-remote-mesh-open.witness.json",
+  "agent-remote-mesh-frames.witness.json",
+  "agent-remote-mesh-open.resync.json",
+];
+const remoteFixtures = [
+  "agent-remote-row.valid.json",
+  "agent-remote-row.terminal.json",
+  "agent-remote-mesh-open.valid.json",
+  "agent-remote-mesh-frames.valid.json",
+  "monitor-agent-row.valid.json",
+  ...remoteWitness,
+];
 const requiredMirrors = [
   ["freeway", freewayFixtures, ["Tests/FieldFreewayTests"]],
   ["tp", tpFixtures, ["Tests/FieldRoutedTerminalTests"]],
@@ -171,6 +188,14 @@ const requiredMirrors = [
   ["face", ["face-deal.vector.json"], ["Tests/FieldDesignTests"]],
   // IOS-8f — `user.me`'s answers, read by the kit's own `UserMeResult`
   ["user-me", ["user-me.valid.json", "user-me.dealt.json"], ["Tests/FieldProductTests"]],
+  // PG-3c — the remote cut's readers' goldens
+  ["remote", remoteFixtures, ["Tests/FieldProductTests"]],
+  // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's
+  [
+    "remote",
+    [...remoteWitness, "agent-field-snapshot.project-keys.json", "phone-fold.golden.json"],
+    ["Tests/FieldMeshTests"],
+  ],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
