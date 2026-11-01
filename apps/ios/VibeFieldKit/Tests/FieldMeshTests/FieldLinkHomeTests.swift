@@ -562,4 +562,81 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     }
     #expect(await door.dials(to: laptopDoorHost) == 0)
   }
+  // MARK: F1b's kit half — the approval rides the home's door
+
+  /// F1b (FW-D5; FW-R3, FW-R6) — the phone's freeway approval for ANOTHER
+  /// desktop is asked of the HOME: `freeway.approve {device}` on the home's
+  /// door, which forwards it whole to that desktop (M63). The other desktop's
+  /// door is never dialled for it — the owner mints, and only the ask rides the
+  /// home. The answer comes back unread, as the owner minted it.
+  @Test func anApprovalForAnotherDesktopRidesTheHomesDoor() async throws {
+    let ledger = PhoneConnectionBudget()
+    let door = LinkDoor(script: selfDoor)
+    await door.route(studioDoorHost) { method, id, params in
+      if method == "freeway.approve" {
+        return [frame(id: id, .object(["minted": params["device"] ?? .string("the home"), "expiresAt": .int(1)]))]
+      }
+      return homeDoor(studioBoard)(method, id, params)
+    }
+    await door.route(laptopDoorHost) { method, id, _ in
+      method == "system.hello" ? [frame(id: id, ack)] : []
+    }
+    let (link, _) = try await homedLink(door: door, budget: ledger)
+    defer { link.stop() }
+    try await waitUntil("the field through the studio") { link.agents.count == 2 }
+
+    let approved = try await link.approveFreeway(on: "dev-laptop")
+    #expect(approved["minted"]?.stringValue == "dev-laptop")
+    let asked = try await settledRequest(door, "freeway.approve", host: studioDoorHost)
+    #expect(asked.params == .object(["device": .string("dev-laptop")]))
+    #expect(await door.dials(to: laptopDoorHost) == 0, "the owner's door is not dialled for it")
+    #expect(await door.dials(to: studioDoorHost) == 1, "the home's own door: no second dial")
+    #expect(ledger.inUse(.door(desktop: "dev-laptop")) == 0)
+  }
+
+  /// The home's own link asks the home with nothing more: `freeway.approve {}`.
+  @Test func theHomesOwnApprovalAsksNothingMore() async throws {
+    let door = LinkDoor(script: selfDoor)
+    await door.route(studioDoorHost) { method, id, params in
+      if method == "freeway.approve" { return [frame(id: id, .object(["expiresAt": .int(1)]))] }
+      return homeDoor(studioBoard)(method, id, params)
+    }
+    let (link, _) = try await homedLink(door: door)
+    defer { link.stop() }
+    try await waitUntil("the field through the studio") { link.agents.count == 2 }
+
+    _ = try await link.approveFreeway(on: "dev-studio")
+    let asked = try await settledRequest(door, "freeway.approve", host: studioDoorHost)
+    #expect(asked.params == .object([:]))
+  }
+
+  /// The owner's refusal comes back through the home as the owner said it —
+  /// its kind, its retryability, its `{service, state}` — for the link to put
+  /// into the phone's words (`FreewayApproval.said`); FieldLink reads nothing.
+  @Test func anOwnersRefusalComesBackThroughTheHomeAsSent() async throws {
+    let door = LinkDoor(script: selfDoor)
+    await door.route(studioDoorHost) { method, id, params in
+      if method == "freeway.approve" {
+        return [
+          failureFrame(
+            id: id, kind: "UNAVAILABLE", message: "uncorrelated", retryable: true,
+            details: .object(["service": .string("freeway"), "state": .string("uncorrelated")]))
+        ]
+      }
+      return homeDoor(studioBoard)(method, id, params)
+    }
+    let (link, _) = try await homedLink(door: door)
+    defer { link.stop() }
+    try await waitUntil("the field through the studio") { link.agents.count == 2 }
+
+    do {
+      _ = try await link.approveFreeway(on: "dev-laptop")
+      Issue.record("a refused approval was handed back as granted")
+    } catch let error as FieldProductError {
+      #expect(error.unavailable?.service == "freeway")
+      #expect(error.unavailable?.state == "uncorrelated")
+      #expect(error.retryable)
+    }
+    #expect(await door.dials(to: laptopDoorHost) == 0)
+  }
 }

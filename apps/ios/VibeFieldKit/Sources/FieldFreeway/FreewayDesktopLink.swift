@@ -17,6 +17,9 @@ public enum FreewayLinkState: Sendable, Equatable {
   case up(FreewayWelcome)
   /// Ended; the next dial is due at `until` (epoch ms), and `after` is why.
   case waiting(until: Int64, after: FreewayLinkEnd?)
+  /// The approval was refused in a way no retry fixes (F1b: `FORBIDDEN_SCOPE`), said in the phone's
+  /// words: no dial is scheduled, and the next is a tap's.
+  case refused(FieldProductError)
   case stopped
 }
 
@@ -31,18 +34,24 @@ public actor FreewayDesktopLink {
     public var deviceId: String
     /// A fresh approval from the phone's home desktop: `freeway.approve` → `{approval, expiresAt}`.
     public var approve: @Sendable () async throws -> JSONValue
+    /// This phone's own name, for the hello.
     public var deviceName: String?
+    /// The desktop's name as the phone shows it, for a refusal's words; its tailnet name's first
+    /// label when none is given.
+    public var desktopName: String
 
     public init(
       dial: @escaping @Sendable () async throws -> any FreewayByteStream, host: String,
       deviceId: String, approve: @escaping @Sendable () async throws -> JSONValue,
-      deviceName: String? = nil
+      deviceName: String? = nil, desktopName: String? = nil
     ) {
       self.dial = dial
       self.host = host
       self.deviceId = deviceId
       self.approve = approve
       self.deviceName = deviceName
+      self.desktopName =
+        desktopName ?? host.split(separator: ".").first.map(String.init) ?? host
     }
   }
 
