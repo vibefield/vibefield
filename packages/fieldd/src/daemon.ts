@@ -60,6 +60,7 @@ import {
   DEVICE_LIMITS,
   DeviceGetParams,
   DeviceRenameParams,
+  type DiagnosticsLastExitResult,
   DocCreateParams,
   DocDeleteParams,
   DocHoldersParams,
@@ -2286,6 +2287,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       };
       return result;
     });
+    // AL-12 — Settings → Diagnostics' "Last exit": the kept record, read-only (`diagnostics.read`, local)
+    api.register("diagnostics.lastExit", async () => {
+      const result: DiagnosticsLastExitResult = { shell: await shellLease.lastExit() };
+      return result;
+    });
     api.register("system.shell.leave", (ctx, params) => {
       const connectionId = leaseConnection(ctx);
       const parsed = SystemShellLeaveParams.safeParse(params ?? {});
@@ -2319,7 +2325,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         reason,
         native: nativeStop ?? null,
       });
-      shellLease.seal(); // AL-7 — a shell that drops from here on is fieldd stopping, not a shell leaving
+      // AL-7 — a shell that drops from here on is fieldd stopping, not a shell leaving. AL-12 — a stop a shell asked for
+      // is its exit, kept for Diagnostics' "Last exit": one that ended the floor, or the update's B3 that leaves it. The
+      // supervisor's replacement of a stale fieldd names no reason, and is no shell's exit.
+      if (parsed.data.native !== undefined && nativeStop !== undefined) {
+        shellLease.stoppedBy(reason, parsed.data.native.sessions.length);
+      } else if (parsed.data.native === undefined && parsed.data.reason === "update") {
+        shellLease.leftForUpdate();
+      } else {
+        shellLease.seal();
+      }
       const callback = shutdownRequested;
       setImmediate(() => callback());
       return { stopping: true, ...(nativeStop === undefined ? {} : { native: nativeStop }) };

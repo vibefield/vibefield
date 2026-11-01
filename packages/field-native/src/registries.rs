@@ -266,6 +266,7 @@ pub mod layout {
     pub const PAIRING_FILE: &[&str] = &["native", "pairing"];
     pub const MESH_STATE_DIR: &[&str] = &["native", "mesh"];
     pub const LINK_FILE: &[&str] = &["fieldd", "link.json"];
+    pub const SHELL_LAST_EXIT: &[&str] = &["fieldd", "shell-last-exit.json"];
     pub const SHELL_EXIT: &[&str] = &["fieldd", "shell-exit.json"];
     pub const MANAGER_EXIT: &[&str] = &["fieldd", "manager-exit.json"];
     pub const SHELL_RELAUNCHES: &[&str] = &["fieldd", "shell-relaunches.json"];
@@ -337,6 +338,7 @@ pub mod layout {
         ("PAIRING_FILE", PAIRING_FILE),
         ("MESH_STATE_DIR", MESH_STATE_DIR),
         ("LINK_FILE", LINK_FILE),
+        ("SHELL_LAST_EXIT", SHELL_LAST_EXIT),
         ("SHELL_EXIT", SHELL_EXIT),
         ("MANAGER_EXIT", MANAGER_EXIT),
         ("SHELL_RELAUNCHES", SHELL_RELAUNCHES),

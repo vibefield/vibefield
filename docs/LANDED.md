@@ -26738,3 +26738,62 @@ its first F139 model; slice-light2.sh from F139 on).
 **Owed.** PT-S3 L1's re-run on a lane with field-native built (PORTALS's): 133's preflight before the launch, and
 134's named fatal if it still dies. Item 141 (`process-service.test.ts:244`'s fixed deadline under load, the red this
 light met) is the fixer's next.
+
+## AL-12 — Settings → Diagnostics says how VibeField last quit: the last exit is kept after the next launch's notice has gone, in one sentence in DESIGN.md §9's words, and a stop a shell asked for is kept as its exit (2026-11-01; `b14117151`, lane `al/12-last-exit`; James's "do the worth doing stuff"; VF-PM's GO)
+
+**Why:** the record of how the last shell left (`LAYOUT.SHELL_EXIT`, AL-7) is said ONCE, by the next launch's notice,
+then gone. A stop a shell asked for (a person's quit that ended the terminal service, an update) sealed the lease and
+recorded nothing. So nothing told a person, later, how VibeField last quit. AL-7 owed the line, and AL's Next named it.
+
+**What landed** (contracts · fieldd · field-app · DESIGN.md · field-native's generated registries):
+- **`LAYOUT.SHELL_LAST_EXIT`** (`fieldd/shell-last-exit.json`; `pnpm gen`; the vector by hand) holds `ShellLastExit`:
+  `ShellExitRecord` plus `stopped?: NativeRestartReason`. Each shell exit replaces it, and nothing takes it.
+- **`diagnostics.lastExit`** (product surface, `diagnostics.read`, idempotent, local) answers
+  `DiagnosticsLastExitResult {shell: ShellLastExit | null}`.
+- **fieldd's lease keeps it:**
+  - the last holder's close, beside the once-record, with its own write failing alone;
+  - `stoppedBy` for a consented floor stop: sealed, and `{planned, stopped, at, sessions}` with the consented set it
+    ended. A crash still owed is still said to the next shell;
+  - `leftForUpdate` for the update's B3 stop (`{reason: "update"}` with no floor stop): `why: "update"` with the floor's
+    count;
+  - the supervisor's bare `{}` for a stale fieldd only seals: no shell's exit.
+- **The words** (`field-app/src/panels/last-exit-words.ts`, pure): "VibeField quit unexpectedly on Oct 30 at 10:42. 2
+  terminal sessions kept running." · "VibeField quit on Oct 30 at 10:42 and ended 2 terminal sessions." · the update,
+  logout, restart and user-switch variants · "No exit recorded yet.". An unread count is "Its terminal service kept
+  running.", never zero.
+- **Settings → Diagnostics** shows "Last exit" above Crash artifacts: "Reading…", the sentence, or "Couldn't read it:
+  <reason>".
+- **DESIGN.md §9 "The quit's words"** gains the "Last exit" bullet.
+
+**Rows:**
+- fieldd `shell-lease.test.ts`, 21 rows, 6 new: kept after the attach took the once-record, and each exit replaces it;
+  a stop kept and the lease sealed; a record still owed survives a stop; the B3 update kept; the daemon's update stop
+  vs the supervisor's bare stop; `diagnostics.lastExit` for a `diagnostics.read` window, FORBIDDEN_SCOPE otherwise.
+- The kill matrix's row AL-2a, over the real floor, reads the kept `{planned, stopped: "quit", sessions: 1}`.
+- field-app `last-exit-words.test.ts`, 5 rows, DESIGN.md holding the same sentences; `diagnostics-section.test.tsx`,
+  2 rows.
+
+**Validation.**
+- **Red first** (03:39:35 → 03:40:06Z):
+  - fieldd's `shell-lease.ts` and `daemon.ts` as AL-11 left them: 6 of 21 red, and AL-2a red;
+  - field-app's `DiagnosticsSection.tsx` and DESIGN.md as AL-11 left them: 3 of 11 red;
+  - restored: 21/21, AL-2a 1/1, 11/11.
+- **The light** at `b14117151` on `2b35a3def`, AL-11's landed main (04:01:06 → 04:09:04Z, nice 19, the guard,
+  co-plan/HOLD):
+  - contracts', fieldd's and field-app's typecheck, biome, preflight, check:walls;
+  - contracts whole: 54 files, 1,434 tests;
+  - fieldd whole: 223 files passed and 3 skipped, 2,819 tests passed and 30 skipped;
+  - field-app whole: 270 files passed and 1 skipped, 3,538 tests passed and 3 skipped;
+  - cargo `layout_vector` 1/1.
+  - An early light on `3ead0fd36` was green as well.
+- **Run 76** (M76 `805f9e5b5`, the MERGE shape: `b14117151` over main `583e6e107`, the fixer's records on M75; minted by
+  a9 on VF-PM's GO, no second rebase, the light standing):
+  - `pnpm verify` armed 04:23:12Z, exit 0 at 04:28:05Z (about five minutes), the mini's tree clean after it.
+  - vitest 11,522 passed, 0 failed, 18 skipped, +17: the fixtures 532 → 536, shell-lease 15 → 21, last-exit-words 5,
+    diagnostics-section 4 → 6. cargo 534 passed, 0 failed, 14 ignored (33 results). Typecheck and test ran for 28
+    projects.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run76/` (`mrun76.bundle`, sha256 `612847593cf33fdc…`).
+- **Landed:** main fast-forwarded `583e6e107` → `805f9e5b5` at 2026-11-01 04:31:12Z on VF-PM's GO.
+
+**Owed.** The idle bound's own stop (AL-5) and a signal are fieldd's, not a shell's exit, and leave the kept record as
+it was. The draft's §8.1 line is folded at the next queue opening.
