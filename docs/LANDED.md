@@ -25724,3 +25724,184 @@ own order:
   and FG-D29 with the still's door's answers, VF-PM's rulings at a5's leans (22:28Z, 23:00Z), James's to overturn.
 - Not claimed: the frozen frame under reduced motion (no walk runs it), and which door held the field live. Item 127's
   list stands.
+
+## DS-7 — transcripts by ticket: another desktop's transcript streams into History by its owner's grant
+
+(2026-10-31; six commits `f878918b2` → `005d14bcb` on lane `ds/7-transcripts-by-ticket` over main `06cf3fe3d`, main
+`e312dde9c` merged in as `afab373c3`; the mint M66 `c0d68b94d`, run 66.) A transcript on desktop A streams into desktop
+B's History by A's grant, over B's own egress route to A's index serve, and neither door carries a byte of it.
+
+**What James asked and ruled:** 2026-10-31 21:09Z — the sync plane lands before the Settings track; DS-7 is its next
+slice, "unblocked and waits only on being built" (RO-1 and RO-10 in the rosetta pin, egress the default arm since TB-E).
+VF-PM dispatched the lane; a predecessor made it at 21:18–21:20Z and was stopped before writing code. 22:08Z — the
+phone's History through the home (DS-L4, design-06 §5's History bullet (DS-D8), FW-R6); this slice follows it ("Depends
+on", below). At these records VF-PM ruled SP-D4 (a) at the lean, James's to overturn (DECISIONS' SP row).
+
+**What landed** (six commits and a merge, 34 files +1,901 −179 over main `e312dde9c`):
+
+- **Contracts first** (`f878918b2`). `MESH_EGRESS.ROUTABLE_PORTS` gains `PORTS.INDEX_SERVE` (9424), the claim SP-3
+  deferred "to DS-7's pin move, in review": every rosettad fieldd starts demands a bearer on every route and opens a
+  session's routes only to that session's RO-10 grant (`indexPlaneLive` refuses any other generation), so its serve is a
+  door that demands its own grant (DS-L6). Generated into Rust (`registries.rs` the one changed output), so the floor's
+  belt and fieldd's suspenders read one list. `INDEX_TICKET` gains the two ROAD states in the terminal's words,
+  `egress_unavailable` and `doors_not_published`, and `IndexTicketRoadDetails {service: "index", state, device}`,
+  retryable, naming the desktop; the capability pair is unchanged and `direct-plane-unbuilt` now names the phone's half
+  alone (SP-7). No new leg on the tailnet set: the owner answers `RemoteIndexEndpointSet` as it stood. Goldens:
+  `error-data.index-egress-unavailable` and `error-data.index-doors-not-published` (TS; no native reader, like the
+  capability pair), `mesh-egress-route-add-params.index` (TS and Rust). Dated corrections at their sources (the
+  `INDEX_SERVE` note, the routable list's note, `agent-index.ts`'s direct-plane header and `IndexOpenTicket`, the
+  METHODS comment).
+- **The two daemons** (`cbb78032b`). THE OWNER: `IndexTicketMinter` serves a `peer-fieldd` principal (transport-derived,
+  D1) from its own rule: a `read` grant (`files` stays the desktop window's, RO-13), `cid` keyed by the window behind
+  the forward (`clientIdFor(principal, onBehalfOf)`, DS-4c's key), beside the TAILNET set of its index serve as it
+  stands at the mint (`indexEndpointsFrom` over `mesh.serves()`); no live serve is `doors_not_published`, naming this
+  desktop. THE WINDOW'S DESKTOP: `IndexTicketForwarding` (`index-forward.ts`) wraps the `device?` forwarder around
+  `TerminalService.forwardVia`. The ask is carried only for a window or the shell (a plugin, an MCP agent, a guest or a
+  relaying peer `FORBIDDEN_SCOPE`; the phone `direct-plane-unbuilt`; none reach the owner), and the owner's ticket is
+  adopted: it must parse as the owner's own (`INCOMPATIBLE`), its set must be the owner's index serve's
+  (`doors_not_published`), and only `endpoints` change, to the loopback pair composed from the ASKED session and the
+  route's listener (`indexEndpointsFor`, the one composer); the grant rides untouched; no road is `egress_unavailable`.
+  THE ROUTE: DS-1b's one-reference-per-owner rule lifted out of `EgressCellRewriter` into `OwnerRoutes`
+  (`egress-owner-routes.ts`); the cell rewriter holds one for 9422, unchanged in behaviour, words and log event, and the
+  index forwarding one for 9424; the target is the ROSTER's tailnet name, never the URL the owner answered.
+  `index.openTicket` joins the never-journaled set (`CREDENTIAL_MINTS` since F1b, beside `terminal.openTicket` and
+  `freeway.approve`): no grant sits in the owner's receipts for a day, and a same-key retry mints afresh.
+  `FielddConfig.indexEgressRoutes` is the test seam.
+- **History** (`28adcc19d`). DESIGN.md §8 amended first: another desktop's sessions of a project that has a folder here
+  reach the room, never as if they were here (its mark and path, "ran on Studio" / "Studio is asleep" quiet in the act's
+  place, "Files stay on Studio" in ③), and a transcript's absence is said in that desktop's name; a project with no
+  folder here stays unlisted, and another desktop's Home and Temporary stay its own (PJ's to design); the Peek's "the
+  room cannot open a peer's session yet" gets its dated correction (its search stays local, K5). `isHandedToRoom`,
+  `projectsHereOf` and `elsewhereDeviceOf` (host-model) are the one rule; `index.sessions` reads the MESH; `metaStateOf`
+  and the host model keep the same set (`isThisDesktops` retired); `sessionHomeOf` reads a session's desktop, name and
+  asleep state off the listing; the session port asks `index.openTicket {sessionId, device}` for a remote session and
+  reads the same loopback lease; a desktop the listing calls asleep is said at once and never asked; a road refusal at
+  the open is said in the desktop's name instead of the silent retry (a renewal keeps its patience); `resumeWaits` says
+  where a remote session ran.
+- **The agent-plane pages** (`452a8735f`): api.html first (the tickets convention, the catalogue row, the direct-plane
+  card), then system.html and architecture.html, dated; no hero number moves.
+- **The light's two finds** (`12f339f29`, `005d14bcb`): `remote-endpoints.test.ts` pinned `INDEX_TICKET` whole and
+  field-native's `tests/mesh_egress.rs` pinned `routablePorts: [9422]`; both name the new members now, and a floor row
+  binds a route to an admitted peer's `:9424` while a stranger's `:9424` stays `TARGET_NOT_PEER`.
+- **The merge of main** (`afab373c3`, at VF-PM's word, main `e312dde9c` its second parent). Two conflicts, both kept
+  whole: F1b renamed the never-journaled set `CREDENTIAL_MINTS` and added `freeway.approve` where DS-7 had added
+  `index.openTicket` to `TICKET_MINTS`; the set holds all three, F1b's doc with DS-7's dated note under it, and the two
+  journal rows stand side by side. DS-7's METHODS comment names the new set. Six files auto-merged; `daemon.ts` keeps
+  DS-7's forwarder chain (PG-2 changed the subscription half, `routedBoardAsk`). PG-2's `remote` cut asks nothing of
+  History, which reads `index.sessions` and `index.openTicket`, never an agent projection. `pnpm gen` after the merge
+  changed nothing.
+
+**Real vs stubbed.** Real between two real daemons on mock floors: the owner's mint for a peer daemon, the forward, the
+guard, the adoption, the route holding, every refusal, and rosetta's own client streaming through the route, against the
+scripted rosettad and, opt-in, the REAL rosettad over rosetta's ground truth (`FIELDD_ROSETTAD_BIN`). Stubbed: the
+egress route itself is `FakeEgressRoutes` bound to the owner's rosettad listener; in production it is B's sidecar to A's
+index serve to A's rosettad. truffle's E2 route is a raw TCP splice (`sidecar-slim/egress.go`: "The splice is raw TCP"),
+so History's plain-HTTP reads ride it as the cells' WebSockets do; that is first exercised on a real tailnet at James's
+run. The History view is witnessed by its unit rows; no window drew a remote transcript on a real screen here.
+
+**Depends on: the phone's History topology** (James, 22:08Z: through the home; design-06 carries the dated corrections).
+DS-7 follows the laws, not SP-6's as-built per-desktop reading: B's window holds ONE product connection, its own
+daemon's door; the listing (`index.sessions {scope: "mesh"}`) and the ticket ask (`index.openTicket {sessionId,
+device}`) ride it and B's daemon forwards (DS-L4); the transcript's bytes ride the ticketed socket, rosetta's own,
+through B's egress route (EL2). Nothing phone-side was built: the window's daemon refuses a `tailnet` principal's carry
+and the owner refuses a phone's own ask, both `direct-plane-unbuilt`; the kit is untouched. The phone's History via the
+home's forward (owed, the slice after FW, SP and PG) reuses this forward whole (the home carries the phone's ask as B
+carries a window's, and the owner mints for `peer-fieldd` with the phone behind it in `onBehalfOf`) and owns the two
+choices DS-7 leaves open: `refuseCarry`'s `tailnet` row (`index-forward.ts`, from `direct-plane-unbuilt` to carried),
+and the bytes' road for a phone. The adoption re-homes the set onto the home's LOOPBACK listener, which a phone cannot
+dial; whether the owner's tailnet set passes through untouched for the phone's own node to dial at the owner (design-06
+§7's L2) or the home serves a route is that slice's pick.
+
+**Validation:**
+
+- **The lane's light** at the merge `afab373c3` (this Mac, 23:12–23:23Z; `lanes/ds7/logs/merge-*.log`): biome on the
+  branch's 26 changed TS/JSON files clean; `pnpm check:walls` clean; `pnpm check:ios-fixtures` 186 copies and 63 pins
+  identical (DS-7's three new fixtures have no kit copy and need none: the phone reads neither the road states nor the
+  floor's route params); `pnpm catalog:check` (R23) pass; `pnpm gen:check` clean and the porcelain empty; `pnpm
+  preflight` OK with R23's standing `acp` warning; `tsc --noEmit` clean in contracts, fieldd and field-app; contracts
+  vitest 54 files, 1,429 passed; field-app 267 files, 3,495 passed, 3 skipped; fieldd in three shards, 222 files, 2,806
+  passed, 30 skipped; the ticket rows (`index-open-ticket`, `index-forward`, `forward-receipts`) with
+  `FIELDD_ROSETTAD_BIN` 67 passed, none skipped; `cargo fmt --check`, `cargo build -p field-native` and `cargo clippy
+  --workspace --all-targets -- -D warnings` clean; `cargo test -p field-native` 534 passed, 0 failed, 14 ignored over 33
+  binaries.
+- **The byte witness** (`DS7_BYTES`, the scripted rosettad, 160 replies of 2 KiB): 766,846 transcript bytes through the
+  route and **0 bytes** on B's window door and B's peer link to A while the stream ran. The real-rosettad row streamed
+  the ground truth's session through the route with A's grant, and its recorded-file read answered `wrong-scope` (a
+  forwarded grant is `read` alone).
+- **Red first** (each new row against the code before it). contracts: the routable row (`expected [ 9422 ] to deeply
+  equal [ 9422, 9424 ]`) and the road-refusal row (no `IndexTicketRoadDetails`). field-native: the belt row before `pnpm
+  gen`, and the integration row against `06cf3fe3d`'s `registries.rs` (the floor answered `EGRESS_PORT_NOT_ROUTABLE` for
+  `:9424`). fieldd (old source, new contracts), 7 rows: the owner answered "a ticket for another desktop's session is
+  not served yet", the journal replayed the ticket (`expected 1 to be 2`), B carried a plugin's ask (`expected
+  'UNAVAILABLE' to be 'FORBIDDEN_SCOPE'`); `index-forward.test.ts` failed to load (no module). field-app (old source), 6
+  rows: `projectsHereOf` and `sessionHomeOf` not functions, the listing asked `{scope: 'local'}`, the remote ask carried
+  no `device`, the remote row was not handed to the model, and the asleep and no-road opens retried silently until the
+  row's 5 s timeout. The fieldd asleep row was green against the old code too: its answer is PeerLink's, unchanged. At
+  the merge: `CREDENTIAL_MINTS` without `index.openTicket` reds the index row alone (`expected 1 to be 2`), F1b's
+  freeway row green beside it.
+- **Run 66** (the mint `c0d68b94d`, the MERGE shape: T = `afab373c3`, main `e312dde9c` merged into `005d14bcb`, first;
+  main `d4c5442c1` second):
+  - `pnpm verify` went green at 23:42:02Z (exit 0; armed 23:37:05Z, about 5 min), the mini's tree clean after it.
+  - vitest: 11,449 passed, 0 failed, 18 skipped, +28 over run 65r. contracts 1,429, +5 (fixtures.test.ts 531,
+    agent-index-history 12, mesh-egress 16). fieldd 2,825 passed and 11 skipped, +19: index-forward.test.ts new with 10,
+    index-open-ticket 28, forward-receipts 29. field-app 3,504, +4 (history-doors 33, history-host 45).
+  - cargo: 534 passed, 0 failed, 14 ignored, +2 (the fixture_parity and mesh_egress binaries ran); typecheck and test
+    ran for 28 projects; biome checked 2,955 files; MaxListeners 0; gen freshness held; the iOS fixtures' 186 copies and
+    63 pins identical, no mirror owed.
+  - The bundle's assert held at 913.1 KB raw and 241.1 KB gz.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run66/` (`mrun66.bundle`, sha256 `1d1f4cf00265b807…`).
+- **Landed:** main fast-forwarded `d4c5442c1` → `c0d68b94d` at 2026-10-31 23:43:41Z on VF-PM's GO (34 files +1,901 −179;
+  parents `afab373c3` and `d4c5442c1`; tree `3e8f9cd5c`). Both sides touched `DESIGN.md` alone, FG-6's frozen-frame bar
+  beside DS-7's §8 words; the merge was clean.
+
+**Found:**
+
+- **PeerLink dials a desktop the roster calls asleep, for every forwarded call.** B's roster read A `{online: false,
+  state: "asleep"}` and the forward still dialled, answering `{service: "peer-link", device, state: "unreachable"}`
+  after 15,011 ms. History sidesteps it (the listing says asleep, so the port never asks); feeding PeerLink's "no
+  endpoint, offline" from the roster's liveness is a cross-cutting change (the online flag lags a wake by up to the 30 s
+  re-diff), the DS owner's call.
+- The asset source reads every image through the newest open session's client, one rosettad's. Two sessions open from
+  two desktops at once could miss an image ("could not load"); the room normally holds one.
+- A stream whose desktop falls asleep mid-read shows rosetta's own "connecting", not the desktop's name (the renewal
+  keeps its silent retry, by design: an open stream outlives its grant).
+- Another desktop's subagent threads are not listed (`index.threads` is this desktop's).
+- Two rows outside the slice pinned the old shapes (`remote-endpoints.test.ts`, `tests/mesh_egress.rs`); the whole runs
+  found them, as the light is for.
+
+**Records.** ROADMAP's DS / SP, History finish and FS rows, the parked History and DS / SP rows and the rosetta
+petitions line advanced in place. DECISIONS' DS row gains DS-7's clause; the SP row gains D5's desktop-half clause and
+SP-D4's ruling, (a) at the lean (VF-PM, at these records; James's to overturn), its OPEN mark pointing there. The draft
+queue owes: `thinking-desktop-sync-plane.md`'s Status header and §11 DS-7 row flipped to LANDED;
+`thinking-sync-planes.md` SP-D5's desktop half marked built and SP-D4's source flip (:266, :309, the Status header);
+design-06's "until DS-7" sentences, if any, folded.
+
+**Owed.**
+
+- **The two-desktop run (James's).** Two Macs on one Tailscale login, both linked in VibeField, the Tailscale app QUIT
+  on both, both on the landed build. A is the owner (an indexed Claude Code session in a repository that also has a
+  folder on B, so the project lives on both); B is the window.
+  1. On B, History → the project: A's sessions are listed with A's OS mark and "ran on ‹A›" in the act's place; a
+     project only A holds shows its "n sessions on ‹A›" line and no rows.
+  2. On B, open one of A's sessions. The transcript loads and its live tail streams. A's audit holds `index.ticket.mint`
+     (outcome `succeeded`, target the session, `attrs.scope ["read"]`); B's holds none. B's floor lists one egress route
+     `egress-‹A's device id›-9424` (`native.mesh.egress.route.list`), its listener `127.0.0.1:‹p›`.
+  3. On A, run a turn in that session; B's open transcript gains the rows within seconds.
+  4. Bytes: in B's DevTools (Network → WS), the product door carries the ticket ask and answer only; the transcript
+     frames ride `ws://127.0.0.1:‹p›/ws/sessions/‹id›`, and the timeline reads `http://127.0.0.1:‹p›/api/sessions/…`.
+  5. On B, open a recorded file row of that session: "Recorded files can't open here yet — no file door on the desktop"
+     (a forwarded grant is read alone).
+  6. Put A to sleep. While A's mark is still solid (the roster has not flipped), an open on B dials for about 15 s and
+     then says "‹A› isn't answering — its transcript opens when it does"; once A's mark goes faint (the roster's
+     asleep), an open says "‹A› is asleep — its transcript opens when it wakes" at once, without asking.
+  7. Wake A; when its mark is solid, the same open loads.
+  8. Capture: both fieldd logs (`fieldd.index.egress.*`, `fieldd.mesh.egress.route_*`, `fieldd.index_serve.declared`),
+     A's audit segment, B's screenshots of steps 1, 2 and 6.
+- The phone's History via the home's forward (James, 22:08Z; "Depends on" above): DS-7's forward and the owner's mint
+  are its code path; its `tailnet` carry, the bytes' road for a phone, its kit and the tailnet row cut's policy are its
+  own.
+- SP-D4's view state, Follow off by default, built LAST, after SP-8 (which waits on AR-6); its source flip at the next
+  draft slot.
+- PJ-8 (acts across desktops) and FS-4 (the files ticket over the same road; `OwnerRoutes` is the pattern) are
+  unblocked.
+- The PeerLink asleep decision and the asset-source finding (Found).
