@@ -25905,3 +25905,108 @@ design-06's "until DS-7" sentences, if any, folded.
 - PJ-8 (acts across desktops) and FS-4 (the files ticket over the same road; `OwnerRoutes` is the pattern) are
   unblocked.
 - The PeerLink asleep decision and the asset-source finding (Found).
+
+## IOS-10a — the phone gets Settings: a sheet on paper headed by you, your desktops as glances in the corner's words
+
+(2026-11-01; four commits `41a3b95b2` → `30c6fc0c3` on lane `ios/settings`, rebased from its fork `c9fe1c65a` onto
+main `c0d68b94d`; the mint M67 `a9a62c20a`, the merge of main `747d8f8f2` into `30c6fc0c3`, run 67.) The phone gets
+Settings: Account, This phone's Appearance and Terminal, About and Acknowledgements, and a glance at each desktop.
+
+James asked on 2026-09-27 for the phone's Settings: what belongs on the phone, native to it and of a piece with its
+Field and History. The design is the page "Settings in a Pocket" (Hof2zWpt), revised 2026-10-31 against `02c902a8d`;
+its docs are `c9fe1c65a`. On 2026-10-31 James said "go ahead and also start the implementation", and the branch was
+built that afternoon. At 21:09Z he held it: "get freeway, sync plane and godview land first, so settings track land
+on top of them." F1b (M63), PG-2 (M64) and DS-7 (M66) are on main, so VF-PM opened the rebase window at 23:45Z. The
+window stood through the account's usage pause, and the rebase ran at 01:14Z.
+
+**What** (four commits, 43 files +3,259 −790, rebased onto `c0d68b94d` with no conflict):
+- `41a3b95b2`, the phone gets Settings:
+  - A new target, `FieldSettings`. `SettingsView` is a NavigationStack over a NavigationPath, with a large title, the
+    system's back, and close on every page. Its pages are Account, a desktop's page, Appearance, About and
+    Acknowledgements. `SettingsInputs` is what FieldHome hands it, and `SettingsModel` holds every word decision,
+    pure and tested. Settings asks nothing of the mesh.
+  - FieldDesign gains `ChromeList` and `PhoneAppearance`:
+    - `ChromeList` is the list's type ramp. It has `chromeGroupHead` (which History's heads now wear), `ChromeRow`,
+      `FactTag` (§8's solid, dashed and dotted) and `ChromeSwitchStyle`.
+    - `PhoneAppearance` is the phone's own look, stored as `vibefield.phone.appearance` and worn by the window. It
+      cross-fades unless Reduce Motion is on.
+    - Six §13 glyphs join the iOS list.
+  - FieldTerminal: the terminal settings sheet becomes Settings › Terminal, in the desktop's Look words. Theme and
+    Effects are pages pushed by value.
+  - FieldHome:
+    - `FieldHomeModel.settingsAccount` decides the account from the corner's own inputs.
+    - HomeScreen presents Settings on paper from three places: the corner's Settings…, *you* (Account) and the
+      card's `···` (Terminal).
+    - The sign-out words and act are written once.
+    - `-vf-open-settings[=<page>]` opens any page for a photograph run.
+  - The account menu's double hairline (ROADMAP §6, filed by `c9fe1c65a`) is fixed:
+    `AccountFace.drawsDesktopSection`, tested.
+- `54df6c854`, Settings' words made true against the sync planes, the freeway and the phone Godview. Two read-only
+  reviews read the branch, and each finding was verified at its source:
+  - the asleep foot (DS-L8);
+  - a desktop's abilities, shown only while it is connected (DS-L9; cited as DS-D5 under TAILNET_SCOPES);
+  - "Approve from the card" as the not-yet row;
+  - the sign-out words whole, with the project colours and the terminal's look, and `SignOutSweep.kept` keeping the
+    phone's look;
+  - the card's "Terminal look…";
+  - DESIGN.md §8 and §13, and the README.
+- `ccc54e89e`, the sign-out words say the History goes too: item 130 (`6130153f8`) built AP-D4's History half.
+- `30c6fc0c3`, a desktop page's later glances read through the home. This follows James's topology ruling (2026-10-31
+  22:08Z; FW-R6, DS-L4). `DesktopPage.swift`'s header had said its agent catalog and profile sets would be read
+  "over its door". The change is a comment only.
+
+**Real.**
+- Every page, and every standing the corner knows: connected, connecting, sign in again, waiting for approval,
+  couldn't connect, signed out.
+- Appearance and Terminal are live and persist.
+- Sign in again, Sign out, Open the admin console and Copy are the phone's existing acts.
+
+**The marks.** The page's eight marks are unpicked, and the build stands at their leans: heads are History's eyebrow,
+glyphs are §13's drawn bare, and the switch is the design kit's ink switch. Each is one modifier to change.
+
+**Measured.** About's icon is the light rendition in either look. With dark traits,
+`UIImage(named:in:compatibleWith:)` hands back the light image under both `AppIcon` and `AppIcon60x60`, though the
+compiled catalog keeps the dark appearance. The dark icon needs its own image in the kit (`SettingsModel.iconName`).
+
+**Gate.**
+- The kit, the gate the mini cannot run: `xcodebuild test` on James's Mac, on the iPhone 17 Pro simulator (iOS 26.5),
+  at nice 19 under the guard, at the rebased tip with the fold.
+  - Run 3: TEST SUCCEEDED, 1,400 tests in 250 suites and 14 bundles, 0 failed (01:21:45–01:22:38Z).
+  - By name, FieldSettingsTests 20, FieldHomeTests 108 and FieldMeshTests 295 passed.
+  - Runs 1 and 2 were each red on one row outside this slice: item 132, under Findings.
+- On the lane: `check-ios-fixtures` found 186 copies and 63 pins identical. Glyphs are fresh (64 names, 20 on iOS),
+  and biome is clean on `picks.json`. No TypeScript or Rust is touched.
+- The mini's run 67, in the merge shape: armed 01:28:13Z, verify exit 0 at 01:33:14Z.
+  - Tests 11,449/0/18, equal to run 66: this tree adds only kit, DESIGN.md and glyph files.
+  - cargo 534/0/14 (ok 33); typecheck and test for 28 projects; MaxListeners 0.
+  - ios fixtures 186 and pins 63; icons 35 current; glyphs.test 8; biome 2,955.
+  - Bundle 913.1 / 241.1; the mini's porcelain 0.
+  - Logs: `lanes/ts6/logs/mini/run67/` (`mrun67.bundle` sha256 713886161d496657…).
+- M67 landed at 01:34:53Z: ff `747d8f8f2..a9a62c20a`, tree `dc4e8ef4d`, no conflict on either side.
+
+**Findings.**
+- Item 132 (filed by VF-PM; not this slice's): kit runs 1 and 2 were each red on one door-harness row outside the
+  branch, at exactly the 5 s bound, and each was green alone in milliseconds. That is item 103's lost-event class.
+  - Run 1: FieldTerminalTests `LanesOverTheDoorTests` :262's first attach ("sess-a's control attach", 5.020 s), its
+    legs looping on NSURLErrorDomain -1011 against the harness door. Alone: 7/7, the row in 0.052 s.
+  - Run 2: FieldRoutedTerminalTests `FakeCellDoorTests` :251 ("the refusal", 5.010 s). Alone: 6/6, the row in
+    0.007 s.
+- The replay corrected `41a3b95b2`'s body, which had swapped two bundle counts. That commit's own gate log has
+  FieldHomeTests at 107 and FieldTerminalTests at 173. No tree changed.
+
+**Closed.**
+- ROADMAP §6's double hairline.
+- Item 130's "owed: IOS-10a's sign-out words".
+
+**Owed.**
+- The page's later slices:
+  - Field, Keyboard, Notifications, Privacy & data and Developer;
+  - a desktop's agents, its History glance and its VibeField version (the roster's `appVersion`);
+  - licence texts, Forget a desktop and Share diagnostics.
+- James's picks on the page, including the signed-out reach (mark `signed-out`) and the corner's Theme row (mark
+  `theme-row`).
+- Re-photographing. It has not been done since `54df6c854` changed the words. The page Hof2zWpt takes the words at
+  the next draft queue.
+- The dark About icon.
+- The app workspace's stale `Package.resolved` (EL8; reported, never committed).
+- F1b's kit half (the phone asks through its home; FieldLink.swift:683), on VF-PM's brief.
