@@ -50,6 +50,14 @@ import { RpcCallError } from "./native-link";
 // here — a hub per {projection, floor} opens them when its first reader arrives
 // and closes them when its last one leaves (PF6), and the manager shares them
 // with any window that routed the same question by `device`.
+// Amended 2026-11-01 (PG-9a, item 135): the last one's leaving starts the
+// hub's LINGER (`AGENT_FIELD.MESH_HUB_LINGER_MS`), and the close is the
+// linger's end; a reader who arrives inside it rejoins the hub as it stands.
+// The phone is the only reader of its hub, and its app switch and its gap
+// repair each unsubscribe and subscribe again: an immediate close tore down
+// every peer's upstream on each, and the new hub answered every other desktop
+// `stale` on a new epoch until each re-attached — the grey flash. The daemon
+// stopping (`MeshBoard.dispose`) waits for no linger.
 //
 // WHICH peers are desktops: the roster lists phones too (a phone is a self node
 // with no fieldd behind it) and cannot say so directly — a phone publishes no
@@ -299,6 +307,8 @@ class BoardHub {
   readonly #local: LocalBoard;
   readonly #sweeper: ReturnType<typeof setInterval>;
   readonly #onRoster = (): void => this.#reconcile();
+  /** PG-9a — set while the hub has no reader and waits out its linger */
+  #linger: ReturnType<typeof setTimeout> | null = null;
   #disposed = false;
 
   constructor(
@@ -322,6 +332,12 @@ class BoardHub {
   /** A reader joins: it is answered with every device as the hub holds it,
    * and hears every later frame. */
   join(member: Member): MeshBoardReader {
+    // PG-9a — a reader back inside the linger keeps the hub as it stands:
+    // its upstreams, each peer's epoch and state, its own board
+    if (this.#linger !== null) {
+      clearTimeout(this.#linger);
+      this.#linger = null;
+    }
     const open = this.#openAnswer();
     this.#members.add(member);
     let left = false;
@@ -336,15 +352,31 @@ class BoardHub {
         if (left) return;
         left = true;
         this.#members.delete(member);
-        if (this.#members.size === 0) this.dispose();
+        if (this.#members.size === 0) this.#startLinger();
       },
     };
   }
 
-  /** The last reader left (or the daemon stops): every upstream closes. */
+  /** PG-9a — the last reader left: the hub stands for the linger, then closes
+   * unless a reader has joined since (`join` cancels it). */
+  #startLinger(): void {
+    if (this.#disposed || this.#linger !== null) return;
+    this.#linger = setTimeout(() => {
+      this.#linger = null;
+      if (this.#members.size === 0) this.dispose();
+    }, AGENT_FIELD.MESH_HUB_LINGER_MS);
+    this.#linger.unref?.();
+  }
+
+  /** The linger ended with no reader (or the daemon stops, at once): every
+   * upstream closes. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    if (this.#linger !== null) {
+      clearTimeout(this.#linger);
+      this.#linger = null;
+    }
     clearInterval(this.#sweeper);
     this.opts.roster.off("changed", this.#onRoster);
     this.opts.links.off("link-changed", this.#onRoster);
@@ -684,6 +716,10 @@ class BoardHub {
  * The mesh board's hubs, one per {projection, floor}. A hub exists exactly
  * while it has a reader: the first `open` builds it and opens its upstreams,
  * the last reader's dispose closes them.
+ * Amended 2026-11-01 (PG-9a, item 135): a hub exists while it has a reader and
+ * for `AGENT_FIELD.MESH_HUB_LINGER_MS` after its last one leaves; an `open`
+ * inside that rejoins it, and the linger's end closes its upstreams. `dispose`
+ * (the daemon stopping) closes every hub at once, lingering or not.
  */
 export class MeshBoard {
   readonly #opts: Resolved;
@@ -764,7 +800,8 @@ export class MeshBoard {
     };
   }
 
-  /** How many hubs are standing — each one is a set of open upstreams. */
+  /** How many hubs are standing — each one is a set of open upstreams, a
+   * lingering one's included (PG-9a). */
   get size(): number {
     return this.#hubs.size;
   }
