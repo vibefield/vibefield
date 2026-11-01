@@ -208,6 +208,18 @@ export type ForwardHook = (
   carry: () => Promise<unknown>,
 ) => Promise<unknown>;
 
+/** PG-3b (the 3b review [4]) — a hook's carry: the forward once, a second call refused (a hook may order or refuse
+ * what is carried, never carry it twice). */
+function onceCarry(method: string, carry: () => Promise<unknown>): () => Promise<unknown> {
+  let used = false;
+  return () => {
+    if (used)
+      return Promise.reject(new Error(`a forward hook carries ${method} once; it was carried`));
+    used = true;
+    return carry();
+  };
+}
+
 /** The slice of TokenService the API needs (keeps the dependency one-way). */
 export interface TokenServiceLike {
   verify(token: string): {
@@ -558,28 +570,32 @@ export class ProductApi extends EventEmitter {
   }
 
   /** PG-3b — the hook around one method's forward (`ForwardHook`): `agent.reportShown`'s home check and order. A
-   * call-and-answer method only; one hook per method. */
+   * call-and-answer READ that forwards only (the 3b review [4]): never a subscription (the proxy carries those), a
+   * local method (it never forwards) or a keyed mutation (its receipt is the door's to bind, until one needs a hook).
+   * One hook per method; the hook's carry runs once (`onceCarry`). */
   wrapForward(method: string, hook: ForwardHook): void {
     const def = this.lookup(method);
     if (def.subscription) throw new Error(`a subscription forwards through the proxy: ${method}`);
     if (def.locality === "local") throw new Error(`a local method never forwards: ${method}`);
+    if (isKeyedForward(def)) throw new Error(`a keyed mutation takes no forward hook: ${method}`);
     if (this.forwardHooks.has(method)) throw new Error(`a forward hook is already set: ${method}`);
     this.forwardHooks.set(method, hook);
   }
 
   /** PG-3b — carry a READ this daemon sends of its own accord for a client (a closing reader's empty
-   * `agent.reportShown`), as the door would carry that client's own call: the same forwarder, the same provenance
-   * (`onBehalfOf` from the client's context, DS-L7). Never a keyed mutation and never a subscription — those carry
-   * a caller's key or a proxy, which a call no client made has neither of. */
+   * `agent.reportShown`, a re-dial's replay), as the door would carry that client's own call: the same forwarder,
+   * the same provenance (`onBehalfOf` from the client's context, DS-L7). Only for a method that set a forward hook
+   * (the 3b review [4]): its hook is what judged, at the client's own call, that the client may report through
+   * here, so this path carries nothing that check never saw. */
   forwardFor(
     ctx: CallerContext,
     device: string,
     method: string,
     params: unknown,
   ): Promise<unknown> {
-    const def = this.lookup(method);
-    if (def.subscription || isKeyedForward(def) || def.locality === "local")
-      throw new Error(`forwardFor carries a forwarded read only: ${method}`);
+    this.lookup(method);
+    if (!this.forwardHooks.has(method))
+      throw new Error(`forwardFor carries only a method with a forward hook: ${method}`);
     const forwarder = this.forwarder;
     if (forwarder === null)
       return Promise.reject(
@@ -1311,10 +1327,11 @@ export class ProductApi extends EventEmitter {
           const carry = () => forwarder(device, method, callParams, callCtx, outbound);
           // PG-3b — after the gates above, before anything is carried: the
           // method's own say (`agent.reportShown`: the home carries a report
-          // only for a reader holding its mesh board, in order per owner)
+          // only for a reader holding its mesh board, in order per owner),
+          // with a carry that runs once
           const hook = this.forwardHooks.get(method);
           const result = await (hook !== undefined
-            ? hook(callCtx, device, callParams, carry)
+            ? hook(callCtx, device, callParams, onceCarry(method, carry))
             : carry());
           reply({ jsonrpc: "2.0", id, result });
           return;

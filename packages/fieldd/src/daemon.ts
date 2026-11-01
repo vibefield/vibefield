@@ -701,6 +701,8 @@ export interface FielddDaemon {
   /** PG-3b — the screens `agent.reportShown` reaches (`agent-screens.ts`);
    * tests read how many connection screens, readers and carried screens stand. */
   agentScreens: AgentScreens;
+  /** PG-3b — the monitor backend beside the runtime, null until it is built; tests read its ledger (`seenAt`). */
+  agentMonitor: () => AgentMonitorService | null;
   /** C6-6 — the artifact hub (registry over the mesh serve facade). */
   artifacts: ArtifactService;
   plugins: PluginRegistryService;
@@ -6410,6 +6412,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ),
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
+    // PG-3b (the 3b review [13]) — a re-dialled link to an owner is a new
+    // connection there, which forgot the screens it carried for this desktop's
+    // readers: each reader's last report to it is carried again
+    peers.on("link-ready", (event: { deviceId: string }) => screens.linkReady(event.deviceId));
     // DS-2 (DS-D15) — the receipt of one of THIS daemon's keyed forwards, so a
     // UI can show applied / refused / outcome-unknown; the retry is the same
     // call carrying the same key (forward-receipts.ts), never this door.
@@ -7447,6 +7453,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       federatedSubs,
       meshBoard: board,
       agentScreens: screens,
+      agentMonitor: () => monitor,
       artifacts,
       plugins,
       services,
