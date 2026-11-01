@@ -505,7 +505,7 @@ export type InkWords = "stage" | "words";
 
 /** One of FG-O2's words, cut from a still's capture (`cutChip`, its BGRA null where the capture could not be cut) and
  * measured at the walk's end (`firstRunContrast`): the stage line with the field under it, or a word on the glass
- * with its colour, never cut where it is passed over (`passedOver`). */
+ * with its colour, and why it is passed over where it is (`passedOver`). */
 export type InkCut =
   | {
       readonly words: "stage";
@@ -585,8 +585,9 @@ export function inkCuts(
   if (words.includes("words"))
     for (const word of seen.words) {
       const passed = passedOver(word, before?.words ?? null);
-      // a word's chip is its lines' together: its own glyphs, never what stands between its lines
-      const lines = passed === null ? word.lines.map(cut) : [];
+      // a word's chip is its lines' together: its own glyphs, never what stands between its lines. A word passed over
+      // is cut too, its ratio printed and never judged (the catalog judged's follow-up 1: an off control's words seen)
+      const lines = word.lines.map(cut);
       const whole = lines.filter((line): line is Uint8Array => line !== null);
       cuts.push({
         words: "words",
@@ -644,8 +645,8 @@ export interface StillWords {
   readonly lowest: readonly (readonly [string, number | null])[];
   /** every one under the bar, or unread, in full */
   readonly short: readonly ShortWord[];
-  /** every one passed over, with why (`passedOver`) */
-  readonly passed: readonly (readonly [string, string])[];
+  /** every one passed over, with why (`passedOver`) and its own ratio, printed and never judged */
+  readonly passed: readonly (readonly [string, string, number | null])[];
 }
 
 /** FG-O2's contrast as the row prints it: the splash's stage line (null where the walk never saw it whole), and every
@@ -665,7 +666,11 @@ export function firstRunContrast(cuts: readonly InkCut[]): FirstRunContrast {
   let stage: StageReading | null = null;
   const stills = new Map<
     string,
-    { read: [string, number | null][]; short: ShortWord[]; passed: [string, string][] }
+    {
+      read: [string, number | null][];
+      short: ShortWord[];
+      passed: [string, string, number | null][];
+    }
   >();
   for (const cut of cuts) {
     if (cut.words === "stage") {
@@ -678,11 +683,11 @@ export function firstRunContrast(cuts: readonly InkCut[]): FirstRunContrast {
       still = { read: [], short: [], passed: [] };
       stills.set(cut.at, still);
     }
+    const chip = reading(cut.px);
     if (cut.passed !== null) {
-      still.passed.push([clip(cut.text), cut.passed]);
+      still.passed.push([clip(cut.text), cut.passed, chip.ratio]);
       continue;
     }
-    const chip = reading(cut.px);
     still.read.push([clip(cut.text), chip.ratio]);
     if (chip.ratio === null || chip.ratio < FIRST_RUN.wordContrast)
       still.short.push({ text: cut.text, color: cut.color, ...chip });
