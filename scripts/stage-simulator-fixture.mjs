@@ -2008,6 +2008,15 @@ export function defaultsJudge(before, after, own, scrub) {
  * run's own (nothing proves it) — then the defaults read again and judged. */
 export async function restoreDefaults(run, deps, ctx) {
   const own = ownUdids(run);
+  /** why the cleanup may not run now, or null: Simulator.app running (it would write them back), or unproven */
+  const blocked = (app) =>
+    app.running === null
+      ? "skipped: pgrep failed — Simulator.app unproven"
+      : app.running > 0
+        ? "skipped: Simulator.app is running (it would write them back)"
+        : null;
+  // G8: pgrep FIRST — the plan is made from an export taken with the app proven gone
+  let app = own.size === 0 ? null : await simulatorNow(run, deps);
   let after = await readDefaults(deps);
   let cleanup = "none needed";
   let removed = 0;
@@ -2018,11 +2027,15 @@ export async function restoreDefaults(run, deps, ctx) {
     plan !== null &&
     (plan.removed > 0 || plan.current === "restored" || plan.current === "removed")
   ) {
-    const app = await simulatorNow(run, deps);
-    if (app.running === null) cleanup = "skipped: pgrep failed — Simulator.app unproven";
-    else if (app.running > 0) {
-      appRunning = true;
-      cleanup = "skipped: Simulator.app is running (it would write them back)";
+    let why = blocked(app);
+    // G8: and again right before the import — an app up since the plan aborts it
+    if (why === null) {
+      app = await simulatorNow(run, deps);
+      why = blocked(app);
+    }
+    if (why !== null) {
+      cleanup = why;
+      appRunning = app.running > 0;
     } else {
       const r = await deps.exec(DEFAULTS, ["import", SIM_DOMAIN, "-"], {
         input: plan.xml,

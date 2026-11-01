@@ -79,6 +79,7 @@ const {
   responsibleApp,
   reusedRun,
   restoreHost,
+  restoreDefaults,
   restoredVerdict,
   rowsMark,
   rowsVerdict,
@@ -3065,6 +3066,45 @@ test("H1: the run's own entries still there after the cleanup are the run's OWN 
     defaults: { own: 2, foreign: 1, cleanup: "skipped: x", appRunning: true },
   });
   assert.deepEqual([theirs.ok, theirs.ownOk, theirs.foreign.length], [false, true, 2]);
+});
+
+test("G8: the defaults cleanup reads pgrep FIRST, then exports and plans, and pgreps AGAIN right before the import — running then, nothing imported", async () => {
+  const before = simDefaults();
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0]] });
+  /** restoreDefaults on a host whose pgrep answers `pgreps` in turn (null: none running); the order of its reads */
+  const traced = async (pgreps) => {
+    const run = ownRun();
+    const host = defaultsHost(after);
+    const queue = [...pgreps];
+    const order = [];
+    const exec = host.deps.exec;
+    host.deps.exec = async (file, args, o) => {
+      if (file === "/usr/bin/pgrep") {
+        order.push("pgrep");
+        host.state.pgrep = queue.length > 1 ? queue.shift() : queue[0];
+      }
+      if (file === "/usr/bin/defaults") order.push(args[0]);
+      return exec(file, args, o);
+    };
+    const r = await restoreDefaults(run, host.deps, { defaultsBefore: before });
+    return { r, order, host };
+  };
+  // nothing running throughout: pgrep, export, plan, pgrep again, import, read again
+  const quiet = await traced([null]);
+  assert.deepEqual(quiet.order, ["pgrep", "export", "pgrep", "import", "export"]);
+  assert.equal(quiet.r.cleanup, "done");
+  // the app comes up between the plan and the import: no import
+  const late = await traced([null, "777"]);
+  assert.deepEqual(late.order, ["pgrep", "export", "pgrep"]);
+  assert.deepEqual(late.host.imports, []);
+  assert.match(late.r.cleanup, /^skipped: Simulator\.app is running/u);
+  // running at the first read: exported (to judge), never planned against, never imported
+  const up = await traced(["777"]);
+  assert.deepEqual(up.order, ["pgrep", "export"]);
+  assert.deepEqual(up.host.imports, []);
+  // pgrep unreadable right before the import: skipped too
+  const blind = await traced([null, "garbage"]);
+  assert.deepEqual(blind.host.imports, []);
 });
 
 test("R3: a non-own defaults change beside the run's OWN Simulator.app is its housekeeping — an OBSERVATION only, never why/foreign, never the exit", async () => {
