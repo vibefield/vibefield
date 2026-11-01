@@ -288,6 +288,19 @@ export const PHONE_ROW_PROJECT = `((f) => f === undefined || f === null ? null :
   ...f, state: { is: f.state?.is ?? null, reason: f.state?.reason ?? null },
 })))`;
 
+/** A phone's words as its kind lays them (run in the page, `screenOf`): `extra.simulator` off the kind's `screen(e)`
+ * (`{is, device, act}`), the lines its words last took (`lines(e)`; none: no words drawn), and whether its words carry a
+ * still (R14: never). Its act PROJECTED as PHONE_ROW_PROJECT projects a state's `retry`: the face's act is a FUNCTION by
+ * contract (plugins/simulator/src/live.ts — offered by its presence), which no structured clone carries — `true` where
+ * one stands (T3: SIM-NO-DEVICE's "An object could not be cloned"). */
+export const PHONE_SCREEN_PROJECT = `((s, lines) => {
+  if (s === undefined || s === null) return null;
+  const said = s.info?.extra?.simulator;
+  return { is: said?.is ?? null, device: said?.device ?? null,
+    act: typeof said?.act === "function" ? true : (said?.act ?? null),
+    lines: lines ?? null, still: s.info?.extra?.still !== undefined };
+})`;
+
 /** Main's simulator census (D1, D2), restated: counts, never a UDID. */
 export interface PhoneCensus {
   readonly sessions: number;
@@ -1504,18 +1517,15 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
   ): Promise<{
     is: string | null;
     device: string | null;
-    act: string | null;
+    act: string | boolean | null;
     lines: number | null;
     still: boolean;
   } | null> => {
     const e = await entityOf(k);
     if (e === null) return null;
-    return js(`(() => {
-      const local = globalThis.__vfDesk.local(${T}); const s = local?.screen?.(${e});
-      const said = s?.info?.extra?.simulator;
-      return s === undefined ? null : { is: said?.is ?? null, device: said?.device ?? null, act: said?.act ?? null,
-        lines: local?.lines?.(${e}) ?? null, still: s.info?.extra?.still !== undefined };
-    })()`);
+    return js(
+      `(() => { const project = ${PHONE_SCREEN_PROJECT}; const local = globalThis.__vfDesk.local(${T}); return project(local?.screen?.(${e}), local?.lines?.(${e})); })()`,
+    );
   };
   const stats = (): Promise<{
     acts: number;
@@ -2033,25 +2043,29 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const mark =
         d.shellOpens === undefined ? { opened: 0, revealed: 0 } : opensMark(d.shellOpens);
       const p = await placePhone("φP", 0, typeOf(1));
-      await view([p]);
-      await until(
-        "φP's face",
-        PHONE_BOUNDS.face,
-        `(globalThis.__vfDesk.live()?.faces ?? []).some((f) => f.key === ${JSON.stringify(p)} && f.simulator?.is != null)`,
-      );
-      await sleep(1_000);
-      const f = await faceOf(p);
-      const screen = await screenOf(p);
-      const seen: NoneSeen = {
-        is: f?.simulator?.is ?? null,
-        act: f?.simulator?.act ?? null,
-        name: f?.simulator?.name ?? null,
-        lines: screen?.lines ?? null,
-        census: census(),
-        opens: judgeOpens("SIM-NONE", d.shellOpens, mark, []),
-      };
-      await remove(p);
-      return { problems: judgeNone(seen), seen };
+      // removed in a finally: a read that throws never leaves φP on the desk for the rows after (T3)
+      try {
+        await view([p]);
+        await until(
+          "φP's face",
+          PHONE_BOUNDS.face,
+          `(globalThis.__vfDesk.live()?.faces ?? []).some((f) => f.key === ${JSON.stringify(p)} && f.simulator?.is != null)`,
+        );
+        await sleep(1_000);
+        const f = await faceOf(p);
+        const screen = await screenOf(p);
+        const seen: NoneSeen = {
+          is: f?.simulator?.is ?? null,
+          act: f?.simulator?.act ?? null,
+          name: f?.simulator?.name ?? null,
+          lines: screen?.lines ?? null,
+          census: census(),
+          opens: judgeOpens("SIM-NONE", d.shellOpens, mark, []),
+        };
+        return { problems: judgeNone(seen), seen };
+      } finally {
+        await remove(p);
+      }
     });
     await noUdidRow();
   }
@@ -2141,25 +2155,29 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     await row("SIM-NO-DEVICE", "MUST", async () => {
       const create = count(calls(), "create");
       const q = await placePhone("φN", 1, typeOf(4));
-      await view([q]);
-      await until(
-        "φN's face",
-        PHONE_BOUNDS.face,
-        `(globalThis.__vfDesk.live()?.faces ?? []).some((f) => f.key === ${JSON.stringify(q)} && f.simulator?.is != null)`,
-      );
-      await sleep(1_000);
-      const f = await faceOf(q);
-      const screen = await screenOf(q);
-      const seen: NoDeviceSeen = {
-        is: f?.simulator?.is ?? null,
-        act: f?.simulator?.act ?? null,
-        name: f?.simulator?.name ?? null,
-        device: screen?.device ?? null,
-        lines: screen?.lines ?? null,
-        create: { before: create, after: count(calls(), "create") },
-      };
-      await remove(q);
-      return { problems: judgeNoDevice(seen), seen };
+      // removed in a finally: run 1101's clone throw skipped it, and φN stood on the desk through every later row (T3)
+      try {
+        await view([q]);
+        await until(
+          "φN's face",
+          PHONE_BOUNDS.face,
+          `(globalThis.__vfDesk.live()?.faces ?? []).some((f) => f.key === ${JSON.stringify(q)} && f.simulator?.is != null)`,
+        );
+        await sleep(1_000);
+        const f = await faceOf(q);
+        const screen = await screenOf(q);
+        const seen: NoDeviceSeen = {
+          is: f?.simulator?.is ?? null,
+          act: f?.simulator?.act ?? null,
+          name: f?.simulator?.name ?? null,
+          device: screen?.device ?? null,
+          lines: screen?.lines ?? null,
+          create: { before: create, after: count(calls(), "create") },
+        };
+        return { problems: judgeNoDevice(seen), seen };
+      } finally {
+        await remove(q);
+      }
     });
 
     await row("SIM-SHOW-FRESH", "MUST", async () => {

@@ -63,6 +63,7 @@ import {
   PHONE_MEASURE,
   PHONE_ROW_PROJECT,
   PHONE_ROWS,
+  PHONE_SCREEN_PROJECT,
   type PhoneCensus,
   type PhoneRowResult,
   type PhoneRowsDriver,
@@ -413,6 +414,58 @@ describe("PT-S3 — what the rows read", () => {
       state: { is: "live", reason: null },
     });
     expect(project(undefined)).toBeNull();
+  });
+
+  it("projects a kind's screen in the page: its act — a FUNCTION by contract — crosses as true, and the clone passes (T3)", () => {
+    const project = new Function(`return ${PHONE_SCREEN_PROJECT};`)() as (
+      s: unknown,
+      lines: unknown,
+    ) => unknown;
+    const screen = {
+      key: "1-0",
+      state: { is: "live" },
+      info: {
+        extra: { simulator: { is: "no-device", device: "iPhone 14", act: () => undefined } },
+      },
+    };
+    // SIM-NO-DEVICE's "An object could not be cloned": the raw words carry the act itself
+    expect(() => structuredClone(screen.info.extra.simulator)).toThrow();
+    const out = project(screen, 2);
+    expect(() => structuredClone(out)).not.toThrow();
+    expect(out).toEqual({
+      is: "no-device",
+      device: "iPhone 14",
+      act: true,
+      lines: 2,
+      still: false,
+    });
+    // an act said by name crosses as itself; none is null; a still in the words is said (R14)
+    expect(
+      project({ info: { extra: { simulator: { is: "off", act: "boot" }, still: {} } } }, undefined),
+    ).toEqual({ is: "off", device: null, act: "boot", lines: null, still: true });
+    expect(project({ info: {} }, 0)).toEqual({
+      is: null,
+      device: null,
+      act: null,
+      lines: 0,
+      still: false,
+    });
+    expect(project(undefined, 1)).toBeNull();
+  });
+
+  it("screenOf runs the projection; SIM-NONE's and SIM-NO-DEVICE's phone is removed in a finally — a throw never leaves it on the desk (T3)", () => {
+    const at = SOURCE.indexOf("  const screenOf = async (");
+    const screenOf = SOURCE.slice(at, SOURCE.indexOf("  const stats = ", at));
+    expect(screenOf).toContain(`const project = $${"{"}PHONE_SCREEN_PROJECT};`);
+    expect(screenOf).not.toMatch(/act: said\?\.act/u);
+    for (const [name, k] of [
+      ["SIM-NONE", "p"],
+      ["SIM-NO-DEVICE", "q"],
+    ] as const) {
+      const body = rowBodies(SOURCE).find((r) => r.name === name)?.body ?? "";
+      expect(body).toMatch(new RegExp(`\\} finally \\{\\s*await remove\\(${k}\\);\\s*\\}`, "u"));
+      expect(body.match(/await remove\(/gu)).toHaveLength(1);
+    }
   });
 
   it("sweeps a UUID's shape, either case, and passes the durable keys and surface ids the rows carry", () => {
