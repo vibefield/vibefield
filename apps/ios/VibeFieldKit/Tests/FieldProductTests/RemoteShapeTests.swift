@@ -519,3 +519,123 @@ enum Remote {
     #expect(!shut.monitorRow.isWritable)
   }
 }
+
+// MARK: - The per-row tolerance rule
+
+/// T9b — PG-1b's screen on the phone (`board-screen.ts`): a refused row is dropped and its desktop reads
+/// `incompatible` while it holds one; the envelope stays whole; the wire's own word comes back after.
+@Suite struct RemoteBoardScreenTests {
+  static let now = "2026-11-01T00:00:00.000Z"
+
+  static func open(_ json: JSONValue) throws -> AgentRemoteMeshOpen { try AgentRemoteMeshOpen(json: json) }
+
+  static func frame(_ json: JSONValue) throws -> AgentRemoteMeshFrame { try AgentRemoteMeshFrame(json: json) }
+
+  static func witnessFrame(_ index: Int) throws -> JSONValue {
+    try Remote.frames("agent-remote-mesh-frames.witness")[index]
+  }
+
+  /// The witness open with one row of `device` (0 home, 1 loft) made unreadable by `edit`.
+  static func openRefusing(_ device: Int, _ key: String, _ path: [Step], _ value: JSONValue?) throws -> JSONValue {
+    let rows: [Step] = [.key("devices"), .index(device), .key("snapshot"), .key("rows"), .row(key)]
+    return edited(try Remote.witnessOpen(), rows + path, value)
+  }
+
+  static let sleeping: ([Step], JSONValue?) = ([.key("monitorRow"), .key("status")], .string("sleeping"))
+
+  /// (a) an open with a refused row: that desktop is `incompatible` now, with its readable rows; the rest as on the wire.
+  @Test func anOpenWithARefusedRowGreysOnlyItsDesktop() throws {
+    let wire = try Self.open(try Self.openRefusing(0, "run-h-turn", Self.sleeping.0, Self.sleeping.1))
+    try #require(wire.devices[0].snapshot?.refused.count == 1)
+    var screen = RemoteBoardScreen()
+    let screened = screen.open(wire, now: Self.now)
+    #expect(screened.devices[0].state == .incompatible)
+    #expect(screened.devices[0].asOf == Self.now)
+    #expect(screened.devices[0].snapshot?.rows.count == 6)
+    #expect(screened.devices[0].snapshot?.refused.isEmpty == true)
+    #expect(screened.devices[0].snapshot?.epoch == wire.devices[0].snapshot?.epoch)
+    #expect(Array(screened.devices.dropFirst()) == Array(wire.devices.dropFirst()))
+    #expect(screen.holds(Remote.home))
+    #expect(!screen.holds(Remote.loft))
+  }
+
+  /// (b) the held row comes back readable: the delta as it came, then the wire's last word for the desktop.
+  @Test func aReadableUpsertReleasesTheDesktopToTheWiresWord() throws {
+    var screen = RemoteBoardScreen()
+    _ = screen.open(
+      try Self.open(try Self.openRefusing(0, "run-h-turn", Self.sleeping.0, Self.sleeping.1)), now: Self.now)
+    try #require(screen.holds(Remote.home))
+    let upsert = edited(try Self.witnessFrame(0), [.key("delta"), .key("upserts")], .array([try Remote.turnRow()]))
+    let delta = try Self.frame(upsert)
+    #expect(screen.frame(delta, now: Self.now) == [
+      delta, .state(device: Remote.home, .live, asOf: "2026-09-30T21:20:00.000Z"),
+    ])
+    #expect(!screen.holds(Remote.home))
+  }
+
+  /// (c) a held READABLE key arrives refused: it leaves the fold (`removed`), and the desktop greys now.
+  @Test func aRefusedUpsertOfAKnownRowRemovesItAndGreys() throws {
+    var screen = RemoteBoardScreen()
+    _ = screen.open(try Self.open(try Remote.witnessOpen()), now: Self.now)
+    try #require(!screen.holds(Remote.home))
+    let refusedTurn = edited(try Remote.turnRow(), Self.sleeping.0, Self.sleeping.1)
+    let wire = try Self.witnessFrame(0)
+    let typed = try #require(at(wire, [.key("delta"), .key("upserts"), .index(0)]))
+    let json = edited(wire, [.key("delta"), .key("upserts")], .array([typed, refusedTurn]))
+    let out = screen.frame(try Self.frame(json), now: Self.now)
+    try #require(out.count == 2)
+    guard case .delta(let device, let delta) = out[0] else { Issue.record("not a delta: \(out[0])"); return }
+    #expect(device == Remote.home)
+    #expect(delta.upserts.map(\.runtimeRunId) == ["run-h-typed"])
+    #expect(delta.refused.isEmpty)
+    #expect(delta.removed == ["pty-h2", "run-h-turn"])
+    #expect((delta.since, delta.revision) == (80, 81))
+    #expect(out[1] == .state(device: Remote.home, .incompatible, asOf: Self.now))
+    #expect(screen.holds(Remote.home))
+  }
+
+  /// (d) a state arm while the desktop holds reads `incompatible` at the WIRE's asOf; the word is kept, and a clean
+  /// reset gives it back.
+  @Test func aStateWordWhileHeldReadsIncompatibleAndIsKept() throws {
+    var screen = RemoteBoardScreen()
+    _ = screen.open(
+      try Self.open(try Self.openRefusing(1, "run-p-ask", Self.sleeping.0, Self.sleeping.1)), now: Self.now)
+    try #require(screen.holds(Remote.loft))
+    let stale = try Self.frame(try Self.witnessFrame(3))
+    try #require(stale == .state(device: Remote.loft, .stale, asOf: "2026-09-30T21:20:09.000Z"))
+    #expect(screen.frame(stale, now: Self.now) == [
+      .state(device: Remote.loft, .incompatible, asOf: "2026-09-30T21:20:09.000Z"),
+    ])
+    let reset = try Self.frame(try Self.witnessFrame(4))
+    #expect(screen.frame(reset, now: Self.now) == [
+      reset, .state(device: Remote.loft, .stale, asOf: "2026-09-30T21:20:09.000Z"),
+    ])
+    #expect(!screen.holds(Remote.loft))
+  }
+
+  /// (e) a keyless refused row holds its desktop until the next snapshot, and its stand-in key is never a removal.
+  @Test func aKeylessRefusedRowHoldsUntilTheNextSnapshot() throws {
+    var screen = RemoteBoardScreen()
+    _ = screen.open(try Self.open(try Self.openRefusing(0, "run-h-quiet", [.key("runtimeRunId")], nil)), now: Self.now)
+    #expect(screen.holds(Remote.home))
+    // a readable delta does not release a row with no key
+    let readable = try Self.frame(try Self.witnessFrame(1))
+    #expect(screen.frame(readable, now: Self.now) == [readable])
+    #expect(screen.holds(Remote.home))
+    // another keyless refusal: nothing is removed for it
+    let keyless = edited(edited(try Remote.turnRow(), [.key("runtimeRunId")], nil), Self.sleeping.0, Self.sleeping.1)
+    let json = edited(try Self.witnessFrame(1), [.key("delta"), .key("upserts")], .array([keyless]))
+    let out = screen.frame(try Self.frame(json), now: Self.now)
+    guard case .delta(_, let delta) = out.first else { Issue.record("not a delta"); return }
+    #expect(delta.removed.isEmpty)
+    #expect(!delta.removed.contains(RemoteBoardScreen.noKey))
+    #expect(out.count == 1)
+    // the desktop's reset clears it, and the wire's word comes back
+    let home = try #require(at(try Remote.witnessOpen(), [.key("devices"), .index(0), .key("snapshot")]))
+    let reset = try Self.frame(.object(["device": .string(Remote.home), "snapshot": home]))
+    #expect(screen.frame(reset, now: Self.now) == [
+      reset, .state(device: Remote.home, .live, asOf: "2026-09-30T21:20:00.000Z"),
+    ])
+    #expect(!screen.holds(Remote.home))
+  }
+}
