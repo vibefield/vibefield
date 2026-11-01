@@ -1,4 +1,5 @@
 import FieldAgents
+import FieldFreeway
 import FieldProduct
 import Foundation
 import Observation
@@ -676,14 +677,20 @@ public final class FieldLink {
     }
   }
 
-  /// F1 (FW-D1) — the phone's approval for its freeway link to `deviceId`, from that desktop's OWN
-  /// door: the approval's audience is that desktop's floor boot, its key signs it, and its fieldd is
-  /// the one that decides the caller is a phone (its roster's phone row). The answer comes back
-  /// unread, `{approval, expiresAt}`, for the link to carry.
+  /// F1b (FW-D5; FW-R3, FW-R6) — the phone's approval for its freeway link to `deviceId`, asked of
+  /// the HOME: `freeway.approve {}` for the home's own link, `{device}` for another desktop's, which
+  /// the home forwards whole to that desktop (M63 `599998fdd`). That desktop still mints: the
+  /// approval's audience is its floor boot, its key signs it, and its own roster decides the caller
+  /// is a phone, the phone the home names in `onBehalfOf.clientDeviceId`. Only the ask rides the
+  /// home, so no second door is opened for it. The answer, or the refusal, comes back unread, as
+  /// the owner sent it; the link says a refusal in the phone's words (`FreewayApproval.said`).
+  ///
+  /// (F1 asked the owner's own door here. That per-ask owner socket is FW-R6's, retired for the
+  /// approval only: a ticket, its renewal and Resume stay over the owner's door above, SP-7's.)
   public func approveFreeway(on deviceId: String) async throws -> JSONValue {
-    try await ownerDoor(deviceId, refusal: Self.noTerminalDoor) { client in
-      try await client.call("freeway.approve", params: .object([:]))
-    }
+    guard let home, let homeClient else { throw FreewayApproval.noHome }
+    return try await homeClient.call(
+      FreewayApproval.method, params: FreewayApproval.params(for: deviceId, home: home))
   }
 
   /// P0-C — renew a session's attach grant over the desktop that minted it:

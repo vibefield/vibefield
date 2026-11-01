@@ -25415,6 +25415,9 @@ own order:
   a non-home desktop's own door (`ownerDoor`, a per-ask owner socket), which F1 already serves. Asking the home with
   `device` instead is unbuilt, and so are FW-R3 (no phone probe of desktops) and FW-R6 (per-ask owner sockets
   retired), both F1b's in §14. The kit keeps one `FreewayDesktopLink` per desktop already (F1).
+  > **Paid (2026-11-01, M93 `284e4af9d`, run93r; LANDED "F1b's kit half"):** the kit asks the home with `device`,
+  > so FW-R3 holds: the phone probes no other desktop for an approval. FW-R6 holds for the approval alone: a
+  > ticket, its renewal and Resume still open the owner's door (SP-7). F1b's exit still needs James's device round.
 - **F1b's exit** (a session on a second desktop opens over that desktop's link, approved through the home's door,
   its bytes owner-direct) needs the kit's half and James's device round on two desktops. The rows here are two real
   fieldd daemons over scripted floors; no live tailnet ran.
@@ -26010,6 +26013,7 @@ compiled catalog keeps the dark appearance. The dark icon needs its own image in
 - The dark About icon.
 - The app workspace's stale `Package.resolved` (EL8; reported, never committed).
 - F1b's kit half (the phone asks through its home; FieldLink.swift:683), on VF-PM's brief.
+  > **Paid (2026-11-01):** M93 `284e4af9d`, run93r (LANDED "F1b's kit half").
 
 ## FG-6's follow-up 3 — the hold carries the field's mark: the browser's glass held off the field wears the field's mark as the held frame holds it, at the field's mark's own spot and size, so row 32's frozen frame compares one mark
 
@@ -27899,3 +27903,78 @@ restored clean; this second run went green throughout:
   new row; cargo 33 ok. The merge is over main `d8902f376`, item 148's records.
 
 **Owed.** Nothing of the fixer's.
+
+## F1b's kit half — the phone's freeway approval rides its home's door, and every refusal is said in its words
+
+(2026-11-01; three commits `dd6bccf5b` → `284e4af9d` on lane `fw/f1b-kit` over main `5c41c10b2`; minted STACKED as M93,
+`284e4af9d` itself (a fast-forward of main `5c41c10b2`: the run IS T), run93r.) The phone asks its HOME for a freeway
+approval to any desktop. The home forwards the ask whole to that desktop, which mints for the phone its own roster knows
+(M63). The phone opens no other door for it.
+
+**What James asked and ruled:** 2026-10-16 22:16Z, FW-D5, "a freeway per desktop": a link to each desktop the phone
+shows a session of, approved by THAT desktop through the home's door. 2026-10-31 21:09Z: freeway, sync plane and
+Godview land first. F1b's desktop half landed as M63 `599998fdd`. VF-PM scoped this half on 2026-11-01 at 01:43Z: the
+approval only. A ticket, its renewal and Resume stay over the owner's door (DS-8), and moving them is SP-7's. GO at
+22:22Z.
+
+**What landed** (10 files +412 −11):
+- `dd6bccf5b`, red first:
+  - FieldFreewayTests `FreewayApprovalTests` and `FreewayApprovalRefusalTests`, and three rows in FieldMeshTests
+    `FieldLinkOwnerDoorTests`.
+  - `FreewayContract.Approval` mirrors `FREEWAY_APPROVAL`, and `check-ios-fixtures` pins all four values: 67 pins,
+    was 63.
+  - 7 rows were red on the stubs. FieldMesh's two: the ask went to the laptop's own door (TIMEOUT), and it dialled
+    the laptop.
+- `8eac5b72b`, the code:
+  - `FieldLink.approveFreeway(on:)` sends `freeway.approve` on the home's door: `{}` for the home's own link,
+    `{device}` for another desktop's. With no home it refuses at once in the kit's shape (`FreewayApproval.noHome`,
+    UNAVAILABLE freeway `no_door`, retryable).
+  - `FreewayApproval.said` puts each refusal in the phone's words, keeping the door's kind, retryability, details
+    and code:
+    - FORBIDDEN_SCOPE → "laptop won't approve a connection from this phone" (not retryable);
+    - uncorrelated → "laptop doesn't know this phone yet";
+    - unread → "laptop isn't ready for this phone's connection yet";
+    - down → "laptop isn't taking connections from phones right now";
+    - the home's `peer-link` → "your home desktop can't reach laptop right now";
+    - no home → "this phone isn't connected to its home desktop".
+  - `FreewayDesktopLink`:
+    - A refusal reaches `link()` in those words, and the attach card's `doorWords` prints them.
+    - One no retry fixes leaves the link `.refused`, and only a tap asks again.
+    - A retryable one is asked again on the backoff.
+    - `Dialing.desktopName` gives the words the field's name for the desktop.
+- `284e4af9d`, the voice: DESIGN.md §9 gains "The freeway's refusals", dated 2026-11-01: the six sentences, quoted
+  exactly by `FreewayApproval.said`. VF-PM ruled at 22:40Z that DESIGN.md governs voice.
+
+**Gate.**
+- The kit, the gate the mini cannot run: `xcodebuild test` on James's Mac, on the iPhone 17 Pro simulator (iOS 26.5),
+  at nice 19 under the guard, DEVELOPER_DIR per command.
+  - TEST SUCCEEDED: 1,411 tests in 252 suites and 14 bundles, 0 failed (22:35:17–22:36:44Z, at load 120).
+  - FieldFreewayTests 57/57, FieldLinkOwnerDoorTests 8/8.
+  - The device (F93EABF3-…) was found Shutdown at 22:37:18Z.
+- On the lane: field-app's 18 DESIGN.md reader files, 391/391, and `ui-system-boundaries` 44/44, each run alone.
+  `check-ios-fixtures` found 186 copies and 67 pins identical. Biome is clean on
+  `scripts/check-ios-fixtures.mjs`, and `git diff --check` is clean.
+- The mini, on M93 = `284e4af9d`:
+  - Run 93 was red on the load lottery: fieldd's terminal-kill-matrix WP12-D10 row, at END load 59.5 (the mini's
+    foreign simulator and Spotlight). The tip has no TypeScript or Rust.
+  - Run93r, the one re-run, was green at 22:54:09Z: 11,999 / 0 / 18 (= main ±0), cargo 33 ok, iOS pins 67, the tree
+    clean.
+
+**Findings.**
+- Since F1, `FreewayDesktopLink`'s header and `Dialing.approve`'s doc said the approval came "from the phone's
+  home", while `approveFreeway` asked the owner's own door. The words are true from this slice on.
+- `thinking-freeway.md`'s FW-R6 row cites `FieldLink.swift:714-716` for the per-ask owner sockets. Those lines have
+  moved, and the approval's socket retires here. A dated note is owed at a draft slot.
+- DESIGN.md named no words for the freeway's refusals. §9 says them from `284e4af9d` on.
+- `check-ios-fixtures`' fix message prints a string pin's value with doubled quotes (`""down""`). Owed, the fixer's.
+
+**Owed.**
+- James's device round, before `-vf-freeway` comes off: F1's exit and this slice's witness on a real phone.
+- PG-3c, which waited on this slice.
+- SP-7, the ticket, renewal and Resume asked through the home, each a desktop slice first.
+- The 15 s wait the desktop half found still stands. An approval for an unreachable desktop waits for the home's
+  forward timeout (`FORWARDING.FORWARD_TIMEOUT_MS`) before the phone hears "your home desktop can't reach laptop
+  right now" and backs off. Reading the roster's state for the desktop first, or FD1's held opens, would answer
+  sooner.
+- `check-ios-fixtures`' doubled quotes, the fixer's (above).
+- `thinking-freeway.md` FW-R6's stale lines, at a draft slot VF-PM opens.
