@@ -11,8 +11,14 @@ import {
   type NeedsFrom,
   type NeedsItem,
   type NeedsItemId,
+  type NeedsItemKind,
+  type NeedsItemState,
   type NeedsNotice,
   type NeedsRecord,
+  NOTIFY_PER_MINUTE,
+  needsKindOf,
+  needsOutcomeOf,
+  needsStateOf,
   type SparkId,
   type SparkRecord,
   type SparkSummary,
@@ -51,10 +57,9 @@ import * as words from "./words";
 // - A held send's Allow is the allowance (one authority, no second table): the answered record stays until its run
 //   ends, through a fieldd restart, and the spark's later words to that run are not held. Liveness is judged at use;
 //   a run that ended while fieldd was down is found once this boot's re-attach has settled (critique 3).
-// - Bounds (PF4's watermark): eight open items per spark, sixteen sends per held item, six notices a minute per session.
+// - Bounds (PF4's watermark), each contracts' (compose.ts): NEEDS_OPEN_PER_SPARK open items per spark,
+//   NEEDS_HELD_SENDS_MAX sends per held item, NOTIFY_PER_MINUTE notices a minute per session.
 
-/** A seventh notice from one session in a minute is refused `limit`. */
-export const NOTIFY_PER_MINUTE = 6;
 const NOTIFY_WINDOW_MS = 60_000;
 /** The answered items remembered for an answer that comes again (the record of each is the audit line). */
 const ANSWERED_KEPT = 64;
@@ -127,14 +132,14 @@ interface Act {
 }
 
 const isAllowance = (record: NeedsRecord): boolean =>
-  record.item.kind === "held-send" &&
-  record.item.state === "answered" &&
-  record.item.answer?.outcome === "done" &&
-  record.item.answer.choice === YES;
+  needsKindOf(record.item) === "held-send" &&
+  needsStateOf(record.item) === "answered" &&
+  needsOutcomeOf(record.item.answer) === "done" &&
+  record.item.answer?.choice === YES;
 
 /** A record holds something still: an open item, an allowance, or a fact its spark has not heard. */
 const needed = (record: NeedsRecord): boolean =>
-  record.item.state === "open" || record.owed !== undefined || isAllowance(record);
+  needsStateOf(record.item) === "open" || record.owed !== undefined || isAllowance(record);
 
 /** An asker's own words as an item shows them: whole up to NEEDS_WORDS_MAX, else cut and said so. */
 const shown = (text: string): Pick<NeedsItem, "words" | "cut"> =>
@@ -193,7 +198,11 @@ export class NeedsQueue implements TalkHolds {
   reconcile(): void {
     const targets = new Set<string>();
     for (const record of this.#records.values())
-      if (record.item.kind === "held-send" && record.item.state !== "ended" && record.item.to)
+      if (
+        needsKindOf(record.item) === "held-send" &&
+        needsStateOf(record.item) !== "ended" &&
+        record.item.to
+      )
         targets.add(record.item.to.session);
     for (const target of targets)
       if (this.opts.run(target) === undefined)
@@ -208,7 +217,7 @@ export class NeedsQueue implements TalkHolds {
   /** The open items, oldest asked first, whole. */
   list(): NeedsItem[] {
     const open = [...this.#records.values()]
-      .filter((record) => record.item.state === "open")
+      .filter((record) => needsStateOf(record.item) === "open")
       .map((record) => record.item);
     return [...open, ...this.#asks.values()].sort((a, b) => a.asked.localeCompare(b.asked));
   }
@@ -233,8 +242,8 @@ export class NeedsQueue implements TalkHolds {
       format: NEEDS_RECORD_FORMAT,
       item: {
         id,
-        kind: "question",
-        state: "open",
+        kind: "question" satisfies NeedsItemKind,
+        state: "open" satisfies NeedsItemState,
         from: this.#fromOf(from),
         spark: from.spark,
         asked: this.#now().toISOString(),
@@ -287,8 +296,8 @@ export class NeedsQueue implements TalkHolds {
     // words held for the same run join its open item; an item an answer is acting on takes none (critique 5)
     const open = [...this.#records.values()].find(
       (record) =>
-        record.item.kind === "held-send" &&
-        record.item.state === "open" &&
+        needsKindOf(record.item) === "held-send" &&
+        needsStateOf(record.item) === "open" &&
         record.acting === undefined &&
         record.item.from.spark === from.spark &&
         record.item.to?.session === runtimeRunId,
@@ -310,8 +319,8 @@ export class NeedsQueue implements TalkHolds {
       format: NEEDS_RECORD_FORMAT,
       item: {
         id,
-        kind: "held-send",
-        state: "open",
+        kind: "held-send" satisfies NeedsItemKind,
+        state: "open" satisfies NeedsItemState,
         from: this.#fromOf(from),
         spark: from.spark,
         asked: this.#now().toISOString(),
@@ -339,8 +348,8 @@ export class NeedsQueue implements TalkHolds {
       format: NEEDS_RECORD_FORMAT,
       item: {
         id,
-        kind: "held-spawn",
-        state: "open",
+        kind: "held-spawn" satisfies NeedsItemKind,
+        state: "open" satisfies NeedsItemState,
         from: this.#fromOf(from),
         spark: from.spark,
         asked: this.#now().toISOString(),
@@ -371,7 +380,7 @@ export class NeedsQueue implements TalkHolds {
     for (let prior = this.#inFlight.get(id); prior !== undefined; prior = this.#inFlight.get(id))
       await prior.catch(() => undefined);
     const record = this.#records.get(id);
-    if (record === undefined || record.item.state !== "open")
+    if (record === undefined || needsStateOf(record.item) !== "open")
       return { item: this.#answeredAgain(id, record, choice) };
     const acts = record.item.choices ?? [];
     if (!Number.isInteger(choice) || choice < 0 || choice >= acts.length)
@@ -409,17 +418,18 @@ export class NeedsQueue implements TalkHolds {
     this.#told.delete(runtimeRunId);
     for (const record of [...this.#records.values()]) {
       const { item } = record;
-      if (item.kind !== "held-send" || item.to?.session !== runtimeRunId) continue;
+      if (needsKindOf(item) !== "held-send" || item.to?.session !== runtimeRunId) continue;
       if (record.acting !== undefined) continue; // the answer acting on it re-checks the run itself
-      if (item.state === "open") {
+      if (needsStateOf(item) === "open") {
         const { texts: _dropped, sender: _sender, ...rest } = record;
         const ended: NeedsRecord = {
           ...rest,
-          item: { ...item, state: "ended" },
+          item: { ...item, state: "ended" satisfies NeedsItemState },
           owed: words.sendEndedFact(item.from.name, item.to.name),
         };
         this.#stand(this.#delivered(ended, this.#sparkSessionOf(ended)));
-      } else if (isAllowance(record)) this.#keep({ ...record, item: { ...item, state: "ended" } });
+      } else if (isAllowance(record))
+        this.#keep({ ...record, item: { ...item, state: "ended" satisfies NeedsItemState } });
     }
     this.#emit();
   }
@@ -454,7 +464,7 @@ export class NeedsQueue implements TalkHolds {
     // what an Allow acted on is spent: only the answer, and what its spark is owed, are kept
     const answered: NeedsRecord = {
       format: NEEDS_RECORD_FORMAT,
-      item: { ...item, state: "answered", answer },
+      item: { ...item, state: "answered" satisfies NeedsItemState, answer },
       owed: act.owed,
     };
     // an act that began (its mark kept) is done: what it did stands whatever the disk does now, so the item never
@@ -475,7 +485,7 @@ export class NeedsQueue implements TalkHolds {
     const acts = item.choices ?? [];
     const notNow = choice === acts.length - 1;
     const spark = item.from.name;
-    switch (item.kind) {
+    switch (needsKindOf(item)) {
       case "question":
         return {
           outcome: "done",
@@ -566,8 +576,9 @@ export class NeedsQueue implements TalkHolds {
     return undefined;
   }
 
-  /** Tell the spark its answer (CP3-D7 A): into its live session, or resume it as compose.sparks.open does and land
-   * there once that session is live; otherwise it waits on disk until its session is next live. */
+  /** Tell the spark its answer (CP3-D7 A): into its live session, or wake it through compose.sparks.open's own wake
+   * (`open`: one per spark, so a window's Wake or Send asked meanwhile joins it, and it joins theirs) and land there
+   * once that session is live; otherwise it waits on disk until its session is next live. */
   async #tellAnswer(id: NeedsItemId, principal: GrantPrincipal): Promise<{ woke?: string }> {
     const record = this.#records.get(id);
     const sparkId = record?.item.from.spark;
@@ -627,7 +638,7 @@ export class NeedsQueue implements TalkHolds {
       throw refuseAnswer("an agent's own ask is answered in its pane", "in-its-pane");
     const item = record?.item ?? this.#answered.get(id);
     if (item === undefined) throw new RpcCallError("NOT_FOUND", `no needs-you item ${id}`, false);
-    if (item.state === "ended" && item.answer === undefined)
+    if (needsStateOf(item) === "ended" && item.answer === undefined)
       throw refuseAnswer("what it waited on ended before an answer", "ended");
     if (item.answer?.choice === choice) return item;
     const said = item.answer === undefined ? undefined : item.choices?.[item.answer.choice];
@@ -642,18 +653,18 @@ export class NeedsQueue implements TalkHolds {
     const { item } = record;
     const spark = item.from.name;
     const owed =
-      item.kind === "held-spawn"
+      needsKindOf(item) === "held-spawn"
         ? words.spawnUncertainFact(spark)
         : words.actUncertainFact(spark, item.to?.name ?? "");
     const next: NeedsRecord = {
       ...rest,
       item: {
         ...item,
-        state: "answered",
+        state: "answered" satisfies NeedsItemState,
         answer: {
           choice: acting?.choice ?? YES,
           at: acting?.at ?? this.#now().toISOString(),
-          outcome: "failed",
+          outcome: "failed" satisfies NeedsAnswerOutcome,
           reason: words.UNCERTAIN_REASON,
           told: false,
         },
@@ -680,8 +691,8 @@ export class NeedsQueue implements TalkHolds {
     const digest = createHash("sha256").update(`${runtimeRunId}\0${first.id}`).digest("hex");
     return {
       id: `ny-${digest.slice(0, 16)}`,
-      kind: "agent-ask",
-      state: "open",
+      kind: "agent-ask" satisfies NeedsItemKind,
+      state: "open" satisfies NeedsItemState,
       from: { name: run?.label ?? words.nameWords(runtimeRunId), session: runtimeRunId },
       ...(spark !== undefined ? { spark } : {}),
       asked: first.since,
@@ -695,7 +706,7 @@ export class NeedsQueue implements TalkHolds {
   #bound(spark: SparkId): void {
     let open = 0;
     for (const record of this.#records.values())
-      if (record.item.state === "open" && record.item.from.spark === spark) open += 1;
+      if (needsStateOf(record.item) === "open" && record.item.from.spark === spark) open += 1;
     if (open >= NEEDS_OPEN_PER_SPARK)
       throw refuse(
         "limit",
@@ -742,7 +753,7 @@ export class NeedsQueue implements TalkHolds {
   #hold(record: NeedsRecord): void {
     if (needed(record)) this.#records.set(record.item.id, record);
     else this.#records.delete(record.item.id);
-    if (record.item.state !== "open") this.#remember(record.item);
+    if (needsStateOf(record.item) !== "open") this.#remember(record.item);
   }
 
   #remember(item: NeedsItem): void {

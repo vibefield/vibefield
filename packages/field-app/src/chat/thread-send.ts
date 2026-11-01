@@ -79,8 +79,12 @@ export interface ThreadSendDeps {
   heard(timeoutMs: number): Promise<boolean>;
   /** the thread's pane once it has settled, else how it stands after `timeoutMs` (`whenSparkPane`) */
   pane(timeoutMs: number): Promise<SparkPaneReport | null>;
-  /** the spark reads Asleep now, as the feed reads it (asked where the send cannot go on): its thread draws no pane
-   * while it is */
+  /** its session is not running now, as the feed reads it (asked where the send cannot go on): its thread draws no
+   * pane while it is.
+   *
+   * *Corrected 2026-11-01 (CP-3):* this said the spark "reads Asleep". Since CP-3 a sleeping spark with a needs-you
+   * item reads Asking you or Needs your OK, so asleep is read from its session, never from its word: its line says it
+   * sleeps, with Wake (`threadLineOf`), whatever its word says. */
   asleep(): boolean;
   /** its thread is on screen now, the one Chat shows while Chat is the view (asked when no pane of it is drawn): a pane
    * is drawn, and found, only while it is */

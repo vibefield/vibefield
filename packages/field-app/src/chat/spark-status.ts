@@ -1,4 +1,10 @@
-import type { AgentFieldRow, NeedsItem, SparkId, SparkSummary } from "@vibefield/contracts";
+import {
+  type AgentFieldRow,
+  type NeedsItem,
+  needsKindOf,
+  type SparkId,
+  type SparkSummary,
+} from "@vibefield/contracts";
 import { SPARK_NEEDS_YOU, type SparkStatus } from "@vibefield/design-kit/spark-face";
 
 // CHAT'S READING OF A SPARK (SP-1b, CP-3; DESIGN.md §8 "Chat's list", §2.10; CH-D1, CH-D3, CH-D4, CP3-D7, CP3-D8).
@@ -81,7 +87,11 @@ function sparkItemsOf(
   return items.filter(
     (item) =>
       item.spark === spark.id &&
-      !(item.kind === "agent-ask" && item.from.session !== undefined && own.has(item.from.session)),
+      !(
+        needsKindOf(item) === "agent-ask" &&
+        item.from.session !== undefined &&
+        own.has(item.from.session)
+      ),
   );
 }
 
@@ -89,7 +99,8 @@ function sparkItemsOf(
  * send, a held spawn, an agent's permission, or a kind this build does not know is Needs your OK — the need is real,
  * and that word is the safe one. */
 export function statusOfItem(item: NeedsItem): SparkStatus {
-  return item.kind === "question" || (item.kind === "agent-ask" && item.ask === "question")
+  const kind = needsKindOf(item);
+  return kind === "question" || (kind === "agent-ask" && item.ask === "question")
     ? "asking"
     : "approval";
 }

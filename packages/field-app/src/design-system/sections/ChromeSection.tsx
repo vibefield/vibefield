@@ -232,16 +232,18 @@ export function ChromeSection({
           a window says, and on three plates what the pane says while it is being found, when this
           desktop's floor does not hold it, and when the floor did not answer. Asleep or not
           started, one honest line with its act: Wake waiting while it wakes, and refused in
-          fieldd's words; a spark whose session never started, with none. A spark just hatched,
-          before its first turn, says hello over its pane, with its three starters (NS-D4), which
-          wait while one is sent; a spark that has had a turn shows its pane alone. At the thread's
-          foot, its composer: the draft, the mic and send, at rest, typing, and waiting while a send
-          or a wake runs; @'s list with the agents to start and the sessions running, and its words
-          while it reads, when nothing matches, when there is nothing to add, when the spark's
-          profiles can't be read, and when what is running can't be, the agents to start standing;
-          an agent's menu in its box (its model and Effort), while its picker is read and when it
-          can't be; and the chips an agent, a session and a card make. Fixture sparks, rows and
-          agents, read by the product's own readings.
+          fieldd's words; a spark whose session never started, with none. A spark asleep with its
+          held send waiting on you (CP-3) says Needs your OK, its line still asleep with Wake, and
+          its card stands in its thread. A spark just hatched, before its first turn, says hello
+          over its pane, with its three starters (NS-D4), which wait while one is sent; a spark that
+          has had a turn shows its pane alone. At the thread's foot, its composer: the draft, the
+          mic and send, at rest, typing, and waiting while a send or a wake runs; @'s list with the
+          agents to start and the sessions running, and its words while it reads, when nothing
+          matches, when there is nothing to add, when the spark's profiles can't be read, and when
+          what is running can't be, the agents to start standing; an agent's menu in its box (its
+          model and Effort), while its picker is read and when it can't be; and the chips an agent,
+          a session and a card make. Fixture sparks, rows and agents, read by the product's own
+          readings.
         </p>
       </Specimen>
 

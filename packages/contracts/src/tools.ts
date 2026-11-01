@@ -24,8 +24,10 @@ import {
   ComposeProjectsListOutput,
   ComposeReadOutput,
   NEEDS_CHOICE_WORDS,
+  NEEDS_CHOICES_MAX,
   NEEDS_NOTICE_CHARS,
   NEEDS_OPEN_PER_SPARK,
+  NOTIFY_PER_MINUTE,
 } from "./compose";
 
 // The tool plane (track MT; `draft/thinking-tool-plane.md`, ruled by James on its page 2026-10-30 21:19–21:20Z; the
@@ -296,7 +298,7 @@ export const TOOLS: readonly ToolDef[] = [
     destructive: false,
     idempotent: false,
     slice: "CP-3",
-    description: `Ask the user a question with one to four choices of your own; VibeField adds ${NEEDS_CHOICE_WORDS.notNow} after them, so no choice may be ${NEEDS_CHOICE_WORDS.notNow}. Returns at once, and the answer arrives as a wake. At most ${NEEDS_OPEN_PER_SPARK} of your questions, held sends and spawns wait for the user at a time.`,
+    description: `Ask the user a question with 1 to ${NEEDS_CHOICES_MAX} choices of your own; VibeField adds ${NEEDS_CHOICE_WORDS.notNow} after them, so no choice may be ${NEEDS_CHOICE_WORDS.notNow}. Returns at once, and the answer arrives as a wake. At most ${NEEDS_OPEN_PER_SPARK} of your questions, held sends and spawns wait for the user at a time.`,
   },
   {
     name: "notify",
@@ -308,7 +310,7 @@ export const TOOLS: readonly ToolDef[] = [
     destructive: false,
     idempotent: false,
     slice: "CP-3",
-    description: `Tell the user something, on one line of at most ${NEEDS_NOTICE_CHARS} characters: every VibeField window's status line says it, and a notification does while no VibeField window is in front. It returns once handed on, never that they read it.`,
+    description: `Tell the user something, on one line of at most ${NEEDS_NOTICE_CHARS} characters: every VibeField window's status line says it, and a notification does while no VibeField window is in front. It returns once handed on, never that they read it. At most ${NOTIFY_PER_MINUTE} a minute from you.`,
   },
 ];
 

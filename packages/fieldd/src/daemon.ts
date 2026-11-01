@@ -111,6 +111,7 @@ import {
   type NativeRestartReason,
   NEEDS_NAME_MAX,
   NeedsAnswerParams,
+  needsOutcomeOf,
   PluginsDisableParams,
   PluginsEnableParams,
   PluginsGetParams,
@@ -6170,7 +6171,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         { action: "needs.answer", target: { kind: "needs-item", id: item }, attrs: { choice } },
         () => needs.answer(item, choice, ctx.principal),
         (r) => ({
-          outcome: r.item.answer?.outcome === "failed" ? "failed" : "succeeded",
+          outcome: needsOutcomeOf(r.item.answer) === "failed" ? "failed" : "succeeded",
           attrs: {
             kind: r.item.kind,
             outcome: r.item.answer?.outcome ?? "done",

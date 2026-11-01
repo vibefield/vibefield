@@ -8,6 +8,7 @@ import type {
   ComposeAgentSpawnOutput,
   ComposeAgentStopOutput,
   ComposeAgentWatchOutput,
+  NeedsHeldLaunch,
   NeedsItemId,
   SparkId,
 } from "@vibefield/contracts";
@@ -52,14 +53,10 @@ export interface HoldSender extends TalkSender {
   readonly session: string;
 }
 
-/** A spawn after its defaults, and its tasks: what Allow one more starts. */
-export interface HeldLaunch {
-  readonly agent: string;
-  readonly profileSet: string;
-  readonly cwd: string;
-  readonly model?: AgentModelSelection | undefined;
-  readonly tasks: readonly string[];
-}
+/** A spawn after its defaults, and its tasks: what Allow one more starts, as the needs-you record keeps it. */
+export type HeldLaunch = Readonly<
+  Pick<NeedsHeldLaunch, "agent" | "profileSet" | "cwd" | "model" | "tasks">
+>;
 
 /** CP-3 — the needs-you queue's holds, as the room asks them (rooms/you/queue.ts answers). */
 export interface TalkHolds {

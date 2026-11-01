@@ -2,6 +2,8 @@ import {
   AGENT_CATALOG,
   type NeedsAnswer,
   type NeedsItem,
+  needsKindOf,
+  needsOutcomeOf,
   type SparkId,
 } from "@vibefield/contracts";
 import { sparkStatusWord } from "@vibefield/design-kit/spark-face";
@@ -123,7 +125,7 @@ function agentLabelOf(agent: string): string {
 
 /** What you are asked, by the item's kind. */
 function questionOf(item: NeedsItem, asker: string): string {
-  switch (item.kind) {
+  switch (needsKindOf(item)) {
     case "question":
       return item.words ?? `${asker} needs you`;
     case "held-send":
@@ -149,7 +151,7 @@ function questionOf(item: NeedsItem, asker: string): string {
 
 /** The sub, by the item's kind: how long a yes lasts, the cap, or where an agent's ask is answered. */
 function subOf(item: NeedsItem, asker: string): string | null {
-  switch (item.kind) {
+  switch (needsKindOf(item)) {
     case "held-send":
       return item.to === undefined ? null : `Your yes lasts until ${item.to.name} ends.`;
     case "held-spawn":
@@ -169,11 +171,12 @@ export function needsCardWords(card: NeedsCard): NeedsCardWords {
   const word = sparkStatusWord(statusOfItem(item));
   const other = item.from.spark !== spark.id;
   const question = questionOf(item, asker);
+  const kind = needsKindOf(item);
   // the asker's own words, for the kinds whose question is not them
-  const shown = item.kind === "question" || item.kind === "agent-ask" ? undefined : item.words;
-  const more = item.kind === "held-send" && (item.count ?? 1) > 1 ? (item.count ?? 1) - 1 : 0;
+  const shown = kind === "question" || kind === "agent-ask" ? undefined : item.words;
+  const more = kind === "held-send" && (item.count ?? 1) > 1 ? (item.count ?? 1) - 1 : 0;
   // an agent's own ask is answered in its pane, never here (CP-L4, AR-6): Show alone, whatever it carries
-  const choices = item.kind === "agent-ask" ? [] : (item.choices ?? []);
+  const choices = kind === "agent-ask" ? [] : (item.choices ?? []);
   const acts = choices.map(
     (choice, index): NeedsCardAct => ({ choice: index, word: choice, primary: index === 0 }),
   );
@@ -207,14 +210,15 @@ export function needsSaid(item: NeedsItem, choice: number): NeedsSaid {
   const answer: NeedsAnswer | undefined = item.answer;
   const said = `You said ${item.choices?.[answer?.choice ?? choice] ?? ""}`.trimEnd();
   const why = (reason: string | undefined): string => (reason === undefined ? "" : `: ${reason}`);
-  if (answer?.outcome === "failed") {
+  if (needsOutcomeOf(answer) === "failed") {
+    const kind = needsKindOf(item);
     const failed =
-      item.kind === "held-send" && item.to !== undefined
+      kind === "held-send" && item.to !== undefined
         ? `Couldn't send ${item.from.name}'s words to ${item.to.name}`
-        : item.kind === "held-spawn"
+        : kind === "held-spawn"
           ? "Couldn't start the agent"
           : "Couldn't finish it";
-    return { text: `${said} · ${failed}${why(answer.reason)}`, tone: "failed" };
+    return { text: `${said} · ${failed}${why(answer?.reason)}`, tone: "failed" };
   }
   if (answer?.told === false) {
     return {

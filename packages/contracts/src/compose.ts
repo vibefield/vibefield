@@ -470,7 +470,7 @@ export type AgentInputQueueFile = z.infer<typeof AgentInputQueueFile>;
 // answered for every window, and the spark hears the answer as a wake (CP3-D2 A). The words of every act are DESIGN.md
 // §9's ("The person's queue's words"); a window answers by an act's place, never its word. ──
 
-/** ask_user's question, before the card cuts it to three lines */
+/** ask_user's question; the card shows six lines of it, then scrolls (DESIGN.md §8 "Chat's thread") */
 export const NEEDS_QUESTION_MAX = 500;
 /** one choice's label */
 export const NEEDS_CHOICE_MAX = 40;
@@ -486,6 +486,8 @@ export const NEEDS_REASON_MAX = 256;
 export const NEEDS_NOTICE_CHARS = 140;
 /** what notify accepts before that cut */
 export const COMPOSE_NOTIFY_MAX = 500;
+/** the notices one session may tell the person in a minute (PF4's watermark): one more is the fact `limit` */
+export const NOTIFY_PER_MINUTE = 6;
 /** the sends that wait on one held item */
 export const NEEDS_HELD_SENDS_MAX = 16;
 /** what one spark may have waiting on the person at once, its questions, held sends and spawns together (PF4's
@@ -510,6 +512,26 @@ export type NeedsItemState = (typeof NEEDS_ITEM_STATES)[number];
  * apart (`told`), so an act done for a spark that sleeps is still done. */
 export const NEEDS_ANSWER_OUTCOMES = ["done", "failed"] as const;
 export type NeedsAnswerOutcome = (typeof NEEDS_ANSWER_OUTCOMES)[number];
+
+/** An open word as this build names it, else undefined: a word a newer build's record may carry. */
+function knownWord<W extends string>(words: readonly W[], word: string | undefined): W | undefined {
+  return words.find((known) => known === word);
+}
+
+/** An item's kind, state and its answer's outcome as this build names them (undefined: a word it never heard of).
+ * fieldd and the window compare these words only through them, so a misspelt word is a type error, never a branch no
+ * item takes. */
+export function needsKindOf(item: { readonly kind: string }): NeedsItemKind | undefined {
+  return knownWord(NEEDS_ITEM_KINDS, item.kind);
+}
+export function needsStateOf(item: { readonly state: string }): NeedsItemState | undefined {
+  return knownWord(NEEDS_ITEM_STATES, item.state);
+}
+export function needsOutcomeOf(
+  answer: { readonly outcome: string } | undefined,
+): NeedsAnswerOutcome | undefined {
+  return knownWord(NEEDS_ANSWER_OUTCOMES, answer?.outcome);
+}
 
 /** An act's place among an item's choices. */
 const NeedsChoiceIndex = z.number().int().min(0).max(NEEDS_CHOICES_MAX);
@@ -636,8 +658,8 @@ const AskChoice = z
   .max(NEEDS_CHOICE_MAX)
   .regex(/^[^\r\n]+$/);
 
-/** ask_user (sparks only, MT-D11): a question with one to four distinct choices of the spark's own. It returns at once
- * and the answer is a wake (CP3-D2 A); Not now is VibeField's, so no choice may be it. */
+/** ask_user (sparks only, MT-D11): a question with 1 to NEEDS_CHOICES_MAX distinct choices of the spark's own. It
+ * returns at once and the answer is a wake (CP3-D2 A); Not now is VibeField's, so no choice may be it. */
 export const ComposeAskUserInput = z
   .object({
     question: z.string().min(1).max(NEEDS_QUESTION_MAX),

@@ -1494,6 +1494,13 @@
               <code>audit.required(ctx, mutation, effect, describeOutcome)</code>, so the record is
               written around the act rather than after it, and the outcome names what actually happened.
               Fifteen doors are audited, over six target kinds.
+              <em>Corrected 2026-11-01 (CP-3, adding <code>needs-item</code>):</em> the count is stale, as the
+              Catalogue's is, and this page no longer keeps one: the table named seven target kinds before CP-3, and it
+              is not every audited act. The compose plane's doors are audited too: <code>compose.spark.hatch</code> and
+              <code>compose.spark.open</code> on a <code>spark</code>, and each tool call as
+              <code>tools.&lt;name&gt;</code> on its caller (the tool door's note, below), whose outcome since CP-3
+              names the needs-you item a call raised (<code>item</code>: <code>ask_user</code>'s, or a held send's or
+              spawn's), never its words.
             </p>
             <div class="table-wrap">
               <table class="reference-table">
@@ -1506,6 +1513,7 @@
                   <tr><td><span class="route">index</span></td><td><p><code>index.enroll</code></p></td></tr>
                   <tr><td><span class="route">index-runtime</span></td><td><p><code>index.retire</code></p></td></tr>
                   <tr><td><span class="route">index-session</span></td><td><p><code>index.ticket.mint</code> — AR-8b: the session's id (its digest when the id is not a safe audit identity) and the grant's expiry, never the grant; RO-13 (2026-10-04): and the grant's scopes</p></td></tr>
+                  <tr><td><span class="route">needs-item</span></td><td><p><code>needs.answer</code> (CP-3) — the act by its place among the item's acts, never the words; the outcome names the item's kind, the act's outcome, whether the spark was told, and the run an answer woke</p></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1923,7 +1931,7 @@
                     <td><p><code>ComposeSparksOpenParams {spark}</code> → <code>ComposeSparksOpenResult {spark}</code></p></td>
                     <td><p><code>agents.manage</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p><p><em>Added 2026-11-01 (SP-1d):</em> one wake per spark. A second open while a wake is under way (another window's, or the shell's) is answered with that same wake, its run or its refusal, so two opens never wake one spark into two runs; each caller is still authorized and audited at the door. Not joined yet: a resume of the spark's session already under way through <code>agent.resume</code>. The daemon's resume wrapper (<code>daemon.ts</code>) reads its <code>PRECONDITION_FAILED</code> (state <code>resuming</code> or <code>replaced</code>) as a session that cannot be resumed, so the wake starts the spark again beside it; the fix is owed to that wrapper.</p></td>
+                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p><p><em>Added 2026-11-01 (SP-1d):</em> one wake per spark. A second open while a wake is under way (another window's, or the shell's) is answered with that same wake, its run or its refusal, so two opens never wake one spark into two runs; each caller is still authorized and audited at the door. Not joined yet: a resume of the spark's session already under way through <code>agent.resume</code>. The daemon's resume wrapper (<code>daemon.ts</code>) reads its <code>PRECONDITION_FAILED</code> (state <code>resuming</code> or <code>replaced</code>) as a session that cannot be resumed, so the wake starts the spark again beside it; the fix is owed to that wrapper.</p><p><em>Added 2026-11-01 (CP-3):</em> an answer to a sleeping spark's needs-you item (<a href="#cat-needs"><code>needs.answer</code></a>) wakes it through this same joined wake, so an answer and an open asked meanwhile are one wake and one run.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>compose-sparks.test.ts</code></p></td>
                   </tr>
@@ -2031,15 +2039,18 @@
               refusal is a tool result, <code>isError</code> with <code>structuredContent.fact</code>
               (<code>unknown-tool</code>, <code>forbidden</code>, <code>bad-input</code>, <code>outside</code>,
               <code>not-found</code>, <code>unavailable</code>, <code>limit</code>, <code>failed</code>), never a
-              protocol error. <em>Corrected 2026-10-31 (CP-3):</em> this named the first five alone; <code>unavailable</code>
-              and <code>failed</code> were facts from MT-0, and <code>limit</code> from CP-2. A send or a spawn held for
-              the person's OK (CP-3) is an answer, never a refusal: it names the needs-you item it waits in (<a href="#cat-needs"><code>needs.*</code></a>). Each caller's <code>instructions</code> are built from
+              protocol error. Each caller's <code>instructions</code> are built from
               the rows it holds. The door knows no vendor (AR-L1). The bridge reaches an agent by the agent runtime's
               per-run briefing at every birth (MT-D9): a spark's carries the whole server and its brief and refuses
               when it cannot be delivered (CP-1d); a plain run's carries the door and its read-only <code>agent</code>
               rows by name, and an agent that cannot take it simply starts without it. A launch typed into a pane holds
               no door until puppeteer briefs an adopted launch (petition PU-J). Planned rows are served when their
               slices build them. CP-1b <code>42748065</code> · <code>3e93ba71</code>; MT-0.
+              <em>Corrected 2026-11-01 (CP-3; the refusal facts above were edited in place on 2026-10-31):</em> MT-0's
+              words named the first five alone, though <code>unavailable</code> and <code>failed</code> were facts from
+              MT-0 too, and <code>limit</code> came with CP-2. A send or a spawn held for the person's OK (CP-3) is an
+              answer, never a refusal: it names the needs-you item it waits in
+              (<a href="#cat-needs"><code>needs.*</code></a>).
             </p>
             <div class="table-wrap">
               <table class="reference-table">

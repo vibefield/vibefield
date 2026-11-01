@@ -7,6 +7,7 @@ import {
   NEEDS_CHOICE_WORDS,
   type NeedsAnswer,
   type NeedsItem,
+  needsKindOf,
   type SparkId,
   type SparkSummary,
 } from "@vibefield/contracts";
@@ -733,9 +734,10 @@ export const needsLiveEntryOf = (items: readonly NeedsItem[]): SparkEntry => vel
 /** What the fixture door hands back for each live item: the question done; the send's Allow not done (its session
  * ended); the spawn's Allow one more done while Vela sleeps, so she has not heard it. Not now is done for each. */
 export function needsLiveAnswerOf(item: NeedsItem, choice: number): NeedsItem {
-  if (item.kind === "held-send" && choice === 0)
+  const kind = needsKindOf(item);
+  if (kind === "held-send" && choice === 0)
     return answeredOf(item, choice, { outcome: "failed", reason: `${SESSION_NAME} ended` });
-  if (item.kind === "held-spawn" && choice === 0)
+  if (kind === "held-spawn" && choice === 0)
     return answeredOf(item, choice, { told: false, waits: "Vela's session is not running yet" });
   return answeredOf(item, choice);
 }

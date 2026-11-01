@@ -15,7 +15,10 @@ import {
   NeedsItem,
   NeedsNotices,
   NeedsRecord,
+  needsKindOf,
   needsNoticesOf,
+  needsOutcomeOf,
+  needsStateOf,
   SparkRecord,
   SparkSummary,
 } from "../src/compose";
@@ -210,6 +213,19 @@ describe("CP-3 — the held answers and the person's doors (cp3-the-person.md, r
     expect(item.kind).toBe("gate");
     expect(item.state).toBe("waiting");
     expect((item as Record<string, unknown>).step).toBe(4);
+  });
+
+  it("reads a kind, a state and an outcome as this build names them, a word it never heard of as none", () => {
+    const unknown = NeedsItem.parse(fixture("needs-item.unknown-kind"));
+    expect(needsKindOf(unknown)).toBeUndefined();
+    expect(needsStateOf(unknown)).toBeUndefined();
+    const { item } = NeedsRecord.parse(fixture("needs-record.held-send"));
+    expect(needsKindOf(item)).toBe("held-send");
+    expect(needsStateOf(item)).toBe("open");
+    const { item: answered } = NeedsAnswerResult.parse(fixture("needs-answer-result.valid"));
+    expect(needsOutcomeOf(answered.answer)).toBe("done");
+    expect(needsOutcomeOf({ outcome: "deferred" })).toBeUndefined();
+    expect(needsOutcomeOf(undefined)).toBeUndefined();
   });
 
   it("keeps what an Allow acts on in the record, under a spark's own name, never on the wire", () => {

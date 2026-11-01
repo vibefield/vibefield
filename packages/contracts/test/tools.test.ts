@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SERVED_TOOLS } from "../gen/tools";
 import { AGENT_CATALOG } from "../src/agent-catalog";
+import { NEEDS_CHOICES_MAX, NOTIFY_PER_MINUTE } from "../src/compose";
 import { METHODS } from "../src/methods";
 import {
   TOOL_AUDIENCES,
@@ -147,6 +148,15 @@ describe("served and planned (ruling 2)", () => {
     expect(toolRow("agent_send")!.description).toContain(
       "Your first words to a session the user started wait for the user's OK.",
     );
+  });
+
+  it("states the you room's bounds from contracts, each said once (ask_user's choices, notify's minute)", () => {
+    for (const name of ["ask_user", "notify"]) {
+      const projected = SERVED_TOOLS.find((t) => t.name === name);
+      expect(projected?.description, name).toBe(toolRow(name)?.description);
+    }
+    expect(toolRow("ask_user")!.description).toContain(`with 1 to ${NEEDS_CHOICES_MAX} choices`);
+    expect(toolRow("notify")!.description).toContain(`At most ${NOTIFY_PER_MINUTE} a minute`);
   });
 
   it("says agent_send's words land marked as the spark's, sent on the user's behalf (CP2-D1)", () => {

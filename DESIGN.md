@@ -1531,16 +1531,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - The other statuses (Listening, Planning, Searching, Reading, Watching, Done, Shipped, Failed, Thanked, Offline)
       arrive with the slices that report them, never from a guess. *Rate limited has no signal yet: puppeteer 0.3.2's
       blockers are a permission, a question or a failure. The slice that reports a limit brings it.*
-    - *Amended 2026-10-31 (CP-3; CP3-D7 A):* an item comes before Asleep, because an answer wakes the spark. A
-      sleeping spark with a question for you says Asking you, in its word and in its face (S-3: the face and the word
-      say one status). Whether it is awake is read from its session, never from its word: the line under the thread's
-      head still says "Vela is asleep", with Wake (below), and its pane is mounted only while its session runs. Nor
-      does its word say any longer whether the spark has been heard, since an item's word stands over Asleep and over
-      the last rule's Hello. Heard is read from its own run's row, never from its word: that row is on the board,
-      alive, and says how the run stands, at work, idle or waiting on you in its pane (a run fieldd is waiting to
-      resume says nothing yet). Send waits for that before it pastes (§8 "Chat's composer"). A blocker counts only
-      while its session runs, as it always did, since a run that has stopped waits on no one. The queue also lists the
-      asks of the spark's own run; Chat reads each of them once, as its own row's blocker.
+    - *Amended 2026-10-31 (CP-3; CP3-D7 A), in the rules above, which were edited in place that day; said whole here
+      2026-11-01:* the needs-you queue's items for the spark are the status's third source, and an item comes before
+      Asleep, because an answer wakes the spark. A sleeping spark with a question for you says Asking you, in its word
+      and in its face (S-3: the face and the word say one status). So the first Hello holds only while nothing waits
+      on you, and the blocker's rule stands above the item's and says "while its session runs", as its place under
+      Asleep said before, since a run that has stopped waits on no one. Whether it is awake is read from its session,
+      never from its word: the line under the thread's head still says "Vela is asleep", with Wake (below), and its
+      pane is mounted only while its session runs. Nor does its word say any longer whether the spark has been heard,
+      since an item's word stands over Asleep and over the last rule's Hello. Heard is read from its own run's row,
+      never from its word: that row is on the board, alive, and says how the run stands, at work, idle or waiting on
+      you in its pane (a run fieldd is waiting to resume says nothing yet). Send waits for that before it pastes (§8
+      "Chat's composer"). The queue also lists the asks of the spark's own run; Chat reads each of them once, as its
+      own row's blocker.
   - **The thread's column at SP-1b:** the chosen spark's head, 72 tall (padding 0 18 0 24, the hairline at its foot):
     the face at 40, framed and live, the name 15 semibold, and the status word under it (12, tertiary). Under the head
     is one line in secondary ink with one act:
@@ -1977,12 +1980,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **A message wakes it** (§2.10). Asleep or not started, Send wakes the spark first (`compose.sparks.open`; the
       line reads "Waking…"). It waits up to 20 s for the spark to be heard and its pane to appear, then up to 1.5 s for
       the pane's input to open, then pastes. An awake spark whose pane is still being found ("Finding Vela's pane…", §8
-      "Chat's thread"), or that has not been heard yet (as just after a hatch, while its word is Hello), is waited for
-      in the same 20 s, with no wake. Nothing is pasted into a spark before it is heard: a program not yet up may not
-      read a paste as one, and a line break inside the message would read as Return. Heard is read from its own run's
-      row, never from its word (§8 "Chat's list", the status): the row is on the board, alive, and says how the run
-      stands. A sleeping spark with a card says Asking you or Needs your OK before Send's wake and after it, so it is
-      heard only once its woken run says so.
+      "Chat's thread"), or that has not been heard yet (Hello, as just after a hatch), is waited for in the same 20 s,
+      with no wake. Nothing is pasted into a spark before it is heard: a program not yet up may not read a paste as
+      one, and a line break inside the message would read as Return.
+      *Amended 2026-10-31 (CP-3; written into the sentences above that day, and moved into this note 2026-11-01):*
+      heard is read from its own run's row, never from its word (§8 "Chat's list", the status): the row is on the
+      board, alive, and says how the run stands. Its word is Hello before it is heard only while nothing waits on you,
+      since an item's word stands over Hello and over Asleep: a sleeping spark with a card says Asking you or Needs
+      your OK before Send's wake and after it, so it is heard only once its woken run says so.
     - **A spark wakes once.** fieldd answers an open asked while another is under way (a second window's:
       `compose.sparks.open` is this desktop's own door, its shell's and its windows') with that same wake, its run or
       its refusal, so two opens never wake one spark into two runs. A resume under way through another door
@@ -2051,9 +2056,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       (HN-L1). "Pasted into" is never said for a paste the pane did not take.
     - **A pasted draft is the agent's until you press Return** (ruled by VF-PM 2026-10-31 16:35Z). What Send pasted
       and you did not send stays in the agent's own input, where VibeField cannot see it. The next delivery VibeField's
-      queue makes into that session (CP-2: a wake's line of facts, or a spark's words; since CP-3, the facts of an
-      answer you gave the spark, §9 "The person's queue's words") is submitted together with it. Send joins the
-      session's queue only through a window door into it, `compose.say`, which is a later slice.
+      queue makes into that session (CP-2: a wake's line of facts, or a spark's words) is submitted together with it.
+      Send joins the session's queue only through a window door into it, `compose.say`, which is a later slice.
+      *Amended 2026-10-31 (CP-3; written into the sentence above that day, and moved into this note 2026-11-01):*
+      the facts of an answer you gave the spark (§9 "The person's queue's words") are such a delivery too, so a draft
+      left there is submitted together with them.
   - **The draft is the thread's.** Each spark keeps its own for the window's life, written nowhere (HN-D9's rule).
     Leaving Chat or choosing another spark keeps it, and coming back finds it. A send still running when you leave
     clears what it carried from the draft you come back to, once it is pasted, and keeps what you typed there
@@ -5784,12 +5791,12 @@ started, play for one resumed — so the noun travels with the verb (One Frame F
 create is a bare plus). Their Hardware records are the page's T4 column, drawn and not shipped.
 **Send** (Chat's composer, §8) needs no glyph of its own: it is `arrow`, as drawn (up). No `attach`:
 @ is typed (FC-D1). Chat's starters (§8 "Chat's thread") wear `agents`, `panes` and `duplicate`, already
-among the 64. The needs-you card (§8 "Chat's thread") needs none of its own either: its answered line wears
-`check`, and `exclaim` when the act was not done. **The hand's indexes** (Cards in Hand, HN-D1, 2026-10-29): a card prints its kind's
-glyph twice, as a playing card prints its rank — `snippets` (text) · `capture` (a picture; the line's
-snapshot wears it too) · `code` (a file) · `agents` (an agent) · `terminal` · `message` — in the card's
-index ink, never a colour of its own (§5). `clipboard` is the selection bar's Copy (HN-D3), its notch
-having left with the clipboard's tray (HN-1).
+among the 64. The needs-you card (§8 "Chat's thread") needs none of its own either: its answered line
+wears `check`, and `exclaim` when the act was not done. **The hand's indexes** (Cards in Hand, HN-D1,
+2026-10-29): a card prints its kind's glyph twice, as a playing card prints its rank — `snippets` (text) ·
+`capture` (a picture; the line's snapshot wears it too) · `code` (a file) · `agents` (an agent) ·
+`terminal` · `message` — in the card's index ink, never a colour of its own (§5). `clipboard` is the
+selection bar's Copy (HN-D3), its notch having left with the clipboard's tray (HN-1).
 **The update** (track AU, AU-D7 ruled A 2026-10-29) needs no glyph of its own either: a download is `arrow` turned
 180 (down), the restart and Settings → Updates' rail are `reset`, an update that has installed is `check`. The dot
 beside the face is not a glyph: it is the badge slot's state (§2.8 I-5, §2.5). The status item's update image — the
