@@ -36,8 +36,11 @@ const {
   doorRow,
   endVerdict,
   enumVerdict,
+  fatalWords,
   fenceAgain,
   fenceClear,
+  fieldNativeFresh,
+  fieldNativePath,
   guardedOutput,
   handleDoor,
   hidLine,
@@ -81,6 +84,7 @@ const {
   simulatorExe,
   simulatorProof,
   simulatorSettled,
+  smokeHomeOf,
   startDoor,
   stopRun,
   sweep,
@@ -487,6 +491,37 @@ test("distFresh: the plugin's dist and the shell's dist stale or missing, or a s
   assert.match(noPhone[0].why, /lacks the literal --phone/u);
   // a missing smoke bundle is said once, as missing
   assert.equal(distFresh({ ...FRESH_DIST, smoke: null, smokeHasPhone: false }).length, 1);
+});
+
+test("fieldNativeFresh: the field-native the shell launches, missing or older than its crate, named with the cargo line and the shared target (item 133)", () => {
+  const path = "/lanes/pts3/vibe-field/target/debug/field-native";
+  assert.deepEqual(fieldNativeFresh({ path, bin: 300, sources: 200 }), []);
+  // a code-only lane: build:all never builds field-native, and the smoke launched to a certain fatal
+  const missing = fieldNativeFresh({ path, bin: null, sources: 200 });
+  assert.equal(missing.length, 1);
+  assert.equal(missing[0].what, `field-native (${path})`);
+  assert.equal(missing[0].why, "missing");
+  assert.match(missing[0].fix, /^cargo build -p field-native from this checkout /u);
+  assert.match(missing[0].fix, /FIELDD_NATIVE_BIN/u);
+  assert.match(missing[0].fix, /shared between checkouts holds whichever built last/u);
+  const stale = fieldNativeFresh({ path, bin: 100, sources: 200 });
+  assert.equal(stale.length, 1);
+  assert.match(stale[0].why, /^older than packages\/field-native's src\//u);
+  assert.equal(stale[0].fix, missing[0].fix);
+  assert.deepEqual(preflightLines(missing), [
+    `PHONE_PREFLIGHT FAIL field-native (${path}): missing → ${missing[0].fix}`,
+  ]);
+});
+
+test("fieldNativePath: the shell's own resolution — FIELDD_NATIVE_BIN when set, else this checkout's target/debug (item 133)", () => {
+  assert.equal(
+    fieldNativePath({ FIELDD_NATIVE_BIN: "/elsewhere/field-native" }),
+    "/elsewhere/field-native",
+  );
+  assert.equal(
+    fieldNativePath({}),
+    join(import.meta.dirname, "..", "..", "..", "target", "debug", "field-native"),
+  );
 });
 
 test("launchChecks: in a launch, no shot dir or a helper ENUM never proved is refused", () => {
@@ -1157,9 +1192,24 @@ test("rowsMark and rowsVerdict: BEGIN and END said, the mode's, and END's count 
     /19 row\(s\): devices runs 20/u,
   );
   assert.equal(rowsVerdict({ mode: "devices", begin: "devices", end: 21, served: 21 }).ok, false);
-  assert.match(
+  // item 134: no BEGIN is never "not in this build" (the preflight proved the bundle carries --phone): the kept HOME's
+  // fatal when the smoke named one, else that it never reached the rows
+  assert.equal(
     rowsVerdict({ mode: "devices", begin: null, end: null, served: 0 }).why,
-    /--phone is not in this build/u,
+    "no PHONE_ROWS_BEGIN: the smoke never reached the rows",
+  );
+  assert.deepEqual(
+    rowsVerdict({
+      mode: "devices",
+      begin: null,
+      end: null,
+      served: 0,
+      fatal: "desktop.lifecycle.fatal: x",
+    }),
+    {
+      ok: false,
+      why: "no PHONE_ROWS_BEGIN: the smoke stopped before the rows — desktop.lifecycle.fatal: x",
+    },
   );
   assert.match(rowsVerdict({ mode: "none", begin: "devices", end: 2, served: 2 }).why, /not none/u);
   assert.match(
@@ -1171,6 +1221,71 @@ test("rowsMark and rowsVerdict: BEGIN and END said, the mode's, and END's count 
     rowsVerdict({ mode: "devices", begin: "devices", end: 9, served: 9 }).why,
     /devices runs 20/u,
   );
+});
+
+test("smokeHomeOf: the HOME a red smoke names, from its SMOKE_HOME line; nothing from any other line (item 134)", () => {
+  assert.equal(
+    smokeHomeOf('SMOKE_HOME {"home":"/tmp/vf-smoke-zp6IXf","removed":false}\n'),
+    "/tmp/vf-smoke-zp6IXf",
+  );
+  assert.equal(smokeHomeOf("x SMOKE_HOME {not json"), null);
+  assert.equal(smokeHomeOf('SMOKE_DAEMONS {"left":[]}'), null);
+  assert.equal(smokeHomeOf('SMOKE_HOME {"removed":true}'), null);
+});
+
+test("fatalWords: PT-S3 L1's kept HOME says the desktop's fatal, fieldd's when it says more, and nothing when silent (item 134)", () => {
+  const home = "/tmp/vf-smoke-zp6IXf";
+  // L1's own records (desktop.ndjson seq 11, fieldd.ndjson's third line), trimmed to what the reader reads
+  const fatal = {
+    level: 60,
+    event: "desktop.lifecycle.fatal",
+    msg: "Electron shell encountered a fatal error",
+    err: {
+      type: "SupervisorError",
+      message:
+        "fieldd exited before readiness (code 1, signal null)\n  [stderr] fieldd failed to start: field-native did not come up before the readiness deadline",
+    },
+  };
+  const bootstrap = {
+    level: 60,
+    event: "fieldd.lifecycle.bootstrap_failed",
+    err: { type: "Error", message: "field-native did not come up before the readiness deadline" },
+  };
+  const files = (entries) => ({
+    readFileSync: (path) => {
+      if (path in entries) return entries[path];
+      throw Object.assign(new Error(`ENOENT ${path}`), { code: "ENOENT" });
+    },
+    readdirSync: (path) => {
+      if (path === join(home, "logs/users")) return ["1"];
+      throw Object.assign(new Error(`ENOENT ${path}`), { code: "ENOENT" });
+    },
+  });
+  const desktopLog = join(home, "logs/system/desktop.ndjson");
+  const fielddLog = join(home, "logs/users/1/system/fieldd.ndjson");
+  const lines = (...records) => `${records.map((r) => JSON.stringify(r)).join("\n")}\n`;
+  // fieldd's words are inside the desktop's: said once
+  assert.equal(
+    fatalWords(
+      home,
+      files({
+        [desktopLog]: lines({ event: "desktop.lifecycle.booted" }, fatal, { event: "x" }),
+        [fielddLog]: lines(bootstrap),
+      }),
+    ),
+    "desktop.lifecycle.fatal: fieldd exited before readiness (code 1, signal null) [stderr] fieldd failed to start: field-native did not come up before the readiness deadline",
+  );
+  // a desktop log with no fatal: fieldd's alone
+  assert.equal(
+    fatalWords(home, files({ [desktopLog]: lines({ event: "x" }), [fielddLog]: lines(bootstrap) })),
+    "fieldd.lifecycle.bootstrap_failed: field-native did not come up before the readiness deadline",
+  );
+  // a torn last line is skipped, never thrown
+  assert.match(
+    fatalWords(home, files({ [desktopLog]: `${lines(fatal)}{"event":"desktop.lif` })),
+    /^desktop\.lifecycle\.fatal: fieldd exited before readiness/u,
+  );
+  assert.equal(fatalWords(home, files({})), null);
 });
 
 // ─── Simulator.app: quit only when proven the run's ───────────────────────────────────────────────────────────────────

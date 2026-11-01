@@ -128,6 +128,16 @@ export function monitorRowOf(row: AgentModelMeshRow): WireMonitorRow | undefined
   return row.monitorRow;
 }
 
+/** The model ids a board's rows carry, in the board's order. */
+function modelIdsOf(rows: readonly AgentModelMeshRow[]): string[] {
+  const ids: string[] = [];
+  for (const row of rows) {
+    const wire = monitorRowOf(row);
+    if (wire !== undefined) ids.push(wire.id);
+  }
+  return ids;
+}
+
 export class ModelBoardFold {
   #revision = 0;
   #here: string | undefined;
@@ -154,7 +164,7 @@ export class ModelBoardFold {
 
   /** Every row the fold holds, this desktop's first and then by device order. */
   heldRows(): readonly HeldModelRow[] {
-    return [...this.#held.values()];
+    return this.#byDevice();
   }
 
   /**
@@ -177,10 +187,15 @@ export class ModelBoardFold {
     }));
   }
 
-  /** The open — and every re-snapshot — replaces everything held (M23). */
+  /** The open — and every re-snapshot — replaces everything held (M23). A row
+   * the new open still holds keeps its place among its desktop's (item 138). */
   open(open: AgentModelMeshOpen): MonitorModelSnapshot {
+    const kept = new Set<string>();
+    for (const entry of open.devices) {
+      for (const id of modelIdsOf(entry.snapshot?.rows ?? [])) kept.add(id);
+    }
+    for (const id of [...this.#held.keys()]) if (!kept.has(id)) this.#held.delete(id);
     this.#devices.clear();
-    this.#held.clear();
     this.#runs.clear();
     this.#runsList = null;
     this.#here = open.devices[0]?.device;
@@ -281,13 +296,16 @@ export class ModelBoardFold {
     return this.#change(upserts, removed);
   }
 
-  /** A device's board, whole: its rows replace that device's; the upserts. */
+  /** A device's board, whole: its rows replace that device's; the upserts. A
+   * row the new board still holds keeps its place (item 138): only the ids it
+   * no longer holds leave, so a re-send that changed nothing moves nothing. */
   #replaceBoard(
     device: string,
     held: HeldDevice,
     snapshot: RowsSnapshot<AgentModelMeshRow>,
   ): MonitorAgentRow[] {
-    for (const id of held.idByKey.values()) this.#held.delete(id);
+    const kept = new Set(modelIdsOf(snapshot.rows));
+    for (const id of held.idByKey.values()) if (!kept.has(id)) this.#held.delete(id);
     held.idByKey = new Map();
     held.epoch = snapshot.epoch;
     held.revision = snapshot.revision;
@@ -331,7 +349,28 @@ export class ModelBoardFold {
   /** Every row the fold holds, this desktop's first and then by device order;
    * the replica sorts by the contract's own rule. */
   #ordered(): MonitorAgentRow[] {
-    return [...this.#held.values()].map((held) => held.row);
+    return this.#byDevice().map((held) => held.row);
+  }
+
+  /**
+   * Item 138 — the held rows grouped by desktop, in the board's device order
+   * (the open's, then each desktop as it is first heard), each desktop's rows
+   * in the order the fold first took them (a whole re-send keeps every row it
+   * still holds in place). `#held` alone is insertion order across every
+   * desktop: a device's whole re-send (`#replaceBoard`: a re-present, a
+   * re-attach, a resync) re-inserted its rows after every other desktop's, and
+   * a birth landed after every desktop's, so a peer's rows moved in the
+   * window's order (the rain's columns) on a frame that changed nothing.
+   */
+  #byDevice(): HeldModelRow[] {
+    const groups = new Map<string, HeldModelRow[]>();
+    for (const device of this.#devices.keys()) groups.set(device, []);
+    for (const held of this.#held.values()) {
+      const group = groups.get(held.device);
+      if (group === undefined) groups.set(held.device, [held]);
+      else group.push(held);
+    }
+    return [...groups.values()].flat();
   }
 }
 

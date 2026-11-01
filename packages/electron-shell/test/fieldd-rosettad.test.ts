@@ -112,6 +112,9 @@ describe("buildSupervisor — the rosettad fieldd is handed (AR-8, L3)", () => {
     cleanup.push(() => rmSync(repoRoot, { recursive: true, force: true }));
     mkdirSync(join(repoRoot, "packages", "fieldd", "dist"), { recursive: true });
     writeFileSync(join(repoRoot, "packages", "fieldd", "dist", "bin.cjs"), "");
+    // item 134b — a smoke refuses a missing field-native (fieldd-native.test.ts), so this tree carries one
+    mkdirSync(join(repoRoot, "target", "debug"), { recursive: true });
+    writeFileSync(join(repoRoot, "target", "debug", "field-native"), "");
     const resources = resolveDevelopmentResources({ repoRoot, electronExecPath: "/electron" });
     expect(resources.rosettadPath).toBeNull();
     buildSupervisor({

@@ -180,13 +180,15 @@
   records `d9e5eb119`; AL-D14 "A", D15…D18), **AL-9b** (`cc37d2d8e`, 10-29; LANDED §AL-9b: one chord table in main for
   ⌃⌘A, ⌘Q and ⌃⌘F, a held chord acting once, a non-Latin layout's chord read from the physical key), **AL-10**
   (`27d61f7a5`, 11-01; LANDED §AL-10: the Behavior tab's lifetime row says a quit ends a terminal, DESIGN.md §9's "The
-  quit's words"; AL-D19 "no"). AL-8b RETIRED (AL-D10 "A": no LaunchAgent, not with AL-6 either).
+  quit's words"; AL-D19 "no"), **AL-11** (`3ead0fd36`, 11-01; LANDED §AL-11: the relaunch cap read from a log on
+  disk, written before each relaunch), **AL-12** (`b14117151`, 11-01; LANDED §AL-12:
+  Settings → Diagnostics' "Last exit", kept after the notice). AL-8b RETIRED (AL-D10 "A": no LaunchAgent, not with
+  AL-6 either).
 - AL-9c candidates, on James's word (VF-PM's board): the deck's no-op `toggleFullscreen`, through a page→main door of
   its own (AL-D19: a person's Ghostty `quit` chord never quits VibeField) · Settings' chord words off the Mac · the
   deck's last-pane count (with ghosttea's "last pane closed" hook).
-- Next, stacked in order, each its own mint: **AL-11** AL-5's relaunch cap persisted · **AL-12** Settings →
-  Diagnostics' "Last exit" · **AL-6** background mode (AL-D2's "Keep running when VibeField quits", a Dock-hidden
-  resident shell, a status item).
+- Next: **AL-6** background mode (AL-D2's "Keep running when VibeField quits", a Dock-hidden resident shell, a
+  status item).
 - Owed: AL-5's relaunch witness on a packaged build; Windows/Linux relaunch; a fieldd no shell ever claimed is
   unbounded; the clean `smoke:canvas` on this Mac (unattended); ghosttea's "last pane closed" hook (an upstream ask);
   James's hand rows (§5).
@@ -242,7 +244,8 @@
   `ModelBoardFold`'s rule, retires `UsageLedger`/`UnreadLedger`/the stale rule, and routes `reportShown` through the
   home, PG-D6). Sliced and ruled (VF-PM 2026-11-01 02:46Z, the brief `lanes/ios/PG3-BRIEF.md`): 3a0 the promotion
   probe, paid by item 137 → 3a the witness goldens ∥ 3b `reportShown` through the home (contracts and fieldd) →
-  3c the kit decodes → 3d the Swift fold → 3e the switch; 3a waits on James's J1 and 3b on J2, on the PM board
+  3c the kit decodes → 3d the Swift fold → 3e the switch; James ruled J1–J4 at 03:55Z, all (a), and item 138
+  (the fold keeps each desktop's place) landed before 3a's golden; 3a and 3b building
   → PG-5…PG-8 (list, timeline, spend, rain, native) → PG-9 (resume, `agent.get`, the measured rates).
   PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
@@ -425,9 +428,19 @@
   push-event verify run 41235730001 green, PR #7's re-run green (41239299536); nothing owed; LANDED "Item 129") ·
   item 130 (the phone's sign-out kept History's cache, against AP-D4: `35b9248d4`, with SP-D12's comment
   `f8d93b4a2`, as the merge `6130153f8`, run 61; IOS-10a's sign-out words paid in `a9a62c20a`; LANDED "Item 130") ·
+  items 131, 133, 134 and 139 (fieldd's slow-cleanup warning waits for its own clock; the phone stage checks the
+  field-native its smoke launches; a smoke dead before its rows names its kept HOME and the stage says the fatal, and
+  134b's smoke refuses a missing field-native at once; the rosettad control row reads at `close`: `130906443` as the
+  merge `230e72848`, run 75; owed: PT-S3 L1's re-run on a built lane, PORTALS's; LANDED "Items 131, 133, 134 and
+  139") ·
+  item 141 (the TREE-dies row's wait for its grandchild ends on a beat or the tree gone, inside the row's own budget,
+  never a 5 s clock: `15428f2a8` as the merge `2d91c6a5c`, run 77; LANDED "Item 141") ·
   item 137 (a shell promoted to an agent left the Godview and was reborn: the window's `ModelBoardFold` dropped an
   id another key of the desktop still held, against M22's one body; found by PG-3a0's probe; `a13132333`,
   `49935e71b`, M70 run 70, a pure fast-forward; nothing owed; LANDED "Item 137") ·
+  item 138 (a peer's rows moved in the window's order, the rain's columns, on a whole re-send that changed
+  nothing: the fold listed `#held` by insertion; now by the board's device order, each row it still holds in
+  place; found by PG-3a's design check; `569ee11cb`, M74 `815babbd3` run 74; nothing owed; LANDED "Item 138") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).

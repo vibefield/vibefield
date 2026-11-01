@@ -26563,3 +26563,273 @@ rebased onto main `be1a21ec0` unchanged, its range-diff `=`; Checks):
 - Not claimed: an off word's ratio is printed, never judged, and row 32 holds no floor for it. The Account page's picker
   is never walked off; its witness is the unit row. The frame switch's off state is not built, and the glass's literals
   are item 136's.
+
+## AL-11 — the relaunch cap outlives fieldd: AL-D8's three relaunches per ten minutes are read from a log on disk, written before each relaunch runs (2026-11-01; `3ead0fd36`, lane `al/11-relaunch-cap`; James's "do the worth doing stuff"; VF-PM's GO)
+
+**Why:** AL-5's cap (`RELAUNCH_CAP` 3 per `RELAUNCH_WINDOW_MS` 10 min, AL-D8) counted in fieldd's memory. A fieldd
+replaced at boot (a stale build the supervisor stops, a crash of its own) began the count at zero. So an app that
+crashed at launch beside a fieldd that went with it could be relaunched without end, the loop the cap exists to bound.
+AL's Next named it: "AL-5's relaunch cap persisted".
+
+**What landed** (contracts · fieldd · field-native's generated registries):
+- **`LAYOUT.SHELL_RELAUNCHES`** (`fieldd/shell-relaunches.json`; `pnpm gen` writes `contracts/gen/layout.json` and
+  `field-native/src/registries.rs`, the vector by hand) holds `ShellRelaunchLog {at: epoch-ms[]}` (contracts
+  `shell-lease.ts`, passthrough; fixture `shell-relaunch-log.valid.json`). fieldd's alone; nothing native reads it.
+- **The cap, read from the log** (`fieldd/src/shell-absence.ts`, `relaunchUnderCap`): the log's stamps (with this
+  fieldd's own, sorted) inside the window. Past the cap it warns `fieldd.shell_absence.relaunch_capped` and relaunches
+  nothing; under it, it WRITES the new stamp, THEN relaunches, so an app that dies at once is counted. A shell that
+  attaches while the log is read or written wins (a generation `clear()` bumps): no relaunch, nothing written.
+- **A log it cannot use** never unbounds the cap: an unreadable or garbled one (`fileRelaunchLog` refuses "not a
+  relaunch log") falls back to this fieldd's own count (`relaunch_log_unreadable`); a failed write is warned
+  (`relaunch_log_failed`) and the relaunch runs under the memory count.
+- **One writer** for fieldd's lifecycle records: the lease's (0600, synced, a durable rename), exported as
+  `writeRecordFile`.
+
+**Rows:** `fieldd/test/shell-absence.test.ts`, 15 rows, 5 new (10 → 15; the commit's body says "6 new", a miscount:
+the sixth new row is the fixture table's `shell-relaunch-log`, 531 → 532). "the relaunch cap outlives fieldd (AL-11)": a second
+fieldd over the spent log relaunches nothing inside the window, then once after it; written before relaunched; a broken
+log capped at `RELAUNCH_CAP`; a shell back during the read wins. "the relaunch log on disk", real timers over a temp
+root: none, then what was written, mode 0600, a garbled one refused.
+
+**Validation.**
+- **Red first** under a mutation (03:20:11Z, the log ignored: `const recorded: number[] = []`): the cross-fieldd row and
+  the shell-wins row red, 2 failed | 13 passed; restored (03:20:30Z), 15/15. contracts fixtures + layout 548/548.
+- **The light** at `3ead0fd36` on `27d61f7a5` (03:31:13 → 03:35:55Z, nice 19, the guard, co-plan/HOLD): contracts' and
+  fieldd's typecheck, biome, preflight, check:walls; contracts whole 54 files / 1,430 tests; fieldd whole 223 files
+  passed and 3 skipped, 2,813 tests passed and 30 skipped; cargo `layout_vector` 1/1 (a fresh field-native build).
+- **Run 73** (M73 `2b35a3def`, the MERGE shape: `3ead0fd36` over main `313deb462`, AL-10's and a5's records on
+  M72; minted by a9 on VF-PM's GO, no second rebase, the light standing):
+  - `pnpm verify` armed 03:50:03Z, exit 0 at 03:54:51Z (about five minutes), the mini's tree clean after it.
+  - vitest 11,498 passed, 0 failed, 18 skipped, +6 over run 72 (shell-absence 10 → 15, the fixtures 531 → 532). cargo 534 passed, 0 failed, 14 ignored (33 results). Typecheck and
+    test ran for 28 projects.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run73/` (`mrun73.bundle`, sha256 `61b32730026270ec…`).
+- **Landed:** main fast-forwarded `313deb462` → `2b35a3def` at 2026-11-01 03:58:16Z on VF-PM's GO.
+
+**Owed.** The log holds at most `RELAUNCH_CAP` stamps (written only while fewer fall inside the window), and nothing
+else reads it. AL-5's packaged relaunch witness, and Windows/Linux relaunch, stay AL's Owed.
+
+## Item 138 — every desktop keeps its place in the Godview's order: the window's fold listed its rows in insertion order across every desktop, so a peer's whole re-send (a re-present, a re-attach, a resync) moved that peer's rows behind every other desktop's and re-listed its own on a frame that changed nothing (2026-11-01; `569ee11cb` on main `27d61f7a5`, lane `item138` in `/Volumes/SamsungRed/lanes/pg3`, in the mini's mint M74 `815babbd3` over main `2b35a3def`, run 74)
+
+**Found by PG-3a's design check** (workflow `wf_4e7ab61f-0b7`, reading the parity golden it would bless). VF-PM filed
+it at 03:34Z as ITEM 138, owed before 3a blesses its parity golden: under P1 a defect is fixed in its own item, never
+blessed. It predates PG: `heldRows()` has listed `#held` in insertion order since MV-3a.
+
+**The finding, plainly.**
+- `ModelBoardFold.heldRows()` was `#held`'s insertion order across every desktop, against its own doc ("this
+  desktop's first and then by device order"). `#replaceBoard` deleted a device's ids and inserted them again.
+- So a peer's whole re-send put that peer's rows after every other desktop's, and re-listed them in its board's order
+  (an owner lists agents before terminals; a delta birth had sat last). A whole re-send can be PG-1d's re-present on a
+  gate flip or a lost frame, a re-attach on a new epoch (its daemon restarted), or the mesh resync. A birth landed
+  after every desktop's too.
+- **What a person saw:** `rowOrder` lists other desktops' rows in held order, and the rain claims columns in display
+  order, so another desktop's columns moved on a frame that changed nothing. The swarm and the model's order
+  (`compareMonitorRows`) were never affected.
+
+**What** (`569ee11cb`, 3 files +149 −10):
+- **The fold** (`field-app/src/godview/monitor/model-board.ts`):
+  - `heldRows()` and the open's rows group the held rows by desktop, in the board's device order (the open's, then
+    each desktop as it is first heard);
+  - `#replaceBoard` and `open()` drop only the ids the new board no longer holds, so every row still held keeps its
+    slot, and a new row joins the end of its own desktop's.
+- **The words:** `rowOrder`'s doc and window-rows' header state the rule. The doc's "the fold holds them in that
+  order" was not true after a birth.
+- **The red row** (`field-app/test/godview-model-board.test.ts`, "item 138"): the golden board's asleep desktop wakes
+  with a board. Then the peer re-presents at the same revision, re-attaches on a new epoch, takes a birth, and
+  re-presents with the newborn listed first, and a whole new open lists both boards reversed. The fold's order and the
+  window's `rowOrder` hold at every step.
+
+**Validation.**
+- **Red first**, in lane `pg3` at nice 19 under the guard and co-plan/HOLD, with no PERF.lock
+  (`lanes/ios/item138-light.sh`):
+  - main `27d61f7a5`'s fold, swapped in and never committed, fails the row at the first re-present (`run-loft-w`
+    moved after `run-attic-e`);
+  - the fix's first cut, device grouping alone (`cd35c72d2`, amended away), fails it at the re-present that lists the
+    newborn first.
+- **The review** (workflow `wf_83f62137-bfe`, two lenses): one should, a desktop's own rows re-listed by a whole
+  re-send, folded as the keep-in-place rule; two nits folded.
+- **The light** at `569ee11cb` (03:41:20 → 03:42:09Z):
+  - biome on the three files, and field-app's and fieldd's typecheck;
+  - thirteen field-app files that read the fold or the window's order, 253 tests, no golden moved.
+- **Run 74** (M74 `815babbd3`, the MERGE shape: main `2b35a3def` merged into `569ee11cb`, minted by a9 on VF-PM's
+  GO):
+  - `pnpm verify` armed 03:59:35Z, exit 0 at 04:04:25Z (about five minutes).
+  - vitest 11,499 passed, 0 failed, 18 skipped, +1: `godview-model-board.test.ts` 14 → 15, the item's row. cargo 534
+    passed, 0 failed, 14 ignored (33 `ok`).
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run74/` (`mrun74.bundle`, sha256 `cf796dd7ccda5ccc…`).
+- **Landed:** main fast-forwarded to `815babbd3` at 2026-11-01 04:07:17Z on VF-PM's GO.
+
+**Owed.** Nothing. PG-3d's Swift fold transcribes the rule, and its parity suite ports this row.
+
+## Items 131, 133, 134 and 139 — four honest states at their sources: the exit cleanup's slow warning waits for its own clock, the phone stage checks the field-native its smoke will launch, a smoke that dies before its rows says why, and the rosettad control row reads the refusal after its stderr has closed
+
+(2026-11-01; five commits `3054b1af2` → `130906443` on lane `fixer/items-131-133-134-139` over main `27d61f7a5`, the
+fixer's; the mint M75 `230e72848`, the merge over main `13c5a6ddc`, run 75.) Four items filed to the fixer, one slice
+on VF-PM's 03:37Z go: 131 (2026-10-31 23:14Z, run 65), 133 and 134 (2026-11-01 02:31Z, PORTALS's PT-S3 L1), 139
+(03:36Z, run 72). 134b was scoped in at 02:35Z: measure the spawn of a missing field-native first, then fix what the
+measure names.
+
+**Item 131 — the slow warning is said only once its own clock agrees.** Run 65 read `expected 1999 to be greater than
+or equal to 2000` at `test/agent-session.test.ts:3675`: fieldd's item 87 exit path arms
+`setTimeout(warn, AGENT_EXIT.CLEANUP_WARN_MS)` and reports `pendingMs: Date.now() - cleanupStartedAt`. libuv arms a
+timer from its loop clock truncated to whole milliseconds, so it can complete up to a millisecond early by the wall
+clock (item 120's class, its second site). The warning claims the cleanup is pending PAST the bound, so the fix is the
+product's: `warnWhenDue` measures as before and, short of the bound, re-arms for the remainder (`c54424ce0`). No slack,
+and the row's `>= CLEANUP_WARN_MS` stands.
+
+**Item 133 — the phone stage checks the field-native the smoke's shell will launch.** Lane pts3 was born code-only.
+`packages/field-native/project.json` has no targets, so `build:all` never builds it, and the stage's preflight (the
+capture pair, the plugin's dist, the shell's dist) passed a smoke that launched to a certain fatal. The stage now
+resolves the binary as electron-shell's `main/fieldd.ts` does (FIELDD_NATIVE_BIN, else this checkout's
+`target/debug/field-native`). In all three passes (`--preflight-only`, the launch's first pass outside ENUM, and the
+late re-check, the last two on the command's own environment) it names the binary missing or older than
+`packages/field-native`'s src/ or Cargo.toml or the workspace's Cargo.toml or Cargo.lock. The fix line is
+`cargo build -p field-native` from this checkout, which lands in CARGO_TARGET_DIR (so `target/` must link there, or
+FIELDD_NATIVE_BIN name the binary). It also says a target dir shared between checkouts holds whichever checkout built
+last: the caveat in the wording, not a wider check (`3362b7e3e`).
+
+**Item 134b — measured first, then the swallow fixed at its source.** fieldd's own spawn of a missing
+FIELDD_NATIVE_BIN is not unheard: a detached spawn with no `'error'` listener throws ENOENT, and the process dies in
+about 2 ms (Node v26.5.0, the spawn copied from `packages/fieldd/src/bin.ts`). L1's ten seconds were no spawn at all.
+electron-shell's `buildSupervisor` hands `nativeExecutable` only when the file exists, so FIELDD_NATIVE_BIN went
+unset and fieldd's `spawnNative` was undefined. NativeLink then waited for a pairing file nothing would write ("did not
+come up before the readiness deadline"). A smoke-like mode now refuses a missing field-native beside the shell's own
+`fieldd bin missing (build it)`: "field-native bin missing (build it: cargo build -p field-native): <path>"
+(`1b6b4244c`). Development keeps its tolerance on purpose, because the dev runner builds and starts the floor itself.
+
+**Item 134 — a smoke that dies before its rows says why.** On a fatal before its run, main names the kept HOME
+(`sayFatalSmokeHome`, beside `dataRoot`, before `flow.fatal`): `SMOKE_HOME {"home":…,"removed":false}`. That is
+DK-18's own promise ("a red run keeps them and SMOKE_HOME names them"), which only runSmoke's teardown had kept. An
+injected FIELDD_DATA_DIR is never named. With no PHONE_ROWS_BEGIN, the stage reads that HOME's `desktop.lifecycle.fatal`
+and fieldd's `fieldd.lifecycle.bootstrap_failed`. It says "no PHONE_ROWS_BEGIN: the smoke stopped before the rows —
+<the fatal>", else "… the smoke never reached the rows". It never says "--phone is not in this build", which its own
+preflight had already disproved (`130906443`).
+
+**Item 139 — the control row reads the refusal at `close`.** fieldd's "the projection lock is real (the control)"
+resolved on the second rosettad's `exit`. Node can fire it before the piped stderr drains, and run 72 at load 39 read
+`''` while the non-zero code passed. It now resolves on `close` (the process gone AND its streams closed), the
+composition the supervisor itself has used since item 65 (`cc5b9d675`) (`3054b1af2`). Measured: `close` still fires
+with the row's unread stdout pipe.
+
+**The light** (lane item118, under cp-landing's HOLD, every red-first step a working-tree mutation restored and proved
+clean): 2026-11-01 03:55:12Z → 04:04:03Z, two scripts (slice-light.sh stopped at
+its first F139 model; slice-light2.sh from F139 on).
+- W: the stage's `--preflight-only` on the lane's own field-native printed "PHONE_PREFLIGHT FAIL field-native
+  (…/lanes/item118/vibe-field/target/debug/field-native): older than packages/field-native's src/ …" (the lane's binary
+  predates DS-7's .rs). With FIELDD_NATIVE_BIN at a path that does not exist, it printed the "missing" line.
+- S: the new test file against main's stage, red; tooling/dev-runner whole, 342/342.
+- E1: 134b's refusal made inert, its two refusal rows red. E2: 134's SMOKE_HOME line made inert, its row red.
+- F139: the second rosettad's stderr handle stopped right after spawn and restarted 100 ms after its exit, so the
+  refusal is still in the pipe at 'exit'. The 'exit' form read `expected '' to match /already owned by another/`,
+  red; the 'close' form, green. The rosettad is ../rosetta-pin's release build at the lock's sha `3948bcf`. The first
+  model, stderr `pause()`d, could not go red: Node's flushStdio resumes every stdio stream on the tick after 'exit', so
+  buffered bytes reach the 'exit' form too. The race is bytes unread in the pipe, measured standalone 3/3.
+- F131: the first timer armed 200 ms short. Main's code read `expected 1805 to be greater than or equal to 2000`, red;
+  this one, green.
+- biome on the eight files; check:walls 0; tsc for fieldd and electron-shell; electron-shell whole 2,446 passed and 3
+  skipped (fieldd-native 6/6, fieldd-rosettad 4/4).
+- fieldd whole, with FIELDD_ROSETTAD_BIN naming that rosettad: 2,826 passed, 11 skipped and ONE failed, all 32
+  rosettad-supervisor rows running and agent-session 68 of 70 (2 skipped). The red was
+  `test/process-service.test.ts:244` "the whole TREE dies: the shim's server does not outlive it (§17.1)": its
+  `until()` deadline at load 123, in a file this slice does not touch (last changed 09-14). One re-run of that file
+  alone was green, 21 passed and 1 skipped at load 92.
+- Run 75 on the mini (a9's mint; VF-PM's read, 04:16:52Z): 11,505 passed, 0 failed, 18 skipped over 27 rows; cargo
+  33 ok; both lottery sites green on their fixes, rosettad-supervisor 32 and agent-session 70.
+
+**Owed.** PT-S3 L1's re-run on a lane with field-native built (PORTALS's): 133's preflight before the launch, and
+134's named fatal if it still dies. Item 141 (`process-service.test.ts:244`'s fixed deadline under load, the red this
+light met) is the fixer's next.
+
+## AL-12 — Settings → Diagnostics says how VibeField last quit: the last exit is kept after the next launch's notice has gone, in one sentence in DESIGN.md §9's words, and a stop a shell asked for is kept as its exit (2026-11-01; `b14117151`, lane `al/12-last-exit`; James's "do the worth doing stuff"; VF-PM's GO)
+
+**Why:** the record of how the last shell left (`LAYOUT.SHELL_EXIT`, AL-7) is said ONCE, by the next launch's notice,
+then gone. A stop a shell asked for (a person's quit that ended the terminal service, an update) sealed the lease and
+recorded nothing. So nothing told a person, later, how VibeField last quit. AL-7 owed the line, and AL's Next named it.
+
+**What landed** (contracts · fieldd · field-app · DESIGN.md · field-native's generated registries):
+- **`LAYOUT.SHELL_LAST_EXIT`** (`fieldd/shell-last-exit.json`; `pnpm gen`; the vector by hand) holds `ShellLastExit`:
+  `ShellExitRecord` plus `stopped?: NativeRestartReason`. Each shell exit replaces it, and nothing takes it.
+- **`diagnostics.lastExit`** (product surface, `diagnostics.read`, idempotent, local) answers
+  `DiagnosticsLastExitResult {shell: ShellLastExit | null}`.
+- **fieldd's lease keeps it:**
+  - the last holder's close, beside the once-record, with its own write failing alone;
+  - `stoppedBy` for a consented floor stop: sealed, and `{planned, stopped, at, sessions}` with the consented set it
+    ended. A crash still owed is still said to the next shell;
+  - `leftForUpdate` for the update's B3 stop (`{reason: "update"}` with no floor stop): `why: "update"` with the floor's
+    count;
+  - the supervisor's bare `{}` for a stale fieldd only seals: no shell's exit.
+- **The words** (`field-app/src/panels/last-exit-words.ts`, pure): "VibeField quit unexpectedly on Oct 30 at 10:42. 2
+  terminal sessions kept running." · "VibeField quit on Oct 30 at 10:42 and ended 2 terminal sessions." · the update,
+  logout, restart and user-switch variants · "No exit recorded yet.". An unread count is "Its terminal service kept
+  running.", never zero.
+- **Settings → Diagnostics** shows "Last exit" above Crash artifacts: "Reading…", the sentence, or "Couldn't read it:
+  <reason>".
+- **DESIGN.md §9 "The quit's words"** gains the "Last exit" bullet.
+
+**Rows:**
+- fieldd `shell-lease.test.ts`, 21 rows, 6 new: kept after the attach took the once-record, and each exit replaces it;
+  a stop kept and the lease sealed; a record still owed survives a stop; the B3 update kept; the daemon's update stop
+  vs the supervisor's bare stop; `diagnostics.lastExit` for a `diagnostics.read` window, FORBIDDEN_SCOPE otherwise.
+- The kill matrix's row AL-2a, over the real floor, reads the kept `{planned, stopped: "quit", sessions: 1}`.
+- field-app `last-exit-words.test.ts`, 5 rows, DESIGN.md holding the same sentences; `diagnostics-section.test.tsx`,
+  2 rows.
+
+**Validation.**
+- **Red first** (03:39:35 → 03:40:06Z):
+  - fieldd's `shell-lease.ts` and `daemon.ts` as AL-11 left them: 6 of 21 red, and AL-2a red;
+  - field-app's `DiagnosticsSection.tsx` and DESIGN.md as AL-11 left them: 3 of 11 red;
+  - restored: 21/21, AL-2a 1/1, 11/11.
+- **The light** at `b14117151` on `2b35a3def`, AL-11's landed main (04:01:06 → 04:09:04Z, nice 19, the guard,
+  co-plan/HOLD):
+  - contracts', fieldd's and field-app's typecheck, biome, preflight, check:walls;
+  - contracts whole: 54 files, 1,434 tests;
+  - fieldd whole: 223 files passed and 3 skipped, 2,819 tests passed and 30 skipped;
+  - field-app whole: 270 files passed and 1 skipped, 3,538 tests passed and 3 skipped;
+  - cargo `layout_vector` 1/1.
+  - An early light on `3ead0fd36` was green as well.
+- **Run 76** (M76 `805f9e5b5`, the MERGE shape: `b14117151` over main `583e6e107`, the fixer's records on M75; minted by
+  a9 on VF-PM's GO, no second rebase, the light standing):
+  - `pnpm verify` armed 04:23:12Z, exit 0 at 04:28:05Z (about five minutes), the mini's tree clean after it.
+  - vitest 11,522 passed, 0 failed, 18 skipped, +17: the fixtures 532 → 536, shell-lease 15 → 21, last-exit-words 5,
+    diagnostics-section 4 → 6. cargo 534 passed, 0 failed, 14 ignored (33 results). Typecheck and test ran for 28
+    projects.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run76/` (`mrun76.bundle`, sha256 `612847593cf33fdc…`).
+- **Landed:** main fast-forwarded `583e6e107` → `805f9e5b5` at 2026-11-01 04:31:12Z on VF-PM's GO.
+
+**Owed.** The idle bound's own stop (AL-5) and a signal are fieldd's, not a shell's exit, and leave the kept record as
+it was. The draft's §8.1 line is folded at the next queue opening.
+
+## Item 141 — the TREE-dies row waits for its grandchild on the condition: a beat, or the tree gone without one, never a 5 s clock
+
+(2026-11-01; one commit `15428f2a8` on lane `fixer/item141` over main `583e6e107`, the fixer's; the mint M77
+`2d91c6a5c`, the merge over main `26f9c2537`, run 77.) Filed to the fixer at 04:07Z from the light of items 131, 133,
+134 and 139, where fieldd whole met the one red that slice did not touch; VF-PM's go at 04:23Z.
+
+**The red.** `packages/fieldd/test/process-service.test.ts:244`, "ProcessService — §17.1 > the whole TREE dies: the
+shim's server does not outlive it (§17.1)", read `until()`'s "condition never became true" at load 123. The wait was
+`until(() => beats() > 0)`, the shim's grandchild writing its first heartbeat, at `until`'s default 5 s. One re-run of
+the file alone at load 92 was green, the row 1,880 ms. It is the family of items 120 and 131: a fixed deadline that
+load spreads. Here the first beat needs a Node start under the shim, and load stretched that start past the deadline.
+
+**The fix, in the test (`15428f2a8`).** That wait is the row's precondition (the server is up and writing), not its
+claim (the kill takes the whole tree). So it ends on the condition either way: a beat, or the tree exited without one.
+The second case fails at once and names itself ("the tree exited before its grandchild wrote a beat"); before, it
+waited out the 5 s in the generic words. Time guards only a hang, at 15 s, inside the row's own budget: fieldd's
+testTimeout (30 s) holds it and the kill's 5 s and the quiet's 8 s after it. The claim's waits are unchanged, and so
+are the file's nine other `until()` calls at their 5 s; none of those was seen red.
+
+**The light** (lane item118, under its own HOLD line, taken 04:34:22Z by noclobber in cp-landing's order; every
+red-first step a working-tree mutation, restored and proved clean): 04:34:43Z → 04:39:39Z at load 106 → 77. No load
+model exists for this row, so a delayed start stands in for the late first beat load made: the shim sleeps 6 s before
+it starts the grandchild.
+- D1: main's wait on the delayed start, red at 5,130 ms, "condition never became true". D2: the fix's wait, green, the
+  row 6,646 ms.
+- X1: a shim that exits with no grandchild, on main's wait: red at 5,036 ms in the generic words. X2: the fix's wait,
+  red at 192 ms, "the tree exited before its grandchild wrote a beat: expected 0 to be greater than 0".
+- The file alone, 21 passed and 1 skipped (the row 621 ms); biome on the file; check:walls 0; tsc for fieldd.
+- fieldd whole, with FIELDD_ROSETTAD_BIN naming ../rosetta-pin's release rosettad at the lock's `3948bcf`: 2,832
+  passed, 11 skipped, 0 failed (process-service.test.ts 22, 1 skipped, 1,786 ms).
+- Run 77 on the mini (a9's mint; VF-PM's read, 04:46:27Z): 11,522 passed, 0 failed, 18 skipped over 27 rows; cargo
+  33 ok; the TREE-dies row 600 ms.
+
+**Owed.** Nothing of the fixer's. The file's nine other `until()` calls keep their 5 s and the same shape; none was
+seen red, and a red among them is its own item.
