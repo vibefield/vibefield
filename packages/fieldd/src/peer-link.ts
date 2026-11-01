@@ -620,6 +620,12 @@ export class PeerLink extends EventEmitter {
           link.state = "connected";
           this.emit("link-changed", { deviceId, state: "connected" });
         }
+        // PG-3b (the 3b review [13]) — EVERY answered dial, the first and each
+        // re-dial after a blip (which keeps the link `connected`, so
+        // `link-changed` says only the first): a new socket is a new connection
+        // at the peer, and what it held for this daemon's clients under the old
+        // one (a reader's carried report) is to be carried again
+        this.emit("link-ready", { deviceId });
         // DS-2b (2026-10-01) — a door that answered a hello, first or again
         // after a blip, is heard (it used to stay "silent" to the roster until
         // some call happened to succeed)

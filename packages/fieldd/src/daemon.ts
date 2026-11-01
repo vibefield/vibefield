@@ -10,8 +10,6 @@ import {
   type AgentLastRunResult,
   AgentModelsParams,
   AgentRecordedLanesParams,
-  AgentReportShownParams,
-  type AgentReportShownResult,
   AgentResumeParams,
   AgentSpawnParams,
   AgentSubscribeParams,
@@ -222,6 +220,7 @@ import { LastRunKeeper, modelBoardSource } from "./agent-last-run";
 import { createModelSubscription, createRemoteSubscription } from "./agent-model-board";
 import { type AgentMonitorService, createAgentMonitorService } from "./agent-monitor";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
+import { type AgentScreens, createAgentScreens } from "./agent-screens";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
 import { AgentWaker, isIdleRow } from "./agent-waker";
 import {
@@ -712,6 +711,11 @@ export interface FielddDaemon {
   /** DS-3 — the mesh board (`agent.subscribe {scope: "mesh"}`); tests read
    * how many hubs, and so how many sets of upstreams, are standing. */
   meshBoard: MeshBoard;
+  /** PG-3b — the screens `agent.reportShown` reaches (`agent-screens.ts`);
+   * tests read how many connection screens, readers and carried screens stand. */
+  agentScreens: AgentScreens;
+  /** PG-3b — the monitor backend beside the runtime, null until it is built; tests read its ledger (`seenAt`). */
+  agentMonitor: () => AgentMonitorService | null;
   /** C6-6 — the artifact hub (registry over the mesh serve facade). */
   artifacts: ArtifactService;
   plugins: PluginRegistryService;
@@ -2034,6 +2038,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AL-7 — the shell lease reads its holders' closes; late-bound because it counts the floor's sessions, and the
     // terminal service is constructed after the api.
     let shellLeaseRef: ShellLease | null = null;
+    // PG-3b — a peer connection's carried screens go with it; late-bound because
+    // the screens are built with the monitor's doors, after the api.
+    let agentScreensRef: AgentScreens | null = null;
     let shellAbsenceRef: ShellAbsence | null = null;
     const api = new ProductApi({
       // UA-D12 — ephemeral default; the fixed registry number is legacy
@@ -2051,7 +2058,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // UA-4 — the door's comparison value (UA-D13): read fresh per hello, so
       // a capture landing mid-uptime activates the law without a restart
       getLinkedLogin: () => links.status().link?.login ?? null,
-      onConnectionClosed: (connectionId) => shellLeaseRef?.closed(connectionId),
+      onConnectionClosed: (connectionId) => {
+        shellLeaseRef?.closed(connectionId);
+        agentScreensRef?.connectionClosed(connectionId);
+      },
     });
     diagnosticsService.register(api);
     shellApi = api;
@@ -4042,36 +4052,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
      * exist (below). Null only in the window before that. */
     let meshBoard: MeshBoard | null = null;
     /** MV-3a (L5, M20) — the screens, one per product connection that holds a
-     * model board: opened with the connection's first model board, forgotten
-     * with its last (a window opens one; two share the connection's screen).
-     * A call with no connection id (none a product door mints) has no screen.
-     * Q05: forgetting a screen keeps the unread marks — a reload's new
-     * connection and a Godview opened again find them (`agent-monitor.ts`).
-     * Q06: only this desktop's own window looks for the person, so only its
-     * screen's reports acknowledge a crashed run's failure; a plugin holding
-     * `agent.observe` opens a screen that acknowledges nothing. */
-    const screens = new Map<string, { count: number; close: () => void }>();
-    const openScreen = (ctx: CallerContext): (() => void) | null => {
-      const service = monitor;
-      const id = ctx.connection?.id;
-      if (service === null || id === undefined) return null;
-      let held = screens.get(id);
-      if (held === undefined) {
-        held = { count: 0, close: service.openScreen(id, { acknowledges: ownWindow(ctx) }) };
-        screens.set(id, held);
-      }
-      const screen = held;
-      screen.count += 1;
-      let open = true;
-      return () => {
-        if (!open) return;
-        open = false;
-        screen.count -= 1;
-        if (screen.count > 0) return;
-        screens.delete(id);
-        screen.close();
-      };
-    };
+     * board showing the model; PG-3b (PG-D6 (a)) — a `remote` board is one too,
+     * a `{remote, mesh}` board makes its connection a READER whose reports this
+     * desktop carries to the rows' owners, and a peer's carried report is a
+     * screen of its own here, keyed by `onBehalfOf` under that peer's
+     * connection (DS-L7 as amended 2026-11-01). Q05: forgetting a screen keeps
+     * the unread marks. Q06: only this desktop's own window acknowledges
+     * (`ownWindow`); a phone, a plugin and a carried screen acknowledge nothing.
+     * The rules are `agent-screens.ts`'s. */
+    const screens = createAgentScreens({
+      monitor: () => monitor,
+      acknowledges: ownWindow,
+      carry: (ctx, device, params) => api.forwardFor(ctx, device, "agent.reportShown", params),
+      logger: logger.child({ component: "agent.screens" }),
+    });
+    agentScreensRef = screens;
     // MF-1 (§5, §10.2) — one door, four projections. Absent params or
     // `projection: "full"` is the subscription the desktop has always had,
     // unchanged: whole `AgentListResult` frames at the fold's own 16 ms tick,
@@ -4110,7 +4105,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const floor = boardFloor(ctx.principal.kind, parsed.data);
       // MV-3a (L5, M20) — a window's model board IS its screen: what it reports
       // shown clears unread marks, and the screen is forgotten with the board.
-      const screen = projection === "model" ? openScreen(ctx) : null;
+      // PG-3b — a remote board is a screen as well, and `{remote, mesh}` a reader.
+      const screen = screens.openBoard(ctx, { projection, scope });
       try {
         if (scope === "mesh") {
           if (meshBoard === null)
@@ -4153,26 +4149,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // MV-3a (L5) — `agent.reportShown {ids}`: which rows the window shows in
     // its active pane, by model id, forwarded to the backend for its unread
-    // marks. The screen is the connection's model board — refused without one.
-    api.register("agent.reportShown", (ctx, params) => {
-      const parsed = AgentReportShownParams.safeParse(params ?? {});
-      if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { ids: string[] }", false);
-      const screenId = ctx.connection?.id;
-      if (
-        monitor === null ||
-        screenId === undefined ||
-        !monitor.reportShown(screenId, parsed.data.ids)
-      )
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          'no model board is open on this connection — subscribe agent.subscribe {projection: "model"} first; the board is the screen',
-          false,
-          { state: "no-screen" },
-        );
-      const result: AgentReportShownResult = { reported: true };
-      return result;
-    });
+    // marks. The screen is the connection's board — refused without one.
+    // PG-3b — routed by `device`: the home carries it only for a reader of its
+    // mesh board, in order per owner (the hook runs after the door's gates and
+    // before the carry); the owner serves a carried one as that reader's screen.
+    api.register("agent.reportShown", (ctx, params) => screens.report(ctx, params));
+    api.wrapForward("agent.reportShown", (ctx, device, params, carry) =>
+      screens.forward(ctx, device, params, carry),
+    );
     // LR (2026-10-15) — what this desktop's last run left, and the answer that
     // lets it go. This desktop's windows' alone, as the `model` board it
     // pictures is: a peer and a phone are refused as that board refuses them.
@@ -6556,6 +6540,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ),
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
+    // PG-3b (the 3b review [13]) — a re-dialled link to an owner is a new
+    // connection there, which forgot the screens it carried for this desktop's
+    // readers: each reader's last report to it is carried again
+    peers.on("link-ready", (event: { deviceId: string }) => screens.linkReady(event.deviceId));
     // DS-2 (DS-D15) — the receipt of one of THIS daemon's keyed forwards, so a
     // UI can show applied / refused / outcome-unknown; the retry is the same
     // call carrying the same key (forward-receipts.ts), never this door.
@@ -6584,6 +6572,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       openLocal: (projection, minIntervalMs, emit) =>
         openLocalBoard(projection, minIntervalMs, emit),
       logger,
+      // PG-3b (the fold check [2]) — an owner's upstream back on the same link
+      // (a hub's resync, a wake) closed and re-opened its remote board there,
+      // so the screens this desktop's readers had carried are carried again
+      onUpstreamReady: (device) => screens.linkReady(device),
     });
     meshBoard = board;
     // DS-6 — history across desktops: every self peer's catalog replicated,
@@ -7595,6 +7587,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       egressRoutes,
       federatedSubs,
       meshBoard: board,
+      agentScreens: screens,
+      agentMonitor: () => monitor,
       artifacts,
       plugins,
       services,

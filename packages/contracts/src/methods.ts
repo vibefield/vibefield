@@ -2743,12 +2743,23 @@ export const METHODS: MethodDef[] = [
   // for every screen, while the fold's row, the record and the resume verb
   // stay. Any other caller's screen (a plugin's, under this same scope)
   // acknowledges nothing (`agent-monitor.ts` `openScreen`).
+  // PG-3b (PG-D6 (a): unread is the owner's mark and the phone is a screen;
+  // J2 (a), James 2026-11-01 03:55Z) — `federate`, routed by `device`: a
+  // phone's `remote` board is a screen as a window's `model` board is (by
+  // kind, `SCREEN_BOARDS`), and a phone reports another
+  // desktop's rows through its home, which carries the report only for a
+  // connection holding a `{remote, mesh}` board (else `no-screen`). The owner
+  // keys what it carries by `onBehalfOf` under the carrying peer connection,
+  // restrict-only (DS-L7 as amended 2026-11-01): a reader behind the home is
+  // a screen of its own, forgotten when its board at the home closes (the
+  // home sends an empty report) or the peer connection does. A carried report
+  // acknowledges nothing; acknowledgement stays this desktop's window's (Q06).
   defineMethod({
     surface: "product",
     method: "agent.reportShown",
     scope: "agent.observe",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   // LR (2026-10-15) — `agent.lastRun`: the picture this desktop's last run left
   // and the sessions in it that did not survive (agent-field.ts
@@ -2812,6 +2823,13 @@ export const METHODS: MethodDef[] = [
   // board's floors (250 / 100 ms, `AGENT_FIELD`); `scope: "mesh"` is the rows
   // protocol (`meshRowsOpen`/`meshRowsFrame`), each device's chain at the
   // floor of its projection.
+  // *Erratum 2026-11-01 (PG-3b; found by PG-3's verifiers): "refuses it to a
+  // PEER daemon and NOT to a phone, so a phone that asks `{}` is served it" is
+  // false. `refuseBoardAsk` (fieldd `agent-field.ts`, the `projection ===
+  // "full"` arm) refuses the bare ask to `tailnet` as to `peer-fieldd`
+  // (FORBIDDEN_SCOPE, "a phone reads remote (SP-L4)"), as the 2026-10-01
+  // correction above says; SP-L4 holds at the door. A phone reads `remote`
+  // (PG-2), or `field` until PG-3 moves it.*
   // PG-2 (PG-L1, PG-D8 (a), 2026-10-31) — `desk` retired into `remote`, the
   // model's cut for every other screen. The floor declared is the least any
   // caller is served: a peer daemon's (`REMOTE_MIN_INTERVAL_MS`, a peer

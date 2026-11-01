@@ -351,6 +351,35 @@ export const MONITOR_AUDIENCE = {
   plugin: "peer",
 } as const satisfies Record<Principal["kind"], MonitorAudience>;
 
+/** PG-3b (the 3b review [0], 2026-11-01; J2 (a)) — which of a caller's boards make it a SCREEN of this desktop's
+ * backend, by its principal's KIND (MONITOR_AUDIENCE's rule, beside it so a kind added to `Principal` fails the
+ * typecheck here too). A screen's reports clear the rows' unread marks, which is a mutation of the owner's mark,
+ * so the table grants it by kind and narrowly:
+ *  · `model` — a model board opens a screen: this desktop's own windows and shell, the kinds `refuseBoardAsk`
+ *    serves `model` to (as since MV-3a);
+ *  · `remote` — a remote board opens a screen: the phone alone (PG-D6 (a): the phone is a screen);
+ *  · `reader` — a `{remote, mesh}` board makes the connection a READER, whose reports for another desktop's rows
+ *    its home carries to their owner: the phone alone.
+ * Every other kind's boards open no screen and no reader. A plugin, a guest or an agent's MCP session holding
+ * `agent.observe` reads the board and clears no mark. A peer daemon's reports reach an owner only as CARRIED
+ * screens, keyed by `onBehalfOf` under its connection (DS-L7 as amended 2026-11-01). Server-side, as `Principal`
+ * is: no wire shape, nothing generated. */
+export interface ScreenBoards {
+  model: boolean;
+  remote: boolean;
+  reader: boolean;
+}
+const NO_SCREEN = { model: false, remote: false, reader: false } as const;
+export const SCREEN_BOARDS = {
+  "local-token": { model: true, remote: false, reader: false },
+  "shell-main": { model: true, remote: false, reader: false },
+  tailnet: { model: false, remote: true, reader: true },
+  "tailnet-guest": NO_SCREEN,
+  "mcp-agent": NO_SCREEN,
+  "peer-fieldd": NO_SCREEN,
+  plugin: NO_SCREEN,
+} as const satisfies Record<Principal["kind"], ScreenBoards>;
+
 /** The run's latest reply, bounded: puppeteer's `MonitorAssistantMessageState`
  * with its text cut to the registry's bound. `at` and `final` are optional
  * because the mirror carries the message as an open object (`agent-session.ts`)
@@ -840,9 +869,34 @@ export const AgentModelMeshFrame: z.ZodType<AgentModelMeshFrame, z.ZodTypeDef, u
  * active pane, by MODEL id. The screen is the CONNECTION's own model board
  * (identity is transport-derived, never on the wire — P6): the door refuses a
  * report from a connection with no model board open, and a closed board
- * forgets its screen (M20). An empty list clears the report. */
+ * forgets its screen (M20). An empty list clears the report.
+ * *Corrected 2026-11-01 (PG-3b; the 3b review [5]):* a connection's own screen
+ * is its model board (a window) or its remote board (the phone), by
+ * `SCREEN_BOARDS`, and it stays transport-derived. On the OWNER, a report a
+ * peer daemon carries is a CARRIED screen. It is keyed by the envelope's
+ * `onBehalfOf` {deviceId, windowId}, which the carrying peer supplies on the
+ * wire, under that peer's connection, restrict-only, and it opens with no board
+ * on that connection (below).
+ *
+ * PG-3b (PG-D6 (a), J2 (a), 2026-11-01) — a phone's `remote` board is a screen
+ * too (by kind, `SCREEN_BOARDS`), and the report is routed by `device` like
+ * every federated call: a phone
+ * reports another desktop's rows through its HOME, which carries it only for a
+ * connection holding a `{projection: "remote", scope: "mesh"}` board (else the
+ * same `no-screen` refusal). The owner keys the screen it opens for a carried
+ * report by the envelope's `onBehalfOf` {deviceId, windowId} under the peer
+ * connection that carried it, restrict-only (DS-L7 as amended 2026-11-01;
+ * `forwarding.ts` F1b's clause is the model): the key splits one peer
+ * connection's reports into per-reader sets, never reaches another
+ * connection's screen and grants nothing. A carried report acknowledges
+ * nothing (Q06): only this desktop's own window looks for the person. */
 export const AgentReportShownParams = z
-  .object({ ids: z.array(z.string().min(1)).max(4096) })
+  .object({
+    ids: z.array(z.string().min(1)).max(4096),
+    /** the desktop whose rows these are (design-04 §6's `device?`); absent or
+     * this desktop's own id is served here */
+    device: z.string().min(1).optional(),
+  })
   .passthrough();
 export type AgentReportShownParams = z.infer<typeof AgentReportShownParams>;
 export const AgentReportShownResult = z.object({ reported: z.literal(true) }).passthrough();

@@ -27353,3 +27353,212 @@ page's CH-D5 A and NS-D4 (James, 2026-10-30), built as ruled.
     fieldd restart replaces the window's document.
 
 James's first sight: `pnpm dev`, ⌘4 for Chat, a spark's row, then its thread.
+
+## PG-3b — reportShown through the home: the phone is a screen of the desktop that owns the row, its report routed by `device` through its home and kept on the owner as that reader's own screen, keyed by `onBehalfOf` under the carrying peer connection (J2 (a)) (2026-11-01; `9e3a67729` → `3072786bb`, seventeen commits on main `313deb462`, lane `pg/3b` in `/Volumes/SamsungRed/lanes/pg3b`, in the mini's mint M84 `fe84493c4` over main `e14d45dbe`, run 84)
+
+**What it rests on.**
+- J2 (a), James 2026-11-01 03:56Z (typed 03:55Z, on the page *PG-3 · four marks*): an owner keys the screens a
+  forwarded `agent.reportShown` opens by its `onBehalfOf`, restrict-only. DS-L7's amendment is at its source in
+  the draft, written at draft slot 16 (2026-11-01 03:59:15Z; design-06 :49–53, thinking-desktop-sync-plane
+  :136–140). In the repo, `forwarding.ts`'s `windowId` clause (beside F1b's `clientDeviceId` clause) and the code
+  comments carry it.
+- PG-D6 (a) (2026-10-29): unread is the owner's mark, and the phone is a screen.
+- VF-PM's sequencing marks in `lanes/ios/PG3-BRIEF.md` (Q-P1…Q-P6). Q-P6 (a desktop window's own peer-row reports
+  come after PG-3, on this door) is why the renderer-key constraint is recorded in `agent-screens.ts`'s header.
+
+**What** (seventeen commits; 20 files, +1,784 −84):
+- **The contract** (`9e3a67729` red, `c6e8aa2a4`):
+  - `agent.reportShown` `local` → `federate`, and `AgentReportShownParams` gains `device?`;
+  - two goldens, `agent-report-shown.routed.json` `{ids, device}` and `agent-report-shown.forwarded.json`
+    `{ids, device, forward:{onBehalfOf}}`, parsed in contracts' tests;
+  - the locality pin flipped;
+  - the census does not move: `agent.observe` is in the phone's preset, so `reachableFromTailnet` was already true;
+    `KEYED_FORWARD_METHODS` does not take it (idempotent).
+- **fieldd** (`979c0e349` red, `b5941c314`):
+  - `agent-screens.ts`, new: the screens' rules, out of `daemon.ts`;
+  - `ProductApi.wrapForward(method, hook)`: a method's own say after the door's gates and before the carry;
+  - `ProductApi.forwardFor(ctx, device, method, params)`: the daemon's own carry of a read for a client, with the
+    client's provenance;
+  - the home carries a report only for a READER, a connection holding a `{remote, mesh}` board, in order per
+    (reader, owner);
+  - the owner keeps a carried report as a CARRIED screen, keyed `connection ␟ onBehalfOf.deviceId ␟ windowId`; a
+    carried report naming no `windowId` is refused;
+  - a closing reader sends each owner an empty report; an owner forgets a connection's carried screens with it;
+  - a carried report acknowledges nothing (Q06).
+- **The seam pages** (`c8c010883`): api.html's reportShown row and system.html's monitor backend; `forwarding.ts`'s
+  `windowId` clause; a dated erratum at `methods.ts`'s SP-1 paragraph (a phone IS refused `full`).
+- **The review** (`1061d675f` red, `fdb347af8`, `169850d83` red, `007c51cff`, `115f0c1a9`, `cd07790f8`): sixteen
+  findings, all folded or ruled. The fold checks (`a4057cc33` red, `a377f8483`, `52fba8828`; `58fdb8244` red,
+  `7374acd7b`) and the mutants' last row (`3072786bb`).
+
+**The security fix: screens by kind.** As first built, a `remote` board opened a screen for ANY principal holding
+one, so a plugin granted `agent.observe` could clear unread marks here and, through the carry, on every owner.
+`SCREEN_BOARDS` (contracts, beside MONITOR_AUDIENCE, held to `Principal["kind"]`) decides by kind:
+- a `model` board is a screen for this desktop's windows and shell;
+- a `remote` board, and the `{remote, mesh}` reader, are the phone's (`tailnet`) alone;
+- a plugin, a guest, an agent's MCP session or a peer daemon holding a board opens no screen and no reader, so its
+  report and its forward are refused `no-screen`.
+
+**The bounds.** A carried report needs no board on the carrying connection (decision 1, kept by the lead's ruling:
+the home's hub upstream may still be attaching at the phone's first report). Bounded instead:
+- `AGENT_FIELD.CARRIED_SCREENS_PER_PEER` = 64 per peer connection; the next is refused
+  `{state: "no-screen", reason: "carried-cap"}`, and that refusal is the owner's bound, not transient;
+- when the carrying connection's last `remote` board on the owner (the home's hub upstream) closes, its carried
+  screens go;
+- they go with the connection.
+
+**The replay.**
+- The home re-carries each reader's current report when the way to its owner comes back:
+  - PeerLink's `link-ready`, at every answered dial (a blip keeps the link `connected`, so `link-changed` says only
+    the first);
+  - MeshBoard's `onUpstreamReady`, at each re-attach a hub makes on the same link (a resync, a wake).
+- It reads the reader's `shown` inside its queued task, so a report in flight, or still queued, is the one replayed.
+- The owner set changes only once a carry is known to land: a non-empty report adds its owner before the carry and
+  undoes the add on a not-delivered verdict; an empty report removes its owner after its carry lands.
+- `shown` is the phone's latest ask whatever became of its carry. Only the owner's own lasting refusal
+  (`locality: "local"`, an owner without PG-3b, or its `carried-cap`) puts back what stood.
+
+**The fixtures.**
+- `agent-report-shown.routed.json` is the phone's send shape. It is mirrored in PG-3e, the slice that builds the
+  sender: there the kit's encoder is compared to it byte for byte, and the mirror joins `check-ios-fixtures`' list.
+- `agent-report-shown.forwarded.json` is fieldd ↔ fieldd only, and is never mirrored.
+
+**The docs.**
+- api.html's reportShown row: a dated *Corrected 2026-11-01* at its lead sentence; the 2026-10-29 "Not built" clause
+  marked superseded; the as-built note with the review and both fold checks folded; which refusals are transient.
+- api.html's stats, recounted from `methods.ts`: 64 agent-plane doors, 43 local, 16 federate, 5 stream (it said 56
+  and 12). A dated erratum at "Every agent-plane door is `local`".
+- `AgentReportShownParams`' P6 sentence corrected at its source, in contracts.
+
+**Validation.**
+- **Red first,** every behaviour commit after its red one, in lane `pg3b` at nice 19 under the guard and
+  co-plan/HOLD, with no PERF.lock. Logs: `/Volumes/SamsungRed/lanes/pg3b/light/`; the light is
+  `lanes/ios/pg3b-light.sh`.
+- **The probe** (the light's `probe` row, main's contracts and fieldd sources swapped in under the lane's tests):
+  - contracts 4 red of 662: the routed/forwarded goldens' row, the carried cap, `SCREEN_BOARDS`, the locality pin;
+  - fieldd 6 red: `onUpstreamReady`, the forward hook's three rows, `link-ready`, and the two-daemon row, refused
+    "agent.reportShown is local to its device and rejects device routing";
+  - `agent-screens.test.ts` is red by its missing module, so its rows are proved by the mutants instead.
+- **The review trail:**
+  - the review (`wf_2f6a71c3-a51`): sixteen findings, all folded or ruled by the lead;
+  - the fold check (`wf_27d3a762-fbe`): its five replay findings folded (`a4057cc33`, `a377f8483`, `52fba8828`);
+  - the fold2 check (`wf_bd8fd78f-ed3`): its four folded (`58fdb8244`, `7374acd7b`), the shown undo narrowed to the
+    owner's lasting refusals at the lead's word; the e2e hub-resync row not built, by the lead's ruling;
+  - the mutants' own finding: `inflight` stayed green once `shown` was set at the carry's begin, so a row with a
+    newer report queued behind a slow carry pins it again (`3072786bb`).
+  - One red commit's message (`979c0e349`) was reworded before anything was shared, its tree unchanged.
+- **Eighteen mutants** of `agent-screens.ts`, `mesh-board.ts` and `daemon.ts`, each target first checked to match
+  once, each reddening the row that pins its rule (light `tip5-mutants`, 07:29:39 → 07:31:02Z, at `3072786bb`):
+
+| Mutant | The rule broken | The row that went red |
+|---|---|---|
+| order | one chain per (reader, owner) | a same-connection re-subscribe keeps the screen |
+| key | the carried key names its reader | two readers behind one home do not overwrite each other |
+| ack | a carried screen never acknowledges | a forwarded report acknowledges nothing (Q06) |
+| release | a closing reader sends its empties | the board closes and the mark returns |
+| forget | a connection's carried screens go with it | the owner forgets a peer connection's screens |
+| gate | the home carries for a reader only | refused with no board |
+| kind | a remote board is the phone's screen alone | a plugin holding {remote, mesh} is no screen |
+| cap | at most 64 per peer connection | at most CARRIED_SCREENS_PER_PEER |
+| upstream | the upstream's last close drops them | the carrying connection's last remote board closes |
+| undo | an owner that refused is dropped | the owner set changes only once a carry lands |
+| after | an empty drops its owner after it lands | the owner set changes only once a carry lands |
+| replay | `linkReady` carries again | the owner restarts or its link re-dials |
+| emptyfirst | an empty clears `shown` first | after a failed empty, a re-dial carries nothing |
+| inflight | the replay reads `shown` in its task | the newer report still waits its turn |
+| undoshown | a lasting refusal puts back what stood | the owner's own lasting refusal is undone |
+| lasting | only a lasting refusal does | a report that never left stays the phone's ask |
+| upstreamready | MeshBoard announces a re-attach | onUpstreamReady fires after a resync |
+| wiring | the daemon hears `link-ready` | the two-daemon row (a real blip, B's count 1 → 0 → 1) |
+
+- **The lights:**
+  - `tip4` at `7374acd7b` (07:06:00 → 07:07:18Z): biome; contracts' and fieldd's typecheck; contracts 662/662
+    (4 files); fieldd 126/126 (8 files: agent-screens, forward-hook, peer-door, agent-model-daemon, mesh-board,
+    mesh-board.e2e, agent-monitor, device-routing); `pnpm check:walls`; the probe red on main as above. Its
+    mutants row stopped at a stale target (`undo`: not found) before running it; the light now checks every target
+    up front, and the row ran again whole as `tip5-mutants`.
+  - `tip5-mutants` at `3072786bb`, after SP-1d's light: eighteen of eighteen red, above.
+  - `merged1` (07:32:02 → 07:34:06Z), VF-PM's merged-tree rule, on a throwaway merge of `3072786bb` with main
+    `bf93e29ff` (`54fe4657b`, `/Volumes/SamsungRed/lanes/pg3b/merged`), installed from the lockfile only:
+    contracts whole 1,454/1,454; fieldd's 3b files and its method-table and scope scanners 343/343 (18 files);
+    field-app's text-ramp, ui-system-boundaries and design-system 61/61; `pnpm check:walls`.
+  - `gen:check` on the merged scratch tree at `b0a6f814a` (`3072786bb` + main `e14d45dbe`): `pnpm gen:check` exit
+    0 at 07:45Z, 8.4 s. The generated paths are unchanged: the registry constant and `SCREEN_BOARDS` reach no schema
+    and no `.rs`. Log: `lanes/pg3b/light/gencheck.log`.
+- **Run 84** (M84 `fe84493c4`, the MERGE shape: main `e14d45dbe` merged into `3072786bb`, minted by a9 on VF-PM's
+  GO):
+  - `pnpm verify` armed 07:47:32Z, exit 0 at 07:53:11Z (about six minutes); gen freshness clean at its end.
+  - vitest 11,816 passed, 0 failed, 18 skipped, +33: contracts' `agent-field.test.ts` 59 → 62 and `fixtures.test.ts`
+    540 → 542 (the two report-shown goldens parsed); fieldd's `agent-screens.test.ts` new with 22,
+    `forward-hook.test.ts` new with 3, `mesh-board` 29 → 30, `mesh-board.e2e` 7 → 8, `peer-door` 12 → 13. cargo 534
+    passed, 0 failed, 14 ignored. The iOS fixtures' 186 copies identical.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run84/` (`mrun84.bundle`, sha256 `ffaf70cc88d8be72…`).
+- **Landed:** main moved to `fe84493c4` on VF-PM's GO (2026-11-01 07:55Z).
+
+**Not built (said).**
+- No two-daemon row for a hub resync. `onUpstreamReady`'s daemon wiring is unit-tested only: mesh-board.test.ts calls
+  the option, and agent-screens' resync row calls `linkReady` by hand. The two-daemon row covers the re-dial.
+- No live-turn two-daemon row. The rig's run on B is an exited record, so the e2e reads B's ledger (`seenAt`) and the
+  unit rows read `unread` itself.
+- A `device` the mesh board does not list is not refused before the carry. The kind gate and the owners undo bound
+  the fan-out to the phone's own refusals.
+- A close's empty that fails is logged (`fieldd.agents.screen_release_failed`) and not retried. Until the carrying
+  connection or its upstream closes on the owner, that reader's screen stands there.
+
+**Owed.**
+- **PG-3e's sender rules:**
+  - send the open card's model id routed by the row's device, and again after every open;
+  - send `{ids: [], device: A}` when the shown id leaves device A;
+  - `{state: "no-screen"}` is transient, while `reason: "carried-cap"` and `locality: "local"` are recorded once per
+    device and not retried on every open.
+  - The 3e brief mirrors them (VF-PM).
+- PG-3e mirrors `agent-report-shown.routed.json` into the kit (the fixtures, above).
+
+## Item 146b — the phone stage places a Simulator.app's start by its age between two reads of the clock, never by lstart's local wall time, so DST's repeated hour cannot make the run's own app foreign
+
+(2026-11-01; three commits `7773c5420` → `ab0199542` on lane `fix/item146` over main `ae430892b`, the fixer's; M87 is
+`ab0199542` itself, a fast-forward of main `ae430892b`, run 87.) Item 146's own copies (item 146 is puppeteer's ps
+reader, upstream), granted at 09:30Z: PORTALS's find and VF-PM's grep.
+
+**The red.** America/Los_Angeles fell back at 09:00Z, so local 01:00–02:00 ran twice, PDT then PST. `ps -o lstart=`
+prints local wall time with no offset, so in that hour its text names two instants, and the stage's `parseLstart`
+(`new Date(y, m, d, h, mi, s)`) took the first. A Simulator.app launched between 09:00 and 10:00Z read 3,600 s early,
+"started before ARMED": FOREIGN, exit 75 instead of a quit. Witnessed live on this Mac inside the hour, three times
+(09:32:59Z, 09:40:19Z, 09:41:30Z): a process one or two seconds old read 3,601–3,602 s old.
+
+**The fix (`7773c5420`, `184f485da`).** `scripts/stage-simulator-fixture.mjs` reads `ps -o etime=` (macOS's ps has no
+`etimes`; measured) through `parseEtime`, and `etimeStart(etime, before, after)` gives the start as a range between
+two reads of the clock around the `ps` call. `etime` is a difference of whole seconds, the clock's and the start's each
+truncated (measured: "00:02" for a process 1.5 s old), so the start lies after `before - (etime + 1) s` and before
+`after - (etime - 1) s`. The first cut assumed the floor of the age and ended its range a second early; the light's
+live witness caught it, and `184f485da` corrected it. `simulatorProof` keeps its direction: the run quits a Simulator
+only when proven its own. "After ARMED" is proven by the range's earliest, "before the run's launch" by its latest.
+`parseLstart` is gone, and `lstart` is no longer read.
+
+**Audited and left.** `packages/electron-shell/src/testing/terminal-perf-lab.ts:666` and `:970` hand their
+`ps -axwwo pid=,ppid=,lstart=,command=` listings to `tooling/terminal-perf/src/reap.ts`. There `lstart`'s five fields
+are joined into `startedAt` and only compared for equality with a later listing of the same pid: an identity string,
+never a time. The text is rendered from the start instant with that instant's own offset, so it reads the same before
+and after the fall back.
+
+**Tests.** The fake host holds a start in ms and answers both `etime=` (from its clock) and `lstart=` (rendered in the
+process's zone, so main's read can be run against it). The proof rows take exact or bracketing ranges. A
+parseEtime / etimeStart row holds the start inside the range for both readings of etime. A new row walks Simulator
+starts through 08:30Z–10:30Z on 2026-11-01 under TZ=America/Los_Angeles through `simulatorNow`. S7's two fake hosts
+now keep a clock after the starts they report (`ab0199542`): etime is an age, and their starts had been in their own
+future.
+
+**The light** (lane item146, `lanes/item146/tools/light146{,b,c}.sh`, logs `lanes/item146/light/`). light146 stopped
+at its live witness: the first cut's range ended before the live start. light146b stopped at the stage's tests, on
+S7's skewed fixture. light146c (09:41:28Z → 09:41:46Z, load 10, at `ab0199542`) was green throughout:
+- L1, live: main's `parseLstart` read a process started at 01:41:28 PST as 08:41:28Z, 3,601 s off. L2, live: the
+  fix's range, 09:41:29.718Z–09:41:31.721Z, held the start (spawned 09:41:30.203Z).
+- R1: the walk on main's stage, 12 of 25 starts not the run's, every one of them 09:00:20Z–09:55:20Z, "it started
+  before ARMED". G1: the walk on the fix's stage, 0 of 25.
+- The stage's test file alone, 99/99; biome on the two files; dev-runner whole, 364/364, under a HOLD line the script
+  released at its exit.
+- Run 87 on the mini (a9's mint; VF-PM's read, 12:04:13Z): 11,816 passed, 0 failed, 18 skipped, main's count, every
+  file's unchanged; node 364 (+1, the walk row); cargo 33 ok.
+
+**Owed.** Nothing of the fixer's. Item 146 itself, puppeteer's ps reader, is upstream; its issue draft names the
+kernel's start, or `etime` with a 2 s window, since macOS's ps has no `etimes`.

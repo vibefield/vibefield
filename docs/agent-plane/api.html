@@ -1101,12 +1101,12 @@
           idempotent) → <b class="product">handler</b> → <b class="native">audit record</b>
         </div>
         <div class="stats">
-          <!-- 2026-10-04: 56 rows = 8 agent.* · 32 agents.* · 16 index.* (methods.ts; SP-6 added index.timeline and index.session.subscribe); 54 on 2026-10-03, 46 when QL wrote this -->
-          <div class="stat"><strong>56</strong><span>agent-plane doors</span></div>
+          <!-- 2026-11-01 (PG-3b, the 3b review [11]; recounted from methods.ts): 64 rows = 12 agent.* · 33 agents.* · 19 index.*, 43 local · 16 federate · 5 stream. 2026-10-04: 56 rows = 8 agent.* · 32 agents.* · 16 index.* (methods.ts; SP-6 added index.timeline and index.session.subscribe); 54 on 2026-10-03, 46 when QL wrote this -->
+          <div class="stat"><strong>64</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>8</strong><span>scopes that gate them</span></div>
           <div class="stat"><strong>15</strong><span>audited mutations</span></div>
-          <!-- 2026-10-03: 12 of them federate since DS-2 (2026-10-01); 0 when this page was written -->
-          <div class="stat"><strong>12</strong><span>that federate</span></div>
+          <!-- 2026-11-01 (PG-3b, the 3b review [11]): 16 federate, recounted from methods.ts, agent.reportShown the 16th (15 before it). 2026-10-03: 12 of them federate since DS-2 (2026-10-01); 0 when this page was written -->
+          <div class="stat"><strong>16</strong><span>that federate</span></div>
         </div>
         <div class="legend">
           <span><span class="badge tone-built">BUILT</span> in the code at the stated revision, cited.</span>
@@ -1196,6 +1196,10 @@
                   <code>local</code> · <code>sync</code> · <code>replicate</code> · <code>stream</code> ·
                   <code>federate</code> · <code>native-plane</code>. Every agent-plane door is
                   <code>local</code>.
+                  <em>Erratum 2026-11-01 (PG-3b; the 3b review [11]):</em> not since DS-2 (2026-10-01). The
+                  agent-plane doors are <code>local</code>, <code>stream</code> or <code>federate</code>: of the 64
+                  in <code>methods.ts</code> today, 43 are local, 16 federate (a foreign <code>device</code> forwards
+                  the call whole to its owner) and 5 stream.
                 </p>
               </div>
             </div>
@@ -1626,12 +1630,18 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent.reportShown</span></td>
-                    <td><p><code>AgentReportShownParams {ids: string[]}</code> → <code>{reported: true}</code></p></td>
-                    <td><p><code>agent.observe</code> · local only</p></td>
+                    <td><p><code>AgentReportShownParams {ids: string[], device?}</code> → <code>{reported: true}</code></p></td>
+                    <td><p><code>agent.observe</code> · <code>federate</code> (PG-3b, 2026-11-01)</p></td>
                     <td><p>yes</p></td>
                     <td><p>The monitor backend's unread acknowledgement, by MODEL id. The screen is the connection's
                       open model board, never an id supplied by the caller. No board: <code>PRECONDITION_FAILED
                       {state: "no-screen"}</code>. An empty list clears the report; closing the board forgets its screen.
+                      <em>Corrected 2026-11-01 (PG-3b; the 3b review [5]):</em> a connection's own screen is its model
+                      board (this desktop's windows and shell) or its remote board (a phone), by its principal's kind
+                      (<code>SCREEN_BOARDS</code>), and is still transport-derived. On the owner, a report a peer daemon
+                      carries is a CARRIED screen. It is keyed by the envelope's <code>onBehalfOf</code> {deviceId,
+                      windowId}, which the carrying peer supplies on the wire, under that peer's connection,
+                      restrict-only, and it opens with no board on that connection (the as-built note below).
                       The marks are fieldd's (Q05, James, 2026-10-27): they outlive every screen, so a reload or a closed
                       Godview keeps them and a turn that ends with no board open is marked (puppeteer's ledger, since
                       0.3.0, 2026-10-28).
@@ -1645,9 +1655,52 @@
                       the door becomes <code>federate</code>, routed by <code>device</code> through the home with
                       <code>onBehalfOf</code>, and any connection holding a model-bearing board (local or remote) is a
                       screen, so the phone is one and unread stays the owner's mark. Not built: as built it is local only,
-                      and a phone holds no <code>model</code> board, so it cannot report until PG-2 and PG-3.</em></p></td>
+                      and a phone holds no <code>model</code> board, so it cannot report until PG-2 and PG-3.</em>
+                      <em>(The "Not built" clause is superseded 2026-11-01 by PG-3b, as built below.)</em>
+                      <em>As built 2026-11-01 (PG-3b; J2 (a), James 03:55Z; DS-L7 as amended that day; folded with the
+                      3b review the same day):</em> the door is <code>federate</code>, routed by <code>device</code>.
+                      Who is a screen goes by kind: a <code>remote</code> board is one for a phone alone, as
+                      <code>model</code> is for this desktop's windows. A plugin, a guest, an agent's MCP session or a
+                      peer daemon holding a board clears no mark. A phone reports another desktop's rows through its
+                      home, which carries the report only while that phone holds a
+                      <code>{projection: "remote", scope: "mesh"}</code> board there (else the same
+                      <code>no-screen</code> refusal, nothing carried). The owner keeps a carried report as a screen of
+                      its own, keyed by the envelope's <code>onBehalfOf</code> {deviceId, windowId} under the peer
+                      connection that carried it, restrict-only: two readers behind one home are two screens, a peer
+                      reaches only its own, and a carried report naming no <code>windowId</code> is refused. The
+                      owner's carried screens are bounded:
+                      at most <code>AGENT_FIELD.CARRIED_SCREENS_PER_PEER</code> (64) per peer connection, the next
+                      refused <code>{state: "no-screen", reason: "carried-cap"}</code>; gone when that connection's
+                      last <code>remote</code> board there (the home's hub upstream) closes, and when the connection
+                      closes. A hub that only resyncs re-attaches on the same connection, and the home carries its
+                      readers' reports again at that re-attach (<code>MeshBoard</code>'s
+                      <code>onUpstreamReady</code>), as it does at a re-dial. When a reader's mesh board at the home closes, the home sends each owner it reported to
+                      an empty report, in order behind anything it carried for that reader, so a re-subscribe's new
+                      report lands after it. An owner is dropped from that list only once a carry is known to land (an
+                      empty that fails keeps it owed). When the home's link to an owner answers a new dial (an owner
+                      restart, a network blip, a sleep), the home carries each reader's current report to it again, so
+                      the open card stays read. The replay reads what the phone shows when it is carried, so a report
+                      still in flight is the one replayed, and an empty the phone sent replays nothing even if its own
+                      carry failed. A report whose own carry failed is still the phone's ask and is the one replayed,
+                      unless the owner refused it for good (it runs without PG-3b, or its carried-cap); then the replay
+                      carries the report that stood before it. Not built: a close's empty that fails is logged
+                      (<code>fieldd.agents.screen_release_failed</code>) and not retried. Until the carrying connection
+                      or its upstream closes on the owner, that reader's carried screen stands, and its rows earn no
+                      unread mark there, in the owner's own windows too. A carried report acknowledges nothing:
+                      acknowledgement stays this desktop's own window's (Q06).
+                      A refusal's details say which kind it is (the 3b review [14]). <code>{state: "no-screen"}</code>
+                      is transient: no mesh board at the home right now, or a board that closed while the report
+                      waited, so it is sent again after the next open. The exception is
+                      <code>reason: "carried-cap"</code>: that is the owner's bound, not a missing board, so a sender
+                      records it once per device, as it does a <code>locality: "local"</code> refusal, and does not
+                      retry it on every open (the PG-3b fold check [3]). A refusal carrying
+                      <code>{locality: "local"}</code> means a home or an owner without PG-3b. The rules are
+                      <code>packages/fieldd/src/agent-screens.ts</code>'s; the door's hook around the carry is
+                      <code>ProductApi.wrapForward</code>. The kit's sender is PG-3e's.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
-                    <td><p><code>agent-model-daemon.test.ts</code>, <code>agent-monitor.test.ts</code></p></td>
+                    <td><p><code>agent-model-daemon.test.ts</code>, <code>agent-monitor.test.ts</code>,
+                      <code>agent-screens.test.ts</code>, <code>forward-hook.test.ts</code>,
+                      <code>peer-door.test.ts</code>, <code>mesh-board.e2e.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent.recordedLanes</span></td>

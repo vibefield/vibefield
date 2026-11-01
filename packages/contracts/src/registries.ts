@@ -423,7 +423,17 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * liveness, a wait, a birth or a death; L12's signal) waits on any remote
  * board: the leading edge goes out once that long has passed since the last
  * frame, or once the board's own floor has, whichever is shorter. DESK_TEXT_CHARS
- * keeps its name: it bounds every text the remote cut carries (PG-D2). */
+ * keeps its name: it bounds every text the remote cut carries (PG-D2).
+ *
+ * PG-3b (the 3b review [1], 2026-11-01) — CARRIED_SCREENS_PER_PEER bounds the
+ * screens one peer daemon's connection may open on an owner for the readers
+ * behind it (`agent.reportShown` carried through a home, keyed by
+ * `onBehalfOf`). One key is one reader connection at the home. One person's
+ * phones and tablets, each reconnect a new key until its empty report lands, are
+ * a handful, so 64 is an order of magnitude above honest use. It also bounds the
+ * owner's memory for one peer: each set holds at most 4096 ids, so at most
+ * 262 144 ids per peer connection. A report that would open the 65th is refused
+ * `{state: "no-screen", reason: "carried-cap"}`; the screens already open stand. */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
@@ -436,6 +446,7 @@ export const AGENT_FIELD = {
   MESH_HEARTBEAT_MS: 1_000,
   MESH_STALE_BEATS: 3,
   FULL_TICK_MS: 16,
+  CARRIED_SCREENS_PER_PEER: 64,
 } as const;
 
 /** Item 87 (2026-10-29) — a managed run's exit, as fieldd closes it. puppeteer's `handleProcessExit`

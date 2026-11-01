@@ -25,7 +25,14 @@ export const OnBehalfOf = z
     /** The forwarding daemon's device (the caller's home). */
     deviceId: z.string().min(1),
     /** The window or phone connection behind the call, when the forwarding
-     * daemon can name one. Opaque; the owner writes it into the audit row. */
+     * daemon can name one. Opaque; the owner writes it into the audit row.
+     * PG-3b (J2 (a), 2026-11-01; DS-L7 as amended that day) — with `deviceId`,
+     * it also keys the screen a forwarded `agent.reportShown` opens on the
+     * owner, UNDER the peer connection that carried it (fieldd
+     * `agent-screens.ts`). Restrict-only, as `clientDeviceId` below: the key
+     * splits one peer connection's reports into per-reader sets, never reaches
+     * another connection's screen and grants nothing; a carried report naming
+     * no window is refused. */
     windowId: z.string().min(1).optional(),
     /** The forwarding daemon's user, for the ledger; the owner compares its
      * OWN login against the transport, never this. */

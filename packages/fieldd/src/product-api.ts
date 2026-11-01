@@ -198,6 +198,28 @@ export type DeviceSubscriptionForwarder = (
   emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
 ) => Promise<{ snapshot: unknown; dispose: () => void; start?: () => void }>;
 
+/** PG-3b — a method's own say around ITS forward (`ProductApi.wrapForward`): run after the door's gates (scope,
+ * locality, source-local) and before anything is carried, with the carry in hand. It may refuse (throw), order the
+ * carry behind its own, or note what was carried; it never changes what is carried or who it is for. */
+export type ForwardHook = (
+  ctx: CallerContext,
+  device: string,
+  params: unknown,
+  carry: () => Promise<unknown>,
+) => Promise<unknown>;
+
+/** PG-3b (the 3b review [4]) — a hook's carry: the forward once, a second call refused (a hook may order or refuse
+ * what is carried, never carry it twice). */
+function onceCarry(method: string, carry: () => Promise<unknown>): () => Promise<unknown> {
+  let used = false;
+  return () => {
+    if (used)
+      return Promise.reject(new Error(`a forward hook carries ${method} once; it was carried`));
+    used = true;
+    return carry();
+  };
+}
+
 /** The slice of TokenService the API needs (keeps the dependency one-way). */
 export interface TokenServiceLike {
   verify(token: string): {
@@ -262,6 +284,7 @@ export class ProductApi extends EventEmitter {
   private ownDeviceId: (() => string) | null = null;
   private forwarder: DeviceForwarder | null = null;
   private subForwarder: DeviceSubscriptionForwarder | null = null;
+  private readonly forwardHooks = new Map<string, ForwardHook>();
   private dynamicRouter: DynamicRouterLike | null = null;
   private readonly shellProvider = new ShellProviderBroker();
   /** live authed connections — the §15.4 revocation path closes by principal */
@@ -544,6 +567,56 @@ export class ProductApi extends EventEmitter {
     this.ownDeviceId = ownDeviceId;
     this.forwarder = forwarder;
     this.subForwarder = subForwarder ?? null;
+  }
+
+  /** PG-3b — the hook around one method's forward (`ForwardHook`): `agent.reportShown`'s home check and order. A
+   * call-and-answer READ that forwards only (the 3b review [4]): never a subscription (the proxy carries those), a
+   * local method (it never forwards) or a keyed mutation (its receipt is the door's to bind, until one needs a hook).
+   * One hook per method; the hook's carry runs once (`onceCarry`). */
+  wrapForward(method: string, hook: ForwardHook): void {
+    const def = this.lookup(method);
+    if (def.subscription) throw new Error(`a subscription forwards through the proxy: ${method}`);
+    if (def.locality === "local") throw new Error(`a local method never forwards: ${method}`);
+    if (isKeyedForward(def)) throw new Error(`a keyed mutation takes no forward hook: ${method}`);
+    if (this.forwardHooks.has(method)) throw new Error(`a forward hook is already set: ${method}`);
+    this.forwardHooks.set(method, hook);
+  }
+
+  /** PG-3b — carry a READ this daemon sends of its own accord for a client (a closing reader's empty
+   * `agent.reportShown`, a re-dial's replay), as the door would carry that client's own call: the same forwarder,
+   * the same provenance (`onBehalfOf` from the client's context, DS-L7). Only for a method that set a forward hook
+   * (the 3b review [4]): its hook is what judged, at the client's own call, that the client may report through
+   * here, so this path carries nothing that check never saw. */
+  forwardFor(
+    ctx: CallerContext,
+    device: string,
+    method: string,
+    params: unknown,
+  ): Promise<unknown> {
+    this.lookup(method);
+    if (!this.forwardHooks.has(method))
+      throw new Error(`forwardFor carries only a method with a forward hook: ${method}`);
+    const forwarder = this.forwarder;
+    if (forwarder === null)
+      return Promise.reject(
+        new RpcCallError("UNAVAILABLE", "device routing is not armed", true, {
+          service: "peer-link",
+          device,
+          state: "starting",
+        }),
+      );
+    return forwarder(device, method, params, ctx, { onBehalfOf: this.provenance(ctx) });
+  }
+
+  /** DS-L7 — who a call this daemon forwards is for, from the CALLING context (a peer's relayed call restates what
+   * that peer said); never from params. F1b — the phone behind it is named by the device this door's own roster
+   * correlates its node to (the same correlation the hello reads). */
+  private provenance(ctx: CallerContext): ReturnType<typeof forwardProvenance> {
+    return forwardProvenance(ctx, {
+      deviceId: this.ownDeviceId?.() ?? "",
+      userId: this.opts.userId,
+      correlateNodeId: this.opts.correlateNodeId,
+    });
   }
 
   register(method: string, handler: Handler): void {
@@ -1243,22 +1316,23 @@ export class ProductApi extends EventEmitter {
             }
             return;
           }
-          // DS-L7 — who the call is for, from the CALLING context (a peer's
-          // relayed call restates what that peer said); never from params.
-          // F1b — the phone behind it is named by the device this door's own
-          // roster correlates its node to (the same correlation the hello reads)
+          // DS-L7 — who the call is for (`provenance`, from the CALLING context).
           // DS-2 — every forwarded MUTATION carries a key (the caller's, a
           // relaying peer's, else a fresh one); a read carries none
           const idempotencyKey = isKeyedForward(def) ? (inboundKey ?? mintForwardKey()) : undefined;
           const outbound: OutboundEnvelope = {
-            onBehalfOf: forwardProvenance(callCtx, {
-              deviceId: this.ownDeviceId?.() ?? "",
-              userId: this.opts.userId,
-              correlateNodeId: this.opts.correlateNodeId,
-            }),
+            onBehalfOf: this.provenance(callCtx),
             ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
           };
-          const result = await forwarder(device, method, callParams, callCtx, outbound);
+          const carry = () => forwarder(device, method, callParams, callCtx, outbound);
+          // PG-3b — after the gates above, before anything is carried: the
+          // method's own say (`agent.reportShown`: the home carries a report
+          // only for a reader holding its mesh board, in order per owner),
+          // with a carry that runs once
+          const hook = this.forwardHooks.get(method);
+          const result = await (hook !== undefined
+            ? hook(callCtx, device, callParams, onceCarry(method, carry))
+            : carry());
           reply({ jsonrpc: "2.0", id, result });
           return;
         }
