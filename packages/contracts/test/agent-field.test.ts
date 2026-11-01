@@ -935,12 +935,67 @@ describe("PG-3a — the witness goldens: the remote cut's states the phone reads
     }
   });
 
-  it("every row as PG-2 holds it: observed and alive, no colour sequence, no path, every text at the bound, no field half", () => {
+  it("Q06 — a crashed home run: dead, its failure its wait, its local terminal join kept, so the home's window keeps its body", () => {
+    const crash = row(HOME, "run-h-crash");
+    expect(crash.terminal).toEqual({
+      hosted: "local",
+      runtimeSessionId: "pty-h3",
+      workloadClass: "agent",
+    });
+    // a run whose shell the floor still lists keeps the shell's id (M22), dead or alive
+    expect(crash.monitorRow).toMatchObject({
+      id: "pty-h3",
+      kind: "agent",
+      status: "blocked",
+      alive: false,
+      observed: true,
+      wait: { kind: "failure" },
+    });
+    // the only dead row the witness carries
+    expect(
+      everyRow()
+        .filter((entry) => !entry.monitorRow.alive)
+        .map((entry) => entry.runtimeRunId),
+    ).toEqual(["run-h-crash"]);
+  });
+
+  it("PG-1c — the whole-mesh resync: every desktop as it stands after frame 7, on its own chain, and one home change the reader never heard", () => {
+    const resync = AgentRemoteMeshOpen.parse(golden("agent-remote-mesh-open.resync.json"));
+    expect(resync.devices.map((entry) => [entry.device, entry.state])).toEqual([
+      [HOME, "live"],
+      [LOFT, "live"],
+      [ATTIC, "asleep"],
+    ]);
+    const [home, loft, attic] = resync.devices.map((entry) => entry.snapshot);
+    // each chain where the frames left it: the home past frame 7 by one delta, the peer on its new chain
+    expect(home).toMatchObject({ epoch: boardOf(HOME)?.snapshot?.epoch, revision: 84 });
+    const reattach = frames()[4];
+    if (reattach === undefined || !("snapshot" in reattach))
+      throw new Error("frame 4 is a re-attach");
+    expect(loft).toMatchObject({ epoch: reattach.snapshot.epoch, revision: 4 });
+    expect(attic).toEqual(boardOf(ATTIC)?.snapshot);
+    expect(home?.rows.map((entry) => `${entry.runtimeRunId}→${entry.monitorRow.id}`)).toEqual([
+      "run-h-turn→pty-h1",
+      "run-h-partial→run-h-partial",
+      "run-h-nocwd→run-h-nocwd",
+      "run-h-root→run-h-root",
+      "run-h-crash→pty-h3",
+      "run-h-typed→pty-h2",
+    ]);
+    expect(loft?.rows.map((entry) => entry.runtimeRunId)).toEqual(["run-p-ask"]);
+    // the change it heals: the home's own window showed run-h-turn, so its owner cleared the mark
+    expect(home?.rows[0]?.monitorRow.unread).toBe(false);
+    expect(AgentModelMeshOpen.safeParse(golden("agent-remote-mesh-open.resync.json")).success).toBe(
+      true,
+    );
+  });
+
+  it("every row as PG-2 holds it: observed, alive but the crash, no colour sequence, no path, every text at the bound, no field half", () => {
     const rows = everyRow();
-    expect(rows.length).toBeGreaterThanOrEqual(16);
+    expect(rows.length).toBeGreaterThanOrEqual(17);
     for (const entry of rows) {
       const id = entry.runtimeRunId;
-      expect(entry.monitorRow, id).toMatchObject({ observed: true, alive: true });
+      expect(entry.monitorRow, id).toMatchObject({ observed: true, alive: id !== "run-h-crash" });
       expect(
         Number.isInteger(entry.monitorRow.createdAt) && entry.monitorRow.createdAt > 0,
         id,
@@ -965,8 +1020,11 @@ describe("PG-3a — the witness goldens: the remote cut's states the phone reads
       "agent-remote-mesh-open.witness.json",
       "agent-remote-mesh-frames.witness.json",
       "agent-field-snapshot.project-keys.json",
+      "agent-remote-mesh-open.resync.json",
     ]) {
-      expect(readFileSync(join(FIXTURES, name), "utf8"), name).not.toMatch(/[​-‍﻿…]/);
+      expect(readFileSync(join(FIXTURES, name), "utf8"), name).not.toMatch(
+        /[\u200B-\u200D\uFEFF\u2026]/,
+      );
     }
   });
 
@@ -1010,6 +1068,7 @@ describe("AgentBoardRowKey — the relay reads each row's key alone", () => {
       "agent-model-mesh-open.valid.json",
       "agent-remote-mesh-open.valid.json",
       "agent-remote-mesh-open.witness.json",
+      "agent-remote-mesh-open.resync.json",
     ]) {
       const open = golden(name) as { devices: Array<{ snapshot?: Board }> };
       for (const device of open.devices)

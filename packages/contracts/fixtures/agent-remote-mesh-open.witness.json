@@ -232,6 +232,73 @@
               "attachable": false,
               "writable": false
             }
+          },
+          {
+            "runtimeRunId": "run-h-crash",
+            "revision": 5,
+            "device": "dev-01HQ9S7UD1",
+            "terminal": {
+              "hosted": "local",
+              "runtimeSessionId": "pty-h3",
+              "workloadClass": "agent"
+            },
+            "nativeSessionId": "1f5b9d3e-6a0c-4e72-8b4f-2d6a0e8c4f95",
+            "monitorRow": {
+              "id": "pty-h3",
+              "kind": "agent",
+              "createdAt": 1790800650000,
+              "status": "blocked",
+              "statusSince": 1790803010000,
+              "stale": true,
+              "alive": false,
+              "observed": true,
+              "detail": "The process exited with code 1.",
+              "project": {
+                "name": "ice",
+                "branch": "main"
+              },
+              "provider": {
+                "id": "claude",
+                "label": "Claude Code"
+              },
+              "model": "Opus 5.5",
+              "effort": {
+                "value": "high",
+                "intent": "observed"
+              },
+              "context": {
+                "usedPercent": 33
+              },
+              "wait": {
+                "kind": "failure",
+                "since": 1790803010000,
+                "detail": "The process exited with code 1."
+              },
+              "reply": {
+                "text": "Rebuilding the arbitration table.",
+                "at": 1790803005000,
+                "final": false
+              },
+              "cost": {
+                "usd": 0.88,
+                "coverage": "complete",
+                "burnPerHour": 0
+              },
+              "tokens": {
+                "total": 72400,
+                "perMinute": 0
+              },
+              "unread": false,
+              "device": {
+                "id": "dev-01HQ9S7UD1",
+                "name": "Studio",
+                "os": "mac"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": true,
+              "writable": true
+            }
           }
         ]
       }
