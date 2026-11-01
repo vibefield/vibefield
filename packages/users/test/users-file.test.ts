@@ -50,7 +50,7 @@ describe("mint + mutate (§3.3 publish modes)", () => {
     expect(file.lastAttached).toBe(file.users[0]?.userId);
   });
 
-  it('the "wx" belt keeps mint exclusive even with a BROKEN lock', () => {
+  it("the exclusive-create belt keeps mint exclusive even with a BROKEN lock", () => {
     const r = root();
     let lost = 0;
     // no lock at all — two direct minters; the second must adopt, never retry
