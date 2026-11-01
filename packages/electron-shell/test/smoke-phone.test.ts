@@ -1512,18 +1512,67 @@ describe("PT-S3 — the stimulus PROVEN: an unproven page or a failed door verb 
   });
 
   it("SIM-LIVE's device screenshot: not `written` is STAGING NOT MET (run 1101's out:56, exit 1); no shot dir or an unread one stays red", () => {
-    expect(liveShot({ dir: true, state: "written", read: true })).toBeNull();
-    const failedShot = liveShot({ dir: true, state: "failed", read: false });
+    expect(
+      liveShot({ proof: proven, dir: true, state: "written", read: true, covered: false }),
+    ).toBeNull();
+    const failedShot = liveShot({
+      proof: proven,
+      dir: true,
+      state: "failed",
+      read: false,
+      covered: false,
+    });
     expect(failedShot).toEqual({ problems: [], staging: "the door's screenshot read failed" });
     expect(markOf(failedShot ?? { problems: [], staging: null })).toBe("STAGING NOT MET");
-    expect(liveShot({ dir: false, state: "no-shot-dir", read: false })).toEqual({
+    expect(
+      liveShot({ proof: proven, dir: false, state: "no-shot-dir", read: false, covered: false }),
+    ).toEqual({
       problems: ["SIM-LIVE: no VF_SMOKE_SHOT_DIR — the row needs the device's screenshot"],
       staging: null,
     });
-    expect(liveShot({ dir: true, state: "written", read: false })).toEqual({
+    expect(
+      liveShot({ proof: proven, dir: true, state: "written", read: false, covered: false }),
+    ).toEqual({
       problems: ["SIM-LIVE: the door's screenshot was not read"],
       staging: null,
     });
+  });
+
+  it("SIM-LIVE: a LIVE-PROVEN red is the row's problem even when its screenshot is unstaged — judged FIRST (G1)", () => {
+    const dead: LiveProof = { ...proven, ms: null, presented: 0, frames: 0, after: [] };
+    const unwritten = liveShot({
+      proof: dead,
+      dir: true,
+      state: "failed",
+      read: false,
+      covered: false,
+    });
+    expect(unwritten?.staging).toBeNull();
+    expect(unwritten?.problems).toEqual(judgeLiveProven("SIM-LIVE", dead));
+    expect(markOf(unwritten ?? { problems: [], staging: null })).toBe("red");
+    // the screenshot's band covered by Safari: the same order — a red proof stands, a good one stages
+    const covered = liveShot({
+      proof: dead,
+      dir: true,
+      state: "written",
+      read: true,
+      covered: true,
+    });
+    expect(markOf(covered ?? { problems: [], staging: null })).toBe("red");
+    expect(
+      liveShot({ proof: proven, dir: true, state: "written", read: true, covered: true }),
+    ).toEqual({
+      problems: [],
+      staging: "the device's screenshot shows no band: Safari covered it",
+    });
+    // no shot dir: red, the proof's red with it
+    expect(
+      liveShot({ proof: dead, dir: false, state: "no-shot-dir", read: false, covered: false })
+        ?.problems,
+    ).toEqual([
+      ...judgeLiveProven("SIM-LIVE", dead),
+      "SIM-LIVE: no VF_SMOKE_SHOT_DIR — the row needs the device's screenshot",
+    ]);
   });
 
   /** The runner as its source must hold it: no bare openUrl in the three rows or bringLive; each page proven and checked
@@ -1562,7 +1611,7 @@ describe("PT-S3 — the stimulus PROVEN: an unproven page or a failed door verb 
     expect(idle).toMatch(/idleVerdict\(seen, \{ motion, still: stillPage, wake \}\)/u);
     const live = body("SIM-LIVE");
     expect(live).toMatch(
-      /liveShot\(\{\s*dir: d\.shotDir !== undefined,\s*state: taken\.state,\s*read: shot !== null,?\s*\}\)/u,
+      /liveShot\(\{\s*proof,\s*dir: d\.shotDir !== undefined,\s*state: taken\.state,\s*read: shot !== null,\s*covered:/u,
     );
   };
 

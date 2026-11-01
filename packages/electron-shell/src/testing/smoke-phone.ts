@@ -826,22 +826,29 @@ export function stimulusStaging(pages: readonly Stimulus[]): string | null {
   return null;
 }
 
-/** SIM-LIVE's device screenshot (T2): no VF_SMOKE_SHOT_DIR is RED (§2: a row that needs the shot dir FAILS without it);
- * the door's screenshot not `written` is the stage's verb failing (run 1101's out:56, exit 1) — STAGING NOT MET; one
- * written but unread is red. Null: the shot stands. */
+/** SIM-LIVE's device screenshot (T2), judged AFTER φP's LIVE-PROVEN (G1): a red proof is the row's problem whatever the
+ * shot did. Then: no VF_SMOKE_SHOT_DIR is RED (§2: a row that needs the shot dir FAILS without it); the door's screenshot
+ * not `written` is the stage's verb failing (run 1101's out:56, exit 1) — STAGING NOT MET; one written but unread is red;
+ * one that shows no band (Safari covered the page) STAGING NOT MET. Null: the shot stands (judgeLive judges the proof). */
 export function liveShot(s: {
+  readonly proof: LiveProof | null;
   readonly dir: boolean;
   readonly state: string;
   readonly read: boolean;
+  readonly covered: boolean;
 }): { readonly problems: string[]; readonly staging: string | null } | null {
+  const red = judgeLiveProven("SIM-LIVE", s.proof);
+  const staged = (staging: string) =>
+    red.length > 0 ? { problems: red, staging: null } : { problems: [], staging };
   if (!s.dir)
     return {
-      problems: ["SIM-LIVE: no VF_SMOKE_SHOT_DIR — the row needs the device's screenshot"],
+      problems: [...red, "SIM-LIVE: no VF_SMOKE_SHOT_DIR — the row needs the device's screenshot"],
       staging: null,
     };
-  if (s.state !== "written")
-    return { problems: [], staging: `the door's screenshot read ${s.state}` };
-  if (!s.read) return { problems: ["SIM-LIVE: the door's screenshot was not read"], staging: null };
+  if (s.state !== "written") return staged(`the door's screenshot read ${s.state}`);
+  if (!s.read)
+    return { problems: [...red, "SIM-LIVE: the door's screenshot was not read"], staging: null };
+  if (s.covered) return staged("the device's screenshot shows no band: Safari covered it");
   return null;
 }
 
@@ -2556,11 +2563,13 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const taken = await deviceShot(1, `sim-live-${q}.png`, band);
       const shot = taken.shot;
       if (shot !== null) native = [shot.width, shot.height];
-      // the door's screenshot not written is the stage's verb failing: STAGING NOT MET (T2)
+      // φP's proof judged FIRST (G1); the door's screenshot not written, or Safari over the band: STAGING NOT MET (T2)
       const unshot = liveShot({
+        proof,
         dir: d.shotDir !== undefined,
         state: taken.state,
         read: shot !== null,
+        covered: shot !== null && shot.band < BAND_FLOOR * shot.px,
       });
       if (unshot !== null || shot === null)
         return {
@@ -2568,13 +2577,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
             problems: ["SIM-LIVE: the door's screenshot was not read"],
             staging: null,
           }),
-          seen: { proof, shot: taken.state },
-        };
-      if (shot.band < BAND_FLOOR * shot.px)
-        return {
-          problems: [],
-          staging: "the device's screenshot shows no band: Safari covered it",
-          seen: { shot },
+          seen: { proof, shot: shot ?? taken.state },
         };
       const glass = await faceRead(p, false);
       const a = await glassOf(p, false, band);
