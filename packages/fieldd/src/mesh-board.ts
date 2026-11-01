@@ -57,7 +57,10 @@ import { RpcCallError } from "./native-link";
 // repair each unsubscribe and subscribe again: an immediate close tore down
 // every peer's upstream on each, and the new hub answered every other desktop
 // `stale` on a new epoch until each re-attached — the grey flash. The daemon
-// stopping (`MeshBoard.dispose`) waits for no linger.
+// stopping (`MeshBoard.dispose`) waits for no linger. At most
+// `AGENT_FIELD.MESH_LINGERING_HUBS_MAX` hubs linger at once, the oldest closing
+// at once past it: a floor is any integer a reader asks, and an unbounded
+// linger would stand up a hub per value (the PG-9a review [0], EL7).
 //
 // WHICH peers are desktops: the roster lists phones too (a phone is a self node
 // with no fieldd behind it) and cannot say so directly — a phone publishes no
@@ -291,6 +294,15 @@ const copyOf = (board: HeldBoard): HeldBoard => ({
   rows: new Map(board.rows),
 });
 
+/** What a hub tells its `MeshBoard` about its life: its linger began (its last
+ * reader left), a reader rejoined it inside the linger, it closed. The board
+ * bounds the lingering hubs by these (the PG-9a review [0]). */
+interface HubLife {
+  lingering(): void;
+  rejoined(): void;
+  closed(): void;
+}
+
 /** One board per {projection, floor}: the readers that asked the same
  * question share its upstreams and its held boards. */
 class BoardHub {
@@ -316,7 +328,7 @@ class BoardHub {
     private readonly projection: BoardProjection,
     private readonly floor: number,
     private readonly kept: KeptBoards,
-    private readonly onClosed: () => void,
+    private readonly life: HubLife,
   ) {
     // This desktop's own board, on its own chain; it is always `live` (the
     // daemon answering IS its liveness) and needs no heartbeat.
@@ -337,6 +349,7 @@ class BoardHub {
     if (this.#linger !== null) {
       clearTimeout(this.#linger);
       this.#linger = null;
+      this.life.rejoined();
     }
     const open = this.#openAnswer();
     this.#members.add(member);
@@ -366,6 +379,8 @@ class BoardHub {
       if (this.#members.size === 0) this.dispose();
     }, AGENT_FIELD.MESH_HUB_LINGER_MS);
     this.#linger.unref?.();
+    // last: the board may close an older lingering hub now, past its bound
+    this.life.lingering();
   }
 
   /** The linger ended with no reader (or the daemon stops, at once): every
@@ -385,7 +400,7 @@ class BoardHub {
     try {
       this.#local.dispose();
     } finally {
-      this.onClosed();
+      this.life.closed();
     }
   }
 
@@ -719,11 +734,19 @@ class BoardHub {
  * Amended 2026-11-01 (PG-9a, item 135): a hub exists while it has a reader and
  * for `AGENT_FIELD.MESH_HUB_LINGER_MS` after its last one leaves; an `open`
  * inside that rejoins it, and the linger's end closes its upstreams. `dispose`
- * (the daemon stopping) closes every hub at once, lingering or not.
+ * (the daemon stopping) closes every hub at once, lingering or not. At most
+ * `AGENT_FIELD.MESH_LINGERING_HUBS_MAX` hubs linger at once; past it the oldest
+ * lingering hub closes at once (the PG-9a review [0]).
  */
 export class MeshBoard {
   readonly #opts: Resolved;
   readonly #hubs = new Map<string, BoardHub>();
+  /** PG-9a (the review [0]) — the hubs waiting out a linger, oldest first (a
+   * Set iterates in insertion order): entering the linger appends, a rejoin or
+   * a close removes. At most `AGENT_FIELD.MESH_LINGERING_HUBS_MAX`; past it the
+   * oldest closes at once, so a reader churning distinct floors cannot stand up
+   * a lingering hub (a local board here, an upstream on every peer) per value. */
+  readonly #lingering = new Set<BoardHub>();
   /** each desktop's last board, by projection (`KeptBoards`) */
   readonly #kept = new Map<"field" | "remote", Map<string, HeldBoard>>();
   #disposed = false;
@@ -774,8 +797,22 @@ export class MeshBoard {
           kept.set(device, board);
         },
       };
-      const created: BoardHub = new BoardHub(this.#opts, projection, minIntervalMs, keeper, () => {
-        if (this.#hubs.get(key) === created) this.#hubs.delete(key);
+      const created: BoardHub = new BoardHub(this.#opts, projection, minIntervalMs, keeper, {
+        lingering: () => {
+          this.#lingering.add(created);
+          for (const oldest of this.#lingering) {
+            if (this.#lingering.size <= AGENT_FIELD.MESH_LINGERING_HUBS_MAX) break;
+            this.#lingering.delete(oldest);
+            oldest.dispose();
+          }
+        },
+        rejoined: () => {
+          this.#lingering.delete(created);
+        },
+        closed: () => {
+          this.#lingering.delete(created);
+          if (this.#hubs.get(key) === created) this.#hubs.delete(key);
+        },
       });
       hub = created;
       this.#hubs.set(key, hub);
@@ -810,5 +847,6 @@ export class MeshBoard {
     this.#disposed = true;
     for (const hub of [...this.#hubs.values()]) hub.dispose();
     this.#hubs.clear();
+    this.#lingering.clear();
   }
 }

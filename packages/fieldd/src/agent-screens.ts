@@ -62,6 +62,12 @@ import { RpcCallError } from "./native-link";
 //    away), its carried screens go, so a failed empty cannot outlive the upstream it rode beside. A hub that only
 //    resyncs re-attaches on the same connection, and the home's replay at that re-attach puts its readers' screens
 //    back;
+//    Amended 2026-11-01 (PG-9a, item 135; the PG-9a review [1]): the home's upstream now outlives its last reader
+//    by `AGENT_FIELD.MESH_HUB_LINGER_MS` and stands across a rejoin (`mesh-board.ts`), so a failed empty is bounded
+//    by the connection, or by the hub going unread for a full linger, not by the reader leaving. A phone that
+//    reconnects inside each linger keeps the owner's stale carried screen standing (its rows earn no unread mark
+//    there, and it holds one of the CARRIED_SCREENS_PER_PEER places). Carrying the empty again (an owed release)
+//    is not built;
 //  · by the connection: they go when it closes (`connectionClosed`).
 // The 3b review [3] (a renderer's provenance windowId is its participant, not its connection) is answered by the kind
 // gate: only a phone is a reader, and a phone's windowId is its connection id.
@@ -264,10 +270,13 @@ export function createAgentScreens(opts: AgentScreensOptions): AgentScreens {
     }).catch((error: unknown) =>
       why === "release"
         ? // the 3b review [12]: not retried. Until the carrying connection or its upstream closes on the owner,
-          // the owner's carried screen for this reader stands, and those rows earn no unread mark there
+          // the owner's carried screen for this reader stands, and those rows earn no unread mark there.
+          // Amended 2026-11-01 (PG-9a, the review [1]): that upstream is the home's hub's, which now outlives its
+          // last reader by MESH_HUB_LINGER_MS and stands across a rejoin, so the bound is the connection, or the
+          // hub going unread for a full linger, never the reader leaving
           logger.warn(
             "fieldd.agents.screen_release_failed",
-            "A closed reader's empty report did not reach its owner; its screen there stands until that connection or its upstream closes",
+            "A closed reader's empty report did not reach its owner; its screen there stands until that connection closes, or until the home's mesh hub has gone unread for a full linger",
             { device: owner, error: error instanceof Error ? error.message : String(error) },
           )
         : logger.warn(
