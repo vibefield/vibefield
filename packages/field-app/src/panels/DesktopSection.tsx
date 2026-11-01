@@ -43,6 +43,7 @@ export function DesktopSection({
   const backgroundShell = preferences?.backgroundShell ?? true;
   const screenshotHotkey = preferences?.screenshotHotkey ?? true;
   const confirmQuit = preferences?.confirmQuit ?? true;
+  const keepRunningOnQuit = preferences?.keepRunningOnQuit ?? false;
   const screenshotIssue = screenshotHotkey ? desktopState?.screenshotHotkey?.message : null;
   const trayUnavailable = desktopState?.tray.availability === "unavailable";
   const trayIssue = showTray ? desktopState?.tray.issue : null;
@@ -114,6 +115,23 @@ export function DesktopSection({
             </div>
           )}
         </>
+      )}
+      {platform === "darwin" && (
+        // AL-6 (AL-D2; DESIGN.md §9 "The quit's words") — the status item is forced while VibeField runs this way, so
+        // the row needs no Show status item: an app nobody can reach is the defect AL-D8 exists for
+        <SettingsRow
+          title="Keep running when VibeField quits"
+          description="Quitting closes the windows and keeps VibeField in the menu bar, with its terminal sessions running. Quit VibeField in the menu bar quits it."
+        >
+          <SettingsSwitch
+            label="Keep running when VibeField quits"
+            checked={keepRunningOnQuit}
+            disabled={unavailable || pending !== null}
+            onChange={(checked) => {
+              void setPreference(APP_PREFERENCE_KEYS.KEEP_RUNNING_ON_QUIT, checked);
+            }}
+          />
+        </SettingsRow>
       )}
       <SettingsRow
         title="Ask before quitting"

@@ -20,7 +20,8 @@
 //                              named (P5's default; the console runs set it on James's word, brief §13 RM2)
 //   VF_PHONE_GUARD_AWK, VF_PHONE_PERF_LOCK, VF_PHONE_DISK_FLOORS (`<path>:<GiB>[,…]`)
 //                              another host's house rules (the mini's); unset, this Mac's. PHONE_HOUSE_RULES says which
-// Exit: the command's own code; 1 for a red preflight, rows record or restore; 2 for a usage error; 75 NOT ARMED or
+// Exit: the command's own code; 1 for a red preflight, rows record or restore; 2 for a usage error (a reused run id among
+// them: `<logs>/<run>/` already holding a file, T7); 75 NOT ARMED or
 // STOPPED (a hand, a locked console, a foreign device booted mid-run, a Simulator.app not proven the run's) over a
 // restored host — a DETERMINISTIC stop (RM4.5's own-input reset; the press gate refusing an act or a device not the
 // run's) is 1 and PHONE_STOP_FINAL, and a STOP whose teardown left the host unrestored is 1 and PHONE_STOP_UNRESTORED;
@@ -42,7 +43,10 @@
 //   POST /act {verb, device: n, url?, file?}     verb: boot, shutdown, state, openurl (`url` on this door, /motion or
 //                                                /still), screenshot (`file`: a new `.png` in the shot dir), show-app,
 //                                                quit-app (no device) → `{n, state}`; 409 `{n, state: "stop", why}`
-//                                                once the run is stopped
+//                                                once the run is stopped. T1: a device simctl lists Booted reads
+//                                                `Booting` until `simctl bootstatus` proves iOS ready (BOOT_READY_MS);
+//                                                boot, openurl and screenshot wait for it, bounded; a `failed` carries
+//                                                `why` (H3: simctl's stderr, redacted, 300 chars)
 //   POST /row {name, phase: begin|press|end}     the HID record → `{go}` (at an end, `{go, void}` for a VOID row) or
 //                                                `{stop, why}`; the smoke ends its rows on a stop
 //   POST /row {name, phase: input}               said by the smoke right before its FIRST `sendInputEvent` of the run
@@ -256,7 +260,27 @@ export function readOptions(env) {
   };
 }
 
-/** The type list the smoke is handed: `n:<type>` (n 1..3 the run's devices, 4 the no-device type); `none` mode's one
+/** T7: a run id is ONE launch's. Its folder (`dirname(VF_PHONE_HID_LOG)`, `<logs>/<run>/`) already there and holding
+ * anything is a reused id: two launches as one run append into one HID and stage log and one `tee` loses the first's
+ * stdout. Answers the refusal's line, or null for a new run (the folder absent, or empty). Read before ANYTHING is
+ * written; `--sweep` and `--preflight-only` never ask. */
+export function reusedRun(opts, fs = { readdirSync }) {
+  const dir = dirname(opts.hidLog);
+  // G9: the folder must BE the run's — another run's folder (or none) would mix two runs' logs whatever it holds
+  if (basename(dir) !== opts.run)
+    return `stage-simulator-fixture: run ${opts.run}: ${dir} is not the run's folder (<logs>/${opts.run}/) — choose a new VF_PHONE_RUN and its VF_PHONE_HID_LOG (<logs>/<run>/<run>-hid.log)`;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    entries = null;
+  }
+  if (entries !== null && entries.length === 0) return null;
+  return `stage-simulator-fixture: run ${opts.run} was launched before — ${dir} ${entries === null ? "is not a readable folder" : `already holds ${entries.length} file(s)`}: choose a new VF_PHONE_RUN (and its VF_PHONE_HID_LOG)`;
+}
+
+/** The type list the smoke is handed:`n:<type>` (n 1..3 the run's devices, 4 the no-device type); `none` mode's one
  * type has no device. Never a UDID. */
 export function devicesWord(mode, types) {
   return mode === "none" ? `1:${types[0]}` : types.map((type, i) => `${i + 1}:${type}`).join(",");
@@ -592,6 +616,8 @@ export function parseList(raw) {
           deviceType: String(d.deviceTypeIdentifier ?? ""),
           runtime,
           available: d.isAvailable === true,
+          // the device's boot (T1): a new one is a new readiness to prove
+          lastBootedAt: typeof d.lastBootedAt === "string" ? d.lastBootedAt : null,
         });
   }
   return { runtimes, devices };
@@ -1124,8 +1150,12 @@ function refuse(run, kind, status, body) {
 /** The pinned env of the stage's OWN simctl and open spawns. */
 const pinned = (run, deps) => ({ ...deps.env, DEVELOPER_DIR: run.devDir });
 
-const simctl = (run, deps, args, timeoutMs) =>
-  deps.exec(XCRUN, ["simctl", ...args], { env: pinned(run, deps), timeoutMs });
+const simctl = (run, deps, args, timeoutMs, signal) =>
+  deps.exec(XCRUN, ["simctl", ...args], {
+    env: pinned(run, deps),
+    timeoutMs,
+    ...(signal === undefined ? {} : { signal }),
+  });
 
 /** The host's list, read in memory: every UDID not yet known joins the redactor as foreign. Null when it fails. */
 export async function readList(run, deps) {
@@ -1240,13 +1270,111 @@ export async function quitApp(run, deps, n = null) {
   return json(502, { n, state: "failed", why: "Simulator.app outlived SIGTERM by 10 s" });
 }
 
-/** An own device's state, as a word from simctl's own set (never its JSON). */
-async function stateOf(run, deps, own) {
+/** An own device now: its state, as a word from simctl's own set (never its JSON), and its boot (`lastBootedAt`). */
+async function deviceNow(run, deps, own) {
   const list = await readList(run, deps);
-  if (list === null) return "unknown";
+  if (list === null) return { state: "unknown", boot: null };
   const device = list.devices.find((d) => d.udid.toUpperCase() === own.udid.toUpperCase());
-  if (device === undefined) return "absent";
-  return DEVICE_STATES.has(device.state) ? device.state : "unknown";
+  if (device === undefined) return { state: "absent", boot: null };
+  return {
+    state: DEVICE_STATES.has(device.state) ? device.state : "unknown",
+    boot: device.lastBootedAt ?? null,
+  };
+}
+
+/** H3: what a failed simctl (or open) said — its stderr (and a spawn error), REDACTED FIRST (no UDID is cut into a
+ * fragment the redactor cannot see), one line, its first 300 chars. */
+export const STDERR_CHARS = 300;
+export function stderrOf(run, r) {
+  return run.redactor
+    .scrub(`${r?.stderr ?? ""} ${r?.error ?? ""}`)
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, STDERR_CHARS);
+}
+
+/** T1: "Booted" is simctl's list word, not iOS ready — a fresh device answers `openurl` and `io screenshot` with exit 60
+ * and 1 for minutes after it (out:46-86). Readiness is `simctl bootstatus <udid>` (never `-b`: the stage never boots by
+ * this path), bounded by BOOT_READY_MS and asked ONCE per device per boot: cached against the UDID and its
+ * `lastBootedAt`, dropped when the device is seen not Booted. It holds whoever booted it (the stage, or the product's
+ * Boot in SIM-OFF-BOOT). */
+export const BOOT_READY_MS = 180_000;
+/** G5: no door verb outlives the smoke's door timeouts (150 s for `boot`, 60 s else). `boot` — its list reads, simctl
+ * boot and the readiness wait — ends inside BOOT_BUDGET_MS; `openurl` and `screenshot` inside VERB_BUDGET_MS, their
+ * simctl given `min(VERB_RUN_MS, what is left)` and never run on under MIN_VERB_MS (answered `failed`, not ready). */
+export const BOOT_BUDGET_MS = 145_000;
+export const VERB_BUDGET_MS = 55_000;
+export const VERB_RUN_MS = 30_000;
+export const MIN_VERB_MS = 5_000;
+/** The longest a device verb waits for readiness (inside its budget, MIN_VERB_MS kept for the verb). */
+export const READY_VERB_WAIT_MS = 45_000;
+
+/** G6: an ask dropped (its device seen down, a new boot, the door's shutdown) — its bootstatus, still pending, killed. */
+function forgetReady(run, key) {
+  const ask = run.ready.get(key);
+  if (ask !== undefined && ask.done === null) ask.kill.abort();
+  run.ready.delete(key);
+}
+
+/** G6: every ask still pending killed — at teardown, before anything else (no bootstatus outlives the run). */
+export function forgetAllReady(run) {
+  for (const key of [...run.ready.keys()]) forgetReady(run, key);
+}
+
+/** An own device's readiness, now (`waitMs` 0) or waited for up to `waitMs`: `{state}` — `Booted` (iOS ready), `Booting`
+ * (not yet), simctl's word for a device neither Booted nor Booting (nothing to prove), or `failed` with `why` (past
+ * BOOT_READY_MS, or bootstatus said no). */
+async function readiness(run, deps, own, now, waitMs) {
+  const key = own.udid.toUpperCase();
+  if (now.state !== "Booted" && now.state !== "Booting") {
+    forgetReady(run, key);
+    return { state: now.state };
+  }
+  let ask = run.ready.get(key);
+  if (ask === undefined || ask.boot !== now.boot) {
+    forgetReady(run, key);
+    const n = [...run.own.entries()].find(([, d]) => d === own)?.[0];
+    const asked = { boot: now.boot, at: deps.now(), done: null, said: false, n };
+    asked.kill = new AbortController();
+    asked.promise = simctl(
+      run,
+      deps,
+      ["bootstatus", own.udid],
+      BOOT_READY_MS,
+      asked.kill.signal,
+    ).then(
+      (r) => {
+        asked.done = { ok: r.code === 0, r, ms: deps.now() - asked.at };
+      },
+      (error) => {
+        asked.done = {
+          ok: false,
+          r: { code: null, error: String(error) },
+          ms: deps.now() - asked.at,
+        };
+      },
+    );
+    run.ready.set(key, asked);
+    ask = asked;
+  }
+  if (ask.done === null && waitMs > 0) {
+    const left = Math.min(waitMs, BOOT_READY_MS - (deps.now() - ask.at));
+    if (left > 0) await Promise.race([ask.promise, deps.sleep(left)]);
+  }
+  if (ask.done?.ok === true) return { state: "Booted" };
+  const ms = ask.done?.ms ?? deps.now() - ask.at;
+  if (ask.done === null && ms < BOOT_READY_MS) return { state: "Booting", ms };
+  const detail = ask.done === null ? "" : stderrOf(run, ask.done.r);
+  const exit =
+    ask.done === null
+      ? ""
+      : ` (bootstatus exit ${ask.done.r.code}${detail === "" ? "" : `: ${detail}`})`;
+  const why = `not ready after ${ms} ms${exit}`;
+  if (!ask.said) {
+    ask.said = true;
+    deps.say(`stage-simulator-fixture: <pts3-dev-${ask.n}> ${why}`);
+  }
+  return { state: "failed", why };
 }
 
 /** POST /act — P6's verbs (with `state` and `quit-app`, amended 03:00Z) on the run's OWN devices; anything else is
@@ -1265,17 +1393,80 @@ export async function doorAct(body, run, deps) {
       state: "refused",
       why: "not one of this run's devices",
     });
+  // H3: a failure says what simctl (or open) said — redacted, one line, 300 chars — in the line and the response
   const failed = (what, r) => {
-    deps.say(`stage-simulator-fixture: ${what} of <pts3-dev-${n}> failed (exit ${r.code})`);
-    return json(502, { n, state: "failed" });
+    const said = stderrOf(run, r);
+    deps.say(
+      `stage-simulator-fixture: ${what} of <pts3-dev-${n}> failed (exit ${r.code})${said === "" ? "" : `: ${said}`}`,
+    );
+    return json(502, {
+      n,
+      state: "failed",
+      why: `${what} exit ${r.code}${said === "" ? "" : `: ${said}`}`,
+    });
   };
-  if (verb === "state") return json(200, { n, state: await stateOf(run, deps, own) });
+  // T1: a device iOS has not finished booting is Booting at the door, and its verbs wait (bounded) or run nothing
+  const notReady = (gate) =>
+    json(502, {
+      n,
+      state: "failed",
+      why:
+        gate.state === "failed"
+          ? gate.why
+          : `not ready yet (${gate.ms} ms of BOOT_READY_MS ${BOOT_READY_MS}): its verb not run`,
+    });
+  const readyFor = async (waitMs) =>
+    readiness(run, deps, own, await deviceNow(run, deps, own), waitMs);
+  // G5: the request's own clock — every wait and every verb's timeout inside its budget
+  const t0 = deps.now();
+  const left = (budget) => budget - (deps.now() - t0);
+  const short = (budget) =>
+    json(502, {
+      n,
+      state: "failed",
+      why: `not ready: ${Math.max(0, left(budget))} ms of the door's ${budget} ms left, under ${MIN_VERB_MS}: its verb not run`,
+    });
+  /** openurl and screenshot: readiness, then simctl on what is left of VERB_BUDGET_MS. */
+  const deviceVerb = async (what, args, word) => {
+    const gate = await readyFor(
+      Math.max(0, Math.min(READY_VERB_WAIT_MS, left(VERB_BUDGET_MS) - MIN_VERB_MS)),
+    );
+    if (gate.state === "Booting" || gate.state === "failed") return notReady(gate);
+    const runFor = Math.min(VERB_RUN_MS, left(VERB_BUDGET_MS));
+    if (runFor < MIN_VERB_MS) return short(VERB_BUDGET_MS);
+    const r = await simctl(run, deps, args, runFor);
+    return r.code === 0 ? json(200, { n, state: word }) : failed(what, r);
+  };
+  if (verb === "state") {
+    const gate = await readyFor(0);
+    return gate.state === "failed" ? notReady(gate) : json(200, { n, state: gate.state });
+  }
   if (verb === "boot" || verb === "shutdown") {
-    const r = await simctl(run, deps, [verb, own.udid], verb === "boot" ? 120_000 : 60_000);
-    const state = await stateOf(run, deps, own);
+    if (verb === "shutdown") forgetReady(run, own.udid.toUpperCase());
+    const up = (state) => state === "Booted" || state === "Booting";
+    // R2-A: a device simctl already lists Booted (the product's face booted it) or Booting is never booted again — boot
+    // only waits for its readiness
+    const was = verb === "boot" ? await deviceNow(run, deps, own) : null;
+    if (was !== null && !up(was.state) && left(BOOT_BUDGET_MS) < MIN_VERB_MS)
+      return short(BOOT_BUDGET_MS);
+    const r =
+      was !== null && up(was.state)
+        ? null
+        : await simctl(
+            run,
+            deps,
+            [verb, own.udid],
+            verb === "boot" ? Math.min(120_000, left(BOOT_BUDGET_MS)) : 60_000,
+          );
+    const now = r === null ? was : await deviceNow(run, deps, own);
     // simctl refuses a boot of a booted device (and a shutdown of a shut one): the state is the answer
-    const reached = verb === "boot" ? state === "Booted" : state === "Shutdown";
-    return r.code === 0 || reached ? json(200, { n, state }) : failed(verb, r);
+    if (verb === "boot" && up(now.state)) {
+      // boot's answer is taken ONCE (the smoke's ensure()): readiness waited for inside its door timeout
+      const gate = await readiness(run, deps, own, now, Math.max(0, left(BOOT_BUDGET_MS)));
+      return gate.state === "failed" ? notReady(gate) : json(200, { n, state: gate.state });
+    }
+    const reached = verb === "boot" ? now.state === "Booted" : now.state === "Shutdown";
+    return r.code === 0 || reached ? json(200, { n, state: now.state }) : failed(verb, r);
   }
   if (verb === "openurl") {
     const url = canonicalPage(body.url, run);
@@ -1285,8 +1476,7 @@ export async function doorAct(body, run, deps) {
         state: "refused",
         why: "openurl reaches only this door's /motion or /still",
       });
-    const r = await simctl(run, deps, ["openurl", own.udid, url], 30_000);
-    return r.code === 0 ? json(200, { n, state: "opened" }) : failed("openurl", r);
+    return deviceVerb("openurl", ["openurl", own.udid, url], "opened");
   }
   if (verb === "screenshot") {
     const file = shotPath(body.file, run, deps);
@@ -1296,8 +1486,7 @@ export async function doorAct(body, run, deps) {
         state: "refused",
         why: "a screenshot is a new .png in the shot dir",
       });
-    const r = await simctl(run, deps, ["io", own.udid, "screenshot", file], 30_000);
-    return r.code === 0 ? json(200, { n, state: "written" }) : failed("screenshot", r);
+    return deviceVerb("screenshot", ["io", own.udid, "screenshot", file], "written");
   }
   // show-app: the fence, and no Simulator.app running unless it is proven the run's
   const fence = await fenceAgain(run, deps);
@@ -1613,18 +1802,263 @@ export function othersCompare(before, list, own) {
   };
 }
 
-/** Simulator's defaults (`defaults read com.apple.iphonesimulator`) before ARMED against after: compared RAW in memory;
- * the lines that differ said only through `scrub` (redacted, UUID shapes swept) — an OBSERVATION for James, never
- * written back. */
-export function defaultsChange(before, after, scrub) {
-  if (before === null || after === null || before === after) return { changed: false, lines: [] };
-  const was = new Set(String(before).split("\n"));
-  const now = new Set(String(after).split("\n"));
-  const lines = [
-    ...[...was].filter((line) => !now.has(line)).map((line) => `- ${scrub(line)}`),
-    ...[...now].filter((line) => !was.has(line)).map((line) => `+ ${scrub(line)}`),
-  ];
-  return { changed: true, lines: lines.slice(0, 20) };
+// ─── Simulator's defaults (H1) ────────────────────────────────────────────────────────────────────────────────────────
+//
+// Simulator.app keeps per-device entries keyed by UDID (`DevicePreferences`, and possibly elsewhere) and may move
+// `CurrentDeviceUDID` to the device it shows: a run that shows its own devices leaves them behind (out:117). Teardown
+// gives back EXACTLY the run's own — the entries keyed by its own UDIDs (held in memory), and `CurrentDeviceUDID` its
+// before value where it now names one — only with Simulator.app NOT running, and only through cfprefsd: `defaults export
+// … -` (an XML plist), the keys edited in memory, `defaults import … -`; never `defaults write`/`delete`, never the plist
+// file. Then it reads again. Every other change is another's: an OBSERVATION, never touched.
+
+const SIM_DOMAIN = "com.apple.iphonesimulator";
+const EMPTY_PLIST =
+  '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict/>\n</plist>\n';
+const PLIST_TAG = /<(\/?)([A-Za-z][A-Za-z0-9]*)\b[^>]*?(\/?)>/gu;
+const PLIST_LEAVES = new Set(["string", "integer", "real", "date", "data", "true", "false"]);
+const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+const decodeXml = (text) =>
+  text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/giu, (whole, name) => {
+    if (name[0] === "#")
+      return String.fromCodePoint(
+        name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : Number(name.slice(1)),
+      );
+    return ENTITIES[name] ?? whole;
+  });
+
+/** An XML plist (`defaults export … -`), read in memory: `{xml, root}` — `dict` `{entries: [{key, s, value}]}`, `array`
+ * `{items}`, `leaf` `{tag, text}`, each with its span `s..e` in `xml` — or null for anything that is not one (never
+ * guessed). */
+export function parsePlist(xml) {
+  if (typeof xml !== "string") return null;
+  const tags = [...xml.matchAll(PLIST_TAG)].map((m) => ({
+    close: m[1] === "/",
+    name: m[2],
+    empty: m[3] === "/",
+    s: m.index,
+    e: m.index + m[0].length,
+  }));
+  let i = tags.findIndex((t) => t.name === "plist" && !t.close);
+  if (i < 0) return null;
+  i += 1;
+  const fail = () => {
+    throw new Error("not a plist");
+  };
+  const node = () => {
+    const t = tags[i] ?? fail();
+    if (t.close) fail();
+    i += 1;
+    if (t.name === "dict" || t.name === "array") {
+      const kids = [];
+      if (!t.empty)
+        for (;;) {
+          const k = tags[i] ?? fail();
+          if (k.close && k.name === t.name) {
+            i += 1;
+            return t.name === "dict"
+              ? { type: "dict", s: t.s, e: k.e, entries: kids }
+              : { type: "array", s: t.s, e: k.e, items: kids };
+          }
+          if (t.name === "array") {
+            kids.push(node());
+            continue;
+          }
+          if (k.name !== "key" || k.close) fail();
+          let key = "";
+          if (k.empty) i += 1;
+          else {
+            const end = tags[i + 1] ?? fail();
+            if (!end.close || end.name !== "key") fail();
+            key = decodeXml(xml.slice(k.e, end.s));
+            i += 2;
+          }
+          kids.push({ key, s: k.s, value: node() });
+        }
+      return t.name === "dict"
+        ? { type: "dict", s: t.s, e: t.e, entries: [] }
+        : { type: "array", s: t.s, e: t.e, items: [] };
+    }
+    if (!PLIST_LEAVES.has(t.name)) fail();
+    if (t.empty) return { type: "leaf", tag: t.name, s: t.s, e: t.e, text: "" };
+    const end = tags[i] ?? fail();
+    if (!end.close || end.name !== t.name) fail();
+    i += 1;
+    return { type: "leaf", tag: t.name, s: t.s, e: end.e, text: decodeXml(xml.slice(t.e, end.s)) };
+  };
+  try {
+    const root = node();
+    const close = tags[i];
+    if (root.type !== "dict" || close === undefined || !close.close || close.name !== "plist")
+      return null;
+    return { xml, root };
+  } catch {
+    return null;
+  }
+}
+
+/** A plist flattened: each leaf (and each empty dict or array) by its path — compared by its tag and text. */
+function flatPlist(root) {
+  const out = new Map();
+  const walk = (node, path) => {
+    if (node.type === "dict") {
+      if (node.entries.length === 0) out.set(JSON.stringify(path), { cmp: "{}", text: "{}" });
+      for (const entry of node.entries) walk(entry.value, [...path, entry.key]);
+    } else if (node.type === "array") {
+      if (node.items.length === 0) out.set(JSON.stringify(path), { cmp: "[]", text: "[]" });
+      for (const [k, item] of node.items.entries()) walk(item, [...path, `[${k}]`]);
+    } else {
+      const text = node.tag === "data" ? node.text.replace(/\s+/gu, "") : node.text;
+      const shown = text !== "" ? text : node.tag === "string" ? '""' : node.tag;
+      out.set(JSON.stringify(path), { cmp: `${node.tag}:${text}`, text: shown });
+    }
+  };
+  walk(root, []);
+  return out;
+}
+
+/** Back over the whitespace before `s`: an entry removed takes its own line with it. */
+const lineStart = (text, s) => {
+  let at = s;
+  while (at > 0 && /\s/u.test(text[at - 1])) at -= 1;
+  return at;
+};
+
+/** The cleanup, in memory: `after` (an XML plist) with every entry keyed by an own UDID (`own`: upper-case UDIDs) removed
+ * at any depth, and `CurrentDeviceUDID`, where it names an own UDID, given its value in `before` (`restored`; removed
+ * where `before` had none; left — `unknown` — where `before` is unreadable). Answers `{xml, removed, current}`, or null
+ * when `after` is not a plist. Nothing else in it is touched: another's entries, a display's UUID, every other key. */
+export function defaultsCleanup(after, own, before) {
+  const plist = parsePlist(after);
+  if (plist === null) return null;
+  const was = parsePlist(before);
+  const cuts = [];
+  let removed = 0;
+  const walk = (node) => {
+    if (node.type === "dict")
+      for (const entry of node.entries) {
+        if (own.has(entry.key.toUpperCase())) {
+          cuts.push({ s: lineStart(after, entry.s), e: entry.value.e, text: "" });
+          removed += 1;
+        } else walk(entry.value);
+      }
+    else if (node.type === "array") for (const item of node.items) walk(item);
+  };
+  walk(plist.root);
+  let current = null;
+  const now = plist.root.entries.find((entry) => entry.key === "CurrentDeviceUDID");
+  if (now?.value.type === "leaf" && own.has(now.value.text.trim().toUpperCase())) {
+    const then = was?.root.entries.find((entry) => entry.key === "CurrentDeviceUDID");
+    if (was === null) current = "unknown";
+    else if (then === undefined) {
+      cuts.push({ s: lineStart(after, now.s), e: now.value.e, text: "" });
+      current = "removed";
+    } else {
+      cuts.push({ s: now.value.s, e: now.value.e, text: before.slice(then.value.s, then.value.e) });
+      current = "restored";
+    }
+  }
+  let xml = after;
+  for (const cut of cuts.sort((a, b) => b.s - a.s))
+    xml = `${xml.slice(0, cut.s)}${cut.text}${xml.slice(cut.e)}`;
+  return { xml, removed, current };
+}
+
+/** Simulator's defaults before ARMED against after, compared in memory leaf by leaf: `restored` when after == before
+ * (null when before is unreadable); each change the run's OWN (its path or its value names an own UDID — the run made
+ * them, nobody else knows them) or ANOTHER's (every other), as lines said only through `scrub` (redacted, UUID shapes
+ * swept, never counted). `read` false: after unreadable, nothing judged. */
+export function defaultsJudge(before, after, own, scrub) {
+  const now = parsePlist(after);
+  if (now === null)
+    return { read: false, changed: null, restored: null, own: [], foreign: [], lines: [] };
+  const then = parsePlist(before);
+  const was = then === null ? null : flatPlist(then.root);
+  const is = flatPlist(now.root);
+  const owns = (path, ...values) =>
+    path.some((seg) => own.has(seg.toUpperCase())) ||
+    values.some((v) => v !== undefined && [...own].some((u) => v.toUpperCase().includes(u)));
+  const name = (key) => JSON.parse(key).join(" › ");
+  const ownLines = [];
+  const foreignLines = [];
+  const put = (path, line, ...values) =>
+    (owns(path, ...values) ? ownLines : foreignLines).push(scrub(line));
+  for (const [key, v] of is) {
+    const path = JSON.parse(key);
+    const prior = was?.get(key);
+    if (was === null) {
+      if (owns(path, v.text)) ownLines.push(scrub(`+ ${name(key)} = ${v.text}`));
+    } else if (prior === undefined) put(path, `+ ${name(key)} = ${v.text}`, v.text);
+    else if (prior.cmp !== v.cmp) put(path, `~ ${name(key)}: ${prior.text} → ${v.text}`, v.text);
+  }
+  if (was !== null)
+    for (const [key, v] of was)
+      if (!is.has(key)) put(JSON.parse(key), `- ${name(key)} = ${v.text}`, v.text);
+  const changed = was === null ? null : ownLines.length + foreignLines.length > 0;
+  return {
+    read: true,
+    changed,
+    restored: changed === null ? null : !changed,
+    own: ownLines,
+    foreign: foreignLines,
+  };
+}
+
+/** H1, run at teardown after the quit: the cleanup (when anything of the run's is there), through cfprefsd, only with
+ * Simulator.app NOT running — running, it is skipped, said, and counted as another's; pgrep unreadable, skipped and the
+ * run's own (nothing proves it) — then the defaults read again and judged. */
+export async function restoreDefaults(run, deps, ctx) {
+  const own = ownUdids(run);
+  /** why the cleanup may not run now, or null: Simulator.app running (it would write them back), or unproven */
+  const blocked = (app) =>
+    app.running === null
+      ? "skipped: pgrep failed — Simulator.app unproven"
+      : app.running > 0
+        ? "skipped: Simulator.app is running (it would write them back)"
+        : null;
+  // G8: pgrep FIRST — the plan is made from an export taken with the app proven gone
+  let app = own.size === 0 ? null : await simulatorNow(run, deps);
+  let after = await readDefaults(deps);
+  let cleanup = "none needed";
+  let removed = 0;
+  let current = null;
+  let appRunning = false;
+  // G12: an app running proven ANOTHER's keeps the cleanup from the run; the run's own (or one unplaced) does not
+  let appForeign = false;
+  const plan = own.size === 0 ? null : defaultsCleanup(after, own, ctx.defaultsBefore);
+  if (
+    plan !== null &&
+    (plan.removed > 0 || plan.current === "restored" || plan.current === "removed")
+  ) {
+    let why = blocked(app);
+    // G8: and again right before the import — an app up since the plan aborts it
+    if (why === null) {
+      app = await simulatorNow(run, deps);
+      why = blocked(app);
+    }
+    if (why !== null) {
+      cleanup = why;
+      appRunning = app.running > 0;
+      appForeign = appRunning && app.foreign === true;
+    } else {
+      const r = await deps.exec(DEFAULTS, ["import", SIM_DOMAIN, "-"], {
+        input: plan.xml,
+        timeoutMs: 10_000,
+      });
+      if (r.code === 0) {
+        cleanup = "done";
+        removed = plan.removed;
+        current = plan.current;
+      } else {
+        const said = stderrOf(run, r);
+        cleanup = `failed: defaults import exit ${r.code}${said === "" ? "" : `: ${said}`}`;
+      }
+      after = await readDefaults(deps);
+    }
+  } else if (plan?.current === "unknown") current = "unknown";
+  const judged = defaultsJudge(ctx.defaultsBefore, after, own, run.redactor.scrub);
+  // G7: unreadable after the run made devices — its own entries unverified: the run's own side, never assumed clean
+  const unverified = own.size > 0 && judged.read === false;
+  return { ...judged, cleanup, removed, current, appRunning, appForeign, unverified };
 }
 
 /** HOST-RESTORED, judged: own devices gone (under the flag) or kept shut down; Simulator.app quit where the run launched
@@ -1647,6 +2081,22 @@ export function restoredVerdict(r) {
   if (r.others === null) own.push("the host's list unreadable at teardown");
   if (r.perfLock === "left") own.push("PERF.lock left held");
   if (r.crash.new.length > 0) own.push(`a new crash report: ${r.crash.new.join(", ")}`);
+  // H1: the run's own UDID-keyed defaults left after the cleanup are its own — unless another's Simulator.app kept the
+  // cleanup from running; a change keyed by anything else is another's
+  const d = r.defaults;
+  if (d?.unverified === true)
+    own.push("Simulator's defaults unreadable at teardown (own entries unverified)");
+  if (d !== undefined && d.own > 0)
+    (d.appForeign === true ? foreign : own).push(
+      `Simulator's defaults: ${d.own} change(s) keyed by the run's own devices left (cleanup ${d.cleanup})`,
+    );
+  // R3: beside the run's OWN Simulator.app (launched by it, none proven another's), a change keyed by no own UDID is the
+  // app's housekeeping (window frames, screen sets) — said as a PHONE_OBSERVATION by teardown, never judged
+  const housekeeping = r.simulator.launchedByRun === true && r.simulator.foreign !== true;
+  if (d !== undefined && d.foreign > 0 && !housekeeping)
+    foreign.push(
+      `Simulator's defaults: ${d.foreign} change(s) not keyed by the run's devices (another's, never touched)`,
+    );
   const why = [...own, ...foreign];
   return { ok: why.length === 0, why, ownOk: own.length === 0, foreign };
 }
@@ -1712,7 +2162,11 @@ export function costRows({ table, commands, helperPath, simExe, own }) {
 const MAX_OUTPUT_CHARS = 64 * 1024 * 1024;
 
 /** THE exec seam: one fixed binary, never a shell; answers `{code, signal, stdout, stderr, error?}` and never throws. */
-export function realExec(file, args, { env = process.env, input, timeoutMs = 30_000 } = {}) {
+export function realExec(
+  file,
+  args,
+  { env = process.env, input, timeoutMs = 30_000, signal } = {},
+) {
   return new Promise((done) => {
     let settled = false;
     const settle = (result) => {
@@ -1720,6 +2174,11 @@ export function realExec(file, args, { env = process.env, input, timeoutMs = 30_
       settled = true;
       done(result);
     };
+    // G6: a caller's AbortSignal kills the child as its timeout does; one already aborted spawns nothing
+    if (signal?.aborted) {
+      settle({ code: null, signal: null, stdout: "", stderr: "", error: "aborted before it ran" });
+      return;
+    }
     let child;
     try {
       child = spawn(file, args, {
@@ -1741,19 +2200,25 @@ export function realExec(file, args, { env = process.env, input, timeoutMs = 30_
       if (stderr.length < MAX_OUTPUT_CHARS) stderr += chunk;
     });
     let kill = null;
-    const timer = setTimeout(() => {
+    const stop = () => {
+      if (kill !== null) return;
       child.kill("SIGTERM");
       kill = setTimeout(() => child.kill("SIGKILL"), 5_000);
-    }, timeoutMs);
-    child.once("error", (error) => {
+    };
+    const timer = setTimeout(stop, timeoutMs);
+    signal?.addEventListener("abort", stop, { once: true });
+    const ended = () => {
       clearTimeout(timer);
       clearTimeout(kill);
+      signal?.removeEventListener("abort", stop);
+    };
+    child.once("error", (error) => {
+      ended();
       settle({ code: null, signal: null, stdout, stderr, error: error.message });
     });
-    child.once("close", (code, signal) => {
-      clearTimeout(timer);
-      clearTimeout(kill);
-      settle({ code, signal, stdout, stderr });
+    child.once("close", (code, exitSignal) => {
+      ended();
+      settle({ code, signal: exitSignal, stdout, stderr });
     });
     if (input !== undefined) {
       child.stdin.on("error", () => {});
@@ -1992,9 +2457,12 @@ async function ancestry(deps, pid) {
   return chain;
 }
 
+/** Simulator's defaults as cfprefsd holds them: `defaults export … -`, an XML plist (a domain not there is an empty one);
+ * null when unreadable. Read-only. */
 async function readDefaults(deps) {
-  const r = await deps.exec(DEFAULTS, ["read", "com.apple.iphonesimulator"], { timeoutMs: 10_000 });
-  return r.code === 0 ? r.stdout : `(no defaults: exit ${r.code})`;
+  const r = await deps.exec(DEFAULTS, ["export", SIM_DOMAIN, "-"], { timeoutMs: 10_000 });
+  if (r.code === 0) return r.stdout;
+  return /does not exist/u.test(String(r.stderr)) ? EMPTY_PLIST : null;
 }
 
 /** A run's state, held in memory only (its UDIDs among it). */
@@ -2025,6 +2493,8 @@ export function newRun(mode, opts, redactor) {
     refused: {},
     loaded: new Map(),
     inputs: new Map(),
+    /** T1: each own device's readiness asked, by UDID — its boot, and bootstatus's answer once it returns */
+    ready: new Map(),
     perfLock: null,
     perfLockPath: null,
   };
@@ -2155,6 +2625,8 @@ const BESIDE_FOREIGN =
  * said, and another's change said as an OBSERVATION (RM6 S-1); answers `restoredVerdict`'s verdict — its `ownOk` is
  * what the exit judges. Exported for its units (deps-injected, as `doorAct` is). */
 export async function restoreHost(run, deps, ctx) {
+  // G6: no bootstatus the door asked outlives the run
+  forgetAllReady(run);
   const findings = [];
   let list = run.devDir === null ? null : await readList(run, deps);
   const own = [...run.own.entries()].map(([n, d]) => {
@@ -2201,7 +2673,13 @@ export async function restoreHost(run, deps, ctx) {
       continue;
     }
     const r = await simctl(run, deps, [step.do, device.udid], 60_000);
-    if (r.code !== 0) findings.push(`${step.do} of ${device.name} failed (exit ${r.code})`);
+    if (r.code !== 0) {
+      // H3: what simctl said, redacted (run A's "shutdown … failed (exit 149)" said nothing of why)
+      const said = stderrOf(run, r);
+      findings.push(
+        `${step.do} of ${device.name} failed (exit ${r.code})${said === "" ? "" : `: ${said}`}`,
+      );
+    }
   }
   list = run.devDir === null ? null : await readList(run, deps);
   const left = list === null ? -1 : list.devices.filter((d) => isOwnName(d.name, run.runId)).length;
@@ -2216,11 +2694,43 @@ export async function restoreHost(run, deps, ctx) {
           .split("\n")
           .filter((line) => line.trim().replace(/^\d+\s+/u, "") === PATHS.helper).length
       : -1;
-  const defaultsAfter = run.devDir === null ? null : await readDefaults(deps);
-  const defaults = defaultsChange(ctx.defaultsBefore, defaultsAfter, run.redactor.scrub);
-  if (defaults.changed)
+  // H1: the run's own UDID-keyed defaults given back (Simulator.app quit above), then judged against ARMED's
+  const defaults =
+    run.devDir === null
+      ? {
+          read: false,
+          own: [],
+          foreign: [],
+          cleanup: "none needed",
+          removed: 0,
+          appRunning: false,
+          appForeign: false,
+          unverified: false,
+        }
+      : await restoreDefaults(run, deps, ctx);
+  if (defaults.cleanup === "done")
     deps.say(
-      `PHONE_OBSERVATION Simulator's defaults changed during the run (never written back): ${JSON.stringify(defaults.lines)}`,
+      `stage-simulator-fixture: Simulator's defaults: ${defaults.removed} entr(ies) keyed by the run's own devices removed${defaults.current === null ? "" : `, CurrentDeviceUDID ${defaults.current}`} (through cfprefsd: defaults import)`,
+    );
+  else if (defaults.cleanup !== "none needed")
+    findings.push(`Simulator's defaults: cleanup ${defaults.cleanup}`);
+  if (defaults.appForeign)
+    deps.say(
+      `PHONE_OBSERVATION Simulator's defaults: the cleanup ${defaults.cleanup} — its entries keyed by the run's own devices left (another's app, never touched): ${JSON.stringify(defaults.own.slice(0, 20))}`,
+    );
+  if (defaults.unverified)
+    deps.say(
+      "stage-simulator-fixture: Simulator's defaults unreadable at teardown (own entries unverified): the run's own side is not proven restored",
+    );
+  if (defaults.foreign.length > 0)
+    deps.say(
+      launchesOf(run) > 0 && !quitForeign
+        ? `PHONE_OBSERVATION Simulator's defaults changed beside the run's own Simulator.app (its housekeeping: never judged, never touched): ${JSON.stringify(defaults.foreign.slice(0, 20))}`
+        : `PHONE_OBSERVATION Simulator's defaults changed by another during the run (never touched): ${JSON.stringify(defaults.foreign.slice(0, 20))}`,
+    );
+  if (defaults.own.length > 0 && !defaults.appForeign)
+    deps.say(
+      `stage-simulator-fixture: Simulator's defaults still hold the run's own entries after the cleanup: ${JSON.stringify(defaults.own.slice(0, 20))}`,
     );
   const reportsAfter = crashReports(ctx.crashDir);
   const known = new Set(ctx.crashBefore.map((r) => r.name));
@@ -2236,7 +2746,19 @@ export async function restoreHost(run, deps, ctx) {
     simulator: { launchedByRun: launchesOf(run) > 0, quit, foreign: quitForeign },
     helperLeft,
     others: list === null ? null : othersCompare(run.othersAtArm, list, ownUdids(run)),
-    defaults: { changed: defaults.changed },
+    defaults: {
+      read: defaults.read,
+      changed: defaults.changed ?? null,
+      restored: defaults.restored ?? null,
+      cleanup: defaults.cleanup,
+      removed: defaults.removed,
+      current: defaults.current ?? null,
+      own: defaults.own.length,
+      foreign: defaults.foreign.length,
+      appRunning: defaults.appRunning,
+      appForeign: defaults.appForeign,
+      unverified: defaults.unverified,
+    },
     perfLock: releasePerfLock(run),
     crash: {
       new: reportsAfter.filter((r) => !known.has(r.name) && r.at >= run.armedAt).map((r) => r.name),
@@ -2706,6 +3228,12 @@ async function main() {
   const opts = readOptions(process.env);
   if (opts.errors.length > 0) {
     process.stderr.write(`${opts.errors.join("\n")}\n`);
+    return 2;
+  }
+  // T7: a reused run id refused before anything is written (launch's folder, its stage log, its HID record)
+  const reused = reusedRun(opts);
+  if (reused !== null) {
+    process.stderr.write(`${reused}\n`);
     return 2;
   }
   return launch(args.mode, args.command ?? [], opts);

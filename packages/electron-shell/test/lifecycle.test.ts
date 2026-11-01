@@ -215,6 +215,8 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
     ended?: number;
     /** AU-5 — install on quit; the rig records `install` in the order as it is called */
     installOnQuit?: (context: { readonly ended: number }) => Promise<void>;
+    /** AL-6 — Keep running when VibeField quits: the caller's answer (it went to the background, or may not) */
+    keepRunning?: () => boolean;
   }) {
     let primaryOpen = options.windowOpen ?? true;
     const close = vi.fn(() => {
@@ -258,6 +260,7 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
       closeLogging: async () => {},
       getQuitGate: () => gate,
       onQuitAborted,
+      ...(options.keepRunning !== undefined ? { keepRunningOnQuit: options.keepRunning } : {}),
       ...(install !== undefined
         ? {
             installOnQuit: async (context: { readonly ended: number }) => {
@@ -428,6 +431,93 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
       installStalled: vi.fn(async () => {}),
     });
     expect(updating.flow.leaveReason).toBe("update");
+  });
+
+  // AL-6 (AL-D2, §5.8) — Keep running when VibeField quits: a person's plain quit goes to the menu bar (the caller
+  // closes the window and keeps the status item); nothing is asked, stopped or marked quitting. The status item's Quit
+  // VibeField (`quitFully`) is the quit, through the gate; a signal's, an update's and the OS's quits never ask.
+  describe("Keep running when VibeField quits (AL-6)", () => {
+    it("a person's quit goes to the background: no gate, no stop, no quitting tray, no native quit", async () => {
+      const keepRunning = vi.fn(() => true);
+      const rig = gateRig({ keepRunning });
+      const event = { preventDefault: vi.fn() };
+      electron.emit("before-quit", event);
+      expect(event.preventDefault).toHaveBeenCalledTimes(1);
+      await settle();
+      await settle();
+      expect(keepRunning).toHaveBeenCalledTimes(1);
+      expect(rig.gate.decide).not.toHaveBeenCalled();
+      expect(rig.gate.stop).not.toHaveBeenCalled();
+      expect(rig.onQuitRequested).not.toHaveBeenCalled();
+      expect(rig.close).not.toHaveBeenCalled(); // the caller's close, never the quit's durable close
+      expect(electron.app.quit).not.toHaveBeenCalled();
+      expect(rig.flow.leaveReason).toBeUndefined();
+    });
+
+    it("the status item's Quit VibeField quits through the gate; after its Cancel, the next quit goes to the background again", async () => {
+      const keepRunning = vi.fn(() => true);
+      const rig = gateRig({ keepRunning, decide: "cancel" });
+      rig.flow.quitFully();
+      await settle();
+      expect(rig.gate.decide).toHaveBeenCalledTimes(1);
+      expect(keepRunning).not.toHaveBeenCalled();
+      await settle();
+      const next = { preventDefault: vi.fn() };
+      electron.emit("before-quit", next);
+      expect(keepRunning).toHaveBeenCalledTimes(1);
+      expect(rig.gate.decide).toHaveBeenCalledTimes(1);
+    });
+
+    it("a status item's quit the person proceeds with stops the pairs and exits, as any quit", async () => {
+      const keepRunning = vi.fn(() => true);
+      const rig = gateRig({ keepRunning });
+      rig.flow.quitFully();
+      await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+      electron.emit("window-all-closed");
+      await vi.waitFor(() => expect(rig.gate.stop).toHaveBeenCalledTimes(1));
+      expect(keepRunning).not.toHaveBeenCalled();
+    });
+
+    it("when it may not (off, no status item) the quit goes on through the gate", async () => {
+      const rig = gateRig({ keepRunning: () => false });
+      electron.emit("before-quit", { preventDefault: vi.fn() });
+      await settle();
+      expect(rig.gate.decide).toHaveBeenCalledTimes(1);
+    });
+
+    it("a signal's, an update's and the OS's quits are never put in the background", async () => {
+      const keepRunning = vi.fn(() => true);
+      const signal = gateRig({ keepRunning });
+      signal.flow.leavePairsOnQuit("signal");
+      electron.emit("before-quit", { preventDefault: vi.fn() });
+      expect(keepRunning).not.toHaveBeenCalled();
+      expect(signal.close).toHaveBeenCalledTimes(1);
+      await drain();
+      electron.reset();
+      electron.app.quit.mockReset();
+
+      const updating = gateRig({ keepRunning });
+      expect(
+        updating.flow.armUpdate({
+          prepare: async () => ({ kind: "install" }),
+          install: vi.fn(),
+          aborted: vi.fn(),
+          installStalled: vi.fn(async () => {}),
+        }),
+      ).toBe(true);
+      electron.emit("before-quit", { preventDefault: vi.fn() });
+      expect(keepRunning).not.toHaveBeenCalled();
+      await drain();
+      electron.reset();
+      electron.app.quit.mockReset();
+
+      const ending = gateRig({ keepRunning });
+      ending.flow.noteOsSessionEnding();
+      electron.emit("before-quit", { preventDefault: vi.fn() });
+      await settle();
+      expect(keepRunning).not.toHaveBeenCalled();
+      expect(ending.order[0]).toBe("decide:unattended");
+    });
   });
 
   it("an update's quit skips the gate: its own consent already ran", () => {
