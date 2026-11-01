@@ -38,6 +38,7 @@ const {
   doorRow,
   endVerdict,
   enumVerdict,
+  etimeStart,
   fatalWords,
   fenceAgain,
   fenceClear,
@@ -63,10 +64,10 @@ const {
   NOT_ARMED,
   othersCompare,
   parseArgs,
+  parseEtime,
   parseIdle,
   parseList,
   parseLocked,
-  parseLstart,
   parsePlist,
   parsePsRow,
   pickDeveloperDir,
@@ -87,6 +88,7 @@ const {
   runCommand,
   runIdOk,
   simulatorExe,
+  simulatorNow,
   simulatorProof,
   simulatorSettled,
   smokeHomeOf,
@@ -169,6 +171,17 @@ function lstartOf(ms) {
   return `${DAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, " ")} ${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())} ${d.getFullYear()}`;
 }
 
+/** `ps -o etime=` under LC_ALL=C for a process `ms` old: `[[dd-]hh:]mm:ss`, whole seconds (macOS's and procps's). */
+function etimeOf(ms) {
+  const s = Math.floor(ms / 1000);
+  const [d, h, m] = [Math.floor(s / 86_400), Math.floor(s / 3600) % 24, Math.floor(s / 60) % 60];
+  const tail = `${two(m)}:${two(s % 60)}`;
+  return d > 0 ? `${d}-${two(h)}:${tail}` : h > 0 ? `${two(h)}:${tail}` : tail;
+}
+
+/** A start known to the millisecond, as `etimeStart` gives it a range. */
+const exactly = (ms) => ({ from: ms, to: ms });
+
 /** The host's list during a run: the run's three own devices (shut down) and the foreign ones as given. */
 const hostList = (foreign = [{ udid: FOREIGN, state: "Shutdown" }]) =>
   simctlList({
@@ -186,7 +199,7 @@ function fakeHost(opts = {}) {
     list: opts.list ?? hostList(),
     pgrep: opts.pgrep ?? null,
     comm: opts.comm ?? SIM_EXE,
-    lstart: opts.lstart ?? lstartOf(ARMED + 60_000),
+    started: opts.started ?? ARMED + 60_000,
   };
   const calls = [];
   const said = [];
@@ -218,7 +231,9 @@ function fakeHost(opts = {}) {
           ? { code: 1, signal: null, stdout: "", stderr: "" }
           : ok(`${state.pgrep}\n`);
       if (file === "/bin/ps" && args[1] === "comm=") return ok(`${state.comm}\n`);
-      if (file === "/bin/ps" && args[1] === "lstart=") return ok(`${state.lstart}\n`);
+      if (file === "/bin/ps" && args[1] === "lstart=") return ok(`${lstartOf(state.started)}\n`);
+      if (file === "/bin/ps" && args[1] === "etime=")
+        return ok(`${etimeOf(deps.now() - state.started)}\n`);
       return ok("");
     },
   };
@@ -1469,16 +1484,30 @@ test("fatalWords: PT-S3 L1's kept HOME says the desktop's fatal, fieldd's when i
 
 // ─── Simulator.app: quit only when proven the run's ───────────────────────────────────────────────────────────────────
 
-test("parseLstart reads ps's local start to the second", () => {
-  assert.equal(parseLstart(lstartOf(ARMED)), Math.floor(ARMED / 1000) * 1000);
-  assert.equal(parseLstart("yesterday"), null);
+test("parseEtime reads ps's elapsed time; etimeStart brackets the start between two reads of the clock", () => {
+  assert.equal(parseEtime("00:01"), 1);
+  assert.equal(parseEtime(" 01:02:03\n"), 3723);
+  assert.equal(parseEtime("29-21:11:30"), ((29 * 24 + 21) * 60 + 11) * 60 + 30);
+  assert.equal(parseEtime("yesterday"), null);
+  assert.equal(parseEtime(""), null);
+  for (const age of [0, 999, 1_000, 61_500, 3_600_000, 90_061_000])
+    assert.equal(parseEtime(etimeOf(age)), Math.floor(age / 1000), etimeOf(age));
+  // etime floors to whole seconds and is sampled somewhere between the two reads: the start lies inside the range
+  const started = ARMED + 60_250;
+  const [before, after] = [ARMED + 120_000, ARMED + 120_400];
+  for (const sampled of [before, ARMED + 120_200, after]) {
+    const range = etimeStart(etimeOf(sampled - started), before, after);
+    assert.ok(range.from < started && started <= range.to, JSON.stringify({ sampled, range }));
+    assert.ok(range.to - range.from <= 1_000 + (after - before));
+  }
+  assert.equal(etimeStart("", before, after), null);
 });
 
 test("simulatorProof: one Simulator, the vetted Xcode's, started after ARMED and after the run's launch since its last quit — or not the run's", () => {
   const proof = {
     pids: [4242],
     comm: SIM_EXE,
-    lstart: lstartOf(ARMED + 60_000),
+    start: exactly(ARMED + 60_000),
     devDir: XCODE_DEVELOPER_DIR,
     armedAt: ARMED,
     launchedAt: ARMED + 30_000,
@@ -1493,18 +1522,26 @@ test("simulatorProof: one Simulator, the vetted Xcode's, started after ARMED and
     }),
     /not the vetted Xcode's/u,
   );
-  assert.match(why({ lstart: lstartOf(ARMED - 60_000) }), /started before ARMED/u);
-  // ARMED's own second, before ARMED: lstart's whole second is not after it
-  assert.match(why({ lstart: lstartOf(ARMED - 400) }), /started before ARMED/u);
-  assert.match(why({ lstart: "" }), /unreadable/u);
+  assert.match(why({ start: exactly(ARMED - 60_000) }), /started before ARMED/u);
+  // a start that may be before ARMED (etime's whole second) is not after it
+  assert.match(why({ start: { from: ARMED - 400, to: ARMED + 600 } }), /started before ARMED/u);
+  assert.match(why({ start: null }), /unreadable/u);
   assert.match(
     why({ launchedAt: null }),
     /the run launched no Simulator\.app since its last quit/u,
   );
   // S7: a Simulator.app started before the run's launch is another's, whatever the run launched before
   assert.match(why({ launchedAt: ARMED + 120_000 }), /started before the run's launch/u);
-  // lstart keeps whole seconds: a start in the launch's own second is the run's
+  // a start that may be after the run's launch is not proven before it: the run's
   assert.equal(simulatorProof({ ...proof, launchedAt: ARMED + 60_000 }).own, true);
+  assert.equal(
+    simulatorProof({
+      ...proof,
+      start: { from: ARMED + 59_500, to: ARMED + 60_400 },
+      launchedAt: ARMED + 60_000,
+    }).own,
+    true,
+  );
   // the vetted executable by its real path is still the vetted one
   assert.equal(
     simulatorProof({
@@ -1514,6 +1551,38 @@ test("simulatorProof: one Simulator, the vetted Xcode's, started after ARMED and
     }).own,
     true,
   );
+});
+
+// Item 146 (2026-11-01) — DST's repeated hour. America/Los_Angeles falls back at 09:00Z: local 01:00–02:00 runs twice,
+// PDT then PST, and `lstart` (local wall time, no offset) names two instants there. Every start through 08:30Z–10:30Z,
+// each after its own ARMED and the run's launch, is the run's own; main's `lstart` read placed the PST hour's starts an
+// hour early: "started before ARMED", FOREIGN, exit 75 instead of a quit (PORTALS's find).
+test("simulatorNow places a Simulator.app's start through DST's repeated hour (TZ=America/Los_Angeles, 2026-11-01 08:30Z–10:30Z)", async () => {
+  const tz = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    // the fall back is real in this zone: 09:30Z and 08:30Z read the same wall time
+    assert.equal(lstartOf(Date.UTC(2026, 10, 1, 9, 30)), lstartOf(Date.UTC(2026, 10, 1, 8, 30)));
+    const wrong = [];
+    for (
+      let at = Date.UTC(2026, 10, 1, 8, 30);
+      at <= Date.UTC(2026, 10, 1, 10, 30);
+      at += 5 * 60_000
+    ) {
+      const run = ownRun();
+      run.armedAt = at;
+      run.simulator.shown = 1;
+      run.simulator.launchedAt = at + 10_000;
+      const host = fakeHost({ pgrep: "4242", started: at + 20_000 });
+      host.deps.now = () => at + 120_000;
+      const now = await simulatorNow(run, host.deps);
+      if (now.own !== true) wrong.push(`${new Date(at + 20_000).toISOString()}: ${now.why}`);
+    }
+    assert.deepEqual(wrong, []);
+  } finally {
+    if (tz === undefined) delete process.env.TZ;
+    else process.env.TZ = tz;
+  }
 });
 
 // ─── the host door ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1685,7 +1754,7 @@ test("doorAct show-app: the fence first; open -a the vetted Simulator.app on an 
 test("doorAct quit-app: refused and STOPPED for a start before ARMED or a foreign path; SIGTERM only when proven", async () => {
   const early = ownRun();
   early.simulator.shown = 1;
-  const before = fakeHost({ pgrep: "4242", lstart: lstartOf(ARMED - 60_000) });
+  const before = fakeHost({ pgrep: "4242", started: ARMED - 60_000 });
   const r1 = await doorAct({ verb: "quit-app" }, early, before.deps);
   assert.equal(r1.status, 409);
   assert.equal(r1.body.state, "stop");
@@ -1728,11 +1797,11 @@ test("doorAct quit-app: after the run quit its own app, a Simulator.app another 
   const run = ownRun();
   run.simulator.shown = 1;
   run.simulator.launchedAt = ARMED + 10_000;
-  const first = fakeHost({ pgrep: "4242", lstart: lstartOf(ARMED + 20_000) });
+  const first = fakeHost({ pgrep: "4242", started: ARMED + 20_000 });
   assert.equal((await doorAct({ verb: "quit-app" }, run, first.deps)).body.state, "quit");
   assert.equal(run.simulator.quits, 1);
   // 300 s after ARMED another launcher starts the vetted Simulator.app: the run launched nothing since its quit
-  const later = fakeHost({ pgrep: "4243", lstart: lstartOf(ARMED + 300_000) });
+  const later = fakeHost({ pgrep: "4243", started: ARMED + 300_000 });
   const r = await doorAct({ verb: "quit-app" }, run, later.deps);
   assert.equal(r.body.state, "stop");
   assert.match(run.stopped.why, /launched no Simulator\.app since its last quit/u);
@@ -1753,7 +1822,7 @@ test("doorAct quit-app: after the run quit its own app, a Simulator.app another 
   );
   assert.equal(again.simulator.launchedAt, ARMED + 120_000);
   host.state.pgrep = "4244";
-  host.state.lstart = lstartOf(ARMED + 125_000);
+  host.state.started = ARMED + 125_000;
   assert.equal((await doorAct({ verb: "quit-app" }, again, host.deps)).body.state, "quit");
 });
 
@@ -2645,7 +2714,7 @@ test("a DETERMINISTIC stop is FINAL — exit 1 and PHONE_STOP_FINAL, never 75; a
     }),
     "a Simulator.app not the run's": await stopOf([sample(10, 310)], (run, host) => {
       host.state.pgrep = "777";
-      host.state.lstart = lstartOf(ARMED - 60_000);
+      host.state.started = ARMED - 60_000;
       return press("show", `pts3-${RUN}-3`)(run, host);
     }),
   };
@@ -3475,18 +3544,18 @@ test("restoredVerdict: restoration judged on the run's OWN side — another's ch
   const proof = {
     pids: [4242],
     comm: SIM_EXE,
-    lstart: lstartOf(ARMED + 60_000),
+    start: exactly(ARMED + 60_000),
     devDir: XCODE_DEVELOPER_DIR,
     armedAt: ARMED,
     launchedAt: ARMED + 30_000,
   };
   for (const change of [
-    { lstart: lstartOf(ARMED - 60_000) },
+    { start: exactly(ARMED - 60_000) },
     { launchedAt: null },
     { launchedAt: ARMED + 120_000 },
   ])
     assert.equal(simulatorProof({ ...proof, ...change }).foreign, true, JSON.stringify(change));
-  for (const change of [{ pids: [4242, 4243] }, { comm: "/x/Simulator" }, { lstart: "" }, {}])
+  for (const change of [{ pids: [4242, 4243] }, { comm: "/x/Simulator" }, { start: null }, {}])
     assert.notEqual(simulatorProof({ ...proof, ...change }).foreign, true, JSON.stringify(change));
   // the run's own: each one unrestores its own side — an app the proof cannot place (two Simulators, an unreadable start)
   // may be the run's, so it stays the run's
