@@ -433,7 +433,16 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * a handful, so 64 is an order of magnitude above honest use. It also bounds the
  * owner's memory for one peer: each set holds at most 4096 ids, so at most
  * 262 144 ids per peer connection. A report that would open the 65th is refused
- * `{state: "no-screen", reason: "carried-cap"}`; the screens already open stand. */
+ * `{state: "no-screen", reason: "carried-cap"}`; the screens already open stand.
+ *
+ * PG-9a (PG-L4.4's linger half, item 135, 2026-11-01) — MESH_HUB_LINGER_MS is how long a mesh board's hub stands
+ * after its last reader leaves before it disposes (its upstreams, its local board). A phone's app switch and its gap
+ * repair each unsubscribe and re-subscribe the phone's board, and the phone is the only reader of its hub: an
+ * immediate close tore down every peer's upstream on each, and the new hub answered every other desktop `stale` on a
+ * new epoch until each re-attached (the grey flash). A reader back within the linger rejoins the standing hub:
+ * every peer's epoch and `live` state stand. 60 s covers an ordinary app switch (a glance at another app, a
+ * notification answered) with margin and a gap repair's milliseconds many times over; its cost is the hub's
+ * upstreams on the desktop↔desktop links and the home's own board for that long, nothing on the phone's radio. */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
@@ -447,6 +456,7 @@ export const AGENT_FIELD = {
   MESH_STALE_BEATS: 3,
   FULL_TICK_MS: 16,
   CARRIED_SCREENS_PER_PEER: 64,
+  MESH_HUB_LINGER_MS: 60_000,
 } as const;
 
 /** Item 87 (2026-10-29) — a managed run's exit, as fieldd closes it. puppeteer's `handleProcessExit`

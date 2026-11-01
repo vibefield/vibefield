@@ -363,6 +363,11 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
     expect(PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS).toBe(250);
   });
 
+  it("PG-9a — a mesh hub lingers a minute after its last reader: past an app switch, far past a gap repair", () => {
+    // PG-L4.4's "~60 s"; the reason is the registry's note beside the constant
+    expect(AGENT_FIELD.MESH_HUB_LINGER_MS).toBe(60_000);
+  });
+
   it("keeps a census of the scope-null product subscriptions, whose reach is their handler's", () => {
     // `scope: null` passes every hello'd principal through the registry's
     // gate — a phone included — and only a handler can narrow it, which the

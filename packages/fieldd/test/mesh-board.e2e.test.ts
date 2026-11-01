@@ -521,8 +521,12 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     });
   }, 60_000);
 
-  it("the upstream is reference-counted: shared by two readers, closed when the last one leaves", async () => {
-    const { A } = await bootPair();
+  // PG-9a (item 135, 2026-11-01) — this row pinned the close at the last reader's leaving. The hub now lingers
+  // `AGENT_FIELD.MESH_HUB_LINGER_MS` first, so a reader back inside it (a phone's app switch, its gap repair)
+  // rejoins the standing hub; the close past the linger is pinned on the clock in `mesh-board.test.ts`, and here
+  // the daemon's own stop is what ends a linger at once.
+  it("the upstream is reference-counted: shared by two readers, kept through the linger when the last one leaves, and closed at once when the board stops", async () => {
+    const { A, B } = await bootPair();
     const onA = await windowOn(A.daemon);
     const first = await openMesh(onA);
     const second = await openMesh(onA);
@@ -532,6 +536,28 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     await onA.call("system.unsubscribe", { subId: first.subId });
     expect(A.daemon.federatedSubs.size).toBe(1);
     await onA.call("system.unsubscribe", { subId: second.subId });
+    // the last reader left: the hub lingers, and B's upstream with it
+    expect(A.daemon.meshBoard.size).toBe(1);
+    expect(A.daemon.federatedSubs.size).toBe(1);
+    // a reader back inside the linger is answered from the standing hub: B live on the chain it was on
+    const heardEpoch = [
+      first.open.devices.find((entry) => entry.device === "dev-b")?.snapshot?.epoch,
+      ...meshFrames(onA, first.subId)
+        .filter((frame) => frame.device === "dev-b")
+        .map((frame) => ("snapshot" in frame ? frame.snapshot.epoch : undefined)),
+    ]
+      .filter((epoch) => epoch !== undefined)
+      .at(-1);
+    expect(heardEpoch?.startsWith(`${B.daemon.bootId}.`)).toBe(true);
+    const back = await openMesh(onA);
+    const b = back.open.devices.find((entry) => entry.device === "dev-b");
+    expect(b?.state).toBe("live");
+    expect(b?.snapshot?.epoch).toBe(heardEpoch);
+    expect(A.daemon.federatedSubs.size).toBe(1);
+    await onA.call("system.unsubscribe", { subId: back.subId });
+    expect(A.daemon.meshBoard.size).toBe(1);
+    // the daemon stopping does not wait out a linger
+    A.daemon.meshBoard.dispose();
     expect(A.daemon.meshBoard.size).toBe(0);
     expect(A.daemon.federatedSubs.size).toBe(0);
   }, 60_000);
