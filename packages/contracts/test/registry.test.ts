@@ -366,6 +366,8 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
   it("PG-9a — a mesh hub lingers a minute after its last reader: past an app switch, far past a gap repair", () => {
     // PG-L4.4's "~60 s"; the reason is the registry's note beside the constant
     expect(AGENT_FIELD.MESH_HUB_LINGER_MS).toBe(60_000);
+    // the PG-9a review [0]: past a handful, the oldest lingering hub closes at once
+    expect(AGENT_FIELD.MESH_LINGERING_HUBS_MAX).toBe(4);
   });
 
   it("keeps a census of the scope-null product subscriptions, whose reach is their handler's", () => {

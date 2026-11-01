@@ -1099,6 +1099,70 @@ describe("PG-9a — a mesh hub lingers after its last reader (item 135)", () => 
     expect(h.local.disposed).toBe(1);
   });
 
+  // the PG-9a review [2] — the rule that a join CANCELS the linger, pinned where it bites: leave, rejoin, leave
+  // again before the first linger would have ended. A timer left standing from the first leave would close the hub
+  // a full linger after the FIRST leave, and a phone back at 65 s would get a new hub and the flash again.
+  it("leave, rejoin, leave again: the hub closes a full linger after the SECOND leave, and the rejoin leaves no linger timer", async () => {
+    const { h, phone, b, c } = await liveHub();
+    const joined = vi.getTimerCount(); // the hub's own, with its reader
+    phone.dispose(); // t = 0
+    expect(vi.getTimerCount()).toBe(joined + 1); // the linger
+    vi.advanceTimersByTime(30_000);
+    const back = reader(h, "remote", AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS); // t = 30 s
+    expect(vi.getTimerCount()).toBe(joined); // the rejoin cleared it
+    vi.advanceTimersByTime(10_000);
+    back.dispose(); // t = 40 s
+    vi.advanceTimersByTime(21_000); // t = 61 s: past where the first linger would have ended
+    expect(h.board.size).toBe(1);
+    expect(h.upstreams.standing()).toEqual([b, c]);
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS - 21_001); // t = 40 s + LINGER - 1 ms
+    expect(h.board.size).toBe(1);
+    vi.advanceTimersByTime(1); // t = 40 s + LINGER
+    expect(h.board.size).toBe(0);
+    expect(h.upstreams.standing()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  // the PG-9a review [0] — hubs are keyed by {projection, floor}, and a floor is any integer a reader asks, so a
+  // reader churning distinct floors would leave a hub lingering per value. At most MESH_LINGERING_HUBS_MAX linger;
+  // past it the OLDEST closes at once, and a join takes its hub out of the order.
+  it("at most MESH_LINGERING_HUBS_MAX hubs linger: churning distinct floors closes the oldest at once, and a rejoin makes a hub the newest", async () => {
+    const max = AGENT_FIELD.MESH_LINGERING_HUBS_MAX;
+    const h = harness([selfRow, desktop("dev-b")]);
+    const floorOf = (attach: Attach) => (attach.params as { minIntervalMs: number }).minIntervalMs;
+    /** a reader at one floor, its upstream answered, then gone */
+    const churn = async (floor: number) => {
+      const r = reader(h, "field", floor);
+      const attach = h.upstreams.attaches.at(-1);
+      if (attach !== undefined && !attach.disposed && floorOf(attach) === floor)
+        h.upstreams.answer(attach, peerSnapshot());
+      await tick();
+      r.dispose();
+    };
+    const floors = [250, 251, 252, 253, 254, 255, 256];
+    for (const [n, floor] of floors.entries()) {
+      await churn(floor);
+      // nothing waited: past the bound the oldest went the moment the newest began to linger
+      expect(h.board.size).toBe(Math.min(n + 1, max));
+      expect(h.local.disposed).toBe(Math.max(0, n + 1 - max));
+    }
+    // the newest four linger, each with its sweeper and its linger timer; the oldest three are closed
+    expect(h.upstreams.standing().map(floorOf)).toEqual([253, 254, 255, 256]);
+    expect(vi.getTimerCount()).toBe(2 * max);
+    // a reader back at the oldest lingering floor rejoins it (no new dial) and, leaving, makes it the newest
+    const attaches = h.upstreams.attaches.length;
+    await churn(253);
+    expect(h.upstreams.attaches).toHaveLength(attaches);
+    await churn(257);
+    expect(h.upstreams.standing().map(floorOf)).toEqual([253, 255, 256, 257]);
+    expect(h.board.size).toBe(max);
+    expect(vi.getTimerCount()).toBe(2 * max);
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
+    expect(h.board.size).toBe(0);
+    expect(h.upstreams.standing()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("two hubs with different questions linger apart: each closes at its own linger's end, and a rejoin saves only its own", async () => {
     const h = harness([selfRow, desktop("dev-b")]);
     const phone = reader(h, "remote", AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS);

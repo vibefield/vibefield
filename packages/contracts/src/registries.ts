@@ -442,7 +442,14 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * new epoch until each re-attached (the grey flash). A reader back within the linger rejoins the standing hub:
  * every peer's epoch and `live` state stand. 60 s covers an ordinary app switch (a glance at another app, a
  * notification answered) with margin and a gap repair's milliseconds many times over; its cost is the hub's
- * upstreams on the desktop↔desktop links and the home's own board for that long, nothing on the phone's radio. */
+ * upstreams on the desktop↔desktop links and the home's own board for that long, nothing on the phone's radio.
+ * MESH_LINGERING_HUBS_MAX (the PG-9a review [0]) bounds how many hubs may linger at once on one daemon: hubs are
+ * keyed by {projection, floor}, and a floor is any integer a reader asks (16 ms to 60 s), so a same-uid reader
+ * looping subscribe and unsubscribe over distinct floors would leave one lingering hub per value: a local board here
+ * and an upstream on every peer each, beyond what the per-connection subscription cap bounds (EL7). Past the bound
+ * the OLDEST lingering hub closes at once. Honest readers stand up two or three hubs: the phone's (`field|250`
+ * today, `remote|1000` from PG-3e), a window's `model`, and a window's `remote` where one is read, so 4 keeps
+ * each of them lingering with room for one more. */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
@@ -457,6 +464,7 @@ export const AGENT_FIELD = {
   FULL_TICK_MS: 16,
   CARRIED_SCREENS_PER_PEER: 64,
   MESH_HUB_LINGER_MS: 60_000,
+  MESH_LINGERING_HUBS_MAX: 4,
 } as const;
 
 /** Item 87 (2026-10-29) — a managed run's exit, as fieldd closes it. puppeteer's `handleProcessExit`
