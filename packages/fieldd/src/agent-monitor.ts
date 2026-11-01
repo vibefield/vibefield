@@ -1,11 +1,13 @@
-import type {
-  AgentCatalogReaders,
-  AgentListResult,
-  AgentProfileSet,
-  AgentSessionSummary,
-  AgentSessionTerminal,
-  AgentsProfileSetsListResult,
-  TerminalInfo,
+import {
+  type AgentCatalogReaders,
+  type AgentListResult,
+  type AgentProfileSet,
+  type AgentProfileSetId,
+  type AgentSessionSummary,
+  type AgentSessionTerminal,
+  type AgentsProfileSetsListResult,
+  personaSetsOf,
+  type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import {
@@ -159,6 +161,10 @@ export interface AgentMonitorService {
    * with the model now (`agent.recordedLanes`); never rejects. Undefined when
    * this desktop has no record source (no history port). */
   readPast(window: { sinceMs: number; untilMs: number }): Promise<MonitorPastSnapshot | undefined>;
+  /** TU-1 (Q3) — each persona to the Agent Profile listing it, over the latest `agents.profileSets` frame, the one the
+   * backend places Godview's rows by; null until the first frame arrives. The rooms and the door place a run by it
+   * (`profileSetOfRun`). */
+  personaSets(): ReadonlyMap<string, AgentProfileSetId> | null;
   dispose(): void;
 }
 
@@ -367,6 +373,11 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
   const logger = (opts.logger ?? createNoopLogger()).child({ component: "agent.monitor" });
   let rows: AgentListResult = opts.fold.list();
   let profileSets: AgentsProfileSetsListResult | null = null;
+  // the persona map of the frame it was read from, made once per frame
+  let personas: {
+    frame: AgentsProfileSetsListResult;
+    map: ReadonlyMap<string, AgentProfileSetId>;
+  } | null = null;
   let facts: MonitorHostFacts | null = null;
   const hostListeners = new Set<() => void>();
   const wake = (): void => {
@@ -570,6 +581,12 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
       return true;
     },
     readPast: (window) => backend.readPast(window),
+    personaSets() {
+      if (profileSets === null) return null;
+      if (personas?.frame !== profileSets)
+        personas = { frame: profileSets, map: personaSetsOf(profileSets.sets) };
+      return personas.map;
+    },
     dispose() {
       if (disposed) return;
       disposed = true;

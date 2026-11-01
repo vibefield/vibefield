@@ -1,11 +1,12 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type {
-  AgentProfileSet,
-  IndexSearchResult,
-  NativeDoorOpen,
-  SparkRecord,
+import {
+  type AgentProfileSet,
+  type IndexSearchResult,
+  type NativeDoorOpen,
+  personaSetsOf,
+  type SparkRecord,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { type ToolPlaneAudit, ToolPlaneService } from "../src/tool-plane";
@@ -18,7 +19,8 @@ import { NeedsStore } from "../src/tool-plane/rooms/you/store";
 // (History and the projects list), and a pane, the outside and an unsettled run nothing, with one plain line each.
 // Every call is held to its row again at the call (MT-L2), held to the caller's own profiles, written to the audit log
 // as the caller's before it answers (CP-L6), and refused as a fact the model reads, never a protocol error. CP-3 adds
-// the you room over a real needs-you queue: a spark's ask_user and every settled agent's notify.
+// the you room over a real needs-you queue: a spark's ask_user and every settled agent's notify. TU-1 (Q3) places a
+// plain run by the one rule the rooms read (`profileSetOfRun`).
 
 const roots: string[] = [];
 afterEach(() => {
@@ -80,7 +82,15 @@ const DOORS = [
   door("c-out", 1006),
 ];
 
-function harness() {
+function harness(
+  opts: {
+    /** doors beyond DOORS (TU-1's) */
+    doors?: readonly NativeDoorOpen[];
+    /** the monitor's persona map; null before its first frame */
+    personaSets?: ReadonlyMap<string, string> | null;
+  } = {},
+) {
+  const personaSets = opts.personaSets === undefined ? personaSetsOf(SETS) : opts.personaSets;
   const handlers = new Map<number, (p: Uint8Array) => void>();
   const sent = new Map<number, string>();
   const searched: string[] = [];
@@ -113,6 +123,7 @@ function harness() {
     store: new NeedsStore({ dir: join(root, "needs"), keyPath: join(root, "needs.key") }),
     inputs: { wake: () => undefined, enqueue: () => ({ position: 1 }) },
     run: () => undefined,
+    personaSets: () => personaSets,
     sparkSession: () => "run-12",
     spark: (id) => (id === SPARK.id ? SPARK : undefined),
     open: async () => {
@@ -126,7 +137,10 @@ function harness() {
   needs.onNotice((notice) => notices.push(notice));
   const plane = new ToolPlaneService({
     native: {
-      subscribe: async () => ({ snapshot: { doors: DOORS }, dispose: () => undefined }),
+      subscribe: async () => ({
+        snapshot: { doors: [...DOORS, ...(opts.doors ?? [])] },
+        dispose: () => undefined,
+      }),
       request: async () => ({ closed: true }),
     },
     lanes: {
@@ -147,10 +161,17 @@ function harness() {
             ? { runtimeRunId: "run-9", verified: true, spark: "sp-forged00" }
             : tid === "sess-unread"
               ? { runtimeRunId: "run-8", verified: false }
-              : undefined,
+              : tid === "sess-persona"
+                ? // TU-1 — a record from before AR-S5: its persona, no filed set
+                  { runtimeRunId: "run-6", verified: true, profileId: "claude:work" }
+                : tid === "sess-orphan"
+                  ? { runtimeRunId: "run-5", verified: true, profileId: "claude:gone" }
+                  : undefined,
+    personaSets: () => personaSets,
     spark: (id) => (id === SPARK.id ? SPARK : undefined),
     verbs: {
       profileSets: async () => SETS,
+      personaSets: () => personaSets,
       agentLabel: () => undefined,
       models: async () => {
         throw new Error("unused");
@@ -362,6 +383,51 @@ describe("the tool plane in fieldd (MT-0)", () => {
     expect(pane).toBe(
       "VibeField has not named this session, so it holds none of VibeField's tools yet.",
     );
+  });
+});
+
+describe("the door places a plain run by the one rule (TU-1, Q3; critique 6)", () => {
+  const PERSONA_DOORS = [
+    door("c-persona", 1007, "sess-persona"),
+    door("c-orphan", 1008, "sess-orphan"),
+  ];
+  /** Each door's caller, as fieldd named it: its kind, the profiles it holds, and whether it is settled. */
+  const callers = (h: ReturnType<typeof harness>) =>
+    Object.fromEntries(
+      [...h.plane.doors()]
+        .filter(([id]) => id === "c-persona" || id === "c-orphan" || id === "c-plain")
+        .map(([id, c]) => [
+          id,
+          c.kind === "run" ? { profiles: c.profiles, unsettled: c.unsettled } : c.kind,
+        ]),
+    );
+
+  it("holds a run filed under none to the profile listing its persona, as the rooms place it; a persona no profile lists holds none, settled", async () => {
+    const h = harness({ doors: PERSONA_DOORS });
+    await h.plane.ensureStarted();
+    expect(callers(h)).toEqual({
+      "c-plain": { profiles: ["work"], unsettled: undefined },
+      "c-persona": { profiles: ["work"], unsettled: undefined },
+      "c-orphan": { profiles: [], unsettled: undefined },
+    });
+    h.call(1007, 40, "history_search", { query: "routes" });
+    h.call(1008, 41, "history_search", { query: "routes" });
+    await h.settle();
+    expect(h.searched).toEqual(["rt-work"]);
+    expect(h.answers(1008)[0].result.structuredContent).toMatchObject({
+      hits: [],
+      note: "No History is filed under your profiles yet.",
+    });
+  });
+
+  it("fails closed before the profiles are read: a persona's run filed under none holds none, and a filed run holds its set", async () => {
+    const h = harness({ doors: PERSONA_DOORS, personaSets: null });
+    await h.plane.ensureStarted();
+    expect(callers(h)).toEqual({
+      "c-plain": { profiles: ["work"], unsettled: undefined },
+      "c-persona": { profiles: [], unsettled: undefined },
+      "c-orphan": { profiles: [], unsettled: undefined },
+    });
   });
 });
 

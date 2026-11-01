@@ -32,7 +32,7 @@ import { McpConnection, type McpServerOptions } from "./mcp";
 export type DoorUnsettled = "record-unverified" | "spark-unverified";
 
 /** Who opened a door, as fieldd knows it. `profiles` are the Agent Profiles its calls are held to: a spark's record's,
- * or the one a run is filed under. */
+ * or the one the placement rule puts a plain run in (`profileSetOfRun`), none for a run it puts in none. */
 export type DoorCaller =
   | {
       readonly kind: "spark";

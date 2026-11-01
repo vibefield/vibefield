@@ -4377,8 +4377,9 @@ describe("ST — a durable Stop (the real floor)", () => {
 
 // TU-1 — fieldd keeps whether a run has worked (`turnedAt`, ruled in `turnfact-read.md`): the first turn it sees is
 // stamped once on the run's signed record and pushed on its row, never for an ask alone (Q2); a resume carries the
-// conversation's fact and History's resume is born turned (Q5); a spark's own session tells the spark (Q1); and the
-// down-window gap is named, not closed (Q4, G4). The scripted agent's observed binding plays the adapter's hooks.
+// conversation's fact and History's resume is born turned (Q5); a spark's own session tells the spark (Q1); a
+// re-attach files a record from before AR-S5 under the set it binds (D11); and the down-window gap is named, not closed
+// (Q4, G4). The scripted agent's observed binding plays the adapter's hooks.
 describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () => {
   /** The run's row as a window reads it. */
   async function rowOf(win: WsRpc, runtimeRunId: string) {
@@ -4611,6 +4612,71 @@ describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () =
     expect(record.turnedAt).toBe(at);
     expect(await sparkSays(win2, spark.id)).toBe(at);
     await win2.call("terminal.terminate", { sessionId: paneId });
+  }, 150_000);
+
+  // R3b (D11, critique 6) — a re-attach files a record from before AR-S5 under the set puppeteer binds the run to at
+  // that attach, so the door (the record, `runForTerminal`) and the rooms (the summary) place it by one filed fact; a
+  // record that names a set keeps it, whatever the attach binds.
+  it("files a record from before AR-S5 under the set its re-attach binds, so the door reads the rooms' fact; a filed set is never moved (D11)", async () => {
+    const config = { floor: "real", profiles: true, attach: true } as const;
+    const first = await setup(config);
+    const win1 = await window(first.daemon, DECK, "tu1r1");
+    // a Work profile with a sign-in of its own: a run under it names its persona, which an attach binds again
+    const made = (await win1.call("agents.profileSets.create", {
+      label: "Work",
+    })) as AgentsProfileSetsSetResult;
+    const { persona } = (await win1.call("agents.profiles.create", {
+      set: made.set.id,
+      provider: "scripted",
+    })) as AgentsProfilesCreateResult;
+    const work = { profileSet: made.set.id, profileId: persona.profileId };
+    const spawnUnderWork = async () => {
+      const spawned = (await born(win1, "agent.spawn", {
+        provider: "scripted",
+        cwd: first.envOut,
+        profileSet: work.profileSet,
+      })) as AgentSpawnResult;
+      await joinedRow(win1, spawned.session.runtimeRunId);
+      return spawned;
+    };
+    const legacy = await spawnUnderWork();
+    const filed = await spawnUnderWork();
+    const record0 = readRecord(first.dataDir, legacy.session.runtimeRunId);
+    expect({ profileSet: record0.profileSet, profileId: record0.profileId }).toEqual(work);
+    await first.daemon.stop();
+    // the first: a record from before AR-S5 (its persona, no set); the second: filed under a set the attach does not
+    // bind
+    const { profileSet: _set, ...older } = record0;
+    first.records.write(older);
+    first.records.write({
+      ...readRecord(first.dataDir, filed.session.runtimeRunId),
+      profileSet: "native",
+    });
+
+    const second = await setup({ ...config, restartOf: first });
+    const win2 = await window(second.daemon, DECK, "tu1r2");
+    for (const run of [legacy, filed])
+      await rowWhere(
+        win2,
+        run.session.runtimeRunId,
+        (r) => r.continuation?.reattached === true,
+        "the run re-attached",
+        20_000,
+      );
+    const row = await rowOf(win2, legacy.session.runtimeRunId);
+    const record = readRecord(first.dataDir, legacy.session.runtimeRunId);
+    expect({ record: record.profileSet, row: row?.profileSet }).toEqual({
+      record: work.profileSet,
+      row: work.profileSet,
+    });
+    expect(second.daemon.agents.runForTerminal(legacy.terminal.sessionId)).toEqual({
+      runtimeRunId: legacy.session.runtimeRunId,
+      verified: true,
+      ...work,
+    });
+    expect(readRecord(first.dataDir, filed.session.runtimeRunId).profileSet).toBe("native");
+    for (const run of [legacy, filed])
+      await win2.call("terminal.terminate", { sessionId: run.terminal.sessionId });
   }, 150_000);
 
   // G4 (Q4, a named guard; plans/tu1-plan.md §3.6): it asserts the gap, so it passes by design, and its TU1_G4 lines

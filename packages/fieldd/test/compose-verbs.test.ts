@@ -1,16 +1,18 @@
-import type {
-  AgentModelsResult,
-  AgentProfileSet,
-  AgentSessionSummary,
-  IndexSearchResult,
-  IndexTimelineResult,
-  SparkRecord,
+import {
+  type AgentModelsResult,
+  type AgentProfileSet,
+  type AgentSessionSummary,
+  type IndexSearchResult,
+  type IndexTimelineResult,
+  personaSetsOf,
+  type SparkRecord,
 } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { createComposeVerbs, type VerbDeps } from "../src/tool-plane/rooms/compose/verbs";
 
 // CP-1b — the six read verbs, held to a spark's Agent Profiles (TL-D5, NS-D5). The v2 page's CP-1 witness, at the
 // verbs' level: a session from another profile never shows, and nothing outside the profiles can be read or searched.
+// TU-1 (Q3) places every session, live or in History, by the one rule (`profileSetOfRun`).
 
 const SPARK: SparkRecord = {
   format: 1,
@@ -98,6 +100,7 @@ function deps(over: Partial<VerbDeps> = {}) {
   const searched: string[] = [];
   const d: VerbDeps = {
     profileSets: async () => SETS,
+    personaSets: () => personaSetsOf(SETS),
     agentLabel: (p) => ({ claude: "Claude Code", grok: "Grok", codex: "Codex" })[p],
     models: async (provider) => {
       if (provider === "grok") throw new Error("grok could not list");
@@ -271,6 +274,49 @@ describe("the read verbs, held to a spark's profiles (CP-1b; TL-D5)", () => {
     const { verbs } = deps();
     expect(await verbs.projects_list(SPARK, {})).toEqual({
       projects: [{ key: "pk-1", name: "vibe-field", folders: ["/code/vibe-field"] }],
+    });
+  });
+});
+
+describe("the read verbs place a session by the one rule (TU-1, Q3)", () => {
+  const MINE: SparkRecord = { ...SPARK, profiles: ["native"], thinksUnder: "native" };
+  const WORK: SparkRecord = { ...SPARK, profiles: ["work"], thinksUnder: "work" };
+  // filed under none: its persona listed by Work; a persona no profile lists
+  const PERSONA_RUNS = [
+    ...RUNS,
+    row("run-persona", undefined, { profileId: "claude:work" }),
+    row("run-orphan", undefined, { profileId: "claude:gone" }),
+  ];
+  const listed = async (verbs: ReturnType<typeof deps>["verbs"], spark: SparkRecord) =>
+    (await verbs.agents_list(spark, {})).sessions.map((s) => `${s.id}:${s.profile}`);
+
+  it("lists a session filed under none under the profile listing its persona, and a persona no profile lists under none", async () => {
+    const { verbs } = deps({ runs: () => PERSONA_RUNS });
+    expect(await listed(verbs, MINE)).toEqual(["run-native:native"]);
+    expect(await listed(verbs, WORK)).toEqual(["run-work:work", "run-persona:work"]);
+    await expect(verbs.agent_read(MINE, { session: "run-orphan" })).rejects.toMatchObject({
+      kind: "FORBIDDEN_SCOPE",
+    });
+    await expect(verbs.agent_read(MINE, { session: "run-persona" })).rejects.toMatchObject({
+      kind: "FORBIDDEN_SCOPE",
+    });
+    expect((await verbs.agent_read(WORK, { session: "run-persona" })).session).toBe("run-persona");
+  });
+
+  it("fails closed before the profiles are read: a persona's session filed under none is listed nowhere", async () => {
+    const { verbs } = deps({ runs: () => PERSONA_RUNS, personaSets: () => null });
+    expect(await listed(verbs, MINE)).toEqual(["run-native:native"]);
+    expect(await listed(verbs, WORK)).toEqual(["run-work:work"]);
+  });
+
+  it("history_read places a History session by its persona, as before: no persona is This Mac's, a persona no profile lists is in none", async () => {
+    const { verbs } = deps({
+      indexSessionProfile: async (sessionId) =>
+        sessionId === "ix-mine" ? {} : { profileId: "claude:gone" },
+    });
+    expect((await verbs.history_read(MINE, { session: "ix-mine" })).turns).toHaveLength(2);
+    await expect(verbs.history_read(SPARK, { session: "ix-gone" })).rejects.toMatchObject({
+      kind: "FORBIDDEN_SCOPE",
     });
   });
 });

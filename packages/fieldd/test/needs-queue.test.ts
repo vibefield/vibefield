@@ -75,6 +75,8 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
     duringOpen: undefined as undefined | (() => void),
     /** called as each word is queued, before it is (a spark's send that arrives while an Allow acts) */
     duringEnqueue: undefined as undefined | (() => void),
+    /** TU-1 — the monitor's persona map (null: no frame read yet): Work lists `claude:work` */
+    personaSets: new Map([["claude:work", "work"]]) as ReadonlyMap<string, string> | null,
   };
   const sleep = () => {
     sessions.delete(VELA);
@@ -92,6 +94,7 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
         },
       },
       run: (id) => runs.get(id),
+      personaSets: () => ctl.personaSets,
       sparkSession: (spark) => sessions.get(spark),
       spark: (id) => sparks.get(id),
       open: async (id, by): Promise<SparkSummary> => {
@@ -480,6 +483,47 @@ describe("the held send (CP-D3, CP3-D3 B)", () => {
       words.sendFailedFact("Vela", "w", "work is not one of Vela's Agent Profiles"),
     ]);
     expect(h.queue.allowed(VELA, "run-work")).toBe(false);
+  });
+
+  it("re-checks an Allow by the one rule (TU-1, Q3): a persona's run is its profile's, and a run in no profile is said in its own words", async () => {
+    const h = harness();
+    // filed under none, its persona listed by Work: Work's, never This Mac's
+    h.runs.set("run-persona", {
+      runtimeRunId: "run-persona",
+      label: "claude·3",
+      profileId: "claude:work",
+      live: true,
+    });
+    // a persona no profile lists
+    h.runs.set("run-orphan", {
+      runtimeRunId: "run-orphan",
+      label: "claude·4",
+      profileId: "claude:gone",
+      live: true,
+    });
+    const persona = await h.queue.answer(h.queue.send(VELA_FROM, "run-persona", "a"), 0, principal);
+    expect(persona.item.answer).toMatchObject({
+      outcome: "failed",
+      reason: "work is not one of Vela's Agent Profiles",
+    });
+    const orphan = await h.queue.answer(h.queue.send(VELA_FROM, "run-orphan", "b"), 0, principal);
+    expect(orphan.item.answer).toMatchObject({
+      outcome: "failed",
+      reason: "claude·4 is in none of Vela's Agent Profiles",
+    });
+    // before the profiles are read, the persona's run is in none too
+    h.ctl.personaSets = null;
+    const unread = await h.queue.answer(h.queue.send(VELA_FROM, "run-persona", "c"), 0, principal);
+    expect(unread.item.answer).toMatchObject({
+      outcome: "failed",
+      reason: "claude·3 is in none of Vela's Agent Profiles",
+    });
+    expect(h.queued).toEqual([]);
+    expect(h.woken.map(([, fact]) => fact)).toEqual([
+      words.sendFailedFact("Vela", "claude·3", "work is not one of Vela's Agent Profiles"),
+      words.sendFailedFact("Vela", "claude·4", "claude·4 is in none of Vela's Agent Profiles"),
+      words.sendFailedFact("Vela", "claude·3", "claude·3 is in none of Vela's Agent Profiles"),
+    ]);
   });
 
   it("an allowance granted to a sleeping spark holds, and the spark hears it once it wakes (critique 4)", async () => {

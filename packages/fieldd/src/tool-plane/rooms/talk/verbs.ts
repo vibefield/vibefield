@@ -1,16 +1,18 @@
-import type {
-  AgentModelSelection,
-  ComposeAgentInterruptOutput,
-  ComposeAgentSendInput,
-  ComposeAgentSendOutput,
-  ComposeAgentSessionInput,
-  ComposeAgentSpawnInput,
-  ComposeAgentSpawnOutput,
-  ComposeAgentStopOutput,
-  ComposeAgentWatchOutput,
-  NeedsHeldLaunch,
-  NeedsItemId,
-  SparkId,
+import {
+  type AgentModelSelection,
+  type AgentProfileSetId,
+  type ComposeAgentInterruptOutput,
+  type ComposeAgentSendInput,
+  type ComposeAgentSendOutput,
+  type ComposeAgentSessionInput,
+  type ComposeAgentSpawnInput,
+  type ComposeAgentSpawnOutput,
+  type ComposeAgentStopOutput,
+  type ComposeAgentWatchOutput,
+  type NeedsHeldLaunch,
+  type NeedsItemId,
+  profileSetOfRun,
+  type SparkId,
 } from "@vibefield/contracts";
 import { RpcCallError } from "../../../native-link";
 
@@ -25,6 +27,8 @@ import { RpcCallError } from "../../../native-link";
 // queue (rooms/you/): a spark's first send into a session the person started waits for his OK, which lasts for that
 // run (CP-D3, CP3-D3 B); and past the cap a spawn waits for his Allow one more (CP-D7, CP3-D4 A). Each answers at once
 // with the item it waits in, never a refusal, and the answer is a wake (CP-L5).
+// TU-1 (Q3) — a session is in the caller's profiles by the one rule every reader shares (`profileSetOfRun`, over the
+// persona map fieldd's monitor holds): filed, else This Mac's with no persona, else its persona's, else none.
 
 /** CP-D7 — the most live agents one spark may have started. */
 export const SPARK_LIVE_AGENTS_MAX = 8;
@@ -32,8 +36,10 @@ export const SPARK_LIVE_AGENTS_MAX = 8;
 /** A session as the talk room sees it (the runtime's rows and records, adapted in daemon.ts). */
 export interface TalkSession {
   readonly runtimeRunId: string;
-  /** the profile set it is filed under (absent: This Mac's) */
+  /** the Agent Profile it is filed under; `profileSetOfRun` places it */
   readonly profileSet?: string | undefined;
+  /** its persona, which places it when it is filed under none */
+  readonly profileId?: string | undefined;
   /** CP-D15: who started it; `spark` names the spark whose agent_spawn did */
   readonly origin?: { readonly by: string; readonly spark?: SparkId | undefined } | undefined;
   /** CP-1c: the spark this session is the own session of */
@@ -72,6 +78,8 @@ export interface TalkHolds {
 export interface TalkDeps {
   session(runtimeRunId: string): TalkSession | undefined;
   sessions(): readonly TalkSession[];
+  /** TU-1 — each persona to the profile listing it (the monitor's latest frame); null until fieldd has read one */
+  personaSets(): ReadonlyMap<string, AgentProfileSetId> | null;
   /** start an agent for a spark: origin `spark` on its record, the spark named (CP-D15) */
   spawn(
     launch: {
@@ -141,11 +149,6 @@ export function runTalk(verbs: TalkVerbs, name: TalkVerbName, caller: TalkCaller
   return (verbs[name] as (caller: TalkCaller, input: unknown) => Promise<unknown>)(caller, input);
 }
 
-/** The profile a session belongs to: its set, or This Mac's when it names none. */
-const NATIVE = "native";
-export const profileOf = (session: { readonly profileSet?: string | undefined }): string =>
-  session.profileSet ?? NATIVE;
-
 /** A refusal the model reads as the tool's own answer, with its fact (index.ts reads `details.fact`). */
 const refuse = (fact: string, message: string, kind = "PRECONDITION_FAILED") =>
   new RpcCallError(kind, message, false, { fact });
@@ -155,7 +158,8 @@ export function createTalkVerbs(deps: TalkDeps): TalkVerbs {
   const reach = (caller: TalkCaller, runtimeRunId: string): TalkSession => {
     const session = deps.session(runtimeRunId);
     if (session === undefined) throw refuse("not-found", `no session ${runtimeRunId}`, "NOT_FOUND");
-    if (!caller.profiles.includes(profileOf(session)))
+    const profile = profileSetOfRun(session, deps.personaSets());
+    if (profile === undefined || !caller.profiles.includes(profile))
       throw refuse("outside", `${runtimeRunId} is outside your Agent Profiles`, "FORBIDDEN_SCOPE");
     if (session.runtimeRunId === caller.runtimeRunId)
       throw refuse("bad-input", "that session is your own");

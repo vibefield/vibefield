@@ -1,23 +1,26 @@
-import type {
-  AgentModelsResult,
-  AgentProfileSet,
-  AgentSessionSummary,
-  ComposeAgentReadInput,
-  ComposeAgentsAvailableOutput,
-  ComposeAgentsListInput,
-  ComposeAgentsListOutput,
-  ComposeHistoryHit,
-  ComposeHistoryReadInput,
-  ComposeHistorySearchInput,
-  ComposeHistorySearchOutput,
-  ComposeModel,
-  ComposeProject,
-  ComposeProjectsListOutput,
-  ComposeReadOutput,
-  ComposeSession,
-  ComposeTurn,
-  IndexSearchResult,
-  IndexTimelineResult,
+import {
+  type AgentModelsResult,
+  type AgentProfileSet,
+  type AgentProfileSetId,
+  type AgentSessionSummary,
+  type ComposeAgentReadInput,
+  type ComposeAgentsAvailableOutput,
+  type ComposeAgentsListInput,
+  type ComposeAgentsListOutput,
+  type ComposeHistoryHit,
+  type ComposeHistoryReadInput,
+  type ComposeHistorySearchInput,
+  type ComposeHistorySearchOutput,
+  type ComposeModel,
+  type ComposeProject,
+  type ComposeProjectsListOutput,
+  type ComposeReadOutput,
+  type ComposeSession,
+  type ComposeTurn,
+  type IndexSearchResult,
+  type IndexTimelineResult,
+  personaSetsOf,
+  profileSetOfRun,
 } from "@vibefield/contracts";
 import { RpcCallError } from "../../../native-link";
 
@@ -27,10 +30,8 @@ import { RpcCallError } from "../../../native-link";
 // those profiles hold, and this join is the whole of History's profile bound: the index's doors carry no profile
 // (the rooms survey, 23:45Z). The audience a row is served to is the plane's (index.ts), never a check here. fieldd's own services answer them through VerbDeps, so nothing here imports puppeteer or rosetta (wall R29) and
 // nothing reads a vendor's transcript. They change nothing; the audit line around each call is the caller's (index.ts).
-
-/** The profile a run belongs to: its set, or This Mac's when it names none. */
-const NATIVE = "native";
-const profileOf = (row: { profileSet?: string | undefined }): string => row.profileSet ?? NATIVE;
+// TU-1 (Q3) — a session, live or in History, is in the caller's profiles by the one rule every reader shares
+// (`profileSetOfRun`): filed, else This Mac's with no persona, else its persona's, else none, which no caller reads.
 
 /** A read's bounds: what a turn may carry, and the page asked of the index for each turn kept. */
 const TURN_TEXT_MAX = 4000;
@@ -42,6 +43,8 @@ const MODELS_WAIT_MS = 4000;
 export interface VerbDeps {
   /** Agent Profiles and their sign-ins (`agents.profiles.sets()`). */
   profileSets(): Promise<readonly AgentProfileSet[]>;
+  /** TU-1 — each persona to the profile listing it (the monitor's latest frame); null until fieldd has read one */
+  personaSets(): ReadonlyMap<string, AgentProfileSetId> | null;
   /** The catalog's label for an agent (AC-D4). */
   agentLabel(provider: string): string | undefined;
   /** An agent's models under a profile (`agents.models`, 0.2–3.2 s, held 60 s). */
@@ -115,7 +118,10 @@ const outside = (what: string) =>
   new RpcCallError("FORBIDDEN_SCOPE", `${what} is outside your Agent Profiles`, false);
 
 export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
-  const inScope = (profiles: readonly string[], profile: string) => profiles.includes(profile);
+  /** Whether a profile is one of the caller's; a session in none is in no caller's. */
+  const inScope = (profiles: readonly string[], profile: string | undefined): profile is string =>
+    profile !== undefined && profiles.includes(profile);
+  const placed = (row: AgentSessionSummary) => profileSetOfRun(row, deps.personaSets());
   const scopedSets = async (caller: VerbCaller) =>
     (await deps.profileSets()).filter((set) => inScope(caller.profiles, set.id));
 
@@ -136,7 +142,7 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
     return row.status;
   };
 
-  const session = (row: AgentSessionSummary): ComposeSession => {
+  const session = (row: AgentSessionSummary, profile: AgentProfileSetId): ComposeSession => {
     const blocker = row.monitor?.blockers[0];
     const facts = deps.runFacts(row.runtimeRunId);
     return {
@@ -146,7 +152,7 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
       state: stateOf(row),
       ...(stateOf(row) === "asking" && blocker ? { asking: blocker.kind } : {}),
       folder: row.monitor?.environment?.cwd ?? row.workspace?.root ?? "",
-      profile: profileOf(row),
+      profile,
       ...(row.monitor?.model?.id ? { model: row.monitor.model.id } : {}),
       ...(facts?.effort ? { effort: facts.effort } : {}),
       ...(facts?.usd !== undefined ? { usd: facts.usd } : {}),
@@ -161,7 +167,7 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
     const row = deps.runs().find((r) => r.runtimeRunId === id && r.tier !== "remote");
     if (!row)
       throw new RpcCallError("NOT_FOUND", `no session ${id}; agents_list names them`, false);
-    if (!inScope(caller.profiles, profileOf(row))) throw outside(`session ${id}`);
+    if (!inScope(caller.profiles, placed(row))) throw outside(`session ${id}`);
     return row;
   };
 
@@ -245,9 +251,12 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
     async agents_list(caller, input) {
       const sessions = deps
         .runs()
-        .filter((r) => r.tier !== "remote" && inScope(caller.profiles, profileOf(r)))
+        .filter((r) => r.tier !== "remote")
         .filter((r) => input.ended === true || !r.continuation?.exited)
-        .map(session);
+        .flatMap((r) => {
+          const profile = placed(r);
+          return inScope(caller.profiles, profile) ? [session(r, profile)] : [];
+        });
       return { sessions };
     },
 
@@ -302,13 +311,10 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
     },
 
     async history_read(caller, input) {
+      // a History session has no filed set: its persona places it, over the profiles read now
       const { profileId } = await deps.indexSessionProfile(input.session);
-      const sets = await deps.profileSets();
-      const filedUnder =
-        sets.find((set) => set.personas.some((p) => p.profileId === profileId))?.id ??
-        (profileId === undefined ? NATIVE : undefined);
-      if (filedUnder === undefined || !inScope(caller.profiles, filedUnder))
-        throw outside(`session ${input.session}`);
+      const profile = profileSetOfRun({ profileId }, personaSetsOf(await deps.profileSets()));
+      if (!inScope(caller.profiles, profile)) throw outside(`session ${input.session}`);
       return read(input.session, input.before, input.turns);
     },
   };

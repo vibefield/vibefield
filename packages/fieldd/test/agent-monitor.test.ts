@@ -2,6 +2,7 @@ import {
   AGENT_CATALOG,
   type AgentSessionSummary,
   createAgentCatalogReaders,
+  profileSetOfRun,
 } from "@vibefield/contracts";
 import type { AgentMonitorState } from "@vibefield/puppeteer-core";
 import type { MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
@@ -332,6 +333,82 @@ describe("the hosted backend — the model's rows for the fold's fixtures", () =
       { profileId: "claude-native", providerLabel: catalog.entry("claude")?.label, loggedIn: true },
     ]);
     expect(set.isDefault).toBe(true);
+  });
+});
+
+// TU-1 (Q3, §12 Q1 (a′)) — the rooms place a run by `profileSetOfRun` over the monitor's persona map, the frame the
+// backend places Godview's rows by. The two agree for every run but a persona no profile lists (and, before the first
+// frame, a persona's run filed under none), which the backend calls This Mac's and the rule none: the one named
+// difference, held here to exactly that. A pin that moves puppeteer-monitor's chain is red here at its EL8 event.
+describe("the rooms' rule is Godview's chain (TU-1)", () => {
+  const work = nativeSet({
+    id: "work",
+    kind: "managed",
+    label: "Work",
+    default: false,
+    personas: [
+      {
+        profileId: "claude-work",
+        provider: "claude",
+        label: "Claude Code",
+        kind: "managed",
+        createdAt: "2026-09-01T00:00:00.000Z",
+        identity: { loggedIn: true, verifiedAt: "2026-09-13T09:00:00.000Z" },
+      },
+    ],
+  });
+  const runs: AgentSessionSummary[] = [
+    { ...summary({ runtimeRunId: "run-filed" }), profileSet: "work" },
+    { ...summary({ runtimeRunId: "run-persona" }), profileId: "claude-work" },
+    { ...summary({ runtimeRunId: "run-orphan" }), profileId: "claude-gone" },
+    summary({ runtimeRunId: "run-plain" }),
+    // filed under a profile that does not list its persona: the filed set wins
+    { ...summary({ runtimeRunId: "run-moved" }), profileSet: "work", profileId: "claude-native" },
+  ];
+  /** Each run as `[id, Godview's placement, the rooms' placement]`. */
+  const placements = (monitor: Awaited<ReturnType<typeof testMonitor>>) =>
+    runs.map((run) => [
+      run.runtimeRunId,
+      monitor.row(run.runtimeRunId).profileSet,
+      profileSetOfRun(run, monitor.service.personaSets()),
+    ]);
+
+  it("places every run where Godview does, but a persona no profile lists, which Godview calls This Mac's and the rule none", async () => {
+    const monitor = await testMonitor({
+      summaries: runs,
+      profiles: profileSetsFrame([nativeSet(), work]),
+    });
+    expect(placements(monitor)).toEqual([
+      ["run-filed", "work", "work"],
+      ["run-persona", "work", "work"],
+      ["run-orphan", "native", undefined],
+      ["run-plain", "native", "native"],
+      ["run-moved", "work", "work"],
+    ]);
+    monitor.service.dispose();
+  });
+
+  it("holds no persona map before the first frame, so a persona's run filed under none is in none; the frame that lands places it", async () => {
+    const monitor = await testMonitor({ summaries: runs });
+    expect(monitor.service.personaSets()).toBeNull();
+    expect(placements(monitor)).toEqual([
+      ["run-filed", "work", "work"],
+      ["run-persona", "native", undefined],
+      ["run-orphan", "native", undefined],
+      ["run-plain", "native", "native"],
+      ["run-moved", "work", "work"],
+    ]);
+    monitor.profiles.publish(profileSetsFrame([nativeSet(), work]));
+    expect(monitor.service.personaSets()).toEqual(
+      new Map([
+        ["claude-native", "native"],
+        ["claude-work", "work"],
+      ]),
+    );
+    expect(placements(monitor)[1]).toEqual(["run-persona", "work", "work"]);
+    // one map per frame, however often the rooms ask
+    expect(monitor.service.personaSets()).toBe(monitor.service.personaSets());
+    monitor.service.dispose();
   });
 });
 

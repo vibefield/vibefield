@@ -12,8 +12,9 @@ import {
 // CP-2 — the talk room (`draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31): who a spark may reach (CP-D5, CP-D6),
 // held at every call to its Agent Profiles (CP-L4), the cap (CP-D7), and spawn's tasks queued for the agent's first idle
 // moment. CP-3 (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31) holds a spark's first send into the person's
-// session (CP3-D3 B) and a spawn past the cap (CP3-D4 A) in the needs-you queue. fieldd's services are faked; the
-// queue, the waker and the needs-you queue have their own files.
+// session (CP3-D3 B) and a spawn past the cap (CP3-D4 A) in the needs-you queue. TU-1 (Q3) places every session it
+// reaches by the one rule (`profileSetOfRun`). fieldd's services are faked; the queue, the waker and the needs-you
+// queue have their own files.
 
 const VELA: TalkCaller = {
   sparkId: "sp-vela00000000000",
@@ -24,6 +25,17 @@ const VELA: TalkCaller = {
   thinksUnder: "native",
 };
 const ORIN = "sp-orin00000000000";
+/** A spark of Work alone (TU-1). */
+const WREN: TalkCaller = {
+  sparkId: "sp-wren00000000000",
+  name: "Wren",
+  runtimeRunId: "run-wren",
+  profiles: ["work"],
+  folder: "/f/sparks/wren",
+  thinksUnder: "work",
+};
+/** The monitor's persona map: Work lists the Claude sign-in `work-claude`. */
+const PERSONAS: ReadonlyMap<string, string> = new Map([["work-claude", "work"]]);
 
 const SESSIONS: TalkSession[] = [
   { runtimeRunId: "run-vela", spark: VELA.sparkId, origin: { by: "you" }, live: true },
@@ -33,9 +45,24 @@ const SESSIONS: TalkSession[] = [
   { runtimeRunId: "run-ada", origin: { by: "spark", spark: VELA.sparkId }, live: true },
   { runtimeRunId: "run-orin", spark: ORIN, origin: { by: "you" }, live: true },
   { runtimeRunId: "run-orin-agent", origin: { by: "spark", spark: ORIN }, live: true },
+  // TU-1: filed under none, its persona listed by Work; filed and persona both; a persona no profile lists
+  { runtimeRunId: "run-persona", profileId: "work-claude", origin: { by: "you" }, live: true },
+  {
+    runtimeRunId: "run-filed",
+    profileSet: "work",
+    profileId: "work-claude",
+    origin: { by: "you" },
+    live: true,
+  },
+  { runtimeRunId: "run-orphan", profileId: "gone-claude", origin: { by: "you" }, live: true },
 ];
 
-function harness(extra: TalkSession[] = [], stopAccepted = true, allowed: string[] = []) {
+function harness(
+  extra: TalkSession[] = [],
+  stopAccepted = true,
+  allowed: string[] = [],
+  personaSets: ReadonlyMap<string, string> | null = PERSONAS,
+) {
   const sessions = [...SESSIONS, ...extra];
   const queued: { run: string; text: string; from: string }[] = [];
   const heldSends: { from: HoldSender; run: string; text: string }[] = [];
@@ -47,6 +74,7 @@ function harness(extra: TalkSession[] = [], stopAccepted = true, allowed: string
   const verbs = createTalkVerbs({
     session: (run) => sessions.find((s) => s.runtimeRunId === run),
     sessions: () => sessions,
+    personaSets: () => personaSets,
     spawn: async (launch, spark) => {
       spawned.push({ ...launch, spark });
       const runtimeRunId = `run-new-${spawned.length}`;
@@ -261,5 +289,35 @@ describe("the talk room's start (TL-D2, CP-D7)", () => {
         live: SPARK_LIVE_AGENTS_MAX,
       },
     ]);
+  });
+});
+
+describe("one rule places a session in an Agent Profile (TU-1, Q3)", () => {
+  /** Who reaches a session: each spark's answer to a send, `ok` when it is reached (sent or held). */
+  const reach = async (h: ReturnType<typeof harness>, session: string) => ({
+    vela: await fact(h.verbs.agent_send(VELA, { session, text: "x" })),
+    wren: await fact(h.verbs.agent_send(WREN, { session, text: "x" })),
+  });
+
+  it("places a session filed under none by the profile listing its persona: Work's sparks reach it, This Mac's do not", async () => {
+    const h = harness();
+    expect(await reach(h, "run-persona")).toEqual({ vela: "outside", wren: "ok" });
+    expect(h.heldSends.map((held) => `${held.from.name}:${held.run}`)).toEqual([
+      "Wren:run-persona",
+    ]);
+  });
+
+  it("a filed set is its profile, a persona no profile lists is in none, and a session naming neither is This Mac's", async () => {
+    const h = harness();
+    expect(await reach(h, "run-filed")).toEqual({ vela: "outside", wren: "ok" });
+    expect(await reach(h, "run-orphan")).toEqual({ vela: "outside", wren: "outside" });
+    expect(await reach(h, "run-his")).toEqual({ vela: "ok", wren: "outside" });
+  });
+
+  it("fails closed before the profiles are read: a persona's session filed under none is in none; filed and persona-less sessions stand", async () => {
+    const h = harness([], true, [], null);
+    expect(await reach(h, "run-persona")).toEqual({ vela: "outside", wren: "outside" });
+    expect(await reach(h, "run-filed")).toEqual({ vela: "outside", wren: "ok" });
+    expect(await reach(h, "run-his")).toEqual({ vela: "ok", wren: "outside" });
   });
 });

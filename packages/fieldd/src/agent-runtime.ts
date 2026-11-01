@@ -2183,10 +2183,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * caller to its pane; fieldd maps the pane to its run here and never walks itself. Managed and pending runs only:
    * an exited run's pane holds no process that could have called. MT-0's settle rule reads the rest from the run's
    * record: whether it exists and verifies, the spark it names when the run is a spark's own session (CP-1c writes it
-   * at hatch), and the profile set it was filed under. */
-  runForTerminal(
-    terminalSessionId: string,
-  ): { runtimeRunId: string; verified: boolean; spark?: SparkId; profileSet?: string } | undefined {
+   * at hatch), the profile set it was filed under (a re-attach files a record from before AR-S5, TU-1 D11), and its
+   * persona, so the door places the run by the rule the rooms read (`profileSetOfRun`). */
+  runForTerminal(terminalSessionId: string):
+    | {
+        runtimeRunId: string;
+        verified: boolean;
+        spark?: SparkId;
+        profileSet?: string;
+        profileId?: string;
+      }
+    | undefined {
     const runtimeRunId = this.byTerminal.get(terminalSessionId);
     if (runtimeRunId === undefined) return undefined;
     if (!this.managed.has(runtimeRunId) && !this.pending.has(runtimeRunId)) return undefined;
@@ -2196,6 +2203,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       verified: record !== undefined,
       ...(record?.spark ? { spark: record.spark } : {}),
       ...(record?.profileSet ? { profileSet: record.profileSet } : {}),
+      ...(record?.profileId ? { profileId: record.profileId } : {}),
     };
   }
 
@@ -2869,6 +2877,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         continuation: { ...info.continuation },
         reattach: { state: "attached", at: now },
         updatedAt: now,
+        // TU-1 (D11) — a record from before AR-S5 is filed under the set puppeteer bound the run to at this attach,
+        // so the door (the record) and the rooms (the summary) read one filed fact; a filed set is never overwritten
+        ...(current.profileSet === undefined && info.profileSetId !== undefined
+          ? { profileSet: info.profileSetId }
+          : {}),
       });
     }
     // FS-1a — the folder this run works in is a place of the files service
