@@ -28,6 +28,14 @@ import { NO_TERMINALS } from "../src/terminal/terminal-words";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+/** This window holds no terminal pool, as the real one says here, unless a test gives it one: Send then goes on to
+ * wake the spark itself. */
+const pool = vi.hoisted(() => ({ configured: false }));
+vi.mock("../src/terminal/pool", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  terminalPoolConfigured: () => pool.configured,
+}));
+
 const AT = "2026-10-31T05:00:00.000Z";
 const NOW = Date.parse("2026-10-31T05:30:00.000Z");
 
@@ -102,6 +110,7 @@ afterEach(() => {
   host = null;
   stop?.();
   stop = null;
+  pool.configured = false;
 });
 
 function mount(element: ReactElement): HTMLElement {
@@ -414,6 +423,8 @@ function scripted(listed: SparkSummary[]) {
     revision: 0,
     woke: [] as string[],
     refuse: null as string | null,
+    /** a wake that takes its time: open answers once this settles */
+    held: null as Promise<void> | null,
   };
   const door: SparksPort = {
     list: async () => {
@@ -429,6 +440,7 @@ function scripted(listed: SparkSummary[]) {
     },
     open: async (id) => {
       port.woke.push(id);
+      if (port.held !== null) await port.held;
       if (port.refuse !== null) throw new Error(port.refuse);
       return port.listed.find((s) => s.id === id) ?? VELA;
     },
@@ -605,6 +617,49 @@ describe("Chat, live (the feed and its acts)", () => {
     // awake, its line gives way to its pane's place (being found, in a window with terminals; here, the Peek's words)
     expect($(".vf-chat-thread-line")).toBeNull();
     expect($(".vf-chat-pane")?.getAttribute("data-pane-state")).toBe("no-terminals");
+  });
+
+  it("wakes a spark once: Send pressed while Wake's wake runs waits, busy, and asks for no second open (SP-1d)", async () => {
+    const { port, door } = scripted([KIWI]);
+    let answer: () => void = () => undefined;
+    port.held = new Promise((resolve) => {
+      answer = resolve;
+    });
+    // a window with terminals: a Send into the asleep thread would wake the spark itself
+    pool.configured = true;
+    stop = startSparksFeed(door);
+    mount(<Chat />);
+    await settle();
+    await act(async () => $(".vf-chat-thread-line button")?.click());
+    expect(port.woke).toEqual(["sp-kiwi0001"]);
+    // typed while the wake runs, and sent by Return and by the button: Send waits, busy, and the draft stays
+    act(() => {
+      const field = $(".vf-chat-input");
+      if (field === null) throw new Error("no draft");
+      field.focus();
+      const node = document.createTextNode("carry on with the migration");
+      field.append(node);
+      const range = document.createRange();
+      range.setStart(node, node.length);
+      range.collapse(true);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect($(".vf-chat-send")?.getAttribute("aria-busy")).toBe("true");
+    await act(async () => {
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    await act(async () => $(".vf-chat-send")?.click());
+    await settle();
+    expect(port.woke).toEqual(["sp-kiwi0001"]);
+    expect($(".vf-chat-input")?.textContent).toBe("carry on with the migration");
+    // the wake answered: the thread is let go, and Send no longer waits
+    await act(async () => answer());
+    await settle();
+    expect($(".vf-chat-send")?.hasAttribute("aria-busy")).toBe(false);
   });
 
   it("says a refused Wake in fieldd's words where the act was, and keeps the act", async () => {

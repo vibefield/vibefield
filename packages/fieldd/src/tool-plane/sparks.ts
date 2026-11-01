@@ -215,6 +215,8 @@ const refused = (message: string, reason: string, details: Record<string, string
 /** The `compose.sparks.*` doors' work: hatch (NS-D1, NS-D5), list, and open (CR-D11, CP-D14). */
 export class SparkService {
   readonly #logger: Logger;
+  /** The wake under way for each spark, until it answers or refuses (`open`). */
+  readonly #opening = new Map<SparkId, Promise<SparkSummary>>();
 
   constructor(private readonly opts: SparkServiceOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
@@ -271,8 +273,24 @@ export class SparkService {
   }
 
   /** Wake a spark: a live session is answered as it is; a sleeping one is resumed in its last session, or started
-   * again in its folder when that cannot be resumed. */
-  async open(id: SparkId, principal: GrantPrincipal): Promise<SparkSummary> {
+   * again in its folder when that cannot be resumed.
+   *
+   * One wake per spark (SP-1d): an open asked while one is under way — two windows, a window and the phone — is
+   * answered by that wake, its run or its refusal. Asked again, the resume would be refused (the runtime claims the
+   * conversation it continues), the daemon's resume reads that refusal as cannot-be-resumed, and the spark would be
+   * started again beside the run it is waking into. The wake is joined per spark, not per caller: the door decides
+   * who may open a spark (`requireDesktopCaller`) and audits each caller before this is asked, and inside the wake
+   * the principal decides nothing — it binds only the terminal ticket a birth mints, which this service never hands
+   * on. */
+  open(id: SparkId, principal: GrantPrincipal): Promise<SparkSummary> {
+    const under = this.#opening.get(id);
+    if (under !== undefined) return under;
+    const wake = this.#wake(id, principal).finally(() => this.#opening.delete(id));
+    this.#opening.set(id, wake);
+    return wake;
+  }
+
+  async #wake(id: SparkId, principal: GrantPrincipal): Promise<SparkSummary> {
     const spark = this.opts.store.get(id);
     if (!spark) throw new RpcCallError("NOT_FOUND", "no such spark", false);
     const runs = this.opts.runs();

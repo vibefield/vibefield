@@ -1498,7 +1498,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       their lines. Send wakes either (§8 "Chat's composer"), so the not-started line reads "Waking…" while a send wakes
       it, as the asleep line does under Wake. A wake's refusal is said once, in the same words, "Couldn't wake Vela:
       …": on this line when Wake started it, on the note when Send did. What the pane's place says while there is no
-      pane to draw is §8 "Chat's thread".
+      pane to draw is §8 "Chat's thread". *Amended 2026-10-31 (SP-1d's critique, correctness-1):* **Wake** holds its
+      thread as a send does, one act at a time (§8 "Chat's thread").
   - **Empty, opening, unavailable:** "No sparks yet"; "Opening Chat…" while the list is first read; "Chat can't read
     your sparks", with fieldd's words under it, when it cannot be read. Each is secondary, centred in the panel, and
     never a blank.
@@ -1626,6 +1627,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       composer"): pasted into the pane, with Return left to you, its note Send's own. A thread takes one send at a
       time, a starter's or Send's: while one runs, the starters wait (busy) and Send waits, and a press of either
       does nothing, so two messages never sit in the agent's one input for a single Return to send as one.
+      *Amended 2026-10-31 (SP-1d's critique, correctness-1):* a wake is one of the thread's acts too, so the thread
+      takes one act at a time, Wake's, a starter's or Send's. While Wake's wake runs, Send and the starters wait; while
+      a send runs, Wake cannot be pressed. A Send pressed during Wake's wake would have woken the spark a second time.
     - **A send that is not taken** leaves the hello standing when it was refused before the pane took the keyboard:
       the window has no terminals, the pane was not found or not heard, you left the thread before its pane was
       ready, its input did not open, or the spark waits on you. Once the pane has taken the keyboard for a send, the
@@ -1771,8 +1775,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - never a trailing line break.
   - **Send** pastes the message into the thread's pane, the road ⌘V takes: bracketed when its program asked for it,
     with Return never pressed for you. Return in the draft and the send button both send. ⇧Return types nothing: the
-    draft is one line. The thread takes one send at a time, Send's or a starter's (§8 "Chat's thread"): while one
-    runs, send waits (busy), and a press does nothing.
+    draft is one line. The thread takes one act at a time, Send's, a starter's or Wake's (§8 "Chat's thread",
+    *amended 2026-10-31*): while one runs, send waits (busy), and a press does nothing.
     - The pane takes the keyboard just before the paste (§8 "Chat's thread"), so it takes the session's size, and the
       keyboard stays there, where Return sends it. Sent, the words and chips it carried are cleared, and the line's
       note (§8 "The line") says so once: "Pasted into Vela's pane — Return sends it". The draft stays a field while a
@@ -1784,6 +1788,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       "Chat's thread"), or that has not been heard yet (Hello, as just after a hatch), is waited for in the same 20 s,
       with no wake. Nothing is pasted into a spark before it is heard: a program not yet up may not read a paste as
       one, and a line break inside the message would read as Return.
+    - *Added 2026-10-31 (SP-1d's critique, correctness-1):* **a spark wakes once.** fieldd answers an open asked while
+      another is under way (a second window's, the phone's) with that same wake, its run or its refusal, so one spark
+      never wakes into two runs.
     - **While the spark waits on you** (Asking you, Needs your OK, Stuck), Send pastes nothing, because a menu in the
       pane would read the paste as its answer. The note says "Vela is waiting on you — answer it in its pane", and the
       draft stays. It is read when Send is pressed, and again after the last wait, just before the paste: a woken or

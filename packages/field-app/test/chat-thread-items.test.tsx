@@ -91,7 +91,11 @@ const PORT: ComposerPort = {
 /** The board's frames as the feed hears them: a test hands it another (fieldd restarted and re-attached). */
 let pushFrame: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
 
-function feed(rows: AgentFieldRow[], record: SparkSummary): SparksPort {
+function feed(
+  rows: AgentFieldRow[],
+  record: SparkSummary,
+  open: SparksPort["open"] = async () => record,
+): SparksPort {
   return {
     list: async () => [record],
     watch: async (onFrame) => {
@@ -99,7 +103,7 @@ function feed(rows: AgentFieldRow[], record: SparkSummary): SparksPort {
       onFrame({ revision: 1, rows }, "snapshot");
       return () => undefined;
     },
-    open: async () => record,
+    open,
   };
 }
 
@@ -128,12 +132,13 @@ afterEach(() => {
   stopHearing = null;
 });
 
-/** Chat as the frame mounts it, over a feed of Vela and her own run. */
+/** Chat as the frame mounts it, over a feed of Vela and her own run (and the wake it answers, `open`). */
 async function mountChat(
   rows: AgentFieldRow[] = [own()],
   record: SparkSummary = VELA,
+  open?: SparksPort["open"],
 ): Promise<void> {
-  stopFeed = startSparksFeed(feed(rows, record));
+  stopFeed = startSparksFeed(feed(rows, record, open));
   function Owner(): ReactElement {
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     return <ChatView active surface={surface} onSurfaceChange={setSurface} port={PORT} />;
@@ -285,7 +290,7 @@ describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4)', (
   });
 });
 
-describe("one send at a time into a thread, a starter's or Send's (DESIGN.md §8 \"Chat's thread\", \"Chat's composer\")", () => {
+describe("one act at a time into a thread, a wake's, a starter's or Send's (DESIGN.md §8 \"Chat's thread\", \"Chat's composer\")", () => {
   const press = (key: string) =>
     act(async () => {
       $(".vf-chat-input")?.dispatchEvent(
@@ -341,6 +346,40 @@ describe("one send at a time into a thread, a starter's or Send's (DESIGN.md §8
     await act(async () => finish({ state: "not-taking" }));
     await settle();
     expect($(".vf-chat-starters")?.hasAttribute("aria-busy")).toBe(false);
+  });
+
+  it("keeps Wake waiting while a send runs into an asleep thread, so the spark is woken once", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    const asleep: SparkSummary = { ...VELA, session: { runtimeRunId: "run-Vela", live: false } };
+    const opened: string[] = [];
+    await mountChat([], asleep, async (spark) => {
+      opened.push(spark);
+      return asleep;
+    });
+    const wake = (): HTMLButtonElement | null =>
+      host?.querySelector<HTMLButtonElement>(".vf-chat-thread-line button") ?? null;
+    expect(words(wake())).toBe("Wake");
+    typeText("carry on with the migration");
+    // the send's own wake is the one: Wake pressed in Return's tick, before the hold is drawn, asks for none …
+    await act(async () => {
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+      wake()?.click();
+    });
+    expect(road.sent.map((send) => send.text)).toEqual(["carry on with the migration"]);
+    expect(opened).toEqual([]);
+    // … and drawn, the line's Wake waits
+    expect(wake()?.disabled).toBe(true);
+    await act(async () => wake()?.click());
+    expect(opened).toEqual([]);
+    await act(async () => finish({ state: "pasted" }));
+    await settle();
+    expect(wake()?.disabled).toBe(false);
   });
 });
 

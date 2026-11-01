@@ -51,7 +51,7 @@ export interface ChatPanelViewProps {
   items?: readonly ThreadItem[];
   /** a starter pressed in the thread's hello: its words, sent as Send sends */
   onStarter?: ((words: string) => void) | undefined;
-  /** a send into the shown thread runs, a starter's or Send's: the starters wait */
+  /** an act holds the shown thread — a send into it, a starter's or Send's, or a wake: Wake and the starters wait */
   sending?: boolean | undefined;
   /** the shown thread's composer, in its foot (the product's `ChatComposer`; the catalog's `ChatComposerView`) */
   composer?: ReactNode;
@@ -268,7 +268,7 @@ function ThreadColumn({
         <p className="vf-chat-thread-line" data-line={line} role="status">
           <span>{lineWords(spark.name, line, act)}</span>
           {line === "asleep" ? (
-            <UiButton disabled={act.state === "busy"} onClick={() => onWake?.(entry)}>
+            <UiButton disabled={act.state === "busy" || sending} onClick={() => onWake?.(entry)}>
               {act.state === "busy" ? "Waking…" : "Wake"}
             </UiButton>
           ) : null}

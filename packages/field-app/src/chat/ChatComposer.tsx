@@ -91,7 +91,8 @@ export interface ChatComposerProps {
   port: ComposerPort;
   /** Send into the thread's pane (`thread-send.ts`, over Chat's world) */
   send: (text: string, stills: readonly string[]) => Promise<ThreadSendOutcome>;
-  /** a send into this thread runs, Send's or a starter's (Chat's one per thread): Send waits, busy, as for its own */
+  /** another act holds this thread — a send into it, Send's or a starter's, or a wake (Chat's one at a time per
+   * thread): Send waits, busy, as for its own */
   threadSending?: boolean | undefined;
   /** where an outcome is said (undefined: the line's note) */
   say?: ((text: string) => boolean) | undefined;
