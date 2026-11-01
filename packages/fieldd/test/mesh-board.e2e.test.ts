@@ -711,7 +711,11 @@ describe("DS-3 — the mesh board across two real daemons", () => {
 
   // PG-3b (PG-D6 (a), J2 (a) 2026-11-01) — the phone is a screen of the desktop that owns the row: its report is
   // routed by `device` through its home, carried only while it holds the home's `{remote, mesh}` board, and kept on
-  // the owner as a screen of its own under the home's peer connection; the board's close takes it away.
+  // the owner as a screen of its own under the home's peer connection; the board's close takes it away. The owner's
+  // mark is read in its backend's ledger (`seenAt`): a row a screen shows is seen at every flush, so a turn ending
+  // then is read; once nothing shows it, its seen time stands still, and a turn ending after it is marked
+  // (puppeteer-monitor's `reconcileUnread`). This rig has no live runtime to end a turn on B (the fold's run is a
+  // record, exited); the unit rows (agent-screens.test.ts) drive the turns and read `unread` itself.
   it("PG-3b — the phone's report reaches the owner through its home, only while it holds the home's mesh board", async () => {
     const { A, B } = await bootPair();
     const phone = await phoneOn(A.door);
@@ -722,11 +726,25 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     );
     const shown = heldBoard(mesh.open, meshFrames(phone, mesh.subId), "dev-b").get(B.run);
     const id = AgentRemoteRow.parse(shown).monitorRow.id;
+    expect(AgentRemoteRow.parse(shown).monitorRow.unread).toBe(false);
+    const seen = (): number | undefined => B.daemon.agentMonitor()?.backend.seenAt().get(id);
+    /** a flush of B's backend: a window's model board opening there is a screen's first report */
+    const flushB = async (): Promise<void> => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      const window = await windowOn(B.daemon);
+      await window.call("agent.subscribe", { projection: "model" });
+    };
     // routed by the row's device through the home: carried, and B keeps it as the phone's own screen
+    const before = Date.now();
     expect(await phone.call("agent.reportShown", { ids: [id], device: "dev-b" })).toEqual({
       reported: true,
     });
     expect(B.daemon.agentScreens.size.carried).toBe(1);
+    const reported = seen() ?? 0;
+    expect(reported).toBeGreaterThanOrEqual(before);
+    // shown: every flush of B's backend sees it again
+    await flushB();
+    expect(seen() ?? 0).toBeGreaterThan(reported);
     // the home's own rows: routed to itself, served by its own screen (the remote board is one)
     expect(await phone.call("agent.reportShown", { ids: [A.pane], device: "dev-a" })).toEqual({
       reported: true,
@@ -735,6 +753,10 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     // a second reader behind the same home is a second screen, never the first one's
     const ipad = await phoneOn(A.door);
     const ipadMesh = await openMesh(ipad);
+    expect(await ipad.call("agent.reportShown", { ids: [B.pane], device: "dev-b" })).toEqual({
+      reported: true,
+    });
+    expect(B.daemon.agentScreens.size.carried).toBe(2);
     expect(await ipad.call("agent.reportShown", { ids: [], device: "dev-b" })).toEqual({
       reported: true,
     });
@@ -750,6 +772,11 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     await until(() => B.daemon.agentScreens.size.carried === 0, 5_000);
     const after = await phone.callErr("agent.reportShown", { ids: [id], device: "dev-b" });
     expect(after.data?.details).toEqual({ state: "no-screen" });
+    // shown nowhere now: B's flushes leave its seen time where it stood, so a turn ending now is the owner's mark
+    await flushB();
+    const released = seen();
+    await flushB();
+    expect(seen()).toBe(released);
     await ipad.call("system.unsubscribe", { subId: ipadMesh.subId });
   }, 60_000);
 });

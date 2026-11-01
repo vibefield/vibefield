@@ -1,4 +1,5 @@
 import type { CallerContext } from "@vibefield/contracts";
+import { AGENT_FIELD } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { type AgentScreens, createAgentScreens } from "../src/agent-screens";
 import { forwardProvenance } from "../src/forward-envelope";
@@ -11,11 +12,13 @@ import { floorTerminal, stateOf, type TestMonitor, testMonitor } from "./agent-m
 // HOME carries a phone's report only while the phone holds a `{remote, mesh}` board there, and orders what it carries
 // for one reader to one owner. The OWNER keys a carried report by `onBehalfOf` under the peer connection that carried
 // it (DS-L7 as amended 2026-11-01), so two readers behind one home are two screens and a peer reaches only its own.
-// The door between them is simulated as fieldd's is: the home's provenance (`forwardProvenance`) on a `peer-fieldd`
-// call to the owner, its `device` stripped there.
+// The door between them is simulated as PeerLink carries a call: the home's provenance (`forwardProvenance`) on a
+// `peer-fieldd` call to the owner, the params whole, `device` among them (the owner's door strips its own id; its
+// screens never read it).
 
 const HOME = "dev-home";
 const OWNER = "dev-owner";
+const OWNER2 = "dev-owner-2";
 
 const phone = (id = "conn_phone"): CallerContext => ({
   principal: { kind: "tailnet", login: "me@example.com", self: true, tailscaleId: "node-phone" },
@@ -32,6 +35,14 @@ const windowOn = (id = "conn_window"): CallerContext => ({
   connection: { id, helloClientKind: "renderer" },
 });
 
+const pluginOn = (id = "conn_plugin"): CallerContext => ({
+  principal: { kind: "plugin", id: "com.example.watcher", scopes: ["agent.observe"] },
+  transport: "inproc-port",
+  receivedAt: 0,
+  clientKind: "plugin-worker",
+  connection: { id, helloClientKind: "plugin-worker" },
+});
+
 const peer = (connection = "conn_peer_home"): Omit<CallerContext, "onBehalfOf"> => ({
   principal: { kind: "peer-fieldd", deviceId: HOME, tailscaleId: "node-home" },
   transport: "ws-tailnet",
@@ -41,43 +52,57 @@ const peer = (connection = "conn_peer_home"): Omit<CallerContext, "onBehalfOf"> 
 
 const REMOTE_MESH = { projection: "remote", scope: "mesh" } as const;
 
-/** Two desktops: the home (a phone's door) and the owner (the run's desktop), each with its own backend. */
-async function pair(
-  options: { latencyMs?: (ids: readonly string[]) => number; owner?: TestMonitor } = {},
-) {
+interface PairOptions {
+  latencyMs?: (ids: readonly string[]) => number;
+  owner?: TestMonitor;
+  /** a second owner desktop, its own backend */
+  owner2?: TestMonitor;
+  /** the door's verdict before anything reaches the owner (a link down, an owner without 3b) */
+  fail?: (device: string, ids: readonly string[]) => Error | undefined;
+}
+
+/** Two desktops (three with `owner2`): the home, a phone's door, and the owner, the run's desktop, each with its own
+ * backend. `link.connection` is the home's peer connection at the owners: a re-dial is a new one. */
+async function pair(options: PairOptions = {}) {
   const owner = options.owner ?? (await testMonitor({ summaries: [working] }));
   const home = await testMonitor();
   const carried: Array<{ device: string; ids: readonly string[]; windowId: string | undefined }> =
     [];
-  let ownerScreens: AgentScreens | null = null;
-  /** the door: the home's forward of a call to the owner, as PeerLink carries it */
+  const link = { connection: "conn_peer_home" };
+  const owners = new Map<string, AgentScreens>();
+  const ownerSide = (monitor: TestMonitor): AgentScreens =>
+    createAgentScreens({
+      monitor: () => monitor.service,
+      acknowledges: (ctx) => ctx.principal.kind === "local-token",
+      carry: () => Promise.reject(new Error("the owner carries nothing here")),
+    });
+  owners.set(OWNER, ownerSide(owner));
+  if (options.owner2 !== undefined) owners.set(OWNER2, ownerSide(options.owner2));
+  /** the door: the home's forward of a call to an owner, as PeerLink carries it (the params whole) */
   const door = async (ctx: CallerContext, device: string, params: unknown): Promise<unknown> => {
     const onBehalfOf = forwardProvenance(ctx, { deviceId: HOME });
-    const { device: _routed, ...rest } = params as Record<string, unknown>;
-    const ids = (rest["ids"] as string[] | undefined) ?? [];
+    const ids = ((params as { ids?: string[] }).ids ?? []) as readonly string[];
     const wait = options.latencyMs?.(ids) ?? 0;
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    const failure = options.fail?.(device, ids);
+    if (failure !== undefined) throw failure;
     carried.push({ device, ids, windowId: onBehalfOf.windowId });
-    if (ownerScreens === null) throw new Error("the owner is not up");
-    return ownerScreens.report({ ...peer(), onBehalfOf }, rest);
+    const target = owners.get(device);
+    if (target === undefined) throw new Error(`no owner ${device}`);
+    return target.report({ ...peer(link.connection), onBehalfOf }, params);
   };
   const homeScreens = createAgentScreens({
     monitor: () => home.service,
     acknowledges: (ctx) => ctx.principal.kind === "local-token",
     carry: door,
   });
-  ownerScreens = createAgentScreens({
-    monitor: () => owner.service,
-    acknowledges: (ctx) => ctx.principal.kind === "local-token",
-    carry: () => Promise.reject(new Error("the owner carries nothing here")),
-  });
-  const ownerSide: AgentScreens = ownerScreens;
+  const ownerScreens = owners.get(OWNER) as AgentScreens;
   /** a report routed by `device` at the home: its forward hook with the door's carry in hand */
-  const routed = (ctx: CallerContext, ids: readonly string[]) =>
-    homeScreens.forward(ctx, OWNER, { ids: [...ids], device: OWNER }, () =>
-      door(ctx, OWNER, { ids: [...ids], device: OWNER }),
+  const routed = (ctx: CallerContext, ids: readonly string[], device = OWNER) =>
+    homeScreens.forward(ctx, device, { ids: [...ids], device }, () =>
+      door(ctx, device, { ids: [...ids], device }),
     );
-  return { owner, home, homeScreens, ownerScreens: ownerSide, door, routed, carried };
+  return { owner, home, homeScreens, ownerScreens, owners, door, routed, carried, link };
 }
 
 const working = summary({ runtimeRunId: "run-working", status: "working" });
@@ -285,6 +310,167 @@ describe("PG-3b — the phone is a screen, through the home", () => {
     expect(() => homeScreens.report(phone(), { ids: [] })).toThrow(RpcCallError);
     homeScreens.openBoard(phone(), { projection: "remote", scope: "local" });
     expect(homeScreens.report(phone(), { ids: [] })).toEqual({ reported: true });
+  });
+
+  it("PG-3b — a plugin holding {remote, mesh} is no screen and no reader: refused by report and by forward, the owner's mark kept", async () => {
+    const { owner, homeScreens, routed, carried } = await pair();
+    const id = owner.row("run-working").id;
+    expect(homeScreens.openBoard(pluginOn(), REMOTE_MESH)).toBeNull();
+    expect(homeScreens.openBoard(pluginOn(), { projection: "model", scope: "local" })).toBeNull();
+    expect(homeScreens.size).toMatchObject({ screens: 0, readers: 0 });
+    expect(() => homeScreens.report(pluginOn(), { ids: [id] })).toThrow(RpcCallError);
+    expect((await refusal(routed(pluginOn(), [id]))).details).toEqual({ state: "no-screen" });
+    expect(carried).toEqual([]);
+    turn(owner);
+    expect(owner.row("run-working").unread).toBe(true);
+    // a window's remote board reads the peers and is no screen either; its model board is
+    expect(homeScreens.openBoard(windowOn(), REMOTE_MESH)).toBeNull();
+    expect((await refusal(routed(windowOn(), [id]))).details).toEqual({ state: "no-screen" });
+  });
+
+  it("PG-3b — one peer connection opens at most CARRIED_SCREENS_PER_PEER carried screens; past it, refused carried-cap", async () => {
+    const { ownerScreens } = await pair();
+    const reader = (n: number) => forwardProvenance(phone(`conn_reader_${n}`), { deviceId: HOME });
+    for (let n = 0; n < AGENT_FIELD.CARRIED_SCREENS_PER_PEER; n += 1)
+      ownerScreens.report({ ...peer(), onBehalfOf: reader(n) }, { ids: ["run-working"] });
+    expect(ownerScreens.size.carried).toBe(AGENT_FIELD.CARRIED_SCREENS_PER_PEER);
+    let thrown: unknown;
+    try {
+      ownerScreens.report({ ...peer(), onBehalfOf: reader(999) }, { ids: ["run-working"] });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(RpcCallError);
+    expect((thrown as RpcCallError).details).toEqual({ state: "no-screen", reason: "carried-cap" });
+    // the screens already open stand and still take reports; another peer connection has its own bound
+    expect(ownerScreens.report({ ...peer(), onBehalfOf: reader(0) }, { ids: [] })).toEqual({
+      reported: true,
+    });
+    expect(
+      ownerScreens.report({ ...peer("conn_peer_other"), onBehalfOf: reader(999) }, { ids: ["x"] }),
+    ).toEqual({ reported: true });
+  });
+
+  it("PG-3b — the carrying connection's last remote board on the owner closes: its carried screens go with it", async () => {
+    const { owner, ownerScreens, homeScreens, routed } = await pair();
+    const id = owner.row("run-working").id;
+    // the home's hub upstream: the peer connection's remote board on the owner (no screen, by kind)
+    const upstream = ownerScreens.openBoard(peer(), { projection: "remote", scope: "local" });
+    const second = ownerScreens.openBoard(peer(), { projection: "remote", scope: "local" });
+    homeScreens.openBoard(phone(), REMOTE_MESH);
+    await routed(phone(), [id]);
+    expect(ownerScreens.size).toMatchObject({ screens: 0, carried: 1 });
+    upstream?.();
+    expect(ownerScreens.size.carried).toBe(1);
+    second?.();
+    expect(ownerScreens.size.carried).toBe(0);
+    turn(owner);
+    expect(owner.row("run-working").unread).toBe(true);
+  });
+
+  it("PG-3b — the home's owner set changes only once a carry is known to land", async () => {
+    const refused = new RpcCallError(
+      "FORBIDDEN_SCOPE",
+      "agent.reportShown is local to its device; it does not federate",
+      false,
+      { method: "agent.reportShown", locality: "local" },
+    );
+    const lost = new RpcCallError("UNAVAILABLE", "peer unreachable", true, {
+      service: "peer-link",
+      device: OWNER,
+      state: "unreachable",
+    });
+    let verdict: Error | undefined;
+    const { homeScreens, routed, carried } = await pair({
+      fail: () => {
+        const once = verdict;
+        verdict = undefined;
+        return once;
+      },
+    });
+    const close = homeScreens.openBoard(phone(), REMOTE_MESH);
+    // an owner that refused (nothing stands there): no empty is owed it at the close
+    verdict = refused;
+    await refusal(routed(phone(), ["run-a"]));
+    expect(homeScreens.size.owners).toBe(0);
+    // a carry whose outcome is unknown may have landed: the owner is kept, and owed the empty
+    verdict = lost;
+    await refusal(routed(phone(), ["run-a"]));
+    expect(homeScreens.size.owners).toBe(1);
+    // the phone's own empty that fails keeps the owner too, so the close sends another
+    await routed(phone(), ["run-a"]);
+    verdict = lost;
+    await refusal(routed(phone(), []));
+    expect(homeScreens.size.owners).toBe(1);
+    // and one that lands drops it
+    await routed(phone(), []);
+    expect(homeScreens.size.owners).toBe(0);
+    await routed(phone(), ["run-a"]);
+    const before = carried.length;
+    close?.();
+    await settle();
+    expect(carried.slice(before)).toEqual([{ device: OWNER, ids: [], windowId: "conn_phone" }]);
+  });
+
+  it("PG-3b — a report queued behind a carry whose board closed while it waited is refused", async () => {
+    const { owner, homeScreens, routed } = await pair({
+      latencyMs: (ids) => (ids.includes("slow") ? 40 : 0),
+    });
+    const id = owner.row("run-working").id;
+    const close = homeScreens.openBoard(phone(), REMOTE_MESH);
+    const first = routed(phone(), ["slow"]);
+    const queued = refusal(routed(phone(), [id]));
+    // the slow carry is on the wire (its board was open when it began); the board closes behind it
+    await settle(5);
+    close?.();
+    expect(await first).toEqual({ reported: true });
+    expect((await queued).details).toEqual({ state: "no-screen" });
+  });
+
+  it("PG-3b — a closing reader sends the empty to EACH owner it reported to", async () => {
+    const owner2 = await testMonitor({ summaries: [other] });
+    const { homeScreens, owners, routed, carried } = await pair({ owner2 });
+    const close = homeScreens.openBoard(phone(), REMOTE_MESH);
+    await routed(phone(), ["run-working"], OWNER);
+    await routed(phone(), ["run-other"], OWNER2);
+    expect(owners.get(OWNER2)?.size.carried).toBe(1);
+    close?.();
+    await settle();
+    expect(
+      carried
+        .filter((entry) => entry.ids.length === 0)
+        .map((entry) => entry.device)
+        .sort(),
+    ).toEqual([OWNER, OWNER2].sort());
+    expect(owners.get(OWNER)?.size.carried).toBe(0);
+    expect(owners.get(OWNER2)?.size.carried).toBe(0);
+  });
+
+  it("PG-3b — the owner restarts or its link re-dials: the home re-carries the open card's report, and the mark stays clear", async () => {
+    const { owner, homeScreens, ownerScreens, routed, carried, link } = await pair();
+    const id = owner.row("run-working").id;
+    homeScreens.openBoard(phone(), REMOTE_MESH);
+    homeScreens.openBoard(phone("conn_ipad"), REMOTE_MESH);
+    await routed(phone(), [id]);
+    // the iPad showed something of this owner, then nothing: it has no report to replay
+    await routed(phone("conn_ipad"), ["run-other"]);
+    await routed(phone("conn_ipad"), []);
+    // the home's peer connection drops: the owner forgets every screen under it
+    ownerScreens.connectionClosed(link.connection);
+    expect(ownerScreens.size.carried).toBe(0);
+    // re-dialled: a new connection, and the link answers again
+    link.connection = "conn_peer_home_2";
+    const before = carried.length;
+    homeScreens.linkReady(OWNER);
+    await settle();
+    expect(carried.slice(before)).toEqual([{ device: OWNER, ids: [id], windowId: "conn_phone" }]);
+    expect(ownerScreens.size.carried).toBe(1);
+    turn(owner);
+    expect(owner.row("run-working").unread).toBe(false);
+    // another device's link answering re-carries nothing; neither does a closed reader's
+    homeScreens.linkReady("dev-elsewhere");
+    await settle();
+    expect(carried.length).toBe(before + 1);
   });
 });
 
