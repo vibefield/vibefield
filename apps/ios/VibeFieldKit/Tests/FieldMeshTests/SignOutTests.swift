@@ -82,6 +82,8 @@ struct SignOutTests {
     #expect(defaults.object(forKey: UserDefaultsProjectLedgerStore.defaultKey) == nil)
     for key in SignOutSweep.kept { #expect(defaults.data(forKey: key) == Data("mine".utf8)) }
     #expect(SignOutSweep.kept.contains("fieldterminal.appearance.v1"))
+    // IOS-10a — this phone's own look is the person's too.
+    #expect(SignOutSweep.kept.contains("vibefield.phone.appearance"))
     #expect(defaults.string(forKey: "vf.terminal.appearance.test") == "dark")
   }
 

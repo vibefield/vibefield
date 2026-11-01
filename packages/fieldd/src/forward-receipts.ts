@@ -65,9 +65,15 @@ const RECEIPT_MESSAGE_CHARS = 1024;
  * in flight, expires unused): never journaled, so a same-key retry mints
  * afresh. A ticket; F1b's freeway approval. Named, never inferred from an
  * answer's shape — `terminal.create` answers a ticket too, and it creates a
- * session. `workspace.openTicket` (DS-D12) and `index.openTicket` (SP-3) join
- * when they are served. */
-const CREDENTIAL_MINTS: ReadonlySet<string> = new Set(["terminal.openTicket", "freeway.approve"]);
+ * session. `workspace.openTicket` (DS-D12) joins when it is served.
+ * *DS-7 (2026-10-31): `index.openTicket` is served to a peer daemon, and joins —
+ * its answer carries a rosetta grant, which a receipt must neither keep nor
+ * replay; a same-key retry mints a fresh one.* */
+const CREDENTIAL_MINTS: ReadonlySet<string> = new Set([
+  "terminal.openTicket",
+  "freeway.approve",
+  "index.openTicket",
+]);
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);

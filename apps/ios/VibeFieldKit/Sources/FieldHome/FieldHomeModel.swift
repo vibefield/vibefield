@@ -486,6 +486,12 @@ enum FieldHomeModel {
     /// desktop's "Sign in again" for an account the tailnet asks for again.
     var signInWord: String
     var canSignOut: Bool
+
+    /// Whether the menu's desktops section has anything in it — a desktop,
+    /// or the line about other accounts' desktops — and so closes with a
+    /// hairline (IOS-10a; filed 2026-10-31: waiting for approval, the two
+    /// hairlines stood with nothing between them).
+    var drawsDesktopSection: Bool { !desktops.isEmpty || othersLine != nil }
   }
 
   /// A desktop this account has seen and the tailnet does not list right now
@@ -495,6 +501,9 @@ enum FieldHomeModel {
     let name: String
     /// TS-7 — the platform the account remembers it saying, for its mark.
     var platform: String? = nil
+    /// IOS-10a — when this login last heard it (`RememberedDesktop.lastSeen`),
+    /// for Settings' "Asleep · last heard …".
+    var lastSeen: Date? = nil
   }
 
   static func accountFace(

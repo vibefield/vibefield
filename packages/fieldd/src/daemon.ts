@@ -233,7 +233,7 @@ import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
 import { DocSyncService, docHostPeers, isDocHostPeer, type LaneInfo } from "./doc-sync";
-import { EgressRoutes, FloorEgress, resolveEgressPath } from "./egress";
+import { EgressRoutes, type EgressRoutesPort, FloorEgress, resolveEgressPath } from "./egress";
 import { EgressCellRewriter } from "./egress-cell-rewriter";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
@@ -247,6 +247,7 @@ import {
 } from "./freeway";
 import { clipActivity, createActivityReader, monitorHistoryPort } from "./index-activity";
 import { IndexCatalog } from "./index-catalog";
+import { IndexTicketForwarding } from "./index-forward";
 import { IndexMesh } from "./index-mesh";
 import { INDEX_SERVE_ID, IndexServeDriver, IndexTicketMinter, indexPlaneLive } from "./index-serve";
 import { IndexStatusFeed } from "./index-status-feed";
@@ -463,6 +464,10 @@ export interface FielddConfig {
   /** AR-8b test seam: the life of a minted index grant (production:
    * `INDEX_TICKET.TTL_MS`), so a row can watch one expire. */
   indexTicketTtlMs?: number;
+  /** DS-7 test seam: the egress routes a forwarded index ticket rides to its
+   * owner's index serve (`IndexTicketForwarding`). Absent = production's
+   * `EgressRoutes`, the same port the terminal rewriter rides. */
+  indexEgressRoutes?: EgressRoutesPort;
   /** DS-6 test seams: the history catalog's cadences (the epoch, the
    * re-snapshot and batch windows, the reconnect backoff, the journal and page
    * budgets) and the digest heartbeat its peer subscribers hear. Production
@@ -963,10 +968,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // the owner's word (ON unless config says false) standing on a generation
   // that enforces access; the device id is read at each mint — the device
   // service is bound further down, before any door can be called.
+  // DS-7 — and the mesh's live serve view, read at each mint once the mesh
+  // client exists (below): another desktop's daemon is answered the tailnet
+  // set of the index serve as it stands.
+  let meshForTickets: MeshClient | null = null;
   const indexTickets = new IndexTicketMinter({
     enabled: config.indexDirectPlane !== false,
     supervisor: rosettad,
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    serves: () => meshForTickets?.serves() ?? [],
     ...(config.indexTicketTtlMs !== undefined ? { ttlMs: config.indexTicketTtlMs } : {}),
   });
   // DS-6 — the history catalog's source (index-catalog.ts): rosetta's topology
@@ -1211,6 +1221,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnostics = diagnosticsService;
     await diagnosticsService.start();
     const mesh = new MeshClient(native);
+    meshForTickets = mesh; // DS-7 — the index minter's serve view
     // WG-D4 — while the floor was held unresponsive its doors were refused, a
     // reconcile's among them: when it answers again, what they would have
     // placed is placed now
@@ -6372,6 +6383,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         logger: logger.child({ component: "terminal.egress" }),
       });
     }
+    // DS-7 — a window's ticket for another desktop's transcript: carried only
+    // for a window or the shell, and the owner's tailnet set re-homed onto ONE
+    // route per owner desktop to its index serve (index-forward.ts)
+    const indexForwarding = new IndexTicketForwarding({
+      routes: config.indexEgressRoutes ?? egressRoutes,
+      logger: logger.child({ component: "index.egress" }),
+    });
     // C6-5/D35 — the subscription half: one ref-counted upstream per
     // {device, method, params}, re-snapshot on recovery; quiet during an
     // outage (the roster carries liveness, the topic stream never lies).
@@ -6387,8 +6405,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // DS-4 — a forwarded terminal mint is carried only for a self principal,
       // and a forwarded ticket's doors are adopted for the caller on the way back
       // (`TerminalService.forwardVia`); every other forward passes through.
-      terminals.forwardVia((device, method, params, _ctx, envelope) =>
-        peers.request(device, method, params, envelope),
+      // DS-7 — the index ticket's the same way, around it (`IndexTicketForwarding`).
+      indexForwarding.forwardVia(
+        terminals.forwardVia((device, method, params, _ctx, envelope) =>
+          peers.request(device, method, params, envelope),
+        ),
       ),
       // S2 (the landing review, 2026-10-01) — a routed board ask is judged for
       // the CALLER here, before it is carried: the owner sees this daemon's
@@ -6884,6 +6905,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         // DS-1b — a superseded daemon KEEPS its egress routes: the floor answers
         // only the successor now, which re-answers each route by its id
         egressCellRewriter?.dispose({ keepFloorRoutes: true });
+        indexForwarding.dispose({ keepFloorRoutes: true }); // DS-7 — the same rule
         terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
         devices.dispose();
         terminals.dispose();
@@ -6939,6 +6961,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       freewayServe.dispose(); // F1 — the floor keeps the serve: FW-L10
       freewayFloor.dispose();
       egressCellRewriter?.dispose(); // DS-1b — the last release takes each route off the floor
+      indexForwarding.dispose(); // DS-7 — and each index route
       void egressRoutes.dispose();
       terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
       devices.dispose();
@@ -7390,6 +7413,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // references (the last release removes each route), and the port
           // waits, bounded, for the floor to answer the removals
           egressCellRewriter?.dispose();
+          indexForwarding.dispose(); // DS-7 — the index routes, the same way
           await Promise.race([
             egressRoutes.dispose(),
             new Promise<void>((resolve) => setTimeout(resolve, 2_000).unref()),

@@ -338,13 +338,17 @@ describe("the index ticket — the template's anatomy for rosettad", () => {
     });
   });
 
-  it("until DS-7 the door answers a contract string, not a sentence — retryable false", () => {
+  it("the door's refusals are contract strings, not sentences — the capability pair retryable false", () => {
     // AR-8b moved the vocabulary into the registry and gave it two more
-    // members: the plane switched off, and the grant's life
+    // members: the plane switched off, and the grant's life. DS-7 (2026-10-31)
+    // adds the two ROAD states of a ticket to another desktop's session, in
+    // the terminal's words (their own rows: agent-index-history.test.ts).
     expect(INDEX_TICKET).toEqual({
       SERVICE: "index",
       STATE_UNBUILT: "direct-plane-unbuilt",
       STATE_OFF: "direct-plane-off",
+      STATE_EGRESS_UNAVAILABLE: "egress_unavailable",
+      STATE_DOORS_NOT_PUBLISHED: "doors_not_published",
       TTL_MS: 600_000,
     });
     const data = ErrorData.parse(fixture("error-data.index-direct-plane-unbuilt.json"));

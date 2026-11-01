@@ -1,6 +1,8 @@
 #if DEBUG
   import FieldDesign
   import FieldMesh
+  import FieldSettings
+  import Foundation
   import Observation
 
   /// `-vf-mock` (IOS-9d): the whole phone over invented facts and no tailnet —
@@ -67,6 +69,45 @@
           desktops: [], asleep: [Self.studioAsleep, Self.mini], foreignDoors: 0, isHearing: false)
       }
     }
+
+    /// IOS-10a — Settings' account, through the real decision: studio the
+    /// home and up, mini asleep since yesterday evening.
+    var settings: SettingsAccount {
+      let state: MeshModel.State =
+        switch standing {
+        case .signedOut: .off
+        case .up: .up
+        case .reconnecting: .reconnecting("the network went away")
+        case .approval: .needsMachineAuth
+        }
+      let up = standing == .up
+      let asleep: [FieldHomeModel.AsleepDesktop] =
+        switch standing {
+        case .up: [Self.miniHeard]
+        case .reconnecting: [Self.studioHeard, Self.miniHeard]
+        case .approval, .signedOut: []
+        }
+      return FieldHomeModel.settingsAccount(
+        meshState: state,
+        rememberedLogin: standing == .signedOut ? nil : Self.login,
+        login: up || standing == .approval ? Self.login : nil,
+        domain: up ? Self.domain : nil,
+        name: standing == .signedOut ? nil : Self.name,
+        face: standing == .approval || standing == .signedOut ? nil : Self.face,
+        seed: Self.login,
+        home: Self.studio.deviceId,
+        homeAnswered: true,
+        desktops: up ? [Self.studio] : [],
+        asleep: asleep,
+        isHearing: up,
+        machineName: AccountFixtures.machine,
+        adminConsole: FieldTruffleRuntime.machinesAdminURL(controlURL: nil))
+    }
+
+    private static let miniHeard = FieldHomeModel.AsleepDesktop(
+      deviceId: "dev-2", name: "mini", platform: "darwin", lastSeen: AccountFixtures.heard)
+    private static let studioHeard = FieldHomeModel.AsleepDesktop(
+      deviceId: "dev-1", name: "studio", platform: "darwin", lastSeen: AccountFixtures.heard)
 
     /// TS-7 — the Field page's door, through the real decision: the welcome
     /// signed out, the approval page waiting, the field otherwise.

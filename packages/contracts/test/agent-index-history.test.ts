@@ -24,6 +24,7 @@ import {
   IndexSessionResponse,
   IndexSessionResult,
   IndexTicketEndpointSet,
+  IndexTicketRoadDetails,
   IndexTicketUnavailableDetails,
   IndexUsageResponse,
   indexEndpointsFor,
@@ -280,6 +281,36 @@ describe("the direct plane's LOOPBACK set — what a window on this desktop dial
     );
     expect(
       IndexTicketUnavailableDetails.safeParse({ service: "index", state: "starting" }).success,
+    ).toBe(false);
+  });
+
+  it("DS-7 — names its two ROAD refusals: retryable, each naming the desktop; neither is a capability refusal", () => {
+    for (const [name, state] of [
+      ["error-data.index-egress-unavailable.json", INDEX_TICKET.STATE_EGRESS_UNAVAILABLE],
+      ["error-data.index-doors-not-published.json", INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED],
+    ] as const) {
+      const data = ErrorData.parse(fixture(name));
+      expect(data, name).toMatchObject({ kind: "UNAVAILABLE", retryable: true });
+      expect(IndexTicketRoadDetails.parse(data.details)).toEqual({
+        service: "index",
+        state,
+        device: "dev-01HQ8ZK4M7",
+      });
+      // a road refusal is not one a retry cannot change
+      expect(IndexTicketUnavailableDetails.safeParse(data.details).success, name).toBe(false);
+    }
+    // the desktop is the point: a road refusal that names none is not one
+    expect(
+      IndexTicketRoadDetails.safeParse({ service: "index", state: "egress_unavailable" }).success,
+    ).toBe(false);
+    // the terminal's words, one vocabulary for one fact
+    expect(INDEX_TICKET.STATE_EGRESS_UNAVAILABLE).toBe("egress_unavailable");
+    expect(INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED).toBe("doors_not_published");
+    // the capability pair says nothing of a desktop and stays as it was
+    expect(
+      IndexTicketRoadDetails.safeParse(
+        ErrorData.parse(fixture("error-data.index-direct-plane-unbuilt.json")).details,
+      ).success,
     ).toBe(false);
   });
 });

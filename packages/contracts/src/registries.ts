@@ -106,7 +106,12 @@ export const PORTS = {
    * move a serve here would put every transcript one same-login node away. And
    * for the same reason NOT in `MESH_EGRESS.ROUTABLE_PORTS` (DS-L6: a loopback
    * egress route may target only a door that demands its own grant); it joins
-   * that list at the pin move, in review. */
+   * that list at the pin move, in review.
+   * *Corrected 2026-10-31 (DS-7): both conditions above ended at AR-8b's pin
+   * move (2026-10-03) — every rosettad fieldd starts demands a bearer on every
+   * route and verifies RO-10's per-session grants, and the serve is published
+   * by default. DS-7 makes the claim: this port is now ROUTABLE, and another
+   * desktop's window reaches it through an egress route of its own desktop.* */
   INDEX_SERVE: 9424,
   /** The freeway (FW-D1, FW-D6; `draft/thinking-freeway.md` v0.3 §3) — ONE link per peer, the
    * phone's to each desktop it shows and one per desktop pair, every plane a stream on it. Its
@@ -327,12 +332,28 @@ export const INDEX_ACTIVITY = {
  * TTL_MS (AR-8b, the plan's lean of 10 minutes): how long a minted grant
  * opens its session. An ESTABLISHMENT deadline — rosetta re-checks no open
  * socket (AUTH.md §3) — so a reader renews by asking again before it
- * reconnects, never by holding a long-lived grant. TS-only: no native reader. */
+ * reconnects, never by holding a long-lived grant. TS-only: no native reader.
+ *
+ * *DS-7 (2026-10-31): a ticket for a session on ANOTHER desktop is served — the
+ * window's daemon forwards the ask, the owner answers the set of its index
+ * serve, and the window's daemon re-homes that set onto an egress route of its
+ * own desktop. STATE_UNBUILT now names the phone's half alone (SP-7). Two ROAD
+ * refusals join, each retryable (a road can come back) and each naming the
+ * desktop the ticket is for (`IndexTicketRoadDetails`, agent-index.ts), in the
+ * terminal's words for the same facts, so a reader learns one vocabulary:*
+ * STATE_EGRESS_UNAVAILABLE: the window's own desktop has no egress route to
+ * that desktop's index serve — a floor without egress, the mesh down, the
+ * owner gone from the roster.
+ * STATE_DOORS_NOT_PUBLISHED: the owner has no live index serve to hand out (no
+ * linked login, or its rosettad restarted and the serve is being re-aimed), or
+ * it answered a set only its own machine can dial. */
 export const INDEX_TICKET = {
   /** `UnavailableDetails.service` on every refusal */
   SERVICE: "index",
   STATE_UNBUILT: "direct-plane-unbuilt",
   STATE_OFF: "direct-plane-off",
+  STATE_EGRESS_UNAVAILABLE: "egress_unavailable",
+  STATE_DOORS_NOT_PUBLISHED: "doors_not_published",
   TTL_MS: 10 * 60 * 1000,
 } as const;
 

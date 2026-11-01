@@ -558,6 +558,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // AR-8b — and the ticket a window on this desktop is ANSWERED today
   // (`index-open-ticket.local`: the loopback pair beside the same vector), and
   // the plane switched off (`error-data.index-direct-plane-off`).
+  // DS-7 — the tailnet ticket (`index-open-ticket.valid`) is what an owner
+  // answers another desktop's daemon now, and the two road refusals ride the
+  // ErrorData prefix (`error-data.index-egress-unavailable`,
+  // `error-data.index-doors-not-published`; their rows in
+  // agent-index-history.test.ts).
   "index-open-ticket-params": IndexOpenTicketParams,
   "index-open-ticket": IndexOpenTicket,
   // AR-8b — the History room's reads: each door's ask and answer, and the

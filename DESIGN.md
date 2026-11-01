@@ -4056,6 +4056,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     room's vocabulary. Until transcripts travel (DS-7) the list is THIS desktop's places and
     sessions (H3): a project with no folder here is not listed, and nothing of another desktop is
     handed to the room as if it were here.
+    *Amended 2026-10-31 (DS-7, transcripts by ticket): transcripts travel. Another desktop's
+    sessions of a project that has a folder here are handed to the room, and never as if they were
+    here: the row's id slot leads with **its** desktop's mark and that desktop's path; in the act's
+    place, quiet, **"ran on Studio"** (or **"Studio is asleep"**), since acting on it waits for
+    routed acts (PJ-8); a folder of it in ③ still says "Files stay on Studio". Opened, its
+    transcript is read from its own desktop by ticket, and what stands in its place says which
+    desktop, never a blank: **"Studio is asleep — its transcript opens when it wakes"** ·
+    **"Studio isn't answering — its transcript opens when it does"** · **"No road to Studio from
+    this desktop yet"** · **"Studio isn't serving its history right now — open it again in a
+    moment"**. A project with no folder here is still not listed, and another desktop's Home and
+    Temporary stay its own: listing them is the project list's to design (PJ), not DS-7's.*
     - **A project's colour is its ink** (§2.9), never the room's dealt tint.
     - **A project row** leads its path line with one OS mark per desktop it lives on (§6.0 of the
       record, PJ-D24: Simple Icons' marks, 11 px, in the path line's ink), left-aligned in the
@@ -4348,6 +4359,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     line: the room's own `openAt` with the hit's session and message, the session in its project and
     the transcript landed on the message (§8 "History"). Everything reads this desktop's index (K5);
     other desktops' history waits for DS-7, since the room cannot open a peer's session yet.
+    *Corrected 2026-10-31 (DS-7): the room opens a peer's session now (History, above); the
+    Peek's search still reads this desktop's index alone (K5) until its own slice widens it.*
   - **A narrow window** (K6): the popup clamps to the window — 24 clear of each side, and 96 clear
     of the window's top and foot (the line's 72, and 24), so it never covers the head or the line.
     Below a 680 popup — a window narrower than 728 — the list and a useful peek no longer both fit:
@@ -4549,6 +4562,41 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   takes nothing while it is away. When it comes back it is presented again, and a presented card
   takes the seat (DS-4b), so the readout shows only while another device holds the seat as the card
   sits on the screen.
+- **The phone's Settings** (IOS-10a, built 2026-10-31 from the design page *Settings in a Pocket*,
+  revised 2026-10-31; its eight marks are unpicked and stand at their leans: History's heads, bare
+  glyphs, the ink switch). A sheet on paper (`--vf-chrome-solid`, opaque: a page to read, not glass),
+  headed by you, as the desktop's Settings is (*The Me menu*): your face at 60 pt, tilted (§2.8), your
+  name, and your login in mono open **Account**; signed out, the head is **Continue with Tailscale**
+  (reached today only by signing out inside Settings, which keeps the sheet open, until the page's
+  signed-out mark gives the corner a way in). iOS's own parts speak the chrome family's voice: a
+  navigation stack with the system's large and inline titles, back and close; inset-grouped lists
+  whose rows sit on `--vf-fill` tiles; History's group head (11 medium, uppercase, 0.08em, the ramp's
+  faint step) with *Fact labels* on its right, in their recipe and grammar — scope (**This phone**,
+  **Read-only**), whose word a value is (**From studio**), timing (**Live**); DASHED for a value known
+  but not shown yet (**No desktop yet**), DOTTED for one not in this build (**Not yet**) — and on a
+  row only where the row is itself the unit (an ability);
+  §13's glyphs bare in the secondary ink, a desktop its OS mark at 19 pt; the design kit's switch (an
+  ink track, the knob its inverse, because green says healthy, §2.5); every size a text style, so the
+  pages move with the reader's text size. **Your desktops** are glances in the corner's words: the
+  home says **Connected · your field comes through it**, a sleeping one **Asleep · last heard
+  yesterday, 18:02**, grey and never "offline" (§9); a desktop's page says what it runs on, whether it
+  serves its terminals, and — while it is connected — what the phone can do with it (DS-D5: what
+  every desktop mints every self principal), with **Approve from the card** dotted **Not yet**
+  (approving by typing into the pane works today, as the welcome says); one asleep says that what
+  you already opened from it stays on the phone (DS-L8) and that its terminals and search answer
+  when it wakes. **Account** holds your face and whose word it is (**From studio**, **This phone** while
+  dealt, **No desktop yet** dashed), Tailscale's card (its mark at 56, the state in §9's words:
+  **Connected**, **Sign in to Tailscale again**, **Waiting for approval**), Network details (this
+  phone's machine name in mono with Copy, the tailnet) and Sign out, confirmed in the corner's words.
+  Under **This phone**, **Appearance** is the Mac's three, **Light · Dark · Auto**, worn by the window,
+  so the field, History and every sheet change with it; **Terminal** is the terminal sheet re-voiced
+  in the desktop's Look words (Theme, its 602 searchable; Background opacity; Font size; Effects, each
+  with its licence; Animate effects). **About** gives the version, your desktops, Acknowledgements,
+  and Tailscale's trademark line, which left the terminal sheet's foot (§13). The corner's
+  **Settings…** opens the root and *you* open Account; the card's `···` menu's **Terminal look…**
+  opens Terminal, Settings one step back.
+  Not yet drawn: Field, Keyboard, Notifications, Privacy & data, Developer, a desktop's agents and
+  History, and its VibeField version.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -5166,12 +5214,14 @@ row and the bottom centre solid, the other five at 40% — never in one colour, 
 48 × 48 px (drawn at 56, so the dots themselves span 48), never on a busy ground, in
 `--vf-tailscale-ink` (`#1E1E1F` on light, `#FFFFFF` on dark, its two files' inks). It appears only
 where trust is decided — the Connect pane's partner line, Settings → Devices' card, the phone's
-sign-in — and every button stays words. It is drawn inline in `account/tailscale-mark.tsx`, the
+sign-in and the phone's Settings › Account card (IOS-10a) — and every button stays words. It is
+drawn inline in `account/tailscale-mark.tsx`, the
 glyph test's allow-list naming it, and About carries "Tailscale is a registered trademark of
 Tailscale Inc.". The phone's copy (TS-7) is FieldDesign's `TailscaleMark` in
 `ChromePalette.tailscaleInk`, drawn from the same constants and held to them by
-`pnpm check:ios-fixtures`; having no About, the phone carries the trademark line at the foot of its
-settings sheet. On the
+`pnpm check:ios-fixtures`; the phone's About carries the trademark line at its foot, as the
+desktop's does (IOS-10a; until the phone had an About, TS-7 put it at the foot of its terminal
+settings sheet). On the
 phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
 copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
 `resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the
