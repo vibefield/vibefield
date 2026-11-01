@@ -416,8 +416,23 @@ test("reusedRun: a run folder that exists and holds anything refuses the launch 
   // the real fs: a folder that holds files is refused; one not there is a new run
   const real = (dir) =>
     reusedRun(readOptions({ VF_PHONE_RUN: "l2-t1", VF_PHONE_HID_LOG: join(dir, "l2-t1-hid.log") }));
-  assert.match(real(FIXTURES), /\bl2-t1\b.*choose a new VF_PHONE_RUN/u);
-  assert.equal(real(join(FIXTURES, "no-such-run-folder")), null);
+  assert.match(real(join(FIXTURES, "..")), /\bl2-t1\b.*choose a new VF_PHONE_RUN/u);
+  assert.equal(real(join(FIXTURES, "l2-t1")), null);
+  // G9: the HID log's folder must BE the run's (`<logs>/<run>/`): another name is refused, even absent or empty
+  const named = (hidLog, entries = []) =>
+    reusedRun(readOptions({ VF_PHONE_RUN: "l2-1102", VF_PHONE_HID_LOG: hidLog }), fsOf(entries));
+  for (const hidLog of [
+    "/lanes/pts3/logs/l2-1101/l2-1102-hid.log",
+    "/lanes/pts3/logs/l2-1102-hid.log",
+    "/lanes/pts3/logs/l2-1102/x/l2-1102-hid.log",
+  ])
+    assert.match(
+      named(hidLog),
+      /\bl2-1102\b.*not the run's folder.*choose a new VF_PHONE_RUN/u,
+      hidLog,
+    );
+  assert.equal(named("/lanes/pts3/logs/l2-1102/l2-1102-hid.log"), null);
+  assert.equal(named("/lanes/pts3/logs/l2-1102/l2-1102-hid.log", enoent), null);
   // main: read right after the options, BEFORE launch (its mkdirSync, its stage log, its HID record) — exit 2; the
   // sweep and the preflight-only return before it
   const main = mainSource();
