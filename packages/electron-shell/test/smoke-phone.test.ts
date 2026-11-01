@@ -1575,6 +1575,34 @@ describe("PT-S3 — the stimulus PROVEN: an unproven page or a failed door verb 
     ]);
   });
 
+  it("SIM-IDLE: a LIVE-PROVEN red over the PROVEN /motion page is the row's problem before any /still staging (G2)", () => {
+    const dead: LiveProof = { ...proven, ms: null, presented: 0, frames: 0, after: [] };
+    const idle = {
+      proof: dead,
+      asleep: [] as boolean[],
+      steps: 0,
+      presented: 0,
+      rearmed: false,
+      wake: { presented: 0, arrivals: 0 },
+    };
+    const j = idleVerdict(idle, { motion, still: silent, wake: failed });
+    expect(j).toEqual({ problems: judgeLiveProven("SIM-IDLE", dead), staging: null });
+    // the /motion page itself unproven: the proof read nothing of it — STAGING NOT MET
+    expect(markOf(idleVerdict(idle, { motion: failed, still: silent, wake: failed }))).toBe(
+      "STAGING NOT MET",
+    );
+    // a good proof under an unproven /still: STAGING NOT MET as before
+    expect(
+      markOf(idleVerdict({ ...idle, proof: proven }, { motion, still: silent, wake: failed })),
+    ).toBe("STAGING NOT MET");
+    // the row's own early return over an unproven /still asks the same judge
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-IDLE")?.body ?? "";
+    expect(body).toMatch(/const unstill = idleBefore\(proof, motion, stillPage\);/u);
+    expect(body).toMatch(
+      /if \(unstill !== null\) return \{ \.\.\.unstill, seen: \{ proof, stillPage \} \};/u,
+    );
+  });
+
   /** The runner as its source must hold it: no bare openUrl in the three rows or bringLive; each page proven and checked
    * BEFORE what it stages; an Unstaged thrown by bringLive is the row's staging, never a red. */
   const stagedHeld = (src: string): void => {
@@ -1604,8 +1632,8 @@ describe("PT-S3 — the stimulus PROVEN: an unproven page or a failed door verb 
       still.indexOf("await pickUp(p);"),
     );
     const idle = body("SIM-IDLE");
-    expect(idle.indexOf("stimulusStaging([stillPage])")).toBeGreaterThan(0);
-    expect(idle.indexOf("stimulusStaging([stillPage])")).toBeLessThan(
+    expect(idle.indexOf("idleBefore(proof, motion, stillPage)")).toBeGreaterThan(0);
+    expect(idle.indexOf("idleBefore(proof, motion, stillPage)")).toBeLessThan(
       idle.indexOf('await until("the desk asleep"'),
     );
     expect(idle).toMatch(/idleVerdict\(seen, \{ motion, still: stillPage, wake \}\)/u);

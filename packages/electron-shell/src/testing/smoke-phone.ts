@@ -1081,6 +1081,22 @@ function idleWake(s: IdleSeen): string[] {
     : [];
 }
 
+/** SIM-IDLE before its window (G2): the `/motion` page unproven — STAGING NOT MET (the proof read nothing of it); proven,
+ * a LIVE-PROVEN red over it is the row's PROBLEM before any `/still` staging; the `/still` page unproven — STAGING NOT
+ * MET. Null: the window may be judged. */
+export function idleBefore(
+  proof: LiveProof | null,
+  motion: Stimulus,
+  still: Stimulus,
+): { readonly problems: string[]; readonly staging: string | null } | null {
+  const unmoved = stimulusStaging([motion]);
+  if (unmoved !== null) return { problems: [], staging: unmoved };
+  const unstill = stimulusStaging([still]);
+  if (unstill === null) return null;
+  const red = judgeLiveProven("SIM-IDLE", proof);
+  return red.length > 0 ? { problems: red, staging: null } : { problems: [], staging: unstill };
+}
+
 /** SIM-IDLE judged over its PROVEN pages (T2): the `/motion` page that brings φP live and the static `/still` page are the
  * window's stimulus — either unproven, the row is STAGING NOT MET (run 1101: the desk "awake" over a page that never left
  * the moving one); the wake's `/motion` page unproven, its motion leg is not judged — the window's own reds stand, else
@@ -1089,8 +1105,8 @@ export function idleVerdict(
   s: IdleSeen,
   pages: { readonly motion: Stimulus; readonly still: Stimulus; readonly wake: Stimulus },
 ): { readonly problems: string[]; readonly staging: string | null } {
-  const before = stimulusStaging([pages.motion, pages.still]);
-  if (before !== null) return { problems: [], staging: before };
+  const before = idleBefore(s.proof, pages.motion, pages.still);
+  if (before !== null) return before;
   const wake = stimulusStaging([pages.wake]);
   if (wake === null) return { problems: judgeIdle(s), staging: null };
   const window = idleWindow(s);
@@ -2831,8 +2847,9 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       await view([p]);
       const proof = await liveProven(p);
       const stillPage = await openProven(1, "/still", nonce());
-      const unstill = stimulusStaging([stillPage]);
-      if (unstill !== null) return { problems: [], staging: unstill, seen: { proof, stillPage } };
+      // a red proof over the proven /motion page is the row's problem before the /still page's staging (G2)
+      const unstill = idleBefore(proof, motion, stillPage);
+      if (unstill !== null) return { ...unstill, seen: { proof, stillPage } };
       await still();
       await sleep(2_000);
       try {
