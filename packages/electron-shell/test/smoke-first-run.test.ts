@@ -770,8 +770,8 @@ describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its w
             },
           ],
           passed: [
-            ["Back", "changed under the capture"],
-            ["Set up later", "fading (0.5)"],
+            ["Back", "changed under the capture", 1],
+            ["Set up later", "fading (0.5)", 1],
           ],
         },
       ],
@@ -780,6 +780,25 @@ describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its w
       'on 05-agents.png "You" reads 2.6:1 ([200,200,200] → [120,120,120]) in rgba(28, 28, 30, 0.7), under 4.5:1',
       `on 05-agents.png "${long}" reads 4.1:1 ([200,200,200] → [90,90,90]) in rgba(28, 28, 30, 0.7), under 4.5:1`,
     ]);
+  });
+
+  it("cuts a word it passes over too and prints its ratio beside why, never judging it", () => {
+    // the catalog judged's follow-up 1: an off group's label at its dim, its glyph cores at 120 on a glass of 200
+    const still = capture(60, 30, 2, 200, { x0: 2, x1: 6, y0: 1, y1: 4, level: 120 });
+    const label = word(0, 0, 10, 5, "Face", { shown: 0.45, off: true });
+    const contrast = firstRunContrast(
+      inkCuts("02-field.png", still, seen({ wizard: true, words: [label] }), ["words"]),
+    );
+    expect(contrast.words).toEqual([
+      {
+        at: "02-field.png",
+        judged: 0,
+        lowest: [],
+        short: [],
+        passed: [["Face", "in a control that is off (0.45)", 2.6]],
+      },
+    ]);
+    expect(judgeContrast(contrast)).toEqual([]);
   });
 
   it("judges the splash's stage line as it is cut: under 4.5:1 it is red with its numbers", () => {

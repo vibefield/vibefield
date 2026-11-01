@@ -435,7 +435,9 @@ the fox. Unique for up to 48 users, the deck's size: a 49th gets its starting fa
 honest and never a blank. Setup pane 2 shows the deal beside the name with the picker already
 open and whole inside the shell — the frame switch (small) under the face, a three-row deck and
 any single emoji typed in beside it; on the Account page, Change… opens the same picker over a
-four-row deck. A face another user wears stays in the deck, greyed and named. Refused as faces, because they already mean
+four-row deck. A face another user wears stays in the deck, greyed and named. While its host writes the picker is off
+(§7): a group that says so, its faces dimmed and its words at t4 (*2026-11-01, the catalog judged's follow-up 1*).
+Refused as faces, because they already mean
 something here: flat colours and hearts · 🔥 (the swarm's burn ladder) · 📁 · the state marks
 · 🔗. A joined sequence is judged by its base — fire joined to fire is still fire, while 🐈 + ⬛
 is a black cat — and a typed face is refused in place, in main's words, before anything is
@@ -1224,6 +1226,7 @@ arc. It is worn nowhere else.
 | **Selection, sole** | `1.5px` inside ring, `--vf-select`, drawn *inside* the element so any transform carries it; 120ms fade — the fields explorer's current tile, the file tree's focused row (§8). |
 | **Selection, multi** | never N rings: a set is one union, or, in a list with no union, N fills and one ring (§8 "The file tree"). |
 | **Drag** (a chrome drag source) | opacity `0.75` for the whole hold and drag — a file row carried toward a chip (§8 "The file tree"). |
+| **Off** (a control that is off) | it says so the way assistive tech reads it, never by a styling hook alone: `disabled` on a control, and on a group of them `role="group"` with `aria-disabled="true"` (or a disabled `fieldset`). Its words wear t4 at full opacity, 3:1 or more on their ground (§2.4); its pictures (an emoji, a tile, a swatch) may dim further. Row 32 passes an off control's words over, says so and prints each one's ratio, never judging it (§8 "Its words read"). *Added 2026-11-01 (track FG, the catalog judged's follow-up 1; VF-PM's ruling at 03:00Z on row 32's red at run69b: the face deck dimmed whole while saving, its two head words at 2.1–2.6:1).* |
 | **Keyboard focus** | visible ring, always (quality floor); Esc = close/cancel, consistently. |
 
 *History (renamed 2026-10-28; James, the housekeeping page (Q18)):* this section was "Interactive
@@ -2939,8 +2942,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   (§2.5), and a quiet button's words stand at t1 (§5). Row 32 measures every word on each pane it walks
   (`docs/desk-gates.md`): each lettered word of the band and the standing pane, cut from the window's own capture
   by DK-16's method and held at the bar once it shows whole; a word in a control that is off (WCAG 2's exemption
-  for an inactive control) or under a list's fade is passed over and said so, and a word under the bar is red with
-  its numbers.
+  for an inactive control) or under a list's fade is passed over and said so, its own ratio printed and never judged
+  (since the catalog judged's follow-up 1, 2026-11-01: an off control's words are seen at §7's t4, never taken on
+  faith), and a word under the bar is red with its numbers.
   **The steps** (FG-D22 A, FG-D23 A): a band along the glass's top 72, one segment per
   step of the chapter's order — You · Agents · Profiles · History · Devices · Setting up — 76 × 3 with a
   gap of 8, its label in small capitals 9 under it (500, 10px, .08em): done in t2 over its filled segment, the
