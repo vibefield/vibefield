@@ -61,6 +61,11 @@ public struct ChromeShadow: Sendable {
       }),
     radius: 15, y: 11)
 
+  /// The switch's knob — the design kit's `0 1px 3px rgb(0 0 0 / 18%)`
+  /// (`.vf-ui-switch__thumb`).
+  public static let knob = ChromeShadow(
+    color: Color.black.opacity(0.18), radius: 1.5, y: 1)
+
   public init(color: Color, radius: CGFloat, y: CGFloat) {
     self.color = color
     self.radius = radius

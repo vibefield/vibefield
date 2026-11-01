@@ -10,7 +10,9 @@ import Foundation
 /// this login's remembered desktops, its face and its home (DS-8 — the desktop
 /// its field was last read through); the project ledger (the
 /// colours dealt to another account's projects would otherwise greet the
-/// next one). **Stays — what the person taught it:** the terminal
+/// next one); and, beside this sweep where History is composed, History's
+/// readers and its cache on disk (`HistoryDesktops.signedOut`, ITEM 130).
+/// **Stays — what the person taught it:** the terminal
 /// appearance, the snippets, the clipboard history, and every other
 /// preference. One account at a time, so there is no switch: sign out, then
 /// sign in. **Stays, and is no preference:** the account a Mac's code said to
@@ -43,9 +45,11 @@ public struct SignOutSweep: Sendable {
 
   /// The defaults keys that belong to the person and survive a sign-out —
   /// named so a test can prove each one is still there afterwards: the
-  /// terminal appearance, the snippets, the clipboard history.
+  /// terminal appearance, the snippets, the clipboard history, and this
+  /// phone's own look (IOS-10a's Appearance, `PhoneAppearance.storageKey`).
   public static let kept: [String] = [
     "fieldterminal.appearance.v1", "vf.input.snippets", "vf.input.clipboardHistory",
+    "vibefield.phone.appearance",
   ]
 
   @discardableResult

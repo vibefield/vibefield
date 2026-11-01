@@ -29,6 +29,10 @@ export default defineConfig({
     poolOptions: { forks: { singleFork: true } },
     testTimeout: 1_800_000,
     hookTimeout: 300_000,
-    server: { deps: { inline: ["@vibecook/ghosttea-react"] } },
+    // puppeteer's views import their own stylesheets, which Node's loader refuses: inlined, as the
+    // suite's config does (`vitest.config.ts`), for the phone's goldens' body model (PG-3a)
+    server: {
+      deps: { inline: ["@vibecook/ghosttea-react", /\/node_modules\/@vibefield\/puppeteer-/] },
+    },
   },
 });

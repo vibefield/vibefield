@@ -112,7 +112,7 @@
 }
 
 .vf-door-device[data-ghost] .vf-door-device-name {
-  color: var(--vf-text-faint);
+  color: var(--vf-text-tertiary);
 }
 
 /* the arrival (§6): a wire draws on the island curve, its mark pops at its end, 90 ms apart */

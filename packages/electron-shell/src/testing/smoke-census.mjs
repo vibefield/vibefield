@@ -127,3 +127,19 @@ export function stillRunning(mark, pids, ps = runPs, spelling = psTables()) {
   const lines = pids.map((pid) => lineOf(ps, spelling.oneWithEnv, pid));
   return markedLines(lines.join("\n"), mark).map((p) => p.pid);
 }
+
+/** Item 142 (2026-11-01) — whether `pid` is gone by the kernel's own reading: `ps` shows it no line (it exits 1 when the
+ * one pid it names is gone) or a zombie (`Z`: it holds no work, and its reaper takes it; item 93's reading). The mark is
+ * not this reading: a process in its exit can stop showing `ps -E` its environment before it is a zombie, so
+ * `stillRunning` let it go while it still ran (AL-6's light: the launcher row said reaped, its witness read the daemon
+ * alive). One pid, asked alone through the census's spawner; `-o stat= -p` is both platforms' spelling. */
+export function goneByKernel(pid, ps = runPs) {
+  let stat;
+  try {
+    stat = ps(["-o", "stat=", "-p", String(pid)]).trim();
+  } catch (error) {
+    if (error?.status === 1) return true;
+    throw error;
+  }
+  return stat === "" || stat.startsWith("Z");
+}

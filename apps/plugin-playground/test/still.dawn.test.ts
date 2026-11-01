@@ -100,6 +100,16 @@ async function still(
   };
 }
 
+it("keeps Dawn alive through device loss, then releases it without a crash or a leaked event loop", async () => {
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ["--expose-gc", join(HERE, "fixtures", "still-gpu-lifetime.mjs")],
+    { timeout: 30_000, maxBuffer: 1024 * 1024 },
+  );
+  expect(stdout).toContain('"phase":"complete"');
+  expect(stdout.match(/"phase":"collected"/gu)).toHaveLength(12);
+});
+
 const short = (type: string): string => type.slice(type.lastIndexOf(".") + 1);
 const byKind = (stills: readonly StillVerdict[]): Record<string, string[]> => {
   const out: Record<string, string[]> = {};
@@ -312,7 +322,7 @@ describe("the desk clock — ICE's kind as VibeField's plugin", () => {
         shot.dispose();
       }
     } finally {
-      gpu.destroy();
+      await gpu.destroy();
     }
   });
 });
@@ -415,7 +425,7 @@ describe("the comment pad — VibeField's own first kind", () => {
       }
       blank.dispose();
     } finally {
-      gpu.destroy();
+      await gpu.destroy();
     }
   });
 });
@@ -585,7 +595,7 @@ describe("the browser pane — PORTALS' first kind (PT-1)", () => {
         night.dispose();
       }
     } finally {
-      gpu.destroy();
+      await gpu.destroy();
     }
   });
 });

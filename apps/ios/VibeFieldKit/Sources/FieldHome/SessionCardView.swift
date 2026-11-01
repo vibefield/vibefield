@@ -259,8 +259,10 @@ struct SessionCardView<Terminal: View>: View {
   }
 
   /// The card's `···` (IOS-8g): the acts about this card's terminal. One
-  /// today — the appearance sheet the TERMINAL chip used to open — in the
-  /// godview voice the card speaks, on the system's own menu. The stacked
+  /// today — the terminal's look, Settings › Terminal with Settings one step
+  /// back (IOS-10a; the TERMINAL chip's appearance sheet until then), named in
+  /// the desktop's Look word — in the godview voice the card speaks, on the
+  /// system's own menu. The stacked
   /// card's header boxes the glyph; the live card's band wears it bare (T1).
   private func moreMenu<Glyph: View>(@ViewBuilder glyph: () -> Glyph) -> some View {
     let face = glyph()
@@ -268,7 +270,7 @@ struct SessionCardView<Terminal: View>: View {
       Button {
         onSettings()
       } label: {
-        Label("Terminal appearance…", systemImage: "paintpalette")
+        Label("Terminal look…", systemImage: "paintpalette")
       }
     } label: {
       face

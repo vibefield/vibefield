@@ -15,7 +15,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { constants, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { leftByRun, SMOKE_RUN_ENV } from "./smoke-daemons.mjs";
+import { leftByRun, leftNames, SMOKE_RUN_ENV } from "./smoke-daemons.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const root = mkdtempSync(
@@ -60,9 +60,7 @@ const settle = async (code) => {
   process.stdout.write(`SMOKE_DAEMONS ${JSON.stringify(daemons)}\n`);
   if (daemons.left.length > 0) {
     process.stderr.write(
-      `run-studio-smoke: ${daemons.left.length} process(es) of this run outlived it (reaped): ${daemons.left
-        .map((p) => `${p.name} ${p.pid}`)
-        .join(", ")}\n`,
+      `run-studio-smoke: ${daemons.left.length} process(es) of this run outlived it (reaped): ${leftNames(daemons)}\n`,
     );
   }
   const ok = code === 0 && daemons.left.length === 0;

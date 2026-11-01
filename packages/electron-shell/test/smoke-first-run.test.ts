@@ -9,25 +9,49 @@ import {
   cancelClearOfFade,
   expectedLogoBox,
   type FaceSeen,
+  FIRST_RUN,
   FIRST_RUN_MARK,
   FIRST_RUN_WALKS,
   type FirstRunRecord,
   type FrameSeen,
+  type FrozenReading,
+  firstRunContrast,
+  firstRunGpu,
   firstRunRows,
+  frameStats,
+  frozenRegion,
+  type GlassSeen,
+  type GpuSample,
+  glassDrawnBy,
+  gpuOver,
+  heard,
+  type InksSeen,
+  inkCuts,
   judgeBand,
+  judgeContrast,
   judgeFrame,
+  judgeFrozen,
   judgeHandOver,
   judgeHolds,
   judgeLogo,
+  judgeOpening,
   judgeRecorded,
   judgeSignIn,
   type LogoSeen,
   listFits,
   measureMark,
+  parseGpuBusy,
   parseWalk,
+  passedOver,
+  readFrozen,
   type SignInSeen,
+  type StageReading,
   shotDirRefusal,
+  splashLook,
+  TEAR_NOT_OPEN,
   WALKED_FACES,
+  type WordSeen,
+  type WordsSeen,
 } from "../src/testing/smoke-first-run";
 import type { StagedTypedAgent } from "../src/testing/typed-agent";
 import { fakeElectron } from "./fake-electron";
@@ -79,13 +103,20 @@ describe("the harness's copy of the field's mark (FIRST_RUN_MARK)", () => {
 });
 
 describe("the walks and where their stills may go", () => {
-  it("names three walks: day and night on the live field, and the page with no WebGPU by day", () => {
+  it("names four walks: day and night on the live field, the page with no WebGPU by day, and the catalog", () => {
     expect(FIRST_RUN_WALKS).toEqual({
       day: { dark: false, webgpu: true },
       night: { dark: true, webgpu: true },
       "no-webgpu": { dark: false, webgpu: false },
+      // the catalog judged: its frames by day, then by night through the catalog's own toggle
+      catalog: { dark: false, webgpu: true },
     });
-    expect(["day", "night", "no-webgpu"].map(parseWalk)).toEqual(["day", "night", "no-webgpu"]);
+    expect(["day", "night", "no-webgpu", "catalog"].map(parseWalk)).toEqual([
+      "day",
+      "night",
+      "no-webgpu",
+      "catalog",
+    ]);
     expect([undefined, "", "dusk", "toString"].map(parseWalk)).toEqual([null, null, null, null]);
   });
 
@@ -105,7 +136,11 @@ const record = (faces: FaceSeen[], now = 100_000): FirstRunRecord => ({
   faces,
   progress: [],
   leaving: [],
+  opening: [],
+  tear: [],
+  frames: { rest: null, tear: null },
   now,
+  epoch: 1_790_000_000_000,
 });
 
 describe("the holds (FG-L5, FG-D20; DESIGN.md §6's floor)", () => {
@@ -282,6 +317,260 @@ describe("the hand-over (FG-5; DESIGN.md §6)", () => {
   });
 });
 
+describe("the opening (FG-6c; DESIGN.md §6)", () => {
+  const live = FIRST_RUN_WALKS.day;
+  const still = FIRST_RUN_WALKS["no-webgpu"];
+
+  it("knows every state FieldLayer.tsx's TearState names: tearing, open, and each way of not opening", () => {
+    const source = readFileSync(resolve(here, "../../field-app/src/boot/FieldLayer.tsx"), "utf8");
+    const union = /export type TearState = ((?:"[a-z]+"(?: \| )?)+);/.exec(source)?.[1];
+    const states = [...(union ?? "").matchAll(/"([a-z]+)"/g)].map((match) => match[1]);
+    expect(states.sort()).toEqual(["tearing", "open", ...Object.keys(TEAR_NOT_OPEN)].sort());
+  });
+
+  it("hears each change once: a value set twice over is one", () => {
+    expect(
+      heard([
+        [1, "tearing"],
+        [2, "tearing"],
+        [3, "open"],
+      ]),
+    ).toEqual(["tearing", "open"]);
+    expect(heard([])).toEqual([]);
+  });
+
+  it("passes the live field opened by its tear, tearing and then open, however long the tear took", () => {
+    expect(
+      judgeOpening(
+        live,
+        [[63_100, "tear"]],
+        [
+          [63_700, "tearing"],
+          [65_600, "open"],
+        ],
+      ),
+    ).toEqual([]);
+    // a loaded host's pace is no step of its own, and a value heard twice over is one
+    expect(
+      judgeOpening(
+        FIRST_RUN_WALKS.night,
+        [
+          [63_100, "tear"],
+          [63_101, "tear"],
+        ],
+        [
+          [63_700, "tearing"],
+          [66_500, "open"],
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it("passes the still opened by the fade, with nothing torn", () => {
+    expect(judgeOpening(still, [[63_100, "fade"]], [])).toEqual([]);
+  });
+
+  it("finds a tear that did not open, in its own words: its bound, a lost device, or its reveal cut", () => {
+    const opened: FirstRunRecord["opening"] = [[63_100, "tear"]];
+    expect(
+      judgeOpening(live, opened, [
+        [63_700, "tearing"],
+        [66_600, "bound"],
+      ]),
+    ).toEqual([
+      "the tear did not open: bound, its bound passed first, so its frames came late or never",
+    ]);
+    expect(
+      judgeOpening(live, opened, [
+        [63_700, "tearing"],
+        [63_710, "lost"],
+      ]),
+    ).toEqual(["the tear did not open: lost, its reveal failed (a lost device)"]);
+    expect(
+      judgeOpening(live, opened, [
+        [63_700, "tearing"],
+        [63_710, "cut"],
+      ]),
+    ).toEqual(["the tear did not open: cut, its reveal ended before the window opened"]);
+  });
+
+  it("finds the live field never opened, opened by the fade, never torn, still tearing, or torn out of order", () => {
+    expect(judgeOpening(live, [], [])).toEqual([
+      "the ground never opened: no opening was heard",
+      "the field never tore: no tear was heard",
+    ]);
+    expect(judgeOpening(live, [[63_100, "fade"]], [])).toEqual([
+      'the ground opened ["fade"], not by the tear',
+      "the field never tore: no tear was heard",
+    ]);
+    expect(judgeOpening(live, [[63_100, "tear"]], [[63_700, "tearing"]])).toEqual([
+      'the tear went ["tearing"], not tearing and then open',
+    ]);
+    expect(judgeOpening(live, [[63_100, "tear"]], [[63_700, "open"]])).toEqual([
+      'the tear went ["open"], not tearing and then open',
+    ]);
+    expect(
+      judgeOpening(
+        live,
+        [
+          [63_100, "tear"],
+          [63_200, "fade"],
+        ],
+        [
+          [63_700, "tearing"],
+          [65_600, "open"],
+        ],
+      ),
+    ).toEqual(['the ground opened ["tear","fade"], not by the tear']);
+  });
+
+  it("finds the still opened by the tear, or torn", () => {
+    expect(judgeOpening(still, [[63_100, "tear"]], [])).toEqual([
+      'the ground opened ["tear"], not by the fade',
+    ]);
+    expect(
+      judgeOpening(
+        still,
+        [[63_100, "fade"]],
+        [
+          [63_700, "tearing"],
+          [65_600, "open"],
+        ],
+      ),
+    ).toEqual(['over the still the field tore: ["tearing","open"]']);
+  });
+});
+
+describe("FG-O3's read (FG-6c; printed, never judged)", () => {
+  it("gives a stretch of frame intervals as its count, its median, its 95th by nearest rank and its most", () => {
+    expect(frameStats(null)).toBeNull();
+    expect(frameStats([])).toBeNull();
+    expect(frameStats([16.7])).toEqual({ n: 1, p50: 16.7, p95: 16.7, max: 16.7 });
+    const intervals = [...Array.from({ length: 19 }, () => 16.7), 41.23];
+    expect(frameStats(intervals)).toEqual({ n: 20, p50: 16.7, p95: 16.7, max: 41.2 });
+    expect(frameStats([33.4, 16.6, 16.8, 16.7])).toEqual({ n: 4, p50: 16.7, p95: 33.4, max: 33.4 });
+  });
+
+  const reading = (
+    at: number,
+    cpuSeconds: number | null,
+    cpuPercent: number | null,
+    busy: number | null,
+  ): GpuSample => ({
+    at,
+    cpuSeconds,
+    cpuPercent,
+    busy,
+  });
+
+  it("reads the GPU process's CPU over a stretch from its seconds, and the GPU's busy share from its readings", () => {
+    const samples = [
+      reading(900, 9.9, 10, 12),
+      reading(1_000, 10, 20, 30),
+      reading(1_100, 10.05, 50, 50),
+      reading(1_200, 10.1, 50, 70),
+      reading(1_300, 11, 900, 0),
+    ];
+    // 0.1 s of CPU over 0.2 s of the wall: 50% of one core; the readings outside the stretch are not its own
+    expect(gpuOver(samples, 1_000, 1_200)).toEqual({
+      n: 3,
+      cpu: 50,
+      busy: { mean: 50, max: 70 },
+    });
+  });
+
+  it("falls back to the percents after its first reading where Electron gives no seconds, and says what was not read", () => {
+    const samples = [
+      reading(1_000, null, 99, null),
+      reading(1_100, null, 20, null),
+      reading(1_200, null, 30, null),
+    ];
+    expect(gpuOver(samples, 1_000, 1_200)).toEqual({ n: 3, cpu: 25, busy: null });
+    expect(
+      gpuOver([reading(1_000, null, null, null), reading(1_100, null, null, null)], 0, 2_000),
+    ).toEqual({
+      n: 2,
+      cpu: null,
+      busy: null,
+    });
+  });
+
+  it("reads nothing over a stretch with fewer than two readings", () => {
+    expect(gpuOver([], 0, 1_000)).toBeNull();
+    expect(gpuOver([reading(500, 1, 10, 10)], 0, 1_000)).toBeNull();
+  });
+
+  it("sets the page's moments beside main's readings by the wall's clock: the stretch before the hand-over, and the tear's", () => {
+    // the page's clock at 70,000 read with the wall's at 1,790,000,070,000: the page's ms t is the wall's
+    // 1,790,000,000,000 + t
+    const wall = (ms: number): number => 1_790_000_000_000 + ms;
+    const page: FirstRunRecord = {
+      ...record([], 70_000),
+      epoch: wall(70_000),
+      leaving: [
+        [61_200, "words"],
+        [62_080, "clear"],
+      ],
+      opening: [[61_200, "tear"]],
+      tear: [
+        [62_680, "tearing"],
+        [64_580, "open"],
+      ],
+      frames: { rest: [16.7, 16.7, 16.6], tear: [16.7, 33.4, 16.6, 16.8] },
+    };
+    const samples = [
+      reading(wall(59_200), 1, 0, 10), // before the stretch before the hand-over
+      reading(wall(59_400), 2, 0, 20),
+      reading(wall(61_200), 2.36, 0, 30), // 0.36 s over 1.8 s: 20%
+      reading(wall(62_680), 3, 0, 40),
+      reading(wall(63_630), 3.38, 0, 60),
+      reading(wall(64_580), 3.76, 0, 80), // 0.76 s over 1.9 s: 40%
+      reading(wall(65_000), 9, 0, 0), // after the tear
+    ];
+    expect(firstRunGpu(page, samples)).toEqual({
+      frames: {
+        rest: { n: 3, p50: 16.7, p95: 16.7, max: 16.7 },
+        tear: { n: 4, p50: 16.7, p95: 33.4, max: 33.4 },
+      },
+      load: {
+        rest: { n: 2, cpu: 20, busy: { mean: 25, max: 30 } },
+        tear: { n: 3, cpu: 40, busy: { mean: 60, max: 80 } },
+      },
+      readings: 7,
+      busy: "read",
+    });
+    expect(FIRST_RUN.restMs).toBe(1_900);
+  });
+
+  it("reads no tear where none was heard, and says the busy share was not read where the host gave none", () => {
+    const page: FirstRunRecord = {
+      ...record([], 70_000),
+      epoch: 1_790_000_070_000,
+      leaving: [[61_200, "words"]],
+      opening: [[61_200, "fade"]],
+      frames: { rest: [16.7], tear: null },
+    };
+    const gpu = firstRunGpu(page, [
+      reading(1_790_000_060_000, 1, 0, null),
+      reading(1_790_000_061_000, 1.1, 0, null),
+    ]);
+    expect(gpu.frames.tear).toBeNull();
+    expect(gpu.load.tear).toBeNull();
+    expect(gpu.load.rest).toEqual({ n: 2, cpu: 10, busy: null });
+    expect(gpu.busy).toBe("not read");
+    expect(firstRunGpu(record([]), []).load).toEqual({ rest: null, tear: null });
+  });
+
+  it("finds the GPU's busy share in ioreg's reading of IOAccelerator, the busiest's where there are several", () => {
+    const agx =
+      '+-o AGXAcceleratorG13X  <class AGXAcceleratorG13X>\n    | "PerformanceStatistics" = {"Tiler Utilization %"=23,"Renderer Utilization %"=22,"Device Utilization %"=23}\n';
+    expect(parseGpuBusy(agx)).toBe(23);
+    expect(parseGpuBusy(`${agx}${agx.replace("=23}", "=71}")}`)).toBe(71);
+    expect(parseGpuBusy("+-o IntelAccelerator\n")).toBeNull();
+    expect(parseGpuBusy("")).toBeNull();
+  });
+});
+
 /** A block of ink over CSS px [x0, x1) × [y0, y1). */
 interface InkBlock {
   readonly x0: number;
@@ -315,6 +604,272 @@ function capture(
   }
   return bgra;
 }
+
+describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its words read")', () => {
+  const words = (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    text = "",
+    shown = 1,
+  ): WordsSeen => ({
+    x,
+    y,
+    width,
+    height,
+    text,
+    shown,
+  });
+  const word = (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    text: string,
+    over: Partial<WordSeen> = {},
+  ): WordSeen => ({
+    x,
+    y,
+    width,
+    height,
+    text,
+    shown: 1,
+    lines: [{ x, y, width, height }],
+    off: false,
+    fading: false,
+    cut: null,
+    color: "rgba(28, 28, 30, 0.7)",
+    list: null,
+    ...over,
+  });
+  const seen = (over: Partial<InksSeen> = {}): InksSeen => ({
+    view: { width: 60, height: 30 },
+    wizard: false,
+    field: "live",
+    canvas: 1,
+    stage: null,
+    words: [],
+    ...over,
+  });
+
+  it("takes the splash's still on the field that has come, keeps one on a field still waking, and stops at the wizard", () => {
+    const stage = words(20, 20, 10, 5, "loading the field");
+    expect(splashLook(null)).toBe("stop");
+    expect(splashLook(seen({ stage, wizard: true }))).toBe("stop");
+    expect(splashLook(seen())).toBe("wait");
+    expect(splashLook(seen({ stage: { ...stage, shown: 0.5 } }))).toBe("wait");
+    expect(splashLook(seen({ stage, field: "waking", canvas: 0 }))).toBe("keep");
+    // the live field fading in over its still (500ms)
+    expect(splashLook(seen({ stage, canvas: 0.6 }))).toBe("keep");
+    expect(splashLook(seen({ stage }))).toBe("take");
+    expect(splashLook(seen({ stage, field: "still", canvas: null }))).toBe("take");
+  });
+
+  it("holds a word as it stands, dimmed or not, and passes over one that does not show as it stands, saying why", () => {
+    const label = word(10, 10, 20, 6, "Agents");
+    expect(passedOver(label, null)).toBeNull();
+    // dimmed to stay so, it is held as it shows; in a control that is off, or fading in, it is passed over
+    expect(passedOver({ ...label, shown: 0.55 }, null)).toBeNull();
+    expect(passedOver({ ...label, shown: 0.4, off: true }, null)).toBe(
+      "in a control that is off (0.4)",
+    );
+    expect(passedOver({ ...label, shown: 0.6, fading: true }, null)).toBe("fading (0.6)");
+    expect(passedOver({ ...label, fading: true }, null)).toBeNull();
+    expect(passedOver({ ...label, cut: "list" }, null)).toBe("cut off at its list's edge");
+    expect(passedOver({ ...label, cut: "box" }, null)).toBe("cut off by its box");
+    // a list 100 tall whose foot fades over its last 20: a word ending in that foot stands under the fade; one ending
+    // above it, or in a list that wears no fade, is held
+    const list = { x: 0, y: 0, width: 60, height: 100, masked: true };
+    expect(passedOver({ ...label, y: 76, list }, null)).toBe("under its list's fade");
+    expect(passedOver({ ...label, y: 74, list }, null)).toBeNull();
+    expect(passedOver({ ...label, y: 76, list: { ...list, masked: false } }, null)).toBeNull();
+    // read on the capture's other side: held where it stood as it stands, within the slack
+    expect(passedOver(label, [label])).toBeNull();
+    expect(passedOver(label, [{ ...label, x: 10.8 }])).toBeNull();
+    expect(passedOver(label, [{ ...label, y: 14 }])).toBe("changed under the capture");
+    expect(passedOver(label, [{ ...label, text: "Agent" }])).toBe("changed under the capture");
+    expect(passedOver(label, [{ ...label, shown: 0.9, fading: true }])).toBe(
+      "changed under the capture",
+    );
+    expect(passedOver(label, [])).toBe("changed under the capture");
+  });
+
+  it("cuts every word from its still by its own lines, holds each at 4.5:1, and prints the lowest and every short one", () => {
+    // a window 60 × 30 at 2 to the px on a glass of 200: the stage line's glyph cores at 40, a label's at 120, two
+    // buttons' at 40, and a voice of two lines at 90 with a darker mark between its lines' ends
+    const still = capture(60, 30, 2, 200, [
+      { x0: 2, x1: 4, y0: 1, y1: 3, level: 40 },
+      { x0: 14, x1: 15, y0: 2, y1: 3, level: 120 },
+      { x0: 26, x1: 27, y0: 2, y1: 3, level: 40 },
+      { x0: 50, x1: 51, y0: 2, y1: 3, level: 40 },
+      { x0: 4, x1: 6, y0: 11, y1: 13, level: 90 },
+      { x0: 4, x1: 6, y0: 16, y1: 18, level: 90 },
+      { x0: 12, x1: 18, y0: 15, y1: 19, level: 0 },
+    ]);
+    const long = "Your agents keep their history on this Mac, and the field can read it";
+    const you = word(12, 0, 10, 5, "You");
+    const onward = word(24, 0, 10, 5, "Continue");
+    const back = word(36, 0, 10, 5, "Back");
+    const next = word(48, 0, 10, 5, "Next");
+    const voice = word(0, 10, 20, 9, long, {
+      lines: [
+        { x: 0, y: 10, width: 20, height: 4 },
+        { x: 0, y: 15, width: 10, height: 4 },
+      ],
+    });
+    const later = word(30, 10, 10, 5, "Set up later", { shown: 0.5, fading: true });
+    const agents = seen({ wizard: true, words: [you, onward, back, next, voice, later] });
+    // Back stood 3 lower when the page was read before the capture
+    const before = seen({
+      wizard: true,
+      words: [you, onward, { ...back, y: 3 }, next, voice, later],
+    });
+    const cuts = [
+      ...inkCuts("01-splash.png", still, seen({ stage: words(0, 0, 10, 5, "loading the field") }), [
+        "stage",
+      ]),
+      ...inkCuts("05-agents.png", still, agents, ["words"], before),
+    ];
+    const glass = [200, 200, 200];
+    const contrast = firstRunContrast(cuts);
+    expect(contrast).toEqual({
+      stage: {
+        at: "01-splash.png",
+        said: "loading the field",
+        field: "live",
+        canvas: 1,
+        ground: glass,
+        ink: [40, 40, 40],
+        ratio: 8.8,
+        shown: 1,
+      },
+      words: [
+        {
+          at: "05-agents.png",
+          judged: 4,
+          lowest: [
+            ["You", 2.6],
+            [`${long.slice(0, 47)}…`, 4.1],
+            ["Continue", 8.8],
+          ],
+          short: [
+            {
+              text: "You",
+              color: "rgba(28, 28, 30, 0.7)",
+              ground: glass,
+              ink: [120, 120, 120],
+              ratio: 2.6,
+            },
+            {
+              text: long,
+              color: "rgba(28, 28, 30, 0.7)",
+              ground: glass,
+              ink: [90, 90, 90],
+              ratio: 4.1,
+            },
+          ],
+          passed: [
+            ["Back", "changed under the capture", 1],
+            ["Set up later", "fading (0.5)", 1],
+          ],
+        },
+      ],
+    });
+    expect(judgeContrast(contrast)).toEqual([
+      'on 05-agents.png "You" reads 2.6:1 ([200,200,200] → [120,120,120]) in rgba(28, 28, 30, 0.7), under 4.5:1',
+      `on 05-agents.png "${long}" reads 4.1:1 ([200,200,200] → [90,90,90]) in rgba(28, 28, 30, 0.7), under 4.5:1`,
+    ]);
+  });
+
+  it("cuts a word it passes over too and prints its ratio beside why, never judging it", () => {
+    // the catalog judged's follow-up 1: an off group's label at its dim, its glyph cores at 120 on a glass of 200
+    const still = capture(60, 30, 2, 200, { x0: 2, x1: 6, y0: 1, y1: 4, level: 120 });
+    const label = word(0, 0, 10, 5, "Face", { shown: 0.45, off: true });
+    const contrast = firstRunContrast(
+      inkCuts("02-field.png", still, seen({ wizard: true, words: [label] }), ["words"]),
+    );
+    expect(contrast.words).toEqual([
+      {
+        at: "02-field.png",
+        judged: 0,
+        lowest: [],
+        short: [],
+        passed: [["Face", "in a control that is off (0.45)", 2.6]],
+      },
+    ]);
+    expect(judgeContrast(contrast)).toEqual([]);
+  });
+
+  it("judges the splash's stage line as it is cut: under 4.5:1 it is red with its numbers", () => {
+    const stage: StageReading = {
+      at: "01-splash.png",
+      said: "loading the field",
+      field: "waking",
+      canvas: 0,
+      ground: [200, 200, 200],
+      ink: [90, 90, 90],
+      ratio: 4.1,
+      shown: 1,
+    };
+    expect(judgeContrast({ stage, words: [] })).toEqual([
+      "the splash's stage line reads 4.1:1 ([200,200,200] → [90,90,90]) on 01-splash.png, under 4.5:1",
+    ]);
+    expect(
+      judgeContrast({ stage: { ...stage, ink: [40, 40, 40], ratio: 8.8 }, words: [] }),
+    ).toEqual([]);
+  });
+
+  it("says what it could not read: no still prints nothing, and a capture not the window's size is red, unread", () => {
+    expect(firstRunContrast([])).toEqual({ stage: null, words: [] });
+    expect(judgeContrast({ stage: null, words: [] })).toEqual([]);
+    const odd = new Uint8Array(4 * 7);
+    const contrast = firstRunContrast([
+      ...inkCuts("01-splash.png", odd, seen({ stage: words(0, 0, 10, 5, "loading the field") }), [
+        "stage",
+      ]),
+      ...inkCuts(
+        "11-connect.png",
+        odd,
+        seen({ wizard: true, words: [word(0, 0, 10, 5, "Not now")] }),
+        ["words"],
+      ),
+    ]);
+    expect(contrast).toEqual({
+      stage: {
+        at: "01-splash.png",
+        said: "loading the field",
+        field: "live",
+        canvas: 1,
+        ground: null,
+        ink: null,
+        ratio: null,
+        shown: 1,
+      },
+      words: [
+        {
+          at: "11-connect.png",
+          judged: 1,
+          lowest: [["Not now", null]],
+          short: [
+            {
+              text: "Not now",
+              color: "rgba(28, 28, 30, 0.7)",
+              ground: null,
+              ink: null,
+              ratio: null,
+            },
+          ],
+          passed: [],
+        },
+      ],
+    });
+    expect(judgeContrast(contrast)).toEqual([
+      "the splash's stage line could not be cut from 01-splash.png",
+      'on 11-connect.png "Not now" could not be cut from its still',
+    ]);
+  });
+});
 
 describe("the mark in the pixels (measureMark)", () => {
   it("finds the ink against its glass, centred in CSS px at any density", () => {
@@ -434,6 +989,150 @@ describe("the logo at the welcome's title card (FG-4b, FG-D24)", () => {
     expect(
       judgeLogo({ ...live, dark: true }, FIRST_RUN_WALKS.night, { ...night, ink: 50 }),
     ).toEqual(["by night the mark (50) is not white on its glass (40)"]);
+  });
+});
+
+describe("FG-6's frozen frame (DESIGN.md §8 \"Held to the browser's glass\")", () => {
+  // a 600 × 500 window, its glass 400 × 300 at 100, 100 with corners of 32, at its own size, the logo's box at its
+  // centre
+  const seen: GlassSeen = {
+    box: { x: 100, y: 100, width: 400, height: 300 },
+    radius: 32,
+    fit: 1,
+    drawn: "field",
+    logo: { x: 250, y: 220, width: 100, height: 60 },
+    mark: null,
+    view: { width: 600, height: 500 },
+  };
+  /** A capture of the window at `density` (BGRA), each px the grey `level` gives at its centre in CSS px. */
+  const shot = (density: number, level: (x: number, y: number) => number): Uint8Array => {
+    const w = seen.view.width * density;
+    const h = seen.view.height * density;
+    const bgra = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const l = level((x + 0.5) / density, (y + 0.5) / density);
+        bgra.set([l, l, l, 255], (y * w + x) * 4);
+      }
+    }
+    return bgra;
+  };
+
+  it("holds the field's glass to DESIGN.md §8's bars", () => {
+    const design = readFileSync(resolve(here, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
+    const bars =
+      /\*\*Held to the browser's glass\*\*.*? differ by a mean of at most ([\d.]+) inside the glass, ([\d.]+) in its shadow and ([\d.]+) on the logo/.exec(
+        design,
+      );
+    expect(bars?.slice(1).map(Number)).toEqual([
+      FIRST_RUN.frozen.inside,
+      FIRST_RUN.frozen.shadow,
+      FIRST_RUN.frozen.logo,
+    ]);
+  });
+
+  it("waits for the glass drawn as it is wanted: by the field, or by the browser in the field's held mark, never the brand's (FG-6's follow-up 3)", () => {
+    expect(glassDrawnBy(seen, true)).toBe(true);
+    expect(glassDrawnBy({ ...seen, drawn: null }, true)).toBe(false);
+    expect(glassDrawnBy({ ...seen, drawn: null, mark: "field" }, false)).toBe(true);
+    // the browser's glass with the brand's mark on its logo: the judge would read the logo against the brand's still
+    expect(glassDrawnBy({ ...seen, drawn: null }, false)).toBe(false);
+    expect(glassDrawnBy({ ...seen, mark: "field" }, false)).toBe(false);
+    expect(glassDrawnBy(null, true)).toBe(false);
+  });
+
+  it("places a window's px on the glass: on its logo, inside past its edge's hairlines, in the ring of its shadow, or on none", () => {
+    expect(frozenRegion(seen, 300, 250)).toBe("logo");
+    expect(frozenRegion(seen, 150, 150)).toBe("inside");
+    // its edge, with its two hairlines
+    expect(frozenRegion(seen, 104, 250)).toBe("inside");
+    expect(frozenRegion(seen, 101, 250)).toBeNull();
+    expect(frozenRegion(seen, 99.5, 250)).toBeNull();
+    // the ring of its shadow, round its corners too, and the field past it
+    expect(frozenRegion(seen, 70, 250)).toBe("shadow");
+    expect(frozenRegion(seen, 102, 102)).toBe("shadow");
+    expect(frozenRegion(seen, 30, 250)).toBeNull();
+    // at the glass's fit
+    const half = { ...seen, fit: 0.5 };
+    expect(frozenRegion(half, 102, 250)).toBe("inside");
+    expect(frozenRegion(half, 60, 250)).toBeNull();
+  });
+
+  it("reads the field's two captures apart over the window, and its glass against the browser's by region, at any density", () => {
+    // square corners, so a region's px are the paint's
+    const square = { ...seen, radius: 0 };
+    const inLogo = (x: number, y: number) => x >= 250 && x < 350 && y >= 220 && y < 280;
+    const inGlass = (x: number, y: number) => x >= 100 && x < 500 && y >= 100 && y < 400;
+    for (const density of [1, 2]) {
+      const field = shot(density, () => 200);
+      const browser = shot(density, (x, y) => (inLogo(x, y) ? 205 : inGlass(x, y) ? 201 : 202));
+      // the field again, but 10 apart over a block the logo's size: a field that moved there
+      const moved = shot(density, (x, y) => (inLogo(x, y) ? 210 : 200));
+      const reading = readFrozen(field, browser, field, square);
+      expect(reading).toEqual({
+        held: 0,
+        regions: {
+          inside: { diff: 1, px: (394 * 294 - 6000) * density * density },
+          shadow: { diff: 2, px: expect.any(Number) },
+          logo: { diff: 5, px: 6000 * density * density },
+        },
+      });
+      expect(reading?.regions.shadow.px).toBeGreaterThan(0);
+      expect(readFrozen(field, browser, moved, square)?.held).toBe(0.2);
+    }
+    // nothing off a capture that is no picture of the window read: an empty one (a hidden window's), one of another
+    // window's size (600 × 400), or three not one size
+    const field = shot(1, () => 200);
+    const empty = new Uint8Array(0);
+    const other = new Uint8Array(600 * 400 * 4);
+    expect(readFrozen(empty, empty, empty, seen)).toBeNull();
+    expect(readFrozen(other, other, other, seen)).toBeNull();
+    expect(readFrozen(field, field.subarray(4), field, seen)).toBeNull();
+  });
+
+  it("passes a held frame within §8's bars, and at them, and finds a frame not held, a region over its bar, and one with no px", () => {
+    const within: FrozenReading = {
+      held: 0,
+      regions: {
+        inside: { diff: 1.1, px: 400_000 },
+        shadow: { diff: 0.3, px: 90_000 },
+        logo: { diff: 2.4, px: 39_424 },
+      },
+    };
+    expect(judgeFrozen(within)).toEqual([]);
+    expect(
+      judgeFrozen({
+        held: 0.1,
+        regions: {
+          inside: { diff: 2, px: 1 },
+          shadow: { diff: 1, px: 1 },
+          logo: { diff: 6, px: 1 },
+        },
+      }),
+    ).toEqual([]);
+    expect(
+      judgeFrozen({
+        ...within,
+        regions: {
+          ...within.regions,
+          inside: { diff: 2.4, px: 400_000 },
+          shadow: { diff: 0, px: 0 },
+        },
+      }),
+    ).toEqual([
+      "on the frozen frame the field's glass differs from the browser's by 2.4 inside the glass, over DESIGN.md §8's 2",
+      "the frozen frame has no px in its shadow",
+    ]);
+    // a frame not held is said alone: what differs then is no longer one frame
+    expect(
+      judgeFrozen({
+        held: 0.4,
+        regions: { ...within.regions, logo: { diff: 9, px: 39_424 } },
+      }),
+    ).toEqual([
+      "the field did not hold its frame: its two captures with the field's glass differ by 0.4 (at most 0.1)",
+    ]);
+    expect(judgeFrozen(null)).toEqual(["the frozen frame's captures are no picture of the window"]);
   });
 });
 
@@ -652,6 +1351,8 @@ describe("a walk that stops (firstRunRows)", () => {
       });
       expect(problems).toEqual([
         "the mark's ink centres at 600.0, 374.0, not the window's 590, 374",
+        // a page with no field's door: the frozen frame finds nothing to hold, and the walk goes on
+        "on the live field the field's door held no frame (window.__vfField)",
         "the walk stopped at you: the renderer went away",
       ]);
       expect(facts["stoppedAt"]).toBe("you");
@@ -680,19 +1381,20 @@ describe("the launcher (apps/desktop/packaging/run-first-run.mjs)", () => {
     `const userData = process.argv.find((a) => a.startsWith("--user-data-dir=")).slice("--user-data-dir=".length);\n` +
     `let theme = null;\n` +
     `try { theme = JSON.parse(fs.readFileSync(path.join(userData, "vibefield-theme.json"), "utf8")); } catch {}\n` +
-    `fs.appendFileSync(process.env.FIRST_RUN_RECORD, JSON.stringify({ argv: process.argv.slice(2), walk: process.env.VF_FIRST_RUN_WALK ?? null, shotDir: process.env.VF_SMOKE_SHOT_DIR ?? null, mark: process.env.VF_SMOKE_RUN ?? null, userData, theme }) + "\\n");\n` +
+    `fs.appendFileSync(process.env.FIRST_RUN_RECORD, JSON.stringify({ argv: process.argv.slice(2), walk: process.env.VF_FIRST_RUN_WALK ?? null, shotDir: process.env.VF_SMOKE_SHOT_DIR ?? null, mark: process.env.VF_SMOKE_RUN ?? null, catalog: process.env.VF_CATALOG_RENDERER ?? null, userData, theme }) + "\\n");\n` +
     `process.exit(process.env.VF_FIRST_RUN_WALK === process.env.FIRST_RUN_RED ? 2 : 0);\n`;
   interface Launched {
     argv: string[];
     walk: string | null;
     shotDir: string | null;
     mark: string | null;
+    catalog: string | null;
     userData: string;
     theme: { preference?: string } | null;
   }
-  // three stand-in launches and three censuses (`smoke-daemons.mjs`); smoke-profile.test.ts measured one launch and its
-  // census at up to 9 s on a loaded host, so three get the room of three and more
-  const ROWS_BUDGET_MS = 45_000;
+  // four stand-in launches and four censuses (`smoke-daemons.mjs`); smoke-profile.test.ts measured one launch and its
+  // census at up to 9 s on a loaded host, so four get the room of four and more
+  const ROWS_BUDGET_MS = 60_000;
   const run = (args: string[], red: string | null) => {
     const dist = mkdtempSync(join(tmpdir(), "fg-fake-electron-"));
     const shots = mkdtempSync(join(tmpdir(), "fg-first-run-shots-"));
@@ -724,25 +1426,34 @@ describe("the launcher (apps/desktop/packaging/run-first-run.mjs)", () => {
   };
 
   it.skipIf(process.platform === "win32")(
-    "runs the three walks in order, each on a fresh profile seeded with its theme, its stills kept outside it",
+    "runs the four walks in order, each on a fresh profile seeded with its theme, its stills kept outside it",
     { timeout: ROWS_BUDGET_MS },
     () => {
       const { result, launched, shots } = run([], null);
       expect(result.status, result.stderr).toBe(0);
       expect(result.stdout).toContain(`FIRST_RUN_SHOTS ${shots}\n`);
-      expect(launched.map((l) => l.walk)).toEqual(["day", "night", "no-webgpu"]);
+      expect(launched.map((l) => l.walk)).toEqual(["day", "night", "no-webgpu", "catalog"]);
       // light and dark both explicit, in the app's own store, before the boot
       expect(launched.map((l) => l.theme)).toEqual([
         { preference: "light" },
         { preference: "dark" },
+        { preference: "light" },
         { preference: "light" },
       ]);
       expect(launched.map((l) => l.argv.slice(1))).toEqual([
         [`--user-data-dir=${launched[0]?.userData}`, "--smoke-first-run"],
         [`--user-data-dir=${launched[1]?.userData}`, "--smoke-first-run"],
         [`--user-data-dir=${launched[2]?.userData}`, "--smoke-first-run", "--smoke-no-webgpu"],
+        [`--user-data-dir=${launched[3]?.userData}`, "--smoke-first-run"],
       ]);
-      expect(new Set(launched.map((l) => l.userData)).size).toBe(3);
+      // the catalog's walk alone is handed the design build, where `build:design` writes it
+      expect(launched.map((l) => l.catalog)).toEqual([
+        null,
+        null,
+        null,
+        resolve(desktopRoot, "../../.vibefield/studio/catalog-renderer"),
+      ]);
+      expect(new Set(launched.map((l) => l.userData)).size).toBe(4);
       for (const l of launched) {
         expect(l.shotDir).toBe(join(shots, l.walk ?? ""));
         expect(l.mark).toBe(basename(l.userData));
@@ -759,7 +1470,7 @@ describe("the launcher (apps/desktop/packaging/run-first-run.mjs)", () => {
     () => {
       const all = run([], "day");
       expect(all.result.status).toBe(1);
-      expect(all.launched.map((l) => l.walk)).toEqual(["day", "night", "no-webgpu"]);
+      expect(all.launched.map((l) => l.walk)).toEqual(["day", "night", "no-webgpu", "catalog"]);
       expect(all.result.stdout).toContain(`FIRST_RUN_VERDICT {"walk":"day","ok":false,"code":2`);
       const night = run(["night"], null);
       expect(night.result.status).toBe(0);

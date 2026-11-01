@@ -189,6 +189,22 @@ card surface). On dark surfaces: primary `white`, secondary `white/70–80`, eye
 `white/60`, tertiary/captions `white/40`. On light chrome: `black`, `black/70`, `black/50`,
 captions `neutral-500`. Pure-opaque text is reserved for primary content.
 
+*Amended 2026-11-01 (track FG, item 127: the ramp's floors and its alphas, VF-PM's leans of 02:17Z, James's GO on the
+board's `text-ramp-alphas` at 02:26:44Z; built in the catalog judged):* the ramp is `--vf-foreground` (`#1C1C1E` by
+day, `#F5F5F7` by night) at four alphas, and each tier holds a floor on every chrome ground of its theme: by day
+`white`, the canvas `#FAFAFA`, the fill `#F2F2F7` and its hover `#E5E5EA`; by night `#1C1C1E`, the canvas `#171717`
+and the fill `#2C2C2E` (the translucent chrome stands between them). t1, t2 and t3 are words that are read, at 4.5:1
+or more (§8's bar, "Its words read"). t4 is never a word that must be read: only a mark (a separator, a chevron, a
+ghost's disc, a glyph) and the words of a control that is off, at 3:1 or more (WCAG 2's 1.4.11, and 1.4.3's
+exemption); a placeholder is a word that is read. By day t1 85%, t2 70%, t3 64% and t4 50% (from `white` to the hover
+10.7–9.0, 6.3–5.6, 5.1–4.7 and 3.3–3.1:1); by night 85%, 70%, 54% and 38% (12.1–9.7, 8.5–7.1, 5.5–4.9 and 3.4–3.2:1).
+`tokens.css` projects them as `--vf-text-primary`, `-secondary`, `-tertiary` and `-faint`; the catalog's Foundations
+sets each tier on each ground ("Text ramp"), and row 32's catalog walk holds those chips to their floors. The Setup
+Assistant's glass keeps its own t2 for t2–t4 (§5). *Corrected the same day:* the paragraph above said black, black/70,
+black/50 and captions `neutral-500` by day, and white/40 for tertiary by night. `tokens.css` carried 85/70/45/30% in
+both themes from 2026-08-05 (`250e383d6`): its t3 at 2.7–2.9:1 and its t4 at 1.9:1 by day, 3.9–4.2:1 and 2.5–2.6:1 by
+night, under the bar since.
+
 ### 2.5 State & system color (the only color chrome may use)
 
 iOS system palette, one meaning each — never decorative:
@@ -226,6 +242,19 @@ row (an install that didn't take, a refusal) in `--vf-ink-attention`; and the de
 update", in `--vf-red` text (§8's two-step destructive confirm). Offline adds no ink: the Me row says it in its
 tertiary line, and the page stays in its neutral words, as shipped (§8 "Settings → Updates"). A channel with no
 release yet is quiet: "No stable release yet" ("No beta release yet") is tertiary on the row and on the page.
+
+*Amended 2026-10-31 (track FG, row 32 at run59b: the glass's day inks, at VF-PM's leans 20:46Z and 20:56Z, James's to
+overturn; built in the judge's fix):* the inks hold 4.5:1 on light chrome, and the Setup Assistant's day glass (§5,
+§8 "The Setup Assistant's glass") is not light chrome: its ground is the field through a 75% milk, which row 32
+measured as dark as [200, 201, 210] under a short word, where an agent's "Ready" in `--vf-ink-healthy` read
+3.4–3.7:1. So on that glass a state word takes its glass ink: its ink's own hue, scaled in linear light until it
+holds 5:1 over that ground at the thinnest stroke the row measured (a small word's strokes read at 90% of their
+ink, §8 "The Setup Assistant's glass"), the rule the glass's t2 follows. `--vf-wizard-ink-healthy` `#104C1F`, where
+`#1F7A36` gives 2.9 (an agent's "Ready" in AO's panes, drawn whole at 500, reads 6.3–6.9:1); and
+`--vf-wizard-ink-attention` `#683400`, where `#B25E00` gives 2.6 (the wizard's own error line, which wore
+Tailwind's amber outside these inks, under 2:1 there). The shell re-projects the two on the glass alone, so AO's
+panes keep their inks in Settings, and by night the glass reads the inks as they are. They are the two the glass
+wears; danger and info take theirs when a word in them first comes onto the glass, DESIGN.md first.
 
 ### 2.6 Organizational accents (containers, comments, tags)
 
@@ -406,7 +435,9 @@ the fox. Unique for up to 48 users, the deck's size: a 49th gets its starting fa
 honest and never a blank. Setup pane 2 shows the deal beside the name with the picker already
 open and whole inside the shell — the frame switch (small) under the face, a three-row deck and
 any single emoji typed in beside it; on the Account page, Change… opens the same picker over a
-four-row deck. A face another user wears stays in the deck, greyed and named. Refused as faces, because they already mean
+four-row deck. A face another user wears stays in the deck, greyed and named. While its host writes the picker is off
+(§7): a group that says so, its faces dimmed and its words at t4 (*2026-11-01, the catalog judged's follow-up 1*).
+Refused as faces, because they already mean
 something here: flat colours and hearts · 🔥 (the swarm's burn ladder) · 📁 · the state marks
 · 🔗. A joined sequence is judged by its base — fire joined to fire is still fire, while 🐈 + ⬛
 is a black cat — and a typed face is refused in place, in main's words, before anything is
@@ -697,7 +728,7 @@ exception again.
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9) |
-| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 55% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
+| Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 75% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept. Its words (FG-O2's judge, and its fix after row 32 at run59b, 2026-10-31): the ramp stops at the glass's own t2, `--vf-wizard-text` (`rgb(28 28 30)` 80% by day, the ramp's t2 by night), t2, t3 and t4 re-projected to it there (`--vf-text-secondary`, `--vf-text-tertiary`, `--vf-text-faint`); a state word takes its glass ink (§2.5), `--vf-ink-healthy` and `--vf-ink-attention` re-projected to `--vf-wizard-ink-healthy` (`#104C1F` by day) and `--vf-wizard-ink-attention` (`#683400` by day), the inks themselves by night; and a quiet button's words stand at t1 on its fill; its panes' words go with its own, so every word on it reads at 4.5:1 (§8) | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C; by day through a 75% milk since FG-O2's judge, 2026-10-31, at a little over half the strength 55% let through). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -1195,6 +1226,7 @@ arc. It is worn nowhere else.
 | **Selection, sole** | `1.5px` inside ring, `--vf-select`, drawn *inside* the element so any transform carries it; 120ms fade — the fields explorer's current tile, the file tree's focused row (§8). |
 | **Selection, multi** | never N rings: a set is one union, or, in a list with no union, N fills and one ring (§8 "The file tree"). |
 | **Drag** (a chrome drag source) | opacity `0.75` for the whole hold and drag — a file row carried toward a chip (§8 "The file tree"). |
+| **Off** (a control that is off) | it says so the way assistive tech reads it, never by a styling hook alone: `disabled` on a control, and on a group of them `role="group"` with `aria-disabled="true"` (or a disabled `fieldset`). Its words wear t4 at full opacity, 3:1 or more on their ground (§2.4); its pictures (an emoji, a tile, a swatch) may dim further. Row 32 passes an off control's words over, says so and prints each one's ratio, never judging it (§8 "Its words read"). *Added 2026-11-01 (track FG, the catalog judged's follow-up 1; VF-PM's ruling at 03:00Z on row 32's red at run69b: the face deck dimmed whole while saving, its two head words at 2.1–2.6:1).* |
 | **Keyboard focus** | visible ring, always (quality floor); Esc = close/cancel, consistently. |
 
 *History (renamed 2026-10-28; James, the housekeeping page (Q18)):* this section was "Interactive
@@ -2779,8 +2811,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   at a time, each said once, never per frame. A notice that carries an act — the degraded desk's
   Reload (R18) — holds until the act is taken or the state clears, the act at its end as a text
   button in primary ink. A notice may carry a detail — the renderer's own words after VibeField's,
-  verbatim, 11 mono and faint on a row of its own under them (the degraded desk's ICE message; DK-17,
-  2026-10-07). It stands with the frame, above the cover (§10).
+  verbatim, 11 mono and tertiary on a row of its own under them (the degraded desk's ICE message;
+  DK-17, 2026-10-07; *amended 2026-11-01, item 127:* faint until then, and §2.4's t4 is never a word
+  that is read). It stands with the frame, above the cover (§10).
   **An ended lane that could not be opened** in History (TV-8, 2026-10-11; Godview's timeline) is
   said here, in the words of the Peek's pick that could not be shown ("Could not jump — ‹why›")
   but not in its place: that one is said in the line's note, where its act began; this act began
@@ -3077,8 +3110,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the CSS-fallback dots left with the tokens, DK-17, 2026-10-07), centred, the strong hairline dashed, corners 22, padded 26 26 22:
   **what happened** (14/600, primary), **what to do** (12.5/400, tertiary), **one Reload** (the
   primary: inverted, 36 tall, padded 0 18, corners 18, 13/500) — a desk remount, not a window reload
-  (R18) — and in the detail slot **ICE's message, verbatim**, last and small (11 mono, faint, 12
-  below; R18). ICE says why in that one string, so the card reads it: **the device lost**
+  (R18) — and in the detail slot **ICE's message, verbatim**, last and small (11 mono, tertiary, 12
+  below; R18; *amended 2026-11-01, item 127:* faint until then). ICE says why in that one string, so
+  the card reads it: **the device lost**
   (`the device was lost: <reason>: <message>`) — "The desk lost its graphics device" · "The graphics
   device was reset while the desk was drawing. Your objects are saved in this document; reload to
   draw them again." · Reload · the message; **no WebGPU** (a boot refusal ending
@@ -3102,7 +3136,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the desk still draws) is a banner, not the card: the status line saying VibeField's sentence first
   — **"The graphics device reported an error. The desk is still drawing — Reload restarts it."** (what
   happened, that the desk keeps drawing, that Reload remounts it) — with ICE's message after it as the
-  detail (11 mono, faint, verbatim, on a row of its own under the words, as the card carries its
+  detail (11 mono, tertiary (faint until item 127, 2026-11-01), verbatim, on a row of its own under
+  the words, as the card carries its
   detail) and a Reload until the state clears, the desk drawing on beneath it (R18). *Amended
   2026-10-07 (DK-17; the migration plan's (75)):* until then the line held ICE's message alone, and a
   person read "an uncaptured GPU error — GPUValidationError: …" as the whole of it. No Canvas2D fallback in v1
@@ -3253,12 +3288,23 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   `draft/thinking-first-run-glass.md`, the page *First run on the field*). The Setup Assistant stands on
   the field as one glass, **880 × 640 on every step** (FG-D3 A): centred, never scrolling, and below a
   976 × 736 window scaled as one picture (fit = min(1, (w − 96)/880, (h − 96)/640)), never reflowed. Its
-  material is §5's Setup Assistant tier (FG-D15 C: the tunnel's rings come through softly), milk by day
+  material is §5's Setup Assistant tier (FG-D15 C: the tunnel's rings come through softly, by day through a
+  75% milk since FG-O2's judge), milk by day
   and smoke by night while the field stays the dark in both (FG-D4 A), and nothing see-through is ever cut
-  into it (FG-L2). **The steps** (FG-D22 A, FG-D23 A): a band along the glass's top 72, one segment per
+  into it (FG-L2). **Its words read** (FG-O2's judge): every word on the glass, its panes' with its own, reads at
+  4.5:1 or more over the field as it moves, by day, by night and over the field's still (§2.5's bar for a word that
+  is read), so on the glass the ramp stops at t2, by day the glass's own 80% (§5), a state word takes its glass ink
+  (§2.5), and a quiet button's words stand at t1 (§5). Row 32 measures every word on each pane it walks
+  (`docs/desk-gates.md`): each lettered word of the band and the standing pane, cut from the window's own capture
+  by DK-16's method and held at the bar once it shows whole; a word in a control that is off (WCAG 2's exemption
+  for an inactive control) or under a list's fade is passed over and said so, its own ratio printed and never judged
+  (since the catalog judged's follow-up 1, 2026-11-01: an off control's words are seen at §7's t4, never taken on
+  faith), and a word under the bar is red with its numbers.
+  **The steps** (FG-D22 A, FG-D23 A): a band along the glass's top 72, one segment per
   step of the chapter's order — You · Agents · Profiles · History · Devices · Setting up — 76 × 3 with a
-  gap of 8, its label in small capitals 9 under it (500, 10px, .08em): done in grey (t3), the current in
-  ink (`aria-current="step"`), the rest a hairline (t4). A segment fills as you arrive (480ms island),
+  gap of 8, its label in small capitals 9 under it (500, 10px, .08em): done in t2 over its filled segment, the
+  current in ink (`aria-current="step"`), the rest in t2 over the hairline (§5).
+  A segment fills as you arrive (480ms island),
   Setting up's with the work's own progress. The band is absent on the welcome, fades in with You (240ms)
   and stays over a load and over Setting up. **One frame** (FG-L3): every pane stands between 96 and 600,
   560 wide — its head at the top, its body 20 under it, its foot on the bottom (the actions, and the line
@@ -3266,14 +3312,21 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   fades in (240ms `ease`, 160ms reduced), the old one out first (120ms); nothing rises, slides or
   recentres. AO's and TS's panes keep their markup and words without their eyebrows (FG-L7). **A load**
   (FG-L5, FG-D20) is the logo and one line: the glass's rows `1fr | the logo | 1fr`, the line 26 under the
-  logo (400, 14px/1.4, t2, tabular figures) with its sub (12px, t3), and no buttons; a way out shows only
+  logo (400, 14px/1.4, t2, tabular figures) with its sub (12px, t2, told by its
+  size), and no buttons; a way out shows only
   when it runs long (Setting up's Start now after 8 s, AO-D4). Setting up is one such line from its first
   phase to the welcome (FG-D21 B). **The logo** (FG-D1, FG-D2, FG-D16, FG-D17 A, FG-D18): one living mark,
   the field's own, at the field's mark's spot and size, only ever fading (§6); white on smoke, inverted on
   milk (`invert(1) hue-rotate(180deg)`, its colours kept). **Drawn by the field** (FG-D24): over the live
   field the glass's shadow, frost, tint, grain and logo are a pass of the field's own frame, read from
   §5's tokens, so the window draws the field once; the two hairlines stay the browser's, at the screen's
-  own pixels; over the still the browser draws the whole glass. *Status 2026-10-29: ruled, to be built —
+  own pixels; over the still the browser draws the whole glass. **Held to the browser's glass** (FG-6's
+  frozen frame; ruled 2026-10-31 at the lean, James's to overturn): on one held frame of the live field, the
+  field's glass and the browser's differ by a mean of at most 2 inside the glass, 1 in its shadow and 6 on the
+  logo (of 255, a channel's), where FG-D24's A/B measured about 1, 0.3 and 2.5; row 32 holds the field's glass
+  to it (`docs/desk-gates.md`). On that frame the browser's logo wears the field's mark as the frame holds it,
+  at the field's mark's own spot and size (FG-6's follow-up 3, 2026-11-01), so the two glasses show one mark;
+  anywhere else the browser's logo is the brand's still. *Status 2026-10-29: ruled, to be built —
   the glass, the steps, the frame and the logo at FG-3, the panes in the frame at FG-4 (after TS-6 and
   TS-7 land), the hand-over at FG-5, the gates at FG-6 (the record's §7). Until each lands, the Setup
   Assistant ships as "The Setup Assistant's agent chapter" and the Connect pane describe it.*
@@ -3341,6 +3394,49 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   own px against the fit); over the field's still, the still's own mark, cover-fitted with the picture (1× wide, 2×
   tall). Over the live field the field draws it over the frost, from the mark it draws itself, reading its fade and
   its filter (§5) off the glass. The pixel witness and the console rows are owed to the next window.*
+  *Amended 2026-10-31 (track FG, FG-O2's judge: the lighter day glass, ruled by James at 18:25Z ("b"), amending his
+  own FG-D15 C; DESIGN.md first, built in the judge's slice):* the glass's words read at 4.5:1. Row 32's walks
+  measured the small ones at run57b (FG-O2, printed, not judged): by day the band's done labels at 2.2–2.4:1, its
+  next at 1.7, the line under the actions and a load's sub at 2.2; by night 3.2–3.8, 2.5, 3.7 and 3.2; over the
+  field's still as by day. t3 cannot reach 4.5:1 on any light ground (2.85:1 on white, 2.6 on a 75% milk), and on
+  the 55% milk over the dark field one step up, t2, gave 3.7–4.5 by day by the walk's own grounds (3.8–4.6 over the
+  still). So by day the milk goes from 55% to 75% (`--vf-wizard-surface`; by night the smoke stays 55%), and on the
+  glass the ramp stops at t2 (§5). In t2 now, from t3, the band's done labels, the line under the actions (FG-4a's
+  status), a load's sub (FG-4b's), a user's detail in the chooser, the face deck's labels and its "Or any emoji",
+  and on Devices the partner line's small print and the waiting steps; from t4, the band's labels still to come and
+  a ghost's name on Devices. A load's sub is told from its line by its size, and a load's line and the panes' t2
+  words come up with the milk. The wizard's own class inks stood outside the tokens, in fixed black and white, which
+  §10 already rules out (product code consumes tokens): its facts at 45%, among them Connect's "What VibeField can
+  see", You's "Name" at 50%, its voices at 70%, and its quiet buttons' words at 65% on a 5% fill (10% by night).
+  They come onto the ramp: the facts and the label as t3 and the voices as t2, so on the glass the facts and the
+  label in t2 with the small words, and the voices a shade lighter than the fixed black they wore; and a quiet
+  button's words at t1 on its fill in both themes, since on that fill a 70% ink gives 4.3–5.8 by night. By the
+  judge's model over the walk's grounds the quiet words read at 4.9–5.3:1 by day, 4.9–5.4 over the still and 5.5–7.4
+  by night, and a quiet button's words at 6.8–7.6 by day and 5.5–7.7 by night, until the row measures them. The
+  marks the two re-projected tokens colour follow them: a done segment's fill (t3) and a ghost's disc (t4). By day
+  the field shows through at 25% where it showed at 45%, so the tunnel's rings come through at a little over half
+  their strength and the glass reads a light grey-blue where it read a mid one; FG-D15 C chose 55% with the rings
+  showing softly over A's thick frost (84% under a 64px blur), and 75% under the same 32px blur goes two-thirds of
+  the way back to that milk and none of the way to that blur. It is one token, so all that wears it moves with it:
+  Finish setting up's sheet, and the field's own pass and the still's CSS glass, which read it (FG-D24). Settings
+  keeps its ramp: these panes' words on its chrome are §2.4's own question (item 127), as is the name field's
+  placeholder, which stands on the input's own white, a control's face.
+  *Corrected 2026-10-31 (track FG, row 32 at run59b, the judge's first live run; the fix at VF-PM's leans, 20:46Z and
+  20:56Z, James's to overturn; DESIGN.md first, built in the fix's slice):* the judge's model ran high. On the
+  walk's own stills by day, two inks fell short on the 75% milk: t2 at 4.1–4.4:1 (Agents' "its own updater",
+  History's "· last used", Connect's "Your phone") and an agent's "Ready" in `--vf-ink-healthy` at 3.4–3.7; by night
+  every word read 4.9:1 or more. The ground under those words reads [200–209, 201–213, 210–223], darker than the
+  grounds the model took, and a small word's strokes read lighter than a full composite, at 90–94% of it (t2 over
+  [200, 202, 211] composites to [80, 80, 84] and reads [87, 88, 92]). So by day the glass's t2 is 80%
+  (`--vf-wizard-text`; by night the ramp's t2), and t2, t3 and t4 are re-projected to it (§5): at each short
+  word's own coverage they come to 5.25–5.79:1, where about 78% would be the least for 5:1, and at the thinnest
+  stroke on the darkest ground under a short word 80% holds 5.1:1. A state word on the glass takes its glass ink
+  (§2.5), held by the same rule: healthy `#104C1F` (an agent's "Ready", drawn whole, 6.3:1 on the darkest ground
+  under it); and attention `#683400` for the wizard's own error line, which wore Tailwind's amber outside the inks
+  (under 2:1 there) and now wears `--vf-ink-attention`, judged by this arithmetic alone, since row 32 walks no
+  error (an error pane under the judge is owed). The milk stays 75% (James's "b"). By day t2 now stands close to
+  t1 (80% against 85%), so on the glass the quiet words are told from the reading ones by their size and place
+  more than by their shade.
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
@@ -4338,6 +4434,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     room's vocabulary. Until transcripts travel (DS-7) the list is THIS desktop's places and
     sessions (H3): a project with no folder here is not listed, and nothing of another desktop is
     handed to the room as if it were here.
+    *Amended 2026-10-31 (DS-7, transcripts by ticket): transcripts travel. Another desktop's
+    sessions of a project that has a folder here are handed to the room, and never as if they were
+    here: the row's id slot leads with **its** desktop's mark and that desktop's path; in the act's
+    place, quiet, **"ran on Studio"** (or **"Studio is asleep"**), since acting on it waits for
+    routed acts (PJ-8); a folder of it in ③ still says "Files stay on Studio". Opened, its
+    transcript is read from its own desktop by ticket, and what stands in its place says which
+    desktop, never a blank: **"Studio is asleep — its transcript opens when it wakes"** ·
+    **"Studio isn't answering — its transcript opens when it does"** · **"No road to Studio from
+    this desktop yet"** · **"Studio isn't serving its history right now — open it again in a
+    moment"**. A project with no folder here is still not listed, and another desktop's Home and
+    Temporary stay its own: listing them is the project list's to design (PJ), not DS-7's.*
     - **A project's colour is its ink** (§2.9), never the room's dealt tint.
     - **A project row** leads its path line with one OS mark per desktop it lives on (§6.0 of the
       record, PJ-D24: Simple Icons' marks, 11 px, in the path line's ink), left-aligned in the
@@ -4630,6 +4737,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     line: the room's own `openAt` with the hit's session and message, the session in its project and
     the transcript landed on the message (§8 "History"). Everything reads this desktop's index (K5);
     other desktops' history waits for DS-7, since the room cannot open a peer's session yet.
+    *Corrected 2026-10-31 (DS-7): the room opens a peer's session now (History, above); the
+    Peek's search still reads this desktop's index alone (K5) until its own slice widens it.*
   - **A narrow window** (K6): the popup clamps to the window — 24 clear of each side, and 96 clear
     of the window's top and foot (the line's 72, and 24), so it never covers the head or the line.
     Below a 680 popup — a window narrower than 728 — the list and a useful peek no longer both fit:
@@ -4831,6 +4940,41 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   takes nothing while it is away. When it comes back it is presented again, and a presented card
   takes the seat (DS-4b), so the readout shows only while another device holds the seat as the card
   sits on the screen.
+- **The phone's Settings** (IOS-10a, built 2026-10-31 from the design page *Settings in a Pocket*,
+  revised 2026-10-31; its eight marks are unpicked and stand at their leans: History's heads, bare
+  glyphs, the ink switch). A sheet on paper (`--vf-chrome-solid`, opaque: a page to read, not glass),
+  headed by you, as the desktop's Settings is (*The Me menu*): your face at 60 pt, tilted (§2.8), your
+  name, and your login in mono open **Account**; signed out, the head is **Continue with Tailscale**
+  (reached today only by signing out inside Settings, which keeps the sheet open, until the page's
+  signed-out mark gives the corner a way in). iOS's own parts speak the chrome family's voice: a
+  navigation stack with the system's large and inline titles, back and close; inset-grouped lists
+  whose rows sit on `--vf-fill` tiles; History's group head (11 medium, uppercase, 0.08em, the ramp's
+  faint step) with *Fact labels* on its right, in their recipe and grammar — scope (**This phone**,
+  **Read-only**), whose word a value is (**From studio**), timing (**Live**); DASHED for a value known
+  but not shown yet (**No desktop yet**), DOTTED for one not in this build (**Not yet**) — and on a
+  row only where the row is itself the unit (an ability);
+  §13's glyphs bare in the secondary ink, a desktop its OS mark at 19 pt; the design kit's switch (an
+  ink track, the knob its inverse, because green says healthy, §2.5); every size a text style, so the
+  pages move with the reader's text size. **Your desktops** are glances in the corner's words: the
+  home says **Connected · your field comes through it**, a sleeping one **Asleep · last heard
+  yesterday, 18:02**, grey and never "offline" (§9); a desktop's page says what it runs on, whether it
+  serves its terminals, and — while it is connected — what the phone can do with it (DS-D5: what
+  every desktop mints every self principal), with **Approve from the card** dotted **Not yet**
+  (approving by typing into the pane works today, as the welcome says); one asleep says that what
+  you already opened from it stays on the phone (DS-L8) and that its terminals and search answer
+  when it wakes. **Account** holds your face and whose word it is (**From studio**, **This phone** while
+  dealt, **No desktop yet** dashed), Tailscale's card (its mark at 56, the state in §9's words:
+  **Connected**, **Sign in to Tailscale again**, **Waiting for approval**), Network details (this
+  phone's machine name in mono with Copy, the tailnet) and Sign out, confirmed in the corner's words.
+  Under **This phone**, **Appearance** is the Mac's three, **Light · Dark · Auto**, worn by the window,
+  so the field, History and every sheet change with it; **Terminal** is the terminal sheet re-voiced
+  in the desktop's Look words (Theme, its 602 searchable; Background opacity; Font size; Effects, each
+  with its licence; Animate effects). **About** gives the version, your desktops, Acknowledgements,
+  and Tailscale's trademark line, which left the terminal sheet's foot (§13). The corner's
+  **Settings…** opens the root and *you* open Account; the card's `···` menu's **Terminal look…**
+  opens Terminal, Settings one step back.
+  Not yet drawn: Field, Keyboard, Notifications, Privacy & data, Developer, a desktop's agents and
+  History, and its VibeField version.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -5134,6 +5278,38 @@ fill, are retired. **The three titles:** **Minimize — every session keeps runn
 one thing the gesture could leave in doubt) · **Maximize** · **Restore**. Their accessible names
 carry the noun: "Minimize the terminals", "Maximize the terminals", "Restore the terminals to
 their place". "Fullscreen" stays the pane's word (§8).
+
+**The quit's words** (track AL, `draft/thinking-app-lifecycle.md` §4 and §8; AL-D1, AL-D3 ruled 2026-10-27; this
+paragraph added 2026-11-01 by AL-10, the words before it lived only in the shell's code). A person's quit (⌘Q, the
+Dock, the status item, the menu) stops the terminal service. A crash, a Force Quit or a signal leaves it running.
+Every place that says what a terminal's life is says those two facts, and no place promises more (GT-D11). With
+**Keep running when VibeField quits** on, only the status item's **Quit VibeField** is a quit (the last bullet).
+- **The quit box** (`quit-gate.ts`, only while sessions run and **Ask before quitting** is on) is the update consent's
+  shape. Its message is the consequence: "Quit VibeField and end 3 terminal sessions?" Its detail names them: "Quitting
+  stops the terminal service, which ends:", then up to five rows ("title — cwd"), then "and N more". Its buttons say
+  what each does: **Cancel** (the default) · **Quit and end 3 sessions**.
+- **The unknown box**, when a pair's sessions can't be read, says that nothing it can't name will end: "VibeField
+  couldn't check for running sessions" · "It ends no session it can't name, so quitting now leaves the terminal service
+  running. Open VibeField again and quit to stop it." · **Cancel** · **Quit and leave it running**.
+- **The next launch's notice**, after an exit that said no goodbye, gives the time and what survived, in numbers:
+  "VibeField quit unexpectedly at 10:42" · "2 terminal sessions kept running." It never says null as zero: an unread
+  count is "Its terminal service kept running."
+- **Settings → Terminal → Behavior's "How long a terminal lives"** says the same two facts: "As long as its program
+  runs, on this Mac's terminal service. Closing this window leaves it running, and so does a crash: the next launch
+  finds it. It ends when its program exits, when you end it, when you quit VibeField, or when the Mac restarts." The
+  fact beside it is **Until you quit**. Until AL-10 it said a terminal "outlives … quitting VibeField", which has been
+  false since AL-3 (2026-10-27).
+- **Settings → Diagnostics' "Last exit"** (AL-12, `last-exit-words.ts`) keeps how a shell last left after the notice
+  has gone, in one sentence: what happened and when, then what it ended or what kept running. "VibeField quit
+  unexpectedly on Oct 30 at 10:42. 2 terminal sessions kept running." · "VibeField quit on Oct 30 at 10:42 and ended 2
+  terminal sessions." · before any exit, "No exit recorded yet." An unread count is again "Its terminal service kept
+  running.", never zero.
+- **Keep running when VibeField quits** (AL-6, AL-D2; Settings → Desktop behavior, macOS, off by default): "Quitting
+  closes the windows and keeps VibeField in the menu bar, with its terminal sessions running. Quit VibeField in the
+  menu bar quits it." With it on, ⌘Q, the Dock and the menu close the windows and hide the Dock icon. That is no quit,
+  so nothing asks and nothing ends. The status item is shown whatever **Show status item** says, and its first row
+  says "VibeField is running in the background". Its **Quit VibeField** is the quit, through the boxes above. Opening
+  a window brings the Dock icon back.
 
 ---
 
@@ -5480,12 +5656,14 @@ row and the bottom centre solid, the other five at 40% — never in one colour, 
 48 × 48 px (drawn at 56, so the dots themselves span 48), never on a busy ground, in
 `--vf-tailscale-ink` (`#1E1E1F` on light, `#FFFFFF` on dark, its two files' inks). It appears only
 where trust is decided — the Connect pane's partner line, Settings → Devices' card, the phone's
-sign-in — and every button stays words. It is drawn inline in `account/tailscale-mark.tsx`, the
+sign-in and the phone's Settings › Account card (IOS-10a) — and every button stays words. It is
+drawn inline in `account/tailscale-mark.tsx`, the
 glyph test's allow-list naming it, and About carries "Tailscale is a registered trademark of
 Tailscale Inc.". The phone's copy (TS-7) is FieldDesign's `TailscaleMark` in
 `ChromePalette.tailscaleInk`, drawn from the same constants and held to them by
-`pnpm check:ios-fixtures`; having no About, the phone carries the trademark line at the foot of its
-settings sheet. On the
+`pnpm check:ios-fixtures`; the phone's About carries the trademark line at its foot, as the
+desktop's does (IOS-10a; until the phone had an About, TS-7 put it at the foot of its terminal
+settings sheet). On the
 phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
 copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
 `resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the

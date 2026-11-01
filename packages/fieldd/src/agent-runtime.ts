@@ -4588,12 +4588,23 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // reads the final git state (`resumableNow`, `awaitExitCleanup`). One
     // still pending past the bound is said while it waits, not after.
     const cleanupStartedAt = Date.now();
-    const slow = setTimeout(() => {
+    // Item 131 — libuv arms a timer from its loop clock truncated to whole ms, so one can complete up to a
+    // millisecond early by the wall clock this warning reports (item 120's class). The warning says the cleanup is
+    // pending PAST the bound, so it is said only once Date.now() agrees; a short fire re-arms for the rest.
+    let slow: NodeJS.Timeout;
+    const warnWhenDue = (): void => {
+      const pendingMs = Date.now() - cleanupStartedAt;
+      if (pendingMs < AGENT_EXIT.CLEANUP_WARN_MS) {
+        slow = setTimeout(warnWhenDue, AGENT_EXIT.CLEANUP_WARN_MS - pendingMs);
+        slow.unref?.();
+        return;
+      }
       this.logger.warn("fieldd.agents.exit_cleanup_slow", "Agent exit cleanup is still pending", {
         runtimeRunId,
-        pendingMs: Date.now() - cleanupStartedAt,
+        pendingMs,
       });
-    }, AGENT_EXIT.CLEANUP_WARN_MS);
+    };
+    slow = setTimeout(warnWhenDue, AGENT_EXIT.CLEANUP_WARN_MS);
     slow.unref?.();
     const cleanup = this.runtime
       .handleProcessExit(entry.info.terminalSessionId, {

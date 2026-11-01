@@ -1,6 +1,8 @@
 import { getRendererLogger } from "../../logging";
+import { fieldHold } from "./field-hold";
 import { markFade } from "./field-mark";
 import type { GlassState } from "./glass-look";
+import type { MarkPicture } from "./glass-pass";
 import type { Splash, SplashRevealOptions } from "./vibefield-splash.js";
 
 // The field's door (DESIGN.md §2.1, §8 "The boot splash"; track FG): the website's loading window
@@ -13,6 +15,8 @@ import type { Splash, SplashRevealOptions } from "./vibefield-splash.js";
 // `?field=still` and `?field=main` force the still and the main thread (the website's `?splash=`).
 // Since FG-3b the door carries the Setup Assistant's glass to the field (FG-D24, glass-pass.ts): what
 // to draw goes in, and whether the field draws it comes out, so the browser can stand its own down.
+// Since FG-6's frozen frame it holds the field on one frame for a harness, and lets it run on
+// (field-hold.ts); since its follow-up 3 it pictures the field's mark for the glass held off it.
 
 /** The website's desktop budget (lib/loading-window.js BUDGET.desktop): the device pixels the
  * field's backing store stops at, so it leaves the GPU room for the desk composing behind it. */
@@ -49,6 +53,16 @@ export interface FieldDoor {
   reveal(options?: FieldRevealOptions): Promise<boolean>;
   /** The Setup Assistant's glass, drawn by the field in its own frame (FG-3b); null draws none. */
   glass(glass: GlassState | null): void;
+  /** The field held on the frame it last drew (FG-6's frozen frame), a glass handed in meanwhile
+   * drawn over it: true once it is held, false where nothing runs to hold (the still, or a door
+   * gone). A reveal runs it on. */
+  freeze(): Promise<boolean>;
+  /** The held field run on from where it was held. */
+  thaw(): void;
+  /** The field's mark as the frame it last drew holds it (FG-6's follow-up 3), for the glass held
+   * off the field to wear: its picture and its box; null where none is drawn (the still, a door
+   * gone) or it can't be read back, which is logged. Never rejects. */
+  markPicture(): Promise<MarkPicture | null>;
   destroy(): void;
 }
 
@@ -68,6 +82,9 @@ export type FieldToWorker =
   | { type: "mark"; to: number; ms: number }
   | { type: "reveal"; id: number; options: FieldRevealOptions }
   | { type: "glass"; glass: GlassState | null }
+  | { type: "freeze" }
+  | { type: "thaw" }
+  | { type: "mark-picture"; id: number }
   | { type: "destroy" };
 
 export type FieldFromWorker =
@@ -77,6 +94,8 @@ export type FieldFromWorker =
   | { type: "revealed"; id: number; opened: boolean }
   | { type: "glass-drawn"; drawn: boolean }
   | { type: "glass-failed"; message: string }
+  | { type: "frozen" }
+  | { type: "mark-pictured"; id: number; picture: MarkPicture | null; failed?: string }
   | { type: "destroyed" };
 
 type SplashModule = typeof import("./vibefield-splash.js");
@@ -158,6 +177,11 @@ const glassFailed = (message: string): void =>
     message,
   });
 
+/** The field's mark couldn't be read back for the glass held off the field (FG-6's follow-up 3),
+ * so the browser's logo keeps the brand's mark. */
+const pictureFailed = (message: string): void =>
+  log().warn("renderer.boot.field_mark_picture", "The field can't picture its mark", { message });
+
 class FieldUnavailable extends Error {
   constructor(
     readonly reason: string,
@@ -168,7 +192,17 @@ class FieldUnavailable extends Error {
 }
 
 function still(reason: string): FieldDoor {
-  return { mode: "still", reason, mark() {}, reveal: async () => false, glass() {}, destroy() {} };
+  return {
+    mode: "still",
+    reason,
+    mark() {},
+    reveal: async () => false,
+    glass() {},
+    freeze: async () => false,
+    thaw() {},
+    markPicture: async () => null,
+    destroy() {},
+  };
 }
 
 async function inWorker(
@@ -187,6 +221,8 @@ async function inWorker(
     dpr: devicePixelRatio || 1,
   });
   const reveals = new Map<number, (opened: boolean) => void>();
+  const freezes: ((held: boolean) => void)[] = [];
+  const pictures = new Map<number, (picture: MarkPicture | null) => void>();
   const started = new Promise<void>((resolve, reject) => {
     worker.onerror = (event) => reject(new Error(event.message || "The field's worker failed"));
     worker.onmessage = ({ data }: MessageEvent<FieldFromWorker>) => {
@@ -198,6 +234,12 @@ async function inWorker(
         reveals.delete(data.id);
       } else if (data.type === "glass-drawn") onGlass?.(data.drawn);
       else if (data.type === "glass-failed") glassFailed(data.message);
+      else if (data.type === "frozen") for (const resolve of freezes.splice(0)) resolve(true);
+      else if (data.type === "mark-pictured") {
+        if (data.failed !== undefined) pictureFailed(data.failed);
+        pictures.get(data.id)?.(data.picture);
+        pictures.delete(data.id);
+      }
     };
   });
   const offscreen = canvas.transferControlToOffscreen();
@@ -230,11 +272,32 @@ async function inWorker(
     glass(state) {
       if (!gone) post({ type: "glass", glass: state });
     },
+    freeze() {
+      if (gone) return Promise.resolve(false);
+      return new Promise((resolve) => {
+        freezes.push(resolve);
+        post({ type: "freeze" });
+      });
+    },
+    thaw() {
+      if (!gone) post({ type: "thaw" });
+    },
+    markPicture() {
+      if (gone) return Promise.resolve(null);
+      const id = ++next;
+      return new Promise((resolve) => {
+        pictures.set(id, resolve);
+        post({ type: "mark-picture", id });
+      });
+    },
     destroy() {
       if (gone) return;
       gone = true;
       for (const resolve of reveals.values()) resolve(false);
       reveals.clear();
+      for (const resolve of freezes.splice(0)) resolve(false);
+      for (const resolve of pictures.values()) resolve(null);
+      pictures.clear();
       observer.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
       post({ type: "destroy" });
@@ -281,7 +344,8 @@ async function onMainThread(
       post: glass,
     });
     drawing = splash;
-    splash.start();
+    const hold = fieldHold(splash, settings.reducedMotion);
+    hold.start();
     const mark = markFade(splash);
     const owned = device;
     let gone = false;
@@ -293,6 +357,7 @@ async function onMainThread(
       reveal(options = {}) {
         if (gone) return Promise.resolve(false);
         mark.cancel();
+        hold.thaw();
         return splash.reveal(options);
       },
       glass(state) {
@@ -300,6 +365,21 @@ async function onMainThread(
         glass.setLook(state?.look ?? null);
         glass.setPose(state?.pose ?? null);
         splash.redraw();
+      },
+      freeze() {
+        if (gone) return Promise.resolve(false);
+        hold.freeze();
+        return Promise.resolve(true);
+      },
+      thaw() {
+        if (!gone) hold.thaw();
+      },
+      markPicture() {
+        if (gone) return Promise.resolve(null);
+        return glass.markPicture().catch((error: unknown) => {
+          pictureFailed(error instanceof Error ? error.message : String(error));
+          return null;
+        });
       },
       destroy() {
         if (gone) return;

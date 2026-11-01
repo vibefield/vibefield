@@ -133,6 +133,22 @@ public final class HistoryDesktops {
     projectsOffline()
   }
 
+  /// Sign out (AP-D4; ITEM 130): what the field taught this phone goes with
+  /// the account — every reader, the ledger, and the cache on disk — so
+  /// nothing of the account that left replays here, to it or to the next.
+  /// The readers and the ledger close first, and a closed one writes nothing
+  /// more, so the cache is cleared last and stays clear; the ledger left
+  /// standing is the empty cache's.
+  public func signedOut() {
+    for reader in readers { reader.close() }
+    readers = []
+    home = nil
+    projects.close()
+    cache?.clear()
+    projects = HistoryProjects(source: nil, door: nil, cache: cache, now: now)
+    projects.start()
+  }
+
   public func setHome(_ deviceId: String?) {
     home = deviceId
     order()

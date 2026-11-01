@@ -43,6 +43,24 @@ const PROJECT_INKS = Array.from({ length: 16 }, (_, ink) => ({
   value: projectInk(ink),
 }));
 
+/** DESIGN.md §2.4's ramp, each tier on each chrome ground of the theme with the
+ * floor it holds there (item 127): t1–t3 are words that are read, at 4.5:1; t4 is
+ * only a mark or a control that is off, at 3:1. Row 32's catalog walk measures
+ * these chips in pixels, so the tiers stand as the product's words do. */
+const TEXT_RAMP_GROUNDS = [
+  { label: "Chrome", token: "--vf-chrome-solid" },
+  { label: "Canvas", token: "--vf-canvas-bg" },
+  { label: "Fill", token: "--vf-fill" },
+  { label: "Fill · hover", token: "--vf-fill-hover" },
+] as const;
+
+const TEXT_RAMP_TIERS = [
+  { tier: "t1", label: "Primary", token: "--vf-text-primary", floor: "4.5" },
+  { tier: "t2", label: "Secondary", token: "--vf-text-secondary", floor: "4.5" },
+  { tier: "t3", label: "Tertiary", token: "--vf-text-tertiary", floor: "4.5" },
+  { tier: "t4", label: "Faint · marks", token: "--vf-text-faint", floor: "3" },
+] as const;
+
 const ACCENT_COLORS = Array.from({ length: 8 }, (_, index) => ({
   label: `Accent ${index + 1}`,
   token: `--vf-accent-${index + 1}`,
@@ -74,6 +92,33 @@ export function FoundationsSection(): ReactElement {
           </div>
         </Specimen>
       </div>
+
+      <Specimen title="Text ramp" source="DESIGN.md §2.4 · design-kit/tokens.css">
+        <div className="vf-ds-text-ramp" data-ds-text-ramp="">
+          {TEXT_RAMP_GROUNDS.map((ground) => (
+            <div
+              key={ground.token}
+              className="vf-ds-text-ramp-ground"
+              data-ramp-ground-of={ground.token}
+              style={{ backgroundColor: `var(${ground.token})` }}
+            >
+              <code>{ground.label}</code>
+              {TEXT_RAMP_TIERS.map((tier) => (
+                <span
+                  key={tier.tier}
+                  className="vf-ds-text-ramp-chip"
+                  data-ramp-tier={tier.tier}
+                  data-ramp-ground={ground.token}
+                  data-ramp-floor={tier.floor}
+                  style={{ color: `var(${tier.token})` }}
+                >
+                  {`${tier.tier} ${tier.label}`}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </Specimen>
 
       <Specimen title="Organizational accents" source="design-kit/tokens.css · DESIGN.md §2.6">
         <div className="vf-ds-accent-line">

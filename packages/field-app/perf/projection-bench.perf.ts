@@ -86,9 +86,13 @@ describe("the projection bench (PG-1e0)", () => {
         );
         // and exactly so while no row leaves and no snapshot replaces the board:
         // each moved row past the open is one upsert, so the bench's stamps found
-        // what the projection's own did, row for row
+        // what the projection's own did, row for row. The open's rows are its
+        // agents, and its bare terminals on every cut but `field`.
+        // *Corrected 2026-11-01 (item 144): the remote cut carries bare terminals
+        // since PG-2/PG-D5, as the model board does; red on main since 5e70a6c44,
+        // ungated (perf runs outside verify).*
         if (c.removed === 0 && c.snapshots === 0) {
-          const atOpen = open.agents + (c.cut === "model" ? open.terminals : 0);
+          const atOpen = open.agents + (c.cut === "field" ? 0 : open.terminals);
           expect(c.upserts, `${prepared.name} ${c.cut}: upserts = moved − the open`).toBe(
             c.moved - atOpen,
           );
@@ -117,7 +121,7 @@ describe("the projection bench (PG-1e0)", () => {
       await timed(prepared, null);
       for (const cut of BENCH_CUTS) await timed(prepared, cut);
       const baselines: number[] = [];
-      const added: Record<BenchCut, number[]> = { model: [], desk: [], field: [] };
+      const added: Record<BenchCut, number[]> = { model: [], remote: [], field: [] };
       for (let round = 0; round < rounds; round += 1) {
         for (const cut of BENCH_CUTS) {
           const base = await timed(prepared, null);

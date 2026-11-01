@@ -110,6 +110,26 @@ describe("UI system ownership boundaries", () => {
     expect(catalogCss).not.toMatch(/^\.vf-chat(?:\b|-)/m);
     // SP-1c: the New spark sheet's plate stages it over Chat; the sheet's rules are the product's
     expect(catalogCss).not.toMatch(/^\.vf-new-spark(?:\b|-)/m);
+    // FG-6: the first run's frames box the shipping field and glass; their rules are boot.css's and
+    // wizard-ui.css's, and the field's still is the field's own rule, never a copy of its picture
+    expect(catalogCss).not.toMatch(/^\.vf-(?:field|splash|wizard)(?:\b|-)/m);
+    expect(catalogCss).not.toContain("splash-still");
+  });
+
+  it("stands the first run's frames on the shipping field over its still — the page a window asks with, never a copy (FG-6)", () => {
+    // The catalog stands in for the page a window that can't run the field is (`?field=still`), and mounts the
+    // product's own field layer and glass on it. Never the field's or the glass's classes, never its picture or a
+    // stylesheet, never the field's door.
+    const preview = source("design-system/OnboardingPreview.tsx");
+    expect(preview).toContain('const STILL_PAGE = { search: "?field=still" } as const;');
+    expect(preview).toMatch(
+      /<FieldLayer mark=\{false\} page=\{STILL_PAGE\}>\s*<WizardShellView [^>]*ground="field">/u,
+    );
+    expect(preview).not.toMatch(/className="vf-(?:field|splash|wizard)/u);
+    expect(preview).not.toContain("splash-still");
+    expect(preview).not.toContain("<style");
+    expect(preview).not.toContain("openFieldDoor");
+    expect(preview).not.toContain("FieldGlassContext");
   });
 
   it("keeps Chat's fixture an ADAPTER — the product's reading over fixture sparks and rows, never the panel's markup (SP-1b)", () => {
@@ -793,6 +813,8 @@ describe("UI system ownership boundaries", () => {
       "OnboardingWelcomeBackPaneView",
       "OnboardingWelcomePaneView",
       "WizardShellView",
+      // FG-6 — the first run's glass stands on the field's own layer, over its still
+      "FieldLayer",
       "SwarmBodiesPreview",
       "swarmMonitorView",
       "CanvasGroundWorkbench",

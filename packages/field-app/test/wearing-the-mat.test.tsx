@@ -178,6 +178,13 @@ describe("the boot's first face stands on the field (track FG, DESIGN.md §2.1)"
     expect(rule).not.toContain("background-image");
   });
 
+  it("grounds the catalog's Setup Assistant on the field, never the mat — its frames stand on the field's still (FG-6)", () => {
+    const rule = block(read("src/design-system/styles/scenes.css"), ".vf-ds-onboarding-production");
+    expect(rule).toContain("background-color: var(--vf-field-ground);");
+    expect(rule).not.toContain("--vf-mat-");
+    expect(rule).not.toContain("background-image");
+  });
+
   it("projects the field's ground into the window's pre-paint by name (FG-D25, UI_SYSTEM.md)", () => {
     // The files as written: `read` drops block comments, and main can't read the CSS at all.
     const raw = (rel: string): string => readFileSync(join(process.cwd(), rel), "utf8");

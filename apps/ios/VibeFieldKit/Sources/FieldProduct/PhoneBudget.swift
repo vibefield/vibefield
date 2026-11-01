@@ -7,10 +7,12 @@ import Foundation
 /// number that moves on one side only is a red there, never a quiet
 /// disagreement about how many sockets this phone may hold.
 ///
-/// These are the AS-BUILT numbers (2026-10-01). SP-D12 is OPEN — its lean is
-/// one door to the HOME desktop, two attached terminals (the open card and one
-/// warm), one web view — and when it rules, the registry moves and this file
-/// moves with it.
+/// These are the AS-BUILT numbers. SP-D12's terminal half is FW-D2's (three
+/// lanes, 2026-10-16: `terminalLegs` below); the rest of SP-D12 is OPEN — its
+/// lean is one door to the HOME desktop and one web view — and when it rules,
+/// the registry moves and this file moves with it. *Corrected 2026-10-31: this
+/// said the lean's "two attached terminals (the open card and one warm)" after
+/// FW-D2 had ruled the terminal half, as `registries.ts`'s own comment says.*
 // FS-2 adds no leg: roots/list/search and agent.spawn reuse a desktop's
 // existing product door, including the one held open by History.
 public enum PhoneBudget {

@@ -148,6 +148,24 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       ).not.toBeNull();
     }
     expect(container?.textContent).toContain("The field, in one frame.");
+    // Item 127 (DESIGN.md §2.4): the ramp's measured chip — every tier on every chrome ground of the theme, each
+    // with its floor, which row 32's catalog walk holds it to
+    const TIER_TOKENS = { t1: "primary", t2: "secondary", t3: "tertiary", t4: "faint" } as const;
+    const grounds = ["--vf-chrome-solid", "--vf-canvas-bg", "--vf-fill", "--vf-fill-hover"];
+    const chips = [
+      ...(container?.querySelectorAll<HTMLElement>("[data-ds-text-ramp] [data-ramp-tier]") ?? []),
+    ];
+    expect(chips.map((chip) => [chip.dataset.rampGround, chip.dataset.rampTier])).toEqual(
+      grounds.flatMap((ground) => ["t1", "t2", "t3", "t4"].map((tier) => [ground, tier])),
+    );
+    for (const chip of chips) {
+      const tier = chip.dataset.rampTier as keyof typeof TIER_TOKENS;
+      expect(chip.dataset.rampFloor).toBe(tier === "t4" ? "3" : "4.5");
+      expect(chip.style.color).toBe(`var(--vf-text-${TIER_TOKENS[tier]})`);
+      expect(chip.closest<HTMLElement>("[data-ramp-ground-of]")?.style.backgroundColor).toBe(
+        `var(${chip.dataset.rampGround})`,
+      );
+    }
     expect(container?.textContent).toContain("The actual field, under glass");
     expect(container?.textContent).toContain("Infinite canvas and visual tuning workbench");
     expect(container?.textContent).toContain("Field chrome playground");
@@ -718,12 +736,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     );
     expect(place?.dataset.open).toBe("true");
     // HN-8: its package turns the same sheet to Artifacts in place — which waits here, with no
-    // plugin host in the catalog to bind the Hub, as a window's does at boot
+    // plugin host in the catalog to bind the Hub, as a window's does at boot. Its words are the
+    // clock's: opening, and past 10 s from the playground's mount, not starting. This page can
+    // take longer than that to render and reach here (GitHub's runner did, item 129), so the
+    // words are read with the clock frozen, in head.test.tsx's row for the catalog's live head.
     await act(async () => place?.querySelector<HTMLButtonElement>(".vf-head-pack")?.click());
     expect(place?.dataset.open).toBe("true");
-    expect(place?.querySelector('[data-shelf="artifacts"][data-shown]')?.textContent).toBe(
-      "Opening Artifacts…",
-    );
+    const artifacts = place?.querySelector('[data-shelf="artifacts"][data-shown]');
+    expect(artifacts?.querySelector(".vf-head-waits")).not.toBeNull();
+    expect(artifacts?.querySelector("[data-vf-plugin]")).toBeNull();
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
     // GV-D1: the head in the other theme too — the page is dark, so the frame's
@@ -812,6 +833,14 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       expect(container?.querySelector(`[data-onboarding-preview="${state}"]`)).not.toBeNull();
     }
     expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(13);
+    // FG-6: every frame stands the shipping glass on the shipping field, over the field's still as
+    // a window that can't run the field stands it — no canvas, and the browser's glass over it.
+    expect(
+      container?.querySelectorAll('.vf-ds-onboarding-production > .vf-field[data-field="still"]'),
+    ).toHaveLength(13);
+    expect(container?.querySelectorAll('.vf-wizard-shell[data-ground="field"]')).toHaveLength(13);
+    expect(container?.querySelector(".vf-ds-onboarding-production .vf-field-canvas")).toBeNull();
+    expect(container?.querySelector(".vf-ds-onboarding-production [data-glass]")).toBeNull();
     expect(container?.querySelector(".vf-ds-field-stage .vf-head-zoom")).not.toBeNull();
     expect(container?.querySelector("[data-ground-workbench]")).not.toBeNull();
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();

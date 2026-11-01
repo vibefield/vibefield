@@ -16,7 +16,8 @@ import type { SplashFrame, SplashPost, SplashSize } from "./vibefield-splash.js"
 //          box's Gaussian, after Evan Wallace's "Fast Rounded Rectangle Shadows"), then inside it the blurred frame,
 //          saturated, then the tint and the grain, and over them the logo, inverted on milk
 // The recipe and the pose come from the page (glass-look.ts). The edge's hairlines stay the browser's, at the
-// screen's own pixels where the field may draw at fewer (its budget).
+// screen's own pixels where the field may draw at fewer (its budget). FG-6's follow-up 3: the pass pictures the field's
+// mark as its last frame holds it, for the glass held off the field to wear (`markPicture`).
 
 const WGSL = /* wgsl */ `
 struct Glass {
@@ -185,7 +186,26 @@ fn glass(@builtin(position) fc: vec4f) -> @location(0) vec4f {
 }
 `;
 
+// The field's mark as a picture (FG-6's follow-up 3): its texels as they stand, premultiplied, drawn into a texture the
+// pass can copy out, since the splash's own has no COPY_SRC.
+const PICTURE_WGSL = /* wgsl */ `
+@group(0) @binding(0) var markTex: texture_2d<f32>;
+
+@vertex
+fn full(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
+  return vec4f(p * 2.0 - 1.0, 0.0, 1.0);
+}
+
+@fragment
+fn picture(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  return textureLoad(markTex, vec2i(fc.xy), 0);
+}
+`;
+
 const LEVEL: GPUTextureFormat = "rgba16float";
+/** The mark's own format (the splash's MARK_FORMAT), so its picture is drawn texel for texel. */
+const PICTURE: GPUTextureFormat = "rgba8unorm";
 const DEEPEST = 3;
 /** The glass's uniforms: ten vec4s (the shader's `Glass`). */
 const GLASS_FLOATS = 10 * 4;
@@ -259,6 +279,46 @@ export function glassFrame(
   return { blur, uniforms };
 }
 
+/** The mark's texels as they are read back (RGBA, premultiplied, rows `bytesPerRow` apart: the copy's alignment), as a
+ * PNG's rows: each colour over its alpha, as the glass's own shader takes it (`m.rgb / m.a`), and a texel with no alpha
+ * clear. */
+export function straightRows(
+  texels: Uint8Array,
+  width: number,
+  height: number,
+  bytesPerRow: number,
+): Uint8ClampedArray<ArrayBuffer> {
+  const rows = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const from = y * bytesPerRow + x * 4;
+      const to = (y * width + x) * 4;
+      const alpha = texels[from + 3] ?? 0;
+      if (alpha === 0) continue;
+      for (let c = 0; c < 3; c++)
+        rows[to + c] = Math.round(((texels[from + c] ?? 0) * 255) / alpha);
+      rows[to + 3] = alpha;
+    }
+  }
+  return rows;
+}
+
+/** A box in CSS px of the field's own box. */
+export interface MarkBox {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** The field's mark as one of its frames holds it (FG-6's follow-up 3): a PNG of its texels, each colour over its
+ * alpha as a page's pictures are, and its box in CSS px of the field's box, for the glass held off the field to wear
+ * (field-glass.ts). */
+export interface MarkPicture {
+  readonly png: Blob;
+  readonly box: MarkBox;
+}
+
 /** What the pass tells the field's side of the door. */
 export interface GlassPassHooks {
   /** Whether the field draws the glass: said from the frame that first does, and again when it stops. */
@@ -275,6 +335,9 @@ export interface GlassPass extends SplashPost {
   setLook(look: GlassLook | null): void;
   /** Where the glass stands and how far it has formed; null draws no glass. */
   setPose(pose: GlassPose | null): void;
+  /** The field's mark as the frame it last drew holds it (FG-6's follow-up 3); null before the field has drawn a
+   * frame, and once the pass is gone. Rejects with what the GPU says when it can't picture it. */
+  markPicture(): Promise<MarkPicture | null>;
   destroy(): void;
 }
 
@@ -313,6 +376,10 @@ export function createGlassPass(
   const downGroups: GPUBindGroup[] = [];
   const blurGroups: (readonly [GPUBindGroup, GPUBindGroup])[] = [];
   const glassGroups: GPUBindGroup[] = [];
+  // the field's last frame, whose mark is pictured, and the picture's pipeline, made at the first picture so a boot
+  // that never asks for one never makes it (FG-6's follow-up 3)
+  let last: SplashFrame | null = null;
+  let picturing: Promise<GPURenderPipeline> | null = null;
 
   const make = async (): Promise<Pipes> => {
     const format = gpu.getPreferredCanvasFormat();
@@ -471,6 +538,62 @@ export function createGlassPass(
     run(encoder, p.glass, glass, frame.view, true);
   };
 
+  const picturePipe = (): Promise<GPURenderPipeline> => {
+    if (picturing === null) {
+      const module = device.createShaderModule({ label: "glass-picture", code: PICTURE_WGSL });
+      picturing = device.createRenderPipelineAsync({
+        label: "glass-picture",
+        layout: "auto",
+        vertex: { module, entryPoint: "full" },
+        fragment: { module, entryPoint: "picture", targets: [{ format: PICTURE }] },
+      });
+    }
+    return picturing;
+  };
+
+  // the mark drawn into a texture of its own, copied out at the copy's row alignment, read back and made a PNG
+  const picture = async (
+    pipeline: GPURenderPipeline,
+    mark: GPUTexture,
+    size: SplashSize,
+  ): Promise<MarkPicture> => {
+    const { k, MX, MY, LW, LH } = size;
+    const bytesPerRow = Math.ceil((LW * 4) / 256) * 256;
+    const texture = device.createTexture({
+      label: "glass-picture",
+      size: [LW, LH],
+      format: PICTURE,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    });
+    const buffer = device.createBuffer({
+      label: "glass-picture",
+      size: bytesPerRow * LH,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
+    try {
+      device.pushErrorScope("validation");
+      const encoder = device.createCommandEncoder({ label: "glass-picture" });
+      const bound = group(pipeline, [{ binding: 0, resource: mark.createView() }]);
+      run(encoder, pipeline, bound, texture.createView());
+      encoder.copyTextureToBuffer({ texture }, { buffer, bytesPerRow }, [LW, LH]);
+      device.queue.submit([encoder.finish()]);
+      const invalid = await device.popErrorScope();
+      if (invalid !== null) throw new Error(invalid.message);
+      await buffer.mapAsync(GPUMapMode.READ);
+      const rows = straightRows(new Uint8Array(buffer.getMappedRange()), LW, LH, bytesPerRow);
+      buffer.unmap();
+      const canvas = new OffscreenCanvas(LW, LH);
+      const context = canvas.getContext("2d");
+      if (context === null) throw new Error("no 2D canvas to picture the mark on");
+      context.putImageData(new ImageData(rows, LW, LH), 0, 0);
+      const png = await canvas.convertToBlob({ type: "image/png" });
+      return { png, box: { x: MX / k, y: MY / k, width: LW / k, height: LH / k } };
+    } finally {
+      buffer.destroy();
+      texture.destroy();
+    }
+  };
+
   return {
     setLook(next) {
       look = next;
@@ -494,6 +617,7 @@ export function createGlassPass(
       pose = next;
     },
     encode(encoder, frame) {
+      last = frame;
       const p = pipes;
       const recipe = look;
       const at = pose;
@@ -508,8 +632,15 @@ export function createGlassPass(
         hooks.drawn(draws);
       }
     },
+    async markPicture() {
+      const shown = last;
+      if (shown === null || gone) return null;
+      const pipeline = await picturePipe();
+      return gone ? null : picture(pipeline, shown.mark, shown.size);
+    },
     destroy() {
       gone = true;
+      last = null;
       destroySized();
       if (pipes !== null) release(pipes);
       pipes = null;

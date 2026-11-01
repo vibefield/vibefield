@@ -1,6 +1,9 @@
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { appBundleOf, ShellAbsence } from "../src/shell-absence";
+import { appBundleOf, fileRelaunchLog, type RelaunchLog, ShellAbsence } from "../src/shell-absence";
 
 // AL-5 (`draft/thinking-app-lifecycle.md` §8.2; AL-D4, AL-D8) — the orphan bound, over fake timers: an empty pair
 // with no shell ends itself after the idle span (never on a count it cannot read); an unplanned exit that left
@@ -17,9 +20,10 @@ const T = {
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
-function rig(live: { n: number | null }, relaunch = true) {
+function rig(live: { n: number | null }, relaunch = true, relaunchLog?: RelaunchLog) {
   const calls = { idle: 0, relaunch: 0 };
   const absence = new ShellAbsence({
+    ...(relaunchLog !== undefined ? { relaunchLog } : {}),
     liveSessions: () => live.n,
     stopForIdle: async () => void calls.idle++,
     relaunchShell: relaunch
@@ -168,6 +172,126 @@ describe("the orphan bound (AL-5)", () => {
     absence.vacant(unplanned(1));
     await vi.advanceTimersByTimeAsync(T.RELAUNCH_DELAY_MS * 4);
     expect(calls.relaunch).toBe(0);
+  });
+});
+
+/** A log that outlives the ShellAbsence reading it, as the file outlives fieldd. */
+function memoryLog(order?: string[]): RelaunchLog & { at: number[] } {
+  const log = {
+    at: [] as number[],
+    read: async () => [...log.at],
+    write: async (at: readonly number[]) => {
+      order?.push("written");
+      log.at = [...at];
+    },
+  };
+  return log;
+}
+
+describe("the relaunch cap outlives fieldd (AL-11)", () => {
+  it("a fieldd after the one that spent the cap relaunches nothing more inside the window, then may again", async () => {
+    const log = memoryLog();
+    const first = rig({ n: 1 }, true, log);
+    for (let i = 0; i < T.RELAUNCH_CAP; i++) {
+      first.absence.vacant(unplanned(1));
+      await vi.advanceTimersByTimeAsync(T.RELAUNCH_DELAY_MS + 1);
+      first.absence.held();
+    }
+    expect(first.calls.relaunch).toBe(T.RELAUNCH_CAP);
+    expect(log.at).toHaveLength(T.RELAUNCH_CAP);
+    first.absence.dispose();
+
+    // a fieldd replaced at boot: its own count would begin at zero
+    const next = rig({ n: 1 }, true, log);
+    next.absence.vacant(unplanned(1));
+    await vi.advanceTimersByTimeAsync(T.RELAUNCH_DELAY_MS + 1);
+    expect(next.calls.relaunch).toBe(0);
+    next.absence.held();
+
+    await vi.advanceTimersByTimeAsync(T.RELAUNCH_WINDOW_MS + 1);
+    next.absence.vacant(unplanned(1));
+    await vi.advanceTimersByTimeAsync(T.RELAUNCH_DELAY_MS + 1);
+    expect(next.calls.relaunch).toBe(1);
+    // the times past the window leave the log
+    expect(log.at).toHaveLength(1);
+  });
+
+  it("writes the relaunch down before it runs, so an app that dies at once is counted", async () => {
+    const order: string[] = [];
+    const log = memoryLog(order);
+    const absence = new ShellAbsence({
+      liveSessions: () => 1,
+      stopForIdle: async () => undefined,
+      relaunchShell: async () => {
+        order.push("relaunched");
+        return true;
+      },
+      relaunchLog: log,
+      logger: createNoopLogger(),
+      now: () => Date.now(),
+      timings: T,
+    });
+    absence.vacant(unplanned(1));
+    await vi.advanceTimersByTimeAsync(T.RELAUNCH_DELAY_MS + 1);
+    expect(order).toEqual(["written", "relaunched"]);
+  });
+
+  it("a log it cannot read or write leaves the cap to this fieldd's own count, never unbounded", async () => {
+    const broken: RelaunchLog = {
+      read: async () => {
+        throw new Error("not a relaunch log");
+      },
+      write: async () => {
+        throw new Error("disk full");
+      },
+    };
+    const { absence, calls } = rig({ n: 1 }, true, broken);
+    for (let i = 0; i < T.RELAUNCH_CAP + 1; i++) {
+      absence.vacant(unplanned(1));
+      await vi.advanceTimersByTimeAsync(T.RELAUNCH_DELAY_MS + 1);
+      absence.held();
+    }
+    expect(calls.relaunch).toBe(T.RELAUNCH_CAP);
+  });
+
+  it("a shell back while the log is read wins: no relaunch, nothing written", async () => {
+    let release: () => void = () => undefined;
+    const log = memoryLog();
+    const slow: RelaunchLog = {
+      read: () =>
+        new Promise((resolve) => {
+          release = () => resolve([]);
+        }),
+      write: log.write,
+    };
+    const { absence, calls } = rig({ n: 1 }, true, slow);
+    absence.vacant(unplanned(1));
+    await vi.advanceTimersByTimeAsync(T.RELAUNCH_DELAY_MS + 1);
+    absence.held();
+    release();
+    await vi.advanceTimersByTimeAsync(T.RELAUNCH_DELAY_MS * 4);
+    expect(calls.relaunch).toBe(0);
+    expect(log.at).toEqual([]);
+  });
+});
+
+describe("the relaunch log on disk (AL-11, LAYOUT.SHELL_RELAUNCHES)", () => {
+  beforeEach(() => vi.useRealTimers());
+
+  it("reads none before the first relaunch, then what was written, owner-only; a garbled one is refused", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "al11-"));
+    try {
+      const path = join(dir, "fieldd", "shell-relaunches.json");
+      const log = fileRelaunchLog(path);
+      expect(await log.read()).toEqual([]);
+      await log.write([1_000, 2_000]);
+      expect(await log.read()).toEqual([1_000, 2_000]);
+      expect((await stat(path)).mode & 0o777).toBe(0o600);
+      await writeFile(path, JSON.stringify({ at: ["soon"] }));
+      await expect(log.read()).rejects.toThrow("not a relaunch log");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -1,9 +1,9 @@
 import type {
   AgentDeskTerminalRow,
-  AgentModelBoardRow,
   AgentModelDeskRow,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
+  AgentModelMeshRow,
   RowsDelta,
   RowsDeviceState,
   RowsSnapshot,
@@ -38,6 +38,11 @@ import type {
  * (`local`). That is what the window's chrome reads — the deck's pane frames,
  * the find sheet, the AR-7 marker — now that the fold's `full` board is no
  * longer asked (`runs()`; `model-replica.ts` publishes it as `chrome`).
+ *
+ * PG-2 (PG-L1) — every other desktop's board is its owner's REMOTE cut
+ * (`AgentRemoteRow`): the model's row and its joins, a bare terminal's among
+ * them, with no field half beside it. The fold reads a peer's row for exactly
+ * what it read before: its `monitorRow`, its `terminal` join and its key.
  */
 
 /** A desktop as the board stands it: its state and when that was established. */
@@ -53,14 +58,14 @@ export interface ModelBoardDevice {
  * and the BOARD row it rode in on, kept beside it for the window's own joins.
  * The model carries no pane join by design (a view never looks a pane up); the
  * board row does — a terminal row's `terminal.runtimeSessionId` (G3), a desk
- * row's `terminal` and `runtimeRunId` — and that is what lets the window map
+ * or remote row's `terminal` and `runtimeRunId` — and that is what lets the window map
  * its panes, its spawn answers and fieldd's history (keyed by run) onto model
  * ids without deriving a business fact. Every row the fold has heard is here,
  * the ones the replica hides included (`alive: false`, M3).
  */
 export interface HeldModelRow {
   readonly device: string;
-  readonly board: AgentModelBoardRow;
+  readonly board: AgentModelMeshRow;
   readonly row: MonitorAgentRow;
 }
 
@@ -76,10 +81,19 @@ interface HeldDevice {
 
 const SDK_OS = new Set<string>(["mac", "windows", "linux", "ios", "android"]);
 
-/** A board row is a bare terminal's when it is of the terminal kind and carries
- * no status of its own; every other row is a run's (a desk row). */
-export function isTerminalBoardRow(row: AgentModelBoardRow): row is AgentDeskTerminalRow {
-  return row.kind === "terminal" && !("status" in row);
+/** A board row is a bare terminal's when it is of the terminal kind, carries no
+ * status of its own and names its pane: the join every reader of one reads. A
+ * peer's terminal whose owner's doors are down names none (F-M4, PG-2), and no
+ * join is read off it. */
+export function isTerminalBoardRow(row: AgentModelMeshRow): row is AgentDeskTerminalRow {
+  return row.kind === "terminal" && !("status" in row) && row.terminal !== undefined;
+}
+
+/** A board row is a run's desk row (this desktop's model board) when it carries
+ * the field half, a status of its own; a bare terminal's and a peer's remote row
+ * carry none. */
+export function isDeskBoardRow(row: AgentModelMeshRow): row is AgentModelDeskRow {
+  return "status" in row;
 }
 
 /** A wire OS word as the SDK's mark, kept only when it is one of the SDK's words. */
@@ -109,9 +123,19 @@ export function modelRowFrom(wire: WireMonitorRow, here: string | undefined): Mo
   } as unknown as MonitorAgentRow;
 }
 
-/** The model row a board row carries, or none (a desk row from an older daemon). */
-export function monitorRowOf(row: AgentModelBoardRow): WireMonitorRow | undefined {
+/** The model row a board row carries, or none (a run the backend has not assembled yet). */
+export function monitorRowOf(row: AgentModelMeshRow): WireMonitorRow | undefined {
   return row.monitorRow;
+}
+
+/** The model ids a board's rows carry, in the board's order. */
+function modelIdsOf(rows: readonly AgentModelMeshRow[]): string[] {
+  const ids: string[] = [];
+  for (const row of rows) {
+    const wire = monitorRowOf(row);
+    if (wire !== undefined) ids.push(wire.id);
+  }
+  return ids;
 }
 
 export class ModelBoardFold {
@@ -140,7 +164,7 @@ export class ModelBoardFold {
 
   /** Every row the fold holds, this desktop's first and then by device order. */
   heldRows(): readonly HeldModelRow[] {
-    return [...this.#held.values()];
+    return this.#byDevice();
   }
 
   /**
@@ -163,10 +187,15 @@ export class ModelBoardFold {
     }));
   }
 
-  /** The open — and every re-snapshot — replaces everything held (M23). */
+  /** The open — and every re-snapshot — replaces everything held (M23). A row
+   * the new open still holds keeps its place among its desktop's (item 138). */
   open(open: AgentModelMeshOpen): MonitorModelSnapshot {
+    const kept = new Set<string>();
+    for (const entry of open.devices) {
+      for (const id of modelIdsOf(entry.snapshot?.rows ?? [])) kept.add(id);
+    }
+    for (const id of [...this.#held.keys()]) if (!kept.has(id)) this.#held.delete(id);
     this.#devices.clear();
-    this.#held.clear();
     this.#runs.clear();
     this.#runsList = null;
     this.#here = open.devices[0]?.device;
@@ -208,7 +237,9 @@ export class ModelBoardFold {
       if (held === undefined) this.#devices.set(frame.device, target);
       const before = new Set(target.idByKey.values());
       const upserts = this.#replaceBoard(frame.device, target, frame.snapshot);
-      const removed = [...before].filter((id) => !target.idByKey.has(this.#keyOf(target, id)));
+      // gone is an id no key of the device maps to now (item 137's rule)
+      const mapped = new Set(target.idByKey.values());
+      const removed = [...before].filter((id) => !mapped.has(id));
       return this.#change(upserts, removed);
     }
     const delta = frame.delta;
@@ -221,7 +252,16 @@ export class ModelBoardFold {
       return "gap";
     }
     const upserts: MonitorAgentRow[] = [];
-    const removed: string[] = [];
+    // Item 137 — the ids a key let go of in this frame, each dropped only if
+    // no key of the device maps to it once the whole frame is applied. One
+    // model id can change keys inside one delta: a shell promoted to an agent
+    // is the run's key carrying the shell's id while the shell's key leaves
+    // (M22, fieldd's `hostRunFromSummary`), and the run's end is the shell's
+    // key back with the id while the run's key leaves (fieldd's
+    // `agent-board-promotion.test.ts`). Dropping by key alone deleted the row
+    // in the frame that moved it: a window drew a departure and a birth where
+    // M22 keeps one body.
+    const released = new Set<string>();
     const here = frame.device === this.#here;
     for (const row of delta.upserts) {
       if (here) this.#takeRun(row);
@@ -232,16 +272,12 @@ export class ModelBoardFold {
         // stands for nothing now
         if (previous !== undefined) {
           held.idByKey.delete(row.runtimeRunId);
-          this.#held.delete(previous);
-          removed.push(previous);
+          released.add(previous);
         }
         continue;
       }
       const next = modelRowFrom(wire, this.#here);
-      if (previous !== undefined && previous !== next.id) {
-        this.#held.delete(previous);
-        removed.push(previous);
-      }
+      if (previous !== undefined && previous !== next.id) released.add(previous);
       held.idByKey.set(row.runtimeRunId, next.id);
       this.#held.set(next.id, { device: frame.device, board: row, row: next });
       upserts.push(next);
@@ -251,20 +287,25 @@ export class ModelBoardFold {
       const id = held.idByKey.get(key);
       if (id === undefined) continue;
       held.idByKey.delete(key);
-      this.#held.delete(id);
-      removed.push(id);
+      released.add(id);
     }
+    const mapped = new Set(held.idByKey.values());
+    const removed = [...released].filter((id) => !mapped.has(id));
+    for (const id of removed) this.#held.delete(id);
     held.revision = delta.revision;
     return this.#change(upserts, removed);
   }
 
-  /** A device's board, whole: its rows replace that device's; the upserts. */
+  /** A device's board, whole: its rows replace that device's; the upserts. A
+   * row the new board still holds keeps its place (item 138): only the ids it
+   * no longer holds leave, so a re-send that changed nothing moves nothing. */
   #replaceBoard(
     device: string,
     held: HeldDevice,
-    snapshot: RowsSnapshot<AgentModelBoardRow>,
+    snapshot: RowsSnapshot<AgentModelMeshRow>,
   ): MonitorAgentRow[] {
-    for (const id of held.idByKey.values()) this.#held.delete(id);
+    const kept = new Set(modelIdsOf(snapshot.rows));
+    for (const id of held.idByKey.values()) if (!kept.has(id)) this.#held.delete(id);
     held.idByKey = new Map();
     held.epoch = snapshot.epoch;
     held.revision = snapshot.revision;
@@ -287,20 +328,15 @@ export class ModelBoardFold {
   }
 
   /** One of this desktop's board rows, for the chrome: a run row is kept whole
-   * (assembled by the backend or not); a key that turned into a terminal row
-   * is a run no more. */
-  #takeRun(row: AgentModelBoardRow): void {
-    if (isTerminalBoardRow(row)) {
+   * (assembled by the backend or not); a key that turned into any other row is
+   * a run no more. */
+  #takeRun(row: AgentModelMeshRow): void {
+    if (!isDeskBoardRow(row)) {
       if (this.#runs.delete(row.runtimeRunId)) this.#runsList = null;
       return;
     }
     this.#runs.set(row.runtimeRunId, row);
     this.#runsList = null;
-  }
-
-  #keyOf(held: HeldDevice, id: string): string {
-    for (const [key, candidate] of held.idByKey) if (candidate === id) return key;
-    return id;
   }
 
   #change(upserts: MonitorAgentRow[], removed: string[]): MonitorModelChange | null {
@@ -313,7 +349,28 @@ export class ModelBoardFold {
   /** Every row the fold holds, this desktop's first and then by device order;
    * the replica sorts by the contract's own rule. */
   #ordered(): MonitorAgentRow[] {
-    return [...this.#held.values()].map((held) => held.row);
+    return this.#byDevice().map((held) => held.row);
+  }
+
+  /**
+   * Item 138 — the held rows grouped by desktop, in the board's device order
+   * (the open's, then each desktop as it is first heard), each desktop's rows
+   * in the order the fold first took them (a whole re-send keeps every row it
+   * still holds in place). `#held` alone is insertion order across every
+   * desktop: a device's whole re-send (`#replaceBoard`: a re-present, a
+   * re-attach, a resync) re-inserted its rows after every other desktop's, and
+   * a birth landed after every desktop's, so a peer's rows moved in the
+   * window's order (the rain's columns) on a frame that changed nothing.
+   */
+  #byDevice(): HeldModelRow[] {
+    const groups = new Map<string, HeldModelRow[]>();
+    for (const device of this.#devices.keys()) groups.set(device, []);
+    for (const held of this.#held.values()) {
+      const group = groups.get(held.device);
+      if (group === undefined) groups.set(held.device, [held]);
+      else group.push(held);
+    }
+    return [...groups.values()].flat();
   }
 }
 

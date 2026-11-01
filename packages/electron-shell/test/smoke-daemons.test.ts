@@ -98,14 +98,21 @@ describe("the run's processes — by the mark in their environment, named by the
 });
 
 /** A fake machine: each process lives until its `until` (ms on the fake clock), or until it is killed; a SIGTERM to one
- * that drains on a term moves its end to `drainMs` after the ask. */
-function machine(procs: { p: RunProcess; until: number; drainOnTerm?: number }[]) {
+ * that drains on a term moves its end to `drainMs` after the ask. Its mark shows until `markUntil`, else as long as it
+ * lives: a process in its exit can stop showing `ps -E` its environment before the kernel has it gone (item 142). */
+function machine(
+  procs: { p: RunProcess; until: number; drainOnTerm?: number; markUntil?: number }[],
+) {
   let clock = 0;
   const signals: [number, string][] = [];
+  const lives = (x: { until: number }): boolean => x.until > clock;
   const deps: StopRunDeps = {
-    list: () => procs.filter((x) => x.until > clock).map((x) => x.p),
+    list: () => procs.filter(lives).map((x) => x.p),
     still: (_mark, pids) =>
-      pids.filter((pid) => procs.some((x) => x.p.pid === pid && x.until > clock)),
+      pids.filter((pid) =>
+        procs.some((x) => x.p.pid === pid && lives(x) && (x.markUntil ?? x.until) > clock),
+      ),
+    gone: (pid) => !procs.some((x) => x.p.pid === pid && lives(x)),
     signal: (pid, signal) => {
       signals.push([pid, signal]);
       const x = procs.find((y) => y.p.pid === pid);
@@ -174,6 +181,15 @@ describe("stopRunDaemons — the teardown asks what nothing asked, and WAITS for
     expect(stopped.killed).toEqual([]);
     expect(stopped.left).toEqual([]);
     expect(stopped.waitedMs).toBeLessThan(1_000);
+  });
+
+  it("waits for a process the kernel still has after its mark has gone (item 142, AL-6's arm)", async () => {
+    // field-native, already stopping: its environment gone from `ps -E` at once, the process itself 2 s on
+    const m = machine([{ p: proc(403, 1, "field-native"), until: 2_000, markUntil: 0 }]);
+    const stopped = await stopRunDaemons("vf-smoke-profile-x", 100, m.deps);
+    expect(stopped.waitedMs).toBeGreaterThanOrEqual(2_000);
+    expect(stopped.killed).toEqual([]);
+    expect(stopped.left).toEqual([]);
   });
 
   it("asks again and then kills what outlives the drain's bound", async () => {

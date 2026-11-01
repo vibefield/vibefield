@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { AuditOnBehalfOfV1 } from "../src/diagnostics";
 import { ForwardEnvelope, ForwardReceipt, IdempotencyKey, OnBehalfOf } from "../src/forwarding";
 import { FORWARDING, ROWS } from "../src/registries";
 import {
@@ -122,6 +124,22 @@ describe("DS-L7 / DS-D15 — a forwarded call carries who it is for", () => {
     ).toBe("w1");
     expect(OnBehalfOf.safeParse({ clientKind: "browser", deviceId: "laptop" }).success).toBe(false);
     expect(OnBehalfOf.safeParse({ clientKind: "ios", deviceId: "" }).success).toBe(false);
+  });
+
+  it("F1b — a home's forward names the phone behind it by its roster device, and the ledger keeps it", () => {
+    const fixture = JSON.parse(
+      readFileSync(new URL("../fixtures/forward-envelope.phone.json", import.meta.url), "utf8"),
+    ) as unknown;
+    const behalf = OnBehalfOf.parse(ForwardEnvelope.parse(fixture).forward?.onBehalfOf);
+    expect(behalf).toMatchObject({
+      clientKind: "ios",
+      deviceId: "dev-desktop-a",
+      clientDeviceId: "dev-phone-1",
+    });
+    // bounded like its siblings: an empty name names no one
+    expect(OnBehalfOf.safeParse({ ...behalf, clientDeviceId: "" }).success).toBe(false);
+    // the audit actor's provenance keeps the phone (its `.strip()` drops only what it does not name)
+    expect(AuditOnBehalfOfV1.parse(behalf).clientDeviceId).toBe("dev-phone-1");
   });
 
   it("an idempotency key is bounded and a receipt names one of three honest outcomes", () => {

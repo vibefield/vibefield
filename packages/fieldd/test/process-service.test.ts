@@ -241,7 +241,16 @@ describe("ProcessService — §17.1", () => {
       restart: "never",
     });
     const beats = (): number => (existsSync(beat) ? statSync(beat).size : 0);
-    await until(() => beats() > 0); // the grandchild is alive and writing
+    // Item 141 — the grandchild coming up is this row's precondition, not its
+    // claim, and load spreads it: at load 123 its first beat came after
+    // `until`'s 5 s. So the wait ends on the condition either way — a beat, or
+    // the tree gone without one, which fails at once — and time only guards a
+    // hang, inside the row's own budget: fieldd's testTimeout (30 s) holds this
+    // 15 s and the kill's 5 s and the quiet's 8 s after it.
+    const gone = (): boolean => svc.stat(PLUGIN, rec.procId)[0]?.state === "exited";
+    await until(() => beats() > 0 || gone(), 15_000);
+    // the grandchild is alive and writing
+    expect(beats(), "the tree exited before its grandchild wrote a beat").toBeGreaterThan(0);
     svc.signal(PLUGIN, { procId: rec.procId, signal: "kill" });
     await until(() => svc.stat(PLUGIN, rec.procId)[0]?.state === "exited");
     // The tree verb is asynchronous (a taskkill process on win32), so poll for

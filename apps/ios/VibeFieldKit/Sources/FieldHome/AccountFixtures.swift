@@ -1,6 +1,7 @@
 #if DEBUG
   import FieldDesign
   import FieldMesh
+  import FieldSettings
   import Foundation
 
   /// `-vf-demo-account=<state>` (IOS-8e, AP-D8): the corner's inputs, stamped,
@@ -31,6 +32,8 @@
     struct Demo {
       let face: FieldHomeModel.AccountFace
       let door: FieldHomeModel.DoorPage?
+      /// IOS-10a — Settings over the same inputs.
+      let settings: SettingsAccount
     }
 
     static func demo(named name: String) -> Demo? {
@@ -115,7 +118,30 @@
           adminConsole: FieldTruffleRuntime.machinesAdminURL(controlURL: nil),
           signInNote: nil,
           found: found,
-          expected: expected))
+          expected: expected),
+        settings: FieldHomeModel.settingsAccount(
+          meshState: state,
+          rememberedLogin: remembered,
+          login: login,
+          domain: login == nil ? nil : domain,
+          name: nil,
+          face: face,
+          seed: login ?? remembered ?? "",
+          home: desktops.first?.deviceId,
+          homeAnswered: face != nil && !desktops.isEmpty,
+          desktops: desktops,
+          asleep: asleep.map { .init(deviceId: $0.0, name: $0.1, platform: "darwin", lastSeen: heard) },
+          isHearing: hearing,
+          machineName: machine,
+          adminConsole: FieldTruffleRuntime.machinesAdminURL(controlURL: nil)))
+    }
+
+    /// When a fixture's sleeping desktops were last heard: yesterday at 18:02,
+    /// so a photograph's words never depend on the hour it was taken.
+    static var heard: Date? {
+      let calendar = Calendar.current
+      guard let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()) else { return nil }
+      return calendar.date(bySettingHour: 18, minute: 2, second: 0, of: yesterday)
     }
   }
 #endif

@@ -45,7 +45,7 @@ import {
   webContents,
 } from "electron";
 import { CLOSE_WINDOW_ITEM_ID, ZOOM_ITEM_IDS } from "../main/app-menu-model";
-import { APP_ORIGIN } from "../main/app-protocol";
+import { APP_ORIGIN, APP_SCHEME, serveAppRequest } from "../main/app-protocol";
 import type { WindowRendererBoundary } from "../main/bootstrap";
 import type { LiveSurfaceSimulatorCensus } from "../main/live-surfaces/authority";
 import { BrowserControlTargetRegistry } from "../main/live-surfaces/browser-control-target";
@@ -142,6 +142,13 @@ import {
 } from "./plugin-runtime-soak";
 import { browserPaneRows, PANE_FLAG } from "./smoke-browser-pane";
 import { BUNDLED_FLAG, bundledFixture, judgeBundled } from "./smoke-bundled";
+import {
+  CATALOG,
+  CATALOG_PARTITION,
+  CATALOG_RENDERER_ENV,
+  catalogBuildRefusal,
+  catalogRows,
+} from "./smoke-catalog";
 import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 import { deskCopyRows } from "./smoke-desk-copy";
@@ -152,6 +159,7 @@ import {
   FIRST_RUN_WALKS,
   firstRunRows,
   parseWalk,
+  readGpuBusy,
   shotDirRefusal,
   WALK_ENV,
 } from "./smoke-first-run";
@@ -200,7 +208,7 @@ import {
   PAGE_VISIBILITY,
   type PageVisibility,
 } from "./smoke-visibility";
-import { keepFromPerson, smokeWindow, smokeWindowsFocused } from "./smoke-window";
+import { keepFromPerson, keepSmokeWindow, smokeWindow, smokeWindowsFocused } from "./smoke-window";
 import { timelinePastRungs } from "./timeline-past-rungs";
 import {
   HISTORY_SEED_WORDS,
@@ -1597,8 +1605,9 @@ export async function runSmokeCanvas(opts: {
 /**
  * FG — THE FIRST RUN, WALKED (`pnpm smoke:first-run`, desk-gates row 32): one walk of the Setup Assistant a launch, by
  * the page's own controls, from a user minted not onboarded (UA-3w as amended: `answersSetup`) to the desk
- * (smoke-first-run.ts). The launcher (`packaging/run-first-run.mjs`) runs the three walks, each on a fresh profile with
- * its theme seeded before the boot, and keeps their stills where no teardown reaches.
+ * (smoke-first-run.ts). The launcher (`packaging/run-first-run.mjs`) runs the four walks, each on a fresh profile with
+ * its theme seeded before the boot, and keeps their stills where no teardown reaches; the fourth, the catalog's, is
+ * `runSmokeCatalog`'s.
  */
 export async function runSmokeFirstRun(opts: {
   handle: FielddHandle;
@@ -1616,6 +1625,8 @@ export async function runSmokeFirstRun(opts: {
   shellOpens?: { readonly opened: readonly string[]; readonly revealed: readonly string[] };
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
+  // the catalog judged: the design catalog's frames, in a window of the walk's own, never the product's
+  if (process.env[WALK_ENV] === "catalog") return runSmokeCatalog(opts);
   // Shown, as the desk smokes' are with the GPU on: the walk's stills are of the field's own frames. DK-18 (36): shown
   // inactive and click-through — kept from the person's input (smoke-window.ts).
   const win = smokeWindow({ mode: "smoke-first-run", preloadPath: opts.preloadPath, show: true });
@@ -1671,6 +1682,9 @@ export async function runSmokeFirstRun(opts: {
       staged: opts.staged,
       users: opts.users,
       say: (line) => console.log(line),
+      // FG-O3's read (FG-6c): printed, never judged
+      processes: () => app.getAppMetrics(),
+      gpuBusy: readGpuBusy,
     });
     problems.push(...walked);
     // GT-8b: the walk presses no link, so main's opener has nothing to record — anything there opened on its own
@@ -1690,6 +1704,79 @@ export async function runSmokeFirstRun(opts: {
     if (!win.isDestroyed() && win.webContents.isCrashed()) problems.push("the renderer crashed");
     if (problems.length > 0) throw new Error(problems.join(" · "));
     console.log(`SMOKE_FIRST_RUN_OK ${walk}`);
+    ok = true;
+  } catch (e) {
+    console.error(`SMOKE_FIRST_RUN failed: ${e instanceof Error ? e.message : e}`);
+  }
+  await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
+  app.exit(ok ? 0 : 2);
+}
+
+/**
+ * FG — THE CATALOG JUDGED (desk-gates row 32's fourth walk, `catalog`; smoke-catalog.ts): the design catalog's Setup
+ * Assistant frames, walked in a window of the walk's own on an in-memory partition whose app scheme serves the design
+ * build (`VF_CATALOG_RENDERER`; a missing build is red). The product's window is never made; the pair main booted for
+ * the mode is stopped by the teardown, as every walk's is.
+ */
+async function runSmokeCatalog(opts: {
+  supervisor: FielddSupervisor;
+  root: string;
+  beforeExit: () => Promise<void>;
+}): Promise<void> {
+  let ok = false;
+  try {
+    const shotDir = process.env["VF_SMOKE_SHOT_DIR"];
+    if (shotDir === undefined || shotDir.length === 0) {
+      throw new Error("VF_SMOKE_SHOT_DIR names no folder for the walk's stills");
+    }
+    const refusal =
+      shotDirRefusal(shotDir) ?? catalogBuildRefusal(process.env[CATALOG_RENDERER_ENV]);
+    if (refusal !== null) throw new Error(refusal);
+    const root = process.env[CATALOG_RENDERER_ENV] as string;
+    if (process.argv.includes("--disable-gpu")) {
+      throw new Error("the first-run smoke keeps the GPU: no walk of it runs with --disable-gpu");
+    }
+    if (process.argv.includes(NO_WEBGPU_FLAG)) {
+      throw new Error(`the catalog walk was launched with ${NO_WEBGPU_FLAG}`);
+    }
+    const problems = smokeProfileFailures();
+    // the design build's own files, and none other: what the scheme would not serve is printed
+    const refused: string[] = [];
+    const ses = session.fromPartition(CATALOG_PARTITION);
+    ses.protocol.handle(APP_SCHEME, (request) =>
+      serveAppRequest(request.url, {
+        root,
+        onRefusal: (reason, url) => refused.push(`${reason} ${url.slice(0, 160)}`),
+      }),
+    );
+    const win = new BrowserWindow({
+      width: CATALOG.window.width,
+      height: CATALOG.window.height,
+      useContentSize: true,
+      show: false,
+      webPreferences: {
+        session: ses,
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    // DK-18 (36): shown inactive and click-through, as every smoke's window (smoke-window.ts)
+    keepSmokeWindow(win);
+    win.showInactive();
+    await win.loadURL(`${APP_ORIGIN}/${CATALOG.page}`);
+    const { facts, problems: walked } = await catalogRows({
+      win,
+      shotDir,
+      say: (line) => console.log(line),
+    });
+    problems.push(...walked);
+    console.log(
+      `SMOKE_FIRST_RUN ${JSON.stringify({ ...facts, shotDir, refused, isolation: smokeWindowsFocused() })}`,
+    );
+    if (!win.isDestroyed() && win.webContents.isCrashed()) problems.push("the renderer crashed");
+    if (problems.length > 0) throw new Error(problems.join(" · "));
+    console.log("SMOKE_FIRST_RUN_OK catalog");
     ok = true;
   } catch (e) {
     console.error(`SMOKE_FIRST_RUN failed: ${e instanceof Error ? e.message : e}`);

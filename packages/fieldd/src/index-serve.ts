@@ -4,6 +4,7 @@ import {
   INDEX_TICKET,
   type IndexOpenTicket,
   IndexOpenTicketParams,
+  type IndexTicketEndpointSet,
   indexEndpointsFor,
   PORTS,
   type RemoteIndexEndpointSet,
@@ -86,6 +87,18 @@ import { clientIdFor } from "./terminal-grants";
 // path (`direct-plane-off`), never an environment variable. F-H1's residue
 // above is now every flag-on boot's to withdraw, which the driver's first
 // refresh does.*
+//
+// *DS-7 (2026-10-31): another desktop's forward is answered. A `peer-fieldd`
+// principal — this person's other desktop, its kind transport-derived (D1) —
+// asking for a session here is minted from this daemon's own rule: a `read`
+// grant (`indexTicketScopes`), its `cid` keyed by the window behind the
+// forward (`clientIdFor`, DS-4c's rule), beside the TAILNET set of this serve
+// as it stands now (`indexEndpointsFrom`). No live serve is
+// `doors_not_published`, retryable, naming this desktop. The forwarding
+// daemon re-homes the set onto an egress route of its own desktop
+// (`index-forward.ts`), so the serve's port joined DS-L6's routable list. The
+// phone (a `tailnet` principal) still hears `direct-plane-unbuilt`: its
+// ticket is SP-7's.*
 
 /** The engine identity and display name of rosettad's listener. */
 export const INDEX_SERVE_ID = "index" as const;
@@ -175,7 +188,8 @@ export class IndexServeDriver extends RouteServeDriver {
  * restart moves rosettad's port; until the re-declare lands the serve forwards
  * to a dead port, and a URL into it is not one a client can act on — that is
  * `undefined`, as a cell whose route has not landed is. DS-7's door names this
- * beside the grant it mints; until then nothing hands it out. */
+ * beside the grant it mints; until then nothing hands it out. *DS-7
+ * (2026-10-31): the minter names it to a peer daemon (`IndexTicketMinter`).* */
 export function indexEndpointsFrom(
   serves: readonly ServeState[],
   origin: string | null,
@@ -213,6 +227,10 @@ export interface IndexTicketMinterOptions {
   } | null;
   /** this desktop's device id — the ticket's `device` */
   deviceId: () => string;
+  /** DS-7 — the mesh's live serve view (`MeshClient.serves()`): a peer
+   * daemon's set is read off the index serve as it stands at the mint
+   * (`indexEndpointsFrom`). Absent = no serve to hand out. */
+  serves?: () => readonly ServeState[];
   /** the grant's life (`INDEX_TICKET.TTL_MS`; a test seam) */
   ttlMs?: number;
   now?: () => number;
@@ -293,6 +311,9 @@ function auditSessionId(sessionId: string): string {
  *  - the phone, or another desktop's daemon forwarding a `{device}` ask:
  *    UNAVAILABLE `direct-plane-unbuilt`, retryable false — their set is the
  *    tailnet serve's (SP-6, DS-7), and nothing hands it out yet;
+ *    *DS-7 (2026-10-31): the phone alone now (SP-7). Another desktop's daemon
+ *    is minted the tailnet set of this serve — or, with no live serve,
+ *    UNAVAILABLE `doors_not_published`, retryable, naming this desktop;*
  *  - the plane switched off: UNAVAILABLE `direct-plane-off`, retryable false;
  *  - no daemon ready: UNAVAILABLE `{service: "index", state: <phase>}`,
  *    retryable unless unconfigured — the other index doors' answer;
@@ -329,12 +350,12 @@ export class IndexTicketMinter {
         false,
         { method: "index.openTicket", principal: kind },
       );
-    if (kind === "tailnet" || kind === "peer-fieldd")
+    // DS-7 — `peer-fieldd` passes: another desktop's daemon forwarding for its
+    // window is minted below. The phone's ticket is SP-7's.
+    if (kind === "tailnet")
       throw new RpcCallError(
         "UNAVAILABLE",
-        kind === "tailnet"
-          ? "a ticket across the tailnet is not served yet: the phone's set is the index serve's (SP-6)"
-          : "a ticket for another desktop's session is not served yet: it rides the egress route (DS-7)",
+        "a ticket across the tailnet is not served to the phone yet: its set is the index serve's (SP-7)",
         false,
         { service: INDEX_TICKET.SERVICE, state: INDEX_TICKET.STATE_UNBUILT },
       );
@@ -381,18 +402,14 @@ export class IndexTicketMinter {
         service: INDEX_TICKET.SERVICE,
         state: state?.phase ?? "unconfigured",
       });
-    const endpoints = indexEndpointsFor(state.origin as string, ask.sessionId);
-    if (endpoints === undefined)
-      throw new RpcCallError("UNAVAILABLE", "the agent index has no loopback origin", true, {
-        service: INDEX_TICKET.SERVICE,
-        state: state.phase,
-      });
+    const endpoints = this.#endpointsFor(ctx, state, ask.sessionId);
     const now = (this.#opts.now ?? Date.now)();
     const exp = Math.max(now + (this.#opts.ttlMs ?? INDEX_TICKET.TTL_MS), this.#lastExp + 1);
     let grant: string;
     try {
       grant = mintGrant(credentials.grantKey, {
-        cid: clientIdFor(ctx.principal),
+        // DS-4c's key: a peer daemon's forward is the window behind it
+        cid: clientIdFor(ctx.principal, ctx.onBehalfOf),
         exp,
         scope: ask.scope,
         sid: ask.sessionId,
@@ -415,5 +432,39 @@ export class IndexTicketMinter {
       );
     this.#lastExp = exp;
     return { device: this.#opts.deviceId(), endpoints, grant, expiresAt: exp };
+  }
+
+  /** The set the caller dials: the loopback pair for a principal on this
+   * desktop; for another desktop's daemon (DS-7), the tailnet set of the index
+   * serve as it stands now — the only coordinate that daemon's egress route
+   * can reach. No live serve is said, naming this desktop, never a set nothing
+   * answers. */
+  #endpointsFor(
+    ctx: CallerContext,
+    state: RosettadState,
+    sessionId: string,
+  ): IndexTicketEndpointSet {
+    if (ctx.principal.kind === "peer-fieldd") {
+      const remote = indexEndpointsFrom(this.#opts.serves?.() ?? [], state.origin, sessionId);
+      if (remote === undefined)
+        throw new RpcCallError(
+          "UNAVAILABLE",
+          "this desktop's index serve is not on the tailnet right now",
+          true,
+          {
+            service: INDEX_TICKET.SERVICE,
+            state: INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED,
+            device: this.#opts.deviceId(),
+          },
+        );
+      return remote;
+    }
+    const local = indexEndpointsFor(state.origin as string, sessionId);
+    if (local === undefined)
+      throw new RpcCallError("UNAVAILABLE", "the agent index has no loopback origin", true, {
+        service: INDEX_TICKET.SERVICE,
+        state: state.phase,
+      });
+    return local;
   }
 }

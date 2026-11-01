@@ -425,6 +425,35 @@ describe("R4 and ④: a session's act or its reason, and its host key", () => {
     expect(resumeWaits(MODEL, { ...SESSIONS[1]!, provider: "nope" })).toBe("not offered here");
     expect(resumeWaits(MODEL, SESSIONS[3]!)).toBe("folder is gone");
   });
+
+  it("DS-7: the laptop's session of a project here reaches the model and says where it ran, quiet in the act's place; the laptop's own project does not", () => {
+    const there = session("s-lap", "p1:vibe", "pl_lap", "/Users/me/code/vibe-field", {
+      device: LAPTOP,
+      devices: [LAPTOP],
+      place: { device: LAPTOP, placeId: "pl_lap" },
+    });
+    const away = session("s-away", "p1:away", "pl_away", "/x", {
+      device: LAPTOP,
+      place: { device: LAPTOP, placeId: "pl_away" },
+    });
+    const listing = { ...LISTING, sessions: [...SESSIONS, there, away] };
+    const asleep = hostModelOf(listing, ROSTER, RUNS, PROVIDERS);
+    expect(asleep.sessions.has("s-lap")).toBe(true);
+    expect(asleep.sessions.has("s-away")).toBe(false);
+    expect(resumeWaits(asleep, there)).toBe("Laptop is asleep");
+    const awake = hostModelOf(
+      { ...listing, sources: [LISTING.sources[0]!, { ...LISTING.sources[1]!, state: "live" }] },
+      [
+        ROSTER[0],
+        { deviceId: LAPTOP, name: "Laptop", platform: "win32", self: false, online: true },
+      ] as never[],
+      RUNS,
+      PROVIDERS,
+    );
+    expect(resumeWaits(awake, there)).toBe("ran on Laptop");
+    // one this desktop also holds (DS-D10) is acted on here
+    expect(resumeWaits(awake, { ...there, devices: [LAPTOP, STUDIO] }) ?? "").not.toMatch(/Laptop/);
+  });
 });
 
 /** A client answering the reads Resume makes, the folder as given. */

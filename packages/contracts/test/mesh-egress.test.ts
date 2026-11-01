@@ -174,14 +174,19 @@ describe("DS-1 — the registry", () => {
     // A cell verifies a MAC on its first frame. The product door trusts the
     // node's login, so an unauthenticated loopback route to it would hand any
     // same-uid process (EL7's adversary) the peer's whole door.
-    expect(MESH_EGRESS.ROUTABLE_PORTS).toEqual([PORTS.TERMINAL_CELLS_SERVE]);
+    // DS-7 (2026-10-31) — and rosettad's serve: every rosettad fieldd starts
+    // demands a bearer on every route and opens a session's routes only to
+    // that session's RO-10 grant, so it is a door that demands its own grant.
+    // (SP-3 kept it off this list while the pinned rosettad verified nothing.)
+    expect(MESH_EGRESS.ROUTABLE_PORTS).toEqual([PORTS.TERMINAL_CELLS_SERVE, PORTS.INDEX_SERVE]);
     expect(MESH_EGRESS.ROUTABLE_PORTS).not.toContain(PORTS.FIELDD_PRODUCT_SERVE);
-    // SP-3 — rosettad's serve is not a door that demands a grant YET: the
-    // pinned rosettad verifies no credential (RO-1/RO-10 are unmerged
-    // upstream), so a route to it would hand a same-uid process every
-    // transcript. It joins this list at DS-7's pin move, in review.
-    expect(PORTS.INDEX_SERVE).toBeTypeOf("number");
-    expect(MESH_EGRESS.ROUTABLE_PORTS).not.toContain(PORTS.INDEX_SERVE);
+    expect(MESH_EGRESS.ROUTABLE_PORTS).not.toContain(PORTS.FREEWAY_SERVE);
+  });
+
+  it("DS-7 — the index route's golden targets the index serve, and parses as an add", () => {
+    const add = MeshEgressRouteAddParams.parse(fixture("mesh-egress-route-add-params.index.json"));
+    expect(add.target.endsWith(`:${PORTS.INDEX_SERVE}`)).toBe(true);
+    expect(add.id.endsWith(`-${PORTS.INDEX_SERVE}`)).toBe(true);
   });
 
   it("declares the six facade verbs as local mgmt methods", () => {

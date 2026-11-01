@@ -2,7 +2,9 @@
  * Track FG, FG-3b — the Setup Assistant's glass drawn by the field (glass-pass.ts; FG-D24; DESIGN.md §8 "The Setup
  * Assistant's glass"): a pass over each frame the field draws, after its own. happy-dom has no WebGPU, so the pass
  * runs on a device and an encoder that record what it asks of them; the shader itself compiles only on a GPU. FG-4b:
- * the logo over the frost, the field's own mark where the field draws it.
+ * the logo over the frost, the field's own mark where the field draws it. FG-6's follow-up 3: the field's mark as a
+ * picture, for the glass held off the field to wear; its readback is witnessed on a GPU alone (row 32), so these rows
+ * hold its shapes and its arithmetic.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GlassLook, GlassPose } from "../src/boot/splash/glass-look";
@@ -12,6 +14,7 @@ import {
   type GlassPassHooks,
   glassFrame,
   spent,
+  straightRows,
 } from "../src/boot/splash/glass-pass";
 import type { SplashFrame } from "../src/boot/splash/vibefield-splash.js";
 
@@ -46,8 +49,13 @@ const POSE: GlassPose = {
 const SIZE = { k: 2, MX: 1072, MY: 723, LW: 256, LH: 154 };
 
 beforeEach(() => {
-  vi.stubGlobal("GPUBufferUsage", { COPY_DST: 0x8, UNIFORM: 0x40 });
-  vi.stubGlobal("GPUTextureUsage", { TEXTURE_BINDING: 0x4, RENDER_ATTACHMENT: 0x10 });
+  vi.stubGlobal("GPUBufferUsage", { MAP_READ: 0x1, COPY_DST: 0x8, UNIFORM: 0x40 });
+  vi.stubGlobal("GPUTextureUsage", {
+    COPY_SRC: 0x1,
+    TEXTURE_BINDING: 0x4,
+    RENDER_ATTACHMENT: 0x10,
+  });
+  vi.stubGlobal("GPUMapMode", { READ: 0x1 });
 });
 
 afterEach(() => {
@@ -143,15 +151,26 @@ describe("the glass's uniforms", () => {
   });
 });
 
-/** A device that records what the pass asks of it; `fail` rejects its pipelines. */
-function fakeDevice(fail?: Error) {
+/** A device that records what the pass asks of it; `fail` rejects its pipelines. Since FG-6's follow-up 3 it takes
+ * the work the pass submits of its own (the mark's picture): each encoder's passes and copies, its error scope (what
+ * `invalid` says of the work), and its buffers mapped to read, each read as zeros. */
+function fakeDevice(fail?: Error, invalid?: string) {
   const made = {
     modules: [] as string[],
     pipelines: [] as GPURenderPipelineDescriptor[],
-    textures: [] as { label: string; size: number[]; destroyed: boolean }[],
-    buffers: [] as { label: string; destroyed: boolean }[],
+    textures: [] as {
+      label: string;
+      size: number[];
+      format: GPUTextureFormat;
+      usage: number;
+      destroyed: boolean;
+    }[],
+    buffers: [] as { label: string; size: number; usage: number; destroyed: boolean }[],
     writes: [] as { buffer: string; data: number[] }[],
     groups: [] as GPUBindGroupEntry[][],
+    encoded: [] as ReturnType<typeof fakeEncoder>["passes"][],
+    copies: [] as { texture: string; buffer: string; bytesPerRow: number; size: number[] }[],
+    submitted: 0,
   };
   const device = {
     createShaderModule({ code }: GPUShaderModuleDescriptor) {
@@ -164,10 +183,15 @@ function fakeDevice(fail?: Error) {
       return { label: descriptor.label, getBindGroupLayout: () => ({}) };
     },
     createSampler: () => ({}),
-    createBuffer({ label = "" }: GPUBufferDescriptor) {
+    createBuffer({ label = "", size, usage }: GPUBufferDescriptor) {
       const buffer = {
         label,
+        size,
+        usage,
         destroyed: false,
+        mapAsync: async () => {},
+        getMappedRange: () => new ArrayBuffer(size),
+        unmap() {},
         destroy() {
           buffer.destroyed = true;
         },
@@ -175,10 +199,12 @@ function fakeDevice(fail?: Error) {
       made.buffers.push(buffer);
       return buffer;
     },
-    createTexture({ label = "", size }: GPUTextureDescriptor) {
+    createTexture({ label = "", size, format, usage }: GPUTextureDescriptor) {
       const texture = {
         label,
         size: size as number[],
+        format,
+        usage,
         destroyed: false,
         destroy() {
           texture.destroyed = true;
@@ -192,13 +218,70 @@ function fakeDevice(fail?: Error) {
       made.groups.push(Array.from(entries));
       return { entries };
     },
+    createCommandEncoder() {
+      const { encoder, passes } = fakeEncoder();
+      made.encoded.push(passes);
+      return Object.assign(encoder, {
+        copyTextureToBuffer(
+          { texture }: { texture: { label: string } },
+          { buffer, bytesPerRow }: { buffer: { label: string }; bytesPerRow: number },
+          size: number[],
+        ) {
+          made.copies.push({ texture: texture.label, buffer: buffer.label, bytesPerRow, size });
+        },
+        finish: () => ({}),
+      });
+    },
+    pushErrorScope() {},
+    popErrorScope: async () => (invalid === undefined ? null : { message: invalid }),
     queue: {
       writeBuffer(buffer: { label: string }, _offset: number, data: Float32Array) {
         made.writes.push({ buffer: buffer.label, data: Array.from(data) });
       },
+      submit() {
+        made.submitted++;
+      },
     },
   } as unknown as GPUDevice;
   return { device, made };
+}
+
+/** The page's 2D canvas and its ImageData, as the pass makes the mark's PNG with them: the pictures it put, the type
+ * it asked for, and the PNGs it was given. */
+function stubPicture() {
+  const seen = {
+    puts: [] as { width: number; height: number }[],
+    types: [] as (string | undefined)[],
+    pngs: [] as Blob[],
+  };
+  vi.stubGlobal(
+    "ImageData",
+    class {
+      constructor(
+        readonly data: Uint8ClampedArray,
+        readonly width: number,
+        readonly height: number,
+      ) {}
+    },
+  );
+  vi.stubGlobal(
+    "OffscreenCanvas",
+    class {
+      getContext() {
+        return {
+          putImageData: (image: ImageData) =>
+            void seen.puts.push({ width: image.width, height: image.height }),
+        };
+      }
+      async convertToBlob(options?: ImageEncodeOptions) {
+        seen.types.push(options?.type);
+        const png = new Blob(["png"], { type: options?.type ?? "" });
+        seen.pngs.push(png);
+        return png;
+      }
+    },
+  );
+  return seen;
 }
 
 /** An encoder that records each render pass: its pipeline, what it draws into and whether it keeps it. */
@@ -500,5 +583,93 @@ describe("the glass's pass", () => {
     expect(late.frame).not.toHaveBeenCalled();
     expect(later.made.buffers).toHaveLength(3);
     expect(later.made.buffers.every((buffer) => buffer.destroyed)).toBe(true);
+  });
+});
+
+describe("the field's mark as a picture (FG-6's follow-up 3)", () => {
+  /** A frame the field has drawn at the window's own density, its mark 129 px across at a whole px: a row of 516
+   * bytes, which the copy pads to 768. */
+  const held = (): SplashFrame => ({
+    view: FRAME_VIEW,
+    size: { k: 1, W: 1200, H: 800, MX: 536, MY: 362, LW: 129, LH: 77 },
+    mark: MARK,
+    seconds: 2.5,
+  });
+
+  it("reads its texels back as a PNG's rows: each row's padding dropped, each colour over its alpha, a texel with none clear", () => {
+    // two rows of two texels, 256 bytes apart (the copy's alignment), premultiplied as the field draws its mark
+    const texels = new Uint8Array(256 + 8);
+    texels.set([255, 128, 0, 255, 60, 30, 0, 120]);
+    texels.set([9, 9, 9, 0, 1, 2, 3, 3], 256);
+    expect(Array.from(straightRows(texels, 2, 2, 256))).toEqual([
+      255, 128, 0, 255, 128, 64, 0, 120, 0, 0, 0, 0, 85, 170, 255, 3,
+    ]);
+  });
+
+  it("pictures the mark the last frame drew: texel for texel into a texture it can copy, copied at the copy's row alignment, read back as a PNG, its box in CSS px", async () => {
+    const seen = stubPicture();
+    const { device, made } = fakeDevice();
+    const pass = createGlassPass(device, gpu, hooks());
+    // no frame drawn, no mark to picture
+    expect(await pass.markPicture()).toBeNull();
+    pass.encode(fakeEncoder().encoder, held());
+    const picture = await pass.markPicture();
+    expect(picture?.box).toEqual({ x: 536, y: 362, width: 129, height: 77 });
+    expect(picture?.png).toBe(seen.pngs[0]);
+    expect(seen.puts).toEqual([{ width: 129, height: 77 }]);
+    expect(seen.types).toEqual(["image/png"]);
+    // its own shader, made at the first picture, never the glass's
+    expect(made.modules).toHaveLength(1);
+    expect(made.modules[0]).toContain("fn picture(");
+    expect(made.modules[0]).toContain("textureLoad(markTex, vec2i(fc.xy), 0)");
+    expect(
+      made.pipelines.map((pipeline) => [
+        pipeline.label,
+        pipeline.fragment?.entryPoint,
+        Array.from(pipeline.fragment?.targets ?? []),
+      ]),
+    ).toEqual([["glass-picture", "picture", [{ format: "rgba8unorm" }]]]);
+    // the field's mark drawn into a texture of its size the pass can copy, copied out and read
+    expect(made.groups).toEqual([[{ binding: 0, resource: { of: "mark" } }]]);
+    expect(made.encoded).toEqual([
+      [{ pipeline: "glass-picture", into: view("glass-picture"), load: "clear" }],
+    ]);
+    expect(made.copies).toEqual([
+      { texture: "glass-picture", buffer: "glass-picture", bytesPerRow: 768, size: [129, 77] },
+    ]);
+    expect(made.submitted).toBe(1);
+    expect(made.textures).toEqual([
+      expect.objectContaining({
+        label: "glass-picture",
+        size: [129, 77],
+        format: "rgba8unorm",
+        usage: 0x10 | 0x1,
+        destroyed: true,
+      }),
+    ]);
+    expect(made.buffers).toEqual([
+      expect.objectContaining({
+        label: "glass-picture",
+        size: 768 * 77,
+        usage: 0x1 | 0x8,
+        destroyed: true,
+      }),
+    ]);
+    // a second picture makes its texture and buffer again, and nothing else
+    await pass.markPicture();
+    expect(made.pipelines).toHaveLength(1);
+    expect(made.textures).toHaveLength(2);
+    pass.destroy();
+    expect(await pass.markPicture()).toBeNull();
+  });
+
+  it("says what the GPU says when it can't picture the mark, and lets its texture and buffer go", async () => {
+    stubPicture();
+    const { device, made } = fakeDevice(undefined, "copy out of bounds");
+    const pass = createGlassPass(device, gpu, hooks());
+    pass.encode(fakeEncoder().encoder, held());
+    await expect(pass.markPicture()).rejects.toThrow("copy out of bounds");
+    expect(made.textures.map(({ destroyed }) => destroyed)).toEqual([true]);
+    expect(made.buffers.map(({ destroyed }) => destroyed)).toEqual([true]);
   });
 });

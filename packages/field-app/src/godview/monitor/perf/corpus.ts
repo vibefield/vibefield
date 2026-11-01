@@ -20,7 +20,8 @@ import type { RecordedFrame } from "./corpus-frames";
 // (`AGENT_FIELD.FULL_TICK_MS`, whole boards, emitted only when something moved —
 // which under working agents is every tick, because every tick a working
 // agent's usage ticks and its mirror revision with it), and the mesh board at
-// the desk's floor (`DESK_MIN_INTERVAL_MS`): one open with THIS desktop and ONE
+// the desk's floor (100 ms, `REMOTE_MIN_INTERVAL_MS` since PG-2 retired the
+// desk cut into the remote one at the same floor): one open with THIS desktop and ONE
 // PEER, then per-device deltas of the rows whose projected JSON changed, with
 // fieldd's own rule that a row's revision bumps only when its projection does.
 //
@@ -97,7 +98,7 @@ export function resolveRecipe(recipe: CorpusRecipe): ResolvedCorpusRecipe {
     peerAgents: recipe.peerAgents ?? Math.max(1, Math.round(n / 4)),
     bareTerminals: recipe.bareTerminals ?? 2,
     foldTickMs,
-    deskTickMs: recipe.deskTickMs ?? AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+    deskTickMs: recipe.deskTickMs ?? AGENT_FIELD.REMOTE_MIN_INTERVAL_MS,
     samplesRing: recipe.samplesRing ?? 64,
     statusFlipMs: recipe.statusFlipMs ?? 1_000,
     replyMs: recipe.replyMs ?? 1_500,
@@ -483,7 +484,11 @@ function bound(text: string, chars: number): string {
  * fieldd's DESK projection of a fold row (`agent-field.ts` `projectDeskRow`),
  * re-stated here because the renderer may not import fieldd. The corpus test
  * holds the two equal field by field, so a drift in either is a red test and
- * not a quietly different peer.
+ * not a quietly different peer. *2026-10-31 (PG-2):* no peer reads a desk row
+ * now (the `remote` cut replaced it), so this is the desk half of fieldd's
+ * model-board run row, and the corpus's recorded mesh frames are the lab's own
+ * format: MV-8 retired the doors that replayed them, and the model stream
+ * re-hosts the peer through fieldd's remote cut.
  */
 export function deskRowOf(summary: AgentSessionSummary, revision: number): AgentDeskRow {
   const monitor = summary.monitor;
