@@ -10665,7 +10665,46 @@ export async function runSmokeGodview(opts: {
         // 1. The hatch: ⌘N's sheet, and Create under This Mac for the typed agent the stub stands in for
         const sheet = await openSheet("⌘N in Chat, to hatch 11m's spark");
         const name = sheet.name ?? "";
-        await pressAt('.vf-new-spark-foot .vf-ui-button[data-variant="primary"]');
+        // Create waits, disabled, on the sheet's opening reads (item 149; run89c pressed it before them): press it
+        // once it is enabled and its box has held across two reads, as a person's hand finds a still button
+        const CREATE = '.vf-new-spark-foot .vf-ui-button[data-variant="primary"]';
+        type CreateFacts = { disabled: boolean; box: string } | null;
+        const createFacts = async (): Promise<CreateFacts> =>
+          (await win.webContents.executeJavaScript(`(() => {
+            const el = document.querySelector(${JSON.stringify(CREATE)});
+            if (el === null) return null;
+            const r = el.getBoundingClientRect();
+            return {
+              disabled: el.disabled === true || el.getAttribute("aria-disabled") === "true",
+              box: [r.left, r.top, r.width, r.height].map((n) => Math.round(n)).join(","),
+            };
+          })()`)) as CreateFacts;
+        {
+          const deadline = Date.now() + 10_000;
+          let last = await createFacts();
+          let still = false;
+          while (!still && Date.now() < deadline) {
+            await sleep(100);
+            const now = await createFacts();
+            still =
+              now !== null &&
+              last !== null &&
+              !now.disabled &&
+              !last.disabled &&
+              now.box === last.box;
+            last = now;
+          }
+          if (!still) {
+            const said =
+              last === null
+                ? "absent"
+                : `${last.disabled ? "disabled" : "enabled"}, box ${last.box}`;
+            throw new Error(
+              `${name}'s Create was never enabled and still within 10000ms (it read ${said})`,
+            );
+          }
+        }
+        await pressAt(CREATE);
         const hatched = await untilThread(
           `Create ${name}: the sheet gone, and Chat on ${name}`,
           (facts) =>
