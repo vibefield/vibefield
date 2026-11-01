@@ -441,6 +441,15 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // AL-12 (`thinking-app-lifecycle.md` §8.1, AL-7's owed line) — Settings → Diagnostics' "Last exit": how a shell last
+  // left this pair, kept after the next launch's notice has gone (`DiagnosticsLastExitResult`). Read-only, local.
+  defineMethod({
+    surface: "product",
+    method: "diagnostics.lastExit",
+    scope: "diagnostics.read",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "diagnostics.lease.revoke",

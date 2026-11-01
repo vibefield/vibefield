@@ -51,6 +51,7 @@ import { requestView } from "../frame/view-state";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import { readClipboardText } from "../terminal/clipboard";
+import { whenPaneInputOpen } from "../terminal/paste-road";
 import {
   adoptCreatedTerminal,
   adoptRemoteTerminalSession,
@@ -84,7 +85,7 @@ import {
   rememberDeviceHost,
   savedPaneSessionIds,
 } from "./deck-restore";
-import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
+import { useDeckPaneLook } from "./deck-theme";
 import { getDeckWrapperFacts, subscribeDeckWrapperFacts } from "./deck-wrapper-witness";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import {
@@ -95,7 +96,7 @@ import {
   resumedPaneSession,
   useLastRun,
 } from "./last-run";
-import { linePanesOf, newTerminalOutcome, pasteIntoPane, whenPaneInputOpen } from "./line-panes";
+import { linePanesOf, newTerminalOutcome, pasteIntoPane } from "./line-panes";
 import type { MonitorFloorRecord } from "./monitor/agents";
 import { RosterFlips, teeDevicesPort } from "./monitor/devices";
 import {
@@ -491,23 +492,22 @@ export function GodviewDeck({
    * itself). The button is the deck's; the ladder is not. */
   const retry = useCallback(() => retryTerminalPool(savedPanes), [savedPanes]);
 
-  // The viewer's own appearance (GT-D12), read from the store Settings writes.
-  // Recomputed when it moves and ONLY then: `theme` is not among the
-  // workspace's initialization deps (`storageKey ∥ defaultShell ∥
-  // claimExistingSessions ∥ initialCwd ∥ runtime`), so a new theme re-renders
-  // the panes without re-initializing the deck — an appearance change applies
-  // to an open deck with no remount, no reclaim, and no new pane.
+  // The viewer's own appearance (GT-D12), read from the store Settings writes,
+  // as a deck pane's look (`useDeckPaneLook`: the one authority, which Chat's
+  // thread reads too from SP-1d). Recomputed when it moves and ONLY then:
+  // `theme` is not among the workspace's initialization deps (`storageKey ∥
+  // defaultShell ∥ claimExistingSessions ∥ initialCwd ∥ runtime`), so a new
+  // theme re-renders the panes without re-initializing the deck — an
+  // appearance change applies to an open deck with no remount, no reclaim, and
+  // no new pane. The effects are memoized on the STORED selection, so the
+  // object handed over is the same one until the viewer actually changes
+  // something.
   const appearance = useDeckAppearance();
-  const terminalTheme = useMemo(
-    () => godviewTerminalTheme(appearance, godviewTheme),
-    [appearance, godviewTheme],
-  );
-  // Memoized on the STORED selection, so the object handed over is the same one
-  // until the viewer actually changes something. 0.9.1 canonicalizes equal
-  // effect objects behind `workspaceEffectsKey` and would forgive a fresh one
-  // each render, but leaning on that would be asking a library to clean up
-  // after a prop this component controls completely.
-  const terminalEffects = useMemo(() => godviewTerminalEffects(appearance), [appearance]);
+  const {
+    theme: terminalTheme,
+    effects: terminalEffects,
+    ground: paneGround,
+  } = useDeckPaneLook(godviewTheme);
   const activeThemeName = deckThemeNameForMode(appearance, godviewTheme);
   /** Stable by construction: `sidebar` is a component TYPE, and a fresh arrow
    * on every render would remount the probe — and re-run its publish — forever. */
@@ -1958,8 +1958,9 @@ export function GodviewDeck({
     .map((pane) => pane.session.id);
 
   /** The terminal's INK, from the same projection the workspace is handed
-   * (record §07: every figure the frame draws is mixed from the terminal's own
-   * ink, so a viewer who changes the palette moves the frame with it).
+   * (`useDeckPaneLook`'s ground; record §07: every figure the frame draws is
+   * mixed from the terminal's own ink, so a viewer who changes the palette
+   * moves the frame with it).
    *
    * The ground travels no further than this (GT-6 review): the record has the
    * DECK tinted with it at 82%, and VibeField tints each pane instead
@@ -1973,7 +1974,7 @@ export function GodviewDeck({
    * again, from the overlay's stage style (`godviewTerminalGroundStyle`), where
    * the sheet that reads it lives; the panes keep their own translucent ground,
    * which over a sheet of the same colour composites to it exactly. */
-  const ground = useMemo(() => terminalGround(terminalTheme), [terminalTheme]);
+  const terminalInk = paneGround["--vf-godview-terminal-ink"];
 
   // DEMAND (TP-L-E'), declared where the views are.
   //
@@ -2354,7 +2355,9 @@ export function GodviewDeck({
         // removes only what it added.
         className={`vf-deck-zoom ${DECK_FRAMED_CLASS}`}
         data-zoom-phase="idle"
-        style={{ "--vf-godview-terminal-ink": ground.ink, ...TERMINAL_CELL_STYLE } as CSSProperties}
+        style={
+          { "--vf-godview-terminal-ink": terminalInk, ...TERMINAL_CELL_STYLE } as CSSProperties
+        }
       >
         {/* Pane chrome is shared with Puppeteer. Closing detaches used sessions;
             a fresh shell with no input is reaped through the product door. */}

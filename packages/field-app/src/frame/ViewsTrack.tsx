@@ -2,7 +2,15 @@ import type { FrameView } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { SparkFace, type SparkStatus } from "@vibefield/design-kit/spark-face";
 import type { CSSProperties, KeyboardEvent, ReactElement } from "react";
-import { FRAME_VIEWS, type ViewKeys, viewKeyLabel, viewKeyParts, viewKeyShortcut } from "./views";
+import type { ThreadMark } from "../chat/thread-marks";
+import {
+  FRAME_VIEWS,
+  type FrameViewCell,
+  type ViewKeys,
+  viewKeyLabel,
+  viewKeyParts,
+  viewKeyShortcut,
+} from "./views";
 import "./view-frame.css";
 
 // THE VIEWS TRACK (DESIGN.md §8; One Frame FC-D2, FC-D11, FC-D17) — the frame's
@@ -39,8 +47,9 @@ export interface ViewsTrackViewProps {
   press?: ViewKeyPress | null;
   /** A cell was chosen — by a click, Enter or Space. */
   onSelect?: (view: FrameView) => void;
-  /** CH-D4 — a spark needs you and the window is in another view: Chat's cell takes the orange dot. */
-  needs?: boolean;
+  /** CH-D4, SP-1d — Chat's cell's dot, while the window is in another view: the orange one while a needs-you dot
+   * stands, the cyan one while a thread is unread (DESIGN.md §8 "Chat's list"); null, none. */
+  mark?: ThreadMark | null;
   /** CH-D4 — the note over Chat's cell, for 2.4 s, or null. */
   note?: ViewsNote | null;
   /** AO-4b — History imports (`history/first-reading.ts`): its cell carries
@@ -62,7 +71,7 @@ export function ViewsTrackView({
   press = null,
   onSelect,
   importing = false,
-  needs = false,
+  mark = null,
   note = null,
 }: ViewsTrackViewProps): ReactElement {
   const index = Math.max(
@@ -98,7 +107,7 @@ export function ViewsTrackView({
         {FRAME_VIEWS.map((cell) => {
           const on = cell.view === view;
           const arc = importing && cell.view === "history";
-          const dot = needs && cell.view === "assistant";
+          const dot = cell.view === "assistant" ? mark : null;
           const { modifier, digit } = viewKeyParts(cell, keys);
           return (
             <button
@@ -108,13 +117,7 @@ export function ViewsTrackView({
               data-view={cell.view}
               {...(on ? { "data-on": "true" } : {})}
               aria-pressed={on}
-              aria-label={
-                arc
-                  ? `${cell.name}, importing`
-                  : dot
-                    ? `${cell.name}, a spark needs you`
-                    : cell.name
-              }
+              aria-label={cellLabel(cell, arc, dot)}
               aria-keyshortcuts={viewKeyShortcut(cell, keys)}
               title={`${cell.name}  ${viewKeyLabel(cell, keys)}`}
               onClick={() => onSelect?.(cell.view)}
@@ -130,7 +133,9 @@ export function ViewsTrackView({
                 <span>{modifier}</span>
                 <b>{digit}</b>
               </kbd>
-              {dot ? <span className="vf-views-dot" aria-hidden="true" /> : null}
+              {dot === null ? null : (
+                <span className="vf-views-dot" data-mark={dot} aria-hidden="true" />
+              )}
             </button>
           );
         })}
@@ -143,4 +148,12 @@ export function ViewsTrackView({
       )}
     </div>
   );
+}
+
+/** A cell's accessible name: its view's, and what its arc or its dot says. */
+function cellLabel(cell: FrameViewCell, arc: boolean, dot: ThreadMark | null): string {
+  if (arc) return `${cell.name}, importing`;
+  if (dot === "needs") return `${cell.name}, a spark needs you`;
+  if (dot === "unread") return `${cell.name}, a thread is unread`;
+  return cell.name;
 }

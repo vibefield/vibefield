@@ -116,6 +116,7 @@ vi.mock("@vibecook/ghosttea-react/terminal-render.worker.js?worker", () => ({
 }));
 
 const pool = await import("../src/terminal/pool");
+const { NO_TERMINALS } = await import("../src/terminal/terminal-words");
 const { LivePeekPane } = await import("../src/frame/peek-pane/LivePeekPane");
 const { MIRROR_REFUSED_VERBS, watchOnlyRuntime } = await import(
   "../src/frame/peek-pane/watch-only"
@@ -300,6 +301,16 @@ describe("the live peek cannot take input focus, nor claim the terminal's size",
     expect(container?.textContent).toContain(
       "Its terminal is not on this desktop's floor any more.",
     );
+  });
+
+  it("says the window's own words where it has no terminals to show — the sentence Chat's thread says too", async () => {
+    pool.disposeTerminalPool();
+    expect(pool.terminalPoolConfigured()).toBe(false);
+    await mountPane();
+    expect(pane().getAttribute("data-live-peek")).toBe("unavailable");
+    expect(container?.textContent).toBe(NO_TERMINALS);
+    expect(NO_TERMINALS).toBe("This window has no terminals to show it with.");
+    expect(runtimeCalls).toEqual([]);
   });
 });
 

@@ -47,9 +47,19 @@ const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.la
 // Goldens whose origin is another package than the contracts — a design
 // decision both apps compute, not a wire shape — compared byte for byte all
 // the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
-// kit's own test reads too.
+// kit's own test reads too. PG-3a: the phone's parity goldens, the home's window over the witness
+// remote goldens (field-app computes them, `phone:goldens`), which the kit's fold and body model are
+// held to; PG-3c adds the copies (Tests/FieldMeshTests, Tests/FieldAgentsTests), inert until then.
 const OTHER_ORIGINS = new Map([
   ["project-ink.golden.json", join(root, "packages/design-kit/fixtures/project-ink.golden.json")],
+  [
+    "phone-fold.golden.json",
+    join(root, "packages/field-app/test/fixtures/phone-godview/phone-fold.golden.json"),
+  ],
+  [
+    "phone-body.golden.json",
+    join(root, "packages/field-app/test/fixtures/phone-godview/phone-body.golden.json"),
+  ],
 ]);
 
 const problems = [];

@@ -23,7 +23,7 @@ import { createRequire } from "node:module";
 import { constants, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { leftByRun, SMOKE_RUN_ENV } from "./smoke-daemons.mjs";
+import { leftByRun, leftNames, SMOKE_RUN_ENV } from "./smoke-daemons.mjs";
 import { mintSmokeProfile } from "./smoke-profile.mjs";
 
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -124,9 +124,7 @@ function walkOnce({ walk, preference, flags, env, timeoutMs }) {
       process.stdout.write(`SMOKE_DAEMONS ${JSON.stringify(daemons)}\n`);
       if (daemons.left.length > 0) {
         process.stderr.write(
-          `run-first-run: ${daemons.left.length} process(es) of the ${walk} walk outlived it (reaped): ${daemons.left
-            .map((p) => `${p.name} ${p.pid}`)
-            .join(", ")}\n`,
+          `run-first-run: ${daemons.left.length} process(es) of the ${walk} walk outlived it (reaped): ${leftNames(daemons)}\n`,
         );
       }
       const removed = profile.remove();

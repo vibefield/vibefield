@@ -86,21 +86,57 @@ The catalog currently mounts these shipping views directly:
   (`SparkFaceRenderer`), all on fixed seeds (`spark-fixtures.ts`)
 - the view frame (One Frame FR-1): the views track in every state the design's plates show — at
   rest, ⌘ held, Godview, History, importing, Chat, a spark that needs you (the cell's dot and its
-  note), Windows' keys — and the cover rising, swapping and lowering over a field with Godview's
-  stage, History's room and Chat, on fixture state
+  note), a thread unread (the cell's cyan dot, SP-1d), Windows' keys — and the cover rising,
+  swapping and lowering over a field with Godview's stage, History's room and Chat, on fixture state
 - Chat (SP-1b, DESIGN.md §8 "Chat's list"): the shipping `ChatPanelView` over the product's own
   reading (`sparkEntriesOf`) of fixture sparks and field rows (`chat-fixtures.ts`) — the list, a
-  spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds
+  spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds, each
+  row wearing the mark the product's own ledger and reading (`ThreadLedger`, `threadMarksOf`)
+  latch from what the plates' window read with the shown thread on screen (a need's orange dot,
+  and since SP-1d a thread unread in cyan, and a need that has ended still orange, "needed you"
+  in the row's name); and, since SP-1d (§8 "Chat's thread", "Chat's composer"), the thread:
+  - the line in the pane's place: the shipping panel's own words for Wake under way (its button
+    waiting, the thread held, so send is busy) and refused in fieldd's words, and for a spark whose
+    session never started, each a fixture act (`CHAT_ACT`, handed to the panel's `act` as Chat's
+    controller hands it) or a fixture spark with no session;
+  - the pane's place: the shipping `SparkPaneView` in the words a window with no terminals says,
+    and on three plates its words while it is being found, when this desktop's floor does not hold
+    it, and when the floor did not answer. No catalog holds a terminal pool ("a host, never a
+    painter"), so the live pane (`SparkPane`) is never mounted there, and no picture of a terminal
+    stands in for it;
+  - the composer: the shipping `ChatComposerView` at the thread's foot, its `AtRowsView` over
+    fixture agents, profiles and rows read by the product's own `atRowsOf`, and an agent's menu
+    read by the controller's own `agentChipMenuOf` (the New spark sheet's agent menu for the
+    chip's one agent) — at rest, typing, @ open on both groups, an agent's model and Effort, and
+    the chips an agent, a session and a card make; its blank and armed read by the draft's own
+    `draftBlank` and `draftSendable`. Never its controller (`ChatComposer`), which registers the
+    hand's place and sends;
+  - the composer's quiet and busy states, each the same readings over a fixture that puts it
+    there: @ while its profiles are read (`sets` null), when nothing is called what follows the @,
+    with nothing to add (This Mac and Work with no sign-in, and none of your sessions on the
+    board), when the profiles can't be read (`"failed"`, the New spark sheet's sentence), and when
+    the board can't be (its rows `"failed"`: the agents to start stand, and the sessions' group
+    says what's running can't be read); an agent just taken, its menu while its picker is read
+    and when the read fails; and a send under way, Send's over its draft and a starter's, one fact
+    (`CHAT_SENDING`, which holds Wake's too) handed to the panel's `sending` and the composer's
+    `busy`, as Chat's controller hands its thread's one act to both;
+  - the hello: what stands in the thread over its pane is the product's own `threadItemsOf` over
+    the shown spark and the plate's draft, drawn by the shipping `ThreadItemsView` inside the
+    panel — a spark just hatched saying hello with its three starters, which send nothing there,
+    the same starters waiting while a starter's send runs, and none where the shown spark has
+    had a turn
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
   waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the
   project the room shows (HN-7), Windows' keys — and the live line on its real controller
   (`Composer`) over the frame's field, with fixture doors for what Godview lends it and the
-  capture. @'s `AtMenuView` and the draft's plates left with the draft (LN-D3)
+  capture. @'s `AtMenuView` and the draft's plates left with the draft (LN-D3); @ came back in
+  Chat's composer at SP-1d, as `AtRowsView` (above), never on the line
 - the hand (Cards in Hand, HN-1): the shipping `CardsView` and `CardFace` over fixture cards
   (`CardsPreview`) — the six faces in both lights, the fan at rest, a card reached with its ×, the
-  hand raised with a card in the keyboard's focus, a card picked up over its scrim, and a card from
-  another app still waiting
+  same card reached while Chat shows (SP-1d: the product's `CHAT_REACH`, its tip risen to the
+  panel's foot), the hand raised with a card in the keyboard's focus, a card picked up over its
+  scrim, and a card from another app still waiting
 - the head (One Frame FR-3; its package and the pill's sheet on two shelves since HN-8, PL-D1 and
   PL-D2): `HeadView` in every state the page's head plates draw — the field's name at its top, the
   package after the chevron's rule and, in a plate of its own, its standing dot, the crumbs folded

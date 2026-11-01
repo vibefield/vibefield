@@ -118,11 +118,14 @@
   background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
 }
 
+/* the agent's mark at 18: it draws at its text's size (1em), so the box's font size is its size, never the pill's 13 */
 .vf-new-spark-agent-mark {
   inline-size: 18px;
   block-size: 18px;
   display: inline-grid;
   place-items: center;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .vf-new-spark-agent-profile {

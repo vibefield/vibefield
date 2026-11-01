@@ -235,6 +235,16 @@ describe("the glyph set", () => {
     });
   });
 
+  // SP-1d (§13): Chat's starters wear `agents`, `panes` and `duplicate`, already among the 64; each
+  // one's tooltip says so, after where else the chrome draws it.
+  it("says Chat's three starters wear agents, panes and duplicate (SP-1d)", () => {
+    expect([GLYPH_META.agents.role, GLYPH_META.panes.role, GLYPH_META.duplicate.role]).toEqual([
+      "The Agents page and its head glyph; Chat's first starter",
+      "The Godview toggle: the deck's own silhouette; Chat's second starter",
+      "Duplicate on the desk's selection bar (⌘D); a taped selection does not offer it; Chat's third starter",
+    ]);
+  });
+
   it("keeps the committed drawings and the phone's template assets fresh", () => {
     // The generator is the source; data.ts and FieldGlyphs.xcassets are its
     // outputs. A drawing edited by hand in either place fails here.

@@ -74,7 +74,7 @@ import { ConnectAsks, workingAgents } from "./connect-asks";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
 import { desktopDevelopmentExtension } from "./development-extension";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
-import { buildSupervisor, dataRoot } from "./fieldd";
+import { buildSupervisor, dataRoot, sayFatalSmokeHome } from "./fieldd";
 import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import {
   registerBrowserDataClear,
@@ -248,6 +248,9 @@ let restoreAfterAbortedQuit: (() => void) | null = null;
 /** AU-5 — install on quit, the updater's (assigned once it exists); null in a build with no updater and after teardown,
  * when a person's quit installs nothing. */
 let quitInstaller: ((context: { readonly ended: number }) => Promise<void>) | null = null;
+/** AL-6 (AL-D2) — a person's quit with Keep running when VibeField quits on: into the menu bar (true), or not (false:
+ * the quit goes on). Assigned once the status item exists; null before and after teardown, when a quit quits. */
+let quitKeepsRunning: (() => boolean) | null = null;
 /** P8b-2 — the live fieldd client the plugin protocol authorizes against. Null
  * until the pair is up, which is the honest state: with no authority reachable,
  * no plugin module is servable. */
@@ -857,6 +860,8 @@ async function main(
     trayController?.update({ link: observedLink });
   };
   let statusItemForced = BACKGROUND_RELAUNCH && MODE === "production";
+  /** AL-6 — the effective `desktop.keepRunningOnQuit`, off until the preferences are read */
+  let keepRunningOnQuit = false;
   const applyPreferences = (raw: unknown): void => {
     observedSnapshots.preferences = raw;
     observedSnapshots.hasPreferences = true;
@@ -876,6 +881,7 @@ async function main(
       backgroundShell: parsed.data.backgroundShell,
     });
     screenshotShortcut?.setEnabled(parsed.data.screenshotHotkey);
+    keepRunningOnQuit = parsed.data.keepRunningOnQuit;
     enforceBackgroundEscapeHatch();
   };
   const applyEvidenceHealth = (raw: unknown): void => {
@@ -2503,7 +2509,8 @@ async function main(
       newUser: async () => {
         await createAndAttach({});
       },
-      quit: () => app.quit(),
+      // AL-6 — the status item's Quit VibeField quits, even while Keep running when VibeField quits is on
+      quit: () => (lifecycleFlow === null ? app.quit() : lifecycleFlow.quitFully()),
     },
     onError: (stage, error) => {
       logger.error(
@@ -2732,14 +2739,32 @@ async function main(
   const stopWindowObservation = registry.onPrimaryChanged((windowOpen) => {
     if (windowOpen) primaryHasOpened = true;
     if (windowOpen && statusItemForced) {
-      // AL-5 — the window is open: the relaunch's menu-bar-only presence ends, the Dock icon comes back
+      // AL-5 — the window is open: the relaunch's menu-bar-only presence ends, the Dock icon comes back (AL-6's
+      // background too)
       statusItemForced = false;
       app.dock?.show();
+      trayController?.update({ inBackground: false });
       if (observedSnapshots.hasPreferences) applyPreferences(observedSnapshots.preferences);
     }
     trayController?.update({ windowOpen });
   });
   shellDisposers.add(stopWindowObservation);
+  // AL-6 (AL-D2, §5.8) — Keep running when VibeField quits: a person's quit closes the window and leaves VibeField in
+  // the menu bar, AL-5's presence (no Dock icon, the status item forced and saying so); nothing stops. Opening a window
+  // ends it. macOS alone, and never without a status item to stay in.
+  quitKeepsRunning = () => {
+    const controller = trayController;
+    if (process.platform !== "darwin" || isSmokeLike(MODE) || !keepRunningOnQuit) return false;
+    if (controller === null) return false;
+    statusItemForced = true;
+    controller.update({ showTray: true, inBackground: true });
+    app.dock?.hide();
+    registry.primary()?.close();
+    return true;
+  };
+  shellDisposers.add(() => {
+    quitKeepsRunning = null;
+  });
   if (observedSnapshots.hasPreferences) applyPreferences(observedSnapshots.preferences);
 
   if (statusItemForced && trayController !== null) {
@@ -2953,6 +2978,7 @@ if (!hasInstanceLock) {
       logger,
       closeLogging: closeEvidence,
       getQuitGate: () => quitGate,
+      keepRunningOnQuit: () => quitKeepsRunning?.() ?? false,
       onQuitAborted: () => restoreAfterAbortedQuit?.(),
       installOnQuit: async (context) => {
         await quitInstaller?.(context);
@@ -2974,6 +3000,8 @@ if (!hasInstanceLock) {
         rootReal: ensured.rootReal,
       });
     } catch (error) {
+      // item 134 — a smoke gone fatal before its run names its kept HOME, as a red run's teardown does
+      sayFatalSmokeHome(MODE, root);
       flow.fatal(error);
     }
   })().catch(async () => {

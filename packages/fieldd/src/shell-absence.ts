@@ -1,10 +1,13 @@
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import {
   ORPHAN_BOUND,
   SHELL_BACKGROUND_RELAUNCH_ARG,
   type ShellExitRecord,
+  ShellRelaunchLog,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
+import { writeRecordFile } from "./shell-lease";
 
 // AL-5 (`draft/thinking-app-lifecycle.md` §8.2; AL-D4, AL-D8) — what a pair does while no shell holds its lease:
 // - no live session for the whole IDLE span → it ends itself, the floor with it (`stopForIdle`: the consented stop
@@ -13,6 +16,8 @@ import type { Logger } from "@vibefield/logging";
 //   sessions have a visible owner again and Quit is a click away — at most RELAUNCH_CAP times per window, then it
 //   stops relaunching and says so (a crash loop must not become an app that cannot be got rid of).
 // A shell attaching ends both. Pure policy over injected effects; the daemon wires the effects.
+// AL-11 — the cap's count is read from and written to a log that outlives fieldd (`relaunchLog`), so a fieldd
+// replaced at boot does not begin it at zero; without a log it lives in memory alone.
 
 export const SHELL_ABSENCE = {
   /** AL-D4 — no shell and no session for this long ends the pair; the floor's own bound reads the same number
@@ -34,6 +39,8 @@ export interface ShellAbsenceOptions {
   readonly stopForIdle: () => Promise<void>;
   /** relaunch the app into the menu bar; null = this fieldd cannot (a dev or unpackaged run, another platform) */
   readonly relaunchShell: (() => Promise<boolean>) | null;
+  /** AL-11 — where the relaunch times outlive this fieldd (`fileRelaunchLog`); absent = memory alone */
+  readonly relaunchLog?: RelaunchLog;
   readonly logger: Logger;
   readonly now?: () => number;
   readonly timings?: Partial<Record<keyof typeof SHELL_ABSENCE, number>>;
@@ -45,7 +52,11 @@ export class ShellAbsence {
   private idleSince: number | null = null;
   private idleTimer: ReturnType<typeof setInterval> | null = null;
   private relaunchTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly relaunches: number[] = [];
+  /** this fieldd's own count, the log's fallback when it cannot be read */
+  private relaunches: number[] = [];
+  /** bumped by every `clear()`: a relaunch decided across an await is dropped once a shell is back or a new vacancy
+   * began */
+  private generation = 0;
   private stopping = false;
   /** no shell holds the lease (between `vacant` and `held`) */
   private vacancy = false;
@@ -81,6 +92,7 @@ export class ShellAbsence {
   }
 
   private clear(): void {
+    this.generation++;
     if (this.idleTimer !== null) clearInterval(this.idleTimer);
     if (this.relaunchTimer !== null) clearTimeout(this.relaunchTimer);
     this.idleTimer = null;
@@ -122,41 +134,105 @@ export class ShellAbsence {
     if (relaunch === null) return;
     this.relaunchTimer = setTimeout(() => {
       this.relaunchTimer = null;
-      const now = this.now();
-      while (
-        this.relaunches.length > 0 &&
-        now - (this.relaunches[0] ?? now) > this.t.RELAUNCH_WINDOW_MS
-      ) {
-        this.relaunches.shift();
-      }
-      if (this.relaunches.length >= this.t.RELAUNCH_CAP) {
-        this.opts.logger.warn(
-          "fieldd.shell_absence.relaunch_capped",
-          "The app went away again; it is not relaunched past the cap, and the sessions keep running",
-          { relaunches: this.relaunches.length, windowMs: this.t.RELAUNCH_WINDOW_MS },
-        );
-        return;
-      }
-      this.relaunches.push(now);
-      void relaunch().then(
-        (started) =>
-          this.opts.logger.info(
-            "fieldd.shell_absence.relaunched",
-            "The app went away with sessions running; it was relaunched into the menu bar",
-            { started, relaunches: this.relaunches.length },
-          ),
-        (error: unknown) =>
-          this.opts.logger.warn(
-            "fieldd.shell_absence.relaunch_failed",
-            "The app could not be relaunched",
-            {
-              error: error instanceof Error ? error.message : String(error),
-            },
-          ),
-      );
+      void this.relaunchUnderCap(relaunch, this.generation);
     }, this.t.RELAUNCH_DELAY_MS);
     this.relaunchTimer.unref?.();
   }
+
+  /** AL-D8's cap, read from the log (AL-11): the relaunch is written down BEFORE it runs, so an app that dies at once
+   * is counted; a shell back while the log was read or written wins. */
+  private async relaunchUnderCap(
+    relaunch: () => Promise<boolean>,
+    generation: number,
+  ): Promise<void> {
+    const recorded = await this.readRelaunches();
+    if (generation !== this.generation) return;
+    const now = this.now();
+    const inWindow = recorded.filter((at) => now - at <= this.t.RELAUNCH_WINDOW_MS);
+    if (inWindow.length >= this.t.RELAUNCH_CAP) {
+      this.relaunches = inWindow;
+      this.opts.logger.warn(
+        "fieldd.shell_absence.relaunch_capped",
+        "The app went away again; it is not relaunched past the cap, and the sessions keep running",
+        { relaunches: inWindow.length, windowMs: this.t.RELAUNCH_WINDOW_MS },
+      );
+      return;
+    }
+    this.relaunches = [...inWindow, now];
+    await this.writeRelaunches(this.relaunches);
+    if (generation !== this.generation) return;
+    void relaunch().then(
+      (started) =>
+        this.opts.logger.info(
+          "fieldd.shell_absence.relaunched",
+          "The app went away with sessions running; it was relaunched into the menu bar",
+          { started, relaunches: this.relaunches.length },
+        ),
+      (error: unknown) =>
+        this.opts.logger.warn(
+          "fieldd.shell_absence.relaunch_failed",
+          "The app could not be relaunched",
+          {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        ),
+    );
+  }
+
+  /** The log's times and this fieldd's own, together (a write that failed earlier is still counted). */
+  private async readRelaunches(): Promise<number[]> {
+    const log = this.opts.relaunchLog;
+    if (log === undefined) return [...this.relaunches];
+    try {
+      const recorded = await log.read();
+      return [...new Set([...recorded, ...this.relaunches])].sort((a, b) => a - b);
+    } catch (error) {
+      this.opts.logger.warn(
+        "fieldd.shell_absence.relaunch_log_unreadable",
+        "The relaunch log could not be read; the cap counts this fieldd's own relaunches alone",
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+      return [...this.relaunches];
+    }
+  }
+
+  private async writeRelaunches(at: readonly number[]): Promise<void> {
+    try {
+      await this.opts.relaunchLog?.write(at);
+    } catch (error) {
+      this.opts.logger.warn(
+        "fieldd.shell_absence.relaunch_log_failed",
+        "The relaunch could not be written down; a fieldd after this one will not count it",
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  }
+}
+
+/** AL-11 — the relaunch times that outlive fieldd. `read` answers [] for no log yet and THROWS for one it cannot
+ * parse (the cap then counts this fieldd's own alone, and says so); `write` replaces it whole. */
+export interface RelaunchLog {
+  read(): Promise<readonly number[]>;
+  write(at: readonly number[]): Promise<void>;
+}
+
+/** The log at `LAYOUT.SHELL_RELAUNCHES`, written as the lease's records are (`writeRecordFile`). */
+export function fileRelaunchLog(path: string): RelaunchLog {
+  return {
+    async read() {
+      let raw: string;
+      try {
+        raw = await readFile(path, "utf8");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+        throw error;
+      }
+      const parsed = ShellRelaunchLog.safeParse(JSON.parse(raw));
+      if (!parsed.success) throw new Error(`not a relaunch log: ${path}`);
+      return parsed.data.at;
+    },
+    write: (at) => writeRecordFile(path, { at: [...at] } satisfies ShellRelaunchLog),
+  };
 }
 
 /** AL-D8 — the app bundle this fieldd ships in, read from its OWN path (never from a message, EL7): a packaged fieldd

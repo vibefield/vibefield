@@ -527,7 +527,7 @@ colour stays inside the face.
 | **S-2 Its hue stays in the face** | A palette colours the star and its disc, nothing else. No row, ring, badge, line or wash takes a spark's colour; state keeps §2.5's colours and projects keep §2.9's ink. |
 | **S-3 The face expresses; the word certifies** | CH-D3 (ruled A), §2.8 I-5: the face shows the spark's state live, as one of the nineteen statuses below, and the status's word sits beside it wherever there is room, and in the accessible name where there isn't. A face can be missed; a word can be read, searched and spoken by VoiceOver. |
 | **S-4 Needs you is the attention ink, in words** | CH-D4 (ruled A): Asking you, Needs your OK, Stuck and Rate limited turn the row's word to the attention ink (§2.5), Chat's cell takes the orange dot, and in another view a note says so for 2.4 s. The face itself never turns orange. |
-| **S-5 The name makes it certain** | §2.8 I-4: the face is an index. The name sits beside it, and @ finds a spark by its name. |
+| **S-5 The name makes it certain** | §2.8 I-4: the face is an index. The name sits beside it, and @ finds a spark by its name. *(SP-1d, 2026-10-31: Chat's @ lists agents and sessions, never sparks (CH-D5 A, EW-D3 B), so this waits for a @ that names sparks.)* |
 
 **The nineteen statuses.** These are a spark's. Coding and Debugging are an agent's work and never a
 spark's face.
@@ -567,8 +567,8 @@ is the star alone, with no disc.
 |---|---|---|
 | Chat's list row (CH-D1) | 40 px | framed, live while it works |
 | A thread's head | 40 px | framed, live |
-| A message's lead, in its thread | 28 px | framed |
-| @'s menu row · a chip in the line | 24 px · 18 px | framed |
+| A message's lead, in its thread (since SP-1d, the hello's: §8 "Chat's thread") | 28 px | framed |
+| @'s menu row · a chip in the line (no wearer since SP-1d: Chat's @ lists no sparks, S-5) | 24 px · 18 px | framed |
 | The New spark sheet's hatch | 104 px | free |
 | Its profile card | 64 px | free |
 | Godview: its own bubble · its agents' rims · their panes' chips (EW-D1, *proposed*) | 20 px · 20 px · 16 px | free · framed · free |
@@ -723,7 +723,7 @@ exception again.
 | Tier | Recipe | Use |
 |---|---|---|
 | Island | surface `/80` + `backdrop-blur-xl` (hover `/90`) | the file tree's context menu (§8 "The file tree"); the closed pill and its toolbars retired with the island (FR-2, DK-13) |
-| Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the composer line (§8), the views track at its left end on the same pane of glass — the track's own pill folded into it 2026-10-03 (FR-2); the head's name pill and zoom readout, the frame's floating controls at the top (FR-3, 2026-10-03); on the desk, the selection bar and the tools in hand (§8; MC-D2, R20) |
+| Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the line (§8), and Chat's composer without the blur, on the panel's solid ground (§8 "Chat's composer") *(corrected 2026-10-31, SP-1d: this said "the composer line", which stopped being a composer at HN-2)*; the views track at its left end on the same pane of glass — the track's own pill folded into it 2026-10-03 (FR-2); the head's name pill and zoom readout, the frame's floating controls at the top (FR-3, 2026-10-03); on the desk, the selection bar and the tools in hand (§8; MC-D2, R20) |
 | Sheet | surface `/90` + `backdrop-blur-3xl` | the pill's sheet — its Fields shelf (the fields explorer) and its Artifacts shelf — grown from the head's pill (FR-3) or, under a cover, the package circle (HN-8, §8 "The head"); the open tray left at DK-13 |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
@@ -1142,7 +1142,7 @@ island curve's morph, never the recede's (§8).
 into the fields explorer as every other morph does — 600ms on the island curve (M1), the pill's own
 row staying its head — and the 560ms `cubic-bezier(0.32, 0.72, 0, 1)` it alone carried is gone. The
 head's menus grow from their control on the island curve in 240ms (the zoom's from the readout, the
-palette from the head); the zoom's folds at once, as @'s list does, and the palette fades out over
+palette from the head); the zoom's folds at once, as @'s list does (Chat's composer, §8), and the palette fades out over
 200ms `ease`. Reduced motion fades them in over 120ms at full size.
 
 **The pill's sheet, on two shelves (PL-D1, PL-D2; built at HN-8).** The explorer is the pill's
@@ -1354,7 +1354,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   2026-10-03): the frame's way to each view (§10), the segmented control at the line's left end.
   Four cells — Canvas (`canvas`), Godview (`panes`), History (`history`), and Assistant (`message`),
   whose cell waits, faint by ink (the faint text at 55%), named "not built yet" *(amended 2026-10-31, SP-1b: the fourth
-  cell is **Chat**, built — §8 "Chat's list"; it takes the orange dot when a spark needs you, and nothing waits)* — each **printing
+  cell is **Chat**, built — §8 "Chat's list"; it takes the orange dot when a spark needs you, and nothing waits; since
+  SP-1d it takes the cyan one while a thread is unread)* — each **printing
   its key under its glyph**, the way a Mac keyboard prints F1 under its brightness mark. Cells
   46 × 36 on a 48 pitch (the track 196: padding 3, gap 2), the glyph 15 (the views' glyphs at rest
   tertiary, secondary under the pointer, primary on the cell that is on), the key 3 below it at 9 —
@@ -1479,6 +1480,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       ("Oct 12").
     - Under the name, the status word, 12 regular in tertiary ink, cut with an ellipsis (S-3).
     - Under the pointer the row takes the foreground at 4%; the chosen row takes the ready fill.
+  - **The thread it shows** is the chosen spark's. Chat opens on the newest spark and keeps it until you choose
+    another: by its row, or by the New spark sheet's hatch (SP-1c). A spark whose activity is newer moves up the list
+    and never takes the thread, nor the keyboard in its pane.
   - **Needs you (S-4):**
     - Asking you, Needs your OK and Stuck turn the row's word to `--vf-ink-attention`. An 8 dot in `--vf-orange` stands
       at the row's right, 12 in and 15 up from its foot.
@@ -1487,8 +1491,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - When a spark starts to need you in another view, the views track's note (above) says so over Chat's cell for
       2.4 s: its face at 18, framed, then "Vela needs you" in the attention ink.
     - The face itself never turns orange.
-    - *At SP-1b a dot lasts while the need does. With the thread (SP-1d) it lasts until you open the thread, and unread,
-      the same dot in `--vf-cyan`, comes with it: until there is a thread there is nothing to read.*
+    - *At SP-1b a dot lasted while the need did; the thread (SP-1d) was to make it last until you open the thread, with
+      unread beside it: until there is a thread there is nothing to read.* *Amended 2026-10-31 (SP-1d):* a needs-you dot
+      lasts until you open the thread, even after the need ends, and **unread** comes with it: the same dot in
+      `--vf-cyan`. A thread is unread when its spark's own turn ends while its thread is not on screen: its own run, at
+      work on one of the window's readings, is not on a later one (idle, waiting on you, or gone), so a turn that ended
+      before the window first read the board is no news. A need the window finds on its first reading keeps its dot as
+      any need does. On the row the word says the status as it stands, and the dot stays. A thread is on screen while
+      Chat is the view and it is the one shown, and opening it reads it. In another view Chat's cell takes the orange
+      dot while a needs-you dot stands, else the cyan one while a thread is unread, its accessible name "Chat, a thread
+      is unread". Both are kept for the window's life and written nowhere (HN-D9's rule).
+    - The dot is a picture, so a dot that outlasts the status word is said in the row's accessible name, right after
+      the status word, in a word only a screen reader reads: "unread", or "needed you" for a needs-you dot whose need
+      has ended ("Asleep, needed you", "Ready, unread"). A need standing now is said by its own word (Asking you), so it
+      adds none (S-3).
   - **The status, as SP-1b reads it:** from the spark's own run row (`agent.subscribe {projection: "field"}`, by the
     row's `spark`) and its agents' rows (by their `origin`). The first that holds is the word:
     - no session yet: Hello;
@@ -1508,9 +1524,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - While its act runs it reads "Showing…" or "Waking…". Refused, the line says so in fieldd's words ("Couldn't show
       Vela's pane: …", "Couldn't wake Vela: …"), and the act stays.
     - No thread is drawn in its place: SP-1d mounts the spark's pane there, then its composer.
+    - *Built at SP-1d, 2026-10-31:* awake, the spark's pane is the thread (§8 "Chat's thread"), so the awake line
+      retires with **Show**, "Showing…" and "Couldn't show Vela's pane: …". Asleep and not started keep their lines.
+      **Wake** holds its thread as a send does, one act at a time (§8 "Chat's thread"). Send wakes either (§8 "Chat's
+      composer"), so the not-started line reads "Waking…" while a send wakes it, as the asleep line does under Wake. A
+      wake's refusal is said once, in the same words, "Couldn't wake Vela: …": on this line when Wake started it, on
+      the note when Send did. What the pane's place says while there is no pane to draw is §8 "Chat's thread".
   - **Empty, opening, unavailable:** "No sparks yet"; "Opening Chat…" while the list is first read; "Chat can't read
     your sparks", with fieldd's words under it, when it cannot be read. Each is secondary, centred in the panel, and
-    never a blank.
+    never a blank. *Amended 2026-11-01 (SP-1d):* "first read" is the window's feed's. A fieldd restart replaces the
+    window's document (main's boot fence, `FielddDaemonBootFence` → `requestAllReplacements`), so Chat's feed starts
+    again: the list reads "Opening Chat…" again, and the new feed asks for the board afresh. A connection drop while
+    the same fieldd stays up starts no new feed: the window's client reconnects, the board's subscription comes back
+    with a fresh snapshot, and the list stands as last read.
   - **No create yet.** Chat's line holds the views and the snapshot. Its create, **New spark** (⌘N, `sparkle`), comes
     with its sheet in SP-1c. *(Built at SP-1c, 2026-10-31: §8 "The New spark sheet", and the line's create above.)*
 - **The New spark sheet — a name, an agent, and the face it is dealt** (SP-1c; NS-D1 A, NS-D2 B, NS-D3 A and NS-D5,
@@ -1541,6 +1567,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       thinks under on that agent's head, and Effort as a small segmented control.
     - An agent that cannot take the briefing yet is listed, disabled, with why ("can't take VibeField's tools yet"),
       read from `agent.providers[].briefing`.
+    - When its agents can't be read (`agent.providers`), the sheet lists none and its foot says "VibeField can't list
+      its agents right now". @'s list in Chat says the same sentence (§8 "Chat's composer").
   - **Its profiles** (NS-D5), once there is more than This Mac: a row of chips, 28 tall, corners 14, 12.5 medium. A
     checked chip takes the ready fill and a 1.5 inset ring. The default comes checked; the one it thinks under is always
     checked and cannot be unchecked. Under them, tertiary: "Sees 3 sessions · starts Claude Code and Codex".
@@ -1554,40 +1582,353 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Created, the face flies to its row in Chat (§2.10), the sheet folds, and Chat chooses the new spark.
   - **Reduced motion:** no falling star and no flight; the face fades in, and the sheet appears and leaves by opacity
     alone.
-- **Chat's composer — the line's draft, moved into the thread** (LN-D3 ruled by James 2026-10-29,
-  Cards in Hand; **not built — CO's SP-1d builds it**, with the Assistant's cell becoming Chat *(the cell became Chat
-  at SP-1b, 2026-10-31, §8 "Chat's list"; the composer is still SP-1d's)*. The
-  lane that deleted the line's composer carries its canon here (VF-PM 2026-10-29 16:23Z); SP-1b and
-  SP-1d link to this entry, and CO's rulings, `draft/compose-plane/`, decide what it does not): a
-  composer at the foot of Chat's open thread, scoped to the spark that thread is — the draft, @, the
-  mic and send, as the
-  line drew them from FR-2 to HN-2. The line's code for them left main at HN-2 and stays in git for
-  SP-1 to take what it wants. Until SP-1 draws it anew, the line's canon stands for it:
+- **Chat's thread — the spark's own pane, at first light** (SP-1d; its row in `draft/compose-plane/
+  thinking-roled-agents.md` §17; CH-D5 and NS-D4 ruled A by James on 2026-10-30, on the Sparks page; the thread's seam,
+  the deck's pane and the hand ruled by VF-PM 2026-10-31 16:35Z, James's to overturn). The thread is the spark's own
+  session, in its own terminal, in Chat's thread column. No messages are drawn: the pane is the transcript. The live
+  cards (CH-D2) are not drawn at SP-1d. They come with **SP-1e**, which writes their entry here first, with their data:
+  a job that groups a spark's spawns, and a door that lists its watches. Chat's thread pane takes no card at SP-1d: it
+  joins the places that take one with SP-1e.
+  - **The column is a fixed box:** the head, the pane, then the foot, in one column centred under the head, as wide as
+    the composer: 640, or the thread's width less 56 where that is narrower.
+    - The head stays SP-1b's (72): the face at 40, framed and live, the name and the status word. It is the pane's head.
+    - The pane stands 16 under the head's hairline and takes every height the head and the foot leave.
+    - The foot holds the composer, 12 under the pane and 16 above the panel's foot.
+    - Nothing the thread shows changes the pane's size: what stands in the thread stands over it (below).
+    - At 1180 × 780 the pane is 640 × 472, x 406–1046, y 140–612: about 80 columns and 24 rows.
+  - **The pane** is the deck's pane, mounted. It is a second view of the spark's floor session, as the Peek's is (one
+    decode, two presents), in the deck's own theme, effects and cell grid (§2.7), so it reads as the pane Godview
+    shows. It is the bare terminal, with no pane frame: no badge, readout or Stop. The thread's head is its head.
+    - It sits in a well: corners `--vf-godview-deck-well-radius` (10), the terminal 1 in from its edge and clipped at
+      9, and the hairline (`--vf-hairline`) drawn over it as a 1px inner ring.
+    - The well is painted in the terminal's own ground, `--vf-godview-terminal-bg`, projected from the theme the pane
+      is handed, as the deck sheet is. The pane keeps the panes' own 82% ground, which over its own colour composites
+      to it exactly, so Chat's white never shows through.
+  - **It takes input.** A click puts the keyboard in it, and keys go to the session as they do in Godview. The pane
+    that holds the keyboard sizes the session's terminal (DS-D5). The thread's pane takes the size when it takes the
+    keyboard, by a press in it or a send (§8 "Chat's composer"), and keeps it until another pane takes the keyboard.
+    Shown, it takes the size only when no pane holds it. Mounted under another view's cover (a wake, a terminal named
+    late) it claims no size at all until Chat shows it. Until then it draws the terminal at the size the last pane
+    gave it, cut at its edges where that is larger. ⌘W stays the window's, as in every view but Godview.
+    - It holds the keyboard only while Chat is the view, and lets it go when Chat stops being the view. A send whose
+      paste lands after you left Chat (its wait outlived your stay) pastes without taking the keyboard or the size.
+      Back in Chat, the pane takes them only on a press or a send.
+  - **It draws only while Chat is the view.** Under another view's cover it stops, as the deck does. Godview's pane on
+    the same session stays Godview's: only the one on screen draws, and the keyboard is in at most one of them.
+  - **When there is no pane to draw,** the pane's place stands without its well, on the panel's own chrome, and says
+    why in 13 regular secondary ink, centred, as the line under the head is drawn. It is never a blank:
+    - "Finding Vela's pane…" while its terminal is being found: the floor's sessions are being read, or the spark is
+      awake and fieldd has not named its terminal yet, as just after a hatch or a wake. It waits up to 20 s.
+    - "Vela's terminal is not on this desktop's floor." when the floor answers and holds no such terminal, or none was
+      named in those 20 s.
+    - "Couldn't find Vela's pane: …", in the floor's own words, when the floor did not answer ("the floor did not
+      answer in 10 s"), or in the window's own when its terminals could not start. A floor that did not answer is
+      never said not to hold the terminal.
+    - Until its pane is drawn, it is asked again whenever the floor may have moved: when the floor's sessions are read
+      again (the deck reads them), or this window's terminals start or are replaced. So a terminal that appears later
+      is drawn.
+    - "This window has no terminals to show it with." in a window with no terminals (the catalog, a browser): the
+      Peek's words.
+    - Asleep or not started there is no pane. The line under the head says so, with its act (§8 "Chat's list").
+  - **The thread's items** stand over the pane, never in its flow. They stand in the foot, as wide as the composer,
+    their foot 12 above the composer's top (at 1180 × 780, y 612, the pane's own foot), and they grow upward over the
+    pane. One rule holds every item: it covers the pane's bottom rows and never moves or resizes
+    the pane, so a live agent's screen never reflows under it. The rows it covers are where an agent's own input box
+    sits, so each item's entry says what it covers and when it leaves. @'s list stands over the items.
+    - At SP-1d the one item is the hello and its starters (below). CP-3's needs-you card (CP3-D8) joins them by the
+      same rule, with its own entry here when its slice draws it, and so do the live cards at SP-1e.
+    - A question the spark's own agent asks in its pane (a permission, a question) draws no item: the pane shows the
+      ask itself, and the row's word says it (Needs your OK, Asking you).
+  - **The hello and three starters** (NS-D4 A, "Hello, and three starters"; CH-D5, "Starters show while a thread is
+    quiet"). A new spark says what it does, as its first words. They stand on one card of solid chrome, the thread's own
+    ground as the Sparks page draws it: corners 16, padding 14 16, ringed by the strong hairline, with the island
+    shadow.
+    - Its face at 28, framed (§2.10, a message's lead). 12 after it, in 14 regular at 1.55 (a message's measure) in
+      primary ink: "Hi, I'm Vela. I can start agents for you, keep track of the ones you run, and carry work between
+      them. What first?"
+    - 8 under the words and 40 in (the lead and its gap), the three starters, one per job, one under another, 8 apart:
+      - `agents` "Spawn 4 Grok agents to research a topic each"
+      - `panes` "Keep track of my agents in vibe-field"
+      - `duplicate` "Have Codex review claude·2's work until it's clean"
+      These are the page's words as ruled (`sparks/src/kit.js`, VF-PM 2026-10-31), with straight apostrophes, as
+      Chat's other words have them. The third names a session as the page's fixtures do, "claude·2", a handle @ does
+      not draw (@ names a session by its project, §8 "Chat's composer"). It is kept as ruled: words the spark reads,
+      not a session @ chose.
+    - **A starter** is 34 tall, corners 17, padded 0 14 0 11, on solid chrome ringed by the strong hairline, as wide as
+      its words. Its glyph is 14 in secondary ink, then 8, then its words in 13/500 primary ink. Under the pointer it
+      takes `--vf-fill` and rises 1, in 180ms on `--vf-ease-lift`. Pressed, it is sent as Send sends (§8 "Chat's
+      composer"): pasted into the pane, with Return left to you, its note Send's own. A thread takes one act at a
+      time, Wake's, a starter's or Send's, and a press while one runs does nothing. While a send runs, the starters
+      wait (busy), Send waits and Wake cannot be pressed, so two messages never sit in the agent's one input for a
+      single Return to send as one. While Wake's wake runs, Send and the starters wait, so a send never wakes the
+      spark a second time.
+    - **A send that is not taken** leaves the hello standing when it was refused before the pane took the keyboard:
+      the window has no terminals, the pane was not found or not heard, you left the thread or the spark fell asleep
+      before its pane was ready, Chat could not read its list, its input did not open, or the spark waits on you.
+      Once the pane has taken the keyboard for a send, the hello leaves with it, pasted or not, since the pane then
+      holds the keyboard.
+    - **What it covers:** at 1180 × 780 the card is about 200 tall, y 412–612, so while it shows it covers about the
+      pane's last ten rows, where a new agent's input box waits. It leaves the moment you write, so nothing you type is
+      under it.
+    - **When they show:** while the thread is quiet. Quiet means four things hold:
+      - the spark is new: its session has had no turn yet (below);
+      - its draft is empty;
+      - the pane does not hold the keyboard;
+      - nothing has been sent to it from this window.
+      The hello and starters leave the moment the draft holds anything, and come back if it is emptied. The pane
+      taking the keyboard, or the first send, takes them away for the window's life. A new window keeps no memory of
+      them (HN-D9's rule), so a spark that is still new says hello again.
+    - **How "new" is read:** from the board, cautiously, so that an idle spark with a transcript shows its pane alone.
+      The board counts a run's tokens only as they are spent live: a run that reads its transcript back counts nothing
+      from it until its next live turn. Both a woken spark's run (resumed, or started afresh) and a run fieldd
+      re-attached after a restart read it back. So a spark is new only while every fact the window holds agrees:
+      - it never started; or
+      - the board shows its own run, and all three hold:
+        - that run is the one it hatched in, born within a minute of the spark's record. A run born in its place
+          after that minute is not: a wake's (resumed, or started afresh), or one fieldd resumed in place of a run it
+          could not re-attach. So a spark woken after that minute never says hello;
+        - fieldd is watching that run, not waiting to resume it;
+        - this window has never seen the spark at work or waiting on you, nor that run's tokens spent (a turn is a
+          model's answer, and every answer spends them). What the window saw is kept for its life (HN-D9's rule), so
+          a turn it saw stays seen whatever the board counts after it. That life ends at a fieldd restart: a restart
+          replaces the window's document (main's boot fence, §8 "Chat's list"), and the window after it has seen
+          nothing. fieldd re-attaches only the runs a restart left (as it boots, and in its G5 retries after, the run
+          unwatched on the board until one attaches), so no window has seen a re-attached run's turns.
+      A spark whose run the board does not show is not said to be new. Two cases are still open. In each, a window that
+      has seen none of a run's turns reads a run whose transcript the board does not count:
+      - a run fieldd re-attached after a restart keeps its birth, so it still reads as the run its spark hatched in,
+        however old it is. The window the restart opened has seen none of its turns, so until that run's next live
+        turn it can say hello over the spark's transcript;
+      - a run born in the hatch run's place within the minute reads as the hatch run: one fieldd resumed in place of a
+        run it could not re-attach, after a restart within the hatch run's first 60 s, or a spark woken that soon.
+      Closing them needs a fact on the board's row that a transcript read back keeps: the run's turns.
+    - They come in over 420ms on `--vf-ease-island`, from 8 below at opacity 0, and they go at once. With reduced
+      motion they fade in over 120ms, and a starter's rise takes 90ms on ease-out (M6).
+    - The hello is VibeField's words for what a spark does, drawn in its voice. It is never sent to the session and is
+      not in its transcript.
+  - **Listening** (§2.10) is not reported: typing in the draft, or a paste, is not a report (§8 "Chat's list").
+- **Chat's composer — the line's draft, moved into the thread** (LN-D3 ruled by James 2026-10-29, Cards in Hand;
+  built at SP-1d from the line's code in git at `0e2ad08bc`, the parent of HN-2's deletion; CH-D5 A and EW-D4 rule @'s
+  rows). *Amended 2026-10-31 (SP-1d):* this entry said "not built — CO's SP-1d builds it", and that the line's canon
+  stood for it until SP-1 drew it anew; the lane that deleted the line's composer had carried that canon here (VF-PM
+  2026-10-29 16:23Z). CO's rulings (`draft/compose-plane/`) still decide what this entry does not. A composer sits at
+  the foot of Chat's open thread, scoped to the spark that thread is: the draft, @, the mic and send, as the line drew
+  them from FR-2 to HN-2.
+  - **Where it stands:** in the thread's foot (§8 "Chat's thread"), 640 wide (the thread's width less 56 where that is
+    narrower), 52 tall, centred, its foot 16 above the panel's foot. It is padded 5 6 with corners 26, so the mic and
+    send are concentric with it. At 1180 × 780 it is x 406–1046, y 624–676.
+  - **On the line's glass:** the Line tier (§5): `--vf-chrome-solid` at 88% (94% by night), ringed by the hairline
+    (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6). It has
+    no blur: the panel under it is solid, and nothing scrolls under it.
   - **the draft** — an editor, not a field: 14px body (§3) in primary ink, padded 10, one line that
     keeps the caret in view (typing past one line is the page's next drawing, One Frame §21). Its
     placeholder, tertiary, says who it goes to — the spark's name, "Message Lyra…" (it said "Message,
     or type @ to add…" on the line);
-  - **mic** — 36 round in the ready fill, `mic` 17, waiting faint by ink with its reason in its
-    tooltip ("Dictation — not on the desktop yet") until a dictation door exists; nothing faked;
+  - **mic** — 36 round in the ready fill, `mic` 17, waiting in t4, a control that is off (§2.4), with its reason in
+    its tooltip ("Dictation — not on the desktop yet") until a dictation door exists; nothing faked;
   - **send** — 40 round, 4 after the mic, `arrow` (up) 17: the ready fill and tertiary ink while there
     is nothing to send, **inverted** (`--vf-foreground`, the inverse ink) once there is. Return sends.
   **@ is typed, never a button** (FC-D1; no attach button either). An @ typed at the start of a word
   opens **@'s list** — a menu (§5: solid, the strong hairline, the island shadow, corners 18,
   padding 6), 316 wide, grown upward from the caret (its left 10 before the @, its foot 8 above the
-  composer), read bottom-up, nearest first; its rows are CO's to rule (CH-D5: the agents to start and
-  the sessions in the spark's profiles; EW-D3: @ lives only in Chat). Rows 36 tall (46 with a small
+  composer), read bottom-up, nearest first; its rows are below (CH-D5; EW-D3: @ lives only in Chat).
+  Rows 36 tall (46 with a small
   line under the name), corners 12, 13/500; eyebrows 10px mono capitals in tertiary ink; the hot row
   in the ready fill. Typing after the @ filters every group; ↑ ↓ move, Return or Tab takes the row,
   Esc closes the list and keeps what was typed. A row with no door behind it says why and cannot be
-  taken — never faked. A paste or a drop lands at the caret, as plain text; **a card played on the
-  composer** (§8 "The hand") lands as a chip in the sentence and carries the whole card to the spark
-  — "Added to your message to Lyra" — and a card stays in the hand (HN-D4).
+  taken — never faked. ⌘V, and text dragged inside the window, land at the caret as plain text;
+  **a card played on the composer** (§8 "The hand") lands as a chip in the sentence and carries the
+  whole card to the spark — "Added to your message to Lyra" — and a card stays in the hand (HN-D4).
+  *Amended 2026-10-31 (SP-1d):* this said a paste or a drop lands as plain text. A drag from another
+  app is a card from the moment it enters the window, and the composer's place for cards outranks the
+  field under it (§8 "The hand"), so let go there it plays straight in as a chip (below).
   **The chip** (D1, ruled 12 Sep): a token in the sentence, 24 tall, corners 7, 12.5/500, its glyph
   13, padded 0 8 0 6, ringed 1px; it never splits a word, Backspace takes it as one character and ×
   on hover removes it. A picture wears `capture` on the select blue at 14%; a card's chip wears its
   kind's index glyph (§8 "The hand").
+  - **@'s rows in Chat** (CH-D5 A, "Agents to start, and sessions running"; EW-D4: @ offers only its scope). There are
+    two groups, read bottom-up, nearest first. Each lists only what the spark's own tools reach, but for the one
+    residual below.
+    - *The residual, a session's profile (2026-10-31):* the talk room reads it as the profile the run was filed under
+      (`profileSet`), else This Mac's. The board's row carries only the run's persona, so @ reads the persona's
+      profile, else This Mac's when the run names no persona. The two agree while a run is filed under its persona's
+      profile, or names neither. Where they part (a run filed under another profile, or naming only one of the two),
+      @ can offer a session that `agent_send` refuses as outside the spark's profiles, which the tool says, or leave
+      out one it would take. Closing it needs `profileSet` on the board's row.
+    - **Running in its profiles**, nearest the composer: the sessions the spark's `agent_send` (CP-2) takes, by its
+      whole rule (`fieldd/src/tool-plane/rooms/talk/verbs.ts`). A session is a row when all three hold:
+      - it is live;
+      - its profile is one of the spark's (read as the residual above says);
+      - it is the person's own, or one this spark started (CP-D6). The person's own is not a spark's own session, and
+        you started it (`origin.by` you, or no origin). One this spark started has `origin.by` spark and `origin.spark`
+        this spark.
+      So the spark's own session, every other spark's session, another spark's agents and a flow's runs are never rows
+      (CP-D5), and neither is a run whose origin names a word this build does not know.
+    - Each session row is 46 tall: the agent's mark at 20, then the session's handle in mono: its folder's name, which
+      is the board's project ("vibe-field"), else, for a run that names no folder, the agent's label ("Claude Code").
+      Under it a small line says the agent by the catalog's label and one word for what it is doing ("Claude Code ·
+      Working"). The word is Working, Idle or Needs you, the last in `--vf-ink-attention`. The newest activity is
+      nearest.
+    - **Two sessions with one name** are told apart by an ordinal, the `·2` the Sparks page numbers its sessions with.
+      Where more than one row shares a name, each after the first by its start takes the next: "vibe-field",
+      "vibe-field·2", "vibe-field·3". They are numbered across every session @ offers, before what follows the @
+      filters them, so a row keeps its handle while you type, and a chip keeps the handle it was taken with.
+    - **Start an agent**, above it: each agent signed in under one of the spark's profiles, the same list its
+      `agents_available` tool answers (TL-D2). Each row is 36 tall: the agent's mark at 20, then the catalog's label,
+      as that tool says it. When the spark has more than one profile there is a row for each agent and profile, and
+      the profile's name follows as a pill at the row's right (§8 "Pills").
+    - The eyebrows are "Running in its profiles" and "Start an agent". A group with no rows is left out. The hot row
+      starts at the nearest row.
+    - Until its agents are read, their group says "Reading its agents…". When nothing matches what follows the @, the
+      list says `Nothing called "cla"`, and with nothing to offer at all, "Nothing to add from Vela's profiles".
+    - When the spark's profiles can't be read (`agents.profileSets.list`), no agent and no session can be placed, so
+      the list offers no row and says the New spark sheet's sentence, "VibeField can't list its agents right now". The
+      next @ reads them again. Each of these words is 12/400 in tertiary ink, padded 10.
+    - The sessions are read from the window's one board (Chat's feed, `agent.subscribe`), never by an @. When that
+      board can't be read (its subscription refused), no session can be placed, but the agents can, since they are the
+      profiles' alone. So **Start an agent** stands, and **Running in its profiles** stands with no row, saying
+      "VibeField can't read what's running right now" in their place, 12/400 in tertiary ink, padded 10, as @'s other
+      words. `Nothing called "cla"` is still said when no agent matches what follows the @, and "Nothing to add from
+      Vela's profiles" is not, since what is running is not known. The board is asked again when Chat's feed starts
+      again (fieldd restarting, which replaces the window's document: §8 "Chat's list"), never by the next @. One
+      refused because the socket closed under the ask while the same fieldd stayed up (the window's client marks that
+      refusal retryable, and never replays a subscribe it lost in flight) is asked again too, once that client has
+      reconnected. Any other refusal stands until the feed starts again. The residual: a board that neither answers nor
+      refuses leaves its group saying "Reading its agents…" until it answers.
+    - Flows' rows are CP-4's (FL-D5 A). Sparks are never rows: in a spark's thread the spark is the one you are
+      talking to (CH-D5).
+    - @'s list stays 316 wide. The page's 340 was not taken: 316 is the line's, and the rows fit it.
+  - **An agent's model and effort** (CH-D5 A: "An agent becomes a chip with its model and effort"). Taking an agent's
+    row puts its chip in the draft and turns @'s list into that agent's menu, in the list's own box. It is the New spark
+    sheet's agent menu (§8 "The New spark sheet") for the one agent: **Its own model** first, then its picker's models
+    as `agent.models` lists them, and Effort as a small segmented control under a model that has one. "Reading Claude
+    Code's models…" stands while they are read, and a picker that cannot be read says why, in the sheet's words.
+    - ↑ ↓ move, ← → turn Effort, Return or Tab keeps the choice, and Esc folds the menu with the chip as it stands.
+    - A click on an agent's chip opens its menu again.
+    - Untouched, the agent starts at its own model and effort, as the sheet's untouched pill does.
+  - **The chips** come from @ or from the hand, each in the chip's anatomy above, on solid chrome ringed 1px in the
+    strong hairline (a picture's select blue excepted):
+    - **An agent:** its mark at 15, then its label, and its model and effort once chosen, in the sheet's spelling
+      ("Claude Code · Opus 5.5 · high"). When the spark has more than one profile, " · Work" follows.
+    - **A session:** its mark at 15, then its handle in mono ("vibe-field", "vibe-field·2").
+    - **A card:** its kind's index glyph at 13 (§8 "The hand"), then its name as an outcome says it (one line, cut at
+      60), in mono for a terminal card. A picture's chip wears `capture` on the select blue at 14%.
+  - **What a send carries** is the message as it is pasted, in the draft's order:
+    - the words as typed, their ends trimmed;
+    - an agent chip as its words: "Claude Code", or "Claude Code at Opus 5.5 · high", either followed by " under Work"
+      when the spark has more than one profile;
+    - a session chip as its words and the id the spark's tools take: "Claude Code in vibe-field (session ‹its run›)",
+      or "Claude Code (session ‹its run›)" for a run that names no folder. The id is there for the spark's tools to
+      read (§9 "Chat's words"). The name is the project's, without @'s ordinal, which is the window's own: the id is
+      what tells two sessions apart;
+    - a card chip as a pane takes the card (§8 "The hand"): its words, a file's path, a picture's file's path, or an
+      agent card's handle. A chip that carries more than one line stands on lines of its own, with its line breaks kept;
+    - never a trailing line break.
+  - **Send** pastes the message into the thread's pane, the road ⌘V takes: bracketed when its program asked for it,
+    with Return never pressed for you. Return in the draft and the send button both send. ⇧Return types nothing: the
+    draft is one line. The thread takes one act at a time, Send's, a starter's or Wake's (§8 "Chat's thread"): while
+    one runs, send waits (busy), and a press does nothing. The thread's own hold turns the press away, the one Wake and
+    the starters read, not the button drawn busy, so a Return in the same moment as a Wake press sends nothing, says
+    nothing and lets go of nothing.
+    - The pane takes the keyboard just before the paste (§8 "Chat's thread"), so it takes the session's size, and the
+      keyboard stays there, where Return sends it. Sent, the words and chips it carried are cleared, and the line's
+      note (§8 "The line") says so once: "Pasted into Vela's pane — Return sends it". The draft stays a field while a
+      send runs, so what was typed or added after them meanwhile stays; a draft changed within what was sent stays
+      whole, so no word is lost.
+    - **A message wakes it** (§2.10). Asleep or not started, Send wakes the spark first (`compose.sparks.open`; the
+      line reads "Waking…"). It waits up to 20 s for the spark to be heard and its pane to appear, then up to 1.5 s for
+      the pane's input to open, then pastes. An awake spark whose pane is still being found ("Finding Vela's pane…", §8
+      "Chat's thread"), or that has not been heard yet (Hello, as just after a hatch), is waited for in the same 20 s,
+      with no wake. Nothing is pasted into a spark before it is heard: a program not yet up may not read a paste as
+      one, and a line break inside the message would read as Return.
+    - **A spark wakes once.** fieldd answers an open asked while another is under way (a second window's:
+      `compose.sparks.open` is this desktop's own door, its shell's and its windows') with that same wake, its run or
+      its refusal, so two opens never wake one spark into two runs. A resume under way through another door
+      (`agent.resume`, as Godview's Resume asks it) is not joined yet: the wake reads that resume's refusal as a session
+      that cannot be resumed and starts the spark again. Joining it is owed to fieldd's resume wrapper.
+    - **While the spark waits on you** (Asking you, Needs your OK, Stuck), Send pastes nothing, because a menu in the
+      pane would read the paste as its answer. The note says "Vela is waiting on you — answer it in its pane", and the
+      draft stays. It is read when Send is pressed, and again after the last wait, just before the paste: a woken or
+      just-started agent puts up its first menu as its input opens. A menu the board has not heard of yet is not
+      seen.
+    - When the paste is not taken, the draft stays whole and the note says why, in the hand's words where the outcome
+      is the hand's own (§8 "The hand"):
+      - "Not pasted — Vela's pane is not taking input" (its input did not open within 1.5 s, or a spark that is awake
+        was not heard in the 20 s), never for a spark Chat reads asleep then, nor while Chat cannot read its list, nor
+        for a pane no longer drawn when a wait ends or the paste is asked: each of those is said below;
+      - "Not pasted — that snapshot is no longer kept";
+      - "Not pasted into Vela's pane — 300 KB, and one paste carries 261 KB of it" (D6, said once);
+      - "Not sent — Vela didn't wake in 20 seconds", only for a spark this send woke that was not heard in them;
+      - "Not sent — Vela's terminal is not on this desktop's floor", at once when the floor holds no such terminal,
+        and after the 20 s for a spark that is awake, or was heard, but whose terminal was not named in them. A spark
+        that is awake is never said not to have woken. A thread still on screen whose pane is not drawn yet when the
+        20 s end (a spark heard just as they end) is a pane still being found, so it is said this too;
+      - "Not sent — you left Vela's thread before its pane was ready", after the 20 s, when no pane of the thread
+        has settled and the thread is not on screen then: you left Chat, or chose another thread, while its pane was
+        being found or had not appeared. The pane is only found while its thread is shown, so its terminal is never
+        said to be off the floor then. Once the pane is found, it is read again after each wait (for the spark to be
+        heard, for its input) and at the paste. The send pastes into the pane its thread draws then, so a thread left
+        and shown again is pasted into: a pane being found again is waited for in what is left of the 20 s, and a pane
+        drawn again has its own input waited for (1.5 s) before the paste. A pane still drawn under another view's
+        cover takes the paste (§8 "Chat's thread"). A pane no longer drawn when a wait ends is said as no pane at the
+        20 s is: a thread left while the send waited for the spark to be heard, or for its input, says this, never that
+        its pane is not taking input, and a pane still being found is never said to be off the floor before the 20 s
+        end;
+      - "Not sent — Vela fell asleep before its pane was ready", after the 20 s, when the spark fell asleep while the
+        send waited. An asleep thread draws no pane, so none could be ready, and you are never said to have left it.
+        While the send waits for the pane of a thread on screen, it is said the moment that pane goes, not at the
+        20 s. It is read too when an awake spark is not heard, when its input does not open, and wherever the pane is
+        read again. Still at the 20 s: a spark that falls asleep off screen, where no pane goes, or after its pane was
+        found and before it was heard, which that wait reads from the list alone;
+      - "Not sent — Chat is opening again" and "Not sent — Chat can't read your sparks", when Chat's list is not read
+        at the moment the send reads why it cannot go on, said as the list stands then (§8 "Chat's list"). A send is
+        pressed only on a list read, so the list is unread then only when the window's feed started again under the
+        running send: opening again, where the list reads "Opening Chat…", or unreadable, its list refused before that
+        feed first read it, in the list's own words. A fieldd restart never does that: it replaces the window's
+        document, and the send with it (main's boot fence, §8 "Chat's list"), and the new document's list reads
+        "Opening Chat…" with no thread drawn, so no send is pressed there. Within one document the feed starts once, so
+        today these only guard a feed restarted in place, which no product path does. With no list read no thread is
+        drawn and no spark is heard, so "you left", "didn't wake" and "not taking input" are never said then;
+      - "Couldn't find Vela's pane: …", at once, in the floor's or the window's own words, while the pane's place says
+        it (§8 "Chat's thread");
+      - "Not sent — this window has no terminals", at once, in a window with no terminals (the catalog, a browser),
+        where the pane's place says the Peek's words. Send is still drawn there, so its states can be seen;
+      - "Couldn't wake Vela: …", in fieldd's words, as the line says it;
+      - "Couldn't send to Vela: …", in the words of the step that broke (main's still door, the pane's paste), so a
+        send that fails is never a blank.
+      A starter is sent as Send sends, so its outcomes are these.
+    - Chat has **no clipboard road**. A message is never copied in place of a send: the hand holds what you copied
+      (HN-L1). "Pasted into" is never said for a paste the pane did not take.
+    - **A pasted draft is the agent's until you press Return** (ruled by VF-PM 2026-10-31 16:35Z). What Send pasted
+      and you did not send stays in the agent's own input, where VibeField cannot see it. The next delivery VibeField's
+      queue makes into that session (CP-2: a wake's line of facts, or a spark's words) is submitted together with it.
+      Send joins the session's queue only through a window door into it, `compose.say`, which is a later slice.
+  - **The draft is the thread's.** Each spark keeps its own for the window's life, written nowhere (HN-D9's rule).
+    Leaving Chat or choosing another spark keeps it, and coming back finds it. A send still running when you leave
+    clears what it carried from the draft you come back to, once it is pasted, and keeps what you typed there
+    meanwhile.
+  - **A card from the hand** (§8 "The hand"):
+    - Carried over the composer, a card rings it at its own corners (26), 1.5px `--vf-select`, and says "Add to your
+      message to Vela". A place says its ring's corner with its answer, the composer its own, and the carried card's
+      ring is drawn at it; the composer draws no ring of its own.
+    - Let go, it lands as a chip at the caret, or at the draft's end when the draft holds no caret. The note says
+      "Added to your message to Vela". The card stays in the hand (HN-D4).
+    - What a pane cannot take, the composer cannot take either, in the same words: "A picture with no file can't be
+      pasted yet", "A file with no path can't be pasted yet".
+    - A drag from another app let go on the composer plays straight in, as it does on a pane.
+  - **Keys:** Esc closes @ and keeps what was typed; with @ closed it gives the keyboard back (CB-2). While the draft
+    holds the caret it is a field (`isField`): ⌫ edits it and never removes a card, and ⌘V pastes into it as plain text
+    on one line and deals no card.
+  - **One surface.** @'s list, and an agent's menu in its place, is the frame's open surface **`at`** (§10). Opening it
+    folds the rest, and a change of view folds it. The hand does not reach while it is open.
+  - **Motion.** @'s list grows from the caret in 240ms on `--vf-ease-island`, from 6 below at 0.97, from its foot's
+    left 10 in. It folds at once. With reduced motion it fades in over 120ms at full size. Send's ink and fill turn over
+    160ms.
   **The line's canon as HN-2 deleted it** (DESIGN.md at `e23fa8a1f`, kept whole here for SP-1d —
-  what Chat keeps of it, CO's rulings keep; what they re-rule, they rule there):
+  what Chat keeps of it, CO's rulings keep; what they re-rule, they rule there).
+  *At SP-1d (2026-10-31) Chat keeps from it the draft, the mic, send, @'s keys and chrome, the chip, and the interim
+  send's road with its "Pasted into" rule. CH-D5 re-ruled @'s rows (above). The aim is gone, because in Chat the thread
+  is the aim (CH-D5). The clipboard road left: a send that is not taken keeps its draft.*
   - **@'s list's rows** — read bottom-up, nearest first: **Send to** nearest the line ("Send to a
     pane" in Godview, where the panes lead) — what the deck shows, each named by its folder as the
     swarm names its body, with what runs there and its state word; above it **Add** — From the
@@ -1642,7 +1983,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     right to stay **28** clear of the line and 24 from the window's right edge. Within the foot's band
     (the window's bottom 214, the fan's ends ± 70) the cards near the pointer rise by a smoothstep on
     their distance — up to **86** within **120** of it, 240ms on the island curve — and straighten as
-    they come, the nearest in front. The card under the pointer rises whole, says where it came from
+    they come, the nearest in front. **While Chat shows** (SP-1d; Q5, ruled by VF-PM 2026-10-31
+    16:35Z: the band ends at the foot's top, so no card lifts over or under the composer), the band
+    begins at the panel's foot, the window's bottom 88 (the cover's reserve, FC-D15), in place of its
+    bottom 214, so a pointer on the thread, its items, its composer or the 16 under the composer lifts
+    no card. A card rises at most **20** there, its tip to the panel's foot (y 692 at 1180 × 780), and
+    never its 86, so no card stands over the composer or under it. The card under the pointer rises
+    those 20, not whole. *(The rise of 20 is SP-1d's reading of Q5's outcome, VF-PM's to overturn.)*
+    Its × and its words (below) are drawn as everywhere, so while the pointer is on the hand under the
+    panel its words stand over the composer's bottom 16 (y 660–684). Raised (⇧⌘V, below) is asked for
+    and takes the keyboard, so it lifts the hand over the composer as over any view's foot.
+    Elsewhere the card under the pointer rises whole, says where it came from
     above itself — "Godview · claude·2 · 2m ago", "Canvas · snapshot · just now", a copy made in
     Settings or the Setup Assistant by the view under it ("Canvas · Settings · just now"), one History's
     room made by the view alone ("History · just now"), a paste with no caret by its act alone
@@ -1670,6 +2021,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **Copy** (§8) deals a picture of the selection, or a text card for one note. ⌘C in a pane, Copy in
     History and in Chat's thread, and another app's copy brought in — ⌘V with no caret anywhere, or a
     drag let go away from a pane and the prompt — deal as their doors arrive (*as built*, below).
+    *(SP-1d: Chat's thread at first light is its pane, whose ⌘C waits on G30 with every pane's. Chat's
+    own Copy comes with drawn messages.)*
     Another app's clipboard is never read on its own: what is copied elsewhere, passwords included,
     stays out. Every other copy VibeField makes deals the same way, as a text card — Settings' (a
     sign-in link, a device's name, the exact version, a diagnostics record) from the button pressed,
@@ -1712,7 +2065,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     no path can't be pasted yet"), and a snapshot whose still main no longer keeps
     says "Not pasted — that snapshot is no longer kept". **The desk** (Canvas) takes text as a note and a picture as a print, where you let go
     (HN-D7); a file or an agent says the desk can't hold it yet. **Chat's composer** takes a card as a
-    chip (§8 "Chat's composer"). Over the line the carried card ducks to 0.55; **held over a view's
+    chip (§8 "Chat's composer"): "Add to your message to Vela", then "Added to your message to
+    Vela". *(SP-1d, 2026-10-31: Chat's thread pane takes no card yet; it joins the places that take one
+    with SP-1e.)* Over the line the carried card ducks to 0.55; **held over a view's
     cell for 520ms** (HN-D6) that view opens under it, the cell saying "Opening Godview" with its
     progress — copy in History and play in Godview in one drag.
   - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its notebook — it flies
@@ -4824,6 +5179,34 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - One row stands by decision. An agent that never says who keeps Settings' "Doesn't say who is signed in" over the
   page's "Signed in · doesn't say which account": VibeField cannot know it is signed in.
 
+**Chat's words** (track CO, SP-1d; where each stands is §8 "Chat's list", "Chat's thread" and "Chat's composer").
+- The hello and its starters: "Hi, I'm Vela. I can start agents for you, keep track of the ones you run, and carry
+  work between them. What first?" · "Spawn 4 Grok agents to research a topic each" · "Keep track of my agents in
+  vibe-field" · "Have Codex review claude·2's work until it's clean".
+- The pane's place: "Finding Vela's pane…" · "Vela's terminal is not on this desktop's floor." · "Couldn't find Vela's
+  pane: …" (Send's note says it too) · "This window has no terminals to show it with."
+- @: "Running in its profiles" · "Start an agent" · "Reading its agents…" · `Nothing called "cla"` · "Nothing to add
+  from Vela's profiles" · "VibeField can't list its agents right now" (the New spark sheet's own sentence) ·
+  "VibeField can't read what's running right now" (the sessions' group, while the board can't be read); a session's
+  word, Working · Idle · Needs you.
+- Send's notes: "Pasted into Vela's pane — Return sends it" · "Vela is waiting on you — answer it in its pane" · "Not
+  pasted — Vela's pane is not taking input" · "Not pasted — that snapshot is no longer kept" · "Not pasted into Vela's
+  pane — 300 KB, and one paste carries 261 KB of it" · "Not sent — Vela didn't wake in 20 seconds" · "Not sent — Vela's
+  terminal is not on this desktop's floor" · "Not sent — you left Vela's thread before its pane was ready" · "Not sent
+  — Vela fell asleep before its pane was ready" · "Not sent — Chat is opening again" · "Not sent — Chat can't read your
+  sparks" · "Not sent — this window has no terminals" · "Couldn't wake Vela: …" · "Couldn't send to Vela: …". A card's: "Add to your message to Vela" ·
+  "Added to your message to Vela".
+- A row's lasting mark, in its accessible name after the status word: "unread" · "needed you" ("Asleep, needed you",
+  "Ready, unread").
+- A session's handle: its folder's name, which is the board's project, else the agent's label for a run that names no
+  folder, with @'s ordinal where two share it ("vibe-field·2", "Claude Code·2"). Its chip pastes "Claude Code in
+  vibe-field (session ‹its run›)", or "Claude Code (session ‹its run›)" with no folder.
+- Where an outcome is the hand's, the words are the hand's (§8 "The hand"), so one outcome is never said two ways.
+- Each note is under 70 characters beside the spark's name, so it is read in the note's 2.4 s. A refusal from fieldd
+  is said in its own words after the colon, as the line says it.
+- A session chip's id is pasted for the spark's tools, which address a session by it. It is the one runtime id Chat
+  puts on screen, in the pane, as part of what you send, and never in Chat's own chrome.
+
 **The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
 `face.ts`; its design test reads this table). `iPhone 17 Pro` stands for the device's name: the host's
@@ -4899,7 +5282,8 @@ their place". "Fullscreen" stays the pane's word (§8).
 **The quit's words** (track AL, `draft/thinking-app-lifecycle.md` §4 and §8; AL-D1, AL-D3 ruled 2026-10-27; this
 paragraph added 2026-11-01 by AL-10, the words before it lived only in the shell's code). A person's quit (⌘Q, the
 Dock, the status item, the menu) stops the terminal service. A crash, a Force Quit or a signal leaves it running.
-Every place that says what a terminal's life is says those two facts, and no place promises more (GT-D11).
+Every place that says what a terminal's life is says those two facts, and no place promises more (GT-D11). With
+**Keep running when VibeField quits** on, only the status item's **Quit VibeField** is a quit (the last bullet).
 - **The quit box** (`quit-gate.ts`, only while sessions run and **Ask before quitting** is on) is the update consent's
   shape. Its message is the consequence: "Quit VibeField and end 3 terminal sessions?" Its detail names them: "Quitting
   stops the terminal service, which ends:", then up to five rows ("title — cwd"), then "and N more". Its buttons say
@@ -4915,6 +5299,17 @@ Every place that says what a terminal's life is says those two facts, and no pla
   finds it. It ends when its program exits, when you end it, when you quit VibeField, or when the Mac restarts." The
   fact beside it is **Until you quit**. Until AL-10 it said a terminal "outlives … quitting VibeField", which has been
   false since AL-3 (2026-10-27).
+- **Settings → Diagnostics' "Last exit"** (AL-12, `last-exit-words.ts`) keeps how a shell last left after the notice
+  has gone, in one sentence: what happened and when, then what it ended or what kept running. "VibeField quit
+  unexpectedly on Oct 30 at 10:42. 2 terminal sessions kept running." · "VibeField quit on Oct 30 at 10:42 and ended 2
+  terminal sessions." · before any exit, "No exit recorded yet." An unread count is again "Its terminal service kept
+  running.", never zero.
+- **Keep running when VibeField quits** (AL-6, AL-D2; Settings → Desktop behavior, macOS, off by default): "Quitting
+  closes the windows and keeps VibeField in the menu bar, with its terminal sessions running. Quit VibeField in the
+  menu bar quits it." With it on, ⌘Q, the Dock and the menu close the windows and hide the Dock icon. That is no quit,
+  so nothing asks and nothing ends. The status item is shown whatever **Show status item** says, and its first row
+  says "VibeField is running in the background". Its **Quit VibeField** is the quit, through the boxes above. Opening
+  a window brings the Dock icon back.
 
 ---
 
@@ -5041,7 +5436,8 @@ Every place that says what a terminal's life is says those two facts, and no pla
   `objects · fields | artifacts · zoom · palette · me · cards · selection · search`, so opening the
   sheet on either shelf folds the rest, and turning it to its other shelf folds nothing.* *Since
   SP-1c (2026-10-31) the New spark sheet, Chat's create, is one of them too: **`new-spark`** (§8 "The
-  New spark sheet").* **The
+  New spark sheet").* *Since SP-1d (2026-10-31) @'s list is back, in Chat's composer: **`at`**, which
+  an agent's menu shares (§8 "Chat's composer").* **The
   app's theme has ONE owner, main's** (FC-D5): Light · Dark · Auto, one value per device kept by the
   shell, Auto following the OS through Electron's `nativeTheme`, and the owner projects what it
   resolves to back into `nativeTheme` — so the window's native chrome, its menus and the page's
@@ -5148,11 +5544,13 @@ weight, scaled, never nine. **One drawing per meaning:** a chevron is drawn poin
 *turned* (90 down, 180 left, 270 up); the four cursor keys are one arrow turned; redo is undo
 *flipped*. The set, by group — actions: plus · close · check · search · pencil · undo · reset ·
 outward · link · return · backspace · ellipsis · start · resume · jump · duplicate · tape · lift · trash ·
-pen · eraser · today · minimize · maximize · restore; navigation: chevron · arrow; places and objects:
+pen · eraser · today · minimize · maximize · restore · sparkle; navigation: chevron · arrow; places and objects:
 gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
 moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
 mic · scantext · snippets · prompt; signals: message · key · question · exclaim · flame · missing · importing;
-Studio only: document · layers · sparkle. **`history`** (2026-10-03, One Frame §13) is the views
+Studio only: document · layers. *Corrected 2026-10-31 (SP-1d, at its source):* `sparkle` stood here,
+Studio only, after SP-1c gave it to New spark, Chat's create (§8 "The line"). It is an action, and the
+catalog's callout still wears it. **`history`** (2026-10-03, One Frame §13) is the views
 track's History cell (§10): a clock turning back, the dial at `globe`'s radius opened where its arrow
 turns it. **`importing`** (2026-10-27, AO-4b) is History's arc (§6, the arc; §8, the views track): a fifth of
 that dial, from twelve o'clock, drawn only over the History cell's glyph while History imports and turned by the
@@ -5164,7 +5562,8 @@ window with its chevron, the frame opened at the lower right to hold the verb �
 started, play for one resumed — so the noun travels with the verb (One Frame FR-3: only Canvas's
 create is a bare plus). Their Hardware records are the page's T4 column, drawn and not shipped.
 **Send** (Chat's composer, §8) needs no glyph of its own: it is `arrow`, as drawn (up). No `attach`:
-@ is typed (FC-D1). **The hand's indexes** (Cards in Hand, HN-D1, 2026-10-29): a card prints its kind's
+@ is typed (FC-D1). Chat's starters (§8 "Chat's thread") wear `agents`, `panes` and `duplicate`, already
+among the 64. **The hand's indexes** (Cards in Hand, HN-D1, 2026-10-29): a card prints its kind's
 glyph twice, as a playing card prints its rank — `snippets` (text) · `capture` (a picture; the line's
 snapshot wears it too) · `code` (a file) · `agents` (an agent) · `terminal` · `message` — in the card's
 index ink, never a colour of its own (§5). `clipboard` is the selection bar's Copy (HN-D3), its notch

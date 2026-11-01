@@ -3,11 +3,12 @@
 // so they are counts and never timings: the two whole-table reads per look it once made came to four or more for a
 // run that left a daemon, each 0.1–2 s with the host's load, and DK-18's launcher rows outran vitest's 5 s on them.
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { test } from "node:test";
 import {
   leftByRun,
+  leftNames,
   listRunProcesses,
   psTables,
   SMOKE_RUN_ENV,
@@ -99,4 +100,78 @@ test("on Linux each of the census's three reads is asked in procps's spelling: `
     ["-ww", ...columns, "-p", "41"],
     ["wwe", ...columns, "-p", "41"],
   ]);
+});
+
+// Item 142 (2026-11-01) — the reap calls a pid reaped only once the KERNEL says it is gone. AL-6's light read the launcher
+// row's daemon alive just after the row said it reaped (1,580 ms in, the SIGTERM arm): a process in its exit can stop
+// showing `ps -E` its environment before it is a zombie, and the reap judged gone by the mark. The witness is the test's
+// own, item 93's reading (`kill(pid, 0)`, then `ps`'s stat, a zombie gone), never the census's.
+const aliveByKernel = (pid) => {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return false;
+  }
+  const stat = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], {
+    encoding: "utf8",
+  }).stdout.trim();
+  return stat !== "" && !stat.startsWith("Z");
+};
+
+test("a daemon whose mark the census no longer sees is called reaped only once the kernel says it is gone", {
+  skip,
+}, async () => {
+  const mark = `vf-smoke-profile-census-exiting-${process.pid}`;
+  // its exit takes a second after the SIGTERM; it says when that handler is in, so the SIGTERM cannot beat it
+  const daemon = spawn(
+    process.execPath,
+    [
+      "-e",
+      "process.on('SIGTERM', () => setTimeout(() => process.exit(0), 1000)); setTimeout(() => {}, 60000); console.log('ready')",
+    ],
+    {
+      detached: true,
+      stdio: ["ignore", "pipe", "ignore"],
+      env: { ...process.env, [SMOKE_RUN_ENV]: mark },
+    },
+  );
+  try {
+    await once(daemon.stdout, "data");
+    // the census finds it by its mark, then sees no mark from the first re-look on: AL-6's arm, a process in its exit
+    const row = await leftByRun(mark, { still: () => [] });
+    assert.equal(
+      aliveByKernel(daemon.pid),
+      false,
+      "the row said reaped while the kernel still had the daemon",
+    );
+    assert.deepEqual(row.reaped, [daemon.pid]);
+    assert.deepEqual(row.unreaped, []);
+  } finally {
+    if (daemon.exitCode === null && daemon.signalCode === null) daemon.kill("SIGKILL");
+  }
+});
+
+test("what the kernel still has after the SIGKILL and the hang's bound is said unreaped, never reaped", async () => {
+  // stand-ins throughout: a pid still the run's that never goes, on a clock the waits move
+  const pid = 4_242_424;
+  let t = 0;
+  const signals = [];
+  const row = await leftByRun("vf-smoke-profile-census-unreaped", {
+    list: () => [{ pid, ppid: 1, name: "node", helper: false, command: "node" }],
+    still: (_mark, pids) => pids,
+    gone: () => false,
+    signal: (to, signal) => signals.push([to, signal]),
+    sleep: async (ms) => {
+      t += ms;
+    },
+    now: () => t,
+  });
+  assert.deepEqual(signals, [
+    [pid, "SIGTERM"],
+    [pid, "SIGKILL"],
+  ]);
+  assert.deepEqual(row.reaped, []);
+  assert.deepEqual(row.unreaped, [pid]);
+  // a red run's words never call it reaped
+  assert.equal(leftNames(row), `node ${pid} (NOT gone after the reap)`);
 });

@@ -23,21 +23,26 @@ syncBuiltinESMExports();
 
 const {
   armGate,
+  BOOT_READY_MS,
   canonicalPage,
   catalogIds,
   commandEnv,
   costRows,
   createRedactor,
   DEFAULT_DEADLINE_MS,
-  defaultsChange,
+  defaultsCleanup,
+  defaultsJudge,
   devicesWord,
   distFresh,
   doorAct,
   doorRow,
   endVerdict,
   enumVerdict,
+  fatalWords,
   fenceAgain,
   fenceClear,
+  fieldNativeFresh,
+  fieldNativePath,
   guardedOutput,
   handleDoor,
   hidLine,
@@ -62,6 +67,7 @@ const {
   parseList,
   parseLocked,
   parseLstart,
+  parsePlist,
   parsePsRow,
   pickDeveloperDir,
   pickOwnTypes,
@@ -71,7 +77,9 @@ const {
   realExec,
   redactStream,
   responsibleApp,
+  reusedRun,
   restoreHost,
+  restoreDefaults,
   restoredVerdict,
   rowsMark,
   rowsVerdict,
@@ -81,6 +89,7 @@ const {
   simulatorExe,
   simulatorProof,
   simulatorSettled,
+  smokeHomeOf,
   startDoor,
   stopRun,
   sweep,
@@ -140,6 +149,7 @@ function simctlList({ devices = [], runtimes = [runtime(RT26, "26.5", CATALOG)] 
       deviceTypeIdentifier: d.type,
       state: d.state ?? "Shutdown",
       name: d.name,
+      ...(d.lastBootedAt === undefined ? {} : { lastBootedAt: d.lastBootedAt }),
     });
   }
   return JSON.stringify({ devices: byRuntime, runtimes });
@@ -200,6 +210,9 @@ function fakeHost(opts = {}) {
     exec: async (file, args, o = {}) => {
       calls.push({ file, args, env: o.env });
       if (file === "/usr/bin/xcrun" && args[1] === "list") return ok(state.list);
+      // Simulator's defaults: readable, and nothing of the run's in them (G7: unreadable is the run's own red)
+      if (file === "/usr/bin/defaults" && args[0] === "export")
+        return ok(opts.defaults ?? simDefaults());
       if (file === "/usr/bin/pgrep")
         return state.pgrep === null
           ? { code: 1, signal: null, stdout: "", stderr: "" }
@@ -368,6 +381,74 @@ test("readOptions: the deadline is bounded at 6 h — a timer past 2^31-1 ms fir
   assert.ok(MAX_DEADLINE_MS + 3_600_000 <= 2 ** 31 - 1);
 });
 
+/** `main()`'s own text, from its head to the next top-level close: it runs on the host, so its ORDER is held from its
+ * source (as `launchSource`). */
+const mainSource = () => {
+  const source = readFileSync(
+    join(import.meta.dirname, "../../../scripts/stage-simulator-fixture.mjs"),
+    "utf8",
+  );
+  const head = source.indexOf("\nasync function main(");
+  assert.ok(head >= 0, "main() is in the stage");
+  return source.slice(head, source.indexOf("\n}\n", head));
+};
+
+test("reusedRun: a run folder that exists and holds anything refuses the launch — exit 2 in main, before anything is written (T7)", () => {
+  assert.equal(typeof reusedRun, "function", "the stage exports reusedRun");
+  const hidLog = "/lanes/pts3/logs/l2-1101/l2-1101-hid.log";
+  const opts = readOptions({ VF_PHONE_RUN: "l2-1101", VF_PHONE_HID_LOG: hidLog });
+  const read = [];
+  const fsOf = (entries) => ({
+    readdirSync: (path) => {
+      read.push(path);
+      if (entries instanceof Error) throw entries;
+      return entries;
+    },
+  });
+  const enoent = Object.assign(new Error("ENOENT: no such file or directory"), { code: "ENOENT" });
+  // a new run: its folder absent, or there and empty
+  assert.equal(reusedRun(opts, fsOf(enoent)), null);
+  assert.equal(reusedRun(opts, fsOf([])), null);
+  assert.deepEqual(read, ["/lanes/pts3/logs/l2-1101", "/lanes/pts3/logs/l2-1101"]);
+  // James's two L2 launches as l2-1101: the second finds run A's logs — refused, naming the run, and the way out
+  const line = reusedRun(opts, fsOf(["l2-1101-hid.log", "l2-1101-stage.log", "shots"]));
+  assert.match(line, /\bl2-1101\b/u);
+  assert.match(line, /choose a new VF_PHONE_RUN/u);
+  // the path a file, or unreadable: never taken for a new run
+  const notDir = Object.assign(new Error("ENOTDIR"), { code: "ENOTDIR" });
+  assert.match(reusedRun(opts, fsOf(notDir)), /choose a new VF_PHONE_RUN/u);
+  // the real fs: a folder that holds files is refused; one not there is a new run
+  const real = (dir) =>
+    reusedRun(readOptions({ VF_PHONE_RUN: "l2-t1", VF_PHONE_HID_LOG: join(dir, "l2-t1-hid.log") }));
+  assert.match(real(join(FIXTURES, "..")), /\bl2-t1\b.*choose a new VF_PHONE_RUN/u);
+  assert.equal(real(join(FIXTURES, "l2-t1")), null);
+  // G9: the HID log's folder must BE the run's (`<logs>/<run>/`): another name is refused, even absent or empty
+  const named = (hidLog, entries = []) =>
+    reusedRun(readOptions({ VF_PHONE_RUN: "l2-1102", VF_PHONE_HID_LOG: hidLog }), fsOf(entries));
+  for (const hidLog of [
+    "/lanes/pts3/logs/l2-1101/l2-1102-hid.log",
+    "/lanes/pts3/logs/l2-1102-hid.log",
+    "/lanes/pts3/logs/l2-1102/x/l2-1102-hid.log",
+  ])
+    assert.match(
+      named(hidLog),
+      /\bl2-1102\b.*not the run's folder.*choose a new VF_PHONE_RUN/u,
+      hidLog,
+    );
+  assert.equal(named("/lanes/pts3/logs/l2-1102/l2-1102-hid.log"), null);
+  assert.equal(named("/lanes/pts3/logs/l2-1102/l2-1102-hid.log", enoent), null);
+  // main: read right after the options, BEFORE launch (its mkdirSync, its stage log, its HID record) — exit 2; the
+  // sweep and the preflight-only return before it
+  const main = mainSource();
+  const at = main.indexOf("reusedRun(opts)");
+  assert.ok(at > main.indexOf("readOptions(process.env);"), "after the options are read");
+  assert.ok(at > main.indexOf("return sweep("), "the sweep is unaffected");
+  assert.ok(at > main.indexOf("return preflightOnly()"), "the preflight is unaffected");
+  const launched = main.indexOf("return launch(");
+  assert.ok(at < launched, "before launch writes anything");
+  assert.match(main.slice(at, launched), /return 2;/u, "a usage error: exit 2");
+});
+
 test("commandEnv: DEVELOPER_DIR never reaches the command; none points the product at /var/empty; types, never UDIDs", () => {
   const door = {
     origin: "http://127.0.0.1:51234",
@@ -487,6 +568,37 @@ test("distFresh: the plugin's dist and the shell's dist stale or missing, or a s
   assert.match(noPhone[0].why, /lacks the literal --phone/u);
   // a missing smoke bundle is said once, as missing
   assert.equal(distFresh({ ...FRESH_DIST, smoke: null, smokeHasPhone: false }).length, 1);
+});
+
+test("fieldNativeFresh: the field-native the shell launches, missing or older than its crate, named with the cargo line and the shared target (item 133)", () => {
+  const path = "/lanes/pts3/vibe-field/target/debug/field-native";
+  assert.deepEqual(fieldNativeFresh({ path, bin: 300, sources: 200 }), []);
+  // a code-only lane: build:all never builds field-native, and the smoke launched to a certain fatal
+  const missing = fieldNativeFresh({ path, bin: null, sources: 200 });
+  assert.equal(missing.length, 1);
+  assert.equal(missing[0].what, `field-native (${path})`);
+  assert.equal(missing[0].why, "missing");
+  assert.match(missing[0].fix, /^cargo build -p field-native from this checkout /u);
+  assert.match(missing[0].fix, /FIELDD_NATIVE_BIN/u);
+  assert.match(missing[0].fix, /shared between checkouts holds whichever built last/u);
+  const stale = fieldNativeFresh({ path, bin: 100, sources: 200 });
+  assert.equal(stale.length, 1);
+  assert.match(stale[0].why, /^older than packages\/field-native's src\//u);
+  assert.equal(stale[0].fix, missing[0].fix);
+  assert.deepEqual(preflightLines(missing), [
+    `PHONE_PREFLIGHT FAIL field-native (${path}): missing → ${missing[0].fix}`,
+  ]);
+});
+
+test("fieldNativePath: the shell's own resolution — FIELDD_NATIVE_BIN when set, else this checkout's target/debug (item 133)", () => {
+  assert.equal(
+    fieldNativePath({ FIELDD_NATIVE_BIN: "/elsewhere/field-native" }),
+    "/elsewhere/field-native",
+  );
+  assert.equal(
+    fieldNativePath({}),
+    join(import.meta.dirname, "..", "..", "..", "target", "debug", "field-native"),
+  );
 });
 
 test("launchChecks: in a launch, no shot dir or a helper ENUM never proved is refused", () => {
@@ -1126,21 +1238,123 @@ test("redactStream: a UDID split across two chunks is whole before it is matched
   });
 });
 
-test("defaultsChange: Simulator's defaults compared raw; the changed lines said redacted, no UDID, never counted", () => {
+// ─── H1: Simulator's defaults (`defaults export com.apple.iphonesimulator -`, an XML plist) ────────────────────────────
+
+/** A display's UUID: Simulator keys window geometry and screen sets by it — never a device's, never the run's. */
+const DISPLAY = "1F2E3D4C-5B6A-4798-8A7B-6C5D4E3F2A1B";
+const plistXml = (body) =>
+  `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n${body}</dict>\n</plist>\n`;
+/** One device's DevicePreferences entry, as Simulator.app writes it (its window geometry keyed by a display). */
+const devicePrefs = (udid) =>
+  `\t\t<key>${udid}</key>\n\t\t<dict>\n\t\t\t<key>ChromeTint</key>\n\t\t\t<string></string>\n\t\t\t<key>SimulatorWindowGeometry</key>\n\t\t\t<dict>\n\t\t\t\t<key>${DISPLAY}</key>\n\t\t\t\t<dict>\n\t\t\t\t\t<key>WindowCenter</key>\n\t\t\t\t\t<string>{922, 584}</string>\n\t\t\t\t\t<key>WindowScale</key>\n\t\t\t\t\t<real>1</real>\n\t\t\t\t</dict>\n\t\t\t</dict>\n\t\t\t<key>SimulatorWindowOrientation</key>\n\t\t\t<string>Portrait</string>\n\t\t</dict>\n`;
+/** Simulator's defaults: CurrentDeviceUDID (null: absent), DevicePreferences by UDID, ScreenConfigurations by display. */
+const simDefaults = ({ current = FOREIGN_GONE, prefs = [FOREIGN_GONE], extra = "" } = {}) =>
+  plistXml(
+    [
+      current === null ? "" : `\t<key>CurrentDeviceUDID</key>\n\t<string>${current}</string>\n`,
+      `\t<key>DevicePreferences</key>\n\t<dict>\n${prefs.map(devicePrefs).join("")}\t</dict>\n`,
+      "\t<key>LocationMode</key>\n\t<integer>5102</integer>\n",
+      `\t<key>ScreenConfigurations</key>\n\t<dict>\n\t\t<key>${DISPLAY}</key>\n\t\t<array>\n\t\t\t<string>{{0, 0}, {1728, 1117}}</string>\n\t\t</array>\n\t</dict>\n`,
+      extra,
+    ].join(""),
+  );
+const OWN_SET = new Set(OWN);
+
+test("parsePlist: defaults' XML plist read in memory — dicts, arrays and leaves; anything else is unreadable, never guessed", () => {
+  const before = simDefaults();
+  const plist = parsePlist(before);
+  assert.ok(plist !== null);
+  assert.deepEqual(
+    plist.root.entries.map((e) => e.key),
+    ["CurrentDeviceUDID", "DevicePreferences", "LocationMode", "ScreenConfigurations"],
+  );
+  assert.equal(plist.root.entries[0].value.text, FOREIGN_GONE);
+  for (const bad of [
+    "",
+    null,
+    "(no defaults: exit 1)",
+    '{\n    CurrentDeviceUDID = "x";\n}',
+    plistXml("\t<key>a</key>\n"),
+    plistXml("\t<key>a</key>\n\t<string>x</integer>\n"),
+  ])
+    assert.equal(parsePlist(bad), null, String(bad));
+  // entities and empty forms
+  const odd = parsePlist(
+    plistXml(
+      "\t<key>a &amp; b</key>\n\t<true/>\n\t<key>e</key>\n\t<dict/>\n\t<key>s</key>\n\t<string/>\n",
+    ),
+  );
+  assert.deepEqual(
+    odd.root.entries.map((e) => [e.key, e.value.type]),
+    [
+      ["a & b", "leaf"],
+      ["e", "dict"],
+      ["s", "leaf"],
+    ],
+  );
+});
+
+test("defaultsCleanup: EXACTLY the entries keyed by the run's own UDIDs removed, CurrentDeviceUDID given back — another's untouched", () => {
+  const before = simDefaults();
+  // the run's two devices shown: their entries, and the current device moved to one of them
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0], OWN[1]], current: OWN[0] });
+  const cleaned = defaultsCleanup(after, OWN_SET, before);
+  assert.equal(cleaned.removed, 2);
+  assert.equal(cleaned.current, "restored");
+  assert.equal(cleaned.xml, before, "byte for byte what it was");
+  // the current device alone, moved to an own device and back
+  const moved = defaultsCleanup(simDefaults({ current: OWN[2] }), OWN_SET, before);
+  assert.deepEqual([moved.removed, moved.current, moved.xml === before], [0, "restored", true]);
+  // absent before: removed, never invented
+  const none = simDefaults({ current: null });
+  assert.equal(defaultsCleanup(simDefaults({ current: OWN[2] }), OWN_SET, none).xml, none);
+  // another's device keyed in the same dict: kept; a display UUID never taken for a device
+  const theirs = simDefaults({ prefs: [FOREIGN_GONE, FOREIGN, OWN[2]] });
+  const kept = defaultsCleanup(theirs, OWN_SET, before);
+  assert.equal(kept.removed, 1);
+  assert.equal(kept.current, null);
+  assert.equal(kept.xml, simDefaults({ prefs: [FOREIGN_GONE, FOREIGN] }));
+  assert.ok(kept.xml.includes(DISPLAY));
+  // a current device that is not the run's is never touched; before unreadable, it is never guessed
+  assert.equal(defaultsCleanup(simDefaults({ current: FOREIGN }), OWN_SET, before).current, null);
+  assert.equal(defaultsCleanup(simDefaults({ current: OWN[0] }), OWN_SET, null).current, "unknown");
+  assert.equal(defaultsCleanup("(no defaults: exit 1)", OWN_SET, before), null);
+});
+
+test("defaultsJudge: after == before is restored; a change keyed by an own UDID is the run's, any other another's — said redacted", () => {
   const r = createRedactor();
-  r.own(OWN[0], 1);
-  const before = `{\n    CurrentDeviceUDID = "${FOREIGN_GONE}";\n    ShowChrome = 1;\n}`;
-  const after = `{\n    CurrentDeviceUDID = "${OWN[0]}";\n    ShowChrome = 1;\n}`;
-  assert.deepEqual(defaultsChange(before, before, r.scrub), { changed: false, lines: [] });
-  const change = defaultsChange(before, after, r.scrub);
-  assert.equal(change.changed, true);
-  assert.deepEqual(change.lines, [
-    '-     CurrentDeviceUDID = "<uuid>";',
-    '+     CurrentDeviceUDID = "<pts3-dev-1>";',
-  ]);
-  assert.ok(!holdsUdid(JSON.stringify(change)));
-  assert.deepEqual(r.counts().driver, { own: 0, foreign: 0 });
-  assert.equal(defaultsChange(null, after, r.scrub).changed, false);
+  for (const [i, udid] of OWN.entries()) r.own(udid, i + 1);
+  r.foreign(FOREIGN);
+  const before = simDefaults();
+  const same = defaultsJudge(before, before, OWN_SET, r.scrub);
+  assert.deepEqual(
+    [same.read, same.changed, same.restored, same.own, same.foreign],
+    [true, false, true, [], []],
+  );
+  const both = defaultsJudge(
+    before,
+    simDefaults({ prefs: [FOREIGN_GONE, FOREIGN, OWN[0]], current: OWN[0] }),
+    OWN_SET,
+    r.scrub,
+  );
+  assert.equal(both.restored, false);
+  assert.ok(both.own.length > 0 && both.foreign.length > 0);
+  assert.ok(
+    both.own.every((line) => /<pts3-dev-1>/u.test(line)),
+    both.own.join("\n"),
+  );
+  assert.ok(
+    both.foreign.every((line) => /<host-dev-1>/u.test(line)),
+    both.foreign.join("\n"),
+  );
+  assert.ok(both.own.some((line) => /^~ CurrentDeviceUDID: <uuid> → <pts3-dev-1>$/u.test(line)));
+  assert.ok(!holdsUdid(JSON.stringify(both)));
+  assert.deepEqual(r.counts().driver, { own: 0, foreign: 0 }, "never counted");
+  // unreadable after: nothing judged; unreadable before: own residue still judged, nothing restored
+  assert.equal(defaultsJudge(before, "", OWN_SET, r.scrub).read, false);
+  const blind = defaultsJudge(null, simDefaults({ prefs: [OWN[1]] }), OWN_SET, r.scrub);
+  assert.deepEqual([blind.restored, blind.foreign], [null, []]);
+  assert.ok(blind.own.length > 0);
 });
 
 // ─── the rows record ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1157,9 +1371,24 @@ test("rowsMark and rowsVerdict: BEGIN and END said, the mode's, and END's count 
     /19 row\(s\): devices runs 20/u,
   );
   assert.equal(rowsVerdict({ mode: "devices", begin: "devices", end: 21, served: 21 }).ok, false);
-  assert.match(
+  // item 134: no BEGIN is never "not in this build" (the preflight proved the bundle carries --phone): the kept HOME's
+  // fatal when the smoke named one, else that it never reached the rows
+  assert.equal(
     rowsVerdict({ mode: "devices", begin: null, end: null, served: 0 }).why,
-    /--phone is not in this build/u,
+    "no PHONE_ROWS_BEGIN: the smoke never reached the rows",
+  );
+  assert.deepEqual(
+    rowsVerdict({
+      mode: "devices",
+      begin: null,
+      end: null,
+      served: 0,
+      fatal: "desktop.lifecycle.fatal: x",
+    }),
+    {
+      ok: false,
+      why: "no PHONE_ROWS_BEGIN: the smoke stopped before the rows — desktop.lifecycle.fatal: x",
+    },
   );
   assert.match(rowsVerdict({ mode: "none", begin: "devices", end: 2, served: 2 }).why, /not none/u);
   assert.match(
@@ -1171,6 +1400,71 @@ test("rowsMark and rowsVerdict: BEGIN and END said, the mode's, and END's count 
     rowsVerdict({ mode: "devices", begin: "devices", end: 9, served: 9 }).why,
     /devices runs 20/u,
   );
+});
+
+test("smokeHomeOf: the HOME a red smoke names, from its SMOKE_HOME line; nothing from any other line (item 134)", () => {
+  assert.equal(
+    smokeHomeOf('SMOKE_HOME {"home":"/tmp/vf-smoke-zp6IXf","removed":false}\n'),
+    "/tmp/vf-smoke-zp6IXf",
+  );
+  assert.equal(smokeHomeOf("x SMOKE_HOME {not json"), null);
+  assert.equal(smokeHomeOf('SMOKE_DAEMONS {"left":[]}'), null);
+  assert.equal(smokeHomeOf('SMOKE_HOME {"removed":true}'), null);
+});
+
+test("fatalWords: PT-S3 L1's kept HOME says the desktop's fatal, fieldd's when it says more, and nothing when silent (item 134)", () => {
+  const home = "/tmp/vf-smoke-zp6IXf";
+  // L1's own records (desktop.ndjson seq 11, fieldd.ndjson's third line), trimmed to what the reader reads
+  const fatal = {
+    level: 60,
+    event: "desktop.lifecycle.fatal",
+    msg: "Electron shell encountered a fatal error",
+    err: {
+      type: "SupervisorError",
+      message:
+        "fieldd exited before readiness (code 1, signal null)\n  [stderr] fieldd failed to start: field-native did not come up before the readiness deadline",
+    },
+  };
+  const bootstrap = {
+    level: 60,
+    event: "fieldd.lifecycle.bootstrap_failed",
+    err: { type: "Error", message: "field-native did not come up before the readiness deadline" },
+  };
+  const files = (entries) => ({
+    readFileSync: (path) => {
+      if (path in entries) return entries[path];
+      throw Object.assign(new Error(`ENOENT ${path}`), { code: "ENOENT" });
+    },
+    readdirSync: (path) => {
+      if (path === join(home, "logs/users")) return ["1"];
+      throw Object.assign(new Error(`ENOENT ${path}`), { code: "ENOENT" });
+    },
+  });
+  const desktopLog = join(home, "logs/system/desktop.ndjson");
+  const fielddLog = join(home, "logs/users/1/system/fieldd.ndjson");
+  const lines = (...records) => `${records.map((r) => JSON.stringify(r)).join("\n")}\n`;
+  // fieldd's words are inside the desktop's: said once
+  assert.equal(
+    fatalWords(
+      home,
+      files({
+        [desktopLog]: lines({ event: "desktop.lifecycle.booted" }, fatal, { event: "x" }),
+        [fielddLog]: lines(bootstrap),
+      }),
+    ),
+    "desktop.lifecycle.fatal: fieldd exited before readiness (code 1, signal null) [stderr] fieldd failed to start: field-native did not come up before the readiness deadline",
+  );
+  // a desktop log with no fatal: fieldd's alone
+  assert.equal(
+    fatalWords(home, files({ [desktopLog]: lines({ event: "x" }), [fielddLog]: lines(bootstrap) })),
+    "fieldd.lifecycle.bootstrap_failed: field-native did not come up before the readiness deadline",
+  );
+  // a torn last line is skipped, never thrown
+  assert.match(
+    fatalWords(home, files({ [desktopLog]: `${lines(fatal)}{"event":"desktop.lif` })),
+    /^desktop\.lifecycle\.fatal: fieldd exited before readiness/u,
+  );
+  assert.equal(fatalWords(home, files({})), null);
 });
 
 // ─── Simulator.app: quit only when proven the run's ───────────────────────────────────────────────────────────────────
@@ -1268,9 +1562,11 @@ test("doorAct: boot, shutdown and openurl run on the own UDID with DEVELOPER_DIR
   const run = ownRun();
   const { deps, calls } = fakeHost();
   assert.equal((await doorAct({ verb: "boot", device: 1 }, run, deps)).status, 200);
-  assert.deepEqual(calls[0].args, ["simctl", "boot", OWN[0]]);
-  assert.equal(calls[0].file, "/usr/bin/xcrun");
-  assert.equal(calls[0].env.DEVELOPER_DIR, XCODE_DEVELOPER_DIR);
+  // the device's state read first (R2-A: a device already Booted is never booted again), then the boot
+  const boot = calls.find((c) => c.args[1] === "boot");
+  assert.deepEqual(boot.args, ["simctl", "boot", OWN[0]]);
+  assert.equal(boot.file, "/usr/bin/xcrun");
+  assert.equal(boot.env.DEVELOPER_DIR, XCODE_DEVELOPER_DIR);
   const url = `http://127.0.0.1:51234/motion?n=ff8800&t=${run.token}`;
   assert.deepEqual(
     (
@@ -1343,7 +1639,11 @@ test("doorAct screenshot: a NEW .png inside the shot dir — outside, existing, 
     (await doorAct({ verb: "screenshot", device: 1, file: "live-2.png" }, run, deps)).body.state,
     "written",
   );
-  assert.deepEqual(calls[0].args, ["simctl", "io", OWN[0], "screenshot", `${SHOTS}/live-2.png`]);
+  // the device's state read first (T1's readiness gate), then the one screenshot
+  assert.deepEqual(
+    calls.filter((c) => c.args[1] !== "list").map((c) => c.args),
+    [["simctl", "io", OWN[0], "screenshot", `${SHOTS}/live-2.png`]],
+  );
 });
 
 test("doorAct show-app: the fence first; open -a the vetted Simulator.app on an own UDID; refused beside a foreign app", async () => {
@@ -1455,6 +1755,388 @@ test("doorAct quit-app: after the run quit its own app, a Simulator.app another 
   host.state.pgrep = "4244";
   host.state.lstart = lstartOf(ARMED + 125_000);
   assert.equal((await doorAct({ verb: "quit-app" }, again, host.deps)).body.state, "quit");
+});
+
+// ─── T1: Booted is not ready ──────────────────────────────────────────────────────────────────────────────────────────
+
+const BOOT_A = "2026-11-01T03:00:00Z";
+
+/** A host whose own device 1 lists `state` (its boot `lastBootedAt`) and the others Shutdown; `simctl bootstatus` is
+ * answered only when the unit says (`host.asks[i](result)`), and the clock is the unit's (`host.at`). */
+function bootingHost(state = "Booted", lastBootedAt = BOOT_A) {
+  const listOf = (s, at) =>
+    simctlList({
+      devices: [
+        ...OWN.map((udid, i) => ({
+          udid,
+          name: `pts3-${RUN}-${i + 1}`,
+          type: CATALOG[i + 2],
+          state: i === 0 ? s : "Shutdown",
+          ...(i === 0 && at !== null ? { lastBootedAt: at } : {}),
+        })),
+        { udid: FOREIGN, name: "iPhone 11", type: CATALOG[0], state: "Shutdown" },
+      ],
+    });
+  const host = fakeHost({ list: listOf(state, lastBootedAt) });
+  host.at = ARMED + 120_000;
+  host.deps.now = () => host.at;
+  host.asks = [];
+  const exec = host.deps.exec;
+  host.deps.exec = async (file, args, o = {}) => {
+    if (file === "/usr/bin/xcrun" && args[1] === "bootstatus") {
+      host.calls.push({ file, args, env: o.env, timeoutMs: o.timeoutMs, signal: o.signal });
+      return new Promise((answer) => host.asks.push(answer));
+    }
+    return exec(file, args, o);
+  };
+  host.list = (s, at = BOOT_A) => {
+    host.state.list = listOf(s, at);
+  };
+  host.asked = () => host.calls.filter((c) => c.args[1] === "bootstatus");
+  host.ran = (verb) => host.calls.filter((c) => c.file === "/usr/bin/xcrun" && c.args[1] === verb);
+  return host;
+}
+
+const settle = () => new Promise((done) => setImmediate(done));
+const MOTION = "http://127.0.0.1:51234/motion?n=ff8800";
+
+test("T1: Booted is not ready — the door answers Booting until `simctl bootstatus` returns, asked once per device per boot", async () => {
+  assert.equal(BOOT_READY_MS, 180_000);
+  const run = ownRun();
+  const host = bootingHost();
+  const state = async () => (await doorAct({ verb: "state", device: 1 }, run, host.deps)).body;
+  assert.deepEqual(await state(), { n: 1, state: "Booting" });
+  assert.deepEqual(await state(), { n: 1, state: "Booting" });
+  assert.equal(host.asked().length, 1, "asked once per boot");
+  // never `-b`: the stage never boots by this path; the vetted dir pinned; bounded by BOOT_READY_MS
+  assert.deepEqual(host.asked()[0].args, ["simctl", "bootstatus", OWN[0]]);
+  assert.equal(host.asked()[0].env.DEVELOPER_DIR, XCODE_DEVELOPER_DIR);
+  assert.equal(host.asked()[0].timeoutMs, BOOT_READY_MS);
+  // a device verb before ready runs nothing on the device: failed, not ready yet
+  const early = await doorAct({ verb: "openurl", device: 1, url: MOTION }, run, host.deps);
+  assert.equal(early.body.state, "failed");
+  assert.match(early.body.why, /not ready yet/u);
+  assert.deepEqual(host.ran("openurl"), []);
+  // bootstatus returns: Booted, the device's verbs run, and this boot is never asked again
+  host.asks[0](ok("Monitoring boot status for <x>.\nDevice already booted, nothing to do.\n"));
+  await settle();
+  assert.deepEqual(await state(), { n: 1, state: "Booted" });
+  assert.equal(
+    (await doorAct({ verb: "openurl", device: 1, url: MOTION }, run, host.deps)).body.state,
+    "opened",
+  );
+  assert.equal(
+    (await doorAct({ verb: "screenshot", device: 1, file: "live-1.png" }, run, host.deps)).body
+      .state,
+    "written",
+  );
+  assert.equal(host.asked().length, 1);
+  // the product shuts it down and boots it again (row OFF-BOOT): seen not Booted drops the cache, the new boot is asked
+  host.list("Shutdown");
+  assert.deepEqual(await state(), { n: 1, state: "Shutdown" });
+  host.list("Booted", "2026-11-01T03:05:00Z");
+  assert.deepEqual(await state(), { n: 1, state: "Booting" });
+  assert.equal(host.asked().length, 2);
+  host.asks[1](ok());
+  await settle();
+  assert.deepEqual(await state(), { n: 1, state: "Booted" });
+  // a boot the stage never saw down (its lastBootedAt new) is a new boot too
+  host.list("Booted", "2026-11-01T03:09:00Z");
+  assert.deepEqual(await state(), { n: 1, state: "Booting" });
+  assert.equal(host.asked().length, 3);
+  // simctl's own `Booting` is asked as well: bootstatus waits out the boot
+  const mid = ownRun();
+  const booting = bootingHost("Booting");
+  assert.deepEqual((await doorAct({ verb: "state", device: 1 }, mid, booting.deps)).body, {
+    n: 1,
+    state: "Booting",
+  });
+  assert.equal(booting.asked().length, 1);
+});
+
+test("T1: boot and a device verb WAIT for readiness inside the smoke's door timeout — ready meanwhile, they answer as ready", async () => {
+  // the stage's `boot` (ensure() takes its answer ONCE): simctl boot, then readiness within the wait
+  const run = ownRun();
+  const host = bootingHost("Shutdown");
+  const exec = host.deps.exec;
+  host.deps.exec = async (file, args, o) => {
+    const r = await exec(file, args, o);
+    if (args[1] === "boot") host.list("Booted");
+    return r;
+  };
+  const waits = [];
+  host.deps.sleep = async (ms) => {
+    waits.push(ms);
+    host.asks.at(-1)?.(ok());
+    await settle();
+  };
+  assert.deepEqual((await doorAct({ verb: "boot", device: 1 }, run, host.deps)).body, {
+    n: 1,
+    state: "Booted",
+  });
+  assert.deepEqual(
+    host.calls.map((c) => c.args?.[1]).filter((v) => v === "boot" || v === "bootstatus"),
+    ["boot", "bootstatus"],
+  );
+  // boot's wait fits the smoke's 150 s door timeout for `boot`
+  assert.ok(waits.length === 1 && waits[0] > 0 && waits[0] <= 145_000, String(waits));
+  // never ready within boot's wait: Booting, never Booted
+  const slow = ownRun();
+  const late = bootingHost("Shutdown");
+  const lateExec = late.deps.exec;
+  late.deps.exec = async (file, args, o) => {
+    const r = await lateExec(file, args, o);
+    if (args[1] === "boot") late.list("Booted");
+    return r;
+  };
+  assert.deepEqual((await doorAct({ verb: "boot", device: 1 }, slow, late.deps)).body, {
+    n: 1,
+    state: "Booting",
+  });
+  // R2-A: a device simctl already lists Booted (the product's face booted it) — or Booting — is never `simctl boot`ed:
+  // boot only waits for readiness, then answers Booted
+  for (const listed of ["Booted", "Booting"]) {
+    const faced = ownRun();
+    const product = bootingHost(listed);
+    product.deps.sleep = async () => {
+      product.asks.at(-1)?.(ok());
+      await settle();
+    };
+    assert.deepEqual((await doorAct({ verb: "boot", device: 1 }, faced, product.deps)).body, {
+      n: 1,
+      state: "Booted",
+    });
+    assert.deepEqual(product.ran("boot"), [], `${listed}: no simctl boot`);
+    assert.equal(product.asked().length, 1, listed);
+  }
+  // a device verb asked while iOS boots: waits (inside the 60 s door timeout), then runs once ready
+  const verb = ownRun();
+  const host2 = bootingHost();
+  assert.equal(
+    (await doorAct({ verb: "state", device: 1 }, verb, host2.deps)).body.state,
+    "Booting",
+  );
+  const verbWaits = [];
+  host2.deps.sleep = async (ms) => {
+    verbWaits.push(ms);
+    host2.asks[0](ok());
+    await settle();
+  };
+  assert.equal(
+    (await doorAct({ verb: "openurl", device: 1, url: MOTION }, verb, host2.deps)).body.state,
+    "opened",
+  );
+  assert.ok(verbWaits.length === 1 && verbWaits[0] <= 45_000, String(verbWaits));
+  assert.equal(host2.asked().length, 1);
+});
+
+test("T1: past BOOT_READY_MS the device answers failed — `not ready after <ms>` — and its verbs run nothing", async () => {
+  // bootstatus never answers within the bound
+  const run = ownRun();
+  const host = bootingHost();
+  assert.equal((await doorAct({ verb: "state", device: 1 }, run, host.deps)).body.state, "Booting");
+  host.at += BOOT_READY_MS;
+  for (const body of [
+    { verb: "state", device: 1 },
+    { verb: "openurl", device: 1, url: MOTION },
+    { verb: "screenshot", device: 1, file: "live-1.png" },
+  ]) {
+    const r = await doorAct(body, run, host.deps);
+    assert.equal(r.status, 502, body.verb);
+    assert.equal(r.body.state, "failed", body.verb);
+    assert.match(r.body.why, /not ready after 180000 ms/u, body.verb);
+  }
+  assert.deepEqual(host.ran("openurl"), []);
+  assert.deepEqual(host.ran("io"), []);
+  assert.equal(host.asked().length, 1);
+  // bootstatus ended at its timeout (killed): failed, said ONCE, the reason redacted
+  const killed = ownRun();
+  const host2 = bootingHost();
+  await doorAct({ verb: "state", device: 1 }, killed, host2.deps);
+  host2.at += BOOT_READY_MS;
+  host2.asks[0]({
+    code: null,
+    signal: "SIGTERM",
+    stdout: "",
+    stderr: `Monitoring boot status for ${OWN[0]}.\nWaiting on Data Migration\n`,
+  });
+  await settle();
+  for (let i = 0; i < 2; i += 1) {
+    const r = await doorAct({ verb: "state", device: 1 }, killed, host2.deps);
+    assert.equal(r.body.state, "failed");
+    assert.match(r.body.why, /^not ready after 180000 ms \(bootstatus exit null: .*<pts3-dev-1>/u);
+    assert.ok(!holdsUdid(JSON.stringify(r.body)));
+  }
+  const said = host2.said.filter((line) => /not ready/u.test(line));
+  assert.equal(said.length, 1, said.join("\n"));
+  assert.match(said[0], /<pts3-dev-1> not ready after 180000 ms/u);
+  assert.match(said[0], /Waiting on Data Migration/u);
+  assert.ok(!holdsUdid(said[0]));
+});
+
+test("G6: every pending bootstatus is killable — dropped when its device is seen down, replaced by a new boot, shut down, and at teardown", async () => {
+  const run = ownRun();
+  const host = bootingHost();
+  const state = () => doorAct({ verb: "state", device: 1 }, run, host.deps);
+  const aborted = () => host.asked().map((c) => c.signal?.aborted ?? "no signal");
+  await state();
+  assert.deepEqual(aborted(), [false], "each ask carries a signal, live while pending");
+  // seen down: the pending ask is killed
+  host.list("Shutdown");
+  await state();
+  assert.deepEqual(aborted(), [true]);
+  // a new boot replaces the pending ask of the old: the old is killed
+  host.list("Booted", "2026-11-01T03:05:00Z");
+  await state();
+  host.list("Booted", "2026-11-01T03:06:00Z");
+  await state();
+  assert.deepEqual(aborted(), [true, true, false]);
+  // the door's shutdown kills it
+  await doorAct({ verb: "shutdown", device: 1 }, run, host.deps);
+  assert.deepEqual(aborted(), [true, true, true]);
+  // an ask that returned is never killed; teardown kills every one still pending, first
+  host.list("Booted", "2026-11-01T03:07:00Z");
+  await state();
+  host.asks[3](ok());
+  await settle();
+  const two = ownRun();
+  const pending = bootingHost();
+  await doorAct({ verb: "state", device: 1 }, two, pending.deps);
+  const order = [];
+  const exec = pending.deps.exec;
+  pending.deps.exec = async (file, args, o) => {
+    order.push(
+      `${args?.[1] ?? file} (ask ${pending.asked()[0].signal.aborted ? "killed" : "live"})`,
+    );
+    return exec(file, args, o);
+  };
+  await restoreHost(two, pending.deps, {
+    deleteDevices: false,
+    defaultsBefore: "",
+    crashDir: join(FIXTURES, "no-crash-reports-here"),
+    crashBefore: [],
+  });
+  assert.equal(pending.asked()[0].signal.aborted, true);
+  assert.match(order[0], /\(ask killed\)$/u, order.join(" → "));
+  assert.equal(aborted()[3], false, "the returned ask left alone");
+  // realExec takes the signal: one already aborted spawns nothing
+  const before = spawned.length;
+  const r = await realExec("/usr/bin/true", [], { signal: AbortSignal.abort() });
+  assert.equal(r.code, null);
+  assert.match(r.error, /abort/u);
+  assert.equal(spawned.length, before, "nothing spawned");
+  // and a live one, aborted, kills the child (its source: SIGTERM on abort, as its timeout does)
+  const source = readFileSync(
+    join(import.meta.dirname, "../../../scripts/stage-simulator-fixture.mjs"),
+    "utf8",
+  );
+  const exe = source.slice(source.indexOf("export function realExec("));
+  assert.match(exe.slice(0, exe.indexOf("\n}\n")), /signal\?\.addEventListener\("abort"/u);
+});
+
+test("G5: no door verb outlives the smoke's timeouts — openurl and screenshot inside 55 s, boot inside 145 s", async () => {
+  // a slow host: every `simctl list` costs `host.step` ms of the clock; each verb's own timeout is kept
+  const slow = (state, step) => {
+    const host = bootingHost(state);
+    const exec = host.deps.exec;
+    host.step = step;
+    host.timeouts = {};
+    host.deps.exec = async (file, args, o = {}) => {
+      if (file === "/usr/bin/xcrun" && args[1] === "list") host.at += host.step;
+      if (file === "/usr/bin/xcrun" && ["openurl", "io", "boot"].includes(args[1]))
+        host.timeouts[args[1]] = o.timeoutMs;
+      const r = await exec(file, args, o);
+      if (args[1] === "boot") host.list("Booted");
+      return r;
+    };
+    return host;
+  };
+  const run = ownRun();
+  const host = slow("Booted", 0);
+  await doorAct({ verb: "state", device: 1 }, run, host.deps);
+  host.asks[0](ok());
+  await settle();
+  // iOS ready; the list read takes 30 s: the verb runs on the 25 s left of 55, never its own 30
+  host.step = 30_000;
+  assert.equal(
+    (await doorAct({ verb: "openurl", device: 1, url: MOTION }, run, host.deps)).body.state,
+    "opened",
+  );
+  assert.equal(host.timeouts.openurl, 25_000);
+  assert.equal(
+    (await doorAct({ verb: "screenshot", device: 1, file: "live-5.png" }, run, host.deps)).body
+      .state,
+    "written",
+  );
+  assert.equal(host.timeouts.io, 25_000);
+  // 51 s gone before the verb: under 5 s left — failed, not ready, and never run
+  host.step = 51_000;
+  host.timeouts = {};
+  for (const body of [
+    { verb: "openurl", device: 1, url: MOTION },
+    { verb: "screenshot", device: 1, file: "live-6.png" },
+  ]) {
+    const r = await doorAct(body, run, host.deps);
+    assert.equal(r.status, 502, body.verb);
+    assert.match(r.body.why, /not ready/u, body.verb);
+  }
+  assert.deepEqual(host.timeouts, {});
+  // boot: simctl boot's timeout is what is left of 145 s, and readiness waits only what is left after it
+  const b = slow("Shutdown", 30_000);
+  const waits = [];
+  b.deps.sleep = async (ms) => {
+    waits.push(ms);
+  };
+  assert.deepEqual((await doorAct({ verb: "boot", device: 1 }, ownRun(), b.deps)).body, {
+    n: 1,
+    state: "Booting",
+  });
+  assert.equal(b.timeouts.boot, 115_000);
+  assert.deepEqual(waits, [85_000]);
+});
+
+test("H3: a failed verb carries simctl's stderr — its first 300 chars, redacted — in the said line and the response", async () => {
+  const run = ownRun();
+  const host = fakeHost();
+  const stranger = "0123ABCD-0000-4000-8000-00000000BEEF";
+  const stderrs = {
+    openurl: `An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):\nUnable to lookup in current state: Shutdown\n${OWN[0]} beside ${FOREIGN} and ${stranger}\n`,
+    io: `${"x".repeat(290)} ${OWN[1]} ${"y".repeat(500)}`,
+  };
+  const exec = host.deps.exec;
+  host.deps.exec = async (file, args, o) => {
+    if (file === "/usr/bin/xcrun" && stderrs[args[1]] !== undefined) {
+      host.calls.push({ file, args });
+      return {
+        code: args[1] === "io" ? 1 : 60,
+        signal: null,
+        stdout: "",
+        stderr: stderrs[args[1]],
+      };
+    }
+    return exec(file, args, o);
+  };
+  const r = await doorAct({ verb: "openurl", device: 1, url: MOTION }, run, host.deps);
+  assert.equal(r.status, 502);
+  assert.equal(r.body.state, "failed");
+  assert.match(
+    r.body.why,
+    /^openurl exit 60: An error was encountered .* Unable to lookup in current state: Shutdown <pts3-dev-1> beside <host-dev-1> and <uuid>$/u,
+  );
+  const line = host.said.find((l) => l.includes("openurl of <pts3-dev-1> failed (exit 60)"));
+  assert.ok(line !== undefined, host.said.join("\n"));
+  assert.match(line, /: An error was encountered .*Unable to lookup in current state: Shutdown/u);
+  for (const text of [line, r.body.why]) {
+    assert.ok(!holdsUdid(text), text);
+    assert.doesNotMatch(text, /[0-9a-f]{8}-[0-9a-f]{4}-/iu, text);
+    assert.doesNotMatch(text, /\n/u, "one line");
+  }
+  // a long stderr: its first 300 chars at most — redacted FIRST, so no UDID is cut into a fragment that slips through
+  const shot = await doorAct({ verb: "screenshot", device: 1, file: "live-9.png" }, run, host.deps);
+  const said = shot.body.why.replace(/^screenshot exit 1: /u, "");
+  assert.ok(said.length <= 300, String(said.length));
+  assert.match(said, /^x{290} <pts3-de/u);
+  assert.doesNotMatch(shot.body.why, /6B2D/u);
 });
 
 test("the door's responses never hold a UDID — own or foreign — whatever is asked", async () => {
@@ -2200,6 +2882,389 @@ test("restoreHost: each own device's name read again right before its step — r
   );
   // no flag, no delete — whatever the list says
   assert.ok(!kept.acts().some((act) => act.startsWith("delete")));
+});
+
+test("H3: teardown's failed shutdown (run A's exit 149) carries simctl's stderr, redacted, in HOST_RESTORED's findings", async () => {
+  const run = ownRun();
+  run.othersAtArm.set(FOREIGN, "Shutdown");
+  const booted = ownList(["Booted", "Shutdown", "Shutdown"]);
+  const host = scriptedLists([booted], {
+    extra: (file, args) =>
+      file === "/usr/bin/xcrun" && args[1] === "shutdown"
+        ? {
+            code: 149,
+            signal: null,
+            stdout: "",
+            stderr: `An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):\nUnable to shutdown device in current state: Booting\n${OWN[0]}\n`,
+          }
+        : undefined,
+  });
+  await restoreHost(run, host.deps, {
+    deleteDevices: false,
+    defaultsBefore: "",
+    crashDir: join(FIXTURES, "no-crash-reports-here"),
+    crashBefore: [],
+  });
+  const said = host.said.find((line) => line.startsWith("PHONE_HOST_RESTORED "));
+  assert.match(
+    said,
+    /shutdown of pts3-l2-t1-1 failed \(exit 149\): An error was encountered .* Unable to shutdown device in current state: Booting <pts3-dev-1>/u,
+  );
+  assert.ok(!holdsUdid(said), said);
+});
+
+/** A host whose Simulator defaults the stage reads and gives back through cfprefsd alone (`defaults export … -` and
+ * `defaults import … -`): any other `defaults` verb throws, as would a write to the plist file. */
+function defaultsHost(after, opts = {}) {
+  const host = fakeHost(opts);
+  host.store = after;
+  host.imports = [];
+  host.defaults = [];
+  const exec = host.deps.exec;
+  host.deps.exec = async (file, args, o = {}) => {
+    if (file === "/usr/bin/defaults") {
+      host.defaults.push(args.join(" "));
+      if (args[1] !== "com.apple.iphonesimulator" || args[2] !== "-" || args.length !== 3)
+        throw new Error(`a unit ran defaults ${args.join(" ")}`);
+      if (args[0] === "export") return opts.exportAnswer ?? ok(host.store);
+      if (args[0] === "import") {
+        host.imports.push(o.input);
+        if (opts.importIgnored !== true) host.store = o.input;
+        return ok();
+      }
+      throw new Error(`a unit ran defaults ${args[0]}`);
+    }
+    return exec(file, args, o);
+  };
+  return host;
+}
+
+const defaultsTeardown = async (before, after, opts = {}) => {
+  const run = ownRun();
+  run.othersAtArm.set(FOREIGN, "Shutdown");
+  if (opts.launched === true) {
+    // the run showed its own Simulator.app, quit since (nothing running at teardown)
+    run.simulator.shown = 1;
+    run.simulator.launchedAt = ARMED + 30_000;
+  }
+  const host = defaultsHost(after, opts);
+  const verdict = await restoreHost(run, host.deps, {
+    deleteDevices: false,
+    defaultsBefore: before,
+    crashDir: join(FIXTURES, "no-crash-reports-here"),
+    crashBefore: [],
+  });
+  const line = host.said.find((l) => l.startsWith("PHONE_HOST_RESTORED "));
+  return { run, host, verdict, restored: JSON.parse(line.slice("PHONE_HOST_RESTORED ".length)) };
+};
+
+test("H1: teardown removes EXACTLY the run's own UDID-keyed Simulator defaults through cfprefsd, then re-reads: restored", async () => {
+  const before = simDefaults();
+  // run A's leftover (out:117): the three own devices' DevicePreferences, and the current device moved to one of them
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0], OWN[2], OWN[1]], current: OWN[0] });
+  const { host, verdict, restored } = await defaultsTeardown(before, after);
+  // exported, edited in memory, imported ONCE, read again — never `defaults write`/`delete`, never the plist file
+  assert.deepEqual(host.defaults, [
+    "export com.apple.iphonesimulator -",
+    "import com.apple.iphonesimulator -",
+    "export com.apple.iphonesimulator -",
+  ]);
+  assert.equal(host.imports.length, 1);
+  assert.equal(host.imports[0], before, "what it was, byte for byte");
+  assert.deepEqual(
+    {
+      changed: restored.defaults.changed,
+      restored: restored.defaults.restored,
+      removed: restored.defaults.removed,
+      current: restored.defaults.current,
+      cleanup: restored.defaults.cleanup,
+    },
+    { changed: false, restored: true, removed: 3, current: "restored", cleanup: "done" },
+  );
+  assert.deepEqual([verdict.ok, verdict.ownOk, verdict.foreign], [true, true, []]);
+  for (const line of host.said) assert.ok(!holdsUdid(line), line);
+  // nothing of the run's there: nothing imported
+  const quiet = await defaultsTeardown(before, before);
+  assert.deepEqual(quiet.host.imports, []);
+  assert.equal(quiet.restored.defaults.restored, true);
+});
+
+test("H1: CurrentDeviceUDID moved to an own device is given back its before value", async () => {
+  const before = simDefaults();
+  const { host, verdict, restored } = await defaultsTeardown(
+    before,
+    simDefaults({ current: OWN[1] }),
+  );
+  assert.equal(host.imports[0], before);
+  assert.equal(restored.defaults.current, "restored");
+  assert.equal(restored.defaults.restored, true);
+  assert.equal(verdict.ok, true);
+});
+
+test("H1: a change keyed by another's UDID is the FOREIGN side — never touched, said as an OBSERVATION; the run's own still cleaned", async () => {
+  const before = simDefaults();
+  const after = simDefaults({ prefs: [FOREIGN_GONE, FOREIGN, OWN[2]] });
+  const { host, verdict, restored } = await defaultsTeardown(before, after);
+  // the own entry gone, another's kept as it was
+  assert.equal(host.imports[0], simDefaults({ prefs: [FOREIGN_GONE, FOREIGN] }));
+  assert.equal(restored.defaults.removed, 1);
+  assert.equal(restored.defaults.restored, false);
+  assert.equal(restored.defaults.own, 0);
+  assert.ok(restored.defaults.foreign > 0);
+  assert.equal(verdict.ownOk, true);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.foreign.join("; "), /Simulator's defaults/u);
+  const observed = host.said.filter((l) => l.startsWith("PHONE_OBSERVATION "));
+  assert.ok(
+    observed.some((l) => /Simulator's defaults.*<host-dev-1>/u.test(l)),
+    observed.join("\n"),
+  );
+  for (const line of host.said) assert.ok(!holdsUdid(line), line);
+});
+
+test("H1: Simulator.app running at teardown — the cleanup skipped, said, and counted as another's; nothing imported", async () => {
+  const before = simDefaults();
+  // a Simulator.app the run never launched (another's): its quit refused, and the defaults left as they are
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0]], current: OWN[0] });
+  const { host, verdict, restored } = await defaultsTeardown(before, after, { pgrep: "777" });
+  assert.deepEqual(host.imports, []);
+  assert.deepEqual(host.defaults, ["export com.apple.iphonesimulator -"]);
+  assert.match(restored.defaults.cleanup, /^skipped: Simulator\.app is running/u);
+  assert.equal(verdict.ownOk, true);
+  assert.match(verdict.foreign.join("; "), /Simulator's defaults/u);
+  assert.ok(
+    host.said.some((l) => /^PHONE_OBSERVATION .*Simulator's defaults.*skipped/u.test(l)),
+    host.said.join("\n"),
+  );
+});
+
+test("H1: the run's own entries still there after the cleanup are the run's OWN side — ok:false, ownOk:false, why names it", async () => {
+  const before = simDefaults();
+  // cfprefsd took the import, but the re-read still holds the run's entry
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0]] });
+  const { verdict, restored } = await defaultsTeardown(before, after, { importIgnored: true });
+  assert.equal(restored.defaults.restored, false);
+  assert.ok(restored.defaults.own > 0);
+  assert.deepEqual([verdict.ok, verdict.ownOk], [false, false]);
+  assert.match(verdict.why.join("; "), /Simulator's defaults: .*the run's own devices/u);
+  // restoredVerdict alone: the own count is own, the foreign count another's
+  const good = {
+    run: RUN,
+    own: { form: "deleted", left: 0, shutdown: true },
+    simulator: { launchedByRun: true, quit: "quit", foreign: false },
+    helperLeft: 0,
+    others: { unchanged: true },
+    perfLock: "removed",
+    crash: { new: [] },
+  };
+  const own = restoredVerdict({
+    ...good,
+    defaults: { own: 2, foreign: 0, cleanup: "done", appRunning: false },
+  });
+  assert.deepEqual([own.ok, own.ownOk, own.foreign], [false, false, []]);
+  // another's app running kept the cleanup (the run launched none): both counts another's
+  const theirs = restoredVerdict({
+    ...good,
+    simulator: { launchedByRun: false, quit: "refused: x", foreign: true },
+    defaults: { own: 2, foreign: 1, cleanup: "skipped: x", appRunning: true, appForeign: true },
+  });
+  assert.deepEqual([theirs.ok, theirs.ownOk, theirs.foreign.length], [false, true, 2]);
+});
+
+test("G8: the defaults cleanup reads pgrep FIRST, then exports and plans, and pgreps AGAIN right before the import — running then, nothing imported", async () => {
+  const before = simDefaults();
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0]] });
+  /** restoreDefaults on a host whose pgrep answers `pgreps` in turn (null: none running); the order of its reads */
+  const traced = async (pgreps) => {
+    const run = ownRun();
+    const host = defaultsHost(after);
+    const queue = [...pgreps];
+    const order = [];
+    const exec = host.deps.exec;
+    host.deps.exec = async (file, args, o) => {
+      if (file === "/usr/bin/pgrep") {
+        order.push("pgrep");
+        host.state.pgrep = queue.length > 1 ? queue.shift() : queue[0];
+      }
+      if (file === "/usr/bin/defaults") order.push(args[0]);
+      return exec(file, args, o);
+    };
+    const r = await restoreDefaults(run, host.deps, { defaultsBefore: before });
+    return { r, order, host };
+  };
+  // nothing running throughout: pgrep, export, plan, pgrep again, import, read again
+  const quiet = await traced([null]);
+  assert.deepEqual(quiet.order, ["pgrep", "export", "pgrep", "import", "export"]);
+  assert.equal(quiet.r.cleanup, "done");
+  // the app comes up between the plan and the import: no import
+  const late = await traced([null, "777"]);
+  assert.deepEqual(late.order, ["pgrep", "export", "pgrep"]);
+  assert.deepEqual(late.host.imports, []);
+  assert.match(late.r.cleanup, /^skipped: Simulator\.app is running/u);
+  // running at the first read: exported (to judge), never planned against, never imported
+  const up = await traced(["777"]);
+  assert.deepEqual(up.order, ["pgrep", "export"]);
+  assert.deepEqual(up.host.imports, []);
+  // pgrep unreadable right before the import: skipped too
+  const blind = await traced([null, "garbage"]);
+  assert.deepEqual(blind.host.imports, []);
+});
+
+test("G12: Simulator.app running at teardown and PROVEN the run's own — its own entries left are the run's OWN side, never another's", async () => {
+  const before = simDefaults();
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0]] });
+  const verdictOf = (r, launchedByRun) =>
+    restoredVerdict({
+      run: RUN,
+      own: { form: "kept", left: 3, shutdown: true },
+      simulator: { launchedByRun, quit: "quit", foreign: false },
+      helperLeft: 0,
+      others: { unchanged: true },
+      perfLock: "removed",
+      crash: { new: [] },
+      defaults: { ...r, own: r.own.length, foreign: r.foreign.length },
+    });
+  // the run's own app (it launched one since its last quit, started after): the cleanup skipped, the entries the run's
+  const run = ownRun();
+  run.simulator.shown = 1;
+  run.simulator.launchedAt = ARMED + 30_000;
+  const host = defaultsHost(after, { pgrep: "4242" });
+  const r = await restoreDefaults(run, host.deps, { defaultsBefore: before });
+  assert.deepEqual(host.imports, []);
+  assert.match(r.cleanup, /^skipped: Simulator\.app is running/u);
+  assert.equal(r.appForeign, false);
+  const v = verdictOf(r, true);
+  assert.deepEqual([v.ok, v.ownOk], [false, false]);
+  assert.match(v.why.join("; "), /Simulator's defaults: .*the run's own devices left/u);
+  assert.equal(v.foreign.filter((w) => /Simulator's defaults/u.test(w)).length, 0);
+  // control: an app proven ANOTHER's (the run launched none) — the same entries are another's
+  const theirs = ownRun();
+  const host2 = defaultsHost(after, { pgrep: "4242" });
+  const r2 = await restoreDefaults(theirs, host2.deps, { defaultsBefore: before });
+  assert.equal(r2.appForeign, true);
+  const v2 = verdictOf(r2, false);
+  assert.equal(v2.ownOk, true);
+  assert.match(v2.foreign.join("; "), /Simulator's defaults: .*the run's own devices left/u);
+});
+
+test("G7: Simulator's defaults unreadable at teardown are the run's OWN side — its own entries unverified; said and judged", async () => {
+  const before = simDefaults();
+  const good = {
+    run: RUN,
+    own: { form: "kept", left: 3, shutdown: true },
+    simulator: { launchedByRun: true, quit: "quit", foreign: false },
+    helperLeft: 0,
+    others: { unchanged: true },
+    perfLock: "removed",
+    crash: { new: [] },
+  };
+  // an export that fails, answers nothing, a part, or times out: nothing imported, and the run's own side unrestored
+  for (const answer of [
+    { code: 1, signal: null, stdout: "", stderr: "boom" },
+    ok(""),
+    ok(simDefaults({ prefs: [FOREIGN_GONE, OWN[0]] }).slice(0, 300)),
+    { code: null, signal: "SIGTERM", stdout: before, stderr: "" },
+  ]) {
+    const { host, verdict, restored } = await defaultsTeardown(before, "", {
+      exportAnswer: answer,
+    });
+    assert.deepEqual(host.imports, [], JSON.stringify(answer));
+    assert.equal(restored.defaults.read, false);
+    assert.equal(restored.defaults.unverified, true);
+    assert.deepEqual([verdict.ok, verdict.ownOk], [false, false], JSON.stringify(answer));
+    assert.match(
+      verdict.why.join("; "),
+      /Simulator's defaults unreadable at teardown \(own entries unverified\)/u,
+    );
+    assert.ok(
+      host.said.some((l) => /Simulator's defaults unreadable at teardown/u.test(l)),
+      host.said.join("\n"),
+    );
+  }
+  // a run that made no device has no own entry to verify
+  assert.equal(
+    restoredVerdict({ ...good, defaults: { read: false, unverified: false, own: 0, foreign: 0 } })
+      .ok,
+    true,
+  );
+});
+
+test("R3: a non-own defaults change beside the run's OWN Simulator.app is its housekeeping — an OBSERVATION only, never why/foreign, never the exit", async () => {
+  const good = {
+    run: RUN,
+    own: { form: "kept", left: 3, shutdown: true },
+    simulator: { launchedByRun: true, quit: "quit", foreign: false },
+    helperLeft: 0,
+    others: { unchanged: true },
+    perfLock: "removed",
+    crash: { new: [] },
+    defaults: { own: 0, foreign: 2, cleanup: "done", appRunning: false },
+  };
+  // (a) the run launched Simulator.app, none proven another's: observation only
+  assert.deepEqual(restoredVerdict(good), { ok: true, why: [], ownOk: true, foreign: [] });
+  // (b) the run launched none: another's, as built
+  const unlaunched = restoredVerdict({
+    ...good,
+    simulator: { launchedByRun: false, quit: "not-running", foreign: false },
+  });
+  assert.deepEqual([unlaunched.ok, unlaunched.ownOk], [false, true]);
+  assert.match(unlaunched.foreign.join("; "), /Simulator's defaults: 2 change\(s\) not keyed/u);
+  // another's app proven: another's, even where the run launched one
+  const proven = restoredVerdict({
+    ...good,
+    simulator: { launchedByRun: true, quit: "refused: another's", foreign: true },
+  });
+  assert.match(proven.foreign.join("; "), /Simulator's defaults/u);
+  // own-UDID entries left are still the run's own, launched or not
+  const left = restoredVerdict({ ...good, defaults: { ...good.defaults, own: 1 } });
+  assert.deepEqual([left.ok, left.ownOk], [false, false]);
+  // through teardown: the run's own app wrote a window frame (no UDID) — said, never judged; the exit is 0
+  const before = simDefaults();
+  const frame =
+    "\t<key>NSWindow Frame Simulator</key>\n\t<string>10 20 400 800 0 0 1728 1084 </string>\n";
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0]], extra: frame });
+  const a = await defaultsTeardown(before, after, { launched: true });
+  assert.equal(a.restored.simulator.launchedByRun, true);
+  assert.equal(
+    a.host.imports[0],
+    simDefaults({ extra: frame }),
+    "the own entry removed, the frame kept",
+  );
+  assert.deepEqual([a.verdict.ok, a.verdict.ownOk, a.verdict.foreign], [true, true, []]);
+  assert.ok(
+    a.host.said.some((l) =>
+      /^PHONE_OBSERVATION Simulator's defaults .*run's own Simulator\.app.*NSWindow Frame Simulator/u.test(
+        l,
+      ),
+    ),
+    a.host.said.join("\n"),
+  );
+  assert.equal(
+    launchExit({
+      signal: null,
+      stopped: null,
+      deadlineHit: false,
+      code: 0,
+      restored: a.verdict.ownOk,
+      foreign: a.verdict.foreign,
+    }).code,
+    0,
+  );
+  // the same change on a run that launched no Simulator.app: another's — 75
+  const b = await defaultsTeardown(before, after);
+  assert.deepEqual([b.verdict.ok, b.verdict.ownOk], [false, true]);
+  assert.match(b.verdict.foreign.join("; "), /Simulator's defaults/u);
+  assert.equal(
+    launchExit({
+      signal: null,
+      stopped: null,
+      deadlineHit: false,
+      code: 0,
+      restored: b.verdict.ownOk,
+      foreign: b.verdict.foreign,
+    }).code,
+    NOT_ARMED,
+  );
 });
 
 test("sweep: exactly the run's own names, shut down; deleted only under the flag, each name read again right before (S9)", async () => {

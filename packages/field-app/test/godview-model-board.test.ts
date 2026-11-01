@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ModelBoardFold } from "../src/godview/monitor/model-board";
 import { createGodviewMonitorFeed } from "../src/godview/monitor/model-replica";
 import type { ModelBoardPort } from "../src/godview/monitor/remote-door";
+import { rowOrder } from "../src/godview/monitor/window-rows";
 
 // MV-3a (MV-D18, M3, M23) — the window adapter: the one door's per-device
 // chains folded into ONE model chain, fed to the replica. The frames are the
@@ -212,6 +213,103 @@ describe("ModelBoardFold — one chain from every desktop's own", () => {
     });
     expect(fold.held("pty-s4")).toBeUndefined();
     replica.dispose();
+  });
+
+  it("item 138 — every desktop keeps its place: a peer's whole re-send and a peer's birth leave the rows in the board's device order, and the window's order with them", () => {
+    const fold = new ModelBoardFold();
+    fold.open(OPEN);
+    const ASLEEP = "dev-01HQ9S7Y44";
+    const board = OPEN.devices[1]?.snapshot;
+    const loft = board?.rows[0];
+    if (board?.epoch === undefined || loft === undefined || loft.monitorRow === undefined) {
+      throw new Error("the peer's board");
+    }
+    expect(fold.devices().map((device) => device.device)).toEqual([HERE, PEER, ASLEEP]);
+    // the asleep desktop wakes with a board of its own: it joins after the others, its place in the open
+    const woke = {
+      ...loft,
+      runtimeRunId: "run-attic-e",
+      device: ASLEEP,
+      monitorRow: {
+        ...loft.monitorRow,
+        id: "run-attic-e",
+        device: { ...loft.monitorRow.device, id: ASLEEP, name: "Attic" },
+      },
+    };
+    fold.frame({ device: ASLEEP, snapshot: { epoch: "fieldd-3e7a.1", revision: 1, rows: [woke] } });
+    const order = () => fold.heldRows().map((held) => `${held.device}:${held.row.id}`);
+    const drawn = () => rowOrder(fold.heldRows(), fold.here, { sessionIds: [] });
+    const before = order();
+    const drawnBefore = drawn();
+    expect(before.slice(-2)).toEqual([`${PEER}:run-loft-w`, `${ASLEEP}:run-attic-e`]);
+    expect(drawnBefore.slice(-2)).toEqual(["run-loft-w", "run-attic-e"]);
+    // the peer re-presents its board whole at the same revision (PG-1d's gate flip, a lost frame): nothing moves
+    expect(
+      fold.frame({
+        device: PEER,
+        snapshot: { epoch: board.epoch, revision: board.revision, rows: board.rows },
+      }),
+    ).toMatchObject({ removed: [] });
+    expect(order()).toEqual(before);
+    expect(drawn()).toEqual(drawnBefore);
+    // …nor when it re-attaches on a new epoch (its daemon restarted)
+    fold.frame({
+      device: PEER,
+      snapshot: { epoch: "fieldd-5d2c.3", revision: 1, rows: board.rows },
+    });
+    expect(order()).toEqual(before);
+    expect(drawn()).toEqual(drawnBefore);
+    // a birth on the peer joins its own desktop's rows, ahead of the next desktop's
+    const born = {
+      ...loft,
+      runtimeRunId: "run-loft-n",
+      monitorRow: {
+        ...loft.monitorRow,
+        id: "run-loft-n",
+        createdAt: loft.monitorRow.createdAt + 1,
+      },
+    };
+    fold.frame({
+      device: PEER,
+      delta: { epoch: "fieldd-5d2c.3", since: 1, revision: 2, upserts: [born], removed: [] },
+    });
+    expect(order().slice(-3)).toEqual([
+      `${PEER}:run-loft-w`,
+      `${PEER}:run-loft-n`,
+      `${ASLEEP}:run-attic-e`,
+    ]);
+    expect(drawn().slice(-3)).toEqual(["run-loft-w", "run-loft-n", "run-attic-e"]);
+    const grown = order();
+    const drawnGrown = drawn();
+    // the peer re-presents with its board listing the newborn first: the rows it still holds keep their places
+    fold.frame({
+      device: PEER,
+      snapshot: { epoch: "fieldd-5d2c.3", revision: 2, rows: [born, ...board.rows] },
+    });
+    expect(order()).toEqual(grown);
+    expect(drawn()).toEqual(drawnGrown);
+    // …and so does a whole new open after a gap, whatever order its boards list
+    const own = OPEN.devices[0];
+    if (own === undefined) throw new Error("this desktop's entry");
+    fold.open({
+      devices: [
+        own,
+        {
+          device: PEER,
+          state: "live",
+          asOf: own.asOf,
+          snapshot: { epoch: "fieldd-5d2c.4", revision: 1, rows: [born, ...board.rows] },
+        },
+        {
+          device: ASLEEP,
+          state: "live",
+          asOf: own.asOf,
+          snapshot: { epoch: "fieldd-3e7a.2", revision: 1, rows: [woke] },
+        },
+      ],
+    });
+    expect(order()).toEqual(grown);
+    expect(drawn()).toEqual(drawnGrown);
   });
 
   it("a row with no model row (an older peer's desk row) is no row, and removes what its key stood for", () => {

@@ -1626,12 +1626,18 @@ export const LAYOUT = {
   PAIRING_FILE: ["native", "pairing"],
   MESH_STATE_DIR: ["native", "mesh"],
   LINK_FILE: ["fieldd", "link.json"],
+  /** AL-12 — how a shell last left this pair, KEPT (`ShellLastExit`; Settings → Diagnostics' "Last exit"): replaced at
+   * every shell exit and every shell-asked stop, never taken. */
+  SHELL_LAST_EXIT: ["fieldd", "shell-last-exit.json"],
   /** AL-7 — how the last shell left this pair (`ShellExitRecord`): written when the last shell-main connection
    * closes, handed once to the next shell that claims the lease (`system.shell.attach`). */
   SHELL_EXIT: ["fieldd", "shell-exit.json"],
   /** AL-8a — how the PREVIOUS fieldd left this pair's floor, when it went without a goodbye (`ManagerExitRecord`):
    * written by the fieldd whose hello-ack said so, handed once to the next shell that claims the lease. */
   MANAGER_EXIT: ["fieldd", "manager-exit.json"],
+  /** AL-11 — when fieldd relaunched the app after an unplanned exit (`ShellRelaunchLog`), so AL-D8's cap of 3 per
+   * 10 min holds across a fieldd restart. */
+  SHELL_RELAUNCHES: ["fieldd", "shell-relaunches.json"],
   /** SB-2 (AR-7g) — which shells fieldd birthed under an Agent Profile
    * (`TerminalBindingsFile`, 0600): session → profile set, never a variable.
    * fieldd's, because nothing below it can hold a session's metadata, and on

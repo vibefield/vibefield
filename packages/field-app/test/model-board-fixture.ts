@@ -55,6 +55,9 @@ export interface ScriptedPeer {
   platform?: string;
   state?: RowsDeviceState;
   rows: readonly AgentSessionSummary[];
+  /** PG-3a — that desktop's floor: its live PTYs, so its backend promotes a run whose shell it lists (M22) and cuts
+   * a bare terminal's row; absent keeps the floor it had */
+  terminals?: readonly TerminalInfo[];
 }
 
 export interface ScriptedModelBoard {
@@ -499,6 +502,7 @@ export function scriptedModelBoard(options: ScriptedModelBoardOptions = {}): Scr
         peers.set(peer.device, held);
       }
       held.state = peer.state ?? held.state;
+      if (peer.terminals !== undefined) held.hosted.terminals.observe(peer.terminals);
       held.hosted.fold.publish(peer.rows);
       held.hosted.runtime.set(peer.rows);
       held.hosted.flush();

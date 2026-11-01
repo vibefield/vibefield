@@ -56,6 +56,10 @@ export interface SparkAgent {
 /** The words for an agent that cannot take the briefing yet (DESIGN.md §8). */
 export const CANNOT_TAKE_TOOLS = "can't take VibeField's tools yet";
 
+/** The words for agents that can't be read (DESIGN.md §8 "The New spark sheet", §9): said at the sheet's foot, and by
+ * @'s list in Chat when its profiles can't be read. */
+export const CANNOT_LIST_AGENTS = "VibeField can't list its agents right now";
+
 /** The agents the sheet lists: every offered agent, a spark's when it declares all three briefing fields and a process
  * the door can name (CP-1d's gate, read from `agent.providers[].briefing`). */
 export function sparkAgentsOf(providers: readonly AgentProviderSummary[]): SparkAgent[] {
@@ -77,6 +81,22 @@ export function defaultProfileOf(sets: readonly AgentProfileSet[]): AgentProfile
   return sets.find((set) => set.default) ?? sets[0];
 }
 
+/** A chosen model in words: its label, and its effort once one is chosen ("Opus 5.5", "high"); none while untouched.
+ * THE one spelling of a model and its effort — the New spark sheet's pill and Chat's agent chip (SP-1d, DESIGN.md §8
+ * "Chat's composer") both say it. */
+export function modelWords(
+  model: AgentModelChoice | undefined,
+  selection: AgentModelSelection | undefined,
+): string[] {
+  if (model === undefined || selection === undefined) return [];
+  const effort = model.controls.find((control) => control.role === "effort");
+  const value =
+    effort === undefined
+      ? undefined
+      : effort.values.find((candidate) => candidate.id === selection.controls?.[effort.id]);
+  return value === undefined ? [model.label] : [model.label, value.label];
+}
+
 /** What the agent pill says: the agent, and the model and effort once one is chosen (NS-D1 A's "Claude Code · Opus 5.5 ·
  * high"); untouched, the agent alone — it thinks at its own model. */
 export function agentLine(
@@ -85,13 +105,7 @@ export function agentLine(
   selection: AgentModelSelection | undefined,
 ): string {
   if (agent === undefined) return "No agent can be a spark yet";
-  if (model === undefined || selection === undefined) return agent.label;
-  const effort = model.controls.find((control) => control.role === "effort");
-  const value =
-    effort === undefined
-      ? undefined
-      : effort.values.find((candidate) => candidate.id === selection.controls?.[effort.id]);
-  return [agent.label, model.label, value?.label].filter(Boolean).join(" · ");
+  return [agent.label, ...modelWords(model, selection)].join(" · ");
 }
 
 /** Where the sheet says a refusal (DESIGN.md §8): under what it asked. */

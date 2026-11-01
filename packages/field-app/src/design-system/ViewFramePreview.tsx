@@ -1,6 +1,7 @@
 import type { FrameView, ScreenshotCaptureResult } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useEffect, useState } from "react";
+import type { ThreadMark } from "../chat/thread-marks";
 import { Composer, type ComposerHost } from "../frame/Composer";
 import { ComposerLineView } from "../frame/ComposerLine";
 import type { FrameSurface } from "../frame/frame-surface";
@@ -44,10 +45,19 @@ export const FIXTURE_CAPTURE_HOST: ComposerHost = {
 
 /** The states the One Frame page's Chrome & Composer plates show for the
  * frame (`data-state`): at rest on the canvas, ⌘ held, Godview, History, the
- * arc while History imports (AO-4b), Chat (SP-1b), and a spark that needs you
- * from Godview (CH-D4, the Sparks page's `ch-away`) — each in the catalog's
- * light and dark. */
-export const FRAME_STATES = ["rest", "cmd", "gv", "hx", "import", "chat", "needs"] as const;
+ * arc while History imports (AO-4b), Chat (SP-1b), a spark that needs you
+ * from Godview (CH-D4, the Sparks page's `ch-away`), and a thread unread from
+ * Godview (SP-1d, the cell's cyan dot) — each in the catalog's light and dark. */
+export const FRAME_STATES = [
+  "rest",
+  "cmd",
+  "gv",
+  "hx",
+  "import",
+  "chat",
+  "needs",
+  "unread",
+] as const;
 export type FrameState = (typeof FRAME_STATES)[number];
 
 const STATE_LABEL: Record<FrameState, string> = {
@@ -58,6 +68,7 @@ const STATE_LABEL: Record<FrameState, string> = {
   import: "Importing",
   chat: "Chat",
   needs: "Needs you",
+  unread: "Unread",
 };
 
 const VIEW_OF: Record<FrameState, FrameView> = {
@@ -68,6 +79,19 @@ const VIEW_OF: Record<FrameState, FrameView> = {
   import: "canvas",
   chat: "assistant",
   needs: "godview",
+  unread: "godview",
+};
+
+/** Chat's cell's mark on a plate: the orange dot while Vela needs you, the cyan one while a thread is unread. */
+const MARK_OF: Record<FrameState, ThreadMark | null> = {
+  rest: null,
+  cmd: null,
+  gv: null,
+  hx: null,
+  import: null,
+  chat: null,
+  needs: "needs",
+  unread: "unread",
 };
 
 /** The note the `needs` plate says: Vela asking you, from another view (CH-D4). */
@@ -112,7 +136,7 @@ export function ViewsTrackSpecimen({
               keys={keys}
               held={state === "cmd"}
               importing={state === "import"}
-              needs={state === "needs"}
+              mark={MARK_OF[state]}
               note={state === "needs" ? FIXTURE_NOTE(said) : null}
             />
           }
@@ -212,7 +236,7 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
               held={state === "cmd"}
               press={press}
               importing={state === "import"}
-              needs={state === "needs"}
+              mark={MARK_OF[state]}
               note={note}
               onSelect={(asked) => choose(STATE_OF[asked])}
             />

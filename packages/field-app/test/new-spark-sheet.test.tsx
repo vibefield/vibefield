@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   AGENT_CATALOG,
   type AgentModelsResult,
@@ -291,5 +293,16 @@ describe("the New spark sheet", () => {
     );
     await settle();
     expect($<HTMLInputElement>(".vf-new-spark-name")?.value).toBe("Polaris");
+  });
+
+  it("draws the agent's mark on its pill at 18, as DESIGN gives it, since the mark draws at its text's size (SP-1d's final critique 4)", async () => {
+    await open(portOf());
+    // the mark is the agent's own, drawn at 1em: its box's font size is its size, never the pill's 13
+    expect($(".vf-new-spark-agent-mark svg")?.getAttribute("width")).toBe("1em");
+    const css = readFileSync(join(process.cwd(), "src/chat/new-spark-sheet.css"), "utf8");
+    const rule = css.match(/^\.vf-new-spark-agent-mark \{([^}]*)\}/m)?.[1] ?? "";
+    expect(rule).toMatch(/inline-size: 18px;/);
+    expect(rule).toMatch(/font-size: 18px;/);
+    expect(rule).toMatch(/line-height: 1;/);
   });
 });

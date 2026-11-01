@@ -444,6 +444,9 @@ export const APP_PREFERENCE_KEYS = {
   /** TS-4 (TS-D7) — the one switch in Settings → Devices that stops the asks to
    * connect after Not now; on until the person turns it off */
   CONNECT_ASKS: "mesh.connectAsks",
+  /** AL-6 (AL-D2, §5.8) — macOS: a person's quit closes the windows and keeps VibeField in the menu bar, its terminal
+   * service running; the status item's Quit VibeField is the quit. Off until the person turns it on */
+  KEEP_RUNNING_ON_QUIT: "desktop.keepRunningOnQuit",
 } as const;
 
 export const AppPreferenceKey = z.enum([
@@ -453,6 +456,7 @@ export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE,
   APP_PREFERENCE_KEYS.CONFIRM_QUIT,
   APP_PREFERENCE_KEYS.CONNECT_ASKS,
+  APP_PREFERENCE_KEYS.KEEP_RUNNING_ON_QUIT,
 ]);
 export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
 
@@ -474,6 +478,8 @@ export const AppPreferences = z
     confirmQuit: z.boolean().default(true),
     // TS-4: on by default, including snapshots from an older daemon.
     connectAsks: z.boolean().default(true),
+    // AL-6: off by default, including snapshots from an older daemon.
+    keepRunningOnQuit: z.boolean().default(false),
   })
   .passthrough();
 export type AppPreferences = z.infer<typeof AppPreferences>;

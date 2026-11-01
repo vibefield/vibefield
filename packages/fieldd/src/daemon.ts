@@ -58,6 +58,7 @@ import {
   DEVICE_LIMITS,
   DeviceGetParams,
   DeviceRenameParams,
+  type DiagnosticsLastExitResult,
   DocCreateParams,
   DocDeleteParams,
   DocHoldersParams,
@@ -324,7 +325,13 @@ import {
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
 import { SetupLedgerStore } from "./setup-ledger";
-import { appBundleOf, relaunchFromBundle, type SHELL_ABSENCE, ShellAbsence } from "./shell-absence";
+import {
+  appBundleOf,
+  fileRelaunchLog,
+  relaunchFromBundle,
+  type SHELL_ABSENCE,
+  ShellAbsence,
+} from "./shell-absence";
 import { ShellLease } from "./shell-lease";
 import { createSurfaceService } from "./surface-service";
 import { oweSyncQuestion } from "./sync-question";
@@ -2237,6 +2244,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           : derivedBundle === null
             ? null
             : relaunchFromBundle(derivedBundle),
+      // AL-11 — the cap's count outlives this fieldd
+      relaunchLog: fileRelaunchLog(join(config.dataDir, ...LAYOUT.SHELL_RELAUNCHES)),
       logger: logger.child({ component: "shell.absence" }),
       ...(config.shellAbsenceTimings !== undefined ? { timings: config.shellAbsenceTimings } : {}),
     });
@@ -2288,6 +2297,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       };
       return result;
     });
+    // AL-12 — Settings → Diagnostics' "Last exit": the kept record, read-only (`diagnostics.read`, local)
+    api.register("diagnostics.lastExit", async () => {
+      const result: DiagnosticsLastExitResult = { shell: await shellLease.lastExit() };
+      return result;
+    });
     api.register("system.shell.leave", (ctx, params) => {
       const connectionId = leaseConnection(ctx);
       const parsed = SystemShellLeaveParams.safeParse(params ?? {});
@@ -2321,7 +2335,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         reason,
         native: nativeStop ?? null,
       });
-      shellLease.seal(); // AL-7 — a shell that drops from here on is fieldd stopping, not a shell leaving
+      // AL-7 — a shell that drops from here on is fieldd stopping, not a shell leaving. AL-12 — a stop a shell asked for
+      // is its exit, kept for Diagnostics' "Last exit": one that ended the floor, or the update's B3 that leaves it. The
+      // supervisor's replacement of a stale fieldd names no reason, and is no shell's exit.
+      if (parsed.data.native !== undefined && nativeStop !== undefined) {
+        shellLease.stoppedBy(reason, parsed.data.native.sessions.length);
+      } else if (parsed.data.native === undefined && parsed.data.reason === "update") {
+        shellLease.leftForUpdate();
+      } else {
+        shellLease.seal();
+      }
       const callback = shutdownRequested;
       setImmediate(() => callback());
       return { stopping: true, ...(nativeStop === undefined ? {} : { native: nativeStop }) };
@@ -5935,7 +5958,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) }",
+          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|desktop.keepRunningOnQuit|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) }",
           false,
         );
       }

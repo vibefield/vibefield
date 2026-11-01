@@ -38,6 +38,8 @@ export interface CardBox {
   /** a turn to land in, degrees, about the fan's pivot; the hand's slots name none — a flight
    * carries no turn, and the fan settles a card into its tilt once it is back */
   readonly rotate?: number;
+  /** a place's ring: the corner its answer says, px (`CardAnswer.corner`); absent, the layer's own */
+  readonly corner?: number;
 }
 
 export interface CardDragStart {
@@ -74,8 +76,8 @@ export interface CarriedCard {
   /** Over the line it ducks small, so the cell it is held over shows (HN-D6) — and, from another
    * app, over a field that takes the drop, so the field's own caret shows (LC-25). */
   readonly ducked: boolean;
-  /** Where the select ring is drawn: the place that takes it (a pane, the desk's stage) — kept
-   * through the play, while it fades (§6). */
+  /** Where the select ring is drawn: the place that takes it (a pane, the desk's stage), at the
+   * corner it says (Chat's composer's own) — kept through the play, while it fades (§6). */
   readonly ring: CardBox | null;
   /** The cell opening under it: where "Opening Godview" and its ring stand. */
   readonly cell: CardBox | null;
@@ -174,6 +176,13 @@ const wait = (ms: number): Promise<void> =>
 
 const boxOf = (rect: DOMRect | null): CardBox | null =>
   rect === null ? null : { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+
+/** A place's ring: its box, at the corner its yes says; a refusal rings nothing. */
+function ringOf(said: CardAnswer, target: CardTarget): CardBox | null {
+  if (!said.ok) return null;
+  const box = boxOf(said.ring ?? target.rect());
+  return box === null || said.corner === undefined ? box : { ...box, corner: said.corner };
+}
 
 function publish(next: CarriedCard | null): void {
   carried = next;
@@ -327,7 +336,7 @@ function hitTest(drag: LiveDrag): void {
     const { target, said } = place;
     drag.target = target;
     drag.answer = { kind: target.kind, ok: said.ok, label: said.label };
-    drag.ring = said.ok ? boxOf(said.ring ?? target.rect()) : null;
+    drag.ring = ringOf(said, target);
     return;
   }
   drag.target = null;

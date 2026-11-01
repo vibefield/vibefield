@@ -14,10 +14,28 @@ export type CardTargetKind = "pane" | "prompt" | "desk";
 
 /** What a place says to a carried card. `ring`: where its select ring is drawn
  * when that is not the place's whole box — the one pane of a deck under the
- * point, say; absent, the ring is drawn on `rect()`. */
+ * point, say; absent, the ring is drawn on `rect()`. `corner`: the ring's
+ * corner, px, where the place's own is not a pane's (Chat's composer's,
+ * `cornerOf`); absent, the carried layer's own (carried.css). A refusal draws
+ * no ring, so it says no corner. */
 export type CardAnswer =
-  | { readonly ok: true; readonly label: string; readonly ring?: DOMRect }
+  | {
+      readonly ok: true;
+      readonly label: string;
+      readonly ring?: DOMRect;
+      readonly corner?: number;
+    }
   | { readonly ok: false; readonly label: string; readonly ring?: DOMRect };
+
+/** A place's own corner, px, as its stylesheet draws it — what its ring is
+ * drawn at, so the ring traces the place and no corner stands outside it
+ * (DESIGN.md §8 "Chat's composer", a card from the hand); null for an element
+ * with no rounded corner. */
+export function cornerOf(element: Element | null): number | null {
+  if (element === null) return null;
+  const corner = Number.parseFloat(getComputedStyle(element).borderTopLeftRadius);
+  return Number.isFinite(corner) && corner > 0 ? corner : null;
+}
 
 export interface CardPlayed {
   readonly ok: boolean;

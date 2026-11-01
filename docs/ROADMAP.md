@@ -180,13 +180,15 @@
   records `d9e5eb119`; AL-D14 "A", D15…D18), **AL-9b** (`cc37d2d8e`, 10-29; LANDED §AL-9b: one chord table in main for
   ⌃⌘A, ⌘Q and ⌃⌘F, a held chord acting once, a non-Latin layout's chord read from the physical key), **AL-10**
   (`27d61f7a5`, 11-01; LANDED §AL-10: the Behavior tab's lifetime row says a quit ends a terminal, DESIGN.md §9's "The
-  quit's words"; AL-D19 "no"). AL-8b RETIRED (AL-D10 "A": no LaunchAgent, not with AL-6 either).
+  quit's words"; AL-D19 "no"), **AL-11** (`3ead0fd36`, 11-01; LANDED §AL-11: the relaunch cap read from a log on
+  disk, written before each relaunch), **AL-12** (`b14117151`, 11-01; LANDED §AL-12:
+  Settings → Diagnostics' "Last exit", kept after the notice), **AL-6** (`79458ac4a`, 11-01; LANDED §AL-6: Keep
+  running when VibeField quits). AL-8b RETIRED (AL-D10 "A": no LaunchAgent, not with
+  AL-6 either).
 - AL-9c candidates, on James's word (VF-PM's board): the deck's no-op `toggleFullscreen`, through a page→main door of
   its own (AL-D19: a person's Ghostty `quit` chord never quits VibeField) · Settings' chord words off the Mac · the
   deck's last-pane count (with ghosttea's "last pane closed" hook).
-- Next, stacked in order, each its own mint: **AL-11** AL-5's relaunch cap persisted · **AL-12** Settings →
-  Diagnostics' "Last exit" · **AL-6** background mode (AL-D2's "Keep running when VibeField quits", a Dock-hidden
-  resident shell, a status item).
+- Next: nothing queued; the AL-9c candidates wait on James's word.
 - Owed: AL-5's relaunch witness on a packaged build; Windows/Linux relaunch; a fieldd no shell ever claimed is
   unbounded; the clean `smoke:canvas` on this Mac (unattended); ghosttea's "last pane closed" hook (an upstream ask);
   James's hand rows (§5).
@@ -238,11 +240,13 @@
   and paced by its caller's kind (a peer window 100 ms; the phone 1 s, its urgent edge 250 ms). Bare terminals ride it
   (PG-D5), their directory as its folder; each window's mesh asks its peers for `remote`, the phone's `{remote, mesh}`
   door is open at its home, and `desk` retired.
-- Next: PG-3 (the phone's replica under the swarm: the kit decodes `AgentRemoteRow` from mirrored goldens, folds by
-  `ModelBoardFold`'s rule, retires `UsageLedger`/`UnreadLedger`/the stale rule, and routes `reportShown` through the
-  home, PG-D6). Sliced and ruled (VF-PM 2026-11-01 02:46Z, the brief `lanes/ios/PG3-BRIEF.md`): 3a0 the promotion
-  probe, paid by item 137 → 3a the witness goldens ∥ 3b `reportShown` through the home (contracts and fieldd) →
-  3c the kit decodes → 3d the Swift fold → 3e the switch; 3a waits on James's J1 and 3b on J2, on the PM board
+  **PG-3a** (11-01), the witness goldens (`b13390352` → `c5dfba715`, M80 `d14e97880`; LANDED "PG-3a"): the remote cut's
+  states a phone reads row for row, hand-written and held to fieldd's own cut, and the home's window computed over
+  them as `phone-fold.golden.json` and `phone-body.golden.json`, which the kit transcribes (J1 (a)); item 144 found.
+- Next: PG-3's remaining slices (the brief `lanes/ios/PG3-BRIEF.md`; James ruled J1–J4 at 2026-11-01 03:56Z, all
+  (a)): 3b `reportShown` through the home (contracts and fieldd; J2, owner screens keyed by `onBehalfOf`) → 3c the
+  kit decodes the remote cut from the mirrored goldens (after F1b's kit half) → 3d the Swift fold and replica, held
+  to `phone-fold.golden.json` → 3e the switch, held to `phone-body.golden.json` (J3 per hour; J4 ahead of PU-I)
   → PG-5…PG-8 (list, timeline, spend, rain, native) → PG-9 (resume, `agent.get`, the measured rates).
   PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
@@ -250,7 +254,8 @@
   and the ticket mint read different things), an old owner's run-id fallback (a design question) and a kit comment
   (`AgentTerminalFace.swift`); from PG-2, the draft queue's amendments (design-06's SP-L4, DS-D4 and limits "not
   built" clauses, design-mv §1, build-mv L8 and M29, the design record's §8 as built), and `field`'s retirement one
-  release of skew after the kit ships (PG-L1).
+  release of skew after the kit ships (PG-L1); from PG-3a, the kit's copies of its goldens (3c), and at a draft slot
+  PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's remote-cut self-check).
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -321,9 +326,14 @@
   LANDED "PT-S3"); its brief's P1–P16 are the orchestrator's leans. `pnpm smoke:phone` (L2), `:none` (L1) and `:cost`
   (L3) run the phone's rows under a stage that arms on the console's idle, makes and deletes only its own devices and
   restores the host (desk-gates row 33: landing-only, never inside `gate:landing`); P1 finds Xcode beside the Command
-  Line Tools. Nothing live has run: no real Simulator pixels have been seen on the desk.
-- Next: **PT-S3's live run, on James's unlock** (§6 step 3a's build and preflight, then L0 ENUM with him at the screen,
-  L1 and L2; L3 on the mini on his word, or skipped): a booted simulator streams its real pixels to the desk, each
+  Line Tools. **The first console run, 11-01** (James's unlock): L0 ENUM GREEN (Ghostty holds Screen Recording, no
+  prompt), L1 GREEN (after field-native was built: items 133/134); L2 ran 14 of 20 rows: real Simulator pixels
+  reached the desk (SIM-CAP's band), and its four reds and two VOIDs were the harness's, not the product's: a fresh
+  device's door verbs before iOS was ready, rows judging pages never opened (item 140, LANDED 11-01 in the mint
+  `aa5bf3669`; P7, P8 and H1 ruled at the leans).
+- Next: **PT-S3's L2 again, under a new run id, at James's launch** (L0 and L1 stand; SIM-STOPPED-CLOSED and P7's
+  hand witness after it, if he offers; L3 on the mini on his word, or skipped): a booted simulator streams its real
+  pixels to the desk, each
   honest face, the Screen Recording and Accessibility flows, "Show it" on a running Simulator.app (P7: recorded, its
   fix ruled after), the stopped word (P8), the fps buckets (PT-S2's R9: the law's 12 at rest arrives as 10), the
   letter of PT-S2's R7, the cost at the cap beside a pane
@@ -370,10 +380,21 @@
   - Chat's create is New spark (⌘N). It asks a name, the agent that can take VibeField's tools and its model, and
     the profiles once there is more than This Mac; Create's refusals are said where the sheet asked.
   - Hatched, a star falls and bursts in the sheet's sky, and the face is born there and flies to its row in Chat.
+- **SP-1d, Chat's thread and composer**: LANDED 11-01 (`7871ce1f1`, the mini's run 83; LANDED "SP-1d").
+  - An awake spark's thread is its own terminal pane in Chat, with Chat's composer under it: @'s agents and sessions,
+    and Send, which pastes into the pane and leaves Return to you.
+  - A new spark says hello with three starters. A thread's unread dot lasts until you open it. A thread takes one act
+    at a time, and fieldd wakes a spark once.
 - Next, in order:
-  - **SP-1d**: the thread and Chat's composer (HN B1 and B2 landed 10-31).
-  - **CP-3**: the person (`ask_user`, `notify`). Its marks CP3-D1…D8 were ruled 10-31 at their leans (James, 06:31:34Z;
-    `draft/compose-plane/cp3-the-person.md`), and its build waits on his go.
+  - **CP-3**: the person (`ask_user`, `notify`; CP3-D1…D8 ruled 10-31 at their leans, James 06:31:34Z;
+    `draft/compose-plane/cp3-the-person.md`).
+    - It was built in lane `cp3` on James's "start all" (10-31 14:57:34Z): half 1 (contracts, fieldd, main), then
+      half 2 (the window, on SP-1d's thread). Its tip is `8c1bc51c0`.
+    - Next it merges the new main and resolves the six meanings its final critique names (`lanes/co-plan/final-cp3.md`).
+      Then it gets its own light and mint.
+  - **TU-1**: the turn fact and the persona set on the board's row, after CP-3's merge. VF-PM ruled Q3–Q7 on 11-01 at
+    07:17Z. Q1 and Q2 are James's, on a decision page first.
+  - **SP-1e**: CH-D2's live cards in Chat's thread, and Chat's pane as a card target.
   - **CP-4**: flows and the desk applier.
   - **CP-5**, which is MT-7: Codex and Grok, once their MCP processes can be named.
 
@@ -425,9 +446,25 @@
   push-event verify run 41235730001 green, PR #7's re-run green (41239299536); nothing owed; LANDED "Item 129") ·
   item 130 (the phone's sign-out kept History's cache, against AP-D4: `35b9248d4`, with SP-D12's comment
   `f8d93b4a2`, as the merge `6130153f8`, run 61; IOS-10a's sign-out words paid in `a9a62c20a`; LANDED "Item 130") ·
+  items 131, 133, 134 and 139 (fieldd's slow-cleanup warning waits for its own clock; the phone stage checks the
+  field-native its smoke launches; a smoke dead before its rows names its kept HOME and the stage says the fatal, and
+  134b's smoke refuses a missing field-native at once; the rosettad control row reads at `close`: `130906443` as the
+  merge `230e72848`, run 75; owed: PT-S3 L1's re-run on a built lane, PORTALS's; LANDED "Items 131, 133, 134 and
+  139") ·
+  item 141 (the TREE-dies row's wait for its grandchild ends on a beat or the tree gone, inside the row's own budget,
+  never a 5 s clock: `15428f2a8` as the merge `2d91c6a5c`, run 77; LANDED "Item 141") ·
   item 137 (a shell promoted to an agent left the Godview and was reborn: the window's `ModelBoardFold` dropped an
   id another key of the desktop still held, against M22's one body; found by PG-3a0's probe; `a13132333`,
   `49935e71b`, M70 run 70, a pure fast-forward; nothing owed; LANDED "Item 137") ·
+  item 138 (a peer's rows moved in the window's order, the rain's columns, on a whole re-send that changed
+  nothing: the fold listed `#held` by insertion; now by the board's device order, each row it still holds in
+  place; found by PG-3a's design check; `569ee11cb`, M74 `815babbd3` run 74; nothing owed; LANDED "Item 138") ·
+  item 144 (the projection bench's count self-check left the remote cut's bare terminals out since PG-2: red,
+  ungated; found by PG-3a's light; `8cf8c1a05`, M80 `d14e97880`; owed: PG-1e0's erratum at a draft slot; LANDED
+  "Item 144") ·
+  items 142, 143 and 145 (a smoke's process is gone when the kernel says so, in the launchers' reap and the in-app
+  teardown, and `unreaped` is said of the rest; release-notes' row and typed-agent's real-zsh row name their measured
+  15 s: `00b6fe2ac` as the merge `fc2a896ec`, run 81; LANDED "Items 142, 143 and 145") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
@@ -802,7 +839,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b and SP-1c landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | SP-1d · CP-3 (ruled 10-31, on James's go) |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c and SP-1d landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | CP-3 (built, merging the new main) · TU-1 · SP-1e |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**

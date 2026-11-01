@@ -9,6 +9,10 @@ export const FIXTURE_SPARKS = [
   { name: "Kiwi", seed: 31337 },
 ] as const;
 
+/** The spark the New spark sheet's plates hatch, and Chat's hello plate shows just hatched: its suggested name and the
+ * face its still plates are dealt. */
+export const FIXTURE_HATCHED = { name: "Polaris", seed: 0x2f6a91c3 } as const;
+
 /** Framed, by §2.10's surfaces: Chat's row and a thread's head 40, a message's lead 28, a flow's
  * head 26, @'s row 24, Godview's rims and History's rows 20, a chip and a byline 18. */
 export const SPARK_FRAMED_LADDER = [40, 28, 26, 24, 20, 18] as const;

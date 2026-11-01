@@ -31,6 +31,7 @@ import {
   CARD_W,
   CARDS_LINE_RIGHT,
   type Card,
+  CHAT_REACH,
   layoutCards,
   layoutRaised,
   reachLift,
@@ -141,6 +142,23 @@ describe("the fan at rest and the reach (HN: Holding them)", () => {
     expect(label?.textContent).toBe("Godview · claude·2 · 2m ago");
     expect(Number.parseFloat(label?.style.left ?? "")).toBeCloseTo(centre, 1);
     const above = (REST.slots[2]?.y ?? 0) - CARD_LIFT - 32;
+    expect(Number.parseFloat(label?.style.top ?? "")).toBeCloseTo(above, 1);
+  });
+
+  it("lifts by the view's reach: in Chat the reached card rises its 20, and its words stand 32 above that (SP-1d; Q5)", () => {
+    const centre = (REST.slots[2]?.x ?? 0) + CARD_W / 2;
+    const lifts = reachLift(REST.slots, centre);
+    const el = mount(<CardsView {...props({ lifts, reached: 2, reach: CHAT_REACH })} />);
+    for (const [index, each] of CARDS.entries()) {
+      const y = (REST.slots[index]?.y ?? 0) - (lifts[index] ?? 0) * CHAT_REACH.lift;
+      expect(num(liftOf(slotOf(el, each.id)), "--vf-cards-y"), each.id).toBeCloseTo(y, 1);
+    }
+    expect(num(liftOf(slotOf(el, "c")), "--vf-cards-y")).toBeCloseTo(
+      (REST.slots[2]?.y ?? 0) - 20,
+      1,
+    );
+    const label = el.querySelector<HTMLElement>(".vf-cards-label");
+    const above = (REST.slots[2]?.y ?? 0) - CHAT_REACH.lift - 32;
     expect(Number.parseFloat(label?.style.top ?? "")).toBeCloseTo(above, 1);
   });
 
