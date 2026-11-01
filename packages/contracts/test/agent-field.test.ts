@@ -776,6 +776,214 @@ describe("PG-2 — the remote cut: the model's row for every other screen, cut b
   });
 });
 
+// PG-3a (Q-J1 (a), James 2026-11-01 03:55Z) — THE WITNESS GOLDENS: the remote
+// cut's states a phone must read row for row with its home's window, which the
+// PG-2 goldens never reach (every row there is read and fresh, and every key is
+// its id). Hand-written in this contract commit, as every remote golden is
+// (EL9: contracts first); the producer side is held to them in field-app
+// (`test/phone-goldens-producer.test.ts`, fieldd's own cut), and the window's
+// fold, replica and J1 step over them are the computed goldens
+// (`field-app/test/fixtures/phone-godview/`).
+describe("PG-3a — the witness goldens: the remote cut's states the phone reads row for row", () => {
+  const HOME = "dev-01HQ9S7UD1";
+  const LOFT = "dev-01HQ9S7XZ2";
+  const ATTIC = "dev-01HQ9S7Y44";
+  const open = (): AgentRemoteMeshOpen =>
+    AgentRemoteMeshOpen.parse(golden("agent-remote-mesh-open.witness.json"));
+  const frames = (): AgentRemoteMeshFrame[] =>
+    (golden("agent-remote-mesh-frames.witness.json") as unknown[]).map((frame) =>
+      AgentRemoteMeshFrame.parse(frame),
+    );
+  const boardOf = (device: string) => open().devices.find((entry) => entry.device === device);
+  const rowsOf = (device: string): AgentRemoteRow[] => boardOf(device)?.snapshot?.rows ?? [];
+  const row = (device: string, key: string): AgentRemoteRow => {
+    const found = rowsOf(device).find((candidate) => candidate.runtimeRunId === key);
+    if (found === undefined) throw new Error(`${key} is not on ${device}'s board`);
+    return found;
+  };
+  /** every row the witness carries: the open's boards, then every frame's rows */
+  const everyRow = (): AgentRemoteRow[] => [
+    ...open().devices.flatMap((entry) => entry.snapshot?.rows ?? []),
+    ...frames().flatMap((frame) =>
+      "delta" in frame ? frame.delta.upserts : "snapshot" in frame ? frame.snapshot.rows : [],
+    ),
+  ];
+
+  it("the open: the home live, a live peer, an asleep peer carrying the board its home kept", () => {
+    expect(open().devices.map((entry) => [entry.device, entry.state])).toEqual([
+      [HOME, "live"],
+      [LOFT, "live"],
+      [ATTIC, "asleep"],
+    ]);
+    // DS-L8 — asleep is a state, not an absence: the home sends the board it kept
+    expect(rowsOf(ATTIC).map((entry) => entry.runtimeRunId)).toEqual(["run-a-idle"]);
+    for (const entry of open().devices)
+      expect(entry.snapshot?.epoch).toMatch(/^fieldd-[0-9a-f]{16}\.\d+$/);
+  });
+
+  it("an unread mark on a home row and on a peer's, as each owner keeps it (L5)", () => {
+    expect(row(HOME, "run-h-turn").monitorRow).toMatchObject({ status: "idle", unread: true });
+    expect(row(LOFT, "run-p-done").monitorRow).toMatchObject({ status: "idle", unread: true });
+    // and a frame that ends a turn nobody has shown carries the owner's mark
+    const ended = frames()[1];
+    if (ended === undefined || !("delta" in ended)) throw new Error("frame 1 is the home's delta");
+    expect(ended.delta.upserts[0]?.monitorRow).toMatchObject({
+      id: "run-h-partial",
+      status: "idle",
+      unread: true,
+      reply: { final: true },
+    });
+  });
+
+  it("the cost in every coverage: complete with a burn, partial with a burn, unavailable with none", () => {
+    expect(row(HOME, "run-h-turn").monitorRow.cost).toMatchObject({
+      usd: 2.1,
+      coverage: "complete",
+      burnPerHour: 0.9,
+    });
+    expect(row(HOME, "run-h-partial").monitorRow.cost).toMatchObject({
+      usd: 0.62,
+      coverage: "partial",
+      burnPerHour: 30,
+    });
+    const quiet = row(HOME, "run-h-quiet").monitorRow;
+    expect(quiet.cost).toEqual({ usd: 0, coverage: "unavailable" });
+    // the owner's evidence that it went quiet, which the home's window keeps for its own rows
+    expect(quiet).toMatchObject({ status: "working", stale: true });
+    // the J1 discriminator: a live peer's row its owner calls stale
+    expect(row(LOFT, "run-p-ask").monitorRow).toMatchObject({ status: "blocked", stale: true });
+  });
+
+  it("M22 — a promoted row's key is its run and its id its shell's, at the open and in one delta", () => {
+    const turn = row(HOME, "run-h-turn");
+    expect(turn.monitorRow.id).toBe("pty-h1");
+    expect(turn.terminal).toMatchObject({ hosted: "local", runtimeSessionId: "pty-h1" });
+    expect(row(LOFT, "run-p-ask").monitorRow.id).toBe("pty-p3");
+    // item 137's case: the run's key arrives carrying the shell's id while the shell's key leaves
+    const promotion = frames()[0];
+    if (promotion === undefined || !("delta" in promotion))
+      throw new Error("frame 0 is the home's delta");
+    expect(promotion.device).toBe(HOME);
+    const [typed] = promotion.delta.upserts;
+    expect(typed).toMatchObject({
+      runtimeRunId: "run-h-typed",
+      terminal: { hosted: "local", runtimeSessionId: "pty-h2" },
+      monitorRow: { id: "pty-h2", kind: "agent" },
+    });
+    expect(typed?.kind).toBeUndefined();
+    expect(promotion.delta.removed).toEqual(["pty-h2"]);
+    expect(row(HOME, "pty-h2").kind).toBe("terminal");
+  });
+
+  it("each desktop's chain: a same-epoch re-present, a re-attach on a new epoch, and a delta on the old chain", () => {
+    const loftBoard = boardOf(LOFT)?.snapshot;
+    const loft = frames().filter((frame) => frame.device === LOFT);
+    const kinds = loft.map((frame) =>
+      "delta" in frame ? "delta" : "snapshot" in frame ? "snapshot" : frame.state,
+    );
+    expect(kinds).toEqual(["snapshot", "stale", "snapshot", "live", "delta", "delta"]);
+    const [present, , reattach, , removal, gap] = loft;
+    // PG-1d — the board re-presented on its own chain, row for row as it was
+    if (present === undefined || !("snapshot" in present)) throw new Error("a re-present");
+    expect(present.snapshot).toEqual(loftBoard);
+    // a restarted daemon: a new chain, the question answered, the idle shell gone
+    if (reattach === undefined || !("snapshot" in reattach)) throw new Error("a re-attach");
+    expect(reattach.snapshot.epoch).not.toBe(loftBoard?.epoch);
+    expect(reattach.snapshot.rows.map((entry) => entry.runtimeRunId)).toEqual([
+      "run-p-ask",
+      "run-p-done",
+    ]);
+    expect(reattach.snapshot.rows[0]?.monitorRow).toMatchObject({
+      id: "pty-p3",
+      status: "working",
+      stale: false,
+    });
+    if (removal === undefined || !("delta" in removal)) throw new Error("a delta on the new chain");
+    expect(removal.delta).toMatchObject({
+      epoch: reattach.snapshot.epoch,
+      since: reattach.snapshot.revision,
+      removed: ["run-p-done"],
+    });
+    // the old chain heard after the new one: no reader can follow it
+    if (gap === undefined || !("delta" in gap)) throw new Error("a delta on the old chain");
+    expect(gap.delta).toMatchObject({ epoch: loftBoard?.epoch, since: loftBoard?.revision });
+  });
+
+  it("bare terminals on the home and a peer, each named by its folder (EL7 B1)", () => {
+    for (const [device, key] of [
+      [HOME, "pty-h2"],
+      [LOFT, "pty-p1"],
+    ] as const) {
+      expect(row(device, key)).toMatchObject({
+        kind: "terminal",
+        terminal: { hosted: "local", runtimeSessionId: key },
+        monitorRow: { id: key, kind: "terminal", detail: "notes", project: { name: "notes" } },
+      });
+    }
+  });
+
+  it("the project-key pair: the remote cut names a run with no cwd by its provider and one with only a workspace by its root; the field cut names neither", () => {
+    expect(row(HOME, "run-h-nocwd").monitorRow.project).toEqual({ name: "Claude Code" });
+    expect(row(HOME, "run-h-root").monitorRow.project).toEqual({ name: "vibe-field" });
+    const field = AgentFieldSnapshot.parse(golden("agent-field-snapshot.project-keys.json"));
+    expect(field.rows.map((entry) => entry.runtimeRunId)).toEqual(["run-h-nocwd", "run-h-root"]);
+    for (const entry of field.rows) {
+      // the kit's key is `projectName ?? label`: "Claude Code" for both, where the remote cut says two names
+      expect(entry.project, entry.runtimeRunId).toBeUndefined();
+      expect(entry.label).toBe("Claude Code");
+      expect(entry.device).toBe(HOME);
+    }
+  });
+
+  it("every row as PG-2 holds it: observed and alive, no colour sequence, no path, every text at the bound, no field half", () => {
+    const rows = everyRow();
+    expect(rows.length).toBeGreaterThanOrEqual(16);
+    for (const entry of rows) {
+      const id = entry.runtimeRunId;
+      expect(entry.monitorRow, id).toMatchObject({ observed: true, alive: true });
+      expect(
+        Number.isInteger(entry.monitorRow.createdAt) && entry.monitorRow.createdAt > 0,
+        id,
+      ).toBe(true);
+      expect(entry.monitorRow.project.seq, id).toBeUndefined();
+      // the outer kind is a bare terminal's alone, and says what the model row says
+      expect(entry.kind === "terminal", id).toBe(entry.monitorRow.kind === "terminal");
+      expect(JSON.stringify(entry), id).not.toMatch(/\/Users\/|\/home\/|[A-Za-z]:\\\\/);
+      for (const text of [
+        entry.monitorRow.detail,
+        entry.monitorRow.reply?.text,
+        entry.monitorRow.wait?.question,
+        entry.monitorRow.wait?.header,
+      ]) {
+        expect(text?.length ?? 0, id).toBeLessThanOrEqual(AGENT_FIELD.DESK_TEXT_CHARS);
+      }
+      for (const key of ["status", "label", "tier", "blockers", "usage", "local"])
+        expect(key in entry, `${id}: ${key}`).toBe(false);
+    }
+    // nothing elided or hidden: every epoch and id spelled out in full
+    for (const name of [
+      "agent-remote-mesh-open.witness.json",
+      "agent-remote-mesh-frames.witness.json",
+      "agent-field-snapshot.project-keys.json",
+    ]) {
+      expect(readFileSync(join(FIXTURES, name), "utf8"), name).not.toMatch(/[​-‍﻿…]/);
+    }
+  });
+
+  it("both doors read the witness: the phone's remote door and a peer window's model door", () => {
+    expect(
+      AgentModelMeshOpen.parse(golden("agent-remote-mesh-open.witness.json")).devices,
+    ).toHaveLength(3);
+    const raw = golden("agent-remote-mesh-frames.witness.json") as unknown[];
+    expect(raw).toHaveLength(9);
+    for (const frame of raw) expect(AgentModelMeshFrame.safeParse(frame).success).toBe(true);
+    // the field board's reader does not take it: an older phone keeps reading `field`
+    expect(AgentMeshOpen.safeParse(golden("agent-remote-mesh-open.witness.json")).success).toBe(
+      false,
+    );
+  });
+});
+
 describe("item 100 — whose cut a caller reads, by its principal's kind (M16, SP-L4)", () => {
   it("names every kind, and only this desktop's own callers read the window's whole row", () => {
     // the typecheck holds the table to `Principal["kind"]`; this row holds what it says
@@ -801,6 +1009,7 @@ describe("AgentBoardRowKey — the relay reads each row's key alone", () => {
       "agent-mesh-open.valid.json",
       "agent-model-mesh-open.valid.json",
       "agent-remote-mesh-open.valid.json",
+      "agent-remote-mesh-open.witness.json",
     ]) {
       const open = golden(name) as { devices: Array<{ snapshot?: Board }> };
       for (const device of open.devices)
@@ -821,6 +1030,9 @@ describe("AgentBoardRowKey — the relay reads each row's key alone", () => {
         (f) => f.delta,
       ),
       ...(golden("agent-remote-mesh-frames.valid.json") as Array<{ delta?: unknown }>).map(
+        (f) => f.delta,
+      ),
+      ...(golden("agent-remote-mesh-frames.witness.json") as Array<{ delta?: unknown }>).map(
         (f) => f.delta,
       ),
     ].filter((delta) => delta !== undefined);
