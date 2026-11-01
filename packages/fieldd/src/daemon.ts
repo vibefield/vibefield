@@ -2968,6 +2968,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       needs.onRunEnded(runtimeRunId);
       inputs.forget(runtimeRunId);
     });
+    // TU-1 (Q1) — a spark has worked once one of its own sessions has: its record keeps the first time told
+    agents.onSparkTurned((spark, at) => sparks.turned(spark, at));
     const kept = inputs.restore();
     if (kept > 0)
       logger.info("fieldd.inputs.restored", "Kept inputs wait for their sessions", { kept });

@@ -233,6 +233,8 @@ export class SparkService {
       folder,
       createdAt: now,
       updatedAt: now,
+      // TU-1 (Q1) — hatched, and never worked: NS-D4's hello is for this spark
+      turnedAt: null,
     };
     this.opts.store.write(spark);
     return this.#summary(await this.#launch(spark, principal), this.opts.runs());
@@ -294,10 +296,35 @@ export class SparkService {
     return this.#keep(spark, runtimeRunId);
   }
 
+  /** The session a spark thinks in now, kept on the record as it stands on disk: the record in hand was read before
+   * the wake's or the launch's await, and a turn told meanwhile (`turned`) must survive this write (TU-1, D6). */
   #keep(spark: SparkRecord, runtimeRunId: string): SparkRecord {
-    const next = { ...spark, session: { runtimeRunId }, updatedAt: this.opts.now().toISOString() };
+    const current = this.opts.store.get(spark.id) ?? spark;
+    const next = {
+      ...current,
+      session: { runtimeRunId },
+      updatedAt: this.opts.now().toISOString(),
+    };
     this.opts.store.write(next);
     return next;
+  }
+
+  /** TU-1 (Q1) — one of the spark's own sessions has worked (the runtime's `onSparkTurned`): the first time told is
+   * kept on its signed record, re-read first; a later one is the same fact, and changes nothing. `updatedAt` stays as
+   * it stands (Chat's list moves on the session's activity, not on this). A spark gone or set aside is left alone, and
+   * a write that fails is logged: the session's own record keeps the fact, and its next entry tells the spark again. */
+  turned(id: SparkId, at: string): void {
+    const current = this.opts.store.get(id);
+    if (current === undefined || typeof current.turnedAt === "string") return;
+    try {
+      this.opts.store.write({ ...current, turnedAt: at });
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.compose.spark_turn_unrecorded",
+        "A spark's first turn could not be kept on its record",
+        { spark: id, reason: error instanceof Error ? error.message : String(error) },
+      );
+    }
   }
 
   #liveRun(spark: SparkRecord, runs: readonly AgentSessionSummary[]) {
