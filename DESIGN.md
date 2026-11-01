@@ -3089,6 +3089,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   does, chosen once as the hand-over begins: the tear when the field is live and motion is allowed, else
   the base reveal (the still in 240ms; under reduced motion, where the glass fades only and halved, the
   field in 120ms). A hidden window hands over at once. From its first step the glass takes no press.
+- **The living mark, drawn as SVG** (built 2026-11-01; its surfaces are to be ruled): the field's own mark — the
+  band that runs the ∞ with its one half-twist, and its three lights — in motion as an image, for a load the field
+  doesn't draw: no WebGPU, a slot too small for the field, a pane's or a plugin's own wait. It is generated, never
+  drawn: `tooling/splash/living-mark.mjs` ports the mark's geometry line for line from the vendored splash's shader
+  (`BAKED.mark.wgsl`) and checks its clock against the runtime's own `phases`, so a new bake reaches it only by
+  running the generator (`living-mark.test.tsx` holds the files to it). The kit carries it
+  (`@vibefield/design-kit/living-mark`: `LivingMark`, `LIVING_MARK_URL`) as one drawing on the app icon's two
+  grounds (§12): `dark` in white ink for the field and smoke, `light` in black ink for milk and paper, the lights
+  the same on both. Its box is 99 × 44 at the field's scale, the ∞ 93 wide as the splash draws it; it is an `<img>`
+  with no words of its own (the words beside it say what loads, so its `alt` is empty unless a host names it). Its
+  motion is the mark's: the twist a half-turn every 2.38s, lingering 0.82 at the crossing, the lights a lap of the
+  edge every 15.27s riding the twist, the near strand over the far; under reduced motion it stands at rest, the
+  icon's pose. What it leaves out, said: the breath (±0.25% of scale) and the drift (nothing in this look); its
+  hairline is half a CSS px at every size; and a light keeps its place by the edge's length where the field keeps it
+  by the curve's, so at a given moment one stands up to 12px (at its scale) from where the field draws it. Against
+  the field's own mark pass on one clock (14 moments of a whole twist, at 2× and 4×) it differs by a mean of about 1
+  of 255 over its box. Its motion is the renderer's main thread's, as any SVG motion is, so a long task freezes it
+  where the field, in its worker, never stops; ~20 KB a ground.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
