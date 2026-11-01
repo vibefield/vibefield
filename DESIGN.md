@@ -4892,6 +4892,26 @@ one thing the gesture could leave in doubt) · **Maximize** · **Restore**. Thei
 carry the noun: "Minimize the terminals", "Maximize the terminals", "Restore the terminals to
 their place". "Fullscreen" stays the pane's word (§8).
 
+**The quit's words** (track AL, `draft/thinking-app-lifecycle.md` §4 and §8; AL-D1, AL-D3 ruled 2026-10-27; this
+paragraph added 2026-11-01 by AL-10, the words before it lived only in the shell's code). A person's quit (⌘Q, the
+Dock, the status item, the menu) stops the terminal service. A crash, a Force Quit or a signal leaves it running.
+Every place that says what a terminal's life is says those two facts, and no place promises more (GT-D11).
+- **The quit box** (`quit-gate.ts`, only while sessions run and **Ask before quitting** is on) is the update consent's
+  shape. Its message is the consequence: "Quit VibeField and end 3 terminal sessions?" Its detail names them: "Quitting
+  stops the terminal service, which ends:", then up to five rows ("title — cwd"), then "and N more". Its buttons say
+  what each does: **Cancel** (the default) · **Quit and end 3 sessions**.
+- **The unknown box**, when a pair's sessions can't be read, says that nothing it can't name will end: "VibeField
+  couldn't check for running sessions" · "It ends no session it can't name, so quitting now leaves the terminal service
+  running. Open VibeField again and quit to stop it." · **Cancel** · **Quit and leave it running**.
+- **The next launch's notice**, after an exit that said no goodbye, gives the time and what survived, in numbers:
+  "VibeField quit unexpectedly at 10:42" · "2 terminal sessions kept running." It never says null as zero: an unread
+  count is "Its terminal service kept running."
+- **Settings → Terminal → Behavior's "How long a terminal lives"** says the same two facts: "As long as its program
+  runs, on this Mac's terminal service. Closing this window leaves it running, and so does a crash: the next launch
+  finds it. It ends when its program exits, when you end it, when you quit VibeField, or when the Mac restarts." The
+  fact beside it is **Until you quit**. Until AL-10 it said a terminal "outlives … quitting VibeField", which has been
+  false since AL-3 (2026-10-27).
+
 ---
 
 ## 10. Implementation & governance
