@@ -26376,3 +26376,190 @@ its key alone, and M22 made a promoted shell's run carry the shell's model id un
 - **Landed:** main fast-forwarded `86b788e2f` → `49935e71b` at 2026-11-01 03:08:38Z on VF-PM's GO.
 
 **Owed.** Nothing. PG-3d's Swift fold transcribes the fixed rule and its parity suite ports item 137's row.
+
+## AL-10 — Settings → Terminal → Behavior says what a quit does: a terminal ends when you quit VibeField, and a crash leaves it; DESIGN.md §9 gains "The quit's words" (2026-11-01; `27d61f7a5`, lane `al/10-quit-words`; James's "do the worth doing stuff"; VF-PM's GO)
+
+**Why:** the Behavior tab's "How long a terminal lives" told the person that a terminal "outlives this window and
+quitting VibeField". That has been false since AL-3 (2026-10-27): a person's quit stops the terminal service through
+the quit gate (AL-D1). The roadmap named the row as owed under AL's Next, with "DESIGN.md §9 words first".
+
+**What landed** (field-app · DESIGN.md):
+- **DESIGN.md §9, "The quit's words":** AL's one home for words. It has the rule (a person's quit stops the service, a
+  crash leaves it, no place promises more; GT-D11) and the four places as built: the quit box and the unknown box
+  (`quit-gate.ts`), the next launch's notice (`shell-exit-notice.ts`), and the Behavior row. Before this, those words
+  lived only in the shell's code.
+- **The row:** "As long as its program runs, on this Mac's terminal service. Closing this window leaves it running, and
+  so does a crash: the next launch finds it. It ends when its program exits, when you end it, when you quit VibeField,
+  or when the Mac restarts." Its fact is **Until you quit** (was "Until it exits").
+
+**Not in it:** AL-6's "Keep running when VibeField quits" amends the paragraph and the row when it lands. The row's
+"this Mac's" off the Mac is AL-9c's Settings words off the Mac.
+
+**Rows:** terminal-settings.test.tsx gains one AL-10 row: the row's sentence and fact, never "outlives", and DESIGN.md
+carrying the same sentence and fact (whitespace folded, chat-view's canon idiom). Red-first twice (the old tab; the new
+tab beside the old DESIGN.md), then green: the file 19/19.
+
+**Validation.**
+- **Red first**, in lane `al2` at nice 19 (03:01:53 → 03:02:20Z): the old tab and the old DESIGN.md, ×
+  "expected 'SessionsRead-only…' to contain 'As long as…'"; the new tab beside the old DESIGN.md, × "expected
+  '# DESIGN.md…' to contain '"As long as…'"; both new, the file 19/19.
+- **The light** at `20695bc30` on `86b788e2f` (03:11:33 → 03:13:59Z, under the guard and co-plan/HOLD, after
+  PERF.lock cleared): field-app's typecheck, biome, preflight, check:walls, and field-app's whole vitest, 268 files
+  passed and 1 skipped, 3,525 tests passed and 3 skipped.
+- **The rebase** onto `be1a21ec0` (VF-PM 03:16Z) was clean (`git merge-tree` first): `27d61f7a5`. At the tip
+  (03:19:16 → 03:19:52Z), field-app's typecheck, biome and the file again, 19/19.
+- **Run 71** (M71 `27d61f7a5`, the mint-rebased shape: the tip on main `be1a21ec0`, minted by a9 on VF-PM's GO):
+  - `pnpm verify` armed 03:21:22Z, exit 0 at 03:26:12Z (about five minutes), the mini's tree clean after it.
+  - vitest 11,486 passed, 0 failed, 18 skipped, +1 (AL-10's row). cargo 534 passed, 0 failed, 14 ignored (33
+    results). Typecheck and test ran for 28 projects.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run71/` (`mrun71.bundle`, sha256 `2002282a05cd7a76…`).
+- **Landed:** main fast-forwarded `be1a21ec0` → `27d61f7a5` at 2026-11-01 03:29:48Z on VF-PM's GO.
+
+**Decided with it:** AL-D19 (James, 2026-11-01 02:55Z, typed in better-quit's session): a quit chord a person binds in
+their own Ghostty file does NOT quit VibeField. There is no page→main quit door; the deck's `quit` hook keeps putting
+the terminals away. DECISIONS' AL-D19 row.
+
+**Owed:** AL-11 (the relaunch cap persisted), AL-12 (Diagnostics' "Last exit"), AL-6 (background mode), each its own
+mint.
+
+## FG, the catalog judged's follow-up 1 — an off control says so: the face deck, off while its host writes, is a group that is off to assistive tech, its faces dimmed and its words at t4, and row 32 prints every passed-over word's ratio
+
+**Why.**
+- Row 32 on M69 was red at run69b on one face alone (LANDED "FG, the catalog judged", its Checks): on the catalog's "02
+  field (saving)" the deck's two head words, "Face" and "Or any emoji", read 2.1:1 by day and 2.5–2.6:1 by night against
+  §8's 4.5:1. While the name writes, the wizard's FaceDeck is disabled, and FacePicker.css dimmed its whole choices
+  group to 0.45. The group said it was off only by `data-disabled`, and row 32's finder passes a word over only under
+  `:disabled` or `[aria-disabled="true"]`, so the two head words were judged as words that are read.
+- VF-PM's ruling (03:00Z, at a5's lean): the fix is at the product, never the judge. The dimmed group declares itself
+  off the way assistive tech reads it, DESIGN.md first, with a red-first unit row that a `data-disabled` wrapper without
+  `aria-disabled` fails; the judge's rule stands as the accessibility rule. With it (03:01Z, VF-PM's lean, James's to
+  overturn): §2.4's off-control floor (3:1) is measured on the dimmed deck, so the off deck's words hold 3:1 rather than
+  passing on faith, and the judge keeps passing off words over, with no widening onto the 20 words of controls that are
+  off. VF-PM approved the brief as written (03:05Z): §7's Off row is its home, the dim stays on the pictures, the off
+  head words wear t4 at full opacity, and every passed-over word prints its ratio, never judged.
+
+**What landed** (`1c6cb8aac`, built and lit in lane fg2 on `fg/catalog-followup-1` over `86b788e2f` as `adaa4974f`,
+rebased onto main `be1a21ec0` unchanged, its range-diff `=`; Checks):
+- DESIGN.md first: §7 (Interactive states) gains an **Off** row. A control that is off says so the way assistive tech
+  reads it, never by a styling hook alone: `disabled` on a control, and on a group of them `role="group"` with
+  `aria-disabled="true"` (or a disabled `fieldset`). Its words wear t4 at full opacity, 3:1 or more on their ground
+  (§2.4); its pictures may dim further; row 32 passes its words over, says so and prints each one's ratio. §2.8's face
+  picker says the picker is off while its host writes, and §8's "Its words read" says a word passed over is cut too, its
+  ratio printed and never judged; each dated.
+- FacePicker.tsx: FaceDeck's choices group and FacePicker's own take `role="group"` and `aria-disabled="true"` beside
+  `data-disabled` while disabled, and neither while on.
+- FacePicker.css: the 0.45 leaves the two groups (they keep `pointer-events: none`) and dims the pictures alone, the
+  deck's faces and the typed face's field; the head's two words (`-label` and `-any-label`, t3 while on) wear t4 while
+  off. On chrome t4 holds 3.1–3.4:1 (the catalog's Text ramp at run69b); on the glass `.vf-wizard-shell` re-projects
+  t2–t4 to the glass's ink, so there the off words read at the glass's own text. The off rules stand at the stylesheet's
+  end, after every rule they outrank.
+- Row 32 (`smoke-first-run.ts`): `inkCuts` cuts a passed-over word too, and `firstRunContrast` prints it as
+  `[text, why, ratio]`, the ratio printed and never judged; `passedOver`, `judgeContrast` and the bar are unchanged.
+  `docs/desk-gates.md` row 32 says so.
+- Tests: face-picker (new, 5) holds the deck and the picker, off, to groups that say so (every `[data-disabled]` is
+  `role="group"` with `aria-disabled="true"`, and none is while on), the stylesheet to dimming only the pictures and
+  putting the head's words at t4, and DESIGN.md to §7's Off row. text-ramp names t4's new use (17). In smoke-first-run
+  the contrast row's passed words carry their ratio, and a new row cuts an off word, prints it at 2.6:1 and judges
+  nothing (49 → 50).
+
+**Checks.**
+- Red first on `86b788e2f`'s code (`lanes/fg2/catalog-followup-1/red.zsh`, 03:09:12–03:09:30Z, on the HOLD file,
+  released to `released/HOLD-030930`): 8 rows red, each for its own missing piece. They were face-picker's 5 (the role
+  null on both groups, the group's own opacity, no t4 rule, no Off row), text-ramp's t4 uses (16 against 17) and
+  smoke-first-run's 2 (the passed words without a ratio); the 11 other rows stayed green.
+- The lane's lights, nice 19 under the guard, on the shared vitest lane by the HOLD file
+  (`lanes/fg2/catalog-followup-1/light/`):
+  - the tip's (`adaa4974f`, 03:14:05–03:18:38Z, released to `released/HOLD-031838`): biome clean on the six files and
+    diff-check clean; field-app's face-picker, text-ramp, design-system, onboarding-wizard and ui-system-boundaries, 125
+    passed; the typechecks of field-app and electron-shell and `check:walls`; electron-shell's whole vitest 2,441
+    passed, 3 skipped (smoke-first-run 50), and field-app's 3,529 passed, 3 skipped (face-picker 5). The focused
+    electron-shell step misnamed smoke-first-run's file (a sed in the script) and ran the other two alone, 12 passed;
+    the whole carried its 50;
+  - the rebased tip's (`1c6cb8aac`, 03:20:09–03:21:15Z, released to `released/HOLD-032115`, on VF-PM's 03:20Z): biome on
+    the six files, face-picker and text-ramp 17 passed, smoke-first-run 50 passed, and the typechecks of field-app and
+    electron-shell.
+- VF-PM heard the tip at 03:20Z and had it rebased onto main `be1a21ec0`. At 03:21Z it set the order: AL-10 armed first
+  as M71 (`27d61f7a5`), this slice M72 in the MERGE shape over it, with no second rebase. The merge-tree onto M71 was
+  clean (tree `c443dc7a9`): DESIGN.md is the one file both touch, AL-10's hunk in §9 and this slice's in §2.8, §7 and
+  §8, and the merged §7 still holds the Off row as face-picker reads it.
+- **Run 72** (the mint M72, the merge `96e99edff`: main `27d61f7a5` merged into `1c6cb8aac`):
+  - run 72 went red at 03:33:55Z (exit 1; armed 03:30:44Z, its load 2.23 at the arming and 38.99 at the end) on one row
+    outside the slice: fieldd's `rosettad-supervisor.test.ts:978`, the projection lock's control, read the second
+    rosettad's stderr empty at its exit under that load (`expected '' to match /already owned by another/`); fieldd 1
+    failed, 2,826 passed, 11 skipped, and cargo's tests never ran. It is item 139, the fixer's (VF-PM 03:36Z), with one
+    re-run on the same M72.
+  - run72r went green at 03:40:35Z (exit 0; armed 03:35:49Z, its load 8.01 at the arming and 10.01 at the end), the
+    mini's tree clean after it and no stubs left; run 72's preflight (03:30:41Z, the same HEAD) had its one WARN, R23's
+    `acp` candidate, as before.
+  - vitest at run72r: 11,492 passed, 0 failed, 18 skipped over its 27 rows, +6 over run 71's 11,486: face-picker's 5
+    (field-app 3,529 → 3,534, none skipped, where this Mac's light read 3,529 and 3 skipped) and smoke-first-run's one
+    (electron-shell 2,440 → 2,441, 3 skipped).
+  - cargo: `test result: ok.` × 33, none failed; typecheck and test ran for 28 projects; biome checked 2,960 files, +1
+    over run 71's 2,959 (face-picker.test.tsx); MaxListeners 0; the iOS fixtures' 186 copies identical.
+  - The bundle's assert held at 914.9 KB raw and 241.6 KB gz, +0.3 KB raw over run 71's 914.6 and 241.6.
+  - The console was unlocked through both runs (HID idle 986 s at run 72's arming and 1,178 s at its end, 16 s and 303 s
+    on run72r).
+- **Row 32 on M72**, GREEN at run72b (03:43:45Z), the first to print a passed-over word's ratio, read again in
+  `lanes/ts6/logs/mini/run72b/` (run72b-first-run.out and smoke:first-run.log, sha256 `15c3cd5eb52e3025…`) by
+  `lanes/fg2/records/catalog-followup-1/read-row32.py` (it takes `[text, why, ratio]`, the shape the catalog judged's
+  reader refused, and reads run69b's face again):
+  - The row armed 03:41:07Z and ended 03:43:45Z, exit 0, on HEAD `96e99edff`: day green 22s, night green 22s, no-webgpu
+    green 18s, catalog green 92s; the console unlocked, HID idle 336 s at the arming and 493 s at the end.
+  - day: held by the field's worker door, 0 over the window; the field's glass against the browser's: 1.18 inside
+    (543,540 px), 0.37 in the shadow's ring (183,448 px) and 1.04 on the logo (9,856 px), against §8's 2, 1 and 6.
+  - night: held by the field's worker door, 0 over the window; the field's glass against the browser's: 1.08 inside
+    (543,540 px), 0.37 in the shadow's ring (183,448 px) and 0.85 on the logo (9,856 px), against §8's 2, 1 and 6.
+  - no-webgpu: "nothing to compare: over the still the browser draws the whole glass".
+  - The live walks' rest, from their facts: the words' contrast judge 0 short on every walk (186, 180 and 186 words
+    judged on day, night and no-webgpu), the hand-over heard `words` then `clear` on each, and the desk opened by its
+    tear, tear and fade.
+  - catalog: 60 faces by day and 60 by night over its 13 frames, 122 stills kept; the glass's lowest fit 1; 956 words
+    judged against §8's 4.5:1, 0 short, the lowest 4.8:1 ("Not on this Mac" on night 03 agents (more)); passed over: 24
+    in a control that is off, 2 under its list's fade and 2 cut off at its list's edge; every face settled.
+  - catalog, the wizard's error line: it stood on 8 faces (day 02 field (error), day A4 setting-up-write-failed, day A5
+    setting-up-desk-failed, day A6 users (refused), night 02 field (error), night A4 setting-up-write-failed, night A5
+    setting-up-desk-failed and night A6 users (refused)), saying "That did not save. The profile service refused this
+    write." on 2, "Setup could not be recorded. The profile store is read-only — your field is ready either way." on 2,
+    "document open failed: the daemon refused doc.open (UNAVAILABLE)" on 2 and "Couldn't open Work's field — a user
+    switch is already in flight." on 2.
+  - catalog, 02 field (saving) (row 32's red at run69b): by day 6 words judged, 0 short, passed over as off: "Face" at
+    6.6:1, "Or any emoji" at 6.5:1 and "Saving…" at 3.2:1; by night 6 words judged, 0 short, passed over as off: "Face"
+    at 7.1:1, "Or any emoji" at 6.6:1 and "Saving…" at 4.4:1.
+  - catalog, the words of controls that are off, each passed over and printed with its ratio (DESIGN.md §7's Off row:
+    t4's 3:1, said and never judged): 24 words, 2.3–7.1:1; 2 under 3:1 (A6 users (opening)).
+  - catalog, DESIGN.md §2.4's Text ramp off its own capture, its 32 chips 0 under their floors (4.5:1 for t1–t3, 3:1 for
+    t4), each tier's span over the theme's four grounds: by day t1 9–10.7, t2 5.6–6.3, t3 4.6–5.1 and t4 3.1–3.3; by
+    night t1 9.7–12.1, t2 7.1–8.6, t3 4.9–5.5 and t4 3.2–3.4.
+  - catalog: 1 smoke window, which took the key 0 times; no product window made.
+- **Landed:** main fast-forwarded `27d61f7a5` → `96e99edff` at 2026-11-01 03:44:09Z (main's reflog; the fixer, VF-PM
+  03:45Z): 8 files +201 −22 over main, the merge of main into the tip.
+
+**Found while building.**
+- The deck's head words sit inside the dimmed group but outside every control: "Face" is the deck's aria-hidden label
+  and "Or any emoji" the typed face's label, neither `:disabled`, so under a `data-disabled` wrapper alone they were
+  never passed over and its opacity reached them.
+- At run69b the catalog's walk passed 20 words over as in a control that is off (the saving button, Continue while
+  signing in, Sign in with the key, A6's users while opening), dimmed to 0.4 and 0.55; none was measured until this
+  slice, and each now prints its ratio (Checks).
+- FacePicker's own group, the Account page's picker, carried the same hook alone. No host disables it today
+  (AccountSection and the catalog's controls pass no `disabled`), so it is fixed with the deck and witnessed by the unit
+  row alone.
+- A segmented control has no off state: FacePicker's frame switch, off with its picker, keeps its ink (Owed).
+- biome's noDescendingSpecificity put the off rules after the base rules they outrank, at the stylesheet's end.
+
+**Owed.**
+- The words of controls that are off: row 32 prints each one's ratio and judges none (VF-PM 03:01Z: no widening onto the
+  20). At run72b they were 24 words at 2.3–7.1:1, 2 under §2.4's 3:1 on A6 users (opening). Each control's own dim onto
+  §7's Off row (its words at t4, its pictures dimmed) is a slice of its own, on VF-PM's word.
+- A segmented control's off state: design-kit's `SegmentedControl` takes no `disabled`, so FacePicker's frame switch,
+  off with its picker, stands at its ink. It is latent (no host disables the whole picker), a primitive's slice.
+- Item 136, the wizard's own Tailwind literals outside the tokens: the name field's placeholder (`views/field.tsx`,
+  about 1.9:1 by day) and its `disabled:opacity-45` while saving, and `primaryCls`'s and `quietCls`'s fills
+  (`wizard-ui.tsx`), projected through tokens.css, DESIGN.md first; a placeholder needs a witness of its own.
+- James's look: the slice's two calls are VF-PM's rulings at a5's lean (03:00Z: the fix in the markup, §7's Off row;
+  03:01Z: the off deck's words at t4, measured), James's to overturn. His product question stands, named and not built:
+  whether the browser's glass wears the field's living mark anywhere but the held frame (a failed pass's glass, its
+  first look), where its logo is the brand's still.
+- Not claimed: an off word's ratio is printed, never judged, and row 32 holds no floor for it. The Account page's picker
+  is never walked off; its witness is the unit row. The frame switch's off state is not built, and the glass's literals
+  are item 136's.

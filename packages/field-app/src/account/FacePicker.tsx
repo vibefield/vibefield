@@ -142,8 +142,15 @@ export function FaceDeck({
     </label>
   );
 
+  // Off while its host writes (DESIGN.md §7): a group that says so the way assistive tech reads it, beside the
+  // stylesheet's hook — its faces dim, its words stand at t4 (FacePicker.css).
   return (
-    <div className="vf-face-picker-choices" data-disabled={disabled ? "" : undefined}>
+    <div
+      className="vf-face-picker-choices"
+      data-disabled={disabled ? "" : undefined}
+      role={disabled ? "group" : undefined}
+      aria-disabled={disabled ? true : undefined}
+    >
       {label !== undefined && (
         <div className="vf-face-picker-head">
           {/* The radiogroup names itself ("Face") to assistive tech. */}
@@ -209,7 +216,12 @@ export function FacePicker({
   name?: string;
 }): ReactElement {
   return (
-    <div className="vf-face-picker" data-disabled={disabled ? "" : undefined}>
+    <div
+      className="vf-face-picker"
+      data-disabled={disabled ? "" : undefined}
+      role={disabled ? "group" : undefined}
+      aria-disabled={disabled ? true : undefined}
+    >
       <FaceFrameSwitch value={value} onChange={onChange} disabled={disabled} />
       <FaceDeck value={value} held={held} onChange={onChange} disabled={disabled} name={name} />
     </div>
