@@ -174,16 +174,22 @@ export class ShellLease {
     return this.writeRecord(this.path, record);
   }
 
-  private async writeRecord(path: string, record: object): Promise<void> {
-    await mkdir(dirname(path), { recursive: true });
-    const tmp = `${path}.tmp-${randomBytes(6).toString("hex")}`;
-    const fd = await open(tmp, "w", 0o600);
-    try {
-      await fd.writeFile(JSON.stringify(record));
-      await fd.sync();
-    } finally {
-      await fd.close();
-    }
-    await durableRename(tmp, path);
+  private writeRecord(path: string, record: object): Promise<void> {
+    return writeRecordFile(path, record);
   }
+}
+
+/** One of fieldd's lifecycle records, written whole or not at all (0600, synced, a durable rename): the lease's
+ * records here, AL-11's relaunch log (`shell-absence.ts`). */
+export async function writeRecordFile(path: string, record: object): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const tmp = `${path}.tmp-${randomBytes(6).toString("hex")}`;
+  const fd = await open(tmp, "w", 0o600);
+  try {
+    await fd.writeFile(JSON.stringify(record));
+    await fd.sync();
+  } finally {
+    await fd.close();
+  }
+  await durableRename(tmp, path);
 }
