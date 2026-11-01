@@ -1787,10 +1787,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       runs, every act waits: the pressed one keeps its look and says its word with an ellipsis ("Allow…"), and the
       others dim as the kit's disabled buttons do. The card stands from the press until fieldd's answer returns,
       whatever the queue says meanwhile: the queue drops the item once fieldd has recorded the answer, before it has
-      told the spark, and an Allow one more's start, or a sleeping spark's wake, can take seconds. Refused, the card
-      says so under its words in the attention ink, "Couldn't answer: ‹fieldd's words›", and the acts stay while the
-      item still waits; when it waits no longer (another window answered it first), the card leaves 2.4 s after it
-      says so.
+      told the spark, and an Allow one more's start, or a sleeping spark's wake, can take seconds. An answer to a
+      sleeping spark wakes it to tell it (§9), and the pressed act ("Yes…") is all the thread shows of that wake: the
+      line under the head still says "Vela is asleep", with **Wake**, until the woken run is up, and a Wake or a Send
+      pressed meanwhile joins that same wake in fieldd, never a second run (§8 "Chat's composer", a spark wakes once).
+      The answer holds no thread, as Wake and Send do, because it pastes nothing: what it tells the spark goes through
+      the spark's input queue (§9). Refused, the card says so under its words in the attention ink, "Couldn't answer:
+      ‹fieldd's words›", and the acts stay while the item still waits. When it waits no longer (another window
+      answered it first), its acts dim as the kit's disabled buttons do, so nothing on it is answered again, and the
+      card leaves 2.4 s after it says so.
     - **Answered here, it says what you said** once fieldd's answer returns, for 2.4 s, a note's time, then leaves. The
       acts and the count give way to one line, 4 further than the rows' 5, so 9 under the row above it (the plate's
       `.k-done`, its `padding-top` 4): `check` 13, then "You said Allow", 12.5/500 in tertiary ink. The ring returns to
@@ -5770,7 +5775,8 @@ started, play for one resumed — so the noun travels with the verb (One Frame F
 create is a bare plus). Their Hardware records are the page's T4 column, drawn and not shipped.
 **Send** (Chat's composer, §8) needs no glyph of its own: it is `arrow`, as drawn (up). No `attach`:
 @ is typed (FC-D1). Chat's starters (§8 "Chat's thread") wear `agents`, `panes` and `duplicate`, already
-among the 64. **The hand's indexes** (Cards in Hand, HN-D1, 2026-10-29): a card prints its kind's
+among the 64. The needs-you card (§8 "Chat's thread") needs none of its own either: its answered line wears
+`check`, and `exclaim` when the act was not done. **The hand's indexes** (Cards in Hand, HN-D1, 2026-10-29): a card prints its kind's
 glyph twice, as a playing card prints its rank — `snippets` (text) · `capture` (a picture; the line's
 snapshot wears it too) · `code` (a file) · `agents` (an agent) · `terminal` · `message` — in the card's
 index ink, never a colour of its own (§5). `clipboard` is the selection bar's Copy (HN-D3), its notch

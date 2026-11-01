@@ -61,6 +61,7 @@ import {
   type AgentsProfilesListResult,
   type AgentsProfilesLoginResult,
   type ComposeSparksHatchResult,
+  ComposeSparksOpenResult,
   LAYOUT,
   NeedsAnswerResult,
   NeedsListResult,
@@ -1735,6 +1736,99 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(["kept", "in its terminal"]).toContain(landed);
     await win.call("terminal.terminate", { sessionId: box.sessions[0]!.runtimeSessionId });
   }, 90_000);
+
+  // CP-3 — needs.answer is a second caller of the sparks' one wake (SparkService.open; SP-1d's join, per spark): an
+  // answer to a sleeping spark's question wakes it to tell it, so a window's Wake (compose.sparks.open) under way at
+  // that moment must be the same wake. The resume's birth is held until the answer has asked its own open (the queue
+  // asks it in the same turn as it drops the item from every window's list), so the two meet inside one wake. Two
+  // wakes would resume once and, the conversation claimed, start the spark again beside it: two births, two runs.
+  it("CP-3 — an answer that wakes a sleeping spark while a window's Wake wakes it is that same wake: one birth, one run", async () => {
+    const briefing: AgentBriefingCapabilities = {
+      mcpServers: true,
+      allowTools: true,
+      instructions: true,
+      mcpServerProcess: "terminal",
+    };
+    // every birth is held here while the row holds `wakes`; the hatch's is not
+    const births: string[] = [];
+    let wakes: Promise<void> = Promise.resolve();
+    const box = await setup({
+      floor: "real",
+      profiles: true,
+      briefing,
+      exerciseDoor: true,
+      doorCalls: [
+        { name: "ask_user", arguments: { question: "Push the fix?", choices: ["Push", "Hold"] } },
+      ],
+      afterBirth: async (paneId) => {
+        births.push(paneId);
+        await wakes;
+      },
+    });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agents.manage"], "cp3-wake");
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    const { spark } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const runId = spark.session!.runtimeRunId;
+    const proof = await poll(async () => {
+      const path = join(box.envOut, "session-1.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    const [asked] = proof.calls as { structuredContent: Record<string, unknown> }[];
+    const item = asked?.structuredContent.item as string;
+    expect(item).toMatch(/^ny-/);
+    // Vela sleeps
+    await win.call("terminal.terminate", { sessionId: box.sessions[0]!.runtimeSessionId });
+    await poll(async () => (readRecord(dataDir, runId).exited ? true : undefined), 15_000);
+    const needs = (await win.call("needs.subscribe", {})) as { subId: string };
+
+    let release: () => void = () => undefined;
+    wakes = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Wake, from the window: its resume's birth is held
+    const woken = win.call("compose.sparks.open", { spark: spark.id });
+    await poll(async () => (births.length === 2 ? true : undefined), 25_000, "the wake's birth");
+    // the answer, meanwhile: once its item has left the list, its own open has been asked
+    const answering = win.call("needs.answer", { item, choice: 0 });
+    await poll(
+      async () =>
+        win.notifications.some(
+          (n) =>
+            n.method === "needs.delta" &&
+            n.params.subId === needs.subId &&
+            !NeedsListResult.parse(n.params.payload).items.some((each) => each.id === item),
+        )
+          ? true
+          : undefined,
+      10_000,
+      "the answered item leaving the list",
+    );
+    release();
+    const [opened, answered] = await Promise.all([woken, answering]);
+    const run = ComposeSparksOpenResult.parse(opened).spark.session?.runtimeRunId;
+    expect(run).toBeDefined();
+    expect(NeedsAnswerResult.parse(answered).item.answer).toMatchObject({
+      choice: 0,
+      outcome: "done",
+    });
+    // one wake: one birth after the hatch's, and one run of Vela's that has not exited
+    expect(births).toHaveLength(2);
+    expect(box.sessions).toHaveLength(2);
+    expect(
+      daemon.agents
+        .list()
+        .sessions.filter((row) => row.spark === spark.id && !row.continuation?.exited)
+        .map((row) => row.runtimeRunId),
+    ).toEqual([run]);
+    await win.call("terminal.terminate", { sessionId: box.sessions[1]!.runtimeSessionId });
+  }, 120_000);
 
   // CP-2 — the talk room's two ports on the real floor. The queue's idle gate is agent-input-queue.test.ts's: the
   // scripted agent observes only its terminal, so its monitor never says idle on cue, and this row witnesses what the

@@ -72,6 +72,8 @@ export function NeedsCardView({ card, onAnswer, onShow, ref }: NeedsCardViewProp
   const subId = useId();
   const answered = act.state === "said" ? needsSaid(item, act.choice) : null;
   const busy = act.state === "busy" ? act.choice : null;
+  // every act waits while an answer runs, and none answers once the item waits no longer (a refused card's note)
+  const quiet = busy !== null || !card.waits;
   const described = [said.words === null ? null : wordsId, said.sub === null ? null : subId]
     .filter((id) => id !== null)
     .join(" ");
@@ -138,7 +140,7 @@ export function NeedsCardView({ card, onAnswer, onShow, ref }: NeedsCardViewProp
                 key={each.choice}
                 className="vf-needs-act"
                 variant={each.primary ? "primary" : "quiet"}
-                disabled={busy !== null}
+                disabled={quiet}
                 onClick={() => onAnswer?.(item, each.choice)}
               >
                 {each.word}

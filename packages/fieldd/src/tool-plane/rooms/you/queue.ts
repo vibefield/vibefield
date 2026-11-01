@@ -3,6 +3,7 @@ import {
   type ComposeAskUserInput,
   NEEDS_CHOICE_WORDS,
   NEEDS_HELD_SENDS_MAX,
+  NEEDS_OPEN_PER_SPARK,
   NEEDS_RECORD_FORMAT,
   NEEDS_WORDS_MAX,
   type NeedsAnswer,
@@ -37,21 +38,21 @@ import * as words from "./words";
 // person started (CP-D3, CP3-D3 B), a spawn past its cap (CP-D7, CP3-D4 A), and an agent's own ask, read from its run's
 // blockers, listed with where to answer it and never answered here (CP3-D1 A, CP-L4).
 // - Kept: every item fieldd raised is a signed record (store.ts), read once at boot and held in memory after
-//   (critique 20d); every change is written through before it is acted on. An agent's own ask is never kept.
+//   (critique 20d); every change is written through before it is acted on. What follows an act already done (an
+//   answer's record once its act began, a fact once it is in a spark's input queue) stands in memory whatever the disk
+//   does, and a restart reads what the disk kept. An agent's own ask is never kept.
 // - Answered once, an item is answered for every window: a second answer to one item waits for the first and is then
 //   the same answer, or refused (critique 5). An act fieldd started and did not record done is never done again: after
 //   a restart its spark is told it is uncertain (CP2-D2).
 // - The act and its telling are apart (critique 4): `outcome` is the act's (done | failed), and `told` says whether the
 //   spark has heard it. The spark hears it as one marked line of facts in its own input queue (CP3-D2 A, words.ts); a
-//   sleeping spark is resumed for it as compose.sparks.open resumes one (CP3-D7 A), and a spark that cannot be woken
-//   hears it when its session is next live. Never into a pending run: AR-4 may replace it.
+//   sleeping spark is resumed for it through compose.sparks.open's own wake, one per spark (CP3-D7 A), and a spark that
+//   cannot be woken hears it when its session is next live. Never into a pending run: AR-4 may replace it.
 // - A held send's Allow is the allowance (one authority, no second table): the answered record stays until its run
 //   ends, through a fieldd restart, and the spark's later words to that run are not held. Liveness is judged at use;
 //   a run that ended while fieldd was down is found once this boot's re-attach has settled (critique 3).
 // - Bounds (PF4's watermark): eight open items per spark, sixteen sends per held item, six notices a minute per session.
 
-/** A ninth open item from one spark is refused `limit`. */
-export const NEEDS_OPEN_PER_SPARK = 8;
 /** A seventh notice from one session in a minute is refused `limit`. */
 export const NOTIFY_PER_MINUTE = 6;
 const NOTIFY_WINDOW_MS = 60_000;
@@ -95,7 +96,7 @@ export interface NeedsQueueOptions {
   sparkSession(spark: SparkId): string | undefined;
   /** a spark's record, when it verifies */
   spark(id: SparkId): SparkRecord | undefined;
-  /** wake a spark as compose.sparks.open does (CP3-D7 A) */
+  /** wake a spark through compose.sparks.open's own wake (CP3-D7 A): one per spark, joined by whoever asks meanwhile */
   open(spark: SparkId, principal: GrantPrincipal): Promise<SparkSummary>;
   /** the talk room's own spawn (one spawn): Allow one more starts past the cap on purpose (CP3-D4 A) */
   readonly spawn: TalkDeps["spawn"];
@@ -374,9 +375,6 @@ export class NeedsQueue implements TalkHolds {
     const acts = record.item.choices ?? [];
     if (!Number.isInteger(choice) || choice < 0 || choice >= acts.length)
       throw refuseAnswer(`${id} has no act ${choice}`, "no-such-act");
-    // an earlier answer's act began and could not be recorded (its record was not kept): never done twice (CP2-D2)
-    if (record.acting !== undefined)
-      throw refuseAnswer("an earlier answer's act did not finish; it is not done again", "acting");
     const run = this.#answer(record, choice, principal);
     this.#inFlight.set(id, run);
     try {
@@ -419,7 +417,7 @@ export class NeedsQueue implements TalkHolds {
           item: { ...item, state: "ended" },
           owed: words.sendEndedFact(item.from.name, item.to.name),
         };
-        this.#keep(this.#delivered(ended, this.#sparkSessionOf(ended)));
+        this.#stand(this.#delivered(ended, this.#sparkSessionOf(ended)));
       } else if (isAllowance(record)) this.#keep({ ...record, item: { ...item, state: "ended" } });
     }
     this.#emit();
@@ -432,7 +430,7 @@ export class NeedsQueue implements TalkHolds {
     );
     if (owed.length === 0 || !this.opts.run(runtimeRunId)?.live) return;
     owed.sort((a, b) => a.item.asked.localeCompare(b.item.asked));
-    for (const record of owed) this.#keep(this.#delivered(record, runtimeRunId));
+    for (const record of owed) this.#stand(this.#delivered(record, runtimeRunId));
   }
 
   // ── inside ──
@@ -458,7 +456,11 @@ export class NeedsQueue implements TalkHolds {
       item: { ...item, state: "answered", answer },
       owed: act.owed,
     };
-    this.#keep(answered);
+    // an act that began (its mark kept) is done: what it did stands whatever the disk does now, so the item never
+    // waits on with its act spent (CP2-D2); an answer that began none is written through, and its item waits on when
+    // the disk does not take it
+    if (this.#records.get(item.id)?.acting !== undefined) this.#stand(answered);
+    else this.#keep(answered);
     this.#emit();
     const { woke } = await this.#tellAnswer(item.id, principal);
     // the record as its telling left it: kept, or forgotten once told (and remembered for an answer again)
@@ -513,7 +515,7 @@ export class NeedsQueue implements TalkHolds {
       return failed("the words' sender is unknown");
     const why = this.#sparkRefusal(sparkId, profileOf(run));
     if (why !== undefined) return failed(why);
-    this.#write({ ...record, acting: { choice, at } });
+    this.#keep({ ...record, acting: { choice, at } });
     for (const text of record.texts ?? [])
       this.opts.inputs.enqueue(target, text, { kind: "spark", spark: sparkId, name: sender });
     return { outcome: "done", owed: words.sendAllowedFact(spark, to) };
@@ -533,7 +535,7 @@ export class NeedsQueue implements TalkHolds {
       return failed("the spawn's launch is unknown");
     const why = this.#sparkRefusal(sparkId, launch.profileSet);
     if (why !== undefined) return failed(why);
-    this.#write({ ...record, acting: { choice, at } });
+    this.#keep({ ...record, acting: { choice, at } });
     let runtimeRunId: string;
     try {
       ({ runtimeRunId } = await this.opts.spawn(
@@ -571,7 +573,7 @@ export class NeedsQueue implements TalkHolds {
     if (record?.owed === undefined || sparkId === undefined) return {};
     const live = this.opts.sparkSession(sparkId);
     if (live !== undefined) {
-      this.#keep(this.#delivered(record, live));
+      this.#stand(this.#delivered(record, live));
       return {};
     }
     let summary: SparkSummary;
@@ -586,7 +588,7 @@ export class NeedsQueue implements TalkHolds {
     const now = this.#records.get(id);
     if (now?.owed === undefined) return woke !== undefined ? { woke } : {};
     if (woke !== undefined && summary.session?.live === true && this.opts.run(woke)?.live)
-      this.#keep(this.#delivered(now, woke));
+      this.#stand(this.#delivered(now, woke));
     else this.#waits(id, `${summary.name}'s session is not running yet`);
     return woke !== undefined ? { woke } : {};
   }
@@ -607,7 +609,7 @@ export class NeedsQueue implements TalkHolds {
     const record = this.#records.get(id);
     const answer = record?.item.answer;
     if (record?.owed === undefined || answer === undefined) return;
-    this.#keep({
+    this.#stand({
       ...record,
       item: { ...record.item, answer: { ...answer, told: false, waits: words.reasonWords(why) } },
     });
@@ -660,7 +662,7 @@ export class NeedsQueue implements TalkHolds {
       "An answer's act was under way when fieldd stopped; it is not done again, and its spark is told",
       { item: item.id, kind: item.kind },
     );
-    this.#write(next);
+    this.#stand(next);
     return next;
   }
 
@@ -702,20 +704,42 @@ export class NeedsQueue implements TalkHolds {
     return { name: words.nameWords(sender.name), session: sender.session, spark: sender.spark };
   }
 
-  /** Keep a record that still holds something, written through; forget one that holds nothing more. An item that
-   * is no longer open is remembered for an answer that comes again. */
+  /** Keep a record before anything is acted on it: written through (or its file removed once it holds nothing
+   * more), so nothing is done that a restart would not find, and thrown when the disk does not take it; then held. */
   #keep(record: NeedsRecord): void {
-    if (needed(record)) this.#write(record);
-    else {
-      this.opts.store.remove(record.item.id);
-      this.#records.delete(record.item.id);
-    }
-    if (record.item.state !== "open") this.#remember(record.item);
+    this.#store(record);
+    this.#hold(record);
   }
 
-  #write(record: NeedsRecord): void {
-    this.opts.store.write(record);
-    this.#records.set(record.item.id, record);
+  /** Keep a record that follows what was already done — an answer's once its act began, what an answer or a run's end
+   * leaves its spark to hear (told, or still owed), one a restart broke into: held whatever the disk does, so every
+   * window and the spark go by what was done. One the disk does not take is logged, and a restart reads what the disk
+   * kept: an act it finds begun is uncertain (CP2-D2), and a fact it finds owed is told again, never an act. */
+  #stand(record: NeedsRecord): void {
+    try {
+      this.#store(record);
+    } catch (err) {
+      this.#logger.warn(
+        "fieldd.needs.unkept",
+        "A needs-you record that follows an act could not be kept; it stands in memory",
+        { item: record.item.id, reason: (err as Error).message },
+      );
+    }
+    this.#hold(record);
+  }
+
+  /** The record on disk: written while it holds something, its file removed once it holds nothing more. */
+  #store(record: NeedsRecord): void {
+    if (needed(record)) this.opts.store.write(record);
+    else this.opts.store.remove(record.item.id);
+  }
+
+  /** The record in memory: held while it holds something, forgotten once it holds nothing more. An item no longer
+   * open is remembered for an answer that comes again. */
+  #hold(record: NeedsRecord): void {
+    if (needed(record)) this.#records.set(record.item.id, record);
+    else this.#records.delete(record.item.id);
+    if (record.item.state !== "open") this.#remember(record.item);
   }
 
   #remember(item: NeedsItem): void {

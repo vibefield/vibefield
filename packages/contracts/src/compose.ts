@@ -488,6 +488,9 @@ export const NEEDS_NOTICE_CHARS = 140;
 export const COMPOSE_NOTIFY_MAX = 500;
 /** the sends that wait on one held item */
 export const NEEDS_HELD_SENDS_MAX = 16;
+/** what one spark may have waiting on the person at once, its questions, held sends and spawns together (PF4's
+ * watermark): a ninth is refused as the fact `limit` */
+export const NEEDS_OPEN_PER_SPARK = 8;
 
 /** The acts' words (DESIGN.md §9 "The person's queue's words"): one authority for fieldd, the window and tests. A
  * question's own choices come first and Not now is always last; a held item's yes is always first. */

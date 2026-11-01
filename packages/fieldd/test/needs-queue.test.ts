@@ -72,6 +72,8 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
     }),
     /** called inside open, before it answers (a monitor event that arrives meanwhile) */
     duringOpen: undefined as undefined | (() => void),
+    /** called as each word is queued, before it is (a spark's send that arrives while an Allow acts) */
+    duringEnqueue: undefined as undefined | (() => void),
   };
   const sleep = () => {
     sessions.delete(VELA);
@@ -83,6 +85,7 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
       inputs: {
         wake: (run, fact) => void woken.push([run, fact]),
         enqueue: (run, text, from) => {
+          ctl.duringEnqueue?.();
           queued.push([run, text, from.kind === "spark" ? from.name : "VibeField"]);
           return { position: queued.filter(([r]) => r === run).length };
         },
@@ -399,6 +402,25 @@ describe("the held send (CP-D3, CP3-D3 B)", () => {
     ]);
   });
 
+  it("holds a send that comes while an Allow acts on its run's item in an item of its own, never in the one being spent (critique 5)", async () => {
+    const h = harness();
+    const id = h.queue.send(VELA_FROM, "run-his", "run the tests");
+    let later: string | undefined;
+    h.ctl.duringEnqueue = () => {
+      h.ctl.duringEnqueue = undefined;
+      later = h.queue.send(VELA_FROM, "run-his", "then push it");
+    };
+    const { item } = await h.queue.answer(id, 0, principal);
+    expect(item.answer).toMatchObject({ outcome: "done", told: true });
+    // the Allow queued only what it was asked about; the words that came meanwhile wait for an answer of their own
+    expect(h.queued).toEqual([["run-his", "run the tests", "Vela"]]);
+    expect(later).toMatch(/^ny-/);
+    expect(later).not.toBe(id);
+    expect(listed(h.queue)).toEqual([
+      expect.objectContaining({ id: later, kind: "held-send", words: "then push it", count: 1 }),
+    ]);
+  });
+
   it("cuts long words on the wire and says so, while the record keeps them whole", async () => {
     const h = harness();
     const long = "w".repeat(2_500);
@@ -637,28 +659,51 @@ describe("an act a restart broke into (CP2-D2, critique 15)", () => {
   });
 });
 
-describe("an act whose record could not be kept (CP2-D2)", () => {
-  it("is never done twice: a retry after a failed write is refused, and nothing is queued again", async () => {
-    const h = harness();
-    const id = h.queue.send(VELA_FROM, "run-his", "run the tests");
+describe("an answer whose record the disk does not take (CP2-D2)", () => {
+  /** The store as the queue keeps it, its writes failing once `from` of them have been kept (the disk filled). */
+  function fillsAfter(h: ReturnType<typeof harness>, from: number) {
     const store = (h.queue as unknown as { opts: { store: NeedsStore } }).opts.store;
     const write = store.write.bind(store);
     let writes = 0;
     store.write = (record) => {
       writes += 1;
-      // the acting record (1) is kept; the answered one (2) is not (the disk filled)
-      if (writes === 2) throw new Error("ENOSPC");
+      if (writes > from) throw new Error("ENOSPC: no space left on device");
       write(record);
     };
-    expect(await refusal(h.queue.answer(id, 0, principal))).toBe("Error");
+  }
+
+  it("stands once its act is done: it leaves every window, its spark is told, and it is never done twice", async () => {
+    const h = harness();
+    const id = h.queue.send(VELA_FROM, "run-his", "run the tests");
+    // the act's mark is kept (1); no record after it is
+    fillsAfter(h, 1);
+    const { item } = await h.queue.answer(id, 0, principal);
+    expect(item.answer).toMatchObject({ choice: 0, outcome: "done", told: true });
+    expect(h.queue.list()).toEqual([]);
     expect(h.queued).toEqual([["run-his", "run the tests", "Vela"]]);
-    expect(await refusal(h.queue.answer(id, 0, principal))).toBe("acting");
+    expect(h.woken).toEqual([["run-vela", words.sendAllowedFact("Vela", "claude·2")]]);
+    // his yes stands, so the spark's next words to that run are not held
+    expect(h.queue.allowed(VELA, "run-his")).toBe(true);
+    // answered once: the same act again answers it as it is, another is refused, and nothing is queued again
+    expect((await h.queue.answer(id, 0, principal)).item.answer).toMatchObject({ outcome: "done" });
+    expect(await refusal(h.queue.answer(id, 1, principal))).toBe("answered");
     expect(h.queued).toHaveLength(1);
-    // a restart turns it into its uncertain fact, told once
+    // a restart finds the act begun on disk: it is never done again, its yes is gone, and its spark hears it uncertain
     const again = h.make();
-    again.restore();
+    expect(again.restore()).toBe(1);
+    expect(again.allowed(VELA, "run-his")).toBe(false);
     again.onSparkLive(VELA, "run-vela");
-    expect(h.woken).toEqual([["run-vela", words.actUncertainFact("Vela", "claude·2")]]);
+    expect(h.woken.at(-1)).toEqual(["run-vela", words.actUncertainFact("Vela", "claude·2")]);
+    expect(h.queued).toHaveLength(1);
+  });
+
+  it("is refused while it began no act, and its item still waits to be answered again", async () => {
+    const h = harness();
+    const id = ask(h);
+    fillsAfter(h, 0);
+    expect(await refusal(h.queue.answer(id, 0, principal))).toBe("Error");
+    expect(h.queue.list().map((each) => each.id)).toEqual([id]);
+    expect(h.woken).toEqual([]);
   });
 });
 

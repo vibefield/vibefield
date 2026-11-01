@@ -249,6 +249,10 @@ export class SparkService {
    * who may open a spark and audits each caller before this is asked, and inside the wake the principal decides
    * nothing — it binds only the terminal ticket a birth mints, which this service never hands on.
    *
+   * *Added 2026-11-01 (CP-3):* a second door wakes a spark through this open: `needs.answer`, whose answer to a
+   * sleeping spark's item resumes it to tell it (`NeedsQueue`'s `open`, CP3-D7 A). That door is this desktop's too, and
+   * audits the answer before the queue asks, so an answer and a window's open at once are one wake and one run.
+   *
    * Not joined yet: a resume of the spark's session already under way through another door (`agent.resume`, as
    * Godview's Resume asks it). The daemon's resume wrapper reads its PRECONDITION_FAILED (state `resuming` or
    * `replaced`) as cannot-be-resumed, so this wake starts the spark again beside it; the wrapper owes the fix. */

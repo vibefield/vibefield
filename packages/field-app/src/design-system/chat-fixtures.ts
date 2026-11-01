@@ -693,12 +693,17 @@ export const NEEDS_KIND_PLATES: readonly NeedsPlate[] = [
   plate("unknown", "A kind this build does not know", [UNKNOWN], UNKNOWN),
 ];
 
-/** What an answer does to it: running, refused, and answered here three ways. */
+/** What an answer does to it: running, refused while it waits and once it no longer does, and answered here three
+ * ways. */
 export const NEEDS_ANSWER_PLATES: readonly NeedsPlate[] = [
   plate("busy", "Answering", [HELD_SEND], HELD_SEND, { state: "busy", choice: 0 }),
   plate("refused", "Refused", [QUESTION], QUESTION, {
     state: "refused",
     reason: "fieldd is not answering (the daemon is restarting)",
+  }),
+  plate("refused-gone", "Refused, answered in another window", [], QUESTION, {
+    state: "refused",
+    reason: "already answered: Hold",
   }),
   plate("done", "Answered", [], answeredOf(QUESTION, 0), { state: "said", choice: 0 }),
   plate(

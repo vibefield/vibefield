@@ -18,7 +18,8 @@ import type { SparkEntry } from "./spark-status";
 // answered in another window, motion, the keyboard). Chat's controller (`ChatView`) asks this for the card its shown
 // thread stands, and hands it the presses. One card at a time, the oldest first: it rises in, stands while its item
 // waits, and leaves — at once when its item no longer waits (answered in another window, or ended); answered or
-// refused here, after a note's time and once its item has left the queue — and the next rises only once it has gone.
+// refused here, after a note's time and once its item has left the queue, a refused one's acts quiet meanwhile — and
+// the next rises only once it has gone.
 // A card this window is answering stands from the press until fieldd's answer returns, whatever the queue says
 // meanwhile (fieldd drops the item once the answer is recorded, before it has told the spark). A thread left takes its
 // card at once; an answer it was running still returns, and what did not go as asked, or was refused, is said on the
@@ -82,6 +83,7 @@ function sameCard(a: NeedsCard, b: NeedsCard): boolean {
     a.item === b.item &&
     a.act === b.act &&
     a.of === b.of &&
+    a.waits === b.waits &&
     a.reduced === b.reduced &&
     a.leaving === b.leaving &&
     a.spark.id === b.spark.id &&
@@ -227,9 +229,10 @@ export function useNeedsCard(
       const shown = entryNow.current;
       if (door === null || shown === undefined) return;
       const spark = shown.spark.id;
-      // one answer at a time to an item; a refused one may be answered again
+      // one answer at a time to an item; a refused one may be answered again while its item still waits
       const prior = answeringNow.current.get(item.id);
-      if (prior !== undefined && prior.act.state !== "refused") return;
+      const waits = shown.items.some((each) => each.id === item.id);
+      if (prior !== undefined && (prior.act.state !== "refused" || !waits)) return;
       cardRef.current?.focus();
       change(item.id, () => ({ spark, item, act: { state: "busy", choice }, holds: true }));
       const here = () => live.current && shownNow.current === spark;

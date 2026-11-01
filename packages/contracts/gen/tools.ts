@@ -888,7 +888,7 @@ export const SERVED_TOOLS = [
     "audience": "spark",
     "scope": "self",
     "slice": "CP-3",
-    "description": "Ask the user a question with choices. Returns at once; the answer arrives as a wake.",
+    "description": "Ask the user a question with one to four choices of your own; VibeField adds Not now after them, so no choice may be Not now. Returns at once, and the answer arrives as a wake. At most 8 of your questions, held sends and spawns wait for the user at a time.",
     "annotations": {
       "readOnlyHint": false,
       "destructiveHint": false,
@@ -947,7 +947,7 @@ export const SERVED_TOOLS = [
     "audience": "agent",
     "scope": "self",
     "slice": "CP-3",
-    "description": "Tell the user something while they are in another view.",
+    "description": "Tell the user something, on one line of at most 140 characters: every VibeField window's status line says it, and a notification does while no VibeField window is in front. It returns once handed on, never that they read it.",
     "annotations": {
       "readOnlyHint": false,
       "destructiveHint": false,

@@ -419,6 +419,29 @@ describe("the card, drawn (the shipping NeedsCardView)", () => {
     expect(acts().map((button) => button.disabled)).toEqual([false, false, false]);
   });
 
+  it("dims a refused card's acts once its item no longer waits, so nothing on it answers again", () => {
+    const pressed: number[] = [];
+    mount(
+      <NeedsCardView
+        card={needsCardOf(entryOf([HELD_SPAWN]), QUESTION, {
+          state: "refused",
+          reason: "already answered: Hold",
+        })}
+        onAnswer={(_item, choice) => void pressed.push(choice)}
+      />,
+    );
+    expect(words($(".vf-needs-refused"))).toBe("Couldn't answer: already answered: Hold");
+    expect(acts().map((button) => [words(button), button.disabled])).toEqual([
+      ["Push", true],
+      ["Hold", true],
+      ["Not now", true],
+    ]);
+    act(() => {
+      for (const button of acts()) button.click();
+    });
+    expect(pressed).toEqual([]);
+  });
+
   it("answered here, gives its acts and count to one line: what you said, ringed in the hairline again", () => {
     draw(answered(QUESTION, 0), { state: "said", choice: 0 });
     expect(acts()).toEqual([]);
@@ -644,7 +667,7 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     expect(statusLineSaid()).toEqual([]);
   });
 
-  it("says a refusal on the card and keeps its acts while the item waits; one no longer waiting leaves 2.4 s after", async () => {
+  it("says a refusal on the card and keeps its acts while the item waits; one no longer waiting dims them and leaves 2.4 s after", async () => {
     await mountChat([QUESTION]);
     await press("Push");
     await act(async () => queue.answers[0]?.reject(new Error("fieldd is restarting")));
@@ -657,7 +680,12 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     await frame([]);
     await act(async () => queue.answers[1]?.reject(new Error("already answered: Hold")));
     expect(words($(".vf-needs-refused"))).toBe("Couldn't answer: already answered: Hold");
-    tick(NEEDS_SAID_MS - 1);
+    // its item waits no longer: its acts dim, and a press answers nothing, nor keeps the card longer
+    expect(acts().map((button) => button.disabled)).toEqual([true, true, true]);
+    tick(NEEDS_SAID_MS / 2);
+    await press("Push");
+    expect(queue.asked).toHaveLength(2);
+    tick(NEEDS_SAID_MS / 2 - 1);
     expect(card()?.hasAttribute("data-leaving")).toBe(false);
     tick(1);
     expect(card()?.hasAttribute("data-leaving")).toBe(true);
@@ -787,6 +815,7 @@ describe("the catalog's needs-you card (docs/UI_SYSTEM.md: the shipping view on 
       "unknown",
       "busy",
       "refused",
+      "refused-gone",
       "done",
       "failed",
       "unheard",
@@ -798,6 +827,13 @@ describe("the catalog's needs-you card (docs/UI_SYSTEM.md: the shipping view on 
     for (const plate of plates)
       expect(plate.querySelector(".vf-needs-card"), plate.dataset.plate).not.toBeNull();
     expect(host?.querySelector(".dark .vf-needs-card")).not.toBeNull();
+    // refused once another window has answered it, its acts go quiet
+    const gone = [
+      ...(host?.querySelectorAll<HTMLButtonElement>('[data-plate="refused-gone"] .vf-needs-act') ??
+        []),
+    ];
+    expect(gone.length).toBeGreaterThan(0);
+    expect(gone.every((button) => button.disabled)).toBe(true);
     expect(host?.querySelector('[data-plate="unknown"] .vf-needs-question')?.textContent).toMatch(
       / needs you$/u,
     );

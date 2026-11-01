@@ -40,6 +40,9 @@ export interface NeedsCard {
   readonly spark: { readonly id: SparkId; readonly name: string };
   /** how many wait on you in the thread, this one with them: "1 of 3" when more than one */
   readonly of: number;
+  /** its item still waits in the queue; one that has left (answered in another window, or ended) answers nothing
+   * more, so a refused card's acts go quiet for the note's time it stands */
+  readonly waits: boolean;
   readonly act: NeedsAct;
   /** on its way out, inert for its 180ms */
   readonly leaving: boolean;
@@ -67,6 +70,7 @@ export function needsCardOf(
     item,
     spark: { id: entry.spark.id, name: entry.spark.name },
     of: entry.items.length + (waits ? 0 : 1),
+    waits,
     act,
     leaving,
     reduced,

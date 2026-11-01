@@ -2911,7 +2911,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // CP-3 (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31; tool-plane/rooms/you/) — the needs-you queue:
     // a spark's questions, its held sends and spawns (signed records under LAYOUT.NEEDS_DIR, kept across a restart),
     // and every run's own ask, read from its blockers. An answer is told to its spark through its input queue, and
-    // resumes a sleeping spark as compose.sparks.open does (CP3-D7 A).
+    // resumes a sleeping spark through compose.sparks.open's own wake, so a window's open meanwhile is that same wake
+    // (CP3-D7 A; SparkService.open joins it per spark).
     const needs = new NeedsQueue({
       store: new NeedsStore({
         dir: join(config.dataDir, ...LAYOUT.NEEDS_DIR),
