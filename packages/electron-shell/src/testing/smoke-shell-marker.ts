@@ -6,7 +6,8 @@
 // that replaced it (R-T 2): a CARD played onto the pane (HN-4) — pasted, Return never pressed — through the hand's lab door
 // (`__vfCards.playInto`). What lives here: the wait's failure, which tells "never created" from "created empty"; a
 // session's input gate, read off the deck's own direct-terminal markers, which the rows that type into a pane wait on;
-// and the play's judge and its ONE line of evidence, printed when the rung fails.
+// and the play's judge and its ONE line of evidence, printed when the rung fails. 11m (SP-1d) has its own: a card played
+// onto Chat's composer, judged, and a line of evidence (`SMOKE_CHAT_SEND`) printed whether its rung passes or fails.
 
 import { statSync } from "node:fs";
 
@@ -133,6 +134,77 @@ export function cardPlayEvidenceLine(
     failed: cause instanceof Error ? cause.message : String(cause),
     session: evidence.session,
     file: file === null ? null : { path: evidence.path, ...file },
+    inputAllowed: evidence.inputAllowed,
+    play: evidence.play,
+    waitedMs: evidence.waitedMs,
+    gateNow,
+  })}`;
+}
+
+/** Why a play did not land in Chat's composer as a chip, in words — none when it did: the place on top at the
+ * composer's centre was its prompt (`chat-composer`, SP-1d), it answered the card, and the play said "Added to your
+ * message to …" (11m). The card stays in the hand; the rung judges that itself. */
+export function judgeChatCardPlay(play: CardPlaySeen | null): string[] {
+  if (play === null) return ["the hand's lab door answered nothing"];
+  if (play.played === null) return [`nothing was played: ${play.refused ?? "no reason was said"}`];
+  const problems: string[] = [];
+  if (play.target !== "prompt")
+    problems.push(`the place that took the card is ${play.target}, not the composer's prompt`);
+  if (!play.played.ok || !play.played.note.startsWith("Added to your message to "))
+    problems.push(`the play said ${JSON.stringify(play.played.note)}`);
+  return problems;
+}
+
+/** What 11m saw as it went (SP-1d's witness: Chat's thread and composer). Null is "not reached". */
+export interface ChatSendEvidence {
+  /** the spark the rung hatched */
+  spark: string | null;
+  /** the floor session its thread's pane shows */
+  session: string | null;
+  /** the file the stub records each submitted line in (`StubRecords.lines`) */
+  readonly lines: string;
+  /** what the sent line carries, so the record names this rung's line and no other */
+  readonly nonce: string;
+  /** the line's note after Send */
+  note: string | null;
+  /** the pane's `inputAllowed`, by its latest marker, sampled before its Return */
+  readonly inputAllowed: { Return: boolean | null };
+  /** what the lab door answered the card played onto the composer */
+  play: CardPlaySeen | null;
+  /** how long the waits took: the spark heard ("Ready"), and the pane's input before its Return */
+  readonly waitedMs: { ready: number | null; inputBeforeReturn: number | null };
+}
+
+export function newChatSendEvidence(lines: string, nonce: string): ChatSendEvidence {
+  return {
+    spark: null,
+    session: null,
+    lines,
+    nonce,
+    note: null,
+    inputAllowed: { Return: null },
+    play: null,
+    waitedMs: { ready: null, inputBeforeReturn: null },
+  };
+}
+
+/** 11m's evidence line's prefix in the smoke's log. */
+export const CHAT_SEND_EVIDENCE = "SMOKE_CHAT_SEND ";
+
+/** 11m's one line, printed when the rung passes and when it fails: the cause (null when it passed), what it saw, and
+ * the pane's gate as it is now. */
+export function chatSendEvidenceLine(
+  evidence: ChatSendEvidence,
+  cause: unknown,
+  gateNow: RoutedGateFacts | null,
+): string {
+  return `${CHAT_SEND_EVIDENCE}${JSON.stringify({
+    failed: cause === null ? null : cause instanceof Error ? cause.message : String(cause),
+    spark: evidence.spark,
+    session: evidence.session,
+    lines: evidence.lines,
+    nonce: evidence.nonce,
+    note: evidence.note,
     inputAllowed: evidence.inputAllowed,
     play: evidence.play,
     waitedMs: evidence.waitedMs,

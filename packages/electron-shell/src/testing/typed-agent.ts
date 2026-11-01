@@ -65,6 +65,12 @@ export const TYPED_AGENT_ID = "claude";
  * grammar: the session would fire no hook, so it could not be observed). */
 export const TYPED_AGENT_REFUSED_ARGUMENT = "--bare";
 
+/** The variable that agent's adapter binds a managed Agent Profile's root
+ * through (its profile service's own root variable). This Mac's native read
+ * of a sign-in runs without it, so the godview smoke's stub tells the two
+ * apart by its NAME alone: it answers This Mac's read and no profile's. */
+export const TYPED_AGENT_PROFILE_ROOT = "CLAUDE_CONFIG_DIR";
+
 /** The kit's own variables, which the shim strips before an agent runs. */
 const KIT_VARIABLE_PREFIX = "PUPPETEER_SHIM_";
 
@@ -118,22 +124,53 @@ export const TYPED_AGENT_MODELS = [
 
 /** What the stub does with a TERMINAL run that is no session — a sign-in, or its
  * name typed by hand at a prompt. A run with no terminal (a sign-in's status, a
- * usage read) exits 1 either way. For the godview smoke a terminal run exits 1
- * too (`"refuses"`). For the first-run smoke it STANDS (`"stands"`): the Setup
- * Assistant's Profiles pane opens a sign-in in a terminal, and a login waits
- * for its person, so the stub says one line and waits for its terminal's end.
- * Terminal semantics only: no vendor's words or flags. */
+ * usage read) exits 1 either way, but for This Mac's sign-in read a signed-in
+ * stub answers (`StubRecords.signedIn`). For the godview smoke a terminal run
+ * exits 1 too (`"refuses"`). For the first-run smoke it STANDS (`"stands"`): the
+ * Setup Assistant's Profiles pane opens a sign-in in a terminal, and a login
+ * waits for its person, so the stub says one line and waits for its terminal's
+ * end. Terminal semantics only: no vendor's words or flags. */
 export type StubAtATerminal = "refuses" | "stands";
 
 /** What a standing stub says in its terminal. */
 export const STUB_STANDING = "typed-agent stub: a sign-in that stands until it is cancelled.";
+
+/** What a stub does beyond answering its probes: the godview smoke's, for 11m
+ * (SP-1d's rung, VF-PM 2026-11-01). The first-run smoke's does neither. */
+export interface StubRecords {
+  /** answer This Mac's read of a sign-in — `auth status --json` with no profile
+   * root bound (`TYPED_AGENT_PROFILE_ROOT`) — with `{"loggedIn":true}` and
+   * nothing more: fieldd hatches a spark only for an agent This Mac is signed
+   * in to. A profile's read is still nothing to answer. */
+  readonly signedIn?: boolean;
+  /** where a managed session records each line it is given, one JSON line
+   * each (`readTypedAgentLines`): the witness that a sent line reached it */
+  readonly lines?: string;
+}
 
 /** The stub, as a Node program: `#!/usr/bin/env node`, so a shell, the
  * shim's exec and fieldd's probes all run the same file the same way. */
 export function typedAgentStubSource(
   calls: string,
   atATerminal: StubAtATerminal = "refuses",
+  records: StubRecords = {},
 ): string {
+  const signedIn =
+    records.signedIn === true
+      ? `if (argv.length === 3 && argv[0] === "auth" && argv[1] === "status" && argv[2] === "--json" &&
+    process.env[${JSON.stringify(TYPED_AGENT_PROFILE_ROOT)}] === undefined) {
+  // This Mac's read of a sign-in (no profile root bound): signed in, and nothing else said
+  process.stdout.write(${JSON.stringify(`${JSON.stringify({ loggedIn: true })}\n`)}, () => process.exit(0));
+} else `
+      : "";
+  const recordLine =
+    records.lines === undefined
+      ? ""
+      : `
+      appendFileSync(
+        ${JSON.stringify(records.lines)},
+        JSON.stringify({ pid: process.pid, cwd: process.cwd(), line }) + "\\n",
+      );`;
   const notASession =
     atATerminal === "stands"
       ? `  // Not a session. A sign-in's status or a usage read (no terminal) has
@@ -174,7 +211,7 @@ if (argv.length === 1 && (argv[0] === "--help" || argv[0] === "-h")) {
 }
 let pending = "";
 process.stdin.setEncoding("utf8");
-if (argv.includes("--print") && argv.includes("stream-json")) {
+${signedIn}if (argv.includes("--print") && argv.includes("stream-json")) {
   // PJ-6 — the model picker's read: one control request, the agent's own
   // \`initialize\` answered under its id with the stub's models
   process.stdin.on("data", (chunk) => {
@@ -201,7 +238,7 @@ ${notASession}
     pending += chunk;
     for (let at = pending.indexOf("\\n"); at >= 0; at = pending.indexOf("\\n")) {
       const line = pending.slice(0, at).trim();
-      pending = pending.slice(at + 1);
+      pending = pending.slice(at + 1);${recordLine}
       if (line === "exit") process.exit(0);
     }
   });
@@ -238,6 +275,36 @@ export function readTypedAgentCalls(calls: string): TypedAgentCall[] {
     if (line.trim() === "") continue;
     try {
       seen.push(JSON.parse(line) as TypedAgentCall);
+    } catch {
+      // half a line: the stub is writing it
+    }
+  }
+  return seen;
+}
+
+/** One line a managed session of the stub was given, as it recorded it (`StubRecords.lines`). */
+export interface TypedAgentLine {
+  pid: number;
+  /** the folder the session runs in (resolved, as the OS reports it) */
+  cwd: string;
+  /** the line as submitted, its ends trimmed */
+  line: string;
+}
+
+/** Every line the stub's sessions were given so far, oldest first. A line still being written is left for the
+ * next read. */
+export function readTypedAgentLines(lines: string): TypedAgentLine[] {
+  let text: string;
+  try {
+    text = readFileSync(lines, "utf8");
+  } catch {
+    return [];
+  }
+  const seen: TypedAgentLine[] = [];
+  for (const entry of text.split("\n")) {
+    if (entry.trim() === "") continue;
+    try {
+      seen.push(JSON.parse(entry) as TypedAgentLine);
     } catch {
       // half a line: the stub is writing it
     }
@@ -443,6 +510,9 @@ export interface StagedTypedAgent {
   stub: string;
   /** what the stub records, one JSON line per run of it */
   calls: string;
+  /** what its managed sessions are given, one JSON line per line (`readTypedAgentLines`): the godview smoke's
+   * alone (11m), absent for the first-run smoke */
+  lines?: string;
   /** the person's HOME */
   person: string;
   /** one line per startup file a shell of theirs read: `<file> <pid>` */
@@ -477,6 +547,8 @@ export function stageTypedAgent(opts: StagePersonOptions): StagedTypedAgent {
     dir: "typed-agent",
     atATerminal: "refuses",
     standsFor: (entry) => entry.id === TYPED_AGENT_ID,
+    // 11m (SP-1d): This Mac signed in, so a spark hatches; each line its session is given, recorded
+    records: { signedIn: true, lines: true },
   });
 }
 
@@ -502,6 +574,8 @@ function stagePerson(
     atATerminal: StubAtATerminal;
     /** whether the machine record names the stub for this launchable row */
     standsFor: (entry: (typeof AGENT_CATALOG)[number]) => boolean;
+    /** what the stub does beyond its probes (`StubRecords`): none unless named */
+    records?: { signedIn: boolean; lines: boolean };
   },
 ): StagedTypedAgent {
   const row = AGENT_CATALOG.find((entry) => entry.id === TYPED_AGENT_ID);
@@ -526,7 +600,14 @@ function stagePerson(
   for (const directory of [bin, person, work, dirname(record)]) {
     mkdirSync(directory, { recursive: true });
   }
-  writeFileSync(stub, typedAgentStubSource(calls, shape.atATerminal));
+  const lines = shape.records?.lines === true ? join(base, "lines.jsonl") : undefined;
+  writeFileSync(
+    stub,
+    typedAgentStubSource(calls, shape.atATerminal, {
+      ...(shape.records?.signedIn === true ? { signedIn: true } : {}),
+      ...(lines === undefined ? {} : { lines }),
+    }),
+  );
   chmodSync(stub, 0o755);
   writePersonFiles(person, ran);
   const history = writePersonTranscript(person, work, row);
@@ -552,6 +633,7 @@ function stagePerson(
     standsFor,
     stub,
     calls,
+    ...(lines === undefined ? {} : { lines }),
     person,
     ran,
     work,
