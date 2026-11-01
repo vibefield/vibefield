@@ -90,14 +90,11 @@ The catalog currently mounts these shipping views directly:
   swapping and lowering over a field with Godview's stage, History's room and Chat, on fixture state
 - Chat (SP-1b, DESIGN.md §8 "Chat's list"): the shipping `ChatPanelView` over the product's own
   reading (`sparkEntriesOf`) of fixture sparks and field rows (`chat-fixtures.ts`) — the list, a
-  spark asleep, no sparks yet, opening and unavailable, and since CP-3 a spark asleep while the
-  needs-you queue holds its held send (its word Needs your OK, its line still asleep with Wake, its
-  card standing in its thread, and Vela's own run's ask read once, as her row's blocker) — on a
-  fixed clock and fixed seeds, each row wearing the mark the product's own ledger and reading
-  (`ThreadLedger`, `threadMarksOf`) latch from what the plates' window read with the shown thread
-  on screen (a need's orange dot, and since SP-1d a thread unread in cyan, and a need that has
-  ended still orange, "needed you" in the row's name); and, since SP-1d (§8 "Chat's thread",
-  "Chat's composer"), the thread:
+  spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds, each
+  row wearing the mark the product's own ledger and reading (`ThreadLedger`, `threadMarksOf`)
+  latch from what the plates' window read with the shown thread on screen (a need's orange dot,
+  and since SP-1d a thread unread in cyan, and a need that has ended still orange, "needed you"
+  in the row's name); and, since SP-1d (§8 "Chat's thread", "Chat's composer"), the thread:
   - the line in the pane's place: the shipping panel's own words for Wake under way (its button
     waiting, the thread held, so send is busy) and refused in fieldd's words, and for a spark whose
     session never started, each a fixture act (`CHAT_ACT`, handed to the panel's `act` as Chat's
@@ -127,18 +124,21 @@ The catalog currently mounts these shipping views directly:
     the shown spark and the plate's draft, drawn by the shipping `ThreadItemsView` inside the
     panel — a spark just hatched saying hello with its three starters, which send nothing there,
     the same starters waiting while a starter's send runs, and none where the shown spark has
-    had a turn;
-  - the needs-you card (CP-3, §8 "Chat's thread"): on the waiting plate, the product's own
-    `waitingCardOf` stands it in the thread in the hello's place; and in a specimen of its own
-    (`NeedsCardPreview`), the shipping `NeedsCardView` over the product's own `needsCardOf` of
-    fixture items — a spark's question (1 of 3), a held send, a held spawn past the cap, an agent's
-    ask with Show alone, a kind this build does not know, answering, refused (its acts live while it
-    waits; quiet, and its ring gone, once another window has answered it), answered three ways
-    (done, an act not done, not heard yet) and a narrow thread, by the page's light and by the
-    Moon's — and the card live: the product's own controller (`useNeedsCard`) over a fixture door
-    that answers after a beat, standing it in the shipping `ThreadItemsView`, where its rise, its
-    "You said …", its way out, the next card's rise, the keyboard on its acts and on the card, and
-    reduced motion (a control on the plate) are seen. Its acts answer nothing outside the plate
+    had a turn
+- Chat's needs-you card (CP-3, DESIGN.md §8 "Chat's list", "Chat's thread"): a plate of the shipping
+  `ChatPanelView` with a spark asleep while the needs-you queue holds its held send (its word Needs
+  your OK, its line still asleep with Wake, and Vela's own run's ask read once, as her row's
+  blocker), where the product's own `waitingCardOf` stands its card in the thread in the hello's
+  place; and in a specimen of its own (`NeedsCardPreview`), the shipping `NeedsCardView` over the
+  product's own `needsCardOf` of fixture items — a spark's question (1 of 3), a held send, a held
+  spawn past the cap, an agent's ask with Show alone, a kind this build does not know, answering,
+  refused (its acts live while it waits; quiet, and its ring gone, once another window has answered
+  it), answered three ways (done, an act not done, not heard yet) and a narrow thread, by the page's
+  light and by the Moon's — and the card live: the product's own controller (`useNeedsCard`) over a
+  fixture door that answers after a beat, standing it in the shipping `ThreadItemsView`, where its
+  rise, its "You said …", its way out, the next card's rise, the keyboard on its acts and on the
+  card, and reduced motion (a control on the plate) are seen. Its acts answer nothing outside the
+  plate
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
   waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the
@@ -216,9 +216,11 @@ The catalog currently mounts these shipping views directly:
   WebGPU and no adapter (no Reload: a reload cannot help), and a board from before the desk — the
   kit's card (the primitives layer, above) on the plain ground, in the product's own words
   (`desk-words.ts`); and the status line's notices (`StatusLineView`): a missing face's word said
-  once, its place under the tools in hand, a degraded desk holding ICE's message and its Reload, and
-  (CP-3) an agent's notify longer than the line, on one line cut at its width, said through the
-  window's own notice (`needsNoticeStatus`) over a fixture notice
+  once, its place under the tools in hand, and a degraded desk holding ICE's message and its Reload
+- an agent's notify (CP-3, DESIGN.md §8 "The status line" and §9): among the status line's notices
+  in the Status section, the shipping `StatusLineView` with a notify longer than the line, on one
+  line cut at its width, said through the window's own notice (`needsNoticeStatus`) over a fixture
+  notice
 - the desk itself (`DeskPreview`, DK-3; named so at DK-17): the field's own layer (`fieldDeskLayer`)
   on a disposable engine with an empty board, under the canvas-ground workbench, the field chrome's
   playground and the view frame — and where a page has no WebGPU, the specimen says so

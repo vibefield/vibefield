@@ -2,9 +2,9 @@
    One of the thread's items, standing in the foot's overlay by the items' one rule (`.vf-chat-items`, chat.css): solid
    chrome, corners 16, padding 14 16 and the island shadow, as the hello's; ringed 1.5 in the orange at 75% while it
    waits on you (`data-waits`), the strong hairline once answered here or once its item no longer waits. Its rows stand
-   5 apart. It rises in over 240ms on the island curve
-   from 8 below, and leaves in 180ms on plain ease, 4 down; with reduced motion each way is a 120ms fade in place
-   (`data-motion`, which its controller sets from the person's setting, M6). Tokens only. */
+   5 apart. It rises in over 240ms on the island curve from 8 below, and leaves in 180ms on plain ease, 4 down; with
+   reduced motion each way is a 120ms fade in place (`data-motion`, which its controller sets from the person's
+   setting, M6). Tokens only. */
 
 .vf-needs-card {
   position: relative;

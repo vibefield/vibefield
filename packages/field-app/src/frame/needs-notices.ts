@@ -1,6 +1,6 @@
 import { type NeedsNotice, needsNoticesOf } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
-import { askAgain, onReconnectedOver } from "../chat/sparks-feed";
+import { askAgain, onReconnectedOver } from "../reconnect";
 import { type StatusNotice, sayStatus } from "./status-line";
 
 // AN AGENT'S NOTIFY, IN THE WINDOW (track CO, CP-3; CP3-D5 A; DESIGN.md §8 "The status line", amended 2026-10-31, and
@@ -13,14 +13,16 @@ import { type StatusNotice, sayStatus } from "./status-line";
 // another's. Main says the same notice outside the app while no VibeField window is in front (main/needs-notices.ts);
 // nothing here depends on it. A fieldd without notify's carrier (one before CP-3) refuses the subscribe for good, and
 // the window says nothing: no notice, never a guess. One refused as the socket closed under the ask (the same fieldd
-// up) is asked again once the window's client reconnects, on the seam Chat's feed asks its board again on.
+// up) is asked again once the window's client reconnects, on the seam Chat's feed asks its board again on
+// (`reconnect.ts`).
 
 /** What the window hears notify through: its fieldd client in the product (`needsNoticesPortOver`), a fake in a test. */
 export interface NeedsNoticesPort {
   /** Each notice fieldd tells after this subscribe, one at a time, in order. Resolves to the way to stop; rejects with
    * fieldd's refusal where it has no carrier, `retryable` when asking again may be answered. */
   watch(onNotice: (notice: NeedsNotice) => void): Promise<() => void>;
-  /** Heard each time the window's client is connected again (`SparksPort.onReconnected`'s seam). The answer stops it. */
+  /** Heard each time the window's client is connected again (`onReconnectedOver`, the seam `SparksPort.onReconnected`
+   * rides too). The answer stops it. */
   onReconnected(listener: () => void): () => void;
 }
 

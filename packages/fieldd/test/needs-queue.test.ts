@@ -708,6 +708,10 @@ describe("an answer whose record the disk does not take (CP2-D2)", () => {
     again.onSparkLive(VELA, "run-vela");
     expect(h.woken.at(-1)).toEqual(["run-vela", words.actUncertainFact("Vela", "claude·2")]);
     expect(h.queued).toHaveLength(1);
+    // and, as that fact says, its later words to that run are held again: a send waits as a new item
+    const held = again.send(VELA_FROM, "run-his", "and the lint");
+    expect(again.list().map((each) => each.id)).toEqual([held]);
+    expect(h.queued).toHaveLength(1);
   });
 
   it("is refused while it began no act, and its item still waits to be answered again", async () => {

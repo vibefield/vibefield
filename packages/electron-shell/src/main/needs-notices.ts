@@ -5,9 +5,10 @@ import type { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 // window's status line says a notify; while no VibeField window is in front,
 // main says it as an OS notice. Main decides, as for the link's notices
 // (TS-5): a notice must reach someone with no window in front. DESIGN.md §9
-// ("An agent's notify"): its title is the teller, as Chat or Godview names it,
-// and its body the agent's words, which fieldd has already put on one line of
-// at most 140 characters; a click opens Chat, whoever told it, and chooses
+// ("An agent's notify"): its title is the teller, named as fieldd names it (a
+// spark by its name, a session by its title, else its agent's label, else its
+// id), and its body the agent's words, which fieldd has already put on one line
+// of at most 140 characters; a click opens Chat, whoever told it, and chooses
 // nothing there. A notify is an event and is never kept, so there is no ledger
 // and no first-minute quiet (that is the link's rule, LINK_NOTICE_QUIET_MS),
 // and a new item in the needs-you queue raises no notice here. The carrier is

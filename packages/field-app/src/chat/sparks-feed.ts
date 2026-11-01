@@ -10,6 +10,7 @@ import {
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { useSyncExternalStore } from "react";
+import { askAgain, onReconnectedOver } from "../reconnect";
 import { type SparkEntry, sparkEntriesOf } from "./spark-status";
 import { cellMarkOf, ThreadLedger, type ThreadMark, threadMarksOf } from "./thread-marks";
 
@@ -70,16 +71,6 @@ export function sparksPortOver(client: FielddClient): SparksPort {
     open: async (spark) =>
       ComposeSparksOpenResult.parse(await client.request("compose.sparks.open", { spark })).spark,
   };
-}
-
-/** Heard each time `client` turns `ready` again (`SparksPort.onReconnected`, and the window's notify carrier's): its
- * socket closed while the same fieldd stayed up, and it reconnected on the token fieldd still holds. The answer stops
- * it. */
-export function onReconnectedOver(client: FielddClient): (listener: () => void) => () => void {
-  return (listener) =>
-    client.onStatusChange(() => {
-      if (client.status === "ready") listener();
-    });
 }
 
 /** A subscription heard in order: the subscribe answers its snapshot, and a frame heard before that answer waits
@@ -675,14 +666,6 @@ function noNewsOf(
     [...standing].filter((need) => before.has(need) || (first && !last.has(need))),
   );
   return next.size === before.size && [...next].every((need) => before.has(need)) ? before : next;
-}
-
-/** Whether fieldd may answer a subscription asked again: its refusal's own `retryable` (a FielddRpcError's). fieldd's
- * doors refuse this window's field board, its queue and its notify carrier only for good (a malformed or unpermitted
- * ask, or a fieldd without the door), so a retryable refusal is the connection's: the socket closed under the ask, and
- * the client reconnected (`SparksPort.onReconnected`) is when to ask again. */
-export function askAgain(refusal: unknown): boolean {
-  return isRecord(refusal) && refusal["retryable"] === true;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

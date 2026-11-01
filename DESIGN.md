@@ -544,7 +544,7 @@ spark's face.
 | `running` | Running | Its agents are at work |
 | `focus` | Watching | Keeping an eye on a project |
 | `asking` | Asking you | Has a question for you (needs you) |
-| `approval` | Needs your OK | Passing on an agent's request, or waiting for your OK to send or to start one (needs you) |
+| `approval` | Needs your OK | Passing on an agent's request (needs you). *Amended 2026-10-31 (CP-3; written into this row that day, and moved into this note 2026-11-01):* also waiting for your OK to send words or to start an agent |
 | `stuck` | Stuck | An agent is looping or out of room (needs you) |
 | `limited` | Rate limited | Waiting out a limit (needs you) |
 | `success` | Done | The job is finished |
@@ -1492,11 +1492,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       and the window is in another view.
     - However many items wait, and whoever asks, the row and the cell each take one dot. The dot says that a thread
       needs you; the card in the thread says how many things wait ("1 of 3").
-    - When something starts to need you in another view (a spark's own run blocking, or a new item for it in the
-      queue), the views track's note (above) says so over Chat's cell for 2.4 s: its face at 18, framed, then "Vela
-      needs you" in the attention ink. A need the window finds on its first reading of the board, or on its first
-      reading of the queue, is no news, even when that reading comes only once the window asks again past a refusal
-      (the connection closed under its first ask, and the window's client reconnected): its dot says it.
+    - When a spark starts to need you in another view, the views track's note (above) says so over Chat's cell for
+      2.4 s: its face at 18, framed, then "Vela needs you" in the attention ink.
+      *Amended 2026-10-31 (CP-3; written into the sentence above that day, and moved into this note 2026-11-01):* the
+      note is said when something starts to need you there: a spark's own run blocking, or a new item for it in the
+      queue. A need the window finds on its first reading of the board, or on its first reading of the queue, is no
+      news, even when that reading comes only once the window asks again past a refusal (the connection closed under
+      its first ask, and the window's client reconnected): its dot says it.
       *A reading of CP3-D8 (CP-3, 2026-10-31; recorded for the DECISIONS row, James's to strike):* CH-D4 says the note
       once, when a spark starts to need you, and CP3-D8 rules that items count. This reads each item as a need of its
       own, so a second question from Vela, while its first still waits, says the note again. Struck, the note is said
@@ -1776,7 +1778,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         from whom", cp3 §5). Nor do they count: "1 of 3" is this card's too, since one card stands at a time.*
       - **the sub:** 12.5 regular in tertiary ink at 1.3: "Your yes lasts until Claude Code ends." for a send; "8 of
         Vela's agents are running, the most a spark may run." for a spawn; "Answer it in its pane." for an agent's ask.
-        A question has none.
+        A question has none. *The send's sub speaks for an answer VibeField keeps. A restart that finds its Allow begun
+        and never recorded done drops the yes (§9: "Vela's later words to Claude Code are held again"), so the spark's
+        next words to that session wait on a card of their own.*
       - The question and the words each show six lines at most. Past that, each scrolls within itself under the scroll
         fade (§4 `--vf-scroll-fade`), so nothing you answer is hidden from you.
       - **the acts:** 8 further than the rows' 5, so 13 under the row above them (the plate's `padding-top` 8 on its
@@ -2979,19 +2983,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   record cannot be read now"**, with the door's own words as its detail; **"Could not open — no
   session is recorded for this run"**; **"Could not open — this run is no longer in the
   timeline"**.
-  *Amended 2026-10-31 (CP-3, CP3-D5 A; §9 "An agent's notify"):* **an agent's notify** is said here
-  too, in every window: "Vela — the build is green". The teller comes first, as Chat or Godview
-  names it, then a dash, then its words; the name is fieldd's, never the agent's own words, so a
-  notice cannot pass as another teller's. It is one line, cut with an ellipsis at the line's width
-  and never wrapped, and it stands 2.4s like any plain notice. At most two of one teller's notices
-  wait their turn, and a third from that teller sheds that teller's oldest waiting one, never the
-  one standing, so one agent's notices never hold back another's (PF4's watermark). The line says
+  *Amended 2026-10-31 (CP-3, CP3-D5 A; §9 "An agent's notify"):* **an agent's notify** is said
+  here too, in every window: "Vela — the build is green". The teller comes first, named as fieldd
+  names it (a spark by its name, a session by its title, else its agent's label, else its id),
+  then a dash, then its words; the name is never the agent's own words, so a notice cannot pass
+  as another teller's. It is one line, cut with an ellipsis at the line's width and never
+  wrapped, and it stands 2.4s like any plain notice. At most two of one teller's notices wait
+  their turn, and a third from that teller sheds that teller's oldest waiting one, never the one
+  standing, so one agent's notices never hold back another's (PF4's watermark). The line says
   only what is told while the window listens: a notice told before it is no news. While no
   VibeField window is in front, main says it outside the app as well (§9). An answer given on a
-  needs-you card that did not go as asked, that its spark has not heard, or that fieldd refused, is
-  said here too when it returns after its card has left the screen, as a plain notice in the card's
-  own words ("You said Allow one more · Couldn't start the agent: …"; "Couldn't answer: …"; §8
-  "Chat's thread", the needs-you card).
+  needs-you card that did not go as asked, that its spark has not heard, or that fieldd refused,
+  is said here too when it returns after its card has left the screen, as a plain notice in the
+  card's own words ("You said Allow one more · Couldn't start the agent: …"; "Couldn't answer:
+  …"; §8 "Chat's thread", the needs-you card).
 - **The selection bar** (Chrome on the Mat §3.1; MC-D2 the line's glass, ruled 2026-10-01; MC-D1;
   One Frame §7; R1, R2, R3, R7–R10, R23, R25; DK-11): one element over `handle.selection`'s anchor,
   placed imperatively each time the anchor publishes — never a render per frame.
@@ -5256,8 +5261,9 @@ on the wire.
 A send is held for the person's OK when it is a spark's first send into a session the person started, whatever that
 session's mode (CP3-D3 B). CP3-D3 A, which holds only a session running with its approvals off, waits on a fact
 VibeField does not read yet: the session's permission mode, in no vendor's words. The person's yes lasts as long as
-that run does, through a restart of VibeField; a session resumed later is a new run, and asks again. A spark's words
-to an agent it started itself are never held, because that agent asks the person itself (TL-D2 A).
+that run does, through a restart of VibeField that finds the answer kept; a restart that finds its act begun and never
+recorded done drops it (below). A session resumed later is a new run, and asks again. A spark's words to an agent it
+started itself are never held, because that agent asks the person itself (TL-D2 A).
 What VibeField tells a spark lands in its session as one marked line of facts, never as the person's words (CP-L5),
 without a closing stop, so that lines waiting together join with " · ". Every value a fact quotes stays on its line:
 a line break or a run of spaces in a question, a choice or a name is said as one space, a name is cut at 64
@@ -5274,23 +5280,24 @@ input (CP3-D7 A); a spark that cannot be woken hears it when it next wakes.
   allowed that could not start: "VibeField: the agent you allowed Vela could not start: ‹reason›";
 - an act a restart finds begun and never recorded done (the restart broke into it, or the disk did not take the record
   of its end): "VibeField: VibeField restarted, and cannot tell whether it finished acting on your answer about Vela's
-  words to Claude Code; read the session to see", and for a spawn, "VibeField: VibeField restarted, and cannot tell
-  whether the agent you allowed Vela started; list Vela's agents to see". Each is true whether or not the spark heard
-  what the act did before the restart. An act is never done twice (CP2-D2).
+  words to Claude Code (read the session to see); Vela's later words to Claude Code are held again", and for a spawn,
+  "VibeField: VibeField restarted, and cannot tell whether the agent you allowed Vela started; list Vela's agents to
+  see". Each is true whether or not the spark heard what the act did before the restart: the held send's yes is gone
+  either way, and a spawn's yes was for that one agent. An act is never done twice (CP2-D2).
 
 "Claude Code" is the catalog's label (R23b): the agent a spawn starts, and a session fieldd names by its title, else by
 its agent's label, else by its id (§8 "Chat's thread", the needs-you card). ‹reason› is fieldd's own words for what
 stopped it.
 
 **An agent's notify** (CP-3, CP3-D5 A) is said as its teller, named as fieldd names it (a spark by its name, a session
-as the card names one: "Vela", "Claude Code"), then its words on one line: each line break or run of spaces is one
-space, and the words are cut at 140 characters, the last of them "…". In every window it is the status line's note (§8
-"The status line"). At most two of one teller's notices wait their turn there, and a third from the same teller sheds
-that teller's oldest waiting one, so one agent's notices never hold back another's (PF4's watermark). Outside the app it
-is an OS notice, said only while no VibeField window is in front, and never in a smoke: its title is the teller, and its
-body the words. A click on it opens Chat, whoever told it, and chooses nothing there. A notify is never kept, and
-nothing says the person read it. A new item in the queue raises no OS notice: CP3-D5 rules notify alone. *Main decides,
-as for the link's notices (TS-5): a notice must reach someone with no window in front.*
+by its title, else its agent's label, else its id: "Vela", "Claude Code"), then its words on one line: each line break
+or run of spaces is one space, and the words are cut at 140 characters, the last of them "…". In every window it is the
+status line's note (§8 "The status line"). At most two of one teller's notices wait their turn there, and a third from
+the same teller sheds that teller's oldest waiting one, so one agent's notices never hold back another's (PF4's
+watermark). Outside the app it is an OS notice, said only while no VibeField window is in front, and never in a smoke:
+its title is the teller, and its body the words. A click on it opens Chat, whoever told it, and chooses nothing there. A
+notify is never kept, and nothing says the person read it. A new item in the queue raises no OS notice: CP3-D5 rules
+notify alone. *Main decides, as for the link's notices (TS-5): a notice must reach someone with no window in front.*
 
 **The link's words** (track TS, TS-D1 and TS-D2 ruled 2026-10-27). The act is **Continue with
 Tailscale** on every button that starts it — the Connect pane, Settings → Devices, the phone — and

@@ -55,8 +55,10 @@ import * as words from "./words";
 //   sleeping spark is resumed for it through compose.sparks.open's own wake, one per spark (CP3-D7 A), and a spark that
 //   cannot be woken hears it when its session is next live. Never into a pending run: AR-4 may replace it.
 // - A held send's Allow is the allowance (one authority, no second table): the answered record stays until its run
-//   ends, through a fieldd restart, and the spark's later words to that run are not held. Liveness is judged at use;
-//   a run that ended while fieldd was down is found once this boot's re-attach has settled (critique 3).
+//   ends, through a fieldd restart that finds it kept, and the spark's later words to that run are not held. A restart
+//   that finds its act begun instead (`#uncertain`) leaves no allowance, and its spark is told the later words are held
+//   again. Liveness is judged at use; a run that ended while fieldd was down is found once this boot's re-attach has
+//   settled (critique 3).
 // - Bounds (PF4's watermark), each contracts' (compose.ts): NEEDS_OPEN_PER_SPARK open items per spark,
 //   NEEDS_HELD_SENDS_MAX sends per held item, NOTIFY_PER_MINUTE notices a minute per session.
 

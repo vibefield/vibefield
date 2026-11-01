@@ -536,7 +536,8 @@ export function needsOutcomeOf(
 /** An act's place among an item's choices. */
 const NeedsChoiceIndex = z.number().int().min(0).max(NEEDS_CHOICES_MAX);
 
-/** Who asks or tells: as Chat or Godview names it, its session, and the spark when the teller IS that spark. */
+/** Who asks or tells: named as fieldd names it (a spark by its name, a session by its title, else its agent's label,
+ * else its id), its session, and the spark when the teller IS that spark. */
 export const NeedsFrom = z
   .object({
     name: z.string().min(1).max(NEEDS_NAME_MAX),

@@ -70,11 +70,13 @@ export const spawnFailedFact = (spark: string, reason: string): string =>
 
 // An act a restart finds begun and never recorded done is never done again (CP2-D2). The restart may have broken into
 // it, or have come after it was done and told, once the disk did not take the record of its end (queue.ts's `#stand`):
-// so what the spark hears then is true in both orders, whether or not it heard what the act did before.
+// so what the spark hears then is true in both orders, whether or not it heard what the act did before. Either way the
+// held send's yes is gone (its record is no allowance), so its later words to that session are held again; a spawn's
+// yes was for that one agent.
 
 /** A held send's Allow a restart found begun. */
 export const actUncertainFact = (spark: string, to: string): string =>
-  `VibeField restarted, and cannot tell whether it finished acting on your answer about ${n(spark)}'s words to ${n(to)}; read the session to see`;
+  `VibeField restarted, and cannot tell whether it finished acting on your answer about ${n(spark)}'s words to ${n(to)} (read the session to see); ${n(spark)}'s later words to ${n(to)} are held again`;
 
 /** A held spawn's Allow one more a restart found begun (critique 15). */
 export const spawnUncertainFact = (spark: string): string =>

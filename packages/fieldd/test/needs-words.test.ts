@@ -52,9 +52,10 @@ describe("the person's queue's words (DESIGN.md §9)", () => {
       "the agent you allowed Vela could not start: no sign-in",
     );
     // true whether the restart broke into the act or came after the spark heard what it did (the disk did not take
-    // the record of its end): needs-queue.test.ts tells it both ways
+    // the record of its end): needs-queue.test.ts tells it both ways. The yes is gone either way, so the held send's
+    // fact says the later words are held again; a spawn's yes was for that one agent
     expect(actUncertainFact("Vela", "Claude Code")).toBe(
-      "VibeField restarted, and cannot tell whether it finished acting on your answer about Vela's words to Claude Code; read the session to see",
+      "VibeField restarted, and cannot tell whether it finished acting on your answer about Vela's words to Claude Code (read the session to see); Vela's later words to Claude Code are held again",
     );
     expect(spawnUncertainFact("Vela")).toBe(
       "VibeField restarted, and cannot tell whether the agent you allowed Vela started; list Vela's agents to see",
