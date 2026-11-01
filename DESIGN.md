@@ -1573,6 +1573,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     checked chip takes the ready fill and a 1.5 inset ring. The default comes checked; the one it thinks under is always
     checked and cannot be unchecked. Under them, tertiary: "Sees 3 sessions · starts Claude Code and Codex".
   - **The foot:** Cancel (quiet) and **Create Polaris** (primary), both big, at its right. Create waits on a name.
+    - *Added 2026-11-01 (item 149):* Create also waits, disabled, on what the sheet reads as it opens: the agent it
+      thinks with and the profile it thinks under. A read that fails is said at the foot, never a Create left waiting
+      in silence: the agents' sentence above, or "VibeField can't list your Agent Profiles right now".
   - **Create** calls `compose.sparks.hatch {name, face, agent, modelSelection?, profiles, thinksUnder}`. A refusal is
     said where the sheet asked:
     - a name another spark holds, under the name ("Vela is taken");

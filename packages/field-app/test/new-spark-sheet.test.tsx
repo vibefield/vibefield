@@ -305,4 +305,37 @@ describe("the New spark sheet", () => {
     expect(rule).toMatch(/font-size: 18px;/);
     expect(rule).toMatch(/line-height: 1;/);
   });
+
+  it("keeps Create disabled until its agent and the profile it thinks under are read, then hatches (item 149)", async () => {
+    const port = portOf();
+    let offer: (providers: AgentProviderSummary[]) => void = () => undefined;
+    port.providers.mockImplementationOnce(
+      () =>
+        new Promise<AgentProviderSummary[]>((done) => {
+          offer = done;
+        }),
+    );
+    await open(port);
+    // its reads still out: a press now would hatch nothing, so the button cannot be pressed
+    expect(named("Create Polaris")?.hasAttribute("disabled")).toBe(true);
+    await press(named("Create Polaris"));
+    await settle();
+    expect(port.hatch).not.toHaveBeenCalled();
+    await act(async () => offer(PROVIDERS));
+    await settle();
+    expect(named("Create Polaris")?.hasAttribute("disabled")).toBe(false);
+    await press(named("Create Polaris"));
+    await settle();
+    expect(port.hatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("says at its foot when its profiles can't be read, Create disabled, never a silent button (item 149)", async () => {
+    const port = portOf();
+    port.profileSets.mockRejectedValueOnce(new Error("fieldd is restarting"));
+    await open(port);
+    expect($('[role="alert"]')?.textContent).toBe(
+      "VibeField can't list your Agent Profiles right now",
+    );
+    expect(named("Create Polaris")?.hasAttribute("disabled")).toBe(true);
+  });
 });

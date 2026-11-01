@@ -12,6 +12,7 @@ import {
   agentLine,
   agentMenuOf,
   CANNOT_LIST_AGENTS,
+  CANNOT_LIST_PROFILES,
   dealSeed,
   defaultProfileOf,
   effortOf,
@@ -148,7 +149,10 @@ function Sheet({
       const home = defaultProfileOf(profileSets)?.id;
       setThinksUnder((held) => held ?? home);
       setProfiles((held) => (held.length > 0 || home === undefined ? held : [home]));
+      // Create waits on these reads (item 149): one that failed is said at the foot, the agents' first, so Create is
+      // never left waiting in silence (an agent list with none that can be a spark says so on its pill)
       if (offered.status === "rejected") setRefusal({ at: "foot", words: CANNOT_LIST_AGENTS });
+      else if (home === undefined) setRefusal({ at: "foot", words: CANNOT_LIST_PROFILES });
     });
     return () => {
       live = false;
@@ -270,6 +274,7 @@ function Sheet({
       }
       refusal={refusal}
       creating={creating}
+      ready={agentId !== undefined && thinksUnder !== undefined}
       hatchRef={hatch}
       onName={(next) => {
         setName(next);

@@ -60,6 +60,10 @@ export const CANNOT_TAKE_TOOLS = "can't take VibeField's tools yet";
  * @'s list in Chat when its profiles can't be read. */
 export const CANNOT_LIST_AGENTS = "VibeField can't list its agents right now";
 
+/** The words for Agent Profiles that can't be read (DESIGN.md §8 "The New spark sheet", item 149): said at the sheet's
+ * foot, since Create waits on the profile the spark thinks under and never waits in silence. */
+export const CANNOT_LIST_PROFILES = "VibeField can't list your Agent Profiles right now";
+
 /** The agents the sheet lists: every offered agent, a spark's when it declares all three briefing fields and a process
  * the door can name (CP-1d's gate, read from `agent.providers[].briefing`). */
 export function sparkAgentsOf(providers: readonly AgentProviderSummary[]): SparkAgent[] {
