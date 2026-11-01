@@ -83,9 +83,11 @@ import {
   rowMark,
   type StillSeen,
   type Stimulus,
+  type StoppedHands,
   stillAddress,
   stimulusStaging,
   stoppedBeforeQuit,
+  stoppedWord,
   type UseSeen,
   uuidHits,
   wakesIn,
@@ -1084,6 +1086,8 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     proof0: proven,
     quit: "quit",
     word: "stopped",
+    reads: ["stopped", "stopped"],
+    moved: null,
     stateP: "Booted",
     wakes: [3, 4],
     paneAlive: true,
@@ -1167,10 +1171,10 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     const dropped = SOURCE.replace(block, "");
     expect(dropped).not.toBe(SOURCE);
     expect(() => stoppedHeld(dropped)).toThrow();
-    const quitLine = "      const quit = await quitApp();\n      let wordNow";
+    const quitLine = "      const quit = await quitApp();\n      let wakes1";
     const moved = dropped.replace(
       quitLine,
-      `      const quit = await quitApp();\n${block}      let wordNow`,
+      `      const quit = await quitApp();\n${block}      let wakes1`,
     );
     expect(moved).not.toBe(dropped);
     expect(() => stoppedHeld(moved)).toThrow();
@@ -1195,13 +1199,137 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     expect(mark({ ...seen, retry: null })).toBe("red");
   });
 
-  it("any other word is RECORDED as a finding, never green — `off` with P Shutdown, another word, or none (R1)", () => {
+  it("any other word SETTLED is RECORDED as a finding, never green — `off` with P Shutdown, another word (R1); none settled is STAGING NOT MET (T4)", () => {
     const off = judgeStopped({ ...seen, word: "off", stateP: "Shutdown", retry: null });
     expect(off.recorded).toBe(true);
     expect(off.staging).toBe("the quit reads off (device Shutdown) — the stopped face unwitnessed");
     expect(mark({ ...seen, word: "off", stateP: "Shutdown", retry: null })).toBe("RECORDED");
-    for (const word of ["no-window", "at-rest", null])
+    for (const word of ["no-window", "at-rest"])
       expect(mark({ ...seen, word, retry: null })).toBe("RECORDED");
+    const unsettled = { ...seen, word: null, reads: ["stopped", "off"], retry: null } as const;
+    expect(mark(unsettled)).toBe("STAGING NOT MET");
+    expect(judgeStopped(unsettled).staging).toBe(
+      `the quit's word never settled within 10000 ms (its last two reads ["stopped","off"], device Booted)`,
+    );
+  });
+
+  /** The word's hands, faked: the face's words and the device's state from queues (the last stands), a clock that moves
+   * only by the row's sleeps, and Try again's leg — the word re-read in hand right before the press. */
+  const hands = (o: {
+    words: (string | null)[];
+    states: string[];
+    reread?: (string | null)[];
+  }): StoppedHands & { pressed: number; between: number; t: () => number } => {
+    let t = 0;
+    const next = <T>(q: T[]): T => (q.length > 1 ? (q.shift() as T) : (q[0] as T));
+    const h = {
+      pressed: 0,
+      between: 0,
+      t: () => t,
+      word: async () => next(o.words),
+      state: async () => next(o.states),
+      now: () => t,
+      sleep: async (ms: number) => {
+        t += ms;
+      },
+      aftermath: async () => {
+        h.between += 1;
+      },
+      retry: async () => {
+        const reread = o.reread === undefined ? "stopped" : next(o.reread);
+        if (reread !== "stopped") return { reread };
+        h.pressed += 1;
+        return { proof: proven };
+      },
+    };
+    return h;
+  };
+  const judged = (w: Awaited<ReturnType<typeof stoppedWord>>) =>
+    mark({
+      ...seen,
+      word: w.word,
+      reads: w.reads,
+      moved: w.moved,
+      stateP: w.stateP,
+      retry: w.retry,
+    });
+
+  it("the quit's word SETTLES: `stopped` → `off` (the quit shut P down) is RECORDED with the word and the device — and nothing pressed (T4, P8 = A)", async () => {
+    // run 1101 (out:104-108): the loop took the first `stopped`, then pressed Try again 2 s on at a face saying off/Boot
+    const h = hands({ words: ["stopped", "off", "off"], states: ["Shutdown"] });
+    const w = await stoppedWord(h);
+    expect(w).toMatchObject({ word: "off", stateP: "Shutdown", retry: null, moved: null });
+    expect(h.pressed).toBe(0);
+    expect(h.between).toBe(1);
+    expect(judged(w)).toBe("RECORDED");
+    // `stopped` read twice but P already Shutdown is not settled: it waits for the word to agree with the device
+    const lag = hands({
+      words: ["stopped", "stopped", "stopped", "off", "off"],
+      states: ["Shutdown"],
+    });
+    expect((await stoppedWord(lag)).word).toBe("off");
+    expect(lag.pressed).toBe(0);
+  });
+
+  it("a steady `stopped` with P Booted presses Try again — the word re-read in hand right before it (T4)", async () => {
+    const h = hands({ words: ["stopped"], states: ["Booted"] });
+    const w = await stoppedWord(h);
+    expect(w).toMatchObject({ word: "stopped", stateP: "Booted", retry: proven, moved: null });
+    expect(h.pressed).toBe(1);
+    expect(h.between).toBe(1);
+    expect(judged(w)).toBe("green");
+    // the re-read in hand is `off` (P shut down after the settle): nothing pressed, the word settled again — RECORDED
+    const moved = hands({
+      words: ["stopped", "stopped", "off"],
+      states: ["Booted", "Shutdown"],
+      reread: ["off"],
+    });
+    const m = await stoppedWord(moved);
+    expect(moved.pressed).toBe(0);
+    expect(m).toMatchObject({ word: "off", stateP: "Shutdown", retry: null, moved: "off" });
+    expect(judged(m)).toBe("RECORDED");
+  });
+
+  it("reads that never agree — with each other or with the device — past the word's bound are STAGING NOT MET, nothing pressed (T4)", async () => {
+    const flip = hands({
+      words: Array.from({ length: 40 }, (_, i) => (i % 2 === 0 ? "stopped" : "off")),
+      states: ["Booted"],
+    });
+    const a = await stoppedWord(flip);
+    expect(a.word).toBeNull();
+    expect(flip.pressed).toBe(0);
+    expect(flip.t()).toBeGreaterThanOrEqual(10_000);
+    expect(flip.t()).toBeLessThan(12_000);
+    expect(judged(a)).toBe("STAGING NOT MET");
+    const against = hands({ words: ["stopped"], states: ["Shutdown"] });
+    const b = await stoppedWord(against);
+    expect(b).toMatchObject({ word: null, reads: ["stopped", "stopped"], stateP: "Shutdown" });
+    expect(against.pressed).toBe(0);
+    expect(judged(b)).toBe("STAGING NOT MET");
+    // a word that went back to `stopped` after the re-read missed will not hold: STAGING NOT MET, not a second press
+    const flap = hands({ words: ["stopped"], states: ["Booted"], reread: ["off"] });
+    const c = await stoppedWord(flap);
+    expect(flap.pressed).toBe(0);
+    expect(c).toMatchObject({ word: null, moved: "off" });
+    expect(judged(c)).toBe("STAGING NOT MET");
+    // a red give-back stays red over an unsettled word
+    expect(
+      mark({ ...seen, word: null, reads: ["stopped", "off"], retry: null, paneAlive: false }),
+    ).toBe("red");
+  });
+
+  it("the row asks stoppedWord over the face, the door's state and Try again in hand — no word loop of its own, no `off` pressed (T4)", () => {
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-STOPPED")?.body ?? "";
+    expect(body.match(/\bstoppedWord\(/gu)).toHaveLength(1);
+    expect(body).not.toMatch(/wordNow === "stopped" \|\| wordNow === "off"/u);
+    const retry = body.slice(body.indexOf("retry: async () => {"));
+    const reread = retry.indexOf("const reread = (await faceOf(p))?.simulator?.is ?? null;");
+    expect(reread).toBeGreaterThan(0);
+    expect(retry.indexOf('if (reread !== "stopped")')).toBeGreaterThan(reread);
+    expect(retry.indexOf('await pressAct("SIM-STOPPED", p, 1, "retry");')).toBeGreaterThan(
+      retry.indexOf('if (reread !== "stopped")'),
+    );
+    expect(body.match(/pressAct\(/gu)).toHaveLength(1);
   });
 
   it("the cap's give-back stays red in every branch — over the word's record too", () => {

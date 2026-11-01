@@ -1174,7 +1174,11 @@ export interface StoppedSeen {
   /** φP's LIVE-PROVEN before the quit (R-1): a quit of an unproven stream witnesses nothing "mid-stream" */
   readonly proof0: LiveProof | null;
   readonly quit: string;
+  /** the quit's word SETTLED (`stoppedWord`, T4); null: none within the word's bound */
   readonly word: string | null;
+  /** the settle's last two reads, and the word the re-read in hand found in place of `stopped` (null: none) */
+  readonly reads: readonly [string | null, string | null];
+  readonly moved: string | null;
   readonly stateP: string;
   readonly wakes: readonly [number, number];
   readonly paneAlive: boolean;
@@ -1198,10 +1202,86 @@ export function judgeStopped(s: StoppedSeen): {
     out.push(...judgeLiveProven("SIM-STOPPED (Try again)", s.retry));
     return { problems: out, recorded: false, staging: null };
   }
+  // no word settled (T4): the quit's aftermath unread — STAGING NOT MET, never a finding against the product
+  if (s.word === null) {
+    const moved = s.moved === null ? "" : `; in hand \`stopped\` read ${s.moved} before the press`;
+    const unsettled = `the quit's word never settled within ${PHONE_BOUNDS.word} ms (its last two reads ${JSON.stringify(s.reads)}, device ${s.stateP}${moved})`;
+    return out.length > 0
+      ? { problems: out, recorded: false, staging: null }
+      : { problems: [], recorded: false, staging: unsettled };
+  }
   const finding = `the quit reads ${s.word ?? "nothing"} (device ${s.stateP}) — the stopped face unwitnessed`;
   return out.length > 0
     ? { problems: out, recorded: false, staging: null }
     : { problems: [], recorded: true, staging: finding };
+}
+
+/** SIM-STOPPED's word against P (P8 = A): `stopped` — the window gone, the device still Booted; `off` — the quit shut it
+ * down. Another word has no device state it must match. */
+export const wordAgrees = (word: string, stateP: string): boolean =>
+  word === "stopped" ? stateP === "Booted" : word === "off" ? stateP !== "Booted" : true;
+
+/** What SIM-STOPPED's word asks of the window (the row's hands; a unit's fakes). */
+export interface StoppedHands {
+  /** the face's word (`simulator.is`), read afresh */
+  readonly word: () => Promise<string | null>;
+  /** P's state, the door's */
+  readonly state: () => Promise<string>;
+  readonly now: () => number;
+  readonly sleep: (ms: number) => Promise<void>;
+  /** the quit's aftermath the row reads once the word settled, before any press: the pane's wake, the desk shot */
+  readonly aftermath: () => Promise<void>;
+  /** Try again's leg: φP picked up and its word RE-READ right before the press — `stopped`: pressed and proven; any other:
+   * nothing pressed (put down), that word said */
+  readonly retry: () => Promise<{ readonly proof: LiveProof } | { readonly reread: string | null }>;
+}
+
+/** SIM-STOPPED's word SETTLED (T4; run 1101 took the first `stopped`, then pressed Try again 2 s on at a face that said
+ * `off`, and the press gate STOPPED the run): two reads 1 s apart agree, and agree with P's state (`wordAgrees`), within
+ * `bound`. Settled `stopped`: the aftermath read, then Try again — its word re-read in hand first; a re-read that is not
+ * `stopped` presses nothing, and the word is settled AGAIN (a `stopped` once more will not hold: null). Settled `off`
+ * (or another word): never pressed — judgeStopped RECORDS it. None settled: null — STAGING NOT MET. */
+export async function stoppedWord(
+  h: StoppedHands,
+  bound: number = PHONE_BOUNDS.word,
+): Promise<{
+  readonly word: string | null;
+  readonly reads: readonly [string | null, string | null];
+  readonly stateP: string;
+  readonly retry: LiveProof | null;
+  readonly moved: string | null;
+}> {
+  const settle = async (): Promise<{
+    word: string | null;
+    reads: readonly [string | null, string | null];
+    stateP: string;
+  }> => {
+    const end = h.now() + bound;
+    let reads: readonly [string | null, string | null] = [null, null];
+    let stateP = "unread";
+    while (h.now() < end) {
+      const a = await h.word();
+      await h.sleep(1_000);
+      const b = await h.word();
+      stateP = await h.state();
+      reads = [a, b];
+      if (a !== null && a === b && wordAgrees(a, stateP)) return { word: a, reads, stateP };
+      await h.sleep(200);
+    }
+    return { word: null, reads, stateP };
+  };
+  const first = await settle();
+  await h.aftermath();
+  if (first.word !== "stopped") return { ...first, retry: null, moved: null };
+  const pressed = await h.retry();
+  if ("proof" in pressed) return { ...first, retry: pressed.proof, moved: null };
+  const again = await settle();
+  return {
+    ...again,
+    word: again.word === "stopped" ? null : again.word,
+    retry: null,
+    moved: pressed.reread,
+  };
 }
 
 /** The host's device reads as the desk's door counts them (D5): reads BEGUN, those that failed, the last one's rows
@@ -2995,43 +3075,53 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       }
       const wakes0 = (await stats())?.wakes ?? 0;
       const quit = await quitApp();
-      let wordNow: string | null = null;
-      const deadline = Date.now() + PHONE_BOUNDS.word;
-      while (Date.now() < deadline) {
-        wordNow = (await faceOf(p))?.simulator?.is ?? null;
-        if (wordNow === "stopped" || wordNow === "off") break;
-        await sleep(200);
-      }
-      const stateP = (await doorAct("state", 1)).state;
-      await sleep(1_500);
-      const wakes1 = (await stats())?.wakes ?? 0;
-      const paneAlive = (await faceOf(pane))?.alive === true;
-      const shot = await shootDesk("pt-s3-stopped.png");
-      let retry: LiveProof | null = null;
-      if (wordNow === "stopped") {
-        await pickUp(p);
-        const before = calls();
-        await pressAct("SIM-STOPPED", p, 1, "retry");
-        retry = await liveProven(p);
-        await putDown();
-        say(`SMOKE_PHONE_RETRY ${JSON.stringify({ before, after: calls() })}`);
-      }
+      let wakes1 = wakes0;
+      let paneAlive = false;
+      let shot = false;
+      const paneK = pane; // narrowed here, not in a closure
+      // the word SETTLED against P's state before anything is judged or pressed; `off` is recorded, never pressed (T4)
+      const said = await stoppedWord({
+        word: async () => (await faceOf(p))?.simulator?.is ?? null,
+        state: async () => (await doorAct("state", 1)).state,
+        now: () => Date.now(),
+        sleep,
+        aftermath: async () => {
+          await sleep(1_500);
+          wakes1 = (await stats())?.wakes ?? 0;
+          paneAlive = (await faceOf(paneK))?.alive === true;
+          shot = await shootDesk("pt-s3-stopped.png");
+        },
+        retry: async () => {
+          await pickUp(p);
+          // the word re-read in hand, right before the press: a face gone `off` since the settle is never pressed
+          const reread = (await faceOf(p))?.simulator?.is ?? null;
+          if (reread !== "stopped") {
+            await putDown();
+            return { reread };
+          }
+          const before = calls();
+          await pressAct("SIM-STOPPED", p, 1, "retry");
+          const proof = await liveProven(p);
+          await putDown();
+          say(`SMOKE_PHONE_RETRY ${JSON.stringify({ before, after: calls() })}`);
+          return { proof };
+        },
+      });
       await js(`globalThis.__vfDesk.liveCap(${capNow ?? 6})`);
       const stoppedSeen: StoppedSeen = {
         proof0,
         quit,
-        word: wordNow,
-        stateP,
+        word: said.word,
+        reads: said.reads,
+        moved: said.moved,
+        stateP: said.stateP,
         wakes: [wakes0, wakes1],
         paneAlive,
-        retry,
+        retry: said.retry,
         shot,
       };
       const j = judgeStopped(stoppedSeen);
-      const finding =
-        wordNow === "stopped"
-          ? null
-          : `the quit reads ${wordNow ?? "nothing"} (device ${stateP}) — the stopped face unwitnessed`;
+      const finding = j.recorded ? j.staging : null;
       if (finding !== null)
         say(`SMOKE_PHONE_FINDING ${JSON.stringify({ row: "SIM-STOPPED", finding })}`);
       return {
