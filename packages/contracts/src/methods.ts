@@ -2892,8 +2892,8 @@ export const METHODS: MethodDef[] = [
   // CP-3 (`draft/compose-plane/cp3-the-person.md`, CP3-D6 A) — the needs-you queue's doors for the window, beside the
   // sparks': `agents.manage` and `local`, because answering an item may start an agent or send words on the person's
   // behalf, an act of the person at this device. `approval.respond` stays reserved for AR-6's answers to an agent's own
-  // asks. Not reachable from the tailnet, so each subscription is a bare `true` (the phone's comes with PG and its own
-  // ruling).
+  // asks. Not reachable from the tailnet, so each subscription is a bare `true`: the phone reaches none of them until
+  // PG rules its scope.
   defineMethod({
     surface: "product",
     method: "needs.list",

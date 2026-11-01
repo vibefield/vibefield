@@ -664,7 +664,8 @@ export const ComposeAskUserOutput = z
   .passthrough();
 export type ComposeAskUserOutput = z.infer<typeof ComposeAskUserOutput>;
 
-/** notify (every agent, MT-D11): words for the user while they are elsewhere (CP3-D5 A), said on one line. */
+/** notify (every agent, MT-D11): words for the user, said on one line on every window's status line, and as an OS
+ * notice while no window is in front (CP3-D5 A). */
 export const ComposeNotifyInput = z
   .object({ text: z.string().min(1).max(COMPOSE_NOTIFY_MAX) })
   .passthrough();

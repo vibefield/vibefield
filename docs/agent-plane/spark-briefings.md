@@ -66,7 +66,7 @@ reach, and is written to the audit log before it acts.
     B).
   - *Corrected 2026-10-31 (CP-3):* this said "CP-D7's cap past 8 live agents is refused as `limit`. Its needs-you card
     comes with CP-3." Since CP-3 such a spawn waits in the needs-you queue for Allow one more (below), and Not now is
-    told as `limit`. The card that answers it is the window's, in CP-3's window half.
+    told as `limit`. The window's needs-you card answers it (DESIGN.md §8 "Chat's thread").
 
 ## The person (CP-3)
 

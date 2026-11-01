@@ -1661,9 +1661,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the pane, so a live agent's screen never reflows under it. The rows it covers are where an agent's own input box
     sits, so each item's entry says what it covers and when it leaves. @'s list stands over the items.
     - At SP-1d the one item is the hello and its starters (below). CP-3's needs-you card (CP3-D8) joins them by the
-      same rule, with its own entry here when its slice draws it, and so do the live cards at SP-1e. *Drawn at CP-3
-      (2026-10-31, DESIGN.md first):* the needs-you card, below the hello. One item stands at a time: while a card
-      stands, the hello does not.
+      same rule, with its own entry here when its slice draws it, and so do the live cards at SP-1e. *Drawn at CP-3,
+      2026-10-31:* the needs-you card, its entry below the hello's. One item stands at a time: while a card stands, the
+      hello does not.
     - A question the spark's own agent asks in its pane (a permission, a question) draws no item: the pane shows the
       ask itself, and the row's word says it (Needs your OK, Asking you).
   - **The hello and three starters** (NS-D4 A, "Hello, and three starters"; CH-D5, "Starters show while a thread is
@@ -1995,7 +1995,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       pane holds no menu for it, so a paste there is not an answer. The cost is said: a paste made while a card stands
       lies under the card, unseen, until it leaves, and the paste's hazard (below) holds for the answer's facts, which
       are submitted together with it. Struck, a card stops Send as the blocker does, and the note points at the card,
-      not the pane (its words here first).
+      not the pane.
     - When the paste is not taken, the draft stays whole and the note says why, in the hand's words where the outcome
       is the hand's own (§8 "The hand"):
       - "Not pasted — Vela's pane is not taking input" (its input did not open within 1.5 s, or a spark that is awake

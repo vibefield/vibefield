@@ -1669,8 +1669,8 @@ export const LAYOUT = {
   /** CP-2 (CP2-D3) — each session's input queue, one file per run, 0600 in a 0700 directory: a spark's words and
    * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. Since CP-3 (LEANS P3)
    * each `AgentInputQueueFile` is signed with AGENT_INPUTS_KEY_FILE's secret (0600, made once, never overwritten), so
-   * an agent that writes or edits one cannot speak as a spark or as VibeField: an unsigned or forged queue is set
-   * aside at restore, never delivered. */
+   * an agent that edits one cannot speak as a spark or as VibeField: an unsigned or forged queue is set aside at
+   * restore, never delivered. That holds against an edit; the key is 0600 to the same uid, as the sparks' is (EL7). */
   AGENT_INPUTS_DIR: ["fieldd", "inputs"],
   AGENT_INPUTS_KEY_FILE: ["fieldd", "inputs.key"],
   /** CP-3 (cp3-the-person.md §5.1) — the needs-you queue: one `NeedsRecord` per item, 0600 in a 0700 directory, each

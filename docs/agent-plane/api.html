@@ -2030,9 +2030,10 @@
               (CP-L6), under the principal <code>mcp-agent</code> with the run's id and the caller as its target. A
               refusal is a tool result, <code>isError</code> with <code>structuredContent.fact</code>
               (<code>unknown-tool</code>, <code>forbidden</code>, <code>bad-input</code>, <code>outside</code>,
-              <code>not-found</code>, <code>unavailable</code>, and since CP-2 <code>limit</code> and
-              <code>failed</code>), never a protocol error. A send or a spawn held for the person's OK (CP-3) is an
-              answer, never a refusal: it names the needs-you item it waits in (<a href="#cat-needs"><code>needs.*</code></a>). Each caller's <code>instructions</code> are built from
+              <code>not-found</code>, <code>unavailable</code>, <code>limit</code>, <code>failed</code>), never a
+              protocol error. <em>Corrected 2026-10-31 (CP-3):</em> this named the first five alone; <code>unavailable</code>
+              and <code>failed</code> were facts from MT-0, and <code>limit</code> from CP-2. A send or a spawn held for
+              the person's OK (CP-3) is an answer, never a refusal: it names the needs-you item it waits in (<a href="#cat-needs"><code>needs.*</code></a>). Each caller's <code>instructions</code> are built from
               the rows it holds. The door knows no vendor (AR-L1). The bridge reaches an agent by the agent runtime's
               per-run briefing at every birth (MT-D9): a spark's carries the whole server and its brief and refuses
               when it cannot be delivered (CP-1d); a plain run's carries the door and its read-only <code>agent</code>
