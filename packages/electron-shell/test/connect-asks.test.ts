@@ -42,6 +42,7 @@ const preferences = (connectAsks: boolean) => ({
   syncPosture: "automatic",
   confirmQuit: true,
   connectAsks,
+  keepRunningOnQuit: false,
 });
 
 /** A session past its first minute, not connected, Devices put off, the switch on. */

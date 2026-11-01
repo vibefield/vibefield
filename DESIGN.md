@@ -4899,7 +4899,8 @@ their place". "Fullscreen" stays the pane's word (§8).
 **The quit's words** (track AL, `draft/thinking-app-lifecycle.md` §4 and §8; AL-D1, AL-D3 ruled 2026-10-27; this
 paragraph added 2026-11-01 by AL-10, the words before it lived only in the shell's code). A person's quit (⌘Q, the
 Dock, the status item, the menu) stops the terminal service. A crash, a Force Quit or a signal leaves it running.
-Every place that says what a terminal's life is says those two facts, and no place promises more (GT-D11).
+Every place that says what a terminal's life is says those two facts, and no place promises more (GT-D11). With
+**Keep running when VibeField quits** on, only the status item's **Quit VibeField** is a quit (the last bullet).
 - **The quit box** (`quit-gate.ts`, only while sessions run and **Ask before quitting** is on) is the update consent's
   shape. Its message is the consequence: "Quit VibeField and end 3 terminal sessions?" Its detail names them: "Quitting
   stops the terminal service, which ends:", then up to five rows ("title — cwd"), then "and N more". Its buttons say
@@ -4915,6 +4916,17 @@ Every place that says what a terminal's life is says those two facts, and no pla
   finds it. It ends when its program exits, when you end it, when you quit VibeField, or when the Mac restarts." The
   fact beside it is **Until you quit**. Until AL-10 it said a terminal "outlives … quitting VibeField", which has been
   false since AL-3 (2026-10-27).
+- **Settings → Diagnostics' "Last exit"** (AL-12, `last-exit-words.ts`) keeps how a shell last left after the notice
+  has gone, in one sentence: what happened and when, then what it ended or what kept running. "VibeField quit
+  unexpectedly on Oct 30 at 10:42. 2 terminal sessions kept running." · "VibeField quit on Oct 30 at 10:42 and ended 2
+  terminal sessions." · before any exit, "No exit recorded yet." An unread count is again "Its terminal service kept
+  running.", never zero.
+- **Keep running when VibeField quits** (AL-6, AL-D2; Settings → Desktop behavior, macOS, off by default): "Quitting
+  closes the windows and keeps VibeField in the menu bar, with its terminal sessions running. Quit VibeField in the
+  menu bar quits it." With it on, ⌘Q, the Dock and the menu close the windows and hide the Dock icon. That is no quit,
+  so nothing asks and nothing ends. The status item is shown whatever **Show status item** says, and its first row
+  says "VibeField is running in the background". Its **Quit VibeField** is the quit, through the boxes above. Opening
+  a window brings the Dock icon back.
 
 ---
 

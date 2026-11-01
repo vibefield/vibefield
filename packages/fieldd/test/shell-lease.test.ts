@@ -133,6 +133,79 @@ describe("the shell lease (AL-7)", () => {
     expect(await b.value.attach("c1")).toBeNull();
   });
 
+  it("keeps how the last holder left after the next attach took the once-record, and each exit replaces it (AL-12)", async () => {
+    const root = tempRoot();
+    const a = lease(root, 2, 1_000);
+    expect(await a.value.lastExit()).toBeNull();
+    await a.value.attach("c1");
+    a.value.closed("c1");
+    await a.value.flush();
+    const b = lease(root, 1, 2_000);
+    expect(await b.value.attach("c2")).toEqual({ planned: false, at: 1_000, sessions: 2 });
+    // said once, kept for Diagnostics
+    expect(await b.value.lastExit()).toEqual({ planned: false, at: 1_000, sessions: 2 });
+    b.value.leave("c2", "restart");
+    b.value.closed("c2");
+    expect(await b.value.lastExit()).toEqual({
+      planned: true,
+      why: "restart",
+      at: 2_000,
+      sessions: 1,
+    });
+  });
+
+  it("a stop a shell asked for is kept as that shell's exit and seals the lease: its own close records nothing (AL-12)", async () => {
+    const root = tempRoot();
+    const a = lease(root, 0, 3_000);
+    expect(await a.value.attach("c1")).toBeNull();
+    a.value.stoppedBy("quit", 4);
+    a.value.closed("c1"); // the stop's own close
+    await a.value.flush();
+    expect(a.vacancies).toEqual([]);
+    expect(await a.value.lastExit()).toEqual({
+      planned: true,
+      stopped: "quit",
+      at: 3_000,
+      sessions: 4,
+    });
+    // a stopping pair is no shell leaving one that keeps running: nothing is said to the next shell
+    expect(await lease(root).value.attach("c2")).toBeNull();
+  });
+
+  it("a record still owed survives a stop: the crash before it is said, once, to the next shell (AL-12)", async () => {
+    const root = tempRoot();
+    const a = lease(root, 2, 1_000);
+    await a.value.attach("c1");
+    a.value.closed("c1"); // a crash: its once-record is owed to the next shell
+    await a.value.flush();
+    // the next fieldd on this root is stopped by a shell's quit before any shell took the record
+    const b = lease(root, 0, 3_000);
+    b.value.stoppedBy("quit", 0);
+    await b.value.flush();
+    expect((await b.value.lastExit())?.stopped).toBe("quit");
+    expect(await lease(root).value.attach("c3")).toEqual({
+      planned: false,
+      at: 1_000,
+      sessions: 2,
+    });
+  });
+
+  it("an update that leaves the floor is kept as the shell's exit with the floor's count, and seals the lease (AL-12)", async () => {
+    const root = tempRoot();
+    const a = lease(root, 3, 5_000);
+    await a.value.attach("c1");
+    a.value.leftForUpdate();
+    a.value.closed("c1");
+    await a.value.flush();
+    expect(a.vacancies).toEqual([]);
+    expect(await a.value.lastExit()).toEqual({
+      planned: true,
+      why: "update",
+      at: 5_000,
+      sessions: 3,
+    });
+  });
+
   it("a garbled record is set aside and read as none", async () => {
     const root = tempRoot();
     const path = join(root, ...LAYOUT.SHELL_EXIT);
@@ -262,6 +335,57 @@ describe("the shell lease's verbs (AL-7, the daemon)", () => {
     await until(() => native.paired.size > 0);
     await daemon.stop();
     expect(native.requestLog.map((request) => request.method)).toContain("native.lifecycle.detach");
+  });
+
+  it("an update's stop that leaves the floor is the shell's exit; the supervisor's bare stop of a stale fieldd is none (AL-12)", async () => {
+    const update = await fixture();
+    update.daemon.onShutdownRequest(() => undefined);
+    const shell = await connect(update.daemon, update.daemon.shellToken, "shell-main");
+    await shell.rpc.call("system.shell.attach", {});
+    await shell.rpc.call("system.shutdown", { reason: "update" });
+    await until(() => existsSync(join(update.dataDir, ...LAYOUT.SHELL_LAST_EXIT)));
+    expect(
+      JSON.parse(readFileSync(join(update.dataDir, ...LAYOUT.SHELL_LAST_EXIT), "utf8")),
+    ).toMatchObject({
+      planned: true,
+      why: "update",
+    });
+
+    const stale = await fixture();
+    stale.daemon.onShutdownRequest(() => undefined);
+    const supervisor = await connect(stale.daemon, stale.daemon.shellToken, "shell-main");
+    await supervisor.rpc.call("system.shutdown", {});
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(existsSync(join(stale.dataDir, ...LAYOUT.SHELL_LAST_EXIT))).toBe(false);
+  });
+
+  it("a window that may read diagnostics reads the last exit, kept after the next attach; one that may not is refused (AL-12)", async () => {
+    const { daemon, dataDir } = await fixture();
+    const reader = await connect(
+      daemon,
+      daemon.tokens.mint(["diagnostics.read"], "test-diagnostics").token,
+      "renderer",
+    );
+    expect(await reader.rpc.call("diagnostics.lastExit", {})).toEqual({ shell: null });
+    const first = await connect(daemon, daemon.shellToken, "shell-main");
+    await first.rpc.call("system.shell.attach", {});
+    first.socket.terminate();
+    await until(() => existsSync(join(dataDir, ...LAYOUT.SHELL_LAST_EXIT)));
+    const next = await connect(daemon, daemon.shellToken, "shell-main");
+    expect(await next.rpc.call("system.shell.attach", {})).toMatchObject({
+      lastExit: { planned: false },
+    });
+    expect(await reader.rpc.call("diagnostics.lastExit", {})).toMatchObject({
+      shell: { planned: false },
+    });
+    const other = await connect(
+      daemon,
+      daemon.tokens.mint(["settings.manage"], "test-window").token,
+      "renderer",
+    );
+    expect((await other.rpc.callErr("diagnostics.lastExit", {})).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
   });
 
   it("a probe (hello alone) leaves no record, and a window may not touch the lease", async () => {

@@ -14,6 +14,7 @@
   "PAIRING_FILE": ["native", "pairing"],
   "MESH_STATE_DIR": ["native", "mesh"],
   "LINK_FILE": ["fieldd", "link.json"],
+  "SHELL_LAST_EXIT": ["fieldd", "shell-last-exit.json"],
   "SHELL_EXIT": ["fieldd", "shell-exit.json"],
   "MANAGER_EXIT": ["fieldd", "manager-exit.json"],
   "SHELL_RELAUNCHES": ["fieldd", "shell-relaunches.json"],
