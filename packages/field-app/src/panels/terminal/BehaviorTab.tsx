@@ -151,9 +151,9 @@ export function BehaviorTab({ model }: { model: TerminalPageModel }): ReactEleme
       >
         <SettingsRow
           title="How long a terminal lives"
-          description="As long as its program runs, on this Mac's terminal service. It outlives this window and quitting VibeField; it ends when its program exits, when you end it, or when the service stops — when the Mac restarts, for instance."
+          description="As long as its program runs, on this Mac's terminal service. Closing this window leaves it running, and so does a crash: the next launch finds it. It ends when its program exits, when you end it, when you quit VibeField, or when the Mac restarts."
         >
-          <Fact>Until it exits</Fact>
+          <Fact>Until you quit</Fact>
         </SettingsRow>
         <SettingsRow
           title="Closing a pane"
