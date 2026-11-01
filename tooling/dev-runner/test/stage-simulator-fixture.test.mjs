@@ -1875,7 +1875,7 @@ test("T1: boot and a device verb WAIT for readiness inside the smoke's door time
     ["boot", "bootstatus"],
   );
   // boot's wait fits the smoke's 150 s door timeout for `boot`
-  assert.ok(waits.length === 1 && waits[0] > 0 && waits[0] <= 140_000, String(waits));
+  assert.ok(waits.length === 1 && waits[0] > 0 && waits[0] <= 145_000, String(waits));
   // never ready within boot's wait: Booting, never Booted
   const slow = ownRun();
   const late = bootingHost("Shutdown");
@@ -1968,6 +1968,67 @@ test("T1: past BOOT_READY_MS the device answers failed — `not ready after <ms>
   assert.match(said[0], /<pts3-dev-1> not ready after 180000 ms/u);
   assert.match(said[0], /Waiting on Data Migration/u);
   assert.ok(!holdsUdid(said[0]));
+});
+
+test("G5: no door verb outlives the smoke's timeouts — openurl and screenshot inside 55 s, boot inside 145 s", async () => {
+  // a slow host: every `simctl list` costs `host.step` ms of the clock; each verb's own timeout is kept
+  const slow = (state, step) => {
+    const host = bootingHost(state);
+    const exec = host.deps.exec;
+    host.step = step;
+    host.timeouts = {};
+    host.deps.exec = async (file, args, o = {}) => {
+      if (file === "/usr/bin/xcrun" && args[1] === "list") host.at += host.step;
+      if (file === "/usr/bin/xcrun" && ["openurl", "io", "boot"].includes(args[1]))
+        host.timeouts[args[1]] = o.timeoutMs;
+      const r = await exec(file, args, o);
+      if (args[1] === "boot") host.list("Booted");
+      return r;
+    };
+    return host;
+  };
+  const run = ownRun();
+  const host = slow("Booted", 0);
+  await doorAct({ verb: "state", device: 1 }, run, host.deps);
+  host.asks[0](ok());
+  await settle();
+  // iOS ready; the list read takes 30 s: the verb runs on the 25 s left of 55, never its own 30
+  host.step = 30_000;
+  assert.equal(
+    (await doorAct({ verb: "openurl", device: 1, url: MOTION }, run, host.deps)).body.state,
+    "opened",
+  );
+  assert.equal(host.timeouts.openurl, 25_000);
+  assert.equal(
+    (await doorAct({ verb: "screenshot", device: 1, file: "live-5.png" }, run, host.deps)).body
+      .state,
+    "written",
+  );
+  assert.equal(host.timeouts.io, 25_000);
+  // 51 s gone before the verb: under 5 s left — failed, not ready, and never run
+  host.step = 51_000;
+  host.timeouts = {};
+  for (const body of [
+    { verb: "openurl", device: 1, url: MOTION },
+    { verb: "screenshot", device: 1, file: "live-6.png" },
+  ]) {
+    const r = await doorAct(body, run, host.deps);
+    assert.equal(r.status, 502, body.verb);
+    assert.match(r.body.why, /not ready/u, body.verb);
+  }
+  assert.deepEqual(host.timeouts, {});
+  // boot: simctl boot's timeout is what is left of 145 s, and readiness waits only what is left after it
+  const b = slow("Shutdown", 30_000);
+  const waits = [];
+  b.deps.sleep = async (ms) => {
+    waits.push(ms);
+  };
+  assert.deepEqual((await doorAct({ verb: "boot", device: 1 }, ownRun(), b.deps)).body, {
+    n: 1,
+    state: "Booting",
+  });
+  assert.equal(b.timeouts.boot, 115_000);
+  assert.deepEqual(waits, [85_000]);
 });
 
 test("H3: a failed verb carries simctl's stderr — its first 300 chars, redacted — in the said line and the response", async () => {

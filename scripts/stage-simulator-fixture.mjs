@@ -1295,9 +1295,14 @@ export function stderrOf(run, r) {
  * `lastBootedAt`, dropped when the device is seen not Booted. It holds whoever booted it (the stage, or the product's
  * Boot in SIM-OFF-BOOT). */
 export const BOOT_READY_MS = 180_000;
-/** How long one door request waits for readiness: `boot` inside the smoke's 150 s door timeout for it (simctl boot's
- * own time counted), a device verb inside its 60 s. */
-export const BOOT_VERB_WAIT_MS = 140_000;
+/** G5: no door verb outlives the smoke's door timeouts (150 s for `boot`, 60 s else). `boot` — its list reads, simctl
+ * boot and the readiness wait — ends inside BOOT_BUDGET_MS; `openurl` and `screenshot` inside VERB_BUDGET_MS, their
+ * simctl given `min(VERB_RUN_MS, what is left)` and never run on under MIN_VERB_MS (answered `failed`, not ready). */
+export const BOOT_BUDGET_MS = 145_000;
+export const VERB_BUDGET_MS = 55_000;
+export const VERB_RUN_MS = 30_000;
+export const MIN_VERB_MS = 5_000;
+/** The longest a device verb waits for readiness (inside its budget, MIN_VERB_MS kept for the verb). */
 export const READY_VERB_WAIT_MS = 45_000;
 
 /** An own device's readiness, now (`waitMs` 0) or waited for up to `waitMs`: `{state}` — `Booted` (iOS ready), `Booting`
@@ -1388,32 +1393,52 @@ export async function doorAct(body, run, deps) {
     });
   const readyFor = async (waitMs) =>
     readiness(run, deps, own, await deviceNow(run, deps, own), waitMs);
+  // G5: the request's own clock — every wait and every verb's timeout inside its budget
+  const t0 = deps.now();
+  const left = (budget) => budget - (deps.now() - t0);
+  const short = (budget) =>
+    json(502, {
+      n,
+      state: "failed",
+      why: `not ready: ${Math.max(0, left(budget))} ms of the door's ${budget} ms left, under ${MIN_VERB_MS}: its verb not run`,
+    });
+  /** openurl and screenshot: readiness, then simctl on what is left of VERB_BUDGET_MS. */
+  const deviceVerb = async (what, args, word) => {
+    const gate = await readyFor(
+      Math.max(0, Math.min(READY_VERB_WAIT_MS, left(VERB_BUDGET_MS) - MIN_VERB_MS)),
+    );
+    if (gate.state === "Booting" || gate.state === "failed") return notReady(gate);
+    const runFor = Math.min(VERB_RUN_MS, left(VERB_BUDGET_MS));
+    if (runFor < MIN_VERB_MS) return short(VERB_BUDGET_MS);
+    const r = await simctl(run, deps, args, runFor);
+    return r.code === 0 ? json(200, { n, state: word }) : failed(what, r);
+  };
   if (verb === "state") {
     const gate = await readyFor(0);
     return gate.state === "failed" ? notReady(gate) : json(200, { n, state: gate.state });
   }
   if (verb === "boot" || verb === "shutdown") {
-    const asked = deps.now();
     if (verb === "shutdown") run.ready.delete(own.udid.toUpperCase());
     const up = (state) => state === "Booted" || state === "Booting";
     // R2-A: a device simctl already lists Booted (the product's face booted it) or Booting is never booted again — boot
     // only waits for its readiness
     const was = verb === "boot" ? await deviceNow(run, deps, own) : null;
+    if (was !== null && !up(was.state) && left(BOOT_BUDGET_MS) < MIN_VERB_MS)
+      return short(BOOT_BUDGET_MS);
     const r =
       was !== null && up(was.state)
         ? null
-        : await simctl(run, deps, [verb, own.udid], verb === "boot" ? 120_000 : 60_000);
+        : await simctl(
+            run,
+            deps,
+            [verb, own.udid],
+            verb === "boot" ? Math.min(120_000, left(BOOT_BUDGET_MS)) : 60_000,
+          );
     const now = r === null ? was : await deviceNow(run, deps, own);
     // simctl refuses a boot of a booted device (and a shutdown of a shut one): the state is the answer
     if (verb === "boot" && up(now.state)) {
       // boot's answer is taken ONCE (the smoke's ensure()): readiness waited for inside its door timeout
-      const gate = await readiness(
-        run,
-        deps,
-        own,
-        now,
-        Math.max(0, BOOT_VERB_WAIT_MS - (deps.now() - asked)),
-      );
+      const gate = await readiness(run, deps, own, now, Math.max(0, left(BOOT_BUDGET_MS)));
       return gate.state === "failed" ? notReady(gate) : json(200, { n, state: gate.state });
     }
     const reached = verb === "boot" ? now.state === "Booted" : now.state === "Shutdown";
@@ -1427,10 +1452,7 @@ export async function doorAct(body, run, deps) {
         state: "refused",
         why: "openurl reaches only this door's /motion or /still",
       });
-    const gate = await readyFor(READY_VERB_WAIT_MS);
-    if (gate.state === "Booting" || gate.state === "failed") return notReady(gate);
-    const r = await simctl(run, deps, ["openurl", own.udid, url], 30_000);
-    return r.code === 0 ? json(200, { n, state: "opened" }) : failed("openurl", r);
+    return deviceVerb("openurl", ["openurl", own.udid, url], "opened");
   }
   if (verb === "screenshot") {
     const file = shotPath(body.file, run, deps);
@@ -1440,10 +1462,7 @@ export async function doorAct(body, run, deps) {
         state: "refused",
         why: "a screenshot is a new .png in the shot dir",
       });
-    const gate = await readyFor(READY_VERB_WAIT_MS);
-    if (gate.state === "Booting" || gate.state === "failed") return notReady(gate);
-    const r = await simctl(run, deps, ["io", own.udid, "screenshot", file], 30_000);
-    return r.code === 0 ? json(200, { n, state: "written" }) : failed("screenshot", r);
+    return deviceVerb("screenshot", ["io", own.udid, "screenshot", file], "written");
   }
   // show-app: the fence, and no Simulator.app running unless it is proven the run's
   const fence = await fenceAgain(run, deps);
