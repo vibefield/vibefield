@@ -390,15 +390,20 @@
     and Send, which pastes into the pane and leaves Return to you.
   - A new spark says hello with three starters. A thread's unread dot lasts until you open it. A thread takes one act
     at a time, and fieldd wakes a spark once.
+- **CP-3, the person**: LANDED 11-01 (`ce6577783`, the mini's run 88; LANDED "CP-3"), on CP3-D1…D8, all A (James,
+  10-31 06:31:34Z; `draft/compose-plane/cp3-the-person.md`). CP3-D3 is built as its fallback, B, until a session's
+  permission mode is a fact VibeField reads.
+  - A spark asks you (`ask_user`) and tells you (`notify`). What waits on you is one queue in fieldd: a spark's
+    questions, which wait on your answer, and its first send into a session you started and a spawn past 8 live
+    agents, each held for your OK.
+  - Chat's row says it, with the orange dot and the note, and the thread shows its card, answered once for every
+    window. A notify is one line on the status line, and an OS notice while no VibeField window is in front.
 - Next, in order:
-  - **CP-3**: the person (`ask_user`, `notify`; CP3-D1…D8 ruled 10-31 at their leans, James 06:31:34Z;
-    `draft/compose-plane/cp3-the-person.md`).
-    - It was built in lane `cp3` on James's "start all" (10-31 14:57:34Z): half 1 (contracts, fieldd, main), then
-      half 2 (the window, on SP-1d's thread). Its tip is `8c1bc51c0`.
-    - Next it merges the new main and resolves the six meanings its final critique names (`lanes/co-plan/final-cp3.md`).
-      Then it gets its own light and mint.
-  - **TU-1**: the turn fact and the persona set on the board's row, after CP-3's merge. VF-PM ruled Q3–Q7 on 11-01 at
-    07:17Z. Q1 and Q2 are James's, on a decision page first.
+  - **TU-1**: the turn fact and the persona set on the board's row. All seven marks are ruled: Q1 and Q2 by James
+    (11-01 08:31:35Z, on the decision page), Q3–Q7 by VF-PM (07:17Z).
+    - After it, its own slice, **the handle** (VF-PM, 11-01 09:55Z): the needs-you card names a session by fieldd's
+      runLabel, and the lean is @'s handle ("vibe-field·2"), so two untitled sessions never read alike. A one-frame
+      visual goes to James only if it changes what he sees.
   - **SP-1e**: CH-D2's live cards in Chat's thread, and Chat's pane as a card target.
   - **CP-4**: flows and the desk applier.
   - **CP-5**, which is MT-7: Codex and Grok, once their MCP processes can be named.
@@ -473,6 +478,9 @@
   item 146b (the phone stage places a Simulator.app's start by its `etime` between two reads of the clock, never by
   `lstart`'s local wall time, so DST's repeated hour cannot make the run's own app foreign; perf-lab's lstart an
   identity string, left: `ab0199542` as M87, a fast-forward, run 87; LANDED "Item 146b") ·
+  item 147 (index-timeline's SP-6 real-rosettad row "the page over the ground-truth transcript" pages once the
+  session's row is indexed, before rosetta has its entries under load: red once in CP-3's merged-tree light, green
+  3 of 3 alone; the row should wait on its entries; skipped where FIELDD_ROSETTAD_BIN is unset; LANDED "CP-3") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
@@ -847,7 +855,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c and SP-1d landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | CP-3 (built, merging the new main) · TU-1 · SP-1e |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d and CP-3 (`ce6577783`, run 88) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | TU-1 (ruled) · the handle, after TU-1 · SP-1e · CP-4 · CP-5 |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**

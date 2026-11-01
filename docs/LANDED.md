@@ -27562,3 +27562,255 @@ S7's skewed fixture. light146c (09:41:28Z → 09:41:46Z, load 10, at `ab0199542`
 
 **Owed.** Nothing of the fixer's. Item 146 itself, puppeteer's ps reader, is upstream; its issue draft names the
 kernel's start, or `etime` with a 2 s window, since macOS's ps has no `etimes`.
+
+## CP-3 — the person: a spark asks you (`ask_user`) and tells you (`notify`); what waits on you is one queue in fieldd (a spark's questions, its first send into a session you started, its spawn past 8 live agents), answered once for every window on a card in Chat's thread; a notify is one line on the status line, and an OS notice while no VibeField window is in front (2026-11-01; `34067fe76` → `ba3cdf984`, sixteen commits begun on `c9fe1c65a`, with co/sp1d at `c5b0c2688` (`5985d56a7`) and main `e14d45dbe` (`365e723e5`) merged in, lane `co/cp3` in `/Volumes/SamsungRed/lanes/cp3`, in the mini's mint M88 `ce6577783` over main `b2fad1d42`, run 88)
+
+James ruled CP3-D1…D8 at A, all eight at their leans, at 2026-10-31 06:31:34Z ("Accept all eight at the leans"), and
+typed "start all" at 14:57:34Z, his go for SP-1d and CP-3's build. VF-PM ruled the builders' leans at 16:35Z (CP-3's
+P1–P5 in `lanes/co-plan/LEANS.md`), James's to overturn. It is `draft/compose-plane/cp3-the-person.md`, built as
+ruled in two halves: half 1 (contracts, fieldd, main) on main, then half 2 (the window) on SP-1d's thread (P1).
+CP3-D3 is A, and what is built is its own fallback, B ("Until it lands, B stands"): the first send into each session
+the person started waits for his OK, whatever its mode. A waits on a fact VibeField does not read yet: the session's
+permission mode, in no vendor's words (DESIGN.md §9).
+
+**What.**
+- **The words and the doors' page first** (`34067fe76`):
+  - DESIGN.md §9 gains "The person's queue's words" and "An agent's notify";
+  - api.html gains `#cat-needs`: `needs.list`, `needs.subscribe`, `needs.answer` and `needs.notices.subscribe`, all
+    `agents.manage` and local, beside `compose.sparks.*` (CP3-D6 A);
+  - the tool table marks `ask_user` and `notify` Built, and `agent_send` and `agent_spawn` gain their held answers.
+- **One record signer** (`204e1d32e`): `RecordSigner` (`fieldd/src/signed-record.ts`) signs with HMAC-SHA256 over
+  contracts' canonicalJson. Like SessionRecordStore, it sets aside a key other users can read, or a file that holds
+  no key, and mints another. SparkStore is on it.
+- **CP-2's input queue, signed** (`aaeaf2d0b`, EL7): a kept queue is `{format, run, inputs, signature}`, its run
+  inside the signature, under its own key (`LAYOUT.AGENT_INPUTS_KEY_FILE`). Restore refuses an unsigned, forged,
+  exposed or unreadable file: it renames it aside, logs `fieldd.inputs.set_aside`, and never delivers its words.
+- **The person's room, `rooms/you/`** (`86c9d621d`, contracts and fieldd as one commit):
+  - contracts: the needs-you item and its answer `{choice, at, outcome, reason?, told, waits?}`, the choice an index
+    into the item's acts; the bounds; `NEEDS_CHOICE_WORDS`; the four `needs.*` rows; `NEEDS_DIR` and
+    `NEEDS_KEY_FILE`; 15 fixtures. `tools.ts` serves `ask_user` and `notify` (14 of 20 served).
+  - `NeedsStore`: one signed record per item, 0600 in 0700. A record whose item id is not its file name is set aside
+    as forged.
+  - `words.ts`: §9's facts line for line, every value on one line, a name cut at 64 and a question at 120.
+  - `NeedsQueue`, the room's one authority:
+    - restore only reads, and reconciles once the re-attach has settled;
+    - answers are serialized per item, and an act is never done twice (CP2-D2);
+    - an act's outcome is kept apart from its telling (`told`, `waits`);
+    - an answer to a sleeping spark wakes it through compose.sparks.open's own wake, and lands once its run is live
+      (CP3-D7 A);
+    - an agent's own ask is read from its run's first permission or question blocker, listed with where to answer
+      it and never kept (CP3-D1 A);
+    - 8 open items per spark, 16 sends per held item and 6 notices a minute per session; past each, the fact `limit`.
+  - The talk room holds a spark's first send into a session the person started (CP3-D3) and a spawn past 8 live
+    agents (CP3-D4 A). `needs.answer` is audited on a `needs-item` target, its choice by index, and a tool call that
+    raised an item names it on its audit line, never its words.
+- **Main's OS notice** (`6436827ac`, CP3-D5 A): `NeedsNoticeObserver` hears `needs.notices.subscribe`, deltas only,
+  and says a notify only while no VibeField window is in front, never in a smoke. A click opens Chat, whoever told
+  it. No IPC channel is added: the table stays 36.
+- **The window half, on SP-1d's thread** (co/sp1d at `c5b0c2688` merged in, `5985d56a7`):
+  - **the card, drawn, DESIGN.md first** (`5bd26f569`): §8 "Chat's thread" gains "The needs-you card", on the Sparks
+    page's plates, with each deviation said;
+  - **Chat counts what needs you** (`6cbeba97c`): the feed reads the queue beside the board, so the row's word, its
+    dot, Chat's cell dot and the views note count the queue's items. The note is said per item; the dot stays one;
+  - **notify's note** (`07d0d4327`): "Vela — the build is green" on the status line, one line, for 2.4 s, at most
+    two waiting per teller. contracts' `needsNoticesOf` is the one reader of a notices frame, for main and the window;
+  - **the card in the thread** (`8c1bc51c0`): a `ThreadItem` in the thread's foot, answered by its act's place. An
+    agent's ask has Show alone, which goes to its pane in Godview. The catalog has `NeedsCardPreview` and the waiting
+    plate.
+- **Main merged in** (`365e723e5`, main `e14d45dbe`, SP-1d as landed): 15 conflicts, each resolved by meaning
+  (final-cp3 item 1 (a)–(f)), and two tsc reds after the textual resolve, both fixed.
+- **The critics' rounds and the fold** (`2a4c67d69`, `6f19861a6`, `63aac8b4c`, `8268de88d`, `ba3cdf984`):
+  - an answer and a Wake give one run, held by a real-floor row; a stale card's acts go quiet;
+  - a record after an act already done stands in memory whatever the disk does (`#stand`, logged
+    `fieldd.needs.unkept`), and the `acting` refusal is retired;
+  - fieldd's `clip` is the one cut, tied to the window by the EL9 fixture `needs-item.held-send-cut.json`;
+  - the card is ringed while it waits on you, and the window's two needs subscriptions are asked again after a
+    retryable refusal (`src/reconnect.ts`);
+  - one authority for each bound (`NEEDS_OPEN_PER_SPARK` and `NOTIFY_PER_MINUTE` in contracts) and for the kind
+    words (`needsKindOf`, `needsStateOf`, `needsOutcomeOf`);
+  - the tools' descriptions state their bounds, and the glyph roles name the card's answered line;
+  - landed words carry one dated note each (VF-PM's dated-note rule, 2026-11-01); a restart's uncertain answer says
+    the yes is gone; the teller is named as fieldd names it.
+
+**Real vs not yet.**
+- Real, from fieldd's doors to the window and main, with nothing stubbed:
+  - the queue, its store and its four doors; `ask_user` and `notify`;
+  - the held send and the held spawn, and the yes, which lasts for that run;
+  - an answer's wake into a sleeping spark;
+  - the row's word, the dot and the note counting items; the card and its acts; notify's line; main's OS notice;
+  - CP-2's input queue, signed;
+  - the catalog's plates, each the shipping view over fixtures.
+- Not yet, each named by a ruling, by the plan's §0.2 or by the builders' notes:
+  - the daily spend (CP-D7's second half): no spend fact exists, and CP3-D4 A names it a gap;
+  - an agent's own ask answered here: it is listed with Show, and `approval.respond` stays reserved (CP3-D1 A,
+    CP-L4, AR-6);
+  - the watchdog (CR-D14 A), homed at CP-4; Godview's orange bubble (EW-D1);
+  - the phone: `agents.manage` is local, so the phone reaches no `needs.*` door until PG rules its scope;
+  - CP3-D3 A, which waits on a session's permission mode in no vendor's words;
+  - CP-D14's sleep timer: Asleep stays "no live session";
+  - main's observer, like TS-5's link notices, is not asked again when a handle's first subscribe fails as the
+    connection drops, so that handle hears no notify until the next one. The window's subscriptions are asked again.
+
+**Found.**
+- **CP-2's kept input queue could speak as anyone.** Its restore trusted its files, so a same-uid file at
+  `fieldd/inputs/<run>.json` was pasted into that run at its next idle after a restart, marked as any spark's words
+  or as "VibeField:", around the hold CP-3 builds. It is signed now; red first, a CP-2-form file speaking as VibeField
+  restored 2 inputs where 0 must.
+- **A signature binds a file to its name only when the name is inside it.** The input queue binds its run, and the
+  needs store its item id. SparkStore does not (owed, below).
+- **SessionRecordStore's exposed-key branch threw on its first call:** its `continue` skipped the mint, so the first
+  records read after a chmod'd `sessions.key` (at boot, the re-attach list) threw. Fixed at its source, red first.
+- **SparkStore's old compare took a valid signature with trailing junk** (`Buffer.from(hex)` stops at the first
+  non-hex character), and its unguarded mode check would set aside every spark on Windows, where libuv reports a
+  writable file as 0o666 (reasoned, not run there). The one signer does both now.
+- **CP-2's waker named an untitled run by its id:** it read `row.provider`, which no session summary carries.
+  `runLabel` (the run's title, else its catalog label, else its id, one line cut at 64) is now the one name, for the
+  waker and the queue.
+- **A need on the board's first reading was no news only by race** (`6cbeba97c`): a board snapshot that came after
+  the list said a note for a blocker already standing. The note now waits until the list, the board and the queue
+  have each been read once.
+- **A word-keyed `heard` would paste before a woken program was up** (H2-1's review): a sleeping spark with a card
+  reads Asking you before and after Send's wake. `heard` is read from the spark's own run's row.
+- **An answered card could redraw its acts** when fieldd's frame came after its 2.4 s. It leaves only once the queue
+  drops the item.
+- **An answer is a second caller of `sparks.open`** (final-cp3 item 3). With SP-1d's per-spark join it is the same
+  wake; with the join removed, the real-floor row counts 3 births where 2 are right.
+- **A card could stick after a failed write** (item 5): its item stayed open, and `acting` in memory, until a
+  restart. `#stand` fixes it.
+- **Two ellipses on the card** (round 2's #1, its one MEDIUM): fieldd cut the words with "…", and the window added
+  another. Each side tested its own reading, so no test saw it until the EL9 fixture tied them.
+- **Item 5's path told a spark its later words were not held, then a restart dropped the yes.** The fact now says
+  "Vela's later words to Claude Code are held again", true in both orders (`ba3cdf984`).
+- **The catalog's session name was not fieldd's** (`${AGENT.id}·2`, under a comment that claimed runLabel). It is
+  the catalog label now, so two untitled Claude Code sessions both read "Claude Code" on a card, where @ tells them
+  apart. That is VF-PM's handle ruling (owed, below).
+- **api.html's refusal facts** were extended in place with no note, and named `failed` as CP-2's when it is MT-0's
+  fallback fact. A dated Corrected note now carries all eight.
+
+**Validation.**
+- **Reviews:** every commit had an adversarial review, and a fix pass where one was needed. Then two completeness
+  critics:
+  - `lanes/co-plan/final-cp3.md`, at `8c1bc51c0`: eleven items. 1–8 are fixed, 11 in `8268de88d`, and 9 and 10 are
+    owed lines below;
+  - `lanes/co-plan/final-cp3-2.md`, at `6f19861a6`: twelve items. #1–#11 are fixed, #3's naming question went to
+    VF-PM (the handle, owed), and #12 is the owed list below.
+- **Red first** in every behaviour commit, the rows named in its body, with mutation probes:
+  - the signer: compose-sparks 2 red, and agent-session-records' signing-key row threw;
+  - the input queue: 4 of 9 red;
+  - rooms/you: tool-plane-talk 2 red; with the in-flight map removed, the two-answers row went red;
+  - main's notice: its module absent; a mutant without the focus check and the delta-only rule, 2 of 7 red;
+  - Chat's count: 27 red on the unchanged code, and 5 probes (6 rows red);
+  - notify's note: status-line 3 rows, needs-notices (its module absent) and compose 1 row red, and 3 probes;
+  - the card: 11 probes;
+  - the fixes: needs-queue 1 of 29, needs-card and glyphs 3 of 41; the acting guard removed, 1 red; the one-wake join
+    removed, 3 births;
+  - the true words: field-app 9 red, fieldd 2; the constants: contracts 2 of 37; the last words: needs-words 1 of 6.
+- **The lane light** (`lanes/co-plan/logs/cp3-light-20261101T115415Z/`): GREEN on `ba3cdf984`, 11:54:15Z →
+  12:00:52Z, on the shared HOLD.
+  - Every step exited 0: biome (92 files), check:walls, check:retired, check:ios-fixtures, preflight (OK, with one
+    warning, R23's `acp` candidate, a sibling's offering), glyphs --check, gen:check (the tree clean after), cargo
+    layout_vector 1/1, and tsc on contracts, design-kit, field-app, fieldd and electron-shell.
+  - contracts whole: 54 files, 1482 tests.
+  - field-app whole: 284 files (+1 skipped), 3827 tests (+3 skipped), text-ramp, ui-system-boundaries and
+    design-system among them.
+  - electron-shell whole: 163 files, 2484 tests (+3 skipped), smoke-catalog among them.
+  - fieldd whole: 228 files (+3 skipped), 2906 tests (+11 skipped), with FIELDD_ROSETTAD_BIN set, so the real
+    rosettad rows ran. Item 146's hour was past.
+- **The merged-tree light** (`lanes/co-plan/logs/cp3-light-20261101T120139Z/`): the scratch merge `9f7d98542` of
+  `ba3cdf984` and main `ae430892b` (merge-tree's tree `346e76aca`, branch `scratch/cp3-merge-ae430892b`, never
+  landed), with BASE `ae430892b`, 12:01:40Z → 12:08:39Z. The new main changed no dependency.
+  - Every static step, gen:check, cargo and tsc exited 0.
+  - contracts 1487 (five more, PG-3b's); field-app 3827 (+3 skipped); electron-shell 2484 (+3 skipped).
+  - fieldd: 2933 passed and 1 red. The red is **ITEM 147**, numbered by VF-PM, and it is not CP-3's:
+    `index-timeline.test.ts` › "SP-6 — the two doors against the REAL rosettad" › "the page over the ground-truth
+    transcript", `expected 0 to be greater than or equal to 1` (:972).
+    - `realWorld()` waits until the session's row is indexed, then pages at once. Under the whole suite's load (a
+      load average of about 40–50), rosetta had not yet taken the entries.
+    - Neither side touches the index or the timeline. The file was green in `ba3cdf984`'s own light, and in 3 of 3
+      re-runs alone on the merged tree (12/12 each, 12:09–12:10Z).
+    - So it is a load race in SP-6's real-rosettad row, not a semantic merge: the row should wait on its entries,
+      not on its row. It is in the fixer's queue. Where FIELDD_ROSETTAD_BIN is unset (CI), it is skipped.
+- **VF-PM's pre-check** (12:12Z): `git merge-tree` of `ba3cdf984` over main `b2fad1d42` (item 146b landed) is
+  `1d862468e`, clean. The files both sides changed are api.html, methods.ts, registries.ts and daemon.ts, and none
+  of them is a pin or a ledger doc. VF-PM gave a9 the mint's GO at 12:12Z.
+- **Run 88** (M88 `ce6577783`, the MERGE shape: main `b2fad1d42` merged into `ba3cdf984`, minted by a9): verify
+  exit 0 at 12:18:49Z.
+  - vitest 11,996 passed, 0 failed, 18 skipped: +180 against run 87 (contracts +33, electron-shell +7, field-app
+    +75, fieldd +65).
+  - The new files: needs-card 35, needs-queue 29, needs-notices 10 and 7, signed-record 8, needs-words 6,
+    needs-doors 4, needs-store 4.
+  - cargo 534/0/14, unchanged. Gen freshness clean. The bundle is 919.6 KB, 242.9 KB gzipped.
+  - Item 147's row was green. Logs: `lanes/ts6/logs/mini/run88/`.
+- **Landed:** main moved to `ce6577783` on VF-PM's word at 2026-11-01 12:21:57Z: `b2fad1d42..ce6577783`, 101 files,
+  +9468 −403.
+
+**Owed.**
+- **The send's sub** (VF-PM, 2026-11-01 11:55Z, ruled): "Your yes lasts until Claude Code ends." stays. One path
+  makes it untrue: an Allow is done and told, the disk fails at writing its record, then fieldd restarts. The yes is
+  gone, and the next send is held again. §9 and api.html say so; the card does not.
+- **The handle** (VF-PM, 2026-11-01 09:55Z): the card names a session by fieldd's runLabel. The lean is @'s handle
+  ("vibe-field·2"), so two untitled sessions never read alike. It is its own slice after TU-1, with a one-frame
+  visual for James only if it changes what he sees.
+- **The upgrade:** a CP-2 build's kept input queue, a bare array, is set aside as `unsigned` at this build's first
+  boot (P3-2, as LEANS P3 asks). Its words are not delivered; they stay on disk beside the queue.
+- **SparkStore** does not bind a record to its file name (P3-2): a same-uid copy of `sp-A.json` to `sp-B.json` lists
+  A twice and answers `get("sp-B")` with A. Closing it needs a check that a record's id is its file name.
+- **Replay** is not covered (P3-2): an agent that keeps a copy of a file fieldd wrote for a run's input queue can put
+  it back after delivery, and it verifies at the next restore. A per-store counter would close it, and none is ruled.
+- **Untested:**
+  - the race of two fieldds minting one key at once;
+  - the signer's win32 skip of the exposed check, reasoned and never run on Windows.
+- **SessionRecordStore** is still on its own HMAC, with a base64 key. Moving it onto the signer needs the signer to
+  read that key as written: a hex read sets it aside, and every session record it signed would read as forged.
+- **The settle poll** (once a second, until the re-attach settles) stays until an `onReattachSettled` event exists.
+- **A disk failure at the telling's keep** can tell the same fact again: a restart finds it owed and tells it again,
+  never the act. Within one boot, `#stand` holds it.
+- **A background user's notify** reaches no one: main wires the attached user alone (UA-5).
+- **a1's physical rungs** (final-cp3 item 9), which `docs/desk-gates.md` names none of yet:
+  - a scripted spark's `ask_user` reaches Chat as a card, and clears in two windows;
+  - a scripted run's `notify` reaches the status line (`statusLineSaid()`);
+  - a held spawn past the cap shows its card.
+  Main's OS notice is suppressed in a smoke, so it has unit rows only.
+- **An answer's fact** woken into a live run is dropped by `inputs.forget` if that run ends before its next idle
+  moment, while the item still reads `told` (final-cp3 item 10, plan risk 11). fieldd's own wakes are unaudited.
+- **Risk 10:** two door connections of one spark can overshoot the cap, since `creation()` does not serialize. It is
+  CP-2's; a held spawn makes it rarer, not worse.
+- **Plan §9's open questions:**
+  - Q2: an OS notice when a new item arrives;
+  - Q3: a notice's click choosing the spark, which needs a `ShellCommand` with a payload, a contracts change;
+  - Q5: a plain run's notify in its allowance, which re-rules MT-D7.
+- **architecture.html's MT-0 row** still says "Designed".
+- **The prose numbers:** DESIGN.md §9 and api.html's `ask_user` row say "one to four" choices in words, as they say
+  140 and 8, while the code reads `NEEDS_CHOICES_MAX`, `NEEDS_NOTICE_CHARS` and `NEEDS_OPEN_PER_SPARK` (contracts).
+  A change to a constant leaves those words behind until they are moved by hand.
+- **The witness is James's look** in `pnpm dev`: the card's pixels, its six-line scroll, and a wheel over it with the
+  live pane under it (happy-dom lays nothing out); and the OS notice, with the app in the background.
+- **A real Claude spark's idle** (plan risk 4): no run has seen an answer land at it, because the scripted monitor
+  never reads idle on cue. The unit rows and the real-floor row that reads the input queue's file stand for it until
+  a console run, James's or a1's rung, sees it.
+- **Owed to the draft queue, on VF-PM's word:**
+  - the CP3 row in DECISIONS, with P2's dated reading;
+  - the readings recorded for it (H2-1, H2-4): the views note said per item; a card does not stop Send; the card
+    replaces the hello; the outcome is said on the card; an off-screen refusal is said on the status line; and
+    CP3-D8's line, never built;
+  - `draft/tool-plane/IMPLEMENTATION.md` §2.1's fold;
+  - a dated correction at `cp3-the-person.md:132`: the phone's scope is PG's, and the doors are `agents.manage` and
+    local;
+  - design-03's PF2/§5.1 delta: an agent's notify is a notice in main's notices entry, as TS-5's are;
+  - the status lines as built: `cp3-the-person.md`'s Status header still says "nothing is built and no lane exists",
+    and `thinking-roled-agents.md`'s status layer still says CP-3 builds on James's go;
+  - a dated note at `thinking-tool-plane.md` §8 (:334), which lists `held` among the `isError` facts: a held send or
+    spawn is a success answer;
+  - a dated note at `IMPLEMENTATION.md` :72, row 1', whose "a door behind `approval.respond`" stands against
+    CP3-D6 A (`agents.manage`, local);
+  - the stale cites plan risk 15 lists, each a dated correction at its source: the ruled note's cites of
+    `thinking-roled-agents.md` (now :633, :637 and :642), `cp2-talk-room.md` (each now 16 lines on), `registries.ts`
+    (now :1138 and :1251), main's `index.ts` (now :926, :1253 and :1287) and `IMPLEMENTATION.md` (now :72 and :343),
+    and `cp2-talk-room.md` :62's own cite of CP-D3 (now :633).
+
+James's first sight, in `pnpm dev`, Chat (⌘4):
+- a spark that asks you reads "Asking you", with the orange dot on its row and on Chat's cell;
+- in its thread, over the pane's foot, a card ringed in orange: the question and its choices, then Not now;
+- a press says "You said Yes" for 2.4 s, then the card leaves; every other window drops it at once;
+- from another view, "Vela needs you" stands over Chat's cell for 2.4 s;
+- a notify is one line on the status line, and an OS notice while no VibeField window is in front.
