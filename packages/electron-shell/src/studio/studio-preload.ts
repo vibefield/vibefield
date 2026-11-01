@@ -1,13 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { parseStudioPortGeneration, STUDIO_PUBLISHER_PORT_CHANNEL } from "./channels";
+import { type PublishClock, scheduleAppearancePublish } from "./publish-scheduler";
 import type { RendererPort } from "./studio-preload-bridge";
 import { StudioPreloadBridge } from "./studio-preload-bridge";
 
-const isolatedWindow = globalThis as unknown as {
-  requestAnimationFrame(callback: () => void): number;
-};
+const isolatedWindow = globalThis as unknown as PublishClock;
 const bridge = new StudioPreloadBridge((callback) =>
-  isolatedWindow.requestAnimationFrame(callback),
+  scheduleAppearancePublish(isolatedWindow, callback),
 );
 ipcRenderer.on(STUDIO_PUBLISHER_PORT_CHANNEL, (event, envelope: unknown) => {
   const port = event.ports[0] as RendererPort | undefined;

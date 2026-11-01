@@ -670,14 +670,21 @@
   width: min(100%, 620px);
 }
 
+/* FG-6 — the first run's frames: the shipping glass on the shipping field, over the
+   field's still (DESIGN.md §2.1; OnboardingPreview's FieldLayer). The box is the
+   window it stands in: positioned and isolated, so the field's layer (boot.css)
+   fills it and stays under the glass inside it, on the field's own ground. Its height
+   is FG-L2's floor, 640 + 96 (DESIGN.md's 976 × 736): at 976 wide the glass stands at
+   its own size, never scaled, so row 32's catalog walk reads its words as the product
+   draws them (the catalog judged, 2026-11-01; 568 until then scaled it to 0.74). */
 .vf-ds-onboarding-production {
+  position: relative;
+  isolation: isolate;
   display: grid;
-  height: 568px;
+  height: 736px;
   overflow: auto;
   place-items: center;
-  background-color: var(--vf-mat-ground);
-  background-image: var(--vf-mat-lattice);
-  background-size: var(--vf-mat-lattice-size);
+  background-color: var(--vf-field-ground);
 }
 
 .vf-ds-godview-frame {

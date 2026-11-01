@@ -1,9 +1,10 @@
 // THE PASTE ROAD: how text goes into a terminal surface the way ⌘V puts it there (HN-4, HN-L5;
 // DESIGN.md §8 "The hand", where cards go). The surface's own paste handler takes it — bracketed
 // when its program asked for that — and nothing presses Return. Godview's panes take a card's
-// play by it (`godview/line-panes.ts`), and Chat's thread is to take Send by the same road
-// (SP-1d; DESIGN.md §8 "Chat's composer"), so the road has one home under the terminal plane
-// both sit on, not in Godview. The wait for a session's routed input lives here too: a paste is
+// play by it (`godview/line-panes.ts`), and Chat's thread takes Send and its starters by the
+// same road (SP-1d; DESIGN.md §8 "Chat's composer": the thread pane's door, `chat/SparkPane.tsx`,
+// pastes through `pasteIntoInput`), so the road has one home under the terminal plane both sit
+// on, not in Godview. The wait for a session's routed input lives here too: a paste is
 // only handed over once the runtime says that input is open.
 
 /** Paste `text` into a terminal surface's own input — the road ⌘V takes. The input is focused

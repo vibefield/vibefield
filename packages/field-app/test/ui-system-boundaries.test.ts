@@ -112,6 +112,26 @@ describe("UI system ownership boundaries", () => {
     expect(catalogCss).not.toMatch(/^\.vf-new-spark(?:\b|-)/m);
     // CP-3: the needs-you card's plates are boxes on the canvas's ground; the card's rules are the product's
     expect(catalogCss).not.toMatch(/^\.vf-needs(?:\b|-)/m);
+    // FG-6: the first run's frames box the shipping field and glass; their rules are boot.css's and
+    // wizard-ui.css's, and the field's still is the field's own rule, never a copy of its picture
+    expect(catalogCss).not.toMatch(/^\.vf-(?:field|splash|wizard)(?:\b|-)/m);
+    expect(catalogCss).not.toContain("splash-still");
+  });
+
+  it("stands the first run's frames on the shipping field over its still — the page a window asks with, never a copy (FG-6)", () => {
+    // The catalog stands in for the page a window that can't run the field is (`?field=still`), and mounts the
+    // product's own field layer and glass on it. Never the field's or the glass's classes, never its picture or a
+    // stylesheet, never the field's door.
+    const preview = source("design-system/OnboardingPreview.tsx");
+    expect(preview).toContain('const STILL_PAGE = { search: "?field=still" } as const;');
+    expect(preview).toMatch(
+      /<FieldLayer mark=\{false\} page=\{STILL_PAGE\}>\s*<WizardShellView [^>]*ground="field">/u,
+    );
+    expect(preview).not.toMatch(/className="vf-(?:field|splash|wizard)/u);
+    expect(preview).not.toContain("splash-still");
+    expect(preview).not.toContain("<style");
+    expect(preview).not.toContain("openFieldDoor");
+    expect(preview).not.toContain("FieldGlassContext");
   });
 
   it("keeps Chat's fixture an ADAPTER — the product's reading over fixture sparks and rows, never the panel's markup (SP-1b)", () => {
@@ -186,14 +206,24 @@ describe("UI system ownership boundaries", () => {
 
   it("keeps Chat's composer fixture an ADAPTER — the shipping view over fixture drafts and @ rows, never its controller (SP-1d)", () => {
     // The catalog stands in for what the composer's controller would hand its view — a draft, @'s rows read by the
-    // product's own `atRowsOf`, an agent's menu read by the sheet's own `agentMenuOf` — and mounts the shipping
-    // `ChatComposerView`. Never the controller (it registers the hand's place and sends), never the hand's registry,
-    // never the product's doors or feed.
+    // product's own `atRowsOf`, an agent's menu read by the controller's own `agentChipMenuOf` — and mounts the
+    // shipping `ChatComposerView`. Never the controller (it registers the hand's place and sends), never the hand's
+    // registry, never the product's doors or feed.
     const preview = source("design-system/ChatPreview.tsx");
     const fixtures = source("design-system/chat-fixtures.ts");
     expect(preview).toMatch(/<ChatComposerView\s/u);
     expect(fixtures).toContain("atRowsOf");
-    expect(fixtures).toContain("agentMenuOf");
+    // one reading of an agent's chip menu (SP-1d's fix review): the controller and the plates both call it, and
+    // neither reads the sheet's `agentMenuOf` beside it
+    for (const file of [source("chat/ChatComposer.tsx"), fixtures]) {
+      expect(file).toContain("agentChipMenuOf(");
+      expect(file).not.toContain("agentMenuOf(");
+    }
+    // rulings-5: a plate's blank and armed are the draft's own readings, and a send under way is one fact handed to
+    // the panel and the composer, never a busy drawn on one of them alone
+    expect(fixtures).toContain("draftBlank");
+    expect(fixtures).toContain("draftSendable");
+    expect(preview).toContain("CHAT_SENDING");
     for (const file of [preview, fixtures]) {
       expect(file).not.toMatch(/<ChatComposer[\s/>]/u);
       expect(file).not.toMatch(/from "\.\.\/chat\/ChatComposer"/u);
@@ -648,6 +678,9 @@ describe("UI system ownership boundaries", () => {
     for (const model of ["reachLift(", "reachedIndex(", "textCardOf(", "termCardOf("])
       expect(fixture).toContain(model);
     expect(fixture).toMatch(/raised \? layoutRaised : layoutCards/u);
+    // SP-1d: the reach in Chat is the product's own, never its 20 copied
+    expect(fixture).toMatch(/reach=\{[^}]*CHAT_REACH/u);
+    expect(fixture).not.toMatch(/(?:lift|band): \d/u);
     expect(fixture).not.toMatch(/className="[^"]*vf-cards?(?:-|\b)/u);
     expect(fixture).not.toContain("<style");
     for (const door of [/\bgetHost\b/u, /\bcardsStore\b/u, /\buseCards\b/u, /<Cards\s/u])
@@ -812,6 +845,8 @@ describe("UI system ownership boundaries", () => {
       "OnboardingWelcomeBackPaneView",
       "OnboardingWelcomePaneView",
       "WizardShellView",
+      // FG-6 — the first run's glass stands on the field's own layer, over its still
+      "FieldLayer",
       "SwarmBodiesPreview",
       "swarmMonitorView",
       "CanvasGroundWorkbench",

@@ -282,6 +282,10 @@ export interface HolderFaceRoster {
  * account reads only and never holds the seat, and the phone reaching this
  * desktop THROUGH one of its desktops is named by that desktop's provenance,
  * which carries the forwarding desktop and no name of the phone's.
+ * *Corrected 2026-10-31 (F1b): that provenance names the phone's roster
+ * device now (`onBehalfOf.clientDeviceId`), so a face is derivable. None is
+ * drawn: no phone ticket rides a peer — the phone asks the owner's own door
+ * for one (`FieldLink.swift` `openTerminalTicket`).*
  */
 export function holderFaceFor(
   principal: GrantPrincipal,

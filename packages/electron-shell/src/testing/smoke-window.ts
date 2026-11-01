@@ -26,12 +26,17 @@ export function smokeWindow(opts: {
   show: boolean;
 }): BrowserWindow {
   const win = createMainWindow({ mode: opts.mode, preloadPath: opts.preloadPath, show: false });
+  keepSmokeWindow(win);
+  if (opts.show) win.showInactive();
+  return win;
+}
+
+/** A window a smoke made itself (the catalog's walk: never the product's), kept and counted as `smokeWindow`'s are. */
+export function keepSmokeWindow(win: BrowserWindow): void {
   keepFromPerson(win);
   const id = win.id;
   keyed.set(id, 0);
   win.on("focus", () => keyed.set(id, (keyed.get(id) ?? 0) + 1));
-  if (opts.show) win.showInactive();
-  return win;
 }
 
 /** The smoke windows made so far, and how many times in all one became the key window. */

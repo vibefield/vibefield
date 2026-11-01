@@ -388,4 +388,34 @@ mod tests {
             self::golden("mesh-egress-route-table.reset.json")
         );
     }
+
+    /// DS-7 — the belt routes the index serve now (its rosettad demands a
+    /// bearer and verifies per-session grants), and still never the product
+    /// door. With no node the add goes no further than the backend's own
+    /// answer, so the index target is judged by what the BELT says: anything
+    /// but `EGRESS_PORT_NOT_ROUTABLE`.
+    #[tokio::test]
+    async fn the_belt_routes_the_index_serve_and_never_the_product_door() {
+        let (_dir, daemon) = state().await;
+        let egress = daemon.state.mesh.egress();
+        let index = golden("mesh-egress-route-add-params.index.json");
+        assert!(index["target"]
+            .as_str()
+            .unwrap()
+            .ends_with(&format!(":{}", crate::registries::ports::INDEX_SERVE)));
+        let routed = route_add(&daemon.state, &egress, None, &index, Some(json!(1))).await;
+        assert_ne!(
+            routed["error"]["data"]["details"]["code"], "EGRESS_PORT_NOT_ROUTABLE",
+            "the index serve is a door that demands its own grant: {routed}"
+        );
+        let mut door = index.clone();
+        door["id"] = json!("egress-01ARZ3NDEKTSV4RRFFQ69G5FAV-9423");
+        door["target"] = json!("truffle-vibefield-studio.tail1234.ts.net:9423");
+        let refused = route_add(&daemon.state, &egress, None, &door, Some(json!(2))).await;
+        assert_eq!(
+            refused["error"]["data"]["details"]["code"],
+            "EGRESS_PORT_NOT_ROUTABLE"
+        );
+        daemon.shutdown().await;
+    }
 }

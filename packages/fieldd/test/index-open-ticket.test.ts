@@ -35,7 +35,10 @@ import {
   IndexEndpointSet,
   IndexOpenTicket,
   type IndexSessionsResult,
+  IndexTicketRoadDetails,
   IndexTicketUnavailableDetails,
+  PORTS,
+  RemoteIndexEndpointSet,
   type Scope,
   SOCKETS,
 } from "@vibefield/contracts";
@@ -49,8 +52,17 @@ import {
 import { SCOPE_FILES, SCOPE_READ, verifyGrant } from "@vibefield/rosetta-protocol/grants";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap, type FielddDaemon } from "../src/index";
-import { INDEX_SERVE_ID, IndexTicketMinter, indexTicketScopes } from "../src/index-serve";
+import { FakeEgressRoutes } from "../src/egress";
+import { bootstrap, type FielddConfig, type FielddDaemon } from "../src/index";
+import {
+  INDEX_SERVE_ID,
+  IndexTicketMinter,
+  indexEndpointsFrom,
+  indexServeSpec,
+  indexTargetPort,
+  indexTicketScopes,
+} from "../src/index-serve";
+import type { ServeSpec, ServeState } from "../src/mesh-client";
 import type { RosettadState } from "../src/rosettad-supervisor";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productDoorPath, productPathSecret, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
@@ -143,6 +155,12 @@ async function boot(
     indexTicketTtlMs?: number;
     rosettad?: boolean;
     mode?: string;
+    /** DS-7 — the scripted rosettad's timeline rows (FAKE_ROSETTAD_TIMELINE) */
+    timeline?: unknown[];
+    /** DS-7 — the floor's mesh as this desktop sees it, set before the boot */
+    mesh?: (mock: MockMgmtServer) => void;
+    /** DS-7 — the rest of the daemon's config (its peer dial, its routes) */
+    config?: Partial<FielddConfig>;
   } = {},
 ): Promise<World> {
   const dataDir = makeDataDir();
@@ -150,7 +168,10 @@ async function boot(
   mkdirSync(home, { recursive: true });
   const sessionsFile = join(dataDir, "sessions.json");
   writeFileSync(sessionsFile, JSON.stringify(SESSIONS));
+  const timelineFile = join(dataDir, "timeline.json");
+  writeFileSync(timelineFile, JSON.stringify(opts.timeline ?? []));
   const mock = await startMock(dataDir);
+  opts.mesh?.(mock);
   const keys: Buffer[] = [];
   const bearers: string[] = [];
   const fakeRosettad = ((_bin: string, args: readonly string[], options: object) => {
@@ -164,6 +185,7 @@ async function boot(
         ...process.env,
         FAKE_ROSETTAD_MODE: opts.mode ?? "ok",
         FAKE_ROSETTAD_SESSIONS: sessionsFile,
+        FAKE_ROSETTAD_TIMELINE: timelineFile,
       },
     });
   }) as unknown as typeof spawn;
@@ -177,10 +199,14 @@ async function boot(
       : { rosettadBin: "/stand-in/rosettad", rosettadSpawn: fakeRosettad, rosettadHome: home }),
     ...(opts.indexDirectPlane !== undefined ? { indexDirectPlane: opts.indexDirectPlane } : {}),
     ...(opts.indexTicketTtlMs !== undefined ? { indexTicketTtlMs: opts.indexTicketTtlMs } : {}),
+    ...opts.config,
   });
   cleanup.push(() => daemon.stop());
   return { daemon, mock, dataDir, keys, bearers };
 }
+
+/** Each test client's socket, so a row can read what a door carried (DS-7). */
+const socketOf = new WeakMap<WsRpc, WebSocket>();
 
 async function open(url: string, headers?: Record<string, string>): Promise<WsRpc> {
   const ws = new WebSocket(url, headers ? { headers } : {});
@@ -189,7 +215,9 @@ async function open(url: string, headers?: Record<string, string>): Promise<WsRp
     ws.once("open", () => resolve());
     ws.once("error", reject);
   });
-  return new WsRpc(ws);
+  const rpc = new WsRpc(ws);
+  socketOf.set(rpc, ws);
+  return rpc;
 }
 
 /** A renderer window on this desktop holding exactly `scopes` — the shell
@@ -603,11 +631,12 @@ describe("AR-8b — IndexTicketMinter, the rule alone", () => {
     state: () => state,
     credentials: () => ({ authorization: "Bearer test", token: "test", grantKey: key }),
   });
-  const minterOf = (state: RosettadState = live) =>
+  const minterOf = (state: RosettadState = live, serves: readonly ServeState[] = []) =>
     new IndexTicketMinter({
       enabled: true,
       supervisor: supervisorOf(state),
       deviceId: () => "dev-a",
+      serves: () => serves,
       now: () => 1_000_000,
     });
   const ctx = {
@@ -744,69 +773,449 @@ describe("AR-8b — IndexTicketMinter, the rule alone", () => {
       details: { service: "index", state: INDEX_TICKET.STATE_OFF },
     });
   });
+
+  // DS-7 — another desktop's daemon, forwarding for its window
+  const peer = (windowId?: string) =>
+    ({
+      principal: { kind: "peer-fieldd", deviceId: "dev-b", scopes: ["index.read"] },
+      transport: "ws-tailnet",
+      receivedAt: 0,
+      ...(windowId !== undefined
+        ? { onBehalfOf: { clientKind: "renderer", deviceId: "dev-b", windowId } }
+        : {}),
+    }) as CallerContext;
+  const serveOf = (over: Partial<ServeState> = {}): ServeState => ({
+    ...(indexServeSpec({
+      enabled: true,
+      origin: live.origin,
+      linkedLogin: TEST_LOGIN,
+    }) as ServeSpec),
+    status: "active",
+    url: "http://desk-a.tail1234.ts.net:9424",
+    ...over,
+  });
+
+  it("DS-7: another desktop's daemon is minted the tailnet set of the live serve, a read grant keyed by the window behind it", () => {
+    const minter = minterOf(live, [serveOf()]);
+    const forward = peer("renderer:b:1");
+    const ask = minter.check(forward, { sessionId: "s1" });
+    expect(ask.scope).toEqual([SCOPE_READ]);
+    const ticket = minter.mint(forward, ask);
+    expect(RemoteIndexEndpointSet.parse(ticket.endpoints)).toEqual({
+      sessionUrl: "ws://desk-a.tail1234.ts.net:9424/ws/sessions/s1",
+    });
+    expect(IndexEndpointSet.safeParse(ticket.endpoints).success).toBe(false);
+    expect(ticket.device).toBe("dev-a");
+    const verdict = verifyGrant(key, ticket.grant, 1_000_000);
+    expect(verdict.ok).toBe(true);
+    if (!verdict.ok) return;
+    expect(verdict.claims).toMatchObject({ sid: "s1", scope: [SCOPE_READ] });
+    // DS-4c's key: the forward is the window behind it, not the bare daemon
+    expect(verdict.claims.cid).toMatch(/^peer-fieldd:dev-b#/);
+    expect(verdict.claims.cid).toContain("renderer%3Ab%3A1");
+    const bare = verifyGrant(
+      key,
+      minter.mint(peer(), minter.check(peer(), { sessionId: "s1" })).grant,
+      1_000_000,
+    );
+    expect(bare.ok && bare.claims.cid).toBe("peer-fieldd:dev-b");
+  });
+
+  it("DS-7: with no live serve the forward is told doors_not_published, retryable, naming this desktop — never a set nothing answers", () => {
+    for (const [why, serves] of [
+      ["no index serve at all", []],
+      ["the node has not taken it yet", [serveOf({ status: "pending" })]],
+      ["aimed at a rosettad that restarted", [serveOf({ target: { kind: "port", port: 1 } })]],
+    ] as const) {
+      const minter = minterOf(live, serves);
+      const ask = minter.check(peer("w"), { sessionId: "s1" });
+      let refusal: unknown;
+      try {
+        minter.mint(peer("w"), ask);
+      } catch (error) {
+        refusal = error;
+      }
+      expect(refusal, why).toMatchObject({ kind: "UNAVAILABLE", retryable: true });
+      expect(IndexTicketRoadDetails.parse((refusal as { details: unknown }).details), why).toEqual({
+        service: "index",
+        state: INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED,
+        device: "dev-a",
+      });
+    }
+    // a window here still dials the loopback pair, serve or none
+    const local = minterOf(live, []);
+    expect(
+      IndexEndpointSet.parse(local.mint(ctx, local.check(ctx, { sessionId: "s1" })).endpoints),
+    ).toMatchObject({ restUrl: live.origin });
+  });
+
+  it("DS-7: the phone is still told the plane is unbuilt for it — its ticket is SP-7's", () => {
+    const phone = {
+      principal: { kind: "tailnet", login: TEST_LOGIN, self: true },
+      transport: "ws-tailnet",
+      receivedAt: 0,
+      clientKind: "ios",
+    } as CallerContext;
+    let refusal: unknown;
+    try {
+      minterOf(live, [serveOf()]).check(phone, { sessionId: "s1" });
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: false,
+      details: { service: "index", state: INDEX_TICKET.STATE_UNBUILT },
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
-// A peer daemon's forward of it: two real daemons (the DS-4 e2e harness).
+// DS-7 — another desktop's transcript by ticket: two real daemons (the DS-4 e2e
+// harness), named as the design names them (`thinking-desktop-sync-plane.md`
+// §11: "a transcript on A streams into B's History"). A is the OWNER — its
+// scripted rosettad holds the session and its index serve is on the (mock)
+// tailnet; B is the WINDOW's desktop — its window asks `{device: A}`, B
+// forwards, A mints for B's daemon, and B re-homes A's set onto an egress
+// route of its own. The route is the routes port's test double, bound to A's
+// rosettad listener: what B's sidecar → A's serve → A's rosettad carries in
+// production, the double carries here, byte for byte.
 
-/** The sidecar half of A's dial: a tailnet coordinate for B lands on B's
- * loopback door with the route secret joined, and the WhoIs login plus A's
- * node id are injected — B's roster correlates that node to A's desktop slice,
- * which is what makes the caller a `peer-fieldd` principal (D1). */
-function sidecar(loopback: () => string): WsCtor {
+/** The sidecar half of B's dial: a tailnet coordinate for A lands on A's
+ * loopback door with the route secret joined, and the WhoIs login plus B's
+ * node id are injected — A's roster correlates that node to B's desktop slice,
+ * which is what makes the caller a `peer-fieldd` principal (D1). Every socket
+ * it opens is kept, so a row can read the peer link's bytes. */
+function sidecar(loopback: () => string, opened: WebSocket[]): WsCtor {
   class SidecarSim extends WebSocket {
     constructor(url: string) {
-      const target = url.includes("device-b.tailnet.ts.net") ? loopback() : "ws://127.0.0.1:1/";
+      const target = url.includes("device-a.tailnet.ts.net") ? loopback() : "ws://127.0.0.1:1/";
       super(url.includes(".ts.net") ? target : url, {
-        headers: { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": "node-a" },
+        headers: { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": "node-b" },
       });
+      opened.push(this);
     }
   }
   return SidecarSim;
 }
 
-describe("SP-3 — index.openTicket through a peer daemon's forward", () => {
-  it("A's window asks for a session on B: A forwards it keyed, B answers from its own door — the remote half is DS-7's", async () => {
-    const dirB = makeDataDir();
-    const mockB = await startMock(dirB);
-    mockB.meshDeviceId = "dev-b";
-    mockB.meshPeers = [
-      registryPeer({ nodeId: "node-a", deviceId: "dev-a", name: "device-a", login: TEST_LOGIN }),
-    ];
-    mockB.storeSlices = new Map<string, unknown>([["dev-a", desktopSlice("dev-a", "device-a")]]);
-    const B = await bootstrap({ dataDir: dirB, controlPort: 0, dataPort: 0 });
-    cleanup.push(() => B.stop());
-    await until(() => mockB.meshServes.get("product") !== undefined, 15_000);
-    const bEndpoint = `ws://127.0.0.1:${B.controlPort}/t/${productPathSecret(mockB)}`;
+/** Bytes a client socket has moved both ways, framing included. */
+function bytesOf(ws: WebSocket): number {
+  const raw = (ws as unknown as { _socket?: { bytesRead: number; bytesWritten: number } })._socket;
+  return raw === undefined ? 0 : raw.bytesRead + raw.bytesWritten;
+}
 
-    const dirA = makeDataDir();
-    const mockA = await startMock(dirA);
-    mockA.meshDeviceId = "dev-a";
-    mockA.meshPeers = [
-      {
-        id: "node-b",
-        deviceId: "dev-b",
-        name: "device-b",
-        online: true,
-        whois: { login: TEST_LOGIN, deviceName: "device-b.tailnet.ts.net" },
-      },
-    ];
-    const A = await bootstrap({
-      dataDir: dirA,
-      controlPort: 0,
-      dataPort: 0,
-      peerWebSocket: sidecar(() => bEndpoint),
+/** One agent reply of `size` characters, in rosetta's `TimelineEntry` shape. */
+function replyRow(sessionId: string, ordinal: number, size: number): Record<string, unknown> {
+  return {
+    timeline_id: `${sessionId}-t${ordinal}`,
+    session_id: sessionId,
+    ordinal,
+    group: { id: `turn-${ordinal}`, kind: "agent_cycle", derivation: "native" },
+    response: { id: `response-${ordinal}`, derivation: "native" },
+    block_index: null,
+    native_id: null,
+    parent_native_id: null,
+    at: 3_600_000 + ordinal * 1_000,
+    model: "claude-opus-5",
+    effort: null,
+    body: {
+      type: "agent",
+      text: { type: "inline", text: `reply ${ordinal} `.padEnd(size, "·") },
+      attachments: [],
+      citations: [],
+    },
+    parent_tool_native_id: null,
+    usage: {
+      input: null,
+      output: null,
+      cache_read: null,
+      cache_write: null,
+      thinking: null,
+      cache_write_1h: null,
+      web_searches: null,
+      service_tier: null,
+      route: null,
+      billed_pico_usd: null,
+      scope: "request",
+      requests: null,
+    },
+    provenance: { agent_version: "2.1.241", src_cursor: 1, src_offset: ordinal },
+  };
+}
+
+interface Pair {
+  /** the owner: its rosettad holds `s1` */
+  A: World;
+  /** the window's desktop */
+  B: World;
+  /** B's egress routes (the port's double) */
+  routes: FakeEgressRoutes;
+  /** the loopback listener B's route to A's index serve answers at */
+  listen: string;
+  /** every socket B's daemon dialled towards A */
+  peerSockets: WebSocket[];
+}
+
+async function pair(opts: { timeline?: unknown[] } = {}): Promise<Pair> {
+  const A = await boot({
+    ...(opts.timeline !== undefined ? { timeline: opts.timeline } : {}),
+    mesh: (mock) => {
+      mock.meshDeviceId = "dev-a";
+      mock.meshPeers = [
+        registryPeer({ nodeId: "node-b", deviceId: "dev-b", name: "device-b", login: TEST_LOGIN }),
+      ];
+      mock.storeSlices = new Map<string, unknown>([["dev-b", desktopSlice("dev-b", "device-b")]]);
+    },
+  });
+  await ready(A.daemon);
+  await until(() => A.mock.meshServes.get("product") !== undefined, 15_000);
+  // A's index serve is live on the tailnet, aimed at the rosettad answering now
+  await until(
+    () =>
+      indexEndpointsFrom(
+        A.daemon.mesh.serves(),
+        A.daemon.rosettad?.state().origin ?? null,
+        "s1",
+      ) !== undefined,
+    15_000,
+  );
+  const aEndpoint = `ws://127.0.0.1:${A.daemon.controlPort}/t/${productPathSecret(A.mock)}`;
+  const listen = `127.0.0.1:${indexTargetPort(A.daemon.rosettad?.state().origin ?? null)}`;
+  const routes = new FakeEgressRoutes();
+  routes.route("dev-a", PORTS.INDEX_SERVE, listen);
+  const peerSockets: WebSocket[] = [];
+  const B = await boot({
+    rosettad: false,
+    mesh: (mock) => {
+      mock.meshDeviceId = "dev-b";
+      mock.meshPeers = [
+        {
+          id: "node-a",
+          deviceId: "dev-a",
+          name: "device-a",
+          online: true,
+          whois: { login: TEST_LOGIN, deviceName: "device-a.tailnet.ts.net" },
+        },
+      ];
+    },
+    config: {
+      peerWebSocket: sidecar(() => aEndpoint, peerSockets),
+      indexEgressRoutes: routes,
+    },
+  });
+  await until(() => B.daemon.devices.get("dev-a") !== undefined, 8_000);
+  await until(() => A.daemon.devices.isDocHost("dev-b"), 8_000);
+  return { A, B, routes, listen, peerSockets };
+}
+
+/** Wait until `read()` has not moved for `quietMs`. */
+async function settled(read: () => number, quietMs = 400, ms = 10_000): Promise<number> {
+  const started = Date.now();
+  let last = read();
+  let since = Date.now();
+  while (Date.now() - started < ms) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const now = read();
+    if (now !== last) {
+      last = now;
+      since = Date.now();
+    } else if (Date.now() - since >= quietMs) return now;
+  }
+  throw new Error("settled: the reading never stood still");
+}
+
+describe("DS-7 — a transcript on A, by ticket, into a window on B", () => {
+  it("B's window asks for A's session: A mints for B's daemon from its own rule, B re-homes A's set onto its route to A's index serve — and the grant opens that session through the route, nothing else", async () => {
+    const { A, B, routes, listen } = await pair();
+    const win = await windowOf(B.daemon, ["index.read"]);
+    const ticket = IndexOpenTicket.parse(
+      await win.call("index.openTicket", { device: "dev-a", sessionId: "s1" }),
+    );
+    // the window's set: loopback, at B's route, composed for the asked session
+    expect(ticket.device).toBe("dev-a");
+    expect(IndexEndpointSet.parse(ticket.endpoints)).toEqual({
+      sessionUrl: `ws://${listen}/ws/sessions/s1`,
+      restUrl: `http://${listen}`,
     });
-    cleanup.push(() => A.stop());
-    await until(() => A.devices.get("dev-b") !== undefined, 8_000);
-    await until(() => B.devices.isDocHost("dev-a"), 8_000);
+    // A's grant, from A's key, read-only, keyed by the window behind B's forward
+    const verdict = verifyGrant(A.keys.at(-1) as Buffer, ticket.grant, Date.now());
+    expect(verdict.ok).toBe(true);
+    if (!verdict.ok) return;
+    expect(verdict.claims).toMatchObject({ sid: "s1", scope: [SCOPE_READ] });
+    expect(verdict.claims.cid).toBe("peer-fieldd:dev-b#renderer%3Aixt%3Aw1");
+    // through the route: the session's socket, on the browser's carrier
+    const { sessionUrl, restUrl } = IndexEndpointSet.parse(ticket.endpoints);
+    expect(await dialSession(sessionUrl, ticket.grant, "subprotocol")).toMatchObject({
+      opened: true,
+      frame: { frame: "hello" },
+    });
+    // and nothing else: another session, a list, the topology stream, a file
+    expect(await dialSession(sessionUrl.replace(/s1$/, "s2"), ticket.grant)).toEqual({
+      opened: false,
+      status: 401,
+      reason: "wrong-session",
+    });
+    expect(await getWith(`${restUrl}/api/sessions`, `Rosetta-Grant ${ticket.grant}`)).toEqual({
+      status: 401,
+      reason: "wrong-route",
+    });
+    expect(
+      await getWith(
+        `${restUrl}/api/sessions/s1/timeline/t1/read/0`,
+        `Rosetta-Grant ${ticket.grant}`,
+      ),
+    ).toEqual({ status: 401, reason: "wrong-scope" });
+    // ONE route reference per owner, however many tickets ride it
+    await win.call("index.openTicket", { device: "dev-a", sessionId: "s2" });
+    expect(routes.refs("dev-a", PORTS.INDEX_SERVE)).toBe(1);
+    // A audited the mint, naming the session and what the grant may do; B
+    // minted nothing of its own
+    const mints = (await auditRecords(A.daemon)).filter((r) => r.action === "index.ticket.mint");
+    expect(mints.filter((r) => r.phase === "outcome")).toHaveLength(2);
+    expect(mints.find((r) => r.phase === "outcome")).toMatchObject({
+      outcome: "succeeded",
+      target: { kind: "index-session", id: "s1" },
+      attrs: { scope: [SCOPE_READ] },
+    });
+    expect(JSON.stringify(mints)).not.toContain(ticket.grant);
+    expect((await auditRecords(B.daemon)).some((r) => r.action === "index.ticket.mint")).toBe(
+      false,
+    );
+  }, 90_000);
 
-    const win = await windowOf(A, ["index.read"]);
-    const err = await win.callErr("index.openTicket", { device: "dev-b", sessionId: "s1" });
-    // B's own answer, untouched by the hop: a forward that never reached B
-    // reads `peer-link`/`mesh` states, never the index's
-    expectRefusal(err, INDEX_TICKET.STATE_UNBUILT);
-    expect(err.message).toMatch(/another desktop/);
+  it("the transcript's bytes ride the ticketed socket: hundreds of KiB arrive through the route while neither door's byte count moves with them (EL2)", async () => {
+    const rows = Array.from({ length: 160 }, (_, i) => replyRow("s1", i + 1, 2_048));
+    const { B, peerSockets } = await pair({ timeline: rows });
+    const win = await windowOf(B.daemon, ["index.read"]);
+    const ticket = IndexOpenTicket.parse(
+      await win.call("index.openTicket", { device: "dev-a", sessionId: "s1" }),
+    );
+    const doors = (): number =>
+      bytesOf(socketOf.get(win) as WebSocket) +
+      peerSockets.reduce((sum, socket) => sum + bytesOf(socket), 0);
+    const before = await settled(doors);
+    // rosetta's own client over the ticket, counting what its socket carries
+    let carried = 0;
+    class Counting extends WebSocket {
+      constructor(url: string, protocols?: string | string[]) {
+        super(url, protocols);
+        this.on("message", (data: Buffer | ArrayBuffer | Buffer[]) => {
+          carried += Array.isArray(data)
+            ? data.reduce((sum, part) => sum + part.length, 0)
+            : data instanceof ArrayBuffer
+              ? data.byteLength
+              : data.length;
+        });
+      }
+    }
+    const client = new RosettaClient({
+      baseUrl: IndexEndpointSet.parse(ticket.endpoints).restUrl,
+      credential: { kind: "grant", grant: ticket.grant },
+      WebSocketImpl: Counting as unknown as typeof globalThis.WebSocket,
+      fetchFn: fetch.bind(globalThis),
+    });
+    const entries = await new Promise<number>((resolve, reject) => {
+      const subscription = client.subscribeSession("s1", {
+        onChange: (current) => {
+          if (current.length >= rows.length) {
+            subscription.close();
+            resolve(current.length);
+          }
+        },
+        onError: (error) => {
+          subscription.close();
+          reject(new Error(`${error.code}: ${error.message}`));
+        },
+      });
+      cleanup.push(() => subscription.close());
+    });
+    const after = doors();
+    expect(entries).toBe(rows.length);
+    expect(carried).toBeGreaterThan(rows.length * 2_048);
+    // the doors carried the ask and the answer before the stream, and nothing
+    // the size of the stream during it (a keepalive or a digest at most)
+    expect(after - before).toBeLessThan(4_096);
+    console.log(
+      `DS7_BYTES ${JSON.stringify({ transcript: carried, doorsDuringStream: after - before, entries })}`,
+    );
+  }, 90_000);
+
+  it("an ask without the right is refused on B before anything is carried: a plugin holding index.read, a window without it, the phone through B", async () => {
+    const { A, B, routes } = await pair();
+    const plugin = await tokenOf(B.daemon, ["index.read"], "ds7-plugin");
+    const refused = await plugin.callErr("index.openTicket", { device: "dev-a", sessionId: "s1" });
+    expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(refused.data?.details).toMatchObject({ principal: "plugin", device: "dev-a" });
+    const reader = await windowOf(B.daemon, ["doc.read"], "w2");
+    const scope = await reader.callErr("index.openTicket", { device: "dev-a", sessionId: "s1" });
+    expect(scope.data?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(scope.data?.details).toEqual({ required: "index.read" });
+    const phone = await tailnetCaller(B.daemon, B.mock, TEST_LOGIN);
+    expectRefusal(
+      await phone.callErr("index.openTicket", { device: "dev-a", sessionId: "s1" }),
+      INDEX_TICKET.STATE_UNBUILT,
+    );
+    // none of them reached A or took a route
+    expect((await auditRecords(A.daemon)).some((r) => r.action === "index.ticket.mint")).toBe(
+      false,
+    );
+    expect(routes.asked).toEqual([]);
+  }, 90_000);
+
+  it("no road: B's route to A is gone — egress_unavailable naming A, retryable, and the route's reference went back with A", async () => {
+    const { B, routes } = await pair();
+    const win = await windowOf(B.daemon, ["index.read"]);
+    await win.call("index.openTicket", { device: "dev-a", sessionId: "s1" });
+    expect(routes.refs("dev-a", PORTS.INDEX_SERVE)).toBe(1);
+    routes.drop("dev-a", PORTS.INDEX_SERVE, "peer-left");
+    expect(routes.refs("dev-a", PORTS.INDEX_SERVE)).toBe(0);
+    const err = await win.callErr("index.openTicket", { device: "dev-a", sessionId: "s1" });
+    expect(err.data).toMatchObject({ kind: "UNAVAILABLE", retryable: true });
+    expect(IndexTicketRoadDetails.parse(err.data?.details)).toEqual({
+      service: "index",
+      state: INDEX_TICKET.STATE_EGRESS_UNAVAILABLE,
+      device: "dev-a",
+    });
+  }, 90_000);
+});
+
+describe("DS-7 — A asleep", () => {
+  it("B's window hears the peer link's honest UNAVAILABLE naming A, and no route is asked for", async () => {
+    const routes = new FakeEgressRoutes();
+    routes.route("dev-a", PORTS.INDEX_SERVE, "127.0.0.1:9");
+    const B = await boot({
+      rosettad: false,
+      mesh: (mock) => {
+        mock.meshDeviceId = "dev-b";
+        mock.meshPeers = [
+          {
+            id: "node-a",
+            deviceId: "dev-a",
+            name: "device-a",
+            online: false,
+            whois: { login: TEST_LOGIN, deviceName: "device-a.tailnet.ts.net" },
+          },
+        ];
+      },
+      config: { indexEgressRoutes: routes },
+    });
+    await until(() => B.daemon.devices.get("dev-a") !== undefined, 8_000);
+    const win = await windowOf(B.daemon, ["index.read"]);
+    // B's roster already says A is asleep (DS-L8)…
+    expect(B.daemon.devices.get("dev-a")).toMatchObject({ online: false, state: "asleep" });
+    const err = await win.callErr("index.openTicket", { device: "dev-a", sessionId: "s1" });
+    // …and the door's answer to the forward is the peer link's own, once its
+    // dial gives up: the desktop named, retryable, nothing minted, no route.
+    // (PeerLink dials a desktop the roster calls asleep — every forwarded call
+    // does, today; History's window says "asleep" at once off the listing's
+    // sources and never asks, `session-port.ts`.)
+    expect(err.data).toEqual({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "peer-link", device: "dev-a", state: "unreachable" },
+    });
+    expect(routes.asked).toEqual([]);
   }, 60_000);
 });
 
@@ -845,12 +1254,15 @@ async function untilAsync(fn: () => Promise<boolean>, ms: number): Promise<void>
 }
 
 /** A real daemon behind fieldd, the ground truth indexed, and its session id. */
-async function realWorld(): Promise<{ daemon: FielddDaemon; win: WsRpc; sid: string }> {
+async function realWorld(
+  mesh?: (mock: MockMgmtServer) => void,
+): Promise<{ daemon: FielddDaemon; win: WsRpc; sid: string; mock: MockMgmtServer }> {
   const dataDir = makeDataDir();
   const home = join(dataDir, "home");
   mkdirSync(home, { recursive: true });
   cpSync(GROUNDTRUTH, join(home, ".claude"), { recursive: true });
-  await startMock(dataDir);
+  const mock = await startMock(dataDir);
+  mesh?.(mock);
   const daemon = await bootstrap({
     dataDir,
     controlPort: 0,
@@ -872,7 +1284,7 @@ async function realWorld(): Promise<{ daemon: FielddDaemon; win: WsRpc; sid: str
     sid = found.rows[0]?.sessionId ?? "";
     return sid !== "";
   }, 90_000);
-  return { daemon, win, sid };
+  return { daemon, win, sid, mock };
 }
 
 /** rosetta's own client over a ticket: the origin, and the grant as the credential. */
@@ -1041,5 +1453,70 @@ describe.skipIf(
     // re-ticketed: the stream opens again
     const again = await firstSnapshot(clientFor(after), sid);
     again.close();
+  }, 240_000);
+
+  it("DS-7: a window on another desktop streams the REAL transcript through its route, by the owner's grant — rosetta's own client, and neither door carries it", async () => {
+    // A, the owner: the real rosettad over the ground truth, on the (mock) tailnet
+    const A = await realWorld((mock) => {
+      mock.meshDeviceId = "dev-a";
+      mock.meshPeers = [
+        registryPeer({ nodeId: "node-b", deviceId: "dev-b", name: "device-b", login: TEST_LOGIN }),
+      ];
+      mock.storeSlices = new Map<string, unknown>([["dev-b", desktopSlice("dev-b", "device-b")]]);
+    });
+    await until(() => A.mock.meshServes.get("product") !== undefined, 15_000);
+    const origin = A.daemon.rosettad?.state().origin ?? null;
+    await until(
+      () => indexEndpointsFrom(A.daemon.mesh.serves(), origin, A.sid) !== undefined,
+      15_000,
+    );
+    // B, the window's desktop: its route to A's index serve, its dial to A's door
+    const routes = new FakeEgressRoutes();
+    const listen = `127.0.0.1:${indexTargetPort(origin)}`;
+    routes.route("dev-a", PORTS.INDEX_SERVE, listen);
+    const peerSockets: WebSocket[] = [];
+    const aEndpoint = `ws://127.0.0.1:${A.daemon.controlPort}/t/${productPathSecret(A.mock)}`;
+    const B = await boot({
+      rosettad: false,
+      mesh: (mock) => {
+        mock.meshDeviceId = "dev-b";
+        mock.meshPeers = [
+          {
+            id: "node-a",
+            deviceId: "dev-a",
+            name: "device-a",
+            online: true,
+            whois: { login: TEST_LOGIN, deviceName: "device-a.tailnet.ts.net" },
+          },
+        ];
+      },
+      config: { peerWebSocket: sidecar(() => aEndpoint, peerSockets), indexEgressRoutes: routes },
+    });
+    await until(() => B.daemon.devices.get("dev-a") !== undefined, 8_000);
+    await until(() => A.daemon.devices.isDocHost("dev-b"), 8_000);
+    const win = await windowOf(B.daemon, ["index.read"], "real-b");
+    const ticket = IndexOpenTicket.parse(
+      await win.call("index.openTicket", { device: "dev-a", sessionId: A.sid }),
+    );
+    expect(IndexEndpointSet.parse(ticket.endpoints).restUrl).toBe(`http://${listen}`);
+    const doors = (): number =>
+      bytesOf(socketOf.get(win) as WebSocket) +
+      peerSockets.reduce((sum, socket) => sum + bytesOf(socket), 0);
+    const before = await settled(doors);
+    // rosetta's own client, holding A's grant: the header row and the live stream
+    const client = clientFor(ticket);
+    expect((await client.session(A.sid)).session.id).toBe(A.sid);
+    const timelineId = await firstTimelineId(client, A.sid);
+    expect(timelineId).not.toBe("");
+    const stream = await firstSnapshot(client, A.sid);
+    stream.close();
+    expect(doors() - before).toBeLessThan(4_096);
+    // the forwarded grant is read alone: the recorded-file read is refused
+    expect(
+      await getWith(
+        `${IndexEndpointSet.parse(ticket.endpoints).restUrl}/api/sessions/${encodeURIComponent(A.sid)}/timeline/${encodeURIComponent(timelineId)}/read/0`,
+        `Rosetta-Grant ${ticket.grant}`,
+      ),
+    ).toEqual({ status: 401, reason: "wrong-scope" });
   }, 240_000);
 });

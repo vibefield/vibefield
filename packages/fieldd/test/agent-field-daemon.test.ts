@@ -229,8 +229,9 @@ describe("TM-2 (F-M4) — the door answers the attach-join question", () => {
 
 // PG-1d — F-M4's residual. The gate is read at SEND time, so an idle board kept
 // what its last frame said about the doors until the board next moved. A flip
-// of the gate re-presents every live field and desk board: ONE snapshot at the
-// board's current revision. The flip moves none (MF-1h), but a live daemon's
+// of the gate re-presents every live field and remote board (PG-2; the desk
+// board before it): ONE snapshot at the board's current revision. The flip
+// moves none (MF-1h), but a live daemon's
 // fold may have a change waiting out the floor, folded into the same snapshot,
 // so these rows hold it to "never behind the reader"; the idle unit rows pin
 // the exact revision.

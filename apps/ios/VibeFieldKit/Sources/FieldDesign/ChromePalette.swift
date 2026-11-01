@@ -236,6 +236,22 @@ public enum ChromePalette {
   /// A search hit's mark: the term, on a wash of the select hue.
   public static let markWash = dynamic(light: 0x4A90D9, lightAlpha: 0.18, dark: 0x4A90D9, darkAlpha: 0.30)
 
+  // MARK: - The switch (IOS-10a)
+
+  /// The design kit's switch (`.vf-ui-switch`, `primitives.css`) at iOS's
+  /// measure: an ink track with the knob its inverse, never the system's
+  /// green, because green says working or healthy here (§2.5). On is the ink,
+  /// solid (`--vf-foreground`).
+  public static let switchOn = keyOnFill
+  /// Off is the ink at 15% (`color-mix(in srgb, var(--vf-foreground) 15%,
+  /// transparent)`).
+  public static let switchOff = dynamic(
+    light: 0x000000, lightAlpha: 0.15, dark: 0xFFFFFF, darkAlpha: 0.15)
+  /// The knob is the ink's inverse (`--vf-foreground-inverse`: `#FFFFFF`,
+  /// `#1C1C1E` at night) — the paper's own two values. The system knob is
+  /// always white, and a white track at night would swallow it.
+  public static let switchKnob = paper
+
   // MARK: - The bar (IOS-9e)
 
   /// The selected tab's pill inside the bar's capsule — measured off iOS 26's

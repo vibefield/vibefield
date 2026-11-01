@@ -106,7 +106,12 @@ export const PORTS = {
    * move a serve here would put every transcript one same-login node away. And
    * for the same reason NOT in `MESH_EGRESS.ROUTABLE_PORTS` (DS-L6: a loopback
    * egress route may target only a door that demands its own grant); it joins
-   * that list at the pin move, in review. */
+   * that list at the pin move, in review.
+   * *Corrected 2026-10-31 (DS-7): both conditions above ended at AR-8b's pin
+   * move (2026-10-03) — every rosettad fieldd starts demands a bearer on every
+   * route and verifies RO-10's per-session grants, and the serve is published
+   * by default. DS-7 makes the claim: this port is now ROUTABLE, and another
+   * desktop's window reaches it through an egress route of its own desktop.* */
   INDEX_SERVE: 9424,
   /** The freeway (FW-D1, FW-D6; `draft/thinking-freeway.md` v0.3 §3) — ONE link per peer, the
    * phone's to each desktop it shows and one per desktop pair, every plane a stream on it. Its
@@ -327,12 +332,28 @@ export const INDEX_ACTIVITY = {
  * TTL_MS (AR-8b, the plan's lean of 10 minutes): how long a minted grant
  * opens its session. An ESTABLISHMENT deadline — rosetta re-checks no open
  * socket (AUTH.md §3) — so a reader renews by asking again before it
- * reconnects, never by holding a long-lived grant. TS-only: no native reader. */
+ * reconnects, never by holding a long-lived grant. TS-only: no native reader.
+ *
+ * *DS-7 (2026-10-31): a ticket for a session on ANOTHER desktop is served — the
+ * window's daemon forwards the ask, the owner answers the set of its index
+ * serve, and the window's daemon re-homes that set onto an egress route of its
+ * own desktop. STATE_UNBUILT now names the phone's half alone (SP-7). Two ROAD
+ * refusals join, each retryable (a road can come back) and each naming the
+ * desktop the ticket is for (`IndexTicketRoadDetails`, agent-index.ts), in the
+ * terminal's words for the same facts, so a reader learns one vocabulary:*
+ * STATE_EGRESS_UNAVAILABLE: the window's own desktop has no egress route to
+ * that desktop's index serve — a floor without egress, the mesh down, the
+ * owner gone from the roster.
+ * STATE_DOORS_NOT_PUBLISHED: the owner has no live index serve to hand out (no
+ * linked login, or its rosettad restarted and the serve is being re-aimed), or
+ * it answered a set only its own machine can dial. */
 export const INDEX_TICKET = {
   /** `UnavailableDetails.service` on every refusal */
   SERVICE: "index",
   STATE_UNBUILT: "direct-plane-unbuilt",
   STATE_OFF: "direct-plane-off",
+  STATE_EGRESS_UNAVAILABLE: "egress_unavailable",
+  STATE_DOORS_NOT_PUBLISHED: "doors_not_published",
   TTL_MS: 10 * 60 * 1000,
 } as const;
 
@@ -345,10 +366,9 @@ export const FREEWAY_APPROVAL = {
   STATE_UNREAD: "unread",
   /** the freeway host is not running: no declaration yet, between generations, or parked */
   STATE_DOWN: "down",
-  /** this desktop's roster does not correlate the calling node to a device (yet) */
+  /** this desktop's roster does not correlate the calling node — or, for an ask a self peer daemon
+   * forwards (F1b), the phone it names — to a device (yet) */
   STATE_UNCORRELATED: "uncorrelated",
-  /** FW-D5's approval forwarded through a self peer daemon for a phone (F1b) */
-  STATE_FORWARDING_UNBUILT: "forwarding-unbuilt",
 } as const;
 
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
@@ -381,24 +401,37 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * They stay, unread, as the record of what an older desktop's slice means.*
  *
  * DS-3 (the mesh board, DS-D4; design-06 §8 "the board's cadence floors") —
- * DESK_MIN_INTERVAL_MS is the desk projection's floor (windows; a caller may
- * ask slower, never faster); DESK_TEXT_CHARS bounds every text a desk row
- * carries (the reply line, a blocker's question). MESH_HEARTBEAT_MS is the
- * heartbeat the mesh board asks each peer's upstream for (an empty delta
- * after that long without a frame), and a peer unheard for MESH_STALE_BEATS
- * of them reads `stale`: the board's own cadence is quiet when nothing moves,
- * so without a beat an idle desktop and a dead stream would look alike.
+ * DESK_MIN_INTERVAL_MS was the desk projection's floor (windows; a caller may
+ * ask slower, never faster; REMOTE_MIN_INTERVAL_MS since PG-2); DESK_TEXT_CHARS
+ * bounds every text a desk row carries (the reply line, a blocker's question).
+ * MESH_HEARTBEAT_MS is the heartbeat the mesh board asks each peer's upstream
+ * for (an empty delta after that long without a frame), and a peer unheard for
+ * MESH_STALE_BEATS of them reads `stale`: the board's own cadence is quiet
+ * when nothing moves, so without a beat an idle desktop and a dead stream would
+ * look alike.
  *
  * SP-1 (2026-10-01) — FULL_TICK_MS is the fold's own publish tick (PF5: one
  * whole-board frame per tick per subscriber, trailing-edge), moved here from a
  * fieldd constant so the registry can say what `agent.subscribe`'s full
- * projection costs a reader (`methods.ts`'s subscription descriptor). */
+ * projection costs a reader (`methods.ts`'s subscription descriptor).
+ *
+ * PG-2 (PG-L1, PG-D8 (a), 2026-10-31) — the `remote` cut's floors.
+ * REMOTE_MIN_INTERVAL_MS is a peer window's (the floor a peer daemon's upstream
+ * is served at; it was DESK_MIN_INTERVAL_MS, the retired `desk` cut's, and its
+ * value is unchanged). REMOTE_PHONE_MIN_INTERVAL_MS is the phone's ordinary
+ * floor, and REMOTE_URGENT_MS the longest an URGENT change (a status, a
+ * liveness, a wait, a birth or a death; L12's signal) waits on any remote
+ * board: the leading edge goes out once that long has passed since the last
+ * frame, or once the board's own floor has, whichever is shorter. DESK_TEXT_CHARS
+ * keeps its name: it bounds every text the remote cut carries (PG-D2). */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
   STORE_HEARTBEAT_MS: 10_000,
   STORE_EXPIRY_MS: 30_000,
-  DESK_MIN_INTERVAL_MS: 100,
+  REMOTE_MIN_INTERVAL_MS: 100,
+  REMOTE_PHONE_MIN_INTERVAL_MS: 1_000,
+  REMOTE_URGENT_MS: 250,
   DESK_TEXT_CHARS: 280,
   MESH_HEARTBEAT_MS: 1_000,
   MESH_STALE_BEATS: 3,
@@ -1584,12 +1617,18 @@ export const LAYOUT = {
   PAIRING_FILE: ["native", "pairing"],
   MESH_STATE_DIR: ["native", "mesh"],
   LINK_FILE: ["fieldd", "link.json"],
+  /** AL-12 — how a shell last left this pair, KEPT (`ShellLastExit`; Settings → Diagnostics' "Last exit"): replaced at
+   * every shell exit and every shell-asked stop, never taken. */
+  SHELL_LAST_EXIT: ["fieldd", "shell-last-exit.json"],
   /** AL-7 — how the last shell left this pair (`ShellExitRecord`): written when the last shell-main connection
    * closes, handed once to the next shell that claims the lease (`system.shell.attach`). */
   SHELL_EXIT: ["fieldd", "shell-exit.json"],
   /** AL-8a — how the PREVIOUS fieldd left this pair's floor, when it went without a goodbye (`ManagerExitRecord`):
    * written by the fieldd whose hello-ack said so, handed once to the next shell that claims the lease. */
   MANAGER_EXIT: ["fieldd", "manager-exit.json"],
+  /** AL-11 — when fieldd relaunched the app after an unplanned exit (`ShellRelaunchLog`), so AL-D8's cap of 3 per
+   * 10 min holds across a fieldd restart. */
+  SHELL_RELAUNCHES: ["fieldd", "shell-relaunches.json"],
   /** SB-2 (AR-7g) — which shells fieldd birthed under an Agent Profile
    * (`TerminalBindingsFile`, 0600): session → profile set, never a variable.
    * fieldd's, because nothing below it can hold a session's metadata, and on

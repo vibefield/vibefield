@@ -256,12 +256,12 @@ describe("the generator", () => {
     expect(corpus.panes.sessionIds).toHaveLength(10 + 2);
   });
 
-  it("projects desk rows exactly as fieldd does", () => {
+  it("projects desk rows exactly as fieldd does (the desk half of its model board's run row since PG-2)", () => {
     const boards = fold(corpus.frames);
     for (const board of [boards[0], boards[Math.floor(boards.length / 2)], boards.at(-1)]) {
       for (const row of board?.rows ?? []) {
         const { revision: _ours, ...ours } = deskRowOf(row, 1);
-        const { revision: _theirs, ...theirs } = projectDeskRow(row);
+        const { local: _chrome, ...theirs } = projectDeskRow(row) as Record<string, unknown>;
         expect(ours).toEqual(theirs);
       }
     }

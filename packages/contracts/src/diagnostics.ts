@@ -218,7 +218,7 @@ export type CrashArtifactViewedV1 = z.infer<typeof CrashArtifactViewedV1>;
 /** DS-L7 / DS-D15 (2026-09-30) — who a forwarded call was FOR, as the
  * forwarding daemon restated it (`forwarding.ts` OnBehalfOf). `clientKind` is a
  * bounded string, not the enum, so a newer peer's kind is recorded rather than
- * lost; `.strip()` so nothing a peer adds beside the four members enters the
+ * lost; `.strip()` so nothing a peer adds beside the five members enters the
  * ledger. Provenance only — the actor's `kind`/`id` remain the principal that
  * was authorized. */
 export const AuditOnBehalfOfV1 = z
@@ -227,6 +227,9 @@ export const AuditOnBehalfOfV1 = z
     deviceId: LogBoundedIdentityV1,
     windowId: LogBoundedIdentityV1.optional(),
     userId: LogBoundedIdentityV1.optional(),
+    /** F1b (2026-10-31) — the phone behind its home, by its roster device
+     * (`OnBehalfOf.clientDeviceId`): a forwarded approval's actor names it */
+    clientDeviceId: LogBoundedIdentityV1.optional(),
   })
   .strip();
 export type AuditOnBehalfOfV1 = z.infer<typeof AuditOnBehalfOfV1>;

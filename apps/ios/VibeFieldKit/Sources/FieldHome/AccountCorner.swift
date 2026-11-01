@@ -31,6 +31,8 @@ struct AccountCornerView: View {
   /// launch of this account.
   let seed: String
   let onToggle: () -> Void
+  /// You, beside the face: Settings › Account (§8 "The Me menu").
+  let onAccount: () -> Void
   let onSettings: () -> Void
   let onSignOut: () -> Void
   let onSignIn: () -> Void
@@ -177,10 +179,10 @@ struct AccountCornerView: View {
   }
 
   /// You, beside the face: the name, and the login line or the connection's
-  /// word under it. Tapping it opens Settings — the account's own page, when
-  /// the phone has one; today the settings sheet.
+  /// word under it. Tapping it opens Settings › Account, as the desktop's
+  /// does (IOS-10a; until then it opened the terminal sheet).
   private var youRow: some View {
-    Button(action: onSettings) {
+    Button(action: onAccount) {
       HStack(spacing: 0) {
         VStack(alignment: .leading, spacing: 1) {
           Text(face.name.isEmpty ? "You" : face.name)
@@ -206,7 +208,7 @@ struct AccountCornerView: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .accessibilityLabel("\(face.name.isEmpty ? "You" : face.name)\(face.detail.map { ", \($0)" } ?? "") — settings")
+    .accessibilityLabel("\(face.name.isEmpty ? "You" : face.name)\(face.detail.map { ", \($0)" } ?? "") — account")
   }
 
   /// The rows above you, top to bottom as they stand on screen.
@@ -249,7 +251,12 @@ struct AccountCornerView: View {
           .padding(.top, 2)
           .padding(.bottom, 8)
       }
-      separator
+      // The section closes with a hairline only when it drew something: with
+      // no desktop listed (waiting for approval, no desktops yet) the two
+      // hairlines stood with nothing between them (filed 2026-10-31).
+      if face.drawsDesktopSection {
+        separator
+      }
     }
     .padding(.top, 6)
     .padding(.horizontal, 6)

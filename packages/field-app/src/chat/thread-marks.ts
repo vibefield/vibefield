@@ -11,6 +11,20 @@ import type { SparkEntry } from "./spark-status";
 /** A thread's dot: a need's (`--vf-orange`), or unread (`--vf-cyan`). A need outranks unread. */
 export type ThreadMark = "needs" | "unread";
 
+/** A dot that outlasts the row's status word, in the words its accessible name says after that word (DESIGN.md §9
+ * "Chat's words"): a need that has ended, or unread. */
+export const THREAD_MARK_WORDS: Readonly<Record<ThreadMark, string>> = {
+  needs: "needed you",
+  unread: "unread",
+};
+
+/** What a row's dot says that its status word does not: unread, or a need that has ended; null for no dot, or for a
+ * need standing now, which the word says itself (Asking you). */
+export function lastingMarkOf(entry: SparkEntry, mark: ThreadMark | null): string | null {
+  if (mark === null || (mark === "needs" && entry.needsYou)) return null;
+  return THREAD_MARK_WORDS[mark];
+}
+
 /** What a window has latched since each thread was last on screen. */
 export interface ThreadLatches {
   /** the threads that needed you while not on screen */

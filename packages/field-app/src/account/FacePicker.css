@@ -8,12 +8,6 @@
   gap: 10px;
 }
 
-.vf-face-picker[data-disabled],
-.vf-face-picker-choices[data-disabled] {
-  opacity: 0.45;
-  pointer-events: none;
-}
-
 .vf-face-picker-frames {
   width: 184px;
 }
@@ -160,6 +154,26 @@
   margin: 0;
   color: var(--vf-orange);
   font-size: 12px;
+}
+
+/* Off while its host writes (DESIGN.md §7): the group says so to assistive
+   tech too (`role="group"`, `aria-disabled`). Its pictures dim — the faces,
+   and the typed one's field — and its words wear t4 at full opacity, 3:1 or
+   more on their ground (§2.4); a dim on the group itself would reach its words
+   (row 32 at run69b: the deck's head at 2.1–2.6:1 while saving). */
+.vf-face-picker[data-disabled],
+.vf-face-picker-choices[data-disabled] {
+  pointer-events: none;
+}
+
+.vf-face-picker-choices[data-disabled] .vf-face-picker-deck,
+.vf-face-picker-choices[data-disabled] .vf-face-picker-any-input {
+  opacity: 0.45;
+}
+
+.vf-face-picker-choices[data-disabled] .vf-face-picker-label,
+.vf-face-picker-choices[data-disabled] .vf-face-picker-any-label {
+  color: var(--vf-text-faint);
 }
 
 @media (prefers-reduced-motion: reduce) {

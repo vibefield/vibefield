@@ -1,7 +1,12 @@
 import { EventEmitter } from "node:events";
-import { type AgentFieldRow, CONTRACTS_VERSION, type DeviceInfo } from "@vibefield/contracts";
+import {
+  AGENT_FIELD,
+  type AgentFieldRow,
+  CONTRACTS_VERSION,
+  type DeviceInfo,
+} from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MeshBoard, type MeshBoardFrame } from "../src/mesh-board";
+import { type BoardProjection, MeshBoard, type MeshBoardFrame } from "../src/mesh-board";
 import { RpcCallError } from "../src/native-link";
 
 // DS-3 (DS-D4) — the mesh board's multiplexer against fakes: the roster
@@ -170,7 +175,7 @@ function harness(rows: DeviceInfo[], selfDevice: () => string = () => SELF): Har
 }
 
 /** A reader, and the frames it has heard. */
-function reader(h: Harness, projection: "field" | "desk" = "desk", floor = 100) {
+function reader(h: Harness, projection: BoardProjection = "remote", floor = 100) {
   const frames: MeshBoardFrame[] = [];
   const opened = h.board.open(projection, floor, (frame) => frames.push(frame));
   return { ...opened, frames };
@@ -209,9 +214,37 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     expect(
       h.upstreams.attaches.map((attach) => [attach.device, attach.method, attach.params]),
     ).toEqual([
-      ["dev-b", "agent.subscribe", { projection: "desk", minIntervalMs: 100, heartbeatMs: 1_000 }],
+      [
+        "dev-b",
+        "agent.subscribe",
+        { projection: "remote", minIntervalMs: 100, heartbeatMs: 1_000 },
+      ],
     ]);
     r.dispose();
+  });
+
+  // PG-2 (PG-L1, PG-D8 (a)) — the relay asks each OWNER for its remote cut, so
+  // the owner cuts and paces its rows and the home only relays them (DS-D4).
+  it("PG-2 — a window's model hub asks each peer for its remote board at the remote floor; the phone's hub asks the same at the phone's floor", () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const window = reader(h, "model", AGENT_FIELD.FULL_TICK_MS);
+    const phone = reader(h, "remote", AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS);
+    expect(h.upstreams.attaches.map((attach) => attach.params)).toEqual([
+      {
+        projection: "remote",
+        minIntervalMs: AGENT_FIELD.REMOTE_MIN_INTERVAL_MS,
+        heartbeatMs: AGENT_FIELD.MESH_HEARTBEAT_MS,
+      },
+      {
+        projection: "remote",
+        minIntervalMs: AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS,
+        heartbeatMs: AGENT_FIELD.MESH_HEARTBEAT_MS,
+      },
+    ]);
+    // two floors, two hubs: the phone's never slows a window's, nor a window's hurries the phone's
+    expect(h.board.size).toBe(2);
+    window.dispose();
+    phone.dispose();
   });
 
   it("takes what a peer sent right behind its snapshot only AFTER applying the snapshot (the manager's start, 2026-10-01)", async () => {
@@ -476,12 +509,12 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     expect(h.local.disposed).toBe(1);
     expect(h.board.size).toBe(0);
     // another cadence is another question: its own hub, its own upstreams
-    const slow = reader(h, "desk", 500);
+    const slow = reader(h, "remote", 500);
     const field = reader(h, "field", 250);
     expect(h.board.size).toBe(2);
     expect(h.upstreams.standing().map((attach) => attach.params)).toEqual([
-      { projection: "desk", minIntervalMs: 500, heartbeatMs: 1_000 },
-      { projection: "desk", minIntervalMs: 500, heartbeatMs: 1_000 },
+      { projection: "remote", minIntervalMs: 500, heartbeatMs: 1_000 },
+      { projection: "remote", minIntervalMs: 500, heartbeatMs: 1_000 },
       { projection: "field", minIntervalMs: 250, heartbeatMs: 1_000 },
       { projection: "field", minIntervalMs: 250, heartbeatMs: 1_000 },
     ]);
@@ -513,7 +546,7 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     });
     // DS-L8: its board, greyed by its state — and nothing is asked of it asleep
     expect(h.upstreams.attaches).toHaveLength(1);
-    // another projection keeps its own: a field reader never sees a desk board
+    // another projection keeps its own: a field reader never sees a remote board
     const field = reader(h, "field", 250);
     expect(field.open.devices.find((entry) => entry.device === "dev-b")?.snapshot).toBeUndefined();
     field.dispose();
@@ -620,7 +653,7 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     h.board.dispose();
     let refusal: unknown;
     try {
-      h.board.open("desk", 100, () => {});
+      h.board.open("remote", 100, () => {});
     } catch (error) {
       refusal = error;
     }
@@ -819,7 +852,7 @@ describe("PG-1c — a reader's current open, the door's resync for a phone behin
   it("the door's install answers the open, relays every frame as a delta, and resyncs with ONE whole-mesh snapshot", async () => {
     const h = harness([selfRow, desktop("dev-b")]);
     const sent: Array<[unknown, string | undefined]> = [];
-    const install = h.board.subscribe("desk", 100, (payload, kind) => sent.push([payload, kind]));
+    const install = h.board.subscribe("remote", 100, (payload, kind) => sent.push([payload, kind]));
     const [attach] = h.upstreams.attaches;
     if (attach === undefined) throw new Error("no upstream");
     h.upstreams.answer(attach, peerSnapshot());

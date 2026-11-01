@@ -1597,6 +1597,19 @@ export type IndexActivityResponse = z.infer<typeof IndexActivityResponse>;
 // the tailnet set and its serve are what DS-7 (another desktop) and SP-6 (the
 // phone) still owe.*
 //
+// *DS-7 (2026-10-31): another desktop's half is built. A window here asks
+// `{sessionId, device}`; this daemon forwards it whole to the owner, which
+// mints for the forwarding daemon (a `peer-fieldd` self principal) from its own
+// rule and answers the TAILNET set of its live index serve
+// (`RemoteIndexEndpointSet`, the `index-open-ticket.valid.json` golden as it
+// stands); this daemon then re-homes that set onto an egress route of its OWN
+// desktop to the owner's `PORTS.INDEX_SERVE` and hands the window the loopback
+// set (`IndexEndpointSet`, composed from the asked session id and the route's
+// listener — the route forwards the whole listener, so its origin is the
+// `rest` leg the tailnet set never needed). No new leg on the tailnet set: the
+// phone's (SP-7) is its own to add. Grants ride untouched; fieldd's doors carry
+// the ask and the answer, never a transcript byte (EL2).*
+//
 // A session's transcript is rosetta's own stream, read at the OWNER's rosettad:
 // history to a stamp, then the live tail, resumable, with `resync` as the gap
 // marker (AR-D7). fieldd publishes rosettad's loopback listener as ONE serve on
@@ -1747,13 +1760,34 @@ export const IndexTicketUnavailableDetails = z
   .passthrough();
 export type IndexTicketUnavailableDetails = z.infer<typeof IndexTicketUnavailableDetails>;
 
+/** DS-7 — the door's two ROAD refusals, for a ticket to another desktop's
+ * session (`INDEX_TICKET`, registries.ts — `UnavailableDetails`, retryable
+ * TRUE: a road can come back): this desktop has no egress route to that
+ * desktop's index serve (`egress_unavailable`), or that desktop has no live
+ * serve to hand out (`doors_not_published`). Both name the desktop the ticket
+ * is for, so a reader says which desktop its words are about. A desktop that
+ * does not answer at all is not this — the peer link's own refusal
+ * (`{service: "peer-link", device, state: "offline" | "unreachable"}`). */
+export const IndexTicketRoadDetails = z
+  .object({
+    service: z.literal(INDEX_TICKET.SERVICE),
+    state: z.enum([INDEX_TICKET.STATE_EGRESS_UNAVAILABLE, INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED]),
+    device: z.string().min(1),
+  })
+  .passthrough();
+export type IndexTicketRoadDetails = z.infer<typeof IndexTicketRoadDetails>;
+
 /**
  * SP-3 — what `index.openTicket` answers: the template's ticket anatomy
  * (`TerminalOpenTicket`'s) for rosettad — the endpoint set and, BESIDE it, the
  * one grant rosetta verifies. *AR-8b (2026-10-03): ANSWERED, for a window on
  * this desktop — `endpoints` is the loopback set (`index-open-ticket.local.json`
  * is its golden); the tailnet set (`index-open-ticket.valid.json`) stays
- * DS-7's and SP-6's, which may amend it, golden and all.*
+ * DS-7's and SP-6's, which may amend it, golden and all.* *DS-7 (2026-10-31):
+ * the owner ANSWERS the tailnet set, unamended, to another desktop's daemon
+ * forwarding for its window; that daemon hands its window the loopback set
+ * over an egress route (the section's header says how). The phone's (SP-7)
+ * may still amend it.*
  *
  *  - `device`: the desktop whose rosettad holds the session — the cache key's
  *    first part (`{device, session, stamp}`, thinking-sync-planes §5.4).

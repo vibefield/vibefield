@@ -1,23 +1,32 @@
-import type {
-  AgentFieldRow,
-  AgentProfileSet,
-  AgentProviderSummary,
-  SparkSummary,
+import {
+  type AgentFieldRow,
+  type AgentProfileSet,
+  catalogEntry,
+  type SparkSummary,
 } from "@vibefield/contracts";
+import { CANNOT_LIST_AGENTS } from "./new-spark";
+import type { BoardRows } from "./sparks-feed";
 
 // @'S ROWS IN CHAT (SP-1d; DESIGN.md §8 "Chat's composer", @'s rows in Chat; CH-D5 A "Agents to start, and sessions
-// running"; EW-D4: @ offers only its scope). PURE: the spark, what fieldd answers of its agents and profiles, and the
-// field board's rows in; the two groups out, read bottom-up, nearest first. Each lists only what the spark's own tools
-// reach, so @ never offers a row they would refuse:
+// running"; EW-D4: @ offers only its scope). PURE: the spark, what fieldd answers of its profiles, and the field
+// board's rows in; the two groups out, read bottom-up, nearest first. Each lists only what the spark's own tools reach,
+// but for the one residual below:
 //
 //   - "Start an agent": the list its `agents_available` tool answers (TL-D2; fieldd's compose room) — each agent
-//     signed in under one of the spark's profiles, a row per agent and profile;
+//     signed in under one of the spark's profiles, a row per agent and profile, said by the catalog's label as that
+//     tool says it (the raw id only for an agent the catalog has no row for);
 //   - "Running in its profiles": the sessions its `agent_send` takes (CP-2; fieldd's talk room, `reach` + `his` /
-//     `startedBy` + `live`), by that whole rule.
+//     `startedBy` + `live`), by that whole rule but for a session's profile.
 //
-// The board's row names its persona (`profileId`), not the profile its run was filed under, so a session's profile is
-// read as the talk room's own fallback reads it: its persona's profile, or This Mac's when it names none. The one
-// parity left: a run fieldd filed under a profile other than its persona's is placed by its persona here.
+// The residual (DESIGN.md's, dated 2026-10-31): the talk room reads a session's profile as the one its run was filed
+// under (`profileSet`), else This Mac's. The board's row carries only the run's persona (`profileId`), so here a
+// session is placed by its persona's profile, else This Mac's when it names no persona. The two part for a run filed
+// under a profile other than its persona's, or naming only one of the two: @ can then offer a session `agent_send`
+// refuses as outside, or leave out one it takes. Closing it needs `profileSet` on the board's row.
+//
+// Without its profiles no row can be placed, so a failed read of them offers none and says the New spark sheet's
+// sentence. Without the board no session can be placed, but the agents can: they are the profiles' alone, so a failed
+// board leaves them standing, and the sessions' group says in its rows' place that what is running can't be read.
 //
 // The keyboard's walk over the rows (`atStops`, `atDefaultHot`, `atMove`, `atRow`) came back from the line's model in
 // git (`0e2ad08bc:packages/field-app/src/frame/`), its rows re-ruled.
@@ -47,7 +56,8 @@ export interface AtSessionRow {
   readonly session: string;
   readonly agent: string;
   readonly label: string;
-  /** its name as the swarm names its body, with @'s ordinal where two share it ("vibe-field·2") */
+  /** its folder's name (the board's project), else its agent's label, with @'s ordinal where two share it
+   * ("vibe-field·2") */
   readonly handle: string;
   /** its project's name, the ordinal left off; null for a run that names none */
   readonly project: string | null;
@@ -62,7 +72,10 @@ export interface AtList {
   readonly sessions: readonly AtSessionRow[];
   /** what it offers is still being read */
   readonly reading: boolean;
-  /** the list's word when it holds no row: nothing matches what follows the @, or nothing to offer at all */
+  /** what is running can't be read (the board refused): the sessions' group says so in its rows' place */
+  readonly sessionsFailed: boolean;
+  /** the list's word when it holds no row: nothing matches what follows the @, nothing to offer at all, or its
+   * profiles can't be read */
   readonly quiet: string | null;
 }
 
@@ -70,12 +83,10 @@ export interface AtSources {
   readonly spark: SparkSummary;
   /** what follows the @ */
   readonly query: string;
-  /** `agent.providers`' answer, or null until it is read */
-  readonly providers: readonly AgentProviderSummary[] | null;
-  /** `agents.profileSets.list`'s answer, or null until it is read */
-  readonly sets: readonly AgentProfileSet[] | null;
-  /** the field board's rows, or null until the board is read */
-  readonly rows: readonly AgentFieldRow[] | null;
+  /** `agents.profileSets.list`'s answer: null until it is read, "failed" when it could not be */
+  readonly sets: readonly AgentProfileSet[] | "failed" | null;
+  /** the field board's rows as the window reads them: null until the board is read, "failed" while it can't be */
+  readonly rows: BoardRows;
 }
 
 /** @'s words (DESIGN.md §9 "Chat's words"). */
@@ -85,6 +96,10 @@ export const AT_WORDS = {
   reading: "Reading its agents…",
   none: (query: string) => `Nothing called "${query}"`,
   empty: (name: string) => `Nothing to add from ${name}'s profiles`,
+  /** the New spark sheet's own sentence, never a copy */
+  failed: CANNOT_LIST_AGENTS,
+  /** the sessions' group, in its rows' place, while the board can't be read */
+  sessionsFailed: "VibeField can't read what's running right now",
 } as const;
 
 /** A session's word: Working, Idle, or Needs you (its run blocked on the person); none for a run not heard yet. */
@@ -95,8 +110,9 @@ export function sessionWord(row: AgentFieldRow): SessionWord | null {
   return null;
 }
 
-/** The profile a run belongs to, as the talk room's fallback reads it: its persona's profile, or This Mac's when it
- * names no persona; undefined for a persona no profile holds. */
+/** The profile a run is placed by here: its persona's, or This Mac's when it names no persona; undefined for a persona
+ * no profile holds. The talk room reads the run's own `profileSet` instead, which the board's row lacks (the header's
+ * residual). */
 function profileOfRow(row: AgentFieldRow, sets: readonly AgentProfileSet[]): string | undefined {
   if (row.profileId === undefined) return sets.find((set) => set.kind === "native")?.id;
   return sets.find((set) => set.personas.some((persona) => persona.profileId === row.profileId))
@@ -153,10 +169,18 @@ function matches(query: string, ...words: readonly (string | null)[]): boolean {
 
 /** @'s list for the spark's thread. */
 export function atRowsOf(sources: AtSources): AtList {
-  const { spark, query, providers, sets, rows } = sources;
-  if (providers === null || sets === null || rows === null) {
-    return { agents: [], sessions: [], reading: true, quiet: null };
-  }
+  const { spark, query, sets, rows } = sources;
+  if (sets === "failed")
+    return {
+      agents: [],
+      sessions: [],
+      reading: false,
+      sessionsFailed: false,
+      quiet: AT_WORDS.failed,
+    };
+  const sessionsFailed = rows === "failed";
+  if (sets === null || rows === null)
+    return { agents: [], sessions: [], reading: true, sessionsFailed, quiet: null };
   const mine = sets.filter((set) => spark.profiles.includes(set.id));
   const many = spark.profiles.length > 1;
   const offeredAgents = mine.flatMap((set) =>
@@ -171,13 +195,13 @@ export function atRowsOf(sources: AtSources): AtList {
         kind: "agent",
         id: `agent:${provider}:${set.id}`,
         agent: provider,
-        label: providers.find((entry) => entry.id === provider)?.label ?? provider,
+        label: catalogEntry(provider)?.label ?? provider,
         profile: { id: set.id, name: set.label },
         pill: many ? set.label : null,
       }),
     ),
   );
-  const reached = reachedBy(spark, rows, sets);
+  const reached = rows === "failed" ? [] : reachedBy(spark, rows, sets);
   const handles = handlesOf(reached);
   const offeredSessions = reached
     .sort(
@@ -201,13 +225,15 @@ export function atRowsOf(sources: AtSources): AtList {
     matches(query, row.handle, row.project, row.label),
   );
   const offered = offeredAgents.length + offeredSessions.length;
+  // without the board what is running is not known, so "nothing to add" is never said then; what follows the @
+  // matching none of what is offered is said as ever
   const quiet =
-    offered === 0
+    offered === 0 && !sessionsFailed
       ? AT_WORDS.empty(spark.name)
-      : agents.length + sessions.length === 0
+      : query !== "" && agents.length + sessions.length === 0
         ? AT_WORDS.none(query)
         : null;
-  return { agents, sessions, reading: false, quiet };
+  return { agents, sessions, reading: false, sessionsFailed, quiet };
 }
 
 /** The rows a hot highlight can stop on, top to bottom as drawn. */

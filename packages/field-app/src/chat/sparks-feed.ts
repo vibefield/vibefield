@@ -24,11 +24,20 @@ import { cellMarkOf, ThreadLedger, type ThreadMark, threadMarksOf } from "./thre
 // It holds the window's one ledger of each thread's mark (`thread-marks.ts`): Chat says which thread is on screen
 // (`showThread`), and every reading latches what happened in the others. A module store, as the status line's is:
 // only what reads it redraws when the board moves.
+//
+// A fieldd restart replaces the window's document (main's boot fence: `FielddDaemonBootFence` →
+// `requestAllReplacements`), so the feed, its ledger and its list start again ("Opening Chat…"), and the new feed asks
+// for the board afresh. What the feed outlives is a connection drop while the same fieldd stays up: the client
+// reconnects, replays the board's subscription with a fresh snapshot, and the list stands as last read. A board
+// refused because the socket closed under the ask is never replayed, so it is asked again when the window's client is
+// connected again (`SparksPort.onReconnected`); one refused for good stands until the feed starts again.
 
 /** What the feed reads: the window's fieldd client in the product (`sparksPortOver`), a fixture in a test. */
 export interface SparksPort {
   list(): Promise<readonly SparkSummary[]>;
-  /** The field board: its snapshot, then its deltas, in order. Resolves to the way to stop. */
+  /** The field board: its snapshot, then its deltas, in order. Resolves to the way to stop; rejects with fieldd's
+   * refusal, `retryable` (a FielddRpcError's) when asking again may be answered, as when the connection closed under
+   * the ask. */
   watch(onFrame: (payload: unknown, kind: "snapshot" | "delta") => void): Promise<() => void>;
   /** CP-3 — the needs-you queue's open items, oldest first: its snapshot, then each change, whole, in order. Resolves
    * to the way to stop; rejects where fieldd has no queue. */
@@ -36,6 +45,10 @@ export interface SparksPort {
   /** CP-3 — answer an item by its act's place among the item's acts (`needs.answer`): the answered item, or fieldd's
    * refusal thrown. The queue's next frame says it for every window. */
   answer(item: NeedsItemId, choice: number): Promise<NeedsItem>;
+  /** Heard each time the window's client turns `ready` again: after its socket closed while the same fieldd stayed up,
+   * reconnected on the token fieldd still holds. Never after a fieldd restart, which refuses that token and replaces
+   * the window's document. The answer stops it. */
+  onReconnected(listener: () => void): () => void;
   /** Wake a spark: its last session resumes; a live one is answered as it is (CR-D11). */
   open(spark: SparkId): Promise<SparkSummary>;
 }
@@ -51,6 +64,10 @@ export function sparksPortOver(client: FielddClient): SparksPort {
       subscribeInOrder(client, "needs.subscribe", {}, (payload) => onItems(needsItemsOf(payload))),
     answer: async (item, choice) =>
       NeedsAnswerResult.parse(await client.request("needs.answer", { item, choice })).item,
+    onReconnected: (listener) =>
+      client.onStatusChange(() => {
+        if (client.status === "ready") listener();
+      }),
     open: async (spark) =>
       ComposeSparksOpenResult.parse(await client.request("compose.sparks.open", { spark })).spark,
   };
@@ -136,11 +153,18 @@ export class FieldBoard {
   }
 }
 
+/** The field board's rows as the window reads them: null before the board is read, "failed" while it can't be. */
+export type BoardRows = readonly AgentFieldRow[] | "failed" | null;
+
 /** Chat's reading, as the frame and the view draw it: honest states, never a blank. */
 export type SparksReading =
   | { readonly state: "opening" }
   | { readonly state: "unavailable"; readonly reason: string }
   | { readonly state: "ready"; readonly entries: readonly SparkEntry[] };
+
+/** What Chat says while its list cannot be read (DESIGN.md §8 "Chat's list"), fieldd's words under it; Send says the
+ * same when it cannot go on while the list says it (§8 "Chat's composer"). */
+export const SPARKS_UNREADABLE = "Chat can't read your sparks";
 
 interface FeedState {
   readonly reading: SparksReading;
@@ -150,8 +174,9 @@ interface FeedState {
   /** the person's live sessions on the board by the persona each runs as (its `profileId`; null for an agent's own
    * folder), or null before the board is read: the New spark sheet's "Sees N sessions" (SP-1c) */
   readonly sessions: ReadonlyMap<string | null, number> | null;
-  /** the field board's rows as last read, or null before the board is read: @'s sessions in Chat's composer (SP-1d) */
-  readonly rows: readonly AgentFieldRow[] | null;
+  /** the field board's rows as last read, null before the board is read, or "failed" while it can't be (its
+   * subscription refused): @'s sessions in Chat's composer (SP-1d) */
+  readonly rows: BoardRows;
   /** Wake, through the feed that reads this window's sparks; null while none does, so no act that wakes is drawn */
   readonly open: SparkOpener | null;
   /** An answer, through the same feed (CP-3); null while none reads the queue, so nothing is answered */
@@ -245,13 +270,20 @@ class RunningFeed {
   /** the queue has had its first reading, or cannot be read */
   #needsSettled = false;
   #stopNeeds: (() => void) | null = null;
+  /** the board's subscription was refused: "again" when the refusal is retryable (the socket closed under the ask),
+   * asked again when the window's client is connected again (`SparksPort.onReconnected`); "for-good" for any other
+   * refusal, never asked again by this feed */
+  #boardRefused: "again" | "for-good" | null = null;
   #asked = 0;
   #generation = 0;
   #stop: (() => void) | null = null;
+  readonly #offReconnected: () => void;
   #open = true;
   #onBoard = "";
-  /** the sparks this window has seen have a turn, for its life and written nowhere (HN-D9's rule): a run fieldd
-   * re-attached reads its transcript back, which the board never counts, so a turn seen before stays seen */
+  /** the sparks this window has seen have a turn, for its life and written nowhere (HN-D9's rule): a turn seen stays
+   * seen whatever the board counts after it. A fieldd restart replaces the window's document, and fieldd re-attaches
+   * only the runs a restart left (as it boots, and in its G5 retries after), so the set starts empty over a
+   * re-attached run (DESIGN.md §8 "Chat's thread", the open cases) */
   readonly #turnsSeen = new Set<SparkId>();
   /** each thread's mark, for the feed's life (the window's) and written nowhere (HN-D9's rule) */
   readonly #ledger = new ThreadLedger();
@@ -263,6 +295,9 @@ class RunningFeed {
     this.refresh();
     this.#watch();
     this.#watchNeeds();
+    this.#offReconnected = port.onReconnected(() => {
+      if (this.#open && this.#boardRefused === "again") this.#watch();
+    });
   }
 
   /** A thread came on screen, or left it: opening it reads it, and the reading stands as it was. */
@@ -310,18 +345,25 @@ class RunningFeed {
 
   close(): void {
     this.#open = false;
+    this.#offReconnected();
     this.#stop?.();
     this.#stop = null;
     this.#stopNeeds?.();
     this.#stopNeeds = null;
   }
 
-  /** The board, for the feed's life; a gap asks for a fresh snapshot. */
+  /** The board, for the feed's life; a gap asks for a fresh snapshot, and so does the window's client reconnected after
+   * a refusal the closed socket caused. */
   #watch(): void {
     const mine = ++this.#generation;
     const board = new FieldBoard();
     this.#stop?.();
     this.#stop = null;
+    // a board asked again is said as being read, never as the refusal it asks past (rows read before stand meanwhile)
+    if (this.#boardRefused !== null) {
+      this.#boardRefused = null;
+      this.#derive();
+    }
     this.port
       .watch((payload, kind) => {
         if (!this.#open || mine !== this.#generation) return;
@@ -344,9 +386,11 @@ class RunningFeed {
           if (this.#open && mine === this.#generation) this.#stop = unsubscribe;
           else unsubscribe();
         },
-        // without the board the list stands on its records (and the queue): Asleep, Hello, never a guess
-        () => {
-          if (!this.#open || mine !== this.#generation || this.#boardSettled) return;
+        // without the board the list stands on its records and the queue (Asleep, Hello, never a guess), and @ says it
+        // can't read what is running rather than read it for good (DESIGN.md §8 "Chat's composer")
+        (refusal: unknown) => {
+          if (!this.#open || mine !== this.#generation) return;
+          this.#boardRefused = askAgain(refusal) ? "again" : "for-good";
           this.#boardSettled = true;
           this.#derive();
         },
@@ -378,7 +422,7 @@ class RunningFeed {
 
   #derive(): void {
     const sessions = this.#boardRead ? sessionsByProfileOf(this.#rows) : null;
-    const rows = this.#boardRead ? this.#rows : null;
+    const rows = this.#boardRefused !== null ? "failed" : this.#boardRead ? this.#rows : null;
     if (this.#sparks === null) {
       publish({
         reading:
@@ -487,6 +531,12 @@ export function showThread(spark: SparkId | null): void {
   running?.show(spark);
 }
 
+/** The thread on screen now, as Chat last said it (`showThread`), or null: for Send, which asks it when no pane of
+ * its thread settled (DESIGN.md §8 "Chat's composer"). */
+export function threadOnScreen(): SparkId | null {
+  return onScreen;
+}
+
 /** Each thread's mark (SP-1d), by its spark: a needs-you dot while the need stands or since it stood off screen,
  * else unread since its spark's own turn ended off screen. Empty before the first reading. Chat's rows draw it. */
 export function useThreadMarks(): ReadonlyMap<SparkId, ThreadMark> {
@@ -505,9 +555,19 @@ export function useSessionTally(): ReadonlyMap<string | null, number> | null {
   return useSyncExternalStore(subscribe, () => state.sessions);
 }
 
-/** The field board's rows as last read, or null before the board is read (@'s sessions, SP-1d). */
-export function useBoardRows(): readonly AgentFieldRow[] | null {
+/** The field board's rows as last read, null before the board is read, or "failed" while it can't be (@'s sessions,
+ * SP-1d). */
+export function useBoardRows(): BoardRows {
   return useSyncExternalStore(subscribe, () => state.rows);
+}
+
+/** How Chat's list stands now — read, opening, or unreadable — as its panel draws it: for Send, which asks it where it
+ * cannot go on and says it as the list does (DESIGN.md §8 "Chat's composer"). While it is not read no thread is drawn.
+ * A send is pressed only on a list read, so Send reads it unread only when the window's feed starts again under the
+ * send. A fieldd restart never does that: it replaces the window's document, and the send with it (main's boot
+ * fence). Within one document the feed starts once, so today that only guards a feed restarted in place. */
+export function sparksReadingNow(): SparksReading["state"] {
+  return state.reading.state;
 }
 
 /** `spark`'s entry as the feed reads it now, or null while the list does not hold it. */
@@ -554,6 +614,14 @@ function sessionsByProfileOf(rows: readonly AgentFieldRow[]): ReadonlyMap<string
     tally.set(profile, (tally.get(profile) ?? 0) + 1);
   }
   return tally;
+}
+
+/** Whether fieldd may answer the board asked again: its refusal's own `retryable` (a FielddRpcError's). fieldd's door
+ * refuses this window's field board only for good (a malformed or unpermitted ask), so a retryable refusal is the
+ * connection's: the socket closed under the ask, and the client reconnected (`SparksPort.onReconnected`) is when to
+ * ask again. */
+function askAgain(refusal: unknown): boolean {
+  return isRecord(refusal) && refusal["retryable"] === true;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

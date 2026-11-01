@@ -173,6 +173,11 @@ function service(
   const calls: string[] = [];
   const launched: { launch: SparkLaunch; spark: string }[] = [];
   let resumable = true;
+  // a resume that takes its time until the test lets it answer, or refuse
+  let held: Promise<void> = Promise.resolve();
+  // the runtime's claim (claimConversation): a second resume of a conversation already being resumed is refused, and
+  // the daemon's wrapper reads that refusal as "cannot be resumed", so the spark would be started again beside it
+  const resuming = new Set<string>();
   const svc = new SparkService({
     store: store(root),
     homes: join(root, "sparks"),
@@ -186,7 +191,14 @@ function service(
     },
     resume: async (runtimeRunId) => {
       calls.push(`resume:${runtimeRunId}`);
-      return resumable ? { runtimeRunId: `${runtimeRunId}-b` } : undefined;
+      if (resuming.has(runtimeRunId)) return undefined;
+      resuming.add(runtimeRunId);
+      try {
+        await held;
+        return resumable ? { runtimeRunId: `${runtimeRunId}-b` } : undefined;
+      } finally {
+        resuming.delete(runtimeRunId);
+      }
     },
     now: () => new Date("2026-10-29T12:00:00.000Z"),
   });
@@ -199,6 +211,14 @@ function service(
     principal,
     notResumable: () => {
       resumable = false;
+    },
+    /** Hold every resume until the returned call: it answers, or refuses with `error`. */
+    holdResume: () => {
+      let settle: (error?: Error) => void = () => undefined;
+      held = new Promise<void>((resolve, reject) => {
+        settle = (error) => (error === undefined ? resolve() : reject(error));
+      });
+      return settle;
     },
   };
 }
@@ -293,5 +313,44 @@ describe("hatch, list and open (CP-1c; NS-D1, NS-D5, CR-D11)", () => {
     await h.svc.open(vela.id, h.principal);
     expect(h.calls).toEqual(["resume:run-1-b", "spawn"]);
     expect(h.svc.list().map((s) => s.name)).toEqual(["Vela"]);
+  });
+
+  it("answers an open asked while one is under way with that same wake: one resume, one run, for both callers", async () => {
+    const h = service();
+    const vela = await h.svc.hatch(HATCH, h.principal);
+    h.calls.length = 0;
+    const answer = h.holdResume();
+    // two windows, or a window and the phone, open the sleeping spark at once
+    const first = h.svc.open(vela.id, h.principal);
+    const second = h.svc.open(vela.id, h.principal);
+    answer();
+    const [a, b] = await Promise.all([first, second]);
+    expect(h.calls).toEqual(["resume:run-1"]);
+    expect(h.launched).toHaveLength(1);
+    expect(a.session).toEqual({ runtimeRunId: "run-1-b", live: false });
+    expect(b).toEqual(a);
+    expect(h.svc.get(vela.id)?.session).toEqual({ runtimeRunId: "run-1-b" });
+    // answered, the wake is let go: the next open is a wake of its own
+    h.calls.length = 0;
+    await h.svc.open(vela.id, h.principal);
+    expect(h.calls).toEqual(["resume:run-1-b"]);
+  });
+
+  it("refuses every caller of a wake that fails, and lets it go, so the next open wakes again", async () => {
+    const h = service();
+    const vela = await h.svc.hatch(HATCH, h.principal);
+    h.calls.length = 0;
+    const refuse = h.holdResume();
+    const first = h.svc.open(vela.id, h.principal);
+    const second = h.svc.open(vela.id, h.principal);
+    refuse(new Error("the floor did not answer"));
+    await expect(first).rejects.toThrow("the floor did not answer");
+    await expect(second).rejects.toThrow("the floor did not answer");
+    expect(h.calls).toEqual(["resume:run-1"]);
+    expect(h.launched).toHaveLength(1);
+    h.holdResume()();
+    await h.svc.open(vela.id, h.principal);
+    expect(h.calls).toEqual(["resume:run-1", "resume:run-1"]);
+    expect(h.svc.get(vela.id)?.session).toEqual({ runtimeRunId: "run-1-b" });
   });
 });

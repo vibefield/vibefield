@@ -426,8 +426,15 @@ describe("what the step reads back", () => {
   });
 
   const zsh = spawnSync("zsh", ["-fc", "print ok"], { encoding: "utf8" }).stdout?.trim() === "ok";
+  // Item 145 (2026-11-01) — one real login, interactive zsh over the staged HOME, synchronous: a loaded host stretches
+  // it, and vitest's 5 s default cut it at 7,573 ms (items 142–143's electron-shell whole, 05:13Z), in the minute the
+  // release-notes row ran 7,436 (item 143): the host, not the row. Measured in this Mac's logged suites since 10-29
+  // (24 runs): 14 under vitest's 300 ms report threshold, the rest 456–1,354 ms; the mini's 76, 72 under it and the
+  // rest 311–439. Its claim is the startup files' order and silence, never a time: 15 s, as release-notes' row and
+  // smoke-profile's LAUNCHER_ROW_BUDGET_MS (item 93), is about twice the worst this Mac has logged.
   it.skipIf(!zsh)(
     "the person's startup files run in a real zsh, each saying so with its shell's pid, and parse without a word on stderr",
+    { timeout: 15_000 },
     () => {
       const staged = stageTypedAgent({
         vibefieldRoot: root(),

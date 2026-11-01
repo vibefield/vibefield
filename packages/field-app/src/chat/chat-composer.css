@@ -125,11 +125,15 @@
   color: var(--vf-select);
 }
 
+/* an agent's or a session's mark at 15: the agent's mark draws at its text's size (1em), so the box's font size is its
+   size, never the chip's 12.5 */
 .vf-chat-chip-mark {
   display: inline-grid;
   width: 15px;
   height: 15px;
   place-items: center;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .vf-chat-chip-x {
@@ -163,7 +167,7 @@
   place-items: center;
   border: 0;
   border-radius: 18px;
-  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
+  color: var(--vf-text-faint);
   background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
   cursor: default;
 }
@@ -268,12 +272,15 @@
   padding: 5px 10px;
 }
 
+/* a row's agent's mark at 20, at its own text's size (1em), never the list's 13 */
 .vf-chat-at-mark {
   display: grid;
   width: 20px;
   height: 20px;
   flex: none;
   place-items: center;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .vf-chat-at-label {

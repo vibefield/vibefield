@@ -11,11 +11,12 @@ import {
   AgentModelDeskRow,
   type AgentModelLocalFacts,
   type AgentRecordedLanesResult,
+  AgentRemoteRow,
   type AgentSessionOrigin,
   type AgentSessionSummary,
   type AgentSessionTerminal,
   type AgentStopState,
-  type AgentSubscribeParams,
+  AgentSubscribeParams,
   MONITOR_AUDIENCE,
   type MonitorAudience,
   type Principal,
@@ -24,6 +25,7 @@ import {
 import type { MonitorAgentRow, MonitorPastSnapshot } from "@vibefield/puppeteer-view-sdk/model";
 import { RpcCallError } from "./native-link";
 import {
+  atFloor,
   diffRows,
   projectRows,
   RevisionedSubscription,
@@ -36,7 +38,7 @@ import {
 export function malformedBoardAsk(): RpcCallError {
   return new RpcCallError(
     "PRECONDITION_FAILED",
-    'expected { projection?: "full" | "field" | "desk" | "model", scope?: "local" | "mesh", minIntervalMs?: number, heartbeatMs?: number }',
+    'expected { projection?: "full" | "field" | "model" | "remote", scope?: "local" | "mesh", minIntervalMs?: number, heartbeatMs?: number }',
     false,
   );
 }
@@ -48,16 +50,18 @@ export function malformedBoardAsk(): RpcCallError {
  * (`{device}`) never reaches the handler on THIS daemon: ProductApi forwards it
  * whole to the owner, which sees this daemon's `peer-fieldd` principal and not
  * the caller behind it. So a phone could ask `desk` of another desktop through
- * its home and be served the content SP-L4 withholds from it. The handler asks
- * this of its own caller, and the subscription forwarder asks it of the CALLER
- * before carrying the ask — the one place that caller's kind is known.
+ * its home and be served the content SP-L4 withheld from it then. The handler
+ * asks this of its own caller, and the subscription forwarder asks it of the
+ * CALLER before carrying the ask — the one place that caller's kind is known.
  *
  *  · `full` stays on its device: a peer is refused it, the mesh is never asked
  *    for it, and the cadence options it cannot honour are refused (MF-1h);
- *  · `desk` carries content for this person's DESKTOPS — a window, or a self
- *    peer daemon relaying to one; a phone (`tailnet`) reads `field` (SP-L4);
  *  · `model` is this desktop's own windows' (MV-D18, M16): only a caller whose
  *    `MONITOR_AUDIENCE` is `window` asks it (item 100);
+ *  · `remote` (PG-2, PG-L1) is every other screen's: a phone (`tailnet`) asks
+ *    it at its home's mesh scope (SP-L4 as amended, PG-D1/D2), and a self peer
+ *    daemon at the local scope, for its windows' mesh board. It replaced `desk`
+ *    (retired 2026-10-31), which an ask no longer parses as;
  *  · `scope: "mesh"` is this desktop's clients' aggregate: a peer reads a
  *    desktop's OWN board (DS-L4), and the mesh states each desktop's liveness
  *    itself, so `heartbeatMs` is refused there.
@@ -84,15 +88,15 @@ export function refuseBoardAsk(
       return new RpcCallError(
         "FORBIDDEN_SCOPE",
         principal === "tailnet"
-          ? "the full projection is local to its device; a phone reads field (SP-L4)"
-          : "the full projection is local to its device; a peer reads field or desk (DS-D4)",
+          ? "the full projection is local to its device; a phone reads remote (SP-L4)"
+          : "the full projection is local to its device; a peer reads remote (DS-D4, PG-L1)",
         false,
         { projection },
       );
     if (scope === "mesh")
       return new RpcCallError(
         "PRECONDITION_FAILED",
-        "the mesh board is the field or desk projection; full is local to its device",
+        "the mesh board is a board projection (field, model or remote); full is local to its device",
         false,
       );
     // MF-1h — an option that cannot be honoured is refused, not ignored: a
@@ -101,37 +105,34 @@ export function refuseBoardAsk(
     if (minIntervalMs !== undefined || heartbeatMs !== undefined)
       return new RpcCallError(
         "PRECONDITION_FAILED",
-        `${minIntervalMs !== undefined ? "minIntervalMs" : "heartbeatMs"} applies to the field projection and the desk projection`,
+        `${minIntervalMs !== undefined ? "minIntervalMs" : "heartbeatMs"} applies to the board projections (field, model and remote)`,
         false,
       );
     return null;
   }
   // MV-3a (MV-D18, L8, M16) — the model board is THIS desktop's own windows':
-  // it carries the colour sequences this desktop dealt and its bare terminals,
-  // neither of which crosses the sync plane. A peer reads `desk`, a phone
-  // `field`. Item 100: who is a window is `MONITOR_AUDIENCE`'s, the one table
-  // the recorded lanes' cut reads too, so every kind that is not (an agent's
-  // MCP session, a plugin, a guest, a kind not yet written) is refused it.
+  // it carries the colour sequences this desktop dealt and the chrome's facts
+  // (`local`, paths among them), neither of which crosses the sync plane. Every
+  // other screen reads `remote` (PG-2). Item 100: who is a window is
+  // `MONITOR_AUDIENCE`'s, the one table the recorded lanes' cut reads too, so
+  // every kind that is not (an agent's MCP session, a plugin, a guest, a kind
+  // not yet written) is refused it.
   if (projection === "model" && MONITOR_AUDIENCE[principal] !== "window")
     return new RpcCallError(
       "FORBIDDEN_SCOPE",
       principal === "tailnet"
-        ? "the model projection is this desktop's windows'; a phone reads field (SP-L4)"
+        ? "the model projection is this desktop's windows'; a phone reads remote (SP-L4)"
         : principal === "peer-fieldd"
-          ? "the model projection is this desktop's windows'; a peer reads desk (M16)"
+          ? "the model projection is this desktop's windows'; a peer reads remote (M16)"
           : "the model projection is this desktop's windows'",
       false,
       { projection },
     );
-  // SP-L4 — every subscription a phone opens is content-free. Decided by the
-  // principal's kind, never by its transport.
-  if (projection === "desk" && principal === "tailnet")
-    return new RpcCallError(
-      "FORBIDDEN_SCOPE",
-      "the desk projection carries content for this person's desktops; a phone reads field (SP-L4)",
-      false,
-      { projection },
-    );
+  // PG-2 (SP-L4 as amended, PG-D1 (a), PG-D2 (a)) — the `remote` cut is the
+  // model's row for every other screen, its texts bounded and its custody cut
+  // by its owner, so it is admitted to a phone as to a self peer daemon (the
+  // mesh scope stays refused to the peer below, DS-L4). Every other
+  // subscription a phone opens stays content-free.
   if (scope === "mesh") {
     // DS-L4 — a peer asking for the mesh would be one daemon aggregating
     // another's aggregate, and two desktops asking each other would loop.
@@ -150,6 +151,58 @@ export function refuseBoardAsk(
       );
   }
   return null;
+}
+
+/**
+ * PG-2 (PG-D8 (a); design-06 §8 "the board's cadence floors") — the floor a
+ * board ask is served at, beside `refuseBoardAsk` and for the same reason: the
+ * handler asks it of its own caller, and the subscription forwarder asks it of
+ * the caller a routed ask is for, which the owner never sees. A caller may ask
+ * SLOWER and is never served faster. `remote` is the one board whose floor is
+ * the caller's kind's: a phone (`tailnet`) reads it at
+ * `REMOTE_PHONE_MIN_INTERVAL_MS`, every other screen at
+ * `REMOTE_MIN_INTERVAL_MS`. `model` is the fold's tick (L12), `field` its own.
+ * Not asked of `full`, which takes no cadence (MF-1h).
+ */
+export function boardFloor(
+  principal: Principal["kind"],
+  ask: Pick<AgentSubscribeParams, "projection" | "minIntervalMs">,
+): number {
+  const floor =
+    ask.projection === "model"
+      ? AGENT_FIELD.FULL_TICK_MS
+      : ask.projection === "remote"
+        ? principal === "tailnet"
+          ? AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS
+          : AGENT_FIELD.REMOTE_MIN_INTERVAL_MS
+        : AGENT_FIELD.MIN_INTERVAL_MS;
+  return atFloor(ask.minIntervalMs, floor);
+}
+
+/**
+ * S2 and PG-2 — a ROUTED board ask (`agent.subscribe {device}`) as the caller's
+ * home carries it to the owner, which sees the home's `peer-fieldd` principal
+ * and never the caller behind it. It is judged for the CALLER here
+ * (`refuseBoardAsk`, a malformed ask included), and a `remote` ask carries the
+ * floor its caller is served at (`boardFloor`), so a phone's routed remote stays
+ * at the phone's floor however it was asked. Every other ask is carried whole,
+ * as it was asked. Throws the refusal; answers the params to carry.
+ */
+export function routedBoardAsk(principal: Principal["kind"], params: unknown): unknown {
+  const ask = AgentSubscribeParams.safeParse(params ?? {});
+  if (!ask.success) throw malformedBoardAsk();
+  const refusal = refuseBoardAsk(principal, ask.data);
+  if (refusal !== null) throw refusal;
+  if (ask.data.projection !== "remote") return params;
+  return { ...ask.data, minIntervalMs: boardFloor(principal, ask.data) };
+}
+
+/** PG-2 (PG-D8 (a)) — the longest an URGENT change waits on a remote board at
+ * `floor`: `AGENT_FIELD.REMOTE_URGENT_MS`, or the floor itself where that is
+ * shorter (a peer window's 100 ms floor is its own urgent edge, as L12 is the
+ * model board's). The phone's 1 s board sends an urgent change after 250 ms. */
+export function remoteUrgentMs(floor: number): number {
+  return Math.min(floor, AGENT_FIELD.REMOTE_URGENT_MS);
 }
 
 /**
@@ -453,7 +506,9 @@ export function boundText(text: string, chars: number): string {
   return `${points.slice(0, chars - 1).join("")}…`;
 }
 
-/** What a row is projected by: the field's (content-free) or the desk's. */
+/** What a field board's row is projected by: `projectFieldRow`, or a wrapper of
+ * it (the projection bench counts through one, PG-1e0). The desk's retired with
+ * the `desk` cut (PG-2). */
 export type RowProjector = (summary: AgentSessionSummary) => ProjectedFieldRow;
 
 /** The run's latest reply as the desk carries it: puppeteer's
@@ -495,11 +550,13 @@ function blockerQuestion(blocker: unknown, chars: number): string | undefined {
 // custody rule"):
 //   · this desktop's own window (the `model` projection) reads it whole — the
 //     colour sequence it dealt, the texts as core bounded them (M21);
-//   · a PEER (the `desk` projection) reads it without `project.seq` (M16: a
-//     sequence is desktop-local and would collide with the reader's own) and
-//     with every text bounded at `DESK_TEXT_CHARS`, exactly as the desk row's
-//     own reply line and question are (M21);
-//   · the phone (`field`) never sees it.
+//   · every OTHER screen (the `remote` projection, PG-2: a peer's windows and
+//     the phone) reads it without `project.seq` (M16: a sequence is
+//     desktop-local and would collide with the reader's own), with every text
+//     bounded at `DESK_TEXT_CHARS` (M21, PG-D2), and with a bare terminal's
+//     directory named by its folder (EL7 B1: the backend's terminal `detail`
+//     is its working directory as a PATH);
+//   · the phone's `field` row (an older phone's) never sees it.
 // `device.self` is the reader's fact and never travels.
 
 /** The SDK's row as the wire carries it: the same facts, `device.self` dropped. */
@@ -577,7 +634,10 @@ export function clipRecordedLanes(
 }
 
 /** The model's row for a PEER: no colour sequence (M16), every text bounded
- * at the desk's bound (M21). */
+ * at the desk's bound (M21), and (PG-2) a bare terminal's directory as its
+ * folder's name: the backend writes a terminal's working directory into its
+ * `detail` (puppeteer-monitor's `deriveTerminalRow`), and a path never leaves
+ * its desktop (EL7 B1). A terminal with no directory keeps the backend's word. */
 export function peerMonitorRow(
   row: MonitorAgentRow,
   chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
@@ -589,10 +649,12 @@ export function peerMonitorRow(
   const activity = wire.activity;
   const wait = wire.wait;
   const reply = wire.reply;
+  const detail =
+    wire.kind === "terminal" ? (folderNameOf(wire.detail) ?? project.name) : wire.detail;
   return {
     ...wire,
     project,
-    detail: boundText(wire.detail, chars),
+    detail: boundText(detail, chars),
     ...(activity !== undefined
       ? {
           activity: {
@@ -644,9 +706,10 @@ export function projectModelTerminalRow(
 // (`AgentModelDeskRow.local`). Each fact is one a reader reads and the rest of
 // the row does not say; what the row already carries (the provider, its label,
 // the status and its clock, the PTY join, the model, the effort, the context
-// share) is read off the row. The window cut alone carries them: the `desk` cut
-// a peer receives never does, `monitorRow` never does, the phone's field row
-// never does — which is what lets `cwd` be a PATH (EL7 B1).
+// share) is read off the row. The window cut alone carries them: the `remote`
+// cut a peer and the phone receive never does (PG-2; the `desk` cut before it),
+// `monitorRow` never does, the phone's field row never does — which is what lets
+// `cwd` be a PATH (EL7 B1).
 
 /** The fold's facts the window's chrome reads of one run, beside the model.
  * Pure, key order fixed, so the board's change detection (the projected row's
@@ -684,30 +747,28 @@ export function localFactsOf(summary: AgentSessionSummary): AgentModelLocalFacts
 
 /**
  * DS-3 — the DESK row: the field row plus the reply line, the blocker's
- * question and the cost (DS-D4; `AgentDeskRow` in the contract). Content is
- * allowed here because the desk's audience is this person's own desktops —
- * the mesh board's upstreams are self peers, and the door refuses `desk` to a
- * phone (which reads `field`, SP-L4). Everything the field row says is said
- * the same way, from `projectFieldRow`, so the two cannot drift.
+ * question and the cost (DS-D4; `AgentDeskRow` in the contract). Everything the
+ * field row says is said the same way, from `projectFieldRow`, so the two
+ * cannot drift.
  *
- * MV-3a — with the model's row for the run (`monitorRow`), the desk row also
- * carries the backend's facts, cut for its audience: a PEER's cut by default
- * (`peerMonitorRow`), this desktop's own window's when `audience` says so.
- * Absent (the backend has not assembled the run yet, or a caller without the
- * backend), the row carries none and a reader draws what it was sent.
+ * MV-3a — with the model's row for the run (`monitorRow`), whole
+ * (`windowMonitorRow`). Absent (the backend has not assembled the run yet), the
+ * row carries none and a reader draws what it was sent.
  *
- * MV-3d — the window's cut also carries the chrome's facts (`localFactsOf`),
- * whether or not the backend has assembled the run: the marker names every run
- * of the fold. A peer's cut never does.
+ * MV-3d — the chrome's facts (`localFactsOf`), whether or not the backend has
+ * assembled the run: the marker names every run of the fold.
+ *
+ * *2026-10-31 (PG-2):* this is the run row of this desktop's own `model` board
+ * and nothing else. The `desk` cut a peer read retired into `remote`
+ * (`projectRemoteRow`), and with it this row's peer audience.
  */
 export function projectDeskRow(
   summary: AgentSessionSummary,
   chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
   monitorRow?: MonitorAgentRow | undefined,
-  audience: MonitorAudience = "peer",
 ): ProjectedFieldRow {
-  // PJ-7 — the conversation id is the PHONE's (its History row's Jump to): a
-  // window reads its own runs' ids from `local`, and no peer's desk asks one
+  // PJ-7 — the conversation id rides the phone's and the remote cuts (its
+  // History row's Jump to): a window reads its own runs' ids from `local`
   const { nativeSessionId: _phones, ...field } = projectFieldRow(summary);
   const message = deskMessage(summary, chars);
   const mirrorBlockers = summary.monitor?.blockers ?? [];
@@ -732,25 +793,49 @@ export function projectDeskRow(
     blockers,
     ...(cost !== undefined ? { usage: { ...field.usage, ...cost } } : {}),
     ...(message !== undefined ? { lastAssistantMessage: message } : {}),
-    ...(monitorRow !== undefined
-      ? {
-          monitorRow:
-            audience === "window"
-              ? windowMonitorRow(monitorRow)
-              : peerMonitorRow(monitorRow, chars),
-        }
-      : {}),
-    ...(audience === "window" ? { local: localFactsOf(summary) } : {}),
+    ...(monitorRow !== undefined ? { monitorRow: windowMonitorRow(monitorRow) } : {}),
+    local: localFactsOf(summary),
   };
 }
 
-/** The desk projector with the backend joined in: each run's model row, as a
- * peer reads it. The join is by run id (`AgentMonitorService.rowForRun`). */
-export function deskProjector(
-  rowForRun: (runtimeRunId: string) => MonitorAgentRow | undefined,
+// PG-2 (PG-L1, PG-D1 (a), PG-D5 (a)) — THE REMOTE CUT, as its owner cuts it.
+// Every other screen reads the model's row for a peer (`peerMonitorRow`) and
+// the joins it acts by, and nothing of the fold's field half: the row is
+// `AgentRemoteRow` in the contract. The join is written verbatim, as on the
+// field row, and withheld at SEND time while this device's terminal doors are
+// down (`attachableRows`, F-M4); the conversation id and the Stop are rebuilt
+// from their named fields, as the field row builds them.
+
+const ProjectedRemoteRowSchema = AgentRemoteRow.omit({ revision: true });
+export type ProjectedRemoteRow = (typeof ProjectedRemoteRowSchema)["_output"];
+
+/** A run's row on the remote cut: its model row as a peer reads it, its pane
+ * join, its conversation id and the person's Stop. A run the backend has not
+ * assembled has no model row and so no remote row: the caller leaves it out. */
+export function projectRemoteRow(
+  summary: AgentSessionSummary,
+  monitorRow: MonitorAgentRow,
   chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
-): RowProjector {
-  return (summary) => projectDeskRow(summary, chars, rowForRun(summary.runtimeRunId));
+): ProjectedRemoteRow {
+  return {
+    runtimeRunId: summary.runtimeRunId,
+    device: summary.device,
+    ...(summary.terminal !== undefined ? { terminal: summary.terminal } : {}),
+    nativeSessionId: summary.sessionId,
+    ...(summary.stop !== undefined ? { stop: stopOf(summary.stop) } : {}),
+    monitorRow: peerMonitorRow(monitorRow, chars),
+  };
+}
+
+/** A bare terminal's row on the remote cut (L8 as amended by PG-D5): the
+ * `model` board's terminal row (`projectModelTerminalRow`) with the model's row
+ * cut for a peer, so its directory travels as its folder's name. */
+export function projectRemoteTerminalRow(
+  row: MonitorAgentRow,
+  join: Pick<AgentSessionTerminal, "cellBootId" | "workloadClass"> = {},
+  chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
+): ProjectedRemoteRow {
+  return { ...projectModelTerminalRow(row, join), monitorRow: peerMonitorRow(row, chars) };
 }
 
 /** Upserts and removals between two projected boards, by (runtimeRunId,
@@ -783,9 +868,8 @@ export function diffFieldRows(
 export class FieldProjection {
   readonly #rows: RowsProjection<AgentSessionSummary, ProjectedFieldRow, AgentFieldRow>;
 
-  /** DS-3 — the projector decides WHICH board this is (`projectFieldRow`, the
-   * default and the store's, or `projectDeskRow`); the revision machinery is
-   * the same for both. */
+  /** DS-3 — the projector the board's rows are cut by (`projectFieldRow` by
+   * default); the revision machinery is the same whatever it is. */
   constructor(project: RowProjector = projectFieldRow) {
     this.#rows = projectRows({
       project,
@@ -849,27 +933,35 @@ export class FieldProjection {
  * (`withholdAttachPromise`). Before, a peer window read `attachable: true` with
  * no join, fell back to the run id, raised the deck and asked the owner for a
  * session its floor may not hold.
+ *
+ * *2026-10-31 (PG-2):* the desk cut retired into `remote`, whose rows carry the
+ * same two promises, a bare terminal's included, and whose board is gated by
+ * this same function (`agent-model-board.ts`).
  */
-export function attachableRows(
-  rows: readonly AgentFieldRow[],
+export function attachableRows<R extends GatedRow>(
+  rows: readonly R[],
   terminalPublished: boolean,
-): AgentFieldRow[] {
+): R[] {
   if (terminalPublished) return [...rows];
   return rows.map((row) => {
     let held = row;
     if (held.terminal !== undefined) {
       const { terminal: _unreachable, ...rest } = held;
-      held = rest;
+      held = rest as R;
     }
     return withholdAttachPromise(held);
   });
 }
 
+/** A board row the gate reads: its join, which it may withhold (a field row,
+ * a remote row; PG-2 gives the remote cut the same gate). */
+type GatedRow = { terminal?: AgentSessionTerminal | undefined };
+
 /** F-M4 on the model's promise (PG-1a): a row's `monitorRow` that says it can be
  * attached or written says so no longer while this device's doors are down.
  * Its keys keep their order, so a frame's bytes move by the two values alone;
  * a row with no `monitorRow`, or one that promised nothing, is returned as is. */
-function withholdAttachPromise(row: AgentFieldRow): AgentFieldRow {
+function withholdAttachPromise<R extends GatedRow>(row: R): R {
   const monitorRow = (row as { monitorRow?: unknown }).monitorRow;
   if (typeof monitorRow !== "object" || monitorRow === null) return row;
   const promise = monitorRow as { attachable?: unknown; writable?: unknown };
@@ -908,7 +1000,7 @@ export interface FieldSubscriptionOptions {
    * fold): frames carry none, exactly as before DS-3.
    */
   epoch?: string;
-  /** DS-3 — which board: `projectFieldRow` (default) or `projectDeskRow`. */
+  /** DS-3 — the projector (`projectFieldRow` by default). */
   project?: RowProjector;
   /**
    * DS-3 — after this long with no frame, an EMPTY delta (`since === revision`,

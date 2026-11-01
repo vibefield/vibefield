@@ -37,6 +37,17 @@ export function dataRoot(mode: ShellMode): string {
   return join(app.getPath("appData"), "VibeField");
 }
 
+/** Item 134 — a smoke gone fatal before its run (a fieldd that never came up) keeps its HOME like any red run, and names
+ * it as a red run's teardown does (testing/smoke-daemons.ts `removeSmokeRoot`, DK-18), so the harness that launched it
+ * reads the fatal from the HOME's logs instead of a blank. Only a root `dataRoot` minted is named: an injected
+ * FIELDD_DATA_DIR is someone else's data. */
+export function sayFatalSmokeHome(mode: ShellMode, root: string): void {
+  if (!isSmokeLike(mode) || process.env["FIELDD_DATA_DIR"]) return;
+  process.stdout.write(
+    `SMOKE_HOME ${JSON.stringify({ home: root, removed: !existsSync(root) })}\n`,
+  );
+}
+
 export function buildSupervisor(opts: {
   mode: ShellMode;
   rendererPolicyMode: ShellMode;
@@ -82,6 +93,15 @@ export function buildSupervisor(opts: {
   const launchTarget = nodeMode ? args[0] : command;
   if (launchTarget === undefined || !existsSync(launchTarget)) {
     throw new Error(`fieldd bin missing (build it): ${launchTarget ?? "(unset)"}`);
+  }
+  // Item 134b — a missing field-native is handed to no one (`nativeExecutable` below), and fieldd then waits its
+  // whole readiness deadline for a floor nothing starts. Development tolerates that on purpose (the dev runner builds
+  // and starts the floor itself; resources.ts's assertPackagedResources); a smoke has no runner, so it says the path
+  // at once instead of "did not come up" ten seconds later.
+  if (isSmokeLike(opts.mode) && !existsSync(nativeBin)) {
+    throw new Error(
+      `field-native bin missing (build it: cargo build -p field-native): ${nativeBin}`,
+    );
   }
   const policy = shutdownPolicy(opts.mode);
   // UA-D12/UA-5 — ephemeral ports EVERYWHERE, no mode split. The old

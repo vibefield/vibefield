@@ -973,7 +973,9 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
       second.stderr?.on("data", (c: string) => {
         err += c;
       });
-      const code = await new Promise<number | null>((resolve) => second.on("exit", resolve));
+      // item 139 — 'close', never 'exit': Node can fire 'exit' before the piped stderr has drained (item 65's reason,
+      // the supervisor's own composition since cc5b9d675), and the refusal is the words this row reads
+      const code = await new Promise<number | null>((resolve) => second.on("close", resolve));
       expect(code).not.toBe(0);
       expect(err).toMatch(/already owned by another/);
       first.proc.kill("SIGINT");

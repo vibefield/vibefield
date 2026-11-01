@@ -9,6 +9,7 @@ import {
   AgentModelDeskRow,
   AgentModelMeshOpen,
   AgentModelSnapshot,
+  AgentRemoteSnapshot,
   type AgentSessionRecord,
   LAYOUT,
   SOCKETS,
@@ -177,13 +178,25 @@ describe("MV-3a — the model board through the door, and the report of what a w
       nativeSessionId: "native-1",
       exited: true,
     });
-    // …which no other board carries: not the desk cut a peer reads, nor the field row
-    for (const projection of ["desk", "field"]) {
-      const other = (await rpc.call("agent.subscribe", { projection })) as { snapshot: unknown };
-      const otherRows = AgentFieldSnapshot.parse(other.snapshot).rows;
+    // …which no other board carries: not the remote cut a peer and the phone read
+    // (PG-2; the desk cut before it), nor the field row
+    const field = (await rpc.call("agent.subscribe", { projection: "field" })) as {
+      snapshot: unknown;
+    };
+    const remote = (await rpc.call("agent.subscribe", { projection: "remote" })) as {
+      snapshot: unknown;
+    };
+    const remoteRows = AgentRemoteSnapshot.parse(remote.snapshot).rows;
+    for (const otherRows of [AgentFieldSnapshot.parse(field.snapshot).rows, remoteRows]) {
       expect(otherRows.some((row) => row.runtimeRunId === RUN)).toBe(true);
       for (const row of otherRows) expect("local" in row).toBe(false);
     }
+    // PG-2 (PG-D5, EL7 B1) — the bare terminal rides the remote cut, its
+    // directory by its folder: the path stays on the window's own row
+    expect(remoteRows.find((row) => row.runtimeRunId === PANE)).toMatchObject({
+      kind: "terminal",
+      monitorRow: { kind: "terminal", detail: "repo" },
+    });
     const pane = AgentDeskTerminalRow.parse(rows.pane);
     expect(pane).toMatchObject({
       runtimeRunId: PANE,

@@ -121,11 +121,11 @@ describe("the unavailable card's numbers (R18), in the kit's and the stage's sty
       expect(reload).toContain(decl);
   });
 
-  it("sets ICE's message last and small: 11 mono, faint, 12 below", () => {
+  it("sets ICE's message last and small: 11 mono, tertiary (a word that is read, §2.4), 12 below", () => {
     const detail = kit(".vf-ui-unavailable-state__detail");
     for (const decl of [
       "margin: 12px 0 0;",
-      "color: var(--vf-text-faint);",
+      "color: var(--vf-text-tertiary);",
       "font-family: var(--vf-font-mono);",
       "font-size: 11px;",
     ])

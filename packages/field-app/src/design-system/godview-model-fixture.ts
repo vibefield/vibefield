@@ -3,11 +3,11 @@ import {
   AGENT_CATALOG,
   AGENT_FIELD,
   type AgentDeskTerminalRow,
-  type AgentModelBoardRow,
   type AgentModelDeskRow,
   type AgentModelLocalFacts,
   type AgentModelMeshDevice,
   type AgentModelMeshOpen,
+  type AgentModelMeshRow,
   type AgentProfileSet,
   type AgentSessionSummary,
   createAgentCatalogReaders,
@@ -341,8 +341,9 @@ function boundText(text: string, chars: number): string {
  * carries it. `device.self` is the reader's fact and never travels (the window's
  * fold joins it back); this desktop's own row is otherwise whole, and a PEER's
  * carries no colour sequence (M16) with every text bounded at the desk's bound
- * (M21). The shapes mirror field for field (fieldd parses real backend rows
- * through the contract).
+ * (M21) and (PG-2) a bare terminal's directory as its folder's name (EL7 B1). The
+ * shapes mirror field for field (fieldd parses real backend rows through the
+ * contract).
  */
 function wireRowOf(row: MonitorAgentRow, peer: boolean): WireMonitorRow {
   const { self: _self, ...device } = row.device;
@@ -352,11 +353,16 @@ function wireRowOf(row: MonitorAgentRow, peer: boolean): WireMonitorRow {
   const bound = (text: string | undefined): string | undefined =>
     text === undefined ? undefined : boundText(text, chars);
   const { activity, wait, reply } = row;
+  const folder = row.detail
+    .replace(/[/\\]+$/, "")
+    .split(/[/\\]+/)
+    .pop();
+  const detail = row.kind === "terminal" ? folder || project.name : row.detail;
   return {
     ...row,
     device,
     project,
-    detail: boundText(row.detail, chars),
+    detail: boundText(detail, chars),
     ...(activity !== undefined
       ? {
           activity: {
@@ -408,25 +414,36 @@ function localFactsOf(summary: AgentSessionSummary): AgentModelLocalFacts {
   };
 }
 
-/** `agent-field.ts` `projectDeskRow`, as far as the window reads a board row: the key, the
- * PTY join, the model row, and (this desktop's rows) the chrome's facts; the rest only
- * parses. */
+/** `agent-field.ts` `projectDeskRow` for this desktop and `projectRemoteRow` for a peer
+ * (PG-2), as far as the window reads a board row: the key, the PTY join, the model row,
+ * and (this desktop's rows) the chrome's facts; the rest only parses. */
 function boardRowsOf(
   desk: HostedDesktop,
   device: CatalogDesktop,
   peer: boolean,
-): AgentModelBoardRow[] {
+): AgentModelMeshRow[] {
   desk.flush();
   const snapshot = desk.backend.getSnapshot();
   const byId = new Map(snapshot.rows.map((row) => [row.id, row] as const));
   const claimed = new Set<string>();
-  const rows: AgentModelBoardRow[] = [];
+  const rows: AgentModelMeshRow[] = [];
   for (const summary of desk.rows()) {
     const id = desk.backend.idOf(summary.runtimeRunId);
     const row = id === undefined ? undefined : byId.get(id);
     if (id === undefined || row === undefined) continue;
     claimed.add(id);
     const monitorRow = wireRowOf(row, peer);
+    if (peer) {
+      rows.push({
+        runtimeRunId: summary.runtimeRunId,
+        revision: snapshot.revision,
+        device: device.id,
+        ...(summary.terminal !== undefined ? { terminal: summary.terminal } : {}),
+        nativeSessionId: summary.sessionId,
+        monitorRow,
+      });
+      continue;
+    }
     const since = summary.monitor?.statusSince ?? summary.stateChangedAt ?? summary.createdAt;
     const desk_: AgentModelDeskRow = {
       runtimeRunId: summary.runtimeRunId,
@@ -451,7 +468,7 @@ function boardRowsOf(
       },
       ...(summary.terminal !== undefined ? { terminal: summary.terminal } : {}),
       monitorRow,
-      ...(peer ? {} : { local: localFactsOf(summary) }),
+      local: localFactsOf(summary),
     };
     rows.push(desk_);
   }

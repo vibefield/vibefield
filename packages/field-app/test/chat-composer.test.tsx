@@ -16,21 +16,43 @@ import {
   type AgentProfileSet,
   type SparkSummary,
 } from "@vibefield/contracts";
-import { act, type ReactElement, useState } from "react";
+import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
+import { act, type ReactElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AT_WORDS } from "../src/chat/at-rows";
 import { ChatComposer, type ComposerPort } from "../src/chat/ChatComposer";
 import { ChatView } from "../src/chat/ChatView";
 import type { DraftPart } from "../src/chat/composer-draft";
+import { CANNOT_LIST_AGENTS } from "../src/chat/new-spark";
 import { sparkEntriesOf } from "../src/chat/spark-status";
-import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
+import { type SparksPort, sparksPortOver, startSparksFeed } from "../src/chat/sparks-feed";
 import type { ThreadSendOutcome } from "../src/chat/thread-send";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import { CHAT_STATES, type ChatState } from "../src/design-system/chat-fixtures";
 import { CardTargets } from "../src/frame/cards/card-targets";
+import { listenForOtherApps } from "../src/frame/cards/cards-outside";
+import { CardStore } from "../src/frame/cards/cards-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** Send's road under Chat's own controller (`ChatView`), scripted: what each send was handed, and what it comes to.
+ * The composer mounted alone is handed its `send`; the road itself is `thread-send.test.ts`'s. */
+const road = vi.hoisted(() => ({
+  sent: [] as string[],
+  outcome: (): Promise<ThreadSendOutcome> => Promise.resolve({ state: "pasted" }),
+}));
+vi.mock("../src/chat/thread-send", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/chat/thread-send")>();
+  return {
+    ...actual,
+    sendToThread: (_deps: unknown, text: string) => {
+      road.sent.push(text);
+      return road.outcome();
+    },
+  };
+});
 
 const [A, B] = [AGENT_CATALOG[0], AGENT_CATALOG[1]];
 const AT = "2026-10-31T05:00:00.000Z";
@@ -111,14 +133,6 @@ const MODELS = (provider: string, profileSet: string): AgentModelsResult => ({
 });
 
 const port: ComposerPort = {
-  providers: async () =>
-    [A, B].map((entry) => ({
-      id: entry.id,
-      label: entry.label,
-      available: true,
-      resumable: true,
-      personas: [],
-    })),
   profileSets: async () => SETS,
   models: async (provider, profileSet) => MODELS(provider, profileSet),
 };
@@ -168,6 +182,7 @@ function feed(sparks: SparkSummary[] = [VELA], rows: AgentFieldRow[] = ROWS): Sp
     answer: async () => {
       throw new Error("nothing is answered here");
     },
+    onReconnected: () => () => undefined,
     open: async () => VELA,
   };
 }
@@ -180,6 +195,8 @@ let setSurfaceNow: ((next: FrameSurface | null) => void) | null = null;
 
 beforeEach(() => {
   surfaceNow = null;
+  road.sent = [];
+  road.outcome = () => Promise.resolve({ state: "pasted" });
 });
 
 afterEach(() => {
@@ -194,15 +211,19 @@ afterEach(() => {
 interface Mounted {
   readonly send: ReturnType<typeof vi.fn>;
   readonly said: string[];
+  /** the thread's draft as it stood after each change */
   readonly parked: (readonly DraftPart[])[];
 }
 
-/** The composer under FieldView's place (the one owner of the open surface), over a running feed. */
+/** The composer under FieldView's place (the one owner of the open surface), over a running feed, its draft kept as
+ * Chat keeps a thread's (one copy: what the composer parks, and a send's clearing). */
 async function mountComposer(
-  outcome: () => Promise<ThreadSendOutcome> = async () => ({ state: "pasted" }),
+  outcome: () => Promise<ThreadSendOutcome | null> = async () => ({ state: "pasted" }),
   parked: readonly DraftPart[] = [],
+  asks: ComposerPort = port,
+  board: SparksPort = feed(),
 ): Promise<Mounted> {
-  stopFeed = startSparksFeed(feed());
+  stopFeed = startSparksFeed(board);
   const said: string[] = [];
   const parks: (readonly DraftPart[])[] = [];
   const send = vi.fn((_text: string, _stills: readonly string[]) => outcome());
@@ -212,15 +233,19 @@ async function mountComposer(
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     surfaceNow = surface;
     setSurfaceNow = setSurface;
+    const [draft, setDraft] = useState(parked);
+    useEffect(() => {
+      parks.push(draft);
+    }, [draft]);
     return (
       <ChatComposer
         entry={entry as NonNullable<typeof entry>}
         active
-        parked={parked}
-        onPark={(parts) => parks.push(parts)}
+        parked={draft}
+        onPark={setDraft}
         surface={surface}
         onSurfaceChange={setSurface}
-        port={port}
+        port={asks}
         send={send}
         say={(text) => {
           said.push(text);
@@ -342,6 +367,69 @@ describe("the composer's composition (DESIGN.md §8 \"Chat's composer\")", () =>
     await settle();
     expect(send().getAttribute("data-armed")).toBe("true");
   });
+
+  it("draws an agent's mark at DESIGN's sizes — 20 in @'s rows, 15 on a chip — since the mark draws at its text's size (final critique 4)", async () => {
+    // the mark is the agent's own, drawn at 1em: its box's font size is its size
+    await mountComposer();
+    typeText("ask @");
+    await settle();
+    expect(menu()?.querySelector(".vf-chat-at-mark svg")?.getAttribute("width")).toBe("1em");
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/chat/chat-composer.css"),
+      "utf8",
+    );
+    const rule = (selector: string): string =>
+      css.match(new RegExp(`^\\${selector} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
+    for (const [selector, size] of [
+      [".vf-chat-at-mark", 20],
+      [".vf-chat-chip-mark", 15],
+    ] as const) {
+      expect(rule(selector), selector).toMatch(new RegExp(`\\bwidth: ${size}px;`));
+      expect(rule(selector), selector).toMatch(new RegExp(`font-size: ${size}px;`));
+      expect(rule(selector), selector).toMatch(/line-height: 1;/);
+    }
+  });
+});
+
+describe("the composer's keys (DESIGN.md §8 \"Chat's composer\", Keys)", () => {
+  it("gives the keyboard back on Esc with @ closed (CB-2); with @ open, Esc closes it and keeps the keyboard", async () => {
+    await mountComposer();
+    typeText("ping @");
+    await settle();
+    expect(document.activeElement).toBe(editor());
+    press(editor(), { key: "Escape" });
+    expect(surfaceNow).toBeNull();
+    expect(document.activeElement).toBe(editor());
+    press(editor(), { key: "Escape" });
+    expect(document.activeElement).not.toBe(editor());
+    expect(editor().textContent).toBe("ping @");
+  });
+
+  it("lands text dragged inside the window at the caret as plain text on one line, and deals no card", async () => {
+    // the window's hand hears another app's drags (`listenForOtherApps`); a drag that began in this page is not one
+    const hand = new CardStore();
+    const stopHearing = listenForOtherApps({ store: hand });
+    try {
+      await mountComposer();
+      typeText("see ");
+      act(() => {
+        document.body.dispatchEvent(new Event("dragstart", { bubbles: true }));
+      });
+      const data = new DataTransfer();
+      data.setData("text/plain", "a\nb");
+      const drop = new MouseEvent("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(drop, "dataTransfer", { value: data });
+      act(() => {
+        editor().dispatchEvent(drop);
+      });
+      expect(drop.defaultPrevented).toBe(true);
+      expect(editor().textContent).toBe("see a b");
+      expect(editor().querySelector(".vf-chat-chip")).toBeNull();
+      expect(hand.snapshot().cards).toEqual([]);
+    } finally {
+      stopHearing();
+    }
+  });
 });
 
 describe("@ in Chat's composer (DESIGN.md §8, @'s rows in Chat; the surface `at`)", () => {
@@ -399,6 +487,146 @@ describe("@ in Chat's composer (DESIGN.md §8, @'s rows in Chat; the surface `at
     typeText("@zzz");
     await settle();
     expect(words(menu())).toBe('Nothing called "zzz"');
+  });
+
+  it("says the New spark sheet's words, and offers no row, when its profiles can't be read; the next @ reads again", async () => {
+    let fails = true;
+    await mountComposer(undefined, undefined, {
+      ...port,
+      profileSets: async () => {
+        if (fails) throw new Error("fieldd is not answering");
+        return SETS;
+      },
+    });
+    typeText("ask @");
+    await settle();
+    expect(words(menu())).toBe(CANNOT_LIST_AGENTS);
+    expect(menu()?.querySelectorAll(".vf-chat-at-row").length).toBe(0);
+    press(editor(), { key: "Escape" });
+    fails = false;
+    typeText("ask @");
+    // while that read runs, @ is reading again, never still the failure it reads past (SP-1d's fix review)
+    expect(words(menu())).toContain(AT_WORDS.reading);
+    expect(words(menu())).not.toContain(CANNOT_LIST_AGENTS);
+    await settle();
+    expect(
+      [...(menu()?.querySelectorAll<HTMLElement>(".vf-chat-at-row") ?? [])].map(
+        (r) => r.dataset.row,
+      ),
+    ).toEqual([`agent:${A.id}:native`, `agent:${B.id}:work`, "session:run-his"]);
+  });
+
+  /** The window's feed over a board refused with `first` until `board.refusal` is null: how many times it was asked,
+   * and the window's client reconnected (`SparksPort.onReconnected`) when the test says. */
+  function refusedBoard(first: Error) {
+    const board = { asks: 0, refusal: first as Error | null, reconnected: new Set<() => void>() };
+    const door: SparksPort = {
+      ...feed(),
+      watch: async (onFrame) => {
+        board.asks += 1;
+        if (board.refusal !== null) throw board.refusal;
+        onFrame({ revision: 1, rows: ROWS }, "snapshot");
+        return () => undefined;
+      },
+      onReconnected: (listener) => {
+        board.reconnected.add(listener);
+        return () => board.reconnected.delete(listener);
+      },
+    };
+    const reconnect = () =>
+      act(async () => {
+        for (const listener of [...board.reconnected]) listener();
+      });
+    return { board, door, reconnect };
+  }
+  const atRowIds = (): string[] =>
+    [...(menu()?.querySelectorAll<HTMLElement>(".vf-chat-at-row") ?? [])].map(
+      (r) => r.dataset.row ?? "",
+    );
+
+  it("keeps Start an agent standing when the window's board can't be read, and says what's running can't be (SP-1d's review)", async () => {
+    // the agents to start are its profiles' alone: only the sessions are read off the board
+    const { door } = refusedBoard(new Error("fieldd refused the board"));
+    await mountComposer(undefined, undefined, port, door);
+    typeText("ask @");
+    await settle();
+    expect(atRowIds()).toEqual([`agent:${A.id}:native`, `agent:${B.id}:work`]);
+    expect(words(menu())).toContain(`${AT_WORDS.sessions} ${AT_WORDS.sessionsFailed}`);
+    expect(words(menu())).not.toContain(CANNOT_LIST_AGENTS);
+    expect(words(menu())).not.toContain(AT_WORDS.reading);
+  });
+
+  it("asks again for a board refused as the socket closed, once the window's client reconnects, and offers its sessions then (SP-1d's review)", async () => {
+    // the connection closed under the ask while the same fieldd stayed up (a reconnect, not a restart: a restart
+    // replaces the window's document): the client's own retryable refusal
+    const { board, door, reconnect } = refusedBoard(
+      new FielddRpcError("UNAVAILABLE", "connection closed", true),
+    );
+    await mountComposer(undefined, undefined, port, door);
+    typeText("ask @");
+    await settle();
+    expect(words(menu())).toContain(AT_WORDS.sessionsFailed);
+    expect(board.asks).toBe(1);
+    // the next @ asks the board for nothing: only the client reconnected does
+    press(editor(), { key: "Escape" });
+    typeText("ask @");
+    await settle();
+    expect(board.asks).toBe(1);
+    board.refusal = null;
+    await reconnect();
+    await settle();
+    expect(board.asks).toBe(2);
+    expect(atRowIds()).toEqual([`agent:${A.id}:native`, `agent:${B.id}:work`, "session:run-his"]);
+    expect(words(menu())).not.toContain(AT_WORDS.sessionsFailed);
+    // a board read stands: another reconnect asks for nothing (the client replays its subscription itself)
+    await reconnect();
+    expect(board.asks).toBe(2);
+  });
+
+  it("never asks again for a board fieldd refused for good (SP-1d's review)", async () => {
+    const { board, door, reconnect } = refusedBoard(
+      new FielddRpcError("FORBIDDEN_SCOPE", "the full projection is local to its device", false),
+    );
+    await mountComposer(undefined, undefined, port, door);
+    typeText("ask @");
+    await settle();
+    await reconnect();
+    await settle();
+    expect(board.asks).toBe(1);
+    expect(words(menu())).toContain(AT_WORDS.sessionsFailed);
+  });
+
+  it("says the window's client reconnected each time it is ready again, and on no other status (SP-1d's review)", () => {
+    const heard = new Set<() => void>();
+    const client = {
+      status: "ready",
+      onStatusChange: (listener: () => void) => {
+        heard.add(listener);
+        return () => heard.delete(listener);
+      },
+    };
+    const to = (status: string): void => {
+      client.status = status;
+      for (const listener of [...heard]) listener();
+    };
+    let reconnects = 0;
+    const stop = sparksPortOver(client as unknown as FielddClient).onReconnected(() => {
+      reconnects += 1;
+    });
+    to("reconnecting");
+    expect(reconnects).toBe(0);
+    to("ready");
+    expect(reconnects).toBe(1);
+    to("reconnecting");
+    to("ready");
+    expect(reconnects).toBe(2);
+    // a fieldd restart refuses the window's token: the client fails, and main replaces the document instead
+    to("failed");
+    expect(reconnects).toBe(2);
+    stop();
+    to("reconnecting");
+    to("ready");
+    expect(reconnects).toBe(2);
   });
 
   it("takes a session with Return: its chip is its handle, the @ and its query gone", async () => {
@@ -532,6 +760,18 @@ describe('Send (DESIGN.md §8 "Chat\'s composer")', () => {
     expect(write).not.toHaveBeenCalled();
   });
 
+  it("says nothing and keeps the draft whole when the thread's hold turns the send away (final critique 11)", async () => {
+    // another act holds the thread (a Wake pressed in this tick, before Send is drawn busy): Chat's send answers null
+    const mounted = await mountComposer(async () => null);
+    typeText("carry on with the migration");
+    press(editor(), { key: "Enter" });
+    await settle();
+    expect(mounted.send).toHaveBeenCalledTimes(1);
+    expect(mounted.said).toEqual([]);
+    expect(editor().textContent).toBe("carry on with the migration");
+    expect(send().hasAttribute("aria-busy")).toBe(false);
+  });
+
   it("waits while a send runs: busy, and a second press does nothing", async () => {
     let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
     const mounted = await mountComposer(
@@ -584,7 +824,8 @@ describe("the draft is the thread's (DESIGN.md §8 \"Chat's composer\")", () => 
     expect(host?.querySelector(".vf-chat-ph")).toBeNull();
   });
 
-  it("keeps each spark's own draft when another thread is chosen, and finds it on coming back", async () => {
+  /** Chat as the frame mounts it, over a feed of Vela and Juno, Vela's thread shown. */
+  async function mountChat(): Promise<void> {
     stopFeed = startSparksFeed(feed([VELA, JUNO]));
     function Owner(): ReactElement {
       const [surface, setSurface] = useState<FrameSurface | null>(null);
@@ -596,16 +837,79 @@ describe("the draft is the thread's (DESIGN.md §8 \"Chat's composer\")", () => 
     await act(async () => root?.render(<Owner />));
     await settle();
     expect(q(".vf-chat-thread").getAttribute("aria-label")).toBe("Vela's thread");
-    typeText("for Vela");
-    const row = (id: string) => q<HTMLButtonElement>(`.vf-chat-row[data-spark="${id}"]`);
-    act(() => row("sp-juno0001").click());
+  }
+  const choose = async (id: string): Promise<void> => {
+    act(() => q<HTMLButtonElement>(`.vf-chat-row[data-spark="${id}"]`).click());
     await settle();
+  };
+
+  it("keeps each spark's own draft when another thread is chosen, and finds it on coming back", async () => {
+    await mountChat();
+    typeText("for Vela");
+    await choose("sp-juno0001");
     expect(q(".vf-chat-thread").getAttribute("aria-label")).toBe("Juno's thread");
     expect(editor().textContent).toBe("");
     expect(q(".vf-chat-ph").textContent).toBe("Message Juno…");
-    act(() => row("sp-vela0001").click());
-    await settle();
+    await choose("sp-vela0001");
     expect(editor().textContent).toBe("for Vela");
+  });
+
+  it("is never drawn again by its own parking: what is typed comes back from the thread as itself", async () => {
+    await mountChat();
+    const drawn = editor();
+    typeText("for Vela");
+    await settle();
+    typeOn(", and the docs");
+    await settle();
+    // the thread kept each change and handed it back; the editor the person types in is the one still standing
+    expect(editor()).toBe(drawn);
+    expect(editor().textContent).toBe("for Vela, and the docs");
+  });
+
+  /** A send held open, as one into a spark being woken waits up to 20 s; `finish` says what it came to. */
+  function holdSends(): { finish: (outcome: ThreadSendOutcome) => void } {
+    const held = { finish: (_outcome: ThreadSendOutcome): void => undefined };
+    road.outcome = () =>
+      new Promise((resolve) => {
+        held.finish = resolve;
+      });
+    return held;
+  }
+
+  it("clears what a send carried even when its thread was left and chosen again while it ran (correctness-2)", async () => {
+    const held = holdSends();
+    await mountChat();
+    typeText("look at the failing test");
+    press(editor(), { key: "Enter" });
+    expect(road.sent).toEqual(["look at the failing test"]);
+    // while it runs, Juno's thread, then Vela's again: Vela's composer is drawn afresh from the thread's draft
+    await choose("sp-juno0001");
+    await choose("sp-vela0001");
+    expect(editor().textContent).toBe("look at the failing test");
+    await act(async () => held.finish({ state: "pasted" }));
+    await settle();
+    // DESIGN.md §8 "Chat's composer": "Sent, the words and chips it carried are cleared" — in the composer standing
+    // now, so a second Send never pastes them again
+    expect(editor().textContent).toBe("");
+    expect(q(".vf-chat-ph").textContent).toBe("Message Vela…");
+  });
+
+  it("keeps what was typed in the thread's composer drawn afresh while the send ran: only what it carried goes", async () => {
+    const held = holdSends();
+    await mountChat();
+    typeText("look at the failing test");
+    press(editor(), { key: "Enter" });
+    await choose("sp-juno0001");
+    await choose("sp-vela0001");
+    // the thread's draft as it stands now holds more than was sent
+    typeOn(" and fix it");
+    await act(async () => held.finish({ state: "pasted" }));
+    await settle();
+    expect(editor().textContent).toBe("and fix it");
+    // and leaving and coming back finds the same
+    await choose("sp-juno0001");
+    await choose("sp-vela0001");
+    expect(editor().textContent).toBe("and fix it");
   });
 });
 
@@ -654,6 +958,59 @@ describe("the catalog's composer plates (docs/UI_SYSTEM.md: the shipping view on
     expect(editor().querySelectorAll(".vf-chat-chip")).toHaveLength(3);
     expect(chipLabels()).toContain("vibe-field·2");
   });
+
+  it("draws @'s quiet states, an agent's menu being read and refused, and a send under way, in the composer's own parts", async () => {
+    // @ while what it offers is read: the first group's eyebrow over its word, no row
+    await plate("at-reading");
+    expect(menu()?.dataset.at).toBe("rows");
+    expect(words(menu())).toBe("Start an agent Reading its agents…");
+    expect(menu()?.querySelector(".vf-chat-at-row")).toBeNull();
+    // nothing matches what follows the @
+    await plate("at-none");
+    expect(words(menu())).toBe('Nothing called "docs"');
+    expect(menu()?.querySelector(".vf-chat-at-row")).toBeNull();
+    // the spark's profiles hold no sign-in and run none of your sessions
+    await plate("at-empty");
+    expect(words(menu())).toBe("Nothing to add from Juno's profiles");
+    // its profiles can't be read: the New spark sheet's own sentence
+    await plate("at-failed");
+    expect(words(menu())).toBe(CANNOT_LIST_AGENTS);
+    expect(menu()?.querySelector(".vf-chat-at-row")).toBeNull();
+    // the board can't be read: the agents to start stand, and the sessions' group says what's running can't be read
+    await plate("at-board-failed");
+    expect(words(menu())).toMatch(
+      new RegExp(`^${AT_WORDS.agents} .+ ${AT_WORDS.sessions} ${AT_WORDS.sessionsFailed}$`, "u"),
+    );
+    expect(menu()?.querySelectorAll('.vf-chat-at-row[data-row^="agent:"]').length).toBeGreaterThan(
+      0,
+    );
+    expect(menu()?.querySelector('.vf-chat-at-row[data-row^="session:"]')).toBeNull();
+
+    // an agent just taken, its menu open while its picker is read: Its own model, then the word in the picker's place
+    await plate("menu-reading");
+    expect(menu()?.dataset.at).toBe("menu");
+    expect(words(menu())).toContain(`Its own model Reading ${A.label}'s models…`);
+    expect(menu()?.querySelector('[data-kind="model"]')?.getAttribute("aria-checked")).toBe("true");
+    // …and a picker that can't be read says why, in the words its read failed with
+    await plate("menu-failed");
+    expect(words(menu())).toContain(
+      "Its own model fieldd is not answering (the daemon is restarting)",
+    );
+    expect(menu()?.querySelectorAll('[data-kind="model"]')).toHaveLength(1);
+
+    // a send under way: send waits, busy, over the draft it carries
+    await plate("sending");
+    expect(editor().textContent).toBe("Why does the composer test fail on main?");
+    expect(send().hasAttribute("data-armed")).toBe(true);
+    expect(send().getAttribute("aria-busy")).toBe("true");
+    // …and a starter's: the thread takes one send at a time, so send waits too
+    await plate("starting");
+    expect(send().getAttribute("aria-busy")).toBe("true");
+    for (const state of ["typing", "at", "chips"] as const) {
+      await plate(state);
+      expect(send().hasAttribute("aria-busy"), state).toBe(false);
+    }
+  });
 });
 
 describe("the composer's words are DESIGN.md's (§8 \"Chat's composer\", §9 \"Chat's words\")", () => {
@@ -670,6 +1027,8 @@ describe("the composer's words are DESIGN.md's (§8 \"Chat's composer\", §9 \"C
       '"Reading its agents…"',
       '`Nothing called "cla"`',
       '"Nothing to add from Vela\'s profiles"',
+      '"VibeField can\'t list its agents right now"',
+      "\"VibeField can't read what's running right now\"",
       '"Claude Code · Working"',
       '"Add to your message to Vela"',
       '"Added to your message to Vela"',

@@ -13,7 +13,7 @@ import type { ChromeRun } from "../src/godview/monitor/chrome-facts";
  */
 export function chromeRunOf(summary: AgentSessionSummary, revision = 1): ChromeRun {
   return AgentModelDeskRow.parse({
-    ...projectDeskRow(summary, AGENT_FIELD.DESK_TEXT_CHARS, undefined, "window"),
+    ...projectDeskRow(summary, AGENT_FIELD.DESK_TEXT_CHARS),
     revision,
   });
 }

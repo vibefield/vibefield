@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NativeRestartReason } from "./mgmt";
 
 // AL-7 (`draft/thinking-app-lifecycle.md` §8.1; James ruled 2026-10-27 08:10Z) — the shell lease. A shell CLAIMS the
 // lease on its `shell-main` connection (`system.shell.attach`); a probe that only says hello — the supervisor's
@@ -20,6 +21,14 @@ export type ShellLeaveReason = z.infer<typeof ShellLeaveReason>;
  * happened (`system.shell.attach`'s record). Both sides read it from here. */
 export const SHELL_BACKGROUND_RELAUNCH_ARG = "--background-relaunch";
 
+/** AL-11 — when fieldd relaunched the app (AL-D8's cap reads it), held at `LAYOUT.SHELL_RELAUNCHES` so the count
+ * outlives fieldd: a fieldd replaced at boot (a stale build, a crash of its own) would otherwise begin the cap at zero
+ * and a crash loop could relaunch the app without end. epoch millis, oldest first; fieldd's alone. */
+export const ShellRelaunchLog = z
+  .object({ at: z.array(z.number().int().nonnegative()) })
+  .passthrough();
+export type ShellRelaunchLog = z.infer<typeof ShellRelaunchLog>;
+
 /** `system.shell.leave` — scope `native.admin`, local only, and only a `shell-main` principal may say it. */
 export const SystemShellLeaveParams = z.object({ why: ShellLeaveReason }).passthrough();
 export type SystemShellLeaveParams = z.infer<typeof SystemShellLeaveParams>;
@@ -39,6 +48,23 @@ export const ShellExitRecord = z
   })
   .passthrough();
 export type ShellExitRecord = z.infer<typeof ShellExitRecord>;
+
+/** AL-12 — how a shell last left this pair, KEPT for Settings → Diagnostics' "Last exit" (`diagnostics.lastExit`). It
+ * is the lease's record when the last holder left (planned or not), or, when a shell's `system.shutdown` stopped the
+ * floor, that stop: `stopped` is its reason and `sessions` the consented set it ended. An update's stop that leaves
+ * the floor (B3) is `why: "update"` with the floor's count. Each exit replaces it and
+ * nothing takes it, unlike `LAYOUT.SHELL_EXIT`, whose record is said once. fieldd's own stop (the idle bound, a
+ * signal) is no shell's exit and leaves it as it was. */
+export const ShellLastExit = ShellExitRecord.extend({
+  stopped: NativeRestartReason.optional(),
+}).passthrough();
+export type ShellLastExit = z.infer<typeof ShellLastExit>;
+
+/** `diagnostics.lastExit` (scope `diagnostics.read`, local only): the kept record, null before any shell has left. */
+export const DiagnosticsLastExitResult = z
+  .object({ shell: ShellLastExit.nullable() })
+  .passthrough();
+export type DiagnosticsLastExitResult = z.infer<typeof DiagnosticsLastExitResult>;
 
 /** AL-8a (`thinking-app-lifecycle.md` §8.3.1) — a fieldd that went without saying goodbye to its floor (a crash), as
  * the next fieldd's hello-ack told it (`HelloAck.lastManager`): when, and the floor's count then (null when it could

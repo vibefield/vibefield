@@ -11,19 +11,20 @@ import type { CSSProperties, ReactElement, ReactNode, Ref } from "react";
 import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
 import { SparkPaneView } from "./SparkPaneView";
 import { activityWords, type SparkEntry } from "./spark-status";
-import type { SparksReading } from "./sparks-feed";
+import { SPARKS_UNREADABLE, type SparksReading } from "./sparks-feed";
 import { ThreadItemsView } from "./ThreadItemsView";
 import type { ThreadItem } from "./thread-items";
-import { NO_LATCHES, type ThreadMark, threadMarksOf } from "./thread-marks";
+import { lastingMarkOf, NO_LATCHES, type ThreadMark, threadMarksOf } from "./thread-marks";
 import "./chat.css";
 
 // CHAT, THE PANEL (SP-1b, SP-1d; DESIGN.md §8 "Chat's list", "Chat's thread"; the Sparks page's `ch-view`,
 // `ch-needs`) — controller-free, so the catalog mounts this exact markup on fixtures. The list's column holds the
 // sparks fieldd keeps, newest activity first (CH-D1); a row is the face, the name and the status word (CH-D3); the
 // needs-you three take the attention ink (CH-D4), and a row wears its thread's mark: the orange dot, or unread's cyan
-// one (SP-1d). The thread's column is a fixed box: the chosen spark's head, then its own pane (the controller's
-// `SparkPane`, handed in) — or, asleep or not started, one honest line with its one act — then the thread's foot: its
-// composer, handed in, and its items standing over the pane (a new spark's hello, or since CP-3 the needs-you card).
+// one, said in the row's name too where it outlasts the word (SP-1d). The thread's column is a fixed box: the chosen
+// spark's head, then its own pane (the controller's `SparkPane`, handed in) — or, asleep or not started, one honest
+// line with its one act — then the thread's foot: its composer, handed in, and its items standing over the pane (a new
+// spark's hello, or since CP-3 the needs-you card).
 
 /** What the chosen spark's act is doing: at rest, under way, or refused in fieldd's words. */
 export type ChatAct =
@@ -51,7 +52,7 @@ export interface ChatPanelViewProps {
   items?: readonly ThreadItem[];
   /** a starter pressed in the thread's hello: its words, sent as Send sends */
   onStarter?: ((words: string) => void) | undefined;
-  /** a send into the shown thread runs, a starter's or Send's: the starters wait */
+  /** an act holds the shown thread — a send into it, a starter's or Send's, or a wake: Wake and the starters wait */
   sending?: boolean | undefined;
   /** CP-3 — an act pressed on the thread's needs-you card, by its place */
   onAnswer?: ((item: NeedsItem, choice: number) => void) | undefined;
@@ -140,7 +141,7 @@ export function ChatPanelView({
     if (reading.state === "unavailable") {
       return (
         <div className="vf-chat-panel-state">
-          <UnavailableState card title="Chat can't read your sparks" description={reading.reason} />
+          <UnavailableState card title={SPARKS_UNREADABLE} description={reading.reason} />
         </div>
       );
     }
@@ -208,6 +209,7 @@ function SparkRow({
   onChoose: ((spark: SparkId) => void) | undefined;
 }): ReactElement {
   const { spark, status, needsYou } = entry;
+  const lasting = lastingMarkOf(entry, mark);
   return (
     <button
       type="button"
@@ -227,6 +229,8 @@ function SparkRow({
         <span className="vf-chat-row-status" {...(needsYou ? { "data-tone": "attention" } : {})}>
           {sparkStatusWord(status)}
         </span>
+        {/* the dot is a picture: what it says beyond the word is in the row's name ("Asleep, needed you") */}
+        {lasting === null ? null : <span className="sr-only">{`, ${lasting}`}</span>}
       </span>
       {mark === null ? null : (
         <span className="vf-chat-row-dot" data-mark={mark} aria-hidden="true" />
@@ -285,7 +289,7 @@ function ThreadColumn({
         <p className="vf-chat-thread-line" data-line={line} role="status">
           <span>{lineWords(spark.name, line, act)}</span>
           {line === "asleep" ? (
-            <UiButton disabled={act.state === "busy"} onClick={() => onWake?.(entry)}>
+            <UiButton disabled={act.state === "busy" || sending} onClick={() => onWake?.(entry)}>
               {act.state === "busy" ? "Waking…" : "Wake"}
             </UiButton>
           ) : null}

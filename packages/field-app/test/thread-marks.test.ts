@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 import { type SparkEntry, sparkEntriesOf } from "../src/chat/spark-status";
 import {
   cellMarkOf,
+  lastingMarkOf,
   NO_LATCHES,
+  THREAD_MARK_WORDS,
   ThreadLedger,
   threadMarkOf,
   threadMarksOf,
@@ -72,6 +74,20 @@ function marks(ledger: ThreadLedger, entries: readonly SparkEntry[]): Record<str
 }
 
 describe("a thread's mark (DESIGN.md §8 \"Chat's list\", Needs you)", () => {
+  it("says in words only what a dot adds to the row's status word: a need that has ended, or unread", () => {
+    const vela = (doing: Doing): SparkEntry => {
+      const entry = reading(doing).find((each) => each.spark.id === VELA.id);
+      if (entry === undefined) throw new Error("no Vela on the reading");
+      return entry;
+    };
+    // a need standing now is its word's own (Asking you); answered since, the dot's need is said
+    expect(lastingMarkOf(vela("asking"), "needs")).toBeNull();
+    expect(lastingMarkOf(vela("idle"), "needs")).toBe(THREAD_MARK_WORDS.needs);
+    expect(lastingMarkOf(vela("idle"), "unread")).toBe(THREAD_MARK_WORDS.unread);
+    expect(lastingMarkOf(vela("idle"), null)).toBeNull();
+    expect(THREAD_MARK_WORDS).toEqual({ needs: "needed you", unread: "unread" });
+  });
+
   it("keeps a need's dot after the need ends, until the thread is on screen", () => {
     const ledger = new ThreadLedger();
     ledger.read(reading("idle"));

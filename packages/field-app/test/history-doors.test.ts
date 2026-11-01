@@ -45,20 +45,22 @@ import {
   dayUsageOf,
   type HistoryDoorClient,
   type HistoryRegroup,
-  isThisDesktops,
   metaStateOf,
   pingParts,
   projectRowOf,
   projectStatsOf,
   selfOf,
+  sessionHomeOf,
   sessionRowOf,
   threadRowOf,
   usageOf,
 } from "../src/history/doors";
+import { isHandedToRoom, projectsHereOf } from "../src/history/host-model";
 import {
   FILE_TARGET_REFUSAL,
   sessionPortOver,
   TICKET_RENEW_LEAD_MS,
+  ticketRefusalWords,
 } from "../src/history/session-port";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "fixtures");
@@ -340,26 +342,77 @@ describe("the catalog port's rows (AR-8c; PJ-4 H1)", () => {
     ]);
   });
 
-  it("PJ-4 — THE DEVICE GUARD (V6): another desktop's session never reaches the room, nor anything that names a desktop when none is known", () => {
+  // PJ-4 wrote the guard as "another desktop's session never reaches the
+  // room"; DS-7 (2026-10-31) hands the room another desktop's sessions of a
+  // project with a place here — read from their own desktop, acted on there —
+  // and keeps the rest of the guard.
+  it("DS-7 — THE DEVICE GUARD, as amended: another desktop's session of a project with a place here reaches the room under its project; its Home, a project only it holds and a session with no project do not; a remote place is never a root; nothing that names a desktop when none is known", () => {
     const remote = {
       ...SESSIONS.rows[0]!,
       sessionId: "ses-on-the-laptop",
       device: LAPTOP,
-      // the same spelling as this Mac's checkout: the room would resume HERE
+      devices: [LAPTOP],
+      // the same spelling as this Mac's checkout: its acts are the host's to
+      // refuse (its host key names the laptop), its root never this Mac's
       cwd: "/Users/me/Projects/vibe-field",
     };
-    expect(isThisDesktops(remote, STUDIO)).toBe(false);
-    expect(isThisDesktops(SESSIONS.rows[0]!, STUDIO)).toBe(true);
-    const meta = metaStateOf(PROJECTS.rows, [...SESSIONS.rows, remote], [], STUDIO);
-    expect(meta.sessions.map((row) => row.id)).not.toContain("ses-on-the-laptop");
+    const onlyThere = { ...remote, sessionId: "ses-laptop-only", projectKey: LAPTOP_ONLY.key };
+    const { projectKey: _none, ...unkeyed } = { ...remote, sessionId: "ses-laptop-unkeyed" };
+    const projects = [...PROJECTS.rows, LAPTOP_ONLY];
+    const here = projectsHereOf(projects, STUDIO);
+    expect([...here].sort()).toEqual([VIBE_FIELD, HOME].sort());
+    expect(isHandedToRoom(remote, STUDIO, here)).toBe(true);
+    expect(isHandedToRoom(onlyThere, STUDIO, here)).toBe(false);
+    expect(isHandedToRoom(unkeyed, STUDIO, here)).toBe(false);
+    expect(isHandedToRoom(SESSIONS.rows[0]!, STUDIO, here)).toBe(true);
+    const meta = metaStateOf(projects, [...SESSIONS.rows, remote, onlyThere, unkeyed], [], STUDIO);
+    expect(meta.sessions.map((row) => [row.id, row.project_id])).toContainEqual([
+      "ses-on-the-laptop",
+      VIBE_FIELD,
+    ]);
+    const ids = meta.sessions.map((row) => row.id);
+    expect(ids).not.toContain("ses-laptop-only");
+    expect(ids).not.toContain("ses-laptop-unkeyed");
+    expect(meta.projects.map((project) => project.id)).toEqual([VIBE_FIELD, HOME]);
     expect(meta.projects.flatMap((project) => project.root_paths)).toEqual([
       "/Users/me/Projects/vibe-field",
       "/Users/me",
     ]);
     // which desktop is this one, unknown: no project, no row that names one
-    const blind = metaStateOf(PROJECTS.rows, [...SESSIONS.rows, remote], [], null);
+    const blind = metaStateOf(projects, [...SESSIONS.rows, remote], [], null);
     expect(blind.projects).toEqual([]);
     expect(blind.sessions).toEqual([]);
+  });
+
+  it("DS-7 — a session's home: another desktop that alone holds it, named as the listing's sources name it; this desktop's own, one it also holds (DS-D10), or one the listing does not name, is read here", () => {
+    const remote = {
+      ...SESSIONS.rows[0]!,
+      sessionId: "ses-on-the-laptop",
+      device: LAPTOP,
+      devices: [LAPTOP],
+    };
+    const shared = { ...remote, sessionId: "ses-on-both", devices: [LAPTOP, STUDIO] };
+    const listing = {
+      sessions: [...SESSIONS.rows, remote, shared],
+      sources: [
+        { device: STUDIO, name: "Studio", self: true, state: "live" as const, rows: 3 },
+        { device: LAPTOP, name: "Laptop", self: false, state: "asleep" as const, rows: 1 },
+      ],
+      self: STUDIO,
+    };
+    expect(sessionHomeOf(listing, "ses-on-the-laptop")).toEqual({
+      device: LAPTOP,
+      name: "Laptop",
+      asleep: true,
+    });
+    expect(sessionHomeOf(listing, "ses-on-both")).toBeNull();
+    expect(sessionHomeOf(listing, SESSIONS.rows[0]!.sessionId)).toBeNull();
+    expect(sessionHomeOf(listing, "not-listed")).toBeNull();
+    expect(sessionHomeOf(null, "ses-on-the-laptop")).toBeNull();
+    expect(
+      sessionHomeOf({ ...listing, sources: [] }, "ses-on-the-laptop"),
+      "a desktop the sources do not name has no name to say",
+    ).toEqual({ device: LAPTOP, name: null, asleep: false });
   });
 
   it("AR-8 (L1): reads a ping's `tables` — the parts it names; none, or a word it does not know, is both", () => {
@@ -518,12 +571,13 @@ describe("the catalog port's meta feed (AR-8c; PJ-4)", () => {
       "ses-a07b1f62",
       "ses-unmapped",
     ]);
-    // the listings at the doors' page ceilings: every project; this desktop's sessions
+    // the listings at the doors' page ceilings: every project; the mesh's
+    // sessions (DS-7 — another desktop's of a project here reach the room)
     expect(door.calls.find((call) => call.method === "project.list")?.params).toEqual({
       limit: 500,
     });
     expect(door.calls.find((call) => call.method === "index.sessions")?.params).toEqual({
-      scope: "local",
+      scope: "mesh",
       limit: 500,
     });
     expect(statuses).toEqual(["connecting", "live"]);
@@ -1103,6 +1157,90 @@ describe("the session port's lease (AR-8c)", () => {
     await expect(port.open("s1")).rejects.toThrow(
       "This desktop has the direct plane switched off — its transcripts can't be read here",
     );
+  });
+
+  // DS-7 — a session another desktop holds
+  const laptop = (id: string) =>
+    id === "s1" ? { device: LAPTOP, name: "Laptop", asleep: false } : null;
+
+  it("DS-7: a session another desktop holds is asked for by its owner, and reads through the same loopback lease; this desktop's own is asked as before", async () => {
+    const door = client({
+      "index.openTicket": () => ({ ...ticket(42100, "g1", Date.now() + 600_000), device: LAPTOP }),
+    });
+    const rest = rosettadFetch();
+    const port = sessionPortOver(door, { fetchFn: rest.fetchFn }, laptop);
+    const session = await port.open("s1");
+    await session.timelineEntry("s1", "t1");
+    expect(rest.reads.at(-1)).toEqual({
+      url: "http://127.0.0.1:42100/api/sessions/s1/timeline/t1",
+      authorization: "Rosetta-Grant g1",
+    });
+    await port.open("s2");
+    expect(
+      door.calls.filter((call) => call.method === "index.openTicket").map((call) => call.params),
+    ).toEqual([{ sessionId: "s1", device: LAPTOP }, { sessionId: "s2" }]);
+    port.dispose();
+  });
+
+  it("DS-7: the owner asleep, not answering, out of road or not serving is said at once, in its name — never retried behind a spinner", async () => {
+    const refusals: Array<[Record<string, unknown>, string]> = [
+      [
+        { service: "peer-link", device: LAPTOP, state: "offline" },
+        "Laptop is asleep — its transcript opens when it wakes",
+      ],
+      [
+        { service: "peer-link", device: LAPTOP, state: "unreachable" },
+        "Laptop isn't answering — its transcript opens when it does",
+      ],
+      [
+        { service: "index", device: LAPTOP, state: "egress_unavailable" },
+        "No road to Laptop from this desktop yet",
+      ],
+      [
+        { service: "index", device: LAPTOP, state: "doors_not_published" },
+        "Laptop isn't serving its history right now — open it again in a moment",
+      ],
+    ];
+    for (const [details, words] of refusals) {
+      const door = client({
+        "index.openTicket": () => {
+          throw Object.assign(new Error("refused"), {
+            kind: "UNAVAILABLE",
+            retryable: true,
+            details,
+          });
+        },
+      });
+      const port = sessionPortOver(door, {}, laptop);
+      await expect(port.open("s1")).rejects.toThrow(words);
+      expect(door.calls.filter((call) => call.method === "index.openTicket")).toHaveLength(1);
+    }
+    // a desktop the listing already calls asleep is said so at once, never asked
+    const door = client({ "index.openTicket": () => ticket(42100, "g1", Date.now() + 600_000) });
+    const port = sessionPortOver(door, {}, (id) =>
+      id === "s1" ? { device: LAPTOP, name: "Laptop", asleep: true } : null,
+    );
+    await expect(port.open("s1")).rejects.toThrow(
+      "Laptop is asleep — its transcript opens when it wakes",
+    );
+    expect(door.calls.filter((call) => call.method === "index.openTicket")).toEqual([]);
+    // a desktop the listing does not name is still said, as that desktop
+    expect(
+      ticketRefusalWords({
+        kind: "UNAVAILABLE",
+        retryable: true,
+        details: { service: "peer-link", device: LAPTOP, state: "offline" },
+      }),
+    ).toBe("That desktop is asleep — its transcript opens when it wakes");
+    // and a refusal naming no desktop keeps the patient retry it had
+    expect(
+      ticketRefusalWords({
+        kind: "UNAVAILABLE",
+        retryable: true,
+        details: { service: "index", state: "starting" },
+        message: "the agent index is starting",
+      }),
+    ).toBe("the agent index is starting");
   });
 });
 

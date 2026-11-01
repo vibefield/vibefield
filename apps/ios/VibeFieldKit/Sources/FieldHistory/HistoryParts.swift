@@ -182,10 +182,8 @@ struct GroupHead<Trailing: View>: View {
           Text("\(count)").foregroundStyle(ChromePalette.green)
         }
       }
-      .font(ChromeType.sans(11, .medium))
-      .textCase(.uppercase)
-      .tracking(ChromeType.tracking(0.08, of: 11))
-      .foregroundStyle(ChromePalette.inkFaint)
+      // IOS-10a — the head Settings draws too (`chromeGroupHead`, FieldDesign).
+      .chromeGroupHead()
       Spacer(minLength: 0)
       trailing()
     }
@@ -202,10 +200,7 @@ struct DayHeader: View {
 
   var body: some View {
     Text(text)
-      .font(ChromeType.sans(11, .medium))
-      .textCase(.uppercase)
-      .tracking(ChromeType.tracking(0.08, of: 11))
-      .foregroundStyle(ChromePalette.inkFaint)
+      .chromeGroupHead()
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.horizontal, HistoryParts.sidePadding)
       .padding(.top, 18)

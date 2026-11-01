@@ -1286,7 +1286,8 @@
                   is no ack protocol — the tolerant reader's own rule. <em>Since PG-1d (2026-10-31):</em> the
                   field and desk boards may also send a mid-stream snapshot on the same epoch, at the board's
                   current revision: a re-present when the doors' gate flips, or the repair after a lost frame.
-                  The reader replaces its copy.
+                  The reader replaces its copy. <em>Since PG-2 (2026-10-31):</em> the field and remote boards; the
+                  desk board retired into the remote cut.
                 </p>
               </div>
               <div class="card">
@@ -1368,6 +1369,25 @@
               route is <code>wrong-scope</code>. The mint's audit record names the scopes, never the
               grant. The <code>IndexOpenTicket</code> shape is unchanged: the grant stays opaque. Upstream
               it is MERGED to rosetta main <code>856bd80</code> (2026-10-04).
+              <span class="badge tone-built">Built</span>
+            </p>
+            <p class="section-note">
+              <strong>Update 2026-10-31 (DS-7, transcripts by ticket).</strong> A window asks for a session
+              on ANOTHER desktop with <code>{sessionId, device}</code>. Its daemon carries the ask only for
+              a window or the shell (a plugin, an agent, a guest or a relaying peer is
+              <code>FORBIDDEN_SCOPE</code>; the phone still hears <code>direct-plane-unbuilt</code>, SP-7)
+              and forwards it whole. The owner mints for that daemon, a <code>peer-fieldd</code> principal,
+              from its own rule: a <code>["read"]</code> grant whose <code>cid</code> is the window behind
+              the forward, beside the tailnet set of its index serve as it stands
+              (<code>RemoteIndexEndpointSet</code>), or <code>doors_not_published</code> when no serve is
+              live. The window's daemon re-homes that set onto an egress route of its own sidecar to the
+              owner's <code>PORTS.INDEX_SERVE</code>, now on DS-L6's routable list, one route per owner
+              desktop (<code>index-forward.ts</code>, <code>egress-owner-routes.ts</code>), and hands the
+              window the loopback pair, composed from the asked session and the route's listener. The grant
+              rides untouched. No road is <code>egress_unavailable</code>; both road refusals are retryable
+              and name the owner (<code>IndexTicketRoadDetails</code>). A forwarded index ticket is never
+              journaled as a receipt. The transcript's bytes go sidecar to sidecar: the e2e witness counts
+              766,846 bytes through the route and 0 on either door during the stream.
               <span class="badge tone-built">Built</span>
             </p>
 
@@ -1632,12 +1652,12 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent.subscribe</span></td>
-                    <td><p><code>AgentSubscribeParams {projection?: "full" | "field" | "desk" | "model", scope?: "local" | "mesh", …}</code> → the projection's snapshot/deltas (full: whole <code>AgentListResult</code> frames)</p></td>
+                    <td><p><code>AgentSubscribeParams {projection?: "full" | "field" | "model" | "remote", scope?: "local" | "mesh", …}</code> → the projection's snapshot/deltas (full: whole <code>AgentListResult</code> frames). <em>PG-2 (2026-10-31):</em> <code>remote</code> replaced <code>desk</code>.</p></td>
                     <td><p><code>agent.observe</code></p></td>
                     <td><p>yes</p></td>
                     <td><p><code>runtime.onMonitorState / onMonitorRemoved / onMonitorNotification</code></p></td>
                     <td><span class="badge tone-built">Built</span></td>
-                    <td><p><code>agent-field-daemon.test.ts</code></p></td>
+                    <td><p><code>agent-field-daemon.test.ts</code>, <code>agent-remote-cut.test.ts</code></p></td>
                   </tr>
                 </tbody>
               </table>
@@ -1667,13 +1687,24 @@
               peer windows keep the 100 ms floor, and the phone's is 1 s with a 250 ms urgent edge. None of it is built:
               as built a peer's rows still arrive as <code>desk</code> and the phone still reads <code>field</code>,
               until PG-2 (the cut) and PG-3 (the phone's replica).
+              <em>Corrected 2026-10-31 (PG-2, as built):</em> the remote cut is built and <code>desk</code> is retired.
+              Other desktops contribute their owner's <code>remote</code> cut (<code>AgentRemoteRow</code>), which
+              the window's door reads as <code>AgentModelMeshRow</code>. A phone may ask
+              <code>{projection: "remote", scope: "mesh"}</code> at its home (<code>AgentRemoteMeshOpen</code> /
+              <code>AgentRemoteMeshFrame</code>), served at <code>AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS</code> with
+              an urgent change after at most <code>AGENT_FIELD.REMOTE_URGENT_MS</code>. The home asks each owner for its
+              cut at the phone's floor, so the owner cuts and paces and the home relays. The row also carries the
+              person's Stop (ST-D5), and a bare terminal's directory travels as its folder's name. An older desktop
+              asking <code>desk</code> is refused as a malformed ask, so mixed versions read each other as another
+              version until both update. The phone still reads <code>field</code> until PG-3, the kit's decode.
             </p>
             <p>
               <code>AgentModelLocalFacts</code> carries only what this window's chrome needs: <code>nativeSessionId</code>,
               <code>cwd</code>, <code>spawnedBy</code>, <code>exited</code>, and optional mirror facts
               <code>alive</code>, <code>startedAt</code>, <code>lastEvidenceAt</code>, <code>contextSource</code>.
               These facts ride the same row/frame, eliminating the race with a second full-board subscription.
-              They never enter <code>monitorRow</code>, the peer's desk cut or the phone's field row. A missing fact
+              They never enter <code>monitorRow</code>, the remote cut (the peer's desk cut before PG-2) or the
+              phone's field row. A missing fact
               remains absent. The schemas live in <code>packages/contracts/src/agent-field.ts</code>.
             </p>
             <p>
@@ -1763,7 +1794,7 @@
                   <tr><td><span class="route">index.project</span></td><td><p><code>IndexProjectParams {projectId, sinceMs?, offsetMinutes? (−840…840), device?}</code> → <code>IndexProjectResult {projectId, heatmap, usage {models, hours}, contribution, clipped}</code> (AR-8b, AR-D39 (a): a project's panels in one answer; a figure rosetta could not price stays <code>null</code>; a tailnet caller's contribution rows stop at <code>INDEX_TAILNET_LIMITS.MAX_ROWS</code> and say <code>clipped</code>)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>federate</code></p></td><td><p><code>GET /api/projects/{id}/heatmap</code>, <code>/usage</code> (both <code>?since_ms=…&amp;offset_minutes=…</code>) and <code>/contribution</code>, in one flight, each parsed; rosetta's 503 before canonical publication answers <code>UNAVAILABLE {service: "index", state: "building"}</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.projectDay</span></td><td><p><code>IndexProjectDayParams {projectId, day (a real YYYY-MM-DD), offsetMinutes?, device?}</code> → <code>IndexProjectDayResult {projectId, day, models}</code> (AR-8b: one day's hours by model, asked when a person opens a day)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>federate</code></p></td><td><p><code>GET /api/projects/{id}/usage/day?day=…&amp;offset_minutes=…</code>, parsed</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.activity</span></td><td><p><code>IndexActivityParams {sinceMs, untilMs (at most a day later), sessions?, silenceMs?, device?}</code> → <code>IndexActivityResult {sinceMs, untilMs, fidelity: "turns" | "bounds", partial, detail?, clipped?, sessions}</code> (TL, docket v9 RULED 2026-10-09: the record's top-level sessions in a window with their turns; the monitor backend's history port reads it)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>federate</code></p></td><td><p><code>GET /api/activity?since_ms&amp;until_ms&amp;gap_ms&amp;limit</code> (protocol 27, T4), parsed — rosetta's turns and the silences it cut; when the route cannot answer, the catalog's session bounds (<code>fidelity: "bounds"</code>, T5's floor, <code>partial</code>); never a transcript page</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">index.openTicket</span></td><td><p><code>IndexOpenTicketParams {sessionId, device?}</code> → <code>IndexOpenTicket {device, endpoints, grant, expiresAt}</code> (AR-8b: for a window or the shell on this desktop, the loopback pair beside an RO-10 grant for that session, ten minutes ahead — RO-13: <code>read</code> and <code>files</code> for the desktop window, <code>read</code> alone for the shell or a plain token; a plugin or an MCP agent is <code>FORBIDDEN_SCOPE</code>; the phone and a peer daemon's forward hear <code>direct-plane-unbuilt</code>, the plane switched off <code>direct-plane-off</code>, both retryable false; a daemon not ready its phase)</p></td><td><p><code>index.read</code></p></td><td><p><strong>no</strong></p></td><td><p><code>federate</code></p></td><td><p>no route: <code>mintGrant</code> from <code>@vibefield/rosetta-protocol/grants</code> with the generation's key — the window then dials <code>/ws/sessions/{id}</code> and the session's pages itself</p></td><td><p><code>index-session</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">index.openTicket</span></td><td><p><code>IndexOpenTicketParams {sessionId, device?}</code> → <code>IndexOpenTicket {device, endpoints, grant, expiresAt}</code> (AR-8b: for a window or the shell on this desktop, the loopback pair beside an RO-10 grant for that session, ten minutes ahead — RO-13: <code>read</code> and <code>files</code> for the desktop window, <code>read</code> alone for the shell or a plain token; a plugin or an MCP agent is <code>FORBIDDEN_SCOPE</code>; the phone and a peer daemon's forward hear <code>direct-plane-unbuilt</code>, the plane switched off <code>direct-plane-off</code>, both retryable false; a daemon not ready its phase). <em>DS-7 (2026-10-31): a peer daemon's forward is minted the tailnet set of the live index serve and a <code>read</code> grant, or <code>doors_not_published</code>; the forwarding daemon re-homes it onto its egress route (<code>egress_unavailable</code> without one); the phone alone hears <code>direct-plane-unbuilt</code>.</em></p></td><td><p><code>index.read</code></p></td><td><p><strong>no</strong></p></td><td><p><code>federate</code></p></td><td><p>no route: <code>mintGrant</code> from <code>@vibefield/rosetta-protocol/grants</code> with the generation's key — the window then dials <code>/ws/sessions/{id}</code> and the session's pages itself</p></td><td><p><code>index-session</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.timeline</span></td><td><p><code>IndexTimelineParams {sessionId, cursor?, limit? (1..INDEX_TIMELINE.PAGE_MAX_LIMIT)}</code> → <code>IndexTimelineResult {sessionId, entries: IndexTimelineRow[], nextCursor, clipped, watermark}</code> (SP-6, 2026-10-04: one BACKWARD page of one session's transcript — oldest first within the page, <code>nextCursor</code> to the older page, null at the top; each row the projection of rosetta's <code>TimelineEntry</code>: the kind, the stamps, the turn group and the reply it belongs to, the words bounded to <code>INDEX_TIMELINE.TEXT_CHARS</code> with <code>textClipped</code>, a tool line's name · family · status · failed · object · result · duration, attachments as REFS — <code>{id, kind, name?, mediaType?, byteLen?, available, reason?}</code>, never bytes, never rosettad's address — the usage buckets and a priced cost; a tailnet caller's page is cut at <code>INDEX_TAILNET_LIMITS.MAX_ROWS</code> and says <code>clipped</code>; a cursor the session was rewritten under is <code>PRECONDITION_FAILED {service: "index", reason: "cursor-expired"}</code>, read again from the head; a session the index lacks is <code>NOT_FOUND</code>)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>local</code></p></td><td><p><code>GET /api/sessions/{id}/timeline?limit=…&amp;cursor=…</code>, parsed (<code>IndexTimelinePageResponse</code>); rosetta's 410 <code>cursor_expired</code> is the refusal above</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.session.subscribe</span></td><td><p><code>IndexSessionSubscribeParams {sessionId, since?, minIntervalMs?}</code> → the open <code>{snapshot: {epoch, revision, rows}}</code>, then <code>index.session.subscribe.delta {epoch, since, revision, upserts, removed}</code> keyed by <code>timelineId</code> and <code>index.session.subscribe.snapshot</code> on a reset (fieldd's ProductAPI names a subscription's frames <code>&lt;method&gt;.delta</code> / <code>&lt;method&gt;.snapshot</code> and the kit's codec routes on that suffix — corrected 2026-10-04 evening; the first draft of this row said <code>index.session.delta</code>; SP-6: one session's LIVE TAIL as rows, SP-L4 — the open is rosetta's own socket snapshot, cut to the newest <code>INDEX_TAILNET_LIMITS.MAX_ROWS</code> rows for a tailnet caller (the rows before them are <code>index.timeline</code>'s); a reset follows rosetta's <code>resync</code> barrier, a rewrite, a dropped socket or the daemon's restart; the open always answers a snapshot — each subscription is its own chain, a kept cursor never resumes; the open WAITS for rosetta's first snapshot, never an empty page, and refuses in words — UNAVAILABLE with the index's phase, INCOMPATIBLE naming both protocol numbers, NOT_FOUND for a session the index lacks)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>stream</code> · <code>{shape: "rows", cadenceFloorMs: INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS}</code> (1 s)</p></td><td><p><code>WS /ws/sessions/{id}</code> through rosetta's OWN client (<code>RosettaClient.subscribeSession</code>, the bearer on the subprotocol pair), one socket per session shared by its subscribers (<code>index-tail.ts</code>), re-aimed at the daemon's next generation</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.threads</span></td><td><p><code>IndexThreadsParams {cursor?, limit? (1..500)}</code> → <code>IndexThreadsResult {rows: IndexThread[], cursor?}</code> (AR-8, build-hf.md L1, 2026-10-08: a page of this desktop's DELEGATED threads — a subagent's or a team member's session — by keyset in a stable order, by root then by id. Each row is <code>IndexCatalogSession</code>'s columns without a <code>device</code> (a thread never leaves its desktop) plus <code>parentSessionId</code>, <code>rootSessionId</code>, <code>role</code> (rosetta's <code>subagent</code> · <code>team</code>, an OPEN vocabulary, absent when rosetta reported none) and <code>delegation</code> (rosetta's <code>SessionDelegation</code> projected to VibeField's spelling on a passthrough object — <code>parentToolNativeId</code>, <code>workflowRunId</code>, <code>team</code>, <code>color</code>, <code>configuredModel</code> — or null; the History port maps it BACK to rosetta's <code>SessionDelegation</code> for the room, <code>threadRowOf</code> in <code>field-app/src/history/doors.ts</code>, a colour outside rosetta's eight becoming null, and a role the room does not draw becoming <code>subagent</code>). A window's door alone: the handler refuses a plugin, an MCP agent, the phone and a guest <code>FORBIDDEN_SCOPE {method, principal}</code>, and the D36 wall a peer daemon; a catalog that has not read the index is <code>UNAVAILABLE</code>, never "none")</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>local</code></p></td><td><p><code>WS /ws/meta</code> — the children the catalog's follower used to drop, held in its local-only <code>threads</code> table</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
@@ -1892,7 +1923,7 @@
                     <td><p><code>ComposeSparksOpenParams {spark}</code> → <code>ComposeSparksOpenResult {spark}</code></p></td>
                     <td><p><code>agents.manage</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p></td>
+                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p><p><em>Added 2026-11-01 (SP-1d):</em> one wake per spark. A second open while a wake is under way (another window's, or the shell's) is answered with that same wake, its run or its refusal, so two opens never wake one spark into two runs; each caller is still authorized and audited at the door. Not joined yet: a resume of the spark's session already under way through <code>agent.resume</code>. The daemon's resume wrapper (<code>daemon.ts</code>) reads its <code>PRECONDITION_FAILED</code> (state <code>resuming</code> or <code>replaced</code>) as a session that cannot be resumed, so the wake starts the spark again beside it; the fix is owed to that wrapper.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>compose-sparks.test.ts</code></p></td>
                   </tr>
@@ -2125,7 +2156,7 @@
                   <tr><td><span class="route">terminal.openTicket</span></td><td><p><code>TerminalOpenTicket</code></p></td><td><p><strong>no</strong></p></td><td><p>The mint for an existing session — how a fold row's <code>terminal.runtimeSessionId</code> becomes a mounted pane. Every mint is a fresh audited grant.</p></td></tr>
                   <tr><td><span class="route">terminal.create</span></td><td><p><code>TerminalCreateOpenResult</code></p></td><td><p>no</p></td><td><p>The atomic birth-plus-ticket, so a spawn mounts without a second inventory round trip. Since AR-7 the shell it births is integrated by fieldd itself (the launcher home at the head of PATH, the person's own ZDOTDIR restored by the integration). Since SB-2 it takes <code>profileSet</code>: the shell is born under that Agent Profile's binding (AR-7g) and the answer carries <code>profileSet</code> when it was. A bound birth also needs <code>agent.spawn</code> (<code>FORBIDDEN_SCOPE</code> without it), and is refused before anything reaches the floor for a profile that no longer exists (<code>NOT_FOUND</code>), profiles that cannot be read (<code>UNAVAILABLE</code>, retryable) or a binding that fails (<code>PRECONDITION_FAILED</code>, in puppeteer's words) — never answered with an unbound shell.</p></td></tr>
                   <tr><td><span class="route">terminal.renewAttach</span></td><td><p><code>TerminalRenewAttachResult</code></p></td><td><p>yes</p></td><td><p>A compare-and-set on the generation the caller holds, idempotent by request id, so a retried renewal returns the grant it already got.</p></td></tr>
-                  <tr><td><span class="route">freeway.approve</span></td><td><p><code>FreewayApproveResult</code></p></td><td><p>no</p></td><td><p>F1 (2026-10-17): the phone's approval for its freeway link — minted only for a node fieldd's roster correlates to a phone row (never a desktop's, never a node that publishes no device), under the floor's per-boot freeway key, audited like a ticket. The link's host mints every terminal grant after it from its own keyring, so a tap needs no fieldd round trip. Refused <code>UNAVAILABLE {service: "freeway"}</code> while the host is down; the approval forwarded for a phone on another desktop (FW-D5) is F1b's.</p></td></tr>
+                  <tr><td><span class="route">freeway.approve</span></td><td><p><code>FreewayApproveResult</code></p></td><td><p>no</p></td><td><p>F1 (2026-10-17): the phone's approval for its freeway link — minted only for a node fieldd's roster correlates to a phone row (never a desktop's, never a node that publishes no device), under the floor's per-boot freeway key, audited like a ticket. The link's host mints every terminal grant after it from its own keyring, so a tap needs no fieldd round trip. Refused <code>UNAVAILABLE {service: "freeway"}</code> while the host is down. F1b (2026-10-31): routable for FW-D5 — the phone asks its home with <code>device</code> naming another desktop, the home forwards it whole, and that desktop mints under its own floor's key for a self peer daemon carrying <code>onBehalfOf.clientDeviceId</code> (the phone, as the home's roster correlated its node): the phone's node read from the owner's own roster, the linked login, the peer's self set; authorized as the peer, audited as the phone. A peer with no phone behind it, or naming a desktop, is <code>FORBIDDEN_SCOPE</code>; a phone the owner's roster does not know is <code>UNAVAILABLE uncorrelated</code>; an owner the home cannot reach is PeerLink's <code>UNAVAILABLE {service: "peer-link", device, state}</code>. Never replayed from a receipt: a same-key retry mints afresh.</p></td></tr>
                   <tr><td><span class="route">terminal.terminate</span></td><td><p>—</p></td><td><p>yes</p></td><td><p>Closes an agent's pane. Idempotent by intent: terminating an already-exited session is the normal race when the ladder and a click converge.</p></td></tr>
                   <tr><td><span class="route">terminal.list · sessions · roster · get</span></td><td><p>inventories</p></td><td><p>yes</p></td><td><p>Four doors over three projections for three readers, with <code>get</code> answering one row. The fold joins against the inventory; the roster is the UI's view and carries no placement. Since SB-2 a roster row names the Agent Profile its shell was born under (<code>profileSet</code>, from fieldd's record, still naming a profile deleted since).</p></td></tr>
                 </tbody>
@@ -2197,6 +2228,7 @@
               with its series and burn rate — the owed item's answer, superseding Q13's <code>desk</code> door of
               2026-10-28. The remote cut never carries the mirror, the absolute path, <code>project.seq</code> or
               <code>local</code>. As built the phone's rows carry none of it until PG-2 and PG-3.
+              <em>2026-10-31 (PG-2):</em> the remote cut is served to a phone; the kit reads it from PG-3.
             </p>
             <div class="callout foundation">
               <strong>Login scope is a transport guarantee, and not a licence to stop thinking.</strong>
@@ -2326,6 +2358,11 @@
                   per-session grant, and the window dials the session's socket itself, fieldd out of the
                   byte path (EL2). fieldd's one socket is the catalog's <code>/ws/meta</code> (DS-6). Across
                   the tailnet — the phone (SP-6), another desktop (DS-7) — it is still designed.
+                </p>
+                <p>
+                  <em>Update 2026-10-31 (DS-7):</em> another desktop's half is built: the owner's set,
+                  re-homed onto the window's own egress route, the grant untouched (the tickets
+                  convention above). The phone's ticket stays SP-7's.
                 </p>
                 <span class="badge tone-built">Built</span> <span class="badge tone-designed">Designed</span>
               </div>

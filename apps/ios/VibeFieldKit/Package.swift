@@ -59,6 +59,7 @@ let package = Package(
     .library(name: "FieldHome", targets: ["FieldHome"]),
     .library(name: "FieldHistory", targets: ["FieldHistory"]),
     .library(name: "FieldWorkspace", targets: ["FieldWorkspace"]),
+    .library(name: "FieldSettings", targets: ["FieldSettings"]),
   ],
   dependencies: [
     // The Ghosttea Apple stack — the terminal RENDERER (FieldTerminal's three products). Exact pin, EL8: a bump is
@@ -311,12 +312,18 @@ let package = Package(
     .testTarget(
       name: "FieldWorkspaceTests", dependencies: ["FieldWorkspace", "FieldProduct", "FieldHistory"],
       resources: [.copy("Fixtures")]),
+    // IOS-10a — the phone's Settings: a sheet headed by you, your desktops as
+    // glances, this phone's own preferences. It draws what FieldHome hands it
+    // (`SettingsAccount`) and asks nothing of the mesh, so it takes no mesh
+    // product; FieldTerminal is here for its Terminal page.
+    .target(name: "FieldSettings", dependencies: ["FieldDesign", "FieldTerminal"]),
+    .testTarget(name: "FieldSettingsTests", dependencies: ["FieldSettings", "FieldDesign"]),
     .target(
       name: "FieldHome",
       dependencies: [
         "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
         "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct", "FieldFreeway",
-        "FieldRoutedTerminal",
+        "FieldRoutedTerminal", "FieldSettings",
       ],
       resources: [.process("Resources")]
     ),

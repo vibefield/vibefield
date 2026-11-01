@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { PORTS, SHELL_CLIPBOARD } from "@vibefield/contracts";
+import { PORTS, SHELL_CLIPBOARD, type ShellLastExit } from "@vibefield/contracts";
 import type {
   DiagnosticLogSnapshotV1,
   SupportBundlePreviewV1,
@@ -109,8 +109,12 @@ function windowHost(
   };
 }
 
-/** fieldd's half: its feed answering `remote`, and no leases. */
-function fieldd(remote: DiagnosticLogSnapshotV1): FielddClient {
+/** fieldd's half: its feed answering `remote`, no leases, and `lastExit` as the kept last exit (AL-12; an Error
+ * refuses the read). */
+function fieldd(
+  remote: DiagnosticLogSnapshotV1,
+  lastExit: ShellLastExit | null | Error = null,
+): FielddClient {
   return {
     subscribe: vi.fn(async () => ({
       subId: "remote-1",
@@ -120,6 +124,10 @@ function fieldd(remote: DiagnosticLogSnapshotV1): FielddClient {
     request: vi.fn(async (method: string) => {
       if (method === "diagnostics.lease.list") {
         return { v: 1, observedAt: Date.now(), leases: [] };
+      }
+      if (method === "diagnostics.lastExit") {
+        if (lastExit instanceof Error) throw lastExit;
+        return { shell: lastExit };
       }
       throw new Error(`unexpected ${method}`);
     }),
@@ -243,6 +251,37 @@ describe("diagnostics viewer folds", () => {
       crashArtifactIds: [],
     });
     expect(view.textContent).toContain("Export preview");
+  });
+});
+
+// AL-12 — "Last exit": how a shell last left this pair, read from fieldd, in DESIGN.md §9's words; a read that
+// fails says so, never a blank or a made-up "none".
+describe("Diagnostics' last exit (AL-12)", () => {
+  const lastExitOf = (view: HTMLDivElement) =>
+    view.querySelector('[data-diagnostics="last-exit"]')?.textContent ?? "";
+
+  it("says the kept exit, and none before any", async () => {
+    const at = new Date(2026, 9, 30, 10, 42).getTime();
+    const view = await mount(
+      windowHost(snapshot([])),
+      fieldd(snapshot([]), { planned: true, stopped: "quit", at, sessions: 2 }),
+    );
+    expect(lastExitOf(view)).toMatch(
+      /^Last exit VibeField quit on .+ and ended 2 terminal sessions\.$/,
+    );
+    act(() => root?.unmount());
+    root = null;
+    view.remove();
+    const none = await mount(windowHost(snapshot([])), fieldd(snapshot([]), null));
+    expect(lastExitOf(none)).toBe("Last exit No exit recorded yet.");
+  });
+
+  it("a read fieldd refuses says it couldn't, with the reason", async () => {
+    const view = await mount(
+      windowHost(snapshot([])),
+      fieldd(snapshot([]), new Error("FORBIDDEN_SCOPE")),
+    );
+    expect(lastExitOf(view)).toBe("Last exit Couldn't read it: FORBIDDEN_SCOPE");
   });
 });
 

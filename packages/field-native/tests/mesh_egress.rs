@@ -451,9 +451,10 @@ async fn a_route_may_aim_only_at_an_admitted_peers_grant_door() {
         "{product}"
     );
     assert_eq!(error_code(&product), "EGRESS_PORT_NOT_ROUTABLE");
+    // the cells and, since DS-7 (2026-10-31), rosettad's index serve
     assert_eq!(
         product["error"]["data"]["details"]["routablePorts"],
-        json!([9422])
+        json!([9422, 9424])
     );
 
     let stranger = mgmt
@@ -476,6 +477,37 @@ async fn a_route_may_aim_only_at_an_admitted_peers_grant_door() {
 
     let listed = mgmt.call("native.mesh.egress.route.list", json!({})).await;
     assert_eq!(listed["result"]["routes"], json!([]), "nothing was bound");
+    drop(mgmt);
+    daemon.shutdown().await;
+}
+
+/// DS-7 — rosettad's index serve demands its own grant (a bearer on every
+/// route, RO-10's per-session grants), so the floor binds a route to an
+/// admitted peer's index serve, through the same peer gate as a cell route.
+#[tokio::test]
+async fn a_route_may_aim_at_an_admitted_peers_index_serve() {
+    let (_dir, daemon, fake, door) = fake_floor().await;
+    fake.admit("studio.tail1234.ts.net:9424", door);
+    let mut mgmt = Mgmt::connect(&daemon).await;
+
+    let added = mgmt
+        .call(
+            "native.mesh.egress.route.add",
+            json!({"id": "egress-dev-a-9424", "target": "studio.tail1234.ts.net:9424"}),
+        )
+        .await;
+    let bound: MeshEgressRouteBound =
+        serde_json::from_value(added["result"].clone()).unwrap_or_else(|e| panic!("{e}: {added}"));
+    assert_eq!(bound.id.as_str(), "egress-dev-a-9424");
+
+    // a peer the node does not admit is refused at the index serve as at a cell
+    let stranger = mgmt
+        .call(
+            "native.mesh.egress.route.add",
+            json!({"id": "r2", "target": "stranger.tail1234.ts.net:9424"}),
+        )
+        .await;
+    assert_eq!(error_code(&stranger), "TARGET_NOT_PEER", "{stranger}");
     drop(mgmt);
     daemon.shutdown().await;
 }

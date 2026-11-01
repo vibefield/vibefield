@@ -325,7 +325,10 @@ overrides:
   # (`node scripts/siblings.mjs render --prod` writes them from the lock's
   # `release.npm`), preflight's PIN_EXPECTATIONS, the lock's sha (`pnpm
   # siblings:pin puppeteer` at the tag), and minimumReleaseAgeExclude for a
-  # version published this week.
+  # version published this week. PG-3a: the same commit re-blesses the phone's
+  # parity goldens, which name the monitor, view-sdk and views versions they
+  # were computed by (`pnpm --filter @vibefield/field-app phone:goldens`, their
+  # kit copies with them), and says the re-bless in its body.
   # 0.3.0 → 0.3.2 (2026-10-29, CP-1d's upstream prerequisite, #52/#53):
   # published from v0.3.2 (95a70aa7). Per-run MCP servers, tool allowances and
   # instructions work beside modelSelection on spawn and resume. Includes

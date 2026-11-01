@@ -117,8 +117,11 @@ export function approvalSigningInput(
   return canonicalJson({ protected: protectedHeader, claims });
 }
 
-/** `freeway.approve {}` → the approval and when it lapses. Forwarded for FW-D5 (a self peer
- * daemon carrying `onBehalfOf {clientKind: "phone"}`): `onBehalfOf` picks the audience only. */
+/** `freeway.approve {}` → the approval and when it lapses. Forwarded for FW-D5 (F1b): the phone asks
+ * its home with `device` naming the other desktop, and the home forwards the ask whole to that
+ * desktop's fieldd, which mints under its OWN floor's key for a self peer daemon carrying
+ * `onBehalfOf.clientDeviceId` — the phone its own roster knows, the node read from that roster.
+ * `onBehalfOf` picks the audience only, restrict-only. */
 export const FreewayApproveParams = z.object({}).passthrough();
 export type FreewayApproveParams = z.infer<typeof FreewayApproveParams>;
 export const FreewayApproveResult = z

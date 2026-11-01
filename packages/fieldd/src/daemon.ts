@@ -4,7 +4,6 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AGENT_CATALOG,
-  AGENT_FIELD,
   AgentCatalogParams,
   AgentInterruptParams,
   type AgentLastRunForgetResult,
@@ -61,6 +60,7 @@ import {
   DEVICE_LIMITS,
   DeviceGetParams,
   DeviceRenameParams,
+  type DiagnosticsLastExitResult,
   DocCreateParams,
   DocDeleteParams,
   DocHoldersParams,
@@ -201,13 +201,13 @@ import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@vibefield/rosetta
 import { AgentBriefings } from "./agent-briefing";
 import {
   agentListFor,
+  boardFloor,
   clipRecordedLanes,
   createFieldSubscription,
-  deskProjector,
-  type FieldSubscription,
   malformedBoardAsk,
   projectFieldRow,
   refuseBoardAsk,
+  routedBoardAsk,
   wireRecordedLanes,
 } from "./agent-field";
 import {
@@ -218,7 +218,7 @@ import {
 import { DEFAULT_SEARCH_LIMIT, EnrollmentStore, IndexService } from "./agent-index";
 import { AgentInputQueues } from "./agent-input-queue";
 import { LastRunKeeper, modelBoardSource } from "./agent-last-run";
-import { createModelSubscription } from "./agent-model-board";
+import { createModelSubscription, createRemoteSubscription } from "./agent-model-board";
 import { type AgentMonitorService, createAgentMonitorService } from "./agent-monitor";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
@@ -236,7 +236,7 @@ import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
 import { DocSyncService, docHostPeers, isDocHostPeer, type LaneInfo } from "./doc-sync";
-import { EgressRoutes, FloorEgress, resolveEgressPath } from "./egress";
+import { EgressRoutes, type EgressRoutesPort, FloorEgress, resolveEgressPath } from "./egress";
 import { EgressCellRewriter } from "./egress-cell-rewriter";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
@@ -250,6 +250,7 @@ import {
 } from "./freeway";
 import { clipActivity, createActivityReader, monitorHistoryPort } from "./index-activity";
 import { IndexCatalog } from "./index-catalog";
+import { IndexTicketForwarding } from "./index-forward";
 import { IndexMesh } from "./index-mesh";
 import { INDEX_SERVE_ID, IndexServeDriver, IndexTicketMinter, indexPlaneLive } from "./index-serve";
 import { IndexStatusFeed } from "./index-status-feed";
@@ -327,7 +328,13 @@ import {
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
 import { SetupLedgerStore } from "./setup-ledger";
-import { appBundleOf, relaunchFromBundle, type SHELL_ABSENCE, ShellAbsence } from "./shell-absence";
+import {
+  appBundleOf,
+  fileRelaunchLog,
+  relaunchFromBundle,
+  type SHELL_ABSENCE,
+  ShellAbsence,
+} from "./shell-absence";
 import { ShellLease } from "./shell-lease";
 import { createSurfaceService } from "./surface-service";
 import { oweSyncQuestion } from "./sync-question";
@@ -469,6 +476,10 @@ export interface FielddConfig {
   /** AR-8b test seam: the life of a minted index grant (production:
    * `INDEX_TICKET.TTL_MS`), so a row can watch one expire. */
   indexTicketTtlMs?: number;
+  /** DS-7 test seam: the egress routes a forwarded index ticket rides to its
+   * owner's index serve (`IndexTicketForwarding`). Absent = production's
+   * `EgressRoutes`, the same port the terminal rewriter rides. */
+  indexEgressRoutes?: EgressRoutesPort;
   /** DS-6 test seams: the history catalog's cadences (the epoch, the
    * re-snapshot and batch windows, the reconnect backoff, the journal and page
    * budgets) and the digest heartbeat its peer subscribers hear. Production
@@ -969,10 +980,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // the owner's word (ON unless config says false) standing on a generation
   // that enforces access; the device id is read at each mint — the device
   // service is bound further down, before any door can be called.
+  // DS-7 — and the mesh's live serve view, read at each mint once the mesh
+  // client exists (below): another desktop's daemon is answered the tailnet
+  // set of the index serve as it stands.
+  let meshForTickets: MeshClient | null = null;
   const indexTickets = new IndexTicketMinter({
     enabled: config.indexDirectPlane !== false,
     supervisor: rosettad,
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    serves: () => meshForTickets?.serves() ?? [],
     ...(config.indexTicketTtlMs !== undefined ? { ttlMs: config.indexTicketTtlMs } : {}),
   });
   // DS-6 — the history catalog's source (index-catalog.ts): rosetta's topology
@@ -1217,6 +1233,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnostics = diagnosticsService;
     await diagnosticsService.start();
     const mesh = new MeshClient(native);
+    meshForTickets = mesh; // DS-7 — the index minter's serve view
     // WG-D4 — while the floor was held unresponsive its doors were refused, a
     // reconcile's among them: when it answers again, what they would have
     // placed is placed now
@@ -2224,6 +2241,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           : derivedBundle === null
             ? null
             : relaunchFromBundle(derivedBundle),
+      // AL-11 — the cap's count outlives this fieldd
+      relaunchLog: fileRelaunchLog(join(config.dataDir, ...LAYOUT.SHELL_RELAUNCHES)),
       logger: logger.child({ component: "shell.absence" }),
       ...(config.shellAbsenceTimings !== undefined ? { timings: config.shellAbsenceTimings } : {}),
     });
@@ -2275,6 +2294,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       };
       return result;
     });
+    // AL-12 — Settings → Diagnostics' "Last exit": the kept record, read-only (`diagnostics.read`, local)
+    api.register("diagnostics.lastExit", async () => {
+      const result: DiagnosticsLastExitResult = { shell: await shellLease.lastExit() };
+      return result;
+    });
     api.register("system.shell.leave", (ctx, params) => {
       const connectionId = leaseConnection(ctx);
       const parsed = SystemShellLeaveParams.safeParse(params ?? {});
@@ -2308,7 +2332,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         reason,
         native: nativeStop ?? null,
       });
-      shellLease.seal(); // AL-7 — a shell that drops from here on is fieldd stopping, not a shell leaving
+      // AL-7 — a shell that drops from here on is fieldd stopping, not a shell leaving. AL-12 — a stop a shell asked for
+      // is its exit, kept for Diagnostics' "Last exit": one that ended the floor, or the update's B3 that leaves it. The
+      // supervisor's replacement of a stale fieldd names no reason, and is no shell's exit.
+      if (parsed.data.native !== undefined && nativeStop !== undefined) {
+        shellLease.stoppedBy(reason, parsed.data.native.sessions.length);
+      } else if (parsed.data.native === undefined && parsed.data.reason === "update") {
+        shellLease.leftForUpdate();
+      } else {
+        shellLease.seal();
+      }
       const callback = shutdownRequested;
       setImmediate(() => callback());
       return { stopping: true, ...(nativeStop === undefined ? {} : { native: nativeStop }) };
@@ -3886,15 +3919,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // a revision of one chain for a revision of another.
     let boardChains = 0;
     const nextBoardEpoch = (): string => `${bootId}.${++boardChains}`;
-    // PG-1d (F-M4's residual) — every live field and desk board of this device
-    // is re-presented when the doors' gate flips: ONE snapshot at the board's
-    // current revision (its reader's own unless a change waiting out the floor
-    // is folded in), its rows shaped by the gate as it reads now. The flip
-    // is read off the gate itself, never off one event: a re-pair to the same
-    // floor reopens it at `connected` (its hello's `terminal-endpoints` fires
-    // while the link is still down), and a link lost with nothing held closes
-    // it with no `terminal-endpoints` at all (`native-link.ts`).
-    const gatedBoards = new Set<FieldSubscription>();
+    // PG-1d (F-M4's residual) — every live field and remote board of this device
+    // (its desk boards until PG-2) is re-presented when the doors' gate flips:
+    // ONE snapshot at the board's current revision (its reader's own unless a
+    // change waiting out the floor is folded in), its rows shaped by the gate as
+    // it reads now. The flip is read off the gate itself, never off one event: a
+    // re-pair to the same floor reopens it at `connected` (its hello's
+    // `terminal-endpoints` fires while the link is still down), and a link lost
+    // with nothing held closes it with no `terminal-endpoints` at all
+    // (`native-link.ts`).
+    const gatedBoards = new Set<{ represent(): void }>();
     let presentedGate = native.terminalMeshPublished();
     const representOnGateFlip = (): void => {
       const gate = native.terminalMeshPublished();
@@ -3904,9 +3938,24 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     };
     for (const event of ["terminal-endpoints", "connected", "reconnecting", "closed", "superseded"])
       native.on(event, representOnGateFlip);
+    /** A board the doors' gate shapes (the field, the remote cut), stamped with
+     * its chain and held in `gatedBoards` while it lives. */
+    const gated = (
+      board: { snapshot: LocalBoardSnapshot; represent(): void; dispose(): void },
+      epoch: string,
+    ): LocalBoard => {
+      gatedBoards.add(board);
+      return {
+        snapshot: { ...board.snapshot, epoch },
+        dispose: () => {
+          gatedBoards.delete(board);
+          board.dispose();
+        },
+      };
+    };
     /** One board of THIS device at a projection and a floor: a snapshot on its
-     * own chain, then its frames through `emit` (`createFieldSubscription`): its
-     * deltas, and (PG-1d) a snapshot when it is re-presented or repaired. */
+     * own chain, then its frames through `emit`: its deltas, and (PG-1d) a
+     * snapshot when it is re-presented or repaired. */
     const openLocalBoard = (
       projection: BoardProjection,
       minIntervalMs: number,
@@ -3939,49 +3988,53 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         });
         return { snapshot: { ...board.snapshot, epoch }, dispose: board.dispose };
       }
+      // PG-2 (PG-L1) — the `remote` board: the backend's model cut for every
+      // other screen (`agent-model-board.ts`), at the caller's floor
+      // (`boardFloor`: a peer window's, or the phone's 1 s), urgent changes at
+      // the remote edge. Its rows carry the model's attach promise, a bare
+      // terminal's join included, so the doors' gate shapes every frame.
+      if (projection === "remote") {
+        const service = monitor;
+        if (service === null)
+          throw new RpcCallError("UNAVAILABLE", "the monitor backend is not ready yet", true, {
+            service: "agent-monitor",
+            state: "starting",
+          });
+        const board = createRemoteSubscription({
+          fold: { list: () => agents.list(), subscribe: (fn) => agents.subscribe(fn) },
+          monitor: service,
+          emit,
+          epoch,
+          minIntervalMs,
+          ...(heartbeatMs !== undefined ? { heartbeatMs } : {}),
+          terminalPublished: () => native.terminalMeshPublished(),
+          onError: (error) =>
+            logger.warn("fieldd.agents.remote_frame_failed", "A remote subscriber's frame failed", {
+              error: error instanceof Error ? error.message : String(error),
+            }),
+        });
+        return gated(board, epoch);
+      }
       const board = createFieldSubscription({
         list: () => agents.list(),
-        // the desk row carries the backend's model row (a PEER's cut), so a
-        // backend change with no fold publish behind it — the 30 s cost step,
-        // a recency flip — moves the desk board too
-        subscribe:
-          projection === "desk"
-            ? (fn) => {
-                const offFold = agents.subscribe(fn);
-                const offModel = monitor?.subscribe(() => fn()) ?? (() => undefined);
-                return () => {
-                  offFold();
-                  offModel();
-                };
-              }
-            : (fn) => agents.subscribe(fn),
+        subscribe: (fn) => agents.subscribe(fn),
         emit,
         epoch,
-        project:
-          projection === "desk"
-            ? deskProjector((runtimeRunId) => monitor?.rowForRun(runtimeRunId))
-            : projectFieldRow,
+        project: projectFieldRow,
         minIntervalMs,
         ...(heartbeatMs !== undefined ? { heartbeatMs } : {}),
         // TM-2 (F-M4) — the gate on every attach promise a row makes: the
-        // `terminal` join and, on a desk row, `monitorRow.attachable`/
-        // `.writable` (PG-1a). The store publisher it once matched retired at
-        // DS-D14; a promise of a tap the owner refuses is the false positive
-        // MF-1l exists to prevent.
+        // `terminal` join (and on the remote cut the model's
+        // `monitorRow.attachable`/`.writable`, PG-1a). The store publisher it
+        // once matched retired at DS-D14; a promise of a tap the owner refuses
+        // is the false positive MF-1l exists to prevent.
         terminalPublished: () => native.terminalMeshPublished(),
         onError: (error) =>
           logger.warn("fieldd.agents.field_frame_failed", "A field subscriber's frame failed", {
             error: error instanceof Error ? error.message : String(error),
           }),
       });
-      gatedBoards.add(board);
-      return {
-        snapshot: { ...board.snapshot, epoch },
-        dispose: () => {
-          gatedBoards.delete(board);
-          board.dispose();
-        },
-      };
+      return gated(board, epoch);
     };
     /** DS-3 — the mesh board; built once PeerLink and the federated manager
      * exist (below). Null only in the window before that. */
@@ -4017,16 +4070,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         screen.close();
       };
     };
-    // MF-1 (§5, §10.2) — one door, three projections. Absent params or
+    // MF-1 (§5, §10.2) — one door, four projections. Absent params or
     // `projection: "full"` is the subscription the desktop has always had,
     // unchanged: whole `AgentListResult` frames at the fold's own 16 ms tick,
     // which the renderer reads as whole `rows` arrays. `projection: "field"`
     // answers the content-free board — a snapshot, then deltas at this
-    // subscriber's own trailing-edge floor — which is what a phone on the
-    // tailnet can afford. DS-3: `projection: "desk"` is the field row plus the
-    // reply line, the blocker's question and the cost (windows, 100 ms floor),
-    // and `scope: "mesh"` answers every self desktop's board through this one
-    // door (`mesh-board.ts`, DS-D4).
+    // subscriber's own trailing-edge floor — which is what an older phone on the
+    // tailnet reads. MV-3a: `projection: "model"` is this desktop's windows'
+    // board. PG-2: `projection: "remote"` is the model's cut for every other
+    // screen (a peer's windows at 100 ms, the phone at 1 s with a 250 ms urgent
+    // edge; it replaced DS-3's `desk`), and `scope: "mesh"` answers every self
+    // desktop's board through this one door (`mesh-board.ts`, DS-D4).
     api.registerSubscription("agent.subscribe", (ctx, params, emit) => {
       const parsed = AgentSubscribeParams.safeParse(params ?? {});
       if (!parsed.success) throw malformedBoardAsk();
@@ -4038,27 +4092,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // option is refused (MF-1h).
       const refusal = refuseBoardAsk(ctx.principal.kind, parsed.data);
       if (refusal !== null) throw refusal;
-      const { minIntervalMs, heartbeatMs } = parsed.data;
+      const { heartbeatMs } = parsed.data;
       const projection = parsed.data.projection ?? "full";
       const scope = parsed.data.scope ?? "local";
       if (projection === "full") {
         const dispose = agents.subscribe((rows) => emit(rows));
         return { snapshot: agents.list(), dispose };
       }
-      // design-06 §8: "the board's cadence floors (250 / 100 ms)" — a caller
-      // may ask SLOWER, never faster, on either projection. The field's was a
-      // default and not a floor until 2026-10-01 (the landing review): a 16 ms
-      // ask was honoured, and every distinct ask stood up its own mesh hub.
-      // MV-3a (L12) — the model board's floor is the fold's own tick.
-      const floor =
-        projection === "model"
-          ? Math.max(minIntervalMs ?? AGENT_FIELD.FULL_TICK_MS, AGENT_FIELD.FULL_TICK_MS)
-          : projection === "desk"
-            ? Math.max(
-                minIntervalMs ?? AGENT_FIELD.DESK_MIN_INTERVAL_MS,
-                AGENT_FIELD.DESK_MIN_INTERVAL_MS,
-              )
-            : Math.max(minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS, AGENT_FIELD.MIN_INTERVAL_MS);
+      // design-06 §8: "the board's cadence floors" — a caller may ask SLOWER,
+      // never faster, on any board. The field's was a default and not a floor
+      // until 2026-10-01 (the landing review): a 16 ms ask was honoured, and
+      // every distinct ask stood up its own mesh hub. MV-3a (L12) — the model
+      // board's floor is the fold's own tick. PG-2 (PG-D8) — the remote board's
+      // is the caller's kind's: the phone's 1 s, every other screen's 100 ms.
+      const floor = boardFloor(ctx.principal.kind, parsed.data);
       // MV-3a (L5, M20) — a window's model board IS its screen: what it reports
       // shown clears unread marks, and the screen is forgotten with the board.
       const screen = projection === "model" ? openScreen(ctx) : null;
@@ -5985,7 +6032,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) }",
+          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|desktop.keepRunningOnQuit|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) }",
           false,
         );
       }
@@ -6462,6 +6509,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         logger: logger.child({ component: "terminal.egress" }),
       });
     }
+    // DS-7 — a window's ticket for another desktop's transcript: carried only
+    // for a window or the shell, and the owner's tailnet set re-homed onto ONE
+    // route per owner desktop to its index serve (index-forward.ts)
+    const indexForwarding = new IndexTicketForwarding({
+      routes: config.indexEgressRoutes ?? egressRoutes,
+      logger: logger.child({ component: "index.egress" }),
+    });
     // C6-5/D35 — the subscription half: one ref-counted upstream per
     // {device, method, params}, re-snapshot on recovery; quiet during an
     // outage (the roster carries liveness, the topic stream never lies).
@@ -6477,24 +6531,27 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // DS-4 — a forwarded terminal mint is carried only for a self principal,
       // and a forwarded ticket's doors are adopted for the caller on the way back
       // (`TerminalService.forwardVia`); every other forward passes through.
-      terminals.forwardVia((device, method, params, _ctx, envelope) =>
-        peers.request(device, method, params, envelope),
+      // DS-7 — the index ticket's the same way, around it (`IndexTicketForwarding`).
+      indexForwarding.forwardVia(
+        terminals.forwardVia((device, method, params, _ctx, envelope) =>
+          peers.request(device, method, params, envelope),
+        ),
       ),
       // S2 (the landing review, 2026-10-01) — a routed board ask is judged for
       // the CALLER here, before it is carried: the owner sees this daemon's
       // `peer-fieldd` principal, never the phone behind it, so a phone asking
       // `desk` of another desktop through its home would otherwise be served
       // the content SP-L4 withholds. A routed `field` from the phone, and a
-      // window's routed `desk`, are carried as before.
-      (device, method, params, ctx, emit) => {
-        if (method === "agent.subscribe") {
-          const ask = AgentSubscribeParams.safeParse(params ?? {});
-          if (!ask.success) throw malformedBoardAsk();
-          const refusal = refuseBoardAsk(ctx.principal.kind, ask.data);
-          if (refusal !== null) throw refusal;
-        }
-        return federatedSubs.attach(device, method, params, emit);
-      },
+      // window's routed board, are carried as before. PG-2 (PG-D8) — a routed
+      // `remote` carries the floor its CALLER is served at, which the owner
+      // would otherwise read as a peer window's (`routedBoardAsk`).
+      (device, method, params, ctx, emit) =>
+        federatedSubs.attach(
+          device,
+          method,
+          method === "agent.subscribe" ? routedBoardAsk(ctx.principal.kind, params) : params,
+          emit,
+        ),
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
     // DS-2 (DS-D15) — the receipt of one of THIS daemon's keyed forwards, so a
@@ -6816,9 +6873,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // FW-D1 — the phone's approval: fieldd's one mint for a link (the host mints every grant after
     // it), audited like a ticket. The roster decides who is a phone; the floor's state holds the key.
+    // F1b — forwarded by the phone's home for a link to this desktop, it is minted here, under the
+    // linked login, for the phone this roster knows.
     const freewayApprover = new FreewayApprover({
       state: () => freewayFloor.state(),
       roster: devices,
+      linkedLogin,
     });
     api.register("freeway.approve", async (ctx, params) => {
       const ask = freewayApprover.check(ctx, params);
@@ -6972,6 +7032,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         // DS-1b — a superseded daemon KEEPS its egress routes: the floor answers
         // only the successor now, which re-answers each route by its id
         egressCellRewriter?.dispose({ keepFloorRoutes: true });
+        indexForwarding.dispose({ keepFloorRoutes: true }); // DS-7 — the same rule
         terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
         devices.dispose();
         terminals.dispose();
@@ -7028,6 +7089,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       freewayServe.dispose(); // F1 — the floor keeps the serve: FW-L10
       freewayFloor.dispose();
       egressCellRewriter?.dispose(); // DS-1b — the last release takes each route off the floor
+      indexForwarding.dispose(); // DS-7 — and each index route
       void egressRoutes.dispose();
       terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
       devices.dispose();
@@ -7480,6 +7542,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // references (the last release removes each route), and the port
           // waits, bounded, for the floor to answer the removals
           egressCellRewriter?.dispose();
+          indexForwarding.dispose(); // DS-7 — the index routes, the same way
           await Promise.race([
             egressRoutes.dispose(),
             new Promise<void>((resolve) => setTimeout(resolve, 2_000).unref()),

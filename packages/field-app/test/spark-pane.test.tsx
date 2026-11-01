@@ -73,7 +73,15 @@ vi.mock("@vibecook/ghosttea-react", async (importOriginal) => {
       sessionMetadata: () => SESSION,
       mount: (...args: unknown[]) => {
         runtimeCalls.push({ verb: "mount", args });
-        return { resize: record("mount.resize"), dispose: record("mount.dispose") };
+        return {
+          resize: record("mount.resize"),
+          // its last view gone, the runtime lets the session's routed input go (ghosttea's `#releaseRoutedView`): the
+          // pane's is the one view here
+          dispose: (...disposed: unknown[]) => {
+            runtimeCalls.push({ verb: "mount.dispose", args: disposed });
+            activations.delete(args[0] as string);
+          },
+        };
       },
       resize: record("resize"),
       claimResizeControl: record("claimResizeControl"),
@@ -127,6 +135,7 @@ const { getAppTheme } = await import("../src/theme");
 const { FielddProvider } = await import("@vibefield/fieldd-client/react");
 const { ChatView } = await import("../src/chat/ChatView");
 const { startSparksFeed } = await import("../src/chat/sparks-feed");
+const { getGodviewLineDoor } = await import("../src/frame/line-door");
 
 type PoolClient = Parameters<typeof pool.openTerminalPool>[0];
 /** The floor's sessions as fieldd's roster lists them (`terminal.roster`). */
@@ -248,6 +257,8 @@ describe("the thread's pane is the spark's own floor session, read-write (SP-1d)
     // It takes input: Return is James's, in this pane.
     expect(input().readOnly).toBe(false);
     expect(calls("setViewInputPolicy").every((call) => call.args[1] !== false)).toBe(true);
+    // …with no Godview opened first: no deck has published its door in this window (critique 10)
+    expect(getGodviewLineDoor()).toBeNull();
   });
 
   it("is drawn in the deck's own look: the session is handed the theme the deck hands it, on the terminal's ground", async () => {
@@ -326,12 +337,12 @@ describe("the pane takes the session's size when it takes the keyboard, never at
     await mountPane();
     const door = sparkPaneOf("sp-vela0001")?.door;
     expect(door).toBeTruthy();
-    let taken = false;
+    let taken: string | undefined;
     await act(async () => {
-      taken = door?.paste("look at the failing test") ?? false;
+      taken = door?.paste("look at the failing test");
       await settle();
     });
-    expect(taken).toBe(true);
+    expect(taken).toBe("pasted");
     expect(document.activeElement).toBe(input());
     expect(calls("takeResizeControl")).toHaveLength(1);
     expect(calls("paste").map((call) => call.args.at(-1))).toContain("look at the failing test");
@@ -356,9 +367,10 @@ describe("the pane takes the session's size when it takes the keyboard, never at
     });
     expect(onKeyboard).toHaveBeenCalledTimes(1);
 
-    // a pane that has not held it yet, taken by Send's paste
+    // a pane that has not held it yet, taken by Send's paste: its own view's input opens afresh
     act(() => root?.unmount());
     root = container === null ? null : createRoot(container);
+    activations.set("pty-vela", { inputAllowed: true });
     const pasted = vi.fn();
     await mountPane({ onKeyboard: pasted });
     expect(pasted).not.toHaveBeenCalled();
@@ -389,6 +401,31 @@ describe("the pane takes the session's size when it takes the keyboard, never at
     expect(calls("setFocused").at(-1)?.args[2]).toBe(false);
     elsewhere.remove();
   });
+
+  it("holds the keyboard only while Chat is the view: a paste that lands once Chat is hidden takes neither it nor the size, then or on coming back", async () => {
+    activations.set("pty-vela", { inputAllowed: true });
+    const onKeyboard = vi.fn();
+    await mountPane({ onKeyboard });
+    // Send read the live door while Chat showed it…
+    const door = sparkPaneOf("sp-vela0001")?.door;
+    expect(door).toBeTruthy();
+    // …and the person went to another view while it waited (to be heard, then the input's 1.5 s)
+    await mountPane({ active: false, onKeyboard });
+    let taken: string | undefined;
+    await act(async () => {
+      taken = door?.paste("look at the failing test");
+      await settle();
+    });
+    // the text goes in by the road, as the send asked; the keyboard is not taken under another view's cover
+    expect(taken).toBe("pasted");
+    expect(calls("paste").map((call) => call.args.at(-1))).toContain("look at the failing test");
+    expect(calls("takeResizeControl")).toEqual([]);
+    expect(onKeyboard).not.toHaveBeenCalled();
+    // back in Chat with no press in the pane and no send from it: still not held, so no seat taken (LEANS Q4)
+    await mountPane({ active: true, onKeyboard });
+    expect(calls("takeResizeControl")).toEqual([]);
+    expect(onKeyboard).not.toHaveBeenCalled();
+  });
 });
 
 describe("the pane's door, for Send (thread-pane-door.ts)", () => {
@@ -396,12 +433,34 @@ describe("the pane's door, for Send (thread-pane-door.ts)", () => {
     await mountPane();
     const report = sparkPaneOf("sp-vela0001");
     expect(report?.state).toBe("live");
-    expect(report?.door?.paste("hello")).toBe(false);
+    expect(report?.door?.paste("hello")).toBe("closed");
     expect(calls("paste")).toEqual([]);
     const opened = report?.door?.whenInputOpen(1_500);
     activations.set("pty-vela", { inputAllowed: true });
     for (const listener of activationListeners) listener();
     await expect(opened).resolves.toBe(true);
+  });
+
+  it("says its pane is undrawn once it is no longer drawn — another thread shown, the spark asleep — and hands nothing over (final critique 7)", async () => {
+    activations.set("pty-vela", { inputAllowed: true });
+    await mountPane();
+    // Send found the live door while the thread showed…
+    const door = sparkPaneOf("sp-vela0001")?.door;
+    expect(door).toBeTruthy();
+    expect(door?.drawn()).toBe(true);
+    await expect(door?.whenInputOpen(0)).resolves.toBe(true);
+    // …and the thread's pane went while it waited for the spark to be heard: its door says so, and the session's input
+    // went with its one view, so a wait for it lapses (Send reads the lapse as the pane stands)
+    await act(async () => {
+      root?.render(null);
+      await settle();
+    });
+    expect(door?.drawn()).toBe(false);
+    expect(activations.has("pty-vela")).toBe(false);
+    await expect(door?.whenInputOpen(0)).resolves.toBe(false);
+    expect(door?.paste("look at the failing test")).toBe("undrawn");
+    expect(calls("paste")).toEqual([]);
+    expect(calls("takeResizeControl")).toEqual([]);
   });
 
   it("is published only while Chat is the view, and withdrawn when the pane goes", async () => {
@@ -450,12 +509,13 @@ describe("when there is no pane to draw, its place says why, never a blank", () 
   });
 
   it("a session the floor does not hold is not on this desktop's floor once the floor answers, and asks for no demand", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     sessions = [];
     await mountPane();
     // the pool's join asks the floor a few times over ~100 ms before it answers "no such session" (an inventory that
     // lags a birth): no 20 s wait
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await vi.advanceTimersByTimeAsync(200);
     });
     expect(pane().getAttribute("data-pane-state")).toBe("gone");
     expect(pane().textContent).toBe("Vela's terminal is not on this desktop's floor.");
@@ -464,10 +524,11 @@ describe("when there is no pane to draw, its place says why, never a blank", () 
   });
 
   it("a session the floor lists later, once its sessions are read again, mounts", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     sessions = [];
     await mountPane();
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await vi.advanceTimersByTimeAsync(200);
     });
     expect(pane().getAttribute("data-pane-state")).toBe("gone");
     // the deck reads the floor's sessions again, and the spark's terminal is there now
@@ -569,7 +630,6 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
     terminal: { hosted: "local", runtimeSessionId: "pty-vela" },
   };
   const PORT: ComposerPort = {
-    providers: async () => [],
     profileSets: async () => [],
     models: async () => {
       throw new Error("no picker here");
@@ -614,6 +674,7 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
       answer: async () => {
         throw new Error("nothing is answered here");
       },
+      onReconnected: () => () => undefined,
       open: async () => VELA,
     });
     await act(async () => {

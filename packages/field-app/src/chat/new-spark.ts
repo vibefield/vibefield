@@ -56,6 +56,10 @@ export interface SparkAgent {
 /** The words for an agent that cannot take the briefing yet (DESIGN.md §8). */
 export const CANNOT_TAKE_TOOLS = "can't take VibeField's tools yet";
 
+/** The words for agents that can't be read (DESIGN.md §8 "The New spark sheet", §9): said at the sheet's foot, and by
+ * @'s list in Chat when its profiles can't be read. */
+export const CANNOT_LIST_AGENTS = "VibeField can't list its agents right now";
+
 /** The agents the sheet lists: every offered agent, a spark's when it declares all three briefing fields and a process
  * the door can name (CP-1d's gate, read from `agent.providers[].briefing`). */
 export function sparkAgentsOf(providers: readonly AgentProviderSummary[]): SparkAgent[] {

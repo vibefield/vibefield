@@ -24,6 +24,15 @@ public enum FieldGlyphName: String, CaseIterable, Sendable {
   case start
   case resume
   case jump
+  /// IOS-10a — Settings' rows (DESIGN.md §13, the rail's own drawings): a tick
+  /// for what the phone can do, Appearance's sun, Terminal's window, About's
+  /// package, a page that opens outside the app, and the credits' document.
+  case check
+  case sun
+  case terminal
+  case package
+  case outward
+  case document
 
   var assetName: String { "glyph-\(rawValue)" }
 }

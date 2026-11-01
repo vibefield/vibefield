@@ -1,15 +1,11 @@
-import type {
-  AgentModelChoice,
-  AgentModelSelection,
-  AgentProfileSet,
-  AgentProviderSummary,
-} from "@vibefield/contracts";
+import type { AgentModelSelection } from "@vibefield/contracts";
 import {
   type ClipboardEvent,
   type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
   type ReactElement,
+  type SetStateAction,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -17,14 +13,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { type CardTargets, cardTargets, TARGET_LAYER } from "../frame/cards/card-targets";
+import { type CardTargets, cardTargets, cornerOf, TARGET_LAYER } from "../frame/cards/card-targets";
 import { nothingToGive, paneTextOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
 import { OUTCOME_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { sayOnLine } from "../frame/line-door";
-import { type AtRow, atDefaultHot, atMove, atRow, atRowsOf } from "./at-rows";
-import { type AtShown, ChatComposerView, menuRowId } from "./ChatComposerView";
+import { agentChipMenuOf, menuRowId, modelsOf } from "./agent-chip-menu";
+import { type AtRow, type AtSources, atDefaultHot, atMove, atRow, atRowsOf } from "./at-rows";
+import { type AtShown, ChatComposerView } from "./ChatComposerView";
 import {
   type AgentChip,
   atQueryBefore,
@@ -48,13 +45,7 @@ import {
   placeCaret,
   readEditor,
 } from "./composer-editor";
-import {
-  agentMenuOf,
-  effortOf,
-  type ModelsReading,
-  modelWords,
-  type NewSparkPort,
-} from "./new-spark";
+import { type ModelsReading, modelWords, type NewSparkPort } from "./new-spark";
 import type { SparkEntry } from "./spark-status";
 import { useBoardRows } from "./sparks-feed";
 import { sendNote, type ThreadSendOutcome } from "./thread-send";
@@ -69,28 +60,35 @@ import { sendNote, type ThreadSendOutcome } from "./thread-send";
 // chip landing, an @ taken, a model chosen, a send — by handing the view a new seed and a new revision, after which
 // the caret is put where the change leaves it. Restored from the line's controller in git
 // (`0e2ad08bc:packages/field-app/src/frame/Composer.tsx`, its editor, @ and send halves); its create, its keys, Send
-// to…'s landing and its clipboard road did not come back. The draft is the thread's: every change of it is parked with
-// Chat (`onPark`), and on unmount, so leaving the thread or Chat keeps it.
+// to…'s landing and its clipboard road did not come back. The draft is the thread's, and Chat keeps it (`parked`, the
+// one copy): every change of it is parked there (`onPark`), and on unmount, so leaving the thread or Chat keeps it; a
+// send's clearing is made there, to the draft as the thread holds it then; and the editor follows a draft the thread
+// holds that this composer did not write — a send that was pasted after the thread was left and chosen again.
 
-/** What @'s rows read: the agents and profiles fieldd offers, and an agent's own picker (the New spark sheet's doors). */
-export type ComposerPort = Pick<NewSparkPort, "providers" | "profileSets" | "models">;
+/** What @'s rows read: the Agent Profiles fieldd offers, and an agent's own picker (the New spark sheet's doors). Its
+ * agents are said by the catalog's labels, so `agent.providers` is not read. */
+export type ComposerPort = Pick<NewSparkPort, "profileSets" | "models">;
 
 export interface ChatComposerProps {
   /** the spark whose thread this is: who a message goes to */
   entry: SparkEntry;
   /** Chat is the view: the composer is the hand's place for cards while it is */
   active: boolean;
-  /** the draft as the thread last left it */
+  /** the thread's draft as Chat keeps it: drawn at mount, and followed when it changes from outside. It is the one
+   * copy, so an array this composer did not park is a new draft: hand back what `onPark` kept, never a fresh one */
   parked: readonly DraftPart[];
-  /** the draft changed (and on unmount): the thread keeps it */
-  onPark: (parts: readonly DraftPart[]) => void;
+  /** the draft changed here (and on unmount), or — a function of the thread's draft as it stands — a send's clearing:
+   * the thread keeps the result */
+  onPark: (next: SetStateAction<readonly DraftPart[]>) => void;
   /** the frame's open surface, from its one owner */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
   port: ComposerPort;
-  /** Send into the thread's pane (`thread-send.ts`, over Chat's world) */
-  send: (text: string, stills: readonly string[]) => Promise<ThreadSendOutcome>;
-  /** a send into this thread runs, Send's or a starter's (Chat's one per thread): Send waits, busy, as for its own */
+  /** Send into the thread's pane (`thread-send.ts`, over Chat's world): null while another act holds the thread, which
+   * turns the press away (Chat's one guard), so nothing is said and the draft stays */
+  send: (text: string, stills: readonly string[]) => Promise<ThreadSendOutcome | null>;
+  /** another act holds this thread — a send into it, Send's or a starter's, or a wake (Chat's one at a time per
+   * thread): Send waits, busy, as for its own */
   threadSending?: boolean | undefined;
   /** where an outcome is said (undefined: the line's note) */
   say?: ((text: string) => boolean) | undefined;
@@ -120,10 +118,6 @@ interface MenuOpen {
   readonly hot: string | null;
   readonly left: number;
 }
-
-/** A picker's models, once read. */
-const modelsOf = (picker: ModelsReading | undefined): readonly AgentModelChoice[] =>
-  picker?.state === "read" ? (picker.answer.catalog?.models ?? []) : [];
 
 export function ChatComposer({
   entry,
@@ -159,14 +153,21 @@ export function ChatComposer({
   const sending = useRef(false);
   const live = useRef(true);
 
-  // ── THE DRAFT IS THE THREAD'S: parked on every change, and as the composer goes ──
+  // ── THE DRAFT IS THE THREAD'S: parked on every change, and as the composer goes; followed when it changes from
+  // outside ──
   const onParkRef = useRef(onPark);
   onParkRef.current = onPark;
   const partsRef = useRef(parts);
   partsRef.current = parts;
-  useEffect(() => {
-    onParkRef.current(parts);
-  }, [parts]);
+  /** the drafts this composer parked, or took from the thread: the thread handing one back is no change to follow,
+   * however its parks and its keystrokes interleave */
+  const known = useRef(new WeakSet<readonly DraftPart[]>([parked]));
+  const park = useCallback((next: readonly DraftPart[]) => {
+    if (known.current.has(next)) return;
+    known.current.add(next);
+    onParkRef.current(next);
+  }, []);
+  useEffect(() => park(parts), [park, parts]);
   const surfaceRef = useRef(surface);
   surfaceRef.current = surface;
   const onSurfaceChangeRef = useRef(onSurfaceChange);
@@ -175,16 +176,15 @@ export function ChatComposer({
     live.current = true;
     return () => {
       live.current = false;
-      onParkRef.current(partsRef.current);
+      park(partsRef.current);
       // a thread left with @ open leaves no @ standing over the next
       if (surfaceRef.current === "at") onSurfaceChangeRef.current(null);
     };
-  }, []);
+  }, [park]);
 
   // ── WHAT @ OFFERS: read on Chat's first show and again each time @ opens (an agent's picker as its menu opens) ──
   const [asks, setAsks] = useState(0);
-  const [providers, setProviders] = useState<readonly AgentProviderSummary[] | null>(null);
-  const [sets, setSets] = useState<readonly AgentProfileSet[] | null>(null);
+  const [sets, setSets] = useState<AtSources["sets"]>(null);
   const [models, setModels] = useState<ReadonlyMap<string, ModelsReading>>(new Map());
   const shownOnce = useRef(false);
   useEffect(() => {
@@ -195,20 +195,25 @@ export function ChatComposer({
   useEffect(() => {
     if (asks === 0) return;
     let current = true;
-    void Promise.allSettled([port.providers(), port.profileSets()]).then(([offered, listed]) => {
-      if (!current) return;
-      // a read that failed offers nothing from it, as the New spark sheet's does
-      setProviders(offered.status === "fulfilled" ? offered.value : []);
-      setSets(listed.status === "fulfilled" ? listed.value : []);
-    });
+    // a read that failed is said as failed (`atRowsOf`), never as profiles with nothing in them; the next read is
+    // said as reading, never as the failure it reads past (a list read before stands while it is read again)
+    setSets((held) => (held === "failed" ? null : held));
+    port.profileSets().then(
+      (listed) => {
+        if (current) setSets(listed);
+      },
+      () => {
+        if (current) setSets("failed");
+      },
+    );
     return () => {
       current = false;
     };
   }, [asks, port]);
   const rows = useBoardRows();
   const list = useMemo(
-    () => atRowsOf({ spark, query: at?.query ?? "", providers, sets, rows }),
-    [spark, at, providers, sets, rows],
+    () => atRowsOf({ spark, query: at?.query ?? "", sets, rows }),
+    [spark, at, sets, rows],
   );
   const pointed = atRow(list, hot);
   const hotId = pointed !== null ? hot : atDefaultHot(list);
@@ -233,26 +238,21 @@ export function ChatComposer({
   }, [agentChip, models, pickerKey, port]);
   const picker = pickerKey === null ? undefined : models.get(pickerKey);
   const selection = agentChip?.model?.selection;
-  const model = modelsOf(picker).find((choice) => choice.id === selection?.modelId);
-  const menuRows =
-    agentChip === undefined
-      ? []
-      : agentMenuOf(
-          [{ id: agentChip.agent, label: agentChip.label, takes: true }],
-          agentChip.agent,
-          picker,
-          selection,
-          agentChip.named ? agentChip.profile.name : undefined,
-        );
-  const effort = effortOf(model, selection);
-  const menuStops = menuRows.flatMap((row) => (row.kind === "model" ? [menuRowId(row.id)] : []));
-  const menuHot = menu?.hot ?? menuRowId(selection?.modelId ?? null);
+  const chipMenu =
+    agentChip === undefined ? undefined : agentChipMenuOf(agentChip, picker, menu?.hot ?? null);
+  const model = chipMenu?.model;
 
   const atOpen = surface === "at" && (at !== null || agentChip !== undefined);
   const shownAt: AtShown | null = !atOpen
     ? null
-    : agentChip !== undefined && menu !== null
-      ? { kind: "menu", left: menu.left, rows: menuRows, effort, hot: menuHot }
+    : chipMenu !== undefined && menu !== null
+      ? {
+          kind: "menu",
+          left: menu.left,
+          rows: chipMenu.rows,
+          effort: chipMenu.effort,
+          hot: chipMenu.hot,
+        }
       : at === null
         ? null
         : { kind: "rows", left: at.left, list, hot: hotId };
@@ -281,6 +281,15 @@ export function ChatComposer({
     editor.focus();
     placeCaret(editor, caret);
   }, [revision]);
+
+  // The thread's draft changed from outside — a send pasted after this composer was drawn again in its place cleared
+  // what it carried: the editor follows it, the keyboard left where it is.
+  useEffect(() => {
+    if (known.current.has(parked)) return;
+    known.current.add(parked);
+    chips.current = chipsOf(parked);
+    redraw(parked, null);
+  }, [parked, redraw]);
 
   // asked to take the keyboard (CP-3): only when the count moves after the composer is up, never as it mounts
   const keyboardAsked = useRef(takeKeyboard);
@@ -473,37 +482,37 @@ export function ChatComposer({
     if (sending.current || threadSending || !draftSendable(sent, null)) return;
     sending.current = true;
     setBusy(true);
-    let outcome: ThreadSendOutcome;
+    let outcome: ThreadSendOutcome | null;
     try {
       outcome = await send(draftText(sent), draftStills(sent));
     } finally {
       sending.current = false;
       if (live.current) setBusy(false);
     }
+    if (outcome === null) return;
     say(sendNote(outcome, name));
     if (outcome.state !== "pasted") return;
-    // sent: what it carried is cleared, and what was typed or added while it ran stays; the keyboard stays in the
-    // pane, where Return sends it
-    const rest = draftAfterSend(sent, partsRef.current);
-    // changed within what was sent, the draft stays as it stands
-    if (rest === partsRef.current) return;
-    chips.current = chipsOf(rest);
-    if (live.current) redraw(rest, null);
-    else onParkRef.current(rest);
-  }, [name, parts, redraw, say, send, threadSending]);
+    // Sent: what it carried leaves the thread's draft as the thread holds it now — this editor's, parked first, or,
+    // if the thread was left and chosen again while it ran, the one drawn in its place — and what was typed or added
+    // meanwhile stays (changed within what was sent, it stays whole). The editor standing follows; the keyboard stays
+    // in the pane, where Return sends it.
+    if (live.current) park(partsRef.current);
+    onParkRef.current((now) => draftAfterSend(sent, now));
+  }, [park, parts, name, say, send, threadSending]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.nativeEvent.isComposing) return;
-      if (atOpen && shownAt?.kind === "menu") {
+      if (atOpen && shownAt?.kind === "menu" && chipMenu !== undefined) {
+        const { stops, hot: menuHot, effort } = chipMenu;
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
-          const index = menuStops.indexOf(menuHot);
+          const index = stops.indexOf(menuHot);
           const next =
             event.key === "ArrowUp"
               ? Math.max(0, index - 1)
-              : Math.min(menuStops.length - 1, index < 0 ? 0 : index + 1);
-          const id = menuStops[next];
+              : Math.min(stops.length - 1, index < 0 ? 0 : index + 1);
+          const id = stops[next];
           if (id !== undefined) setMenu((open) => (open === null ? open : { ...open, hot: id }));
           return;
         }
@@ -518,7 +527,7 @@ export function ChatComposer({
         }
         if (event.key === "Enter" || event.key === "Tab") {
           event.preventDefault();
-          if (menuStops.includes(menuHot)) chooseModel(menuHot === "" ? null : menuHot);
+          if (stops.includes(menuHot)) chooseModel(menuHot === "" ? null : menuHot);
           foldMenu();
           return;
         }
@@ -559,15 +568,13 @@ export function ChatComposer({
     },
     [
       atOpen,
+      chipMenu,
       chooseEffort,
       chooseModel,
       closeAt,
-      effort,
       foldMenu,
       hotId,
       list,
-      menuHot,
-      menuStops,
       sendNow,
       shownAt?.kind,
       take,
@@ -655,11 +662,15 @@ export function ChatComposer({
         return box === null || box.closest("[inert]") !== null ? null : box.getBoundingClientRect();
       },
       element: () => boxRef.current,
-      // a card from another app says what it holds only once it is let go
-      answer: (card) =>
-        card.waiting !== true && paneTextOf(card) === null
-          ? { ok: false, label: nothingToGive(card) }
-          : { ok: true, label: TARGET_WORDS.prompt(nameRef.current) },
+      // a card from another app says what it holds only once it is let go; a yes rings the composer at its own
+      // corners, as its stylesheet draws them
+      answer: (card) => {
+        if (card.waiting !== true && paneTextOf(card) === null)
+          return { ok: false, label: nothingToGive(card) };
+        const corner = cornerOf(boxRef.current);
+        const label = TARGET_WORDS.prompt(nameRef.current);
+        return corner === null ? { ok: true, label } : { ok: true, label, corner };
+      },
       play: async (card) => {
         const text = paneTextOf(card);
         if (text === null) return { ok: false, note: nothingToGive(card) };

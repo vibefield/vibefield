@@ -7,6 +7,9 @@
  * silent clobber. These cases drive the shipping controller against a fake
  * fieldd that answers with the catalog's fixture document.
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { TerminalConfigDocument } from "@vibefield/contracts";
 import { FielddRpcError } from "@vibefield/fieldd-client";
 import { act } from "react";
@@ -502,5 +505,25 @@ describe("GT-8 — Behavior → Links, on ghosttea 0.12.0", () => {
     click("Behavior");
     expect(linksSwitch()).toBeNull();
     expect(linksSection()?.textContent).toContain("This Mac");
+  });
+});
+
+describe("AL-10 — Behavior → Sessions says what a quit does (DESIGN.md §9, The quit's words)", () => {
+  it("says a quit ends a terminal and a crash leaves it, in the canon's words, and never that it outlives quitting", async () => {
+    await mount();
+    click("Behavior");
+    const section =
+      host?.querySelector<HTMLElement>('[data-ts-anchor="behavior-sessions"]')?.textContent ?? "";
+    // a person's quit stops the terminal service (AL-D1, since AL-3); a crash leaves it
+    const lifetime =
+      "As long as its program runs, on this Mac's terminal service. Closing this window leaves it running, and so does a crash: the next launch finds it. It ends when its program exits, when you end it, when you quit VibeField, or when the Mac restarts.";
+    expect(section).toContain(lifetime);
+    expect(section).toContain("Until you quit");
+    expect(section).not.toContain("outlives");
+    // the doc wraps its lines; a sentence is the same sentence across a wrap
+    const here = dirname(fileURLToPath(import.meta.url));
+    const design = readFileSync(join(here, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
+    expect(design).toContain(`"${lifetime}"`);
+    expect(design).toContain("The fact beside it is **Until you quit**.");
   });
 });

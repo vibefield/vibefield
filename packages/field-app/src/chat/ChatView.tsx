@@ -1,5 +1,12 @@
 import type { NeedsItem, SparkId } from "@vibefield/contracts";
-import { type ReactElement, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactElement,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import type { FrameSurface } from "../frame/frame-surface";
 import { jumpNote, sayOnLine } from "../frame/line-door";
@@ -17,6 +24,8 @@ import {
   type SparkOpener,
   showThread,
   sparkEntryNow,
+  sparksReadingNow,
+  threadOnScreen,
   useBoardRows,
   useChooseRequest,
   useNeedsAnswerer,
@@ -26,7 +35,7 @@ import {
   whenSparkEntry,
 } from "./sparks-feed";
 import { threadItemsOf, threadQuiet } from "./thread-items";
-import { whenSparkPane } from "./thread-pane-door";
+import { sparkPaneOf, whenSparkPane } from "./thread-pane-door";
 import { sendNote, sendToThread, type ThreadSendOutcome } from "./thread-send";
 
 // CHAT, THE CONTROLLER (SP-1b, SP-1d; DESIGN.md §8 "Chat's list", "Chat's thread", "Chat's composer"). It draws the
@@ -36,11 +45,11 @@ import { sendNote, sendToThread, type ThreadSendOutcome } from "./thread-send";
 // (`ChatComposer`), keeps each thread's draft for the window's life, and runs the thread's two acts that wake a
 // spark — Wake on the line, and Send — through the feed's one wake (`SparkOpener`). It reads what stands in the shown
 // thread over its pane (`threadItemsOf`: a new spark's hello and its starters while the thread is quiet), and sends a
-// starter pressed as Send sends, one send at a time into a thread. Since CP-3 the needs-you card stands there in the
-// hello's place (`useNeedsCard`): its acts answered through the feed (`needs.answer`, by their place), an agent's ask
-// shown in its pane by Jump to's path. It tells the feed which thread is on screen — the shown one while Chat is the
-// view — so opening a thread reads it, and draws each row's mark as the feed keeps it. What it chose, whose hello has
-// left, which threads a send runs into, and what its cards answer, are this view's alone.
+// starter pressed as Send sends, one act at a time into a thread, a wake's or a send's. Since CP-3 the needs-you card
+// stands there in the hello's place (`useNeedsCard`): its acts answered through the feed (`needs.answer`, by their
+// place), an agent's ask shown in its pane by Jump to's path. It tells the feed which thread is on screen — the shown
+// one while Chat is the view — so opening a thread reads it, and draws each row's mark as the feed keeps it. What it
+// chose, whose hello has left, which threads an act holds, and what its cards answer, are this view's alone.
 
 /** How often the rows' times are said again while Chat shows ("now" becomes "9:41"). */
 const CLOCK_MS = 30_000;
@@ -58,7 +67,8 @@ export function ChatView({
   /** the frame's open surface, from its one owner (@'s list is `at`) */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
-  /** what @'s rows read: the agents and profiles fieldd offers, and an agent's own picker */
+  /** what @'s rows read: the Agent Profiles fieldd offers, and an agent's own picker (`ComposerPort`; its agents are
+   * said by the catalog's labels, so `agent.providers` is not read) */
   port: ComposerPort;
 }): ReactElement {
   const reading = useSparksReading();
@@ -77,10 +87,16 @@ export function ChatView({
     return () => window.clearInterval(timer);
   }, [active]);
 
-  // each thread's draft, for the window's life and written nowhere (HN-D9's rule): state, so what reads it redraws
+  // each thread's draft, for the window's life and written nowhere (HN-D9's rule): state, so what reads it redraws.
+  // It is the one copy: the composer parks each change here, and a send's clearing is made here, to the draft as the
+  // thread holds it when the send is pasted — whichever composer is drawn for the thread by then follows it.
   const [drafts, setDrafts] = useState<ReadonlyMap<SparkId, readonly DraftPart[]>>(() => new Map());
-  const park = useCallback((spark: SparkId, parts: readonly DraftPart[]) => {
-    setDrafts((held) => (held.get(spark) === parts ? held : new Map(held).set(spark, parts)));
+  const park = useCallback((spark: SparkId, next: SetStateAction<readonly DraftPart[]>) => {
+    setDrafts((held) => {
+      const now = held.get(spark) ?? NO_DRAFT;
+      const parts = typeof next === "function" ? next(now) : next;
+      return parts === now ? held : new Map(held).set(spark, parts);
+    });
   }, []);
 
   // the threads whose hello has left for the window's life (DESIGN.md §8 "Chat's thread", when they show): the pane took
@@ -90,38 +106,53 @@ export function ChatView({
     setHelloLeft((left) => (left.has(spark) ? left : new Set(left).add(spark)));
   }, []);
 
-  // Wake, on the line: its refusal is said there, once, in fieldd's words
-  const open = useSparkOpener();
-  const wake = useCallback(async (opener: SparkOpener, entry: SparkEntry): Promise<void> => {
-    const spark = entry.spark.id;
-    setAct({ spark, act: { state: "busy" } });
-    try {
-      await opener(spark);
-      setAct(null);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      setAct({ spark, act: { state: "refused", reason } });
-    }
+  // One act at a time into a thread, Wake's, Send's or a starter's (DESIGN.md §8 "Chat's thread", "Chat's
+  // composer"): two pasted messages would sit in the agent's one input for a single Return to send as one, and a Send
+  // into a thread Wake is waking would wake the spark a second time. While one runs, Wake, the starters and Send wait,
+  // and a press of any does nothing: the ref is the one guard, which Wake and every send read (so a press within the
+  // tick of another is turned away), and the state draws it.
+  const [heldThreads, setHeldThreads] = useState<ReadonlySet<SparkId>>(() => new Set());
+  const heldNow = useRef(new Set<SparkId>());
+  const holdThread = useCallback((spark: SparkId, held: boolean) => {
+    if (held) heldNow.current.add(spark);
+    else heldNow.current.delete(spark);
+    setHeldThreads(new Set(heldNow.current));
   }, []);
 
-  // One send at a time into a thread, Send's or a starter's (DESIGN.md §8 "Chat's thread", "Chat's composer"): two
-  // pasted messages would sit in the agent's one input for a single Return to send as one. While one runs, the
-  // starters and Send wait, and a press of either does nothing (the ref holds it within one tick, the state draws it).
-  const [sending, setSending] = useState<ReadonlySet<SparkId>>(() => new Set());
-  const sendingNow = useRef(new Set<SparkId>());
-  const holdThread = useCallback((spark: SparkId, held: boolean) => {
-    if (held) sendingNow.current.add(spark);
-    else sendingNow.current.delete(spark);
-    setSending(new Set(sendingNow.current));
-  }, []);
+  // Wake, on the line: it holds the thread while it runs, and its refusal is said there, once, in fieldd's words
+  const open = useSparkOpener();
+  const wake = useCallback(
+    async (opener: SparkOpener, entry: SparkEntry): Promise<void> => {
+      const spark = entry.spark.id;
+      if (heldNow.current.has(spark)) return;
+      holdThread(spark, true);
+      setAct({ spark, act: { state: "busy" } });
+      try {
+        await opener(spark);
+        setAct(null);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        setAct({ spark, act: { state: "refused", reason } });
+      } finally {
+        holdThread(spark, false);
+      }
+    },
+    [holdThread],
+  );
 
   // Send, into the thread's pane (`thread-send.ts`): it wakes the spark through the same wake, the line reading
   // "Waking…" meanwhile; a refusal is the send's note, never the line's (said once). Pasted, the thread's hello leaves.
+  // While another act holds the thread it does nothing and answers null, so nothing is said and nothing let go.
   const sendTo = useCallback(
     (entry: SparkEntry, opener: SparkOpener) =>
-      async (text: string, stills: readonly string[]): Promise<ThreadSendOutcome> => {
+      async (text: string, stills: readonly string[]): Promise<ThreadSendOutcome | null> => {
         const spark = entry.spark.id;
+        if (heldNow.current.has(spark)) return null;
         holdThread(spark, true);
+        const asleep = (): boolean => {
+          const now = sparkEntryNow(spark);
+          return now !== null && threadLineOf(now) === "asleep";
+        };
         let outcome: ThreadSendOutcome;
         try {
           outcome = await sendToThread(
@@ -140,7 +171,12 @@ export function ChatView({
               },
               // from its own run's row, never its word: an item's word stands over Asleep and Hello (CP-3)
               heard: async (ms) => (await whenSparkEntry(spark, (now) => now.heard, ms)) !== null,
-              pane: (ms) => whenSparkPane(spark, ms),
+              // asleep, its thread draws no pane: the wait ends as the pane goes, never at the 20 s
+              pane: (ms) => whenSparkPane(spark, ms, asleep),
+              asleep,
+              onScreen: () => threadOnScreen() === spark,
+              paneNow: () => sparkPaneOf(spark),
+              sparksReading: sparksReadingNow,
               stillKept,
             },
             text,
@@ -155,12 +191,12 @@ export function ChatView({
     [holdThread, leaveHello],
   );
 
-  // A starter, pressed: sent as Send sends (no stills), its outcome said in Send's own words — never while a send into
-  // its thread runs.
+  // A starter, pressed: sent as Send sends (no stills), its outcome said in Send's own words — never while an act holds
+  // its thread (the send's own guard).
   const start = useCallback(
     async (entry: SparkEntry, opener: SparkOpener, words: string): Promise<void> => {
-      if (sendingNow.current.has(entry.spark.id)) return;
-      sayOnLine(sendNote(await sendTo(entry, opener)(words, []), entry.spark.name));
+      const outcome = await sendTo(entry, opener)(words, []);
+      if (outcome !== null) sayOnLine(sendNote(outcome, entry.spark.name));
     },
     [sendTo],
   );
@@ -192,13 +228,17 @@ export function ChatView({
     say: sayStatus,
     focusDraft: () => setDraftKeyboard((count) => count + 1),
   });
-  // Show, on an agent's ask: its pane in Godview by Jump to's path; one it cannot show is said in Jump to's words
+  // Show, on an agent's ask: its pane in Godview by Jump to's path, the floor session its board row names (none while
+  // the board is not read, or can't be); one it cannot show is said in Jump to's words
   const rows = useBoardRows();
   const showAsk = useCallback(
     (item: NeedsItem) => {
       const id = item.from.session;
       if (id === undefined) return;
-      const row = rows?.find((each) => each.runtimeRunId === id);
+      const row =
+        rows === null || rows === "failed"
+          ? undefined
+          : rows.find((each) => each.runtimeRunId === id);
       void openLiveRow(
         { id, floorSessionId: row?.terminal?.runtimeSessionId ?? null },
         "assistant",
@@ -228,12 +268,12 @@ export function ChatView({
         entry={shown}
         active={active}
         parked={drafts.get(shown.spark.id) ?? NO_DRAFT}
-        onPark={(parts) => park(shown.spark.id, parts)}
+        onPark={(next) => park(shown.spark.id, next)}
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         port={port}
         send={sendTo(shown, open)}
-        threadSending={sending.has(shown.spark.id)}
+        threadSending={heldThreads.has(shown.spark.id)}
         takeKeyboard={draftKeyboard}
       />
     );
@@ -265,7 +305,7 @@ export function ChatView({
           ? undefined
           : (words: string) => void start(shown, open, words)
       }
-      sending={shown !== undefined && sending.has(shown.spark.id)}
+      sending={shown !== undefined && heldThreads.has(shown.spark.id)}
       onAnswer={needs.answer}
       onShowAsk={showAsk}
       cardRef={needs.cardRef}

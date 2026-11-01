@@ -31,13 +31,17 @@ import { dimmed } from "../src/testing/smoke-last-still";
 import {
   actOrStop,
   actScan,
+  afterFaceBoot,
   BAND_PALETTE,
   BAND_TOL,
   bandColour,
   bandNonce,
   bindingRead,
+  type DoorAct,
   endVoid,
+  ensureDevice,
   glassRect,
+  idleVerdict,
   idleWait,
   isOwnDevice,
   judgeCap,
@@ -50,11 +54,13 @@ import {
   judgeNoUdid,
   judgeP1,
   judgePress,
+  judgePressed,
   judgeReload,
   judgeStill,
   judgeStopped,
   judgeUse,
   type LiveProof,
+  liveShot,
   type Measure,
   measurePixels,
   type NoneSeen,
@@ -63,6 +69,7 @@ import {
   PHONE_MEASURE,
   PHONE_ROW_PROJECT,
   PHONE_ROWS,
+  PHONE_SCREEN_PROJECT,
   type PhoneCensus,
   type PhoneRowResult,
   type PhoneRowsDriver,
@@ -77,10 +84,17 @@ import {
   rowLedger,
   rowMark,
   type StillSeen,
+  type Stimulus,
+  type StoppedHands,
+  standOrStage,
   stillAddress,
+  stimulusStaging,
   stoppedBeforeQuit,
+  stoppedWord,
   type UseSeen,
   uuidHits,
+  wakesIn,
+  wakeWindow,
 } from "../src/testing/smoke-phone";
 
 const TP = "com.apple.CoreSimulator.SimDeviceType.iPhone-16e";
@@ -415,6 +429,58 @@ describe("PT-S3 — what the rows read", () => {
     expect(project(undefined)).toBeNull();
   });
 
+  it("projects a kind's screen in the page: its act — a FUNCTION by contract — crosses as true, and the clone passes (T3)", () => {
+    const project = new Function(`return ${PHONE_SCREEN_PROJECT};`)() as (
+      s: unknown,
+      lines: unknown,
+    ) => unknown;
+    const screen = {
+      key: "1-0",
+      state: { is: "live" },
+      info: {
+        extra: { simulator: { is: "no-device", device: "iPhone 14", act: () => undefined } },
+      },
+    };
+    // SIM-NO-DEVICE's "An object could not be cloned": the raw words carry the act itself
+    expect(() => structuredClone(screen.info.extra.simulator)).toThrow();
+    const out = project(screen, 2);
+    expect(() => structuredClone(out)).not.toThrow();
+    expect(out).toEqual({
+      is: "no-device",
+      device: "iPhone 14",
+      act: true,
+      lines: 2,
+      still: false,
+    });
+    // an act said by name crosses as itself; none is null; a still in the words is said (R14)
+    expect(
+      project({ info: { extra: { simulator: { is: "off", act: "boot" }, still: {} } } }, undefined),
+    ).toEqual({ is: "off", device: null, act: "boot", lines: null, still: true });
+    expect(project({ info: {} }, 0)).toEqual({
+      is: null,
+      device: null,
+      act: null,
+      lines: 0,
+      still: false,
+    });
+    expect(project(undefined, 1)).toBeNull();
+  });
+
+  it("screenOf runs the projection; SIM-NONE's and SIM-NO-DEVICE's phone is removed in a finally — a throw never leaves it on the desk (T3)", () => {
+    const at = SOURCE.indexOf("  const screenOf = async (");
+    const screenOf = SOURCE.slice(at, SOURCE.indexOf("  const stats = ", at));
+    expect(screenOf).toContain(`const project = $${"{"}PHONE_SCREEN_PROJECT};`);
+    expect(screenOf).not.toMatch(/act: said\?\.act/u);
+    for (const [name, k] of [
+      ["SIM-NONE", "p"],
+      ["SIM-NO-DEVICE", "q"],
+    ] as const) {
+      const body = rowBodies(SOURCE).find((r) => r.name === name)?.body ?? "";
+      expect(body).toMatch(new RegExp(`\\} finally \\{\\s*await remove\\(${k}\\);\\s*\\}`, "u"));
+      expect(body.match(/await remove\(/gu)).toHaveLength(1);
+    }
+  });
+
   it("sweeps a UUID's shape, either case, and passes the durable keys and surface ids the rows carry", () => {
     expect(uuidHits(`PHONE_WORDS {"udid":"${UDID}"}`)).toBe(1);
     expect(uuidHits(`${UDID.toLowerCase()} and ${UDID}`)).toBe(2);
@@ -727,10 +793,11 @@ describe("PT-S3 — the rows' judges", () => {
     expect(judgeUse({ ...seen, proof: dead, loaded: 0 }).void).toBeNull();
     expect(judgeUse({ ...seen, proof: dead, loaded: 0 }).problems.length).toBeGreaterThan(0);
     const body = rowBodies(SOURCE).find((r) => r.name === "SIM-USE")?.body ?? "";
-    const motion = body.indexOf('openUrl(1, "/motion"');
+    const motion = body.indexOf('openProven(1, "/motion"');
     expect(motion).toBeGreaterThanOrEqual(0);
     expect(body.indexOf("liveProven(p)")).toBeGreaterThan(motion);
-    expect(body.indexOf('openUrl(1, "/still"')).toBeGreaterThan(body.indexOf("liveProven(p)"));
+    // the /still page opened and its load counted (T2's openProven) only after the proof in hand
+    expect(body.indexOf('openProven(1, "/still"')).toBeGreaterThan(body.indexOf("liveProven(p)"));
     expect(judgeUse({ ...seen, native: [603, 1278] }).problems.join(" ")).toMatch(
       /not the device's 603 × 1278/u,
     );
@@ -745,6 +812,7 @@ describe("PT-S3 — the rows' judges", () => {
     expect(want).toBe(`ios-simulator:${TP}/${RUNTIME}`);
     const seen: StillSeen = {
       taken: { before: 0, after: 1 },
+      begun: { putDown: 1_700_000_000_000, still: 1_700_000_000_120 },
       address: want,
       want,
       extraStill: false,
@@ -777,6 +845,48 @@ describe("PT-S3 — the rows' judges", () => {
     );
     expect(judgeStill({ ...seen, extraStill: true }).join(" ")).toMatch(/R14/u);
     expect(judgeStill({ ...seen, taken: { before: 0, after: 2 } }).join(" ")).toMatch(/2 stills/u);
+  });
+
+  it("SIM-STILL: an at-rest take landing in the window is counted BEFORE it (the live service settled first), and the still filed is the put-down's (T5)", () => {
+    const want = stillAddress(TP, RUNTIME);
+    const ok: StillSeen = {
+      taken: { before: 9, after: 10 },
+      begun: { putDown: 1_700_000_030_000, still: 1_700_000_030_140 },
+      address: want,
+      want,
+      extraStill: false,
+      live: measure(),
+      reloaded: true,
+      rested: { still: 1_700_000_030_140, rested: true },
+      seen: measure({ colors: 300, bandMean: [128, 22, 76] }),
+      predicted: [128, 22, 76],
+      handover: proof,
+    };
+    // run 1101 (out:69, out:84): the 30 s at-rest take, begun in hand before the count and kept after it, read 8 → 10
+    expect(judgeStill({ ...ok, taken: { before: 8, after: 10 } }).join(" ")).toMatch(
+      /took 2 stills, not one/u,
+    );
+    // settled before the count, that take is in `before` (9): the put-down's is the one
+    expect(judgeStill(ok)).toEqual([]);
+    // one still counted, but the still filed began BEFORE the put-down: the at-rest take's, the put-down took none
+    expect(
+      judgeStill({ ...ok, begun: { putDown: 1_700_000_030_000, still: 1_700_000_029_400 } }).join(
+        " ",
+      ),
+    ).toMatch(/the still filed began 600 ms before the put-down/u);
+    expect(
+      judgeStill({ ...ok, begun: { putDown: 1_700_000_030_000, still: null } }).join(" "),
+    ).toMatch(/no still filed for φP/u);
+    // the row settles the live service BEFORE it counts, and marks the put-down's moment before Esc
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-STILL")?.body ?? "";
+    const settle = body.indexOf('await js("globalThis.__vfDesk.liveSettled()");');
+    const count0 = body.indexOf("const taken0 = (await stats())?.stillsTaken ?? 0;");
+    const mark = body.indexOf("const putDownAt = Date.now();");
+    const down = body.indexOf("await putDown();");
+    expect(settle).toBeGreaterThan(0);
+    expect(count0).toBeGreaterThan(settle);
+    expect(mark).toBeGreaterThan(count0);
+    expect(down).toBeGreaterThan(mark);
   });
 
   it("SIM-CAP: waiting at rest on its still DIMMED, the pane put to rest (rests +1), the held surface unchanged 1 s on (R17)", () => {
@@ -829,6 +939,18 @@ describe("PT-S3 — the rows' judges", () => {
     expect(judgeIdle({ ...idle, steps: 2 }).join(" ")).toMatch(/stepped 2 times/u);
   });
 
+  it("SIM-IDLE prints the WINDOW's wakes by reason — r1 − r0, never the running totals (T6)", () => {
+    // run 1101's out:89 printed `rest().wakes` as it stood at r1: every wake since the desk was made
+    expect(
+      wakesIn({ input: 7, world: 120, doc: 3 }, { input: 7, world: 124, doc: 3, "desk:live": 2 }),
+    ).toEqual({ world: 4, "desk:live": 2 });
+    expect(wakesIn({ input: 7 }, { input: 7 })).toEqual({});
+    expect(wakesIn({}, { presence: 1 })).toEqual({ presence: 1 });
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-IDLE")?.body ?? "";
+    expect(body).toContain("wakes: wakesIn(r0.wakes, r1.wakes),");
+    expect(body).not.toMatch(/wakes: r1\.wakes/u);
+  });
+
   it("SIM-RELOAD: a session MADE is red even when the face looks right; SIM-GONE: each count one fewer, the device still booted", () => {
     const before = { runtimes: 2, census: census({ sessions: 1, sessionsMade: 3 }) };
     const reload = { before, after: before, origins: [1, 2] as const, proof };
@@ -852,6 +974,67 @@ describe("PT-S3 — the rows' judges", () => {
     expect(judgeGone({ ...gone, after: { ...gone.after, sessions: 2 } }).join(" ")).toMatch(
       /sessions 2 → 2/u,
     );
+  });
+});
+
+describe("PT-S3 — a device staged Booted waits for READY (R2-B: the stage answers Booting until iOS is ready)", () => {
+  /** A fake door: `state` and the verb answer from their queues (the last answer stands), a fake clock 1 s a sleep. */
+  const door = (answers: { state: string[]; boot?: string[]; shutdown?: string[] }) => {
+    const asked: string[] = [];
+    let t = 0;
+    const next = (q: string[]): string => (q.length > 1 ? (q.shift() ?? "") : (q[0] ?? ""));
+    return {
+      asked,
+      act: async (verb: string, n: number): Promise<DoorAct> => {
+        asked.push(`${verb} ${n}`);
+        const q = verb === "state" ? answers.state : (answers[verb as "boot" | "shutdown"] ?? []);
+        return { state: next(q), why: null };
+      },
+      clock: {
+        now: () => t,
+        sleep: async (ms: number) => {
+          t += ms;
+        },
+      },
+    };
+  };
+
+  it("a device already Booted asks nothing more; a Shutdown one is booted, and Booted at once is staged", async () => {
+    const a = door({ state: ["Booted"] });
+    expect(await ensureDevice(a.act, 1, "Booted", a.clock)).toBeNull();
+    expect(a.asked).toEqual(["state 1"]);
+    const b = door({ state: ["Shutdown"], boot: ["Booted"] });
+    expect(await ensureDevice(b.act, 1, "Booted", b.clock)).toBeNull();
+    expect(b.asked).toEqual(["state 1", "boot 1"]);
+    const c = door({ state: ["Booted"], shutdown: ["Shutdown"] });
+    expect(await ensureDevice(c.act, 2, "Shutdown", c.clock)).toBeNull();
+    expect(c.asked).toEqual(["state 2", "shutdown 2"]);
+  });
+
+  it("boot answering Booting is polled by state until Booted — never read as unstaged at once (R2-B)", async () => {
+    const a = door({ state: ["Booting", "Booting", "Booting", "Booted"], boot: ["Booting"] });
+    expect(await ensureDevice(a.act, 3, "Booted", a.clock)).toBeNull();
+    expect(a.asked).toEqual(["state 3", "boot 3", "state 3", "state 3", "state 3"]);
+  });
+
+  it("past the bound (180 s from the first read) the existing staging words; a failed boot is not polled", async () => {
+    const a = door({ state: ["Shutdown", "Booting"], boot: ["Booting"] });
+    expect(await ensureDevice(a.act, 1, "Booted", a.clock)).toBe(
+      "device 1 reads Booting, not Booted",
+    );
+    expect(a.clock.now()).toBeGreaterThanOrEqual(180_000);
+    expect(a.clock.now()).toBeLessThan(182_000);
+    const b = door({ state: ["Shutdown"], boot: ["failed"] });
+    expect(await ensureDevice(b.act, 1, "Booted", b.clock)).toBe(
+      "device 1 reads failed, not Booted",
+    );
+    expect(b.asked).toEqual(["state 1", "boot 1"]);
+  });
+
+  it("the rows' ensure is ensureDevice on the door's act (R2-B)", () => {
+    const at = SOURCE.indexOf("  const ensure = ");
+    const ensure = SOURCE.slice(at, SOURCE.indexOf("  const quitApp = ", at));
+    expect(ensure).toMatch(/ensureDevice\(doorAct, n, want\)/u);
   });
 });
 
@@ -907,6 +1090,8 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     proof0: proven,
     quit: "quit",
     word: "stopped",
+    reads: ["stopped", "stopped"],
+    moved: null,
     stateP: "Booted",
     wakes: [3, 4],
     paneAlive: true,
@@ -990,10 +1175,10 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     const dropped = SOURCE.replace(block, "");
     expect(dropped).not.toBe(SOURCE);
     expect(() => stoppedHeld(dropped)).toThrow();
-    const quitLine = "      const quit = await quitApp();\n      let wordNow";
+    const quitLine = "      const quit = await quitApp();\n      let wakes1";
     const moved = dropped.replace(
       quitLine,
-      `      const quit = await quitApp();\n${block}      let wordNow`,
+      `      const quit = await quitApp();\n${block}      let wakes1`,
     );
     expect(moved).not.toBe(dropped);
     expect(() => stoppedHeld(moved)).toThrow();
@@ -1018,13 +1203,154 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     expect(mark({ ...seen, retry: null })).toBe("red");
   });
 
-  it("any other word is RECORDED as a finding, never green — `off` with P Shutdown, another word, or none (R1)", () => {
+  it("any other word SETTLED is RECORDED as a finding, never green — `off` with P Shutdown, another word (R1); none settled is STAGING NOT MET (T4)", () => {
     const off = judgeStopped({ ...seen, word: "off", stateP: "Shutdown", retry: null });
     expect(off.recorded).toBe(true);
     expect(off.staging).toBe("the quit reads off (device Shutdown) — the stopped face unwitnessed");
     expect(mark({ ...seen, word: "off", stateP: "Shutdown", retry: null })).toBe("RECORDED");
-    for (const word of ["no-window", "at-rest", null])
+    for (const word of ["no-window", "at-rest"])
       expect(mark({ ...seen, word, retry: null })).toBe("RECORDED");
+    const unsettled = { ...seen, word: null, reads: ["stopped", "off"], retry: null } as const;
+    expect(mark(unsettled)).toBe("STAGING NOT MET");
+    expect(judgeStopped(unsettled).staging).toBe(
+      `the quit's word never settled within 10000 ms (its last two reads ["stopped","off"], device Booted)`,
+    );
+  });
+
+  /** The word's hands, faked: the face's words and the device's state from queues (the last stands), a clock that moves
+   * only by the row's sleeps, and Try again's leg — the word re-read in hand right before the press. */
+  const hands = (o: {
+    words: (string | null)[];
+    states: string[];
+    reread?: (string | null)[];
+  }): StoppedHands & { pressed: number; between: number; t: () => number } => {
+    let t = 0;
+    const next = <T>(q: T[]): T => (q.length > 1 ? (q.shift() as T) : (q[0] as T));
+    const h = {
+      pressed: 0,
+      between: 0,
+      t: () => t,
+      word: async () => next(o.words),
+      state: async () => next(o.states),
+      now: () => t,
+      sleep: async (ms: number) => {
+        t += ms;
+      },
+      aftermath: async () => {
+        h.between += 1;
+      },
+      retry: async () => {
+        const reread = o.reread === undefined ? "stopped" : next(o.reread);
+        if (reread !== "stopped") return { reread };
+        h.pressed += 1;
+        return { proof: proven };
+      },
+    };
+    return h;
+  };
+  const judged = (w: Awaited<ReturnType<typeof stoppedWord>>) =>
+    mark({
+      ...seen,
+      word: w.word,
+      reads: w.reads,
+      moved: w.moved,
+      stateP: w.stateP,
+      retry: w.retry,
+    });
+
+  it("the quit's word SETTLES: `stopped` → `off` (the quit shut P down) is RECORDED with the word and the device — and nothing pressed (T4, P8 = A)", async () => {
+    // run 1101 (out:104-108): the loop took the first `stopped`, then pressed Try again 2 s on at a face saying off/Boot
+    const h = hands({ words: ["stopped", "off", "off"], states: ["Shutdown"] });
+    const w = await stoppedWord(h);
+    expect(w).toMatchObject({ word: "off", stateP: "Shutdown", retry: null, moved: null });
+    expect(h.pressed).toBe(0);
+    expect(h.between).toBe(1);
+    expect(judged(w)).toBe("RECORDED");
+    // `stopped` read twice but P already Shutdown is not settled: it waits for the word to agree with the device
+    const lag = hands({
+      words: ["stopped", "stopped", "stopped", "off", "off"],
+      states: ["Shutdown"],
+    });
+    expect((await stoppedWord(lag)).word).toBe("off");
+    expect(lag.pressed).toBe(0);
+  });
+
+  it("a steady `stopped` with P Booted presses Try again — the word re-read in hand right before it (T4)", async () => {
+    const h = hands({ words: ["stopped"], states: ["Booted"] });
+    const w = await stoppedWord(h);
+    expect(w).toMatchObject({ word: "stopped", stateP: "Booted", retry: proven, moved: null });
+    expect(h.pressed).toBe(1);
+    expect(h.between).toBe(1);
+    expect(judged(w)).toBe("green");
+    // the re-read in hand is `off` (P shut down after the settle): nothing pressed, the word settled again — RECORDED
+    const moved = hands({
+      words: ["stopped", "stopped", "off"],
+      states: ["Booted", "Shutdown"],
+      reread: ["off"],
+    });
+    const m = await stoppedWord(moved);
+    expect(moved.pressed).toBe(0);
+    expect(m).toMatchObject({ word: "off", stateP: "Shutdown", retry: null, moved: "off" });
+    expect(judged(m)).toBe("RECORDED");
+  });
+
+  it("reads that never agree — with each other or with the device — past the word's bound are STAGING NOT MET, nothing pressed (T4)", async () => {
+    const flip = hands({
+      words: Array.from({ length: 40 }, (_, i) => (i % 2 === 0 ? "stopped" : "off")),
+      states: ["Booted"],
+    });
+    const a = await stoppedWord(flip);
+    expect(a.word).toBeNull();
+    expect(flip.pressed).toBe(0);
+    expect(flip.t()).toBeGreaterThanOrEqual(10_000);
+    expect(flip.t()).toBeLessThan(12_000);
+    expect(judged(a)).toBe("STAGING NOT MET");
+    const against = hands({ words: ["stopped"], states: ["Shutdown"] });
+    const b = await stoppedWord(against);
+    expect(b).toMatchObject({ word: null, reads: ["stopped", "stopped"], stateP: "Shutdown" });
+    expect(against.pressed).toBe(0);
+    expect(judged(b)).toBe("STAGING NOT MET");
+    // a word that went back to `stopped` after the re-read missed will not hold: STAGING NOT MET, not a second press
+    const flap = hands({ words: ["stopped"], states: ["Booted"], reread: ["off"] });
+    const c = await stoppedWord(flap);
+    expect(flap.pressed).toBe(0);
+    expect(c).toMatchObject({ word: null, moved: "off" });
+    expect(judged(c)).toBe("STAGING NOT MET");
+    // a red give-back stays red over an unsettled word
+    expect(
+      mark({ ...seen, word: null, reads: ["stopped", "off"], retry: null, paneAlive: false }),
+    ).toBe("red");
+  });
+
+  it("`off` read steadily over a device steadily Booted is the product's PROBLEM, never STAGING NOT MET; nothing pressed (G11, P8 = A)", async () => {
+    const h = hands({ words: ["off"], states: ["Booted"] });
+    const w = await stoppedWord(h);
+    expect(w).toMatchObject({ word: "off", stateP: "Booted", retry: null, moved: null });
+    expect(h.pressed).toBe(0);
+    expect(judged(w)).toBe("red");
+    expect(judgeStopped({ ...seen, word: "off", stateP: "Booted", retry: null }).problems).toEqual([
+      "SIM-STOPPED: the face says off over a booted device (P8 = A: off ⇔ not Booted)",
+    ]);
+    // reads that disagree past the bound stay STAGING NOT MET
+    const flip = hands({
+      words: Array.from({ length: 40 }, (_, i) => (i % 2 === 0 ? "off" : "stopped")),
+      states: ["Booted"],
+    });
+    expect(judged(await stoppedWord(flip))).toBe("STAGING NOT MET");
+  });
+
+  it("the row asks stoppedWord over the face, the door's state and Try again in hand — no word loop of its own, no `off` pressed (T4)", () => {
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-STOPPED")?.body ?? "";
+    expect(body.match(/\bstoppedWord\(/gu)).toHaveLength(1);
+    expect(body).not.toMatch(/wordNow === "stopped" \|\| wordNow === "off"/u);
+    const retry = body.slice(body.indexOf("retry: async () => {"));
+    const reread = retry.indexOf("const reread = (await faceOf(p))?.simulator?.is ?? null;");
+    expect(reread).toBeGreaterThan(0);
+    expect(retry.indexOf('if (reread !== "stopped")')).toBeGreaterThan(reread);
+    expect(retry.indexOf('await pressAct("SIM-STOPPED", p, 1, "retry");')).toBeGreaterThan(
+      retry.indexOf('if (reread !== "stopped")'),
+    );
+    expect(body.match(/pressAct\(/gu)).toHaveLength(1);
   });
 
   it("the cap's give-back stays red in every branch — over the word's record too", () => {
@@ -1119,6 +1445,394 @@ describe("PT-S3 — SIM-ATTACH's poll: an answer from a read taken after R's boo
     );
     expect(twice).not.toBe(SOURCE);
     expect(() => attachPollHeld(twice)).toThrow();
+  });
+});
+
+describe("PT-S3 — the stimulus PROVEN: an unproven page or a failed door verb is STAGING NOT MET, never a red (T2)", () => {
+  const proven: LiveProof = {
+    bound: 20_000,
+    ms: 800,
+    condition: "streaming",
+    presented: 5,
+    frames: 5,
+    after: Array.from({ length: 10 }, () => "streaming"),
+  };
+  const motion: Stimulus = { page: "/motion", opened: "opened", loaded: 1 };
+  const still: Stimulus = { page: "/still", opened: "opened", loaded: 1 };
+  /** run 1101's door: openurl exit 60 (out:55, 61, 68, 73, 86), and a page opened whose beacon never came */
+  const failed: Stimulus = { page: "/motion", opened: "failed", loaded: null };
+  const silent: Stimulus = { page: "/still", opened: "opened", loaded: 0 };
+  const markOf = (j: { problems: readonly string[]; staging: string | null }) =>
+    rowMark(j.problems, { staging: j.staging }).mark;
+
+  it("a page stands only when openurl read `opened` AND the door counted its nonce's /loaded", () => {
+    expect(stimulusStaging([motion, still])).toBeNull();
+    expect(stimulusStaging([failed])).toBe("the /motion page was not opened (openurl read failed)");
+    expect(stimulusStaging([motion, silent])).toBe(
+      "the /still page never beaconed /loaded within 10000 ms",
+    );
+    expect(stimulusStaging([{ ...motion, loaded: null }])).toBe(
+      "the /motion page's /loaded was not read",
+    );
+    // the door unanswered is not a page opened
+    expect(stimulusStaging([{ ...motion, opened: "unanswered", loaded: null }])).toMatch(
+      /not opened \(openurl read unanswered\)/u,
+    );
+  });
+
+  it("each row's verdict on an unproven page: STAGING NOT MET with its why — SIM-LIVE (bringLive's page), SIM-STILL, SIM-IDLE", () => {
+    for (const page of [failed, silent]) {
+      const why = stimulusStaging([page]);
+      expect(why).not.toBeNull();
+      // bringLive's page (SIM-LIVE and every row that brings φP live) and SIM-STILL's: the row returns the staging
+      expect(rowMark([], { staging: why })).toEqual({ mark: "STAGING NOT MET", why });
+    }
+    const idle = {
+      proof: proven,
+      asleep: [true, true, true, true, true, true],
+      steps: 0,
+      presented: 0,
+      rearmed: true,
+      wake: { presented: 3, arrivals: 4 },
+    };
+    expect(idleVerdict(idle, { motion, still, wake: motion })).toEqual({
+      problems: [],
+      staging: null,
+    });
+    // run 1101's SIM-IDLE (out:86-89): the /still page never opened, the desk awake over a MOVING page — not a red
+    const awake = {
+      ...idle,
+      asleep: [true, true, false, false, false, false],
+      steps: 338,
+      presented: 88,
+    };
+    expect(
+      markOf(idleVerdict(awake, { motion, still: { ...failed, page: "/still" }, wake: motion })),
+    ).toBe("STAGING NOT MET");
+    expect(markOf(idleVerdict(awake, { motion: failed, still, wake: motion }))).toBe(
+      "STAGING NOT MET",
+    );
+    expect(markOf(idleVerdict(awake, { motion, still: silent, wake: motion }))).toBe(
+      "STAGING NOT MET",
+    );
+    // the wake's page unproven: the window is still judged; its motion leg is not (no red for a page that never moved)
+    const unwoken = { ...idle, wake: { presented: 0, arrivals: 0 } };
+    const j = idleVerdict(unwoken, { motion, still, wake: failed });
+    expect(j).toEqual({
+      problems: [],
+      staging: "the wake's /motion page was not opened (openurl read failed)",
+    });
+    const both = idleVerdict({ ...unwoken, steps: 4 }, { motion, still, wake: failed });
+    expect(both.staging).toBeNull();
+    expect(both.problems.join(" ")).toMatch(/stepped 4 times/u);
+    expect(both.problems.join(" ")).not.toMatch(/motion did not wake it/u);
+    // all proven: the judge's own reds stand
+    expect(idleVerdict(unwoken, { motion, still, wake: motion }).problems.join(" ")).toMatch(
+      /motion did not wake it/u,
+    );
+  });
+
+  it("SIM-LIVE's device screenshot: not `written` is STAGING NOT MET (run 1101's out:56, exit 1); no shot dir or an unread one stays red", () => {
+    expect(
+      liveShot({ proof: proven, dir: true, state: "written", read: true, covered: false }),
+    ).toBeNull();
+    const failedShot = liveShot({
+      proof: proven,
+      dir: true,
+      state: "failed",
+      read: false,
+      covered: false,
+    });
+    expect(failedShot).toEqual({ problems: [], staging: "the door's screenshot read failed" });
+    expect(markOf(failedShot ?? { problems: [], staging: null })).toBe("STAGING NOT MET");
+    expect(
+      liveShot({ proof: proven, dir: false, state: "no-shot-dir", read: false, covered: false }),
+    ).toEqual({
+      problems: ["SIM-LIVE: no VF_SMOKE_SHOT_DIR — the row needs the device's screenshot"],
+      staging: null,
+    });
+    expect(
+      liveShot({ proof: proven, dir: true, state: "written", read: false, covered: false }),
+    ).toEqual({
+      problems: ["SIM-LIVE: the door's screenshot was not read"],
+      staging: null,
+    });
+  });
+
+  it("SIM-LIVE: a LIVE-PROVEN red is the row's problem even when its screenshot is unstaged — judged FIRST (G1)", () => {
+    const dead: LiveProof = { ...proven, ms: null, presented: 0, frames: 0, after: [] };
+    const unwritten = liveShot({
+      proof: dead,
+      dir: true,
+      state: "failed",
+      read: false,
+      covered: false,
+    });
+    expect(unwritten?.staging).toBeNull();
+    expect(unwritten?.problems).toEqual(judgeLiveProven("SIM-LIVE", dead));
+    expect(markOf(unwritten ?? { problems: [], staging: null })).toBe("red");
+    // the screenshot's band covered by Safari: the same order — a red proof stands, a good one stages
+    const covered = liveShot({
+      proof: dead,
+      dir: true,
+      state: "written",
+      read: true,
+      covered: true,
+    });
+    expect(markOf(covered ?? { problems: [], staging: null })).toBe("red");
+    expect(
+      liveShot({ proof: proven, dir: true, state: "written", read: true, covered: true }),
+    ).toEqual({
+      problems: [],
+      staging: "the device's screenshot shows no band: Safari covered it",
+    });
+    // no shot dir: red, the proof's red with it
+    expect(
+      liveShot({ proof: dead, dir: false, state: "no-shot-dir", read: false, covered: false })
+        ?.problems,
+    ).toEqual([
+      ...judgeLiveProven("SIM-LIVE", dead),
+      "SIM-LIVE: no VF_SMOKE_SHOT_DIR — the row needs the device's screenshot",
+    ]);
+  });
+
+  it("SIM-IDLE: a LIVE-PROVEN red over the PROVEN /motion page is the row's problem before any /still staging (G2)", () => {
+    const dead: LiveProof = { ...proven, ms: null, presented: 0, frames: 0, after: [] };
+    const idle = {
+      proof: dead,
+      asleep: [] as boolean[],
+      steps: 0,
+      presented: 0,
+      rearmed: false,
+      wake: { presented: 0, arrivals: 0 },
+    };
+    const j = idleVerdict(idle, { motion, still: silent, wake: failed });
+    expect(j).toEqual({ problems: judgeLiveProven("SIM-IDLE", dead), staging: null });
+    // the /motion page itself unproven: the proof read nothing of it — STAGING NOT MET
+    expect(markOf(idleVerdict(idle, { motion: failed, still: silent, wake: failed }))).toBe(
+      "STAGING NOT MET",
+    );
+    // a good proof under an unproven /still: STAGING NOT MET as before
+    expect(
+      markOf(idleVerdict({ ...idle, proof: proven }, { motion, still: silent, wake: failed })),
+    ).toBe("STAGING NOT MET");
+    // the row's own early return over an unproven /still asks the same judge
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-IDLE")?.body ?? "";
+    expect(body).toMatch(/const unstill = idleBefore\(proof, motion, stillPage\);/u);
+    expect(body).toMatch(
+      /if \(unstill !== null\) return \{ \.\.\.unstill, seen: \{ proof, stillPage \} \};/u,
+    );
+  });
+
+  it("bringLive after the face's Boot: not ready (Booting, failed, unanswered) is STAGING NOT MET; Shutdown or ShuttingDown is the product's PROBLEM (G3)", () => {
+    expect(afterFaceBoot("Booted")).toBeNull();
+    for (const state of ["Booting", "failed", "unanswered"])
+      expect(afterFaceBoot(state)).toEqual({
+        staging: `after the face's Boot the device reads ${state}, not Booted within 180000 ms`,
+      });
+    for (const state of ["Shutdown", "ShuttingDown"])
+      expect(afterFaceBoot(state)).toEqual({ problem: `the face's Boot left the device ${state}` });
+    // the row keeps the LAST state read, polls within the readiness bound, and asks afterFaceBoot of it
+    const bl = SOURCE.slice(
+      SOURCE.indexOf("  const bringLive = async ("),
+      SOURCE.indexOf("  /** The far ask's size"),
+    );
+    const boot = bl.slice(bl.indexOf('if (act === "boot") {'));
+    expect(boot).toMatch(/const deadline = Date\.now\(\) \+ PHONE_BOUNDS\.ready;/u);
+    expect(boot).toMatch(/let state = \(await doorAct\("state", n\)\)\.state;/u);
+    expect(boot.indexOf("const left = afterFaceBoot(state);")).toBeGreaterThan(0);
+    expect(boot.indexOf("const left = afterFaceBoot(state);")).toBeLessThan(
+      boot.indexOf("openProven("),
+    );
+  });
+
+  it("T2 is GENERAL: no page is opened whose result is dropped — every openProven's page is judged (G4)", () => {
+    // run 1101 dropped openurl's false at SIM-OFF-BOOT (out:46), SIM-USE (out:61), SIM-UNSEEN (out:68), SIM-SHOW-RUNNING
+    // (out:99): the unproven opener is gone, and no openurl is asked bare
+    expect(SOURCE).not.toMatch(/\bopenUrl\(/u);
+    expect(SOURCE).not.toMatch(/^\s*await doorAct\("openurl"/mu);
+    expect(SOURCE).not.toMatch(/^\s*await openProven\(/mu);
+    const pages = [...SOURCE.matchAll(/(?:const |let |^\s*)(\w+) = await openProven\(/gmu)].map(
+      (m) => m[1] ?? "",
+    );
+    expect(pages.length).toBeGreaterThanOrEqual(12);
+    for (const name of new Set(pages))
+      expect(
+        new RegExp(
+          `stimulusStaging\\(\\[${name}\\]\\)|idleBefore\\(proof, ${name}|idleBefore\\(proof, motion, ${name}\\)|${name}\\.loaded`,
+          "u",
+        ).test(SOURCE),
+        `${name} is never judged`,
+      ).toBe(true);
+    for (const name of [
+      "SIM-SHOW-FRESH",
+      "SIM-OFF-BOOT",
+      "SIM-USE",
+      "SIM-UNSEEN",
+      "SIM-RELOAD",
+      "SIM-SHOW-RUNNING",
+      "SIM-COST",
+    ]) {
+      const body = rowBodies(SOURCE).find((r) => r.name === name)?.body ?? "";
+      expect(body, name).toMatch(/await openProven\(/u);
+    }
+  });
+
+  it("a page unproven AFTER other legs were read: their reds stand as the row's problems; none, STAGING NOT MET (G4)", () => {
+    expect(standOrStage([], "the /motion page was not opened (openurl read failed)")).toEqual({
+      problems: [],
+      staging: "the /motion page was not opened (openurl read failed)",
+    });
+    expect(standOrStage(["SIM-OFF-BOOT: main ran boot 2 time(s), not 1"], "x")).toEqual({
+      problems: ["SIM-OFF-BOOT: main ran boot 2 time(s), not 1"],
+      staging: null,
+    });
+    expect(standOrStage(["a red"], null)).toEqual({ problems: ["a red"], staging: null });
+    // the press's legs and the reload's census stand without the proof the page never staged
+    const dead: LiveProof = { ...proven, ms: null, presented: 0, frames: 0, after: [] };
+    const pressed = {
+      act: "boot" as const,
+      acts: { before: 0, after: 1 },
+      seq: [
+        { is: "off", acting: "boot", act: "", condition: "off" },
+        { is: "booting", acting: "", act: "", condition: "booting" },
+      ],
+      proof: dead,
+      calls: { before: { boot: 0, show: 0 }, after: { boot: 1, show: 1 } },
+    };
+    const o = { through: "booting", calls: { boot: 1, show: 1 } };
+    expect(judgePressed("SIM-OFF-BOOT", pressed, o).join(" ")).toMatch(/not LIVE-PROVEN/u);
+    expect(judgePressed("SIM-OFF-BOOT", pressed, { ...o, live: false })).toEqual([]);
+    expect(
+      judgePressed(
+        "SIM-OFF-BOOT",
+        { ...pressed, acts: { before: 0, after: 2 } },
+        { ...o, live: false },
+      ),
+    ).toEqual(["SIM-OFF-BOOT: the face ran 2 acts, not the one pressed"]);
+    const c = {
+      sessions: 1,
+      sessionsMade: 3,
+      captureReady: true,
+      helperPresent: true,
+      helper: null,
+      vetted: null,
+    };
+    const reload = {
+      before: { runtimes: 2, census: c },
+      after: { runtimes: 2, census: c },
+      origins: [1, 2] as const,
+      proof: dead,
+    };
+    expect(judgeReload(reload).join(" ")).toMatch(/not LIVE-PROVEN/u);
+    expect(judgeReload(reload, { live: false })).toEqual([]);
+    expect(judgeReload({ ...reload, origins: [1, 1] }, { live: false })).toEqual([
+      "SIM-RELOAD: performance.timeOrigin is unchanged — no reload happened",
+    ]);
+  });
+
+  it("SIM-IDLE's wake: the 2 s window runs from the page's /loaded, polled inside the loop; a page not loaded within its bound stages the leg (G10)", async () => {
+    /** a fake door and desk: the page beacons at `loadAt` ms (null: never), the desk wakes at `wakeAt` (null: never) */
+    const at = (loadAt: number | null, wakeAt: number | null) => {
+      let t = 0;
+      return {
+        t: () => t,
+        loaded: async () => (loadAt !== null && t >= loadAt ? 1 : 0),
+        woken: async () =>
+          wakeAt !== null && t >= wakeAt
+            ? { presented: 2, arrivals: 3 }
+            : { presented: 0, arrivals: 0 },
+        now: () => t,
+        sleep: async (ms: number) => {
+          t += ms;
+        },
+      };
+    };
+    const idle = {
+      proof: proven,
+      asleep: [true, true, true, true, true, true],
+      steps: 0,
+      presented: 0,
+      rearmed: true,
+      wake: { presented: 0, arrivals: 0 },
+    };
+    const verdict = (w: Awaited<ReturnType<typeof wakeWindow>>) =>
+      idleVerdict(
+        { ...idle, wake: w.wake },
+        { motion, still, wake: { page: "/motion", opened: "opened", loaded: w.loaded } },
+      );
+    // Safari slow to load: /loaded at 3 s, the desk awake at 4 s — inside the window from the load (2 s from the openurl
+    // would have read "motion did not wake it")
+    const slow = at(3_000, 4_000);
+    const a = await wakeWindow(slow);
+    expect(a).toMatchObject({ loaded: 1, wake: { presented: 2, arrivals: 3 } });
+    expect(verdict(a)).toEqual({ problems: [], staging: null });
+    // never loaded within the bound: the leg is STAGED, the window's own judgement clean
+    const never = at(null, null);
+    const b = await wakeWindow(never);
+    expect(b.loaded).toBe(0);
+    expect(never.t()).toBeGreaterThanOrEqual(10_000);
+    expect(never.t()).toBeLessThan(10_400);
+    expect(verdict(b)).toEqual({
+      problems: [],
+      staging: "the wake's /motion page never beaconed /loaded within 10000 ms",
+    });
+    // loaded at 1 s and no wake within 2 s of it: the product's red
+    const still2 = at(1_000, null);
+    const c = await wakeWindow(still2);
+    expect(c.loaded).toBe(1);
+    expect(still2.t()).toBeGreaterThanOrEqual(3_000);
+    expect(still2.t()).toBeLessThan(3_400);
+    expect(verdict(c).problems.join(" ")).toMatch(/motion did not wake it within 2 s/u);
+    // the row's wake asks wakeWindow; no window timed from the openurl
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-IDLE")?.body ?? "";
+    expect(body.match(/await wakeWindow\(/gu)).toHaveLength(1);
+    expect(body).not.toMatch(/Date\.now\(\) - woke < 2_000/u);
+  });
+
+  /** The runner as its source must hold it: no bare openUrl in the three rows or bringLive; each page proven and checked
+   * BEFORE what it stages; an Unstaged thrown by bringLive is the row's staging, never a red. */
+  const stagedHeld = (src: string): void => {
+    const body = (name: string): string => rowBodies(src).find((r) => r.name === name)?.body ?? "";
+    for (const name of ["SIM-LIVE", "SIM-STILL", "SIM-IDLE"])
+      expect(body(name)).not.toMatch(/\bopenUrl\(/u);
+    const bl = src.slice(
+      src.indexOf("  const bringLive = async ("),
+      src.indexOf("  /** The far ask's size"),
+    );
+    expect(bl).not.toMatch(/\bopenUrl\(/u);
+    expect(bl.match(/page = await openProven\(n, "\/motion", q\);/gu)).toHaveLength(2);
+    // the ensure, the page, the face's Boot not ready (G3), the page after it
+    expect(bl.match(/throw new Unstaged\(/gu)?.length).toBe(4);
+    const firstCheck = bl.indexOf("stimulusStaging([page])");
+    expect(firstCheck).toBeGreaterThan(0);
+    expect(firstCheck).toBeLessThan(bl.indexOf("await view([k]);"));
+    const runner = src.slice(
+      src.indexOf("  const row = async ("),
+      src.indexOf("// ── the rows, by mode"),
+    );
+    expect(runner).toMatch(
+      /\} else if \(error instanceof Unstaged\) out = \{ problems: \[\], staging: error\.message \};/u,
+    );
+    const still = body("SIM-STILL");
+    expect(still.indexOf("stimulusStaging([page])")).toBeGreaterThan(0);
+    expect(still.indexOf("stimulusStaging([page])")).toBeLessThan(
+      still.indexOf("await pickUp(p);"),
+    );
+    const idle = body("SIM-IDLE");
+    expect(idle.indexOf("idleBefore(proof, motion, stillPage)")).toBeGreaterThan(0);
+    expect(idle.indexOf("idleBefore(proof, motion, stillPage)")).toBeLessThan(
+      idle.indexOf('await until("the desk asleep"'),
+    );
+    expect(idle).toMatch(/idleVerdict\(seen, \{ motion, still: stillPage, wake \}\)/u);
+    const live = body("SIM-LIVE");
+    expect(live).toMatch(
+      /liveShot\(\{\s*proof,\s*dir: d\.shotDir !== undefined,\s*state: taken\.state,\s*read: shot !== null,\s*covered:/u,
+    );
+  };
+
+  it("the rows prove their pages before they judge: SIM-LIVE (via bringLive), SIM-STILL, SIM-IDLE (T2)", () => {
+    stagedHeld(SOURCE);
   });
 });
 

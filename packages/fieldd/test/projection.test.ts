@@ -532,6 +532,84 @@ describe("RevisionedSubscription — one subscriber of one source", () => {
   });
 });
 
+// PG-2 (PG-D8 (a)) — the phone's remote board is floored at 1 s with an urgent
+// edge at 250 ms: what a person waits on (a status, a wait, a birth or a death)
+// must not wait a whole second. The edge is an option of the subscription, so
+// the model board's L12 edge (at its own floor) stays exactly as it was.
+describe("RevisionedSubscription — an urgent edge inside a longer floor (PG-2)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function urgentSubscriber(minIntervalMs: number, urgentIntervalMs?: number) {
+    let items: Item[] = [{ id: "a", status: "s0" }];
+    const listeners = new Set<(urgent?: boolean) => void>();
+    const table = itemProjection();
+    table.apply(items);
+    const sent: number[] = [];
+    const subscriber = new RevisionedSubscription({
+      view: snapshotDeltaView({
+        table: () => table.snapshot(),
+        apply: () => table.apply(items),
+        revision: () => table.revision,
+      }),
+      subscribe: (onChange) => {
+        listeners.add(onChange);
+        return () => listeners.delete(onChange);
+      },
+      emit: () => sent.push(Date.now()),
+      minIntervalMs,
+      ...(urgentIntervalMs !== undefined ? { urgentIntervalMs } : {}),
+    });
+    const change = (status: string, urgent: boolean): void => {
+      items = [{ id: "a", status }];
+      for (const fn of [...listeners]) fn(urgent);
+    };
+    return { subscriber, sent, change };
+  }
+
+  it("an urgent change leaves once the edge has passed since the last frame, never a whole floor later", () => {
+    const { subscriber, sent, change } = urgentSubscriber(1_000, 250);
+    const t0 = Date.now();
+    // an ordinary change waits the floor out
+    vi.advanceTimersByTime(300);
+    change("s1", false);
+    vi.advanceTimersByTime(999);
+    expect(sent).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(sent).toEqual([t0 + 1_300]);
+    // an urgent change right behind that frame waits only to the edge
+    change("s2", true);
+    vi.advanceTimersByTime(249);
+    expect(sent).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(sent).toEqual([t0 + 1_300, t0 + 1_550]);
+    // past the edge it goes at once, taking an ordinary window it lands in with it
+    vi.advanceTimersByTime(400);
+    change("s3", false);
+    vi.advanceTimersByTime(100);
+    change("s4", true);
+    expect(sent).toEqual([t0 + 1_300, t0 + 1_550, t0 + 2_050]);
+    vi.advanceTimersByTime(2_000);
+    expect(sent).toHaveLength(3);
+    subscriber.dispose();
+  });
+
+  it("with no edge of its own, an urgent change keeps L12's edge at the floor, exactly as before", () => {
+    const { subscriber, sent, change } = urgentSubscriber(1_000);
+    const t0 = Date.now();
+    vi.advanceTimersByTime(300);
+    change("s1", true);
+    vi.advanceTimersByTime(999);
+    expect(sent).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(sent).toEqual([t0 + 1_300]);
+    vi.advanceTimersByTime(1_000);
+    change("s2", true);
+    expect(sent).toEqual([t0 + 1_300, t0 + 2_300]);
+    subscriber.dispose();
+  });
+});
+
 describe("wholeValueView — a stream of whole values, its wire untouched", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());

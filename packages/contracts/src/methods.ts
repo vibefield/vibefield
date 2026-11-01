@@ -441,6 +441,15 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // AL-12 (`thinking-app-lifecycle.md` §8.1, AL-7's owed line) — Settings → Diagnostics' "Last exit": how a shell last
+  // left this pair, kept after the next launch's notice has gone (`DiagnosticsLastExitResult`). Read-only, local.
+  defineMethod({
+    surface: "product",
+    method: "diagnostics.lastExit",
+    scope: "diagnostics.read",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "diagnostics.lease.revoke",
@@ -2077,6 +2086,13 @@ export const METHODS: MethodDef[] = [
   // refused FORBIDDEN_SCOPE; the phone and a peer daemon's forward still hear
   // `direct-plane-unbuilt` (SP-6, DS-7); the plane switched off answers
   // `direct-plane-off`, and a daemon that is not ready its phase.*
+  // *DS-7 (2026-10-31): a peer daemon's forward is served — the owner answers
+  // the tailnet set of its live index serve with a `read` grant, and the
+  // forwarding daemon re-homes it onto an egress route of its own desktop for
+  // its window (`IndexOpenTicket`'s DS-7 note). Only a window or the shell is
+  // carried; the phone still hears `direct-plane-unbuilt` (SP-7). A ticket is
+  // never journaled as a receipt (forward-receipts' CREDENTIAL_MINTS): a retry
+  // mints a fresh grant rather than replaying one.*
   defineMethod({
     surface: "product",
     method: "index.openTicket",
@@ -2796,6 +2812,13 @@ export const METHODS: MethodDef[] = [
   // board's floors (250 / 100 ms, `AGENT_FIELD`); `scope: "mesh"` is the rows
   // protocol (`meshRowsOpen`/`meshRowsFrame`), each device's chain at the
   // floor of its projection.
+  // PG-2 (PG-L1, PG-D8 (a), 2026-10-31) — `desk` retired into `remote`, the
+  // model's cut for every other screen. The floor declared is the least any
+  // caller is served: a peer daemon's (`REMOTE_MIN_INTERVAL_MS`, a peer
+  // window's mesh board). A phone (`tailnet`) is served at
+  // `REMOTE_PHONE_MIN_INTERVAL_MS` with an urgent change after at most
+  // `REMOTE_URGENT_MS`, the handler's floor by the caller's kind
+  // (`agent-field.ts` `boardFloor`).
   defineMethod({
     surface: "product",
     method: "agent.subscribe",
@@ -2810,22 +2833,23 @@ export const METHODS: MethodDef[] = [
           shape: "snapshot-delta",
           cadenceFloorMs: AGENT_FIELD.MIN_INTERVAL_MS,
         },
-        '{projection: "desk"}': {
+        '{projection: "remote"}': {
           shape: "snapshot-delta",
-          cadenceFloorMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+          cadenceFloorMs: AGENT_FIELD.REMOTE_MIN_INTERVAL_MS,
         },
         '{scope: "mesh", projection: "field"}': {
           shape: "rows",
           cadenceFloorMs: AGENT_FIELD.MIN_INTERVAL_MS,
         },
-        '{scope: "mesh", projection: "desk"}': {
+        '{scope: "mesh", projection: "remote"}': {
           shape: "rows",
-          cadenceFloorMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+          cadenceFloorMs: AGENT_FIELD.REMOTE_MIN_INTERVAL_MS,
         },
         // MV-3a (MV-D18, L12) — this desktop's own windows' board: the model's
         // rows at the fold's own tick, urgent changes ahead of it; refused to a
         // peer daemon and to a phone like `full`. Under `scope: "mesh"` the
-        // other desktops ride beside it as their `desk` cuts at the desk floor.
+        // other desktops ride beside it as their `remote` cuts at the remote
+        // floor (their `desk` cuts until PG-2).
         '{projection: "model"}': {
           shape: "snapshot-delta",
           cadenceFloorMs: AGENT_FIELD.FULL_TICK_MS,

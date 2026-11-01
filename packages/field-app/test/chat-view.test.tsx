@@ -26,13 +26,22 @@ import {
   sparksPortOver,
   startSparksFeed,
 } from "../src/chat/sparks-feed";
-import type { ThreadMark } from "../src/chat/thread-marks";
+import { THREAD_MARK_WORDS, type ThreadMark } from "../src/chat/thread-marks";
 import { sparkPaneOf } from "../src/chat/thread-pane-door";
 import { ChatPreview } from "../src/design-system/ChatPreview";
+import type { ChatState } from "../src/design-system/chat-fixtures";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { NO_TERMINALS } from "../src/terminal/terminal-words";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** This window holds no terminal pool, as the real one says here, unless a test gives it one: Send then goes on to
+ * wake the spark itself. */
+const pool = vi.hoisted(() => ({ configured: false }));
+vi.mock("../src/terminal/pool", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  terminalPoolConfigured: () => pool.configured,
+}));
 
 const AT = "2026-10-31T05:00:00.000Z";
 const NOW = Date.parse("2026-10-31T05:30:00.000Z");
@@ -105,7 +114,6 @@ const NEEDS_LIST: unknown = JSON.parse(
 
 /** What @'s rows would read of fieldd: nothing to offer here (the composer's own suite reads the rows). */
 const PORT: ComposerPort = {
-  providers: async () => [],
   profileSets: async () => [],
   models: async () => {
     throw new Error("no picker here");
@@ -130,6 +138,7 @@ afterEach(() => {
   host = null;
   stop?.();
   stop = null;
+  pool.configured = false;
 });
 
 function mount(element: ReactElement): HTMLElement {
@@ -240,6 +249,39 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     );
   });
 
+  it("says a dot that outlasts the status word in the row's accessible name: unread, or needed you (SP-1d)", () => {
+    const LYRA = spark("sp-lyra0001", "Lyra");
+    const NOVA_NEW = spark("sp-nova0001", "Nova");
+    mount(
+      <ChatPanelView
+        reading={ready([VELA, KIWI, LYRA, NOVA_NEW], [VELA_ASKS])}
+        chosen={null}
+        now={NOW}
+        marks={
+          new Map<string, ThreadMark>([
+            ["sp-vela0001", "needs"],
+            ["sp-kiwi0001", "needs"],
+            ["sp-lyra0001", "unread"],
+          ])
+        }
+      />,
+    );
+    const row = (id: string): HTMLElement | null => $(`.vf-chat-row[data-spark="${id}"]`);
+    /** The word only a screen reader reads, right after the status word, inside the row's button. */
+    const lasting = (id: string): string | null =>
+      row(id)?.querySelector(".vf-chat-row-status + .sr-only")?.textContent ?? null;
+    // Kiwi's need has ended (asleep since): its word says Asleep, so the dot's need is said after it
+    expect(lasting("sp-kiwi0001")).toBe(", needed you");
+    expect(lasting("sp-lyra0001")).toBe(", unread");
+    // Vela's need stands: its word already says it, so nothing is added; a row with no dot adds nothing
+    expect(row("sp-vela0001")?.querySelector(".sr-only")).toBeNull();
+    expect(row("sp-nova0001")?.querySelector(".sr-only")).toBeNull();
+    // the dot itself stays a picture: the words are the name's
+    expect(row("sp-kiwi0001")?.querySelector(".vf-chat-row-dot")?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
+  });
+
   it("draws an awake spark's own pane under its head, with no line and no Show (SP-1d)", () => {
     const draw = (pane?: ReactElement) =>
       act(() =>
@@ -333,11 +375,18 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     expect(onWake.mock.calls[0]?.[0]?.spark.id).toBe("sp-kiwi0001");
   });
 
-  it("draws the catalog's waiting plate on the product's reading: Kiwi asleep, its held send Needs your OK, Wake on its line (CP-3)", async () => {
+  /** One of the Chat specimen's plates, mounted as the catalog mounts it. */
+  async function plate(state: ChatState): Promise<void> {
+    act(() => root?.unmount());
+    host?.remove();
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
-    await act(async () => root?.render(<ChatPreview state="waiting" />));
+    await act(async () => root?.render(<ChatPreview state={state} />));
+  }
+
+  it("draws the catalog's waiting plate on the product's reading: Kiwi asleep, its held send Needs your OK, Wake on its line (CP-3)", async () => {
+    await plate("waiting");
     const status = (id: string): string =>
       words($(`.vf-chat-row[data-spark="${id}"] .vf-chat-row-status`));
     expect(status("sp-kiwi0001")).toBe("Needs your OK");
@@ -350,17 +399,47 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     expect(words($(".vf-chat-thread-line"))).toBe("Kiwi is asleep Wake");
   });
 
-  it("draws the catalog's rows with the product's own marks: Vela's need orange, Lyra's unread thread cyan (SP-1d)", async () => {
-    host = document.createElement("div");
-    document.body.appendChild(host);
-    root = createRoot(host);
-    await act(async () => root?.render(<ChatPreview state="list" />));
+  it("draws the catalog's rows with the product's own marks: Vela's need orange, Lyra's unread thread cyan, and Kiwi's ended need still orange (SP-1d)", async () => {
+    await plate("list");
     const mark = (id: string): string | null =>
       $(`.vf-chat-row[data-spark="${id}"] .vf-chat-row-dot`)?.getAttribute("data-mark") ?? null;
+    const lasting = (id: string): string | null =>
+      $(`.vf-chat-row[data-spark="${id}"] .vf-chat-row-status + .sr-only`)?.textContent ?? null;
     expect(mark("sp-vela0001")).toBe("needs");
     expect(mark("sp-lyra0001")).toBe("unread");
     expect(mark("sp-juno0001")).toBeNull();
+    // Kiwi asked you while its thread was off screen and has fallen asleep since: its dot outlasts the need, said in
+    // its row's name (final critique 9)
+    expect(mark("sp-kiwi0001")).toBe("needs");
+    expect(lasting("sp-kiwi0001")).toBe(`, ${THREAD_MARK_WORDS.needs}`);
+    expect(lasting("sp-vela0001")).toBeNull();
+    // a thread on screen latches nothing, as opening it reads it: shown, Kiwi wears no dot
+    await plate("asleep");
     expect(mark("sp-kiwi0001")).toBeNull();
+    expect(mark("sp-lyra0001")).toBe("unread");
+  });
+
+  it("draws the thread's line in its plates in the product's own words: Wake under way and refused, and a spark not started yet (final critique 9)", async () => {
+    const line = (): HTMLElement | null => $(".vf-chat-thread-line");
+    const wake = (): HTMLButtonElement | null =>
+      host?.querySelector<HTMLButtonElement>(".vf-chat-thread-line button") ?? null;
+    // Wake pressed: its button waits, and it holds the thread, so Send waits too (one act at a time)
+    await plate("waking");
+    expect(words(line())).toBe("Kiwi is asleep Waking…");
+    expect(wake()?.disabled).toBe(true);
+    expect($(".vf-chat-send")?.getAttribute("aria-busy")).toBe("true");
+    // …and refused, in fieldd's words, said on the line once; Wake stands to be pressed again
+    await plate("wake-refused");
+    expect(words(line())).toBe(
+      "Couldn't wake Kiwi: fieldd is not answering (the daemon is restarting) Wake",
+    );
+    expect(wake()?.disabled).toBe(false);
+    expect($(".vf-chat-send")?.hasAttribute("aria-busy")).toBe(false);
+    // a spark whose session never started: no act of its own, Send wakes it
+    await plate("not-started");
+    expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Polaris's thread");
+    expect(words(line())).toBe("Polaris hasn't started yet");
+    expect(wake()).toBeNull();
   });
 
   it("keeps the thread a fixed box: the pane takes every height left, and the foot is where the thread's items stand over it", () => {
@@ -521,6 +600,8 @@ function scripted(listed: SparkSummary[]) {
     needs: null as ((items: readonly NeedsItem[]) => void) | null,
     /** the queue's first answer: its snapshot, or a refusal (an older fieldd has no needs.subscribe) */
     queue: [] as readonly NeedsItem[] | Error,
+    /** a wake that takes its time: open answers once this settles */
+    held: null as Promise<void> | null,
   };
   const door: SparksPort = {
     list: async () => {
@@ -546,8 +627,10 @@ function scripted(listed: SparkSummary[]) {
     answer: async () => {
       throw new Error("nothing is answered here");
     },
+    onReconnected: () => () => undefined,
     open: async (id) => {
       port.woke.push(id);
+      if (port.held !== null) await port.held;
       if (port.refuse !== null) throw new Error(port.refuse);
       return port.listed.find((s) => s.id === id) ?? VELA;
     },
@@ -759,6 +842,49 @@ describe("Chat, live (the feed and its acts)", () => {
     expect($(".vf-chat-pane")?.getAttribute("data-pane-state")).toBe("no-terminals");
   });
 
+  it("wakes a spark once: Send pressed while Wake's wake runs waits, busy, and asks for no second open (SP-1d)", async () => {
+    const { port, door } = scripted([KIWI]);
+    let answer: () => void = () => undefined;
+    port.held = new Promise((resolve) => {
+      answer = resolve;
+    });
+    // a window with terminals: a Send into the asleep thread would wake the spark itself
+    pool.configured = true;
+    stop = startSparksFeed(door);
+    mount(<Chat />);
+    await settle();
+    await act(async () => $(".vf-chat-thread-line button")?.click());
+    expect(port.woke).toEqual(["sp-kiwi0001"]);
+    // typed while the wake runs, and sent by Return and by the button: Send waits, busy, and the draft stays
+    act(() => {
+      const field = $(".vf-chat-input");
+      if (field === null) throw new Error("no draft");
+      field.focus();
+      const node = document.createTextNode("carry on with the migration");
+      field.append(node);
+      const range = document.createRange();
+      range.setStart(node, node.length);
+      range.collapse(true);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect($(".vf-chat-send")?.getAttribute("aria-busy")).toBe("true");
+    await act(async () => {
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    await act(async () => $(".vf-chat-send")?.click());
+    await settle();
+    expect(port.woke).toEqual(["sp-kiwi0001"]);
+    expect($(".vf-chat-input")?.textContent).toBe("carry on with the migration");
+    // the wake answered: the thread is let go, and Send no longer waits
+    await act(async () => answer());
+    await settle();
+    expect($(".vf-chat-send")?.hasAttribute("aria-busy")).toBe(false);
+  });
+
   it("says a refused Wake in fieldd's words where the act was, and keeps the act", async () => {
     const { port, door } = scripted([KIWI]);
     port.refuse = "the spark's agent has no sign-in";
@@ -793,6 +919,9 @@ describe("Chat's words are DESIGN.md's (§8 \"Chat's list\", \"Chat's thread\")"
       "Vela's terminal is not on this desktop's floor.",
       "Couldn't find Vela's pane: …",
       NO_TERMINALS,
+      // a row's lasting mark, after its status word (SP-1d)
+      `"Asleep, ${THREAD_MARK_WORDS.needs}"`,
+      `"Ready, ${THREAD_MARK_WORDS.unread}"`,
     ]) {
       expect(design, said).toContain(said);
     }

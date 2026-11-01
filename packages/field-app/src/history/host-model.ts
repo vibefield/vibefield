@@ -25,6 +25,9 @@ import type { HistorySections } from "./sections";
 // catalog's ids, R23) with the Agent Profiles they run in
 // (`agents.profileSets.list`, PJ-6 Q2). Pure: the controller (`HistoryView`)
 // gathers, this folds; `host-inputs.tsx` draws from it.
+// *DS-7 (2026-10-31): the sessions are the mesh's listing now, and the model
+// keeps those the room is handed (`isHandedToRoom`): this desktop's, and
+// another desktop's of a project that has a folder here.*
 
 /** A desktop as History draws it: its OS mark and its name (PJ-D24), and
  * whether it is this one or asleep (PJ-L6). */
@@ -42,7 +45,9 @@ export interface HistoryHostModel {
   readonly self: string | null;
   /** every project fieldd groups, by key */
   readonly projects: ReadonlyMap<string, ProjectSummary>;
-  /** this desktop's sessions, by rosetta's id */
+  /** the sessions the room is handed, by rosetta's id: this desktop's, and
+   * since DS-7 another desktop's of a project that has a folder here
+   * (`isHandedToRoom`) */
   readonly sessions: ReadonlyMap<string, IndexSession>;
   /** every desktop the listing names, in its order (this one first) */
   readonly devices: readonly HostDevice[];
@@ -101,6 +106,50 @@ export function hostDevicesOf(
   });
 }
 
+/** DS-7 — the projects with a folder on this desktop, by key: the ones
+ * History lists (H3), and the ones another desktop's sessions are handed to
+ * the room under. None while this desktop is unknown. */
+export function projectsHereOf(
+  projects: readonly ProjectSummary[],
+  self: string | null,
+): Set<string> {
+  if (self === null) return new Set();
+  return new Set(
+    projects
+      .filter((project) => project.places.some((place) => place.ref.device === self))
+      .map((project) => project.key),
+  );
+}
+
+/** DS-7 (H3 (a)'s "remote sessions arrive with DS-7") — whether the room is
+ * handed a session: this desktop's own (its `device`, or none named), or
+ * another desktop's whose project has a folder here, its transcript read from
+ * its own desktop by ticket (`session-port.ts`) and its acts said, never
+ * pressed, here (`resumeWaits`). Another desktop's session with no project
+ * here — its Home, its Temporary, a project only it holds — is not handed
+ * over; nor, with this desktop unknown, is anything that names a desktop. */
+export function isHandedToRoom(
+  session: Pick<IndexSession, "device" | "projectKey">,
+  self: string | null,
+  here: ReadonlySet<string>,
+): boolean {
+  if (session.device === undefined) return true;
+  if (self === null) return false;
+  return (
+    session.device === self || (session.projectKey !== undefined && here.has(session.projectKey))
+  );
+}
+
+/** DS-7 — a session another desktop holds and this one does not (DS-D10: a
+ * row whose `devices` names this desktop is read here), or null. */
+export function elsewhereDeviceOf(
+  session: Pick<IndexSession, "device" | "devices">,
+  self: string | null,
+): string | null {
+  if (session.device === undefined || self === null || session.device === self) return null;
+  return session.devices?.includes(self) === true ? null : session.device;
+}
+
 /** This desktop's live runs, by native id (`agent.list`'s rows, P3's rule:
  * the conversation, not stamped ended, its terminal on this floor). */
 export function liveRunsOf(
@@ -123,9 +172,10 @@ export function hostModelOf(
   providers: readonly AgentProviderSummary[],
   profileSets: readonly AgentProfileSet[] = [],
 ): HistoryHostModel {
+  const here = projectsHereOf(listing.projects, listing.self);
   const sessions = new Map(
     listing.sessions
-      .filter((session) => session.device === undefined || session.device === listing.self)
+      .filter((session) => isHandedToRoom(session, listing.self, here))
       .map((session) => [session.sessionId, session]),
   );
   return {

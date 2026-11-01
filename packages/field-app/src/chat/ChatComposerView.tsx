@@ -15,6 +15,7 @@ import {
   useId,
 } from "react";
 import { CARD_INDEX } from "../frame/cards/CardFace";
+import { menuRowId } from "./agent-chip-menu";
 import { AT_WORDS, type AtAgentRow, type AtList, type AtRow, type AtSessionRow } from "./at-rows";
 import { chipLabel, type DraftChip, type DraftPart, draftPlaceholder } from "./composer-draft";
 import type { AgentMenuRow, EffortChoice } from "./new-spark";
@@ -50,7 +51,7 @@ export type AtShown =
   | {
       readonly kind: "menu";
       readonly left: number;
-      /** the agent's menu (`agentMenuOf` for the one agent): its head, Its own model, its picker's models */
+      /** the agent's menu (`agentChipMenuOf`): its head, Its own model, its picker's models */
       readonly rows: readonly AgentMenuRow[];
       readonly effort?: EffortChoice | undefined;
       /** the hot model row's id ("" for Its own model) — what Return or Tab keeps */
@@ -85,9 +86,6 @@ export interface ChatComposerViewProps {
   onModel?: ((model: string | null) => void) | undefined;
   onEffort?: ((value: string) => void) | undefined;
 }
-
-/** A model row's id as the menu's hot row names it: "" for Its own model. */
-export const menuRowId = (model: string | null): string => model ?? "";
 
 /** An agent's menu, as a reader hears it: "Claude Code's model". */
 function menuLabel(rows: readonly AgentMenuRow[]): string {
@@ -207,7 +205,8 @@ function SessionRowBody({ row }: { row: AtSessionRow }): ReactElement {
 }
 
 /** @'s rows (DESIGN.md §8 "Chat's composer", @'s rows in Chat): read bottom-up, nearest first — "Start an agent"
- * above, "Running in its profiles" against the composer. A group with no rows is left out. */
+ * above, "Running in its profiles" against the composer. A group with no rows is left out; one that can't be read yet
+ * or at all says so in its rows' place. */
 export function AtRowsView({
   list,
   hot,
@@ -237,7 +236,12 @@ export function AtRowsView({
           ))}
         </>
       )}
-      {list.sessions.length === 0 ? null : (
+      {list.sessionsFailed ? (
+        <>
+          <div className="vf-chat-at-eye">{AT_WORDS.sessions}</div>
+          <div className="vf-chat-at-quiet">{AT_WORDS.sessionsFailed}</div>
+        </>
+      ) : list.sessions.length === 0 ? null : (
         <>
           <div className="vf-chat-at-eye">{AT_WORDS.sessions}</div>
           {list.sessions.map((row) => (

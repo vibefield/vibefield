@@ -43,7 +43,9 @@ export interface HelloItem {
 export type ThreadItem = HelloItem | NeedsCard;
 
 /** A hatch writes the spark's record and starts its first run in the same call, so that run is born within this of the
- * record. A wake's run, resumed or started afresh, is born when the spark is woken, after it has slept. */
+ * record. A wake's run, resumed or started afresh, is born when the spark is woken, after it has slept. A run fieldd
+ * re-attached after a restart keeps its birth, so this cannot tell how old a re-attached hatch run is (DESIGN.md's
+ * open cases). */
 export const HATCH_RUN_MS = 60_000;
 
 /** The run is the one the spark hatched in: born within `HATCH_RUN_MS` after the spark's record. */
@@ -57,7 +59,9 @@ function bornInItsHatch(run: AgentFieldRow, spark: SparkSummary): boolean {
  * back (a woken spark's, or one fieldd re-attached) counts nothing from it. A spark that never started is new. One
  * whose own run the board shows is new only while that run is the one it hatched in, fieldd is watching it (not
  * waiting to resume it), and the window has never seen the spark have a turn (`turnSeen`). One whose run the board
- * does not show is not said to be new: nothing there certifies it. */
+ * does not show is not said to be new: nothing there certifies it. Two cases stay open (DESIGN.md §8 "Chat's thread"): a
+ * hatch run fieldd re-attached after a restart, read by the window that restart opened before the run's next live turn,
+ * and a run born in the hatch run's place within its minute. */
 export function sparkIsNew(entry: SparkEntry): boolean {
   const { spark, run } = entry;
   if (run === null) return spark.session === undefined;

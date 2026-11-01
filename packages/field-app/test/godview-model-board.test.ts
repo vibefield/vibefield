@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ModelBoardFold } from "../src/godview/monitor/model-board";
 import { createGodviewMonitorFeed } from "../src/godview/monitor/model-replica";
 import type { ModelBoardPort } from "../src/godview/monitor/remote-door";
+import { rowOrder } from "../src/godview/monitor/window-rows";
 
 // MV-3a (MV-D18, M3, M23) — the window adapter: the one door's per-device
 // chains folded into ONE model chain, fed to the replica. The frames are the
@@ -137,11 +138,185 @@ describe("ModelBoardFold — one chain from every desktop's own", () => {
     ).toMatchObject({ removed: ["run-studio-q"] });
   });
 
-  it("a row with no model row (an older daemon) is no row, and removes what its key stood for", () => {
+  it("item 137 — a shell promoted to an agent keeps its body: the run's key takes the shell's id as the shell's key leaves, in ONE delta (M22), and back when the run ends", () => {
+    const scheduler = manualFrame();
+    const replica = createMonitorReplica({ scheduler });
+    const fold = new ModelBoardFold();
+    replica.apply(fold.open(OPEN));
+    scheduler.flush();
+    const own = OPEN.devices[0]?.snapshot;
+    const run = own?.rows[0];
+    const shell = own?.rows[1];
+    if (
+      own?.epoch === undefined ||
+      run === undefined ||
+      shell === undefined ||
+      run.monitorRow === undefined ||
+      shell.monitorRow === undefined
+    ) {
+      throw new Error("this desktop's run and terminal rows");
+    }
+    expect([shell.runtimeRunId, shell.monitorRow.id, shell.monitorRow.kind]).toEqual([
+      "pty-s4",
+      "pty-s4",
+      "terminal",
+    ]);
+    const delta = (n: number, upserts: (typeof own.rows)[number][], removed: string[]) => ({
+      device: HERE,
+      delta: {
+        epoch: own.epoch,
+        since: own.revision + n,
+        revision: own.revision + n + 1,
+        upserts,
+        removed,
+      },
+    });
+    // the person types the agent's name in pty-s4: the backend's run carries the shell's model id (M22), and the
+    // owner sends the run's key in and the shell's key out in one delta (fieldd's agent-board-promotion pin)
+    const promoted = {
+      ...run,
+      runtimeRunId: "run-typed",
+      monitorRow: { ...run.monitorRow, id: "pty-s4" },
+    };
+    const promotion = fold.frame(delta(0, [promoted], ["pty-s4"]));
+    if (promotion === null || promotion === "gap") throw new Error("the promotion is a change");
+    expect(promotion.upserts.map((row) => [row.id, row.kind])).toEqual([["pty-s4", "agent"]]);
+    expect(promotion.removed).toEqual([]);
+    expect(fold.held("pty-s4")?.row.kind).toBe("agent");
+    // the chrome's runs take the run in (MV-3d)
+    expect(fold.runs().map((row) => row.runtimeRunId)).toContain("run-typed");
+    // the replica takes it as the body changing, never one leaving and another born
+    expect(replica.apply(promotion)).toBe(true);
+    scheduler.flush();
+    expect(replica.getSnapshot().changes).toEqual({ added: [], updated: ["pty-s4"], removed: [] });
+    expect(replica.getSnapshot().model.byId.get("pty-s4")?.kind).toBe("agent");
+    // the run ends and leaves its PTY standing: the shell's key comes back with the id as the run's key leaves
+    const demotion = fold.frame(delta(1, [shell], ["run-typed"]));
+    if (demotion === null || demotion === "gap") throw new Error("the demotion is a change");
+    expect(demotion.upserts.map((row) => [row.id, row.kind])).toEqual([["pty-s4", "terminal"]]);
+    expect(demotion.removed).toEqual([]);
+    expect(replica.apply(demotion)).toBe(true);
+    scheduler.flush();
+    expect(replica.getSnapshot().changes).toEqual({ added: [], updated: ["pty-s4"], removed: [] });
+    expect(replica.getSnapshot().model.byId.get("pty-s4")?.kind).toBe("terminal");
+    expect(fold.runs().map((row) => row.runtimeRunId)).not.toContain("run-typed");
+    // a snapshot of the same board after it is the same rows by id: nothing removed
+    const resnap = fold.frame({
+      device: HERE,
+      snapshot: { epoch: own.epoch, revision: own.revision + 2, rows: own.rows },
+    });
+    expect(resnap).toMatchObject({ removed: [] });
+    // a key that leaves with no other key holding its id still takes the row with it
+    expect(fold.frame(delta(2, [], ["pty-s4"]))).toMatchObject({
+      upserts: [],
+      removed: ["pty-s4"],
+    });
+    expect(fold.held("pty-s4")).toBeUndefined();
+    replica.dispose();
+  });
+
+  it("item 138 — every desktop keeps its place: a peer's whole re-send and a peer's birth leave the rows in the board's device order, and the window's order with them", () => {
+    const fold = new ModelBoardFold();
+    fold.open(OPEN);
+    const ASLEEP = "dev-01HQ9S7Y44";
+    const board = OPEN.devices[1]?.snapshot;
+    const loft = board?.rows[0];
+    if (board?.epoch === undefined || loft === undefined || loft.monitorRow === undefined) {
+      throw new Error("the peer's board");
+    }
+    expect(fold.devices().map((device) => device.device)).toEqual([HERE, PEER, ASLEEP]);
+    // the asleep desktop wakes with a board of its own: it joins after the others, its place in the open
+    const woke = {
+      ...loft,
+      runtimeRunId: "run-attic-e",
+      device: ASLEEP,
+      monitorRow: {
+        ...loft.monitorRow,
+        id: "run-attic-e",
+        device: { ...loft.monitorRow.device, id: ASLEEP, name: "Attic" },
+      },
+    };
+    fold.frame({ device: ASLEEP, snapshot: { epoch: "fieldd-3e7a.1", revision: 1, rows: [woke] } });
+    const order = () => fold.heldRows().map((held) => `${held.device}:${held.row.id}`);
+    const drawn = () => rowOrder(fold.heldRows(), fold.here, { sessionIds: [] });
+    const before = order();
+    const drawnBefore = drawn();
+    expect(before.slice(-2)).toEqual([`${PEER}:run-loft-w`, `${ASLEEP}:run-attic-e`]);
+    expect(drawnBefore.slice(-2)).toEqual(["run-loft-w", "run-attic-e"]);
+    // the peer re-presents its board whole at the same revision (PG-1d's gate flip, a lost frame): nothing moves
+    expect(
+      fold.frame({
+        device: PEER,
+        snapshot: { epoch: board.epoch, revision: board.revision, rows: board.rows },
+      }),
+    ).toMatchObject({ removed: [] });
+    expect(order()).toEqual(before);
+    expect(drawn()).toEqual(drawnBefore);
+    // …nor when it re-attaches on a new epoch (its daemon restarted)
+    fold.frame({
+      device: PEER,
+      snapshot: { epoch: "fieldd-5d2c.3", revision: 1, rows: board.rows },
+    });
+    expect(order()).toEqual(before);
+    expect(drawn()).toEqual(drawnBefore);
+    // a birth on the peer joins its own desktop's rows, ahead of the next desktop's
+    const born = {
+      ...loft,
+      runtimeRunId: "run-loft-n",
+      monitorRow: {
+        ...loft.monitorRow,
+        id: "run-loft-n",
+        createdAt: loft.monitorRow.createdAt + 1,
+      },
+    };
+    fold.frame({
+      device: PEER,
+      delta: { epoch: "fieldd-5d2c.3", since: 1, revision: 2, upserts: [born], removed: [] },
+    });
+    expect(order().slice(-3)).toEqual([
+      `${PEER}:run-loft-w`,
+      `${PEER}:run-loft-n`,
+      `${ASLEEP}:run-attic-e`,
+    ]);
+    expect(drawn().slice(-3)).toEqual(["run-loft-w", "run-loft-n", "run-attic-e"]);
+    const grown = order();
+    const drawnGrown = drawn();
+    // the peer re-presents with its board listing the newborn first: the rows it still holds keep their places
+    fold.frame({
+      device: PEER,
+      snapshot: { epoch: "fieldd-5d2c.3", revision: 2, rows: [born, ...board.rows] },
+    });
+    expect(order()).toEqual(grown);
+    expect(drawn()).toEqual(drawnGrown);
+    // …and so does a whole new open after a gap, whatever order its boards list
+    const own = OPEN.devices[0];
+    if (own === undefined) throw new Error("this desktop's entry");
+    fold.open({
+      devices: [
+        own,
+        {
+          device: PEER,
+          state: "live",
+          asOf: own.asOf,
+          snapshot: { epoch: "fieldd-5d2c.4", revision: 1, rows: [born, ...board.rows] },
+        },
+        {
+          device: ASLEEP,
+          state: "live",
+          asOf: own.asOf,
+          snapshot: { epoch: "fieldd-3e7a.2", revision: 1, rows: [woke] },
+        },
+      ],
+    });
+    expect(order()).toEqual(grown);
+    expect(drawn()).toEqual(drawnGrown);
+  });
+
+  it("a row with no model row (an older peer's desk row) is no row, and removes what its key stood for", () => {
     const fold = new ModelBoardFold();
     fold.open(OPEN);
     const peer = OPEN.devices[1]?.snapshot?.rows[0];
-    if (peer === undefined || peer.kind === "terminal") throw new Error("the peer's desk row");
+    if (peer === undefined || peer.kind === "terminal") throw new Error("the peer's row");
     const { monitorRow: _omitted, ...older } = peer;
     const change = fold.frame({
       device: PEER,
@@ -169,7 +344,7 @@ describe("ModelBoardFold — one chain from every desktop's own", () => {
     ]);
     const peer = OPEN.devices[1]?.snapshot?.rows[0];
     if (peer === undefined || peer.kind === "terminal" || peer.monitorRow === undefined) {
-      throw new Error("the peer's desk row");
+      throw new Error("the peer's row");
     }
     const upsert = (monitorRow: typeof peer.monitorRow, revision: number) =>
       fold.frame({
@@ -385,7 +560,8 @@ describe("createGodviewMonitorFeed — the one door, re-asked on a gap, the scre
   });
 
   it("PG-1b — a peer row this build cannot read reads that desktop as another version, and the Godview stands", async () => {
-    // a newer peer's row: a tier this build has no word for (the relay passes it since PG-1b)
+    // a newer peer's row: a tier this build has no word for (the relay passes it since PG-1b),
+    // in its model row (a peer's row is its remote cut since PG-2, whose own root is passthrough)
     const open = structuredClone(golden("agent-model-mesh-open.valid.json")) as {
       devices: Array<{ device: string; snapshot?: { rows: Array<Record<string, unknown>> } }>;
     };
@@ -396,8 +572,7 @@ describe("createGodviewMonitorFeed — the one door, re-asked on a gap, the scre
     const newer = (id: string, tier = "hosted") => ({
       ...sample,
       runtimeRunId: id,
-      tier,
-      monitorRow: { ...(sample["monitorRow"] as Record<string, unknown>), id },
+      monitorRow: { ...(sample["monitorRow"] as Record<string, unknown>), id, tier },
     });
     rows.push(newer("run-newer"));
     const door = fakeBoard(open);

@@ -525,4 +525,40 @@ describe("DS-D15 — the actor names the node and the client behind a forwarded 
       onBehalfOf: { windowId: "window-7" },
     });
   });
+  it("F1b — a peer daemon's act for the phone behind it records that phone by its roster device", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-f1b-actor" });
+    await service.start();
+    const forPhone: CallerContext = {
+      principal: { kind: "peer-fieldd", deviceId: "dev-a", tailscaleId: "node-a" },
+      transport: "ws-tailnet",
+      receivedAt: Date.now(),
+      onBehalfOf: {
+        clientKind: "ios",
+        deviceId: "dev-a",
+        windowId: "conn_7",
+        clientDeviceId: "dev-phone",
+      },
+    };
+    await service.required(
+      forPhone,
+      { action: "freeway.approval.mint", target: { kind: "device", id: "dev-phone" } },
+      () => ({ approved: true }),
+    );
+    await service.close();
+    const all = await records(service.root);
+    expect(all.map((r) => r.actor)).toEqual(
+      [0, 1].map(() => ({
+        kind: "peer-fieldd",
+        id: "dev-a",
+        nodeId: "node-a",
+        onBehalfOf: {
+          clientKind: "ios",
+          deviceId: "dev-a",
+          windowId: "conn_7",
+          clientDeviceId: "dev-phone",
+        },
+      })),
+    );
+  });
 });

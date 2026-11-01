@@ -1,0 +1,43 @@
+{
+  "epoch": "fieldd-9b04c1e27a6d5f30.12",
+  "revision": 44,
+  "rows": [
+    {
+      "runtimeRunId": "run-h-nocwd",
+      "revision": 3,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ9S7UD1",
+      "status": "idle",
+      "statusSince": "2026-09-30T21:17:40.000Z",
+      "stateChangedAt": "2026-09-30T21:17:40.000Z",
+      "createdAt": "2026-09-30T20:33:20.000Z",
+      "alive": true,
+      "blockers": [],
+      "context": { "usedPercent": 12 },
+      "model": { "id": "claude-sonnet-5-5", "displayName": "Sonnet 5.5" },
+      "nativeSessionId": "4f8a2c6e-1d3b-4e7a-9c5f-8b2d6e0a4c19",
+      "terminal": { "hosted": "none" }
+    },
+    {
+      "runtimeRunId": "run-h-root",
+      "revision": 2,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ9S7UD1",
+      "status": "idle",
+      "statusSince": "2026-09-30T21:17:50.000Z",
+      "stateChangedAt": "2026-09-30T21:17:50.000Z",
+      "createdAt": "2026-09-30T20:35:00.000Z",
+      "alive": true,
+      "blockers": [],
+      "context": { "usedPercent": 5 },
+      "model": { "id": "claude-opus-5-5", "displayName": "Opus 5.5" },
+      "effort": { "value": "low", "intent": "configured" },
+      "nativeSessionId": "9b1d5f3a-7e2c-4a68-b0d4-3c9e7a1f5b82",
+      "terminal": { "hosted": "none" }
+    }
+  ]
+}

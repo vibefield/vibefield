@@ -12,7 +12,15 @@ import { afterEach, beforeEach, describe, expect, vi, it as vitestIt } from "vit
 import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootOnboarding, BootView } from "../src/boot/machine";
 import { OnboardingWizard } from "../src/boot/onboarding/OnboardingWizard";
-import { glassFit, type WizardLeaving } from "../src/boot/onboarding/wizard-ui";
+import {
+  errorCls,
+  eyebrowCls,
+  factCls,
+  glassFit,
+  quietCls,
+  voiceCls,
+  type WizardLeaving,
+} from "../src/boot/onboarding/wizard-ui";
 import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } from "../src/host";
 import { observeFrames } from "./wizard-frame-fixture";
@@ -1634,6 +1642,61 @@ describe("Setup Assistant", () => {
     expect(night).not.toContain("--vf-wizard-saturate");
   });
 
+  it("reads its words at 4.5:1 over the field (FG-O2's judge; DESIGN.md §5, §8): the day's milk at 75%, the ramp stopped at t2 on the glass, the wizard's own inks on it", () => {
+    const [day = "", night = ""] = TOKENS.split("\n.dark {");
+    expect(day).toContain("--vf-wizard-surface: rgb(255 255 255 / 75%);");
+    expect(night).toContain("--vf-wizard-surface: rgb(28 28 30 / 55%);");
+    // on the glass t2, t3 and t4 read as the glass's own t2 (its value is the next row's), its panes' words with its
+    // own; Settings keeps its ramp
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell \{\s*--vf-text-secondary: var\(--vf-wizard-text\);\s*--vf-text-tertiary: var\(--vf-wizard-text\);\s*--vf-text-faint: var\(--vf-wizard-text\);/u,
+    );
+    // its own words name their tier: the band's labels, done or to come, the line under the actions, a load's sub and a
+    // user's detail, all t2
+    for (const rule of ["step-label", "later", "status-sub", "user-detail"])
+      expect(WIZARD_CSS).toMatch(
+        new RegExp(`\\n\\.vf-wizard-${rule} \\{[^}]*color: var\\(--vf-text-secondary\\);`, "u"),
+      );
+    expect(WIZARD_CSS).not.toContain('li[data-state="done"] .vf-wizard-step-label');
+    // the class inks on the ramp, never a fixed black or white (DESIGN.md §10): a fact and an eyebrow at t3, a voice at
+    // t2, and a quiet button's words at t1 on its fill
+    expect(factCls).toContain("text-[var(--vf-text-tertiary)]");
+    expect(eyebrowCls).toContain("text-[var(--vf-text-tertiary)]");
+    expect(voiceCls).toContain("text-[var(--vf-text-secondary)]");
+    expect(quietCls).toContain("text-[var(--vf-text-primary)]");
+    for (const cls of [factCls, eyebrowCls, voiceCls, quietCls])
+      expect(cls).not.toMatch(/text-(black|white)\b/u);
+  });
+
+  it("holds its small words and its state words at 5:1 by day at the thinnest stroke row 32 measured (run59b; DESIGN.md §2.5, §5, §8)", () => {
+    const [day = "", night = ""] = TOKENS.split("\n.dark {");
+    // the glass's own t2: 80% by day; by night the ramp's t2
+    expect(day).toContain("--vf-wizard-text: rgb(28 28 30 / 80%);");
+    const nightT2 = night.match(/\n {2}--vf-text-secondary: ([^;]+);/u)?.[1];
+    expect(nightT2).toBe("rgb(245 245 247 / 70%)");
+    expect(night).toContain(`--vf-wizard-text: ${nightT2};`);
+    // its two state inks, darker by day; by night the inks themselves
+    expect(day).toContain("--vf-wizard-ink-healthy: #104c1f;");
+    expect(day).toContain("--vf-wizard-ink-attention: #683400;");
+    for (const [ink, fill] of [
+      ["healthy", "green"],
+      ["attention", "orange"],
+    ]) {
+      expect(night).toContain(`--vf-ink-${ink}: var(--vf-${fill});`);
+      expect(night).toContain(`--vf-wizard-ink-${ink}: var(--vf-${fill});`);
+    }
+    // re-projected on the shell alone, so Settings keeps its inks; danger and info take theirs when a word in them
+    // first comes onto the glass
+    expect(WIZARD_CSS).toMatch(
+      /\n\.vf-wizard-shell \{[^}]*--vf-ink-healthy: var\(--vf-wizard-ink-healthy\);\s*--vf-ink-attention: var\(--vf-wizard-ink-attention\);/u,
+    );
+    expect(WIZARD_CSS.match(/--vf-ink-[a-z]+: var\(--vf-wizard-ink-/gu)).toHaveLength(2);
+    expect(TOKENS + WIZARD_CSS).not.toMatch(/--vf-wizard-ink-(danger|info)/u);
+    // the wizard's error line wears the attention ink, never a palette colour of its own
+    expect(errorCls).toContain("text-[var(--vf-ink-attention)]");
+    expect(errorCls).not.toMatch(/text-[a-z]+-\d{2,3}\b/u);
+  });
+
   it("stands the browser's glass down where the field draws it, keeping the edge (FG-3b, FG-D24)", () => {
     // the shadow, the frost (its tint is its ::after) and the grain, hidden but keeping their style, which is the
     // recipe the field reads; the frost's backdrop filter off, so nothing blurs the field but the field
@@ -1675,6 +1738,15 @@ describe("Setup Assistant", () => {
     });
     const ground = container?.querySelector<HTMLElement>(".vf-wizard-ground");
     expect(ground?.style.getPropertyValue("--vf-glass-fit")).toBe("1");
+  });
+
+  it("stands the catalog's frames on FG-L2's ground of 976 × 736, the glass at its own size (the catalog judged)", () => {
+    const scenes = readFileSync(join(process.cwd(), "src/design-system/styles/scenes.css"), "utf8");
+    const height = /\n\.vf-ds-onboarding-production \{[^}]*\n {2}height: (\d+)px;/u.exec(
+      scenes,
+    )?.[1];
+    // row 32's catalog walk reads every frame's words as the product draws them, never scaled under its size
+    expect(glassFit({ width: 976, height: Number(height) }, { width: 880, height: 640 })).toBe(1);
   });
 
   it("forms the glass on the field by its frost and its rise, and fades nothing that holds the frost (DESIGN.md §6)", () => {
@@ -2020,12 +2092,13 @@ describe("Setup Assistant", () => {
     expect(WIZARD_CSS).toMatch(
       /@keyframes vf-wizard-fade-out \{\s*from \{\s*opacity: var\(--vf-wizard-from, 1\);\s*\}\s*to \{\s*opacity: 0;/u,
     );
-    // the line in t2 and the sub in t3, in tabular figures, the sub's 17 kept; the welcome's line in ink
+    // the line and the sub both in t2, the sub told by its size (FG-O2's judge), in tabular figures, the sub's 17 kept;
+    // the welcome's line in ink
     expect(WIZARD_CSS).toMatch(
       /\n\.vf-wizard-status-line \{\s*margin: 0;\s*color: var\(--vf-text-secondary\);\s*font-size: 14px;\s*font-variant-numeric: tabular-nums;\s*font-weight: 400;\s*line-height: 1\.4;/u,
     );
     expect(WIZARD_CSS).toMatch(
-      /\n\.vf-wizard-status-sub \{\s*min-height: 17px;\s*margin: 4px 0 0;\s*color: var\(--vf-text-tertiary\);\s*font-size: 12px;\s*font-variant-numeric: tabular-nums;\s*line-height: 1\.4;/u,
+      /\n\.vf-wizard-status-sub \{\s*min-height: 17px;\s*margin: 4px 0 0;\s*color: var\(--vf-text-secondary\);\s*font-size: 12px;\s*font-variant-numeric: tabular-nums;\s*line-height: 1\.4;/u,
     );
     expect(WIZARD_CSS).toMatch(
       /\n\.vf-wizard-status-words\[data-ink="true"\] \.vf-wizard-status-line \{\s*color: var\(--vf-foreground\);/u,

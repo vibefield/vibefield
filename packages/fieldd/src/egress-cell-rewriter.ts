@@ -1,6 +1,7 @@
 import { type CellEndpointSet, PORTS, RemoteCellEndpointSet } from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
-import type { EgressRouteDrop, EgressRoutesPort } from "./egress";
+import type { Logger } from "@vibefield/logging";
+import type { EgressRoutesPort } from "./egress";
+import { OwnerRoutes } from "./egress-owner-routes";
 import {
   egressTarget,
   egressUnavailable,
@@ -48,6 +49,11 @@ import {
 //    superseded daemon keeps them (`keepFloorRoutes`): the floor answers only
 //    its successor, which re-answers each route by its id.
 //
+// *DS-7 (2026-10-31): the one-reference-per-owner rule above moved into
+// `egress-owner-routes.ts` (`OwnerRoutes`) when a forwarded index ticket became
+// its second user; this rewriter holds one for the cell serve's port, and its
+// behaviour, words and log event are unchanged.*
+//
 // LIVE in the default build (TB-E): field-native's truffle arm, over
 // truffle-core 0.7.19 and its protocol-8 sidecar (RFC 026 egress needs
 // protocol 7). With a node up, an ensure binds a real loopback route. With no
@@ -64,23 +70,29 @@ export interface EgressCellRewriterOptions {
   logger?: Logger;
 }
 
-export class EgressCellRewriter implements RemoteCellRewriter {
-  /** the owner devices this rewriter holds its ONE reference on */
-  private readonly held = new Set<string>();
-  private readonly stopDrops: () => void;
-  private readonly logger: Logger;
-  private disposed = false;
+const STOPPING = "this desktop's daemon is stopping";
 
-  constructor(private readonly opts: EgressCellRewriterOptions) {
-    this.logger = opts.logger ?? createNoopLogger();
-    this.stopDrops = opts.routes.onDropped((drop) => this.onDropped(drop));
+export class EgressCellRewriter implements RemoteCellRewriter {
+  /** the ONE reference per owner device on its cell serve's route */
+  private readonly owners: OwnerRoutes;
+
+  constructor(opts: EgressCellRewriterOptions) {
+    this.owners = new OwnerRoutes({
+      routes: opts.routes,
+      port: CELLS,
+      ownerLeft: {
+        event: "fieldd.terminal.egress.owner_left",
+        message: "An owner desktop left the roster; its cell route is gone",
+      },
+      ...(opts.logger !== undefined ? { logger: opts.logger } : {}),
+    });
   }
 
   async rewrite(
     deviceId: string,
     endpoints: RemoteCellEndpointSet,
   ): Promise<CellEndpointSet | RemoteCellUnavailable> {
-    if (this.disposed) return egressUnavailable(deviceId, "this desktop's daemon is stopping");
+    if (this.owners.stopped) return egressUnavailable(deviceId, STOPPING);
     if (!RemoteCellEndpointSet.safeParse(endpoints).success)
       return egressUnavailable(deviceId, "the owner's doors are not one cell's tailnet pair");
     const target = egressTarget(endpoints);
@@ -91,15 +103,11 @@ export class EgressCellRewriter implements RemoteCellRewriter {
         deviceId,
         `the owner's cell doors are not on the cell serve's port (${CELLS})`,
       );
-    const route = await this.opts.routes.ensureRoute(deviceId, CELLS);
-    if (route === undefined) return egressUnavailable(deviceId);
-    if (this.disposed) {
-      // stopped while the route was being ensured: give it straight back
-      this.opts.routes.release(deviceId, CELLS);
-      return egressUnavailable(deviceId, "this desktop's daemon is stopping");
-    }
-    if (this.held.has(deviceId)) this.opts.routes.release(deviceId, CELLS);
-    else this.held.add(deviceId);
+    const route = await this.owners.hold(deviceId);
+    if ("refused" in route)
+      return route.refused === "stopping"
+        ? egressUnavailable(deviceId, STOPPING)
+        : egressUnavailable(deviceId);
     return (
       loopbackCellEndpoints(endpoints, route.listen) ??
       egressUnavailable(deviceId, "the egress route answered a listener that is not loopback")
@@ -108,7 +116,7 @@ export class EgressCellRewriter implements RemoteCellRewriter {
 
   /** The owner devices holding a route through this rewriter (tests, health). */
   holders(): string[] {
-    return [...this.held];
+    return this.owners.holders();
   }
 
   /** Daemon stop. Gives back every reference, and the last release takes each
@@ -116,27 +124,6 @@ export class EgressCellRewriter implements RemoteCellRewriter {
    * the floor answers only its successor then, which re-answers each route by
    * its id. Idempotent. */
   dispose(opts: { keepFloorRoutes?: boolean } = {}): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.stopDrops();
-    if (opts.keepFloorRoutes !== true) {
-      for (const deviceId of this.held) this.opts.routes.release(deviceId, CELLS);
-    }
-    this.held.clear();
-  }
-
-  /** The owner left the roster: EgressRoutes already took the route off the
-   * floor; the reference goes back so the entry goes too, and the next ticket
-   * after the owner returns binds afresh. A reset keeps the reference — the
-   * next ensure rebinds the same id. */
-  private onDropped(drop: EgressRouteDrop): void {
-    if (drop.port !== CELLS || drop.reason !== "peer-left") return;
-    if (!this.held.delete(drop.peerDeviceId)) return;
-    this.opts.routes.release(drop.peerDeviceId, CELLS);
-    this.logger.debug(
-      "fieldd.terminal.egress.owner_left",
-      "An owner desktop left the roster; its cell route is gone",
-      { owner: drop.peerDeviceId },
-    );
+    this.owners.dispose(opts);
   }
 }

@@ -508,12 +508,12 @@ function feed(sparks: SparkSummary[] = [VELA]): SparksPort {
       queue.asked.push({ item, choice });
       return new Promise((resolve, reject) => queue.answers.push({ resolve, reject }));
     },
+    onReconnected: () => () => undefined,
     open: async (id) => sparks.find((spark) => spark.id === id) ?? VELA,
   };
 }
 
 const PORT: ComposerPort = {
-  providers: async () => [],
   profileSets: async () => [],
   models: async () => {
     throw new Error("no picker here");

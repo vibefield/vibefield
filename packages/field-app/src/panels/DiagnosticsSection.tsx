@@ -1,4 +1,4 @@
-import { LOG_STREAMS } from "@vibefield/contracts";
+import { DiagnosticsLastExitResult, LOG_STREAMS, type ShellLastExit } from "@vibefield/contracts";
 import type {
   CrashArtifactListV1,
   DiagnosticLeaseCreateV1,
@@ -17,6 +17,7 @@ import type { DealFrom } from "../frame/cards/cards-store";
 import { COPY_PLACES } from "../frame/cards/cards-words";
 import { copyNamedWords, sheetOrigin } from "../frame/cards/copy-door";
 import { getHost } from "../host";
+import { lastExitWhen, lastExitWords } from "./last-exit-words";
 
 const ALL_SOURCES: readonly LogStreamV1[] = [
   LOG_STREAMS.SYSTEM_DESKTOP,
@@ -238,6 +239,9 @@ export function DiagnosticsSection(): ReactElement {
   const [leaseDuration, setLeaseDuration] = useState<"15m" | "1h" | "until-restart">("15m");
   const [leaseBusy, setLeaseBusy] = useState(false);
   const [crashes, setCrashes] = useState<CrashArtifactListV1 | null>(null);
+  // AL-12 — how the shell last left this pair; undefined while it is read, null when none is recorded
+  const [lastExit, setLastExit] = useState<ShellLastExit | null | undefined>(undefined);
+  const [lastExitError, setLastExitError] = useState<string | null>(null);
   const [selectedCrashes, setSelectedCrashes] = useState<Set<string>>(new Set());
   const [includeAudit, setIncludeAudit] = useState(false);
   const [supportPreview, setSupportPreview] = useState<SupportBundlePreviewV1 | null>(null);
@@ -379,6 +383,24 @@ export function DiagnosticsSection(): ReactElement {
       cancelled = true;
     };
   }, [host, refreshLeases]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void client
+      .request("diagnostics.lastExit")
+      .then((raw) => {
+        if (cancelled) return;
+        const parsed = DiagnosticsLastExitResult.safeParse(raw);
+        if (parsed.success) setLastExit(parsed.data.shell);
+        else setLastExitError("fieldd answered in a shape this window can't read");
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setLastExitError(message(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
 
   const records = useMemo(
     () =>
@@ -959,6 +981,19 @@ export function DiagnosticsSection(): ReactElement {
               )}
             </div>
           </details>
+
+          <div data-diagnostics="last-exit">
+            <span className={labelCls}>Last exit</span>{" "}
+            {lastExitError !== null ? (
+              <span className="text-orange-600 dark:text-orange-400">
+                Couldn't read it: {lastExitError}
+              </span>
+            ) : lastExit === undefined ? (
+              <span className={labelCls}>Reading…</span>
+            ) : (
+              <span>{lastExitWords(lastExit, lastExitWhen)}</span>
+            )}
+          </div>
 
           <details>
             <summary className="cursor-pointer text-neutral-400 dark:text-neutral-500">

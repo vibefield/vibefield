@@ -2,11 +2,12 @@ import {
   AGENT_FIELD,
   AgentDeskRow,
   AgentDeskTerminalRow,
-  AgentFieldRow,
   type AgentModelBoardRow,
   AgentModelDelta,
   AgentModelDeskRow,
   AgentModelSnapshot,
+  AgentRemoteRow,
+  AgentRemoteSnapshot,
   type AgentSessionSummary,
   AgentSubscribeParams,
   MonitorAgentRow,
@@ -14,16 +15,15 @@ import {
 import type { AgentMonitorState } from "@vibefield/puppeteer-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createFieldSubscription,
-  deskProjector,
   localFactsOf,
   peerMonitorRow,
   projectDeskRow,
   projectFieldRow,
+  projectRemoteRow,
   refuseBoardAsk,
   windowMonitorRow,
 } from "../src/agent-field";
-import { createModelSubscription } from "../src/agent-model-board";
+import { createModelSubscription, createRemoteSubscription } from "../src/agent-model-board";
 import { upstreamFloor, upstreamProjection } from "../src/mesh-board";
 import { managedSummary as summary } from "./agent-field-summary";
 import { floorTerminal, stateOf, testMonitor } from "./agent-monitor-fixture";
@@ -31,10 +31,10 @@ import { floorTerminal, stateOf, testMonitor } from "./agent-monitor-fixture";
 // MV-3a — THE WIRE (MV-D18, L8, L12, M16, M21): the model's row rides the desk
 // row; this desktop's own windows read the `model` board — every run's row
 // whole, every bare terminal as a row of its own kind, at the fold's tick with
-// urgent changes ahead of it; peers read the desk cut — no colour sequence,
-// texts bounded — at the desk's floor; the phone reads neither. EL9: every
-// frame here is parsed with the contracts' schemas, as the window's adapter
-// parses it.
+// urgent changes ahead of it; every other screen reads the remote cut (PG-2,
+// the desk cut before it) — no colour sequence, texts bounded — whose own rows
+// are `agent-remote-cut.test.ts`'s. EL9: every frame here is parsed with the
+// contracts' schemas, as the window's adapter parses it.
 
 const working = summary({
   runtimeRunId: "run-working",
@@ -142,15 +142,15 @@ describe("the two cuts of the model's row (M16, M21)", () => {
     const window = windowMonitorRow(row);
     expect(window.project.seq).toBe(0);
     expect(window.reply?.text).toBe(long);
-    // the desk projector joins the peer's cut onto the desk row
-    const desk = AgentDeskRow.parse({
-      ...deskProjector((id) => monitor.service.rowForRun(id))(monitor.fold.list().sessions[0]!),
+    // the remote cut carries the peer's cut (PG-2)
+    const remote = AgentRemoteRow.parse({
+      ...projectRemoteRow(monitor.fold.list().sessions[0]!, row),
       revision: 1,
     });
-    expect(desk.monitorRow?.project.seq).toBeUndefined();
-    expect(desk.monitorRow?.id).toBe("run-long");
+    expect(remote.monitorRow.project.seq).toBeUndefined();
+    expect(remote.monitorRow.id).toBe("run-long");
     // and the window's projection the whole row
-    const asWindow = projectDeskRow(monitor.fold.list().sessions[0]!, undefined, row, "window");
+    const asWindow = projectDeskRow(monitor.fold.list().sessions[0]!, undefined, row);
     expect(
       (asWindow as { monitorRow?: { project: { seq?: number } } }).monitorRow?.project.seq,
     ).toBe(0);
@@ -159,8 +159,8 @@ describe("the two cuts of the model's row (M16, M21)", () => {
     monitor.service.dispose();
   });
 
-  it("the desk projector without a backend row carries none (an older daemon's shape)", () => {
-    const row = deskProjector(() => undefined)(working);
+  it("the window's desk row without a backend row carries none (the run before its first tick)", () => {
+    const row = projectDeskRow(working);
     expect("monitorRow" in row).toBe(false);
   });
 
@@ -180,37 +180,32 @@ describe("the two cuts of the model's row (M16, M21)", () => {
       // EL9: what the window's adapter parses keeps it, a declared field
       expect(MonitorAgentRow.parse(peerMonitorRow(row)).writable).toBe(row.writable);
     }
-    // the desk projector a peer's board is cut with carries it on the desk row
+    // the remote cut a peer's board is cut with carries it on the remote row (PG-2)
     const session = monitor.fold
       .list()
       .sessions.find((candidate) => candidate.runtimeRunId === "run-headless");
     if (session === undefined) throw new Error("the fold lists the headless run");
-    const desk = AgentDeskRow.parse({
-      ...deskProjector((id) => monitor.service.rowForRun(id))(session),
-      revision: 1,
-    });
-    expect(desk.monitorRow).toMatchObject({ attachable: false, writable: false });
+    const remote = AgentRemoteRow.parse({ ...projectRemoteRow(session, headless), revision: 1 });
+    expect(remote.monitorRow).toMatchObject({ attachable: false, writable: false });
     monitor.service.dispose();
   });
 
-  it("F-M4 (PG-1a) — an owner whose doors are down withholds the model's attach promise with the join on its desk cut", async () => {
+  it("F-M4 (PG-1a) — an owner whose doors are down withholds the model's attach promise with the join on its remote cut (the desk cut until PG-2)", async () => {
     const monitor = await testMonitor({ summaries: [working] });
     // the backend promises an attach: a PTY is named (M41)
     expect(monitor.row("run-working")).toMatchObject({ attachable: true, writable: true });
     const cut = (published: boolean) =>
-      createFieldSubscription({
-        list: () => monitor.fold.list(),
-        subscribe: (fn) => monitor.fold.subscribe(fn),
+      createRemoteSubscription({
+        fold: monitor.fold,
+        monitor: monitor.service,
         emit: () => {},
-        project: deskProjector((id) => monitor.service.rowForRun(id)),
-        minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
         epoch: published ? "boot.up" : "boot.down",
         terminalPublished: () => published,
       });
     const up = cut(true);
     const down = cut(false);
-    const open = AgentDeskRow.parse(up.snapshot.rows[0]);
-    const held = AgentDeskRow.parse(down.snapshot.rows[0]);
+    const open = AgentRemoteRow.parse(up.snapshot.rows[0]);
+    const held = AgentRemoteRow.parse(down.snapshot.rows[0]);
     expect(open.terminal).toBeDefined();
     expect(open.monitorRow).toMatchObject({ attachable: true, writable: true });
     // doors down: neither the join nor the model's word promises a tap
@@ -223,7 +218,7 @@ describe("the two cuts of the model's row (M16, M21)", () => {
     monitor.service.dispose();
   });
 
-  it("PG-1d — an idle desk board re-presented on a gate flip: ONE snapshot at its revision, the attach promise withdrawn", async () => {
+  it("PG-1d — an idle remote board (the desk board until PG-2) re-presented on a gate flip: ONE snapshot at its revision, the attach promise withdrawn", async () => {
     const monitor = await testMonitor({ summaries: [working] });
     // the backend promises an attach (M41); `row` brings the model's rows up first
     expect(monitor.row("run-working")).toMatchObject({ attachable: true, writable: true });
@@ -232,27 +227,25 @@ describe("the two cuts of the model's row (M16, M21)", () => {
       kind: string;
     }> = [];
     let published = true;
-    const sub = createFieldSubscription({
-      list: () => monitor.fold.list(),
-      subscribe: (fn) => monitor.fold.subscribe(fn),
+    const sub = createRemoteSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
       emit: (frame, kind) => frames.push({ frame: frame as never, kind }),
-      project: deskProjector((id) => monitor.service.rowForRun(id)),
-      minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
       epoch: "boot.1",
       terminalPublished: () => published,
     });
-    const open = AgentDeskRow.parse(sub.snapshot.rows[0]);
+    const open = AgentRemoteRow.parse(sub.snapshot.rows[0]);
     expect(open.monitorRow).toMatchObject({ attachable: true, writable: true });
 
     published = false;
     sub.represent();
-    await new Promise((resolve) => setTimeout(resolve, AGENT_FIELD.DESK_MIN_INTERVAL_MS + 50));
+    await new Promise((resolve) => setTimeout(resolve, AGENT_FIELD.REMOTE_MIN_INTERVAL_MS + 50));
     expect(frames).toHaveLength(1);
     expect(frames[0]).toMatchObject({
       kind: "snapshot",
       frame: { epoch: "boot.1", revision: sub.snapshot.revision },
     });
-    const held = AgentDeskRow.parse(frames[0]?.frame.rows[0]);
+    const held = AgentRemoteRow.parse(frames[0]?.frame.rows[0]);
     expect(held.terminal).toBeUndefined();
     expect(held.monitorRow).toMatchObject({ attachable: false, writable: false });
     // nothing else of the model's row moves
@@ -263,7 +256,7 @@ describe("the two cuts of the model's row (M16, M21)", () => {
 });
 
 describe("who may ask the model board (MV-D18, M16, L8)", () => {
-  it("is refused to a peer daemon and to a phone, like `full`; a window asks it at either scope", () => {
+  it("is refused to a peer daemon and to a phone, like `full` (each reads `remote`); a window asks it at either scope", () => {
     expect(refuseBoardAsk("peer-fieldd", ask("model"))?.kind).toBe("FORBIDDEN_SCOPE");
     expect(refuseBoardAsk("tailnet", ask("model"))?.kind).toBe("FORBIDDEN_SCOPE");
     expect(refuseBoardAsk("peer-fieldd", ask("model", "mesh"))?.kind).toBe("FORBIDDEN_SCOPE");
@@ -290,19 +283,21 @@ describe("who may ask the model board (MV-D18, M16, L8)", () => {
     expect(refuseBoardAsk("shell-main", ask("model"))).toBeNull();
   });
 
-  it("a model hub asks its peers for their desk boards at the desk's floor", () => {
-    expect(upstreamProjection("model")).toBe("desk");
-    expect(upstreamProjection("desk")).toBe("desk");
+  it("a model hub asks its peers for their remote boards at the remote floor (PG-2); the phone's hub asks the same at its own", () => {
+    expect(upstreamProjection("model")).toBe("remote");
+    expect(upstreamProjection("remote")).toBe("remote");
     expect(upstreamProjection("field")).toBe("field");
-    expect(upstreamFloor("model", AGENT_FIELD.FULL_TICK_MS)).toBe(AGENT_FIELD.DESK_MIN_INTERVAL_MS);
+    expect(upstreamFloor("model", AGENT_FIELD.FULL_TICK_MS)).toBe(
+      AGENT_FIELD.REMOTE_MIN_INTERVAL_MS,
+    );
     expect(upstreamFloor("model", 250)).toBe(250);
-    expect(upstreamFloor("desk", AGENT_FIELD.DESK_MIN_INTERVAL_MS)).toBe(
-      AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+    expect(upstreamFloor("remote", AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS)).toBe(
+      AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS,
     );
   });
 });
 
-describe("cadence (L12): the window's own rows at the fold's tick, urgent changes ahead of it; peers at the desk floor", () => {
+describe("cadence (L12): the window's own rows at the fold's tick, urgent changes ahead of it", () => {
   it("a usage-only revision waits the 16 ms floor; a status flip with the floor elapsed goes out at once; inside the floor it waits the window out", async () => {
     vi.useFakeTimers();
     const monitor = await testMonitor({ summaries: [working] });
@@ -371,45 +366,6 @@ describe("cadence (L12): the window's own rows at the fold's tick, urgent change
     board.dispose();
     monitor.service.dispose();
   });
-
-  it("the desk board (a peer's cut) keeps the desk's 100 ms floor, urgent or not", async () => {
-    vi.useFakeTimers();
-    const monitor = await testMonitor({ summaries: [working] });
-    monitor.rows();
-    const frames: unknown[] = [];
-    const board = createFieldSubscription({
-      list: () => monitor.fold.list(),
-      subscribe: (fn) => {
-        const offFold = monitor.fold.subscribe(fn);
-        const offModel = monitor.service.subscribe(() => fn());
-        return () => {
-          offFold();
-          offModel();
-        };
-      },
-      emit: (delta) => frames.push(delta),
-      project: deskProjector((id) => monitor.service.rowForRun(id)),
-      minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
-      epoch: "boot.3",
-    });
-    vi.advanceTimersByTime(AGENT_FIELD.DESK_MIN_INTERVAL_MS + 1);
-    const base = stateOf(working);
-    monitor.runtime.push({
-      ...base,
-      revision: base.revision + 1,
-      status: "idle",
-      statusSince: "2026-09-13T10:06:00.000Z",
-    } as AgentMonitorState);
-    // urgent at the backend, and still the desk floor on this subscriber: the
-    // field subscription's signal says nothing of urgency
-    expect(frames).toHaveLength(0);
-    vi.advanceTimersByTime(AGENT_FIELD.DESK_MIN_INTERVAL_MS - 1);
-    expect(frames).toHaveLength(0);
-    vi.advanceTimersByTime(1);
-    expect(frames).toHaveLength(1);
-    board.dispose();
-    monitor.service.dispose();
-  });
 });
 
 describe("EL9 — what the window's adapter parses is what fieldd sends", () => {
@@ -463,7 +419,7 @@ function spoken(runtimeRunId: string, cwd: string): AgentSessionSummary {
 }
 
 describe("MV-3d — the chrome's facts ride the window's own run rows (M35, M42)", () => {
-  it("the window's cut carries each fact a chrome reader reads; the peer's desk cut, the phone's field row and the model's row carry none", async () => {
+  it("the window's cut carries each fact a chrome reader reads; the remote cut, the phone's field row and the model's row carry none", async () => {
     const typed = spoken("run-typed", "/Users/me/src/vibe-field");
     const starting = summary({ runtimeRunId: "run-starting", monitor: false, cwd: "/repo/wt" });
     const exited = summary({ runtimeRunId: "run-exited", exited: true });
@@ -498,29 +454,21 @@ describe("MV-3d — the chrome's facts ride the window's own run rows (M35, M42)
     // the path is the window's alone (EL7 B1): the model's row names the folder
     expect(run?.monitorRow?.project.name).toBe("vibe-field");
     expect(JSON.stringify(run?.monitorRow)).not.toContain("/Users/me");
-    // the desk cut a peer reads, and the phone's field row, carry none
-    for (const source of [typed, starting, exited]) {
-      const desk = deskProjector((id) => monitor.service.rowForRun(id))(source);
-      expect("local" in desk).toBe(false);
+    // the phone's field row carries none
+    for (const source of [typed, starting, exited])
       expect("local" in projectFieldRow(source)).toBe(false);
-      expect(
-        "local" in
-          projectDeskRow(source, undefined, monitor.service.rowForRun(source.runtimeRunId), "peer"),
-      ).toBe(false);
-    }
-    // and a peer's desk board, end to end, with the backend behind it
-    const peerFrames: unknown[] = [];
-    const peerBoard = createFieldSubscription({
-      list: () => monitor.fold.list(),
-      subscribe: (fn) => monitor.fold.subscribe(fn),
-      emit: (delta) => peerFrames.push(delta),
-      project: deskProjector((id) => monitor.service.rowForRun(id)),
-      minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+    // and the remote board a peer and the phone read, end to end, with the backend behind it
+    const peerBoard = createRemoteSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: () => undefined,
       epoch: "boot.6",
     });
-    for (const row of peerBoard.snapshot.rows) {
-      expect("local" in AgentDeskRow.parse(row)).toBe(false);
-      AgentFieldRow.parse(row);
+    const peerRows = AgentRemoteSnapshot.parse(peerBoard.snapshot).rows;
+    expect(peerRows.length).toBeGreaterThan(0);
+    for (const row of peerRows) {
+      expect("local" in row).toBe(false);
+      expect(JSON.stringify(row)).not.toContain("/Users/me");
     }
     peerBoard.dispose();
     board.dispose();
@@ -545,14 +493,11 @@ describe("MV-3d — the chrome's facts ride the window's own run rows (M35, M42)
     const keyed: AgentSessionSummary = { ...summary({ runtimeRunId: "run-k" }), stopKey: "escape" };
     expect(localFactsOf(keyed).stopKey).toBe("escape");
     // the row as it rides the window's board: the board stamps the revision when it publishes
-    const cut = AgentModelDeskRow.parse({
-      ...projectDeskRow(keyed, undefined, undefined, "window"),
-      revision: 1,
-    });
+    const cut = AgentModelDeskRow.parse({ ...projectDeskRow(keyed), revision: 1 });
     expect(cut.local?.stopKey).toBe("escape");
     expect(localFactsOf(summary({ runtimeRunId: "run-n" }))).not.toHaveProperty("stopKey");
-    // the key is the window's chrome alone: the peer's desk cut and the phone's row carry none
-    expect(JSON.stringify(projectDeskRow(keyed))).not.toContain("stopKey");
+    // the key is the window's chrome alone: the phone's row carries none, and the
+    // remote cut no `local` at all (`agent-remote-cut.test.ts`)
     expect(JSON.stringify(projectFieldRow(keyed))).not.toContain("stopKey");
   });
 

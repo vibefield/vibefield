@@ -647,6 +647,7 @@ describe('a spark that needs you, and a thread unread, from another view (CH-D4,
       answer: async () => {
         throw new Error("nothing is answered here");
       },
+      onReconnected: () => () => undefined,
       open: async () => vela,
     };
     stop = startSparksFeed(port);

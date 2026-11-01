@@ -80,67 +80,24 @@ private func catalogFixture() throws -> [GhostteaColorTheme] {
   }
 }
 
-@Suite struct ThemeResultsTests {
-  @Test func floatsTheSelectionAndReportsThePreCapTotal() throws {
-    let catalog = try catalogFixture()
-    let results = TerminalSettingsModel.themeResults(
-      query: "", selected: "Tokyo Night", limit: 2, in: catalog)
-    #expect(results.shown.map(\.name) == ["Tokyo Night", "Matte Black"])
-    #expect(results.total == 4)
+/// IOS-10a — the Theme page lists every theme (a `List` draws them lazily), so
+/// the sheet's ten-row cap and its "10 of 602 shown" line retired; a search
+/// heads its results with their count.
+@Suite struct ThemeCountWordTests {
+  @Test func countsWhatASearchFound() {
+    #expect(TerminalSettingsModel.themeCountWord(4) == "4 themes")
+    #expect(TerminalSettingsModel.themeCountWord(1) == "1 theme")
+    #expect(TerminalSettingsModel.themeCountWord(0) == "0 themes")
   }
 
-  /// A search is an instruction: a selection the query excludes stays excluded.
-  @Test func doesNotFloatASelectionTheQueryExcludes() throws {
-    let catalog = try catalogFixture()
-    let results = TerminalSettingsModel.themeResults(
-      query: "solar", selected: "Tokyo Night", in: catalog)
-    #expect(results.shown.map(\.name) == ["Solarized Dark", "solarized light"])
-    #expect(results.total == 2)
-  }
-
-  @Test func capsTheRenderedRows() throws {
-    let catalog = try catalogFixture()
-    let results = TerminalSettingsModel.themeResults(
-      query: "", selected: nil, limit: 1, in: catalog)
-    #expect(results.shown.count == 1)
-    #expect(results.total == 4)
-  }
-
-  @Test func handlesAnEmptyCatalog() {
-    let results = TerminalSettingsModel.themeResults(query: "x", selected: "Matte Black", in: [])
-    #expect(results.shown.isEmpty)
-    #expect(results.total == 0)
-  }
-
-  /// The real catalog, so the cap and the default selection are exercised
-  /// against the 602 themes the sheet actually renders.
-  @Test func theDefaultThemeLeadsTheRealCatalog() {
-    let results = TerminalSettingsModel.themeResults(
-      query: "", selected: TerminalAppearance.default.themeName)
-    #expect(results.total == GhostteaThemeCatalog.themes.count)
-    #expect(results.shown.count == TerminalSettingsModel.themeResultLimit)
-    #expect(results.shown.first?.name == "Matte Black")
-  }
-}
-
-@Suite struct ThemeCountLineTests {
-  @Test func namesWhatIsWithheld() {
-    #expect(
-      TerminalSettingsModel.themeCountLine(shown: 10, total: 602, query: "")
-        == "10 of 602 shown — search narrows the list")
-  }
-
-  @Test func statesTheWholeCountWhenNothingIsWithheld() {
-    #expect(TerminalSettingsModel.themeCountLine(shown: 4, total: 4, query: "sol") == "4 themes")
-    #expect(TerminalSettingsModel.themeCountLine(shown: 1, total: 1, query: "sol") == "1 theme")
-  }
-
-  @Test func emptyResultsQuoteTheQuery() {
-    #expect(
-      TerminalSettingsModel.themeCountLine(shown: 0, total: 0, query: " nope ")
-        == "no theme matches “nope”")
-    #expect(
-      TerminalSettingsModel.themeCountLine(shown: 0, total: 0, query: "") == "the catalog is empty")
+  /// `nil` is our default by contract, so the tick lands on the row that is
+  /// actually rendering — and that row is in the real catalog.
+  @Test func theDefaultThemeIsTheOneInUseAndIsCarried() {
+    var appearance = TerminalAppearance.default
+    appearance.themeName = nil
+    let name = TerminalSettingsModel.themeName(of: appearance)
+    #expect(name == "Matte Black")
+    #expect(GhostteaThemeCatalog.themes.contains { $0.name == name })
   }
 }
 
@@ -237,7 +194,9 @@ private func catalogFixture() throws -> [GhostteaColorTheme] {
   /// rights clear, the line stops claiming it.
   @Test func countsUpstreamsOwnList() {
     let line = TerminalSettingsModel.unavailableShaderLine()
-    #expect(line.hasPrefix("\(GhostteaShaderOption.unavailableUpstreamNames.count) more ports"))
+    #expect(
+      line.hasPrefix(
+        "\(GhostteaShaderOption.unavailableUpstreamNames.count) more of Ghostty’s community shaders"))
     #expect(line.contains("their redistribution terms are unclear"))
     #expect(!line.contains("sorry"))
   }
@@ -249,7 +208,7 @@ private func catalogFixture() throws -> [GhostteaColorTheme] {
   /// rather than quoting the doc, so only this pin needed correcting.
   @Test func upstreamCarriesThirtyTwoUnavailablePorts() {
     #expect(GhostteaShaderOption.unavailableUpstreamNames.count == 32)
-    #expect(TerminalSettingsModel.unavailableShaderLine().hasPrefix("32 more ports"))
+    #expect(TerminalSettingsModel.unavailableShaderLine().hasPrefix("32 more of Ghostty’s"))
   }
 
   @Test func fourShadersShipWithLicencesAndDescriptions() {
@@ -261,58 +220,88 @@ private func catalogFixture() throws -> [GhostteaColorTheme] {
   }
 }
 
-@Suite struct CatalogAttributionTests {
-  @Test func namesTheRepoAndTheExactCommit() {
+@Suite struct CatalogFootTests {
+  @Test func namesTheRepoAndTheRevisionAsTheDesktopDoes() {
     #expect(
-      TerminalSettingsModel.catalogAttribution(
-        source: "https://github.com/mbadolato/iTerm2-Color-Schemes/tree/875a82f0/ghostty",
-        revision: "875a82f0") == "mbadolato/iTerm2-Color-Schemes @ 875a82f0")
+      TerminalSettingsModel.catalogFoot(
+        count: 602,
+        source: "https://github.com/mbadolato/iTerm2-Color-Schemes/tree/875a82f0fdc773ae/ghostty",
+        revision: "875a82f0fdc773ae45099ce683a11c56bb0f8b3d")
+        == "602 themes from iTerm2-Color-Schemes, as ghosttea bundles them · revision 875a82f0")
   }
 
-  /// Anything that is not that URL shape is shown whole rather than guessed at.
-  @Test func showsAnUnfamiliarSourceVerbatim() {
+  /// Anything that is not that URL shape is named whole rather than guessed at.
+  @Test func namesAnUnfamiliarSourceWhole() {
     #expect(
-      TerminalSettingsModel.catalogAttribution(source: "an internal mirror", revision: "abc")
-        == "an internal mirror @ abc")
+      TerminalSettingsModel.catalogFoot(count: 3, source: "an internal mirror", revision: "abc")
+        == "3 themes from an internal mirror, as ghosttea bundles them · revision abc")
     #expect(
-      TerminalSettingsModel.catalogAttribution(source: "somewhere", revision: "") == "somewhere")
+      TerminalSettingsModel.catalogFoot(count: 1, source: "somewhere", revision: "")
+        == "1 themes from somewhere, as ghosttea bundles them")
   }
 
   @Test func readsTheRealCatalogsProvenance() {
-    let line = TerminalSettingsModel.catalogAttribution()
-    #expect(line.hasPrefix("mbadolato/iTerm2-Color-Schemes @ "))
-    #expect(line.hasSuffix(GhostteaThemeCatalog.revision))
+    let line = TerminalSettingsModel.catalogFoot()
+    #expect(line.hasPrefix("\(GhostteaThemeCatalog.themes.count) themes from iTerm2-Color-Schemes"))
+    #expect(line.hasSuffix(String(GhostteaThemeCatalog.revision.prefix(8))))
   }
 }
 
-/// The view is not unit-testable, but "it does not trap" is: rendering it once
-/// evaluates every section against a given appearance — including the hostile
-/// one a decoded payload can carry.
-@Suite struct SheetRenderTests {
-  @MainActor private func render(_ appearance: TerminalAppearance) -> Bool {
-    var reported: TerminalAppearance?
-    let renderer = ImageRenderer(
-      content: TerminalSettingsSheet(appearance: appearance) { reported = $0 }
-        .frame(width: 393, height: 800))
-    let image = renderer.uiImage
-    // Rendering is not a change: the host must not be told anything happened.
-    #expect(reported == nil)
-    return image != nil
+/// IOS-10a — the pages are `List`s, which `ImageRenderer` does not draw, so
+/// "it does not trap" is held where the trap would be: every readout the
+/// pages format, over the default and over the hostile appearance a decoded
+/// payload can carry (`Int(.nan)` traps).
+@Suite struct PageReadoutTests {
+  private let hostile = TerminalAppearance(
+    themeName: "a theme the catalog never carried",
+    backgroundOpacity: .nan,
+    shaderEffects: ["ghosttea:not-a-shader", GhostteaShaderOption.available[3].id],
+    shaderAnimation: true,
+    fontSize: 0)
+
+  @Test func readsTheDefaultAppearance() {
+    let appearance = TerminalAppearance.default
+    #expect(TerminalSettingsModel.percent(appearance.backgroundOpacity).hasSuffix("%"))
+    #expect(TerminalSettingsModel.pointsText(appearance.fontSize) == "13 pt")
+    #expect(TerminalSettingsModel.effectsWord(appearance.shaderEffects) == "None")
   }
 
-  @MainActor @Test func rendersTheDefaultAppearance() {
-    #expect(render(.default))
+  @Test func readsAHostileStoredAppearanceWithoutTrapping() {
+    #expect(TerminalSettingsModel.percent(hostile.backgroundOpacity) == "100%")
+    #expect(TerminalSettingsModel.opacityDetail(hostile.backgroundOpacity) == "Solid: the field stays behind the terminal.")
+    #expect(TerminalSettingsModel.pointsText(hostile.fontSize) == "9 pt")
+    #expect(TerminalSettingsModel.themeName(of: hostile) == "a theme the catalog never carried")
+    // An id the renderer would drop is not an effect the terminal wears.
+    #expect(TerminalSettingsModel.effectsWord(hostile.shaderEffects) == GhostteaShaderOption.available[3].name)
   }
 
-  @MainActor @Test func rendersAHostileStoredAppearance() {
+  @Test func effectsAreNamedOneAtATimeAndCountedAfter() {
+    let ids = GhostteaShaderOption.available.map(\.id)
+    #expect(TerminalSettingsModel.effectsWord([]) == "None")
+    #expect(TerminalSettingsModel.effectsWord([ids[1]]) == GhostteaShaderOption.available[1].name)
+    #expect(TerminalSettingsModel.effectsWord([ids[1], ids[2]]) == "2 on")
+  }
+
+  /// The names are upstream's, read; the switch is what stops the motion,
+  /// whatever Reduce Motion says, and the line tells the truth about it.
+  @Test func animateDetailSaysWhatTheSwitchDoes() {
+    let moving = GhostteaShaderOption.available.filter(\.animated)
+    let still = GhostteaShaderOption.available.filter { !$0.animated }
+    #expect(moving.count == 2)
+    let off = TerminalSettingsModel.animateDetail(selection: still.map(\.id), reduceMotion: false)
+    #expect(off == "Only \(moving[0].name) and \(moving[1].name) move. Turn one on to use this.")
     #expect(
-      render(
-        TerminalAppearance(
-          themeName: "a theme the catalog never carried",
-          backgroundOpacity: .nan,
-          shaderEffects: ["ghosttea:not-a-shader", GhostteaShaderOption.available[3].id],
-          shaderAnimation: true,
-          fontSize: 0)))
+      TerminalSettingsModel.animateDetail(selection: [moving[0].id], reduceMotion: false)
+        == "Runs the motion in \(moving[0].name) and \(moving[1].name).")
+    #expect(
+      TerminalSettingsModel.animateDetail(selection: [moving[0].id], reduceMotion: true)
+        == "Reduce Motion is on. Leave this off to keep the terminal still.")
+  }
+
+  @Test func opacityDetailFollowsTheDesktopsTwoLines() {
+    #expect(TerminalSettingsModel.opacityDetail(1) == "Solid: the field stays behind the terminal.")
+    #expect(TerminalSettingsModel.opacityDetail(0.85) == "The field shows through the terminal.")
+    #expect(TerminalSettingsModel.percent(0.85) == "85%")
   }
 }
 

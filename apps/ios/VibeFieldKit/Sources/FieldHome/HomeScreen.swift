@@ -6,6 +6,7 @@ import FieldInput
 import FieldMesh
 import FieldProduct
 import FieldRoutedTerminal
+import FieldSettings
 import FieldWorkspace
 import FieldSwarm
 import FieldTerminal
@@ -139,6 +140,11 @@ public struct HomeScreen: View {
   /// root is behind the card while it is up, and a second presentation from
   /// the same presenter is a sheet that never appears.
   @State private var cardSettingsOpen = false
+  /// IOS-10a — where Settings opens from the corner: its root, Account (your
+  /// name), or, in a photograph run (`-vf-open-settings=<page>`), any page.
+  @State private var settingsOpening: SettingsOpening = .root
+  /// IOS-10a — the phone's look (Settings › Appearance), worn by the window.
+  @AppStorage(PhoneAppearance.storageKey) private var phoneLook: PhoneAppearance = .auto
   @State private var discoveryPolling = false
   @State private var attachment: TerminalAttachment?
   /// The freeway's kit half (FW-D1/D2, 2026-10-16): each desktop's terminal
@@ -367,20 +373,13 @@ public struct HomeScreen: View {
     .onChange(of: linkHome) { syncHistoryDesktops() }
     // IOS-8d — on the stage for the type-checker's sake, like the cover above.
     .confirmationDialog(
-      "Sign out of \(accountLogin ?? "this account")?", isPresented: $signOutPending,
+      SettingsWords.signOutTitle(login: accountLogin), isPresented: $signOutPending,
       titleVisibility: .visible
     ) {
-      Button("Sign out", role: .destructive) {
-        // TS-7b — the person's own Sign out settles a Mac's code too; the
-        // sweep alone keeps it, for "Another account?"'s Sign in again.
-        expectationMemory.forget()
-        signOut()
-      }
+      Button("Sign out", role: .destructive) { confirmSignOut() }
       Button("Cancel", role: .cancel) {}
     } message: {
-      Text(
-        "This phone forgets your Tailscale sign-in, your desktops and your face. "
-          + "Appearance, snippets and clipboard history stay.")
+      Text(SettingsWords.signOutMessage)
     }
   }
 
@@ -691,8 +690,14 @@ public struct HomeScreen: View {
       isOpen: accountMenuOpen,
       seed: accountSeed,
       onToggle: { setAccountMenu(open: !accountMenuOpen) },
+      onAccount: {
+        setAccountMenu(open: false)
+        settingsOpening = .account
+        settingsSheetOpen = true
+      },
       onSettings: {
         setAccountMenu(open: false)
+        settingsOpening = .root
         settingsSheetOpen = true
       },
       onSignOut: {
@@ -979,6 +984,7 @@ public struct HomeScreen: View {
   public var body: some View {
     tabs
       .background(FieldPalette.panelBackground.ignoresSafeArea())
+      .phoneAppearance(phoneLook)
     .onAppear {
       assembly.projects = projectStore.load()
       refold()
@@ -1217,7 +1223,11 @@ public struct HomeScreen: View {
           requestLandscape()
         }
         // --- end IOS-5e ---------------------------------------------------
-        if ProcessInfo.processInfo.arguments.contains("-vf-open-settings") {
+        // IOS-10a — `-vf-open-settings[=<page>]`: Settings, at its root or
+        // at one page (`account`, `desktop:<id>`, `appearance`, `terminal`,
+        // `about`, `acknowledgements`), for a photograph run.
+        if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-open-settings") }) {
+          settingsOpening = FieldHomeModel.settingsOpening(argument: argument)
           settingsSheetOpen = true
         }
         // --- IOS-6c: the swarm design lab — the reference's fixture stages on
@@ -1545,11 +1555,7 @@ public struct HomeScreen: View {
         .fieldGlassSheet()
     }
     .sheet(isPresented: $settingsSheetOpen) {
-      settingsSheet
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(40)
-        .fieldGlassSheet()
+      settingsSheet(at: settingsOpening)
     }
     // RETIRED 2026-09-14 (TM-3): the write-key sheet, which took a pasted
     // capability or asked the desktop for one. Both doors are deleted.
@@ -1766,13 +1772,10 @@ public struct HomeScreen: View {
       }
     }
     // IOS-8g — the appearance sheet, from the card's `···`, on the card's own
-    // presenter (the root is behind this sheet).
+    // presenter (the root is behind this sheet). IOS-10a: it is Settings,
+    // opened on its Terminal page, with Settings one step back.
     .sheet(isPresented: $cardSettingsOpen) {
-      settingsSheet
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(40)
-        .fieldGlassSheet()
+      settingsSheet(at: .terminal)
     }
     // A keyboard coming up — any owner, either mode — is the person engaging
     // this pane: it takes the seat (DS-D5), and puts the view back on the
@@ -2050,20 +2053,99 @@ public struct HomeScreen: View {
     }
   }
 
-  private var settingsSheet: some View {
-    TerminalSettingsSheet(appearance: appearance) { next in
-      // The PREFERENCE commits eagerly and is what every future attach is
-      // seeded from; `TerminalAttachment.appearance` is what the terminal on
-      // screen is wearing. Since TM-5 they cannot disagree — there is no
-      // replica left that could decline a change.
-      appearance = next
-      TerminalAppearanceStore.save(next)
-      // The DEVICE half goes live at once. Under T there is no replica here
-      // to rebuild and nothing that can refuse the edit — the glyphs in a
-      // remote frame are the cell's, and what these values still style is this
-      // renderer's own ground (see `TerminalSettingsSheet`'s note).
-      attachment?.apply(appearance: next)
-    }
+  // MARK: - IOS-10a: Settings
+
+  /// The phone's Settings, on paper (the History tab's ground, opaque: a page
+  /// to read, not a pane of glass), opened where `opening` says.
+  private func settingsSheet(at opening: SettingsOpening) -> some View {
+    SettingsView(
+      account: settingsAccount,
+      terminal: terminalAppearance,
+      opening: opening,
+      actions: SettingsActions(
+        // Both acts leave Settings first: the sign-in is the system's own
+        // sheet, and a signed-out phone's Field is the welcome.
+        signIn: {
+          closeSettings()
+          performSignIn()
+        },
+        signOut: {
+          closeSettings()
+          confirmSignOut()
+        })
+    )
+    .presentationDetents([.large])
+    .presentationDragIndicator(.hidden)
+    .presentationCornerRadius(40)
+    .presentationBackground(ChromePalette.paper)
+  }
+
+  private func closeSettings() {
+    settingsSheetOpen = false
+    cardSettingsOpen = false
+  }
+
+  /// A confirmed Sign out, from the corner's menu or from Settings › Account.
+  private func confirmSignOut() {
+    // TS-7b — the person's own Sign out settles a Mac's code too; the sweep
+    // alone keeps it, for "Another account?"'s Sign in again.
+    expectationMemory.forget()
+    signOut()
+  }
+
+  /// The terminal's look, as Settings › Terminal edits it.
+  private var terminalAppearance: Binding<TerminalAppearance> {
+    Binding(
+      get: { appearance },
+      set: { next in
+        // The PREFERENCE commits eagerly and is what every future attach is
+        // seeded from; `TerminalAttachment.appearance` is what the terminal on
+        // screen is wearing. Since TM-5 they cannot disagree — there is no
+        // replica left that could decline a change.
+        appearance = next
+        TerminalAppearanceStore.save(next)
+        // The DEVICE half goes live at once. Under T there is no replica here
+        // to rebuild and nothing that can refuse the edit — the glyphs in a
+        // remote frame are the cell's, and what these values still style is
+        // this renderer's own ground (see `TerminalSettingsPage`'s note).
+        attachment?.apply(appearance: next)
+      })
+  }
+
+  /// Settings' account, decided in `FieldHomeModel.settingsAccount` from the
+  /// corner's own inputs, where it is tested without a simulator.
+  private var settingsAccount: SettingsAccount {
+    #if DEBUG
+      if let demoAccount { return demoAccount.settings }
+      if let mock { return mock.settings }
+    #endif
+    _ = identityEpoch
+    let account = accountLogin
+    let home = linkHome ?? account.flatMap { HomeMemory().lastHome(for: $0) }
+    // A home has said who you are: on this connection, or before (its name is
+    // kept only from a home's answer).
+    let homeAnswered =
+      linkDesktops.first { $0.deviceId == linkHome }?.person != nil
+      || account.flatMap { faceStore.name(for: $0) } != nil
+    return FieldHomeModel.settingsAccount(
+      meshState: mesh.state,
+      rememberedLogin: mesh.rememberedLogin,
+      login: mesh.loginName,
+      domain: mesh.tailnetDomain,
+      name: account.flatMap { faceStore.name(for: $0) },
+      face: account.flatMap { faceStore.face(for: $0) },
+      seed: accountSeed,
+      home: home,
+      homeAnswered: homeAnswered,
+      desktops: linkDesktops,
+      asleep: account.map { login in
+        desktopMemory.remembered(for: login).map {
+          .init(deviceId: $0.deviceId, name: $0.name, platform: $0.platform, lastSeen: $0.lastSeen)
+        }
+      } ?? [],
+      isHearing: link?.isHearing ?? false,
+      machineName: mesh.machineName,
+      adminConsole: mesh.adminConsoleURL)
   }
 
   // MARK: - Attachment
@@ -2282,6 +2364,10 @@ public struct HomeScreen: View {
     createSheet = nil
     workspaceLaunch = nil
     closeLink()
+    // AP-D4 (ITEM 130): History's readers, its ledger and its cache on disk go
+    // with the account, beside the mesh's own sweep — the one place every
+    // sign-out passes, the welcome's "Another account?" included.
+    historyDesktops.signedOut()
     mesh.signOut()
     assembly.projects = .empty
     refold()
