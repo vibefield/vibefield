@@ -478,9 +478,8 @@
   item 146b (the phone stage places a Simulator.app's start by its `etime` between two reads of the clock, never by
   `lstart`'s local wall time, so DST's repeated hour cannot make the run's own app foreign; perf-lab's lstart an
   identity string, left: `ab0199542` as M87, a fast-forward, run 87; LANDED "Item 146b") ·
-  item 147 (index-timeline's SP-6 real-rosettad row "the page over the ground-truth transcript" pages once the
-  session's row is indexed, before rosetta has its entries under load: red once in CP-3's merged-tree light, green
-  3 of 3 alone; the row should wait on its entries; skipped where FIELDD_ROSETTAD_BIN is unset; LANDED "CP-3") ·
+  item 147 (the ground-truth page waits for rosetta's `indexed`, never the session row's first sight: rosetta writes
+  the row `pending` before its entries; test-only: `f3554436d` as the merge `10368b597`, run 91; LANDED "Item 147") ·
   item 148 (users.json's mint and the layout stamp are created whole: tmp, fsync, a link that fails EEXIST; a bare
   "wx" create named the file before its bytes, and `detectLayoutState` read it outside the lock: `75e1bd31a` as
   M90, a fast-forward, run 90; LANDED "Item 148") ·

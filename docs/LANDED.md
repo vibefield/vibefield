@@ -27863,3 +27863,39 @@ lock.ts's two comments and `users-file.test.ts`'s belt row title name the exclus
 would fail loudly as users-unwritable, "cannot mint users.json", never silently. verify runs on macOS only.
 
 **Owed.** The Windows box check of the mint (the link on NTFS), not the fixer's to run unasked.
+
+## Item 147 — the ground-truth page waits for rosetta's `indexed`, never the session row's first sight
+
+(2026-11-01; one commit `f3554436d` on lane `fix/item147` over main `b2fad1d42`, the fixer's; the mint M91 `10368b597`,
+the merge over main `d8902f376`, run 91.) Found by cp-landing's merged-tree light, granted at 12:13Z. Test-only.
+
+**The red.** index-timeline.test.ts's "SP-6 — the two doors against the REAL rosettad › the page over the ground-truth
+transcript" read `expected 0 to be ≥ 1` under whole-suite load, and was green 3 of 3 alone. Its `realWorld()` waited
+for the session's row in `index.sessions` and paged at once. rosetta writes a session's row `pending` at setup, before
+any of its entries (rosetta-pin `crates/pipeline/src/streamed.rs`), and marks it `indexed` only once every admitted
+source file has completed a clean generation (`stream.rs`). The row's first sight is not its entries, and under load
+the page landed in between.
+
+**The fix.** `untilIndexed(rpc, nativeSessionId, ms)` ends the wait on the row's `streamState === "indexed"`, rosetta's
+own mark that the transcript has landed whole, read through fieldd's `index.sessions` door. Both of realWorld's rows
+ask it at the same 90 s: the page, and the tail, which compares its snapshot to a page. Waiting on the mark, not on a
+non-empty page, keeps the row's own `≥ 1` a claim, and holds the agent reply and the tail's comparison as well as the
+first entry. The red-first row is in the stub world (the fake rosettad re-reads its files per request): the session
+reads `pending` with no entries, and 1 s later the entries land and the row reads `indexed`. The wait must end with the
+page holding all seven of S1's entries. `World` gains `sessions(rows)`.
+
+**The light** (lane item147, `lanes/item147/tools/light147.sh`, logs `lanes/item147/light/`; 12:43:28Z → 12:45:56Z,
+at `f3554436d`). Its first run, at 12:20Z, was stopped on its red-first step for M88's landing, and the lane was
+restored clean; this second run went green throughout:
+- R, red-first: `untilIndexed` given main's condition (the row's first sight), the stub row alone, red:
+  `expected [] to have a length of 7 but got +0`. The file was restored from HEAD.
+- G: the stub row alone at the fix, green in 1,200 ms (the 1 s flip waited out).
+- X: the whole file against the REAL rosettad (the siblings-built release binary at the pin), 13/13. The page row took
+  592 ms and the tail row 3,708 ms, both run, neither skipped.
+- Biome on the file. fieldd's typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- The merge-tree over main `0a97e59b6` was clean (`ea31487c5`, no file changed on both sides), and CP-3 touched none of
+  the row's seams: the fake rosettad, the index contracts, fieldd's index and rosetta code.
+- Run 91 on the mini (a9's mint; VF-PM's read, 22:16:29Z): 11,999 passed, 0 failed, 18 skipped, main's count plus the
+  new row; cargo 33 ok. The merge is over main `d8902f376`, item 148's records.
+
+**Owed.** Nothing of the fixer's.
