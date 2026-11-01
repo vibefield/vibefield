@@ -26797,3 +26797,39 @@ recorded nothing. So nothing told a person, later, how VibeField last quit. AL-7
 
 **Owed.** The idle bound's own stop (AL-5) and a signal are fieldd's, not a shell's exit, and leave the kept record as
 it was. The draft's §8.1 line is folded at the next queue opening.
+
+## Item 141 — the TREE-dies row waits for its grandchild on the condition: a beat, or the tree gone without one, never a 5 s clock
+
+(2026-11-01; one commit `15428f2a8` on lane `fixer/item141` over main `583e6e107`, the fixer's; the mint M77
+`2d91c6a5c`, the merge over main `26f9c2537`, run 77.) Filed to the fixer at 04:07Z from the light of items 131, 133,
+134 and 139, where fieldd whole met the one red that slice did not touch; VF-PM's go at 04:23Z.
+
+**The red.** `packages/fieldd/test/process-service.test.ts:244`, "ProcessService — §17.1 > the whole TREE dies: the
+shim's server does not outlive it (§17.1)", read `until()`'s "condition never became true" at load 123. The wait was
+`until(() => beats() > 0)`, the shim's grandchild writing its first heartbeat, at `until`'s default 5 s. One re-run of
+the file alone at load 92 was green, the row 1,880 ms. It is the family of items 120 and 131: a fixed deadline that
+load spreads. Here the first beat needs a Node start under the shim, and load stretched that start past the deadline.
+
+**The fix, in the test (`15428f2a8`).** That wait is the row's precondition (the server is up and writing), not its
+claim (the kill takes the whole tree). So it ends on the condition either way: a beat, or the tree exited without one.
+The second case fails at once and names itself ("the tree exited before its grandchild wrote a beat"); before, it
+waited out the 5 s in the generic words. Time guards only a hang, at 15 s, inside the row's own budget: fieldd's
+testTimeout (30 s) holds it and the kill's 5 s and the quiet's 8 s after it. The claim's waits are unchanged, and so
+are the file's nine other `until()` calls at their 5 s; none of those was seen red.
+
+**The light** (lane item118, under its own HOLD line, taken 04:34:22Z by noclobber in cp-landing's order; every
+red-first step a working-tree mutation, restored and proved clean): 04:34:43Z → 04:39:39Z at load 106 → 77. No load
+model exists for this row, so a delayed start stands in for the late first beat load made: the shim sleeps 6 s before
+it starts the grandchild.
+- D1: main's wait on the delayed start, red at 5,130 ms, "condition never became true". D2: the fix's wait, green, the
+  row 6,646 ms.
+- X1: a shim that exits with no grandchild, on main's wait: red at 5,036 ms in the generic words. X2: the fix's wait,
+  red at 192 ms, "the tree exited before its grandchild wrote a beat: expected 0 to be greater than 0".
+- The file alone, 21 passed and 1 skipped (the row 621 ms); biome on the file; check:walls 0; tsc for fieldd.
+- fieldd whole, with FIELDD_ROSETTAD_BIN naming ../rosetta-pin's release rosettad at the lock's `3948bcf`: 2,832
+  passed, 11 skipped, 0 failed (process-service.test.ts 22, 1 skipped, 1,786 ms).
+- Run 77 on the mini (a9's mint; VF-PM's read, 04:46:27Z): 11,522 passed, 0 failed, 18 skipped over 27 rows; cargo
+  33 ok; the TREE-dies row 600 ms.
+
+**Owed.** Nothing of the fixer's. The file's nine other `until()` calls keep their 5 s and the same shape; none was
+seen red, and a red among them is its own item.

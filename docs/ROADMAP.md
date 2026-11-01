@@ -433,6 +433,8 @@
   134b's smoke refuses a missing field-native at once; the rosettad control row reads at `close`: `130906443` as the
   merge `230e72848`, run 75; owed: PT-S3 L1's re-run on a built lane, PORTALS's; LANDED "Items 131, 133, 134 and
   139") ·
+  item 141 (the TREE-dies row's wait for its grandchild ends on a beat or the tree gone, inside the row's own budget,
+  never a 5 s clock: `15428f2a8` as the merge `2d91c6a5c`, run 77; LANDED "Item 141") ·
   item 137 (a shell promoted to an agent left the Godview and was reborn: the window's `ModelBoardFold` dropped an
   id another key of the desktop still held, against M22's one body; found by PG-3a0's probe; `a13132333`,
   `49935e71b`, M70 run 70, a pure fast-forward; nothing owed; LANDED "Item 137") ·
