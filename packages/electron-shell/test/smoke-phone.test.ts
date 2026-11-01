@@ -36,7 +36,9 @@ import {
   bandColour,
   bandNonce,
   bindingRead,
+  type DoorAct,
   endVoid,
+  ensureDevice,
   glassRect,
   idleWait,
   isOwnDevice,
@@ -961,6 +963,67 @@ describe("PT-S3 — the rows' judges", () => {
     expect(judgeGone({ ...gone, after: { ...gone.after, sessions: 2 } }).join(" ")).toMatch(
       /sessions 2 → 2/u,
     );
+  });
+});
+
+describe("PT-S3 — a device staged Booted waits for READY (R2-B: the stage answers Booting until iOS is ready)", () => {
+  /** A fake door: `state` and the verb answer from their queues (the last answer stands), a fake clock 1 s a sleep. */
+  const door = (answers: { state: string[]; boot?: string[]; shutdown?: string[] }) => {
+    const asked: string[] = [];
+    let t = 0;
+    const next = (q: string[]): string => (q.length > 1 ? (q.shift() ?? "") : (q[0] ?? ""));
+    return {
+      asked,
+      act: async (verb: string, n: number): Promise<DoorAct> => {
+        asked.push(`${verb} ${n}`);
+        const q = verb === "state" ? answers.state : (answers[verb as "boot" | "shutdown"] ?? []);
+        return { state: next(q), why: null };
+      },
+      clock: {
+        now: () => t,
+        sleep: async (ms: number) => {
+          t += ms;
+        },
+      },
+    };
+  };
+
+  it("a device already Booted asks nothing more; a Shutdown one is booted, and Booted at once is staged", async () => {
+    const a = door({ state: ["Booted"] });
+    expect(await ensureDevice(a.act, 1, "Booted", a.clock)).toBeNull();
+    expect(a.asked).toEqual(["state 1"]);
+    const b = door({ state: ["Shutdown"], boot: ["Booted"] });
+    expect(await ensureDevice(b.act, 1, "Booted", b.clock)).toBeNull();
+    expect(b.asked).toEqual(["state 1", "boot 1"]);
+    const c = door({ state: ["Booted"], shutdown: ["Shutdown"] });
+    expect(await ensureDevice(c.act, 2, "Shutdown", c.clock)).toBeNull();
+    expect(c.asked).toEqual(["state 2", "shutdown 2"]);
+  });
+
+  it("boot answering Booting is polled by state until Booted — never read as unstaged at once (R2-B)", async () => {
+    const a = door({ state: ["Booting", "Booting", "Booting", "Booted"], boot: ["Booting"] });
+    expect(await ensureDevice(a.act, 3, "Booted", a.clock)).toBeNull();
+    expect(a.asked).toEqual(["state 3", "boot 3", "state 3", "state 3", "state 3"]);
+  });
+
+  it("past the bound (180 s from the first read) the existing staging words; a failed boot is not polled", async () => {
+    const a = door({ state: ["Shutdown", "Booting"], boot: ["Booting"] });
+    expect(await ensureDevice(a.act, 1, "Booted", a.clock)).toBe(
+      "device 1 reads Booting, not Booted",
+    );
+    expect(a.clock.now()).toBeGreaterThanOrEqual(180_000);
+    expect(a.clock.now()).toBeLessThan(182_000);
+    const b = door({ state: ["Shutdown"], boot: ["failed"] });
+    expect(await ensureDevice(b.act, 1, "Booted", b.clock)).toBe(
+      "device 1 reads failed, not Booted",
+    );
+    expect(b.asked).toEqual(["state 1", "boot 1"]);
+  });
+
+  it("the rows' ensure is ensureDevice on the door's act (R2-B)", () => {
+    const at = SOURCE.indexOf("  const ensure = ");
+    const ensure = SOURCE.slice(at, SOURCE.indexOf("  const quitApp = ", at));
+    expect(ensure).toMatch(/ensureDevice\(doorAct, n, want\)/u);
   });
 });
 

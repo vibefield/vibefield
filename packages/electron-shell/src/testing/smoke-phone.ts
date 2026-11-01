@@ -138,6 +138,8 @@ export const PHONE_BOUNDS = {
   boot: 120_000 + 30_000,
   face: 15_000,
   word: 10_000,
+  /** a device's boot until iOS is READY (the stage's BOOT_READY_MS: its door answers Booting until `bootstatus` says so) */
+  ready: 180_000,
 } as const;
 
 // ─── the stage's word: the env ────────────────────────────────────────────────────────────────────────────────────────
@@ -1375,6 +1377,30 @@ export interface PhoneRowsDriver extends PaneRowsDriver {
   readonly fetch?: typeof fetch;
 }
 
+/** A device's state re-staged through the door: Booted or Shutdown, or the row cannot be staged (its words). `state` is
+ * read once; else `boot`/`shutdown` asked — and a boot answering `Booting` (the stage holds `Booted` until iOS is READY,
+ * whoever booted it: T1) is POLLED by `state` until Booted, within `bound` from the first read (R2-B). */
+export async function ensureDevice(
+  act: (verb: string, n: number) => Promise<DoorAct>,
+  n: number,
+  want: "Booted" | "Shutdown",
+  clock: { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> } = {
+    now: () => Date.now(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  },
+  bound: number = PHONE_BOUNDS.ready,
+): Promise<string | null> {
+  const t0 = clock.now();
+  const now = await act("state", n);
+  if (now.state === want) return null;
+  let r = await act(want === "Booted" ? "boot" : "shutdown", n);
+  while (want === "Booted" && r.state === "Booting" && clock.now() - t0 < bound) {
+    await clock.sleep(1_000);
+    r = await act("state", n);
+  }
+  return r.state === want ? null : `device ${n} reads ${r.state}, not ${want}`;
+}
+
 /** The rows stop: the door said stop, or the press gate refused. */
 class PhoneStop extends Error {}
 /** The door's `act` as the rows ask it: a stop answer is the run's STOP, thrown — never a state a poll waits past, nor
@@ -1796,13 +1822,9 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       after,
     };
   };
-  /** A device's state re-staged through the door: Booted or Shutdown, or the row cannot be staged. */
-  const ensure = async (n: number, want: "Booted" | "Shutdown"): Promise<string | null> => {
-    const now = await doorAct("state", n);
-    if (now.state === want) return null;
-    const r = await doorAct(want === "Booted" ? "boot" : "shutdown", n);
-    return r.state === want ? null : `device ${n} reads ${r.state}, not ${want}`;
-  };
+  /** A device's state re-staged through the door (`ensureDevice`, above). */
+  const ensure = (n: number, want: "Booted" | "Shutdown"): Promise<string | null> =>
+    ensureDevice(doorAct, n, want);
   const quitApp = async (): Promise<string> => (await doorAct("quit-app")).state;
   const openUrl = async (n: number, path: "/motion" | "/still", q: string): Promise<boolean> => {
     const r = await doorAct("openurl", n, { url: door.page(path, q) });
