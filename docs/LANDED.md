@@ -27978,3 +27978,30 @@ approval only. A ticket, its renewal and Resume stay over the owner's door (DS-8
   sooner.
 - `check-ios-fixtures`' doubled quotes, the fixer's (above).
 - `thinking-freeway.md` FW-R6's stale lines, at a draft slot VF-PM opens.
+
+## Item 150 — the board screen reads a row keyed "" as keyless, never `removed: [""]`, a delta RowsDelta refuses and the replica reopens on
+
+(2026-11-01; one commit `47ee475bd` on lane `fix/item150` over main `5c41c10b2`, the fixer's; the mint M94 `a6dc43cd2`,
+the merge over main `9f0b7c73f`, run 94.) fd's find in PG-3c's design, granted at 22:53Z.
+
+**The red.** `packages/field-app/src/godview/monitor/board-screen.ts`'s `keyOf` returned any string `runtimeRunId`, ""
+included; only a non-string read as NO_KEY. A row keyed "" fails AgentModelMeshRow (a key is `min(1)`), so it is
+unreadable, and the delta path appends every unreadable key but NO_KEY to `removed`. The screened delta carried
+`removed: [""]`, which contracts' RowsDelta (`removed: z.array(z.string().min(1))`) refuses. The replica read the frame
+as unreadable and reopened (`model-replica.ts`), so every such delta looped a reopen. The open path drops the row
+without touching `removed`, so only deltas looped.
+
+**The fix.** `keyOf` maps "" to NO_KEY, as PG-3c's Swift reader will. A keyless row still reads its desktop as another
+version until a snapshot or an open replaces it, as a non-string key always did.
+
+**The light** (lane item150, `lanes/item150/tools/light150.sh`, logs `lanes/item150/light/`; 22:57:02Z → 22:57:35Z, at
+`47ee475bd`), green throughout:
+- R, red-first: main's `board-screen.ts` under the new row, red, the screened delta's `removed` holding `"run-gone"`
+  and `""`. The file was restored from HEAD.
+- G: `board-screen.test.ts` at the fix, 9/9. board-screen with phone-parity, 22/22. Biome on the two files.
+- field-app's typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- The merge-tree over main `284e4af9d` (M93) was clean (`d880fc5e8`), with no file changed on both sides.
+- Run 94 on the mini (a9's mint; VF-PM's read, 23:07:43Z): 12,000 passed, 0 failed, 18 skipped, main's count plus one
+  (board-screen.test 8 → 9); cargo 33 ok.
+
+**Owed.** Nothing of the fixer's.
