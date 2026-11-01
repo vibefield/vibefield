@@ -165,8 +165,10 @@ export interface MeshBoardOptions {
   retryMaxMs?: number;
   logger?: Logger;
   /** PG-3b (the fold check [2]) — an owner's upstream is back: attached and its snapshot applied, at the first attach
-   * and at each re-attach (after a resync, a wake, a re-dial). What this daemon carries for its readers beside that
-   * upstream is carried again then (`agent-screens.ts` `linkReady`). Absent: nothing is told. */
+   * and at each re-attach this hub makes (a resync, a wake after asleep). A re-dial is link-ready's (PeerLink), not
+   * this. Every hub announces it, and duplicates are harmless because a report replaces its set. What this daemon
+   * carries for its readers beside that upstream is carried again then (`agent-screens.ts` `linkReady`). Absent:
+   * nothing is told. */
   onUpstreamReady?: (device: string) => void;
 }
 

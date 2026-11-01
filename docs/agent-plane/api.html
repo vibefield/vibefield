@@ -1673,7 +1673,9 @@
                       restart, a network blip, a sleep), the home carries each reader's current report to it again, so
                       the open card stays read. The replay reads what the phone shows when it is carried, so a report
                       still in flight is the one replayed, and an empty the phone sent replays nothing even if its own
-                      carry failed. Not built: a close's empty that fails is logged
+                      carry failed. A report whose own carry failed is still the phone's ask and is the one replayed,
+                      unless the owner refused it for good (it runs without PG-3b, or its carried-cap); then the replay
+                      carries the report that stood before it. Not built: a close's empty that fails is logged
                       (<code>fieldd.agents.screen_release_failed</code>) and not retried. Until the carrying connection
                       or its upstream closes on the owner, that reader's carried screen stands, and its rows earn no
                       unread mark there, in the owner's own windows too. A carried report acknowledges nothing:

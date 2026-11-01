@@ -30,9 +30,11 @@ import { RpcCallError } from "./native-link";
 //    is refused with a verdict that proves nothing stands there (`notDelivered`: the owner's own refusal, or the
 //    link's "never sent"). An empty report removes its owner only AFTER its carry lands, so a failed empty leaves the
 //    owner owed the close's (the 3b review [2], [12]).
-//  · `shown`: what the phone shows of each owner NOW. A non-empty report sets it when its carry begins, and a
-//    not-delivered verdict puts back what stood. An empty report clears it before its carry, whatever the outcome
-//    (the fold check [0], [1]). The home carries it again when the way to that owner comes back (`linkReady`):
+//  · `shown`: what the phone shows of each owner NOW. A non-empty report sets it when its carry begins, and it stays
+//    the phone's latest ask whatever the carry's outcome, since a replay runs only where the owner already forgot
+//    the screen. Only the owner's own lasting refusal (`lastingRefusal`: an owner without PG-3b, or its carried-cap)
+//    puts back what stood there (the fold2 check [0]). An empty report clears it before its carry, whatever the
+//    outcome (the fold check [0], [1]). The home carries it again when the way to that owner comes back (`linkReady`):
 //    the peer link answers a new dial, or the mesh board's upstream to that owner re-attaches on the same link after
 //    a resync (`MeshBoard`'s `onUpstreamReady`, the fold check [2]). In both cases the owner forgot the carried
 //    screen (with the old connection, or with its last `remote` board), and the phone's board at the home never
@@ -172,6 +174,15 @@ function notDelivered(error: unknown): boolean {
   if (error.kind !== "UNAVAILABLE") return true;
   const state = (error.details as { state?: unknown } | undefined)?.state;
   return state === "offline" || state === "starting" || state === "disposed";
+}
+
+/** The fold2 check [0] — the owner's own refusal that holds for as long as that owner does: it runs without PG-3b
+ * (`locality: "local"`), or its carried screens for this peer are at their bound (`carried-cap`). Only this makes a
+ * replay carry the report that stood before the refused one; every other failure leaves the phone's ask standing. */
+function lastingRefusal(error: unknown): boolean {
+  if (!(error instanceof RpcCallError)) return false;
+  const details = error.details as { locality?: unknown; reason?: unknown } | undefined;
+  return details?.locality === "local" || details?.reason === "carried-cap";
 }
 
 /** A carried screen's key: the carrying connection first, so no other connection's key can equal it. */
@@ -411,8 +422,10 @@ export function createAgentScreens(opts: AgentScreensOptions): AgentScreens {
         try {
           return await carry();
         } catch (error) {
-          if (notDelivered(error)) {
-            if (added) reader.owners.delete(device);
+          if (added && notDelivered(error)) reader.owners.delete(device);
+          // a replay runs only where the owner forgot the screen, so `shown` stays the phone's latest ask; only the
+          // owner's own lasting refusal (an owner without PG-3b, its carried-cap) puts back what stood there
+          if (lastingRefusal(error) && readers.get(id) === reader) {
             if (before === undefined) reader.shown.delete(device);
             else reader.shown.set(device, before);
           }
