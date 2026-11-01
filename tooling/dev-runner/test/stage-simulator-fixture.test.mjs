@@ -210,6 +210,9 @@ function fakeHost(opts = {}) {
     exec: async (file, args, o = {}) => {
       calls.push({ file, args, env: o.env });
       if (file === "/usr/bin/xcrun" && args[1] === "list") return ok(state.list);
+      // Simulator's defaults: readable, and nothing of the run's in them (G7: unreadable is the run's own red)
+      if (file === "/usr/bin/defaults" && args[0] === "export")
+        return ok(opts.defaults ?? simDefaults());
       if (file === "/usr/bin/pgrep")
         return state.pgrep === null
           ? { code: 1, signal: null, stdout: "", stderr: "" }
@@ -2923,7 +2926,7 @@ function defaultsHost(after, opts = {}) {
       host.defaults.push(args.join(" "));
       if (args[1] !== "com.apple.iphonesimulator" || args[2] !== "-" || args.length !== 3)
         throw new Error(`a unit ran defaults ${args.join(" ")}`);
-      if (args[0] === "export") return ok(host.store);
+      if (args[0] === "export") return opts.exportAnswer ?? ok(host.store);
       if (args[0] === "import") {
         host.imports.push(o.input);
         if (opts.importIgnored !== true) host.store = o.input;
@@ -3142,6 +3145,48 @@ test("G12: Simulator.app running at teardown and PROVEN the run's own — its ow
   const v2 = verdictOf(r2, false);
   assert.equal(v2.ownOk, true);
   assert.match(v2.foreign.join("; "), /Simulator's defaults: .*the run's own devices left/u);
+});
+
+test("G7: Simulator's defaults unreadable at teardown are the run's OWN side — its own entries unverified; said and judged", async () => {
+  const before = simDefaults();
+  const good = {
+    run: RUN,
+    own: { form: "kept", left: 3, shutdown: true },
+    simulator: { launchedByRun: true, quit: "quit", foreign: false },
+    helperLeft: 0,
+    others: { unchanged: true },
+    perfLock: "removed",
+    crash: { new: [] },
+  };
+  // an export that fails, answers nothing, a part, or times out: nothing imported, and the run's own side unrestored
+  for (const answer of [
+    { code: 1, signal: null, stdout: "", stderr: "boom" },
+    ok(""),
+    ok(simDefaults({ prefs: [FOREIGN_GONE, OWN[0]] }).slice(0, 300)),
+    { code: null, signal: "SIGTERM", stdout: before, stderr: "" },
+  ]) {
+    const { host, verdict, restored } = await defaultsTeardown(before, "", {
+      exportAnswer: answer,
+    });
+    assert.deepEqual(host.imports, [], JSON.stringify(answer));
+    assert.equal(restored.defaults.read, false);
+    assert.equal(restored.defaults.unverified, true);
+    assert.deepEqual([verdict.ok, verdict.ownOk], [false, false], JSON.stringify(answer));
+    assert.match(
+      verdict.why.join("; "),
+      /Simulator's defaults unreadable at teardown \(own entries unverified\)/u,
+    );
+    assert.ok(
+      host.said.some((l) => /Simulator's defaults unreadable at teardown/u.test(l)),
+      host.said.join("\n"),
+    );
+  }
+  // a run that made no device has no own entry to verify
+  assert.equal(
+    restoredVerdict({ ...good, defaults: { read: false, unverified: false, own: 0, foreign: 0 } })
+      .ok,
+    true,
+  );
 });
 
 test("R3: a non-own defaults change beside the run's OWN Simulator.app is its housekeeping — an OBSERVATION only, never why/foreign, never the exit", async () => {

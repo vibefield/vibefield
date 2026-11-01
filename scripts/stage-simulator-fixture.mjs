@@ -2056,7 +2056,9 @@ export async function restoreDefaults(run, deps, ctx) {
     }
   } else if (plan?.current === "unknown") current = "unknown";
   const judged = defaultsJudge(ctx.defaultsBefore, after, own, run.redactor.scrub);
-  return { ...judged, cleanup, removed, current, appRunning, appForeign };
+  // G7: unreadable after the run made devices — its own entries unverified: the run's own side, never assumed clean
+  const unverified = own.size > 0 && judged.read === false;
+  return { ...judged, cleanup, removed, current, appRunning, appForeign, unverified };
 }
 
 /** HOST-RESTORED, judged: own devices gone (under the flag) or kept shut down; Simulator.app quit where the run launched
@@ -2082,6 +2084,8 @@ export function restoredVerdict(r) {
   // H1: the run's own UDID-keyed defaults left after the cleanup are its own — unless another's Simulator.app kept the
   // cleanup from running; a change keyed by anything else is another's
   const d = r.defaults;
+  if (d?.unverified === true)
+    own.push("Simulator's defaults unreadable at teardown (own entries unverified)");
   if (d !== undefined && d.own > 0)
     (d.appForeign === true ? foreign : own).push(
       `Simulator's defaults: ${d.own} change(s) keyed by the run's own devices left (cleanup ${d.cleanup})`,
@@ -2701,6 +2705,7 @@ export async function restoreHost(run, deps, ctx) {
           removed: 0,
           appRunning: false,
           appForeign: false,
+          unverified: false,
         }
       : await restoreDefaults(run, deps, ctx);
   if (defaults.cleanup === "done")
@@ -2712,6 +2717,10 @@ export async function restoreHost(run, deps, ctx) {
   if (defaults.appForeign)
     deps.say(
       `PHONE_OBSERVATION Simulator's defaults: the cleanup ${defaults.cleanup} — its entries keyed by the run's own devices left (another's app, never touched): ${JSON.stringify(defaults.own.slice(0, 20))}`,
+    );
+  if (defaults.unverified)
+    deps.say(
+      "stage-simulator-fixture: Simulator's defaults unreadable at teardown (own entries unverified): the run's own side is not proven restored",
     );
   if (defaults.foreign.length > 0)
     deps.say(
@@ -2748,6 +2757,7 @@ export async function restoreHost(run, deps, ctx) {
       foreign: defaults.foreign.length,
       appRunning: defaults.appRunning,
       appForeign: defaults.appForeign,
+      unverified: defaults.unverified,
     },
     perfLock: releasePerfLock(run),
     crash: {
