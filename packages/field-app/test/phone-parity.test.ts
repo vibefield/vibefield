@@ -22,10 +22,12 @@ import {
   PHONE_GOLDEN_MIRRORS,
   PHONE_GOLDENS_COMMAND,
   PHONE_GOLDENS_DIR,
+  PHONE_VISIBLE,
   type PhoneBodyStep,
   type PhoneFoldStep,
   type PhoneGoldens,
   phoneGoldenFiles,
+  phoneVisible,
   puppeteerVersions,
   readWitnessInputs,
 } from "../perf/lib/phone-goldens";
@@ -74,6 +76,25 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
         ].join("\n"),
       ).toBe(true);
     }
+  });
+
+  it("the fold golden's header states the visibility rule the computation hands the replica", () => {
+    const stored = JSON.parse(readFileSync(join(PHONE_GOLDENS_DIR, PHONE_FOLD_GOLDEN), "utf8")) as {
+      visible: unknown;
+    };
+    expect(stored.visible).toEqual(PHONE_VISIBLE);
+    // and the rule says what the header says: alive, or a failure with a terminal join here
+    const joined = new Map([["pty-h3", "pty-h3"]]);
+    const visible = phoneVisible(joined);
+    const row = (over: Record<string, unknown>) =>
+      ({ id: "pty-h3", kind: "agent", alive: true, ...over }) as unknown as Parameters<
+        typeof visible
+      >[0];
+    const failure = { alive: false, wait: { kind: "failure", since: 1 } };
+    expect(visible(row({}))).toBe(true);
+    expect(visible(row(failure))).toBe(true);
+    expect(visible(row({ ...failure, id: "run-elsewhere" }))).toBe(false);
+    expect(visible(row({ alive: false }))).toBe(false);
   });
 
   it("names the three puppeteer packages it was computed by, as installed (a puppeteer EL8 regenerates it)", () => {
@@ -271,11 +292,10 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
     });
   });
 
-  it("Q06 — a crashed home run stays drawn on its terminal join, its failure on its body, published by the window's re-join", () => {
-    // the open's own publication is the model's visible rows; the window then hands the replica the
-    // board's joins, and the kept failure is added by that re-join
-    expect(foldAt("open").changes?.added).not.toContain("pty-h3");
-    expect(foldAt("open").rejoined).toEqual({ added: ["pty-h3"], updated: [], removed: [] });
+  it("Q06 — a crashed home run is drawn from the open on its terminal join, its failure on its body", () => {
+    // which publication carries it is the window's race (its render against its frame), not a fact
+    // 3d holds: it is drawn from the open on
+    expect(foldAt("open").drawn).toContain("pty-h3");
     for (const step of goldens.fold.filter((entry) => entry.gap !== true)) {
       expect(step.drawn, String(step.at)).toContain("pty-h3");
       expect(
