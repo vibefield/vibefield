@@ -2802,6 +2802,11 @@ function defaultsHost(after, opts = {}) {
 const defaultsTeardown = async (before, after, opts = {}) => {
   const run = ownRun();
   run.othersAtArm.set(FOREIGN, "Shutdown");
+  if (opts.launched === true) {
+    // the run showed its own Simulator.app, quit since (nothing running at teardown)
+    run.simulator.shown = 1;
+    run.simulator.launchedAt = ARMED + 30_000;
+  }
   const host = defaultsHost(after, opts);
   const verdict = await restoreHost(run, host.deps, {
     deleteDevices: false,
@@ -2917,11 +2922,91 @@ test("H1: the run's own entries still there after the cleanup are the run's OWN 
     defaults: { own: 2, foreign: 0, cleanup: "done", appRunning: false },
   });
   assert.deepEqual([own.ok, own.ownOk, own.foreign], [false, false, []]);
+  // another's app running kept the cleanup (the run launched none): both counts another's
   const theirs = restoredVerdict({
     ...good,
+    simulator: { launchedByRun: false, quit: "refused: x", foreign: true },
     defaults: { own: 2, foreign: 1, cleanup: "skipped: x", appRunning: true },
   });
   assert.deepEqual([theirs.ok, theirs.ownOk, theirs.foreign.length], [false, true, 2]);
+});
+
+test("R3: a non-own defaults change beside the run's OWN Simulator.app is its housekeeping — an OBSERVATION only, never why/foreign, never the exit", async () => {
+  const good = {
+    run: RUN,
+    own: { form: "kept", left: 3, shutdown: true },
+    simulator: { launchedByRun: true, quit: "quit", foreign: false },
+    helperLeft: 0,
+    others: { unchanged: true },
+    perfLock: "removed",
+    crash: { new: [] },
+    defaults: { own: 0, foreign: 2, cleanup: "done", appRunning: false },
+  };
+  // (a) the run launched Simulator.app, none proven another's: observation only
+  assert.deepEqual(restoredVerdict(good), { ok: true, why: [], ownOk: true, foreign: [] });
+  // (b) the run launched none: another's, as built
+  const unlaunched = restoredVerdict({
+    ...good,
+    simulator: { launchedByRun: false, quit: "not-running", foreign: false },
+  });
+  assert.deepEqual([unlaunched.ok, unlaunched.ownOk], [false, true]);
+  assert.match(unlaunched.foreign.join("; "), /Simulator's defaults: 2 change\(s\) not keyed/u);
+  // another's app proven: another's, even where the run launched one
+  const proven = restoredVerdict({
+    ...good,
+    simulator: { launchedByRun: true, quit: "refused: another's", foreign: true },
+  });
+  assert.match(proven.foreign.join("; "), /Simulator's defaults/u);
+  // own-UDID entries left are still the run's own, launched or not
+  const left = restoredVerdict({ ...good, defaults: { ...good.defaults, own: 1 } });
+  assert.deepEqual([left.ok, left.ownOk], [false, false]);
+  // through teardown: the run's own app wrote a window frame (no UDID) — said, never judged; the exit is 0
+  const before = simDefaults();
+  const frame =
+    "\t<key>NSWindow Frame Simulator</key>\n\t<string>10 20 400 800 0 0 1728 1084 </string>\n";
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0]], extra: frame });
+  const a = await defaultsTeardown(before, after, { launched: true });
+  assert.equal(a.restored.simulator.launchedByRun, true);
+  assert.equal(
+    a.host.imports[0],
+    simDefaults({ extra: frame }),
+    "the own entry removed, the frame kept",
+  );
+  assert.deepEqual([a.verdict.ok, a.verdict.ownOk, a.verdict.foreign], [true, true, []]);
+  assert.ok(
+    a.host.said.some((l) =>
+      /^PHONE_OBSERVATION Simulator's defaults .*run's own Simulator\.app.*NSWindow Frame Simulator/u.test(
+        l,
+      ),
+    ),
+    a.host.said.join("\n"),
+  );
+  assert.equal(
+    launchExit({
+      signal: null,
+      stopped: null,
+      deadlineHit: false,
+      code: 0,
+      restored: a.verdict.ownOk,
+      foreign: a.verdict.foreign,
+    }).code,
+    0,
+  );
+  // the same change on a run that launched no Simulator.app: another's — 75
+  const b = await defaultsTeardown(before, after);
+  assert.deepEqual([b.verdict.ok, b.verdict.ownOk], [false, true]);
+  assert.match(b.verdict.foreign.join("; "), /Simulator's defaults/u);
+  assert.equal(
+    launchExit({
+      signal: null,
+      stopped: null,
+      deadlineHit: false,
+      code: 0,
+      restored: b.verdict.ownOk,
+      foreign: b.verdict.foreign,
+    }).code,
+    NOT_ARMED,
+  );
 });
 
 test("sweep: exactly the run's own names, shut down; deleted only under the flag, each name read again right before (S9)", async () => {

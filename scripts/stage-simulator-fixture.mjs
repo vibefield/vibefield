@@ -2024,7 +2024,10 @@ export function restoredVerdict(r) {
     (d.appRunning === true ? foreign : own).push(
       `Simulator's defaults: ${d.own} change(s) keyed by the run's own devices left (cleanup ${d.cleanup})`,
     );
-  if (d !== undefined && d.foreign > 0)
+  // R3: beside the run's OWN Simulator.app (launched by it, none proven another's), a change keyed by no own UDID is the
+  // app's housekeeping (window frames, screen sets) — said as a PHONE_OBSERVATION by teardown, never judged
+  const housekeeping = r.simulator.launchedByRun === true && r.simulator.foreign !== true;
+  if (d !== undefined && d.foreign > 0 && !housekeeping)
     foreign.push(
       `Simulator's defaults: ${d.foreign} change(s) not keyed by the run's devices (another's, never touched)`,
     );
@@ -2625,7 +2628,9 @@ export async function restoreHost(run, deps, ctx) {
     );
   if (defaults.foreign.length > 0)
     deps.say(
-      `PHONE_OBSERVATION Simulator's defaults changed by another during the run (never touched): ${JSON.stringify(defaults.foreign.slice(0, 20))}`,
+      launchesOf(run) > 0 && !quitForeign
+        ? `PHONE_OBSERVATION Simulator's defaults changed beside the run's own Simulator.app (its housekeeping: never judged, never touched): ${JSON.stringify(defaults.foreign.slice(0, 20))}`
+        : `PHONE_OBSERVATION Simulator's defaults changed by another during the run (never touched): ${JSON.stringify(defaults.foreign.slice(0, 20))}`,
     );
   if (defaults.own.length > 0 && !defaults.appRunning)
     deps.say(
