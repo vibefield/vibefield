@@ -26376,3 +26376,48 @@ its key alone, and M22 made a promoted shell's run carry the shell's model id un
 - **Landed:** main fast-forwarded `86b788e2f` → `49935e71b` at 2026-11-01 03:08:38Z on VF-PM's GO.
 
 **Owed.** Nothing. PG-3d's Swift fold transcribes the fixed rule and its parity suite ports item 137's row.
+
+## AL-10 — Settings → Terminal → Behavior says what a quit does: a terminal ends when you quit VibeField, and a crash leaves it; DESIGN.md §9 gains "The quit's words" (2026-11-01; `27d61f7a5`, lane `al/10-quit-words`; James's "do the worth doing stuff"; VF-PM's GO)
+
+**Why:** the Behavior tab's "How long a terminal lives" told the person that a terminal "outlives this window and
+quitting VibeField". That has been false since AL-3 (2026-10-27): a person's quit stops the terminal service through
+the quit gate (AL-D1). The roadmap named the row as owed under AL's Next, with "DESIGN.md §9 words first".
+
+**What landed** (field-app · DESIGN.md):
+- **DESIGN.md §9, "The quit's words":** AL's one home for words. It has the rule (a person's quit stops the service, a
+  crash leaves it, no place promises more; GT-D11) and the four places as built: the quit box and the unknown box
+  (`quit-gate.ts`), the next launch's notice (`shell-exit-notice.ts`), and the Behavior row. Before this, those words
+  lived only in the shell's code.
+- **The row:** "As long as its program runs, on this Mac's terminal service. Closing this window leaves it running, and
+  so does a crash: the next launch finds it. It ends when its program exits, when you end it, when you quit VibeField,
+  or when the Mac restarts." Its fact is **Until you quit** (was "Until it exits").
+
+**Not in it:** AL-6's "Keep running when VibeField quits" amends the paragraph and the row when it lands. The row's
+"this Mac's" off the Mac is AL-9c's Settings words off the Mac.
+
+**Rows:** terminal-settings.test.tsx gains one AL-10 row: the row's sentence and fact, never "outlives", and DESIGN.md
+carrying the same sentence and fact (whitespace folded, chat-view's canon idiom). Red-first twice (the old tab; the new
+tab beside the old DESIGN.md), then green: the file 19/19.
+
+**Validation.**
+- **Red first**, in lane `al2` at nice 19 (03:01:53 → 03:02:20Z): the old tab and the old DESIGN.md, ×
+  "expected 'SessionsRead-only…' to contain 'As long as…'"; the new tab beside the old DESIGN.md, × "expected
+  '# DESIGN.md…' to contain '"As long as…'"; both new, the file 19/19.
+- **The light** at `20695bc30` on `86b788e2f` (03:11:33 → 03:13:59Z, under the guard and co-plan/HOLD, after
+  PERF.lock cleared): field-app's typecheck, biome, preflight, check:walls, and field-app's whole vitest, 268 files
+  passed and 1 skipped, 3,525 tests passed and 3 skipped.
+- **The rebase** onto `be1a21ec0` (VF-PM 03:16Z) was clean (`git merge-tree` first): `27d61f7a5`. At the tip
+  (03:19:16 → 03:19:52Z), field-app's typecheck, biome and the file again, 19/19.
+- **Run 71** (M71 `27d61f7a5`, the mint-rebased shape: the tip on main `be1a21ec0`, minted by a9 on VF-PM's GO):
+  - `pnpm verify` armed 03:21:22Z, exit 0 at 03:26:12Z (about five minutes), the mini's tree clean after it.
+  - vitest 11,486 passed, 0 failed, 18 skipped, +1 (AL-10's row). cargo 534 passed, 0 failed, 14 ignored (33
+    results). Typecheck and test ran for 28 projects.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run71/` (`mrun71.bundle`, sha256 `2002282a05cd7a76…`).
+- **Landed:** main fast-forwarded `be1a21ec0` → `27d61f7a5` at 2026-11-01 03:29:48Z on VF-PM's GO.
+
+**Decided with it:** AL-D19 (James, 2026-11-01 02:55Z, typed in better-quit's session): a quit chord a person binds in
+their own Ghostty file does NOT quit VibeField. There is no page→main quit door; the deck's `quit` hook keeps putting
+the terminals away. DECISIONS' AL-D19 row.
+
+**Owed:** AL-11 (the relaunch cap persisted), AL-12 (Diagnostics' "Last exit"), AL-6 (background mode), each its own
+mint.
