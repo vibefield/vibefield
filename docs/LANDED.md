@@ -26563,3 +26563,47 @@ rebased onto main `be1a21ec0` unchanged, its range-diff `=`; Checks):
 - Not claimed: an off word's ratio is printed, never judged, and row 32 holds no floor for it. The Account page's picker
   is never walked off; its witness is the unit row. The frame switch's off state is not built, and the glass's literals
   are item 136's.
+
+## AL-11 — the relaunch cap outlives fieldd: AL-D8's three relaunches per ten minutes are read from a log on disk, written before each relaunch runs (2026-11-01; `3ead0fd36`, lane `al/11-relaunch-cap`; James's "do the worth doing stuff"; VF-PM's GO)
+
+**Why:** AL-5's cap (`RELAUNCH_CAP` 3 per `RELAUNCH_WINDOW_MS` 10 min, AL-D8) counted in fieldd's memory. A fieldd
+replaced at boot (a stale build the supervisor stops, a crash of its own) began the count at zero. So an app that
+crashed at launch beside a fieldd that went with it could be relaunched without end, the loop the cap exists to bound.
+AL's Next named it: "AL-5's relaunch cap persisted".
+
+**What landed** (contracts · fieldd · field-native's generated registries):
+- **`LAYOUT.SHELL_RELAUNCHES`** (`fieldd/shell-relaunches.json`; `pnpm gen` writes `contracts/gen/layout.json` and
+  `field-native/src/registries.rs`, the vector by hand) holds `ShellRelaunchLog {at: epoch-ms[]}` (contracts
+  `shell-lease.ts`, passthrough; fixture `shell-relaunch-log.valid.json`). fieldd's alone; nothing native reads it.
+- **The cap, read from the log** (`fieldd/src/shell-absence.ts`, `relaunchUnderCap`): the log's stamps (with this
+  fieldd's own, sorted) inside the window. Past the cap it warns `fieldd.shell_absence.relaunch_capped` and relaunches
+  nothing; under it, it WRITES the new stamp, THEN relaunches, so an app that dies at once is counted. A shell that
+  attaches while the log is read or written wins (a generation `clear()` bumps): no relaunch, nothing written.
+- **A log it cannot use** never unbounds the cap: an unreadable or garbled one (`fileRelaunchLog` refuses "not a
+  relaunch log") falls back to this fieldd's own count (`relaunch_log_unreadable`); a failed write is warned
+  (`relaunch_log_failed`) and the relaunch runs under the memory count.
+- **One writer** for fieldd's lifecycle records: the lease's (0600, synced, a durable rename), exported as
+  `writeRecordFile`.
+
+**Rows:** `fieldd/test/shell-absence.test.ts`, 15 rows, 5 new (10 → 15; the commit's body says "6 new", a miscount:
+the sixth new row is the fixture table's `shell-relaunch-log`, 531 → 532). "the relaunch cap outlives fieldd (AL-11)": a second
+fieldd over the spent log relaunches nothing inside the window, then once after it; written before relaunched; a broken
+log capped at `RELAUNCH_CAP`; a shell back during the read wins. "the relaunch log on disk", real timers over a temp
+root: none, then what was written, mode 0600, a garbled one refused.
+
+**Validation.**
+- **Red first** under a mutation (03:20:11Z, the log ignored: `const recorded: number[] = []`): the cross-fieldd row and
+  the shell-wins row red, 2 failed | 13 passed; restored (03:20:30Z), 15/15. contracts fixtures + layout 548/548.
+- **The light** at `3ead0fd36` on `27d61f7a5` (03:31:13 → 03:35:55Z, nice 19, the guard, co-plan/HOLD): contracts' and
+  fieldd's typecheck, biome, preflight, check:walls; contracts whole 54 files / 1,430 tests; fieldd whole 223 files
+  passed and 3 skipped, 2,813 tests passed and 30 skipped; cargo `layout_vector` 1/1 (a fresh field-native build).
+- **Run 73** (M73 `2b35a3def`, the MERGE shape: `3ead0fd36` over main `313deb462`, AL-10's and a5's records on
+  M72; minted by a9 on VF-PM's GO, no second rebase, the light standing):
+  - `pnpm verify` armed 03:50:03Z, exit 0 at 03:54:51Z (about five minutes), the mini's tree clean after it.
+  - vitest 11,498 passed, 0 failed, 18 skipped, +6 over run 72 (shell-absence 10 → 15, the fixtures 531 → 532). cargo 534 passed, 0 failed, 14 ignored (33 results). Typecheck and
+    test ran for 28 projects.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run73/` (`mrun73.bundle`, sha256 `61b32730026270ec…`).
+- **Landed:** main fast-forwarded `313deb462` → `2b35a3def` at 2026-11-01 03:58:16Z on VF-PM's GO.
+
+**Owed.** The log holds at most `RELAUNCH_CAP` stamps (written only while fewer fall inside the window), and nothing
+else reads it. AL-5's packaged relaunch witness, and Windows/Linux relaunch, stay AL's Owed.
