@@ -1702,9 +1702,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       holds the keyboard.
     - **What it covers:** at 1180 × 780 the card is about 200 tall, y 412–612, so while it shows it covers about the
       pane's last ten rows, where a new agent's input box waits. It leaves the moment you write, so nothing you type is
-      under it.
+      under it. An ask is no turn (below), so when a new spark's own agent asks before it has worked (a trust or
+      permission menu at launch, a question), the hello stands over that ask too. The head's word says it (Needs your
+      OK, Asking you), and the ask shows once you click into the pane, which takes the hello away, or write. That is
+      the cost James chose (TU-1, Q2 A, on a frame that drew the hello over the ask).
     - **When they show:** while the thread is quiet. Quiet means four things hold:
-      - the spark is new: its session has had no turn yet (below);
+      - the spark is new: it has never worked (below);
       - its draft is empty;
       - the pane does not hold the keyboard;
       - nothing has been sent to it from this window.
@@ -1714,30 +1717,36 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       *Amended 2026-10-31 (CP-3):* quiet takes a fifth, that nothing in the thread waits on you. While a needs-you card
       stands (below), the hello and the starters do not show, and they come back when it leaves if the other four still
       hold: a thread with something waiting on you is not quiet (NS-D4).
-    - **How "new" is read:** from the board, cautiously, so that an idle spark with a transcript shows its pane alone.
-      The board counts a run's tokens only as they are spent live: a run that reads its transcript back counts nothing
-      from it until its next live turn. Both a woken spark's run (resumed, or started afresh) and a run fieldd
-      re-attached after a restart read it back. So a spark is new only while every fact the window holds agrees:
-      - it never started; or
-      - the board shows its own run, and all three hold:
-        - that run is the one it hatched in, born within a minute of the spark's record. A run born in its place
-          after that minute is not: a wake's (resumed, or started afresh), or one fieldd resumed in place of a run it
-          could not re-attach. So a spark woken after that minute never says hello;
-        - fieldd is watching that run, not waiting to resume it;
-        - this window has never seen the spark at work or waiting on you, nor that run's tokens spent (a turn is a
-          model's answer, and every answer spends them). What the window saw is kept for its life (HN-D9's rule), so
-          a turn it saw stays seen whatever the board counts after it. That life ends at a fieldd restart: a restart
-          replaces the window's document (main's boot fence, §8 "Chat's list"), and the window after it has seen
-          nothing. fieldd re-attaches only the runs a restart left (as it boots, and in its G5 retries after, the run
-          unwatched on the board until one attaches), so no window has seen a re-attached run's turns.
-      A spark whose run the board does not show is not said to be new. Two cases are still open. In each, a window that
-      has seen none of a run's turns reads a run whose transcript the board does not count:
-      - a run fieldd re-attached after a restart keeps its birth, so it still reads as the run its spark hatched in,
-        however old it is. The window the restart opened has seen none of its turns, so until that run's next live
-        turn it can say hello over the spark's transcript;
-      - a run born in the hatch run's place within the minute reads as the hatch run: one fieldd resumed in place of a
-        run it could not re-attach, after a restart within the hatch run's first 60 s, or a spark woken that soon.
-      Closing them needs a fact on the board's row that a transcript read back keeps: the run's turns.
+    - **How "new" is read:** fieldd keeps it, and the window reads it.
+      - A spark's record says whether it has ever worked: the time fieldd first saw one of its own sessions take a
+        turn, or that none has yet. A turn is work: the agent at work, tokens spent, or an answer written. An ask
+        alone (a trust or permission menu at launch, a question) is no turn.
+      - Each run's record says the same of its conversation, and the run's board row says it the moment it changes. A
+        resume carries the conversation's own (a wake, or fieldd's resume of a run it could not re-attach), and a
+        conversation resumed from History has worked.
+      - So a spark is new when it never started, or when its record says it has never worked and its own run's row
+        does not say otherwise: the row says a first turn before Chat reads the list again. While fieldd waits to
+        resume its run (it could not re-attach the run after a restart), it is not new: nothing watches that pane.
+      - A spark woken into its last session, or started afresh, is new only if it has never worked. A spark from
+        before fieldd kept the fact, whose record says neither, is new only if it never started.
+      - Asleep, a spark that has never worked is still new. Its hello stands in the thread's foot under the line "Vela
+        is asleep" and its **Wake**, as a spark that has not started yet has its hello under "Vela hasn't started yet".
+        A starter is sent as Send sends (§8 "Chat's composer"), so it wakes the spark first.
+      - One case is open: a turn no fieldd saw. While fieldd is down, and after a restart that could not re-attach a
+        run until fieldd resumes it at its next idle, the run's pane lives on and can still be typed into. If that turn
+        has ended by the time fieldd watches the conversation again (a re-attach, or the resume that replaces the run),
+        nothing reports it: the agent runtime replays only open work at attach, and an agent's transcript read back is
+        a silent baseline. Its record then says no turn yet, so for a spark that had not worked before, the hello can
+        stand over a conversation you had while nothing watched it. A run still mid-turn when fieldd attaches is seen
+        at work, and its turn is kept then. Closing the case needs a reading of the conversation from outside fieldd's
+        watch at that moment: the agent runtime reporting the transcript it reads back, or the History index's turns.
+      *Amended 2026-11-01 (TU-1; Q1 and Q2 ruled A by James, Q3 to Q5 by VF-PM):* quiet's first said "its session has
+      had no turn yet", and this read "new" from the board, cautiously: the spark's own run born within a minute of
+      the spark's record, fieldd watching it, and no turn this window had seen (at work, waiting on you, or tokens
+      spent). It named two open cases, a hatch run fieldd re-attached after a restart and a run born in the hatch
+      run's place within that minute. New is now the spark's: fieldd keeps the fact on the spark's record and the
+      run's, and both cases are closed. A spark asleep before it ever worked, its run off the board, was not new then,
+      nor was one whose own agent asked before it had worked (the window counted an ask); both are new now.
     - They come in over 420ms on `--vf-ease-island`, from 8 below at opacity 0, and they go at once. With reduced
       motion they fade in over 120ms, and a starter's rise takes 90ms on ease-out (M6).
     - The hello is VibeField's words for what a spark does, drawn in its voice. It is never sent to the session and is
@@ -1893,18 +1902,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   on hover removes it. A picture wears `capture` on the select blue at 14%; a card's chip wears its
   kind's index glyph (§8 "The hand").
   - **@'s rows in Chat** (CH-D5 A, "Agents to start, and sessions running"; EW-D4: @ offers only its scope). There are
-    two groups, read bottom-up, nearest first. Each lists only what the spark's own tools reach, but for the one
-    residual below.
-    - *The residual, a session's profile (2026-10-31):* the talk room reads it as the profile the run was filed under
-      (`profileSet`), else This Mac's. The board's row carries only the run's persona, so @ reads the persona's
-      profile, else This Mac's when the run names no persona. The two agree while a run is filed under its persona's
-      profile, or names neither. Where they part (a run filed under another profile, or naming only one of the two),
-      @ can offer a session that `agent_send` refuses as outside the spark's profiles, which the tool says, or leave
-      out one it would take. Closing it needs `profileSet` on the board's row.
+    two groups, read bottom-up, nearest first. Each lists only what the spark's own tools reach.
+    - *Amended 2026-11-01 (TU-1; Q3, and its rule ruled (a′) by VF-PM):* this said "but for the one residual below",
+      and the residual that the talk room reads a session's profile as the one its run was filed under, else This
+      Mac's, while @ read its persona's, so @ could offer a session `agent_send` refuses or leave out one it takes.
+      The board's row now carries the profile its run is filed under, and @, the talk room and every other room of a
+      spark's tools place a session by one rule (`profileSetOfRun`): the profile its run is filed under; else This
+      Mac's for a run that names no persona; else the profile that lists its persona. A persona no profile lists (a
+      retired sign-in) is in none: no spark reaches it, and @ never offers it. Godview's profile tabs, the agent
+      runtime's own reading, walk the same chain and draw that last session under This Mac, the one place the two
+      differ.
     - **Running in its profiles**, nearest the composer: the sessions the spark's `agent_send` (CP-2) takes, by its
       whole rule (`fieldd/src/tool-plane/rooms/talk/verbs.ts`). A session is a row when all three hold:
       - it is live;
-      - its profile is one of the spark's (read as the residual above says);
+      - its profile is one of the spark's (placed by the one rule above, as the talk room places it);
       - it is the person's own, or one this spark started (CP-D6). The person's own is not a spark's own session, and
         you started it (`origin.by` you, or no origin). One this spark started has `origin.by` spark and `origin.spark`
         this spark.

@@ -1,7 +1,10 @@
 import {
   type AgentFieldRow,
   type AgentProfileSet,
+  type AgentProfileSetId,
   catalogEntry,
+  personaSetsOf,
+  profileSetOfRun,
   type SparkSummary,
 } from "@vibefield/contracts";
 import { CANNOT_LIST_AGENTS } from "./new-spark";
@@ -9,22 +12,20 @@ import type { BoardRows } from "./sparks-feed";
 
 // @'S ROWS IN CHAT (SP-1d; DESIGN.md §8 "Chat's composer", @'s rows in Chat; CH-D5 A "Agents to start, and sessions
 // running"; EW-D4: @ offers only its scope). PURE: the spark, what fieldd answers of its profiles, and the field
-// board's rows in; the two groups out, read bottom-up, nearest first. Each lists only what the spark's own tools reach,
-// but for the one residual below:
+// board's rows in; the two groups out, read bottom-up, nearest first. Each lists only what the spark's tools reach:
 //
 //   - "Start an agent": the list its `agents_available` tool answers (TL-D2; fieldd's compose room) — each agent
 //     signed in under one of the spark's profiles, a row per agent and profile, said by the catalog's label as that
 //     tool says it (the raw id only for an agent the catalog has no row for);
 //   - "Running in its profiles": the sessions its `agent_send` takes (CP-2; fieldd's talk room, `reach` + `his` /
-//     `startedBy` + `live`), by that whole rule but for a session's profile.
+//     `startedBy` + `live`), by that whole rule.
 //
-// The residual (DESIGN.md's, dated 2026-10-31): the talk room reads a session's profile as the one its run was filed
-// under (`profileSet`), else This Mac's. The board's row carries only the run's persona (`profileId`), so here a
-// session is placed by its persona's profile, else This Mac's when it names no persona. The two part for a run filed
-// under a profile other than its persona's, or naming only one of the two: @ can then offer a session `agent_send`
-// refuses as outside, or leave out one it takes. Closing it needs `profileSet` on the board's row.
+// A session is placed as the talk room places it, by the one rule (`profileSetOfRun`, TU-1) over the row's two filing
+// keys and the profiles' persona map: the profile its run is filed under (`profileSet`); else This Mac's for a run
+// that names no persona; else the profile listing its persona (`profileId`); else none, and @ never offers it.
 //
-// Without its profiles no row can be placed, so a failed read of them offers none and says the New spark sheet's
+// Without its profiles no row can be placed: the agents are the profiles' own, and a persona's session with no profile
+// filed is placed by the profile listing it. So a failed read of them offers none and says the New spark sheet's
 // sentence. Without the board no session can be placed, but the agents can: they are the profiles' alone, so a failed
 // board leaves them standing, and the sessions' group says in its rows' place that what is running can't be read.
 //
@@ -110,26 +111,17 @@ export function sessionWord(row: AgentFieldRow): SessionWord | null {
   return null;
 }
 
-/** The profile a run is placed by here: its persona's, or This Mac's when it names no persona; undefined for a persona
- * no profile holds. The talk room reads the run's own `profileSet` instead, which the board's row lacks (the header's
- * residual). */
-function profileOfRow(row: AgentFieldRow, sets: readonly AgentProfileSet[]): string | undefined {
-  if (row.profileId === undefined) return sets.find((set) => set.kind === "native")?.id;
-  return sets.find((set) => set.personas.some((persona) => persona.profileId === row.profileId))
-    ?.id;
-}
-
 /** The sessions the spark's `agent_send` takes, by its whole rule: live; in one of its profiles; not its own session;
  * and the person's own (no spark's own session, started by you) or one this spark started. Another spark's agents, a
  * flow's runs and an origin word this build does not know are never rows. */
 function reachedBy(
   spark: SparkSummary,
   rows: readonly AgentFieldRow[],
-  sets: readonly AgentProfileSet[],
+  personaSets: ReadonlyMap<string, AgentProfileSetId>,
 ): AgentFieldRow[] {
   return rows.filter((row) => {
     if (!row.alive || row.runtimeRunId === spark.session?.runtimeRunId) return false;
-    const profile = profileOfRow(row, sets);
+    const profile = profileSetOfRun(row, personaSets);
     if (profile === undefined || !spark.profiles.includes(profile)) return false;
     const his = row.spark === undefined && (row.origin?.by ?? "you") === "you";
     const started = row.origin?.by === "spark" && row.origin.spark === spark.id;
@@ -201,7 +193,7 @@ export function atRowsOf(sources: AtSources): AtList {
       }),
     ),
   );
-  const reached = rows === "failed" ? [] : reachedBy(spark, rows, sets);
+  const reached = rows === "failed" ? [] : reachedBy(spark, rows, personaSetsOf(sets));
   const handles = handlesOf(reached);
   const offeredSessions = reached
     .sort(

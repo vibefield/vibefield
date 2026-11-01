@@ -15,7 +15,6 @@ import {
 import { describe, expect, it } from "vitest";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import {
-  HATCH_RUN_MS,
   helloWords,
   STARTERS,
   sparkIsNew,
@@ -38,6 +37,8 @@ function spark(over: Partial<SparkSummary> = {}): SparkSummary {
     folder: "/f/vela",
     createdAt: AT,
     updatedAt: AT,
+    // just hatched: fieldd has not seen it work
+    turnedAt: null,
     session: { runtimeRunId: "run-Vela", terminalSessionId: "pty-Vela", live: true },
     ...over,
   };
@@ -62,87 +63,126 @@ function row(over: Partial<AgentFieldRow> = {}): AgentFieldRow {
   };
 }
 
-/** Vela as Chat reads her, over her own run's row (or none), with the sparks the window has seen have a turn. */
-function entryOf(
-  record: SparkSummary = spark(),
-  own: AgentFieldRow | null = row(),
-  turnsSeen: ReadonlySet<string> = new Set(),
-) {
-  const entry = sparkEntriesOf([record], own === null ? [] : [own], { turnsSeen })[0];
+/** Vela as Chat reads her, over her own run's row (or none). */
+function entryOf(record: SparkSummary = spark(), own: AgentFieldRow | null = row()) {
+  const entry = sparkEntriesOf([record], own === null ? [] : [own])[0];
   if (entry === undefined) throw new Error("no entry");
   return entry;
 }
 
 const { session: _none, ...NEVER_STARTED } = spark();
 
-describe("a new spark: its session has had no turn yet (NS-D4; critique 17)", () => {
-  it("is new while its own run has not worked and has spent no tokens", () => {
+/** When fieldd first saw Vela work, as her record and her run's row say it (TU-1). */
+const TURNED = "2026-10-31T05:00:40.000Z";
+const hoursLater = (hours: number) => new Date(Date.parse(AT) + hours * 3_600_000).toISOString();
+
+describe("a new spark: it has never worked (NS-D4; TU-1, Q1)", () => {
+  it("is new while fieldd says it has never worked: its record null, its own run's row no turn", () => {
     expect(entryOf().status).toBe("ready");
     expect(sparkIsNew(entryOf())).toBe(true);
-    expect(sparkIsNew(entryOf(spark(), row({ usage: { cumulativeTokens: 0 } })))).toBe(true);
+    expect(sparkIsNew(entryOf(spark(), row({ turnedAt: null })))).toBe(true);
     // just hatched, its run not heard from yet: Hello
     expect(sparkIsNew(entryOf(spark(), row({ status: "unknown" })))).toBe(true);
-    // asleep before its first turn: still new, so a message to it is its first
+    // asleep before it ever worked, its run on the board: still new, so a message to it is its first
     const asleep = entryOf(spark(), row({ alive: false }));
     expect(asleep.status).toBe("sleeping");
     expect(sparkIsNew(asleep)).toBe(true);
   });
 
-  it("is new when it has never started at all", () => {
+  it("is new when it has never started at all, whatever its record says", () => {
     expect(sparkIsNew(entryOf(NEVER_STARTED, null))).toBe(true);
+    const { turnedAt: _absent, ...older } = NEVER_STARTED;
+    expect(sparkIsNew(entryOf(older, null))).toBe(true);
   });
 
-  it("is never new once it has had a turn: tokens spent, at work, or waiting on you", () => {
-    // an idle spark with a transcript shows its pane alone
-    expect(sparkIsNew(entryOf(spark(), row({ usage: { cumulativeTokens: 18_400 } })))).toBe(false);
-    expect(sparkIsNew(entryOf(spark(), row({ status: "working" })))).toBe(false);
+  it("W1: is not new in a window opened after a re-attach: its record and its run say it has worked, though nothing is counted", () => {
+    // the hatch run, re-attached after a restart: born at the spark's minute, its tokens gone (a re-attach counts
+    // nothing), the window new — fieldd's record keeps the turn
+    const entry = entryOf(spark({ turnedAt: TURNED }), row({ turnedAt: TURNED }));
+    expect(entry.run?.createdAt).toBe(AT);
+    expect(entry.run?.usage).toBeUndefined();
+    expect(sparkIsNew(entry)).toBe(false);
+  });
+
+  it("W2: is not new in a run born in the hatch run's place within the minute, once the spark has worked", () => {
+    const fresh = row({
+      runtimeRunId: "run-Vela2",
+      createdAt: "2026-10-31T05:00:30.000Z",
+      turnedAt: null,
+    });
+    const record = spark({
+      turnedAt: TURNED,
+      session: { runtimeRunId: "run-Vela2", terminalSessionId: "pty-Vela2", live: true },
+    });
+    expect(sparkIsNew(entryOf(record, fresh))).toBe(false);
+  });
+
+  it("W3: is new when woken hours later, if it was asleep before it ever worked", () => {
+    const woken = spark({
+      updatedAt: hoursLater(3),
+      session: { runtimeRunId: "run-Vela2", terminalSessionId: "pty-Vela2", live: true },
+    });
+    const resumed = row({ runtimeRunId: "run-Vela2", createdAt: hoursLater(3), turnedAt: null });
+    expect(sparkIsNew(entryOf(woken, resumed))).toBe(true);
+    // woken after it had worked, its resumed run carrying the conversation's time: its pane alone
+    const worked = { ...woken, turnedAt: TURNED };
+    expect(sparkIsNew(entryOf(worked, { ...resumed, turnedAt: TURNED }))).toBe(false);
+  });
+
+  it("is never new once its own run's row says a first turn, before the list is read again", () => {
+    expect(sparkIsNew(entryOf(spark(), row({ turnedAt: TURNED })))).toBe(false);
+  });
+
+  it("W4: a spark from before fieldd kept the fact (its record says neither) is never said to be new", () => {
+    const { turnedAt: _absent, ...older } = spark();
+    expect(sparkIsNew(entryOf(older))).toBe(false);
+    expect(sparkIsNew(entryOf(older, null))).toBe(false);
+  });
+
+  it("W5: is still new while its own agent asks before it has worked: an ask is no turn (Q2), and the hello stands over it", () => {
     const asks = entryOf(
       spark(),
       row({ status: "blocked", blockers: [{ id: "q-1", kind: "question", since: AT }] }),
     );
     expect(asks.status).toBe("asking");
-    expect(sparkIsNew(asks)).toBe(false);
+    expect(asks.blocked).toBe(true);
+    expect(sparkIsNew(asks)).toBe(true);
+    // James's Q2 A: the hello stands over the pane's ask until the pane takes the keyboard, or a draft is written
+    expect(threadQuiet(asks, true, false)).toBe(true);
+    expect(threadQuiet(asks, true, true)).toBe(false);
+    expect(threadQuiet(asks, false, false)).toBe(false);
   });
 
-  it("is never new in a run it did not hatch in: a woken spark's run reads its transcript back and counts nothing", () => {
-    // Wake resumes into a new run, which the record then names; puppeteer counts no usage read back from the
-    // transcript, so the resumed run is idle with nothing spent until its next live turn
-    const woken = spark({
-      updatedAt: "2026-11-01T09:00:00.000Z",
-      session: { runtimeRunId: "run-Vela2", terminalSessionId: "pty-Vela2", live: true },
-    });
-    const resumed = row({ runtimeRunId: "run-Vela2", createdAt: "2026-11-01T09:00:00.000Z" });
-    const entry = entryOf(woken, resumed);
-    expect(entry.run?.runtimeRunId).toBe("run-Vela2");
-    expect(entry.status).toBe("ready");
-    expect(entry.run?.usage).toBeUndefined();
-    expect(sparkIsNew(entry)).toBe(false);
-    // the run a hatch starts is born within HATCH_RUN_MS of the record, and only that one is its first
-    const born = (ms: number) => row({ createdAt: new Date(Date.parse(AT) + ms).toISOString() });
-    expect(sparkIsNew(entryOf(spark(), born(HATCH_RUN_MS)))).toBe(true);
-    expect(sparkIsNew(entryOf(spark(), born(HATCH_RUN_MS + 1)))).toBe(false);
-    expect(sparkIsNew(entryOf(spark(), born(-1)))).toBe(false);
-  });
-
-  it("is never new while fieldd waits to resume its run: nothing watches it", () => {
+  it("W6: is never new while fieldd waits to resume its run, whatever its record says: nothing watches it (D10)", () => {
     expect(sparkIsNew(entryOf(spark(), row({ pending: "resume-when-idle" })))).toBe(false);
-  });
-
-  it("is never new once the window has seen it have a turn, though the board's count is gone", () => {
-    // the same run, its count gone from the board (a transcript read back), and a turn the window's set still holds
-    const uncounted = entryOf(spark(), row(), new Set(["sp-vela0001"]));
-    expect(uncounted.run?.usage).toBeUndefined();
-    expect(uncounted.turnSeen).toBe(true);
-    expect(sparkIsNew(uncounted)).toBe(false);
-  });
-
-  it("is not said to be new when the board shows none of its runs: nothing certifies it", () => {
-    // awake by its record, its run not on the board yet (just after a wake): a spark that has had a turn never says
-    // hello, so nothing says it is new
-    expect(sparkIsNew(entryOf(spark(), null))).toBe(false);
     expect(
-      sparkIsNew(entryOf(spark({ session: { runtimeRunId: "run-Vela", live: false } }), null)),
+      sparkIsNew(entryOf(spark({ turnedAt: TURNED }), row({ pending: "resume-when-idle" }))),
     ).toBe(false);
+  });
+
+  it("W7: is new asleep before it ever worked, though the board shows none of its runs", () => {
+    const asleep = spark({ session: { runtimeRunId: "run-Vela", live: false } });
+    expect(sparkIsNew(entryOf(asleep, null))).toBe(true);
+    // awake by its record, its run not on the board yet (just after a hatch): its record says it has never worked
+    expect(sparkIsNew(entryOf(spark(), null))).toBe(true);
+    // one that has worked, or one whose record says neither, is not
+    expect(sparkIsNew(entryOf({ ...asleep, turnedAt: TURNED }, null))).toBe(false);
+    const { turnedAt: _absent, ...older } = asleep;
+    expect(sparkIsNew(entryOf(older, null))).toBe(false);
+  });
+
+  // G4's window half (Q4, a named guard; plans/tu1-plan.md §3.6): it asserts the gap, so it passes by design, and its
+  // TU1_G4 line is its reading. fieldd's half (fieldd/test/agent-session.test.ts) reads the spark, the record and the
+  // row null after a re-attach; a turn the person took while fieldd was down, ended before it attached, is unseen.
+  it("G4's window half: a spark whose facts read null after a re-attach is new, and its hello stands (the named gap)", () => {
+    const reattached = entryOf(spark(), row({ turnedAt: null, lastActivityAt: hoursLater(1) }));
+    const quiet = threadQuiet(reattached, true, false);
+    const hello = threadItemsOf(reattached, quiet, null).map((item) => item.kind);
+    console.log(
+      `TU1_G4 ${JSON.stringify({ case: "window", new: sparkIsNew(reattached), quiet, hello })}`,
+    );
+    expect(sparkIsNew(reattached)).toBe(true);
+    expect(hello).toEqual(["hello"]);
   });
 });
 
@@ -151,11 +191,15 @@ describe('quiet, and the items it brings (DESIGN.md §8 "Chat\'s thread", when t
     expect(threadQuiet(entryOf(), true, false)).toBe(true);
     expect(threadQuiet(entryOf(), false, false)).toBe(false);
     expect(threadQuiet(entryOf(), true, true)).toBe(false);
-    expect(threadQuiet(entryOf(spark(), row({ status: "working" })), true, false)).toBe(false);
+    expect(
+      threadQuiet(entryOf(spark(), row({ status: "working", turnedAt: TURNED })), true, false),
+    ).toBe(false);
+    // at work as it launches (puppeteer's `starting` span) is no turn yet, so fieldd stamps nothing: still quiet
+    expect(threadQuiet(entryOf(spark(), row({ status: "working" })), true, false)).toBe(true);
   });
 
   it("is not quiet while something in the queue waits on you in its thread (CP-3: quiet's fifth)", () => {
-    // held apart from "new": an item is a turn the window sees, so a spark asking is not new either
+    // held apart from "new": a card stands in the hello's place, and the spark is still new under it
     const item = NeedsItem.parse({
       id: "ny-quietfifth01",
       kind: "question",
