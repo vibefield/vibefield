@@ -182,13 +182,13 @@
   (`27d61f7a5`, 11-01; LANDED §AL-10: the Behavior tab's lifetime row says a quit ends a terminal, DESIGN.md §9's "The
   quit's words"; AL-D19 "no"), **AL-11** (`3ead0fd36`, 11-01; LANDED §AL-11: the relaunch cap read from a log on
   disk, written before each relaunch), **AL-12** (`b14117151`, 11-01; LANDED §AL-12:
-  Settings → Diagnostics' "Last exit", kept after the notice). AL-8b RETIRED (AL-D10 "A": no LaunchAgent, not with
+  Settings → Diagnostics' "Last exit", kept after the notice), **AL-6** (`79458ac4a`, 11-01; LANDED §AL-6: Keep
+  running when VibeField quits). AL-8b RETIRED (AL-D10 "A": no LaunchAgent, not with
   AL-6 either).
 - AL-9c candidates, on James's word (VF-PM's board): the deck's no-op `toggleFullscreen`, through a page→main door of
   its own (AL-D19: a person's Ghostty `quit` chord never quits VibeField) · Settings' chord words off the Mac · the
   deck's last-pane count (with ghosttea's "last pane closed" hook).
-- Next: **AL-6** background mode (AL-D2's "Keep running when VibeField quits", a Dock-hidden resident shell, a
-  status item).
+- Next: nothing queued; the AL-9c candidates wait on James's word.
 - Owed: AL-5's relaunch witness on a packaged build; Windows/Linux relaunch; a fieldd no shell ever claimed is
   unbounded; the clean `smoke:canvas` on this Mac (unattended); ghosttea's "last pane closed" hook (an upstream ask);
   James's hand rows (§5).
@@ -324,9 +324,14 @@
   LANDED "PT-S3"); its brief's P1–P16 are the orchestrator's leans. `pnpm smoke:phone` (L2), `:none` (L1) and `:cost`
   (L3) run the phone's rows under a stage that arms on the console's idle, makes and deletes only its own devices and
   restores the host (desk-gates row 33: landing-only, never inside `gate:landing`); P1 finds Xcode beside the Command
-  Line Tools. Nothing live has run: no real Simulator pixels have been seen on the desk.
-- Next: **PT-S3's live run, on James's unlock** (§6 step 3a's build and preflight, then L0 ENUM with him at the screen,
-  L1 and L2; L3 on the mini on his word, or skipped): a booted simulator streams its real pixels to the desk, each
+  Line Tools. **The first console run, 11-01** (James's unlock): L0 ENUM GREEN (Ghostty holds Screen Recording, no
+  prompt), L1 GREEN (after field-native was built: items 133/134); L2 ran 14 of 20 rows: real Simulator pixels
+  reached the desk (SIM-CAP's band), and its four reds and two VOIDs were the harness's, not the product's: a fresh
+  device's door verbs before iOS was ready, rows judging pages never opened (item 140, LANDED 11-01 in the mint
+  `aa5bf3669`; P7, P8 and H1 ruled at the leans).
+- Next: **PT-S3's L2 again, under a new run id, at James's launch** (L0 and L1 stand; SIM-STOPPED-CLOSED and P7's
+  hand witness after it, if he offers; L3 on the mini on his word, or skipped): a booted simulator streams its real
+  pixels to the desk, each
   honest face, the Screen Recording and Accessibility flows, "Show it" on a running Simulator.app (P7: recorded, its
   fix ruled after), the stopped word (P8), the fps buckets (PT-S2's R9: the law's 12 at rest arrives as 10), the
   letter of PT-S2's R7, the cost at the cap beside a pane
@@ -433,6 +438,8 @@
   134b's smoke refuses a missing field-native at once; the rosettad control row reads at `close`: `130906443` as the
   merge `230e72848`, run 75; owed: PT-S3 L1's re-run on a built lane, PORTALS's; LANDED "Items 131, 133, 134 and
   139") ·
+  item 141 (the TREE-dies row's wait for its grandchild ends on a beat or the tree gone, inside the row's own budget,
+  never a 5 s clock: `15428f2a8` as the merge `2d91c6a5c`, run 77; LANDED "Item 141") ·
   item 137 (a shell promoted to an agent left the Godview and was reborn: the window's `ModelBoardFold` dropped an
   id another key of the desktop still held, against M22's one body; found by PG-3a0's probe; `a13132333`,
   `49935e71b`, M70 run 70, a pure fast-forward; nothing owed; LANDED "Item 137") ·

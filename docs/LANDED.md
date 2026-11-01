@@ -26797,3 +26797,185 @@ recorded nothing. So nothing told a person, later, how VibeField last quit. AL-7
 
 **Owed.** The idle bound's own stop (AL-5) and a signal are fieldd's, not a shell's exit, and leave the kept record as
 it was. The draft's §8.1 line is folded at the next queue opening.
+
+## Item 141 — the TREE-dies row waits for its grandchild on the condition: a beat, or the tree gone without one, never a 5 s clock
+
+(2026-11-01; one commit `15428f2a8` on lane `fixer/item141` over main `583e6e107`, the fixer's; the mint M77
+`2d91c6a5c`, the merge over main `26f9c2537`, run 77.) Filed to the fixer at 04:07Z from the light of items 131, 133,
+134 and 139, where fieldd whole met the one red that slice did not touch; VF-PM's go at 04:23Z.
+
+**The red.** `packages/fieldd/test/process-service.test.ts:244`, "ProcessService — §17.1 > the whole TREE dies: the
+shim's server does not outlive it (§17.1)", read `until()`'s "condition never became true" at load 123. The wait was
+`until(() => beats() > 0)`, the shim's grandchild writing its first heartbeat, at `until`'s default 5 s. One re-run of
+the file alone at load 92 was green, the row 1,880 ms. It is the family of items 120 and 131: a fixed deadline that
+load spreads. Here the first beat needs a Node start under the shim, and load stretched that start past the deadline.
+
+**The fix, in the test (`15428f2a8`).** That wait is the row's precondition (the server is up and writing), not its
+claim (the kill takes the whole tree). So it ends on the condition either way: a beat, or the tree exited without one.
+The second case fails at once and names itself ("the tree exited before its grandchild wrote a beat"); before, it
+waited out the 5 s in the generic words. Time guards only a hang, at 15 s, inside the row's own budget: fieldd's
+testTimeout (30 s) holds it and the kill's 5 s and the quiet's 8 s after it. The claim's waits are unchanged, and so
+are the file's nine other `until()` calls at their 5 s; none of those was seen red.
+
+**The light** (lane item118, under its own HOLD line, taken 04:34:22Z by noclobber in cp-landing's order; every
+red-first step a working-tree mutation, restored and proved clean): 04:34:43Z → 04:39:39Z at load 106 → 77. No load
+model exists for this row, so a delayed start stands in for the late first beat load made: the shim sleeps 6 s before
+it starts the grandchild.
+- D1: main's wait on the delayed start, red at 5,130 ms, "condition never became true". D2: the fix's wait, green, the
+  row 6,646 ms.
+- X1: a shim that exits with no grandchild, on main's wait: red at 5,036 ms in the generic words. X2: the fix's wait,
+  red at 192 ms, "the tree exited before its grandchild wrote a beat: expected 0 to be greater than 0".
+- The file alone, 21 passed and 1 skipped (the row 621 ms); biome on the file; check:walls 0; tsc for fieldd.
+- fieldd whole, with FIELDD_ROSETTAD_BIN naming ../rosetta-pin's release rosettad at the lock's `3948bcf`: 2,832
+  passed, 11 skipped, 0 failed (process-service.test.ts 22, 1 skipped, 1,786 ms).
+- Run 77 on the mini (a9's mint; VF-PM's read, 04:46:27Z): 11,522 passed, 0 failed, 18 skipped over 27 rows; cargo
+  33 ok; the TREE-dies row 600 ms.
+
+**Owed.** Nothing of the fixer's. The file's nine other `until()` calls keep their 5 s and the same shape; none was
+seen red, and a red among them is its own item.
+
+## AL-6 — Keep running when VibeField quits: on macOS, with the switch on, a person's quit closes the windows and keeps VibeField in the menu bar with its terminal sessions running; the status item's Quit VibeField is the quit (2026-11-01; `79458ac4a`, lane `al/6-keep-running`; AL-D2; James's "do the worth doing stuff"; VF-PM's GO)
+
+**Why:** AL-D2 (ruled 2026-10-27) gives the person who wants the terminal service kept a switch, off by default. With
+it on, a quit is no quit: the windows close, the Dock icon goes, the status item stays, and nothing ends. The status
+item's Quit VibeField is then the quit. AL-D10 "A" stands: no LaunchAgent, with AL-6 or without it.
+
+**What landed** (contracts · fieldd · field-app · electron-shell · DESIGN.md):
+- **The preference** `desktop.keepRunningOnQuit` (`APP_PREFERENCE_KEYS.KEEP_RUNNING_ON_QUIT`; `AppPreferences`
+  `.default(false)`, so an older daemon's snapshot means off); fieldd's default and tolerant read.
+- **The lifecycle** (`electron-shell/src/main/lifecycle.ts`):
+  - `before-quit` asks `keepRunningOnQuit()` for a PLAIN person's quit only. That excludes a full quit, a signal's,
+    an armed update's, the OS ending the session, a stop or a move under way, and a durable-close replay.
+  - True absorbs the quit: no gate, no stop, no quitting tray, no native quit
+    (`desktop.lifecycle.quit_keeps_running`).
+  - `quitFully()` is the status item's Quit VibeField: it meets the gate as every quit did before. A Cancel or an
+    aborted stop clears it.
+- **main** (`index.ts`):
+  - `quitKeepsRunning` acts on macOS alone, never in a smoke-like mode, and only with the preference on and a status
+    item to stay in.
+  - It reuses AL-5's menu-bar-only presence (`statusItemForced`, the status item shown whatever Show status item
+    says), `app.dock.hide()` and the primary window's own close.
+  - Opening a window ends it: the Dock icon comes back.
+- **The status item** (`tray-model.ts`): "VibeField is running in the background" leads the menu, inert, then a
+  separator.
+- **Settings → Desktop behavior** (macOS): "Keep running when VibeField quits", "Quitting closes the windows and keeps
+  VibeField in the menu bar, with its terminal sessions running. Quit VibeField in the menu bar quits it."
+- **DESIGN.md §9 "The quit's words":** the rule's carve-out, and the bullet with the row's words, the status item's
+  first row and the Dock icon's return.
+
+**Rows:**
+- `lifecycle.test.ts` "Keep running when VibeField quits (AL-6)", 5 rows (34 → 39):
+  - a person's quit goes to the background;
+  - the status item's quit meets the gate, and after its Cancel the next quit goes to the background again;
+  - a proceeded status-item quit stops and exits;
+  - "may not" goes through the gate;
+  - a signal's, an update's and the OS's quits are never asked.
+- `tray-model.test.ts` +1 (23 → 24).
+- `desktop-section.test.tsx` +1 (7 → 8): the row, off, enabled with the status item hidden, its one key, absent on
+  win32, and DESIGN.md quoting its words. The macOS switch count becomes 4.
+- fieldd `app-preferences.test.ts` +1 (7 → 8). The effective snapshots carry the key in contracts' `shell.test.ts`,
+  fieldd's integration test and `connect-asks.test.ts`.
+
+**Validation.**
+- **Red first** (03:50:08 → 03:50:23Z), each source as AL-12 left it; the "may not" and "never asked" rows stay green
+  on both, the controls:
+  - `lifecycle.ts` + `tray-model.ts`: 4 of 106 red;
+  - `app-preferences.ts`: 3 of 10 red;
+  - contracts' `shell.ts`: 1 of 64 red;
+  - `DesktopSection.tsx` + DESIGN.md: 2 of 8 red;
+  - restored: 106/106, 10/10, 64/64, 8/8.
+- **The light** at the tip on `b14117151`, AL-12 (04:22:59 → 04:41:56Z, nice 19, the guard, co-plan/HOLD):
+  - contracts', fieldd's, field-app's and electron-shell's typecheck, biome, preflight, check:walls;
+  - contracts whole: 54 files, 1,434 tests; fieldd whole: 2,820 passed and 30 skipped; field-app whole: 3,539 passed
+    and 3 skipped; electron-shell whole: 161 files, 2,447 passed and 3 skipped.
+  - electron-shell's first whole run, at load about 117, had 2 reds outside this diff (`smoke-profile.test.ts:169`, a
+    reaped daemon read alive; `release-scripts.test.ts:695`, a 5 s timeout), both green alone twice and green in the
+    second whole run; VF-PM logged them as load-class sightings.
+- **Run 78** (M78 `9ea3698a1`, the MERGE shape: `79458ac4a` over main `feea2ea80`, item 141's records on M77; minted by
+  a9 on VF-PM's GO, no second rebase, the light standing):
+  - `pnpm verify` armed 04:52:15Z, exit 0 at 04:57:18Z (about five minutes), the mini's tree clean after it.
+  - vitest 11,530 passed, 0 failed, 18 skipped, +8: lifecycle 34 → 39, tray-model 23 → 24, desktop-section 7 → 8,
+    fieldd app-preferences 7 → 8. cargo 534 passed, 0 failed, 14 ignored (33 results). Typecheck and test ran for 28
+    projects.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run78/` (`mrun78.bundle`, sha256 `153b40faedbb80a8…`).
+- **Landed:** main fast-forwarded `feea2ea80` → `9ea3698a1` at 2026-11-01 04:59:35Z on VF-PM's GO.
+
+**Owed.**
+- The status item's session count (§5.8's "· N sessions"), which needs a census read the tray does not hold.
+- The app menu's Quit item still says "Quit VibeField" while the switch is on.
+- The physical row: a real ⌘Q with the switch on, on a packaged build. It is James's hand row.
+- Windows/Linux keep their own "Keep running after window closes".
+
+## Item 140 — PT-S3's L2 phone smoke made honest: the door waits for iOS ready, an unproven stimulus is STAGING NOT MET, the host gives back its own Simulator defaults, and a reused run id is refused (2026-11-01; `468420ee8`, lane `pts3` branch `item140`, 24 commits rebased onto M75 `230e72848`, in the mint `aa5bf3669`, run 79, over main `090791e63`; VF-PM's item 140, 03:42Z, from the orchestrator's L2 triage)
+
+**Why:** PT-S3's first console run (James's unlock, 2026-11-01).
+- L0 ENUM was GREEN at 02:18Z: Ghostty holds Screen Recording; 156 sources; no prompt.
+- L1 `smoke:phone:none` failed first at 02:21Z (`l1-1101`). The lane had no field-native binary, because `build:all`
+  never builds it (items 133/134, the fixer's, M75). After `cargo build -p field-native`, L1 was GREEN at 02:40Z
+  (`l1b-1101`).
+- L2 `smoke:phone` (`l2-1101`) ran TWICE under one run id (02:59–03:11Z and 03:22–03:29Z). The host was restored both
+  times. The second run's stdout was 14 of 20 rows: 7 green, 1 RECORDED, 4 red, 2 VOID, with a STOP at SIM-STOPPED.
+- The orchestrator's read-only triage (three readers, each cite verified) found NO product red. The reds came from the
+  stage and from the rows:
+  - "Booted" is not "ready": every openurl and screenshot on a freshly created iOS 26.5 device failed for minutes.
+  - The rows judged pages that were never opened.
+  - A function crossed `executeJavaScript`.
+  - SIM-STOPPED pressed on a word read once.
+  - SIM-STILL read its baseline before settling.
+  - SIM-IDLE printed running totals.
+  - The stage accepted a reused run id.
+  - Simulator.app's per-device defaults for the deleted devices were left behind.
+
+**Rulings** (dated in the PT record):
+- T2, the orchestrator's: a failed door verb or an unproven `/loaded` is STAGING NOT MET, never a product red. Since the
+  grade's G1–G3, a staging failure never hides a red proven over a page that did open.
+- P8 = A: quitting Simulator.app may shut the device down, and the face's `off` + Boot stands. Design §3 is amended:
+  `stopped` means the window is gone while the device is still booted. SIM-STOPPED records `off`. `off` over a steadily
+  Booted device is a red (G11).
+- P7 = A: PT-S2's risk 1 ("Show it" on a running Simulator.app) is unreachable by staging, because a fresh launch opens
+  a window for every booted device. James witnesses it once by hand, beside SIM-STOPPED-CLOSED.
+- H1 = A: teardown removes exactly the run's own UDID-keyed Simulator defaults and judges them as the own side.
+- R2, the orchestrator's: `ensure()` polls while the door answers Booting, and `boot` on an already-booted device only
+  waits.
+- R3, the orchestrator's: defaults housekeeping beside the run's own Simulator.app is an observation, not another's
+  hand.
+
+**What landed** (4 files, +2,903 −244: `scripts/stage-simulator-fixture.mjs` with its unit,
+`packages/electron-shell/src/testing/smoke-phone.ts` with its unit; no product file, lock, pin or Rust change):
+- **The stage:**
+  - T1: the door proves iOS ready with `simctl bootstatus` (never `-b`), bounded at `BOOT_READY_MS` (180 s), once per
+    device per boot, keyed by `lastBootedAt`. It answers Booting until then.
+  - G5: no door verb outlives the smoke's timeouts.
+  - G6: every pending bootstatus is killable and is killed at teardown.
+  - H3: a failed verb carries simctl's stderr, redacted.
+  - T7 and G9: a reused or mismatched run id exits 2 before any write.
+  - H1, G7, G8 and G12: the cleanup cuts byte spans out of the export, then pgrep → export → pgrep → import → re-read.
+    The grade proved it byte-exact over every plist type, and that it never imports from a bad export. An unreadable
+    export is OWN.
+- **The rows:**
+  - T2 and G4: every page open is `openProven` (openurl opened AND `/loaded` counted); a source check holds that no
+    dropped `openUrl(` remains.
+  - T3: `screenOf` projects a function-valued act. The no-device phone is removed in a `finally`.
+  - T4 and G11: SIM-STOPPED settles its word against P's state.
+  - T5: SIM-STILL settles before its baseline and judges by the take's start.
+  - T6 and G10: SIM-IDLE prints the window's wakes and runs its wake window from `/loaded`.
+  - R2-B: `ensure()` polls.
+
+**Validation.**
+- Red first, per T and G, in each commit's message.
+- Read-only grade: no blocker; 7 SHOULD and 3 NIT, all taken as G1–G12.
+- Units after the rebase onto M75: stage 98/98, smoke-phone 76/76, electron-shell tsc exit 0, biome clean.
+- The light at `468420ee8`: 19 of 19 GREEN, 04:27:40–04:47:29Z, at load 70–150. Outside HOLD: diff-check, biome,
+  typecheck, walls, deps, gen:check, lint, and the two units. Under co-plan/HOLD (04:42:06–04:47:29Z): electron-shell
+  2,470 passed (3 skipped), field-app 3,532 (3 skipped), plugin-simulator 131, dev-runner 361, `build:all
+  --skip-nx-cache`, bundle-report, the native build, and `cargo build -p field-native`. After: `PHONE_PREFLIGHT ok` and
+  the tree clean (`lanes/pts3/light/SUMMARY.txt`).
+- Run 79: the mini's run 79 GREEN: `pnpm verify` exit 0 at 05:11:52Z; vitest 11,553 passed, 0 failed, 18 skipped (+23,
+  all in `smoke-phone.test.ts`, 53 → 76); node 342 → 361; cargo 534/0/14; typecheck 28/28; the tree clean.
+- **Landed:** M79 `aa5bf3669` (the MERGE shape: `468420ee8` + main `090791e63`), main fast-forwarded to it at 2026-11-01
+  06:13:50Z on VF-PM's GO.
+
+**Owed.**
+- L2 again, under a new run id, launched by James. It carries L1's re-run with item 133's preflight.
+- Then SIM-STOPPED-CLOSED and P7's hand witness, if James offers.
+- L3 on the mini on his word, or skipped.
