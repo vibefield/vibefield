@@ -10,6 +10,7 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { type ToolPlaneAudit, ToolPlaneService } from "../src/tool-plane";
+import { REASK_MS } from "../src/tool-plane/door";
 import { MCP_MODERN } from "../src/tool-plane/mcp";
 import { NeedsQueue } from "../src/tool-plane/rooms/you/queue";
 import { NeedsStore } from "../src/tool-plane/rooms/you/store";
@@ -90,7 +91,8 @@ function harness(
     personaSets?: ReadonlyMap<string, string> | null;
   } = {},
 ) {
-  const personaSets = opts.personaSets === undefined ? personaSetsOf(SETS) : opts.personaSets;
+  let personaSets = opts.personaSets === undefined ? personaSetsOf(SETS) : opts.personaSets;
+  const clock = { t: 1_000_000 };
   const handlers = new Map<number, (p: Uint8Array) => void>();
   const sent = new Map<number, string>();
   const searched: string[] = [];
@@ -205,6 +207,7 @@ function harness(
     you: { queue: needs, label: (run) => (run === "run-7" ? "claude·7" : run) },
     audit,
     version: "0.1.0",
+    now: () => clock.t,
   });
   const ask = (laneId: number, msg: object) =>
     handlers.get(laneId)?.(
@@ -218,7 +221,11 @@ function harness(
       .filter(Boolean)
       .map((l) => JSON.parse(l));
   const settle = () => new Promise((r) => setTimeout(r, 0));
-  return { plane, ask, call, answers, audited, searched, settle, needs, notices };
+  /** The monitor's sets frame lands. */
+  const frame = (sets: readonly AgentProfileSet[]) => {
+    personaSets = personaSetsOf(sets);
+  };
+  return { plane, ask, call, answers, audited, searched, settle, needs, notices, clock, frame };
 }
 
 const names = (answer: { result: { tools: { name: string }[] } }) =>
@@ -420,14 +427,36 @@ describe("the door places a plain run by the one rule (TU-1, Q3; critique 6)", (
     });
   });
 
-  it("fails closed before the profiles are read: a persona's run filed under none holds none, and a filed run holds its set", async () => {
+  it("fails closed until the profiles are read: a persona's run filed under none holds none, unsettled, and is placed once the frame lands", async () => {
     const h = harness({ doors: PERSONA_DOORS, personaSets: null });
     await h.plane.ensureStarted();
     expect(callers(h)).toEqual({
       "c-plain": { profiles: ["work"], unsettled: undefined },
-      "c-persona": { profiles: [], unsettled: undefined },
+      "c-persona": { profiles: [], unsettled: "profiles-unread" },
+      "c-orphan": { profiles: [], unsettled: "profiles-unread" },
+    });
+    h.ask(1007, { id: 1, method: "tools/list", params: { _meta: META } });
+    await h.settle();
+    expect(names(h.answers(1007)[0])).toEqual([]);
+    expect(h.answers(1007)[0].result.ttlMs).toBe(0);
+    expect(h.audited.map((a) => `${a.action} ${a.target.id} ${String(a.reason)}`)).toEqual([
+      "tools.door.plain c-persona profiles-unread",
+    ]);
+    h.frame(SETS);
+    h.clock.t += REASK_MS;
+    expect(callers(h)).toEqual({
+      "c-plain": { profiles: ["work"], unsettled: undefined },
+      "c-persona": { profiles: ["work"], unsettled: undefined },
       "c-orphan": { profiles: [], unsettled: undefined },
     });
+    h.ask(1007, { id: 2, method: "tools/list", params: { _meta: META } });
+    await h.settle();
+    expect(names(h.answers(1007)[1])).toEqual([
+      "history_search",
+      "history_read",
+      "projects_list",
+      "notify",
+    ]);
   });
 });
 

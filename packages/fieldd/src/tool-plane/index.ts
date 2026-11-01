@@ -283,8 +283,10 @@ export class ToolPlaneService {
   }
 
   /** The settle rule's evidence (door.ts): a run is settled only by a record that verifies, and a spark's run only by
-   * a spark that does too. A plain run holds the profile the one rule places it in (TU-1, `profileSetOfRun`), and a
-   * run it places in none is settled holding none: its record verified, and what it says is "in no profile". */
+   * a spark that does too. A plain run holds the profile the one rule places it in (TU-1, `profileSetOfRun`). One the
+   * rule can place only by its persona, before fieldd has read the Agent Profiles, is unsettled (`profiles-unread`):
+   * it holds none and is asked again, so the monitor's first frame places it. A run the rule places in none with the
+   * profiles read is settled holding none: its record verified, and what it says is "in no profile". */
   #identify(pane: NativeDoorPane | undefined): DoorCaller {
     if (!pane) return { kind: "outside" };
     const run = this.opts.runForTerminal(pane.terminalSessionId);
@@ -293,7 +295,10 @@ export class ToolPlaneService {
     if (!run.verified)
       return { kind: "run", runtimeRunId, profiles: [], unsettled: "record-unverified" };
     if (run.spark === undefined) {
-      const profile = profileSetOfRun(run, this.opts.personaSets());
+      const personaSets = this.opts.personaSets();
+      const profile = profileSetOfRun(run, personaSets);
+      if (profile === undefined && personaSets === null)
+        return { kind: "run", runtimeRunId, profiles: [], unsettled: "profiles-unread" };
       return { kind: "run", runtimeRunId, profiles: profile === undefined ? [] : [profile] };
     }
     const spark = this.opts.spark(run.spark);
