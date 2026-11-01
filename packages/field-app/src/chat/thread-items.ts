@@ -43,13 +43,15 @@ export type ThreadItem = HelloItem | NeedsCard;
 
 /** NS-D4's "a new spark" (DESIGN.md §8 "Chat's thread", how "new" is read; TU-1, Q1): it never started, or fieldd
  * says it has never worked: its record (`turnedAt: null`) and its own run's row, which says a first turn before the
- * list is read again. Never while fieldd waits to resume its run (AR-4's pending): nothing watches that pane. A spark
- * whose record says neither (one from before fieldd kept the fact) is not said to be new: nothing certifies it. An ask
- * alone is no turn (Q2), so a spark whose own agent asks before it has worked is still new. */
+ * list is read again. Never while fieldd waits to resume its run (AR-4's pending), nor while it is awake and the board
+ * does not show its run: nothing says fieldd watches that pane. Asleep, its run off the board, its record decides. A
+ * spark whose record says neither (one from before fieldd kept the fact) is new only if it never started: nothing
+ * else certifies it. An ask alone is no turn (Q2), so a spark whose own agent asks before it has worked is still new. */
 export function sparkIsNew({ spark, run }: SparkEntry): boolean {
   if (spark.session === undefined) return true;
-  if (run?.pending !== undefined) return false;
-  return spark.turnedAt === null && typeof run?.turnedAt !== "string";
+  if (run === null) return spark.session.live === false && spark.turnedAt === null;
+  if (run.pending !== undefined) return false;
+  return spark.turnedAt === null && typeof run.turnedAt !== "string";
 }
 
 /** Quiet (DESIGN.md §8 "Chat's thread"): the spark is new, its draft is empty, its hello has not left — `helloLeft`

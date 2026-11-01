@@ -303,10 +303,15 @@ describe("the read verbs place a session by the one rule (TU-1, Q3)", () => {
     expect((await verbs.agent_read(WORK, { session: "run-persona" })).session).toBe("run-persona");
   });
 
-  it("fails closed before the profiles are read: a persona's session filed under none is listed nowhere", async () => {
+  it("fails closed until the profiles are read (§12 Q1 (a′)): a persona's session filed under none is listed nowhere, and read is refused retryably", async () => {
     const { verbs } = deps({ runs: () => PERSONA_RUNS, personaSets: () => null });
     expect(await listed(verbs, MINE)).toEqual(["run-native:native"]);
     expect(await listed(verbs, WORK)).toEqual(["run-work:work"]);
+    for (const caller of [MINE, WORK])
+      await expect(verbs.agent_read(caller, { session: "run-persona" })).rejects.toMatchObject({
+        kind: "UNAVAILABLE",
+        retryable: true,
+      });
   });
 
   it("history_read places a History session by its persona, as before: no persona is This Mac's, a persona no profile lists is in none", async () => {

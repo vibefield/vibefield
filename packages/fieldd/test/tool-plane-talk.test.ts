@@ -314,9 +314,13 @@ describe("one rule places a session in an Agent Profile (TU-1, Q3)", () => {
     expect(await reach(h, "run-his")).toEqual({ vela: "ok", wren: "outside" });
   });
 
-  it("fails closed before the profiles are read: a persona's session filed under none is in none; filed and persona-less sessions stand", async () => {
+  it("fails closed until the profiles are read (§12 Q1 (a′)): a persona's session filed under none is not placed yet, retryably; filed and persona-less sessions stand", async () => {
     const h = harness([], true, [], null);
-    expect(await reach(h, "run-persona")).toEqual({ vela: "outside", wren: "outside" });
+    expect(await reach(h, "run-persona")).toEqual({ vela: "unavailable", wren: "unavailable" });
+    await expect(
+      h.verbs.agent_send(WREN, { session: "run-persona", text: "x" }),
+    ).rejects.toMatchObject({ kind: "UNAVAILABLE", retryable: true });
+    expect(h.heldSends).toEqual([]);
     expect(await reach(h, "run-filed")).toEqual({ vela: "outside", wren: "ok" });
     expect(await reach(h, "run-his")).toEqual({ vela: "ok", wren: "outside" });
   });

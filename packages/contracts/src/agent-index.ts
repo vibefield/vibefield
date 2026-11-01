@@ -2413,8 +2413,10 @@ export function personaSetsOf(
  * room, the door, Chat's @ and the New spark sheet share. The profile it was filed under; else This Mac's for a run
  * that names no persona; else the profile listing its persona (AR-S5's "the persona's set"); else none — a persona no
  * profile lists (a retired sign-in, or a root no profile holds), or the profiles not read yet (`null`): no spark
- * reaches it and @ never offers it. Godview's tabs (puppeteer-monitor's `resolveProfileSet`) walk the same chain and
- * call that last case This Mac's, the one place the two differ. Pure. */
+ * reaches it and @ never offers it. With the profiles not read, none is "not placed yet": fieldd's door, its rooms and
+ * the needs-you Allow refuse it retryably until the monitor's first frame (§12 Q1 (a′)). Godview's tabs
+ * (puppeteer-monitor's `resolveProfileSet`) walk the same chain and call that last case This Mac's, the one place the
+ * two differ. Pure. */
 export function profileSetOfRun(
   run: RunProfileFacts,
   personaSets: ReadonlyMap<string, AgentProfileSetId> | null,

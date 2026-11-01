@@ -163,12 +163,23 @@ describe("a new spark: it has never worked (NS-D4; TU-1, Q1)", () => {
   it("W7: is new asleep before it ever worked, though the board shows none of its runs", () => {
     const asleep = spark({ session: { runtimeRunId: "run-Vela", live: false } });
     expect(sparkIsNew(entryOf(asleep, null))).toBe(true);
-    // awake by its record, its run not on the board yet (just after a hatch): its record says it has never worked
-    expect(sparkIsNew(entryOf(spark(), null))).toBe(true);
     // one that has worked, or one whose record says neither, is not
     expect(sparkIsNew(entryOf({ ...asleep, turnedAt: TURNED }, null))).toBe(false);
     const { turnedAt: _absent, ...older } = asleep;
     expect(sparkIsNew(entryOf(older, null))).toBe(false);
+  });
+
+  it("W8: is not new while awake with its run not on the board yet: nothing says fieldd watches its pane (D10)", () => {
+    // its record says awake and never worked, but the board does not show its run: just after a hatch, before the
+    // board's first snapshot, or a run fieldd waits to resume while the board is refused — the pane may be one fieldd
+    // does not drive, so the hello does not stand over it
+    const awake = entryOf(spark(), null);
+    expect(awake.awake).toBe(true);
+    expect(sparkIsNew(awake)).toBe(false);
+    expect(threadQuiet(awake, true, false)).toBe(false);
+    expect(threadItemsOf(awake, threadQuiet(awake, true, false), null)).toEqual([]);
+    // the board shows its run: new again
+    expect(sparkIsNew(entryOf(spark(), row()))).toBe(true);
   });
 
   // G4's window half (Q4, a named guard; plans/tu1-plan.md §3.6): it asserts the gap, so it passes by design, and its

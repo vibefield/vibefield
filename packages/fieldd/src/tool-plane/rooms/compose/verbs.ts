@@ -32,6 +32,8 @@ import { RpcCallError } from "../../../native-link";
 // nothing reads a vendor's transcript. They change nothing; the audit line around each call is the caller's (index.ts).
 // TU-1 (Q3) — a session, live or in History, is in the caller's profiles by the one rule every reader shares
 // (`profileSetOfRun`): filed, else This Mac's with no persona, else its persona's, else none, which no caller reads.
+// Until the monitor's first frame a persona's live session filed under none is not placed yet: a read of it is refused
+// `unavailable`, retryably (§12 Q1 (a′)), and `agents_list`, a list, leaves it out until the frame places it.
 
 /** A read's bounds: what a turn may carry, and the page asked of the index for each turn kept. */
 const TURN_TEXT_MAX = 4000;
@@ -167,7 +169,15 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
     const row = deps.runs().find((r) => r.runtimeRunId === id && r.tier !== "remote");
     if (!row)
       throw new RpcCallError("NOT_FOUND", `no session ${id}; agents_list names them`, false);
-    if (!inScope(caller.profiles, placed(row))) throw outside(`session ${id}`);
+    const personaSets = deps.personaSets();
+    const profile = profileSetOfRun(row, personaSets);
+    if (profile === undefined && personaSets === null)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        `VibeField hasn't read the Agent Profiles yet, so session ${id} is not placed; try again in a moment`,
+        true,
+      );
+    if (!inScope(caller.profiles, profile)) throw outside(`session ${id}`);
     return row;
   };
 

@@ -511,19 +511,40 @@ describe("the held send (CP-D3, CP3-D3 B)", () => {
       outcome: "failed",
       reason: "claude·4 is in none of Vela's Agent Profiles",
     });
-    // before the profiles are read, the persona's run is in none too
-    h.ctl.personaSets = null;
-    const unread = await h.queue.answer(h.queue.send(VELA_FROM, "run-persona", "c"), 0, principal);
-    expect(unread.item.answer).toMatchObject({
-      outcome: "failed",
-      reason: "claude·3 is in none of Vela's Agent Profiles",
-    });
     expect(h.queued).toEqual([]);
     expect(h.woken.map(([, fact]) => fact)).toEqual([
       words.sendFailedFact("Vela", "claude·3", "work is not one of Vela's Agent Profiles"),
       words.sendFailedFact("Vela", "claude·4", "claude·4 is in none of Vela's Agent Profiles"),
-      words.sendFailedFact("Vela", "claude·3", "claude·3 is in none of Vela's Agent Profiles"),
     ]);
+  });
+
+  it("an Allow before the profiles are read waits (TU-1, §12 Q1 (a′)): refused as retryable, its item open, its spark told nothing; the frame placed, it acts", async () => {
+    const h = harness();
+    // filed under none, its persona one This Mac's profile lists: Vela's, once the profiles are read
+    h.runs.set("run-mine", {
+      runtimeRunId: "run-mine",
+      label: "claude·3",
+      profileId: "claude:mine",
+      live: true,
+    });
+    h.ctl.personaSets = null;
+    const id = h.queue.send(VELA_FROM, "run-mine", "c");
+    await expect(h.queue.answer(id, 0, principal)).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      retryable: true,
+      details: { reason: "profiles-unread" },
+    });
+    expect(h.queue.list().find((item) => item.id === id)?.state).toBe("open");
+    expect(h.queued).toEqual([]);
+    expect(h.woken).toEqual([]);
+    // the monitor's first frame lands: the same Allow, pressed again, is placed and acts
+    h.ctl.personaSets = new Map([
+      ["claude:work", "work"],
+      ["claude:mine", "native"],
+    ]);
+    const allowed = await h.queue.answer(id, 0, principal);
+    expect(allowed.item.answer).toMatchObject({ outcome: "done" });
+    expect(h.queued).toEqual([["run-mine", "c", "Vela"]]);
   });
 
   it("an allowance granted to a sleeping spark holds, and the spark hears it once it wakes (critique 4)", async () => {

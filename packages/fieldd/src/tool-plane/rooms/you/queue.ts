@@ -131,6 +131,9 @@ const refuse = (fact: string, message: string) =>
 /** A window's refused answer, with its reason (the compose doors' shape). */
 const refuseAnswer = (message: string, reason: string) =>
   new RpcCallError("PRECONDITION_FAILED", message, false, { reason });
+/** TU-1 (§12 Q1 (a′)) — an Allow fieldd cannot place yet: the profiles are not read, so the item stays open and the
+ * same answer is taken once the monitor's first frame lands. */
+const PROFILES_UNREAD = "VibeField hasn't read the Agent Profiles yet. Try again in a moment";
 
 /** What an act did, and what its spark is owed. */
 interface Act {
@@ -513,7 +516,9 @@ export class NeedsQueue implements TalkHolds {
   }
 
   /** Allow: re-checked first (the run is live, the spark's record and its profiles stand, CP-L4 and TL-D5), then each
-   * held word queued as the spark's, in order (CP2-D1). */
+   * held word queued as the spark's, in order (CP2-D1). A run the one rule can place only by its persona, before fieldd
+   * has read the Agent Profiles, is refused retryably (`profiles-unread`): nothing is spent, the item stays open, and
+   * the spark is told nothing until an answer acts (TU-1, §12 Q1 (a′): fail closed until the frame). */
   #allowSend(record: NeedsRecord, choice: number, at: string): Act {
     const { item } = record;
     const spark = item.from.name;
@@ -532,7 +537,13 @@ export class NeedsQueue implements TalkHolds {
     const sender = record.sender;
     if (sparkId === undefined || sender === undefined)
       return failed("the words' sender is unknown");
-    const why = this.#sparkRefusal(sparkId, profileSetOfRun(run, this.opts.personaSets()), to);
+    const personaSets = this.opts.personaSets();
+    const profile = profileSetOfRun(run, personaSets);
+    if (profile === undefined && personaSets === null)
+      throw new RpcCallError("PRECONDITION_FAILED", PROFILES_UNREAD, true, {
+        reason: "profiles-unread",
+      });
+    const why = this.#sparkRefusal(sparkId, profile, to);
     if (why !== undefined) return failed(why);
     this.#keep({ ...record, acting: { choice, at } });
     for (const text of record.texts ?? [])
@@ -576,7 +587,7 @@ export class NeedsQueue implements TalkHolds {
   }
 
   /** Why the spark may not act there now: its record is gone, or what it acts on (`name`) is in none of its profiles
-   * (TL-D5), whether the one rule places it in another or in none (TU-1). */
+   * (TL-D5), whether the one rule places it in another or, with the profiles read, in none (TU-1). */
   #sparkRefusal(
     sparkId: SparkId,
     profile: AgentProfileSetId | undefined,

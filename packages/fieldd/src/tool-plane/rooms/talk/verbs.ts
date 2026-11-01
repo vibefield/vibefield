@@ -28,7 +28,9 @@ import { RpcCallError } from "../../../native-link";
 // run (CP-D3, CP3-D3 B); and past the cap a spawn waits for his Allow one more (CP-D7, CP3-D4 A). Each answers at once
 // with the item it waits in, never a refusal, and the answer is a wake (CP-L5).
 // TU-1 (Q3) — a session is in the caller's profiles by the one rule every reader shares (`profileSetOfRun`, over the
-// persona map fieldd's monitor holds): filed, else This Mac's with no persona, else its persona's, else none.
+// persona map fieldd's monitor holds): filed, else This Mac's with no persona, else its persona's, else none. Until
+// the monitor's first frame a persona's session filed under none is not placed yet: refused `unavailable`, retryably,
+// never `outside`, so the spark asks again (§12 Q1 (a′), as the door and the Allow wait).
 
 /** CP-D7 — the most live agents one spark may have started. */
 export const SPARK_LIVE_AGENTS_MAX = 8;
@@ -158,7 +160,15 @@ export function createTalkVerbs(deps: TalkDeps): TalkVerbs {
   const reach = (caller: TalkCaller, runtimeRunId: string): TalkSession => {
     const session = deps.session(runtimeRunId);
     if (session === undefined) throw refuse("not-found", `no session ${runtimeRunId}`, "NOT_FOUND");
-    const profile = profileSetOfRun(session, deps.personaSets());
+    const personaSets = deps.personaSets();
+    const profile = profileSetOfRun(session, personaSets);
+    if (profile === undefined && personaSets === null)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        `VibeField hasn't read the Agent Profiles yet, so ${runtimeRunId} is not placed; try again in a moment`,
+        true,
+        { fact: "unavailable" },
+      );
     if (profile === undefined || !caller.profiles.includes(profile))
       throw refuse("outside", `${runtimeRunId} is outside your Agent Profiles`, "FORBIDDEN_SCOPE");
     if (session.runtimeRunId === caller.runtimeRunId)

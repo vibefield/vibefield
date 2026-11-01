@@ -1702,10 +1702,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       holds the keyboard.
     - **What it covers:** at 1180 × 780 the card is about 200 tall, y 412–612, so while it shows it covers about the
       pane's last ten rows, where a new agent's input box waits. It leaves the moment you write, so nothing you type is
-      under it. An ask is no turn (below), so when a new spark's own agent asks before it has worked (a trust or
-      permission menu at launch, a question), the hello stands over that ask too. The head's word says it (Needs your
-      OK, Asking you), and the ask shows once you click into the pane, which takes the hello away, or write. That is
-      the cost James chose (TU-1, Q2 A, on a frame that drew the hello over the ask).
+      under it. *TU-1 (2026-11-01; Q2 A, James, on a frame that drew the hello over the ask):* an ask is no turn
+      (below), so when a new spark's own agent asks before it has worked (a trust or permission menu at launch, a
+      question), the hello stands over that ask too. The head's word says it (Needs your OK, Asking you), and the ask
+      shows once you click into the pane, which takes the hello away, or write. That is the cost James chose.
     - **When they show:** while the thread is quiet. Quiet means four things hold:
       - the spark is new: it has never worked (below);
       - its draft is empty;
@@ -1727,6 +1727,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - So a spark is new when it never started, or when its record says it has never worked and its own run's row
         does not say otherwise: the row says a first turn before Chat reads the list again. While fieldd waits to
         resume its run (it could not re-attach the run after a restart), it is not new: nothing watches that pane.
+        Nor is an awake spark whose run the board does not show yet (before the board's first answer, or while it is
+        refused): nothing says fieldd watches it.
       - A spark woken into its last session, or started afresh, is new only if it has never worked. A spark from
         before fieldd kept the fact, whose record says neither, is new only if it never started.
       - Asleep, a spark that has never worked is still new. Its hello stands in the thread's foot under the line "Vela
@@ -1746,7 +1748,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       spent). It named two open cases, a hatch run fieldd re-attached after a restart and a run born in the hatch
       run's place within that minute. New is now the spark's: fieldd keeps the fact on the spark's record and the
       run's, and both cases are closed. A spark asleep before it ever worked, its run off the board, was not new then,
-      nor was one whose own agent asked before it had worked (the window counted an ask); both are new now.
+      nor was one woken, or started afresh, after its hatch's minute ("so a spark woken after that minute never says
+      hello"), nor one whose own agent asked before it had worked (the window counted an ask); all three are new now
+      if the spark has never worked.
     - They come in over 420ms on `--vf-ease-island`, from 8 below at opacity 0, and they go at once. With reduced
       motion they fade in over 120ms, and a starter's rise takes 90ms on ease-out (M6).
     - The hello is VibeField's words for what a spark does, drawn in its voice. It is never sent to the session and is
@@ -1910,8 +1914,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       spark's tools place a session by one rule (`profileSetOfRun`): the profile its run is filed under; else This
       Mac's for a run that names no persona; else the profile that lists its persona. A persona no profile lists (a
       retired sign-in) is in none: no spark reaches it, and @ never offers it. Godview's profile tabs, the agent
-      runtime's own reading, walk the same chain and draw that last session under This Mac, the one place the two
-      differ.
+      runtime's own reading, walk the same chain and draw under This Mac a session the rule places in none, the one
+      place the two differ: a persona no profile lists, and, for a boot's first moments before the profiles are read,
+      a persona's run filed under none.
     - **Running in its profiles**, nearest the composer: the sessions the spark's `agent_send` (CP-2) takes, by its
       whole rule (`fieldd/src/tool-plane/rooms/talk/verbs.ts`). A session is a row when all three hold:
       - it is live;
@@ -1938,9 +1943,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       starts at the nearest row.
     - Until its agents are read, their group says "Reading its agents…". When nothing matches what follows the @, the
       list says `Nothing called "cla"`, and with nothing to offer at all, "Nothing to add from Vela's profiles".
-    - When the spark's profiles can't be read (`agents.profileSets.list`), no agent and no session can be placed, so
-      the list offers no row and says the New spark sheet's sentence, "VibeField can't list its agents right now". The
-      next @ reads them again. Each of these words is 12/400 in tertiary ink, padded 10.
+    - When the spark's profiles can't be read (`agents.profileSets.list`), no agent can be placed, nor a session its
+      persona places, so the list offers no row and says the New spark sheet's sentence, "VibeField can't list its
+      agents right now". The next @ reads them again. Each of these words is 12/400 in tertiary ink, padded 10.
+      *Amended 2026-11-01 (TU-1):* this said "no agent and no session can be placed". A session filed under a profile
+      is placed without them now (the one rule, above), but the list still offers none.
     - The sessions are read from the window's one board (Chat's feed, `agent.subscribe`), never by an @. When that
       board can't be read (its subscription refused), no session can be placed, but the agents can, since they are the
       profiles' alone. So **Start an agent** stands, and **Running in its profiles** stands with no row, saying
