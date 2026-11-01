@@ -1226,6 +1226,8 @@ export const SCOPES = [
   // record — the active executable per provider, updates — the native.admin
   // posture. Both are local-only forever: consent is an act of the person at
   // this device; neither enters TAILNET_SCOPES or any plugin eligibility table.
+  // Since CP-0 and CP-3 `agents.manage` is also the person's acts on the agents
+  // and sparks of this device: the `compose.sparks.*` and `needs.*` doors.
   "index.manage",
   "agents.manage",
   // AR-5b (the review's EL7 lens) — two CONTENT reads, split off the census
@@ -1676,8 +1678,18 @@ export const LAYOUT = {
    * CLAUDE.md written for it. The person's, to open in Finder; fieldd's records never live in it. */
   SPARK_HOMES_DIR: ["sparks"],
   /** CP-2 (CP2-D3) — each session's input queue, one file per run, 0600 in a 0700 directory: a spark's words and
-   * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. */
+   * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. Since CP-3 (LEANS P3)
+   * each `AgentInputQueueFile` is signed with AGENT_INPUTS_KEY_FILE's secret (0600, made once, never overwritten), so
+   * an agent that edits one cannot speak as a spark or as VibeField: an unsigned or forged queue is set aside at
+   * restore, never delivered. That holds against an edit; the key is 0600 to the same uid, as the sparks' is (EL7). */
   AGENT_INPUTS_DIR: ["fieldd", "inputs"],
+  AGENT_INPUTS_KEY_FILE: ["fieldd", "inputs.key"],
+  /** CP-3 (cp3-the-person.md §5.1) — the needs-you queue: one `NeedsRecord` per item, 0600 in a 0700 directory, each
+   * signed with NEEDS_KEY_FILE's secret (0600, made once, never overwritten), so an agent that edits one cannot answer
+   * it, allow itself a session or put words in a spark's mouth: an unsigned or forged record is set aside, never served.
+   * That holds against an edit; the key is 0600 to the same uid, as the sparks' is (EL7). */
+  NEEDS_DIR: ["fieldd", "needs"],
+  NEEDS_KEY_FILE: ["fieldd", "needs.key"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):

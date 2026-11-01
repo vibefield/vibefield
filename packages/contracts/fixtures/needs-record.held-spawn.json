@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "item": {
+    "id": "ny-5e2b7d90c1a4f863",
+    "kind": "held-spawn",
+    "state": "open",
+    "from": {
+      "name": "Vela",
+      "session": "run-12",
+      "spark": "sp-7k2m9q4x"
+    },
+    "spark": "sp-7k2m9q4x",
+    "asked": "2026-10-31T16:06:02.004Z",
+    "words": "review the input queue's restore for a forged file",
+    "choices": ["Allow one more", "Not now"],
+    "agent": "claude",
+    "folder": "vibe-field",
+    "live": 8
+  },
+  "launch": {
+    "agent": "claude",
+    "profileSet": "work",
+    "cwd": "/Users/you/Projects/vibe-field",
+    "model": {
+      "modelId": "claude-opus-5-5",
+      "controls": {
+        "effort": "high"
+      }
+    },
+    "tasks": [
+      "review the input queue's restore for a forged file",
+      "then write the test that proves it"
+    ]
+  },
+  "sender": "Vela",
+  "signature": "0c2e4a6b8d0f1e3c5a7b9d1f3e5c7a9b1d3f5e7c9a1b3d5f7e9c1a3b5d7f9e1c"
+}

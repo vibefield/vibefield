@@ -317,8 +317,13 @@ function stringAt(source: Record<string, unknown> | undefined, key: string): str
  * `kind: "permission"` arm beside a `requestId` we drop) — NOT from a `tool`
  * at the blocker's root, which nothing upstream writes. `input`, `questions`
  * and `detail` are dropped on purpose: what a run is waiting ON is the field's
- * business, what it is waiting to be TOLD is not. */
-function projectBlocker(blocker: { id: string; kind: string; since: string }): AgentFieldBlocker {
+ * business, what it is waiting to be TOLD is not. The needs-you queue's agent
+ * asks read the tool here too (CP-3): one authority for a blocker's tool. */
+export function projectBlocker(blocker: {
+  id: string;
+  kind: string;
+  since: string;
+}): AgentFieldBlocker {
   const tool = stringAt(objectAt(blocker, "permission"), "tool");
   return {
     id: blocker.id,

@@ -8,6 +8,8 @@ import type {
   ComposeAgentSpawnOutput,
   ComposeAgentStopOutput,
   ComposeAgentWatchOutput,
+  NeedsHeldLaunch,
+  NeedsItemId,
   SparkId,
 } from "@vibefield/contracts";
 import { RpcCallError } from "../../../native-link";
@@ -19,6 +21,10 @@ import { RpcCallError } from "../../../native-link";
 // an interrupt is the one way past the queue, and counts as his (CO-D7). Who may reach what (CP-D5, CP-D6) and the cap
 // (CP-D7) are held here at every call; the audience a row is served to is the plane's (index.ts). fieldd's services
 // answer through TalkDeps, so nothing here imports puppeteer (R29).
+// CP-3 (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31) adds the person's two holds, both in the needs-you
+// queue (rooms/you/): a spark's first send into a session the person started waits for his OK, which lasts for that
+// run (CP-D3, CP3-D3 B); and past the cap a spawn waits for his Allow one more (CP-D7, CP3-D4 A). Each answers at once
+// with the item it waits in, never a refusal, and the answer is a wake (CP-L5).
 
 /** CP-D7 — the most live agents one spark may have started. */
 export const SPARK_LIVE_AGENTS_MAX = 8;
@@ -40,6 +46,26 @@ export interface TalkSession {
 export interface TalkSender {
   readonly spark: SparkId;
   readonly name: string;
+}
+
+/** Who a held act is from: the sender, and its own session, which the item names as the asker's. */
+export interface HoldSender extends TalkSender {
+  readonly session: string;
+}
+
+/** A spawn after its defaults, and its tasks: what Allow one more starts, as the needs-you record keeps it. */
+export type HeldLaunch = Readonly<
+  Pick<NeedsHeldLaunch, "agent" | "profileSet" | "cwd" | "model" | "tasks">
+>;
+
+/** CP-3 — the needs-you queue's holds, as the room asks them (rooms/you/queue.ts answers). */
+export interface TalkHolds {
+  /** the person said Allow to this spark's words to this run (CP3-D3 B): its later words are not held */
+  allowed(spark: SparkId, runtimeRunId: string): boolean;
+  /** hold words for the person's OK; the item they wait in (words held for the same run join it) */
+  send(from: HoldSender, runtimeRunId: string, text: string): NeedsItemId;
+  /** hold a spawn past the cap for the person's OK (CP3-D4 A); `live` is how many the spark runs */
+  spawn(from: HoldSender, launch: HeldLaunch, live: number): NeedsItemId;
 }
 
 /** fieldd's own services, as the room needs them (daemon.ts adapts the real ones). */
@@ -64,6 +90,8 @@ export interface TalkDeps {
   end(runtimeRunId: string): Promise<void>;
   /** be woken by a session, or stop being woken (the spawner is woken by its own runs without asking) */
   watch(spark: SparkId, runtimeRunId: string, on: boolean): void;
+  /** CP-3 — the person's holds. Required: CP-2's unheld send must not survive by default. */
+  readonly holds: TalkHolds;
 }
 
 /** Who a talk verb answers: a settled spark (the door's caller, with its record's facts). */
@@ -115,7 +143,8 @@ export function runTalk(verbs: TalkVerbs, name: TalkVerbName, caller: TalkCaller
 
 /** The profile a session belongs to: its set, or This Mac's when it names none. */
 const NATIVE = "native";
-const profileOf = (session: TalkSession): string => session.profileSet ?? NATIVE;
+export const profileOf = (session: { readonly profileSet?: string | undefined }): string =>
+  session.profileSet ?? NATIVE;
 
 /** A refusal the model reads as the tool's own answer, with its fact (index.ts reads `details.fact`). */
 const refuse = (fact: string, message: string, kind = "PRECONDITION_FAILED") =>
@@ -142,6 +171,11 @@ export function createTalkVerbs(deps: TalkDeps): TalkVerbs {
     if (!session.live)
       throw refuse("unavailable", `${session.runtimeRunId} is not running`, "UNAVAILABLE");
   };
+  const senderOf = (caller: TalkCaller): HoldSender => ({
+    spark: caller.sparkId,
+    name: caller.name,
+    session: caller.runtimeRunId,
+  });
 
   return {
     async agent_spawn(caller, input) {
@@ -152,24 +186,22 @@ export function createTalkVerbs(deps: TalkDeps): TalkVerbs {
           `${profileSet} is not one of your Agent Profiles`,
           "FORBIDDEN_SCOPE",
         );
-      // CP-D7 (CP2-D5 A): past the cap the spawn is refused as the fact `limit`; the needs-you card comes with CP-3
-      const alive = deps.sessions().filter((s) => s.live && startedBy(s, caller)).length;
-      if (alive >= SPARK_LIVE_AGENTS_MAX)
-        throw refuse(
-          "limit",
-          `you have ${alive} live agents, the most a spark may run; end one first`,
-        );
-      const { runtimeRunId } = await deps.spawn(
-        {
-          agent: input.agent,
-          profileSet,
-          cwd: input.cwd ?? caller.folder,
-          ...(input.model !== undefined ? { model: input.model } : {}),
-        },
-        caller.sparkId,
-      );
-      // fieldd's spawn takes no first prompt: each task waits in the agent's queue for its first idle moment
+      const launch = {
+        agent: input.agent,
+        profileSet,
+        cwd: input.cwd ?? caller.folder,
+        ...(input.model !== undefined ? { model: input.model } : {}),
+      };
       const tasks = input.tasks ?? [];
+      // CP-D7 (CP3-D4 A): past the cap the spawn waits in the needs-you queue; Allow one more starts it, and Not now
+      // tells the spark `limit`, as CP-2 refused it
+      const alive = deps.sessions().filter((s) => s.live && startedBy(s, caller)).length;
+      if (alive >= SPARK_LIVE_AGENTS_MAX) {
+        const held = deps.holds.spawn(senderOf(caller), { ...launch, tasks }, alive);
+        return { held, queued: tasks.length };
+      }
+      const { runtimeRunId } = await deps.spawn(launch, caller.sparkId);
+      // fieldd's spawn takes no first prompt: each task waits in the agent's queue for its first idle moment
       for (const task of tasks)
         deps.enqueue(runtimeRunId, task, { spark: caller.sparkId, name: caller.name });
       return { session: runtimeRunId, queued: tasks.length };
@@ -194,6 +226,13 @@ export function createTalkVerbs(deps: TalkDeps): TalkVerbs {
       if (!his(session) && !startedBy(session, caller))
         throw refuse("forbidden", `you may send only to the user's sessions or your own agents`);
       live(session);
+      // CP-D3 (CP3-D3 B, until a session's approvals posture is a fact fieldd reads in no vendor's words): the first
+      // send into a session the person started waits for his OK, and his yes lasts for that run; its own agents ask
+      // the person themselves (TL-D2 A), so a send to them is never held
+      if (his(session) && !deps.holds.allowed(caller.sparkId, session.runtimeRunId)) {
+        const held = deps.holds.send(senderOf(caller), session.runtimeRunId, input.text);
+        return { session: session.runtimeRunId, queued: false, held };
+      }
       const { position } = deps.enqueue(session.runtimeRunId, input.text, {
         spark: caller.sparkId,
         name: caller.name,

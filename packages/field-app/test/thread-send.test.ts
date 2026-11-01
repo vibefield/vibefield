@@ -67,7 +67,7 @@ const live = (door: SparkPaneDoor): SparkPaneReport => ({ state: "live", door })
 function deps(over: Partial<ThreadSendDeps> = {}): ThreadSendDeps {
   return {
     terminals: true,
-    needsYou: () => false,
+    blocked: () => false,
     needsWake: false,
     wake: async () => undefined,
     heard: async () => true,
@@ -375,10 +375,10 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
     expect(sendNote(outcome, "Vela")).toBe("Couldn't wake Vela: the spark's agent has no sign-in");
   });
 
-  it("pastes nothing while the spark waits on you, and says so (a menu in the pane would read it as its answer)", async () => {
+  it("pastes nothing while its own run waits on you in its pane, and says so (a menu there would read it as its answer)", async () => {
     const door = doorOf();
     const outcome = await sendToThread(
-      deps({ needsYou: () => true, pane: async () => live(door) }),
+      deps({ blocked: () => true, pane: async () => live(door) }),
       "yes",
       [],
     );
@@ -388,7 +388,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
     // a woken spark that asks on waking is asked again just before the paste
     let asks = 0;
     const late = await sendToThread(
-      deps({ needsYou: () => ++asks > 1, pane: async () => live(door) }),
+      deps({ blocked: () => ++asks > 1, pane: async () => live(door) }),
       "yes",
       [],
     );
@@ -396,7 +396,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
     expect(door.pasted).toEqual([]);
   });
 
-  it("reads the need again after the pane's input wait, just before the paste: a menu put up meanwhile gets no paste", async () => {
+  it("reads its own run's blocker again after the pane's input wait, just before the paste: a menu put up meanwhile gets no paste", async () => {
     let waiting = false;
     // the input opens just as the agent puts up a permission menu (Needs your OK): the wait is when a woken or
     // just-started agent asks first
@@ -407,7 +407,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
       },
     });
     const outcome = await sendToThread(
-      deps({ needsYou: () => waiting, pane: async () => live(door) }),
+      deps({ blocked: () => waiting, pane: async () => live(door) }),
       "yes, and push it",
       [],
     );

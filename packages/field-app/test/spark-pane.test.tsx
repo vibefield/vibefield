@@ -667,6 +667,13 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
         onFrame({ revision: 1, rows: [OWN] }, "snapshot");
         return () => undefined;
       },
+      watchNeeds: async (onItems) => {
+        onItems([]);
+        return () => undefined;
+      },
+      answer: async () => {
+        throw new Error("nothing is answered here");
+      },
       onReconnected: () => () => undefined,
       open: async () => VELA,
     });

@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useCellMark, useSparksNeedingYou } from "../chat/sparks-feed";
+import { useCellMark, useNeedsNoNews, useSparksNeedingYou } from "../chat/sparks-feed";
 import { emitViewKeyMarker } from "../development-console";
 import { listenForProductChord } from "../field/product-chords";
 import { historyImporting, useIndexStatus } from "../history/first-reading";
@@ -69,21 +69,27 @@ export function ViewFrame({
   // AO-4b — History's cell carries the arc while History imports, heard pushed
   // (`index.status.subscribe`), whether or not History was ever opened.
   const importing = historyImporting(useIndexStatus());
-  // CH-D4, SP-1d — the window's one feed (`chat/sparks-feed.ts`): Chat's cell takes its mark in another view (the
-  // orange dot while a needs-you dot stands, which lasts until its thread is opened, else the cyan one while a thread
-  // is unread), and a spark that STARTS to need you there says so over the cell, once. What needed you before the
-  // first reading is no news; the dot says it.
+  // CH-D4, SP-1d, CP-3 — the window's one feed (`chat/sparks-feed.ts`): Chat's cell takes its mark in another view
+  // (the orange dot while a needs-you dot stands, which lasts until its thread is opened, else the cyan one while a
+  // thread is unread), and each thing that STARTS to need you there says so over the cell, once: a spark's own run
+  // blocking, or a new item for it in the queue — each item a need of its own (a reading of CP3-D8), so a second
+  // question from a spark already waiting on you says it again, while the dot stays one dot. What needed you before
+  // the first reading of the board and the queue is no news, and so is what a first reading finds that comes only
+  // after a refusal the feed asked past (`useNeedsNoNews`); the dot says it.
   const mark = useCellMark();
   const needing = useSparksNeedingYou();
+  const noNews = useNeedsNoNews();
   const [note, setNote] = useState<ViewsNote | null>(null);
   const notes = useRef(0);
   const seen = useRef<ReadonlySet<string> | null>(null);
   useEffect(() => {
     if (needing === null) return;
     const before = seen.current;
-    seen.current = new Set(needing.map((entry) => entry.spark.id));
+    seen.current = new Set(needing.flatMap((entry) => entry.needs));
     if (before === null || current.current === "assistant") return;
-    const fresh = needing.find((entry) => !before.has(entry.spark.id));
+    const fresh = needing.find((entry) =>
+      entry.needs.some((need) => !before.has(need) && !noNews.has(need)),
+    );
     if (fresh === undefined) return;
     notes.current += 1;
     setNote({
@@ -92,7 +98,7 @@ export function ViewFrame({
       seed: fresh.spark.face.seed,
       status: fresh.status,
     });
-  }, [needing]);
+  }, [needing, noNews]);
   useEffect(() => {
     if (note === null) return;
     const timer = window.setTimeout(() => setNote(null), NOTE_MS);

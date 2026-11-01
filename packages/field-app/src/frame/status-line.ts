@@ -3,14 +3,16 @@ import { useSyncExternalStore } from "react";
 // THE STATUS LINE's store (DESIGN.md §8 "The status line", R12, R16, R18; §10: the head's place) —
 // the frame's one line for the desk's notices, where what the desk says ONCE is said: a degraded
 // desk (DK-3), a type it cannot draw and a type to remount (DK-11, desk-notices.ts), and later a
-// capture that failed. One notice at a time, each said once, never per frame: a notice is keyed by
-// its `id`, and saying an id that is already standing — or waiting its turn — is nothing. A plain
-// notice stands 2.4s and goes, and one said while another stands waits its turn behind it (DK-11: a
-// board with two missing kinds says each); one that HOLDS (a notice with an act — the degraded
-// desk's Reload) stands until it is withdrawn, the act taken or the state cleared, a passing notice
-// the latest word over it. A module store read through `useSyncExternalStore` (board-status.ts's
-// shape): its writers and its one reader live in different subtrees, and a prop between them would
-// invent a second owner.
+// capture that failed — and since CP-3 an agent's notify (CP3-D5 A, frame/needs-notices.ts). One
+// notice at a time, each said once, never per frame: a notice is keyed by its `id`, and saying an id
+// that is already standing — or waiting its turn — is nothing. A plain notice stands 2.4s and goes,
+// and one said while another stands waits its turn behind it (DK-11: a board with two missing kinds
+// says each); one that HOLDS (a notice with an act — the degraded desk's Reload) stands until it is
+// withdrawn, the act taken or the state cleared, a passing notice the latest word over it. A notice
+// of a shed group waits among at most two of its group (PF4's watermark: a third sheds the group's
+// oldest waiting one, never the one standing), so one teller's flood never holds back another's
+// words. A module store read through `useSyncExternalStore` (board-status.ts's shape): its writers
+// and its one reader live in different subtrees, and a prop between them would invent a second owner.
 
 export interface StatusAct {
   readonly label: string;
@@ -28,6 +30,12 @@ export interface StatusNotice {
   readonly act?: StatusAct;
   /** Stand until withdrawn rather than for the line's 2.4s (implied by `act`). */
   readonly hold?: boolean;
+  /** One line, cut with an ellipsis at the line's width and never wrapped (an agent's notify). */
+  readonly oneLine?: boolean;
+  /** A plain notice's shed group (PF4's watermark): at most STATUS_SHED_WAITING of one group wait
+   * their turn, and a third sheds that group's oldest waiting one — never the one standing, and
+   * never another group's or a notice of none (an agent's notify: one group per teller). */
+  readonly shed?: string;
 }
 
 /** A notice the line said, in the order said — what a smoke counts ("said once"). */
@@ -38,6 +46,9 @@ export interface SaidNotice {
 
 /** How long a plain notice stands (DESIGN.md §8): it rises in, then goes. */
 export const STATUS_STAND_MS = 2400;
+
+/** How many notices of one shed group may wait their turn (PF4's watermark; DESIGN.md §8). */
+export const STATUS_SHED_WAITING = 2;
 
 /** The said log's length: a session's notices, never the session's every word. */
 const SAID_KEPT = 64;
@@ -78,6 +89,16 @@ function pass(notice: StatusNotice): void {
   }, STATUS_STAND_MS);
 }
 
+/** The waiting notices with room for one more of `group`: past its watermark, the group's oldest
+ * waiting one is shed — never said, and never logged. */
+function shedFor(group: string | undefined): StatusNotice[] {
+  if (group === undefined) return waiting;
+  const ofGroup = waiting.filter((w) => w.shed === group);
+  if (ofGroup.length < STATUS_SHED_WAITING) return waiting;
+  const oldest = ofGroup[0];
+  return waiting.filter((w) => w !== oldest);
+}
+
 /** Say a notice on the line — once: an id already standing, or waiting its turn, is not said again. */
 export function sayStatus(notice: StatusNotice): void {
   const standing = (n: StatusNotice): boolean => n.id === notice.id;
@@ -88,7 +109,7 @@ export function sayStatus(notice: StatusNotice): void {
   } else if (passing === null) {
     pass(notice);
   } else {
-    waiting = [...waiting, notice];
+    waiting = [...shedFor(notice.shed), notice];
   }
   publish();
 }

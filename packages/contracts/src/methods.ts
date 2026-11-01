@@ -2907,4 +2907,41 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // CP-3 (`draft/compose-plane/cp3-the-person.md`, CP3-D6 A) — the needs-you queue's doors for the window, beside the
+  // sparks': `agents.manage` and `local`, because answering an item may start an agent or send words on the person's
+  // behalf, an act of the person at this device. `approval.respond` stays reserved for AR-6's answers to an agent's own
+  // asks. Not reachable from the tailnet, so each subscription is a bare `true`: the phone reaches none of them until
+  // PG rules its scope.
+  defineMethod({
+    surface: "product",
+    method: "needs.list",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "needs.subscribe",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  // Declarative: answered once, an item is answered for every window; the same answer again answers it as it is.
+  defineMethod({
+    surface: "product",
+    method: "needs.answer",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  // notify's carrier (CP3-D5 A): an event, never kept, heard by every window's status line and by main's OS notice.
+  defineMethod({
+    surface: "product",
+    method: "needs.notices.subscribe",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
 ];

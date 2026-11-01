@@ -46,6 +46,7 @@ import {
   type AgentAccountUsageBatch,
   type AgentCatalogEntry,
   AgentFieldRow,
+  AgentInputQueueFile,
   type AgentListResult,
   type AgentProvidersResult,
   AgentSessionRecord,
@@ -60,7 +61,10 @@ import {
   type AgentsProfilesListResult,
   type AgentsProfilesLoginResult,
   type ComposeSparksHatchResult,
+  ComposeSparksOpenResult,
   LAYOUT,
+  NeedsAnswerResult,
+  NeedsListResult,
   type PlaceFacts,
   SOCKETS,
   type SparkRecord,
@@ -466,6 +470,8 @@ function scriptedProvider(
     facts?: boolean;
     briefing?: AgentBriefingCapabilities;
     exerciseDoor?: boolean;
+    /** CP-3 — the calls the door's client makes, in order (absent: one agents_list) */
+    doorCalls?: readonly DoorCall[];
   } = {},
 ): AgentProvider {
   let counter = 0;
@@ -517,7 +523,13 @@ function scriptedProvider(
       if (doorRecipe)
         writeFileSync(
           briefingFile,
-          JSON.stringify({ server: doorRecipe, output: join(envOut, `session-${n}.tools.json`) }),
+          JSON.stringify({
+            server: doorRecipe,
+            output: join(envOut, `session-${n}.tools.json`),
+            ...(extra.doorCalls === undefined
+              ? {}
+              : { calls: extra.doorCalls, typed: join(envOut, `session-${n}.typed`) }),
+          }),
         );
       const { runtimeSessionId } = await options.host.spawnTerminal({
         command: "/bin/sh",
@@ -637,10 +649,17 @@ interface Box {
   observed: ScriptedCandidates;
 }
 
+/** One tools/call the door's client makes (test/fixtures/spark-mcp-client.mjs). */
+interface DoorCall {
+  readonly name: string;
+  readonly arguments: Record<string, unknown>;
+}
+
 interface SetupConfig {
   floor: "mock" | "real";
   briefing?: AgentBriefingCapabilities;
   exerciseDoor?: boolean;
+  doorCalls?: readonly DoorCall[];
   /** AR-S4d — the keychain fieldd keeps server values in (default: a map; never the machine's) */
   secretStore?: SecretStore;
   realAgent?: boolean;
@@ -801,6 +820,7 @@ async function setup(config: SetupConfig): Promise<Box> {
             profiles: config.profiles === true,
             ...(config.briefing === undefined ? {} : { briefing: config.briefing }),
             ...(config.exerciseDoor === undefined ? {} : { exerciseDoor: config.exerciseDoor }),
+            ...(config.doorCalls === undefined ? {} : { doorCalls: config.doorCalls }),
             seen,
             ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
             models,
@@ -1620,16 +1640,195 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
     }, 25_000);
     expect(plainProof.error).toBeUndefined();
+    // CP-3 (MT-D11): telling the person is every agent's, under its harness's own ask (MT-D7: not in its allowance)
     expect(plainProof.listed.tools.map((tool: { name: string }) => tool.name)).toEqual([
       "history_search",
       "history_read",
       "projects_list",
+      "notify",
     ]);
     // MT-L2: a call is held to its row again, so a spark's row answers a plain run as the fact `forbidden`.
     expect(plainProof.called.isError).toBe(true);
     expect(plainProof.called.structuredContent?.fact).toBe("forbidden");
     await win.call("terminal.terminate", { sessionId: ordinary.terminal.sessionId });
   }, 90_000);
+
+  // CP-3 — the person, through the real door: a spark's ask_user and notify reach the window's doors, and the window's
+  // answer joins the spark's own signed input queue as one marked line of facts. The scripted agent's terminal-only
+  // monitor may read idle at any moment, so the fact is witnessed where it is: kept in the queue, or already in the
+  // spark's terminal (the door's client keeps what it reads). When it lands is needs-queue.test.ts's witness.
+  it("CP-3 — a spark asks and tells through the floor's door; the window answers, and the answer reaches it through its input queue", async () => {
+    const briefing: AgentBriefingCapabilities = {
+      mcpServers: true,
+      allowTools: true,
+      instructions: true,
+      mcpServerProcess: "terminal",
+    };
+    const box = await setup({
+      floor: "real",
+      profiles: true,
+      briefing,
+      exerciseDoor: true,
+      doorCalls: [
+        { name: "ask_user", arguments: { question: "Push the fix?", choices: ["Push", "Hold"] } },
+        { name: "notify", arguments: { text: "the build\nis green" } },
+      ],
+    });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agents.manage"], "cp3");
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    // a notice is an event: only a window listening when it is told hears it
+    const notices = (await win.call("needs.notices.subscribe", {})) as { subId: string };
+    const { spark } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const runId = spark.session!.runtimeRunId;
+    const proof = await poll(async () => {
+      const path = join(box.envOut, "session-1.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(proof.error).toBeUndefined();
+    const [asked, told] = proof.calls as { structuredContent: Record<string, unknown> }[];
+    expect(asked?.structuredContent).toEqual({ item: expect.stringMatching(/^ny-/), queued: true });
+    expect(told?.structuredContent).toEqual({ sent: true });
+    const item = asked!.structuredContent.item as string;
+
+    const heard = await poll(async () => {
+      const frame = win.notifications.find(
+        (n) => n.method === "needs.notices.delta" && n.params.subId === notices.subId,
+      );
+      return frame?.params.payload as { notices: { from: unknown; words: string }[] } | undefined;
+    }, 10_000);
+    expect(heard.notices).toEqual([
+      expect.objectContaining({
+        from: { name: "Vela", session: runId, spark: spark.id },
+        words: "the build is green",
+      }),
+    ]);
+
+    const listed = NeedsListResult.parse(await win.call("needs.list", {}));
+    expect(listed.items).toEqual([
+      expect.objectContaining({
+        id: item,
+        kind: "question",
+        spark: spark.id,
+        choices: ["Push", "Hold", "Not now"],
+      }),
+    ]);
+    const answered = NeedsAnswerResult.parse(await win.call("needs.answer", { item, choice: 0 }));
+    expect(answered.item.answer).toMatchObject({ choice: 0, outcome: "done", told: true });
+    expect(NeedsListResult.parse(await win.call("needs.list", {})).items).toEqual([]);
+    // the witness: the fact, marked as VibeField's, kept in the spark's own signed queue or already in its terminal
+    const fact = 'VibeField: you answered Vela\'s question "Push the fix?": Push';
+    const landed = await poll(async () => {
+      const typed = join(box.envOut, "session-1.typed");
+      if (existsSync(typed) && readFileSync(typed, "utf8").includes(fact)) return "in its terminal";
+      const keptPath = join(dataDir, ...LAYOUT.AGENT_INPUTS_DIR, `${runId}.json`);
+      if (!existsSync(keptPath)) return undefined;
+      const kept = AgentInputQueueFile.parse(JSON.parse(readFileSync(keptPath, "utf8")));
+      expect((kept as { signature?: string }).signature ?? "").toMatch(/^[0-9a-f]{64}$/);
+      return kept.inputs.some((input) => markedText(input) === fact) ? "kept" : undefined;
+    }, 15_000);
+    expect(["kept", "in its terminal"]).toContain(landed);
+    await win.call("terminal.terminate", { sessionId: box.sessions[0]!.runtimeSessionId });
+  }, 90_000);
+
+  // CP-3 — needs.answer is a second caller of the sparks' one wake (SparkService.open; SP-1d's join, per spark): an
+  // answer to a sleeping spark's question wakes it to tell it, so a window's Wake (compose.sparks.open) under way at
+  // that moment must be the same wake. The resume's birth is held until the answer has asked its own open (the queue
+  // asks it in the same turn as it drops the item from every window's list), so the two meet inside one wake. Two
+  // wakes would resume once and, the conversation claimed, start the spark again beside it: two births, two runs.
+  it("CP-3 — an answer that wakes a sleeping spark while a window's Wake wakes it is that same wake: one birth, one run", async () => {
+    const briefing: AgentBriefingCapabilities = {
+      mcpServers: true,
+      allowTools: true,
+      instructions: true,
+      mcpServerProcess: "terminal",
+    };
+    // every birth is held here while the row holds `wakes`; the hatch's is not
+    const births: string[] = [];
+    let wakes: Promise<void> = Promise.resolve();
+    const box = await setup({
+      floor: "real",
+      profiles: true,
+      briefing,
+      exerciseDoor: true,
+      doorCalls: [
+        { name: "ask_user", arguments: { question: "Push the fix?", choices: ["Push", "Hold"] } },
+      ],
+      afterBirth: async (paneId) => {
+        births.push(paneId);
+        await wakes;
+      },
+    });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agents.manage"], "cp3-wake");
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    const { spark } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const runId = spark.session!.runtimeRunId;
+    const proof = await poll(async () => {
+      const path = join(box.envOut, "session-1.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    const [asked] = proof.calls as { structuredContent: Record<string, unknown> }[];
+    const item = asked?.structuredContent.item as string;
+    expect(item).toMatch(/^ny-/);
+    // Vela sleeps
+    await win.call("terminal.terminate", { sessionId: box.sessions[0]!.runtimeSessionId });
+    await poll(async () => (readRecord(dataDir, runId).exited ? true : undefined), 15_000);
+    const needs = (await win.call("needs.subscribe", {})) as { subId: string };
+
+    let release: () => void = () => undefined;
+    wakes = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Wake, from the window: its resume's birth is held
+    const woken = win.call("compose.sparks.open", { spark: spark.id });
+    await poll(async () => (births.length === 2 ? true : undefined), 25_000, "the wake's birth");
+    // the answer, meanwhile: once its item has left the list, its own open has been asked
+    const answering = win.call("needs.answer", { item, choice: 0 });
+    await poll(
+      async () =>
+        win.notifications.some(
+          (n) =>
+            n.method === "needs.delta" &&
+            n.params.subId === needs.subId &&
+            !NeedsListResult.parse(n.params.payload).items.some((each) => each.id === item),
+        )
+          ? true
+          : undefined,
+      10_000,
+      "the answered item leaving the list",
+    );
+    release();
+    const [opened, answered] = await Promise.all([woken, answering]);
+    const run = ComposeSparksOpenResult.parse(opened).spark.session?.runtimeRunId;
+    expect(run).toBeDefined();
+    expect(NeedsAnswerResult.parse(answered).item.answer).toMatchObject({
+      choice: 0,
+      outcome: "done",
+    });
+    // one wake: one birth after the hatch's, and one run of Vela's that has not exited
+    expect(births).toHaveLength(2);
+    expect(box.sessions).toHaveLength(2);
+    expect(
+      daemon.agents
+        .list()
+        .sessions.filter((row) => row.spark === spark.id && !row.continuation?.exited)
+        .map((row) => row.runtimeRunId),
+    ).toEqual([run]);
+    await win.call("terminal.terminate", { sessionId: box.sessions[1]!.runtimeSessionId });
+  }, 120_000);
 
   // CP-2 — the talk room's two ports on the real floor. The queue's idle gate is agent-input-queue.test.ts's: the
   // scripted agent observes only its terminal, so its monitor never says idle on cue, and this row witnesses what the

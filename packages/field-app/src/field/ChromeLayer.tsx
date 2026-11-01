@@ -28,6 +28,7 @@ import { type FrameSurface, foldSurface, type SheetShelf } from "../frame/frame-
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
 import { runChosenSession } from "../frame/line-door";
+import { needsNoticesPortOver, startNeedsNotices } from "../frame/needs-notices";
 import { PackageCircle } from "../frame/PackageCircle";
 import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
@@ -150,6 +151,9 @@ export function ChromeLayer({
   // redraws when the board moves; this layer never does.
   const fieldd = useFielddClient();
   useEffect(() => startSparksFeed(sparksPortOver(fieldd)), [fieldd]);
+  // An agent's notify on the status line (CP-3, CP3-D5 A): heard over the same client for the window's life, in every
+  // window, whatever main says outside the app (`frame/needs-notices.ts`).
+  useEffect(() => startNeedsNotices(needsNoticesPortOver(fieldd)), [fieldd]);
   // Chat's create (SP-1c): the New spark sheet asks fieldd through the same client — and so do @'s rows in Chat's
   // composer (SP-1d), whose list is one of the frame's open surfaces (`at`), so Chat is handed the one owner's value.
   const newSparkPort = useMemo(() => newSparkPortOver(fieldd), [fieldd]);

@@ -1,4 +1,4 @@
-import type { SparkId } from "@vibefield/contracts";
+import type { NeedsItem, SparkId } from "@vibefield/contracts";
 import { EmptyState, UiButton, UnavailableState } from "@vibefield/design-kit/primitives";
 import {
   SparkFace,
@@ -7,7 +7,7 @@ import {
   sparkStatusWord,
 } from "@vibefield/design-kit/spark-face";
 import { ChromeBoundary } from "@vibefield/puppeteer-views";
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import type { CSSProperties, ReactElement, ReactNode, Ref } from "react";
 import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
 import { SparkPaneView } from "./SparkPaneView";
 import { activityWords, type SparkEntry } from "./spark-status";
@@ -23,7 +23,8 @@ import "./chat.css";
 // needs-you three take the attention ink (CH-D4), and a row wears its thread's mark: the orange dot, or unread's cyan
 // one, said in the row's name too where it outlasts the word (SP-1d). The thread's column is a fixed box: the chosen
 // spark's head, then its own pane (the controller's `SparkPane`, handed in) — or, asleep or not started, one honest
-// line with its one act — then the thread's foot: its composer, handed in, and its items standing over the pane.
+// line with its one act — then the thread's foot: its composer, handed in, and its items standing over the pane (a new
+// spark's hello, or since CP-3 the needs-you card).
 
 /** What the chosen spark's act is doing: at rest, under way, or refused in fieldd's words. */
 export type ChatAct =
@@ -53,6 +54,12 @@ export interface ChatPanelViewProps {
   onStarter?: ((words: string) => void) | undefined;
   /** an act holds the shown thread — a send into it, a starter's or Send's, or a wake: Wake and the starters wait */
   sending?: boolean | undefined;
+  /** CP-3 — an act pressed on the thread's needs-you card, by its place */
+  onAnswer?: ((item: NeedsItem, choice: number) => void) | undefined;
+  /** CP-3 — Show pressed on an agent's ask: its pane in Godview */
+  onShowAsk?: ((item: NeedsItem) => void) | undefined;
+  /** CP-3 — the needs-you card's own element (the controller puts the keyboard on it) */
+  cardRef?: Ref<HTMLDivElement> | undefined;
   /** the shown thread's composer, in its foot (the product's `ChatComposer`; the catalog's `ChatComposerView`) */
   composer?: ReactNode;
   /** the locale the times are said in; the window's own when absent */
@@ -72,10 +79,12 @@ const AT_WORK: ReadonlySet<SparkStatus> = new Set([
 /** The line the thread's column says under the head in place of a pane: asleep, or not started. */
 export type ThreadLine = "asleep" | "not-started";
 
-/** The spark's line, or null while it is awake: then its pane is the thread (DESIGN.md §8 "Chat's thread"). */
+/** The spark's line, or null while it is awake: then its pane is the thread (DESIGN.md §8 "Chat's thread"). Read from
+ * its session (`awake`), never from its word: a sleeping spark with an item says Asking you or Needs your OK, and still
+ * sleeps (§8 "Chat's list", the status as amended at CP-3). */
 export function threadLineOf(entry: SparkEntry): ThreadLine | null {
-  if (entry.status === "sleeping") return "asleep";
   if (entry.run === null && entry.spark.session === undefined) return "not-started";
+  if (!entry.awake) return "asleep";
   return null;
 }
 
@@ -105,6 +114,9 @@ export function ChatPanelView({
   items = [],
   onStarter,
   sending = false,
+  onAnswer,
+  onShowAsk,
+  cardRef,
   composer,
   locale,
 }: ChatPanelViewProps): ReactElement {
@@ -172,6 +184,9 @@ export function ChatPanelView({
             items={items}
             onStarter={onStarter}
             sending={sending}
+            onAnswer={onAnswer}
+            onShowAsk={onShowAsk}
+            cardRef={cardRef}
             composer={composer}
           />
         )}
@@ -232,6 +247,9 @@ function ThreadColumn({
   items,
   onStarter,
   sending,
+  onAnswer,
+  onShowAsk,
+  cardRef,
   composer,
 }: {
   entry: SparkEntry;
@@ -241,6 +259,9 @@ function ThreadColumn({
   items: readonly ThreadItem[];
   onStarter: ((words: string) => void) | undefined;
   sending: boolean;
+  onAnswer: ((item: NeedsItem, choice: number) => void) | undefined;
+  onShowAsk: ((item: NeedsItem) => void) | undefined;
+  cardRef: Ref<HTMLDivElement> | undefined;
   composer: ReactNode;
 }): ReactElement {
   const { spark, status, needsYou } = entry;
@@ -275,7 +296,14 @@ function ThreadColumn({
         </p>
       )}
       <div className="vf-chat-foot">
-        <ThreadItemsView items={items} onStarter={onStarter} sending={sending} />
+        <ThreadItemsView
+          items={items}
+          onStarter={onStarter}
+          sending={sending}
+          onAnswer={onAnswer}
+          onShow={onShowAsk}
+          cardRef={cardRef}
+        />
         {composer}
       </div>
     </section>

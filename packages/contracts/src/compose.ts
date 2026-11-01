@@ -36,6 +36,11 @@ export type SparkName = z.infer<typeof SparkName>;
 export const SparkFace = z.object({ seed: z.number().int().min(0).max(0xffffffff) }).passthrough();
 export type SparkFace = z.infer<typeof SparkFace>;
 
+/** CP-3 — a needs-you item's id: fieldd's, minted when it is raised. An agent's own ask has one derived from its run
+ * and its blocker, so it is the same on every read. */
+export const NeedsItemId = z.string().regex(/^ny-[0-9a-z]{6,32}$/);
+export type NeedsItemId = z.infer<typeof NeedsItemId>;
+
 const sparkFields = {
   id: SparkId,
   name: SparkName,
@@ -344,13 +349,25 @@ export const ComposeAgentSpawnInput = z
   .passthrough();
 export type ComposeAgentSpawnInput = z.infer<typeof ComposeAgentSpawnInput>;
 
+/** A spawn starts, or past the spark's cap waits in the needs-you queue for the user's OK (CP-D7, CP3-D4 A): one
+ * object with one of the two, never a union, because an MCP output schema is an object. */
 export const ComposeAgentSpawnOutput = z
   .object({
-    session: z.string().min(1),
-    /** how many tasks wait in its queue */
+    /** the new session (absent while it waits for the user's OK, `held`) */
+    session: z.string().min(1).optional(),
+    /** past the cap: the needs-you item it waits in */
+    held: NeedsItemId.optional(),
+    /** how many tasks wait: in its queue, or with the held item */
     queued: z.number().int().min(0),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((out, ctx) => {
+    if ((out.session === undefined) === (out.held === undefined))
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "a session or a held item, one of them",
+      });
+  });
 export type ComposeAgentSpawnOutput = z.infer<typeof ComposeAgentSpawnOutput>;
 
 /** The one input of agent_watch, agent_unwatch, agent_interrupt and agent_stop: the session it acts on. */
@@ -367,15 +384,30 @@ export const ComposeAgentSendInput = z
   .passthrough();
 export type ComposeAgentSendInput = z.infer<typeof ComposeAgentSendInput>;
 
-/** A send is queued, never delivered, at the call; the spark is told how it went on its next wake (CP2-D2). */
+/** A send is queued, never delivered, at the call; the spark is told how it went on its next wake (CP2-D2). Or it is
+ * held for the user's OK (CP-D3, CP3-D3 B: the first send into a session the user started), and the answer is a
+ * wake too. */
 export const ComposeAgentSendOutput = z
   .object({
     session: z.string().min(1),
-    queued: z.literal(true),
-    /** its place in the session's queue, 1 being next */
-    position: z.number().int().min(1),
+    /** queued now; false while it waits for the user's OK (CP-D3) */
+    queued: z.boolean(),
+    /** its place in the session's queue, 1 being next (queued only) */
+    position: z.number().int().min(1).optional(),
+    /** the needs-you item it waits in (held only) */
+    held: NeedsItemId.optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((out, ctx) => {
+    const ok = out.queued
+      ? out.position !== undefined && out.held === undefined
+      : out.held !== undefined && out.position === undefined;
+    if (!ok)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "queued with a place, or held with an item",
+      });
+  });
 export type ComposeAgentSendOutput = z.infer<typeof ComposeAgentSendOutput>;
 
 /** The stop was delivered to the agent, never that its turn ended (puppeteer's turn stop). */
@@ -389,3 +421,323 @@ export const ComposeAgentStopOutput = z
   .object({ session: z.string().min(1), ending: z.literal(true) })
   .passthrough();
 export type ComposeAgentStopOutput = z.infer<typeof ComposeAgentStopOutput>;
+
+// ── a session's input queue, as fieldd keeps it (CP2-D3; signed since CP-3, LEANS P3) ──
+
+/** Who a kept input is from: a spark, by id and by the name its words are marked with; or fieldd's own wake. CLOSED:
+ * an input lands marked by its source (CP2-D1), so one from a source this build cannot mark is never delivered. */
+export const AgentInputSender = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("spark"), spark: SparkId, name: SparkName }).passthrough(),
+  z.object({ kind: z.literal("fieldd") }).passthrough(),
+]);
+export type AgentInputSender = z.infer<typeof AgentInputSender>;
+
+/** One input that waits for a session's next idle moment. Its text has no bound here: fieldd's wakes that wait join
+ * into one line (CP-D4), and a spark's own words were bounded at its call (COMPOSE_TEXT_MAX). */
+export const AgentQueuedInput = z
+  .object({
+    id: z.string().min(1).max(64),
+    text: z.string().min(1),
+    from: AgentInputSender,
+    /** when it was queued (ISO) */
+    at: z.string().min(1),
+  })
+  .passthrough();
+export type AgentQueuedInput = z.infer<typeof AgentQueuedInput>;
+
+export const AGENT_INPUT_QUEUE_FORMAT = 1;
+
+/** One session's queue, one file per run under LAYOUT.AGENT_INPUTS_DIR, signed with AGENT_INPUTS_KEY_FILE's secret by
+ * fieldd's one record signer. The schema is the unsigned body; the file adds its `signature`. A file a same-uid agent
+ * wrote or edited would otherwise speak as a spark or as VibeField into the session at its next idle, so fieldd sets
+ * aside, and never delivers, a file that is unsigned, does not verify, does not parse, or names another run. */
+export const AgentInputQueueFile = z
+  .object({
+    format: z.literal(AGENT_INPUT_QUEUE_FORMAT),
+    /** the run it waits for, its file's name too: inside the signature, so a file copied to another run's name is
+     * refused there */
+    run: z.string().min(1),
+    /** oldest first; an empty queue keeps no file */
+    inputs: z.array(AgentQueuedInput).min(1),
+  })
+  .passthrough();
+export type AgentInputQueueFile = z.infer<typeof AgentInputQueueFile>;
+
+// ── CP-3: the person (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31 06:31:34Z: CP3-D1…D8 at A). The
+// needs-you queue (CP-D12) is fieldd's one list of what waits on the person: a spark's question (`ask_user`), its first
+// send into a session the person started (CP-D3, CP3-D3 B), a spawn past its cap (CP-D7, CP3-D4 A), and an agent's own
+// ask, which is listed with where to answer it and never answered here (CP3-D1 A, CP-L4). Answered once, an item is
+// answered for every window, and the spark hears the answer as a wake (CP3-D2 A). The words of every act are DESIGN.md
+// §9's ("The person's queue's words"); a window answers by an act's place, never its word. ──
+
+/** ask_user's question; the card shows six lines of it, then scrolls (DESIGN.md §8 "Chat's thread") */
+export const NEEDS_QUESTION_MAX = 500;
+/** one choice's label */
+export const NEEDS_CHOICE_MAX = 40;
+/** a question's own choices; Not now is VibeField's, after them */
+export const NEEDS_CHOICES_MAX = 4;
+/** an item's words on the wire; fieldd cuts longer ones and says `cut` */
+export const NEEDS_WORDS_MAX = 2_000;
+/** a name as an item or a fact says it: a run's title is cut here, with "…" (DESIGN.md §9) */
+export const NEEDS_NAME_MAX = 64;
+/** fieldd's own words for why an act failed or a spark was not told */
+export const NEEDS_REASON_MAX = 256;
+/** a notify's words, one line, after fieldd collapses its whitespace */
+export const NEEDS_NOTICE_CHARS = 140;
+/** what notify accepts before that cut */
+export const COMPOSE_NOTIFY_MAX = 500;
+/** the notices one session may tell the person in a minute (PF4's watermark): one more is the fact `limit` */
+export const NOTIFY_PER_MINUTE = 6;
+/** the sends that wait on one held item */
+export const NEEDS_HELD_SENDS_MAX = 16;
+/** what one spark may have waiting on the person at once, its questions, held sends and spawns together (PF4's
+ * watermark): a ninth is refused as the fact `limit` */
+export const NEEDS_OPEN_PER_SPARK = 8;
+
+/** The acts' words (DESIGN.md §9 "The person's queue's words"): one authority for fieldd, the window and tests. A
+ * question's own choices come first and Not now is always last; a held item's yes is always first. */
+export const NEEDS_CHOICE_WORDS = {
+  allow: "Allow",
+  allowOneMore: "Allow one more",
+  notNow: "Not now",
+} as const;
+
+/** The kinds and states, OPEN on the wire like COMPOSE_SESSION_STATES: a word this build never heard of must not refuse
+ * an item. `ended`: what it waited on ended before an answer (a held send's session), or an allowance's run ended. */
+export const NEEDS_ITEM_KINDS = ["question", "held-send", "held-spawn", "agent-ask"] as const;
+export type NeedsItemKind = (typeof NEEDS_ITEM_KINDS)[number];
+export const NEEDS_ITEM_STATES = ["open", "answered", "ended"] as const;
+export type NeedsItemState = (typeof NEEDS_ITEM_STATES)[number];
+/** What became of an answer's act, OPEN: done, or failed with fieldd's `reason`. Whether the spark has heard it is
+ * apart (`told`), so an act done for a spark that sleeps is still done. */
+export const NEEDS_ANSWER_OUTCOMES = ["done", "failed"] as const;
+export type NeedsAnswerOutcome = (typeof NEEDS_ANSWER_OUTCOMES)[number];
+
+/** An open word as this build names it, else undefined: a word a newer build's record may carry. */
+function knownWord<W extends string>(words: readonly W[], word: string | undefined): W | undefined {
+  return words.find((known) => known === word);
+}
+
+/** An item's kind, state and its answer's outcome as this build names them (undefined: a word it never heard of).
+ * fieldd and the window compare these words only through them, so a misspelt word is a type error, never a branch no
+ * item takes. */
+export function needsKindOf(item: { readonly kind: string }): NeedsItemKind | undefined {
+  return knownWord(NEEDS_ITEM_KINDS, item.kind);
+}
+export function needsStateOf(item: { readonly state: string }): NeedsItemState | undefined {
+  return knownWord(NEEDS_ITEM_STATES, item.state);
+}
+export function needsOutcomeOf(
+  answer: { readonly outcome: string } | undefined,
+): NeedsAnswerOutcome | undefined {
+  return knownWord(NEEDS_ANSWER_OUTCOMES, answer?.outcome);
+}
+
+/** An act's place among an item's choices. */
+const NeedsChoiceIndex = z.number().int().min(0).max(NEEDS_CHOICES_MAX);
+
+/** Who asks or tells: named as fieldd names it (a spark by its name, a session by its title, else its agent's label,
+ * else its id), its session, and the spark when the teller IS that spark. */
+export const NeedsFrom = z
+  .object({
+    name: z.string().min(1).max(NEEDS_NAME_MAX),
+    session: z.string().min(1).optional(),
+    spark: SparkId.optional(),
+  })
+  .passthrough();
+export type NeedsFrom = z.infer<typeof NeedsFrom>;
+
+/** How an item was answered. The record says the person did it; the audit line says from which window. */
+export const NeedsAnswer = z
+  .object({
+    /** the act's place among the item's choices, never its word */
+    choice: NeedsChoiceIndex,
+    /** when it was answered (ISO) */
+    at: z.string().min(1),
+    /** NEEDS_ANSWER_OUTCOMES, OPEN */
+    outcome: z.string().min(1).max(32),
+    /** why the act failed, in fieldd's words */
+    reason: z.string().min(1).max(NEEDS_REASON_MAX).optional(),
+    /** the spark has been told: the answer's fact is in its input queue */
+    told: z.boolean(),
+    /** why it has not been told yet (told false): it hears the answer when it next wakes */
+    waits: z.string().min(1).max(NEEDS_REASON_MAX).optional(),
+  })
+  .passthrough();
+export type NeedsAnswer = z.infer<typeof NeedsAnswer>;
+
+export const NeedsItem = z
+  .object({
+    id: NeedsItemId,
+    /** NEEDS_ITEM_KINDS, OPEN */
+    kind: z.string().min(1).max(32),
+    /** NEEDS_ITEM_STATES, OPEN */
+    state: z.string().min(1).max(32),
+    from: NeedsFrom,
+    /** the spark whose thread shows it: the asker, or the spark that started the asking agent */
+    spark: SparkId.optional(),
+    /** when it was asked (ISO) */
+    asked: z.string().min(1),
+    /** the asker's own words: the question, the held words, a held spawn's first task (absent: none) */
+    words: z.string().min(1).max(NEEDS_WORDS_MAX).optional(),
+    /** `words` was cut at NEEDS_WORDS_MAX */
+    cut: z.literal(true).optional(),
+    /** what the person may answer, in order; absent: nothing to answer here (an agent's own ask) */
+    choices: z
+      .array(z.string().min(1).max(NEEDS_CHOICE_MAX))
+      .min(1)
+      .max(NEEDS_CHOICES_MAX + 1)
+      .optional(),
+    /** how many wait together: a held send's words, or an agent's asks */
+    count: z.number().int().min(1).optional(),
+    /** a held send: the session it is for */
+    to: z
+      .object({ session: z.string().min(1), name: z.string().min(1).max(NEEDS_NAME_MAX) })
+      .passthrough()
+      .optional(),
+    /** a held spawn: the agent, its folder by its last segment, and the spark's live agents when it asked */
+    agent: AgentProviderId.optional(),
+    folder: z.string().min(1).max(255).optional(),
+    live: z.number().int().min(0).optional(),
+    /** an agent's own ask: its blocker's kind (permission | question, OPEN), and a permission's tool */
+    ask: z.string().min(1).max(32).optional(),
+    tool: z.string().min(1).max(128).optional(),
+    answer: NeedsAnswer.optional(),
+  })
+  .passthrough();
+export type NeedsItem = z.infer<typeof NeedsItem>;
+
+/** needs.list's answer and every needs.subscribe frame: the open items, oldest first, whole. */
+export const NeedsListResult = z.object({ items: z.array(NeedsItem) }).passthrough();
+export type NeedsListResult = z.infer<typeof NeedsListResult>;
+
+/** needs.answer: the act by its place among the item's choices (DESIGN.md §9), so rewording an act is no wire change. */
+export const NeedsAnswerParams = z
+  .object({ item: NeedsItemId, choice: NeedsChoiceIndex })
+  .passthrough();
+export type NeedsAnswerParams = z.infer<typeof NeedsAnswerParams>;
+
+export const NeedsAnswerResult = z.object({ item: NeedsItem }).passthrough();
+export type NeedsAnswerResult = z.infer<typeof NeedsAnswerResult>;
+
+/** A notify, as the window and main hear it (needs.notices.subscribe). Never kept: it is an event. */
+export const NeedsNotice = z
+  .object({
+    id: z.string().regex(/^nt-[0-9a-z]{6,32}$/),
+    from: NeedsFrom,
+    words: z.string().min(1).max(NEEDS_NOTICE_CHARS),
+    /** when it was told (ISO) */
+    at: z.string().min(1),
+  })
+  .passthrough();
+export type NeedsNotice = z.infer<typeof NeedsNotice>;
+
+export const NeedsNotices = z.object({ notices: z.array(NeedsNotice).max(16) }).passthrough();
+export type NeedsNotices = z.infer<typeof NeedsNotices>;
+
+/** The notices one needs.notices.subscribe frame tells, as main and every window read them: each on its own, so one
+ * this build cannot read is passed over and the rest are said (the tolerant reader); a frame with no list tells none. */
+export function needsNoticesOf(payload: unknown): NeedsNotice[] {
+  const notices =
+    typeof payload === "object" && payload !== null
+      ? (payload as { notices?: unknown }).notices
+      : undefined;
+  if (!Array.isArray(notices)) return [];
+  const read: NeedsNotice[] = [];
+  for (const value of notices) {
+    const notice = NeedsNotice.safeParse(value);
+    if (notice.success) read.push(notice.data);
+  }
+  return read;
+}
+
+/** One of a question's choices: one line, trimmed. */
+const AskChoice = z
+  .string()
+  .trim()
+  .min(1)
+  .max(NEEDS_CHOICE_MAX)
+  .regex(/^[^\r\n]+$/);
+
+/** ask_user (sparks only, MT-D11): a question with 1 to NEEDS_CHOICES_MAX distinct choices of the spark's own. It
+ * returns at once and the answer is a wake (CP3-D2 A); Not now is VibeField's, so no choice may be it. */
+export const ComposeAskUserInput = z
+  .object({
+    question: z.string().min(1).max(NEEDS_QUESTION_MAX),
+    choices: z.array(AskChoice).min(1).max(NEEDS_CHOICES_MAX),
+  })
+  .passthrough()
+  .superRefine((input, ctx) => {
+    const seen = new Set<string>();
+    for (const [i, choice] of input.choices.entries()) {
+      const key = choice.toLowerCase();
+      if (key === NEEDS_CHOICE_WORDS.notNow.toLowerCase() || seen.has(key))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["choices", i],
+          message: `"${choice}" is a choice already, or VibeField's own`,
+        });
+      seen.add(key);
+    }
+  });
+export type ComposeAskUserInput = z.infer<typeof ComposeAskUserInput>;
+
+export const ComposeAskUserOutput = z
+  .object({ item: NeedsItemId, queued: z.literal(true) })
+  .passthrough();
+export type ComposeAskUserOutput = z.infer<typeof ComposeAskUserOutput>;
+
+/** notify (every agent, MT-D11): words for the user, said on one line on every window's status line, and as an OS
+ * notice while no window is in front (CP3-D5 A). */
+export const ComposeNotifyInput = z
+  .object({ text: z.string().min(1).max(COMPOSE_NOTIFY_MAX) })
+  .passthrough();
+export type ComposeNotifyInput = z.infer<typeof ComposeNotifyInput>;
+
+/** Handed to the windows and to main, never that the user read it (CP-2's house rule). */
+export const ComposeNotifyOutput = z.object({ sent: z.literal(true) }).passthrough();
+export type ComposeNotifyOutput = z.infer<typeof ComposeNotifyOutput>;
+
+export const NEEDS_RECORD_FORMAT = 1;
+
+/** What a held spawn starts once the user allows it: agent_spawn's launch after its defaults, and its tasks. */
+export const NeedsHeldLaunch = z
+  .object({
+    agent: AgentProviderId,
+    profileSet: AgentProfileSetId,
+    cwd: z.string().min(1),
+    model: AgentModelSelection.optional(),
+    tasks: z.array(z.string().min(1).max(COMPOSE_TEXT_MAX)).max(16),
+  })
+  .passthrough();
+export type NeedsHeldLaunch = z.infer<typeof NeedsHeldLaunch>;
+
+/** The record fieldd keeps per item, one file per item under LAYOUT.NEEDS_DIR, signed with NEEDS_KEY_FILE's secret by
+ * fieldd's one record signer. The schema is the unsigned body; the file adds its `signature`, and its name is the
+ * item's id, inside the signature. What an Allow acts on (the held words, the launch) is kept here and never rides the
+ * wire. An agent's own ask is never kept: it is read from its run's blockers. */
+export const NeedsRecord = z
+  .object({
+    format: z.literal(NEEDS_RECORD_FORMAT),
+    item: NeedsItem,
+    /** a held send: the words, in order, until the Allow queues them */
+    texts: z
+      .array(z.string().min(1).max(COMPOSE_TEXT_MAX))
+      .min(1)
+      .max(NEEDS_HELD_SENDS_MAX)
+      .optional(),
+    /** a held spawn: what Allow one more starts, until it does */
+    launch: NeedsHeldLaunch.optional(),
+    /** the spark's name its words are marked with (CP2-D1) */
+    sender: SparkName.optional(),
+    /** the fact owed to its spark, until it is in the spark's input queue */
+    owed: z.string().min(1).max(NEEDS_WORDS_MAX).optional(),
+    /** the act an answer began and did not record done: after a restart the spark is told it is uncertain, and it is
+     * never done again (CP2-D2) */
+    acting: z
+      .object({ choice: NeedsChoiceIndex, at: z.string().min(1) })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+export type NeedsRecord = z.infer<typeof NeedsRecord>;

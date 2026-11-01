@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AGENT_CATALOG, AgentSessionRecord } from "@vibefield/contracts";
@@ -146,5 +146,30 @@ describe("CP-1c — a record carrying who started the run and the spark it is", 
       readFileSync(records.path("run-started"), "utf8"),
     ) as AgentSessionRecord;
     expect(records.verifies({ ...plain, spark: "sp-7k2m9q4x" })).toBe(false);
+  });
+});
+
+describe("AR-4b — the signing key (EL7)", () => {
+  it("sets aside a key other users could read and makes another in the same call, so what it signed reads as untrusted", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vf-records-"));
+    dirs.push(dir);
+    const opts = {
+      dir: join(dir, "sessions"),
+      keyPath: join(dir, "sessions.key"),
+      now: () => new Date("2026-10-31T12:00:00.000Z"),
+    };
+    new SessionRecordStore(opts).write(record("run-1", FIRST!, "2026-10-31T11:00:00.000Z"));
+    const exposedKey = readFileSync(opts.keyPath, "utf8");
+    chmodSync(opts.keyPath, 0o644);
+    const after = new SessionRecordStore(opts);
+    // the first call that needs the key finds it exposed: it is set aside and replaced there, never a throw
+    expect(after.read("run-1")).toBeUndefined();
+    expect(readFileSync(opts.keyPath, "utf8")).not.toBe(exposedKey);
+    expect(statSync(opts.keyPath).mode & 0o777).toBe(0o600);
+    expect(
+      readdirSync(dir).filter((name) => name.startsWith("sessions.key.exposed-")),
+    ).toHaveLength(1);
+    after.write(record("run-2", FIRST!, "2026-10-31T12:00:00.000Z"));
+    expect(new SessionRecordStore(opts).read("run-2")?.runtimeRunId).toBe("run-2");
   });
 });

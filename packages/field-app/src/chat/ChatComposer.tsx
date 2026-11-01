@@ -92,6 +92,9 @@ export interface ChatComposerProps {
   threadSending?: boolean | undefined;
   /** where an outcome is said (undefined: the line's note) */
   say?: ((text: string) => boolean) | undefined;
+  /** CP-3 — counted: each time it moves, the draft takes the keyboard, its caret where it last stood (a needs-you card
+   * that held the keyboard left, and none took its place: DESIGN.md §8 "Chat's thread", the keyboard) */
+  takeKeyboard?: number | undefined;
   /** the hand's registry of places (undefined: the window's) */
   targets?: CardTargets | undefined;
 }
@@ -128,6 +131,7 @@ export function ChatComposer({
   threadSending = false,
   say = sayOnLine,
   targets = cardTargets,
+  takeKeyboard = 0,
 }: ChatComposerProps): ReactElement {
   const { spark } = entry;
   const name = spark.name;
@@ -286,6 +290,17 @@ export function ChatComposer({
     chips.current = chipsOf(parked);
     redraw(parked, null);
   }, [parked, redraw]);
+
+  // asked to take the keyboard (CP-3): only when the count moves after the composer is up, never as it mounts
+  const keyboardAsked = useRef(takeKeyboard);
+  useEffect(() => {
+    if (keyboardAsked.current === takeKeyboard) return;
+    keyboardAsked.current = takeKeyboard;
+    const editor = editorRef.current;
+    if (editor === null) return;
+    editor.focus();
+    placeCaret(editor, caretMemo.current ?? Number.POSITIVE_INFINITY);
+  }, [takeKeyboard]);
 
   // the caret the draft last held: where a card played on the composer lands
   useEffect(() => {

@@ -1,5 +1,6 @@
 import type { AgentFieldRow, SparkSummary } from "@vibefield/contracts";
 import type { SparkStatus } from "@vibefield/design-kit/spark-face";
+import type { NeedsCard } from "./needs-card";
 import type { SparkEntry } from "./spark-status";
 
 // THE THREAD'S ITEMS (SP-1d; DESIGN.md §8 "Chat's thread", the thread's items; VF-PM's Q2, 2026-10-31): what stands in
@@ -37,9 +38,9 @@ export interface HelloItem {
 }
 
 /** One thing that stands in a thread over its pane. Each kind joins this union with the slice that draws it, and with
- * its case in `ThreadItemsView`, which does not compile until the new kind is drawn: CP-3 adds its needs-you card,
- * SP-1e its live cards. */
-export type ThreadItem = HelloItem;
+ * its case in `ThreadItemsView`, which does not compile until the new kind is drawn: CP-3's needs-you card
+ * (`needs-card.ts`), and SP-1e's live cards to come. */
+export type ThreadItem = HelloItem | NeedsCard;
 
 /** A hatch writes the spark's record and starts its first run in the same call, so that run is born within this of the
  * record. A wake's run, resumed or started afresh, is born when the spark is woken, after it has slept. A run fieldd
@@ -68,14 +69,21 @@ export function sparkIsNew(entry: SparkEntry): boolean {
   return bornInItsHatch(run, spark);
 }
 
-/** Quiet (DESIGN.md §8 "Chat's thread"): the spark is new, its draft is empty, and its hello has not left — `helloLeft`
- * once the pane took the keyboard or a send was pasted into it from this window, for the window's life. */
+/** Quiet (DESIGN.md §8 "Chat's thread"): the spark is new, its draft is empty, its hello has not left — `helloLeft`
+ * once the pane took the keyboard or a send was pasted into it from this window, for the window's life — and, since
+ * CP-3, nothing in the queue waits on you in its thread. */
 export function threadQuiet(entry: SparkEntry, draftBlank: boolean, helloLeft: boolean): boolean {
-  return draftBlank && !helloLeft && sparkIsNew(entry);
+  return draftBlank && !helloLeft && entry.items.length === 0 && sparkIsNew(entry);
 }
 
-/** What stands in the shown thread over its pane, in order: at SP-1d, the hello and its starters while it is quiet. */
-export function threadItemsOf(entry: SparkEntry, quiet: boolean): readonly ThreadItem[] {
+/** What stands in the shown thread over its pane, one item at a time: the needs-you card while one stands (CP-3; its
+ * way out included, so the hello never stands beside it), else the hello and its starters while the thread is quiet. */
+export function threadItemsOf(
+  entry: SparkEntry,
+  quiet: boolean,
+  card: NeedsCard | null,
+): readonly ThreadItem[] {
+  if (card !== null) return [card];
   if (!quiet) return [];
   const { spark, status } = entry;
   return [

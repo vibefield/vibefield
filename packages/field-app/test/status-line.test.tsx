@@ -3,8 +3,13 @@
  * one line for the desk's notices under the head. One notice at a time, each said ONCE — an id
  * already standing is not said again, never per frame; a plain notice stands 2.4s and goes; one
  * with an act (the degraded desk's Reload) HOLDS until it is withdrawn, and a passing notice is
- * the latest word over it. The view carries the act as a text button at the notice's end.
+ * the latest word over it. The view carries the act as a text button at the notice's end. Since CP-3 (CP3-D5 A) an
+ * agent's notify is said here too: on one line, cut at the line's width, and shed per teller so one agent's notices
+ * never hold back another's (PF4's watermark).
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +17,7 @@ import { StatusLine, StatusLineView } from "../src/frame/StatusLine";
 import {
   getStatusNotice,
   resetStatusLineForTest,
+  STATUS_SHED_WAITING,
   STATUS_STAND_MS,
   sayStatus,
   statusLineSaid,
@@ -147,5 +153,81 @@ describe("the status line", () => {
     act(() => root.render(<StatusLineView notice={notice} held />));
     expect(host.querySelector(".vf-status-line")?.hasAttribute("data-held")).toBe(true);
     act(() => root.unmount());
+  });
+});
+
+describe('CP-3 — an agent\'s notify on the line (DESIGN.md §8 "The status line", amended 2026-10-31)', () => {
+  it("draws a one-line notice on one line, cut with an ellipsis at the line's width and never wrapped", () => {
+    // the product's stylesheet, in the document, so the line computes as it does in the window (happy-dom lays
+    // nothing out: the cut is the text's own terms, and the pixels are James's eye at the landing)
+    const sheet = document.createElement("style");
+    sheet.textContent = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/frame/status-line.css"),
+      "utf8",
+    );
+    document.head.appendChild(sheet);
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    try {
+      const words = `Vela — ${"the build is green and every package passed its tests ".repeat(3)}`;
+      act(() =>
+        root.render(<StatusLineView notice={{ id: "notify:nt-1", text: words, oneLine: true }} />),
+      );
+      const line = host.querySelector(".vf-status-line");
+      expect(line?.hasAttribute("data-one-line")).toBe(true);
+      const text = line?.querySelector<HTMLElement>(".vf-status-line__text");
+      if (text == null) throw new Error("no words on the line");
+      const style = getComputedStyle(text);
+      expect([style.whiteSpace, style.textOverflow, style.overflow]).toEqual([
+        "nowrap",
+        "ellipsis",
+        "hidden",
+      ]);
+      // the line cuts where it draws, never the words: they stand whole for a reader of the line
+      expect(text.textContent).toBe(words);
+      // a plain notice still wraps, as the desk's do
+      act(() =>
+        root.render(<StatusLineView notice={{ id: "missing", text: "Clock · plugin off" }} />),
+      );
+      expect(host.querySelector(".vf-status-line")?.hasAttribute("data-one-line")).toBe(false);
+      const plain = host.querySelector<HTMLElement>(".vf-status-line__text");
+      if (plain == null) throw new Error("no words on the line");
+      expect(getComputedStyle(plain).whiteSpace).not.toBe("nowrap");
+    } finally {
+      act(() => root.unmount());
+      host.remove();
+      sheet.remove();
+    }
+  });
+
+  it("sheds a third waiting notice's group's oldest, never the one standing, nor another group's, nor a plain one", () => {
+    expect(STATUS_SHED_WAITING).toBe(2);
+    const vela = (n: number) => ({ id: `v${n}`, text: `Vela — ${n}`, shed: "notify:run-12" });
+    sayStatus(vela(1)); // stands
+    sayStatus({ id: "c1", text: "claude·2 — 1", shed: "notify:run-31" });
+    sayStatus({ id: "plain", text: "Clock · plugin off" });
+    sayStatus(vela(2));
+    sayStatus(vela(3)); // two of Vela's wait
+    sayStatus(vela(4)); // a third: Vela's oldest waiting one (v2) is shed
+    sayStatus(vela(5)); // and again (v3)
+    // the one standing stands its whole 2.4s
+    vi.advanceTimersByTime(STATUS_STAND_MS - 1);
+    expect(getStatusNotice()?.id).toBe("v1");
+    vi.advanceTimersByTime(STATUS_STAND_MS * 8);
+    expect(getStatusNotice()).toBeNull();
+    // claude·2's notice and the plain one were never held back by Vela's
+    expect(statusLineSaid().map((n) => n.id)).toEqual(["v1", "c1", "plain", "v4", "v5"]);
+  });
+
+  it("a shed notice is gone: said again later, it is said as new", () => {
+    const vela = (n: number) => ({ id: `v${n}`, text: `Vela — ${n}`, shed: "notify:run-12" });
+    sayStatus(vela(1));
+    sayStatus(vela(2));
+    sayStatus(vela(3));
+    sayStatus(vela(4)); // sheds v2
+    sayStatus(vela(2)); // not waiting any more: it waits again, and sheds v3
+    vi.advanceTimersByTime(STATUS_STAND_MS * 4);
+    expect(statusLineSaid().map((n) => n.id)).toEqual(["v1", "v4", "v2"]);
   });
 });

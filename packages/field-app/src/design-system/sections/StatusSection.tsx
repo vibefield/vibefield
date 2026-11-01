@@ -1,7 +1,9 @@
+import type { NeedsNotice } from "@vibefield/contracts";
 import { EmptyState, StatusDot, UnavailableState } from "@vibefield/design-kit";
 import type { ReactElement, ReactNode } from "react";
 import { DeskUnavailableView } from "../../field/desk/DeskUnavailableView";
 import { BEFORE_THE_DESK, DEGRADED_SENTENCE, failedWords } from "../../field/desk/desk-words";
+import { needsNoticeStatus } from "../../frame/needs-notices";
 import { StatusLineView } from "../../frame/StatusLine";
 import { Icon, Section, Specimen } from "../catalog-ui";
 
@@ -16,6 +18,15 @@ const DESK_REFUSED =
   "no desk — the adapter, the device or the pipelines were refused: GPUPipelineError: invalid shader module";
 const DESK_DEGRADED = "an uncaptured GPU error — GPUOutOfMemoryError: out of memory";
 const reloadFixture = (): void => undefined;
+// An agent's notify as fieldd tells it (CP-3), longer than the line is wide — said through the window's own
+// `needsNoticeStatus`, so the plate is the line's one-line cut, never a copy of its words.
+const NOTIFY_FIXTURE: NeedsNotice = {
+  id: "nt-4b1d9e7a0c3f2e85",
+  from: { name: "Vela", session: "run-12", spark: "sp-7k2m9q4x" },
+  words:
+    "the build is green on every package; fieldd's slow suite took 4m 12s, and the two GPU smokes wait for the Mac mini to unlock",
+  at: "2026-10-31T16:13:01.000Z",
+};
 
 export function StatusSection(): ReactElement {
   return (
@@ -123,6 +134,14 @@ export function StatusSection(): ReactElement {
         >
           <div className="vf-ds-status-line-stage vf-ds-status-line-stage--held">
             <StatusLineView notice={{ id: "remount", text: "Dial · remount to draw it" }} held />
+          </div>
+        </Specimen>
+        <Specimen
+          title="The status line — an agent's notify, one line, cut at its width"
+          source="frame/needs-notices.ts"
+        >
+          <div className="vf-ds-status-line-stage">
+            <StatusLineView notice={needsNoticeStatus(NOTIFY_FIXTURE)} />
           </div>
         </Specimen>
         <Specimen title="The status line — a degraded desk" source="frame/StatusLine.tsx">

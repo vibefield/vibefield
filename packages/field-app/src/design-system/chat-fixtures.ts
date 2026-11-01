@@ -4,6 +4,10 @@ import {
   type AgentModelChoice,
   type AgentModelSelection,
   type AgentProfileSet,
+  NEEDS_CHOICE_WORDS,
+  type NeedsAnswer,
+  type NeedsItem,
+  needsKindOf,
   type SparkId,
   type SparkSummary,
 } from "@vibefield/contracts";
@@ -19,6 +23,7 @@ import {
   draftSendable,
   type SessionChip,
 } from "../chat/composer-draft";
+import { type NeedsAct, type NeedsCard, needsCardOf } from "../chat/needs-card";
 import { type ModelsReading, modelWords } from "../chat/new-spark";
 import { type SparkEntry, sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
@@ -29,11 +34,12 @@ import type { Card } from "../frame/cards/cards-model";
 import { FIXTURE_NATIVE, FIXTURE_WORK } from "./profiles-fixtures";
 import { FIXTURE_HATCHED, FIXTURE_SPARKS } from "./spark-fixtures";
 
-// Chat's fixture ADAPTER (SP-1b, SP-1d; docs/UI_SYSTEM.md): what fieldd would answer — the sparks it keeps, the field
-// board's rows, the agents and Agent Profiles it offers, an agent's picker, or that it is not answering — run through
-// the PRODUCT's own readings (`sparkEntriesOf`, the thread marks' `ThreadLedger` and `threadMarksOf`, @'s `atRowsOf`,
-// an agent chip's menu `agentChipMenuOf`, the draft's `draftBlank` and `draftSendable`), so the catalog draws what the
-// window would, never a copy of its words.
+// Chat's fixture ADAPTER (SP-1b, SP-1d, CP-3; docs/UI_SYSTEM.md): what fieldd would answer — the sparks it keeps, the
+// field board's rows, the needs-you queue's items, the agents and Agent Profiles it offers, an agent's picker, or that
+// it is not answering — run through the PRODUCT's own readings (`sparkEntriesOf`, the thread marks' `ThreadLedger` and
+// `threadMarksOf`, @'s `atRowsOf`, an agent chip's menu `agentChipMenuOf`, the draft's `draftBlank` and
+// `draftSendable`, the needs-you card's `needsCardOf`), so the catalog draws what the window would, never a copy of its
+// words.
 // Fixed seeds (`spark-fixtures.ts`) and a fixed clock, so every plate deals the same faces and says the same times.
 
 /** The catalog's clock: a Saturday morning, 9:41 local. */
@@ -187,6 +193,33 @@ const HATCHED_RUN = row({
   lastActivityAt: minutesAgo(0),
 });
 
+/** The needs-you queue's open items, oldest first, as needs.subscribe would say them (CP-3): the ask of Vela's own run,
+ * which her row's blocker already says (read once, there), and Kiwi's held send — Kiwi asked, then slept, and an answer
+ * would wake it (CP3-D7). Names as fieldd's `runLabel` gives them: a session's title, else its agent's label. */
+const ITEMS: readonly NeedsItem[] = [
+  {
+    id: "ny-velaown0001",
+    kind: "agent-ask",
+    state: "open",
+    from: { name: AGENT.label, session: "run-vela" },
+    spark: "sp-vela0001",
+    asked: minutesAgo(0),
+    ask: "question",
+    count: 1,
+  },
+  {
+    id: "ny-kiwisend001",
+    kind: "held-send",
+    state: "open",
+    from: { name: "Kiwi", session: "run-kiwi", spark: "sp-kiwi0001" },
+    spark: "sp-kiwi0001",
+    asked: minutesAgo(30),
+    words: "run the tests in packages/fieldd and tell me what fails",
+    choices: [NEEDS_CHOICE_WORDS.allow, NEEDS_CHOICE_WORDS.notNow],
+    to: { session: "run-his-1", name: AGENT.label },
+  },
+];
+
 /** Chat's plates, one per honest state. */
 export const CHAT_STATES = [
   "list",
@@ -211,6 +244,7 @@ export const CHAT_STATES = [
   "waking",
   "wake-refused",
   "not-started",
+  "waiting",
   "empty",
   "opening",
   "unavailable",
@@ -240,6 +274,7 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   waking: "Waking",
   "wake-refused": "Wake refused",
   "not-started": "Not started",
+  waiting: "Waiting on you",
   empty: "No sparks",
   opening: "Opening",
   unavailable: "Unavailable",
@@ -285,6 +320,8 @@ export function chatReadingOf(state: ChatState): SparksReading {
         state: "ready",
         entries: sparkEntriesOf([HATCHED, ...SPARKS], [HATCHED_RUN, ...ROWS]),
       };
+    case "waiting":
+      return { state: "ready", entries: sparkEntriesOf(SPARKS, ROWS, { items: ITEMS }) };
     case "empty":
       return { state: "ready", entries: [] };
     case "opening":
@@ -331,7 +368,8 @@ export function chatMarksOf(
 }
 
 /** The spark a plate opens on: the newest (Polaris, just hatched, on the hello's), Juno (awake and Ready) for the
- * pane's words and the composer, Kiwi asleep, or Polaris not started. */
+ * pane's words and the composer, Kiwi asleep (on the waiting plate with its held send in the queue, so its word is
+ * Needs your OK while its line still says it sleeps: CP-3), or Polaris not started. */
 export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   list: null,
   hello: HATCHED.id,
@@ -355,6 +393,7 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   waking: "sp-kiwi0001",
   "wake-refused": "sp-kiwi0001",
   "not-started": UNSTARTED.id,
+  waiting: "sp-kiwi0001",
   empty: null,
   opening: null,
   unavailable: null,
@@ -549,3 +588,156 @@ export const CHAT_COMPOSER: Partial<Record<ChatState, ComposerPlate>> = {
     words(" "),
   ]),
 };
+
+// ── the needs-you card's plates (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card) ──
+
+/** Vela, awake, with a transcript behind her: the spark whose thread every card plate stands in. */
+const VELA = SPARKS[0] as SparkSummary;
+
+/** A session's name as fieldd's `runLabel` gives it (its title, else its row's catalog label, else its id): an untitled
+ * run of the catalog's first agent, so its label (DESIGN.md's "Claude Code"). */
+const SESSION_NAME = AGENT.label;
+
+/** One of Vela's open items, as needs.subscribe would say it. */
+function velaItem(over: Partial<NeedsItem> & Pick<NeedsItem, "id" | "kind">): NeedsItem {
+  return {
+    state: "open",
+    from: { name: VELA.name, session: "run-vela", spark: VELA.id },
+    spark: VELA.id,
+    asked: minutesAgo(2),
+    ...over,
+  };
+}
+
+const QUESTION = velaItem({
+  id: "ny-platequestion",
+  kind: "question",
+  words: "Push the fix to main now, or hold it for the review?",
+  choices: ["Push", "Hold", NEEDS_CHOICE_WORDS.notNow],
+});
+const HELD_SEND = velaItem({
+  id: "ny-plateheldsend",
+  kind: "held-send",
+  words: "run the tests in packages/fieldd and tell me what fails",
+  count: 3,
+  choices: [NEEDS_CHOICE_WORDS.allow, NEEDS_CHOICE_WORDS.notNow],
+  to: { session: "run-his-1", name: SESSION_NAME },
+});
+const HELD_SPAWN = velaItem({
+  id: "ny-plateheldspawn",
+  kind: "held-spawn",
+  words: "review the input queue's restore for a forged file",
+  choices: [NEEDS_CHOICE_WORDS.allowOneMore, NEEDS_CHOICE_WORDS.notNow],
+  agent: AGENT.id,
+  folder: "vibe-field",
+  live: 8,
+});
+const AGENT_ASK: NeedsItem = {
+  id: "ny-plateagentask",
+  kind: "agent-ask",
+  state: "open",
+  // an agent Vela started, asking in its own pane
+  from: { name: SESSION_NAME, session: "run-vela-agent" },
+  spark: VELA.id,
+  asked: minutesAgo(1),
+  ask: "permission",
+  tool: "Bash",
+  count: 1,
+};
+/** A kind this build never heard of (a flow's gate, say): drawn, never dropped. */
+const UNKNOWN = velaItem({
+  id: "ny-plateunknown",
+  kind: "gate",
+  state: "waiting",
+  words: "Push 0.7.25?",
+  choices: ["Push", "Hold"],
+});
+
+/** Vela as Chat reads her with `items` in the queue (the product's own reading). */
+function velaWith(items: readonly NeedsItem[]): SparkEntry {
+  const entry = sparkEntriesOf([VELA], ROWS, { items }).find((each) => each.spark.id === VELA.id);
+  if (entry === undefined) throw new Error("the fixture spark is not in its own reading");
+  return entry;
+}
+
+/** The item fieldd hands back once answered: as it was, with its answer. */
+function answeredOf(item: NeedsItem, choice: number, over: Partial<NeedsAnswer> = {}): NeedsItem {
+  return {
+    ...item,
+    state: "answered",
+    answer: { choice, at: minutesAgo(0), outcome: "done", told: true, ...over },
+  };
+}
+
+/** One plate: a card as the thread would stand it, by the product's own `needsCardOf`. */
+export interface NeedsPlate {
+  readonly id: string;
+  readonly label: string;
+  readonly card: NeedsCard;
+  /** a thread too narrow for its acts on one row */
+  readonly narrow?: boolean;
+}
+
+const plate = (
+  id: string,
+  label: string,
+  waiting: readonly NeedsItem[],
+  item: NeedsItem,
+  act?: NeedsAct,
+): NeedsPlate => ({ id, label, card: needsCardOf(velaWith(waiting), item, act) });
+
+/** Each kind of item as it waits on you. */
+export const NEEDS_KIND_PLATES: readonly NeedsPlate[] = [
+  plate("question", "A spark's question, 1 of 3", [QUESTION, HELD_SEND, HELD_SPAWN], QUESTION),
+  plate("held-send", "A held send, two more behind it", [HELD_SEND], HELD_SEND),
+  plate("held-spawn", "A held spawn, past the cap", [HELD_SPAWN], HELD_SPAWN),
+  plate("agent-ask", "An agent's own ask: Show", [AGENT_ASK], AGENT_ASK),
+  plate("unknown", "A kind this build does not know", [UNKNOWN], UNKNOWN),
+];
+
+/** What an answer does to it: running, refused while it waits and once it no longer does, and answered here three
+ * ways. */
+export const NEEDS_ANSWER_PLATES: readonly NeedsPlate[] = [
+  plate("busy", "Answering", [HELD_SEND], HELD_SEND, { state: "busy", choice: 0 }),
+  plate("refused", "Refused", [QUESTION], QUESTION, {
+    state: "refused",
+    reason: "fieldd is not answering (the daemon is restarting)",
+  }),
+  plate("refused-gone", "Refused, answered in another window", [], QUESTION, {
+    state: "refused",
+    reason: "already answered: Hold",
+  }),
+  plate("done", "Answered", [], answeredOf(QUESTION, 0), { state: "said", choice: 0 }),
+  plate(
+    "failed",
+    "Answered, the act not done",
+    [],
+    answeredOf(HELD_SPAWN, 0, { outcome: "failed", reason: "the agent's sign-in has expired" }),
+    { state: "said", choice: 0 },
+  ),
+  plate(
+    "unheard",
+    "Answered, not heard yet",
+    [],
+    answeredOf(QUESTION, 0, { told: false, waits: "Vela's session is not running yet" }),
+    { state: "said", choice: 0 },
+  ),
+  { ...plate("narrow", "A narrow thread", [HELD_SPAWN], HELD_SPAWN), narrow: true },
+];
+
+/** The live plate's queue: three of Vela's items, answered by a fixture door after a beat. */
+export const NEEDS_LIVE_ITEMS: readonly NeedsItem[] = [QUESTION, HELD_SEND, HELD_SPAWN];
+
+/** Vela's reading with what is left of the live plate's queue. */
+export const needsLiveEntryOf = (items: readonly NeedsItem[]): SparkEntry => velaWith(items);
+
+/** What the fixture door hands back for each live item: the question done; the send's Allow not done (its session
+ * ended); the spawn's Allow one more done while Vela sleeps, so she has not heard it. Not now is done for each. */
+export function needsLiveAnswerOf(item: NeedsItem, choice: number): NeedsItem {
+  const kind = needsKindOf(item);
+  if (kind === "held-send" && choice === 0)
+    return answeredOf(item, choice, { outcome: "failed", reason: `${SESSION_NAME} ended` });
+  if (kind === "held-spawn" && choice === 0)
+    return answeredOf(item, choice, { told: false, waits: "Vela's session is not running yet" });
+  return answeredOf(item, choice);
+}

@@ -1,7 +1,9 @@
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -80,6 +82,39 @@ describe("the spark store: signed, and set aside when it does not verify (CP-1c;
     chmodSync(path, 0o644);
     expect(records.get("sp-0a1b2c3d4e5f6a7b")).toBeUndefined();
     expect(records.list()).toEqual([]);
+  });
+
+  it("sets aside a key other users can read and makes another, so what it signed reads as forged (one signer, SessionRecordStore's rule)", () => {
+    const root = tmp();
+    const keyPath = join(root, "fieldd", "sparks.key");
+    store(root).write(spark());
+    const exposedKey = readFileSync(keyPath, "utf8");
+    chmodSync(keyPath, 0o644);
+    const after = store(root);
+    expect(after.get("sp-0a1b2c3d4e5f6a7b")).toBeUndefined();
+    expect(readFileSync(keyPath, "utf8")).not.toBe(exposedKey);
+    expect(statSync(keyPath).mode & 0o777).toBe(0o600);
+    // kept beside it for a human, never deleted
+    const aside = readdirSync(join(root, "fieldd")).filter((name) =>
+      name.startsWith("sparks.key.exposed-"),
+    );
+    expect(aside).toHaveLength(1);
+    expect(readFileSync(join(root, "fieldd", aside[0] ?? ""), "utf8")).toBe(exposedKey);
+    after.write(spark());
+    expect(store(root).get("sp-0a1b2c3d4e5f6a7b")).toEqual(spark());
+  });
+
+  it("sets aside a key file that holds no key, and never signs with what it holds", () => {
+    const root = tmp();
+    const keyPath = join(root, "fieldd", "sparks.key");
+    mkdirSync(join(root, "fieldd"), { recursive: true, mode: 0o700 });
+    writeFileSync(keyPath, "not a key", { mode: 0o600 });
+    store(root).write(spark());
+    expect(readFileSync(keyPath, "utf8")).toMatch(/^[0-9a-f]{64}$/);
+    expect(
+      readdirSync(join(root, "fieldd")).filter((name) => name.startsWith("sparks.key.unreadable-")),
+    ).toHaveLength(1);
+    expect(store(root).get("sp-0a1b2c3d4e5f6a7b")).toEqual(spark());
   });
 
   it("knows a name by its letters, not its case", () => {

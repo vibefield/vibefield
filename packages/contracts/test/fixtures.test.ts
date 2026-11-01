@@ -112,12 +112,21 @@ import {
   LocalArtifactIntent,
 } from "../src/artifacts";
 import {
+  AgentInputQueueFile,
+  ComposeAgentSendOutput,
+  ComposeAgentSpawnOutput,
   ComposeAgentsAvailableOutput,
   ComposeAgentsListOutput,
   ComposeHistorySearchOutput,
   ComposeReadOutput,
   ComposeSparksHatchParams,
   ComposeSparksListResult,
+  NeedsAnswerParams,
+  NeedsAnswerResult,
+  NeedsItem,
+  NeedsListResult,
+  NeedsNotices,
+  NeedsRecord,
   SparkRecord,
 } from "../src/compose";
 import { DeviceInfo, DeviceNameFile, DeviceRenameParams, DeviceSlice } from "../src/devices";
@@ -860,6 +869,18 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "compose-agents-list": ComposeAgentsListOutput,
   "compose-agent-read": ComposeReadOutput,
   "compose-history-search": ComposeHistorySearchOutput,
+  // CP-2's input queue as fieldd keeps it, signed since CP-3 (LEANS P3): the signature rides the passthrough
+  "agent-input-queue": AgentInputQueueFile,
+  // CP-3 (the person): the held answers of agent_send and agent_spawn, the needs-you queue's items and doors, a
+  // notify's frame, and the record fieldd keeps per item (the unsigned body; its signature rides the passthrough)
+  "compose-agent-send": ComposeAgentSendOutput,
+  "compose-agent-spawn": ComposeAgentSpawnOutput,
+  "needs-item": NeedsItem,
+  "needs-list": NeedsListResult,
+  "needs-answer-params": NeedsAnswerParams,
+  "needs-answer-result": NeedsAnswerResult,
+  "needs-notices": NeedsNotices,
+  "needs-record": NeedsRecord,
   // IOS-8f — who this desktop's person is: a written face with a name, and the deal with none
   "user-me": UserMeResult,
 };
