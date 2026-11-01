@@ -253,7 +253,14 @@ public struct MonitorSeries: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorSeries", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorSeries", value: json)
+    stepMs = try object.integer("stepMs", atLeast: 1)
+    let elements = try object.requiredArray(strict: "steps")
+    let steps = elements.compactMap(\.doubleValue)
+    guard steps.count == elements.count else { throw object.mismatch("steps", "an array of numbers") }
+    self.steps = steps
+    lastStepAt = try object.integer("lastStepAt")
+    unknownFields = object.unknownFields
   }
 }
 
@@ -271,7 +278,16 @@ public struct MonitorWait: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorWait", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorWait", value: json)
+    kind = try object.text("kind")
+    since = try object.integer("since")
+    count = try object.typedInt("count", atLeast: 1)
+    tool = try object.typedString("tool")
+    code = try object.typedString("code")
+    header = try object.typedString("header")
+    question = try object.typedString("question")
+    detail = try object.typedString("detail")
+    unknownFields = object.unknownFields
   }
 }
 
@@ -283,7 +299,11 @@ public struct MonitorActivity: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorActivity", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorActivity", value: json)
+    kind = try object.text("kind")
+    line = try object.typedString("line")
+    since = try object.typedInt("since")
+    unknownFields = object.unknownFields
   }
 }
 
@@ -295,7 +315,11 @@ public struct MonitorReply: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorReply", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorReply", value: json)
+    text = try object.text("text")
+    at = try object.typedInt("at")
+    final = try object.typedBool("final")
+    unknownFields = object.unknownFields
   }
 }
 
@@ -308,7 +332,12 @@ public struct MonitorCost: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorCost", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorCost", value: json)
+    usd = try object.number("usd")
+    coverage = MonitorCostCoverage(wire: try object.text("coverage"))
+    burnPerHour = try object.typedDouble("burnPerHour")
+    series = try object.strictObject("series", MonitorSeries.init(json:))
+    unknownFields = object.unknownFields
   }
 }
 
@@ -321,7 +350,11 @@ public struct MonitorDeviceRef: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorDeviceRef", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorDeviceRef", value: json)
+    id = try object.text("id", 1...Int.max)
+    name = try object.text("name", 1...Int.max)
+    os = try object.typedString("os").map(MonitorDeviceOS.init(wire:))
+    unknownFields = object.unknownFields
   }
 }
 
@@ -341,7 +374,16 @@ public struct MonitorProject: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorProject", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorProject", value: json)
+    name = try object.text("name")
+    if object.fields["branch"]?.isNull == true {
+      _ = object.value("branch")
+      branch = .noBranch
+    } else {
+      branch = try object.typedString("branch").map(MonitorBranch.named) ?? .notLooked
+    }
+    seq = try object.typedInt("seq", atLeast: 0)
+    unknownFields = object.unknownFields
   }
 }
 
@@ -351,7 +393,10 @@ public struct MonitorProvider: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorProvider", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorProvider", value: json)
+    id = try object.text("id")
+    label = try object.text("label")
+    unknownFields = object.unknownFields
   }
 }
 
@@ -361,7 +406,10 @@ public struct MonitorEffort: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorEffort", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorEffort", value: json)
+    value = try object.text("value")
+    intent = try object.closed("intent", MonitorEffortIntent.self)
+    unknownFields = object.unknownFields
   }
 }
 
@@ -370,7 +418,9 @@ public struct MonitorContext: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorContext", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorContext", value: json)
+    usedPercent = try object.number("usedPercent")
+    unknownFields = object.unknownFields
   }
 }
 
@@ -380,7 +430,10 @@ public struct MonitorTokens: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorTokens", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorTokens", value: json)
+    total = try object.typedDouble("total")
+    perMinute = try object.typedDouble("perMinute")
+    unknownFields = object.unknownFields
   }
 }
 
@@ -429,7 +482,35 @@ public struct MonitorAgentRow: Sendable, Equatable {
   public var isWritable: Bool { writable ?? attachable }
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "MonitorAgentRow", reason: "not read yet")
+    var object = try WireObject(shape: "MonitorAgentRow", value: json)
+    id = try object.text("id", 1...Int.max)
+    kind = try object.requiredClosed("kind", MonitorRowKind.self)
+    createdAt = try object.integer("createdAt")
+    status = try object.requiredClosed("status", MonitorRowStatus.self)
+    statusSince = try object.integer("statusSince")
+    stale = try object.flag("stale")
+    alive = try object.flag("alive")
+    observed = try object.flag("observed")
+    pending = try object.typedBool("pending")
+    detail = try object.text("detail")
+    activity = try object.strictObject("activity", MonitorActivity.init(json:))
+    project = try object.requiredObject("project", MonitorProject.init(json:))
+    provider = try object.strictObject("provider", MonitorProvider.init(json:))
+    model = try object.typedString("model")
+    effort = try object.strictObject("effort", MonitorEffort.init(json:))
+    account = try object.typedString("account")
+    context = try object.strictObject("context", MonitorContext.init(json:))
+    wait = try object.strictObject("wait", MonitorWait.init(json:))
+    reply = try object.strictObject("reply", MonitorReply.init(json:))
+    cost = try object.strictObject("cost", MonitorCost.init(json:))
+    tokens = try object.strictObject("tokens", MonitorTokens.init(json:))
+    unread = try object.flag("unread")
+    device = try object.requiredObject("device", MonitorDeviceRef.init(json:))
+    tier = try object.closed("tier", MonitorTier.self)
+    profileSet = try object.typedString("profileSet")
+    attachable = try object.flag("attachable")
+    writable = try object.typedBool("writable")
+    unknownFields = object.unknownFields
   }
 }
 
@@ -439,7 +520,13 @@ extension AgentTerminalJoin {
   /// The remote cut's reading of the pane join: `hosted` is CLOSED here (an unknown word refuses the row) and every
   /// optional is read strictly. The `field` cut's tolerant reading (`init(json:)`) is unchanged.
   init(remote json: JSONValue) throws {
-    throw WireDecodeError(shape: "AgentTerminalJoin", reason: "not read yet")
+    var object = try WireObject(shape: "AgentTerminalJoin", value: json)
+    hosted = try object.requiredClosed("hosted", Hosted.self).rawValue
+    runtimeSessionId = try object.typedString("runtimeSessionId")
+    cellBootId = try object.typedString("cellBootId")
+    workloadClass = try object.typedString("workloadClass")
+    replaced = try object.typedString("replaced")
+    unknownFields = object.unknownFields
   }
 }
 
@@ -447,7 +534,12 @@ extension AgentFieldStop {
   /// The remote cut's reading of a durable Stop (`AgentStopState`): `sentAt` may be "" (`z.string()`), `stage` is an
   /// OPEN word of 1 to 32 UTF-16 units, `heardBy` the same when present. The `field` cut's `init(json:)` is unchanged.
   init(remote json: JSONValue) throws {
-    throw WireDecodeError(shape: "AgentFieldStop", reason: "not read yet")
+    var object = try WireObject(shape: "AgentFieldStop", value: json)
+    sentAt = try object.text("sentAt")
+    stage = try object.text("stage", 1...32)
+    heardBy = try object.typedString("heardBy", 1...32)
+    unheardAt = try object.typedString("unheardAt")
+    unknownFields = object.unknownFields
   }
 }
 
@@ -474,7 +566,23 @@ public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
   public var id: String { runtimeRunId }
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "AgentRemoteRow", reason: "not read yet")
+    var object = try WireObject(shape: "AgentRemoteRow", value: json)
+    runtimeRunId = try object.text("runtimeRunId", 1...Int.max)
+    revision = try object.integer("revision")
+    device = try object.text("device", 1...Int.max)
+    isTerminal = try object.closed("kind", RootKind.self) == .terminal
+    terminal = try object.strictObject("terminal", AgentTerminalJoin.init(remote:))
+    monitorRow = try object.requiredObject("monitorRow", MonitorAgentRow.init(json:))
+    if isTerminal, terminal != nil {
+      // The window's union reads a bare terminal with a pane join as `AgentDeskTerminalRow`, which does not look at
+      // `nativeSessionId` or `stop`: kept when they read, named unknown when they do not, never a refusal.
+      nativeSessionId = object.tolerant("nativeSessionId", Self.sessionId)
+      stop = object.tolerant("stop", AgentFieldStop.init(remote:))
+    } else {
+      nativeSessionId = try object.strict("nativeSessionId", Self.sessionId)
+      stop = try object.strictObject("stop", AgentFieldStop.init(remote:))
+    }
+    unknownFields = object.unknownFields
   }
 
   private enum RootKind: String { case terminal }
@@ -534,7 +642,14 @@ public struct AgentRemoteMeshSnapshot: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "AgentRemoteMeshSnapshot", reason: "not read yet")
+    var object = try WireObject(shape: "AgentRemoteMeshSnapshot", value: json)
+    epoch = try object.text("epoch", 1...128)
+    revision = try object.integer("revision", atLeast: 0)
+    let split = AgentRemoteRow.split(try object.requiredArray(strict: "rows"))
+    rows = split.rows
+    refused = split.refused
+    more = try object.typedBool("more")
+    unknownFields = object.unknownFields
   }
 
   init(
@@ -569,7 +684,20 @@ public struct AgentRemoteMeshDelta: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "AgentRemoteMeshDelta", reason: "not read yet")
+    var object = try WireObject(shape: "AgentRemoteMeshDelta", value: json)
+    epoch = try object.text("epoch", 1...128)
+    since = try object.integer("since", atLeast: 0)
+    revision = try object.integer("revision", atLeast: 0)
+    let split = AgentRemoteRow.split(try object.requiredArray(strict: "upserts"))
+    upserts = split.rows
+    refused = split.refused
+    let elements = try object.requiredArray(strict: "removed")
+    let removed = elements.compactMap { $0.stringValue.flatMap { $0.isEmpty ? nil : $0 } }
+    guard removed.count == elements.count else {
+      throw object.mismatch("removed", "an array of non-empty strings")
+    }
+    self.removed = removed
+    unknownFields = object.unknownFields
   }
 
   init(
@@ -605,7 +733,12 @@ public struct AgentRemoteMeshDevice: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "AgentRemoteMeshDevice", reason: "not read yet")
+    var object = try WireObject(shape: "AgentRemoteMeshDevice", value: json)
+    device = try object.text("device", 1...Int.max)
+    state = AgentMeshDeviceState(wire: try object.text("state", 1...Int.max))
+    asOf = try object.text("asOf", 1...Int.max)
+    snapshot = try object.strictObject("snapshot", AgentRemoteMeshSnapshot.init(json:))
+    unknownFields = object.unknownFields
   }
 
   init(
@@ -628,7 +761,9 @@ public struct AgentRemoteMeshOpen: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "AgentRemoteMeshOpen", reason: "not read yet")
+    var object = try WireObject(shape: "AgentRemoteMeshOpen", value: json)
+    devices = try object.requiredArray(strict: "devices").map(AgentRemoteMeshDevice.init(json:))
+    unknownFields = object.unknownFields
   }
 
   init(devices: [AgentRemoteMeshDevice], unknownFields: [String]) {
@@ -646,7 +781,31 @@ public enum AgentRemoteMeshFrame: Sendable, Equatable {
   case state(device: String, AgentMeshDeviceState, asOf: String)
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "AgentRemoteMeshFrame", reason: "not read yet")
+    var object = try WireObject(shape: "AgentRemoteMeshFrame", value: json)
+    let device = try object.text("device", 1...Int.max)
+    var faults: [String] = []
+    if let raw = object.fields["delta"] {
+      do {
+        self = .delta(device: device, try AgentRemoteMeshDelta(json: raw))
+        return
+      } catch { faults.append(String(describing: error)) }
+    }
+    if let raw = object.fields["snapshot"] {
+      do {
+        self = .snapshot(device: device, try AgentRemoteMeshSnapshot(json: raw))
+        return
+      } catch { faults.append(String(describing: error)) }
+    }
+    if object.fields["state"] != nil {
+      do {
+        let state = AgentMeshDeviceState(wire: try object.text("state", 1...Int.max))
+        self = .state(device: device, state, asOf: try object.text("asOf", 1...Int.max))
+        return
+      } catch { faults.append(String(describing: error)) }
+    }
+    throw WireDecodeError(
+      shape: "AgentRemoteMeshFrame",
+      reason: faults.isEmpty ? "names no delta, no snapshot and no state" : faults.joined(separator: "; "))
   }
 
   /// The desktop this frame is about.
