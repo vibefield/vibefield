@@ -38,6 +38,8 @@ const {
   enumVerdict,
   fenceAgain,
   fenceClear,
+  fieldNativeFresh,
+  fieldNativePath,
   guardedOutput,
   handleDoor,
   hidLine,
@@ -487,6 +489,37 @@ test("distFresh: the plugin's dist and the shell's dist stale or missing, or a s
   assert.match(noPhone[0].why, /lacks the literal --phone/u);
   // a missing smoke bundle is said once, as missing
   assert.equal(distFresh({ ...FRESH_DIST, smoke: null, smokeHasPhone: false }).length, 1);
+});
+
+test("fieldNativeFresh: the field-native the shell launches, missing or older than its crate, named with the cargo line and the shared target (item 133)", () => {
+  const path = "/lanes/pts3/vibe-field/target/debug/field-native";
+  assert.deepEqual(fieldNativeFresh({ path, bin: 300, sources: 200 }), []);
+  // a code-only lane: build:all never builds field-native, and the smoke launched to a certain fatal
+  const missing = fieldNativeFresh({ path, bin: null, sources: 200 });
+  assert.equal(missing.length, 1);
+  assert.equal(missing[0].what, `field-native (${path})`);
+  assert.equal(missing[0].why, "missing");
+  assert.match(missing[0].fix, /^cargo build -p field-native from this checkout /u);
+  assert.match(missing[0].fix, /FIELDD_NATIVE_BIN/u);
+  assert.match(missing[0].fix, /shared between checkouts holds whichever built last/u);
+  const stale = fieldNativeFresh({ path, bin: 100, sources: 200 });
+  assert.equal(stale.length, 1);
+  assert.match(stale[0].why, /^older than packages\/field-native's src\//u);
+  assert.equal(stale[0].fix, missing[0].fix);
+  assert.deepEqual(preflightLines(missing), [
+    `PHONE_PREFLIGHT FAIL field-native (${path}): missing → ${missing[0].fix}`,
+  ]);
+});
+
+test("fieldNativePath: the shell's own resolution — FIELDD_NATIVE_BIN when set, else this checkout's target/debug (item 133)", () => {
+  assert.equal(
+    fieldNativePath({ FIELDD_NATIVE_BIN: "/elsewhere/field-native" }),
+    "/elsewhere/field-native",
+  );
+  assert.equal(
+    fieldNativePath({}),
+    join(import.meta.dirname, "..", "..", "..", "target", "debug", "field-native"),
+  );
 });
 
 test("launchChecks: in a launch, no shot dir or a helper ENUM never proved is refused", () => {

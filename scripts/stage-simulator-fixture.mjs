@@ -171,9 +171,20 @@ export const PATHS = {
     join(ROOT, "packages/field-app/src"),
     join(ROOT, "plugins/simulator/src"),
   ],
+  fieldNativeSources: [
+    join(ROOT, "packages/field-native/src"),
+    join(ROOT, "packages/field-native/Cargo.toml"),
+    join(ROOT, "Cargo.toml"),
+    join(ROOT, "Cargo.lock"),
+  ],
   catalog: join(ROOT, "plugins/simulator/src/catalog.gen.ts"),
   verifyCapture: join(ROOT, "apps/desktop/packaging/verify-live-surface-capture.mjs"),
 };
+
+/** The field-native the smoke's shell launches, as the shell resolves it (electron-shell main/fieldd.ts, resources.ts):
+ * FIELDD_NATIVE_BIN when set, else this checkout's cargo debug build. */
+export const fieldNativePath = (env) =>
+  env.FIELDD_NATIVE_BIN ?? join(ROOT, "target/debug/field-native");
 
 const USAGE =
   "usage: stage-simulator-fixture.mjs <none|devices|cost> -- <command…> | enum | --preflight-only | --sweep <runId>";
@@ -362,6 +373,29 @@ export function distFresh({
   return fails;
 }
 
+// item 133: a smoke has no dev runner to build or start field-native, and the desktop's build:all never builds it (its
+// project has no targets) — a code-only lane launched without one to a certain fatal. Cargo builds into
+// CARGO_TARGET_DIR, which the shell reads only through this checkout's target/ (or FIELDD_NATIVE_BIN), and a target
+// dir shared between checkouts holds whichever checkout built last: an mtime proves only this checkout's sources
+const FIELD_NATIVE_FIX =
+  "cargo build -p field-native from this checkout (it lands in CARGO_TARGET_DIR: this checkout's target/ must link " +
+  "there, or FIELDD_NATIVE_BIN name the binary; a target dir shared between checkouts holds whichever built last)";
+
+/** Item 133: the field-native the smoke's shell will launch, there and no older than this checkout's crate sources. */
+export function fieldNativeFresh({ path, bin, sources }) {
+  const what = `field-native (${path})`;
+  if (bin === null) return [{ what, why: "missing", fix: FIELD_NATIVE_FIX }];
+  if (bin < sources)
+    return [
+      {
+        what,
+        why: "older than packages/field-native's src/ or Cargo.toml, or the workspace's Cargo.toml or Cargo.lock",
+        fix: FIELD_NATIVE_FIX,
+      },
+    ];
+  return [];
+}
+
 /** Inside a launch, before the arm and again right before the command: the shot dir set, the helper ENUM proved; and
  * right after the arm has inferred it (`app` given), before any lock or device (RM6 S-5) — the responsible app ENUM
  * proved (§6: "ENUM by the same app as L1 and L2"; TCC follows the responsible process, so another app's first
@@ -401,8 +435,9 @@ export const preflightLines = (fails) =>
     ? ["PHONE_PREFLIGHT ok"]
     : fails.map((f) => `PHONE_PREFLIGHT FAIL ${f.what}: ${f.why} → ${f.fix}`);
 
-/** The files, read: what `nativeFresh` and `distFresh` judge. Reads only — never a simctl. */
-export function readFiles(fs = { statSync, readdirSync, readFileSync }) {
+/** The files, read: what `nativeFresh`, `distFresh` and `fieldNativeFresh` judge. Reads only — never a simctl. */
+export function readFiles(fs = { statSync, readdirSync, readFileSync }, env = process.env) {
+  const fieldNative = fieldNativePath(env);
   let smokeHasPhone = false;
   try {
     smokeHasPhone = fs.readFileSync(PATHS.shellSmoke, "utf8").includes("--phone");
@@ -421,6 +456,11 @@ export function readFiles(fs = { statSync, readdirSync, readFileSync }) {
       renderer: newestMtime(PATHS.shellRenderer, fs),
       shellSources: newestOf(PATHS.shellSources, fs),
       smokeHasPhone,
+    },
+    fieldNative: {
+      path: fieldNative,
+      bin: newestMtime(fieldNative, fs),
+      sources: newestOf(PATHS.fieldNativeSources, fs),
     },
   };
 }
@@ -2183,7 +2223,11 @@ function say(line) {
 
 async function preflightOnly() {
   const files = readFiles();
-  const fails = [...nativeFresh(files.native), ...distFresh(files.dist)];
+  const fails = [
+    ...nativeFresh(files.native),
+    ...distFresh(files.dist),
+    ...fieldNativeFresh(files.fieldNative),
+  ];
   for (const line of preflightLines(fails)) say(line);
   return fails.length === 0 ? 0 : 1;
 }
@@ -2286,12 +2330,17 @@ async function launch(mode, command, opts) {
     stopTimer.unref();
   };
 
-  // the preflight, first: the files (no simctl) — ENUM needs the native pair alone
-  const files = readFiles();
+  // the preflight, first: the files (no simctl) — ENUM needs the native pair alone; a launch's shell, the field-native
+  // its environment names too
+  const files = readFiles(undefined, deps.env);
   const fails =
     mode === "enum"
       ? nativeFresh(files.native)
-      : [...nativeFresh(files.native), ...distFresh(files.dist)];
+      : [
+          ...nativeFresh(files.native),
+          ...distFresh(files.dist),
+          ...fieldNativeFresh(files.fieldNative),
+        ];
   let record = null;
   try {
     record = JSON.parse(readFileSync(opts.enumRecord, "utf8"));
@@ -2381,10 +2430,11 @@ async function launch(mode, command, opts) {
         `PHONE_COMMAND_ENV ${JSON.stringify({ DEVELOPER_DIR: env.DEVELOPER_DIR === undefined ? "absent" : "SET", VF_SMOKE_SIMCTL_DEVELOPER_DIR: env.VF_SMOKE_SIMCTL_DEVELOPER_DIR ?? "absent", VF_PHONE_MODE: mode, VF_PHONE_RUNTIME: run.runtime, VF_PHONE_DEVICES: env.VF_PHONE_DEVICES, VF_PHONE_DEVDIR_BY: env.VF_PHONE_DEVDIR_BY, VF_SMOKE_SHOT_DIR: env.VF_SMOKE_SHOT_DIR })}`,
       );
       // the preflight again, right before the command: the files and the helper's sha (the app was checked at the arm)
-      const again = readFiles();
+      const again = readFiles(undefined, env);
       const late = [
         ...nativeFresh(again.native),
         ...distFresh(again.dist),
+        ...fieldNativeFresh(again.fieldNative),
         ...launchChecks({
           shotDir: env.VF_SMOKE_SHOT_DIR,
           helperSha: sha256File(PATHS.helper),
