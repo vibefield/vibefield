@@ -451,6 +451,9 @@
   item 144 (the projection bench's count self-check left the remote cut's bare terminals out since PG-2: red,
   ungated; found by PG-3a's light; `8cf8c1a05`, M80 `d14e97880`; owed: PG-1e0's erratum at a draft slot; LANDED
   "Item 144") ·
+  items 142, 143 and 145 (a smoke's process is gone when the kernel says so, in the launchers' reap and the in-app
+  teardown, and `unreaped` is said of the rest; release-notes' row and typed-agent's real-zsh row name their measured
+  15 s: `00b6fe2ac` as the merge `fc2a896ec`, run 81; LANDED "Items 142, 143 and 145") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).

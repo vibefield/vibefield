@@ -27127,3 +27127,68 @@ assertion's comment.
 - **Landed:** with PG-3a in M80 `d14e97880` (2026-11-01 06:26Z).
 
 **Owed.** PG-1e0's erratum at its source in the draft queue: the bench's remote-cut self-check, corrected here.
+
+## Items 142, 143 and 145 — three honest reads under load: a smoke's process is gone when the kernel says so, never when its mark does, and two synchronous rows name the budget their process starts take
+
+(2026-11-01; three commits `c311429d4` → `00b6fe2ac` on lane `fixer/items-142-143` over main `feea2ea80`, the fixer's;
+the mint M81 `fc2a896ec`, the merge over main `cc33a4f6a`, run 81.) 142 and 143 were sighted in AL-6's first
+electron-shell whole at load about 117, each green alone twice and on the re-run at load about 37; pre-read by the fixer
+at 04:56Z, filed by VF-PM the same minute, and built on its go. 142's in-app teardown was folded in at 05:01Z. 145 was
+this slice's own light's one red, filed and folded in at 06:13Z.
+
+**Item 142 — gone is the kernel's word.** `packages/electron-shell/test/smoke-profile.test.ts:169`, the DK-18 (39) row
+"a daemon the smoke LEFT is found by the mark, reaped", read its daemon alive right after the launcher's row said it
+reaped, 1,580 ms in. The row's witness (item 93's reading: `kill(pid, 0)` answers, and `ps`'s stat is not Z) was
+right. `leftByRun` (`apps/desktop/packaging/smoke-daemons.mjs`) judged gone by the run's mark, through `ps -E` one pid
+at a time, and a process in its exit can stop showing `ps -E` its environment before it is a zombie. It also called
+every left pid reaped the moment the SIGKILL went, with no wait at all. The in-app teardown (`stopRunDaemons`,
+`packages/electron-shell/src/testing/smoke-daemons.ts`) waited the same way.
+- The census (`smoke-census.mjs`) gains `goneByKernel(pid, ps)`: gone when `ps -o stat= -p` shows no line or a zombie,
+  asked through the census's own spawner, so a row's fake host answers it too.
+- The launchers' row waits for that reading after the SIGTERM (`REAP_GRACE_MS`, 3 s). It kills only what is still the
+  run's by the mark, since a pid the system has handed on is never signalled. It waits again (`REAP_HANG_MS`, 5 s, a
+  hang's guard), then says `reaped` of the gone and `unreaped` of the rest.
+- `leftNames(row)` names the left in a red run's words for run-smoke, run-first-run, run-studio-smoke and
+  smoke-godview, and never calls an unreaped pid reaped. The update and browser-profile smokes spread the row, so
+  `unreaped` reaches their records with it.
+- The teardown's `StopRunDeps` gains `gone` (in `censusDeps`, `goneByKernel`); `waitGone` ends on it, and the mark
+  still decides whom to signal (`c311429d4`).
+
+**Item 143 — the release-notes row names its measured budget.** Its "reads the log as git writes it"
+(`packages/electron-shell/test/updates/release-scripts.test.ts`) timed out at 5,074 ms against vitest's 5 s default
+(electron-shell's config sets none). The row is synchronous, twelve `git` starts in a row, so a loaded host stretches
+it, and nothing in it races. Measured first, on VF-PM's ruling (the budget, not a fast-import cut), in every logged
+suite on this Mac since the row came (AU-6b `2b1cfff6f`, 2026-10-29), 24 runs: a median 898 ms, p90 2,649, the greens'
+worst 4,646. The mini's 116 verify logs: a median 1,001, a worst 1,736. It is never bimodal. `6983e697a` gave it 10 s,
+"almost twice the worst this Mac has logged"; this slice's own light then ran it 7,436 ms, green but 1.3 times short of
+that claim, so `00b6fe2ac` moves it to 15 s, smoke-profile's `LAUNCHER_ROW_BUDGET_MS` (item 93), about twice the worst,
+and its comment names that run.
+
+**Item 145 — typed-agent's real-zsh row names its measured budget too.** In the light's electron-shell whole (05:13Z),
+`packages/electron-shell/test/typed-agent.test.ts:429`, "the person's startup files run in a real zsh, each saying so
+with its shell's pid, and parse without a word on stderr", timed out at 7,573 ms against the same 5 s default, in the
+minute release-notes ran 7,436: the host stretched, both rows about eight times their usual. It is one synchronous
+`zsh -l -i -c` over the staged HOME, and alone at 06:13Z it was 17/17 green. Measured in this Mac's logged suites since
+10-29, 24 runs that ran the file: 14 under vitest's 300 ms report threshold (a row under it prints no time), the rest
+456–1,354 ms; the mini's 76, 72 under it and the rest 311–439. It carries the same 15 s, the measurement in its comment
+(`00b6fe2ac`).
+
+**The light** (lane item118, three scripts, each under its own HOLD line taken by noclobber in cp-landing's order; every
+red-first step a working-tree mutation, restored and proved clean):
+- light142 (05:12:04Z, load 39) at `6983e697a`. C1: main's reap under the new census rows, both red, "the row said
+  reaped while the kernel still had the daemon" and the unreaped stand-in called reaped; C2: the fix's, 5/5. D1: main's
+  teardown wait under the new row, red, "expected 0 to be greater than or equal to 2000"; D2: the fix's file, 14/14.
+  smoke-profile and release-scripts alone, 50/50; biome; check:walls 0; electron-shell's tsc. electron-shell whole:
+  2,447 passed, 1 failed, typed-agent's real-zsh row at 7,573 ms (item 145), while release-notes ran 7,436 green on
+  10 s. It stopped there, and its HOLD line sat until 06:11Z while the fixer's session waited out a usage limit.
+- light142b (06:13:28Z, load 14): typed-agent.test.ts alone, 17/17; dev-runner whole, 344/344. Its HOLD was released
+  by the script at its exit, as every light since does.
+- light142c (06:17:37Z, load 19) at `00b6fe2ac`: typed-agent and release-scripts alone, 58/58; biome on the 12 files;
+  electron-shell's tsc; electron-shell whole, 2,448 passed and 3 skipped, the zsh row 579 ms, release-notes 1,528 ms
+  and the DK-18 LEFT row 1,085 ms.
+- Run 81 on the mini (a9's mint; VF-PM's read, 06:37:15Z): 11,587 passed, 0 failed, 18 skipped over 27 rows (+1,
+  smoke-daemons 13 → 14); node 363 (+2, the census rows); cargo 33 ok; green under an end load of 51 beside a
+  foreign iOS build; release-notes 1,119 ms.
+
+**Owed.** Nothing of the fixer's. `goneByKernel`'s `ps -o stat= -p` is new to Linux's procps: main's GitHub verify reads
+it there for the first time at the push after this landing (the census rows run on ubuntu-latest).
