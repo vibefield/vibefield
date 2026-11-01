@@ -26010,3 +26010,144 @@ compiled catalog keeps the dark appearance. The dark icon needs its own image in
 - The dark About icon.
 - The app workspace's stale `Package.resolved` (EL8; reported, never committed).
 - F1b's kit half (the phone asks through its home; FieldLink.swift:683), on VF-PM's brief.
+
+## FG-6's follow-up 3 — the hold carries the field's mark: the browser's glass held off the field wears the field's mark as the held frame holds it, at the field's mark's own spot and size, so row 32's frozen frame compares one mark
+
+**Why.** Row 32 on M65 was red at run65b on the logo alone (LANDED "FG-6's frozen frame", its Checks): the field's glass
+and the browser's 8.02 apart on the logo by day and 7.59 by night against DESIGN.md §8's 6, where inside (1.18 and 1.08)
+and the shadow's ring (0.37) stood within their bars and the field held its frame (0). A red is the follow-up's class by
+the ruling (VF-PM 22:28Z (5)), and VF-PM named it at 23:27Z: the browser's glass draws the logo's colour sweep at its
+own phase, about 1 px from the field's held frame; the handoff must carry the sweep's phase and the logo's placement (or
+the judge align them before comparing); the fix at the handoff, never the bar. a5's study read why, before the brief
+VF-PM approved at 01:14Z (the door's call named at 01:16Z):
+- Two marks, not one. The field's logo is the living mark, which the vendored splash draws into its mark texture every
+  frame; the browser's logo is the brand's still, `mark-white.webp`, scaled to 73.4% and centred by CSS. On run65b's
+  stills the two marks were the same size, their sweeps at two phases.
+- Two places. The splash stands its mark on whole field px (`MX = round((W − LW) / 2)` and `MY = round((H − LH) / 2)`),
+  and CSS centres the logo's box by `translate(-50%, -50%)`: at the walk's 1180 × 748, y 336 against 335.5.
+- DESIGN.md §8 already asks for "one living mark, the field's own, at the field's mark's spot and size". So the handoff
+  carries the mark itself, as the held frame holds it, and its place; the bar stays 6.
+
+**What landed** (`0cf63cfed`, built and lit in lane fg2 on `fg/followup-3` over `d4c5442c1`; Checks), in the commit's
+own order:
+- The pass (`glass-pass.ts`): `markPicture()` pictures the field's mark as the frame it last drew holds it. It draws the
+  mark texel for texel into a texture of its own, copies that out at the copy's 256-byte row alignment and reads it
+  back. `straightRows` turns each colour back over its alpha, as the glass's shader takes it (`m.rgb / m.a`), into an
+  OffscreenCanvas's PNG, and the box is the mark's in CSS px of the field's (`MX/k`, `MY/k`, `LW/k`, `LH/k`). Its own
+  small shader and pipeline are made at the first picture, so a boot that never asks never makes them, and the glass's
+  own module is unchanged. It is null before a frame or once the pass is gone, and rejects with what the GPU's error
+  scope says.
+- The door (`field-door.ts`, `field-worker.ts`): `markPicture()`, which never rejects. In the worker it is
+  "mark-picture" answered "mark-pictured" by id, as a reveal is, and a picture unanswered when the door goes is null; on
+  the main thread it is the pass's own; the still's door answers null. A picture the GPU can't make is logged
+  (`renderer.boot.field_mark_picture`), and the logo keeps the brand's. The name is VF-PM's (01:16Z): `mark(to, ms)` is
+  the mark's fade and keeps its name.
+- The glass's hold (`field-glass.ts`): `hold(true)` asks the door for the mark, held as a blob URL (`heldMark()`) while
+  the hold lasts. `hold(false)` revokes it, a door that goes takes it with it, and a picture that comes after its hold
+  was let go, or its door went, is dropped.
+- The logo's dress (`useFieldGlass`): while a mark is held the logo wears it inline, the picture as its background at
+  the mark's size, with `data-mark="field"`. Its box is moved by the CSS `translate` property onto the mark's corner (in
+  the logo's own px, over the glass's fit), so the picture lands on the field's own px, never half a px inside a box at
+  335.5. VF-PM took the move as built (01:41Z): onto the mark's corner up front is the better dress, not the brief's
+  fallback. The filter (inverted on milk) and the fade stay the stylesheet's, as the field's pass draws them, and the
+  dress comes off when the hold lets go or the glass goes.
+- The shell's markup and stylesheet are unchanged (FG-D29 (3)), and so is `window.__vfField`: the picture stays inside
+  the hold (VF-PM 01:16Z), and desk-gates' doors table stands.
+- Row 32 (`smoke-first-run.ts`): the page's `glass()` reads the logo's `data-mark`, and the browser's capture waits for
+  the glass drawn by the browser with its logo in the field's mark (`glassDrawnBy`). A logo that never wears it stops
+  the walk in those words, so the judge never reads the logo against the brand's still. The walk's `finally` lets the
+  glass go, which strips the dress and revokes the URL. The bars stay 2, 1 and 6.
+- DESIGN.md §8 first, "Held to the browser's glass": on that frame the browser's logo wears the field's mark as the
+  frame holds it, at the field's mark's own spot and size; anywhere else the browser's logo is the brand's still.
+  `docs/desk-gates.md` row 32 says the browser's capture waits for it.
+- Tests:
+  - glass-pass (18 → 21): `straightRows`; the picture's shapes (its box, a 256-byte row, the texture's and the buffer's
+    usages, its pipeline made once, null before a frame and after the pass is gone); and the GPU's error rejecting, its
+    texture and buffer let go;
+  - field-door (18 → 20): the worker's picture by id, its failure logged, a picture pending at the door's end null; the
+    main thread's, a rejection logged and null; the still's row, widened to answer null;
+  - field-glass (18 → 23): the hold holding the field's mark and letting it go, a late picture dropped; `markDress`'s
+    arithmetic; the logo wearing the mark while held, undressed at the let-go and at the unmount; the brand's mark kept
+    while the door has none to picture;
+  - smoke-first-run (48 → 49): `glassDrawnBy`, the walk's wait.
+
+**Checks.**
+- Red first, `d4c5442c1`'s code under the new tests (`lanes/fg2/followup-3/red.zsh`, 01:28:52–01:28:59Z on the HOLD
+  file, released to `released/HOLD-012859`): the twelve new or widened rows red, each for its own missing piece.
+  field-app's 11 failed: `straightRows` not a function, the pass's `markPicture` twice, the door's three times (the
+  still's, the worker's and the main thread's), the hold's `heldMark` twice, `markDress`, the logo's `data-mark` null
+  where "field" was wanted, and a door's picture never asked (its spy called 0 times). electron-shell's one:
+  `glassDrawnBy` not a function.
+- The lane's lights, nice 19 under the guard, on the shared vitest lane by the HOLD file
+  (`lanes/fg2/followup-3/light/`):
+  - the first (01:34:23–01:36:49Z, released to `released/HOLD-013649`), on the staged tree `258912f4c`, the same before
+    and after: biome clean on the nine files; the three field-app files whole, 64 passed, and smoke-first-run whole, 49;
+    electron-shell's typecheck and `check:walls`; electron-shell's whole vitest 2,431 passed, 3 skipped, and field-app's
+    3,507 passed, 3 skipped. field-app's typecheck was red on one fault, in the tests: TS2379 at
+    `glass-pass.test.ts:278`, a Blob stub's `type` handed `undefined` under `exactOptionalPropertyTypes`, now defaulted
+    to "";
+  - the re-light (01:37:12–01:37:37Z, released to `released/HOLD-013737`), on the staged tree `ba7c8c53f`, the tip's:
+    biome clean on the file, field-app's typecheck green, and glass-pass whole, 21 passed.
+- VF-PM took the tip at 01:41Z, lit as said, the dress as built. Its merge-tree onto main `69ee1f061` was clean
+  (`7104394ce`, M68's tree): DESIGN.md the one file both changed, main's hunks DS-7's and IOS-10a's (its lines
+  4053–5222), far from §8's at 2949.
+- **Run 68** (the mint M68, the merge `064e7a5f9`: main `69ee1f061` merged into `0cf63cfed`):
+  - verify went green at 01:45:46Z (exit 0; armed 01:40:54Z, its load 1.95 at the arming and 9.04 at the end), the
+    mini's tree clean after it and no stubs left.
+  - vitest: 11,460 passed, 0 failed, 18 skipped over its 27 rows, +11 over run 67's 11,449: glass-pass 18 → 21,
+    field-door 18 → 20 and field-glass 18 → 23 (field-app 3,504 → 3,514, none skipped, where this Mac's light read 3,507
+    and 3 skipped on `d4c5442c1`'s tree), and smoke-first-run 48 → 49 (electron-shell 2,430 → 2,431, 3 skipped).
+  - cargo: `test result: ok.` × 33, none failed; typecheck and test ran for 28 projects; biome checked 2,955 files, as
+    run 67 did (the slice adds none); MaxListeners 0; the iOS fixtures' 186 copies identical.
+  - The bundle's assert held at 914.5 KB raw and 241.6 KB gz, +1.4 KB raw and +0.5 KB gz over run 67's 913.1 and 241.1.
+  - The console was locked through the run (HID idle 8,474 s at the arming and 8,767 s at the end).
+- **Row 32 on M68**, GREEN at run68b (01:53:12Z), the frozen frame's first live run with the browser's logo in the
+  field's mark (run65b, before it, read 7.59–8.02 on the logo), read again in `lanes/ts6/logs/mini/run68b/`
+  (run68b-first-run.out and smoke:first-run.log, sha256 `d6dd94eb5b666e05…`):
+  - The row armed 01:52:07Z and ended 01:53:12Z, exit 0, on HEAD `064e7a5f9`: day green 22s, night green 21s, no-webgpu
+    green 18s; the console unlocked, HID idle 162 s at the arming and 227 s at the end.
+  - day: held 0 over the window, the browser's logo in the field's held mark; the field's glass against the browser's:
+    1.18 inside (543,540 px), 0.37 in the shadow's ring (183,448 px) and 1.03 on the logo (9,856 px), against §8's 2, 1
+    and 6.
+  - night: held 0 over the window, the browser's logo in the field's held mark; the field's glass against the browser's:
+    1.08 inside (543,540 px), 0.37 in the shadow's ring (183,448 px) and 0.85 on the logo (9,856 px), against §8's 2, 1
+    and 6.
+  - no-webgpu: "nothing to compare: over the still the browser draws the whole glass".
+  - The rest, read from the walks' facts: the words' contrast judge 0 short on every walk (186, 165 and 180 words judged
+    on day, night and no-webgpu), the hand-over heard `words` then `clear` on each, and the desk opened by its tear,
+    tear and fade.
+  - a9's reading of the stills (`first-run-shots/{day,night}/` 04, 05 and 06, and `a9-logo-sheets/`), through VF-PM
+    (01:56Z): on the logo's crop the field's glass and the browser's a mean of 1.07 apart by day and 0.89 by night, at
+    most 4, with no px over 20 where M65's had about 730; the arcs at one phase and the double outline gone, the residue
+    the glass's grain. The field's two captures are the same, 04 and 06 byte for byte on both walks (a5's `cmp` at the
+    cut), and inside and the shadow's ring read run65b's numbers again (1.18 and 1.08, 0.37).
+- **Landed:** main fast-forwarded `69ee1f061` → `064e7a5f9` at 2026-11-01 01:47:44Z (main's reflog; VF-PM 01:48Z): 11
+  files +732 −40 over main, M68's tree `7104394ce`.
+
+**Found while building.**
+- The splash's mark texture can't be copied out: it is a target the splash draws and the glass's shader samples, with no
+  copy usage (`vibefield-splash.js`), so the pass draws it texel for texel into a texture of its own that can be. Its
+  texels are premultiplied, so the picture turns each colour back over its alpha, as the glass's shader takes it.
+- The field's mark stands on whole field px, and the browser's logo box half a px off them at the walk's window (y 336
+  against 335.5), so a picture placed inside the box would have been drawn half a px off; moving the box itself onto the
+  mark's corner keeps the picture on the field's px.
+- `mark(to, ms)` was already the door's, the mark's fade, so the picture's call is `markPicture()` and the worker's
+  messages "mark-picture" and "mark-pictured" (VF-PM 01:16Z).
+- happy-dom (20.11.0) keeps the inline `translate` and the background's longhands, and drops the style attribute when
+  the last is removed, so the vitest rows read the dress as the page's style holds it.
+
+**Owed.**
+- The catalog judged, next (VF-PM 21:32Z): an Electron walk of its frames on the Mac mini, each judged by row 32's own
+  measure (`captureWords`, `judgeContrast`), which pays the error pane under the judge (its two completion failures
+  stand the wizard's error line on the glass). It folds in the one line that prints the door's mode in the walk's
+  `frozen` (VF-PM 23:13Z).
+- James's product question, named by the brief and not built (VF-PM 01:14Z): whether the browser's glass wears the
+  field's living mark anywhere but the held frame (a failed pass's glass, its first look), where its logo is the brand's
+  still.
+- James's look at the frozen frame's three stills a live walk (`frozen-field`, `frozen-browser`, `frozen-field-again`),
+  the browser's now in the field's mark, and the follow-up's two calls, VF-PM's rulings at a5's leans (01:16Z: the
+  picture inside the hold, `window.__vfField` unchanged; 01:41Z: the logo moved onto the mark's corner), James's to
+  overturn.
+- Not claimed: the picture's readback runs only on a GPU, so its witness is row 32 alone (VF-PM 01:14Z (1)); the vitest
+  rows hold the dressing's arithmetic and the door's and the pass's shapes, never the pixels. The frozen frame under
+  reduced motion (no walk runs it) and which door held the field live stay unclaimed, as before. Item 127's list stands.
