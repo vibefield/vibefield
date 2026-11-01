@@ -629,3 +629,38 @@ describe("item 121 — the record names the non-agent cell its PTY was born on",
     expect(later).toMatchObject({ role: "later-word" });
   });
 });
+
+describe("TU-1 — the record and its row say whether the run's conversation has worked (Q6)", () => {
+  it("is the signed record's own: a time, null, or absent on a record from before TU-1", () => {
+    const turned = AgentSessionRecord.parse(fixture("agent-session-record.turned.json"));
+    expect(turned.turnedAt).toBe("2026-08-16T11:00:41.000Z");
+    const valid = AgentSessionRecord.parse(fixture("agent-session-record.valid.json"));
+    expect("turnedAt" in valid).toBe(false);
+    expect(AgentSessionRecord.parse({ ...valid, turnedAt: null }).turnedAt).toBeNull();
+    // under the record's HMAC, beside the launch facts: never a key of the row alone
+    expect(Object.keys(AgentSessionRecord.shape)).toContain("turnedAt");
+  });
+
+  it("refuses a clock that is not one rather than coercing it", () => {
+    const valid = fixture("agent-session-record.valid.json") as Record<string, unknown>;
+    for (const bad of ["", 42, true, { at: "2026-08-16T11:00:41.000Z" }]) {
+      expect(
+        AgentSessionRecord.safeParse({ ...valid, turnedAt: bad }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
+    }
+  });
+
+  it("the row carries the record's fact and the set it is filed under; a row from before TU-1 carries neither", () => {
+    const row = AgentSessionSummary.parse(fixture("agent-session-summary.turned.json"));
+    expect(row.turnedAt).toBe("2026-11-01T08:40:12.000Z");
+    expect(row.profileSet).toBe("work-7f3a");
+    expect(AgentSessionSummary.parse({ ...row, turnedAt: null }).turnedAt).toBeNull();
+    for (const bad of ["", 42, false])
+      expect(AgentSessionSummary.safeParse({ ...row, turnedAt: bad }).success, String(bad)).toBe(
+        false,
+      );
+    const before = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
+    expect("turnedAt" in before).toBe(false);
+  });
+});

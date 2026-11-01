@@ -59,6 +59,11 @@ const sparkFields = {
   folder: z.string().min(1),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
+  /** TU-1 (Q1) — whether the spark has worked: the time fieldd first saw one of its own sessions take a turn (a
+   * resume's, or a native resume's, counts as its session's). `null`: hatched under TU-1 and never worked; NS-D4's
+   * hello is for this spark alone. Absent: a spark from before TU-1, unknown, so once started it is never said to be
+   * new. */
+  turnedAt: z.string().min(1).nullable().optional(),
 };
 
 const thinksUnderItsProfiles = (

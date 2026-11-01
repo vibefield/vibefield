@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AgentKind,
+  AgentProfileSet,
   AgentsProfilesVerifyResult,
   AgentsReleasesParams,
   AgentsReleasesResult,
@@ -21,6 +22,9 @@ import {
   IndexSessionsParams,
   IndexSessionsResponse,
   IndexStatus,
+  NATIVE_PROFILE_SET_ID,
+  personaSetsOf,
+  profileSetOfRun,
 } from "../src/agent-index";
 import { METHODS, reachableFromTailnet } from "../src/methods";
 import { PLUGIN_CAPABILITY_ELIGIBILITY } from "../src/plugins";
@@ -830,5 +834,49 @@ describe("the agents.* door shapes (AR-2)", () => {
     });
     expect(AgentsReleasesParams.parse({}).network).toBeUndefined();
     expect(AgentsReleasesParams.safeParse({ provider: "Claude Code" }).success).toBe(false);
+  });
+});
+
+describe("TU-1 (Q3) — the one rule that places a run in an Agent Profile", () => {
+  const P = new Map([["x", "w2"]]);
+
+  it("the profile it was filed under; else This Mac's with no persona; else the one listing its persona; else none", () => {
+    expect(profileSetOfRun({ profileSet: "w" }, P)).toBe("w");
+    // the filed set is the run's own fact; its persona places only a run filed nowhere
+    expect(profileSetOfRun({ profileSet: "w", profileId: "x" }, P)).toBe("w");
+    expect(profileSetOfRun({}, P)).toBe("native");
+    expect(profileSetOfRun({}, null)).toBe("native");
+    expect(profileSetOfRun({ profileId: "x" }, P)).toBe("w2");
+    // a persona no profile lists (a retired sign-in) is in none: no spark reaches it
+    expect(profileSetOfRun({ profileId: "y" }, P)).toBeUndefined();
+    // the profiles not read yet: a persona's run is in none until they are (fail closed)
+    expect(profileSetOfRun({ profileId: "x" }, null)).toBeUndefined();
+    expect(NATIVE_PROFILE_SET_ID).toBe("native");
+  });
+
+  it("maps each persona to the profile listing it, over one frame's sets", () => {
+    const persona = (profileId: string) => ({
+      profileId,
+      provider: "claude",
+      label: profileId,
+      kind: "managed" as const,
+      createdAt: "2026-11-01T08:00:00.000Z",
+    });
+    const set = (id: string, personas: string[]) =>
+      AgentProfileSet.parse({
+        id,
+        kind: id === "native" ? "native" : "managed",
+        label: id,
+        default: id === "native",
+        createdAt: "2026-11-01T08:00:00.000Z",
+        personas: personas.map(persona),
+      });
+    const map = personaSetsOf([set("native", ["claude:native-default"]), set("work", ["a", "b"])]);
+    expect([...map]).toEqual([
+      ["claude:native-default", "native"],
+      ["a", "work"],
+      ["b", "work"],
+    ]);
+    expect(personaSetsOf([]).size).toBe(0);
   });
 });

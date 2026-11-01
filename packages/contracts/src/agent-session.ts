@@ -226,7 +226,11 @@ export const AgentSessionSummary = z
     /** AR-S5 — the Agent Profile the run was born under, when puppeteer knows
      * it (`AgentSessionInfo.profileSetId`: a spawn that chose one or took the
      * default's sign-in, or a run whose sign-in is registered). Absent is
-     * unknown, never "This Mac": a reader falls back to the persona's set. */
+     * unknown, never "This Mac": a reader falls back to the persona's set.
+     * *Amended 2026-11-01 (TU-1):* a reader places a run with `profileSetOfRun` (`agent-index.ts`): this set; else, as
+     * above, the set listing its persona; else This Mac's for a run that names no persona. A persona no set lists is
+     * in none. puppeteer files a run under its persona's set whenever that persona is filed in one (`bindRunProfile`),
+     * so a live persona run normally carries this. */
     profileSet: AgentProfileSetId.optional(),
     terminal: AgentSessionTerminal.optional(),
     workspace: AgentSessionWorkspace.optional(),
@@ -286,6 +290,9 @@ export const AgentSessionSummary = z
     door: z.string().min(1).max(32).optional(),
     /** ST — the person's Stop while this fieldd holds one for the run (`AgentStopState`); absent otherwise. */
     stop: AgentStopState.optional(),
+    /** TU-1 — the record's `turnedAt`, as fieldd holds it for the run: a time (its conversation has worked), `null`
+     * (not yet), absent (a record or a daemon from before TU-1). */
+    turnedAt: z.string().min(1).nullable().optional(),
   })
   .passthrough();
 export type AgentSessionSummary = z.infer<typeof AgentSessionSummary>;
@@ -362,7 +369,9 @@ export const AgentSessionRecord = z
     runtimeEpoch: z.number().int(),
     provider: AgentProviderId,
     profileId: AgentProfileId.optional(),
-    /** AR-S5 — the Agent Profile it was born under, as the summary says it */
+    /** AR-S5 — the Agent Profile it was born under, as the summary says it.
+     * *Amended 2026-11-01 (TU-1, D11):* or, for a record from before AR-S5 that a re-attach brought forward, the one
+     * puppeteer filed the run under at that attach. A filed set is never overwritten. */
     profileSet: AgentProfileSetId.optional(),
     cwd: z.string(),
     title: z.string().optional(),
@@ -475,6 +484,12 @@ export const AgentSessionRecord = z
     /** CO — the run is this spark's own session, the one it thinks in. A spark that thinks under another profile
      * starts a fresh session (NS-D6), so each of its past sessions carries it too. */
     spark: SparkId.optional(),
+    /** TU-1 (Q2, Q5, Q6) — whether this run's conversation has worked, as fieldd saw it: the time fieldd first saw a
+     * turn (at work outside the launch's `starting` span, tokens spent, or an answer written; never an ask alone), a
+     * resume's inherited from the record it continues, a native resume's its birth. `null`: born under a fieldd that
+     * keeps the fact, no turn seen. Absent: a record from before TU-1, unknown. Optional and nullable, so a record
+     * without it canonicalises (and verifies) as before, and an older fieldd's passthrough keeps it. */
+    turnedAt: z.string().min(1).nullable().optional(),
   })
   .passthrough();
 export type AgentSessionRecord = z.infer<typeof AgentSessionRecord>;

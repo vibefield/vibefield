@@ -9,6 +9,7 @@ import {
   ComposeAgentSpawnOutput,
   ComposeAskUserInput,
   ComposeSparksHatchParams,
+  ComposeSparksListResult,
   NEEDS_CHOICE_WORDS,
   NeedsAnswerParams,
   NeedsAnswerResult,
@@ -88,6 +89,35 @@ describe("a spark (NS-D1, NS-D2 B, NS-D5)", () => {
       session: { runtimeRunId: "run-12", live: false },
     });
     expect(summary.session?.live).toBe(false);
+  });
+});
+
+describe("TU-1 (Q1) — a spark says whether it has worked", () => {
+  it("reads a time, null or nothing, as the list answers it", () => {
+    const { sparks } = ComposeSparksListResult.parse(fixture("compose-sparks-list.turned"));
+    expect(sparks.map((spark) => spark.turnedAt)).toEqual([
+      "2026-11-01T08:40:12.000Z",
+      null,
+      undefined,
+    ]);
+    // a spark from before TU-1 carries no key at all: unknown, never null
+    expect("turnedAt" in (sparks[2] ?? {})).toBe(false);
+    const older = ComposeSparksListResult.parse(fixture("compose-sparks-list.valid"));
+    expect(older.sparks.every((spark) => !("turnedAt" in spark))).toBe(true);
+  });
+
+  it("is the signed record's: it takes null and a time, and refuses a clock that is not one", () => {
+    const record = SparkRecord.parse(fixture("compose-spark-record.valid"));
+    expect(SparkRecord.parse({ ...record, turnedAt: null }).turnedAt).toBeNull();
+    expect(SparkRecord.parse({ ...record, turnedAt: "2026-11-01T08:40:12.000Z" }).turnedAt).toBe(
+      "2026-11-01T08:40:12.000Z",
+    );
+    for (const bad of ["", 42, false])
+      expect(SparkRecord.safeParse({ ...record, turnedAt: bad }).success, String(bad)).toBe(false);
+  });
+
+  it("is fieldd's alone: the sheet's answers name no turn", () => {
+    expect(Object.keys(ComposeSparksHatchParams.innerType().shape)).not.toContain("turnedAt");
   });
 });
 

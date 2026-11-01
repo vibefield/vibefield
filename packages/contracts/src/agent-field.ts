@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentProfileId, AgentProviderId } from "./agent-index";
+import { AgentProfileId, AgentProfileSetId, AgentProviderId } from "./agent-index";
 import {
   AgentSessionOrigin,
   AgentSessionTerminal,
@@ -155,6 +155,16 @@ export const AgentFieldRow = z
      * every audience's row: a phone's Stop needs the same truth as a window's. Absent otherwise, and on a row from a
      * daemon before ST. */
     stop: AgentStopState.optional(),
+    /** TU-1 — the fold's `turnedAt`: a time (its run has worked), `null` (not yet), absent (a daemon or a record from
+     * before TU-1). It flips once in a run's life, so a snapshot-delta pays it once. Content-free: a clock, as
+     * `createdAt` is. */
+    turnedAt: z.string().min(1).nullable().optional(),
+    /** TU-1 (rulings-2) — the Agent Profile the run is filed under (the fold's `profileSet`): its id, which puppeteer
+     * makes once from the profile's first name, so it can read like one; never its folder or its label, the same
+     * class as `profileId`. Absent: none filed, or a daemon before TU-1; a reader places the run with
+     * `profileSetOfRun`. On the model board this is the filed fact; `monitorRow.profileSet` is the backend's
+     * placement, which Godview's tabs read. */
+    profileSet: AgentProfileSetId.optional(),
   })
   .passthrough();
 export type AgentFieldRow = z.infer<typeof AgentFieldRow>;

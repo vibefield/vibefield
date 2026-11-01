@@ -1,0 +1,60 @@
+{
+  "//": "TU-1 (Q1) — a spark says whether it has worked: Vela has (a time; its own run is `agent-field-snapshot.turned.json`'s run-vela), Lyra was hatched and has not (null; its run is run-lyra), and Juno, asleep, is a spark from before TU-1 (absent: unknown).",
+  "sparks": [
+    {
+      "id": "sp-vela01",
+      "name": "Vela",
+      "face": {
+        "seed": 2846113027
+      },
+      "agent": "claude",
+      "profiles": ["native"],
+      "thinksUnder": "native",
+      "folder": "/Users/you/Library/Application Support/VibeField/users/u-1f3a/sparks/vela",
+      "createdAt": "2026-11-01T08:39:48.000Z",
+      "updatedAt": "2026-11-01T08:39:50.000Z",
+      "turnedAt": "2026-11-01T08:40:12.000Z",
+      "session": {
+        "runtimeRunId": "run-vela",
+        "terminalSessionId": "pty-6c10",
+        "live": true
+      }
+    },
+    {
+      "id": "sp-lyra01",
+      "name": "Lyra",
+      "face": {
+        "seed": 90210417
+      },
+      "agent": "claude",
+      "profiles": ["work-7f3a", "native"],
+      "thinksUnder": "work-7f3a",
+      "folder": "/Users/you/Library/Application Support/VibeField/users/u-1f3a/sparks/lyra",
+      "createdAt": "2026-11-01T09:01:38.000Z",
+      "updatedAt": "2026-11-01T09:01:40.000Z",
+      "turnedAt": null,
+      "session": {
+        "runtimeRunId": "run-lyra",
+        "terminalSessionId": "pty-6c11",
+        "live": true
+      }
+    },
+    {
+      "id": "sp-j8n4w2re",
+      "name": "Juno",
+      "face": {
+        "seed": 3301877712
+      },
+      "agent": "claude",
+      "profiles": ["native"],
+      "thinksUnder": "native",
+      "folder": "/Users/you/Library/Application Support/VibeField/users/u-1f3a/sparks/juno",
+      "createdAt": "2026-10-30T10:05:00.000Z",
+      "updatedAt": "2026-10-30T11:40:00.000Z",
+      "session": {
+        "runtimeRunId": "run-7",
+        "live": false
+      }
+    }
+  ]
+}
