@@ -12,9 +12,10 @@ import {
   type SwarmBubbleModel,
   workingShares,
 } from "@vibefield/puppeteer-views";
+import { keepsFailure } from "../../src/godview/monitor/failed-bodies";
 import { createGodviewMonitorFeed } from "../../src/godview/monitor/model-replica";
 import type { ModelBoardPort } from "../../src/godview/monitor/remote-door";
-import { boardJoins } from "../../src/godview/monitor/window-local";
+import { boardJoins, boardJoinsKey } from "../../src/godview/monitor/window-local";
 import { createRowOrder, createWindowRows } from "../../src/godview/monitor/window-rows";
 
 /**
@@ -31,15 +32,25 @@ import { createRowOrder, createWindowRows } from "../../src/godview/monitor/wind
  * row's working share, at the base scale). J1 (a): the phone equals its home's window, so home rows
  * are self and keep their owner's stale, and a peer greys by its desktop's standing.
  *
- * The phone has no panes, so this is the window with none: the replica's local join is VibeField's
- * `visible: row => row.alive` and nothing else (no attachments, no active pane, no visual ids), and
- * the order has no pane or floor sessions. Exact for a window with no deck panes, which is the
- * honest limit of "row for row".
+ * The phone has no panes, so this is the window with none: the replica's local join is the
+ * window's visibility rule and nothing else (no attachments, no active pane, no visual ids), and
+ * the order has no pane or floor sessions. The rule is `useMonitorAgents`': a row is drawn while it
+ * is alive, or while it is a failure this desktop has a terminal join for (`keepsFailure` over
+ * `boardJoins(...).sessionByRow`, Q06), and the window hands the replica a new predicate when the
+ * joins move, so a step can publish twice: the frame's, then the re-join's (`rejoined`). Exact for
+ * a window with no deck panes, which is the honest limit of "row for row".
  *
- * Deterministic: no clock is read. The fold stamps `asOf` for a desktop first heard by a snapshot
- * (never recorded here), the replica's clock stamps only window-joined terminal activity (none),
- * and the body model reads `nowMs` only for a terminal's elapsed time or a birth's opening (none);
- * it is a constant all the same.
+ * Each step is a cut after ONE frame, as the window would draw if its frame landed there; two
+ * frames the owner sends back to back are two steps (a peer's re-attach is its snapshot and then
+ * its live state, fieldd `mesh-board.ts` `#onUpstream`), and 3d reproduces the cut without
+ * designing for it.
+ *
+ * Deterministic: no clock value is recorded. The fold stamps `asOf` for a desktop first heard by a
+ * snapshot (never recorded), the replica's clock stamps only window-joined terminal activity (none
+ * joined). A bare terminal IS running here (`pty-h2` at the open), and the window draws its elapsed
+ * line from its own first sight of the foreground job (`AgentSwarm`'s `runningSinceMs`); that is a
+ * clock value, like `asOf`, so the body model is called without it and the line is left out, said in
+ * the body golden's note. `nowMs` is a constant for the rest (a birth's opening; none here).
  */
 
 const FIELD_APP = join(import.meta.dirname, "..", "..");
@@ -49,14 +60,19 @@ export const PHONE_BODY_GOLDEN = "phone-body.golden.json";
 export const PHONE_WITNESS_INPUTS = [
   "agent-remote-mesh-open.witness.json",
   "agent-remote-mesh-frames.witness.json",
+  "agent-remote-mesh-open.resync.json",
 ] as const;
+/** PG-1c — the whole-mesh resync is delivered after this frame (the live chains' last), before the
+ * old chain's delta that is the run's gap */
+export const PHONE_RESYNC_AFTER = 7;
 export const PHONE_GOLDENS_COMMAND = "pnpm --filter @vibefield/field-app phone:goldens";
 /** where PG-3c puts the kit's copies (`scripts/check-ios-fixtures.mjs` OTHER_ORIGINS compares them) */
 export const PHONE_GOLDEN_MIRRORS: Readonly<Record<string, readonly string[]>> = {
   [PHONE_FOLD_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures"],
   [PHONE_BODY_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldAgentsTests/Fixtures"],
 };
-/** the body model's clock: read by no body these goldens draw (no running terminal, no birth) */
+/** the body model's clock: a constant. It would date a birth's opening (none here); a running
+ * terminal's elapsed line reads `runningSinceMs`, which is not passed (a clock value, never compared) */
 export const PHONE_BODY_NOW_MS = 1_790_803_300_000;
 
 /** The three puppeteer packages the goldens are computed by, read by path: puppeteer-views'
@@ -75,16 +91,25 @@ export function puppeteerVersions(): { monitor: string; "view-sdk": string; view
   };
 }
 
-export function readWitnessInputs(): { open: unknown; frames: readonly unknown[] } {
+/** One delivery after the open: a per-device frame (its index in the frames golden), or the
+ * whole-mesh resync, which the door delivers as a `snapshot` (PG-1c). */
+export type WitnessDelivery = { at: number; frame: unknown } | { at: "resync"; resync: unknown };
+
+export function readWitnessInputs(): { open: unknown; deliveries: readonly WitnessDelivery[] } {
   const read = (name: string): unknown =>
     JSON.parse(readFileSync(join(FIELD_APP, "..", "contracts", "fixtures", name), "utf8"));
-  return {
-    open: read(PHONE_WITNESS_INPUTS[0]),
-    frames: read(PHONE_WITNESS_INPUTS[1]) as unknown[],
-  };
+  const frames = read(PHONE_WITNESS_INPUTS[1]) as unknown[];
+  const deliveries: WitnessDelivery[] = [];
+  for (const [index, frame] of frames.entries()) {
+    deliveries.push({ at: index, frame });
+    if (index === PHONE_RESYNC_AFTER)
+      deliveries.push({ at: "resync", resync: read(PHONE_WITNESS_INPUTS[2]) });
+  }
+  return { open: read(PHONE_WITNESS_INPUTS[0]), deliveries };
 }
 
-type FrameKind = "delta" | "snapshot" | "state";
+type FrameKind = "delta" | "snapshot" | "state" | "resync";
+type Publication = { added: string[]; updated: string[]; removed: string[] };
 
 /** One drawn row as the fold golden records it. */
 export interface PhoneFoldRow {
@@ -99,7 +124,7 @@ export interface PhoneFoldRow {
 }
 
 export interface PhoneFoldStep {
-  at: "open" | number;
+  at: "open" | "resync" | number;
   frame?: FrameKind;
   /** the replica's next publication's frame could not be followed: the window re-opens (M23) */
   gap?: true;
@@ -111,7 +136,10 @@ export interface PhoneFoldStep {
   /** what the fold handed the replica for this frame, by model id; null: nothing */
   fold?: { upserts: string[]; removed: string[] } | null;
   /** the replica's publication for this frame; null: it published nothing */
-  changes?: { added: string[]; updated: string[]; removed: string[] } | null;
+  changes?: Publication | null;
+  /** the publication of the window's re-join when the board's joins moved (a new visibility
+   * predicate: a kept failure shown); null: the joins did not move, or nothing re-joined */
+  rejoined?: Publication | null;
   /** `model.agents`, the contract's order (agents by birth, then terminals, ties by id) */
   ids?: string[];
   /** J1 (a): the window's order (this desktop's agents by birth, its terminals, then each desktop in place) */
@@ -119,17 +147,26 @@ export interface PhoneFoldStep {
   rows?: PhoneFoldRow[];
 }
 
+/** A copy line: its key and text, `italic` where the style is (a configured effort, launch intent),
+ * and the state line's mark (`icon`). */
+export interface PhoneCopyLine {
+  key: string;
+  text: string;
+  italic?: true;
+  icon?: string;
+}
+
 export interface PhoneBody {
   id: string;
   state: SwarmBubbleModel["state"];
   appearance: SwarmBubbleModel["appearance"];
   radius: number;
-  copy: [string, string][];
-  top: string | null;
+  copy: PhoneCopyLine[];
+  top: { text: string; hot: boolean; none: boolean } | null;
   bottom: { text: string; none: boolean } | null;
   burn: { lit: number; priced: boolean } | null;
   light: string | null;
-  ring: number | null;
+  ring: { percent: number; hot: boolean } | null;
   unread: boolean;
   stale: boolean;
   hollow: boolean;
@@ -138,7 +175,7 @@ export interface PhoneBody {
 }
 
 export interface PhoneBodyStep {
-  at: "open" | number;
+  at: "open" | "resync" | number;
   frame?: FrameKind;
   gap?: true;
   bodies?: PhoneBody[];
@@ -188,18 +225,26 @@ function costOf(row: AgentView): PhoneFoldRow["cost"] {
 }
 
 function bodyOf(model: SwarmBubbleModel): PhoneBody {
+  const top = model.figures?.top;
   const bottom = model.figures?.bottom;
   return {
     id: model.id,
     state: model.state,
     appearance: model.appearance,
     radius: model.radius,
-    copy: model.copy.map((line) => [line.key, line.text]),
-    top: model.figures?.top?.text ?? null,
+    copy: model.copy.map((line) => ({
+      key: line.key,
+      text: line.text,
+      ...(line.style.italic === true ? { italic: true as const } : {}),
+      ...(line.key === "state" && line.lead?.kind === "icon" && line.lead.icon !== undefined
+        ? { icon: line.lead.icon }
+        : {}),
+    })),
+    top: top === undefined ? null : { text: top.text, hot: top.hot, none: top.none },
     bottom: bottom === undefined ? null : { text: bottom.text, none: bottom.none },
     burn: model.burn ?? null,
     light: model.light ?? null,
-    ring: model.ring?.percent ?? null,
+    ring: model.ring === undefined ? null : { percent: model.ring.percent, hot: model.ring.hot },
     unread: model.unread,
     stale: model.stale,
     hollow: model.hollow,
@@ -208,7 +253,9 @@ function bodyOf(model: SwarmBubbleModel): PhoneBody {
   };
 }
 
-/** The window's bodies for its drawn rows, as `AgentSwarm` builds them (scale 1: fit is a layout fact). */
+/** The window's bodies for its drawn rows, as `AgentSwarm` builds them, at scale 1 (fit is a layout
+ * fact), without `runningSinceMs` (the window's own first-sight clock) or a profile line (the
+ * window's spawn menu names it; the phone has none). */
 function bodiesOf(rows: readonly AgentView[]): PhoneBody[] {
   const shares = workingShares(rows);
   return rows.map((agent) =>
@@ -230,7 +277,7 @@ function bodiesOf(rows: readonly AgentView[]): PhoneBody[] {
  */
 export async function computePhoneGoldens(input: {
   open: unknown;
-  frames: readonly unknown[];
+  deliveries: readonly WitnessDelivery[];
 }): Promise<PhoneGoldens> {
   const scheduler = manualFrame();
   let sink: ((payload: unknown, kind?: "snapshot" | "delta") => void) | null = null;
@@ -260,7 +307,7 @@ export async function computePhoneGoldens(input: {
     handed = update;
     return apply(update);
   };
-  let published: { added: string[]; updated: string[]; removed: string[] } | null = null;
+  let published: Publication | null = null;
   const offPublished = replica.subscribe(() => {
     const { changes } = replica.getSnapshot();
     published = {
@@ -269,17 +316,49 @@ export async function computePhoneGoldens(input: {
       removed: [...changes.removed],
     };
   });
-  replica.setLocal({
-    attachments: new Map(),
-    activeIds: new Set(),
-    spawnHints: new Map(),
-    visible: (row) => row.alive,
-  });
+  // The window's visibility (`useMonitorAgents`: alive, or a failure with a terminal join here,
+  // Q06), handed to the replica anew whenever the board's joins move, as the window's memo does.
+  let joinsKey: string | null = null;
+  const rejoin = (): boolean => {
+    const held = feed.heldRows();
+    const here = feed.here();
+    const key = boardJoinsKey(held, here);
+    if (key === joinsKey) return false;
+    joinsKey = key;
+    const sessionByRow = boardJoins(held, here).sessionByRow;
+    replica.setLocal({
+      attachments: new Map(),
+      activeIds: new Set(),
+      spawnHints: new Map(),
+      visible: (row) => row.alive || keepsFailure(row, sessionByRow),
+    });
+    return true;
+  };
+  rejoin();
+  /** what the replica published since the last read; null: nothing */
+  const take = (): Publication | null => {
+    const was = published;
+    published = null;
+    return was;
+  };
   const windowRows = createWindowRows();
   const orderFor = createRowOrder();
   let foldRevision = 0;
 
-  const step = (at: "open" | number, kind?: FrameKind): [PhoneFoldStep, PhoneBodyStep] => {
+  /** After a delivery: the frame's publication, then the window's re-join if the joins moved. */
+  const settleStep = (): { changes: Publication | null; rejoined: Publication | null } => {
+    scheduler.flush();
+    const changes = take();
+    if (!rejoin()) return { changes, rejoined: null };
+    scheduler.flush();
+    return { changes, rejoined: take() };
+  };
+
+  const step = (
+    at: "open" | "resync" | number,
+    kind: FrameKind | undefined,
+    heard: { changes: Publication | null; rejoined: Publication | null },
+  ): [PhoneFoldStep, PhoneBodyStep] => {
     const update = handed as MonitorModelSnapshot | MonitorModelChange | null;
     if (update !== null) foldRevision = update.revision;
     const fold =
@@ -306,21 +385,27 @@ export async function computePhoneGoldens(input: {
       modelRevision: model.revision,
       devices: devices.map((entry) => ({ device: entry.device, state: entry.state })),
       fold,
-      changes: published,
+      changes: heard.changes,
+      rejoined: heard.rejoined,
       ids: model.agents.map((row) => row.id),
       drawn: rows.map((row) => row.id),
-      rows: rows.map((row) => ({
-        id: row.id,
-        key: feed.held(row.id)?.board.runtimeRunId ?? row.id,
-        device: row.device.id,
-        self: row.device.self,
-        unread: row.unread,
-        stale: row.stale,
-        cost: costOf(row),
-      })),
+      rows: rows.map((row) => {
+        const kept = feed.held(row.id);
+        // a drawn row the fold no longer holds would lose its key: a defect, never a fallback
+        if (kept === undefined)
+          throw new Error(`step ${at}: drawn ${row.id} is not held by the fold`);
+        return {
+          id: row.id,
+          key: kept.board.runtimeRunId,
+          device: row.device.id,
+          self: row.device.self,
+          unread: row.unread,
+          stale: row.stale,
+          cost: costOf(row),
+        };
+      }),
     };
     handed = null;
-    published = null;
     return [foldStep, { at, ...frame, bodies: bodiesOf(rows) }];
   };
 
@@ -328,24 +413,27 @@ export async function computePhoneGoldens(input: {
   const body: PhoneBodyStep[] = [];
   try {
     await settle();
-    scheduler.flush();
+    const opened = settleStep();
     const state = feed.state();
     if (state.state !== "live")
       throw new Error(`the witness open was not read: ${JSON.stringify(state)}`);
-    let [foldStep, bodyStep] = step("open");
+    let [foldStep, bodyStep] = step("open", undefined, opened);
     fold.push(foldStep);
     body.push(bodyStep);
-    for (const [index, frame] of input.frames.entries()) {
+    for (const delivery of input.deliveries) {
       const deliver = sink as ((payload: unknown, kind?: "snapshot" | "delta") => void) | null;
-      if (deliver === null) throw new Error(`frame ${index}: the board closed before it`);
-      deliver(structuredClone(frame), "delta");
-      scheduler.flush();
+      if (deliver === null) throw new Error(`step ${delivery.at}: the board closed before it`);
+      // the door hands a per-device frame as a delta, and PG-1c's whole mesh as a snapshot
+      const kind: FrameKind = "resync" in delivery ? "resync" : frameKind(delivery.frame);
+      if ("resync" in delivery) deliver(structuredClone(delivery.resync), "snapshot");
+      else deliver(structuredClone(delivery.frame), "delta");
+      const heard = settleStep();
       if (opens > 1) {
-        fold.push({ at: index, frame: frameKind(frame), gap: true });
-        body.push({ at: index, frame: frameKind(frame), gap: true });
+        fold.push({ at: delivery.at, frame: kind, gap: true });
+        body.push({ at: delivery.at, frame: kind, gap: true });
         break;
       }
-      [foldStep, bodyStep] = step(index, frameKind(frame));
+      [foldStep, bodyStep] = step(delivery.at, kind, heard);
       fold.push(foldStep);
       body.push(bodyStep);
     }
@@ -357,10 +445,10 @@ export async function computePhoneGoldens(input: {
 }
 
 const FOLD_NOTE =
-  "PG-3a — the phone's fold parity golden (Q-J1 (a), James 2026-11-01: the phone equals its home's window row for row). GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens) from contracts' agent-remote-mesh-{open,frames}.witness.json through the window's own feed (createGodviewMonitorFeed: BoardScreen → the parse → ModelBoardFold → createMonitorReplica, visible = alive) and its rows (createWindowRows, createRowOrder, boardJoins), as a window with no deck panes. Per step: foldRevision (the fold's chain) and modelRevision (the replica's publication; behind after a frame that changed nothing), each desktop's standing, what the fold handed the replica, what the replica published (null: nothing), ids (the contract's order) and drawn (the window's order), and each drawn row's key, self, unread, stale and cost (no series). Never asOf. Pinned byte for byte by packages/field-app/test/phone-parity.test.ts, the kit's copy by pnpm check:ios-fixtures (OTHER_ORIGINS). Never edit by hand; a regeneration is a re-bless, said in its commit (step, field, cause), and never over a defect (PG-3a0's rule).";
+  "PG-3a — the phone's fold parity golden (Q-J1 (a), James 2026-11-01: the phone equals its home's window row for row). GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens) from contracts' agent-remote-mesh-{open,frames}.witness.json and agent-remote-mesh-open.resync.json (PG-1c's whole mesh, delivered as a snapshot after frame 7) through the window's own feed (createGodviewMonitorFeed: BoardScreen → the parse → ModelBoardFold → createMonitorReplica) and its rows (createWindowRows, createRowOrder, boardJoins), as a window with no deck panes. visible: a row is drawn while alive, or while it is a failure with a terminal join here (keepsFailure over boardJoins' sessionByRow, Q06), the predicate handed anew when the joins move. Each step is a cut after ONE frame, as the window draws if its frame lands there: step 4's grey Loft is mesh-board's own order (fieldd mesh-board.ts #onUpstream broadcasts a re-attached peer's snapshot, then its live state), a cut 3d reproduces and does not design for. Per step: foldRevision (the fold's chain) and modelRevision (the replica's publication; behind after a frame that changed nothing), each desktop's standing, what the fold handed the replica, what the replica published (changes; null: nothing) and what the window's re-join published (rejoined; null: none), ids (the contract's order) and drawn (the window's order), and each drawn row's key, self, unread, stale and cost (no series). Never asOf. Pinned byte for byte by packages/field-app/test/phone-parity.test.ts, the kit's copy by pnpm check:ios-fixtures (OTHER_ORIGINS). Never edit by hand; a regeneration is a re-bless, said in its commit (step, field, cause), and never over a defect (PG-3a0's rule).";
 
 const BODY_NOTE =
-  "PG-3a — the phone's body golden (the IOS-6a method): puppeteer-views' bubbleModel over the window's drawn rows of phone-fold.golden.json, as AgentSwarm calls it (each row's working share, scale 1), per step. Per body: id, state, appearance, the base radius, copy as [key, text], the top and bottom figures and the burn (working bodies only; null otherwise), light, the ring's percent, unread, stale, hollow, running, blockerKind. Not here: accent (the theme's; the phone's colour is ProjectLedger's), ariaLabel and title (they carry the burn's unit, Q-J3, 3e's). GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens); pinned byte for byte by packages/field-app/test/phone-parity.test.ts, the kit's copy by pnpm check:ios-fixtures. A puppeteer EL8 moves it: regenerate and copy to the kit in the same commit. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
+  "PG-3a — the phone's body golden (the IOS-6a method): puppeteer-views' bubbleModel over the window's drawn rows of phone-fold.golden.json, per step, at scale 1 with each row's working share. Per body: id, state, appearance, the base radius, copy as {key, text, italic (a configured effort's launch intent), icon (the state line's mark)}, the top figure {text, hot, none}, the bottom figure {text, none} and the burn (working bodies only; null otherwise), light, the ring {percent, hot}, unread, stale, hollow, running, blockerKind. Not here: accent (the theme's; the phone's colour is ProjectLedger's); ariaLabel and title (they carry the burn's unit, Q-J3, 3e's); a running terminal's elapsed line (the window's own clock from its first sight of the foreground job, AgentSwarm's runningSinceMs: a clock value, never compared, like asOf; the phone keeps its own); and a terminal's profile line (AgentSwarm's terminalProfile, named from the window's spawn menu; the phone has none). GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens); pinned byte for byte by packages/field-app/test/phone-parity.test.ts, the kit's copy by pnpm check:ios-fixtures. A puppeteer EL8 moves it: regenerate and copy to the kit in the same commit. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
 
 /** JSON with one object per line inside every array, the objects inside a step printed whole on
  * their line, so a diff reads row by row. */
@@ -436,12 +524,18 @@ export function goldenChanges(before: string, after: string): string[] {
     if (key === "steps") continue;
     if (JSON.stringify(was[key]) !== JSON.stringify(now[key])) lines.push(`header: ${key}`);
   }
-  const wasSteps = was.steps ?? [];
-  const nowSteps = now.steps ?? [];
-  for (let index = 0; index < Math.max(wasSteps.length, nowSteps.length); index += 1) {
-    const left = wasSteps[index] ?? {};
-    const right = nowSteps[index] ?? {};
-    const at = String(right["at"] ?? left["at"] ?? index);
+  // steps pair by their `at`, so a step added or dropped reads as one, never as every step after it
+  const byAt = (steps: Array<Record<string, unknown>>) =>
+    new Map(steps.map((entry, index) => [String(entry["at"] ?? index), entry]));
+  const wasSteps = byAt(was.steps ?? []);
+  const nowSteps = byAt(now.steps ?? []);
+  for (const at of new Set([...wasSteps.keys(), ...nowSteps.keys()])) {
+    const left = wasSteps.get(at);
+    const right = nowSteps.get(at);
+    if (left === undefined || right === undefined) {
+      lines.push(`step ${at}: ${left === undefined ? "a new step" : "the step is gone"}`);
+      continue;
+    }
     for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
       if (JSON.stringify(left[key]) !== JSON.stringify(right[key]))
         lines.push(`step ${at}: ${key}`);

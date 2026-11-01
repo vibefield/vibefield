@@ -40,12 +40,12 @@ beforeAll(async () => {
   goldens = await computePhoneGoldens(readWitnessInputs());
 });
 
-const foldAt = (at: "open" | number): PhoneFoldStep => {
+const foldAt = (at: PhoneFoldStep["at"]): PhoneFoldStep => {
   const found = goldens.fold.find((step) => step.at === at);
   if (found === undefined) throw new Error(`no fold step at ${at}`);
   return found;
 };
-const bodyAt = (at: "open" | number): PhoneBodyStep => {
+const bodyAt = (at: PhoneFoldStep["at"]): PhoneBodyStep => {
   const found = goldens.body.find((step) => step.at === at);
   if (found === undefined) throw new Error(`no body step at ${at}`);
   return found;
@@ -77,8 +77,8 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
   });
 
   it("names the three puppeteer packages it was computed by, as installed (a puppeteer EL8 regenerates it)", () => {
+    // the pin's authority is the manifests (pnpm-workspace.yaml, preflight's PIN_EXPECTATIONS): no literal here
     const installed = puppeteerVersions();
-    expect(installed).toEqual({ monitor: "0.3.2", "view-sdk": "0.3.2", views: "0.3.2" });
     for (const name of [PHONE_FOLD_GOLDEN, PHONE_BODY_GOLDEN]) {
       const stored = JSON.parse(readFileSync(join(PHONE_GOLDENS_DIR, name), "utf8")) as {
         versions: unknown;
@@ -93,17 +93,37 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
   });
 
   it("the screen passes every witness frame as it came: nothing screened out shapes the golden", () => {
-    const { open, frames } = readWitnessInputs();
+    const { open, deliveries } = readWitnessInputs();
     const screen = new BoardScreen();
     expect(screen.open(open)).toEqual(open);
-    for (const frame of frames) {
-      expect(screen.frame(frame)).toEqual([frame]);
-      expect(AgentModelMeshFrame.safeParse(frame).success).toBe(true);
+    for (const delivery of deliveries) {
+      if ("resync" in delivery) {
+        expect(screen.open(delivery.resync)).toEqual(delivery.resync);
+        continue;
+      }
+      expect(screen.frame(delivery.frame)).toEqual([delivery.frame]);
+      expect(AgentModelMeshFrame.safeParse(delivery.frame).success).toBe(true);
     }
   });
 
-  it("one step per frame up to the gap: the old chain's delta at frame 8 ends the run (M23)", () => {
-    expect(goldens.fold.map((step) => step.at)).toEqual(["open", 0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  // Each step is a cut after ONE delivery, as the window draws if its frame lands there. Two frames
+  // the owner sends back to back are two steps: a re-attached peer's snapshot and then its live
+  // state (fieldd mesh-board.ts `#onUpstream`), so step 4's grey Loft is a cut 3d reproduces and
+  // does not design for.
+  it("one step per delivery up to the gap: PG-1c's resync after frame 7, the old chain's delta at 8 ends the run (M23)", () => {
+    expect(goldens.fold.map((step) => step.at)).toEqual([
+      "open",
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      "resync",
+      8,
+    ]);
     expect(foldAt(8)).toEqual({ at: 8, frame: "delta", gap: true });
     expect(bodyAt(8)).toEqual({ at: 8, frame: "delta", gap: true });
   });
@@ -141,7 +161,7 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
     expect(rowsOn(open, LOFT).find((row) => row.id === "pty-p3")?.stale).toBe(false);
     // an asleep desktop's rows are grey from the open
     expect(rowsOn(open, ATTIC).map((row) => [row.id, row.stale])).toEqual([["run-a-idle", true]]);
-    for (const at of [0, 1, 2, 5, 6, 7] as const)
+    for (const at of [0, 1, 2, 5, 6, 7, "resync"] as const)
       for (const row of rowsOn(foldAt(at), LOFT)) expect(row.stale, `${at} ${row.id}`).toBe(false);
     // the peer greys whole when it goes stale, through its re-attach, and lights again when live
     for (const at of [3, 4] as const) {
@@ -163,6 +183,7 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
       "run-h-nocwd",
       "run-h-root",
       "run-h-quiet",
+      "pty-h3",
       "pty-h2",
       "pty-p3",
       "pty-p1",
@@ -196,7 +217,7 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
   it("the bodies: a peer's wear their desktop's name and the home's none; priced flames, an unpriced hollow", () => {
     const bodies = bodyAt("open").bodies ?? [];
     const host = (id: string) =>
-      bodies.find((body) => body.id === id)?.copy.find(([key]) => key === "host")?.[1];
+      bodies.find((body) => body.id === id)?.copy.find((line) => line.key === "host")?.text;
     for (const id of ["pty-h1", "run-h-partial", "pty-h2", "run-h-quiet"])
       expect(host(id), id).toBeUndefined();
     expect(host("pty-p3")).toBe("Loft");
@@ -204,7 +225,22 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
     expect(host("run-a-idle")).toBe("Attic");
     const partial = bodies.find((body) => body.id === "run-h-partial");
     // 30/h is 0.5/min: three of the four flames, the ladder's (0.05, 0.15, 0.4, 1)
-    expect(partial).toMatchObject({ state: "working", burn: { lit: 3, priced: true }, ring: 83 });
+    // 83% of the context: a hot ring and a hot top figure
+    expect(partial).toMatchObject({
+      state: "working",
+      burn: { lit: 3, priced: true },
+      ring: { percent: 83, hot: true },
+      top: { text: "83%", hot: true, none: false },
+    });
+    // a configured effort is launch intent, set in italics; an observed one is not
+    expect(partial?.copy.find((line) => line.key === "model")).toEqual({
+      key: "model",
+      text: "GPT-5.5 · medium",
+      italic: true,
+    });
+    expect(
+      bodies.find((body) => body.id === "pty-h1")?.copy.find((line) => line.key === "model"),
+    ).toEqual({ key: "model", text: "Opus 5.5 · high" });
     expect(partial?.bottom).toEqual({ text: "~$0.62+", none: false });
     const quiet = bodies.find((body) => body.id === "run-h-quiet");
     expect(quiet).toMatchObject({
@@ -217,9 +253,64 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
       light: "orange",
       stale: false,
     });
+    expect(
+      bodies.find((body) => body.id === "pty-p3")?.copy.find((line) => line.key === "state")?.icon,
+    ).toBe("question");
     expect(bodies.find((body) => body.id === "pty-h1")).toMatchObject({
       unread: true,
       light: "blue",
     });
+    // the running shell: the window's elapsed line reads its own first-sight clock, left out (BODY_NOTE)
+    expect(bodies.find((body) => body.id === "pty-h2")).toMatchObject({
+      state: "terminal-running",
+      running: true,
+      copy: [
+        { key: "name", text: "notes" },
+        { key: "command", text: "running" },
+      ],
+    });
+  });
+
+  it("Q06 — a crashed home run stays drawn on its terminal join, its failure on its body, published by the window's re-join", () => {
+    // the open's own publication is the model's visible rows; the window then hands the replica the
+    // board's joins, and the kept failure is added by that re-join
+    expect(foldAt("open").changes?.added).not.toContain("pty-h3");
+    expect(foldAt("open").rejoined).toEqual({ added: ["pty-h3"], updated: [], removed: [] });
+    for (const step of goldens.fold.filter((entry) => entry.gap !== true)) {
+      expect(step.drawn, String(step.at)).toContain("pty-h3");
+      expect(
+        step.rows?.find((row) => row.id === "pty-h3"),
+        String(step.at),
+      ).toMatchObject({
+        key: "run-h-crash",
+        self: true,
+        stale: true,
+      });
+    }
+    const crashed = bodyAt("open").bodies?.find((body) => body.id === "pty-h3");
+    expect(crashed).toMatchObject({ state: "blocked", blockerKind: "failure", light: "orange" });
+    expect(crashed?.copy.find((line) => line.key === "state")).toMatchObject({
+      text: "The process exited with code 1.",
+      icon: "failure",
+    });
+  });
+
+  it("PG-1c — the whole-mesh resync keeps every place and publishes only what it heals", () => {
+    const before = foldAt(7);
+    const resync = foldAt("resync");
+    expect(resync.frame).toBe("resync");
+    // the open replaces the fold's copy on a chain of its own, one past the frames'
+    expect(resync.foldRevision).toBe((before.foldRevision ?? 0) + 1);
+    expect(resync.modelRevision).toBe(resync.foldRevision);
+    // every desktop where it was, every row in its place (item 138)
+    expect(resync.drawn).toEqual(before.drawn);
+    expect(resync.ids).toEqual(before.ids);
+    expect(resync.devices).toEqual(before.devices);
+    // the one change the reader never heard: the home's window read run-h-turn
+    expect(resync.changes).toEqual({ added: [], updated: ["pty-h1"], removed: [] });
+    expect(resync.rejoined).toBeNull();
+    expect(resync.rows?.find((row) => row.id === "pty-h1")?.unread).toBe(false);
+    // and the old chain is still a gap after it
+    expect(foldAt(8).gap).toBe(true);
   });
 });
