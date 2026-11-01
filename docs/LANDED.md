@@ -26151,3 +26151,172 @@ own order:
 - Not claimed: the picture's readback runs only on a GPU, so its witness is row 32 alone (VF-PM 01:14Z (1)); the vitest
   rows hold the dressing's arithmetic and the door's and the pass's shapes, never the pixels. The frozen frame under
   reduced motion (no walk runs it) and which door held the field live stay unclaimed, as before. Item 127's list stands.
+
+## FG, the catalog judged — row 32's fourth walk judges the design catalog's Setup Assistant frames, every face by day and by night, by row 32's own measure, and DESIGN.md §2.4's ramp holds its floors (item 127)
+
+**Why.**
+- The catalog over the still (LANDED "FG-6's catalog") stood the Setup Assistant's 13 frames on the shipping glass over
+  the shipping field, but nothing judged their pixels: row 32's three walks read only the faces a first run meets, so
+  the error pane and Connect's variants stood unjudged (ROADMAP's Owed since FG-O2's judge's fix: "an error pane under
+  the judge is owed"). The slice is a5's lean (VF-PM 21:32Z): an Electron walk of the frames, each judged by row 32's
+  own measure.
+- Item 127 (VF-PM 17:40Z on 10-31, found by FG-O2's judge's arithmetic): DESIGN.md §2.4 said black/70, black/50 and
+  captions at neutral-500, while tokens.css carried 85/70/45/30 % from `250e383d6` (2026-08-05). By day t3 read
+  2.72–2.85:1 and t4 1.87–1.92:1 on the chrome grounds, by night 3.86–4.18:1 and 2.52–2.59:1, so every t3 word on light
+  chrome and every t4 word anywhere stood under §8's bar. VF-PM routed it into this slice (02:00Z).
+- The live walks' `frozen` fact named no door (VF-PM 23:13Z: the one line that prints the door's mode).
+- VF-PM's rulings on a5's brief (02:17Z, at a5's leans, James's to overturn): (1) the seam is row 32's fourth walk
+  `catalog` on run-first-run.mjs, one launch, the design build served over an in-memory partition, a missing build red;
+  not row 33 and not row 26; (2) the frame takes FG-L2's floor of 736, red on a fit under 1, never judged at 0.74; (3)
+  the ramp: §2.4 amended at its source, t1 to t3 read words at 4.5:1 or more on every chrome ground of their theme, t4
+  never a read word, at 3:1 or more, t4's read words moved to t3 so the law holds at landing, DESIGN.md first; (C)
+  `frozen.mode` printed and never judged. James clicked the board's `text-ramp-alphas` GO at 02:26:44Z (VF-PM 02:27Z):
+  the ramp's law and numbers are his word.
+
+**What landed** (`e2c86e7fb` and `86b788e2f`, built and lit in lane fg2 on `fg/catalog-judged` over `a5267b27b`;
+Checks), in the commits' own order:
+- The ramp (`e2c86e7fb`, "FG, item 127: the ramp holds its floors"):
+  - DESIGN.md §2.4 amended and dated: the ramp is `--vf-foreground` at four alphas, each tier holding a floor on every
+    chrome ground of its theme (by day white, the canvas, the fill and its hover; by night the solid chrome, the canvas
+    and the fill). t1–t3 are words that are read, at 4.5:1 or more (§8's bar); t4 is never a word that is read, only a
+    mark or a control that is off, at 3:1 or more. The paragraph's erratum stands at its source: it said black/70/50 and
+    neutral-500 while the tokens carried 85/70/45/30 %. §8's three "11 mono, faint" lines for ICE's message say
+    tertiary, dated;
+  - tokens.css: by day t3 45 → 64 % (5.1–4.7:1) and t4 30 → 50 % (3.3–3.1:1), by night t3 45 → 54 % (5.5–4.9:1) and t4
+    30 → 38 % (3.4–3.2:1); t1 and t2 unchanged. The Setup Assistant's glass is untouched: `.vf-wizard-shell` re-projects
+    t2–t4 to `--vf-wizard-text`;
+  - the ten read words t4 carried move to t3: the ui field's and the head's rename placeholders, the unavailable card's
+    detail (ICE's message), the status line's detail, the door's ghost device name, Settings' account eyebrow, and
+    terminal settings' was-value, palette labels, editor gutter and comment. Sixteen uses stay t4, each a mark or a
+    control that is off;
+  - tests: text-ramp (new, 12) composites tokens.css's own tiers over the chrome grounds in both themes against the
+    floors, holds DESIGN.md to the same alphas, and names every product use of t4 (a new use is red until it is named);
+    unavailable-card pins the detail at tertiary.
+- The walk (`86b788e2f`, "FG, the catalog judged"):
+  - the seam, as ruled: row 32's fourth walk `catalog`, one launch in smoke-first-run mode; smoke.ts branches to
+    `runSmokeCatalog` before the product window is made, and main and modes.ts are untouched. Its window (1600 × 900
+    content, inactive and click-through, kept and counted by smoke-window.ts's new `keepSmokeWindow`) stands on an
+    in-memory partition (`vf-catalog-walk`) whose app scheme serves the design build through `serveAppRequest`
+    (`.vibefield/studio/catalog-renderer`, handed to that walk alone as `VF_CATALOG_RENDERER`). A missing build is red
+    (`catalogBuildRefusal`), and smoke:first-run's script runs `build:design` before the launcher. The catalog walk gets
+    480 s; the others keep 240 s;
+  - the walk (new `testing/smoke-catalog.ts`: `CATALOG_PAGE` and `catalogRows`): the 13 frames and every choice their
+    controls offer (Connect's variants under each state), by day and then by night through the catalog's own toggle, a
+    choice the control's own click in the page, never input. Each face is centred and settled (no pane leaving, nothing
+    moving but what loops, the field at its still) and captured alone; its words are found by row 32's own finder, cut
+    from that capture (`catalogCuts` moves the window's boxes onto the frame) and held at 4.5:1 by `inkCuts`,
+    `firstRunContrast` and `judgeContrast`. `judgeCatalog` is red on a glass under its own size or whose fit could not
+    be read, on a theme missing a frame, on the error line not standing on 02's error, A4 and A5 in either theme, and on
+    the two themes meeting different face counts. Each still is kept as a JPEG named by its face;
+  - row 32's finder is `PAGE_WORDS` (`opacity`, `box`, `wordsIn`), which FIRST_RUN_PAGE and CATALOG_PAGE include byte
+    for byte; FIRST_RUN_PAGE's behaviour is unchanged;
+  - the frame: scenes.css's `.vf-ds-onboarding-production` is 736 tall, FG-L2's floor;
+  - item 127's measured chip: Foundations' new "Text ramp" (DESIGN.md §2.4) puts t1–t4 on each chrome ground of the
+    theme, each chip carrying its tier, ground and floor, and the walk reads the specimen's capture (`rampReadings`,
+    `judgeRamp`: 4.5:1 for t1–t3, 3:1 for t4);
+  - the live walks' `frozen` is `{ mode, held, regions }`: `mode` is the door that held the field (`__vfField.mode`,
+    read before the hold), printed and never judged;
+  - `docs/desk-gates.md`: row 32 gains the catalog, `mode` and the budget, and `VF_CATALOG_RENDERER` joins the env
+    table;
+  - tests: smoke-catalog (new, 9): the finder byte for byte, a face's name and its still's, the cut moved onto the
+    frame, `judgeCatalog`'s reds and `judgeRamp`'s; smoke-first-run's walks table and launcher at four walks (49,
+    widened in place); design-system's 16 chips (a row widened in place); onboarding-wizard's catalog frame at fit 1 (57
+    → 58).
+
+**Checks.**
+- Red first on `a5267b27b`'s code (`lanes/fg2/catalog-judged/red.zsh`, 02:28:32Z, before either commit, on the HOLD
+  file, released to `released/HOLD-022851`): the ramp's rows 7 red and 12 green (t3 and t4 under their floors in both
+  themes, light t3 2.85:1 and t4 1.92:1, dark t3 4.18:1 and t4 2.59:1; DESIGN.md's alphas; t4's ten read words; ICE's
+  message at faint); the catalog's frame fit 0.7375; no Text ramp chips; smoke-catalog.ts absent; the walks table and
+  the launcher without `catalog`.
+- The lane's lights, nice 19 under the guard, on the shared vitest lane by the HOLD file
+  (`lanes/fg2/catalog-judged/light/`):
+  - the ramp's (02:30:10Z, released to `released/HOLD-023014`): text-ramp and unavailable-card 19 passed, and biome
+    clean on the commit's files;
+  - field-app's five rows text-ramp, unavailable-card, design-system, onboarding-wizard and ui-system-boundaries, 127
+    passed (02:40:08Z, released to `released/HOLD-024139`);
+  - the tip's (02:43:06–02:46:04Z, released to `released/HOLD-024604`): biome clean on every changed file and diff-check
+    clean; electron-shell's smoke-catalog, smoke-first-run and smoke-window, 61 passed; the typechecks of field-app and
+    electron-shell and `check:walls`; electron-shell's whole vitest 2,440 passed, 3 skipped, and field-app's 3,524
+    passed, 3 skipped. design-kit has no test script.
+- VF-PM took the tip at 02:48Z, sending the mint's GO to a9 (M69, the rebased shape). Its merge-tree onto main
+  `a5267b27b` was clean, main its ancestor: 24 files +1,333 −104.
+- **Run 69** (the mint M69, `86b788e2f`, the tip itself):
+  - verify went green at 02:53:14Z (exit 0; armed 02:48:24Z, its load 1.22 at the arming and 8.97 at the end), the
+    mini's tree clean after it and no stubs left; preflight's one WARN R23's `acp` candidate, as before.
+  - vitest: 11,482 passed, 0 failed, 18 skipped over its 27 rows, +22 over run 68's 11,460: text-ramp's 12 and
+    onboarding-wizard's catalog frame row (field-app 3,514 → 3,527, none skipped, where this Mac's light read 3,524 and
+    3 skipped), and smoke-catalog's 9 (electron-shell 2,431 → 2,440, 3 skipped).
+  - cargo: `test result: ok.` × 33, none failed; typecheck and test ran for 28 projects; biome checked 2,958 files, +3
+    over run 68's 2,955 (smoke-catalog.ts, its test and text-ramp's); MaxListeners 0; the iOS fixtures' 186 copies
+    identical.
+  - The bundle's assert held at 914.6 KB raw and 241.6 KB gz, +0.1 KB raw over run 68's 914.5 and 241.6.
+  - The console was unlocked through the run (HID idle 303 s at the arming and 593 s at the end).
+- **Row 32 on M69**, RED at run69b (02:56:43Z), the catalog's first live walk and the first `frozen` to name its door,
+  read again in `lanes/ts6/logs/mini/run69b/` (run69b-first-run.out and smoke:first-run.log, sha256 `c191b72f86683d01…`)
+  by `lanes/fg2/records/catalog-judged/read-row32.py` (it accepts `mode`, the key follow-up 3's reader refused, and
+  reads the catalog's facts):
+  - The row armed 02:54:04Z and ended 02:56:43Z, exit 1, on HEAD `86b788e2f`: day green 22s, night green 21s, no-webgpu
+    green 18s, catalog red 93s; the console unlocked, HID idle 643 s at the arming and 802 s at the end.
+  - day: held by the field's worker door, 0 over the window; the field's glass against the browser's: 1.18 inside
+    (543,540 px), 0.37 in the shadow's ring (183,448 px) and 1.04 on the logo (9,856 px), against §8's 2, 1 and 6.
+  - night: held by the field's worker door, 0 over the window; the field's glass against the browser's: 1.08 inside
+    (543,540 px), 0.37 in the shadow's ring (183,448 px) and 0.85 on the logo (9,856 px), against §8's 2, 1 and 6.
+  - no-webgpu: "nothing to compare: over the still the browser draws the whole glass".
+  - The live walks' rest, from their facts: the words' contrast judge 0 short on every walk (165, 180 and 165 words
+    judged on day, night and no-webgpu), the hand-over heard `words` then `clear` on each, and the desk opened by its
+    tear, tear and fade.
+  - catalog: 60 faces by day and 60 by night over its 13 frames, 122 stills kept; the glass's lowest fit 1; 960 words
+    judged against §8's 4.5:1, 4 short, the lowest 2.1:1 ("Face" on day 02 field (saving)); passed over: 20 in a control
+    that is off, 2 under its list's fade and 2 cut off at its list's edge; every face settled.
+  - catalog, the wizard's error line: it stood on 8 faces (day 02 field (error), day A4 setting-up-write-failed, day A5
+    setting-up-desk-failed, day A6 users (refused), night 02 field (error), night A4 setting-up-write-failed, night A5
+    setting-up-desk-failed and night A6 users (refused)), saying "That did not save. The profile service refused this
+    write." on 2, "Setup could not be recorded. The profile store is read-only — your field is ready either way." on 2,
+    "document open failed: the daemon refused doc.open (UNAVAILABLE)" on 2 and "Couldn't open Work's field — a user
+    switch is already in flight." on 2.
+  - catalog, DESIGN.md §2.4's Text ramp off its own capture, its 32 chips 0 under their floors (4.5:1 for t1–t3, 3:1 for
+    t4), each tier's span over the theme's four grounds: by day t1 9–10.7, t2 5.6–6.3, t3 4.6–5.1 and t4 3.1–3.3; by
+    night t1 9.7–12.1, t2 7.1–8.6, t3 4.9–5.5 and t4 3.2–3.4.
+  - catalog: 1 smoke window, which took the key 0 times; no product window made.
+  - catalog's problems: on day 02 field (saving) "Face" reads 2.1:1 ([204,204,213] → [140,141,147]) in rgba(28, 28, 30,
+    0.8), under 4.5:1 · on day 02 field (saving) "Or any emoji" reads 2.1:1 ([204,207,218] → [142,143,151]) in rgba(28,
+    28, 30, 0.8), under 4.5:1 · on night 02 field (saving) "Face" reads 2.6:1 ([42,43,59] → [105,106,118]) in rgba(245,
+    245, 247, 0.7), under 4.5:1 · on night 02 field (saving) "Or any emoji" reads 2.5:1 ([44,49,69] → [105,109,124]) in
+    rgba(245, 245, 247, 0.7), under 4.5:1.
+- **Landed:** main fast-forwarded `a5267b27b` → `86b788e2f` at 2026-11-01 02:55:56Z (main's reflog; the fixer, VF-PM
+  02:56Z): 24 files +1,333 −104 over main, the tip itself.
+
+**Found while building.**
+- §2.4 and tokens.css had disagreed since `250e383d6` (2026-08-05), the paragraph saying black/70/50 and neutral-500 and
+  the tokens 85/70/45/30 %; the amendment carries the erratum at its source (the errata rule).
+- At the catalog's production frame's 568 the glass stood at fit 0.7375, against FG-L2's ground of 976 × 736, so the
+  frame grew to 736 rather than the judge reading a glass under its size.
+- t4 carried ten words that are read, so the law (t4 marks only) held at landing only with the ten moved; the test names
+  t4's sixteen remaining uses, so a new one is red until it is named.
+- `measureChip` rounds to one decimal, so the ramp's rows read 2.8 and 5.1, never 2.86 and 5.12.
+- With the escapes moved into `PAGE_WORDS`, FIRST_RUN_PAGE's `String.raw` was useless (biome's noUselessStringRaw), so
+  it is a plain template.
+- main's backstop (`installWebContentsBackstop`) logs `desktop.security.unregistered_webcontents` once for the walk's
+  window, which main never registered; its deny-by-default policy holds and the window has no IPC grant (Owed).
+
+**Owed.**
+- The catalog judged's follow-up 1, first: row 32 was red at run69b (Checks), the follow-up's class by VF-PM's ruling
+  (03:00Z), in VF-PM's words: the face deck's off group says it is off only by data-disabled; the fix is in the markup
+  (role=group + aria-disabled=true on .vf-face-picker-choices while disabled, honest to assistive tech), never the bar
+  or the judge; and §2.4's off-control floor (3:1) is measured on the dimmed deck in the same follow-up — DESIGN.md
+  first, then the dim — so the off deck's words hold 3:1 rather than passing on faith.
+- Item 127 CLOSED on the ramp (VF-PM 02:51Z); its remainder is item 136: the wizard's own Tailwind literals outside the
+  tokens, the name field's placeholder (`views/field.tsx`, black and white at 30%, about 1.9:1 by day) and
+  `primaryCls`'s and `quietCls`'s fills (`wizard-ui.tsx`), projected through tokens.css, DESIGN.md first; a placeholder
+  needs a witness of its own, since no walk reads one (a `::placeholder` is no text node).
+- The iOS kit's ChromePalette ramp: its `inkFaint` carries words that are read, an IOS slice's, on §2.4's law.
+- The walk window's one `desktop.security.unregistered_webcontents` log: whether main registers a smoke window or its
+  backstop names one as a smoke's, owed and not built.
+- James's look at the catalog's stills (`first-run-shots/catalog/`, each named by its face) and at the slice's two
+  seams, VF-PM's rulings at a5's leans (02:17Z: the fourth walk, the frame at 736), James's to overturn; his product
+  question stands, named and not built: whether the browser's glass wears the field's living mark anywhere but the held
+  frame (a failed pass's glass, its first look), where its logo is the brand's still.
+- Not claimed: the walk's pixels are row 32's alone; the vitest rows hold how it names, cuts and judges, never a
+  capture. The Text ramp is measured on chrome grounds (the glass re-projects t2–t4 to its own text, judged by the
+  walks' words). `mode` is printed, never judged, and the frozen frame under reduced motion stays unclaimed.
