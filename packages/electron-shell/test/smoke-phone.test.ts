@@ -82,6 +82,7 @@ import {
   stoppedBeforeQuit,
   type UseSeen,
   uuidHits,
+  wakesIn,
 } from "../src/testing/smoke-phone";
 
 const TP = "com.apple.CoreSimulator.SimDeviceType.iPhone-16e";
@@ -880,6 +881,18 @@ describe("PT-S3 — the rows' judges", () => {
       /motion did not wake it/u,
     );
     expect(judgeIdle({ ...idle, steps: 2 }).join(" ")).toMatch(/stepped 2 times/u);
+  });
+
+  it("SIM-IDLE prints the WINDOW's wakes by reason — r1 − r0, never the running totals (T6)", () => {
+    // run 1101's out:89 printed `rest().wakes` as it stood at r1: every wake since the desk was made
+    expect(
+      wakesIn({ input: 7, world: 120, doc: 3 }, { input: 7, world: 124, doc: 3, "desk:live": 2 }),
+    ).toEqual({ world: 4, "desk:live": 2 });
+    expect(wakesIn({ input: 7 }, { input: 7 })).toEqual({});
+    expect(wakesIn({}, { presence: 1 })).toEqual({ presence: 1 });
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-IDLE")?.body ?? "";
+    expect(body).toContain("wakes: wakesIn(r0.wakes, r1.wakes),");
+    expect(body).not.toMatch(/wakes: r1\.wakes/u);
   });
 
   it("SIM-RELOAD: a session MADE is red even when the face looks right; SIM-GONE: each count one fewer, the device still booted", () => {

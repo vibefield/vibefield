@@ -1008,6 +1008,20 @@ export function judgeIdle(s: IdleSeen): string[] {
   return out;
 }
 
+/** SIM-IDLE's window by reason (T6): the wakes that grew between its two ends (`rest().wakes` at r0 and r1 — RUNNING
+ * totals since the desk was made, which run 1101 printed as the window's), a reason new at r1 counted from 0. */
+export function wakesIn(
+  r0: Readonly<Record<string, number>>,
+  r1: Readonly<Record<string, number>>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [reason, n] of Object.entries(r1)) {
+    const grew = n - (r0[reason] ?? 0);
+    if (grew > 0) out[reason] = grew;
+  }
+  return out;
+}
+
 /** SIM-RELOAD: the same main runtime re-bound — no inner, no session, no device verb. */
 export interface ReloadSeen {
   readonly before: { readonly runtimes: number; readonly census: PhoneCensus | null };
@@ -2626,7 +2640,8 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         problems: judgeIdle(seen),
         seen: {
           ...seen,
-          wakes: r1.wakes,
+          // the window's wakes by reason (§4), never rest()'s running totals (T6)
+          wakes: wakesIn(r0.wakes, r1.wakes),
           wire: { near: near?.targetFps ?? null, far: far?.targetFps ?? null },
         },
       };
