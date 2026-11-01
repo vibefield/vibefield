@@ -23,6 +23,7 @@ syncBuiltinESMExports();
 
 const {
   armGate,
+  BOOT_READY_MS,
   canonicalPage,
   catalogIds,
   commandEnv,
@@ -145,6 +146,7 @@ function simctlList({ devices = [], runtimes = [runtime(RT26, "26.5", CATALOG)] 
       deviceTypeIdentifier: d.type,
       state: d.state ?? "Shutdown",
       name: d.name,
+      ...(d.lastBootedAt === undefined ? {} : { lastBootedAt: d.lastBootedAt }),
     });
   }
   return JSON.stringify({ devices: byRuntime, runtimes });
@@ -1512,7 +1514,11 @@ test("doorAct screenshot: a NEW .png inside the shot dir — outside, existing, 
     (await doorAct({ verb: "screenshot", device: 1, file: "live-2.png" }, run, deps)).body.state,
     "written",
   );
-  assert.deepEqual(calls[0].args, ["simctl", "io", OWN[0], "screenshot", `${SHOTS}/live-2.png`]);
+  // the device's state read first (T1's readiness gate), then the one screenshot
+  assert.deepEqual(
+    calls.filter((c) => c.args[1] !== "list").map((c) => c.args),
+    [["simctl", "io", OWN[0], "screenshot", `${SHOTS}/live-2.png`]],
+  );
 });
 
 test("doorAct show-app: the fence first; open -a the vetted Simulator.app on an own UDID; refused beside a foreign app", async () => {
@@ -1624,6 +1630,251 @@ test("doorAct quit-app: after the run quit its own app, a Simulator.app another 
   host.state.pgrep = "4244";
   host.state.lstart = lstartOf(ARMED + 125_000);
   assert.equal((await doorAct({ verb: "quit-app" }, again, host.deps)).body.state, "quit");
+});
+
+// ─── T1: Booted is not ready ──────────────────────────────────────────────────────────────────────────────────────────
+
+const BOOT_A = "2026-11-01T03:00:00Z";
+
+/** A host whose own device 1 lists `state` (its boot `lastBootedAt`) and the others Shutdown; `simctl bootstatus` is
+ * answered only when the unit says (`host.asks[i](result)`), and the clock is the unit's (`host.at`). */
+function bootingHost(state = "Booted", lastBootedAt = BOOT_A) {
+  const listOf = (s, at) =>
+    simctlList({
+      devices: [
+        ...OWN.map((udid, i) => ({
+          udid,
+          name: `pts3-${RUN}-${i + 1}`,
+          type: CATALOG[i + 2],
+          state: i === 0 ? s : "Shutdown",
+          ...(i === 0 && at !== null ? { lastBootedAt: at } : {}),
+        })),
+        { udid: FOREIGN, name: "iPhone 11", type: CATALOG[0], state: "Shutdown" },
+      ],
+    });
+  const host = fakeHost({ list: listOf(state, lastBootedAt) });
+  host.at = ARMED + 120_000;
+  host.deps.now = () => host.at;
+  host.asks = [];
+  const exec = host.deps.exec;
+  host.deps.exec = async (file, args, o = {}) => {
+    if (file === "/usr/bin/xcrun" && args[1] === "bootstatus") {
+      host.calls.push({ file, args, env: o.env, timeoutMs: o.timeoutMs });
+      return new Promise((answer) => host.asks.push(answer));
+    }
+    return exec(file, args, o);
+  };
+  host.list = (s, at = BOOT_A) => {
+    host.state.list = listOf(s, at);
+  };
+  host.asked = () => host.calls.filter((c) => c.args[1] === "bootstatus");
+  host.ran = (verb) => host.calls.filter((c) => c.file === "/usr/bin/xcrun" && c.args[1] === verb);
+  return host;
+}
+
+const settle = () => new Promise((done) => setImmediate(done));
+const MOTION = "http://127.0.0.1:51234/motion?n=ff8800";
+
+test("T1: Booted is not ready — the door answers Booting until `simctl bootstatus` returns, asked once per device per boot", async () => {
+  assert.equal(BOOT_READY_MS, 180_000);
+  const run = ownRun();
+  const host = bootingHost();
+  const state = async () => (await doorAct({ verb: "state", device: 1 }, run, host.deps)).body;
+  assert.deepEqual(await state(), { n: 1, state: "Booting" });
+  assert.deepEqual(await state(), { n: 1, state: "Booting" });
+  assert.equal(host.asked().length, 1, "asked once per boot");
+  // never `-b`: the stage never boots by this path; the vetted dir pinned; bounded by BOOT_READY_MS
+  assert.deepEqual(host.asked()[0].args, ["simctl", "bootstatus", OWN[0]]);
+  assert.equal(host.asked()[0].env.DEVELOPER_DIR, XCODE_DEVELOPER_DIR);
+  assert.equal(host.asked()[0].timeoutMs, BOOT_READY_MS);
+  // a device verb before ready runs nothing on the device: failed, not ready yet
+  const early = await doorAct({ verb: "openurl", device: 1, url: MOTION }, run, host.deps);
+  assert.equal(early.body.state, "failed");
+  assert.match(early.body.why, /not ready yet/u);
+  assert.deepEqual(host.ran("openurl"), []);
+  // bootstatus returns: Booted, the device's verbs run, and this boot is never asked again
+  host.asks[0](ok("Monitoring boot status for <x>.\nDevice already booted, nothing to do.\n"));
+  await settle();
+  assert.deepEqual(await state(), { n: 1, state: "Booted" });
+  assert.equal(
+    (await doorAct({ verb: "openurl", device: 1, url: MOTION }, run, host.deps)).body.state,
+    "opened",
+  );
+  assert.equal(
+    (await doorAct({ verb: "screenshot", device: 1, file: "live-1.png" }, run, host.deps)).body
+      .state,
+    "written",
+  );
+  assert.equal(host.asked().length, 1);
+  // the product shuts it down and boots it again (row OFF-BOOT): seen not Booted drops the cache, the new boot is asked
+  host.list("Shutdown");
+  assert.deepEqual(await state(), { n: 1, state: "Shutdown" });
+  host.list("Booted", "2026-11-01T03:05:00Z");
+  assert.deepEqual(await state(), { n: 1, state: "Booting" });
+  assert.equal(host.asked().length, 2);
+  host.asks[1](ok());
+  await settle();
+  assert.deepEqual(await state(), { n: 1, state: "Booted" });
+  // a boot the stage never saw down (its lastBootedAt new) is a new boot too
+  host.list("Booted", "2026-11-01T03:09:00Z");
+  assert.deepEqual(await state(), { n: 1, state: "Booting" });
+  assert.equal(host.asked().length, 3);
+  // simctl's own `Booting` is asked as well: bootstatus waits out the boot
+  const mid = ownRun();
+  const booting = bootingHost("Booting");
+  assert.deepEqual((await doorAct({ verb: "state", device: 1 }, mid, booting.deps)).body, {
+    n: 1,
+    state: "Booting",
+  });
+  assert.equal(booting.asked().length, 1);
+});
+
+test("T1: boot and a device verb WAIT for readiness inside the smoke's door timeout — ready meanwhile, they answer as ready", async () => {
+  // the stage's `boot` (ensure() takes its answer ONCE): simctl boot, then readiness within the wait
+  const run = ownRun();
+  const host = bootingHost("Shutdown");
+  const exec = host.deps.exec;
+  host.deps.exec = async (file, args, o) => {
+    const r = await exec(file, args, o);
+    if (args[1] === "boot") host.list("Booted");
+    return r;
+  };
+  const waits = [];
+  host.deps.sleep = async (ms) => {
+    waits.push(ms);
+    host.asks.at(-1)?.(ok());
+    await settle();
+  };
+  assert.deepEqual((await doorAct({ verb: "boot", device: 1 }, run, host.deps)).body, {
+    n: 1,
+    state: "Booted",
+  });
+  assert.deepEqual(
+    host.calls.map((c) => c.args?.[1]).filter((v) => v === "boot" || v === "bootstatus"),
+    ["boot", "bootstatus"],
+  );
+  // boot's wait fits the smoke's 150 s door timeout for `boot`
+  assert.ok(waits.length === 1 && waits[0] > 0 && waits[0] <= 140_000, String(waits));
+  // never ready within boot's wait: Booting, never Booted
+  const slow = ownRun();
+  const late = bootingHost("Shutdown");
+  const lateExec = late.deps.exec;
+  late.deps.exec = async (file, args, o) => {
+    const r = await lateExec(file, args, o);
+    if (args[1] === "boot") late.list("Booted");
+    return r;
+  };
+  assert.deepEqual((await doorAct({ verb: "boot", device: 1 }, slow, late.deps)).body, {
+    n: 1,
+    state: "Booting",
+  });
+  // a device verb asked while iOS boots: waits (inside the 60 s door timeout), then runs once ready
+  const verb = ownRun();
+  const host2 = bootingHost();
+  assert.equal(
+    (await doorAct({ verb: "state", device: 1 }, verb, host2.deps)).body.state,
+    "Booting",
+  );
+  const verbWaits = [];
+  host2.deps.sleep = async (ms) => {
+    verbWaits.push(ms);
+    host2.asks[0](ok());
+    await settle();
+  };
+  assert.equal(
+    (await doorAct({ verb: "openurl", device: 1, url: MOTION }, verb, host2.deps)).body.state,
+    "opened",
+  );
+  assert.ok(verbWaits.length === 1 && verbWaits[0] <= 45_000, String(verbWaits));
+  assert.equal(host2.asked().length, 1);
+});
+
+test("T1: past BOOT_READY_MS the device answers failed — `not ready after <ms>` — and its verbs run nothing", async () => {
+  // bootstatus never answers within the bound
+  const run = ownRun();
+  const host = bootingHost();
+  assert.equal((await doorAct({ verb: "state", device: 1 }, run, host.deps)).body.state, "Booting");
+  host.at += BOOT_READY_MS;
+  for (const body of [
+    { verb: "state", device: 1 },
+    { verb: "openurl", device: 1, url: MOTION },
+    { verb: "screenshot", device: 1, file: "live-1.png" },
+  ]) {
+    const r = await doorAct(body, run, host.deps);
+    assert.equal(r.status, 502, body.verb);
+    assert.equal(r.body.state, "failed", body.verb);
+    assert.match(r.body.why, /not ready after 180000 ms/u, body.verb);
+  }
+  assert.deepEqual(host.ran("openurl"), []);
+  assert.deepEqual(host.ran("io"), []);
+  assert.equal(host.asked().length, 1);
+  // bootstatus ended at its timeout (killed): failed, said ONCE, the reason redacted
+  const killed = ownRun();
+  const host2 = bootingHost();
+  await doorAct({ verb: "state", device: 1 }, killed, host2.deps);
+  host2.at += BOOT_READY_MS;
+  host2.asks[0]({
+    code: null,
+    signal: "SIGTERM",
+    stdout: "",
+    stderr: `Monitoring boot status for ${OWN[0]}.\nWaiting on Data Migration\n`,
+  });
+  await settle();
+  for (let i = 0; i < 2; i += 1) {
+    const r = await doorAct({ verb: "state", device: 1 }, killed, host2.deps);
+    assert.equal(r.body.state, "failed");
+    assert.match(r.body.why, /^not ready after 180000 ms \(bootstatus exit null: .*<pts3-dev-1>/u);
+    assert.ok(!holdsUdid(JSON.stringify(r.body)));
+  }
+  const said = host2.said.filter((line) => /not ready/u.test(line));
+  assert.equal(said.length, 1, said.join("\n"));
+  assert.match(said[0], /<pts3-dev-1> not ready after 180000 ms/u);
+  assert.match(said[0], /Waiting on Data Migration/u);
+  assert.ok(!holdsUdid(said[0]));
+});
+
+test("H3: a failed verb carries simctl's stderr — its first 300 chars, redacted — in the said line and the response", async () => {
+  const run = ownRun();
+  const host = fakeHost();
+  const stranger = "0123ABCD-0000-4000-8000-00000000BEEF";
+  const stderrs = {
+    openurl: `An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):\nUnable to lookup in current state: Shutdown\n${OWN[0]} beside ${FOREIGN} and ${stranger}\n`,
+    io: `${"x".repeat(290)} ${OWN[1]} ${"y".repeat(500)}`,
+  };
+  const exec = host.deps.exec;
+  host.deps.exec = async (file, args, o) => {
+    if (file === "/usr/bin/xcrun" && stderrs[args[1]] !== undefined) {
+      host.calls.push({ file, args });
+      return {
+        code: args[1] === "io" ? 1 : 60,
+        signal: null,
+        stdout: "",
+        stderr: stderrs[args[1]],
+      };
+    }
+    return exec(file, args, o);
+  };
+  const r = await doorAct({ verb: "openurl", device: 1, url: MOTION }, run, host.deps);
+  assert.equal(r.status, 502);
+  assert.equal(r.body.state, "failed");
+  assert.match(
+    r.body.why,
+    /^openurl exit 60: An error was encountered .* Unable to lookup in current state: Shutdown <pts3-dev-1> beside <host-dev-1> and <uuid>$/u,
+  );
+  const line = host.said.find((l) => l.includes("openurl of <pts3-dev-1> failed (exit 60)"));
+  assert.ok(line !== undefined, host.said.join("\n"));
+  assert.match(line, /: An error was encountered .*Unable to lookup in current state: Shutdown/u);
+  for (const text of [line, r.body.why]) {
+    assert.ok(!holdsUdid(text), text);
+    assert.doesNotMatch(text, /[0-9a-f]{8}-[0-9a-f]{4}-/iu, text);
+    assert.doesNotMatch(text, /\n/u, "one line");
+  }
+  // a long stderr: its first 300 chars at most — redacted FIRST, so no UDID is cut into a fragment that slips through
+  const shot = await doorAct({ verb: "screenshot", device: 1, file: "live-9.png" }, run, host.deps);
+  const said = shot.body.why.replace(/^screenshot exit 1: /u, "");
+  assert.ok(said.length <= 300, String(said.length));
+  assert.match(said, /^x{290} <pts3-de/u);
+  assert.doesNotMatch(shot.body.why, /6B2D/u);
 });
 
 test("the door's responses never hold a UDID — own or foreign — whatever is asked", async () => {
@@ -2369,6 +2620,35 @@ test("restoreHost: each own device's name read again right before its step — r
   );
   // no flag, no delete — whatever the list says
   assert.ok(!kept.acts().some((act) => act.startsWith("delete")));
+});
+
+test("H3: teardown's failed shutdown (run A's exit 149) carries simctl's stderr, redacted, in HOST_RESTORED's findings", async () => {
+  const run = ownRun();
+  run.othersAtArm.set(FOREIGN, "Shutdown");
+  const booted = ownList(["Booted", "Shutdown", "Shutdown"]);
+  const host = scriptedLists([booted], {
+    extra: (file, args) =>
+      file === "/usr/bin/xcrun" && args[1] === "shutdown"
+        ? {
+            code: 149,
+            signal: null,
+            stdout: "",
+            stderr: `An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):\nUnable to shutdown device in current state: Booting\n${OWN[0]}\n`,
+          }
+        : undefined,
+  });
+  await restoreHost(run, host.deps, {
+    deleteDevices: false,
+    defaultsBefore: "",
+    crashDir: join(FIXTURES, "no-crash-reports-here"),
+    crashBefore: [],
+  });
+  const said = host.said.find((line) => line.startsWith("PHONE_HOST_RESTORED "));
+  assert.match(
+    said,
+    /shutdown of pts3-l2-t1-1 failed \(exit 149\): An error was encountered .* Unable to shutdown device in current state: Booting <pts3-dev-1>/u,
+  );
+  assert.ok(!holdsUdid(said), said);
 });
 
 test("sweep: exactly the run's own names, shut down; deleted only under the flag, each name read again right before (S9)", async () => {

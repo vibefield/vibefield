@@ -43,7 +43,10 @@
 //   POST /act {verb, device: n, url?, file?}     verb: boot, shutdown, state, openurl (`url` on this door, /motion or
 //                                                /still), screenshot (`file`: a new `.png` in the shot dir), show-app,
 //                                                quit-app (no device) → `{n, state}`; 409 `{n, state: "stop", why}`
-//                                                once the run is stopped
+//                                                once the run is stopped. T1: a device simctl lists Booted reads
+//                                                `Booting` until `simctl bootstatus` proves iOS ready (BOOT_READY_MS);
+//                                                boot, openurl and screenshot wait for it, bounded; a `failed` carries
+//                                                `why` (H3: simctl's stderr, redacted, 300 chars)
 //   POST /row {name, phase: begin|press|end}     the HID record → `{go}` (at an end, `{go, void}` for a VOID row) or
 //                                                `{stop, why}`; the smoke ends its rows on a stop
 //   POST /row {name, phase: input}               said by the smoke right before its FIRST `sendInputEvent` of the run
@@ -610,6 +613,8 @@ export function parseList(raw) {
           deviceType: String(d.deviceTypeIdentifier ?? ""),
           runtime,
           available: d.isAvailable === true,
+          // the device's boot (T1): a new one is a new readiness to prove
+          lastBootedAt: typeof d.lastBootedAt === "string" ? d.lastBootedAt : null,
         });
   }
   return { runtimes, devices };
@@ -1258,13 +1263,86 @@ export async function quitApp(run, deps, n = null) {
   return json(502, { n, state: "failed", why: "Simulator.app outlived SIGTERM by 10 s" });
 }
 
-/** An own device's state, as a word from simctl's own set (never its JSON). */
-async function stateOf(run, deps, own) {
+/** An own device now: its state, as a word from simctl's own set (never its JSON), and its boot (`lastBootedAt`). */
+async function deviceNow(run, deps, own) {
   const list = await readList(run, deps);
-  if (list === null) return "unknown";
+  if (list === null) return { state: "unknown", boot: null };
   const device = list.devices.find((d) => d.udid.toUpperCase() === own.udid.toUpperCase());
-  if (device === undefined) return "absent";
-  return DEVICE_STATES.has(device.state) ? device.state : "unknown";
+  if (device === undefined) return { state: "absent", boot: null };
+  return {
+    state: DEVICE_STATES.has(device.state) ? device.state : "unknown",
+    boot: device.lastBootedAt ?? null,
+  };
+}
+
+/** H3: what a failed simctl (or open) said — its stderr (and a spawn error), REDACTED FIRST (no UDID is cut into a
+ * fragment the redactor cannot see), one line, its first 300 chars. */
+export const STDERR_CHARS = 300;
+export function stderrOf(run, r) {
+  return run.redactor
+    .scrub(`${r?.stderr ?? ""} ${r?.error ?? ""}`)
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, STDERR_CHARS);
+}
+
+/** T1: "Booted" is simctl's list word, not iOS ready — a fresh device answers `openurl` and `io screenshot` with exit 60
+ * and 1 for minutes after it (out:46-86). Readiness is `simctl bootstatus <udid>` (never `-b`: the stage never boots by
+ * this path), bounded by BOOT_READY_MS and asked ONCE per device per boot: cached against the UDID and its
+ * `lastBootedAt`, dropped when the device is seen not Booted. It holds whoever booted it (the stage, or the product's
+ * Boot in SIM-OFF-BOOT). */
+export const BOOT_READY_MS = 180_000;
+/** How long one door request waits for readiness: `boot` inside the smoke's 150 s door timeout for it (simctl boot's
+ * own time counted), a device verb inside its 60 s. */
+export const BOOT_VERB_WAIT_MS = 140_000;
+export const READY_VERB_WAIT_MS = 45_000;
+
+/** An own device's readiness, now (`waitMs` 0) or waited for up to `waitMs`: `{state}` — `Booted` (iOS ready), `Booting`
+ * (not yet), simctl's word for a device neither Booted nor Booting (nothing to prove), or `failed` with `why` (past
+ * BOOT_READY_MS, or bootstatus said no). */
+async function readiness(run, deps, own, now, waitMs) {
+  const key = own.udid.toUpperCase();
+  if (now.state !== "Booted" && now.state !== "Booting") {
+    run.ready.delete(key);
+    return { state: now.state };
+  }
+  let ask = run.ready.get(key);
+  if (ask === undefined || ask.boot !== now.boot) {
+    const n = [...run.own.entries()].find(([, d]) => d === own)?.[0];
+    const asked = { boot: now.boot, at: deps.now(), done: null, said: false, n };
+    asked.promise = simctl(run, deps, ["bootstatus", own.udid], BOOT_READY_MS).then(
+      (r) => {
+        asked.done = { ok: r.code === 0, r, ms: deps.now() - asked.at };
+      },
+      (error) => {
+        asked.done = {
+          ok: false,
+          r: { code: null, error: String(error) },
+          ms: deps.now() - asked.at,
+        };
+      },
+    );
+    run.ready.set(key, asked);
+    ask = asked;
+  }
+  if (ask.done === null && waitMs > 0) {
+    const left = Math.min(waitMs, BOOT_READY_MS - (deps.now() - ask.at));
+    if (left > 0) await Promise.race([ask.promise, deps.sleep(left)]);
+  }
+  if (ask.done?.ok === true) return { state: "Booted" };
+  const ms = ask.done?.ms ?? deps.now() - ask.at;
+  if (ask.done === null && ms < BOOT_READY_MS) return { state: "Booting", ms };
+  const detail = ask.done === null ? "" : stderrOf(run, ask.done.r);
+  const exit =
+    ask.done === null
+      ? ""
+      : ` (bootstatus exit ${ask.done.r.code}${detail === "" ? "" : `: ${detail}`})`;
+  const why = `not ready after ${ms} ms${exit}`;
+  if (!ask.said) {
+    ask.said = true;
+    deps.say(`stage-simulator-fixture: <pts3-dev-${ask.n}> ${why}`);
+  }
+  return { state: "failed", why };
 }
 
 /** POST /act — P6's verbs (with `state` and `quit-app`, amended 03:00Z) on the run's OWN devices; anything else is
@@ -1283,17 +1361,53 @@ export async function doorAct(body, run, deps) {
       state: "refused",
       why: "not one of this run's devices",
     });
+  // H3: a failure says what simctl (or open) said — redacted, one line, 300 chars — in the line and the response
   const failed = (what, r) => {
-    deps.say(`stage-simulator-fixture: ${what} of <pts3-dev-${n}> failed (exit ${r.code})`);
-    return json(502, { n, state: "failed" });
+    const said = stderrOf(run, r);
+    deps.say(
+      `stage-simulator-fixture: ${what} of <pts3-dev-${n}> failed (exit ${r.code})${said === "" ? "" : `: ${said}`}`,
+    );
+    return json(502, {
+      n,
+      state: "failed",
+      why: `${what} exit ${r.code}${said === "" ? "" : `: ${said}`}`,
+    });
   };
-  if (verb === "state") return json(200, { n, state: await stateOf(run, deps, own) });
+  // T1: a device iOS has not finished booting is Booting at the door, and its verbs wait (bounded) or run nothing
+  const notReady = (gate) =>
+    json(502, {
+      n,
+      state: "failed",
+      why:
+        gate.state === "failed"
+          ? gate.why
+          : `not ready yet (${gate.ms} ms of BOOT_READY_MS ${BOOT_READY_MS}): its verb not run`,
+    });
+  const readyFor = async (waitMs) =>
+    readiness(run, deps, own, await deviceNow(run, deps, own), waitMs);
+  if (verb === "state") {
+    const gate = await readyFor(0);
+    return gate.state === "failed" ? notReady(gate) : json(200, { n, state: gate.state });
+  }
   if (verb === "boot" || verb === "shutdown") {
+    const asked = deps.now();
+    if (verb === "shutdown") run.ready.delete(own.udid.toUpperCase());
     const r = await simctl(run, deps, [verb, own.udid], verb === "boot" ? 120_000 : 60_000);
-    const state = await stateOf(run, deps, own);
+    const now = await deviceNow(run, deps, own);
     // simctl refuses a boot of a booted device (and a shutdown of a shut one): the state is the answer
-    const reached = verb === "boot" ? state === "Booted" : state === "Shutdown";
-    return r.code === 0 || reached ? json(200, { n, state }) : failed(verb, r);
+    if (verb === "boot" && (now.state === "Booted" || now.state === "Booting")) {
+      // boot's answer is taken ONCE (the smoke's ensure()): readiness waited for inside its door timeout
+      const gate = await readiness(
+        run,
+        deps,
+        own,
+        now,
+        Math.max(0, BOOT_VERB_WAIT_MS - (deps.now() - asked)),
+      );
+      return gate.state === "failed" ? notReady(gate) : json(200, { n, state: gate.state });
+    }
+    const reached = verb === "boot" ? now.state === "Booted" : now.state === "Shutdown";
+    return r.code === 0 || reached ? json(200, { n, state: now.state }) : failed(verb, r);
   }
   if (verb === "openurl") {
     const url = canonicalPage(body.url, run);
@@ -1303,6 +1417,8 @@ export async function doorAct(body, run, deps) {
         state: "refused",
         why: "openurl reaches only this door's /motion or /still",
       });
+    const gate = await readyFor(READY_VERB_WAIT_MS);
+    if (gate.state === "Booting" || gate.state === "failed") return notReady(gate);
     const r = await simctl(run, deps, ["openurl", own.udid, url], 30_000);
     return r.code === 0 ? json(200, { n, state: "opened" }) : failed("openurl", r);
   }
@@ -1314,6 +1430,8 @@ export async function doorAct(body, run, deps) {
         state: "refused",
         why: "a screenshot is a new .png in the shot dir",
       });
+    const gate = await readyFor(READY_VERB_WAIT_MS);
+    if (gate.state === "Booting" || gate.state === "failed") return notReady(gate);
     const r = await simctl(run, deps, ["io", own.udid, "screenshot", file], 30_000);
     return r.code === 0 ? json(200, { n, state: "written" }) : failed("screenshot", r);
   }
@@ -2043,6 +2161,8 @@ export function newRun(mode, opts, redactor) {
     refused: {},
     loaded: new Map(),
     inputs: new Map(),
+    /** T1: each own device's readiness asked, by UDID — its boot, and bootstatus's answer once it returns */
+    ready: new Map(),
     perfLock: null,
     perfLockPath: null,
   };
@@ -2219,7 +2339,13 @@ export async function restoreHost(run, deps, ctx) {
       continue;
     }
     const r = await simctl(run, deps, [step.do, device.udid], 60_000);
-    if (r.code !== 0) findings.push(`${step.do} of ${device.name} failed (exit ${r.code})`);
+    if (r.code !== 0) {
+      // H3: what simctl said, redacted (run A's "shutdown … failed (exit 149)" said nothing of why)
+      const said = stderrOf(run, r);
+      findings.push(
+        `${step.do} of ${device.name} failed (exit ${r.code})${said === "" ? "" : `: ${said}`}`,
+      );
+    }
   }
   list = run.devDir === null ? null : await readList(run, deps);
   const left = list === null ? -1 : list.devices.filter((d) => isOwnName(d.name, run.runId)).length;
