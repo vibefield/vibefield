@@ -182,9 +182,12 @@ describe("11m's card play into Chat's composer, as the hand's lab door answers i
 describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
   it("prints the rung's facts on ONE line, its cause when it failed and null when it passed", () => {
     const evidence = newChatSendEvidence("/tmp/typed-agent/lines.jsonl", "sp1d-abc");
+    expect(evidence.typing).toEqual({ caret: null, heard: null });
     evidence.spark = "spark-1";
     evidence.session = "s-pane";
     evidence.note = "Pasted into Polaris's pane — Return sends it";
+    evidence.typing.caret = { focused: "BODY", pressed: "editor" };
+    evidence.typing.heard = { "keydown@draft": 8, "keypress@draft": 8, "input@draft": 8 };
     evidence.inputAllowed.Return = true;
     evidence.play = {
       at: { x: 760, y: 640 },
@@ -204,6 +207,10 @@ describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
       lines: "/tmp/typed-agent/lines.jsonl",
       nonce: "sp1d-abc",
       note: "Pasted into Polaris's pane — Return sends it",
+      typing: {
+        caret: { focused: "BODY", pressed: "editor" },
+        heard: { "keydown@draft": 8, "keypress@draft": 8, "input@draft": 8 },
+      },
       inputAllowed: { Return: true },
       play: evidence.play,
       waitedMs: { ready: 640, inputBeforeReturn: 12 },

@@ -10514,8 +10514,9 @@ export async function runSmokeGodview(opts: {
     //      This Mac, where the godview smoke's typed-agent stub stands signed in for the
     //      typed agent and records each line a session of it is given (`StubRecords`) —
     //      never a vendor's agent, since the smoke's HOME holds no sign-in (EL7). The
-    //      thread mounts its live pane and the spark reads Ready; the composer takes a
-    //      typed line, @ opens its list with the hot row the one nearest the composer,
+    //      thread mounts its live pane and the spark reads Ready; the composer, pressed,
+    //      takes a line typed a key at a time (down, its character, up: a field's road,
+    //      run85b), @ opens its list with the hot row the one nearest the composer,
     //      and Esc folds it with the text kept; Send says "Pasted into …'s pane — Return
     //      sends it", and no line reaches the stub until the pane's own Return, which the
     //      harness presses. A card from the hand let go on the composer becomes a chip in
@@ -10549,6 +10550,8 @@ export async function runSmokeGodview(opts: {
         chips: number;
         inPane: boolean;
         inInput: boolean;
+        /** where the document's caret is: "editor" inside the composer's draft, else the node it is in (null: none) */
+        caret: string | null;
         cards: number;
       };
       /** Chat's thread, its composer and the hand, as the page shows them now. */
@@ -10562,6 +10565,8 @@ export async function runSmokeGodview(opts: {
         const rows = at === null ? [] : [...at.querySelectorAll(".vf-chat-at-row")];
         const send = document.querySelector(".vf-chat-send");
         const active = document.activeElement;
+        const selection = document.getSelection();
+        const anchor = selection === null || selection.rangeCount === 0 ? null : selection.anchorNode;
         const chosen = document.querySelector('.vf-chat-row[aria-pressed="true"]');
         return {
           view: ${VIEW_NOW},
@@ -10585,11 +10590,44 @@ export async function runSmokeGodview(opts: {
             active !== null && pane !== null && pane.contains(active) &&
             active.classList.contains("terminal-input"),
           inInput: active !== null && input !== null && (active === input || input.contains(active)),
+          caret:
+            anchor === null
+              ? null
+              : input !== null && input.contains(anchor)
+                ? "editor"
+                : anchor.nodeName,
           cards: document.querySelectorAll(".vf-cards-slot").length,
         };
       })()`;
       const threadFacts = async (): Promise<ThreadFacts> =>
         (await win.webContents.executeJavaScript(THREAD_FACTS)) as ThreadFacts;
+      /** The page's ear for the typed line: each keydown, keypress, beforeinput and input, counted by its type and its
+       * place ("draft" inside the composer's draft, else the node), with "!" where the page took its default.
+       * `done()` takes the ear away and answers the counts. */
+      const CHAT_EAR = `(() => {
+        const heard = {};
+        const types = ["keydown", "keypress", "beforeinput", "input"];
+        const ear = (event) => {
+          const target = event.target;
+          const where =
+            target instanceof Element && target.closest(".vf-chat-input") !== null
+              ? "draft"
+              : (target?.nodeName ?? "none");
+          setTimeout(() => {
+            const key = event.type + "@" + where + (event.defaultPrevented ? "!" : "");
+            heard[key] = (heard[key] ?? 0) + 1;
+          }, 0);
+        };
+        for (const type of types) document.addEventListener(type, ear, true);
+        globalThis.__vfChatEar = {
+          done: () => {
+            for (const type of types) document.removeEventListener(type, ear, true);
+            delete globalThis.__vfChatEar;
+            return heard;
+          },
+        };
+        return "ok";
+      })()`;
       /** The thread's facts once `accept` holds them, or why not, with what was seen last. */
       const untilThread = async (
         label: string,
@@ -10651,15 +10689,38 @@ export async function runSmokeGodview(opts: {
         chatThread["the hatch"] =
           `⌘N's sheet, Create ${name}: Chat chose ${name}, its pane live on ${session}, and ` +
           `${name} Ready after ${evidence.waitedMs.ready}ms`;
-        // 3. The composer: a typed line, @'s list with the hot row nearest, Esc keeping the text
+        // 3. The composer: a typed line, @'s list with the hot row nearest, Esc keeping the text. The draft is an
+        // editor, typed into as a person types: a press puts the caret where it lands, and each key goes down, its
+        // character, up (`pressZoomKey`'s rule for a field). Run85b's red was the road before it: a script's focus,
+        // then bare characters, left the focused draft empty. Where that focus leaves the caret is still read, and
+        // what the page hears of the keys, so the evidence says which half it was.
         await win.webContents.executeJavaScript(
           `document.querySelector(".vf-chat-input")?.focus(); "ok"`,
         );
-        await untilThread("the composer holding the keyboard", (facts) => facts.inInput, 5_000);
-        for (const character of `${nonce} @`) {
-          win.webContents.sendInputEvent({ type: "char", keyCode: character });
-          await sleep(15);
-        }
+        const focused = await threadFacts();
+        await pressAt(".vf-chat-input");
+        const pressed = await untilThread(
+          "the composer holding the keyboard, the caret in its draft",
+          (facts) => facts.inInput && facts.caret === "editor",
+          5_000,
+        );
+        evidence.typing.caret = { focused: focused.caret, pressed: pressed.caret };
+        const typeKeys = async (text: string): Promise<void> => {
+          for (const character of text) {
+            win.webContents.sendInputEvent({ type: "keyDown", keyCode: character });
+            win.webContents.sendInputEvent({ type: "char", keyCode: character });
+            win.webContents.sendInputEvent({ type: "keyUp", keyCode: character });
+            await sleep(15);
+          }
+        };
+        await win.webContents.executeJavaScript(CHAT_EAR);
+        await typeKeys(nonce);
+        await sleep(100);
+        evidence.typing.heard = (await win.webContents.executeJavaScript(
+          "globalThis.__vfChatEar?.done() ?? null",
+        )) as Record<string, number> | null;
+        await untilThread("the typed line in the draft", (facts) => facts.text === nonce, 3_000);
+        await typeKeys(" @");
         const opened = await untilThread(
           "@'s list in the composer",
           (facts) => facts.at === "rows" && facts.rows > 0,
@@ -10678,8 +10739,8 @@ export async function runSmokeGodview(opts: {
           );
         }
         chatThread["the composer"] =
-          `typed "${kept.text}"; @ opened its list (${opened.rows} rows, the hot one the nearest); ` +
-          "Esc folded it, the text and the keyboard kept";
+          `pressed, then typed "${kept.text}" a key at a time (down, its character, up); @ opened its list ` +
+          `(${opened.rows} rows, the hot one the nearest); Esc folded it, the text and the keyboard kept`;
         // 4. Send: pasted, and never submitted until the pane's own Return
         await untilThread("Send armed", (facts) => facts.armed, 3_000);
         await pressAt(".vf-chat-send");

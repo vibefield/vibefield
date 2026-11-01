@@ -167,6 +167,13 @@ export interface ChatSendEvidence {
   readonly nonce: string;
   /** the line's note after Send */
   note: string | null;
+  /** how the line was typed into the draft (an editor): where the caret was after a script's focus and after a press
+   * on the draft ("editor" inside it, else the node it was in), and what the page heard of the line's keys, by event
+   * and place (run85b: a script's focus and bare characters left the focused draft empty) */
+  readonly typing: {
+    caret: { focused: string | null; pressed: string | null } | null;
+    heard: Record<string, number> | null;
+  };
   /** the pane's `inputAllowed`, by its latest marker, sampled before its Return */
   readonly inputAllowed: { Return: boolean | null };
   /** what the lab door answered the card played onto the composer */
@@ -182,6 +189,7 @@ export function newChatSendEvidence(lines: string, nonce: string): ChatSendEvide
     lines,
     nonce,
     note: null,
+    typing: { caret: null, heard: null },
     inputAllowed: { Return: null },
     play: null,
     waitedMs: { ready: null, inputBeforeReturn: null },
@@ -205,6 +213,7 @@ export function chatSendEvidenceLine(
     lines: evidence.lines,
     nonce: evidence.nonce,
     note: evidence.note,
+    typing: evidence.typing,
     inputAllowed: evidence.inputAllowed,
     play: evidence.play,
     waitedMs: evidence.waitedMs,
