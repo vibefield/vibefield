@@ -2022,6 +2022,8 @@ export async function restoreDefaults(run, deps, ctx) {
   let removed = 0;
   let current = null;
   let appRunning = false;
+  // G12: an app running proven ANOTHER's keeps the cleanup from the run; the run's own (or one unplaced) does not
+  let appForeign = false;
   const plan = own.size === 0 ? null : defaultsCleanup(after, own, ctx.defaultsBefore);
   if (
     plan !== null &&
@@ -2036,6 +2038,7 @@ export async function restoreDefaults(run, deps, ctx) {
     if (why !== null) {
       cleanup = why;
       appRunning = app.running > 0;
+      appForeign = appRunning && app.foreign === true;
     } else {
       const r = await deps.exec(DEFAULTS, ["import", SIM_DOMAIN, "-"], {
         input: plan.xml,
@@ -2053,7 +2056,7 @@ export async function restoreDefaults(run, deps, ctx) {
     }
   } else if (plan?.current === "unknown") current = "unknown";
   const judged = defaultsJudge(ctx.defaultsBefore, after, own, run.redactor.scrub);
-  return { ...judged, cleanup, removed, current, appRunning };
+  return { ...judged, cleanup, removed, current, appRunning, appForeign };
 }
 
 /** HOST-RESTORED, judged: own devices gone (under the flag) or kept shut down; Simulator.app quit where the run launched
@@ -2080,7 +2083,7 @@ export function restoredVerdict(r) {
   // cleanup from running; a change keyed by anything else is another's
   const d = r.defaults;
   if (d !== undefined && d.own > 0)
-    (d.appRunning === true ? foreign : own).push(
+    (d.appForeign === true ? foreign : own).push(
       `Simulator's defaults: ${d.own} change(s) keyed by the run's own devices left (cleanup ${d.cleanup})`,
     );
   // R3: beside the run's OWN Simulator.app (launched by it, none proven another's), a change keyed by no own UDID is the
@@ -2690,7 +2693,15 @@ export async function restoreHost(run, deps, ctx) {
   // H1: the run's own UDID-keyed defaults given back (Simulator.app quit above), then judged against ARMED's
   const defaults =
     run.devDir === null
-      ? { read: false, own: [], foreign: [], cleanup: "none needed", removed: 0, appRunning: false }
+      ? {
+          read: false,
+          own: [],
+          foreign: [],
+          cleanup: "none needed",
+          removed: 0,
+          appRunning: false,
+          appForeign: false,
+        }
       : await restoreDefaults(run, deps, ctx);
   if (defaults.cleanup === "done")
     deps.say(
@@ -2698,7 +2709,7 @@ export async function restoreHost(run, deps, ctx) {
     );
   else if (defaults.cleanup !== "none needed")
     findings.push(`Simulator's defaults: cleanup ${defaults.cleanup}`);
-  if (defaults.appRunning)
+  if (defaults.appForeign)
     deps.say(
       `PHONE_OBSERVATION Simulator's defaults: the cleanup ${defaults.cleanup} — its entries keyed by the run's own devices left (another's app, never touched): ${JSON.stringify(defaults.own.slice(0, 20))}`,
     );
@@ -2708,7 +2719,7 @@ export async function restoreHost(run, deps, ctx) {
         ? `PHONE_OBSERVATION Simulator's defaults changed beside the run's own Simulator.app (its housekeeping: never judged, never touched): ${JSON.stringify(defaults.foreign.slice(0, 20))}`
         : `PHONE_OBSERVATION Simulator's defaults changed by another during the run (never touched): ${JSON.stringify(defaults.foreign.slice(0, 20))}`,
     );
-  if (defaults.own.length > 0 && !defaults.appRunning)
+  if (defaults.own.length > 0 && !defaults.appForeign)
     deps.say(
       `stage-simulator-fixture: Simulator's defaults still hold the run's own entries after the cleanup: ${JSON.stringify(defaults.own.slice(0, 20))}`,
     );
@@ -2736,6 +2747,7 @@ export async function restoreHost(run, deps, ctx) {
       own: defaults.own.length,
       foreign: defaults.foreign.length,
       appRunning: defaults.appRunning,
+      appForeign: defaults.appForeign,
     },
     perfLock: releasePerfLock(run),
     crash: {

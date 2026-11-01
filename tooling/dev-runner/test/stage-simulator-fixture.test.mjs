@@ -3063,7 +3063,7 @@ test("H1: the run's own entries still there after the cleanup are the run's OWN 
   const theirs = restoredVerdict({
     ...good,
     simulator: { launchedByRun: false, quit: "refused: x", foreign: true },
-    defaults: { own: 2, foreign: 1, cleanup: "skipped: x", appRunning: true },
+    defaults: { own: 2, foreign: 1, cleanup: "skipped: x", appRunning: true, appForeign: true },
   });
   assert.deepEqual([theirs.ok, theirs.ownOk, theirs.foreign.length], [false, true, 2]);
 });
@@ -3105,6 +3105,43 @@ test("G8: the defaults cleanup reads pgrep FIRST, then exports and plans, and pg
   // pgrep unreadable right before the import: skipped too
   const blind = await traced([null, "garbage"]);
   assert.deepEqual(blind.host.imports, []);
+});
+
+test("G12: Simulator.app running at teardown and PROVEN the run's own — its own entries left are the run's OWN side, never another's", async () => {
+  const before = simDefaults();
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0]] });
+  const verdictOf = (r, launchedByRun) =>
+    restoredVerdict({
+      run: RUN,
+      own: { form: "kept", left: 3, shutdown: true },
+      simulator: { launchedByRun, quit: "quit", foreign: false },
+      helperLeft: 0,
+      others: { unchanged: true },
+      perfLock: "removed",
+      crash: { new: [] },
+      defaults: { ...r, own: r.own.length, foreign: r.foreign.length },
+    });
+  // the run's own app (it launched one since its last quit, started after): the cleanup skipped, the entries the run's
+  const run = ownRun();
+  run.simulator.shown = 1;
+  run.simulator.launchedAt = ARMED + 30_000;
+  const host = defaultsHost(after, { pgrep: "4242" });
+  const r = await restoreDefaults(run, host.deps, { defaultsBefore: before });
+  assert.deepEqual(host.imports, []);
+  assert.match(r.cleanup, /^skipped: Simulator\.app is running/u);
+  assert.equal(r.appForeign, false);
+  const v = verdictOf(r, true);
+  assert.deepEqual([v.ok, v.ownOk], [false, false]);
+  assert.match(v.why.join("; "), /Simulator's defaults: .*the run's own devices left/u);
+  assert.equal(v.foreign.filter((w) => /Simulator's defaults/u.test(w)).length, 0);
+  // control: an app proven ANOTHER's (the run launched none) — the same entries are another's
+  const theirs = ownRun();
+  const host2 = defaultsHost(after, { pgrep: "4242" });
+  const r2 = await restoreDefaults(theirs, host2.deps, { defaultsBefore: before });
+  assert.equal(r2.appForeign, true);
+  const v2 = verdictOf(r2, false);
+  assert.equal(v2.ownOk, true);
+  assert.match(v2.foreign.join("; "), /Simulator's defaults: .*the run's own devices left/u);
 });
 
 test("R3: a non-own defaults change beside the run's OWN Simulator.app is its housekeeping — an OBSERVATION only, never why/foreign, never the exit", async () => {
