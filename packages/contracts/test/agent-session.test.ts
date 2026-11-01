@@ -105,13 +105,14 @@ describe("agent.* registry rows (AR-3)", () => {
         subscription: false,
       },
       // MV-3a (L5) — what a window shows, reported to the backend beside the
-      // runtime: the board's scope, `local` because the screen is this
-      // connection's own model board.
+      // runtime: the board's scope. PG-3b (PG-D6 (a), 2026-11-01): `federate`,
+      // routed by `device` through the home, so a phone is a screen of the
+      // desktop that owns the row.
       {
         method: "agent.reportShown",
         scope: "agent.observe",
         idempotent: true,
-        locality: "local",
+        locality: "federate",
         subscription: false,
       },
       // LR (2026-10-15) — what the last run left: read on the board's scope,

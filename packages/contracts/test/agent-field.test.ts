@@ -31,6 +31,7 @@ import {
   MONITOR_AUDIENCE,
   MonitorAgentRow,
 } from "../src/agent-field";
+import { OnBehalfOf } from "../src/forwarding";
 import { AGENT_FIELD } from "../src/registries";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
@@ -529,6 +530,31 @@ describe("MV-3a — the model's row on the wire (MV-D22, MV-D18)", () => {
     ]);
     expect(AgentReportShownParams.safeParse({ ids: [""] }).success).toBe(false);
     expect(AgentReportShownParams.safeParse({}).success).toBe(false);
+  });
+
+  // PG-3b (PG-D6 (a), J2 (a), 2026-11-01) — the report travels: routed by
+  // `device` through the home like every federated call, and carried to the
+  // owner with the home's forwarding envelope beside it (DS-L7)
+  it("PG-3b — a report is routed by device, and the owner reads the reader it is for in the envelope", () => {
+    const routed = AgentReportShownParams.parse(golden("agent-report-shown.routed.json"));
+    expect(routed).toEqual({ ids: ["run-studio-q"], device: "dev-desktop-b" });
+    // the routing key is declared, as on every federated params object
+    expect(AgentReportShownParams.safeParse({ ids: [], device: "" }).success).toBe(false);
+    expect(AgentReportShownParams.safeParse({ ids: [], device: 7 }).success).toBe(false);
+    // the owner's view: the same params, the envelope beside them
+    const forwarded = golden("agent-report-shown.forwarded.json") as {
+      forward: { onBehalfOf: unknown };
+    };
+    expect(AgentReportShownParams.parse(forwarded)).toMatchObject({
+      ids: ["run-studio-q"],
+      device: "dev-desktop-b",
+    });
+    // the reader's window keys its screen on the owner (restrict-only)
+    expect(OnBehalfOf.parse(forwarded.forward.onBehalfOf)).toMatchObject({
+      clientKind: "ios",
+      deviceId: "dev-desktop-a",
+      windowId: "conn_7",
+    });
   });
 
   it("the model's texts name folders, never paths, on the agent row; a terminal's detail is its directory and stays home (L8)", () => {
