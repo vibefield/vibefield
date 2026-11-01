@@ -266,6 +266,9 @@ export function readOptions(env) {
  * written; `--sweep` and `--preflight-only` never ask. */
 export function reusedRun(opts, fs = { readdirSync }) {
   const dir = dirname(opts.hidLog);
+  // G9: the folder must BE the run's — another run's folder (or none) would mix two runs' logs whatever it holds
+  if (basename(dir) !== opts.run)
+    return `stage-simulator-fixture: run ${opts.run}: ${dir} is not the run's folder (<logs>/${opts.run}/) — choose a new VF_PHONE_RUN and its VF_PHONE_HID_LOG (<logs>/<run>/<run>-hid.log)`;
   let entries;
   try {
     entries = fs.readdirSync(dir);
