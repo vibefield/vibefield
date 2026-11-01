@@ -26659,3 +26659,82 @@ blessed. It predates PG: `heldRows()` has listed `#held` in insertion order sinc
 - **Landed:** main fast-forwarded to `815babbd3` at 2026-11-01 04:07:17Z on VF-PM's GO.
 
 **Owed.** Nothing. PG-3d's Swift fold transcribes the rule, and its parity suite ports this row.
+
+## Items 131, 133, 134 and 139 — four honest states at their sources: the exit cleanup's slow warning waits for its own clock, the phone stage checks the field-native its smoke will launch, a smoke that dies before its rows says why, and the rosettad control row reads the refusal after its stderr has closed
+
+(2026-11-01; five commits `3054b1af2` → `130906443` on lane `fixer/items-131-133-134-139` over main `27d61f7a5`, the
+fixer's; the mint M75 `230e72848`, the merge over main `13c5a6ddc`, run 75.) Four items filed to the fixer, one slice
+on VF-PM's 03:37Z go: 131 (2026-10-31 23:14Z, run 65), 133 and 134 (2026-11-01 02:31Z, PORTALS's PT-S3 L1), 139
+(03:36Z, run 72). 134b was scoped in at 02:35Z: measure the spawn of a missing field-native first, then fix what the
+measure names.
+
+**Item 131 — the slow warning is said only once its own clock agrees.** Run 65 read `expected 1999 to be greater than
+or equal to 2000` at `test/agent-session.test.ts:3675`: fieldd's item 87 exit path arms
+`setTimeout(warn, AGENT_EXIT.CLEANUP_WARN_MS)` and reports `pendingMs: Date.now() - cleanupStartedAt`. libuv arms a
+timer from its loop clock truncated to whole milliseconds, so it can complete up to a millisecond early by the wall
+clock (item 120's class, its second site). The warning claims the cleanup is pending PAST the bound, so the fix is the
+product's: `warnWhenDue` measures as before and, short of the bound, re-arms for the remainder (`c54424ce0`). No slack,
+and the row's `>= CLEANUP_WARN_MS` stands.
+
+**Item 133 — the phone stage checks the field-native the smoke's shell will launch.** Lane pts3 was born code-only.
+`packages/field-native/project.json` has no targets, so `build:all` never builds it, and the stage's preflight (the
+capture pair, the plugin's dist, the shell's dist) passed a smoke that launched to a certain fatal. The stage now
+resolves the binary as electron-shell's `main/fieldd.ts` does (FIELDD_NATIVE_BIN, else this checkout's
+`target/debug/field-native`). In all three passes (`--preflight-only`, the launch's first pass outside ENUM, and the
+late re-check, the last two on the command's own environment) it names the binary missing or older than
+`packages/field-native`'s src/ or Cargo.toml or the workspace's Cargo.toml or Cargo.lock. The fix line is
+`cargo build -p field-native` from this checkout, which lands in CARGO_TARGET_DIR (so `target/` must link there, or
+FIELDD_NATIVE_BIN name the binary). It also says a target dir shared between checkouts holds whichever checkout built
+last: the caveat in the wording, not a wider check (`3362b7e3e`).
+
+**Item 134b — measured first, then the swallow fixed at its source.** fieldd's own spawn of a missing
+FIELDD_NATIVE_BIN is not unheard: a detached spawn with no `'error'` listener throws ENOENT, and the process dies in
+about 2 ms (Node v26.5.0, the spawn copied from `packages/fieldd/src/bin.ts`). L1's ten seconds were no spawn at all.
+electron-shell's `buildSupervisor` hands `nativeExecutable` only when the file exists, so FIELDD_NATIVE_BIN went
+unset and fieldd's `spawnNative` was undefined. NativeLink then waited for a pairing file nothing would write ("did not
+come up before the readiness deadline"). A smoke-like mode now refuses a missing field-native beside the shell's own
+`fieldd bin missing (build it)`: "field-native bin missing (build it: cargo build -p field-native): <path>"
+(`1b6b4244c`). Development keeps its tolerance on purpose, because the dev runner builds and starts the floor itself.
+
+**Item 134 — a smoke that dies before its rows says why.** On a fatal before its run, main names the kept HOME
+(`sayFatalSmokeHome`, beside `dataRoot`, before `flow.fatal`): `SMOKE_HOME {"home":…,"removed":false}`. That is
+DK-18's own promise ("a red run keeps them and SMOKE_HOME names them"), which only runSmoke's teardown had kept. An
+injected FIELDD_DATA_DIR is never named. With no PHONE_ROWS_BEGIN, the stage reads that HOME's `desktop.lifecycle.fatal`
+and fieldd's `fieldd.lifecycle.bootstrap_failed`. It says "no PHONE_ROWS_BEGIN: the smoke stopped before the rows —
+<the fatal>", else "… the smoke never reached the rows". It never says "--phone is not in this build", which its own
+preflight had already disproved (`130906443`).
+
+**Item 139 — the control row reads the refusal at `close`.** fieldd's "the projection lock is real (the control)"
+resolved on the second rosettad's `exit`. Node can fire it before the piped stderr drains, and run 72 at load 39 read
+`''` while the non-zero code passed. It now resolves on `close` (the process gone AND its streams closed), the
+composition the supervisor itself has used since item 65 (`cc5b9d675`) (`3054b1af2`). Measured: `close` still fires
+with the row's unread stdout pipe.
+
+**The light** (lane item118, under cp-landing's HOLD, every red-first step a working-tree mutation restored and proved
+clean): 2026-11-01 03:55:12Z → 04:04:03Z, two scripts (slice-light.sh stopped at
+its first F139 model; slice-light2.sh from F139 on).
+- W: the stage's `--preflight-only` on the lane's own field-native printed "PHONE_PREFLIGHT FAIL field-native
+  (…/lanes/item118/vibe-field/target/debug/field-native): older than packages/field-native's src/ …" (the lane's binary
+  predates DS-7's .rs). With FIELDD_NATIVE_BIN at a path that does not exist, it printed the "missing" line.
+- S: the new test file against main's stage, red; tooling/dev-runner whole, 342/342.
+- E1: 134b's refusal made inert, its two refusal rows red. E2: 134's SMOKE_HOME line made inert, its row red.
+- F139: the second rosettad's stderr handle stopped right after spawn and restarted 100 ms after its exit, so the
+  refusal is still in the pipe at 'exit'. The 'exit' form read `expected '' to match /already owned by another/`,
+  red; the 'close' form, green. The rosettad is ../rosetta-pin's release build at the lock's sha `3948bcf`. The first
+  model, stderr `pause()`d, could not go red: Node's flushStdio resumes every stdio stream on the tick after 'exit', so
+  buffered bytes reach the 'exit' form too. The race is bytes unread in the pipe, measured standalone 3/3.
+- F131: the first timer armed 200 ms short. Main's code read `expected 1805 to be greater than or equal to 2000`, red;
+  this one, green.
+- biome on the eight files; check:walls 0; tsc for fieldd and electron-shell; electron-shell whole 2,446 passed and 3
+  skipped (fieldd-native 6/6, fieldd-rosettad 4/4).
+- fieldd whole, with FIELDD_ROSETTAD_BIN naming that rosettad: 2,826 passed, 11 skipped and ONE failed, all 32
+  rosettad-supervisor rows running and agent-session 68 of 70 (2 skipped). The red was
+  `test/process-service.test.ts:244` "the whole TREE dies: the shim's server does not outlive it (§17.1)": its
+  `until()` deadline at load 123, in a file this slice does not touch (last changed 09-14). One re-run of that file
+  alone was green, 21 passed and 1 skipped at load 92.
+- Run 75 on the mini (a9's mint; VF-PM's read, 04:16:52Z): 11,505 passed, 0 failed, 18 skipped over 27 rows; cargo
+  33 ok; both lottery sites green on their fixes, rosettad-supervisor 32 and agent-session 70.
+
+**Owed.** PT-S3 L1's re-run on a lane with field-native built (PORTALS's): 133's preflight before the launch, and
+134's named fatal if it still dies. Item 141 (`process-service.test.ts:244`'s fixed deadline under load, the red this
+light met) is the fixer's next.
