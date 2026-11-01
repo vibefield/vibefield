@@ -164,6 +164,10 @@ export interface MeshBoardOptions {
   retryMinMs?: number;
   retryMaxMs?: number;
   logger?: Logger;
+  /** PG-3b (the fold check [2]) — an owner's upstream is back: attached and its snapshot applied, at the first attach
+   * and at each re-attach (after a resync, a wake, a re-dial). What this daemon carries for its readers beside that
+   * upstream is carried again then (`agent-screens.ts` `linkReady`). Absent: nothing is told. */
+  onUpstreamReady?: (device: string) => void;
 }
 
 interface Resolved {
@@ -178,6 +182,7 @@ interface Resolved {
   retryMinMs: number;
   retryMaxMs: number;
   logger: Logger;
+  onUpstreamReady: (device: string) => void;
 }
 
 /** A board as the relay holds it: the owner's chain, the owner's rows. */
@@ -533,6 +538,9 @@ class BoardHub {
           peer.backoffMs = this.opts.retryMinMs;
           this.#onUpstream(peer, generation, snapshot, "snapshot");
           start?.(); // what followed the snapshot on the wire, after it
+          // PG-3b — the owner's upstream is back: what rides beside it is carried again
+          if (!this.#disposed && generation === peer.generation)
+            this.opts.onUpstreamReady(peer.device);
         },
         (error: unknown) => {
           if (this.#disposed || generation !== peer.generation) return;
@@ -695,6 +703,7 @@ export class MeshBoard {
       retryMinMs: opts.retryMinMs ?? 1_000,
       retryMaxMs: opts.retryMaxMs ?? 30_000,
       logger: (opts.logger ?? createNoopLogger()).child({ component: "mesh.board" }),
+      onUpstreamReady: opts.onUpstreamReady ?? (() => {}),
     };
   }
 

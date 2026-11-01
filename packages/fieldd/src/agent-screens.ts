@@ -30,10 +30,14 @@ import { RpcCallError } from "./native-link";
 //    is refused with a verdict that proves nothing stands there (`notDelivered`: the owner's own refusal, or the
 //    link's "never sent"). An empty report removes its owner only AFTER its carry lands, so a failed empty leaves the
 //    owner owed the close's (the 3b review [2], [12]).
-//  · `shown`: the last non-empty ids that LANDED per owner, which the home carries again when the peer link to that
-//    owner answers a new dial (`linkReady`). The owner forgot them with the old connection, and the phone's board at
-//    the home never closed, so the phone re-sends nothing ([13]). A duplicate is harmless, since a report replaces
-//    its screen's set.
+//  · `shown`: what the phone shows of each owner NOW. A non-empty report sets it when its carry begins, and a
+//    not-delivered verdict puts back what stood. An empty report clears it before its carry, whatever the outcome
+//    (the fold check [0], [1]). The home carries it again when the way to that owner comes back (`linkReady`):
+//    the peer link answers a new dial, or the mesh board's upstream to that owner re-attaches on the same link after
+//    a resync (`MeshBoard`'s `onUpstreamReady`, the fold check [2]). In both cases the owner forgot the carried
+//    screen (with the old connection, or with its last `remote` board), and the phone's board at the home never
+//    closed, so the phone re-sends nothing ([13]). The replay reads `shown` inside its queued task, so a report
+//    still in flight is the one replayed. A duplicate is harmless, since a report replaces its screen's set.
 // When the reader's last mesh board closes (pause, re-home, a gap repair's unsubscribe, a lost socket), it sends
 // each owner in `owners` an empty report. Everything carried for one reader to one owner goes in order (`inOrder`),
 // so a re-subscribe's new report never lands before the empty one, and a report whose board closed while it waited
@@ -53,7 +57,9 @@ import { RpcCallError } from "./native-link";
 //  · by count: at most `AGENT_FIELD.CARRIED_SCREENS_PER_PEER` per peer connection, the next refused
 //    `{state: "no-screen", reason: "carried-cap"}`;
 //  · by the upstream: when the carrying connection's last `remote` board here closes (the home's hub upstream going
-//    away), its carried screens go, so a failed empty cannot outlive the upstream it rode beside;
+//    away), its carried screens go, so a failed empty cannot outlive the upstream it rode beside. A hub that only
+//    resyncs re-attaches on the same connection, and the home's replay at that re-attach puts its readers' screens
+//    back;
 //  · by the connection: they go when it closes (`connectionClosed`).
 // The 3b review [3] (a renderer's provenance windowId is its participant, not its connection) is answered by the kind
 // gate: only a phone is a reader, and a phone's windowId is its connection id.
@@ -95,7 +101,8 @@ export interface AgentScreens {
     params: unknown,
     carry: () => Promise<unknown>,
   ): Promise<unknown>;
-  /** the peer link to `device` answered a dial (the first, or a re-dial): carry each reader's last report again */
+  /** the way to `device` is back (its peer link answered a dial, or the mesh board's upstream to it re-attached):
+   * carry each reader's current report to it again */
   linkReady(device: string): void;
   /** a product connection closed: the screens peers' reports opened under it go */
   connectionClosed(connectionId: string): void;
@@ -147,6 +154,8 @@ const unnamedReader = (): RpcCallError =>
     { state: "no-screen" },
   );
 
+/** Not transient (the fold check [3]): the owner's bound, not a missing board. A sender records it once per device,
+ * as it does a `locality: "local"` refusal, and does not retry it on every open. */
 const carriedCap = (): RpcCallError =>
   new RpcCallError(
     "PRECONDITION_FAILED",
@@ -226,17 +235,22 @@ export function createAgentScreens(opts: AgentScreensOptions): AgentScreens {
   };
   const pairKey = (readerId: string, owner: string): string => `${readerId}\u001f${owner}`;
 
-  /** a carry the home makes of its own accord (a close's empty, a replay): logged, never thrown */
+  /** a carry the home makes of its own accord, logged, never thrown: a close's empty, or a replay of what the reader
+   * shows NOW, read inside the queued task (the fold check [1]: a report still in flight when the link re-dials is
+   * the one replayed, and a reader gone by then replays nothing) */
   const carryQuietly = (
     readerId: string,
     reader: Reader,
     owner: string,
-    ids: readonly string[],
     why: "release" | "replay",
   ): void => {
-    void inOrder(pairKey(readerId, owner), () =>
-      opts.carry(reader.ctx, owner, { ids: [...ids], device: owner }),
-    ).catch((error: unknown) =>
+    void inOrder(pairKey(readerId, owner), async () => {
+      if (why === "release") return opts.carry(reader.ctx, owner, { ids: [], device: owner });
+      if (readers.get(readerId) !== reader) return undefined;
+      const ids = reader.shown.get(owner);
+      if (ids === undefined) return undefined;
+      return opts.carry(reader.ctx, owner, { ids: [...ids], device: owner });
+    }).catch((error: unknown) =>
       why === "release"
         ? // the 3b review [12]: not retried. Until the carrying connection or its upstream closes on the owner,
           // the owner's carried screen for this reader stands, and those rows earn no unread mark there
@@ -268,7 +282,7 @@ export function createAgentScreens(opts: AgentScreensOptions): AgentScreens {
       if (reader.count > 0) return;
       readers.delete(id);
       // what it showed is shown no more: each owner it may have reported to is told so, in order behind its last
-      for (const owner of reader.owners) carryQuietly(id, reader, owner, [], "release");
+      for (const owner of reader.owners) carryQuietly(id, reader, owner, "release");
       reader.owners.clear();
       reader.shown.clear();
     });
@@ -382,30 +396,34 @@ export function createAgentScreens(opts: AgentScreensOptions): AgentScreens {
         // the board may have closed while an earlier carry for this pair was on the wire
         if (readers.get(id) !== reader) throw noReader();
         if (ids.length === 0) {
-          const result = await carry();
-          // landed: nothing of this owner is shown, and nothing is owed it
-          reader.owners.delete(device);
+          // the phone shows nothing of this owner, whatever the carry's outcome: nothing is replayed
           reader.shown.delete(device);
+          const result = await carry();
+          // landed: nothing is owed it
+          reader.owners.delete(device);
           return result;
         }
+        // what the phone shows now, from the moment it is carried: a replay queued behind this carry reads it
         const added = !reader.owners.has(device);
+        const before = reader.shown.get(device);
         reader.owners.add(device);
+        reader.shown.set(device, ids);
         try {
-          const result = await carry();
-          if (readers.get(id) === reader) reader.shown.set(device, ids);
-          return result;
+          return await carry();
         } catch (error) {
-          if (added && notDelivered(error)) reader.owners.delete(device);
+          if (notDelivered(error)) {
+            if (added) reader.owners.delete(device);
+            if (before === undefined) reader.shown.delete(device);
+            else reader.shown.set(device, before);
+          }
           throw error;
         }
       });
     },
 
     linkReady(device) {
-      for (const [id, reader] of readers) {
-        const ids = reader.shown.get(device);
-        if (ids !== undefined) carryQuietly(id, reader, device, ids, "replay");
-      }
+      for (const [id, reader] of readers)
+        if (reader.shown.has(device)) carryQuietly(id, reader, device, "replay");
     },
 
     connectionClosed(connectionId) {

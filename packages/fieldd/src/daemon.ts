@@ -6444,6 +6444,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       openLocal: (projection, minIntervalMs, emit) =>
         openLocalBoard(projection, minIntervalMs, emit),
       logger,
+      // PG-3b (the fold check [2]) — an owner's upstream back on the same link
+      // (a hub's resync, a wake) closed and re-opened its remote board there,
+      // so the screens this desktop's readers had carried are carried again
+      onUpstreamReady: (device) => screens.linkReady(device),
     });
     meshBoard = board;
     // DS-6 — history across desktops: every self peer's catalog replicated,
