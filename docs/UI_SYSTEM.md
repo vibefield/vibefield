@@ -133,8 +133,8 @@ The catalog currently mounts these shipping views directly:
     (`NeedsCardPreview`), the shipping `NeedsCardView` over the product's own `needsCardOf` of
     fixture items — a spark's question (1 of 3), a held send, a held spawn past the cap, an agent's
     ask with Show alone, a kind this build does not know, answering, refused (its acts live while it
-    waits, quiet once another window has answered it), answered three ways (done, an act not
-    done, not heard yet) and a narrow thread, by the page's light and by the
+    waits; quiet, and its ring gone, once another window has answered it), answered three ways
+    (done, an act not done, not heard yet) and a narrow thread, by the page's light and by the
     Moon's — and the card live: the product's own controller (`useNeedsCard`) over a fixture door
     that answers after a beat, standing it in the shipping `ThreadItemsView`, where its rise, its
     "You said …", its way out, the next card's rise, the keyboard on its acts and on the card, and

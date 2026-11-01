@@ -74,6 +74,9 @@ export function NeedsCardView({ card, onAnswer, onShow, ref }: NeedsCardViewProp
   const busy = act.state === "busy" ? act.choice : null;
   // every act waits while an answer runs, and none answers once the item waits no longer (a refused card's note)
   const quiet = busy !== null || !card.waits;
+  // ringed while it waits on you: its item waits in the queue, or your answer to it runs (fieldd drops the item once
+  // it has recorded the answer); answered here, or its item gone, it waits on no one
+  const waits = answered === null && (card.waits || busy !== null);
   const described = [said.words === null ? null : wordsId, said.sub === null ? null : subId]
     .filter((id) => id !== null)
     .join(" ");
@@ -89,7 +92,7 @@ export function NeedsCardView({ card, onAnswer, onShow, ref }: NeedsCardViewProp
       aria-label={said.label}
       tabIndex={-1}
       {...(described === "" ? {} : { "aria-describedby": described })}
-      {...(answered === null ? { "data-waits": "" } : {})}
+      {...(waits ? { "data-waits": "" } : {})}
       {...(leaving ? { "data-leaving": "", inert: true } : {})}
       {...(reduced ? { "data-motion": "reduced" } : {})}
     >

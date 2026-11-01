@@ -28,9 +28,10 @@ import { cellMarkOf, ThreadLedger, type ThreadMark, threadMarksOf } from "./thre
 // A fieldd restart replaces the window's document (main's boot fence: `FielddDaemonBootFence` →
 // `requestAllReplacements`), so the feed, its ledger and its list start again ("Opening Chat…"), and the new feed asks
 // for the board afresh. What the feed outlives is a connection drop while the same fieldd stays up: the client
-// reconnects, replays the board's subscription with a fresh snapshot, and the list stands as last read. A board
-// refused because the socket closed under the ask is never replayed, so it is asked again when the window's client is
-// connected again (`SparksPort.onReconnected`); one refused for good stands until the feed starts again.
+// reconnects, replays the board's and the queue's subscriptions with fresh snapshots, and the list stands as last
+// read. A board or a queue refused because the socket closed under the ask is never replayed, so each is asked again
+// when the window's client is connected again (`SparksPort.onReconnected`); one refused for good stands until the feed
+// starts again. What the board's or the queue's first reading finds is no news, whenever that reading comes.
 
 /** What the feed reads: the window's fieldd client in the product (`sparksPortOver`), a fixture in a test. */
 export interface SparksPort {
@@ -40,7 +41,8 @@ export interface SparksPort {
    * the ask. */
   watch(onFrame: (payload: unknown, kind: "snapshot" | "delta") => void): Promise<() => void>;
   /** CP-3 — the needs-you queue's open items, oldest first: its snapshot, then each change, whole, in order. Resolves
-   * to the way to stop; rejects where fieldd has no queue. */
+   * to the way to stop; rejects with fieldd's refusal where fieldd has no queue, `retryable` (as the board's) when
+   * asking again may be answered. */
   watchNeeds(onItems: (items: readonly NeedsItem[]) => void): Promise<() => void>;
   /** CP-3 — answer an item by its act's place among the item's acts (`needs.answer`): the answered item, or fieldd's
    * refusal thrown. The queue's next frame says it for every window. */
@@ -64,13 +66,20 @@ export function sparksPortOver(client: FielddClient): SparksPort {
       subscribeInOrder(client, "needs.subscribe", {}, (payload) => onItems(needsItemsOf(payload))),
     answer: async (item, choice) =>
       NeedsAnswerResult.parse(await client.request("needs.answer", { item, choice })).item,
-    onReconnected: (listener) =>
-      client.onStatusChange(() => {
-        if (client.status === "ready") listener();
-      }),
+    onReconnected: onReconnectedOver(client),
     open: async (spark) =>
       ComposeSparksOpenResult.parse(await client.request("compose.sparks.open", { spark })).spark,
   };
+}
+
+/** Heard each time `client` turns `ready` again (`SparksPort.onReconnected`, and the window's notify carrier's): its
+ * socket closed while the same fieldd stayed up, and it reconnected on the token fieldd still holds. The answer stops
+ * it. */
+export function onReconnectedOver(client: FielddClient): (listener: () => void) => () => void {
+  return (listener) =>
+    client.onStatusChange(() => {
+      if (client.status === "ready") listener();
+    });
 }
 
 /** A subscription heard in order: the subscribe answers its snapshot, and a frame heard before that answer waits
@@ -181,6 +190,9 @@ interface FeedState {
   readonly open: SparkOpener | null;
   /** An answer, through the same feed (CP-3); null while none reads the queue, so nothing is answered */
   readonly answer: NeedsAnswerer | null;
+  /** the needs that stood when the board or the queue was first read, while they stand (CP-3): what a first reading
+   * finds is no news, even one that comes only after a refusal the feed asked past */
+  readonly noNews: ReadonlySet<string>;
   /** each thread's mark on the reading (SP-1d): a needs-you dot, or unread; empty before the first reading */
   readonly marks: ReadonlyMap<SparkId, ThreadMark>;
   /** Chat's cell's mark, which the views track draws in another view: needs while any needs-you dot stands, else
@@ -199,6 +211,7 @@ export type SparkOpener = (spark: SparkId) => Promise<void>;
 export type NeedsAnswerer = (item: NeedsItemId, choice: number) => Promise<NeedsItem>;
 
 const NO_MARKS: ReadonlyMap<SparkId, ThreadMark> = new Map();
+const NO_NEWS: ReadonlySet<string> = new Set();
 
 const OPENING: FeedState = {
   reading: { state: "opening" },
@@ -207,6 +220,7 @@ const OPENING: FeedState = {
   rows: null,
   open: null,
   answer: null,
+  noNews: NO_NEWS,
   marks: NO_MARKS,
   cell: null,
 };
@@ -267,9 +281,18 @@ class RunningFeed {
   #boardSettled = false;
   /** the queue's open items as last read (CP-3); none while it has not answered, or where fieldd has none */
   #items: readonly NeedsItem[] = [];
+  /** the queue has answered once: a frame after that is no first reading */
+  #needsRead = false;
   /** the queue has had its first reading, or cannot be read */
   #needsSettled = false;
   #stopNeeds: (() => void) | null = null;
+  /** the queue's subscription was refused, as the board's can be: "again", asked again when the window's client is
+   * connected again; "for-good" (a fieldd with no queue), never asked again by this feed */
+  #needsRefused: "again" | "for-good" | null = null;
+  /** the needs (`SparkEntry.needs`' keys) standing on the last reading */
+  #standing: ReadonlySet<string> = NO_NEWS;
+  /** those of them found by the board's or the queue's first reading, kept while they stand (`FeedState.noNews`) */
+  #noNews: ReadonlySet<string> = NO_NEWS;
   /** the board's subscription was refused: "again" when the refusal is retryable (the socket closed under the ask),
    * asked again when the window's client is connected again (`SparksPort.onReconnected`); "for-good" for any other
    * refusal, never asked again by this feed */
@@ -296,7 +319,9 @@ class RunningFeed {
     this.#watch();
     this.#watchNeeds();
     this.#offReconnected = port.onReconnected(() => {
-      if (this.#open && this.#boardRefused === "again") this.#watch();
+      if (!this.#open) return;
+      if (this.#boardRefused === "again") this.#watch();
+      if (this.#needsRefused === "again") this.#watchNeeds();
     });
   }
 
@@ -372,6 +397,7 @@ class RunningFeed {
           return;
         }
         this.#rows = board.rows();
+        const first = !this.#boardRead;
         this.#boardRead = true;
         this.#boardSettled = true;
         const key = boardSparksKey(this.#rows);
@@ -379,7 +405,7 @@ class RunningFeed {
           this.#onBoard = key;
           this.refresh();
         }
-        this.#derive();
+        this.#derive(first);
       })
       .then(
         (unsubscribe) => {
@@ -398,29 +424,36 @@ class RunningFeed {
   }
 
   /** The queue, for the feed's life (CP-3). Each frame is the whole list, so no frame can be missed; a reconnect's
-   * fresh snapshot comes to the same listener. A fieldd without it refuses: the list stands on the board. */
+   * fresh snapshot comes to the same listener. A fieldd without it refuses for good: the list stands on the board. One
+   * refused as the socket closed under the ask is asked again on the board's seam, once the client reconnects. */
   #watchNeeds(): void {
+    this.#needsRefused = null;
     this.port
       .watchNeeds((items) => {
         if (!this.#open) return;
         this.#items = items;
+        const first = !this.#needsRead;
+        this.#needsRead = true;
         this.#needsSettled = true;
-        this.#derive();
+        this.#derive(first);
       })
       .then(
         (unsubscribe) => {
           if (this.#open) this.#stopNeeds = unsubscribe;
           else unsubscribe();
         },
-        () => {
-          if (!this.#open || this.#needsSettled) return;
+        (refusal: unknown) => {
+          if (!this.#open) return;
+          this.#needsRefused = askAgain(refusal) ? "again" : "for-good";
+          if (this.#needsSettled) return;
           this.#needsSettled = true;
           this.#derive();
         },
       );
   }
 
-  #derive(): void {
+  /** One reading published. `first`: it follows the board's or the queue's first reading, whose needs are no news. */
+  #derive(first = false): void {
     const sessions = this.#boardRead ? sessionsByProfileOf(this.#rows) : null;
     const rows = this.#boardRefused !== null ? "failed" : this.#boardRead ? this.#rows : null;
     if (this.#sparks === null) {
@@ -434,6 +467,7 @@ class RunningFeed {
         rows,
         open: this.open,
         answer: this.answer,
+        noNews: this.#noNews,
         marks: NO_MARKS,
         cell: null,
       });
@@ -447,8 +481,13 @@ class RunningFeed {
     this.#entries = entries;
     this.#ledger.read(entries);
     const needing = entries.filter((entry) => entry.needsYou);
-    // what the list, the board and the queue each say on their first reading is no news: the note waits for all three
+    // what the list, the board and the queue each say on their first reading is no news: the note waits for all three,
+    // and a first reading that comes after them (the board or the queue asked again past a refusal) hands what it
+    // finds as already seen
     const read = this.#boardSettled && this.#needsSettled;
+    const standing = new Set(needing.flatMap((entry) => entry.needs));
+    this.#noNews = noNewsOf(this.#noNews, this.#standing, standing, first);
+    this.#standing = standing;
     publish({
       reading: { state: "ready", entries },
       needing: !read ? null : sameNeeds(state.needing, needing) ? state.needing : needing,
@@ -456,6 +495,7 @@ class RunningFeed {
       rows,
       open: this.open,
       answer: this.answer,
+      noNews: this.#noNews,
       ...this.#marked(),
     });
   }
@@ -518,9 +558,16 @@ export function useNeedsAnswerer(): NeedsAnswerer | null {
 }
 
 /** The sparks that need you (S-4), or null before the first reading of the list, the board and the queue: the views
- * track's note over Chat's cell, said for each need new since the last reading (`SparkEntry.needs`). */
+ * track's note over Chat's cell, said for each need new since the last reading (`SparkEntry.needs`) and not among
+ * `useNeedsNoNews`'s. */
 export function useSparksNeedingYou(): readonly SparkEntry[] | null {
   return useSyncExternalStore(subscribe, () => state.needing);
+}
+
+/** The needs (`SparkEntry.needs`' keys) that stood when the board or the queue was first read, while they stand: no
+ * news, whenever that reading came (CP-3; DESIGN.md §8 "Chat's list", Needs you). */
+export function useNeedsNoNews(): ReadonlySet<string> {
+  return useSyncExternalStore(subscribe, () => state.noNews);
 }
 
 /** Chat says which thread is on screen (SP-1d; DESIGN.md §8 "Chat's list"): the one it shows while Chat is the view,
@@ -616,11 +663,25 @@ function sessionsByProfileOf(rows: readonly AgentFieldRow[]): ReadonlyMap<string
   return tally;
 }
 
-/** Whether fieldd may answer the board asked again: its refusal's own `retryable` (a FielddRpcError's). fieldd's door
- * refuses this window's field board only for good (a malformed or unpermitted ask), so a retryable refusal is the
- * connection's: the socket closed under the ask, and the client reconnected (`SparksPort.onReconnected`) is when to
- * ask again. */
-function askAgain(refusal: unknown): boolean {
+/** The needs no news now: those of `before` that still stand, and after a first reading the ones it found (standing
+ * now, not on the reading before it). Kept as it was while nothing changed. */
+function noNewsOf(
+  before: ReadonlySet<string>,
+  last: ReadonlySet<string>,
+  standing: ReadonlySet<string>,
+  first: boolean,
+): ReadonlySet<string> {
+  const next = new Set(
+    [...standing].filter((need) => before.has(need) || (first && !last.has(need))),
+  );
+  return next.size === before.size && [...next].every((need) => before.has(need)) ? before : next;
+}
+
+/** Whether fieldd may answer a subscription asked again: its refusal's own `retryable` (a FielddRpcError's). fieldd's
+ * doors refuse this window's field board, its queue and its notify carrier only for good (a malformed or unpermitted
+ * ask, or a fieldd without the door), so a retryable refusal is the connection's: the socket closed under the ask, and
+ * the client reconnected (`SparksPort.onReconnected`) is when to ask again. */
+export function askAgain(refusal: unknown): boolean {
   return isRecord(refusal) && refusal["retryable"] === true;
 }
 

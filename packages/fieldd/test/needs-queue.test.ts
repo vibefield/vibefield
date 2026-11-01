@@ -1,9 +1,10 @@
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AGENT_CATALOG,
   NEEDS_RECORD_FORMAT,
+  NEEDS_WORDS_MAX,
   NeedsItem,
   NeedsNotice,
   type NeedsRecord,
@@ -422,12 +423,24 @@ describe("the held send (CP-D3, CP3-D3 B)", () => {
   });
 
   it("cuts long words on the wire and says so, while the record keeps them whole", async () => {
+    // the cut is fieldd's alone, its "…" with it: the words come out as the contracts fixture the window draws (EL9)
+    const fixture = NeedsItem.parse(
+      JSON.parse(
+        readFileSync(
+          join(import.meta.dirname, "../../contracts/fixtures/needs-item.held-send-cut.json"),
+          "utf8",
+        ),
+      ),
+    );
+    const cutWords = fixture.words ?? "";
+    expect(fixture.cut).toBe(true);
     const h = harness();
-    const long = "w".repeat(2_500);
+    const long = `${cutWords.slice(0, -1)} and every word past the cut`;
     const id = h.queue.send(VELA_FROM, "run-his", long);
     const [item] = listed(h.queue);
-    expect(item).toMatchObject({ cut: true });
-    expect(item?.words).toHaveLength(2_000);
+    expect(item).toMatchObject({ cut: true, words: cutWords });
+    expect(item?.words).toHaveLength(NEEDS_WORDS_MAX);
+    expect(item?.words?.endsWith("…")).toBe(true);
     await h.queue.answer(id, 0, principal);
     expect(h.queued).toEqual([["run-his", long, "Vela"]]);
   });

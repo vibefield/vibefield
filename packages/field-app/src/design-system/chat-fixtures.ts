@@ -593,8 +593,9 @@ export const CHAT_COMPOSER: Partial<Record<ChatState, ComposerPlate>> = {
 /** Vela, awake, with a transcript behind her: the spark whose thread every card plate stands in. */
 const VELA = SPARKS[0] as SparkSummary;
 
-/** A session's name as fieldd's `runLabel` gives it, and @'s ordinal (DESIGN.md's "claude·2"), from the catalog. */
-const HANDLE = `${AGENT.id}·2`;
+/** A session's name as fieldd's `runLabel` gives it (its title, else its row's catalog label, else its id): an untitled
+ * run of the catalog's first agent, so its label (DESIGN.md's "Claude Code"). */
+const SESSION_NAME = AGENT.label;
 
 /** One of Vela's open items, as needs.subscribe would say it. */
 function velaItem(over: Partial<NeedsItem> & Pick<NeedsItem, "id" | "kind">): NeedsItem {
@@ -619,7 +620,7 @@ const HELD_SEND = velaItem({
   words: "run the tests in packages/fieldd and tell me what fails",
   count: 3,
   choices: [NEEDS_CHOICE_WORDS.allow, NEEDS_CHOICE_WORDS.notNow],
-  to: { session: "run-his-1", name: HANDLE },
+  to: { session: "run-his-1", name: SESSION_NAME },
 });
 const HELD_SPAWN = velaItem({
   id: "ny-plateheldspawn",
@@ -635,7 +636,7 @@ const AGENT_ASK: NeedsItem = {
   kind: "agent-ask",
   state: "open",
   // an agent Vela started, asking in its own pane
-  from: { name: HANDLE, session: "run-vela-agent" },
+  from: { name: SESSION_NAME, session: "run-vela-agent" },
   spark: VELA.id,
   asked: minutesAgo(1),
   ask: "permission",
@@ -733,7 +734,7 @@ export const needsLiveEntryOf = (items: readonly NeedsItem[]): SparkEntry => vel
  * ended); the spawn's Allow one more done while Vela sleeps, so she has not heard it. Not now is done for each. */
 export function needsLiveAnswerOf(item: NeedsItem, choice: number): NeedsItem {
   if (item.kind === "held-send" && choice === 0)
-    return answeredOf(item, choice, { outcome: "failed", reason: `${HANDLE} ended` });
+    return answeredOf(item, choice, { outcome: "failed", reason: `${SESSION_NAME} ended` });
   if (item.kind === "held-spawn" && choice === 0)
     return answeredOf(item, choice, { told: false, waits: "Vela's session is not running yet" });
   return answeredOf(item, choice);

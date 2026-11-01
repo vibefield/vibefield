@@ -19,6 +19,7 @@ import {
   type NeedsItemId,
   type SparkSummary,
 } from "@vibefield/contracts";
+import { FielddRpcError } from "@vibefield/fieldd-client";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -82,6 +83,13 @@ const UNKNOWN = NeedsItem.parse({
   from: { name: "Vela", session: "run-12", spark: "sp-7k2m9q4x" },
   spark: "sp-7k2m9q4x",
 });
+/** fieldd's fixture of a held send whose words it cut: 2,000 units, the last its "…" (needs-queue.test.ts sends the
+ * words that come out as these). */
+const HELD_SEND_CUT = NeedsItem.parse(
+  JSON.parse(
+    readFileSync(join(here, "../../contracts/fixtures/needs-item.held-send-cut.json"), "utf8"),
+  ),
+);
 
 const VELA: SparkSummary = {
   id: "sp-7k2m9q4x",
@@ -238,10 +246,11 @@ describe('what the card says (DESIGN.md §8 "Chat\'s thread", the needs-you card
     expect(said.more).toBe("and 1 more");
     expect(said.sub).toBe("Your yes lasts until claude·2 ends.");
     expect(said.acts.map((each) => each.word)).toEqual(["Allow", "Not now"]);
-    // words fieldd cut end in "…"
-    const cut = NeedsItem.parse({ ...HELD_SEND, cut: true, count: 1 });
-    const cutSaid = needsCardWords(needsCardOf(entryOf([cut]), cut));
-    expect(cutSaid.words).toBe("run the tests in packages/fieldd and tell me what fails…");
+    // words fieldd cut end in its one "…": the window adds none
+    const cutSaid = needsCardWords(needsCardOf(entryOf([HELD_SEND_CUT]), HELD_SEND_CUT));
+    expect(cutSaid.words).toBe(HELD_SEND_CUT.words);
+    expect(cutSaid.words?.match(/…/gu)).toHaveLength(1);
+    expect(cutSaid.words?.endsWith("…")).toBe(true);
     expect(cutSaid.more).toBeNull();
   });
 
@@ -339,23 +348,23 @@ describe('what the card says (DESIGN.md §8 "Chat\'s thread", the needs-you card
     const design = readFileSync(join(here, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
     for (const text of [
       "Asking you",
-      "Needs your OK · claude·2",
+      "Needs your OK · Claude Code",
       "1 of 3",
-      "Vela wants to send to claude·2",
+      "Vela wants to send to Claude Code",
       "Vela wants another agent: Claude Code in vibe-field",
-      "claude·2 asks to run Bash",
-      "claude·2 asks for your OK",
-      "claude·2 has a question",
-      "claude·2 needs you",
+      "Claude Code asks to run Bash",
+      "Claude Code asks for your OK",
+      "Claude Code has a question",
+      "Claude Code needs you",
       "Vela needs you",
       "and 2 more",
-      "Your yes lasts until claude·2 ends.",
+      "Your yes lasts until Claude Code ends.",
       "8 of Vela's agents are running, the most a spark may run.",
       "Answer it in its pane.",
       "Allow…",
       "Couldn't answer: …",
       "You said Allow",
-      "Couldn't send Vela's words to claude·2: …",
+      "Couldn't send Vela's words to Claude Code: …",
       "Couldn't start the agent: …",
       "Couldn't finish it: …",
       "Vela hears it when it wakes: …",
@@ -440,6 +449,24 @@ describe("the card, drawn (the shipping NeedsCardView)", () => {
       for (const button of acts()) button.click();
     });
     expect(pressed).toEqual([]);
+    // it waits on no one: the strong hairline and a tertiary eyebrow, as an answered card's
+    expect(card()?.hasAttribute("data-waits")).toBe(false);
+  });
+
+  it("stays ringed while its answer runs, though fieldd has dropped its item meanwhile", () => {
+    mount(
+      <NeedsCardView
+        card={needsCardOf(entryOf([HELD_SPAWN]), HELD_SEND, { state: "busy", choice: 0 })}
+      />,
+    );
+    expect(card()?.hasAttribute("data-waits")).toBe(true);
+  });
+
+  it("draws words fieldd cut with fieldd's one ellipsis, never a second", () => {
+    draw(HELD_SEND_CUT);
+    const shown = $(".vf-needs-words")?.textContent ?? "";
+    expect(shown).toBe(HELD_SEND_CUT.words);
+    expect(shown.endsWith("……")).toBe(false);
   });
 
   it("answered here, gives its acts and count to one line: what you said, ringed in the hairline again", () => {
@@ -545,11 +572,15 @@ const PORT: ComposerPort = {
 
 let setActive: ((active: boolean) => void) | null = null;
 
-async function mountChat(items: readonly NeedsItem[], sparks: SparkSummary[] = [VELA]) {
+async function mountChat(
+  items: readonly NeedsItem[],
+  sparks: SparkSummary[] = [VELA],
+  port: SparksPort = feed(sparks),
+) {
   queue.items = items;
   queue.asked = [];
   queue.answers = [];
-  stopFeed = startSparksFeed(feed(sparks));
+  stopFeed = startSparksFeed(port);
   function Owner(): ReactElement {
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [active, set] = useState(true);
@@ -618,6 +649,60 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     expect(document.activeElement).toBe(card());
     // an answer that went as asked says nothing on the status line: the pane's line of facts says it
     expect(statusLineSaid()).toEqual([]);
+  });
+
+  /** The feed over a queue refused with `first` until `reads.refusal` is null, asked again when the test reconnects
+   * the window's client (`SparksPort.onReconnected`, the seam the board is asked again on). */
+  function refusedQueue(first: Error) {
+    const reads = { asks: 0, refusal: first as Error | null, reconnected: new Set<() => void>() };
+    const door: SparksPort = {
+      ...feed(),
+      watchNeeds: async (onItems) => {
+        reads.asks += 1;
+        if (reads.refusal !== null) throw reads.refusal;
+        queue.push = onItems;
+        onItems(queue.items);
+        return () => undefined;
+      },
+      onReconnected: (listener) => {
+        reads.reconnected.add(listener);
+        return () => reads.reconnected.delete(listener);
+      },
+    };
+    const reconnect = () =>
+      act(async () => {
+        for (const listener of [...reads.reconnected]) listener();
+      });
+    return { reads, door, reconnect };
+  }
+
+  it("asks the queue again for a subscribe refused as the socket closed, once the window's client reconnects, and stands its card then", async () => {
+    // the connection closed under the ask while the same fieldd stayed up: the client's own retryable refusal
+    const { reads, door, reconnect } = refusedQueue(
+      new FielddRpcError("UNAVAILABLE", "connection closed", true),
+    );
+    await mountChat([QUESTION], [VELA], door);
+    expect(reads.asks).toBe(1);
+    expect(card()).toBeNull();
+    reads.refusal = null;
+    await reconnect();
+    await settle();
+    expect(reads.asks).toBe(2);
+    expect(words($(".vf-needs-question"))).toBe(QUESTION.words);
+    // a queue read stands: another reconnect asks for nothing (the client replays its subscription itself)
+    await reconnect();
+    expect(reads.asks).toBe(2);
+  });
+
+  it("never asks the queue again where fieldd refused it for good (a fieldd before CP-3)", async () => {
+    const { reads, door, reconnect } = refusedQueue(
+      new FielddRpcError("NOT_FOUND", "unknown method needs.subscribe", false),
+    );
+    await mountChat([QUESTION], [VELA], door);
+    await reconnect();
+    await settle();
+    expect(reads.asks).toBe(1);
+    expect(card()).toBeNull();
   });
 
   it("leaves at once, saying nothing, when the item is answered in another window", async () => {
@@ -834,6 +919,11 @@ describe("the catalog's needs-you card (docs/UI_SYSTEM.md: the shipping view on 
     ];
     expect(gone.length).toBeGreaterThan(0);
     expect(gone.every((button) => button.disabled)).toBe(true);
+    // and it is ringed no longer, since it waits on no one; refused while it waits, it keeps its ring
+    const ringed = (id: string): boolean | undefined =>
+      host?.querySelector(`[data-plate="${id}"] .vf-needs-card`)?.hasAttribute("data-waits");
+    expect(ringed("refused-gone")).toBe(false);
+    expect(ringed("refused")).toBe(true);
     expect(host?.querySelector('[data-plate="unknown"] .vf-needs-question')?.textContent).toMatch(
       / needs you$/u,
     );

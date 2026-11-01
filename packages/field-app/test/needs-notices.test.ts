@@ -9,9 +9,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type NeedsNotice, NeedsNotices } from "@vibefield/contracts";
-import type { FielddClient } from "@vibefield/fieldd-client";
+import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  type NeedsNoticesPort,
   needsNoticeStatus,
   needsNoticesPortOver,
   startNeedsNotices,
@@ -36,13 +37,15 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 5; i += 1) await Promise.resolve();
 }
 
-/** One fake fieldd client: its `needs.notices.subscribe` answers when the test says. */
+/** One fake fieldd client: its `needs.notices.subscribe` answers when the test says; it stays connected. */
 function fieldd() {
   const subscribed: string[] = [];
   let onEvent: OnEvent = () => {};
   let answer!: { resolve: (snapshot: unknown) => void; reject: (error: unknown) => void };
   const unsubscribe = vi.fn();
   const client = {
+    status: "ready",
+    onStatusChange: () => () => undefined,
     subscribe: vi.fn((method: string, _params: unknown, listener: OnEvent) => {
       subscribed.push(method);
       onEvent = listener;
@@ -161,6 +164,67 @@ describe("an agent's notify on the window's status line (CP3-D5 A)", () => {
     await f.refuse(Object.assign(new Error("unknown method"), { code: "NOT_FOUND" }));
     expect(getStatusNotice()).toBeNull();
     expect(() => stop()).not.toThrow();
+  });
+
+  /** notify's carrier as a fake port: refused with `refusal` until it is null, asked again when the test reconnects. */
+  function carrier(first: Error) {
+    const port = {
+      asks: 0,
+      refusal: first as Error | null,
+      hear: null as ((notice: NeedsNotice) => void) | null,
+      reconnected: new Set<() => void>(),
+    };
+    const door: NeedsNoticesPort = {
+      watch: async (onNotice) => {
+        port.asks += 1;
+        if (port.refusal !== null) throw port.refusal;
+        port.hear = onNotice;
+        return () => undefined;
+      },
+      onReconnected: (listener) => {
+        port.reconnected.add(listener);
+        return () => port.reconnected.delete(listener);
+      },
+    };
+    const reconnect = async (): Promise<void> => {
+      for (const listener of [...port.reconnected]) listener();
+      await settle();
+    };
+    return { port, door, reconnect };
+  }
+
+  it("asks again for a carrier refused as the socket closed, once the window's client reconnects, and says what is told then", async () => {
+    // the connection closed under the ask while the same fieldd stayed up: the client's own retryable refusal
+    const { port, door, reconnect } = carrier(
+      new FielddRpcError("UNAVAILABLE", "connection closed", true),
+    );
+    const stop = startNeedsNotices(door);
+    await settle();
+    expect(port.asks).toBe(1);
+    // refused again as it reconnects: asked again at the next
+    await reconnect();
+    expect(port.asks).toBe(2);
+    port.refusal = null;
+    await reconnect();
+    expect(port.asks).toBe(3);
+    port.hear?.(VELA);
+    expect(getStatusNotice()?.text).toBe("Vela — the build is green");
+    // a carrier heard stands: another reconnect asks for nothing (the client replays it itself)
+    await reconnect();
+    expect(port.asks).toBe(3);
+    stop();
+    expect(port.reconnected.size).toBe(0);
+  });
+
+  it("never asks again for a carrier fieldd refused for good", async () => {
+    const { port, door, reconnect } = carrier(
+      new FielddRpcError("NOT_FOUND", "unknown method needs.notices.subscribe", false),
+    );
+    startNeedsNotices(door);
+    await settle();
+    await reconnect();
+    expect(port.asks).toBe(1);
+    expect(getStatusNotice()).toBeNull();
   });
 
   it("stopped, it says nothing more, and a subscribe that answers after the stop is let go at once", async () => {

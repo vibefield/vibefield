@@ -165,8 +165,9 @@ export class NeedsQueue implements TalkHolds {
     this.#logger = opts.logger ?? createNoopLogger();
   }
 
-  /** At boot: read the store, and nothing else (critique 3: no run has re-attached yet). An act a restart broke into
-   * becomes its uncertain fact, owed to its spark, and is never done again. Returns how many records were kept. */
+  /** At boot: read the store, and nothing else (critique 3: no run has re-attached yet). An act found begun and never
+   * recorded done becomes its uncertain fact, owed to its spark, and is never done again. Returns how many records were
+   * kept. */
   restore(): number {
     for (const record of this.opts.store.list()) {
       const kept = record.acting === undefined ? record : this.#uncertain(record);
@@ -633,7 +634,9 @@ export class NeedsQueue implements TalkHolds {
     throw refuseAnswer(`already answered: ${said ?? "another act"}`, "answered");
   }
 
-  /** An act a restart broke into: the spark is told it is uncertain, and it is never done again (CP2-D2). */
+  /** An act a restart found begun and never recorded done (it broke into it, or the disk did not take the record of its
+   * end): the spark is told it is uncertain, true whether or not it heard the act before, and it is never done again
+   * (CP2-D2). */
   #uncertain(record: NeedsRecord): NeedsRecord {
     const { acting, texts: _texts, launch: _launch, sender: _sender, ...rest } = record;
     const { item } = record;
@@ -651,7 +654,7 @@ export class NeedsQueue implements TalkHolds {
           choice: acting?.choice ?? YES,
           at: acting?.at ?? this.#now().toISOString(),
           outcome: "failed",
-          reason: "VibeField restarted during the act",
+          reason: words.UNCERTAIN_REASON,
           told: false,
         },
       },
@@ -659,7 +662,7 @@ export class NeedsQueue implements TalkHolds {
     };
     this.#logger.warn(
       "fieldd.needs.act_uncertain",
-      "An answer's act was under way when fieldd stopped; it is not done again, and its spark is told",
+      "An answer's act was begun and never recorded done when fieldd stopped; it is not done again, and its spark is told",
       { item: item.id, kind: item.kind },
     );
     this.#stand(next);

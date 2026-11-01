@@ -779,6 +779,75 @@ describe('a spark that needs you, and a thread unread, from another view (CH-D4,
     expect(note()?.textContent).toBe("Vela needs you");
   });
 
+  /** The window's feed over a port whose first ask of the board, or of the queue, is refused as the connection closes
+   * under it (retryable, the same fieldd up) while the other two are read; each refused one is asked again once the
+   * window's client reconnects (`reconnect`). What stood before the window opened: Vela asking on the board, or her
+   * question in the queue. */
+  async function refusedFirst(which: "board" | "queue"): Promise<() => Promise<void>> {
+    revision = 1;
+    const reconnected = new Set<() => void>();
+    let refused = true;
+    const closed = (): Error => Object.assign(new Error("connection closed"), { retryable: true });
+    const port: SparksPort = {
+      list: async () => [vela],
+      watch: async (onFrame) => {
+        if (which === "board" && refused) throw closed();
+        frame = onFrame;
+        const doing = which === "board" ? "asking" : "idle";
+        onFrame({ revision, rows: [velaRow(doing, revision)] }, "snapshot");
+        return () => undefined;
+      },
+      watchNeeds: async (onItems) => {
+        if (which === "queue" && refused) throw closed();
+        needs = onItems;
+        onItems(which === "queue" ? [asks("ny-before00001")] : []);
+        return () => undefined;
+      },
+      answer: async () => {
+        throw new Error("nothing is answered here");
+      },
+      onReconnected: (listener) => {
+        reconnected.add(listener);
+        return () => reconnected.delete(listener);
+      },
+      open: async () => vela,
+    };
+    stop = startSparksFeed(port);
+    await act(async () => undefined);
+    return () =>
+      act(async () => {
+        refused = false;
+        for (const listener of [...reconnected]) listener();
+      });
+  }
+
+  it("says nothing of what the board's first reading finds, though it comes only after a refusal asked past (CP-3)", async () => {
+    const reconnect = await refusedFirst("board");
+    mountFrame();
+    to("godview");
+    expect(dot()).toBeNull();
+    await reconnect();
+    // Vela was asking before the window first read the board: the dot says it, and no note was earned
+    expect(dot()?.dataset.mark).toBe("needs");
+    expect(note()).toBeNull();
+    // what starts to need you after that is news
+    await say("idle");
+    await say("asking");
+    expect(note()?.textContent).toBe("Vela needs you");
+  });
+
+  it("says nothing of what the queue's first reading finds, though it comes only after a refusal asked past (CP-3)", async () => {
+    const reconnect = await refusedFirst("queue");
+    mountFrame();
+    to("godview");
+    expect(dot()).toBeNull();
+    await reconnect();
+    expect(dot()?.dataset.mark).toBe("needs");
+    expect(note()).toBeNull();
+    await act(async () => needs?.([asks("ny-before00001"), asks("ny-after000001")]));
+    expect(note()?.textContent).toBe("Vela needs you");
+  });
+
   it("says nothing of what needed you before the first reading, and nothing at all in Chat", async () => {
     await feed("asking");
     mountFrame();

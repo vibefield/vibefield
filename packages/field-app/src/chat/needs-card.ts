@@ -22,7 +22,9 @@ export const NEEDS_LEAVE_MS = 180;
 export const NEEDS_FADE_MS = 120;
 
 /** What the card is doing: waiting on you, its answer running (the act pressed, by its place), refused in fieldd's
- * words while it can still be answered, or answered here (the act pressed, and the answer fieldd recorded). */
+ * words, or answered here (the act pressed, and the answer fieldd recorded). Refused, it is answered again while its
+ * item still waits (`NeedsCard.waits`); once that item has left the queue, its acts go quiet for the note's time it
+ * stands. */
 export type NeedsAct =
   | { readonly state: "idle" }
   | { readonly state: "busy"; readonly choice: number }
@@ -96,7 +98,8 @@ export interface NeedsCardWords {
   readonly eyebrow: string;
   /** what you are asked */
   readonly question: string;
-  /** a held send's first held words, a held spawn's first task, an unknown kind's words; "…" where fieldd cut them */
+  /** a held send's first held words, a held spawn's first task, an unknown kind's words: as fieldd hands them, so
+   * words it cut end in its own "…" (`NeedsItem.cut`) and the card adds none */
   readonly words: string | null;
   /** how many more held words wait behind them ("and 2 more") */
   readonly more: string | null;
@@ -179,7 +182,7 @@ export function needsCardWords(card: NeedsCard): NeedsCardWords {
   return {
     eyebrow: other ? `${word} · ${asker}` : word,
     question,
-    words: shown === undefined ? null : `${shown}${item.cut === true ? "…" : ""}`,
+    words: shown ?? null,
     more: more > 0 ? `and ${more} more` : null,
     sub: subOf(item, asker),
     acts,
