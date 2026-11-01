@@ -243,11 +243,15 @@
   **PG-3a** (11-01), the witness goldens (`b13390352` → `c5dfba715`, M80 `d14e97880`; LANDED "PG-3a"): the remote cut's
   states a phone reads row for row, hand-written and held to fieldd's own cut, and the home's window computed over
   them as `phone-fold.golden.json` and `phone-body.golden.json`, which the kit transcribes (J1 (a)); item 144 found.
+  **PG-3b** (11-01), `reportShown` through the home (`9e3a67729` → `3072786bb`, M84 `fe84493c4`; LANDED "PG-3b"): the
+  phone is a screen of the desktop that owns the row, its report routed by `device` through its home and kept on
+  the owner as that reader's own screen, keyed by `onBehalfOf` (J2 (a)); screens by kind (`SCREEN_BOARDS`), at most
+  64 carried per peer connection, and the report replayed at every re-dial and upstream re-attach.
 - Next: PG-3's remaining slices (the brief `lanes/ios/PG3-BRIEF.md`; James ruled J1–J4 at 2026-11-01 03:56Z, all
-  (a)): 3b `reportShown` through the home (contracts and fieldd; J2, owner screens keyed by `onBehalfOf`) → 3c the
-  kit decodes the remote cut from the mirrored goldens (after F1b's kit half) → 3d the Swift fold and replica, held
-  to `phone-fold.golden.json` → 3e the switch, held to `phone-body.golden.json` (J3 per hour; J4 ahead of PU-I)
-  → PG-5…PG-8 (list, timeline, spend, rain, native) → PG-9 (resume, `agent.get`, the measured rates).
+  (a)): 3c the kit decodes the remote cut from the mirrored goldens (after F1b's kit half) → 3d the Swift fold and
+  replica, held to `phone-fold.golden.json` → 3e the switch, held to `phone-body.golden.json`, and the phone's
+  `reportShown` by PG-3b's sender rules (J3 per hour; J4 ahead of PU-I) → PG-5…PG-8 (list, timeline, spend, rain,
+  native) → PG-9 (resume, `agent.get`, the measured rates).
   PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
   the shed; the cap read on the phone under the link conditioner (PG-9); from PG-1d, the F-H2 rider (the board's gate
@@ -255,7 +259,8 @@
   (`AgentTerminalFace.swift`); from PG-2, the draft queue's amendments (design-06's SP-L4, DS-D4 and limits "not
   built" clauses, design-mv §1, build-mv L8 and M29, the design record's §8 as built), and `field`'s retirement one
   release of skew after the kit ships (PG-L1); from PG-3a, the kit's copies of its goldens (3c), and at a draft slot
-  PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's remote-cut self-check).
+  PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's remote-cut self-check); from PG-3b,
+  3e's sender rules, and 3e mirrors `agent-report-shown.routed.json` (the phone's send shape) into the kit.
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
