@@ -324,9 +324,14 @@
   LANDED "PT-S3"); its brief's P1–P16 are the orchestrator's leans. `pnpm smoke:phone` (L2), `:none` (L1) and `:cost`
   (L3) run the phone's rows under a stage that arms on the console's idle, makes and deletes only its own devices and
   restores the host (desk-gates row 33: landing-only, never inside `gate:landing`); P1 finds Xcode beside the Command
-  Line Tools. Nothing live has run: no real Simulator pixels have been seen on the desk.
-- Next: **PT-S3's live run, on James's unlock** (§6 step 3a's build and preflight, then L0 ENUM with him at the screen,
-  L1 and L2; L3 on the mini on his word, or skipped): a booted simulator streams its real pixels to the desk, each
+  Line Tools. **The first console run, 11-01** (James's unlock): L0 ENUM GREEN (Ghostty holds Screen Recording, no
+  prompt), L1 GREEN (after field-native was built: items 133/134); L2 ran 14 of 20 rows: real Simulator pixels
+  reached the desk (SIM-CAP's band), and its four reds and two VOIDs were the harness's, not the product's: a fresh
+  device's door verbs before iOS was ready, rows judging pages never opened (item 140, LANDED 11-01 in the mint
+  `aa5bf3669`; P7, P8 and H1 ruled at the leans).
+- Next: **PT-S3's L2 again, under a new run id, at James's launch** (L0 and L1 stand; SIM-STOPPED-CLOSED and P7's
+  hand witness after it, if he offers; L3 on the mini on his word, or skipped): a booted simulator streams its real
+  pixels to the desk, each
   honest face, the Screen Recording and Accessibility flows, "Show it" on a running Simulator.app (P7: recorded, its
   fix ruled after), the stopped word (P8), the fps buckets (PT-S2's R9: the law's 12 at rest arrives as 10), the
   letter of PT-S2's R7, the cost at the cap beside a pane

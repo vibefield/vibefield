@@ -26905,3 +26905,77 @@ item's Quit VibeField is then the quit. AL-D10 "A" stands: no LaunchAgent, with 
 - The app menu's Quit item still says "Quit VibeField" while the switch is on.
 - The physical row: a real ⌘Q with the switch on, on a packaged build. It is James's hand row.
 - Windows/Linux keep their own "Keep running after window closes".
+
+## Item 140 — PT-S3's L2 phone smoke made honest: the door waits for iOS ready, an unproven stimulus is STAGING NOT MET, the host gives back its own Simulator defaults, and a reused run id is refused (2026-11-01; `468420ee8`, lane `pts3` branch `item140`, 24 commits rebased onto M75 `230e72848`, in the mint `aa5bf3669`, run 79, over main `090791e63`; VF-PM's item 140, 03:42Z, from the orchestrator's L2 triage)
+
+**Why:** PT-S3's first console run (James's unlock, 2026-11-01).
+- L0 ENUM was GREEN at 02:18Z: Ghostty holds Screen Recording; 156 sources; no prompt.
+- L1 `smoke:phone:none` failed first at 02:21Z (`l1-1101`). The lane had no field-native binary, because `build:all`
+  never builds it (items 133/134, the fixer's, M75). After `cargo build -p field-native`, L1 was GREEN at 02:40Z
+  (`l1b-1101`).
+- L2 `smoke:phone` (`l2-1101`) ran TWICE under one run id (02:59–03:11Z and 03:22–03:29Z). The host was restored both
+  times. The second run's stdout was 14 of 20 rows: 7 green, 1 RECORDED, 4 red, 2 VOID, with a STOP at SIM-STOPPED.
+- The orchestrator's read-only triage (three readers, each cite verified) found NO product red. The reds came from the
+  stage and from the rows:
+  - "Booted" is not "ready": every openurl and screenshot on a freshly created iOS 26.5 device failed for minutes.
+  - The rows judged pages that were never opened.
+  - A function crossed `executeJavaScript`.
+  - SIM-STOPPED pressed on a word read once.
+  - SIM-STILL read its baseline before settling.
+  - SIM-IDLE printed running totals.
+  - The stage accepted a reused run id.
+  - Simulator.app's per-device defaults for the deleted devices were left behind.
+
+**Rulings** (dated in the PT record):
+- T2, the orchestrator's: a failed door verb or an unproven `/loaded` is STAGING NOT MET, never a product red. Since the
+  grade's G1–G3, a staging failure never hides a red proven over a page that did open.
+- P8 = A: quitting Simulator.app may shut the device down, and the face's `off` + Boot stands. Design §3 is amended:
+  `stopped` means the window is gone while the device is still booted. SIM-STOPPED records `off`. `off` over a steadily
+  Booted device is a red (G11).
+- P7 = A: PT-S2's risk 1 ("Show it" on a running Simulator.app) is unreachable by staging, because a fresh launch opens
+  a window for every booted device. James witnesses it once by hand, beside SIM-STOPPED-CLOSED.
+- H1 = A: teardown removes exactly the run's own UDID-keyed Simulator defaults and judges them as the own side.
+- R2, the orchestrator's: `ensure()` polls while the door answers Booting, and `boot` on an already-booted device only
+  waits.
+- R3, the orchestrator's: defaults housekeeping beside the run's own Simulator.app is an observation, not another's
+  hand.
+
+**What landed** (4 files, +2,903 −244: `scripts/stage-simulator-fixture.mjs` with its unit,
+`packages/electron-shell/src/testing/smoke-phone.ts` with its unit; no product file, lock, pin or Rust change):
+- **The stage:**
+  - T1: the door proves iOS ready with `simctl bootstatus` (never `-b`), bounded at `BOOT_READY_MS` (180 s), once per
+    device per boot, keyed by `lastBootedAt`. It answers Booting until then.
+  - G5: no door verb outlives the smoke's timeouts.
+  - G6: every pending bootstatus is killable and is killed at teardown.
+  - H3: a failed verb carries simctl's stderr, redacted.
+  - T7 and G9: a reused or mismatched run id exits 2 before any write.
+  - H1, G7, G8 and G12: the cleanup cuts byte spans out of the export, then pgrep → export → pgrep → import → re-read.
+    The grade proved it byte-exact over every plist type, and that it never imports from a bad export. An unreadable
+    export is OWN.
+- **The rows:**
+  - T2 and G4: every page open is `openProven` (openurl opened AND `/loaded` counted); a source check holds that no
+    dropped `openUrl(` remains.
+  - T3: `screenOf` projects a function-valued act. The no-device phone is removed in a `finally`.
+  - T4 and G11: SIM-STOPPED settles its word against P's state.
+  - T5: SIM-STILL settles before its baseline and judges by the take's start.
+  - T6 and G10: SIM-IDLE prints the window's wakes and runs its wake window from `/loaded`.
+  - R2-B: `ensure()` polls.
+
+**Validation.**
+- Red first, per T and G, in each commit's message.
+- Read-only grade: no blocker; 7 SHOULD and 3 NIT, all taken as G1–G12.
+- Units after the rebase onto M75: stage 98/98, smoke-phone 76/76, electron-shell tsc exit 0, biome clean.
+- The light at `468420ee8`: 19 of 19 GREEN, 04:27:40–04:47:29Z, at load 70–150. Outside HOLD: diff-check, biome,
+  typecheck, walls, deps, gen:check, lint, and the two units. Under co-plan/HOLD (04:42:06–04:47:29Z): electron-shell
+  2,470 passed (3 skipped), field-app 3,532 (3 skipped), plugin-simulator 131, dev-runner 361, `build:all
+  --skip-nx-cache`, bundle-report, the native build, and `cargo build -p field-native`. After: `PHONE_PREFLIGHT ok` and
+  the tree clean (`lanes/pts3/light/SUMMARY.txt`).
+- Run 79: the mini's run 79 GREEN: `pnpm verify` exit 0 at 05:11:52Z; vitest 11,553 passed, 0 failed, 18 skipped (+23,
+  all in `smoke-phone.test.ts`, 53 → 76); node 342 → 361; cargo 534/0/14; typecheck 28/28; the tree clean.
+- **Landed:** M79 `aa5bf3669` (the MERGE shape: `468420ee8` + main `090791e63`), main fast-forwarded to it at 2026-11-01
+  06:13:50Z on VF-PM's GO.
+
+**Owed.**
+- L2 again, under a new run id, launched by James. It carries L1's re-run with item 133's preflight.
+- Then SIM-STOPPED-CLOSED and P7's hand witness, if James offers.
+- L3 on the mini on his word, or skipped.
