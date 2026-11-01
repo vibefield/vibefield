@@ -1543,9 +1543,11 @@ test("doorAct: boot, shutdown and openurl run on the own UDID with DEVELOPER_DIR
   const run = ownRun();
   const { deps, calls } = fakeHost();
   assert.equal((await doorAct({ verb: "boot", device: 1 }, run, deps)).status, 200);
-  assert.deepEqual(calls[0].args, ["simctl", "boot", OWN[0]]);
-  assert.equal(calls[0].file, "/usr/bin/xcrun");
-  assert.equal(calls[0].env.DEVELOPER_DIR, XCODE_DEVELOPER_DIR);
+  // the device's state read first (R2-A: a device already Booted is never booted again), then the boot
+  const boot = calls.find((c) => c.args[1] === "boot");
+  assert.deepEqual(boot.args, ["simctl", "boot", OWN[0]]);
+  assert.equal(boot.file, "/usr/bin/xcrun");
+  assert.equal(boot.env.DEVELOPER_DIR, XCODE_DEVELOPER_DIR);
   const url = `http://127.0.0.1:51234/motion?n=ff8800&t=${run.token}`;
   assert.deepEqual(
     (
@@ -1872,6 +1874,22 @@ test("T1: boot and a device verb WAIT for readiness inside the smoke's door time
     n: 1,
     state: "Booting",
   });
+  // R2-A: a device simctl already lists Booted (the product's face booted it) — or Booting — is never `simctl boot`ed:
+  // boot only waits for readiness, then answers Booted
+  for (const listed of ["Booted", "Booting"]) {
+    const faced = ownRun();
+    const product = bootingHost(listed);
+    product.deps.sleep = async () => {
+      product.asks.at(-1)?.(ok());
+      await settle();
+    };
+    assert.deepEqual((await doorAct({ verb: "boot", device: 1 }, faced, product.deps)).body, {
+      n: 1,
+      state: "Booted",
+    });
+    assert.deepEqual(product.ran("boot"), [], `${listed}: no simctl boot`);
+    assert.equal(product.asked().length, 1, listed);
+  }
   // a device verb asked while iOS boots: waits (inside the 60 s door timeout), then runs once ready
   const verb = ownRun();
   const host2 = bootingHost();

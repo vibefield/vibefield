@@ -1392,10 +1392,17 @@ export async function doorAct(body, run, deps) {
   if (verb === "boot" || verb === "shutdown") {
     const asked = deps.now();
     if (verb === "shutdown") run.ready.delete(own.udid.toUpperCase());
-    const r = await simctl(run, deps, [verb, own.udid], verb === "boot" ? 120_000 : 60_000);
-    const now = await deviceNow(run, deps, own);
+    const up = (state) => state === "Booted" || state === "Booting";
+    // R2-A: a device simctl already lists Booted (the product's face booted it) or Booting is never booted again — boot
+    // only waits for its readiness
+    const was = verb === "boot" ? await deviceNow(run, deps, own) : null;
+    const r =
+      was !== null && up(was.state)
+        ? null
+        : await simctl(run, deps, [verb, own.udid], verb === "boot" ? 120_000 : 60_000);
+    const now = r === null ? was : await deviceNow(run, deps, own);
     // simctl refuses a boot of a booted device (and a shutdown of a shut one): the state is the answer
-    if (verb === "boot" && (now.state === "Booted" || now.state === "Booting")) {
+    if (verb === "boot" && up(now.state)) {
       // boot's answer is taken ONCE (the smoke's ensure()): readiness waited for inside its door timeout
       const gate = await readiness(
         run,
