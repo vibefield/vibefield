@@ -137,6 +137,83 @@ describe("ModelBoardFold — one chain from every desktop's own", () => {
     ).toMatchObject({ removed: ["run-studio-q"] });
   });
 
+  it("item 137 — a shell promoted to an agent keeps its body: the run's key takes the shell's id as the shell's key leaves, in ONE delta (M22), and back when the run ends", () => {
+    const scheduler = manualFrame();
+    const replica = createMonitorReplica({ scheduler });
+    const fold = new ModelBoardFold();
+    replica.apply(fold.open(OPEN));
+    scheduler.flush();
+    const own = OPEN.devices[0]?.snapshot;
+    const run = own?.rows[0];
+    const shell = own?.rows[1];
+    if (
+      own?.epoch === undefined ||
+      run === undefined ||
+      shell === undefined ||
+      run.monitorRow === undefined ||
+      shell.monitorRow === undefined
+    ) {
+      throw new Error("this desktop's run and terminal rows");
+    }
+    expect([shell.runtimeRunId, shell.monitorRow.id, shell.monitorRow.kind]).toEqual([
+      "pty-s4",
+      "pty-s4",
+      "terminal",
+    ]);
+    const delta = (n: number, upserts: (typeof own.rows)[number][], removed: string[]) => ({
+      device: HERE,
+      delta: {
+        epoch: own.epoch,
+        since: own.revision + n,
+        revision: own.revision + n + 1,
+        upserts,
+        removed,
+      },
+    });
+    // the person types the agent's name in pty-s4: the backend's run carries the shell's model id (M22), and the
+    // owner sends the run's key in and the shell's key out in one delta (fieldd's agent-board-promotion pin)
+    const promoted = {
+      ...run,
+      runtimeRunId: "run-typed",
+      monitorRow: { ...run.monitorRow, id: "pty-s4" },
+    };
+    const promotion = fold.frame(delta(0, [promoted], ["pty-s4"]));
+    if (promotion === null || promotion === "gap") throw new Error("the promotion is a change");
+    expect(promotion.upserts.map((row) => [row.id, row.kind])).toEqual([["pty-s4", "agent"]]);
+    expect(promotion.removed).toEqual([]);
+    expect(fold.held("pty-s4")?.row.kind).toBe("agent");
+    // the chrome's runs take the run in (MV-3d)
+    expect(fold.runs().map((row) => row.runtimeRunId)).toContain("run-typed");
+    // the replica takes it as the body changing, never one leaving and another born
+    expect(replica.apply(promotion)).toBe(true);
+    scheduler.flush();
+    expect(replica.getSnapshot().changes).toEqual({ added: [], updated: ["pty-s4"], removed: [] });
+    expect(replica.getSnapshot().model.byId.get("pty-s4")?.kind).toBe("agent");
+    // the run ends and leaves its PTY standing: the shell's key comes back with the id as the run's key leaves
+    const demotion = fold.frame(delta(1, [shell], ["run-typed"]));
+    if (demotion === null || demotion === "gap") throw new Error("the demotion is a change");
+    expect(demotion.upserts.map((row) => [row.id, row.kind])).toEqual([["pty-s4", "terminal"]]);
+    expect(demotion.removed).toEqual([]);
+    expect(replica.apply(demotion)).toBe(true);
+    scheduler.flush();
+    expect(replica.getSnapshot().changes).toEqual({ added: [], updated: ["pty-s4"], removed: [] });
+    expect(replica.getSnapshot().model.byId.get("pty-s4")?.kind).toBe("terminal");
+    expect(fold.runs().map((row) => row.runtimeRunId)).not.toContain("run-typed");
+    // a snapshot of the same board after it is the same rows by id: nothing removed
+    const resnap = fold.frame({
+      device: HERE,
+      snapshot: { epoch: own.epoch, revision: own.revision + 2, rows: own.rows },
+    });
+    expect(resnap).toMatchObject({ removed: [] });
+    // a key that leaves with no other key holding its id still takes the row with it
+    expect(fold.frame(delta(2, [], ["pty-s4"]))).toMatchObject({
+      upserts: [],
+      removed: ["pty-s4"],
+    });
+    expect(fold.held("pty-s4")).toBeUndefined();
+    replica.dispose();
+  });
+
   it("a row with no model row (an older peer's desk row) is no row, and removes what its key stood for", () => {
     const fold = new ModelBoardFold();
     fold.open(OPEN);

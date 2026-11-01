@@ -222,7 +222,9 @@ export class ModelBoardFold {
       if (held === undefined) this.#devices.set(frame.device, target);
       const before = new Set(target.idByKey.values());
       const upserts = this.#replaceBoard(frame.device, target, frame.snapshot);
-      const removed = [...before].filter((id) => !target.idByKey.has(this.#keyOf(target, id)));
+      // gone is an id no key of the device maps to now (item 137's rule)
+      const mapped = new Set(target.idByKey.values());
+      const removed = [...before].filter((id) => !mapped.has(id));
       return this.#change(upserts, removed);
     }
     const delta = frame.delta;
@@ -235,7 +237,16 @@ export class ModelBoardFold {
       return "gap";
     }
     const upserts: MonitorAgentRow[] = [];
-    const removed: string[] = [];
+    // Item 137 — the ids a key let go of in this frame, each dropped only if
+    // no key of the device maps to it once the whole frame is applied. One
+    // model id can change keys inside one delta: a shell promoted to an agent
+    // is the run's key carrying the shell's id while the shell's key leaves
+    // (M22, fieldd's `hostRunFromSummary`), and the run's end is the shell's
+    // key back with the id while the run's key leaves (fieldd's
+    // `agent-board-promotion.test.ts`). Dropping by key alone deleted the row
+    // in the frame that moved it: a window drew a departure and a birth where
+    // M22 keeps one body.
+    const released = new Set<string>();
     const here = frame.device === this.#here;
     for (const row of delta.upserts) {
       if (here) this.#takeRun(row);
@@ -246,16 +257,12 @@ export class ModelBoardFold {
         // stands for nothing now
         if (previous !== undefined) {
           held.idByKey.delete(row.runtimeRunId);
-          this.#held.delete(previous);
-          removed.push(previous);
+          released.add(previous);
         }
         continue;
       }
       const next = modelRowFrom(wire, this.#here);
-      if (previous !== undefined && previous !== next.id) {
-        this.#held.delete(previous);
-        removed.push(previous);
-      }
+      if (previous !== undefined && previous !== next.id) released.add(previous);
       held.idByKey.set(row.runtimeRunId, next.id);
       this.#held.set(next.id, { device: frame.device, board: row, row: next });
       upserts.push(next);
@@ -265,9 +272,11 @@ export class ModelBoardFold {
       const id = held.idByKey.get(key);
       if (id === undefined) continue;
       held.idByKey.delete(key);
-      this.#held.delete(id);
-      removed.push(id);
+      released.add(id);
     }
+    const mapped = new Set(held.idByKey.values());
+    const removed = [...released].filter((id) => !mapped.has(id));
+    for (const id of removed) this.#held.delete(id);
     held.revision = delta.revision;
     return this.#change(upserts, removed);
   }
@@ -310,11 +319,6 @@ export class ModelBoardFold {
     }
     this.#runs.set(row.runtimeRunId, row);
     this.#runsList = null;
-  }
-
-  #keyOf(held: HeldDevice, id: string): string {
-    for (const [key, candidate] of held.idByKey) if (candidate === id) return key;
-    return id;
   }
 
   #change(upserts: MonitorAgentRow[], removed: string[]): MonitorModelChange | null {
