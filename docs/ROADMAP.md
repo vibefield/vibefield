@@ -181,12 +181,14 @@
   ⌃⌘A, ⌘Q and ⌃⌘F, a held chord acting once, a non-Latin layout's chord read from the physical key), **AL-10**
   (`27d61f7a5`, 11-01; LANDED §AL-10: the Behavior tab's lifetime row says a quit ends a terminal, DESIGN.md §9's "The
   quit's words"; AL-D19 "no"), **AL-11** (`3ead0fd36`, 11-01; LANDED §AL-11: the relaunch cap read from a log on
-  disk, written before each relaunch). AL-8b RETIRED (AL-D10 "A": no LaunchAgent, not with AL-6 either).
+  disk, written before each relaunch), **AL-12** (`b14117151`, 11-01; LANDED §AL-12:
+  Settings → Diagnostics' "Last exit", kept after the notice). AL-8b RETIRED (AL-D10 "A": no LaunchAgent, not with
+  AL-6 either).
 - AL-9c candidates, on James's word (VF-PM's board): the deck's no-op `toggleFullscreen`, through a page→main door of
   its own (AL-D19: a person's Ghostty `quit` chord never quits VibeField) · Settings' chord words off the Mac · the
   deck's last-pane count (with ghosttea's "last pane closed" hook).
-- Next, stacked in order, each its own mint: **AL-12** Settings → Diagnostics' "Last exit" · **AL-6** background
-  mode (AL-D2's "Keep running when VibeField quits", a Dock-hidden resident shell, a status item).
+- Next: **AL-6** background mode (AL-D2's "Keep running when VibeField quits", a Dock-hidden resident shell, a
+  status item).
 - Owed: AL-5's relaunch witness on a packaged build; Windows/Linux relaunch; a fieldd no shell ever claimed is
   unbounded; the clean `smoke:canvas` on this Mac (unattended); ghosttea's "last pane closed" hook (an upstream ask);
   James's hand rows (§5).
