@@ -26833,3 +26833,75 @@ it starts the grandchild.
 
 **Owed.** Nothing of the fixer's. The file's nine other `until()` calls keep their 5 s and the same shape; none was
 seen red, and a red among them is its own item.
+
+## AL-6 — Keep running when VibeField quits: on macOS, with the switch on, a person's quit closes the windows and keeps VibeField in the menu bar with its terminal sessions running; the status item's Quit VibeField is the quit (2026-11-01; `79458ac4a`, lane `al/6-keep-running`; AL-D2; James's "do the worth doing stuff"; VF-PM's GO)
+
+**Why:** AL-D2 (ruled 2026-10-27) gives the person who wants the terminal service kept a switch, off by default. With
+it on, a quit is no quit: the windows close, the Dock icon goes, the status item stays, and nothing ends. The status
+item's Quit VibeField is then the quit. AL-D10 "A" stands: no LaunchAgent, with AL-6 or without it.
+
+**What landed** (contracts · fieldd · field-app · electron-shell · DESIGN.md):
+- **The preference** `desktop.keepRunningOnQuit` (`APP_PREFERENCE_KEYS.KEEP_RUNNING_ON_QUIT`; `AppPreferences`
+  `.default(false)`, so an older daemon's snapshot means off); fieldd's default and tolerant read.
+- **The lifecycle** (`electron-shell/src/main/lifecycle.ts`):
+  - `before-quit` asks `keepRunningOnQuit()` for a PLAIN person's quit only. That excludes a full quit, a signal's,
+    an armed update's, the OS ending the session, a stop or a move under way, and a durable-close replay.
+  - True absorbs the quit: no gate, no stop, no quitting tray, no native quit
+    (`desktop.lifecycle.quit_keeps_running`).
+  - `quitFully()` is the status item's Quit VibeField: it meets the gate as every quit did before. A Cancel or an
+    aborted stop clears it.
+- **main** (`index.ts`):
+  - `quitKeepsRunning` acts on macOS alone, never in a smoke-like mode, and only with the preference on and a status
+    item to stay in.
+  - It reuses AL-5's menu-bar-only presence (`statusItemForced`, the status item shown whatever Show status item
+    says), `app.dock.hide()` and the primary window's own close.
+  - Opening a window ends it: the Dock icon comes back.
+- **The status item** (`tray-model.ts`): "VibeField is running in the background" leads the menu, inert, then a
+  separator.
+- **Settings → Desktop behavior** (macOS): "Keep running when VibeField quits", "Quitting closes the windows and keeps
+  VibeField in the menu bar, with its terminal sessions running. Quit VibeField in the menu bar quits it."
+- **DESIGN.md §9 "The quit's words":** the rule's carve-out, and the bullet with the row's words, the status item's
+  first row and the Dock icon's return.
+
+**Rows:**
+- `lifecycle.test.ts` "Keep running when VibeField quits (AL-6)", 5 rows (34 → 39):
+  - a person's quit goes to the background;
+  - the status item's quit meets the gate, and after its Cancel the next quit goes to the background again;
+  - a proceeded status-item quit stops and exits;
+  - "may not" goes through the gate;
+  - a signal's, an update's and the OS's quits are never asked.
+- `tray-model.test.ts` +1 (23 → 24).
+- `desktop-section.test.tsx` +1 (7 → 8): the row, off, enabled with the status item hidden, its one key, absent on
+  win32, and DESIGN.md quoting its words. The macOS switch count becomes 4.
+- fieldd `app-preferences.test.ts` +1 (7 → 8). The effective snapshots carry the key in contracts' `shell.test.ts`,
+  fieldd's integration test and `connect-asks.test.ts`.
+
+**Validation.**
+- **Red first** (03:50:08 → 03:50:23Z), each source as AL-12 left it; the "may not" and "never asked" rows stay green
+  on both, the controls:
+  - `lifecycle.ts` + `tray-model.ts`: 4 of 106 red;
+  - `app-preferences.ts`: 3 of 10 red;
+  - contracts' `shell.ts`: 1 of 64 red;
+  - `DesktopSection.tsx` + DESIGN.md: 2 of 8 red;
+  - restored: 106/106, 10/10, 64/64, 8/8.
+- **The light** at the tip on `b14117151`, AL-12 (04:22:59 → 04:41:56Z, nice 19, the guard, co-plan/HOLD):
+  - contracts', fieldd's, field-app's and electron-shell's typecheck, biome, preflight, check:walls;
+  - contracts whole: 54 files, 1,434 tests; fieldd whole: 2,820 passed and 30 skipped; field-app whole: 3,539 passed
+    and 3 skipped; electron-shell whole: 161 files, 2,447 passed and 3 skipped.
+  - electron-shell's first whole run, at load about 117, had 2 reds outside this diff (`smoke-profile.test.ts:169`, a
+    reaped daemon read alive; `release-scripts.test.ts:695`, a 5 s timeout), both green alone twice and green in the
+    second whole run; VF-PM logged them as load-class sightings.
+- **Run 78** (M78 `9ea3698a1`, the MERGE shape: `79458ac4a` over main `feea2ea80`, item 141's records on M77; minted by
+  a9 on VF-PM's GO, no second rebase, the light standing):
+  - `pnpm verify` armed 04:52:15Z, exit 0 at 04:57:18Z (about five minutes), the mini's tree clean after it.
+  - vitest 11,530 passed, 0 failed, 18 skipped, +8: lifecycle 34 → 39, tray-model 23 → 24, desktop-section 7 → 8,
+    fieldd app-preferences 7 → 8. cargo 534 passed, 0 failed, 14 ignored (33 results). Typecheck and test ran for 28
+    projects.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run78/` (`mrun78.bundle`, sha256 `153b40faedbb80a8…`).
+- **Landed:** main fast-forwarded `feea2ea80` → `9ea3698a1` at 2026-11-01 04:59:35Z on VF-PM's GO.
+
+**Owed.**
+- The status item's session count (§5.8's "· N sessions"), which needs a census read the tray does not hold.
+- The app menu's Quit item still says "Quit VibeField" while the switch is on.
+- The physical row: a real ⌘Q with the switch on, on a packaged build. It is James's hand row.
+- Windows/Linux keep their own "Keep running after window closes".
