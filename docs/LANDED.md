@@ -27192,3 +27192,164 @@ red-first step a working-tree mutation, restored and proved clean):
 
 **Owed.** Nothing of the fixer's. `goneByKernel`'s `ps -o stat= -p` is new to Linux's procps: main's GitHub verify reads
 it there for the first time at the push after this landing (the census rows run on ubuntu-latest).
+
+## SP-1d — Chat's thread: the spark's own pane in Chat, and Chat's composer under it (the draft, @'s agents and sessions, the mic and Send, which pastes and leaves Return to you); a new spark's hello and its three starters; unread; one act at a time in a thread, and one wake per spark (2026-11-01; `7871ce1f1` — sixteen commits, C1 `ca05ce7e9` to the fold `c7da9c75f`, on `c9fe1c65a`, then main `bf93e29ff` merged in (`a8f46ea1e`) and the one fix `7871ce1f1` — lane `co/sp1d`, landed stacked as the mini's mint `7871ce1f1` itself, run 83, over main `bf93e29ff`)
+
+James typed "start all" at 2026-10-31 14:57:34Z, his go for SP-1d and CP-3's build. VF-PM ruled every SP-1d question at
+its lean (16:35Z: Q1–Q6 in `lanes/co-plan/LEANS.md`). It is `thinking-roled-agents.md` §17's SP-1d, on the Sparks
+page's CH-D5 A and NS-D4 (James, 2026-10-30), built as ruled.
+
+**What.**
+- **DESIGN.md first** (`ca05ce7e9`): §8 "Chat's thread", "Chat's composer" with @'s rows and the agent's menu, the
+  hello and its starters, and the hand while Chat shows; §9's words; UI_SYSTEM.md's Chat plates.
+- **The frame's seams** (`2e8242cfc`):
+  - one paste road (`terminal/paste-road.ts`), shared by Godview's deck and Chat;
+  - one card text (`frame/cards/card-text.ts`) and the deck's pane look (`useDeckPaneLook`);
+  - the `at` surface back, and the hand's reach in Chat (`CHAT_REACH`), so no card lifts over the composer.
+- **The thread** (`5a0176eef`): an awake spark's own terminal pane, a bare `TerminalSurface` on the window's pool. It
+  never claims the pool (SignInTerminal's rule) and takes the session's size only on a click, a focus or a send (Q4).
+  While its pane is found it says "Finding Vela's pane…"; after 20 s, or when the floor holds no such session, it
+  says so in the floor's words. The pane's box is fixed: the thread's items stand over its foot and never resize it
+  (Q2).
+- **Chat's composer** (`143667203`), restored from git (`0e2ad08bc`) into the thread's foot:
+  - the draft, its chips and the mic, drawn disabled ("Dictation — not on the desktop yet");
+  - @'s rows: "Start an agent" by `agents_available`'s rule, and "Running in its profiles" by `agent_send`'s whole
+    rule. An agent becomes a chip with its model and effort, through SP-1c's `agent.models` menu (CH-D5 A). A
+    session becomes its handle, with an ordinal for twins;
+  - Send (`chat/thread-send.ts`) pastes into the spark's pane through the paste road and never presses Return (Q1).
+    It refuses at once in a window with no terminals. While the spark waits on you it pastes nothing and says so. It
+    wakes a sleeping spark, then waits 20 s for it and its pane and 1.5 s for the pane's input. A send not taken
+    keeps its draft and never touches the clipboard.
+- **The thread's first words** (`2c7ea193f`): NS-D4's hello and the page's three starters, verbatim, for a new spark.
+  A starter is sent as Send sends. "New" is read cautiously: a spark whose run the window has never seen take a turn,
+  still in its hatch run's first minute, with nothing pending.
+- **Unread** (`c5b0c2688`, Q6): a thread's dot lasts until you open it, on its row and on Chat's cell, and the row's
+  accessible name says "unread" or "needed you" after its status word.
+- **The critique's fixes** (`fdcbf345f`, `6bff91d60`, `aaa8d4c19`, `2857ccf55`), each red-first:
+  - one copy of the draft;
+  - the pane holds the keyboard only while Chat shows;
+  - a need is read again after the input wait, just before the paste;
+  - @ says a failed read in the New spark sheet's own words;
+  - the catalog shows @'s quiet states;
+  - **one wake per spark:** Wake holds its thread, and fieldd's `SparkService.open` answers an open asked while one
+    is under way with that same wake, its run or its refusal. That is the slice's one fieldd change, with no wire
+    change.
+- **Two more rounds and a fold** (`89ab4025f`, `41f6be3e3`, `8ec39f033`, `826556bb8`, `b205269b6`, `c7da9c75f`):
+  - one reading of the agent's menu (`chat/agent-chip-menu.ts`), shared by the composer and the catalog;
+  - Send says the true reason to the end, and the thread's hold is its one guard;
+  - the agent marks at DESIGN's 20 and 15, and the carried ring at the composer's own corners;
+  - the line's waking, wake-refused and not-started plates;
+  - a board refused under a reconnect is asked again when the client reconnects, and a board failure leaves @'s
+    agents standing ("VibeField can't read what's running right now" for its sessions);
+  - DESIGN.md as built: the slice's own sentences said once, the landed text's errata kept.
+
+**Real vs not yet.**
+- Real:
+  - the thread's pane, the composer and Send;
+  - @'s agents and sessions, with their chips;
+  - the hello and the starters;
+  - unread;
+  - one act at a time in a thread, and one wake per spark in fieldd;
+  - the catalog's Chat plates, each the shipping view over fixtures.
+- Not yet:
+  - `compose.say`, a window door into the session's queue (Send pastes, Q1);
+  - CH-D2's live cards, which are SP-1e's (Q3);
+  - Chat's thread pane as a card target, also SP-1e's;
+  - dictation;
+  - Listening, which is never reported from a draft.
+
+**Found.**
+- **Two runs for one spark** (the critique's correctness-1, high):
+  - Wake, then Send while the wake ran, opened the spark twice.
+  - `SparkService.open` was not serialized per spark. The second resume was refused with state `resuming`, and
+    `daemon.ts`'s resume wrapper read that as "cannot be resumed" and started a fresh session.
+  - Both halves are fixed here. The wrapper's reading is owed (below).
+- **A send that resolved after its thread was left and chosen again** left the sent words in the remounted composer.
+  A second Send would have pasted them twice.
+- **A review's premise was false.** It held that Chat's feed outlives a fieldd restart. Main's boot fence
+  (`FielddDaemonBootFence` → `requestAllReplacements`) replaces every renderer document at a restart (LANDED's TP-R21
+  line), so the feed starts again with "Opening Chat…". The words were corrected before the light.
+- **`AgentFieldRow` carries a run's persona (`profileId`), not its `profileSet`.** The talk room reads
+  `session.profileSet`, else This Mac's, so @ can offer a session `agent_send` then refuses, or leave out one it
+  would take. DESIGN §8 says so.
+- **Item 129:** the tip was cut before main's fix (`2d2f41046`). field-app's whole suite was green on it anyway, and
+  the mint carries main's version.
+- **Run 82 was red on a semantic merge,** and every time:
+  - main's `test/text-ramp.test.ts` (item 127, `e2c86e7fb` and `1c6cb8aac`, after SP-1d's base) names every product
+    use of t4. It read 18 against its 17, the new one being SP-1d's waiting mic at 55% of t4;
+  - each side was green alone and they share no file, so neither merge-tree nor the both-sides list could see it.
+
+  VF-PM ruled (07:25Z): merge main into the lane (`a8f46ea1e`, clean, tree `bdecac93e`), then one fix on top
+  (`7871ce1f1`). The mic is a control that is off (§2.4), so it takes t4 at its own alpha, and T4_USES names it. M82
+  did not land.
+
+**Validation.**
+- **Reviews:** every commit was reviewed adversarially and fixed before the next. Then:
+  - an early critique: three lenses, each with a skeptic, 16 findings confirmed and 6 refuted;
+  - a final completeness critique: 14 items;
+  - a review of each round after.
+- **The lane light** (`lanes/co-plan/logs/sp1d-light-20261101T070725Z/`): GREEN 07:13:20Z on `c7da9c75f`, on the
+  shared HOLD.
+  - preflight OK, with one warning (R23's `acp` candidate, a sibling's offering); walls, `check:retired` and
+    `glyphs --check`; biome over the 83 touched files.
+  - tsc for design-kit, field-app, fieldd and electron-shell.
+  - Red-first for correctness-1, with each source put back as it stood before the fix:
+    - compose-sparks: 2 red, `[resume, resume, spawn]` where `['resume:run-1']` was expected;
+    - chat-view: 1 red, at Send's busy check during Wake;
+    - both restored.
+  - field-app whole: 277 files passed | 1 skipped, 3677 tests passed | 3 skipped (+263 over SP-1c's 3414).
+  - electron-shell whole: 158 files, 2403 passed | 3 skipped.
+  - fieldd, the files over the sparks door (agent-briefing, agent-session, compose-sparks): 97 passed | 2 skipped.
+- **Run 82** (M82, the MERGE of `c7da9c75f` over `bf93e29ff`): RED on text-ramp's t4 table (above). Not landed.
+- **The fix's red-first and the merged tree** (`lanes/co-plan/logs/sp1d-merged-20261101T072602Z` and `-072845Z`, on
+  tree `0f18c33a3`, which is T's):
+  - text-ramp: red at 18 against 17 on the merge, then green;
+  - text-ramp, ui-system-boundaries and design-system: 63/63;
+  - tsc for field-app and electron-shell;
+  - electron-shell's smoke-catalog: 9/9;
+  - field-app whole: 282 files passed | 1 skipped, 3752 tests passed | 3 skipped;
+  - electron-shell whole: 162 files, 2477 passed | 3 skipped;
+  - fieldd's agent-board-promotion and compose-sparks: 13/13.
+- **Run 83** (M83 = T `7871ce1f1`, stacked by `mint-rebased.sh`, T containing main; its tree is T's `0f18c33a3`;
+  VF-PM's read of the mini's run, lines in `lanes/ts6/logs/mini/run83/`): `pnpm verify` exit 0 at 07:38:07Z.
+  - vitest 11,783 passed | 0 failed | 18 skipped, +196 against run 81. field-app is +194: chat-view 11 to 21, the
+    ten new files, cards +6, ui-system-boundaries +2, view-frame +2 and nine more +1s. fieldd's compose-sparks went
+    9 to 11, and electron-shell is unchanged. text-ramp is 12 green: the mic is an entry in the existing row's
+    table, not a new row.
+  - node 363; cargo 534 passed | 0 failed | 14 ignored; the iOS fixtures 186; end load 16, 24 and 19.
+- **Landed:** main fast-forwarded to `7871ce1f1` at 2026-11-01T07:40:31Z: `bf93e29ff..7871ce1f1`, 84 files,
+  +11177 −521.
+
+**Owed.**
+- **The glued draft** (VF-PM, 2026-10-31 16:35Z): Send pastes and leaves Return to you, so a pasted, unsent draft
+  stays in the agent's own input. VibeField's next delivery into that session (a wake, or a spark's words through
+  CP-2's queue) is sent together with it. DESIGN §8 names it. `compose.say`, the window's door into the session's
+  queue, is the later slice.
+- **Smoke rung 11m** (a1's, smoke:godview): ⌘4 with the thread's pane live; @; Send says "Pasted into"; no marker
+  after 400 ms; Return in the pane gives the marker; `__vfCards.playAt` on the composer. desk-gates row 23 names it.
+- **The witness is James's look** in `pnpm dev`, posted to him by VF-PM at the landing:
+  - hatch, the hello, then a starter and Return in the pane;
+  - @ with a session chip and a hand card;
+  - Send, then Return;
+  - the 640 width.
+- **The hello's open cases** (DESIGN §8 "Chat's thread"):
+  - a run fieldd re-attached after a restart, read before its next live turn, including a restart inside a hatch
+    run's first minute;
+  - a run born in the hatch run's place within its minute.
+
+  Closing them needs a fact on the board's row that a transcript read back keeps, the run's turns. That is TU-1,
+  after CP-3's merge (VF-PM, 2026-11-01 07:17Z, on the read `lanes/co-plan/plans/turnfact-read.md`: Q3–Q7 ruled; Q1
+  and Q2 are James's, on a decision page first).
+- **@'s profile residual:** closing it needs `profileSet` on the board's row, also TU-1's.
+- **`daemon.ts`'s resume wrapper** reads PRECONDITION_FAILED state `resuming` or `replaced` as "cannot be resumed"
+  and starts a fresh session, so a resume under way through `agent.resume` is not joined by a spark's open.
+  api.html's `compose.sparks.open` row names it.
+- **The draft corpus's "as built"** (thinking-roled-agents.md §17 and the Sparks page's SP-1d status), at the next
+  draft queue.
+- **Two subjects, restated truly:**
+  - `fdcbf345f`'s "a thread closed mid-send said as closed" ships "Not sent — you left Vela's thread before its pane
+    was ready";
+  - `826556bb8`'s "asked again when fieldd is back" covers a reconnect while the same fieldd stays up, because a
+    fieldd restart replaces the window's document.
+
+James's first sight: `pnpm dev`, ⌘4 for Chat, a spark's row, then its thread.
