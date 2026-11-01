@@ -1618,8 +1618,8 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent.reportShown</span></td>
-                    <td><p><code>AgentReportShownParams {ids: string[]}</code> → <code>{reported: true}</code></p></td>
-                    <td><p><code>agent.observe</code> · local only</p></td>
+                    <td><p><code>AgentReportShownParams {ids: string[], device?}</code> → <code>{reported: true}</code></p></td>
+                    <td><p><code>agent.observe</code> · <code>federate</code> (PG-3b, 2026-11-01)</p></td>
                     <td><p>yes</p></td>
                     <td><p>The monitor backend's unread acknowledgement, by MODEL id. The screen is the connection's
                       open model board, never an id supplied by the caller. No board: <code>PRECONDITION_FAILED
@@ -1637,9 +1637,24 @@
                       the door becomes <code>federate</code>, routed by <code>device</code> through the home with
                       <code>onBehalfOf</code>, and any connection holding a model-bearing board (local or remote) is a
                       screen, so the phone is one and unread stays the owner's mark. Not built: as built it is local only,
-                      and a phone holds no <code>model</code> board, so it cannot report until PG-2 and PG-3.</em></p></td>
+                      and a phone holds no <code>model</code> board, so it cannot report until PG-2 and PG-3.</em>
+                      <em>As built 2026-11-01 (PG-3b; J2 (a), James 03:55Z; DS-L7 as amended that day):</em> the door
+                      is <code>federate</code>, routed by <code>device</code>, and a <code>remote</code> board is a screen
+                      as <code>model</code> is. A phone reports another desktop's rows through its home, which carries
+                      the report only for a connection holding a <code>{projection: "remote", scope: "mesh"}</code>
+                      board there (else the same <code>no-screen</code> refusal, nothing carried). The owner keeps a
+                      carried report as a screen of its own, keyed by the envelope's <code>onBehalfOf</code>
+                      {deviceId, windowId} under the peer connection that carried it, restrict-only: two readers behind
+                      one home are two screens, a peer reaches only its own, and a carried report naming no
+                      <code>windowId</code> is refused. When a reader's mesh board at the home closes, the home sends
+                      each owner it reported to an empty report, in order behind anything it carried for that reader, so
+                      a re-subscribe's new report lands after it; the owner forgets a peer connection's screens when that
+                      connection closes. A carried report acknowledges nothing: acknowledgement stays this desktop's own
+                      window's (Q06). The rules are <code>packages/fieldd/src/agent-screens.ts</code>'s; the door's hook
+                      around the carry is <code>ProductApi.wrapForward</code>. The kit's sender is PG-3e's.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
-                    <td><p><code>agent-model-daemon.test.ts</code>, <code>agent-monitor.test.ts</code></p></td>
+                    <td><p><code>agent-model-daemon.test.ts</code>, <code>agent-monitor.test.ts</code>,
+                      <code>agent-screens.test.ts</code>, <code>mesh-board.e2e.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent.recordedLanes</span></td>
