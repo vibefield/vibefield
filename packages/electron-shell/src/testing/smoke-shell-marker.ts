@@ -167,11 +167,18 @@ export interface ChatSendEvidence {
   readonly nonce: string;
   /** the line's note after Send */
   note: string | null;
-  /** how the line was typed into the draft (an editor): where the caret was after a script's focus and after a press
-   * on the draft ("editor" inside it, else the node it was in), and what the page heard of the line's keys, by event
-   * and place (run85b: a script's focus and bare characters left the focused draft empty) */
+  /** the sheet's Create as the rung pressed it, or as it last read when it never could (item 149: Create waits on the
+   * sheet's reads): enabled or disabled (absent: no Create drawn), its box in window px ("left,top,width,height"), and
+   * how long the wait took */
+  create: { state: "enabled" | "disabled" | "absent"; box: string | null; waitedMs: number } | null;
+  /** how the draft (an editor) took the keyboard and the line's keys (`focusDeck`'s rule: the window and its contents
+   * focused, then the focus placed — run92b's press blurred it, run85b's placed focus alone edited nothing): whether
+   * the window, its contents and the document held the focus once it was placed; where the caret stood as it was
+   * placed and when the composer held it ("editor" inside the draft, else the node it was in), each recorded as it was
+   * read; and what the page heard of the line's keys, by event and place */
   readonly typing: {
-    caret: { focused: string | null; pressed: string | null } | null;
+    focus: { window: boolean; contents: boolean; document: boolean } | null;
+    caret: { placed: string | null; held: string | null } | null;
     heard: Record<string, number> | null;
   };
   /** the pane's `inputAllowed`, by its latest marker, sampled before its Return */
@@ -189,7 +196,8 @@ export function newChatSendEvidence(lines: string, nonce: string): ChatSendEvide
     lines,
     nonce,
     note: null,
-    typing: { caret: null, heard: null },
+    create: null,
+    typing: { focus: null, caret: null, heard: null },
     inputAllowed: { Return: null },
     play: null,
     waitedMs: { ready: null, inputBeforeReturn: null },
@@ -213,6 +221,7 @@ export function chatSendEvidenceLine(
     lines: evidence.lines,
     nonce: evidence.nonce,
     note: evidence.note,
+    create: evidence.create,
     typing: evidence.typing,
     inputAllowed: evidence.inputAllowed,
     play: evidence.play,

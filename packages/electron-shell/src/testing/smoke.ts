@@ -10514,12 +10514,12 @@ export async function runSmokeGodview(opts: {
     //      This Mac, where the godview smoke's typed-agent stub stands signed in for the
     //      typed agent and records each line a session of it is given (`StubRecords`) —
     //      never a vendor's agent, since the smoke's HOME holds no sign-in (EL7). The
-    //      thread mounts its live pane and the spark reads Ready; the composer, pressed,
-    //      takes a line typed a key at a time (down, its character, up: a field's road,
-    //      run85b), @ opens its list with the hot row the one nearest the composer,
-    //      and Esc folds it with the text kept; Send says "Pasted into …'s pane — Return
-    //      sends it", and no line reaches the stub until the pane's own Return, which the
-    //      harness presses. A card from the hand let go on the composer becomes a chip in
+    //      thread mounts its live pane and the spark reads Ready; the composer's draft,
+    //      its keyboard placed as focusDeck places a pane's (run92b), takes a line typed
+    //      a key at a time (down, its character, up: a field's road, run85b), @ opens its
+    //      list with the hot row the one nearest the composer, and Esc folds it with the
+    //      text kept; Send says "Pasted into …'s pane — Return sends it", and no line
+    //      reaches the stub until the pane's own Return, which the harness presses. A card from the hand let go on the composer becomes a chip in
     //      its draft, the card still in the hand. The no-deck case and two surfaces on one
     //      seat are spark-pane.test.tsx's. Back to Godview's deck for 11h, which must stay
     //      last; the spark's session ends with the run's teardown.
@@ -10628,6 +10628,19 @@ export async function runSmokeGodview(opts: {
         };
         return "ok";
       })()`;
+      /** The keyboard PLACED in the composer's draft, its caret at the draft's end, as a person's press on its empty
+       * line leaves it: whether the document holds the focus after (null: no draft drawn). */
+      const PLACE_IN_DRAFT = `(() => {
+        const editor = document.querySelector(".vf-chat-input");
+        if (editor === null) return null;
+        editor.focus();
+        const selection = document.getSelection();
+        if (selection !== null) {
+          selection.selectAllChildren(editor);
+          selection.collapseToEnd();
+        }
+        return document.hasFocus();
+      })()`;
       /** The thread's facts once `accept` holds them, or why not, with what was seen last. */
       const untilThread = async (
         label: string,
@@ -10680,7 +10693,8 @@ export async function runSmokeGodview(opts: {
             };
           })()`)) as CreateFacts;
         {
-          const deadline = Date.now() + 10_000;
+          const waitFrom = Date.now();
+          const deadline = waitFrom + 10_000;
           let last = await createFacts();
           let still = false;
           while (!still && Date.now() < deadline) {
@@ -10694,6 +10708,12 @@ export async function runSmokeGodview(opts: {
               now.box === last.box;
             last = now;
           }
+          // what Create read as it was pressed, or last read when it never could: the evidence line carries both
+          evidence.create = {
+            state: last === null ? "absent" : last.disabled ? "disabled" : "enabled",
+            box: last?.box ?? null,
+            waitedMs: Date.now() - waitFrom,
+          };
           if (!still) {
             const said =
               last === null
@@ -10728,22 +10748,38 @@ export async function runSmokeGodview(opts: {
         chatThread["the hatch"] =
           `⌘N's sheet, Create ${name}: Chat chose ${name}, its pane live on ${session}, and ` +
           `${name} Ready after ${evidence.waitedMs.ready}ms`;
-        // 3. The composer: a typed line, @'s list with the hot row nearest, Esc keeping the text. The draft is an
-        // editor, typed into as a person types: a press puts the caret where it lands, and each key goes down, its
-        // character, up (`pressZoomKey`'s rule for a field). Run85b's red was the road before it: a script's focus,
-        // then bare characters, left the focused draft empty. Where that focus leaves the caret is still read, and
-        // what the page hears of the keys, so the evidence says which half it was.
-        await win.webContents.executeJavaScript(
-          `document.querySelector(".vf-chat-input")?.focus(); "ok"`,
-        );
-        const focused = await threadFacts();
-        await pressAt(".vf-chat-input");
-        const pressed = await untilThread(
+        // 3. The composer: a typed line, @'s list with the hot row nearest, Esc keeping the text. The draft takes the
+        // keyboard as every field in this smoke takes it (`focusDeck`'s rule, which says why): the window and its
+        // contents focused first, the half of a person's press that no synthesized event carries, then the focus
+        // PLACED in the draft, its caret at the end. A synthesized press runs none of Chromium's default actions: on
+        // the draft it blurred it to the body, where the frame stops every key under a cover (run92b), and a placed
+        // focus without the window's left the keys editing nothing (run85b). Each key then goes down, its character,
+        // up (`pressZoomKey`'s rule for a field). Where the focus and the caret stood as the focus was placed, and what
+        // the page heard of the keys, are recorded as they are read, so the evidence says which half a red is.
+        win.focus();
+        win.webContents.focus();
+        const inDocument = (await win.webContents.executeJavaScript(PLACE_IN_DRAFT)) as
+          | boolean
+          | null;
+        const placed = await threadFacts();
+        evidence.typing.focus = {
+          window: win.isFocused(),
+          contents: win.webContents.isFocused(),
+          document: inDocument === true,
+        };
+        const caret: { placed: string | null; held: string | null } = {
+          placed: placed.caret,
+          held: null,
+        };
+        evidence.typing.caret = caret;
+        if (inDocument === null)
+          throw new Error(`${name}'s thread has no draft to place the keyboard in`);
+        const held = await untilThread(
           "the composer holding the keyboard, the caret in its draft",
           (facts) => facts.inInput && facts.caret === "editor",
           5_000,
         );
-        evidence.typing.caret = { focused: focused.caret, pressed: pressed.caret };
+        caret.held = held.caret;
         const typeKeys = async (text: string): Promise<void> => {
           for (const character of text) {
             win.webContents.sendInputEvent({ type: "keyDown", keyCode: character });
@@ -10778,7 +10814,9 @@ export async function runSmokeGodview(opts: {
           );
         }
         chatThread["the composer"] =
-          `pressed, then typed "${kept.text}" a key at a time (down, its character, up); @ opened its list ` +
+          `its keyboard placed (window ${evidence.typing.focus?.window}, contents ` +
+          `${evidence.typing.focus?.contents}), then typed "${kept.text}" a key at a time (down, its character, up); ` +
+          `@ opened its list ` +
           `(${opened.rows} rows, the hot one the nearest); Esc folded it, the text and the keyboard kept`;
         // 4. Send: pasted, and never submitted until the pane's own Return
         await untilThread("Send armed", (facts) => facts.armed, 3_000);

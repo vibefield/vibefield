@@ -182,11 +182,14 @@ describe("11m's card play into Chat's composer, as the hand's lab door answers i
 describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
   it("prints the rung's facts on ONE line, its cause when it failed and null when it passed", () => {
     const evidence = newChatSendEvidence("/tmp/typed-agent/lines.jsonl", "sp1d-abc");
-    expect(evidence.typing).toEqual({ caret: null, heard: null });
+    expect(evidence.typing).toEqual({ focus: null, caret: null, heard: null });
+    expect(evidence.create).toBeNull();
     evidence.spark = "spark-1";
     evidence.session = "s-pane";
     evidence.note = "Pasted into Polaris's pane — Return sends it";
-    evidence.typing.caret = { focused: "BODY", pressed: "editor" };
+    evidence.create = { state: "enabled", box: "612,690,96,32", waitedMs: 340 };
+    evidence.typing.focus = { window: true, contents: true, document: true };
+    evidence.typing.caret = { placed: "editor", held: "editor" };
     evidence.typing.heard = { "keydown@draft": 8, "keypress@draft": 8, "input@draft": 8 };
     evidence.inputAllowed.Return = true;
     evidence.play = {
@@ -207,8 +210,10 @@ describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
       lines: "/tmp/typed-agent/lines.jsonl",
       nonce: "sp1d-abc",
       note: "Pasted into Polaris's pane — Return sends it",
+      create: { state: "enabled", box: "612,690,96,32", waitedMs: 340 },
       typing: {
-        caret: { focused: "BODY", pressed: "editor" },
+        focus: { window: true, contents: true, document: true },
+        caret: { placed: "editor", held: "editor" },
         heard: { "keydown@draft": 8, "keypress@draft": 8, "input@draft": 8 },
       },
       inputAllowed: { Return: true },
