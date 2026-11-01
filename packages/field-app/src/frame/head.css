@@ -204,7 +204,7 @@
 }
 
 .vf-head-rename::placeholder {
-  color: var(--vf-text-faint);
+  color: var(--vf-text-tertiary);
 }
 
 /* The sync dot (C6-4): a standing fact after the name — muted for a fact,

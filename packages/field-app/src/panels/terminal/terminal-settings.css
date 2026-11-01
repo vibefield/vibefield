@@ -170,7 +170,7 @@
 .vf-ts-was {
   display: block;
   margin-top: 3px;
-  color: var(--vf-text-faint);
+  color: var(--vf-text-tertiary);
 }
 
 .vf-ts-provenance,
@@ -881,7 +881,7 @@
 .vf-ts-palette-cell span {
   display: flex;
   justify-content: space-between;
-  color: var(--vf-text-faint);
+  color: var(--vf-text-tertiary);
   font-family: var(--vf-font-mono);
   font-size: 10px;
 }
@@ -1088,7 +1088,7 @@
   flex-direction: column;
   padding: 10px 8px 10px 10px;
   border-right: 1px solid var(--vf-hairline);
-  color: var(--vf-text-faint);
+  color: var(--vf-text-tertiary);
   background: var(--vf-chrome-solid);
   text-align: right;
   user-select: none;
@@ -1168,7 +1168,7 @@
 }
 
 .vf-ts-hl-comment {
-  color: var(--vf-text-faint);
+  color: var(--vf-text-tertiary);
 }
 
 .vf-ts-hl-key {

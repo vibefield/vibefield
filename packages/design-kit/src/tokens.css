@@ -59,10 +59,13 @@
      the names below so light/dark treatment cannot drift independently. */
   --vf-foreground: #1c1c1e;
   --vf-foreground-inverse: #ffffff;
+  /* §2.4 the ramp, the foreground at four alphas (item 127, 2026-11-01): t1–t3 are words that are read, at 4.5:1 or
+     more on every chrome ground of the theme (white, the canvas, the fill, its hover: t3 5.1–4.7:1); t4 is never a
+     word that is read, only a mark or a control that is off, at 3:1 or more (3.3–3.1:1) */
   --vf-text-primary: rgb(28 28 30 / 85%);
   --vf-text-secondary: rgb(28 28 30 / 70%);
-  --vf-text-tertiary: rgb(28 28 30 / 45%);
-  --vf-text-faint: rgb(28 28 30 / 30%);
+  --vf-text-tertiary: rgb(28 28 30 / 64%);
+  --vf-text-faint: rgb(28 28 30 / 50%);
   --vf-hairline: rgb(0 0 0 / 5%);
   --vf-hairline-strong: rgb(0 0 0 / 10%);
   --vf-chrome-solid: #ffffff;
@@ -407,10 +410,11 @@
 
   --vf-foreground: #f5f5f7;
   --vf-foreground-inverse: #1c1c1e;
+  /* §2.4 by night: the same floors on #1C1C1E, the canvas and the fill (t3 5.5–4.9:1, t4 3.4–3.2:1) */
   --vf-text-primary: rgb(245 245 247 / 85%);
   --vf-text-secondary: rgb(245 245 247 / 70%);
-  --vf-text-tertiary: rgb(245 245 247 / 45%);
-  --vf-text-faint: rgb(245 245 247 / 30%);
+  --vf-text-tertiary: rgb(245 245 247 / 54%);
+  --vf-text-faint: rgb(245 245 247 / 38%);
   --vf-hairline: rgb(255 255 255 / 10%);
   --vf-hairline-strong: rgb(255 255 255 / 15%);
   --vf-chrome-solid: #1c1c1e;

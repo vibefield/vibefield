@@ -53,7 +53,7 @@
 }
 
 .vf-ui-field::placeholder {
-  color: var(--vf-text-faint);
+  color: var(--vf-text-tertiary);
 }
 
 .vf-ui-field:focus {
@@ -436,7 +436,7 @@
 
 .vf-ui-unavailable-state__detail {
   margin: 12px 0 0;
-  color: var(--vf-text-faint);
+  color: var(--vf-text-tertiary);
   font-family: var(--vf-font-mono);
   font-size: 11px;
   line-height: 1.4;

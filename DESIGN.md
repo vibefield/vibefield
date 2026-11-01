@@ -189,6 +189,22 @@ card surface). On dark surfaces: primary `white`, secondary `white/70–80`, eye
 `white/60`, tertiary/captions `white/40`. On light chrome: `black`, `black/70`, `black/50`,
 captions `neutral-500`. Pure-opaque text is reserved for primary content.
 
+*Amended 2026-11-01 (track FG, item 127: the ramp's floors and its alphas, VF-PM's leans of 02:17Z, James's GO on the
+board's `text-ramp-alphas` at 02:26:44Z; built in the catalog judged):* the ramp is `--vf-foreground` (`#1C1C1E` by
+day, `#F5F5F7` by night) at four alphas, and each tier holds a floor on every chrome ground of its theme: by day
+`white`, the canvas `#FAFAFA`, the fill `#F2F2F7` and its hover `#E5E5EA`; by night `#1C1C1E`, the canvas `#171717`
+and the fill `#2C2C2E` (the translucent chrome stands between them). t1, t2 and t3 are words that are read, at 4.5:1
+or more (§8's bar, "Its words read"). t4 is never a word that must be read: only a mark (a separator, a chevron, a
+ghost's disc, a glyph) and the words of a control that is off, at 3:1 or more (WCAG 2's 1.4.11, and 1.4.3's
+exemption); a placeholder is a word that is read. By day t1 85%, t2 70%, t3 64% and t4 50% (from `white` to the hover
+10.7–9.0, 6.3–5.6, 5.1–4.7 and 3.3–3.1:1); by night 85%, 70%, 54% and 38% (12.1–9.7, 8.5–7.1, 5.5–4.9 and 3.4–3.2:1).
+`tokens.css` projects them as `--vf-text-primary`, `-secondary`, `-tertiary` and `-faint`; the catalog's Foundations
+sets each tier on each ground ("Text ramp"), and row 32's catalog walk holds those chips to their floors. The Setup
+Assistant's glass keeps its own t2 for t2–t4 (§5). *Corrected the same day:* the paragraph above said black, black/70,
+black/50 and captions `neutral-500` by day, and white/40 for tertiary by night. `tokens.css` carried 85/70/45/30% in
+both themes from 2026-08-05 (`250e383d6`): its t3 at 2.7–2.9:1 and its t4 at 1.9:1 by day, 3.9–4.2:1 and 2.5–2.6:1 by
+night, under the bar since.
+
 ### 2.5 State & system color (the only color chrome may use)
 
 iOS system palette, one meaning each — never decorative:
@@ -2437,8 +2453,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   at a time, each said once, never per frame. A notice that carries an act — the degraded desk's
   Reload (R18) — holds until the act is taken or the state clears, the act at its end as a text
   button in primary ink. A notice may carry a detail — the renderer's own words after VibeField's,
-  verbatim, 11 mono and faint on a row of its own under them (the degraded desk's ICE message; DK-17,
-  2026-10-07). It stands with the frame, above the cover (§10).
+  verbatim, 11 mono and tertiary on a row of its own under them (the degraded desk's ICE message;
+  DK-17, 2026-10-07; *amended 2026-11-01, item 127:* faint until then, and §2.4's t4 is never a word
+  that is read). It stands with the frame, above the cover (§10).
   **An ended lane that could not be opened** in History (TV-8, 2026-10-11; Godview's timeline) is
   said here, in the words of the Peek's pick that could not be shown ("Could not jump — ‹why›")
   but not in its place: that one is said in the line's note, where its act began; this act began
@@ -2735,8 +2752,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the CSS-fallback dots left with the tokens, DK-17, 2026-10-07), centred, the strong hairline dashed, corners 22, padded 26 26 22:
   **what happened** (14/600, primary), **what to do** (12.5/400, tertiary), **one Reload** (the
   primary: inverted, 36 tall, padded 0 18, corners 18, 13/500) — a desk remount, not a window reload
-  (R18) — and in the detail slot **ICE's message, verbatim**, last and small (11 mono, faint, 12
-  below; R18). ICE says why in that one string, so the card reads it: **the device lost**
+  (R18) — and in the detail slot **ICE's message, verbatim**, last and small (11 mono, tertiary, 12
+  below; R18; *amended 2026-11-01, item 127:* faint until then). ICE says why in that one string, so
+  the card reads it: **the device lost**
   (`the device was lost: <reason>: <message>`) — "The desk lost its graphics device" · "The graphics
   device was reset while the desk was drawing. Your objects are saved in this document; reload to
   draw them again." · Reload · the message; **no WebGPU** (a boot refusal ending
@@ -2760,7 +2778,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the desk still draws) is a banner, not the card: the status line saying VibeField's sentence first
   — **"The graphics device reported an error. The desk is still drawing — Reload restarts it."** (what
   happened, that the desk keeps drawing, that Reload remounts it) — with ICE's message after it as the
-  detail (11 mono, faint, verbatim, on a row of its own under the words, as the card carries its
+  detail (11 mono, tertiary (faint until item 127, 2026-11-01), verbatim, on a row of its own under
+  the words, as the card carries its
   detail) and a Reload until the state clears, the desk drawing on beneath it (R18). *Amended
   2026-10-07 (DK-17; the migration plan's (75)):* until then the line held ICE's message alone, and a
   person read "an uncaptured GPU error — GPUValidationError: …" as the whole of it. No Canvas2D fallback in v1
