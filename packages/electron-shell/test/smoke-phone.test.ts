@@ -54,6 +54,7 @@ import {
   judgeNoUdid,
   judgeP1,
   judgePress,
+  judgePressed,
   judgeReload,
   judgeStill,
   judgeStopped,
@@ -85,6 +86,7 @@ import {
   type StillSeen,
   type Stimulus,
   type StoppedHands,
+  standOrStage,
   stillAddress,
   stimulusStaging,
   stoppedBeforeQuit,
@@ -790,7 +792,7 @@ describe("PT-S3 — the rows' judges", () => {
     expect(judgeUse({ ...seen, proof: dead, loaded: 0 }).void).toBeNull();
     expect(judgeUse({ ...seen, proof: dead, loaded: 0 }).problems.length).toBeGreaterThan(0);
     const body = rowBodies(SOURCE).find((r) => r.name === "SIM-USE")?.body ?? "";
-    const motion = body.indexOf('openUrl(1, "/motion"');
+    const motion = body.indexOf('openProven(1, "/motion"');
     expect(motion).toBeGreaterThanOrEqual(0);
     expect(body.indexOf("liveProven(p)")).toBeGreaterThan(motion);
     // the /still page opened and its load counted (T2's openProven) only after the proof in hand
@@ -1624,6 +1626,91 @@ describe("PT-S3 — the stimulus PROVEN: an unproven page or a failed door verb 
     expect(boot.indexOf("const left = afterFaceBoot(state);")).toBeLessThan(
       boot.indexOf("openProven("),
     );
+  });
+
+  it("T2 is GENERAL: no page is opened whose result is dropped — every openProven's page is judged (G4)", () => {
+    // run 1101 dropped openurl's false at SIM-OFF-BOOT (out:46), SIM-USE (out:61), SIM-UNSEEN (out:68), SIM-SHOW-RUNNING
+    // (out:99): the unproven opener is gone, and no openurl is asked bare
+    expect(SOURCE).not.toMatch(/\bopenUrl\(/u);
+    expect(SOURCE).not.toMatch(/^\s*await doorAct\("openurl"/mu);
+    expect(SOURCE).not.toMatch(/^\s*await openProven\(/mu);
+    const pages = [...SOURCE.matchAll(/(?:const |let |^\s*)(\w+) = await openProven\(/gmu)].map(
+      (m) => m[1] ?? "",
+    );
+    expect(pages.length).toBeGreaterThanOrEqual(12);
+    for (const name of new Set(pages))
+      expect(
+        new RegExp(
+          `stimulusStaging\\(\\[${name}\\]\\)|idleBefore\\(proof, ${name}|idleBefore\\(proof, motion, ${name}\\)|${name}\\.loaded`,
+          "u",
+        ).test(SOURCE),
+        `${name} is never judged`,
+      ).toBe(true);
+    for (const name of [
+      "SIM-SHOW-FRESH",
+      "SIM-OFF-BOOT",
+      "SIM-USE",
+      "SIM-UNSEEN",
+      "SIM-RELOAD",
+      "SIM-SHOW-RUNNING",
+      "SIM-COST",
+    ]) {
+      const body = rowBodies(SOURCE).find((r) => r.name === name)?.body ?? "";
+      expect(body, name).toMatch(/await openProven\(/u);
+    }
+  });
+
+  it("a page unproven AFTER other legs were read: their reds stand as the row's problems; none, STAGING NOT MET (G4)", () => {
+    expect(standOrStage([], "the /motion page was not opened (openurl read failed)")).toEqual({
+      problems: [],
+      staging: "the /motion page was not opened (openurl read failed)",
+    });
+    expect(standOrStage(["SIM-OFF-BOOT: main ran boot 2 time(s), not 1"], "x")).toEqual({
+      problems: ["SIM-OFF-BOOT: main ran boot 2 time(s), not 1"],
+      staging: null,
+    });
+    expect(standOrStage(["a red"], null)).toEqual({ problems: ["a red"], staging: null });
+    // the press's legs and the reload's census stand without the proof the page never staged
+    const dead: LiveProof = { ...proven, ms: null, presented: 0, frames: 0, after: [] };
+    const pressed = {
+      act: "boot" as const,
+      acts: { before: 0, after: 1 },
+      seq: [
+        { is: "off", acting: "boot", act: "", condition: "off" },
+        { is: "booting", acting: "", act: "", condition: "booting" },
+      ],
+      proof: dead,
+      calls: { before: { boot: 0, show: 0 }, after: { boot: 1, show: 1 } },
+    };
+    const o = { through: "booting", calls: { boot: 1, show: 1 } };
+    expect(judgePressed("SIM-OFF-BOOT", pressed, o).join(" ")).toMatch(/not LIVE-PROVEN/u);
+    expect(judgePressed("SIM-OFF-BOOT", pressed, { ...o, live: false })).toEqual([]);
+    expect(
+      judgePressed(
+        "SIM-OFF-BOOT",
+        { ...pressed, acts: { before: 0, after: 2 } },
+        { ...o, live: false },
+      ),
+    ).toEqual(["SIM-OFF-BOOT: the face ran 2 acts, not the one pressed"]);
+    const c = {
+      sessions: 1,
+      sessionsMade: 3,
+      captureReady: true,
+      helperPresent: true,
+      helper: null,
+      vetted: null,
+    };
+    const reload = {
+      before: { runtimes: 2, census: c },
+      after: { runtimes: 2, census: c },
+      origins: [1, 2] as const,
+      proof: dead,
+    };
+    expect(judgeReload(reload).join(" ")).toMatch(/not LIVE-PROVEN/u);
+    expect(judgeReload(reload, { live: false })).toEqual([]);
+    expect(judgeReload({ ...reload, origins: [1, 1] }, { live: false })).toEqual([
+      "SIM-RELOAD: performance.timeOrigin is unchanged — no reload happened",
+    ]);
   });
 
   /** The runner as its source must hold it: no bare openUrl in the three rows or bringLive; each page proven and checked

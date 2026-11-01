@@ -712,7 +712,12 @@ export interface PressedSeen {
 export function judgePressed(
   row: string,
   s: PressedSeen,
-  o: { readonly through?: string; readonly calls: Readonly<Record<string, number>> },
+  o: {
+    readonly through?: string;
+    readonly calls: Readonly<Record<string, number>>;
+    /** false: the press's stimulus page went unproven — its LIVE-PROVEN leg is not judged (G4) */
+    readonly live?: boolean;
+  },
 ): string[] {
   const out: string[] = [];
   if (s.acts.after !== s.acts.before + 1)
@@ -727,7 +732,7 @@ export function judgePressed(
     const moved = count(s.calls.after, call) - count(s.calls.before, call);
     if (moved !== by) out.push(`${row}: main ran ${call} ${moved} time(s), not ${by}`);
   }
-  out.push(...judgeLiveProven(row, s.proof));
+  if (o.live !== false) out.push(...judgeLiveProven(row, s.proof));
   return out;
 }
 
@@ -838,6 +843,17 @@ export function afterFaceBoot(
       staging: `after the face's Boot the device reads ${state}, not Booted within ${PHONE_BOUNDS.ready} ms`,
     };
   return { problem: `the face's Boot left the device ${state}` };
+}
+
+/** A row whose stimulus page went unproven AFTER other legs were read (G4): those legs stand — their reds are the row's
+ * problems — and with none, STAGING NOT MET (`staging`; null: the page stood). */
+export function standOrStage(
+  problems: readonly string[],
+  staging: string | null,
+): { readonly problems: string[]; readonly staging: string | null } {
+  return staging === null || problems.length > 0
+    ? { problems: [...problems], staging: null }
+    : { problems: [], staging };
 }
 
 /** SIM-LIVE's device screenshot (T2), judged AFTER φP's LIVE-PROVEN (G1): a red proof is the row's problem whatever the
@@ -1151,7 +1167,11 @@ export interface ReloadSeen {
   readonly proof: LiveProof | null;
 }
 
-export function judgeReload(s: ReloadSeen): string[] {
+export function judgeReload(
+  s: ReloadSeen,
+  /** false: the page after the reload went unproven — its LIVE-PROVEN leg is not judged (G4) */
+  o: { readonly live?: boolean } = {},
+): string[] {
   const out: string[] = [];
   if (s.origins[0] === s.origins[1])
     out.push("SIM-RELOAD: performance.timeOrigin is unchanged — no reload happened");
@@ -1172,7 +1192,7 @@ export function judgeReload(s: ReloadSeen): string[] {
       if (count(b.simctl, call) !== count(a.simctl, call))
         out.push(`SIM-RELOAD: main ran ${call} again`);
   }
-  out.push(...judgeLiveProven("SIM-RELOAD", s.proof));
+  if (o.live !== false) out.push(...judgeLiveProven("SIM-RELOAD", s.proof));
   return out;
 }
 
@@ -2018,11 +2038,6 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
   const ensure = (n: number, want: "Booted" | "Shutdown"): Promise<string | null> =>
     ensureDevice(doorAct, n, want);
   const quitApp = async (): Promise<string> => (await doorAct("quit-app")).state;
-  const openUrl = async (n: number, path: "/motion" | "/still", q: string): Promise<boolean> => {
-    const r = await doorAct("openurl", n, { url: door.page(path, q) });
-    await sleep(1_500);
-    return r.state === "opened";
-  };
   /** The door's `/loaded` count for a nonce over `base`, polled until it grows or the bound (null: never read). */
   const loadedSince = async (
     q: string,
@@ -2480,7 +2495,9 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       if (running !== null) return { problems: [], staging: running, seen: { quit } };
       const booted = await ensure(3, "Booted");
       if (booted !== null) return { problems: [], staging: booted };
-      await openUrl(3, "/motion", nonce());
+      const page = await openProven(3, "/motion", nonce());
+      const unproven = stimulusStaging([page]);
+      if (unproven !== null) return { problems: [], staging: unproven, seen: { quit, page } };
       r = await placePhone("φR", 2, typeOf(3));
       await view([r]);
       await until(
@@ -2551,33 +2568,58 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const t0 = Date.now();
       await watchStart(p);
       await pressAct("SIM-OFF-BOOT", p, 1, "boot");
-      // the page moves once the device is up: LIVE-PROVEN asks frames of a moving screen
+      // the page moves once the device is up: LIVE-PROVEN asks frames of a moving screen. The device's LAST state within
+      // the readiness bound (G3), then the page PROVEN (G4): either unmet, the proof is not judged — the press's legs stand
       const deadline = t0 + PHONE_BOUNDS.boot;
-      while (Date.now() < deadline && (await doorAct("state", 1)).state !== "Booted")
+      const ready = t0 + PHONE_BOUNDS.ready;
+      let state = (await doorAct("state", 1)).state;
+      while (Date.now() < ready && state !== "Booted") {
         await sleep(1_000);
-      await openUrl(1, "/motion", nonce());
+        state = (await doorAct("state", 1)).state;
+      }
+      const left = afterFaceBoot(state);
+      const downed = left !== null && "problem" in left ? [`SIM-OFF-BOOT: ${left.problem}`] : [];
+      let unmet = left !== null && "staging" in left ? left.staging : null;
+      if (left === null) {
+        const page = await openProven(1, "/motion", nonce());
+        unmet = stimulusStaging([page]);
+      }
       const proofAt = Date.now();
-      const proof = await liveProven(p, Math.max(1_000, deadline - proofAt));
+      const proof =
+        left === null && unmet === null
+          ? await liveProven(p, Math.max(1_000, deadline - proofAt))
+          : null;
       const seq = await watchStop();
       const seen: PressedSeen = {
         act: "boot",
         acts: { before: f0.acts, after: (await faceOf(p))?.acts ?? f0.acts },
         seq,
         // its time from the press, within boot's bound
-        proof: {
-          ...proof,
-          bound: PHONE_BOUNDS.boot,
-          ms: proof.ms === null ? null : proofAt - t0 + proof.ms,
-        },
+        proof:
+          proof === null
+            ? null
+            : {
+                ...proof,
+                bound: PHONE_BOUNDS.boot,
+                ms: proof.ms === null ? null : proofAt - t0 + proof.ms,
+              },
         calls: { before, after: calls() },
       };
       await putDown();
-      const problems = [
-        ...named,
-        ...judgePressed("SIM-OFF-BOOT", seen, { through: "booting", calls: { boot: 1, show: 1 } }),
-      ];
-      offBootGreen = problems.length === 0;
-      return { problems, seen: { quit, offFace: offRead, bootMs: Date.now() - t0, ...seen } };
+      const j = standOrStage(
+        [
+          ...named,
+          ...downed,
+          ...judgePressed("SIM-OFF-BOOT", seen, {
+            through: "booting",
+            calls: { boot: 1, show: 1 },
+            live: proof !== null,
+          }),
+        ],
+        unmet,
+      );
+      offBootGreen = j.problems.length === 0 && j.staging === null;
+      return { ...j, seen: { quit, state, offFace: offRead, bootMs: Date.now() - t0, ...seen } };
     });
 
     await row("SIM-P1", "MUST", async () => {
@@ -2661,7 +2703,9 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       if (staged0 !== null) return { problems: [], staging: staged0 };
       // §4's nine states name SIM-USE a witness of `live`: LIVE-PROVEN in hand on /motion FIRST — /still is a static
       // page, where presents and the helper's frames may never come — then the input half on /still (R-7)
-      await openUrl(1, "/motion", nonce());
+      const motion = await openProven(1, "/motion", nonce());
+      const unmoved = stimulusStaging([motion]);
+      if (unmoved !== null) return { problems: [], staging: unmoved, seen: { motion } };
       await view([p]);
       const name = env.runId === null ? "" : ownName(env.runId, 1);
       let held = false;
@@ -2717,7 +2761,9 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const q = nonce();
       const staged0 = await ensure(1, "Booted");
       if (staged0 !== null) return { problems: [], staging: staged0 };
-      await openUrl(1, "/motion", q);
+      const page = await openProven(1, "/motion", q);
+      const unproven = stimulusStaging([page]);
+      if (unproven !== null) return { problems: [], staging: unproven, seen: { page } };
       await view([p]);
       await sleep(800);
       const a0 = (await faceOf(p))?.arrivals ?? 0;
@@ -3014,9 +3060,11 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       await still();
       await d.focused();
       await sleep(1_500);
-      await openUrl(1, "/motion", nonce());
+      // the page after the reload PROVEN (G4): unmet, the proof is not judged — the reload's own legs stand
+      const page = await openProven(1, "/motion", nonce());
+      const unmet = stimulusStaging([page]);
       await view([p]);
-      const proof = await liveProven(p);
+      const proof = unmet === null ? await liveProven(p) : null;
       const o1 = await js<number>("performance.timeOrigin");
       const seen: ReloadSeen = {
         before,
@@ -3025,8 +3073,14 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         proof,
       };
       return {
-        problems: [...judgeLiveProven("SIM-RELOAD (before)", proof0), ...judgeReload(seen)],
-        seen,
+        ...standOrStage(
+          [
+            ...judgeLiveProven("SIM-RELOAD (before)", proof0),
+            ...judgeReload(seen, { live: unmet === null }),
+          ],
+          unmet,
+        ),
+        seen: { ...seen, page },
       };
     });
 
@@ -3043,7 +3097,10 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         const b1 = await ensure(1, "Booted");
         if (b2 !== null || b1 !== null)
           return { problems: [], staging: b2 ?? b1, recorded: true, seen: { quit } };
-        await openUrl(2, "/motion", nonce());
+        const page = await openProven(2, "/motion", nonce());
+        const unproven = stimulusStaging([page]);
+        if (unproven !== null)
+          return { problems: [], staging: unproven, recorded: true, seen: { quit, page } };
         const shown = await doorAct("show-app", 1);
         if (shown.state !== "shown")
           return {
@@ -3412,7 +3469,15 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       if (booted !== null) return { problems: [], staging: booted, recorded: true };
       const shown = await doorAct("show-app", 1);
       await sleep(3_000);
-      await openUrl(1, "/motion", nonce());
+      const page = await openProven(1, "/motion", nonce());
+      const unproven = stimulusStaging([page]);
+      if (unproven !== null)
+        return {
+          problems: [],
+          staging: unproven,
+          recorded: true,
+          seen: { shown: shown.state, page },
+        };
       const pane = await placePane(0);
       await view([pane, p]);
       const atRest = await liveProven(p);
