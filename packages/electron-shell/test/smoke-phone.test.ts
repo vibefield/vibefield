@@ -40,6 +40,7 @@ import {
   endVoid,
   ensureDevice,
   glassRect,
+  idleVerdict,
   idleWait,
   isOwnDevice,
   judgeCap,
@@ -57,6 +58,7 @@ import {
   judgeStopped,
   judgeUse,
   type LiveProof,
+  liveShot,
   type Measure,
   measurePixels,
   type NoneSeen,
@@ -80,7 +82,9 @@ import {
   rowLedger,
   rowMark,
   type StillSeen,
+  type Stimulus,
   stillAddress,
+  stimulusStaging,
   stoppedBeforeQuit,
   type UseSeen,
   uuidHits,
@@ -786,7 +790,8 @@ describe("PT-S3 — the rows' judges", () => {
     const motion = body.indexOf('openUrl(1, "/motion"');
     expect(motion).toBeGreaterThanOrEqual(0);
     expect(body.indexOf("liveProven(p)")).toBeGreaterThan(motion);
-    expect(body.indexOf('openUrl(1, "/still"')).toBeGreaterThan(body.indexOf("liveProven(p)"));
+    // the /still page opened and its load counted (T2's openProven) only after the proof in hand
+    expect(body.indexOf('openProven(1, "/still"')).toBeGreaterThan(body.indexOf("liveProven(p)"));
     expect(judgeUse({ ...seen, native: [603, 1278] }).problems.join(" ")).toMatch(
       /not the device's 603 × 1278/u,
     );
@@ -1291,6 +1296,150 @@ describe("PT-S3 — SIM-ATTACH's poll: an answer from a read taken after R's boo
     );
     expect(twice).not.toBe(SOURCE);
     expect(() => attachPollHeld(twice)).toThrow();
+  });
+});
+
+describe("PT-S3 — the stimulus PROVEN: an unproven page or a failed door verb is STAGING NOT MET, never a red (T2)", () => {
+  const proven: LiveProof = {
+    bound: 20_000,
+    ms: 800,
+    condition: "streaming",
+    presented: 5,
+    frames: 5,
+    after: Array.from({ length: 10 }, () => "streaming"),
+  };
+  const motion: Stimulus = { page: "/motion", opened: "opened", loaded: 1 };
+  const still: Stimulus = { page: "/still", opened: "opened", loaded: 1 };
+  /** run 1101's door: openurl exit 60 (out:55, 61, 68, 73, 86), and a page opened whose beacon never came */
+  const failed: Stimulus = { page: "/motion", opened: "failed", loaded: null };
+  const silent: Stimulus = { page: "/still", opened: "opened", loaded: 0 };
+  const markOf = (j: { problems: readonly string[]; staging: string | null }) =>
+    rowMark(j.problems, { staging: j.staging }).mark;
+
+  it("a page stands only when openurl read `opened` AND the door counted its nonce's /loaded", () => {
+    expect(stimulusStaging([motion, still])).toBeNull();
+    expect(stimulusStaging([failed])).toBe("the /motion page was not opened (openurl read failed)");
+    expect(stimulusStaging([motion, silent])).toBe(
+      "the /still page never beaconed /loaded within 10000 ms",
+    );
+    expect(stimulusStaging([{ ...motion, loaded: null }])).toBe(
+      "the /motion page's /loaded was not read",
+    );
+    // the door unanswered is not a page opened
+    expect(stimulusStaging([{ ...motion, opened: "unanswered", loaded: null }])).toMatch(
+      /not opened \(openurl read unanswered\)/u,
+    );
+  });
+
+  it("each row's verdict on an unproven page: STAGING NOT MET with its why — SIM-LIVE (bringLive's page), SIM-STILL, SIM-IDLE", () => {
+    for (const page of [failed, silent]) {
+      const why = stimulusStaging([page]);
+      expect(why).not.toBeNull();
+      // bringLive's page (SIM-LIVE and every row that brings φP live) and SIM-STILL's: the row returns the staging
+      expect(rowMark([], { staging: why })).toEqual({ mark: "STAGING NOT MET", why });
+    }
+    const idle = {
+      proof: proven,
+      asleep: [true, true, true, true, true, true],
+      steps: 0,
+      presented: 0,
+      rearmed: true,
+      wake: { presented: 3, arrivals: 4 },
+    };
+    expect(idleVerdict(idle, { motion, still, wake: motion })).toEqual({
+      problems: [],
+      staging: null,
+    });
+    // run 1101's SIM-IDLE (out:86-89): the /still page never opened, the desk awake over a MOVING page — not a red
+    const awake = {
+      ...idle,
+      asleep: [true, true, false, false, false, false],
+      steps: 338,
+      presented: 88,
+    };
+    expect(
+      markOf(idleVerdict(awake, { motion, still: { ...failed, page: "/still" }, wake: motion })),
+    ).toBe("STAGING NOT MET");
+    expect(markOf(idleVerdict(awake, { motion: failed, still, wake: motion }))).toBe(
+      "STAGING NOT MET",
+    );
+    expect(markOf(idleVerdict(awake, { motion, still: silent, wake: motion }))).toBe(
+      "STAGING NOT MET",
+    );
+    // the wake's page unproven: the window is still judged; its motion leg is not (no red for a page that never moved)
+    const unwoken = { ...idle, wake: { presented: 0, arrivals: 0 } };
+    const j = idleVerdict(unwoken, { motion, still, wake: failed });
+    expect(j).toEqual({
+      problems: [],
+      staging: "the wake's /motion page was not opened (openurl read failed)",
+    });
+    const both = idleVerdict({ ...unwoken, steps: 4 }, { motion, still, wake: failed });
+    expect(both.staging).toBeNull();
+    expect(both.problems.join(" ")).toMatch(/stepped 4 times/u);
+    expect(both.problems.join(" ")).not.toMatch(/motion did not wake it/u);
+    // all proven: the judge's own reds stand
+    expect(idleVerdict(unwoken, { motion, still, wake: motion }).problems.join(" ")).toMatch(
+      /motion did not wake it/u,
+    );
+  });
+
+  it("SIM-LIVE's device screenshot: not `written` is STAGING NOT MET (run 1101's out:56, exit 1); no shot dir or an unread one stays red", () => {
+    expect(liveShot({ dir: true, state: "written", read: true })).toBeNull();
+    const failedShot = liveShot({ dir: true, state: "failed", read: false });
+    expect(failedShot).toEqual({ problems: [], staging: "the door's screenshot read failed" });
+    expect(markOf(failedShot ?? { problems: [], staging: null })).toBe("STAGING NOT MET");
+    expect(liveShot({ dir: false, state: "no-shot-dir", read: false })).toEqual({
+      problems: ["SIM-LIVE: no VF_SMOKE_SHOT_DIR — the row needs the device's screenshot"],
+      staging: null,
+    });
+    expect(liveShot({ dir: true, state: "written", read: false })).toEqual({
+      problems: ["SIM-LIVE: the door's screenshot was not read"],
+      staging: null,
+    });
+  });
+
+  /** The runner as its source must hold it: no bare openUrl in the three rows or bringLive; each page proven and checked
+   * BEFORE what it stages; an Unstaged thrown by bringLive is the row's staging, never a red. */
+  const stagedHeld = (src: string): void => {
+    const body = (name: string): string => rowBodies(src).find((r) => r.name === name)?.body ?? "";
+    for (const name of ["SIM-LIVE", "SIM-STILL", "SIM-IDLE"])
+      expect(body(name)).not.toMatch(/\bopenUrl\(/u);
+    const bl = src.slice(
+      src.indexOf("  const bringLive = async ("),
+      src.indexOf("  /** The far ask's size"),
+    );
+    expect(bl).not.toMatch(/\bopenUrl\(/u);
+    expect(bl.match(/page = await openProven\(n, "\/motion", q\);/gu)).toHaveLength(2);
+    expect(bl.match(/throw new Unstaged\(/gu)?.length).toBe(3);
+    const firstCheck = bl.indexOf("stimulusStaging([page])");
+    expect(firstCheck).toBeGreaterThan(0);
+    expect(firstCheck).toBeLessThan(bl.indexOf("await view([k]);"));
+    const runner = src.slice(
+      src.indexOf("  const row = async ("),
+      src.indexOf("// ── the rows, by mode"),
+    );
+    expect(runner).toMatch(
+      /\} else if \(error instanceof Unstaged\) out = \{ problems: \[\], staging: error\.message \};/u,
+    );
+    const still = body("SIM-STILL");
+    expect(still.indexOf("stimulusStaging([page])")).toBeGreaterThan(0);
+    expect(still.indexOf("stimulusStaging([page])")).toBeLessThan(
+      still.indexOf("await pickUp(p);"),
+    );
+    const idle = body("SIM-IDLE");
+    expect(idle.indexOf("stimulusStaging([stillPage])")).toBeGreaterThan(0);
+    expect(idle.indexOf("stimulusStaging([stillPage])")).toBeLessThan(
+      idle.indexOf('await until("the desk asleep"'),
+    );
+    expect(idle).toMatch(/idleVerdict\(seen, \{ motion, still: stillPage, wake \}\)/u);
+    const live = body("SIM-LIVE");
+    expect(live).toMatch(
+      /liveShot\(\{\s*dir: d\.shotDir !== undefined,\s*state: taken\.state,\s*read: shot !== null,?\s*\}\)/u,
+    );
+  };
+
+  it("the rows prove their pages before they judge: SIM-LIVE (via bringLive), SIM-STILL, SIM-IDLE (T2)", () => {
+    stagedHeld(SOURCE);
   });
 });
 

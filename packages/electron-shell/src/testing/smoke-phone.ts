@@ -140,6 +140,8 @@ export const PHONE_BOUNDS = {
   word: 10_000,
   /** a device's boot until iOS is READY (the stage's BOOT_READY_MS: its door answers Booting until `bootstatus` says so) */
   ready: 180_000,
+  /** a stimulus page's `/loaded` beacon, counted by the door after its openurl (T2) */
+  loaded: 10_000,
 } as const;
 
 // ─── the stage's word: the env ────────────────────────────────────────────────────────────────────────────────────────
@@ -801,6 +803,48 @@ export function judgeLive(s: LiveSeen): string[] {
   return out;
 }
 
+/** A stimulus page as the door served it (T2): openurl's word (`opened`, else the door's — `failed`, `unanswered`) and the
+ * `/loaded` beacons the door counted for its nonce SINCE the openurl (null: not opened, or the count never read). */
+export interface Stimulus {
+  readonly page: "/motion" | "/still";
+  readonly opened: string;
+  readonly loaded: number | null;
+}
+
+/** THE STIMULUS PROVEN (T2, the orchestrator's ruling): a page stands only when its openurl read `opened` AND the door
+ * counted its nonce's `/loaded` within the bound — else the row is STAGING NOT MET (these words), never a red against the
+ * product: run 1101's openurl failed (exit 60) on a device not yet ready, and its rows read the PAGE's absence as the
+ * desk's. Null: every page stands. */
+export function stimulusStaging(pages: readonly Stimulus[]): string | null {
+  for (const s of pages) {
+    if (s.opened !== "opened")
+      return `the ${s.page} page was not opened (openurl read ${s.opened})`;
+    if (s.loaded === null) return `the ${s.page} page's /loaded was not read`;
+    if (s.loaded < 1)
+      return `the ${s.page} page never beaconed /loaded within ${PHONE_BOUNDS.loaded} ms`;
+  }
+  return null;
+}
+
+/** SIM-LIVE's device screenshot (T2): no VF_SMOKE_SHOT_DIR is RED (§2: a row that needs the shot dir FAILS without it);
+ * the door's screenshot not `written` is the stage's verb failing (run 1101's out:56, exit 1) — STAGING NOT MET; one
+ * written but unread is red. Null: the shot stands. */
+export function liveShot(s: {
+  readonly dir: boolean;
+  readonly state: string;
+  readonly read: boolean;
+}): { readonly problems: string[]; readonly staging: string | null } | null {
+  if (!s.dir)
+    return {
+      problems: ["SIM-LIVE: no VF_SMOKE_SHOT_DIR — the row needs the device's screenshot"],
+      staging: null,
+    };
+  if (s.state !== "written")
+    return { problems: [], staging: `the door's screenshot read ${s.state}` };
+  if (!s.read) return { problems: ["SIM-LIVE: the door's screenshot was not read"], staging: null };
+  return null;
+}
+
 /** SIM-USE: LIVE-PROVEN in hand (on `/motion`), asked at native 60, View only and the device's name in the bar, nothing
  * reaching iOS (on `/still`). */
 export interface UseSeen {
@@ -1004,6 +1048,11 @@ export interface IdleSeen {
 }
 
 export function judgeIdle(s: IdleSeen): string[] {
+  return [...idleWindow(s), ...idleWake(s)];
+}
+
+/** SIM-IDLE's window: LIVE-PROVEN first, asleep through it, nothing stepped or presented, asleep again before the wake. */
+function idleWindow(s: IdleSeen): string[] {
   const out = judgeLiveProven("SIM-IDLE", s.proof);
   if (s.asleep.length === 0 || s.asleep.some((a) => !a))
     out.push(`SIM-IDLE: the desk was not asleep through the window (${JSON.stringify(s.asleep)})`);
@@ -1013,11 +1062,34 @@ export function judgeIdle(s: IdleSeen): string[] {
     out.push(
       "SIM-IDLE: the desk never slept again after the far ask's camera move — the wake window would read the wire's reconfiguration, not motion",
     );
-  if (s.wake.presented < 1 || s.wake.arrivals < 1)
-    out.push(
-      `SIM-IDLE: motion did not wake it within 2 s (presented +${s.wake.presented}, arrivals +${s.wake.arrivals})`,
-    );
   return out;
+}
+
+/** SIM-IDLE's wake: motion woke it within 2 s. */
+function idleWake(s: IdleSeen): string[] {
+  return s.wake.presented < 1 || s.wake.arrivals < 1
+    ? [
+        `SIM-IDLE: motion did not wake it within 2 s (presented +${s.wake.presented}, arrivals +${s.wake.arrivals})`,
+      ]
+    : [];
+}
+
+/** SIM-IDLE judged over its PROVEN pages (T2): the `/motion` page that brings φP live and the static `/still` page are the
+ * window's stimulus — either unproven, the row is STAGING NOT MET (run 1101: the desk "awake" over a page that never left
+ * the moving one); the wake's `/motion` page unproven, its motion leg is not judged — the window's own reds stand, else
+ * STAGING NOT MET. */
+export function idleVerdict(
+  s: IdleSeen,
+  pages: { readonly motion: Stimulus; readonly still: Stimulus; readonly wake: Stimulus },
+): { readonly problems: string[]; readonly staging: string | null } {
+  const before = stimulusStaging([pages.motion, pages.still]);
+  if (before !== null) return { problems: [], staging: before };
+  const wake = stimulusStaging([pages.wake]);
+  if (wake === null) return { problems: judgeIdle(s), staging: null };
+  const window = idleWindow(s);
+  return window.length > 0
+    ? { problems: window, staging: null }
+    : { problems: [], staging: `the wake's ${wake.replace(/^the /u, "")}` };
 }
 
 /** SIM-IDLE's window by reason (T6): the wakes that grew between its two ends (`rest().wakes` at r0 and r1 — RUNNING
@@ -1403,6 +1475,9 @@ export async function ensureDevice(
 
 /** The rows stop: the door said stop, or the press gate refused. */
 class PhoneStop extends Error {}
+/** A row's stimulus not met where a helper stages it (T2: `bringLive`'s device or page) — the row's STAGING NOT MET, its
+ * message the why; never a red against the product. */
+class Unstaged extends Error {}
 /** The door's `act` as the rows ask it: a stop answer is the run's STOP, thrown — never a state a poll waits past, nor
  * a read turned red (R14). Every act the rows ask goes through it. */
 export function actOrStop(door: Pick<PhoneDoor, "act">): PhoneDoor["act"] {
@@ -1831,23 +1906,63 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     await sleep(1_500);
     return r.state === "opened";
   };
+  /** The door's `/loaded` count for a nonce over `base`, polled until it grows or the bound (null: never read). */
+  const loadedSince = async (
+    q: string,
+    base: number,
+    bound: number = PHONE_BOUNDS.loaded,
+  ): Promise<number | null> => {
+    const t0 = Date.now();
+    let seen: number | null = null;
+    for (;;) {
+      const c = await door.count("/loaded", q);
+      if (c !== null) seen = c - base;
+      if ((seen ?? 0) >= 1 || Date.now() - t0 >= bound) return seen;
+      await sleep(300);
+    }
+  };
+  /** A stimulus page opened AND its load counted (T2): `stimulusStaging` says whether it stands. The count's base is read
+   * before the openurl, so a nonce served before (bringLive's after a boot; the palette's nonces come round) never
+   * counts. */
+  const openProven = async (
+    n: number,
+    path: "/motion" | "/still",
+    q: string,
+  ): Promise<Stimulus> => {
+    const base = (await door.count("/loaded", q)) ?? 0;
+    const r = await doorAct("openurl", n, { url: door.page(path, q) });
+    await sleep(1_500);
+    return {
+      page: path,
+      opened: r.state,
+      loaded: r.state === "opened" ? await loadedSince(q, base) : null,
+    };
+  };
   /** The door's screenshot of an own device, measured in main against a band. */
   const deviceShot = async (
     n: number,
     file: string,
     band: readonly [number, number, number] | null,
-  ): Promise<(Measure & { readonly width: number; readonly height: number }) | null> => {
-    if (d.shotDir === undefined) return null;
+  ): Promise<{
+    /** the door's word (`written`), or `no-shot-dir` */
+    readonly state: string;
+    readonly shot: (Measure & { readonly width: number; readonly height: number }) | null;
+  }> => {
+    if (d.shotDir === undefined) return { state: "no-shot-dir", shot: null };
     const r = await doorAct("screenshot", n, { file });
-    if (r.state !== "written") return null;
+    if (r.state !== "written") return { state: r.state, shot: null };
     const png = d.pngPixels(join(d.shotDir, file));
-    return png === null
-      ? null
-      : {
-          ...measurePixels(png.rgba, png.width, png.height, band, BAND_TOL),
-          width: png.width,
-          height: png.height,
-        };
+    return {
+      state: r.state,
+      shot:
+        png === null
+          ? null
+          : {
+              ...measurePixels(png.rgba, png.width, png.height, band, BAND_TOL),
+              width: png.width,
+              height: png.height,
+            },
+    };
   };
   const shootDesk = async (name: string): Promise<boolean> => {
     if (d.shotDir === undefined) return false;
@@ -1857,9 +1972,12 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
   };
   /** A phone brought to LIVE-PROVEN however its device stands: booted, its page moving, its window shown if closed. */
   const bringLive = async (row: string, k: string, n: number, q: string): Promise<LiveProof> => {
+    // its device and its page are the row's STIMULUS: either unmet, the row is STAGING NOT MET (T2), never red
     const staged = await ensure(n, "Booted");
-    if (staged !== null) throw new Error(`${row}: ${staged}`);
-    await openUrl(n, "/motion", q);
+    if (staged !== null) throw new Unstaged(staged);
+    let page = await openProven(n, "/motion", q);
+    const unproven = stimulusStaging([page]);
+    if (unproven !== null) throw new Unstaged(unproven);
     await view([k]);
     await until(
       "the phone's face",
@@ -1874,7 +1992,10 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         const deadline = Date.now() + PHONE_BOUNDS.boot;
         while (Date.now() < deadline && (await doorAct("state", n)).state !== "Booted")
           await sleep(1_000);
-        await openUrl(n, "/motion", q);
+        page = await openProven(n, "/motion", q);
+        const unbooted = stimulusStaging([page]);
+        // the row's runner puts the phone down after a throw (R6)
+        if (unbooted !== null) throw new Unstaged(unbooted);
       }
       const proof = await liveProven(k, act === "boot" ? PHONE_BOUNDS.boot : PHONE_BOUNDS.live);
       await putDown();
@@ -1983,7 +2104,8 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       } else if (error instanceof PhoneStop) {
         stopped = error.message;
         out = { problems: [], void: `STOPPED: ${error.message}` };
-      } else
+      } else if (error instanceof Unstaged) out = { problems: [], staging: error.message };
+      else
         out = { problems: [`${name}: ${error instanceof Error ? error.message : String(error)}`] };
     }
     // a row that threw with a phone in hand puts it down before the next row's select press (R6)
@@ -2351,15 +2473,22 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const band = bandColour(q);
       const proof = await bringLive("SIM-LIVE", p, 1, q);
       await sleep(800);
-      const shot = await deviceShot(1, `sim-live-${q}.png`, band);
+      const taken = await deviceShot(1, `sim-live-${q}.png`, band);
+      const shot = taken.shot;
       if (shot !== null) native = [shot.width, shot.height];
-      if (shot === null)
+      // the door's screenshot not written is the stage's verb failing: STAGING NOT MET (T2)
+      const unshot = liveShot({
+        dir: d.shotDir !== undefined,
+        state: taken.state,
+        read: shot !== null,
+      });
+      if (unshot !== null || shot === null)
         return {
-          problems: [
-            d.shotDir === undefined
-              ? "SIM-LIVE: no VF_SMOKE_SHOT_DIR — the row needs the device's screenshot"
-              : "SIM-LIVE: the door's screenshot was not read",
-          ],
+          ...(unshot ?? {
+            problems: ["SIM-LIVE: the door's screenshot was not read"],
+            staging: null,
+          }),
+          seen: { proof, shot: taken.state },
         };
       if (shot.band < BAND_FLOOR * shot.px)
         return {
@@ -2421,14 +2550,10 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         /* said by the judge */
       }
       const proof = held ? await liveProven(p) : null;
-      await openUrl(1, "/still", q);
-      let loaded = 0;
-      for (let i = 0; i < 10 && loaded < 1; i += 1) {
-        loaded = (await door.count("/loaded", q)) ?? 0;
-        if (loaded < 1) await sleep(300);
-      }
+      const stillPage = await openProven(1, "/still", q);
+      const loaded = stillPage.loaded ?? 0;
       if (native === null) {
-        const shot = await deviceShot(1, `sim-use-${q}.png`, null);
+        const shot = (await deviceShot(1, `sim-use-${q}.png`, null)).shot;
         if (shot !== null) native = [shot.width, shot.height];
       }
       await sleep(1_200);
@@ -2517,7 +2642,10 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const band = bandColour(q);
       const staged0 = await ensure(1, "Booted");
       if (staged0 !== null) return { problems: [], staging: staged0 };
-      await openUrl(1, "/motion", q);
+      // the band's page PROVEN before the still is judged by it (T2: run 1101's "no band to dim" read a page never opened)
+      const page = await openProven(1, "/motion", q);
+      const unproven = stimulusStaging([page]);
+      if (unproven !== null) return { problems: [], staging: unproven, seen: { page } };
       await view([p]);
       await pickUp(p);
       const proof = await liveProven(p);
@@ -2612,10 +2740,16 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     await row("SIM-IDLE", "MUST", async () => {
       const staged0 = await ensure(1, "Booted");
       if (staged0 !== null) return { problems: [], staging: staged0 };
-      await openUrl(1, "/motion", nonce());
+      // the window's pages PROVEN (T2): run 1101's /still never opened (out:86), and the desk read "awake" over the
+      // moving page it never left
+      const motion = await openProven(1, "/motion", nonce());
+      const unmoved = stimulusStaging([motion]);
+      if (unmoved !== null) return { problems: [], staging: unmoved, seen: { motion } };
       await view([p]);
       const proof = await liveProven(p);
-      await openUrl(1, "/still", nonce());
+      const stillPage = await openProven(1, "/still", nonce());
+      const unstill = stimulusStaging([stillPage]);
+      if (unstill !== null) return { problems: [], staging: unstill, seen: { proof, stillPage } };
       await still();
       await sleep(2_000);
       try {
@@ -2656,7 +2790,10 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       // motion wakes it: presents and arrivals within 2 s of the page asked to move
       const f0 = await faceOf(p);
       const s0 = (await stats())?.presented ?? 0;
-      await doorAct("openurl", 1, { url: door.page("/motion", nonce()) });
+      // the wake's page: opened at once (the 2 s window starts at its openurl), its load counted after the window
+      const wq = nonce();
+      const wBase = (await door.count("/loaded", wq)) ?? 0;
+      const wOpened = (await doorAct("openurl", 1, { url: door.page("/motion", wq) })).state;
       const woke = Date.now();
       let f1 = f0;
       let s1 = s0;
@@ -2674,10 +2811,18 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         rearmed,
         wake: { presented: s1 - s0, arrivals: (f1?.arrivals ?? 0) - (f0?.arrivals ?? 0) },
       };
+      const wake: Stimulus = {
+        page: "/motion",
+        opened: wOpened,
+        loaded: wOpened === "opened" ? await loadedSince(wq, wBase) : null,
+      };
+      const j = idleVerdict(seen, { motion, still: stillPage, wake });
       return {
-        problems: judgeIdle(seen),
+        problems: j.problems,
+        staging: j.staging,
         seen: {
           ...seen,
+          wakePage: wake,
           // the window's wakes by reason (§4), never rest()'s running totals (T6)
           wakes: wakesIn(r0.wakes, r1.wakes),
           wire: { near: near?.targetFps ?? null, far: far?.targetFps ?? null },
@@ -3036,9 +3181,9 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     await row("SIM-RATE", "OBSERVATION", async () => {
       // P12: arrivals a second with /motion — numbers that stand only on a timing host (PM-WINDOW): never here
       await bringLive("SIM-RATE", p, 1, nonce());
-      const a = await deviceShot(1, `sim-rate-a-${nonce()}.png`, null);
+      const a = (await deviceShot(1, `sim-rate-a-${nonce()}.png`, null)).shot;
       await sleep(250);
-      const b = await deviceShot(1, `sim-rate-b-${nonce()}.png`, null);
+      const b = (await deviceShot(1, `sim-rate-b-${nonce()}.png`, null)).shot;
       const moving = a !== null && b !== null && gridsDiffer(a.grid, b.grid);
       const rate = async (): Promise<number> => {
         const a0 = (await faceOf(p))?.arrivals ?? 0;
