@@ -1450,8 +1450,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - Under the pointer the row takes the foreground at 4%; the chosen row takes the ready fill.
   - **The thread it shows** is the chosen spark's. Chat opens on the newest spark and keeps it until you choose
     another: by its row, or by the New spark sheet's hatch (SP-1c). A spark whose activity is newer moves up the list
-    and never takes the thread, nor the keyboard in its pane. *(SP-1d, 2026-10-31: until the thread was the spark's own
-    pane, a thread nothing had chosen followed the newest activity.)*
+    and never takes the thread, nor the keyboard in its pane.
   - **Needs you (S-4):**
     - Asking you, Needs your OK and Stuck turn the row's word to `--vf-ink-attention`. An 8 dot in `--vf-orange` stands
       at the row's right, 12 in and 15 up from its foot.
@@ -1470,10 +1469,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       Chat is the view and it is the one shown, and opening it reads it. In another view Chat's cell takes the orange
       dot while a needs-you dot stands, else the cyan one while a thread is unread, its accessible name "Chat, a thread
       is unread". Both are kept for the window's life and written nowhere (HN-D9's rule).
-    - *Added 2026-10-31 (SP-1d's critique, rulings-9):* the dot is a picture, so a dot that outlasts the status word is
-      said in the row's accessible name, right after the status word, in a word only a screen reader reads: "unread",
-      or "needed you" for a needs-you dot whose need has ended ("Asleep, needed you", "Ready, unread"). A need standing
-      now is said by its own word (Asking you), so it adds none (S-3).
+    - The dot is a picture, so a dot that outlasts the status word is said in the row's accessible name, right after
+      the status word, in a word only a screen reader reads: "unread", or "needed you" for a needs-you dot whose need
+      has ended ("Asleep, needed you", "Ready, unread"). A need standing now is said by its own word (Asking you), so it
+      adds none (S-3).
   - **The status, as SP-1b reads it:** from the spark's own run row (`agent.subscribe {projection: "field"}`, by the
     row's `spark`) and its agents' rows (by their `origin`). The first that holds is the word:
     - no session yet: Hello;
@@ -1493,24 +1492,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - While its act runs it reads "Showing…" or "Waking…". Refused, the line says so in fieldd's words ("Couldn't show
       Vela's pane: …", "Couldn't wake Vela: …"), and the act stays.
     - No thread is drawn in its place: SP-1d mounts the spark's pane there, then its composer.
-    - *Built at SP-1d (2026-10-31, DESIGN.md first):* awake, the spark's pane is the thread (§8 "Chat's thread"), so
-      the awake line retires with **Show**, "Showing…" and "Couldn't show Vela's pane: …". Asleep and not started keep
-      their lines. Send wakes either (§8 "Chat's composer"), so the not-started line reads "Waking…" while a send wakes
-      it, as the asleep line does under Wake. A wake's refusal is said once, in the same words, "Couldn't wake Vela:
-      …": on this line when Wake started it, on the note when Send did. What the pane's place says while there is no
-      pane to draw is §8 "Chat's thread". *Amended 2026-10-31 (SP-1d's critique, correctness-1):* **Wake** holds its
-      thread as a send does, one act at a time (§8 "Chat's thread").
+    - *Built at SP-1d, 2026-10-31:* awake, the spark's pane is the thread (§8 "Chat's thread"), so the awake line
+      retires with **Show**, "Showing…" and "Couldn't show Vela's pane: …". Asleep and not started keep their lines.
+      **Wake** holds its thread as a send does, one act at a time (§8 "Chat's thread"). Send wakes either (§8 "Chat's
+      composer"), so the not-started line reads "Waking…" while a send wakes it, as the asleep line does under Wake. A
+      wake's refusal is said once, in the same words, "Couldn't wake Vela: …": on this line when Wake started it, on
+      the note when Send did. What the pane's place says while there is no pane to draw is §8 "Chat's thread".
   - **Empty, opening, unavailable:** "No sparks yet"; "Opening Chat…" while the list is first read; "Chat can't read
     your sparks", with fieldd's words under it, when it cannot be read. Each is secondary, centred in the panel, and
-    never a blank. *Amended 2026-11-01 (SP-1d's final critique):* "first read" is the window's feed's: the list reads
-    "Opening Chat…" again whenever that feed starts again (fieldd restarting), and a send that gives up then says so
-    in its own sentence (§8 "Chat's composer"). *Corrected 2026-11-01 (SP-1d's second review):* SP-1d's review struck
-    "(fieldd restarting)" here as false, writing that the feed outlives a fieldd restart with the list as last read.
-    The sentence was true and that correction was not: a fieldd restart replaces the window's document (main's boot
-    fence, `FielddDaemonBootFence` → `requestAllReplacements`), so Chat's feed starts again, the list reads "Opening
-    Chat…", and the new feed asks for the board afresh. What the feed outlives is a connection drop while the same
-    fieldd stays up: the window's client reconnects, the board's subscription comes back with a fresh snapshot, and
-    the list stands as last read.
+    never a blank. *Amended 2026-11-01 (SP-1d):* "first read" is the window's feed's. A fieldd restart replaces the
+    window's document (main's boot fence, `FielddDaemonBootFence` → `requestAllReplacements`), so Chat's feed starts
+    again: the list reads "Opening Chat…" again, the new feed asks for the board afresh, and a send that gives up then
+    says so in its own sentence (§8 "Chat's composer"). A connection drop while the same fieldd stays up starts no new
+    feed: the window's client reconnects, the board's subscription comes back with a fresh snapshot, and the list
+    stands as last read.
   - **No create yet.** Chat's line holds the views and the snapshot. Its create, **New spark** (⌘N, `sparkle`), comes
     with its sheet in SP-1c. *(Built at SP-1c, 2026-10-31: §8 "The New spark sheet", and the line's create above.)*
 - **The New spark sheet — a name, an agent, and the face it is dealt** (SP-1c; NS-D1 A, NS-D2 B, NS-D3 A and NS-D5,
@@ -1561,8 +1556,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the deck's pane and the hand ruled by VF-PM 2026-10-31 16:35Z, James's to overturn). The thread is the spark's own
   session, in its own terminal, in Chat's thread column. No messages are drawn: the pane is the transcript. The live
   cards (CH-D2) are not drawn at SP-1d. They come with **SP-1e**, which writes their entry here first, with their data:
-  a job that groups a spark's spawns, and a door that lists its watches. *Chat's thread pane takes no card at SP-1d: it
-  joins the places that take one with SP-1e (2026-10-31, SP-1d's critique, rulings-8).*
+  a job that groups a spark's spawns, and a door that lists its watches. Chat's thread pane takes no card at SP-1d: it
+  joins the places that take one with SP-1e.
   - **The column is a fixed box:** the head, the pane, then the foot, in one column centred under the head, as wide as
     the composer: 640, or the thread's width less 56 where that is narrower.
     - The head stays SP-1b's (72): the face at 40, framed and live, the name and the status word. It is the pane's head.
@@ -1586,8 +1581,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     gave it, cut at its edges where that is larger. ⌘W stays the window's, as in every view but Godview.
     - It holds the keyboard only while Chat is the view, and lets it go when Chat stops being the view. A send whose
       paste lands after you left Chat (its wait outlived your stay) pastes without taking the keyboard or the size.
-      Back in Chat, the pane takes them only on a press or a send. *(Added 2026-10-31, SP-1d's critique,
-      correctness-3.)*
+      Back in Chat, the pane takes them only on a press or a send.
   - **It draws only while Chat is the view.** Under another view's cover it stops, as the deck does. Godview's pane on
     the same session stays Godview's: only the one on screen draws, and the keyboard is in at most one of them.
   - **When there is no pane to draw,** the pane's place stands without its well, on the panel's own chrome, and says
@@ -1632,12 +1626,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **A starter** is 34 tall, corners 17, padded 0 14 0 11, on solid chrome ringed by the strong hairline, as wide as
       its words. Its glyph is 14 in secondary ink, then 8, then its words in 13/500 primary ink. Under the pointer it
       takes `--vf-fill` and rises 1, in 180ms on `--vf-ease-lift`. Pressed, it is sent as Send sends (§8 "Chat's
-      composer"): pasted into the pane, with Return left to you, its note Send's own. A thread takes one send at a
-      time, a starter's or Send's: while one runs, the starters wait (busy) and Send waits, and a press of either
-      does nothing, so two messages never sit in the agent's one input for a single Return to send as one.
-      *Amended 2026-10-31 (SP-1d's critique, correctness-1):* a wake is one of the thread's acts too, so the thread
-      takes one act at a time, Wake's, a starter's or Send's. While Wake's wake runs, Send and the starters wait; while
-      a send runs, Wake cannot be pressed. A Send pressed during Wake's wake would have woken the spark a second time.
+      composer"): pasted into the pane, with Return left to you, its note Send's own. A thread takes one act at a
+      time, Wake's, a starter's or Send's, and a press while one runs does nothing. While a send runs, the starters
+      wait (busy), Send waits and Wake cannot be pressed, so two messages never sit in the agent's one input for a
+      single Return to send as one. While Wake's wake runs, Send and the starters wait, so a send never wakes the
+      spark a second time.
     - **A send that is not taken** leaves the hello standing when it was refused before the pane took the keyboard:
       the window has no terminals, the pane was not found or not heard, you left the thread or the spark fell asleep
       before its pane was ready, Chat could not read its list, its input did not open, or the spark waits on you.
@@ -1660,16 +1653,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       re-attached after a restart read it back. So a spark is new only while every fact the window holds agrees:
       - it never started; or
       - the board shows its own run, and all three hold:
-        - that run is the one it hatched in, born within a minute of the spark's record. A wake's run never is, so a
-          woken spark never says hello;
+        - that run is the one it hatched in, born within a minute of the spark's record. A run born in its place
+          after that minute is not: a wake's (resumed, or started afresh), or one fieldd resumed in place of a run it
+          could not re-attach. So a spark woken after that minute never says hello;
         - fieldd is watching that run, not waiting to resume it;
         - this window has never seen the spark at work or waiting on you, nor that run's tokens spent (a turn is a
           model's answer, and every answer spends them). What the window saw is kept for its life (HN-D9's rule), so
-          a turn it saw outlasts the board's count when fieldd restarts.
-      A spark whose run the board does not show is not said to be new. One case is still open. A window that opens
-      after fieldd re-attached the run a spark hatched in, before that run's next live turn, has seen none of its
-      turns, so it can say hello over that spark's transcript. Closing it takes a fact on the board's row that a
-      transcript read back keeps, the run's turns (a contracts question, VF-PM's).
+          a turn it saw stays seen whatever the board counts after it. That life ends at a fieldd restart, the one
+          time fieldd re-attaches a run: a restart replaces the window's document (main's boot fence, §8 "Chat's
+          list"), and the window after it has seen nothing.
+      A spark whose run the board does not show is not said to be new. Two cases are still open. In each, a window that
+      has seen none of a run's turns reads a run whose transcript the board does not count:
+      - a run fieldd re-attached as it restarted keeps its birth, so it still reads as the run its spark hatched in,
+        however old it is. The window the restart opened has seen none of its turns, so until that run's next live
+        turn it can say hello over the spark's transcript;
+      - a run born in the hatch run's place within the minute reads as the hatch run: one fieldd resumed in place of a
+        run it could not re-attach, after a restart within the hatch run's first 60 s, or a spark woken that soon.
+      Both close with the turn fact of the slice that follows SP-1d (VF-PM, 2026-10-31): a fact on the board's row
+      that a transcript read back keeps, the run's turns.
     - They come in over 420ms on `--vf-ease-island`, from 8 below at opacity 0, and they go at once. With reduced
       motion they fade in over 120ms, and a starter's rise takes 90ms on ease-out (M6).
     - The hello is VibeField's words for what a spark does, drawn in its voice. It is never sent to the session and is
@@ -1717,13 +1718,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **@'s rows in Chat** (CH-D5 A, "Agents to start, and sessions running"; EW-D4: @ offers only its scope). There are
     two groups, read bottom-up, nearest first. Each lists only what the spark's own tools reach, but for the one
     residual below.
-    - *Amended 2026-10-31 (SP-1d's critique, rulings-2):* this said @ never offers a row the spark's tools would
-      refuse. That holds but for a session's profile. The talk room reads it as the profile the run was filed under
+    - *The residual, a session's profile (2026-10-31):* the talk room reads it as the profile the run was filed under
       (`profileSet`), else This Mac's. The board's row carries only the run's persona, so @ reads the persona's
       profile, else This Mac's when the run names no persona. The two agree while a run is filed under its persona's
       profile, or names neither. Where they part (a run filed under another profile, or naming only one of the two),
       @ can offer a session that `agent_send` refuses as outside the spark's profiles, which the tool says, or leave
-      out one it would take. Carrying `profileSet` on the board's row closes it, and that is VF-PM's call, owed.
+      out one it would take. Carrying `profileSet` on the board's row closes it, in the turn-fact slice that follows
+      SP-1d (VF-PM, 2026-10-31).
     - **Running in its profiles**, nearest the composer: the sessions the spark's `agent_send` (CP-2) takes, by its
       whole rule (`fieldd/src/tool-plane/rooms/talk/verbs.ts`). A session is a row when all three hold:
       - it is live;
@@ -1753,9 +1754,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - When the spark's profiles can't be read (`agents.profileSets.list`), no agent and no session can be placed, so
       the list offers no row and says the New spark sheet's sentence, "VibeField can't list its agents right now". The
       next @ reads them again. Each of these words is 12/400 in tertiary ink, padded 10.
-    - *Added 2026-11-01 (SP-1d's final critique; amended the same day, SP-1d's review and its second review):* the
-      sessions are read from the window's one board (Chat's feed, `agent.subscribe`), never by an @. When that board
-      can't be read (its subscription refused), no session can be placed, but the agents can, since they are the
+    - The sessions are read from the window's one board (Chat's feed, `agent.subscribe`), never by an @. When that
+      board can't be read (its subscription refused), no session can be placed, but the agents can, since they are the
       profiles' alone. So **Start an agent** stands, and **Running in its profiles** stands with no row, saying
       "VibeField can't read what's running right now" in their place, 12/400 in tertiary ink, padded 10, as @'s other
       words. `Nothing called "cla"` is still said when no agent matches what follows the @, and "Nothing to add from
@@ -1764,13 +1764,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       refused because the socket closed under the ask while the same fieldd stayed up (the window's client marks that
       refusal retryable, and never replays a subscribe it lost in flight) is asked again too, once that client has
       reconnected. Any other refusal stands until the feed starts again. The residual: a board that neither answers nor
-      refuses leaves its group saying "Reading its agents…" until it answers. *Corrected 2026-11-01 (SP-1d's review):*
-      this said a refused board leaves the list with no row and the New spark sheet's sentence; the agents to start
-      never depended on the board. *Corrected again the same day (SP-1d's second review):* SP-1d's review also wrote
-      here that the feed starts once for the window's life, so a refusal stood until the window reloaded, and that a
-      board refused "as fieldd went" is asked again "when fieldd is back". A fieldd restart replaces the window's
-      document, so the feed starts again and asks afresh, as this said before. The re-ask covers a connection drop,
-      not a restart. Before it, a board refused that way stood until the next restart or reload.
+      refuses leaves its group saying "Reading its agents…" until it answers.
     - Flows' rows are CP-4's (FL-D5 A). Sparks are never rows: in a spark's thread the spark is the one you are
       talking to (CH-D5).
     - @'s list stays 316 wide. The page's 340 was not taken: 316 is the line's, and the rows fit it.
@@ -1802,10 +1796,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - never a trailing line break.
   - **Send** pastes the message into the thread's pane, the road ⌘V takes: bracketed when its program asked for it,
     with Return never pressed for you. Return in the draft and the send button both send. ⇧Return types nothing: the
-    draft is one line. The thread takes one act at a time, Send's, a starter's or Wake's (§8 "Chat's thread",
-    *amended 2026-10-31*): while one runs, send waits (busy), and a press does nothing. *Amended 2026-11-01 (SP-1d's
-    final critique):* the thread's own hold turns the press away, the one Wake and the starters read, not the button
-    drawn busy, so a Return in the same moment as a Wake press sends nothing, says nothing and lets go of nothing.
+    draft is one line. The thread takes one act at a time, Send's, a starter's or Wake's (§8 "Chat's thread"): while
+    one runs, send waits (busy), and a press does nothing. The thread's own hold turns the press away, the one Wake and
+    the starters read, not the button drawn busy, so a Return in the same moment as a Wake press sends nothing, says
+    nothing and lets go of nothing.
     - The pane takes the keyboard just before the paste (§8 "Chat's thread"), so it takes the session's size, and the
       keyboard stays there, where Return sends it. Sent, the words and chips it carried are cleared, and the line's
       note (§8 "The line") says so once: "Pasted into Vela's pane — Return sends it". The draft stays a field while a
@@ -1817,13 +1811,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       "Chat's thread"), or that has not been heard yet (Hello, as just after a hatch), is waited for in the same 20 s,
       with no wake. Nothing is pasted into a spark before it is heard: a program not yet up may not read a paste as
       one, and a line break inside the message would read as Return.
-    - *Added 2026-10-31 (SP-1d's critique, correctness-1):* **a spark wakes once.** fieldd answers an open asked while
-      another is under way (a second window's: `compose.sparks.open` is this desktop's own door, its shell's and its
-      windows') with that same wake, its run or its refusal, so two opens never wake one spark into two runs.
-      *Amended 2026-10-31 (SP-1d's fix review):* this named the phone, which has no such door, and said "never" of a
-      case it does not cover. A resume under way through another door (`agent.resume`, as Godview's Resume asks it) is
-      not joined yet: the wake reads that resume's refusal as a session that cannot be resumed and starts the spark
-      again. Joining it is owed to fieldd's resume wrapper.
+    - **A spark wakes once.** fieldd answers an open asked while another is under way (a second window's:
+      `compose.sparks.open` is this desktop's own door, its shell's and its windows') with that same wake, its run or
+      its refusal, so two opens never wake one spark into two runs. A resume under way through another door
+      (`agent.resume`, as Godview's Resume asks it) is not joined yet: the wake reads that resume's refusal as a session
+      that cannot be resumed and starts the spark again. Joining it is owed to fieldd's resume wrapper.
     - **While the spark waits on you** (Asking you, Needs your OK, Stuck), Send pastes nothing, because a menu in the
       pane would read the paste as its answer. The note says "Vela is waiting on you — answer it in its pane", and the
       draft stays. It is read when Send is pressed, and again after the last wait, just before the paste: a woken or
@@ -1832,44 +1824,38 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - When the paste is not taken, the draft stays whole and the note says why, in the hand's words where the outcome
       is the hand's own (§8 "The hand"):
       - "Not pasted — Vela's pane is not taking input" (its input did not open within 1.5 s, or a spark that is awake
-        was not heard in the 20 s). *Amended 2026-11-01 (SP-1d's final critique):* never for a spark Chat reads asleep
-        then, nor while Chat cannot read its list, nor for a pane no longer drawn when a wait ends or the paste is
-        asked: each of those is said below;
+        was not heard in the 20 s), never for a spark Chat reads asleep then, nor while Chat cannot read its list, nor
+        for a pane no longer drawn when a wait ends or the paste is asked: each of those is said below;
       - "Not pasted — that snapshot is no longer kept";
       - "Not pasted into Vela's pane — 300 KB, and one paste carries 261 KB of it" (D6, said once);
       - "Not sent — Vela didn't wake in 20 seconds", only for a spark this send woke that was not heard in them;
       - "Not sent — Vela's terminal is not on this desktop's floor", at once when the floor holds no such terminal,
         and after the 20 s for a spark that is awake, or was heard, but whose terminal was not named in them. A spark
-        that is awake is never said not to have woken. *Amended 2026-10-31 (SP-1d's fix review):* a thread still on
-        screen whose pane is not drawn yet when the 20 s end (a spark heard just as they end) is a pane still being
-        found, so it is said so too;
+        that is awake is never said not to have woken. A thread still on screen whose pane is not drawn yet when the
+        20 s end (a spark heard just as they end) is a pane still being found, so it is said this too;
       - "Not sent — you left Vela's thread before its pane was ready", after the 20 s, when no pane of the thread
         has settled and the thread is not on screen then: you left Chat, or chose another thread, while its pane was
         being found or had not appeared. The pane is only found while its thread is shown, so its terminal is never
-        said to be off the floor then. *Amended 2026-10-31 (SP-1d's fix review):* this was said whenever no pane had
-        settled, the thread on screen or not. *Amended 2026-11-01 (SP-1d's final critique):* once the pane is found,
-        it is read again after each wait (for the spark to be heard, for its input) and at the paste. The send pastes
-        into the pane its thread draws then, so a thread left and shown again is pasted into: a pane being found again
-        is waited for in what is left of the 20 s, and a pane drawn again has its own input waited for (1.5 s) before
-        the paste. A pane still drawn under another view's cover takes the paste (§8 "Chat's thread"). A pane no
-        longer drawn when a wait ends is said as no pane at the 20 s is: a thread left while the send waited for the
-        spark to be heard, or for its input, says this, never that its pane is not taking input, and a pane still
-        being found is never said to be off the floor before the 20 s end;
+        said to be off the floor then. Once the pane is found, it is read again after each wait (for the spark to be
+        heard, for its input) and at the paste. The send pastes into the pane its thread draws then, so a thread left
+        and shown again is pasted into: a pane being found again is waited for in what is left of the 20 s, and a pane
+        drawn again has its own input waited for (1.5 s) before the paste. A pane still drawn under another view's
+        cover takes the paste (§8 "Chat's thread"). A pane no longer drawn when a wait ends is said as no pane at the
+        20 s is: a thread left while the send waited for the spark to be heard, or for its input, says this, never that
+        its pane is not taking input, and a pane still being found is never said to be off the floor before the 20 s
+        end;
       - "Not sent — Vela fell asleep before its pane was ready", after the 20 s, when the spark fell asleep while the
-        send waited (*added 2026-10-31, SP-1d's fix review*). An asleep thread draws no pane, so none could be
-        ready, and you are never said to have left it. *Amended 2026-11-01 (SP-1d's final critique):* while the send
-        waits for the pane of a thread on screen, it is said the moment that pane goes, not at the 20 s. It is read
-        too when an awake spark is not heard, when its input does not open, and wherever the pane is read again. Still
-        at the 20 s: a spark that falls asleep off screen, where no pane goes, or after its pane was found and before
-        it was heard, which that wait reads from the list alone;
+        send waited. An asleep thread draws no pane, so none could be ready, and you are never said to have left it.
+        While the send waits for the pane of a thread on screen, it is said the moment that pane goes, not at the
+        20 s. It is read too when an awake spark is not heard, when its input does not open, and wherever the pane is
+        read again. Still at the 20 s: a spark that falls asleep off screen, where no pane goes, or after its pane was
+        found and before it was heard, which that wait reads from the list alone;
       - "Not sent — Chat is opening again" and "Not sent — Chat can't read your sparks", when Chat's list is not read
         at the moment the send reads why it cannot go on, said as the list stands then (§8 "Chat's list"): opening
         again, where the list reads "Opening Chat…" (its feed started again, as fieldd restarts; a send is pressed
         only on a list read, so it is always again), or unreadable, its list refused before that feed first read it,
         in the list's own words. With no list read no thread is drawn and no spark is heard, so "you left", "didn't
-        wake" and "not taking input" are never said then (*added 2026-11-01, SP-1d's final critique; corrected the
-        same day, SP-1d's second review: SP-1d's review struck "as fieldd restarts", saying the feed outlives a
-        restart. It does not, since a restart replaces the window's document (§8 "Chat's list")*);
+        wake" and "not taking input" are never said then;
       - "Couldn't find Vela's pane: …", at once, in the floor's or the window's own words, while the pane's place says
         it (§8 "Chat's thread");
       - "Not sent — this window has no terminals", at once, in a window with no terminals (the catalog, a browser),
@@ -1890,9 +1876,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     meanwhile.
   - **A card from the hand** (§8 "The hand"):
     - Carried over the composer, a card rings it at its own corners (26), 1.5px `--vf-select`, and says "Add to your
-      message to Vela". *Amended 2026-11-01 (SP-1d's final critique):* the ring was drawn at a pane's corner (8), so
-      its corners stood outside the composer's glass at both ends. A place says its ring's corner with its answer, the
-      composer its own, and the carried card's ring is drawn at it; the composer draws no ring of its own.
+      message to Vela". A place says its ring's corner with its answer, the composer its own, and the carried card's
+      ring is drawn at it; the composer draws no ring of its own.
     - Let go, it lands as a chip at the caret, or at the draft's end when the draft holds no caret. The note says
       "Added to your message to Vela". The card stays in the hand (HN-D4).
     - What a pane cannot take, the composer cannot take either, in the same words: "A picture with no file can't be
@@ -2048,8 +2033,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     says "Not pasted — that snapshot is no longer kept". **The desk** (Canvas) takes text as a note and a picture as a print, where you let go
     (HN-D7); a file or an agent says the desk can't hold it yet. **Chat's composer** takes a card as a
     chip (§8 "Chat's composer"): "Add to your message to Vela", then "Added to your message to
-    Vela". *Chat's thread pane takes no card at SP-1d: it joins the places that take one with SP-1e
-    (2026-10-31, SP-1d's critique, rulings-8).* Over the line the carried card ducks to 0.55; **held over a view's
+    Vela". *(SP-1d, 2026-10-31: Chat's thread pane takes no card yet; it joins the places that take one
+    with SP-1e.)* Over the line the carried card ducks to 0.55; **held over a view's
     cell for 520ms** (HN-D6) that view opens under it, the cell saying "Opening Godview" with its
     progress — copy in History and play in Godview in one drag.
   - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its notebook — it flies

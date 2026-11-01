@@ -24,9 +24,7 @@ import { cellMarkOf, ThreadLedger, type ThreadMark, threadMarksOf } from "./thre
 // for the board afresh. What the feed outlives is a connection drop while the same fieldd stays up: the client
 // reconnects, replays the board's subscription with a fresh snapshot, and the list stands as last read. A board
 // refused because the socket closed under the ask is never replayed, so it is asked again when the window's client is
-// connected again (`SparksPort.onReconnected`); one refused for good stands until the feed starts again. (Corrected
-// 2026-11-01, SP-1d's second review: this said the feed outlives a fieldd restart, and that a board refused "as fieldd
-// went" is asked again "when fieldd is back".)
+// connected again (`SparksPort.onReconnected`); one refused for good stands until the feed starts again.
 
 /** What the feed reads: the window's fieldd client in the product (`sparksPortOver`), a fixture in a test. */
 export interface SparksPort {
@@ -225,8 +223,10 @@ class RunningFeed {
   readonly #offReconnected: () => void;
   #open = true;
   #onBoard = "";
-  /** the sparks this window has seen have a turn, for its life and written nowhere (HN-D9's rule): a run fieldd
-   * re-attached reads its transcript back, which the board never counts, so a turn seen before stays seen */
+  /** the sparks this window has seen have a turn, for its life and written nowhere (HN-D9's rule): a turn seen stays
+   * seen whatever the board counts after it. A fieldd restart, the one time fieldd re-attaches a run, replaces the
+   * window's document, so the set starts empty over a re-attached run (DESIGN.md §8 "Chat's thread", the open
+   * cases) */
   readonly #turnsSeen = new Set<SparkId>();
   /** each thread's mark, for the feed's life (the window's) and written nowhere (HN-D9's rule) */
   readonly #ledger = new ThreadLedger();
@@ -461,9 +461,8 @@ export function useBoardRows(): BoardRows {
 
 /** How Chat's list stands now — read, opening, or unreadable — as its panel draws it: for Send, which asks it where it
  * cannot go on and says it as the list does (DESIGN.md §8 "Chat's composer"). While it is not read — fieldd
- * restarting, which replaces the window's document and starts its feed again, or its list refused before that feed
- * first read it — no thread is drawn. (Corrected 2026-11-01, SP-1d's second review: SP-1d's review struck "fieldd
- * restarting" here, saying the feed outlives a restart. It does not: main's boot fence replaces the document.) */
+ * restarting, which replaces the window's document (main's boot fence) and starts its feed again, or its list
+ * refused before that feed first read it — no thread is drawn. */
 export function sparksReadingNow(): SparksReading["state"] {
   return state.reading.state;
 }

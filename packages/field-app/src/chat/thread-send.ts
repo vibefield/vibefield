@@ -44,10 +44,8 @@ export type ThreadSendOutcome =
    * closed): it fell asleep while the send waited, and an asleep thread draws no pane */
   | { readonly state: "fell-asleep" }
   /** Chat's list was not read where the send could not go on, said as the list stands: opening again (its feed
-   * started again, as fieldd restarts) or unreadable (its list refused before that feed first read it). No thread is
-   * drawn and no spark is heard then, so why cannot be told. (Corrected 2026-11-01, SP-1d's second review: SP-1d's
-   * review struck "as fieldd restarts", saying the feed outlives a restart. It does not: a restart replaces the
-   * window's document, main's boot fence, and its feed starts again.) */
+   * started again, as fieldd restarts and main's boot fence replaces the window's document) or unreadable (its list
+   * refused before that feed first read it). No thread is drawn and no spark is heard then, so why cannot be told. */
   | { readonly state: "sparks-unread"; readonly reading: Exclude<SparksReading["state"], "ready"> }
   /** the floor did not answer, or this window's terminals could not start, in their own words */
   | { readonly state: "fault"; readonly reason: string }

@@ -93,11 +93,10 @@ The catalog currently mounts these shipping views directly:
   latch from what the plates' window read with the shown thread on screen (a need's orange dot,
   and since SP-1d a thread unread in cyan, and a need that has ended still orange, "needed you"
   in the row's name); and, since SP-1d (§8 "Chat's thread", "Chat's composer"), the thread:
-  - the line in the pane's place (SP-1d's final critique, item 9): the shipping panel's own
-    words for Wake under way (its button waiting, the thread held, so send is busy) and refused
-    in fieldd's words, and for a spark whose session never started, each a fixture act
-    (`CHAT_ACT`, handed to the panel's `act` as Chat's controller hands it) or a fixture spark
-    with no session;
+  - the line in the pane's place: the shipping panel's own words for Wake under way (its button
+    waiting, the thread held, so send is busy) and refused in fieldd's words, and for a spark whose
+    session never started, each a fixture act (`CHAT_ACT`, handed to the panel's `act` as Chat's
+    controller hands it) or a fixture spark with no session;
   - the pane's place: the shipping `SparkPaneView` in the words a window with no terminals says,
     and on three plates its words while it is being found, when this desktop's floor does not hold
     it, and when the floor did not answer. No catalog holds a terminal pool ("a host, never a
@@ -110,16 +109,15 @@ The catalog currently mounts these shipping views directly:
     the chips an agent, a session and a card make; its blank and armed read by the draft's own
     `draftBlank` and `draftSendable`. Never its controller (`ChatComposer`), which registers the
     hand's place and sends;
-  - the composer's quiet and busy states (SP-1d's critique, rulings-5), each the same readings
-    over a fixture that puts it there: @ while its profiles are read (`sets` null), when nothing
-    is called what follows the @, with nothing to add (This Mac and Work with no sign-in, and
-    none of your sessions on the board), when the profiles can't be read (`"failed"`, the New
-    spark sheet's sentence), and when the board can't be (its rows `"failed"`: the agents to start
-    stand, and the sessions' group says what's running can't be read, SP-1d's review); an agent
-    just taken, its menu while its picker is read and when the read fails; and a send under way,
-    Send's over its draft and a starter's, one fact (`CHAT_SENDING`, which holds Wake's too)
-    handed to the panel's `sending` and the composer's `busy`, as Chat's controller hands its
-    thread's one act to both;
+  - the composer's quiet and busy states, each the same readings over a fixture that puts it
+    there: @ while its profiles are read (`sets` null), when nothing is called what follows the @,
+    with nothing to add (This Mac and Work with no sign-in, and none of your sessions on the
+    board), when the profiles can't be read (`"failed"`, the New spark sheet's sentence), and when
+    the board can't be (its rows `"failed"`: the agents to start stand, and the sessions' group
+    says what's running can't be read); an agent just taken, its menu while its picker is read
+    and when the read fails; and a send under way, Send's over its draft and a starter's, one fact
+    (`CHAT_SENDING`, which holds Wake's too) handed to the panel's `sending` and the composer's
+    `busy`, as Chat's controller hands its thread's one act to both;
   - the hello: what stands in the thread over its pane is the product's own `threadItemsOf` over
     the shown spark and the plate's draft, drawn by the shipping `ThreadItemsView` inside the
     panel — a spark just hatched saying hello with its three starters, which send nothing there,

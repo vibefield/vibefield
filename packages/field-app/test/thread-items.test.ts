@@ -122,12 +122,12 @@ describe("a new spark: its session has had no turn yet (NS-D4; critique 17)", ()
     expect(sparkIsNew(entryOf(spark(), row({ pending: "resume-when-idle" })))).toBe(false);
   });
 
-  it("is never new once the window has seen it have a turn, though the board's count is gone (fieldd re-attached)", () => {
-    // the same run, re-attached after fieldd restarts: its transcript read back, nothing counted
-    const reattached = entryOf(spark(), row(), new Set(["sp-vela0001"]));
-    expect(reattached.run?.usage).toBeUndefined();
-    expect(reattached.turnSeen).toBe(true);
-    expect(sparkIsNew(reattached)).toBe(false);
+  it("is never new once the window has seen it have a turn, though the board's count is gone", () => {
+    // the same run, its count gone from the board (a transcript read back), and a turn the window's set still holds
+    const uncounted = entryOf(spark(), row(), new Set(["sp-vela0001"]));
+    expect(uncounted.run?.usage).toBeUndefined();
+    expect(uncounted.turnSeen).toBe(true);
+    expect(sparkIsNew(uncounted)).toBe(false);
   });
 
   it("is not said to be new when the board shows none of its runs: nothing certifies it", () => {

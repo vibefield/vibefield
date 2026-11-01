@@ -90,7 +90,7 @@ const PORT: ComposerPort = {
   },
 };
 
-/** The board's frames as the feed hears them: a test hands it another (fieldd restarted and re-attached). */
+/** The board's frames as the feed hears them: a test hands it another, within the same window's life. */
 let pushFrame: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
 
 function feed(
@@ -283,10 +283,10 @@ describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4)', (
     expect($(".vf-chat-items")).toBeNull();
   });
 
-  it("says no hello once the window saw a turn, when fieldd re-attaches the run and its count is gone", async () => {
+  it("says no hello once the window saw a turn, though a later frame no longer counts it", async () => {
     await mountChat([own({ usage: { cumulativeTokens: 18_400 } })]);
     expect($(".vf-chat-items")).toBeNull();
-    // fieldd restarts and re-attaches the same run: its transcript is read back, so the board counts nothing
+    // the same run in a later frame with nothing counted (a transcript read back): the turn the window saw stays seen
     await act(async () => pushFrame?.({ revision: 1, rows: [own()] }, "snapshot"));
     await settle();
     expect($(".vf-chat-composer")).not.toBeNull();
