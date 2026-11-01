@@ -1664,19 +1664,26 @@
                       at most <code>AGENT_FIELD.CARRIED_SCREENS_PER_PEER</code> (64) per peer connection, the next
                       refused <code>{state: "no-screen", reason: "carried-cap"}</code>; gone when that connection's
                       last <code>remote</code> board there (the home's hub upstream) closes, and when the connection
-                      closes. When a reader's mesh board at the home closes, the home sends each owner it reported to
+                      closes. A hub that only resyncs re-attaches on the same connection, and the home carries its
+                      readers' reports again at that re-attach (<code>MeshBoard</code>'s
+                      <code>onUpstreamReady</code>), as it does at a re-dial. When a reader's mesh board at the home closes, the home sends each owner it reported to
                       an empty report, in order behind anything it carried for that reader, so a re-subscribe's new
                       report lands after it. An owner is dropped from that list only once a carry is known to land (an
                       empty that fails keeps it owed). When the home's link to an owner answers a new dial (an owner
-                      restart, a network blip, a sleep), the home carries each reader's last report to it again, so the
-                      open card stays read. Not built: a close's empty that fails is logged
+                      restart, a network blip, a sleep), the home carries each reader's current report to it again, so
+                      the open card stays read. The replay reads what the phone shows when it is carried, so a report
+                      still in flight is the one replayed, and an empty the phone sent replays nothing even if its own
+                      carry failed. Not built: a close's empty that fails is logged
                       (<code>fieldd.agents.screen_release_failed</code>) and not retried. Until the carrying connection
                       or its upstream closes on the owner, that reader's carried screen stands, and its rows earn no
                       unread mark there, in the owner's own windows too. A carried report acknowledges nothing:
                       acknowledgement stays this desktop's own window's (Q06).
                       A refusal's details say which kind it is (the 3b review [14]). <code>{state: "no-screen"}</code>
                       is transient: no mesh board at the home right now, or a board that closed while the report
-                      waited, so it is sent again after the next open. A refusal carrying
+                      waited, so it is sent again after the next open. The exception is
+                      <code>reason: "carried-cap"</code>: that is the owner's bound, not a missing board, so a sender
+                      records it once per device, as it does a <code>locality: "local"</code> refusal, and does not
+                      retry it on every open (the PG-3b fold check [3]). A refusal carrying
                       <code>{locality: "local"}</code> means a home or an owner without PG-3b. The rules are
                       <code>packages/fieldd/src/agent-screens.ts</code>'s; the door's hook around the carry is
                       <code>ProductApi.wrapForward</code>. The kit's sender is PG-3e's.</p></td>
