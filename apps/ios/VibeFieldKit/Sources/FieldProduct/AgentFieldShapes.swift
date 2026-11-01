@@ -301,6 +301,8 @@ public struct AgentSubscribeParams: Sendable, Equatable {
   public enum Projection: String, Sendable, Equatable {
     case full
     case field
+    /// PG-3 — the home's REMOTE cut (`AgentRemoteRow`, `AgentRemoteShapes.swift`). Not asked yet.
+    case remote
   }
 
   /// DS-3 — `local` (the door's default) is the answering desktop's own board;
@@ -331,6 +333,12 @@ public struct AgentSubscribeParams: Sendable, Equatable {
   /// refuses it to a phone (SP-L4) — and never `full`.
   public static let phoneMesh = AgentSubscribeParams(
     projection: .field, scope: .mesh, minIntervalMs: 250)
+
+  /// PG-3 — the phone's Godview door (SP-L4 as amended): the home's REMOTE cut of
+  /// its mesh board. No `minIntervalMs`: the door floors the ask by the caller's
+  /// kind (`boardFloor`, fieldd/src/agent-field.ts), so the kit holds no copy of a
+  /// registry number. Unused until 3e; FieldLink asks `phoneMesh`.
+  public static let phoneRemote = AgentSubscribeParams(projection: .remote, scope: .mesh)
 
   public var json: JSONValue {
     var fields: [String: JSONValue] = [:]

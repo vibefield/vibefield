@@ -177,4 +177,16 @@ import Testing
           "projection": .string("field"), "scope": .string("mesh"), "minIntervalMs": .int(250),
         ]))
   }
+
+  /// PG-3c — the phone's Godview ask, pinned and unused until 3e: the home's REMOTE cut of its
+  /// mesh board, with NO interval — the door floors it by the caller's kind (`boardFloor`,
+  /// fieldd's `agent-field.ts`), so the kit holds no copy of a registry number. FieldLink still
+  /// asks `phoneMesh` (above).
+  @Test func thePhoneWillAskTheHomeForTheRemoteCutWithNoInterval() {
+    #expect(
+      AgentSubscribeParams.phoneRemote.json
+        == .object(["projection": .string("remote"), "scope": .string("mesh")]))
+    #expect(AgentSubscribeParams.phoneRemote.minIntervalMs == nil)
+    #expect(AgentSubscribeParams.Projection(rawValue: "remote") == .remote)
+  }
 }
