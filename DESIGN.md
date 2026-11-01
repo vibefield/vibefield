@@ -1631,9 +1631,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       takes one act at a time, Wake's, a starter's or Send's. While Wake's wake runs, Send and the starters wait; while
       a send runs, Wake cannot be pressed. A Send pressed during Wake's wake would have woken the spark a second time.
     - **A send that is not taken** leaves the hello standing when it was refused before the pane took the keyboard:
-      the window has no terminals, the pane was not found or not heard, you left the thread before its pane was
-      ready, its input did not open, or the spark waits on you. Once the pane has taken the keyboard for a send, the
-      hello leaves with it, pasted or not, since the pane then holds the keyboard.
+      the window has no terminals, the pane was not found or not heard, you left the thread or the spark fell asleep
+      before its pane was ready, its input did not open, or the spark waits on you. Once the pane has taken the
+      keyboard for a send, the hello leaves with it, pasted or not, since the pane then holds the keyboard.
     - **What it covers:** at 1180 × 780 the card is about 200 tall, y 412–612, so while it shows it covers about the
       pane's last ten rows, where a new agent's input box waits. It leaves the moment you write, so nothing you type is
       under it.
@@ -1789,8 +1789,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       with no wake. Nothing is pasted into a spark before it is heard: a program not yet up may not read a paste as
       one, and a line break inside the message would read as Return.
     - *Added 2026-10-31 (SP-1d's critique, correctness-1):* **a spark wakes once.** fieldd answers an open asked while
-      another is under way (a second window's, the phone's) with that same wake, its run or its refusal, so one spark
-      never wakes into two runs.
+      another is under way (a second window's: `compose.sparks.open` is this desktop's own door, its shell's and its
+      windows') with that same wake, its run or its refusal, so two opens never wake one spark into two runs.
+      *Amended 2026-10-31 (SP-1d's fix review):* this named the phone, which has no such door, and said "never" of a
+      case it does not cover. A resume under way through another door (`agent.resume`, as Godview's Resume asks it) is
+      not joined yet: the wake reads that resume's refusal as a session that cannot be resumed and starts the spark
+      again. Joining it is owed to fieldd's resume wrapper.
     - **While the spark waits on you** (Asking you, Needs your OK, Stuck), Send pastes nothing, because a menu in the
       pane would read the paste as its answer. The note says "Vela is waiting on you — answer it in its pane", and the
       draft stays. It is read when Send is pressed, and again after the last wait, just before the paste: a woken or
@@ -1805,10 +1809,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - "Not sent — Vela didn't wake in 20 seconds", only for a spark this send woke that was not heard in them;
       - "Not sent — Vela's terminal is not on this desktop's floor", at once when the floor holds no such terminal,
         and after the 20 s for a spark that is awake, or was heard, but whose terminal was not named in them. A spark
-        that is awake is never said not to have woken;
-      - "Not sent — you left Vela's thread before its pane was ready", after the 20 s, when no pane of the thread is
-        on screen: you left Chat, or chose another thread, while its pane was being found or had not appeared. The
-        pane is only found while its thread is shown, so its terminal is never said to be off the floor then;
+        that is awake is never said not to have woken. *Amended 2026-10-31 (SP-1d's fix review):* a thread still on
+        screen whose pane is not drawn yet when the 20 s end (a spark heard just as they end) is a pane still being
+        found, so it is said so too;
+      - "Not sent — you left Vela's thread before its pane was ready", after the 20 s, when no pane of the thread
+        has settled and the thread is not on screen then: you left Chat, or chose another thread, while its pane was
+        being found or had not appeared. The pane is only found while its thread is shown, so its terminal is never
+        said to be off the floor then. *Amended 2026-10-31 (SP-1d's fix review):* this was said whenever no pane had
+        settled, the thread on screen or not;
+      - "Not sent — Vela fell asleep before its pane was ready", after the 20 s, when the spark fell asleep while the
+        send waited (*added 2026-10-31, SP-1d's fix review*). An asleep thread draws no pane, so none could be
+        ready, and you are never said to have left it;
       - "Couldn't find Vela's pane: …", at once, in the floor's or the window's own words, while the pane's place says
         it (§8 "Chat's thread");
       - "Not sent — this window has no terminals", at once, in a window with no terminals (the catalog, a browser),
@@ -4998,8 +5009,8 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   pasted — Vela's pane is not taking input" · "Not pasted — that snapshot is no longer kept" · "Not pasted into Vela's
   pane — 300 KB, and one paste carries 261 KB of it" · "Not sent — Vela didn't wake in 20 seconds" · "Not sent — Vela's
   terminal is not on this desktop's floor" · "Not sent — you left Vela's thread before its pane was ready" · "Not sent
-  — this window has no terminals" · "Couldn't wake Vela: …" · "Couldn't send to Vela: …". A card's: "Add to your
-  message to Vela" · "Added to your message to Vela".
+  — Vela fell asleep before its pane was ready" · "Not sent — this window has no terminals" · "Couldn't wake Vela: …"
+  · "Couldn't send to Vela: …". A card's: "Add to your message to Vela" · "Added to your message to Vela".
 - A row's lasting mark, in its accessible name after the status word: "unread" · "needed you" ("Asleep, needed you",
   "Ready, unread").
 - A session's handle: its folder's name, which is the board's project, else the agent's label for a run that names no

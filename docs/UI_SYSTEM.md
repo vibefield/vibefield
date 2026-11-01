@@ -99,10 +99,11 @@ The catalog currently mounts these shipping views directly:
     stands in for it;
   - the composer: the shipping `ChatComposerView` at the thread's foot, its `AtRowsView` over
     fixture agents, profiles and rows read by the product's own `atRowsOf`, and an agent's menu
-    read by the New spark sheet's own `agentMenuOf` — at rest, typing, @ open on both groups, an
-    agent's model and Effort, and the chips an agent, a session and a card make; its blank and
-    armed read by the draft's own `draftBlank` and `draftSendable`. Never its controller
-    (`ChatComposer`), which registers the hand's place and sends;
+    read by the controller's own `agentChipMenuOf` (the New spark sheet's agent menu for the
+    chip's one agent) — at rest, typing, @ open on both groups, an agent's model and Effort, and
+    the chips an agent, a session and a card make; its blank and armed read by the draft's own
+    `draftBlank` and `draftSendable`. Never its controller (`ChatComposer`), which registers the
+    hand's place and sends;
   - the composer's quiet and busy states (SP-1d's critique, rulings-5), each the same readings
     over a fixture that puts it there: @ while its profiles are read (`sets` null), when nothing
     is called what follows the @, with nothing to add (This Mac and Work with no sign-in, and

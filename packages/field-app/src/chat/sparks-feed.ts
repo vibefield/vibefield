@@ -382,6 +382,12 @@ export function showThread(spark: SparkId | null): void {
   running?.show(spark);
 }
 
+/** The thread on screen now, as Chat last said it (`showThread`), or null: for Send, which asks it when no pane of
+ * its thread settled (DESIGN.md §8 "Chat's composer"). */
+export function threadOnScreen(): SparkId | null {
+  return onScreen;
+}
+
 /** Each thread's mark (SP-1d), by its spark: a needs-you dot while the need stands or since it stood off screen,
  * else unread since its spark's own turn ended off screen. Empty before the first reading. Chat's rows draw it. */
 export function useThreadMarks(): ReadonlyMap<SparkId, ThreadMark> {

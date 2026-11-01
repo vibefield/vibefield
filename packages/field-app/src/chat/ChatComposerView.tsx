@@ -15,6 +15,7 @@ import {
   useId,
 } from "react";
 import { CARD_INDEX } from "../frame/cards/CardFace";
+import { menuRowId } from "./agent-chip-menu";
 import { AT_WORDS, type AtAgentRow, type AtList, type AtRow, type AtSessionRow } from "./at-rows";
 import { chipLabel, type DraftChip, type DraftPart, draftPlaceholder } from "./composer-draft";
 import type { AgentMenuRow, EffortChoice } from "./new-spark";
@@ -50,7 +51,7 @@ export type AtShown =
   | {
       readonly kind: "menu";
       readonly left: number;
-      /** the agent's menu (`agentMenuOf` for the one agent): its head, Its own model, its picker's models */
+      /** the agent's menu (`agentChipMenuOf`): its head, Its own model, its picker's models */
       readonly rows: readonly AgentMenuRow[];
       readonly effort?: EffortChoice | undefined;
       /** the hot model row's id ("" for Its own model) — what Return or Tab keeps */
@@ -85,9 +86,6 @@ export interface ChatComposerViewProps {
   onModel?: ((model: string | null) => void) | undefined;
   onEffort?: ((value: string) => void) | undefined;
 }
-
-/** A model row's id as the menu's hot row names it: "" for Its own model. */
-export const menuRowId = (model: string | null): string => model ?? "";
 
 /** An agent's menu, as a reader hears it: "Claude Code's model". */
 function menuLabel(rows: readonly AgentMenuRow[]): string {

@@ -19,6 +19,7 @@ import {
 import { act, type ReactElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AT_WORDS } from "../src/chat/at-rows";
 import { ChatComposer, type ComposerPort } from "../src/chat/ChatComposer";
 import { ChatView } from "../src/chat/ChatView";
 import type { DraftPart } from "../src/chat/composer-draft";
@@ -428,6 +429,9 @@ describe("@ in Chat's composer (DESIGN.md §8, @'s rows in Chat; the surface `at
     press(editor(), { key: "Escape" });
     fails = false;
     typeText("ask @");
+    // while that read runs, @ is reading again, never still the failure it reads past (SP-1d's fix review)
+    expect(words(menu())).toContain(AT_WORDS.reading);
+    expect(words(menu())).not.toContain(CANNOT_LIST_AGENTS);
     await settle();
     expect(
       [...(menu()?.querySelectorAll<HTMLElement>(".vf-chat-at-row") ?? [])].map(

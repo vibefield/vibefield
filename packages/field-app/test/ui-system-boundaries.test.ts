@@ -154,14 +154,19 @@ describe("UI system ownership boundaries", () => {
 
   it("keeps Chat's composer fixture an ADAPTER — the shipping view over fixture drafts and @ rows, never its controller (SP-1d)", () => {
     // The catalog stands in for what the composer's controller would hand its view — a draft, @'s rows read by the
-    // product's own `atRowsOf`, an agent's menu read by the sheet's own `agentMenuOf` — and mounts the shipping
-    // `ChatComposerView`. Never the controller (it registers the hand's place and sends), never the hand's registry,
-    // never the product's doors or feed.
+    // product's own `atRowsOf`, an agent's menu read by the controller's own `agentChipMenuOf` — and mounts the
+    // shipping `ChatComposerView`. Never the controller (it registers the hand's place and sends), never the hand's
+    // registry, never the product's doors or feed.
     const preview = source("design-system/ChatPreview.tsx");
     const fixtures = source("design-system/chat-fixtures.ts");
     expect(preview).toMatch(/<ChatComposerView\s/u);
     expect(fixtures).toContain("atRowsOf");
-    expect(fixtures).toContain("agentMenuOf");
+    // one reading of an agent's chip menu (SP-1d's fix review): the controller and the plates both call it, and
+    // neither reads the sheet's `agentMenuOf` beside it
+    for (const file of [source("chat/ChatComposer.tsx"), fixtures]) {
+      expect(file).toContain("agentChipMenuOf(");
+      expect(file).not.toContain("agentMenuOf(");
+    }
     // rulings-5: a plate's blank and armed are the draft's own readings, and a send under way is one fact handed to
     // the panel and the composer, never a busy drawn on one of them alone
     expect(fixtures).toContain("draftBlank");

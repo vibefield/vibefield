@@ -275,13 +275,17 @@ export class SparkService {
   /** Wake a spark: a live session is answered as it is; a sleeping one is resumed in its last session, or started
    * again in its folder when that cannot be resumed.
    *
-   * One wake per spark (SP-1d): an open asked while one is under way — two windows, a window and the phone — is
-   * answered by that wake, its run or its refusal. Asked again, the resume would be refused (the runtime claims the
-   * conversation it continues), the daemon's resume reads that refusal as cannot-be-resumed, and the spark would be
-   * started again beside the run it is waking into. The wake is joined per spark, not per caller: the door decides
-   * who may open a spark (`requireDesktopCaller`) and audits each caller before this is asked, and inside the wake
-   * the principal decides nothing — it binds only the terminal ticket a birth mints, which this service never hands
-   * on. */
+   * One wake per spark (SP-1d): an open asked while one is under way — two windows, or a window and the shell, since
+   * `compose.sparks.open` is local and its door admits only this desktop's shell and windows (`requireDesktopCaller`)
+   * — is answered by that wake, its run or its refusal. Asked again, the resume would be refused (the runtime claims
+   * the conversation it continues), the daemon's resume reads that refusal as cannot-be-resumed, and the spark would
+   * be started again beside the run it is waking into. The wake is joined per spark, not per caller: the door decides
+   * who may open a spark and audits each caller before this is asked, and inside the wake the principal decides
+   * nothing — it binds only the terminal ticket a birth mints, which this service never hands on.
+   *
+   * Not joined yet: a resume of the spark's session already under way through another door (`agent.resume`, as
+   * Godview's Resume asks it). The daemon's resume wrapper reads its PRECONDITION_FAILED (state `resuming` or
+   * `replaced`) as cannot-be-resumed, so this wake starts the spark again beside it; the wrapper owes the fix. */
   open(id: SparkId, principal: GrantPrincipal): Promise<SparkSummary> {
     const under = this.#opening.get(id);
     if (under !== undefined) return under;

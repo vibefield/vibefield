@@ -6,8 +6,9 @@ import {
   type AgentProfileSet,
   type SparkSummary,
 } from "@vibefield/contracts";
+import { agentChipMenuOf } from "../chat/agent-chip-menu";
 import { type AtSources, atDefaultHot, atRowsOf } from "../chat/at-rows";
-import { type AtShown, type ChatComposerViewProps, menuRowId } from "../chat/ChatComposerView";
+import type { AtShown, ChatComposerViewProps } from "../chat/ChatComposerView";
 import {
   type AgentChip,
   type CardChip,
@@ -16,7 +17,7 @@ import {
   draftSendable,
   type SessionChip,
 } from "../chat/composer-draft";
-import { agentMenuOf, effortOf, type ModelsReading, modelWords } from "../chat/new-spark";
+import { type ModelsReading, modelWords } from "../chat/new-spark";
 import { sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
 import type { ThreadLatches } from "../chat/thread-marks";
@@ -28,8 +29,8 @@ import { FIXTURE_HATCHED, FIXTURE_SPARKS } from "./spark-fixtures";
 
 // Chat's fixture ADAPTER (SP-1b, SP-1d; docs/UI_SYSTEM.md): what fieldd would answer — the sparks it keeps, the field
 // board's rows, the agents and Agent Profiles it offers, an agent's picker, or that it is not answering — run through
-// the PRODUCT's own readings (`sparkEntriesOf`, @'s `atRowsOf`, the agent menu's `agentMenuOf` and `effortOf`, the
-// draft's `draftBlank` and `draftSendable`), so the catalog draws what the window would, never a copy of its words.
+// the PRODUCT's own readings (`sparkEntriesOf`, @'s `atRowsOf`, an agent chip's menu `agentChipMenuOf`, the draft's
+// `draftBlank` and `draftSendable`), so the catalog draws what the window would, never a copy of its words.
 // Fixed seeds (`spark-fixtures.ts`) and a fixed clock, so every plate deals the same faces and says the same times.
 
 /** The catalog's clock: a Saturday morning, 9:41 local. */
@@ -439,27 +440,17 @@ const SIGNED_OUT: readonly AgentProfileSet[] = PROFILE_SETS.map((set) => ({
 /** The board with none of your own sessions on it: the sparks' own runs and the agent Lyra started. */
 const SPARKS_RUNS = ROWS.filter((row) => row.spark !== undefined || row.origin?.by === "spark");
 
-/** "Start " and the agent's chip, its menu open in @'s box as the controller reads it for that chip: the New spark
- * sheet's `agentMenuOf` for the one agent, the profile on its head (Juno has two), and Effort under a chosen model
+/** "Start " and the agent's chip, its menu open in @'s box as the controller reads it for that chip
+ * (`agentChipMenuOf`, nothing pointed at yet): the profile on its head (Juno has two), and Effort under a chosen model
  * that has one. */
 function started(chip: AgentChip, picker: ModelsReading): ComposerPlate {
-  const selection = chip.model?.selection;
-  const model =
-    picker.state === "read"
-      ? picker.answer.catalog?.models.find((choice) => choice.id === selection?.modelId)
-      : undefined;
+  const menu = agentChipMenuOf(chip, picker, null);
   return drafted([words("Start "), { kind: "chip", chip }, words(" ")], {
     kind: "menu",
     left: 46,
-    rows: agentMenuOf(
-      [{ id: chip.agent, label: chip.label, takes: true }],
-      chip.agent,
-      picker,
-      selection,
-      chip.named ? chip.profile.name : undefined,
-    ),
-    effort: effortOf(model, selection),
-    hot: menuRowId(selection?.modelId ?? null),
+    rows: menu.rows,
+    effort: menu.effort,
+    hot: menu.hot,
   });
 }
 

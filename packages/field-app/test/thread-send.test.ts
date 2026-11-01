@@ -54,6 +54,8 @@ function deps(over: Partial<ThreadSendDeps> = {}): ThreadSendDeps {
     wake: async () => undefined,
     heard: async () => true,
     pane: async () => live(doorOf()),
+    asleep: () => false,
+    onScreen: () => true,
     stillKept: async () => true,
     inputRefusals: () => () => undefined,
     ...over,
@@ -236,12 +238,12 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
   });
 
   it("says a thread left before its pane was ready as left — never off the floor, where its terminal may stand", async () => {
-    // no pane of the thread on screen when the 20 s ran out: Chat was left, or another thread chosen, while the send
-    // waited — for an awake spark's pane being found, or for a woken one's to appear
+    // no pane of the thread when the 20 s ran out, and its thread not on screen then: Chat was left, or another thread
+    // chosen, while the send waited — for an awake spark's pane being found, or for a woken one's to appear
     for (const needsWake of [false, true]) {
       const heard = vi.fn(async () => true);
       const outcome = await sendToThread(
-        deps({ needsWake, heard, pane: async () => null }),
+        deps({ needsWake, heard, pane: async () => null, onScreen: () => false }),
         "hi",
         [],
       );
@@ -252,6 +254,58 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
       // no pane, no paste: it is not asked again whether it was heard
       expect(heard).toHaveBeenCalledTimes(needsWake ? 1 : 0);
     }
+  });
+
+  it("says a spark that fell asleep while the send waited as asleep — never that you left its thread (SP-1d's fix review)", async () => {
+    // its run ended during the wait: an asleep thread draws no pane, so none settles, though the thread stays on screen
+    for (const needsWake of [false, true]) {
+      let asleep = false;
+      const outcome = await sendToThread(
+        deps({
+          needsWake,
+          pane: async () => {
+            asleep = true;
+            return null;
+          },
+          asleep: () => asleep,
+        }),
+        "hi",
+        [],
+      );
+      expect(outcome, `needsWake ${needsWake}`).toEqual({ state: "fell-asleep" });
+      expect(sendNote(outcome, "Vela")).toBe(
+        "Not sent — Vela fell asleep before its pane was ready",
+      );
+    }
+    // asleep is why there is no pane, whether or not you stayed
+    expect(
+      await sendToThread(
+        deps({ pane: async () => null, asleep: () => true, onScreen: () => false }),
+        "hi",
+        [],
+      ),
+    ).toEqual({ state: "fell-asleep" });
+  });
+
+  it("reads a pane not yet drawn on a thread still on screen as one being found: off the floor, never left (SP-1d's fix review)", async () => {
+    // a woken spark heard as the 20 s end: the wait for its pane has no time left, and Chat has not drawn the pane
+    // yet, so nothing is published for it — the thread never left the screen
+    vi.useFakeTimers();
+    const sent = sendToThread(
+      deps({
+        needsWake: true,
+        heard: (ms) => new Promise((resolve) => setTimeout(() => resolve(true), ms - 1)),
+        pane: (ms) => whenSparkPane("sp-vela0001", ms),
+      }),
+      "hi",
+      [],
+    );
+    await vi.advanceTimersByTimeAsync(SPARK_WAKE_WAIT_MS);
+    const outcome = await sent;
+    expect(outcome).toEqual({ state: "off-floor" });
+    expect(sendNote(outcome, "Vela")).toBe(
+      "Not sent — Vela's terminal is not on this desktop's floor",
+    );
   });
 
   it("refuses at once where the pane's place already says why: off the floor, a fault, no terminals", async () => {
@@ -425,6 +479,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
       { state: "no-wake" },
       { state: "off-floor" },
       { state: "thread-left" },
+      { state: "fell-asleep" },
       { state: "no-terminals" },
     ];
     for (const outcome of outcomes) {

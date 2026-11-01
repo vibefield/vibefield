@@ -20,6 +20,7 @@ import {
   type SparkOpener,
   showThread,
   sparkEntryNow,
+  threadOnScreen,
   useChooseRequest,
   useSparkOpener,
   useSparksReading,
@@ -57,7 +58,8 @@ export function ChatView({
   /** the frame's open surface, from its one owner (@'s list is `at`) */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
-  /** what @'s rows read: the agents and profiles fieldd offers, and an agent's own picker */
+  /** what @'s rows read: the Agent Profiles fieldd offers, and an agent's own picker (`ComposerPort`; its agents are
+   * said by the catalog's labels, so `agent.providers` is not read) */
   port: ComposerPort;
 }): ReactElement {
   const reading = useSparksReading();
@@ -157,6 +159,11 @@ export function ChatView({
                   ms,
                 )) !== null,
               pane: (ms) => whenSparkPane(spark, ms),
+              asleep: () => {
+                const now = sparkEntryNow(spark);
+                return now !== null && threadLineOf(now) === "asleep";
+              },
+              onScreen: () => threadOnScreen() === spark,
               stillKept,
             },
             text,

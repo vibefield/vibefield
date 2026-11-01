@@ -1,4 +1,4 @@
-import type { AgentModelChoice, AgentModelSelection } from "@vibefield/contracts";
+import type { AgentModelSelection } from "@vibefield/contracts";
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -19,8 +19,9 @@ import type { Card } from "../frame/cards/cards-model";
 import { OUTCOME_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { sayOnLine } from "../frame/line-door";
+import { agentChipMenuOf, menuRowId, modelsOf } from "./agent-chip-menu";
 import { type AtRow, type AtSources, atDefaultHot, atMove, atRow, atRowsOf } from "./at-rows";
-import { type AtShown, ChatComposerView, menuRowId } from "./ChatComposerView";
+import { type AtShown, ChatComposerView } from "./ChatComposerView";
 import {
   type AgentChip,
   atQueryBefore,
@@ -44,13 +45,7 @@ import {
   placeCaret,
   readEditor,
 } from "./composer-editor";
-import {
-  agentMenuOf,
-  effortOf,
-  type ModelsReading,
-  modelWords,
-  type NewSparkPort,
-} from "./new-spark";
+import { type ModelsReading, modelWords, type NewSparkPort } from "./new-spark";
 import type { SparkEntry } from "./spark-status";
 import { useBoardRows } from "./sparks-feed";
 import { sendNote, type ThreadSendOutcome } from "./thread-send";
@@ -119,10 +114,6 @@ interface MenuOpen {
   readonly hot: string | null;
   readonly left: number;
 }
-
-/** A picker's models, once read. */
-const modelsOf = (picker: ModelsReading | undefined): readonly AgentModelChoice[] =>
-  picker?.state === "read" ? (picker.answer.catalog?.models ?? []) : [];
 
 export function ChatComposer({
   entry,
@@ -199,7 +190,9 @@ export function ChatComposer({
   useEffect(() => {
     if (asks === 0) return;
     let current = true;
-    // a read that failed is said as failed (`atRowsOf`), never as profiles with nothing in them
+    // a read that failed is said as failed (`atRowsOf`), never as profiles with nothing in them; the next read is
+    // said as reading, never as the failure it reads past (a list read before stands while it is read again)
+    setSets((held) => (held === "failed" ? null : held));
     port.profileSets().then(
       (listed) => {
         if (current) setSets(listed);
@@ -240,26 +233,21 @@ export function ChatComposer({
   }, [agentChip, models, pickerKey, port]);
   const picker = pickerKey === null ? undefined : models.get(pickerKey);
   const selection = agentChip?.model?.selection;
-  const model = modelsOf(picker).find((choice) => choice.id === selection?.modelId);
-  const menuRows =
-    agentChip === undefined
-      ? []
-      : agentMenuOf(
-          [{ id: agentChip.agent, label: agentChip.label, takes: true }],
-          agentChip.agent,
-          picker,
-          selection,
-          agentChip.named ? agentChip.profile.name : undefined,
-        );
-  const effort = effortOf(model, selection);
-  const menuStops = menuRows.flatMap((row) => (row.kind === "model" ? [menuRowId(row.id)] : []));
-  const menuHot = menu?.hot ?? menuRowId(selection?.modelId ?? null);
+  const chipMenu =
+    agentChip === undefined ? undefined : agentChipMenuOf(agentChip, picker, menu?.hot ?? null);
+  const model = chipMenu?.model;
 
   const atOpen = surface === "at" && (at !== null || agentChip !== undefined);
   const shownAt: AtShown | null = !atOpen
     ? null
-    : agentChip !== undefined && menu !== null
-      ? { kind: "menu", left: menu.left, rows: menuRows, effort, hot: menuHot }
+    : chipMenu !== undefined && menu !== null
+      ? {
+          kind: "menu",
+          left: menu.left,
+          rows: chipMenu.rows,
+          effort: chipMenu.effort,
+          hot: chipMenu.hot,
+        }
       : at === null
         ? null
         : { kind: "rows", left: at.left, list, hot: hotId };
@@ -498,15 +486,16 @@ export function ChatComposer({
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.nativeEvent.isComposing) return;
-      if (atOpen && shownAt?.kind === "menu") {
+      if (atOpen && shownAt?.kind === "menu" && chipMenu !== undefined) {
+        const { stops, hot: menuHot, effort } = chipMenu;
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
-          const index = menuStops.indexOf(menuHot);
+          const index = stops.indexOf(menuHot);
           const next =
             event.key === "ArrowUp"
               ? Math.max(0, index - 1)
-              : Math.min(menuStops.length - 1, index < 0 ? 0 : index + 1);
-          const id = menuStops[next];
+              : Math.min(stops.length - 1, index < 0 ? 0 : index + 1);
+          const id = stops[next];
           if (id !== undefined) setMenu((open) => (open === null ? open : { ...open, hot: id }));
           return;
         }
@@ -521,7 +510,7 @@ export function ChatComposer({
         }
         if (event.key === "Enter" || event.key === "Tab") {
           event.preventDefault();
-          if (menuStops.includes(menuHot)) chooseModel(menuHot === "" ? null : menuHot);
+          if (stops.includes(menuHot)) chooseModel(menuHot === "" ? null : menuHot);
           foldMenu();
           return;
         }
@@ -562,15 +551,13 @@ export function ChatComposer({
     },
     [
       atOpen,
+      chipMenu,
       chooseEffort,
       chooseModel,
       closeAt,
-      effort,
       foldMenu,
       hotId,
       list,
-      menuHot,
-      menuStops,
       sendNow,
       shownAt?.kind,
       take,

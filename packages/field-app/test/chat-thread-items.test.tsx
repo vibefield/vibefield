@@ -20,7 +20,7 @@ import { ChatView } from "../src/chat/ChatView";
 import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import { ThreadItemsView } from "../src/chat/ThreadItemsView";
 import { helloWords, STARTERS, type ThreadItem } from "../src/chat/thread-items";
-import type { ThreadSendOutcome } from "../src/chat/thread-send";
+import type { ThreadSendDeps, ThreadSendOutcome } from "../src/chat/thread-send";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import type { ChatState } from "../src/design-system/chat-fixtures";
 import type { FrameSurface } from "../src/frame/frame-surface";
@@ -28,16 +28,18 @@ import { hearLineSays } from "../src/frame/line-door";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** Send's road, scripted: what each send was handed, and what it comes to. */
+/** Send's road, scripted: what each send was handed (and the world Chat lent the last one), and what it comes to. */
 const road = vi.hoisted(() => ({
   sent: [] as { readonly text: string; readonly stills: readonly string[] }[],
+  deps: null as ThreadSendDeps | null,
   outcome: (): Promise<ThreadSendOutcome> => Promise.resolve({ state: "pasted" }),
 }));
 vi.mock("../src/chat/thread-send", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/chat/thread-send")>();
   return {
     ...actual,
-    sendToThread: (_deps: unknown, text: string, stills: readonly string[]) => {
+    sendToThread: (deps: ThreadSendDeps, text: string, stills: readonly string[]) => {
+      road.deps = deps;
       road.sent.push({ text, stills });
       return road.outcome();
     },
@@ -115,6 +117,7 @@ let said: string[] = [];
 
 beforeEach(() => {
   road.sent = [];
+  road.deps = null;
   road.outcome = () => Promise.resolve({ state: "pasted" });
   said = [];
   stopHearing = hearLineSays((text) => said.push(text));
@@ -380,6 +383,34 @@ describe("one act at a time into a thread, a wake's, a starter's or Send's (DESI
     await act(async () => finish({ state: "pasted" }));
     await settle();
     expect(wake()?.disabled).toBe(false);
+  });
+});
+
+describe("what a send reads of Chat when no pane settled (DESIGN.md §8 \"Chat's composer\"; SP-1d's fix review)", () => {
+  it("lends Send the thread on screen and the spark asleep as Chat stands at the time it asks, never as it stood at the press", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    await mountChat();
+    await act(async () => starters()[0]?.click());
+    const lent = road.deps;
+    if (lent === null) throw new Error("no send");
+    expect(lent.onScreen()).toBe(true);
+    expect(lent.asleep()).toBe(false);
+    // Vela's run ends while the send waits: she reads Asleep, her thread draws no pane, and it is still on screen
+    await act(async () => pushFrame?.({ revision: 2, rows: [own({ alive: false })] }, "snapshot"));
+    await settle();
+    expect($(".vf-chat-pane")).toBeNull();
+    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
+    expect(lent.asleep()).toBe(true);
+    expect(lent.onScreen()).toBe(true);
+    // Chat goes: no thread is on screen
+    act(() => root?.unmount());
+    root = null;
+    expect(lent.onScreen()).toBe(false);
+    await act(async () => finish({ state: "fell-asleep" }));
   });
 });
 

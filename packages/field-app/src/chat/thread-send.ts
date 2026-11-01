@@ -26,11 +26,16 @@ export type ThreadSendOutcome =
   | { readonly state: "too-large"; readonly refusal: RoutedInputRefusal }
   /** a spark this send woke was not heard in the 20 s */
   | { readonly state: "no-wake" }
-  /** the floor holds no such terminal, or none was named in the 20 s */
+  /** the floor holds no such terminal, or none was named in the 20 s — its thread on screen with its pane not drawn
+   * yet when they ran out is a pane still being found */
   | { readonly state: "off-floor" }
-  /** no pane of its thread was on screen when the 20 s ran out: Chat was left, or another thread chosen, while the
-   * pane was being found or had not appeared — and a pane is found only while its thread is shown */
+  /** no pane of its thread had settled when the 20 s ran out, and its thread was not on screen then: Chat was left,
+   * or another thread chosen, while the pane was being found or had not appeared — and a pane is found only while its
+   * thread is shown */
   | { readonly state: "thread-left" }
+  /** no pane of its thread had settled when the 20 s ran out, and the spark was asleep then: it fell asleep while the
+   * send waited, and an asleep thread draws no pane */
+  | { readonly state: "fell-asleep" }
   /** the floor did not answer, or this window's terminals could not start, in their own words */
   | { readonly state: "fault"; readonly reason: string }
   /** a window with no terminals (the catalog, a browser) */
@@ -56,6 +61,12 @@ export interface ThreadSendDeps {
   heard(timeoutMs: number): Promise<boolean>;
   /** the thread's pane once it has settled, else how it stands after `timeoutMs` (`whenSparkPane`) */
   pane(timeoutMs: number): Promise<SparkPaneReport | null>;
+  /** the spark reads Asleep now, as the feed reads it (asked when no pane of its thread settled): its thread draws no
+   * pane while it is */
+  asleep(): boolean;
+  /** its thread is on screen now, the one Chat shows while Chat is the view (asked when no pane of it settled): a pane
+   * is drawn, and found, only while it is */
+  onScreen(): boolean;
   /** main still keeps this snapshot's still (`screenshotStillKept`; a host with no still door keeps none to lose) */
   stillKept(path: string): Promise<boolean>;
   /** D6 — where a paste the terminal refused is heard (undefined: the window's terminal pool) */
@@ -105,8 +116,14 @@ async function sendSteps(
     if (!(await deps.heard(left()))) return { state: "no-wake" };
   }
   const report = await deps.pane(left());
-  // no pane of the thread on screen at the 20 s: the person left it, and its pane is found only while it is shown
-  if (report === null) return { state: "thread-left" };
+  if (report === null) {
+    // no pane of the thread at the 20 s, read as the window stands then: the spark fell asleep, so its thread draws
+    // none; the person left the thread, and its pane is found only while it is shown; or, the thread still on screen,
+    // its pane not drawn yet (a spark heard just as the 20 s end), which is a pane still being found
+    if (deps.asleep()) return { state: "fell-asleep" };
+    if (!deps.onScreen()) return { state: "thread-left" };
+    return { state: "off-floor" };
+  }
   if (report.door === null) {
     if (report.state === "fault") return { state: "fault", reason: report.reason };
     if (report.state === "no-terminals") return { state: "no-terminals" };
@@ -159,6 +176,8 @@ export function sendNote(outcome: ThreadSendOutcome, name: string): string {
       return `Not sent — ${name}'s terminal is not on this desktop's floor`;
     case "thread-left":
       return `Not sent — you left ${name}'s thread before its pane was ready`;
+    case "fell-asleep":
+      return `Not sent — ${name} fell asleep before its pane was ready`;
     case "fault":
       return `Couldn't find ${pane}: ${outcome.reason}`;
     case "no-terminals":
