@@ -966,14 +966,15 @@ export function parseEtime(text) {
 }
 
 /** Item 146 (2026-11-01) — when a process started, from its `etime` and the clock read just before and just after `ps`
- * was asked: `{ from, to }`, the start somewhere between, or null when unreadable. Zone-free: `lstart` is local wall time
+ * was asked: `{ from, to }`, the start strictly between, or null when unreadable. Zone-free: `lstart` is local wall time
  * with no offset, so in DST's repeated hour (the fall back) its text names two instants, and its parse took the first,
  * an hour early (PORTALS's find: a Simulator.app launched between 09:00 and 10:00Z on 2026-11-01 read "started before
- * ARMED", FOREIGN, exit 75). `etime` floors to whole seconds, so the start is after `before - (etime + 1) s` and no
- * later than `after - etime s`. */
+ * ARMED", FOREIGN, exit 75). `etime` is a difference of whole seconds, the clock's and the start's each truncated
+ * (measured on macOS's ps, 2026-11-01 09:38Z: "00:02" for a process 1.5 s old), so it reads up to a second either way:
+ * the start is after `before - (etime + 1) s` and before `after - (etime - 1) s`. */
 export function etimeStart(text, before, after) {
   const s = parseEtime(text);
-  return s === null ? null : { from: before - (s + 1) * 1000, to: after - s * 1000 };
+  return s === null ? null : { from: before - (s + 1) * 1000, to: after - (s - 1) * 1000 };
 }
 
 export const simulatorExe = (devDir) =>

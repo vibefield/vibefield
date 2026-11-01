@@ -1492,13 +1492,20 @@ test("parseEtime reads ps's elapsed time; etimeStart brackets the start between 
   assert.equal(parseEtime(""), null);
   for (const age of [0, 999, 1_000, 61_500, 3_600_000, 90_061_000])
     assert.equal(parseEtime(etimeOf(age)), Math.floor(age / 1000), etimeOf(age));
-  // etime floors to whole seconds and is sampled somewhere between the two reads: the start lies inside the range
-  const started = ARMED + 60_250;
+  // etime is sampled somewhere between the two reads, and is a difference of whole seconds (the clock's and the start's,
+  // each truncated: macOS's ps read "00:02" for a process 1.5 s old), so it may read a second either way of the floor
+  // of the age: the start lies strictly inside the range for every reading
   const [before, after] = [ARMED + 120_000, ARMED + 120_400];
-  for (const sampled of [before, ARMED + 120_200, after]) {
-    const range = etimeStart(etimeOf(sampled - started), before, after);
-    assert.ok(range.from < started && started <= range.to, JSON.stringify({ sampled, range }));
-    assert.ok(range.to - range.from <= 1_000 + (after - before));
+  for (const started of [ARMED + 60_250, ARMED + 60_900, ARMED + 119_700]) {
+    for (const sampled of [before, ARMED + 120_200, after]) {
+      const age = Math.floor(sampled / 1000) - Math.floor(started / 1000);
+      for (const etime of [etimeOf(sampled - started), etimeOf(age * 1000)]) {
+        const range = etimeStart(etime, before, after);
+        const at = JSON.stringify({ started, sampled, etime, range });
+        assert.ok(range.from < started && started < range.to, at);
+        assert.ok(range.to - range.from <= 2_000 + (after - before), at);
+      }
+    }
   }
   assert.equal(etimeStart("", before, after), null);
 });
