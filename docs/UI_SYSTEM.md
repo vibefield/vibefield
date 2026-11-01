@@ -89,9 +89,15 @@ The catalog currently mounts these shipping views directly:
 - Chat (SP-1b, DESIGN.md §8 "Chat's list"): the shipping `ChatPanelView` over the product's own
   reading (`sparkEntriesOf`) of fixture sparks and field rows (`chat-fixtures.ts`) — the list, a
   spark asleep, no sparks yet, opening and unavailable — on a fixed clock and fixed seeds, each
-  row wearing the mark the product's own `threadMarksOf` reads from what the plates' window saw
-  off screen (a need's orange dot, and since SP-1d a thread unread in cyan); and, since SP-1d
-  (§8 "Chat's thread", "Chat's composer"), the thread:
+  row wearing the mark the product's own ledger and reading (`ThreadLedger`, `threadMarksOf`)
+  latch from what the plates' window read with the shown thread on screen (a need's orange dot,
+  and since SP-1d a thread unread in cyan, and a need that has ended still orange, "needed you"
+  in the row's name); and, since SP-1d (§8 "Chat's thread", "Chat's composer"), the thread:
+  - the line in the pane's place (SP-1d's final critique, item 9): the shipping panel's own
+    words for Wake under way (its button waiting, the thread held, so send is busy) and refused
+    in fieldd's words, and for a spark whose session never started, each a fixture act
+    (`CHAT_ACT`, handed to the panel's `act` as Chat's controller hands it) or a fixture spark
+    with no session;
   - the pane's place: the shipping `SparkPaneView` in the words a window with no terminals says,
     and on three plates its words while it is being found, when this desktop's floor does not hold
     it, and when the floor did not answer. No catalog holds a terminal pool ("a host, never a
@@ -110,8 +116,8 @@ The catalog currently mounts these shipping views directly:
     none of your sessions on the board), and when the profiles can't be read (`"failed"`, the New
     spark sheet's sentence); an agent just taken, its menu while its picker is read and when the
     read fails; and a send under way, Send's over its draft and a starter's, one fact
-    (`CHAT_SENDING`) handed to the panel's `sending` and the composer's `busy`, as Chat's
-    controller hands its thread's one send to both;
+    (`CHAT_SENDING`, which holds Wake's too) handed to the panel's `sending` and the composer's
+    `busy`, as Chat's controller hands its thread's one act to both;
   - the hello: what stands in the thread over its pane is the product's own `threadItemsOf` over
     the shown spark and the plate's draft, drawn by the shipping `ThreadItemsView` inside the
     panel — a spark just hatched saying hello with its three starters, which send nothing there,

@@ -225,19 +225,21 @@ export function ChromeSection({
         <ChatSpecimen />
         <p className="vf-ds-stage-caption">
           The fourth view (SP-1b): the sparks fieldd keeps, each a face, a name and its status word;
-          Asking you, Needs your OK and Stuck in the attention ink with the orange dot. The thread
-          (SP-1d) is the spark's own pane under its head. A catalog holds no terminals, so its place
-          says what such a window says, and on three plates what the pane says while it is being
-          found, when this desktop's floor does not hold it, and when the floor did not answer.
-          Asleep or not started, one honest line with its act. A spark just hatched, before its
-          first turn, says hello over its pane, with its three starters (NS-D4), which wait while
-          one is sent; a spark that has had a turn shows its pane alone. At the thread's foot, its
-          composer: the draft, the mic and send, at rest, typing, and waiting while a send runs; @'s
-          list with the agents to start and the sessions running, and its words while it reads, when
-          nothing matches, when there is nothing to add, and when the spark's profiles can't be
-          read; an agent's menu in its box (its model and Effort), while its picker is read and when
-          it can't be; and the chips an agent, a session and a card make. Fixture sparks, rows and
-          agents, read by the product's own readings.
+          Asking you, Needs your OK and Stuck in the attention ink with the orange dot, which
+          outlasts a need that ended off screen; an unread thread in cyan. The thread (SP-1d) is the
+          spark's own pane under its head. A catalog holds no terminals, so its place says what such
+          a window says, and on three plates what the pane says while it is being found, when this
+          desktop's floor does not hold it, and when the floor did not answer. Asleep or not
+          started, one honest line with its act: Wake waiting while it wakes, and refused in
+          fieldd's words; a spark whose session never started, with none. A spark just hatched,
+          before its first turn, says hello over its pane, with its three starters (NS-D4), which
+          wait while one is sent; a spark that has had a turn shows its pane alone. At the thread's
+          foot, its composer: the draft, the mic and send, at rest, typing, and waiting while a send
+          or a wake runs; @'s list with the agents to start and the sessions running, and its words
+          while it reads, when nothing matches, when there is nothing to add, and when the spark's
+          profiles can't be read; an agent's menu in its box (its model and Effort), while its
+          picker is read and when it can't be; and the chips an agent, a session and a card make.
+          Fixture sparks, rows and agents, read by the product's own readings.
         </p>
       </Specimen>
 

@@ -30,6 +30,8 @@ import type { ThreadSendOutcome } from "../src/chat/thread-send";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import { CHAT_STATES, type ChatState } from "../src/design-system/chat-fixtures";
 import { CardTargets } from "../src/frame/cards/card-targets";
+import { listenForOtherApps } from "../src/frame/cards/cards-outside";
+import { CardStore } from "../src/frame/cards/cards-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -209,8 +211,9 @@ async function mountComposer(
   outcome: () => Promise<ThreadSendOutcome | null> = async () => ({ state: "pasted" }),
   parked: readonly DraftPart[] = [],
   asks: ComposerPort = port,
+  board: SparksPort = feed(),
 ): Promise<Mounted> {
-  stopFeed = startSparksFeed(feed());
+  stopFeed = startSparksFeed(board);
   const said: string[] = [];
   const parks: (readonly DraftPart[])[] = [];
   const send = vi.fn((_text: string, _stills: readonly string[]) => outcome());
@@ -354,6 +357,69 @@ describe("the composer's composition (DESIGN.md §8 \"Chat's composer\")", () =>
     await settle();
     expect(send().getAttribute("data-armed")).toBe("true");
   });
+
+  it("draws an agent's mark at DESIGN's sizes — 20 in @'s rows, 15 on a chip — since the mark draws at its text's size (final critique 4)", async () => {
+    // the mark is the agent's own, drawn at 1em: its box's font size is its size
+    await mountComposer();
+    typeText("ask @");
+    await settle();
+    expect(menu()?.querySelector(".vf-chat-at-mark svg")?.getAttribute("width")).toBe("1em");
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/chat/chat-composer.css"),
+      "utf8",
+    );
+    const rule = (selector: string): string =>
+      css.match(new RegExp(`^\\${selector} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
+    for (const [selector, size] of [
+      [".vf-chat-at-mark", 20],
+      [".vf-chat-chip-mark", 15],
+    ] as const) {
+      expect(rule(selector), selector).toMatch(new RegExp(`\\bwidth: ${size}px;`));
+      expect(rule(selector), selector).toMatch(new RegExp(`font-size: ${size}px;`));
+      expect(rule(selector), selector).toMatch(/line-height: 1;/);
+    }
+  });
+});
+
+describe("the composer's keys (DESIGN.md §8 \"Chat's composer\", Keys)", () => {
+  it("gives the keyboard back on Esc with @ closed (CB-2); with @ open, Esc closes it and keeps the keyboard", async () => {
+    await mountComposer();
+    typeText("ping @");
+    await settle();
+    expect(document.activeElement).toBe(editor());
+    press(editor(), { key: "Escape" });
+    expect(surfaceNow).toBeNull();
+    expect(document.activeElement).toBe(editor());
+    press(editor(), { key: "Escape" });
+    expect(document.activeElement).not.toBe(editor());
+    expect(editor().textContent).toBe("ping @");
+  });
+
+  it("lands text dragged inside the window at the caret as plain text on one line, and deals no card", async () => {
+    // the window's hand hears another app's drags (`listenForOtherApps`); a drag that began in this page is not one
+    const hand = new CardStore();
+    const stopHearing = listenForOtherApps({ store: hand });
+    try {
+      await mountComposer();
+      typeText("see ");
+      act(() => {
+        document.body.dispatchEvent(new Event("dragstart", { bubbles: true }));
+      });
+      const data = new DataTransfer();
+      data.setData("text/plain", "a\nb");
+      const drop = new MouseEvent("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(drop, "dataTransfer", { value: data });
+      act(() => {
+        editor().dispatchEvent(drop);
+      });
+      expect(drop.defaultPrevented).toBe(true);
+      expect(editor().textContent).toBe("see a b");
+      expect(editor().querySelector(".vf-chat-chip")).toBeNull();
+      expect(hand.snapshot().cards).toEqual([]);
+    } finally {
+      stopHearing();
+    }
+  });
 });
 
 describe("@ in Chat's composer (DESIGN.md §8, @'s rows in Chat; the surface `at`)", () => {
@@ -438,6 +504,19 @@ describe("@ in Chat's composer (DESIGN.md §8, @'s rows in Chat; the surface `at
         (r) => r.dataset.row,
       ),
     ).toEqual([`agent:${A.id}:native`, `agent:${B.id}:work`, "session:run-his"]);
+  });
+
+  it("says the same sentence, and offers no row, when the window's board can't be read — never reading for good (final critique 12)", async () => {
+    await mountComposer(undefined, undefined, port, {
+      ...feed(),
+      watch: async () => {
+        throw new Error("fieldd refused the board");
+      },
+    });
+    typeText("ask @");
+    await settle();
+    expect(words(menu())).toBe(CANNOT_LIST_AGENTS);
+    expect(menu()?.querySelectorAll(".vf-chat-at-row").length).toBe(0);
   });
 
   it("takes a session with Return: its chip is its handle, the @ and its query gone", async () => {

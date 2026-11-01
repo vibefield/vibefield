@@ -1747,6 +1747,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - When the spark's profiles can't be read (`agents.profileSets.list`), no agent and no session can be placed, so
       the list offers no row and says the New spark sheet's sentence, "VibeField can't list its agents right now". The
       next @ reads them again. Each of these words is 12/400 in tertiary ink, padded 10.
+    - *Added 2026-11-01 (SP-1d's final critique):* the sessions are read from the window's one board (Chat's feed,
+      `agent.subscribe`), never by an @. When that board can't be read (its subscription refused), no session can be
+      placed, so the list says the same sentence and offers no row, as when the profiles can't be read. The board is
+      asked again only when Chat's feed starts again (fieldd restarting), not by the next @. The residual: a board that
+      neither answers nor refuses leaves its group saying "Reading its agents…" until it answers.
     - Flows' rows are CP-4's (FL-D5 A). Sparks are never rows: in a spark's thread the spark is the one you are
       talking to (CH-D5).
     - @'s list stays 316 wide. The page's 340 was not taken: 316 is the line's, and the rows fit it.
@@ -1863,7 +1868,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     clears what it carried from the draft you come back to, once it is pasted, and keeps what you typed there
     meanwhile.
   - **A card from the hand** (§8 "The hand"):
-    - Carried over the composer, a card rings it (1.5px `--vf-select`) and says "Add to your message to Vela".
+    - Carried over the composer, a card rings it at its own corners (26), 1.5px `--vf-select`, and says "Add to your
+      message to Vela". *Amended 2026-11-01 (SP-1d's final critique):* the ring was drawn at a pane's corner (8), so
+      its corners stood outside the composer's glass at both ends. A place says its ring's corner with its answer, the
+      composer its own, and the carried card's ring is drawn at it; the composer draws no ring of its own.
     - Let go, it lands as a chip at the caret, or at the draft's end when the draft holds no caret. The note says
       "Added to your message to Vela". The card stays in the hand (HN-D4).
     - What a pane cannot take, the composer cannot take either, in the same words: "A picture with no file can't be

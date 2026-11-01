@@ -13,7 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { type CardTargets, cardTargets, TARGET_LAYER } from "../frame/cards/card-targets";
+import { type CardTargets, cardTargets, cornerOf, TARGET_LAYER } from "../frame/cards/card-targets";
 import { nothingToGive, paneTextOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
 import { OUTCOME_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
@@ -647,11 +647,15 @@ export function ChatComposer({
         return box === null || box.closest("[inert]") !== null ? null : box.getBoundingClientRect();
       },
       element: () => boxRef.current,
-      // a card from another app says what it holds only once it is let go
-      answer: (card) =>
-        card.waiting !== true && paneTextOf(card) === null
-          ? { ok: false, label: nothingToGive(card) }
-          : { ok: true, label: TARGET_WORDS.prompt(nameRef.current) },
+      // a card from another app says what it holds only once it is let go; a yes rings the composer at its own
+      // corners, as its stylesheet draws them
+      answer: (card) => {
+        if (card.waiting !== true && paneTextOf(card) === null)
+          return { ok: false, label: nothingToGive(card) };
+        const corner = cornerOf(boxRef.current);
+        const label = TARGET_WORDS.prompt(nameRef.current);
+        return corner === null ? { ok: true, label } : { ok: true, label, corner };
+      },
       play: async (card) => {
         const text = paneTextOf(card);
         if (text === null) return { ok: false, note: nothingToGive(card) };

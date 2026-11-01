@@ -267,6 +267,18 @@ describe("@'s rows in Chat (DESIGN.md §8 \"Chat's composer\")", () => {
     }
   });
 
+  it("says the same words, and offers no row, when the window's board can't be read (final critique 12)", () => {
+    // its sessions are read off the board: with it refused, @ offers neither group, as with its profiles refused
+    for (const over of [{}, { sets: null }, { query: "vib" }]) {
+      expect(atRowsOf(sources({ rows: "failed", ...over }))).toEqual({
+        agents: [],
+        sessions: [],
+        reading: false,
+        quiet: CANNOT_LIST_AGENTS,
+      });
+    }
+  });
+
   it("is reading until its profiles and the board are read, and offers nothing meanwhile", () => {
     for (const over of [{ sets: null }, { rows: null }]) {
       const list = atRowsOf(sources(over));

@@ -135,6 +135,7 @@ const { getAppTheme } = await import("../src/theme");
 const { FielddProvider } = await import("@vibefield/fieldd-client/react");
 const { ChatView } = await import("../src/chat/ChatView");
 const { startSparksFeed } = await import("../src/chat/sparks-feed");
+const { getGodviewLineDoor } = await import("../src/frame/line-door");
 
 type PoolClient = Parameters<typeof pool.openTerminalPool>[0];
 /** The floor's sessions as fieldd's roster lists them (`terminal.roster`). */
@@ -256,6 +257,8 @@ describe("the thread's pane is the spark's own floor session, read-write (SP-1d)
     // It takes input: Return is James's, in this pane.
     expect(input().readOnly).toBe(false);
     expect(calls("setViewInputPolicy").every((call) => call.args[1] !== false)).toBe(true);
+    // …with no Godview opened first: no deck has published its door in this window (critique 10)
+    expect(getGodviewLineDoor()).toBeNull();
   });
 
   it("is drawn in the deck's own look: the session is handed the theme the deck hands it, on the terminal's ground", async () => {

@@ -1892,7 +1892,7 @@
                     <td><p><code>ComposeSparksOpenParams {spark}</code> → <code>ComposeSparksOpenResult {spark}</code></p></td>
                     <td><p><code>agents.manage</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p></td>
+                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p><p><em>Added 2026-11-01 (SP-1d):</em> one wake per spark. A second open while a wake is under way (another window's, or the shell's) is answered with that same wake, its run or its refusal, so two opens never wake one spark into two runs; each caller is still authorized and audited at the door. Not joined yet: a resume of the spark's session already under way through <code>agent.resume</code>. The daemon's resume wrapper (<code>daemon.ts</code>) reads its <code>PRECONDITION_FAILED</code> (state <code>resuming</code> or <code>replaced</code>) as a session that cannot be resumed, so the wake starts the spark again beside it; the fix is owed to that wrapper.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>compose-sparks.test.ts</code></p></td>
                   </tr>

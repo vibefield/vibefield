@@ -99,6 +99,9 @@ export class FieldBoard {
   }
 }
 
+/** The field board's rows as the window reads them: null before the board is read, "failed" while it can't be. */
+export type BoardRows = readonly AgentFieldRow[] | "failed" | null;
+
 /** Chat's reading, as the frame and the view draw it: honest states, never a blank. */
 export type SparksReading =
   | { readonly state: "opening" }
@@ -116,8 +119,9 @@ interface FeedState {
   /** the person's live sessions on the board by the persona each runs as (its `profileId`; null for an agent's own
    * folder), or null before the board is read: the New spark sheet's "Sees N sessions" (SP-1c) */
   readonly sessions: ReadonlyMap<string | null, number> | null;
-  /** the field board's rows as last read, or null before the board is read: @'s sessions in Chat's composer (SP-1d) */
-  readonly rows: readonly AgentFieldRow[] | null;
+  /** the field board's rows as last read, null before the board is read, or "failed" while it can't be (its
+   * subscription refused): @'s sessions in Chat's composer (SP-1d) */
+  readonly rows: BoardRows;
   /** Wake, through the feed that reads this window's sparks; null while none does, so no act that wakes is drawn */
   readonly open: SparkOpener | null;
   /** each thread's mark on the reading (SP-1d): a needs-you dot, or unread; empty before the first reading */
@@ -192,6 +196,8 @@ class RunningFeed {
   #failed: string | null = null;
   #rows: readonly AgentFieldRow[] = [];
   #boardRead = false;
+  /** the board's subscription was refused: it is asked again only when the feed starts again */
+  #boardRefused = false;
   #asked = 0;
   #generation = 0;
   #stop: (() => void) | null = null;
@@ -284,14 +290,19 @@ class RunningFeed {
           if (this.#open && mine === this.#generation) this.#stop = unsubscribe;
           else unsubscribe();
         },
-        // without the board the list stands on its records: Asleep, Hello, never a guess
-        () => undefined,
+        // without the board the list stands on its records (Asleep, Hello, never a guess), and @ says it can't list
+        // the spark's agents rather than read them for good (DESIGN.md §8 "Chat's composer")
+        () => {
+          if (!this.#open || mine !== this.#generation) return;
+          this.#boardRefused = true;
+          this.#derive();
+        },
       );
   }
 
   #derive(): void {
     const sessions = this.#boardRead ? sessionsByProfileOf(this.#rows) : null;
-    const rows = this.#boardRead ? this.#rows : null;
+    const rows = this.#boardRefused ? "failed" : this.#boardRead ? this.#rows : null;
     if (this.#sparks === null) {
       publish({
         reading:
@@ -410,8 +421,9 @@ export function useSessionTally(): ReadonlyMap<string | null, number> | null {
   return useSyncExternalStore(subscribe, () => state.sessions);
 }
 
-/** The field board's rows as last read, or null before the board is read (@'s sessions, SP-1d). */
-export function useBoardRows(): readonly AgentFieldRow[] | null {
+/** The field board's rows as last read, null before the board is read, or "failed" while it can't be (@'s sessions,
+ * SP-1d). */
+export function useBoardRows(): BoardRows {
   return useSyncExternalStore(subscribe, () => state.rows);
 }
 

@@ -5,6 +5,7 @@ import {
   type SparkSummary,
 } from "@vibefield/contracts";
 import { CANNOT_LIST_AGENTS } from "./new-spark";
+import type { BoardRows } from "./sparks-feed";
 
 // @'S ROWS IN CHAT (SP-1d; DESIGN.md §8 "Chat's composer", @'s rows in Chat; CH-D5 A "Agents to start, and sessions
 // running"; EW-D4: @ offers only its scope). PURE: the spark, what fieldd answers of its profiles, and the field
@@ -23,7 +24,8 @@ import { CANNOT_LIST_AGENTS } from "./new-spark";
 // under a profile other than its persona's, or naming only one of the two: @ can then offer a session `agent_send`
 // refuses as outside, or leave out one it takes. `profileSet` on the board's row closes it (VF-PM's call, owed).
 //
-// Without its profiles no row can be placed, so a failed read offers none and says the New spark sheet's sentence.
+// Without its profiles no row can be placed, and without the board no session can be, so a failed read of either offers
+// none and says the New spark sheet's sentence.
 //
 // The keyboard's walk over the rows (`atStops`, `atDefaultHot`, `atMove`, `atRow`) came back from the line's model in
 // git (`0e2ad08bc:packages/field-app/src/frame/`), its rows re-ruled.
@@ -70,7 +72,7 @@ export interface AtList {
   /** what it offers is still being read */
   readonly reading: boolean;
   /** the list's word when it holds no row: nothing matches what follows the @, nothing to offer at all, or its
-   * profiles can't be read */
+   * profiles or the board can't be read */
   readonly quiet: string | null;
 }
 
@@ -80,8 +82,8 @@ export interface AtSources {
   readonly query: string;
   /** `agents.profileSets.list`'s answer: null until it is read, "failed" when it could not be */
   readonly sets: readonly AgentProfileSet[] | "failed" | null;
-  /** the field board's rows, or null until the board is read */
-  readonly rows: readonly AgentFieldRow[] | null;
+  /** the field board's rows as the window reads them: null until the board is read, "failed" while it can't be */
+  readonly rows: BoardRows;
 }
 
 /** @'s words (DESIGN.md §9 "Chat's words"). */
@@ -163,7 +165,7 @@ function matches(query: string, ...words: readonly (string | null)[]): boolean {
 /** @'s list for the spark's thread. */
 export function atRowsOf(sources: AtSources): AtList {
   const { spark, query, sets, rows } = sources;
-  if (sets === "failed")
+  if (sets === "failed" || rows === "failed")
     return { agents: [], sessions: [], reading: false, quiet: AT_WORDS.failed };
   if (sets === null || rows === null)
     return { agents: [], sessions: [], reading: true, quiet: null };

@@ -4,11 +4,13 @@ import {
   type AgentModelChoice,
   type AgentModelSelection,
   type AgentProfileSet,
+  type SparkId,
   type SparkSummary,
 } from "@vibefield/contracts";
 import { agentChipMenuOf } from "../chat/agent-chip-menu";
 import { type AtSources, atDefaultHot, atRowsOf } from "../chat/at-rows";
 import type { AtShown, ChatComposerViewProps } from "../chat/ChatComposerView";
+import type { ChatAct } from "../chat/ChatPanelView";
 import {
   type AgentChip,
   type CardChip,
@@ -18,9 +20,9 @@ import {
   type SessionChip,
 } from "../chat/composer-draft";
 import { type ModelsReading, modelWords } from "../chat/new-spark";
-import { sparkEntriesOf } from "../chat/spark-status";
+import { type SparkEntry, sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
-import type { ThreadLatches } from "../chat/thread-marks";
+import { ThreadLedger, type ThreadMark, threadMarksOf } from "../chat/thread-marks";
 import type { SparkPanePlace } from "../chat/thread-pane-door";
 import { paneTextOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
@@ -29,8 +31,9 @@ import { FIXTURE_HATCHED, FIXTURE_SPARKS } from "./spark-fixtures";
 
 // Chat's fixture ADAPTER (SP-1b, SP-1d; docs/UI_SYSTEM.md): what fieldd would answer — the sparks it keeps, the field
 // board's rows, the agents and Agent Profiles it offers, an agent's picker, or that it is not answering — run through
-// the PRODUCT's own readings (`sparkEntriesOf`, @'s `atRowsOf`, an agent chip's menu `agentChipMenuOf`, the draft's
-// `draftBlank` and `draftSendable`), so the catalog draws what the window would, never a copy of its words.
+// the PRODUCT's own readings (`sparkEntriesOf`, the thread marks' `ThreadLedger` and `threadMarksOf`, @'s `atRowsOf`,
+// an agent chip's menu `agentChipMenuOf`, the draft's `draftBlank` and `draftSendable`), so the catalog draws what the
+// window would, never a copy of its words.
 // Fixed seeds (`spark-fixtures.ts`) and a fixed clock, so every plate deals the same faces and says the same times.
 
 /** The catalog's clock: a Saturday morning, 9:41 local. */
@@ -99,13 +102,17 @@ const SPARKS: readonly SparkSummary[] = [
   spark("sp-kiwi0001", "Kiwi", { runtimeRunId: "run-kiwi", live: false }),
 ];
 
-/** The spark the New spark sheet's plates hatch, just hatched: awake, its run up, no turn taken yet (the hello's). */
-const HATCHED: SparkSummary = {
-  ...spark("sp-polaris01", FIXTURE_HATCHED.name, live("polaris")),
+/** The spark the New spark sheet's plates hatch, as fieldd keeps it before its session is born — and keeps it, for a
+ * hatch whose session did not start: no session yet (Hello, "hasn't started yet"). */
+const UNSTARTED: SparkSummary = {
+  ...spark("sp-polaris01", FIXTURE_HATCHED.name, undefined),
   face: { seed: FIXTURE_HATCHED.seed },
   createdAt: minutesAgo(0),
   updatedAt: minutesAgo(0),
 };
+
+/** …just hatched: awake, its run up, no turn taken yet (the hello's). */
+const HATCHED: SparkSummary = { ...UNSTARTED, session: live("polaris") };
 
 /** Work's sign-in for the fixture agent: a session run under it is filed under Work. */
 const WORK_PERSONA = FIXTURE_WORK.personas.find((persona) => persona.provider === AGENT.id);
@@ -200,6 +207,9 @@ export const CHAT_STATES = [
   "gone",
   "fault",
   "asleep",
+  "waking",
+  "wake-refused",
+  "not-started",
   "empty",
   "opening",
   "unavailable",
@@ -225,6 +235,9 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   gone: "Off the floor",
   fault: "No answer",
   asleep: "Asleep",
+  waking: "Waking",
+  "wake-refused": "Wake refused",
+  "not-started": "Not started",
   empty: "No sparks",
   opening: "Opening",
   unavailable: "Unavailable",
@@ -258,7 +271,11 @@ export function chatReadingOf(state: ChatState): SparksReading {
     case "gone":
     case "fault":
     case "asleep":
+    case "waking":
+    case "wake-refused":
       return { state: "ready", entries: sparkEntriesOf(SPARKS, ROWS) };
+    case "not-started":
+      return { state: "ready", entries: sparkEntriesOf([UNSTARTED, ...SPARKS], ROWS) };
     case "hello":
     case "starting":
       return {
@@ -274,12 +291,44 @@ export function chatReadingOf(state: ChatState): SparksReading {
   }
 }
 
-/** What the plates' window saw while each thread was off screen (SP-1d): Lyra's own turn ended, so her thread is
- * unread, the cyan dot on her row. Vela's need is standing, so it needs no latch to wear the orange one. */
-export const CHAT_LATCHES: ThreadLatches = { needs: new Set(), unread: new Set(["sp-lyra0001"]) };
+const KIWI = SPARKS[3] as SparkSummary;
+
+/** What the plates' window read before each plate's own reading (SP-1d): Kiwi awake and asking you a question, and
+ * Lyra's own turn under way. */
+const EARLIER: readonly SparkEntry[] = sparkEntriesOf(
+  SPARKS.map((each) => (each.id === KIWI.id ? { ...each, session: live("kiwi") } : each)),
+  [
+    ...ROWS.map((each) =>
+      each.runtimeRunId === "run-lyra" ? { ...each, status: "working" as const } : each,
+    ),
+    row({
+      runtimeRunId: "run-kiwi",
+      spark: KIWI.id,
+      origin: { by: "you" },
+      status: "blocked",
+      lastActivityAt: minutesAgo(40),
+      blockers: [{ id: "q-2", kind: "question", since: minutesAgo(40) }],
+    }),
+  ],
+);
+
+/** Each thread's mark on a plate (SP-1d), as the product's own ledger latches it over what the plates' window read
+ * with the plate's thread on screen: the earlier reading, then the plate's own. Kiwi has fallen asleep since it asked,
+ * so its dot outlasts the need ("needed you"); Lyra's own turn has ended, so her thread is unread; Vela's need stands.
+ * A thread on screen latches nothing, as opening it reads it. */
+export function chatMarksOf(
+  entries: readonly SparkEntry[],
+  shown: SparkId | null,
+): ReadonlyMap<SparkId, ThreadMark> {
+  const ledger = new ThreadLedger();
+  ledger.show(shown, []);
+  ledger.read(EARLIER);
+  ledger.read(entries);
+  return threadMarksOf(entries, ledger);
+}
 
 /** The spark a plate opens on: the newest (Polaris, just hatched, on the hello's), Juno (awake and Ready) for the
- * pane's words and the composer, or Kiwi asleep. */
+ * pane's words and the composer, Kiwi asleep, or Polaris not started. */
 export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   list: null,
   hello: HATCHED.id,
@@ -299,14 +348,25 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   gone: "sp-juno0001",
   fault: "sp-juno0001",
   asleep: "sp-kiwi0001",
+  waking: "sp-kiwi0001",
+  "wake-refused": "sp-kiwi0001",
+  "not-started": UNSTARTED.id,
   empty: null,
   opening: null,
   unavailable: null,
 };
 
-/** The plates whose thread has a send under way (DESIGN.md §8 "Chat's thread"): Send's, over the draft it carries, or
- * a starter's, its hello's starters waiting. The thread takes one send at a time, so on both its send waits, busy. */
-export const CHAT_SENDING: ReadonlySet<ChatState> = new Set(["starting", "sending"]);
+/** The plates whose thread an act holds (DESIGN.md §8 "Chat's thread"): Send's, over the draft it carries; a
+ * starter's, its hello's starters waiting; or Wake's. The thread takes one act at a time, so on each its send waits,
+ * busy. */
+export const CHAT_SENDING: ReadonlySet<ChatState> = new Set(["starting", "sending", "waking"]);
+
+/** The shown spark's act on a plate (DESIGN.md §8 "Chat's list", the thread's column): Kiwi's Wake under way, or
+ * refused in fieldd's words. At rest where a plate names none. */
+export const CHAT_ACT: Partial<Record<ChatState, ChatAct>> = {
+  waking: { state: "busy" },
+  "wake-refused": { state: "refused", reason: FIELDD_GONE },
+};
 
 // ── the composer's plates (SP-1d; DESIGN.md §8 "Chat's composer") ──
 

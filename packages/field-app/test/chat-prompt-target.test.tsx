@@ -5,6 +5,8 @@
  * chip at the caret that carries the whole card into the message. The drag machine that asks it is
  * `card-drag.test.tsx`'s; the composer's own keys are `chat-composer.test.tsx`'s.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { AGENT_CATALOG, type SparkSummary } from "@vibefield/contracts";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -164,6 +166,29 @@ describe('the composer as a place for cards (DESIGN.md §8 "Chat\'s composer", a
       ok: true,
       label: "Add to your message to Vela",
     });
+  });
+
+  it("says its own corner with its yes, as its stylesheet draws it (26), so the carried card rings it there (final critique 5)", async () => {
+    // the product's own stylesheet, as the window loads it: the corner is read off the composer, never restated
+    const sheet = document.createElement("style");
+    sheet.textContent = readFileSync(join(process.cwd(), "src/chat/chat-composer.css"), "utf8");
+    document.head.append(sheet);
+    try {
+      const targets = new CardTargets();
+      await mount(targets);
+      expect(only(targets).answer(text("ship the tray"), POINT)).toEqual({
+        ok: true,
+        label: "Add to your message to Vela",
+        corner: 26,
+      });
+      // a refusal rings nothing, so it says no corner
+      expect(only(targets).answer(picture(), POINT)).toEqual({
+        ok: false,
+        label: "A picture with no file can't be pasted yet",
+      });
+    } finally {
+      sheet.remove();
+    }
   });
 
   it("lands a card let go as a chip at the caret, carrying the whole card, and the hand keeps it", async () => {

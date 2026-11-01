@@ -103,6 +103,11 @@ const boxStyle = (box: CardBox, out = 0): CSSProperties => ({
   height: box.height + out * 2,
 });
 
+/** A place's ring: its box, at the corner the place said (Chat's composer's own), else the
+ * layer's own (carried.css). */
+const ringStyle = (box: CardBox): CSSProperties =>
+  box.corner === undefined ? boxStyle(box) : { ...boxStyle(box), borderRadius: box.corner };
+
 export interface CarriedCardViewProps {
   /** the drag's state (`useCarriedCard`), or null: nothing carried, nothing drawn */
   readonly carried: CarriedCard | null;
@@ -134,7 +139,7 @@ export function CarriedCardView({
         <div
           className="vf-cards-carried-ring"
           data-phase={carried.phase}
-          style={boxStyle(carried.ring)}
+          style={ringStyle(carried.ring)}
         />
       )}
       {carried.opening === null || carried.cell === null ? null : (

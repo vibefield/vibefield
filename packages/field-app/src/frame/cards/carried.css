@@ -71,7 +71,8 @@
 }
 
 /* the place that will take it: its box ringed in the select blue, 1.5px inside (§7, a sole
-   selection), the frame's active pane's corner */
+   selection), at the frame's active pane's corner — or at the place's own, where its answer says
+   one (Chat's composer's: DESIGN.md §8 "Chat's composer"; the layer sets it on the ring) */
 .vf-cards-carried-ring {
   position: absolute;
   border-radius: 8px;

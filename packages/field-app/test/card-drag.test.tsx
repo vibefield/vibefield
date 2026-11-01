@@ -664,6 +664,38 @@ describe("the one drag machine (HN-4)", () => {
     expect(css).toMatch(/@keyframes vf-cards-carried-ring-out \{\s*to \{\s*opacity: 0;/);
     expect(rule(":root[data-vf-cards-carrying] *")).toContain("cursor: grabbing !important;");
   });
+
+  it("rings a place at the corner its answer says — Chat's composer at its own — and at the layer's own where it says none (final critique 5)", () => {
+    const card = text("Keep track of my agents.");
+    place({
+      kind: "prompt",
+      box: new DOMRect(270, 620, 640, 52),
+      answer: { ok: true, label: "Add to your message to Vela", corner: 26 },
+    });
+    place({ box: new DOMRect(0, 0, 400, 300) });
+    mountLayer();
+    const ring = (): HTMLElement | null =>
+      document.querySelector<HTMLElement>(".vf-cards-carried-ring");
+
+    act(() => startCardDrag(dragOf(card)));
+    act(() => pointer("pointermove", 7, 500, 640));
+    expect(getCarriedCard()?.ring).toEqual({
+      left: 270,
+      top: 620,
+      width: 640,
+      height: 52,
+      corner: 26,
+    });
+    expect(ring()?.style.borderRadius).toBe("26px");
+    // a place that says no corner is ringed at the layer's own, a pane's (carried.css), never at the last one's
+    act(() => pointer("pointermove", 7, 100, 100));
+    expect(getCarriedCard()?.ring).toEqual({ left: 0, top: 0, width: 400, height: 300 });
+    expect(ring()?.style.borderRadius).toBe("");
+    const css = readFileSync(join(process.cwd(), "src/frame/cards/carried.css"), "utf8");
+    expect(css.slice(css.indexOf(".vf-cards-carried-ring {")).split("}")[0]).toContain(
+      "border-radius: 8px;",
+    );
+  });
 });
 
 // ── Godview's panes ─────────────────────────────────────────────────────────
