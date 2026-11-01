@@ -1724,8 +1724,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     keeps the caret in view (typing past one line is the page's next drawing, One Frame §21). Its
     placeholder, tertiary, says who it goes to — the spark's name, "Message Lyra…" (it said "Message,
     or type @ to add…" on the line);
-  - **mic** — 36 round in the ready fill, `mic` 17, waiting faint by ink with its reason in its
-    tooltip ("Dictation — not on the desktop yet") until a dictation door exists; nothing faked;
+  - **mic** — 36 round in the ready fill, `mic` 17, waiting in t4, a control that is off (§2.4), with its reason in
+    its tooltip ("Dictation — not on the desktop yet") until a dictation door exists; nothing faked;
   - **send** — 40 round, 4 after the mic, `arrow` (up) 17: the ready fill and tertiary ink while there
     is nothing to send, **inverted** (`--vf-foreground`, the inverse ink) once there is. Return sends.
   **@ is typed, never a button** (FC-D1; no attach button either). An @ typed at the start of a word

@@ -167,7 +167,7 @@
   place-items: center;
   border: 0;
   border-radius: 18px;
-  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
+  color: var(--vf-text-faint);
   background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
   cursor: default;
 }
