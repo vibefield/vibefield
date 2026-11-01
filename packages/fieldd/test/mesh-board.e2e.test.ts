@@ -242,6 +242,23 @@ async function windowOn(daemon: FielddDaemon): Promise<WsRpc> {
   return rpc;
 }
 
+/** A phone on a desktop's tailnet door: a WhoIs-verified self login, not a daemon. */
+async function phoneOn(door: string): Promise<WsRpc> {
+  const ws = new WebSocket(door, { headers: { "Tailscale-User-Login": TEST_LOGIN } });
+  cleanup.push(() => ws.close());
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", () => resolve());
+    ws.once("error", reject);
+  });
+  const phone = new WsRpc(ws);
+  await phone.call("system.hello", {
+    contractsVersion: CONTRACTS_VERSION,
+    minCompatible: CONTRACTS_VERSION,
+    clientKind: "ios",
+  });
+  return phone;
+}
+
 /** The mesh frames a reader has heard for one subscription, in order. */
 function meshFrames(rpc: WsRpc, subId: string): AgentMeshFrame[] {
   return rpc.notifications
@@ -690,5 +707,49 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     const bRow = peerBoard().get(B.run);
     expect(AgentRemoteRow.parse(bRow)).not.toHaveProperty("label");
     expect(AgentModelDeskRow.safeParse(bRow).success).toBe(false);
+  }, 60_000);
+
+  // PG-3b (PG-D6 (a), J2 (a) 2026-11-01) — the phone is a screen of the desktop that owns the row: its report is
+  // routed by `device` through its home, carried only while it holds the home's `{remote, mesh}` board, and kept on
+  // the owner as a screen of its own under the home's peer connection; the board's close takes it away.
+  it("PG-3b — the phone's report reaches the owner through its home, only while it holds the home's mesh board", async () => {
+    const { A, B } = await bootPair();
+    const phone = await phoneOn(A.door);
+    const mesh = await openMesh(phone);
+    await until(
+      () => heldBoard(mesh.open, meshFrames(phone, mesh.subId), "dev-b").has(B.run),
+      5_000,
+    );
+    const shown = heldBoard(mesh.open, meshFrames(phone, mesh.subId), "dev-b").get(B.run);
+    const id = AgentRemoteRow.parse(shown).monitorRow.id;
+    // routed by the row's device through the home: carried, and B keeps it as the phone's own screen
+    expect(await phone.call("agent.reportShown", { ids: [id], device: "dev-b" })).toEqual({
+      reported: true,
+    });
+    expect(B.daemon.agentScreens.size.carried).toBe(1);
+    // the home's own rows: routed to itself, served by its own screen (the remote board is one)
+    expect(await phone.call("agent.reportShown", { ids: [A.pane], device: "dev-a" })).toEqual({
+      reported: true,
+    });
+    expect(A.daemon.agentScreens.size.carried).toBe(0);
+    // a second reader behind the same home is a second screen, never the first one's
+    const ipad = await phoneOn(A.door);
+    const ipadMesh = await openMesh(ipad);
+    expect(await ipad.call("agent.reportShown", { ids: [], device: "dev-b" })).toEqual({
+      reported: true,
+    });
+    expect(B.daemon.agentScreens.size.carried).toBe(1);
+    // a reader with no board at the home is refused there, and nothing reaches B
+    const bare = await phoneOn(A.door);
+    const refused = await bare.callErr("agent.reportShown", { ids: [id], device: "dev-b" });
+    expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(refused.data?.details).toEqual({ state: "no-screen" });
+    expect(B.daemon.agentScreens.size.carried).toBe(1);
+    // the phone's board closes: the home sends B the empty report, and B's screen for it goes
+    await phone.call("system.unsubscribe", { subId: mesh.subId });
+    await until(() => B.daemon.agentScreens.size.carried === 0, 5_000);
+    const after = await phone.callErr("agent.reportShown", { ids: [id], device: "dev-b" });
+    expect(after.data?.details).toEqual({ state: "no-screen" });
+    await ipad.call("system.unsubscribe", { subId: ipadMesh.subId });
   }, 60_000);
 });
