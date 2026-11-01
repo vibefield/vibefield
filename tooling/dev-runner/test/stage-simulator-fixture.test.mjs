@@ -1809,6 +1809,7 @@ test("doorAct quit-app: after the run quit its own app, a Simulator.app another 
   assert.equal(run.simulator.quits, 1);
   // 300 s after ARMED another launcher starts the vetted Simulator.app: the run launched nothing since its quit
   const later = fakeHost({ pgrep: "4243", started: ARMED + 300_000 });
+  later.deps.now = () => ARMED + 360_000; // the host's clock is after the start its etime ages
   const r = await doorAct({ verb: "quit-app" }, run, later.deps);
   assert.equal(r.body.state, "stop");
   assert.match(run.stopped.why, /launched no Simulator\.app since its last quit/u);
@@ -1830,6 +1831,7 @@ test("doorAct quit-app: after the run quit its own app, a Simulator.app another 
   assert.equal(again.simulator.launchedAt, ARMED + 120_000);
   host.state.pgrep = "4244";
   host.state.started = ARMED + 125_000;
+  host.deps.now = () => ARMED + 130_000; // the host's clock is after the start its etime ages
   assert.equal((await doorAct({ verb: "quit-app" }, again, host.deps)).body.state, "quit");
 });
 
