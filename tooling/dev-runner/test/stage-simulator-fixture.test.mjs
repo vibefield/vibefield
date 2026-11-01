@@ -1780,7 +1780,7 @@ function bootingHost(state = "Booted", lastBootedAt = BOOT_A) {
   const exec = host.deps.exec;
   host.deps.exec = async (file, args, o = {}) => {
     if (file === "/usr/bin/xcrun" && args[1] === "bootstatus") {
-      host.calls.push({ file, args, env: o.env, timeoutMs: o.timeoutMs });
+      host.calls.push({ file, args, env: o.env, timeoutMs: o.timeoutMs, signal: o.signal });
       return new Promise((answer) => host.asks.push(answer));
     }
     return exec(file, args, o);
@@ -1968,6 +1968,66 @@ test("T1: past BOOT_READY_MS the device answers failed — `not ready after <ms>
   assert.match(said[0], /<pts3-dev-1> not ready after 180000 ms/u);
   assert.match(said[0], /Waiting on Data Migration/u);
   assert.ok(!holdsUdid(said[0]));
+});
+
+test("G6: every pending bootstatus is killable — dropped when its device is seen down, replaced by a new boot, shut down, and at teardown", async () => {
+  const run = ownRun();
+  const host = bootingHost();
+  const state = () => doorAct({ verb: "state", device: 1 }, run, host.deps);
+  const aborted = () => host.asked().map((c) => c.signal?.aborted ?? "no signal");
+  await state();
+  assert.deepEqual(aborted(), [false], "each ask carries a signal, live while pending");
+  // seen down: the pending ask is killed
+  host.list("Shutdown");
+  await state();
+  assert.deepEqual(aborted(), [true]);
+  // a new boot replaces the pending ask of the old: the old is killed
+  host.list("Booted", "2026-11-01T03:05:00Z");
+  await state();
+  host.list("Booted", "2026-11-01T03:06:00Z");
+  await state();
+  assert.deepEqual(aborted(), [true, true, false]);
+  // the door's shutdown kills it
+  await doorAct({ verb: "shutdown", device: 1 }, run, host.deps);
+  assert.deepEqual(aborted(), [true, true, true]);
+  // an ask that returned is never killed; teardown kills every one still pending, first
+  host.list("Booted", "2026-11-01T03:07:00Z");
+  await state();
+  host.asks[3](ok());
+  await settle();
+  const two = ownRun();
+  const pending = bootingHost();
+  await doorAct({ verb: "state", device: 1 }, two, pending.deps);
+  const order = [];
+  const exec = pending.deps.exec;
+  pending.deps.exec = async (file, args, o) => {
+    order.push(
+      `${args?.[1] ?? file} (ask ${pending.asked()[0].signal.aborted ? "killed" : "live"})`,
+    );
+    return exec(file, args, o);
+  };
+  await restoreHost(two, pending.deps, {
+    deleteDevices: false,
+    defaultsBefore: "",
+    crashDir: join(FIXTURES, "no-crash-reports-here"),
+    crashBefore: [],
+  });
+  assert.equal(pending.asked()[0].signal.aborted, true);
+  assert.match(order[0], /\(ask killed\)$/u, order.join(" → "));
+  assert.equal(aborted()[3], false, "the returned ask left alone");
+  // realExec takes the signal: one already aborted spawns nothing
+  const before = spawned.length;
+  const r = await realExec("/usr/bin/true", [], { signal: AbortSignal.abort() });
+  assert.equal(r.code, null);
+  assert.match(r.error, /abort/u);
+  assert.equal(spawned.length, before, "nothing spawned");
+  // and a live one, aborted, kills the child (its source: SIGTERM on abort, as its timeout does)
+  const source = readFileSync(
+    join(import.meta.dirname, "../../../scripts/stage-simulator-fixture.mjs"),
+    "utf8",
+  );
+  const exe = source.slice(source.indexOf("export function realExec("));
+  assert.match(exe.slice(0, exe.indexOf("\n}\n")), /signal\?\.addEventListener\("abort"/u);
 });
 
 test("G5: no door verb outlives the smoke's timeouts — openurl and screenshot inside 55 s, boot inside 145 s", async () => {

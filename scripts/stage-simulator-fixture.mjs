@@ -1150,8 +1150,12 @@ function refuse(run, kind, status, body) {
 /** The pinned env of the stage's OWN simctl and open spawns. */
 const pinned = (run, deps) => ({ ...deps.env, DEVELOPER_DIR: run.devDir });
 
-const simctl = (run, deps, args, timeoutMs) =>
-  deps.exec(XCRUN, ["simctl", ...args], { env: pinned(run, deps), timeoutMs });
+const simctl = (run, deps, args, timeoutMs, signal) =>
+  deps.exec(XCRUN, ["simctl", ...args], {
+    env: pinned(run, deps),
+    timeoutMs,
+    ...(signal === undefined ? {} : { signal }),
+  });
 
 /** The host's list, read in memory: every UDID not yet known joins the redactor as foreign. Null when it fails. */
 export async function readList(run, deps) {
@@ -1305,20 +1309,40 @@ export const MIN_VERB_MS = 5_000;
 /** The longest a device verb waits for readiness (inside its budget, MIN_VERB_MS kept for the verb). */
 export const READY_VERB_WAIT_MS = 45_000;
 
+/** G6: an ask dropped (its device seen down, a new boot, the door's shutdown) — its bootstatus, still pending, killed. */
+function forgetReady(run, key) {
+  const ask = run.ready.get(key);
+  if (ask !== undefined && ask.done === null) ask.kill.abort();
+  run.ready.delete(key);
+}
+
+/** G6: every ask still pending killed — at teardown, before anything else (no bootstatus outlives the run). */
+export function forgetAllReady(run) {
+  for (const key of [...run.ready.keys()]) forgetReady(run, key);
+}
+
 /** An own device's readiness, now (`waitMs` 0) or waited for up to `waitMs`: `{state}` — `Booted` (iOS ready), `Booting`
  * (not yet), simctl's word for a device neither Booted nor Booting (nothing to prove), or `failed` with `why` (past
  * BOOT_READY_MS, or bootstatus said no). */
 async function readiness(run, deps, own, now, waitMs) {
   const key = own.udid.toUpperCase();
   if (now.state !== "Booted" && now.state !== "Booting") {
-    run.ready.delete(key);
+    forgetReady(run, key);
     return { state: now.state };
   }
   let ask = run.ready.get(key);
   if (ask === undefined || ask.boot !== now.boot) {
+    forgetReady(run, key);
     const n = [...run.own.entries()].find(([, d]) => d === own)?.[0];
     const asked = { boot: now.boot, at: deps.now(), done: null, said: false, n };
-    asked.promise = simctl(run, deps, ["bootstatus", own.udid], BOOT_READY_MS).then(
+    asked.kill = new AbortController();
+    asked.promise = simctl(
+      run,
+      deps,
+      ["bootstatus", own.udid],
+      BOOT_READY_MS,
+      asked.kill.signal,
+    ).then(
       (r) => {
         asked.done = { ok: r.code === 0, r, ms: deps.now() - asked.at };
       },
@@ -1418,7 +1442,7 @@ export async function doorAct(body, run, deps) {
     return gate.state === "failed" ? notReady(gate) : json(200, { n, state: gate.state });
   }
   if (verb === "boot" || verb === "shutdown") {
-    if (verb === "shutdown") run.ready.delete(own.udid.toUpperCase());
+    if (verb === "shutdown") forgetReady(run, own.udid.toUpperCase());
     const up = (state) => state === "Booted" || state === "Booting";
     // R2-A: a device simctl already lists Booted (the product's face booted it) or Booting is never booted again — boot
     // only waits for its readiness
@@ -2118,7 +2142,11 @@ export function costRows({ table, commands, helperPath, simExe, own }) {
 const MAX_OUTPUT_CHARS = 64 * 1024 * 1024;
 
 /** THE exec seam: one fixed binary, never a shell; answers `{code, signal, stdout, stderr, error?}` and never throws. */
-export function realExec(file, args, { env = process.env, input, timeoutMs = 30_000 } = {}) {
+export function realExec(
+  file,
+  args,
+  { env = process.env, input, timeoutMs = 30_000, signal } = {},
+) {
   return new Promise((done) => {
     let settled = false;
     const settle = (result) => {
@@ -2126,6 +2154,11 @@ export function realExec(file, args, { env = process.env, input, timeoutMs = 30_
       settled = true;
       done(result);
     };
+    // G6: a caller's AbortSignal kills the child as its timeout does; one already aborted spawns nothing
+    if (signal?.aborted) {
+      settle({ code: null, signal: null, stdout: "", stderr: "", error: "aborted before it ran" });
+      return;
+    }
     let child;
     try {
       child = spawn(file, args, {
@@ -2147,19 +2180,25 @@ export function realExec(file, args, { env = process.env, input, timeoutMs = 30_
       if (stderr.length < MAX_OUTPUT_CHARS) stderr += chunk;
     });
     let kill = null;
-    const timer = setTimeout(() => {
+    const stop = () => {
+      if (kill !== null) return;
       child.kill("SIGTERM");
       kill = setTimeout(() => child.kill("SIGKILL"), 5_000);
-    }, timeoutMs);
-    child.once("error", (error) => {
+    };
+    const timer = setTimeout(stop, timeoutMs);
+    signal?.addEventListener("abort", stop, { once: true });
+    const ended = () => {
       clearTimeout(timer);
       clearTimeout(kill);
+      signal?.removeEventListener("abort", stop);
+    };
+    child.once("error", (error) => {
+      ended();
       settle({ code: null, signal: null, stdout, stderr, error: error.message });
     });
-    child.once("close", (code, signal) => {
-      clearTimeout(timer);
-      clearTimeout(kill);
-      settle({ code, signal, stdout, stderr });
+    child.once("close", (code, exitSignal) => {
+      ended();
+      settle({ code, signal: exitSignal, stdout, stderr });
     });
     if (input !== undefined) {
       child.stdin.on("error", () => {});
@@ -2566,6 +2605,8 @@ const BESIDE_FOREIGN =
  * said, and another's change said as an OBSERVATION (RM6 S-1); answers `restoredVerdict`'s verdict — its `ownOk` is
  * what the exit judges. Exported for its units (deps-injected, as `doorAct` is). */
 export async function restoreHost(run, deps, ctx) {
+  // G6: no bootstatus the door asked outlives the run
+  forgetAllReady(run);
   const findings = [];
   let list = run.devDir === null ? null : await readList(run, deps);
   const own = [...run.own.entries()].map(([n, d]) => {
