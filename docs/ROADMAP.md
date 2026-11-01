@@ -481,6 +481,9 @@
   item 147 (index-timeline's SP-6 real-rosettad row "the page over the ground-truth transcript" pages once the
   session's row is indexed, before rosetta has its entries under load: red once in CP-3's merged-tree light, green
   3 of 3 alone; the row should wait on its entries; skipped where FIELDD_ROSETTAD_BIN is unset; LANDED "CP-3") ·
+  item 148 (users.json's mint and the layout stamp are created whole: tmp, fsync, a link that fails EEXIST; a bare
+  "wx" create named the file before its bytes, and `detectLayoutState` read it outside the lock: `75e1bd31a` as
+  M90, a fast-forward, run 90; LANDED "Item 148") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).

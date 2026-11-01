@@ -27814,3 +27814,52 @@ James's first sight, in `pnpm dev`, Chat (⌘4):
 - a press says "You said Yes" for 2.4 s, then the card leaves; every other window drops it at once;
 - from another view, "Vela needs you" stands over Chat's cell for 2.4 s;
 - a notify is one line on the status line, and an OS notice while no VibeField window is in front.
+
+## Item 148 — users.json's mint and the layout stamp are created whole: tmp, fsync, then a link that fails EEXIST, never a bare "wx" write a reader can catch mid-write
+
+(2026-11-01; one commit `75e1bd31a` on lane `fix/item148` over main `0a97e59b6`, the fixer's; M90 is `75e1bd31a` itself,
+a fast-forward of main `0a97e59b6`, run 90.) Found by push 58's GitHub verify (41308169170), granted at 13:18Z.
+
+**The red.** packages/users `mint-race.test.ts`, "eight real minters, one empty root › exactly one users.json, one ULID,
+losers adopt": a loser's `ensureUsersRoot` → `detectLayoutState` → `readLayoutStamp` threw users-corrupt, "layout.json
+is present but unusable", with JSON.parse's "Unexpected end of JSON input". The cause: `detectLayoutState`, outside the
+lock (`ensure.ts`), read a two-step "wx" write. The winner wrote the stamp with
+`writeFileSync(path, …, { flag: "wx" })`, which creates the name before it writes the bytes, and a reader between the
+two read an empty file. The lock file's own header already records the lesson ("another process can observe the file
+between create and the identity write"); the two markers never took it. The race is old: users last changed at UA-7, and
+the runner surfaced it.
+
+**The fix.** `createWholeSync(target, payload)` in `users-file.ts` writes and fsyncs the payload under a private tmp
+name, then runs `linkSync(tmp, target)`, unlinks the tmp, and fsyncs the directory. The link fails EEXIST when any file
+holds the name, so the "wx" semantics stand, and the name appears only with its bytes complete. Both never-overwrite
+markers take it:
+- the layout stamp: EEXIST still validates the incumbent;
+- users.json's mint: EEXIST still adopts the winner, the belt under a broken lock. Mint's critical section stays
+  synchronous.
+
+Mutation's tmp + `durableRename` was not used: a rename lands the bytes whole too, but it replaces an incumbent, and
+these are the two files nobody may overwrite. No tolerance was added to any reader.
+
+**Tests.** `test/whole-markers.test.ts` (new) mocks `node:fs`, the repo's idiom (electron-shell's
+`authority-production.test.ts`). `writeFileSync` by path runs as its two real steps, open then write, with a reader
+between them, where another process lands:
+- a fresh mint's every write must leave each marker absent or whole;
+- an incumbent stamp is kept unchanged, and no tmp is left in the root.
+
+lock.ts's two comments and `users-file.test.ts`'s belt row title name the exclusive create, no longer "wx".
+
+**The light** (lane item148, `lanes/item148/tools/light148.sh`, logs `lanes/item148/light/`; 13:25:08Z → 13:26:08Z, at
+`75e1bd31a`), green throughout:
+- R, red-first: main's `users-file.ts` under the new file, its first row red, one torn read in each marker's
+  window: `expected [ 'users-corrupt', 'users-corrupt' ] to deeply equal []`. The file was restored from HEAD.
+- G: the new file at the fix, 2/2. M: `mint-race.test.ts` alone, 10 of 10 green: the lottery's row, never a proof by
+  itself.
+- @vibefield/users whole, 42 passed and 1 skipped (the win32-only row), 8 files. Biome on the package. The users
+  typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- Run 90 on the mini (a9's mint; VF-PM's read, 16:08:21Z): 11,998 passed, 0 failed, 18 skipped, main's count plus the
+  two new rows; it stood for the landing at 22:08Z, main unmoved.
+
+**Windows.** `linkSync` is CreateHardLinkW, which NTFS has (`%LOCALAPPDATA%`). A VibeField root on FAT or exFAT
+would fail loudly as users-unwritable, "cannot mint users.json", never silently. verify runs on macOS only.
+
+**Owed.** The Windows box check of the mint (the link on NTFS), not the fixer's to run unasked.
