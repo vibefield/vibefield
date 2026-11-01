@@ -206,7 +206,7 @@ interface Mounted {
 /** The composer under FieldView's place (the one owner of the open surface), over a running feed, its draft kept as
  * Chat keeps a thread's (one copy: what the composer parks, and a send's clearing). */
 async function mountComposer(
-  outcome: () => Promise<ThreadSendOutcome> = async () => ({ state: "pasted" }),
+  outcome: () => Promise<ThreadSendOutcome | null> = async () => ({ state: "pasted" }),
   parked: readonly DraftPart[] = [],
   asks: ComposerPort = port,
 ): Promise<Mounted> {
@@ -569,6 +569,18 @@ describe('Send (DESIGN.md §8 "Chat\'s composer")', () => {
     expect(chipLabels()).toEqual(["vibe-field"]);
     expect(editor().textContent).toContain("to rebase");
     expect(write).not.toHaveBeenCalled();
+  });
+
+  it("says nothing and keeps the draft whole when the thread's hold turns the send away (final critique 11)", async () => {
+    // another act holds the thread (a Wake pressed in this tick, before Send is drawn busy): Chat's send answers null
+    const mounted = await mountComposer(async () => null);
+    typeText("carry on with the migration");
+    press(editor(), { key: "Enter" });
+    await settle();
+    expect(mounted.send).toHaveBeenCalledTimes(1);
+    expect(mounted.said).toEqual([]);
+    expect(editor().textContent).toBe("carry on with the migration");
+    expect(send().hasAttribute("aria-busy")).toBe(false);
   });
 
   it("waits while a send runs: busy, and a second press does nothing", async () => {

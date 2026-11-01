@@ -1502,7 +1502,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       thread as a send does, one act at a time (§8 "Chat's thread").
   - **Empty, opening, unavailable:** "No sparks yet"; "Opening Chat…" while the list is first read; "Chat can't read
     your sparks", with fieldd's words under it, when it cannot be read. Each is secondary, centred in the panel, and
-    never a blank.
+    never a blank. *Amended 2026-11-01 (SP-1d's final critique):* "first read" is the window's feed's: the list reads
+    "Opening Chat…" again whenever that feed starts again (fieldd restarting), and a send that gives up then says so
+    in its own sentence (§8 "Chat's composer").
   - **No create yet.** Chat's line holds the views and the snapshot. Its create, **New spark** (⌘N, `sparkle`), comes
     with its sheet in SP-1c. *(Built at SP-1c, 2026-10-31: §8 "The New spark sheet", and the line's create above.)*
 - **The New spark sheet — a name, an agent, and the face it is dealt** (SP-1c; NS-D1 A, NS-D2 B, NS-D3 A and NS-D5,
@@ -1632,8 +1634,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       a send runs, Wake cannot be pressed. A Send pressed during Wake's wake would have woken the spark a second time.
     - **A send that is not taken** leaves the hello standing when it was refused before the pane took the keyboard:
       the window has no terminals, the pane was not found or not heard, you left the thread or the spark fell asleep
-      before its pane was ready, its input did not open, or the spark waits on you. Once the pane has taken the
-      keyboard for a send, the hello leaves with it, pasted or not, since the pane then holds the keyboard.
+      before its pane was ready, Chat could not read its list, its input did not open, or the spark waits on you.
+      Once the pane has taken the keyboard for a send, the hello leaves with it, pasted or not, since the pane then
+      holds the keyboard.
     - **What it covers:** at 1180 × 780 the card is about 200 tall, y 412–612, so while it shows it covers about the
       pane's last ten rows, where a new agent's input box waits. It leaves the moment you write, so nothing you type is
       under it.
@@ -1776,7 +1779,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Send** pastes the message into the thread's pane, the road ⌘V takes: bracketed when its program asked for it,
     with Return never pressed for you. Return in the draft and the send button both send. ⇧Return types nothing: the
     draft is one line. The thread takes one act at a time, Send's, a starter's or Wake's (§8 "Chat's thread",
-    *amended 2026-10-31*): while one runs, send waits (busy), and a press does nothing.
+    *amended 2026-10-31*): while one runs, send waits (busy), and a press does nothing. *Amended 2026-11-01 (SP-1d's
+    final critique):* the thread's own hold turns the press away, the one Wake and the starters read, not the button
+    drawn busy, so a Return in the same moment as a Wake press sends nothing, says nothing and lets go of nothing.
     - The pane takes the keyboard just before the paste (§8 "Chat's thread"), so it takes the session's size, and the
       keyboard stays there, where Return sends it. Sent, the words and chips it carried are cleared, and the line's
       note (§8 "The line") says so once: "Pasted into Vela's pane — Return sends it". The draft stays a field while a
@@ -1803,7 +1808,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - When the paste is not taken, the draft stays whole and the note says why, in the hand's words where the outcome
       is the hand's own (§8 "The hand"):
       - "Not pasted — Vela's pane is not taking input" (its input did not open within 1.5 s, or a spark that is awake
-        was not heard in the 20 s);
+        was not heard in the 20 s). *Amended 2026-11-01 (SP-1d's final critique):* never for a spark Chat reads asleep
+        then, nor while Chat cannot read its list, nor for a pane no longer drawn when a wait ends or the paste is
+        asked: each of those is said below;
       - "Not pasted — that snapshot is no longer kept";
       - "Not pasted into Vela's pane — 300 KB, and one paste carries 261 KB of it" (D6, said once);
       - "Not sent — Vela didn't wake in 20 seconds", only for a spark this send woke that was not heard in them;
@@ -1816,10 +1823,27 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         has settled and the thread is not on screen then: you left Chat, or chose another thread, while its pane was
         being found or had not appeared. The pane is only found while its thread is shown, so its terminal is never
         said to be off the floor then. *Amended 2026-10-31 (SP-1d's fix review):* this was said whenever no pane had
-        settled, the thread on screen or not;
+        settled, the thread on screen or not. *Amended 2026-11-01 (SP-1d's final critique):* once the pane is found,
+        it is read again after each wait (for the spark to be heard, for its input) and at the paste. The send pastes
+        into the pane its thread draws then, so a thread left and shown again is pasted into: a pane being found again
+        is waited for in what is left of the 20 s, and a pane drawn again has its own input waited for (1.5 s) before
+        the paste. A pane still drawn under another view's cover takes the paste (§8 "Chat's thread"). A pane no
+        longer drawn when a wait ends is said as no pane at the 20 s is: a thread left while the send waited for the
+        spark to be heard, or for its input, says this, never that its pane is not taking input, and a pane still
+        being found is never said to be off the floor before the 20 s end;
       - "Not sent — Vela fell asleep before its pane was ready", after the 20 s, when the spark fell asleep while the
         send waited (*added 2026-10-31, SP-1d's fix review*). An asleep thread draws no pane, so none could be
-        ready, and you are never said to have left it;
+        ready, and you are never said to have left it. *Amended 2026-11-01 (SP-1d's final critique):* while the send
+        waits for the pane of a thread on screen, it is said the moment that pane goes, not at the 20 s. It is read
+        too when an awake spark is not heard, when its input does not open, and wherever the pane is read again. Still
+        at the 20 s: a spark that falls asleep off screen, where no pane goes, or after its pane was found and before
+        it was heard, which that wait reads from the list alone;
+      - "Not sent — Chat is opening again" and "Not sent — Chat can't read your sparks", when Chat's list is not read
+        at the moment the send reads why it cannot go on, said as the list stands then (§8 "Chat's list"): opening
+        again, where the list reads "Opening Chat…" (its feed started again, as fieldd restarts; a send is pressed
+        only on a list read, so it is always again), or unreadable, its list refused, in the list's own words. With
+        no list read no thread is drawn and no spark is heard, so "you left", "didn't wake" and "not taking input"
+        are never said then (*added 2026-11-01, SP-1d's final critique*);
       - "Couldn't find Vela's pane: …", at once, in the floor's or the window's own words, while the pane's place says
         it (§8 "Chat's thread");
       - "Not sent — this window has no terminals", at once, in a window with no terminals (the catalog, a browser),
@@ -5009,8 +5033,9 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   pasted — Vela's pane is not taking input" · "Not pasted — that snapshot is no longer kept" · "Not pasted into Vela's
   pane — 300 KB, and one paste carries 261 KB of it" · "Not sent — Vela didn't wake in 20 seconds" · "Not sent — Vela's
   terminal is not on this desktop's floor" · "Not sent — you left Vela's thread before its pane was ready" · "Not sent
-  — Vela fell asleep before its pane was ready" · "Not sent — this window has no terminals" · "Couldn't wake Vela: …"
-  · "Couldn't send to Vela: …". A card's: "Add to your message to Vela" · "Added to your message to Vela".
+  — Vela fell asleep before its pane was ready" · "Not sent — Chat is opening again" · "Not sent — Chat can't read your
+  sparks" · "Not sent — this window has no terminals" · "Couldn't wake Vela: …" · "Couldn't send to Vela: …". A card's: "Add to your message to Vela" ·
+  "Added to your message to Vela".
 - A row's lasting mark, in its accessible name after the status word: "unread" · "needed you" ("Asleep, needed you",
   "Ready, unread").
 - A session's handle: its folder's name, which is the board's project, else the agent's label for a run that names no

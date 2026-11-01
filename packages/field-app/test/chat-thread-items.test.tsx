@@ -384,6 +384,37 @@ describe("one act at a time into a thread, a wake's, a starter's or Send's (DESI
     await settle();
     expect(wake()?.disabled).toBe(false);
   });
+
+  it("turns away a Return pressed in Wake's own tick by the thread's hold, before Send is drawn busy: nothing sent, said or let go (final critique 11)", async () => {
+    let woken: () => void = () => undefined;
+    const asleep: SparkSummary = { ...VELA, session: { runtimeRunId: "run-Vela", live: false } };
+    const opened: string[] = [];
+    await mountChat([], asleep, (spark) => {
+      opened.push(spark);
+      return new Promise((resolve) => {
+        woken = () => resolve(asleep);
+      });
+    });
+    const wake = (): HTMLButtonElement | null =>
+      host?.querySelector<HTMLButtonElement>(".vf-chat-thread-line button") ?? null;
+    typeText("carry on with the migration");
+    // Wake, then Return in the same tick: the hold is Wake's, though Send is not drawn busy yet
+    await act(async () => {
+      wake()?.click();
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(opened).toEqual(["sp-vela0001"]);
+    expect(road.sent).toEqual([]);
+    expect(said).toEqual([]);
+    // the hold stands, Wake's, until its wake ends: Send waits, and the draft is kept
+    expect($(".vf-chat-send")?.getAttribute("aria-busy")).toBe("true");
+    expect($(".vf-chat-input")?.textContent).toBe("carry on with the migration");
+    await act(async () => woken());
+    await settle();
+    expect($(".vf-chat-send")?.hasAttribute("aria-busy")).toBe(false);
+  });
 });
 
 describe("what a send reads of Chat when no pane settled (DESIGN.md §8 \"Chat's composer\"; SP-1d's fix review)", () => {
@@ -411,6 +442,35 @@ describe("what a send reads of Chat when no pane settled (DESIGN.md §8 \"Chat's
     root = null;
     expect(lent.onScreen()).toBe(false);
     await act(async () => finish({ state: "fell-asleep" }));
+  });
+
+  it("lends Send the pane its thread draws now, whether Chat reads its list, and a pane wait that ends once the spark reads asleep (final critique 7)", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    await mountChat();
+    await act(async () => starters()[0]?.click());
+    const lent = road.deps;
+    if (lent === null) throw new Error("no send");
+    // this window has no terminals: the thread's pane says so, and that is the pane it draws now
+    expect(lent.paneNow()).toEqual({ state: "no-terminals", door: null });
+    expect(lent.sparksReading()).toBe("ready");
+    // asleep, its thread draws no pane: a wait for one answers at once, never at the 20 s
+    await act(async () => pushFrame?.({ revision: 2, rows: [own({ alive: false })] }, "snapshot"));
+    await settle();
+    expect(lent.paneNow()).toBeNull();
+    const waited = await Promise.race([
+      lent.pane(20_000),
+      new Promise<"waited">((resolve) => setTimeout(() => resolve("waited"), 50)),
+    ]);
+    expect(waited).toBeNull();
+    // fieldd restarting: the window's feed starts again, and its list is not read until it answers
+    stopFeed?.();
+    stopFeed = null;
+    expect(lent.sparksReading()).toBe("opening");
+    await act(async () => finish({ state: "sparks-unread", reading: "opening" }));
   });
 });
 

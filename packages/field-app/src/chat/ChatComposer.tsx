@@ -84,8 +84,9 @@ export interface ChatComposerProps {
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
   port: ComposerPort;
-  /** Send into the thread's pane (`thread-send.ts`, over Chat's world) */
-  send: (text: string, stills: readonly string[]) => Promise<ThreadSendOutcome>;
+  /** Send into the thread's pane (`thread-send.ts`, over Chat's world): null while another act holds the thread, which
+   * turns the press away (Chat's one guard), so nothing is said and the draft stays */
+  send: (text: string, stills: readonly string[]) => Promise<ThreadSendOutcome | null>;
   /** another act holds this thread — a send into it, Send's or a starter's, or a wake (Chat's one at a time per
    * thread): Send waits, busy, as for its own */
   threadSending?: boolean | undefined;
@@ -466,13 +467,14 @@ export function ChatComposer({
     if (sending.current || threadSending || !draftSendable(sent, null)) return;
     sending.current = true;
     setBusy(true);
-    let outcome: ThreadSendOutcome;
+    let outcome: ThreadSendOutcome | null;
     try {
       outcome = await send(draftText(sent), draftStills(sent));
     } finally {
       sending.current = false;
       if (live.current) setBusy(false);
     }
+    if (outcome === null) return;
     say(sendNote(outcome, name));
     if (outcome.state !== "pasted") return;
     // Sent: what it carried leaves the thread's draft as the thread holds it now — this editor's, parked first, or,

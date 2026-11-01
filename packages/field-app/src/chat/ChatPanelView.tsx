@@ -11,7 +11,7 @@ import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
 import { SparkPaneView } from "./SparkPaneView";
 import { activityWords, type SparkEntry } from "./spark-status";
-import type { SparksReading } from "./sparks-feed";
+import { SPARKS_UNREADABLE, type SparksReading } from "./sparks-feed";
 import { ThreadItemsView } from "./ThreadItemsView";
 import type { ThreadItem } from "./thread-items";
 import { lastingMarkOf, NO_LATCHES, type ThreadMark, threadMarksOf } from "./thread-marks";
@@ -129,7 +129,7 @@ export function ChatPanelView({
     if (reading.state === "unavailable") {
       return (
         <div className="vf-chat-panel-state">
-          <UnavailableState card title="Chat can't read your sparks" description={reading.reason} />
+          <UnavailableState card title={SPARKS_UNREADABLE} description={reading.reason} />
         </div>
       );
     }

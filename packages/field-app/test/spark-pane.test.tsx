@@ -73,7 +73,15 @@ vi.mock("@vibecook/ghosttea-react", async (importOriginal) => {
       sessionMetadata: () => SESSION,
       mount: (...args: unknown[]) => {
         runtimeCalls.push({ verb: "mount", args });
-        return { resize: record("mount.resize"), dispose: record("mount.dispose") };
+        return {
+          resize: record("mount.resize"),
+          // its last view gone, the runtime lets the session's routed input go (ghosttea's `#releaseRoutedView`): the
+          // pane's is the one view here
+          dispose: (...disposed: unknown[]) => {
+            runtimeCalls.push({ verb: "mount.dispose", args: disposed });
+            activations.delete(args[0] as string);
+          },
+        };
       },
       resize: record("resize"),
       claimResizeControl: record("claimResizeControl"),
@@ -326,12 +334,12 @@ describe("the pane takes the session's size when it takes the keyboard, never at
     await mountPane();
     const door = sparkPaneOf("sp-vela0001")?.door;
     expect(door).toBeTruthy();
-    let taken = false;
+    let taken: string | undefined;
     await act(async () => {
-      taken = door?.paste("look at the failing test") ?? false;
+      taken = door?.paste("look at the failing test");
       await settle();
     });
-    expect(taken).toBe(true);
+    expect(taken).toBe("pasted");
     expect(document.activeElement).toBe(input());
     expect(calls("takeResizeControl")).toHaveLength(1);
     expect(calls("paste").map((call) => call.args.at(-1))).toContain("look at the failing test");
@@ -356,9 +364,10 @@ describe("the pane takes the session's size when it takes the keyboard, never at
     });
     expect(onKeyboard).toHaveBeenCalledTimes(1);
 
-    // a pane that has not held it yet, taken by Send's paste
+    // a pane that has not held it yet, taken by Send's paste: its own view's input opens afresh
     act(() => root?.unmount());
     root = container === null ? null : createRoot(container);
+    activations.set("pty-vela", { inputAllowed: true });
     const pasted = vi.fn();
     await mountPane({ onKeyboard: pasted });
     expect(pasted).not.toHaveBeenCalled();
@@ -399,11 +408,13 @@ describe("the pane takes the session's size when it takes the keyboard, never at
     expect(door).toBeTruthy();
     // …and the person went to another view while it waited (to be heard, then the input's 1.5 s)
     await mountPane({ active: false, onKeyboard });
+    let taken: string | undefined;
     await act(async () => {
-      door?.paste("look at the failing test");
+      taken = door?.paste("look at the failing test");
       await settle();
     });
     // the text goes in by the road, as the send asked; the keyboard is not taken under another view's cover
+    expect(taken).toBe("pasted");
     expect(calls("paste").map((call) => call.args.at(-1))).toContain("look at the failing test");
     expect(calls("takeResizeControl")).toEqual([]);
     expect(onKeyboard).not.toHaveBeenCalled();
@@ -419,12 +430,34 @@ describe("the pane's door, for Send (thread-pane-door.ts)", () => {
     await mountPane();
     const report = sparkPaneOf("sp-vela0001");
     expect(report?.state).toBe("live");
-    expect(report?.door?.paste("hello")).toBe(false);
+    expect(report?.door?.paste("hello")).toBe("closed");
     expect(calls("paste")).toEqual([]);
     const opened = report?.door?.whenInputOpen(1_500);
     activations.set("pty-vela", { inputAllowed: true });
     for (const listener of activationListeners) listener();
     await expect(opened).resolves.toBe(true);
+  });
+
+  it("says its pane is undrawn once it is no longer drawn — another thread shown, the spark asleep — and hands nothing over (final critique 7)", async () => {
+    activations.set("pty-vela", { inputAllowed: true });
+    await mountPane();
+    // Send found the live door while the thread showed…
+    const door = sparkPaneOf("sp-vela0001")?.door;
+    expect(door).toBeTruthy();
+    expect(door?.drawn()).toBe(true);
+    await expect(door?.whenInputOpen(0)).resolves.toBe(true);
+    // …and the thread's pane went while it waited for the spark to be heard: its door says so, and the session's input
+    // went with its one view, so a wait for it lapses (Send reads the lapse as the pane stands)
+    await act(async () => {
+      root?.render(null);
+      await settle();
+    });
+    expect(door?.drawn()).toBe(false);
+    expect(activations.has("pty-vela")).toBe(false);
+    await expect(door?.whenInputOpen(0)).resolves.toBe(false);
+    expect(door?.paste("look at the failing test")).toBe("undrawn");
+    expect(calls("paste")).toEqual([]);
+    expect(calls("takeResizeControl")).toEqual([]);
   });
 
   it("is published only while Chat is the view, and withdrawn when the pane goes", async () => {

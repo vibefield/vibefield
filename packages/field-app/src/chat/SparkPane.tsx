@@ -193,12 +193,16 @@ function FloorSparkPane({
     if (found === null || runtime === null) return null;
     const id = found.id;
     return {
+      // drawn while its box stands: the live surface's, gone once its thread's pane unmounts or has no session to draw
+      drawn: () => box.current !== null,
       whenInputOpen: (timeoutMs) => whenPaneInputOpen(runtime, () => id, timeoutMs),
       // A routed input that is closed drops a paste its surface still claims, so the runtime is asked first, and a
-      // paste it would drop is never handed over (the deck's door, `GodviewDeck.tsx` pasteInto).
+      // paste it would drop is never handed over (the deck's door, `GodviewDeck.tsx` pasteInto). A door whose pane is
+      // no longer drawn (another thread shown, the spark asleep, Chat's list unread) says so, for Send to say why.
       paste: (text) => {
-        const input = box.current?.querySelector("textarea") ?? null;
-        if (input === null || runtime.routedActivation(id)?.inputAllowed !== true) return false;
+        if (box.current === null) return "undrawn";
+        const input = box.current.querySelector("textarea");
+        if (input === null || runtime.routedActivation(id)?.inputAllowed !== true) return "closed";
         // Shown, the pane takes the keyboard, and with it the session's size, BEFORE the text lands (DESIGN.md §8
         // "Chat's composer"): the surface takes the seat in its own focus report once its `active` and its input's
         // focus have committed, so both are flushed before the paste is dispatched. A paste that lands after Chat
@@ -209,7 +213,7 @@ function FloorSparkPane({
             input.focus();
           });
         }
-        return pasteIntoInput(input, text);
+        return pasteIntoInput(input, text) ? "pasted" : "closed";
       },
     };
   }, [found, runtime]);

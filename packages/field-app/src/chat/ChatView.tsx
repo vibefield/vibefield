@@ -20,6 +20,7 @@ import {
   type SparkOpener,
   showThread,
   sparkEntryNow,
+  sparksReadingNow,
   threadOnScreen,
   useChooseRequest,
   useSparkOpener,
@@ -28,7 +29,7 @@ import {
   whenSparkEntry,
 } from "./sparks-feed";
 import { threadItemsOf, threadQuiet } from "./thread-items";
-import { whenSparkPane } from "./thread-pane-door";
+import { sparkPaneOf, whenSparkPane } from "./thread-pane-door";
 import { sendNote, sendToThread, type ThreadSendOutcome } from "./thread-send";
 
 // CHAT, THE CONTROLLER (SP-1b, SP-1d; DESIGN.md §8 "Chat's list", "Chat's thread", "Chat's composer"). It draws the
@@ -100,7 +101,8 @@ export function ChatView({
   // One act at a time into a thread, Wake's, Send's or a starter's (DESIGN.md §8 "Chat's thread", "Chat's
   // composer"): two pasted messages would sit in the agent's one input for a single Return to send as one, and a Send
   // into a thread Wake is waking would wake the spark a second time. While one runs, Wake, the starters and Send wait,
-  // and a press of any does nothing (the ref holds it within one tick, the state draws it).
+  // and a press of any does nothing: the ref is the one guard, which Wake and every send read (so a press within the
+  // tick of another is turned away), and the state draws it.
   const [heldThreads, setHeldThreads] = useState<ReadonlySet<SparkId>>(() => new Set());
   const heldNow = useRef(new Set<SparkId>());
   const holdThread = useCallback((spark: SparkId, held: boolean) => {
@@ -132,11 +134,17 @@ export function ChatView({
 
   // Send, into the thread's pane (`thread-send.ts`): it wakes the spark through the same wake, the line reading
   // "Waking…" meanwhile; a refusal is the send's note, never the line's (said once). Pasted, the thread's hello leaves.
+  // While another act holds the thread it does nothing and answers null, so nothing is said and nothing let go.
   const sendTo = useCallback(
     (entry: SparkEntry, opener: SparkOpener) =>
-      async (text: string, stills: readonly string[]): Promise<ThreadSendOutcome> => {
+      async (text: string, stills: readonly string[]): Promise<ThreadSendOutcome | null> => {
         const spark = entry.spark.id;
+        if (heldNow.current.has(spark)) return null;
         holdThread(spark, true);
+        const asleep = (): boolean => {
+          const now = sparkEntryNow(spark);
+          return now !== null && threadLineOf(now) === "asleep";
+        };
         let outcome: ThreadSendOutcome;
         try {
           outcome = await sendToThread(
@@ -158,12 +166,12 @@ export function ChatView({
                   (heard) => heard.status !== "hello" && heard.status !== "sleeping",
                   ms,
                 )) !== null,
-              pane: (ms) => whenSparkPane(spark, ms),
-              asleep: () => {
-                const now = sparkEntryNow(spark);
-                return now !== null && threadLineOf(now) === "asleep";
-              },
+              // asleep, its thread draws no pane: the wait ends as the pane goes, never at the 20 s
+              pane: (ms) => whenSparkPane(spark, ms, asleep),
+              asleep,
               onScreen: () => threadOnScreen() === spark,
+              paneNow: () => sparkPaneOf(spark),
+              sparksReading: sparksReadingNow,
               stillKept,
             },
             text,
@@ -179,11 +187,11 @@ export function ChatView({
   );
 
   // A starter, pressed: sent as Send sends (no stills), its outcome said in Send's own words — never while an act holds
-  // its thread.
+  // its thread (the send's own guard).
   const start = useCallback(
     async (entry: SparkEntry, opener: SparkOpener, words: string): Promise<void> => {
-      if (heldNow.current.has(entry.spark.id)) return;
-      sayOnLine(sendNote(await sendTo(entry, opener)(words, []), entry.spark.name));
+      const outcome = await sendTo(entry, opener)(words, []);
+      if (outcome !== null) sayOnLine(sendNote(outcome, entry.spark.name));
     },
     [sendTo],
   );

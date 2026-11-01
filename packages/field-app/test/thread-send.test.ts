@@ -35,14 +35,32 @@ function doorOf(over: Partial<SparkPaneDoor> = {}): SparkPaneDoor & { pasted: st
   const pasted: string[] = [];
   return {
     pasted,
+    drawn: () => true,
     whenInputOpen: async () => true,
     paste: (text) => {
       pasted.push(text);
-      return true;
+      return "pasted";
     },
     ...over,
   };
 }
+
+/** A door whose pane is no longer drawn: it says so, and its paste hands nothing over. */
+const undrawnDoor = (): SparkPaneDoor & { pasted: string[] } =>
+  doorOf({ drawn: () => false, paste: () => "undrawn" });
+
+/** A door drawn until `gone()` holds, as a pane is until its thread is left: then it says so, and pastes nothing. */
+const doorUntil = (
+  gone: () => boolean,
+  over: Partial<SparkPaneDoor> = {},
+): SparkPaneDoor & { pasted: string[] } => {
+  const door = doorOf(over);
+  return {
+    ...door,
+    drawn: () => !gone(),
+    paste: (text) => (gone() ? "undrawn" : door.paste(text)),
+  };
+};
 
 const live = (door: SparkPaneDoor): SparkPaneReport => ({ state: "live", door });
 
@@ -56,6 +74,8 @@ function deps(over: Partial<ThreadSendDeps> = {}): ThreadSendDeps {
     pane: async () => live(doorOf()),
     asleep: () => false,
     onScreen: () => true,
+    paneNow: () => null,
+    sparksReading: () => "ready",
     stillKept: async () => true,
     inputRefusals: () => () => undefined,
     ...over,
@@ -75,7 +95,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
     const door = doorOf();
     await sendToThread(deps({ pane: async () => live(door) }), "line one\nline two", []);
     expect(door.pasted).toEqual(["line one\nline two"]);
-    expect(Object.keys(door).sort()).toEqual(["paste", "pasted", "whenInputOpen"]);
+    expect(Object.keys(door).sort()).toEqual(["drawn", "paste", "pasted", "whenInputOpen"]);
   });
 
   it("wakes an asleep spark, waits until it is heard and its pane takes input, then pastes", async () => {
@@ -87,7 +107,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
       },
       paste: (text) => {
         order.push(`paste ${text}`);
-        return true;
+        return "pasted";
       },
     });
     const outcome = await sendToThread(
@@ -295,7 +315,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
       deps({
         needsWake: true,
         heard: (ms) => new Promise((resolve) => setTimeout(() => resolve(true), ms - 1)),
-        pane: (ms) => whenSparkPane("sp-vela0001", ms),
+        pane: (ms) => whenSparkPane("sp-vela0001", ms, () => false),
       }),
       "hi",
       [],
@@ -401,7 +421,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
     expect(outcome).toEqual({ state: "not-taking" });
     expect(closed.pasted).toEqual([]);
     expect(sendNote(outcome, "Vela")).toBe("Not pasted — Vela's pane is not taking input");
-    const unclaimed = doorOf({ paste: () => false });
+    const unclaimed = doorOf({ paste: () => "closed" });
     expect(await sendToThread(deps({ pane: async () => live(unclaimed) }), "hi", [])).toEqual({
       state: "not-taking",
     });
@@ -420,7 +440,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
       paste: () => {
         claimedInside = refusalClaimed();
         hear?.(refusal);
-        return true;
+        return "pasted";
       },
     });
     const outcome = await sendToThread(
@@ -464,6 +484,313 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
     expect(wake).not.toHaveBeenCalled();
   });
 
+  it("says a thread left after its pane was found as left, read once the spark is heard — never that its pane is not taking input (final critique 7)", async () => {
+    // the pane was found, and the send waits for the spark to be heard (a just-hatched spark: up to the 20 s); meanwhile
+    // the thread's pane goes — another thread chosen, the spark asleep, or Chat's list unread — so the door's pane is
+    // no longer drawn, and the facts are read as the null pane's are
+    const cases: [Partial<ThreadSendDeps>, ThreadSendOutcome][] = [
+      [{ onScreen: () => false }, { state: "thread-left" }],
+      [{ asleep: () => true }, { state: "fell-asleep" }],
+      [
+        { sparksReading: () => "unavailable", onScreen: () => false },
+        { state: "sparks-unread", reading: "unavailable" },
+      ],
+      [
+        {
+          paneNow: () => ({
+            state: "fault",
+            reason: "the floor did not answer in 10 s",
+            door: null,
+          }),
+        },
+        { state: "fault", reason: "the floor did not answer in 10 s" },
+      ],
+    ];
+    for (const [after, expected] of cases) {
+      let left = false;
+      const inputAsked = vi.fn(async () => true);
+      const door = doorUntil(() => left, { whenInputOpen: inputAsked });
+      const outcome = await sendToThread(
+        deps({
+          pane: async () => live(door),
+          heard: async () => {
+            left = true;
+            return true;
+          },
+          onScreen: () => !left || after.onScreen?.() !== false,
+          asleep: () => left && after.asleep?.() === true,
+          sparksReading: () => (left ? (after.sparksReading?.() ?? "ready") : "ready"),
+          paneNow: () => (left ? (after.paneNow?.() ?? null) : live(door)),
+        }),
+        "hi",
+        [],
+      );
+      expect(outcome, JSON.stringify(expected)).toEqual(expected);
+      // said once the wait ends: its input is never waited for, nothing is pasted
+      expect(inputAsked).not.toHaveBeenCalled();
+      expect(door.pasted).toEqual([]);
+    }
+    // the note is the left thread's
+    expect(sendNote({ state: "thread-left" }, "Vela")).toBe(
+      "Not sent — you left Vela's thread before its pane was ready",
+    );
+  });
+
+  it("says a thread left while its input was waited for as left, when that wait lapses — never that its pane is not taking input (the final critique's fix review)", async () => {
+    // ghosttea lets a session's routed input go with its last view: a thread left, its pane unmounted, its input wait
+    // lapses — so a lapse is read as the pane stands then, as no pane is
+    const cases: [Partial<ThreadSendDeps>, ThreadSendOutcome][] = [
+      [{ onScreen: () => false }, { state: "thread-left" }],
+      [{ asleep: () => true }, { state: "fell-asleep" }],
+      [
+        { sparksReading: () => "unavailable", onScreen: () => false },
+        { state: "sparks-unread", reading: "unavailable" },
+      ],
+    ];
+    for (const [after, expected] of cases) {
+      let left = false;
+      const door = doorUntil(() => left, {
+        whenInputOpen: async () => {
+          left = true;
+          return false;
+        },
+      });
+      const outcome = await sendToThread(
+        deps({
+          pane: async () => live(door),
+          onScreen: () => !left || after.onScreen?.() !== false,
+          asleep: () => left && after.asleep?.() === true,
+          sparksReading: () => (left ? (after.sparksReading?.() ?? "ready") : "ready"),
+          paneNow: () => (left ? null : live(door)),
+        }),
+        "hi",
+        [],
+      );
+      expect(outcome, JSON.stringify(expected)).toEqual(expected);
+      expect(door.pasted).toEqual([]);
+    }
+    // its pane still drawn, a lapse is its input not opening
+    const closed = doorOf({ whenInputOpen: async () => false });
+    expect(await sendToThread(deps({ pane: async () => live(closed) }), "hi", [])).toEqual({
+      state: "not-taking",
+    });
+  });
+
+  it("pastes into the pane its thread draws as it pastes: a thread left and shown again is pasted into, once its own input opens", async () => {
+    // drawn again before the spark was heard: the new pane's input is waited for, and it takes the paste
+    const asked: string[] = [];
+    const found = undrawnDoor();
+    const drawnAgain = doorOf({
+      whenInputOpen: async (ms) => {
+        asked.push(`again ${ms}`);
+        return true;
+      },
+    });
+    const outcome = await sendToThread(
+      deps({ pane: async () => live(found), paneNow: () => live(drawnAgain) }),
+      "carry on",
+      [],
+    );
+    expect(outcome).toEqual({ state: "pasted" });
+    expect(drawnAgain.pasted).toEqual(["carry on"]);
+    expect(found.pasted).toEqual([]);
+    expect(asked).toEqual(["again 1500"]);
+    // drawn again while the first pane's input was waited for: the new one's is waited for too, before the paste
+    let again = false;
+    const first = doorUntil(() => again, {
+      whenInputOpen: async () => {
+        again = true;
+        return true;
+      },
+    });
+    const second = doorOf({
+      whenInputOpen: async () => {
+        asked.push("second");
+        return true;
+      },
+    });
+    expect(
+      await sendToThread(
+        deps({
+          pane: async () => live(first),
+          paneNow: () => live(again ? second : first),
+        }),
+        "carry on",
+        [],
+      ),
+    ).toEqual({ state: "pasted" });
+    expect(second.pasted).toEqual(["carry on"]);
+    expect(first.pasted).toEqual([]);
+    expect(asked).toEqual(["again 1500", "second"]);
+    // a pane drawn again whose input does not open is not taking input, and gets no paste
+    const shut = doorOf({ whenInputOpen: async () => false });
+    expect(
+      await sendToThread(
+        deps({ pane: async () => live(found), paneNow: () => live(shut) }),
+        "hi",
+        [],
+      ),
+    ).toEqual({ state: "not-taking" });
+    expect(shut.pasted).toEqual([]);
+  });
+
+  it("waits, in what is left of the 20 s, for a pane its thread is finding again — never off the floor before they end (the final critique's fix review)", async () => {
+    vi.useFakeTimers();
+    // left and shown again while the spark was heard: the new pane starts with no floor read, so it is being found
+    let shownAgain = false;
+    const found = doorUntil(() => shownAgain);
+    const drawnAgain = doorOf();
+    let published: SparkPaneReport = live(found);
+    let settle: () => void = () => undefined;
+    const waited: number[] = [];
+    const sent = sendToThread(
+      deps({
+        pane: (ms) => {
+          if (!shownAgain) return Promise.resolve(published);
+          waited.push(ms);
+          return new Promise((resolve) => {
+            settle = () => {
+              published = live(drawnAgain);
+              resolve(published);
+            };
+          });
+        },
+        heard: () =>
+          new Promise((resolve) =>
+            setTimeout(() => {
+              shownAgain = true;
+              published = { state: "finding", door: null };
+              resolve(true);
+            }, 4_000),
+          ),
+        paneNow: () => published,
+      }),
+      "carry on",
+      [],
+    );
+    let answered: ThreadSendOutcome | "waiting" = "waiting";
+    void sent.then((outcome) => {
+      answered = outcome;
+    });
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(waited).toEqual([SPARK_WAKE_WAIT_MS - 4_000]);
+    expect(answered, "said before the new pane settled").toBe("waiting");
+    settle();
+    expect(await sent).toEqual({ state: "pasted" });
+    expect(drawnAgain.pasted).toEqual(["carry on"]);
+    expect(found.pasted).toEqual([]);
+    // still being found when the 20 s end: then, and only then, a pane still being found
+    let again = false;
+    const lapsed = sendToThread(
+      deps({
+        pane: (ms) =>
+          again
+            ? new Promise((resolve) =>
+                setTimeout(() => resolve({ state: "finding", door: null }), ms),
+              )
+            : Promise.resolve(live(doorUntil(() => again))),
+        heard: async () => {
+          again = true;
+          return true;
+        },
+        paneNow: () => (again ? { state: "finding", door: null } : null),
+      }),
+      "hi",
+      [],
+    );
+    let late: ThreadSendOutcome | "waiting" = "waiting";
+    void lapsed.then((outcome) => {
+      late = outcome;
+    });
+    await vi.advanceTimersByTimeAsync(SPARK_WAKE_WAIT_MS - 1);
+    expect(late).toBe("waiting");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(late).toEqual({ state: "off-floor" });
+  });
+
+  it("pastes into a pane still drawn under another view's cover: nothing is published then, and its door takes it", async () => {
+    const door = doorOf();
+    const outcome = await sendToThread(
+      deps({ pane: async () => live(door), paneNow: () => null, onScreen: () => false }),
+      "carry on",
+      [],
+    );
+    expect(outcome).toEqual({ state: "pasted" });
+    expect(door.pasted).toEqual(["carry on"]);
+  });
+
+  it("says a list Chat cannot read in the list's own words — never that you left, that it didn't wake, or that it is not taking input", async () => {
+    vi.useFakeTimers();
+    // its list refused: Chat's list unread, so no thread is drawn (none on screen) and no spark is heard
+    const unread: Partial<ThreadSendDeps> = {
+      sparksReading: () => "unavailable",
+      onScreen: () => false,
+    };
+    const lapse = (ms: number) =>
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms));
+    const sends = [
+      // no pane of the thread at the 20 s
+      sendToThread(deps({ ...unread, pane: async () => null }), "hi", []),
+      // a spark this send woke, never heard
+      sendToThread(deps({ ...unread, needsWake: true, heard: lapse }), "hi", []),
+      // an awake spark whose pane was found, never heard
+      sendToThread(deps({ ...unread, heard: lapse }), "hi", []),
+    ];
+    await vi.advanceTimersByTimeAsync(SPARK_WAKE_WAIT_MS);
+    for (const outcome of await Promise.all(sends)) {
+      expect(outcome).toEqual({ state: "sparks-unread", reading: "unavailable" });
+      expect(sendNote(outcome, "Vela")).toBe("Not sent — Chat can't read your sparks");
+    }
+    // fieldd restarting: the window's feed starts again, and the list reads "Opening Chat…" — said as the list says it
+    const opening = await sendToThread(
+      deps({ sparksReading: () => "opening", onScreen: () => false, pane: async () => null }),
+      "hi",
+      [],
+    );
+    expect(opening).toEqual({ state: "sparks-unread", reading: "opening" });
+    expect(sendNote(opening, "Vela")).toBe("Not sent — Chat is opening again");
+  });
+
+  it("says an awake spark that fell asleep before it was heard, or before its input opened, as asleep — never not taking input", async () => {
+    vi.useFakeTimers();
+    let asleep = false;
+    const notHeard = sendToThread(
+      deps({
+        asleep: () => asleep,
+        heard: (ms) =>
+          new Promise((resolve) =>
+            setTimeout(() => {
+              asleep = true;
+              resolve(false);
+            }, ms),
+          ),
+      }),
+      "hi",
+      [],
+    );
+    await vi.advanceTimersByTimeAsync(SPARK_WAKE_WAIT_MS);
+    expect(await notHeard).toEqual({ state: "fell-asleep" });
+    // heard, then asleep while its input was waited for: its pane went, so its input never opened
+    let slept = false;
+    const closed = await sendToThread(
+      deps({
+        asleep: () => slept,
+        pane: async () =>
+          live(
+            doorUntil(() => slept, {
+              whenInputOpen: async () => {
+                slept = true;
+                return false;
+              },
+            }),
+          ),
+      }),
+      "hi",
+      [],
+    );
+    expect(closed).toEqual({ state: "fell-asleep" });
+  });
+
   it('says every note in DESIGN.md\'s own words (§8 "Chat\'s composer", §9 "Chat\'s words")', () => {
     const design = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "../../../DESIGN.md"),
@@ -480,6 +807,8 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
       { state: "off-floor" },
       { state: "thread-left" },
       { state: "fell-asleep" },
+      { state: "sparks-unread", reading: "opening" },
+      { state: "sparks-unread", reading: "unavailable" },
       { state: "no-terminals" },
     ];
     for (const outcome of outcomes) {
@@ -498,19 +827,47 @@ describe("the thread's pane, waited for (thread-pane-door.ts)", () => {
   it("answers a settled report at once, a later one when it is published, and the latest at the timeout", async () => {
     vi.useFakeTimers();
     const door = doorOf();
+    const never = () => false;
     publishSparkPane("sp-vela0001", live(door));
-    expect((await whenSparkPane("sp-vela0001", 1_000))?.state).toBe("live");
+    expect((await whenSparkPane("sp-vela0001", 1_000, never))?.state).toBe("live");
     publishSparkPane("sp-vela0001", { state: "finding", door: null });
-    const later = whenSparkPane("sp-vela0001", 1_000);
+    const later = whenSparkPane("sp-vela0001", 1_000, never);
     publishSparkPane("sp-vela0001", { state: "gone", door: null });
     expect((await later)?.state).toBe("gone");
     publishSparkPane("sp-vela0001", { state: "finding", door: null });
-    const lapsed = whenSparkPane("sp-vela0001", 1_000);
+    const lapsed = whenSparkPane("sp-vela0001", 1_000, never);
     await vi.advanceTimersByTimeAsync(1_000);
     expect((await lapsed)?.state).toBe("finding");
     publishSparkPane("sp-vela0001", null);
-    const none = whenSparkPane("sp-vela0001", 500);
+    const none = whenSparkPane("sp-vela0001", 500, never);
     await vi.advanceTimersByTimeAsync(500);
     expect(await none).toBeNull();
+  });
+
+  it("ends early once its wait is over: at once when it already is, else at the publication that finds it so (final critique: a spark asleep mid-send)", async () => {
+    vi.useFakeTimers();
+    let asleep = true;
+    const over = () => asleep;
+    // asleep as the wait starts: no pane will be drawn, so it answers at once, as the pane stands
+    const atOnce = whenSparkPane("sp-vela0001", SPARK_WAKE_WAIT_MS, over);
+    let answered: SparkPaneReport | null | "waiting" = "waiting";
+    void atOnce.then((report) => {
+      answered = report;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(answered).toBeNull();
+    // awake while its pane is being found, then asleep: the pane goes, and that publication ends the wait
+    asleep = false;
+    publishSparkPane("sp-vela0001", { state: "finding", door: null });
+    let heard: SparkPaneReport | null | "waiting" = "waiting";
+    void whenSparkPane("sp-vela0001", SPARK_WAKE_WAIT_MS, over).then((report) => {
+      heard = report;
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(heard).toBe("waiting");
+    asleep = true;
+    publishSparkPane("sp-vela0001", null);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(heard).toBeNull();
   });
 });

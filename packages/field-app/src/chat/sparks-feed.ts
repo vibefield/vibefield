@@ -105,6 +105,10 @@ export type SparksReading =
   | { readonly state: "unavailable"; readonly reason: string }
   | { readonly state: "ready"; readonly entries: readonly SparkEntry[] };
 
+/** What Chat says while its list cannot be read (DESIGN.md §8 "Chat's list"), fieldd's words under it; Send says the
+ * same when it cannot go on while the list says it (§8 "Chat's composer"). */
+export const SPARKS_UNREADABLE = "Chat can't read your sparks";
+
 interface FeedState {
   readonly reading: SparksReading;
   /** the sparks that need you, or null before the first reading (so what needed you then is no news) */
@@ -409,6 +413,13 @@ export function useSessionTally(): ReadonlyMap<string | null, number> | null {
 /** The field board's rows as last read, or null before the board is read (@'s sessions, SP-1d). */
 export function useBoardRows(): readonly AgentFieldRow[] | null {
   return useSyncExternalStore(subscribe, () => state.rows);
+}
+
+/** How Chat's list stands now — read, opening, or unreadable — as its panel draws it: for Send, which asks it where it
+ * cannot go on and says it as the list does (DESIGN.md §8 "Chat's composer"). While it is not read — fieldd
+ * restarting, or its list refused — no thread is drawn. */
+export function sparksReadingNow(): SparksReading["state"] {
+  return state.reading.state;
 }
 
 /** `spark`'s entry as the feed reads it now, or null while the list does not hold it. */
