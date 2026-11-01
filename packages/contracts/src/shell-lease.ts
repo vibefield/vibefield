@@ -20,6 +20,14 @@ export type ShellLeaveReason = z.infer<typeof ShellLeaveReason>;
  * happened (`system.shell.attach`'s record). Both sides read it from here. */
 export const SHELL_BACKGROUND_RELAUNCH_ARG = "--background-relaunch";
 
+/** AL-11 — when fieldd relaunched the app (AL-D8's cap reads it), held at `LAYOUT.SHELL_RELAUNCHES` so the count
+ * outlives fieldd: a fieldd replaced at boot (a stale build, a crash of its own) would otherwise begin the cap at zero
+ * and a crash loop could relaunch the app without end. epoch millis, oldest first; fieldd's alone. */
+export const ShellRelaunchLog = z
+  .object({ at: z.array(z.number().int().nonnegative()) })
+  .passthrough();
+export type ShellRelaunchLog = z.infer<typeof ShellRelaunchLog>;
+
 /** `system.shell.leave` — scope `native.admin`, local only, and only a `shell-main` principal may say it. */
 export const SystemShellLeaveParams = z.object({ why: ShellLeaveReason }).passthrough();
 export type SystemShellLeaveParams = z.infer<typeof SystemShellLeaveParams>;

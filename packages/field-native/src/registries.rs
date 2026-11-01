@@ -268,6 +268,7 @@ pub mod layout {
     pub const LINK_FILE: &[&str] = &["fieldd", "link.json"];
     pub const SHELL_EXIT: &[&str] = &["fieldd", "shell-exit.json"];
     pub const MANAGER_EXIT: &[&str] = &["fieldd", "manager-exit.json"];
+    pub const SHELL_RELAUNCHES: &[&str] = &["fieldd", "shell-relaunches.json"];
     pub const TERMINAL_BINDINGS_FILE: &[&str] = &["fieldd", "terminal-bindings.json"];
     pub const PROJECT_IDENTITY_FILE: &[&str] = &["fieldd", "project-identity.json"];
     pub const SETUP_LEDGER_FILE: &[&str] = &["fieldd", "setup.json"];
@@ -338,6 +339,7 @@ pub mod layout {
         ("LINK_FILE", LINK_FILE),
         ("SHELL_EXIT", SHELL_EXIT),
         ("MANAGER_EXIT", MANAGER_EXIT),
+        ("SHELL_RELAUNCHES", SHELL_RELAUNCHES),
         ("TERMINAL_BINDINGS_FILE", TERMINAL_BINDINGS_FILE),
         ("PROJECT_IDENTITY_FILE", PROJECT_IDENTITY_FILE),
         ("SETUP_LEDGER_FILE", SETUP_LEDGER_FILE),

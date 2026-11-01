@@ -239,6 +239,7 @@ import {
 import { SetupAnswerParams, SetupLedger, SetupMomentParams } from "../src/setup";
 import {
   ShellExitRecord,
+  ShellRelaunchLog,
   SystemShellAttachResult,
   SystemShellLeaveParams,
 } from "../src/shell-lease";
@@ -336,6 +337,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "system-shell-leave-params": SystemShellLeaveParams,
   "shell-exit-record": ShellExitRecord,
   "system-shell-attach-result": SystemShellAttachResult,
+  // AL-11 — when fieldd relaunched the app (fieldd's alone, TS-only)
+  "shell-relaunch-log": ShellRelaunchLog,
   "system-shutdown-result": SystemShutdownResult,
   "restart-scheduled": RestartScheduled,
   // WG-D1…D6 (draft/thinking-floor-wedge.md §7) — the wedge ladder. The floor's half is
