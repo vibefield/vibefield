@@ -21,8 +21,9 @@ export interface SparkEntry {
    * waiting on you, or its own run's tokens spent, on this reading or on any the window's feed made before it. The
    * board counts tokens only as they are spent live, so a run that reads its transcript back shows none until its
    * next live turn; a turn this window saw stays seen for the window's life whatever the board counts after it. That
-   * life ends at a fieldd restart (main's boot fence replaces the document), the one time fieldd re-attaches a run, so
-   * a re-attached run is read by a window that has seen none of its turns: DESIGN.md's open case. */
+   * life ends at a fieldd restart (main's boot fence replaces the document), and fieldd re-attaches only the runs a
+   * restart left (as it boots, and in its G5 retries after), so a re-attached run is read by a window that has seen
+   * none of its turns: DESIGN.md's open case. */
   readonly turnSeen: boolean;
 }
 

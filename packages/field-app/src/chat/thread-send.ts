@@ -43,9 +43,12 @@ export type ThreadSendOutcome =
   /** the spark read asleep where the send could not go on (no pane at the 20 s or at the paste, not heard, its input
    * closed): it fell asleep while the send waited, and an asleep thread draws no pane */
   | { readonly state: "fell-asleep" }
-  /** Chat's list was not read where the send could not go on, said as the list stands: opening again (its feed
-   * started again, as fieldd restarts and main's boot fence replaces the window's document) or unreadable (its list
-   * refused before that feed first read it). No thread is drawn and no spark is heard then, so why cannot be told. */
+  /** Chat's list was not read where the send could not go on. A send is pressed only on a list read, so this is the
+   * window's feed started again under the running send, said as the list stands: opening again, or unreadable (its
+   * list refused before that feed first read it). A fieldd restart never does that: it replaces the window's document,
+   * and the send with it (main's boot fence). Within one document the feed starts once, so today this only guards a
+   * feed restarted in place, which no product path does. No thread is drawn and no spark is heard then, so why cannot
+   * be told. */
   | { readonly state: "sparks-unread"; readonly reading: Exclude<SparksReading["state"], "ready"> }
   /** the floor did not answer, or this window's terminals could not start, in their own words */
   | { readonly state: "fault"; readonly reason: string }

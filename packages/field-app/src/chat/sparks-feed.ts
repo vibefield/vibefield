@@ -224,9 +224,9 @@ class RunningFeed {
   #open = true;
   #onBoard = "";
   /** the sparks this window has seen have a turn, for its life and written nowhere (HN-D9's rule): a turn seen stays
-   * seen whatever the board counts after it. A fieldd restart, the one time fieldd re-attaches a run, replaces the
-   * window's document, so the set starts empty over a re-attached run (DESIGN.md §8 "Chat's thread", the open
-   * cases) */
+   * seen whatever the board counts after it. A fieldd restart replaces the window's document, and fieldd re-attaches
+   * only the runs a restart left (as it boots, and in its G5 retries after), so the set starts empty over a
+   * re-attached run (DESIGN.md §8 "Chat's thread", the open cases) */
   readonly #turnsSeen = new Set<SparkId>();
   /** each thread's mark, for the feed's life (the window's) and written nowhere (HN-D9's rule) */
   readonly #ledger = new ThreadLedger();
@@ -460,9 +460,10 @@ export function useBoardRows(): BoardRows {
 }
 
 /** How Chat's list stands now — read, opening, or unreadable — as its panel draws it: for Send, which asks it where it
- * cannot go on and says it as the list does (DESIGN.md §8 "Chat's composer"). While it is not read — fieldd
- * restarting, which replaces the window's document (main's boot fence) and starts its feed again, or its list
- * refused before that feed first read it — no thread is drawn. */
+ * cannot go on and says it as the list does (DESIGN.md §8 "Chat's composer"). While it is not read no thread is drawn.
+ * A send is pressed only on a list read, so Send reads it unread only when the window's feed starts again under the
+ * send. A fieldd restart never does that: it replaces the window's document, and the send with it (main's boot
+ * fence). Within one document the feed starts once, so today that only guards a feed restarted in place. */
 export function sparksReadingNow(): SparksReading["state"] {
   return state.reading.state;
 }

@@ -1502,10 +1502,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     your sparks", with fieldd's words under it, when it cannot be read. Each is secondary, centred in the panel, and
     never a blank. *Amended 2026-11-01 (SP-1d):* "first read" is the window's feed's. A fieldd restart replaces the
     window's document (main's boot fence, `FielddDaemonBootFence` → `requestAllReplacements`), so Chat's feed starts
-    again: the list reads "Opening Chat…" again, the new feed asks for the board afresh, and a send that gives up then
-    says so in its own sentence (§8 "Chat's composer"). A connection drop while the same fieldd stays up starts no new
-    feed: the window's client reconnects, the board's subscription comes back with a fresh snapshot, and the list
-    stands as last read.
+    again: the list reads "Opening Chat…" again, and the new feed asks for the board afresh. A connection drop while
+    the same fieldd stays up starts no new feed: the window's client reconnects, the board's subscription comes back
+    with a fresh snapshot, and the list stands as last read.
   - **No create yet.** Chat's line holds the views and the snapshot. Its create, **New spark** (⌘N, `sparkle`), comes
     with its sheet in SP-1c. *(Built at SP-1c, 2026-10-31: §8 "The New spark sheet", and the line's create above.)*
 - **The New spark sheet — a name, an agent, and the face it is dealt** (SP-1c; NS-D1 A, NS-D2 B, NS-D3 A and NS-D5,
@@ -1659,18 +1658,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         - fieldd is watching that run, not waiting to resume it;
         - this window has never seen the spark at work or waiting on you, nor that run's tokens spent (a turn is a
           model's answer, and every answer spends them). What the window saw is kept for its life (HN-D9's rule), so
-          a turn it saw stays seen whatever the board counts after it. That life ends at a fieldd restart, the one
-          time fieldd re-attaches a run: a restart replaces the window's document (main's boot fence, §8 "Chat's
-          list"), and the window after it has seen nothing.
+          a turn it saw stays seen whatever the board counts after it. That life ends at a fieldd restart: a restart
+          replaces the window's document (main's boot fence, §8 "Chat's list"), and the window after it has seen
+          nothing. fieldd re-attaches only the runs a restart left (as it boots, and in its G5 retries after, the run
+          unwatched on the board until one attaches), so no window has seen a re-attached run's turns.
       A spark whose run the board does not show is not said to be new. Two cases are still open. In each, a window that
       has seen none of a run's turns reads a run whose transcript the board does not count:
-      - a run fieldd re-attached as it restarted keeps its birth, so it still reads as the run its spark hatched in,
+      - a run fieldd re-attached after a restart keeps its birth, so it still reads as the run its spark hatched in,
         however old it is. The window the restart opened has seen none of its turns, so until that run's next live
         turn it can say hello over the spark's transcript;
       - a run born in the hatch run's place within the minute reads as the hatch run: one fieldd resumed in place of a
         run it could not re-attach, after a restart within the hatch run's first 60 s, or a spark woken that soon.
-      Both close with the turn fact of the slice that follows SP-1d (VF-PM, 2026-10-31): a fact on the board's row
-      that a transcript read back keeps, the run's turns.
+      Closing them needs a fact on the board's row that a transcript read back keeps: the run's turns.
     - They come in over 420ms on `--vf-ease-island`, from 8 below at opacity 0, and they go at once. With reduced
       motion they fade in over 120ms, and a starter's rise takes 90ms on ease-out (M6).
     - The hello is VibeField's words for what a spark does, drawn in its voice. It is never sent to the session and is
@@ -1723,8 +1722,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       profile, else This Mac's when the run names no persona. The two agree while a run is filed under its persona's
       profile, or names neither. Where they part (a run filed under another profile, or naming only one of the two),
       @ can offer a session that `agent_send` refuses as outside the spark's profiles, which the tool says, or leave
-      out one it would take. Carrying `profileSet` on the board's row closes it, in the turn-fact slice that follows
-      SP-1d (VF-PM, 2026-10-31).
+      out one it would take. Closing it needs `profileSet` on the board's row.
     - **Running in its profiles**, nearest the composer: the sessions the spark's `agent_send` (CP-2) takes, by its
       whole rule (`fieldd/src/tool-plane/rooms/talk/verbs.ts`). A session is a row when all three hold:
       - it is live;
@@ -1851,11 +1849,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         read again. Still at the 20 s: a spark that falls asleep off screen, where no pane goes, or after its pane was
         found and before it was heard, which that wait reads from the list alone;
       - "Not sent — Chat is opening again" and "Not sent — Chat can't read your sparks", when Chat's list is not read
-        at the moment the send reads why it cannot go on, said as the list stands then (§8 "Chat's list"): opening
-        again, where the list reads "Opening Chat…" (its feed started again, as fieldd restarts; a send is pressed
-        only on a list read, so it is always again), or unreadable, its list refused before that feed first read it,
-        in the list's own words. With no list read no thread is drawn and no spark is heard, so "you left", "didn't
-        wake" and "not taking input" are never said then;
+        at the moment the send reads why it cannot go on, said as the list stands then (§8 "Chat's list"). A send is
+        pressed only on a list read, so the list is unread then only when the window's feed started again under the
+        running send: opening again, where the list reads "Opening Chat…", or unreadable, its list refused before that
+        feed first read it, in the list's own words. A fieldd restart never does that: it replaces the window's
+        document, and the send with it (main's boot fence, §8 "Chat's list"), and the new document's list reads
+        "Opening Chat…" with no thread drawn, so no send is pressed there. Within one document the feed starts once, so
+        today these only guard a feed restarted in place, which no product path does. With no list read no thread is
+        drawn and no spark is heard, so "you left", "didn't wake" and "not taking input" are never said then;
       - "Couldn't find Vela's pane: …", at once, in the floor's or the window's own words, while the pane's place says
         it (§8 "Chat's thread");
       - "Not sent — this window has no terminals", at once, in a window with no terminals (the catalog, a browser),

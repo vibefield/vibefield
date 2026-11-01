@@ -467,7 +467,7 @@ describe("what a send reads of Chat when no pane settled (DESIGN.md §8 \"Chat's
       new Promise<"waited">((resolve) => setTimeout(() => resolve("waited"), 50)),
     ]);
     expect(waited).toBeNull();
-    // fieldd restarting: the window's feed starts again, and its list is not read until it answers
+    // the window's feed starts again under the send, and its list is not read until it answers
     stopFeed?.();
     stopFeed = null;
     expect(lent.sparksReading()).toBe("opening");

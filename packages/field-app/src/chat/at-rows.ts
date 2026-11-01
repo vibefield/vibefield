@@ -22,8 +22,7 @@ import type { BoardRows } from "./sparks-feed";
 // under (`profileSet`), else This Mac's. The board's row carries only the run's persona (`profileId`), so here a
 // session is placed by its persona's profile, else This Mac's when it names no persona. The two part for a run filed
 // under a profile other than its persona's, or naming only one of the two: @ can then offer a session `agent_send`
-// refuses as outside, or leave out one it takes. `profileSet` on the board's row closes it, in the turn-fact slice
-// that follows SP-1d (VF-PM, 2026-10-31).
+// refuses as outside, or leave out one it takes. Closing it needs `profileSet` on the board's row.
 //
 // Without its profiles no row can be placed, so a failed read of them offers none and says the New spark sheet's
 // sentence. Without the board no session can be placed, but the agents can: they are the profiles' alone, so a failed

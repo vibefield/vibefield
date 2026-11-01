@@ -741,7 +741,7 @@ describe("Send pastes into the thread's pane (DESIGN.md §8 \"Chat's composer\")
       expect(outcome).toEqual({ state: "sparks-unread", reading: "unavailable" });
       expect(sendNote(outcome, "Vela")).toBe("Not sent — Chat can't read your sparks");
     }
-    // fieldd restarting: the window's feed starts again, and the list reads "Opening Chat…" — said as the list says it
+    // the window's feed starts again under the send, and the list reads "Opening Chat…" — said as the list says it
     const opening = await sendToThread(
       deps({ sparksReading: () => "opening", onScreen: () => false, pane: async () => null }),
       "hi",
