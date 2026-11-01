@@ -2946,7 +2946,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   frozen frame; ruled 2026-10-31 at the lean, James's to overturn): on one held frame of the live field, the
   field's glass and the browser's differ by a mean of at most 2 inside the glass, 1 in its shadow and 6 on the
   logo (of 255, a channel's), where FG-D24's A/B measured about 1, 0.3 and 2.5; row 32 holds the field's glass
-  to it (`docs/desk-gates.md`). *Status 2026-10-29: ruled, to be built —
+  to it (`docs/desk-gates.md`). On that frame the browser's logo wears the field's mark as the frame holds it,
+  at the field's mark's own spot and size (FG-6's follow-up 3, 2026-11-01), so the two glasses show one mark;
+  anywhere else the browser's logo is the brand's still. *Status 2026-10-29: ruled, to be built —
   the glass, the steps, the frame and the logo at FG-3, the panes in the frame at FG-4 (after TS-6 and
   TS-7 land), the hand-over at FG-5, the gates at FG-6 (the record's §7). Until each lands, the Setup
   Assistant ships as "The Setup Assistant's agent chapter" and the Connect pane describe it.*

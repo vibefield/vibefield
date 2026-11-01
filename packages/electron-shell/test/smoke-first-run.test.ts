@@ -22,6 +22,7 @@ import {
   frozenRegion,
   type GlassSeen,
   type GpuSample,
+  glassDrawnBy,
   gpuOver,
   heard,
   type InksSeen,
@@ -974,6 +975,7 @@ describe("FG-6's frozen frame (DESIGN.md §8 \"Held to the browser's glass\")", 
     fit: 1,
     drawn: "field",
     logo: { x: 250, y: 220, width: 100, height: 60 },
+    mark: null,
     view: { width: 600, height: 500 },
   };
   /** A capture of the window at `density` (BGRA), each px the grey `level` gives at its centre in CSS px. */
@@ -1001,6 +1003,16 @@ describe("FG-6's frozen frame (DESIGN.md §8 \"Held to the browser's glass\")", 
       FIRST_RUN.frozen.shadow,
       FIRST_RUN.frozen.logo,
     ]);
+  });
+
+  it("waits for the glass drawn as it is wanted: by the field, or by the browser in the field's held mark, never the brand's (FG-6's follow-up 3)", () => {
+    expect(glassDrawnBy(seen, true)).toBe(true);
+    expect(glassDrawnBy({ ...seen, drawn: null }, true)).toBe(false);
+    expect(glassDrawnBy({ ...seen, drawn: null, mark: "field" }, false)).toBe(true);
+    // the browser's glass with the brand's mark on its logo: the judge would read the logo against the brand's still
+    expect(glassDrawnBy({ ...seen, drawn: null }, false)).toBe(false);
+    expect(glassDrawnBy({ ...seen, mark: "field" }, false)).toBe(false);
+    expect(glassDrawnBy(null, true)).toBe(false);
   });
 
   it("places a window's px on the glass: on its logo, inside past its edge's hairlines, in the ring of its shadow, or on none", () => {

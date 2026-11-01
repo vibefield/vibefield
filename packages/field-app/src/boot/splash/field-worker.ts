@@ -8,7 +8,8 @@ import { createSplash, type Splash, SplashUnavailable } from "./vibefield-splash
 // into the boot's canvas through an OffscreenCanvas, so the boot's work on the main thread can't
 // stall it. The website's loading-window.worker.js (vibefield-dotdev), typed, with the mark's fade
 // (field-mark.ts), since FG-3b the Setup Assistant's glass as a pass of its frames (glass-pass.ts),
-// and since FG-6's frozen frame its hold on one frame (field-hold.ts).
+// since FG-6's frozen frame its hold on one frame (field-hold.ts), and since its follow-up 3 the
+// field's mark pictured by that pass.
 //
 // The vendored module runs as it is. It reads three things a worker lacks, so they stand in: a
 // ResizeObserver the page feeds sizes to, document.hidden and its event, and the pixel ratio. It
@@ -136,6 +137,14 @@ scope.onmessage = async ({ data }) => {
     scope.postMessage({ type: "frozen" });
   } else if (data.type === "thaw") {
     hold?.thaw();
+  } else if (data.type === "mark-picture") {
+    try {
+      const picture = glass === null ? null : await glass.markPicture();
+      scope.postMessage({ type: "mark-pictured", id: data.id, picture });
+    } catch (error) {
+      const failed = String(error instanceof Error ? error.message : error);
+      scope.postMessage({ type: "mark-pictured", id: data.id, picture: null, failed });
+    }
   } else if (data.type === "destroy") {
     mark?.cancel();
     mark = null;

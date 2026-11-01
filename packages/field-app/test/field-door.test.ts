@@ -3,7 +3,8 @@
  * WebGPU is read first (a smoke's `--smoke-no-webgpu` takes it per document, and a worker would still find its own),
  * then the worker runs the field, then the main thread, then the still. happy-dom has neither WebGPU nor a worker,
  * so every branch runs on fakes the door is handed. Since FG-3b the door carries the Setup Assistant's glass to the
- * field and the field's word on it back (FG-D24), and since FG-6's frozen frame it holds the field on one frame.
+ * field and the field's word on it back (FG-D24), and since FG-6's frozen frame it holds the field on one frame; since
+ * its follow-up 3 it pictures the field's mark for the glass held off the field.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -128,6 +129,7 @@ function fakeGlass() {
   const pass = {
     setLook: (look: unknown) => void calls.looks.push(look),
     setPose: (pose: unknown) => void calls.poses.push(pose),
+    markPicture: vi.fn<() => Promise<GlassModule.MarkPicture | null>>(async () => null),
     encode() {},
     destroy() {
       calls.destroyed++;
@@ -154,6 +156,12 @@ const GLASS: GlassState = {
     logoInvert: true,
   },
   pose: { x: 600, y: 400, w: 880, h: 640, fit: 0.75, frost: 1, edge: 1, rise: 1, logo: 0 },
+};
+
+/** The field's mark as one frame holds it (FG-6's follow-up 3). */
+const PICTURE: GlassModule.MarkPicture = {
+  png: new Blob(["png"], { type: "image/png" }),
+  box: { x: 536, y: 362, width: 128, height: 77 },
 };
 
 /** The field's container with its still mark, as FieldLayer draws them. */
@@ -220,10 +228,11 @@ describe("the field's door", () => {
     expect(door.reason).toBe("forced");
     expect(container.querySelector("canvas")).toBeNull();
     expect(await door.reveal()).toBe(false);
-    // the browser draws the glass over the still, and nothing runs to hold (FG-6's frozen frame)
+    // the browser draws the glass over the still, and nothing runs to hold (FG-6's frozen frame) or picture
     door.glass(GLASS);
     expect(await door.freeze()).toBe(false);
     door.thaw();
+    expect(await door.markPicture()).toBeNull();
   });
 
   it("runs the field in a worker: the website's budget and power, the page's size, its canvas under the still mark", async () => {
@@ -345,6 +354,47 @@ describe("the field's door", () => {
     expect(await other.freeze()).toBe(false);
     other.thaw();
     expect(silent.last()).toEqual({ type: "destroy" });
+  });
+
+  it("pictures the field's mark in its worker on the worker's word, says why it can't, and gives none once the door is gone (FG-6's follow-up 3)", async () => {
+    const warned = captureWarnings();
+    let failed: string | undefined;
+    const worker = new FakeWorker((m) =>
+      m.type === "start"
+        ? { type: "ready" }
+        : m.type === "mark-picture"
+          ? failed === undefined
+            ? { type: "mark-pictured", id: m.id, picture: PICTURE }
+            : { type: "mark-pictured", id: m.id, picture: null, failed }
+          : null,
+    );
+    const { container, mark } = stage();
+    const door = await openFieldDoor(
+      container,
+      mark,
+      { reducedMotion: false },
+      { search: "", gpu: fakeGpu().gpu, worker: () => worker as unknown as Worker },
+    );
+    expect(await door.markPicture()).toBe(PICTURE);
+    expect(worker.last()).toEqual({ type: "mark-picture", id: 1 });
+    failed = "mapAsync failed";
+    expect(await door.markPicture()).toBeNull();
+    expect(warned).toEqual([["renderer.boot.field_mark_picture", { message: "mapAsync failed" }]]);
+    door.destroy();
+    expect(await door.markPicture()).toBeNull();
+    expect(worker.last()).toEqual({ type: "destroy" });
+
+    // a picture the worker has not given when the door goes is none
+    const silent = new FakeWorker((m) => (m.type === "start" ? { type: "ready" } : null));
+    const other = await openFieldDoor(
+      container,
+      mark,
+      { reducedMotion: false },
+      { search: "", gpu: fakeGpu().gpu, worker: () => silent as unknown as Worker },
+    );
+    const asked = other.markPicture();
+    other.destroy();
+    expect(await asked).toBeNull();
   });
 
   it("answers a reveal still in flight with false when the door is destroyed", async () => {
@@ -487,6 +537,32 @@ describe("the field's door", () => {
     door.destroy();
     expect(await door.freeze()).toBe(false);
     expect(calls.stopped).toBe(2);
+  });
+
+  it("pictures the field's mark on the main thread by the glass's pass, says why it can't, and gives none once the door is gone (FG-6's follow-up 3)", async () => {
+    const warned = captureWarnings();
+    const { module } = fakeSplash();
+    const glass = fakeGlass();
+    const { container, mark } = stage();
+    const door = await openFieldDoor(
+      container,
+      mark,
+      { reducedMotion: false },
+      {
+        search: "?field=main",
+        gpu: fakeGpu().gpu,
+        splash: async () => module,
+        glass: async () => glass.module,
+      },
+    );
+    glass.pass.markPicture.mockResolvedValueOnce(PICTURE);
+    expect(await door.markPicture()).toBe(PICTURE);
+    glass.pass.markPicture.mockRejectedValueOnce(new Error("mapAsync failed"));
+    expect(await door.markPicture()).toBeNull();
+    expect(warned).toEqual([["renderer.boot.field_mark_picture", { message: "mapAsync failed" }]]);
+    door.destroy();
+    expect(await door.markPicture()).toBeNull();
+    expect(glass.pass.markPicture).toHaveBeenCalledTimes(2);
   });
 
   it("skips the worker for ?field=main", async () => {

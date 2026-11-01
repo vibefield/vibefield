@@ -22,9 +22,10 @@
 //     - in the pixels the mark stands at that centre: darker than its glass by day (inverted on milk), lighter by night.
 //   · THE FROZEN FRAME (FG-6's last gate; DESIGN.md §8 "Held to the browser's glass"), there on the live field: the
 //     field held on one frame through its door (`window.__vfField`), the glass captured as the field draws it, as the
-//     browser does, and as the field does again. The field's two captures agree, so it held; then the field's glass
-//     stands within §8's bars of the browser's inside the glass, in the ring of its shadow and on the logo. Every
-//     number is printed and the three stills kept; over the still nothing compares, and the walk says so.
+//     browser does (its logo in the field's held mark, `data-mark`; FG-6's follow-up 3), and as the field does again.
+//     The field's two captures agree, so it held; then the field's glass stands within §8's bars of the browser's
+//     inside the glass, in the ring of its shadow and on the logo. Every number is printed and the three stills kept;
+//     over the still nothing compares, and the walk says so.
 //   · THE HOLDS (FG-L5, FG-D20; DESIGN.md §6): every load that began to show stood its floor from its fade in, with the
 //     logo, and a line hold said one line.
 //   · THE FRAME (FG-4a, FG-L3): on Agents with More open, the list outgrows its body and scrolls within itself under its
@@ -1065,17 +1066,19 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
       };
     },
     /** the glass as it stands (FG-6's frozen frame): its box, its corners' radius and its fit, who draws it, and the
-     * logo's box, in CSS px of the window */
+     * logo's box, in CSS px of the window, and whose mark the logo wears (its follow-up 3) */
     glass: () => {
       const shell = shellOf();
       if (shell === null) return null;
       const fit = shell.getBoundingClientRect().width / shell.offsetWidth;
+      const logo = shell.querySelector(".vf-wizard-logo");
       return {
         box: box(shell),
         radius: Number.parseFloat(getComputedStyle(shell).borderTopLeftRadius) * fit,
         fit,
         drawn: shell.getAttribute("data-glass"),
-        logo: box(shell.querySelector(".vf-wizard-logo")),
+        logo: box(logo),
+        mark: logo?.getAttribute("data-mark") ?? null,
         view: { width: innerWidth, height: innerHeight },
       };
     },
@@ -1377,14 +1380,24 @@ export function judgeLogo(
 }
 
 /** The glass as the page reads it on the held frame (FG-6's frozen frame), in CSS px of the window: its box, its
- * corners' radius and its fit, who draws it (`data-glass`), and the logo's box. */
+ * corners' radius and its fit, who draws it (`data-glass`), the logo's box, and whose mark the logo wears
+ * (`data-mark`: "field" while it wears the field's held mark, FG-6's follow-up 3). */
 export interface GlassSeen {
   readonly box: Box;
   readonly radius: number;
   readonly fit: number;
   readonly drawn: string | null;
   readonly logo: Box | null;
+  readonly mark: string | null;
   readonly view: { readonly width: number; readonly height: number };
+}
+
+/** Whether the glass on the held frame is drawn as the walk wants it (FG-6's frozen frame): by the field, or by the
+ * browser with its logo in the field's held mark (its follow-up 3), so the judge never reads the logo against the
+ * brand's still. */
+export function glassDrawnBy(seen: GlassSeen | null, byField: boolean): boolean {
+  if (seen === null) return false;
+  return byField ? seen.drawn === "field" : seen.drawn === null && seen.mark === "field";
 }
 
 /** Where the frozen frame sets the field's glass beside the browser's. */
@@ -1608,15 +1621,17 @@ export async function firstRunRows(
     const bitmap = await capture(name);
     cutFrom(bitmap, await page<InksSeen | null>("inks()"), ["words"], before);
   };
-  // FG-6's frozen frame: the glass on the held frame drawn by the field, or held off it and drawn by the browser, once
-  // the page says so (`data-glass`) and the compositor has had its frames
+  // FG-6's frozen frame: the glass on the held frame drawn by the field, or held off it and drawn by the browser, its
+  // logo in the field's held mark (its follow-up 3), once the page says so (`data-glass`, `data-mark`) and the
+  // compositor has had its frames
   const glassBy = async (byField: boolean): Promise<void> => {
     await field(`glass(${byField})`);
-    const want = byField ? "field" : null;
     await until(
-      `the glass drawn by the ${byField ? "field" : "browser"} on the held frame`,
+      byField
+        ? "the glass drawn by the field on the held frame"
+        : "the glass drawn by the browser on the held frame, its logo in the field's mark",
       5_000,
-      async () => ((await page<GlassSeen | null>("glass()"))?.drawn === want ? true : null),
+      async () => (glassDrawnBy(await page<GlassSeen | null>("glass()"), byField) ? true : null),
     );
     await sleep(FIRST_RUN.frozenSettleMs);
   };

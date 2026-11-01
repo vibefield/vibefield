@@ -5,16 +5,23 @@
  * rows hand the glass the computed style a browser would, and run its frames by hand. FG-4b: the logo — its filter
  * in the look and its fade in the pose, followed through its fades — and the field's still, which sizes it. FG-6: the
  * field's still where its page asks for it, which the catalog stands the glass on; and FG-6's frozen frame, the glass
- * held off the field and the live field's door for a harness (`window.__vfField`).
+ * held off the field and the live field's door for a harness (`window.__vfField`). Its follow-up 3: the field's mark
+ * held with it, which the browser's logo wears there.
  */
 import { act, createRef, type ReactElement, type Ref } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type FieldHandle, FieldLayer, type VfFieldDoor } from "../src/boot/FieldLayer";
-import { createFieldGlass, FieldGlassContext, useFieldStill } from "../src/boot/field-glass";
+import {
+  createFieldGlass,
+  FieldGlassContext,
+  markDress,
+  useFieldStill,
+} from "../src/boot/field-glass";
 import { type WizardGround, WizardShellView } from "../src/boot/onboarding/wizard-ui";
 import { fieldPlan } from "../src/boot/splash/field-door";
 import type { GlassState } from "../src/boot/splash/glass-look";
+import type { MarkPicture } from "../src/boot/splash/glass-pass";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -44,9 +51,28 @@ function liveDoor() {
     glass: vi.fn<(glass: GlassState | null) => void>(),
     freeze: vi.fn<() => Promise<boolean>>(async () => true),
     thaw: vi.fn<() => void>(),
+    markPicture: vi.fn<() => Promise<MarkPicture | null>>(async () => null),
     destroy: vi.fn<() => void>(),
   };
 }
+
+/** The field's door as the hold reaches it: what it is handed, and the field's mark it pictures (none unless a row
+ * says). */
+function fieldDoor() {
+  return {
+    glass: vi.fn<(glass: GlassState | null) => void>(),
+    markPicture: vi.fn<() => Promise<MarkPicture | null>>(async () => null),
+  };
+}
+
+/** The field's mark as the held frame holds it (FG-6's follow-up 3): 128 × 77 on a whole px of the 1200 × 800 field,
+ * half a px below the logo's box, which the browser centres on the glass. */
+const PICTURE: MarkPicture = {
+  png: new Blob(["png"], { type: "image/png" }),
+  box: { x: 536, y: 362, width: 128, height: 77 },
+};
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Chrome's serialization of `--vf-shadow-wizard-field` (DESIGN.md §5). */
 const FIELD_SHADOW =
@@ -114,12 +140,13 @@ beforeEach(() => {
     return lastFrame;
   });
   vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
-  // laid out at 880 × 640, fitted at 0.75 and centred in a 1200 × 800 field
+  // laid out at 880 × 640, fitted at 0.75 and centred in a 1200 × 800 field, its logo's box (128 × 77) at its centre
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(880);
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(640);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
   ) {
+    if (this.classList.contains("vf-wizard-logo")) return new DOMRect(536, 361.5, 128, 77);
     return this.classList.contains("vf-wizard-shell")
       ? new DOMRect(270, 160, 660, 480)
       : new DOMRect(0, 0, 1200, 800);
@@ -144,7 +171,7 @@ afterEach(async () => {
 function heldField() {
   const field = document.createElement("div");
   const hold = createFieldGlass(() => field);
-  const door = { glass: vi.fn<(glass: GlassState | null) => void>() };
+  const door = fieldDoor();
   hold.attach(door);
   door.glass.mockClear();
   return { hold, door, last: () => door.glass.mock.calls.at(-1)?.[0] };
@@ -188,7 +215,7 @@ describe("the field's hold on the glass", () => {
     const hold = createFieldGlass(() => field);
     const state = { look: {}, pose: {} } as unknown as GlassState;
     hold.set(state);
-    const door = { glass: vi.fn<(glass: GlassState | null) => void>() };
+    const door = fieldDoor();
     hold.attach(door);
     expect(door.glass.mock.calls).toEqual([[state]]);
     hold.set(null);
@@ -228,9 +255,73 @@ describe("the field's hold on the glass", () => {
 
     // a door that opens while the glass is held off is handed none
     hold.hold(true);
-    const next = { glass: vi.fn<(glass: GlassState | null) => void>() };
+    const next = fieldDoor();
     hold.attach(next);
     expect(next.glass.mock.calls).toEqual([[null]]);
+  });
+
+  it("holds the field's mark while the glass is held off it: the door's picture, its URL made once and revoked when the glass is let go (FG-6's follow-up 3)", async () => {
+    const made = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mark");
+    const revoked = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const { hold, door } = heldField();
+    door.markPicture.mockResolvedValue(PICTURE);
+    const heard = vi.fn();
+    hold.subscribe(heard);
+    expect(hold.heldMark()).toBeNull();
+    hold.hold(true);
+    expect(door.markPicture).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(hold.heldMark()).toEqual({ url: "blob:mark", box: PICTURE.box }));
+    expect(made.mock.calls).toEqual([[PICTURE.png]]);
+    expect(heard).toHaveBeenCalledTimes(1);
+    // held again, nothing is asked again
+    hold.hold(true);
+    expect(door.markPicture).toHaveBeenCalledTimes(1);
+    hold.hold(false);
+    expect(hold.heldMark()).toBeNull();
+    expect(revoked.mock.calls).toEqual([["blob:mark"]]);
+    expect(heard).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a picture that comes after the glass was let go or its door went, holds none the door has not, and lets one go with its door", async () => {
+    const made = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mark");
+    const revoked = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const { hold, door } = heldField();
+    let give: (picture: MarkPicture | null) => void = () => {};
+    door.markPicture.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          give = resolve;
+        }),
+    );
+    // let go before its picture comes
+    hold.hold(true);
+    hold.hold(false);
+    give(PICTURE);
+    await settle();
+    expect(hold.heldMark()).toBeNull();
+    // the door gone before it comes
+    hold.hold(true);
+    hold.attach(null);
+    give(PICTURE);
+    await settle();
+    expect(hold.heldMark()).toBeNull();
+    expect(made).not.toHaveBeenCalled();
+    // a door with no mark to picture
+    hold.hold(false);
+    const next = fieldDoor();
+    hold.attach(next);
+    hold.hold(true);
+    await settle();
+    expect(next.markPicture).toHaveBeenCalledTimes(1);
+    expect(hold.heldMark()).toBeNull();
+    // a door that goes takes its mark with it
+    hold.hold(false);
+    next.markPicture.mockResolvedValue(PICTURE);
+    hold.hold(true);
+    await vi.waitFor(() => expect(hold.heldMark()).not.toBeNull());
+    hold.attach(null);
+    expect(hold.heldMark()).toBeNull();
+    expect(revoked.mock.calls).toEqual([["blob:mark"]]);
   });
 
   it("measures the glass from the field's own box", () => {
@@ -502,6 +593,63 @@ describe("the glass on the field", () => {
 
     const alone = mount(glassOn("field", null));
     expect(alone.hasAttribute("data-glass")).toBe(false);
+  });
+});
+
+describe("the logo in the field's held mark (FG-6's follow-up 3)", () => {
+  it("places the mark's picture where the field draws it, in the logo's own px: the logo moved onto the mark's corner, the picture at its size there", () => {
+    // the field at the window's corner, the glass fitted at 0.75: the logo's box half a px above the field's mark
+    const logo = new DOMRect(536, 361.5, 128, 77);
+    expect(markDress(PICTURE.box, new DOMRect(0, 0, 1200, 800), logo, 0.75)).toEqual({
+      x: 0,
+      y: 0.5 / 0.75,
+      width: 128 / 0.75,
+      height: 77 / 0.75,
+    });
+    // a field away from the window's corner, the glass at its own size
+    expect(markDress(PICTURE.box, new DOMRect(10, 20, 1200, 800), logo, 1)).toEqual({
+      x: 10,
+      y: 20.5,
+      width: 128,
+      height: 77,
+    });
+  });
+
+  it("wears it while the glass is held off the field, at the mark's own spot in the glass's fit, and the brand's again once let go or gone", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mark");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const { hold, door } = heldField();
+    door.markPicture.mockResolvedValue(PICTURE);
+    const shell = mount(glassOn("field", hold));
+    const logo = shell.querySelector<HTMLElement>(".vf-wizard-logo");
+    expect(logo?.hasAttribute("data-mark")).toBe(false);
+    act(() => hold.hold(true));
+    await vi.waitFor(() => expect(logo?.getAttribute("data-mark")).toBe("field"));
+    expect(logo?.style.backgroundImage).toBe('url("blob:mark")');
+    expect(logo?.style.backgroundSize).toBe(`${128 / 0.75}px ${77 / 0.75}px`);
+    expect(logo?.style.backgroundPosition).toBe("0px 0px");
+    expect(logo?.style.getPropertyValue("translate")).toBe(`0px ${0.5 / 0.75}px`);
+    // let go, the logo is the stylesheet's again
+    act(() => hold.hold(false));
+    expect(logo?.hasAttribute("data-mark")).toBe(false);
+    expect(logo?.getAttribute("style") ?? "").toBe("");
+    // the glass gone while it wears the field's mark takes it off
+    act(() => hold.hold(true));
+    await vi.waitFor(() => expect(logo?.getAttribute("data-mark")).toBe("field"));
+    await act(async () => root?.unmount());
+    root = null;
+    expect(logo?.hasAttribute("data-mark")).toBe(false);
+    expect(logo?.getAttribute("style") ?? "").toBe("");
+  });
+
+  it("keeps the brand's mark while the field's door has none to picture", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mark");
+    const { hold, door } = heldField();
+    const shell = mount(glassOn("field", hold));
+    act(() => hold.hold(true));
+    await settle();
+    expect(door.markPicture).toHaveBeenCalledTimes(1);
+    expect(shell.querySelector(".vf-wizard-logo")?.hasAttribute("data-mark")).toBe(false);
   });
 });
 
