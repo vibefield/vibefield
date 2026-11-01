@@ -129,7 +129,14 @@ public actor FreewayDesktopLink {
     let dialing = self.dialing
     let deadline = timing.connectDeadlineMs
     let task = Task { () throws -> FreewayLink in
-      let approved = try await dialing.approve()
+      // F1b — the approval is asked of the home; its refusal reaches the ask in the phone's words,
+      // its kind and retryability the door's.
+      let approved: JSONValue
+      do {
+        approved = try await dialing.approve()
+      } catch let refused as FieldProductError {
+        throw FreewayApproval.said(refused, desktop: dialing.desktopName)
+      }
       let stream = try await dialing.dial()
       // The deadline ends the stream under the handshake, so its pending read returns.
       let expiry = Task {
@@ -162,6 +169,10 @@ public actor FreewayDesktopLink {
       state = .up(link.welcome)
       watcher = Task { await self.watch(link) }
       renewal = Task { await self.renew(link) }
+    case .failure(let refused as FieldProductError) where !refused.retryable:
+      // An approval refused in a way no retry fixes (FORBIDDEN_SCOPE): not asked again on its own.
+      // A tap still asks — `link()` dials whatever the state, as the person's word.
+      state = .refused(refused)
     case .failure(let error):
       schedule(after: error as? FreewayLinkEnd)
     }

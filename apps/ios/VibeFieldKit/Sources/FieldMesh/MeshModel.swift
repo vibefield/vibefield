@@ -223,7 +223,7 @@ public final class MeshModel {
   /// kept one would fail every redial after the peer re-announced. Nil while there is no runtime or
   /// the desktop is not in reach.
   public func freewayDialing(
-    to deviceId: String, deviceName: String?,
+    to deviceId: String, deviceName: String?, desktopName: String? = nil,
     approve: @escaping @Sendable () async throws -> FieldProduct.JSONValue
   ) async -> FreewayDesktopLink.Dialing? {
     guard let runtime, let peer = await runtime.peers().first(where: { $0.deviceId == deviceId })
@@ -238,7 +238,8 @@ public final class MeshModel {
         return MeshFreewayStream(
           connection: try await runtime.node.dial(to: live, port: UInt16(FreewayContract.servePort)))
       },
-      host: host, deviceId: deviceId, approve: approve, deviceName: deviceName)
+      host: host, deviceId: deviceId, approve: approve, deviceName: deviceName,
+      desktopName: desktopName)
   }
 
   /// This node's own tailnet domain (`studio.tail1234.ts.net` → `tail1234.ts.net`).
