@@ -1749,18 +1749,245 @@ export function othersCompare(before, list, own) {
   };
 }
 
-/** Simulator's defaults (`defaults read com.apple.iphonesimulator`) before ARMED against after: compared RAW in memory;
- * the lines that differ said only through `scrub` (redacted, UUID shapes swept) — an OBSERVATION for James, never
- * written back. */
-export function defaultsChange(before, after, scrub) {
-  if (before === null || after === null || before === after) return { changed: false, lines: [] };
-  const was = new Set(String(before).split("\n"));
-  const now = new Set(String(after).split("\n"));
-  const lines = [
-    ...[...was].filter((line) => !now.has(line)).map((line) => `- ${scrub(line)}`),
-    ...[...now].filter((line) => !was.has(line)).map((line) => `+ ${scrub(line)}`),
-  ];
-  return { changed: true, lines: lines.slice(0, 20) };
+// ─── Simulator's defaults (H1) ────────────────────────────────────────────────────────────────────────────────────────
+//
+// Simulator.app keeps per-device entries keyed by UDID (`DevicePreferences`, and possibly elsewhere) and may move
+// `CurrentDeviceUDID` to the device it shows: a run that shows its own devices leaves them behind (out:117). Teardown
+// gives back EXACTLY the run's own — the entries keyed by its own UDIDs (held in memory), and `CurrentDeviceUDID` its
+// before value where it now names one — only with Simulator.app NOT running, and only through cfprefsd: `defaults export
+// … -` (an XML plist), the keys edited in memory, `defaults import … -`; never `defaults write`/`delete`, never the plist
+// file. Then it reads again. Every other change is another's: an OBSERVATION, never touched.
+
+const SIM_DOMAIN = "com.apple.iphonesimulator";
+const EMPTY_PLIST =
+  '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict/>\n</plist>\n';
+const PLIST_TAG = /<(\/?)([A-Za-z][A-Za-z0-9]*)\b[^>]*?(\/?)>/gu;
+const PLIST_LEAVES = new Set(["string", "integer", "real", "date", "data", "true", "false"]);
+const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+const decodeXml = (text) =>
+  text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/giu, (whole, name) => {
+    if (name[0] === "#")
+      return String.fromCodePoint(
+        name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : Number(name.slice(1)),
+      );
+    return ENTITIES[name] ?? whole;
+  });
+
+/** An XML plist (`defaults export … -`), read in memory: `{xml, root}` — `dict` `{entries: [{key, s, value}]}`, `array`
+ * `{items}`, `leaf` `{tag, text}`, each with its span `s..e` in `xml` — or null for anything that is not one (never
+ * guessed). */
+export function parsePlist(xml) {
+  if (typeof xml !== "string") return null;
+  const tags = [...xml.matchAll(PLIST_TAG)].map((m) => ({
+    close: m[1] === "/",
+    name: m[2],
+    empty: m[3] === "/",
+    s: m.index,
+    e: m.index + m[0].length,
+  }));
+  let i = tags.findIndex((t) => t.name === "plist" && !t.close);
+  if (i < 0) return null;
+  i += 1;
+  const fail = () => {
+    throw new Error("not a plist");
+  };
+  const node = () => {
+    const t = tags[i] ?? fail();
+    if (t.close) fail();
+    i += 1;
+    if (t.name === "dict" || t.name === "array") {
+      const kids = [];
+      if (!t.empty)
+        for (;;) {
+          const k = tags[i] ?? fail();
+          if (k.close && k.name === t.name) {
+            i += 1;
+            return t.name === "dict"
+              ? { type: "dict", s: t.s, e: k.e, entries: kids }
+              : { type: "array", s: t.s, e: k.e, items: kids };
+          }
+          if (t.name === "array") {
+            kids.push(node());
+            continue;
+          }
+          if (k.name !== "key" || k.close) fail();
+          let key = "";
+          if (k.empty) i += 1;
+          else {
+            const end = tags[i + 1] ?? fail();
+            if (!end.close || end.name !== "key") fail();
+            key = decodeXml(xml.slice(k.e, end.s));
+            i += 2;
+          }
+          kids.push({ key, s: k.s, value: node() });
+        }
+      return t.name === "dict"
+        ? { type: "dict", s: t.s, e: t.e, entries: [] }
+        : { type: "array", s: t.s, e: t.e, items: [] };
+    }
+    if (!PLIST_LEAVES.has(t.name)) fail();
+    if (t.empty) return { type: "leaf", tag: t.name, s: t.s, e: t.e, text: "" };
+    const end = tags[i] ?? fail();
+    if (!end.close || end.name !== t.name) fail();
+    i += 1;
+    return { type: "leaf", tag: t.name, s: t.s, e: end.e, text: decodeXml(xml.slice(t.e, end.s)) };
+  };
+  try {
+    const root = node();
+    const close = tags[i];
+    if (root.type !== "dict" || close === undefined || !close.close || close.name !== "plist")
+      return null;
+    return { xml, root };
+  } catch {
+    return null;
+  }
+}
+
+/** A plist flattened: each leaf (and each empty dict or array) by its path — compared by its tag and text. */
+function flatPlist(root) {
+  const out = new Map();
+  const walk = (node, path) => {
+    if (node.type === "dict") {
+      if (node.entries.length === 0) out.set(JSON.stringify(path), { cmp: "{}", text: "{}" });
+      for (const entry of node.entries) walk(entry.value, [...path, entry.key]);
+    } else if (node.type === "array") {
+      if (node.items.length === 0) out.set(JSON.stringify(path), { cmp: "[]", text: "[]" });
+      for (const [k, item] of node.items.entries()) walk(item, [...path, `[${k}]`]);
+    } else {
+      const text = node.tag === "data" ? node.text.replace(/\s+/gu, "") : node.text;
+      const shown = text !== "" ? text : node.tag === "string" ? '""' : node.tag;
+      out.set(JSON.stringify(path), { cmp: `${node.tag}:${text}`, text: shown });
+    }
+  };
+  walk(root, []);
+  return out;
+}
+
+/** Back over the whitespace before `s`: an entry removed takes its own line with it. */
+const lineStart = (text, s) => {
+  let at = s;
+  while (at > 0 && /\s/u.test(text[at - 1])) at -= 1;
+  return at;
+};
+
+/** The cleanup, in memory: `after` (an XML plist) with every entry keyed by an own UDID (`own`: upper-case UDIDs) removed
+ * at any depth, and `CurrentDeviceUDID`, where it names an own UDID, given its value in `before` (`restored`; removed
+ * where `before` had none; left — `unknown` — where `before` is unreadable). Answers `{xml, removed, current}`, or null
+ * when `after` is not a plist. Nothing else in it is touched: another's entries, a display's UUID, every other key. */
+export function defaultsCleanup(after, own, before) {
+  const plist = parsePlist(after);
+  if (plist === null) return null;
+  const was = parsePlist(before);
+  const cuts = [];
+  let removed = 0;
+  const walk = (node) => {
+    if (node.type === "dict")
+      for (const entry of node.entries) {
+        if (own.has(entry.key.toUpperCase())) {
+          cuts.push({ s: lineStart(after, entry.s), e: entry.value.e, text: "" });
+          removed += 1;
+        } else walk(entry.value);
+      }
+    else if (node.type === "array") for (const item of node.items) walk(item);
+  };
+  walk(plist.root);
+  let current = null;
+  const now = plist.root.entries.find((entry) => entry.key === "CurrentDeviceUDID");
+  if (now?.value.type === "leaf" && own.has(now.value.text.trim().toUpperCase())) {
+    const then = was?.root.entries.find((entry) => entry.key === "CurrentDeviceUDID");
+    if (was === null) current = "unknown";
+    else if (then === undefined) {
+      cuts.push({ s: lineStart(after, now.s), e: now.value.e, text: "" });
+      current = "removed";
+    } else {
+      cuts.push({ s: now.value.s, e: now.value.e, text: before.slice(then.value.s, then.value.e) });
+      current = "restored";
+    }
+  }
+  let xml = after;
+  for (const cut of cuts.sort((a, b) => b.s - a.s))
+    xml = `${xml.slice(0, cut.s)}${cut.text}${xml.slice(cut.e)}`;
+  return { xml, removed, current };
+}
+
+/** Simulator's defaults before ARMED against after, compared in memory leaf by leaf: `restored` when after == before
+ * (null when before is unreadable); each change the run's OWN (its path or its value names an own UDID — the run made
+ * them, nobody else knows them) or ANOTHER's (every other), as lines said only through `scrub` (redacted, UUID shapes
+ * swept, never counted). `read` false: after unreadable, nothing judged. */
+export function defaultsJudge(before, after, own, scrub) {
+  const now = parsePlist(after);
+  if (now === null)
+    return { read: false, changed: null, restored: null, own: [], foreign: [], lines: [] };
+  const then = parsePlist(before);
+  const was = then === null ? null : flatPlist(then.root);
+  const is = flatPlist(now.root);
+  const owns = (path, ...values) =>
+    path.some((seg) => own.has(seg.toUpperCase())) ||
+    values.some((v) => v !== undefined && [...own].some((u) => v.toUpperCase().includes(u)));
+  const name = (key) => JSON.parse(key).join(" › ");
+  const ownLines = [];
+  const foreignLines = [];
+  const put = (path, line, ...values) =>
+    (owns(path, ...values) ? ownLines : foreignLines).push(scrub(line));
+  for (const [key, v] of is) {
+    const path = JSON.parse(key);
+    const prior = was?.get(key);
+    if (was === null) {
+      if (owns(path, v.text)) ownLines.push(scrub(`+ ${name(key)} = ${v.text}`));
+    } else if (prior === undefined) put(path, `+ ${name(key)} = ${v.text}`, v.text);
+    else if (prior.cmp !== v.cmp) put(path, `~ ${name(key)}: ${prior.text} → ${v.text}`, v.text);
+  }
+  if (was !== null)
+    for (const [key, v] of was)
+      if (!is.has(key)) put(JSON.parse(key), `- ${name(key)} = ${v.text}`, v.text);
+  const changed = was === null ? null : ownLines.length + foreignLines.length > 0;
+  return {
+    read: true,
+    changed,
+    restored: changed === null ? null : !changed,
+    own: ownLines,
+    foreign: foreignLines,
+  };
+}
+
+/** H1, run at teardown after the quit: the cleanup (when anything of the run's is there), through cfprefsd, only with
+ * Simulator.app NOT running — running, it is skipped, said, and counted as another's; pgrep unreadable, skipped and the
+ * run's own (nothing proves it) — then the defaults read again and judged. */
+export async function restoreDefaults(run, deps, ctx) {
+  const own = ownUdids(run);
+  let after = await readDefaults(deps);
+  let cleanup = "none needed";
+  let removed = 0;
+  let current = null;
+  let appRunning = false;
+  const plan = own.size === 0 ? null : defaultsCleanup(after, own, ctx.defaultsBefore);
+  if (
+    plan !== null &&
+    (plan.removed > 0 || plan.current === "restored" || plan.current === "removed")
+  ) {
+    const app = await simulatorNow(run, deps);
+    if (app.running === null) cleanup = "skipped: pgrep failed — Simulator.app unproven";
+    else if (app.running > 0) {
+      appRunning = true;
+      cleanup = "skipped: Simulator.app is running (it would write them back)";
+    } else {
+      const r = await deps.exec(DEFAULTS, ["import", SIM_DOMAIN, "-"], {
+        input: plan.xml,
+        timeoutMs: 10_000,
+      });
+      if (r.code === 0) {
+        cleanup = "done";
+        removed = plan.removed;
+        current = plan.current;
+      } else {
+        const said = stderrOf(run, r);
+        cleanup = `failed: defaults import exit ${r.code}${said === "" ? "" : `: ${said}`}`;
+      }
+      after = await readDefaults(deps);
+    }
+  } else if (plan?.current === "unknown") current = "unknown";
+  const judged = defaultsJudge(ctx.defaultsBefore, after, own, run.redactor.scrub);
+  return { ...judged, cleanup, removed, current, appRunning };
 }
 
 /** HOST-RESTORED, judged: own devices gone (under the flag) or kept shut down; Simulator.app quit where the run launched
@@ -1783,6 +2010,17 @@ export function restoredVerdict(r) {
   if (r.others === null) own.push("the host's list unreadable at teardown");
   if (r.perfLock === "left") own.push("PERF.lock left held");
   if (r.crash.new.length > 0) own.push(`a new crash report: ${r.crash.new.join(", ")}`);
+  // H1: the run's own UDID-keyed defaults left after the cleanup are its own — unless another's Simulator.app kept the
+  // cleanup from running; a change keyed by anything else is another's
+  const d = r.defaults;
+  if (d !== undefined && d.own > 0)
+    (d.appRunning === true ? foreign : own).push(
+      `Simulator's defaults: ${d.own} change(s) keyed by the run's own devices left (cleanup ${d.cleanup})`,
+    );
+  if (d !== undefined && d.foreign > 0)
+    foreign.push(
+      `Simulator's defaults: ${d.foreign} change(s) not keyed by the run's devices (another's, never touched)`,
+    );
   const why = [...own, ...foreign];
   return { ok: why.length === 0, why, ownOk: own.length === 0, foreign };
 }
@@ -2128,9 +2366,12 @@ async function ancestry(deps, pid) {
   return chain;
 }
 
+/** Simulator's defaults as cfprefsd holds them: `defaults export … -`, an XML plist (a domain not there is an empty one);
+ * null when unreadable. Read-only. */
 async function readDefaults(deps) {
-  const r = await deps.exec(DEFAULTS, ["read", "com.apple.iphonesimulator"], { timeoutMs: 10_000 });
-  return r.code === 0 ? r.stdout : `(no defaults: exit ${r.code})`;
+  const r = await deps.exec(DEFAULTS, ["export", SIM_DOMAIN, "-"], { timeoutMs: 10_000 });
+  if (r.code === 0) return r.stdout;
+  return /does not exist/u.test(String(r.stderr)) ? EMPTY_PLIST : null;
 }
 
 /** A run's state, held in memory only (its UDIDs among it). */
@@ -2360,11 +2601,28 @@ export async function restoreHost(run, deps, ctx) {
           .split("\n")
           .filter((line) => line.trim().replace(/^\d+\s+/u, "") === PATHS.helper).length
       : -1;
-  const defaultsAfter = run.devDir === null ? null : await readDefaults(deps);
-  const defaults = defaultsChange(ctx.defaultsBefore, defaultsAfter, run.redactor.scrub);
-  if (defaults.changed)
+  // H1: the run's own UDID-keyed defaults given back (Simulator.app quit above), then judged against ARMED's
+  const defaults =
+    run.devDir === null
+      ? { read: false, own: [], foreign: [], cleanup: "none needed", removed: 0, appRunning: false }
+      : await restoreDefaults(run, deps, ctx);
+  if (defaults.cleanup === "done")
     deps.say(
-      `PHONE_OBSERVATION Simulator's defaults changed during the run (never written back): ${JSON.stringify(defaults.lines)}`,
+      `stage-simulator-fixture: Simulator's defaults: ${defaults.removed} entr(ies) keyed by the run's own devices removed${defaults.current === null ? "" : `, CurrentDeviceUDID ${defaults.current}`} (through cfprefsd: defaults import)`,
+    );
+  else if (defaults.cleanup !== "none needed")
+    findings.push(`Simulator's defaults: cleanup ${defaults.cleanup}`);
+  if (defaults.appRunning)
+    deps.say(
+      `PHONE_OBSERVATION Simulator's defaults: the cleanup ${defaults.cleanup} — its entries keyed by the run's own devices left (another's app, never touched): ${JSON.stringify(defaults.own.slice(0, 20))}`,
+    );
+  if (defaults.foreign.length > 0)
+    deps.say(
+      `PHONE_OBSERVATION Simulator's defaults changed by another during the run (never touched): ${JSON.stringify(defaults.foreign.slice(0, 20))}`,
+    );
+  if (defaults.own.length > 0 && !defaults.appRunning)
+    deps.say(
+      `stage-simulator-fixture: Simulator's defaults still hold the run's own entries after the cleanup: ${JSON.stringify(defaults.own.slice(0, 20))}`,
     );
   const reportsAfter = crashReports(ctx.crashDir);
   const known = new Set(ctx.crashBefore.map((r) => r.name));
@@ -2380,7 +2638,17 @@ export async function restoreHost(run, deps, ctx) {
     simulator: { launchedByRun: launchesOf(run) > 0, quit, foreign: quitForeign },
     helperLeft,
     others: list === null ? null : othersCompare(run.othersAtArm, list, ownUdids(run)),
-    defaults: { changed: defaults.changed },
+    defaults: {
+      read: defaults.read,
+      changed: defaults.changed ?? null,
+      restored: defaults.restored ?? null,
+      cleanup: defaults.cleanup,
+      removed: defaults.removed,
+      current: defaults.current ?? null,
+      own: defaults.own.length,
+      foreign: defaults.foreign.length,
+      appRunning: defaults.appRunning,
+    },
     perfLock: releasePerfLock(run),
     crash: {
       new: reportsAfter.filter((r) => !known.has(r.name) && r.at >= run.armedAt).map((r) => r.name),

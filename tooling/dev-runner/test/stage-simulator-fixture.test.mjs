@@ -30,7 +30,8 @@ const {
   costRows,
   createRedactor,
   DEFAULT_DEADLINE_MS,
-  defaultsChange,
+  defaultsCleanup,
+  defaultsJudge,
   devicesWord,
   distFresh,
   doorAct,
@@ -66,6 +67,7 @@ const {
   parseList,
   parseLocked,
   parseLstart,
+  parsePlist,
   parsePsRow,
   pickDeveloperDir,
   pickOwnTypes,
@@ -1217,21 +1219,123 @@ test("redactStream: a UDID split across two chunks is whole before it is matched
   });
 });
 
-test("defaultsChange: Simulator's defaults compared raw; the changed lines said redacted, no UDID, never counted", () => {
+// ─── H1: Simulator's defaults (`defaults export com.apple.iphonesimulator -`, an XML plist) ────────────────────────────
+
+/** A display's UUID: Simulator keys window geometry and screen sets by it — never a device's, never the run's. */
+const DISPLAY = "1F2E3D4C-5B6A-4798-8A7B-6C5D4E3F2A1B";
+const plistXml = (body) =>
+  `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n${body}</dict>\n</plist>\n`;
+/** One device's DevicePreferences entry, as Simulator.app writes it (its window geometry keyed by a display). */
+const devicePrefs = (udid) =>
+  `\t\t<key>${udid}</key>\n\t\t<dict>\n\t\t\t<key>ChromeTint</key>\n\t\t\t<string></string>\n\t\t\t<key>SimulatorWindowGeometry</key>\n\t\t\t<dict>\n\t\t\t\t<key>${DISPLAY}</key>\n\t\t\t\t<dict>\n\t\t\t\t\t<key>WindowCenter</key>\n\t\t\t\t\t<string>{922, 584}</string>\n\t\t\t\t\t<key>WindowScale</key>\n\t\t\t\t\t<real>1</real>\n\t\t\t\t</dict>\n\t\t\t</dict>\n\t\t\t<key>SimulatorWindowOrientation</key>\n\t\t\t<string>Portrait</string>\n\t\t</dict>\n`;
+/** Simulator's defaults: CurrentDeviceUDID (null: absent), DevicePreferences by UDID, ScreenConfigurations by display. */
+const simDefaults = ({ current = FOREIGN_GONE, prefs = [FOREIGN_GONE], extra = "" } = {}) =>
+  plistXml(
+    [
+      current === null ? "" : `\t<key>CurrentDeviceUDID</key>\n\t<string>${current}</string>\n`,
+      `\t<key>DevicePreferences</key>\n\t<dict>\n${prefs.map(devicePrefs).join("")}\t</dict>\n`,
+      "\t<key>LocationMode</key>\n\t<integer>5102</integer>\n",
+      `\t<key>ScreenConfigurations</key>\n\t<dict>\n\t\t<key>${DISPLAY}</key>\n\t\t<array>\n\t\t\t<string>{{0, 0}, {1728, 1117}}</string>\n\t\t</array>\n\t</dict>\n`,
+      extra,
+    ].join(""),
+  );
+const OWN_SET = new Set(OWN);
+
+test("parsePlist: defaults' XML plist read in memory — dicts, arrays and leaves; anything else is unreadable, never guessed", () => {
+  const before = simDefaults();
+  const plist = parsePlist(before);
+  assert.ok(plist !== null);
+  assert.deepEqual(
+    plist.root.entries.map((e) => e.key),
+    ["CurrentDeviceUDID", "DevicePreferences", "LocationMode", "ScreenConfigurations"],
+  );
+  assert.equal(plist.root.entries[0].value.text, FOREIGN_GONE);
+  for (const bad of [
+    "",
+    null,
+    "(no defaults: exit 1)",
+    '{\n    CurrentDeviceUDID = "x";\n}',
+    plistXml("\t<key>a</key>\n"),
+    plistXml("\t<key>a</key>\n\t<string>x</integer>\n"),
+  ])
+    assert.equal(parsePlist(bad), null, String(bad));
+  // entities and empty forms
+  const odd = parsePlist(
+    plistXml(
+      "\t<key>a &amp; b</key>\n\t<true/>\n\t<key>e</key>\n\t<dict/>\n\t<key>s</key>\n\t<string/>\n",
+    ),
+  );
+  assert.deepEqual(
+    odd.root.entries.map((e) => [e.key, e.value.type]),
+    [
+      ["a & b", "leaf"],
+      ["e", "dict"],
+      ["s", "leaf"],
+    ],
+  );
+});
+
+test("defaultsCleanup: EXACTLY the entries keyed by the run's own UDIDs removed, CurrentDeviceUDID given back — another's untouched", () => {
+  const before = simDefaults();
+  // the run's two devices shown: their entries, and the current device moved to one of them
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0], OWN[1]], current: OWN[0] });
+  const cleaned = defaultsCleanup(after, OWN_SET, before);
+  assert.equal(cleaned.removed, 2);
+  assert.equal(cleaned.current, "restored");
+  assert.equal(cleaned.xml, before, "byte for byte what it was");
+  // the current device alone, moved to an own device and back
+  const moved = defaultsCleanup(simDefaults({ current: OWN[2] }), OWN_SET, before);
+  assert.deepEqual([moved.removed, moved.current, moved.xml === before], [0, "restored", true]);
+  // absent before: removed, never invented
+  const none = simDefaults({ current: null });
+  assert.equal(defaultsCleanup(simDefaults({ current: OWN[2] }), OWN_SET, none).xml, none);
+  // another's device keyed in the same dict: kept; a display UUID never taken for a device
+  const theirs = simDefaults({ prefs: [FOREIGN_GONE, FOREIGN, OWN[2]] });
+  const kept = defaultsCleanup(theirs, OWN_SET, before);
+  assert.equal(kept.removed, 1);
+  assert.equal(kept.current, null);
+  assert.equal(kept.xml, simDefaults({ prefs: [FOREIGN_GONE, FOREIGN] }));
+  assert.ok(kept.xml.includes(DISPLAY));
+  // a current device that is not the run's is never touched; before unreadable, it is never guessed
+  assert.equal(defaultsCleanup(simDefaults({ current: FOREIGN }), OWN_SET, before).current, null);
+  assert.equal(defaultsCleanup(simDefaults({ current: OWN[0] }), OWN_SET, null).current, "unknown");
+  assert.equal(defaultsCleanup("(no defaults: exit 1)", OWN_SET, before), null);
+});
+
+test("defaultsJudge: after == before is restored; a change keyed by an own UDID is the run's, any other another's — said redacted", () => {
   const r = createRedactor();
-  r.own(OWN[0], 1);
-  const before = `{\n    CurrentDeviceUDID = "${FOREIGN_GONE}";\n    ShowChrome = 1;\n}`;
-  const after = `{\n    CurrentDeviceUDID = "${OWN[0]}";\n    ShowChrome = 1;\n}`;
-  assert.deepEqual(defaultsChange(before, before, r.scrub), { changed: false, lines: [] });
-  const change = defaultsChange(before, after, r.scrub);
-  assert.equal(change.changed, true);
-  assert.deepEqual(change.lines, [
-    '-     CurrentDeviceUDID = "<uuid>";',
-    '+     CurrentDeviceUDID = "<pts3-dev-1>";',
-  ]);
-  assert.ok(!holdsUdid(JSON.stringify(change)));
-  assert.deepEqual(r.counts().driver, { own: 0, foreign: 0 });
-  assert.equal(defaultsChange(null, after, r.scrub).changed, false);
+  for (const [i, udid] of OWN.entries()) r.own(udid, i + 1);
+  r.foreign(FOREIGN);
+  const before = simDefaults();
+  const same = defaultsJudge(before, before, OWN_SET, r.scrub);
+  assert.deepEqual(
+    [same.read, same.changed, same.restored, same.own, same.foreign],
+    [true, false, true, [], []],
+  );
+  const both = defaultsJudge(
+    before,
+    simDefaults({ prefs: [FOREIGN_GONE, FOREIGN, OWN[0]], current: OWN[0] }),
+    OWN_SET,
+    r.scrub,
+  );
+  assert.equal(both.restored, false);
+  assert.ok(both.own.length > 0 && both.foreign.length > 0);
+  assert.ok(
+    both.own.every((line) => /<pts3-dev-1>/u.test(line)),
+    both.own.join("\n"),
+  );
+  assert.ok(
+    both.foreign.every((line) => /<host-dev-1>/u.test(line)),
+    both.foreign.join("\n"),
+  );
+  assert.ok(both.own.some((line) => /^~ CurrentDeviceUDID: <uuid> → <pts3-dev-1>$/u.test(line)));
+  assert.ok(!holdsUdid(JSON.stringify(both)));
+  assert.deepEqual(r.counts().driver, { own: 0, foreign: 0 }, "never counted");
+  // unreadable after: nothing judged; unreadable before: own residue still judged, nothing restored
+  assert.equal(defaultsJudge(before, "", OWN_SET, r.scrub).read, false);
+  const blind = defaultsJudge(null, simDefaults({ prefs: [OWN[1]] }), OWN_SET, r.scrub);
+  assert.deepEqual([blind.restored, blind.foreign], [null, []]);
+  assert.ok(blind.own.length > 0);
 });
 
 // ─── the rows record ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -2649,6 +2753,157 @@ test("H3: teardown's failed shutdown (run A's exit 149) carries simctl's stderr,
     /shutdown of pts3-l2-t1-1 failed \(exit 149\): An error was encountered .* Unable to shutdown device in current state: Booting <pts3-dev-1>/u,
   );
   assert.ok(!holdsUdid(said), said);
+});
+
+/** A host whose Simulator defaults the stage reads and gives back through cfprefsd alone (`defaults export … -` and
+ * `defaults import … -`): any other `defaults` verb throws, as would a write to the plist file. */
+function defaultsHost(after, opts = {}) {
+  const host = fakeHost(opts);
+  host.store = after;
+  host.imports = [];
+  host.defaults = [];
+  const exec = host.deps.exec;
+  host.deps.exec = async (file, args, o = {}) => {
+    if (file === "/usr/bin/defaults") {
+      host.defaults.push(args.join(" "));
+      if (args[1] !== "com.apple.iphonesimulator" || args[2] !== "-" || args.length !== 3)
+        throw new Error(`a unit ran defaults ${args.join(" ")}`);
+      if (args[0] === "export") return ok(host.store);
+      if (args[0] === "import") {
+        host.imports.push(o.input);
+        if (opts.importIgnored !== true) host.store = o.input;
+        return ok();
+      }
+      throw new Error(`a unit ran defaults ${args[0]}`);
+    }
+    return exec(file, args, o);
+  };
+  return host;
+}
+
+const defaultsTeardown = async (before, after, opts = {}) => {
+  const run = ownRun();
+  run.othersAtArm.set(FOREIGN, "Shutdown");
+  const host = defaultsHost(after, opts);
+  const verdict = await restoreHost(run, host.deps, {
+    deleteDevices: false,
+    defaultsBefore: before,
+    crashDir: join(FIXTURES, "no-crash-reports-here"),
+    crashBefore: [],
+  });
+  const line = host.said.find((l) => l.startsWith("PHONE_HOST_RESTORED "));
+  return { run, host, verdict, restored: JSON.parse(line.slice("PHONE_HOST_RESTORED ".length)) };
+};
+
+test("H1: teardown removes EXACTLY the run's own UDID-keyed Simulator defaults through cfprefsd, then re-reads: restored", async () => {
+  const before = simDefaults();
+  // run A's leftover (out:117): the three own devices' DevicePreferences, and the current device moved to one of them
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0], OWN[2], OWN[1]], current: OWN[0] });
+  const { host, verdict, restored } = await defaultsTeardown(before, after);
+  // exported, edited in memory, imported ONCE, read again — never `defaults write`/`delete`, never the plist file
+  assert.deepEqual(host.defaults, [
+    "export com.apple.iphonesimulator -",
+    "import com.apple.iphonesimulator -",
+    "export com.apple.iphonesimulator -",
+  ]);
+  assert.equal(host.imports.length, 1);
+  assert.equal(host.imports[0], before, "what it was, byte for byte");
+  assert.deepEqual(
+    {
+      changed: restored.defaults.changed,
+      restored: restored.defaults.restored,
+      removed: restored.defaults.removed,
+      current: restored.defaults.current,
+      cleanup: restored.defaults.cleanup,
+    },
+    { changed: false, restored: true, removed: 3, current: "restored", cleanup: "done" },
+  );
+  assert.deepEqual([verdict.ok, verdict.ownOk, verdict.foreign], [true, true, []]);
+  for (const line of host.said) assert.ok(!holdsUdid(line), line);
+  // nothing of the run's there: nothing imported
+  const quiet = await defaultsTeardown(before, before);
+  assert.deepEqual(quiet.host.imports, []);
+  assert.equal(quiet.restored.defaults.restored, true);
+});
+
+test("H1: CurrentDeviceUDID moved to an own device is given back its before value", async () => {
+  const before = simDefaults();
+  const { host, verdict, restored } = await defaultsTeardown(
+    before,
+    simDefaults({ current: OWN[1] }),
+  );
+  assert.equal(host.imports[0], before);
+  assert.equal(restored.defaults.current, "restored");
+  assert.equal(restored.defaults.restored, true);
+  assert.equal(verdict.ok, true);
+});
+
+test("H1: a change keyed by another's UDID is the FOREIGN side — never touched, said as an OBSERVATION; the run's own still cleaned", async () => {
+  const before = simDefaults();
+  const after = simDefaults({ prefs: [FOREIGN_GONE, FOREIGN, OWN[2]] });
+  const { host, verdict, restored } = await defaultsTeardown(before, after);
+  // the own entry gone, another's kept as it was
+  assert.equal(host.imports[0], simDefaults({ prefs: [FOREIGN_GONE, FOREIGN] }));
+  assert.equal(restored.defaults.removed, 1);
+  assert.equal(restored.defaults.restored, false);
+  assert.equal(restored.defaults.own, 0);
+  assert.ok(restored.defaults.foreign > 0);
+  assert.equal(verdict.ownOk, true);
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.foreign.join("; "), /Simulator's defaults/u);
+  const observed = host.said.filter((l) => l.startsWith("PHONE_OBSERVATION "));
+  assert.ok(
+    observed.some((l) => /Simulator's defaults.*<host-dev-1>/u.test(l)),
+    observed.join("\n"),
+  );
+  for (const line of host.said) assert.ok(!holdsUdid(line), line);
+});
+
+test("H1: Simulator.app running at teardown — the cleanup skipped, said, and counted as another's; nothing imported", async () => {
+  const before = simDefaults();
+  // a Simulator.app the run never launched (another's): its quit refused, and the defaults left as they are
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0]], current: OWN[0] });
+  const { host, verdict, restored } = await defaultsTeardown(before, after, { pgrep: "777" });
+  assert.deepEqual(host.imports, []);
+  assert.deepEqual(host.defaults, ["export com.apple.iphonesimulator -"]);
+  assert.match(restored.defaults.cleanup, /^skipped: Simulator\.app is running/u);
+  assert.equal(verdict.ownOk, true);
+  assert.match(verdict.foreign.join("; "), /Simulator's defaults/u);
+  assert.ok(
+    host.said.some((l) => /^PHONE_OBSERVATION .*Simulator's defaults.*skipped/u.test(l)),
+    host.said.join("\n"),
+  );
+});
+
+test("H1: the run's own entries still there after the cleanup are the run's OWN side — ok:false, ownOk:false, why names it", async () => {
+  const before = simDefaults();
+  // cfprefsd took the import, but the re-read still holds the run's entry
+  const after = simDefaults({ prefs: [FOREIGN_GONE, OWN[0]] });
+  const { verdict, restored } = await defaultsTeardown(before, after, { importIgnored: true });
+  assert.equal(restored.defaults.restored, false);
+  assert.ok(restored.defaults.own > 0);
+  assert.deepEqual([verdict.ok, verdict.ownOk], [false, false]);
+  assert.match(verdict.why.join("; "), /Simulator's defaults: .*the run's own devices/u);
+  // restoredVerdict alone: the own count is own, the foreign count another's
+  const good = {
+    run: RUN,
+    own: { form: "deleted", left: 0, shutdown: true },
+    simulator: { launchedByRun: true, quit: "quit", foreign: false },
+    helperLeft: 0,
+    others: { unchanged: true },
+    perfLock: "removed",
+    crash: { new: [] },
+  };
+  const own = restoredVerdict({
+    ...good,
+    defaults: { own: 2, foreign: 0, cleanup: "done", appRunning: false },
+  });
+  assert.deepEqual([own.ok, own.ownOk, own.foreign], [false, false, []]);
+  const theirs = restoredVerdict({
+    ...good,
+    defaults: { own: 2, foreign: 1, cleanup: "skipped: x", appRunning: true },
+  });
+  assert.deepEqual([theirs.ok, theirs.ownOk, theirs.foreign.length], [false, true, 2]);
 });
 
 test("sweep: exactly the run's own names, shut down; deleted only under the flag, each name read again right before (S9)", async () => {
