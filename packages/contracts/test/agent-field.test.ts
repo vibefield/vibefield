@@ -30,8 +30,9 @@ import {
   AgentSubscribeParams,
   MONITOR_AUDIENCE,
   MonitorAgentRow,
+  SCREEN_BOARDS,
 } from "../src/agent-field";
-import { OnBehalfOf } from "../src/forwarding";
+import { ForwardEnvelope, KEYED_FORWARD_METHODS, OnBehalfOf } from "../src/forwarding";
 import { AGENT_FIELD } from "../src/registries";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
@@ -555,6 +556,20 @@ describe("MV-3a — the model's row on the wire (MV-D22, MV-D18)", () => {
       deviceId: "dev-desktop-a",
       windowId: "conn_7",
     });
+    // the owner's door strips the envelope it reads: a carried report is a READ, keyed by no receipt
+    const envelope = ForwardEnvelope.parse(forwarded);
+    expect(envelope.forward?.idempotencyKey).toBeUndefined();
+    const { forward: _forward, ...rest } = envelope;
+    expect(AgentReportShownParams.parse(rest)).toEqual({
+      ids: ["run-studio-q"],
+      device: "dev-desktop-b",
+    });
+    expect(KEYED_FORWARD_METHODS.has("agent.reportShown")).toBe(false);
+  });
+
+  // PG-3b (the 3b review [1], 2026-11-01) — the owner's carried screens are bounded per peer connection
+  it("PG-3b — a peer connection carries at most CARRIED_SCREENS_PER_PEER readers' screens", () => {
+    expect(AGENT_FIELD.CARRIED_SCREENS_PER_PEER).toBe(64);
   });
 
   it("the model's texts name folders, never paths, on the agent row; a terminal's detail is its directory and stays home (L8)", () => {
@@ -812,6 +827,28 @@ describe("item 100 — whose cut a caller reads, by its principal's kind (M16, S
     expect(windows.sort()).toEqual(["local-token", "shell-main"]);
     expect(MONITOR_AUDIENCE.tailnet).toBe("peer");
     expect(MONITOR_AUDIENCE["peer-fieldd"]).toBe("peer");
+  });
+
+  // PG-3b (the 3b review [0], 2026-11-01) — which boards make a screen, beside whose cut a caller reads
+  it("PG-3b — a model board is a screen for this desktop's windows; a remote board and the reader are the phone's alone", () => {
+    expect(Object.keys(SCREEN_BOARDS).sort()).toEqual(Object.keys(MONITOR_AUDIENCE).sort());
+    const kinds = (board: "model" | "remote" | "reader") =>
+      Object.entries(SCREEN_BOARDS)
+        .filter(([, boards]) => boards[board])
+        .map(([kind]) => kind)
+        .sort();
+    // `model` is served to the window audience alone, and each of them is a screen
+    expect(kinds("model")).toEqual(
+      Object.entries(MONITOR_AUDIENCE)
+        .filter(([, audience]) => audience === "window")
+        .map(([kind]) => kind)
+        .sort(),
+    );
+    expect(kinds("remote")).toEqual(["tailnet"]);
+    expect(kinds("reader")).toEqual(["tailnet"]);
+    // a plugin, a guest, an agent's MCP session and a peer daemon clear no mark by holding a board
+    for (const kind of ["plugin", "tailnet-guest", "mcp-agent", "peer-fieldd"] as const)
+      expect(SCREEN_BOARDS[kind]).toEqual({ model: false, remote: false, reader: false });
   });
 });
 
