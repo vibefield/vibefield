@@ -26,6 +26,7 @@
 import { existsSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
 import {
+  goneByKernel,
   listRunProcesses,
   type Ps,
   type PsSpelling,
@@ -72,6 +73,8 @@ export interface StopRunDeps {
   readonly list: (mark: string) => readonly RunProcess[];
   /** which of `pids` are still the run's: each asked alone, judged by its environment (item 93's cost) */
   readonly still: (mark: string, pids: readonly number[]) => readonly number[];
+  /** whether `pid` is gone by the kernel's own reading (`ps` shows it no line or a zombie), never by the mark (item 142) */
+  readonly gone: (pid: number) => boolean;
   readonly signal: (pid: number, signal: NodeJS.Signals) => void;
   readonly sleep: (ms: number) => Promise<void>;
   readonly now: () => number;
@@ -82,6 +85,7 @@ export function censusDeps(ps?: Ps, spelling: PsSpelling = psTables()): StopRunD
   return {
     list: (mark) => listRunProcesses(mark, ps, spelling),
     still: (mark, pids) => stillRunning(mark, pids, ps, spelling),
+    gone: (pid) => goneByKernel(pid, ps),
     signal: (pid, signal) => {
       try {
         process.kill(pid, signal);
@@ -126,12 +130,16 @@ export async function stopRunDaemons(
     );
     return processes.filter((p) => live.has(p.pid));
   };
+  // Item 142 (2026-11-01): gone is the KERNEL's word (`deps.gone`), never the mark's. A process in its exit can stop
+  // showing `ps -E` its environment before it is a zombie, so a wait judged by the mark could end, and the smoke leave,
+  // while it still ran (the launcher's row, AL-6's light). The mark still decides whom to signal: a pid the system has
+  // handed on is never signalled.
   const waitGone = async (of: readonly RunProcess[], ms: number): Promise<RunProcess[]> => {
     const until = deps.now() + ms;
-    let alive = stillOf(of);
+    let alive = of.filter((p) => !deps.gone(p.pid));
     while (alive.length > 0 && deps.now() < until) {
       await deps.sleep(bounds.pollMs);
-      alive = stillOf(alive);
+      alive = alive.filter((p) => !deps.gone(p.pid));
     }
     return alive;
   };
@@ -139,9 +147,9 @@ export async function stopRunDaemons(
   const waitedMs = deps.now() - t0;
   const killed: number[] = [];
   if (alive.length > 0) {
-    for (const p of alive) deps.signal(p.pid, "SIGTERM");
+    for (const p of stillOf(alive)) deps.signal(p.pid, "SIGTERM");
     alive = await waitGone(alive, bounds.askMs);
-    for (const p of alive) {
+    for (const p of stillOf(alive)) {
       deps.signal(p.pid, "SIGKILL");
       killed.push(p.pid);
     }
