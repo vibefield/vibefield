@@ -1111,6 +1111,45 @@ function idleWake(s: IdleSeen): string[] {
     : [];
 }
 
+/** What SIM-IDLE's wake asks of the window (the row's hands; a unit's fakes). */
+export interface WakeHands {
+  /** the door's `/loaded` count for the wake page's nonce over its base (null: unread) */
+  readonly loaded: () => Promise<number | null>;
+  /** presents and arrivals since the wake's baseline */
+  readonly woken: () => Promise<{ readonly presented: number; readonly arrivals: number }>;
+  readonly now: () => number;
+  readonly sleep: (ms: number) => Promise<void>;
+}
+
+/** SIM-IDLE's wake window (G10): its `windowMs` runs from the page's `/loaded` — polled INSIDE the loop, every 200 ms —
+ * never from the openurl (a slow Safari ate run 1101's window before the page moved). Ends at the wake once loaded, at
+ * `windowMs` after the load, or at `bound` with no load: `loaded` then 0 and idleVerdict stages the leg. */
+export async function wakeWindow(
+  h: WakeHands,
+  bound: number = PHONE_BOUNDS.loaded,
+  windowMs = 2_000,
+): Promise<{
+  readonly loaded: number | null;
+  readonly wake: { readonly presented: number; readonly arrivals: number };
+}> {
+  const t0 = h.now();
+  let loaded: number | null = null;
+  let at: number | null = null;
+  let wake = { presented: 0, arrivals: 0 };
+  for (;;) {
+    if (at === null) {
+      const c = await h.loaded();
+      if (c !== null) loaded = c;
+      if ((loaded ?? 0) >= 1) at = h.now();
+    }
+    wake = await h.woken();
+    if (at !== null && wake.presented >= 1 && wake.arrivals >= 1) break;
+    if (at !== null ? h.now() - at >= windowMs : h.now() - t0 >= bound) break;
+    await h.sleep(200);
+  }
+  return { loaded, wake };
+}
+
 /** SIM-IDLE before its window (G2): the `/motion` page unproven — STAGING NOT MET (the proof read nothing of it); proven,
  * a LIVE-PROVEN red over it is the row's PROBLEM before any `/still` staging; the `/still` page unproven — STAGING NOT
  * MET. Null: the window may be judged. */
@@ -2959,32 +2998,35 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       // motion wakes it: presents and arrivals within 2 s of the page asked to move
       const f0 = await faceOf(p);
       const s0 = (await stats())?.presented ?? 0;
-      // the wake's page: opened at once (the 2 s window starts at its openurl), its load counted after the window
+      // the wake's page: its 2 s window runs from its /loaded, counted inside the loop (G10)
       const wq = nonce();
       const wBase = (await door.count("/loaded", wq)) ?? 0;
       const wOpened = (await doorAct("openurl", 1, { url: door.page("/motion", wq) })).state;
-      const woke = Date.now();
-      let f1 = f0;
-      let s1 = s0;
-      while (Date.now() - woke < 2_000) {
-        await sleep(200);
-        f1 = await faceOf(p);
-        s1 = (await stats())?.presented ?? 0;
-        if (s1 > s0 && (f1?.arrivals ?? 0) > (f0?.arrivals ?? 0)) break;
-      }
+      const woken = async (): Promise<{ presented: number; arrivals: number }> => ({
+        presented: ((await stats())?.presented ?? 0) - s0,
+        arrivals: ((await faceOf(p))?.arrivals ?? 0) - (f0?.arrivals ?? 0),
+      });
+      const window =
+        wOpened === "opened"
+          ? await wakeWindow({
+              loaded: async () => {
+                const c = await door.count("/loaded", wq);
+                return c === null ? null : c - wBase;
+              },
+              woken,
+              now: () => Date.now(),
+              sleep,
+            })
+          : { loaded: null, wake: await woken() };
       const seen: IdleSeen = {
         proof,
         asleep,
         steps: r1.steps - r0.steps,
         presented: p1 - p0,
         rearmed,
-        wake: { presented: s1 - s0, arrivals: (f1?.arrivals ?? 0) - (f0?.arrivals ?? 0) },
+        wake: window.wake,
       };
-      const wake: Stimulus = {
-        page: "/motion",
-        opened: wOpened,
-        loaded: wOpened === "opened" ? await loadedSince(wq, wBase) : null,
-      };
+      const wake: Stimulus = { page: "/motion", opened: wOpened, loaded: window.loaded };
       const j = idleVerdict(seen, { motion, still: stillPage, wake });
       return {
         problems: j.problems,

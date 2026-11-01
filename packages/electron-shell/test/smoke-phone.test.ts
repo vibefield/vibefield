@@ -94,6 +94,7 @@ import {
   type UseSeen,
   uuidHits,
   wakesIn,
+  wakeWindow,
 } from "../src/testing/smoke-phone";
 
 const TP = "com.apple.CoreSimulator.SimDeviceType.iPhone-16e";
@@ -1711,6 +1712,65 @@ describe("PT-S3 — the stimulus PROVEN: an unproven page or a failed door verb 
     expect(judgeReload({ ...reload, origins: [1, 1] }, { live: false })).toEqual([
       "SIM-RELOAD: performance.timeOrigin is unchanged — no reload happened",
     ]);
+  });
+
+  it("SIM-IDLE's wake: the 2 s window runs from the page's /loaded, polled inside the loop; a page not loaded within its bound stages the leg (G10)", async () => {
+    /** a fake door and desk: the page beacons at `loadAt` ms (null: never), the desk wakes at `wakeAt` (null: never) */
+    const at = (loadAt: number | null, wakeAt: number | null) => {
+      let t = 0;
+      return {
+        t: () => t,
+        loaded: async () => (loadAt !== null && t >= loadAt ? 1 : 0),
+        woken: async () =>
+          wakeAt !== null && t >= wakeAt
+            ? { presented: 2, arrivals: 3 }
+            : { presented: 0, arrivals: 0 },
+        now: () => t,
+        sleep: async (ms: number) => {
+          t += ms;
+        },
+      };
+    };
+    const idle = {
+      proof: proven,
+      asleep: [true, true, true, true, true, true],
+      steps: 0,
+      presented: 0,
+      rearmed: true,
+      wake: { presented: 0, arrivals: 0 },
+    };
+    const verdict = (w: Awaited<ReturnType<typeof wakeWindow>>) =>
+      idleVerdict(
+        { ...idle, wake: w.wake },
+        { motion, still, wake: { page: "/motion", opened: "opened", loaded: w.loaded } },
+      );
+    // Safari slow to load: /loaded at 3 s, the desk awake at 4 s — inside the window from the load (2 s from the openurl
+    // would have read "motion did not wake it")
+    const slow = at(3_000, 4_000);
+    const a = await wakeWindow(slow);
+    expect(a).toMatchObject({ loaded: 1, wake: { presented: 2, arrivals: 3 } });
+    expect(verdict(a)).toEqual({ problems: [], staging: null });
+    // never loaded within the bound: the leg is STAGED, the window's own judgement clean
+    const never = at(null, null);
+    const b = await wakeWindow(never);
+    expect(b.loaded).toBe(0);
+    expect(never.t()).toBeGreaterThanOrEqual(10_000);
+    expect(never.t()).toBeLessThan(10_400);
+    expect(verdict(b)).toEqual({
+      problems: [],
+      staging: "the wake's /motion page never beaconed /loaded within 10000 ms",
+    });
+    // loaded at 1 s and no wake within 2 s of it: the product's red
+    const still2 = at(1_000, null);
+    const c = await wakeWindow(still2);
+    expect(c.loaded).toBe(1);
+    expect(still2.t()).toBeGreaterThanOrEqual(3_000);
+    expect(still2.t()).toBeLessThan(3_400);
+    expect(verdict(c).problems.join(" ")).toMatch(/motion did not wake it within 2 s/u);
+    // the row's wake asks wakeWindow; no window timed from the openurl
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-IDLE")?.body ?? "";
+    expect(body.match(/await wakeWindow\(/gu)).toHaveLength(1);
+    expect(body).not.toMatch(/Date\.now\(\) - woke < 2_000/u);
   });
 
   /** The runner as its source must hold it: no bare openUrl in the three rows or bringLive; each page proven and checked
