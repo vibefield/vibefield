@@ -26607,3 +26607,55 @@ root: none, then what was written, mode 0600, a garbled one refused.
 
 **Owed.** The log holds at most `RELAUNCH_CAP` stamps (written only while fewer fall inside the window), and nothing
 else reads it. AL-5's packaged relaunch witness, and Windows/Linux relaunch, stay AL's Owed.
+
+## Item 138 — every desktop keeps its place in the Godview's order: the window's fold listed its rows in insertion order across every desktop, so a peer's whole re-send (a re-present, a re-attach, a resync) moved that peer's rows behind every other desktop's and re-listed its own on a frame that changed nothing (2026-11-01; `569ee11cb` on main `27d61f7a5`, lane `item138` in `/Volumes/SamsungRed/lanes/pg3`, in the mini's mint M74 `815babbd3` over main `2b35a3def`, run 74)
+
+**Found by PG-3a's design check** (workflow `wf_4e7ab61f-0b7`, reading the parity golden it would bless). VF-PM filed
+it at 03:34Z as ITEM 138, owed before 3a blesses its parity golden: under P1 a defect is fixed in its own item, never
+blessed. It predates PG: `heldRows()` has listed `#held` in insertion order since MV-3a.
+
+**The finding, plainly.**
+- `ModelBoardFold.heldRows()` was `#held`'s insertion order across every desktop, against its own doc ("this
+  desktop's first and then by device order"). `#replaceBoard` deleted a device's ids and inserted them again.
+- So a peer's whole re-send put that peer's rows after every other desktop's, and re-listed them in its board's order
+  (an owner lists agents before terminals; a delta birth had sat last). A whole re-send can be PG-1d's re-present on a
+  gate flip or a lost frame, a re-attach on a new epoch (its daemon restarted), or the mesh resync. A birth landed
+  after every desktop's too.
+- **What a person saw:** `rowOrder` lists other desktops' rows in held order, and the rain claims columns in display
+  order, so another desktop's columns moved on a frame that changed nothing. The swarm and the model's order
+  (`compareMonitorRows`) were never affected.
+
+**What** (`569ee11cb`, 3 files +149 −10):
+- **The fold** (`field-app/src/godview/monitor/model-board.ts`):
+  - `heldRows()` and the open's rows group the held rows by desktop, in the board's device order (the open's, then
+    each desktop as it is first heard);
+  - `#replaceBoard` and `open()` drop only the ids the new board no longer holds, so every row still held keeps its
+    slot, and a new row joins the end of its own desktop's.
+- **The words:** `rowOrder`'s doc and window-rows' header state the rule. The doc's "the fold holds them in that
+  order" was not true after a birth.
+- **The red row** (`field-app/test/godview-model-board.test.ts`, "item 138"): the golden board's asleep desktop wakes
+  with a board. Then the peer re-presents at the same revision, re-attaches on a new epoch, takes a birth, and
+  re-presents with the newborn listed first, and a whole new open lists both boards reversed. The fold's order and the
+  window's `rowOrder` hold at every step.
+
+**Validation.**
+- **Red first**, in lane `pg3` at nice 19 under the guard and co-plan/HOLD, with no PERF.lock
+  (`lanes/ios/item138-light.sh`):
+  - main `27d61f7a5`'s fold, swapped in and never committed, fails the row at the first re-present (`run-loft-w`
+    moved after `run-attic-e`);
+  - the fix's first cut, device grouping alone (`cd35c72d2`, amended away), fails it at the re-present that lists the
+    newborn first.
+- **The review** (workflow `wf_83f62137-bfe`, two lenses): one should, a desktop's own rows re-listed by a whole
+  re-send, folded as the keep-in-place rule; two nits folded.
+- **The light** at `569ee11cb` (03:41:20 → 03:42:09Z):
+  - biome on the three files, and field-app's and fieldd's typecheck;
+  - thirteen field-app files that read the fold or the window's order, 253 tests, no golden moved.
+- **Run 74** (M74 `815babbd3`, the MERGE shape: main `2b35a3def` merged into `569ee11cb`, minted by a9 on VF-PM's
+  GO):
+  - `pnpm verify` armed 03:59:35Z, exit 0 at 04:04:25Z (about five minutes).
+  - vitest 11,499 passed, 0 failed, 18 skipped, +1: `godview-model-board.test.ts` 14 → 15, the item's row. cargo 534
+    passed, 0 failed, 14 ignored (33 `ok`).
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run74/` (`mrun74.bundle`, sha256 `cf796dd7ccda5ccc…`).
+- **Landed:** main fast-forwarded to `815babbd3` at 2026-11-01 04:07:17Z on VF-PM's GO.
+
+**Owed.** Nothing. PG-3d's Swift fold transcribes the rule, and its parity suite ports this row.

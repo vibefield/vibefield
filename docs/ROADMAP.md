@@ -242,7 +242,8 @@
   `ModelBoardFold`'s rule, retires `UsageLedger`/`UnreadLedger`/the stale rule, and routes `reportShown` through the
   home, PG-D6). Sliced and ruled (VF-PM 2026-11-01 02:46Z, the brief `lanes/ios/PG3-BRIEF.md`): 3a0 the promotion
   probe, paid by item 137 → 3a the witness goldens ∥ 3b `reportShown` through the home (contracts and fieldd) →
-  3c the kit decodes → 3d the Swift fold → 3e the switch; 3a waits on James's J1 and 3b on J2, on the PM board
+  3c the kit decodes → 3d the Swift fold → 3e the switch; James ruled J1–J4 at 03:55Z, all (a), and item 138
+  (the fold keeps each desktop's place) landed before 3a's golden; 3a and 3b building
   → PG-5…PG-8 (list, timeline, spend, rain, native) → PG-9 (resume, `agent.get`, the measured rates).
   PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
@@ -428,6 +429,9 @@
   item 137 (a shell promoted to an agent left the Godview and was reborn: the window's `ModelBoardFold` dropped an
   id another key of the desktop still held, against M22's one body; found by PG-3a0's probe; `a13132333`,
   `49935e71b`, M70 run 70, a pure fast-forward; nothing owed; LANDED "Item 137") ·
+  item 138 (a peer's rows moved in the window's order, the rain's columns, on a whole re-send that changed
+  nothing: the fold listed `#held` by insertion; now by the board's device order, each row it still holds in
+  place; found by PG-3a's design check; `569ee11cb`, M74 `815babbd3` run 74; nothing owed; LANDED "Item 138") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
