@@ -623,6 +623,7 @@ describe('a spark that needs you, and a thread unread, from another view (CH-D4,
         onFrame({ revision, rows: [velaRow(doing, revision)] }, "snapshot");
         return () => undefined;
       },
+      onReconnected: () => () => undefined,
       open: async () => vela,
     };
     stop = startSparksFeed(port);

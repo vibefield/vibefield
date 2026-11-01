@@ -16,6 +16,7 @@ import {
   type AgentProfileSet,
   type SparkSummary,
 } from "@vibefield/contracts";
+import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { act, type ReactElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,7 +26,7 @@ import { ChatView } from "../src/chat/ChatView";
 import type { DraftPart } from "../src/chat/composer-draft";
 import { CANNOT_LIST_AGENTS } from "../src/chat/new-spark";
 import { sparkEntriesOf } from "../src/chat/spark-status";
-import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
+import { type SparksPort, sparksPortOver, startSparksFeed } from "../src/chat/sparks-feed";
 import type { ThreadSendOutcome } from "../src/chat/thread-send";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import { CHAT_STATES, type ChatState } from "../src/design-system/chat-fixtures";
@@ -173,6 +174,7 @@ function feed(sparks: SparkSummary[] = [VELA], rows: AgentFieldRow[] = ROWS): Sp
       onFrame({ revision: 1, rows }, "snapshot");
       return () => undefined;
     },
+    onReconnected: () => () => undefined,
     open: async () => VELA,
   };
 }
@@ -506,17 +508,117 @@ describe("@ in Chat's composer (DESIGN.md §8, @'s rows in Chat; the surface `at
     ).toEqual([`agent:${A.id}:native`, `agent:${B.id}:work`, "session:run-his"]);
   });
 
-  it("says the same sentence, and offers no row, when the window's board can't be read — never reading for good (final critique 12)", async () => {
-    await mountComposer(undefined, undefined, port, {
+  /** The window's feed over a board refused with `first` until `board.refusal` is null: how many times it was asked,
+   * and the window's client reconnected (`SparksPort.onReconnected`) when the test says. */
+  function refusedBoard(first: Error) {
+    const board = { asks: 0, refusal: first as Error | null, reconnected: new Set<() => void>() };
+    const door: SparksPort = {
       ...feed(),
-      watch: async () => {
-        throw new Error("fieldd refused the board");
+      watch: async (onFrame) => {
+        board.asks += 1;
+        if (board.refusal !== null) throw board.refusal;
+        onFrame({ revision: 1, rows: ROWS }, "snapshot");
+        return () => undefined;
       },
-    });
+      onReconnected: (listener) => {
+        board.reconnected.add(listener);
+        return () => board.reconnected.delete(listener);
+      },
+    };
+    const reconnect = () =>
+      act(async () => {
+        for (const listener of [...board.reconnected]) listener();
+      });
+    return { board, door, reconnect };
+  }
+  const atRowIds = (): string[] =>
+    [...(menu()?.querySelectorAll<HTMLElement>(".vf-chat-at-row") ?? [])].map(
+      (r) => r.dataset.row ?? "",
+    );
+
+  it("keeps Start an agent standing when the window's board can't be read, and says what's running can't be (SP-1d's review)", async () => {
+    // the agents to start are its profiles' alone: only the sessions are read off the board
+    const { door } = refusedBoard(new Error("fieldd refused the board"));
+    await mountComposer(undefined, undefined, port, door);
     typeText("ask @");
     await settle();
-    expect(words(menu())).toBe(CANNOT_LIST_AGENTS);
-    expect(menu()?.querySelectorAll(".vf-chat-at-row").length).toBe(0);
+    expect(atRowIds()).toEqual([`agent:${A.id}:native`, `agent:${B.id}:work`]);
+    expect(words(menu())).toContain(`${AT_WORDS.sessions} ${AT_WORDS.sessionsFailed}`);
+    expect(words(menu())).not.toContain(CANNOT_LIST_AGENTS);
+    expect(words(menu())).not.toContain(AT_WORDS.reading);
+  });
+
+  it("asks again for a board refused as the socket closed, once the window's client reconnects, and offers its sessions then (SP-1d's review)", async () => {
+    // the connection closed under the ask while the same fieldd stayed up (a reconnect, not a restart: a restart
+    // replaces the window's document): the client's own retryable refusal
+    const { board, door, reconnect } = refusedBoard(
+      new FielddRpcError("UNAVAILABLE", "connection closed", true),
+    );
+    await mountComposer(undefined, undefined, port, door);
+    typeText("ask @");
+    await settle();
+    expect(words(menu())).toContain(AT_WORDS.sessionsFailed);
+    expect(board.asks).toBe(1);
+    // the next @ asks the board for nothing: only the client reconnected does
+    press(editor(), { key: "Escape" });
+    typeText("ask @");
+    await settle();
+    expect(board.asks).toBe(1);
+    board.refusal = null;
+    await reconnect();
+    await settle();
+    expect(board.asks).toBe(2);
+    expect(atRowIds()).toEqual([`agent:${A.id}:native`, `agent:${B.id}:work`, "session:run-his"]);
+    expect(words(menu())).not.toContain(AT_WORDS.sessionsFailed);
+    // a board read stands: another reconnect asks for nothing (the client replays its subscription itself)
+    await reconnect();
+    expect(board.asks).toBe(2);
+  });
+
+  it("never asks again for a board fieldd refused for good (SP-1d's review)", async () => {
+    const { board, door, reconnect } = refusedBoard(
+      new FielddRpcError("FORBIDDEN_SCOPE", "the full projection is local to its device", false),
+    );
+    await mountComposer(undefined, undefined, port, door);
+    typeText("ask @");
+    await settle();
+    await reconnect();
+    await settle();
+    expect(board.asks).toBe(1);
+    expect(words(menu())).toContain(AT_WORDS.sessionsFailed);
+  });
+
+  it("says the window's client reconnected each time it is ready again, and on no other status (SP-1d's review)", () => {
+    const heard = new Set<() => void>();
+    const client = {
+      status: "ready",
+      onStatusChange: (listener: () => void) => {
+        heard.add(listener);
+        return () => heard.delete(listener);
+      },
+    };
+    const to = (status: string): void => {
+      client.status = status;
+      for (const listener of [...heard]) listener();
+    };
+    let reconnects = 0;
+    const stop = sparksPortOver(client as unknown as FielddClient).onReconnected(() => {
+      reconnects += 1;
+    });
+    to("reconnecting");
+    expect(reconnects).toBe(0);
+    to("ready");
+    expect(reconnects).toBe(1);
+    to("reconnecting");
+    to("ready");
+    expect(reconnects).toBe(2);
+    // a fieldd restart refuses the window's token: the client fails, and main replaces the document instead
+    to("failed");
+    expect(reconnects).toBe(2);
+    stop();
+    to("reconnecting");
+    to("ready");
+    expect(reconnects).toBe(2);
   });
 
   it("takes a session with Return: its chip is its handle, the @ and its query gone", async () => {
@@ -865,6 +967,16 @@ describe("the catalog's composer plates (docs/UI_SYSTEM.md: the shipping view on
     // its profiles can't be read: the New spark sheet's own sentence
     await plate("at-failed");
     expect(words(menu())).toBe(CANNOT_LIST_AGENTS);
+    expect(menu()?.querySelector(".vf-chat-at-row")).toBeNull();
+    // the board can't be read: the agents to start stand, and the sessions' group says what's running can't be read
+    await plate("at-board-failed");
+    expect(words(menu())).toMatch(
+      new RegExp(`^${AT_WORDS.agents} .+ ${AT_WORDS.sessions} ${AT_WORDS.sessionsFailed}$`, "u"),
+    );
+    expect(menu()?.querySelectorAll('.vf-chat-at-row[data-row^="agent:"]').length).toBeGreaterThan(
+      0,
+    );
+    expect(menu()?.querySelector('.vf-chat-at-row[data-row^="session:"]')).toBeNull();
 
     // an agent just taken, its menu open while its picker is read: Its own model, then the word in the picker's place
     await plate("menu-reading");
@@ -908,6 +1020,7 @@ describe("the composer's words are DESIGN.md's (§8 \"Chat's composer\", §9 \"C
       '`Nothing called "cla"`',
       '"Nothing to add from Vela\'s profiles"',
       '"VibeField can\'t list its agents right now"',
+      "\"VibeField can't read what's running right now\"",
       '"Claude Code · Working"',
       '"Add to your message to Vela"',
       '"Added to your message to Vela"',

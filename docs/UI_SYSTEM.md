@@ -113,11 +113,13 @@ The catalog currently mounts these shipping views directly:
   - the composer's quiet and busy states (SP-1d's critique, rulings-5), each the same readings
     over a fixture that puts it there: @ while its profiles are read (`sets` null), when nothing
     is called what follows the @, with nothing to add (This Mac and Work with no sign-in, and
-    none of your sessions on the board), and when the profiles can't be read (`"failed"`, the New
-    spark sheet's sentence); an agent just taken, its menu while its picker is read and when the
-    read fails; and a send under way, Send's over its draft and a starter's, one fact
-    (`CHAT_SENDING`, which holds Wake's too) handed to the panel's `sending` and the composer's
-    `busy`, as Chat's controller hands its thread's one act to both;
+    none of your sessions on the board), when the profiles can't be read (`"failed"`, the New
+    spark sheet's sentence), and when the board can't be (its rows `"failed"`: the agents to start
+    stand, and the sessions' group says what's running can't be read, SP-1d's review); an agent
+    just taken, its menu while its picker is read and when the read fails; and a send under way,
+    Send's over its draft and a starter's, one fact (`CHAT_SENDING`, which holds Wake's too)
+    handed to the panel's `sending` and the composer's `busy`, as Chat's controller hands its
+    thread's one act to both;
   - the hello: what stands in the thread over its pane is the product's own `threadItemsOf` over
     the shown spark and the plate's draft, drawn by the shipping `ThreadItemsView` inside the
     panel — a spark just hatched saying hello with its three starters, which send nothing there,

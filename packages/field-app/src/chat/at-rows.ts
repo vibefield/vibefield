@@ -24,8 +24,9 @@ import type { BoardRows } from "./sparks-feed";
 // under a profile other than its persona's, or naming only one of the two: @ can then offer a session `agent_send`
 // refuses as outside, or leave out one it takes. `profileSet` on the board's row closes it (VF-PM's call, owed).
 //
-// Without its profiles no row can be placed, and without the board no session can be, so a failed read of either offers
-// none and says the New spark sheet's sentence.
+// Without its profiles no row can be placed, so a failed read of them offers none and says the New spark sheet's
+// sentence. Without the board no session can be placed, but the agents can: they are the profiles' alone, so a failed
+// board leaves them standing, and the sessions' group says in its rows' place that what is running can't be read.
 //
 // The keyboard's walk over the rows (`atStops`, `atDefaultHot`, `atMove`, `atRow`) came back from the line's model in
 // git (`0e2ad08bc:packages/field-app/src/frame/`), its rows re-ruled.
@@ -71,8 +72,10 @@ export interface AtList {
   readonly sessions: readonly AtSessionRow[];
   /** what it offers is still being read */
   readonly reading: boolean;
+  /** what is running can't be read (the board refused): the sessions' group says so in its rows' place */
+  readonly sessionsFailed: boolean;
   /** the list's word when it holds no row: nothing matches what follows the @, nothing to offer at all, or its
-   * profiles or the board can't be read */
+   * profiles can't be read */
   readonly quiet: string | null;
 }
 
@@ -95,6 +98,8 @@ export const AT_WORDS = {
   empty: (name: string) => `Nothing to add from ${name}'s profiles`,
   /** the New spark sheet's own sentence, never a copy */
   failed: CANNOT_LIST_AGENTS,
+  /** the sessions' group, in its rows' place, while the board can't be read */
+  sessionsFailed: "VibeField can't read what's running right now",
 } as const;
 
 /** A session's word: Working, Idle, or Needs you (its run blocked on the person); none for a run not heard yet. */
@@ -165,10 +170,17 @@ function matches(query: string, ...words: readonly (string | null)[]): boolean {
 /** @'s list for the spark's thread. */
 export function atRowsOf(sources: AtSources): AtList {
   const { spark, query, sets, rows } = sources;
-  if (sets === "failed" || rows === "failed")
-    return { agents: [], sessions: [], reading: false, quiet: AT_WORDS.failed };
+  if (sets === "failed")
+    return {
+      agents: [],
+      sessions: [],
+      reading: false,
+      sessionsFailed: false,
+      quiet: AT_WORDS.failed,
+    };
+  const sessionsFailed = rows === "failed";
   if (sets === null || rows === null)
-    return { agents: [], sessions: [], reading: true, quiet: null };
+    return { agents: [], sessions: [], reading: true, sessionsFailed, quiet: null };
   const mine = sets.filter((set) => spark.profiles.includes(set.id));
   const many = spark.profiles.length > 1;
   const offeredAgents = mine.flatMap((set) =>
@@ -189,7 +201,7 @@ export function atRowsOf(sources: AtSources): AtList {
       }),
     ),
   );
-  const reached = reachedBy(spark, rows, sets);
+  const reached = rows === "failed" ? [] : reachedBy(spark, rows, sets);
   const handles = handlesOf(reached);
   const offeredSessions = reached
     .sort(
@@ -213,13 +225,15 @@ export function atRowsOf(sources: AtSources): AtList {
     matches(query, row.handle, row.project, row.label),
   );
   const offered = offeredAgents.length + offeredSessions.length;
+  // without the board what is running is not known, so "nothing to add" is never said then; what follows the @
+  // matching none of what is offered is said as ever
   const quiet =
-    offered === 0
+    offered === 0 && !sessionsFailed
       ? AT_WORDS.empty(spark.name)
-      : agents.length + sessions.length === 0
+      : query !== "" && agents.length + sessions.length === 0
         ? AT_WORDS.none(query)
         : null;
-  return { agents, sessions, reading: false, quiet };
+  return { agents, sessions, reading: false, sessionsFailed, quiet };
 }
 
 /** The rows a hot highlight can stop on, top to bottom as drawn. */

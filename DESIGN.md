@@ -1504,7 +1504,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     your sparks", with fieldd's words under it, when it cannot be read. Each is secondary, centred in the panel, and
     never a blank. *Amended 2026-11-01 (SP-1d's final critique):* "first read" is the window's feed's: the list reads
     "Opening Chat…" again whenever that feed starts again (fieldd restarting), and a send that gives up then says so
-    in its own sentence (§8 "Chat's composer").
+    in its own sentence (§8 "Chat's composer"). *Corrected 2026-11-01 (SP-1d's second review):* SP-1d's review struck
+    "(fieldd restarting)" here as false, writing that the feed outlives a fieldd restart with the list as last read.
+    The sentence was true and that correction was not: a fieldd restart replaces the window's document (main's boot
+    fence, `FielddDaemonBootFence` → `requestAllReplacements`), so Chat's feed starts again, the list reads "Opening
+    Chat…", and the new feed asks for the board afresh. What the feed outlives is a connection drop while the same
+    fieldd stays up: the window's client reconnects, the board's subscription comes back with a fresh snapshot, and
+    the list stands as last read.
   - **No create yet.** Chat's line holds the views and the snapshot. Its create, **New spark** (⌘N, `sparkle`), comes
     with its sheet in SP-1c. *(Built at SP-1c, 2026-10-31: §8 "The New spark sheet", and the line's create above.)*
 - **The New spark sheet — a name, an agent, and the face it is dealt** (SP-1c; NS-D1 A, NS-D2 B, NS-D3 A and NS-D5,
@@ -1747,11 +1753,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - When the spark's profiles can't be read (`agents.profileSets.list`), no agent and no session can be placed, so
       the list offers no row and says the New spark sheet's sentence, "VibeField can't list its agents right now". The
       next @ reads them again. Each of these words is 12/400 in tertiary ink, padded 10.
-    - *Added 2026-11-01 (SP-1d's final critique):* the sessions are read from the window's one board (Chat's feed,
-      `agent.subscribe`), never by an @. When that board can't be read (its subscription refused), no session can be
-      placed, so the list says the same sentence and offers no row, as when the profiles can't be read. The board is
-      asked again only when Chat's feed starts again (fieldd restarting), not by the next @. The residual: a board that
-      neither answers nor refuses leaves its group saying "Reading its agents…" until it answers.
+    - *Added 2026-11-01 (SP-1d's final critique; amended the same day, SP-1d's review and its second review):* the
+      sessions are read from the window's one board (Chat's feed, `agent.subscribe`), never by an @. When that board
+      can't be read (its subscription refused), no session can be placed, but the agents can, since they are the
+      profiles' alone. So **Start an agent** stands, and **Running in its profiles** stands with no row, saying
+      "VibeField can't read what's running right now" in their place, 12/400 in tertiary ink, padded 10, as @'s other
+      words. `Nothing called "cla"` is still said when no agent matches what follows the @, and "Nothing to add from
+      Vela's profiles" is not, since what is running is not known. The board is asked again when Chat's feed starts
+      again (fieldd restarting, which replaces the window's document: §8 "Chat's list"), never by the next @. One
+      refused because the socket closed under the ask while the same fieldd stayed up (the window's client marks that
+      refusal retryable, and never replays a subscribe it lost in flight) is asked again too, once that client has
+      reconnected. Any other refusal stands until the feed starts again. The residual: a board that neither answers nor
+      refuses leaves its group saying "Reading its agents…" until it answers. *Corrected 2026-11-01 (SP-1d's review):*
+      this said a refused board leaves the list with no row and the New spark sheet's sentence; the agents to start
+      never depended on the board. *Corrected again the same day (SP-1d's second review):* SP-1d's review also wrote
+      here that the feed starts once for the window's life, so a refusal stood until the window reloaded, and that a
+      board refused "as fieldd went" is asked again "when fieldd is back". A fieldd restart replaces the window's
+      document, so the feed starts again and asks afresh, as this said before. The re-ask covers a connection drop,
+      not a restart. Before it, a board refused that way stood until the next restart or reload.
     - Flows' rows are CP-4's (FL-D5 A). Sparks are never rows: in a spark's thread the spark is the one you are
       talking to (CH-D5).
     - @'s list stays 316 wide. The page's 340 was not taken: 316 is the line's, and the rows fit it.
@@ -1846,9 +1865,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - "Not sent — Chat is opening again" and "Not sent — Chat can't read your sparks", when Chat's list is not read
         at the moment the send reads why it cannot go on, said as the list stands then (§8 "Chat's list"): opening
         again, where the list reads "Opening Chat…" (its feed started again, as fieldd restarts; a send is pressed
-        only on a list read, so it is always again), or unreadable, its list refused, in the list's own words. With
-        no list read no thread is drawn and no spark is heard, so "you left", "didn't wake" and "not taking input"
-        are never said then (*added 2026-11-01, SP-1d's final critique*);
+        only on a list read, so it is always again), or unreadable, its list refused before that feed first read it,
+        in the list's own words. With no list read no thread is drawn and no spark is heard, so "you left", "didn't
+        wake" and "not taking input" are never said then (*added 2026-11-01, SP-1d's final critique; corrected the
+        same day, SP-1d's second review: SP-1d's review struck "as fieldd restarts", saying the feed outlives a
+        restart. It does not, since a restart replaces the window's document (§8 "Chat's list")*);
       - "Couldn't find Vela's pane: …", at once, in the floor's or the window's own words, while the pane's place says
         it (§8 "Chat's thread");
       - "Not sent — this window has no terminals", at once, in a window with no terminals (the catalog, a browser),
@@ -5035,8 +5056,9 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - The pane's place: "Finding Vela's pane…" · "Vela's terminal is not on this desktop's floor." · "Couldn't find Vela's
   pane: …" (Send's note says it too) · "This window has no terminals to show it with."
 - @: "Running in its profiles" · "Start an agent" · "Reading its agents…" · `Nothing called "cla"` · "Nothing to add
-  from Vela's profiles" · "VibeField can't list its agents right now" (the New spark sheet's own sentence); a
-  session's word, Working · Idle · Needs you.
+  from Vela's profiles" · "VibeField can't list its agents right now" (the New spark sheet's own sentence) ·
+  "VibeField can't read what's running right now" (the sessions' group, while the board can't be read); a session's
+  word, Working · Idle · Needs you.
 - Send's notes: "Pasted into Vela's pane — Return sends it" · "Vela is waiting on you — answer it in its pane" · "Not
   pasted — Vela's pane is not taking input" · "Not pasted — that snapshot is no longer kept" · "Not pasted into Vela's
   pane — 300 KB, and one paste carries 261 KB of it" · "Not sent — Vela didn't wake in 20 seconds" · "Not sent — Vela's

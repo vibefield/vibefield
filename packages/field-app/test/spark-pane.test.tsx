@@ -667,6 +667,7 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
         onFrame({ revision: 1, rows: [OWN] }, "snapshot");
         return () => undefined;
       },
+      onReconnected: () => () => undefined,
       open: async () => VELA,
     });
     await act(async () => {

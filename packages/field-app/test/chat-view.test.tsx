@@ -479,6 +479,7 @@ function scripted(listed: SparkSummary[]) {
         port.frame = null;
       };
     },
+    onReconnected: () => () => undefined,
     open: async (id) => {
       port.woke.push(id);
       if (port.held !== null) await port.held;

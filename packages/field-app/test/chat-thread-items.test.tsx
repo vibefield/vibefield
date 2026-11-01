@@ -105,6 +105,7 @@ function feed(
       onFrame({ revision: 1, rows }, "snapshot");
       return () => undefined;
     },
+    onReconnected: () => () => undefined,
     open,
   };
 }

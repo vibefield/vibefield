@@ -236,10 +236,11 @@ export function ChromeSection({
           wait while one is sent; a spark that has had a turn shows its pane alone. At the thread's
           foot, its composer: the draft, the mic and send, at rest, typing, and waiting while a send
           or a wake runs; @'s list with the agents to start and the sessions running, and its words
-          while it reads, when nothing matches, when there is nothing to add, and when the spark's
-          profiles can't be read; an agent's menu in its box (its model and Effort), while its
-          picker is read and when it can't be; and the chips an agent, a session and a card make.
-          Fixture sparks, rows and agents, read by the product's own readings.
+          while it reads, when nothing matches, when there is nothing to add, when the spark's
+          profiles can't be read, and when what is running can't be, the agents to start standing;
+          an agent's menu in its box (its model and Effort), while its picker is read and when it
+          can't be; and the chips an agent, a session and a card make. Fixture sparks, rows and
+          agents, read by the product's own readings.
         </p>
       </Specimen>
 

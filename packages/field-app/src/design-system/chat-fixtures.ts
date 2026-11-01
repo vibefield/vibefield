@@ -199,6 +199,7 @@ export const CHAT_STATES = [
   "at-none",
   "at-empty",
   "at-failed",
+  "at-board-failed",
   "menu",
   "menu-reading",
   "menu-failed",
@@ -227,6 +228,7 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   "at-none": "@ no match",
   "at-empty": "@ nothing to add",
   "at-failed": "@ can't read",
+  "at-board-failed": "@ can't read sessions",
   menu: "An agent's model",
   "menu-reading": "Its picker reading",
   "menu-failed": "Its picker failed",
@@ -263,6 +265,7 @@ export function chatReadingOf(state: ChatState): SparksReading {
     case "at-none":
     case "at-empty":
     case "at-failed":
+    case "at-board-failed":
     case "menu":
     case "menu-reading":
     case "menu-failed":
@@ -340,6 +343,7 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   "at-none": "sp-juno0001",
   "at-empty": "sp-juno0001",
   "at-failed": "sp-juno0001",
+  "at-board-failed": "sp-juno0001",
   menu: "sp-juno0001",
   "menu-reading": "sp-juno0001",
   "menu-failed": "sp-juno0001",
@@ -477,11 +481,12 @@ function drafted(
 }
 
 /** @ open on Juno's thread after "Ask ", its list the product's own `atRowsOf` over `query`, what fieldd answers of
- * the spark's profiles (or null before it has, or "failed"), and the board's rows. */
+ * the spark's profiles (or null before it has, or "failed"), and the board's rows (or "failed", its subscription
+ * refused). */
 function asked(
   query: string,
   sets: AtSources["sets"],
-  rows: readonly AgentFieldRow[] = ROWS,
+  rows: AtSources["rows"] = ROWS,
 ): ComposerPlate {
   const list = atRowsOf({ spark: JUNO, query, sets, rows });
   return drafted(
@@ -523,12 +528,13 @@ export const CHAT_COMPOSER: Partial<Record<ChatState, ComposerPlate>> = {
   typing: drafted(ASKED),
   sending: drafted(ASKED),
   // @'s list: both groups; still being read; nothing called what follows the @; nothing to add (no sign-in, none of
-  // your sessions); and the spark's profiles not read
+  // your sessions); the spark's profiles not read; and the board not read, the agents to start standing
   at: asked("", PROFILE_SETS),
   "at-reading": asked("", null),
   "at-none": asked("docs", PROFILE_SETS),
   "at-empty": asked("", SIGNED_OUT, SPARKS_RUNS),
   "at-failed": asked("", "failed"),
+  "at-board-failed": asked("", PROFILE_SETS, "failed"),
   // an agent's menu: its picker read and a model chosen; just taken, its picker being read; its picker not read
   menu: started(AGENT_CHIP, PICKER),
   "menu-reading": started(TAKEN_CHIP, { state: "reading" }),

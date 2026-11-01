@@ -256,33 +256,70 @@ describe("@'s rows in Chat (DESIGN.md §8 \"Chat's composer\")", () => {
   it("says the New spark sheet's words, and offers no row, when its profiles can't be read", () => {
     expect(AT_WORDS.failed).toBe(CANNOT_LIST_AGENTS);
     expect(CANNOT_LIST_AGENTS).toBe("VibeField can't list its agents right now");
-    // with the board read or not: without its profiles no agent and no session can be placed
-    for (const over of [{}, { rows: null }, { query: "vib" }]) {
+    // with the board read, being read or refused: without its profiles no agent and no session can be placed
+    for (const over of [{}, { rows: null }, { rows: "failed" as const }, { query: "vib" }]) {
       expect(atRowsOf(sources({ sets: "failed", ...over }))).toEqual({
         agents: [],
         sessions: [],
         reading: false,
+        sessionsFailed: false,
         quiet: CANNOT_LIST_AGENTS,
       });
     }
   });
 
-  it("says the same words, and offers no row, when the window's board can't be read (final critique 12)", () => {
-    // its sessions are read off the board: with it refused, @ offers neither group, as with its profiles refused
-    for (const over of [{}, { sets: null }, { query: "vib" }]) {
-      expect(atRowsOf(sources({ rows: "failed", ...over }))).toEqual({
-        agents: [],
-        sessions: [],
-        reading: false,
-        quiet: CANNOT_LIST_AGENTS,
-      });
-    }
+  it("keeps the agents to start when the window's board can't be read, and says what's running can't be (SP-1d's review)", () => {
+    expect(AT_WORDS.sessionsFailed).toBe("VibeField can't read what's running right now");
+    // the agents are its profiles' alone: only the sessions are read off the board
+    const list = atRowsOf(sources({ rows: "failed" }));
+    expect(list).toEqual({
+      agents: atRowsOf(sources()).agents,
+      sessions: [],
+      reading: false,
+      sessionsFailed: true,
+      quiet: null,
+    });
+    expect(atStops(list).every((stop) => stop.kind === "agent")).toBe(true);
+    // what follows the @ filters the agents, and no agent matching is said as ever
+    const filtered = atRowsOf(sources({ rows: "failed", query: A.label.slice(0, 3) }));
+    expect(filtered.agents.length).toBeGreaterThan(0);
+    expect(filtered.agents.every((r) => r.label === A.label)).toBe(true);
+    expect(atRowsOf(sources({ rows: "failed", query: "zzz" }))).toMatchObject({
+      agents: [],
+      sessionsFailed: true,
+      quiet: 'Nothing called "zzz"',
+    });
+    // "nothing to add" needs what is running, so it is never said without the board
+    const bare = atRowsOf(
+      sources({ rows: "failed", sets: [profile("native", "This Mac", [], "native")] }),
+    );
+    expect(bare).toEqual({
+      agents: [],
+      sessions: [],
+      reading: false,
+      sessionsFailed: true,
+      quiet: null,
+    });
+    // its profiles still being read: their group reads, and the sessions' says it can't
+    expect(atRowsOf(sources({ rows: "failed", sets: null }))).toEqual({
+      agents: [],
+      sessions: [],
+      reading: true,
+      sessionsFailed: true,
+      quiet: null,
+    });
   });
 
   it("is reading until its profiles and the board are read, and offers nothing meanwhile", () => {
     for (const over of [{ sets: null }, { rows: null }]) {
       const list = atRowsOf(sources(over));
-      expect(list).toEqual({ agents: [], sessions: [], reading: true, quiet: null });
+      expect(list).toEqual({
+        agents: [],
+        sessions: [],
+        reading: true,
+        sessionsFailed: false,
+        quiet: null,
+      });
     }
     expect(AT_WORDS.reading).toBe("Reading its agents…");
   });

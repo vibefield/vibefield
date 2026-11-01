@@ -205,7 +205,8 @@ function SessionRowBody({ row }: { row: AtSessionRow }): ReactElement {
 }
 
 /** @'s rows (DESIGN.md §8 "Chat's composer", @'s rows in Chat): read bottom-up, nearest first — "Start an agent"
- * above, "Running in its profiles" against the composer. A group with no rows is left out. */
+ * above, "Running in its profiles" against the composer. A group with no rows is left out; one that can't be read yet
+ * or at all says so in its rows' place. */
 export function AtRowsView({
   list,
   hot,
@@ -235,7 +236,12 @@ export function AtRowsView({
           ))}
         </>
       )}
-      {list.sessions.length === 0 ? null : (
+      {list.sessionsFailed ? (
+        <>
+          <div className="vf-chat-at-eye">{AT_WORDS.sessions}</div>
+          <div className="vf-chat-at-quiet">{AT_WORDS.sessionsFailed}</div>
+        </>
+      ) : list.sessions.length === 0 ? null : (
         <>
           <div className="vf-chat-at-eye">{AT_WORDS.sessions}</div>
           {list.sessions.map((row) => (
