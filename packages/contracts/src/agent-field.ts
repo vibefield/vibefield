@@ -878,8 +878,9 @@ export const AgentModelMeshFrame: z.ZodType<AgentModelMeshFrame, z.ZodTypeDef, u
  * wire, under that peer's connection, restrict-only, and it opens with no board
  * on that connection (below).
  *
- * PG-3b (PG-D6 (a), J2 (a), 2026-11-01) — a `remote` board is a screen too,
- * and the report is routed by `device` like every federated call: a phone
+ * PG-3b (PG-D6 (a), J2 (a), 2026-11-01) — a phone's `remote` board is a screen
+ * too (by kind, `SCREEN_BOARDS`), and the report is routed by `device` like
+ * every federated call: a phone
  * reports another desktop's rows through its HOME, which carries it only for a
  * connection holding a `{projection: "remote", scope: "mesh"}` board (else the
  * same `no-screen` refusal). The owner keys the screen it opens for a carried

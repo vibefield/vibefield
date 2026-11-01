@@ -2736,7 +2736,8 @@ export const METHODS: MethodDef[] = [
   // acknowledges nothing (`agent-monitor.ts` `openScreen`).
   // PG-3b (PG-D6 (a): unread is the owner's mark and the phone is a screen;
   // J2 (a), James 2026-11-01 03:55Z) — `federate`, routed by `device`: a
-  // `remote` board is a screen as `model` is, and a phone reports another
+  // phone's `remote` board is a screen as a window's `model` board is (by
+  // kind, `SCREEN_BOARDS`), and a phone reports another
   // desktop's rows through its home, which carries the report only for a
   // connection holding a `{remote, mesh}` board (else `no-screen`). The owner
   // keys what it carries by `onBehalfOf` under the carrying peer connection,
