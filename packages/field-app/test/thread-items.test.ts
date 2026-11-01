@@ -2,10 +2,16 @@
  * SP-1d — THE THREAD'S ITEMS, as data (DESIGN.md §8 "Chat's thread": the thread's items, the hello and three
  * starters; NS-D4 A; CH-D5 A "Starters show while a thread is quiet"; critique finding 17, LEANS "a NEW spark"). What
  * stands in a thread over its pane is read here, purely: a new spark's hello and its starters while the thread is
- * quiet, and nothing else at SP-1d. The drawing and the controller are `chat-thread-items.test.tsx`'s.
+ * quiet, and nothing else at SP-1d; since CP-3 the needs-you card in its place (`needs-card.test.tsx`). The drawing and
+ * the controller are `chat-thread-items.test.tsx`'s.
  */
 
-import { AGENT_CATALOG, type AgentFieldRow, type SparkSummary } from "@vibefield/contracts";
+import {
+  AGENT_CATALOG,
+  type AgentFieldRow,
+  NeedsItem,
+  type SparkSummary,
+} from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import {
@@ -148,9 +154,26 @@ describe('quiet, and the items it brings (DESIGN.md §8 "Chat\'s thread", when t
     expect(threadQuiet(entryOf(spark(), row({ status: "working" })), true, false)).toBe(false);
   });
 
+  it("is not quiet while something in the queue waits on you in its thread (CP-3: quiet's fifth)", () => {
+    // held apart from "new": an item is a turn the window sees, so a spark asking is not new either
+    const item = NeedsItem.parse({
+      id: "ny-quietfifth01",
+      kind: "question",
+      state: "open",
+      from: { name: "Vela", session: "run-Vela", spark: "sp-vela0001" },
+      spark: "sp-vela0001",
+      asked: AT,
+      words: "Push it?",
+      choices: ["Push", "Not now"],
+    });
+    const waiting = { ...entryOf(), items: [item] };
+    expect(sparkIsNew(waiting)).toBe(true);
+    expect(threadQuiet(waiting, true, false)).toBe(false);
+  });
+
   it("brings the hello and its three starters while quiet, with the spark's own face as its lead", () => {
     const entry = entryOf();
-    const items = threadItemsOf(entry, true);
+    const items = threadItemsOf(entry, true, null);
     expect(items).toEqual([
       {
         kind: "hello",
@@ -159,7 +182,7 @@ describe('quiet, and the items it brings (DESIGN.md §8 "Chat\'s thread", when t
         starters: STARTERS,
       },
     ] satisfies ThreadItem[]);
-    expect(threadItemsOf(entry, false)).toEqual([]);
+    expect(threadItemsOf(entry, false, null)).toEqual([]);
   });
 
   it("says the hello and the starters in the page's words, as ruled", () => {

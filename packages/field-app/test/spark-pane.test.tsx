@@ -611,6 +611,9 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
         onItems([]);
         return () => undefined;
       },
+      answer: async () => {
+        throw new Error("nothing is answered here");
+      },
       open: async () => VELA,
     });
     await act(async () => {

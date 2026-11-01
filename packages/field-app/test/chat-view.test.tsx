@@ -481,6 +481,31 @@ describe("the needs-you queue, as one window reads it (CP-3; needs.subscribe)", 
     );
     expect(heard).toEqual([0, 0]);
   });
+
+  it("answers an item by its act's place (needs.answer {item, choice}), and reads the item fieldd hands back", async () => {
+    const fixture = (name: string): unknown =>
+      JSON.parse(
+        readFileSync(
+          join(dirname(fileURLToPath(import.meta.url)), `../../contracts/fixtures/${name}`),
+          "utf8",
+        ),
+      );
+    const params = fixture("needs-answer-params.valid.json") as { item: string; choice: number };
+    const asked: unknown[] = [];
+    const answering = {
+      request: async (method: string, body: unknown) => {
+        asked.push([method, body]);
+        return fixture("needs-answer-result.valid.json");
+      },
+    } as unknown as FielddClient;
+    const item = await sparksPortOver(answering).answer(params.item, params.choice);
+    // the act travels by its place, never its word, so a rewording is no wire change
+    expect(asked).toEqual([["needs.answer", params]]);
+    expect([item.state, item.answer?.choice, item.answer?.told]).toEqual(["answered", 0, false]);
+    // a reply that is not an item is a refusal thrown, never a guess
+    const garbled = { request: async () => ({ item: { id: 7 } }) } as unknown as FielddClient;
+    await expect(sparksPortOver(garbled).answer(params.item, 0)).rejects.toThrow();
+  });
 });
 
 /** A port the test drives: the list it answers, and the board it moves. */
@@ -516,6 +541,10 @@ function scripted(listed: SparkSummary[]) {
       return () => {
         port.needs = null;
       };
+    },
+    // the card's answers are needs-card.test.tsx's
+    answer: async () => {
+      throw new Error("nothing is answered here");
     },
     open: async (id) => {
       port.woke.push(id);

@@ -165,6 +165,9 @@ function feed(sparks: SparkSummary[] = [VELA], rows: AgentFieldRow[] = ROWS): Sp
       onItems([]);
       return () => undefined;
     },
+    answer: async () => {
+      throw new Error("nothing is answered here");
+    },
     open: async () => VELA,
   };
 }

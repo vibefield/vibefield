@@ -1,19 +1,25 @@
-import type { SparkId } from "@vibefield/contracts";
+import type { NeedsItem, SparkId } from "@vibefield/contracts";
 import { type ReactElement, useCallback, useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import type { FrameSurface } from "../frame/frame-surface";
-import { sayOnLine } from "../frame/line-door";
+import { jumpNote, sayOnLine } from "../frame/line-door";
+import { openLiveRow } from "../frame/live-open";
+import { sayStatus } from "../frame/status-line";
 import { stillKept } from "../host";
 import { terminalPoolConfigured } from "../terminal/pool";
 import { ChatComposer, type ComposerPort } from "./ChatComposer";
 import { type ChatAct, ChatPanelView, paneSessionOf, shownOf, threadLineOf } from "./ChatPanelView";
 import { type DraftPart, draftBlank } from "./composer-draft";
+import { useNeedsCard } from "./needs-card-stand";
 import { SparkPane } from "./SparkPane";
 import type { SparkEntry } from "./spark-status";
 import {
   type SparkOpener,
   showThread,
   sparkEntryNow,
+  useBoardRows,
   useChooseRequest,
+  useNeedsAnswerer,
   useSparkOpener,
   useSparksReading,
   useThreadMarks,
@@ -30,9 +36,11 @@ import { sendNote, sendToThread, type ThreadSendOutcome } from "./thread-send";
 // (`ChatComposer`), keeps each thread's draft for the window's life, and runs the thread's two acts that wake a
 // spark — Wake on the line, and Send — through the feed's one wake (`SparkOpener`). It reads what stands in the shown
 // thread over its pane (`threadItemsOf`: a new spark's hello and its starters while the thread is quiet), and sends a
-// starter pressed as Send sends, one send at a time into a thread. It tells the feed which thread is on screen — the
-// shown one while Chat is the view — so opening a thread reads it, and draws each row's mark as the feed keeps it.
-// What it chose, whose hello has left, and which threads a send runs into, are this view's alone.
+// starter pressed as Send sends, one send at a time into a thread. Since CP-3 the needs-you card stands there in the
+// hello's place (`useNeedsCard`): its acts answered through the feed (`needs.answer`, by their place), an agent's ask
+// shown in its pane by Jump to's path. It tells the feed which thread is on screen — the shown one while Chat is the
+// view — so opening a thread reads it, and draws each row's mark as the feed keeps it. What it chose, whose hello has
+// left, which threads a send runs into, and what its cards answer, are this view's alone.
 
 /** How often the rows' times are said again while Chat shows ("now" becomes "9:41"). */
 const CLOCK_MS = 30_000;
@@ -173,6 +181,34 @@ export function ChatView({
   useEffect(() => showThread(onScreen), [onScreen]);
   useEffect(() => () => showThread(null), []);
   const marks = useThreadMarks();
+
+  // CP-3 — the needs-you card the shown thread stands, answered through the feed; a card that leaves holding the
+  // keyboard, with none to take its place, hands it to the draft
+  const answerer = useNeedsAnswerer();
+  const reduced = useReducedMotion();
+  const [draftKeyboard, setDraftKeyboard] = useState(0);
+  const needs = useNeedsCard(shown, onScreen !== null, reduced, {
+    answer: answerer,
+    say: sayStatus,
+    focusDraft: () => setDraftKeyboard((count) => count + 1),
+  });
+  // Show, on an agent's ask: its pane in Godview by Jump to's path; one it cannot show is said in Jump to's words
+  const rows = useBoardRows();
+  const showAsk = useCallback(
+    (item: NeedsItem) => {
+      const id = item.from.session;
+      if (id === undefined) return;
+      const row = rows?.find((each) => each.runtimeRunId === id);
+      void openLiveRow(
+        { id, floorSessionId: row?.terminal?.runtimeSessionId ?? null },
+        "assistant",
+      ).then((outcome) => {
+        if (outcome.state === "refused") sayOnLine(jumpNote(outcome));
+      });
+    },
+    [rows],
+  );
+
   const pane =
     shown === undefined || threadLineOf(shown) !== null ? undefined : (
       <SparkPane
@@ -198,6 +234,7 @@ export function ChatView({
         port={port}
         send={sendTo(shown, open)}
         threadSending={sending.has(shown.spark.id)}
+        takeKeyboard={draftKeyboard}
       />
     );
   const items =
@@ -210,6 +247,7 @@ export function ChatView({
             draftBlank(drafts.get(shown.spark.id) ?? NO_DRAFT),
             helloLeft.has(shown.spark.id),
           ),
+          needs.card,
         );
   return (
     <ChatPanelView
@@ -228,6 +266,9 @@ export function ChatView({
           : (words: string) => void start(shown, open, words)
       }
       sending={shown !== undefined && sending.has(shown.spark.id)}
+      onAnswer={needs.answer}
+      onShowAsk={showAsk}
+      cardRef={needs.cardRef}
       {...(composer === undefined ? {} : { composer })}
     />
   );

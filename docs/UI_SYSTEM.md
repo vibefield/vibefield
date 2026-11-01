@@ -89,10 +89,11 @@ The catalog currently mounts these shipping views directly:
 - Chat (SP-1b, DESIGN.md §8 "Chat's list"): the shipping `ChatPanelView` over the product's own
   reading (`sparkEntriesOf`) of fixture sparks and field rows (`chat-fixtures.ts`) — the list, a
   spark asleep, no sparks yet, opening and unavailable, and since CP-3 a spark asleep while the
-  needs-you queue holds its held send (its word Needs your OK, its line still asleep with Wake,
-  and Vela's own run's ask read once, as her row's blocker) — on a fixed clock and fixed seeds, each
-  row wearing the mark the product's own `threadMarksOf` reads from what the plates' window saw
-  off screen (a need's orange dot, and since SP-1d a thread unread in cyan); and, since SP-1d
+  needs-you queue holds its held send (its word Needs your OK, its line still asleep with Wake, its
+  card standing in its thread, and Vela's own run's ask read once, as her row's blocker) — on a
+  fixed clock and fixed seeds, each row wearing the mark the product's own `threadMarksOf` reads
+  from what the plates' window saw off screen (a need's orange dot, and since SP-1d a thread unread
+  in cyan); and, since SP-1d
   (§8 "Chat's thread", "Chat's composer"), the thread:
   - the pane's place: the shipping `SparkPaneView` in the words a window with no terminals says,
     and on three plates its words while it is being found, when this desktop's floor does not hold
@@ -108,6 +109,16 @@ The catalog currently mounts these shipping views directly:
     the shown spark and the plate's draft, drawn by the shipping `ThreadItemsView` inside the
     panel — a spark just hatched saying hello with its three starters, which send nothing there,
     and none where the shown spark has had a turn
+  - the needs-you card (CP-3, §8 "Chat's thread"): on the waiting plate, the product's own
+    `waitingCardOf` stands it in the thread in the hello's place; and in a specimen of its own
+    (`NeedsCardPreview`), the shipping `NeedsCardView` over the product's own `needsCardOf` of
+    fixture items — a spark's question (1 of 3), a held send, a held spawn past the cap, an agent's
+    ask with Show alone, a kind this build does not know, answering, refused, answered three ways
+    (done, an act not done, not heard yet) and a narrow thread, by the page's light and by the
+    Moon's — and the card live: the product's own controller (`useNeedsCard`) over a fixture door
+    that answers after a beat, standing it in the shipping `ThreadItemsView`, where its rise, its
+    "You said …", its way out, the next card's rise, the keyboard on its acts and on the card, and
+    reduced motion (a control on the plate) are seen. Its acts answer nothing outside the plate
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
   waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the

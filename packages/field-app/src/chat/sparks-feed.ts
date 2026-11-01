@@ -2,7 +2,9 @@ import {
   AgentFieldRow,
   ComposeSparksListResult,
   ComposeSparksOpenResult,
+  NeedsAnswerResult,
   NeedsItem,
+  type NeedsItemId,
   type SparkId,
   type SparkSummary,
 } from "@vibefield/contracts";
@@ -16,9 +18,9 @@ import { cellMarkOf, ThreadLedger, type ThreadMark, threadMarksOf } from "./thre
 // (`compose.sparks.list`), the field board (`agent.subscribe {projection: "field"}` — content-free, a snapshot then
 // deltas at its floor), whose rows say whose session a run is (`spark`) and who started it (`origin`), and since CP-3
 // the needs-you queue (`needs.subscribe` — its open items, whole, at each change), which says what waits on you for
-// each spark. The list is asked again only when the board's sparks change — one appears, or one's run leaves — never
-// on a timer. A fieldd without the queue (one before CP-3) refuses its subscribe, and the list stands on the board:
-// no item, said by nothing, never a guess.
+// each spark, and is answered through the same feed (`needs.answer`, by an act's place). The list is asked again only
+// when the board's sparks change — one appears, or one's run leaves — never on a timer. A fieldd without the queue
+// (one before CP-3) refuses its subscribe, and the list stands on the board: no item, said by nothing, never a guess.
 // It holds the window's one ledger of each thread's mark (`thread-marks.ts`): Chat says which thread is on screen
 // (`showThread`), and every reading latches what happened in the others. A module store, as the status line's is:
 // only what reads it redraws when the board moves.
@@ -31,6 +33,9 @@ export interface SparksPort {
   /** CP-3 — the needs-you queue's open items, oldest first: its snapshot, then each change, whole, in order. Resolves
    * to the way to stop; rejects where fieldd has no queue. */
   watchNeeds(onItems: (items: readonly NeedsItem[]) => void): Promise<() => void>;
+  /** CP-3 — answer an item by its act's place among the item's acts (`needs.answer`): the answered item, or fieldd's
+   * refusal thrown. The queue's next frame says it for every window. */
+  answer(item: NeedsItemId, choice: number): Promise<NeedsItem>;
   /** Wake a spark: its last session resumes; a live one is answered as it is (CR-D11). */
   open(spark: SparkId): Promise<SparkSummary>;
 }
@@ -44,6 +49,8 @@ export function sparksPortOver(client: FielddClient): SparksPort {
     watch: (onFrame) => subscribeInOrder(client, "agent.subscribe", FIELD_ASK, onFrame),
     watchNeeds: (onItems) =>
       subscribeInOrder(client, "needs.subscribe", {}, (payload) => onItems(needsItemsOf(payload))),
+    answer: async (item, choice) =>
+      NeedsAnswerResult.parse(await client.request("needs.answer", { item, choice })).item,
     open: async (spark) =>
       ComposeSparksOpenResult.parse(await client.request("compose.sparks.open", { spark })).spark,
   };
@@ -147,6 +154,8 @@ interface FeedState {
   readonly rows: readonly AgentFieldRow[] | null;
   /** Wake, through the feed that reads this window's sparks; null while none does, so no act that wakes is drawn */
   readonly open: SparkOpener | null;
+  /** An answer, through the same feed (CP-3); null while none reads the queue, so nothing is answered */
+  readonly answer: NeedsAnswerer | null;
   /** each thread's mark on the reading (SP-1d): a needs-you dot, or unread; empty before the first reading */
   readonly marks: ReadonlyMap<SparkId, ThreadMark>;
   /** Chat's cell's mark, which the views track draws in another view: needs while any needs-you dot stands, else
@@ -160,6 +169,10 @@ interface FeedState {
  * Send. */
 export type SparkOpener = (spark: SparkId) => Promise<void>;
 
+/** Answer one of the queue's items by its act's place (`needs.answer`, CP-3): the item fieldd handed back with its
+ * answer, or its refusal thrown in fieldd's words, for the card that asked to say. */
+export type NeedsAnswerer = (item: NeedsItemId, choice: number) => Promise<NeedsItem>;
+
 const NO_MARKS: ReadonlyMap<SparkId, ThreadMark> = new Map();
 
 const OPENING: FeedState = {
@@ -168,6 +181,7 @@ const OPENING: FeedState = {
   sessions: null,
   rows: null,
   open: null,
+  answer: null,
   marks: NO_MARKS,
   cell: null,
 };
@@ -264,6 +278,9 @@ class RunningFeed {
       ? { marks: state.marks, cell: state.cell }
       : { marks, cell: cellMarkOf(marks) };
   }
+
+  /** The feed's answer: the queue's next frame says what it did, for every window. */
+  readonly answer: NeedsAnswerer = (item, choice) => this.port.answer(item, choice);
 
   /** The feed's wake: the list is asked again whether it woke or not, since the record says what the door did. */
   readonly open: SparkOpener = async (spark) => {
@@ -372,6 +389,7 @@ class RunningFeed {
         sessions,
         rows,
         open: this.open,
+        answer: this.answer,
         marks: NO_MARKS,
         cell: null,
       });
@@ -393,6 +411,7 @@ class RunningFeed {
       sessions,
       rows,
       open: this.open,
+      answer: this.answer,
       ...this.#marked(),
     });
   }
@@ -446,6 +465,12 @@ export function useSparksReading(): SparksReading {
  * that wakes is drawn. */
 export function useSparkOpener(): SparkOpener | null {
   return useSyncExternalStore(subscribe, () => state.open);
+}
+
+/** Answer the queue's items through the feed that reads them (CP-3): null while no feed runs, when no reading is ready
+ * and so no card stands. */
+export function useNeedsAnswerer(): NeedsAnswerer | null {
+  return useSyncExternalStore(subscribe, () => state.answer);
 }
 
 /** The sparks that need you (S-4), or null before the first reading of the list, the board and the queue: the views

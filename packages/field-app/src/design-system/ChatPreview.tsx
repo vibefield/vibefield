@@ -4,6 +4,7 @@ import { type ReactElement, useState } from "react";
 import { ChatComposerView } from "../chat/ChatComposerView";
 import { ChatPanelView, shownOf } from "../chat/ChatPanelView";
 import { draftBlank } from "../chat/composer-draft";
+import { waitingCardOf } from "../chat/needs-card";
 import { SparkPaneView } from "../chat/SparkPaneView";
 import { threadItemsOf, threadQuiet } from "../chat/thread-items";
 import { threadMarksOf } from "../chat/thread-marks";
@@ -25,7 +26,8 @@ import {
 // here) and the thread's pane: a catalog holds no terminals, so the pane's place shows the shipping `SparkPaneView`'s
 // words, never the live pane. The thread's composer is the shipping `ChatComposerView` on the plate's fixture draft
 // and @ rows, never its controller. What stands in the thread over its pane is the product's own reading
-// (`threadItemsOf`) of the shown spark and the plate's draft: a new spark's hello, whose starters send nothing here.
+// (`threadItemsOf`) of the shown spark and the plate's draft: a new spark's hello, whose starters send nothing here,
+// or on the waiting plate the needs-you card (`waitingCardOf`), whose acts answer nothing here.
 // Each row's mark is the product's own reading (`threadMarksOf`) of what the plates' window saw off screen. The markup
 // and the CSS are the product's.
 
@@ -48,11 +50,16 @@ export function ChatPreview({
   const drafted = CHAT_COMPOSER[state];
   const composer =
     shown === undefined ? undefined : <ChatComposerView name={shown.spark.name} {...drafted} />;
-  // a catalog window has sent nothing, and its pane holds no keyboard: the hello leaves only for a draft
+  // a catalog window has sent nothing, and its pane holds no keyboard: the hello leaves only for a draft; it answers
+  // nothing, so a thread with something waiting on you stands that card (the waiting plate's)
   const items =
     shown === undefined
       ? []
-      : threadItemsOf(shown, threadQuiet(shown, draftBlank(drafted?.seed ?? []), false));
+      : threadItemsOf(
+          shown,
+          threadQuiet(shown, draftBlank(drafted?.seed ?? []), false),
+          waitingCardOf(shown),
+        );
   const marks = threadMarksOf(reading.state === "ready" ? reading.entries : [], CHAT_LATCHES);
   return (
     <ChatPanelView

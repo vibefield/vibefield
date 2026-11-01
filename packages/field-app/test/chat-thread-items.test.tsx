@@ -22,6 +22,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComposerPort } from "../src/chat/ChatComposer";
 import { ChatView } from "../src/chat/ChatView";
+import { NEEDS_IDLE } from "../src/chat/needs-card";
 import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import { ThreadItemsView } from "../src/chat/ThreadItemsView";
 import { helloWords, STARTERS, type ThreadItem } from "../src/chat/thread-items";
@@ -101,6 +102,8 @@ const PORT: ComposerPort = {
 let pushFrame: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
 /** The needs-you queue's open items as the feed's first reading hears them (CP-3); none unless a test says. */
 let queued: readonly NeedsItem[] = [];
+/** The queue's next frame, whole, as needs.subscribe sends it. */
+let pushNeeds: ((items: readonly NeedsItem[]) => void) | null = null;
 
 function feed(rows: AgentFieldRow[], record: SparkSummary): SparksPort {
   return {
@@ -111,8 +114,12 @@ function feed(rows: AgentFieldRow[], record: SparkSummary): SparksPort {
       return () => undefined;
     },
     watchNeeds: async (onItems) => {
+      pushNeeds = onItems;
       onItems(queued);
       return () => undefined;
+    },
+    answer: async () => {
+      throw new Error("nothing is answered here");
     },
     open: async () => record,
   };
@@ -153,6 +160,8 @@ afterEach(() => {
   stopFeed?.();
   stopFeed = null;
   pushFrame = null;
+  pushNeeds = null;
+  vi.useRealTimers();
   stopHearing?.();
   stopHearing = null;
 });
@@ -441,7 +450,7 @@ describe('what Chat lends Send while the queue holds an item (CP-3; DESIGN.md §
 });
 
 describe("the thread's items never move or resize the pane (VF-PM's Q2: one rule for every item)", () => {
-  it("toggling the hello leaves the pane's box as it stood: the same element, the same flow, the items out of it", async () => {
+  it("toggling the hello, or standing a needs-you card, leaves the pane's box as it stood: the same element, the same flow, the items out of it", async () => {
     // The product's stylesheet, in the document, so the column computes as it does in the window. happy-dom lays
     // nothing out (every rect is 0 × 0), so the measure is the box's own terms: the pane is the same element, styled
     // the same, and the foot holds the same things IN FLOW with the hello and without it — the items stand out of
@@ -482,13 +491,32 @@ describe("the thread's items never move or resize the pane (VF-PM's Q2: one rule
       expect(hello()).not.toBeNull();
       expect($(".vf-chat-pane")).toBe(pane);
       expect({ box: box($(".vf-chat-pane")), flow: flow() }).toEqual(withHello);
+
+      // CP-3: the needs-you card stands by the same rule, in the hello's place, and its way out moves nothing either
+      vi.useFakeTimers();
+      await act(async () => pushNeeds?.([VELA_ASKS]));
+      expect(hello()).toBeNull();
+      expect($(".vf-chat-items > .vf-needs-card")).not.toBeNull();
+      expect($(".vf-chat-pane")).toBe(pane);
+      expect({ box: box($(".vf-chat-pane")), flow: flow() }).toEqual(withHello);
+      await act(async () => pushNeeds?.([]));
+      expect($(".vf-needs-card")?.hasAttribute("data-leaving")).toBe(true);
+      expect({ box: box($(".vf-chat-pane")), flow: flow() }).toEqual(withHello);
+      act(() => {
+        vi.advanceTimersByTime(180);
+      });
+      expect($(".vf-needs-card")).toBeNull();
+      // an item is a turn the window saw (a spark asks in a turn), so Vela is no longer new: no hello comes back
+      expect(hello()).toBeNull();
+      expect($(".vf-chat-pane")).toBe(pane);
+      expect({ box: box($(".vf-chat-pane")), flow: flow() }).toEqual(withHello);
     } finally {
       sheet.remove();
     }
   });
 
-  it("draws every kind of item by its own case (the seam CP-3 extends; a kind left undrawn fails to compile)", () => {
-    const DRAWN = ["hello"] as const satisfies readonly ThreadItem["kind"][];
+  it("draws every kind of item by its own case (the seam CP-3 extended; a kind left undrawn fails to compile)", () => {
+    const DRAWN = ["hello", "needs"] as const satisfies readonly ThreadItem["kind"][];
     // a kind in the union that this list does not name is a type error here, as it is in `ThreadItemsView`
     const undrawn: [Exclude<ThreadItem["kind"], (typeof DRAWN)[number]>] extends [never]
       ? true
@@ -501,6 +529,15 @@ describe("the thread's items never move or resize the pane (VF-PM's Q2: one rule
         words: helloWords("Vela"),
         starters: STARTERS,
       },
+      needs: {
+        kind: "needs",
+        item: VELA_ASKS,
+        spark: { id: VELA.id, name: VELA.name },
+        of: 1,
+        act: NEEDS_IDLE,
+        leaving: false,
+        reduced: false,
+      },
     };
     host = document.createElement("div");
     document.body.appendChild(host);
@@ -511,8 +548,9 @@ describe("the thread's items never move or resize the pane (VF-PM's Q2: one rule
         item.getAttribute("data-item"),
       ),
     ).toEqual([...DRAWN]);
-    // with no act handed in (the catalog), a starter pressed does nothing
+    // with no act handed in (the catalog), a starter pressed does nothing, nor does a card's act
     act(() => starters()[0]?.click());
+    act(() => host?.querySelector<HTMLButtonElement>(".vf-needs-act")?.click());
     expect(road.sent).toEqual([]);
   });
 });

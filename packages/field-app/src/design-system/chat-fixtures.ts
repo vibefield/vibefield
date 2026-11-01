@@ -5,14 +5,16 @@ import {
   type AgentModelSelection,
   type AgentProviderSummary,
   NEEDS_CHOICE_WORDS,
+  type NeedsAnswer,
   type NeedsItem,
   type SparkSummary,
 } from "@vibefield/contracts";
 import { atDefaultHot, atRowsOf } from "../chat/at-rows";
 import type { ChatComposerViewProps } from "../chat/ChatComposerView";
 import type { AgentChip, CardChip, DraftPart, SessionChip } from "../chat/composer-draft";
+import { type NeedsAct, type NeedsCard, needsCardOf } from "../chat/needs-card";
 import { agentMenuOf, effortOf, modelWords } from "../chat/new-spark";
-import { sparkEntriesOf } from "../chat/spark-status";
+import { type SparkEntry, sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
 import type { ThreadLatches } from "../chat/thread-marks";
 import type { SparkPanePlace } from "../chat/thread-pane-door";
@@ -24,8 +26,9 @@ import { FIXTURE_HATCHED, FIXTURE_SPARKS } from "./spark-fixtures";
 // Chat's fixture ADAPTER (SP-1b, SP-1d, CP-3; docs/UI_SYSTEM.md): what fieldd would answer — the sparks it keeps, the
 // field board's rows, the needs-you queue's items, the agents and Agent Profiles it offers, an agent's picker — run
 // through the PRODUCT's own readings (`sparkEntriesOf`, @'s `atRowsOf`, the agent menu's `agentMenuOf` and
-// `effortOf`), so the catalog draws what the window would, never a copy of its words. Fixed seeds (`spark-fixtures.ts`)
-// and a fixed clock, so every plate deals the same faces and says the same times.
+// `effortOf`, the needs-you card's `needsCardOf`), so the catalog draws what the window would, never a copy of its
+// words. Fixed seeds (`spark-fixtures.ts`) and a fixed clock, so every plate deals the same faces and says the same
+// times.
 
 /** The catalog's clock: a Saturday morning, 9:41 local. */
 export const FIXTURE_NOW = new Date(2026, 9, 31, 9, 41).getTime();
@@ -441,3 +444,149 @@ export const CHAT_COMPOSER: Partial<Record<ChatState, Omit<ChatComposerViewProps
     armed: true,
   },
 };
+
+// ── the needs-you card's plates (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card) ──
+
+/** Vela, awake, with a transcript behind her: the spark whose thread every card plate stands in. */
+const VELA = SPARKS[0] as SparkSummary;
+
+/** A session's name as fieldd's `runLabel` gives it, and @'s ordinal (DESIGN.md's "claude·2"), from the catalog. */
+const HANDLE = `${AGENT.id}·2`;
+
+/** One of Vela's open items, as needs.subscribe would say it. */
+function velaItem(over: Partial<NeedsItem> & Pick<NeedsItem, "id" | "kind">): NeedsItem {
+  return {
+    state: "open",
+    from: { name: VELA.name, session: "run-vela", spark: VELA.id },
+    spark: VELA.id,
+    asked: minutesAgo(2),
+    ...over,
+  };
+}
+
+const QUESTION = velaItem({
+  id: "ny-platequestion",
+  kind: "question",
+  words: "Push the fix to main now, or hold it for the review?",
+  choices: ["Push", "Hold", NEEDS_CHOICE_WORDS.notNow],
+});
+const HELD_SEND = velaItem({
+  id: "ny-plateheldsend",
+  kind: "held-send",
+  words: "run the tests in packages/fieldd and tell me what fails",
+  count: 3,
+  choices: [NEEDS_CHOICE_WORDS.allow, NEEDS_CHOICE_WORDS.notNow],
+  to: { session: "run-his-1", name: HANDLE },
+});
+const HELD_SPAWN = velaItem({
+  id: "ny-plateheldspawn",
+  kind: "held-spawn",
+  words: "review the input queue's restore for a forged file",
+  choices: [NEEDS_CHOICE_WORDS.allowOneMore, NEEDS_CHOICE_WORDS.notNow],
+  agent: AGENT.id,
+  folder: "vibe-field",
+  live: 8,
+});
+const AGENT_ASK: NeedsItem = {
+  id: "ny-plateagentask",
+  kind: "agent-ask",
+  state: "open",
+  // an agent Vela started, asking in its own pane
+  from: { name: HANDLE, session: "run-vela-agent" },
+  spark: VELA.id,
+  asked: minutesAgo(1),
+  ask: "permission",
+  tool: "Bash",
+  count: 1,
+};
+/** A kind this build never heard of (a flow's gate, say): drawn, never dropped. */
+const UNKNOWN = velaItem({
+  id: "ny-plateunknown",
+  kind: "gate",
+  state: "waiting",
+  words: "Push 0.7.25?",
+  choices: ["Push", "Hold"],
+});
+
+/** Vela as Chat reads her with `items` in the queue (the product's own reading). */
+function velaWith(items: readonly NeedsItem[]): SparkEntry {
+  const entry = sparkEntriesOf([VELA], ROWS, { items }).find((each) => each.spark.id === VELA.id);
+  if (entry === undefined) throw new Error("the fixture spark is not in its own reading");
+  return entry;
+}
+
+/** The item fieldd hands back once answered: as it was, with its answer. */
+function answeredOf(item: NeedsItem, choice: number, over: Partial<NeedsAnswer> = {}): NeedsItem {
+  return {
+    ...item,
+    state: "answered",
+    answer: { choice, at: minutesAgo(0), outcome: "done", told: true, ...over },
+  };
+}
+
+/** One plate: a card as the thread would stand it, by the product's own `needsCardOf`. */
+export interface NeedsPlate {
+  readonly id: string;
+  readonly label: string;
+  readonly card: NeedsCard;
+  /** a thread too narrow for its acts on one row */
+  readonly narrow?: boolean;
+}
+
+const plate = (
+  id: string,
+  label: string,
+  waiting: readonly NeedsItem[],
+  item: NeedsItem,
+  act?: NeedsAct,
+): NeedsPlate => ({ id, label, card: needsCardOf(velaWith(waiting), item, act) });
+
+/** Each kind of item as it waits on you. */
+export const NEEDS_KIND_PLATES: readonly NeedsPlate[] = [
+  plate("question", "A spark's question, 1 of 3", [QUESTION, HELD_SEND, HELD_SPAWN], QUESTION),
+  plate("held-send", "A held send, two more behind it", [HELD_SEND], HELD_SEND),
+  plate("held-spawn", "A held spawn, past the cap", [HELD_SPAWN], HELD_SPAWN),
+  plate("agent-ask", "An agent's own ask: Show", [AGENT_ASK], AGENT_ASK),
+  plate("unknown", "A kind this build does not know", [UNKNOWN], UNKNOWN),
+];
+
+/** What an answer does to it: running, refused, and answered here three ways. */
+export const NEEDS_ANSWER_PLATES: readonly NeedsPlate[] = [
+  plate("busy", "Answering", [HELD_SEND], HELD_SEND, { state: "busy", choice: 0 }),
+  plate("refused", "Refused", [QUESTION], QUESTION, {
+    state: "refused",
+    reason: "fieldd is not answering (the daemon is restarting)",
+  }),
+  plate("done", "Answered", [], answeredOf(QUESTION, 0), { state: "said", choice: 0 }),
+  plate(
+    "failed",
+    "Answered, the act not done",
+    [],
+    answeredOf(HELD_SPAWN, 0, { outcome: "failed", reason: "the agent's sign-in has expired" }),
+    { state: "said", choice: 0 },
+  ),
+  plate(
+    "unheard",
+    "Answered, not heard yet",
+    [],
+    answeredOf(QUESTION, 0, { told: false, waits: "Vela's session is not running yet" }),
+    { state: "said", choice: 0 },
+  ),
+  { ...plate("narrow", "A narrow thread", [HELD_SPAWN], HELD_SPAWN), narrow: true },
+];
+
+/** The live plate's queue: three of Vela's items, answered by a fixture door after a beat. */
+export const NEEDS_LIVE_ITEMS: readonly NeedsItem[] = [QUESTION, HELD_SEND, HELD_SPAWN];
+
+/** Vela's reading with what is left of the live plate's queue. */
+export const needsLiveEntryOf = (items: readonly NeedsItem[]): SparkEntry => velaWith(items);
+
+/** What the fixture door hands back for each live item: the question done; the send's Allow not done (its session
+ * ended); the spawn's Allow one more done while Vela sleeps, so she has not heard it. Not now is done for each. */
+export function needsLiveAnswerOf(item: NeedsItem, choice: number): NeedsItem {
+  if (item.kind === "held-send" && choice === 0)
+    return answeredOf(item, choice, { outcome: "failed", reason: `${HANDLE} ended` });
+  if (item.kind === "held-spawn" && choice === 0)
+    return answeredOf(item, choice, { told: false, waits: "Vela's session is not running yet" });
+  return answeredOf(item, choice);
+}

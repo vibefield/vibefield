@@ -42,6 +42,7 @@ import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { DeskPreview } from "../DeskPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
+import { NeedsCardLivePlate, NeedsCardPlates } from "../NeedsCardPreview";
 import { NewSparkSpecimen } from "../NewSparkPreview";
 import { PACKAGE_CIRCLE_STATES, PackageCirclePlate } from "../PackageCirclePreview";
 import { PEERS_STATES, PeersPlate } from "../PeersPreview";
@@ -235,6 +236,27 @@ export function ChromeSection({
           and send, at rest and typing; @'s list with the agents to start and the sessions running;
           an agent's menu in its box (its model and Effort); and the chips an agent, a session and a
           card make. Fixture sparks, rows and agents, read by the product's own readings.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The needs-you card — what waits on you, in the thread"
+        source="chat/NeedsCardView.tsx · chat/needs-card.ts · chat/needs-card-stand.ts · DESIGN.md §8 “Chat's thread”, §9 “Chat's words”"
+        bleed
+      >
+        <NeedsCardLivePlate />
+        <NeedsCardPlates />
+        <p className="vf-ds-stage-caption">
+          CP-3: the queue's item for the thread's spark, one card at a time over the pane, drawn by
+          Chat. Live, the product's own controller over three of Vela's items, answered by a fixture
+          door after a beat: an act pressed waits with its word and an ellipsis, then says what you
+          said (a send that could not go, a spawn its sleeping spark has not heard) for a note's
+          time, and leaves; the next rises once it has gone. Tab reaches the acts with the kit's
+          ring, and a pressed act puts the keyboard on the card; Reduced motion fades each way.
+          Still, each kind as it waits — a spark's question (1 of 3), a held send, a held spawn past
+          the cap, an agent's ask with Show alone, a kind this build does not know — then answering,
+          refused, answered three ways and a narrow thread, by this page's light and by the Moon's.
+          Fixture items read by the product's own card.
         </p>
       </Specimen>
 

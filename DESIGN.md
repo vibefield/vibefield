@@ -1721,7 +1721,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         first is `primary` and the rest `quiet`, and Not now is always last: a question's are the spark's own choices,
         then Not now; a held send's, Allow and Not now; a held spawn's, Allow one more and Not now (§9). An agent's ask
         has **Show** alone, quiet, which goes to its pane in Godview (History's Jump to). It is answered there, never
-        here (CP-L4, AR-6).
+        here (CP-L4, AR-6). A pane Show cannot show is said in the line's note in Jump to's words, "Could not jump —
+        ‹why›", as the Peek's pick is (§8 "Search — the Peek").
     - **A kind this build does not know** is drawn, never dropped, because the need is real. The eyebrow says Needs
       your OK, the question says "Vela needs you", and its words stand when it has them. Its acts are the choices
       fieldd hands it, answered by their place as every act is (§9); with none, it has Show when it names a session,
@@ -1748,6 +1749,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       When the answer returns and its card is no longer on screen (you left the thread, or Chat is not the view), the
       line is said on the status line instead (§8 "The status line"), as a plain notice in the same words, so what a
       failed or unheard answer came to is always said: "You said Allow one more · Couldn't start the agent: ‹reason›".
+      A refusal that returns off screen is said there too, in the card's words, "Couldn't answer: ‹fieldd's words›".
       An answer that went as asked says nothing there, since the pane's line of facts says it (§9).
       *A deviation from the plate, said:* the Sparks page's answered card stays in the thread, "You said Push". Here the
       thread's items are an overlay, not a transcript. The pane is the spark's transcript, and VibeField's line of facts
@@ -2849,9 +2851,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   one standing, so one agent's notices never hold back another's (PF4's watermark). The line says
   only what is told while the window listens: a notice told before it is no news. While no
   VibeField window is in front, main says it outside the app as well (§9). An answer given on a
-  needs-you card that did not go as asked, or that its spark has not heard, is said here too when
-  it returns after its card has left the screen, as a plain notice in the card's own words ("You
-  said Allow one more · Couldn't start the agent: …"; §8 "Chat's thread", the needs-you card).
+  needs-you card that did not go as asked, that its spark has not heard, or that fieldd refused, is
+  said here too when it returns after its card has left the screen, as a plain notice in the card's
+  own words ("You said Allow one more · Couldn't start the agent: …"; "Couldn't answer: …"; §8
+  "Chat's thread", the needs-you card).
 - **The selection bar** (Chrome on the Mat §3.1; MC-D2 the line's glass, ruled 2026-10-01; MC-D1;
   One Frame §7; R1, R2, R3, R7–R10, R23, R25; DK-11): one element over `handle.selection`'s anchor,
   placed imperatively each time the anchor publishes — never a render per frame.

@@ -1,7 +1,9 @@
+import type { NeedsItem } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { UiButton } from "@vibefield/design-kit/primitives";
 import { SparkFace } from "@vibefield/design-kit/spark-face";
-import type { ReactElement } from "react";
+import type { ReactElement, Ref } from "react";
+import { NeedsCardView } from "./NeedsCardView";
 import type { HelloItem, ThreadItem } from "./thread-items";
 
 // THE THREAD'S ITEMS, DRAWN (SP-1d; DESIGN.md §8 "Chat's thread") — controller-free, so the catalog draws this markup
@@ -15,6 +17,12 @@ export interface ThreadItemsViewProps {
   onStarter?: ((words: string) => void) | undefined;
   /** a send into the thread runs, a starter's or Send's: the starters wait, and a press does nothing */
   sending?: boolean | undefined;
+  /** CP-3 — an act pressed on the needs-you card, by its place (absent: the catalog, where nothing is answered) */
+  onAnswer?: ((item: NeedsItem, choice: number) => void) | undefined;
+  /** CP-3 — Show pressed on an agent's ask: its pane in Godview */
+  onShow?: ((item: NeedsItem) => void) | undefined;
+  /** CP-3 — the needs-you card's own element, which the keyboard is put on */
+  cardRef?: Ref<HTMLDivElement> | undefined;
 }
 
 /** NS-D4's hello: the spark's face as its lead, its words, and the three starters one under another. */
@@ -55,6 +63,9 @@ export function ThreadItemsView({
   items,
   onStarter,
   sending = false,
+  onAnswer,
+  onShow,
+  cardRef,
 }: ThreadItemsViewProps): ReactElement | null {
   if (items.length === 0) return null;
   /** Each kind of item, drawn by its own case; a kind added to `ThreadItem` fails to compile here until it is. */
@@ -63,9 +74,21 @@ export function ThreadItemsView({
     switch (item.kind) {
       case "hello":
         return <HelloView key={key} item={item} onStarter={onStarter} sending={sending} />;
+      case "needs":
+        // one element per item, so the next card rises as its own
+        return (
+          <NeedsCardView
+            key={`needs:${item.item.id}`}
+            card={item}
+            onAnswer={onAnswer}
+            onShow={onShow}
+            ref={cardRef}
+          />
+        );
       default: {
-        const undrawn: never = item.kind;
-        throw new Error(`a thread item this build does not draw: ${String(undrawn)}`);
+        const undrawn: never = item;
+        const { kind } = undrawn as { readonly kind: unknown };
+        throw new Error(`a thread item this build does not draw: ${String(kind)}`);
       }
     }
   };
