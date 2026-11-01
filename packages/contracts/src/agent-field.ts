@@ -840,9 +840,26 @@ export const AgentModelMeshFrame: z.ZodType<AgentModelMeshFrame, z.ZodTypeDef, u
  * active pane, by MODEL id. The screen is the CONNECTION's own model board
  * (identity is transport-derived, never on the wire — P6): the door refuses a
  * report from a connection with no model board open, and a closed board
- * forgets its screen (M20). An empty list clears the report. */
+ * forgets its screen (M20). An empty list clears the report.
+ *
+ * PG-3b (PG-D6 (a), J2 (a), 2026-11-01) — a `remote` board is a screen too,
+ * and the report is routed by `device` like every federated call: a phone
+ * reports another desktop's rows through its HOME, which carries it only for a
+ * connection holding a `{projection: "remote", scope: "mesh"}` board (else the
+ * same `no-screen` refusal). The owner keys the screen it opens for a carried
+ * report by the envelope's `onBehalfOf` {deviceId, windowId} under the peer
+ * connection that carried it, restrict-only (DS-L7 as amended 2026-11-01;
+ * `forwarding.ts` F1b's clause is the model): the key splits one peer
+ * connection's reports into per-reader sets, never reaches another
+ * connection's screen and grants nothing. A carried report acknowledges
+ * nothing (Q06): only this desktop's own window looks for the person. */
 export const AgentReportShownParams = z
-  .object({ ids: z.array(z.string().min(1)).max(4096) })
+  .object({
+    ids: z.array(z.string().min(1)).max(4096),
+    /** the desktop whose rows these are (design-04 §6's `device?`); absent or
+     * this desktop's own id is served here */
+    device: z.string().min(1).optional(),
+  })
   .passthrough();
 export type AgentReportShownParams = z.infer<typeof AgentReportShownParams>;
 export const AgentReportShownResult = z.object({ reported: z.literal(true) }).passthrough();
