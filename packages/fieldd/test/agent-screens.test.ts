@@ -472,6 +472,91 @@ describe("PG-3b — the phone is a screen, through the home", () => {
     await settle();
     expect(carried.length).toBe(before + 1);
   });
+
+  // the fold check (2026-11-01) — what the replay carries is what the phone shows NOW
+  it("PG-3b — after a failed empty, a re-dial carries nothing non-empty: the phone said it shows nothing", async () => {
+    const lost = new RpcCallError("UNAVAILABLE", "peer unreachable", true, {
+      service: "peer-link",
+      device: OWNER,
+      state: "unreachable",
+    });
+    let verdict: Error | undefined;
+    const { homeScreens, routed, carried } = await pair({
+      fail: () => {
+        const once = verdict;
+        verdict = undefined;
+        return once;
+      },
+    });
+    homeScreens.openBoard(phone(), REMOTE_MESH);
+    await routed(phone(), ["run-x"]);
+    verdict = lost;
+    await refusal(routed(phone(), []));
+    // still owed the close's empty, and nothing to replay
+    expect(homeScreens.size.owners).toBe(1);
+    const before = carried.length;
+    homeScreens.linkReady(OWNER);
+    await settle();
+    expect(carried.slice(before).filter((entry) => entry.ids.length > 0)).toEqual([]);
+  });
+
+  it("PG-3b — a re-dial while a report is in flight replays that report, not the one before it", async () => {
+    const { homeScreens, routed, carried } = await pair({
+      latencyMs: (ids) => (ids.includes("run-y") ? 40 : 0),
+    });
+    homeScreens.openBoard(phone(), REMOTE_MESH);
+    await routed(phone(), ["run-x"]);
+    const inFlight = routed(phone(), ["run-y"]);
+    await settle(5);
+    homeScreens.linkReady(OWNER);
+    expect(await inFlight).toEqual({ reported: true });
+    await settle(60);
+    expect(carried.map((entry) => entry.ids)).toEqual([["run-x"], ["run-y"], ["run-y"]]);
+  });
+
+  it("PG-3b — a report the owner refused is undone in the replay too: the re-dial carries the last one that stood", async () => {
+    const refused = new RpcCallError(
+      "PRECONDITION_FAILED",
+      "this peer connection carries 64 readers' screens already",
+      false,
+      { state: "no-screen", reason: "carried-cap" },
+    );
+    let verdict: Error | undefined;
+    const { homeScreens, routed, carried } = await pair({
+      fail: () => {
+        const once = verdict;
+        verdict = undefined;
+        return once;
+      },
+    });
+    homeScreens.openBoard(phone(), REMOTE_MESH);
+    await routed(phone(), ["run-x"]);
+    verdict = refused;
+    await refusal(routed(phone(), ["run-z"]));
+    const before = carried.length;
+    homeScreens.linkReady(OWNER);
+    await settle();
+    expect(carried.slice(before).map((entry) => entry.ids)).toEqual([["run-x"]]);
+  });
+
+  it("PG-3b — the owner's upstream comes back on the same connection (a hub resync): the replay puts the carried screen back", async () => {
+    const { owner, ownerScreens, homeScreens, routed } = await pair();
+    const id = owner.row("run-working").id;
+    const first = ownerScreens.openBoard(peer(), { projection: "remote", scope: "local" });
+    const second = ownerScreens.openBoard(peer(), { projection: "remote", scope: "local" });
+    homeScreens.openBoard(phone(), REMOTE_MESH);
+    await routed(phone(), [id]);
+    first?.();
+    second?.();
+    expect(ownerScreens.size.carried).toBe(0);
+    // the hub re-attaches on the same peer connection: no re-dial, the upstream's return is the cue
+    ownerScreens.openBoard(peer(), { projection: "remote", scope: "local" });
+    homeScreens.linkReady(OWNER);
+    await settle();
+    expect(ownerScreens.size.carried).toBe(1);
+    turn(owner);
+    expect(owner.row("run-working").unread).toBe(false);
+  });
 });
 
 /** the runtime's failure on a run whose PTY died (agent-monitor.test.ts's `crashed`) */

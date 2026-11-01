@@ -130,7 +130,11 @@ const registryPeer = (deviceId: string, host: string, online = true) => ({
  * which the other desktop's registry row correlates to this desktop's slice:
  * the peer kind is the transport's to give. `routes` resolves lazily: the
  * doors exist only once both daemons are up. */
-function sidecar(routes: Record<string, () => string>, node: string): WsCtor {
+function sidecar(
+  routes: Record<string, () => string>,
+  node: string,
+  dialled: WebSocket[] = [],
+): WsCtor {
   class SidecarSim extends WebSocket {
     constructor(url: string) {
       const host = Object.keys(routes).find((name) => url.includes(name));
@@ -138,6 +142,8 @@ function sidecar(routes: Record<string, () => string>, node: string): WsCtor {
       super(url.includes(".ts.net") ? target : url, {
         headers: { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": node },
       });
+      // PG-3b — every socket this desktop's peer link dialled, so a row can cut one (a network blip)
+      dialled.push(this);
     }
   }
   return SidecarSim;
@@ -150,6 +156,8 @@ interface Side {
   pane: string;
   /** this daemon's loopback door with its route secret — what the OTHER dials */
   door: string;
+  /** the sockets its peer link dialled, latest last */
+  dialled: WebSocket[];
 }
 
 async function bootSide(
@@ -165,6 +173,7 @@ async function bootSide(
   const run = `run-${deviceId}`;
   const pane = `pane-${deviceId}`;
   writeRun(dataDir, run, pane);
+  const dialled: WebSocket[] = [];
 
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   mock.meshDeviceId = deviceId;
@@ -182,10 +191,10 @@ async function bootSide(
     dataDir,
     controlPort: 0,
     dataPort: 0,
-    peerWebSocket: sidecar({ [`${peer.host}.tailnet.ts.net`]: route }, `node-${deviceId}`),
+    peerWebSocket: sidecar({ [`${peer.host}.tailnet.ts.net`]: route }, `node-${deviceId}`, dialled),
   });
   cleanup.push(() => daemon.stop());
-  return { daemon, mock, run, pane };
+  return { daemon, mock, run, pane, dialled };
 }
 
 async function doorOf(side: Omit<Side, "door">): Promise<string> {
@@ -745,6 +754,25 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     // shown: every flush of B's backend sees it again
     await flushB();
     expect(seen() ?? 0).toBeGreaterThan(reported);
+    // a network blip: A's socket to B goes. B forgets the screens that connection carried, and when A's link
+    // answers its re-dial, A carries the phone's report again under the new connection
+    const cut = A.dialled.at(-1);
+    if (cut === undefined) throw new Error("A dialled no peer socket");
+    cut.terminate();
+    await until(
+      () => B.daemon.agentScreens.size.carried === 0,
+      5_000,
+      "B forgets the cut connection's screens",
+    );
+    await until(
+      () => B.daemon.agentScreens.size.carried === 1,
+      10_000,
+      "the re-dial carries the report again",
+    );
+    expect(A.dialled.length).toBeGreaterThan(1);
+    const replayed = seen() ?? 0;
+    await flushB();
+    expect(seen() ?? 0).toBeGreaterThan(replayed);
     // the home's own rows: routed to itself, served by its own screen (the remote board is one)
     expect(await phone.call("agent.reportShown", { ids: [A.pane], device: "dev-a" })).toEqual({
       reported: true,

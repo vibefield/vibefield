@@ -139,6 +139,8 @@ async function tick(): Promise<void> {
 
 interface Harness {
   board: MeshBoard;
+  /** PG-3b — each upstream that came back, by device (`onUpstreamReady`) */
+  ready: string[];
   roster: FakeRoster;
   links: FakeLinks;
   upstreams: FakeUpstreams;
@@ -155,11 +157,13 @@ function harness(rows: DeviceInfo[], selfDevice: () => string = () => SELF): Har
   const links = new FakeLinks();
   const upstreams = new FakeUpstreams();
   const local: Harness["local"] = { emit: null, opened: 0, disposed: 0 };
+  const ready: string[] = [];
   const board = new MeshBoard({
     selfDevice,
     roster,
     links,
     upstreams,
+    onUpstreamReady: (device) => ready.push(device),
     openLocal: (_projection, _floor, emit) => {
       local.emit = emit as NonNullable<Harness["local"]["emit"]>;
       local.opened += 1;
@@ -171,7 +175,7 @@ function harness(rows: DeviceInfo[], selfDevice: () => string = () => SELF): Har
       };
     },
   });
-  return { board, roster, links, upstreams, local };
+  return { board, ready, roster, links, upstreams, local };
 }
 
 /** A reader, and the frames it has heard. */
@@ -904,6 +908,47 @@ describe("PG-1d — this desktop's own board, re-presented in the hub", () => {
       delta: { epoch: "self-boot.1", since: 1, revision: 2 },
     });
     late.dispose();
+    r.dispose();
+  });
+});
+
+// PG-3b (the fold check, 2026-11-01) — an owner's upstream coming back is announced, at its first attach and at the
+// re-attach after a resync on the same link: the home's carried reports ride beside it and are carried again then
+// (`agent-screens.ts` `linkReady`), since a resync closes the owner's remote board without any re-dial.
+describe("PG-3b — the mesh board says when an owner's upstream is back", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-09-30T21:00:00.000Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("PG-3b — onUpstreamReady fires once the snapshot is applied, and again after a resync re-attaches", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const [first] = h.upstreams.attaches;
+    if (first === undefined) throw new Error("no upstream");
+    expect(h.ready).toEqual([]);
+    h.upstreams.answer(first, peerSnapshot());
+    await tick();
+    expect(h.ready).toEqual(["dev-b"]);
+    // an unreadable delta breaks the chain: the hub detaches, then re-attaches on the same link
+    first.emit(
+      {
+        epoch: "boot-dev-b.3",
+        since: 41,
+        revision: 42,
+        upserts: [row("", "dev-b", 8)],
+        removed: [],
+      },
+      "delta",
+    );
+    expect(first.disposed).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const again = h.upstreams.attaches.at(-1);
+    if (again === undefined || again === first) throw new Error("no re-attach");
+    h.upstreams.answer(again, peerSnapshot(50));
+    await tick();
+    expect(h.ready).toEqual(["dev-b", "dev-b"]);
     r.dispose();
   });
 });
