@@ -692,7 +692,14 @@ describe("release-notes (AU-6)", () => {
     expect(ReleaseNotes.parse(eight)).toEqual(eight);
   });
 
-  it("reads the log as git writes it: no merges, newest first, a folded Release-note: trailer unfolded", () => {
+  // Item 143 (2026-11-01) — this row is twelve `git` starts in a row (the fixture repo's eleven, then readCommits' log),
+  // synchronous, so a loaded host stretches it, and vitest's 5 s default cut it at 5,074 ms (AL-6's light, load ~117).
+  // Measured in this Mac's logged suites since the row came (AU-6b, 2026-10-29; 24 runs): a median 898 ms, p90 2,649,
+  // the greens' worst 4,646; the mini's 116 verify runs, a median 1,001 and a worst 1,736. Its claim is the log's
+  // reading, never a time: 10 s is almost twice the worst this Mac has logged.
+  it("reads the log as git writes it: no merges, newest first, a folded Release-note: trailer unfolded", {
+    timeout: 10_000,
+  }, () => {
     const dir = scratch();
     let at = 1_790_000_000;
     // place-scanner's temporary repo: its own identity, no global or system config; each commit a minute later
