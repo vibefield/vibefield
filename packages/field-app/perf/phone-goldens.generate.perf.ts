@@ -35,7 +35,7 @@ describe("the phone's parity goldens", () => {
       const moved =
         before === null ? ["a new golden: its first bless"] : goldenChanges(before, bytes);
       const verdict = before === null ? "WRITTEN" : moved.length === 0 ? "unchanged" : "RE-BLESSED";
-      report.push(`${name}: ${verdict} (${bytes.length} B)`);
+      report.push(`${name}: ${verdict} (${Buffer.byteLength(bytes)} bytes)`);
       for (const line of moved) report.push(`  ${line}`);
       if (moved.length > 0)
         for (const folder of PHONE_GOLDEN_MIRRORS[name] ?? [])
