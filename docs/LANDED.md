@@ -27513,3 +27513,52 @@ the home's hub upstream may still be attaching at the phone's first report). Bou
     device and not retried on every open.
   - The 3e brief mirrors them (VF-PM).
 - PG-3e mirrors `agent-report-shown.routed.json` into the kit (the fixtures, above).
+
+## Item 146b — the phone stage places a Simulator.app's start by its age between two reads of the clock, never by lstart's local wall time, so DST's repeated hour cannot make the run's own app foreign
+
+(2026-11-01; three commits `7773c5420` → `ab0199542` on lane `fix/item146` over main `ae430892b`, the fixer's; M87 is
+`ab0199542` itself, a fast-forward of main `ae430892b`, run 87.) Item 146's own copies (item 146 is puppeteer's ps
+reader, upstream), granted at 09:30Z: PORTALS's find and VF-PM's grep.
+
+**The red.** America/Los_Angeles fell back at 09:00Z, so local 01:00–02:00 ran twice, PDT then PST. `ps -o lstart=`
+prints local wall time with no offset, so in that hour its text names two instants, and the stage's `parseLstart`
+(`new Date(y, m, d, h, mi, s)`) took the first. A Simulator.app launched between 09:00 and 10:00Z read 3,600 s early,
+"started before ARMED": FOREIGN, exit 75 instead of a quit. Witnessed live on this Mac inside the hour, three times
+(09:32:59Z, 09:40:19Z, 09:41:30Z): a process one or two seconds old read 3,601–3,602 s old.
+
+**The fix (`7773c5420`, `184f485da`).** `scripts/stage-simulator-fixture.mjs` reads `ps -o etime=` (macOS's ps has no
+`etimes`; measured) through `parseEtime`, and `etimeStart(etime, before, after)` gives the start as a range between
+two reads of the clock around the `ps` call. `etime` is a difference of whole seconds, the clock's and the start's each
+truncated (measured: "00:02" for a process 1.5 s old), so the start lies after `before - (etime + 1) s` and before
+`after - (etime - 1) s`. The first cut assumed the floor of the age and ended its range a second early; the light's
+live witness caught it, and `184f485da` corrected it. `simulatorProof` keeps its direction: the run quits a Simulator
+only when proven its own. "After ARMED" is proven by the range's earliest, "before the run's launch" by its latest.
+`parseLstart` is gone, and `lstart` is no longer read.
+
+**Audited and left.** `packages/electron-shell/src/testing/terminal-perf-lab.ts:666` and `:970` hand their
+`ps -axwwo pid=,ppid=,lstart=,command=` listings to `tooling/terminal-perf/src/reap.ts`. There `lstart`'s five fields
+are joined into `startedAt` and only compared for equality with a later listing of the same pid: an identity string,
+never a time. The text is rendered from the start instant with that instant's own offset, so it reads the same before
+and after the fall back.
+
+**Tests.** The fake host holds a start in ms and answers both `etime=` (from its clock) and `lstart=` (rendered in the
+process's zone, so main's read can be run against it). The proof rows take exact or bracketing ranges. A
+parseEtime / etimeStart row holds the start inside the range for both readings of etime. A new row walks Simulator
+starts through 08:30Z–10:30Z on 2026-11-01 under TZ=America/Los_Angeles through `simulatorNow`. S7's two fake hosts
+now keep a clock after the starts they report (`ab0199542`): etime is an age, and their starts had been in their own
+future.
+
+**The light** (lane item146, `lanes/item146/tools/light146{,b,c}.sh`, logs `lanes/item146/light/`). light146 stopped
+at its live witness: the first cut's range ended before the live start. light146b stopped at the stage's tests, on
+S7's skewed fixture. light146c (09:41:28Z → 09:41:46Z, load 10, at `ab0199542`) was green throughout:
+- L1, live: main's `parseLstart` read a process started at 01:41:28 PST as 08:41:28Z, 3,601 s off. L2, live: the
+  fix's range, 09:41:29.718Z–09:41:31.721Z, held the start (spawned 09:41:30.203Z).
+- R1: the walk on main's stage, 12 of 25 starts not the run's, every one of them 09:00:20Z–09:55:20Z, "it started
+  before ARMED". G1: the walk on the fix's stage, 0 of 25.
+- The stage's test file alone, 99/99; biome on the two files; dev-runner whole, 364/364, under a HOLD line the script
+  released at its exit.
+- Run 87 on the mini (a9's mint; VF-PM's read, 12:04:13Z): 11,816 passed, 0 failed, 18 skipped, main's count, every
+  file's unchanged; node 364 (+1, the walk row); cargo 33 ok.
+
+**Owed.** Nothing of the fixer's. Item 146 itself, puppeteer's ps reader, is upstream; its issue draft names the
+kernel's start, or `etime` with a 2 s window, since macOS's ps has no `etimes`.

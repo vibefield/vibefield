@@ -470,6 +470,9 @@
   items 142, 143 and 145 (a smoke's process is gone when the kernel says so, in the launchers' reap and the in-app
   teardown, and `unreaped` is said of the rest; release-notes' row and typed-agent's real-zsh row name their measured
   15 s: `00b6fe2ac` as the merge `fc2a896ec`, run 81; LANDED "Items 142, 143 and 145") ·
+  item 146b (the phone stage places a Simulator.app's start by its `etime` between two reads of the clock, never by
+  `lstart`'s local wall time, so DST's repeated hour cannot make the run's own app foreign; perf-lab's lstart an
+  identity string, left: `ab0199542` as M87, a fast-forward, run 87; LANDED "Item 146b") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
