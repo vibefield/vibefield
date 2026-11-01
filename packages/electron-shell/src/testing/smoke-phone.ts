@@ -871,7 +871,12 @@ export function judgeUse(s: UseSeen): {
 
 /** SIM-STILL: ONE still filed under the binding, laid at rest after a reload at the law's dim, and handed over to live. */
 export interface StillSeen {
+  /** `stats.stillsTaken` around the put-down — its `before` read only once the live service has SETTLED (T5: a take in
+   * flight, begun in hand by the 30 s clock and kept after the read, counted 8 → 10 in run 1101) */
   readonly taken: { readonly before: number; readonly after: number };
+  /** the put-down's moment (main's clock, before Esc) and when φP's filed still BEGAN (`pageStill`'s `takenAt`, the
+   * page's wall clock; null: none filed) — the stats keep no take's start, so the still filed is the witness */
+  readonly begun: { readonly putDown: number; readonly still: number | null };
   readonly address: string | null;
   readonly want: string;
   readonly extraStill: boolean;
@@ -916,6 +921,11 @@ export function judgeStill(s: StillSeen): string[] {
   const out: string[] = [];
   if (s.taken.after !== s.taken.before + 1)
     out.push(`SIM-STILL: the put-down took ${s.taken.after - s.taken.before} stills, not one`);
+  if (s.begun.still === null) out.push("SIM-STILL: no still filed for φP — its take unread");
+  else if (s.begun.still < s.begun.putDown)
+    out.push(
+      `SIM-STILL: the still filed began ${s.begun.putDown - s.begun.still} ms before the put-down — an at-rest take's, not the put-down's`,
+    );
   if (s.address !== s.want)
     out.push(`SIM-STILL: the still is filed under ${JSON.stringify(s.address)}, not ${s.want}`);
   if (s.extraStill) out.push("SIM-STILL: the face's words carry a still (R14)");
@@ -2491,14 +2501,19 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const proof = await liveProven(p);
       if (proof.ms === null) return { problems: judgeLiveProven("SIM-STILL (in hand)", proof) };
       const live = await glassOf(p, true, band);
+      // settled BEFORE the count: a take in flight (the 30 s clock's, begun in hand) lands in `before`, never in the
+      // put-down's window (T5; run 1101 read 8 → 10)
+      await js("globalThis.__vfDesk.liveSettled()");
       const taken0 = (await stats())?.stillsTaken ?? 0;
+      const putDownAt = Date.now();
       await putDown();
       await js("globalThis.__vfDesk.liveSettled()");
       await sleep(800);
       const taken1 = (await stats())?.stillsTaken ?? 0;
-      const address = await js<string | null>(
-        `globalThis.__vfDesk.pageStill(${JSON.stringify(p)}).then((s) => s?.address ?? null)`,
+      const filed = await js<{ address: string; takenAt: number } | null>(
+        `globalThis.__vfDesk.pageStill(${JSON.stringify(p)}).then((s) => s === null ? null : { address: s.address, takenAt: s.takenAt })`,
       );
+      const address = filed?.address ?? null;
       const extraStill = (await screenOf(p))?.still ?? false;
       // reopened off view: the reload frames the content on arrival (use-workspace-session), so away AFTER it (R3)
       const reloaded = await d.reload();
@@ -2555,6 +2570,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       const handover = await liveProven(p);
       const seen: StillSeen = {
         taken: { before: taken0, after: taken1 },
+        begun: { putDown: putDownAt, still: filed?.takenAt ?? null },
         address,
         want: stillAddress(typeOf(1), env.runtime),
         extraStill,

@@ -799,6 +799,7 @@ describe("PT-S3 — the rows' judges", () => {
     expect(want).toBe(`ios-simulator:${TP}/${RUNTIME}`);
     const seen: StillSeen = {
       taken: { before: 0, after: 1 },
+      begun: { putDown: 1_700_000_000_000, still: 1_700_000_000_120 },
       address: want,
       want,
       extraStill: false,
@@ -831,6 +832,48 @@ describe("PT-S3 — the rows' judges", () => {
     );
     expect(judgeStill({ ...seen, extraStill: true }).join(" ")).toMatch(/R14/u);
     expect(judgeStill({ ...seen, taken: { before: 0, after: 2 } }).join(" ")).toMatch(/2 stills/u);
+  });
+
+  it("SIM-STILL: an at-rest take landing in the window is counted BEFORE it (the live service settled first), and the still filed is the put-down's (T5)", () => {
+    const want = stillAddress(TP, RUNTIME);
+    const ok: StillSeen = {
+      taken: { before: 9, after: 10 },
+      begun: { putDown: 1_700_000_030_000, still: 1_700_000_030_140 },
+      address: want,
+      want,
+      extraStill: false,
+      live: measure(),
+      reloaded: true,
+      rested: { still: 1_700_000_030_140, rested: true },
+      seen: measure({ colors: 300, bandMean: [128, 22, 76] }),
+      predicted: [128, 22, 76],
+      handover: proof,
+    };
+    // run 1101 (out:69, out:84): the 30 s at-rest take, begun in hand before the count and kept after it, read 8 → 10
+    expect(judgeStill({ ...ok, taken: { before: 8, after: 10 } }).join(" ")).toMatch(
+      /took 2 stills, not one/u,
+    );
+    // settled before the count, that take is in `before` (9): the put-down's is the one
+    expect(judgeStill(ok)).toEqual([]);
+    // one still counted, but the still filed began BEFORE the put-down: the at-rest take's, the put-down took none
+    expect(
+      judgeStill({ ...ok, begun: { putDown: 1_700_000_030_000, still: 1_700_000_029_400 } }).join(
+        " ",
+      ),
+    ).toMatch(/the still filed began 600 ms before the put-down/u);
+    expect(
+      judgeStill({ ...ok, begun: { putDown: 1_700_000_030_000, still: null } }).join(" "),
+    ).toMatch(/no still filed for φP/u);
+    // the row settles the live service BEFORE it counts, and marks the put-down's moment before Esc
+    const body = rowBodies(SOURCE).find((r) => r.name === "SIM-STILL")?.body ?? "";
+    const settle = body.indexOf('await js("globalThis.__vfDesk.liveSettled()");');
+    const count0 = body.indexOf("const taken0 = (await stats())?.stillsTaken ?? 0;");
+    const mark = body.indexOf("const putDownAt = Date.now();");
+    const down = body.indexOf("await putDown();");
+    expect(settle).toBeGreaterThan(0);
+    expect(count0).toBeGreaterThan(settle);
+    expect(mark).toBeGreaterThan(count0);
+    expect(down).toBeGreaterThan(mark);
   });
 
   it("SIM-CAP: waiting at rest on its still DIMMED, the pane put to rest (rests +1), the held surface unchanged 1 s on (R17)", () => {
