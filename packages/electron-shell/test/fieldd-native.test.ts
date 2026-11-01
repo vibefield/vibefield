@@ -22,16 +22,20 @@ vi.mock("@vibefield/fieldd-supervisor", () => ({
   },
 }));
 
-const { buildSupervisor } = await import("../src/main/fieldd");
+const { buildSupervisor, sayFatalSmokeHome } = await import("../src/main/fieldd");
 const { resolveDevelopmentResources } = await import("../src/main/resources");
 
 const cleanup: (() => void)[] = [];
 const savedNative = process.env["FIELDD_NATIVE_BIN"];
+const savedDataDir = process.env["FIELDD_DATA_DIR"];
 afterEach(() => {
   for (const fn of cleanup.splice(0).reverse()) fn();
   stub.created.length = 0;
+  vi.restoreAllMocks();
   if (savedNative === undefined) delete process.env["FIELDD_NATIVE_BIN"];
   else process.env["FIELDD_NATIVE_BIN"] = savedNative;
+  if (savedDataDir === undefined) delete process.env["FIELDD_DATA_DIR"];
+  else process.env["FIELDD_DATA_DIR"] = savedDataDir;
 });
 
 /** A development tree: fieldd's bundle always (buildSupervisor refuses a missing launch target), the cargo debug
@@ -86,5 +90,38 @@ describe("buildSupervisor — a smoke's field-native (item 134b)", () => {
     delete process.env["FIELDD_NATIVE_BIN"];
     build("dev", devTree(false));
     expect(stub.created.at(-1)).not.toHaveProperty("nativeExecutable");
+  });
+});
+
+/** What `sayFatalSmokeHome` wrote to stdout. */
+function said(run: () => void): string[] {
+  const lines: string[] = [];
+  vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+    lines.push(String(chunk));
+    return true;
+  });
+  run();
+  vi.restoreAllMocks();
+  return lines;
+}
+
+describe("sayFatalSmokeHome — a smoke gone fatal before its run names its kept HOME (item 134)", () => {
+  it("names the root dataRoot minted, kept, in the line a red run's teardown writes", () => {
+    delete process.env["FIELDD_DATA_DIR"];
+    const home = mkdtempSync(join(tmpdir(), "vf-smoke-"));
+    cleanup.push(() => rmSync(home, { recursive: true, force: true }));
+    expect(said(() => sayFatalSmokeHome("smoke-canvas", home))).toEqual([
+      `SMOKE_HOME ${JSON.stringify({ home, removed: false })}\n`,
+    ]);
+  });
+
+  it("names nothing outside a smoke, or for an injected FIELDD_DATA_DIR (someone else's data)", () => {
+    const home = mkdtempSync(join(tmpdir(), "vf-smoke-"));
+    cleanup.push(() => rmSync(home, { recursive: true, force: true }));
+    delete process.env["FIELDD_DATA_DIR"];
+    expect(said(() => sayFatalSmokeHome("dev", home))).toEqual([]);
+    expect(said(() => sayFatalSmokeHome("production", home))).toEqual([]);
+    process.env["FIELDD_DATA_DIR"] = home;
+    expect(said(() => sayFatalSmokeHome("smoke", home))).toEqual([]);
   });
 });

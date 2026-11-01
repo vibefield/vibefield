@@ -847,11 +847,80 @@ export function rowsMark(line) {
   return end === null ? null : { end: Number(end[1]) };
 }
 
-/** Red when the smoke never said BEGIN or END ("--phone not in this build"), said another mode, or its count is not the
- * rows the door saw open and close, or not the mode's count. */
-export function rowsVerdict({ mode, begin, end, served }) {
+/** A `SMOKE_HOME {…}` line's home (the data root a red smoke keeps and names, DK-18), or null. */
+export function smokeHomeOf(line) {
+  const at = line.indexOf("SMOKE_HOME {");
+  if (at === -1) return null;
+  try {
+    const { home } = JSON.parse(line.slice(at + "SMOKE_HOME ".length));
+    return typeof home === "string" && home.length > 0 ? home : null;
+  } catch {
+    return null;
+  }
+}
+
+const oneLine = (text) =>
+  String(text)
+    .replace(/\s*\n\s*/gu, " ")
+    .trim()
+    .slice(0, 400);
+
+/** The last record of `event` in an NDJSON log, as its error's words (or its msg), or null. */
+function lastWords(path, event, fs) {
+  let text;
+  try {
+    text = fs.readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+  let words = null;
+  for (const line of text.split("\n")) {
+    try {
+      const record = JSON.parse(line);
+      if (record?.event === event) words = oneLine(record.err?.message ?? record.msg ?? event);
+    } catch {}
+  }
+  return words;
+}
+
+/** Item 134: why a smoke that never said BEGIN stopped, from the HOME it kept — the desktop's
+ * `desktop.lifecycle.fatal`, and each user's fieldd `fieldd.lifecycle.bootstrap_failed` when it says more — or null. */
+export function fatalWords(home, fs = { readFileSync, readdirSync }) {
+  const said = [];
+  const desktop = lastWords(
+    join(home, "logs/system/desktop.ndjson"),
+    "desktop.lifecycle.fatal",
+    fs,
+  );
+  if (desktop !== null) said.push(`desktop.lifecycle.fatal: ${desktop}`);
+  let users = [];
+  try {
+    users = fs.readdirSync(join(home, "logs/users"));
+  } catch {}
+  for (const user of users) {
+    const fieldd = lastWords(
+      join(home, "logs/users", user, "system/fieldd.ndjson"),
+      "fieldd.lifecycle.bootstrap_failed",
+      fs,
+    );
+    if (fieldd !== null && !(desktop ?? "").includes(fieldd))
+      said.push(`fieldd.lifecycle.bootstrap_failed: ${fieldd}`);
+  }
+  return said.length === 0 ? null : said.join(" · ");
+}
+
+/** Red when the smoke never said BEGIN or END, said another mode, or its count is not the rows the door saw open and
+ * close, or not the mode's count. No BEGIN says why from the smoke's kept HOME when it named one (`fatal`, item 134),
+ * else that it never reached the rows — never "not in this build": the preflight proved the bundle carries --phone. */
+export function rowsVerdict({ mode, begin, end, served, fatal = null }) {
   if (begin === null)
-    return { ok: false, why: "no PHONE_ROWS_BEGIN: --phone is not in this build" };
+    return {
+      ok: false,
+      why:
+        fatal === null
+          ? "no PHONE_ROWS_BEGIN: the smoke never reached the rows"
+          : `no PHONE_ROWS_BEGIN: the smoke stopped before the rows — ${fatal}`,
+    };
   if (begin !== mode) return { ok: false, why: `PHONE_ROWS_BEGIN mode=${begin}, not ${mode}` };
   if (end === null) return { ok: false, why: "no PHONE_ROWS_END: the rows never finished" };
   if (end !== served)
@@ -2445,11 +2514,12 @@ async function launch(mode, command, opts) {
         for (const line of preflightLines(late)) deps.say(line);
         code = 1;
       } else if (signalled === null) {
-        const marks = { begin: null, end: null };
+        const marks = { begin: null, end: null, home: null };
         const watch = (line) => {
           const mark = rowsMark(line);
           if (mark?.begin !== undefined) marks.begin = mark.begin;
           if (mark?.end !== undefined) marks.end = mark.end;
+          marks.home = smokeHomeOf(line) ?? marks.home;
         };
         const out = redactStream(redactor, "main", (line) => {
           watch(line);
@@ -2463,7 +2533,13 @@ async function launch(mode, command, opts) {
         if (sampler !== null) clearInterval(sampler);
         code = exited.code;
         deadlineHit = exited.deadlineHit;
-        const rows = rowsVerdict({ mode, begin: marks.begin, end: marks.end, served: run.served });
+        const rows = rowsVerdict({
+          mode,
+          begin: marks.begin,
+          end: marks.end,
+          served: run.served,
+          fatal: marks.begin === null && marks.home !== null ? fatalWords(marks.home) : null,
+        });
         deps.say(`PHONE_ROWS ${JSON.stringify({ ...rows, voids: run.voids })}`);
         if (code === 0 && !rows.ok) code = 1;
       }
