@@ -20,7 +20,8 @@
 //                              named (P5's default; the console runs set it on James's word, brief §13 RM2)
 //   VF_PHONE_GUARD_AWK, VF_PHONE_PERF_LOCK, VF_PHONE_DISK_FLOORS (`<path>:<GiB>[,…]`)
 //                              another host's house rules (the mini's); unset, this Mac's. PHONE_HOUSE_RULES says which
-// Exit: the command's own code; 1 for a red preflight, rows record or restore; 2 for a usage error; 75 NOT ARMED or
+// Exit: the command's own code; 1 for a red preflight, rows record or restore; 2 for a usage error (a reused run id among
+// them: `<logs>/<run>/` already holding a file, T7); 75 NOT ARMED or
 // STOPPED (a hand, a locked console, a foreign device booted mid-run, a Simulator.app not proven the run's) over a
 // restored host — a DETERMINISTIC stop (RM4.5's own-input reset; the press gate refusing an act or a device not the
 // run's) is 1 and PHONE_STOP_FINAL, and a STOP whose teardown left the host unrestored is 1 and PHONE_STOP_UNRESTORED;
@@ -256,7 +257,24 @@ export function readOptions(env) {
   };
 }
 
-/** The type list the smoke is handed: `n:<type>` (n 1..3 the run's devices, 4 the no-device type); `none` mode's one
+/** T7: a run id is ONE launch's. Its folder (`dirname(VF_PHONE_HID_LOG)`, `<logs>/<run>/`) already there and holding
+ * anything is a reused id: two launches as one run append into one HID and stage log and one `tee` loses the first's
+ * stdout. Answers the refusal's line, or null for a new run (the folder absent, or empty). Read before ANYTHING is
+ * written; `--sweep` and `--preflight-only` never ask. */
+export function reusedRun(opts, fs = { readdirSync }) {
+  const dir = dirname(opts.hidLog);
+  let entries;
+  try {
+    entries = fs.readdirSync(dir);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    entries = null;
+  }
+  if (entries !== null && entries.length === 0) return null;
+  return `stage-simulator-fixture: run ${opts.run} was launched before — ${dir} ${entries === null ? "is not a readable folder" : `already holds ${entries.length} file(s)`}: choose a new VF_PHONE_RUN (and its VF_PHONE_HID_LOG)`;
+}
+
+/** The type list the smoke is handed:`n:<type>` (n 1..3 the run's devices, 4 the no-device type); `none` mode's one
  * type has no device. Never a UDID. */
 export function devicesWord(mode, types) {
   return mode === "none" ? `1:${types[0]}` : types.map((type, i) => `${i + 1}:${type}`).join(",");
@@ -2706,6 +2724,12 @@ async function main() {
   const opts = readOptions(process.env);
   if (opts.errors.length > 0) {
     process.stderr.write(`${opts.errors.join("\n")}\n`);
+    return 2;
+  }
+  // T7: a reused run id refused before anything is written (launch's folder, its stage log, its HID record)
+  const reused = reusedRun(opts);
+  if (reused !== null) {
+    process.stderr.write(`${reused}\n`);
     return 2;
   }
   return launch(args.mode, args.command ?? [], opts);

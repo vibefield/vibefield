@@ -74,6 +74,7 @@ const {
   realExec,
   redactStream,
   responsibleApp,
+  reusedRun,
   restoreHost,
   restoredVerdict,
   rowsMark,
@@ -370,6 +371,59 @@ test("readOptions: the deadline is bounded at 6 h — a timer past 2^31-1 ms fir
   assert.equal(at(MAX_DEADLINE_MS).deadlineMs, MAX_DEADLINE_MS);
   // the bound and caffeinate's extra hour both fit a 32-bit timer
   assert.ok(MAX_DEADLINE_MS + 3_600_000 <= 2 ** 31 - 1);
+});
+
+/** `main()`'s own text, from its head to the next top-level close: it runs on the host, so its ORDER is held from its
+ * source (as `launchSource`). */
+const mainSource = () => {
+  const source = readFileSync(
+    join(import.meta.dirname, "../../../scripts/stage-simulator-fixture.mjs"),
+    "utf8",
+  );
+  const head = source.indexOf("\nasync function main(");
+  assert.ok(head >= 0, "main() is in the stage");
+  return source.slice(head, source.indexOf("\n}\n", head));
+};
+
+test("reusedRun: a run folder that exists and holds anything refuses the launch — exit 2 in main, before anything is written (T7)", () => {
+  assert.equal(typeof reusedRun, "function", "the stage exports reusedRun");
+  const hidLog = "/lanes/pts3/logs/l2-1101/l2-1101-hid.log";
+  const opts = readOptions({ VF_PHONE_RUN: "l2-1101", VF_PHONE_HID_LOG: hidLog });
+  const read = [];
+  const fsOf = (entries) => ({
+    readdirSync: (path) => {
+      read.push(path);
+      if (entries instanceof Error) throw entries;
+      return entries;
+    },
+  });
+  const enoent = Object.assign(new Error("ENOENT: no such file or directory"), { code: "ENOENT" });
+  // a new run: its folder absent, or there and empty
+  assert.equal(reusedRun(opts, fsOf(enoent)), null);
+  assert.equal(reusedRun(opts, fsOf([])), null);
+  assert.deepEqual(read, ["/lanes/pts3/logs/l2-1101", "/lanes/pts3/logs/l2-1101"]);
+  // James's two L2 launches as l2-1101: the second finds run A's logs — refused, naming the run, and the way out
+  const line = reusedRun(opts, fsOf(["l2-1101-hid.log", "l2-1101-stage.log", "shots"]));
+  assert.match(line, /\bl2-1101\b/u);
+  assert.match(line, /choose a new VF_PHONE_RUN/u);
+  // the path a file, or unreadable: never taken for a new run
+  const notDir = Object.assign(new Error("ENOTDIR"), { code: "ENOTDIR" });
+  assert.match(reusedRun(opts, fsOf(notDir)), /choose a new VF_PHONE_RUN/u);
+  // the real fs: a folder that holds files is refused; one not there is a new run
+  const real = (dir) =>
+    reusedRun(readOptions({ VF_PHONE_RUN: "l2-t1", VF_PHONE_HID_LOG: join(dir, "l2-t1-hid.log") }));
+  assert.match(real(FIXTURES), /\bl2-t1\b.*choose a new VF_PHONE_RUN/u);
+  assert.equal(real(join(FIXTURES, "no-such-run-folder")), null);
+  // main: read right after the options, BEFORE launch (its mkdirSync, its stage log, its HID record) — exit 2; the
+  // sweep and the preflight-only return before it
+  const main = mainSource();
+  const at = main.indexOf("reusedRun(opts)");
+  assert.ok(at > main.indexOf("readOptions(process.env);"), "after the options are read");
+  assert.ok(at > main.indexOf("return sweep("), "the sweep is unaffected");
+  assert.ok(at > main.indexOf("return preflightOnly()"), "the preflight is unaffected");
+  const launched = main.indexOf("return launch(");
+  assert.ok(at < launched, "before launch writes anything");
+  assert.match(main.slice(at, launched), /return 2;/u, "a usage error: exit 2");
 });
 
 test("commandEnv: DEVELOPER_DIR never reaches the command; none points the product at /var/empty; types, never UDIDs", () => {
