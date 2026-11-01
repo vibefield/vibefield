@@ -83,6 +83,15 @@ export function buildSupervisor(opts: {
   if (launchTarget === undefined || !existsSync(launchTarget)) {
     throw new Error(`fieldd bin missing (build it): ${launchTarget ?? "(unset)"}`);
   }
+  // Item 134b — a missing field-native is handed to no one (`nativeExecutable` below), and fieldd then waits its
+  // whole readiness deadline for a floor nothing starts. Development tolerates that on purpose (the dev runner builds
+  // and starts the floor itself; resources.ts's assertPackagedResources); a smoke has no runner, so it says the path
+  // at once instead of "did not come up" ten seconds later.
+  if (isSmokeLike(opts.mode) && !existsSync(nativeBin)) {
+    throw new Error(
+      `field-native bin missing (build it: cargo build -p field-native): ${nativeBin}`,
+    );
+  }
   const policy = shutdownPolicy(opts.mode);
   // UA-D12/UA-5 — ephemeral ports EVERYWHERE, no mode split. The old
   // rationale ("a leave-running mode wants the registry ports so its
