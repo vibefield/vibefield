@@ -8,10 +8,11 @@ import SwiftUI
 /// why in words — asleep is grey, never "offline" (§9); what the phone can do
 /// with it is drawn only while it is connected.
 ///
-/// Later slices read more, each a glance like these: its agent catalog and
-/// profile sets over its door, its History's index, its VibeField version
-/// (the roster's `appVersion`). Its running agents are the Field's, read
-/// through the home (PG-L4.6), never here.
+/// Later slices read more, each a glance like these and each through the home
+/// (FW-R6, DS-L4; James's ruling of 2026-10-31 22:08Z): its agent catalog and
+/// profile sets, its History's index, its VibeField version (the roster's
+/// `appVersion`). Its running agents are the Field's, read through the home
+/// (PG-L4.6), never here.
 struct DesktopPage: View {
   let desktop: SettingsDesktop
   let standing: SettingsAccount.Standing
