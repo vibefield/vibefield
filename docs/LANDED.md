@@ -26320,3 +26320,59 @@ Checks), in the commits' own order:
 - Not claimed: the walk's pixels are row 32's alone; the vitest rows hold how it names, cuts and judges, never a
   capture. The Text ramp is measured on chrome grounds (the glass re-projects t2–t4 to its own text, judged by the
   walks' words). `mode` is printed, never judged, and the frozen frame under reduced motion stays unclaimed.
+
+## Item 137 — a shell promoted to an agent keeps its body in the Godview: the window's fold dropped the model id a key let go of although another key of the same desktop held it, so the promotion (and the run's end) drew a departure and a birth where M22 keeps one body (2026-11-01; `a13132333` and `49935e71b` on main `86b788e2f`, lane `item137` in `/Volumes/SamsungRed/lanes/pg3`, as the Mac mini's run 70, M70 = the tip itself, landed as a pure fast-forward)
+
+**Found by PG-3a0** (the PG-3 brief `lanes/ios/PG3-BRIEF.md`, ruled by VF-PM 2026-11-01 02:46Z; P1: "fix in its own
+item if red"). The probe asked one question of the owner's boards: does a promotion travel as ONE delta? It went red at
+02:50:39Z, and VF-PM filed it at 02:52Z as ITEM 137. It predates PG: the window's `ModelBoardFold` dropped an id by
+its key alone, and M22 made a promoted shell's run carry the shell's model id under another key.
+
+**The finding, plainly.**
+- A run promoted from a shell carries the shell's model id (M22, `hostRunFromSummary`), so the board KEY of that one
+  model row changes: the run's key arrives carrying `pty-shell` while the shell's key `pty-shell` leaves. The owner
+  sends both in one delta, on the `remote` cut and on the `model` board alike: `{upserts:[run-typed→pty-shell],
+  removed:[pty-shell]}`. The run's end is the mirror image: `{upserts:[pty-shell→pty-shell], removed:[run-typed]}`.
+- `ModelBoardFold`'s delta applied the upserts, then dropped the id each removed key held, by key alone. So the frame
+  that promoted the shell deleted the row it had just taken in, and the replica was told the id was removed.
+- **What a person saw:** a window's swarm drew the shell's body leaving and a new body born on the run's next change,
+  where M22 rules one body. At the run's end the bare terminal stayed gone until the terminal itself changed.
+- The phone has no such fold yet (PG-3d transcribes this one), so it is fixed before it is ported.
+
+**What** (`a13132333` the owner-side pin, `49935e71b` the fold and its row; 3 files +237 −15):
+- **The fold** (`field-app/src/godview/monitor/model-board.ts`): the ids a key lets go of in a delta (a removed key, a
+  key whose row moved to another id, a key with no model row) are collected, and each is dropped only if no key of
+  that desktop maps to it once the whole frame is applied. A key that leaves alone still takes its row with it.
+- **The window's red row** (`field-app/test/godview-model-board.test.ts`, "item 137"): the golden board's own terminal
+  `pty-s4` promoted and returned against the real fold AND the real replica. The fold reports no removal either way,
+  and the replica takes each as `updated: ["pty-s4"]`, never a removal and a birth.
+- **The snapshot path** reads the same rule: an id is gone when no key of the device maps to it now. It asked whether
+  a KEY named like the old id existed (`#keyOf`, retired), a latent miss once one id can move between keys.
+- **The owner-side pin** (`fieldd/test/agent-board-promotion.test.ts`, new): both boards replayed by key leave some
+  key holding the id after every frame, and each change ends under the one key the backend's row stands under. It
+  holds the reader's invariant, not the owner's batching (the review's point).
+- **The replica needs no change** (read, and proved by the red row): `createMonitorReplica` applies an upsert of a
+  held id as an update, whatever its kind; it only ever saw the removal because the fold reported one.
+
+**Validation.**
+- **Red first**, in lane `pg3` at nice 19 under the guard and co-plan/HOLD, with no PERF.lock:
+  - the probe (`lanes/ios/pg3a0-probe.sh`), 02:48:03 → 02:50:39Z: both boards red, `expected [] to deeply equal
+    ['pty-shell']` after the promotion, the owner's deltas printed paired;
+  - item 137's row on main's fold swapped in (`lanes/ios/item137-light.sh`, never committed): `expected [ 'pty-s4' ]
+    to deeply equal []`.
+- **The review** (workflow `wf_43403c40-2fe`, three lenses: the fold's correctness, the replica's claim and the
+  window's consumers, the tests and the words): no must, four nits, all folded (the snapshot rule, the pin's
+  invariant, the comment's width, the chrome's runs and a same-board snapshot in the row).
+- **The light** at the tip (`49935e71b`, 02:58:02 → 02:58:54Z, `lanes/ios/item137-light.sh`):
+  - biome on the three files, and field-app's and fieldd's typecheck;
+  - field-app's six fold-reading files, 6 files and 48 tests: the committed lab streams replay unchanged, nothing
+    re-blessed;
+  - the fieldd pin, 2 of 2.
+- **Run 70** (M70 `49935e71b`, the mint-rebased shape: the tip on main `86b788e2f`, minted by a9 on VF-PM's GO):
+  - `pnpm verify` armed 03:00:36Z, exit 0 at 03:05:25Z (about five minutes), the mini's tree clean after it.
+  - vitest 11,485 passed, 0 failed, 18 skipped, +3: the pin's 2 and godview-model-board's 1. cargo 534 passed, 0
+    failed, 14 ignored (33 `ok`). Typecheck and test ran for 28 projects.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run70/` (`mrun70.bundle`, sha256 `3d4615b2c591a9ef…`).
+- **Landed:** main fast-forwarded `86b788e2f` → `49935e71b` at 2026-11-01 03:08:38Z on VF-PM's GO.
+
+**Owed.** Nothing. PG-3d's Swift fold transcribes the fixed rule and its parity suite ports item 137's row.
