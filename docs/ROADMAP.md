@@ -240,12 +240,13 @@
   and paced by its caller's kind (a peer window 100 ms; the phone 1 s, its urgent edge 250 ms). Bare terminals ride it
   (PG-D5), their directory as its folder; each window's mesh asks its peers for `remote`, the phone's `{remote, mesh}`
   door is open at its home, and `desk` retired.
-- Next: PG-3 (the phone's replica under the swarm: the kit decodes `AgentRemoteRow` from mirrored goldens, folds by
-  `ModelBoardFold`'s rule, retires `UsageLedger`/`UnreadLedger`/the stale rule, and routes `reportShown` through the
-  home, PG-D6). Sliced and ruled (VF-PM 2026-11-01 02:46Z, the brief `lanes/ios/PG3-BRIEF.md`): 3a0 the promotion
-  probe, paid by item 137 → 3a the witness goldens ∥ 3b `reportShown` through the home (contracts and fieldd) →
-  3c the kit decodes → 3d the Swift fold → 3e the switch; James ruled J1–J4 at 03:55Z, all (a), and item 138
-  (the fold keeps each desktop's place) landed before 3a's golden; 3a and 3b building
+  **PG-3a** (11-01), the witness goldens (`b13390352` → `c5dfba715`, M80 `d14e97880`; LANDED "PG-3a"): the remote cut's
+  states a phone reads row for row, hand-written and held to fieldd's own cut, and the home's window computed over
+  them as `phone-fold.golden.json` and `phone-body.golden.json`, which the kit transcribes (J1 (a)); item 144 found.
+- Next: PG-3's remaining slices (the brief `lanes/ios/PG3-BRIEF.md`; James ruled J1–J4 at 2026-11-01 03:56Z, all
+  (a)): 3b `reportShown` through the home (contracts and fieldd; J2, owner screens keyed by `onBehalfOf`) → 3c the
+  kit decodes the remote cut from the mirrored goldens (after F1b's kit half) → 3d the Swift fold and replica, held
+  to `phone-fold.golden.json` → 3e the switch, held to `phone-body.golden.json` (J3 per hour; J4 ahead of PU-I)
   → PG-5…PG-8 (list, timeline, spend, rain, native) → PG-9 (resume, `agent.get`, the measured rates).
   PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
@@ -253,7 +254,8 @@
   and the ticket mint read different things), an old owner's run-id fallback (a design question) and a kit comment
   (`AgentTerminalFace.swift`); from PG-2, the draft queue's amendments (design-06's SP-L4, DS-D4 and limits "not
   built" clauses, design-mv §1, build-mv L8 and M29, the design record's §8 as built), and `field`'s retirement one
-  release of skew after the kit ships (PG-L1).
+  release of skew after the kit ships (PG-L1); from PG-3a, the kit's copies of its goldens (3c), and at a draft slot
+  PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's remote-cut self-check).
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -446,6 +448,9 @@
   item 138 (a peer's rows moved in the window's order, the rain's columns, on a whole re-send that changed
   nothing: the fold listed `#held` by insertion; now by the board's device order, each row it still holds in
   place; found by PG-3a's design check; `569ee11cb`, M74 `815babbd3` run 74; nothing owed; LANDED "Item 138") ·
+  item 144 (the projection bench's count self-check left the remote cut's bare terminals out since PG-2: red,
+  ungated; found by PG-3a's light; `8cf8c1a05`, M80 `d14e97880`; owed: PG-1e0's erratum at a draft slot; LANDED
+  "Item 144") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).

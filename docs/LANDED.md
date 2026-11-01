@@ -26979,3 +26979,151 @@ item's Quit VibeField is then the quit. AL-D10 "A" stands: no LaunchAgent, with 
 - L2 again, under a new run id, launched by James. It carries L1's re-run with item 133's preflight.
 - Then SIM-STOPPED-CLOSED and P7's hand witness, if James offers.
 - L3 on the mini on his word, or skipped.
+
+## PG-3a — the witness goldens: the remote cut's states a phone must read row for row, hand-written and held to fieldd's own cut, and the home's window computed over them as the parity and body goldens the kit will transcribe (Q-J1 (a)) (2026-11-01; `b13390352` → `c5dfba715`, eleven commits on main `26f9c2537`, lane `pg/3a` in `/Volumes/SamsungRed/lanes/pg3`, in the mini's mint M80 `d14e97880` over main `fc512fa17`, run 80)
+
+**What James ruled.** J1–J4, all (a), 2026-11-01 03:56Z: James typed "Good, all ruled on pg3" at 03:55Z and
+confirmed all three leans to VF-PM at 03:56Z, on the page *PG-3 · four marks* (artifact `4oE5h2fczLMssjM3Po5cDs` v2,
+the visual page). A page's picks live in the records; this entry and DECISIONS' PG row are where they are kept.
+- **J1 (a):** the phone equals the home's window row for row. Home rows are self and keep their owner's stale; a
+  peer greys by its desktop's standing (`window-rows.ts`). PG-L2's "the row's stale" takes a dated clarification.
+- **J2 (a):** an owner keys a forwarded screen by `onBehalfOf` (DS-L7 amended): 3b's.
+- **J3 (a):** the burn is per hour, as the desktop's; folded at its lean.
+- **J4 (a):** 3e ships ahead of PU-I, a dated deviation from PG-D9: 3e's.
+
+**Why the goldens.** Every PG-2 remote golden row is read, fresh and keyed by its own id, so "cost, unread and stale
+equal, row for row" had nothing to compare. PG-3a writes the states that matter and computes, by the window's own
+code, what the home's window draws over them, so the kit's fold (3d) and body model (3e) are held to bytes rather than
+to a reading of TypeScript.
+
+**What** (eleven commits; 17 files, +3,662 −4; no product line):
+- **The witness, contracts first** (`b13390352`, `9eac6fe20`; hand-written, as every remote golden is, EL9):
+  - `agent-remote-mesh-open.witness.json`: the home (Studio) live with seven rows, a live peer (Loft) with three,
+    an asleep peer (Attic) carrying the board its home kept (DS-L8). Among them: a row unread with a final reply; a
+    row priced `partial` with a burn (30/h); an unpriced row its owner calls stale; promoted rows whose key is not
+    their id (M22), on the home and on Loft (the J1 discriminator: blocked on a question, stale by its owner); bare
+    terminals named by their folder; a crashed run kept on its terminal join (Q06); the project-key pair (a run with
+    no cwd named by its provider, one with only a workspace by its root). A Loft agent is born between two of the
+    home's, so the contract's order and the window's differ.
+  - `agent-remote-mesh-frames.witness.json`, nine frames: the promotion in one delta (item 137's case), a turn ending
+    unread at partial coverage, Loft re-presented byte for byte (PG-1d), Loft stale, Loft re-attached on a new chain
+    of the same boot, live again, a removal on each desktop, and a delta on Loft's old chain (the gap).
+  - `agent-remote-mesh-open.resync.json`: PG-1c's whole-mesh resync, the mesh as it stands after frame 7, with one
+    home change the reader never heard (the home's window read `run-h-turn`).
+  - `agent-field-snapshot.project-keys.json`: the field cut of the pair. It names neither run, so the kit's
+    `projectName ?? label` keys both "Claude Code" where the remote cut says two names: the migration 3e proves.
+  - `contracts/test/agent-field.test.ts`, the describe "PG-3a — the witness goldens" (11 rows): each scenario
+    element, PG-2's per-row checks (no `project.seq`, no path, texts at `DESK_TEXT_CHARS`, no field half), and both
+    doors (`AgentRemoteMesh*`, the window's `AgentModelMesh*`).
+- **The producer witness** (`a00ea7147`, `636047fea`; `field-app/test/phone-goldens-producer.test.ts`, 5 rows): the
+  home and Loft stood up through `model-board-fixture.ts` (fieldd's real backend and `RemoteProjection`; the peer gains
+  `terminals`), and every hand row held to the cut on its key, owner, model id, kind, project and terminal join with
+  its workload class: the open, frame 0's promotion, frame 1's unread mark, frame 4's re-attach, and the field pair
+  through `projectFieldRow`. It closes PG-2's open EL9 side for the remote cut.
+- **The computation** (`36e0f2216`, `f4e49e8fd`, `bb0ce73b5`; `field-app/perf/lib/phone-goldens.ts`): the REAL
+  `createGodviewMonitorFeed` over a scripted `ModelBoardPort`, the window's visibility rule (`phoneVisible`: alive, or
+  a failure with a terminal join here) handed anew when the board's joins move, then J1 (a)'s window rows
+  (`createWindowRows`, `createRowOrder`, `boardJoins`), then puppeteer-views' `bubbleModel`. One step per delivery to
+  the gap, each a cut after one frame. Per step: the fold's revision and the replica's, each desktop's standing, what
+  the fold handed and what the replica published, the contract's order and the window's, and each drawn row's key,
+  self, unread, stale and cost; per body its state, radius, copy with its marks, figures, burn, light, ring and
+  blocker. `pnpm --filter @vibefield/field-app phone:goldens` is the one writer and prints what moved.
+- **The goldens** (`74216a595`, re-blessed `d06e8116d` and `c5dfba715`): `field-app/test/fixtures/phone-godview/`
+  `phone-fold.golden.json` (26,787 bytes) and `phone-body.golden.json` (42,134 bytes), pinned byte for byte by
+  `test/phone-parity.test.ts` (13 rows: the bytes, the versions as installed, the header's rule, BoardScreen passing
+  every witness frame, and semantic rows that read no golden bytes). The kit reaches them through `OTHER_ORIGINS` in
+  `scripts/check-ios-fixtures.mjs`, inert until PG-3c adds the copies; biome leaves them to the generator.
+- **The pin's recipe:** pnpm-workspace.yaml's puppeteer EL8 note says the same commit re-blesses the phone's goldens
+  and says it; the parity test states no version literal.
+
+**Deltas from the design** (`lanes/ios/pg3a-design.md`, its twelve binding corrections):
+- The producer witness lives in field-app beside the fixture that already cuts a peer through fieldd's code, not in
+  a fieldd test (correction 3); it holds Loft too, not the home alone (the review).
+- J1 (a) alone ships: no switch, no (b) branch (correction 10). The computation lives in `perf/lib` (correction 11).
+- Both revisions are recorded (correction 1), and the publications are heard by `subscribe`.
+- Beyond the design, from the review: a crashed home run and the window's real visibility rule (Q06, `keepsFailure`
+  over the board's joins), the resync step, the body's marks (`hot`, italics for a configured effort, the state line's
+  icon), and a header that states the rule. Left out and said in the body golden's note: a running terminal's elapsed
+  line (the window's own first-sight clock, a clock value like `asOf`) and the profile line (the window's spawn menu).
+- `vitest.perf.config.ts` inlines puppeteer's packages, as the suite's config does (their views import CSS).
+
+**Found.**
+- **A hand fact the owner never makes:** a run with no PTY carries the fold's join verbatim, `terminal: {hosted:
+  "none"}` (`projectRemoteRow`, `projectFieldRow`), where the hand goldens left it out. The producer witness's first
+  run caught it; fixed as authoring before any bless.
+- **Item 144:** the projection bench's count self-check, red on main since PG-2 (`5e70a6c44`) and ungated, found when
+  the review widened the light to prove the perf config. Its own entry below.
+- **The window's open is a race,** not a defect: `deliverOpen` applies the open and then publishes `live`, and the
+  window's render on that publish re-joins before the replica's frame usually lands, so the open publishes once with
+  a kept failure in it. The computation models that render; 3d holds `drawn`, not the order of publications.
+- **Step 4's grey Loft is the owner's order:** a re-attached peer's snapshot, then its live state, back to back
+  (fieldd `mesh-board.ts` `#onUpstream`). Each step is a per-frame cut, which 3d reproduces and does not design for.
+- No defect of the fold or the window was found: nothing blessed over one (PG-3a0's rule).
+
+**Validation.**
+- **Red first**, in lane `pg3` at nice 19 under the guard and co-plan/HOLD, with no PERF.lock (logs:
+  `lanes/ios/logs/pg3a/`, then `lanes/pg3/light/`):
+  - contracts by ENOENT before the witness existed (10 rows), then 4 rows against the witness before the crash and
+    the resync; the producer witness red on the missing `hosted: "none"` join, then on the missing crash;
+  - the parity file by ENOENT before the first bless, its semantic rows already green on main's fold; then, before
+    each re-bless, the byte compare red and naming exactly what moved.
+- **Every re-bless said**, step and field, in its commit: the first bless (`74216a595`), the review's (`d06e8116d`:
+  the crash in every step, `rejoined`, the resync step, the bodies' marks; nothing else moved), the check's
+  (`c5dfba715`: the header's `visible`, the open publishing once; nothing else moved).
+- **The review trail:** the design and its buildability check (`wf_4e7ab61f-0b7`, twelve corrections), the review
+  (`wf_507fdeca-d4f`, thirteen findings, all folded), the fold check (`wf_d74190db-bd4`: twelve folded, four more
+  folded at VF-PM's ruling, the re-bless notes verified by script). Two commit messages were rewritten before anything
+  was shared, trees unchanged (a regex's escapes, a commit's name).
+- **The light** (`lanes/ios/pg3a-light.sh`) at `8cf8c1a05`, 05:09:01 → 05:10:29Z, clean: biome; contracts' and
+  field-app's typecheck; contracts 599/599; field-app's 19 fold, window, fixture-consumer and goldens files, 337/337;
+  the projection bench's count half 2/2; `check:ios-fixtures` (186 copies); the generator byte-identical.
+- **Run 80** (M80 `d14e97880`, the MERGE shape: main `fc512fa17` merged into `8cf8c1a05`, minted by a9 on VF-PM's
+  GO):
+  - `pnpm verify` armed 06:18:53Z, exit 0 at 06:24:09Z (about five minutes).
+  - vitest 11,586 passed, 0 failed, 18 skipped, +33: contracts' `agent-field.test.ts` 48 → 59 and `fixtures.test.ts`
+    536 → 540; field-app's `phone-parity.test.ts` new with 13 and `phone-goldens-producer.test.ts` new with 5. cargo
+    534 passed, 0 failed, 14 ignored. The iOS fixtures' 186 copies identical.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run80/` (`mrun80.bundle`, sha256 `6d79a311aed14ff5…`).
+- **Landed:** main fast-forwarded to `d14e97880` on VF-PM's GO (2026-11-01 06:26Z).
+
+**Owed.**
+- **PG-3c:** the kit's copies of both goldens and the witness (Tests/FieldMeshTests, Tests/FieldAgentsTests,
+  Tests/FieldProductTests) and their `requiredMirrors` set.
+- **The draft queue:** PG-L2's dated clarification (J1), and PG-1e0's erratum at its source (item 144).
+- DECISIONS' RD row, if it lists a puppeteer EL8's steps: the goldens' re-bless clause the recipe now carries.
+
+## Item 144 — the projection bench counts the open's bare terminals on the remote cut too: its count half's exact self-check counted them on the model cut alone, so since PG-2 renamed `desk` to `remote` and PG-D5 put bare terminals on it, the bench was two short and red, ungated (2026-11-01; `8cf8c1a05` on PG-3a's lane `pg/3a` in `/Volumes/SamsungRed/lanes/pg3`, in the mini's mint M80 `d14e97880` over main `fc512fa17`, run 80)
+
+**Found while building PG-3a.** The review widened PG-3a's light to prove the new `vitest.perf.config.ts` inlining
+with a perf file that loads puppeteer's packages, and `perf:godview:projection`'s count half went red: `n10-2s-s1
+remote: upserts = moved − the open: expected 85 to be 87`. It was red the same way with main's own perf config, and
+the bench imports nothing PG-3a changed. VF-PM filed it at 05:00Z as ITEM 144, one commit on PG-3a's lane.
+
+**The finding, plainly.**
+- The bench's count half holds each cut's frames to its projection exactly while no row leaves and no snapshot
+  replaces the board: every moved row past the open is one upsert. The open's rows were
+  `open.agents + (c.cut === "model" ? open.terminals : 0)`.
+- PG-2 (`5e70a6c44`) renamed the `desk` cut to `remote`, and since PG-D5 the remote cut carries every desktop's bare
+  terminals, as the model board does. The check went on counting them for the model cut alone, so on the remote cut
+  it was short by exactly the open's terminals (two in every in-repo recipe).
+- **Red on main since `5e70a6c44`, ungated:** the perf runs sit outside `pnpm test` and `pnpm verify` by design, and
+  nothing ran the bench after PG-2. Its figures in PG-1e0's entry were measured before PG-2 and stand; the check, not
+  the measure, was wrong.
+
+**What** (`8cf8c1a05`, 1 file +6 −2): `packages/field-app/perf/projection-bench.perf.ts` counts the open's bare
+terminals on every cut but `field` (`open.agents + (c.cut === "field" ? 0 : open.terminals)`), with a dated note on the
+assertion's comment.
+
+**Validation.**
+- **Red first**, main's line in place, `pnpm --filter @vibefield/field-app perf:godview:projection` (the count half,
+  `VF_GODVIEW_BENCH_CPU` unset), at nice 19 under the guard and co-plan/HOLD: `expected 85 to be 87`, on PG-3a's perf
+  config (`lanes/pg3/light/fold1-projection.log`, 04:56:13Z) and on main's own (`bench-on-main-config.log`,
+  04:57:37Z).
+- **Green with the fix:** the same command, 2/2, over the three in-repo recipes `n10-2s-s1`, `n20-2s-s1` and
+  `n60-1s-s1`, each with two bare terminals (`item144-projection.log`, 05:00:34Z); and PG-3a's light at `8cf8c1a05`,
+  its perf row 2/2 (05:10:20Z).
+- **Run 80** (M80 `d14e97880`, with PG-3a): `pnpm verify` exit 0 at 06:24:09Z, vitest 11,586/0/18. The bench runs
+  outside verify, so its proof is the light's perf row above.
+- **Landed:** with PG-3a in M80 `d14e97880` (2026-11-01 06:26Z).
+
+**Owed.** PG-1e0's erratum at its source in the draft queue: the bench's remote-cut self-check, corrected here.
