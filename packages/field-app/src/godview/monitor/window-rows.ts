@@ -20,9 +20,10 @@ import type { MonitorPaneFacts } from "./useMonitorAgents";
  *     the floor session it stands for, else its id — the seam's rule, and its
  *     one rule over it: one body per visual identity, the earlier row wins;
  *   · the ORDER the seam drew: this desktop's agents by birth, then the panes'
- *     terminals in pane order, then the floor's, then other desktops' runs as
- *     their boards list them. The rain claims columns in display order, so the
- *     order is a thing a person sees.
+ *     terminals in pane order, then the floor's, then other desktops' runs,
+ *     each desktop in its place and its rows as the fold first took them (item
+ *     138). The rain claims columns in display order, so the order is a thing
+ *     a person sees.
  *
  * A TERMINAL's status is NOT decided here (M36): the replica's join reads it
  * off the activity this window supplies (M28), by the backend's one classifier,
@@ -163,7 +164,8 @@ export function sameVisualIds(
  * The ids in the order the seam drew its rows: this desktop's agents by birth
  * (the model's own order among agents), then its terminals — the panes' in pane
  * order, the floor's in roster order, the rest by birth — then other desktops'
- * rows as their boards listed them (the fold holds them in that order).
+ * rows, each desktop in the board's device order and its rows in the order the
+ * fold first took them, a whole re-send moving none (item 138).
  */
 export function rowOrder(
   held: readonly HeldModelRow[],

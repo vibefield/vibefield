@@ -171,9 +171,20 @@ export const PATHS = {
     join(ROOT, "packages/field-app/src"),
     join(ROOT, "plugins/simulator/src"),
   ],
+  fieldNativeSources: [
+    join(ROOT, "packages/field-native/src"),
+    join(ROOT, "packages/field-native/Cargo.toml"),
+    join(ROOT, "Cargo.toml"),
+    join(ROOT, "Cargo.lock"),
+  ],
   catalog: join(ROOT, "plugins/simulator/src/catalog.gen.ts"),
   verifyCapture: join(ROOT, "apps/desktop/packaging/verify-live-surface-capture.mjs"),
 };
+
+/** The field-native the smoke's shell launches, as the shell resolves it (electron-shell main/fieldd.ts, resources.ts):
+ * FIELDD_NATIVE_BIN when set, else this checkout's cargo debug build. */
+export const fieldNativePath = (env) =>
+  env.FIELDD_NATIVE_BIN ?? join(ROOT, "target/debug/field-native");
 
 const USAGE =
   "usage: stage-simulator-fixture.mjs <none|devices|cost> -- <command…> | enum | --preflight-only | --sweep <runId>";
@@ -362,6 +373,29 @@ export function distFresh({
   return fails;
 }
 
+// item 133: a smoke has no dev runner to build or start field-native, and the desktop's build:all never builds it (its
+// project has no targets) — a code-only lane launched without one to a certain fatal. Cargo builds into
+// CARGO_TARGET_DIR, which the shell reads only through this checkout's target/ (or FIELDD_NATIVE_BIN), and a target
+// dir shared between checkouts holds whichever checkout built last: an mtime proves only this checkout's sources
+const FIELD_NATIVE_FIX =
+  "cargo build -p field-native from this checkout (it lands in CARGO_TARGET_DIR: this checkout's target/ must link " +
+  "there, or FIELDD_NATIVE_BIN name the binary; a target dir shared between checkouts holds whichever built last)";
+
+/** Item 133: the field-native the smoke's shell will launch, there and no older than this checkout's crate sources. */
+export function fieldNativeFresh({ path, bin, sources }) {
+  const what = `field-native (${path})`;
+  if (bin === null) return [{ what, why: "missing", fix: FIELD_NATIVE_FIX }];
+  if (bin < sources)
+    return [
+      {
+        what,
+        why: "older than packages/field-native's src/ or Cargo.toml, or the workspace's Cargo.toml or Cargo.lock",
+        fix: FIELD_NATIVE_FIX,
+      },
+    ];
+  return [];
+}
+
 /** Inside a launch, before the arm and again right before the command: the shot dir set, the helper ENUM proved; and
  * right after the arm has inferred it (`app` given), before any lock or device (RM6 S-5) — the responsible app ENUM
  * proved (§6: "ENUM by the same app as L1 and L2"; TCC follows the responsible process, so another app's first
@@ -401,8 +435,9 @@ export const preflightLines = (fails) =>
     ? ["PHONE_PREFLIGHT ok"]
     : fails.map((f) => `PHONE_PREFLIGHT FAIL ${f.what}: ${f.why} → ${f.fix}`);
 
-/** The files, read: what `nativeFresh` and `distFresh` judge. Reads only — never a simctl. */
-export function readFiles(fs = { statSync, readdirSync, readFileSync }) {
+/** The files, read: what `nativeFresh`, `distFresh` and `fieldNativeFresh` judge. Reads only — never a simctl. */
+export function readFiles(fs = { statSync, readdirSync, readFileSync }, env = process.env) {
+  const fieldNative = fieldNativePath(env);
   let smokeHasPhone = false;
   try {
     smokeHasPhone = fs.readFileSync(PATHS.shellSmoke, "utf8").includes("--phone");
@@ -421,6 +456,11 @@ export function readFiles(fs = { statSync, readdirSync, readFileSync }) {
       renderer: newestMtime(PATHS.shellRenderer, fs),
       shellSources: newestOf(PATHS.shellSources, fs),
       smokeHasPhone,
+    },
+    fieldNative: {
+      path: fieldNative,
+      bin: newestMtime(fieldNative, fs),
+      sources: newestOf(PATHS.fieldNativeSources, fs),
     },
   };
 }
@@ -807,11 +847,80 @@ export function rowsMark(line) {
   return end === null ? null : { end: Number(end[1]) };
 }
 
-/** Red when the smoke never said BEGIN or END ("--phone not in this build"), said another mode, or its count is not the
- * rows the door saw open and close, or not the mode's count. */
-export function rowsVerdict({ mode, begin, end, served }) {
+/** A `SMOKE_HOME {…}` line's home (the data root a red smoke keeps and names, DK-18), or null. */
+export function smokeHomeOf(line) {
+  const at = line.indexOf("SMOKE_HOME {");
+  if (at === -1) return null;
+  try {
+    const { home } = JSON.parse(line.slice(at + "SMOKE_HOME ".length));
+    return typeof home === "string" && home.length > 0 ? home : null;
+  } catch {
+    return null;
+  }
+}
+
+const oneLine = (text) =>
+  String(text)
+    .replace(/\s*\n\s*/gu, " ")
+    .trim()
+    .slice(0, 400);
+
+/** The last record of `event` in an NDJSON log, as its error's words (or its msg), or null. */
+function lastWords(path, event, fs) {
+  let text;
+  try {
+    text = fs.readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+  let words = null;
+  for (const line of text.split("\n")) {
+    try {
+      const record = JSON.parse(line);
+      if (record?.event === event) words = oneLine(record.err?.message ?? record.msg ?? event);
+    } catch {}
+  }
+  return words;
+}
+
+/** Item 134: why a smoke that never said BEGIN stopped, from the HOME it kept — the desktop's
+ * `desktop.lifecycle.fatal`, and each user's fieldd `fieldd.lifecycle.bootstrap_failed` when it says more — or null. */
+export function fatalWords(home, fs = { readFileSync, readdirSync }) {
+  const said = [];
+  const desktop = lastWords(
+    join(home, "logs/system/desktop.ndjson"),
+    "desktop.lifecycle.fatal",
+    fs,
+  );
+  if (desktop !== null) said.push(`desktop.lifecycle.fatal: ${desktop}`);
+  let users = [];
+  try {
+    users = fs.readdirSync(join(home, "logs/users"));
+  } catch {}
+  for (const user of users) {
+    const fieldd = lastWords(
+      join(home, "logs/users", user, "system/fieldd.ndjson"),
+      "fieldd.lifecycle.bootstrap_failed",
+      fs,
+    );
+    if (fieldd !== null && !(desktop ?? "").includes(fieldd))
+      said.push(`fieldd.lifecycle.bootstrap_failed: ${fieldd}`);
+  }
+  return said.length === 0 ? null : said.join(" · ");
+}
+
+/** Red when the smoke never said BEGIN or END, said another mode, or its count is not the rows the door saw open and
+ * close, or not the mode's count. No BEGIN says why from the smoke's kept HOME when it named one (`fatal`, item 134),
+ * else that it never reached the rows — never "not in this build": the preflight proved the bundle carries --phone. */
+export function rowsVerdict({ mode, begin, end, served, fatal = null }) {
   if (begin === null)
-    return { ok: false, why: "no PHONE_ROWS_BEGIN: --phone is not in this build" };
+    return {
+      ok: false,
+      why:
+        fatal === null
+          ? "no PHONE_ROWS_BEGIN: the smoke never reached the rows"
+          : `no PHONE_ROWS_BEGIN: the smoke stopped before the rows — ${fatal}`,
+    };
   if (begin !== mode) return { ok: false, why: `PHONE_ROWS_BEGIN mode=${begin}, not ${mode}` };
   if (end === null) return { ok: false, why: "no PHONE_ROWS_END: the rows never finished" };
   if (end !== served)
@@ -2183,7 +2292,11 @@ function say(line) {
 
 async function preflightOnly() {
   const files = readFiles();
-  const fails = [...nativeFresh(files.native), ...distFresh(files.dist)];
+  const fails = [
+    ...nativeFresh(files.native),
+    ...distFresh(files.dist),
+    ...fieldNativeFresh(files.fieldNative),
+  ];
   for (const line of preflightLines(fails)) say(line);
   return fails.length === 0 ? 0 : 1;
 }
@@ -2286,12 +2399,17 @@ async function launch(mode, command, opts) {
     stopTimer.unref();
   };
 
-  // the preflight, first: the files (no simctl) — ENUM needs the native pair alone
-  const files = readFiles();
+  // the preflight, first: the files (no simctl) — ENUM needs the native pair alone; a launch's shell, the field-native
+  // its environment names too
+  const files = readFiles(undefined, deps.env);
   const fails =
     mode === "enum"
       ? nativeFresh(files.native)
-      : [...nativeFresh(files.native), ...distFresh(files.dist)];
+      : [
+          ...nativeFresh(files.native),
+          ...distFresh(files.dist),
+          ...fieldNativeFresh(files.fieldNative),
+        ];
   let record = null;
   try {
     record = JSON.parse(readFileSync(opts.enumRecord, "utf8"));
@@ -2381,10 +2499,11 @@ async function launch(mode, command, opts) {
         `PHONE_COMMAND_ENV ${JSON.stringify({ DEVELOPER_DIR: env.DEVELOPER_DIR === undefined ? "absent" : "SET", VF_SMOKE_SIMCTL_DEVELOPER_DIR: env.VF_SMOKE_SIMCTL_DEVELOPER_DIR ?? "absent", VF_PHONE_MODE: mode, VF_PHONE_RUNTIME: run.runtime, VF_PHONE_DEVICES: env.VF_PHONE_DEVICES, VF_PHONE_DEVDIR_BY: env.VF_PHONE_DEVDIR_BY, VF_SMOKE_SHOT_DIR: env.VF_SMOKE_SHOT_DIR })}`,
       );
       // the preflight again, right before the command: the files and the helper's sha (the app was checked at the arm)
-      const again = readFiles();
+      const again = readFiles(undefined, env);
       const late = [
         ...nativeFresh(again.native),
         ...distFresh(again.dist),
+        ...fieldNativeFresh(again.fieldNative),
         ...launchChecks({
           shotDir: env.VF_SMOKE_SHOT_DIR,
           helperSha: sha256File(PATHS.helper),
@@ -2395,11 +2514,12 @@ async function launch(mode, command, opts) {
         for (const line of preflightLines(late)) deps.say(line);
         code = 1;
       } else if (signalled === null) {
-        const marks = { begin: null, end: null };
+        const marks = { begin: null, end: null, home: null };
         const watch = (line) => {
           const mark = rowsMark(line);
           if (mark?.begin !== undefined) marks.begin = mark.begin;
           if (mark?.end !== undefined) marks.end = mark.end;
+          marks.home = smokeHomeOf(line) ?? marks.home;
         };
         const out = redactStream(redactor, "main", (line) => {
           watch(line);
@@ -2413,7 +2533,13 @@ async function launch(mode, command, opts) {
         if (sampler !== null) clearInterval(sampler);
         code = exited.code;
         deadlineHit = exited.deadlineHit;
-        const rows = rowsVerdict({ mode, begin: marks.begin, end: marks.end, served: run.served });
+        const rows = rowsVerdict({
+          mode,
+          begin: marks.begin,
+          end: marks.end,
+          served: run.served,
+          fatal: marks.begin === null && marks.home !== null ? fatalWords(marks.home) : null,
+        });
         deps.say(`PHONE_ROWS ${JSON.stringify({ ...rows, voids: run.voids })}`);
         if (code === 0 && !rows.ok) code = 1;
       }

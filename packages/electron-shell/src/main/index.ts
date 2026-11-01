@@ -74,7 +74,7 @@ import { ConnectAsks, workingAgents } from "./connect-asks";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
 import { desktopDevelopmentExtension } from "./development-extension";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
-import { buildSupervisor, dataRoot } from "./fieldd";
+import { buildSupervisor, dataRoot, sayFatalSmokeHome } from "./fieldd";
 import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import {
   registerBrowserDataClear,
@@ -2974,6 +2974,8 @@ if (!hasInstanceLock) {
         rootReal: ensured.rootReal,
       });
     } catch (error) {
+      // item 134 — a smoke gone fatal before its run names its kept HOME, as a red run's teardown does
+      sayFatalSmokeHome(MODE, root);
       flow.fatal(error);
     }
   })().catch(async () => {
