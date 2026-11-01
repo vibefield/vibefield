@@ -514,6 +514,26 @@ describe("PG-3b — the phone is a screen, through the home", () => {
     expect(carried.map((entry) => entry.ids)).toEqual([["run-x"], ["run-y"], ["run-y"]]);
   });
 
+  // the 3b mutants (2026-11-01): since `shown` is set when a carry BEGINS, the row above no longer tells a replay that
+  // reads `shown` inside its task from one that copies it at `linkReady`. They differ while the phone's newer ask is
+  // still QUEUED behind an earlier carry for the pair: its task has not begun, so `shown` still holds the older ask
+  it("PG-3b — a re-dial while the newer report still waits its turn replays the newer one, read when the replay runs", async () => {
+    const { homeScreens, routed, carried } = await pair({
+      latencyMs: (ids) => (ids.includes("run-x") ? 40 : 0),
+    });
+    homeScreens.openBoard(phone(), REMOTE_MESH);
+    // [run-x] is on the wire; [run-y] waits behind it on the pair's chain
+    const first = routed(phone(), ["run-x"]);
+    const queued = routed(phone(), ["run-y"]);
+    await settle(5);
+    homeScreens.linkReady(OWNER);
+    expect(await first).toEqual({ reported: true });
+    expect(await queued).toEqual({ reported: true });
+    await settle(60);
+    // the replay runs after [run-y] and carries what the phone shows then: [run-y], never the [run-x] before it
+    expect(carried.map((entry) => entry.ids)).toEqual([["run-x"], ["run-y"], ["run-y"]]);
+  });
+
   // the fold2 check [0] — a replay runs only where the owner already forgot the screen, so `shown` is the phone's
   // latest ask whatever became of its carry, except when the owner itself refused it for good
   it("PG-3b — the owner's own lasting refusal is undone in the replay: the re-dial carries the last report that stood", async () => {
