@@ -147,6 +147,24 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       ).not.toBeNull();
     }
     expect(container?.textContent).toContain("The field, in one frame.");
+    // Item 127 (DESIGN.md §2.4): the ramp's measured chip — every tier on every chrome ground of the theme, each
+    // with its floor, which row 32's catalog walk holds it to
+    const TIER_TOKENS = { t1: "primary", t2: "secondary", t3: "tertiary", t4: "faint" } as const;
+    const grounds = ["--vf-chrome-solid", "--vf-canvas-bg", "--vf-fill", "--vf-fill-hover"];
+    const chips = [
+      ...(container?.querySelectorAll<HTMLElement>("[data-ds-text-ramp] [data-ramp-tier]") ?? []),
+    ];
+    expect(chips.map((chip) => [chip.dataset.rampGround, chip.dataset.rampTier])).toEqual(
+      grounds.flatMap((ground) => ["t1", "t2", "t3", "t4"].map((tier) => [ground, tier])),
+    );
+    for (const chip of chips) {
+      const tier = chip.dataset.rampTier as keyof typeof TIER_TOKENS;
+      expect(chip.dataset.rampFloor).toBe(tier === "t4" ? "3" : "4.5");
+      expect(chip.style.color).toBe(`var(--vf-text-${TIER_TOKENS[tier]})`);
+      expect(chip.closest<HTMLElement>("[data-ramp-ground-of]")?.style.backgroundColor).toBe(
+        `var(${chip.dataset.rampGround})`,
+      );
+    }
     expect(container?.textContent).toContain("The actual field, under glass");
     expect(container?.textContent).toContain("Infinite canvas and visual tuning workbench");
     expect(container?.textContent).toContain("Field chrome playground");

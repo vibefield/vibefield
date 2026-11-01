@@ -103,13 +103,20 @@ describe("the harness's copy of the field's mark (FIRST_RUN_MARK)", () => {
 });
 
 describe("the walks and where their stills may go", () => {
-  it("names three walks: day and night on the live field, and the page with no WebGPU by day", () => {
+  it("names four walks: day and night on the live field, the page with no WebGPU by day, and the catalog", () => {
     expect(FIRST_RUN_WALKS).toEqual({
       day: { dark: false, webgpu: true },
       night: { dark: true, webgpu: true },
       "no-webgpu": { dark: false, webgpu: false },
+      // the catalog judged: its frames by day, then by night through the catalog's own toggle
+      catalog: { dark: false, webgpu: true },
     });
-    expect(["day", "night", "no-webgpu"].map(parseWalk)).toEqual(["day", "night", "no-webgpu"]);
+    expect(["day", "night", "no-webgpu", "catalog"].map(parseWalk)).toEqual([
+      "day",
+      "night",
+      "no-webgpu",
+      "catalog",
+    ]);
     expect([undefined, "", "dusk", "toString"].map(parseWalk)).toEqual([null, null, null, null]);
   });
 
@@ -1355,19 +1362,20 @@ describe("the launcher (apps/desktop/packaging/run-first-run.mjs)", () => {
     `const userData = process.argv.find((a) => a.startsWith("--user-data-dir=")).slice("--user-data-dir=".length);\n` +
     `let theme = null;\n` +
     `try { theme = JSON.parse(fs.readFileSync(path.join(userData, "vibefield-theme.json"), "utf8")); } catch {}\n` +
-    `fs.appendFileSync(process.env.FIRST_RUN_RECORD, JSON.stringify({ argv: process.argv.slice(2), walk: process.env.VF_FIRST_RUN_WALK ?? null, shotDir: process.env.VF_SMOKE_SHOT_DIR ?? null, mark: process.env.VF_SMOKE_RUN ?? null, userData, theme }) + "\\n");\n` +
+    `fs.appendFileSync(process.env.FIRST_RUN_RECORD, JSON.stringify({ argv: process.argv.slice(2), walk: process.env.VF_FIRST_RUN_WALK ?? null, shotDir: process.env.VF_SMOKE_SHOT_DIR ?? null, mark: process.env.VF_SMOKE_RUN ?? null, catalog: process.env.VF_CATALOG_RENDERER ?? null, userData, theme }) + "\\n");\n` +
     `process.exit(process.env.VF_FIRST_RUN_WALK === process.env.FIRST_RUN_RED ? 2 : 0);\n`;
   interface Launched {
     argv: string[];
     walk: string | null;
     shotDir: string | null;
     mark: string | null;
+    catalog: string | null;
     userData: string;
     theme: { preference?: string } | null;
   }
-  // three stand-in launches and three censuses (`smoke-daemons.mjs`); smoke-profile.test.ts measured one launch and its
-  // census at up to 9 s on a loaded host, so three get the room of three and more
-  const ROWS_BUDGET_MS = 45_000;
+  // four stand-in launches and four censuses (`smoke-daemons.mjs`); smoke-profile.test.ts measured one launch and its
+  // census at up to 9 s on a loaded host, so four get the room of four and more
+  const ROWS_BUDGET_MS = 60_000;
   const run = (args: string[], red: string | null) => {
     const dist = mkdtempSync(join(tmpdir(), "fg-fake-electron-"));
     const shots = mkdtempSync(join(tmpdir(), "fg-first-run-shots-"));
@@ -1399,25 +1407,34 @@ describe("the launcher (apps/desktop/packaging/run-first-run.mjs)", () => {
   };
 
   it.skipIf(process.platform === "win32")(
-    "runs the three walks in order, each on a fresh profile seeded with its theme, its stills kept outside it",
+    "runs the four walks in order, each on a fresh profile seeded with its theme, its stills kept outside it",
     { timeout: ROWS_BUDGET_MS },
     () => {
       const { result, launched, shots } = run([], null);
       expect(result.status, result.stderr).toBe(0);
       expect(result.stdout).toContain(`FIRST_RUN_SHOTS ${shots}\n`);
-      expect(launched.map((l) => l.walk)).toEqual(["day", "night", "no-webgpu"]);
+      expect(launched.map((l) => l.walk)).toEqual(["day", "night", "no-webgpu", "catalog"]);
       // light and dark both explicit, in the app's own store, before the boot
       expect(launched.map((l) => l.theme)).toEqual([
         { preference: "light" },
         { preference: "dark" },
+        { preference: "light" },
         { preference: "light" },
       ]);
       expect(launched.map((l) => l.argv.slice(1))).toEqual([
         [`--user-data-dir=${launched[0]?.userData}`, "--smoke-first-run"],
         [`--user-data-dir=${launched[1]?.userData}`, "--smoke-first-run"],
         [`--user-data-dir=${launched[2]?.userData}`, "--smoke-first-run", "--smoke-no-webgpu"],
+        [`--user-data-dir=${launched[3]?.userData}`, "--smoke-first-run"],
       ]);
-      expect(new Set(launched.map((l) => l.userData)).size).toBe(3);
+      // the catalog's walk alone is handed the design build, where `build:design` writes it
+      expect(launched.map((l) => l.catalog)).toEqual([
+        null,
+        null,
+        null,
+        resolve(desktopRoot, "../../.vibefield/studio/catalog-renderer"),
+      ]);
+      expect(new Set(launched.map((l) => l.userData)).size).toBe(4);
       for (const l of launched) {
         expect(l.shotDir).toBe(join(shots, l.walk ?? ""));
         expect(l.mark).toBe(basename(l.userData));
@@ -1434,7 +1451,7 @@ describe("the launcher (apps/desktop/packaging/run-first-run.mjs)", () => {
     () => {
       const all = run([], "day");
       expect(all.result.status).toBe(1);
-      expect(all.launched.map((l) => l.walk)).toEqual(["day", "night", "no-webgpu"]);
+      expect(all.launched.map((l) => l.walk)).toEqual(["day", "night", "no-webgpu", "catalog"]);
       expect(all.result.stdout).toContain(`FIRST_RUN_VERDICT {"walk":"day","ok":false,"code":2`);
       const night = run(["night"], null);
       expect(night.result.status).toBe(0);

@@ -63,6 +63,37 @@
   display: none;
 }
 
+/* DESIGN.md §2.4's ramp on each chrome ground (item 127). The chips are 15/600 so
+   a glyph's core is the tier's own ink: row 32's catalog walk reads them. */
+.vf-ds-text-ramp {
+  display: grid;
+  gap: 8px;
+}
+
+.vf-ds-text-ramp-ground {
+  display: grid;
+  grid-template-columns: 96px repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--vf-ds-line);
+  border-radius: 12px;
+}
+
+.vf-ds-text-ramp-ground > code {
+  color: var(--vf-text-secondary);
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+.vf-ds-text-ramp-chip {
+  justify-self: start;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .vf-ds-type-ramp {
   display: flex;
   flex-direction: column;

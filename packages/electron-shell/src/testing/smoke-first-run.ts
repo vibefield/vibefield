@@ -9,10 +9,12 @@
 // (History's one row), and one stub named as every launchable row's active install. Which rows count it installed is
 // each adapter's own rule (an executable the host was configured to launch), never a name of this repo's (AR-L1).
 //
-// Three walks, each its own launch on a fresh profile (`apps/desktop/packaging/run-first-run.mjs`): by DAY and by NIGHT
+// Four walks, each its own launch on a fresh profile (`apps/desktop/packaging/run-first-run.mjs`): by DAY and by NIGHT
 // on the live field, the preference pre-seeded in the profile's theme file before the boot (the app's own store,
-// main/theme.ts), and with NO WEBGPU, the page given no `navigator.gpu`, so the glass stands over the field's still.
-// Each keeps its stills in `VF_SMOKE_SHOT_DIR`, outside the run's own folders, so no teardown can take them.
+// main/theme.ts), and with NO WEBGPU, the page given no `navigator.gpu`, so the glass stands over the field's still;
+// and the CATALOG (the catalog judged, smoke-catalog.ts): the design catalog's Setup Assistant frames, every face their
+// controls offer, judged by this row's own measure. Each keeps its stills in `VF_SMOKE_SHOT_DIR`, outside the run's
+// own folders, so no teardown can take them.
 //
 // What it judges:
 //   · THE LOGO (FG-4b, FG-D24), at the welcome's title card:
@@ -63,8 +65,8 @@ import { cutChip, measureChip } from "./smoke-contrast";
 import { WITHOUT_WEBGPU } from "./smoke-unavailable";
 import { readTypedAgentCalls, type StagedTypedAgent } from "./typed-agent";
 
-/** The walks, by their names on the launcher's list. */
-export type FirstRunWalk = "day" | "night" | "no-webgpu";
+/** The walks, by their names on the launcher's list: the catalog's is smoke-catalog.ts's (the catalog judged). */
+export type FirstRunWalk = "day" | "night" | "no-webgpu" | "catalog";
 
 /** Which walk this launch is (`run-first-run.mjs` sets it). */
 export const WALK_ENV = "VF_FIRST_RUN_WALK";
@@ -76,6 +78,8 @@ export const FIRST_RUN_WALKS: Readonly<
   day: { dark: false, webgpu: true },
   night: { dark: true, webgpu: true },
   "no-webgpu": { dark: false, webgpu: false },
+  // the design catalog's frames, by day and then by night through the catalog's own toggle (smoke-catalog.ts)
+  catalog: { dark: false, webgpu: true },
 };
 
 export function parseWalk(value: string | undefined): FirstRunWalk | null {
@@ -781,51 +785,13 @@ export function measureMark(
   };
 }
 
-/** The page's half: a recorder armed before any of the page's scripts (DevTools' script on every new document), and
- * the reads the walk asks of it. It presses nothing; it sets nothing but a list's scroll when asked. */
-export const FIRST_RUN_PAGE = String.raw`(() => {
-  if (globalThis.__vfFirstRun !== undefined) return;
-  const LEAVING = "vf-wizard-pane-leaving";
-  const faces = [];
-  const current = new Map();
-  const progress = [];
-  let lastProgress = null;
-  const leaving = [];
-  const opening = [];
-  const tear = [];
-  // FG-O3's read (FG-6c): the page's frame intervals, the last few hundred kept so the stretch before the hand-over
-  // can be cut from them, and the tear's kept while it runs
-  const recent = [];
-  let lastFrame = null;
-  let restFrames = null;
-  let tearFrames = null;
-  let tearing = false;
-  const shellOf = () => document.querySelector(".vf-wizard-shell");
-  const frameOf = () => shellOf()?.querySelector(".vf-wizard-frame") ?? null;
-  const rootsOf = (frame) => [...frame.children].filter((child) => child.hasAttribute("data-face"));
-  // the root standing in the frame, as the frame itself finds it: its own, never a leaving copy
-  const standingRoot = () => {
-    const frame = frameOf();
-    if (frame === null) return null;
-    return rootsOf(frame).reverse().find((child) => !child.classList.contains(LEAVING)) ?? null;
-  };
-  const opacity = (el) => Number.parseFloat(getComputedStyle(el).opacity);
+/** The page's finder of words, shared by every page script that judges them (FG-O2's judge; the catalog judged,
+ * smoke-catalog.ts, includes it byte for byte): `opacity` and `box`, and `wordsIn`, every lettered text in a scope. */
+export const PAGE_WORDS = String.raw`  const opacity = (el) => Number.parseFloat(getComputedStyle(el).opacity);
   const box = (el) => {
     if (el === null) return null;
     const r = el.getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };
-  };
-  // FG-O2's stage line: the box its glyphs take (a range over its text, never the element's), what it says, and how
-  // much of it shows (its own opacity times every ancestor's)
-  const wordsOf = (el) => {
-    if (el === null || el.textContent.trim() === "") return null;
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    const r = range.getBoundingClientRect();
-    let shown = 1;
-    for (let at = el; at !== null; at = at.parentElement) shown *= opacity(at);
-    const text = el.textContent.trim();
-    return { x: r.x, y: r.y, width: r.width, height: r.height, text, shown: Math.round(shown * 1000) / 1000 };
   };
   // FG-O2's judge: every lettered text in a scope, one text node at a time. Each of its lines is the box a range over
   // the node gives it (never its element's box), clipped by every box around it that cuts what overflows it; a box that
@@ -888,6 +854,48 @@ export const FIRST_RUN_PAGE = String.raw`(() => {
       words.push({ x, y, width, height, lines, text, shown: seen, off, fading, cut, color: style.color, list });
     }
     return words;
+  };`;
+
+/** The page's half: a recorder armed before any of the page's scripts (DevTools' script on every new document), and
+ * the reads the walk asks of it. It presses nothing; it sets nothing but a list's scroll when asked. */
+export const FIRST_RUN_PAGE = `(() => {
+  if (globalThis.__vfFirstRun !== undefined) return;
+  const LEAVING = "vf-wizard-pane-leaving";
+  const faces = [];
+  const current = new Map();
+  const progress = [];
+  let lastProgress = null;
+  const leaving = [];
+  const opening = [];
+  const tear = [];
+  // FG-O3's read (FG-6c): the page's frame intervals, the last few hundred kept so the stretch before the hand-over
+  // can be cut from them, and the tear's kept while it runs
+  const recent = [];
+  let lastFrame = null;
+  let restFrames = null;
+  let tearFrames = null;
+  let tearing = false;
+  const shellOf = () => document.querySelector(".vf-wizard-shell");
+  const frameOf = () => shellOf()?.querySelector(".vf-wizard-frame") ?? null;
+  const rootsOf = (frame) => [...frame.children].filter((child) => child.hasAttribute("data-face"));
+  // the root standing in the frame, as the frame itself finds it: its own, never a leaving copy
+  const standingRoot = () => {
+    const frame = frameOf();
+    if (frame === null) return null;
+    return rootsOf(frame).reverse().find((child) => !child.classList.contains(LEAVING)) ?? null;
+  };
+${PAGE_WORDS}
+  // FG-O2's stage line: the box its glyphs take (a range over its text, never the element's), what it says, and how
+  // much of it shows (its own opacity times every ancestor's)
+  const wordsOf = (el) => {
+    if (el === null || el.textContent.trim() === "") return null;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const r = range.getBoundingClientRect();
+    let shown = 1;
+    for (let at = el; at !== null; at = at.parentElement) shown *= opacity(at);
+    const text = el.textContent.trim();
+    return { x: r.x, y: r.y, width: r.width, height: r.height, text, shown: Math.round(shown * 1000) / 1000 };
   };
   // a scope's list (overflow-y auto or scroll): the one that outgrows its box, else the first, which fits
   const scrollerIn = (scope) => {
@@ -1766,6 +1774,8 @@ export async function firstRunRows(
     // FG-6's frozen frame (DESIGN.md §8 "Held to the browser's glass"), the welcome's glass at rest with its logo
     // whole: the live field held on one frame through its door, the glass captured as the field draws it, as the
     // browser does, and as the field does again, then the field let go
+    // which door held it (printed, never judged): the field's worker or the main thread (`FieldDoor["mode"]`)
+    const mode = walk.webgpu ? await field<string>("mode") : null;
     if (!walk.webgpu) {
       facts["frozen"] = "nothing to compare: over the still the browser draws the whole glass";
     } else if ((await field<boolean>("freeze()")) !== true) {
@@ -1782,7 +1792,7 @@ export async function firstRunRows(
         await glassBy(true);
         const again = await capture("frozen-field-again");
         const reading = readFrozen(byField, byBrowser, again, seen);
-        facts["frozen"] = reading;
+        facts["frozen"] = { mode, ...reading };
         problems.push(...judgeFrozen(reading));
       } finally {
         await field("glass(true)");

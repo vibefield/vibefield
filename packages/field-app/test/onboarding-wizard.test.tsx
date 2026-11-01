@@ -1740,6 +1740,15 @@ describe("Setup Assistant", () => {
     expect(ground?.style.getPropertyValue("--vf-glass-fit")).toBe("1");
   });
 
+  it("stands the catalog's frames on FG-L2's ground of 976 × 736, the glass at its own size (the catalog judged)", () => {
+    const scenes = readFileSync(join(process.cwd(), "src/design-system/styles/scenes.css"), "utf8");
+    const height = /\n\.vf-ds-onboarding-production \{[^}]*\n {2}height: (\d+)px;/u.exec(
+      scenes,
+    )?.[1];
+    // row 32's catalog walk reads every frame's words as the product draws them, never scaled under its size
+    expect(glassFit({ width: 976, height: Number(height) }, { width: 880, height: 640 })).toBe(1);
+  });
+
   it("forms the glass on the field by its frost and its rise, and fades nothing that holds the frost (DESIGN.md §6)", () => {
     expect(WIZARD_CSS).toMatch(
       /@property --vf-glass-frost \{[^}]*syntax: "<number>";[^}]*initial-value: 1;/,
