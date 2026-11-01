@@ -1322,6 +1322,23 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
     ).toBe("red");
   });
 
+  it("`off` read steadily over a device steadily Booted is the product's PROBLEM, never STAGING NOT MET; nothing pressed (G11, P8 = A)", async () => {
+    const h = hands({ words: ["off"], states: ["Booted"] });
+    const w = await stoppedWord(h);
+    expect(w).toMatchObject({ word: "off", stateP: "Booted", retry: null, moved: null });
+    expect(h.pressed).toBe(0);
+    expect(judged(w)).toBe("red");
+    expect(judgeStopped({ ...seen, word: "off", stateP: "Booted", retry: null }).problems).toEqual([
+      "SIM-STOPPED: the face says off over a booted device (P8 = A: off ⇔ not Booted)",
+    ]);
+    // reads that disagree past the bound stay STAGING NOT MET
+    const flip = hands({
+      words: Array.from({ length: 40 }, (_, i) => (i % 2 === 0 ? "off" : "stopped")),
+      states: ["Booted"],
+    });
+    expect(judged(await stoppedWord(flip))).toBe("STAGING NOT MET");
+  });
+
   it("the row asks stoppedWord over the face, the door's state and Try again in hand — no word loop of its own, no `off` pressed (T4)", () => {
     const body = rowBodies(SOURCE).find((r) => r.name === "SIM-STOPPED")?.body ?? "";
     expect(body.match(/\bstoppedWord\(/gu)).toHaveLength(1);

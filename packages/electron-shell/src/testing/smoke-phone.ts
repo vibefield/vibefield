@@ -1298,6 +1298,11 @@ export function judgeStopped(s: StoppedSeen): {
     out.push(...judgeLiveProven("SIM-STOPPED (Try again)", s.retry));
     return { problems: out, recorded: false, staging: null };
   }
+  // `off` steadily over P steadily Booted (G11): P8 = A defines off ⇔ not Booted — the product's red, not a staging
+  if (s.word === "off" && s.stateP === "Booted") {
+    out.push("SIM-STOPPED: the face says off over a booted device (P8 = A: off ⇔ not Booted)");
+    return { problems: out, recorded: false, staging: null };
+  }
   // no word settled (T4): the quit's aftermath unread — STAGING NOT MET, never a finding against the product
   if (s.word === null) {
     const moved = s.moved === null ? "" : `; in hand \`stopped\` read ${s.moved} before the press`;
@@ -1336,7 +1341,8 @@ export interface StoppedHands {
  * `off`, and the press gate STOPPED the run): two reads 1 s apart agree, and agree with P's state (`wordAgrees`), within
  * `bound`. Settled `stopped`: the aftermath read, then Try again — its word re-read in hand first; a re-read that is not
  * `stopped` presses nothing, and the word is settled AGAIN (a `stopped` once more will not hold: null). Settled `off`
- * (or another word): never pressed — judgeStopped RECORDS it. None settled: null — STAGING NOT MET. */
+ * (or another word): never pressed — judgeStopped RECORDS it. `off`, `off` over P Booted to the bound (two settles or
+ * more): `off` with P Booted — judgeStopped's PROBLEM (G11). None settled: null — STAGING NOT MET. */
 export async function stoppedWord(
   h: StoppedHands,
   bound: number = PHONE_BOUNDS.word,
@@ -1355,6 +1361,8 @@ export async function stoppedWord(
     const end = h.now() + bound;
     let reads: readonly [string | null, string | null] = [null, null];
     let stateP = "unread";
+    /** consecutive reads of `off`, `off` over P Booted (G11) */
+    let offBooted = 0;
     while (h.now() < end) {
       const a = await h.word();
       await h.sleep(1_000);
@@ -1362,8 +1370,11 @@ export async function stoppedWord(
       stateP = await h.state();
       reads = [a, b];
       if (a !== null && a === b && wordAgrees(a, stateP)) return { word: a, reads, stateP };
+      offBooted = a === "off" && b === "off" && stateP === "Booted" ? offBooted + 1 : 0;
       await h.sleep(200);
     }
+    // `off` held over a device held Booted to the bound: the face's word against P — judgeStopped's PROBLEM (G11)
+    if (offBooted >= 2) return { word: "off", reads, stateP };
     return { word: null, reads, stateP };
   };
   const first = await settle();
