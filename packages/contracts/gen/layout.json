@@ -58,6 +58,10 @@
     "fieldd",
     "link.json"
   ],
+  "SHELL_LAST_EXIT": [
+    "fieldd",
+    "shell-last-exit.json"
+  ],
   "SHELL_EXIT": [
     "fieldd",
     "shell-exit.json"

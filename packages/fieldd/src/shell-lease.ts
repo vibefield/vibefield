@@ -4,7 +4,9 @@ import { dirname, join } from "node:path";
 import {
   LAYOUT,
   ManagerExitRecord,
+  type NativeRestartReason,
   ShellExitRecord,
+  ShellLastExit,
   type ShellLeaveReason,
 } from "@vibefield/contracts";
 import { durableRename, type Logger } from "@vibefield/logging";
@@ -14,6 +16,8 @@ import { durableRename, type Logger } from "@vibefield/logging";
 // leaves PLANNED, one that is simply gone leaves UNPLANNED. When the last holder goes, the record of how is written
 // to `LAYOUT.SHELL_EXIT` — fieldd's to keep, so a fieldd that stops or dies before the next shell comes still hands it
 // over — and the next attach takes it once. AL-5 reads the lease's vacancy (`onVacant`, `onHeld`) for the orphan bound.
+// AL-12 — the same exit is also KEPT (`LAYOUT.SHELL_LAST_EXIT`, never taken) for Settings → Diagnostics' "Last exit",
+// and so is a stop a shell asked for (`stoppedBy`), which the once-record never says.
 
 export interface ShellLeaseOptions {
   /** the user root this fieldd serves */
@@ -33,6 +37,7 @@ export class ShellLease {
   private readonly leaving = new Map<string, ShellLeaveReason>();
   private readonly path: string;
   private readonly managerPath: string;
+  private readonly lastPath: string;
   private readonly now: () => number;
   private writes: Promise<void> = Promise.resolve();
   private sealed = false;
@@ -40,6 +45,7 @@ export class ShellLease {
   constructor(private readonly opts: ShellLeaseOptions) {
     this.path = join(opts.dataDir, ...LAYOUT.SHELL_EXIT);
     this.managerPath = join(opts.dataDir, ...LAYOUT.MANAGER_EXIT);
+    this.lastPath = join(opts.dataDir, ...LAYOUT.SHELL_LAST_EXIT);
     this.now = opts.now ?? Date.now;
   }
 
@@ -78,6 +84,45 @@ export class ShellLease {
     this.sealed = true;
   }
 
+  /** AL-12 — a shell's `system.shutdown` stopped the floor (`reason`, ending the consented `sessions`): the stop is that
+   * shell's exit, kept for "Last exit", and the lease is sealed. The once-record (`SHELL_EXIT`) is left alone: a stopping
+   * pair is no shell leaving one that keeps running, and a record still owed must survive the stop (AL-7). */
+  stoppedBy(reason: NativeRestartReason, sessions: number): void {
+    this.seal();
+    this.keep({ planned: true, stopped: reason, at: this.now(), sessions });
+  }
+
+  /** AL-12 — a shell's `system.shutdown {reason: "update"}` without a floor stop (the update's B3: the release leaves
+   * the floor's bytes alone): the shell leaves for the update and its sessions live on, kept with the floor's count;
+   * the lease is sealed. */
+  leftForUpdate(): void {
+    this.seal();
+    this.keep({ planned: true, why: "update", at: this.now(), sessions: this.opts.liveSessions() });
+  }
+
+  /** `diagnostics.lastExit`: how a shell last left this pair, null before any has. */
+  async lastExit(): Promise<ShellLastExit | null> {
+    await this.writes;
+    let raw: string;
+    try {
+      raw = await readFile(this.lastPath, "utf8");
+    } catch {
+      return null;
+    }
+    try {
+      const parsed = ShellLastExit.safeParse(JSON.parse(raw));
+      if (parsed.success) return parsed.data;
+    } catch {
+      // falls through: a garbled record is said, then read as none
+    }
+    this.opts.logger.warn(
+      "fieldd.shell_lease.record_unreadable",
+      "A record of how a shell or a fieldd left could not be read; it was set aside",
+      { path: this.lastPath },
+    );
+    return null;
+  }
+
   /** The connection closed (product-api's close hook). Only a holder's close can vacate the lease. */
   closed(connectionId: string): void {
     if (!this.holders.delete(connectionId) || this.sealed) return;
@@ -106,6 +151,7 @@ export class ShellLease {
           { error: error instanceof Error ? error.message : String(error) },
         );
       });
+    this.keep(record);
     this.opts.onVacant?.(record);
   }
 
@@ -172,6 +218,19 @@ export class ShellLease {
 
   private write(record: ShellExitRecord): Promise<void> {
     return this.writeRecord(this.path, record);
+  }
+
+  /** AL-12 — replace the kept last exit (its own write: a failure here never costs the once-record). */
+  private keep(record: ShellLastExit): void {
+    this.writes = this.writes
+      .then(() => this.writeRecord(this.lastPath, record))
+      .catch((error: unknown) => {
+        this.opts.logger.warn(
+          "fieldd.shell_lease.last_exit_failed",
+          "How the last shell left could not be kept; Diagnostics will show the exit before it",
+          { error: error instanceof Error ? error.message : String(error) },
+        );
+      });
   }
 
   private writeRecord(path: string, record: object): Promise<void> {

@@ -533,6 +533,14 @@ describe("the kill matrix (NF-4, real field-native)", () => {
         readFileSync(join(native.dir, "native", "restart-intent.json"), "utf8"),
       ) as Record<string, unknown>;
       expect(intent).toMatchObject({ schemaVersion: 1, reason: "quit" });
+      // AL-12 — the stop is the asking shell's exit, kept for Diagnostics' "Last exit": the quit, and what it ended
+      const kept = join(native.dir, ...LAYOUT.SHELL_LAST_EXIT);
+      await poll(async () => (existsSync(kept) ? true : undefined), 2_000);
+      expect(JSON.parse(readFileSync(kept, "utf8"))).toMatchObject({
+        planned: true,
+        stopped: "quit",
+        sessions: 1,
+      });
       await daemon.stop();
 
       await spawnNative(native.dir);

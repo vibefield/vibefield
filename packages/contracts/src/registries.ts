@@ -1615,6 +1615,9 @@ export const LAYOUT = {
   PAIRING_FILE: ["native", "pairing"],
   MESH_STATE_DIR: ["native", "mesh"],
   LINK_FILE: ["fieldd", "link.json"],
+  /** AL-12 — how a shell last left this pair, KEPT (`ShellLastExit`; Settings → Diagnostics' "Last exit"): replaced at
+   * every shell exit and every shell-asked stop, never taken. */
+  SHELL_LAST_EXIT: ["fieldd", "shell-last-exit.json"],
   /** AL-7 — how the last shell left this pair (`ShellExitRecord`): written when the last shell-main connection
    * closes, handed once to the next shell that claims the lease (`system.shell.attach`). */
   SHELL_EXIT: ["fieldd", "shell-exit.json"],

@@ -4915,6 +4915,11 @@ Every place that says what a terminal's life is says those two facts, and no pla
   finds it. It ends when its program exits, when you end it, when you quit VibeField, or when the Mac restarts." The
   fact beside it is **Until you quit**. Until AL-10 it said a terminal "outlives … quitting VibeField", which has been
   false since AL-3 (2026-10-27).
+- **Settings → Diagnostics' "Last exit"** (AL-12, `last-exit-words.ts`) keeps how a shell last left after the notice
+  has gone, in one sentence: what happened and when, then what it ended or what kept running. "VibeField quit
+  unexpectedly on Oct 30 at 10:42. 2 terminal sessions kept running." · "VibeField quit on Oct 30 at 10:42 and ended 2
+  terminal sessions." · before any exit, "No exit recorded yet." An unread count is again "Its terminal service kept
+  running.", never zero.
 
 ---
 
