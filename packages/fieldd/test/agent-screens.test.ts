@@ -514,13 +514,50 @@ describe("PG-3b — the phone is a screen, through the home", () => {
     expect(carried.map((entry) => entry.ids)).toEqual([["run-x"], ["run-y"], ["run-y"]]);
   });
 
-  it("PG-3b — a report the owner refused is undone in the replay too: the re-dial carries the last one that stood", async () => {
-    const refused = new RpcCallError(
+  // the fold2 check [0] — a replay runs only where the owner already forgot the screen, so `shown` is the phone's
+  // latest ask whatever became of its carry, except when the owner itself refused it for good
+  it("PG-3b — the owner's own lasting refusal is undone in the replay: the re-dial carries the last report that stood", async () => {
+    const capped = new RpcCallError(
       "PRECONDITION_FAILED",
       "this peer connection carries 64 readers' screens already",
       false,
       { state: "no-screen", reason: "carried-cap" },
     );
+    const without3b = new RpcCallError(
+      "FORBIDDEN_SCOPE",
+      "agent.reportShown is local to its device; it does not federate",
+      false,
+      { method: "agent.reportShown", locality: "local" },
+    );
+    for (const lasting of [capped, without3b]) {
+      let verdict: Error | undefined;
+      const { homeScreens, routed, carried } = await pair({
+        fail: () => {
+          const once = verdict;
+          verdict = undefined;
+          return once;
+        },
+      });
+      homeScreens.openBoard(phone(), REMOTE_MESH);
+      await routed(phone(), ["run-x"]);
+      verdict = lasting;
+      await refusal(routed(phone(), ["run-z"]));
+      const before = carried.length;
+      homeScreens.linkReady(OWNER);
+      await settle();
+      expect(
+        carried.slice(before).map((entry) => entry.ids),
+        lasting.kind,
+      ).toEqual([["run-x"]]);
+    }
+  });
+
+  it("PG-3b — a report that never left (the link offline) stays the phone's ask: the re-dial carries it, not the one before", async () => {
+    const offline = new RpcCallError("UNAVAILABLE", "no endpoint for the peer", true, {
+      service: "peer-link",
+      device: OWNER,
+      state: "offline",
+    });
     let verdict: Error | undefined;
     const { homeScreens, routed, carried } = await pair({
       fail: () => {
@@ -531,12 +568,14 @@ describe("PG-3b — the phone is a screen, through the home", () => {
     });
     homeScreens.openBoard(phone(), REMOTE_MESH);
     await routed(phone(), ["run-x"]);
-    verdict = refused;
-    await refusal(routed(phone(), ["run-z"]));
+    verdict = offline;
+    await refusal(routed(phone(), ["run-y"]));
+    // never sent: the owner is not owed an empty for it (it stood there before, so it stays owed)
+    expect(homeScreens.size.owners).toBe(1);
     const before = carried.length;
     homeScreens.linkReady(OWNER);
     await settle();
-    expect(carried.slice(before).map((entry) => entry.ids)).toEqual([["run-x"]]);
+    expect(carried.slice(before).map((entry) => entry.ids)).toEqual([["run-y"]]);
   });
 
   it("PG-3b — the owner's upstream comes back on the same connection (a hub resync): the replay puts the carried screen back", async () => {
