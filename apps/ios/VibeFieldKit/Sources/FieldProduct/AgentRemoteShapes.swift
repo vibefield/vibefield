@@ -597,8 +597,8 @@ public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
 
 /// A row an envelope could not read, named by its key as the screen holds it.
 public struct AgentRemoteRowRefusal: Sendable, Equatable {
-  /// The row's `runtimeRunId` when that is a non-empty string, else nil: keyless. `""` is keyless too (VF-PM, Q-C3;
-  /// the window's `keyOf` takes `""` as a key, which item 150 brings in line).
+  /// The row's `runtimeRunId` when that is a non-empty string, else nil: keyless. `""` is keyless too (VF-PM, Q-C3),
+  /// as the window's `keyOf` reads it since item 150 (`47ee475bd`, main 2026-11-01): a key is `min(1)`.
   public let key: String?
   public let reason: String
 
