@@ -66,13 +66,16 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
   /// connection. Nil until it answers, and from a desktop older than the door
   /// or one that serves no user — then the corner deals from `userId`.
   public let person: DesktopPerson?
+  /// PG-3e — this desktop's STANDING on the home's remote board (`AgentMeshDeviceState`), for Settings' "Watch its
+  /// agents". nil: the home's board does not list it (yet). `state` stays the connection's word (3d §7's last bullet).
+  public let board: AgentMeshDeviceState?
 
   public var id: String { deviceId }
 
   public init(
     deviceId: String, name: String, platform: String?, state: State, feed: FieldFeedSource,
     publishesTerminalDoors: Bool? = nil, fieldRefusal: String? = nil, userId: String? = nil,
-    person: DesktopPerson? = nil
+    person: DesktopPerson? = nil, board: AgentMeshDeviceState? = nil
   ) {
     self.deviceId = deviceId
     self.name = name
@@ -83,6 +86,7 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
     self.fieldRefusal = fieldRefusal
     self.userId = userId
     self.person = person
+    self.board = board
   }
 }
 
@@ -259,6 +263,15 @@ public final class FieldLink {
   /// each board's own order — a field that reshuffled because a dictionary
   /// rehashed would respawn every body.
   public private(set) var agents: [AgentSnapshot] = []
+  /// PG-3e — the drawn rows of the home's remote board, UA-P-5's foreign doors held off AFTER the fold: PG-4s's and
+  /// PG-5…8's input (template §3). Skeleton: constant until the switch.
+  public private(set) var rows: [RemoteFieldRow] = []
+  /// PG-3e — the swarm's bubbles, mapped from `rows` (design v2 §2). Skeleton: constant until the switch.
+  public private(set) var bubbles: [FieldBubble] = []
+  /// PG-3e — the phone-only grey: false while no live home answers for the copy. Skeleton: constant.
+  public private(set) var fieldIsLive = false
+  /// PG-3e — how many times `bubbles` was reassigned: a `@testable` witness for L7. Skeleton: constant.
+  internal private(set) var redraws = 0
   /// THIS ACCOUNT'S desktops. A peer whose door refused this login is not here
   /// — it is somebody else's machine, which is an ordinary thing for a tailnet
   /// to contain and not a row this phone has any business drawing.

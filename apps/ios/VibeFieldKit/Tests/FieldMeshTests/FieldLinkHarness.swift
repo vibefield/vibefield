@@ -77,6 +77,55 @@ func boardRow(
   ])
 }
 
+/// PG-3e — a row of the REMOTE cut (`AgentRemoteRow`), as the home's mesh board carries it since 3e: the board key,
+/// the owner, the pane join and the owner's `monitorRow` (a minimal valid one, modelled on
+/// `monitor-agent-row.valid.json`). `key` is the board key (`runtimeRunId`), `id` the model id (the key unless said).
+/// `kind: "terminal"` is a bare terminal: the root's `kind`, a pane join (its own session unless said), no provider.
+func remoteBoardRow(
+  key: String, id: String? = nil, device: String = "dev-studio", deviceName: String? = nil,
+  status: String = "working", kind: String = "agent", terminal: JSONValue? = nil, unread: Bool = false,
+  stale: Bool = false, observed: Bool = true, alive: Bool = true, pending: Bool? = nil,
+  createdAt: Int64 = 1_790_800_000_000, provider: String = "claude", label: String = "Claude Code",
+  project: String = "vibe-field", nativeSessionId: String? = nil, wait: JSONValue? = nil, cost: JSONValue? = nil,
+  reply: String? = nil, revision: Int64 = 1
+) -> JSONValue {
+  let isTerminal = kind == "terminal"
+  var monitor: [String: JSONValue] = [
+    "id": .string(id ?? key), "kind": .string(isTerminal ? "terminal" : "agent"), "createdAt": .int(createdAt),
+    "status": .string(status), "statusSince": .int(createdAt + 60_000), "stale": .bool(stale), "alive": .bool(alive),
+    "observed": .bool(observed), "detail": .string(isTerminal ? project : "working on it"),
+    "project": .object(["name": .string(project)]), "unread": .bool(unread),
+    "device": .object(["id": .string(device), "name": .string(deviceName ?? device)]), "attachable": .bool(true),
+  ]
+  if !isTerminal { monitor["provider"] = .object(["id": .string(provider), "label": .string(label)]) }
+  if let pending { monitor["pending"] = .bool(pending) }
+  if let wait { monitor["wait"] = wait }
+  if let cost { monitor["cost"] = cost }
+  if let reply { monitor["reply"] = .object(["text": .string(reply)]) }
+  var row: [String: JSONValue] = [
+    "runtimeRunId": .string(key), "revision": .int(revision), "device": .string(device),
+    "monitorRow": .object(monitor),
+  ]
+  if isTerminal {
+    row["kind"] = .string("terminal")
+    row["terminal"] = terminal ?? .object(["hosted": .string("local"), "runtimeSessionId": .string(id ?? key)])
+  } else if let terminal {
+    row["terminal"] = terminal
+  }
+  if let nativeSessionId { row["nativeSessionId"] = .string(nativeSessionId) }
+  return .object(row)
+}
+
+/// PG-3e — the subscribe answer that carries a whole open as JSON (the witness's own, or one edited from it).
+func remoteSubscribed(id: Int64, subId: String = "m1", _ open: JSONValue) -> String {
+  frame(id: id, .object(["subId": .string(subId), "snapshot": open]))
+}
+
+/// PG-3e — a whole-mesh resync (PG-1c) on the stream: an open delivered as the subscription's `.snapshot` event.
+func meshResync(subId: String = "m1", _ open: JSONValue) -> String {
+  event(method: "agent.subscribe.snapshot", subId: subId, payload: open)
+}
+
 // MARK: - The home's mesh board (DS-8)
 
 /// One desktop's entry in a mesh open, as a row writes it. `rows: nil` is a

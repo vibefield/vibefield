@@ -303,6 +303,30 @@ private func row(
     #expect(dressed.first?.id == "pty-h2")
   }
 
+  /// F2 (PG-3e) — the dress keeps the row's own marks: a remote-cut row carries its owner's `stale` and `unread`, so a
+  /// folded bubble keeps each exactly — whatever the phone's own clock and its ledger would have said of evidence an
+  /// hour old (Q01's 30 s rule and the phone's unread ledger, which retire with the switch).
+  @Test func theDressKeepsTheRowsMarks() {
+    var assembly = FieldAssembly(tint: .light)
+    let hourOld = now.addingTimeInterval(-3_600)
+    func row(_ id: String, status: AgentVisualStatus, stale: Bool, unread: Bool) -> FieldBubble {
+      FieldBubble(
+        id: id, project: "p", detail: "d", status: status, identityKey: id, createdAt: hourOld,
+        agent: AgentFacet(provider: .claude, statusSince: hourOld, lastEvidenceAt: hourOld),
+        stale: stale, unread: unread, modelId: id, runKey: id)
+    }
+    let rows = [
+      row("marked", status: .idle, stale: true, unread: true),
+      row("clear", status: .working, stale: false, unread: false),
+      row("quiet", status: .blocked, stale: false, unread: true),
+    ]
+    let dressed = assembly.fold(rows, cardSubjectID: nil, nowMs: t0)
+    let stale = dressed.map { $0.stale }
+    let unread = dressed.map { $0.unread }
+    #expect(stale == [true, false, false])
+    #expect(unread == [true, false, true])
+  }
+
   @Test func theProjectionCarriesTheMonitorsFacts() {
     let state = AgentRuntimeState(
       permissions: [AgentPermission(tool: "Bash")], effort: AgentEffort(value: "high", intent: .configured),

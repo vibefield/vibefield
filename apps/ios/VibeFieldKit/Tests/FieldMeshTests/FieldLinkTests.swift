@@ -964,6 +964,41 @@ private final class Refusal: @unchecked Sendable {
     #expect(link.endpointRefusals.isEmpty)
     #expect(link.foreignDoors.isEmpty)
   }
+
+  /// D1 (PG-3e) — `-vf-demo-field-slice` stages PG-3a's WITNESS remote board through the real home path: its three
+  /// desktops on the fixture's tailnet (Studio, the home, answering; Loft online and not answering, its rows arriving
+  /// through the home; Attic offline), the phone homing to Studio, and the window's rows drawn — Attic's, greyed.
+  /// Attic is absent from `desktops`: an offline peer never enters the sweep's table (as `air` is absent above).
+  @Test func theDemoDoorDrawsTheWitness() async throws {
+    let link = try #require(FieldLink.goldenFixture(schedule: briskSchedule))
+    defer { link.stop() }
+    link.start()
+
+    let golden = try MeshFixture.json("phone-fold.golden")
+    let open = (golden["steps"]?.arrayValue ?? []).first { $0["at"]?.stringValue == "open" }
+    let drawn = open?["drawn"]?.arrayValue?.compactMap { $0.stringValue } ?? []
+    let keys = open?["rows"]?.arrayValue?.compactMap { $0["key"]?.stringValue } ?? []
+    #expect(drawn.count == 11)
+    try await waitUntil("the witness through the home") { link.rows.count == 11 }
+    #expect(link.home == "dev-01HQ9S7UD1")
+    let ids = link.rows.map { $0.id }
+    #expect(ids == drawn)
+    let rowKeys = link.rows.map { $0.key }
+    #expect(rowKeys == keys)
+    let attic = link.rows.first { $0.id == "run-a-idle" }
+    #expect(attic?.stale == true)
+
+    try await waitUntil("two named desktops") {
+      link.desktops.map { $0.name }.sorted() == ["Loft", "Studio"]
+    }
+    let studio = try #require(link.desktops.first { $0.name == "Studio" })
+    #expect(studio.state == .ready)
+    #expect(studio.feed == .door)
+    let loft = try #require(link.desktops.first { $0.name == "Loft" })
+    #expect(loft.state == .noDoor)
+    let names = link.desktops.map { $0.name }
+    #expect(!names.contains("Attic"))
+  }
 }
 
 // MARK: - Self and guest, by login (UA-P-5)
