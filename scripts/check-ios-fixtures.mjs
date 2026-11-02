@@ -6,6 +6,7 @@
 // workspace. A copy is only evidence while it is identical — and this lane
 // shipped a "byte for byte" claim that was already false by one line of
 // formatting, with nothing to notice. This is the thing that notices.
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
@@ -63,6 +64,12 @@ const OTHER_ORIGINS = new Map([
     join(root, "packages/field-app/test/fixtures/phone-godview/phone-body.golden.json"),
   ],
 ]);
+// Goldens VENDORED from a sibling project outside this workspace, so there is no origin here to
+// compare with: each is pinned by its sha256 beside the files it tests, and the vendoring script's
+// own `--check` holds them all to their pins below (needing no sibling checkout). The phone's
+// splash (DESIGN.md §8 "The phone's splash"): runtime.js's goldens for the Swift runtime, vendored
+// with the shaders and the runtime from vibefield-splash's Metal bake.
+const VENDORED = new Map([["splash-clock.json", "apps/ios/scripts/vendor-splash.mjs"]]);
 
 const problems = [];
 let checked = 0;
@@ -220,7 +227,7 @@ for (const searchRoot of searchRoots) {
     try {
       statSync(origin);
     } catch {
-      if (!LANE_AUTHORED.has(name)) {
+      if (!LANE_AUTHORED.has(name) && !VENDORED.has(name)) {
         problems.push(
           `${relative(root, copy)} has no origin in packages/contracts/fixtures — a golden was ` +
             "deleted or renamed and this phone-side copy is now unchecked\n" +
@@ -238,6 +245,18 @@ for (const searchRoot of searchRoots) {
           `  fix: cp ${relative(root, origin)} ${relative(root, copy)}`,
       );
     }
+  }
+}
+
+// The vendored files, each held to its pin by the script that vendored it (VENDORED, above).
+for (const script of new Set(VENDORED.values())) {
+  try {
+    execFileSync(process.execPath, [join(root, script), "--check"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    checked += 1;
+  } catch (error) {
+    problems.push(`${script} --check: ${String(error.stderr ?? error.message).trim()}`);
   }
 }
 

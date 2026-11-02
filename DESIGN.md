@@ -3701,6 +3701,34 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the field's own mark pass on one clock (14 moments of a whole twist, at 2× and 4×) it differs by a mean of about 1
   of 255 over its box. Its motion is the renderer's main thread's, as any SVG motion is, so a long task freezes it
   where the field, in its worker, never stops; ~20 KB a ground.
+- **The phone's splash** (2026-11-01; `apps/ios/VibeFieldKit/Sources/FieldSplash`): the phone's first face
+  is the field too, in its own design — vibefield-splash's **iPhone splash** (`splash/look-iphone.json`, tuned
+  apart in the studio's iPhone window). By night (the window's Appearance, Settings › Appearance; Auto follows
+  the system) it is **Wormhole · Obsidian**: white rays and dust out of a black well, the living mark in white
+  at its centre. By day it is **Wormhole · Obsidian Light**: the same look with Obsidian Light's palette keys
+  laid over it, the field turned over and the mark in black, its edge lights keeping their colours. **The field
+  and the mark only**: the mark 96 pt at the centre (the look's iPhone logo size), and no bar, no stage line and
+  no shade (the shade only seats the words). It is the look itself, drawn natively: the splash's Metal bake
+  (`splash/bake-metal.mjs`, the bake's WGSL written as Metal, with its numbers and its runtime) is vendored at a
+  pin (`apps/ios/scripts/vendor-splash.mjs`) and never edited, and it is held to the lab's own window in both
+  appearances (`npm run check:splash:metal`; 0.40 to 0.48 levels mean at an iPhone's sizes, 2026-11-01). It
+  draws at the screen's own scale, 60 frames a second, on a thread of its own, so nothing the app does at
+  launch stops it.
+  **Launch.** The launch screen is the splash's first frame without its field: the field's own ground (black
+  by night, white by day, `SplashGround`) and the mark (`SplashMark`, drawn by the splash's own runtime from
+  that first frame, `apps/ios/scripts/splash-stills.mjs`), centred on the whole screen. So the icon opens onto
+  the mark, and the mark holds while the app starts, which the live field cannot cover (it can draw only once
+  the app runs; 1.4s of a Debug launch in the simulator, 2026-11-01). The splash stands on that same picture,
+  the still on exactly the live mark's pixels, until the field's first frame is up; then the field comes up
+  around the mark, which never moves (the launch screen fades from over it in 240ms plain `ease`, 120 under
+  reduced motion, run by the render server from that frame, so nothing on the main thread holds it). From then
+  the home is built under it, so its start (the swarm's shaders compiling) happens under the field, never in
+  front of it. **It leaves as the desk's splash does** (the reveal, above): once the home is frame-stable (six
+  frames on time in a row) and never before the field has stood **700ms** whole (FG-L6's floor, a floor and
+  never a stage), the splash fades 240ms on plain `ease` while the home settles `scale(0.99) → 1` over 560ms
+  on the island curve. Reduced motion: the mark at rest, one frame drawn, fades only, halved. Without Metal the
+  launch screen's picture stands until the home is steady and then fades: a first face never shows an error.
+  Its accessible name is the desk's bar's, "Starting VibeField".
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
