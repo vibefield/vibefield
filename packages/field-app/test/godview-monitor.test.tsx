@@ -743,6 +743,98 @@ describe("the monitor stage", () => {
     expect(recording.updates).toBeGreaterThan(updates);
   });
 
+  it("publishes the pane's target wall without changing a full-stage viewport, including under a scaled cover", async () => {
+    const fire = driveObservers();
+    const recording = createRecordingView("full-stage");
+    const fullView = {
+      ...recording.view,
+      manifest: { ...recording.view.manifest, stageAllocation: "full" as const },
+    };
+    const entry: MonitorViewEntry = {
+      id: "full-stage",
+      label: "FULL",
+      parameterGroups: [],
+      mark: recording.view.manifest.mark,
+      view: fullView,
+    };
+    const door = fakeDoor();
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const renderView = async (selected: MonitorViewEntry) =>
+      act(async () => {
+        root?.render(
+          <div className="vf-godview" data-godview-deck-edge="" data-godview-deck="up">
+            <GodviewAgentsProvider door={door}>
+              <GodviewMonitor view={selected} parameters={{}} door={door} panes={PANES} />
+            </GodviewAgentsProvider>
+            <span className="vf-godview-field-wall" />
+          </div>,
+        );
+      });
+    await renderView(entry);
+    await settle();
+    const stage = container.querySelector<HTMLElement>(".vf-godview-monitor-stage")!;
+    const shell = container.querySelector<HTMLElement>(".vf-godview")!;
+    const wall = container.querySelector<HTMLElement>(".vf-godview-field-wall")!;
+    const box = (top: number, height: number) =>
+      ({
+        left: 0,
+        right: 500,
+        width: 500,
+        top,
+        height,
+        bottom: top + height,
+      }) as DOMRect;
+    vi.spyOn(stage, "clientWidth", "get").mockReturnValue(1000);
+    vi.spyOn(stage, "clientHeight", "get").mockReturnValue(900);
+    stage.getBoundingClientRect = () => box(20, 450);
+    let floor = 280;
+    wall.getBoundingClientRect = () => box(20 + floor / 2, 0);
+    act(() => {
+      for (const publish of fire) publish();
+    });
+    await settle();
+    expect(stage.getAttribute("data-stage-allocation")).toBe("full");
+    expect(recording.lastInput?.stage).toMatchObject({
+      width: 1000,
+      height: 900,
+      insets: { bottom: 620 },
+    });
+    // Only the root's style/state changes: no ResizeObserver notification.
+    for (const [state, target] of [
+      ["away", 812],
+      ["up", 280],
+      ["up", 220],
+    ] as const) {
+      floor = target;
+      await act(async () => {
+        shell.setAttribute("data-godview-deck", state);
+        shell.style.setProperty("--vf-godview-deck-shift", `${target - 280}px`);
+        await nextTask();
+      });
+      await settle();
+      expect(recording.lastInput?.stage).toMatchObject({
+        width: 1000,
+        height: 900,
+        insets: { bottom: 900 - target },
+      });
+    }
+    expect(recording.mounts).toBe(1);
+    const flow = createRecordingView("flow-stage");
+    await renderView({ ...entry, id: "flow-stage", view: flow.view });
+    await settle();
+    expect(flow.lastInput?.stage.insets.bottom).toBe(0);
+    const beforeSwitch = recording.inputs.length;
+    await renderView(entry);
+    await settle();
+    // The full view first waits, then spawns from its own measured boundary.
+    expect(recording.inputs[beforeSwitch]?.stage.height).toBe(0);
+    expect(recording.lastInput?.stage.insets.bottom).toBe(680);
+    expect(recording.mounts).toBe(2);
+  });
+
   it("stands the head's slot beside the stage, never inside it: the stage's mask dissolves the field under the head, never the head (2026-10-12)", async () => {
     const host = await mountMonitor("swarm", null);
     expect(host.querySelector(".vf-stories-slot")).not.toBeNull();

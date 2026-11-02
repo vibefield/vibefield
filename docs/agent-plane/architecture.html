@@ -1144,6 +1144,10 @@
               desktop and profile choice) and mounts exactly one SDK view. A view consumes its input,
               owns its DOM, CSS and resources, and sends only declared commands to the host; it never
               reads another view, a runtime, a store, or the host's DOM.
+              <p>A view may request <code>stageAllocation: 'full'</code> in its manifest. The host keeps
+                that viewport behind its terminal sheet and publishes the target edge as
+                <code>stage.insets.bottom</code>. The swarm owns the eased wall and its full-size physics
+                world; pane movement never resizes its canvas (DESIGN.md §8, 2026-11-02).</p>
               <p><strong>Godview is runtime only.</strong> Neither the backend nor a view records a status
                 history. The timeline draws birth and current state; removed runs leave it. The former
                 <code>agent.history</code> door and fieldd status ledger are removed. Future historical
