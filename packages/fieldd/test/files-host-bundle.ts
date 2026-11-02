@@ -1,14 +1,16 @@
 // FS-1a — the files worker, bundled for source runs. vitest does not bundle,
 // so nothing stands beside the daemon's source where `dist/files-host.cjs`
 // stands beside `dist/bin.cjs`; the rows that start a REAL worker build it
-// ONCE per file into a directory of the test's own, with fieldd's own build
+// ONCE per file into a directory under the run's root (`fielddRunRoot`, which
+// global-setup.ts removes at the run's end — item 153: a directory per file
+// under the OS temp dir was left by every run), with fieldd's own build
 // definition (scripts/files-host-build.mjs — the plugin that loads mille's
 // engine by an explicit path), and hand the daemon a launch naming it and the
 // installed engine (`FielddConfig.filesHost`). Test-local — not shipped.
 import { existsSync, mkdtempSync, realpathSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "esbuild";
+import { inject } from "vitest";
 import type { FilesHostLaunch } from "../src/workspace/launch";
 import { chooseFilesHostLaunch, installedMilleNative, isMusl } from "../src/workspace/launch";
 
@@ -43,7 +45,7 @@ export function sourceFilesHostLaunch(): Promise<FilesHostLaunch> {
     const definition = (await import(join(PACKAGE_ROOT, "scripts", "files-host-build.mjs"))) as {
       filesHostBuildOptions: (opts: { outfile: string }) => Parameters<typeof build>[0];
     };
-    const dir = mkdtempSync(join(tmpdir(), "vf-fh-"));
+    const dir = mkdtempSync(join(inject("fielddRunRoot"), "vf-fh-"));
     const outfile = join(dir, "files-host.cjs");
     await build(definition.filesHostBuildOptions({ outfile }));
     const milleNative = installedMilleNative(PACKAGE_ROOT);

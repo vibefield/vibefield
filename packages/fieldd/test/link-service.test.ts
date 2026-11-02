@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LinkService, otherUserLinks } from "../src/link-service";
 import { RpcCallError } from "../src/native-link";
 
@@ -9,7 +9,21 @@ import { RpcCallError } from "../src/native-link";
 // native answers, the stored login never guesses, and unlink clears exactly
 // the identity. Probes are driven directly; the timer loop is cadence only.
 
-const mkRoot = () => mkdtempSync(join(tmpdir(), "vf-link-"));
+// Item 153 (2026-11-02): every root a row makes is removed when the row ends, as shell-lease's rows do. Before, each
+// run left ~57 behind under the OS temp dir.
+let cleanup: Array<() => void> = [];
+afterEach(() => {
+  for (const dispose of cleanup.reverse()) dispose();
+  cleanup = [];
+});
+
+const tempRoot = (prefix: string): string => {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true, maxRetries: 3 }));
+  return dir;
+};
+
+const mkRoot = () => tempRoot("vf-link-");
 const linkPath = (root: string) => join(root, "fieldd", "link.json");
 
 interface Call {
@@ -611,7 +625,7 @@ describe("UA-P-0j — a floor that restarts under fieldd gets its posture back",
 
 /** A `<root>/users/<fuid>/` machine, optionally with users.json and links. */
 function machine(users: Array<{ fuid: number; name: string; login?: string }>) {
-  const root = mkdtempSync(join(tmpdir(), "vf-uap0b-"));
+  const root = tempRoot("vf-uap0b-");
   for (const user of users) {
     const dir = join(root, "users", String(user.fuid));
     mkdirSync(join(dir, "fieldd"), { recursive: true });

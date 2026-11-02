@@ -1,8 +1,19 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { TestProject } from "vitest/node";
 import { nativeBinPath, nativeBuildEnv } from "./native-harness";
+
+declare module "vitest" {
+  export interface ProvidedContext {
+    /** Item 153 (2026-11-02): one directory for the whole run, removed at its teardown, for what a file's rows
+     * share and no single row owns (the files-host bundle, `files-host-bundle.ts`). A row's own root is the row's
+     * to remove (its afterEach); a root here outlives every row of a file but never the run. */
+    fielddRunRoot: string;
+  }
+}
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -23,7 +34,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 // the binary is on disk when the suites open: the same guarantee the hooks
 // were making, minus the queue. When G12 lands upstream this stays correct and
 // simply gets cheaper.
-export async function setup(): Promise<void> {
+export async function setup(project: TestProject): Promise<() => void> {
   await new Promise<void>((resolveBuild, reject) => {
     // the cargo PACKAGE name — never `.exe`, on any platform. Only the artifact
     // this produces carries the suffix, and only nativeBinPath knows that.
@@ -55,4 +66,8 @@ export async function setup(): Promise<void> {
   if (!existsSync(bin)) {
     throw new Error(`cargo build -p field-native succeeded but ${bin} does not exist`);
   }
+  // Made only once the build is green, so a red setup leaves nothing behind.
+  const runRoot = mkdtempSync(join(tmpdir(), "vf-fieldd-run-"));
+  project.provide("fielddRunRoot", runRoot);
+  return () => rmSync(runRoot, { recursive: true, force: true, maxRetries: 3 });
 }
