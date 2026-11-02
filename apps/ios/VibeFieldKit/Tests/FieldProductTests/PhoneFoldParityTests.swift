@@ -187,6 +187,7 @@ import Testing
 
     var stepIndex = 1
     var lastDrawn = copy.drawn()
+    var lastModel = copy.model
     var gapped = false
     for delivery in deliveries {
       let step = stepIndex < steps.count ? steps[stepIndex] : .null
@@ -204,9 +205,13 @@ import Testing
         #expect(isGap == true, "step \(delivery.at): a gap")
         let frameKind = step["frame"]?.stringValue
         #expect(frameKind == "delta", "step \(delivery.at): a delta")
-        // the copy stands as it was last drawn until the fresh open
+        // the copy stands as it was last drawn until the fresh open: a frame drawn after the gap moves nothing
+        let quiet = copy.publish()
+        #expect(!quiet.moved, "step \(delivery.at): nothing moves after the gap")
         let standing = copy.drawn()
         #expect(standing == lastDrawn, "step \(delivery.at): the copy stands")
+        let model = copy.model
+        #expect(model == lastModel, "step \(delivery.at): the model stands")
         let after = copy.frame(frames[Self.resyncAfter], now: Self.now)
         #expect(after == .ignored, "step \(delivery.at): what follows a gap is ignored")
         gapped = true
@@ -218,6 +223,7 @@ import Testing
       let published = copy.publish()
       Self.compare(step, copy, published)
       lastDrawn = copy.drawn()
+      lastModel = copy.model
     }
     #expect(gapped, "the old chain's delta ends the run")
     #expect(stepIndex == steps.count)

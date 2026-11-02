@@ -35,6 +35,8 @@ public struct RemoteMeshCopy: Sendable {
     public let rejoined: RemotePublication?
     /// A desktop's standing moved: `drawn`'s `stale` may have, with no row change.
     public let standingMoved: Bool
+    /// PG-3d (red, the review): whether a drawn row moved — not read yet, so always false.
+    public var rowsMoved: Bool { false }
 
     public var moved: Bool { changes != nil || rejoined != nil || standingMoved }
   }

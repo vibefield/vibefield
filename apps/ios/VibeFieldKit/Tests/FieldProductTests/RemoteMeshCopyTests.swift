@@ -78,6 +78,33 @@ extension RemoteMeshCopy {
     #expect(published.changes == nil)
     #expect(copy.row("pty-h1")?.key == "run-h-turn2")
     #expect(copy.held("pty-h1")?.board.runtimeRunId == "run-h-turn2")
+    // the drawn row moved (its key), so the frame moved: 3e redraws on `moved` (the review's [2])
+    #expect(published.rowsMoved)
+    #expect(published.moved)
+    let again = copy.publish()
+    #expect(!again.moved)
+  }
+
+  /// D2's board half (the review's [2]): a durable Stop arriving on a row whose model row is unchanged publishes no
+  /// replica change, yet the drawn row moved, and so the frame did.
+  @Test func aBoardOnlyChangeMovesTheFrame() throws {
+    var copy = try RemoteMeshCopy.witness()
+    let before = copy.row("pty-h1")
+    #expect(before?.board.stop == nil)
+    let turn = try W.row(W.homeRows, "run-h-turn")
+    let stopped = edited(
+      turn, [.key("stop")], .object(["sentAt": .string("2026-09-30T21:21:00.000Z"), "stage": .string("sent")]))
+    let outcome = copy.frame(
+      try W.delta(Remote.home, epoch: W.homeEpoch, since: 80, revision: 81, upserts: [stopped]), now: W.now)
+    #expect(outcome == .applied)
+    let published = copy.publish()
+    #expect(published.changes == nil)
+    #expect(published.rejoined == nil)
+    #expect(!published.standingMoved)
+    let stage = copy.row("pty-h1")?.board.stop?.stage
+    #expect(stage == "sent")
+    #expect(published.rowsMoved)
+    #expect(published.moved)
   }
 
   /// D3 — a desktop first heard by its board is live, not stale (`model-board.ts:231-237`): listed LAST, though its
@@ -152,12 +179,18 @@ extension RemoteMeshCopy {
     #expect(six == .applied)
     _ = copy.publish()
     let standing = copy.drawnIds()
+    let model = copy.model
 
     let old = copy.frame(frames[8], now: W.now)
     guard case .gap = old else {
       Issue.record("the old chain's delta is a gap, not \(old)")
       return
     }
+    // the copy stands: a frame drawn after the gap moves nothing (the review's [5])
+    let quiet = copy.publish()
+    #expect(!quiet.moved)
+    #expect(copy.drawnIds() == standing)
+    #expect(copy.model == model)
     let seven = copy.frame(frames[7], now: W.now)
     #expect(seven == .ignored)
     #expect(copy.handed == nil)

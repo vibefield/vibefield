@@ -83,6 +83,34 @@ struct WindowStage {
     #expect(first == "pty-h2")
   }
 
+  /// W4 (the review's [4]) — the home's bare terminals rank by birth, and an equal birth keeps held order, as
+  /// JavaScript's stable sort does (`window-rows.ts:205-209`): never the id, so the equal pair is held against its
+  /// id order.
+  @Test func theHomesTerminalsRankByBirthThenHeldOrder() throws {
+    let shell = try W.row(W.homeRows, "pty-h2")
+    func terminal(_ id: String, _ createdAt: Int64) -> JSONValue {
+      let row = W.moved(shell, key: id, id: id, createdAt: createdAt)
+      return edited(row, [.key("terminal"), .key("runtimeSessionId")], .string(id))
+    }
+    let born = at(shell, [.key("monitorRow"), .key("createdAt")])?.intValue ?? 0
+    let added = [
+      terminal("pty-b", born + 2), terminal("pty-a", born + 1), terminal("pty-z", born + 5),
+      terminal("pty-y", born + 5),
+    ]
+    let open = edited(try W.openJSON(), W.homeRows, .array(try W.rows(W.homeRows) + added))
+    let stage = WindowStage(try AgentRemoteMeshOpen(json: open))
+    let terminals = ["pty-h2", "pty-a", "pty-b", "pty-z", "pty-y"]
+    let ranked = stage.order.filter { terminals.contains($0) }
+    #expect(ranked == terminals)
+    // the terminals come after every home agent and before the first peer
+    let order = stage.order
+    let firstTerminal = order.firstIndex(of: "pty-h2") ?? -1
+    let lastAgent = order.firstIndex(of: "pty-h3") ?? -1
+    let firstPeer = order.firstIndex(of: "pty-p3") ?? -1
+    #expect(lastAgent < firstTerminal)
+    #expect(order.firstIndex(of: "pty-y") == firstPeer - 1)
+  }
+
   /// W3 — a peer greys by its desktop's standing, never its owner's clock, and a home row keeps its owner's `stale`;
   /// a dead failure the home holds a pane for is drawn.
   @Test func aPeerGreysByItsStandingAndAHomeRowKeepsItsOwn() throws {
