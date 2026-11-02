@@ -46,7 +46,11 @@ import { sparkEntriesOf } from "../src/chat/spark-status";
 import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import { sparkIsNew, threadItemsOf, threadQuiet } from "../src/chat/thread-items";
 import { ChatPreview } from "../src/design-system/ChatPreview";
-import { NeedsCardPlates } from "../src/design-system/NeedsCardPreview";
+import {
+  LIVE_BEAT_MS,
+  NeedsCardLivePlate,
+  NeedsCardPlates,
+} from "../src/design-system/NeedsCardPreview";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { hearLineSays } from "../src/frame/line-door";
 import { resetStatusLineForTest, statusLineSaid } from "../src/frame/status-line";
@@ -1192,8 +1196,52 @@ describe("the catalog's needs-you card (docs/UI_SYSTEM.md: the shipping view on 
     mount(<ChatPreview state="waiting" />);
     await settle();
     expect(words($(".vf-needs-eyebrow"))).toBe("Needs your OK");
-    expect(words($(".vf-needs-question"))).toMatch(/^Kiwi wants to send to /u);
+    // its session named as Kiwi's @ names it, the product's sessionHandlesOf on the fixture board (track CO)
+    expect(words($(".vf-needs-question"))).toBe("Kiwi wants to send to vibe-field");
+    expect(words($(".vf-needs-sub"))).toBe("Your yes lasts until vibe-field ends.");
     expect(card()?.closest(".vf-chat-foot")).not.toBeNull();
+  });
+
+  it("names the plates' sessions as the catalog's @ does: vibe-field, vibe-field·2, and fieldd's name where @ offers none (track CO, the handle)", async () => {
+    // beside the plates, the catalog's @ plate: a thread of the same profiles over the same board,
+    // and its rows' handles
+    mount(
+      <>
+        <ChatPreview state="at" />
+        <NeedsCardPlates />
+      </>,
+    );
+    await settle();
+    const atHandle = (session: string): string =>
+      words($(`.vf-chat-at-row[data-row="session:${session}"] b`));
+    const handles = [atHandle("run-his-1"), atHandle("run-his-2")];
+    expect(handles).toEqual(["vibe-field", "vibe-field·2"]);
+    const said = (id: string, part: string): string =>
+      words($(`[data-plate="${id}"] .vf-needs-${part}`));
+    expect(said("held-send", "question")).toBe(`Vela wants to send to ${handles[0]}`);
+    expect(said("held-send-second", "question")).toBe(`Vela wants to send to ${handles[1]}`);
+    expect(said("held-send-second", "sub")).toBe(`Your yes lasts until ${handles[1]} ends.`);
+    expect(said("busy", "question")).toBe(`Vela wants to send to ${handles[0]}`);
+    // the agent Vela started is off the board, so @ offers it no handle: fieldd's name
+    expect(said("agent-ask", "eyebrow")).toBe("Needs your OK · Claude Code");
+  });
+
+  it("names the live plate's held send as Vela's @ does, once the question before it is answered and gone (track CO, the handle)", async () => {
+    mount(<NeedsCardLivePlate />);
+    await settle();
+    const live = (part: string): string => words($(`[data-plate="live"] .vf-needs-${part}`));
+    expect(live("question")).toBe("Push the fix to main now, or hold it for the review?");
+    vi.useFakeTimers();
+    await press("Push");
+    // the fixture door answers after its beat, and the queue drops the item as it does
+    tick(LIVE_BEAT_MS);
+    await settle();
+    expect(live("said")).toBe("You said Push");
+    tick(NEEDS_SAID_MS);
+    tick(NEEDS_LEAVE_MS);
+    // the held send to run-his-1 rises in its place, named by the thread's handles, never fieldd's "Claude Code"
+    expect(live("question")).toBe("Vela wants to send to vibe-field");
+    expect(live("sub")).toBe("Your yes lasts until vibe-field ends.");
   });
 
   it("draws every kind and state on its plates: an unknown kind, waiting, refused, answered three ways, narrow and by night", async () => {
@@ -1204,6 +1252,7 @@ describe("the catalog's needs-you card (docs/UI_SYSTEM.md: the shipping view on 
     for (const state of [
       "question",
       "held-send",
+      "held-send-second",
       "held-spawn",
       "agent-ask",
       "unknown",

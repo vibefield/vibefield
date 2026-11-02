@@ -12,7 +12,7 @@ import {
   type SparkSummary,
 } from "@vibefield/contracts";
 import { agentChipMenuOf } from "../chat/agent-chip-menu";
-import { type AtSources, atDefaultHot, atRowsOf } from "../chat/at-rows";
+import { type AtSources, atDefaultHot, atRowsOf, sessionHandlesOf } from "../chat/at-rows";
 import type { AtShown, ChatComposerViewProps } from "../chat/ChatComposerView";
 import type { ChatAct } from "../chat/ChatPanelView";
 import {
@@ -38,8 +38,8 @@ import { FIXTURE_HATCHED, FIXTURE_SPARKS } from "./spark-fixtures";
 // field board's rows, the needs-you queue's items, the agents and Agent Profiles it offers, an agent's picker, or that
 // it is not answering — run through the PRODUCT's own readings (`sparkEntriesOf`, the thread marks' `ThreadLedger` and
 // `threadMarksOf`, @'s `atRowsOf`, an agent chip's menu `agentChipMenuOf`, the draft's `draftBlank` and
-// `draftSendable`, the needs-you card's `needsCardOf`), so the catalog draws what the window would, never a copy of its
-// words.
+// `draftSendable`, the needs-you card's `needsCardOf`, its sessions named by @'s `sessionHandlesOf`), so the catalog
+// draws what the window would, never a copy of its words.
 // Fixed seeds (`spark-fixtures.ts`) and a fixed clock, so every plate deals the same faces and says the same times.
 
 /** The catalog's clock: a Saturday morning, 9:41 local. */
@@ -189,6 +189,12 @@ const ROWS: readonly AgentFieldRow[] = [
   }),
 ];
 
+/** How a spark's thread names the person's sessions (track CO, the handle): @'s handles, by the product's own
+ * `sessionHandlesOf` over the fixture board and Agent Profiles, so a card says what that thread's @ would. Every
+ * plate's board holds these sessions; a hatched spark's own run is never one @ offers. */
+export const chatHandlesOf = (spark: SparkSummary): ReadonlyMap<string, string> =>
+  sessionHandlesOf(spark, ROWS, PROFILE_SETS);
+
 /** The hatched spark's own run: up and idle — it has had no turn. */
 const HATCHED_RUN = row({
   runtimeRunId: "run-polaris",
@@ -202,8 +208,9 @@ const HATCHED_RUN = row({
 });
 
 /** The needs-you queue's open items, oldest first, as needs.subscribe would say them (CP-3): the ask of Vela's own run,
- * which her row's blocker already says (read once, there), and Kiwi's held send — Kiwi asked, then slept, and an answer
- * would wake it (CP3-D7). Names as fieldd's `runLabel` gives them: a session's title, else its agent's label. */
+ * which her row's blocker already says (read once, there), and Kiwi's held send to the first vibe-field — Kiwi asked,
+ * then slept, and an answer would wake it (CP3-D7). Names as fieldd's `runLabel` gives them (a session's title, else
+ * its agent's label); the card names a session @ offers by its handle instead (`chatHandlesOf`). */
 const ITEMS: readonly NeedsItem[] = [
   {
     id: "ny-velaown0001",
@@ -603,8 +610,12 @@ export const CHAT_COMPOSER: Partial<Record<ChatState, ComposerPlate>> = {
 const VELA = SPARKS[0] as SparkSummary;
 
 /** A session's name as fieldd's `runLabel` gives it (its title, else its row's catalog label, else its id): an untitled
- * run of the catalog's first agent, so its label (DESIGN.md's "Claude Code"). */
+ * run of the catalog's first agent, so its label (DESIGN.md's "Claude Code"). The card says it only for a session
+ * Vela's @ does not offer (the agent she started, off the board); fieldd's own reasons say it too. */
 const SESSION_NAME = AGENT.label;
+
+/** How Vela's thread names the person's sessions: "vibe-field", "vibe-field·2" and "rosetta", as her @ does. */
+export const NEEDS_HANDLES = chatHandlesOf(VELA);
 
 /** One of Vela's open items, as needs.subscribe would say it. */
 function velaItem(over: Partial<NeedsItem> & Pick<NeedsItem, "id" | "kind">): NeedsItem {
@@ -630,6 +641,14 @@ const HELD_SEND = velaItem({
   count: 3,
   choices: [NEEDS_CHOICE_WORDS.allow, NEEDS_CHOICE_WORDS.notNow],
   to: { session: "run-his-1", name: SESSION_NAME },
+});
+/** …and one to the second session in a folder of that name, started after the first: "vibe-field·2", as @ says. */
+const HELD_SEND_SECOND = velaItem({
+  id: "ny-plateheldsend2",
+  kind: "held-send",
+  words: "review the input queue's restore and say what you'd change",
+  choices: [NEEDS_CHOICE_WORDS.allow, NEEDS_CHOICE_WORDS.notNow],
+  to: { session: "run-his-2", name: SESSION_NAME },
 });
 const HELD_SPAWN = velaItem({
   id: "ny-plateheldspawn",
@@ -677,7 +696,7 @@ function answeredOf(item: NeedsItem, choice: number, over: Partial<NeedsAnswer> 
   };
 }
 
-/** One plate: a card as the thread would stand it, by the product's own `needsCardOf`. */
+/** One plate: a card as the thread would stand it, by the product's own `needsCardOf`, under Vela's handles. */
 export interface NeedsPlate {
   readonly id: string;
   readonly label: string;
@@ -692,12 +711,22 @@ const plate = (
   waiting: readonly NeedsItem[],
   item: NeedsItem,
   act?: NeedsAct,
-): NeedsPlate => ({ id, label, card: needsCardOf(velaWith(waiting), item, act) });
+): NeedsPlate => ({
+  id,
+  label,
+  card: needsCardOf(velaWith(waiting), item, act, { handles: NEEDS_HANDLES }),
+});
 
 /** Each kind of item as it waits on you. */
 export const NEEDS_KIND_PLATES: readonly NeedsPlate[] = [
   plate("question", "A spark's question, 1 of 3", [QUESTION, HELD_SEND, HELD_SPAWN], QUESTION),
   plate("held-send", "A held send, two more behind it", [HELD_SEND], HELD_SEND),
+  plate(
+    "held-send-second",
+    "A held send to the second vibe-field",
+    [HELD_SEND_SECOND],
+    HELD_SEND_SECOND,
+  ),
   plate("held-spawn", "A held spawn, past the cap", [HELD_SPAWN], HELD_SPAWN),
   plate("agent-ask", "An agent's own ask: Show", [AGENT_ASK], AGENT_ASK),
   plate("unknown", "A kind this build does not know", [UNKNOWN], UNKNOWN),

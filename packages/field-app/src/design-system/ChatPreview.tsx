@@ -16,6 +16,7 @@ import {
   CHAT_STATE_LABEL,
   CHAT_STATES,
   type ChatState,
+  chatHandlesOf,
   chatMarksOf,
   chatReadingOf,
   FIXTURE_NOW,
@@ -29,7 +30,8 @@ import {
 // the live pane. The thread's composer is the shipping `ChatComposerView` on the plate's fixture draft and @ rows,
 // never its controller. What stands in the thread over its pane is the product's own reading (`threadItemsOf`) of the
 // shown spark and the plate's draft: a new spark's hello, whose starters send nothing here, or on the waiting plate
-// the needs-you card (`waitingCardOf`), whose acts answer nothing here. A plate whose thread an act holds
+// the needs-you card (`waitingCardOf`), its sessions named as the thread's @ names them (`chatHandlesOf`, the
+// product's `sessionHandlesOf` on the fixture board), whose acts answer nothing here. A plate whose thread an act holds
 // (`CHAT_SENDING`) hands that one fact to both, as Chat's controller does: Wake and the starters wait and send is
 // busy. Each row's mark is the product's own ledger and reading (`chatMarksOf`: `ThreadLedger`, `threadMarksOf`) over
 // what the plates' window read, the shown thread on screen. The markup and the CSS are the product's.
@@ -64,7 +66,7 @@ export function ChatPreview({
       : threadItemsOf(
           shown,
           threadQuiet(shown, draftBlank(drafted?.seed ?? []), false),
-          waitingCardOf(shown),
+          waitingCardOf(shown, { handles: chatHandlesOf(shown.spark) }),
         );
   const marks = chatMarksOf(
     reading.state === "ready" ? reading.entries : [],
