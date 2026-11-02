@@ -18,6 +18,7 @@ import { ChatComposer, type ComposerPort } from "./ChatComposer";
 import { type ChatAct, ChatPanelView, paneSessionOf, shownOf, threadLineOf } from "./ChatPanelView";
 import { type DraftPart, draftBlank } from "./composer-draft";
 import { useNeedsCard } from "./needs-card-stand";
+import { useProfileSets } from "./profile-sets";
 import { SparkPane } from "./SparkPane";
 import type { SparkEntry } from "./spark-status";
 import {
@@ -48,8 +49,10 @@ import { sendNote, sendToThread, type ThreadSendOutcome } from "./thread-send";
 // starter pressed as Send sends, one act at a time into a thread, a wake's or a send's. Since CP-3 the needs-you card
 // stands there in the hello's place (`useNeedsCard`): its acts answered through the feed (`needs.answer`, by their
 // place), an agent's ask shown in its pane by Jump to's path. It tells the feed which thread is on screen — the shown
-// one while Chat is the view — so opening a thread reads it, and draws each row's mark as the feed keeps it. What it
-// chose, whose hello has left, which threads an act holds, and what its cards answer, are this view's alone.
+// one while Chat is the view — so opening a thread reads it, and draws each row's mark as the feed keeps it. It reads
+// the Agent Profiles once for every thread (`useProfileSets`: on its first show, and again as @ opens) and hands the
+// reading to the composer's @. What it chose, whose hello has left, which threads an act holds, and what its cards
+// answer, are this view's alone.
 
 /** How often the rows' times are said again while Chat shows ("now" becomes "9:41"). */
 const CLOCK_MS = 30_000;
@@ -67,11 +70,13 @@ export function ChatView({
   /** the frame's open surface, from its one owner (@'s list is `at`) */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
-  /** what @'s rows read: the Agent Profiles fieldd offers, and an agent's own picker (`ComposerPort`; its agents are
-   * said by the catalog's labels, so `agent.providers` is not read) */
+  /** what @'s rows read: the Agent Profiles fieldd offers, read here, and an agent's own picker, the composer's
+   * (`ComposerPort`; its agents are said by the catalog's labels, so `agent.providers` is not read) */
   port: ComposerPort;
 }): ReactElement {
   const reading = useSparksReading();
+  // the Agent Profiles, read once for every thread's @ (on Chat's first show, and again as @ opens)
+  const profiles = useProfileSets(port, active);
   const [chosen, setChosen] = useState<SparkId | null>(null);
   const [act, setAct] = useState<{ readonly spark: SparkId; readonly act: ChatAct } | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -271,6 +276,7 @@ export function ChatView({
         onPark={(next) => park(shown.spark.id, next)}
         surface={surface}
         onSurfaceChange={onSurfaceChange}
+        profiles={profiles}
         port={port}
         send={sendTo(shown, open)}
         threadSending={heldThreads.has(shown.spark.id)}

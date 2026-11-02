@@ -13,6 +13,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatComposer, type ComposerPort } from "../src/chat/ChatComposer";
 import type { DraftPart } from "../src/chat/composer-draft";
+import { useProfileSets } from "../src/chat/profile-sets";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import {
   type CardLetGo,
@@ -98,8 +99,9 @@ async function mount(
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [active, setActive] = useState(true);
     setActiveNow = setActive;
-    // the thread's draft, kept as Chat keeps it (one copy)
+    // the thread's draft, kept as Chat keeps it (one copy), and its profiles read as Chat's controller reads them
     const [draft, setDraft] = useState<readonly DraftPart[]>([]);
+    const profiles = useProfileSets(port, active);
     return (
       <ChatComposer
         entry={entry as NonNullable<typeof entry>}
@@ -108,6 +110,7 @@ async function mount(
         onPark={setDraft}
         surface={surface}
         onSurfaceChange={setSurface}
+        profiles={profiles}
         port={port}
         send={send}
         say={() => true}

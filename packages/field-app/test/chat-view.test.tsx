@@ -123,9 +123,15 @@ const PORT: ComposerPort = {
 
 /** Chat as the frame mounts it: FieldView's place, the one owner of the frame's open surface, stands around it. Chat
  * is the view showing unless the test says it is not (the frame keeps it mounted in another view). */
-function Chat({ active = true }: { active?: boolean }): ReactElement {
+function Chat({
+  active = true,
+  port = PORT,
+}: {
+  active?: boolean;
+  port?: ComposerPort;
+}): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>(null);
-  return <ChatView active={active} surface={surface} onSurfaceChange={setSurface} port={PORT} />;
+  return <ChatView active={active} surface={surface} onSurfaceChange={setSurface} port={port} />;
 }
 
 let root: Root | null = null;
@@ -163,6 +169,23 @@ function words(element: HTMLElement | null): string {
     if (text) parts.push(text);
   }
   return parts.join(" ");
+}
+/** Type into the draft as the browser leaves it: the text in the editor, the caret at its end, an input event. */
+function typeText(text: string): void {
+  act(() => {
+    const field = $(".vf-chat-input");
+    if (field === null) throw new Error("no draft");
+    field.focus();
+    field.textContent = "";
+    const node = document.createTextNode(text);
+    field.append(node);
+    const range = document.createRange();
+    range.setStart(node, node.length);
+    range.collapse(true);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }
 
 describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
@@ -839,6 +862,54 @@ describe("Chat, live (the feed and its acts)", () => {
     act(() => root?.render(<Chat />));
     await settle();
     expect(dot()).toBeNull();
+  });
+
+  it("reads the Agent Profiles once for every thread: on Chat's first show, never on a thread switch, again at each @ open (CO)", async () => {
+    const LYRA = spark("sp-lyra0001", "Lyra");
+    const { door } = scripted([{ ...VELA, updatedAt: "2026-10-31T05:10:00.000Z" }, LYRA]);
+    let reads = 0;
+    const counted: ComposerPort = {
+      ...PORT,
+      profileSets: async () => {
+        reads += 1;
+        return [];
+      },
+    };
+    stop = startSparksFeed(door);
+    // mounted in another view: nothing is read until Chat shows
+    mount(<Chat active={false} port={counted} />);
+    await settle();
+    expect(reads).toBe(0);
+    act(() => root?.render(<Chat port={counted} />));
+    await settle();
+    expect(reads).toBe(1);
+    expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Vela's thread");
+    // a thread switch draws the next thread's composer, which reads nothing of its own
+    act(() => $('.vf-chat-row[data-spark="sp-lyra0001"]')?.click());
+    await settle();
+    expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Lyra's thread");
+    act(() => $('.vf-chat-row[data-spark="sp-vela0001"]')?.click());
+    await settle();
+    expect(reads).toBe(1);
+    // another view and back: the first show is past
+    act(() => root?.render(<Chat active={false} port={counted} />));
+    act(() => root?.render(<Chat port={counted} />));
+    await settle();
+    expect(reads).toBe(1);
+    // @ opens: read again; writing on inside it reads nothing more; @ opened again reads again
+    typeText("ask @");
+    await settle();
+    expect($(".vf-chat-at")).not.toBeNull();
+    expect(reads).toBe(2);
+    typeText("ask @v");
+    await settle();
+    expect(reads).toBe(2);
+    typeText("ask");
+    await settle();
+    expect($(".vf-chat-at")).toBeNull();
+    typeText("ask @");
+    await settle();
+    expect(reads).toBe(3);
   });
 
   it("reads the queue beside the board: an item for a spark is its word and its dot, and leaves with them (CP-3)", async () => {
