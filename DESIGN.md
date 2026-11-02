@@ -5391,6 +5391,21 @@ is the primary act. It changes nothing about who may reach what. *Named deviatio
 still reads "Sign in" — three words do not fit its 10 pt label — and its spoken name is "Sign in,
 Continue with Tailscale".
 
+**The freeway's refusals** (track FW, F1b's kit half; FW-D5; added 2026-11-01). The phone asks its home desktop to
+approve its connection to each desktop, and when a desktop says no, the phone says it in these words. ‹desktop› is
+the field's name for that desktop, the way the attach card names it ("couldn't reach studio's terminal"). The
+words are quoted exactly by `FreewayApproval.said` (`apps/ios/VibeFieldKit/Sources/FieldFreeway`). They change only
+the message: the refusal's kind, whether it may be asked again, and its details stay the desktop's.
+- "‹desktop› won't approve a connection from this phone" — a refusal asking again does not fix, so the phone does not
+  ask on its own. A tap asks again.
+- "‹desktop› doesn't know this phone yet" — its roster has not matched this phone yet. The phone asks again on its own.
+- "‹desktop› isn't ready for this phone's connection yet" — it has not read its own state yet.
+- "‹desktop› isn't taking connections from phones right now" — its freeway is not running.
+- "your home desktop can't reach ‹desktop› right now" — the home's own link to that desktop, never a guess about the
+  desktop.
+- "this phone isn't connected to its home desktop" — there is no home to ask through. The phone asks again once it is.
+- A refusal the phone has no words for keeps the desktop's own.
+
 **The agents' words** (track AO, ruled 2026-10-27; AO-L8, no machinery on screen). One word per thing,
 in the Setup Assistant, Settings, History and the launcher alike. An **agent** is named by the
 catalog's label (Claude Code, Codex, Grok). **This Mac** is the profile that uses the agents' own

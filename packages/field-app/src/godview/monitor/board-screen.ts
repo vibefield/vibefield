@@ -127,9 +127,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** The stand-in key of a row with none: never a real key (the relay refuses a keyless row). */
 const NO_KEY = "\u0000";
 
-/** A row's key as the relay read it, or the stand-in. */
+/** A row's key as the relay read it, or the stand-in. An empty `runtimeRunId` is
+ * no key (item 150, 2026-11-01): a row key is `min(1)`, so "" in a screened
+ * delta's `removed` failed `RowsDelta` and the replica reopened at every frame. */
 function keyOf(row: unknown): string {
-  return isRecord(row) && typeof row["runtimeRunId"] === "string" ? row["runtimeRunId"] : NO_KEY;
+  const key = isRecord(row) ? row["runtimeRunId"] : undefined;
+  return typeof key === "string" && key !== "" ? key : NO_KEY;
 }
 
 function split(rows: readonly unknown[]): { readable: unknown[]; unreadable: Set<string> } {

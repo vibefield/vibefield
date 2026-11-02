@@ -25415,6 +25415,9 @@ own order:
   a non-home desktop's own door (`ownerDoor`, a per-ask owner socket), which F1 already serves. Asking the home with
   `device` instead is unbuilt, and so are FW-R3 (no phone probe of desktops) and FW-R6 (per-ask owner sockets
   retired), both F1b's in §14. The kit keeps one `FreewayDesktopLink` per desktop already (F1).
+  > **Paid (2026-11-01, M93 `284e4af9d`, run93r; LANDED "F1b's kit half"):** the kit asks the home with `device`,
+  > so FW-R3 holds: the phone probes no other desktop for an approval. FW-R6 holds for the approval alone: a
+  > ticket, its renewal and Resume still open the owner's door (SP-7). F1b's exit still needs James's device round.
 - **F1b's exit** (a session on a second desktop opens over that desktop's link, approved through the home's door,
   its bytes owner-direct) needs the kit's half and James's device round on two desktops. The rows here are two real
   fieldd daemons over scripted floors; no live tailnet ran.
@@ -26010,6 +26013,7 @@ compiled catalog keeps the dark appearance. The dark icon needs its own image in
 - The dark About icon.
 - The app workspace's stale `Package.resolved` (EL8; reported, never committed).
 - F1b's kit half (the phone asks through its home; FieldLink.swift:683), on VF-PM's brief.
+  > **Paid (2026-11-01):** M93 `284e4af9d`, run93r (LANDED "F1b's kit half").
 
 ## FG-6's follow-up 3 — the hold carries the field's mark: the browser's glass held off the field wears the field's mark as the held frame holds it, at the field's mark's own spot and size, so row 32's frozen frame compares one mark
 
@@ -27814,3 +27818,190 @@ James's first sight, in `pnpm dev`, Chat (⌘4):
 - a press says "You said Yes" for 2.4 s, then the card leaves; every other window drops it at once;
 - from another view, "Vela needs you" stands over Chat's cell for 2.4 s;
 - a notify is one line on the status line, and an OS notice while no VibeField window is in front.
+
+## Item 148 — users.json's mint and the layout stamp are created whole: tmp, fsync, then a link that fails EEXIST, never a bare "wx" write a reader can catch mid-write
+
+(2026-11-01; one commit `75e1bd31a` on lane `fix/item148` over main `0a97e59b6`, the fixer's; M90 is `75e1bd31a` itself,
+a fast-forward of main `0a97e59b6`, run 90.) Found by push 58's GitHub verify (41308169170), granted at 13:18Z.
+
+**The red.** packages/users `mint-race.test.ts`, "eight real minters, one empty root › exactly one users.json, one ULID,
+losers adopt": a loser's `ensureUsersRoot` → `detectLayoutState` → `readLayoutStamp` threw users-corrupt, "layout.json
+is present but unusable", with JSON.parse's "Unexpected end of JSON input". The cause: `detectLayoutState`, outside the
+lock (`ensure.ts`), read a two-step "wx" write. The winner wrote the stamp with
+`writeFileSync(path, …, { flag: "wx" })`, which creates the name before it writes the bytes, and a reader between the
+two read an empty file. The lock file's own header already records the lesson ("another process can observe the file
+between create and the identity write"); the two markers never took it. The race is old: users last changed at UA-7, and
+the runner surfaced it.
+
+**The fix.** `createWholeSync(target, payload)` in `users-file.ts` writes and fsyncs the payload under a private tmp
+name, then runs `linkSync(tmp, target)`, unlinks the tmp, and fsyncs the directory. The link fails EEXIST when any file
+holds the name, so the "wx" semantics stand, and the name appears only with its bytes complete. Both never-overwrite
+markers take it:
+- the layout stamp: EEXIST still validates the incumbent;
+- users.json's mint: EEXIST still adopts the winner, the belt under a broken lock. Mint's critical section stays
+  synchronous.
+
+Mutation's tmp + `durableRename` was not used: a rename lands the bytes whole too, but it replaces an incumbent, and
+these are the two files nobody may overwrite. No tolerance was added to any reader.
+
+**Tests.** `test/whole-markers.test.ts` (new) mocks `node:fs`, the repo's idiom (electron-shell's
+`authority-production.test.ts`). `writeFileSync` by path runs as its two real steps, open then write, with a reader
+between them, where another process lands:
+- a fresh mint's every write must leave each marker absent or whole;
+- an incumbent stamp is kept unchanged, and no tmp is left in the root.
+
+lock.ts's two comments and `users-file.test.ts`'s belt row title name the exclusive create, no longer "wx".
+
+**The light** (lane item148, `lanes/item148/tools/light148.sh`, logs `lanes/item148/light/`; 13:25:08Z → 13:26:08Z, at
+`75e1bd31a`), green throughout:
+- R, red-first: main's `users-file.ts` under the new file, its first row red, one torn read in each marker's
+  window: `expected [ 'users-corrupt', 'users-corrupt' ] to deeply equal []`. The file was restored from HEAD.
+- G: the new file at the fix, 2/2. M: `mint-race.test.ts` alone, 10 of 10 green: the lottery's row, never a proof by
+  itself.
+- @vibefield/users whole, 42 passed and 1 skipped (the win32-only row), 8 files. Biome on the package. The users
+  typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- Run 90 on the mini (a9's mint; VF-PM's read, 16:08:21Z): 11,998 passed, 0 failed, 18 skipped, main's count plus the
+  two new rows; it stood for the landing at 22:08Z, main unmoved.
+
+**Windows.** `linkSync` is CreateHardLinkW, which NTFS has (`%LOCALAPPDATA%`). A VibeField root on FAT or exFAT
+would fail loudly as users-unwritable, "cannot mint users.json", never silently. verify runs on macOS only.
+
+**Owed.** The Windows box check of the mint (the link on NTFS), not the fixer's to run unasked.
+
+## Item 147 — the ground-truth page waits for rosetta's `indexed`, never the session row's first sight
+
+(2026-11-01; one commit `f3554436d` on lane `fix/item147` over main `b2fad1d42`, the fixer's; the mint M91 `10368b597`,
+the merge over main `d8902f376`, run 91.) Found by cp-landing's merged-tree light, granted at 12:13Z. Test-only.
+
+**The red.** index-timeline.test.ts's "SP-6 — the two doors against the REAL rosettad › the page over the ground-truth
+transcript" read `expected 0 to be ≥ 1` under whole-suite load, and was green 3 of 3 alone. Its `realWorld()` waited
+for the session's row in `index.sessions` and paged at once. rosetta writes a session's row `pending` at setup, before
+any of its entries (rosetta-pin `crates/pipeline/src/streamed.rs`), and marks it `indexed` only once every admitted
+source file has completed a clean generation (`stream.rs`). The row's first sight is not its entries, and under load
+the page landed in between.
+
+**The fix.** `untilIndexed(rpc, nativeSessionId, ms)` ends the wait on the row's `streamState === "indexed"`, rosetta's
+own mark that the transcript has landed whole, read through fieldd's `index.sessions` door. Both of realWorld's rows
+ask it at the same 90 s: the page, and the tail, which compares its snapshot to a page. Waiting on the mark, not on a
+non-empty page, keeps the row's own `≥ 1` a claim, and holds the agent reply and the tail's comparison as well as the
+first entry. The red-first row is in the stub world (the fake rosettad re-reads its files per request): the session
+reads `pending` with no entries, and 1 s later the entries land and the row reads `indexed`. The wait must end with the
+page holding all seven of S1's entries. `World` gains `sessions(rows)`.
+
+**The light** (lane item147, `lanes/item147/tools/light147.sh`, logs `lanes/item147/light/`; 12:43:28Z → 12:45:56Z,
+at `f3554436d`). Its first run, at 12:20Z, was stopped on its red-first step for M88's landing, and the lane was
+restored clean; this second run went green throughout:
+- R, red-first: `untilIndexed` given main's condition (the row's first sight), the stub row alone, red:
+  `expected [] to have a length of 7 but got +0`. The file was restored from HEAD.
+- G: the stub row alone at the fix, green in 1,200 ms (the 1 s flip waited out).
+- X: the whole file against the REAL rosettad (the siblings-built release binary at the pin), 13/13. The page row took
+  592 ms and the tail row 3,708 ms, both run, neither skipped.
+- Biome on the file. fieldd's typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- The merge-tree over main `0a97e59b6` was clean (`ea31487c5`, no file changed on both sides), and CP-3 touched none of
+  the row's seams: the fake rosettad, the index contracts, fieldd's index and rosetta code.
+- Run 91 on the mini (a9's mint; VF-PM's read, 22:16:29Z): 11,999 passed, 0 failed, 18 skipped, main's count plus the
+  new row; cargo 33 ok. The merge is over main `d8902f376`, item 148's records.
+
+**Owed.** Nothing of the fixer's.
+
+## F1b's kit half — the phone's freeway approval rides its home's door, and every refusal is said in its words
+
+(2026-11-01; three commits `dd6bccf5b` → `284e4af9d` on lane `fw/f1b-kit` over main `5c41c10b2`; minted STACKED as M93,
+`284e4af9d` itself (a fast-forward of main `5c41c10b2`: the run IS T), run93r.) The phone asks its HOME for a freeway
+approval to any desktop. The home forwards the ask whole to that desktop, which mints for the phone its own roster knows
+(M63). The phone opens no other door for it.
+
+**What James asked and ruled:** 2026-10-16 22:16Z, FW-D5, "a freeway per desktop": a link to each desktop the phone
+shows a session of, approved by THAT desktop through the home's door. 2026-10-31 21:09Z: freeway, sync plane and
+Godview land first. F1b's desktop half landed as M63 `599998fdd`. VF-PM scoped this half on 2026-11-01 at 01:43Z: the
+approval only. A ticket, its renewal and Resume stay over the owner's door (DS-8), and moving them is SP-7's. GO at
+22:22Z.
+
+**What landed** (10 files +412 −11):
+- `dd6bccf5b`, red first:
+  - FieldFreewayTests `FreewayApprovalTests` and `FreewayApprovalRefusalTests`, and three rows in FieldMeshTests
+    `FieldLinkOwnerDoorTests`.
+  - `FreewayContract.Approval` mirrors `FREEWAY_APPROVAL`, and `check-ios-fixtures` pins all four values: 67 pins,
+    was 63.
+  - 7 rows were red on the stubs. FieldMesh's two: the ask went to the laptop's own door (TIMEOUT), and it dialled
+    the laptop.
+- `8eac5b72b`, the code:
+  - `FieldLink.approveFreeway(on:)` sends `freeway.approve` on the home's door: `{}` for the home's own link,
+    `{device}` for another desktop's. With no home it refuses at once in the kit's shape (`FreewayApproval.noHome`,
+    UNAVAILABLE freeway `no_door`, retryable).
+  - `FreewayApproval.said` puts each refusal in the phone's words, keeping the door's kind, retryability, details
+    and code:
+    - FORBIDDEN_SCOPE → "laptop won't approve a connection from this phone" (not retryable);
+    - uncorrelated → "laptop doesn't know this phone yet";
+    - unread → "laptop isn't ready for this phone's connection yet";
+    - down → "laptop isn't taking connections from phones right now";
+    - the home's `peer-link` → "your home desktop can't reach laptop right now";
+    - no home → "this phone isn't connected to its home desktop".
+  - `FreewayDesktopLink`:
+    - A refusal reaches `link()` in those words, and the attach card's `doorWords` prints them.
+    - One no retry fixes leaves the link `.refused`, and only a tap asks again.
+    - A retryable one is asked again on the backoff.
+    - `Dialing.desktopName` gives the words the field's name for the desktop.
+- `284e4af9d`, the voice: DESIGN.md §9 gains "The freeway's refusals", dated 2026-11-01: the six sentences, quoted
+  exactly by `FreewayApproval.said`. VF-PM ruled at 22:40Z that DESIGN.md governs voice.
+
+**Gate.**
+- The kit, the gate the mini cannot run: `xcodebuild test` on James's Mac, on the iPhone 17 Pro simulator (iOS 26.5),
+  at nice 19 under the guard, DEVELOPER_DIR per command.
+  - TEST SUCCEEDED: 1,411 tests in 252 suites and 14 bundles, 0 failed (22:35:17–22:36:44Z, at load 120).
+  - FieldFreewayTests 57/57, FieldLinkOwnerDoorTests 8/8.
+  - The device (F93EABF3-…) was found Shutdown at 22:37:18Z.
+- On the lane: field-app's 18 DESIGN.md reader files, 391/391, and `ui-system-boundaries` 44/44, each run alone.
+  `check-ios-fixtures` found 186 copies and 67 pins identical. Biome is clean on
+  `scripts/check-ios-fixtures.mjs`, and `git diff --check` is clean.
+- The mini, on M93 = `284e4af9d`:
+  - Run 93 was red on the load lottery: fieldd's terminal-kill-matrix WP12-D10 row, at END load 59.5 (the mini's
+    foreign simulator and Spotlight). The tip has no TypeScript or Rust.
+  - Run93r, the one re-run, was green at 22:54:09Z: 11,999 / 0 / 18 (= main ±0), cargo 33 ok, iOS pins 67, the tree
+    clean.
+
+**Findings.**
+- Since F1, `FreewayDesktopLink`'s header and `Dialing.approve`'s doc said the approval came "from the phone's
+  home", while `approveFreeway` asked the owner's own door. The words are true from this slice on.
+- `thinking-freeway.md`'s FW-R6 row cites `FieldLink.swift:714-716` for the per-ask owner sockets. Those lines have
+  moved, and the approval's socket retires here. A dated note is owed at a draft slot.
+- DESIGN.md named no words for the freeway's refusals. §9 says them from `284e4af9d` on.
+- `check-ios-fixtures`' fix message prints a string pin's value with doubled quotes (`""down""`). Owed, the fixer's.
+
+**Owed.**
+- James's device round, before `-vf-freeway` comes off: F1's exit and this slice's witness on a real phone.
+- PG-3c, which waited on this slice.
+- SP-7, the ticket, renewal and Resume asked through the home, each a desktop slice first.
+- The 15 s wait the desktop half found still stands. An approval for an unreachable desktop waits for the home's
+  forward timeout (`FORWARDING.FORWARD_TIMEOUT_MS`) before the phone hears "your home desktop can't reach laptop
+  right now" and backs off. Reading the roster's state for the desktop first, or FD1's held opens, would answer
+  sooner.
+- `check-ios-fixtures`' doubled quotes, the fixer's (above).
+- `thinking-freeway.md` FW-R6's stale lines, at a draft slot VF-PM opens.
+
+## Item 150 — the board screen reads a row keyed "" as keyless, never `removed: [""]`, a delta RowsDelta refuses and the replica reopens on
+
+(2026-11-01; one commit `47ee475bd` on lane `fix/item150` over main `5c41c10b2`, the fixer's; the mint M94 `a6dc43cd2`,
+the merge over main `9f0b7c73f`, run 94.) fd's find in PG-3c's design, granted at 22:53Z.
+
+**The red.** `packages/field-app/src/godview/monitor/board-screen.ts`'s `keyOf` returned any string `runtimeRunId`, ""
+included; only a non-string read as NO_KEY. A row keyed "" fails AgentModelMeshRow (a key is `min(1)`), so it is
+unreadable, and the delta path appends every unreadable key but NO_KEY to `removed`. The screened delta carried
+`removed: [""]`, which contracts' RowsDelta (`removed: z.array(z.string().min(1))`) refuses. The replica read the frame
+as unreadable and reopened (`model-replica.ts`), so every such delta looped a reopen. The open path drops the row
+without touching `removed`, so only deltas looped.
+
+**The fix.** `keyOf` maps "" to NO_KEY, as PG-3c's Swift reader will. A keyless row still reads its desktop as another
+version until a snapshot or an open replaces it, as a non-string key always did.
+
+**The light** (lane item150, `lanes/item150/tools/light150.sh`, logs `lanes/item150/light/`; 22:57:02Z → 22:57:35Z, at
+`47ee475bd`), green throughout:
+- R, red-first: main's `board-screen.ts` under the new row, red, the screened delta's `removed` holding `"run-gone"`
+  and `""`. The file was restored from HEAD.
+- G: `board-screen.test.ts` at the fix, 9/9. board-screen with phone-parity, 22/22. Biome on the two files.
+- field-app's typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- The merge-tree over main `284e4af9d` (M93) was clean (`d880fc5e8`), with no file changed on both sides.
+- Run 94 on the mini (a9's mint; VF-PM's read, 23:07:43Z): 12,000 passed, 0 failed, 18 skipped, main's count plus one
+  (board-screen.test 8 → 9); cargo 33 ok.
+
+**Owed.** Nothing of the fixer's.

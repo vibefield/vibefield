@@ -1,10 +1,12 @@
 import {
   closeSync,
   fsyncSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { userInfo } from "node:os";
@@ -175,9 +177,52 @@ export interface MintOptions {
   onMintLost?: () => void;
 }
 
+/** Item 148 (2026-11-01) — create-if-absent, whole or not at all, for the two
+ * never-overwrite commit markers (users.json's mint, the layout stamp). The
+ * payload is written and fsynced under a private tmp name, then hard-linked
+ * onto `target`, which fails EEXIST when anyone's file is already there: the
+ * "wx" semantics, with the name appearing only once its bytes are complete.
+ *
+ * A bare `writeFileSync(target, …, { flag: "wx" })` creates the name BEFORE
+ * it writes the bytes, so a reader outside the lock could read an empty file
+ * and call the root corrupt — the lock file's own lesson (lock.ts). Push 58's
+ * GitHub verify read it in the eight-minter row: a loser's `detectLayoutState`
+ * read `layout.json` mid-write, `layout.json is present but unusable`. A rename
+ * would land the bytes whole too, but it replaces an incumbent. */
+function createWholeSync(target: string, payload: string): void {
+  const tmp = `${target}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
+  const fd = openSync(tmp, "wx", 0o600);
+  try {
+    writeFileSync(fd, payload);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  try {
+    linkSync(tmp, target);
+  } finally {
+    try {
+      unlinkSync(tmp);
+    } catch {
+      /* a tmp left behind is litter under a name no reader opens, never a marker */
+    }
+  }
+  try {
+    const dirFd = openSync(dirname(target), "r");
+    try {
+      fsyncSync(dirFd);
+    } finally {
+      closeSync(dirFd);
+    }
+  } catch {
+    /* some filesystems refuse directory fsync — the link already landed */
+  }
+}
+
 /** Mint-if-absent. Caller holds the lock (or is deliberately proving the belt:
- * users.json itself publishes with "wx", so EEXIST means someone minted despite
- * everything — drop your ULID, re-read, ADOPT the winner, never retry (§3.3.5). */
+ * users.json itself is created whole and only if absent (`createWholeSync`), so
+ * EEXIST means someone minted despite everything — drop your ULID, re-read,
+ * ADOPT the winner, never retry (§3.3.5). */
 export function mintLockedUsersFile(
   rootReal: string,
   opts: MintOptions = {},
@@ -202,10 +247,7 @@ export function mintLockedUsersFile(
     users: [first],
   };
   try {
-    writeFileSync(usersFilePath(rootReal), `${JSON.stringify(file, null, 2)}\n`, {
-      flag: "wx",
-      mode: 0o600,
-    });
+    createWholeSync(usersFilePath(rootReal), `${JSON.stringify(file, null, 2)}\n`);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
       throw new UsersError("users-unwritable", "cannot mint users.json", error);
@@ -218,7 +260,7 @@ export function mintLockedUsersFile(
     mkdirSync(userRootFor(rootReal, activeUser(winner)), { recursive: true });
     return { file: winner, created: false };
   }
-  // Mint stays a SYNCHRONOUS critical section (the "wx" belt is the whole point
+  // Mint stays a SYNCHRONOUS critical section (the exclusive create is the whole point
   // — nothing may await between the exclusive create and the user root), so the
   // two mkdirs above and below cannot be `createPrivateUserDir`. They do not
   // need to be: `ensureUsersRoot` makes the root private BEFORE it mints, and a
@@ -229,8 +271,9 @@ export function mintLockedUsersFile(
   return { file, created: true };
 }
 
-/** Write the layout stamp (the migration/mint commit marker) — "wx"; EEXIST
- * validates the incumbent rather than overwriting anyone's marker. */
+/** Write the layout stamp (the migration/mint commit marker) — created whole and
+ * only if absent (`createWholeSync`); EEXIST validates the incumbent rather than
+ * overwriting anyone's marker. */
 export function writeLayoutStamp(
   rootReal: string,
   previous: "flat-v1" | "fresh",
@@ -242,10 +285,7 @@ export function writeLayoutStamp(
     previous,
   };
   try {
-    writeFileSync(layoutStampPath(rootReal), `${JSON.stringify(stamp, null, 2)}\n`, {
-      flag: "wx",
-      mode: 0o600,
-    });
+    createWholeSync(layoutStampPath(rootReal), `${JSON.stringify(stamp, null, 2)}\n`);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
       throw new UsersError("users-unwritable", "cannot write layout.json", error);
