@@ -98,7 +98,7 @@ private func soak(
     defer { client.close() }
     let tally = Tally()
     let handle = try await client.subscribe(
-      "agent.subscribe", params: AgentSubscribeParams.phoneField.json,
+      "agent.subscribe", params: fieldAsk.json,
       onSnapshot: { _ in tally.snapshots += 1 }, onDelta: { _ in tally.deltas += 1 })
     let socket = try #require(await door.latest)
     await settle(clock, parked: 2)

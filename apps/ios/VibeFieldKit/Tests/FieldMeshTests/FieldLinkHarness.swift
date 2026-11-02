@@ -125,7 +125,7 @@ struct MeshEntry {
   var chain: String { epoch ?? "\(device).1" }
 }
 
-/// `AgentMeshOpen`, as the home's door answers `agent.subscribe {scope: "mesh"}`.
+/// `AgentRemoteMeshOpen`, as the home's door answers `agent.subscribe {projection: "remote", scope: "mesh"}`.
 func meshOpen(_ entries: [MeshEntry]) -> JSONValue {
   .object([
     "devices": .array(

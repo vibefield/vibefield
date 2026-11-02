@@ -9,8 +9,8 @@ import Testing
 // project-key pair, `phone-fold.golden.json` (the home's window over the witness, which 3d's fold is held to) and,
 // since PG-3e, `phone-body.golden.json` (the window's bodies, which the drawn rows' bubbles are held to).
 // Copies, byte for byte, in the named set "remote" (`pnpm check:ios-fixtures`). Read here so a copy is never inert
-// until 3d, and so what only FieldMesh knows — the wire's date reading, the field cut's projection — is pinned beside
-// the remote cut's words.
+// until 3d, and so what only FieldMesh knows — the wire's date reading, the project ledger through the drawn rows — is
+// pinned beside the remote cut's words. (PG-3e, 2026-11-02: "the field cut's projection" until it retired.)
 
 @Suite struct RemoteMirrorTests {
   static let witness = [
@@ -32,20 +32,38 @@ import Testing
     for stamp in stamps { #expect(parseWireDate(stamp) != nil, "\(stamp)") }
   }
 
-  /// T10p — the field cut collapses what the remote cut names: through the kit's projection a run with no cwd and one
-  /// with only a workspace both read as their provider's label, where the remote rows name "Claude Code" and
-  /// "vibe-field" (`agent-field.test.ts`, the project-key pair).
-  @Test func theFieldCutCollapsesWhatTheRemoteCutNames() throws {
+  /// K1 (PG-3e; T10p until it, which read the field cut through `projectAgentField`, retired with it) — the switch moves
+  /// no colour already dealt. The field cut drew both `run-h-nocwd` and `run-h-root` under the provider's label,
+  /// "Claude Code" (T10p pinned it); the remote rows name "Claude Code" and "vibe-field" (`agent-field.test.ts`, the
+  /// project-key pair, still in this bundle). A ledger dealt under the field cut's names keeps every seq through the
+  /// drawn rows' names, and the root run moves to its folder's colour — the seq `run-h-turn`'s folder already holds,
+  /// or a new deal on a ledger that holds none (J-E2).
+  @Test func theLedgerKeepsItsKeysAndARootRunMovesToItsFolder() throws {
     let field = try AgentFieldSnapshot(json: try MeshFixture.json("agent-field-snapshot.project-keys"))
-    #expect(field.rows.map(\.runtimeRunId) == ["run-h-nocwd", "run-h-root"])
-    #expect(projectAgentField(rows: field.rows).agents.map(\.project) == ["Claude Code", "Claude Code"])
+    let pair = field.rows.map { $0.runtimeRunId }
+    #expect(pair == ["run-h-nocwd", "run-h-root"])
 
-    let open = try AgentRemoteMeshOpen(json: try MeshFixture.json("agent-remote-mesh-open.witness"))
-    let rows = open.devices.compactMap(\.snapshot).flatMap(\.rows)
-    let named = ["run-h-nocwd", "run-h-root"].map { key in
-      rows.first { $0.runtimeRunId == key }?.monitorRow.project.name
+    // the baseline: what the field cut dealt, the home's folders first, then the provider's label for the pair
+    let before = ProjectLedger.empty.dealing(["vibe-field", "puppeteer", "Claude Code"])
+    let dealt = before.seqByKey
+    #expect(dealt == ["vibe-field": 0, "puppeteer": 1, "Claude Code": 2])
+
+    let bubbles = try RemoteRows.drawn().map {
+      fieldBubble(from: $0, fieldIsLive: true, catalog: .empty, suppressUnread: false)
     }
+    let named = ["run-h-nocwd", "run-h-root"].map { key in bubbles.first { $0.runKey == key }?.project }
     #expect(named == ["Claude Code", "vibe-field"])
+
+    let after = before.dealing(bubbles.map { $0.project })
+    let kept = dealt.keys.sorted().map { after.seqByKey[$0] }
+    let wanted = dealt.keys.sorted().map { dealt[$0] }
+    #expect(kept == wanted, "no colour already dealt moves")
+    let root = after.seqByKey["vibe-field"]
+    #expect(root == 0, "the root run takes its folder's colour")
+    // a ledger that held only the provider's label deals the root run's folder anew
+    let alone = ProjectLedger.empty.dealing(["Claude Code"]).dealing(["Claude Code", "vibe-field"])
+    let fresh = alone.seqByKey
+    #expect(fresh == ["Claude Code": 0, "vibe-field": 1])
   }
 
   /// T10f — the fold golden's inputs are all in this bundle, and each reads as an open or a frame list.

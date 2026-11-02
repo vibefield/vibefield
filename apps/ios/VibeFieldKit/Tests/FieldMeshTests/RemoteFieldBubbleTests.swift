@@ -140,6 +140,11 @@ import Testing
     #expect(none?.runtimeSessionID == nil)
     #expect(none?.exited == false)
     #expect(partial.identityKey == "run-h-partial")
+    // a PENDING row is live and merely unobserved: its flag rides the join, and it has not exited (MF-1f)
+    let pendingJSON = R.monitor(try R.row("run-h-crash"), ["pending"], .bool(true))
+    let pending = try Self.bubble(pendingJSON).agent?.join
+    #expect(pending?.pending == true)
+    #expect(pending?.exited == false)
   }
 
   /// M6 — a bare terminal is a hollow with no facet; a peer's wears its host (Q-E8: no attach in 3e, so no join).

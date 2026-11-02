@@ -218,6 +218,11 @@ enum Frame {
 
 // MARK: - Fixtures
 
+/// The FIELD cut's ask at the field's floor — what `AgentSubscribeParams.phoneField` was until PG-3e retired it (the phone
+/// asks `phoneRemote` alone). The transport suites keep it: their payloads are the field row decoders' goldens, which
+/// stay with no product caller until PG-L1 (Q-E4 (a)), and the params ride beside them as the wire they came from.
+let fieldAsk = AgentSubscribeParams(projection: .field, minIntervalMs: 250)
+
 enum Fixture {
   static func json(_ name: String) throws -> JSONValue {
     guard let url = Bundle.module.url(forResource: name, withExtension: "json",
