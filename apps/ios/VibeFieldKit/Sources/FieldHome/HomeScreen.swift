@@ -1426,7 +1426,7 @@ public struct HomeScreen: View {
             // session — a remote row is the DEBUG fixture's, and is kept as
             // the fallback for exactly that reason.
             let wanted =
-              bubbles.first(where: { $0.agent?.join?.hasTerminal == true })
+              bubbles.first(where: { $0.join?.hasTerminal == true })
               ?? bubbles.first(where: { $0.remote?.attachable == true })
               ?? bubbles.first(where: { $0.status == .working })
               ?? bubbles.first
@@ -2000,7 +2000,7 @@ public struct HomeScreen: View {
   /// session runs on, as the link lists it (§13), and a plain screen while its
   /// platform is not said.
   private var cardSessionOS: DeviceMark.OS {
-    let device = cardBubble?.agent?.join?.deviceID ?? cardBubble?.remote?.deviceID
+    let device = cardBubble?.join?.deviceID ?? cardBubble?.remote?.deviceID
     return DeviceMark.OS(platform: link?.desktops.first { $0.deviceId == device }?.platform)
   }
 
@@ -2424,7 +2424,8 @@ public struct HomeScreen: View {
   // MARK: - IOS-4c: the agent card's terminal
 
   /// G3's join for the card's subject. `.noJoin` for a remote bubble or the
-  /// scripted fleet — neither has an agent row behind it.
+  /// scripted fleet — neither has an agent row behind it. (Item 154: a bare
+  /// terminal's pane join counts too, read through `FieldBubble.join`.)
   ///
   /// Both extra facts come from the DEVICES store rather than from a terminal
   /// listing: the desktop's name, and (TM-5a) whether it publishes its terminal
@@ -2518,7 +2519,7 @@ public struct HomeScreen: View {
     // TM-3 retires the three together; the act that could not work is gone now.
     // IOS-4c — an ended run's one act.
     // PG-3e — a resume names the run's board KEY; a bubble's id is its body's. The mock has no key and keys by id.
-    if let resume = resumeAction(cardBubble?.agent?.join, runtimeRunId: cardBubble?.runKey ?? cardBubble?.id) {
+    if let resume = resumeAction(cardBubble?.join, runtimeRunId: cardBubble?.runKey ?? cardBubble?.id) {
       actions.append(resume)
     }
     return actions
@@ -2716,11 +2717,12 @@ public struct HomeScreen: View {
     #endif
   }
 
-  /// The terminal sessions the field shows on one desktop: each run whose join names a PTY there.
+  /// The terminal sessions the field shows on one desktop: each run whose join names a PTY there, a bare terminal's
+  /// included (item 154), so its ticket is held before the tap as an agent's is.
   static func listedSessions(_ bubbles: [FieldBubble], on deviceID: String) -> Set<String> {
     Set(
       bubbles.compactMap { bubble -> String? in
-        guard let join = bubble.agent?.join, join.deviceID == deviceID, join.hosted != "none"
+        guard let join = bubble.join, join.deviceID == deviceID, join.hosted != "none"
         else { return nil }
         return join.runtimeSessionID
       })

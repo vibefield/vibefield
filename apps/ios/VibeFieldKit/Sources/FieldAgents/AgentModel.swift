@@ -294,7 +294,11 @@ public struct AgentJoin: Sendable, Equatable, Codable {
   public var deviceID: String
   /// `local` · `remote` · `none`, the wire's own word. `none` is an exited run
   /// (or one whose PTY is gone), and it is the only value that means there is
-  /// nothing to attach to.
+  /// nothing to attach to. (Corrected 2026-11-02, item 162: the contract's
+  /// `none` is "no terminal is known (an ingested row, or a managed run whose
+  /// PTY is gone)", agent-session.ts:116-119, so a LIVE run can carry it;
+  /// whether the run ended is `exited`, and a pane the owner withheld is
+  /// `paneWithheld`.)
   public var hosted: String
   /// The floor's session id — the handle `terminal.v1.hosts` advertises and
   /// the one an attach takes. Absent for a run with no terminal.

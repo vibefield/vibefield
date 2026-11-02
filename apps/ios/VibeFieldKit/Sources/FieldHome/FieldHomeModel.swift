@@ -717,14 +717,15 @@ extension FieldHomeModel {
   /// The card's terminal face for its subject: the subject's join decided against its desktop's name and doors (the
   /// devices store's `name` and `terminalMesh`). `.noJoin` with no subject.
   static func cardTerminalFace(_ bubble: FieldBubble?, desktops: [FieldDesktop]) -> AgentTerminalFace {
-    guard let join = bubble?.agent?.join else { return .noJoin }
+    guard let join = bubble?.join else { return .noJoin }
     let desktop = desktops.first { $0.deviceId == join.deviceID }
     return agentTerminalFace(
       join: join, deviceName: desktop?.name, publishesTerminalDoors: desktop?.publishesTerminalDoors)
   }
 
-  /// Whether the card offers RESUME for its subject, given its face.
+  /// Whether the card offers RESUME for its subject, given its face: an agent's alone. A bare terminal has no run (its
+  /// board key is a floor session, which `agent.resume` would refuse), whatever its face.
   static func offersResume(_ face: AgentTerminalFace, for bubble: FieldBubble?) -> Bool {
-    face.offersResume
+    face.offersResume && bubble?.agent != nil
   }
 }

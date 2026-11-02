@@ -51,12 +51,23 @@ public func fieldBubble(
   let identityKey = board.terminal?.runtimeSessionId ?? row.key
   let createdAt = wireInstant(monitor.createdAt)
 
+  // A peer's `stale` IS its standing; the home answers while the home is live, whatever its owner's evidence clock.
+  let deviceLive = fieldIsLive && (row.isSelf || !row.stale)
+  // Items 154 and 162 — the owner deletes a row's `terminal` while its terminal doors are down (`attachableRows`,
+  // agent-field.ts), and a run with no known pane carries it PRESENT as `{hosted: "none"}`; the two are told apart
+  // here.
+  let paneWithheld = board.terminal == nil
+
   guard monitor.kind == .agent else {
-    // A bare terminal carries no facet: the body draws it hollow, running while its job works. No attach in 3e
-    // (Q-E8): its device, model id and key ride the bubble, never a join.
+    // A bare terminal carries no facet: the body draws it hollow, running while its job works. Item 154: its pane join
+    // rides the bubble (`terminalJoin`, read through `join`), so its card attaches as an agent's does. (3e had none,
+    // Q-E8.) It is never `exited`: the replica keeps a terminal's row only while it is alive.
+    let join = AgentJoin(
+      deviceID: row.device, hosted: board.terminal?.hosted ?? "none",
+      runtimeSessionID: board.terminal?.runtimeSessionId, deviceLive: deviceLive, paneWithheld: paneWithheld)
     return FieldBubble(
       id: row.visualId, project: project, detail: detail, status: status, identityKey: identityKey,
-      createdAt: createdAt, stale: stale, host: host, modelId: row.id, runKey: row.key)
+      createdAt: createdAt, stale: stale, host: host, modelId: row.id, runKey: row.key, terminalJoin: join)
   }
 
   let provider = AgentProvider(rawValue: monitor.provider?.id ?? "")
@@ -86,14 +97,17 @@ public func fieldBubble(
   let pending = monitor.pending ?? false
   let join = AgentJoin(
     deviceID: row.device,
+    // (Corrected 2026-11-02, item 162: "none" for an ABSENT `terminal` read a withheld pane as no pane at all, and the
+    // face read both as an ended run; `paneWithheld` now says which. The field cut's join, retired with PG-3e, filled
+    // it the same way (`AgentFieldProjection.swift:190-197` at d4eb2e74f).)
     hosted: board.terminal?.hosted ?? "none",
     runtimeSessionID: board.terminal?.runtimeSessionId,
     pending: pending,
     // MF-1f's row: the process ended and the pane is still on the floor. A PENDING row is live and merely unobserved.
     exited: !monitor.alive && !pending,
-    // A peer's `stale` IS its standing; the home answers while the home is live, whatever its owner's evidence clock.
-    deviceLive: fieldIsLive && (row.isSelf || !row.stale),
-    nativeSessionID: board.nativeSessionId)
+    deviceLive: deviceLive,
+    nativeSessionID: board.nativeSessionId,
+    paneWithheld: paneWithheld)
   let facet = AgentFacet(
     provider: provider,
     label: monitor.provider.map { $0.label.isEmpty ? nil : $0.label } ?? nil,

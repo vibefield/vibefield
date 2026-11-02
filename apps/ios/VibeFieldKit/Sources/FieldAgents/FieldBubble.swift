@@ -211,7 +211,7 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
 
   /// Item 154 — the card's join, whatever the body is: an agent's run, or a bare terminal's pane. Every reader of a
   /// card's terminal reads this (the face, the badge's desktop, the keyring's sessions, the DEBUG auto-open).
-  public var join: AgentJoin? { agent?.join }
+  public var join: AgentJoin? { agent?.join ?? terminalJoin }
 }
 
 /// nil when the session has left the field (exited/failed) — the same law as
