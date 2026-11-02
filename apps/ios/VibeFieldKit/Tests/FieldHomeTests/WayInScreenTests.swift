@@ -183,6 +183,17 @@ struct WayInScreenTests {
     }
   }
 
+  @Test("M2: the reader, the way in's own cover, says computer where it said Mac, and its title is the welcome's act")
+  func readerWords() {
+    for word in MacCodeReader.Words.all {
+      #expect(!word.contains("Mac"), "\(word)")
+    }
+    #expect(MacCodeReader.Words.title == "Scan the code on your computer")
+    #expect(
+      screen(.welcome(failure: nil)).acts.contains(
+        .secondary(MacCodeReader.Words.title, .scanCode, glyph: "qrcode.viewfinder")))
+  }
+
   @Test("WI-L3: until the splash can fade its mark, the mark keeps its place on every step")
   func theMarkStays() {
     #expect(WayInView.shownPicture(.mark, hasFace: true) == .mark)
