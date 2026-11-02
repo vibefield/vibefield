@@ -15,25 +15,24 @@ extension MonitorWords {
   /// host menu's `label`; a row always carries `name` (`MonitorDeviceRef`, AgentRemoteShapes.swift), so the phone
   /// takes the name alone (the design check's N11). `isSelf` is the window's join (`RemoteFieldRow.isSelf`).
   static func deviceWord(name: String, isSelf: Bool) -> String {
-    // PG-4s (red): the skeleton says nothing
-    ""
+    isSelf ? thisDesktop : name
   }
 }
 
 extension MonitorWords.StateWords {
-  // status
-  static let idle = ""
-  static let working = ""
-  // terminal
-  static let quiet = ""
-  static let opening = ""
+  // status (MonitorWords holds `blocked`)
+  static let idle = "idle"
+  static let working = "working"
+  // terminal (MonitorWords holds `running` and `empty`)
+  static let quiet = "quiet"
+  static let opening = "opening"
   // wait
-  static let waitPermission = ""
-  static let waitQuestion = ""
-  static let waitFailure = ""
+  static let waitPermission = "permission"
+  static let waitQuestion = "question"
+  static let waitFailure = "failed"
   // unread (MonitorWords holds its `line`, `unreadLine`)
-  static let unreadState = ""
+  static let unreadState = "reply unseen"
   // kind
-  static let kindTerminal = ""
-  static let kindRemote = ""
+  static let kindTerminal = "terminal"
+  static let kindRemote = "remote session"
 }

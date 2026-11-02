@@ -12,7 +12,10 @@ enum GodviewTone: String, Sendable, CaseIterable {
   /// the open card's suppression applied), never a row's raw `unread` (the design check's N3: a namespaced static,
   /// never a free function).
   static func of(status: MonitorRowStatus, isAgent: Bool, unread: Bool) -> GodviewTone {
-    // PG-4s (red): the skeleton is always idle
-    .idle
+    switch status {
+    case .blocked: .blocked
+    case .working: .working
+    case .idle: isAgent && unread ? .unread : .idle
+    }
   }
 }
