@@ -118,6 +118,14 @@ struct DoorPageTests {
         previous: .anotherAccount(current: "a@b", expected: login, from: "Studio", byLink: false), next: nil))
   }
 
+  @Test("M1: signed out, the tabs stay under the splash until it stands whole over them; signed in, they stand")
+  func tabsStand() {
+    #expect(FieldHomeModel.tabsStand(signedIn: true, splashCovers: true))
+    #expect(FieldHomeModel.tabsStand(signedIn: true, splashCovers: false))
+    #expect(FieldHomeModel.tabsStand(signedIn: false, splashCovers: false), "a sign-out's splash fades in over them")
+    #expect(!FieldHomeModel.tabsStand(signedIn: false, splashCovers: true), "covered: the way in stands alone")
+  }
+
   @Test("the found beat names the home when it is listed, else the first desktop, else none")
   func foundDesktop() {
     let studio = FieldDesktop(deviceId: "dev-1", name: "studio", platform: "darwin", state: .ready, feed: .door)

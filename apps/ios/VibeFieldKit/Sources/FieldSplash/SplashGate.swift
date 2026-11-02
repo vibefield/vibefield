@@ -40,8 +40,10 @@ extension SplashLook {
 ///
 /// WI-1 (DESIGN.md §8 "The phone's way in"): while the content holds it (`.splashHolds`), the splash
 /// stays, and what the content puts on it (`.splashOverlay`) stands over its field; a hold that comes
-/// after the splash has gone brings it back over the content, by its own fade. Released, it leaves by
-/// its own exit once the content is steady again.
+/// after the splash has gone brings it back over the content, by its own fade, and what stands on it
+/// comes once the splash stands whole again. Released, it leaves by its own exit once the content is
+/// steady again. The content hears whether the splash stands whole over it (`splashCovers`), so what a
+/// hold takes away (a sign-out's tabs) stays under the splash until it does.
 public struct SplashGate<Content: View>: View {
   private let content: () -> Content
   @Environment(\.colorScheme) private var colorScheme
@@ -59,6 +61,7 @@ public struct SplashGate<Content: View>: View {
         content()
           .scaleEffect(model.settled || reduceMotion ? 1 : SplashTiming.settleFrom)
           .accessibilityHidden(!model.revealing)
+          .environment(\.splashCovers, model.covers)
       }
       if !model.gone {
         splash
@@ -70,9 +73,10 @@ public struct SplashGate<Content: View>: View {
           .transition(.opacity)
       }
     }
-    // what the content puts on the field, drawn over it only while it holds the splash up
+    // what the content puts on the field, drawn over it only while it holds the splash up and the splash
+    // stands whole: a come-back fades in over the content first, then the way in (DESIGN.md §8)
     .overlayPreferenceValue(SplashOverlayKey.self) { overlay in
-      if let overlay, model.holding, !model.revealing, !model.gone {
+      if let overlay, model.holding, model.covers {
         overlay.view
           .transition(.opacity)
       }
@@ -97,6 +101,56 @@ public struct SplashGate<Content: View>: View {
   }
 }
 
+/// The splash's time, given to its model (WI-1's review): when a call falls due, and when the content
+/// draws on time. The app's are the continuous clock and the display link (`SplashTaskTimer`,
+/// `FrameWatch`); a test steps its own, so no row waits on the wall clock (item 157's lesson).
+@MainActor
+protocol SplashTimer: AnyObject {
+  /// Runs `body` once `delay` has passed, unless the handle is cancelled first.
+  @discardableResult
+  func after(_ delay: Duration, _ body: @escaping @MainActor () -> Void) -> any SplashDue
+}
+
+/// A call a `SplashTimer` has scheduled: cancelled, it never runs.
+@MainActor
+protocol SplashDue: AnyObject {
+  func cancel()
+}
+
+/// Whether the content draws on time: `onSteady`, once, when it does; `stop` stops the watch.
+@MainActor
+protocol SplashSteadiness: AnyObject {
+  func start(_ onSteady: @escaping @MainActor () -> Void)
+  func stop()
+}
+
+/// The app's timer: a task asleep on the continuous clock.
+@MainActor
+final class SplashTaskTimer: SplashTimer {
+  @discardableResult
+  func after(_ delay: Duration, _ body: @escaping @MainActor () -> Void) -> any SplashDue {
+    SplashTask(
+      Task { @MainActor in
+        try? await Task.sleep(for: delay)
+        guard !Task.isCancelled else { return }
+        body()
+      })
+  }
+}
+
+@MainActor
+private final class SplashTask: SplashDue {
+  private let task: Task<Void, Never>
+
+  init(_ task: Task<Void, Never>) {
+    self.task = task
+  }
+
+  func cancel() {
+    task.cancel()
+  }
+}
+
 /// The splash's decisions, in order: the field shows → the content comes under it → the content
 /// steadies and the floor passes → the splash leaves → it is gone (its thread and memory with it).
 @MainActor
@@ -108,18 +162,34 @@ final class SplashGateModel {
   private(set) var gone = false
   /// WI-1 — the content asks the splash to stand (`.splashHolds`): it never leaves while this holds.
   private(set) var holding = false
+  /// WI-1 (the review's M1) — whether the splash stands whole over the content: from launch until it
+  /// starts to leave, and again once a come-back's fade has run. The content hears it
+  /// (`splashCovers`): a sign-out's tabs stay under the splash fading in over them, and go once it
+  /// is whole.
+  private(set) var covers = true
 
   @ObservationIgnored private var begun = false
   @ObservationIgnored private var fieldShown = false
   @ObservationIgnored private var reduceMotion = false
   @ObservationIgnored private var stable = false
-  /// When the field will have stood its floor (none while it has not shown, or if it never does).
-  @ObservationIgnored private var floorUntil: ContinuousClock.Instant?
-  private let watch = FrameWatch()
+  /// Whether the field has yet to stand its floor, counted from its first frame (never, if it does not
+  /// show), and the call that ends it.
+  @ObservationIgnored private var floorPending = false
+  @ObservationIgnored private var floorDue: (any SplashDue)?
+  /// Counts the splash's moves (it leaves, it comes back), so a fade's end that a later move overtook
+  /// does nothing.
+  @ObservationIgnored private var moves = 0
+  private let timer: any SplashTimer
+  private let watch: any SplashSteadiness
   #if DEBUG
     @ObservationIgnored private var held = false
     private let begunAt = CACurrentMediaTime()
   #endif
+
+  init(timer: any SplashTimer = SplashTaskTimer(), watch: any SplashSteadiness = FrameWatch()) {
+    self.timer = timer
+    self.watch = watch
+  }
 
   #if DEBUG
     /// How long this process has run, from the kernel's own start time (the launch screen's share
@@ -164,13 +234,11 @@ final class SplashGateModel {
         settled = true
         revealing = true
         gone = true
+        covers = false
         return
       }
     #endif
-    Task {
-      try? await Task.sleep(for: SplashTiming.startLimit)
-      mountContent()
-    }
+    timer.after(SplashTiming.startLimit) { [weak self] in self?.mountContent() }
   }
 
   /// The field's first frame is done, shown at `at` (CACurrentMediaTime's clock), and the surface's
@@ -186,11 +254,10 @@ final class SplashGateModel {
       revealIfReady()
       return
     }
-    let until = ContinuousClock.now + .seconds(delay + fade) + SplashTiming.floor
-    floorUntil = until
-    Task {
-      try? await Task.sleep(until: until)
-      revealIfReady()
+    floorPending = true
+    floorDue = timer.after(.seconds(delay + fade) + SplashTiming.floor) { [weak self] in
+      self?.floorPending = false
+      self?.revealIfReady()
     }
     // the content now: the fade is the render server's, so its start can hold the main thread
     mountContent()
@@ -214,10 +281,9 @@ final class SplashGateModel {
       self?.stable = true
       self?.revealIfReady()
     }
-    Task {
-      try? await Task.sleep(for: SplashTiming.stableLimit)
-      stable = true
-      revealIfReady()
+    timer.after(SplashTiming.stableLimit) { [weak self] in
+      self?.stable = true
+      self?.revealIfReady()
     }
   }
 
@@ -239,35 +305,45 @@ final class SplashGateModel {
       self?.stable = true
       self?.revealIfReady()
     }
-    Task {
-      try? await Task.sleep(for: SplashTiming.stableLimit)
-      stable = true
-      revealIfReady()
+    timer.after(SplashTiming.stableLimit) { [weak self] in
+      self?.stable = true
+      self?.revealIfReady()
     }
   }
 
   /// The splash over the content again (a sign-out, Tailscale asking a remembered phone again): a new
   /// surface stands on the launch picture, fades in over the content, and the field comes up around its
-  /// mark as at launch. The content stays mounted under it.
+  /// mark as at launch. The content stays mounted under it, and hears that the splash covers it once
+  /// the fade has run.
   private func comeBack() {
     note("the splash comes back")
     watch.stop()
     fieldShown = false
-    floorUntil = nil
+    floorPending = false
+    floorDue?.cancel()
     // the content is watched again once the hold is released; until then the new field stands its floor
     stable = false
+    covers = false
+    moves += 1
+    let move = moves
     let fade = reduceMotion ? SplashTiming.fadeOut / 2 : SplashTiming.fadeOut
     withAnimation(FieldMotion.plainEase(fade)) {
       gone = false
       revealing = false
     }
+    timer.after(.seconds(fade)) { [weak self] in
+      guard let self, self.moves == move, !self.revealing, !self.gone else { return }
+      self.covers = true
+      self.note("the splash covers the content")
+    }
   }
 
   private func revealIfReady() {
-    guard contentMounted, stable, !revealing, !holding else { return }
-    if let floorUntil, ContinuousClock.now < floorUntil { return }
+    guard contentMounted, stable, !revealing, !holding, !floorPending else { return }
     watch.stop()
     note("the splash leaves")
+    covers = false
+    moves += 1
     let fade = reduceMotion ? SplashTiming.fadeOut / 2 : SplashTiming.fadeOut
     withAnimation(FieldMotion.plainEase(fade)) { revealing = true }
     if reduceMotion {
@@ -275,12 +351,11 @@ final class SplashGateModel {
     } else {
       withAnimation(FieldMotion.island(SplashTiming.settle)) { settled = true }
     }
-    Task {
-      try? await Task.sleep(for: .seconds(fade))
+    timer.after(.seconds(fade)) { [weak self] in
       // a hold taken during the fade brought it back: it stays
-      guard revealing else { return }
-      gone = true
-      note("the splash is gone")
+      guard let self, self.revealing else { return }
+      self.gone = true
+      self.note("the splash is gone")
     }
   }
 }
@@ -289,7 +364,7 @@ final class SplashGateModel {
 /// row have come within half a frame of when they were due (the desk's frame-stability gate —
 /// never reveal mid-hitch).
 @MainActor
-final class FrameWatch: NSObject {
+final class FrameWatch: NSObject, SplashSteadiness {
   private var link: CADisplayLink?
   private var last: CFTimeInterval = 0
   private var steady = 0

@@ -27,6 +27,21 @@ struct SplashOverlay {
   let view: AnyView
 }
 
+private struct SplashCoversKey: EnvironmentKey {
+  static let defaultValue = true
+}
+
+extension EnvironmentValues {
+  /// WI-1 (the review's M1) — whether the splash stands whole over this content: from launch until it starts to
+  /// leave, and again once a come-back's fade has run. What a hold takes away stays under the splash until then
+  /// (the tabs under a sign-out: the splash comes back over the tabs, DESIGN.md §8). Without a gate, true:
+  /// nothing is coming to cover it.
+  public var splashCovers: Bool {
+    get { self[SplashCoversKey.self] }
+    set { self[SplashCoversKey.self] = newValue }
+  }
+}
+
 extension View {
   /// WI-1 — holds the splash over this content while `hold` is true: its field stays up, and comes back over the
   /// content if it had gone. Releasing it lets the splash leave by its own exit once the content is steady.

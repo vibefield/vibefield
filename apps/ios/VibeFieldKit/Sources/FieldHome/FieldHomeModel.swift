@@ -708,6 +708,14 @@ enum FieldHomeModel {
     return true
   }
 
+  /// WI-1 (the review's M1) — whether the tabs stand: signed in, always; signed out, only until the splash stands
+  /// whole over them. A sign-out's splash comes back over the tabs, fading in over them (DESIGN.md §8 "The phone's
+  /// way in"), so they stay under it until it covers them, taking no touch meanwhile; a launch signed out never
+  /// mounts them, the splash covering from its first frame.
+  static func tabsStand(signedIn: Bool, splashCovers: Bool) -> Bool {
+    signedIn || !splashCovers
+  }
+
   /// The found beat's desktop: the home if it is listed, else the first desktop listed; nil while none
   /// answers (signed in by a desktop remembered, asleep).
   static func foundDesktop(home: String?, desktops: [FieldDesktop]) -> FoundDesktop? {

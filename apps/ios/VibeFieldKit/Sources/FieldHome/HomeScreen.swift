@@ -222,6 +222,9 @@ public struct HomeScreen: View {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.openURL) private var openURL
+  /// WI-1 (the review's M1) — whether the splash stands whole over the home: the tabs stay under a sign-out's
+  /// splash until it does.
+  @Environment(\.splashCovers) private var splashCovers
 
   public init() {}
 
@@ -466,12 +469,16 @@ public struct HomeScreen: View {
 
   /// WI-1 (DESIGN.md §9 "The way in"; WI-L1) — the phone's two states. Signed in, the tabs. Signed out, nothing
   /// here: the way in stands on the splash's own field, which this holds up (`.splashHolds`), and is drawn over
-  /// it (`.splashOverlay`). The hooks that teach the account's memory live here, never on the tabs, so a first
-  /// sign-in's listing is remembered while the way in still stands.
+  /// it (`.splashOverlay`). A sign-out keeps the tabs under the splash until it stands whole over them
+  /// (`FieldHomeModel.tabsStand`), so the splash fades in over the tabs, not over the panel. The hooks that teach
+  /// the account's memory live here, never on the tabs, so a first sign-in's listing is remembered while the way
+  /// in still stands.
   private var standing: some View {
     ZStack {
-      if wayInStep == nil {
+      if FieldHomeModel.tabsStand(signedIn: wayInStep == nil, splashCovers: splashCovers) {
         tabs
+          .allowsHitTesting(wayInStep == nil)
+          .accessibilityHidden(wayInStep != nil)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
