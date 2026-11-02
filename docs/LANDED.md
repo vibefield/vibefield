@@ -28489,3 +28489,74 @@ It pays SP-1d's owed line "Smoke rung 11m" (LANDED "SP-1d").
   (GodviewDeck.tsx imports it). An upstream note: VF-PM carries it to the upstream topic, and nothing is fixed here.
 - The sheet's order: whether NewSparkSheet should close (lift the inert) before it chooses the spark, so a thread
   never mounts under it. A sequencing question for SP-1c, named and not built.
+
+## PG-9a — a mesh hub lingers a minute after its last reader: a phone's app switch and its gap repair rejoin the standing hub, every peer still live on its epoch, and at most four hubs linger on one daemon (item 135; PG-L4.4's linger half, pulled ahead of PG-9) (2026-11-02; `5a7165338` → `4daf4326a`, four commits on main `50a66dd52`, lane `pg/9a` in `/Volumes/SamsungRed/lanes/pg3b`, in the mini's mint M98 `29c20cef0` over main `e6726af78`, run 98)
+
+**What it rests on.**
+- Item 135 (the read `lanes/ios/item135-read.md`, from code only, on main `0a97e59b6`). An app switch
+  (`FieldLink.pause()`) or a gap repair (`FieldProductClient.resnapshot`, unsubscribe first) left the phone's hub
+  with no reader. `BoardHub.dispose()` then detached every peer, and the new hub answered each other desktop
+  `stale` on a new epoch until it re-attached: the grey flash. The rows grey out from the kept board (DS-L8); they
+  do not vanish.
+- PG-L4.4 (`draft/thinking-phone-godview.md` §7/§8): per-device resume cursors and a lingering hub (~60 s). PG-D9
+  put L4.4 at PG-9. This slice pulls ahead its linger half alone; the per-device cursor half stays PG-9's.
+- VF-PM's grant of the pull-ahead; the review's five findings (`lanes/ios/pg9a-review.json`), each folded or ruled.
+
+**What** (four commits; 6 files, +390 −16; no lock and no pin moves):
+- **The contract** (`5a7165338` red, `f72a907e2` red), contracts first in `registries.ts`, each pinned in
+  `registry.test.ts` with its reason beside it:
+  - `AGENT_FIELD.MESH_HUB_LINGER_MS` = 60,000: an ordinary app switch with margin, a gap repair's milliseconds
+    many times over; its cost is the hub's desktop↔desktop upstreams and the home's own board for that long,
+    nothing on the phone's radio;
+  - `AGENT_FIELD.MESH_LINGERING_HUBS_MAX` = 4 (the review [0]): hubs key on {projection, floor}, and a floor is any
+    integer 16 ms to 60 s, so a same-uid reader churning floors would leave one lingering hub per value, past what
+    the per-connection subscription cap bounds (EL7). Honest readers stand up two or three.
+- **fieldd** (`eb9f36564`, `4daf4326a`), `mesh-board.ts`:
+  - the last reader's leave starts the hub's linger (an unref'd timer) instead of disposing it;
+  - a `join` inside the linger clears the timer and is answered from the hub as it stands (`#openAnswer`): the same
+    upstreams, each peer's epoch, revision and `live` state, the same local board;
+  - the linger's end disposes the hub as before, and only if no reader has joined since;
+  - `BoardHub.dispose` clears a pending linger, so `MeshBoard.dispose` (the daemon stopping) closes every hub at
+    once, lingering or not, and leaves no timer;
+  - a hub reports its life to its board (`HubLife`: lingering, rejoined, closed). The board keeps its lingering
+    hubs oldest first, and past the bound it disposes the oldest at once;
+  - dated notes at PF6's two statements (the file head and `MeshBoard`'s doc).
+- **agent-screens.ts** (`4daf4326a`, the review [1], comment and log text only): a failed release's empty is now
+  bounded by the connection, or by the home's hub going unread for a full linger, never by the reader leaving.
+  The `fieldd.agents.screen_release_failed` text says so.
+
+**Validation.**
+- Red first, each run on its parent or on a mutant:
+  - the new rows on main's `mesh-board.ts`: 9 failed | 28 passed (37), each at a linger assertion; the e2e's
+    reference-count row 1 failed | 7 passed (8);
+  - the mutant without the bound: 1 failed (the churn row, "expected 5 to be 4" at the fifth floor);
+  - the mutant without the join's `clearTimeout`: 2 failed (leave, rejoin, leave again; the churn row).
+- The lane lights at `4daf4326a` (each row alone, nice 19, the guard clear; logs `lanes/pg3b/light/pg9a-r3-*`):
+  biome clean; typecheck contracts + fieldd green; `registry.test.ts` 47/47; `mesh-board.test.ts` 37/37,
+  `mesh-board.e2e.test.ts` 8/8, `agent-screens.test.ts` 22/22, `federated-subs.test.ts` 17/17; `check:walls`
+  and `gen:check` clean.
+- The merged lights, VF-PM's merged-tree rule, on `1136067ed` (`4daf4326a` + main `2832987be`, merge-tree
+  `995288f80`; logs `lanes/pg3b/light/pg9a-r4-merged-*`, 00:55:52 → 01:03:25Z): mesh-board 37/37, its e2e 8/8,
+  agent-screens 22/22, federated-subs 17/17; field-app's text-ramp 12/12, ui-system-boundaries 44/44 and
+  design-system 8/8; `check:walls` and `gen:check` clean; contracts whole 1,502/1,502.
+- **Run 98** (M98 `29c20cef0`, the MERGE shape: `4daf4326a` first, main `e6726af78` second, minted by a9 on
+  VF-PM's GO):
+  - `pnpm verify` armed 01:51:23Z, verify alone, exit 0 at 01:57:01Z (5 m 38 s); gen freshness clean at its end
+    (registries.ts moved; no mirror owed); the tree clean after; MaxListeners warnings 0.
+  - vitest 12,079 passed, 0 failed, 18 skipped (870 files), +8 on main's 12,071: fieldd's `mesh-board.test.ts`
+    30 → 37 and contracts' `registry.test.ts` 46 → 47; `mesh-board.e2e.test.ts` 8, unchanged in count. cargo
+    534 passed, 0 failed (33 results, unchanged); node 364; typecheck 28/28; the iOS pins 67.
+- **Landed:** main moved to `29c20cef0` on VF-PM's GO (2026-11-02 01:58:17Z).
+
+**Not built (said).**
+- PG-L4.4's per-device cursor half (`since: {device: cursor}`, `resumed`): PG-9's.
+- A failed release's empty is not carried again (the 3b review [12]: not retried). A phone that reconnects inside
+  each linger keeps the owner's stale carried screen standing; its rows earn no unread mark there, and it holds one
+  of the 64 carried places. Re-carrying the empty is owed, below.
+- The screens reader still closes with its subscription, linger or not (item 135 (c)'s expected limit).
+
+**Owed.**
+- At a draft slot, on VF-PM's word, dated notes at two sources: `draft/thinking-desktop-sync-plane.md` :201 (PF6's
+  "closed when the last one leaves": now a linger later) and `draft/thinking-phone-godview.md` §8's PG-9 line
+  (:488 today; the review read it at :476 before §8 grew): L4.4's linger half landed as PG-9a.
+- The failed release's re-carry (an owed release), filed by the lead.

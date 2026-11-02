@@ -247,11 +247,15 @@
   phone is a screen of the desktop that owns the row, its report routed by `device` through its home and kept on
   the owner as that reader's own screen, keyed by `onBehalfOf` (J2 (a)); screens by kind (`SCREEN_BOARDS`), at most
   64 carried per peer connection, and the report replayed at every re-dial and upstream re-attach.
+  **PG-9a** (11-02), the lingering hub, pulled ahead of 3e (`5a7165338` → `4daf4326a`, M98 `29c20cef0`; LANDED "PG-9a"):
+  a mesh hub stands `MESH_HUB_LINGER_MS` (60 s) after its last reader, so a phone's app switch and its gap repair
+  rejoin it with every peer live on its epoch (item 135's grey flash); at most `MESH_LINGERING_HUBS_MAX` (4) linger
+  on one daemon, the oldest closing at once. L4.4's per-device cursor half stays PG-9's.
 - Next: PG-3's remaining slices (the brief `lanes/ios/PG3-BRIEF.md`; James ruled J1–J4 at 2026-11-01 03:56Z, all
   (a)): 3c the kit decodes the remote cut from the mirrored goldens (F1b's kit half landed) → 3d the Swift fold and
   replica, held to `phone-fold.golden.json` → 3e the switch, held to `phone-body.golden.json`, and the phone's
   `reportShown` by PG-3b's sender rules (J3 per hour; J4 ahead of PU-I) → PG-5…PG-8 (list, timeline, spend, rain,
-  native) → PG-9 (resume, `agent.get`, the measured rates).
+  native) → PG-9 (the per-device resume cursors, `agent.get`, the measured rates; L4.4's linger half is PG-9a's).
   PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
   the shed; the cap read on the phone under the link conditioner (PG-9); from PG-1d, the F-H2 rider (the board's gate
@@ -260,7 +264,9 @@
   built" clauses, design-mv §1, build-mv L8 and M29, the design record's §8 as built), and `field`'s retirement one
   release of skew after the kit ships (PG-L1); from PG-3a, the kit's copies of its goldens (3c), and at a draft slot
   PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's remote-cut self-check); from PG-3b,
-  3e's sender rules, and 3e mirrors `agent-report-shown.routed.json` (the phone's send shape) into the kit.
+  3e's sender rules, and 3e mirrors `agent-report-shown.routed.json` (the phone's send shape) into the kit; from
+  PG-9a, a failed release's empty carried again (not built), and at a draft slot the dated notes at
+  thinking-desktop-sync-plane :201 (PF6's close) and thinking-phone-godview §8's PG-9 line.
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
