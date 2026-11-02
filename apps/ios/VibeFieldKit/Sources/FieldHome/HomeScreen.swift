@@ -7,6 +7,7 @@ import FieldMesh
 import FieldProduct
 import FieldRoutedTerminal
 import FieldSettings
+import FieldSplash
 import FieldWorkspace
 import FieldSwarm
 import FieldTerminal
@@ -41,6 +42,10 @@ public struct HomeScreen: View {
   @State private var mesh = MeshModel()
   /// TS-7 — the system's sign-in sheet; `syncSignInSheet` opens and closes it.
   @State private var signInSheet = TailscaleSignInSession()
+  /// WI-2 — the way in's own end: the found beat, after a page that stood for signing in yields to signed in.
+  @State private var wayInEnding: FieldHomeModel.WayInStep?
+  /// WI-2 — How it works, from the welcome: the page standing (0…3), or nil.
+  @State private var tourPage: Int?
   /// TS-7b — the account a Mac's code said to expect, and its reader.
   private let expectationMemory = ExpectationMemory()
   @State private var macCodeReaderOpen = false
@@ -216,6 +221,7 @@ public struct HomeScreen: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.openURL) private var openURL
 
   public init() {}
 
@@ -320,17 +326,6 @@ public struct HomeScreen: View {
     .onChange(of: selection?.id) { refold() }
     .onChange(of: colorScheme) { refold() }
     // --- end IOS-6d
-    // IOS-8c — every listing teaches the account's memory: which desktops it
-    // has, and — from the first door that answers with a user id — its face.
-    .onChange(of: linkDesktops) {
-      rememberAccount()
-      syncHistoryDesktops()
-      workspaceLaunch?.update(workspaceDesktops)
-      readBloomProfiles()
-    }
-    // SP-6 — the home moved: the History groups re-order and the home's
-    // reader takes the shared door
-    .onChange(of: linkHome) { syncHistoryDesktops() }
     // IOS-8d — on the stage for the type-checker's sake, like the cover above.
     .confirmationDialog(
       SettingsWords.signOutTitle(login: accountLogin), isPresented: $signOutPending,
@@ -465,6 +460,126 @@ public struct HomeScreen: View {
         recipe: context.recipe, places: context.usual, desktop: link?.home ?? "", online: online)
     else { return nil }
     return workspaceDesktops.first { $0.id == place.desktop }
+  }
+
+  // MARK: - WI-1: the two states
+
+  /// WI-1 (DESIGN.md §9 "The way in"; WI-L1) — the phone's two states. Signed in, the tabs. Signed out, nothing
+  /// here: the way in stands on the splash's own field, which this holds up (`.splashHolds`), and is drawn over
+  /// it (`.splashOverlay`). The hooks that teach the account's memory live here, never on the tabs, so a first
+  /// sign-in's listing is remembered while the way in still stands.
+  private var standing: some View {
+    ZStack {
+      if wayInStep == nil {
+        tabs
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .splashHolds(wayInStep != nil)
+    .splashOverlay { wayIn }
+    .onChange(of: doorPage) { previous, next in
+      // WI-2 — the found beat: a page that stood for signing in yields to signed in
+      guard FieldHomeModel.wayInEnds(previous: previous, next: next) else { return }
+      tourPage = nil
+      let found = FieldHomeModel.foundDesktop(home: link?.home, desktops: linkDesktops)
+      let ending = FieldHomeModel.WayInStep.found(name: accountLogin.flatMap { faceStore.name(for: $0) }, desktop: found?.name)
+      wayInEnding = ending
+      Task {
+        try? await Task.sleep(for: FieldHomeModel.foundBeatHold)
+        if wayInEnding == ending { wayInEnding = nil }
+      }
+    }
+    // IOS-8c — every listing teaches the account's memory: which desktops it
+    // has, and — from the first door that answers with a user id — its face.
+    .onChange(of: linkDesktops) {
+      rememberAccount()
+      syncHistoryDesktops()
+      workspaceLaunch?.update(workspaceDesktops)
+      readBloomProfiles()
+    }
+    // SP-6 — the home moved: the History groups re-order and the home's
+    // reader takes the shared door
+    .onChange(of: linkHome) { syncHistoryDesktops() }
+    // The way in standing again (a sign-out, Tailscale asking again) takes the
+    // screen whole: nothing the tabs had open stays over it or comes back with them.
+    .onChange(of: wayInStep == nil) { _, signedIn in
+      if !signedIn { closeWhatTheTabsOpened() }
+    }
+  }
+
+  /// The way in's screen standing, or nil for signed in: How it works over the welcome, the way in's own end,
+  /// else the page the decision stands.
+  private var wayInStep: FieldHomeModel.WayInStep? {
+    #if DEBUG
+      if let stamped = demoAccount?.wayIn { return stamped }
+    #endif
+    if let wayInEnding { return wayInEnding }
+    guard let door = doorPage else { return nil }
+    if let tourPage, case .welcome = door { return .tour(tourPage) }
+    return .page(door)
+  }
+
+  @ViewBuilder
+  private var wayIn: some View {
+    if let step = wayInStep {
+      WayInView(
+        screen: FieldHomeModel.wayInScreen(step),
+        face: wayInFace,
+        faceSeed: accountSeed,
+        onAct: wayInAct)
+      .phoneAppearance(phoneLook)
+      // On the way in rather than the tabs: the reader is how a signed-out phone takes a desktop's code.
+      .fullScreenCover(isPresented: $macCodeReaderOpen) {
+        MacCodeReader(
+          onCode: { code in
+            macCodeReaderOpen = false
+            receive(code, arrival: .scanned)
+          },
+          onClose: { macCodeReaderOpen = false })
+      }
+    }
+  }
+
+  /// The face that takes the mark's place: the account's, once a desktop has said who you are.
+  private var wayInFace: UserFace? {
+    if case .face(let face) = accountFace.control { return face }
+    return nil
+  }
+
+  /// WI-1 — what the tabs had open closes under the way in: the card (and what it presented), Settings, the
+  /// launch sheet and the corner's menu. They are presented over the window, so they would stand over the way in.
+  private func closeWhatTheTabsOpened() {
+    selection = nil
+    closeCard()
+    closeSettings()
+    createSheet = nil
+    if accountMenuOpen { setAccountMenu(open: false) }
+  }
+
+  /// WI-1 — the way in's acts, each the home's own: the sign-in, the reader, the tour, and TS-7b's two.
+  private func wayInAct(_ act: FieldHomeModel.WayInAct) {
+    switch act {
+    case .continueWithTailscale, .signInAgain:
+      performSignIn()
+    case .scanCode:
+      macCodeReaderOpen = true
+    case .seeHowItWorks:
+      tourPage = 0
+    case .tour(let page):
+      tourPage = min(max(page, 0), 3)
+    case .welcome:
+      tourPage = nil
+    case .useAnotherAccount:
+      // Tailscale asking again, answered with another account: the full sign-out, then the welcome
+      signOut()
+    case .switchAccount:
+      switchAccount()
+    case .keepAccount, .startOver:
+      // the desktop's code is set aside: the welcome, or the account kept
+      keepAccount()
+    case .openAdminConsole(let url):
+      openURL(url)
+    }
   }
 
   // MARK: - IOS-9e: the pages, and the bar over them
@@ -942,7 +1057,7 @@ public struct HomeScreen: View {
 
 
   public var body: some View {
-    tabs
+    standing
       .background(FieldPalette.panelBackground.ignoresSafeArea())
       .phoneAppearance(phoneLook)
     .onAppear {
@@ -2024,7 +2139,7 @@ public struct HomeScreen: View {
       opening: opening,
       actions: SettingsActions(
         // Both acts leave Settings first: the sign-in is the system's own
-        // sheet, and a signed-out phone's Field is the welcome.
+        // sheet, and a signed-out phone is the way in (WI-1).
         signIn: {
           closeSettings()
           performSignIn()
@@ -2160,9 +2275,9 @@ public struct HomeScreen: View {
       isHearing: link?.isHearing ?? false)
   }
 
-  // MARK: - TS-7: the account's door on the Field page
+  // MARK: - WI-1: the way in (TS-7's door, off the Field tab)
 
-  /// The page standing on the Field tab, or nil for the field — decided in
+  /// The way in's page while signed out, or nil for signed in — decided in
   /// `FieldHomeModel.doorPage`, where it is tested without a simulator.
   private var doorPage: FieldHomeModel.DoorPage? {
     var fixtureOwnsTheField = false

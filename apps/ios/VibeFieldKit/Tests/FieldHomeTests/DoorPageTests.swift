@@ -215,6 +215,7 @@ struct DoorPageTests {
       "from-code": .fromCode(desktop: "Studio", login: me),
       "joining": .joining(login: me, note: nil),
       "looking": .looking(login: me),
+      "tour-1": .welcome(failure: nil), "tour-4": .welcome(failure: nil),
       "another": .anotherAccount(current: AccountFixtures.otherLogin, expected: me, from: "Studio", byLink: false),
       "another-link": .anotherAccount(current: AccountFixtures.otherLogin, expected: me, from: "Studio", byLink: true),
     ]
@@ -223,6 +224,11 @@ struct DoorPageTests {
       #expect(demo != nil, "\(name)")
       #expect(demo?.door == door, "\(name)")
     }
+    // the way in's own steps, stamped: the found beat over a phone already signed in, How it works over the welcome
+    #expect(AccountFixtures.demo(named: "none-found")?.wayIn == .found(name: nil, desktop: "studio"))
+    #expect(AccountFixtures.demo(named: "tour-1")?.wayIn == .tour(0))
+    #expect(AccountFixtures.demo(named: "tour-4")?.wayIn == .tour(3))
+    #expect(AccountFixtures.demo(named: "none")?.wayIn == nil)
     #expect(AccountFixtures.demo(named: "nonsense") == nil)
   }
 }

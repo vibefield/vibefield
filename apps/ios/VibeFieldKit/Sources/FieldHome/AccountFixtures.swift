@@ -14,7 +14,9 @@
   ///
   /// TS-7, WI-1 — a state stamps the way in's page with the corner, from
   /// `FieldHomeModel.doorPage` over the SAME inputs, so a photograph never
-  /// pairs a corner with a page the phone could not draw beside it.
+  /// pairs a corner with a page the phone could not draw beside it. A state
+  /// may stamp a step the way in takes on its own (the found beat, a page of
+  /// How it works) over those inputs.
   ///
   /// The names are the design page's (The Account Pill, 2026-09-23; the
   /// phone's door, A:719-722): the login, the domain and the desktops are the
@@ -34,6 +36,9 @@
       let door: FieldHomeModel.DoorPage?
       /// IOS-10a — Settings over the same inputs.
       let settings: SettingsAccount
+      /// WI-2 — a step the way in takes on its own, stamped over the state: the found beat over a phone
+      /// already signed in, or a page of How it works over the welcome.
+      var wayIn: FieldHomeModel.WayInStep? = nil
     }
 
     static func demo(named name: String) -> Demo? {
@@ -62,13 +67,20 @@
       case "none":
         return make(.up, login: login)
       case "none-found":
-        // WI-2 — the found beat's inputs: a phone just signed in (the beat itself is the way in's own step)
-        return make(.up, login: login, face: fox, desktops: [ready("studio")], hearing: true)
+        // WI-2 — the found beat, held: your face in the mark's place, the desktop the phone first reached.
+        var demo = make(.up, login: login, face: fox, desktops: [ready("studio")], hearing: true)
+        demo.wayIn = .found(name: nil, desktop: "studio")
+        return demo
       // WI-1 — the way in's two holds: signed in and joining the network, then looking for a desktop
       case "joining":
         return make(.starting, login: login)
       case "looking":
         return make(.up, login: login, listedYet: false)
+      // WI-1 — How it works, its four pages over the welcome (WI-D1)
+      case "tour-1", "tour-2", "tour-3", "tour-4":
+        var demo = make(.off)
+        demo.wayIn = .tour((Int(name.dropFirst(5)) ?? 1) - 1)
+        return demo
       // TS-7b — a Mac's code: the welcome that knows the account to pick, and
       // "Another account?" for a code scanned in the app and for a link.
       case "expecting":

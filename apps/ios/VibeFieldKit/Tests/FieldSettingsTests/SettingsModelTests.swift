@@ -136,8 +136,8 @@ struct SettingsModelTests {
           can: false))
     // Not said is not a refusal.
     #expect(SettingsModel.abilities(desktop(.connected, terminals: nil))[2].can)
-    // The welcome promises "Approve agents" — by typing into the pane, which
-    // works — so nothing here may say approvals cannot be answered at all.
+    // An agent's approval is answered by typing into its pane, which works,
+    // so nothing here may say approvals cannot be answered at all.
     #expect(!all.contains { $0.title.localizedCaseInsensitiveContains("answer approvals") })
   }
 
