@@ -29478,3 +29478,70 @@ keeps its place on every step. The Desktop slice is held for James: item 160's p
 - Item 163 (L8: Settings' unreachable signed-out head says "Mac"), then item 161 (a dropped leg re-mints with no
   backoff): the IOS session's.
 - At VF-PM's next draft slot: the way-in README's fifth line, its check stamp brought to v5's (10:52Z).
+
+## PG-4s — the scaffold: the Godview toolkit held to its golden, the view choice and its stage inputs, and the per-view golden registry, empty and live; the Field page stands on a chosen view, the swarm until PG-5…8 add theirs (2026-11-02; `88be342ae` → `7902bdb13`, seven commits on main `884502631`, lane `pg/4s` in `/Volumes/SamsungRed/lanes/pg4s`, in the mini's mint M109 `7902bdb13`, stacked on main `884502631`, run 109)
+
+**What it rests on.** PG-3 is done (LANDED "PG-3e"). The design (`lanes/ios/pg4s-design.md`, read at `2afc9c512`)
+returned ready with corrections (3 must, 7 should, 12 nit); its BINDING head folds them, and VF-PM ruled Q-S1…Q-S14
+at their leans (13:28Z). James's page (J-S1…J-S4: how a person switches the view, B's current-view mark, the
+scanlines and vignette over other views, the open card's row lit in a view) is published and unpicked. Nothing here
+draws a choice he owns: the stage keeps the overlays above it (J-S3's lean) and computes the open card's row
+(J-S4's), and no view but the swarm stands to show either. Landing order: items 154/155/162, then WI-1, then 4s.
+
+**What** (21 files, +3,361 −44; the kit, field-app's phone goldens and `scripts/check-ios-fixtures.mjs`):
+- **The witness in FieldHomeTests** (C1): `Package.swift`'s FieldHomeTests target gains
+  `resources: [.copy("Fixtures")]`, the one Package.swift line PG-4s or any view lane adds (a test-target resource;
+  no dependency, pin or `let …Release` line moves). PG-3a's three witness inputs are mirrored there, and
+  `HomeFixture` opens them through `RemoteMeshCopy` as FieldLink drives it; every view lane's harness starts from it.
+  The fixtures check gains `phoneViewGoldens` (empty; a view lane adds one line) and its `phone-view` row.
+- **One writer for every phone golden** (C2 red, C3): `phoneAllGoldenFiles(goldens, views)` writes fold and body byte
+  for byte, the toolkit's golden and each registered view's file; `phoneGoldenMirrors(views)` derives every mirror;
+  two guards red an unregistered view file or an orphan golden. The window's rows are kept whole per step
+  (`windowRows`). The registry `PHONE_VIEW_GOLDENS` is empty and live. FIRST BLESS: `phone-toolkit.golden.json`
+  (7,076 bytes), puppeteer-view-sdk's `./toolkit` over a fixed vector, the clock zone-free.
+- **The toolkit** (C4 red, C5): `MonitorWords` gains the ten STATE_WORDS it did not carry (14 in all, M1),
+  `deviceWord`, `GodviewTone.of`, the recede family and `GodviewFormat` (formatShort, formatWords, formatClock,
+  formatPercent), each held to the golden; the numbers are printed as JavaScript prints them, and nothing traps.
+  formatPercent's bound at 2^53 is a dated phone-only deviation.
+- **The view choice** (C6 red, C7): `GodviewViewChoice` (`.swarm`; `-vf-godview-view=` and `-vf-godview-now=`, DEBUG,
+  read once), `GodviewStageInput` (the link's rows, the swarm's own unread ids, the open card's row, the ledger's
+  colour, the clock, the bar's band, the open) and `GodviewStage`. HomeScreen stands the stage where SwarmField
+  stood; WI-1's SwarmField call moved unchanged into `swarmField(active:)`. Release draws the swarm on the live
+  clock.
+- **The door gate, designed and not built.** The design gated every view by the door page over the field (TS-7c,
+  TS-D22). WI-1 (M108 `8cfe4a59d`) retires that page and deletes `fieldTakesActs`, `doorDimsField` and
+  `ChromePalette.searchScrim`. It was found at the merge for the kit slot (14:18Z: `merge-tree` conflicted in the
+  stage, and the FieldHomeModel auto-merge called the deleted helpers); the slot was voided before any build, and the
+  lane was re-cut over WI-1 with the gate retired whole (fd 14:19Z; VF-PM approved 14:20Z). The design carries a
+  dated erratum at its head and at each door passage. FieldHomeModel.swift is untouched by PG-4s.
+
+**Validation.**
+- Red first on every pair, by assertion on skeletons: C2 "8 failed | 13 passed (21)"; C4 "12 tests in 2 suites failed
+  … 103 issues"; C6 "23 tests in 4 suites failed … 32 issues" (V1–V3, V5–V7, I1, I2, I2b, I4).
+- The host loop at the tip: "23 tests in 4 suites passed" (H1, H2, K1–K9, K5b, V1–V7, I1, I2, I2b, I4).
+- Mutation probes: ties to even in the clamped round red K1 and K2; the ledger keyed by the raw project name reds I2b
+  alone.
+- TS: biome clean; phone-parity 21/21; the goldens' writer leaves fold and body unchanged; field-app's `tsc --noEmit`
+  0 errors.
+- The fixtures: 202 copies by a node run (198 at WI-1's main, after its two scrim compares left; +3 witness inputs at
+  C1, +1 toolkit golden at C3); pins 67.
+- fd's kit slot at `99252ada0` on `8cfe4a59d` (14:25–14:34Z, this Mac, Xcode 26.6, iPhone 17 Pro):
+  - VibeField Debug (42 s), VibeField-Mock Debug (3 s, incremental) and ONE VibeField Release (97 s), each built;
+  - the kit 15 runs, 1,538 tests, 0 red (WI-1's mint kit 1,514, plus PG-4s's 23 and L1); the four PG-4s suites and
+    FieldLinkReportTests' L1 passed;
+  - C6's kit red at `d0d748500` held: built green, "11 tests in 2 suites failed … 32 issues".
+- The mint's base `884502631` is WI-1's records over the slot's base, docs only (`git diff 8cfe4a59d 884502631`:
+  DECISIONS, LANDED, ROADMAP), so the slot stands without a re-light (VF-PM 14:30Z).
+- **Run 109** (`7902bdb13`, stacked on main `884502631`, a fast-forward, minted by a9 on VF-PM's GO):
+  - verify exit 0 at 14:47:31Z on the mini: vitest 12,111 passed, 0 failed, 18 skipped, 871 files (12,103 + 8; the
+    per-file diff against run 108 names only `test/phone-parity.test.ts`, 13 → 21); node 364 passed, 0 failed; cargo
+    534 passed, 0 failed (33 results); typecheck and test, 28 projects; no MaxListeners warning; the tree clean
+    after.
+  - The iOS fixtures 202, pins 67. The kit is fd's slot at `99252ada0` (above), standing under the docs-only delta; a
+    stacked mint has no kit of its own.
+- **Landed:** main moved to `7902bdb13` on VF-PM's GO (2026-11-02 14:48:43Z).
+
+**Not built.** No view beyond the swarm (PG-5…8 add theirs, four lanes on the brief template); no selector, so no
+switch a person can make (James's J-S1…J-S4 rule it); the door gate (retired above). Items 164 (formatRatePerHour
+traps at 2^63 and above) and 165 (formatTokens' tie) are the fixer's, after this landing. The by-eye still of the
+swarm under the view flag (the design check's N12) is owed to the first view lane's stills.

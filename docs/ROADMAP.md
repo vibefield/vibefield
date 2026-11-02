@@ -267,11 +267,15 @@
   held to `phone-body.golden.json` step by step; the owner's cost, words and ids on every body; an old home on its
   own ladder; "Watch its agents" says a desktop the phone cannot read; the field cut's read path retired. 3f: the
   phone is a screen, its open card's model id routed by its desktop through the home (PG-3b's rules). PG-3 is done.
-- Next: PG-4s, the scaffold (fd's: the one resources line, the shared words over 3e's `MonitorWords`, the view flag,
-  the golden registry; after 3e, which touched its files) → PG-5…PG-8 (list, timeline, spend, rain, native) IN
-  PARALLEL, four lanes on one frozen brief template (`lanes/ios/PG5-8-BRIEF-TEMPLATE.md`, three lines unfrozen at 3e,
-  Q-E11), landing in green order (James 2026-11-01 22:47Z; PG-D4 as amended) → PG-9 (the per-device resume cursors,
-  `agent.get`, the measured rates; L4.4's linger half is PG-9a's). PU-I is filed by James.
+  **PG-4s** (11-02), the scaffold (`88be342ae` → `7902bdb13`, M109 `7902bdb13`; LANDED "PG-4s"): the Godview toolkit
+  held to `phone-toolkit.golden.json`, the view choice and its stage inputs, and the per-view golden registry, empty
+  and live; the Field page stands on the swarm until PG-5…8 add theirs. The door gate the design drew is not built:
+  WI-1 retired the page it gated, found at the merge.
+- Next: PG-5…PG-8 (list, timeline, spend, rain, native) IN PARALLEL, four lanes on one brief template
+  (`lanes/ios/PG5-8-BRIEF-TEMPLATE.md`, brought to the landed scaffold by Q-S13's dated pass), landing in green order
+  (James 2026-11-01 22:47Z; PG-D4 as amended); a view lane adds one `phoneViewGoldens` line and one registry entry →
+  PG-9 (the per-device resume cursors, `agent.get`, the measured rates; L4.4's linger half is PG-9a's). PU-I is filed
+  by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both
   on the shed; the cap read on the phone under the link conditioner (PG-9); from PG-1d, the F-H2 rider (the board's
   gate and the ticket mint read different things) and an old owner's run-id fallback (a design question); from PG-2,
@@ -280,7 +284,8 @@
   (PG-L1); from PG-3a, at a draft slot PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's
   remote-cut self-check); from PG-9a, a failed release's empty carried again (not built), and at a draft slot the
   dated notes at thinking-desktop-sync-plane :201 (PF6's close) and thinking-phone-godview §8's PG-9 line; from
-  PG-3e, James's live look (J-E4, §5).
+  PG-3e, James's live look (J-E4, §5); from PG-4s, James's page (J-S1…J-S4, the switch and what other views keep),
+  items 164 and 165 (the fixer's), and the swarm's still under the view flag at the first view lane (N12).
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -876,7 +881,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6, FG-5, FG-6c, FG-O2, FG-O2's judge and its fix, FG-6's catalog, FG-6's frozen frame 10-31, FG-6's follow-up 3, the catalog judged and its follow-up 1 11-01 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | the glass's literals (item 136) → James's product question |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
-| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31; PG-3 (3a…3f) and PG-9a 11-01…11-02 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-4s, the scaffold; then PG-5…8 |
+| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31; PG-3 (3a…3f), PG-9a and PG-4s 11-01…11-02 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-5…8, four lanes in parallel; then PG-9 |
 | HN — Cards in Hand | BUILT; B1–B3 (HN-0…HN-8) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | the console-window smoke rows; D10 (James) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
