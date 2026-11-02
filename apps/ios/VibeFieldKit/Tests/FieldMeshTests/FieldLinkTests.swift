@@ -973,6 +973,20 @@ private final class Refusal: @unchecked Sendable {
     let names = link.desktops.map { $0.name }
     #expect(!names.contains("Attic"))
   }
+
+  /// D2 (PG-3f; the v2 check's S4) — the demo door hears the phone's report: the Loft's open card (`pty-p3`, model
+  /// `pty-p3`, key `run-p-ask`) is reported to the Loft through the home, and the door answers `{reported: true}`.
+  @Test func theDemoDoorHearsTheReport() async throws {
+    let link = try #require(FieldLink.goldenFixture(schedule: briskSchedule))
+    defer { link.stop() }
+    link.start()
+    try await waitUntil("the witness through the home") { link.rows.count == 11 }
+
+    link.show(visualId: "pty-p3")
+    try await waitUntil("the report answered") { !link.reportAnswers.isEmpty }
+    let answers = link.reportAnswers
+    #expect(answers == [.init(device: "dev-01HQ9S7XZ2", ids: ["pty-p3"], outcome: .reported)])
+  }
 }
 
 // MARK: - Self and guest, by login (UA-P-5)

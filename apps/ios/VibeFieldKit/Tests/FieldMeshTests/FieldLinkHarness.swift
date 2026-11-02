@@ -178,18 +178,103 @@ func meshFrame(subId: String = "m1", _ payload: JSONValue) -> String {
   event(method: "agent.subscribe.delta", subId: subId, payload: payload)
 }
 
-/// A self desktop serving as a HOME: hello, its roster, and its mesh board.
+/// A self desktop serving as a HOME: hello, its roster, its mesh board and — PG-3f — its answers to
+/// `agent.reportShown` (`reports`, ok for every device unless the row scripts otherwise).
 func homeDoor(
-  _ entries: [MeshEntry], subId: String = "m1", roster: [JSONValue] = []
+  _ entries: [MeshEntry], subId: String = "m1", roster: [JSONValue] = [],
+  reports: ReportScript = ReportScript()
 ) -> LinkDoor.Script {
-  { method, id, _ in
+  { method, id, params in
     switch method {
     case "system.hello": return [frame(id: id, ack)]
     case "device.list": return [frame(id: id, deviceListResult(roster))]
     case "agent.subscribe": return [meshSubscribed(id: id, subId: subId, entries)]
+    case "agent.reportShown": return reports.answer(id: id, params: params)
     default: return []
     }
   }
+}
+
+/// PG-3f (design v2 §4.5) — how a home answers `agent.reportShown`, per device the report names: each device's queued
+/// answers first, in order, then its standing answer (`ok` unless set). The refusals are fieldd's own shapes
+/// (`agent-screens.ts`, `product-api.ts`): the sender reads their `details`, never their kind.
+final class ReportScript: @unchecked Sendable {
+  enum Answer: Sendable {
+    /// `{reported: true}`.
+    case ok
+    /// `{state: "no-screen"}` and no reason: no board open for this reader yet. Transient.
+    case noScreen
+    /// `{state: "no-screen", reason: "carried-cap"}`: the owner's bound. Lasting.
+    case carriedCap
+    /// `{method, locality: "local"}`: an owner, or a home, without PG-3b. Lasting.
+    case localityLocal
+    /// NOT_FOUND with no details (a door that does not know the method). Transient.
+    case noDetails
+    /// UNAVAILABLE, retryable. Transient.
+    case unavailable
+    /// No answer at all: the call stands until the socket goes (S14's report in flight).
+    case silent
+  }
+
+  private let lock = NSLock()
+  private var queued: [String: [Answer]] = [:]
+  private var standing: [String: Answer] = [:]
+
+  init() {}
+
+  /// The device's next answers, in order, before its standing one.
+  func queue(_ device: String, _ answers: Answer...) {
+    lock.withLock { queued[device, default: []] += answers }
+  }
+
+  /// The device's answer from now on.
+  func set(_ device: String, _ answer: Answer) { lock.withLock { standing[device] = answer } }
+
+  func answer(id: Int64, params: JSONValue) -> [String] {
+    let device = params["device"]?.stringValue ?? ""
+    let next: Answer = lock.withLock {
+      if var list = queued[device], !list.isEmpty {
+        let first = list.removeFirst()
+        queued[device] = list
+        return first
+      }
+      return standing[device] ?? .ok
+    }
+    switch next {
+    case .silent:
+      return []
+    case .ok:
+      return [frame(id: id, .object(["reported": .bool(true)]))]
+    case .noScreen:
+      return [failureFrame(
+        id: id, kind: "PRECONDITION_FAILED", message: "no board is open on this connection",
+        details: .object(["state": .string("no-screen")]))]
+    case .carriedCap:
+      return [failureFrame(
+        id: id, kind: "PRECONDITION_FAILED", message: "this peer connection carries 8 readers' screens already",
+        details: .object(["state": .string("no-screen"), "reason": .string("carried-cap")]))]
+    case .localityLocal:
+      return [failureFrame(
+        id: id, kind: "NOT_FOUND", message: "agent.reportShown is local to its desktop",
+        details: .object(["method": .string("agent.reportShown"), "locality": .string("local")]))]
+    case .noDetails:
+      return [failureFrame(id: id, kind: "NOT_FOUND", message: "unknown method agent.reportShown")]
+    case .unavailable:
+      return [failureFrame(
+        id: id, kind: "UNAVAILABLE", message: "the owner is not answering", retryable: true,
+        details: .object(["service": .string("fieldd"), "state": .string("offline")]))]
+    }
+  }
+}
+
+/// PG-3f — the params of every `agent.reportShown` the door received, connection by connection, in order.
+func reportsSent(_ door: LinkDoor) async -> [JSONValue] {
+  await door.requests("agent.reportShown")
+}
+
+/// One report's params, as the phone must send them.
+func report(_ ids: [String], _ device: String) -> JSONValue {
+  .object(["ids": .array(ids.map(JSONValue.string)), "device": .string(device)])
 }
 
 // MARK: - A scripted probe
@@ -278,6 +363,15 @@ actor LinkDoor: ProductTransport {
       total += await connection.methods.filter { $0 == "agent.subscribe" }.count
     }
     return total
+  }
+
+  /// The params of every `method` request across every connection this door served, in connection order.
+  func requests(_ method: String) async -> [JSONValue] {
+    var sent: [JSONValue] = []
+    for (_, connection) in connections {
+      sent += await connection.requests.filter { $0.method == method }.map(\.params)
+    }
+    return sent
   }
 
   /// `agent.subscribe` requests across every connection this door served.

@@ -275,6 +275,31 @@ public final class FieldLink {
   public private(set) var fieldIsLive = false
   /// PG-3e — how many times `bubbles` was reassigned: a `@testable` witness for L7.
   internal private(set) var redraws = 0
+  /// PG-3f (the v2 check's S4) — every `agent.reportShown` answer this link heard, in order: a `@testable` witness, so
+  /// a row (D2) can read that a report LANDED, not only that nothing was refused.
+  internal private(set) var reportAnswers: [ReportAnswer] = []
+
+  /// One report's answer: the device it named, the model ids it carried, and how the home (or the owner) answered.
+  struct ReportAnswer: Equatable {
+    var device: String
+    var ids: [String]
+    var outcome: ReportOutcome
+  }
+
+  enum ReportOutcome: Equatable {
+    case reported
+    /// No screen yet, a deadline, UNAVAILABLE, or a refusal with no details: nothing recorded, the next open re-sends.
+    case transient
+    /// The owner's own lasting refusal (3b's `lastingRefusal`): recorded for the device, no resend on open.
+    case lasting(ReportRefusal)
+  }
+
+  enum ReportRefusal: Equatable {
+    /// `details.reason == "carried-cap"`: the owner carries this peer's readers' screens to its bound.
+    case carriedCap
+    /// `details.locality == "local"`: the owner (or the home) runs without PG-3b's screens.
+    case noScreens
+  }
   /// THIS ACCOUNT'S desktops. A peer whose door refused this login is not here
   /// — it is somebody else's machine, which is an ordinary thing for a tailnet
   /// to contain and not a row this phone has any business drawing.
@@ -725,6 +750,13 @@ public final class FieldLink {
   ///
   /// (F1 asked the owner's own door here. That per-ask owner socket is FW-R6's, retired for the
   /// approval only: a ticket, its renewal and Resume stay over the owner's door above, SP-7's.)
+  /// PG-3f (design v2 §4.1) — what the open card shows, by the body it follows: its VISUAL id (`FieldBubble.id`). nil:
+  /// the card is closed. The link resolves the row under it at every refold and reports that row's MODEL id to its
+  /// owner, routed through the home.
+  ///
+  /// (C13's skeleton: records nothing.)
+  public func show(visualId: String?) {}
+
   public func approveFreeway(on deviceId: String) async throws -> JSONValue {
     guard let home, let homeClient else { throw FreewayApproval.noHome }
     return try await homeClient.call(

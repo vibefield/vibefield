@@ -650,3 +650,17 @@ enum Remote {
     #expect(!screen.holds(Remote.home))
   }
 }
+
+// PG-3f — the phone's report, held to 3b's routed golden.
+@Suite struct AgentReportShownTests {
+  /// E1 — the shown row's MODEL id, routed by the desktop that owns it, encodes as the contracts' golden, by value.
+  @Test func theRoutedReportEncodesAsTheGolden() throws {
+    let golden = try Fixture.json("agent-report-shown.routed")
+    let encoded = AgentReportShownParams(ids: ["run-studio-q"], device: "dev-desktop-b").json
+    #expect(encoded == golden)
+    // an empty list clears the report: the same shape, no ids
+    let cleared = AgentReportShownParams(ids: [], device: "dev-desktop-b").json
+    #expect(cleared == .object(["ids": .array([]), "device": .string("dev-desktop-b")]))
+    #expect(AgentReportShownParams.method == "agent.reportShown")
+  }
+}
