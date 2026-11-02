@@ -270,6 +270,16 @@ actor LinkDoor: ProductTransport {
     connections.last { $0.host == host }?.connection
   }
 
+  /// `agent.subscribe` requests across every connection to `host` (PG-3e's old-home rows: a home that moves opens a
+  /// new client, so a desktop's asks are its connections' together).
+  func subscribes(to host: String) async -> Int {
+    var total = 0
+    for (dialed, connection) in connections where dialed == host {
+      total += await connection.methods.filter { $0 == "agent.subscribe" }.count
+    }
+    return total
+  }
+
   /// `agent.subscribe` requests across every connection this door served.
   func subscribes() async -> Int {
     var total = 0
