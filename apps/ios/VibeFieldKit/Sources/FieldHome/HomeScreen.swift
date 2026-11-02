@@ -250,7 +250,8 @@ public struct HomeScreen: View {
   // --- IOS-6d: the field's ledgers ------------------------------------------
   /// The rows the field draws: the projection dressed by `FieldAssembly` —
   /// every project's colour, the open card's pane, the unread marks, the
-  /// stale flags, the usage ledger. Folded on every projection and every
+  /// stale flags (PG-3e: the usage ledger retired; the owner's cost rides the
+  /// row). Folded on every projection and every
   /// change of the card's subject, never derived twice.
   @State private var bubbles: [FieldBubble] = []
   @State private var assembly = FieldAssembly(tint: .light)

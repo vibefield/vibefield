@@ -157,7 +157,7 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
   @Test func aWorkingBodyPacksTheRimTheShadowTheInkLightTheRingAndItsClimb() {
     let facet = AgentFacet(
       provider: .claude, modelName: "Fable 5.1", contextUsedPercent: 88,
-      usage: UsageHistory(total: 1, coverage: .complete, steps: (0..<usageStepCount).map(Double.init)))
+      cost: AgentCost(usd: 1, coverage: "complete"))
     let body = render(bubble(status: .working, agent: facet))
     let data = packedBody(body, frameGlow: glow, theme: lightTheme)
     let bits = flags(data)

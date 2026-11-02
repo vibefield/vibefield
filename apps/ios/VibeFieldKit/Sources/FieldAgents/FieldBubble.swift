@@ -33,14 +33,11 @@ public struct AgentFacet: Sendable, Equatable {
   public let effort: AgentEffort?
   /// The root agent's latest reply; the body shows its first line.
   public let lastMessage: String?
-  /// PG-3e — the run's cost as its owner priced it (the remote cut's `cost`). nil: no cost said, or not yet observed.
+  /// PG-3e — the run's cost as its owner priced it (the remote cut's `cost`): the body's total, the working shares'
+  /// rank and the burn per hour. nil: no cost said, or not yet observed. (Corrected 2026-11-02, PG-3e: the facet
+  /// carried Core's usage verbatim beside the phone's own `UsageLedger` history, which the body read for its total;
+  /// both retired with the ledger. The owner keeps the ledger now.)
   public let cost: AgentCost?
-  /// Core's usage, verbatim — the ledger's INPUT, never drawn.
-  public let monitorUsage: AgentUsage?
-  /// The UI's display history of the run's USD (`UsageLedger`): the corrected
-  /// total and the buckets. The body reads this for the total and
-  /// `monitorUsage` for the live rate. Filled at assembly.
-  public var usage: UsageHistory?
   public let statusSince: Date?
   public let lastEvidenceAt: Date?
   /// G3's join: where this run's terminal is, and on whose desktop. nil for a
@@ -69,8 +66,6 @@ public struct AgentFacet: Sendable, Equatable {
     effort: AgentEffort? = nil,
     lastMessage: String? = nil,
     cost: AgentCost? = nil,
-    monitorUsage: AgentUsage? = nil,
-    usage: UsageHistory? = nil,
     statusSince: Date? = nil,
     lastEvidenceAt: Date? = nil,
     join: AgentJoin? = nil,
@@ -86,8 +81,6 @@ public struct AgentFacet: Sendable, Equatable {
     self.effort = effort
     self.lastMessage = lastMessage
     self.cost = cost
-    self.monitorUsage = monitorUsage
-    self.usage = usage
     self.statusSince = statusSince
     self.lastEvidenceAt = lastEvidenceAt
     self.join = join
@@ -226,7 +219,7 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
       blocker: status == .blocked ? agentBlocker(state) : nil,
       effort: state?.effort,
       lastMessage: state?.lastAssistantMessage,
-      monitorUsage: state?.usage,
+      cost: agentCost(state?.usage),
       statusSince: state?.statusSince,
       lastEvidenceAt: state?.lastEvidenceAt,
       join: snapshot.join,
@@ -236,6 +229,17 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
     // published does NOT become a remote bubble — the card resolves the join
     // itself (`agentTerminalFace`).
     remote: nil)
+}
+
+/// PG-3e — a snapshot's usage as the owner's cost: the USD, its coverage word, and the per-minute rate as USD an hour
+/// (J3 (a)). No USD is no cost, which draws the same "—", unpriced, as a cost the owner says is unavailable. A USD
+/// with no coverage word reads `unavailable`, the ledger's own default for a run with none, so no total is drawn
+/// that nothing priced.
+public func agentCost(_ usage: AgentUsage?) -> AgentCost? {
+  guard let usage, let usd = usage.costUsd else { return nil }
+  return AgentCost(
+    usd: usd, coverage: usage.costCoverage?.rawValue ?? AgentCostCoverage.unavailable.rawValue,
+    burnPerHour: usage.costRatePerMin.map { $0 * 60 })
 }
 
 /// Ported from the desktop's `monitorAgentFromRemote`, where every clause is a
@@ -280,12 +284,12 @@ public func fieldBubble(from row: RemoteSessionRow) -> FieldBubble {
 
 /// Everything the field decides ABOUT the rows rather than from them, folded
 /// once per projection: the project colours (D-i13), the one pane (D-i12),
-/// the usage ledger, the unread marks, the stale flags. A plain
+/// the unread marks, the stale flags. A plain
 /// value the home screen keeps and folds; every rule inside is a pure
-/// function with its own tests.
+/// function with its own tests. (Corrected 2026-11-02, PG-3e: it folded a
+/// usage ledger too, which retired with the owner's cost on the row.)
 public struct FieldAssembly: Sendable {
   public var projects: ProjectLedger
-  public var usage: UsageLedger
   public var unread: UnreadLedger
   /// The theme's tint; the home screen swaps it with the colour scheme.
   public var tint: ProjectTint
@@ -295,12 +299,10 @@ public struct FieldAssembly: Sendable {
   public init(
     tint: ProjectTint,
     projects: ProjectLedger = .empty,
-    usage: UsageLedger = .empty,
     unread: UnreadLedger = .empty
   ) {
     self.tint = tint
     self.projects = projects
-    self.usage = usage
     self.unread = unread
   }
 
@@ -309,11 +311,6 @@ public struct FieldAssembly: Sendable {
     _ bubbles: [FieldBubble], cardSubjectID: String?, nowMs: Double
   ) -> [FieldBubble] {
     projects = projects.dealing(bubbles.filter { $0.agent != nil }.map(\.project))
-    // The row's id IS the run (AR-4b), so the ledger's run key is the id; the
-    // native session id does not ride the row, and the reference's fold holds
-    // a run's history across projections without it.
-    usage = usage.reconciling(
-      bubbles.map { UsageReading(id: $0.id, runId: $0.id, usage: $0.agent?.monitorUsage) }, nowMs: nowMs)
     unread = unread.reconciling(
       bubbles.map { bubble in
         UnreadCandidate(
@@ -324,12 +321,10 @@ public struct FieldAssembly: Sendable {
           statusSinceMs: bubble.agent?.statusSince.map { $0.timeIntervalSince1970 * 1000 })
       }, nowMs: nowMs)
     return bubbles.map { bubble in
+      // Never rebuilt: every fact the row carries rides through the dress (PG-3e's F1; the rebuild set the usage
+      // history and reset the row's ids).
       var dressed = bubble
-      if var facet = bubble.agent {
-        facet.usage = usage.history(of: bubble.id)
-        dressed = FieldBubble(
-          id: bubble.id, project: bubble.project, detail: bubble.detail, status: bubble.status,
-          identityKey: bubble.identityKey, createdAt: bubble.createdAt, agent: facet, remote: bubble.remote)
+      if let facet = bubble.agent {
         dressed.color = projects.seqByKey[bubble.project].map { SwarmColor.project($0, tint) }
         // Q01 (James, 2026-10-27) — stale only while the agent should be
         // talking: a quiet idle agent is just idle, as puppeteer's monitor

@@ -154,21 +154,12 @@ public struct AgentCost: Sendable, Equatable {
   }
 }
 
-/// Corrected spend in one of Core's fixed thirty-second buckets
-/// (`MonitorCostBucket`), including the current bucket.
-public struct AgentCostBucket: Sendable, Equatable, Codable {
-  public var at: Date
-  public var costUsd: Double
-  public init(at: Date, costUsd: Double) {
-    self.at = at
-    self.costUsd = costUsd
-  }
-}
-
 /// Core's usage for a run, in the mirror's own field names (`MonitorUsageState`):
 /// a corrected estimate that every source moves. The field never reads the
-/// tokens directly — `UsageLedger` folds the USD into the number the screen
-/// stands behind, and the body reads the live rate for the burn ladder.
+/// tokens directly: the body reads the USD, its coverage and the live rate,
+/// through `agentCost`. (Corrected 2026-11-02, PG-3e: `UsageLedger` folded the
+/// USD and its thirty-second buckets into a history the body drew; it retired,
+/// and so did the buckets, which it alone read.)
 ///
 /// The cost fields are decoded tolerantly (D-i18): `field.agents.v1` does not
 /// carry them yet and VibeField's puppeteer pin predates RFC 008, so on today's
@@ -187,8 +178,6 @@ public struct AgentUsage: Sendable, Equatable, Codable {
   /// Core's own live projection over its rate-eligible window — never a
   /// difference of UI snapshots.
   public var costRatePerMin: Double?
-  /// Corrected costs in fixed 30-second buckets, including the current one.
-  public var costHistory: [AgentCostBucket]
 
   public init(
     cumulativeTokens: Double? = nil,
@@ -200,8 +189,7 @@ public struct AgentUsage: Sendable, Equatable, Codable {
     samples: [AgentUsageSample] = [],
     costUsd: Double? = nil,
     costCoverage: AgentCostCoverage? = nil,
-    costRatePerMin: Double? = nil,
-    costHistory: [AgentCostBucket] = []
+    costRatePerMin: Double? = nil
   ) {
     self.cumulativeTokens = cumulativeTokens
     self.inputTokens = inputTokens
@@ -213,7 +201,6 @@ public struct AgentUsage: Sendable, Equatable, Codable {
     self.costUsd = costUsd
     self.costCoverage = costCoverage
     self.costRatePerMin = costRatePerMin
-    self.costHistory = costHistory
   }
 }
 

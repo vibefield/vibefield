@@ -213,15 +213,14 @@ private func row(
     #expect(closed[1].active == false)
   }
 
-  @Test func joinsTheUsageLedgerAndMarksUnreadRowsAndNeverDimsAnIdleOne() {
+  @Test func marksUnreadRowsAndNeverDimsAnIdleOne() {
     var assembly = FieldAssembly(tint: .light)
     let working = AgentRuntimeState(
       activeTurn: true, usage: AgentUsage(cumulativeTokens: 1_000, costUsd: 1, costCoverage: .complete), statusSince: now,
       lastEvidenceAt: now)
     var rows = assembly.fold([agent("a", project: "p", state: working)], cardSubjectID: nil, nowMs: t0)
-    // The ledger's total is RFC 008's USD, never the tokens.
-    #expect(rows[0].agent?.usage?.total == 1)
-    #expect(rows[0].agent?.usage?.coverage == .complete)
+    // The total is the owner's, carried on the row through the fold (PG-3e: the phone's usage ledger retired).
+    #expect(rows[0].agent?.cost == AgentCost(usd: 1, coverage: "complete"))
     #expect(rows[0].unread == false)
     #expect(rows[0].stale == false)
     // The turn ends after the row was seen: the reply is unread until its card opens.
@@ -230,7 +229,7 @@ private func row(
       statusSince: now.addingTimeInterval(30), lastEvidenceAt: now.addingTimeInterval(30))
     rows = assembly.fold([agent("a", project: "p", state: done)], cardSubjectID: nil, nowMs: t0 + 31_000)
     #expect(rows[0].unread)
-    #expect(rows[0].agent?.usage?.total == 1.4)
+    #expect(rows[0].agent?.cost?.usd == 1.4)
     rows = assembly.fold([agent("a", project: "p", state: done)], cardSubjectID: "a", nowMs: t0 + 32_000)
     #expect(rows[0].unread == false)
     // Q01 — an idle body never dims, however old its evidence.
@@ -307,14 +306,18 @@ private func row(
   @Test func theProjectionCarriesTheMonitorsFacts() {
     let state = AgentRuntimeState(
       permissions: [AgentPermission(tool: "Bash")], effort: AgentEffort(value: "high", intent: .configured),
-      lastAssistantMessage: "May I?", usage: AgentUsage(cumulativeTokens: 5),
+      lastAssistantMessage: "May I?",
+      usage: AgentUsage(cumulativeTokens: 5, costUsd: 0.5, costCoverage: .partial, costRatePerMin: 0.2),
       statusSince: now, lastEvidenceAt: now)
     let bubble = agent("a", project: "p", state: state)
     #expect(bubble.status == .blocked)
     #expect(bubble.agent?.blockerKind == .permission)
     #expect(bubble.agent?.effort == AgentEffort(value: "high", intent: .configured))
     #expect(bubble.agent?.lastMessage == "May I?")
-    #expect(bubble.agent?.monitorUsage?.cumulativeTokens == 5)
+    // the usage reaches the body as the owner's cost: the USD, the word, and the rate by the hour (J3 (a))
+    #expect(bubble.agent?.cost == AgentCost(usd: 0.5, coverage: "partial", burnPerHour: 0.2 * 60))
+    #expect(agentCost(AgentUsage(cumulativeTokens: 5)) == nil)
+    #expect(agentCost(AgentUsage(costUsd: 2)) == AgentCost(usd: 2, coverage: "unavailable"))
     #expect(bubble.agent?.statusSince == now)
     // Not blocked: no kind, even with a stale blocker list nobody classified.
     #expect(agent("b", project: "p").agent?.blockerKind == nil)
