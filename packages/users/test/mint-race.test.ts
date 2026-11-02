@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { readUsersFile } from "../src";
+import { tempDir } from "./temp-dir";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageDir = join(here, "..");
@@ -39,8 +39,8 @@ function runChild(root: string, goFile: string): Promise<ChildResult> {
 
 describe("eight real minters, one empty root (§3.3 / V5 scenario b×b)", () => {
   it("exactly one users.json, one ULID, losers adopt", { timeout: 60_000 }, async () => {
-    const root = mkdtempSync(join(tmpdir(), "vf-mint-race-"));
-    const goFile = join(mkdtempSync(join(tmpdir(), "vf-mint-go-")), "go");
+    const root = tempDir("vf-mint-race-");
+    const goFile = join(tempDir("vf-mint-go-"), "go");
     const children = Array.from({ length: 8 }, () => runChild(root, goFile));
     // let the interpreters finish booting so the barrier release is a real race
     await new Promise((resolve) => setTimeout(resolve, 1_500));

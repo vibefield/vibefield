@@ -1,10 +1,10 @@
-import { mkdtempSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { realpathSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { acquireUsersLock, canonicalRoot, UsersError, usersLockPath, withUsersLock } from "../src";
+import { tempDir } from "./temp-dir";
 
-const root = () => canonicalRoot(mkdtempSync(join(tmpdir(), "vf-users-lock-")));
+const root = () => canonicalRoot(tempDir("vf-users-lock-"));
 const noSleep = (_ms: number) => Promise.resolve();
 
 describe("the users.json lock (§3.3)", () => {
@@ -74,7 +74,7 @@ describe("the users.json lock (§3.3)", () => {
   // not; the fixture only ever needed the right link TYPE.
   it("a symlinked root contends on the SAME lock (canonicalization)", async () => {
     const real = root();
-    const linkParent = mkdtempSync(join(tmpdir(), "vf-users-link-"));
+    const linkParent = tempDir("vf-users-link-");
     const link = join(linkParent, "alias");
     symlinkSync(real, link, process.platform === "win32" ? "junction" : "dir");
     const viaLink = canonicalRoot(link);

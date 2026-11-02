@@ -1,13 +1,4 @@
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  statSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { UsersFile } from "@vibefield/contracts";
 import {
@@ -26,8 +17,9 @@ import {
   ulid,
   usersFilePath,
 } from "../src";
+import { tempDir } from "./temp-dir";
 
-const root = () => canonicalRoot(mkdtempSync(join(tmpdir(), "vf-users-file-")));
+const root = () => canonicalRoot(tempDir("vf-users-file-"));
 const noSleep = { sleep: (_ms: number) => Promise.resolve() };
 
 describe("ulid", () => {
@@ -154,7 +146,7 @@ describe("private at rest (EL7 / WIN-D4)", () => {
    * bare temp dir would satisfy the assertion below without the product doing
    * anything — the loosening is what makes the row measure the tightening. */
   function permissiveRoot(): string {
-    const path = mkdtempSync(join(tmpdir(), "vf-users-private-"));
+    const path = tempDir("vf-users-private-");
     if (process.platform !== "win32") chmodSync(path, 0o755);
     return path;
   }
@@ -214,7 +206,7 @@ describe("private at rest (EL7 / WIN-D4)", () => {
   // lstats as a symbolic link.
   it("refuses to write a user tree through a planted link, leaving the target alone", async () => {
     const root = permissiveRoot();
-    const outside = mkdtempSync(join(tmpdir(), "vf-users-outside-"));
+    const outside = tempDir("vf-users-outside-");
     if (process.platform !== "win32") chmodSync(outside, 0o755);
     const before = process.platform === "win32" ? await readWindowsAcl(outside) : [];
     mkdirSync(join(root, "users"), { recursive: true });

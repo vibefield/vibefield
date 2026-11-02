@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { canonicalRoot, ensureUsersRoot, mutateUsersFile, readUsersFile } from "../src";
+import { tempDir } from "./temp-dir";
 
 // UA-3w — the two durable facts the Setup Assistant reads before it decides
 // anything: whether this user has been through setup at all, and whether their
@@ -11,7 +11,7 @@ import { canonicalRoot, ensureUsersRoot, mutateUsersFile, readUsersFile } from "
 const noSleep = { sleep: (_ms: number) => Promise.resolve() };
 
 function freshRoot(): string {
-  return canonicalRoot(mkdtempSync(join(tmpdir(), "vf-setup-variant-")));
+  return canonicalRoot(tempDir("vf-setup-variant-"));
 }
 
 /** The cheapest possible flat-v1 tree: one region present is enough for
