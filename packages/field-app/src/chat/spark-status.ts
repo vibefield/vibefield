@@ -9,12 +9,12 @@ import { SPARK_NEEDS_YOU, type SparkStatus } from "@vibefield/design-kit/spark-f
 
 // CHAT'S READING OF A SPARK (SP-1b, CP-3; DESIGN.md §8 "Chat's list", §2.10; CH-D1, CH-D3, CH-D4, CP3-D7, CP3-D8).
 // Pure: the sparks fieldd keeps (`compose.sparks.list`), the field board's rows (`agent.subscribe {projection:
-// "field"}`) and the needs-you queue's open items (`needs.subscribe`) in, with the sparks the window's feed has seen
-// have a turn, the list Chat draws out. A run is a spark's by the row's `spark` (its own session) or its `origin` (an
-// agent it started); a row from a daemon before SP-1b carries neither and is simply no spark's. An item is a spark's
-// by its `spark`. Only the statuses the board or the queue can certify are read here — the others arrive with the
-// slices that report them, never from a guess. What its session is doing (awake, heard, waiting on you in its pane) is
-// read from the session, never from the word, which an item's stands over.
+// "field"}`) and the needs-you queue's open items (`needs.subscribe`) in, the list Chat draws out. A run is a spark's
+// by the row's `spark` (its own session) or its `origin` (an agent it started); a row from a daemon before SP-1b
+// carries neither and is simply no spark's. An item is a spark's by its `spark`. Only the statuses the board or the
+// queue can certify are read here — the others arrive with the slices that report them, never from a guess. What its
+// session is doing (awake, heard, waiting on you in its pane) is read from the session, never from the word, which an
+// item's stands over.
 
 /** One spark, as Chat's list and its cell draw it. */
 export interface SparkEntry {
@@ -42,14 +42,6 @@ export interface SparkEntry {
   readonly needs: readonly string[];
   /** when it last did anything, as epoch ms: its own run, the agents it started, or its record */
   readonly activityAt: number;
-  /** It has had a turn, as far as this window has seen (DESIGN.md §8 "Chat's thread", how "new" is read): at work or
-   * waiting on you, or its own run's tokens spent, on this reading or on any the window's feed made before it. The
-   * board counts tokens only as they are spent live, so a run that reads its transcript back shows none until its
-   * next live turn; a turn this window saw stays seen for the window's life whatever the board counts after it. That
-   * life ends at a fieldd restart (main's boot fence replaces the document), and fieldd re-attaches only the runs a
-   * restart left (as it boots, and in its G5 retries after), so a re-attached run is read by a window that has seen
-   * none of its turns: DESIGN.md's open case. */
-  readonly turnSeen: boolean;
 }
 
 /** The spark's own session on the board: the run its record names, else a live one, else the newest. */
@@ -164,30 +156,17 @@ function needsOf(blocked: AgentFieldRow | null, items: readonly NeedsItem[]): st
   return [...asks, ...items.map((item) => item.id)];
 }
 
-/** The statuses a spark has before its first turn: Hello, Ready, Asleep. Any other is at work or waiting on you. */
-const UNSPOKEN: ReadonlySet<SparkStatus> = new Set(["hello", "ready", "sleeping"]);
-
-/** The board shows a turn now: the spark at work or waiting on you, or its own run's tokens spent (a turn is a model's
- * answer, and every answer spends them). */
-function turnShown(status: SparkStatus, own: AgentFieldRow | null): boolean {
-  return !UNSPOKEN.has(status) || (own?.usage?.cumulativeTokens ?? 0) > 0;
-}
-
-const NO_TURNS: ReadonlySet<SparkId> = new Set();
-
 /** What the window's feed reads beside the sparks and the board, for one reading. */
 export interface BesideTheBoard {
   /** the needs-you queue's open items, oldest first (`needs.subscribe`); none: a reading with no queue */
   readonly items?: readonly NeedsItem[] | undefined;
-  /** the sparks the window's feed has seen have a turn before this reading; none: a reading of the board alone */
-  readonly turnsSeen?: ReadonlySet<SparkId> | undefined;
 }
 
 /** Chat's list: one entry per spark, newest activity first (CH-D1), a tie by name. */
 export function sparkEntriesOf(
   sparks: readonly SparkSummary[],
   rows: readonly AgentFieldRow[],
-  { items = NO_ITEMS, turnsSeen = NO_TURNS }: BesideTheBoard = {},
+  { items = NO_ITEMS }: BesideTheBoard = {},
 ): SparkEntry[] {
   return sparks
     .map((spark): SparkEntry => {
@@ -209,7 +188,6 @@ export function sparkEntriesOf(
         items: mine,
         needs: needsOf(blocked ? run : null, mine),
         activityAt: Math.max(...times.map((at) => (at ? timeOf(at) : 0))),
-        turnSeen: turnsSeen.has(spark.id) || turnShown(status, run),
       };
     })
     .sort((a, b) => b.activityAt - a.activityAt || a.spark.name.localeCompare(b.spark.name));

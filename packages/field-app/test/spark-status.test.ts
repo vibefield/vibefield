@@ -367,20 +367,6 @@ describe("the list (CH-D1)", () => {
     expect(entries[0]?.needsYou).toBe(true);
     expect(sparkEntriesOf([spark()], [row({ status: "working" })])[0]?.needsYou).toBe(false);
   });
-
-  it("says a turn was seen while the spark is at work or waits on you, its run spent tokens, or the window saw one", () => {
-    const seen = (rows: AgentFieldRow[], turnsSeen?: ReadonlySet<string>) =>
-      sparkEntriesOf([spark()], rows, { turnsSeen })[0]?.turnSeen;
-    expect(seen([row()])).toBe(false);
-    expect(seen([row({ usage: { cumulativeTokens: 0 } })])).toBe(false);
-    expect(seen([row({ status: "working" })])).toBe(true);
-    expect(seen([row(), agent({ status: "working" })])).toBe(true);
-    expect(seen([row({ status: "blocked", blockers: [blocker("question")] })])).toBe(true);
-    expect(seen([row({ usage: { cumulativeTokens: 18_400 } })])).toBe(true);
-    // the same idle run with nothing counted (fieldd re-attached it), after the window saw a turn
-    expect(seen([row()], new Set(["sp-vela0001"]))).toBe(true);
-    expect(seen([row()], new Set(["sp-lyra0001"]))).toBe(false);
-  });
 });
 
 describe("a row's time (DESIGN.md §8: now, 9:41 AM, Tue, a date)", () => {

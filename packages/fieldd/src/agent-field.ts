@@ -470,6 +470,10 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
     // ST-D5 — the person's Stop, on every audience's row: a stage and its clocks, content-free,
     // REBUILT from its named fields as the origin is, so nothing riding its passthrough travels
     ...(summary.stop !== undefined ? { stop: stopOf(summary.stop) } : {}),
+    // TU-1 — whether the run has worked (a time, or null kept as null) and the profile it is filed under: each a
+    // whole value, a clock and an id, so nothing rides a passthrough
+    ...(summary.turnedAt !== undefined ? { turnedAt: summary.turnedAt } : {}),
+    ...(summary.profileSet !== undefined ? { profileSet: summary.profileSet } : {}),
   };
 }
 

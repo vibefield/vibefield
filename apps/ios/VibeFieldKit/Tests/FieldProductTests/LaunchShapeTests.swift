@@ -132,6 +132,21 @@ import Testing
     #expect(none.rows.allSatisfy { $0.stop == nil }, "a row holding no Stop carries none")
   }
 
+  // TU-1 — the row says whether its run has worked and the Agent Profile it is
+  // filed under. The phone reads both and leaves a spark's own keys unread
+  // (`spark`, `origin`), named as unread, never refused.
+  @Test func theFieldRowSaysWhetherItsRunHasWorkedAndTheProfileItIsFiledUnder() throws {
+    let board = try AgentFieldSnapshot(json: try Fixture.json("agent-field-snapshot.turned"))
+    #expect(board.droppedRows.isEmpty)
+    #expect(board.rows.map(\.turnedAt) == ["2026-11-01T08:40:12.000Z", nil, nil])
+    #expect(board.rows.map(\.profileSet) == ["native", "work-7f3a", nil])
+    #expect(board.rows.map(\.unknownFields) == [["origin", "spark"], ["origin", "spark"], []])
+    for name in ["agent-field-snapshot.native-session", "agent-field-snapshot.stop"] {
+      let older = try AgentFieldSnapshot(json: try Fixture.json(name))
+      #expect(older.rows.allSatisfy { $0.turnedAt == nil && $0.profileSet == nil }, "\(name)")
+    }
+  }
+
   @Test func aStopsStageIsAnOpenWordKeptAsItCame() throws {
     let stop = try AgentFieldStop(
       json: .object([

@@ -2388,6 +2388,44 @@ export const AgentProfileSet = z
   .passthrough();
 export type AgentProfileSet = z.infer<typeof AgentProfileSet>;
 
+/** puppeteer's `NATIVE_PROFILE_SET_ID` at the pin (`@vibefield/puppeteer-core`, `services/profiles.js`): This Mac's
+ * Agent Profile, each agent's own folder. A mirror, held to the pin by fieldd's `agent-monitor-pin.test.ts`, so a pin
+ * that moves it is red at the EL8 event. */
+export const NATIVE_PROFILE_SET_ID = "native";
+
+/** What a run is placed by: the profile it was filed under, and its persona. */
+export interface RunProfileFacts {
+  readonly profileSet?: string | undefined;
+  readonly profileId?: string | undefined;
+}
+
+/** TU-1 (Q3) — each persona to the profile listing it, over one `agents.profileSets` frame: every set's personas, as
+ * puppeteer-monitor's `personaSets` reads the same frame for Godview (a persona two sets list is the later set's). */
+export function personaSetsOf(
+  sets: readonly AgentProfileSet[],
+): ReadonlyMap<string, AgentProfileSetId> {
+  const map = new Map<string, AgentProfileSetId>();
+  for (const set of sets) for (const persona of set.personas) map.set(persona.profileId, set.id);
+  return map;
+}
+
+/** TU-1 (Q3) — the Agent Profile a run is placed in: the ONE rule the talk room, the needs-you Allow, the compose
+ * room, the door, Chat's @ and the New spark sheet share. The profile it was filed under; else This Mac's for a run
+ * that names no persona; else the profile listing its persona (AR-S5's "the persona's set"); else none — a persona no
+ * profile lists (a retired sign-in, or a root no profile holds), or the profiles not read yet (`null`): no spark
+ * reaches it and @ never offers it. With the profiles not read, none is "not placed yet": fieldd's door, its rooms and
+ * the needs-you Allow refuse it retryably until the monitor's first frame (§12 Q1 (a′)). Godview's tabs
+ * (puppeteer-monitor's `resolveProfileSet`) walk the same chain and call that last case This Mac's, the one place the
+ * two differ. Pure. */
+export function profileSetOfRun(
+  run: RunProfileFacts,
+  personaSets: ReadonlyMap<string, AgentProfileSetId> | null,
+): AgentProfileSetId | undefined {
+  if (run.profileSet !== undefined) return run.profileSet;
+  if (run.profileId === undefined) return NATIVE_PROFILE_SET_ID;
+  return personaSets?.get(run.profileId);
+}
+
 /** `agents.profileSets.list` and every `agents.profileSets.subscribe` frame
  * (full snapshots at the tick). Each set carries the plans it runs on and each
  * of its personas what it holds (AR-S2c); `routes` names the ways to add a

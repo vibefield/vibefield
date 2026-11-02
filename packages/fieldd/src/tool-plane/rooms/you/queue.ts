@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  type AgentProfileSetId,
   type ComposeAskUserInput,
   NEEDS_CHOICE_WORDS,
   NEEDS_HELD_SENDS_MAX,
@@ -19,6 +20,7 @@ import {
   needsKindOf,
   needsOutcomeOf,
   needsStateOf,
+  profileSetOfRun,
   type SparkId,
   type SparkRecord,
   type SparkSummary,
@@ -31,7 +33,6 @@ import type { GrantPrincipal } from "../../../terminal-grants";
 import {
   type HeldLaunch,
   type HoldSender,
-  profileOf,
   SPARK_LIVE_AGENTS_MAX,
   type TalkDeps,
   type TalkHolds,
@@ -80,7 +81,10 @@ export interface NeedsRun {
   readonly spark?: SparkId | undefined;
   /** the spark whose agent_spawn started it (CP-D15's origin) */
   readonly startedBy?: SparkId | undefined;
+  /** the Agent Profile it is filed under; `profileSetOfRun` places it */
   readonly profileSet?: string | undefined;
+  /** its persona, which places it when it is filed under none */
+  readonly profileId?: string | undefined;
   /** live under this daemon: it can take input (a re-attaching run cannot yet) */
   readonly live: boolean;
 }
@@ -99,6 +103,8 @@ export interface NeedsQueueOptions {
   readonly inputs: Pick<AgentInputQueues, "wake" | "enqueue">;
   /** a run the fold holds, managed or re-attaching */
   run(runtimeRunId: string): NeedsRun | undefined;
+  /** TU-1 — the talk room's persona map, so an Allow places a run as the room did */
+  readonly personaSets: TalkDeps["personaSets"];
   /** a spark's own live session, where what it is told lands */
   sparkSession(spark: SparkId): string | undefined;
   /** a spark's record, when it verifies */
@@ -125,6 +131,9 @@ const refuse = (fact: string, message: string) =>
 /** A window's refused answer, with its reason (the compose doors' shape). */
 const refuseAnswer = (message: string, reason: string) =>
   new RpcCallError("PRECONDITION_FAILED", message, false, { reason });
+/** TU-1 (§12 Q1 (a′)) — an Allow fieldd cannot place yet: the profiles are not read, so the item stays open and the
+ * same answer is taken once the monitor's first frame lands. */
+const PROFILES_UNREAD = "VibeField hasn't read the Agent Profiles yet. Try again in a moment";
 
 /** What an act did, and what its spark is owed. */
 interface Act {
@@ -507,7 +516,9 @@ export class NeedsQueue implements TalkHolds {
   }
 
   /** Allow: re-checked first (the run is live, the spark's record and its profiles stand, CP-L4 and TL-D5), then each
-   * held word queued as the spark's, in order (CP2-D1). */
+   * held word queued as the spark's, in order (CP2-D1). A run the one rule can place only by its persona, before fieldd
+   * has read the Agent Profiles, is refused retryably (`profiles-unread`): nothing is spent, the item stays open, and
+   * the spark is told nothing until an answer acts (TU-1, §12 Q1 (a′): fail closed until the frame). */
   #allowSend(record: NeedsRecord, choice: number, at: string): Act {
     const { item } = record;
     const spark = item.from.name;
@@ -526,7 +537,13 @@ export class NeedsQueue implements TalkHolds {
     const sender = record.sender;
     if (sparkId === undefined || sender === undefined)
       return failed("the words' sender is unknown");
-    const why = this.#sparkRefusal(sparkId, profileOf(run));
+    const personaSets = this.opts.personaSets();
+    const profile = profileSetOfRun(run, personaSets);
+    if (profile === undefined && personaSets === null)
+      throw new RpcCallError("PRECONDITION_FAILED", PROFILES_UNREAD, true, {
+        reason: "profiles-unread",
+      });
+    const why = this.#sparkRefusal(sparkId, profile, to);
     if (why !== undefined) return failed(why);
     this.#keep({ ...record, acting: { choice, at } });
     for (const text of record.texts ?? [])
@@ -546,7 +563,8 @@ export class NeedsQueue implements TalkHolds {
     });
     if (launch === undefined || sender === undefined || sparkId === undefined)
       return failed("the spawn's launch is unknown");
-    const why = this.#sparkRefusal(sparkId, launch.profileSet);
+    const agent = this.opts.agentLabel(launch.agent) ?? launch.agent;
+    const why = this.#sparkRefusal(sparkId, launch.profileSet, agent);
     if (why !== undefined) return failed(why);
     this.#keep({ ...record, acting: { choice, at } });
     let runtimeRunId: string;
@@ -565,14 +583,19 @@ export class NeedsQueue implements TalkHolds {
     }
     for (const task of launch.tasks)
       this.opts.inputs.enqueue(runtimeRunId, task, { kind: "spark", spark: sparkId, name: sender });
-    const agent = this.opts.agentLabel(launch.agent) ?? launch.agent;
     return { outcome: "done", owed: words.spawnAllowedFact(spark, agent, runtimeRunId) };
   }
 
-  /** Why the spark may not act there now: its record is gone, or the profile is not one of its own (TL-D5). */
-  #sparkRefusal(sparkId: SparkId, profile: string): string | undefined {
+  /** Why the spark may not act there now: its record is gone, or what it acts on (`name`) is in none of its profiles
+   * (TL-D5), whether the one rule places it in another or, with the profiles read, in none (TU-1). */
+  #sparkRefusal(
+    sparkId: SparkId,
+    profile: AgentProfileSetId | undefined,
+    name: string,
+  ): string | undefined {
     const spark = this.opts.spark(sparkId);
     if (spark === undefined) return "the spark's record is unavailable";
+    if (profile === undefined) return `${name} is in none of ${spark.name}'s Agent Profiles`;
     if (!spark.profiles.includes(profile))
       return `${profile} is not one of ${spark.name}'s Agent Profiles`;
     return undefined;

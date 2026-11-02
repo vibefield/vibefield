@@ -6,7 +6,8 @@
 // that replaced it (R-T 2): a CARD played onto the pane (HN-4) — pasted, Return never pressed — through the hand's lab door
 // (`__vfCards.playInto`). What lives here: the wait's failure, which tells "never created" from "created empty"; a
 // session's input gate, read off the deck's own direct-terminal markers, which the rows that type into a pane wait on;
-// and the play's judge and its ONE line of evidence, printed when the rung fails.
+// and the play's judge and its ONE line of evidence, printed when the rung fails. 11m (SP-1d) has its own: a card played
+// onto Chat's composer, judged, and a line of evidence (`SMOKE_CHAT_SEND`) printed whether its rung passes or fails.
 
 import { statSync } from "node:fs";
 
@@ -133,6 +134,98 @@ export function cardPlayEvidenceLine(
     failed: cause instanceof Error ? cause.message : String(cause),
     session: evidence.session,
     file: file === null ? null : { path: evidence.path, ...file },
+    inputAllowed: evidence.inputAllowed,
+    play: evidence.play,
+    waitedMs: evidence.waitedMs,
+    gateNow,
+  })}`;
+}
+
+/** Why a play did not land in Chat's composer as a chip, in words — none when it did: the place on top at the
+ * composer's centre was its prompt (`chat-composer`, SP-1d), it answered the card, and the play said "Added to your
+ * message to …" (11m). The card stays in the hand; the rung judges that itself. */
+export function judgeChatCardPlay(play: CardPlaySeen | null): string[] {
+  if (play === null) return ["the hand's lab door answered nothing"];
+  if (play.played === null) return [`nothing was played: ${play.refused ?? "no reason was said"}`];
+  const problems: string[] = [];
+  if (play.target !== "prompt")
+    problems.push(`the place that took the card is ${play.target}, not the composer's prompt`);
+  if (!play.played.ok || !play.played.note.startsWith("Added to your message to "))
+    problems.push(`the play said ${JSON.stringify(play.played.note)}`);
+  return problems;
+}
+
+/** What 11m saw as it went (SP-1d's witness: Chat's thread and composer). Null is "not reached". */
+export interface ChatSendEvidence {
+  /** the spark the rung hatched */
+  spark: string | null;
+  /** the floor session its thread's pane shows */
+  session: string | null;
+  /** the file the stub records each submitted line in (`StubRecords.lines`) */
+  readonly lines: string;
+  /** what the sent line carries, so the record names this rung's line and no other */
+  readonly nonce: string;
+  /** the line's note after Send */
+  note: string | null;
+  /** the sheet's Create as the rung pressed it, or as it last read when it never could (item 149: Create waits on the
+   * sheet's reads): enabled or disabled (absent: no Create drawn), its box in window px ("left,top,width,height"), and
+   * how long the wait took */
+  create: { state: "enabled" | "disabled" | "absent"; box: string | null; waitedMs: number } | null;
+  /** how the draft (an editor) took the keyboard and the line's keys (`focusDeck`'s rule: the window and its contents
+   * focused, then the focus placed — run92b's press blurred it, run85b's placed focus alone edited nothing): whether
+   * the window, its contents and the document held the focus once it was placed; where the caret stood as it was
+   * placed and when the composer held it ("editor" inside the draft, else the node it was in), each recorded as it was
+   * read; the draft as it held the keyboard, its box's height and whether the page would insert there (item 151: a
+   * draft mounted under the sheet's inert root stood 0 px tall, insertText disabled); and what the page heard of the
+   * line's keys, by event and place */
+  readonly typing: {
+    focus: { window: boolean; contents: boolean; document: boolean } | null;
+    caret: { placed: string | null; held: string | null } | null;
+    draft: { height: number; enabled: boolean } | null;
+    heard: Record<string, number> | null;
+  };
+  /** the pane's `inputAllowed`, by its latest marker, sampled before its Return */
+  readonly inputAllowed: { Return: boolean | null };
+  /** what the lab door answered the card played onto the composer */
+  play: CardPlaySeen | null;
+  /** how long the waits took: the spark heard ("Ready"), and the pane's input before its Return */
+  readonly waitedMs: { ready: number | null; inputBeforeReturn: number | null };
+}
+
+export function newChatSendEvidence(lines: string, nonce: string): ChatSendEvidence {
+  return {
+    spark: null,
+    session: null,
+    lines,
+    nonce,
+    note: null,
+    create: null,
+    typing: { focus: null, caret: null, draft: null, heard: null },
+    inputAllowed: { Return: null },
+    play: null,
+    waitedMs: { ready: null, inputBeforeReturn: null },
+  };
+}
+
+/** 11m's evidence line's prefix in the smoke's log. */
+export const CHAT_SEND_EVIDENCE = "SMOKE_CHAT_SEND ";
+
+/** 11m's one line, printed when the rung passes and when it fails: the cause (null when it passed), what it saw, and
+ * the pane's gate as it is now. */
+export function chatSendEvidenceLine(
+  evidence: ChatSendEvidence,
+  cause: unknown,
+  gateNow: RoutedGateFacts | null,
+): string {
+  return `${CHAT_SEND_EVIDENCE}${JSON.stringify({
+    failed: cause === null ? null : cause instanceof Error ? cause.message : String(cause),
+    spark: evidence.spark,
+    session: evidence.session,
+    lines: evidence.lines,
+    nonce: evidence.nonce,
+    note: evidence.note,
+    create: evidence.create,
+    typing: evidence.typing,
     inputAllowed: evidence.inputAllowed,
     play: evidence.play,
     waitedMs: evidence.waitedMs,

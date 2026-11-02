@@ -26,13 +26,19 @@ import { McpConnection, type McpServerOptions } from "./mcp";
 // for the door's life (MT-D4: the list is stable per session). Anything else is UNSETTLED: served nothing and asked
 // again, at most once per REASK_MS. A door can open before fieldd knows its run or its spark: after a fieldd restart
 // the floor re-announces the doors it held before the session records and the spark store are read back.
+// *Amended 2026-11-01 (TU-1, §12 Q1):* a plain run also waits on the Agent Profiles that place it. A run filed under no
+// profile that names a persona is placed by the profile listing that persona, so until fieldd has read the profiles
+// (the monitor's first frame) it is unsettled, and a door opened in a boot's first moments is never fixed in no
+// profile for its life.
 
 /** Why an unsettled run is served nothing yet: its record is missing or does not verify, or it names a spark that does
- * not (a spark's run must never be served a plain run's rows, nor a forged spark's run anything). */
-export type DoorUnsettled = "record-unverified" | "spark-unverified";
+ * not (a spark's run must never be served a plain run's rows, nor a forged spark's run anything).
+ * *Amended 2026-11-01 (TU-1, §12 Q1):* or it is a plain run filed under no profile whose persona's profile fieldd has
+ * not read yet (`profiles-unread`). */
+export type DoorUnsettled = "record-unverified" | "spark-unverified" | "profiles-unread";
 
 /** Who opened a door, as fieldd knows it. `profiles` are the Agent Profiles its calls are held to: a spark's record's,
- * or the one a run is filed under. */
+ * or the one the placement rule puts a plain run in (`profileSetOfRun`), none for a run it puts in none. */
 export type DoorCaller =
   | {
       readonly kind: "spark";

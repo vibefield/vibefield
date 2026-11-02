@@ -48,6 +48,9 @@ export const FIXTURE_NOW = new Date(2026, 9, 31, 9, 41).getTime();
 const minutesAgo = (minutes: number): string =>
   new Date(FIXTURE_NOW - minutes * 60_000).toISOString();
 
+/** When fieldd saw the plate's sparks first work (`turnedAt`): minutes after their hatch, three days ago. */
+const WORKED_AT = minutesAgo(60 * 24 * 3 - 5);
+
 const seedOf = (name: string): number =>
   FIXTURE_SPARKS.find((spark) => spark.name === name)?.seed ?? 0;
 
@@ -72,6 +75,7 @@ function spark(id: string, name: string, session: SparkSummary["session"]): Spar
     folder: `/fixture/sparks/${name.toLowerCase()}`,
     createdAt: minutesAgo(60 * 24 * 3),
     updatedAt: minutesAgo(60 * 24 * 3),
+    turnedAt: WORKED_AT,
     ...(session === undefined ? {} : { session }),
   };
 }
@@ -115,6 +119,7 @@ const UNSTARTED: SparkSummary = {
   face: { seed: FIXTURE_HATCHED.seed },
   createdAt: minutesAgo(0),
   updatedAt: minutesAgo(0),
+  turnedAt: null,
 };
 
 /** …just hatched: awake, its run up, no turn taken yet (the hello's). */
@@ -132,7 +137,7 @@ const ROWS: readonly AgentFieldRow[] = [
     status: "blocked",
     lastActivityAt: minutesAgo(0),
     blockers: [{ id: "q-1", kind: "question", since: minutesAgo(0) }],
-    usage: { cumulativeTokens: 48_200 },
+    turnedAt: WORKED_AT,
   }),
   // Lyra is idle, but an agent it started is at work: Running (CH-D3)
   row({
@@ -140,7 +145,7 @@ const ROWS: readonly AgentFieldRow[] = [
     spark: "sp-lyra0001",
     origin: { by: "you" },
     lastActivityAt: minutesAgo(12),
-    usage: { cumulativeTokens: 126_900 },
+    turnedAt: WORKED_AT,
   }),
   row({
     runtimeRunId: "run-lyra-agent",
@@ -148,13 +153,13 @@ const ROWS: readonly AgentFieldRow[] = [
     status: "working",
     lastActivityAt: minutesAgo(3),
   }),
-  // Juno is awake with nothing running: Ready, a transcript behind it (so no hello: its pane alone)
+  // Juno is awake with nothing running: Ready, a spark that has worked (so no hello: its pane alone)
   row({
     runtimeRunId: "run-juno",
     spark: "sp-juno0001",
     origin: { by: "you" },
     lastActivityAt: minutesAgo(60 * 26),
-    usage: { cumulativeTokens: 18_400 },
+    turnedAt: WORKED_AT,
   }),
   // the person's own sessions, which @ offers a spark of This Mac and Work (SP-1d): two folders of one name, so the
   // second started takes its ordinal, and one under Work
@@ -168,7 +173,9 @@ const ROWS: readonly AgentFieldRow[] = [
   }),
   row({
     runtimeRunId: "run-his-2",
-    ...(WORK_PERSONA === undefined ? {} : { profileId: WORK_PERSONA.profileId }),
+    ...(WORK_PERSONA === undefined
+      ? {}
+      : { profileId: WORK_PERSONA.profileId, profileSet: FIXTURE_WORK.id }),
     project: { name: "vibe-field" },
     createdAt: minutesAgo(40),
     lastActivityAt: minutesAgo(8),
@@ -182,11 +189,12 @@ const ROWS: readonly AgentFieldRow[] = [
   }),
 ];
 
-/** The hatched spark's own run: up and idle, nothing spent — it has had no turn. */
+/** The hatched spark's own run: up and idle — it has had no turn. */
 const HATCHED_RUN = row({
   runtimeRunId: "run-polaris",
   spark: HATCHED.id,
   origin: { by: "you" },
+  turnedAt: null,
   statusSince: minutesAgo(0),
   stateChangedAt: minutesAgo(0),
   createdAt: minutesAgo(0),

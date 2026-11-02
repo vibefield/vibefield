@@ -126,6 +126,15 @@ describe("BoardScreen — the model board read one desktop at a time (PG-1b)", (
     expect(frames[1]).toMatchObject({ device: PEER, state: "incompatible" });
   });
 
+  it('item 150: a row keyed "" is keyless — its delta screens to a frame that parses, never removed: [""]', () => {
+    const screen = new BoardScreen();
+    screen.open(openWith());
+    const frames = screen.frame(delta(17, [readable("run-ok"), readable("")], ["run-gone"]));
+    expect(frames[0]).toEqual(delta(17, [readable("run-ok")], ["run-gone"]));
+    expect(frames[1]).toMatchObject({ device: PEER, state: "incompatible" });
+    for (const frame of frames) expect(AgentModelMeshFrame.safeParse(frame).success).toBe(true);
+  });
+
   it("a desktop's snapshot frame replaces what it held unreadable", () => {
     const screen = new BoardScreen();
     screen.open(openWith([newer()]));

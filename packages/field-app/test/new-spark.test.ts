@@ -232,20 +232,28 @@ describe("its profiles (NS-D5)", () => {
     expect(startsOf([], [], undefined, agents)).toEqual([]);
   });
 
-  it("sees its profiles' personas' sessions, and a native profile's agents' own folders too; nothing before the board", () => {
+  it("sees the sessions placed in its profiles by the one rule, as @ and agent_send place them; nothing before the board", () => {
     const nativeFirst = FIXTURE_NATIVE.personas[0]?.profileId ?? "";
     const workFirst = FIXTURE_WORK.personas[0]?.profileId ?? "";
-    const tally = new Map<string | null, number>([
-      [null, 2],
-      [nativeFirst, 1],
-      [workFirst, 3],
-      ["a-profile-of-no-chosen-set", 5],
-    ]);
+    const sessions = [
+      // a run naming no persona: This Mac's (an agent's own folder)
+      {},
+      // a persona's run with no profile filed: the profile listing it
+      { profileId: nativeFirst },
+      { profileId: workFirst },
+      // filed under Work, naming no persona: Work's, never This Mac's (the red-first: main counted it as This Mac's)
+      { profileSet: FIXTURE_WORK.id },
+      // filed under Work though its persona is This Mac's: the profile it is filed under
+      { profileSet: FIXTURE_WORK.id, profileId: nativeFirst },
+      // a persona no profile lists (a retired sign-in): in none
+      { profileId: "a-retired-sign-in" },
+    ];
     expect(sessionsSeenOf(null, sets, [FIXTURE_NATIVE.id])).toBeNull();
-    expect(sessionsSeenOf(tally, sets, [FIXTURE_NATIVE.id])).toBe(3);
-    expect(sessionsSeenOf(tally, sets, [FIXTURE_WORK.id])).toBe(3);
-    expect(sessionsSeenOf(tally, sets, [FIXTURE_NATIVE.id, FIXTURE_WORK.id])).toBe(6);
-    expect(sessionsSeenOf(tally, sets, [])).toBe(0);
+    expect(sessionsSeenOf(sessions, sets, [FIXTURE_NATIVE.id])).toBe(2);
+    expect(sessionsSeenOf(sessions, sets, [FIXTURE_WORK.id])).toBe(3);
+    expect(sessionsSeenOf(sessions, sets, [FIXTURE_NATIVE.id, FIXTURE_WORK.id])).toBe(5);
+    expect(sessionsSeenOf(sessions, sets, [])).toBe(0);
+    expect(sessionsSeenOf([], sets, [FIXTURE_NATIVE.id])).toBe(0);
   });
 
   it("says how many sessions it sees and what it starts, and only what it starts before the board is read", () => {

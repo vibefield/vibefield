@@ -1761,6 +1761,10 @@
               the card it jumps to — the id, never the folder. Deliberately absent: <code>lastAssistantMessage</code>, a blocker's
               <code>input</code>/<code>questions</code>/<code>detail</code>, the title, and the mirror
               itself. A field row says what a run is doing, never what it said.
+              <em>Amended 2026-11-01 (TU-1):</em> the row also carries <code>turnedAt</code> (a clock: whether
+              its run has worked) and <code>profileSet</code> (the id of the Agent Profile it is filed under, never
+              its folder or its label). This list never named three keys the row has carried since SP-1b and ST-D5:
+              <code>spark</code>, <code>origin</code> and <code>stop</code>.
             </p>
             <p class="section-note">
               Two narrowings are worth naming because they are easy to undo by accident. The

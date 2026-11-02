@@ -31,6 +31,9 @@ export interface NewSparkSheetViewProps {
   profiles?: { readonly chips: readonly ProfileChip[]; readonly reach: string } | undefined;
   refusal: SheetRefusal | null;
   creating: boolean;
+  /** what Create needs is read: the agent it thinks with and the profile it thinks under, read as the sheet opens.
+   * Until then Create waits, disabled (item 149: an enabled Create pressed before them hatched nothing, in silence) */
+  ready?: boolean | undefined;
   hatchRef?: Ref<SparkHatchHandle> | undefined;
   onName?: (name: string) => void;
   onReroll?: () => void;
@@ -58,6 +61,7 @@ export function NewSparkSheetView({
   profiles,
   refusal,
   creating,
+  ready = true,
   hatchRef,
   onName,
   onReroll,
@@ -196,7 +200,7 @@ export function NewSparkSheetView({
           <UiButton onClick={onCancel}>Cancel</UiButton>
           <UiButton
             variant="primary"
-            disabled={trimmed === "" || creating}
+            disabled={trimmed === "" || creating || !ready}
             onClick={() => onCreate?.()}
           >
             {trimmed === "" ? "Create" : `Create ${trimmed}`}

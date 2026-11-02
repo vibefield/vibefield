@@ -497,7 +497,9 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     r.dispose();
   });
 
-  it("readers of one question share its upstreams; the last one out closes every one", async () => {
+  // PG-9a (item 135, 2026-11-01) — re-pinned: the last one out starts the hub's linger, and the close is the
+  // linger's end (`AGENT_FIELD.MESH_HUB_LINGER_MS`), never the leaving itself.
+  it("readers of one question share its upstreams; the last one out closes every one once the linger ends", async () => {
     const h = harness([selfRow, desktop("dev-b"), desktop("dev-c")]);
     const first = reader(h);
     const second = reader(h);
@@ -509,6 +511,10 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     expect(h.upstreams.standing()).toHaveLength(2);
     expect(h.board.size).toBe(1);
     second.dispose();
+    expect(h.upstreams.standing()).toHaveLength(2);
+    expect(h.local.disposed).toBe(0);
+    expect(h.board.size).toBe(1);
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
     expect(h.upstreams.standing()).toHaveLength(0);
     expect(h.local.disposed).toBe(1);
     expect(h.board.size).toBe(0);
@@ -524,8 +530,10 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     ]);
     slow.dispose();
     field.dispose();
+    expect(h.board.size).toBe(2);
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
     expect(h.board.size).toBe(0);
-    // those four were still in flight: each is closed the moment it answers
+    // those four were still in flight when the hubs closed: each is closed the moment it answers
     for (const attach of h.upstreams.standing()) h.upstreams.answer(attach, peerSnapshot());
     await tick();
     expect(h.upstreams.standing()).toHaveLength(0);
@@ -538,7 +546,8 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     if (attach === undefined) throw new Error("no upstream");
     h.upstreams.answer(attach, peerSnapshot());
     await tick();
-    first.dispose(); // the last reader leaves: the hub and its upstreams close
+    first.dispose(); // the last reader leaves, and once the linger ends the hub and its upstreams close
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
     expect(h.board.size).toBe(0);
     expect(attach.disposed).toBe(true);
     // the desktop falls asleep while nobody is watching
@@ -557,10 +566,13 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     later.dispose();
   });
 
-  it("an attach answered after its reader left is closed at once", async () => {
+  // PG-9a — re-pinned: a reader's leaving starts the linger, so the attach is closed once the hub has closed
+  it("an attach answered after its hub closed is closed at once", async () => {
     const h = harness([selfRow, desktop("dev-b")]);
     const r = reader(h);
     r.dispose();
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
+    expect(h.board.size).toBe(0);
     const [attach] = h.upstreams.attaches;
     if (attach === undefined) throw new Error("no upstream");
     h.upstreams.answer(attach, peerSnapshot());
@@ -873,6 +885,9 @@ describe("PG-1c — a reader's current open, the door's resync for a phone behin
     expect(install.snapshot.devices.map((entry) => entry.device)).toEqual([SELF, "dev-b"]);
     late.dispose();
     install.dispose();
+    // PG-9a — the install's close is a reader's leaving: the hub lingers, then closes
+    expect(h.board.size).toBe(1);
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
     expect(h.board.size).toBe(0);
   });
 });
@@ -950,5 +965,229 @@ describe("PG-3b — the mesh board says when an owner's upstream is back", () =>
     await tick();
     expect(h.ready).toEqual(["dev-b", "dev-b"]);
     r.dispose();
+  });
+});
+
+// PG-9a (PG-L4.4's linger half, item 135, 2026-11-01) — a hub LINGERS after its last reader leaves. The phone is the
+// only reader of its hub, and its app switch and its gap repair each unsubscribe, then subscribe again: an immediate
+// close tore down every peer's upstream on each, and the new hub answered every other desktop `stale` on a new epoch
+// until each re-attached — the grey flash. A reader back inside `AGENT_FIELD.MESH_HUB_LINGER_MS` rejoins the hub as it
+// stands; past it the hub closes as it always did; the daemon stopping does not wait for it.
+describe("PG-9a — a mesh hub lingers after its last reader (item 135)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-11-01T22:00:00.000Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const cSnapshot = () => ({
+    epoch: "boot-dev-c.9",
+    revision: 5,
+    rows: [row("run-c", "dev-c", 2)],
+  });
+
+  /** a phone's hub with both peers attached, answered and live */
+  async function liveHub() {
+    const h = harness([selfRow, desktop("dev-b"), desktop("dev-c")]);
+    const phone = reader(h, "remote", AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS);
+    const [b, c] = h.upstreams.attaches;
+    if (b === undefined || c === undefined) throw new Error("no upstreams");
+    h.upstreams.answer(b, peerSnapshot());
+    h.upstreams.answer(c, cSnapshot());
+    await tick();
+    for (const device of ["dev-b", "dev-c"])
+      expect(phone.frames).toContainEqual(expect.objectContaining({ device, state: "live" }));
+    return { h, phone, b, c };
+  }
+
+  /** each owner's heartbeat, once a second, for `ms` */
+  function beat(b: Attach, c: Attach, ms: number): void {
+    for (let at = 0; at < ms; at += 1_000) {
+      vi.advanceTimersByTime(1_000);
+      b.emit({ epoch: "boot-dev-b.3", since: 41, revision: 41, upserts: [], removed: [] });
+      c.emit({ epoch: "boot-dev-c.9", since: 5, revision: 5, upserts: [], removed: [] });
+    }
+  }
+
+  it("an app switch inside the linger: the phone back is answered with every peer live on the epoch it held, and no owner is asked again", async () => {
+    const { h, phone, b, c } = await liveHub();
+    phone.dispose(); // FieldLink.pause: the phone's board is unsubscribed
+    beat(b, c, 30_000); // away 30 s, while the owners keep beating
+    const back = reader(h, "remote", AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS);
+    // the open answer has no stale peer and no new epoch: the grey flash is gone
+    expect(
+      back.open.devices.map((entry) => [entry.device, entry.state, entry.snapshot?.epoch]),
+    ).toEqual([
+      [SELF, "live", "self-boot.1"],
+      ["dev-b", "live", "boot-dev-b.3"],
+      ["dev-c", "live", "boot-dev-c.9"],
+    ]);
+    // the same hub, the same upstreams and the same local board: nothing torn down, nothing re-dialled
+    expect(h.board.size).toBe(1);
+    expect(h.upstreams.attaches).toHaveLength(2);
+    expect(h.upstreams.standing()).toEqual([b, c]);
+    expect(h.local).toMatchObject({ opened: 1, disposed: 0 });
+    // and the next frame continues the chain the phone holds
+    const next = {
+      epoch: "boot-dev-b.3",
+      since: 41,
+      revision: 42,
+      upserts: [row("run-b", "dev-b", 8)],
+      removed: [],
+    };
+    b.emit(next);
+    expect(back.frames.at(-1)).toEqual({ device: "dev-b", delta: next });
+    // the rejoin cancelled the linger: past it, the hub still stands for its reader
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
+    expect(h.board.size).toBe(1);
+    expect(h.upstreams.standing()).toEqual([b, c]);
+    back.dispose();
+  });
+
+  it("a gap repair's unsubscribe-then-subscribe, in one turn: the new subscription is answered from the standing hub", async () => {
+    const { h, phone, b, c } = await liveHub();
+    phone.dispose(); // FieldProductClient.resnapshot: the UNSUBSCRIBE first, the subscribe right behind it
+    const sent: unknown[] = [];
+    const again = h.board.subscribe("remote", AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS, (payload) =>
+      sent.push(payload),
+    );
+    expect(again.snapshot.devices.filter((entry) => entry.state !== "live")).toEqual([]);
+    expect(h.upstreams.attaches).toHaveLength(2);
+    expect(h.upstreams.standing()).toEqual([b, c]);
+    expect(h.local.disposed).toBe(0);
+    again.dispose();
+  });
+
+  it("past the linger the hub closes: its upstreams and its local board; the next reader builds a new hub", async () => {
+    const { h, phone, b, c } = await liveHub();
+    phone.dispose();
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS - 1);
+    expect(h.board.size).toBe(1);
+    expect(h.upstreams.standing()).toEqual([b, c]);
+    expect(h.local.disposed).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(h.board.size).toBe(0);
+    expect(h.upstreams.standing()).toEqual([]);
+    expect(h.local.disposed).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+    // a reader past it: a new hub dials again, and the peers wait in their kept boards, stale (DS-L8)
+    const late = reader(h, "remote", AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS);
+    expect(h.local.opened).toBe(2);
+    expect(h.upstreams.attaches).toHaveLength(4);
+    expect(late.open.devices.map((entry) => [entry.device, entry.state])).toEqual([
+      [SELF, "live"],
+      ["dev-b", "stale"],
+      ["dev-c", "stale"],
+    ]);
+    late.dispose();
+  });
+
+  it("the board stopping during a linger closes the hub at once and leaves no timer", async () => {
+    const { h, phone, b, c } = await liveHub();
+    phone.dispose();
+    // lingering: the hub, its upstreams and its timers stand
+    expect(h.board.size).toBe(1);
+    expect(h.upstreams.standing()).toEqual([b, c]);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    h.board.dispose();
+    expect(h.board.size).toBe(0);
+    expect(h.upstreams.standing()).toEqual([]);
+    expect(h.local.disposed).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+    // nothing fires later: a minute on, the local board closed once
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
+    expect(h.local.disposed).toBe(1);
+  });
+
+  // the PG-9a review [2] — the rule that a join CANCELS the linger, pinned where it bites: leave, rejoin, leave
+  // again before the first linger would have ended. A timer left standing from the first leave would close the hub
+  // a full linger after the FIRST leave, and a phone back at 65 s would get a new hub and the flash again.
+  it("leave, rejoin, leave again: the hub closes a full linger after the SECOND leave, and the rejoin leaves no linger timer", async () => {
+    const { h, phone, b, c } = await liveHub();
+    const joined = vi.getTimerCount(); // the hub's own, with its reader
+    phone.dispose(); // t = 0
+    expect(vi.getTimerCount()).toBe(joined + 1); // the linger
+    vi.advanceTimersByTime(30_000);
+    const back = reader(h, "remote", AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS); // t = 30 s
+    expect(vi.getTimerCount()).toBe(joined); // the rejoin cleared it
+    vi.advanceTimersByTime(10_000);
+    back.dispose(); // t = 40 s
+    vi.advanceTimersByTime(21_000); // t = 61 s: past where the first linger would have ended
+    expect(h.board.size).toBe(1);
+    expect(h.upstreams.standing()).toEqual([b, c]);
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS - 21_001); // t = 40 s + LINGER - 1 ms
+    expect(h.board.size).toBe(1);
+    vi.advanceTimersByTime(1); // t = 40 s + LINGER
+    expect(h.board.size).toBe(0);
+    expect(h.upstreams.standing()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  // the PG-9a review [0] — hubs are keyed by {projection, floor}, and a floor is any integer a reader asks, so a
+  // reader churning distinct floors would leave a hub lingering per value. At most MESH_LINGERING_HUBS_MAX linger;
+  // past it the OLDEST closes at once, and a join takes its hub out of the order.
+  it("at most MESH_LINGERING_HUBS_MAX hubs linger: churning distinct floors closes the oldest at once, and a rejoin makes a hub the newest", async () => {
+    const max = AGENT_FIELD.MESH_LINGERING_HUBS_MAX;
+    const h = harness([selfRow, desktop("dev-b")]);
+    const floorOf = (attach: Attach) => (attach.params as { minIntervalMs: number }).minIntervalMs;
+    /** a reader at one floor, its upstream answered, then gone */
+    const churn = async (floor: number) => {
+      const r = reader(h, "field", floor);
+      const attach = h.upstreams.attaches.at(-1);
+      if (attach !== undefined && !attach.disposed && floorOf(attach) === floor)
+        h.upstreams.answer(attach, peerSnapshot());
+      await tick();
+      r.dispose();
+    };
+    const floors = [250, 251, 252, 253, 254, 255, 256];
+    for (const [n, floor] of floors.entries()) {
+      await churn(floor);
+      // nothing waited: past the bound the oldest went the moment the newest began to linger
+      expect(h.board.size).toBe(Math.min(n + 1, max));
+      expect(h.local.disposed).toBe(Math.max(0, n + 1 - max));
+    }
+    // the newest four linger, each with its sweeper and its linger timer; the oldest three are closed
+    expect(h.upstreams.standing().map(floorOf)).toEqual([253, 254, 255, 256]);
+    expect(vi.getTimerCount()).toBe(2 * max);
+    // a reader back at the oldest lingering floor rejoins it (no new dial) and, leaving, makes it the newest
+    const attaches = h.upstreams.attaches.length;
+    await churn(253);
+    expect(h.upstreams.attaches).toHaveLength(attaches);
+    await churn(257);
+    expect(h.upstreams.standing().map(floorOf)).toEqual([253, 255, 256, 257]);
+    expect(h.board.size).toBe(max);
+    expect(vi.getTimerCount()).toBe(2 * max);
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
+    expect(h.board.size).toBe(0);
+    expect(h.upstreams.standing()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("two hubs with different questions linger apart: each closes at its own linger's end, and a rejoin saves only its own", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const phone = reader(h, "remote", AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS);
+    const field = reader(h, "field", 250);
+    const [phoneUp, fieldUp] = h.upstreams.attaches;
+    if (phoneUp === undefined || fieldUp === undefined) throw new Error("no upstreams");
+    for (const attach of [phoneUp, fieldUp]) h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    expect(h.board.size).toBe(2);
+    phone.dispose();
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS / 2);
+    field.dispose();
+    // the phone's hub ends its linger first; the field hub's has half to run
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS / 2);
+    expect(h.board.size).toBe(1);
+    expect(h.upstreams.standing()).toEqual([fieldUp]);
+    // a field reader back now rejoins its own hub; the phone's stays closed
+    const back = reader(h, "field", 250);
+    expect(h.upstreams.attaches).toHaveLength(2);
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
+    expect(h.board.size).toBe(1);
+    expect(h.upstreams.standing()).toEqual([fieldUp]);
+    back.dispose();
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
+    expect(h.board.size).toBe(0);
+    expect(h.upstreams.standing()).toEqual([]);
   });
 });

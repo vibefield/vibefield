@@ -1,9 +1,11 @@
 import {
+  type AgentProfileSetId,
   type CallerContext,
   type ComposeProject,
   isServedTool,
   type NativeDoorPane,
   type ProjectListResult,
+  profileSetOfRun,
   type SparkId,
   type SparkRecord,
   TOOL_SCHEMAS,
@@ -69,12 +71,13 @@ export interface ToolPlaneAudit {
 }
 
 /** A pane's run as its session record says (AgentRuntime.runForTerminal): whether that record exists and verifies,
- * the spark it names, and the profile set it was filed under. */
+ * the spark it names, the profile set it was filed under, and its persona. */
 export interface DoorRun {
   readonly runtimeRunId: string;
   readonly verified: boolean;
   readonly spark?: SparkId;
   readonly profileSet?: string;
+  readonly profileId?: string;
 }
 
 export interface ToolPlaneServiceOptions {
@@ -82,6 +85,8 @@ export interface ToolPlaneServiceOptions {
   readonly lanes: DoorLanes;
   /** The run in a pane (managed and pending runs only). */
   runForTerminal(terminalSessionId: string): DoorRun | undefined;
+  /** TU-1 — each persona to the profile listing it (the monitor's latest frame); null until fieldd has read one */
+  personaSets(): ReadonlyMap<string, AgentProfileSetId> | null;
   /** A spark's record, when it verifies (CP-1c's store). */
   spark(id: SparkId): SparkRecord | undefined;
   readonly verbs: VerbDeps;
@@ -96,9 +101,6 @@ export interface ToolPlaneServiceOptions {
   readonly now?: () => number;
   readonly logger?: Logger;
 }
-
-/** The profile a run is filed under when its record names none: This Mac's (verbs.ts's profileOf). */
-const NATIVE = "native";
 
 const toMcp = (tool: (typeof SERVED_TOOLS)[number]): McpTool => ({
   name: tool.name,
@@ -281,7 +283,10 @@ export class ToolPlaneService {
   }
 
   /** The settle rule's evidence (door.ts): a run is settled only by a record that verifies, and a spark's run only by
-   * a spark that does too. */
+   * a spark that does too. A plain run holds the profile the one rule places it in (TU-1, `profileSetOfRun`). One the
+   * rule can place only by its persona, before fieldd has read the Agent Profiles, is unsettled (`profiles-unread`):
+   * it holds none and is asked again, so the monitor's first frame places it. A run the rule places in none with the
+   * profiles read is settled holding none: its record verified, and what it says is "in no profile". */
   #identify(pane: NativeDoorPane | undefined): DoorCaller {
     if (!pane) return { kind: "outside" };
     const run = this.opts.runForTerminal(pane.terminalSessionId);
@@ -289,8 +294,13 @@ export class ToolPlaneService {
     const { runtimeRunId } = run;
     if (!run.verified)
       return { kind: "run", runtimeRunId, profiles: [], unsettled: "record-unverified" };
-    if (run.spark === undefined)
-      return { kind: "run", runtimeRunId, profiles: [run.profileSet ?? NATIVE] };
+    if (run.spark === undefined) {
+      const personaSets = this.opts.personaSets();
+      const profile = profileSetOfRun(run, personaSets);
+      if (profile === undefined && personaSets === null)
+        return { kind: "run", runtimeRunId, profiles: [], unsettled: "profiles-unread" };
+      return { kind: "run", runtimeRunId, profiles: profile === undefined ? [] : [profile] };
+    }
     const spark = this.opts.spark(run.spark);
     if (!spark) return { kind: "run", runtimeRunId, profiles: [], unsettled: "spark-unverified" };
     return { kind: "spark", sparkId: spark.id, runtimeRunId, profiles: [...spark.profiles] };

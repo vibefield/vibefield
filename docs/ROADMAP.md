@@ -247,11 +247,15 @@
   phone is a screen of the desktop that owns the row, its report routed by `device` through its home and kept on
   the owner as that reader's own screen, keyed by `onBehalfOf` (J2 (a)); screens by kind (`SCREEN_BOARDS`), at most
   64 carried per peer connection, and the report replayed at every re-dial and upstream re-attach.
+  **PG-9a** (11-02), the lingering hub, pulled ahead of 3e (`5a7165338` → `4daf4326a`, M98 `29c20cef0`; LANDED "PG-9a"):
+  a mesh hub stands `MESH_HUB_LINGER_MS` (60 s) after its last reader, so a phone's app switch and its gap repair
+  rejoin it with every peer live on its epoch (item 135's grey flash); at most `MESH_LINGERING_HUBS_MAX` (4) linger
+  on one daemon, the oldest closing at once. L4.4's per-device cursor half stays PG-9's.
 - Next: PG-3's remaining slices (the brief `lanes/ios/PG3-BRIEF.md`; James ruled J1–J4 at 2026-11-01 03:56Z, all
-  (a)): 3c the kit decodes the remote cut from the mirrored goldens (after F1b's kit half) → 3d the Swift fold and
+  (a)): 3c the kit decodes the remote cut from the mirrored goldens (F1b's kit half landed) → 3d the Swift fold and
   replica, held to `phone-fold.golden.json` → 3e the switch, held to `phone-body.golden.json`, and the phone's
   `reportShown` by PG-3b's sender rules (J3 per hour; J4 ahead of PU-I) → PG-5…PG-8 (list, timeline, spend, rain,
-  native) → PG-9 (resume, `agent.get`, the measured rates).
+  native) → PG-9 (the per-device resume cursors, `agent.get`, the measured rates; L4.4's linger half is PG-9a's).
   PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
   the shed; the cap read on the phone under the link conditioner (PG-9); from PG-1d, the F-H2 rider (the board's gate
@@ -260,7 +264,9 @@
   built" clauses, design-mv §1, build-mv L8 and M29, the design record's §8 as built), and `field`'s retirement one
   release of skew after the kit ships (PG-L1); from PG-3a, the kit's copies of its goldens (3c), and at a draft slot
   PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's remote-cut self-check); from PG-3b,
-  3e's sender rules, and 3e mirrors `agent-report-shown.routed.json` (the phone's send shape) into the kit.
+  3e's sender rules, and 3e mirrors `agent-report-shown.routed.json` (the phone's send shape) into the kit; from
+  PG-9a, a failed release's empty carried again (not built), and at a draft slot the dated notes at
+  thinking-desktop-sync-plane :201 (PF6's close) and thinking-phone-godview §8's PG-9 line.
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -390,6 +396,8 @@
     and Send, which pastes into the pane and leaves Return to you.
   - A new spark says hello with three starters. A thread's unread dot lasts until you open it. A thread takes one act
     at a time, and fieldd wakes a spark once.
+  - Its smoke:godview rung 11m is on main since M97 `f0e7bb465` (2026-11-02), row 23 green as run97b, with items 149
+    and 151 (LANDED "SP-1d — smoke:godview's rung 11m").
 - **CP-3, the person**: LANDED 11-01 (`ce6577783`, the mini's run 88; LANDED "CP-3"), on CP3-D1…D8, all A (James,
   10-31 06:31:34Z; `draft/compose-plane/cp3-the-person.md`). CP3-D3 is built as its fallback, B, until a session's
   permission mode is a fact VibeField reads.
@@ -398,12 +406,20 @@
     agents, each held for your OK.
   - Chat's row says it, with the orange dot and the note, and the thread shows its card, answered once for every
     window. A notify is one line on the status line, and an OS notice while no VibeField window is in front.
+- **TU-1, the turn fact and the one placement rule**: LANDED 11-02 (`57569bca3`, the mini's mint M96; LANDED "TU-1"),
+  on the read's seven marks (Q1 and Q2 A by James, 11-01 08:31:35Z, on the decision page; Q3–Q7 by VF-PM, 07:17Z) and
+  the plan's §12 (VF-PM, 14:01Z: (a′), O1 out, the pending tail named).
+  - fieldd keeps whether a spark, and each run's conversation, has worked (`turnedAt`), and Chat's hello reads it: a
+    spark that has worked never says hello again, across a restart or a wake. An ask alone is no turn.
+  - One rule places a run in an Agent Profile (`profileSetOfRun`) for @, the talk room, the needs-you Allow, the
+    compose room, the door and the New spark sheet's count. The board's row carries the profile its run is filed
+    under.
+  - A turn no fieldd saw (while it was down, or in a run a restart could not re-attach) is not kept. It is named
+    (Q4), not closed.
 - Next, in order:
-  - **TU-1**: the turn fact and the persona set on the board's row. All seven marks are ruled: Q1 and Q2 by James
-    (11-01 08:31:35Z, on the decision page), Q3–Q7 by VF-PM (07:17Z).
-    - After it, its own slice, **the handle** (VF-PM, 11-01 09:55Z): the needs-you card names a session by fieldd's
-      runLabel, and the lean is @'s handle ("vibe-field·2"), so two untitled sessions never read alike. A one-frame
-      visual goes to James only if it changes what he sees.
+  - **The handle** (VF-PM, 11-01 09:55Z), its own slice: the needs-you card names a session by fieldd's runLabel, and
+    the lean is @'s handle ("vibe-field·2"), so two untitled sessions never read alike. A one-frame visual goes to
+    James only if it changes what he sees.
   - **SP-1e**: CH-D2's live cards in Chat's thread, and Chat's pane as a card target.
   - **CP-4**: flows and the desk applier.
   - **CP-5**, which is MT-7: Codex and Grok, once their MCP processes can be named.
@@ -483,6 +499,8 @@
   item 148 (users.json's mint and the layout stamp are created whole: tmp, fsync, a link that fails EEXIST; a bare
   "wx" create named the file before its bytes, and `detectLayoutState` read it outside the lock: `75e1bd31a` as
   M90, a fast-forward, run 90; LANDED "Item 148") ·
+  item 150 (the board screen reads a row keyed "" as keyless, never `removed: [""]`: a screened delta RowsDelta refused
+  looped the replica's reopen; `47ee475bd` as the merge `a6dc43cd2`, run 94; LANDED "Item 150") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
@@ -557,7 +575,7 @@
 | History finish (AR-8) | B-D4/B-D5 (the doors federate; no window asks for another desktop's past; the phone reads none) · PJ-8 acts across desktops (PlaceRef + the params idempotency key), unblocked by DS-7 (another desktop's sessions are in the room, their acts said "ran on ‹desktop›") · projects only another desktop holds, and its Home and Temporary, in the list (PJ's design; DESIGN.md §8's DS-7 amendment) · the Peek's "Everything" across desktops (K5) · R8/R9 and P2's runs (§6) | the History lead's slot | `build-hf.md`, `thinking-ar-history-room.md`, `thinking-project-places.md` |
 | PJ-5 · PJ L5 | Godview's project chip, "Open in History", synced ink, where line: unbuilt; re-judged against One Frame and MV before any build (Q16) · the project key unkeyed (`normalize.ts:172`, version 1) | the re-judgement · a mesh-shared secret | `thinking-project-places.md` |
 | FS | FS-3 the files consumer on the desk (a kind or panel; `pickFolder()` → `attach(root)` is built) · FS-4 over DS-7's road (one route per owner desktop, `OwnerRoutes`; the workspace serve needs its DS-L6 claim) · FS-5 the phone viewer · GitService replaces the interim git port (R2; M5) | a desk lane · mille's release | `thinking-files-service.md`, `draft/files-service/build-fs.md` |
-| FW — the freeway | F1's device round before leaving `-vf-freeway`, which witnesses F1b's exit once the kit asks through its home · F1b's kit half, its own slice (`FieldLink.swift` `approveFreeway` asks the home with `device`; FW-R3, FW-R6) · FD1/FD2 (truffle precondition met; need an owner), FD3/FD4, F4, FW-D10's slice, FW-R1…R10 · FW-DF-1/DF-2 (§6) | James's device round; an owner for FD1/FD2 (History lead); F1b's kit half (IOS) | `draft/thinking-freeway.md` v0.3 §13/§14/§16; LANDED "F1b — the forwarded phone approval" |
+| FW — the freeway | F1's device round before leaving `-vf-freeway`, which witnesses F1b's exit (the kit asks through its home since 11-01, `284e4af9d`; LANDED "F1b's kit half") · FD1/FD2 (truffle precondition met; need an owner), FD3/FD4, F4, FW-D10's slice, FW-R1…R10 · FW-DF-1/DF-2 (§6) | James's device round; an owner for FD1/FD2 (History lead) | `draft/thinking-freeway.md` v0.3 §13/§14/§16; LANDED "F1b — the forwarded phone approval", "F1b's kit half" |
 | AR-6 — approvals + prompts | Phase 0 paid (P0-H, 09-25); AG-1 shipped as AR-S1/AR-S2. Waits on AR6-D1…D9 (unindexed; re-verify §0's anchors at the pinned puppeteer). PU-15 rides it. A 1.0 exit | James rules AR6-D1…D9 | `thinking-ar-approvals-prompts.md` |
 | AR-7 later slices · AR-S4e3 | AR-7f leak detector, AR-7h bash/fish, AR-7i prewarm (AR-7j is a beta blocker) · S4e3 options, Needs/Needed by, EX6/EX7, other profiles | an AR lane | `thinking-ar7-typed-agents.md` §5.6, `thinking-ar-agents-settings.md` |
 | MV-8b ruling 8 | the transcript-provider migration: puppeteer 0.2.3 still ships adapter-claude's `observation/transcript/provider.ts` | its own track after MV | DECISIONS MV-8b, `docs/agent-plane/architecture.html` |
@@ -837,7 +855,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | MV — monitor views | PARKED; landed 10-08 | `draft/monitor-view-sdk/design-mv.md`; DESIGN.md §8 | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); item 39 and the tuck wait on a later release; QL ratifications |
 | History (AR-8) / PJ | PARKED; PJ-1…4, 6, 7 landed; DS-7 hands the room another desktop's sessions | `build-hf.md`, `thinking-ar-history-room.md`, `thinking-project-places.md` | R8/R9; B-D4/B-D5; PJ-5 re-judged; PJ-8 (unblocked) |
 | DS / SP — sync planes (was C — mesh) | PARKED; waves 1–3 and DS-7 landed | design-04, `design-06-sync-planes.md`, `thinking-desktop-sync-plane.md`, `thinking-sync-planes.md`, `thinking-c6-meshdata.md` | the two-desktop run (James); DS-9; SP-7 |
-| FW — the freeway | PARKED; F1 landed 10-20, packaging 10-27, F1b's desktop half 10-31 (M63 `599998fdd`) | `thinking-freeway.md` | James's device round (the flag-off); F1b's kit half; FD1/FD2's owner |
+| FW — the freeway | PARKED; F1 landed 10-20, packaging 10-27, F1b's desktop half 10-31 (M63 `599998fdd`), its kit half 11-01 (M93 `284e4af9d`) | `thinking-freeway.md` | James's device round (the flag-off); FD1/FD2's owner |
 | FS — files service | PARKED; FS-1a/1b/2 landed | `thinking-files-service.md`, `build-fs.md` | FS-3 on the desk; mille's release |
 | PT — PORTALS | ACTIVE (PT-S, resumed 10-29); browser landed 10-14; PT-S1 (the phone as a kind) built 10-18 and 10-29, gated and looked at 10-29, LANDED 10-30 (`1de84540b`); PT-S2 (the phone's producer) built code-only and light-green 10-30, LANDED 10-31 (`e4aa3d367`); PT-S3 (the gates) built code-only and light-green 10-31, LANDED 10-31 (`c564de0e4`) | `thinking-portals.md`, `draft/portals-maps/` (PT-S: `PT-S-the-simulator.md`), `draft/ground/PHONE.md`, ICE design-019, LSF spec | PT-S3's live run (on James's unlock) → PT-S4 (touch); then PT-C, PT-T |
 | Desk Phase 6 | PARKED; replaces the four dogfood packs (Q9) | `thinking-desk-migration.md` | STRING's thinking doc |
@@ -857,7 +875,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d and CP-3 (`ce6577783`, run 88) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | TU-1 (ruled) · the handle, after TU-1 · SP-1e · CP-4 · CP-5 |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88) and TU-1 (`57569bca3`, mint M96) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | the handle · SP-1e · CP-4 · CP-5 |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
