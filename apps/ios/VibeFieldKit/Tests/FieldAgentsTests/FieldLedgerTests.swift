@@ -288,6 +288,22 @@ private func row(
     #expect(rows[1].agent?.join?.deviceLive == false)
   }
 
+  /// F1 (PG-3e) — the dress never rebuilds a row: the ids a drawn row carries beside its body's (the host's name, the
+  /// model id a report names, the board key a resume names) ride through the fold exactly.
+  @Test func theDressKeepsTheRowsIds() {
+    var assembly = FieldAssembly(tint: .light)
+    let base = agent("pty-h2", project: "vibe-field")
+    let row = FieldBubble(
+      id: base.id, project: base.project, detail: base.detail, status: base.status, identityKey: base.identityKey,
+      createdAt: base.createdAt, agent: base.agent, host: "Loft", modelId: "run-h-launch", runKey: "run-h-launch-key")
+    let dressed = assembly.fold([row], cardSubjectID: nil, nowMs: t0)
+    #expect(dressed.count == 1)
+    #expect(dressed.first?.host == "Loft")
+    #expect(dressed.first?.modelId == "run-h-launch")
+    #expect(dressed.first?.runKey == "run-h-launch-key")
+    #expect(dressed.first?.id == "pty-h2")
+  }
+
   @Test func theProjectionCarriesTheMonitorsFacts() {
     let state = AgentRuntimeState(
       permissions: [AgentPermission(tool: "Bash")], effort: AgentEffort(value: "high", intent: .configured),

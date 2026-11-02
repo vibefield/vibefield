@@ -71,8 +71,11 @@ public struct AgentBlocker: Sendable, Equatable, Codable {
   public var kind: AgentBlockerKind
   /// An adapter's human-readable line for the blocker: what the body says first.
   public var detail: String?
-  /// A question blocker's question as asked (the first question's header, else
-  /// its prompt). fieldd's row does not carry it yet; the mock and a later door do.
+  /// PG-3e — a question's HEADER (`MonitorWait.header`): what a question body says first, before its prompt
+  /// (`waitBodyLine`, puppeteer-view-sdk `toolkit/words.js`).
+  public var header: String?
+  /// A question blocker's question as asked (its prompt). The remote cut's wait carries it beside the header; the
+  /// mock carries it alone.
   public var question: String?
   /// The tool a permission names — the one piece of evidence `field.agents.v1`
   /// flattens onto the row today.
@@ -81,11 +84,12 @@ public struct AgentBlocker: Sendable, Equatable, Codable {
   public var code: String?
 
   public init(
-    kind: AgentBlockerKind, detail: String? = nil, question: String? = nil, tool: String? = nil,
-    code: String? = nil
+    kind: AgentBlockerKind, detail: String? = nil, header: String? = nil, question: String? = nil,
+    tool: String? = nil, code: String? = nil
   ) {
     self.kind = kind
     self.detail = detail
+    self.header = header
     self.question = question
     self.tool = tool
     self.code = code
@@ -132,6 +136,22 @@ public enum AgentCostCoverage: String, Sendable, Codable {
   case complete
   case partial
   case unavailable
+}
+
+/// PG-3e — a run's cost as its OWNER priced it: the remote cut's `MonitorCost` (`cost {usd, coverage, burnPerHour?}`),
+/// the backend's own ledger, never one the phone keeps. `coverage` stays the WIRE word, open as the contract's is
+/// (`MonitorCostCoverage.unrecognized`), because a word this build does not know still shows its total, unpriced, as
+/// the window shows it (`formatEstimate`, `bubble-model.js`'s `priced`). `burnPerHour` is USD an hour (J3 (a)).
+public struct AgentCost: Sendable, Equatable {
+  public var usd: Double
+  public var coverage: String
+  public var burnPerHour: Double?
+
+  public init(usd: Double, coverage: String, burnPerHour: Double? = nil) {
+    self.usd = usd
+    self.coverage = coverage
+    self.burnPerHour = burnPerHour
+  }
 }
 
 /// Corrected spend in one of Core's fixed thirty-second buckets

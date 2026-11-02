@@ -409,3 +409,109 @@ private func model(
     #expect(body.title == "puppeteer · Fable 5.1 · Editing tokens.css")
   }
 }
+
+/// PG-3e — the body reads its OWNER's cost (`AgentCost`, the remote cut's `cost`): the total and the shares from the
+/// owner's ledger, the flames from the owner's burn per hour (J3 (a)), the host on a peer's agent, the question's header
+/// before its prompt. The rows the body golden cannot reach (`phone-goldens.ts` BODY_NOTE; the body read §5), each
+/// transcribed from `bubble-model.js` 0.3.2.
+@Suite struct OwnersCostBodyTests {
+  private func owned(
+    id: String = "a", status: AgentVisualStatus = .working, cost: AgentCost? = nil, host: String? = nil,
+    blocker: AgentBlocker? = nil
+  ) -> FieldBubble {
+    FieldBubble(
+      id: id, project: "puppeteer", detail: "Editing tokens.css", status: status, identityKey: id, createdAt: now,
+      agent: AgentFacet(provider: .claude, modelName: "Opus 5.5", blocker: blocker, cost: cost),
+      color: SwarmColor(hex: "#6366f1"), host: host)
+  }
+
+  /// B1 — the flames read the owner's burn PER HOUR, divided back to the per-minute ladder and restored to fifteen
+  /// significant digits (`perMinute`, M27): 8.999999999999998 an hour divides raw to 0.14999999999999997, one flame,
+  /// and restores to 0.15, two. At a rung's exact multiple the restore cannot show, so 9.0 alone could not fail.
+  @Test func aWorkingBodyBurnsByTheHour() {
+    func lit(_ perHour: Double) -> Int? {
+      model(owned(cost: AgentCost(usd: 1, coverage: "complete", burnPerHour: perHour))).burn?.lit
+    }
+    #expect(lit(8.999999999999998) == 2)
+    #expect(lit(9.0) == 2)
+    #expect(lit(8.99) == 1)
+    #expect(lit(30) == 3)
+    let body = model(owned(cost: AgentCost(usd: 1, coverage: "complete", burnPerHour: 9)))
+    #expect(body.burn == SwarmBurn(lit: 2, priced: true))
+    #expect(body.title.hasSuffix("· $9.0/hr"))
+    // priced with no burn said: calm, never unpriced
+    #expect(model(owned(cost: AgentCost(usd: 1, coverage: "partial"))).burn == SwarmBurn(lit: 0, priced: true))
+  }
+
+  /// B2 — a coverage word this build does not know still shows its total, unpriced: `~$x` with no plus and `none`
+  /// false, and the ladder drawn unread (`formatEstimate`; `priced` is complete or partial only).
+  @Test func anUnrecognizedCoverageShowsItsTotalUnpriced() {
+    let body = model(owned(cost: AgentCost(usd: 0.62, coverage: "estimated", burnPerHour: 30)))
+    #expect(body.figures?.bottom == SwarmFigure(text: "~$0.62", hot: false, none: false))
+    #expect(body.burn == SwarmBurn(lit: 0, priced: false))
+  }
+
+  /// B3 — `unavailable` is no total, whatever its usd: a missing lane is never zero dollars (RFC 008).
+  @Test func unavailableIsNoTotal() {
+    let priced = model(owned(cost: AgentCost(usd: 0.62, coverage: "complete")))
+    #expect(priced.figures?.bottom == SwarmFigure(text: "~$0.62", hot: false, none: false))
+    let missing = model(owned(cost: AgentCost(usd: 0.62, coverage: "unavailable", burnPerHour: 30)))
+    #expect(missing.figures?.bottom == SwarmFigure(text: "—", hot: false, none: true))
+    #expect(missing.burn == SwarmBurn(lit: 0, priced: false))
+    // no cost at all reads the same
+    #expect(model(owned()).figures?.bottom == SwarmFigure(text: "—", hot: false, none: true))
+  }
+
+  /// B4 — a peer's agent wears its desktop's name under its model line, on all three agent branches (Q16; the
+  /// window's `hostLine`); the home's own agent wears none.
+  @Test func aPeersAgentWearsItsHost() {
+    let waiting = AgentBlocker(kind: .question, question: "Which order?")
+    for (status, blocker) in [(AgentVisualStatus.working, nil), (.idle, nil), (.blocked, waiting)] {
+      let body = model(owned(status: status, host: "Loft", blocker: blocker))
+      let keys = body.copy.map { $0.key }
+      #expect(keys.last == "host", "\(status)")
+      #expect(keys.firstIndex(of: "host") == keys.firstIndex(of: "model").map { $0 + 1 }, "\(status)")
+      let host = body.copy.last
+      #expect(host?.text == "Loft", "\(status)")
+      #expect(host?.style == SwarmCopyStyle.labelStacked, "\(status)")
+      #expect(host?.gapBefore == 3, "\(status)")
+      let home = model(owned(status: status, blocker: blocker)).copy.map { $0.key }
+      #expect(!home.contains("host"), "\(status)")
+    }
+  }
+
+  /// B5 — a question says its header first, then its prompt (`waitBodyLine`).
+  @Test func aQuestionSaysItsHeaderFirst() {
+    let blocker = AgentBlocker(kind: .question, header: "Peer order", question: "Which order?")
+    let body = model(owned(status: .blocked, blocker: blocker))
+    let state = body.copy.first { $0.key == "state" }
+    #expect(state?.text == "Peer order")
+    #expect(state?.lead?.kind == .icon("question"))
+    // a blank header is no header
+    let blank = AgentBlocker(kind: .question, header: "  ", question: "Which order?")
+    #expect(model(owned(status: .blocked, blocker: blank)).copy.first { $0.key == "state" }?.text == "Which order?")
+  }
+
+  /// B6 — partial coverage adds the plus.
+  @Test func partialAddsThePlus() {
+    let body = model(owned(cost: AgentCost(usd: 0.2, coverage: "partial", burnPerHour: 12)))
+    #expect(body.figures?.bottom == SwarmFigure(text: "~$0.20+", hot: false, none: false))
+    #expect(body.burn == SwarmBurn(lit: 2, priced: true))
+  }
+
+  /// B7 — the working shares rank by the owner's total: 0.02 and 0.62 share 0 and 1; an unavailable total counts as
+  /// 0; an idle body and a terminal do not count.
+  @Test func workingSharesReadTheCost() {
+    let rows = [
+      owned(id: "a", cost: AgentCost(usd: 0.02, coverage: "complete")),
+      owned(id: "b", cost: AgentCost(usd: 0.62, coverage: "partial")),
+      owned(id: "c", cost: AgentCost(usd: 9, coverage: "unavailable")),
+      owned(id: "d", status: .idle, cost: AgentCost(usd: 40, coverage: "complete")),
+    ]
+    let shares = workingShares(rows)
+    #expect(shares["a"] == 0.02 / 0.62)
+    #expect(shares["b"] == 1)
+    #expect(shares["c"] == 0)
+    #expect(shares["d"] == nil)
+  }
+}

@@ -33,6 +33,8 @@ public struct AgentFacet: Sendable, Equatable {
   public let effort: AgentEffort?
   /// The root agent's latest reply; the body shows its first line.
   public let lastMessage: String?
+  /// PG-3e — the run's cost as its owner priced it (the remote cut's `cost`). nil: no cost said, or not yet observed.
+  public let cost: AgentCost?
   /// Core's usage, verbatim — the ledger's INPUT, never drawn.
   public let monitorUsage: AgentUsage?
   /// The UI's display history of the run's USD (`UsageLedger`): the corrected
@@ -66,6 +68,7 @@ public struct AgentFacet: Sendable, Equatable {
     blocker: AgentBlocker? = nil,
     effort: AgentEffort? = nil,
     lastMessage: String? = nil,
+    cost: AgentCost? = nil,
     monitorUsage: AgentUsage? = nil,
     usage: UsageHistory? = nil,
     statusSince: Date? = nil,
@@ -82,6 +85,7 @@ public struct AgentFacet: Sendable, Equatable {
     self.blocker = blocker
     self.effort = effort
     self.lastMessage = lastMessage
+    self.cost = cost
     self.monitorUsage = monitorUsage
     self.usage = usage
     self.statusSince = statusSince
@@ -149,6 +153,13 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   public var mounted: Bool
   /// Finished something while another session had the card (`UnreadLedger`).
   public var unread: Bool
+  /// PG-3e — the desktop a PEER's row lives on, by name: the host line every body from another desktop wears (the
+  /// window's `hostLine`, agent or terminal). nil on the home's own rows and on every source with no desktop.
+  public let host: String?
+  /// PG-3e — the row's MODEL id (`MonitorAgentRow.id`), which `agent.reportShown` names. nil on the mock.
+  public let modelId: String?
+  /// PG-3e — the row's board KEY (`runtimeRunId`), which a resume or a stop names. nil on the mock.
+  public let runKey: String?
 
   public init(
     id: String,
@@ -163,7 +174,10 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     stale: Bool = false,
     active: Bool = false,
     mounted: Bool = false,
-    unread: Bool = false
+    unread: Bool = false,
+    host: String? = nil,
+    modelId: String? = nil,
+    runKey: String? = nil
   ) {
     self.id = id
     self.project = project
@@ -178,6 +192,9 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     self.active = active
     self.mounted = mounted
     self.unread = unread
+    self.host = host
+    self.modelId = modelId
+    self.runKey = runKey
   }
 }
 
