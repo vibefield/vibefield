@@ -28943,3 +28943,60 @@ puppeteer `v0.3.2` (`95a70aa77`).
 **Owed.**
 - 3e: FieldLink owns the copy and redraws on `Published.moved`; the switch; phone-body's mirror; `.routed`'s mirror;
   the field cut's copies retired.
+
+## Item 153 — the test suites remove the temp roots they make: each row's root goes when the row ends, and fieldd's files-host bundle lives in a root the run removes
+
+(2026-11-02; six commits `2bcb3441f` → `50c30574a` on lane `fix/item153` over main `d4eb2e74f`, the fixer's; M102 is
+`50c30574a` itself, a fast-forward of main `d4eb2e74f`, run 102, landed 2026-11-02T06:33:20Z.) Granted by VF-PM at
+06:05Z, on a9's measure of the gate host.
+
+**The red.** Our suites made their roots with `mkdtempSync(join(tmpdir(), …))` and never removed them.
+- a9's list (`~/vf-lanes/tmp/a9-vf-list-0536` on the mini, after the lanes' TMPDIR=/tmp runs) held 33,345 vf-* dirs,
+  1.26 GiB. The largest prefixes were vf-create 8,253 (318 MiB), vf-plugin-cli 7,810 (77 MiB), vf-link 5,717 and
+  vf-fh 552 (694 MiB).
+- Across its 55 prefixes the counts come in multiples of ~110: one root set per verify run.
+- The single-digit prefixes (vf-smoke 24, vf-seam and vf-km 10, vf-ar7 2, …) belong to files that already remove
+  their roots. They are a killed run's leftovers, not a row's, and are left.
+
+**The witness** (`lanes/item153/tools/leftover153.sh`). One run of a package, or of named files, with TMPDIR a fresh
+empty directory, then a count of what is left by prefix. The way the smokes prove their cleanup. Main `d4eb2e74f`,
+run in the lane before the first commit, against the tip:
+
+| suite | main | tip |
+| --- | --- | --- |
+| users, whole | 41 vf-* | 0 |
+| create-plugin, whole | 72 vf-create | 0 |
+| plugin-cli, whole | 95 vf-* | 0 |
+| electron-shell: users-profile, setup-variant | 12 | 0 |
+| fieldd: link-service, plugin-install, boot-env, workspace-attach/-doors/-worker | 60 | 0 |
+| dev-runner: siblings-window | 22, one a shared `truffle-fixture` | 0 |
+
+What is left at the tip is tsx's and node's own caches (`tsx-501`, `node-compile-cache`), which are reused across
+runs.
+
+**The fix, one commit a package:**
+- **The vitest packages:** `tempDir(prefix)` registers the root's recursive removal with vitest's `onTestFinished`.
+  It throws outside a test, so a root made at describe scope fails loudly instead of leaking.
+  - users and electron-shell: `test/temp-dir.ts`, with `removeWhenTestEnds(path)` for create-user's fixed 70-byte
+    sun_path root.
+  - create-plugin and plugin-cli: their `fixtures.ts` `freshDir`. plugin-cli's `makePlugin` makes its roots
+    through it.
+- **fieldd:** link-service takes shell-lease's class, a file-local cleanup list in afterEach. The files-host bundle
+  is shared by a file's rows, so no row may remove it. It builds under `inject("fielddRunRoot")`: global-setup
+  makes that directory once field-native's build is green, provides it, and removes it at teardown.
+- **dev-runner** (node:test): a top-level afterEach runs the cleanup list. `goFixture` wrote its sibling checkout
+  to `<root>/../truffle-fixture`, one fixed directory in the shared temp dir. It now sits beside the repo inside
+  the fixture's own root, as the lock's `../truffle-fixture` spells it.
+
+**The light** (`lanes/item153/tools/light153.sh`, logs `lanes/item153/light/`; 06:19:59Z → 06:22:08Z, at
+`50c30574a`), green throughout:
+- Every witness at the tip, exit 0 and 0 vf-* left. The fieldd row added ios-phone-place and project-doors-phone,
+  the bundle's other readers: 118 passed.
+- Biome on the 17 changed files.
+- The typechecks of users, create-plugin, plugin-cli, electron-shell and fieldd, under a HOLD line the script took
+  by noclobber and released at its exit.
+- Run 102 on the mini (a9's mint, M102 the tip itself; VF-PM's read, 06:32:22Z): 12,092 passed, 0 failed,
+  18 skipped (main's count, ±0); cargo 33 ok. a9 counted the vf-* entries in the mini's /private/tmp around the
+  full verify: 33,655 before and 33,655 after (+0), against about +304 for run101r on the old code.
+
+**Owed.** Nothing of the fixer's. The dirs already leaked on the gate host are James's to clear.

@@ -517,6 +517,9 @@
   M90, a fast-forward, run 90; LANDED "Item 148") ·
   item 150 (the board screen reads a row keyed "" as keyless, never `removed: [""]`: a screened delta RowsDelta refused
   looped the replica's reopen; `47ee475bd` as the merge `a6dc43cd2`, run 94; LANDED "Item 150") ·
+  item 153 (the test suites remove the temp roots they make: a row's root at its end, fieldd's files-host bundle under
+  a run root its global-setup removes; ~300 vf-* dirs a verify run before, 33,345 on the gate host: `50c30574a`
+  as M102, a fast-forward, run 102; LANDED "Item 153") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
