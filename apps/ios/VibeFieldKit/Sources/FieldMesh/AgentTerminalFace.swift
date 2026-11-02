@@ -28,6 +28,16 @@ import Foundation
 // the same projection with no such filter, so a board that arrived over a
 // desktop's own door carries its joins regardless. That is exactly the case a
 // pre-attach face has to cover, and the capability is what covers it.
+//
+// *Corrected 2026-11-02 (PG-3e):* the paragraph above is the FIELD cut's, and
+// the phone no longer reads it. Since PG-3e it reads its home's REMOTE cut
+// (`agent.subscribe {projection: "remote", scope: "mesh"}`), whose rows carry
+// the pane join as `terminal`, and fieldd gates that board by the same
+// `attachableRows` (PG-2, `agent-model-board.ts`): while a desktop's doors are
+// down its join and its `monitorRow.attachable` are withheld. (The door-fed
+// field board had been gated so since PG-1a; the store carrier retired at
+// DS-D14.) The capability stays this face's word for WHY a missing attach is
+// missing, which a withheld join does not say.
 
 /// What an agent's card can offer for its terminal.
 public enum AgentTerminalFace: Sendable, Equatable {

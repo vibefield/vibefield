@@ -107,8 +107,9 @@ public enum SettingsModel {
   }
 
   public static func abilities(_ desktop: SettingsDesktop) -> [Ability] {
-    // Its agents' terminals: a bare terminal is no body on the phone until
-    // PG-D5 brings them onto the remote cut (`thinking-phone-godview.md` §1).
+    // Its agents' terminals — and, since PG-3e, its bare terminals, which are
+    // bodies on the phone now that it reads the home's remote cut (PG-D5).
+    // (Corrected 2026-11-02: this said a bare terminal was no body until PG-D5.)
     let terminals: Ability =
       desktop.servesTerminals == false
       ? Ability(
@@ -116,7 +117,13 @@ public enum SettingsModel {
         detail: "\(desktop.name) doesn’t serve its terminals to your devices.", can: false)
       : Ability(title: "Open its agents’ terminals and type", detail: nil, can: true)
     return [
-      Ability(title: "Watch its agents", detail: nil, can: true),
+      // PG-3e (§5.3) — a desktop this phone cannot read says so (J-E1 (iii)'s
+      // words, at the lean); not said is not a refusal.
+      desktop.watchable == false
+        ? Ability(
+          title: "Watch its agents", detail: "\(desktop.name) runs a VibeField this phone can’t read.",
+          can: false)
+        : Ability(title: "Watch its agents", detail: nil, can: true),
       Ability(title: "Start agents in its folders", detail: nil, can: true),
       terminals,
       Ability(title: "Read and search its History", detail: nil, can: true),
