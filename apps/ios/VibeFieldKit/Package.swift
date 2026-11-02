@@ -425,7 +425,14 @@ let package = Package(
     // untested: the integrator carried three state-machine bugs (the parked
     // poll, the card's ended face, the double attach) that no other target
     // could have caught.
-    .testTarget(name: "FieldHomeTests", dependencies: ["FieldHome"]),
+    //
+    // PG-4s — and the Godview views' bundle (PG-5…8): PG-3a's witness, which every view suite replays, and one golden
+    // per view (`phone-<view>.golden.json`), copied in byte for byte; `pnpm check:ios-fixtures` keeps the word true.
+    .testTarget(
+      name: "FieldHomeTests",
+      dependencies: ["FieldHome"],
+      resources: [.copy("Fixtures")]
+    ),
     // The History tab's DECISIONS (H-D4): ranking, the scope line, the search's
     // matching and counts, where a hit lands, the stepper's ring.
     .testTarget(

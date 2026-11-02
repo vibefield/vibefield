@@ -45,6 +45,12 @@ function jsonFiles(dir) {
 // so the copy half now has the pin half's posture below.
 const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.lane.json"]);
 
+// PG-4s — the phone's Godview views (PG-5…8): the witness each view suite replays, the toolkit's golden, and one
+// golden per view, which its lane names here (ONE line; both uses below derive from it). FieldHomeTests reads them.
+const PHONE_GODVIEW = join(root, "packages/field-app/test/fixtures/phone-godview");
+const phoneViewGoldens = [
+  // "phone-list.golden.json",
+];
 // Goldens whose origin is another package than the contracts — a design
 // decision both apps compute, not a wire shape — compared byte for byte all
 // the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
@@ -65,6 +71,8 @@ const OTHER_ORIGINS = new Map([
     "phone-body.golden.json",
     join(root, "packages/field-app/test/fixtures/phone-godview/phone-body.golden.json"),
   ],
+  // PG-4s — each view's golden, from the one list above
+  ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
 ]);
 // Goldens VENDORED from a sibling project outside this workspace, so there is no origin here to
 // compare with: each is pinned by its sha256 beside the files it tests, and the vendoring script's
@@ -220,6 +228,9 @@ const requiredMirrors = [
   // PG-3e — the demo door (`-vf-demo-field-slice`) serves the witness's open from the kit's own
   // bundle; the field golden it served until the switch left that folder in the same commit
   ["remote", ["agent-remote-mesh-open.witness.json"], ["Sources/FieldMesh"]],
+  // PG-4s — the Godview views' bundle: the witness every view suite replays, and each view's golden. Never empty: the
+  // witness stands in it from PG-4s on, so the row always asserts something.
+  ["phone-view", [...remoteWitness, ...phoneViewGoldens], ["Tests/FieldHomeTests"]],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
