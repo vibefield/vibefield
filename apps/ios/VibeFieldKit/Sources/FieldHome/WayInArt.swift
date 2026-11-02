@@ -26,7 +26,6 @@ struct WayInArt: View {
   }
 
   private static let ink = ChromePalette.ink
-  private static let mono = "Menlo"
 
   /// A computer, 192 × 128: its screen and its base; dashed while it waits to be filled.
   private func computer(empty: Bool, inner: Inner?) -> some View {
@@ -62,7 +61,7 @@ struct WayInArt: View {
           }
           if !label.isEmpty {
             context.draw(
-              Text(label).font(.custom(Self.mono, size: 7.5).weight(.bold)).foregroundColor(Self.ink),
+              Text(label).font(ChromeType.mono(7.5, .bold)).foregroundColor(Self.ink),
               at: CGPoint(x: x, y: y))
           }
         }
@@ -107,7 +106,7 @@ struct WayInArt: View {
         lines.fill(Path(roundedRect: CGRect(x: 78, y: y, width: width, height: 3), cornerRadius: 1.5), with: ink)
       }
       context.draw(
-        Text("› y").font(.custom(Self.mono, size: 10).weight(.bold)).foregroundColor(Self.ink),
+        Text("› y").font(ChromeType.mono(10, .bold)).foregroundColor(Self.ink),
         at: CGPoint(x: 78, y: 107), anchor: .leading)
       context.fill(Path(roundedRect: CGRect(x: 97, y: 102.5, width: 5, height: 10), cornerRadius: 1), with: ink)
     }
