@@ -699,13 +699,16 @@ enum FieldHomeModel {
     }
   }
 
-  /// WI-2 — whether the way in ends here, with the found beat: a page that stood for signing in yields to
+  /// WI-2 — whether the way in ends here, with the found beat: a page that stood for a first sign-in yields to
   /// signed in. "Another account?" kept is no arrival, and a launch that is signed in from its first frame
-  /// passes no page at all.
+  /// passes no page at all. Nor does Sign in again end the way in with a beat (WI-1's review, M4): §9 sets the
+  /// beat between the steps and the lock's offer, and Tailscale asking a remembered phone again is neither.
   static func wayInEnds(previous: DoorPage?, next: DoorPage?) -> Bool {
     guard let previous, next == nil else { return false }
-    if case .anotherAccount = previous { return false }
-    return true
+    switch previous {
+    case .anotherAccount, .signInAgain: return false
+    case .welcome, .fromCode, .approval, .joining, .looking, .noDesktops: return true
+    }
   }
 
   /// WI-1 (the review's M1) — whether the tabs stand: signed in, always; signed out, only until the splash stands

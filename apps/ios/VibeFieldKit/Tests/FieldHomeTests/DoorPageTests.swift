@@ -100,10 +100,10 @@ struct DoorPageTests {
     }
   }
 
-  @Test("WI-2: the found beat begins when a page that stood for signing in yields to signed in, and only then")
+  @Test("WI-2: the found beat begins when a page that stood for a first sign-in yields to signed in, and only then")
   func wayInEnds() {
     let pages: [FieldHomeModel.DoorPage] = [
-      .welcome(failure: nil), .approval(machine: nil, adminConsole: nil), .signInAgain(note: nil),
+      .welcome(failure: nil), .approval(machine: nil, adminConsole: nil),
       .joining(login: login, note: nil), .looking(login: login), .noDesktops(login: login),
       .fromCode(desktop: "Studio", login: login),
     ]
@@ -113,6 +113,9 @@ struct DoorPageTests {
     }
     // A launch signed in from its first frame passes no page; "Another account?" kept is no arrival.
     #expect(!FieldHomeModel.wayInEnds(previous: nil, next: nil))
+    // M4 — Sign in again goes back to the tabs with no beat: §9 sets the beat between the steps and the lock's offer.
+    #expect(!FieldHomeModel.wayInEnds(previous: .signInAgain(note: nil), next: nil))
+    #expect(!FieldHomeModel.wayInEnds(previous: .signInAgain(note: "the session expired"), next: nil))
     #expect(
       !FieldHomeModel.wayInEnds(
         previous: .anotherAccount(current: "a@b", expected: login, from: "Studio", byLink: false), next: nil))
