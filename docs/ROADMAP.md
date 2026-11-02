@@ -255,9 +255,13 @@
   refused exactly where the window's `AgentModelMeshRow` refuses it (closed words, null, UTF-16 bounds), a refused
   row costs only its own place (`RemoteBoardScreen`, the window's screen transcribed), and the cut's 13 copies are
   the required mirror set "remote"; the phone's `{remote, mesh}` ask is pinned and unused until 3e.
+  **PG-3d** (11-02), the phone's copy of its home's board (`6750ae899` → `8c91dd166`, M101 `fc6146dfe`; LANDED "PG-3d"):
+  the window's screen, fold, replica and rows transcribed into FieldProduct (`RemoteMeshCopy`) and held to
+  `phone-fold.golden.json` step by step, the whole golden compared; the replica keeps `cost.series` (costOf
+  corrected at its source); no caller until 3e.
 - Next: PG-3's remaining slices (the brief `lanes/ios/PG3-BRIEF.md`; James ruled J1–J4 at 2026-11-01 03:56Z, all
-  (a)): 3d the Swift fold and replica, held to `phone-fold.golden.json` → 3e the switch, held to
-  `phone-body.golden.json`, and the phone's `reportShown` by PG-3b's sender rules (J3 per hour; J4 ahead of PU-I)
+  (a)): 3e the switch, held to `phone-body.golden.json` (FieldLink owns 3d's copy, with PG-L5's `stop()`), and
+  the phone's `reportShown` by PG-3b's sender rules (J3 per hour; J4 ahead of PU-I)
   → PG-4s, the scaffold (fd's: the one resources line, the shared words, the view flag, the golden registry) →
   PG-5…PG-8 (list, timeline, spend, rain, native) IN PARALLEL, four lanes on one frozen brief template
   (`lanes/ios/PG5-8-BRIEF-TEMPLATE.md`), landing in green order (James 2026-11-01 22:47Z; PG-D4 as amended) →
@@ -272,7 +276,8 @@
   PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's remote-cut self-check); from PG-3b,
   3e's sender rules, and 3e mirrors `agent-report-shown.routed.json` (the phone's send shape) into the kit; from
   PG-9a, a failed release's empty carried again (not built), and at a draft slot the dated notes at
-  thinking-desktop-sync-plane :201 (PF6's close) and thinking-phone-godview §8's PG-9 line.
+  thinking-desktop-sync-plane :201 (PF6's close) and thinking-phone-godview §8's PG-9 line; from PG-3d, 3e's
+  FieldLink redraws on `Published.moved`, and PG-L5's `stop()` test.
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on

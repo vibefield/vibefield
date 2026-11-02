@@ -28845,3 +28845,101 @@ James's first sight, in `pnpm dev`, Chat (⌘4):
 - an agent's ask from a session the thread's @ offers says "Needs your OK · vibe-field·2";
 - a session @ does not offer still reads "Claude Code";
 - @'s "Reading its agents…" no longer flashes when you switch threads.
+
+## PG-3d — the phone's copy of its home's board: the window's screen, fold, replica and rows transcribed into FieldProduct and held to `phone-fold.golden.json` step by step, the whole golden compared (J1 (a)), with no caller until 3e (2026-11-02; `6750ae899` → `8c91dd166`, thirteen commits on main `22e4be941`, lane `pg/3d` in `/Volumes/SamsungRed/lanes/pg3`, in the mini's mint M101 `fc6146dfe` over main `af75a5509`, run 101)
+
+**What it rests on.**
+- J1 (a), James 2026-11-01 03:56Z: the phone equals the home's window row for row. The golden is the window's feed
+  plus its rows (`phone-goldens.ts:401-433`), so 3d transcribes the window's rows too, not only the fold and replica.
+- The design `lanes/ios/pg3d-design.md` (wf_94017457-fba), with 23 binding corrections at its head: 21 from its
+  check (`pg3d-design-check.md`, VERDICT ready, none structural) and two from the lead.
+- VF-PM's rulings, 2026-11-02 03:24Z, every question at the design's lean:
+  - Q-D1 (a): everything in FieldProduct, so the macOS host loop covers it all;
+  - Q-D2 (a): the whole golden compared, `drawn` and `stale` included;
+  - Q-D3 (a): synthesized `==` with the divergences documented;
+  - Q-D4 (a): gap, hold and replay transcribed as the backstop;
+  - Q-D5 (a): always sort on publish;
+  - Q-D6 (a): the series kept, with costOf corrected here;
+  - Q-D7 (a): 3e owns FieldLink's wiring;
+  - Q-D8 (a): frames after a gap ignored until the open;
+  - Q-D9 (a): flush → re-join → flush;
+  - Q-D10 moot (F1b's kit half landed, M93); Q-D11 folded here.
+  The size, ≈2,500 lines against the brief's ≈600, was accepted because the golden needs the window's rows.
+
+**What** (thirteen commits; 12 files, +2,510 −6; no FieldLink, HomeScreen or FieldMesh line, no lock or pin):
+- **The replica** (`6750ae899` red, `4d2550749`), `RemoteModelReplica.swift`: puppeteer-monitor 0.3.2's
+  `createMonitorReplica`, with take, flush, gap, hold, apply and setLocal. An equal row is no change (two layers:
+  take's early-out and flush's comparison). Rows are in contract order; `compareMonitorRows` breaks ties on UTF-16
+  units, as JavaScript's `<` does. `gapsHeard` counts gaps, and a negative gap bound traps where the window throws.
+  `RemoteVisibility` (the kept-failure predicate) lives here, not in the rows' file, because this commit comes first.
+- **The fold** (`8a0e0da8e` red, `3e3cf2d71`), `RemoteModelBoard.swift`: `ModelBoardFold` (`model-board.ts:141-375`)
+  makes one chain from every desktop's own. Key maps and released ids are ORDERED, because Swift's Dictionary order
+  is seeded per process. A device first heard by a snapshot is `live`. A resync drops an unlisted device.
+- **The window's rows** (`67f1109c2` red, `31e637fcd`), `RemoteWindowRows.swift`: `rowsFor` and `rowOrder` with no
+  panes (`window-rows.ts`), plus `boardJoins`' sessions (`window-local.ts`):
+  - a peer's `stale` is its desktop's standing;
+  - one body per visual id, with its carry-forward computed once per publish;
+  - the home's bare terminals rank by birth, then held order. That departs from the lead's review ruling, which named
+    a UTF-16 id tie-break: the window sorts stably with no id key (`window-rows.ts:205-209`), and VF-PM accepted it.
+- **The copy** (`4013079ef` red, `c4fd0b80a`), `RemoteMeshCopy.swift`: 3c's `RemoteBoardScreen` → fold → replica →
+  rows. `open` answers an `Outcome` that can say `.gap`. `Published.moved` is what a caller redraws on. An undecodable
+  frame is a gap, and an undecodable open is a non-retryable unavailable.
+- **The parity suite** (`92ba089fc`), `PhoneFoldParityTests`: the three witness goldens driven step by step and the
+  WHOLE golden compared at every step. It brings the golden's 14th copy, into FieldProductTests.
+- **costOf's dated correction** (`07eff9765`, alone): `phone-goldens.ts`'s costOf said the series is "a drawing fact
+  the phone keeps none of". The kit's replica keeps it, pinned by `RemoteMeshCopyTests.costKeepsItsSeries` (S1:
+  pty-h1, run-h-partial and pty-p3 through the open, frame 1 and the resync), and spend (PG-5…8) is its reader.
+  The golden still leaves the series out, and FOLD_NOTE's "(no series)" stands. `PHONE_GOLDEN_MIRRORS` names the new
+  copy.
+- **The mirror** (`bea29f9ac`): `phone-fold.golden.json` joins FieldProductTests' required "remote" row.
+- **The review** (`9e9c5339f` red, `8c91dd166`): six findings (wf_b50fda57-eb8, `lanes/ios/pg3d-review.json`), one
+  refuted:
+  - `Published.rowsMoved`: a drawn row's board half (a re-key, a durable Stop) moves `moved` with no replica change;
+  - the gap steps call `publish()` and assert nothing moved (the old check could not fail);
+  - W4 ranks two home terminals by birth, then held order;
+  - the gap bound's precondition;
+  - two comments made true: a fourth equality divergence (canonical equivalence, latent while ids are ASCII), and
+    a peer's terminal keeping its desktop's place.
+
+**The brief's cites, corrected (Q-D11).** `ModelBoardFold` is `model-board.ts:141-375` and `modelRowFrom` `:112-124`.
+The replica's publication is `flush` (`replica.js:234-299`). The fold's cases are at `godview-model-board.test.ts:49`,
+`:82`, `:101`, `:141`, `:218`, `:315`, `:337` and `:465`. PG-L5's link stop is `HomeScreen.swift:1719-1728`
+(`closeLink`) and `FieldLink.swift:554-586`. The replica's own tests are not in its npm package; they were read at
+puppeteer `v0.3.2` (`95a70aa77`).
+
+**Validation.**
+- The host inner loop (a macOS scratch package over FieldProduct and its tests; not the gate; logs
+  `lanes/pg3/light/pg3d-host-*`):
+  - red at each red commit, naming its rows, and green after; at the tip, 215 tests in 39 suites;
+  - the parity, red on the copy's skeleton;
+  - the whole golden matched step by step on its first run;
+  - more than twenty mutation probes, each red on the rows it targets, each restored byte for byte
+    (`pg3d-host-mutations.log`). The two dedup layers mask each other alone; removing both reds R2, R3, R9, D2 and
+    the parity.
+- The mirror probes: a missing copy is "required remote mirror is missing", a flipped byte is stale, both EXIT 1;
+  as committed, 201 identical.
+- The merged tree `ff9d7d468` (`8c91dd166` + main `af75a5509`; its `apps/ios` tree equal to the tip's), under the
+  HOLD: check-ios-fixtures 201 identical; contracts' fixtures 563/563; field-app's phone-parity, text-ramp,
+  ui-system-boundaries and design-system 77/77; the walls clean.
+- The kit on this Mac (`lanes/pg3/light/pg3d-kit-*.log`), each step under its own HOLD with dev-stack-check 0/0:
+  - the red runner, "RED-FIRST HOLDS", at `6750ae899`, `8a0e0da8e`, `67f1109c2`, `4013079ef` and `9e9c5339f`;
+  - `ts7-mac.sh kit ff9d7d468`: both apps built; 14 runs, 1,470 tests, 0 red;
+  - iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down after.
+- **Run 101** (M101 `fc6146dfe`, the MERGE shape: `8c91dd166` first, main `af75a5509` second, minted by a9 on
+  VF-PM's GO):
+  - run 101 was armed at 04:24Z and stopped on VF-PM's word at 04:27Z, when the mini's disk fell under James's own
+    work; it re-ran as run101r on the same mint, 05:38:22Z → 05:43:55Z (5 m 33 s), verify alone, exit 0.
+  - vitest 12,092 passed, 0 failed, 18 skipped (870 files), ±0 on run 100: 3d moves no TS test. cargo 534 passed,
+    0 failed (33 results); node 364/0; typecheck 28 projects; gen freshness clean.
+  - The iOS fixtures 200 → 201 copies identical (the 14th phone-fold copy), pins 67. The kit is this Mac's gate,
+    above: 14 runs, 1,470 tests, 0 red, on the merged tree `ff9d7d468`.
+- **Landed:** main moved to `fc6146dfe` on VF-PM's GO (2026-11-02 05:45Z).
+
+**Not built (said).**
+- Nothing calls the copy: 3e's FieldLink is its first owner. PG-L5's `stop()` line and its test are 3e's.
+- The equality's four divergences from `sameJson`, written beside the type: an unknown value, the `writable` fill, an
+  unrecognized os, and canonical-equivalence strings. None changes the glyphs drawn; the witness carries none.
+
+**Owed.**
+- 3e: FieldLink owns the copy and redraws on `Published.moved`; the switch; phone-body's mirror; `.routed`'s mirror;
+  the field cut's copies retired.
