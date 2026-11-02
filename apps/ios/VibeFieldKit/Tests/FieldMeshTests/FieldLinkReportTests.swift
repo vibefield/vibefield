@@ -291,6 +291,29 @@ private func sentCount(_ door: LinkDoor) async -> Int { await reportsSent(door).
     #expect(sent.count == 2, "no empty for a recorded device")
   }
 
+  /// L1 (PG-4s, the design check's S2) — the Godview views' unread set is the swarm's own: the model ids of the
+  /// link's unread bubbles, `GodviewStageInput.unreadIds(bubbles:)`'s expression (FieldHome; I4 pins that function to
+  /// it, and this target cannot import it). On a recorded desktop the open card's model id is out of the set while
+  /// the card is shown, every other unread row stays in it, and it is back once the home's hello clears the record.
+  /// A PIN from PG-4s C6: the link already holds the row out (S11); this row holds the views to the same fact.
+  @Test func theViewsUnreadSetIsTheSwarms() async throws {
+    let reports = ReportScript()
+    let (link, door) = try await reportLink(reports)
+    defer { link.stop() }
+    let unreadIds = { Set(link.bubbles.filter { $0.unread }.compactMap { $0.modelId }) }
+    try await waitUntil("the witness's unread rows") { unreadIds() == ["pty-h1", "run-p-done"] }
+
+    reports.set(loft, .localityLocal)
+    link.show(visualId: "run-p-done")
+    try await waitUntil("recorded") { link.reportAnswers.last?.outcome == .lasting(.noScreens) }
+    try await waitUntil("the card's row out of the set") { unreadIds() == ["pty-h1"] }
+
+    reports.set(loft, .ok)
+    await door.latest?.drop()
+    try await waitUntil("reported after the hello") { link.reportAnswers.last?.outcome == .reported }
+    try await waitUntil("back in the set") { unreadIds() == ["pty-h1", "run-p-done"] }
+  }
+
   /// S12 — a record clears when its desktop's board re-attaches on a new epoch (the report goes at once, with no
   /// whole open between: the v2 check's S3), and when the home says hello again.
   @Test func aNewEpochOrAHelloClearsTheRecord() async throws {
