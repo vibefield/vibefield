@@ -29647,3 +29647,9 @@ single-copy checks, all 202 fixture mirrors / 67 contract values, typechecks, li
 bundle assertions and generated-file freshness. The first full run also saw one gateway shutdown assertion
 (`agent-gateway-panes`, row 11b: exit 0 instead of 75); the unchanged isolated case and the final full suite
 passed. No gateway behavior or assertion was changed. The consumer PR records the desktop landing-gate verdict.
+
+**Push-hook correction.** Git exports the active worktree's repository variables to `pre-push`; inherited by
+preflight, they made `git -C` report VibeField's HEAD for both pinned siblings. The hook now clears Git's
+repository-local environment in the verification subprocess, so each cwd selects its own repository. The full
+verification hook remains mandatory. Reproduced the wrong HEAD under the inherited context and the exact Mille
+and Rosetta pins after clearing it; shell syntax and the full verification gate were checked before committing.
