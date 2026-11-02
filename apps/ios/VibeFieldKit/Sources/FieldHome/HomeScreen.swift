@@ -500,11 +500,22 @@ public struct HomeScreen: View {
     // SP-6 — the home moved: the History groups re-order and the home's
     // reader takes the shared door
     .onChange(of: linkHome) { syncHistoryDesktops() }
-    // The way in standing again (a sign-out, Tailscale asking again) takes the
-    // screen whole: nothing the tabs had open stays over it or comes back with them.
+    // The tabs mount at sign-in and unmount under the way in, and their hooks go
+    // with them. So the field folds what arrived while the way in stood (the
+    // stage's own refold hooks were not there to hear it), and the way in
+    // standing again (a sign-out, Tailscale asking again) takes the screen whole:
+    // nothing the tabs had open stays over it or comes back with them.
     .onChange(of: wayInStep == nil) { _, signedIn in
-      if !signedIn { closeWhatTheTabsOpened() }
+      if signedIn { refold() } else { closeWhatTheTabsOpened() }
     }
+    #if DEBUG
+      // The mock's account moves while the way in stands too, so its hooks stand
+      // here rather than on the tabs.
+      .onChange(of: mockDesktopIsUp) { syncMockHistory() }
+      .onChange(of: mockFieldIsLive) { _, live in
+        if live == true { feed.start() } else { feed.stop() }
+      }
+    #endif
   }
 
   /// The way in's screen standing, or nil for signed in: How it works over the welcome, the way in's own end,
@@ -616,12 +627,6 @@ public struct HomeScreen: View {
     }
     // Every push and pop opens the bar again, the way the system's does.
     .onChange(of: history.path) { history.barMinimized = false }
-    #if DEBUG
-      .onChange(of: mockDesktopIsUp) { syncMockHistory() }
-      .onChange(of: mockFieldIsLive) { _, live in
-        if live == true { feed.start() } else { feed.stop() }
-      }
-    #endif
   }
 
   /// The field, under the bar's glass to the screen's edge.
