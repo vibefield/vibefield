@@ -698,23 +698,10 @@ public final class FieldLink {
 
   // MARK: The card's asks — each over its OWNER's door (DS-L4)
 
-  /// The latest reply line for a run, asked only when a card opens.
-  ///
-  /// The field projection carries NO conversation content by design (§10.1),
-  /// so this is the one door that fetches any — `agent.list`'s full row, on
-  /// demand, for one run, from the desktop that runs it. A phone that streamed
-  /// reply text for every body would be paying §5's whole budget for words
-  /// nobody is reading.
-  public func latestReply(runtimeRunId: String, on deviceId: String) async throws -> String? {
-    try await ownerDoor(
-      deviceId,
-      refusal: FieldProductError(
-        kind: "UNAVAILABLE", message: "no door to \(deviceId)", retryable: false)
-    ) { client in
-      let result = try await client.call("agent.list", as: AgentListResult.self)
-      return result.sessions.first { $0.runtimeRunId == runtimeRunId }?.lastAssistantMessage
-    }
-  }
+  // RETIRED 2026-11-02 (item 155): `latestReply(runtimeRunId:on:)`, which asked a run's owner `agent.list` for its
+  // latest reply line when a card opened. Its doc said the field projection carries no conversation content by design
+  // (§10.1); since PG-3e the phone reads the remote row, whose `monitorRow.reply.text` the body and the card both draw
+  // (PG-D2 (a)), so nothing called it, and a second door for the same words is the debt DS-8 retired.
 
   /// The home's client, for the surfaces that need to ask the home something
   /// of their own; nil for any desktop that is not the home (DS-8: no other

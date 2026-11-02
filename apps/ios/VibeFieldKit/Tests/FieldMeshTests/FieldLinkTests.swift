@@ -713,54 +713,9 @@ private final class Refusal: @unchecked Sendable {
   }
 }
 
-// MARK: - The card's one question
-
-@MainActor
-@Suite struct FieldLinkReplyTests {
-  /// The field carries no reply text by design, so the card asks for one — for
-  /// ONE run, when it opens, and never for a body nobody is reading.
-  @Test func theCardAsksTheDoorForTheLatestReply() async throws {
-    let sessions = JSONValue.object([
-      "sessions": .array([
-        .object([
-          "runtimeRunId": .string("run-1"), "kind": .string("claude"),
-          "label": .string("Claude"), "device": .string("dev-studio"),
-          "tier": .string("managed"), "status": .string("idle"),
-          "createdAt": .string("2026-09-13T18:03:52.000Z"),
-          "stateChangedAt": .string("2026-09-13T18:03:52.000Z"),
-          "monitor": .object([
-            "lastAssistantMessage": .object([.init("text"): .string("the gate is green")])
-          ]),
-        ])
-      ])
-    ])
-    let (link, _, _, _) = try await standingLink(script: { method, id, _ in
-      switch method {
-      case "system.hello": return [frame(id: id, ack)]
-      case "agent.list": return [frame(id: id, sessions)]
-      default: return []
-      }
-    })
-    defer { link.stop() }
-    try await waitUntil("ready") { link.desktops.first?.state == .ready }
-
-    let reply = try await link.latestReply(runtimeRunId: "run-1", on: "dev-studio")
-    #expect(reply == "the gate is green")
-  }
-
-  /// A desktop with no door cannot be asked, and says that rather than
-  /// answering nothing.
-  @Test func askingADesktopWithNoDoorIsAnHonestRefusal() async throws {
-    let probe = LinkProbe(fallback: .unreachable("asleep"))
-    let (link, _, _, _) = try await standingLink(probe: probe)
-    defer { link.stop() }
-    try await waitUntil("the desktop") { !link.desktops.isEmpty }
-
-    await #expect(throws: FieldProductError.self) {
-      _ = try await link.latestReply(runtimeRunId: "run-1", on: "dev-studio")
-    }
-  }
-}
+// RETIRED 2026-11-02 (item 155): `FieldLinkReplyTests`, the two rows of `FieldLink.latestReply` (the card's one
+// question, and a desktop with no door refusing it honestly). The method retired with them: the reply rides the remote
+// row since PG-3e.
 
 // MARK: - The chip's vocabulary
 
