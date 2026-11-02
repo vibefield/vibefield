@@ -79,11 +79,11 @@ struct SettingsModelTests {
     #expect(lines.note == "You’re signed in. An admin of your Tailscale network approves new devices.")
   }
 
-  @Test("signed out: the head is the way in, and This phone works without it")
+  @Test("signed out: Settings has no head of its own, for it is never open signed out (WI-L1; item 163)")
   func headWhenSignedOut() {
     let lines = SettingsModel.headLines(account(.signedOut))
     #expect(lines.status == nil)
-    #expect(lines.note == "Use the same account as VibeField on your Mac. Everything under This phone works without it.")
+    #expect(lines.note == nil, "a Sign out leaves Settings first, and the way in stands alone")
   }
 
   // MARK: - Your desktops
@@ -205,11 +205,35 @@ struct SettingsModelTests {
     #expect(SettingsModel.faceWords(.none, face: nil).value == "None yet")
     #expect(SettingsModel.faceWords(.dealt, face: fox).value == "Sticker")
     #expect(SettingsModel.faceWords(.dealt, face: UserFace(emoji: "🦊", frame: .coin)).value == "Coin")
-    #expect(SettingsModel.faceWords(.dealt, face: fox).foot.hasPrefix("Dealt from your account"))
+    #expect(
+      SettingsModel.faceWords(.dealt, face: fox).foot
+        == "Dealt from your account, the way your computer deals it, until a desktop of yours says who you are.")
     let home = SettingsModel.faceWords(.home("studio"), face: fox)
     #expect(home.value == "Sticker")
     #expect(home.foot.hasPrefix("studio says who you are"))
     #expect(home.foot.contains("Change them on studio, in Settings › Account"))
+  }
+
+  @Test("the phone says computer, never Mac, in every word Settings says (DESIGN.md §9, amended 2026-11-02; item 163)")
+  func computerNeverMac() {
+    let standings: [SettingsAccount.Standing] = [
+      .signedOut, .connected, .connecting, .signInAgain, .waitingForApproval, .couldNotConnect("the network went away"),
+    ]
+    var words: [String] = []
+    for standing in standings {
+      let head = SettingsModel.headLines(account(standing))
+      words += [head.status?.text, head.note].compactMap { $0 }
+      words += [SettingsModel.tailscaleState(standing).text, SettingsModel.tailscaleFoot(standing).text]
+      words.append(SettingsModel.asleepFoot(desktop(.asleep(lastHeard: nil), name: "mini"), standing: standing))
+    }
+    let faces: [(SettingsAccount.FaceSource, UserFace?)] = [(.none, nil), (.dealt, fox), (.home("studio"), fox)]
+    for (source, face) in faces {
+      let said = SettingsModel.faceWords(source, face: face)
+      words += [said.value, said.foot]
+    }
+    for word in words {
+      #expect(!word.contains("Mac"), "\(word)")
+    }
   }
 
   @Test("sign out is asked in one set of words, wherever it is asked")
