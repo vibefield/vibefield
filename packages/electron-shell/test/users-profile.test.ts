@@ -1,6 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import {
   effectiveFaces,
   FACE_DECK,
@@ -23,6 +21,7 @@ import {
   applyProfileUpdate,
   dealOwedFace,
 } from "../src/main/users-profile";
+import { tempDir } from "./temp-dir";
 
 // UA-7: main's two profile writes. `users:update` writes a face the page chose
 // and refuses one another user wears, throwing the sentence the page shows. The
@@ -280,7 +279,7 @@ describe("dealOwedFace: the silent deal at an attach", () => {
   const noSleep = { sleep: (_ms: number) => Promise.resolve() };
 
   async function rootWithOneUser(onboarded: boolean): Promise<{ root: string; userId: string }> {
-    const root = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-face-deal-")));
+    const root = canonicalRoot(tempDir("vf-face-deal-"));
     const ensured = await ensureUsersRoot(root, {
       name: "james",
       mintOnboarded: onboarded,
