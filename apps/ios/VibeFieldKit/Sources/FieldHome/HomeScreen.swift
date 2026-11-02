@@ -223,16 +223,25 @@ public struct HomeScreen: View {
 
   /// One stage, two sources, projected by the pure functions in FieldAgents.
   ///
-  /// Since IOS-4b the agent half is the DAEMON's: `FieldLink` folds every
-  /// desktop's board — from `field.agents.v1` where the floor publishes it, and
-  /// over the door where it does not — into the same `AgentSnapshot` the mock
-  /// used to invent. An empty field with the mesh up is now a real answer
-  /// rather than a missing feature.
+  /// Since PG-3e the agent half is the HOME'S WINDOW: `FieldLink` holds the
+  /// home's remote board and maps its drawn rows straight to bubbles
+  /// (`FieldLink.bubbles`), body for body as the desktop draws them. The
+  /// scripted fleet keeps its own snapshots, behind the lab and the demo
+  /// arguments only. An empty field with the mesh up is a real answer rather
+  /// than a missing feature.
+  ///
+  /// `mockActive` is DEBUG-only, so its branch is too: the Release build reads
+  /// the link alone (the v2 check's M1).
   private var projected: [FieldBubble] {
-    liveAgents.compactMap(fieldBubble(from:)) + remoteField.snapshot.rows.map(fieldBubble(from:))
+    let sessions = remoteField.snapshot.rows.map(fieldBubble(from:))
+    #if DEBUG
+      if mockActive { return liveAgents.compactMap(fieldBubble(from:)) + sessions }
+    #endif
+    return (link?.bubbles ?? []) + sessions
   }
 
-  /// The agent rows, from whoever is entitled to give them.
+  /// The scripted fleet's rows, while it owns the field. Outside the mock this
+  /// is empty: the live field is `FieldLink.bubbles`.
   private var liveAgents: [AgentSnapshot] {
     #if DEBUG
       // The lab and the demo arguments own the field while they are up: what
@@ -244,7 +253,7 @@ public struct HomeScreen: View {
         return feed.agents
       }
     #endif
-    return link?.agents ?? []
+    return []
   }
 
   // --- IOS-6d: the field's ledgers ------------------------------------------
@@ -262,8 +271,7 @@ public struct HomeScreen: View {
   private func refold() {
     assembly.tint = colorScheme == .dark ? .dark : .light
     let before = assembly.projects
-    bubbles = assembly.fold(
-      projected, cardSubjectID: selection?.id, nowMs: Date().timeIntervalSince1970 * 1000)
+    bubbles = assembly.fold(projected, cardSubjectID: selection?.id)
     if assembly.projects != before { projectStore.save(assembly.projects) }
   }
   // --- end IOS-6d -----------------------------------------------------------
@@ -459,7 +467,8 @@ public struct HomeScreen: View {
     guard let link else { return nil }
     let desktops = link.desktops.map { desktop in
       let asleep = desktop.state != .ready
-      let running = liveAgents.filter { $0.join?.deviceID == desktop.deviceId }.count
+      // bare terminals carry no join, so they are not counted, as before
+      let running = projected.filter { $0.agent?.join?.deviceID == desktop.deviceId }.count
       let profiles = (bloomProfiles[desktop.deviceId] ?? []).map { set in
         BloomProfile(
           id: set.id, label: set.kind == "native" ? LaunchModel.nativeLabel : set.label, isDefault: set.isDefault,
@@ -816,7 +825,7 @@ public struct HomeScreen: View {
   /// What History's rows may offer, and how they are done.
   private var historyActs: HistoryActs {
     HistoryActs(
-      inField: { native in liveAgents.contains { $0.join?.nativeSessionID == native } },
+      inField: { native in projected.contains { $0.agent?.join?.nativeSessionID == native } },
       desktopAwake: { device in link?.desktops.first { $0.deviceId == device }?.state == .ready },
       canResume: { device, provider in
         fieldCatalogs[device].map { rows in rows.contains { $0.id == provider && $0.canResume } }
@@ -850,10 +859,11 @@ public struct HomeScreen: View {
 
   /// Jump to: the Field tab opens the card of the run that continues this
   /// conversation (joined by the field row's native id).
+  ///
+  /// PG-3e: found by the join's native id itself — a bubble's id is its BODY's
+  /// (the visual id), which a promoted row does not share with its run.
   private func jumpToRun(_ native: String) {
-    guard let agent = liveAgents.first(where: { $0.join?.nativeSessionID == native }),
-      let bubble = bubbles.first(where: { $0.id == agent.id })
-    else { return }
+    guard let bubble = bubbles.first(where: { $0.agent?.join?.nativeSessionID == native }) else { return }
     selectedTab = .field
     openCard(on: bubble)
   }
@@ -1177,16 +1187,19 @@ public struct HomeScreen: View {
           mockActive = true
           feed.start()
         }
-        // `-vf-demo-field-slice`: the contracts' golden MESH board through the
-        // REAL home path (DS-8, 2026-10-01) — four desktops on the fixture's
-        // tailnet, the phone homing to the first whose door answers and reading
-        // the field through its `agent.subscribe {scope: "mesh"}`: the home's
-        // board, a live laptop's, a sleeping desktop's kept board GREYED, and a
-        // stale one with none. The network is an in-process door answering the
-        // contracts' own bytes, so the swarm AND the corner can be photographed
+        // `-vf-demo-field-slice`: PG-3a's WITNESS remote board through the
+        // REAL home path (PG-3e) — three desktops on the fixture's tailnet
+        // (Studio, the home; Loft, online, its rows arriving through the home;
+        // Attic, offline), the phone homing to Studio and reading the field
+        // through its `agent.subscribe {projection: "remote", scope: "mesh"}`:
+        // the home's window row for row, Loft's rows with their host, Attic's
+        // kept rows GREYED. The network is an in-process door answering the
+        // witness's own bytes, so the swarm AND the corner can be photographed
         // over real-shaped rows in both themes with no desktop and no tailnet.
         // It is not a demo path: nothing downstream of the door knows the
-        // difference, which is the point. (Before DS-8 this was the golden
+        // difference, which is the point. (Corrected 2026-11-02, PG-3e: from
+        // DS-8 it served the contracts' golden FIELD mesh board, four desktops
+        // — studio, laptop, air asleep, mini stale; before DS-8 the golden
         // `field.agents.v1` slice through the store reader, retired by DS-D14.)
         //
         // `link == nil` because this whole block runs again on every return to
@@ -2509,7 +2522,8 @@ public struct HomeScreen: View {
     // nothing about it. The store, the sheet and the door they call stay until
     // TM-3 retires the three together; the act that could not work is gone now.
     // IOS-4c — an ended run's one act.
-    if let resume = resumeAction(cardBubble?.agent?.join, runtimeRunId: cardBubble?.id) {
+    // PG-3e — a resume names the run's board KEY; a bubble's id is its body's. The mock has no key and keys by id.
+    if let resume = resumeAction(cardBubble?.agent?.join, runtimeRunId: cardBubble?.runKey ?? cardBubble?.id) {
       actions.append(resume)
     }
     return actions

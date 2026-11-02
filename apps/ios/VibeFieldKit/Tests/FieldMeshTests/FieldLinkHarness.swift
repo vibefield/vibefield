@@ -61,22 +61,6 @@ func deviceSlice(name: String, url: String?) -> JSONValue {
   return .object(fields)
 }
 
-func boardRow(
-  id: String, status: String = "working", kind: String = "claude", label: String = "Claude Code",
-  device: String = "dev-studio"
-) -> JSONValue {
-  .object([
-    "runtimeRunId": .string(id), "revision": .int(1), "kind": .string(kind),
-    "label": .string(label), "tier": .string("managed"),
-    "device": .string(device), "status": .string(status),
-    "statusSince": .string("2026-09-13T18:42:11.000Z"),
-    "stateChangedAt": .string("2026-09-13T18:42:11.000Z"),
-    "createdAt": .string("2026-09-13T18:03:52.000Z"),
-    "alive": .bool(true), "blockers": .array([]),
-    "project": .object(["name": .string("vibe-field")]),
-  ])
-}
-
 /// PG-3e — a row of the REMOTE cut (`AgentRemoteRow`), as the home's mesh board carries it since 3e: the board key,
 /// the owner, the pane join and the owner's `monitorRow` (a minimal valid one, modelled on
 /// `monitor-agent-row.valid.json`). `key` is the board key (`runtimeRunId`), `id` the model id (the key unless said).

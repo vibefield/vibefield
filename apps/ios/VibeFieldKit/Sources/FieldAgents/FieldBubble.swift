@@ -136,7 +136,8 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   /// the centre light. nil is the ramp — a bare terminal belongs to no
   /// project, and an agent whose project has not been dealt yet wears it too.
   public var color: SwarmColor?
-  /// Evidence recency is presentation metadata, never a fourth status.
+  /// Evidence recency is presentation metadata, never a fourth status. Since PG-3e the row's own: a home row's
+  /// owner's `stale`, a peer's desktop standing, or the phone-only grey while no live home answers.
   public var stale: Bool
   /// Worked in the pane the user has in front of them: the open card's subject.
   public var active: Bool
@@ -144,7 +145,9 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   /// are the theme's ink, never a pane colour: one pane needs no colour to
   /// tell it from another (James, 2026-10-18).
   public var mounted: Bool
-  /// Finished something while another session had the card (`UnreadLedger`).
+  /// A reply nobody has looked at, by its OWNER's mark (`MonitorAgentRow.unread`) since PG-3e: a row the desktop's
+  /// window showed is never unread. (Corrected 2026-11-02, PG-3e: it was the phone's own `UnreadLedger`'s, "finished
+  /// something while another session had the card", which retired.)
   public var unread: Bool
   /// PG-3e — the desktop a PEER's row lives on, by name: the host line every body from another desktop wears (the
   /// window's `hostLine`, agent or terminal). nil on the home's own rows and on every source with no desktop.
@@ -280,64 +283,38 @@ public func fieldBubble(from row: RemoteSessionRow) -> FieldBubble {
       cwdLabel: label))
 }
 
-// MARK: - The field's ledgers (the desktop's `assembleMonitorAgents` + its folds)
+// MARK: - The field's ledger (the desktop's `assembleMonitorAgents` + its folds)
 
 /// Everything the field decides ABOUT the rows rather than from them, folded
-/// once per projection: the project colours (D-i13), the one pane (D-i12),
-/// the unread marks, the stale flags. A plain
-/// value the home screen keeps and folds; every rule inside is a pure
-/// function with its own tests. (Corrected 2026-11-02, PG-3e: it folded a
-/// usage ledger too, which retired with the owner's cost on the row.)
+/// once per projection: the project colours (D-i13) and the one pane (D-i12).
+/// A plain value the home screen keeps and folds; every rule inside is a pure
+/// function with its own tests.
+///
+/// (Corrected 2026-11-02, PG-3e: it folded a usage ledger, an unread ledger,
+/// the 30 s freshness rule and the DS-8 desktop grey too. The row carries its
+/// owner's cost, `unread` and `stale` now, and the phone-only grey is the
+/// link's (`FieldLink.fieldIsLive`), so the dress only colours and mounts.)
 public struct FieldAssembly: Sendable {
   public var projects: ProjectLedger
-  public var unread: UnreadLedger
   /// The theme's tint; the home screen swaps it with the colour scheme.
   public var tint: ProjectTint
 
-  /// The reference's freshness policy: evidence older than this dims the body.
-  public static let staleAfterMs: Double = 30_000
-  public init(
-    tint: ProjectTint,
-    projects: ProjectLedger = .empty,
-    unread: UnreadLedger = .empty
-  ) {
+  public init(tint: ProjectTint, projects: ProjectLedger = .empty) {
     self.tint = tint
     self.projects = projects
-    self.unread = unread
   }
 
-  /// Fold one projection and dress its rows.
-  public mutating func fold(
-    _ bubbles: [FieldBubble], cardSubjectID: String?, nowMs: Double
-  ) -> [FieldBubble] {
+  /// Fold one projection and dress its rows. `cardSubjectID` is the open card's body: the VISUAL id
+  /// (`selection.id`), which a bubble's `id` is.
+  public mutating func fold(_ bubbles: [FieldBubble], cardSubjectID: String?) -> [FieldBubble] {
     projects = projects.dealing(bubbles.filter { $0.agent != nil }.map(\.project))
-    unread = unread.reconciling(
-      bubbles.map { bubble in
-        UnreadCandidate(
-          id: bubble.id,
-          status: bubble.status,
-          active: bubble.id == cardSubjectID,
-          hasAgent: bubble.agent != nil,
-          statusSinceMs: bubble.agent?.statusSince.map { $0.timeIntervalSince1970 * 1000 })
-      }, nowMs: nowMs)
     return bubbles.map { bubble in
-      // Never rebuilt: every fact the row carries rides through the dress (PG-3e's F1; the rebuild set the usage
-      // history and reset the row's ids).
+      // Never rebuilt: every fact the row carries rides through the dress — its ids (F1), its owner's `stale` and
+      // `unread` (F2).
       var dressed = bubble
-      if let facet = bubble.agent {
+      if bubble.agent != nil {
         dressed.color = projects.seqByKey[bubble.project].map { SwarmColor.project($0, tint) }
-        // Q01 (James, 2026-10-27) — stale only while the agent should be
-        // talking: a quiet idle agent is just idle, as puppeteer's monitor
-        // rules it for Godview. Q02's open tool is not on the field row yet,
-        // so a long silent tool still dims here (owed: the row carries it).
-        if let evidence = facet.lastEvidenceAt, bubble.status != .idle {
-          dressed.stale = nowMs - evidence.timeIntervalSince1970 * 1000 > Self.staleAfterMs
-        }
-        // DS-8 (DS-L8) — a run whose desktop is not live on the phone's home
-        // keeps its row, greyed: the same dim, whatever its own evidence says.
-        if facet.join?.deviceLive == false { dressed.stale = true }
       }
-      dressed.unread = unread.unreadIDs.contains(bubble.id)
       dressed.active = bubble.id == cardSubjectID
       dressed.mounted = dressed.active
       return dressed

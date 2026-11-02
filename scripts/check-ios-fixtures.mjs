@@ -210,6 +210,9 @@ const requiredMirrors = [
     ],
     ["Tests/FieldMeshTests"],
   ],
+  // PG-3e — the demo door (`-vf-demo-field-slice`) serves the witness's open from the kit's own
+  // bundle; the field golden it served until the switch left that folder in the same commit
+  ["remote", ["agent-remote-mesh-open.witness.json"], ["Sources/FieldMesh"]],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
