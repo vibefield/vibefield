@@ -70,7 +70,11 @@ export function NeedsCardView({ card, onAnswer, onShow, ref }: NeedsCardViewProp
   const said = needsCardWords(card);
   const wordsId = useId();
   const subId = useId();
-  const answered = act.state === "said" ? needsSaid(item, act.choice) : null;
+  // announced once, as it arrives: the words it arrived with, by its item, though a name in them moves after (a
+  // session's handle, read once the Agent Profiles are; a namesake that ends) — its drawn words follow the names live
+  const arrival = useRef({ id: item.id, asked: said.asked });
+  if (arrival.current.id !== item.id) arrival.current = { id: item.id, asked: said.asked };
+  const answered = act.state === "said" ? needsSaid(item, act.choice, card.names) : null;
   const busy = act.state === "busy" ? act.choice : null;
   // every act waits while an answer runs, and none answers once the item waits no longer (a refused card's note)
   const quiet = busy !== null || !card.waits;
@@ -160,7 +164,7 @@ export function NeedsCardView({ card, onAnswer, onShow, ref }: NeedsCardViewProp
       {act.state === "idle" && !leaving ? (
         // announced once, politely, as it arrives
         <span className="vf-needs-arrived" role="status">
-          {said.asked}
+          {arrival.current.asked}
         </span>
       ) : null}
     </div>

@@ -137,7 +137,11 @@ The catalog currently mounts these shipping views directly:
   light and by the Moon's — and the card live: the product's own controller (`useNeedsCard`) over a
   fixture door that answers after a beat, standing it in the shipping `ThreadItemsView`, where its
   rise, its "You said …", its way out, the next card's rise, the keyboard on its acts and on the
-  card, and reduced motion (a control on the plate) are seen. Its acts answer nothing outside the
+  card, and reduced motion (a control on the plate) are seen. Its sessions are named as the
+  thread's @ names them, by the product's own `sessionHandlesOf` on the fixture board and Agent
+  Profiles (`chatHandlesOf`): Kiwi's held send and the specimen's say vibe-field, a plate of its
+  own holds a held send to the second session in a folder of that name (vibe-field·2), and the
+  agent's ask, from a run @ does not offer, says fieldd's name. Its acts answer nothing outside the
   plate
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and

@@ -7,6 +7,7 @@ import {
   type SparkId,
 } from "@vibefield/contracts";
 import { sparkStatusWord } from "@vibefield/design-kit/spark-face";
+import { NO_HANDLES } from "./at-rows";
 import { type SparkEntry, statusOfItem } from "./spark-status";
 
 // THE NEEDS-YOU CARD, AS DATA (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card; §9 "The person's queue's
@@ -14,7 +15,9 @@ import { type SparkEntry, statusOfItem } from "./spark-status";
 // queue's item for the shown spark, what it says, and what it is doing — waiting on you, its answer running, refused
 // in fieldd's words, or answered here. Pure: an item and the thread's spark in, the card's words out. `NeedsCardView`
 // draws it; `useNeedsCard` (`needs-card-stand.ts`) keeps it standing in the thread. Every act travels by its place
-// among the item's acts, never by its word (§9), so a rewording here is no wire change.
+// among the item's acts, never by its word (§9), so a rewording here is no wire change. It names a session as @ names
+// it in the thread (track CO, the handle): by @'s handle where @ offers one (`sessionHandlesOf`, handed in by Chat's
+// controller), else as fieldd names a run.
 
 /** How long what an answer came to stands on the card, and a refusal of an item no longer waiting: a note's time. */
 export const NEEDS_SAID_MS = 2_400;
@@ -35,11 +38,30 @@ export type NeedsAct =
 
 export const NEEDS_IDLE: NeedsAct = Object.freeze({ state: "idle" });
 
+/** How the card names who asks and whom a send is for: @'s handle for a session @ offers in this thread, else as
+ * fieldd names it. A spark is always its name. */
+export interface NeedsNames {
+  readonly from: string;
+  /** a held send's session; null where the item names none */
+  readonly to: string | null;
+}
+
+/** The names `item` is said by, under @'s `handles` in its thread (by run id; none: fieldd's names alone). */
+export function needsNamesOf(item: NeedsItem, handles: ReadonlyMap<string, string>): NeedsNames {
+  const run = item.from.spark === undefined ? item.from.session : undefined;
+  return {
+    from: (run === undefined ? undefined : handles.get(run)) ?? item.from.name,
+    to: item.to === undefined ? null : (handles.get(item.to.session) ?? item.to.name),
+  };
+}
+
 /** The card, as one of the thread's items. */
 export interface NeedsCard {
   readonly kind: "needs";
   /** the queue's item it draws (answered here: the item fieldd handed back, with its answer) */
   readonly item: NeedsItem;
+  /** who asks and whom a send is for, as the card says them */
+  readonly names: NeedsNames;
   /** the thread's spark */
   readonly spark: { readonly id: SparkId; readonly name: string };
   /** how many wait on you in the thread, this one with them: "1 of 3" when more than one */
@@ -60,18 +82,24 @@ export interface NeedsMotion {
   readonly reduced?: boolean | undefined;
 }
 
+/** How the card moves, and @'s handles in its thread (`sessionHandlesOf`, by run id), which name its sessions. */
+export interface NeedsCardOptions extends NeedsMotion {
+  readonly handles?: ReadonlyMap<string, string> | undefined;
+}
+
 /** The card for `item` in `entry`'s thread: its first item waiting, or the one this window answers, which counts
  * itself among what waits though fieldd has dropped it from the queue meanwhile. */
 export function needsCardOf(
   entry: SparkEntry,
   item: NeedsItem,
   act: NeedsAct = NEEDS_IDLE,
-  { leaving = false, reduced = false }: NeedsMotion = {},
+  { leaving = false, reduced = false, handles = NO_HANDLES }: NeedsCardOptions = {},
 ): NeedsCard {
   const waits = entry.items.some((each) => each.id === item.id);
   return {
     kind: "needs",
     item,
+    names: needsNamesOf(item, handles),
     spark: { id: entry.spark.id, name: entry.spark.name },
     of: entry.items.length + (waits ? 0 : 1),
     waits,
@@ -82,9 +110,9 @@ export function needsCardOf(
 }
 
 /** The card a thread stands while this window answers none of its items: the oldest waiting, or none. */
-export function waitingCardOf(entry: SparkEntry, motion: NeedsMotion = {}): NeedsCard | null {
+export function waitingCardOf(entry: SparkEntry, options: NeedsCardOptions = {}): NeedsCard | null {
   const first = entry.items[0];
-  return first === undefined ? null : needsCardOf(entry, first, NEEDS_IDLE, motion);
+  return first === undefined ? null : needsCardOf(entry, first, NEEDS_IDLE, options);
 }
 
 /** One of the card's acts: its place among the item's acts, its word, and whether it is the first (primary). */
@@ -124,14 +152,12 @@ function agentLabelOf(agent: string): string {
 }
 
 /** What you are asked, by the item's kind. */
-function questionOf(item: NeedsItem, asker: string): string {
+function questionOf(item: NeedsItem, { from: asker, to }: NeedsNames): string {
   switch (needsKindOf(item)) {
     case "question":
       return item.words ?? `${asker} needs you`;
     case "held-send":
-      return item.to === undefined
-        ? `${asker} needs you`
-        : `${asker} wants to send to ${item.to.name}`;
+      return to === null ? `${asker} needs you` : `${asker} wants to send to ${to}`;
     case "held-spawn": {
       if (item.agent === undefined) return `${asker} wants another agent`;
       const where = item.folder === undefined ? "" : ` in ${item.folder}`;
@@ -150,10 +176,10 @@ function questionOf(item: NeedsItem, asker: string): string {
 }
 
 /** The sub, by the item's kind: how long a yes lasts, the cap, or where an agent's ask is answered. */
-function subOf(item: NeedsItem, asker: string): string | null {
+function subOf(item: NeedsItem, { from: asker, to }: NeedsNames): string | null {
   switch (needsKindOf(item)) {
     case "held-send":
-      return item.to === undefined ? null : `Your yes lasts until ${item.to.name} ends.`;
+      return to === null ? null : `Your yes lasts until ${to} ends.`;
     case "held-spawn":
       return item.live === undefined
         ? null
@@ -166,11 +192,11 @@ function subOf(item: NeedsItem, asker: string): string | null {
 }
 
 export function needsCardWords(card: NeedsCard): NeedsCardWords {
-  const { item, spark } = card;
-  const asker = item.from.name;
+  const { item, spark, names } = card;
+  const asker = names.from;
   const word = sparkStatusWord(statusOfItem(item));
   const other = item.from.spark !== spark.id;
-  const question = questionOf(item, asker);
+  const question = questionOf(item, names);
   const kind = needsKindOf(item);
   // the asker's own words, for the kinds whose question is not them
   const shown = kind === "question" || kind === "agent-ask" ? undefined : item.words;
@@ -187,7 +213,7 @@ export function needsCardWords(card: NeedsCard): NeedsCardWords {
     question,
     words: shown ?? null,
     more: more > 0 ? `and ${more} more` : null,
-    sub: subOf(item, asker),
+    sub: subOf(item, names),
     acts,
     show: acts.length === 0 && item.from.session !== undefined,
     place,
@@ -205,16 +231,21 @@ export interface NeedsSaid {
 }
 
 /** The line an answered card gives its acts to, and the status line's words for it off screen: "You said Allow", then
- * what the act came to where it did not go as asked, in fieldd's words. When both hold, the act's failure is said. */
-export function needsSaid(item: NeedsItem, choice: number): NeedsSaid {
+ * what the act came to where it did not go as asked, in fieldd's words. When both hold, the act's failure is said. It
+ * names as the card does (`names`: the card's own; none handed, as fieldd names them). */
+export function needsSaid(
+  item: NeedsItem,
+  choice: number,
+  names: NeedsNames = needsNamesOf(item, NO_HANDLES),
+): NeedsSaid {
   const answer: NeedsAnswer | undefined = item.answer;
   const said = `You said ${item.choices?.[answer?.choice ?? choice] ?? ""}`.trimEnd();
   const why = (reason: string | undefined): string => (reason === undefined ? "" : `: ${reason}`);
   if (needsOutcomeOf(answer) === "failed") {
     const kind = needsKindOf(item);
     const failed =
-      kind === "held-send" && item.to !== undefined
-        ? `Couldn't send ${item.from.name}'s words to ${item.to.name}`
+      kind === "held-send" && names.to !== null
+        ? `Couldn't send ${names.from}'s words to ${names.to}`
         : kind === "held-spawn"
           ? "Couldn't start the agent"
           : "Couldn't finish it";
@@ -222,7 +253,7 @@ export function needsSaid(item: NeedsItem, choice: number): NeedsSaid {
   }
   if (answer?.told === false) {
     return {
-      text: `${said} · ${item.from.name} hears it when it wakes${why(answer.waits)}`,
+      text: `${said} · ${names.from} hears it when it wakes${why(answer.waits)}`,
       tone: "unheard",
     };
   }

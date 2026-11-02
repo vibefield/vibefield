@@ -6,6 +6,7 @@ import { type NeedsCardDoors, useNeedsCard } from "../chat/needs-card-stand";
 import { ThreadItemsView } from "../chat/ThreadItemsView";
 import {
   NEEDS_ANSWER_PLATES,
+  NEEDS_HANDLES,
   NEEDS_KIND_PLATES,
   NEEDS_LIVE_ITEMS,
   type NeedsPlate,
@@ -16,14 +17,15 @@ import {
 // The needs-you card on fixtures (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card; docs/UI_SYSTEM.md): the
 // SHIPPING card (`NeedsCardView`) on the product's own reading of fixture items (`needsCardOf`, in `chat-fixtures.ts`)
 // — each kind as it waits, a kind this build does not know, and what an answer does to it — by this page's light and
-// by the Moon's, and in a narrow thread. And the card live: the product's own controller (`useNeedsCard`) standing it
-// in the thread's items (`ThreadItemsView`) over three of Vela's items, its answers given by a fixture door after a
-// beat, so its motion, its keyboard (Tab to an act, its ring; a pressed act puts the keyboard on the card) and its
-// reduced motion are seen. Nothing here reaches fieldd, the feed or the status line; the markup and the CSS are the
-// product's.
+// by the Moon's, and in a narrow thread. Its sessions are named as Vela's @ names them (`NEEDS_HANDLES`, the
+// product's `sessionHandlesOf` on the fixture board): a held send to "vibe-field", another to "vibe-field·2".
+// And the card live: the product's own controller (`useNeedsCard`) standing it in the thread's items
+// (`ThreadItemsView`) over three of Vela's items, its answers given by a fixture door after a beat, so its motion, its
+// keyboard (Tab to an act, its ring; a pressed act puts the keyboard on the card) and its reduced motion are seen.
+// Nothing here reaches fieldd, the feed or the status line; the markup and the CSS are the product's.
 
 /** How long the live plate's fixture door takes to answer: long enough to see an answer run. */
-const LIVE_BEAT_MS = 900;
+export const LIVE_BEAT_MS = 900;
 
 /** One still plate: the card as the thread would stand it, named under it. */
 function Plate({ plate }: { plate: NeedsPlate }): ReactElement {
@@ -92,7 +94,7 @@ export function NeedsCardLivePlate(): ReactElement {
     [],
   );
   const entry = useMemo(() => needsLiveEntryOf(queue), [queue]);
-  const stand = useNeedsCard(entry, true, motion === "Reduced motion", doors);
+  const stand = useNeedsCard(entry, true, motion === "Reduced motion", doors, NEEDS_HANDLES);
   return (
     <div className="vf-ds-needs-live" data-plate="live">
       <div className="vf-ds-frame-controls">

@@ -28634,3 +28634,214 @@ It pays SP-1d's owed line "Smoke rung 11m" (LANDED "SP-1d").
 - 3d (the Swift fold, held to `phone-fold.golden.json`) → 3e (the switch; phone-body's mirror; `.routed`'s mirror;
   the field cut's copies retired) → PG-4s, the scaffold → PG-5…PG-8 in parallel (PG-D4 as amended, DECISIONS).
 - costOf's comment correction, at 3d's or 3e's records.
+
+## The handle — the needs-you card names a session as @ does: two untitled sessions in vibe-field read "vibe-field" and "vibe-field·2", never two "Claude Code"s, and fieldd's name stands only where @ offers none (track CO) (2026-11-02; `a0fe4990a` → `045f10ec7`, five commits on main `22e4be941`, lane `co/handle` in `/Volumes/SamsungRed/lanes/handle`, in the mini's mint M100 `045f10ec7`, STACKED on main `22e4be941`, run 100)
+
+VF-PM ruled the slice's shape at 2026-11-02 01:41Z, on James's delegated authority: one exported handle rule out of
+`chat/at-rows.ts`, two readers (@'s rows and the needs-you card), and fieldd's runLabel only where there is no
+handle. Field-app only, unless the card is built from fieldd's label with no session set in reach. The plan found
+exactly that and said so before building (its §0). VF-PM ruled the plan's Q0–Q7 at 02:12Z, all at the leans. The
+plan is `lanes/co-plan/plans/handle-plan.md` (its RULED head, §6 and §AS-BUILT). The slice pays CP-3's and TU-1's
+owed line: the card named a session by fieldd's runLabel (VF-PM, 2026-11-01 09:55Z).
+- **Q0:** the Agent Profiles' read moves from the composer into Chat's controller (`useProfileSets`). One read, no
+  callback upward, no second subscribe. fieldd is untouched.
+- **Q1:** accepted. @ never reads a title, so a titled session @ offers reads its handle on the card too.
+- **Q2:** accepted. The card follows @ live. A session that leaves @'s set falls back to fieldd's name. An answer
+  said off screen keeps the names it was pressed under.
+- **Q3:** accepted, and named below. fieldd's ‹reason› after the colon still names a session by runLabel.
+- **Q4:** accepted. A card that rises before the profiles are read says fieldd's name, then the handle.
+- **Q5:** a short CO row in DECISIONS, at this cut.
+- **Q6:** plain text, no CSS. The handle was measured on the widest plate, and a clip is a DESIGN.md question first.
+- **Q7:** notify's teller is out of scope.
+
+**What** (five commits; 18 files, +786 −115; field-app, DESIGN.md and `docs/UI_SYSTEM.md` only):
+- **The one rule** (`a0fe4990a`, C1), `chat/at-rows.ts`:
+  - a private `offeredOf(spark, rows, sets)` is now the one place the sessions a spark's `agent_send` takes are chosen
+    (`reachedBy`) and numbered (`handlesOf`). It gives nothing until the profiles and the board are both read;
+  - `sessionHandlesOf(spark, rows, sets)` exports @'s handles by run id, for a reader outside @. `NO_HANDLES` is one
+    empty `ReadonlyMap`, made once, for readers' defaults;
+  - `atRowsOf` reads `offeredOf` where it called the two itself. Its early returns are as they were. @ does not
+    change: `reachedBy` and `handlesOf` stay private and as they were.
+- **One reading of the Agent Profiles** (`c87855dbb`, C2):
+  - the new `chat/profile-sets.ts` (`useProfileSets(port, active)`) holds the read that was the composer's, moved
+    as it was. It reads on Chat's first active show and again at each `ask()`. A failed reading reads as "reading"
+    while it is read again;
+  - `ChatView` calls it once and hands `profiles` (one prop) to `ChatComposer`. The composer reads `profiles.sets`
+    for @ and calls `profiles.ask()` where @ opens. It keeps its own models read, and its port narrows to
+    `Pick<ComposerPort, "models">`;
+  - both composer harnesses (`chat-composer.test.tsx`'s `mountComposer`, `chat-prompt-target.test.tsx`'s Owner)
+    call the product's own hook, so they cannot drift from it;
+  - what moves: the composer is keyed by spark, so each thread's first show used to read the profiles again. Now
+    the window reads them on Chat's first show and at each @ open. @'s "Reading its agents…" no longer flashes on a
+    thread switch. @ is never stale, because it reads again whenever it opens.
+- **The card names a session as @ does** (`44c53b76f`, C3):
+  - `needs-card.ts` gains `NeedsNames` and `needsNamesOf(item, handles)`, the card's one reader of names: a
+    session's handle where the thread's @ offers it, else fieldd's name. A spark is always its name;
+  - the card carries `names`. `needsCardOf` and `waitingCardOf` take `NeedsCardOptions` (`NeedsMotion` plus
+    `handles`, default `NO_HANDLES`). Every word the card says reads `card.names`, never the item's.
+    `needsSaid(item, choice, names)` takes the names last, so its two-argument callers say what they said before;
+  - `ChatView` hands `useNeedsCard` the shown spark's `sessionHandlesOf(spark, rows, profiles.sets)`, memoized on
+    those three, as its last parameter. `sameCard` compares the names, so a renumbering redraws the card;
+  - `NeedsCardView` holds the first `asked` per item id and speaks that in its `role="status"` span. The drawn words
+    and the aria-label follow the live names;
+  - at the press, `answer` takes the names the card draws into its closure, and the off-screen status line says
+    them. The plan stored them on `Answering`; the closure holds the same names with no new field (§AS-BUILT);
+  - DESIGN.md, three dated notes at their sources in the HANDLE form: §8's eyebrow (its old sentence scoped in
+    place to a session @ offers no handle), §9's restart facts (the pointer moved; fieldd's own words still name by
+    title) and §9's card words (the handle's forms added). One pointer each under the eyebrow's note for the
+    question, the sub and the failed line. §8's @ ("two sessions with one name") gains one sentence, stamped
+    "*Added 2026-11-02 (the handle):*".
+- **The catalog draws the handles** (`f01b6bc22`, C4):
+  - `chat-fixtures.ts` gains `chatHandlesOf(spark)`, the product's own `sessionHandlesOf` over the fixture board and
+    Agent Profiles, and `NEEDS_HANDLES`, Vela's thread's ("vibe-field", "vibe-field·2", "rosetta"). Every still
+    plate's `needsCardOf` takes them. The adapter holds no copy of the card's markup, CSS or words;
+  - a new plate, "held-send-second": a held send to the second vibe-field, which says "Vela wants to send to
+    vibe-field·2" and "Your yes lasts until vibe-field·2 ends.";
+  - `ChatPreview`'s waiting plate passes Kiwi's handles, so it says "Kiwi wants to send to vibe-field".
+    `NeedsCardPreview`'s live plate passes `NEEDS_HANDLES` to `useNeedsCard`. The agent's ask is from a run @ does
+    not offer, so it keeps fieldd's name ("Needs your OK · Claude Code");
+  - `docs/UI_SYSTEM.md`: one new sentence in the card's plate list, before its last, so no landed words change.
+- **The last true words** (`045f10ec7`, C5, the final critic's #1 and #3; words only):
+  - DESIGN.md §9's HANDLE note named every "Claude Code" form as the fallback's. The held spawn's "Claude Code in
+    vibe-field" names the agent asked for, not a session, so it keeps its words. The note now says so;
+  - `chat-fixtures.ts`'s board comment: every plate that draws a card stands on this board, not every plate.
+
+**Real vs not yet.**
+- Real, with nothing stubbed:
+  - one rule names a session for @ and for the needs-you card, read for the same spark from the same board and the
+    same reading of the profiles, so the two never name one session two ways in a thread;
+  - the card's eyebrow, question, sub, its failed line and the off-screen status line, each in the handle's words for
+    a session @ offers, and fieldd's name for one it does not;
+  - one read of the Agent Profiles per Chat show, and again at each @ open;
+  - the catalog's card plates, named by the product's own rule on the fixture board.
+- Not touched: fieldd, contracts, the wire, the kit, electron-shell, the card's CSS, `NewSparkSheet*`, `new-spark.ts`,
+  `chat-composer.css`, `smoke.ts` and `draft/`. No `pnpm gen`, no fixture JSON, no seam moves, so no agent-plane page
+  changes.
+- Not built, each named by a ruling: a title in @ (Q1), a fieldd ‹reason› that names no session (Q3), a name kept
+  when a session leaves @'s set (Q2 ruled no keep) and notify's teller (Q7). Each is below.
+
+**Found.**
+- **The stop-and-say was met** (the plan's critique, #1). The card was built from fieldd's label alone, and the
+  profiles @ needs were the composer's local state. Without them the card could say "vibe-field·2" where @ says
+  "vibe-field". The remedy stayed in field-app (Q0).
+- **Two untitled sessions both read "Claude Code" before this slice.** fieldd's runLabel is the run's title, else its
+  row's catalog label, else its id (`fieldd/src/daemon.ts:2848-2852`). It never reads the folder.
+- **@'s handle never reads a title.** The board's row has none (`contracts/src/agent-field.ts`), and the handle is
+  the folder, else the row's label. So a titled session @ offers moves from its title to its handle on the card (Q1).
+- **`[]` is a reading** (C3). Three live expectations in `needs-card.test.tsx` moved: with `profileSets` answering
+  `[]`, a run that names no persona is This Mac's, so Vela's @ offers run-31 and names it by the agent's label. They
+  now expect `AGENT.label` where they said fieldd's "claude·2". That is the ruling as written, not a regression.
+- **No test drew the card's own failed line under a handle** (C3's review). The said line could name fieldd's name
+  under a question that said the handle, with every test green. A T7 row on the failed line closes it.
+- **The eyebrow's note said a titled session @ offers "is its folder"** (C3's review). That is untrue for one whose
+  folder the monitor has not seen yet. It now says its handle: its folder, else its agent's label.
+- **No test mounted the catalog's live plate** (C4's review), so its handles were unguarded. A new row mounts it.
+- **The plan's reason for the pressed names was wrong** (the final critic, #2). It said no live @ stands beside the
+  off-screen line. After a thread switch, the thread now shown has its own @, and a spark numbers its own set, so
+  that @ can give the same run another handle. Q2's ruling stands; the plan's §AS-BUILT corrects the reason.
+- **The lane was already on main `22e4be941`**, so the plan's merge of main before C1 had nothing to bring in.
+
+**Validation.**
+- **Reviews:** the plan's critique (`lanes/co-plan/plans/handle-critique.md`, 14 findings, all accepted; three
+  answered in part: #3's test helper, #12 and #14's third point) was folded before the build. Each of C1–C4 had an
+  adversarial review: C1's found nothing; C2's, C3's and C4's findings are fixed in their commits. The final
+  critic (`lanes/co-plan/final-handle.md`, round two, at `f01b6bc22`) found no wrong behaviour and three false
+  words: #1 and #3 are fixed in `045f10ec7`, and #2 in the plan (its Status and §AS-BUILT).
+- **Mutation probes**, each restored and green after:
+  - C2: the composer's `profiles.ask()` dropped reddens T3 ("expected 1 to be 2");
+  - C3: the arrival span reading the live `asked` reddens T8; the off-screen line re-reading the handles at return
+    reddens T9 and the existing off-screen row; `sameCard` blind to names reddens T7, T8, T9 and one existing live
+    row; the lift handing `[]` reddens T7, T8 and both T9s; the card's said line without `card.names` reddens the
+    T7 failed-line row alone;
+  - C4: the handles dropped from `plate()` redden the catalog row; `NEEDS_HANDLES` dropped from the live plate
+    reddens the live-plate row, the other 44 green.
+- **The rows** (field-app; 13 new cases):
+  - `test/chat-at-rows.test.ts` 15 → 17: T1 (each session row's handle is the map's, under every query) and T2 (no
+    handles until the profiles and the board are read; numbered across the spark's profiles as @ does);
+  - `test/chat-view.test.tsx` 30 → 31: T3 (the profiles read once on Chat's first show, never on a thread switch,
+    again at each @ open);
+  - `test/needs-card.test.tsx` 35 → 45: T4–T6 (the words), T7 twice, T8, T9 twice (live, under `ChatView`), and two
+    catalog rows (the plates' sessions as the catalog's @ names them; the live plate's held send). Its canon list
+    gains the handle's five forms, and its every-plate list gains "held-send-second";
+  - `test/design-system.test.tsx` 8/8 and `test/ui-system-boundaries.test.ts` 44/44 unchanged in count, and
+    green on the new plate.
+- **The commits' own checks** (field-app's typecheck exit 0 at each of C1–C4):
+  - C1: chat-at-rows 17/17 and chat-composer 33/33;
+  - C2–C4 ran each file alone through heavy.sh, the guard clean before each. At C4: needs-card 45/45, chat-view 31/31,
+    chat-composer 33/33, chat-thread-items 22/22, design-system 8/8 and ui-system-boundaries 44/44. At C3 also
+    chat-at-rows 17/17, spark-pane 21/21, thread-items 17/17, view-frame 33/33 and chat-prompt-target 7/7;
+  - the final critic re-ran needs-card 45/45, chat-view 31/31, chat-at-rows 17/17 and the typecheck at `f01b6bc22`;
+  - biome clean on every touched code file, C1–C5. `check-import-boundaries --enforce` clean at C2, C3 and C4.
+- **Q6, measured at C4** (the design entry in Electron 43, offscreen): the widest plate is 640 px. On
+  "held-send-second" the handle does not clip: 76 px in the question's 608 px box, 67 px in the sub, each box's
+  scrollWidth equal to its clientWidth. Set narrow (a 288 px box), the same lines stay single lines. No CSS change.
+- **The lane light** on T `045f10ec7` over main `22e4be941`
+  (`lanes/handle/light/handle-light-20261102T031407Z/`): ALL GREEN, 03:14:07Z → 03:23:10Z.
+  - Every step exited 0: biome (16 files), check:walls, check:retired, check:ios-fixtures (200
+    copies identical), preflight, glyphs --check, gen:check, cargo layout_vector, and tsc on contracts, design-kit,
+    field-app, fieldd and electron-shell.
+  - contracts whole: 1502. field-app whole: 3853 (+3 skipped). electron-shell whole: 2492 (+3 skipped). fieldd
+    whole: 2979 (+11 skipped), with FIELDD_ROSETTAD_BIN set, so the real rosettad rows ran. T contains main, so no
+    merged-tree light was owed.
+- **Run 100** (M100 `045f10ec7`, tree `053131a6e`, STACKED on `22e4be941`, minted by a9): GREEN, verify armed
+  03:36:00Z, exit 0 at 03:42:22Z (6 m 22 s; VF-PM's own read of the lane copy).
+  - vitest 12,092 passed, 0 failed, 18 skipped: main's 12,079 + 13 (chat-at-rows 15 → 17, chat-view 30 → 31,
+    needs-card 35 → 45; no other file moved). 0 FAIL rows; node 364/0; MaxListeners 0.
+  - cargo 33 results, 534/0. typecheck 28/28. ios fixtures 200, pins 67. gen:check clean; the tree clean after.
+- **Row 23 at the landing** (`docs/desk-gates.md`, smoke:godview): its rung 11m reads @'s rows in Chat's composer,
+  which C2 re-props, and @'s open now calls `profiles.ask()`. **run100b GREEN** on M100 `045f10ec7`: the gate opened
+  by itself at 03:47:22Z (unlocked, idle 175 s), exit 0 at 03:49:34Z, the row 132 s, HID untouched. SMOKE_GODVIEW ok;
+  SMOKE_CHAT_SEND failed null: "Pasted into Polaris's pane — Return sends it", create enabled at 506 ms, the draft
+  24 px and enabled, each key heard 12 times, the card played onto the prompt. Against run97b every field is the same
+  but the ids and 507 → 506 ms, so the re-propped composer's walk is unchanged. Evidence:
+  `lanes/ts6/logs/mini/run100b/`. The card and the handle are off the smoke's
+  path. Their witnesses are the unit rows T1–T9 above and the catalog's plate rows in `needs-card.test.tsx`.
+- **Landed:** main moved to `045f10ec7` at 2026-11-02T03:51:14Z (a fast-forward from `22e4be941`), on VF-PM's GO.
+
+**Owed.**
+- **"Should a title win in @?"** (Q1) is James's question, not built. Today @ never reads a title, so a titled
+  session @ offers reads its folder, else its agent's label, on the card as in @. A title in @ would need the board's
+  row to carry one, and @'s rule first. That is a slice of its own.
+- **fieldd's reason after the colon still names a session by runLabel** (Q3): "Couldn't send Vela's words to
+  vibe-field·2: Claude Code ended" (`fieldd/src/tool-plane/rooms/you/queue.ts:534`). DESIGN.md §9 says a refusal
+  is said in fieldd's words after the colon, and its restart note says so of this one. A fieldd follow-up, not
+  built.
+- **The numbers are live** (Q2). A card's ordinal can shift while it stands: when an earlier same-named session ends,
+  "vibe-field·2" becomes "vibe-field"; when an earlier one gains its folder, "vibe-field" becomes "vibe-field·2". @
+  moves with it, so the two agree at every moment. A session that leaves @'s set reads fieldd's name until its item
+  goes. A held send ends only at the PTY's exit, and `alive` can read false first, so that can last more than a
+  frame. A chip already in the draft keeps the handle it was taken with, and pastes the run's id.
+- **A card that rises before the profiles are read** (Q4) shows runLabel, then the handle once they are. It is
+  announced once, in the words it rose with.
+- **The off-screen answer keeps the names it was pressed under.** After a thread switch, the thread now shown has
+  its own @, which can number the same run differently.
+- **The card's reading of the profiles is staler than a thread mount's was** (plan §3.1). It refreshes at Chat's
+  first show and at each @ open. A run filed under a profile added since then reads fieldd's name on the card until
+  @ opens. Only a run filed by its profile alone depends on it.
+- **notify's teller** (Q7, out of scope): "Claude Code — the build is green" still names by fieldd's label
+  (`field-app/src/frame/needs-notices.ts:52`). A notice is the window's, not a thread's, so there is no spark to
+  number by.
+- **The records outside these three files:** co-plan's `cp3-packet.md:91` owed line (VF-PM 09:55Z) closes, and the
+  plan's Status flips to "LANDED (the handle)".
+
+**James's frame**, before the landing (plan §7): https://claude.ai/artifact/K4DcyuvBebfNqguLKjzxQc,
+"The handle · which session is Vela asking about?". One
+frame, two halves, Vela's thread at one moment, laid out by the shipping numbers with the catalog plates' words. Two
+untitled Claude Code sessions run in vibe-field, and Vela has a held send waiting for each: the first, then the one
+started after it.
+- (a) Today: both cards say "Vela wants to send to Claude Code" and "Your yes lasts until Claude Code ends.", word for
+  word, while @ beside them shows "vibe-field" and "vibe-field·2".
+- (b) The handle, the lean, which lands: the first card says "Vela wants to send to vibe-field", the second "Vela wants
+  to send to vibe-field·2" and "Your yes lasts until vibe-field·2 ends.", each a row of @ beside it.
+- Below them, owed and not in this slice: a titled session reads its handle on the card as in @, not its title (Q1);
+  fieldd's reason after the colon still says "Claude Code ended" (Q3). A run @ does not offer still reads "Claude
+  Code".
+- The page asks nothing: VF-PM ruled it on James's delegated authority, at the lean. James had given no word on it
+  by the landing.
+
+James's first sight, in `pnpm dev`, Chat (⌘4):
+- two untitled Claude Code sessions in vibe-field: Vela's held send to the second says "Vela wants to send to
+  vibe-field·2", the same name @'s row gives it;
+- an agent's ask from a session the thread's @ offers says "Needs your OK · vibe-field·2";
+- a session @ does not offer still reads "Claude Code";
+- @'s "Reading its agents…" no longer flashes when you switch threads.

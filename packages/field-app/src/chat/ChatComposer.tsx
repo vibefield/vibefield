@@ -20,7 +20,7 @@ import { OUTCOME_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { sayOnLine } from "../frame/line-door";
 import { agentChipMenuOf, menuRowId, modelsOf } from "./agent-chip-menu";
-import { type AtRow, type AtSources, atDefaultHot, atMove, atRow, atRowsOf } from "./at-rows";
+import { type AtRow, atDefaultHot, atMove, atRow, atRowsOf } from "./at-rows";
 import { type AtShown, ChatComposerView } from "./ChatComposerView";
 import {
   type AgentChip,
@@ -46,6 +46,7 @@ import {
   readEditor,
 } from "./composer-editor";
 import { type ModelsReading, modelWords, type NewSparkPort } from "./new-spark";
+import type { ProfileSets } from "./profile-sets";
 import type { SparkEntry } from "./spark-status";
 import { useBoardRows } from "./sparks-feed";
 import { sendNote, type ThreadSendOutcome } from "./thread-send";
@@ -65,8 +66,9 @@ import { sendNote, type ThreadSendOutcome } from "./thread-send";
 // send's clearing is made there, to the draft as the thread holds it then; and the editor follows a draft the thread
 // holds that this composer did not write — a send that was pasted after the thread was left and chosen again.
 
-/** What @'s rows read: the Agent Profiles fieldd offers, and an agent's own picker (the New spark sheet's doors). Its
- * agents are said by the catalog's labels, so `agent.providers` is not read. */
+/** What @'s rows read: the Agent Profiles fieldd offers, which Chat's controller reads (`useProfileSets`), and an
+ * agent's own picker, which the composer reads (the New spark sheet's doors). Its agents are said by the catalog's
+ * labels, so `agent.providers` is not read. */
 export type ComposerPort = Pick<NewSparkPort, "profileSets" | "models">;
 
 export interface ChatComposerProps {
@@ -83,7 +85,10 @@ export interface ChatComposerProps {
   /** the frame's open surface, from its one owner */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
-  port: ComposerPort;
+  /** the Agent Profiles @'s rows read, as Chat's controller reads them (`useProfileSets`): @ opening asks again */
+  profiles: ProfileSets;
+  /** an agent's own picker, read as its menu opens */
+  port: Pick<ComposerPort, "models">;
   /** Send into the thread's pane (`thread-send.ts`, over Chat's world): null while another act holds the thread, which
    * turns the press away (Chat's one guard), so nothing is said and the draft stays */
   send: (text: string, stills: readonly string[]) => Promise<ThreadSendOutcome | null>;
@@ -126,6 +131,7 @@ export function ChatComposer({
   onPark,
   surface,
   onSurfaceChange,
+  profiles,
   port,
   send,
   threadSending = false,
@@ -182,34 +188,11 @@ export function ChatComposer({
     };
   }, [park]);
 
-  // ── WHAT @ OFFERS: read on Chat's first show and again each time @ opens (an agent's picker as its menu opens) ──
-  const [asks, setAsks] = useState(0);
-  const [sets, setSets] = useState<AtSources["sets"]>(null);
+  // ── WHAT @ OFFERS: the profiles as Chat reads them, asked again each time @ opens (`profile-sets.ts`), and an
+  // agent's picker as its menu opens ──
+  const sets = profiles.sets;
+  const askProfiles = profiles.ask;
   const [models, setModels] = useState<ReadonlyMap<string, ModelsReading>>(new Map());
-  const shownOnce = useRef(false);
-  useEffect(() => {
-    if (!active || shownOnce.current) return;
-    shownOnce.current = true;
-    setAsks((count) => count + 1);
-  }, [active]);
-  useEffect(() => {
-    if (asks === 0) return;
-    let current = true;
-    // a read that failed is said as failed (`atRowsOf`), never as profiles with nothing in them; the next read is
-    // said as reading, never as the failure it reads past (a list read before stands while it is read again)
-    setSets((held) => (held === "failed" ? null : held));
-    port.profileSets().then(
-      (listed) => {
-        if (current) setSets(listed);
-      },
-      () => {
-        if (current) setSets("failed");
-      },
-    );
-    return () => {
-      current = false;
-    };
-  }, [asks, port]);
   const rows = useBoardRows();
   const list = useMemo(
     () => atRowsOf({ spark, query: at?.query ?? "", sets, rows }),
@@ -344,10 +327,10 @@ export function ChatComposer({
       setHot(null);
       if (surface !== "at") {
         onSurfaceChange("at");
-        setAsks((count) => count + 1);
+        askProfiles();
       }
     } else if (at !== null || surface === "at") closeAt();
-  }, [at, closeAt, onSurfaceChange, surface]);
+  }, [askProfiles, at, closeAt, onSurfaceChange, surface]);
 
   /** The @ and what was typed after it, taken out of the draft — with a chip set in its place when one is given.
    * Returns the new parts and the caret. */

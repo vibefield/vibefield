@@ -20,9 +20,10 @@ import {
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NO_HANDLES } from "../src/chat/at-rows";
 import type { ComposerPort } from "../src/chat/ChatComposer";
 import { ChatView } from "../src/chat/ChatView";
-import { NEEDS_IDLE } from "../src/chat/needs-card";
+import { NEEDS_IDLE, needsNamesOf } from "../src/chat/needs-card";
 import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import { ThreadItemsView } from "../src/chat/ThreadItemsView";
 import { helloWords, STARTERS, type ThreadItem } from "../src/chat/thread-items";
@@ -683,6 +684,7 @@ describe("the thread's items never move or resize the pane (VF-PM's Q2: one rule
       needs: {
         kind: "needs",
         item: VELA_ASKS,
+        names: needsNamesOf(VELA_ASKS, NO_HANDLES),
         spark: { id: VELA.id, name: VELA.name },
         of: 1,
         waits: true,

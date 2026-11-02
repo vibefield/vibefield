@@ -25,6 +25,7 @@ import { ChatComposer, type ComposerPort } from "../src/chat/ChatComposer";
 import { ChatView } from "../src/chat/ChatView";
 import type { DraftPart } from "../src/chat/composer-draft";
 import { CANNOT_LIST_AGENTS } from "../src/chat/new-spark";
+import { useProfileSets } from "../src/chat/profile-sets";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import { type SparksPort, sparksPortOver, startSparksFeed } from "../src/chat/sparks-feed";
 import type { ThreadSendOutcome } from "../src/chat/thread-send";
@@ -216,7 +217,8 @@ interface Mounted {
 }
 
 /** The composer under FieldView's place (the one owner of the open surface), over a running feed, its draft kept as
- * Chat keeps a thread's (one copy: what the composer parks, and a send's clearing). */
+ * Chat keeps a thread's (one copy: what the composer parks, and a send's clearing), and its profiles read as Chat's
+ * controller reads them (the product's own `useProfileSets`). */
 async function mountComposer(
   outcome: () => Promise<ThreadSendOutcome | null> = async () => ({ state: "pasted" }),
   parked: readonly DraftPart[] = [],
@@ -237,6 +239,7 @@ async function mountComposer(
     useEffect(() => {
       parks.push(draft);
     }, [draft]);
+    const profiles = useProfileSets(asks, true);
     return (
       <ChatComposer
         entry={entry as NonNullable<typeof entry>}
@@ -245,6 +248,7 @@ async function mountComposer(
         onPark={setDraft}
         surface={surface}
         onSurfaceChange={setSurface}
+        profiles={profiles}
         port={asks}
         send={send}
         say={(text) => {
