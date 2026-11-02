@@ -28560,3 +28560,77 @@ It pays SP-1d's owed line "Smoke rung 11m" (LANDED "SP-1d").
   "closed when the last one leaves": now a linger later) and `draft/thinking-phone-godview.md` §8's PG-9 line
   (:488 today; the review read it at :476 before §8 grew): L4.4's linger half landed as PG-9a.
 - The failed release's re-carry (an owed release), filed by the lead.
+
+## PG-3c — the kit reads the remote cut: a row is refused exactly where the window's `AgentModelMeshRow` refuses it, a refused row costs only its own place (the window's screen, transcribed), and the cut's thirteen copies are a required mirror set (J1 (a)) (2026-11-02; `8a01d41f6` → `4e2f9ee86`, seven commits on main `5c41c10b2`, lane `pg/3c` in `/Volumes/SamsungRed/lanes/pg3`, in the mini's mint M99 `666ee281b` over main `678e19436`, run 99)
+
+**What it rests on.**
+- J1 (a), James 2026-11-01 03:56Z (the page *PG-3 · four marks*): the phone equals the home's window row for row.
+  So the kit refuses a row where the window refuses it, and reads PG-3a's goldens as its own.
+- The design `lanes/ios/pg3c-design.md`, with its 13 binding corrections from the check
+  (`pg3c-design-check.md`, wf_3f2ffafa-9cc): closed words refuse, open words never do; a null refuses save at
+  `project.branch`; bounds count UTF-16 units; a bare terminal reads `nativeSessionId` and `stop` tolerantly.
+- VF-PM's Q-C1…Q-C5 (2026-11-01 22:52Z): `terminal.hosted` is a closed word (Q-C1); an unknown device STATE stays
+  `.unrecognized` (Q-C2, the one ruled divergence from zod); a "" key is keyless on both sides (Q-C3, the window's
+  half item 150, `47ee475bd`, landed first); phone-body mirrors at 3e with its body model (Q-C4); the field cut's
+  `agent-mesh-*` copies stay unnamed until 3e retires them (Q-C5).
+
+**What** (seven commits; 20 files, +5,721 −1; Swift and fixtures only, save the fixtures script):
+- **The mirrors** (`8a01d41f6`): `scripts/check-ios-fixtures.mjs` names a set "remote", 13 required copies: eight in
+  FieldProductTests (the four `agent-remote-*` wire goldens, `monitor-agent-row.valid`, PG-3a's three witness
+  goldens) and five in FieldMeshTests (the witness three, `agent-field-snapshot.project-keys`, `phone-fold.golden`).
+  A deleted copy used to shrink the count only; now it is a red.
+- **The readers** (`8b60cb0ff` red, `e808a4fa1`), `Sources/FieldProduct/AgentRemoteShapes.swift`:
+  - every known key read strictly: present-but-null and present-but-another-type refuse; "" is a value where the
+    contract has no `.min`; length bounds in UTF-16 units; the sign bounds;
+  - CLOSED words refuse the row (the root kind, `monitorRow.kind`, status, `effort.intent`, tier,
+    `terminal.hosted`); OPEN words are kept (`.unrecognized`, or the string);
+  - `project.branch` alone takes null; `AgentFieldStop`'s remote reading takes `sentAt: ""`;
+  - envelopes `AgentRemoteMeshSnapshot` and `AgentRemoteMeshDelta` (renamed from the design's: contracts already
+    export those names for the local scope): a row fault costs the row (`split`, by key), an envelope fault throws.
+- **The screen** (`2c573b273` red, `b0bad4007`), `Sources/FieldProduct/RemoteBoardScreen.swift`: PG-1b's
+  `BoardScreen` (`board-screen.ts`) as a value with no clock and no I/O. A refused row greys only its desktop
+  (`incompatible`), a delta loses its refused upserts and appends their keys to `removed` (never the keyless
+  stand-in), and the desktop comes back to the wire's last word once it holds none. No caller until 3d's fold.
+- **The ask** (`82ef97492`): `Projection.remote` and `phoneRemote` (`{remote, mesh}`, no interval: the door floors
+  it by kind), pinned and unused; FieldLink still asks `phoneMesh`.
+- **Item 150's note** (`4e2f9ee86`, comment only): the window's `keyOf` takes "" as no key too.
+
+**Validation.**
+- Host inner loops (macOS `swift test` over FieldProduct; not the gate; lane logs `lanes/pg3/light/pg3c-host-*`):
+  red at each red commit, green after; mutation probes (bounds by `.count`, no union tolerance, `hosted` read
+  open, null read as absent) each red. Every edit also went through the window's own zod schemas
+  (`pg3c-zod-parity.log`), and the five screen scenarios through field-app's `BoardScreen`
+  (`pg3c-screen-parity.log`): the same verdicts, frames, states and `removed` lists.
+- The first kit chain (23:25 → 23:28Z on `8787457f9`) was red on a COMPILE error, not a test: a key path at the top
+  of `#require` expands into a closure the compiler reads as throwing, in FieldMeshTests, which does not build on
+  macOS, so the host loop could not see it. The fix (three `let`s out of the macros) was squashed into commit 2.
+- The kit chain on the merged tree `1ac08012e` (`4e2f9ee86` + main `2832987be`; log
+  `lanes/pg3/light/pg3c-kit-all2.log`), each step under its own HOLD, the guard and dev-stack-check 0/0:
+  - check-ios-fixtures: 200 copies identical, 67 pins; contracts' fixtures 563/563;
+  - red first on the simulator: `8b60cb0ff` 16 of 16 RemoteGoldenTests and 3 of 3 RemoteMirrorTests red;
+    `2c573b273` 5 of 5 RemoteBoardScreenTests red ("RED-FIRST HOLDS");
+  - `ts7-mac.sh kit 1ac08012e` (this Mac, Xcode 26.6): app and mock built; 14 runs, 1,437 tests, 0 red; stills
+    failed 0; DONE 01:03:13Z. iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down; none booted after.
+- The review (wf_51126ffc-5b3: parity, screen, mirrors, each finding adversarially verified): one finding, refuted
+  (Swift's String equality is canonical where the window's compares UTF-16 units; no producer mints such keys, and
+  the kit's own fold keys by String, so it is a kit-wide convention, not this slice's).
+- **Run 99** (M99 `666ee281b`, the MERGE shape: `4e2f9ee86` first, main `678e19436` second, minted by a9 on
+  VF-PM's GO):
+  - `pnpm verify` armed 02:01:08Z, verify alone, exit 0 at 02:06:55Z (5 m 47 s); gen freshness clean at its end;
+    the tree clean after; MaxListeners warnings 0.
+  - vitest 12,079 passed, 0 failed, 18 skipped (870 files), ±0 on main (the per-file diff against run 98 empty:
+    3c moves no TS test); cargo 534 passed, 0 failed (33 results, unchanged); node 364; typecheck 28/28.
+  - The iOS fixtures: 200 copies identical (main's 187 + 3c's 13 in the set "remote"), pins 67. The kit itself is
+    this Mac's gate, above, never the mini's.
+- **Landed:** main moved to `666ee281b` on VF-PM's GO (2026-11-02 02:08:05Z).
+
+**Not built (said).**
+- Nothing reads the remote cut yet: 3d's fold is the screen's first caller, and 3e's switch the readers'.
+- The window's union tries `AgentModelDeskRow` first, which a remote cut never carries (in the file's head comment).
+- An envelope that does not read throws in its decoder and never reaches the screen, where the window's screen
+  changes its memory before the envelope's parse; the reopen clears it either way, so 3d must not lean on the order.
+
+**Owed.**
+- 3d (the Swift fold, held to `phone-fold.golden.json`) → 3e (the switch; phone-body's mirror; `.routed`'s mirror;
+  the field cut's copies retired) → PG-4s, the scaffold → PG-5…PG-8 in parallel (PG-D4 as amended, DECISIONS).
+- costOf's comment correction, at 3d's or 3e's records.

@@ -251,18 +251,24 @@
   a mesh hub stands `MESH_HUB_LINGER_MS` (60 s) after its last reader, so a phone's app switch and its gap repair
   rejoin it with every peer live on its epoch (item 135's grey flash); at most `MESH_LINGERING_HUBS_MAX` (4) linger
   on one daemon, the oldest closing at once. L4.4's per-device cursor half stays PG-9's.
+  **PG-3c** (11-02), the kit reads the remote cut (`8a01d41f6` → `4e2f9ee86`, M99 `666ee281b`; LANDED "PG-3c"): a row is
+  refused exactly where the window's `AgentModelMeshRow` refuses it (closed words, null, UTF-16 bounds), a refused
+  row costs only its own place (`RemoteBoardScreen`, the window's screen transcribed), and the cut's 13 copies are
+  the required mirror set "remote"; the phone's `{remote, mesh}` ask is pinned and unused until 3e.
 - Next: PG-3's remaining slices (the brief `lanes/ios/PG3-BRIEF.md`; James ruled J1–J4 at 2026-11-01 03:56Z, all
-  (a)): 3c the kit decodes the remote cut from the mirrored goldens (F1b's kit half landed) → 3d the Swift fold and
-  replica, held to `phone-fold.golden.json` → 3e the switch, held to `phone-body.golden.json`, and the phone's
-  `reportShown` by PG-3b's sender rules (J3 per hour; J4 ahead of PU-I) → PG-5…PG-8 (list, timeline, spend, rain,
-  native) → PG-9 (the per-device resume cursors, `agent.get`, the measured rates; L4.4's linger half is PG-9a's).
+  (a)): 3d the Swift fold and replica, held to `phone-fold.golden.json` → 3e the switch, held to
+  `phone-body.golden.json`, and the phone's `reportShown` by PG-3b's sender rules (J3 per hour; J4 ahead of PU-I)
+  → PG-4s, the scaffold (fd's: the one resources line, the shared words, the view flag, the golden registry) →
+  PG-5…PG-8 (list, timeline, spend, rain, native) IN PARALLEL, four lanes on one frozen brief template
+  (`lanes/ios/PG5-8-BRIEF-TEMPLATE.md`), landing in green order (James 2026-11-01 22:47Z; PG-D4 as amended) →
+  PG-9 (the per-device resume cursors, `agent.get`, the measured rates; L4.4's linger half is PG-9a's).
   PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both on
   the shed; the cap read on the phone under the link conditioner (PG-9); from PG-1d, the F-H2 rider (the board's gate
   and the ticket mint read different things), an old owner's run-id fallback (a design question) and a kit comment
   (`AgentTerminalFace.swift`); from PG-2, the draft queue's amendments (design-06's SP-L4, DS-D4 and limits "not
   built" clauses, design-mv §1, build-mv L8 and M29, the design record's §8 as built), and `field`'s retirement one
-  release of skew after the kit ships (PG-L1); from PG-3a, the kit's copies of its goldens (3c), and at a draft slot
+  release of skew after the kit ships (PG-L1); from PG-3a, phone-body's kit copy (3e), and at a draft slot
   PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's remote-cut self-check); from PG-3b,
   3e's sender rules, and 3e mirrors `agent-report-shown.routed.json` (the phone's send shape) into the kit; from
   PG-9a, a failed release's empty carried again (not built), and at a draft slot the dated notes at
