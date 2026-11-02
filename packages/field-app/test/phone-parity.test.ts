@@ -10,7 +10,7 @@
  * goldens show is fixed in its own item first). The semantic rows below do not read the goldens'
  * bytes, so a re-bless cannot carry a behaviour past them.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentModelMeshFrame } from "@vibefield/contracts";
@@ -36,7 +36,6 @@ import {
   type PhoneGoldens,
   type PhoneViewGoldens,
   phoneAllGoldenFiles,
-  phoneGoldenFiles,
   phoneGoldenMirrors,
   phoneViewGoldenName,
   phoneVisible,
@@ -69,15 +68,27 @@ const rowsOn = (step: PhoneFoldStep, device: string) =>
   (step.rows ?? []).filter((row) => row.device === device);
 
 describe("PG-3a — the phone's parity goldens: the home's window over the witness", () => {
-  it("the committed goldens are byte for byte what the computation writes (a regeneration is a re-bless, said)", () => {
-    const files = phoneGoldenFiles(goldens);
+  it("the committed goldens are byte for byte what the computation writes (a regeneration is a re-bless, said)", async () => {
+    // PG-4s: every golden the one writer writes (fold, body, the toolkit's and each registered view's)
+    const files = await phoneAllGoldenFiles(goldens);
+    expect(Object.keys(files)).toEqual(
+      expect.arrayContaining([PHONE_FOLD_GOLDEN, PHONE_BODY_GOLDEN, PHONE_TOOLKIT_GOLDEN]),
+    );
     for (const [name, bytes] of Object.entries(files)) {
       const path = join(PHONE_GOLDENS_DIR, name);
-      const stored = readFileSync(path, "utf8");
-      const moved = goldenChanges(stored, bytes);
       const mirrors = (PHONE_GOLDEN_MIRRORS[name] ?? []).map(
         (folder) => `cp packages/field-app/test/fixtures/phone-godview/${name} ${folder}/${name}`,
       );
+      // an absent golden says what to run, never a bare ENOENT
+      expect(
+        existsSync(path),
+        [
+          `${name} is not committed: run ${PHONE_GOLDENS_COMMAND}, then copy it to the kit:`,
+          ...mirrors.map((line) => `  ${line}`),
+        ].join("\n"),
+      ).toBe(true);
+      const stored = readFileSync(path, "utf8");
+      const moved = goldenChanges(stored, bytes);
       expect(
         stored === bytes,
         [
@@ -110,10 +121,15 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
     expect(visible(row({ alive: false }))).toBe(false);
   });
 
-  it("names the three puppeteer packages it was computed by, as installed (a puppeteer EL8 regenerates it)", () => {
+  it("names the three puppeteer packages it was computed by, as installed (a puppeteer EL8 regenerates it)", async () => {
     // the pin's authority is the manifests (pnpm-workspace.yaml, preflight's PIN_EXPECTATIONS): no literal here
     const installed = puppeteerVersions();
-    for (const name of [PHONE_FOLD_GOLDEN, PHONE_BODY_GOLDEN]) {
+    // PG-4s (G6b): every golden on disk the one writer writes, the toolkit's and each view's with fold and body
+    const names = Object.keys(await phoneAllGoldenFiles(goldens));
+    expect(names).toEqual(
+      expect.arrayContaining([PHONE_FOLD_GOLDEN, PHONE_BODY_GOLDEN, PHONE_TOOLKIT_GOLDEN]),
+    );
+    for (const name of names) {
       const stored = JSON.parse(readFileSync(join(PHONE_GOLDENS_DIR, name), "utf8")) as {
         versions: unknown;
         "//": string;

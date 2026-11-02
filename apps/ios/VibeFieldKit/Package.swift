@@ -426,8 +426,9 @@ let package = Package(
     // poll, the card's ended face, the double attach) that no other target
     // could have caught.
     //
-    // PG-4s — and the Godview views' bundle (PG-5…8): PG-3a's witness, which every view suite replays, and one golden
-    // per view (`phone-<view>.golden.json`), copied in byte for byte; `pnpm check:ios-fixtures` keeps the word true.
+    // PG-4s — and the Godview views' bundle (PG-5…8): PG-3a's witness, which every view suite replays, the toolkit's
+    // golden (`phone-toolkit.golden.json`) and one golden per view (`phone-<view>.golden.json`), copied in byte for
+    // byte; `pnpm check:ios-fixtures` keeps the word true.
     .testTarget(
       name: "FieldHomeTests",
       dependencies: ["FieldHome"],

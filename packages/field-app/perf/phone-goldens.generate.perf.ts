@@ -6,7 +6,7 @@ import {
   goldenChanges,
   PHONE_GOLDEN_MIRRORS,
   PHONE_GOLDENS_DIR,
-  phoneGoldenFiles,
+  phoneAllGoldenFiles,
   readWitnessInputs,
 } from "./lib/phone-goldens";
 
@@ -14,13 +14,14 @@ import {
 // (`perf/lib/phone-goldens.ts`), into `test/fixtures/phone-godview/`, pinned byte for byte by
 // `test/phone-parity.test.ts`. The ONE writer of those files (biome is told to leave them), so a
 // diff reads one row per line. Every regeneration is a re-bless: this prints what moved, by step
-// and field, for the commit body to say, with the kit's copies to refresh.
+// and field, for the commit body to say, with the kit's copies to refresh. PG-4s: every phone golden, through
+// the one writer (`phoneAllGoldenFiles`): fold, body, the toolkit's, and one per registered view.
 //
 //   pnpm --filter @vibefield/field-app phone:goldens
 
 describe("the phone's parity goldens", () => {
-  it("writes the fold and body goldens", async () => {
-    const files = phoneGoldenFiles(await computePhoneGoldens(readWitnessInputs()));
+  it("writes every phone golden: fold, body, the toolkit's and each registered view's", async () => {
+    const files = await phoneAllGoldenFiles(await computePhoneGoldens(readWitnessInputs()));
     mkdirSync(PHONE_GOLDENS_DIR, { recursive: true });
     const report: string[] = [];
     for (const [name, bytes] of Object.entries(files)) {

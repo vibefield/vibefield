@@ -71,7 +71,8 @@ const OTHER_ORIGINS = new Map([
     "phone-body.golden.json",
     join(root, "packages/field-app/test/fixtures/phone-godview/phone-body.golden.json"),
   ],
-  // PG-4s — each view's golden, from the one list above
+  // PG-4s — the toolkit's golden, and each view's from the one list above
+  ["phone-toolkit.golden.json", join(PHONE_GODVIEW, "phone-toolkit.golden.json")],
   ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
 ]);
 // Goldens VENDORED from a sibling project outside this workspace, so there is no origin here to
@@ -228,9 +229,13 @@ const requiredMirrors = [
   // PG-3e — the demo door (`-vf-demo-field-slice`) serves the witness's open from the kit's own
   // bundle; the field golden it served until the switch left that folder in the same commit
   ["remote", ["agent-remote-mesh-open.witness.json"], ["Sources/FieldMesh"]],
-  // PG-4s — the Godview views' bundle: the witness every view suite replays, and each view's golden. Never empty: the
-  // witness stands in it from PG-4s on, so the row always asserts something.
-  ["phone-view", [...remoteWitness, ...phoneViewGoldens], ["Tests/FieldHomeTests"]],
+  // PG-4s — the Godview views' bundle: the witness every view suite replays, the toolkit's golden and each view's.
+  // Never empty: the witness stands in it from PG-4s on, so the row always asserts something.
+  [
+    "phone-view",
+    [...remoteWitness, "phone-toolkit.golden.json", ...phoneViewGoldens],
+    ["Tests/FieldHomeTests"],
+  ],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
@@ -242,6 +247,29 @@ for (const [set, fixtures, folders] of requiredMirrors) {
         problems.push(`required ${set} mirror is missing: ${relative(root, copy)}`);
       }
     }
+  }
+}
+
+// PG-4s (Q-S8) — a view's golden committed in field-app but named in no list here would never reach the phone: every
+// `phone-*.golden.json` beside fold, body and the toolkit's must be in `phoneViewGoldens`.
+{
+  const named = new Set([
+    "phone-fold.golden.json",
+    "phone-body.golden.json",
+    "phone-toolkit.golden.json",
+    ...phoneViewGoldens,
+  ]);
+  let committed = [];
+  try {
+    committed = readdirSync(PHONE_GODVIEW).filter((name) => /^phone-.+\.golden\.json$/.test(name));
+  } catch {
+    problems.push(`the phone's goldens folder is unreadable: ${relative(root, PHONE_GODVIEW)}`);
+  }
+  for (const name of committed) {
+    if (!named.has(name))
+      problems.push(
+        `${relative(root, join(PHONE_GODVIEW, name))} is committed but not mirrored: add it to phoneViewGoldens`,
+      );
   }
 }
 

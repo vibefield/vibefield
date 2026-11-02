@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type {
   AgentView,
@@ -7,6 +7,22 @@ import type {
   MonitorModelChange,
   MonitorModelSnapshot,
 } from "@vibefield/puppeteer-view-sdk/model";
+import {
+  approachRecede,
+  deviceWord,
+  everyReceded,
+  formatClock,
+  formatPercent,
+  formatShort,
+  formatWords,
+  RECEDE_MS,
+  RECEDED_EMPTY_OPACITY,
+  RECEDED_OPACITY,
+  recedeTarget,
+  STATE_WORDS,
+  stateTone,
+  THIS_DESKTOP,
+} from "@vibefield/puppeteer-view-sdk/toolkit";
 import {
   bubbleModel,
   DEFAULT_SWARM_PARAMETERS,
@@ -115,14 +131,16 @@ export const PHONE_GOLDENS_LIB_DIR = import.meta.dirname;
 export function phoneGoldenMirrors(
   views: PhoneViewGoldens = PHONE_VIEW_GOLDENS,
 ): Readonly<Record<string, readonly string[]>> {
-  // PG-4s (red): the skeleton names the two literal entries alone
-  void views;
   return {
     [PHONE_FOLD_GOLDEN]: [
       "apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures",
       "apps/ios/VibeFieldKit/Tests/FieldProductTests/Fixtures",
     ],
     [PHONE_BODY_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures"],
+    [PHONE_TOOLKIT_GOLDEN]: [PHONE_VIEW_MIRROR],
+    ...Object.fromEntries(
+      Object.keys(views).map((view) => [phoneViewGoldenName(view), [PHONE_VIEW_MIRROR]]),
+    ),
   };
 }
 /** The mirrors of the registry as it stands; declared after it (a `const` read before its declaration is in its
@@ -447,7 +465,7 @@ export async function computePhoneGoldens(input: {
     at: "open" | "resync" | number,
     kind: FrameKind | undefined,
     heard: { changes: Publication | null; rejoined: Publication | null },
-  ): [PhoneFoldStep, PhoneBodyStep] => {
+  ): [PhoneFoldStep, PhoneBodyStep, PhoneWindowStep] => {
     const update = handed as MonitorModelSnapshot | MonitorModelChange | null;
     if (update !== null) foldRevision = update.revision;
     const fold =
@@ -495,20 +513,24 @@ export async function computePhoneGoldens(input: {
       }),
     };
     handed = null;
-    return [foldStep, { at, ...frame, bodies: bodiesOf(rows) }];
+    // the rows whole, for a view's golden: cloned, so a later step can never rewrite an earlier one (Q-S9)
+    const windowStep: PhoneWindowStep = { at, ...frame, rows: structuredClone(rows) };
+    return [foldStep, { at, ...frame, bodies: bodiesOf(rows) }, windowStep];
   };
 
   const fold: PhoneFoldStep[] = [];
   const body: PhoneBodyStep[] = [];
+  const windowSteps: PhoneWindowStep[] = [];
   try {
     await settle();
     const opened = settleStep();
     const state = feed.state();
     if (state.state !== "live")
       throw new Error(`the witness open was not read: ${JSON.stringify(state)}`);
-    let [foldStep, bodyStep] = step("open", undefined, opened);
+    let [foldStep, bodyStep, windowStep] = step("open", undefined, opened);
     fold.push(foldStep);
     body.push(bodyStep);
+    windowSteps.push(windowStep);
     for (const delivery of input.deliveries) {
       const deliver = sink as ((payload: unknown, kind?: "snapshot" | "delta") => void) | null;
       if (deliver === null) throw new Error(`step ${delivery.at}: the board closed before it`);
@@ -520,19 +542,20 @@ export async function computePhoneGoldens(input: {
       if (opens > 1) {
         fold.push({ at: delivery.at, frame: kind, gap: true });
         body.push({ at: delivery.at, frame: kind, gap: true });
+        windowSteps.push({ at: delivery.at, frame: kind, gap: true });
         break;
       }
-      [foldStep, bodyStep] = step(delivery.at, kind, heard);
+      [foldStep, bodyStep, windowStep] = step(delivery.at, kind, heard);
       fold.push(foldStep);
       body.push(bodyStep);
+      windowSteps.push(windowStep);
     }
   } finally {
     offPublished();
     offFeed();
     feed.dispose();
   }
-  // PG-4s (red): the skeleton keeps no rows
-  return { fold, body, windowRows: [] };
+  return { fold, body, windowRows: windowSteps };
 }
 
 const FOLD_NOTE =
@@ -597,21 +620,195 @@ export function phoneGoldenFiles(goldens: PhoneGoldens): Record<string, string> 
   };
 }
 
+const TOOLKIT_NOTE =
+  'PG-4s (Q-S3 (a)) — the phone Godview\'s shared toolkit words, as puppeteer-view-sdk\'s ./toolkit says them over a fixed vector, one entry per call: STATE_WORDS verbatim (five groups, 14 words); the recede constants and THIS_DESKTOP; and under calls, formatShort, formatWords, formatClock, formatPercent, deviceWord, stateTone (status × kind × unread), recedeTarget, everyReceded and approachRecede, each {inputs…, out}. A non-JSON input is a tagged string (in: "NaN", "Infinity", "-Infinity", "undefined"). formatClock reads the LOCAL zone, so it is pinned zone-free: each entry names wall components [year, month, day, hours, minutes, seconds, ms] and a fraction of a ms, the instant is built from them in the computing host\'s own zone and never recorded, and the dates are mid-month weekdays (no zone\'s transition day) at hours outside 01:00-03:59. The kit\'s Godview/Toolkit (FieldHome) is held to it by FieldHomeTests\' copy (GodviewToolkitParityTests), the copy by pnpm check:ios-fixtures. GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens). A puppeteer EL8 moves it: regenerate and copy to the kit in the same commit. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.';
+
+/** A number the toolkit takes, as the golden can carry it: JSON's own, or a tag for what JSON cannot hold. */
+type Tagged = number | "NaN" | "Infinity" | "-Infinity" | "undefined";
+function untag(value: Tagged): number | undefined {
+  if (value === "undefined") return undefined;
+  if (value === "NaN") return Number.NaN;
+  if (value === "Infinity") return Number.POSITIVE_INFINITY;
+  if (value === "-Infinity") return Number.NEGATIVE_INFINITY;
+  return value;
+}
+
+/** The vector: lengths in ms (the ties 499/500 and 59 499/59 500, the negative clamp, the hour edges, absurd and
+ * non-finite inputs). */
+const SHORT_MS: readonly Tagged[] = [
+  0,
+  499,
+  500,
+  1_000,
+  44_999,
+  59_499,
+  59_500,
+  60_000,
+  659_000,
+  3_599_999,
+  3_600_000,
+  3_660_000,
+  8_040_000,
+  7_200_000,
+  259_200_001,
+  -500,
+  -5_000,
+  1e25,
+  2 ** 60,
+  "NaN",
+  "Infinity",
+  "-Infinity",
+];
+const WORDS_MS: readonly Tagged[] = [
+  0,
+  29_999,
+  30_000,
+  60_000,
+  89_999,
+  90_000,
+  120_000,
+  3_570_000,
+  3_600_000,
+  3_660_000,
+  3_720_000,
+  7_200_000,
+  7_260_000,
+  90_000_000,
+  -60_000,
+  1e25,
+  "NaN",
+  "Infinity",
+];
+/** Wall components [y, mo, d, h, mi, s, ms] and a fraction of a ms (TimeClip truncates it). Mid-month weekdays, at
+ * hours outside 01:00-03:59, so no zone's transition can move them (the design check's N4). */
+const CLOCK_WALLS: ReadonlyArray<{
+  wall: readonly [number, number, number, number, number, number, number];
+  frac: number;
+}> = [
+  { wall: [2026, 11, 11, 14, 5, 9, 0], frac: 0 },
+  { wall: [2026, 7, 15, 0, 0, 0, 0], frac: 0 },
+  { wall: [2026, 5, 20, 23, 59, 59, 999], frac: 0.75 },
+  { wall: [2026, 10, 13, 9, 7, 3, 500], frac: 0.25 },
+  { wall: [2026, 2, 17, 12, 30, 0, 999], frac: 0.999 },
+  { wall: [2025, 12, 16, 18, 45, 59, 0], frac: 0 },
+];
+const PERCENTS: ReadonlyArray<{ in: Tagged; missing?: string }> = [
+  { in: 0 },
+  { in: 42.9 },
+  { in: 99.99 },
+  { in: 100 },
+  { in: 140.5 },
+  { in: -0.5 },
+  { in: 7 },
+  { in: "undefined" },
+  { in: "NaN" },
+  { in: "Infinity" },
+  { in: "-Infinity" },
+  { in: "undefined", missing: "n/a" },
+  { in: "NaN", missing: "" },
+  { in: 12.5, missing: "n/a" },
+];
+
 /** PG-4s — the toolkit's golden: the SDK's own words over a fixed vector, one entry per call. */
 export function phoneToolkitGolden(): Record<string, unknown> {
-  // PG-4s (red): the skeleton records nothing
-  return {};
+  const statuses = ["idle", "working", "blocked"] as const;
+  const kinds = ["agent", "terminal"] as const;
+  const bools = [false, true] as const;
+  return {
+    "//": TOOLKIT_NOTE,
+    versions: puppeteerVersions(),
+    STATE_WORDS,
+    constants: { RECEDED_OPACITY, RECEDED_EMPTY_OPACITY, RECEDE_MS, THIS_DESKTOP },
+    calls: {
+      formatShort: SHORT_MS.map((ms) => ({ in: ms, out: formatShort(untag(ms) as number) })),
+      formatWords: WORDS_MS.map((ms) => ({ in: ms, out: formatWords(untag(ms) as number) })),
+      formatClock: CLOCK_WALLS.flatMap(({ wall, frac }) => {
+        const [year, month, day, hours, minutes, seconds, ms] = wall;
+        const at = new Date(year, month - 1, day, hours, minutes, seconds, ms).getTime() + frac;
+        return bools.map((withSeconds) => ({
+          wall: [...wall],
+          frac,
+          withSeconds,
+          out: formatClock(at, withSeconds),
+        }));
+      }),
+      formatPercent: PERCENTS.map((entry) => ({
+        ...entry,
+        out:
+          entry.missing === undefined
+            ? formatPercent(untag(entry.in))
+            : formatPercent(untag(entry.in), entry.missing),
+      })),
+      deviceWord: [
+        { self: true, name: "Studio" },
+        { self: false, name: "Loft" },
+        { self: false, name: "" },
+      ].map((device) => ({ ...device, out: deviceWord(device) })),
+      stateTone: statuses.flatMap((status) =>
+        kinds.flatMap((kind) =>
+          bools.map((unread) => ({
+            status,
+            kind,
+            unread,
+            out: stateTone({ status, kind, unread }),
+          })),
+        ),
+      ),
+      recedeTarget: bools.flatMap((receded) =>
+        bools.map((every) => ({ receded, every, out: recedeTarget(receded, every) })),
+      ),
+      everyReceded: [[], [false], [true, false], [true, true]].map((receded) => ({
+        in: receded,
+        out: everyReceded(receded.map((value) => ({ receded: value }))),
+      })),
+      approachRecede: [
+        { current: 1, target: RECEDED_OPACITY, deltaMs: 16 },
+        { current: RECEDED_OPACITY, target: 1, deltaMs: 16 },
+        { current: 0.99, target: 1, deltaMs: 16 },
+        { current: 1, target: 1, deltaMs: 16 },
+        { current: 0.5, target: 1, deltaMs: -16 },
+        { current: RECEDED_OPACITY, target: RECEDED_EMPTY_OPACITY, deltaMs: 240 },
+      ].map((entry) => ({
+        ...entry,
+        out: approachRecede(entry.current, entry.target, entry.deltaMs),
+      })),
+    },
+  };
 }
 
 /** PG-4s — ONE WRITER OF EVERY PHONE GOLDEN: the fold and body goldens, the toolkit's, and one per registered view
- * (`views` is for the parity test's probe). The generator writes exactly these, and the parity test compares them. */
+ * (`views` is for the parity test's probe). The generator writes exactly these, and the parity test compares them.
+ * A view's file is this file's header around its lane's note and compute's steps, over the window's rows cloned
+ * (a compute cannot reach the goldens it shares them with). */
 export async function phoneAllGoldenFiles(
   goldens: PhoneGoldens,
   views: PhoneViewGoldens = PHONE_VIEW_GOLDENS,
 ): Promise<Record<string, string>> {
-  // PG-4s (red): the skeleton writes the two goldens alone
-  void views;
-  return phoneGoldenFiles(goldens);
+  const files: Record<string, string> = {
+    ...phoneGoldenFiles(goldens),
+    [PHONE_TOOLKIT_GOLDEN]: `${printed(phoneToolkitGolden(), 0, "")}\n`,
+  };
+  for (const [view, load] of Object.entries(views)) {
+    const { golden } = await load();
+    const steps = await golden.compute({
+      steps: structuredClone(goldens.windowRows),
+      nowMs: PHONE_BODY_NOW_MS,
+    });
+    files[phoneViewGoldenName(view)] = `${printed(
+      {
+        "//": golden.note,
+        versions: puppeteerVersions(),
+        self: "home",
+        view,
+        nowMs: PHONE_BODY_NOW_MS,
+        inputs: [...PHONE_WITNESS_INPUTS],
+        steps,
+      },
+      0,
+      "",
+    )}\n`;
+  }
+  return files;
 }
 
 /** PG-4s — a lane file (`phone-goldens-<view>.ts`) in `dir` whose view the registry does not name: a golden no
@@ -620,19 +817,18 @@ export function unregisteredViewFiles(
   dir: string,
   views: PhoneViewGoldens = PHONE_VIEW_GOLDENS,
 ): string[] {
-  // PG-4s (red): the skeleton finds nothing
-  void dir;
-  void views;
-  return [];
+  return readdirSync(dir)
+    .filter((name) => /^phone-goldens-[a-z0-9-]+\.ts$/.test(name))
+    .filter((name) => !Object.hasOwn(views, name.slice("phone-goldens-".length, -".ts".length)))
+    .sort();
 }
 
 /** PG-4s — a `phone-*.golden.json` in `dir` that `files` (the one writer's map) does not write: a golden committed
  * and left behind. */
 export function orphanGoldens(dir: string, files: Readonly<Record<string, string>>): string[] {
-  // PG-4s (red): the skeleton finds nothing
-  void dir;
-  void files;
-  return [];
+  return readdirSync(dir)
+    .filter((name) => /^phone-.+\.golden\.json$/.test(name) && !Object.hasOwn(files, name))
+    .sort();
 }
 
 /** What moved between a committed golden and the computation: one line per step and field, for
