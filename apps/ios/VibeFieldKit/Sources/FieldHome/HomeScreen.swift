@@ -41,8 +41,6 @@ public struct HomeScreen: View {
   @State private var mesh = MeshModel()
   /// TS-7 — the system's sign-in sheet; `syncSignInSheet` opens and closes it.
   @State private var signInSheet = TailscaleSignInSession()
-  /// TS-7 (Q1-f) — the desktop filling "No desktops yet"'s row for the beat.
-  @State private var foundDesktop: FieldHomeModel.FoundDesktop?
   /// TS-7b — the account a Mac's code said to expect, and its reader.
   private let expectationMemory = ExpectationMemory()
   @State private var macCodeReaderOpen = false
@@ -274,25 +272,19 @@ public struct HomeScreen: View {
     ZStack {
       // The swarm on Metal (IOS-6c/6d): the reference's renderer over the
       // dressed rows; the chrome slot's obstacles are the field's walls.
-      let door = doorPage
+      // WI-1 — the field stands only signed in, so no page stands on it: the
+      // way in has the splash's field to itself (TS-7c and TS-D22 retired).
       SwarmField(
         bubbles: bubbles,
         // IOS-9e — the field draws only while it is the page standing: the
         // other two keep it alive under them, and a hidden Metal view
         // rendering at 120 Hz is a battery spent on nobody.
         isActive: scenePhase == .active && selectedTab == .field,
-        // TS-7 — under a door page the field drifts and takes no acts: a hold
-        // would open a launch sheet with no desktop to launch on.
-        showsEmptyState: door == nil,
-        // TS-D22 — over a live field the door's page stands on the Peek's dim.
-        scrim: FieldHomeModel.doorDimsField(door, liveBodies: bubbles.count) ? ChromePalette.searchScrim : nil,
-        // TS-7c — no card opens under a door either. Read at the tap, not at
-        // this render: the stage keeps the closure it was first handed.
-        onSelect: { bubble in
-          if FieldHomeModel.fieldTakesActs(under: doorPage) { openCard(on: bubble) }
-        },
-        onCreate: FieldHomeModel.fieldTakesActs(under: door) ? fieldHold : nil,
-        bloom: FieldHomeModel.fieldTakesActs(under: door) ? bloomMenu : nil,
+        showsEmptyState: true,
+        scrim: nil,
+        onSelect: { bubble in openCard(on: bubble) },
+        onCreate: fieldHold,
+        bloom: bloomMenu,
         onBloom: { choice in
           // Q4 (a): the bloom opens the launch sheet on that desktop and profile
           beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
@@ -305,38 +297,6 @@ public struct HomeScreen: View {
         .ignoresSafeArea()
       VignetteOverlay()
         .ignoresSafeArea()
-
-      if let door {
-        DoorPageView(
-          page: door, onSignIn: performSignIn,
-          bottomClearance: AppBar.clearance(homeInset: homeInset, stepper: false),
-          onScan: { macCodeReaderOpen = true },
-          onSwitchAccount: switchAccount,
-          onKeepAccount: keepAccount)
-        .transition(.opacity)
-        // On the page rather than the stage: the stage already presents the
-        // swarm lab's cover, and one view presents one cover.
-        .fullScreenCover(isPresented: $macCodeReaderOpen) {
-          MacCodeReader(
-            onCode: { code in
-              macCodeReaderOpen = false
-              receive(code, arrival: .scanned)
-            },
-            onClose: { macCodeReaderOpen = false })
-        }
-      }
-    }
-    .animation(FieldMotion.ease(0.24), value: doorPage)
-    .onChange(of: doorPage) { previous, next in
-      // TS-7 (Q1-f) — "Your Mac appears here" keeps its promise: the first
-      // desktop to list fills the row for the beat, then the page yields.
-      guard let found = FieldHomeModel.foundDesktop(previous: previous, next: next, desktops: linkDesktops)
-      else { return }
-      foundDesktop = found
-      Task {
-        try? await Task.sleep(for: FieldHomeModel.foundBeatHold)
-        foundDesktop = nil
-      }
     }
     // The lab covers the stage (IOS-6c); presented here rather than on the
     // body's chain, which is already at the type-checker's limit.
@@ -613,7 +573,7 @@ public struct HomeScreen: View {
   @ViewBuilder
   private var barRow: some View {
     ZStack(alignment: .bottom) {
-      if selectedTab != .search && !barFolded && !welcomeHidesCorner {
+      if selectedTab != .search && !barFolded {
         accountCorner
           .padding(.leading, AppBar.margin)
           .frame(maxWidth: .infinity, alignment: .bottomLeading)
@@ -2224,7 +2184,7 @@ public struct HomeScreen: View {
       machineName: mesh.machineName,
       adminConsole: mesh.adminConsoleURL,
       signInNote: mesh.signInNote,
-      found: foundDesktop,
+      found: nil,
       expected: expectationMemory.expected())
   }
 
@@ -2278,16 +2238,6 @@ public struct HomeScreen: View {
         || argument.hasPrefix("-vf-mock") || argument.hasPrefix("-vf-swarm-lab")
     }
   #endif
-
-  /// TS-7 (Q1-e) — while the welcome stands on the Field tab its Continue is
-  /// the one act, said once: the corner steps aside there and stays on
-  /// History.
-  private var welcomeHidesCorner: Bool {
-    // A menu already open keeps its corner: the bar folds its neighbours
-    // under it, and an invisible menu would take the tabs with it.
-    guard selectedTab == .field, !accountMenuOpen, case .welcome = doorPage else { return false }
-    return true
-  }
 
   /// The field's hold, when no door page stands: the launch sheet on the
   /// usual place, or the scripted fleet's spawn under the mock.

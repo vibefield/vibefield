@@ -682,26 +682,6 @@ enum FieldHomeModel {
     }
   }
 
-  /// The found beat's subject: the first desktop listed as "No desktops yet"
-  /// yields to the field, or nil for any other change of page.
-  static func foundDesktop(previous: DoorPage?, next: DoorPage?, desktops: [FieldDesktop]) -> FoundDesktop? {
-    guard case .noDesktops(_, nil) = previous, next == nil, let first = desktops.first else { return nil }
-    return FoundDesktop(name: first.name, platform: first.platform)
-  }
-
-  /// TS-7c (DESIGN.md §9) — whether the field takes acts: none under a door.
-  /// No hold, no bloom, and a tap on a body opens no card.
-  static func fieldTakesActs(under door: DoorPage?) -> Bool {
-    door == nil
-  }
-
-  /// TS-D22 (James, 2026-10-29) — whether the field drifts dimmed under the
-  /// door: only a page that stands over a live field, one with bodies on it.
-  /// An empty field under the welcome keeps its own ground.
-  static func doorDimsField(_ door: DoorPage?, liveBodies: Int) -> Bool {
-    door != nil && liveBodies > 0
-  }
-
   /// TS-7b — whether the expectation is met and goes: the node reports the
   /// login the Mac's code named. Only the node's own report settles it — a
   /// remembered login is what the phone had, not what it signed in as.

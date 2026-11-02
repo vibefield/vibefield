@@ -95,21 +95,6 @@ struct DoorPageTests {
     }
   }
 
-  @Test("the beat begins only when No desktops yet yields to the field with a desktop listed")
-  func foundBeat() {
-    let studio = FieldDesktop(deviceId: "dev-1", name: "studio", platform: "darwin", state: .ready, feed: .door)
-    let none = FieldHomeModel.DoorPage.noDesktops(login: login, found: nil)
-    #expect(
-      FieldHomeModel.foundDesktop(previous: none, next: nil, desktops: [studio])
-        == .init(name: "studio", platform: "darwin"))
-    #expect(FieldHomeModel.foundDesktop(previous: none, next: nil, desktops: []) == nil)
-    #expect(FieldHomeModel.foundDesktop(previous: none, next: .welcome(failure: nil), desktops: [studio]) == nil)
-    #expect(FieldHomeModel.foundDesktop(previous: .welcome(failure: nil), next: nil, desktops: [studio]) == nil)
-    // The beat's own end yields to the field and does not begin another.
-    let held = FieldHomeModel.DoorPage.noDesktops(login: login, found: .init(name: "studio", platform: "darwin"))
-    #expect(FieldHomeModel.foundDesktop(previous: held, next: nil, desktops: [studio]) == nil)
-  }
-
   @Test("the menu's sign-in row: the act's words on a first sign-in, Sign in again for an account")
   func signInWord() {
     func face(remembered: String?) -> FieldHomeModel.AccountFace {
@@ -212,26 +197,5 @@ struct DoorPageTests {
       #expect(demo?.door == door, "\(name)")
     }
     #expect(AccountFixtures.demo(named: "nonsense") == nil)
-  }
-
-  @Test("TS-D22: a door over a live field dims it; the field alone, or a door over an empty one, keeps its ground")
-  func dimsOnlyALiveField() {
-    let another = FieldHomeModel.DoorPage.anotherAccount(
-      current: AccountFixtures.otherLogin, expected: AccountFixtures.login, from: "Studio", byLink: false)
-    #expect(FieldHomeModel.doorDimsField(another, liveBodies: 3))
-    #expect(FieldHomeModel.doorDimsField(.welcome(failure: nil), liveBodies: 1))
-    #expect(!FieldHomeModel.doorDimsField(.welcome(failure: nil), liveBodies: 0))
-    #expect(!FieldHomeModel.doorDimsField(nil, liveBodies: 3))
-  }
-
-  @Test("TS-7c: the field takes no acts under any door — no hold, no bloom, no card — and every act with none")
-  func noActsUnderADoor() {
-    let doors: [FieldHomeModel.DoorPage] = [
-      .welcome(failure: nil), .approval(machine: nil, adminConsole: nil), .signInAgain(note: nil),
-      .noDesktops(login: login, found: nil),
-      .anotherAccount(current: AccountFixtures.otherLogin, expected: login, from: "Studio", byLink: true),
-    ]
-    for door in doors { #expect(!FieldHomeModel.fieldTakesActs(under: door), "\(door)") }
-    #expect(FieldHomeModel.fieldTakesActs(under: nil))
   }
 }
