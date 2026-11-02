@@ -399,8 +399,10 @@ public final class FieldLink {
   /// stop and a lost home.
   @ObservationIgnored private var refusedWhileArming = false
   /// Q-P2 (design v2 §3.7) — a desktop whose door refused the remote cut, on its own ladder: the asks run the stuck
-  /// ladder apart (30, 60, 120, 240 s, then every 300), and no hello clears it. Only a remote open from that desktop
-  /// that reads clears it, or `stop()`.
+  /// ladder apart (30, 60, 120, 240 s, then every 300), and no hello clears it, nor a sleep (`forget` keeps it). What
+  /// clears it: a remote open from that desktop that reads, a home's board listing that desktop live with its board
+  /// (the v2 check's S1: it serves the field, whichever home answers for it), or `stop()`. While it stands it is the
+  /// desktop's corner words (`refreshDesktops`), and the desktop is no home candidate until it is due.
   @ObservationIgnored private var remoteRefusals: [String: RemoteRefusal] = [:]
 
   private struct RemoteRefusal {
@@ -1149,6 +1151,15 @@ public final class FieldLink {
       if let pick = homeCandidate(excluding: nil) { openHome(pick) }
       return
     }
+    // Q-P2 (§3.7) — a home that refused the remote cut, inside its ladder, gives way to a desktop that may serve it.
+    // It still answers, so it is left standing ("connected · the field was refused: …"), never downgraded.
+    if let refused = remoteRefusals[current], refused.retryAt > now(),
+      let pick = homeCandidate(excluding: current)
+    {
+      loseHome(because: "it cannot serve this phone's field: \(refused.reason)", stillAnswering: true)
+      openHome(pick)
+      return
+    }
     guard struggling, let client = homeClient else { return }
     if case .ready = client.state { return }
     guard let pick = homeCandidate(excluding: current) else { return }
@@ -1158,8 +1169,8 @@ public final class FieldLink {
 
   /// `home = the last home ?? the first self desktop whose door answers`: the
   /// desktops whose door answered this phone, that no door stopped and no
-  /// refusal holds, in device order — the remembered home first when it is
-  /// among them.
+  /// refusal holds — nor the remote cut's ladder (Q-P2, §3.7) until it is due —
+  /// in device order, the remembered home first when it is among them.
   private func homeCandidate(excluding current: String?) -> String? {
     let at = now()
     let candidates = found.keys.sorted().filter { deviceId in
@@ -1169,6 +1180,7 @@ public final class FieldLink {
       guard case .answering = entry.admission else { return false }
       guard endpointRefusals[deviceId] == nil, foreignDoors[deviceId] == nil else { return false }
       if let retryAt = entry.stuckRetryAt, retryAt > at { return false }
+      if let refusal = remoteRefusals[deviceId], refusal.retryAt > at { return false }
       return true
     }
     if let login = selfLogin, let remembered = homeMemory?.lastHome(for: login),
@@ -1194,7 +1206,12 @@ public final class FieldLink {
   /// afresh. The board copy STAYS — greyed, since no live home answers for it —
   /// until the next home's open replaces it (`RemoteMeshCopy.open` replaces
   /// everything).
-  private func loseHome(because reason: String) {
+  ///
+  /// `stillAnswering` (Q-P2, §3.7): the home is left because it refused the
+  /// remote cut, not because its door went. It keeps `.answering`, so its
+  /// corner row stays "connected · the field was refused: …" and it is a
+  /// candidate again when its ladder is due.
+  private func loseHome(because reason: String, stillAnswering: Bool = false) {
     guard let lost = home else { return }
     if let entry = found[lost] {
       note("\(fallbackName(entry)) stopped being this phone's home: \(reason)")
@@ -1217,7 +1234,7 @@ public final class FieldLink {
     // any more: it is weather, asked again on the next pass like every other
     // candidate. (A door that STOPPED this phone keeps its own word and its
     // backoff; a refused one keeps its refusal.)
-    if case .answering = found[lost]?.admission, found[lost]?.stopped == nil {
+    if !stillAnswering, case .answering = found[lost]?.admission, found[lost]?.stopped == nil {
       found[lost]?.admission = .unreachable(reason)
     }
     for deviceId in found.keys {
@@ -1555,9 +1572,19 @@ public final class FieldLink {
         guard self.homeClient === client else { return }
         // UA-P-1d — THIS REACHES A FACE: a door that answered hello and then
         // refused the field is said in the corner (`MeshDisplay.linkLine`), and
-        // the note stays as the diagnostic. The sweep asks again.
+        // the note stays as the diagnostic.
         let reason = MeshModel.shortReason(error)
         self.note("\(deviceId) refused the field subscription: \(reason)")
+        // Q-P2 (§3.7, the v2 check's M3 (a)) — the OLD HOME's own shape: a desktop from before `remote` answers
+        // PRECONDITION_FAILED (fieldd's `malformedBoardAsk`). It goes on its own ladder, and the pass that follows
+        // moves the field to a desktop that serves the cut when one answers. Every other refusal — a modern home's
+        // FORBIDDEN_SCOPE "not yet" (UA-P-1d) among them — is asked again on the sweep, as before.
+        if (error as? FieldProductError)?.kind == "PRECONDITION_FAILED" {
+          self.recordRemoteRefusal(deviceId, reason: reason)
+          self.refreshDesktops()
+          self.sweepSoon()
+          return
+        }
         self.found[deviceId]?.fieldRefusal = reason
         self.refreshDesktops()
       }
@@ -1590,8 +1617,10 @@ public final class FieldLink {
       repair(why)
       return
     }
-    // the open read: this desktop serves the cut, so its ladder and the corner's words go
+    // the open read: this desktop serves the cut, so its ladder and the corner's words go — and every desktop it
+    // lists live with its board (S1)
     clearRemoteRefusal(deviceId)
+    clearListedRefusals()
     redraw(remote.publish())
   }
 
@@ -1628,10 +1657,18 @@ public final class FieldLink {
 
   /// The desktop serves the cut: its ladder goes, and so do the corner's words.
   private func clearRemoteRefusal(_ deviceId: String) {
-    remoteRefusals.removeValue(forKey: deviceId)
-    if found[deviceId]?.fieldRefusal != nil {
-      found[deviceId]?.fieldRefusal = nil
-      refreshDesktops()
+    let held = remoteRefusals.removeValue(forKey: deviceId) != nil
+    let said = found[deviceId]?.fieldRefusal != nil
+    if said { found[deviceId]?.fieldRefusal = nil }
+    if held || said { refreshDesktops() }
+  }
+
+  /// S1 — a desktop the copy lists LIVE with its board serves the field, whichever home answers for it: its ladder
+  /// and its words go (an upgrade behind another home is heard here, not only when it is home again).
+  private func clearListedRefusals() {
+    guard !remoteRefusals.isEmpty else { return }
+    for device in remote.devices where device.state == .live && device.epoch != nil {
+      if remoteRefusals[device.device] != nil { clearRemoteRefusal(device.device) }
     }
   }
 
@@ -1645,7 +1682,9 @@ public final class FieldLink {
       return
     }
     switch remote.frame(frame, now: wireNow()) {
-    case .applied: redraw(remote.publish())
+    case .applied:
+      clearListedRefusals()
+      redraw(remote.publish())
     case .gap(let why): repair(why)
     // after a gap, before the fresh open: the copy's generation guard
     case .ignored: break
@@ -1724,7 +1763,8 @@ public final class FieldLink {
         state: state(of: deviceId, entry: entry),
         feed: feed(of: deviceId),
         publishesTerminalDoors: row?.capabilities?.terminalMesh,
-        fieldRefusal: entry.fieldRefusal,
+        // S1 — the ladder's words while it stands, wherever the desktop has been (a sleep forgets `entry`'s own)
+        fieldRefusal: remoteRefusals[deviceId]?.reason ?? entry.fieldRefusal,
         userId: entry.userId,
         person: entry.person,
         board: standing(of: deviceId))
