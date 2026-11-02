@@ -39,6 +39,7 @@ struct CardGround {
 /// terminal without knowing how one works, which is what keeps the Ghosttea
 /// renderer on the far side of `FieldTerminal`.
 struct SessionCardView<Terminal: View>: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   /// The card's SUBJECT — the bubble it opened on, kept fresh by the host
   /// while the field still carries it and deliberately NOT dropped when the
   /// field stops carrying it. See `listed`.
@@ -71,11 +72,6 @@ struct SessionCardView<Terminal: View>: View {
   /// still copyable, but it is plainly not live. Dimming says that without a
   /// word, which is the honest way to say it while the words are busy.
   let cooled: Bool
-  /// IOS-8g — the terminal's appearance sheet, from the card's own `···`:
-  /// the TERMINAL chip that stood in the field's top-right corner moved here,
-  /// because what it opens is about the terminal this card holds, and the
-  /// field's corners are the account's and the tab bar's now.
-  let onSettings: () -> Void
   /// IOS-4c — why this agent's card has no terminal, in the host's words
   /// (`AgentTerminalFace.note`). nil where the ordinary invitation already
   /// says it, or where there is nothing honest to say.
@@ -93,9 +89,16 @@ struct SessionCardView<Terminal: View>: View {
   /// Item 42 — who drives this card's session from another device, handed over
   /// only while one does and the card has no words of its own
   /// (`FieldHomeModel.seatReadout`, `showsSeatReadout`). Given, the live card
-  /// stands this readout in its empty rows, over the held veil; nil says
+  /// centers this readout over the held veil; nil says
   /// nothing.
   var seatReadout: FieldHomeModel.SeatReadout? = nil
+  /// The open input card reserves space below the terminal. Its custom safe
+  /// area must stay in effect while the card holds the keyboard.
+  var inputIsOpen: Bool = false
+  /// Fold the host's keyboard when the held overlay first appears. Observing
+  /// its presence, rather than its geometry, lets a later explicit tap take
+  /// control without a resize immediately folding the keyboard again.
+  var onOtherDriverAppeared: () -> Void = {}
   /// The act that fixes "no write key for this host" (IOS-3c), when there is
   /// one to offer. `nil` means not offered and draws nothing — this card never
   /// renders a control it cannot honour (D-i6). It is a callback rather than a
@@ -135,11 +138,10 @@ struct SessionCardView<Terminal: View>: View {
   /// The live card is its terminal, edge to edge (DESIGN.md §8, "The phone's
   /// live card is its terminal"; James, 2026-10-19, T1 and F1). It wears
   /// Godview's pane frame: a line and an inner glow that follow the sheet's
-  /// corners, and a 44pt band across its top. The grid starts under the band
-  /// and runs to the top of the home indicator's safe area, so no row hides
-  /// under chrome; the closed input row floats over its last rows (the host's
-  /// `ClosedRow`). The terminal's own ground runs on behind the home indicator.
-  /// There is no paper, rounded inset, divider or header block.
+  /// corners. The header floats over the grid on a blur that fades away below
+  /// its words. The Metal surface also paints behind the home indicator; its
+  /// safe-area insets keep the last grid row above it. The closed input row
+  /// floats over the grid's last rows (the host's `InputOverlay`).
   private func liveCard(_ bubble: FieldBubble, ground: CardGround) -> some View {
     ZStack(alignment: .top) {
       terminal()
@@ -151,14 +153,14 @@ struct SessionCardView<Terminal: View>: View {
         }
         .animation(FieldMotion.ease(0.24), value: cooled)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // The grid starts under the band. The Metal view itself is laid out
-        // there — never translated — so the grid it measures, less its safe
-        // area, is the rows the person can read, and those are the PTY's.
-        .padding(.top, FieldHomeModel.liveCardBand)
+        // Paint through the home-indicator area while reading. Keep the open
+        // input card's safe-area inset: ignoring it would put rows behind its
+        // controls. Keyboard avoidance remains active in either state.
+        .ignoresSafeArea(.container, edges: inputIsOpen ? [] : .bottom)
 
       // Item 42 — another client drives the session: the card goes on drawing
       // it at the holder's size, dimmed under the held veil, and says so in its
-      // empty rows, lit in the band's ink. Over the grid and under the frame and
+      // center, lit in the band's ink. Over the grid and under the frame and
       // the band; it takes no touch, so one on the grid goes through and takes
       // the seat back (DS-D5), and it leaves at once when the phone takes it.
       if let seatReadout {
@@ -182,13 +184,16 @@ struct SessionCardView<Terminal: View>: View {
       .environment(\.colorScheme, ground.inkScheme)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    // The ground runs on under the input card and the home indicator. It is a
-    // strip at the card's foot that takes the bottom safe area, so it never
-    // lies under the grid: one surface, never a layer under a layer.
-    .background(alignment: .bottom) {
-      ground.color
-        .frame(height: 0)
-        .ignoresSafeArea(edges: .bottom)
+    .overlay(alignment: .bottom) {
+      contextMeter(bubble)
+        .environment(\.colorScheme, ground.inkScheme)
+        .padding(.horizontal, 32)
+        // The upper part of the bottom safe area, clear of the keyboard key
+        // and the system's home indicator. This reserves no terminal rows.
+        .offset(y: inputIsOpen ? 0 : 8)
+    }
+    .onChange(of: seatReadout != nil, initial: true) { _, shown in
+      if shown { onOtherDriverAppeared() }
     }
   }
 
@@ -242,42 +247,10 @@ struct SessionCardView<Terminal: View>: View {
             .foregroundStyle(FieldPalette.textFaint)
         }
       }
-
-      moreMenu {
-        Text("···")
-          .font(FieldType.mono(11, .heavy))
-          .foregroundStyle(FieldPalette.textMuted)
-          .frame(width: 30, height: 26)
-          .background(RoundedRectangle(cornerRadius: 6).fill(FieldPalette.panelBackground.opacity(0.8)))
-          .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
-          .contentShape(Rectangle())
-      }
     }
     .padding(.horizontal, 18)
     .padding(.top, 22)
     .padding(.bottom, 14)
-  }
-
-  /// The card's `···` (IOS-8g): the acts about this card's terminal. One
-  /// today — the terminal's look, Settings › Terminal with Settings one step
-  /// back (IOS-10a; the TERMINAL chip's appearance sheet until then), named in
-  /// the desktop's Look word — in the godview voice the card speaks, on the
-  /// system's own menu. The stacked
-  /// card's header boxes the glyph; the live card's band wears it bare (T1).
-  private func moreMenu<Glyph: View>(@ViewBuilder glyph: () -> Glyph) -> some View {
-    let face = glyph()
-    return Menu {
-      Button {
-        onSettings()
-      } label: {
-        Label("Terminal look…", systemImage: "paintpalette")
-      }
-    } label: {
-      face
-    }
-    .menuStyle(.button)
-    .buttonStyle(.plain)
-    .accessibilityLabel("More")
   }
 
   /// The line under the name: what is thinking, or which machine and how it
@@ -303,8 +276,8 @@ struct SessionCardView<Terminal: View>: View {
 
   // MARK: - The band and the frame (item 41)
 
-  /// The live card's band (T1; DESIGN.md §8): 44pt across the sheet's top, on
-  /// the terminal's ground. At the left the readout; at the right `···` and the
+  /// The live card's header: 44pt across the sheet's top, floating over the
+  /// terminal. At the left the readout; at the right the
   /// badge, inset clear of the sheet's 40pt corner (the badge's own corner
   /// stands 12pt inside its arc). The row sits under the drag indicator, its
   /// middle 26pt down. The band takes its own touches: one that reached the
@@ -315,26 +288,35 @@ struct SessionCardView<Terminal: View>: View {
         bandReadout(readout)
       }
       Spacer(minLength: 0)
-      HStack(spacing: 14) {
-        moreMenu {
-          Text("···")
-            .font(FieldType.mono(14, .heavy))
-            .tracking(FieldType.tracking(0.04, of: 14))
-            .foregroundStyle(FieldPalette.textMain.opacity(0.62))
-            .frame(width: 30, height: 36)
-            .contentShape(Rectangle())
-        }
-        badge(bubble, ink: ground.solid)
-      }
-      // The readout gives way first: the badge is which session this is.
-      .layoutPriority(1)
+      badge(bubble, ink: ground.solid)
+        // The readout gives way first: the badge is which session this is.
+        .layoutPriority(1)
     }
     .padding(.leading, 28)
     .padding(.trailing, 24)
     .padding(.top, 8)
     .frame(maxWidth: .infinity)
     .frame(height: FieldHomeModel.liveCardBand)
-    .background(ground.color)
+    .background(alignment: .top) {
+      Rectangle()
+        .fill(.ultraThinMaterial)
+        .overlay(ground.solid.opacity(0.22))
+        .mask {
+          LinearGradient(
+            stops: [
+              .init(color: .black, location: 0),
+              .init(color: .black.opacity(0.96), location: 0.4),
+              .init(color: .black.opacity(0.55), location: 0.68),
+              .init(color: .black.opacity(0.15), location: 0.88),
+              .init(color: .clear, location: 1),
+            ],
+            startPoint: .top, endPoint: .bottom
+          )
+        }
+        .frame(height: FieldHomeModel.liveCardBand + 32)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
     .contentShape(Rectangle())
   }
 
@@ -356,6 +338,32 @@ struct SessionCardView<Terminal: View>: View {
       .foregroundStyle(FieldPalette.textMain.opacity(0.5))
       .lineLimit(1)
       .truncationMode(.tail)
+  }
+
+  /// The desktop pane's context meter: a 6pt monochrome track, stronger at
+  /// 80%, with the same clamping and 420ms fill animation. No invented value
+  /// for a shell or an agent that has not reported its context usage.
+  @ViewBuilder
+  private func contextMeter(_ bubble: FieldBubble) -> some View {
+    if let share = bubble.agent?.contextUsedPercent, share.isFinite {
+      let percent = Int(min(max(share, 0), 100).rounded(.down))
+      GeometryReader { proxy in
+        ZStack(alignment: .leading) {
+          Capsule().fill(FieldPalette.textMain.opacity(0.1))
+          Capsule()
+            .fill(FieldPalette.textMain.opacity(percent >= 80 ? 0.82 : 0.34))
+            .frame(width: proxy.size.width * CGFloat(percent) / 100)
+        }
+      }
+      .frame(height: 6)
+      .animation(
+        reduceMotion ? nil : .timingCurve(0.22, 1, 0.36, 1, duration: 0.42), value: percent
+      )
+      .allowsHitTesting(false)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel("Context window")
+      .accessibilityValue("\(percent)% used")
+    }
   }
 
   /// The badge (T1): the session's OS mark · its agent's mark · its name, in
@@ -588,13 +596,12 @@ extension SessionCardView where Terminal == EmptyView {
   init(
     bubble: FieldBubble?,
     listed: Bool = true,
-    statusNote: String? = nil,
-    onSettings: @escaping () -> Void = {}
+    statusNote: String? = nil
   ) {
     self.init(
       bubble: bubble, listed: listed, isAttached: false,
       statusNote: statusNote, statusDetail: nil,
-      statusActions: [], cooled: false, onSettings: onSettings
+      statusActions: [], cooled: false
     ) {
       EmptyView()
     }

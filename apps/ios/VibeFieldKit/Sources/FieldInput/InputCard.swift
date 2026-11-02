@@ -33,11 +33,6 @@ import SwiftUI
 /// itself (`InputAnnouncement`): armed, locked, released, the mode, the keypad.
 public struct InputCard: View {
   private let model: InputCardModel
-  // --- IOS-5c: the pasteboard's own state, so the paste chip can appear
-  // exactly when there is something new to offer. Optional because a card
-  // without a host has no watcher, and the demo fixture is one of those.
-  private let pasteboard: PasteboardWatcher?
-  // --- end IOS-5c
   /// The composer's measured height. One line at rest; the card grows UPWARD
   /// as the draft does, which is why the row is bottom-aligned.
   @State private var composerHeight: CGFloat = InputCardMetrics.baseRowHeight
@@ -49,17 +44,14 @@ public struct InputCard: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   // --- end IOS-5e -----------------------------------------------------------
 
-  public init(model: InputCardModel, pasteboard: PasteboardWatcher? = nil) {
+  public init(model: InputCardModel) {
     self.model = model
-    self.pasteboard = pasteboard
   }
 
   /// The canvas's geometry: the card is `padding: 8` with `gap: 6` between its
-  /// rows and `gap: 4` inside one; the chips row stands 8 above it, and the
-  /// whole stack is inset 9 from the screen's edges (`.chrome`).
+  /// rows and `gap: 4` inside one; the card is inset 9 from the screen's edges.
   private static let rowGap: CGFloat = 6
   private static let keyGap: CGFloat = 4
-  private static let stackGap: CGFloat = 8
   private static let padding: CGFloat = 8
   private static let inset: CGFloat = 9
 
@@ -70,31 +62,17 @@ public struct InputCard: View {
   private var actionGlyph: CGFloat { InputCardMetrics.actionGlyphSize(for: dynamicTypeSize) }
 
   public var body: some View {
-    // --- IOS-5c: three faces, not one. With the keyboard down the card is a
-    // single row (the design's `MainClosed`); with it up, the contextual chips
-    // row rides above the card whenever it has something to say.
-    // F1 (2026-10-19): the closed row floats over the terminal's last rows —
-    // `ClosedRow`, which the host lays over the session card — so with the
-    // keyboard down this view holds no room in the bottom safe area and the
-    // grid runs to its top. It still stands, empty, for the keypad's hidden
-    // responder below, which must never leave the hierarchy.
+    // Only the composer and key rail reserve terminal space. Paste, replies,
+    // and the show/fold key live in the host's InputOverlay in both states.
+    // Keep this view mounted at zero height when folded: the keypad's hidden
+    // responder below must never leave the hierarchy.
     Group {
       if model.keyboardOwner == .none {
         Color.clear.frame(height: 0)
       } else {
-        VStack(spacing: Self.stackGap) {
-          if !ChipsRow.isEmpty(model: model, pasteboard: pasteboard) {
-            ChipsRow(model: model, pasteboard: pasteboard)
-              // IOS-5e: opacity and nothing else, at every motion setting. The
-              // row arriving is the only thing that changes, and a chip that
-              // flew in from an edge would be the one piece of this card that
-              // moved for decoration.
-              .transition(.opacity)
-          }
-          card
-        }
-        .padding(.horizontal, Self.inset)
-        .padding(.bottom, Self.rowGap)
+        card
+          .padding(.horizontal, Self.inset)
+          .padding(.bottom, Self.rowGap)
       }
     }
     // --- IOS-5e: the card's widest, centred. See `InputCardMetrics.maximumWidth`
@@ -116,8 +94,6 @@ public struct InputCard: View {
     }
     .animation(FieldMotion.ease(0.18), value: model.keypadShown)
     // --- end IOS-5d -----------------------------------------------------------
-    .animation(FieldMotion.ease(0.24), value: model.chips)
-    .animation(FieldMotion.ease(0.24), value: pasteboard?.hasNewContent ?? false)
     .animation(FieldMotion.ease(0.24), value: model.keyboardOwner)
     // --- end IOS-5c
   }

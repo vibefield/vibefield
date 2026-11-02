@@ -376,12 +376,11 @@ public struct TerminalSurface: UIViewRepresentable {
     if view.showsTerminalAccessoryRow != showsKitAccessoryRow {
       view.showsTerminalAccessoryRow = showsKitAccessoryRow
     }
-    // The view's own tap focus is the second keyboard owner: a tap made it
-    // first responder and raised the bare system keyboard under the card's
-    // designed one. The host answers taps (`onTap`). ghosttea's scroll,
-    // long-press and pointer gestures still take focus on their own — its
-    // focus policy is upstream's to fix (one ghosttea release, EL8).
+    // The card owns the keyboard and answers taps through `onTap`. Neither
+    // the view's tap nor its touch scroll may take focus independently: a
+    // swipe must scroll without raising the keyboard after it was dismissed.
     if view.focusesInputOnTap { view.focusesInputOnTap = false }
+    if view.focusesInputOnScroll { view.focusesInputOnScroll = false }
     if view.keyboardAppearance != keyboardAppearance {
       view.keyboardAppearance = keyboardAppearance
     }

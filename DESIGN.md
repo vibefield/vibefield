@@ -5205,11 +5205,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   While the card's session has its geometry seat (DS-4) held by another client, the studio's window,
   a peer's window or another phone, the card goes on drawing the session at the holder's size, where
   the bullet above stands it, so some of the card's rows stand empty: the converse of the phone's
-  own seat, where the grid is the PTY's. The card says so in its empty rows, above the floating
-  input row, wherever they are (at the foot while the held screen stands top-left, at the top once
-  it anchors at the foot; as the spawn bloom's words take the field's widest empty space), in the
-  desktop's figure at the phone's scale: **studio**, the holder's name as fieldd minted it
-  (**Another device** when it minted none), full, and **is driving** at 40%, 800 at 56pt/1,
+  own seat, where the grid is the PTY's. **Updated 2026-11-02, James's phone review:** center the
+  complete message and its bloom between the header and floating input controls, independently
+  of the holder's rows. The bloom is decorative and must not widen the text layout. Long names
+  wrap to two lines and scale within the phone's margins. The fold-keyboard button sits outside
+  the input card, at its upper right. Paste and the show/fold controls share native Liquid Glass
+  and float over terminal content in both keyboard states. Their row reserves no space and never
+  moves the grid; only the composer and key rail inset the terminal. Paste reads the clipboard
+  only on a tap and respects the system's paste-permission prompt; the system Paste control's
+  opaque fill cannot supply this glass treatment. The message uses the desktop's figure at the phone's scale:
+  **studio**, the holder's name as fieldd minted it
+  (**Another device** when it minted none), full, and **is driving** at 40%, 800 starting at 56pt,
   −0.04em, haloed in the terminal's ground (40 and 18), over a veil of that ground at 62%, the
   content dimmed beneath it, never hidden and never blurred. Under them one caption line, **touch to
   take it back**, 12pt semibold at 72%. It names no size: the phone can see what it is drawing. The

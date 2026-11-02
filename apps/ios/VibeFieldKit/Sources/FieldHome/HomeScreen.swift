@@ -147,10 +147,6 @@ public struct HomeScreen: View {
     @State private var demoSignIn: TailscaleSignInSession?
   #endif
   @State private var settingsSheetOpen = false
-  /// IOS-8g — the same sheet, presented from the session card's `···`: the
-  /// root is behind the card while it is up, and a second presentation from
-  /// the same presenter is a sheet that never appears.
-  @State private var cardSettingsOpen = false
   /// IOS-10a — where Settings opens from the corner: its root, Account (your
   /// name), or, in a photograph run (`-vf-open-settings=<page>`), any page.
   @State private var settingsOpening: SettingsOpening = .root
@@ -1915,7 +1911,6 @@ public struct HomeScreen: View {
       statusDetail: attachmentDetail,
       statusActions: attachmentActions,
       cooled: attachment?.banner?.coolsTerminal ?? false,
-      onSettings: { cardSettingsOpen = true },
       terminalReason: cardTerminalFace.note,
       agentAttachable: cardTerminalFace.offersAttach,
       // Item 41: the live card's badge wears the OS of the desktop it runs on.
@@ -1925,29 +1920,21 @@ public struct HomeScreen: View {
       // seeded from, so the card never changes its layout as it rises.
       liveGround: cardGround,
       // Item 42: who drives the session from another device, while one does —
-      // the live card's readout, in its empty rows over its held veil.
-      seatReadout: cardSeatReadout
+      // the live card's readout, centered over its held veil.
+      seatReadout: cardSeatReadout,
+      inputIsOpen: inputCardFace == .shown && inputCard.keyboardOwner != .none,
+      onOtherDriverAppeared: { inputCard.dismissKeyboard() }
     ) {
       liveTerminal(title: bubble?.project)
     }
-    // F1 (item 41) — the closed input row is no longer a band: its keyboard key
-    // and its reply chips float over the grid's last rows, each on a clearing
-    // of the terminal's ground, and inset nothing, so the grid runs to the top
-    // of the home indicator's safe area. Standing on that ground, they wear its
-    // ramp, as the band does. The row draws only while the keyboard is down;
-    // the open card below rides the bottom safe area as it did.
+    // Paste, replies, and the show/fold key float over the grid in both input
+    // states. The open card below alone reserves terminal space.
     .overlay(alignment: .bottom) {
       if inputCardFace == .shown {
         let ground = cardGround
-        ClosedRow(model: inputCard, pasteboard: pasteboard, clearing: ground.color)
+        InputOverlay(model: inputCard, pasteboard: pasteboard)
           .environment(\.colorScheme, ground.inkScheme)
       }
-    }
-    // IOS-8g — the appearance sheet, from the card's `···`, on the card's own
-    // presenter (the root is behind this sheet). IOS-10a: it is Settings,
-    // opened on its Terminal page, with Settings one step back.
-    .sheet(isPresented: $cardSettingsOpen) {
-      settingsSheet(at: .terminal)
     }
     // A keyboard coming up — any owner, either mode — is the person engaging
     // this pane: it takes the seat (DS-D5), and puts the view back on the
@@ -1973,9 +1960,7 @@ public struct HomeScreen: View {
     // --- IOS-5a: the card rides the bottom safe area, above the keyboard ---
     .safeAreaInset(edge: .bottom, spacing: 0) {
       if inputCardFace == .shown {
-        // --- IOS-5c: the watcher rides in so the paste chip can appear.
-        InputCard(model: inputCard, pasteboard: pasteboard)
-        // --- end IOS-5c
+        InputCard(model: inputCard)
       }
     }
     // --- end IOS-5a --------------------------------------------------------
@@ -2254,7 +2239,6 @@ public struct HomeScreen: View {
 
   private func closeSettings() {
     settingsSheetOpen = false
-    cardSettingsOpen = false
   }
 
   /// A confirmed Sign out, from the corner's menu or from Settings › Account.

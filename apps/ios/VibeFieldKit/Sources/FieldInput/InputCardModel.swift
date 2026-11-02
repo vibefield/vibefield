@@ -482,9 +482,16 @@ public final class InputCardModel {
     if keyboardOwner == .none { requestKeyboard() } else { dismissKeyboard() }
   }
 
-  /// Put it down. The swipe on the rail, and the one act that can leave the
-  /// card with no responder while a mode is still selected.
+  /// Fold the input without changing its mode or draft. Used by the fold
+  /// button, the rail's swipe, and another device taking the terminal's seat.
   public func dismissKeyboard() {
+    // A departing popover can report its dismissal after the keyboard has
+    // folded. Cancel its restoration first so it cannot focus the phone and
+    // reclaim a seat that another device just took.
+    keyboardWasUpBeforeFan = false
+    keyboardWasUpBeforeMenu = false
+    openFan = nil
+    plusMenuOpen = false
     fieldFocused = false
     terminalFocused = false
     // --- IOS-5d: the keypad rides a first responder, so putting the keyboard

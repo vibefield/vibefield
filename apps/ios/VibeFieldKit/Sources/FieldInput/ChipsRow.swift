@@ -30,7 +30,7 @@ struct ChipsRow: View {
   /// is context, and the design draws it smaller than the card it sits on.
   /// IOS-5e took the whole card up one step at accessibility sizes; this row
   /// goes with it (`InputCardMetrics.chipHeight`), and `height` is the base
-  /// step, which is what `ClosedRow` and `PasteChip` measure against.
+  /// step. Paste includes the keyboard control's larger hit target.
   static let height: CGFloat = 36
   /// `.chips` — the gap between two chips.
   private static let gap: CGFloat = 8
@@ -49,52 +49,25 @@ struct ChipsRow: View {
     dynamicTypeSize.isAccessibilitySize ? Self.baseNumberSide + 4 : Self.baseNumberSide
   }
 
-  /// The chip height for the reader's text size. When the system paste control
-  /// is on the row its own intrinsic height wins, because a protected system
-  /// control that is squashed stops drawing itself and falls back to a bare
-  /// fill — and that control reads the text size on its own, so at
-  /// accessibility sizes it is the taller of the two and the row follows it.
+  /// Include the paste button's full hit target while its glass stays at the
+  /// same visual height as the fold-keyboard button.
   private var rowHeight: CGFloat {
-    (pasteboard?.hasNewContent ?? false) ? max(chipHeight, PasteChip.height) : chipHeight
+    (pasteboard?.hasNewContent ?? false)
+      ? max(chipHeight, PasteChip.height(for: dynamicTypeSize)) : chipHeight
   }
 
   var body: some View {
-    // Horizontal scrolling because four Claude chips plus a paste chip do not
-    // fit a phone's width, and the alternative — truncating the labels — would
-    // make "Yes, don't ask" and "No" the same chip at a glance.
-    ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: Self.gap) {
-        ForEach(model.chips) { chip in
-          replyChip(chip)
-        }
-        if let pasteboard, pasteboard.hasNewContent {
-          // Rightmost, and last in reading order: the agent's question is what
-          // the row is for when there is one.
-          PasteChip { text in
-            model.acceptPaste(text)
-            // The offer has been answered, so the chip retires — even when the
-            // answer turns out to be Cancel on the review sheet. The
-            // pasteboard still holds the text and the field's own edit menu
-            // still offers Paste; what has been spent is the CHIP, which
-            // exists to say "there is something new here" and has said it.
-            pasteboard.markSeen()
-          }
-          // The hairline is ours, drawn OVER the control: its configuration
-          // offers a fill and a corner style but no border, and without one the
-          // pill has no edge against a pale sheet — witnessed in the simulator,
-          // where the chip read as loose text rather than as a chip.
-          .overlay(
-            Capsule().strokeBorder(ChromePalette.cardHairline, lineWidth: 0.5)
-          )
-        }
+    // Fit the visible controls instead of leaving an invisible scroll view
+    // across the terminal. A long row still scrolls without clipping labels.
+    ViewThatFits(in: .horizontal) {
+      chips.fixedSize(horizontal: true, vertical: false)
+      ScrollView(.horizontal, showsIndicators: false) {
+        chips
       }
-      // Half a hairline of room, so a chip's own edge is not clipped by the
-      // scroll view it rides in.
-      .padding(.vertical, 1)
+      .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+      .scrollClipDisabled()
     }
     .frame(height: rowHeight + 2)
-    // A row that fits should not rubber-band; one that overflows still should.
-    .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
     // --- IOS-5e: what this row IS, said before its chips are read.
     //
     // Four buttons labelled `1 Yes`, `2 Yes, don't ask`, `3 No`, `Esc` are
@@ -104,6 +77,30 @@ struct ChipsRow: View {
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Replies for the waiting agent")
     // --- end IOS-5e
+  }
+
+  private var chips: some View {
+    HStack(spacing: Self.gap) {
+      ForEach(model.chips) { chip in
+        replyChip(chip)
+      }
+      if let pasteboard, pasteboard.hasNewContent {
+        // Rightmost, and last in reading order: the agent's question is what
+        // the row is for when there is one.
+        PasteChip { text in
+          model.acceptPaste(text)
+          // The offer has been answered, so the chip retires — even when the
+          // answer turns out to be Cancel on the review sheet. The
+          // pasteboard still holds the text and the field's own edit menu
+          // still offers Paste; what has been spent is the CHIP, which
+          // exists to say "there is something new here" and has said it.
+          pasteboard.markSeen()
+        }
+      }
+    }
+    // Half a hairline of room, so a chip's own edge is not clipped by the
+    // scroll view it rides in.
+    .padding(.vertical, 1)
   }
 
   /// `.chip` — a 36 pt glass pill: the number in its own circle at the left, the

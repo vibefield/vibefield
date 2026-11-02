@@ -159,8 +159,8 @@ enum FieldHomeModel {
   /// Item 41 (James, 2026-10-19; T1, ruled 21:38Z) — the live card wears
   /// Godview's pane frame (DESIGN.md §8, "The phone's live card is its
   /// terminal"): a band across its top, and a line and a glow that follow the
-  /// sheet's corners. The band is 44pt, and the grid starts under it, so no row
-  /// hides under chrome.
+  /// sheet's corners. The header's controls take 44pt; its fading backdrop
+  /// overlays the grid without reserving a separate header row.
   static let liveCardBand: CGFloat = 44
   /// The sheet's outline, which the frame's line and glow follow: the sheet's
   /// own 40pt corners on top (`.presentationCornerRadius(40)`) and, at its
@@ -210,7 +210,7 @@ enum FieldHomeModel {
 
   /// Item 42 (James, 2026-10-19 17:42Z: "studio is driving · touch to take it
   /// back"; the look ruled 21:38Z, Phone A) — the READOUT a live card stands in
-  /// its empty rows while another client holds its session's geometry seat: a
+  /// center while another client holds its session's geometry seat: a
   /// window, a peer's window, another phone (DESIGN.md §8, "A live card another
   /// client is driving"). It is the desktop's held-edge figure at the phone's
   /// scale: the holder's name huge, the verb at 40%, one caption line. It names
@@ -219,8 +219,8 @@ enum FieldHomeModel {
     /// The holder's name as fieldd minted it into its grant, full and never
     /// re-cased: `seatHolderFallback` when it minted none.
     let name: String
-    /// The rows the holder's grid stands in on the card — the PTY's, from the
-    /// seat — which the words stand clear of.
+    /// The holder's announced geometry. The overlay's position is independent
+    /// of it, so another device's resizing cannot move the message around.
     let heldRows: Int
     /// The renderer's line height, which those rows are measured in; nil
     /// before the card's terminal view exists.
@@ -264,45 +264,13 @@ enum FieldHomeModel {
   }
 
   /// The words' figure (DESIGN.md §8, the desktop's at the phone's scale): 800
-  /// at 56pt with a line height of 1, −0.04em; the verb 4pt under the name, and
+  /// starting at 56pt, −0.04em; the verb 4pt under the name, and
   /// the caption, 12pt semibold, 18pt under the verb (the canvas's spacing).
   static let seatWordsSize: CGFloat = 56
   static let seatWordsTracking: CGFloat = -0.04
   static let seatVerbGap: CGFloat = 4
   static let seatCaptionSize: CGFloat = 12
   static let seatCaptionGap: CGFloat = 18
-  /// The block the words take: the two lines, their gaps, and the caption's line
-  /// at 1.25 of its size.
-  static var seatWordsHeight: CGFloat {
-    seatWordsSize * 2 + seatVerbGap + seatCaptionGap + seatCaptionSize * 1.25
-  }
-  /// Where the text stands in the grid, which the rows are counted from: item
-  /// 41's padding (`presentationConfig`: 0 above, 6 below) and the renderer's own
-  /// 2pt origin on each — 2pt down from the grid's top, 8pt up from its foot.
-  static let liveCardTextTop: CGFloat = 2
-  static let liveCardTextFoot: CGFloat = 8
-
-  /// Where the readout's words stand: the distance of their middle from the
-  /// grid's top. They stand in the card's empty rows (DESIGN.md §8). While the
-  /// held screen stands top-left — the anchor at the foot rides ghosttea 0.10.2
-  /// — its rows fill the grid from the top and the empty rows are at the foot,
-  /// so the words stand in the middle of those. When the held rows reach the
-  /// card's own last row, or leave too few rows for the words, there are none
-  /// to stand in, and the words stand over the grid's middle; so they do while
-  /// the line height is not known yet. The empty rows end above the floating
-  /// input row (`footReserve`, `ClosedRow.footprint`), so the words never stand
-  /// under the keyboard key or the reply chips.
-  static func seatWordsCentre(
-    grid: CGFloat, heldRows: Int, lineHeight: CGFloat?, footReserve: CGFloat = 0
-  ) -> CGFloat {
-    guard grid.isFinite, grid > 0 else { return 0 }
-    let middle = grid / 2
-    guard let lineHeight, lineHeight.isFinite, lineHeight > 0, heldRows > 0 else { return middle }
-    let heldFoot = liveCardTextTop + CGFloat(heldRows) * lineHeight
-    let gridFoot = grid - max(liveCardTextFoot, footReserve)
-    guard gridFoot - heldFoot >= seatWordsHeight else { return middle }
-    return (heldFoot + gridFoot) / 2
-  }
 
   /// One part of the readout's entrance: when it starts, after the wait, and
   /// how long it takes.
