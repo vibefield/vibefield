@@ -289,8 +289,6 @@ public struct HomeScreen: View {
         // other two keep it alive under them, and a hidden Metal view
         // rendering at 120 Hz is a battery spent on nobody.
         isActive: scenePhase == .active && selectedTab == .field,
-        showsEmptyState: true,
-        scrim: nil,
         onSelect: { bubble in openCard(on: bubble) },
         onCreate: fieldHold,
         bloom: bloomMenu,
