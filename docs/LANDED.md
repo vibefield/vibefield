@@ -28005,3 +28005,251 @@ version until a snapshot or an open replaces it, as a non-string key always did.
   (board-screen.test 8 → 9); cargo 33 ok.
 
 **Owed.** Nothing of the fixer's.
+
+## TU-1 — the turn fact and the one placement rule: fieldd keeps whether a spark, and each run's conversation, has worked (`turnedAt`), so Chat's hello reads fieldd's fact, and one rule places a run in an Agent Profile for @, the talk room, the needs-you Allow, the compose room, the door and the New spark sheet (2026-11-02; `1ec240268` → `60ce6a988`, six commits on main `0a97e59b6`, lane `co/tu1` in `/Volumes/SamsungRed/lanes/tu1`, in the mini's mint M96 `57569bca3` over main `50a66dd52`)
+
+James ruled Q1 A and Q2 A, both at their leans, by a board click on the decision page
+https://claude.ai/artifact/SAQ7UP8vqpTqsmVWPxQzWU at 2026-11-01 08:31:35Z ("Q1 A + Q2 A (both leans)"). VF-PM ruled
+Q3–Q7 at 07:17Z, and the plan's three questions (§12) at 14:01Z, all three at cp-landing's leans. The read is
+`lanes/co-plan/plans/turnfact-read.md` (its Status holds the seven rulings) and the plan is
+`lanes/co-plan/plans/tu1-plan.md`. TU-1 is the slice VF-PM ruled on 2026-10-31 (21:42Z and 22:13Z,
+`lanes/co-plan/rulings/wake-fieldd.md`). It pays SP-1d's two owed lines: the hello's open cases and @'s profile
+residual.
+- **Q1:** "new" is the spark's. Once a spark has worked it says no more hello, and fieldd writes the first turn on the
+  spark's record too.
+- **Q2:** work counts as a turn, and an ask does not. An ask seen before any work writes nothing.
+- **Q3:** one rule for the talk room, the compose room and the door's `#identify`.
+- **Q4:** the gap while fieldd is down is accepted and named. There is no EL8 petition. A rosetta check at re-attach
+  comes only if TU-1's red-first shows a wrong hello a person can see.
+- **Q5:** a native resume from History is stamped at birth.
+- **Q6:** `turnedAt` alone. Absent is an older record, `null` is never, and a time is turned.
+- **Q7:** the prefix is TU.
+- **§12 Q1 (a′):** a persona no profile lists is in no profile. fieldd reads the monitor's latest sets frame and
+  fails closed until one arrives.
+- **§12 Q2, O1 OUT:** the hello does not step back while a new spark's own agent asks. James picked Q2 A on the frame
+  that showed the hello over the ask, and chose that cost.
+- **§12 Q3:** a restart's pending tail is accepted as part of Q4's gap and named in Q4's words.
+
+**What.**
+- **Contracts, the kit and the row's two keys, one EL9 commit** (`1ec240268`):
+  - `turnedAt` (`z.string().min(1).nullable().optional()`) on `AgentSessionRecord`, `AgentSessionSummary`,
+    `AgentFieldRow` and `sparkFields` (so `SparkRecord` and `SparkSummary` carry it), and `AgentFieldRow.profileSet`.
+    `AgentDeskRow` and `AgentModelDeskRow` inherit both. `AgentRemoteRow` is untouched.
+  - The one rule, `profileSetOfRun(run, personaSets)`, with `personaSetsOf`, `NATIVE_PROFILE_SET_ID` and
+    `RunProfileFacts` in `contracts/src/agent-index.ts`: the profile the run is filed under; else This Mac's for a run
+    that names no persona; else the profile that lists its persona; else none (a persona no profile lists, or the
+    sets not read yet: `null`, fail closed).
+  - Four new goldens, and no mirrored golden edited: `agent-field-snapshot.turned.json` (mirrored into the kit),
+    `agent-session-record.turned.json`, `agent-session-summary.turned.json` and `compose-sparks-list.turned.json`.
+    The sparks list joins the field golden row for row.
+  - The kit's mirror (D4): its decoder learns `turnedAt` and `profileSet` only. A new `LaunchShapeTests` case
+    asserts both keys per row, and the exact keys it does not read: `["origin","spark"]` on a spark's rows.
+    `check-ios-fixtures` requires the mirror.
+  - system.html's "What a field row carries" gains a dated note. Godview's `NATIVE_PROFILE` is the contract's id.
+  - `pnpm gen` and `gen:check`: no diff. The agent plane and compose are TS-only.
+- **fieldd keeps whether a run has worked** (`50d9c6a5b`):
+  - `mirrorShowsTurn` (Q2, D2): the agent at work outside puppeteer's `starting` span, tokens spent, or an answer
+    written. `blocked` counts nothing. `LAUNCH_ACTIVITY` is typed by puppeteer-core's `MonitorActivityKind`, so a
+    pin that renames the word is red at its typecheck.
+  - `applyMonitor` stamps the signed record once (`stampTurn`): it re-reads the record, writes fieldd's own clock
+    (D8), leaves `updatedAt` alone (D9) and logs `fieldd.agents.session_turned`. A failed write logs
+    `fieldd.agents.turn_unrecorded`, and the row says what fieldd saw for this life.
+  - Every birth says its fact: a spawn and an adopt `null`, a resume the record's own (absent stays absent), History's
+    native resume its birth time (Q5), and a re-attach the record it re-reads. `enter`'s launch is a union on
+    `reattached`, so a birth that forgets the fact does not compile.
+  - The spark is told at the stamp and at every entry that carries a time (D7). `SparkService.turned` re-reads and
+    keeps the first time. Hatch writes `null`, and `#keep` re-reads before it writes (D6).
+  - api.html: dated notes on `agent.subscribe` and `compose.sparks.list`.
+- **fieldd's rooms on the one rule** (`32ffc6108`):
+  - The one rule's persona step (D1), `AgentMonitorService.personaSets()`: `null` until the first frame, then one
+    map per frame, over the same `agents.profileSets` frame Godview's backend reads. daemon.ts hands one closure to
+    the talk room, the Allow, the compose room and the door. Every `NATIVE` literal and every `profileOf` in the
+    tool plane is gone.
+  - The Allow says a run in no profile in its own words: "‹run› is in none of ‹spark›'s Agent Profiles" (fieldd's
+    ‹reason›; no DESIGN.md §9 word moved).
+  - `history_read` places by the rule over its own fresh read of the sets.
+  - D11: a re-attach files a record that names no set under the set puppeteer re-binds at attach, and never
+    overwrites a filed one.
+  - api.html: the tool plane's section note and `agent_send`'s row, first.
+- **The door fails closed until the profiles are read** (`cf5c4e67b`): a plain run the rule can place only by its
+  persona, before the first frame, is unsettled with the new reason `profiles-unread` (`DoorUnsettled`). It is listed
+  nothing with `ttlMs: 0`, asked again every `REASK_MS`, and placed once the frame lands.
+- **Chat's hello on the facts, and @ and the sheet on the rule** (`48f962df0`), DESIGN.md §8 first:
+  - `sparkIsNew`: a spark that never started is new; a spark whose run is pending is never new (D10); otherwise only
+    while the spark's record reads `null` and its own row says no time.
+  - Deleted: the hatch minute (`HATCH_RUN_MS`, `bornInItsHatch`), the turns-seen set (`turnSeen`, `#turnsSeen`,
+    `UNSPOKEN`, `turnShown`, `NO_TURNS`), `profileOfRow` and `sessionsByProfileOf`.
+  - D5: the feed asks the list again once per first turn (`boardSparksKey` marks `·turned`).
+  - @ places a session by `profileSetOfRun`. The New spark sheet's "Sees N sessions" counts by it too
+    (`usePersonSessions`, `sessionsSeenOf`).
+  - The catalog's fixtures carry `turnedAt` in place of the tokens that kept the hello off. The plates are unchanged.
+- **The critic's fixes** (`60ce6a988`, `lanes/co-plan/final-tu1.md` #1–#6; #7, the plan's own text, is outside the
+  commit):
+  - an awake spark whose run the board does not show yet is not new (W8), and DESIGN §8 says so;
+  - an Allow before the profiles are read is refused retryably, `PRECONDITION_FAILED {reason: "profiles-unread"}`:
+    the item stays open, nothing is spent, and the spark is told nothing. The talk room's `reach` and compose's
+    `scopedRun` answer `UNAVAILABLE` (retryable) in place of `outside` at that moment;
+  - DESIGN's words as built: Godview's two differences, the TU-1 lead on SP-1d's landed bullet, and "no agent can be
+    placed, nor a session its persona places" with a dated note. api.html's `needs.answer` row gains the reason.
+
+**Real vs not yet.**
+- Real, on fieldd's own facts, with nothing stubbed:
+  - the fact on the run's record, its summary, its row and the spark's record, kept across a restart, a re-attach, a
+    wake and a resume;
+  - Chat's hello read from it, so a spark that has worked never says hello again, and an ask alone is no turn;
+  - `profileSet` on the row, and the one rule (D1) for @, the talk room, the compose room (`agents_list`,
+    `agent_read`), the door, and (D3) the Allow, `history_read` and the New spark sheet's count;
+  - the kit reading both keys from its mirror.
+- What moved, EL7 (plan §4's table): a run filed under none whose persona a profile lists moves from This Mac's
+  sparks to that profile's. That is the one widening, and the ruled one. A persona no profile lists, and a persona's
+  run filed under none before the first frame, move from This Mac's to none. Filed runs and runs that name no persona
+  are placed as before.
+- Not yet, each named by a ruling or by the plan's §0.2:
+  - a turn no fieldd saw (Q4's gap, below);
+  - the remote cut, which carries neither key (below);
+  - Godview's tabs, which stay on the agent runtime's own placement (below);
+  - no rosetta check at re-attach (Q4's default; plan C5 not built).
+
+**Found.**
+- **fieldd already held the sets synchronously** (plan critique 3). The plan's first D1 dropped the persona step on
+  the premise that it did not, which would have made two placement rules in the product. `AgentMonitorService`
+  keeps the latest frame, and TU-1 exposes it read-only.
+- **The pending rule had to stay** (D10, critique 5; the read said delete it). A pending run is a live pane fieldd
+  does not drive, and Send's starters would paste into it.
+- **`#keep` spread a record it read before an `await`** (D6), so a wake would have erased a stamp written during it.
+  Both writers re-read now.
+- **A door identified before the first frame held a persona's plain run in no profile for its life** (MT-D4 keeps a
+  settled answer). C3's body named it; `cf5c4e67b` closed it.
+- **The hello could stand over a pending pane** while the board had not shown its run (final-tu1 #1): with no row,
+  an awake spark reading `null` was new, and the pending check never ran.
+- **An Allow pressed before the first frame failed for good, in untrue words** (final-tu1 #2): "is in none of …'s
+  Agent Profiles", the Allow spent and the spark told it. It waits now.
+- **A This Mac spawn files the set but names no persona** (measured in R3b), so an attach binds nothing for it. R3b
+  runs under a managed Work profile.
+- **C3's test files differ from the plan** (final-tu1 #9): compose's `agents_list` rows live in
+  `compose-verbs.test.ts`, not in tool-plane-service's.
+
+**Validation.**
+- **Reviews:** the plan's critique (`lanes/co-plan/plans/tu1-critique.md`, 19 findings) was folded before the build.
+  C2, C3, the door (C3b) and C4 each had a review, and the fixes commit closed the C3b and C4 reviews' minors. The
+  completeness critic (`lanes/co-plan/final-tu1.md`, at `48f962df0`) found no High, two Medium, five Low and two
+  Info. #1–#6 are fixed in `60ce6a988`, and #7 in the plan itself (`tu1-plan.md` rewritten to O1 OUT). #8 and #9 are
+  owed lines below.
+- **The build:** a usage-limit stop at about 15:50Z killed C4's first builder. Its partial edit was saved as a patch
+  (`lanes/tu1/c4-partial-design-20261101T2153Z.patch`), and C4 was rebuilt, the patch reused after a word-by-word check.
+- **Red first** in every behaviour commit, each at an assertion unless the export is the change:
+  - C1: contracts 7 of 715, fieldd 2 of 44, the monitor pin 1. The kit's red is the decoder's missing members, not
+    run on the parent;
+  - C2: agent-session-records 11 of 18, compose-sparks 4 of 17, and the real floor's TU-1 describe 6 of 6;
+  - C3: 11 rows (talk 3, compose-verbs 2, needs-queue 1, tool-plane-service 2, agent-monitor 2, R3b on the real
+    floor);
+  - the door: tool-plane-service's null row, at its first assertion;
+  - C4: 17 rows. new-spark's unit row is a TypeError (the signature is the change), and its assertion red is the
+    sheet's composed row;
+  - the fixes: thread-items W8, needs-queue's before-the-frame Allow, and the talk and compose before-the-frame rows.
+- **G4, the named guard:** its two fieldd rows (C2) pass by design, asserting the gap as named; their lines are
+  quoted under Owed. C4's window half printed `TU1_G4 {"case":"window","new":true,"quiet":true,"hello":["hello"]}`.
+  VF-PM read them at 21:55Z: no rosetta check, and both cases are named.
+- **The kit:** `LaunchShapeTests`, 14 passed, the new row among them, on the lane's own simulator
+  (`093F66ED-C6BC-429C-9046-BFBE6B683E6A`), shut down after.
+- **The lane light** on T `60ce6a988` (`lanes/tu1/light/tu1-light-20261101T230619Z/`): GREEN, 23:06:19Z → 23:14:06Z.
+  - Every step exited 0: biome (51 files), check:walls, check:retired, check:ios-fixtures (187 copies identical),
+    preflight (OK, with one warning, R23's `acp` candidate, a sibling's offering), glyphs --check, gen:check, cargo
+    layout_vector 1/1, and tsc on contracts, design-kit, field-app, fieldd and electron-shell.
+  - contracts whole: 54 files, 1501 tests.
+  - field-app whole: 284 files (+1 skipped), 3836 tests (+3 skipped).
+  - electron-shell whole: 163 files, 2484 tests (+3 skipped).
+  - fieldd whole: 230 files (+3 skipped), 2971 tests (+11 skipped), with FIELDD_ROSETTAD_BIN set.
+- **The merged-tree light** (`lanes/tu1/light/tu1-light-20261101T231423Z/`): the scratch merge `09063c8d6` of T and
+  main `50a66dd52` (tree `d7b8114a6`), 23:14:23Z → 23:21:06Z. GREEN, no reds.
+  - Every static step, gen:check, cargo and tsc exited 0.
+  - contracts 1501; field-app 3837; electron-shell 2484; fieldd 2972.
+  - Both sides touched DESIGN.md (TU-1 at lines 1705–1930, main at 5375) and `scripts/check-ios-fixtures.mjs` (118
+    against 699). Nothing is near.
+- **Run 96** (M96 `57569bca3`, a MERGE over main `50a66dd52`, minted by a9): GREEN.
+  - vitest 12,060 passed, 0 failed, 18 skipped: main +60. contracts +14 (agent-field, agent-index, agent-session,
+    compose, fixtures), fieldd +37, field-app +9.
+  - field-app's spark-status file went from 22 rows to 21. C4 (`48f962df0`) removed its row "says a turn was seen
+    while the spark is at work or waits on you, its run spent tokens, or the window saw one". That row tested the
+    window's interim turn reading (`SparkEntry.turnSeen`, `BesideTheBoard.turnsSeen`), and C4 deleted that reading.
+    The hello reads fieldd's `turnedAt` now, and fieldd's `mirrorShowsTurn` rows and the new thread-items rows test
+    what counts as a turn.
+  - cargo 33 ok. Pins: 67.
+- **Landed:** main moved to `57569bca3` at 2026-11-02 00:16:22Z: `50a66dd52..57569bca3`, 57 files, +2498 −410.
+
+**Owed.**
+- **Q4's gap and §12 Q3's pending tail**, named in Q4's words (plan §3.6, the words the records use; DESIGN.md §8's
+  open case says the same to the person):
+
+  > A turn no fieldd saw is not kept. While fieldd is down, and after a restart that could not re-attach a run (AR-4's
+  > pending, until fieldd resumes it at its next idle), the run's pane lives on field-native and can still be typed
+  > into. If that turn has ended by the time fieldd watches the conversation again (a re-attach, or the resume that
+  > replaces a pending run), nothing reports it: puppeteer replays only open work at attach, and Claude Code's
+  > transcript observer makes earlier messages a silent baseline. The record then says no turn yet. If the run is a
+  > spark's first and only session, the hello can stand over a conversation the person had while nothing watched it.
+  > While a run is pending, Chat never calls its spark new, so no hello stands over a pane fieldd does not drive. A run
+  > still mid-turn when fieldd attaches is seen working, and stamped then.
+
+  - G4's two lines, from C2's green run (each wrapped once after a comma here; each is one line in `50d9c6a5b`'s
+    body and in final-tu1.md):
+
+    ```
+    TU1_G4 {"case":"down-window","hatched":{"record":null,"row":null,"spark":null},
+      "reattached":{"reattached":true,"status":"idle","record":null,"row":null,"spark":null}}
+    TU1_G4 {"case":"pending-tail","pending":{"row":null,"spark":null},
+      "successor":{"record":null,"row":null,"spark":null}}
+    ```
+
+    After the re-attach, the run's record, its row and the spark all read `null`; on the pending tail, the successor
+    inherits the record's `null` and the spark stays `null`.
+  - VF-PM read G4 at 21:55Z: no rosetta check, and both cases are named. Closing the gap needs puppeteer to report
+    the transcript it reads back (an EL8 event) or the History index's turns (rosetta).
+- **Godview against (a′):** Godview's tabs (puppeteer-monitor's `resolveProfileSet`) draw under This Mac a persona's
+  run that no profile lists, where the rule says none. Before the first frame they also draw under This Mac a
+  persona's run filed under none. `agent-monitor.test.ts` holds both to exactly that. An EL8 event moves the sibling's
+  side.
+- **The remote cut (`AgentRemoteRow`) carries no `turnedAt`** and no row `profileSet`, as api.html's
+  `agent.subscribe` note says. The phone has no hello yet; its Chat (the PC track, IOS-11a…g) would need them.
+- **`field`'s retirement** (PG-L1): Chat reads the `field` projection (`sparks-feed.ts`). Both new keys ride the model
+  board's row through `projectDeskRow`, so a later move of Chat's board keeps them. Named, not built.
+- **The handle** (VF-PM, 2026-11-01 09:55Z) is its own slice, after TU-1: the needs-you card names a session by
+  fieldd's runLabel, and the lean is @'s handle ("vibe-field·2").
+- **"Try again in a moment" is untrue if the monitor's first profiles read fails** (final-tu1 #9). The seed read
+  is logged (`fieldd.monitor.profiles_unread`) and never retried, so `personaSets()` stays `null` until a profile
+  frame changes. Until then the Allow, the talk room and compose say "try again in a moment", a persona's run filed
+  under none is in no profile, and its door is asked again every `REASK_MS`. That is within (a′).
+- **`history_read` puts a persona two profiles list in the later one** (final-tu1 #8, C3's variance), as
+  puppeteer-monitor's `personaSets` does; main took the first. puppeteer files a persona in one set, so no live
+  answer moves.
+- **`mirrorShowsTurn` counts work only at status `"working"`** (the C2 review's note). puppeteer ranks a blocker
+  above an open activity, so a mirror that first reaches fieldd already `blocked` mid-turn, with no tokens and no
+  answer yet, stamps nothing until the run works again after the answer. A run stopped while so blocked is never
+  stamped, though Q2 counts its turn as work. The fix, if wanted: `blocked` with an open activity that is not
+  `starting`.
+- **rulings-2 is open only while a newer shell runs over an older leave-running fieldd** (plan risk 1). That fieldd
+  sends no `turnedAt`, so no hello, and no row `profileSet`, so @ falls back to the persona's profile until fieldd
+  restarts.
+- **`NewSparkSheet.tsx`'s two lines:** TU-1 changed its `:30` import and `:207` only, beside new-spark.ts's
+  `sessionsSeenOf`, and kept off the View, within item 149's line limits (VF-PM, 22:15Z: a1 fixes the sheet's Create
+  in lane r11m). Whichever of TU-1 and item 149 lands second merges over `:30` and `:207`.
+- **Before the first frame,** compose's `agents_list` leaves a persona's run filed under none out of the list, never
+  refusing the whole list. Its room's header and api.html say so.
+- **Out of scope, named:** a typed run's `--resume` (AR-7's adopt) reads `null` until its next live turn; `helloLeft`
+  stays per window (HN-D9); the phone reads `turnedAt` only as a time or not.
+- **The records outside these three files:** architecture.html's compose row (`:1774`) gains TU-1's SHAs, and the
+  read's Status (`lanes/co-plan/plans/turnfact-read.md`) flips to "BUILT … (LANDED TU-1)".
+- **Owed to the draft queue, on VF-PM's word, never a builder's** (plan §6, final-tu1's owed list):
+  - the compose-plane draft's NS-D4 reading: "its session has had no turn" is now spark-level (Q1);
+  - the Sparks page's notes on the hello, including that it now stands over a new spark's ask (Q2 A, O1 out);
+  - design-03's agent row field list, if it lists the row's fields (`turnedAt`, `profileSet`).
+- **James's look** in `pnpm dev`, posted by VF-PM at the landing: the lines below. The trust-menu line is the cost he
+  chose.
+
+James's first sight, in `pnpm dev`, Chat (⌘4):
+- a new spark says hello; a starter and Return in its pane, and the hello leaves for good;
+- a spark that has worked never greets again: woken, or after fieldd restarts alone, its thread shows its pane alone;
+- a spark put to sleep before it ever worked still says hello, under "Vela is asleep" and its Wake;
+- when a new spark's agent asks first (a trust menu at launch), the hello stays over the ask and the head says Needs
+  your OK; a click into the pane takes the hello away and shows the ask;
+- @ offers the sessions the talk room reaches: a Work session filed under Work, for a Work spark;
+- the New spark sheet's "Sees N sessions" places each session by the same rule.
