@@ -28253,3 +28253,239 @@ James's first sight, in `pnpm dev`, Chat (⌘4):
   your OK; a click into the pane takes the hello away and shows the ask;
 - @ offers the sessions the talk room reaches: a Work session filed under Work, for a Work spark;
 - the New spark sheet's "Sees N sessions" places each session by the same rule.
+
+## SP-1d — smoke:godview's rung 11m: Chat's thread and composer, witnessed end to end through a spark the rung hatches (2026-11-01; smoke.ts and its testing helpers, in the mint M97 `f0e7bb465`)
+
+It pays SP-1d's owed line "Smoke rung 11m" (LANDED "SP-1d").
+
+**What.** 11m is SP-1d's rung, built in a1's lane (`hn/rung-11m`): five commits of testing code, the merge of TU-1
+(`a13d998fa`), and two product commits, item 149's and item 151's (their own entries, below).
+- **The stub** (`typed-agent.ts`, `217c312f7`):
+  - It says This Mac is signed in. `auth status --json` with no profile root bound answers `{"loggedIn":true}`, so
+    fieldd's hatch has a signed-in persona.
+  - It records each line a managed session is given (`StubRecords.lines`).
+  - Both are the godview variant's alone. The first-run smoke's stub still exits 1 and records nothing.
+  - `judgeChatCardPlay` and `SMOKE_CHAT_SEND` are in `smoke-shell-marker.ts`.
+- **The rung** (`smoke.ts`, `3f5dac904`), after 11l and before 11h:
+  1. ⌘N in Chat and Create hatch a spark under This Mac, and Chat chooses it.
+  2. Its own pane is live as its thread, and the spark reads Ready.
+  3. The composer types, @ opens its list with the hot row nearest, and Esc keeps the text.
+  4. Send says "Pasted into <name>'s pane — Return sends it". The stub is given no line for 400 ms, and gets it
+     only at the pane's own Return.
+  5. A card let go on the composer becomes a chip, and the hand keeps it.
+  6. `SMOKE_CHAT_SEND` prints either way.
+- **The typing** (`ad4a414dd`, run85b's fix, then `f503bbf11`, run92b's):
+  - `ad4a414dd` pressed the draft after a script's focus, then typed a key at a time: down, its character, up.
+    Run85b's road, a script's focus and then bare characters, had left the focused draft empty in the live window.
+  - Run92b proved the press wrong (M92's entry below). `f503bbf11` places the keyboard as `focusDeck` places a pane's:
+    the window and its contents focused, then the focus placed in the draft with its caret at the end. The keys are
+    unchanged.
+  - Probes on this Mac found the composer sound in isolation, and both roads too (`lanes/r11m/records/review.md`;
+    `light/rung92b-rehearsal.log`, CP-3's composer). A hidden window reproduces neither live red.
+  - SMOKE_CHAT_SEND's `typing` names the window's, contents' and document's focus as it was placed, where the caret
+    stood then and when the composer held it, and what the page heard of the keys. `create` names Create's state,
+    box and wait.
+  - Past both, the draft itself refused to insert (run95b): item 151, the empty draft 0 px tall, with its own entry.
+    Step 3 now reads the draft's height and insert as it holds the keyboard (`typing.draft`, in `f0e7bb465`).
+  - Prior art: on 2026-10-08, smoke:godview hit the same symptom (lane peek, its ⇧1 into the line's draft). Synthesized
+    keys into a focused contenteditable draft inserted nothing, even typed down/char/up. The trigger was a theme round
+    trip mid-run; its photos moved last. No theme changes before 11m today, and the press is what is new.
+- **Create when it is still** (`0f32a8e73`, run89c's fix, after item 149's `d69301328`):
+  - Step 1 waits up to 10 s, before its press, for the sheet's Create to be enabled with its box the same across two
+    reads 100 ms apart. A failure names the button's last state and its box.
+  - Run89c pressed Create before the sheet's opening reads settled, while Create was still enabled. Item 149 now keeps
+    Create disabled until then.
+- **Dropped, as ruled:** geometryHolder, and the no-deck and two-surface cases. Those are `spark-pane.test.tsx`'s.
+
+**Gates.**
+- **Red first:** 5 of 32 failed on main's code (`light/red-first.log`). Green at 32/32.
+- **The lane's light:** GREEN 09:12:17Z at the tip `ad4a414dd`, and 08:10:57Z at `3f5dac904` before it. Each ran
+  preflight, walls, deps, retired, ios-fixtures, biome, electron-shell's typecheck and the two unit files. The smoke's
+  bundle built at both tips.
+- **Run85b's red-first:** on the old helper, the evidence row failed 1 of 13; green at 32/32.
+- **The renderer JavaScript:** parsed and evaluated ad hoc against happy-dom Chat pages.
+- **M85** `67a15cbab` (the first two commits × main `ae430892b`):
+  - Run 85 was GREEN: verify exit 0 at 08:20:13Z; vitest 11,821/0/18, smoke-shell-marker 10 → 13 and typed-agent
+    17 → 19.
+  - Row 23 (run85b) went RED at step 3 at 08:34:03Z, so M85 is dead. Logs: `lanes/ts6/logs/mini/run85b/`.
+- **M86** `081eadf59` (the tip `ad4a414dd` × main `ae430892b`):
+  - Runs 86 and 86r went red on item 146, the repeated DST hour (09:00–10:00Z), not on 11m. Four fieldd real-floor
+    typed-agent rows failed: puppeteer-runtime 0.3.2's ps reader dates a process started in that hour 3600 s early.
+  - Run 86s is the proof: GREEN at 10:06:57Z, started after the DST hour. vitest 11,821/0/18, unchanged against run
+    85 (the fix's test lines are assertions in an existing row). The gateway rows came back at 80 s and 37 s, so item
+    146 is confirmed by its absence. Logs: `lanes/ts6/logs/mini/run86s/`.
+  - M86 was never landed. The order changed at 11:58Z: James was away with the mini locked, so item 146b (M87) and
+    CP-3 went first.
+- **M89** `9db27cede` (a MERGE of `ad4a414dd` over main `0a97e59b6`, where CP-3 and its records stand; merge-tree
+  `e19c3e4c5`, clean, with 0 files on both sides):
+  - Run 89 was GREEN at 12:49:37Z. vitest 12,001/0/18 is run 88's count plus 11m's five rows (smoke-shell-marker
+    10 → 13, typed-agent 17 → 19). cargo is unchanged. Logs: `lanes/ts6/logs/mini/run89/`.
+  - Read against CP-3 before the run, since a semantic red needs no shared file (run 82). CP-3 moved eight Chat files
+    on 11m's path, and every anchor the rung drives holds at `0a97e59b6`:
+    - the markup: the thread, its pane, the row, the draft, Send, @'s list and its hot row, the chips, the sheet;
+    - Send's note: "Pasted into <name>'s pane — Return sends it";
+    - the composer card's words, and Esc folding @ with the text kept.
+  - CP-3's `takeKeyboard` moves the keyboard only after mount.
+  - An idle, heard run still reads Ready, and Send's wait now reads `heard`, which an idle run is.
+  - A needs-you card stands only on the spark's items, and the stub raises none.
+  - M89 was never landed. James stayed away, and row 23's unlock watcher (run89b, armed 12:50:09Z, deadline 16:50Z)
+    never opened. Items 148 (M90) and 147 (M91) went first (16:02Z).
+  - Row 23 (run89c, at James's unlock) went RED at step 1 at 22:06:01Z: "Create Polaris: the sheet gone, and Chat on
+    Polaris did not happen within 20000ms". The sheet stood open with no refusal, and fieldd heard no hatch.
+    - The cause was a race: `openSheet` waits for the layer, the dialog, the name and the hatch, never for the
+      sheet's reads (`providers()`, `profileSets()`). Create was enabled before them, and `create()` returned in
+      silence while the agent or the profile was unread.
+    - That makes it a product defect, item 149, and a rung that pressed too soon. It is not CP-3's: the merge left the
+      sheet's files untouched. Both were fixed in the lane on VF-PM's ruling (22:13Z): `d69301328` and `0f32a8e73`.
+    - M89 is dead. Logs: `lanes/ts6/logs/mini/run89c/`.
+- **M92** `d74ccdee3` (a MERGE of `0f32a8e73` over main `5c41c10b2`, where item 147's records stand; merge-tree
+  `232a2f44c`, which equals the lit merged tree `fbf6649aa`), run 92 GREEN at 22:33:40Z: vitest 12,006/0/18
+  (main's 11,999, plus item 149's 2 and 11m's 5); cargo 33 ok.
+  - CP-3's reading carries over. Read against what items 148 and 147 moved (`0a97e59b6..5c41c10b2`: `packages/users`
+    and `packages/fieldd/test/index-timeline.test.ts`, none of the rung's files):
+    - Item 148 changes only how users.json and the layout stamp are created: tmp, fsync, then a link that fails
+      EEXIST. The path, the JSON, the 0600 mode and the refusal of a file that exists are unchanged. lock.ts moved
+      comments only, and no export moved.
+    - The rung names users.json's root alone: the stager's `vibefieldRoot`, and the walk's `users.root`. The stager
+      stages before the pair boots, so it never races a mint, and its refusal of a root holding a machine record
+      stands.
+    - Item 147 moved a fieldd test only, and nothing the rung drives.
+  - The scanners on a merged throwaway tree over `5c41c10b2` (item 147's records), before the packet
+    (`fbf6649aa`, a clean merge where only DESIGN.md is shared, auto-merged): walls clean; the smoke bundle builds;
+    field-app and electron-shell tsc exit 0. field-app 311/311 in 14 files (text-ramp, ui-system-boundaries,
+    design-system, the sheet and its model, the composer, @'s rows, the chords, CP-3's needs-card, the five DESIGN.md
+    readers). electron-shell 39/39 (typed-agent, smoke-shell-marker, CP-3's needs-notices).
+    Logs: `light/merged-fbf6649aa/`.
+  - Row 23 (run92b, the watcher armed on `d74ccdee3` at James's unlock, 22:34:27Z, HID idle 204 s) went RED
+    at 22:36:00Z, one step past run89c:
+    - Item 149's wait held: Create was pressed enabled and still, Polaris hatched (`--name Polaris` in calls.jsonl),
+      Ready after 1 ms, and its pane went live.
+    - Step 3 read "the composer holding the keyboard, the caret in its draft did not happen within 5000ms": inInput
+      false, caret null, inPane false, text "". The pane's gate was open (presentationReady, inputAllowed).
+    - The cause is the rung's, and smoke.ts names it (`focusDeck`): `sendInputEvent` runs none of Chromium's default
+      actions, so a synthesized mousedown blurs what was focused. `ad4a414dd`'s press on the draft blurred it to the
+      body, where `ViewFrame` stops every key under a cover. Fixed in the lane, `f503bbf11` (11m's typing above).
+    - M92 is dead. Logs: `lanes/ts6/logs/mini/run92b/`; the HOME `/private/tmp/vf-smoke-x4IJRm` is kept on the mini.
+- **M95** `1888a40e9` (a MERGE of `f503bbf11` over main `50a66dd52`, item 150's records; merge-tree `75ade16be`):
+  - Row 23, run95b (00:04:24Z), went RED one step further again. The placed keyboard held: window, contents and
+    document focused, caret placed and held "editor". Create read enabled at box 713,607,127,40 after 507 ms.
+    keydown and keypress reached the draft 12 times each, but "the typed line in the draft did not happen within
+    3000ms": text "", with no beforeinput and no input.
+  - M95 is dead. That made it item 151 (its entry below), found by three probe rows on M95's tree. They were never
+    minted and never landed: commits `probe/run95pN ^1888a40e9`, which a9 ran through `next BUNDLE`.
+    - run95p (`6ad82e84f`): five insertion roads all landed false, and queryCommandEnabled("insertText") was false.
+    - run95p2 (`0a65e4f05`): the refusal is the draft's own. Its box was 0 px tall with no children, while a fresh
+      contenteditable and a textarea at the body both inserted. The chain was clean, with user-select none from BODY
+      (ghosttea's workspace.css).
+    - run95p3 (`54bf86ec5`, the CSS fix in place): rung 11m walked GREEN, SMOKE_GODVIEW ok, every road inserting.
+      Its style trials read 24 px and enabled in all four, "today" included, because each injected style re-laid the
+      editor out. So the mini proves only that the fixed product types; the cause's split is the harness's (item
+      151's entry).
+    - Logs: `lanes/ts6/logs/mini/run95b/`, `run95p/`, `run95p2/` (chat-lines.txt), `run95p3/`.
+- **M97** `f0e7bb465`, the landing mint: STACKED. The tip `f0e7bb465` stands on main `2832987be` (TU-1's records, M96),
+  through the merge `a13d998fa` (first parent `f503bbf11`, second main), so the mint is the tip itself: run 97
+  GREEN, exit 0 at 01:34:36Z.
+  - vitest 12,071/0/18: main's 12,060 plus 11 (new-spark-sheet +2, smoke-shell-marker +3, typed-agent +2,
+    smoke-chat-thread new with 3, chat-composer +1). 0 FAIL rows; cargo 33 ok; "28 projects" ×4; MaxListeners 0; the
+    tree clean after verify (VF-PM's read of the lane copy).
+  - The tip carries rung 11m's commits, item 149 (`d69301328`), the merge of TU-1 and item 151 (`f0e7bb465`). No
+    probe code lands; step 3 keeps the one-line reader of the draft's height and insert.
+  - TU-1 merged clean onto the sheet: NewSparkSheet.tsx's `usePersonSessions` and `sessionsSeenOf` (new-spark.ts)
+    stand beside item 149's `ready`, its foot refusals and `create()`'s guard.
+  - Every later step's anchors were read against the shipping markup before (`f503bbf11`'s message); run95p3 walked
+    them all.
+  - The lane's light at `f0e7bb465` over main `2832987be`: GREEN 01:26:59Z. Preflight, walls, deps, retired,
+    ios-fixtures, biome, electron-shell and field-app typechecks; electron-shell 38/38 in 4 files; field-app 279/279
+    in 13 files (the sheet and its model, the composer, @'s rows, the chords, text-ramp, ui-system-boundaries,
+    design-system, the five DESIGN.md readers). The smoke bundle builds. Logs: `light/light-f0e7bb465/`.
+  - Row 23 ran on this tree, and M97 landed at 2026-11-02T01:45:46Z on its verdict, a fast-forward
+    `2832987be..f0e7bb465` (13 files, +879 −16).
+- **Row 23 (run97b, the mini's unlock window):** GREEN, exit 0 at 01:43:16Z. The watcher armed at 01:35:05Z on a
+  locked console, saw the unlock at 01:38:36Z, and opened the gate at 01:41:06Z after 157 s idle.
+  - The rows: SMOKE_GODVIEW ok with 136 verdict rows. chatThread's four (the hatch, the composer, Send, the card) and
+    every row after 11m (lineKeys, jumpTo, the timeline's, History's, the deck's away/edge/maximized, the warm open,
+    the photos) all walked.
+  - `SMOKE_CHAT_SEND`:
+    - failed null; create enabled at 713,607,127,40 after 507 ms;
+    - typing focus {window, contents, document} all true; caret placed and held "editor"; draft {height 24,
+      enabled true}; heard keydown, keypress, beforeinput and input at the draft 12 each;
+    - Send's note "Pasted into Polaris's pane — Return sends it"; inputAllowed Return true.
+    - The typed-agent copy holds the nonce `sp1d77goqzt4`, received in users/1/sparks/polaris (lines.jsonl sha256
+      d11c9c82…, calls.jsonl 18 calls). Logs: `lanes/ts6/logs/mini/run97b/`.
+  - The judge: `judgeChatCardPlay` found nothing. The card played on the target `prompt`: "Add to your message to
+    Polaris", then "Added to your message to Polaris", a chip in the draft, the card kept.
+  - Time: the row ran 130 s (01:41:06Z → 01:43:16Z). The person's input was untouched: HID idle 157 s ARMED and
+    286 s at the END.
+
+**Owed.**
+- Run85b's mechanism: run97b's `typing` record shows the road whole once the draft has its line (24 px, enabled;
+  every key heard and inserted). Run85b's empty draft, focus held and nothing inserted, matches item 151's
+  signature, but run85b recorded no box. Item 151 is its likely mechanism, never measured. Run89c never reached
+  step 3, and run92b's red was the press.
+- Item 146's upstream fix to puppeteer-runtime's ps reader, which belongs to item 146's own record.
+- Selection in the draft under workspace.css's `body { user-select: none }`: whether a person can drag-select their
+  own draft's text is unproven either way. A hand row (VF-PM carries it to James's).
+
+## Item 149 — the New spark sheet's Create waits, disabled, until its reads settle; an enabled Create pressed before them hatched nothing, in silence (2026-11-01; `d69301328`, in M97 `f0e7bb465`)
+
+**What.** A pre-existing SP-1c defect. Row 23's run89c on M89 surfaced it (11m's entry above).
+- The defect: Create was enabled once the name was non-empty. `create()` returns with nothing said while `agentId`
+  or `thinksUnder` is unread, and those settle only with the sheet's opening reads. A press in between hatched
+  nothing, refused nothing, and left the sheet open. A person who presses quickly after ⌘N met the same.
+- The fix, in the View and the sheet (`NewSparkSheetView.tsx`, `NewSparkSheet.tsx`, `new-spark.ts`):
+  - The view takes `ready`, true by default, so the catalog's plates are unchanged.
+  - The sheet passes `agentId !== undefined && thinksUnder !== undefined`, and Create waits on it.
+  - `create()`'s guard stays.
+- A read that fails is said at the foot, never a Create left disabled in silence (VF-PM's condition):
+  - the agents' sentence, as before;
+  - or "VibeField can't list your Agent Profiles right now" (`CANNOT_LIST_PROFILES`);
+  - an agent list with none that can be a spark already says so on its pill.
+- DESIGN.md §8 "The New spark sheet", its foot, gains a dated clause carrying both.
+- TU-1's C4 lines are untouched (`usePersonSessions`, `sessionsSeenOf`, the "sees N sessions" count), by VF-PM's
+  collision rule (22:15Z).
+
+**Gates.**
+- **Red first:** two rows in `new-spark-sheet.test.tsx` fail 2 of 12 on today's code
+  (`light/item149-red-first.log`): Create held until the reads, and the profiles' failure said at the foot.
+- **Green:** 134 tests in 7 files, every suite that mounts or scans the sheet (`item149-green.log`). field-app's
+  tsc exits 0. The lane's light at `0f32a8e73` was GREEN at 22:22:02Z: preflight,
+  walls, deps, retired, ios-fixtures, biome, both typechecks; electron-shell 32/32; field-app 275/275 in 13 files
+  (`light/light-0f32a8e73/`).
+- **M92's row 23 (run92b)** witnessed it live: Create was pressed enabled and still, and Polaris hatched.
+- **M97's run** carries it: run 97 GREEN at 01:34:36Z, vitest 12,071/0/18, cargo 33 ok.
+
+## Item 151 — the draft takes its first character: an empty draft mounted under the sheet's inert root stood 0 px tall, and nothing typed into it (2026-11-02; `f0e7bb465`, in M97 `f0e7bb465`)
+
+**What.** A product defect a person meets too, surfaced by row 23's run95b on M95 (11m's entry above).
+- After a hatch, the new thread's empty draft took the keyboard and refused every character. queryCommandEnabled
+  ("insertText") was false, and the box was 0 px tall.
+- The cause, reproduced in a hidden Electron window against the real ChatComposer
+  (`lanes/r11m/light/probe95p3-harness-untouched.log`):
+  - Mounted normally, the empty editor is one line (24 px) and enabled, even with user-select none.
+  - Mounted under an inert root that is then released, it stands 0 px tall with insert disabled. Chromium gives an
+    empty block its line only as a root editable, and the lift re-lays nothing out.
+  - The product does that. Create's success runs refreshSparks → chooseSpark → the face's fly, then onClose
+    (NewSparkSheet.tsx's Create), so the thread's composer mounts while `.field-wrap` is inert from the sheet's
+    modal (field.tsx `modal`).
+  - Under the same inert mount, min-height alone gives 24 px and enabled; user-select: text alone stays 0 px and
+    disabled.
+- The fix: `.vf-chat-input` gets `min-height: 24px`, its own line-height (no new constant), the cause in its comment.
+- The live proof: run95p3 walked rung 11m green on the mini with this CSS. Its style trials cannot split the cause,
+  because each injected style re-laid the editor out.
+
+**Gates.**
+- **Red first:** chat-composer.test.tsx's row holds the declaration in the stylesheet, since happy-dom lays out
+  nothing (`light/item151-red-first.log`: 1 failed on today's CSS). smoke-shell-marker's evidence row in the
+  `typing.draft` shape failed 1 of 13 first (`light/item151-reader-red-first.log`).
+- **Rung 11m's step 3** now fails on a 0 px draft or a disabled insert and names item 151; SMOKE_CHAT_SEND carries
+  `typing.draft`.
+- **Green:** field-app's chat-composer, text-ramp, ui-system-boundaries and design-system 97/97; electron-shell's
+  11m rows 38/38; tsc 0; biome clean; the lane's light GREEN at
+  `f0e7bb465` (01:26:59Z; field-app 279/279 in 13 files).
+- **M97's run** carries it: run 97 GREEN at 01:34:36Z, vitest 12,071/0/18, cargo 33 ok.
+
+**Owed.**
+- ghosttea-react 0.13.7's `dist/workspace.css` sets `body { user-select: none }` for the whole document
+  (GodviewDeck.tsx imports it). An upstream note: VF-PM carries it to the upstream topic, and nothing is fixed here.
+- The sheet's order: whether NewSparkSheet should close (lift the inert) before it chooses the spark, so a thread
+  never mounts under it. A sequencing question for SP-1c, named and not built.

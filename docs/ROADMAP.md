@@ -390,6 +390,8 @@
     and Send, which pastes into the pane and leaves Return to you.
   - A new spark says hello with three starters. A thread's unread dot lasts until you open it. A thread takes one act
     at a time, and fieldd wakes a spark once.
+  - Its smoke:godview rung 11m is on main since M97 `f0e7bb465` (2026-11-02), row 23 green as run97b, with items 149
+    and 151 (LANDED "SP-1d — smoke:godview's rung 11m").
 - **CP-3, the person**: LANDED 11-01 (`ce6577783`, the mini's run 88; LANDED "CP-3"), on CP3-D1…D8, all A (James,
   10-31 06:31:34Z; `draft/compose-plane/cp3-the-person.md`). CP3-D3 is built as its fallback, B, until a session's
   permission mode is a fact VibeField reads.
