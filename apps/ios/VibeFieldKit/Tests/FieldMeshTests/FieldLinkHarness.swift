@@ -578,19 +578,5 @@ final class ManualProductClock: ProductClock, @unchecked Sendable {
   var parked: Int { lock.withLock { sleepers.count } }
 }
 
-// MARK: - The contracts' own bytes, in this bundle
-
-enum MeshFixture {
-  static func json(_ name: String) throws -> JSONValue {
-    guard
-      let url = Bundle.module.url(
-        forResource: name, withExtension: "json", subdirectory: "Fixtures")
-    else { throw MissingFixture(name: name) }
-    return try JSONValue.parse(try Data(contentsOf: url))
-  }
-
-  struct MissingFixture: Error, CustomStringConvertible {
-    let name: String
-    var description: String { "fixture `\(name).json` is not in the FieldMeshTests bundle" }
-  }
-}
+// The contracts' own bytes, in this bundle: `MeshFixture` (MeshFixture.swift, its own file since PG-3e, so the host
+// inner loop's scratch target can read the body golden without this harness, which builds on iOS alone).
