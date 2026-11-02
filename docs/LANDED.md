@@ -29601,3 +29601,49 @@ account. A DEBUG fixture that owns the field over the simulator's empty account 
 `-vf-open-settings`) now draws the head with no name and an empty list: a fixture's artifact, no product state.
 
 **Owed.** Nothing of this item's. Item 161 (a dropped leg re-mints with no backoff) is next, the same session's.
+
+## GV — terminal owners govern pane lifecycle; EL8 to Ghosttea 0.13.8 and Puppeteer 0.3.3 (2026-11-02)
+
+**What.** Godview keeps a pane's visual identity through launch, agent handoff and exit. A correlated creation
+request joins the newborn terminal to its pane before the monitor can draw a second bubble. Dedicated agent
+terminals stay claimed through exit; shells with accepted input keep their own identity. A durable release outbox
+asks the terminal owner to remove an unattached unused shell or exited session, retries failures, and acknowledges
+cleanup only after the owner answers. Attachment and lifetime input evidence are checked atomically by Ghosttea;
+releasing ownership seals new attachments independently of ordinary process termination, which still permits
+reading retained final output. Stop and manual `/exit` use the same lifecycle facts.
+
+The swarm canvas and physics world stay full size. The terminal pane moves an eased collision wall, without
+rescaling the rendered bubbles or teleporting their positions. James's new Stop/Pause ruling is recorded at its
+sources in DESIGN and DECISIONS: Stop ends the agent; Pause sends one provider-declared current-turn cancellation
+and keeps the session open, with no automatic retry or termination. The legacy `agent.interrupt` command retains
+its existing policy for other callers.
+
+**Release order.** The source changes landed upstream before their releases and this consumer:
+- Ghosttea [#99](https://github.com/vibecook-dev/ghosttea/pull/99), then release
+  [#100](https://github.com/vibecook-dev/ghosttea/pull/100): `v0.13.8` at
+  `fb6f13d5aad06cba0b5982a1233a24395a313958`, npm/Cargo/Swift together. Apple artifact
+  `ghosttea-apple-native-be8c80c9cfd3` is the release's checksum-pinned binary.
+- Puppeteer [#55](https://github.com/vibefield/puppeteer/pull/55), then Release Please
+  [#56](https://github.com/vibefield/puppeteer/pull/56): `v0.3.3` at
+  `52d09c8e84951b9a355a6700eac2dfc1290a9fa0`. Its publish workflow also passed the clean npm consumer check.
+
+The consumer uses exact published versions with local source overlays disabled. Manifests, preflight expectations,
+release-age exemptions, sibling coordinates and all three package-manager locks move together. The npm lock
+changes only the 26 Ghosttea/Puppeteer packages; unrelated package resolutions are unchanged. Cargo changes only
+the six Ghosttea crates. Swift resolves the release and downloads its Apple artifact; the production native build
+passes against the published crate.
+
+**Phone parity re-bless.** The phone fold, body and toolkit goldens and their four kit mirrors were regenerated
+by the existing writer. Only the `versions` headers change from 0.3.2 to 0.3.3; every behavioral value is unchanged
+(checked after removing those headers). No drawing, wording, geometry or witness input was re-blessed.
+
+The terminal key catalog was regenerated from `ghosttea-config` 0.13.8 as well: only its source-version comment
+and `GHOSTTY_KEYS_SOURCE.version` change. The first production gate caught that metadata still naming 0.13.7;
+the key catalog itself is unchanged.
+
+**Validation on the published dependencies.** `pnpm verify` passed with source overlays off: 12,163 Vitest
+tests passed (17 skipped), 364 Node tests passed, and 534 Rust tests passed (14 ignored), plus preflight, walls,
+single-copy checks, all 202 fixture mirrors / 67 contract values, typechecks, lint, rustfmt/clippy, production
+bundle assertions and generated-file freshness. The first full run also saw one gateway shutdown assertion
+(`agent-gateway-panes`, row 11b: exit 0 instead of 75); the unchanged isolated case and the final full suite
+passed. No gateway behavior or assertion was changed. The consumer PR records the desktop landing-gate verdict.

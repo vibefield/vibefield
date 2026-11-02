@@ -272,26 +272,27 @@ overrides:
   # plane in ONE event with truffle 0.7.23, which 0.13.7 declares. Tag v0.13.7 = 3eee581c. On
   # this plane the rows move by version alone: 0.13.7 changed no TypeScript source (its fix is
   # the Windows Ghostty VT library, #96; Cargo.toml has the cargo half). No protocol minor (17).
-  "@vibecook/ghosttea-client": 0.13.7
+  # EL8 2026-11-02: 0.13.8 (v0.13.8 = fb6f13d5), owner-atomic release and correlated creation; protocol 1.18.
+  "@vibecook/ghosttea-client": 0.13.8
   # GT-0 (2026-08-01): the Godview terminal planes join at the same exact version
   # (one-version law) — electron-shell consumes ghosttea-electron, field-app
   # consumes ghosttea-react; packages ask for "*".
-  "@vibecook/ghosttea-electron": 0.13.7
+  "@vibecook/ghosttea-electron": 0.13.8
   # ghosttea-react: a link: row into the Godview performance window's checkout
   # (2026-09-27) until ghosttea 0.13.0 published the window's renderer fixes.
-  "@vibecook/ghosttea-react": 0.13.7
+  "@vibecook/ghosttea-react": 0.13.8
   # GT-3m (2026-08-04): field-app declares the wire vocabulary directly — the
   # monitor's rows ARE floor sessions, so `SessionSummary` is the honest type for
   # them. Types-and-constants only (zero dependencies), already resolved at this
   # version transitively; declaring it puts it under the one-version law rather
   # than leaving a hoisted transitive to drift.
-  "@vibecook/ghosttea-protocol": 0.13.7
+  "@vibecook/ghosttea-protocol": 0.13.8
   # The EL8 to 0.13.1 found this row MISSING: tooling/terminal-perf asks
   # `@vibecook/ghosttea-frame: "*"`, and with no row the lock had held it at
   # 0.10.1 while the renderer's own frame moved on — two copies. It joins the
   # one-version law here. FRAME_PROTOCOL_VERSION is 1 in both, so the committed
   # TRF1 corpus (captured at 0.10.1) stays readable; the bench is the proof.
-  "@vibecook/ghosttea-frame": 0.13.7
+  "@vibecook/ghosttea-frame": 0.13.8
   # rosetta — EXACT registry pins since RD-5a (2026-10-14; W-D8's exit shape under
   # RL5's `@vibefield` scope; packages ask for "*"). `@vibefield/rosetta-protocol`
   # is the TypeScript client (types + the REST/WS client); `@vibefield/rosetta-room`
@@ -334,16 +335,17 @@ overrides:
   # instructions work beside modelSelection on spawn and resume. Includes
   # 0.3.1's native install recipes and home-relative installation discovery;
   # the isolated inventory test seam supplies its own discovery home too.
-  "@vibefield/puppeteer-runtime": 0.3.2
-  "@vibefield/puppeteer-builtin-providers": 0.3.2
-  "@vibefield/puppeteer-core": 0.3.2
-  "@vibefield/puppeteer-record": 0.3.2
-  "@vibefield/puppeteer-monitor": 0.3.2
+  # EL8 2026-11-02: 0.3.3 (v0.3.3 = 52d09c8e), stable pane handoffs and the eased swarm boundary.
+  "@vibefield/puppeteer-runtime": 0.3.3
+  "@vibefield/puppeteer-builtin-providers": 0.3.3
+  "@vibefield/puppeteer-core": 0.3.3
+  "@vibefield/puppeteer-record": 0.3.3
+  "@vibefield/puppeteer-monitor": 0.3.3
   # MV-3a (2026-10-03): the monitor-view contract (`/model` is the model fieldd's
   # backend emits and the desk row mirrors; the renderer's adapter and replica
   # read it too). Types for fieldd; the replica's scheduler type for field-app.
-  "@vibefield/puppeteer-view-sdk": 0.3.2
-  "@vibefield/puppeteer-views": 0.3.2
+  "@vibefield/puppeteer-view-sdk": 0.3.3
+  "@vibefield/puppeteer-views": 0.3.3
   # FS-1a (2026-10-05, FS-D10 RULED (a) with its exit at once — 0.3.4 is on npm):
   # mille, the file explorer engine behind the files service, entered as an
   # EXACT registry pin (EL8; ice's shape — packages ask for "*"). Since FS-1b
@@ -413,13 +415,13 @@ minimumReleaseAgeExclude:
   - '@vibecook/ice@0.16.0'
   # The EL8 to ghosttea 0.13.7 with truffle 0.7.23 (2026-10-27): published 2026-10-26 23:57Z –
   # 2026-10-27 00:01Z, inside the release-age window; our own packages, reviewed as an EL8 pin.
-  # The 0.13.6 rows went after the one install that rewrote the lock.
-  - '@vibecook/ghosttea-client@0.13.7'
-  - '@vibecook/ghosttea-protocol@0.13.7'
-  - '@vibecook/ghosttea-electron@0.13.7'
-  - '@vibecook/ghosttea-react@0.13.7'
-  - '@vibecook/ghosttea-frame@0.13.7'
-  - '@vibecook/ghosttea@0.13.7'
+  # EL8 2026-11-02: reviewed 0.13.8; the 0.13.7 rows went after the install that rewrote the lock.
+  - '@vibecook/ghosttea-client@0.13.8'
+  - '@vibecook/ghosttea-protocol@0.13.8'
+  - '@vibecook/ghosttea-electron@0.13.8'
+  - '@vibecook/ghosttea-react@0.13.8'
+  - '@vibecook/ghosttea-frame@0.13.8'
+  - '@vibecook/ghosttea@0.13.8'
   # EL8 2026-10-29: reviewed Rosetta 0.1.2 release, inside the age window.
   - '@vibefield/rosetta-protocol@0.1.2'
   - '@vibefield/rosetta-room@0.1.2'
@@ -429,26 +431,27 @@ minimumReleaseAgeExclude:
   # 0.3.0 → 0.3.2 (2026-10-29, CP-1d): the tag's publication and clean npm consumer check passed
   # (v0.3.2 = 95a70aa7). These 20 transitive packages are inside the release-age window.
   # The old 0.3.0 rows were removed after the install that regenerated the lock.
-  - '@vibefield/puppeteer-adapter-acp@0.3.2'
-  - '@vibefield/puppeteer-adapter-antigravity@0.3.2'
-  - '@vibefield/puppeteer-adapter-claude@0.3.2'
-  - '@vibefield/puppeteer-adapter-codex@0.3.2'
-  - '@vibefield/puppeteer-adapter-copilot@0.3.2'
-  - '@vibefield/puppeteer-adapter-grok@0.3.2'
-  - '@vibefield/puppeteer-adapter-hermes@0.3.2'
-  - '@vibefield/puppeteer-adapter-kimi@0.3.2'
-  - '@vibefield/puppeteer-adapter-opencode@0.3.2'
-  - '@vibefield/puppeteer-adapter-pi@0.3.2'
-  - '@vibefield/puppeteer-builtin-providers@0.3.2'
-  - '@vibefield/puppeteer-core@0.3.2'
-  - '@vibefield/puppeteer-monitor@0.3.2'
-  - '@vibefield/puppeteer-native-observation@0.3.2'
-  - '@vibefield/puppeteer-react@0.3.2'
-  - '@vibefield/puppeteer-record@0.3.2'
-  - '@vibefield/puppeteer-runtime@0.3.2'
-  - '@vibefield/puppeteer-view-sdk@0.3.2'
-  - '@vibefield/puppeteer-views@0.3.2'
-  - '@vibefield/puppeteer-workspaces@0.3.2'
+  # EL8 2026-11-02: reviewed 0.3.3; the 0.3.2 rows went after the install that rewrote the lock.
+  - '@vibefield/puppeteer-adapter-acp@0.3.3'
+  - '@vibefield/puppeteer-adapter-antigravity@0.3.3'
+  - '@vibefield/puppeteer-adapter-claude@0.3.3'
+  - '@vibefield/puppeteer-adapter-codex@0.3.3'
+  - '@vibefield/puppeteer-adapter-copilot@0.3.3'
+  - '@vibefield/puppeteer-adapter-grok@0.3.3'
+  - '@vibefield/puppeteer-adapter-hermes@0.3.3'
+  - '@vibefield/puppeteer-adapter-kimi@0.3.3'
+  - '@vibefield/puppeteer-adapter-opencode@0.3.3'
+  - '@vibefield/puppeteer-adapter-pi@0.3.3'
+  - '@vibefield/puppeteer-builtin-providers@0.3.3'
+  - '@vibefield/puppeteer-core@0.3.3'
+  - '@vibefield/puppeteer-monitor@0.3.3'
+  - '@vibefield/puppeteer-native-observation@0.3.3'
+  - '@vibefield/puppeteer-react@0.3.3'
+  - '@vibefield/puppeteer-record@0.3.3'
+  - '@vibefield/puppeteer-runtime@0.3.3'
+  - '@vibefield/puppeteer-view-sdk@0.3.3'
+  - '@vibefield/puppeteer-views@0.3.3'
+  - '@vibefield/puppeteer-workspaces@0.3.3'
   # The truffle pins are exact and move together as one EL8 commit across the three places.
   # 0.7.19 → 0.7.22 (2026-10-25, with ghosttea 0.13.4): published 2026-10-25
   # 10:58Z, inside the release-age window on the day the pin moves. Sidecar

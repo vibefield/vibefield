@@ -4295,7 +4295,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **A run a Stop has not stopped** (track ST, ST-D4 (a); ruled by James on the board: the place
     at `ds-d4-place`, Accept, 2026-10-31 06:16:32Z, and the look at `ds-d4-look`, "Accept all
     three", 06:29:00Z, as VF-PM proposed them at 06:16Z and in the convention read of 06:26Z).
-    fieldd holds a person's Stop as sent until it hears the run stop (the field row's `stop`;
+    **Amended 2026-11-02 (James's Godview QA ruling):** the pane's **Stop agent** ends the
+    process through `terminal.terminate`. A separate **Pause current turn** uses `agent.pause`:
+    one provider-declared cancellation while working, with no fallback key, retry or termination.
+    Concurrent presses and an unconfirmed cancellation on the same turn coalesce. The legacy
+    `agent.interrupt` command retains ST's resend/escalation policy for its existing callers;
+    the two-send mechanics below describe that command. Pause never escalates to ending the run.
+    For that legacy command, fieldd holds a person's Stop as sent until it hears the run stop (the field row's `stop`;
     `thinking-ar-durable-stop.md`). The pane speaks only in the two states a press cannot answer
     itself, in the held-edge readout's figure (above), with its recipe and its reduced motion:
     - **Sent, and sent again** (the stages `sent`, `resent`): the pane adds nothing. The frame's
@@ -4312,10 +4318,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       words are **Ending** and **the run** at 40%, over **it did not stop after two sends · ending
       it**. The pane colour lights it, as item 42's does: nothing is asked of the person. It holds
       until the exit, the ladder's 4 s at most.
-    - **Still running** (`unheardAt`): fieldd sent the stop twice and cannot tell whether the turn
-      stopped (its status cannot be read, ST-D3), or the ladder could not be placed. The words are
-      **Still** and **running** at 40%, in text main as item 42's are, over **the stop was sent
-      twice and not heard ·** and then **End run**. The light, item 42's two insets and its bloom,
+    - **Still running** (`unheardAt`): the cancellation was not confirmed, or the legacy
+      interrupt's termination ladder could not be placed. This includes a Pause sent once;
+      the caption must not claim a retry. The words are
+      **Still** and **running** at 40%, in text main as item 42's are, over **the cancellation
+      was not confirmed ·** and then **End run**. The light, item 42's two insets and its bloom,
       takes the attention fill (`--vf-orange`, §2.5: needs you, Godview's ring-1) in place of the
       pane colour, and the caption, the small state word that has to be read, takes the attention
       ink (§2.7), not ink 72%. S-4 protects a face's identity, and a pane's glow is not one.
@@ -4324,9 +4331,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       takes none. Item 42's press takes the seat back; here the press answers nothing, so the act
       lives in the figure or nowhere the person is looking. It is a text button in the caption's
       size and weight, named "End run", and its words take the danger text (`--vf-red`, §2.5 as
-      AU-0 amended it), because it ends a process. It is **one press, with no second step**: the
-      person's Stop was the first, fieldd's two sends were its honest repetition, and the caption
-      is the confirm's "what this does" line, so a two-step would be a third press for one intent.
+      AU-0 amended it), because it ends a process. It is **one press, with no second step**:
+      **End run** names that act. After Pause, choosing it is a separate, explicit decision to
+      end the agent; an unconfirmed Pause alone never makes that decision for the person.
       It is `terminal.terminate` on the pane's own session (idempotent, the floor's ladder), and
       the pane then shows the exit as any exit does.
     - **Heard** (`heard`): by an exit, the pane shows the exit as any exit does (the frame's
@@ -5362,9 +5369,11 @@ limit, the size is rounded up and the limit down, so the two never read as equal
 1024s (`panels/DeskReadout.tsx`).*
 
 **A Stop's words** (track ST, ST-D4; ruled with §8's pane state, `ds-d4-place` 2026-10-31
-06:16:32Z and `ds-d4-look` 06:29:00Z). The press is answered by the frame: **Stopping the
-turn…**. While fieldd ends a turn that did not stop: **Ending the run**. When fieldd cannot tell:
-**Still running** · "the stop was sent twice and not heard" · **End run**. A stop that was only
+06:16:32Z and `ds-d4-look` 06:29:00Z; amended by James's 2026-11-02 Stop/Pause ruling).
+The pane's **Stop agent** answers **Stopping agent…**. **Pause current turn** answers
+**Pausing current turn…** and keeps the agent open. The legacy turn-stop control still answers
+**Stopping the turn…**; its escalation says **Ending the run**. When cancellation is unconfirmed:
+**Still running** · "the cancellation was not confirmed" · **End run**. A request that was only
 sent is never "interrupted", and a live pane is never "Stopped": Stopped is an exit's word.
 
 **The person's queue's words** (track CO, CP-3; CP3-D1…D8 ruled A by James, 2026-10-31 06:31:34Z). An item's acts
