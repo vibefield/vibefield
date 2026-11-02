@@ -520,6 +520,9 @@
   item 153 (the test suites remove the temp roots they make: a row's root at its end, fieldd's files-host bundle under
   a run root its global-setup removes; ~300 vf-* dirs a verify run before, 33,345 on the gate host: `50c30574a`
   as M102, a fast-forward, run 102; LANDED "Item 153") ·
+  item 156 (Settings → Devices stays a row under the account head: UA-7's fold dropped the whole Account group,
+  Devices with it, so a connected Mac had no way in from Settings: `95be4565c` as M103, a fast-forward, run 103; LANDED
+  "Item 156") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).

@@ -29000,3 +29000,47 @@ runs.
   full verify: 33,655 before and 33,655 after (+0), against about +304 for run101r on the old code.
 
 **Owed.** Nothing of the fixer's. The dirs already leaked on the gate host are James's to clear.
+
+## Item 156 — Settings → Devices stays a row under the account head: the head folds only the Account page into itself, never the whole group
+
+(2026-11-02; one commit `95be4565c` on lane `fix/item156` over main `48faead25`, the fixer's; M103 is `95be4565c`
+itself, a fast-forward of main `48faead25`, run 103, landed 2026-11-02T08:39:09Z.) James's QA find, granted by VF-PM at
+08:23Z on a9's cause.
+
+**The red.** Settings → Devices had no row in the desktop's Settings sidebar.
+- TS-3a (`32fe49be1`, 2026-10-27) put "devices" in the Account nav group
+  (`packages/field-app/src/panels/SettingsDialog.tsx`).
+- Since UA-7 (`135bd9dd7`), the dialog dropped that WHOLE group whenever the account head is shown. SettingsPanel
+  passes the head whenever `account.me` is known, which is always, in the app.
+- So Devices folded away with Account. It was reachable only through the connect nudges, which exist only while
+  NOT connected, and an `open-devices` notice: a connected Mac had no way in from Settings.
+- `settings-dialog-account.test.tsx` asserted only that the "Account" eyebrow was gone, never that Devices remained.
+
+**The fix**, by DESIGN.md §8: "Settings → Devices … one page under the head", and "the Account nav group is gone,
+because the head is the account".
+- The nav groups carry an `id`, and a `label` that may be null.
+- `NAV_GROUPS_UNDER_HEAD` folds only the Account page into the head and drops the group's eyebrow, so Devices
+  stands as the first row directly under the head tile.
+- Without the head (a browser harness), the whole Account group stays.
+- The Agent Profiles group's hook keys on the Workspace group's id, no longer on its label's text.
+- The catalog's Settings dialog and Devices specimens (Surfaces) already mount the shipping dialog with the fixture
+  account, so they draw the row with no catalog change and no copy.
+
+**The light** (`lanes/item156/tools/light156.sh`, logs `lanes/item156/light/`; 08:26:48Z → 08:27:42Z, at
+`95be4565c`), green throughout:
+- The guard matched James's QA app, a dev runner from his SSD checkout
+  (`/Volumes/SamsungRed/codex-work/vibefield-qa-20261101`). It was waived for that checkout alone, by his 07:14Z word
+  through VF-PM (`light/waiver.log`). A match from any other checkout would have stopped the light.
+- R, red-first: main's `SettingsDialog.tsx` under the new rows, red: under the head, the Devices row
+  (`button[aria-label="Devices settings"]`) was null. The file was restored from HEAD.
+- G, at the fix: settings-dialog-account (17, three new), agents-, profiles- and terminal-settings, devices-section,
+  panels, design-system and ui-system-boundaries, 202/202. Biome on the two files.
+- field-app's typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- Run 103 on the mini (a9's mint, M103 the commit itself; VF-PM's read, 08:36:33Z): 12,095 passed, 0 failed,
+  18 skipped (main's 12,092 plus the three new rows); cargo 33 ok.
+- The land ran under James's 07:14Z waiver for his QA runner 46092 from the SSD checkout: `land-stack5.sh`
+  (`land-stack4.sh` with one change, a guard hit waived only when its cwd is under the named checkout, and printed),
+  dev-stack-check 0/0. `land-stack4.sh`'s try at 08:38:03Z stopped on the same hit, and nothing moved. An
+  `index.lock` stood 480 ms at 08:39:08Z; lock-wait outlived it untouched.
+
+**Owed.** Nothing of the fixer's.
