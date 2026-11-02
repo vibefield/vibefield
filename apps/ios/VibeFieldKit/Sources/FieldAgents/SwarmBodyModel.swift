@@ -60,18 +60,21 @@ public struct SwarmBurn: Equatable, Sendable {
 
 /// The burn rate as people price work: by the hour. Takes USD an HOUR, the owner's `burnPerHour` (J3 (a); sdk
 /// `toolkit/format.js` `formatRatePerHour`). (Corrected 2026-11-02, PG-3e: it took USD a minute and multiplied, which
-/// was the swarm's own copy; the words are the same.)
+/// was the swarm's own copy; the words are the same.) (Corrected 2026-11-02, item 164: the whole dollars were
+/// `Int(perHour.rounded())`, which trapped from 2^63 and at ∞, and a peer's `burnPerHour` is unbounded; they are
+/// `Math.round`'s digits, `$1e+21/hr` and `$Infinity/hr` as the window says them.)
 public func formatRatePerHour(perHour: Double?) -> String {
   guard let perHour else { return "—/hr" }
-  if perHour >= 10 { return "$\(Int(perHour.rounded()))/hr" }
+  if perHour >= 10 { return "$\(JSNumber.whole(JSNumber.round(perHour)))/hr" }
   if perHour >= 1 { return "$\(tenths(perHour))/hr" }
   return "\(formatUsd(perHour))/hr"
 }
 
-/// JavaScript's `toFixed(1)` for a value from 1 to 10: the tenth nearest the EXACT binary value, and on an exact tie the
-/// larger. (PG-3e, the review's [0]: `String(format: "%.1f")` breaks the tie to even, so 2.25 read `2.2` where the
-/// window reads `2.3`. Away from a tie the two agree; a tie is exact only when the binary value's expansion ends at
-/// its hundredths' 5, which forty places show.)
+/// JavaScript's `toFixed(1)` for a value from 1 to 10 (the rate's dollars, the token count's thousands and millions):
+/// the tenth nearest the EXACT binary value, and on an exact tie the larger. (PG-3e, the review's [0]:
+/// `String(format: "%.1f")` breaks the tie to even, so 2.25 read `2.2` where the window reads `2.3`. Away from a tie
+/// the two agree; a tie is exact only when the binary value's expansion ends at its hundredths' 5, which forty places
+/// show.)
 func tenths(_ value: Double) -> String {
   let expansion = String(format: "%.40f", value)
   if let point = expansion.firstIndex(of: ".") {
@@ -288,13 +291,16 @@ func blockerText(_ blocker: AgentBlocker, message: String?) -> String {
   return message ?? blockerMark(blocker.kind).word
 }
 
-/// Compact token counts: 820, 8.1k, 24k, 384k, 1.2M, 24M.
+/// Compact token counts: 820, 8.1k, 24k, 384k, 1.2M, 24M (the sdk's `toolkit/format.js` `formatTokens`).
+/// (Corrected 2026-11-02, item 165: the tenths were `String(format: "%.1f")`, which broke an exact tie to even, 8250
+/// `8.2k` where the window says `8.3k`; and the whole counts were `Int(...rounded())`, which trapped on NaN, ±∞ and
+/// past Int's range and rounded a negative tie away from zero. They are `toFixed(1)` and `Math.round`'s digits.)
 public func formatTokens(_ count: Double) -> String {
-  if count < 1000 { return "\(Int(count.rounded()))" }
-  if count < 10_000 { return String(format: "%.1fk", count / 1000) }
-  if count < 1_000_000 { return "\(Int((count / 1000).rounded()))k" }
-  if count < 10_000_000 { return String(format: "%.1fM", count / 1_000_000) }
-  return "\(Int((count / 1_000_000).rounded()))M"
+  if count < 1000 { return JSNumber.whole(JSNumber.round(count)) }
+  if count < 10_000 { return "\(tenths(count / 1000))k" }
+  if count < 1_000_000 { return "\(JSNumber.whole(JSNumber.round(count / 1000)))k" }
+  if count < 10_000_000 { return "\(tenths(count / 1_000_000))M" }
+  return "\(JSNumber.whole(JSNumber.round(count / 1_000_000)))M"
 }
 
 /// Each working session's place among the working sessions by estimated USD:
