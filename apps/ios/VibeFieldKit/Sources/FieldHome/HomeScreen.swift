@@ -1212,6 +1212,7 @@ public struct HomeScreen: View {
           fixture.start()
           link = fixture
           fixtureLink = true
+          reportCard()
         }
         // `!demoRemoteActive` for the reason the line above carries: a second
         // appearance would otherwise replace a running fixture field with a
@@ -1723,6 +1724,8 @@ public struct HomeScreen: View {
           homeMemory: HomeMemory())
         opened.start()
         link = opened
+        // PG-3f — a `.closeDoor` closes the link but leaves the card open: the new link hears it
+        reportCard()
       }
     }
   }
@@ -2550,6 +2553,13 @@ public struct HomeScreen: View {
     }
   }
 
+  /// PG-3f (design v2 §4.1) — the phone is a screen: the link hears what the open card shows, by the body it follows
+  /// (`selection.id`, the VISUAL id), and reports the row under it to its owner. Called where the card opens and
+  /// closes, and at every link install.
+  private func reportCard() {
+    link?.show(visualId: selection?.id)
+  }
+
   /// Raise the card on a bubble, remembering it as the card's subject. Every
   /// path that opens a card comes through here so none of them can open one
   /// with no subject to fall back on.
@@ -2565,6 +2575,7 @@ public struct HomeScreen: View {
     inputCard.history = clipboardHistory
     // --- end IOS-5d
     selection = SessionSelection(id: bubble.id)
+    reportCard()
     // FW-D2 (James, 2026-10-17: "the terminal should already connect and show
     // the terminal content, no more attach button") — opening the card IS the
     // attach. A kept session comes back painted from its lane; any other mints
@@ -2746,6 +2757,7 @@ public struct HomeScreen: View {
   private func closeCard() {
     let deviceID = attachedDeviceID
     cardBubble = nil
+    reportCard()
     attachedDeviceID = nil
     renderFailure = nil
     attachRefusal = nil

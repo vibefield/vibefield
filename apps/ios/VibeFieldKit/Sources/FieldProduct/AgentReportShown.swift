@@ -16,6 +16,7 @@ public struct AgentReportShownParams: Sendable, Equatable {
     self.device = device
   }
 
-  /// PG-3f (red) — the skeleton: encodes nothing yet.
-  public var json: JSONValue { .object([:]) }
+  public var json: JSONValue {
+    .object(["ids": .array(ids.map(JSONValue.string)), "device": .string(device)])
+  }
 }

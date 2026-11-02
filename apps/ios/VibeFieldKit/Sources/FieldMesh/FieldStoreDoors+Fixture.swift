@@ -130,9 +130,10 @@
 
   /// The fixture's in-process door: every desktop's door answers the same way
   /// — hello as a self desktop, the witness's roster, and the witness's remote
-  /// board — because only the HOME is ever dialled for the field. Nothing else
-  /// is answered (NOT_FOUND), so an act on the fixture fails honestly rather
-  /// than pretending a desktop did something.
+  /// board — because only the HOME is ever dialled for the field — and, since
+  /// PG-3f, the phone's `agent.reportShown` (`{reported: true}`: a report is
+  /// not an act). Nothing else is answered (NOT_FOUND), so an act on the
+  /// fixture fails honestly rather than pretending a desktop did something.
   struct FixtureHome: ProductTransport {
     struct Desktop: Sendable {
       let deviceId: String
@@ -228,6 +229,9 @@
           ]))
       case "agent.subscribe":
         return Self.frame(id: id, result: .object(["subId": .string("fixture"), "snapshot": open]))
+      // PG-3f — the phone's report, heard: the home routes it to the row's owner (`device`), and it lands
+      case "agent.reportShown":
+        return Self.frame(id: id, result: .object(["reported": .bool(true)]))
       default:
         let error = JSONValue.object([
           "jsonrpc": .string("2.0"), "id": .int(id),
