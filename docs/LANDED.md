@@ -29105,3 +29105,65 @@ field's own mark as an image, for the loads the field doesn't draw.
   checkout.
 
 **Owed.** Nothing of these PRs'.
+
+## Item 157 — the kit's flaky rows: a re-tap before the client READ the frames acknowledgement, a stall racing its own witness, and a test door sharing another process's port
+
+(2026-11-02; two commits on lane `fix/item157` over main `4aa731cab`, the IOS session's: `6adcb59e5` and
+`c91484e93`; M105 is the merge `c737af492` of `c91484e93` and main `78edface0` (a9's mint, tree `a086493aa`), main
+fast-forwarded to it, run 105, landed 2026-11-02T12:37:47Z.) VF-PM's assignment at 10:04Z: the kit row
+`theCellASessionOpensOrComesBackOnIsSaidFocused` was red in 2 of 10 kit runs on 10-29, and the fix is test-side.
+
+**The three reds**, each read from its own log, by VF-PM's classes:
+- (i) The row (`LanesOverTheDoorTests.swift:262`): an ordering race, not load.
+  - `attachToLive` returned once the door had SENT the frames leg's acknowledgement, never once the client had READ
+    it.
+  - The row parks and re-taps at once. The re-tap's fast path ("back on its lane — no mint, no dial") needs
+    `hasLiveActivation`, which is false until that acknowledgement is read.
+  - When the attach task ran first, the attachment took the full road: a mint and a fresh attach, which this door
+    never acknowledges. So the `live` demand never came.
+  - Both reds' logs read `mint asked` before `frames acknowledged`. Their 5.04 s is the wait's 5 s plus 40 ms: the
+    work before the wait was fast.
+- (iii) "run 3: a stall said again names the phase it BEGAN in" (AttachLogTests, red in fd's PG-3e kit runs).
+  - A fixed 1 s `Thread.sleep` raced the witness's own timer with about 0.1 s of slack.
+  - Under load the stall ended on two lines, which never become three.
+  - `aStalledQueueIsSaid` (0.9 s against a 0.3 s threshold) had the same shape.
+- (iii) "C8: an attach to a session that had exited reads ended" (AttachDeadlineTests): environmental.
+  - A codex process held `127.0.0.1:64432`, the port the door was handed (`lsof`, 11:40Z).
+  - It answered every WebSocket upgrade with a non-101: 700 dials a leg in 5 s, every one −1011 naming that port.
+  - The test doors bound the wildcard address with `allowLocalEndpointReuse`, which let them share it.
+
+**The fix**, test-side only; the product is unchanged (7 files +61 −22):
+- `6adcb59e5` (+29 −15): `attachToLive` takes the row's `lanes` and returns once `lanes.client(holding:)` reports
+  the session live on both legs.
+  - All 11 call sites pass it.
+  - `leavingParksAndComingBackIsADemandNotADial` carried the same race, made unlikely by its wait for the park.
+  - The full road is the designed one (a fresh activation naming the one it replaces); a re-tap inside the
+    acknowledgement window pays a mint and an attach, and works.
+- `c91484e93` (6 files +32 −7):
+  - Run 3's fake main queue and `aStalledQueueIsSaid`'s are held on a semaphore until the row has read its lines.
+  - The five loopback test doors bind `127.0.0.1` itself, on a port free there, with no reuse: CellDoorHarness,
+    AttachDeadlineTests' silent listener, FakeCellDoor, LoopbackDoorTests and HistoryLoopbackDoorTests. Every one
+    binds any port and none rebinds a fixed one, so reuse bought nothing.
+
+**The witness**, on this Mac by `lanes/item157/kit157.sh` and `kitmint.sh`:
+- At `c91484e93`, 11:50:37Z → 11:56:57Z: the kit green, 14 runs, 1,470 tests, 0 red. The row was green in 0.048 s,
+  its log reading `frames acknowledged` → `parked on its lane` → `back on its lane — no mint, no dial`.
+- The red twin, on the same booted device, with the fix's order undone (the leave-and-come-back before the door's
+  acknowledgement): RED AS ITS OWN TIMEOUT. That is 2 issues, its timeout once, 0 other rows red, its log in the
+  10-29 reds' order. The file was restored and the tree checked clean.
+- At the mint `c737af492` over its tree `a086493aa` (VF-PM's last witness before the land, in a detached worktree
+  with its own derived data), 12:27:42Z → 12:36:17Z: 15 runs, 1,475 tests, 0 red. That is main's count, with PR #10's
+  splash tests in.
+- The simulator (iPhone 17 Pro F93EABF3-4281-4EB5-A5F6-A550FBE95CDC) was shut down after each run.
+- The guard matched only James's QA runner 64402 from his SSD checkout. It was waived by his 07:14Z word and logged
+  before each step.
+- On the twin's red, xcodebuild's own failure-diagnostics collector logged `unable to find utility "simctl"`. Its
+  xcrun resolves through xcode-select, which is James's, and only that xcresult's simulator diagnostics are missing.
+- Run 105 on the mini (a9's mint, verify exit 0, 12:09:27Z → 12:15:30Z): 12,103 passed, 0 failed, 18 skipped
+  (main's count: the change is the kit's alone); cargo 33 ok; the iOS fixtures 202.
+- The land (the fixer's, 12:37:47Z): main fast-forwarded to the merge, 7 files +61 −22 against `78edface0`.
+
+**Owed.**
+- Item 161, found here and filed: a dropped leg re-mints with no backoff after a failed handshake. Against a non-101
+  listener it runs about 140 cycles a second, each mint re-arms the step deadline so the stall is never said, and
+  the card reads "connecting" forever. It is the IOS session's, after WI-1.

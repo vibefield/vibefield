@@ -526,6 +526,9 @@
   item 156 (Settings → Devices stays a row under the account head: UA-7's fold dropped the whole Account group,
   Devices with it, so a connected Mac had no way in from Settings: `95be4565c` as M103, a fast-forward, run 103; LANDED
   "Item 156") ·
+  item 157 (the kit's lane helper returns once the client has READ both legs' acknowledgements, so a re-tap takes the
+  fast path its row tests; run 3's stall is held until its lines are read, and the loopback test doors bind 127.0.0.1
+  with no reuse; test-only: `c91484e93` as the merge `c737af492`, run 105; LANDED "Item 157") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
