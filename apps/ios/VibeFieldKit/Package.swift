@@ -56,6 +56,7 @@ let package = Package(
     .library(name: "FieldFreeway", targets: ["FieldFreeway"]),
     .library(name: "FieldInput", targets: ["FieldInput"]),
     .library(name: "FieldSwarm", targets: ["FieldSwarm"]),
+    .library(name: "FieldSplash", targets: ["FieldSplash"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
     .library(name: "FieldHistory", targets: ["FieldHistory"]),
     .library(name: "FieldWorkspace", targets: ["FieldWorkspace"]),
@@ -290,6 +291,23 @@ let package = Package(
       resources: [.copy("Shaders"), .copy("Resources/marks.png")],
       linkerSettings: [.linkedFramework("Metal"), .linkedFramework("MetalKit")]
     ),
+    // The phone's splash (DESIGN.md §8 "The phone's splash"): vibefield-splash's iPhone look —
+    // Wormhole · Obsidian by night, Obsidian Light by day — drawn natively from its Metal bake,
+    // which apps/ios/scripts/vendor-splash.mjs vendors into `Splash/` at a pin (the shaders and the
+    // numbers generated, the runtime the splash project's own source; never edited here), and the
+    // gate that stands it over the home at launch. Unlike the swarm's shaders (D-i14) these are
+    // compiled with the app into the target's default.metallib: a splash is the one surface that
+    // cannot wait for a compile at first use. It names no other kit target but the design tokens.
+    .target(
+      name: "FieldSplash",
+      dependencies: ["FieldDesign"],
+      resources: [.process("Splash/SplashShaders.metal")],
+      linkerSettings: [.linkedFramework("Metal"), .linkedFramework("QuartzCore")]
+    ),
+    // The splash's runtime held to runtime.js's own phases, sizes and uniforms (the bake's
+    // `clock.json`, vendored with the splash at its pin, which `pnpm check:ios-fixtures` holds it to:
+    // no contracts directory carries it), and both looks drawn on this device's GPU, the dust among them.
+    .testTarget(name: "FieldSplashTests", dependencies: ["FieldSplash"], resources: [.copy("Fixtures")]),
     // The History tab (IOS-9b, H-D4): the ledger, a project, a session's
     // document and search — chrome family only, over VALUES (`HistoryCorpus`)
     // that today only the mock fills (`-vf-mock`) and the index reads will.
@@ -325,7 +343,7 @@ let package = Package(
       dependencies: [
         "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
         "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct", "FieldFreeway",
-        "FieldRoutedTerminal", "FieldSettings",
+        "FieldRoutedTerminal", "FieldSettings", "FieldSplash",
       ],
       resources: [.process("Resources")]
     ),

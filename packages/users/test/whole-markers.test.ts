@@ -9,9 +9,7 @@
 // by path runs as the two steps it is (open, then write), and a reader runs
 // between them, where another process lands. Every read it makes must find each
 // marker absent or whole.
-import { mkdtempSync, readdirSync, realpathSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readdirSync, realpathSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   ensureUsersRoot,
@@ -20,6 +18,7 @@ import {
   UsersError,
   writeLayoutStamp,
 } from "../src";
+import { tempDir } from "./temp-dir";
 
 const inWrite = vi.hoisted(() => ({ root: "", reader: null as null | (() => void) }));
 
@@ -48,7 +47,7 @@ vi.mock("node:fs", async (importOriginal) => {
   return { ...actual, writeFileSync, default: { ...actual, writeFileSync } };
 });
 
-const emptyRoot = () => realpathSync(mkdtempSync(join(tmpdir(), "vf-whole-markers-")));
+const emptyRoot = () => realpathSync(tempDir("vf-whole-markers-"));
 
 /** What a reader outside the lock finds at this instant, per marker. */
 function readEach(root: string): string[] {

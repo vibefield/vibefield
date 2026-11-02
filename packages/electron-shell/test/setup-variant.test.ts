@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { canonicalRoot, ensureUsersRoot, mutateUsersFile, readUsersFile } from "@vibefield/users";
 import { describe, expect, it, vi } from "vitest";
 import { backfillMigratedSetupVariant } from "../src/main/setup-variant";
+import { tempDir } from "./temp-dir";
 
 // UA-3w — main's one-time repair for roots that migrated BEFORE the marker
 // existed. It reads only facts already on disk, writes at most one field, and
@@ -13,7 +13,7 @@ import { backfillMigratedSetupVariant } from "../src/main/setup-variant";
 const noSleep = { sleep: (_ms: number) => Promise.resolve() };
 
 function freshRoot(): string {
-  return canonicalRoot(mkdtempSync(join(tmpdir(), "vf-backfill-")));
+  return canonicalRoot(tempDir("vf-backfill-"));
 }
 
 function legacyRoot(): string {

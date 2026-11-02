@@ -71,7 +71,10 @@ actor FakeCellDoor {
 
   func start() async throws -> UInt16 {
     let parameters = NWParameters.tcp
-    parameters.allowLocalEndpointReuse = true
+    // 127.0.0.1 itself, on a port free there, and no reuse: a wildcard bind with reuse could take a port another
+    // process held on 127.0.0.1, which then answered every dial (item 157, kit c9-rerun 2026-11-02: C8's handshakes
+    // all -1011 from a listener of another process on 127.0.0.1:64432).
+    parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
     parameters.requiredInterfaceType = .loopback
     let websocket = NWProtocolWebSocket.Options()
     websocket.autoReplyPing = true

@@ -28943,3 +28943,227 @@ puppeteer `v0.3.2` (`95a70aa77`).
 **Owed.**
 - 3e: FieldLink owns the copy and redraws on `Published.moved`; the switch; phone-body's mirror; `.routed`'s mirror;
   the field cut's copies retired.
+
+## Item 153 — the test suites remove the temp roots they make: each row's root goes when the row ends, and fieldd's files-host bundle lives in a root the run removes
+
+(2026-11-02; six commits `2bcb3441f` → `50c30574a` on lane `fix/item153` over main `d4eb2e74f`, the fixer's; M102 is
+`50c30574a` itself, a fast-forward of main `d4eb2e74f`, run 102, landed 2026-11-02T06:33:20Z.) Granted by VF-PM at
+06:05Z, on a9's measure of the gate host.
+
+**The red.** Our suites made their roots with `mkdtempSync(join(tmpdir(), …))` and never removed them.
+- a9's list (`~/vf-lanes/tmp/a9-vf-list-0536` on the mini, after the lanes' TMPDIR=/tmp runs) held 33,345 vf-* dirs,
+  1.26 GiB. The largest prefixes were vf-create 8,253 (318 MiB), vf-plugin-cli 7,810 (77 MiB), vf-link 5,717 and
+  vf-fh 552 (694 MiB).
+- Across its 55 prefixes the counts come in multiples of ~110: one root set per verify run.
+- The single-digit prefixes (vf-smoke 24, vf-seam and vf-km 10, vf-ar7 2, …) belong to files that already remove
+  their roots. They are a killed run's leftovers, not a row's, and are left.
+
+**The witness** (`lanes/item153/tools/leftover153.sh`). One run of a package, or of named files, with TMPDIR a fresh
+empty directory, then a count of what is left by prefix. The way the smokes prove their cleanup. Main `d4eb2e74f`,
+run in the lane before the first commit, against the tip:
+
+| suite | main | tip |
+| --- | --- | --- |
+| users, whole | 41 vf-* | 0 |
+| create-plugin, whole | 72 vf-create | 0 |
+| plugin-cli, whole | 95 vf-* | 0 |
+| electron-shell: users-profile, setup-variant | 12 | 0 |
+| fieldd: link-service, plugin-install, boot-env, workspace-attach/-doors/-worker | 60 | 0 |
+| dev-runner: siblings-window | 22, one a shared `truffle-fixture` | 0 |
+
+What is left at the tip is tsx's and node's own caches (`tsx-501`, `node-compile-cache`), which are reused across
+runs.
+
+**The fix, one commit a package:**
+- **The vitest packages:** `tempDir(prefix)` registers the root's recursive removal with vitest's `onTestFinished`.
+  It throws outside a test, so a root made at describe scope fails loudly instead of leaking.
+  - users and electron-shell: `test/temp-dir.ts`, with `removeWhenTestEnds(path)` for create-user's fixed 70-byte
+    sun_path root.
+  - create-plugin and plugin-cli: their `fixtures.ts` `freshDir`. plugin-cli's `makePlugin` makes its roots
+    through it.
+- **fieldd:** link-service takes shell-lease's class, a file-local cleanup list in afterEach. The files-host bundle
+  is shared by a file's rows, so no row may remove it. It builds under `inject("fielddRunRoot")`: global-setup
+  makes that directory once field-native's build is green, provides it, and removes it at teardown.
+- **dev-runner** (node:test): a top-level afterEach runs the cleanup list. `goFixture` wrote its sibling checkout
+  to `<root>/../truffle-fixture`, one fixed directory in the shared temp dir. It now sits beside the repo inside
+  the fixture's own root, as the lock's `../truffle-fixture` spells it.
+
+**The light** (`lanes/item153/tools/light153.sh`, logs `lanes/item153/light/`; 06:19:59Z → 06:22:08Z, at
+`50c30574a`), green throughout:
+- Every witness at the tip, exit 0 and 0 vf-* left. The fieldd row added ios-phone-place and project-doors-phone,
+  the bundle's other readers: 118 passed.
+- Biome on the 17 changed files.
+- The typechecks of users, create-plugin, plugin-cli, electron-shell and fieldd, under a HOLD line the script took
+  by noclobber and released at its exit.
+- Run 102 on the mini (a9's mint, M102 the tip itself; VF-PM's read, 06:32:22Z): 12,092 passed, 0 failed,
+  18 skipped (main's count, ±0); cargo 33 ok. a9 counted the vf-* entries in the mini's /private/tmp around the
+  full verify: 33,655 before and 33,655 after (+0), against about +304 for run101r on the old code.
+
+**Owed.** Nothing of the fixer's. The dirs already leaked on the gate host are James's to clear.
+
+## Item 156 — Settings → Devices stays a row under the account head: the head folds only the Account page into itself, never the whole group
+
+(2026-11-02; one commit `95be4565c` on lane `fix/item156` over main `48faead25`, the fixer's; M103 is `95be4565c`
+itself, a fast-forward of main `48faead25`, run 103, landed 2026-11-02T08:39:09Z.) James's QA find, granted by VF-PM at
+08:23Z on a9's cause.
+
+**The red.** Settings → Devices had no row in the desktop's Settings sidebar.
+- TS-3a (`32fe49be1`, 2026-10-27) put "devices" in the Account nav group
+  (`packages/field-app/src/panels/SettingsDialog.tsx`).
+- Since UA-7 (`135bd9dd7`), the dialog dropped that WHOLE group whenever the account head is shown. SettingsPanel
+  passes the head whenever `account.me` is known, which is always, in the app.
+- So Devices folded away with Account. It was reachable only through the connect nudges, which exist only while
+  NOT connected, and an `open-devices` notice: a connected Mac had no way in from Settings.
+- `settings-dialog-account.test.tsx` asserted only that the "Account" eyebrow was gone, never that Devices remained.
+
+**The fix**, by DESIGN.md §8: "Settings → Devices … one page under the head", and "the Account nav group is gone,
+because the head is the account".
+- The nav groups carry an `id`, and a `label` that may be null.
+- `NAV_GROUPS_UNDER_HEAD` folds only the Account page into the head and drops the group's eyebrow, so Devices
+  stands as the first row directly under the head tile.
+- Without the head (a browser harness), the whole Account group stays.
+- The Agent Profiles group's hook keys on the Workspace group's id, no longer on its label's text.
+- The catalog's Settings dialog and Devices specimens (Surfaces) already mount the shipping dialog with the fixture
+  account, so they draw the row with no catalog change and no copy.
+
+**The light** (`lanes/item156/tools/light156.sh`, logs `lanes/item156/light/`; 08:26:48Z → 08:27:42Z, at
+`95be4565c`), green throughout:
+- The guard matched James's QA app, a dev runner from his SSD checkout
+  (`/Volumes/SamsungRed/codex-work/vibefield-qa-20261101`). It was waived for that checkout alone, by his 07:14Z word
+  through VF-PM (`light/waiver.log`). A match from any other checkout would have stopped the light.
+- R, red-first: main's `SettingsDialog.tsx` under the new rows, red: under the head, the Devices row
+  (`button[aria-label="Devices settings"]`) was null. The file was restored from HEAD.
+- G, at the fix: settings-dialog-account (17, three new), agents-, profiles- and terminal-settings, devices-section,
+  panels, design-system and ui-system-boundaries, 202/202. Biome on the two files.
+- field-app's typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- Run 103 on the mini (a9's mint, M103 the commit itself; VF-PM's read, 08:36:33Z): 12,095 passed, 0 failed,
+  18 skipped (main's 12,092 plus the three new rows); cargo 33 ok.
+- The land ran under James's 07:14Z waiver for his QA runner 46092 from the SSD checkout: `land-stack5.sh`
+  (`land-stack4.sh` with one change, a guard hit waived only when its cwd is under the named checkout, and printed),
+  dev-stack-check 0/0. `land-stack4.sh`'s try at 08:38:03Z stopped on the same hit, and nothing moved. An
+  `index.lock` stood 480 ms at 08:39:08Z; lock-wait outlived it untouched.
+
+**Owed.** Nothing of the fixer's.
+
+## PR #9 and PR #10 — the living mark drawn as SVG, and the phone's splash: James's two pull requests, merged on his word in PR order
+
+(2026-11-02; two merges on lane `land/pr9-pr10` over main `4aa731cab`, the IOS session's: `cbe11fd75` merges PR #9's
+head `9373d4615` and `f2854bf2f` merges PR #10's head `76939a096`; M104 is `f2854bf2f` itself, a fast-forward of main
+`4aa731cab` that kept both merge commits, run 104, landed 2026-11-02T11:52:14Z.) James's word to the IOS session,
+2026-11-02 11:18Z: "first merge PR#9 and PR#10", ahead of the Way In's slices, which stand on PR #10's gate. Merged
+here in PR order, not by GitHub's button (VF-PM 11:23Z). GitHub marks each PR merged by reachability once the push
+carries its head to main.
+
+**PR #9** (`claude/living-mark-svg`, head `9373d4615`, one commit on `d4c5442c1`, 230 commits behind main): the
+field's own mark as an image, for the loads the field doesn't draw.
+- `tooling/splash/living-mark.mjs` ports the mark's geometry line for line from the vendored splash's shader and
+  checks its clock against the runtime's own `phases`; `--check` holds the committed SVGs to it.
+- `packages/design-kit/src/living-mark/`: the two SVGs (white ink by night, black by day), `LivingMark`, and the new
+  `@vibefield/design-kit/living-mark` export. No product surface wears it yet; its surfaces are to be ruled.
+- DESIGN.md §8 "The living mark, drawn as SVG". `biome.jsonc` leaves the generated SVGs to the generator.
+  `living-mark.test.tsx` has 8 rows.
+- 8 files +709 −1.
+
+**PR #10** (`ios/splash`, head `76939a096`, one commit on `26f9c2537`, 185 behind): IOS-11, the phone's splash.
+- The FieldSplash kit target. `Splash/` is vendored at sha256 pins by `apps/ios/scripts/vendor-splash.mjs` from
+  vibefield-splash `6f770f9` (the Metal bake's shaders, numbers and runtime). Ours beside it: `SplashSurface` and
+  `SplashGate`.
+- `FieldHome.HomeRoot` stands the gate over `HomeScreen`, and the app mounts `HomeRoot`. The launch screen is
+  `SplashGround` and `SplashMark`.
+- `FieldSplashTests` (5) with the vendored clock golden, which `check-ios-fixtures` admits as VENDORED and holds by
+  `vendor-splash.mjs --check`.
+- DESIGN.md §8 "The phone's splash", and apps/ios/README.md.
+- 24 files +5487 −7.
+
+**The merge.**
+- Both sides touched `biome.jsonc` and DESIGN.md (#9), and DESIGN.md and `scripts/check-ios-fixtures.mjs` (#10).
+  Git merged all but DESIGN.md with 0 markers.
+- DESIGN.md conflicted where both PRs add a §8 subsection after "The reveal". It keeps both, #9's first, each byte
+  for byte as its PR wrote it (+46 −0 against main).
+- HomeRoot's symbols resolve on main: `HomeScreen.init()`, `PhoneAppearance.storageKey` and `.phoneAppearance`.
+- GitHub CI was green on both heads (verify 41260138741 and 41284931675), each on its own base. Neither PR ran
+  `pnpm verify` on its host.
+
+**The light** (lane `pr910`, the IOS session's, at `f2854bf2f`, tree `4afa3508b`):
+- Under HOLD, 11:32:35Z → 11:33:36Z: typecheck of design-kit and field-app (no cache), biome on the eight touched JS
+  files, check:walls, check-ios-fixtures (with `vendor-splash --check`), and `living-mark.mjs --check` and
+  `vendor-splash.mjs --check` each alone. All green.
+- field-app's scanning suites on the merged tree, by 11-01's semantic-merge rule: text-ramp, ui-system-boundaries,
+  design-system, glyphs, living-mark, phone-parity, phone-goldens-producer, splash-vendor and glass-look. 9 files,
+  121 tests, green.
+- The iOS witness (`lanes/pr910/witness.sh`, 11:40:37Z → 11:50:06Z, on VF-PM's 11:41Z word):
+  - VibeFieldKit-Package built for testing, then every test on an iPhone 17 Pro simulator (udid
+    F93EABF3-4281-4EB5-A5F6-A550FBE95CDC, shut down 11:46:06Z): 15 runs, 1,475 tests, 0 red. Among them are
+    FieldSplashTests' 5, with both looks drawn on the GPU.
+  - The VibeField app built Debug and Release for the simulator.
+  - The guard matched only James's QA runner 64402 from his SSD checkout. It was waived by his 07:14Z word and
+    logged before each step.
+- Run 104 on the mini (a9's mint): 12,103 passed, 0 failed, 18 skipped (main's 12,095 plus `living-mark.test.tsx`'s
+  8); cargo 33 ok; the iOS fixtures 202.
+- The land (the fixer's `land-stack5.sh`, 11:52:14Z): a fast-forward that kept both merge commits, the two manifest
+  files admitted by name, dev-stack-check 0/0, under James's 07:14Z waiver for his QA runner 64402 from the SSD
+  checkout.
+
+**Owed.** Nothing of these PRs'.
+
+## Item 157 — the kit's flaky rows: a re-tap before the client READ the frames acknowledgement, a stall racing its own witness, and a test door sharing another process's port
+
+(2026-11-02; two commits on lane `fix/item157` over main `4aa731cab`, the IOS session's: `6adcb59e5` and
+`c91484e93`; M105 is the merge `c737af492` of `c91484e93` and main `78edface0` (a9's mint, tree `a086493aa`), main
+fast-forwarded to it, run 105, landed 2026-11-02T12:37:47Z.) VF-PM's assignment at 10:04Z: the kit row
+`theCellASessionOpensOrComesBackOnIsSaidFocused` was red in 2 of 10 kit runs on 10-29, and the fix is test-side.
+
+**The three reds**, each read from its own log, by VF-PM's classes:
+- (i) The row (`LanesOverTheDoorTests.swift:262`): an ordering race, not load.
+  - `attachToLive` returned once the door had SENT the frames leg's acknowledgement, never once the client had READ
+    it.
+  - The row parks and re-taps at once. The re-tap's fast path ("back on its lane — no mint, no dial") needs
+    `hasLiveActivation`, which is false until that acknowledgement is read.
+  - When the attach task ran first, the attachment took the full road: a mint and a fresh attach, which this door
+    never acknowledges. So the `live` demand never came.
+  - Both reds' logs read `mint asked` before `frames acknowledged`. Their 5.04 s is the wait's 5 s plus 40 ms: the
+    work before the wait was fast.
+- (iii) "run 3: a stall said again names the phase it BEGAN in" (AttachLogTests, red in fd's PG-3e kit runs).
+  - A fixed 1 s `Thread.sleep` raced the witness's own timer with about 0.1 s of slack.
+  - Under load the stall ended on two lines, which never become three.
+  - `aStalledQueueIsSaid` (0.9 s against a 0.3 s threshold) had the same shape.
+- (iii) "C8: an attach to a session that had exited reads ended" (AttachDeadlineTests): environmental.
+  - A codex process held `127.0.0.1:64432`, the port the door was handed (`lsof`, 11:40Z).
+  - It answered every WebSocket upgrade with a non-101: 700 dials a leg in 5 s, every one −1011 naming that port.
+  - The test doors bound the wildcard address with `allowLocalEndpointReuse`, which let them share it.
+
+**The fix**, test-side only; the product is unchanged (7 files +61 −22):
+- `6adcb59e5` (+29 −15): `attachToLive` takes the row's `lanes` and returns once `lanes.client(holding:)` reports
+  the session live on both legs.
+  - All 11 call sites pass it.
+  - `leavingParksAndComingBackIsADemandNotADial` carried the same race, made unlikely by its wait for the park.
+  - The full road is the designed one (a fresh activation naming the one it replaces); a re-tap inside the
+    acknowledgement window pays a mint and an attach, and works.
+- `c91484e93` (6 files +32 −7):
+  - Run 3's fake main queue and `aStalledQueueIsSaid`'s are held on a semaphore until the row has read its lines.
+  - The five loopback test doors bind `127.0.0.1` itself, on a port free there, with no reuse: CellDoorHarness,
+    AttachDeadlineTests' silent listener, FakeCellDoor, LoopbackDoorTests and HistoryLoopbackDoorTests. Every one
+    binds any port and none rebinds a fixed one, so reuse bought nothing.
+
+**The witness**, on this Mac by `lanes/item157/kit157.sh` and `kitmint.sh`:
+- At `c91484e93`, 11:50:37Z → 11:56:57Z: the kit green, 14 runs, 1,470 tests, 0 red. The row was green in 0.048 s,
+  its log reading `frames acknowledged` → `parked on its lane` → `back on its lane — no mint, no dial`.
+- The red twin, on the same booted device, with the fix's order undone (the leave-and-come-back before the door's
+  acknowledgement): RED AS ITS OWN TIMEOUT. That is 2 issues, its timeout once, 0 other rows red, its log in the
+  10-29 reds' order. The file was restored and the tree checked clean.
+- At the mint `c737af492` over its tree `a086493aa` (VF-PM's last witness before the land, in a detached worktree
+  with its own derived data), 12:27:42Z → 12:36:17Z: 15 runs, 1,475 tests, 0 red. That is main's count, with PR #10's
+  splash tests in.
+- The simulator (iPhone 17 Pro F93EABF3-4281-4EB5-A5F6-A550FBE95CDC) was shut down after each run.
+- The guard matched only James's QA runner 64402 from his SSD checkout. It was waived by his 07:14Z word and logged
+  before each step.
+- On the twin's red, xcodebuild's own failure-diagnostics collector logged `unable to find utility "simctl"`. Its
+  xcrun resolves through xcode-select, which is James's, and only that xcresult's simulator diagnostics are missing.
+- Run 105 on the mini (a9's mint, verify exit 0, 12:09:27Z → 12:15:30Z): 12,103 passed, 0 failed, 18 skipped
+  (main's count: the change is the kit's alone); cargo 33 ok; the iOS fixtures 202.
+- The land (the fixer's, 12:37:47Z): main fast-forwarded to the merge, 7 files +61 −22 against `78edface0`.
+
+**Owed.**
+- Item 161, found here and filed: a dropped leg re-mints with no backoff after a failed handshake. Against a non-101
+  listener it runs about 140 cycles a second, each mint re-arms the step deadline so the stall is never said, and
+  the card reads "connecting" forever. It is the IOS session's, after WI-1.

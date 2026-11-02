@@ -164,7 +164,10 @@
   VF-PM's rulings at a5's leans (01:16Z: the picture inside the hold, `window.__vfField` unchanged; 01:41Z: the logo
   moved onto the mark's corner), James's to overturn; its product question is James's, named and not built: whether the
   browser's glass wears the field's living mark anywhere but the held frame (a failed pass's glass, its first look),
-  where its logo is the brand's still. The catalog judged's two seams are VF-PM's rulings at a5's leans (02:17Z: row
+  where its logo is the brand's still. PR #9 drew the living mark as SVG for such loads
+  (`@vibefield/design-kit/living-mark`, LANDED 11-02 in M104 `f2854bf2f`, LANDED "PR #9 and PR #10"); no surface
+  wears it until that is ruled.
+  The catalog judged's two seams are VF-PM's rulings at a5's leans (02:17Z: row
   32's fourth walk on an in-memory partition, the frame at FG-L2's 736), James's to overturn; its ramp is James's word
   (02:26:44Z). Owed with it: item 136 (the glass's own literals, a placeholder's witness with them), the iOS kit's
   ChromePalette ramp, and the walk window's one `desktop.security.unregistered_webcontents` log. Row 32's red at run69b
@@ -517,6 +520,15 @@
   M90, a fast-forward, run 90; LANDED "Item 148") ·
   item 150 (the board screen reads a row keyed "" as keyless, never `removed: [""]`: a screened delta RowsDelta refused
   looped the replica's reopen; `47ee475bd` as the merge `a6dc43cd2`, run 94; LANDED "Item 150") ·
+  item 153 (the test suites remove the temp roots they make: a row's root at its end, fieldd's files-host bundle under
+  a run root its global-setup removes; ~300 vf-* dirs a verify run before, 33,345 on the gate host: `50c30574a`
+  as M102, a fast-forward, run 102; LANDED "Item 153") ·
+  item 156 (Settings → Devices stays a row under the account head: UA-7's fold dropped the whole Account group,
+  Devices with it, so a connected Mac had no way in from Settings: `95be4565c` as M103, a fast-forward, run 103; LANDED
+  "Item 156") ·
+  item 157 (the kit's lane helper returns once the client has READ both legs' acknowledgements, so a re-tap takes the
+  fast path its row tests; run 3's stall is held until its lines are read, and the loopback test doors bind 127.0.0.1
+  with no reuse; test-only: `c91484e93` as the merge `c737af492`, run 105; LANDED "Item 157") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
@@ -604,7 +616,7 @@
 | PLUG follow-ups | the KIT slice · third-party listing (P8e: TD registry + R2 process host; PA-24, §20.5, §21.8) · sideload · R2 `host:"process"` · PRC-5's power loss (§6) · PRC residual policies (§14–§15) · per-section undo/⌘Z/timeline (D29′, P7) | first-party publishing; third-party plugins; a Settings history design; runtime validation is tracked separately in §6 | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` |
 | TP / TC | D6's cell half, C5, D5, the lineage break (§6) · TC RATIFIED as built (Q6: TC-D1/D2 as amended by WG-D1, D3, D15, L1c at TM-1); TC-S4…S8 (vault, broker, replay, drain-migrate, warm tiers) parked · TP-S4…S6 (S4's typeable mirror struck) | a TP lane · a ghosttea next-major or a P0 witness across a floor restart · measured demand | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md` |
 | GT | G29 upstream (then GT-D22's file half) · GT-D22 (§5) · smoke row 13b: attach through DS-4e to a second staged desktop · no kill control in Godview (Q2): a session ends by the agent's quit, ⌘Q (AL-3) or reaping | G29's release · the two-desktop run | `specs/godview-terminal.md` |
-| IOS | the rebuild and TestFlight (§5) · phone Settings ("Settings in a Pocket", page Hof2zWpt, revised 2026-10-31 against `02c902a8d`: 8 marks, none picked yet; IOS-10a LANDED 2026-11-01 as `a9a62c20a`, run 67, at the page's leans, after FW, SP and PG; next: its later slices, LANDED "IOS-10a") · K-D5's ghosttea `customInputView` petition (unfiled) | James rebuilds; external TestFlight | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `apps/ios/TESTFLIGHT.md` |
+| IOS | the rebuild and TestFlight (§5) · phone Settings ("Settings in a Pocket", page Hof2zWpt, revised 2026-10-31 against `02c902a8d`: 8 marks, none picked yet; IOS-10a LANDED 2026-11-01 as `a9a62c20a`, run 67, at the page's leans, after FW, SP and PG; next: its later slices, LANDED "IOS-10a") · the phone's splash (IOS-11, James's PR #10) LANDED 2026-11-02 in M104 `f2854bf2f`, run 104, LANDED "PR #9 and PR #10"; next on it: The Way In (track WI, page 5cvau5EQ; WI-D1…D8 ruled A by James 2026-11-02 11:13–11:15Z; "now implement it", 11:17Z), building on lane `wi` · K-D5's ghosttea `customInputView` petition (unfiled) | James rebuilds; external TestFlight | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `apps/ios/TESTFLIGHT.md` |
 | NF | COMPLETE; owed: item 52 (b)'s phone half (its routed ghosttea client) · headless floor-on-tailnet rows over TS-1's authKey path (`029af0e6f`) if wanted · native-floor §7 into the T posture | an NF lane | `specs/native-floor.md` |
 | Native push (APNs) | SP-D8: the relay after AR-6; pairing is the account; README's `services/push-relay` row is deferred | AR-6 | `thinking-native-push.md`, design-06 L4 |
 | LOG | LOG-39 (beta list) · LOG-V5 (rides Windows) · LOG-V8 retention (James's product call) · LOG-V7 optional | the beta checklist | `specs/logging-and-diagnostics.md` |
@@ -882,7 +894,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
 | PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |
-| IOS — companion | PARKED; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name); item 130 landed 10-31 (a sign-out clears History's cache, AP-D4); IOS-10a landed 11-01 (the phone's Settings, `a9a62c20a`) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | the rebuild; TestFlight build 4 |
+| IOS — companion | PARKED; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name); item 130 landed 10-31 (a sign-out clears History's cache, AP-D4); IOS-10a landed 11-01 (the phone's Settings, `a9a62c20a`); IOS-11 landed 11-02 (the phone's splash, James's PR #10, M104 `f2854bf2f`); next: The Way In (WI, ruled all A 11-02) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | the rebuild; TestFlight build 4 |
 | UA — users and accounts | COMPLETE except witnesses | `specs/users-and-accounts.md`, `thinking-ua-phone-account.md` | the phone's second-account witness |
 | NF — native floor | COMPLETE; one owed line | `specs/native-floor.md` | item 52 (b)'s phone half |
 | LOG — logging and audit | PARKED; item 78 landed | `specs/logging-and-diagnostics.md` | LOG-39 for the beta |

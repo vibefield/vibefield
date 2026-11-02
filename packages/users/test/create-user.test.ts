@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { UsersError } from "../src/errors";
@@ -11,6 +10,7 @@ import {
   userRootFor,
   usersFilePath,
 } from "../src/users-file";
+import { removeWhenTestEnds, tempDir } from "./temp-dir";
 
 // UA-5 — createUser: mint user N under the §3.3 lock. The allocator only
 // climbs, extras ride the passthrough (the wizard's setupVariant is a UI
@@ -18,7 +18,7 @@ import {
 // any directory exists, naming the socket and leaving users.json untouched.
 // UA-7: the mint writes no face and no colour (W6). Pane 2 writes the face.
 
-const mkRoot = (): string => mkdtempSync(join(tmpdir(), "vf-create-"));
+const mkRoot = (): string => tempDir("vf-create-");
 
 describe("UA-5 — createUser", () => {
   it("allocates the next fuid, persists extras, creates the root", async () => {
@@ -76,6 +76,7 @@ describe("UA-5 — createUser", () => {
       const root = `/tmp/${"x".repeat(65)}`;
       rmSync(root, { recursive: true, force: true });
       mkdirSync(root, { recursive: true });
+      removeWhenTestEnds(root);
       mintLockedUsersFile(root);
       const before = readFileSync(usersFilePath(root), "utf8");
 
