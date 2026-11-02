@@ -5263,6 +5263,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *Amended 2026-11-02 (track WI):* signed out, the phone shows the way in and nothing else (§9 "The way in"), so no
   corner or card reaches the signed-out head; **About** gains **How VibeField works**, the way in's four pages
   again, and **This phone** gains **Lock** with WI-3, in the words of §9 "The way in".
+  *Retired 2026-11-02 (item 163, VF-PM's review of WI-1, L8):* the signed-out head (**Continue with Tailscale** and
+  its note) and the empty list's **None yet** with its foot. Settings is never open signed out, since a Sign out
+  leaves it first and the way in stands alone (WI-L1), and it lists every desktop WI-L2 counts as known, so neither
+  was reachable. Both said "Mac"; the face's dealt note says "the way your computer deals it" (§9: "computer").
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views

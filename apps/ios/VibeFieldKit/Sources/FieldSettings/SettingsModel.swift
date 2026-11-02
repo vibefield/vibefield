@@ -21,11 +21,11 @@ public enum SettingsModel {
   // MARK: - The head
 
   /// Under the name at the head of Settings: the login while all is well, and
-  /// the door's own words when the network asks for the person (TS-7).
+  /// the door's own words when the network asks for the person (TS-7). Signed
+  /// out, nothing: Settings is never open signed out (WI-L1). RETIRED 2026-11-02
+  /// (item 163): the signed-out head's note, which said "Mac".
   public static func headLines(_ account: SettingsAccount) -> (status: Line?, note: String?) {
     switch account.standing {
-    case .signedOut:
-      return (nil, "Use the same account as VibeField on your Mac. Everything under This phone works without it.")
     case .signInAgain:
       return (
         Line("Sign in to Tailscale again", wantsTheUser: true),
@@ -36,7 +36,7 @@ public enum SettingsModel {
         Line("Waiting for approval", wantsTheUser: true),
         "You’re signed in. An admin of your Tailscale network approves new devices."
       )
-    case .connected, .connecting, .couldNotConnect:
+    case .signedOut, .connected, .connecting, .couldNotConnect:
       return (nil, nil)
     }
   }
@@ -61,12 +61,8 @@ public enum SettingsModel {
     }
   }
 
-  /// The desktops section's foot, when there is nothing to list.
-  public static func noDesktopsFoot(_ standing: SettingsAccount.Standing) -> String {
-    standing == .waitingForApproval
-      ? "They appear here once an admin approves this phone."
-      : "On your Mac, open VibeField, click your face, then Connect your devices… with this same account."
-  }
+  // RETIRED 2026-11-02 (item 163): `noDesktopsFoot`, the foot under an empty list, which said "Mac". Settings is
+  // open only signed in, and it lists every desktop WI-L2 counts as known, so its list is never empty.
 
   /// "today, 18:02", "yesterday, 18:02", or the day — when a sleeping desktop
   /// was last heard.
@@ -197,7 +193,7 @@ public enum SettingsModel {
     case .dealt:
       return (
         frame,
-        "Dealt from your account, the way your Mac deals it, until a desktop of yours says who you are."
+        "Dealt from your account, the way your computer deals it, until a desktop of yours says who you are."
       )
     case .home(let desktop):
       return (

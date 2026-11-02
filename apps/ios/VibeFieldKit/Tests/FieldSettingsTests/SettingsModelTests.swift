@@ -112,13 +112,7 @@ struct SettingsModelTests {
     #expect(SettingsModel.heard(date(28, 18, 2), now: now, calendar: calendar, locale: locale) == "28 Oct")
   }
 
-  @Test("no desktop listed: approval says who adds them; otherwise the Mac's own steps")
-  func noDesktopsFoot() {
-    #expect(SettingsModel.noDesktopsFoot(.waitingForApproval) == "They appear here once an admin approves this phone.")
-    #expect(
-      SettingsModel.noDesktopsFoot(.connected)
-        == "On your Mac, open VibeField, click your face, then Connect your devices… with this same account.")
-  }
+  // RETIRED 2026-11-02 (item 163): `noDesktopsFoot`'s row, with the foot it held. Settings' list is never empty.
 
   // MARK: - A desktop's page
 

@@ -92,89 +92,61 @@ public struct SettingsView: View {
     .toolbar { closeItem }
   }
 
-  /// Headed by you: your face, your name and your login, which open Account;
-  /// signed out, the way in.
+  /// Headed by you: your face, your name and your login, which open Account.
+  /// Settings is never open signed out (WI-L1): a Sign out leaves it first, and
+  /// the way in stands alone. RETIRED 2026-11-02 (item 163): the signed-out
+  /// head, Continue with Tailscale and its note.
   @ViewBuilder
   private var head: some View {
     let lines = SettingsModel.headLines(account)
-    if account.standing == .signedOut {
-      Button(action: actions.signIn) {
-        HStack(spacing: 14) {
-          AccountMark(account: account, size: 60)
-          VStack(alignment: .leading, spacing: 3) {
-            Text("Continue with Tailscale")
-              .font(ChromeListType.accountName)
-              .foregroundStyle(ChromePalette.ink)
-            if let note = lines.note {
-              Text(note)
-                .font(ChromeListType.detail)
-                .foregroundStyle(ChromePalette.inkTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-          }
-          Spacer(minLength: 0)
-        }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-    } else {
-      NavigationLink(value: SettingsRoute.account) {
-        HStack(spacing: 14) {
-          AccountMark(account: account, size: 60, dot: lines.status?.wantsTheUser == true)
-          VStack(alignment: .leading, spacing: 3) {
-            Text(account.name)
-              .font(ChromeListType.accountName)
-              .foregroundStyle(ChromePalette.ink)
+    NavigationLink(value: SettingsRoute.account) {
+      HStack(spacing: 14) {
+        AccountMark(account: account, size: 60, dot: lines.status?.wantsTheUser == true)
+        VStack(alignment: .leading, spacing: 3) {
+          Text(account.name)
+            .font(ChromeListType.accountName)
+            .foregroundStyle(ChromePalette.ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+          if let status = lines.status {
+            Text(status.text)
+              .font(ChromeListType.row)
+              .foregroundStyle(status.wantsTheUser ? ChromePalette.attention : ChromePalette.inkTertiary)
+          } else if let login = account.loginLine {
+            Text(login)
+              .font(ChromeListType.detailMono)
+              .foregroundStyle(ChromePalette.inkTertiary)
               .lineLimit(1)
-              .minimumScaleFactor(0.7)
-            if let status = lines.status {
-              Text(status.text)
-                .font(ChromeListType.row)
-                .foregroundStyle(status.wantsTheUser ? ChromePalette.attention : ChromePalette.inkTertiary)
-            } else if let login = account.loginLine {
-              Text(login)
-                .font(ChromeListType.detailMono)
-                .foregroundStyle(ChromePalette.inkTertiary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            }
-            if let note = lines.note {
-              Text(note)
-                .font(ChromeListType.detail)
-                .foregroundStyle(ChromePalette.inkTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
+              .truncationMode(.middle)
+          }
+          if let note = lines.note {
+            Text(note)
+              .font(ChromeListType.detail)
+              .foregroundStyle(ChromePalette.inkTertiary)
+              .fixedSize(horizontal: false, vertical: true)
           }
         }
-        .padding(.vertical, 8)
       }
-      .accessibilityLabel("\(account.name), \(lines.status?.text ?? account.login ?? ""), account")
+      .padding(.vertical, 8)
     }
+    .accessibilityLabel("\(account.name), \(lines.status?.text ?? account.login ?? ""), account")
   }
 
+  /// Every desktop WI-L2 counts as known, listed now or remembered: Settings is
+  /// open only signed in, so the list is never empty. RETIRED 2026-11-02 (item
+  /// 163): its empty state, "None yet" and the foot that said how to add one.
   private var desktops: some View {
     Section {
-      if account.desktops.isEmpty {
-        Text("None yet")
-          .font(ChromeListType.row)
-          .foregroundStyle(ChromePalette.placeholder)
-      } else {
-        ForEach(account.desktops) { desktop in
-          let line = SettingsModel.desktopLine(desktop)
-          NavigationLink(value: SettingsRoute.desktop(desktop.id)) {
-            ChromeRow(
-              desktop.name, lead: .device(platform: desktop.platform), detail: line.text,
-              detailWantsTheUser: line.wantsTheUser)
-          }
+      ForEach(account.desktops) { desktop in
+        let line = SettingsModel.desktopLine(desktop)
+        NavigationLink(value: SettingsRoute.desktop(desktop.id)) {
+          ChromeRow(
+            desktop.name, lead: .device(platform: desktop.platform), detail: line.text,
+            detailWantsTheUser: line.wantsTheUser)
         }
       }
     } header: {
       ChromeListHead("Your desktops")
-    } footer: {
-      if account.desktops.isEmpty {
-        ChromeListFoot(SettingsModel.noDesktopsFoot(account.standing))
-      }
     }
     .chromeRows()
   }
