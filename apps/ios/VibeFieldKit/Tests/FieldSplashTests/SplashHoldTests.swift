@@ -173,6 +173,23 @@ struct SplashHoldTests {
     #expect(model.revealing, "its floor stood once: it leaves at once")
   }
 
+  @Test("L2: a re-hold ends the release's limit: the splash waits past the earlier limits for the next release's own")
+  func aReHoldEndsTheReleasesLimit() {
+    let (model, steps, _) = launched(held: true)
+    #expect(!model.revealing, "held, it stands")
+    model.setHold(false)
+    steps.advance(by: .seconds(1))
+    model.setHold(true)
+    steps.advance(by: .seconds(1))
+    model.setHold(false)
+    // the content never says it is steady: only a limit shows it, and past the mount's and the first release's it
+    // stands
+    steps.advance(by: .milliseconds(2500))
+    #expect(!model.revealing, "the earlier limits are not this release's")
+    steps.advance(by: .milliseconds(1600))
+    #expect(model.revealing, "its own limit: shown anyway")
+  }
+
   @Test("the hold is any asker's: one holding is enough, and none holding releases it")
   func anyAskerHolds() {
     var value = SplashHoldKey.defaultValue

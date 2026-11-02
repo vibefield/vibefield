@@ -179,6 +179,10 @@ final class SplashGateModel {
   /// Counts the splash's moves (it leaves, it comes back), so a fade's end that a later move overtook
   /// does nothing.
   @ObservationIgnored private var moves = 0
+  /// What the splash never waits past for content that never steadies: the mount's limit, then each
+  /// release's. One stands at a time, and a hold ends it (WI-1's review, L2): an earlier limit is not the
+  /// next release's.
+  @ObservationIgnored private var stableDue: (any SplashDue)?
   private let timer: any SplashTimer
   private let watch: any SplashSteadiness
   #if DEBUG
@@ -281,7 +285,7 @@ final class SplashGateModel {
       self?.stable = true
       self?.revealIfReady()
     }
-    timer.after(SplashTiming.stableLimit) { [weak self] in
+    stableDue = timer.after(SplashTiming.stableLimit) { [weak self] in
       self?.stable = true
       self?.revealIfReady()
     }
@@ -294,6 +298,9 @@ final class SplashGateModel {
     guard hold != holding else { return }
     holding = hold
     if hold {
+      // the watch and the limit a release (or the mount) started end with it: the next release starts its own
+      watch.stop()
+      stableDue?.cancel()
       if revealing || gone { comeBack() }
       return
     }
@@ -305,7 +312,8 @@ final class SplashGateModel {
       self?.stable = true
       self?.revealIfReady()
     }
-    timer.after(SplashTiming.stableLimit) { [weak self] in
+    stableDue?.cancel()
+    stableDue = timer.after(SplashTiming.stableLimit) { [weak self] in
       self?.stable = true
       self?.revealIfReady()
     }
