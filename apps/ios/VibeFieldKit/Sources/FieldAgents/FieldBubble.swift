@@ -6,6 +6,10 @@ import Foundation
 /// where a bubble came from. Since IOS-6a it is also the reference's
 /// `MonitorAgent` row: the project's colour, the pane it is worked in, the
 /// unread mark and the stale flag ride the row, dressed by `FieldAssembly`.
+/// (Corrected 2026-11-02, PG-3e, the review's [2]: the unread mark and the
+/// stale flag are the OWNER's, read off the row by `fieldBubble(from:)`, the
+/// grey being `row.stale || !fieldIsLive`; `FieldAssembly` dresses only the
+/// colour and the open card's pane.)
 
 /// What an agent bubble knows that a terminal cannot.
 public struct AgentFacet: Sendable, Equatable {
@@ -119,6 +123,12 @@ public struct RemoteFacet: Sendable, Equatable {
 /// One citizen of the field. Exactly one facet is non-nil: a bubble is an
 /// agent's or a peer's, and the absent facet is what tells the model to draw a
 /// hollow rather than a body.
+///
+/// (Corrected 2026-11-02, PG-3e, design v2 §2.3 and the review's [1]: on the
+/// remote cut a BARE terminal, home or peer, has NEITHER facet —
+/// `fieldBubble(from: RemoteFieldRow)` maps every terminal row with `agent: nil,
+/// remote: nil`. It is a hollow, and its glyph is the terminal prompt
+/// (`glyph`). At most one facet is non-nil; never both.)
 public struct FieldBubble: Identifiable, Sendable, Equatable {
   public let id: String
   /// The headline.
@@ -230,7 +240,8 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
     // NEVER both facets. "Exactly one facet is non-nil" is what tells the
     // renderer to draw a body rather than a hollow, so an agent whose PTY is
     // published does NOT become a remote bubble — the card resolves the join
-    // itself (`agentTerminalFace`).
+    // itself (`agentTerminalFace`). (Corrected 2026-11-02, PG-3e: "at most
+    // one" — a bare terminal on the remote cut has neither; see `FieldBubble`.)
     remote: nil)
 }
 
@@ -331,10 +342,10 @@ public enum FieldBubbleGlyph: Equatable, Sendable {
 }
 
 extension FieldBubble {
-  /// What `BubbleGlyph` draws for this bubble.
-  public var glyph: FieldBubbleGlyph? {
-    if remote != nil { return .terminalPrompt }
-    if let agent { return .agentMark(agent.markKey) }
-    return nil
+  /// What `BubbleGlyph` draws for this bubble: an agent its mark; anything else a terminal, the prompt (a peer's
+  /// terminal session, and since PG-3e a bare terminal on the home or a peer, which has neither facet).
+  public var glyph: FieldBubbleGlyph {
+    if remote == nil, let agent { return .agentMark(agent.markKey) }
+    return .terminalPrompt
   }
 }

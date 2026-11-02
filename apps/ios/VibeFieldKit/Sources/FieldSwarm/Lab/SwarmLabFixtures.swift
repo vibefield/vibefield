@@ -128,8 +128,7 @@ func labAgent(_ spec: LabAgentSpec, palette: LabPalette) -> FieldBubble {
     effort: spec.effort.map { AgentEffort(value: $0, intent: spec.effortIntent) },
     lastMessage: spec.message,
     cost: cost,
-    statusSince: labNow.addingTimeInterval(-20),
-    lastEvidenceAt: labNow.addingTimeInterval(spec.stale ? -120 : 0))
+    statusSince: labNow.addingTimeInterval(-20))
   return FieldBubble(
     id: spec.id,
     project: spec.project,
@@ -259,7 +258,9 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
         palette: palette)),
     LabStage(
       id: "working-stale", title: "Working, stale evidence",
-      note: "Mid-reply, nothing heard for 30 s: dimmed and desaturated, never recoloured. An idle body never dims (Q01).",
+      note: "Mid-reply, its owner marks it stale: dimmed and desaturated, never recoloured. Any body dims on its "
+        + "owner's stale mark, on a desktop that is not live, or while no home answers (PG-3e; the phone's 30 s rule "
+        + "retired).",
       bubble: labAgent(
         LabAgentSpec(
           id: "w8", project: "ref", status: .working, model: "Sonnet 5", effort: "medium", contextPercent: 31,

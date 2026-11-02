@@ -7,7 +7,8 @@ import UIKit
 /// A peer's terminal session gets a prompt, not a vendor mark: the mesh told
 /// us a shell is running, not who is driving it, and drawing Claude's mark on
 /// a bare shell would be the projection claiming something discovery never
-/// said.
+/// said. So does a bare terminal with neither facet (PG-3e, J-E3; it drew
+/// nothing before the review's [1]): `FieldBubble.glyph` decides.
 struct BubbleGlyph: View {
   let bubble: FieldBubble
   /// The size an undrawn mark's letter is set at (`AgentGlyph.letterSize`).
@@ -22,8 +23,6 @@ struct BubbleGlyph: View {
         .scaledToFit()
     case .agentMark(let mark):
       AgentGlyph(mark: mark, letterSize: letterSize)
-    case nil:
-      EmptyView()
     }
   }
 }

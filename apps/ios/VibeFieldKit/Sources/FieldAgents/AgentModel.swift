@@ -236,9 +236,15 @@ public struct AgentRuntimeState: Sendable, Equatable, Codable {
   public var usage: AgentUsage?
   /// When the current status began (the unread rule reads it, never the
   /// transition, so a turn that began and ended between two projections still
-  /// counts).
+  /// counts). (Corrected 2026-11-02, PG-3e, the review's [2]/[18]: the phone's
+  /// unread rule retired with `UnreadLedger`; the unread mark is the owner's,
+  /// on the row. Nothing on the phone reads this now; the body's elapsed clock
+  /// reads the row's own.)
   public var statusSince: Date?
   /// The monitor's `freshness.lastEvidenceAt`: stale evidence dims the body.
+  /// (Corrected 2026-11-02, PG-3e, the review's [2]/[18]: the phone's 30 s rule
+  /// retired (J-E7) and nothing reads this now; a body dims on the owner's
+  /// `stale` or while no live home answers, `row.stale || !fieldIsLive`.)
   public var lastEvidenceAt: Date?
 
   public init(
@@ -306,7 +312,10 @@ public struct AgentJoin: Sendable, Equatable, Codable {
   /// the home is answering. `false` is a desktop asleep, stale or on another
   /// version — or a home that stopped answering — and the row STAYS, drawn
   /// greyed (`FieldAssembly` dresses it stale), because asleep is a state and
-  /// not an absence. `true` for a feed with no mesh behind it.
+  /// not an absence. `true` for a feed with no mesh behind it. (Corrected
+  /// 2026-11-02, PG-3e, the review's [2]: `FieldAssembly` no longer reads it;
+  /// the grey is `row.stale || !fieldIsLive` in `fieldBubble(from:)`, and this
+  /// flag rides the join for the card alone.)
   public var deviceLive: Bool
   /// PJ-7 (Q3) — the agent's own id for the conversation this run continues
   /// (the field row's `nativeSessionId`): what History's Jump to joins a

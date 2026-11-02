@@ -544,8 +544,9 @@ private func model(
     #expect(body.burn == SwarmBurn(lit: 2, priced: true))
   }
 
-  /// B7 — the working shares rank by the owner's total: 0.02 and 0.62 share 0 and 1; an unavailable total counts as
-  /// 0; an idle body and a terminal do not count.
+  /// B7 — the working shares rank by the owner's total: an unavailable total counts as 0, so it is the least here, and
+  /// 0.02 and 0.62 share 0.02 / 0.62 and 1; an idle body and a terminal do not count. (Corrected 2026-11-02, PG-3e, the
+  /// review's [20]: it said 0.02 and 0.62 share 0 and 1, which holds only without the unavailable row.)
   @Test func workingSharesReadTheCost() {
     let rows = [
       owned(id: "a", cost: AgentCost(usd: 0.02, coverage: "complete")),

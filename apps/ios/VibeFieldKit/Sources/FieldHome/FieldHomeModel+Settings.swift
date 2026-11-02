@@ -84,13 +84,16 @@ extension FieldHomeModel {
     }
   }
 
-  /// PG-3e (design v2 §5.3, with the v2 check's M2) — whether "Watch its agents" is available: not while the home is
-  /// not hearing (nil, not said); `false` only for a desktop this phone cannot read — its standing on the home's board
-  /// `incompatible`, or its door refused the field; nil while the board does not list it (not on the board YET is not
-  /// a refusal: the mock and the demo accounts list none); `true` otherwise, asleep included (its kept board is drawn).
+  /// PG-3e (design v2 §5.3, with the v2 check's M2) — whether "Watch its agents" is available: `false` for a desktop
+  /// whose door refused the field, hearing or not (the review's [8]: a sole old home refuses, so the phone hears
+  /// nothing, and J-E1 (iii) says its page reads unavailable while its corner row says "the field was refused"); not
+  /// while the home is not hearing otherwise (nil, not said); `false` for a standing of `incompatible` on the home's
+  /// board; nil while the board does not list it (not on the board YET is not a refusal: the mock and the demo
+  /// accounts list none); `true` otherwise, asleep included (its kept board is drawn).
   static func watchable(_ desktop: FieldDesktop, isHearing: Bool) -> Bool? {
+    if desktop.fieldRefusal != nil { return false }
     guard isHearing else { return nil }
-    if desktop.board == .incompatible || desktop.fieldRefusal != nil { return false }
+    if desktop.board == .incompatible { return false }
     return desktop.board == nil ? nil : true
   }
 

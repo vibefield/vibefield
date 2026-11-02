@@ -64,8 +64,23 @@ public struct SwarmBurn: Equatable, Sendable {
 public func formatRatePerHour(perHour: Double?) -> String {
   guard let perHour else { return "—/hr" }
   if perHour >= 10 { return "$\(Int(perHour.rounded()))/hr" }
-  if perHour >= 1 { return String(format: "$%.1f/hr", perHour) }
+  if perHour >= 1 { return "$\(tenths(perHour))/hr" }
   return "\(formatUsd(perHour))/hr"
+}
+
+/// JavaScript's `toFixed(1)` for a value from 1 to 10: the tenth nearest the EXACT binary value, and on an exact tie the
+/// larger. (PG-3e, the review's [0]: `String(format: "%.1f")` breaks the tie to even, so 2.25 read `2.2` where the
+/// window reads `2.3`. Away from a tie the two agree; a tie is exact only when the binary value's expansion ends at
+/// its hundredths' 5, which forty places show.)
+func tenths(_ value: Double) -> String {
+  let expansion = String(format: "%.40f", value)
+  if let point = expansion.firstIndex(of: ".") {
+    let tail = expansion[expansion.index(point, offsetBy: 2)...]  // from the hundredths on
+    if tail.first == "5", tail.dropFirst().allSatisfy({ $0 == "0" }) {
+      return String(format: "%.1f", value + 0.05)
+    }
+  }
+  return String(format: "%.1f", value)
 }
 
 /// The per-minute rate the owner's per-hour burn was multiplied from, for the ladder: dividing back can land an ulp

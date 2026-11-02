@@ -277,8 +277,9 @@ public final class FieldLink {
   public private(set) var fieldIsLive = false
   /// PG-3e — how many times `bubbles` was reassigned: a `@testable` witness for L7.
   internal private(set) var redraws = 0
-  /// PG-3f (the v2 check's S4) — every `agent.reportShown` answer this link heard, in order: a `@testable` witness, so
-  /// a row (D2) can read that a report LANDED, not only that nothing was refused.
+  /// PG-3f (the v2 check's S4) — the last 32 `agent.reportShown` answers this link heard, in order: a `@testable`
+  /// witness, so a row (D2) can read that a report LANDED, not only that nothing was refused. Capped as `notes` is and
+  /// cleared by `stop()` (the review's [6]/[14]/[19]: it is compiled into Release, and it grew without bound).
   internal private(set) var reportAnswers: [ReportAnswer] = []
 
   /// One report's answer: the device it named, the model ids it carried, and how the home (or the owner) answered.
@@ -446,6 +447,10 @@ public final class FieldLink {
   @ObservationIgnored private var reportRecords: [String: ReportRecord] = [:]
   /// The reports, in order: each send waits for the one before it.
   @ObservationIgnored private var reportChain: Task<Void, Never>?
+  /// The chain's generation: pause, a lost home and stop end the WHOLE chain by moving it, and each queued send drops
+  /// when it wakes on an old one (the review's [13]: cancelling the tail left the sends behind it queued, and a quick
+  /// pause and resume on the same client let one land after the resume's open sent the card's row).
+  @ObservationIgnored private var reportGeneration = 0
   /// A board is open on the home: set by an open that read, cleared by a gap, a refused open, a lost home and the pause.
   /// Rule 1 sends only while it stands (the v2 check's N14); the open's own rule covers the return.
   @ObservationIgnored private var boardOpen = false
@@ -603,8 +608,7 @@ public final class FieldLink {
     refusedWhileArming = false
     // PG-3f — paused, nothing is reported: the subscription that was the screen is gone, and resume's open re-sends
     boardOpen = false
-    reportChain?.cancel()
-    reportChain = nil
+    endReportChain()
     sweepTask?.cancel()
     sweepTask = nil
     devices.pause()
@@ -671,8 +675,8 @@ public final class FieldLink {
     wantedVisualId = nil
     shown = nil
     reportRecords = [:]
-    reportChain?.cancel()
-    reportChain = nil
+    reportAnswers = []
+    endReportChain()
     boardOpen = false
     opening = false
     found.removeAll()
@@ -784,16 +788,6 @@ public final class FieldLink {
     }
   }
 
-  /// F1b (FW-D5; FW-R3, FW-R6) — the phone's approval for its freeway link to `deviceId`, asked of
-  /// the HOME: `freeway.approve {}` for the home's own link, `{device}` for another desktop's, which
-  /// the home forwards whole to that desktop (M63 `599998fdd`). That desktop still mints: the
-  /// approval's audience is its floor boot, its key signs it, and its own roster decides the caller
-  /// is a phone, the phone the home names in `onBehalfOf.clientDeviceId`. Only the ask rides the
-  /// home, so no second door is opened for it. The answer, or the refusal, comes back unread, as
-  /// the owner sent it; the link says a refusal in the phone's words (`FreewayApproval.said`).
-  ///
-  /// (F1 asked the owner's own door here. That per-ask owner socket is FW-R6's, retired for the
-  /// approval only: a ticket, its renewal and Resume stay over the owner's door above, SP-7's.)
   /// PG-3f (design v2 §4.1) — what the open card shows, by the body it follows: its VISUAL id (`FieldBubble.id`). nil:
   /// the card is closed. The link resolves the row under it at every refold and reports that row's MODEL id to its
   /// owner, routed through the home.
@@ -806,6 +800,16 @@ public final class FieldLink {
     refold()
   }
 
+  /// F1b (FW-D5; FW-R3, FW-R6) — the phone's approval for its freeway link to `deviceId`, asked of
+  /// the HOME: `freeway.approve {}` for the home's own link, `{device}` for another desktop's, which
+  /// the home forwards whole to that desktop (M63 `599998fdd`). That desktop still mints: the
+  /// approval's audience is its floor boot, its key signs it, and its own roster decides the caller
+  /// is a phone, the phone the home names in `onBehalfOf.clientDeviceId`. Only the ask rides the
+  /// home, so no second door is opened for it. The answer, or the refusal, comes back unread, as
+  /// the owner sent it; the link says a refusal in the phone's words (`FreewayApproval.said`).
+  ///
+  /// (F1 asked the owner's own door here. That per-ask owner socket is FW-R6's, retired for the
+  /// approval only: a ticket, its renewal and Resume stay over the owner's door above, SP-7's.)
   public func approveFreeway(on deviceId: String) async throws -> JSONValue {
     guard let home, let homeClient else { throw FreewayApproval.noHome }
     return try await homeClient.call(
@@ -1309,8 +1313,7 @@ public final class FieldLink {
     refusedWhileArming = false
     // PG-3f — a queued report for this home is dropped (each send checks its client too); the next home's open re-sends
     boardOpen = false
-    reportChain?.cancel()
-    reportChain = nil
+    endReportChain()
     let client = homeClient
     homeClient = nil
     client?.close()
@@ -1674,6 +1677,9 @@ public final class FieldLink {
           self.sweepSoon()
           return
         }
+        // the review's [10] (M3 (a)'s scope) — a refusal of another kind from a desktop on the ladder: it speaks the
+        // new protocol now, so its record goes, and the corner says the door's own words
+        self.remoteRefusals.removeValue(forKey: deviceId)
         self.found[deviceId]?.fieldRefusal = reason
         self.refreshDesktops()
       }
@@ -1712,7 +1718,7 @@ public final class FieldLink {
     clearListedRefusals()
     boardOpen = true
     // PG-3f — a board that re-attached on a new epoch forgets its report record; the open's own rule sends after
-    let cleared = clearMovedReportRecords()
+    let cleared = !clearMovedReportRecords().isEmpty
     opening = true
     redraw(remote.publish())
     if cleared { refold() }
@@ -1762,11 +1768,14 @@ public final class FieldLink {
   }
 
   /// S1 — a desktop the copy lists LIVE with its board serves the field, whichever home answers for it: its ladder
-  /// and its words go (an upgrade behind another home is heard here, not only when it is home again).
+  /// and its words go (an upgrade behind another home is heard here, not only when it is home again). Its words go
+  /// with or without a record (the review's [9]: a former home's refusal of another kind wrote words and no record,
+  /// and they outlived the new home's board drawing its agents live).
   private func clearListedRefusals() {
-    guard !remoteRefusals.isEmpty else { return }
     for device in remote.devices where device.state == .live && device.epoch != nil {
-      if remoteRefusals[device.device] != nil { clearRemoteRefusal(device.device) }
+      if remoteRefusals[device.device] != nil || found[device.device]?.fieldRefusal != nil {
+        clearRemoteRefusal(device.device)
+      }
     }
   }
 
@@ -1784,10 +1793,14 @@ public final class FieldLink {
       clearListedRefusals()
       let heard = remote.publish()
       // PG-3f (the v2 check's S3) — a desktop's board re-attached on a new epoch: its report record goes, and the
-      // card's row on it is reported at once (a steady connection may see no whole open for a long time)
-      if clearMovedReportRecords() {
+      // card's row on it is reported at once (a steady connection may see no whole open for a long time). Only a card
+      // whose OWN device moved, and only when the refold did not send that row already (the review's [5]/[11]: rule
+      // 3, the same row twice sends once, and no resend on a frame).
+      let moved = clearMovedReportRecords()
+      if !moved.isEmpty {
+        let before = shown
         refold()
-        if let shown, reportRecords[shown.device] == nil, boardOpen, homeIsLive {
+        if let shown, shown == before, moved.contains(shown.device), boardOpen, homeIsLive {
           enqueueReport([shown.modelId], device: shown.device)
         }
       }
@@ -1850,13 +1863,13 @@ public final class FieldLink {
   }
 
   /// Forgets the record of every device whose board now stands on another epoch (its fieldd restarted, perhaps
-  /// upgraded). True when one went.
-  private func clearMovedReportRecords() -> Bool {
-    guard !reportRecords.isEmpty else { return false }
+  /// upgraded), and answers those devices.
+  private func clearMovedReportRecords() -> Set<String> {
+    guard !reportRecords.isEmpty else { return [] }
     let epochs = Dictionary(remote.devices.map { ($0.device, $0.epoch) }) { first, _ in first }
     let moved = reportRecords.filter { device, record in (epochs[device] ?? nil) != record.epoch }.map(\.key)
     for device in moved { reportRecords.removeValue(forKey: device) }
-    return !moved.isEmpty
+    return Set(moved)
   }
 
   /// One report, on the chain. It captures the home's client: when it runs and that client is no longer the home (a
@@ -1866,16 +1879,26 @@ public final class FieldLink {
     guard let client = homeClient, case .ready = client.state else { return }
     let params = AgentReportShownParams(ids: ids, device: device)
     let previous = reportChain
+    let generation = reportGeneration
     reportChain = Task { @MainActor [weak self] in
       await previous?.value
-      guard let self, !Task.isCancelled, self.started, !self.isPaused, self.homeClient === client else { return }
+      guard let self, !Task.isCancelled, self.reportGeneration == generation, self.started, !self.isPaused,
+        self.homeClient === client
+      else { return }
       do {
         _ = try await client.call(AgentReportShownParams.method, params: params.json)
-        self.reportAnswers.append(ReportAnswer(device: device, ids: ids, outcome: .reported))
+        self.heard(ReportAnswer(device: device, ids: ids, outcome: .reported))
       } catch {
         self.heardReportRefusal(error, device: device, ids: ids, client: client)
       }
     }
+  }
+
+  /// Ends the chain whole: the tail is cancelled and every send queued before it drops when it wakes.
+  private func endReportChain() {
+    reportGeneration &+= 1
+    reportChain?.cancel()
+    reportChain = nil
   }
 
   /// §4.3 — 3b's rule (`lastingRefusal`), read from the refusal's `details`, never its kind: `no-screen`
@@ -1889,10 +1912,10 @@ public final class FieldLink {
       else if details?["locality"]?.stringValue == "local" { .noScreens }
       else { nil }
     guard let refusal, homeClient === client else {
-      reportAnswers.append(ReportAnswer(device: device, ids: ids, outcome: .transient))
+      heard(ReportAnswer(device: device, ids: ids, outcome: .transient))
       return
     }
-    reportAnswers.append(ReportAnswer(device: device, ids: ids, outcome: .lasting(refusal)))
+    heard(ReportAnswer(device: device, ids: ids, outcome: .lasting(refusal)))
     if reportRecords[device] == nil {
       note("\(device) cannot hear this phone's reports: \(MeshModel.shortReason(error))")
     }
@@ -2042,6 +2065,12 @@ public final class FieldLink {
   /// the home's door (DS-8): the copy holds a chain for it.
   private func feed(of deviceId: String) -> FieldFeedSource {
     remote.devices.first { $0.device == deviceId }?.epoch != nil ? .door : FieldFeedSource.none
+  }
+
+  /// One report's answer, kept for the rows: the last 32.
+  private func heard(_ answer: ReportAnswer) {
+    reportAnswers.append(answer)
+    if reportAnswers.count > 32 { reportAnswers.removeFirst() }
   }
 
   private func note(_ line: String) {
