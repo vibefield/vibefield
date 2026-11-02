@@ -6,7 +6,9 @@
  * (`needsCardWords`, `needsSaid`), the shipping view (`NeedsCardView`) and its controller (`useNeedsCard`, under the
  * real `ChatView` and a running feed). The ruled witnesses on the window's side: an answer clears the item; a held send
  * is answered only by Allow (its words land in fieldd: needs-queue.test.ts); the cap holds a spawn until Allow one
- * more. The items are fieldd's fixture's (the window side of EL9).
+ * more. The items are fieldd's fixture's (the window side of EL9). Since the handle (track CO, VF-PM 01:41Z) it names
+ * a session as the thread's @ does, by the product's own `sessionHandlesOf`, and as fieldd names it only where @ offers
+ * none.
  */
 
 import { readFileSync } from "node:fs";
@@ -15,6 +17,8 @@ import { fileURLToPath } from "node:url";
 import {
   AGENT_CATALOG,
   type AgentFieldRow,
+  type AgentPersona,
+  type AgentProfileSet,
   NeedsItem,
   type NeedsItemId,
   type SparkSummary,
@@ -23,16 +27,19 @@ import { FielddRpcError } from "@vibefield/fieldd-client";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NO_HANDLES, sessionHandlesOf } from "../src/chat/at-rows";
 import type { ComposerPort } from "../src/chat/ChatComposer";
 import { ChatView } from "../src/chat/ChatView";
 import { NeedsCardView } from "../src/chat/NeedsCardView";
 import {
   NEEDS_FADE_MS,
+  NEEDS_IDLE,
   NEEDS_LEAVE_MS,
   NEEDS_SAID_MS,
   type NeedsAct,
   needsCardOf,
   needsCardWords,
+  needsNamesOf,
   needsSaid,
 } from "../src/chat/needs-card";
 import { sparkEntriesOf } from "../src/chat/spark-status";
@@ -131,7 +138,9 @@ function row(over: Partial<AgentFieldRow> & Pick<AgentFieldRow, "runtimeRunId">)
   };
 }
 
-/** Vela's own run, idle with a transcript behind it; claude·2, the agent she started, live under her. */
+/** Vela's own run, idle with a transcript behind it; claude·2, the agent she started, live under her. Under ChatView
+ * (its port lists no Agent Profiles, and a run that names no persona is This Mac's) her @ offers claude·2, no folder
+ * observed, so its handle, and the live card's name for it, is its agent's label (track CO, the handle). */
 const ROWS: AgentFieldRow[] = [
   row({
     runtimeRunId: "run-12",
@@ -151,6 +160,98 @@ const entryOf = (items: readonly NeedsItem[], spark: SparkSummary = VELA) => {
   if (entry === undefined) throw new Error("no entry");
   return entry;
 };
+
+// ── the handle (track CO): @'s numbering, on the board and the Agent Profiles as fieldd hands them ──
+
+const minute = (m: number) => new Date(Date.parse(AT) + m * 60_000).toISOString();
+const persona = (profileId: string, set: string): AgentPersona => ({
+  profileId,
+  provider: AGENT.id,
+  label: "Default",
+  kind: set === "native" ? "native-default" : "managed",
+  createdAt: AT,
+  set,
+  identity: { loggedIn: true, verifiedAt: AT },
+});
+const profileSet = (
+  id: string,
+  label: string,
+  personas: AgentPersona[],
+  kind: "native" | "managed" = "managed",
+): AgentProfileSet => ({ id, kind, label, default: kind === "native", createdAt: AT, personas });
+/** This Mac, Work and Home, each with one persona. */
+const SETS: AgentProfileSet[] = [
+  profileSet("native", "This Mac", [persona(`${AGENT.id}:native-default`, "native")], "native"),
+  profileSet("work", "Work", [persona("work-a", "work")]),
+  profileSet("home", "Home", [persona("home-b", "home")]),
+];
+/** Vela, of This Mac and Work: her @ offers both profiles' sessions. */
+const VELA_AT: SparkSummary = { ...VELA, profiles: ["native", "work"] };
+
+/** The board the handles are read on. For Vela: run-29 (her agent, its folder not observed yet) is the agent's label;
+ * run-30 is "vibe-field"; run-31, filed by its persona alone under Work and started after, is "vibe-field·2". run-28,
+ * in vibe-field and started first, is under Home, which she lacks, so it is never counted; run-41 is Lyra's agent,
+ * "vibe-field" in her thread alone; run-ended has ended. */
+const AT_ROWS: AgentFieldRow[] = [
+  row({
+    runtimeRunId: "run-12",
+    spark: VELA.id,
+    terminal: { hosted: "local", runtimeSessionId: "pty-12" },
+  }),
+  row({
+    runtimeRunId: "run-28",
+    profileId: "home-b",
+    project: { name: "vibe-field" },
+    createdAt: minute(0),
+  }),
+  row({ runtimeRunId: "run-29", origin: { by: "spark", spark: VELA.id }, createdAt: minute(0) }),
+  row({
+    runtimeRunId: "run-30",
+    origin: { by: "spark", spark: VELA.id },
+    project: { name: "vibe-field" },
+    createdAt: minute(1),
+  }),
+  row({
+    runtimeRunId: "run-31",
+    profileId: "work-a",
+    origin: { by: "spark", spark: VELA.id },
+    project: { name: "vibe-field" },
+    createdAt: minute(2),
+    terminal: { hosted: "local", runtimeSessionId: "pty-31" },
+  }),
+  row({ runtimeRunId: "run-40", spark: LYRA.id }),
+  row({
+    runtimeRunId: "run-41",
+    origin: { by: "spark", spark: LYRA.id },
+    project: { name: "vibe-field" },
+    createdAt: minute(3),
+  }),
+  row({
+    runtimeRunId: "run-ended",
+    alive: false,
+    origin: { by: "spark", spark: VELA.id },
+    project: { name: "vibe-field" },
+    createdAt: minute(-1),
+  }),
+];
+/** Vela's thread's handles, by the product's own rule. */
+const HANDLES = sessionHandlesOf(VELA_AT, AT_ROWS, SETS);
+
+/** Vela's held send to `session`, which fieldd names `name` (an untitled run: its agent's label). */
+const sendTo = (session: string, name: string = AGENT.label, id = "ny-8c41d2e09a77b307") =>
+  NeedsItem.parse({ ...HELD_SEND, id, to: { session, name } });
+/** Lyra's held send to run-41, the agent she started. */
+const LYRA_SEND = NeedsItem.parse({
+  ...HELD_SEND,
+  id: "ny-8c41d2e09a77b308",
+  from: { name: "Lyra", session: "run-40", spark: LYRA.id },
+  spark: LYRA.id,
+  to: { session: "run-41", name: AGENT.label },
+});
+
+/** The card Vela's thread stands for `item`, named by `handles`. */
+const handledCard = (item: NeedsItem, handles: ReadonlyMap<string, string> = HANDLES) =>
+  needsCardOf(entryOf([item], VELA_AT), item, NEEDS_IDLE, { handles });
 
 /** The answered item fieldd hands back: the item as it was, with its answer. */
 const answered = (item: NeedsItem, choice: number, over: Record<string, unknown> = {}): NeedsItem =>
@@ -371,9 +472,75 @@ describe('what the card says (DESIGN.md §8 "Chat\'s thread", the needs-you card
       "Couldn't finish it: …",
       "Vela hears it when it wakes: …",
       "Could not jump — ‹why›",
+      // a session @ offers in the thread, by its handle (track CO)
+      "Needs your OK · vibe-field·2",
+      "Vela wants to send to vibe-field·2",
+      "vibe-field·2 asks to run Bash",
+      "Your yes lasts until vibe-field·2 ends.",
+      "Couldn't send Vela's words to vibe-field·2: …",
     ]) {
       expect(design, text).toContain(text);
     }
+  });
+});
+
+describe('the card names a session as @ does (track CO, the handle; DESIGN.md §8 "Chat\'s thread")', () => {
+  it("T4: tells two untitled vibe-field sessions apart by @'s handle, wherever it names them", () => {
+    expect([HANDLES.get("run-30"), HANDLES.get("run-31")]).toEqual(["vibe-field", "vibe-field·2"]);
+    const first = needsCardWords(handledCard(sendTo("run-30")));
+    expect(first.question).toBe("Vela wants to send to vibe-field");
+    expect(first.sub).toBe("Your yes lasts until vibe-field ends.");
+    const second = needsCardWords(handledCard(HELD_SEND));
+    expect(second.question).toBe("Vela wants to send to vibe-field·2");
+    expect(second.sub).toBe("Your yes lasts until vibe-field·2 ends.");
+    // an agent's ask from the second: its asker by the handle, in the eyebrow, the question and what is announced
+    const ask = handledCard(AGENT_ASK);
+    expect(ask.names).toEqual({ from: "vibe-field·2", to: null });
+    const asked = needsCardWords(ask);
+    expect(asked.eyebrow).toBe("Needs your OK · vibe-field·2");
+    expect(asked.question).toBe("vibe-field·2 asks to run Bash");
+    expect(asked.asked).toBe("Needs your OK, vibe-field·2: vibe-field·2 asks to run Bash");
+    // a session whose folder is not observed yet has its agent's label for a handle, as in @
+    expect(needsCardWords(handledCard(sendTo("run-29", "Codename"))).question).toBe(
+      `Vela wants to send to ${AGENT.label}`,
+    );
+  });
+
+  it("T5: says a session as fieldd names it where @ offers no handle, and a spark always by its name", () => {
+    // no handles handed (the profiles or the board not read): fieldd's names, as every words test above
+    expect(handledCard(HELD_SEND, NO_HANDLES).names).toEqual({ from: "Vela", to: "claude·2" });
+    expect(needsCardWords(handledCard(AGENT_ASK, NO_HANDLES)).eyebrow).toBe(
+      "Needs your OK · claude·2",
+    );
+    // off the board, ended, in a profile Vela lacks, another spark's agent: none is offered, so none has a handle
+    for (const session of ["run-99", "run-ended", "run-28", "run-41"]) {
+      expect(HANDLES.has(session), session).toBe(false);
+      expect(needsCardWords(handledCard(sendTo(session))).question, session).toBe(
+        `Vela wants to send to ${AGENT.label}`,
+      );
+    }
+    // a spark asks by its name, though a handle were keyed by its session
+    const vela = new Map([["run-12", "vela"]]);
+    expect(needsNamesOf(QUESTION, vela).from).toBe("Vela");
+    expect(needsNamesOf(HELD_SEND, vela).from).toBe("Vela");
+  });
+
+  it("T6: says what an answer came to under the card's names, and as fieldd names them with none handed", () => {
+    const failed = answered(HELD_SEND, 0, { outcome: "failed", reason: "claude·2 ended" });
+    expect(needsSaid(failed, 0, handledCard(HELD_SEND).names)).toEqual({
+      text: "You said Allow · Couldn't send Vela's words to vibe-field·2: claude·2 ended",
+      tone: "failed",
+    });
+    expect(needsSaid(failed, 0).text).toBe(
+      "You said Allow · Couldn't send Vela's words to claude·2: claude·2 ended",
+    );
+    const asleep = answered(QUESTION, 0, {
+      told: false,
+      waits: "Vela's session is not running yet",
+    });
+    expect(needsSaid(asleep, 0, handledCard(QUESTION).names).text).toBe(
+      "You said Push · Vela hears it when it wakes: Vela's session is not running yet",
+    );
   });
 });
 
@@ -549,11 +716,19 @@ const queue = {
   }[],
 };
 
-function feed(sparks: SparkSummary[] = [VELA]): SparksPort {
+/** The board's next snapshot, as the test pushes it. */
+const board = { push: null as ((rows: readonly AgentFieldRow[]) => void) | null };
+
+function feed(sparks: SparkSummary[] = [VELA], rows: readonly AgentFieldRow[] = ROWS): SparksPort {
   return {
     list: async () => sparks,
     watch: async (onFrame) => {
-      onFrame({ revision: 1, rows: ROWS }, "snapshot");
+      let revision = 1;
+      board.push = (next) => {
+        revision += 1;
+        onFrame({ revision, rows: next }, "snapshot");
+      };
+      onFrame({ revision, rows }, "snapshot");
       return () => undefined;
     },
     watchNeeds: async (onItems) => {
@@ -583,6 +758,7 @@ async function mountChat(
   items: readonly NeedsItem[],
   sparks: SparkSummary[] = [VELA],
   port: SparksPort = feed(sparks),
+  composer: ComposerPort = PORT,
 ) {
   queue.items = items;
   queue.asked = [];
@@ -592,7 +768,9 @@ async function mountChat(
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [active, set] = useState(true);
     setActive = set;
-    return <ChatView active={active} surface={surface} onSurfaceChange={setSurface} port={PORT} />;
+    return (
+      <ChatView active={active} surface={surface} onSurfaceChange={setSurface} port={composer} />
+    );
   }
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -615,6 +793,24 @@ const tick = (ms: number) =>
   });
 const settleAnswer = (at: number, item: NeedsItem) =>
   act(async () => queue.answers[at]?.resolve(item));
+const boardFrame = (rows: readonly AgentFieldRow[]) => act(async () => board.push?.(rows));
+/** Type into the draft as the browser leaves it: the text in the editor, the caret at its end, an input event. */
+function typeText(text: string): void {
+  act(() => {
+    const field = $(".vf-chat-input");
+    if (field === null) throw new Error("no draft");
+    field.focus();
+    field.textContent = "";
+    const node = document.createTextNode(text);
+    field.append(node);
+    const range = document.createRange();
+    range.setStart(node, node.length);
+    range.collapse(true);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
 
 describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => {
   it("stands in the thread's foot over the pane, before the composer, and never takes the keyboard", async () => {
@@ -651,7 +847,7 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     expect(words($(".vf-needs-said"))).toBe("You said Hold");
     tick(NEEDS_LEAVE_MS);
     // the next rises in its place, and takes the keyboard the last one held: the card, never an act
-    expect(words($(".vf-needs-question"))).toBe("Vela wants to send to claude·2");
+    expect(words($(".vf-needs-question"))).toBe(`Vela wants to send to ${AGENT.label}`);
     expect(card()?.hasAttribute("data-leaving")).toBe(false);
     expect(document.activeElement).toBe(card());
     // an answer that went as asked says nothing on the status line: the pane's line of facts says it
@@ -728,7 +924,7 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     const other = NeedsItem.parse({ ...HELD_SEND, id: "ny-8c41d2e09a77b306" });
     await mountChat([HELD_SEND, other]);
     vi.useFakeTimers();
-    expect(words($(".vf-needs-sub"))).toBe("Your yes lasts until claude·2 ends.");
+    expect(words($(".vf-needs-sub"))).toBe(`Your yes lasts until ${AGENT.label} ends.`);
     expect(queue.asked).toEqual([]);
     await press("Allow");
     expect(queue.asked).toEqual([{ item: HELD_SEND.id, choice: 0 }]);
@@ -842,7 +1038,7 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     expect(statusLineSaid()).toEqual([
       {
         id: `needs-answer:${HELD_SEND.id}`,
-        text: "You said Allow · Couldn't send Vela's words to claude·2: claude·2 ended",
+        text: `You said Allow · Couldn't send Vela's words to ${AGENT.label}: claude·2 ended`,
       },
     ]);
   });
@@ -882,6 +1078,112 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     await press("Show");
     await settle();
     expect(noted).toEqual(["Could not jump — the deck did not open to show it"]);
+  });
+});
+
+describe("the card names a session as the thread's @ does, live (track CO, the handle; useNeedsCard under ChatView)", () => {
+  /** The Agent Profiles fieldd lists, read by Chat's one reading. */
+  const PROFILED: ComposerPort = { ...PORT, profileSets: async () => SETS };
+  const mountHandled = (items: readonly NeedsItem[], sparks: SparkSummary[] = [VELA_AT]) =>
+    mountChat(items, sparks, feed(sparks, AT_ROWS), PROFILED);
+  /** The handle @'s row says for `session`, @ open in the thread. */
+  const atHandle = (session: string): string =>
+    words($(`.vf-chat-at-row[data-row="session:${session}"] b`));
+  const openAt = async () => {
+    typeText("ask @");
+    await settle();
+    expect($(".vf-chat-at")).not.toBeNull();
+  };
+  const question = () => words($(".vf-needs-question"));
+  const arrival = () => words($(".vf-needs-arrived"));
+
+  it("T7: names the session by the handle @'s row says, numbered on the real profiles, never counting a namesake she lacks", async () => {
+    await mountHandled([HELD_SEND]);
+    expect(question()).toBe("Vela wants to send to vibe-field·2");
+    await openAt();
+    expect(atHandle("run-31")).toBe("vibe-field·2");
+    expect(question()).toBe(`Vela wants to send to ${atHandle("run-31")}`);
+    // the earlier vibe-field under Home is not hers: @ has no row for it, and the card no "vibe-field·3"
+    expect($('.vf-chat-at-row[data-row="session:run-28"]')).toBeNull();
+    expect(words($(".vf-needs-sub"))).toBe("Your yes lasts until vibe-field·2 ends.");
+  });
+
+  it("T7: says an answer that did not go as asked on the card itself, under the names the card draws", async () => {
+    await mountHandled([HELD_SEND]);
+    await press("Allow");
+    expect(queue.asked).toEqual([{ item: HELD_SEND.id, choice: 0 }]);
+    await settleAnswer(0, answered(HELD_SEND, 0, { outcome: "failed", reason: "claude·2 ended" }));
+    // the failed line names the session as the question above it did, never fieldd's "claude·2" beside it
+    expect(words($(".vf-needs-said"))).toBe(
+      "You said Allow · Couldn't send Vela's words to vibe-field·2: claude·2 ended",
+    );
+    // said on the card, so not again on the status line
+    expect(statusLineSaid()).toEqual([]);
+  });
+
+  it("T8: follows @ as a namesake ends and as an earlier one gains its folder, announced once all the while", async () => {
+    await mountHandled([HELD_SEND]);
+    await openAt();
+    const announced = arrival();
+    expect(announced).not.toBe("");
+    expect([question(), atHandle("run-31")]).toEqual([
+      "Vela wants to send to vibe-field·2",
+      "vibe-field·2",
+    ]);
+    // the first vibe-field ends: the one left is "vibe-field", on the card and in @
+    const ended = AT_ROWS.map((each) =>
+      each.runtimeRunId === "run-30" ? { ...each, alive: false } : each,
+    );
+    await boardFrame(ended);
+    expect([question(), atHandle("run-31")]).toEqual([
+      "Vela wants to send to vibe-field",
+      "vibe-field",
+    ]);
+    expect(arrival()).toBe(announced);
+    // an earlier session's folder lands: it is "vibe-field" now, and the card's session "vibe-field·2" again
+    const observed = ended.map((each) =>
+      each.runtimeRunId === "run-29" ? { ...each, project: { name: "vibe-field" } } : each,
+    );
+    await boardFrame(observed);
+    expect([question(), atHandle("run-29"), atHandle("run-31")]).toEqual([
+      "Vela wants to send to vibe-field·2",
+      "vibe-field",
+      "vibe-field·2",
+    ]);
+    expect(arrival()).toBe(announced);
+  });
+
+  it("T9: says fieldd's name once the session leaves @'s set, and an answer said off screen keeps the names it was pressed under", async () => {
+    await mountHandled([HELD_SEND]);
+    expect(question()).toBe("Vela wants to send to vibe-field·2");
+    // its row reads ended while its item stands: @ offers it no more, so the card says fieldd's name until it goes
+    await boardFrame(
+      AT_ROWS.map((each) => (each.runtimeRunId === "run-31" ? { ...each, alive: false } : each)),
+    );
+    expect(question()).toBe("Vela wants to send to claude·2");
+    expect(words($(".vf-needs-sub"))).toBe("Your yes lasts until claude·2 ends.");
+    await frame([]);
+    expect(card()?.hasAttribute("data-leaving")).toBe(true);
+  });
+
+  it("T9: hands the card the next thread's handles, and says an answer that returns there under the names it was pressed under", async () => {
+    await mountHandled([HELD_SEND, LYRA_SEND], [VELA_AT, LYRA]);
+    await act(async () => $(`.vf-chat-row[data-spark="${VELA.id}"]`)?.click());
+    expect(question()).toBe("Vela wants to send to vibe-field·2");
+    await press("Allow");
+    expect(queue.asked).toEqual([{ item: HELD_SEND.id, choice: 0 }]);
+    // Lyra's thread: her @ numbers her own agent alone, "vibe-field"
+    await act(async () => $(`.vf-chat-row[data-spark="${LYRA.id}"]`)?.click());
+    expect(question()).toBe("Lyra wants to send to vibe-field");
+    await frame([LYRA_SEND]);
+    await settleAnswer(0, answered(HELD_SEND, 0, { outcome: "failed", reason: "claude·2 ended" }));
+    // Lyra's @ offers run-31 nothing, yet the line names it as Vela's card did at the press
+    expect(statusLineSaid()).toEqual([
+      {
+        id: `needs-answer:${HELD_SEND.id}`,
+        text: "You said Allow · Couldn't send Vela's words to vibe-field·2: claude·2 ended",
+      },
+    ]);
   });
 });
 

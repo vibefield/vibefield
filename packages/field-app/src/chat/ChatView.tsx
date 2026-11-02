@@ -4,6 +4,7 @@ import {
   type SetStateAction,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -14,6 +15,7 @@ import { openLiveRow } from "../frame/live-open";
 import { sayStatus } from "../frame/status-line";
 import { stillKept } from "../host";
 import { terminalPoolConfigured } from "../terminal/pool";
+import { NO_HANDLES, sessionHandlesOf } from "./at-rows";
 import { ChatComposer, type ComposerPort } from "./ChatComposer";
 import { type ChatAct, ChatPanelView, paneSessionOf, shownOf, threadLineOf } from "./ChatPanelView";
 import { type DraftPart, draftBlank } from "./composer-draft";
@@ -51,8 +53,9 @@ import { sendNote, sendToThread, type ThreadSendOutcome } from "./thread-send";
 // place), an agent's ask shown in its pane by Jump to's path. It tells the feed which thread is on screen — the shown
 // one while Chat is the view — so opening a thread reads it, and draws each row's mark as the feed keeps it. It reads
 // the Agent Profiles once for every thread (`useProfileSets`: on its first show, and again as @ opens) and hands the
-// reading to the composer's @. What it chose, whose hello has left, which threads an act holds, and what its cards
-// answer, are this view's alone.
+// reading to the composer's @; with the board's rows it numbers the shown thread's sessions as @ does
+// (`sessionHandlesOf`), and its card names them so. What it chose, whose hello has left, which threads an act holds,
+// and what its cards answer, are this view's alone.
 
 /** How often the rows' times are said again while Chat shows ("now" becomes "9:41"). */
 const CLOCK_MS = 30_000;
@@ -224,18 +227,31 @@ export function ChatView({
   const marks = useThreadMarks();
 
   // CP-3 — the needs-you card the shown thread stands, answered through the feed; a card that leaves holding the
-  // keyboard, with none to take its place, hands it to the draft
+  // keyboard, with none to take its place, hands it to the draft. It names a session as the thread's @ does (track
+  // CO, the handle): @'s handles for the shown spark, on the board's rows and the one reading of the profiles.
   const answerer = useNeedsAnswerer();
   const reduced = useReducedMotion();
   const [draftKeyboard, setDraftKeyboard] = useState(0);
-  const needs = useNeedsCard(shown, onScreen !== null, reduced, {
-    answer: answerer,
-    say: sayStatus,
-    focusDraft: () => setDraftKeyboard((count) => count + 1),
-  });
+  const rows = useBoardRows();
+  const shownSpark = shown?.spark;
+  const handles = useMemo(
+    () =>
+      shownSpark === undefined ? NO_HANDLES : sessionHandlesOf(shownSpark, rows, profiles.sets),
+    [shownSpark, rows, profiles.sets],
+  );
+  const needs = useNeedsCard(
+    shown,
+    onScreen !== null,
+    reduced,
+    {
+      answer: answerer,
+      say: sayStatus,
+      focusDraft: () => setDraftKeyboard((count) => count + 1),
+    },
+    handles,
+  );
   // Show, on an agent's ask: its pane in Godview by Jump to's path, the floor session its board row names (none while
   // the board is not read, or can't be); one it cannot show is said in Jump to's words
-  const rows = useBoardRows();
   const showAsk = useCallback(
     (item: NeedsItem) => {
       const id = item.from.session;

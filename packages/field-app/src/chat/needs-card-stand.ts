@@ -1,6 +1,7 @@
 import type { NeedsItem, NeedsItemId, SparkId } from "@vibefield/contracts";
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { StatusNotice } from "../frame/status-line";
+import { NO_HANDLES } from "./at-rows";
 import {
   NEEDS_FADE_MS,
   NEEDS_LEAVE_MS,
@@ -8,6 +9,7 @@ import {
   type NeedsAct,
   type NeedsCard,
   needsCardOf,
+  needsNamesOf,
   needsRefused,
   needsSaid,
   waitingCardOf,
@@ -25,7 +27,9 @@ import type { SparkEntry } from "./spark-status";
 // card at once; an answer it was running still returns, and what did not go as asked, or was refused, is said on the
 // status line. The keyboard is never taken by a card that arrives; a pressed act puts it on the card, and a card that
 // leaves holding it hands it to the next card, else to the draft. What it answers is this window's alone, for its
-// life, written nowhere.
+// life, written nowhere. It names a session by @'s handles in the shown thread, handed in live (track CO, the handle),
+// so the card and @ agree at every moment; an answer that returns off screen is said under the names it was pressed
+// under, since the handles handed in by then may be another thread's.
 
 /** What the card answers with, and where else it speaks. */
 export interface NeedsCardDoors {
@@ -65,6 +69,7 @@ function wantedOf(
   entry: SparkEntry | undefined,
   answering: AnswerMap,
   reduced: boolean,
+  handles: ReadonlyMap<string, string>,
 ): NeedsCard | null {
   if (entry === undefined) return null;
   for (const held of answering.values()) {
@@ -72,9 +77,9 @@ function wantedOf(
     const waiting = entry.items.find((each) => each.id === held.item.id);
     if (waiting === undefined && !held.holds) continue;
     const item = held.act.state === "said" ? held.item : (waiting ?? held.item);
-    return needsCardOf(entry, item, held.act, { reduced });
+    return needsCardOf(entry, item, held.act, { reduced, handles });
   }
-  return waitingCardOf(entry, { reduced });
+  return waitingCardOf(entry, { reduced, handles });
 }
 
 /** The same card drawn the same way: what stands is kept, so nothing redraws for a frame that changed nothing. */
@@ -87,7 +92,9 @@ function sameCard(a: NeedsCard, b: NeedsCard): boolean {
     a.reduced === b.reduced &&
     a.leaving === b.leaving &&
     a.spark.id === b.spark.id &&
-    a.spark.name === b.spark.name
+    a.spark.name === b.spark.name &&
+    a.names.from === b.names.from &&
+    a.names.to === b.names.to
   );
 }
 
@@ -103,12 +110,14 @@ export interface NeedsCardStand {
 /**
  * The card `entry`'s thread stands. `onScreen`: that thread is on screen (Chat is the view, and shows it) — an answer
  * that returns while it is not says what it came to on the status line. `reduced`: the person asked for reduced motion.
+ * `handles`: @'s handles in that thread (`sessionHandlesOf`, by run id), which name its sessions; none, fieldd's names.
  */
 export function useNeedsCard(
   entry: SparkEntry | undefined,
   onScreen: boolean,
   reduced: boolean,
   doors: NeedsCardDoors,
+  handles: ReadonlyMap<string, string> = NO_HANDLES,
 ): NeedsCardStand {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [answering, setAnswering] = useState<AnswerMap>(NONE);
@@ -128,6 +137,8 @@ export function useNeedsCard(
   entryNow.current = entry;
   const doorsNow = useRef(doors);
   doorsNow.current = doors;
+  const handlesNow = useRef(handles);
+  handlesNow.current = handles;
 
   useEffect(() => {
     live.current = true;
@@ -184,7 +195,7 @@ export function useNeedsCard(
   // keep the card standing: enter, stay, leave, or go with its thread
   const sparkId = entry?.spark.id ?? null;
   useLayoutEffect(() => {
-    const wanted = wantedOf(entry, answering, reduced);
+    const wanted = wantedOf(entry, answering, reduced, handles);
     const prev = standing;
     if (prev === null || prev.spark.id !== sparkId) {
       // nothing stands, or the thread changed (its card goes at once): the wanted card rises, if any
@@ -233,6 +244,8 @@ export function useNeedsCard(
       const prior = answeringNow.current.get(item.id);
       const waits = shown.items.some((each) => each.id === item.id);
       if (prior !== undefined && (prior.act.state !== "refused" || !waits)) return;
+      // the names the card says as it is pressed: what returns off screen is said under them
+      const names = needsNamesOf(item, handlesNow.current);
       cardRef.current?.focus();
       change(item.id, () => ({ spark, item, act: { state: "busy", choice }, holds: true }));
       const here = () => live.current && shownNow.current === spark;
@@ -250,7 +263,7 @@ export function useNeedsCard(
             return;
           }
           change(item.id, () => null);
-          const said = needsSaid(done, choice);
+          const said = needsSaid(done, choice, names);
           if (said.tone !== "done")
             doorsNow.current.say({ id: `needs-answer:${item.id}`, text: said.text });
         },

@@ -1779,14 +1779,26 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       eyebrow say whose it is. Its rows stand 5 apart, from the top:
       - **the eyebrow:** 10.5 mono capitals, semibold, tracked 0.06em, in `--vf-ink-attention`. It is the word Chat's
         row says for the item, then " · " and the asker when the asker is not the thread's spark: "Asking you", "Needs
-        your OK", "Needs your OK · Claude Code". A session is named as fieldd names a run: its title, else its agent's
-        label in the catalog, else its id, so an untitled Claude Code session is "Claude Code" wherever the card names
-        it.
+        your OK", "Needs your OK · vibe-field·2", "Needs your OK · Claude Code". Wherever the card names a session, a
+        session @ offers in this thread is named by its handle, as @ names it (§8 "Chat's composer", two sessions with
+        one name): "vibe-field", "vibe-field·2". A session @ offers no handle is named as fieldd names a run: its
+        title, else its agent's label in the catalog, else its id, so an untitled Claude Code session @ does not offer
+        is "Claude Code".
+        > **HANDLE (2026-11-02):** this said every session is named as fieldd names a run, so two untitled Claude Code
+        > sessions both read "Claude Code" while @ beside the card says "vibe-field" and "vibe-field·2". The card now
+        > names a session as @ does, one rule read twice, and fieldd's name only where @ offers none (track CO, the
+        > handle; VF-PM's ruling, 01:41Z). @ never reads a title, so a titled session @ offers is named by its handle
+        > here too: its folder, else its agent's label. The names follow @ live: a namesake that ends or gains its
+        > folder renumbers both, and a session that leaves @'s set is fieldd's name until its item goes. A card that
+        > rises before the Agent Profiles are read says fieldd's name, then the handle; it is announced once, in the
+        > words it rose with. An answer said on the status line names a session as its card did when you pressed. The
+        > question, the sub and the failed line below name a session so.
       - **the question:** 14/500 in primary ink at 1.45, what you are asked. That is the spark's own question; "Vela
         wants to send to Claude Code"; "Vela wants another agent: Claude Code in vibe-field" (the catalog's label, then
         the folder when fieldd names one); "Claude Code asks to run Bash", or "Claude Code asks for your OK" when its
         permission names no tool; "Claude Code has a question"; "Claude Code needs you" for an ask of a kind this build
-        does not know.
+        does not know. A session @ offers is said by its handle, as the eyebrow names it (the note above): "Vela wants
+        to send to vibe-field·2".
       - **the words**, for a held send or spawn alone: 13 regular in secondary ink at 1.45, the asker's own words as
         they will be sent. For a send they are its first held words, then "and 2 more" in tertiary ink when more wait;
         for a spawn, its first task. Words fieldd cut (past 2,000 characters) end in "…". *The plates have no such
@@ -1794,9 +1806,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         from whom", cp3 §5). Nor do they count: "1 of 3" is this card's too, since one card stands at a time.*
       - **the sub:** 12.5 regular in tertiary ink at 1.3: "Your yes lasts until Claude Code ends." for a send; "8 of
         Vela's agents are running, the most a spark may run." for a spawn; "Answer it in its pane." for an agent's ask.
-        A question has none. *The send's sub speaks for an answer VibeField keeps. A restart that finds its Allow begun
-        and never recorded done drops the yes (§9: "Vela's later words to Claude Code are held again"), so the spark's
-        next words to that session wait on a card of their own.*
+        A question has none. A session @ offers is said by its handle, as the eyebrow names it (the note above): "Your
+        yes lasts until vibe-field·2 ends." *The send's sub speaks for an answer VibeField keeps. A restart that finds
+        its Allow begun and never recorded done drops the yes (§9: "Vela's later words to Claude Code are held again"),
+        so the spark's next words to that session wait on a card of their own.*
       - The question and the words each show six lines at most. Past that, each scrolls within itself under the scroll
         fade (§4 `--vf-scroll-fade`), so nothing you answer is hidden from you.
       - **the acts:** 8 further than the rows' 5, so 13 under the row above them (the plate's `padding-top` 8 on its
@@ -1832,7 +1845,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       §8 "Chat's list"):
       - an act fieldd could not do, in the attention ink with `exclaim` 13 in place of `check`: "You said Allow ·
         Couldn't send Vela's words to Claude Code: ‹reason›"; "You said Allow one more · Couldn't start the agent:
-        ‹reason›"; for any other item, "Couldn't finish it: ‹reason›" after what you said;
+        ‹reason›"; for any other item, "Couldn't finish it: ‹reason›" after what you said. A session @ offers is said
+        by its handle, as the eyebrow names it (the note above): "Couldn't send Vela's words to vibe-field·2:
+        ‹reason›";
       - an answer the spark has not heard, because it sleeps and could not be woken yet: "You said Yes · Vela hears it
         when it wakes: ‹fieldd's words›". When both hold, the act's failure is what the line says.
       When the answer returns and its card is no longer on screen (you left the thread, or Chat is not the view), the
@@ -1938,6 +1953,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       Where more than one row shares a name, each after the first by its start takes the next: "vibe-field",
       "vibe-field·2", "vibe-field·3". They are numbered across every session @ offers, before what follows the @
       filters them, so a row keeps its handle while you type, and a chip keeps the handle it was taken with.
+      - *Added 2026-11-02 (the handle):* the needs-you card in the thread names a session by this handle, the same
+        rule read for the same spark, so the card and @ never name one session two ways (§8 "Chat's thread").
     - **Start an agent**, above it: each agent signed in under one of the spark's profiles, the same list its
       `agents_available` tool answers (TL-D2). Each row is 36 tall: the agent's mark at 20, then the catalog's label,
       as that tool says it. When the spark has more than one profile there is a row for each agent and profile, and
@@ -5310,6 +5327,11 @@ input (CP3-D7 A); a spark that cannot be woken hears it when it next wakes.
 its agent's label, else by its id (§8 "Chat's thread", the needs-you card). ‹reason› is fieldd's own words for what
 stopped it.
 
+> **HANDLE (2026-11-02):** the pointer above sent you to a card that named a session as fieldd does. The card now
+> names a session @ offers by @'s handle ("vibe-field·2"), and fieldd's name only where @ offers none (§8 "Chat's
+> thread", the eyebrow's note). These facts are fieldd's own words, and still name a session by its title, else its
+> agent's label, else its id; so does a ‹reason› after a colon on the card.
+
 **An agent's notify** (CP-3, CP3-D5 A) is said as its teller, named as fieldd names it (a spark by its name, a session
 by its title, else its agent's label, else its id: "Vela", "Claude Code"), then its words on one line: each line break
 or run of spaces is one space, and the words are cut at 140 characters, the last of them "…". In every window it is the
@@ -5465,7 +5487,13 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
     the most a spark may run." · "Answer it in its pane.";
   - while it answers, "Allow…"; refused, "Couldn't answer: …";
   - answered, "You said Allow", and after it "Couldn't send Vela's words to Claude Code: …" · "Couldn't start the agent:
-    …" · "Couldn't finish it: …" · "Vela hears it when it wakes: …".
+    …" · "Couldn't finish it: …" · "Vela hears it when it wakes: …";
+  - a session @ offers in the thread, by its handle: "Needs your OK · vibe-field·2" · "Vela wants to send to
+    vibe-field·2" · "vibe-field·2 asks to run Bash" · "Your yes lasts until vibe-field·2 ends." · "Couldn't send Vela's
+    words to vibe-field·2: …".
+  > **HANDLE (2026-11-02):** these words named every session as fieldd names a run. The "Claude Code" forms above are
+  > now the fallback's, for a session @ offers no handle; the last row is added for one it offers (§8 "Chat's thread",
+  > the eyebrow's note).
 - A notify on the status line: "Vela — the build is green".
 - A row's lasting mark, in its accessible name after the status word: "unread" · "needed you" ("Asleep, needed you",
   "Ready, unread").
