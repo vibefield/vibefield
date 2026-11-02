@@ -35,12 +35,19 @@ struct WayInView: View {
     Self.shownPicture(screen.picture, hasFace: face != nil)
   }
 
-  /// WI-L3 — the mark only fades, and the splash cannot fade it yet (its runtime draws the mark whole): until it
-  /// can, the mark keeps its place on every step, and no face or drawing is set over it.
-  nonisolated static func shownPicture(_ picture: FieldHomeModel.WayInScreen.Picture, hasFace: Bool)
-    -> FieldHomeModel.WayInScreen.Picture
-  {
-    .mark
+  /// WI-L3's door: whether the splash can fade its mark where it stands. The mark only fades, and the splash's
+  /// runtime draws it whole today, so the door is shut and the mark keeps its place on every step. It opens with the
+  /// runtime's mark fade (vibefield-splash's `markOpacity`, vendored at a revision upstream has), and with it a
+  /// face or a drawing takes the mark's place.
+  nonisolated static let markFades = false
+
+  /// What shows in the mark's place. Through the door, a face only when there is one to show (else the mark keeps
+  /// its place) and a drawing always; with the door shut, the mark on every step (WI-L3).
+  nonisolated static func shownPicture(
+    _ picture: FieldHomeModel.WayInScreen.Picture, hasFace: Bool, markFades: Bool = WayInView.markFades
+  ) -> FieldHomeModel.WayInScreen.Picture {
+    guard markFades else { return .mark }
+    return picture == .face && !hasFace ? .mark : picture
   }
 
   var body: some View {

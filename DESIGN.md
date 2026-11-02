@@ -3747,13 +3747,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   240ms `ease` while the home settles from 0.99 over 560ms on the island curve); under Reduce Motion everything fades
   only, in 120ms. *As built 2026-11-02 (WI-1, VF-PM's review of `1626ed4d2`):* the capsule shows **two** bars, **Sign
   in · Your computer**, until WI-3 brings the lock's step (Face ID), so it never promises a step that does not come.
-  The mark keeps its place on every step, the found beat and Sign in again among them, until the splash's runtime
-  can fade it (WI-L3); no face or drawing is set over it till then. The measures, on a 402 × 874 phone: the picture
-  stands on a line 29 pt under the screen's centre (the mark's own centre) and the words start 45 pt under the
-  centre; the seat is an elliptical gradient of `wayInSeat` to clear, the screen's width + 80 by 440, centred 83 pt
-  under the centre; the acts' glass rounds its top corners 32 and its bottom ones 47 (continuous). The found beat
-  ends the first way in only: §9 sets it between the steps and the lock's offer, and Tailscale asking again is
-  neither, so after **Sign in again** the splash leaves for the tabs with no beat.
+  The mark keeps its place on every step, the found beat and Sign in again among them, until the splash's runtime can
+  fade it (WI-L3; its door is `WayInView.markFades`, shut); no face or drawing is set over it till then. The measures,
+  on a 402 × 874 phone: the picture stands on a line 29 pt under the screen's centre (the mark's own centre) and the
+  words start 45 pt under the centre; the seat is an elliptical gradient of `wayInSeat` to clear, the screen's
+  width + 80 by 440, centred 83 pt under the centre; the acts' glass rounds its top corners 32 and its bottom ones 47
+  (continuous). The found beat ends the first way in only: §9 sets it between the steps and the lock's offer, and
+  Tailscale asking again is neither, so after **Sign in again** the splash leaves for the tabs with no beat.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,

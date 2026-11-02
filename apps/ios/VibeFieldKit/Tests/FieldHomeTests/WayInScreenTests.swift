@@ -194,11 +194,18 @@ struct WayInScreenTests {
         .secondary(MacCodeReader.Words.title, .scanCode, glyph: "qrcode.viewfinder")))
   }
 
-  @Test("WI-L3: until the splash can fade its mark, the mark keeps its place on every step")
-  func theMarkStays() {
-    #expect(WayInView.shownPicture(.mark, hasFace: true) == .mark)
-    #expect(WayInView.shownPicture(.face, hasFace: true) == .mark)
-    #expect(WayInView.shownPicture(.art(.tour(1)), hasFace: false) == .mark)
+  @Test(
+    "WI-L3: through its door a face takes the mark's place when there is one, a drawing always; shut, the mark stays",
+    arguments: [false, true])
+  func theMarkFadesOnlyThroughItsDoor(markFades: Bool) {
+    func shown(_ picture: Screen.Picture, face: Bool) -> Screen.Picture {
+      WayInView.shownPicture(picture, hasFace: face, markFades: markFades)
+    }
+    #expect(shown(.mark, face: true) == .mark)
+    #expect(shown(.face, face: false) == .mark, "no face to show: the mark keeps its place")
+    #expect(shown(.face, face: true) == (markFades ? .face : .mark))
+    #expect(shown(.art(.tour(1)), face: false) == (markFades ? .art(.tour(1)) : .mark))
+    #expect(shown(.art(.computerWaiting), face: true) == (markFades ? .art(.computerWaiting) : .mark))
   }
 
   @Test("a bold run in a line is inked: the words the eye looks for elsewhere")
