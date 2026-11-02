@@ -1136,6 +1136,13 @@
                 </tbody>
               </table>
             </div>
+            <p><strong>Pane controls (2026-11-02):</strong> the shared views draw separate Pause and Stop
+              verbs from host ports. VibeField maps Pause to <code>agent.pause</code>
+              and Stop to <code>terminal.terminate</code>; fieldd owns cancellation policy and the floor
+              owns process termination. The <a href="api.html">API</a> and
+              <a href="system.html">session handoff</a> describe correlated creation, native lifetime input facts, and durable conditional cleanup.
+              Ghosttea protocol 1.18 and the shared deck changes are validated together through the sibling overlay;
+              their release pins must move together before distribution.</p>
             <div class="callout boundary" id="monitor-ownership">
               <strong>Monitor ownership (MV, ruled 2026-10-03).</strong> ONE
               <code>createMonitorBackend</code> per desktop lives beside the runtime: in fieldd here,
@@ -2391,7 +2398,7 @@
                   <tr>
                     <td><strong>an agent CLI</strong></td>
                     <td><p>All daemons.</p></td>
-                    <td><p>An exit is published; rosetta sees the final records. A confirmed clean exit returns attached panes to a fresh shell and launcher; history keeps the continuation. Failed exits retain the diagnostic pane. Empty-pane launcher replacements explicitly release the unused shell on its last attachment and transfer only spatial bubble identity; startup jobs do not consume unused-shell receipts. See <a href="system.html#cell">the floor's agent cell</a> (corrected 2026-09-28).</p></td>
+                    <td><p>An exit is published; rosetta sees the final records. A confirmed clean exit returns attached panes to a fresh shell and launcher; history keeps the continuation. The dedicated PTY stays claimed and its attached body stays in place until replacement, even when the monitor reports exit before the native pane does (corrected 2026-11-02). Failed exits retain the diagnostic pane. Empty-pane launcher replacements transfer spatial identity using creation correlation, then enqueue native conditional release. Only the PTY owner decides whether all attachments are gone and the shell is lifetime-unused; cleanup failures retain an obligation without reversing placement. See <a href="system.html#cell">the floor's agent cell</a> (corrected 2026-09-28).</p></td>
                   </tr>
                   <tr>
                     <td><strong>an adapter helper</strong></td>

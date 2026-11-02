@@ -680,13 +680,13 @@ describe("MF-1 — the field's two new doors and its store (§10.1)", () => {
 });
 
 // DS-4 (design-06 §6; design-04 §7's 2026-09-30 note) — a terminal on another
-// desktop: the three doors a window's daemon forwards to the owner are
+// desktop: the control doors a window's daemon forwards to the owner are
 // `federate`, everything else on the terminal surface stays this device's.
 // DS-4e (2026-10-01, the lead's ruling (B)) — and the READ a window mounts a
 // remote pane from: `terminal.sessions`, the owner's exact engine summaries
 // (the decimal `handle` the routed runtime mounts by exists nowhere else).
 describe("DS-4 — the terminal doors routable to the owner", () => {
-  it("reclassifies exactly openTicket, renewAttach, terminate and the sessions read", () => {
+  it("routes openTicket, renewAttach, terminate, release and the sessions read to the owner", () => {
     const localities = Object.fromEntries(
       METHODS.filter(
         (m) =>
@@ -704,6 +704,7 @@ describe("DS-4 — the terminal doors routable to the owner", () => {
       "terminal.renewAttach": "federate",
       "terminal.roster": "local",
       "terminal.terminate": "federate",
+      "terminal.release": "federate",
       "terminal.takeGeometry": "local",
       "terminal.link.open": "local",
     });

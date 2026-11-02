@@ -4,7 +4,7 @@
     "puppeteer": {
       "path": "../puppeteer",
       "repository": "https://github.com/vibefield/puppeteer.git",
-      "sha": "95a70aa77aad6bb0ca30805651797cffb153e1c2",
+      "sha": "91a56da61bcbd26025d30533758c62eaa625734b",
       "packages": {
         "@vibefield/puppeteer-runtime": "packages/runtime",
         "@vibefield/puppeteer-builtin-providers": "packages/builtin-providers",
@@ -49,17 +49,20 @@
     "ghosttea": {
       "path": "../ghosttea-0.11.2",
       "repository": "https://github.com/vibecook-dev/ghosttea.git",
-      "sha": "3eee581c14b05850c90bea09536d4bc6b856223b",
+      "sha": "8c0a1bcf8d1a494a86a17dde5e3add82ef62f04b",
       "javascript": {
         "workspaces": [
           "@vibecook/ghosttea-protocol",
+          "@vibecook/ghosttea-client",
           "@vibecook/ghosttea-frame",
           "@vibecook/ghosttea",
           "@vibecook/ghosttea-react"
         ]
       },
       "packages": {
-        "@vibecook/ghosttea-react": "packages/ghosttea-react"
+        "@vibecook/ghosttea-react": "packages/ghosttea-react",
+        "@vibecook/ghosttea-client": "packages/ghosttea-client",
+        "@vibecook/ghosttea-protocol": "packages/ghosttea-protocol"
       },
       "patch": {
         "ghosttea": "native/ghosttea",

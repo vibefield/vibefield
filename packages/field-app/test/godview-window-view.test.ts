@@ -3,6 +3,7 @@ import type { MonitorReplicaLike } from "@vibefield/puppeteer-view-sdk/host";
 import type { AgentView, MonitorModel } from "@vibefield/puppeteer-view-sdk/model";
 import { agentViewFixture, fixtureModel } from "@vibefield/puppeteer-view-sdk/testing";
 import { describe, expect, it, vi } from "vitest";
+import { PaneTransitions } from "../src/godview/monitor/pane-transitions";
 import {
   createWindowRows,
   narrowToDevice,
@@ -240,4 +241,89 @@ describe("window row identity across a launcher hand-off", () => {
     expect(changed[0]).not.toBe(first[0]);
     expect(changed[1]).toBe(first[1]);
   });
+});
+
+describe("pane handoff publication", () => {
+  it("never draws an early Stop birth as a second body, including before its join arrives", () => {
+    const old = local("agent-row", 1, { kind: "agent" });
+    const next = local("shell-pty", 2, { kind: "terminal" });
+    const transitions = new PaneTransitions();
+    const facts = {
+      current: {
+        ...factsOf([old.id]),
+        transitions,
+        sessionByRow: new Map([[old.id, "agent-pty"]]),
+      },
+      device: null,
+    };
+    const source = handReplica(fixtureModel([old]));
+    const view = createWindowViewReplica(source, windowReader(facts));
+    expect(view.getSnapshot().model.agents.map((row) => row.visualId ?? row.id)).toEqual([
+      "agent-pty",
+    ]);
+    const birth = transitions.begin("agent-pty");
+    const tagged = { ...next, creationId: birth.creationId };
+    // The backend inventory wins the race against both terminal.create's
+    // answer and the React render that supplies its session join.
+    source.publish(fixtureModel([old, tagged]));
+    expect(view.getSnapshot().model.agents.map((row) => row.id)).toEqual([old.id]);
+    transitions.reserve("agent-pty", "shell-pty");
+    transitions.commit("agent-pty", "shell-pty");
+    birth.finish();
+    const handed = view.getSnapshot().model.agents;
+    expect(handed.map((row) => [row.id, row.visualId ?? row.id])).toEqual([
+      ["shell-pty", "agent-pty"],
+    ]);
+    // The stopped agent can remain in the backend fold while its child reaps.
+    source.publish(fixtureModel([old, { ...next, status: "idle" }]));
+    expect(view.getSnapshot().model.agents).toHaveLength(1);
+  });
+
+  it("releases failed placements and allows committed births during concurrent handoffs", () => {
+    const transitions = new PaneTransitions();
+    const birthA = transitions.begin("a");
+    const birthB = transitions.begin("b");
+    expect(transitions.visualId("new-a", birthA.creationId)).toBe("a");
+    expect(transitions.visualId("new-b", birthB.creationId)).toBe("b");
+    transitions.commit("a", "new-a");
+    birthA.finish();
+    expect(transitions.shows("new-a")).toBe(true);
+    expect(transitions.shows("a")).toBe(false);
+    expect(transitions.shows("unrelated-birth")).toBe(true);
+    // Failed launch: its born agent is kept, as a distinct live session.
+    transitions.reserve("b", "new-b");
+    transitions.rollback("b", "new-b");
+    birthB.finish();
+    birthB.finish();
+    expect(transitions.shows("b")).toBe(true);
+    expect(transitions.shows("new-b")).toBe(true);
+    expect(transitions.shows("unrelated-birth")).toBe(true);
+    expect(transitions.visualId("new-b")).toBe("new-b");
+    transitions.commit("new-a", "next-shell");
+    expect(transitions.visualId("next-shell")).toBe("a");
+  });
+});
+
+it("keeps committed identity on cleanup failure and shows a predecessor used elsewhere separately", () => {
+  const transitions = new PaneTransitions();
+  transitions.commit("shell", "agent");
+  transitions.rollback("shell", "agent");
+  expect(transitions.visualId("agent")).toBe("shell");
+  expect(transitions.shows("shell")).toBe(false);
+  expect(transitions.shows("shell", "shell", true)).toBe(true);
+  expect(transitions.visualId("shell", undefined, true)).toBe("retained:shell");
+});
+
+it("reclaims withdrawn handoff records while the successor keeps its spatial identity", () => {
+  const transitions = new PaneTransitions();
+  transitions.commit("shell", "agent");
+  transitions.reconcile(new Set(["shell", "agent"]));
+  transitions.reconcile(new Set(["agent"]));
+  expect(transitions.visualId("agent")).toBe("shell");
+  transitions.commit("agent", "next-shell");
+  transitions.reconcile(new Set(["next-shell"]));
+  expect(transitions.visualIds().has("agent")).toBe(false);
+  expect(transitions.visualId("next-shell")).toBe("shell");
+  transitions.reconcile(new Set());
+  expect(transitions.visualIds().size).toBe(0);
 });

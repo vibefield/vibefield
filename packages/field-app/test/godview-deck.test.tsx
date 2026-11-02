@@ -112,7 +112,9 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       // GT-D17's two verbs, as the door calls them. `openRemoteSession` answers
       // with a REPLICA — a local session id standing for a peer's — which is
       // the thing the deck has to remember the origin of (GT-5c).
-      registerSession: () => undefined,
+      registerSession: (session: Record<string, unknown>) => {
+        if (session["inputUsed"] === false) bornHere.add(session["id"] as string);
+      },
       listRemoteHosts: () => Promise.resolve([]),
       openRemoteSession: (deviceId: string, remoteSessionId: string) => {
         paletteOpens.push([deviceId, remoteSessionId]);
@@ -120,6 +122,8 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       },
       terminate: () => undefined,
       // ghosttea's receipt for its own births (N16's cases name theirs)
+      sessionSummary: (id: string) =>
+        bornHere.has(id) ? { inputUsed: false, programKind: "interactive-shell" } : undefined,
       sessionCreatedHere: (id: string) => bornHere.has(id),
       // DS-4 — the geometry verbs a surface sends, recorded rather than acted on
       claimResizeControl: (...args: unknown[]) => geometryCalls.push(["claim", ...args]),
@@ -305,6 +309,7 @@ const fieldd = {
       }
       return Promise.resolve(routedTicket(sessionId));
     }
+    if (method === "terminal.release") return Promise.resolve({ accepted: true });
     if (method === "terminal.create") {
       const sessionId = `born-${floor.length + 1}`;
       floor = [...floor, { sessionId }];
@@ -2062,10 +2067,7 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
 
   /** ghosttea's receipt for its own births: the workspace's opening shell */
   function createdHere(sessionId: string): void {
-    const runtime = runtimeObjects[runtimeObjects.length - 1] as {
-      sessionCreatedHere: (id: string) => boolean;
-    };
-    runtime.sessionCreatedHere = (id) => id === sessionId;
+    bornHere.add(sessionId);
   }
 
   // L20 (the lead's, 2026-10-12): the first call is a create — ⌘T, the
@@ -2244,7 +2246,7 @@ describe("⌘W on the last pane goes to the terminals' owner (N16 (a))", () => {
       calls.filter(([method]) => method === "terminal.create").map(([, params]) => params);
     const terminated = (): string[] =>
       calls
-        .filter(([method]) => method === "terminal.terminate")
+        .filter(([method]) => method === "terminal.release")
         .map(([, params]) => (params as { sessionId: string }).sessionId);
 
     /** One pane, the deck's owner listening for ⌘W on it. */
@@ -3057,7 +3059,7 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
     );
     expect(ownerReads).toHaveLength(2);
     // what the two attaches displaced was detached, never ended (GT-D5)
-    expect(calls.filter(([method]) => method === "terminal.terminate")).toEqual([]);
+    expect(calls.filter(([method]) => method === "terminal.release")).toEqual([]);
     // the mirror's size is the seat's: every surface takes it on focus (DS-4)
     expect(workspaceMounts.at(-1)?.["takeGeometryOnFocus"]).toBe(true);
     expect(paletteOpens).toEqual([]);

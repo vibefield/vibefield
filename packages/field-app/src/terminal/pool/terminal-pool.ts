@@ -9,10 +9,10 @@ import {
   type WindowTerminalBootstrap,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
-import { getHost } from "../../host";
 import { getRendererLogger } from "../../logging";
 import { registerTerminalPerfSource } from "../../perf/terminal-perf-source";
 import { terminalLinkOpener } from "../links";
+import { TerminalReleaseOutbox } from "../release-outbox";
 import type { RoutedInputRefusal } from "../routed/encode-input";
 import { createRoutedTerminalHost, type RoutedTerminalHostBinding } from "../routed/host";
 import type { RemoteRefusal } from "../routed/remote-refusal";
@@ -21,14 +21,7 @@ import {
   type SessionSeat,
   type SessionSeatAnnouncement,
 } from "../routed/session-seat";
-import {
-  type CellBootId,
-  type CellTransport,
-  CellTransportTable,
-  resolveCellForSession,
-  type TerminalShellPolicy,
-  UNNAMED_CELL,
-} from "./cell-transport";
+import { type CellBootId, type TerminalShellPolicy } from "./cell-transport";
 import {
   NO_SOURCE_DEMAND,
   type SessionDemand,
@@ -38,7 +31,7 @@ import {
   type SourceDemandMode,
   type ViewDemandKey,
 } from "./demand";
-import { type ReadTicket, readCreateTicket, readOpenTicket } from "./open-ticket";
+import { readCreateTicket, readOpenTicket } from "./open-ticket";
 import { createTerminalRuntime } from "./runtime-factory";
 import {
   type SessionAvailability,
@@ -227,6 +220,9 @@ let roster: readonly ProductSessionRosterItem[] = [];
 let rosterState: TerminalRosterState = "unread";
 const closingSessionIds = new Set<string>();
 const closingRequests = new Map<string, Promise<void>>();
+const releases = new TerminalReleaseOutbox(() =>
+  typeof window === "undefined" ? undefined : window.localStorage,
+);
 /** Main's one-per-renderer-generation shell policy (the transport selector
  * collapsed to the routed literal at TP-S3e). Browser harnesses omit it and
  * simply have no shell policy — and no fieldd either. */
@@ -853,6 +849,7 @@ function transportFault(plane: TerminalFaultPlane, cause: unknown): void {
 export function prewarmTerminalPool(fieldd: FielddClient, trace?: TransportTrace): void {
   if (phase !== "cold" || claimed) return;
   client = fieldd;
+  releases.connect((request) => fieldd.request("terminal.release", request));
   phase = "warming";
   const mine: Promise<void> = Promise.resolve()
     .then(async () => {
@@ -915,6 +912,7 @@ export function openTerminalPool(
   options: { sessionIds?: readonly string[]; trace?: TransportTrace } = {},
 ): void {
   client = fieldd;
+  releases.connect((request) => fieldd.request("terminal.release", request));
   options.trace?.mark("claim");
   if (options.trace !== undefined) workspaceBirthTrace = options.trace;
   if (options.sessionIds !== undefined && options.sessionIds.length > 0) {
@@ -1098,6 +1096,10 @@ export async function readRemoteTerminalSession(
  * registered so the runtime can apply the owner's session events to the pane
  * that mounts it. The pool decides nothing about attaching; the deck asked.
  */
+export function isRemoteTerminalSession(sessionId: string): boolean {
+  return remoteSessions.has(sessionId);
+}
+
 export function adoptRemoteTerminalSession(device: string, summary: SessionSummary): void {
   const target = ensureRuntime();
   remoteSessions.set(summary.id, { device, summary });
@@ -1281,6 +1283,13 @@ function unobservedRefusal(cause: unknown): boolean {
 /** Hide a closing shell immediately, while the audited product door runs.
  * Roll back refusals; retain accepted intents so stale inventory responses
  * cannot resurrect a bubble during the native shutdown ladder. */
+export async function releaseTerminalSession(
+  sessionId: string,
+  condition: "unused" | "exited",
+): Promise<void> {
+  return releases.request({ sessionId, condition });
+}
+
 export function terminateTerminalSession(sessionId: string): Promise<void> {
   const fieldd = client;
   if (fieldd === null) return Promise.reject(new Error("The terminal pool is not connected"));
@@ -1467,6 +1476,7 @@ export function disposeTerminalPool(): void {
   projected.clear();
   pending = null;
   client = null;
+  releases.disconnect();
   rejoinHint = [];
   workspaceBirthTrace = undefined;
   phase = "cold";

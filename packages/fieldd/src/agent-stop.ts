@@ -37,10 +37,13 @@ export type StopStep = "resend" | "terminate" | "unheard" | "none";
 /** ST-D2/D3 — the one step a Stop takes at its bound. A `sent` Stop is sent once more. A `resent` one on a run that
  * reads `working` is ended through the floor's ladder; one whose status cannot be read is marked unheard and left to
  * the person. A `terminating` or `heard` Stop, or one already unheard, takes no step. */
-export function nextStopStep(stop: AgentStopState, facts: StopFacts): StopStep {
+export function nextStopStep(stop: AgentStopState, facts: StopFacts, keepOpen = false): StopStep {
   if (stop.stage === "heard" || stop.unheardAt !== undefined) return "none";
+  // Observation may lag cancellation. A second key could quit an already-idle CLI.
+  if (keepOpen) return "unheard";
   if (stop.stage === "sent") return "resend";
-  if (stop.stage === "resent") return facts.readable && facts.working ? "terminate" : "unheard";
+  if (stop.stage === "resent")
+    return !keepOpen && facts.readable && facts.working ? "terminate" : "unheard";
   return "none";
 }
 

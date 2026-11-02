@@ -279,6 +279,8 @@ export type MonitorDeviceRef = z.infer<typeof MonitorDeviceRef>;
  * the SDK's type could do nothing with a fourth. */
 export const MonitorAgentRow = z
   .object({
+    inputUsed: z.boolean().optional(),
+    creationId: z.string().optional(),
     /** stable identity: survives a terminal's promotion and a run's resume */
     id: z.string().min(1),
     kind: z.enum(["agent", "terminal"]),
@@ -1138,10 +1140,15 @@ export const ProjectIdentityFile = z
   .passthrough();
 export type ProjectIdentityFile = z.infer<typeof ProjectIdentityFile>;
 
-/** AR-6-0 — the stop verb. A run id, never a terminal id: fieldd resolves the
- * PTY through the record it minted for that run. */
+/** A run id, never a terminal id: fieldd resolves the PTY through its record.
+ * The existing interrupt command retains its durable-stop policy. */
 export const AgentInterruptParams = z.object({ runtimeRunId: z.string().min(1) }).passthrough();
 export type AgentInterruptParams = z.infer<typeof AgentInterruptParams>;
+
+/** Cancel one working turn using its declared control. No key retry or termination.
+ * A separate method makes an older daemon refuse instead of ignoring a safety flag. */
+export const AgentPauseParams = AgentInterruptParams;
+export type AgentPauseParams = z.infer<typeof AgentPauseParams>;
 
 /** Accepted = the floor took the interrupt, not that the agent obeyed it —
  * what happens next is the vendor's. A refusal carries the floor's own word

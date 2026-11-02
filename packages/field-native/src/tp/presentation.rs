@@ -544,6 +544,7 @@ mod tests {
         let hub = FrameHub::new(32);
         let session = Session::spawn(
             SpawnOptions {
+                creation_id: None,
                 executable: "/bin/sh".into(),
                 args: vec!["-c".into(), "exec sleep 30".into()],
                 cwd: None,
@@ -627,6 +628,7 @@ mod tests {
     fn idle_session(hub: &FrameHub) -> Arc<Session> {
         Session::spawn(
             SpawnOptions {
+                creation_id: None,
                 executable: "/bin/sh".into(),
                 args: vec!["-c".into(), "exec sleep 30".into()],
                 cwd: None,
