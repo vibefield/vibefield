@@ -1417,9 +1417,27 @@ public struct HomeScreen: View {
           // --- end IOS-5d ------------------------------------------------
         }
         // --- end IOS-5c --------------------------------------------------
-        if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
+        let autoOpen = ProcessInfo.processInfo.arguments.first {
+          $0 == "-vf-auto-open-card" || $0.hasPrefix("-vf-auto-open-card=")
+        }
+        if let autoOpen {
           Task {
             try? await Task.sleep(for: .seconds(2))
+            // Item 154 (DEBUG) — `-vf-auto-open-card=<visual id>` opens THAT body's card, once the field draws it
+            // (ten seconds at most). A name the field never holds opens nothing, and says so: no silent fallback.
+            if autoOpen.hasPrefix("-vf-auto-open-card=") {
+              let named = String(autoOpen.dropFirst("-vf-auto-open-card=".count))
+              for _ in 0..<20 where !bubbles.contains(where: { $0.id == named }) {
+                try? await Task.sleep(for: .milliseconds(500))
+              }
+              guard let bubble = bubbles.first(where: { $0.id == named }) else {
+                print("[auto-open] no body \(named) on the field: no card opened")
+                return
+              }
+              print("[auto-open] opening \(named)")
+              openCard(on: bubble)
+              return
+            }
             // A bubble with a TERMINAL first when there is one: its face is
             // the one with an act on it, so it is what a screenshot run is
             // usually after. Since TM-5 that is a fold row whose join names a
