@@ -49,7 +49,8 @@ const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.la
 // the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
 // kit's own test reads too. PG-3a: the phone's parity goldens, the home's window over the witness
 // remote goldens (field-app computes them, `phone:goldens`), which the kit's fold and body model are
-// held to. PG-3c mirrors phone-fold (Tests/FieldMeshTests); phone-body mirrors at 3e, with its body
+// held to. PG-3c mirrors phone-fold (Tests/FieldMeshTests), and PG-3d again in
+// Tests/FieldProductTests, where its parity suite runs; phone-body mirrors at 3e, with its body
 // model (FieldAgentsTests reads no FieldProduct).
 const OTHER_ORIGINS = new Map([
   ["project-ink.golden.json", join(root, "packages/design-kit/fixtures/project-ink.golden.json")],
@@ -189,8 +190,9 @@ const requiredMirrors = [
   ["face", ["face-deal.vector.json"], ["Tests/FieldDesignTests"]],
   // IOS-8f — `user.me`'s answers, read by the kit's own `UserMeResult`
   ["user-me", ["user-me.valid.json", "user-me.dealt.json"], ["Tests/FieldProductTests"]],
-  // PG-3c — the remote cut's readers' goldens
-  ["remote", remoteFixtures, ["Tests/FieldProductTests"]],
+  // PG-3c — the remote cut's readers' goldens; PG-3d — the fold's parity golden beside them, which
+  // the phone's copy of its home's board is held to step by step (PhoneFoldParityTests)
+  ["remote", [...remoteFixtures, "phone-fold.golden.json"], ["Tests/FieldProductTests"]],
   // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's
   [
     "remote",
