@@ -191,7 +191,7 @@ const ROWS: readonly AgentFieldRow[] = [
 
 /** How a spark's thread names the person's sessions (track CO, the handle): @'s handles, by the product's own
  * `sessionHandlesOf` over the fixture board and Agent Profiles, so a card says what that thread's @ would. Every
- * plate's board holds these sessions; a hatched spark's own run is never one @ offers. */
+ * plate that draws a card stands on this board; a hatched spark's own run is never one @ offers. */
 export const chatHandlesOf = (spark: SparkSummary): ReadonlyMap<string, string> =>
   sessionHandlesOf(spark, ROWS, PROFILE_SETS);
 

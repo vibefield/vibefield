@@ -5491,9 +5491,10 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   - a session @ offers in the thread, by its handle: "Needs your OK · vibe-field·2" · "Vela wants to send to
     vibe-field·2" · "vibe-field·2 asks to run Bash" · "Your yes lasts until vibe-field·2 ends." · "Couldn't send Vela's
     words to vibe-field·2: …".
-  > **HANDLE (2026-11-02):** these words named every session as fieldd names a run. The "Claude Code" forms above are
-  > now the fallback's, for a session @ offers no handle; the last row is added for one it offers (§8 "Chat's thread",
-  > the eyebrow's note).
+  > **HANDLE (2026-11-02):** these words named every session as fieldd names a run. The "Claude Code" forms above that
+  > name a session are now the fallback's, for a session @ offers no handle; the last row is added for one it offers
+  > (§8 "Chat's thread", the eyebrow's note). The held spawn's "Claude Code in vibe-field" names the agent asked for,
+  > not a session, so it keeps its words.
 - A notify on the status line: "Vela — the build is green".
 - A row's lasting mark, in its accessible name after the status word: "unread" · "needed you" ("Asleep, needed you",
   "Ready, unread").
