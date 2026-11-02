@@ -25,4 +25,15 @@ struct GodviewBundleTests {
     let ids = rows.map { $0.id }
     #expect(Set(ids).count == ids.count, "one row per model id")
   }
+
+  /// H2 — the toolkit's golden is in the bundle: it parses, names the three puppeteer packages it was computed by, and
+  /// refuses a defect. A baseline from PG-4s C4 on (its bytes landed at C3); the parity rows read it.
+  @Test func theToolkitGoldenIsInTheBundle() throws {
+    let golden = try HomeFixture.json("phone-toolkit.golden")
+    let versions = golden["versions"]?.objectValue ?? [:]
+    let packages = Set(versions.keys)
+    #expect(packages == ["monitor", "view-sdk", "views"])
+    let note = golden["//"]?.stringValue ?? ""
+    #expect(note.contains("never over a defect"))
+  }
 }
