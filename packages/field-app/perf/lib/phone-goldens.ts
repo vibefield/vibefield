@@ -69,9 +69,13 @@ export const PHONE_WITNESS_INPUTS = [
  * old chain's delta that is the run's gap */
 export const PHONE_RESYNC_AFTER = 7;
 export const PHONE_GOLDENS_COMMAND = "pnpm --filter @vibefield/field-app phone:goldens";
-/** where PG-3c puts the kit's copies (`scripts/check-ios-fixtures.mjs` OTHER_ORIGINS compares them) */
+/** where the kit's copies live: PG-3c's, and PG-3d's parity suite in FieldProductTests
+ * (`scripts/check-ios-fixtures.mjs` OTHER_ORIGINS compares them) */
 export const PHONE_GOLDEN_MIRRORS: Readonly<Record<string, readonly string[]>> = {
-  [PHONE_FOLD_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures"],
+  [PHONE_FOLD_GOLDEN]: [
+    "apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures",
+    "apps/ios/VibeFieldKit/Tests/FieldProductTests/Fixtures",
+  ],
   [PHONE_BODY_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldAgentsTests/Fixtures"],
 };
 /** the body model's clock: a constant. It would date a birth's opening (none here); a running
@@ -232,7 +236,12 @@ function frameKind(frame: unknown): FrameKind {
   return "delta" in value ? "delta" : "snapshot" in value ? "snapshot" : "state";
 }
 
-/** The row's cost as the backend priced it, without its series (a drawing fact the phone keeps none of). */
+/**
+ * The row's cost as the backend priced it, without its series. (Corrected 2026-11-02, PG-3d: this
+ * said the series was "a drawing fact the phone keeps none of". The kit's replica keeps it, pinned
+ * beside this golden by RemoteMeshCopyTests.costKeepsItsSeries, and the phone's spend view (PG-5…8)
+ * is the reader that will draw it. The golden leaves it out: its parity rows do not compare it.)
+ */
 function costOf(row: AgentView): PhoneFoldRow["cost"] {
   const cost = row.cost;
   if (cost === undefined) return null;
