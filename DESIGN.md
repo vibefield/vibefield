@@ -3739,12 +3739,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   in the splash's own place, or what takes its place, your face (§2.8, 96 pt) or a drawing, crossfading in 280ms;
   nothing slides, and the mark only fades (WI-L3). **The words**, from that line down: a title (28 bold; a hold's
   status line 17 semibold), a line (15, `inkSecondary`) and a note (12, `inkTertiary`), on a shade of the field's
-  own ground that seats them. **The bottom:** one glass for the acts (`ChromeMaterial.glass`), 8 pt in from the
-  screen's edges and clear of the home indicator: the primary a **wide pill** (`ChromePillStyle(.primary, wide:
-  true)`: 50 tall, the glass's full width) in the same place on every step, then the secondary, then a link or a
-  note. Motion: the glass rises in 460ms on the island curve, words and pictures fade in 280–360ms, and the
-  hand-over is the splash's own exit (§8 "The phone's splash": 240ms `ease` while the home settles from 0.99 over
-  560ms on the island curve); under Reduce Motion everything fades only, in 120ms.
+  own ground that seats them (`ChromePalette.wayInSeat`: white at 66% by day, black at 62% by night). **The bottom:**
+  one glass for the acts (`ChromeMaterial.glass`), 8 pt in from the screen's edges and clear of the home indicator:
+  the primary a **wide pill** (`ChromePillStyle(.primary, wide: true)`: 50 tall, the glass's full width) in the same
+  place on every step, then the secondary, then a link or a note. Motion: the glass rises in 460ms on the island
+  curve, words and pictures fade in 280–360ms, and the hand-over is the splash's own exit (§8 "The phone's splash":
+  240ms `ease` while the home settles from 0.99 over 560ms on the island curve); under Reduce Motion everything fades
+  only, in 120ms.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
