@@ -7,49 +7,63 @@ import Testing
 /// WI-1 — the splash's hold (DESIGN.md §8 "The phone's way in"): while the content holds it the splash never
 /// leaves, however steady the content and however long its field has stood; released, it leaves by its own exit;
 /// and a hold taken once it has gone brings it back over the content. Driven through the gate's own model, as the
-/// view drives it (the field's first frame, the content's hold), with Reduce Motion's halved fades.
+/// view drives it (the field's first frame, the content's hold), with Reduce Motion's halved fades — on a stepped
+/// timer and a steadiness said by hand (WI-1's review, L7), so no row waits on the wall clock or fails for a loaded
+/// host (item 157's lesson).
 @MainActor
 @Suite("WI-1: the content holds the splash up, and brings it back")
 struct SplashHoldTests {
-  /// Polls on the main actor until `done` holds; false once `limit` has passed without it.
-  private func waited(_ limit: Duration = .seconds(10), until done: () -> Bool) async -> Bool {
-    let clock = ContinuousClock()
-    let end = clock.now.advanced(by: limit)
-    while !done() {
-      if clock.now >= end { return false }
-      try? await Task.sleep(for: .milliseconds(20))
-    }
-    return true
+  /// Reduce Motion's fades: the launch screen's and the splash's own, halved.
+  private static let fade: Duration = .milliseconds(120)
+  /// From the field's first frame, its fade and the floor, and a millisecond past them.
+  private static let floorStood: Duration = .milliseconds(120) + SplashTiming.floor + .milliseconds(1)
+
+  /// A gate on the stepped timer, begun and not yet shown.
+  private func gate() -> (SplashGateModel, SplashSteps, SteadyByHand) {
+    let steps = SplashSteps()
+    let watch = SteadyByHand()
+    let model = SplashGateModel(timer: steps, watch: watch)
+    model.begin(reduceMotion: true)
+    return (model, steps, watch)
   }
 
-  @Test(
-    "held, the splash stays past its floor and the content's steadiness; released, it leaves by its own exit",
-    .timeLimit(.minutes(1)))
-  func aHoldKeepsTheSplash() async {
-    let model = SplashGateModel()
-    model.begin(reduceMotion: true)
+  /// A gate on the stepped timer: begun, its field's first frame up, the content steady and the floor stood.
+  /// Unheld, the splash has started to leave; held, it stands.
+  private func launched(held: Bool = false) -> (SplashGateModel, SplashSteps, SteadyByHand) {
+    let (model, steps, watch) = gate()
+    if held { model.setHold(true) }
+    model.fieldPresented(at: CACurrentMediaTime())
+    watch.steady()
+    steps.advance(by: Self.floorStood)
+    return (model, steps, watch)
+  }
+
+  @Test("held, the splash stays past its floor and the content's steadiness; released, it leaves by its own exit")
+  func aHoldKeepsTheSplash() {
+    let (model, steps, watch) = gate()
     model.setHold(true)
     model.fieldPresented(at: CACurrentMediaTime())
     #expect(model.contentMounted)
     #expect(model.holding)
-    // past the floor and past the steadiness limit: a splash not held has left by now whatever the frames did
-    try? await Task.sleep(for: SplashTiming.stableLimit + .milliseconds(500))
+    watch.steady()
+    // past the floor and past the steadiness limit: a splash not held has left by now, whatever the frames did
+    steps.advance(by: SplashTiming.stableLimit + .milliseconds(500))
     #expect(!model.revealing)
     #expect(!model.gone)
     model.setHold(false)
     #expect(!model.holding)
-    #expect(await waited { model.revealing }, "the splash leaves once released")
-    #expect(await waited { model.gone }, "and is gone after its fade")
+    #expect(!model.revealing, "released, it watches the content again first")
+    watch.steady()
+    #expect(model.revealing, "the content steady and the floor long stood: it leaves")
+    steps.advance(by: Self.fade)
+    #expect(model.gone, "and is gone after its fade")
   }
 
-  @Test(
-    "a hold taken once the splash has gone brings it back over the content; released, it leaves again",
-    .timeLimit(.minutes(1)))
-  func aHoldBringsTheSplashBack() async {
-    let model = SplashGateModel()
-    model.begin(reduceMotion: true)
-    model.fieldPresented(at: CACurrentMediaTime())
-    #expect(await waited { model.gone }, "unheld, the splash leaves at launch")
+  @Test("a hold taken once the splash has gone brings it back over the content; released, it leaves again")
+  func aHoldBringsTheSplashBack() {
+    let (model, steps, watch) = launched()
+    steps.advance(by: Self.fade)
+    #expect(model.gone, "unheld, the splash leaves at launch")
     model.setHold(true)
     // back at once, the content still mounted under it
     #expect(model.holding)
@@ -58,31 +72,42 @@ struct SplashHoldTests {
     #expect(model.contentMounted)
     // the new surface's first frame: it stands its floor again, and the hold keeps it past that
     model.fieldPresented(at: CACurrentMediaTime())
-    try? await Task.sleep(for: SplashTiming.floor + .milliseconds(400))
+    steps.advance(by: Self.floorStood + .milliseconds(400))
     #expect(!model.revealing)
     model.setHold(false)
-    #expect(await waited { model.gone }, "released, it leaves by its own exit again")
+    watch.steady()
+    #expect(model.revealing)
+    steps.advance(by: Self.fade)
+    #expect(model.gone, "released, it leaves by its own exit again")
   }
 
-  // --- on a stepped clock (WI-1's review): nothing here waits on the wall clock
+  @Test("L7: a hold taken mid-fade brings it back, whole once its own fade has run; the leaving fade's end leaves it")
+  func aHoldMidFade() {
+    let (model, steps, _) = launched()
+    #expect(model.revealing)
+    steps.advance(by: .milliseconds(60))
+    model.setHold(true)
+    #expect(!model.revealing && !model.gone, "back at once, from where its fade had reached")
+    #expect(!model.covers)
+    steps.advance(by: Self.fade + .milliseconds(10))
+    #expect(!model.gone, "the leaving fade's end does not take it away")
+    #expect(model.covers, "whole once its own fade has run")
+  }
 
-  /// Reduce Motion's fades: the launch screen's and the splash's own, halved.
-  private static let fade: Duration = .milliseconds(120)
-  /// From the field's first frame, its fade and the floor, and a millisecond past them.
-  private static let floorStood: Duration = .milliseconds(120) + SplashTiming.floor + .milliseconds(1)
-
-  /// A gate on a stepped clock: begun, its field's first frame up, the content steady and the floor stood. Unheld,
-  /// the splash has started to leave; held, it stands.
-  private func launched(held: Bool = false) -> (SplashGateModel, SplashSteps, SteadyByHand) {
-    let steps = SplashSteps()
-    let watch = SteadyByHand()
-    let model = SplashGateModel(timer: steps, watch: watch)
-    model.begin(reduceMotion: true)
-    if held { model.setHold(true) }
+  @Test("L7: a hold released before the content is mounted strands nothing: the splash leaves as a launch's does")
+  func aReleaseBeforeMount() {
+    let (model, steps, watch) = gate()
+    model.setHold(true)
+    model.setHold(false)
+    #expect(!model.contentMounted, "nothing under it yet")
     model.fieldPresented(at: CACurrentMediaTime())
+    #expect(model.contentMounted)
     watch.steady()
+    #expect(!model.revealing, "the floor stands")
     steps.advance(by: Self.floorStood)
-    return (model, steps, watch)
+    #expect(model.revealing, "the floor stood and the content steady: it leaves")
+    steps.advance(by: Self.fade)
+    #expect(model.gone)
   }
 
   @Test("M1: the splash covers the content from launch until it starts to leave")
