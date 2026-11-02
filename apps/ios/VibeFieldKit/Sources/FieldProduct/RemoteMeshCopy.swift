@@ -43,31 +43,104 @@ public struct RemoteMeshCopy: Sendable {
   var screen = RemoteBoardScreen()
   var fold = RemoteModelBoard()
   var replica: RemoteModelReplica
+  /// After a gap, until the open: every frame is ignored.
+  private var ignoring = false
+  private var standingMoved = false
+  /// The window's rows as the last `publish` drew them, and each drawn row's visual id (the carry-forward). Neither
+  /// is reset by an open: the window's rows outlive a re-subscribe.
+  private var windowRows: [RemoteFieldRow] = []
+  private var previous: [String: String] = [:]
 
-  /// PG-3d (red): the skeleton hands nothing up.
+  /// What the fold last handed the replica — the open's snapshot or a frame's change — since the last `open` or
+  /// `frame` call began; nil for a frame that handed nothing (a state, a change of nothing). The golden's `fold`.
   public private(set) var handed: RemoteModelUpdate?
 
   public init(gapBuffer: Int = RemoteModelReplica.defaultGapBuffer) {
     replica = RemoteModelReplica(gapBuffer: gapBuffer)
   }
 
-  /// PG-3d (red): the skeleton follows no desktop.
-  public var here: String? { nil }
-  public var devices: [RemoteModelBoard.Device] { [] }
-  public var foldRevision: Int64 { 0 }
-  public var model: RemoteModel { .empty }
-  public func held(_ id: String) -> RemoteModelBoard.Held? { nil }
+  /// The answering desktop.
+  public var here: String? { fold.here }
+  /// Every desktop the board lists, in the board's order (the home first), with its standing.
+  public var devices: [RemoteModelBoard.Device] { fold.devices }
+  /// The fold's own chain.
+  public var foldRevision: Int64 { fold.revision }
+  /// The model as the replica last PUBLISHED it: behind the fold after a frame that changed nothing.
+  public var model: RemoteModel { replica.model }
 
-  /// PG-3d (red): the skeleton draws nothing.
-  public func drawn(hiding devices: Set<String> = []) -> [RemoteFieldRow] { [] }
+  /// A row the fold holds, by model id — hidden or shown — with its board row.
+  public func held(_ id: String) -> RemoteModelBoard.Held? { fold.held(id) }
 
-  /// PG-3d (red): the skeleton takes every open and follows none.
+  /// The window's rows as the last `publish` drew them, without the desktops named (UA-P-5's foreign doors). The
+  /// filter comes AFTER the fold and the rows, so a hidden desktop never moves another row's place or identity.
+  public func drawn(hiding devices: Set<String> = []) -> [RemoteFieldRow] {
+    devices.isEmpty ? windowRows : windowRows.filter { !devices.contains($0.device) }
+  }
+
+  /// The open, and every whole-mesh resync: replaces everything the copy follows (M23), then re-joins at once, as
+  /// the window's `live` render does before the replica's frame.
   @discardableResult
-  public mutating func open(_ open: AgentRemoteMeshOpen, now: String) -> Outcome { .applied }
+  public mutating func open(_ open: AgentRemoteMeshOpen, now: String) -> Outcome {
+    handed = nil
+    let screened = screen.open(open, now: now)
+    let update = fold.open(screened)
+    handed = update
+    let heard = replica.gapsHeard
+    replica.apply(update)
+    standingMoved = true
+    rejoin()
+    // the snapshot's replay of what a gap held broke the replica's chain again: the window's `onGap` reopens
+    if replica.gapsHeard != heard {
+      ignoring = true
+      return .gap("the replica's chain broke behind the open")
+    }
+    ignoring = false
+    return .applied
+  }
 
-  /// PG-3d (red): the skeleton takes every frame and follows none.
-  public mutating func frame(_ frame: AgentRemoteMeshFrame, now: String) -> Outcome { .applied }
+  /// One later frame, screened, folded and applied. A state frame re-joins at once (the window's render on the feed's
+  /// publish); a change waits for `publish`.
+  public mutating func frame(_ frame: AgentRemoteMeshFrame, now: String) -> Outcome {
+    handed = nil
+    if ignoring { return .ignored }
+    for screened in screen.frame(frame, now: now) {
+      switch fold.frame(screened, now: now) {
+      case .gap(let reason):
+        ignoring = true
+        return .gap(reason)
+      case .state:
+        standingMoved = true
+        rejoin()
+      case .unchanged:
+        break
+      case .change(let change):
+        handed = .change(change)
+        if !replica.apply(.change(change)) {
+          ignoring = true
+          return .gap("the replica's chain")
+        }
+      }
+    }
+    return .applied
+  }
 
-  /// PG-3d (red): the skeleton publishes nothing.
-  public mutating func publish() -> Published { Published(changes: nil, rejoined: nil, standingMoved: false) }
+  /// The frame: the replica's publication, the re-join's when the joins moved, then the window's rows, drawn once.
+  public mutating func publish() -> Published {
+    let changes = replica.flush()
+    let rejoined = rejoin() ? replica.flush() : nil
+    let fold = self.fold
+    let standing = Dictionary(fold.devices.map { ($0.device, $0.state) }) { first, _ in first }
+    windowRows = RemoteWindowRows.rows(
+      model: replica.model, held: { fold.held($0) }, standing: standing,
+      order: RemoteWindowRows.order(held: fold.heldRows, here: fold.here),
+      sessionByRow: replica.visibility.sessionByRow, previous: &previous)
+    defer { standingMoved = false }
+    return Published(changes: changes, rejoined: rejoined, standingMoved: standingMoved)
+  }
+
+  /// The window's visibility, handed anew when the home's joins moved. True when they did.
+  @discardableResult
+  private mutating func rejoin() -> Bool {
+    replica.setVisibility(.joins(held: fold.heldRows, here: fold.here))
+  }
 }
