@@ -422,10 +422,15 @@
     under.
   - A turn no fieldd saw (while it was down, or in a run a restart could not re-attach) is not kept. It is named
     (Q4), not closed.
+- **The handle, the card names a session as @ does**: LANDED 11-02 (`045f10ec7`, the mini's mint M100; LANDED "The
+  handle"), on VF-PM's ruling (11-02 01:41Z) and the plan's Q0–Q7 (VF-PM, 02:12Z, all at the leans).
+  James's frame: https://claude.ai/artifact/K4DcyuvBebfNqguLKjzxQc.
+  - The needs-you card names a session as @ does, one rule read twice: two untitled sessions in vibe-field read
+    "vibe-field" and "vibe-field·2", never two "Claude Code"s. fieldd's name stands only where @ offers none.
+  - Chat reads its Agent Profiles once, in its controller, for every thread's @ and the card.
+  - Owed, each named, none built: whether a title should win in @ (Q1, James's; §9 below); fieldd's reason after a
+    colon still names a session by runLabel (Q3, a fieldd follow-up); notify's teller names by fieldd's label (Q7).
 - Next, in order:
-  - **The handle** (VF-PM, 11-01 09:55Z), its own slice: the needs-you card names a session by fieldd's runLabel, and
-    the lean is @'s handle ("vibe-field·2"), so two untitled sessions never read alike. A one-frame visual goes to
-    James only if it changes what he sees.
   - **SP-1e**: CH-D2's live cards in Chat's thread, and Chat's pane as a card target.
   - **CP-4**: flows and the desk applier.
   - **CP-5**, which is MT-7: Codex and Grok, once their MCP processes can be named.
@@ -881,7 +886,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88) and TU-1 (`57569bca3`, mint M96) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | the handle · SP-1e · CP-4 · CP-5 |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96) and the handle (`045f10ec7`, mint M100) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | SP-1e · CP-4 · CP-5 |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
@@ -926,3 +931,6 @@ D-1 and D-10, he ruled A the same morning (DECISIONS' compact row). What stays o
 4. **HN's D10, the sheet's two shelf headers** (`draft/thinking-cards-in-hand.md`; B3's design review): the page drew
    one caption style for both of the pill's sheet's shelves, and the build keeps each shelf's own header, as the doc
    allows. Lean: as built.
+5. **Should a title win in @?** (the handle's Q1; `lanes/co-plan/plans/handle-plan.md` §6): @ never reads a title,
+   so a titled session @ offers reads its handle, its folder else its agent's label, on the needs-you card as in @.
+   A title would need the board's row to carry one, and @'s rule first: a slice of its own. Lean: as built.
