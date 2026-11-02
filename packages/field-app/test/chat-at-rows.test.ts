@@ -21,6 +21,8 @@ import {
   atRow,
   atRowsOf,
   atStops,
+  NO_HANDLES,
+  sessionHandlesOf,
   sessionWord,
 } from "../src/chat/at-rows";
 import { CANNOT_LIST_AGENTS } from "../src/chat/new-spark";
@@ -356,6 +358,51 @@ describe("@'s rows in Chat (DESIGN.md §8 \"Chat's composer\")", () => {
       });
     }
     expect(AT_WORDS.reading).toBe("Reading its agents…");
+  });
+
+  it("gives @'s handles to any reader by one rule: each session row's handle is the map's, under every query (the handle)", () => {
+    const bare = [
+      row({ runtimeRunId: "run-bare-1", createdAt: minute(1), lastActivityAt: minute(5) }),
+      row({ runtimeRunId: "run-bare-2", createdAt: minute(2), lastActivityAt: minute(4) }),
+    ];
+    const queries = ["", "vibe", "field·2", "ROS", A.label.slice(0, 3), "zzz"];
+    for (const rows of [ROWS, bare]) {
+      const handles = sessionHandlesOf(VELA, rows, SETS);
+      expect(handles.size).toBe(atRowsOf(sources({ rows })).sessions.length);
+      for (const query of queries)
+        for (const session of atRowsOf(sources({ rows, query })).sessions)
+          expect(session.handle, `${session.session} under "${query}"`).toBe(
+            handles.get(session.session),
+          );
+    }
+    expect([...sessionHandlesOf(VELA, ROWS, SETS)]).toEqual([
+      ["run-mine", "rosetta"],
+      ["run-his-1", "vibe-field"],
+      ["run-his-2", "vibe-field·2"],
+    ]);
+  });
+
+  it("gives no handles until its profiles and the board are read, and numbers across the spark's profiles as @ does (the handle)", () => {
+    for (const [sets, rows] of [
+      [null, ROWS],
+      ["failed", ROWS],
+      [SETS, null],
+      [SETS, "failed"],
+      [null, null],
+      ["failed", "failed"],
+    ] as const)
+      expect(sessionHandlesOf(VELA, rows, sets), `${String(sets)} ${String(rows)}`).toBe(
+        NO_HANDLES,
+      );
+    expect(NO_HANDLES.size).toBe(0);
+    // Vela is This Mac's and Work's: the vibe-field under Work, started second, is the second of its name
+    expect(sessionHandlesOf(VELA, ROWS, SETS).get("run-his-2")).toBe("vibe-field·2");
+    // a spark of Work alone is offered only that one, so it is the first of its name, in @ and the map alike
+    const work: SparkSummary = { ...VELA, profiles: ["work"] };
+    expect([...sessionHandlesOf(work, ROWS, SETS)]).toEqual([["run-his-2", "vibe-field"]]);
+    expect(atRowsOf(sources({ spark: work })).sessions.map((r) => r.handle)).toEqual([
+      "vibe-field",
+    ]);
   });
 
   it("walks the stops with ↑ ↓, stopping at the ends", () => {

@@ -153,6 +153,30 @@ function handlesOf(rows: readonly AgentFieldRow[]): Map<string, string> {
   return handles;
 }
 
+/** No handles: one empty map, made once, for readers' defaults. */
+export const NO_HANDLES: ReadonlyMap<string, string> = new Map();
+
+/** The sessions `spark`'s agent_send takes and the handles @ gives them: the one place the set is chosen and
+ * numbered. Empty while the profiles or the board are not read, or can't be. */
+function offeredOf(
+  spark: SparkSummary,
+  rows: BoardRows,
+  sets: AtSources["sets"],
+): { readonly reached: AgentFieldRow[]; readonly handles: ReadonlyMap<string, string> } {
+  if (!Array.isArray(rows) || !Array.isArray(sets)) return { reached: [], handles: NO_HANDLES };
+  const reached = reachedBy(spark, rows, personaSetsOf(sets));
+  return { reached, handles: handlesOf(reached) };
+}
+
+/** @'s handles, by run id: the one rule, for every reader that names a session as @ does. */
+export function sessionHandlesOf(
+  spark: SparkSummary,
+  rows: BoardRows,
+  sets: AtSources["sets"],
+): ReadonlyMap<string, string> {
+  return offeredOf(spark, rows, sets).handles;
+}
+
 function matches(query: string, ...words: readonly (string | null)[]): boolean {
   if (query === "") return true;
   const needle = query.toLowerCase();
@@ -193,8 +217,7 @@ export function atRowsOf(sources: AtSources): AtList {
       }),
     ),
   );
-  const reached = rows === "failed" ? [] : reachedBy(spark, rows, personaSetsOf(sets));
-  const handles = handlesOf(reached);
+  const { reached, handles } = offeredOf(spark, rows, sets);
   const offeredSessions = reached
     .sort(
       (a, b) =>
