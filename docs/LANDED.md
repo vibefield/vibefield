@@ -29383,3 +29383,98 @@ at 13:10Z, and VF-PM accepted it: no new words, so no stop for James.
 has logged an error" on run-h-partial's two launches; no SVG changed here, so it is unclaimed, and no item is filed.
 
 **Owed.** Nothing of these items'.
+
+## WI-1 (with WI-2) and WI-4 — the phone's way in: two states, the way in standing on the splash's field, and every word DESIGN.md's (2026-11-02; `40e447bfb` → `08d457f58`, eighteen commits on main `78edface0`, lane `wi/way-in` in `/Volumes/SamsungRed/lanes/wi`, in the mini's mint M108 `8cfe4a59d`, a MERGE over main `eb4d23743`, run 108)
+
+**What it rests on.**
+- James ruled WI-D1…D8 A on the page *The Way In* (11:13–11:15Z; v5 `1793616670-caec`, its words held to the
+  product bible 0.3) and said "way in all ruled, now implement it" (11:17Z). The laws are WI-L1…L7 (DECISIONS WI).
+- VF-PM accepted the brief at 12:06Z: WI-1 and WI-2 as one slice, WI-3 next, the Desktop slice held with item 160.
+  Its four conditions: reviewable commits, a review before the mint, the mark's fade on James's word alone (the
+  fallback, the mark keeping its place, accepted), and photographs of every way-in screen in both appearances.
+- The slice builds on PR #10's splash (M104 `f2854bf2f`) and TS-7's door.
+
+**What** (25 files, +2076 −547: the kit, DESIGN.md, the iOS README, one script and one tokens.css comment):
+- **WI-4** (`40e447bfb`): the words at their source, DESIGN.md §9 "The way in" and §8 "The phone's way in", and the
+  phone's door amended on James's word.
+- **WI-1** (`128a3f5ae` → `1626ed4d2`, six commits):
+  - the design kit's rows: the wide pill (`ChromePillStyle(_:size:wide:)`, 50 tall), glass in any shape
+    (`ChromeMaterial.glass(in:shadow:)`) and the seat (`ChromePalette.wayInSeat`, DESIGN.md first);
+  - the splash holds: the content keeps it up (`.splashHolds`), sets the way in over its field (`.splashOverlay`)
+    and brings it back (`SplashGateModel.setHold`);
+  - the door leaves the Field tab: `DoorPageView` goes, and TS-7c's field under a page and TS-D22's dim go with it;
+  - WI-L2, `FieldHomeModel.doorPage`: signed in is an account whose node is not asking and a desktop known; the
+    desktop that sent you (`fromCode`) and the joining and looking holds are pages of their own;
+  - the way in, drawn (`FieldHomeModel.wayInScreen`, `WayInView`, `WayInArt`): three places, the steps' two bars
+    until WI-3, How it works' four pages, the found beat;
+  - the two states (HomeScreen's `standing`), with the demo states the photographs use.
+- **The merge read** (`12363ac27`): the tabs refold when they mount (the stage's refold hooks are not mounted under
+  the way in), and the mock's account hooks move to `standing`.
+- **The review of `1626ed4d2`** (VF-PM 13:16Z: 0 high, 5 medium, 8 low), folded as ten appended commits:
+  - M1 `540c3d76f`: the splash comes back over the tabs. `SplashGateModel.covers` reaches the content as
+    `\.splashCovers`, and `FieldHomeModel.tabsStand` keeps the tabs under it, untouchable, until it is whole. The
+    gate's time is given to it (`SplashTimer`, `SplashSteadiness`), so its rows step it by hand.
+  - M2 `6d300aa2e`: the reader says computer (`MacCodeReader.Words`).
+  - M3 `13aef47ec`: TS-7c's and TS-D22's plumbing goes: SwarmField's `scrim` and `showsEmptyState`,
+    `ChromePalette.searchScrim` with its check in `scripts/check-ios-fixtures.mjs`, and the phone sentence in
+    tokens.css's comment. DESIGN.md §5's Search scrim row is dated *Retired 2026-11-02*.
+  - M4 `40b10c9bd`: §8's *As built 2026-11-02* line: two bars, the mark on every step, and the measures (the
+    picture's line 29 pt and the words 45 pt under the centre; the seat, the screen's width + 80 by 440, 83 pt under
+    it; the glass's corners 32/47). The iOS README's `none-found` and `attention` rows say the mark. The found beat
+    ends the first way in only: `wayInEnds` is false after Sign in again (§9's reading, VF-PM 13:36Z).
+  - M5 `17ddc3d00`: WI-L3's door is one switch, `WayInView.markFades`, shut.
+  - L1 `98ff3ffd7`: a fade's end is its own (a reveal counts its move; a come-back caught mid-fade keeps its field).
+  - L2 `84812dfdd`: a hold ends the release's limit. L3 `1371aab8f`: How it works stands only over the welcome.
+  - L4 `9cf8ef61f`: the drawings' mono is `ChromeType.mono`. L7 `08d457f58`: SplashHoldTests wait on no wall clock.
+  - Not folded: L5 (words open, below) and L8 (item 163).
+
+**Validation.**
+- Each fold was typechecked on the host (swiftc, the simulator's SDK, Debug) while the Mac was another lane's: a
+  check, not a gate.
+- The first witness (`e4f2e8f9f`, 12:36:43Z) trapped in WayInScreenTests: a View's statics are the main actor's,
+  called from a nonisolated row. The fix (`nonisolated` statics, a `@MainActor` suite) was folded before the review.
+  The witness at `1626ed4d2` then read 15 runs, 1,490 tests, 0 red; app Debug and Release built.
+- The fold proofs on this Mac (13:38:50 → 13:54:59Z, the worktree `lanes/wi/proof`; red is each fold's SHA with only
+  its behavioural lines out, by `lanes/wi/reverts/revert.py`; green is the SHA). Every red fell on its own rows
+  alone: M1 1 issue, M2 5, M4 2, M5 3 (the switch's open side), L1 2 rows, L2 1, L3 3. Greens: 121–123 tests in 17
+  suites (FieldHomeTests), 11–14 in 1 (FieldSplashTests); at M3 also 15 in 4 (FieldSwarmTests) and 36 in 10
+  (FieldDesignTests). M3, L4 and L7 have no red by their nature (a removal, a face, rows on behaviour that stood).
+- The witness at the tip `08d457f58` (13:55:16 → 14:02:14Z): kit 15 runs, 1,501 tests, 0 red, 0 issues; app Debug
+  and Release built.
+- The photographs at the tip (14:02:29 → 14:06:09Z): 34 of 34, 17 mock states × light and dark, by launch arguments
+  alone, no input (`lanes/wi/logs/photos-08d457f58`, with two contact sheets); iPhone 17 Pro
+  `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down after.
+- The merged reads: over `81bb2e8a6` (tree `d3980b535`) coherent, the two lanes' names disjoint; over `eb4d23743` the
+  trial tree `7df83d7a3`. The iOS fixtures on the merged tree are 198 copies (main's 200 − M3's two scrim compares, a
+  deleted mirror), pins 67.
+- **Run 108** (`8cfe4a59d`, the MERGE shape: `08d457f58` first, main `eb4d23743` second, minted by a9 on VF-PM's GO):
+  - vitest 12,103 passed, 0 failed, 18 skipped, ±0 on run 107 (the slice changes no `.test.ts`); cargo 33 results
+    ok, 0 failed; the iOS fixtures 198, pins 67.
+  - The kit over the mint itself (14:09:45 → 14:16:17Z, the proof worktree detached at the mint, its tree asserted
+    `7df83d7a3` and apps/ios `e543ed16d`): 15 runs, 1,514 tests, 0 red; app Debug 14:13:03 → 14:14:16Z and Release
+    14:14:36 → 14:16:17Z; iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down at 14:12:43Z.
+- **Landed:** main fast-forwarded to the mint `8cfe4a59d` itself on VF-PM's GO (2026-11-02 14:21:46Z).
+
+**Found.**
+- The first photographs (12:58:53Z, at `1626ed4d2`) took 0 of 34: CoreSimulator cannot write the external SSD, and
+  the script swallowed the error. Pictures are now shot to /tmp and moved, and a short count fails loudly.
+- No kit suite hosts a view, so a hook's mount is out of every kit row's reach: hence the OWED witness below.
+
+**Not built (said).** WI-3, the lock (FieldLock on LocalAuthentication; WI-D3…D7, WI-L5, WI-L6). The mark's fade:
+vibefield-splash's `markOpacity` (`9219e97`) waits on James's word to push, so `markFades` stays shut and the mark
+keeps its place on every step. The Desktop slice is held for James: item 160's privacy line, and Remove for a phone.
+
+**Owed.**
+- The OWED witness (VF-PM 13:20Z; owed, not folded, as accepted at 14:08Z): "after Sign in with no board change, the
+  slice's four desktops draw". The field slice starts signed out on a static board; Sign in; no board change. Item
+  154's `-vf-auto-open-card=<id>` drives it: green reads "[auto-open] opening <id>", and with `12363ac27`'s refold
+  reverted the red expected is "[auto-open] no body <id> on the field".
+- L5, words open for James: the joining note "Couldn’t connect — ‹reason›." and the tour's "Next", both outside §9's
+  text.
+- A design note for James, not a fold: the 12 pt `inkTertiary` notes read faintly where the field's rays cross them
+  above the glass.
+- The mark's fade: James's word on pushing `9219e97`, then the re-vendor at a revision upstream has, and
+  `markFades` opened.
+- Item 163 (L8: Settings' unreachable signed-out head says "Mac"), then item 161 (a dropped leg re-mints with no
+  backoff): the IOS session's.
+- At VF-PM's next draft slot: the way-in README's fifth line, its check stamp brought to v5's (10:52Z).
