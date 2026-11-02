@@ -58,4 +58,14 @@ public enum FreewayContract {
     public static let restarting = 4503
     public static let doorDown = 4504
   }
+
+  /// F1b — `freeway.approve`'s own refusals (`FREEWAY_APPROVAL` in registries.ts): each is
+  /// `UNAVAILABLE {service, state}`, retryable, and the phone says each in its own words
+  /// (`FreewayApproval.said`).
+  public enum Approval {
+    public static let service = "freeway"
+    public static let stateUnread = "unread"
+    public static let stateDown = "down"
+    public static let stateUncorrelated = "uncorrelated"
+  }
 }

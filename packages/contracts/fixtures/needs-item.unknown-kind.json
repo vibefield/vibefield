@@ -1,0 +1,13 @@
+{
+  "id": "ny-f1e2d3c4b5a69788",
+  "kind": "gate",
+  "state": "waiting",
+  "from": {
+    "name": "r·7",
+    "session": "run-40"
+  },
+  "asked": "2026-10-31T16:09:00.000Z",
+  "words": "Push 0.7.25?",
+  "choices": ["Push", "Hold"],
+  "step": 4
+}

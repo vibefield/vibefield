@@ -8,8 +8,8 @@ import { UsersError } from "./errors";
 // live (another process can observe the file between create and the identity
 // write — the segment-writer lesson), only an artifact older than 30s is
 // reclaimable; a live pid is NEVER broken by force (pid reuse makes blind
-// kills wrong — the dev-lock lesson). Mint additionally publishes users.json
-// itself with "wx", so even a broken lock cannot double-mint (belt, §3.3.5).
+// kills wrong — the dev-lock lesson). Mint additionally creates users.json
+// itself only if absent, so even a broken lock cannot double-mint (belt, §3.3.5).
 
 export type UsersLockRole = "mint" | "mutate" | "migrate" | "attach";
 
@@ -20,8 +20,8 @@ export interface UsersLockDeps {
   pidAlive?: (pid: number) => boolean;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
-  /** TEST ONLY: bypass the lock file entirely — exists to prove the "wx"
-   * publish keeps mint exclusive even under a broken lock. */
+  /** TEST ONLY: bypass the lock file entirely — exists to prove the exclusive
+   * create keeps mint exclusive even under a broken lock. */
   unsafeSkipLock?: boolean;
 }
 

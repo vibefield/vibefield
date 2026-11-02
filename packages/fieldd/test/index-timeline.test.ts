@@ -257,6 +257,8 @@ interface World {
   indexLog(): string[];
   timeline(rows: unknown[]): void;
   control(value: Record<string, unknown>): void;
+  /** rewrite the fake's session rows (re-read per request) */
+  sessions(rows: unknown[]): void;
 }
 
 async function setup(
@@ -331,6 +333,7 @@ async function setup(
     },
     timeline: (rows) => writeFileSync(files.timeline, JSON.stringify(rows)),
     control: (value) => writeFileSync(files.control, JSON.stringify(value)),
+    sessions: (rows) => writeFileSync(files.sessions, JSON.stringify(rows)),
   };
 }
 
@@ -370,6 +373,27 @@ async function ready(daemon: FielddDaemon): Promise<void> {
 
 const page = async (rpc: WsRpc, params: Record<string, unknown>): Promise<IndexTimelineResult> =>
   IndexTimelineResult.parse(await rpc.call("index.timeline", params));
+
+/** Item 147 (2026-11-01) — a session's id once rosetta has ingested it WHOLE. rosetta writes a session's row
+ * `pending` before any of its entries and marks it `indexed` only when every source file has completed a clean
+ * generation (rosetta's `crates/pipeline/src/stream.rs`), so a page asked at the row's first sight can find
+ * nothing: the ground-truth page read `expected 0 to be ≥ 1` under whole-suite load. The wait ends on that mark. */
+async function untilIndexed(rpc: WsRpc, nativeSessionId: string, ms: number): Promise<string> {
+  let sid = "";
+  await untilAsync(
+    async () => {
+      const found = (await rpc.call("index.sessions", {
+        nativeSessionIds: [nativeSessionId],
+      })) as IndexSessionsResult;
+      const row = found.rows[0];
+      sid = row?.streamState === "indexed" ? row.sessionId : "";
+      return sid !== "";
+    },
+    ms,
+    `${nativeSessionId} indexed`,
+  );
+  return sid;
+}
 
 /** Subscribe and parse the open; the frames arrive as notifications. */
 async function tail(rpc: WsRpc, params: Record<string, unknown>) {
@@ -580,6 +604,22 @@ describe("index.timeline — one backward page of one session (SP-6)", () => {
       (await unconfigured.callErr("index.session.subscribe", { sessionId: "s1" })).data,
     ).toMatchObject({ kind: "UNAVAILABLE", details: { service: "index", state: "unconfigured" } });
   }, 40_000);
+
+  it("item 147: a session's row is read before its entries — the wait ends on rosetta's `indexed`, never the row's first sight", async () => {
+    const world = await setup({ timeline: [] });
+    world.sessions([{ ...sessionRow("s1"), stream_state: "pending" }]);
+    await ready(world.daemon);
+    const win = await windowOf(world.daemon, ["index.read", "index.search"]);
+    // rosetta's order: the entries land, then the row is marked indexed
+    const ingested = setTimeout(() => {
+      world.timeline(S1);
+      world.sessions([sessionRow("s1")]);
+    }, 1_000);
+    cleanup.push(() => clearTimeout(ingested));
+    const sid = await untilIndexed(win, "nat-s1", 10_000);
+    expect(sid).toBe("s1");
+    expect((await page(win, { sessionId: sid })).entries).toHaveLength(S1.length);
+  }, 30_000);
 });
 
 describe("index.session.subscribe — the live tail as rows (SP-6)", () => {
@@ -948,18 +988,7 @@ async function realWorld(): Promise<{
     "consent",
   );
   await win.call("index.enroll", { kinds: ["claude-code"] });
-  let sid = "";
-  await untilAsync(
-    async () => {
-      const found = (await win.call("index.sessions", {
-        nativeSessionIds: [FIXTURE_NATIVE_ID],
-      })) as IndexSessionsResult;
-      sid = found.rows[0]?.sessionId ?? "";
-      return sid !== "";
-    },
-    90_000,
-    "the ground-truth session indexed",
-  );
+  const sid = await untilIndexed(win, FIXTURE_NATIVE_ID, 90_000);
   return { daemon, mock, win, sid, home };
 }
 

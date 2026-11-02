@@ -1,0 +1,19 @@
+{
+  "id": "ny-8c41d2e09a77b305",
+  "kind": "held-send",
+  "state": "open",
+  "from": {
+    "name": "Vela",
+    "session": "run-12",
+    "spark": "sp-7k2m9q4x"
+  },
+  "spark": "sp-7k2m9q4x",
+  "asked": "2026-10-31T16:04:51.502Z",
+  "words": "run the tests in packages/fieldd and tell me what fails",
+  "choices": ["Allow", "Not now"],
+  "count": 2,
+  "to": {
+    "session": "run-31",
+    "name": "claude·2"
+  }
+}

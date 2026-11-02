@@ -22,7 +22,8 @@ import {
 /** What one Send came to, as its note says it. */
 export type ThreadSendOutcome =
   | { readonly state: "pasted" }
-  /** Asking you, Needs your OK or Stuck: a menu in the pane would read a paste as its answer */
+  /** its own run waits on you in its pane (Asking you, Needs your OK or Stuck): a menu there would read a paste as its
+   * answer */
   | { readonly state: "waiting-on-you" }
   /** its input did not open within 1.5 s, the pane's handler did not take the paste, or a spark that is awake was not
    * heard in the 20 s — Chat reading its list, the spark awake and its pane still drawn, then */
@@ -63,20 +64,27 @@ export type ThreadSendOutcome =
 export interface ThreadSendDeps {
   /** this window holds a terminal pool (`terminalPoolConfigured`); without one there is no pane to paste into */
   readonly terminals: boolean;
-  /** the spark waits on the person, as the feed reads it now (asked as Send starts, and again after the last wait,
-   * just before the paste) */
-  needsYou(): boolean;
+  /** its own run waits on the person in its pane, a blocker on its own row (`SparkEntry.blocked`), as the feed reads it
+   * now: asked as Send starts, and again after the last wait, just before the paste. A needs-you card does not count:
+   * it is answered on the card, and the pane holds no menu for it (DESIGN.md §8 "Chat's composer", as amended at
+   * CP-3). */
+  blocked(): boolean;
   /** asleep, or not started: Send wakes it first */
   readonly needsWake: boolean;
   /** the feed's one wake (`SparkOpener`): throws its refusal in fieldd's words */
   wake(): Promise<void>;
-  /** true once the spark is heard (its status neither Hello nor Asleep; at once for one heard already), false after
-   * `timeoutMs`. Every paste waits for it, the woken spark's and the awake one's alike. */
+  /** true once the spark is heard (`SparkEntry.heard`: its own run's row on the board, alive, watched and saying how it
+   * stands; at once for one heard already), false after `timeoutMs`. Never read from its word, which an item's stands
+   * over. Every paste waits for it, the woken spark's and the awake one's alike. */
   heard(timeoutMs: number): Promise<boolean>;
   /** the thread's pane once it has settled, else how it stands after `timeoutMs` (`whenSparkPane`) */
   pane(timeoutMs: number): Promise<SparkPaneReport | null>;
-  /** the spark reads Asleep now, as the feed reads it (asked where the send cannot go on): its thread draws no pane
-   * while it is */
+  /** its session is not running now, as the feed reads it (asked where the send cannot go on): its thread draws no
+   * pane while it is.
+   *
+   * *Corrected 2026-11-01 (CP-3):* this said the spark "reads Asleep". Since CP-3 a sleeping spark with a needs-you
+   * item reads Asking you or Needs your OK, so asleep is read from its session, never from its word: its line says it
+   * sleeps, with Wake (`threadLineOf`), whatever its word says. */
   asleep(): boolean;
   /** its thread is on screen now, the one Chat shows while Chat is the view (asked when no pane of it is drawn): a pane
    * is drawn, and found, only while it is */
@@ -119,7 +127,7 @@ async function sendSteps(
   stills: readonly string[],
 ): Promise<ThreadSendOutcome> {
   if (!deps.terminals) return { state: "no-terminals" };
-  if (deps.needsYou()) return { state: "waiting-on-you" };
+  if (deps.blocked()) return { state: "waiting-on-you" };
   for (const still of stills) {
     if (!(await deps.stillKept(still))) return { state: "still-gone" };
   }
@@ -196,7 +204,7 @@ async function pasteOnceOpen(
     if (!open) return unreached(deps) ?? { state: "not-taking" };
     // read again after the last wait, just before the paste: a woken or just-started agent puts up its first menu (a
     // trust or permission ask) as its input opens, and a menu reads pasted characters as its choices
-    if (deps.needsYou()) return { state: "waiting-on-you" };
+    if (deps.blocked()) return { state: "waiting-on-you" };
     const took = pasteInto(deps, door, text);
     // no longer drawn as the paste was asked: read again, never into this door (`paneAfterWait` takes a drawn one)
     if (took !== "undrawn") return took;

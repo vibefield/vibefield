@@ -2668,6 +2668,8 @@ public struct HomeScreen: View {
         guard
           let dialing = await mesh.freewayDialing(
             to: deviceID, deviceName: UIDevice.current.name,
+            // A refusal names the desktop as the field does (F1b: the approval rides the home).
+            desktopName: link.desktops.first { $0.deviceId == deviceID }?.name,
             approve: { [link] in try await link.approveFreeway(on: deviceID) })
         else { return nil }
         let desktop = FreewayDesktopLink(dialing)

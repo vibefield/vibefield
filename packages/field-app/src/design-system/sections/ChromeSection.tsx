@@ -42,6 +42,7 @@ import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { DeskPreview } from "../DeskPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
+import { NeedsCardLivePlate, NeedsCardPlates } from "../NeedsCardPreview";
 import { NewSparkSpecimen } from "../NewSparkPreview";
 import { PACKAGE_CIRCLE_STATES, PackageCirclePlate } from "../PackageCirclePreview";
 import { PEERS_STATES, PeersPlate } from "../PeersPreview";
@@ -231,16 +232,39 @@ export function ChromeSection({
           a window says, and on three plates what the pane says while it is being found, when this
           desktop's floor does not hold it, and when the floor did not answer. Asleep or not
           started, one honest line with its act: Wake waiting while it wakes, and refused in
-          fieldd's words; a spark whose session never started, with none. A spark just hatched,
-          before its first turn, says hello over its pane, with its three starters (NS-D4), which
-          wait while one is sent; a spark that has had a turn shows its pane alone. At the thread's
-          foot, its composer: the draft, the mic and send, at rest, typing, and waiting while a send
-          or a wake runs; @'s list with the agents to start and the sessions running, and its words
-          while it reads, when nothing matches, when there is nothing to add, when the spark's
-          profiles can't be read, and when what is running can't be, the agents to start standing;
-          an agent's menu in its box (its model and Effort), while its picker is read and when it
-          can't be; and the chips an agent, a session and a card make. Fixture sparks, rows and
-          agents, read by the product's own readings.
+          fieldd's words; a spark whose session never started, with none. A spark asleep with its
+          held send waiting on you (CP-3) says Needs your OK, its line still asleep with Wake, and
+          its card stands in its thread. A spark just hatched, before its first turn, says hello
+          over its pane, with its three starters (NS-D4), which wait while one is sent; a spark that
+          has had a turn shows its pane alone. At the thread's foot, its composer: the draft, the
+          mic and send, at rest, typing, and waiting while a send or a wake runs; @'s list with the
+          agents to start and the sessions running, and its words while it reads, when nothing
+          matches, when there is nothing to add, when the spark's profiles can't be read, and when
+          what is running can't be, the agents to start standing; an agent's menu in its box (its
+          model and Effort), while its picker is read and when it can't be; and the chips an agent,
+          a session and a card make. Fixture sparks, rows and agents, read by the product's own
+          readings.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The needs-you card — what waits on you, in the thread"
+        source="chat/NeedsCardView.tsx · chat/needs-card.ts · chat/needs-card-stand.ts · DESIGN.md §8 “Chat's thread”, §9 “Chat's words”"
+        bleed
+      >
+        <NeedsCardLivePlate />
+        <NeedsCardPlates />
+        <p className="vf-ds-stage-caption">
+          CP-3: the queue's item for the thread's spark, one card at a time over the pane, drawn by
+          Chat. Live, the product's own controller over three of Vela's items, answered by a fixture
+          door after a beat: an act pressed waits with its word and an ellipsis, then says what you
+          said (a send that could not go, a spawn its sleeping spark has not heard) for a note's
+          time, and leaves; the next rises once it has gone. Tab reaches the acts with the kit's
+          ring, and a pressed act puts the keyboard on the card; Reduced motion fades each way.
+          Still, each kind as it waits — a spark's question (1 of 3), a held send, a held spawn past
+          the cap, an agent's ask with Show alone, a kind this build does not know — then answering,
+          refused, answered three ways and a narrow thread, by this page's light and by the Moon's.
+          Fixture items read by the product's own card.
         </p>
       </Specimen>
 

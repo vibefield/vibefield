@@ -28,7 +28,7 @@ import {
   startsOf,
   suggestName,
 } from "./new-spark";
-import { chooseSpark, refreshSparks, useSessionTally, useSparksReading } from "./sparks-feed";
+import { chooseSpark, refreshSparks, usePersonSessions, useSparksReading } from "./sparks-feed";
 
 // THE NEW SPARK SHEET, THE CONTROLLER (SP-1c; DESIGN.md §8 "The New spark sheet"). It reads what the sheet offers —
 // the agents that can be a spark (`agent.providers[].briefing`), the Agent Profiles, an agent's picker when its menu
@@ -208,8 +208,7 @@ function Sheet({
     () => (thinksUnder === undefined ? profiles : [...new Set([...profiles, thinksUnder])]),
     [profiles, thinksUnder],
   );
-  const tally = useSessionTally();
-  const sessions = sessionsSeenOf(tally, sets, seen);
+  const sessions = sessionsSeenOf(usePersonSessions(), sets, seen);
 
   const reroll = useCallback(() => {
     setSeed(dealSeed());

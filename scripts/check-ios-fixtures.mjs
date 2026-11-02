@@ -116,6 +116,7 @@ const launchFixtures = [
   "agents-profile-sets.valid.json",
   "agent-field-snapshot.native-session.json",
   "agent-field-snapshot.stop.json",
+  "agent-field-snapshot.turned.json",
 ];
 // History's ledger reads them: the fixture door serves these, its tests read them.
 const historyFixtures = [
@@ -697,6 +698,16 @@ pins.push(
     ["RESTARTING", "restarting"],
     ["DOOR_DOWN", "doorDown"],
   ].map(([key, swift]) => freewayPin("FREEWAY_CODES", key, swift, { indent: 4 })),
+  // F1b — `freeway.approve`'s refusals the phone says in words (`FreewayApproval.said`): the
+  // service and the three states, each read from FREEWAY_APPROVAL's own block.
+  ...[
+    ["SERVICE", "service"],
+    ["STATE_UNREAD", "stateUnread"],
+    ["STATE_DOWN", "stateDown"],
+    ["STATE_UNCORRELATED", "stateUncorrelated"],
+  ].map(([key, swift]) =>
+    freewayPin("FREEWAY_APPROVAL", key, swift, { indent: 4, value: '"[a-z-]+"' }),
+  ),
 );
 
 const pinProblems = [];

@@ -26,7 +26,7 @@ export type GlyphName = (typeof GLYPH_NAMES)[number];
 export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   plus: {"label":"Plus","group":"actions","role":"Objects — the line's create on Canvas, the one bare plus on screen; New profile inside its sheet"},
   close: {"label":"Close","group":"actions","role":"Close settings, stop loading; the line's plus turned 135°"},
-  check: {"label":"Check","group":"actions","role":"An agent row's done mark; the row paints it green (§2.5)"},
+  check: {"label":"Check","group":"actions","role":"An agent row's done mark; the row paints it green (§2.5); the needs-you card's answered line"},
   search: {"label":"Search","group":"actions","role":"The command palette's field"},
   pencil: {"label":"Rename","group":"actions","role":"Rename this field, beside the doc name in the pill"},
   undo: {"label":"Undo","group":"actions","role":"A plugin's settings history; redo is the same drawing flipped"},
@@ -81,7 +81,7 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   message: {"label":"Message","group":"signals","role":"The swarm's said-something mark"},
   key: {"label":"Permission","group":"signals","role":"The swarm's waiting-on-a-permission mark"},
   question: {"label":"Question","group":"signals","role":"The swarm's asked-you-something mark"},
-  exclaim: {"label":"Failure","group":"signals","role":"The swarm's failed mark"},
+  exclaim: {"label":"Failure","group":"signals","role":"The swarm's failed mark; the needs-you card's answered line when the act was not done"},
   flame: {"label":"Burn","group":"signals","role":"The burn ladder's flame: filled when lit, outlined where there is no price"},
   missing: {"label":"Missing","group":"signals","role":"A glyph name the set does not hold — a kind's act or tool drawn as missing, and said once"},
   importing: {"label":"Importing","group":"signals","role":"History's arc while it imports: a fifth of the dial `history` draws, turned over the History cell by the host"},

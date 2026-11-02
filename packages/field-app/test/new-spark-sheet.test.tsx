@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   AGENT_CATALOG,
+  type AgentFieldRow,
   type AgentModelsResult,
   type AgentProfileSet,
   type AgentProviderSummary,
@@ -14,6 +15,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NewSparkSheet } from "../src/chat/NewSparkSheet";
 import type { NewSparkPort } from "../src/chat/new-spark";
+import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import { FIXTURE_NATIVE, FIXTURE_WORK } from "../src/design-system/profiles-fixtures";
 
 // THE NEW SPARK SHEET (SP-1c; DESIGN.md §8 "The New spark sheet"), through the shipping controller and view over a
@@ -99,7 +101,10 @@ function portOf(sets: readonly AgentProfileSet[] = [FIXTURE_NATIVE]) {
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
+let stopFeed: (() => void) | null = null;
 afterEach(async () => {
+  stopFeed?.();
+  stopFeed = null;
   await act(async () => root?.unmount());
   root = null;
   host?.remove();
@@ -269,6 +274,61 @@ describe("the New spark sheet", () => {
     expect(port.hatch).toHaveBeenCalledWith(
       expect.objectContaining({ profiles: [FIXTURE_NATIVE.id, FIXTURE_WORK.id] }),
     );
+  });
+
+  it("counts the sessions its profiles see by the one rule, as @ and agent_send place them (TU-1)", async () => {
+    // the window's feed over a board of the person's two sessions and a spark's own: one filed under Work naming no
+    // persona (Work's, never This Mac's), one naming neither (This Mac's); the spark's own session is not his
+    const at = "2026-10-31T09:00:00.000Z";
+    const run = (
+      over: Partial<AgentFieldRow> & Pick<AgentFieldRow, "runtimeRunId">,
+    ): AgentFieldRow => ({
+      revision: 1,
+      kind: THINKER.id,
+      label: THINKER.label,
+      tier: "managed",
+      device: "dev-1",
+      status: "idle",
+      statusSince: at,
+      stateChangedAt: at,
+      createdAt: at,
+      alive: true,
+      blockers: [],
+      ...over,
+    });
+    const rows = [
+      run({ runtimeRunId: "run-work", profileSet: FIXTURE_WORK.id }),
+      run({ runtimeRunId: "run-mac" }),
+      run({ runtimeRunId: "run-spark", spark: "sp-vela0001", profileSet: FIXTURE_NATIVE.id }),
+    ];
+    const board: SparksPort = {
+      list: async () => [],
+      watch: async (onFrame) => {
+        onFrame({ revision: 1, rows }, "snapshot");
+        return () => undefined;
+      },
+      watchNeeds: async (onItems) => {
+        onItems([]);
+        return () => undefined;
+      },
+      answer: async () => {
+        throw new Error("nothing is answered here");
+      },
+      onReconnected: () => () => undefined,
+      open: async () => {
+        throw new Error("nothing is woken here");
+      },
+    };
+    stopFeed = startSparksFeed(board);
+    await open(portOf([FIXTURE_NATIVE, FIXTURE_WORK]));
+    const reach = () => $(".vf-new-spark-reach")?.textContent ?? "";
+    // This Mac alone, the one it thinks under: the session naming neither
+    expect(reach()).toMatch(/^Sees 1 session · /u);
+    const work = [...(host?.querySelectorAll<HTMLElement>(".vf-new-spark-chip") ?? [])].find(
+      (element) => element.textContent?.includes(FIXTURE_WORK.label),
+    );
+    await press(work ?? null);
+    expect(reach()).toMatch(/^Sees 2 sessions · /u);
   });
 
   it("stays for its leave when it folds, then goes; opened again, it is a sheet of its own", async () => {

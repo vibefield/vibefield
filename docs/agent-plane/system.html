@@ -1676,6 +1676,13 @@
               (<code>createRemoteSubscription</code>, <code>projectRemoteRow</code>) for every other screen. The
               <code>desk</code> cut is retired; each window's mesh board asks the peers for <code>remote</code>, and
               the phone's door is open at its home, though the kit reads <code>field</code> until PG-3.
+              <em>As built 2026-11-01 (PG-3b; PG-D6 (a), J2 (a)):</em> unread is the owner's mark, and every screen
+              reports to the backend that owns the row. A window's <code>model</code> board or a phone's
+              <code>remote</code> board makes its connection a screen of this desktop's backend (by kind,
+              <code>SCREEN_BOARDS</code>; no other caller's board clears a mark); a phone's report for another
+              desktop's row is routed by <code>device</code> through its home and kept on the owner as that
+              reader's own screen (<code>agent-screens.ts</code>; api.html's <code>agent.reportShown</code> row has
+              the keying and the lifetime). Only this desktop's window acknowledges a failure (Q06).
             </p>
             <p>
               <code>GodviewAgentsProvider</code> owns the window's one model subscription and replica. The deck,
@@ -1754,6 +1761,10 @@
               the card it jumps to — the id, never the folder. Deliberately absent: <code>lastAssistantMessage</code>, a blocker's
               <code>input</code>/<code>questions</code>/<code>detail</code>, the title, and the mirror
               itself. A field row says what a run is doing, never what it said.
+              <em>Amended 2026-11-01 (TU-1):</em> the row also carries <code>turnedAt</code> (a clock: whether
+              its run has worked) and <code>profileSet</code> (the id of the Agent Profile it is filed under, never
+              its folder or its label). This list never named three keys the row has carried since SP-1b and ST-D5:
+              <code>spark</code>, <code>origin</code> and <code>stop</code>.
             </p>
             <p class="section-note">
               Two narrowings are worth naming because they are easy to undo by accident. The

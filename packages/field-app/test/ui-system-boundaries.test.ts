@@ -110,6 +110,8 @@ describe("UI system ownership boundaries", () => {
     expect(catalogCss).not.toMatch(/^\.vf-chat(?:\b|-)/m);
     // SP-1c: the New spark sheet's plate stages it over Chat; the sheet's rules are the product's
     expect(catalogCss).not.toMatch(/^\.vf-new-spark(?:\b|-)/m);
+    // CP-3: the needs-you card's plates are boxes on the canvas's ground; the card's rules are the product's
+    expect(catalogCss).not.toMatch(/^\.vf-needs(?:\b|-)/m);
     // FG-6: the first run's frames box the shipping field and glass; their rules are boot.css's and
     // wizard-ui.css's, and the field's still is the field's own rule, never a copy of its picture
     expect(catalogCss).not.toMatch(/^\.vf-(?:field|splash|wizard)(?:\b|-)/m);
@@ -153,6 +155,36 @@ describe("UI system ownership boundaries", () => {
     }
     // the frame's cover mounts the same preview, as it mounts History's
     expect(source("design-system/ViewFramePreview.tsx")).toContain("<ChatPreview");
+  });
+
+  it("keeps the needs-you card's fixture an ADAPTER — the shipping card over the product's reading of fixture items (CP-3)", () => {
+    // The catalog stands in for what fieldd answers — the queue's items, and what an answer hands back — and runs
+    // them through the PRODUCT's own card (`needsCardOf`, `waitingCardOf`); the card it mounts is the shipping one,
+    // standing in the shipping thread items on the live plate under the product's own controller over a fixture door.
+    // Never the card's classes, never a stylesheet, never the product's doors, its feed, the status line or the host.
+    const preview = source("design-system/NeedsCardPreview.tsx");
+    const fixtures = source("design-system/chat-fixtures.ts");
+    const chat = source("design-system/ChatPreview.tsx");
+    expect(preview).toMatch(/<NeedsCardView\s/u);
+    expect(preview).toMatch(/<ThreadItemsView\s/u);
+    expect(preview).toContain("useNeedsCard(");
+    expect(fixtures).toContain("needsCardOf(");
+    expect(chat).toContain("waitingCardOf(");
+    for (const file of [preview, fixtures, chat]) {
+      expect(file).not.toMatch(/className="vf-needs/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("sparksPortOver");
+      expect(file).not.toContain("startSparksFeed");
+      expect(file).not.toContain("useNeedsAnswerer");
+      expect(file).not.toContain("sayStatus");
+    }
+    expect(preview).not.toMatch(/className="vf-chat/);
+    expect(source("design-system/sections/ChromeSection.tsx")).toMatch(
+      /<NeedsCardLivePlate\s*\/>/u,
+    );
+    expect(source("design-system/sections/ChromeSection.tsx")).toMatch(/<NeedsCardPlates\s*\/>/u);
   });
 
   it("never mounts the thread's live pane in Chat's catalog — the pane's place is the shipping view's words (SP-1d)", () => {
@@ -824,6 +856,8 @@ describe("UI system ownership boundaries", () => {
       // DK-3 — when the desk can't draw: the stage's card and the status line's banner
       "DeskUnavailableView",
       "StatusLineView",
+      // CP-3 — an agent's notify on the line, said through the window's own notice, never a copy of its words
+      "needsNoticeStatus",
       "LiveSurfaceView",
       "PaneFramePreview",
       "PaneFrameChrome",
@@ -1023,6 +1057,8 @@ describe("UI system ownership boundaries", () => {
       "chat/SparkPane.tsx",
       "chat/SparkPaneView.tsx",
       "chat/ThreadItemsView.tsx",
+      // CP-3 — the needs-you card
+      "chat/NeedsCardView.tsx",
       // SP-1d — Chat's composer
       "chat/ChatComposer.tsx",
       "chat/ChatComposerView.tsx",
@@ -1070,6 +1106,7 @@ describe("UI system ownership boundaries", () => {
       "chat/chat.css",
       "chat/chat-composer.css",
       "chat/new-spark-sheet.css",
+      "chat/needs-card.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }

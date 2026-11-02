@@ -1,0 +1,23 @@
+{
+  "notices": [
+    {
+      "id": "nt-4b1d9e7a0c3f2e85",
+      "from": {
+        "name": "Vela",
+        "session": "run-12",
+        "spark": "sp-7k2m9q4x"
+      },
+      "words": "the build is green",
+      "at": "2026-10-31T16:13:01.000Z"
+    },
+    {
+      "id": "nt-9e0a2c7b5d1f4e36",
+      "from": {
+        "name": "claude·2",
+        "session": "run-31"
+      },
+      "words": "the tests pass in packages/fieldd; 3 were slow",
+      "at": "2026-10-31T16:13:05.500Z"
+    }
+  ]
+}

@@ -9,7 +9,9 @@ import "./status-line.css";
 // shadow, corners 10, padded 7 10, 12/500 in secondary ink, rising 4 as it fades in. A notice with an
 // act carries it at its end, a text button in primary ink; one with a detail carries it on a row of
 // its own under the words — 11 mono, faint, verbatim, as the unavailable card carries its detail
-// (the degraded desk's ICE message; DK-17). It stands with the frame, above the cover.
+// (the degraded desk's ICE message; DK-17). A one-line notice — an agent's notify (CP-3) — stands on
+// one line, cut with an ellipsis at the line's width and never wrapped. It stands with the frame,
+// above the cover.
 // Controller-free (`StatusLineView`), so the catalog mounts this exact markup on a fixture notice;
 // `StatusLine` reads the store, and the hand off the desk's anchor.
 
@@ -29,6 +31,7 @@ export function StatusLineView({
       data-status-line={notice.id}
       {...(held ? { "data-held": "" } : {})}
       {...(notice.detail === undefined ? {} : { "data-detail": "" })}
+      {...(notice.oneLine === true ? { "data-one-line": "" } : {})}
     >
       <span className="vf-status-line__text">{notice.text}</span>
       {notice.act === undefined ? null : (

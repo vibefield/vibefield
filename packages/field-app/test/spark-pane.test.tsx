@@ -611,6 +611,7 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
     folder: "/f/vela",
     createdAt: AT,
     updatedAt: AT,
+    turnedAt: null,
     session: { runtimeRunId: "run-Vela", terminalSessionId: "pty-vela", live: true },
   };
   const OWN: AgentFieldRow = {
@@ -666,6 +667,13 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
       watch: async (onFrame) => {
         onFrame({ revision: 1, rows: [OWN] }, "snapshot");
         return () => undefined;
+      },
+      watchNeeds: async (onItems) => {
+        onItems([]);
+        return () => undefined;
+      },
+      answer: async () => {
+        throw new Error("nothing is answered here");
       },
       onReconnected: () => () => undefined,
       open: async () => VELA,

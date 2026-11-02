@@ -1,0 +1,79 @@
+{
+  "//": "TU-1 — the row says whether its run has worked (`turnedAt`: a time, null not yet, absent from a daemon or a record before TU-1) and the Agent Profile it is filed under (`profileSet`: an id, absent when none is filed). A re-attached run keeps its time with no usage, because a re-attach counts nothing. The phone reads both keys and leaves `spark` and `origin` unread.",
+  "epoch": "fieldd-5d1e2a7c90b3f418.4",
+  "revision": 12,
+  "rows": [
+    {
+      "runtimeRunId": "run-vela",
+      "revision": 2,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "idle",
+      "statusSince": "2026-11-01T09:02:30.000Z",
+      "stateChangedAt": "2026-11-01T09:02:30.000Z",
+      "createdAt": "2026-11-01T08:39:50.000Z",
+      "lastActivityAt": "2026-11-01T08:41:05.000Z",
+      "alive": true,
+      "blockers": [],
+      "spark": "sp-vela01",
+      "origin": {
+        "by": "you"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-6c10",
+        "workloadClass": "agent"
+      },
+      "turnedAt": "2026-11-01T08:40:12.000Z",
+      "profileSet": "native"
+    },
+    {
+      "runtimeRunId": "run-lyra",
+      "revision": 1,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "profileId": "claude:work-1c7e",
+      "status": "idle",
+      "statusSince": "2026-11-01T09:01:44.000Z",
+      "stateChangedAt": "2026-11-01T09:01:44.000Z",
+      "createdAt": "2026-11-01T09:01:40.000Z",
+      "alive": true,
+      "blockers": [],
+      "spark": "sp-lyra01",
+      "origin": {
+        "by": "you"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-6c11",
+        "workloadClass": "agent"
+      },
+      "turnedAt": null,
+      "profileSet": "work-7f3a"
+    },
+    {
+      "runtimeRunId": "run-older",
+      "revision": 7,
+      "kind": "codex",
+      "label": "Codex",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "working",
+      "statusSince": "2026-11-01T09:00:02.000Z",
+      "stateChangedAt": "2026-11-01T09:00:02.000Z",
+      "createdAt": "2026-11-01T08:52:10.000Z",
+      "lastActivityAt": "2026-11-01T09:02:01.000Z",
+      "alive": true,
+      "blockers": [],
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-6c02",
+        "workloadClass": "agent"
+      }
+    }
+  ]
+}

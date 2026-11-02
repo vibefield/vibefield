@@ -108,6 +108,7 @@ const ROWS: AgentFieldRow[] = [
   row({
     runtimeRunId: "run-his-2",
     profileId: "work-a",
+    profileSet: "work",
     origin: { by: "you" },
     project: { name: "vibe-field" },
     createdAt: minute(2),
@@ -119,6 +120,7 @@ const ROWS: AgentFieldRow[] = [
     kind: B.id,
     label: B.label,
     profileId: `${B.id}:native-default`,
+    profileSet: "native",
     origin: { by: "spark", spark: "sp-vela0001" },
     status: "blocked",
     blockers: [{ id: "q", kind: "question", since: AT }],
@@ -135,7 +137,12 @@ const ROWS: AgentFieldRow[] = [
     project: { name: "x" },
   }),
   row({ runtimeRunId: "run-flow", origin: { by: "flow" }, project: { name: "x" } }),
-  row({ runtimeRunId: "run-home", profileId: "home-b", project: { name: "x" } }),
+  row({
+    runtimeRunId: "run-home",
+    profileId: "home-b",
+    profileSet: "home",
+    project: { name: "x" },
+  }),
   row({ runtimeRunId: "run-ended", alive: false, project: { name: "x" } }),
   row({ runtimeRunId: "run-odd", origin: { by: "someone" }, project: { name: "x" } }),
 ];
@@ -194,6 +201,33 @@ describe("@'s rows in Chat (DESIGN.md §8 \"Chat's composer\")", () => {
   it("offers the sessions its agent_send takes: his own and its own agents, in its profiles, live, never a spark's", () => {
     const list = atRowsOf(sources());
     expect(list.sessions.map((r) => r.session)).toEqual(["run-his-2", "run-mine", "run-his-1"]);
+  });
+
+  it("places a session as the talk room does, by the one rule: filed, else This Mac's with no persona, else its persona's profile", () => {
+    const offered = (rows: AgentFieldRow[]) =>
+      atRowsOf(sources({ rows })).sessions.map((r) => r.session);
+    // filed under a profile the spark lacks, naming no persona: Home's, never This Mac's (main offered it)
+    expect(offered([row({ runtimeRunId: "run-filed-home", profileSet: "home" })])).toEqual([]);
+    // filed under one of its profiles, naming no persona: offered
+    expect(offered([row({ runtimeRunId: "run-filed-work", profileSet: "work" })])).toEqual([
+      "run-filed-work",
+    ]);
+    // filed under Home though its persona is Work's: the profile it is filed under wins (main offered it)
+    expect(
+      offered([row({ runtimeRunId: "run-moved", profileId: "work-a", profileSet: "home" })]),
+    ).toEqual([]);
+    // a persona's run with no profile filed (a record from before the runtime filed one): the profile listing it
+    expect(offered([row({ runtimeRunId: "run-persona", profileId: "work-a" })])).toEqual([
+      "run-persona",
+    ]);
+    expect(offered([row({ runtimeRunId: "run-home-persona", profileId: "home-b" })])).toEqual([]);
+    // a persona no profile lists (a retired sign-in): in none, offered by no spark
+    const retired = [row({ runtimeRunId: "run-retired", profileId: "retired-a" })];
+    for (const profiles of [["native"], ["work"], ["home"], ["native", "work", "home"]])
+      expect(
+        atRowsOf(sources({ spark: { ...VELA, profiles }, rows: retired })).sessions,
+        profiles.join(" "),
+      ).toEqual([]);
   });
 
   it("names two sessions of one name by their start, the first unnumbered, before the query filters", () => {

@@ -1,17 +1,18 @@
 // @vitest-environment happy-dom
 /**
- * SP-1b, SP-1d — Chat (DESIGN.md §8 "Chat's list", "Chat's thread"; CH-D1, CH-D3, CH-D4): the panel the catalog
- * mounts on fixtures (`ChatPanelView`), the window's one feed (`sparks-feed.ts`: the field board and the sparks fieldd
- * keeps) and the controller (`ChatView`: the shown spark's own pane while it is awake, Wake by `compose.sparks.open`
- * while it sleeps). The pane itself is `spark-pane.test.tsx`'s; this window holds no terminal pool, so its place says
- * what such a window says. The live witness of the list is James's first sight in `pnpm dev`; the board's own rows
- * are fieldd's (agent-field.test.ts there).
+ * SP-1b, SP-1d, CP-3 — Chat (DESIGN.md §8 "Chat's list", "Chat's thread"; CH-D1, CH-D3, CH-D4, CP3-D8): the panel the
+ * catalog mounts on fixtures (`ChatPanelView`), the window's one feed (`sparks-feed.ts`: the field board, the sparks
+ * fieldd keeps and, since CP-3, the needs-you queue) and the controller (`ChatView`: the shown spark's own pane while
+ * it is awake, Wake by `compose.sparks.open` while it sleeps). The pane itself is `spark-pane.test.tsx`'s; this window
+ * holds no terminal pool, so its place says what such a window says. The live witness of the list is James's first
+ * sight in `pnpm dev`; the board's own rows are fieldd's (agent-field.test.ts there), the queue's needs-queue.test.ts.
  */
 
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentFieldRow, SparkSummary } from "@vibefield/contracts";
+import type { AgentFieldRow, NeedsItem, SparkSummary } from "@vibefield/contracts";
+import type { FielddClient } from "@vibefield/fieldd-client";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -19,7 +20,13 @@ import type { ComposerPort } from "../src/chat/ChatComposer";
 import { type ChatAct, ChatPanelView } from "../src/chat/ChatPanelView";
 import { ChatView } from "../src/chat/ChatView";
 import { sparkEntriesOf } from "../src/chat/spark-status";
-import { FieldBoard, type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
+import {
+  FieldBoard,
+  type SparksPort,
+  sparksPortOver,
+  startSparksFeed,
+} from "../src/chat/sparks-feed";
+import { sparkIsNew } from "../src/chat/thread-items";
 import { THREAD_MARK_WORDS, type ThreadMark } from "../src/chat/thread-marks";
 import { sparkPaneOf } from "../src/chat/thread-pane-door";
 import { ChatPreview } from "../src/design-system/ChatPreview";
@@ -85,6 +92,27 @@ const VELA_ASKS = row({
   terminal: { hosted: "local", runtimeSessionId: "pty-Vela" },
 });
 
+/** Kiwi, asleep, waits on your OK to send to one of your sessions (CP-3): the queue's item, as fieldd says it. */
+const KIWI_HOLDS: NeedsItem = {
+  id: "ny-kiwisend01",
+  kind: "held-send",
+  state: "open",
+  from: { name: "Kiwi", session: "run-Kiwi", spark: "sp-kiwi0001" },
+  spark: "sp-kiwi0001",
+  asked: AT,
+  words: "run the tests in packages/fieldd",
+  choices: ["Allow", "Not now"],
+  to: { session: "run-his", name: "claude·2" },
+};
+
+/** The window side of EL9: the queue's list as fieldd's fixture says it. */
+const NEEDS_LIST: unknown = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../../contracts/fixtures/needs-list.valid.json"),
+    "utf8",
+  ),
+);
+
 /** What @'s rows would read of fieldd: nothing to offer here (the composer's own suite reads the rows). */
 const PORT: ComposerPort = {
   profileSets: async () => [],
@@ -138,8 +166,11 @@ function words(element: HTMLElement | null): string {
 }
 
 describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
-  const ready = (sparks: readonly SparkSummary[], board: readonly AgentFieldRow[]) =>
-    ({ state: "ready", entries: sparkEntriesOf(sparks, board) }) as const;
+  const ready = (
+    sparks: readonly SparkSummary[],
+    board: readonly AgentFieldRow[],
+    items: readonly NeedsItem[] = [],
+  ) => ({ state: "ready", entries: sparkEntriesOf(sparks, board, { items }) }) as const;
 
   it("lists the sparks newest activity first, each its face, its name, its time and its word", () => {
     mount(
@@ -318,6 +349,33 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     );
   });
 
+  it("says a sleeping spark's item in its word, and still says it sleeps: the line, Wake, and no pane (CP-3; critique 7)", () => {
+    const onWake = vi.fn();
+    mount(
+      <ChatPanelView
+        reading={ready([KIWI, VELA], [VELA_ASKS], [KIWI_HOLDS])}
+        chosen="sp-kiwi0001"
+        now={NOW}
+        onWake={onWake}
+        pane={<div data-the-pane="kiwi" />}
+      />,
+    );
+    const kiwi = $('.vf-chat-row[data-spark="sp-kiwi0001"]');
+    expect(words(kiwi?.querySelector<HTMLElement>(".vf-chat-row-status") ?? null)).toBe(
+      "Needs your OK",
+    );
+    expect(kiwi?.querySelector(".vf-chat-row-status")?.getAttribute("data-tone")).toBe("attention");
+    expect(kiwi?.querySelector(".vf-chat-row-dot")?.getAttribute("data-mark")).toBe("needs");
+    // the head says the item's word, in the attention ink; the face says the same status (S-3)
+    expect(words($(".vf-chat-thread-head"))).toBe("Kiwi Needs your OK");
+    expect($(".vf-chat-thread-status")?.getAttribute("data-tone")).toBe("attention");
+    // awake is read from its session, never its word: asleep, with Wake, and no pane mounted
+    expect(words($(".vf-chat-thread-line"))).toBe("Kiwi is asleep Wake");
+    expect($("[data-the-pane]")).toBeNull();
+    act(() => $(".vf-chat-thread-line button")?.click());
+    expect(onWake.mock.calls[0]?.[0]?.spark.id).toBe("sp-kiwi0001");
+  });
+
   /** One of the Chat specimen's plates, mounted as the catalog mounts it. */
   async function plate(state: ChatState): Promise<void> {
     act(() => root?.unmount());
@@ -327,6 +385,20 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     root = createRoot(host);
     await act(async () => root?.render(<ChatPreview state={state} />));
   }
+
+  it("draws the catalog's waiting plate on the product's reading: Kiwi asleep, its held send Needs your OK, Wake on its line (CP-3)", async () => {
+    await plate("waiting");
+    const status = (id: string): string =>
+      words($(`.vf-chat-row[data-spark="${id}"] .vf-chat-row-status`));
+    expect(status("sp-kiwi0001")).toBe("Needs your OK");
+    // Vela's own run's ask is read once, as her row's blocker
+    expect(status("sp-vela0001")).toBe("Asking you");
+    expect(
+      $('.vf-chat-row[data-spark="sp-kiwi0001"] .vf-chat-row-dot')?.getAttribute("data-mark"),
+    ).toBe("needs");
+    expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Kiwi's thread");
+    expect(words($(".vf-chat-thread-line"))).toBe("Kiwi is asleep Wake");
+  });
 
   it("draws the catalog's rows with the product's own marks: Vela's need orange, Lyra's unread thread cyan, and Kiwi's ended need still orange (SP-1d)", async () => {
     await plate("list");
@@ -455,6 +527,100 @@ describe("the field board, as one window reads it (MF-1)", () => {
   });
 });
 
+describe("the needs-you queue, as one window reads it (CP-3; needs.subscribe)", () => {
+  /** A client whose needs.subscribe hears `early` before it answers its snapshot, as a busy socket can. */
+  function client(snapshot: unknown, early: readonly unknown[]): FielddClient {
+    return {
+      subscribe: async (
+        method: string,
+        _params: unknown,
+        onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
+      ) => {
+        expect(method).toBe("needs.subscribe");
+        for (const payload of early) onEvent(payload, "delta");
+        return { subId: "s-1", snapshot, unsubscribe: () => undefined };
+      },
+    } as unknown as FielddClient;
+  }
+
+  it("reads fieldd's list item by item, its snapshot first and a change heard before it after (the window side of EL9)", async () => {
+    const heard: string[][] = [];
+    const listed = NEEDS_LIST as { items: unknown[] };
+    const stop = await sparksPortOver(
+      client({ items: [...listed.items, { id: "ny-bad", kind: 7 }] }, [{ items: [] }]),
+    ).watchNeeds((items) => heard.push(items.map((each) => each.kind)));
+    // the one it cannot read is passed over, and the rest stand; the early frame waited behind the snapshot
+    expect(heard).toEqual([["question", "held-send", "held-spawn", "agent-ask"], []]);
+    stop();
+  });
+
+  it("reads a frame with no list as no items, never a blank thrown", async () => {
+    const heard: number[] = [];
+    await sparksPortOver(client({ items: "nope" }, [42])).watchNeeds((items) =>
+      heard.push(items.length),
+    );
+    expect(heard).toEqual([0, 0]);
+  });
+
+  it("answers an item by its act's place (needs.answer {item, choice}), and reads the item fieldd hands back", async () => {
+    const fixture = (name: string): unknown =>
+      JSON.parse(
+        readFileSync(
+          join(dirname(fileURLToPath(import.meta.url)), `../../contracts/fixtures/${name}`),
+          "utf8",
+        ),
+      );
+    const params = fixture("needs-answer-params.valid.json") as { item: string; choice: number };
+    const asked: unknown[] = [];
+    const answering = {
+      request: async (method: string, body: unknown) => {
+        asked.push([method, body]);
+        return fixture("needs-answer-result.valid.json");
+      },
+    } as unknown as FielddClient;
+    const item = await sparksPortOver(answering).answer(params.item, params.choice);
+    // the act travels by its place, never its word, so a rewording is no wire change
+    expect(asked).toEqual([["needs.answer", params]]);
+    expect([item.state, item.answer?.choice, item.answer?.told]).toEqual(["answered", 0, false]);
+    // a reply that is not an item is a refusal thrown, never a guess
+    const garbled = { request: async () => ({ item: { id: 7 } }) } as unknown as FielddClient;
+    await expect(sparksPortOver(garbled).answer(params.item, 0)).rejects.toThrow();
+  });
+});
+
+describe("whether a spark has worked, as one window reads it (TU-1, Q1; the window side of EL9)", () => {
+  const golden = (name: string): unknown =>
+    JSON.parse(
+      readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), `../../contracts/fixtures/${name}`),
+        "utf8",
+      ),
+    );
+
+  it("reads fieldd's sparks and board as their goldens say them: new for a spark that has never worked, never for one that has or says neither", async () => {
+    const asked: string[] = [];
+    const client = {
+      request: async (method: string) => {
+        asked.push(method);
+        return golden("compose-sparks-list.turned.json");
+      },
+    } as unknown as FielddClient;
+    const sparks = await sparksPortOver(client).list();
+    expect(asked).toEqual(["compose.sparks.list"]);
+    expect(sparks.map((each) => each.turnedAt)).toEqual([
+      "2026-11-01T08:40:12.000Z",
+      null,
+      undefined,
+    ]);
+    const board = new FieldBoard();
+    expect(board.apply(golden("agent-field-snapshot.turned.json"), "snapshot")).toBe(true);
+    const entries = sparkEntriesOf(sparks, board.rows());
+    expect(
+      Object.fromEntries(entries.map((entry) => [entry.spark.name, sparkIsNew(entry)])),
+    ).toEqual({ Vela: false, Lyra: true, Juno: false });
+  });
+});
+
 /** A port the test drives: the list it answers, and the board it moves. */
 function scripted(listed: SparkSummary[]) {
   const port = {
@@ -464,6 +630,10 @@ function scripted(listed: SparkSummary[]) {
     revision: 0,
     woke: [] as string[],
     refuse: null as string | null,
+    /** the queue's frames, once its subscribe answered: whole, as needs.subscribe sends them */
+    needs: null as ((items: readonly NeedsItem[]) => void) | null,
+    /** the queue's first answer: its snapshot, or a refusal (an older fieldd has no needs.subscribe) */
+    queue: [] as readonly NeedsItem[] | Error,
     /** a wake that takes its time: open answers once this settles */
     held: null as Promise<void> | null,
   };
@@ -478,6 +648,18 @@ function scripted(listed: SparkSummary[]) {
       return () => {
         port.frame = null;
       };
+    },
+    watchNeeds: async (onItems) => {
+      if (port.queue instanceof Error) throw port.queue;
+      port.needs = onItems;
+      onItems(port.queue);
+      return () => {
+        port.needs = null;
+      };
+    },
+    // the card's answers are needs-card.test.tsx's
+    answer: async () => {
+      throw new Error("nothing is answered here");
     },
     onReconnected: () => () => undefined,
     open: async (id) => {
@@ -520,6 +702,21 @@ describe("Chat, live (the feed and its acts)", () => {
     const after = port.lists;
     await act(async () => move([{ ...VELA_ASKS, revision: 3, lastActivityAt: AT }]));
     expect(port.lists).toBe(after);
+  });
+
+  it("asks the list again once when a spark's own run first works, and not for a later frame of the same time (D5)", async () => {
+    const { port, door, move } = scripted([VELA]);
+    stop = startSparksFeed(door);
+    mount(<Chat />);
+    await settle();
+    const own = row({ runtimeRunId: "run-Vela", spark: VELA.id, turnedAt: null });
+    await act(async () => move([own]));
+    const lists = port.lists;
+    // the row's push says the first turn: the spark's own record is read again, so its fact follows the row's
+    await act(async () => move([{ ...own, revision: 2, turnedAt: AT }]));
+    expect(port.lists).toBe(lists + 1);
+    await act(async () => move([{ ...own, revision: 3, turnedAt: AT, lastActivityAt: AT }]));
+    expect(port.lists).toBe(lists + 1);
   });
 
   it("mounts an awake spark's own pane as its thread, with no Show (SP-1d)", async () => {
@@ -642,6 +839,39 @@ describe("Chat, live (the feed and its acts)", () => {
     act(() => root?.render(<Chat />));
     await settle();
     expect(dot()).toBeNull();
+  });
+
+  it("reads the queue beside the board: an item for a spark is its word and its dot, and leaves with them (CP-3)", async () => {
+    const { port, door, move } = scripted([VELA, KIWI]);
+    stop = startSparksFeed(door);
+    mount(<Chat />);
+    await settle();
+    await act(async () => move([row({ runtimeRunId: "run-Vela", spark: "sp-vela0001" })]));
+    const status = (id: string): string =>
+      words($(`.vf-chat-row[data-spark="${id}"] .vf-chat-row-status`));
+    const dot = (id: string): string | null =>
+      $(`.vf-chat-row[data-spark="${id}"] .vf-chat-row-dot`)?.getAttribute("data-mark") ?? null;
+    expect(status("sp-kiwi0001")).toBe("Asleep");
+    await act(async () => port.needs?.([KIWI_HOLDS]));
+    expect(status("sp-kiwi0001")).toBe("Needs your OK");
+    expect(dot("sp-kiwi0001")).toBe("needs");
+    expect(status("sp-vela0001")).toBe("Ready");
+    // answered (here or in another window): the queue's next frame has it gone, and the word goes with it
+    await act(async () => port.needs?.([]));
+    expect(status("sp-kiwi0001")).toBe("Asleep");
+  });
+
+  it("leaves the list as the board says it when an older fieldd has no queue: no item, never a guess (CP-3)", async () => {
+    const { port, door } = scripted([VELA, KIWI]);
+    port.queue = Object.assign(new Error("no such method: needs.subscribe"), { code: "NOT_FOUND" });
+    stop = startSparksFeed(door);
+    mount(<Chat />);
+    await settle();
+    expect(rows().map((r) => words(r.querySelector<HTMLElement>(".vf-chat-row-status")))).toEqual([
+      "Asleep",
+      "Hello",
+    ]);
+    expect($(".vf-chat-row-dot")).toBeNull();
   });
 
   it("wakes an asleep spark through compose.sparks.open, and reads its record again", async () => {

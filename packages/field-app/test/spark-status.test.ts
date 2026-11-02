@@ -1,9 +1,10 @@
 /**
- * SP-1b — Chat's reading of a spark (`chat/spark-status.ts`; DESIGN.md §8 "Chat's list", the status as SP-1b reads
- * it; CH-D1, CH-D3, CH-D4). Pure: the sparks fieldd keeps and the field board's rows in, the words out — each status
- * the board can certify, the first that holds, and never one it cannot.
+ * SP-1b, CP-3 — Chat's reading of a spark (`chat/spark-status.ts`; DESIGN.md §8 "Chat's list", the status as SP-1b
+ * reads it, as amended at CP-3; CH-D1, CH-D3, CH-D4, CP3-D7, CP3-D8). Pure: the sparks fieldd keeps, the field board's
+ * rows and the needs-you queue's items in, the words and the facts out — each status the board or the queue can
+ * certify, the first that holds, and never one they cannot.
  */
-import type { AgentFieldRow, SparkSummary } from "@vibefield/contracts";
+import type { AgentFieldRow, NeedsItem, SparkSummary } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
   activityWords,
@@ -58,6 +59,46 @@ function agent(over: Partial<AgentFieldRow> = {}): AgentFieldRow {
 
 const blocker = (kind: string) => ({ id: `b-${kind}`, kind, since: AT });
 
+/** One of the needs-you queue's open items for Vela, as needs.subscribe says it (fieldd's own words). */
+function item(over: Partial<NeedsItem> & Pick<NeedsItem, "id" | "kind">): NeedsItem {
+  return {
+    state: "open",
+    from: { name: "Vela", session: "run-vela", spark: "sp-vela0001" },
+    spark: "sp-vela0001",
+    asked: AT,
+    ...over,
+  };
+}
+
+const QUESTION = item({
+  id: "ny-question01",
+  kind: "question",
+  words: "Push the fix?",
+  choices: ["Push", "Not now"],
+});
+const HELD_SEND = item({
+  id: "ny-heldsend01",
+  kind: "held-send",
+  words: "run the tests",
+  choices: ["Allow", "Not now"],
+  to: { session: "run-his", name: "claude·2" },
+});
+const HELD_SPAWN = item({
+  id: "ny-heldspawn1",
+  kind: "held-spawn",
+  choices: ["Allow one more", "Not now"],
+  live: 8,
+});
+/** An agent Vela started asks, in its own pane: listed with where to answer it. */
+const agentAsk = (ask: string, session = "run-a"): NeedsItem =>
+  item({
+    id: `ny-ask${ask.slice(0, 6)}${session.slice(-1)}`,
+    kind: "agent-ask",
+    ask,
+    from: { name: "claude·2", session },
+  });
+const ASLEEP = spark({ session: { runtimeRunId: "run-vela", live: false } });
+
 describe("the status, the first that holds (DESIGN.md §8)", () => {
   it("is Hello before its first session, and Asleep while its session is not running", () => {
     const { session: _none, ...hatched } = spark();
@@ -102,6 +143,152 @@ describe("the status, the first that holds (DESIGN.md §8)", () => {
     expect(sparkStatusOf(spark(), row(), [])).toBe("ready");
     expect(sparkStatusOf(spark(), row({ status: "unknown" }), [])).toBe("hello");
     expect(sparkStatusOf(spark(), null, [])).toBe("hello");
+  });
+});
+
+describe("the needs-you queue's items (CP-3; DESIGN.md §8 \"Chat's list\", the status as amended)", () => {
+  it("says a spark with an open question is Asking you, even asleep (CP3-D7: an answer wakes it)", () => {
+    expect(sparkStatusOf(ASLEEP, null, [], [QUESTION])).toBe("asking");
+    expect(sparkStatusOf(spark(), row({ alive: false }), [], [QUESTION])).toBe("asking");
+    // nor is a spark with something waiting on you Hello
+    const { session: _none, ...hatched } = spark();
+    expect(sparkStatusOf(hatched, null, [], [QUESTION])).toBe("asking");
+    // awake and idle, the item outranks Ready, and an agent it started at work
+    expect(sparkStatusOf(spark(), row(), [agent({ status: "working" })], [QUESTION])).toBe(
+      "asking",
+    );
+    const [entry] = sparkEntriesOf([ASLEEP], [], { items: [QUESTION] });
+    expect(entry?.needsYou).toBe(true);
+    expect(entry?.items).toEqual([QUESTION]);
+  });
+
+  it("says a held send, a held spawn or an agent's permission is Needs your OK, and an agent's question Asking you", () => {
+    expect(sparkStatusOf(spark(), row(), [], [HELD_SEND])).toBe("approval");
+    expect(sparkStatusOf(spark(), row(), [], [HELD_SPAWN])).toBe("approval");
+    expect(sparkStatusOf(spark(), row(), [], [agentAsk("permission")])).toBe("approval");
+    expect(sparkStatusOf(spark(), row(), [], [agentAsk("question")])).toBe("asking");
+    // the oldest first: fieldd lists them oldest asked first
+    expect(sparkStatusOf(spark(), row(), [], [HELD_SEND, QUESTION])).toBe("approval");
+  });
+
+  it("still says its own run's blocker first, while its session runs", () => {
+    const asks = row({ status: "blocked", blockers: [blocker("permission")] });
+    expect(sparkStatusOf(spark(), asks, [], [QUESTION])).toBe("approval");
+    // a run that has stopped waits on no one: the item's word
+    expect(sparkStatusOf(spark(), { ...asks, alive: false }, [], [HELD_SEND])).toBe("approval");
+    expect(sparkStatusOf(spark(), { ...asks, alive: false }, [], [QUESTION])).toBe("asking");
+  });
+
+  it("says an item of a kind it never heard of still needs you, in the safe word", () => {
+    const gate = item({ id: "ny-gate000001", kind: "gate", state: "waiting", choices: ["Push"] });
+    expect(sparkStatusOf(spark(), row(), [], [gate])).toBe("approval");
+    expect(sparkEntriesOf([spark()], [row()], { items: [gate] })[0]?.needsYou).toBe(true);
+  });
+
+  it("reads the asks of its own run once, as its row's blocker; an agent it started asking is its item", () => {
+    const own = agentAsk("question", "run-vela");
+    const theirs = agentAsk("permission");
+    const asks = row({ status: "blocked", blockers: [{ id: "q-1", kind: "question", since: AT }] });
+    const [entry] = sparkEntriesOf([spark()], [asks], { items: [own, theirs] });
+    expect(entry?.items).toEqual([theirs]);
+    expect(entry?.status).toBe("asking");
+    // before the board is read, the record names its own run: its ask is still not an item
+    const [unread] = sparkEntriesOf([spark()], [], { items: [own] });
+    expect(unread?.items).toEqual([]);
+    expect(unread?.needsYou).toBe(false);
+    // a question the spark itself asked (ask_user) is from its own run too, and is its item
+    expect(sparkEntriesOf([spark()], [row()], { items: [QUESTION] })[0]?.items).toEqual([QUESTION]);
+  });
+
+  it("takes only its own: an item for another spark, or for no spark (a person's own run asking), is not its", () => {
+    const lyras = item({ id: "ny-lyra000001", kind: "question", spark: "sp-lyra0001" });
+    const { spark: _none, ...nobodys } = agentAsk("permission", "run-his");
+    const [entry] = sparkEntriesOf([spark()], [row()], { items: [lyras, nobodys] });
+    expect(entry?.items).toEqual([]);
+    expect(entry?.status).toBe("ready");
+  });
+
+  it("keys each need once for the views track's note: its own run's blockers while it runs, then its items", () => {
+    const asks = row({ status: "blocked", blockers: [{ id: "q-1", kind: "question", since: AT }] });
+    const keys = (rows: AgentFieldRow[], items: NeedsItem[] = []) =>
+      sparkEntriesOf([spark()], rows, { items })[0]?.needs;
+    expect(keys([row()])).toEqual([]);
+    expect(keys([asks], [QUESTION, HELD_SEND])).toEqual([
+      "run-vela:q-1",
+      "ny-question01",
+      "ny-heldsend01",
+    ]);
+    // blocked with no blocker named is one need of its run
+    expect(keys([row({ status: "blocked" })])).toEqual(["run-vela:blocked"]);
+    // a run that has stopped waits on no one
+    expect(keys([{ ...asks, alive: false }], [QUESTION])).toEqual(["ny-question01"]);
+  });
+});
+
+describe("what a spark's session is doing, read from the session, never from its word (CP-3; critique 7)", () => {
+  it("reads awake from its session: its own run alive on the board, else its record", () => {
+    const awake = (record: SparkSummary, rows: AgentFieldRow[], items: NeedsItem[] = []) =>
+      sparkEntriesOf([record], rows, { items })[0]?.awake;
+    expect(awake(spark(), [row()])).toBe(true);
+    expect(awake(spark(), [])).toBe(true);
+    expect(awake(spark(), [row({ alive: false })])).toBe(false);
+    expect(awake(ASLEEP, [])).toBe(false);
+    // an item's word stands over Asleep; the spark still sleeps
+    const [entry] = sparkEntriesOf([ASLEEP], [], { items: [QUESTION] });
+    expect(entry?.status).toBe("asking");
+    expect(entry?.awake).toBe(false);
+  });
+
+  it("says it waits on you in its pane (what stops Send) only for its own run's blocker while it runs — never for an item", () => {
+    const blocked = (rows: AgentFieldRow[], items: NeedsItem[] = []) =>
+      sparkEntriesOf([spark()], rows, { items })[0]?.blocked;
+    expect(blocked([row({ status: "blocked", blockers: [blocker("permission")] })])).toBe(true);
+    expect(blocked([row({ status: "blocked" })])).toBe(true);
+    expect(
+      blocked([row({ alive: false, status: "blocked", blockers: [blocker("question")] })]),
+    ).toBe(false);
+    const [card] = sparkEntriesOf([spark()], [row()], { items: [QUESTION] });
+    expect(card?.needsYou).toBe(true);
+    expect(card?.blocked).toBe(false);
+  });
+
+  it("hears a spark only from its own run's row: on the board, alive, watched, saying how it stands", () => {
+    const heard = (record: SparkSummary, rows: AgentFieldRow[], items: NeedsItem[] = []) =>
+      sparkEntriesOf([record], rows, { items })[0]?.heard;
+    expect(heard(spark(), [row()])).toBe(true);
+    expect(heard(spark(), [row({ status: "working" })])).toBe(true);
+    expect(heard(spark(), [row({ status: "blocked", blockers: [blocker("question")] })])).toBe(
+      true,
+    );
+    // not heard from yet: Hello's last rule
+    expect(heard(spark(), [row({ status: "unknown" })])).toBe(false);
+    expect(heard(spark(), [])).toBe(false);
+    // a run fieldd is waiting to resume says nothing yet
+    expect(heard(spark(), [row({ status: "unknown", pending: "resume-when-idle" })])).toBe(false);
+    expect(heard(spark(), [row({ pending: "resume-when-idle" })])).toBe(false);
+    // an agent it started at work is not its own run heard (Running is not heard)
+    expect(heard(spark(), [row({ status: "unknown" }), agent({ status: "working" })])).toBe(false);
+  });
+
+  it("does not hear a sleeping spark with an item until its run is: its word is Asking you before the wake and after it", () => {
+    const record = { ...ASLEEP };
+    expect(sparkEntriesOf([record], [row({ alive: false })], { items: [QUESTION] })[0]?.heard).toBe(
+      false,
+    );
+    // woken: fieldd names the new run, which the board has not shown yet
+    const woken = spark({ session: { runtimeRunId: "run-vela2", live: true } });
+    const [waking] = sparkEntriesOf([woken], [row({ alive: false })], { items: [QUESTION] });
+    expect(waking?.status).toBe("asking");
+    expect(waking?.heard).toBe(false);
+    const [up] = sparkEntriesOf(
+      [woken],
+      [row({ alive: false }), row({ runtimeRunId: "run-vela2" })],
+      {
+        items: [QUESTION],
+      },
+    );
+    expect(up?.status).toBe("asking");
+    expect(up?.heard).toBe(true);
   });
 });
 
@@ -179,20 +366,6 @@ describe("the list (CH-D1)", () => {
     );
     expect(entries[0]?.needsYou).toBe(true);
     expect(sparkEntriesOf([spark()], [row({ status: "working" })])[0]?.needsYou).toBe(false);
-  });
-
-  it("says a turn was seen while the spark is at work or waits on you, its run spent tokens, or the window saw one", () => {
-    const seen = (rows: AgentFieldRow[], turnsSeen?: ReadonlySet<string>) =>
-      sparkEntriesOf([spark()], rows, turnsSeen)[0]?.turnSeen;
-    expect(seen([row()])).toBe(false);
-    expect(seen([row({ usage: { cumulativeTokens: 0 } })])).toBe(false);
-    expect(seen([row({ status: "working" })])).toBe(true);
-    expect(seen([row(), agent({ status: "working" })])).toBe(true);
-    expect(seen([row({ status: "blocked", blockers: [blocker("question")] })])).toBe(true);
-    expect(seen([row({ usage: { cumulativeTokens: 18_400 } })])).toBe(true);
-    // the same idle run with nothing counted (fieldd re-attached it), after the window saw a turn
-    expect(seen([row()], new Set(["sp-vela0001"]))).toBe(true);
-    expect(seen([row()], new Set(["sp-lyra0001"]))).toBe(false);
   });
 });
 

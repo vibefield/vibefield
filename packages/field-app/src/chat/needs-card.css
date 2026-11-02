@@ -1,0 +1,221 @@
+/* ── THE NEEDS-YOU CARD (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card; the Sparks page's `.k-card.ask`) ──
+   One of the thread's items, standing in the foot's overlay by the items' one rule (`.vf-chat-items`, chat.css): solid
+   chrome, corners 16, padding 14 16 and the island shadow, as the hello's; ringed 1.5 in the orange at 75% while it
+   waits on you (`data-waits`), the strong hairline once answered here or once its item no longer waits. Its rows stand
+   5 apart. It rises in over 240ms on the island curve from 8 below, and leaves in 180ms on plain ease, 4 down; with
+   reduced motion each way is a 120ms fade in place (`data-motion`, which its controller sets from the person's
+   setting, M6). Tokens only. */
+
+.vf-needs-card {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+  animation: vf-needs-in 240ms var(--vf-ease-island) both;
+}
+
+.vf-needs-card[data-waits] {
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--vf-orange) 75%, transparent),
+    var(--vf-shadow-island);
+}
+
+.vf-needs-card[data-leaving] {
+  animation: vf-needs-out 180ms ease both;
+}
+
+.vf-needs-card[data-motion="reduced"] {
+  animation: vf-needs-fade-in 120ms ease both;
+}
+
+.vf-needs-card[data-motion="reduced"][data-leaving] {
+  animation: vf-needs-fade-out 120ms ease both;
+}
+
+/* the keyboard on the card itself (an act pressed, or a leaving card's place taken): the kit's ring, by keyboard */
+.vf-needs-card:focus {
+  outline: none;
+}
+
+.vf-needs-card:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+@keyframes vf-needs-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes vf-needs-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes vf-needs-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes vf-needs-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* the eyebrow: 10.5 mono capitals, semibold, tracked 0.06em, in the attention ink (tertiary once it waits on no one);
+   "1 of 3" at its right in data small, tertiary */
+.vf-needs-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vf-needs-eyebrow {
+  min-width: 0;
+  font-family: var(--vf-font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--vf-ink-attention);
+  overflow-wrap: anywhere;
+}
+
+.vf-needs-card:not([data-waits]) .vf-needs-eyebrow {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-needs-place {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--vf-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the question, 14/500 in primary ink at 1.45; the held words, 13 regular in secondary ink at 1.45, "and 2 more" in
+   tertiary. Six lines each at most; past that each scrolls within itself under the scroll fade (§4), never past its
+   own box into the pane under it */
+.vf-needs-question,
+.vf-needs-words {
+  max-height: calc(6 * 1.45em);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.vf-needs-question::-webkit-scrollbar,
+.vf-needs-words::-webkit-scrollbar {
+  display: none;
+}
+
+.vf-needs-question[data-overflow],
+.vf-needs-words[data-overflow] {
+  padding-bottom: var(--vf-scroll-fade);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);
+}
+
+.vf-needs-question {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vf-text-primary);
+  white-space: pre-line;
+}
+
+.vf-needs-words {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--vf-text-secondary);
+  white-space: pre-wrap;
+}
+
+.vf-needs-more {
+  color: var(--vf-text-tertiary);
+}
+
+/* the sub, 12.5 regular in tertiary ink at 1.3; a refusal under the words, the same in the attention ink */
+.vf-needs-sub,
+.vf-needs-refused {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-needs-refused {
+  color: var(--vf-ink-attention);
+}
+
+/* the acts: 8 further than the rows' 5, 8 apart, at the card's left; wrapped to a second row in a narrow thread and
+   never shrunk. The kit's buttons at the plate's size: 28 tall, corners 14, padded 0 12, 12.5/500 */
+.vf-needs-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.vf-needs-acts .vf-ui-button.vf-needs-act {
+  flex: none;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.vf-needs-acts .vf-ui-button.vf-needs-act[aria-disabled="true"] {
+  pointer-events: none;
+}
+
+/* answered here: one line, 4 further than the rows' 5 — `check` 13, then what you said, 12.5/500 in tertiary ink;
+   an act that could not be done in the attention ink, with `exclaim` */
+.vf-needs-said {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding-top: 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-needs-said[data-tone="failed"] {
+  color: var(--vf-ink-attention);
+}
+
+.vf-needs-said .vf-glyph {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* what it asks, announced once as it arrives: read, never seen */
+.vf-needs-arrived {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

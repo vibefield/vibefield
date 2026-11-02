@@ -958,44 +958,36 @@ export function rowsVerdict({ mode, begin, end, served, fatal = null }) {
 
 // ─── Simulator.app: quit only when PROVEN the run's ───────────────────────────────────────────────────────────────────
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** `ps -o etime=` under LC_ALL=C (`[[dd-]hh:]mm:ss`, whole seconds since the start) → seconds; null when unreadable. */
+export function parseEtime(text) {
+  const m = /^\s*(?:(\d+)-)?(?:(\d+):)?(\d+):(\d{2})\s*$/u.exec(String(text));
+  if (m === null) return null;
+  return ((Number(m[1] ?? 0) * 24 + Number(m[2] ?? 0)) * 60 + Number(m[3])) * 60 + Number(m[4]);
+}
 
-/** `ps -o lstart=` under LC_ALL=C (`Fri Oct 31 03:30:12 2026`, local time) → ms; null when unreadable. */
-export function parseLstart(text) {
-  const m =
-    /^\s*[A-Z][a-z]{2}\s+([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})\s+(\d{4})\s*$/u.exec(
-      String(text),
-    );
-  const month = m === null ? -1 : MONTHS.indexOf(m[1]);
-  if (m === null || month < 0) return null;
-  return new Date(
-    Number(m[6]),
-    month,
-    Number(m[2]),
-    Number(m[3]),
-    Number(m[4]),
-    Number(m[5]),
-  ).getTime();
+/** Item 146 (2026-11-01) — when a process started, from its `etime` and the clock read just before and just after `ps`
+ * was asked: `{ from, to }`, the start strictly between, or null when unreadable. Zone-free: `lstart` is local wall time
+ * with no offset, so in DST's repeated hour (the fall back) its text names two instants, and its parse took the first,
+ * an hour early (PORTALS's find: a Simulator.app launched between 09:00 and 10:00Z on 2026-11-01 read "started before
+ * ARMED", FOREIGN, exit 75). `etime` is a difference of whole seconds, the clock's and the start's each truncated
+ * (measured on macOS's ps, 2026-11-01 09:38Z: "00:02" for a process 1.5 s old), so it reads up to a second either way:
+ * the start is after `before - (etime + 1) s` and before `after - (etime - 1) s`. */
+export function etimeStart(text, before, after) {
+  const s = parseEtime(text);
+  return s === null ? null : { from: before - (s + 1) * 1000, to: after - (s - 1) * 1000 };
 }
 
 export const simulatorExe = (devDir) =>
   join(devDir, "Applications/Simulator.app/Contents/MacOS/Simulator");
 
 /** P5: a running Simulator.app is the run's only when `pgrep -x Simulator` finds exactly one, its executable is the vetted
- * Xcode's (`ps -o comm=`, as named or by its real path), it started after ARMED — `lstart` keeps whole seconds, so a
- * start in ARMED's own second is NOT after it — and it started no earlier than the run's FIRST launch since its own last
- * quit (`launchedAt`: the door's show-app, or a press of Show it, Boot or Try again through the gate; null — none since,
- * so whatever runs now was started by another), within `lstart`'s second. A count never proves it: after the run quits
+ * Xcode's (`ps -o comm=`, as named or by its real path), it started after ARMED — the start's earliest (`start.from`,
+ * from `etimeStart`: whole seconds, so a start that may be within a second of ARMED is NOT after it) — and it did not
+ * start before the run's FIRST launch since its own last quit (`launchedAt`: the door's show-app, or a press of Show it,
+ * Boot or Try again through the gate; null — none since, so whatever runs now was started by another): the start's
+ * latest (`start.to`) is not before that launch. A count never proves it: after the run quits
  * its app, a Simulator.app another tool starts is not the run's. Never a stored pid. */
-export function simulatorProof({
-  pids,
-  comm,
-  lstart,
-  devDir,
-  realExe = null,
-  armedAt,
-  launchedAt,
-}) {
+export function simulatorProof({ pids, comm, start, devDir, realExe = null, armedAt, launchedAt }) {
   if (pids.length === 0) return { running: 0, own: false, why: "Simulator.app is not running" };
   if (pids.length !== 1)
     return { running: pids.length, own: false, why: `${pids.length} Simulator processes run` };
@@ -1006,11 +998,11 @@ export function simulatorProof({
       own: false,
       why: "its executable is not the vetted Xcode's Simulator.app",
     };
-  const started = parseLstart(lstart);
-  if (started === null) return { running: 1, own: false, why: "its start is unreadable" };
+  if (start === null || start === undefined)
+    return { running: 1, own: false, why: "its start is unreadable" };
   // the three below PROVE it another's (`foreign`): the one Simulator running, and not the run's — so the run's own is
   // not running. Two Simulators, another executable or an unreadable start prove nothing: the run's may be among them
-  if (started < armedAt)
+  if (start.from < armedAt)
     return { running: 1, own: false, foreign: true, why: "it started before ARMED" };
   if (launchedAt === null || launchedAt === undefined)
     return {
@@ -1019,7 +1011,7 @@ export function simulatorProof({
       foreign: true,
       why: "the run launched no Simulator.app since its last quit",
     };
-  if (started < launchedAt - 1_000)
+  if (start.to < launchedAt)
     return { running: 1, own: false, foreign: true, why: "it started before the run's launch" };
   return { running: 1, own: true, pid: pids[0] };
 }
@@ -1211,15 +1203,23 @@ export async function simulatorNow(run, deps) {
     armedAt: run.armedAt,
     launchedAt: run.simulator.launchedAt,
   };
-  if (pids.length !== 1) return simulatorProof({ ...proof, comm: "", lstart: "" });
+  if (pids.length !== 1) return simulatorProof({ ...proof, comm: "", start: null });
   const c = { env: { ...deps.env, LC_ALL: "C" }, timeoutMs: 10_000 };
   const comm = await deps.exec(PS, ["-o", "comm=", "-p", String(pids[0])], c);
-  const lstart = await deps.exec(PS, ["-o", "lstart=", "-p", String(pids[0])], c);
+  // item 146: the start from `etime` between two reads of the clock, never `lstart`'s local wall time
+  const before = deps.now();
+  const etime = await deps.exec(PS, ["-o", "etime=", "-p", String(pids[0])], c);
+  const after = deps.now();
   let realExe = null;
   try {
     realExe = deps.realpath(simulatorExe(run.devDir));
   } catch {}
-  return simulatorProof({ ...proof, comm: comm.stdout, lstart: lstart.stdout, realExe });
+  return simulatorProof({
+    ...proof,
+    comm: comm.stdout,
+    start: etimeStart(etime.stdout, before, after),
+    realExe,
+  });
 }
 
 /** Simulator.app at teardown: a launch the run asked for may still be on its way (LaunchServices answers `open -a` before

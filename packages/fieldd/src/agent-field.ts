@@ -317,8 +317,13 @@ function stringAt(source: Record<string, unknown> | undefined, key: string): str
  * `kind: "permission"` arm beside a `requestId` we drop) — NOT from a `tool`
  * at the blocker's root, which nothing upstream writes. `input`, `questions`
  * and `detail` are dropped on purpose: what a run is waiting ON is the field's
- * business, what it is waiting to be TOLD is not. */
-function projectBlocker(blocker: { id: string; kind: string; since: string }): AgentFieldBlocker {
+ * business, what it is waiting to be TOLD is not. The needs-you queue's agent
+ * asks read the tool here too (CP-3): one authority for a blocker's tool. */
+export function projectBlocker(blocker: {
+  id: string;
+  kind: string;
+  since: string;
+}): AgentFieldBlocker {
   const tool = stringAt(objectAt(blocker, "permission"), "tool");
   return {
     id: blocker.id,
@@ -465,6 +470,10 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
     // ST-D5 — the person's Stop, on every audience's row: a stage and its clocks, content-free,
     // REBUILT from its named fields as the origin is, so nothing riding its passthrough travels
     ...(summary.stop !== undefined ? { stop: stopOf(summary.stop) } : {}),
+    // TU-1 — whether the run has worked (a time, or null kept as null) and the profile it is filed under: each a
+    // whole value, a clock and an id, so nothing rides a passthrough
+    ...(summary.turnedAt !== undefined ? { turnedAt: summary.turnedAt } : {}),
+    ...(summary.profileSet !== undefined ? { profileSet: summary.profileSet } : {}),
   };
 }
 

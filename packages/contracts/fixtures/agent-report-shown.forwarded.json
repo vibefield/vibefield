@@ -1,0 +1,13 @@
+{
+  "ids": ["run-studio-q"],
+  "device": "dev-desktop-b",
+  "forward": {
+    "onBehalfOf": {
+      "clientKind": "ios",
+      "deviceId": "dev-desktop-a",
+      "windowId": "conn_7",
+      "userId": "u_01J9ABCDEFGHJKMNPQRSTVWXYZ",
+      "clientDeviceId": "dev-phone-1"
+    }
+  }
+}

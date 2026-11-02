@@ -1101,12 +1101,12 @@
           idempotent) → <b class="product">handler</b> → <b class="native">audit record</b>
         </div>
         <div class="stats">
-          <!-- 2026-10-04: 56 rows = 8 agent.* · 32 agents.* · 16 index.* (methods.ts; SP-6 added index.timeline and index.session.subscribe); 54 on 2026-10-03, 46 when QL wrote this -->
-          <div class="stat"><strong>56</strong><span>agent-plane doors</span></div>
+          <!-- 2026-11-01 (PG-3b, the 3b review [11]; recounted from methods.ts): 64 rows = 12 agent.* · 33 agents.* · 19 index.*, 43 local · 16 federate · 5 stream. 2026-10-04: 56 rows = 8 agent.* · 32 agents.* · 16 index.* (methods.ts; SP-6 added index.timeline and index.session.subscribe); 54 on 2026-10-03, 46 when QL wrote this -->
+          <div class="stat"><strong>64</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>8</strong><span>scopes that gate them</span></div>
           <div class="stat"><strong>15</strong><span>audited mutations</span></div>
-          <!-- 2026-10-03: 12 of them federate since DS-2 (2026-10-01); 0 when this page was written -->
-          <div class="stat"><strong>12</strong><span>that federate</span></div>
+          <!-- 2026-11-01 (PG-3b, the 3b review [11]): 16 federate, recounted from methods.ts, agent.reportShown the 16th (15 before it). 2026-10-03: 12 of them federate since DS-2 (2026-10-01); 0 when this page was written -->
+          <div class="stat"><strong>16</strong><span>that federate</span></div>
         </div>
         <div class="legend">
           <span><span class="badge tone-built">BUILT</span> in the code at the stated revision, cited.</span>
@@ -1196,6 +1196,10 @@
                   <code>local</code> · <code>sync</code> · <code>replicate</code> · <code>stream</code> ·
                   <code>federate</code> · <code>native-plane</code>. Every agent-plane door is
                   <code>local</code>.
+                  <em>Erratum 2026-11-01 (PG-3b; the 3b review [11]):</em> not since DS-2 (2026-10-01). The
+                  agent-plane doors are <code>local</code>, <code>stream</code> or <code>federate</code>: of the 64
+                  in <code>methods.ts</code> today, 43 are local, 16 federate (a foreign <code>device</code> forwards
+                  the call whole to its owner) and 5 stream.
                 </p>
               </div>
             </div>
@@ -1494,6 +1498,13 @@
               <code>audit.required(ctx, mutation, effect, describeOutcome)</code>, so the record is
               written around the act rather than after it, and the outcome names what actually happened.
               Fifteen doors are audited, over six target kinds.
+              <em>Corrected 2026-11-01 (CP-3, adding <code>needs-item</code>):</em> the count is stale, as the
+              Catalogue's is, and this page no longer keeps one: the table named seven target kinds before CP-3, and it
+              is not every audited act. The compose plane's doors are audited too: <code>compose.spark.hatch</code> and
+              <code>compose.spark.open</code> on a <code>spark</code>, and each tool call as
+              <code>tools.&lt;name&gt;</code> on its caller (the tool door's note, below), whose outcome since CP-3
+              names the needs-you item a call raised (<code>item</code>: <code>ask_user</code>'s, or a held send's or
+              spawn's), never its words.
             </p>
             <div class="table-wrap">
               <table class="reference-table">
@@ -1506,6 +1517,7 @@
                   <tr><td><span class="route">index</span></td><td><p><code>index.enroll</code></p></td></tr>
                   <tr><td><span class="route">index-runtime</span></td><td><p><code>index.retire</code></p></td></tr>
                   <tr><td><span class="route">index-session</span></td><td><p><code>index.ticket.mint</code> — AR-8b: the session's id (its digest when the id is not a safe audit identity) and the grant's expiry, never the grant; RO-13 (2026-10-04): and the grant's scopes</p></td></tr>
+                  <tr><td><span class="route">needs-item</span></td><td><p><code>needs.answer</code> (CP-3) — the act by its place among the item's acts, never the words; the outcome names the item's kind, the act's outcome, whether the spark was told, and the run an answer woke</p></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1618,12 +1630,18 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent.reportShown</span></td>
-                    <td><p><code>AgentReportShownParams {ids: string[]}</code> → <code>{reported: true}</code></p></td>
-                    <td><p><code>agent.observe</code> · local only</p></td>
+                    <td><p><code>AgentReportShownParams {ids: string[], device?}</code> → <code>{reported: true}</code></p></td>
+                    <td><p><code>agent.observe</code> · <code>federate</code> (PG-3b, 2026-11-01)</p></td>
                     <td><p>yes</p></td>
                     <td><p>The monitor backend's unread acknowledgement, by MODEL id. The screen is the connection's
                       open model board, never an id supplied by the caller. No board: <code>PRECONDITION_FAILED
                       {state: "no-screen"}</code>. An empty list clears the report; closing the board forgets its screen.
+                      <em>Corrected 2026-11-01 (PG-3b; the 3b review [5]):</em> a connection's own screen is its model
+                      board (this desktop's windows and shell) or its remote board (a phone), by its principal's kind
+                      (<code>SCREEN_BOARDS</code>), and is still transport-derived. On the owner, a report a peer daemon
+                      carries is a CARRIED screen. It is keyed by the envelope's <code>onBehalfOf</code> {deviceId,
+                      windowId}, which the carrying peer supplies on the wire, under that peer's connection,
+                      restrict-only, and it opens with no board on that connection (the as-built note below).
                       The marks are fieldd's (Q05, James, 2026-10-27): they outlive every screen, so a reload or a closed
                       Godview keeps them and a turn that ends with no board open is marked (puppeteer's ledger, since
                       0.3.0, 2026-10-28).
@@ -1637,9 +1655,52 @@
                       the door becomes <code>federate</code>, routed by <code>device</code> through the home with
                       <code>onBehalfOf</code>, and any connection holding a model-bearing board (local or remote) is a
                       screen, so the phone is one and unread stays the owner's mark. Not built: as built it is local only,
-                      and a phone holds no <code>model</code> board, so it cannot report until PG-2 and PG-3.</em></p></td>
+                      and a phone holds no <code>model</code> board, so it cannot report until PG-2 and PG-3.</em>
+                      <em>(The "Not built" clause is superseded 2026-11-01 by PG-3b, as built below.)</em>
+                      <em>As built 2026-11-01 (PG-3b; J2 (a), James 03:55Z; DS-L7 as amended that day; folded with the
+                      3b review the same day):</em> the door is <code>federate</code>, routed by <code>device</code>.
+                      Who is a screen goes by kind: a <code>remote</code> board is one for a phone alone, as
+                      <code>model</code> is for this desktop's windows. A plugin, a guest, an agent's MCP session or a
+                      peer daemon holding a board clears no mark. A phone reports another desktop's rows through its
+                      home, which carries the report only while that phone holds a
+                      <code>{projection: "remote", scope: "mesh"}</code> board there (else the same
+                      <code>no-screen</code> refusal, nothing carried). The owner keeps a carried report as a screen of
+                      its own, keyed by the envelope's <code>onBehalfOf</code> {deviceId, windowId} under the peer
+                      connection that carried it, restrict-only: two readers behind one home are two screens, a peer
+                      reaches only its own, and a carried report naming no <code>windowId</code> is refused. The
+                      owner's carried screens are bounded:
+                      at most <code>AGENT_FIELD.CARRIED_SCREENS_PER_PEER</code> (64) per peer connection, the next
+                      refused <code>{state: "no-screen", reason: "carried-cap"}</code>; gone when that connection's
+                      last <code>remote</code> board there (the home's hub upstream) closes, and when the connection
+                      closes. A hub that only resyncs re-attaches on the same connection, and the home carries its
+                      readers' reports again at that re-attach (<code>MeshBoard</code>'s
+                      <code>onUpstreamReady</code>), as it does at a re-dial. When a reader's mesh board at the home closes, the home sends each owner it reported to
+                      an empty report, in order behind anything it carried for that reader, so a re-subscribe's new
+                      report lands after it. An owner is dropped from that list only once a carry is known to land (an
+                      empty that fails keeps it owed). When the home's link to an owner answers a new dial (an owner
+                      restart, a network blip, a sleep), the home carries each reader's current report to it again, so
+                      the open card stays read. The replay reads what the phone shows when it is carried, so a report
+                      still in flight is the one replayed, and an empty the phone sent replays nothing even if its own
+                      carry failed. A report whose own carry failed is still the phone's ask and is the one replayed,
+                      unless the owner refused it for good (it runs without PG-3b, or its carried-cap); then the replay
+                      carries the report that stood before it. Not built: a close's empty that fails is logged
+                      (<code>fieldd.agents.screen_release_failed</code>) and not retried. Until the carrying connection
+                      or its upstream closes on the owner, that reader's carried screen stands, and its rows earn no
+                      unread mark there, in the owner's own windows too. A carried report acknowledges nothing:
+                      acknowledgement stays this desktop's own window's (Q06).
+                      A refusal's details say which kind it is (the 3b review [14]). <code>{state: "no-screen"}</code>
+                      is transient: no mesh board at the home right now, or a board that closed while the report
+                      waited, so it is sent again after the next open. The exception is
+                      <code>reason: "carried-cap"</code>: that is the owner's bound, not a missing board, so a sender
+                      records it once per device, as it does a <code>locality: "local"</code> refusal, and does not
+                      retry it on every open (the PG-3b fold check [3]). A refusal carrying
+                      <code>{locality: "local"}</code> means a home or an owner without PG-3b. The rules are
+                      <code>packages/fieldd/src/agent-screens.ts</code>'s; the door's hook around the carry is
+                      <code>ProductApi.wrapForward</code>. The kit's sender is PG-3e's.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
-                    <td><p><code>agent-model-daemon.test.ts</code>, <code>agent-monitor.test.ts</code></p></td>
+                    <td><p><code>agent-model-daemon.test.ts</code>, <code>agent-monitor.test.ts</code>,
+                      <code>agent-screens.test.ts</code>, <code>forward-hook.test.ts</code>,
+                      <code>peer-door.test.ts</code>, <code>mesh-board.e2e.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent.recordedLanes</span></td>
@@ -1652,12 +1713,12 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent.subscribe</span></td>
-                    <td><p><code>AgentSubscribeParams {projection?: "full" | "field" | "model" | "remote", scope?: "local" | "mesh", …}</code> → the projection's snapshot/deltas (full: whole <code>AgentListResult</code> frames). <em>PG-2 (2026-10-31):</em> <code>remote</code> replaced <code>desk</code>.</p></td>
+                    <td><p><code>AgentSubscribeParams {projection?: "full" | "field" | "model" | "remote", scope?: "local" | "mesh", …}</code> → the projection's snapshot/deltas (full: whole <code>AgentListResult</code> frames). <em>PG-2 (2026-10-31):</em> <code>remote</code> replaced <code>desk</code>. <em>TU-1 (2026-11-01):</em> a run carries <code>turnedAt</code> in every projection but the remote cut (whether its conversation has worked: the time fieldd first saw it take a turn, kept on its signed record; a resume carries the conversation's, and a resume from History is born with its birth's; <code>null</code> not yet, and an ask alone is no turn; absent from an older daemon, and from this one for a run whose record is older than TU-1, re-attached, pending or exited and read from that record, and for a resume of such a run, until fieldd sees that run take a turn: a live one is stamped then, and a pending or exited one stays absent). The field and model rows also carry <code>profileSet</code>, as the full frames' summaries already did: the Agent Profile the run is filed under (on the model row, <code>monitorRow.profileSet</code> is the backend's placement). The remote cut carries neither.</p></td>
                     <td><p><code>agent.observe</code></p></td>
                     <td><p>yes</p></td>
                     <td><p><code>runtime.onMonitorState / onMonitorRemoved / onMonitorNotification</code></p></td>
                     <td><span class="badge tone-built">Built</span></td>
-                    <td><p><code>agent-field-daemon.test.ts</code>, <code>agent-remote-cut.test.ts</code></p></td>
+                    <td><p><code>agent-field-daemon.test.ts</code>, <code>agent-remote-cut.test.ts</code>, <code>agent-field.test.ts</code>, <code>agent-session.test.ts</code></p></td>
                   </tr>
                 </tbody>
               </table>
@@ -1905,7 +1966,7 @@
                     <td><p><code>—</code> → <code>ComposeSparksListResult {sparks: SparkSummary[]}</code></p></td>
                     <td><p><code>agents.manage</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>nothing upstream: fieldd's verified records, each joined to the fold's runs. A summary carries its session's <code>runtimeRunId</code>, its pane while it has one, and <code>live</code> (awake while its process runs, asleep otherwise, CP-D14). A record that is unsigned, does not verify, does not parse, or is exposed to other users is set aside and never served.</p></td>
+                    <td><p>nothing upstream: fieldd's verified records, each joined to the fold's runs. A summary carries its session's <code>runtimeRunId</code>, its pane while it has one, and <code>live</code> (awake while its process runs, asleep otherwise, CP-D14). A record that is unsigned, does not verify, does not parse, or is exposed to other users is set aside and never served. <em>TU-1 (2026-11-01):</em> a summary carries <code>turnedAt</code>, from the signed record: the time fieldd first saw one of the spark's own sessions take a turn, <code>null</code> for a spark that has never worked (a hatch writes it), absent for one from before TU-1.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>compose-sparks.test.ts</code></p></td>
                   </tr>
@@ -1923,9 +1984,77 @@
                     <td><p><code>ComposeSparksOpenParams {spark}</code> → <code>ComposeSparksOpenResult {spark}</code></p></td>
                     <td><p><code>agents.manage</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p><p><em>Added 2026-11-01 (SP-1d):</em> one wake per spark. A second open while a wake is under way (another window's, or the shell's) is answered with that same wake, its run or its refusal, so two opens never wake one spark into two runs; each caller is still authorized and audited at the door. Not joined yet: a resume of the spark's session already under way through <code>agent.resume</code>. The daemon's resume wrapper (<code>daemon.ts</code>) reads its <code>PRECONDITION_FAILED</code> (state <code>resuming</code> or <code>replaced</code>) as a session that cannot be resumed, so the wake starts the spark again beside it; the fix is owed to that wrapper.</p></td>
+                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p><p><em>Added 2026-11-01 (SP-1d):</em> one wake per spark. A second open while a wake is under way (another window's, or the shell's) is answered with that same wake, its run or its refusal, so two opens never wake one spark into two runs; each caller is still authorized and audited at the door. Not joined yet: a resume of the spark's session already under way through <code>agent.resume</code>. The daemon's resume wrapper (<code>daemon.ts</code>) reads its <code>PRECONDITION_FAILED</code> (state <code>resuming</code> or <code>replaced</code>) as a session that cannot be resumed, so the wake starts the spark again beside it; the fix is owed to that wrapper.</p><p><em>Added 2026-11-01 (CP-3):</em> an answer to a sleeping spark's needs-you item (<a href="#cat-needs"><code>needs.answer</code></a>) wakes it through this same joined wake, so an answer and an open asked meanwhile are one wake and one run.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>compose-sparks.test.ts</code></p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 id="cat-needs">needs.* — the person's queue</h3>
+            <p class="section-note">
+              CP-3, the person (<code>draft/compose-plane/cp3-the-person.md</code>, CP3-D1…D8 ruled A 2026-10-31;
+              <code>packages/contracts/src/compose.ts</code>; fieldd's <code>tool-plane/rooms/you/</code>). The needs-you
+              queue (CP-D12) is fieldd's one list of what waits on the person: a spark's question
+              (<a href="#cat-compose-door"><code>ask_user</code></a>), a spark's first send into a session the person
+              started (CP-D3, CP3-D3 B: whatever that session's mode, until a permission mode is a fact fieldd reads in no
+              vendor's words), a spawn past a spark's 8 live agents (CP-D7, CP3-D4 A), and an agent's own ask, which is
+              listed with where to answer it and never answered here (CP3-D1 A, CP-L4). fieldd keeps one record per item
+              per user root (<code>LAYOUT.NEEDS_DIR</code>, 0600 files in a 0700 directory), each an HMAC-SHA256 under
+              <code>NEEDS_KEY_FILE</code>'s secret, made by the one signer the spark records and the sessions' input
+              queues use. A record that is unsigned, does not verify, does not parse, is exposed to other users, or names
+              another item than its file does (a record copied to another item's name, set aside as forged) is set
+              aside and never served. That holds against an edit, not against an agent that reads the key: the key is
+              0600 to the same uid, as the sparks' is (EL7). An agent's ask is derived from its run's blockers and never
+              kept. Chat's list and thread call these doors. They hold <code>agents.manage</code> and are
+              <code>local</code>, beside <code>compose.sparks.*</code> (CP3-D6 A), because an answer may start an agent or
+              send words on the person's behalf, an act of the person at this desktop. <code>approval.respond</code>
+              stays reserved for AR-6's answers to an agent's own asks, and the phone reaches none of these until PG
+              rules its scope. An item's <code>kind</code> and <code>state</code> are open words, so an item of a kind
+              this build never heard of still reads. Its acts' words are DESIGN.md §9's ("The person's queue's words").
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Door</th><th>Params → result</th><th>Scope</th><th>Idem</th><th>Wraps upstream</th><th>Status</th><th>Witness</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="route">needs.list</span></td>
+                    <td><p><code>—</code> → <code>NeedsListResult {items: NeedsItem[]}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>nothing upstream: the open items, oldest first, whole. An item is <code>{id, kind, state, from, spark?, asked, words?, cut?, choices?, count?, answer?}</code>; <code>answer</code> is an answered item's, as <code>needs.answer</code> hands it back, so no item this list holds carries one. <code>from</code> names who asks as fieldd names it: a spark by its name, a run by its title, else its agent's catalog label, else its id; <code>spark</code> is the thread that shows it (the asker, or the spark that started the asking agent); <code>choices</code> are its acts in order, absent for an agent's ask. A held send adds <code>to</code>, a held spawn <code>agent</code>, <code>folder</code> and <code>live</code>, an agent's ask <code>ask</code> and <code>tool</code>. What an Allow acts on (the held words, the resolved launch) stays in the record and never rides the wire. An unaudited read, as <code>compose.sparks.list</code> is.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>needs-doors.test.ts</code> · <code>needs-queue.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">needs.subscribe</span></td>
+                    <td><p><code>—</code> → snapshot, then frames, of <code>NeedsListResult</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>the list, whole, at open and on every change (state transfer, never edges). An item answered in one window leaves every window's list.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>needs-doors.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">needs.answer</span></td>
+                    <td><p><code>NeedsAnswerParams {item, choice}</code> → <code>NeedsAnswerResult {item}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p><code>choice</code> is the act's index into the item's <code>choices</code>, never its word, so rewording an act in DESIGN.md changes nothing here. Declarative: answered once, an item is answered for every window, and the same answer again answers it as it is; another is <code>PRECONDITION_FAILED {reason: "answered"}</code>. Two answers to one item at once are one: the second waits for the first. An agent's ask is <code>PRECONDITION_FAILED {reason: "in-its-pane"}</code>, a held send whose session ended before an answer is <code>PRECONDITION_FAILED {reason: "ended"}</code>, an act the item does not offer is <code>PRECONDITION_FAILED {reason: "no-such-act"}</code>, an item of a kind this fieldd cannot act on (an open word, as a newer build's record may carry) is <code>PRECONDITION_FAILED {reason: "unknown-kind"}</code>, and an id fieldd does not know is <code>NOT_FOUND</code>. <em>TU-1 (2026-11-01):</em> an Allow of a held send to a session fieldd cannot place yet, because it has not read the Agent Profiles (the tool plane's note, below), is <code>PRECONDITION_FAILED {reason: "profiles-unread"}</code>, retryable: nothing is spent, the item stays open, the spark is told nothing, and the same answer is taken once the monitor's first frame lands (<code>needs-queue.test.ts</code>). A question's answer is a fact. Allow queues a held send's words, marked as the spark's, and keeps the yes for that run until the run ends, through a fieldd restart that finds the answer's record kept (the one path where it is not is below). Allow one more starts the held spawn past the cap, with its tasks. Not now drops what waited. Each answer is told to the spark as one marked line through its input queue (DESIGN.md §9), and an answer to a sleeping spark resumes it through <code>compose.sparks.open</code>'s own wake (CP3-D7 A), so an answer and an open asked while it wakes are one wake and one run. The result's <code>answer</code> keeps the act apart from its telling: <code>outcome</code> is the act's (<code>done</code> or <code>failed</code>, open, with a <code>reason</code>), and <code>told</code> is false while the spark could not be woken, with <code>waits</code> saying why; it hears the answer when it wakes. An act a restart finds begun and never recorded done is never done again, and the spark is told that VibeField cannot tell whether it finished (DESIGN.md §9). An act that began stands once it is done, for every window and the spark, even when the record after it could not be written; a restart before that record is kept finds the act begun, so the spark may hear what the act did and, after the restart, that VibeField cannot tell whether it finished: words true in either order. On that path the restart keeps no yes, an Allow done and told included: the held send's uncertain fact also says the spark's later words to that session are held again, and they are (<code>needs-queue.test.ts</code>). Its answer reads <code>outcome: "failed"</code>, an act not recorded done, with that for its <code>reason</code>. Audited as <code>needs.answer</code> on a <code>needs-item</code> target, its choice by index and never the words, in the own-actions ledger; the outcome names the item's kind, the act's outcome, whether the spark was told, and the run an answer woke.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>needs-doors.test.ts</code> · <code>needs-queue.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">needs.notices.subscribe</span></td>
+                    <td><p><code>—</code> → snapshot <code>{notices: []}</code>, then frames of <code>NeedsNotices {notices: NeedsNotice[]}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>notify's carrier (CP3-D5 A). A frame carries the notices told since the last, each <code>{id, from, words, at}</code>, its words on one line of at most 140 characters. A notice is an event and is never kept: the snapshot is empty by design, and a window that opens later hears only what is told after it. Every window's status line says each. Electron main subscribes with its <code>shell-main</code> client, as TS-5's link notices do, and says one as an OS notice while no VibeField window is in front, never in a smoke; no IPC channel is added.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>needs-doors.test.ts</code> · <code>needs-notices.test.ts</code></p></td>
                   </tr>
                 </tbody>
               </table>
@@ -1958,29 +2087,49 @@
               (<code>tools.door.plain</code> with its reason, outcome <code>denied</code>). A named caller's list is the
               same for its whole session (MT-D4). Every call is held to its row again whatever the list showed (MT-L2),
               parsed by its schema, and held to the caller's Agent Profiles: a spark's record's, or the one a plain run
-              is filed under. Each call is written to the audit log as <code>tools.&lt;name&gt;</code> before it acts
+              is filed under. <em>Amended 2026-11-01 (TU-1):</em> a run is placed in an Agent Profile by one rule,
+              <code>profileSetOfRun</code> (<code>agent-index.ts</code>), for the plain run a door names and for every
+              session a room reaches: the profile it is filed under; else This Mac's for a run that names no persona;
+              else the profile listing its persona; else none, for a persona no profile lists. Until fieldd has read
+              the profiles (the monitor's first frame), a run filed under none that names a persona is not placed yet,
+              and nothing is refused for good on it: a door does not name it yet, so it is listed nothing and asked
+              again, as a run whose record does not verify is (its plain line's reason <code>profiles-unread</code>);
+              a room's call that names it is refused <code>unavailable</code>, retryably, and
+              <code>agents_list</code> leaves it out; the needs-you Allow of a send to it is refused
+              <code>PRECONDITION_FAILED {reason: "profiles-unread"}</code>, its item left open (<code>needs.answer</code>);
+              each until the frame places it. A plain
+              run the rule places in none with the profiles read is settled and holds no profile, and no spark reaches
+              a session in none. Godview's tabs draw a run the rule places in none under This Mac
+              (puppeteer-monitor's own chain), the one place the two differ. Each call is written to the audit log
+              as <code>tools.&lt;name&gt;</code> before it acts
               (CP-L6), under the principal <code>mcp-agent</code> with the run's id and the caller as its target. A
               refusal is a tool result, <code>isError</code> with <code>structuredContent.fact</code>
               (<code>unknown-tool</code>, <code>forbidden</code>, <code>bad-input</code>, <code>outside</code>,
-              <code>not-found</code>), never a protocol error. Each caller's <code>instructions</code> are built from
+              <code>not-found</code>, <code>unavailable</code>, <code>limit</code>, <code>failed</code>), never a
+              protocol error. Each caller's <code>instructions</code> are built from
               the rows it holds. The door knows no vendor (AR-L1). The bridge reaches an agent by the agent runtime's
               per-run briefing at every birth (MT-D9): a spark's carries the whole server and its brief and refuses
               when it cannot be delivered (CP-1d); a plain run's carries the door and its read-only <code>agent</code>
               rows by name, and an agent that cannot take it simply starts without it. A launch typed into a pane holds
               no door until puppeteer briefs an adopted launch (petition PU-J). Planned rows are served when their
               slices build them. CP-1b <code>42748065</code> · <code>3e93ba71</code>; MT-0.
+              <em>Corrected 2026-11-01 (CP-3; the refusal facts above were edited in place on 2026-10-31):</em> MT-0's
+              words named the first five alone, though <code>unavailable</code> and <code>failed</code> were facts from
+              MT-0 too, and <code>limit</code> came with CP-2. A send or a spawn held for the person's OK (CP-3) is an
+              answer, never a refusal: it names the needs-you item it waits in
+              (<a href="#cat-needs"><code>needs.*</code></a>).
             </p>
             <div class="table-wrap">
               <table class="reference-table">
                 <thead><tr><th>Tool</th><th>Family</th><th>Audience</th><th>Scope</th><th>Slice</th><th>Answers</th><th>Status</th></tr></thead>
                 <tbody>
                   <tr><td><span class="route">agents_available</span></td><td><p><code>agents</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-1</p></td><td><p>The agents the spark can start: each signed in under its Agent Profiles, with its models and their efforts.</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agent_spawn</span></td><td><p><code>agents</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Starts an agent under one of its profiles, in a folder, with a model, an effort and a first prompt: its session id, and a wake when it finishes, asks or fails.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agent_spawn</span></td><td><p><code>agents</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Starts an agent under one of its profiles, in a folder, with a model, an effort and a first prompt: its session id, and a wake when it finishes, asks or fails. Past the spark's 8 live agents it answers <code>{held, queued}</code>, the needs-you item the spawn waits in for the person's OK; Allow one more starts it, Not now is the fact <code>limit</code> told as a wake (CP-3, CP3-D4 A).</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents_list</span></td><td><p><code>watch</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-1</p></td><td><p>The sessions under its profiles: each one's agent, state, folder, model, cost, and who started it.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_read</span></td><td><p><code>watch</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-1</p></td><td><p>One session's latest turns, bounded; <code>before</code> pages back.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_watch</span></td><td><p><code>watch</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>A wake when a session it did not start finishes, asks, fails or ends.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_unwatch</span></td><td><p><code>watch</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Ends those wakes.</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agent_send</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Words to a session the person or the spark started, landing at its next idle moment marked as the spark's, sent on the person's behalf (CP2-D1).</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agent_send</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Words to a session the person or the spark started, landing at its next idle moment marked as the spark's, sent on the person's behalf (CP2-D1). The spark's first words to a session the person started answer <code>{queued: false, held}</code> and wait in the needs-you queue for his OK, which lasts for that run (CP-3, CP-D3, CP3-D3 B); words to an agent it started itself are never held. <em>TU-1 (2026-11-01):</em> the session is placed by the rule above, so a session filed under no profile is reached by the sparks of the profile listing its persona, and a persona no profile lists is reached by no spark.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_interrupt</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Stops a session's current turn; the session stays.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_stop</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Ends a session the spark started.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">flow_run</span></td><td><p><code>flows</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-4</p></td><td><p>Runs a flow the person approved, with its input; a wake when it asks or ends.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
@@ -1992,8 +2141,8 @@
                   <tr><td><span class="route">projects_list</span></td><td><p><code>projects</code></p></td><td><p><code>agent</code></p></td><td><p><code>device</code></p></td><td><p>CP-1</p></td><td><p>The person's projects, each with its name and the folders it has on this desktop.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">canvas_place</span></td><td><p><code>canvas</code></p></td><td><p><code>agent</code></p></td><td><p><code>device</code></p></td><td><p>CP-4</p></td><td><p>A board or a note on the desk, only when the person asked; the window places it, signed and undoable.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
                   <tr><td><span class="route">canvas_update</span></td><td><p><code>canvas</code></p></td><td><p><code>agent</code></p></td><td><p><code>object</code></p></td><td><p>CP-4</p></td><td><p>A change to a board or a note the caller placed, on the person's word.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
-                  <tr><td><span class="route">ask_user</span></td><td><p><code>you</code></p></td><td><p><code>spark</code></p></td><td><p><code>self</code></p></td><td><p>CP-3</p></td><td><p>A question to the person with choices; it returns at once and the answer is a wake.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
-                  <tr><td><span class="route">notify</span></td><td><p><code>you</code></p></td><td><p><code>agent</code></p></td><td><p><code>self</code></p></td><td><p>CP-3</p></td><td><p>A word to the person while they are in another view.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
+                  <tr><td><span class="route">ask_user</span></td><td><p><code>you</code></p></td><td><p><code>spark</code></p></td><td><p><code>self</code></p></td><td><p>CP-3</p></td><td><p>A question to the person with one to four distinct choices of its own (each one line, at most 40 characters, never VibeField's Not now, which follows them). It returns at once, <code>{item, queued: true}</code>, and the answer lands as one marked line in the spark's input queue (CP3-D2 A); a sleeping spark is woken for it (CP3-D7 A). A ninth open item from one spark is the fact <code>limit</code>. <em>Amended 2026-11-01 (CP-3; this row was rewritten in place as built on 2026-10-31):</em> MT-0's planned row said "A question to the person with choices; it returns at once and the answer is a wake"; that wake is the one marked line, and the choices are the spark's own, Not now after them.</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">notify</span></td><td><p><code>you</code></p></td><td><p><code>agent</code></p></td><td><p><code>self</code></p></td><td><p>CP-3</p></td><td><p>A word to the person, on one line of at most 140 characters: every window's status line says it, and an OS notice does while no VibeField window is in front (CP3-D5 A). It answers <code>{sent: true}</code>, handed on, never that they read it. A seventh in a minute from one session is the fact <code>limit</code>. A plain run's harness asks the person before the call, because its allowance takes read-only rows alone (MT-D7). <em>Corrected 2026-11-01 (CP-3):</em> MT-0's planned row said "while they are in another view"; every window's status line says each notify, the view the person is in among them.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                 </tbody>
               </table>
             </div>

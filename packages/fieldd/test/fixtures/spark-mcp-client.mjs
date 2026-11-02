@@ -1,9 +1,17 @@
 // A real terminal child runs the briefing's bridge. Its caller identity must come from the floor's process walk.
+// The briefing file may name the calls to make (CP-3), in order; absent, one agents_list. With `typed`, what the
+// terminal hands the process (an input fieldd's queue delivered) is kept there.
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
-const { server, output } = JSON.parse(readFileSync(process.argv[2], "utf8"));
+const {
+  server,
+  output,
+  calls = [{ name: "agents_list", arguments: {} }],
+  typed,
+} = JSON.parse(readFileSync(process.argv[2], "utf8"));
+if (typed) process.stdin.on("data", (chunk) => appendFileSync(typed, chunk));
 const bridge = spawn(server.command, server.args, { stdio: ["pipe", "pipe", "pipe"] });
 const pending = new Map();
 const lines = createInterface({ input: bridge.stdout });
@@ -39,8 +47,9 @@ try {
     `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
   );
   const listed = await request("tools/list", {});
-  const called = await request("tools/call", { name: "agents_list", arguments: {} });
-  writeFileSync(output, JSON.stringify({ listed, called }));
+  const answers = [];
+  for (const call of calls) answers.push(await request("tools/call", call));
+  writeFileSync(output, JSON.stringify({ listed, called: answers[0], calls: answers }));
 } catch (error) {
   writeFileSync(output, JSON.stringify({ error: error.message }));
 }

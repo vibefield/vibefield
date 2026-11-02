@@ -146,7 +146,7 @@ export const DRAWINGS = {
   check: {
     label: "Check",
     group: "actions",
-    role: "An agent row's done mark; the row paints it green (§2.5)",
+    role: "An agent row's done mark; the row paints it green (§2.5); the needs-you card's answered line",
     instrument: { s: P("M5 12.5l4.5 4.5L19 7.5") },
     hardware: { d: "M3.2 12.6l2.4-2.4 3.6 3.6 9.2-9.2 2.4 2.4L9.2 18.6Z" },
   },
@@ -691,7 +691,7 @@ export const DRAWINGS = {
   exclaim: {
     label: "Failure",
     group: "signals",
-    role: "The swarm's failed mark",
+    role: "The swarm's failed mark; the needs-you card's answered line when the act was not done",
     instrument: { s: P("M12 5v9"), f: C(12, 18, 1.35) },
     hardware: {
       d: `${circlePath(12, 12, 9.5)}${capsule(12, 6.5, 12, 13.1, 1.15)}${circlePath(12, 16.9, 1.35)}`,

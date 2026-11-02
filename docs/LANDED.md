@@ -25415,6 +25415,9 @@ own order:
   a non-home desktop's own door (`ownerDoor`, a per-ask owner socket), which F1 already serves. Asking the home with
   `device` instead is unbuilt, and so are FW-R3 (no phone probe of desktops) and FW-R6 (per-ask owner sockets
   retired), both F1b's in §14. The kit keeps one `FreewayDesktopLink` per desktop already (F1).
+  > **Paid (2026-11-01, M93 `284e4af9d`, run93r; LANDED "F1b's kit half"):** the kit asks the home with `device`,
+  > so FW-R3 holds: the phone probes no other desktop for an approval. FW-R6 holds for the approval alone: a
+  > ticket, its renewal and Resume still open the owner's door (SP-7). F1b's exit still needs James's device round.
 - **F1b's exit** (a session on a second desktop opens over that desktop's link, approved through the home's door,
   its bytes owner-direct) needs the kit's half and James's device round on two desktops. The rows here are two real
   fieldd daemons over scripted floors; no live tailnet ran.
@@ -26010,6 +26013,7 @@ compiled catalog keeps the dark appearance. The dark icon needs its own image in
 - The dark About icon.
 - The app workspace's stale `Package.resolved` (EL8; reported, never committed).
 - F1b's kit half (the phone asks through its home; FieldLink.swift:683), on VF-PM's brief.
+  > **Paid (2026-11-01):** M93 `284e4af9d`, run93r (LANDED "F1b's kit half").
 
 ## FG-6's follow-up 3 — the hold carries the field's mark: the browser's glass held off the field wears the field's mark as the held frame holds it, at the field's mark's own spot and size, so row 32's frozen frame compares one mark
 
@@ -27353,3 +27357,899 @@ page's CH-D5 A and NS-D4 (James, 2026-10-30), built as ruled.
     fieldd restart replaces the window's document.
 
 James's first sight: `pnpm dev`, ⌘4 for Chat, a spark's row, then its thread.
+
+## PG-3b — reportShown through the home: the phone is a screen of the desktop that owns the row, its report routed by `device` through its home and kept on the owner as that reader's own screen, keyed by `onBehalfOf` under the carrying peer connection (J2 (a)) (2026-11-01; `9e3a67729` → `3072786bb`, seventeen commits on main `313deb462`, lane `pg/3b` in `/Volumes/SamsungRed/lanes/pg3b`, in the mini's mint M84 `fe84493c4` over main `e14d45dbe`, run 84)
+
+**What it rests on.**
+- J2 (a), James 2026-11-01 03:56Z (typed 03:55Z, on the page *PG-3 · four marks*): an owner keys the screens a
+  forwarded `agent.reportShown` opens by its `onBehalfOf`, restrict-only. DS-L7's amendment is at its source in
+  the draft, written at draft slot 16 (2026-11-01 03:59:15Z; design-06 :49–53, thinking-desktop-sync-plane
+  :136–140). In the repo, `forwarding.ts`'s `windowId` clause (beside F1b's `clientDeviceId` clause) and the code
+  comments carry it.
+- PG-D6 (a) (2026-10-29): unread is the owner's mark, and the phone is a screen.
+- VF-PM's sequencing marks in `lanes/ios/PG3-BRIEF.md` (Q-P1…Q-P6). Q-P6 (a desktop window's own peer-row reports
+  come after PG-3, on this door) is why the renderer-key constraint is recorded in `agent-screens.ts`'s header.
+
+**What** (seventeen commits; 20 files, +1,784 −84):
+- **The contract** (`9e3a67729` red, `c6e8aa2a4`):
+  - `agent.reportShown` `local` → `federate`, and `AgentReportShownParams` gains `device?`;
+  - two goldens, `agent-report-shown.routed.json` `{ids, device}` and `agent-report-shown.forwarded.json`
+    `{ids, device, forward:{onBehalfOf}}`, parsed in contracts' tests;
+  - the locality pin flipped;
+  - the census does not move: `agent.observe` is in the phone's preset, so `reachableFromTailnet` was already true;
+    `KEYED_FORWARD_METHODS` does not take it (idempotent).
+- **fieldd** (`979c0e349` red, `b5941c314`):
+  - `agent-screens.ts`, new: the screens' rules, out of `daemon.ts`;
+  - `ProductApi.wrapForward(method, hook)`: a method's own say after the door's gates and before the carry;
+  - `ProductApi.forwardFor(ctx, device, method, params)`: the daemon's own carry of a read for a client, with the
+    client's provenance;
+  - the home carries a report only for a READER, a connection holding a `{remote, mesh}` board, in order per
+    (reader, owner);
+  - the owner keeps a carried report as a CARRIED screen, keyed `connection ␟ onBehalfOf.deviceId ␟ windowId`; a
+    carried report naming no `windowId` is refused;
+  - a closing reader sends each owner an empty report; an owner forgets a connection's carried screens with it;
+  - a carried report acknowledges nothing (Q06).
+- **The seam pages** (`c8c010883`): api.html's reportShown row and system.html's monitor backend; `forwarding.ts`'s
+  `windowId` clause; a dated erratum at `methods.ts`'s SP-1 paragraph (a phone IS refused `full`).
+- **The review** (`1061d675f` red, `fdb347af8`, `169850d83` red, `007c51cff`, `115f0c1a9`, `cd07790f8`): sixteen
+  findings, all folded or ruled. The fold checks (`a4057cc33` red, `a377f8483`, `52fba8828`; `58fdb8244` red,
+  `7374acd7b`) and the mutants' last row (`3072786bb`).
+
+**The security fix: screens by kind.** As first built, a `remote` board opened a screen for ANY principal holding
+one, so a plugin granted `agent.observe` could clear unread marks here and, through the carry, on every owner.
+`SCREEN_BOARDS` (contracts, beside MONITOR_AUDIENCE, held to `Principal["kind"]`) decides by kind:
+- a `model` board is a screen for this desktop's windows and shell;
+- a `remote` board, and the `{remote, mesh}` reader, are the phone's (`tailnet`) alone;
+- a plugin, a guest, an agent's MCP session or a peer daemon holding a board opens no screen and no reader, so its
+  report and its forward are refused `no-screen`.
+
+**The bounds.** A carried report needs no board on the carrying connection (decision 1, kept by the lead's ruling:
+the home's hub upstream may still be attaching at the phone's first report). Bounded instead:
+- `AGENT_FIELD.CARRIED_SCREENS_PER_PEER` = 64 per peer connection; the next is refused
+  `{state: "no-screen", reason: "carried-cap"}`, and that refusal is the owner's bound, not transient;
+- when the carrying connection's last `remote` board on the owner (the home's hub upstream) closes, its carried
+  screens go;
+- they go with the connection.
+
+**The replay.**
+- The home re-carries each reader's current report when the way to its owner comes back:
+  - PeerLink's `link-ready`, at every answered dial (a blip keeps the link `connected`, so `link-changed` says only
+    the first);
+  - MeshBoard's `onUpstreamReady`, at each re-attach a hub makes on the same link (a resync, a wake).
+- It reads the reader's `shown` inside its queued task, so a report in flight, or still queued, is the one replayed.
+- The owner set changes only once a carry is known to land: a non-empty report adds its owner before the carry and
+  undoes the add on a not-delivered verdict; an empty report removes its owner after its carry lands.
+- `shown` is the phone's latest ask whatever became of its carry. Only the owner's own lasting refusal
+  (`locality: "local"`, an owner without PG-3b, or its `carried-cap`) puts back what stood.
+
+**The fixtures.**
+- `agent-report-shown.routed.json` is the phone's send shape. It is mirrored in PG-3e, the slice that builds the
+  sender: there the kit's encoder is compared to it byte for byte, and the mirror joins `check-ios-fixtures`' list.
+- `agent-report-shown.forwarded.json` is fieldd ↔ fieldd only, and is never mirrored.
+
+**The docs.**
+- api.html's reportShown row: a dated *Corrected 2026-11-01* at its lead sentence; the 2026-10-29 "Not built" clause
+  marked superseded; the as-built note with the review and both fold checks folded; which refusals are transient.
+- api.html's stats, recounted from `methods.ts`: 64 agent-plane doors, 43 local, 16 federate, 5 stream (it said 56
+  and 12). A dated erratum at "Every agent-plane door is `local`".
+- `AgentReportShownParams`' P6 sentence corrected at its source, in contracts.
+
+**Validation.**
+- **Red first,** every behaviour commit after its red one, in lane `pg3b` at nice 19 under the guard and
+  co-plan/HOLD, with no PERF.lock. Logs: `/Volumes/SamsungRed/lanes/pg3b/light/`; the light is
+  `lanes/ios/pg3b-light.sh`.
+- **The probe** (the light's `probe` row, main's contracts and fieldd sources swapped in under the lane's tests):
+  - contracts 4 red of 662: the routed/forwarded goldens' row, the carried cap, `SCREEN_BOARDS`, the locality pin;
+  - fieldd 6 red: `onUpstreamReady`, the forward hook's three rows, `link-ready`, and the two-daemon row, refused
+    "agent.reportShown is local to its device and rejects device routing";
+  - `agent-screens.test.ts` is red by its missing module, so its rows are proved by the mutants instead.
+- **The review trail:**
+  - the review (`wf_2f6a71c3-a51`): sixteen findings, all folded or ruled by the lead;
+  - the fold check (`wf_27d3a762-fbe`): its five replay findings folded (`a4057cc33`, `a377f8483`, `52fba8828`);
+  - the fold2 check (`wf_bd8fd78f-ed3`): its four folded (`58fdb8244`, `7374acd7b`), the shown undo narrowed to the
+    owner's lasting refusals at the lead's word; the e2e hub-resync row not built, by the lead's ruling;
+  - the mutants' own finding: `inflight` stayed green once `shown` was set at the carry's begin, so a row with a
+    newer report queued behind a slow carry pins it again (`3072786bb`).
+  - One red commit's message (`979c0e349`) was reworded before anything was shared, its tree unchanged.
+- **Eighteen mutants** of `agent-screens.ts`, `mesh-board.ts` and `daemon.ts`, each target first checked to match
+  once, each reddening the row that pins its rule (light `tip5-mutants`, 07:29:39 → 07:31:02Z, at `3072786bb`):
+
+| Mutant | The rule broken | The row that went red |
+|---|---|---|
+| order | one chain per (reader, owner) | a same-connection re-subscribe keeps the screen |
+| key | the carried key names its reader | two readers behind one home do not overwrite each other |
+| ack | a carried screen never acknowledges | a forwarded report acknowledges nothing (Q06) |
+| release | a closing reader sends its empties | the board closes and the mark returns |
+| forget | a connection's carried screens go with it | the owner forgets a peer connection's screens |
+| gate | the home carries for a reader only | refused with no board |
+| kind | a remote board is the phone's screen alone | a plugin holding {remote, mesh} is no screen |
+| cap | at most 64 per peer connection | at most CARRIED_SCREENS_PER_PEER |
+| upstream | the upstream's last close drops them | the carrying connection's last remote board closes |
+| undo | an owner that refused is dropped | the owner set changes only once a carry lands |
+| after | an empty drops its owner after it lands | the owner set changes only once a carry lands |
+| replay | `linkReady` carries again | the owner restarts or its link re-dials |
+| emptyfirst | an empty clears `shown` first | after a failed empty, a re-dial carries nothing |
+| inflight | the replay reads `shown` in its task | the newer report still waits its turn |
+| undoshown | a lasting refusal puts back what stood | the owner's own lasting refusal is undone |
+| lasting | only a lasting refusal does | a report that never left stays the phone's ask |
+| upstreamready | MeshBoard announces a re-attach | onUpstreamReady fires after a resync |
+| wiring | the daemon hears `link-ready` | the two-daemon row (a real blip, B's count 1 → 0 → 1) |
+
+- **The lights:**
+  - `tip4` at `7374acd7b` (07:06:00 → 07:07:18Z): biome; contracts' and fieldd's typecheck; contracts 662/662
+    (4 files); fieldd 126/126 (8 files: agent-screens, forward-hook, peer-door, agent-model-daemon, mesh-board,
+    mesh-board.e2e, agent-monitor, device-routing); `pnpm check:walls`; the probe red on main as above. Its
+    mutants row stopped at a stale target (`undo`: not found) before running it; the light now checks every target
+    up front, and the row ran again whole as `tip5-mutants`.
+  - `tip5-mutants` at `3072786bb`, after SP-1d's light: eighteen of eighteen red, above.
+  - `merged1` (07:32:02 → 07:34:06Z), VF-PM's merged-tree rule, on a throwaway merge of `3072786bb` with main
+    `bf93e29ff` (`54fe4657b`, `/Volumes/SamsungRed/lanes/pg3b/merged`), installed from the lockfile only:
+    contracts whole 1,454/1,454; fieldd's 3b files and its method-table and scope scanners 343/343 (18 files);
+    field-app's text-ramp, ui-system-boundaries and design-system 61/61; `pnpm check:walls`.
+  - `gen:check` on the merged scratch tree at `b0a6f814a` (`3072786bb` + main `e14d45dbe`): `pnpm gen:check` exit
+    0 at 07:45Z, 8.4 s. The generated paths are unchanged: the registry constant and `SCREEN_BOARDS` reach no schema
+    and no `.rs`. Log: `lanes/pg3b/light/gencheck.log`.
+- **Run 84** (M84 `fe84493c4`, the MERGE shape: main `e14d45dbe` merged into `3072786bb`, minted by a9 on VF-PM's
+  GO):
+  - `pnpm verify` armed 07:47:32Z, exit 0 at 07:53:11Z (about six minutes); gen freshness clean at its end.
+  - vitest 11,816 passed, 0 failed, 18 skipped, +33: contracts' `agent-field.test.ts` 59 → 62 and `fixtures.test.ts`
+    540 → 542 (the two report-shown goldens parsed); fieldd's `agent-screens.test.ts` new with 22,
+    `forward-hook.test.ts` new with 3, `mesh-board` 29 → 30, `mesh-board.e2e` 7 → 8, `peer-door` 12 → 13. cargo 534
+    passed, 0 failed, 14 ignored. The iOS fixtures' 186 copies identical.
+  - Its logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run84/` (`mrun84.bundle`, sha256 `ffaf70cc88d8be72…`).
+- **Landed:** main moved to `fe84493c4` on VF-PM's GO (2026-11-01 07:55Z).
+
+**Not built (said).**
+- No two-daemon row for a hub resync. `onUpstreamReady`'s daemon wiring is unit-tested only: mesh-board.test.ts calls
+  the option, and agent-screens' resync row calls `linkReady` by hand. The two-daemon row covers the re-dial.
+- No live-turn two-daemon row. The rig's run on B is an exited record, so the e2e reads B's ledger (`seenAt`) and the
+  unit rows read `unread` itself.
+- A `device` the mesh board does not list is not refused before the carry. The kind gate and the owners undo bound
+  the fan-out to the phone's own refusals.
+- A close's empty that fails is logged (`fieldd.agents.screen_release_failed`) and not retried. Until the carrying
+  connection or its upstream closes on the owner, that reader's screen stands there.
+
+**Owed.**
+- **PG-3e's sender rules:**
+  - send the open card's model id routed by the row's device, and again after every open;
+  - send `{ids: [], device: A}` when the shown id leaves device A;
+  - `{state: "no-screen"}` is transient, while `reason: "carried-cap"` and `locality: "local"` are recorded once per
+    device and not retried on every open.
+  - The 3e brief mirrors them (VF-PM).
+- PG-3e mirrors `agent-report-shown.routed.json` into the kit (the fixtures, above).
+
+## Item 146b — the phone stage places a Simulator.app's start by its age between two reads of the clock, never by lstart's local wall time, so DST's repeated hour cannot make the run's own app foreign
+
+(2026-11-01; three commits `7773c5420` → `ab0199542` on lane `fix/item146` over main `ae430892b`, the fixer's; M87 is
+`ab0199542` itself, a fast-forward of main `ae430892b`, run 87.) Item 146's own copies (item 146 is puppeteer's ps
+reader, upstream), granted at 09:30Z: PORTALS's find and VF-PM's grep.
+
+**The red.** America/Los_Angeles fell back at 09:00Z, so local 01:00–02:00 ran twice, PDT then PST. `ps -o lstart=`
+prints local wall time with no offset, so in that hour its text names two instants, and the stage's `parseLstart`
+(`new Date(y, m, d, h, mi, s)`) took the first. A Simulator.app launched between 09:00 and 10:00Z read 3,600 s early,
+"started before ARMED": FOREIGN, exit 75 instead of a quit. Witnessed live on this Mac inside the hour, three times
+(09:32:59Z, 09:40:19Z, 09:41:30Z): a process one or two seconds old read 3,601–3,602 s old.
+
+**The fix (`7773c5420`, `184f485da`).** `scripts/stage-simulator-fixture.mjs` reads `ps -o etime=` (macOS's ps has no
+`etimes`; measured) through `parseEtime`, and `etimeStart(etime, before, after)` gives the start as a range between
+two reads of the clock around the `ps` call. `etime` is a difference of whole seconds, the clock's and the start's each
+truncated (measured: "00:02" for a process 1.5 s old), so the start lies after `before - (etime + 1) s` and before
+`after - (etime - 1) s`. The first cut assumed the floor of the age and ended its range a second early; the light's
+live witness caught it, and `184f485da` corrected it. `simulatorProof` keeps its direction: the run quits a Simulator
+only when proven its own. "After ARMED" is proven by the range's earliest, "before the run's launch" by its latest.
+`parseLstart` is gone, and `lstart` is no longer read.
+
+**Audited and left.** `packages/electron-shell/src/testing/terminal-perf-lab.ts:666` and `:970` hand their
+`ps -axwwo pid=,ppid=,lstart=,command=` listings to `tooling/terminal-perf/src/reap.ts`. There `lstart`'s five fields
+are joined into `startedAt` and only compared for equality with a later listing of the same pid: an identity string,
+never a time. The text is rendered from the start instant with that instant's own offset, so it reads the same before
+and after the fall back.
+
+**Tests.** The fake host holds a start in ms and answers both `etime=` (from its clock) and `lstart=` (rendered in the
+process's zone, so main's read can be run against it). The proof rows take exact or bracketing ranges. A
+parseEtime / etimeStart row holds the start inside the range for both readings of etime. A new row walks Simulator
+starts through 08:30Z–10:30Z on 2026-11-01 under TZ=America/Los_Angeles through `simulatorNow`. S7's two fake hosts
+now keep a clock after the starts they report (`ab0199542`): etime is an age, and their starts had been in their own
+future.
+
+**The light** (lane item146, `lanes/item146/tools/light146{,b,c}.sh`, logs `lanes/item146/light/`). light146 stopped
+at its live witness: the first cut's range ended before the live start. light146b stopped at the stage's tests, on
+S7's skewed fixture. light146c (09:41:28Z → 09:41:46Z, load 10, at `ab0199542`) was green throughout:
+- L1, live: main's `parseLstart` read a process started at 01:41:28 PST as 08:41:28Z, 3,601 s off. L2, live: the
+  fix's range, 09:41:29.718Z–09:41:31.721Z, held the start (spawned 09:41:30.203Z).
+- R1: the walk on main's stage, 12 of 25 starts not the run's, every one of them 09:00:20Z–09:55:20Z, "it started
+  before ARMED". G1: the walk on the fix's stage, 0 of 25.
+- The stage's test file alone, 99/99; biome on the two files; dev-runner whole, 364/364, under a HOLD line the script
+  released at its exit.
+- Run 87 on the mini (a9's mint; VF-PM's read, 12:04:13Z): 11,816 passed, 0 failed, 18 skipped, main's count, every
+  file's unchanged; node 364 (+1, the walk row); cargo 33 ok.
+
+**Owed.** Nothing of the fixer's. Item 146 itself, puppeteer's ps reader, is upstream; its issue draft names the
+kernel's start, or `etime` with a 2 s window, since macOS's ps has no `etimes`.
+
+## CP-3 — the person: a spark asks you (`ask_user`) and tells you (`notify`); what waits on you is one queue in fieldd (a spark's questions, its first send into a session you started, its spawn past 8 live agents), answered once for every window on a card in Chat's thread; a notify is one line on the status line, and an OS notice while no VibeField window is in front (2026-11-01; `34067fe76` → `ba3cdf984`, sixteen commits begun on `c9fe1c65a`, with co/sp1d at `c5b0c2688` (`5985d56a7`) and main `e14d45dbe` (`365e723e5`) merged in, lane `co/cp3` in `/Volumes/SamsungRed/lanes/cp3`, in the mini's mint M88 `ce6577783` over main `b2fad1d42`, run 88)
+
+James ruled CP3-D1…D8 at A, all eight at their leans, at 2026-10-31 06:31:34Z ("Accept all eight at the leans"), and
+typed "start all" at 14:57:34Z, his go for SP-1d and CP-3's build. VF-PM ruled the builders' leans at 16:35Z (CP-3's
+P1–P5 in `lanes/co-plan/LEANS.md`), James's to overturn. It is `draft/compose-plane/cp3-the-person.md`, built as
+ruled in two halves: half 1 (contracts, fieldd, main) on main, then half 2 (the window) on SP-1d's thread (P1).
+CP3-D3 is A, and what is built is its own fallback, B ("Until it lands, B stands"): the first send into each session
+the person started waits for his OK, whatever its mode. A waits on a fact VibeField does not read yet: the session's
+permission mode, in no vendor's words (DESIGN.md §9).
+
+**What.**
+- **The words and the doors' page first** (`34067fe76`):
+  - DESIGN.md §9 gains "The person's queue's words" and "An agent's notify";
+  - api.html gains `#cat-needs`: `needs.list`, `needs.subscribe`, `needs.answer` and `needs.notices.subscribe`, all
+    `agents.manage` and local, beside `compose.sparks.*` (CP3-D6 A);
+  - the tool table marks `ask_user` and `notify` Built, and `agent_send` and `agent_spawn` gain their held answers.
+- **One record signer** (`204e1d32e`): `RecordSigner` (`fieldd/src/signed-record.ts`) signs with HMAC-SHA256 over
+  contracts' canonicalJson. Like SessionRecordStore, it sets aside a key other users can read, or a file that holds
+  no key, and mints another. SparkStore is on it.
+- **CP-2's input queue, signed** (`aaeaf2d0b`, EL7): a kept queue is `{format, run, inputs, signature}`, its run
+  inside the signature, under its own key (`LAYOUT.AGENT_INPUTS_KEY_FILE`). Restore refuses an unsigned, forged,
+  exposed or unreadable file: it renames it aside, logs `fieldd.inputs.set_aside`, and never delivers its words.
+- **The person's room, `rooms/you/`** (`86c9d621d`, contracts and fieldd as one commit):
+  - contracts: the needs-you item and its answer `{choice, at, outcome, reason?, told, waits?}`, the choice an index
+    into the item's acts; the bounds; `NEEDS_CHOICE_WORDS`; the four `needs.*` rows; `NEEDS_DIR` and
+    `NEEDS_KEY_FILE`; 15 fixtures. `tools.ts` serves `ask_user` and `notify` (14 of 20 served).
+  - `NeedsStore`: one signed record per item, 0600 in 0700. A record whose item id is not its file name is set aside
+    as forged.
+  - `words.ts`: §9's facts line for line, every value on one line, a name cut at 64 and a question at 120.
+  - `NeedsQueue`, the room's one authority:
+    - restore only reads, and reconciles once the re-attach has settled;
+    - answers are serialized per item, and an act is never done twice (CP2-D2);
+    - an act's outcome is kept apart from its telling (`told`, `waits`);
+    - an answer to a sleeping spark wakes it through compose.sparks.open's own wake, and lands once its run is live
+      (CP3-D7 A);
+    - an agent's own ask is read from its run's first permission or question blocker, listed with where to answer
+      it and never kept (CP3-D1 A);
+    - 8 open items per spark, 16 sends per held item and 6 notices a minute per session; past each, the fact `limit`.
+  - The talk room holds a spark's first send into a session the person started (CP3-D3) and a spawn past 8 live
+    agents (CP3-D4 A). `needs.answer` is audited on a `needs-item` target, its choice by index, and a tool call that
+    raised an item names it on its audit line, never its words.
+- **Main's OS notice** (`6436827ac`, CP3-D5 A): `NeedsNoticeObserver` hears `needs.notices.subscribe`, deltas only,
+  and says a notify only while no VibeField window is in front, never in a smoke. A click opens Chat, whoever told
+  it. No IPC channel is added: the table stays 36.
+- **The window half, on SP-1d's thread** (co/sp1d at `c5b0c2688` merged in, `5985d56a7`):
+  - **the card, drawn, DESIGN.md first** (`5bd26f569`): §8 "Chat's thread" gains "The needs-you card", on the Sparks
+    page's plates, with each deviation said;
+  - **Chat counts what needs you** (`6cbeba97c`): the feed reads the queue beside the board, so the row's word, its
+    dot, Chat's cell dot and the views note count the queue's items. The note is said per item; the dot stays one;
+  - **notify's note** (`07d0d4327`): "Vela — the build is green" on the status line, one line, for 2.4 s, at most
+    two waiting per teller. contracts' `needsNoticesOf` is the one reader of a notices frame, for main and the window;
+  - **the card in the thread** (`8c1bc51c0`): a `ThreadItem` in the thread's foot, answered by its act's place. An
+    agent's ask has Show alone, which goes to its pane in Godview. The catalog has `NeedsCardPreview` and the waiting
+    plate.
+- **Main merged in** (`365e723e5`, main `e14d45dbe`, SP-1d as landed): 15 conflicts, each resolved by meaning
+  (final-cp3 item 1 (a)–(f)), and two tsc reds after the textual resolve, both fixed.
+- **The critics' rounds and the fold** (`2a4c67d69`, `6f19861a6`, `63aac8b4c`, `8268de88d`, `ba3cdf984`):
+  - an answer and a Wake give one run, held by a real-floor row; a stale card's acts go quiet;
+  - a record after an act already done stands in memory whatever the disk does (`#stand`, logged
+    `fieldd.needs.unkept`), and the `acting` refusal is retired;
+  - fieldd's `clip` is the one cut, tied to the window by the EL9 fixture `needs-item.held-send-cut.json`;
+  - the card is ringed while it waits on you, and the window's two needs subscriptions are asked again after a
+    retryable refusal (`src/reconnect.ts`);
+  - one authority for each bound (`NEEDS_OPEN_PER_SPARK` and `NOTIFY_PER_MINUTE` in contracts) and for the kind
+    words (`needsKindOf`, `needsStateOf`, `needsOutcomeOf`);
+  - the tools' descriptions state their bounds, and the glyph roles name the card's answered line;
+  - landed words carry one dated note each (VF-PM's dated-note rule, 2026-11-01); a restart's uncertain answer says
+    the yes is gone; the teller is named as fieldd names it.
+
+**Real vs not yet.**
+- Real, from fieldd's doors to the window and main, with nothing stubbed:
+  - the queue, its store and its four doors; `ask_user` and `notify`;
+  - the held send and the held spawn, and the yes, which lasts for that run;
+  - an answer's wake into a sleeping spark;
+  - the row's word, the dot and the note counting items; the card and its acts; notify's line; main's OS notice;
+  - CP-2's input queue, signed;
+  - the catalog's plates, each the shipping view over fixtures.
+- Not yet, each named by a ruling, by the plan's §0.2 or by the builders' notes:
+  - the daily spend (CP-D7's second half): no spend fact exists, and CP3-D4 A names it a gap;
+  - an agent's own ask answered here: it is listed with Show, and `approval.respond` stays reserved (CP3-D1 A,
+    CP-L4, AR-6);
+  - the watchdog (CR-D14 A), homed at CP-4; Godview's orange bubble (EW-D1);
+  - the phone: `agents.manage` is local, so the phone reaches no `needs.*` door until PG rules its scope;
+  - CP3-D3 A, which waits on a session's permission mode in no vendor's words;
+  - CP-D14's sleep timer: Asleep stays "no live session";
+  - main's observer, like TS-5's link notices, is not asked again when a handle's first subscribe fails as the
+    connection drops, so that handle hears no notify until the next one. The window's subscriptions are asked again.
+
+**Found.**
+- **CP-2's kept input queue could speak as anyone.** Its restore trusted its files, so a same-uid file at
+  `fieldd/inputs/<run>.json` was pasted into that run at its next idle after a restart, marked as any spark's words
+  or as "VibeField:", around the hold CP-3 builds. It is signed now; red first, a CP-2-form file speaking as VibeField
+  restored 2 inputs where 0 must.
+- **A signature binds a file to its name only when the name is inside it.** The input queue binds its run, and the
+  needs store its item id. SparkStore does not (owed, below).
+- **SessionRecordStore's exposed-key branch threw on its first call:** its `continue` skipped the mint, so the first
+  records read after a chmod'd `sessions.key` (at boot, the re-attach list) threw. Fixed at its source, red first.
+- **SparkStore's old compare took a valid signature with trailing junk** (`Buffer.from(hex)` stops at the first
+  non-hex character), and its unguarded mode check would set aside every spark on Windows, where libuv reports a
+  writable file as 0o666 (reasoned, not run there). The one signer does both now.
+- **CP-2's waker named an untitled run by its id:** it read `row.provider`, which no session summary carries.
+  `runLabel` (the run's title, else its catalog label, else its id, one line cut at 64) is now the one name, for the
+  waker and the queue.
+- **A need on the board's first reading was no news only by race** (`6cbeba97c`): a board snapshot that came after
+  the list said a note for a blocker already standing. The note now waits until the list, the board and the queue
+  have each been read once.
+- **A word-keyed `heard` would paste before a woken program was up** (H2-1's review): a sleeping spark with a card
+  reads Asking you before and after Send's wake. `heard` is read from the spark's own run's row.
+- **An answered card could redraw its acts** when fieldd's frame came after its 2.4 s. It leaves only once the queue
+  drops the item.
+- **An answer is a second caller of `sparks.open`** (final-cp3 item 3). With SP-1d's per-spark join it is the same
+  wake; with the join removed, the real-floor row counts 3 births where 2 are right.
+- **A card could stick after a failed write** (item 5): its item stayed open, and `acting` in memory, until a
+  restart. `#stand` fixes it.
+- **Two ellipses on the card** (round 2's #1, its one MEDIUM): fieldd cut the words with "…", and the window added
+  another. Each side tested its own reading, so no test saw it until the EL9 fixture tied them.
+- **Item 5's path told a spark its later words were not held, then a restart dropped the yes.** The fact now says
+  "Vela's later words to Claude Code are held again", true in both orders (`ba3cdf984`).
+- **The catalog's session name was not fieldd's** (`${AGENT.id}·2`, under a comment that claimed runLabel). It is
+  the catalog label now, so two untitled Claude Code sessions both read "Claude Code" on a card, where @ tells them
+  apart. That is VF-PM's handle ruling (owed, below).
+- **api.html's refusal facts** were extended in place with no note, and named `failed` as CP-2's when it is MT-0's
+  fallback fact. A dated Corrected note now carries all eight.
+
+**Validation.**
+- **Reviews:** every commit had an adversarial review, and a fix pass where one was needed. Then two completeness
+  critics:
+  - `lanes/co-plan/final-cp3.md`, at `8c1bc51c0`: eleven items. 1–8 are fixed, 11 in `8268de88d`, and 9 and 10 are
+    owed lines below;
+  - `lanes/co-plan/final-cp3-2.md`, at `6f19861a6`: twelve items. #1–#11 are fixed, #3's naming question went to
+    VF-PM (the handle, owed), and #12 is the owed list below.
+- **Red first** in every behaviour commit, the rows named in its body, with mutation probes:
+  - the signer: compose-sparks 2 red, and agent-session-records' signing-key row threw;
+  - the input queue: 4 of 9 red;
+  - rooms/you: tool-plane-talk 2 red; with the in-flight map removed, the two-answers row went red;
+  - main's notice: its module absent; a mutant without the focus check and the delta-only rule, 2 of 7 red;
+  - Chat's count: 27 red on the unchanged code, and 5 probes (6 rows red);
+  - notify's note: status-line 3 rows, needs-notices (its module absent) and compose 1 row red, and 3 probes;
+  - the card: 11 probes;
+  - the fixes: needs-queue 1 of 29, needs-card and glyphs 3 of 41; the acting guard removed, 1 red; the one-wake join
+    removed, 3 births;
+  - the true words: field-app 9 red, fieldd 2; the constants: contracts 2 of 37; the last words: needs-words 1 of 6.
+- **The lane light** (`lanes/co-plan/logs/cp3-light-20261101T115415Z/`): GREEN on `ba3cdf984`, 11:54:15Z →
+  12:00:52Z, on the shared HOLD.
+  - Every step exited 0: biome (92 files), check:walls, check:retired, check:ios-fixtures, preflight (OK, with one
+    warning, R23's `acp` candidate, a sibling's offering), glyphs --check, gen:check (the tree clean after), cargo
+    layout_vector 1/1, and tsc on contracts, design-kit, field-app, fieldd and electron-shell.
+  - contracts whole: 54 files, 1482 tests.
+  - field-app whole: 284 files (+1 skipped), 3827 tests (+3 skipped), text-ramp, ui-system-boundaries and
+    design-system among them.
+  - electron-shell whole: 163 files, 2484 tests (+3 skipped), smoke-catalog among them.
+  - fieldd whole: 228 files (+3 skipped), 2906 tests (+11 skipped), with FIELDD_ROSETTAD_BIN set, so the real
+    rosettad rows ran. Item 146's hour was past.
+- **The merged-tree light** (`lanes/co-plan/logs/cp3-light-20261101T120139Z/`): the scratch merge `9f7d98542` of
+  `ba3cdf984` and main `ae430892b` (merge-tree's tree `346e76aca`, branch `scratch/cp3-merge-ae430892b`, never
+  landed), with BASE `ae430892b`, 12:01:40Z → 12:08:39Z. The new main changed no dependency.
+  - Every static step, gen:check, cargo and tsc exited 0.
+  - contracts 1487 (five more, PG-3b's); field-app 3827 (+3 skipped); electron-shell 2484 (+3 skipped).
+  - fieldd: 2933 passed and 1 red. The red is **ITEM 147**, numbered by VF-PM, and it is not CP-3's:
+    `index-timeline.test.ts` › "SP-6 — the two doors against the REAL rosettad" › "the page over the ground-truth
+    transcript", `expected 0 to be greater than or equal to 1` (:972).
+    - `realWorld()` waits until the session's row is indexed, then pages at once. Under the whole suite's load (a
+      load average of about 40–50), rosetta had not yet taken the entries.
+    - Neither side touches the index or the timeline. The file was green in `ba3cdf984`'s own light, and in 3 of 3
+      re-runs alone on the merged tree (12/12 each, 12:09–12:10Z).
+    - So it is a load race in SP-6's real-rosettad row, not a semantic merge: the row should wait on its entries,
+      not on its row. It is in the fixer's queue. Where FIELDD_ROSETTAD_BIN is unset (CI), it is skipped.
+- **VF-PM's pre-check** (12:12Z): `git merge-tree` of `ba3cdf984` over main `b2fad1d42` (item 146b landed) is
+  `1d862468e`, clean. The files both sides changed are api.html, methods.ts, registries.ts and daemon.ts, and none
+  of them is a pin or a ledger doc. VF-PM gave a9 the mint's GO at 12:12Z.
+- **Run 88** (M88 `ce6577783`, the MERGE shape: main `b2fad1d42` merged into `ba3cdf984`, minted by a9): verify
+  exit 0 at 12:18:49Z.
+  - vitest 11,996 passed, 0 failed, 18 skipped: +180 against run 87 (contracts +33, electron-shell +7, field-app
+    +75, fieldd +65).
+  - The new files: needs-card 35, needs-queue 29, needs-notices 10 and 7, signed-record 8, needs-words 6,
+    needs-doors 4, needs-store 4.
+  - cargo 534/0/14, unchanged. Gen freshness clean. The bundle is 919.6 KB, 242.9 KB gzipped.
+  - Item 147's row was green. Logs: `lanes/ts6/logs/mini/run88/`.
+- **Landed:** main moved to `ce6577783` on VF-PM's word at 2026-11-01 12:21:57Z: `b2fad1d42..ce6577783`, 101 files,
+  +9468 −403.
+
+**Owed.**
+- **The send's sub** (VF-PM, 2026-11-01 11:55Z, ruled): "Your yes lasts until Claude Code ends." stays. One path
+  makes it untrue: an Allow is done and told, the disk fails at writing its record, then fieldd restarts. The yes is
+  gone, and the next send is held again. §9 and api.html say so; the card does not.
+- **The handle** (VF-PM, 2026-11-01 09:55Z): the card names a session by fieldd's runLabel. The lean is @'s handle
+  ("vibe-field·2"), so two untitled sessions never read alike. It is its own slice after TU-1, with a one-frame
+  visual for James only if it changes what he sees.
+- **The upgrade:** a CP-2 build's kept input queue, a bare array, is set aside as `unsigned` at this build's first
+  boot (P3-2, as LEANS P3 asks). Its words are not delivered; they stay on disk beside the queue.
+- **SparkStore** does not bind a record to its file name (P3-2): a same-uid copy of `sp-A.json` to `sp-B.json` lists
+  A twice and answers `get("sp-B")` with A. Closing it needs a check that a record's id is its file name.
+- **Replay** is not covered (P3-2): an agent that keeps a copy of a file fieldd wrote for a run's input queue can put
+  it back after delivery, and it verifies at the next restore. A per-store counter would close it, and none is ruled.
+- **Untested:**
+  - the race of two fieldds minting one key at once;
+  - the signer's win32 skip of the exposed check, reasoned and never run on Windows.
+- **SessionRecordStore** is still on its own HMAC, with a base64 key. Moving it onto the signer needs the signer to
+  read that key as written: a hex read sets it aside, and every session record it signed would read as forged.
+- **The settle poll** (once a second, until the re-attach settles) stays until an `onReattachSettled` event exists.
+- **A disk failure at the telling's keep** can tell the same fact again: a restart finds it owed and tells it again,
+  never the act. Within one boot, `#stand` holds it.
+- **A background user's notify** reaches no one: main wires the attached user alone (UA-5).
+- **a1's physical rungs** (final-cp3 item 9), which `docs/desk-gates.md` names none of yet:
+  - a scripted spark's `ask_user` reaches Chat as a card, and clears in two windows;
+  - a scripted run's `notify` reaches the status line (`statusLineSaid()`);
+  - a held spawn past the cap shows its card.
+  Main's OS notice is suppressed in a smoke, so it has unit rows only.
+- **An answer's fact** woken into a live run is dropped by `inputs.forget` if that run ends before its next idle
+  moment, while the item still reads `told` (final-cp3 item 10, plan risk 11). fieldd's own wakes are unaudited.
+- **Risk 10:** two door connections of one spark can overshoot the cap, since `creation()` does not serialize. It is
+  CP-2's; a held spawn makes it rarer, not worse.
+- **Plan §9's open questions:**
+  - Q2: an OS notice when a new item arrives;
+  - Q3: a notice's click choosing the spark, which needs a `ShellCommand` with a payload, a contracts change;
+  - Q5: a plain run's notify in its allowance, which re-rules MT-D7.
+- **architecture.html's MT-0 row** still says "Designed".
+- **The prose numbers:** DESIGN.md §9 and api.html's `ask_user` row say "one to four" choices in words, as they say
+  140 and 8, while the code reads `NEEDS_CHOICES_MAX`, `NEEDS_NOTICE_CHARS` and `NEEDS_OPEN_PER_SPARK` (contracts).
+  A change to a constant leaves those words behind until they are moved by hand.
+- **The witness is James's look** in `pnpm dev`: the card's pixels, its six-line scroll, and a wheel over it with the
+  live pane under it (happy-dom lays nothing out); and the OS notice, with the app in the background.
+- **A real Claude spark's idle** (plan risk 4): no run has seen an answer land at it, because the scripted monitor
+  never reads idle on cue. The unit rows and the real-floor row that reads the input queue's file stand for it until
+  a console run, James's or a1's rung, sees it.
+- **Owed to the draft queue, on VF-PM's word:**
+  - the CP3 row in DECISIONS, with P2's dated reading;
+  - the readings recorded for it (H2-1, H2-4): the views note said per item; a card does not stop Send; the card
+    replaces the hello; the outcome is said on the card; an off-screen refusal is said on the status line; and
+    CP3-D8's line, never built;
+  - `draft/tool-plane/IMPLEMENTATION.md` §2.1's fold;
+  - a dated correction at `cp3-the-person.md:132`: the phone's scope is PG's, and the doors are `agents.manage` and
+    local;
+  - design-03's PF2/§5.1 delta: an agent's notify is a notice in main's notices entry, as TS-5's are;
+  - the status lines as built: `cp3-the-person.md`'s Status header still says "nothing is built and no lane exists",
+    and `thinking-roled-agents.md`'s status layer still says CP-3 builds on James's go;
+  - a dated note at `thinking-tool-plane.md` §8 (:334), which lists `held` among the `isError` facts: a held send or
+    spawn is a success answer;
+  - a dated note at `IMPLEMENTATION.md` :72, row 1', whose "a door behind `approval.respond`" stands against
+    CP3-D6 A (`agents.manage`, local);
+  - the stale cites plan risk 15 lists, each a dated correction at its source: the ruled note's cites of
+    `thinking-roled-agents.md` (now :633, :637 and :642), `cp2-talk-room.md` (each now 16 lines on), `registries.ts`
+    (now :1138 and :1251), main's `index.ts` (now :926, :1253 and :1287) and `IMPLEMENTATION.md` (now :72 and :343),
+    and `cp2-talk-room.md` :62's own cite of CP-D3 (now :633).
+
+James's first sight, in `pnpm dev`, Chat (⌘4):
+- a spark that asks you reads "Asking you", with the orange dot on its row and on Chat's cell;
+- in its thread, over the pane's foot, a card ringed in orange: the question and its choices, then Not now;
+- a press says "You said Yes" for 2.4 s, then the card leaves; every other window drops it at once;
+- from another view, "Vela needs you" stands over Chat's cell for 2.4 s;
+- a notify is one line on the status line, and an OS notice while no VibeField window is in front.
+
+## Item 148 — users.json's mint and the layout stamp are created whole: tmp, fsync, then a link that fails EEXIST, never a bare "wx" write a reader can catch mid-write
+
+(2026-11-01; one commit `75e1bd31a` on lane `fix/item148` over main `0a97e59b6`, the fixer's; M90 is `75e1bd31a` itself,
+a fast-forward of main `0a97e59b6`, run 90.) Found by push 58's GitHub verify (41308169170), granted at 13:18Z.
+
+**The red.** packages/users `mint-race.test.ts`, "eight real minters, one empty root › exactly one users.json, one ULID,
+losers adopt": a loser's `ensureUsersRoot` → `detectLayoutState` → `readLayoutStamp` threw users-corrupt, "layout.json
+is present but unusable", with JSON.parse's "Unexpected end of JSON input". The cause: `detectLayoutState`, outside the
+lock (`ensure.ts`), read a two-step "wx" write. The winner wrote the stamp with
+`writeFileSync(path, …, { flag: "wx" })`, which creates the name before it writes the bytes, and a reader between the
+two read an empty file. The lock file's own header already records the lesson ("another process can observe the file
+between create and the identity write"); the two markers never took it. The race is old: users last changed at UA-7, and
+the runner surfaced it.
+
+**The fix.** `createWholeSync(target, payload)` in `users-file.ts` writes and fsyncs the payload under a private tmp
+name, then runs `linkSync(tmp, target)`, unlinks the tmp, and fsyncs the directory. The link fails EEXIST when any file
+holds the name, so the "wx" semantics stand, and the name appears only with its bytes complete. Both never-overwrite
+markers take it:
+- the layout stamp: EEXIST still validates the incumbent;
+- users.json's mint: EEXIST still adopts the winner, the belt under a broken lock. Mint's critical section stays
+  synchronous.
+
+Mutation's tmp + `durableRename` was not used: a rename lands the bytes whole too, but it replaces an incumbent, and
+these are the two files nobody may overwrite. No tolerance was added to any reader.
+
+**Tests.** `test/whole-markers.test.ts` (new) mocks `node:fs`, the repo's idiom (electron-shell's
+`authority-production.test.ts`). `writeFileSync` by path runs as its two real steps, open then write, with a reader
+between them, where another process lands:
+- a fresh mint's every write must leave each marker absent or whole;
+- an incumbent stamp is kept unchanged, and no tmp is left in the root.
+
+lock.ts's two comments and `users-file.test.ts`'s belt row title name the exclusive create, no longer "wx".
+
+**The light** (lane item148, `lanes/item148/tools/light148.sh`, logs `lanes/item148/light/`; 13:25:08Z → 13:26:08Z, at
+`75e1bd31a`), green throughout:
+- R, red-first: main's `users-file.ts` under the new file, its first row red, one torn read in each marker's
+  window: `expected [ 'users-corrupt', 'users-corrupt' ] to deeply equal []`. The file was restored from HEAD.
+- G: the new file at the fix, 2/2. M: `mint-race.test.ts` alone, 10 of 10 green: the lottery's row, never a proof by
+  itself.
+- @vibefield/users whole, 42 passed and 1 skipped (the win32-only row), 8 files. Biome on the package. The users
+  typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- Run 90 on the mini (a9's mint; VF-PM's read, 16:08:21Z): 11,998 passed, 0 failed, 18 skipped, main's count plus the
+  two new rows; it stood for the landing at 22:08Z, main unmoved.
+
+**Windows.** `linkSync` is CreateHardLinkW, which NTFS has (`%LOCALAPPDATA%`). A VibeField root on FAT or exFAT
+would fail loudly as users-unwritable, "cannot mint users.json", never silently. verify runs on macOS only.
+
+**Owed.** The Windows box check of the mint (the link on NTFS), not the fixer's to run unasked.
+
+## Item 147 — the ground-truth page waits for rosetta's `indexed`, never the session row's first sight
+
+(2026-11-01; one commit `f3554436d` on lane `fix/item147` over main `b2fad1d42`, the fixer's; the mint M91 `10368b597`,
+the merge over main `d8902f376`, run 91.) Found by cp-landing's merged-tree light, granted at 12:13Z. Test-only.
+
+**The red.** index-timeline.test.ts's "SP-6 — the two doors against the REAL rosettad › the page over the ground-truth
+transcript" read `expected 0 to be ≥ 1` under whole-suite load, and was green 3 of 3 alone. Its `realWorld()` waited
+for the session's row in `index.sessions` and paged at once. rosetta writes a session's row `pending` at setup, before
+any of its entries (rosetta-pin `crates/pipeline/src/streamed.rs`), and marks it `indexed` only once every admitted
+source file has completed a clean generation (`stream.rs`). The row's first sight is not its entries, and under load
+the page landed in between.
+
+**The fix.** `untilIndexed(rpc, nativeSessionId, ms)` ends the wait on the row's `streamState === "indexed"`, rosetta's
+own mark that the transcript has landed whole, read through fieldd's `index.sessions` door. Both of realWorld's rows
+ask it at the same 90 s: the page, and the tail, which compares its snapshot to a page. Waiting on the mark, not on a
+non-empty page, keeps the row's own `≥ 1` a claim, and holds the agent reply and the tail's comparison as well as the
+first entry. The red-first row is in the stub world (the fake rosettad re-reads its files per request): the session
+reads `pending` with no entries, and 1 s later the entries land and the row reads `indexed`. The wait must end with the
+page holding all seven of S1's entries. `World` gains `sessions(rows)`.
+
+**The light** (lane item147, `lanes/item147/tools/light147.sh`, logs `lanes/item147/light/`; 12:43:28Z → 12:45:56Z,
+at `f3554436d`). Its first run, at 12:20Z, was stopped on its red-first step for M88's landing, and the lane was
+restored clean; this second run went green throughout:
+- R, red-first: `untilIndexed` given main's condition (the row's first sight), the stub row alone, red:
+  `expected [] to have a length of 7 but got +0`. The file was restored from HEAD.
+- G: the stub row alone at the fix, green in 1,200 ms (the 1 s flip waited out).
+- X: the whole file against the REAL rosettad (the siblings-built release binary at the pin), 13/13. The page row took
+  592 ms and the tail row 3,708 ms, both run, neither skipped.
+- Biome on the file. fieldd's typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- The merge-tree over main `0a97e59b6` was clean (`ea31487c5`, no file changed on both sides), and CP-3 touched none of
+  the row's seams: the fake rosettad, the index contracts, fieldd's index and rosetta code.
+- Run 91 on the mini (a9's mint; VF-PM's read, 22:16:29Z): 11,999 passed, 0 failed, 18 skipped, main's count plus the
+  new row; cargo 33 ok. The merge is over main `d8902f376`, item 148's records.
+
+**Owed.** Nothing of the fixer's.
+
+## F1b's kit half — the phone's freeway approval rides its home's door, and every refusal is said in its words
+
+(2026-11-01; three commits `dd6bccf5b` → `284e4af9d` on lane `fw/f1b-kit` over main `5c41c10b2`; minted STACKED as M93,
+`284e4af9d` itself (a fast-forward of main `5c41c10b2`: the run IS T), run93r.) The phone asks its HOME for a freeway
+approval to any desktop. The home forwards the ask whole to that desktop, which mints for the phone its own roster knows
+(M63). The phone opens no other door for it.
+
+**What James asked and ruled:** 2026-10-16 22:16Z, FW-D5, "a freeway per desktop": a link to each desktop the phone
+shows a session of, approved by THAT desktop through the home's door. 2026-10-31 21:09Z: freeway, sync plane and
+Godview land first. F1b's desktop half landed as M63 `599998fdd`. VF-PM scoped this half on 2026-11-01 at 01:43Z: the
+approval only. A ticket, its renewal and Resume stay over the owner's door (DS-8), and moving them is SP-7's. GO at
+22:22Z.
+
+**What landed** (10 files +412 −11):
+- `dd6bccf5b`, red first:
+  - FieldFreewayTests `FreewayApprovalTests` and `FreewayApprovalRefusalTests`, and three rows in FieldMeshTests
+    `FieldLinkOwnerDoorTests`.
+  - `FreewayContract.Approval` mirrors `FREEWAY_APPROVAL`, and `check-ios-fixtures` pins all four values: 67 pins,
+    was 63.
+  - 7 rows were red on the stubs. FieldMesh's two: the ask went to the laptop's own door (TIMEOUT), and it dialled
+    the laptop.
+- `8eac5b72b`, the code:
+  - `FieldLink.approveFreeway(on:)` sends `freeway.approve` on the home's door: `{}` for the home's own link,
+    `{device}` for another desktop's. With no home it refuses at once in the kit's shape (`FreewayApproval.noHome`,
+    UNAVAILABLE freeway `no_door`, retryable).
+  - `FreewayApproval.said` puts each refusal in the phone's words, keeping the door's kind, retryability, details
+    and code:
+    - FORBIDDEN_SCOPE → "laptop won't approve a connection from this phone" (not retryable);
+    - uncorrelated → "laptop doesn't know this phone yet";
+    - unread → "laptop isn't ready for this phone's connection yet";
+    - down → "laptop isn't taking connections from phones right now";
+    - the home's `peer-link` → "your home desktop can't reach laptop right now";
+    - no home → "this phone isn't connected to its home desktop".
+  - `FreewayDesktopLink`:
+    - A refusal reaches `link()` in those words, and the attach card's `doorWords` prints them.
+    - One no retry fixes leaves the link `.refused`, and only a tap asks again.
+    - A retryable one is asked again on the backoff.
+    - `Dialing.desktopName` gives the words the field's name for the desktop.
+- `284e4af9d`, the voice: DESIGN.md §9 gains "The freeway's refusals", dated 2026-11-01: the six sentences, quoted
+  exactly by `FreewayApproval.said`. VF-PM ruled at 22:40Z that DESIGN.md governs voice.
+
+**Gate.**
+- The kit, the gate the mini cannot run: `xcodebuild test` on James's Mac, on the iPhone 17 Pro simulator (iOS 26.5),
+  at nice 19 under the guard, DEVELOPER_DIR per command.
+  - TEST SUCCEEDED: 1,411 tests in 252 suites and 14 bundles, 0 failed (22:35:17–22:36:44Z, at load 120).
+  - FieldFreewayTests 57/57, FieldLinkOwnerDoorTests 8/8.
+  - The device (F93EABF3-…) was found Shutdown at 22:37:18Z.
+- On the lane: field-app's 18 DESIGN.md reader files, 391/391, and `ui-system-boundaries` 44/44, each run alone.
+  `check-ios-fixtures` found 186 copies and 67 pins identical. Biome is clean on
+  `scripts/check-ios-fixtures.mjs`, and `git diff --check` is clean.
+- The mini, on M93 = `284e4af9d`:
+  - Run 93 was red on the load lottery: fieldd's terminal-kill-matrix WP12-D10 row, at END load 59.5 (the mini's
+    foreign simulator and Spotlight). The tip has no TypeScript or Rust.
+  - Run93r, the one re-run, was green at 22:54:09Z: 11,999 / 0 / 18 (= main ±0), cargo 33 ok, iOS pins 67, the tree
+    clean.
+
+**Findings.**
+- Since F1, `FreewayDesktopLink`'s header and `Dialing.approve`'s doc said the approval came "from the phone's
+  home", while `approveFreeway` asked the owner's own door. The words are true from this slice on.
+- `thinking-freeway.md`'s FW-R6 row cites `FieldLink.swift:714-716` for the per-ask owner sockets. Those lines have
+  moved, and the approval's socket retires here. A dated note is owed at a draft slot.
+- DESIGN.md named no words for the freeway's refusals. §9 says them from `284e4af9d` on.
+- `check-ios-fixtures`' fix message prints a string pin's value with doubled quotes (`""down""`). Owed, the fixer's.
+
+**Owed.**
+- James's device round, before `-vf-freeway` comes off: F1's exit and this slice's witness on a real phone.
+- PG-3c, which waited on this slice.
+- SP-7, the ticket, renewal and Resume asked through the home, each a desktop slice first.
+- The 15 s wait the desktop half found still stands. An approval for an unreachable desktop waits for the home's
+  forward timeout (`FORWARDING.FORWARD_TIMEOUT_MS`) before the phone hears "your home desktop can't reach laptop
+  right now" and backs off. Reading the roster's state for the desktop first, or FD1's held opens, would answer
+  sooner.
+- `check-ios-fixtures`' doubled quotes, the fixer's (above).
+- `thinking-freeway.md` FW-R6's stale lines, at a draft slot VF-PM opens.
+
+## Item 150 — the board screen reads a row keyed "" as keyless, never `removed: [""]`, a delta RowsDelta refuses and the replica reopens on
+
+(2026-11-01; one commit `47ee475bd` on lane `fix/item150` over main `5c41c10b2`, the fixer's; the mint M94 `a6dc43cd2`,
+the merge over main `9f0b7c73f`, run 94.) fd's find in PG-3c's design, granted at 22:53Z.
+
+**The red.** `packages/field-app/src/godview/monitor/board-screen.ts`'s `keyOf` returned any string `runtimeRunId`, ""
+included; only a non-string read as NO_KEY. A row keyed "" fails AgentModelMeshRow (a key is `min(1)`), so it is
+unreadable, and the delta path appends every unreadable key but NO_KEY to `removed`. The screened delta carried
+`removed: [""]`, which contracts' RowsDelta (`removed: z.array(z.string().min(1))`) refuses. The replica read the frame
+as unreadable and reopened (`model-replica.ts`), so every such delta looped a reopen. The open path drops the row
+without touching `removed`, so only deltas looped.
+
+**The fix.** `keyOf` maps "" to NO_KEY, as PG-3c's Swift reader will. A keyless row still reads its desktop as another
+version until a snapshot or an open replaces it, as a non-string key always did.
+
+**The light** (lane item150, `lanes/item150/tools/light150.sh`, logs `lanes/item150/light/`; 22:57:02Z → 22:57:35Z, at
+`47ee475bd`), green throughout:
+- R, red-first: main's `board-screen.ts` under the new row, red, the screened delta's `removed` holding `"run-gone"`
+  and `""`. The file was restored from HEAD.
+- G: `board-screen.test.ts` at the fix, 9/9. board-screen with phone-parity, 22/22. Biome on the two files.
+- field-app's typecheck, under a HOLD line the script took by noclobber and released at its exit.
+- The merge-tree over main `284e4af9d` (M93) was clean (`d880fc5e8`), with no file changed on both sides.
+- Run 94 on the mini (a9's mint; VF-PM's read, 23:07:43Z): 12,000 passed, 0 failed, 18 skipped, main's count plus one
+  (board-screen.test 8 → 9); cargo 33 ok.
+
+**Owed.** Nothing of the fixer's.
+
+## TU-1 — the turn fact and the one placement rule: fieldd keeps whether a spark, and each run's conversation, has worked (`turnedAt`), so Chat's hello reads fieldd's fact, and one rule places a run in an Agent Profile for @, the talk room, the needs-you Allow, the compose room, the door and the New spark sheet (2026-11-02; `1ec240268` → `60ce6a988`, six commits on main `0a97e59b6`, lane `co/tu1` in `/Volumes/SamsungRed/lanes/tu1`, in the mini's mint M96 `57569bca3` over main `50a66dd52`)
+
+James ruled Q1 A and Q2 A, both at their leans, by a board click on the decision page
+https://claude.ai/artifact/SAQ7UP8vqpTqsmVWPxQzWU at 2026-11-01 08:31:35Z ("Q1 A + Q2 A (both leans)"). VF-PM ruled
+Q3–Q7 at 07:17Z, and the plan's three questions (§12) at 14:01Z, all three at cp-landing's leans. The read is
+`lanes/co-plan/plans/turnfact-read.md` (its Status holds the seven rulings) and the plan is
+`lanes/co-plan/plans/tu1-plan.md`. TU-1 is the slice VF-PM ruled on 2026-10-31 (21:42Z and 22:13Z,
+`lanes/co-plan/rulings/wake-fieldd.md`). It pays SP-1d's two owed lines: the hello's open cases and @'s profile
+residual.
+- **Q1:** "new" is the spark's. Once a spark has worked it says no more hello, and fieldd writes the first turn on the
+  spark's record too.
+- **Q2:** work counts as a turn, and an ask does not. An ask seen before any work writes nothing.
+- **Q3:** one rule for the talk room, the compose room and the door's `#identify`.
+- **Q4:** the gap while fieldd is down is accepted and named. There is no EL8 petition. A rosetta check at re-attach
+  comes only if TU-1's red-first shows a wrong hello a person can see.
+- **Q5:** a native resume from History is stamped at birth.
+- **Q6:** `turnedAt` alone. Absent is an older record, `null` is never, and a time is turned.
+- **Q7:** the prefix is TU.
+- **§12 Q1 (a′):** a persona no profile lists is in no profile. fieldd reads the monitor's latest sets frame and
+  fails closed until one arrives.
+- **§12 Q2, O1 OUT:** the hello does not step back while a new spark's own agent asks. James picked Q2 A on the frame
+  that showed the hello over the ask, and chose that cost.
+- **§12 Q3:** a restart's pending tail is accepted as part of Q4's gap and named in Q4's words.
+
+**What.**
+- **Contracts, the kit and the row's two keys, one EL9 commit** (`1ec240268`):
+  - `turnedAt` (`z.string().min(1).nullable().optional()`) on `AgentSessionRecord`, `AgentSessionSummary`,
+    `AgentFieldRow` and `sparkFields` (so `SparkRecord` and `SparkSummary` carry it), and `AgentFieldRow.profileSet`.
+    `AgentDeskRow` and `AgentModelDeskRow` inherit both. `AgentRemoteRow` is untouched.
+  - The one rule, `profileSetOfRun(run, personaSets)`, with `personaSetsOf`, `NATIVE_PROFILE_SET_ID` and
+    `RunProfileFacts` in `contracts/src/agent-index.ts`: the profile the run is filed under; else This Mac's for a run
+    that names no persona; else the profile that lists its persona; else none (a persona no profile lists, or the
+    sets not read yet: `null`, fail closed).
+  - Four new goldens, and no mirrored golden edited: `agent-field-snapshot.turned.json` (mirrored into the kit),
+    `agent-session-record.turned.json`, `agent-session-summary.turned.json` and `compose-sparks-list.turned.json`.
+    The sparks list joins the field golden row for row.
+  - The kit's mirror (D4): its decoder learns `turnedAt` and `profileSet` only. A new `LaunchShapeTests` case
+    asserts both keys per row, and the exact keys it does not read: `["origin","spark"]` on a spark's rows.
+    `check-ios-fixtures` requires the mirror.
+  - system.html's "What a field row carries" gains a dated note. Godview's `NATIVE_PROFILE` is the contract's id.
+  - `pnpm gen` and `gen:check`: no diff. The agent plane and compose are TS-only.
+- **fieldd keeps whether a run has worked** (`50d9c6a5b`):
+  - `mirrorShowsTurn` (Q2, D2): the agent at work outside puppeteer's `starting` span, tokens spent, or an answer
+    written. `blocked` counts nothing. `LAUNCH_ACTIVITY` is typed by puppeteer-core's `MonitorActivityKind`, so a
+    pin that renames the word is red at its typecheck.
+  - `applyMonitor` stamps the signed record once (`stampTurn`): it re-reads the record, writes fieldd's own clock
+    (D8), leaves `updatedAt` alone (D9) and logs `fieldd.agents.session_turned`. A failed write logs
+    `fieldd.agents.turn_unrecorded`, and the row says what fieldd saw for this life.
+  - Every birth says its fact: a spawn and an adopt `null`, a resume the record's own (absent stays absent), History's
+    native resume its birth time (Q5), and a re-attach the record it re-reads. `enter`'s launch is a union on
+    `reattached`, so a birth that forgets the fact does not compile.
+  - The spark is told at the stamp and at every entry that carries a time (D7). `SparkService.turned` re-reads and
+    keeps the first time. Hatch writes `null`, and `#keep` re-reads before it writes (D6).
+  - api.html: dated notes on `agent.subscribe` and `compose.sparks.list`.
+- **fieldd's rooms on the one rule** (`32ffc6108`):
+  - The one rule's persona step (D1), `AgentMonitorService.personaSets()`: `null` until the first frame, then one
+    map per frame, over the same `agents.profileSets` frame Godview's backend reads. daemon.ts hands one closure to
+    the talk room, the Allow, the compose room and the door. Every `NATIVE` literal and every `profileOf` in the
+    tool plane is gone.
+  - The Allow says a run in no profile in its own words: "‹run› is in none of ‹spark›'s Agent Profiles" (fieldd's
+    ‹reason›; no DESIGN.md §9 word moved).
+  - `history_read` places by the rule over its own fresh read of the sets.
+  - D11: a re-attach files a record that names no set under the set puppeteer re-binds at attach, and never
+    overwrites a filed one.
+  - api.html: the tool plane's section note and `agent_send`'s row, first.
+- **The door fails closed until the profiles are read** (`cf5c4e67b`): a plain run the rule can place only by its
+  persona, before the first frame, is unsettled with the new reason `profiles-unread` (`DoorUnsettled`). It is listed
+  nothing with `ttlMs: 0`, asked again every `REASK_MS`, and placed once the frame lands.
+- **Chat's hello on the facts, and @ and the sheet on the rule** (`48f962df0`), DESIGN.md §8 first:
+  - `sparkIsNew`: a spark that never started is new; a spark whose run is pending is never new (D10); otherwise only
+    while the spark's record reads `null` and its own row says no time.
+  - Deleted: the hatch minute (`HATCH_RUN_MS`, `bornInItsHatch`), the turns-seen set (`turnSeen`, `#turnsSeen`,
+    `UNSPOKEN`, `turnShown`, `NO_TURNS`), `profileOfRow` and `sessionsByProfileOf`.
+  - D5: the feed asks the list again once per first turn (`boardSparksKey` marks `·turned`).
+  - @ places a session by `profileSetOfRun`. The New spark sheet's "Sees N sessions" counts by it too
+    (`usePersonSessions`, `sessionsSeenOf`).
+  - The catalog's fixtures carry `turnedAt` in place of the tokens that kept the hello off. The plates are unchanged.
+- **The critic's fixes** (`60ce6a988`, `lanes/co-plan/final-tu1.md` #1–#6; #7, the plan's own text, is outside the
+  commit):
+  - an awake spark whose run the board does not show yet is not new (W8), and DESIGN §8 says so;
+  - an Allow before the profiles are read is refused retryably, `PRECONDITION_FAILED {reason: "profiles-unread"}`:
+    the item stays open, nothing is spent, and the spark is told nothing. The talk room's `reach` and compose's
+    `scopedRun` answer `UNAVAILABLE` (retryable) in place of `outside` at that moment;
+  - DESIGN's words as built: Godview's two differences, the TU-1 lead on SP-1d's landed bullet, and "no agent can be
+    placed, nor a session its persona places" with a dated note. api.html's `needs.answer` row gains the reason.
+
+**Real vs not yet.**
+- Real, on fieldd's own facts, with nothing stubbed:
+  - the fact on the run's record, its summary, its row and the spark's record, kept across a restart, a re-attach, a
+    wake and a resume;
+  - Chat's hello read from it, so a spark that has worked never says hello again, and an ask alone is no turn;
+  - `profileSet` on the row, and the one rule (D1) for @, the talk room, the compose room (`agents_list`,
+    `agent_read`), the door, and (D3) the Allow, `history_read` and the New spark sheet's count;
+  - the kit reading both keys from its mirror.
+- What moved, EL7 (plan §4's table): a run filed under none whose persona a profile lists moves from This Mac's
+  sparks to that profile's. That is the one widening, and the ruled one. A persona no profile lists, and a persona's
+  run filed under none before the first frame, move from This Mac's to none. Filed runs and runs that name no persona
+  are placed as before.
+- Not yet, each named by a ruling or by the plan's §0.2:
+  - a turn no fieldd saw (Q4's gap, below);
+  - the remote cut, which carries neither key (below);
+  - Godview's tabs, which stay on the agent runtime's own placement (below);
+  - no rosetta check at re-attach (Q4's default; plan C5 not built).
+
+**Found.**
+- **fieldd already held the sets synchronously** (plan critique 3). The plan's first D1 dropped the persona step on
+  the premise that it did not, which would have made two placement rules in the product. `AgentMonitorService`
+  keeps the latest frame, and TU-1 exposes it read-only.
+- **The pending rule had to stay** (D10, critique 5; the read said delete it). A pending run is a live pane fieldd
+  does not drive, and Send's starters would paste into it.
+- **`#keep` spread a record it read before an `await`** (D6), so a wake would have erased a stamp written during it.
+  Both writers re-read now.
+- **A door identified before the first frame held a persona's plain run in no profile for its life** (MT-D4 keeps a
+  settled answer). C3's body named it; `cf5c4e67b` closed it.
+- **The hello could stand over a pending pane** while the board had not shown its run (final-tu1 #1): with no row,
+  an awake spark reading `null` was new, and the pending check never ran.
+- **An Allow pressed before the first frame failed for good, in untrue words** (final-tu1 #2): "is in none of …'s
+  Agent Profiles", the Allow spent and the spark told it. It waits now.
+- **A This Mac spawn files the set but names no persona** (measured in R3b), so an attach binds nothing for it. R3b
+  runs under a managed Work profile.
+- **C3's test files differ from the plan** (final-tu1 #9): compose's `agents_list` rows live in
+  `compose-verbs.test.ts`, not in tool-plane-service's.
+
+**Validation.**
+- **Reviews:** the plan's critique (`lanes/co-plan/plans/tu1-critique.md`, 19 findings) was folded before the build.
+  C2, C3, the door (C3b) and C4 each had a review, and the fixes commit closed the C3b and C4 reviews' minors. The
+  completeness critic (`lanes/co-plan/final-tu1.md`, at `48f962df0`) found no High, two Medium, five Low and two
+  Info. #1–#6 are fixed in `60ce6a988`, and #7 in the plan itself (`tu1-plan.md` rewritten to O1 OUT). #8 and #9 are
+  owed lines below.
+- **The build:** a usage-limit stop at about 15:50Z killed C4's first builder. Its partial edit was saved as a patch
+  (`lanes/tu1/c4-partial-design-20261101T2153Z.patch`), and C4 was rebuilt, the patch reused after a word-by-word check.
+- **Red first** in every behaviour commit, each at an assertion unless the export is the change:
+  - C1: contracts 7 of 715, fieldd 2 of 44, the monitor pin 1. The kit's red is the decoder's missing members, not
+    run on the parent;
+  - C2: agent-session-records 11 of 18, compose-sparks 4 of 17, and the real floor's TU-1 describe 6 of 6;
+  - C3: 11 rows (talk 3, compose-verbs 2, needs-queue 1, tool-plane-service 2, agent-monitor 2, R3b on the real
+    floor);
+  - the door: tool-plane-service's null row, at its first assertion;
+  - C4: 17 rows. new-spark's unit row is a TypeError (the signature is the change), and its assertion red is the
+    sheet's composed row;
+  - the fixes: thread-items W8, needs-queue's before-the-frame Allow, and the talk and compose before-the-frame rows.
+- **G4, the named guard:** its two fieldd rows (C2) pass by design, asserting the gap as named; their lines are
+  quoted under Owed. C4's window half printed `TU1_G4 {"case":"window","new":true,"quiet":true,"hello":["hello"]}`.
+  VF-PM read them at 21:55Z: no rosetta check, and both cases are named.
+- **The kit:** `LaunchShapeTests`, 14 passed, the new row among them, on the lane's own simulator
+  (`093F66ED-C6BC-429C-9046-BFBE6B683E6A`), shut down after.
+- **The lane light** on T `60ce6a988` (`lanes/tu1/light/tu1-light-20261101T230619Z/`): GREEN, 23:06:19Z → 23:14:06Z.
+  - Every step exited 0: biome (51 files), check:walls, check:retired, check:ios-fixtures (187 copies identical),
+    preflight (OK, with one warning, R23's `acp` candidate, a sibling's offering), glyphs --check, gen:check, cargo
+    layout_vector 1/1, and tsc on contracts, design-kit, field-app, fieldd and electron-shell.
+  - contracts whole: 54 files, 1501 tests.
+  - field-app whole: 284 files (+1 skipped), 3836 tests (+3 skipped).
+  - electron-shell whole: 163 files, 2484 tests (+3 skipped).
+  - fieldd whole: 230 files (+3 skipped), 2971 tests (+11 skipped), with FIELDD_ROSETTAD_BIN set.
+- **The merged-tree light** (`lanes/tu1/light/tu1-light-20261101T231423Z/`): the scratch merge `09063c8d6` of T and
+  main `50a66dd52` (tree `d7b8114a6`), 23:14:23Z → 23:21:06Z. GREEN, no reds.
+  - Every static step, gen:check, cargo and tsc exited 0.
+  - contracts 1501; field-app 3837; electron-shell 2484; fieldd 2972.
+  - Both sides touched DESIGN.md (TU-1 at lines 1705–1930, main at 5375) and `scripts/check-ios-fixtures.mjs` (118
+    against 699). Nothing is near.
+- **Run 96** (M96 `57569bca3`, a MERGE over main `50a66dd52`, minted by a9): GREEN.
+  - vitest 12,060 passed, 0 failed, 18 skipped: main +60. contracts +14 (agent-field, agent-index, agent-session,
+    compose, fixtures), fieldd +37, field-app +9.
+  - field-app's spark-status file went from 22 rows to 21. C4 (`48f962df0`) removed its row "says a turn was seen
+    while the spark is at work or waits on you, its run spent tokens, or the window saw one". That row tested the
+    window's interim turn reading (`SparkEntry.turnSeen`, `BesideTheBoard.turnsSeen`), and C4 deleted that reading.
+    The hello reads fieldd's `turnedAt` now, and fieldd's `mirrorShowsTurn` rows and the new thread-items rows test
+    what counts as a turn.
+  - cargo 33 ok. Pins: 67.
+- **Landed:** main moved to `57569bca3` at 2026-11-02 00:16:22Z: `50a66dd52..57569bca3`, 57 files, +2498 −410.
+
+**Owed.**
+- **Q4's gap and §12 Q3's pending tail**, named in Q4's words (plan §3.6, the words the records use; DESIGN.md §8's
+  open case says the same to the person):
+
+  > A turn no fieldd saw is not kept. While fieldd is down, and after a restart that could not re-attach a run (AR-4's
+  > pending, until fieldd resumes it at its next idle), the run's pane lives on field-native and can still be typed
+  > into. If that turn has ended by the time fieldd watches the conversation again (a re-attach, or the resume that
+  > replaces a pending run), nothing reports it: puppeteer replays only open work at attach, and Claude Code's
+  > transcript observer makes earlier messages a silent baseline. The record then says no turn yet. If the run is a
+  > spark's first and only session, the hello can stand over a conversation the person had while nothing watched it.
+  > While a run is pending, Chat never calls its spark new, so no hello stands over a pane fieldd does not drive. A run
+  > still mid-turn when fieldd attaches is seen working, and stamped then.
+
+  - G4's two lines, from C2's green run (each wrapped once after a comma here; each is one line in `50d9c6a5b`'s
+    body and in final-tu1.md):
+
+    ```
+    TU1_G4 {"case":"down-window","hatched":{"record":null,"row":null,"spark":null},
+      "reattached":{"reattached":true,"status":"idle","record":null,"row":null,"spark":null}}
+    TU1_G4 {"case":"pending-tail","pending":{"row":null,"spark":null},
+      "successor":{"record":null,"row":null,"spark":null}}
+    ```
+
+    After the re-attach, the run's record, its row and the spark all read `null`; on the pending tail, the successor
+    inherits the record's `null` and the spark stays `null`.
+  - VF-PM read G4 at 21:55Z: no rosetta check, and both cases are named. Closing the gap needs puppeteer to report
+    the transcript it reads back (an EL8 event) or the History index's turns (rosetta).
+- **Godview against (a′):** Godview's tabs (puppeteer-monitor's `resolveProfileSet`) draw under This Mac a persona's
+  run that no profile lists, where the rule says none. Before the first frame they also draw under This Mac a
+  persona's run filed under none. `agent-monitor.test.ts` holds both to exactly that. An EL8 event moves the sibling's
+  side.
+- **The remote cut (`AgentRemoteRow`) carries no `turnedAt`** and no row `profileSet`, as api.html's
+  `agent.subscribe` note says. The phone has no hello yet; its Chat (the PC track, IOS-11a…g) would need them.
+- **`field`'s retirement** (PG-L1): Chat reads the `field` projection (`sparks-feed.ts`). Both new keys ride the model
+  board's row through `projectDeskRow`, so a later move of Chat's board keeps them. Named, not built.
+- **The handle** (VF-PM, 2026-11-01 09:55Z) is its own slice, after TU-1: the needs-you card names a session by
+  fieldd's runLabel, and the lean is @'s handle ("vibe-field·2").
+- **"Try again in a moment" is untrue if the monitor's first profiles read fails** (final-tu1 #9). The seed read
+  is logged (`fieldd.monitor.profiles_unread`) and never retried, so `personaSets()` stays `null` until a profile
+  frame changes. Until then the Allow, the talk room and compose say "try again in a moment", a persona's run filed
+  under none is in no profile, and its door is asked again every `REASK_MS`. That is within (a′).
+- **`history_read` puts a persona two profiles list in the later one** (final-tu1 #8, C3's variance), as
+  puppeteer-monitor's `personaSets` does; main took the first. puppeteer files a persona in one set, so no live
+  answer moves.
+- **`mirrorShowsTurn` counts work only at status `"working"`** (the C2 review's note). puppeteer ranks a blocker
+  above an open activity, so a mirror that first reaches fieldd already `blocked` mid-turn, with no tokens and no
+  answer yet, stamps nothing until the run works again after the answer. A run stopped while so blocked is never
+  stamped, though Q2 counts its turn as work. The fix, if wanted: `blocked` with an open activity that is not
+  `starting`.
+- **rulings-2 is open only while a newer shell runs over an older leave-running fieldd** (plan risk 1). That fieldd
+  sends no `turnedAt`, so no hello, and no row `profileSet`, so @ falls back to the persona's profile until fieldd
+  restarts.
+- **`NewSparkSheet.tsx`'s two lines:** TU-1 changed its `:30` import and `:207` only, beside new-spark.ts's
+  `sessionsSeenOf`, and kept off the View, within item 149's line limits (VF-PM, 22:15Z: a1 fixes the sheet's Create
+  in lane r11m). Whichever of TU-1 and item 149 lands second merges over `:30` and `:207`.
+- **Before the first frame,** compose's `agents_list` leaves a persona's run filed under none out of the list, never
+  refusing the whole list. Its room's header and api.html say so.
+- **Out of scope, named:** a typed run's `--resume` (AR-7's adopt) reads `null` until its next live turn; `helloLeft`
+  stays per window (HN-D9); the phone reads `turnedAt` only as a time or not.
+- **The records outside these three files:** architecture.html's compose row (`:1774`) gains TU-1's SHAs, and the
+  read's Status (`lanes/co-plan/plans/turnfact-read.md`) flips to "BUILT … (LANDED TU-1)".
+- **Owed to the draft queue, on VF-PM's word, never a builder's** (plan §6, final-tu1's owed list):
+  - the compose-plane draft's NS-D4 reading: "its session has had no turn" is now spark-level (Q1);
+  - the Sparks page's notes on the hello, including that it now stands over a new spark's ask (Q2 A, O1 out);
+  - design-03's agent row field list, if it lists the row's fields (`turnedAt`, `profileSet`).
+- **James's look** in `pnpm dev`, posted by VF-PM at the landing: the lines below. The trust-menu line is the cost he
+  chose.
+
+James's first sight, in `pnpm dev`, Chat (⌘4):
+- a new spark says hello; a starter and Return in its pane, and the hello leaves for good;
+- a spark that has worked never greets again: woken, or after fieldd restarts alone, its thread shows its pane alone;
+- a spark put to sleep before it ever worked still says hello, under "Vela is asleep" and its Wake;
+- when a new spark's agent asks first (a trust menu at launch), the hello stays over the ask and the head says Needs
+  your OK; a click into the pane takes the hello away and shows the ask;
+- @ offers the sessions the talk room reaches: a Work session filed under Work, for a Work spark;
+- the New spark sheet's "Sees N sessions" places each session by the same rule.

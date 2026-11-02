@@ -174,6 +174,14 @@ function feed(sparks: SparkSummary[] = [VELA], rows: AgentFieldRow[] = ROWS): Sp
       onFrame({ revision: 1, rows }, "snapshot");
       return () => undefined;
     },
+    // the needs-you queue holds nothing here (CP-3: Chat's reading of it is chat-view.test.tsx's)
+    watchNeeds: async (onItems) => {
+      onItems([]);
+      return () => undefined;
+    },
+    answer: async () => {
+      throw new Error("nothing is answered here");
+    },
     onReconnected: () => () => undefined,
     open: async () => VELA,
   };

@@ -423,7 +423,17 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * liveness, a wait, a birth or a death; L12's signal) waits on any remote
  * board: the leading edge goes out once that long has passed since the last
  * frame, or once the board's own floor has, whichever is shorter. DESK_TEXT_CHARS
- * keeps its name: it bounds every text the remote cut carries (PG-D2). */
+ * keeps its name: it bounds every text the remote cut carries (PG-D2).
+ *
+ * PG-3b (the 3b review [1], 2026-11-01) — CARRIED_SCREENS_PER_PEER bounds the
+ * screens one peer daemon's connection may open on an owner for the readers
+ * behind it (`agent.reportShown` carried through a home, keyed by
+ * `onBehalfOf`). One key is one reader connection at the home. One person's
+ * phones and tablets, each reconnect a new key until its empty report lands, are
+ * a handful, so 64 is an order of magnitude above honest use. It also bounds the
+ * owner's memory for one peer: each set holds at most 4096 ids, so at most
+ * 262 144 ids per peer connection. A report that would open the 65th is refused
+ * `{state: "no-screen", reason: "carried-cap"}`; the screens already open stand. */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
@@ -436,6 +446,7 @@ export const AGENT_FIELD = {
   MESH_HEARTBEAT_MS: 1_000,
   MESH_STALE_BEATS: 3,
   FULL_TICK_MS: 16,
+  CARRIED_SCREENS_PER_PEER: 64,
 } as const;
 
 /** Item 87 (2026-10-29) — a managed run's exit, as fieldd closes it. puppeteer's `handleProcessExit`
@@ -1215,6 +1226,8 @@ export const SCOPES = [
   // record — the active executable per provider, updates — the native.admin
   // posture. Both are local-only forever: consent is an act of the person at
   // this device; neither enters TAILNET_SCOPES or any plugin eligibility table.
+  // Since CP-0 and CP-3 `agents.manage` is also the person's acts on the agents
+  // and sparks of this device: the `compose.sparks.*` and `needs.*` doors.
   "index.manage",
   "agents.manage",
   // AR-5b (the review's EL7 lens) — two CONTENT reads, split off the census
@@ -1665,8 +1678,18 @@ export const LAYOUT = {
    * CLAUDE.md written for it. The person's, to open in Finder; fieldd's records never live in it. */
   SPARK_HOMES_DIR: ["sparks"],
   /** CP-2 (CP2-D3) — each session's input queue, one file per run, 0600 in a 0700 directory: a spark's words and
-   * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. */
+   * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. Since CP-3 (LEANS P3)
+   * each `AgentInputQueueFile` is signed with AGENT_INPUTS_KEY_FILE's secret (0600, made once, never overwritten), so
+   * an agent that edits one cannot speak as a spark or as VibeField: an unsigned or forged queue is set aside at
+   * restore, never delivered. That holds against an edit; the key is 0600 to the same uid, as the sparks' is (EL7). */
   AGENT_INPUTS_DIR: ["fieldd", "inputs"],
+  AGENT_INPUTS_KEY_FILE: ["fieldd", "inputs.key"],
+  /** CP-3 (cp3-the-person.md §5.1) — the needs-you queue: one `NeedsRecord` per item, 0600 in a 0700 directory, each
+   * signed with NEEDS_KEY_FILE's secret (0600, made once, never overwritten), so an agent that edits one cannot answer
+   * it, allow itself a session or put words in a spark's mouth: an unsigned or forged record is set aside, never served.
+   * That holds against an edit; the key is 0600 to the same uid, as the sparks' is (EL7). */
+  NEEDS_DIR: ["fieldd", "needs"],
+  NEEDS_KEY_FILE: ["fieldd", "needs.key"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
