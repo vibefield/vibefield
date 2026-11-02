@@ -37,6 +37,11 @@ extension SplashLook {
 /// compile among it) happens under the splash, never in front of it; the splash draws on a thread of
 /// its own, so that work never stops it. It leaves once the content is frame-stable and the field
 /// has stood its floor.
+///
+/// WI-1 (DESIGN.md §8 "The phone's way in"): while the content holds it (`.splashHolds`), the splash
+/// stays, and what the content puts on it (`.splashOverlay`) stands over its field; a hold that comes
+/// after the splash has gone brings it back over the content, by its own fade. Released, it leaves by
+/// its own exit once the content is steady again.
 public struct SplashGate<Content: View>: View {
   private let content: () -> Content
   @Environment(\.colorScheme) private var colorScheme
@@ -59,7 +64,21 @@ public struct SplashGate<Content: View>: View {
         splash
           .opacity(model.revealing ? 0 : 1)
           .allowsHitTesting(!model.revealing)
+          // under the way in the field is its ground, not a word of its own
+          .accessibilityHidden(model.holding)
+          // a splash that comes back over the content fades in (WI-1)
+          .transition(.opacity)
       }
+    }
+    // what the content puts on the field, drawn over it only while it holds the splash up
+    .overlayPreferenceValue(SplashOverlayKey.self) { overlay in
+      if let overlay, model.holding, !model.revealing, !model.gone {
+        overlay.view
+          .transition(.opacity)
+      }
+    }
+    .onPreferenceChange(SplashHoldKey.self) { [model] hold in
+      Task { @MainActor in model.setHold(hold) }
     }
     .onAppear { model.begin(reduceMotion: reduceMotion) }
   }
@@ -87,6 +106,8 @@ final class SplashGateModel {
   private(set) var revealing = false
   private(set) var settled = false
   private(set) var gone = false
+  /// WI-1 — the content asks the splash to stand (`.splashHolds`): it never leaves while this holds.
+  private(set) var holding = false
 
   @ObservationIgnored private var begun = false
   @ObservationIgnored private var fieldShown = false
@@ -200,8 +221,50 @@ final class SplashGateModel {
     }
   }
 
+  /// WI-1 — the content's hold. Taken, the splash stays, and comes back over the content if it had
+  /// gone or was leaving; released, the content is watched until it is steady again, then the splash
+  /// leaves by its own exit (the floor still counts from the field's first frame).
+  func setHold(_ hold: Bool) {
+    guard hold != holding else { return }
+    holding = hold
+    if hold {
+      if revealing || gone { comeBack() }
+      return
+    }
+    note("the hold is released")
+    guard contentMounted else { return }
+    stable = false
+    watch.start { [weak self] in
+      self?.note("the content is frame-stable")
+      self?.stable = true
+      self?.revealIfReady()
+    }
+    Task {
+      try? await Task.sleep(for: SplashTiming.stableLimit)
+      stable = true
+      revealIfReady()
+    }
+  }
+
+  /// The splash over the content again (a sign-out, Tailscale asking a remembered phone again): a new
+  /// surface stands on the launch picture, fades in over the content, and the field comes up around its
+  /// mark as at launch. The content stays mounted under it.
+  private func comeBack() {
+    note("the splash comes back")
+    watch.stop()
+    fieldShown = false
+    floorUntil = nil
+    // the content is watched again once the hold is released; until then the new field stands its floor
+    stable = false
+    let fade = reduceMotion ? SplashTiming.fadeOut / 2 : SplashTiming.fadeOut
+    withAnimation(FieldMotion.plainEase(fade)) {
+      gone = false
+      revealing = false
+    }
+  }
+
   private func revealIfReady() {
-    guard contentMounted, stable, !revealing else { return }
+    guard contentMounted, stable, !revealing, !holding else { return }
     if let floorUntil, ContinuousClock.now < floorUntil { return }
     watch.stop()
     note("the splash leaves")
@@ -214,6 +277,8 @@ final class SplashGateModel {
     }
     Task {
       try? await Task.sleep(for: .seconds(fade))
+      // a hold taken during the fade brought it back: it stays
+      guard revealing else { return }
       gone = true
       note("the splash is gone")
     }
