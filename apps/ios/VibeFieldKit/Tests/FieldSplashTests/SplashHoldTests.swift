@@ -144,6 +144,35 @@ struct SplashHoldTests {
     #expect(model.gone)
   }
 
+  @Test("L1: a leaving fade overtaken by a come-back does not end the next fade early")
+  func anOvertakenFadeEndsNothing() {
+    let (model, steps, watch) = launched()
+    #expect(model.revealing)
+    steps.advance(by: .milliseconds(50))
+    model.setHold(true)
+    #expect(!model.revealing && !model.gone, "caught mid-fade, it comes back")
+    model.setHold(false)
+    watch.steady()
+    #expect(model.revealing, "its field up and its floor stood, it leaves again at once")
+    // the first fade's end, 80 ms into the second
+    steps.advance(by: .milliseconds(80))
+    #expect(!model.gone, "the first fade's end is not the second's")
+    steps.advance(by: .milliseconds(45))
+    #expect(model.gone, "gone at the second fade's own end")
+  }
+
+  @Test("L1: a come-back caught mid-fade keeps its field: the same surface's frame again stands no second floor")
+  func aMidFadeComeBackKeepsItsField() {
+    let (model, steps, watch) = launched()
+    steps.advance(by: .milliseconds(50))
+    model.setHold(true)
+    // the same surface, back in its window, says a first frame again
+    model.fieldPresented(at: CACurrentMediaTime())
+    model.setHold(false)
+    watch.steady()
+    #expect(model.revealing, "its floor stood once: it leaves at once")
+  }
+
   @Test("the hold is any asker's: one holding is enough, and none holding releases it")
   func anyAskerHolds() {
     var value = SplashHoldKey.defaultValue

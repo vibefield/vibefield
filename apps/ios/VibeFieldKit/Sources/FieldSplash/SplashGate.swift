@@ -318,9 +318,13 @@ final class SplashGateModel {
   private func comeBack() {
     note("the splash comes back")
     watch.stop()
-    fieldShown = false
-    floorPending = false
-    floorDue?.cancel()
+    // A splash that had gone comes back as a new surface, whose first frame stands a new floor. One caught
+    // mid-fade is the same surface, its field up and its floor stood (WI-1's review, L1).
+    if gone {
+      fieldShown = false
+      floorPending = false
+      floorDue?.cancel()
+    }
     // the content is watched again once the hold is released; until then the new field stands its floor
     stable = false
     covers = false
@@ -351,9 +355,11 @@ final class SplashGateModel {
     } else {
       withAnimation(FieldMotion.island(SplashTiming.settle)) { settled = true }
     }
+    let move = moves
     timer.after(.seconds(fade)) { [weak self] in
-      // a hold taken during the fade brought it back: it stays
-      guard let self, self.revealing else { return }
+      // a later move overtook this fade (a hold brought it back, and maybe it is leaving again): its end is not
+      // this fade's (WI-1's review, L1)
+      guard let self, self.moves == move, self.revealing else { return }
       self.gone = true
       self.note("the splash is gone")
     }
