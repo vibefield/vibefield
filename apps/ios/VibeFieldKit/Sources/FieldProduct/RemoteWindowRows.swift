@@ -19,7 +19,7 @@ import Foundation
 extension AgentRemoteRow {
   /// A bare terminal's row that names its pane: the join every reader of one reads (`isTerminalBoardRow`). A peer's
   /// terminal whose owner's doors are down names none, and ranks with the agents.
-  public var isBareTerminal: Bool { false }  // PG-3d (red): the skeleton reads no terminal
+  public var isBareTerminal: Bool { isTerminal && terminal != nil }
 }
 
 /// One drawn row: the replica's row, the board row the fold holds it with (its key and joins), and the window's
@@ -47,7 +47,19 @@ extension RemoteVisibility {
   /// its pane's session (its own id when the pane names none), an agent for its pane's when that pane is hosted on the
   /// home and named. A peer's rows join nothing here: no pane of the home shows them.
   public static func joins(held: [RemoteModelBoard.Held], here: String?) -> RemoteVisibility {
-    RemoteVisibility()  // PG-3d (red): the skeleton joins nothing
+    guard let here else { return RemoteVisibility() }
+    var sessionByRow: [String: String] = [:]
+    for entry in held where entry.device == here {
+      let board = entry.board
+      if board.isBareTerminal, let terminal = board.terminal {
+        sessionByRow[entry.row.id] = terminal.runtimeSessionId ?? entry.row.id
+        continue
+      }
+      guard let terminal = board.terminal, terminal.hosted == "local" else { continue }
+      guard let session = terminal.runtimeSessionId, !session.isEmpty else { continue }
+      sessionByRow[entry.row.id] = session
+    }
+    return RemoteVisibility(sessionByRow: sessionByRow)
   }
 }
 
@@ -56,7 +68,23 @@ public enum RemoteWindowRows {
   /// home's terminals by birth, then other desktops' rows in held order. Equal births keep held order, as
   /// JavaScript's stable sort does.
   public static func order(held: [RemoteModelBoard.Held], here: String?) -> [String] {
-    []  // PG-3d (red): the skeleton orders nothing
+    var agents: [(Int, RemoteModelBoard.Held)] = []
+    var terminals: [(Int, RemoteModelBoard.Held)] = []
+    var peers: [String] = []
+    for (index, entry) in held.enumerated() {
+      if entry.device != here {
+        peers.append(entry.row.id)
+      } else if entry.board.isBareTerminal {
+        terminals.append((index, entry))
+      } else {
+        agents.append((index, entry))
+      }
+    }
+    func byBirth(_ left: (Int, RemoteModelBoard.Held), _ right: (Int, RemoteModelBoard.Held)) -> Bool {
+      let (a, b) = (left.1.row.monitor.createdAt, right.1.row.monitor.createdAt)
+      return a != b ? a < b : left.0 < right.0
+    }
+    return agents.sorted(by: byBirth).map { $0.1.row.id } + terminals.sorted(by: byBirth).map { $0.1.row.id } + peers
   }
 
   /// Every row of the model, ordered and patched for this window (`rowsFor`): `order`'s ids first, then whatever the
@@ -66,6 +94,30 @@ public enum RemoteWindowRows {
     model: RemoteModel, held: (String) -> RemoteModelBoard.Held?, standing: [String: AgentMeshDeviceState],
     order: [String], sessionByRow: [String: String], previous: inout [String: String]
   ) -> [RemoteFieldRow] {
-    []  // PG-3d (red): the skeleton draws nothing
+    var ordered: [RemoteModelRow] = []
+    var placed: Set<String> = []
+    for id in order {
+      guard let row = model.byId[id], !placed.contains(id) else { continue }
+      placed.insert(id)
+      ordered.append(row)
+    }
+    for row in model.agents where !placed.contains(row.id) { ordered.append(row) }
+    var rows: [RemoteFieldRow] = []
+    var bodies: Set<String> = []
+    var visuals: [String: String] = [:]
+    for row in ordered {
+      let session = row.isSelf ? sessionByRow[row.id] : nil
+      let visualId = previous[row.id] ?? session ?? row.id
+      visuals[row.id] = visualId
+      // one body per visual identity: during a launcher hand-off the launched row takes over the shell's body
+      guard bodies.insert(visualId).inserted else { continue }
+      // the replica's rows are the fold's: a row it does not hold would have no key, and is never drawn keyless
+      guard let kept = held(row.id) else { continue }
+      let stale = row.isSelf ? row.monitor.stale : standing[row.monitor.device.id] != .live
+      rows.append(RemoteFieldRow(row: row, board: kept.board, stale: stale, visualId: visualId))
+    }
+    // the window carries forward only the rows it drew
+    previous = Dictionary(rows.map { ($0.id, visuals[$0.id] ?? $0.id) }) { first, _ in first }
+    return rows
   }
 }
