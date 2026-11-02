@@ -362,6 +362,13 @@ public final class RoutedTerminalClient {
   private var pumps: [Task<Void, Never>] = []
   /// "Re-mint once, then UNAVAILABLE" — the pre-authentication rule, counted.
   private var preAuthRetried = false
+  /// Item 161 — the sets in a row that failed before both legs were accepted (a
+  /// dial the door turned away, a handshake that never finished), and the ONE
+  /// deadline over the whole run (`armReachDeadline`). A set that comes up ends
+  /// the run (`accepted`), and so does a stop (`stall`, `close`).
+  private var unreachedSets = 0
+  private var reachTimer: Task<Void, Never>?
+  private var reachToken = 0
   /// SP-2 (g) — the two legs' budget slots, and a dial waiting for them.
   private var legGrant: PhoneConnectionBudget.Grant?
   private var legGrantTask: Task<Void, Never>?
@@ -557,6 +564,7 @@ public final class RoutedTerminalClient {
 
   public func close() {
     closed = true
+    endReach()
     teardown()
     state = .off
     reconcileStep()
@@ -1034,6 +1042,7 @@ public final class RoutedTerminalClient {
     // a control leg negotiates `session-events`), so both are reported.
     negotiatedCapabilities = Array(Set(control.capabilities).union(frames.capabilities)).sorted()
     preAuthRetried = false
+    endReach()
     state = .attached == state ? .attached : .ready
     startCreditPump()
     for sessionId in grants.keys { attach(sessionId: sessionId) }
@@ -1747,6 +1756,10 @@ public final class RoutedTerminalClient {
 
   private func legFailed(_ failure: RoutedLegFailure, on channel: RoutedChannel) {
     lastRefusal = failure.description
+    // Item 161 — whether this set ever came up: both legs accepted. One that
+    // did not (a dial the door turned away, a handshake that never finished)
+    // lengthens the run of such sets, and the next mint waits its backoff.
+    let cameUp = controlAccepted != nil && framesAccepted != nil
     // Losing or replacing ONE leg invalidates every activation on the SET: the
     // other leg's activations are no longer two-legged, so they are not
     // activations. The cell already made this decision on its side.
@@ -1761,6 +1774,16 @@ public final class RoutedTerminalClient {
       state = .failed(reason: failure.description)
       return
     }
+    var pause = Duration.zero
+    if !cameUp {
+      unreachedSets += 1
+      pause = Self.reachBackoff(after: unreachedSets, cap: options.maxBackoff)
+      armReachDeadline()
+      let parts = pause.components
+      options.log(
+        "the set never came up (\(unreachedSets) in a row): the next mint waits "
+          + "\(parts.seconds * 1000 + parts.attoseconds / 1_000_000_000_000_000) ms")
+    }
     switch failure {
     case .preAuthenticationRefused:
       // "Re-mint once, then UNAVAILABLE." The count is kept here because nothing
@@ -1772,15 +1795,61 @@ public final class RoutedTerminalClient {
         return
       }
       preAuthRetried = true
-      requestFreshTicket(for: sessionId, because: .reconnecting)
+      requestFreshTicket(for: sessionId, because: .reconnecting, after: pause)
     case .closed(let code, _) where code == RoutedTerminalContract.CloseCode.staleRoute:
-      requestFreshTicket(for: sessionId, because: .staleRoute)
+      requestFreshTicket(for: sessionId, because: .staleRoute, after: pause)
     case .protocolViolation(let reason):
       state = .failed(reason: reason)
     case .closed, .dropped:
-      requestFreshTicket(for: sessionId, because: .reconnecting)
+      requestFreshTicket(for: sessionId, because: .reconnecting, after: pause)
     }
     _ = channel
+  }
+
+  /// Item 161 — the wait before the mint after `failures` sets in a row never
+  /// came up: 100 ms, doubling, at most `cap`. A first set that comes up and
+  /// is then lost waits nothing; that loss is no sign the door will refuse.
+  static func reachBackoff(after failures: Int, cap: Duration) -> Duration {
+    guard failures > 0 else { return .zero }
+    return min(Duration.milliseconds(100) * (1 << min(failures - 1, 16)), cap)
+  }
+
+  /// Item 161 — the one deadline over a run of sets that never came up, armed
+  /// at the first and re-armed by none after it. Each re-mint moves `step` (the
+  /// ticket, then the dial), and fix8's deadline is re-armed by every move, so a
+  /// door that turned every dial away left the card "connecting" for ever. When
+  /// it fires while the client is still trying, the attach stops at the dial,
+  /// with the run and its last failure kept in `lastRefusal`.
+  private func armReachDeadline() {
+    guard reachTimer == nil else { return }
+    reachToken &+= 1
+    let token = reachToken
+    let limit = options.stepDeadline
+    reachTimer = Task { [weak self] in
+      try? await Task.sleep(for: limit)
+      guard !Task.isCancelled, let self, token == self.reachToken else { return }
+      self.reachTimer = nil
+      guard !self.closed else { return }
+      switch self.state {
+      case .connecting, .reconnecting, .staleRoute:
+        let run = self.unreachedSets
+        let last = self.lastRefusal ?? "-"
+        self.options.log.error("the reach stopped: \(run) sets in a row never came up — the last: \(last)")
+        self.stall(at: .dial)
+        self.lastRefusal = "the attach stopped waiting at dial: \(run) sets in a row never came up — the last: \(last)"
+      case .off, .ready, .attached, .refused, .failed, .stalled:
+        return
+      }
+    }
+  }
+
+  /// Item 161 — the run of sets that never came up is over: one came up, or the
+  /// client stopped.
+  private func endReach() {
+    unreachedSets = 0
+    reachToken &+= 1
+    reachTimer?.cancel()
+    reachTimer = nil
   }
 
   private enum TicketReason {
@@ -1798,7 +1867,9 @@ public final class RoutedTerminalClient {
   /// `GRANT_NONCE_REPLAYED` — terminal for that grant. Every leg replacement is
   /// a fresh mint, and a client that retried the socket instead would spin
   /// against a refusal that can never become an acceptance.
-  private func requestFreshTicket(for sessionId: String, because reason: TicketReason) {
+  private func requestFreshTicket(
+    for sessionId: String, because reason: TicketReason, after pause: Duration = .zero
+  ) {
     switch reason {
     case .reconnecting: state = .reconnecting
     case .staleRoute: state = .staleRoute
@@ -1811,6 +1882,10 @@ public final class RoutedTerminalClient {
     needsTicket = false
     let token = generation
     Task { [weak self] in
+      // Item 161 — after a set that never came up, the mint waits first. The
+      // delay below grows only while mints fail: a mint that succeeds ends this
+      // task, so against a door that turns every dial away it never grew.
+      if pause > .zero { try? await Task.sleep(for: pause) }
       // The session the set is re-minted through: the one it lost, until the
       // door says that one is gone (below).
       var asking = sessionId
@@ -2266,6 +2341,7 @@ public final class RoutedTerminalClient {
   /// and their slots, a dial waiting for a slot, every re-mint and renewal of
   /// this generation — and the state says where it stopped.
   private func stall(at step: AttachStep) {
+    endReach()
     lastRefusal = "the attach stopped waiting at \(step.rawValue)"
     let parts = options.stepDeadline.components
     let seconds = max(1, parts.seconds + (parts.attoseconds > 0 ? 1 : 0))
