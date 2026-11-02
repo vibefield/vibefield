@@ -2431,24 +2431,15 @@ public struct HomeScreen: View {
   /// doors on the tailnet. It is the same desktop either way, and the devices
   /// store is the only one of the two wires that still answers since TM-5.
   private var cardTerminalFace: AgentTerminalFace {
-    guard let join = cardBubble?.agent?.join else { return .noJoin }
-    let desktop = desktop(join.deviceID)
-    return agentTerminalFace(
-      join: join, deviceName: desktop?.name,
-      publishesTerminalDoors: desktop?.publishesTerminalDoors)
-  }
-
-  /// The field's row for a desktop, when it has one. `nil` is a desktop the
-  /// devices store has not named — which is not the same as one that answered.
-  private func desktop(_ deviceID: String) -> FieldDesktop? {
-    link?.desktops.first { $0.deviceId == deviceID }
+    FieldHomeModel.cardTerminalFace(cardBubble, desktops: link?.desktops ?? [])
   }
 
   /// The one act an ended run has: RESUME, over that desktop's door. The new
   /// run is NOT put on the field here — the board is the fold's to publish,
   /// and the next slice or delta shows it.
   private func resumeAction(_ join: AgentJoin?, runtimeRunId: String?) -> CardAction? {
-    guard cardTerminalFace.offersResume, let join, let runtimeRunId, let link else { return nil }
+    guard FieldHomeModel.offersResume(cardTerminalFace, for: cardBubble), let join, let runtimeRunId, let link
+    else { return nil }
     return CardAction(id: "resume", label: "RESUME") {
       Task {
         do {

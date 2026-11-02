@@ -182,6 +182,90 @@ import Testing
     #expect(agent.glyph == .agentMark(mark))
   }
 
+  /// M9 (item 154) — a bare terminal's pane join rides its bubble: the home's pty-h2 and Loft's pty-p1, each on the
+  /// desktop that owns it, read through `join` as an agent's is. An agent's join stays its facet's.
+  @Test func aBareTerminalCarriesItsPaneJoin() throws {
+    let shell = try Self.bubble(try R.row("pty-h2"))
+    #expect(shell.join == AgentJoin(deviceID: R.home, hosted: "local", runtimeSessionID: "pty-h2"))
+    #expect(shell.agent == nil)
+    #expect(shell.remote == nil)
+    let peer = try Self.bubble(try R.row("pty-p1"))
+    #expect(peer.join == AgentJoin(deviceID: R.loft, hosted: "local", runtimeSessionID: "pty-p1"))
+    let agent = try Self.bubble(try R.row("run-h-turn"))
+    let facets = agent.agent?.join
+    #expect(agent.join == facets)
+    #expect(agent.terminalJoin == nil)
+  }
+
+  /// The witness row `key` as the owner sends it while its terminal doors are down (`attachableRows`): `terminal`
+  /// deleted and `monitorRow.attachable` false.
+  static func withheld(_ key: String) throws -> JSONValue {
+    R.monitor(R.edited(try R.row(key), ["terminal"], nil), ["attachable"], .bool(false))
+  }
+
+  /// M10 (item 154) — a bare terminal's card attaches: the home's pty-h2 on its desktop, Loft's pty-p1 named by Loft,
+  /// and neither offers RESUME. An agent's attach is unchanged.
+  @Test func aBareTerminalsFaceIsTheAttach() throws {
+    let shell = try Self.bubble(try R.row("pty-h2"))
+    let home = agentTerminalFace(join: shell.join, deviceName: "Studio")
+    #expect(home == .attach(AgentTerminalAddress(deviceID: R.home, deviceName: "Studio", sessionID: "pty-h2")))
+    #expect(!home.offersResume)
+    let peer = try Self.bubble(try R.row("pty-p1"))
+    let loft = agentTerminalFace(join: peer.join, deviceName: "Loft")
+    #expect(loft == .attach(AgentTerminalAddress(deviceID: R.loft, deviceName: "Loft", sessionID: "pty-p1")))
+    #expect(!loft.offersResume)
+    let agent = try Self.bubble(try R.row("run-h-turn"))
+    let turn = agentTerminalFace(join: agent.join, deviceName: "Studio")
+    #expect(turn == .attach(AgentTerminalAddress(deviceID: R.home, deviceName: "Studio", sessionID: "pty-h1")))
+  }
+
+  /// M11 (item 154) — a bare terminal whose owner WITHHELD its pane (doors down) says why, by its desktop's name: the
+  /// existing "terminal not published" face, never the blank absence.
+  @Test func aWithheldBareTerminalSaysItsDoorsAreDown() throws {
+    let peer = try Self.bubble(try Self.withheld("pty-p1"))
+    #expect(peer.join?.paneWithheld == true)
+    let face = agentTerminalFace(join: peer.join, deviceName: "Loft")
+    #expect(face == .notPublished(deviceName: "Loft"))
+    #expect(!face.offersResume)
+  }
+
+  /// M12 (item 162) — a LIVE agent whose desktop's doors are down read "this run has ended" and offered RESUME on a
+  /// live run. Its withheld join now reads "terminal not published", with no RESUME.
+  @Test func item162ALiveAgentWithItsDoorsDownIsNotEnded() throws {
+    let ask = try Self.bubble(try Self.withheld("run-p-ask"))
+    #expect(ask.join?.paneWithheld == true)
+    let face = agentTerminalFace(join: ask.join, deviceName: "Loft")
+    #expect(face == .notPublished(deviceName: "Loft"))
+    #expect(!face.offersResume)
+  }
+
+  /// M13 (item 162) — a LIVE run its desktop hosts no pane for (an ingested row: `terminal: {hosted: "none"}` present,
+  /// the contract's "no terminal is known") offers nothing and claims nothing: not "ended", no RESUME.
+  @Test func item162ALiveRunWithNoKnownPaneIsNotEnded() throws {
+    let partial = try Self.bubble(try R.row("run-h-partial"))
+    #expect(partial.join?.paneWithheld == false)
+    let face = agentTerminalFace(join: partial.join, deviceName: "Studio")
+    #expect(face == .noJoin)
+    #expect(!face.offersResume)
+    #expect(face.note == nil)
+  }
+
+  /// M14 (item 162) — over the witness: none of its six live agents with no known pane reads `.exited`, and the one
+  /// that ended (run-h-crash, its pane still on the floor) keeps both acts.
+  @Test func item162NoLiveRunOnTheWitnessReadsEnded() throws {
+    for key in ["run-h-partial", "run-h-nocwd", "run-h-root", "run-h-quiet", "run-p-done", "run-a-idle"] {
+      let bubble = try Self.bubble(try R.row(key))
+      let face = agentTerminalFace(join: bubble.join, deviceName: "Studio")
+      #expect(face != .exited, "\(key)")
+      #expect(!face.offersResume, "\(key)")
+    }
+    let crash = try Self.bubble(try R.row("run-h-crash"))
+    let ended = agentTerminalFace(join: crash.join, deviceName: "Studio")
+    let pane = AgentTerminalAddress(deviceID: R.home, deviceName: "Studio", sessionID: "pty-h3")
+    #expect(ended == .exitedWithPane(pane))
+    #expect(ended.offersResume)
+  }
+
   /// M7 — the names are the owner's words (sdk `words.js`): an empty folder name is an agent's provider label or a
   /// terminal's `terminal`; an empty model is the provider label, never the catalog's; an empty effort is none.
   @Test func namesAreTheOwnersWords() throws {

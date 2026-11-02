@@ -166,6 +166,10 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   public let modelId: String?
   /// PG-3e — the row's board KEY (`runtimeRunId`), which a resume or a stop names. nil on the mock.
   public let runKey: String?
+  /// Item 154 — a BARE terminal's pane join (the remote row's `terminal`): the session its card attaches to, on the
+  /// desktop that owns it. Not a facet (the facet doc's "at most one" stands): a bare terminal still draws hollow, and
+  /// an agent's join stays its facet's. Read through `join`, never directly. nil on every agent and on the mock.
+  public let terminalJoin: AgentJoin?
 
   public init(
     id: String,
@@ -183,7 +187,8 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     unread: Bool = false,
     host: String? = nil,
     modelId: String? = nil,
-    runKey: String? = nil
+    runKey: String? = nil,
+    terminalJoin: AgentJoin? = nil
   ) {
     self.id = id
     self.project = project
@@ -201,7 +206,12 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     self.host = host
     self.modelId = modelId
     self.runKey = runKey
+    self.terminalJoin = terminalJoin
   }
+
+  /// Item 154 — the card's join, whatever the body is: an agent's run, or a bare terminal's pane. Every reader of a
+  /// card's terminal reads this (the face, the badge's desktop, the keyring's sessions, the DEBUG auto-open).
+  public var join: AgentJoin? { agent?.join }
 }
 
 /// nil when the session has left the field (exited/failed) — the same law as

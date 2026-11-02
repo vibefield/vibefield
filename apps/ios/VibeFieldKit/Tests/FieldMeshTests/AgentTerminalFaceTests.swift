@@ -58,7 +58,7 @@ private func join(
 
   /// An ended run: `hosted: "none"`, RESUME and no attach.
   @Test func anEndedRunOffersResumeAndNoTerminal() {
-    let face = agentTerminalFace(join: join(hosted: "none", session: nil), deviceName: "studio")
+    let face = agentTerminalFace(join: join(hosted: "none", session: nil, exited: true), deviceName: "studio")
     #expect(face == .exited)
     #expect(face.offersResume)
     #expect(!face.offersAttach)
@@ -70,7 +70,7 @@ private func join(
   /// offer a terminal the fold has already reported gone.
   @Test func hostedNoneEndsTheRunWhateverSessionIdRidesWithIt() {
     let face = agentTerminalFace(
-      join: join(hosted: "none", session: "pty-a41f"), deviceName: "studio")
+      join: join(hosted: "none", session: "pty-a41f", exited: true), deviceName: "studio")
     #expect(face == .exited)
     #expect(!face.offersAttach)
   }
@@ -186,7 +186,7 @@ private func join(
   /// wrong sentence, so the order of the two checks is load-bearing.
   @Test func aRunWithNoTerminalIsEndedRatherThanBlamedOnTheDoors() {
     let face = agentTerminalFace(
-      join: join(hosted: "none", session: nil), deviceName: "studio",
+      join: join(hosted: "none", session: nil, exited: true), deviceName: "studio",
       publishesTerminalDoors: false)
     #expect(face == .exited)
     #expect(face.note == "this run has ended — its terminal is gone")

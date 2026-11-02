@@ -172,6 +172,19 @@ private let t0: Double = 1_788_688_800_000  // 2026-09-06T10:00:00Z, epoch ms
     #expect(dressed.first?.id == "pty-h2")
   }
 
+  /// F3 (item 154) — the dress keeps a bare terminal's pane join: the card attaches through it, so a fold that rebuilt
+  /// the row (3e's lesson, F1) would leave the card with nothing to open.
+  @Test func theDressKeepsABareTerminalsJoin() {
+    var assembly = FieldAssembly(tint: .light)
+    let join = AgentJoin(deviceID: "dev-studio", hosted: "local", runtimeSessionID: "pty-h2")
+    let row = FieldBubble(
+      id: "pty-h2", project: "", detail: "notes", status: .working, identityKey: "pty-h2", createdAt: now,
+      modelId: "pty-h2", runKey: "pty-h2", terminalJoin: join)
+    let dressed = assembly.fold([row], cardSubjectID: "pty-h2")
+    #expect(dressed.first?.terminalJoin == join)
+    #expect(dressed.first?.join == join)
+  }
+
   /// F2 (PG-3e) — the dress keeps the row's own marks: a remote-cut row carries its owner's `stale` and `unread`, so a
   /// folded bubble keeps each exactly — whatever the phone's own clock and its ledger would have said of evidence an
   /// hour old (Q01's 30 s rule and the phone's unread ledger, retired with the switch).

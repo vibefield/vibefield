@@ -322,10 +322,15 @@ public struct AgentJoin: Sendable, Equatable, Codable {
   /// session row to its card by. The id only, never the folder (EL7 B1); nil
   /// until the agent says it.
   public var nativeSessionID: String?
+  /// Items 154 and 162 — the owner WITHHELD this row's pane join: its terminal doors are down, so fieldd's
+  /// `attachableRows` (agent-field.ts) deleted the row's `terminal` (and set `monitorRow.attachable` false). Not the
+  /// same as `hosted: "none"`, which the row carries PRESENT for a run with no known pane. Never decoded from a wire
+  /// (the remote row's join is built in `fieldBubble(from:)`), so it has no key of its own to read.
+  public var paneWithheld: Bool
 
   public init(
     deviceID: String, hosted: String, runtimeSessionID: String? = nil, pending: Bool = false,
-    exited: Bool = false, deviceLive: Bool = true, nativeSessionID: String? = nil
+    exited: Bool = false, deviceLive: Bool = true, nativeSessionID: String? = nil, paneWithheld: Bool = false
   ) {
     self.deviceID = deviceID
     self.hosted = hosted
@@ -334,6 +339,7 @@ public struct AgentJoin: Sendable, Equatable, Codable {
     self.exited = exited
     self.deviceLive = deviceLive
     self.nativeSessionID = nativeSessionID
+    self.paneWithheld = paneWithheld
   }
 
   /// Whether the run has a terminal at all, by the wire's word.
