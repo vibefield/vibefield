@@ -389,6 +389,21 @@ describe("the composer's composition (DESIGN.md §8 \"Chat's composer\")", () =>
       expect(rule(selector), selector).toMatch(/line-height: 1;/);
     }
   });
+
+  it("keeps the empty draft one line tall, whatever was inert when it mounted (item 151)", () => {
+    // Held in the stylesheet, since happy-dom lays out nothing and draws no pixels. The thread a hatch shows mounts
+    // its composer under the sheet's inert root; Chromium gives an empty block its line only as a root editable, and
+    // the lift re-lays nothing out, so the draft stood 0 px tall with no caret it could type at (run95p2). Its own
+    // line height is its floor.
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/chat/chat-composer.css"),
+      "utf8",
+    );
+    const input = css.match(/^\.vf-chat-input \{([^}]*)\}/m)?.[1] ?? "";
+    const lineHeight = input.match(/\bline-height: (\d+px);/)?.[1];
+    expect(lineHeight).toBe("24px");
+    expect(input).toMatch(new RegExp(`\\bmin-height: ${lineHeight};`));
+  });
 });
 
 describe("the composer's keys (DESIGN.md §8 \"Chat's composer\", Keys)", () => {

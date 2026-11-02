@@ -10780,6 +10780,20 @@ export async function runSmokeGodview(opts: {
           5_000,
         );
         caret.held = held.caret;
+        // the draft can take a character: one line tall, and the page would insert at its caret (item 151 — mounted
+        // under the sheet's inert root it stood 0 px tall, insertText disabled, and every key typed nothing)
+        const draft = (await win.webContents.executeJavaScript(`(() => {
+          const editor = document.querySelector(".vf-chat-input");
+          return editor === null
+            ? null
+            : { height: Math.round(editor.getBoundingClientRect().height), enabled: document.queryCommandEnabled("insertText") };
+        })()`)) as { height: number; enabled: boolean } | null;
+        evidence.typing.draft = draft;
+        if (draft === null || draft.height === 0 || !draft.enabled) {
+          throw new Error(
+            `${name}'s draft cannot take a character: ${JSON.stringify(draft)} (a 0 px draft or insertText disabled; item 151)`,
+          );
+        }
         const typeKeys = async (text: string): Promise<void> => {
           for (const character of text) {
             win.webContents.sendInputEvent({ type: "keyDown", keyCode: character });

@@ -175,10 +175,13 @@ export interface ChatSendEvidence {
    * focused, then the focus placed — run92b's press blurred it, run85b's placed focus alone edited nothing): whether
    * the window, its contents and the document held the focus once it was placed; where the caret stood as it was
    * placed and when the composer held it ("editor" inside the draft, else the node it was in), each recorded as it was
-   * read; and what the page heard of the line's keys, by event and place */
+   * read; the draft as it held the keyboard, its box's height and whether the page would insert there (item 151: a
+   * draft mounted under the sheet's inert root stood 0 px tall, insertText disabled); and what the page heard of the
+   * line's keys, by event and place */
   readonly typing: {
     focus: { window: boolean; contents: boolean; document: boolean } | null;
     caret: { placed: string | null; held: string | null } | null;
+    draft: { height: number; enabled: boolean } | null;
     heard: Record<string, number> | null;
   };
   /** the pane's `inputAllowed`, by its latest marker, sampled before its Return */
@@ -197,7 +200,7 @@ export function newChatSendEvidence(lines: string, nonce: string): ChatSendEvide
     nonce,
     note: null,
     create: null,
-    typing: { focus: null, caret: null, heard: null },
+    typing: { focus: null, caret: null, draft: null, heard: null },
     inputAllowed: { Return: null },
     play: null,
     waitedMs: { ready: null, inputBeforeReturn: null },

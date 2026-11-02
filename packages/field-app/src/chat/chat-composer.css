@@ -48,6 +48,10 @@
 .vf-chat-input {
   flex: 1;
   min-width: 0;
+  /* the empty draft keeps its one line (its line-height below): a hatch's thread mounts its composer under the sheet's
+     inert root, Chromium gives an empty block its line only as a root editable, and the lift re-lays nothing out, so
+     the draft stood 0 px tall with no caret to type at (item 151) */
+  min-height: 24px;
   overflow: hidden;
   color: var(--vf-text-primary);
   font-size: 14px;
