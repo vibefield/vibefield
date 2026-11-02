@@ -45,7 +45,11 @@ public struct RemoteModelRow: Sendable, Equatable, Identifiable {
 /// terminals, then by birth, then by id. The id tie-break compares UTF-16 code units, as JavaScript's `<` does —
 /// Swift's `String <` compares by Unicode scalars, which differs above the Basic Multilingual Plane.
 public func compareMonitorRows(_ left: RemoteModelRow, _ right: RemoteModelRow) -> Bool {
-  false  // PG-3d (red): the skeleton orders nothing
+  let a = left.monitor
+  let b = right.monitor
+  if a.kind != b.kind { return a.kind == .agent }
+  if a.createdAt != b.createdAt { return a.createdAt < b.createdAt }
+  return Array(a.id.utf16).lexicographicallyPrecedes(Array(b.id.utf16))
 }
 
 /// One step of the fold's chain (`MonitorModelChange`): applies on top of `since`.
@@ -122,7 +126,10 @@ public struct RemoteVisibility: Sendable, Equatable {
   }
 
   public func shows(_ row: RemoteModelRow) -> Bool {
-    false  // PG-3d (red): the skeleton shows nothing
+    let monitor = row.monitor
+    if monitor.alive { return true }
+    // `isFailedRow`: a crashed agent's row — dead, its wait the runtime's failure
+    return monitor.kind == .agent && monitor.wait?.kind == "failure" && sessionByRow[monitor.id] != nil
   }
 }
 
@@ -133,23 +140,132 @@ public struct RemoteModelReplica: Sendable {
   public let gapBuffer: Int
   /// The model as last published.
   public private(set) var model = RemoteModel.empty
-  /// How many times the chain has broken.
+  /// How many times the chain has broken: once per break, as the window's `onGap` is heard. A snapshot's replay can
+  /// break it again while `apply` answers true, so a caller reads this after a snapshot (`RemoteMeshCopy.open`).
   public private(set) var gapsHeard = 0
   /// The visibility the replica publishes under.
   public private(set) var visibility = RemoteVisibility()
+
+  /// The backend's rows at the held revision.
+  private var rows: [String: RemoteModelRow] = [:]
+  /// The published rows, by id.
+  private var joined: [String: RemoteModelRow] = [:]
+  /// Rows whose published form may differ from the held one.
+  private var dirty: Set<String> = []
+  private var revision: Int64?
+  private var gapped = false
+  /// The changes heard since the chain broke, for the snapshot that heals it; dropped whole past `gapBuffer`.
+  private var held: [RemoteModelChange] = []
+  private var overflowed = false
 
   public init(gapBuffer: Int = Self.defaultGapBuffer) {
     self.gapBuffer = max(0, gapBuffer)
   }
 
-  /// PG-3d (red): the skeleton takes every update and holds nothing.
+  /// A snapshot replaces the rows and heals a gap, replaying what the gap held that it does not; a change on the
+  /// chain applies. False: a change the replica cannot follow (off the chain, or while the chain is broken), held.
   @discardableResult
-  public mutating func apply(_ update: RemoteModelUpdate) -> Bool { true }
+  public mutating func apply(_ update: RemoteModelUpdate) -> Bool {
+    switch update {
+    case .snapshot(let revision, let rows):
+      self.revision = revision
+      gapped = false
+      var present: Set<String> = []
+      for row in rows {
+        present.insert(row.id)
+        take(row)
+      }
+      for id in self.rows.keys where !present.contains(id) {
+        self.rows.removeValue(forKey: id)
+        dirty.insert(id)
+      }
+      // the changes heard during the gap that the snapshot does not hold, in order; a link missing among them is a
+      // new gap, and what follows it is held for the next snapshot
+      let replay = held.filter { $0.since >= revision }
+      held = []
+      overflowed = false
+      for change in replay { applyChange(change) }
+      return true
+    case .change(let change):
+      return applyChange(change)
+    }
+  }
 
-  /// PG-3d (red): the skeleton's visibility never moves.
+  /// A different visibility re-reads every row at the next frame. True when it moved.
   @discardableResult
-  public mutating func setVisibility(_ next: RemoteVisibility) -> Bool { false }
+  public mutating func setVisibility(_ next: RemoteVisibility) -> Bool {
+    guard next != visibility else { return false }
+    visibility = next
+    dirty.formUnion(rows.keys)
+    return true
+  }
 
-  /// PG-3d (red): the skeleton publishes nothing.
-  public mutating func flush() -> RemotePublication? { nil }
+  /// The frame: publishes what moved since the last one, or nil when nothing did (`flush`, `replica.js`). The order
+  /// is sorted on every publication (VF-PM, Q-D5 (a)): the window sorts only when a sort key, a birth or a death
+  /// moved, and between those its order is already sorted, so the two orders are the same.
+  public mutating func flush() -> RemotePublication? {
+    var shown: [String: RemoteModelRow] = [:]
+    var hidden: Set<String> = []
+    for id in dirty {
+      let was = joined[id]
+      guard let row = rows[id], visibility.shows(row) else {
+        if was != nil { hidden.insert(id) }
+        continue
+      }
+      if row != was { shown[id] = row }
+    }
+    dirty.removeAll()
+    guard !shown.isEmpty || !hidden.isEmpty else { return nil }
+    var added: Set<String> = []
+    var updated: Set<String> = []
+    for id in hidden { joined.removeValue(forKey: id) }
+    for (id, row) in shown {
+      if joined[id] == nil { added.insert(id) } else { updated.insert(id) }
+      joined[id] = row
+    }
+    let before = model.agents
+    let views = joined.values.sorted(by: compareMonitorRows)
+    model = RemoteModel(revision: revision ?? 0, agents: views)
+    return RemotePublication(
+      added: views.filter { added.contains($0.id) }.map { $0.id },
+      updated: views.filter { updated.contains($0.id) }.map { $0.id },
+      removed: before.filter { hidden.contains($0.id) }.map { $0.id })
+  }
+
+  private mutating func take(_ incoming: RemoteModelRow) {
+    if let row = rows[incoming.id], row == incoming { return }
+    rows[incoming.id] = incoming
+    dirty.insert(incoming.id)
+  }
+
+  /// A change on the chain applies; off it, or while the chain is broken, it is held and the gap heard once.
+  @discardableResult
+  private mutating func applyChange(_ change: RemoteModelChange) -> Bool {
+    if !gapped, revision == nil || change.since != revision { gap() }
+    if gapped {
+      hold(change)
+      return false
+    }
+    revision = change.revision
+    for row in change.upserts { take(row) }
+    for id in change.removed where rows.removeValue(forKey: id) != nil { dirty.insert(id) }
+    return true
+  }
+
+  private mutating func gap() {
+    guard !gapped else { return }
+    gapped = true
+    gapsHeard += 1
+  }
+
+  /// Held for the healing snapshot; past the bound everything held goes, and the snapshot alone heals.
+  private mutating func hold(_ change: RemoteModelChange) {
+    guard !overflowed else { return }
+    if held.count >= gapBuffer {
+      held = []
+      overflowed = true
+      return
+    }
+    held.append(change)
+  }
 }
