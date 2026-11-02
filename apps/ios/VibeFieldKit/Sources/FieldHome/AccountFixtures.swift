@@ -12,7 +12,7 @@
   /// cannot run in Release, and the real facts replace it the moment the
   /// argument is absent.
   ///
-  /// TS-7 — a state stamps the Field page's door with the corner, from
+  /// TS-7, WI-1 — a state stamps the way in's page with the corner, from
   /// `FieldHomeModel.doorPage` over the SAME inputs, so a photograph never
   /// pairs a corner with a page the phone could not draw beside it.
   ///
@@ -62,12 +62,20 @@
       case "none":
         return make(.up, login: login)
       case "none-found":
-        // The beat, held: the row filled by the first desktop to list.
-        return make(.up, login: login, found: .init(name: "studio", platform: "darwin"))
+        // WI-2 — the found beat's inputs: a phone just signed in (the beat itself is the way in's own step)
+        return make(.up, login: login, face: fox, desktops: [ready("studio")], hearing: true)
+      // WI-1 — the way in's two holds: signed in and joining the network, then looking for a desktop
+      case "joining":
+        return make(.starting, login: login)
+      case "looking":
+        return make(.up, login: login, listedYet: false)
       // TS-7b — a Mac's code: the welcome that knows the account to pick, and
       // "Another account?" for a code scanned in the app and for a link.
       case "expecting":
         return make(.off, expected: expectation(.scanned))
+      // WI-2 — the desktop's code by its link on a phone with no account: the desktop that sent you
+      case "from-code":
+        return make(.off, expected: expectation(.link))
       case "another":
         return make(.up, login: otherLogin, face: fox, desktops: [ready("studio")], hearing: true, expected: expectation(.scanned))
       case "another-link":
@@ -91,7 +99,7 @@
     private static func make(
       _ state: MeshModel.State, remembered: String? = nil, login: String? = nil, face: UserFace? = nil,
       desktops: [FieldDesktop] = [], asleep: [(String, String)] = [], foreign: Int = 0, hearing: Bool = false,
-      found: FieldHomeModel.FoundDesktop? = nil, expected: PhoneCodeExpectation? = nil
+      listedYet: Bool = true, expected: PhoneCodeExpectation? = nil
     ) -> Demo {
       Demo(
         face: FieldHomeModel.accountFace(
@@ -111,13 +119,12 @@
           rememberedLogin: remembered,
           login: login,
           isGated: login != nil,
-          hasListed: true,
+          hasListed: listedYet,
           listed: desktops.count,
           remembered: asleep.count,
           machineName: machine,
           adminConsole: FieldTruffleRuntime.machinesAdminURL(controlURL: nil),
           signInNote: nil,
-          found: found,
           expected: expected),
         settings: FieldHomeModel.settingsAccount(
           meshState: state,

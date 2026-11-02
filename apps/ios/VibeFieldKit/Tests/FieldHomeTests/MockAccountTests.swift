@@ -56,7 +56,7 @@ struct MockAccountTests {
     #expect(mock.face.control == .face(AccountFixtures.fox))
   }
 
-  @Test("TS-7: the Field page's door follows the standing — the welcome signed out, the field signed in")
+  @Test("WI-1: the way in follows the standing — the welcome signed out, the tabs signed in")
   func door() {
     let mock = MockAccount()
     #expect(mock.door == nil)
@@ -79,7 +79,7 @@ struct MockAccountTests {
           machine: AccountFixtures.machine, adminConsole: URL(string: "https://login.tailscale.com/admin/machines")))
   }
 
-  @Test("TS-7: the scripted fleet is the field only while no door stands — none under the welcome or the approval")
+  @Test("WI-1: the scripted fleet is the field only while signed in — none under the welcome or the approval")
   func fleetOnlyWithoutADoor() {
     let mock = MockAccount()
     #expect(mock.fieldIsLive)

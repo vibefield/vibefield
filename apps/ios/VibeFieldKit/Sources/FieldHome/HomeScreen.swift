@@ -2184,7 +2184,6 @@ public struct HomeScreen: View {
       machineName: mesh.machineName,
       adminConsole: mesh.adminConsoleURL,
       signInNote: mesh.signInNote,
-      found: nil,
       expected: expectationMemory.expected())
   }
 
