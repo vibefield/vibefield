@@ -29044,3 +29044,64 @@ because the head is the account".
   `index.lock` stood 480 ms at 08:39:08Z; lock-wait outlived it untouched.
 
 **Owed.** Nothing of the fixer's.
+
+## PR #9 and PR #10 — the living mark drawn as SVG, and the phone's splash: James's two pull requests, merged on his word in PR order
+
+(2026-11-02; two merges on lane `land/pr9-pr10` over main `4aa731cab`, the IOS session's: `cbe11fd75` merges PR #9's
+head `9373d4615` and `f2854bf2f` merges PR #10's head `76939a096`; M104 is `f2854bf2f` itself, a fast-forward of main
+`4aa731cab` that kept both merge commits, run 104, landed 2026-11-02T11:52:14Z.) James's word to the IOS session,
+2026-11-02 11:18Z: "first merge PR#9 and PR#10", ahead of the Way In's slices, which stand on PR #10's gate. Merged
+here in PR order, not by GitHub's button (VF-PM 11:23Z). GitHub marks each PR merged by reachability once the push
+carries its head to main.
+
+**PR #9** (`claude/living-mark-svg`, head `9373d4615`, one commit on `d4c5442c1`, 230 commits behind main): the
+field's own mark as an image, for the loads the field doesn't draw.
+- `tooling/splash/living-mark.mjs` ports the mark's geometry line for line from the vendored splash's shader and
+  checks its clock against the runtime's own `phases`; `--check` holds the committed SVGs to it.
+- `packages/design-kit/src/living-mark/`: the two SVGs (white ink by night, black by day), `LivingMark`, and the new
+  `@vibefield/design-kit/living-mark` export. No product surface wears it yet; its surfaces are to be ruled.
+- DESIGN.md §8 "The living mark, drawn as SVG". `biome.jsonc` leaves the generated SVGs to the generator.
+  `living-mark.test.tsx` has 8 rows.
+- 8 files +709 −1.
+
+**PR #10** (`ios/splash`, head `76939a096`, one commit on `26f9c2537`, 185 behind): IOS-11, the phone's splash.
+- The FieldSplash kit target. `Splash/` is vendored at sha256 pins by `apps/ios/scripts/vendor-splash.mjs` from
+  vibefield-splash `6f770f9` (the Metal bake's shaders, numbers and runtime). Ours beside it: `SplashSurface` and
+  `SplashGate`.
+- `FieldHome.HomeRoot` stands the gate over `HomeScreen`, and the app mounts `HomeRoot`. The launch screen is
+  `SplashGround` and `SplashMark`.
+- `FieldSplashTests` (5) with the vendored clock golden, which `check-ios-fixtures` admits as VENDORED and holds by
+  `vendor-splash.mjs --check`.
+- DESIGN.md §8 "The phone's splash", and apps/ios/README.md.
+- 24 files +5487 −7.
+
+**The merge.**
+- Both sides touched `biome.jsonc` and DESIGN.md (#9), and DESIGN.md and `scripts/check-ios-fixtures.mjs` (#10).
+  Git merged all but DESIGN.md with 0 markers.
+- DESIGN.md conflicted where both PRs add a §8 subsection after "The reveal". It keeps both, #9's first, each byte
+  for byte as its PR wrote it (+46 −0 against main).
+- HomeRoot's symbols resolve on main: `HomeScreen.init()`, `PhoneAppearance.storageKey` and `.phoneAppearance`.
+- GitHub CI was green on both heads (verify 41260138741 and 41284931675), each on its own base. Neither PR ran
+  `pnpm verify` on its host.
+
+**The light** (lane `pr910`, the IOS session's, at `f2854bf2f`, tree `4afa3508b`):
+- Under HOLD, 11:32:35Z → 11:33:36Z: typecheck of design-kit and field-app (no cache), biome on the eight touched JS
+  files, check:walls, check-ios-fixtures (with `vendor-splash --check`), and `living-mark.mjs --check` and
+  `vendor-splash.mjs --check` each alone. All green.
+- field-app's scanning suites on the merged tree, by 11-01's semantic-merge rule: text-ramp, ui-system-boundaries,
+  design-system, glyphs, living-mark, phone-parity, phone-goldens-producer, splash-vendor and glass-look. 9 files,
+  121 tests, green.
+- The iOS witness (`lanes/pr910/witness.sh`, 11:40:37Z → 11:50:06Z, on VF-PM's 11:41Z word):
+  - VibeFieldKit-Package built for testing, then every test on an iPhone 17 Pro simulator (udid
+    F93EABF3-4281-4EB5-A5F6-A550FBE95CDC, shut down 11:46:06Z): 15 runs, 1,475 tests, 0 red. Among them are
+    FieldSplashTests' 5, with both looks drawn on the GPU.
+  - The VibeField app built Debug and Release for the simulator.
+  - The guard matched only James's QA runner 64402 from his SSD checkout. It was waived by his 07:14Z word and
+    logged before each step.
+- Run 104 on the mini (a9's mint): 12,103 passed, 0 failed, 18 skipped (main's 12,095 plus `living-mark.test.tsx`'s
+  8); cargo 33 ok; the iOS fixtures 202.
+- The land (the fixer's `land-stack5.sh`, 11:52:14Z): a fast-forward that kept both merge commits, the two manifest
+  files admitted by name, dev-stack-check 0/0, under James's 07:14Z waiver for his QA runner 64402 from the SSD
+  checkout.
+
+**Owed.** Nothing of these PRs'.

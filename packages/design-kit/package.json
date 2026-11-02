@@ -10,7 +10,8 @@
     "./primitives": "./src/primitives.tsx",
     "./project-ink": "./src/project-ink.ts",
     "./spark-face": "./src/spark-face/index.ts",
-    "./glyphs": "./src/glyphs/index.ts"
+    "./glyphs": "./src/glyphs/index.ts",
+    "./living-mark": "./src/living-mark/LivingMark.tsx"
   },
   "sideEffects": [
     "*.css",
