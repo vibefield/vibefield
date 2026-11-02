@@ -56,8 +56,9 @@ enum GodviewFormat {
   }
 
   /// `formatPercent`: a share floored — `42%`; `missing` for nil or non-finite. −0 prints `0`, as JavaScript prints
-  /// it. Exact below 2^53; at or beyond, `missing`: a phone-only bound at absurd values, as the body's
-  /// `flooredPercent` has (JavaScript would print the digits).
+  /// it. Exact below 2^53; at or beyond, `missing`: a phone-only DEVIATION at absurd values (PG-4s, 2026-11-02), as
+  /// the body's `flooredPercent` has. JavaScript would print the digits; the toolkit golden holds JavaScript's output
+  /// below the bound, and K4's hand row holds the phone's at it.
   static func formatPercent(_ value: Double?, missing: String = "—") -> String {
     guard let value, value.isFinite else { return missing }
     let floored = value.rounded(.down)

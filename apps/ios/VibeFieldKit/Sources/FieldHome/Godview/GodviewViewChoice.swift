@@ -21,15 +21,20 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   /// The first `-vf-godview-view=<id>`: its view, or nil when it is absent or names none (the caller keeps `.swarm`,
   /// the desktop's own fallback, `monitorViewFor`). Matched with its `=`, so a longer flag never parses as this one.
   static func launch(_ arguments: [String]) -> GodviewViewChoice? {
-    // PG-4s (red)
-    nil
+    value(of: argument, in: arguments).flatMap(GodviewViewChoice.init(rawValue:))
   }
 
   /// The first `-vf-godview-now=<epoch ms>` (Q-S5 (a)): the frozen clock a still is taken at, or nil (the live
   /// clock). A value that is not a whole number of ms is nil.
   static func frozenNow(_ arguments: [String]) -> Date? {
-    // PG-4s (red)
-    nil
+    guard let text = value(of: nowArgument, in: arguments), let ms = Int64(text) else { return nil }
+    return Date(timeIntervalSince1970: Double(ms) / 1000)
+  }
+
+  /// The value of the first `<flag>=…` argument: the flag matched WITH its `=`.
+  private static func value(of flag: String, in arguments: [String]) -> String? {
+    let prefix = flag + "="
+    return arguments.first { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) }
   }
 }
 
@@ -60,22 +65,22 @@ struct GodviewStageInput {
 
   /// The open card's row: the drawn row whose VISUAL id is the card's subject (`selection.id`), by its model id.
   nonisolated static func activeId(rows: [RemoteFieldRow], cardSubject: String?) -> String? {
-    // PG-4s (red)
-    nil
+    guard let cardSubject else { return nil }
+    return rows.first { $0.visualId == cardSubject }?.id
   }
 
   /// The deal the swarm's dress uses (`FieldAssembly.fold`): `projects.seqByKey[MonitorWords.projectName(row)]` →
   /// `SwarmColor.project(seq, tint)`, keyed as the bubble's `project` is (S3); nil for a terminal or an undealt
   /// project.
   nonisolated static func colour(of row: RemoteFieldRow, projects: ProjectLedger, tint: ProjectTint) -> SwarmColor? {
-    // PG-4s (red)
-    nil
+    let monitor = row.row.monitor
+    guard monitor.kind == .agent else { return nil }
+    return projects.seqByKey[MonitorWords.projectName(monitor)].map { SwarmColor.project($0, tint) }
   }
 
   /// The model ids the swarm draws unread (S2): `Set(bubbles.filter(\.unread).compactMap(\.modelId))`.
   nonisolated static func unreadIds(bubbles: [FieldBubble]) -> Set<String> {
-    // PG-4s (red)
-    []
+    Set(bubbles.filter { $0.unread }.compactMap { $0.modelId })
   }
 }
 
@@ -94,9 +99,10 @@ struct GodviewStage<Swarm: View>: View {
     }
   }
 
-  /// What a non-swarm view stands in (Q-S7 (a)).
+  /// What a non-swarm view stands in (Q-S7 (a)), written once so no lane re-derives it: the bar's band as its bottom
+  /// inset (DESIGN.md "Stage insets replace host padding rules"). No door stands over the field since WI-1, so there
+  /// is no gate or dim to lay. No caller at PG-4s; the first view lane's still pins its look.
   func framed(_ view: some View) -> some View {
-    // PG-4s (red)
-    view
+    view.padding(.bottom, input.bandHeight)
   }
 }

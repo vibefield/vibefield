@@ -55,6 +55,14 @@ public struct HomeScreen: View {
   /// exactly like discovery's own door; nil means nobody has been asked, which
   /// is not the same as a mesh that answered with no agents.
   @State private var link: FieldLink?
+  /// PG-4s — the Godview view the Field page stands on, and the clock a still is taken at (nil: the live clock).
+  /// Outside every `#if`: only the DEBUG launch block writes them (`-vf-godview-view=`, `-vf-godview-now=`), so
+  /// Release draws the swarm on the live clock until the selector lands (its lander writes `godviewView`).
+  @State private var godviewView: GodviewViewChoice = .swarm
+  @State private var godviewNow: Date?
+  /// The launch flags are read once (the design check's N10): the DEBUG block runs again on every return to the
+  /// view, and a second read would undo the selector's pick in a DEBUG run launched with the flag.
+  @State private var godviewLaunchRead = false
   /// Whether an open is already in flight. Assigned synchronously by
   /// `openLink`, before it awaits the mesh node, because the window between
   /// that await and the assignment below is exactly where a second caller
@@ -291,23 +299,15 @@ public struct HomeScreen: View {
     ZStack {
       // The swarm on Metal (IOS-6c/6d): the reference's renderer over the
       // dressed rows; the chrome slot's obstacles are the field's walls.
-      // WI-1 — the field stands only signed in, so no page stands on it: the
-      // way in has the splash's field to itself (TS-7c and TS-D22 retired).
-      SwarmField(
-        bubbles: bubbles,
-        // IOS-9e — the field draws only while it is the page standing: the
-        // other two keep it alive under them, and a hidden Metal view
-        // rendering at 120 Hz is a battery spent on nobody.
-        isActive: scenePhase == .active && selectedTab == .field,
-        onSelect: { bubble in openCard(on: bubble) },
-        onCreate: fieldHold,
-        bloom: bloomMenu,
-        onBloom: { choice in
-          // Q4 (a): the bloom opens the launch sheet on that desktop and profile
-          beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
-        }
-      ) {
-        chrome
+      // IOS-9e — the field draws only while it is the page standing: the
+      // other two keep it alive under them, and a hidden Metal view
+      // rendering at 120 Hz is a battery spent on nobody.
+      let active = scenePhase == .active && selectedTab == .field
+      // PG-4s — the Godview view the page stands on: the swarm, until PG-5…8
+      // add theirs. It stands where SwarmField stood, so the overlays below
+      // stay above every view.
+      GodviewStage(choice: godviewView, input: godviewInput(active: active)) {
+        swarmField(active: active)
       }
 
       ScanlinesOverlay()
@@ -347,6 +347,49 @@ public struct HomeScreen: View {
     } message: {
       Text(SettingsWords.signOutMessage)
     }
+  }
+
+  /// The swarm's arm of the stage, its own function so the stage's builder stays inside what the type-checker
+  /// solves in reasonable time (the design check's S6). The stage's former SwarmField call, unchanged but for
+  /// `isActive`, which the stage computes once.
+  private func swarmField(active: Bool) -> some View {
+    // WI-1 — the field stands only signed in, so no page stands on it: the
+    // way in has the splash's field to itself (TS-7c and TS-D22 retired).
+    SwarmField(
+      bubbles: bubbles,
+      isActive: active,
+      onSelect: { bubble in openCard(on: bubble) },
+      onCreate: fieldHold,
+      bloom: bloomMenu,
+      onBloom: { choice in
+        // Q4 (a): the bloom opens the launch sheet on that desktop and profile
+        beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
+      }
+    ) {
+      chrome
+    }
+  }
+
+  /// PG-4s — everything a Godview view takes from the home screen: the link's drawn rows, the swarm's own unread
+  /// (its bubbles', S2) and colours, the open card's row, the clock and the bar's band. Under the mock fleet no link
+  /// stands, so a view draws empty (said; only the swarm draws the mock).
+  private func godviewInput(active: Bool) -> GodviewStageInput {
+    let rows = link?.rows ?? []
+    let projects = assembly.projects
+    let tint = assembly.tint
+    let frozen = godviewNow
+    return GodviewStageInput(
+      isActive: active,
+      rows: rows,
+      fieldIsLive: link?.fieldIsLive ?? false,
+      unreadIds: GodviewStageInput.unreadIds(bubbles: link?.bubbles ?? []),
+      activeId: GodviewStageInput.activeId(rows: rows, cardSubject: selection?.id),
+      colour: { GodviewStageInput.colour(of: $0, projects: projects, tint: tint) },
+      now: { frozen ?? Date() },
+      bandHeight: AppBar.band(homeInset: homeInset),
+      onOpen: { row in
+        if let bubble = bubbles.first(where: { $0.id == row.visualId }) { openCard(on: bubble) }
+      })
   }
 
   @ViewBuilder
@@ -1300,6 +1343,13 @@ public struct HomeScreen: View {
           link = fixture
           fixtureLink = true
           reportCard()
+        }
+        // PG-4s — a still's view and clock (`-vf-godview-view=<id>`, `-vf-godview-now=<epoch ms>`). Neither is a
+        // fixture argument: alone they keep the live path, and they compose with `-vf-demo-field-slice`. Read once.
+        if !godviewLaunchRead {
+          godviewLaunchRead = true
+          if let view = GodviewViewChoice.launch(ProcessInfo.processInfo.arguments) { godviewView = view }
+          godviewNow = GodviewViewChoice.frozenNow(ProcessInfo.processInfo.arguments)
         }
         // `!demoRemoteActive` for the reason the line above carries: a second
         // appearance would otherwise replace a running fixture field with a
