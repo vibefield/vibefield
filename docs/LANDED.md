@@ -29312,3 +29312,74 @@ pin):
 - At the PM's next draft slot (Q-E14): `thinking-ios-swarm` §1's 0.3.2 pins (Q-P3) and the brief's other draft rows
   (:323-327); `thinking-phone-godview` §8's PG-3 "if"; design-mv §6; thinking-desktop-sync-plane :198-203; DS-L7.
 - PG-4s next (fd's), then PG-5…8 on the template as unfrozen here (Q-E11).
+
+## Items 154, 155 and 162 — a bare terminal's card attaches through its pane, a live run is never "ended", and the phone's second reply door retires (2026-11-02; `6016207a1` → `81bb2e8a6`, five commits on main `9e971cbf2`, lane `pg/items-154-155` in `/Volumes/SamsungRed/lanes/pgitems`, in the mini's mint M107 `81bb2e8a6` over main `9e971cbf2`, run 107)
+
+**What it rests on.** Items 154 and 155 were filed at PG-3e (Q-E8, Q-E10) and released to fd by VF-PM at 12:55Z, one
+lane off main `9e971cbf2`. Item 162 was found at 154's read (13:09Z) and widened at 13:18Z. fd ruled 154's shape (a)
+at 13:10Z, and VF-PM accepted it: no new words, so no stop for James.
+
+**What** (14 files, +308 −101; the kit, and one fieldd comment):
+- **Item 155** (`6016207a1`): `FieldLink.latestReply`, the door that asked a run's owner `agent.list` for one reply,
+  retires with `FieldLinkReplyTests`; each leaves a dated "RETIRED 2026-11-02 (item 155)" line. Since PG-3e the body
+  and the card read `monitorRow.reply.text` from the remote row. Readers 2 → 0 (both tests); `ownerDoor`,
+  `AgentListResult` and its fixture keep their other readers.
+- **Item 154** (`4eec543d5` red, `95b259764`): a bare terminal's bubble carries `terminalJoin`, read from the row's
+  `board.terminal`, and one accessor, `join = agent?.join ?? terminalJoin`, serves every join reader: the card's
+  terminal face, its OS badge (item 41), F1's ticket keyring and the DEBUG auto-open. FieldAssembly's dress keeps it
+  (F3). A bare terminal offers no Resume (`offersResume` needs an agent). The card's face and Resume moved,
+  unchanged, into `FieldHomeModel` to be testable.
+- **Item 162** (in 154's pair): a live agent with no terminal read `.exited` — "this run has ended — its terminal is
+  gone" — and offered RESUME on a live run. Two cases reach it:
+  - the owner WITHHOLDS a join while its doors are down, deleting `terminal` from the row (`attachableRows`,
+    `packages/fieldd/src/agent-field.ts:945-958`);
+  - a paneless live run carries `terminal: {hosted: "none"}`, `attachable: false` on a desktop whose doors are up,
+    and the contract's "none" is "no terminal is known", not ended
+    (`packages/contracts/src/agent-session.ts:116-119`). The witness has six such runs (run-h-partial, -nocwd, -root,
+    -quiet; run-p-done; run-a-idle).
+  - RemoteFieldBubble conflated the two (`board.terminal?.hosted ?? "none"`); the field cut's join did the same
+    (`AgentFieldProjection.swift:190-197` at `d4eb2e74f`), so it predates PG-3e.
+  - The fix, no new words or state: `AgentJoin.paneWithheld` is set when `terminal` is absent, and a join with no
+    terminal reads exited → `.exited`, withheld → `.notPublished(deviceName:)`, otherwise → `.noJoin` (the existing
+    "no terminal has been offered for this session"), with no Resume. Each branch cites its wire fact.
+  - fd's first clause ("no terminal on a live run means its doors are down") was falsified by the witness before any
+    code; the builder stopped on it (13:13Z).
+  - AgentTerminalFaceTests' three ended-run rows were re-pinned to `exited: true` in the red commit (their helper
+    defaulted to `false` while meaning an ended run); they stayed green there.
+- **The fieldd note** (`7b134c187`, comment only): `agent-field.ts:85-86` said FieldLink asks
+  `{projection: "field"}`; it gains its dated correction (false since PG-3e's switch).
+- **`-vf-auto-open-card=<visual id>`** (`81bb2e8a6`, DEBUG only, inside HomeScreen's existing `#if DEBUG`
+  :1003-1457): opens that body's card; an id the field never draws opens nothing and logs it. The bare flag keeps its
+  pick.
+
+**Validation.**
+- The host loop: red on exactly the seven host rows (M9–M14, F3), green 349 tests in 66 suites, at `8f0ed9179` and
+  `8607e7609`, the pair before the kit's fold. Each differs from its folded twin (`4eec543d5`, `95b259764`) by one
+  line in `CardTerminalFaceTests.swift`, a file the host package does not compile, so every host-compiled file is
+  byte-identical and the host result carries over; the kit ran at the folded SHAs themselves.
+- The kit on this Mac (VF-PM's slot, 13:22 → 13:35:48Z, each step under the HOLD;
+  `lanes/pgitems/light/pgitems-proof.log`):
+  - the first build at the red commit failed on `AgentProvider.claude` (a kit-only test file); the fix was folded
+    into the red commit and the branch replayed, said in its body;
+  - the red runner at `4eec543d5`: "RED-FIRST HOLDS", exactly the 12 named rows (C1–C5, M9–M14, F3), C6 green;
+  - the merged tree is the tip itself (already on `9e971cbf2`): fixtures 200 (unmoved), contracts 563/563, the walls
+    clean, biome on the fieldd file;
+  - the full kit: 15 runs, 1,488 tests, 0 red (3e's 1,477 + 13 new − 2 retired);
+  - the look over `-vf-demo-field-slice`, opened by the DEBUG argument, no input injected
+    (`lanes/pgitems/light/look-81bb2e8a6`): run-h-partial's card reads "not connected · no terminal has been offered
+    for this session", with no "ended" and no Resume; pty-h2's card opens its terminal face, which on the demo door
+    says "the mesh is not up on this device — connect it first". iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC`
+    shut down after.
+- No Release build (VF-PM's option (b)): the only DEBUG-gated change sits wholly inside an existing `#if DEBUG`
+  region and adds no conditional and no file (`lanes/pgitems/light/pgitems-release-b.txt`).
+- **Run 107** (`81bb2e8a6`, stacked on main `9e971cbf2`, a fast-forward, minted by a9 on VF-PM's GO):
+  - verify 13:42:14 → 13:50:17Z, exit 0: vitest 12,103 passed, 0 failed, 18 skipped, ±0 on run 106 (the lane changes
+    no `.test.ts`); cargo 534 passed, 0 failed (33 results); typecheck and test, 28 projects; no MaxListeners
+    warning; the tree clean after.
+  - The iOS fixtures 200 (unmoved), pins 67. The kit is this Mac's gate, above: 15 runs, 1,488 tests, 0 red.
+- **Landed:** main moved to `81bb2e8a6` on VF-PM's GO (2026-11-02 13:52:11Z).
+
+**Not built (said).** The attach itself over the demo door, which has no mesh. The look's console logged one "CoreSVG
+has logged an error" on run-h-partial's two launches; no SVG changed here, so it is unclaimed, and no item is filed.
+
+**Owed.** Nothing of these items'.

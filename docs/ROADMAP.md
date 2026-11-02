@@ -280,8 +280,7 @@
   (PG-L1); from PG-3a, at a draft slot PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's
   remote-cut self-check); from PG-9a, a failed release's empty carried again (not built), and at a draft slot the
   dated notes at thinking-desktop-sync-plane :201 (PF6's close) and thinking-phone-godview §8's PG-9 line; from
-  PG-3e, James's live look (J-E4, §5), items 154 (the bare terminal's attach) and 155 (`latestReply`), and at the
-  next draft slot Q-E14's rows (thinking-ios-swarm §1's 0.3.2 pins; the brief's draft rows, :323-327).
+  PG-3e, James's live look (J-E4, §5).
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
