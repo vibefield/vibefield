@@ -3729,6 +3729,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   on the island curve. Reduced motion: the mark at rest, one frame drawn, fades only, halved. Without Metal the
   launch screen's picture stands until the home is steady and then fades: a first face never shows an error.
   Its accessible name is the desk's bar's, "Starting VibeField".
+- **The phone's way in** (track WI, 2026-11-02, from the design page *The Way In*; WI-L1…L7, WI-D1…D8 ruled A by
+  James 2026-11-02 11:13–11:15Z; `FieldHome` over `FieldSplash`). Signed out, the splash holds: `SplashGate` keeps
+  its field up while the home asks it to (`.splashHolds`), and the way in stands over that field, the splash's own
+  (§9 "The way in" holds every word). A sign-out, or Tailscale asking a remembered phone again, brings the splash
+  back over the tabs (its fade, 240ms plain `ease`), then the way in. Three places, and nothing moves (WI-L4).
+  **The top:** where you are, a small glass capsule under the status bar: three bars and the step's name (**Sign
+  in · Your computer · Face ID**), or the tour's four dots. **The centre:** one picture on the words line: the mark
+  in the splash's own place, or what takes its place, your face (§2.8, 96 pt) or a drawing, crossfading in 280ms;
+  nothing slides, and the mark only fades (WI-L3). **The words**, from that line down: a title (28 bold; a hold's
+  status line 17 semibold), a line (15, `inkSecondary`) and a note (12, `inkTertiary`), on a shade of the field's
+  own ground that seats them. **The bottom:** one glass for the acts (`ChromeMaterial.glass`), 8 pt in from the
+  screen's edges and clear of the home indicator: the primary a **wide pill** (`ChromePillStyle(.primary, wide:
+  true)`: 50 tall, the glass's full width) in the same place on every step, then the secondary, then a link or a
+  note. Motion: the glass rises in 460ms on the island curve, words and pictures fade in 280–360ms, and the
+  hand-over is the splash's own exit (§8 "The phone's splash": 240ms `ease` while the home settles from 0.99 over
+  560ms on the island curve); under Reduce Motion everything fades only, in 120ms.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -5235,6 +5251,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   opens Terminal, Settings one step back.
   Not yet drawn: Field, Keyboard, Notifications, Privacy & data, Developer, a desktop's agents and
   History, and its VibeField version.
+  *Amended 2026-11-02 (track WI):* signed out, the phone shows the way in and nothing else (§9 "The way in"), so no
+  corner or card reaches the signed-out head; **About** gains **How VibeField works**, the way in's four pages
+  again, and **This phone** gains **Lock** with WI-3, in the words of §9 "The way in".
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -5461,6 +5480,69 @@ for a code that arrived as a link ("the link you opened"), which any page can op
 is the primary act. It changes nothing about who may reach what. *Named deviation:* the corner's circle on History
 still reads "Sign in" — three words do not fit its 10 pt label — and its spoken name is "Sign in,
 Continue with Tailscale".
+*Amended 2026-11-02 (track WI, the design page The Way In: WI-D1…D8 ruled A by James at 11:13–11:15Z, and his
+"way in all ruled, now implement it" at 11:17Z):* the pages leave the Field tab. Signed out, which means no
+account, an admin's approval, Tailscale asking again, another account's code, or signed in with no desktop known,
+the phone shows the way in and nothing else (below): no tabs, no corner and no search. So the field under a page
+(TS-7c), its dim under the Peek's scrim (TS-D22 A) and History's "Sign in" circle (the named deviation above)
+retire with the placement. The words move to the VibeField product bible (0.3): the welcome's title is **Your
+agents, in your pocket.** (its App Store subtitle, §15), and its line "See what needs you and open your agents’
+terminals, while VibeField runs on your computer." (phone approvals and notifications are planned, §9). The
+phone says "computer" where it said "Mac" (§7): **Scan the code on your computer**, "On your computer, open
+VibeField, click your face, then **Connect your devices…** with this same account." and "Your computer appears
+here", drawn with a computer until a desktop fills it with its own mark. Tailscale's line becomes the welcome's
+note, "Use the same Tailscale account as VibeField on your computer.", and its mark moves to How it works, on the
+glass and never on the field (its media kit). "Next, iOS asks to use tailscale.com to sign in." goes: iOS's own
+question says it next. Kept as ruled: Continue with Tailscale, "At Tailscale, pick ‹login›.", Waiting for
+approval, No desktops yet, Another account? and Sign in to Tailscale again.
+
+**The way in** (track WI, 2026-11-02; WI-L1…L7; where each word stands is §8 "The phone's way in"). The phone has
+two states (WI-L1). **Signed in** means Tailscale's node keeps itself up for an account and a VibeField desktop is
+known, listed or remembered: a desktop asleep keeps the phone signed in, and each view says so, while Tailscale
+asking again does not (WI-L2). Signed in, the phone shows the three tabs and no page ever stands on one. **Signed
+out** it shows the way in. The **welcome** (WI-D1 A, one welcome with two doors; WI-D2 A, Continue leads): **Your
+agents, in your pocket.** · "See what needs you and open your agents’ terminals, while VibeField runs on your
+computer." · "Use the same Tailscale account as VibeField on your computer." · **Continue with Tailscale** ·
+**Scan the code on your computer** · *New to VibeField? See how it works*; a code that named the account puts
+"At Tailscale, pick ‹login›." in the note's place. The steps say where you are, **Sign in · Your computer · Face
+ID**: **Joining your network…** · "Signed in as ‹login›" (a hold: the picture and one line), or **Waiting for
+approval.**, then **Looking for your computer…** · "Open VibeField on your computer, signed in to Tailscale as
+‹login›." (a hold), and **No desktops yet.** when the answer is none, with its row and **Send the link to my
+computer**. The **found beat**: your face, from your desktop, takes the mark's place, **Hi, ‹name›.** ·
+"Connected to ‹desktop›." ("Hi." while no desktop has said your name), for 1.2s; then the lock, offered (below);
+then the hand-over. **How it works**, for someone who has never seen VibeField: four pages, optional, the tour's
+dots in the steps' place and again in Settings › About. **Your agents run on your computer.** · "VibeField is a
+control room for coding agents: Claude Code, Codex and others, each in its own terminal." — **Keep up when you
+step away.** · "See which sessions need you, then open an agent’s own terminal and type into it." — **No
+VibeField account.** · "Your phone reaches your computer over your own Tailscale network, encrypted end to end.
+VibeField runs no session relay." with Tailscale's mark beside "Connecting your devices requires a Tailscale
+account." — **Start on your computer.** · "Get VibeField at **vibefield.dev**. When its setup connects your
+devices, it shows a code for this phone." · "Your agents run there, so keep it awake and connected while you’re
+away." · **Send the link to my computer** (iOS's share sheet, with vibefield.dev) · **I already have
+VibeField**. No page promises an Allow or a notification: the bible marks both planned (§9). Opened from the
+desktop's code on a phone with no account: **Connect to ‹desktop›.** · "‹desktop› sent you here. It uses
+Tailscale as **‹login›**, so sign in with that account." · **Continue with Tailscale** · *Not yours? Start over*.
+When Tailscale asks a remembered phone again, the way in comes back with your face in the mark's place (WI-D8 A):
+**Sign in to Tailscale again.** · "This phone can’t reach your desktops until you do. Nothing here is lost." ·
+**Sign in again** · *Use another account*.
+**The lock** (WI-3; WI-D3…D7 A). It is offered as the way in's last step, on by default: **Lock VibeField with
+Face ID.** · "This phone can type into your agents’ terminals. Face ID keeps that to you." · **Lock with Face
+ID** · **Not now** · "You can change this in Settings › Lock." iOS asks once, with VibeField's reason: "VibeField
+uses Face ID so only you can open it on this iPhone." The lock is the splash (WI-L5): on opening VibeField, on
+coming back after the lock's time (1 minute to start; Immediately, 1, 5 or 15 minutes), and after **Lock now**
+(the corner's menu, while the lock is on), the splash stands and Face ID asks over it, and nothing of yours shows
+until it passes. A miss or a Cancel says **VibeField is locked.** · **Unlock with Face ID** · "Your iPhone
+passcode works too." Every word names the method this phone has: Face ID, Touch ID, or the passcode where
+neither is set up. While the lock is on, the app switcher shows the launch picture. Settings › This phone ›
+**Lock**: the switch **Lock VibeField**, never "Use Face ID" (Apple asks apps not to add their own switch for
+biometrics), "Face ID opens VibeField. When Face ID can’t, your iPhone passcode does."; **Require Face ID**
+Immediately · After 1 minute · After 5 minutes · After 15 minutes, "While VibeField is locked, the app switcher
+shows its mark. Changing these asks Face ID first."; off, "VibeField opens without Face ID. Anyone holding this
+phone unlocked can open your agents’ terminals."; with no passcode set, the switch cannot turn on: "Set a
+passcode in iOS Settings to lock VibeField." Nothing is answered from outside the lock (WI-L6): when phone
+approvals come (planned), a notification's act opens VibeField behind it. A lost phone is closed from elsewhere
+(WI-L7): removed from your Tailscale network, it reaches nothing, and its keys never leave it in a backup
+(truffle keeps their folder out of iCloud and computer backups).
 
 **The freeway's refusals** (track FW, F1b's kit half; FW-D5; added 2026-11-01). The phone asks its home desktop to
 approve its connection to each desktop, and when a desktop says no, the phone says it in these words. ‹desktop› is
