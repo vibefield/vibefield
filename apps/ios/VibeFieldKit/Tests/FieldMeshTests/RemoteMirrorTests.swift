@@ -6,7 +6,8 @@ import Testing
 @testable import FieldMesh
 
 // PG-3c — the remote cut's goldens in THIS bundle: PG-3a's witness open, frames and resync, the field cut's
-// project-key pair, and `phone-fold.golden.json` (the home's window over the witness, which 3d's fold is held to).
+// project-key pair, `phone-fold.golden.json` (the home's window over the witness, which 3d's fold is held to) and,
+// since PG-3e, `phone-body.golden.json` (the window's bodies, which the drawn rows' bubbles are held to).
 // Copies, byte for byte, in the named set "remote" (`pnpm check:ios-fixtures`). Read here so a copy is never inert
 // until 3d, and so what only FieldMesh knows — the wire's date reading, the field cut's projection — is pinned beside
 // the remote cut's words.
@@ -67,5 +68,16 @@ import Testing
         #expect(!devices.isEmpty, "\(name)")
       }
     }
+  }
+
+  /// T10b (PG-3e) — the body golden is in this bundle, beside the fold golden and its inputs: the open, the eight
+  /// frames, the resync and the gap, eleven steps, read as JSON before the parity suite reads them as bodies.
+  @Test func theBodyGoldenIsInThisBundle() throws {
+    let golden = try MeshFixture.json("phone-body.golden")
+    let steps = golden["steps"]?.arrayValue ?? []
+    #expect(steps.count == 11)
+    let listed = golden["inputs"]?.arrayValue ?? []
+    let inputs = listed.compactMap { $0.stringValue }
+    #expect(inputs == Self.witness.map { "\($0).json" })
   }
 }

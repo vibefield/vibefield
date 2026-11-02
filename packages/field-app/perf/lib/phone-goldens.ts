@@ -69,14 +69,16 @@ export const PHONE_WITNESS_INPUTS = [
  * old chain's delta that is the run's gap */
 export const PHONE_RESYNC_AFTER = 7;
 export const PHONE_GOLDENS_COMMAND = "pnpm --filter @vibefield/field-app phone:goldens";
-/** where the kit's copies live: PG-3c's, and PG-3d's parity suite in FieldProductTests
- * (`scripts/check-ios-fixtures.mjs` OTHER_ORIGINS compares them) */
+/** where the kit's copies live: PG-3c's, PG-3d's parity suite in FieldProductTests, and PG-3e's body parity suite in
+ * FieldMeshTests, where the mapping from a drawn row to its bubble lives (`scripts/check-ios-fixtures.mjs`
+ * OTHER_ORIGINS compares them). (Corrected 2026-11-02, PG-3e: the body golden was named for FieldAgentsTests, a
+ * bundle that holds no copy and whose target reads no FieldProduct, so it could never run the golden.) */
 export const PHONE_GOLDEN_MIRRORS: Readonly<Record<string, readonly string[]>> = {
   [PHONE_FOLD_GOLDEN]: [
     "apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures",
     "apps/ios/VibeFieldKit/Tests/FieldProductTests/Fixtures",
   ],
-  [PHONE_BODY_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldAgentsTests/Fixtures"],
+  [PHONE_BODY_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures"],
 };
 /** the body model's clock: a constant. It would date a birth's opening (none here); a running
  * terminal's elapsed line reads `runningSinceMs`, which is not passed (a clock value, never compared) */

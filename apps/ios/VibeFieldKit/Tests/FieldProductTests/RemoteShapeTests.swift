@@ -148,6 +148,17 @@ enum Remote {
     "agent-remote-mesh-open.resync",
   ]
 
+  /// T1r (PG-3e) — 3b's routed report is in this bundle, beside the encoder that is held to it: the shown row's
+  /// MODEL id, routed by the desktop that owns it. Read as JSON: the golden is matched by value (it is pretty-printed).
+  @Test func theRoutedReportIsInThisBundle() throws {
+    let json = try Fixture.json("agent-report-shown.routed")
+    let ids = json["ids"]?.arrayValue?.compactMap { $0.stringValue } ?? []
+    #expect(ids == ["run-studio-q"])
+    #expect(json["device"]?.stringValue == "dev-desktop-b")
+    let keys = json.objectValue.map { Set($0.keys) } ?? []
+    #expect(keys == ["ids", "device"])
+  }
+
   /// T1 — every remote golden reads whole: no row refused, no key unknown at any level.
   @Test(arguments: goldens) func everyRemoteGoldenDecodes(name: String) throws {
     let json = try Fixture.json(name)
