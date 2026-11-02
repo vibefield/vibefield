@@ -103,6 +103,46 @@ private func model(
     #expect(formatRatePerHour(perHour: 0.125) == "$0.13/hr")
   }
 
+  /// Item 164 — a peer's `burnPerHour` is unbounded (the toolkit reader §6), and from 2^63 the rate's whole dollars
+  /// trapped (`Int(perHour.rounded())`). They say JavaScript's digits, `Math.round` then `String`: padded with zeros
+  /// below 1e21, an exponent from it, `Infinity`. Measured with node against puppeteer-view-sdk 0.3.2's
+  /// `toolkit/format.js` (2026-11-02).
+  @Test func anAbsurdRateSaysJavaScriptsDigits() {
+    #expect(formatRatePerHour(perHour: 9.3e18) == "$9300000000000000000/hr")
+    #expect(formatRatePerHour(perHour: 0x1p63) == "$9223372036854776000/hr")
+    #expect(formatRatePerHour(perHour: 0x1p64) == "$18446744073709552000/hr")
+    #expect(formatRatePerHour(perHour: 1e21) == "$1e+21/hr")
+    #expect(formatRatePerHour(perHour: 1.5e300) == "$1.5e+300/hr")
+    #expect(formatRatePerHour(perHour: .infinity) == "$Infinity/hr")
+    #expect(formatRatePerHour(perHour: 1e15 + 0.5) == "$1000000000000001/hr")
+  }
+
+  /// Item 165 — the tenths are `toFixed(1)`, as the rate's are (PG-3e): an exact tie takes the larger, where
+  /// `String(format: "%.1f")` broke it to even (8250 read `8.2k`). The whole counts are `Math.round` (a tie toward +∞)
+  /// and `String`, so nothing traps: NaN, ±∞ and absurd counts say what JavaScript says. Measured with node against
+  /// puppeteer-view-sdk 0.3.2's `toolkit/format.js` (2026-11-02).
+  @Test func tokenCountsRoundAsTheWindowDoes() {
+    #expect(formatTokens(8_250) == "8.3k")
+    #expect(formatTokens(1_250) == "1.3k")
+    #expect(formatTokens(1_050) == "1.1k")
+    #expect(formatTokens(9_950) == "9.9k")
+    #expect(formatTokens(9_999.5) == "10.0k")
+    #expect(formatTokens(8_250_000) == "8.3M")
+    #expect(formatTokens(1_250_000) == "1.3M")
+    #expect(formatTokens(999.5) == "1000")
+    #expect(formatTokens(999_500) == "1000k")
+    #expect(formatTokens(2.5) == "3")
+    #expect(formatTokens(-0.5) == "0")
+    #expect(formatTokens(-2.5) == "-2")
+    #expect(formatTokens(.nan) == "NaNM")
+    #expect(formatTokens(.infinity) == "InfinityM")
+    #expect(formatTokens(-.infinity) == "-Infinity")
+    #expect(formatTokens(1e300) == "1e+294M")
+    #expect(formatTokens(-1e300) == "-1e+300")
+    #expect(formatTokens(1e27) == "1e+21M")
+    #expect(formatTokens(0x1p63) == "9223372036855M")
+  }
+
   @Test func lightsTheLadderAtEachStep() {
     #expect(burnLadder == [0.05, 0.15, 0.4, 1])
     #expect(burnFlames(costPerMin: 0.04) == 0)
