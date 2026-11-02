@@ -129,6 +129,17 @@ struct DoorPageTests {
     #expect(!FieldHomeModel.tabsStand(signedIn: false, splashCovers: true), "covered: the way in stands alone")
   }
 
+  @Test("L3: How it works stands only over the welcome: another page ends it, and the welcome's return brings none")
+  func tourEndsOffTheWelcome() {
+    #expect(FieldHomeModel.tourPage(2, after: .welcome(failure: nil)) == 2)
+    #expect(FieldHomeModel.tourPage(2, after: .welcome(failure: "the network went away")) == 2, "the welcome still")
+    #expect(FieldHomeModel.tourPage(2, after: .joining(login: login, note: nil)) == nil)
+    #expect(FieldHomeModel.tourPage(1, after: .approval(machine: nil, adminConsole: nil)) == nil)
+    #expect(FieldHomeModel.tourPage(3, after: .fromCode(desktop: "Studio", login: login)) == nil)
+    #expect(FieldHomeModel.tourPage(0, after: nil) == nil, "signed in")
+    #expect(FieldHomeModel.tourPage(nil, after: .welcome(failure: nil)) == nil)
+  }
+
   @Test("the found beat names the home when it is listed, else the first desktop, else none")
   func foundDesktop() {
     let studio = FieldDesktop(deviceId: "dev-1", name: "studio", platform: "darwin", state: .ready, feed: .door)

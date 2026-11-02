@@ -719,6 +719,13 @@ enum FieldHomeModel {
     signedIn || !splashCovers
   }
 
+  /// WI-2 (WI-1's review, L3) — How it works' page when the way in's page changes: the tour stands only over the
+  /// welcome, so any other page ends it, and the welcome's return later does not bring back a page left mid-tour.
+  static func tourPage(_ page: Int?, after next: DoorPage?) -> Int? {
+    guard case .welcome = next else { return nil }
+    return page
+  }
+
   /// The found beat's desktop: the home if it is listed, else the first desktop listed; nil while none
   /// answers (signed in by a desktop remembered, asleep).
   static func foundDesktop(home: String?, desktops: [FieldDesktop]) -> FoundDesktop? {

@@ -483,9 +483,10 @@ public struct HomeScreen: View {
     .splashHolds(wayInStep != nil)
     .splashOverlay { wayIn }
     .onChange(of: doorPage) { previous, next in
-      // WI-2 — the found beat: a page that stood for signing in yields to signed in
+      // How it works stands only over the welcome: another page ends it (L3)
+      tourPage = FieldHomeModel.tourPage(tourPage, after: next)
+      // WI-2 — the found beat: a page that stood for a first sign-in yields to signed in
       guard FieldHomeModel.wayInEnds(previous: previous, next: next) else { return }
-      tourPage = nil
       let found = FieldHomeModel.foundDesktop(home: link?.home, desktops: linkDesktops)
       let ending = FieldHomeModel.WayInStep.found(name: accountLogin.flatMap { faceStore.name(for: $0) }, desktop: found?.name)
       wayInEnding = ending
