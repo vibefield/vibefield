@@ -1,5 +1,6 @@
 import FieldDesign
 import FieldMesh
+import FieldProduct
 import FieldSettings
 import Foundation
 
@@ -37,7 +38,8 @@ extension FieldHomeModel {
       SettingsDesktop(
         id: desktop.deviceId, name: desktop.name, platform: desktop.platform,
         reach: reach(desktop, isHearing: isHearing), isHome: desktop.deviceId == home,
-        servesTerminals: desktop.publishesTerminalDoors)
+        servesTerminals: desktop.publishesTerminalDoors,
+        watchable: watchable(desktop, isHearing: isHearing))
     }
     let listed = Set(desktops.map(\.deviceId))
     rows += asleep
@@ -80,6 +82,19 @@ extension FieldHomeModel {
     case .failed(let reason): return account == nil ? .signedOut : .couldNotConnect(reason)
     case .off, .starting, .stopping, .reconnecting: return account == nil ? .signedOut : .connecting
     }
+  }
+
+  /// PG-3e (design v2 §5.3, with the v2 check's M2) — whether "Watch its agents" is available: `false` for a desktop
+  /// whose door refused the field, hearing or not (the review's [8]: a sole old home refuses, so the phone hears
+  /// nothing, and J-E1 (iii) says its page reads unavailable while its corner row says "the field was refused"); not
+  /// while the home is not hearing otherwise (nil, not said); `false` for a standing of `incompatible` on the home's
+  /// board; nil while the board does not list it (not on the board YET is not a refusal: the mock and the demo
+  /// accounts list none); `true` otherwise, asleep included (its kept board is drawn).
+  static func watchable(_ desktop: FieldDesktop, isHearing: Bool) -> Bool? {
+    if desktop.fieldRefusal != nil { return false }
+    guard isHearing else { return nil }
+    if desktop.board == .incompatible { return false }
+    return desktop.board == nil ? nil : true
   }
 
   /// A listed desktop's reach, from the corner's word for it.

@@ -162,12 +162,6 @@ public enum ChromePalette {
   /// `.pk` — a fan key on the menu surface.
   public static let fanKeyFill = dynamic(
     light: 0x000000, lightAlpha: 0.06, dark: 0xFFFFFF, darkAlpha: 0.10)
-  /// `--vf-search-scrim` (§5, *Search scrim*): the Peek's dim, `black/16` by
-  /// day and `black/46` by night. The phone wears it, its dim alone, between
-  /// the field and the bar while a door stands over a live field (§9, TS-D22).
-  /// Held to the token by `pnpm check:ios-fixtures`.
-  public static let searchScrim = dynamic(
-    light: 0x000000, lightAlpha: 0.16, dark: 0x000000, darkAlpha: 0.46)
 
   // MARK: - The keypad (`.kb.keypad`)
 
@@ -258,6 +252,12 @@ public enum ChromePalette {
   /// own tab bar on the simulator: the pill reads black/7% over the light
   /// glass (251 → 233) and white/14% over the dark (22 → 55).
   public static let tabPill = dynamic(light: 0x000000, lightAlpha: 0.07, dark: 0xFFFFFF, darkAlpha: 0.14)
+
+  // MARK: - The way in (WI-2, DESIGN.md §8 "The phone's way in")
+
+  /// The seat under the way in's words: the field's own ground, white at 66% by day and black at 62% by night,
+  /// fading out to the field around it.
+  public static let wayInSeat = dynamic(light: 0xFFFFFF, lightAlpha: 0.66, dark: 0x000000, darkAlpha: 0.62)
 
   // MARK: - Vendor marks (§13)
 

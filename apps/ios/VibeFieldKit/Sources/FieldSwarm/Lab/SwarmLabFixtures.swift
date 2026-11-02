@@ -52,15 +52,6 @@ public enum BurnShape: String, CaseIterable, Sendable {
   }
 }
 
-/// The ledger's history for a rate curve over the last ten minutes: one bucket
-/// per step, the fixture's tokens priced at a dollar a million.
-public func labUsageHistory(_ shape: BurnShape, total: Double?) -> UsageHistory {
-  let steps = (0..<usageStepCount).map { index in
-    shape.rate(Double(index * 2)) * usageStepMs / 60_000 / 1_000_000
-  }
-  return UsageHistory(total: total, coverage: .complete, steps: steps)
-}
-
 /// The fixtures' clock: every stage is dated against this instant, and the
 /// lab reads its models at it too, so a running terminal's elapsed line says
 /// 1:23 on any day rather than the days since the fixtures were written.
@@ -79,6 +70,8 @@ struct LabAgentSpec {
   var effortIntent: AgentEffortIntent = .observed
   var branch: String?
   var contextPercent: Double?
+  /// The shape of the work. Drawn by nothing since PG-3e: the ledger history it priced into steps retired, and no
+  /// body ever read the steps (the body read the total alone). Kept as the specs' description of the work.
   var burn: BurnShape?
   var detail: String?
   var blocker: AgentBlockerKind?
@@ -92,8 +85,12 @@ struct LabAgentSpec {
   /// The project's dealt sequence plus one, so the lab's eight projects read 1…8.
   var accent = 1
   var message: String?
-  /// The session's total tokens; the bottom figure prices them at a dollar a million.
+  /// The session's total tokens; the bottom figure prices them at a dollar a million, unless `usd` says the total.
   var tokens: Double?
+  /// The owner's priced total in USD, as the remote cut carries it (PG-3e): what the bottom figure reads. Set on the
+  /// stages with a burn and no tokens, about ten minutes at their rate, so a lit body never reads `~$0.00` — a state
+  /// no real owner sends (fd, 2026-11-02).
+  var usd: Double?
   /// Estimated USD per minute: what the burn ladder reads.
   var ratePerMin: Double?
   /// The provider has no pricing lane, so the ladder is drawn unread.
@@ -115,14 +112,12 @@ func labAgent(_ spec: LabAgentSpec, palette: LabPalette) -> FieldBubble {
     case .failure: AgentBlocker(kind: .failure, detail: spec.blockerDetail, code: "E_TOOL")
     }
   }
-  // A provider with no pricing lane has no ledger either: no total, no rate.
-  let usage: UsageHistory? =
-    spec.unpriced
-    ? nil
-    : spec.burn.map { labUsageHistory($0, total: spec.tokens.map { $0 / 1_000_000 }) }
-      ?? spec.tokens.map {
-        UsageHistory(total: $0 / 1_000_000, coverage: .complete, steps: [Double](repeating: 0, count: usageStepCount))
-      }
+  // The owner's cost, as the remote cut carries it (PG-3e): the spec's own USD, else its tokens priced at a dollar a
+  // million, and the burn by the hour. A provider with no pricing lane says so: `unavailable`, no total, the ladder
+  // drawn unread.
+  let cost = AgentCost(
+    usd: spec.usd ?? (spec.tokens ?? 0) / 1_000_000, coverage: spec.unpriced ? "unavailable" : "complete",
+    burnPerHour: spec.unpriced ? nil : (spec.ratePerMin ?? 0) * 60)
   let facet = AgentFacet(
     provider: spec.provider,
     modelName: spec.model,
@@ -132,15 +127,8 @@ func labAgent(_ spec: LabAgentSpec, palette: LabPalette) -> FieldBubble {
     blocker: blocker,
     effort: spec.effort.map { AgentEffort(value: $0, intent: spec.effortIntent) },
     lastMessage: spec.message,
-    // What the burn ladder reads. An unpriced provider has the lane missing
-    // altogether, which is not the same as a rate of zero.
-    monitorUsage: AgentUsage(
-      cumulativeTokens: spec.tokens,
-      costCoverage: spec.unpriced ? .unavailable : .complete,
-      costRatePerMin: spec.unpriced ? nil : (spec.ratePerMin ?? 0)),
-    usage: usage,
-    statusSince: labNow.addingTimeInterval(-20),
-    lastEvidenceAt: labNow.addingTimeInterval(spec.stale ? -120 : 0))
+    cost: cost,
+    statusSince: labNow.addingTimeInterval(-20))
   return FieldBubble(
     id: spec.id,
     project: spec.project,
@@ -253,14 +241,14 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
       bubble: labAgent(
         LabAgentSpec(
           id: "w2", project: "puppeteer", status: .working, model: "Fable 5.1", effort: "high", branch: "swarm",
-          contextPercent: 88, burn: .blaze, detail: "Delegating to Explore", accent: 1, ratePerMin: 1.2),
+          contextPercent: 88, burn: .blaze, detail: "Delegating to Explore", accent: 1, usd: 12, ratePerMin: 1.2),
         palette: palette)),
     LabStage(
       id: "working-ease", title: "Working, easing", note: "A quiet loop at $4.80/hr: one flame, and nothing beside it.",
       bubble: labAgent(
         LabAgentSpec(
           id: "w3", project: "duke", status: .working, model: "Haiku 4.5", effort: "low", branch: "hw3",
-          contextPercent: 55, burn: .ease, detail: "Thinking", accent: 6, ratePerMin: 0.08),
+          contextPercent: 55, burn: .ease, detail: "Thinking", accent: 6, usd: 0.8, ratePerMin: 0.08),
         palette: palette)),
     LabStage(
       id: "working-quiet", title: "Working, no evidence yet",
@@ -270,11 +258,13 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
         palette: palette)),
     LabStage(
       id: "working-stale", title: "Working, stale evidence",
-      note: "Mid-reply, nothing heard for 30 s: dimmed and desaturated, never recoloured. An idle body never dims (Q01).",
+      note: "Mid-reply, its owner marks it stale: dimmed and desaturated, never recoloured. Any body dims on its "
+        + "owner's stale mark, on a desktop that is not live, or while no home answers (PG-3e; the phone's 30 s rule "
+        + "retired).",
       bubble: labAgent(
         LabAgentSpec(
           id: "w8", project: "ref", status: .working, model: "Sonnet 5", effort: "medium", contextPercent: 31,
-          burn: .ease, detail: "Writing the reply", stale: true, accent: 3, ratePerMin: 0.08),
+          burn: .ease, detail: "Writing the reply", stale: true, accent: 3, usd: 0.8, ratePerMin: 0.08),
         palette: palette)),
     LabStage(
       id: "working-active", title: "Working, the open card",
@@ -282,7 +272,7 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
       bubble: labAgent(
         LabAgentSpec(
           id: "w5", project: "jabali", status: .working, model: "Fable 5.1", effort: "max", branch: "editor",
-          contextPercent: 27, burn: .steady, detail: "Writing the reply", active: true, accent: 2, ratePerMin: 0.3),
+          contextPercent: 27, burn: .steady, detail: "Writing the reply", active: true, accent: 2, usd: 3, ratePerMin: 0.3),
         palette: palette)),
     LabStage(
       id: "working-largest", title: "Working, the most spend",

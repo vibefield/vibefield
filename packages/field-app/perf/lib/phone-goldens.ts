@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type {
   AgentView,
@@ -7,6 +7,22 @@ import type {
   MonitorModelChange,
   MonitorModelSnapshot,
 } from "@vibefield/puppeteer-view-sdk/model";
+import {
+  approachRecede,
+  deviceWord,
+  everyReceded,
+  formatClock,
+  formatPercent,
+  formatShort,
+  formatWords,
+  RECEDE_MS,
+  RECEDED_EMPTY_OPACITY,
+  RECEDED_OPACITY,
+  recedeTarget,
+  STATE_WORDS,
+  stateTone,
+  THIS_DESKTOP,
+} from "@vibefield/puppeteer-view-sdk/toolkit";
 import {
   bubbleModel,
   DEFAULT_SWARM_PARAMETERS,
@@ -69,15 +85,67 @@ export const PHONE_WITNESS_INPUTS = [
  * old chain's delta that is the run's gap */
 export const PHONE_RESYNC_AFTER = 7;
 export const PHONE_GOLDENS_COMMAND = "pnpm --filter @vibefield/field-app phone:goldens";
-/** where the kit's copies live: PG-3c's, and PG-3d's parity suite in FieldProductTests
- * (`scripts/check-ios-fixtures.mjs` OTHER_ORIGINS compares them) */
-export const PHONE_GOLDEN_MIRRORS: Readonly<Record<string, readonly string[]>> = {
-  [PHONE_FOLD_GOLDEN]: [
-    "apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures",
-    "apps/ios/VibeFieldKit/Tests/FieldProductTests/Fixtures",
-  ],
-  [PHONE_BODY_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldAgentsTests/Fixtures"],
+
+/** PG-4s — what a view lane's file exports (`perf/lib/phone-goldens-<view>.ts`): its golden's note and its compute.
+ * The header around them is this file's (`phoneAllGoldenFiles`), so a lane writes only these two. */
+export interface PhoneViewGolden {
+  /** the golden's "//": what it records, how, and by which paths; it says "never over a defect" */
+  note: string;
+  /** the golden's `steps`: JSON-safe and deterministic, each step keyed by its `at` as the fold's are */
+  compute(input: PhoneViewInput): unknown | Promise<unknown>;
+}
+/** What a view's compute reads: the window's drawn rows at every step of the witness run, and the clock. */
+export interface PhoneViewInput {
+  steps: readonly PhoneWindowStep[];
+  nowMs: number;
+}
+/** One step's drawn rows, whole, as the window hands them to its view. Named apart from the fold step's `drawn` (its
+ * ids) so `goldens.windowRows` and `step.drawn` cannot be misread (the design check's N2). */
+export interface PhoneWindowStep {
+  at: "open" | "resync" | number;
+  frame?: FrameKind;
+  gap?: true;
+  rows?: readonly AgentView[];
+}
+/** The registry's shape: a view's manifest id → its lane file, imported lazily (no ESM cycle with this file). */
+export type PhoneViewGoldens = Readonly<Record<string, () => Promise<{ golden: PhoneViewGolden }>>>;
+/** PG-4s — THE PER-VIEW GOLDENS. One line per view lane (PG-5…8), its key the view's manifest id, which is the kit's
+ * `GodviewViewChoice` raw value. `tsc` checks each literal path (`tsconfig.json` includes `perf`). */
+export const PHONE_VIEW_GOLDENS: PhoneViewGoldens = {
+  // list: () => import("./phone-goldens-list"),
 };
+export const phoneViewGoldenName = (view: string): string => `phone-${view}.golden.json`;
+/** where every view's golden and the toolkit's golden are mirrored: FieldHomeTests, where the views' suites run */
+export const PHONE_VIEW_MIRROR = "apps/ios/VibeFieldKit/Tests/FieldHomeTests/Fixtures";
+/** PG-4s (Q-S3 (a)) — the shared toolkit words, as the SDK says them over a fixed vector */
+export const PHONE_TOOLKIT_GOLDEN = "phone-toolkit.golden.json";
+/** this folder: where a view lane's `phone-goldens-<view>.ts` lives */
+export const PHONE_GOLDENS_LIB_DIR = import.meta.dirname;
+
+/** where the kit's copies live: PG-3c's, PG-3d's parity suite in FieldProductTests, and PG-3e's body parity suite in
+ * FieldMeshTests, where the mapping from a drawn row to its bubble lives (`scripts/check-ios-fixtures.mjs`
+ * OTHER_ORIGINS compares them). (Corrected 2026-11-02, PG-3e: the body golden was named for FieldAgentsTests, a
+ * bundle that holds no copy and whose target reads no FieldProduct, so it could never run the golden.) PG-4s: the
+ * toolkit's golden and every registered view's, in FieldHomeTests, derived from the registry; `views` is for the
+ * parity test's probe. */
+export function phoneGoldenMirrors(
+  views: PhoneViewGoldens = PHONE_VIEW_GOLDENS,
+): Readonly<Record<string, readonly string[]>> {
+  return {
+    [PHONE_FOLD_GOLDEN]: [
+      "apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures",
+      "apps/ios/VibeFieldKit/Tests/FieldProductTests/Fixtures",
+    ],
+    [PHONE_BODY_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures"],
+    [PHONE_TOOLKIT_GOLDEN]: [PHONE_VIEW_MIRROR],
+    ...Object.fromEntries(
+      Object.keys(views).map((view) => [phoneViewGoldenName(view), [PHONE_VIEW_MIRROR]]),
+    ),
+  };
+}
+/** The mirrors of the registry as it stands; declared after it (a `const` read before its declaration is in its
+ * temporal dead zone). */
+export const PHONE_GOLDEN_MIRRORS = phoneGoldenMirrors();
 /** the body model's clock: a constant. It would date a birth's opening (none here); a running
  * terminal's elapsed line reads `runningSinceMs`, which is not passed (a clock value, never compared) */
 export const PHONE_BODY_NOW_MS = 1_790_803_300_000;
@@ -207,6 +275,9 @@ export interface PhoneBodyStep {
 export interface PhoneGoldens {
   fold: PhoneFoldStep[];
   body: PhoneBodyStep[];
+  /** PG-4s — the window's drawn rows at every step, whole: what a view's golden computes from. Never printed in the
+   * fold or body golden. */
+  windowRows: PhoneWindowStep[];
 }
 
 /** A frame scheduler drained by hand, once per step (the window's is the browser's frame). */
@@ -394,7 +465,7 @@ export async function computePhoneGoldens(input: {
     at: "open" | "resync" | number,
     kind: FrameKind | undefined,
     heard: { changes: Publication | null; rejoined: Publication | null },
-  ): [PhoneFoldStep, PhoneBodyStep] => {
+  ): [PhoneFoldStep, PhoneBodyStep, PhoneWindowStep] => {
     const update = handed as MonitorModelSnapshot | MonitorModelChange | null;
     if (update !== null) foldRevision = update.revision;
     const fold =
@@ -442,20 +513,24 @@ export async function computePhoneGoldens(input: {
       }),
     };
     handed = null;
-    return [foldStep, { at, ...frame, bodies: bodiesOf(rows) }];
+    // the rows whole, for a view's golden: cloned, so a later step can never rewrite an earlier one (Q-S9)
+    const windowStep: PhoneWindowStep = { at, ...frame, rows: structuredClone(rows) };
+    return [foldStep, { at, ...frame, bodies: bodiesOf(rows) }, windowStep];
   };
 
   const fold: PhoneFoldStep[] = [];
   const body: PhoneBodyStep[] = [];
+  const windowSteps: PhoneWindowStep[] = [];
   try {
     await settle();
     const opened = settleStep();
     const state = feed.state();
     if (state.state !== "live")
       throw new Error(`the witness open was not read: ${JSON.stringify(state)}`);
-    let [foldStep, bodyStep] = step("open", undefined, opened);
+    let [foldStep, bodyStep, windowStep] = step("open", undefined, opened);
     fold.push(foldStep);
     body.push(bodyStep);
+    windowSteps.push(windowStep);
     for (const delivery of input.deliveries) {
       const deliver = sink as ((payload: unknown, kind?: "snapshot" | "delta") => void) | null;
       if (deliver === null) throw new Error(`step ${delivery.at}: the board closed before it`);
@@ -467,18 +542,20 @@ export async function computePhoneGoldens(input: {
       if (opens > 1) {
         fold.push({ at: delivery.at, frame: kind, gap: true });
         body.push({ at: delivery.at, frame: kind, gap: true });
+        windowSteps.push({ at: delivery.at, frame: kind, gap: true });
         break;
       }
-      [foldStep, bodyStep] = step(delivery.at, kind, heard);
+      [foldStep, bodyStep, windowStep] = step(delivery.at, kind, heard);
       fold.push(foldStep);
       body.push(bodyStep);
+      windowSteps.push(windowStep);
     }
   } finally {
     offPublished();
     offFeed();
     feed.dispose();
   }
-  return { fold, body };
+  return { fold, body, windowRows: windowSteps };
 }
 
 const FOLD_NOTE =
@@ -541,6 +618,217 @@ export function phoneGoldenFiles(goldens: PhoneGoldens): Record<string, string> 
       "",
     )}\n`,
   };
+}
+
+const TOOLKIT_NOTE =
+  'PG-4s (Q-S3 (a)) — the phone Godview\'s shared toolkit words, as puppeteer-view-sdk\'s ./toolkit says them over a fixed vector, one entry per call: STATE_WORDS verbatim (five groups, 14 words); the recede constants and THIS_DESKTOP; and under calls, formatShort, formatWords, formatClock, formatPercent, deviceWord, stateTone (status × kind × unread), recedeTarget, everyReceded and approachRecede, each {inputs…, out}. A non-JSON input is a tagged string (in: "NaN", "Infinity", "-Infinity", "undefined"). formatClock reads the LOCAL zone, so it is pinned zone-free: each entry names wall components [year, month, day, hours, minutes, seconds, ms] and a fraction of a ms, the instant is built from them in the computing host\'s own zone and never recorded, and the dates are mid-month weekdays (no zone\'s transition day) at hours outside 01:00-03:59. The kit\'s Godview/Toolkit (FieldHome) is held to it by FieldHomeTests\' copy (GodviewToolkitParityTests), the copy by pnpm check:ios-fixtures. GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens). A puppeteer EL8 moves it: regenerate and copy to the kit in the same commit. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.';
+
+/** A number the toolkit takes, as the golden can carry it: JSON's own, or a tag for what JSON cannot hold. */
+type Tagged = number | "NaN" | "Infinity" | "-Infinity" | "undefined";
+function untag(value: Tagged): number | undefined {
+  if (value === "undefined") return undefined;
+  if (value === "NaN") return Number.NaN;
+  if (value === "Infinity") return Number.POSITIVE_INFINITY;
+  if (value === "-Infinity") return Number.NEGATIVE_INFINITY;
+  return value;
+}
+
+/** The vector: lengths in ms (the ties 499/500 and 59 499/59 500, the negative clamp, the hour edges, absurd and
+ * non-finite inputs). */
+const SHORT_MS: readonly Tagged[] = [
+  0,
+  499,
+  500,
+  1_000,
+  44_999,
+  59_499,
+  59_500,
+  60_000,
+  659_000,
+  3_599_999,
+  3_600_000,
+  3_660_000,
+  8_040_000,
+  7_200_000,
+  259_200_001,
+  -500,
+  -5_000,
+  1e25,
+  2 ** 60,
+  "NaN",
+  "Infinity",
+  "-Infinity",
+];
+const WORDS_MS: readonly Tagged[] = [
+  0,
+  29_999,
+  30_000,
+  60_000,
+  89_999,
+  90_000,
+  120_000,
+  3_570_000,
+  3_600_000,
+  3_660_000,
+  3_720_000,
+  7_200_000,
+  7_260_000,
+  90_000_000,
+  -60_000,
+  1e25,
+  "NaN",
+  "Infinity",
+];
+/** Wall components [y, mo, d, h, mi, s, ms] and a fraction of a ms (TimeClip truncates it). Mid-month weekdays, at
+ * hours outside 01:00-03:59, so no zone's transition can move them (the design check's N4). */
+const CLOCK_WALLS: ReadonlyArray<{
+  wall: readonly [number, number, number, number, number, number, number];
+  frac: number;
+}> = [
+  { wall: [2026, 11, 11, 14, 5, 9, 0], frac: 0 },
+  { wall: [2026, 7, 15, 0, 0, 0, 0], frac: 0 },
+  { wall: [2026, 5, 20, 23, 59, 59, 999], frac: 0.75 },
+  { wall: [2026, 10, 13, 9, 7, 3, 500], frac: 0.25 },
+  { wall: [2026, 2, 17, 12, 30, 0, 999], frac: 0.999 },
+  { wall: [2025, 12, 16, 18, 45, 59, 0], frac: 0 },
+];
+const PERCENTS: ReadonlyArray<{ in: Tagged; missing?: string }> = [
+  { in: 0 },
+  { in: 42.9 },
+  { in: 99.99 },
+  { in: 100 },
+  { in: 140.5 },
+  { in: -0.5 },
+  { in: 7 },
+  { in: "undefined" },
+  { in: "NaN" },
+  { in: "Infinity" },
+  { in: "-Infinity" },
+  { in: "undefined", missing: "n/a" },
+  { in: "NaN", missing: "" },
+  { in: 12.5, missing: "n/a" },
+];
+
+/** PG-4s — the toolkit's golden: the SDK's own words over a fixed vector, one entry per call. */
+export function phoneToolkitGolden(): Record<string, unknown> {
+  const statuses = ["idle", "working", "blocked"] as const;
+  const kinds = ["agent", "terminal"] as const;
+  const bools = [false, true] as const;
+  return {
+    "//": TOOLKIT_NOTE,
+    versions: puppeteerVersions(),
+    STATE_WORDS,
+    constants: { RECEDED_OPACITY, RECEDED_EMPTY_OPACITY, RECEDE_MS, THIS_DESKTOP },
+    calls: {
+      formatShort: SHORT_MS.map((ms) => ({ in: ms, out: formatShort(untag(ms) as number) })),
+      formatWords: WORDS_MS.map((ms) => ({ in: ms, out: formatWords(untag(ms) as number) })),
+      formatClock: CLOCK_WALLS.flatMap(({ wall, frac }) => {
+        const [year, month, day, hours, minutes, seconds, ms] = wall;
+        const at = new Date(year, month - 1, day, hours, minutes, seconds, ms).getTime() + frac;
+        return bools.map((withSeconds) => ({
+          wall: [...wall],
+          frac,
+          withSeconds,
+          out: formatClock(at, withSeconds),
+        }));
+      }),
+      formatPercent: PERCENTS.map((entry) => ({
+        ...entry,
+        out:
+          entry.missing === undefined
+            ? formatPercent(untag(entry.in))
+            : formatPercent(untag(entry.in), entry.missing),
+      })),
+      deviceWord: [
+        { self: true, name: "Studio" },
+        { self: false, name: "Loft" },
+        { self: false, name: "" },
+      ].map((device) => ({ ...device, out: deviceWord(device) })),
+      stateTone: statuses.flatMap((status) =>
+        kinds.flatMap((kind) =>
+          bools.map((unread) => ({
+            status,
+            kind,
+            unread,
+            out: stateTone({ status, kind, unread }),
+          })),
+        ),
+      ),
+      recedeTarget: bools.flatMap((receded) =>
+        bools.map((every) => ({ receded, every, out: recedeTarget(receded, every) })),
+      ),
+      everyReceded: [[], [false], [true, false], [true, true]].map((receded) => ({
+        in: receded,
+        out: everyReceded(receded.map((value) => ({ receded: value }))),
+      })),
+      approachRecede: [
+        { current: 1, target: RECEDED_OPACITY, deltaMs: 16 },
+        { current: RECEDED_OPACITY, target: 1, deltaMs: 16 },
+        { current: 0.99, target: 1, deltaMs: 16 },
+        { current: 1, target: 1, deltaMs: 16 },
+        { current: 0.5, target: 1, deltaMs: -16 },
+        { current: RECEDED_OPACITY, target: RECEDED_EMPTY_OPACITY, deltaMs: 240 },
+      ].map((entry) => ({
+        ...entry,
+        out: approachRecede(entry.current, entry.target, entry.deltaMs),
+      })),
+    },
+  };
+}
+
+/** PG-4s — ONE WRITER OF EVERY PHONE GOLDEN: the fold and body goldens, the toolkit's, and one per registered view
+ * (`views` is for the parity test's probe). The generator writes exactly these, and the parity test compares them.
+ * A view's file is this file's header around its lane's note and compute's steps, over the window's rows cloned
+ * (a compute cannot reach the goldens it shares them with). */
+export async function phoneAllGoldenFiles(
+  goldens: PhoneGoldens,
+  views: PhoneViewGoldens = PHONE_VIEW_GOLDENS,
+): Promise<Record<string, string>> {
+  const files: Record<string, string> = {
+    ...phoneGoldenFiles(goldens),
+    [PHONE_TOOLKIT_GOLDEN]: `${printed(phoneToolkitGolden(), 0, "")}\n`,
+  };
+  for (const [view, load] of Object.entries(views)) {
+    const { golden } = await load();
+    const steps = await golden.compute({
+      steps: structuredClone(goldens.windowRows),
+      nowMs: PHONE_BODY_NOW_MS,
+    });
+    files[phoneViewGoldenName(view)] = `${printed(
+      {
+        "//": golden.note,
+        versions: puppeteerVersions(),
+        self: "home",
+        view,
+        nowMs: PHONE_BODY_NOW_MS,
+        inputs: [...PHONE_WITNESS_INPUTS],
+        steps,
+      },
+      0,
+      "",
+    )}\n`;
+  }
+  return files;
+}
+
+/** PG-4s — a lane file (`phone-goldens-<view>.ts`) in `dir` whose view the registry does not name: a golden no
+ * one writes. */
+export function unregisteredViewFiles(
+  dir: string,
+  views: PhoneViewGoldens = PHONE_VIEW_GOLDENS,
+): string[] {
+  return readdirSync(dir)
+    .filter((name) => /^phone-goldens-[a-z0-9-]+\.ts$/.test(name))
+    .filter((name) => !Object.hasOwn(views, name.slice("phone-goldens-".length, -".ts".length)))
+    .sort();
+}
+
+/** PG-4s — a `phone-*.golden.json` in `dir` that `files` (the one writer's map) does not write: a golden committed
+ * and left behind. */
+export function orphanGoldens(dir: string, files: Readonly<Record<string, string>>): string[] {
+  return readdirSync(dir)
+    .filter((name) => /^phone-.+\.golden\.json$/.test(name) && !Object.hasOwn(files, name))
+    .sort();
 }
 
 /** What moved between a committed golden and the computation: one line per step and field, for

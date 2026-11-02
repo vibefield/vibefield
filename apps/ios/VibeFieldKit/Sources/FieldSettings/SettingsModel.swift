@@ -21,11 +21,11 @@ public enum SettingsModel {
   // MARK: - The head
 
   /// Under the name at the head of Settings: the login while all is well, and
-  /// the door's own words when the network asks for the person (TS-7).
+  /// the door's own words when the network asks for the person (TS-7). Signed
+  /// out, nothing: Settings is never open signed out (WI-L1). RETIRED 2026-11-02
+  /// (item 163): the signed-out head's note, which said "Mac".
   public static func headLines(_ account: SettingsAccount) -> (status: Line?, note: String?) {
     switch account.standing {
-    case .signedOut:
-      return (nil, "Use the same account as VibeField on your Mac. Everything under This phone works without it.")
     case .signInAgain:
       return (
         Line("Sign in to Tailscale again", wantsTheUser: true),
@@ -36,7 +36,7 @@ public enum SettingsModel {
         Line("Waiting for approval", wantsTheUser: true),
         "You’re signed in. An admin of your Tailscale network approves new devices."
       )
-    case .connected, .connecting, .couldNotConnect:
+    case .signedOut, .connected, .connecting, .couldNotConnect:
       return (nil, nil)
     }
   }
@@ -61,12 +61,8 @@ public enum SettingsModel {
     }
   }
 
-  /// The desktops section's foot, when there is nothing to list.
-  public static func noDesktopsFoot(_ standing: SettingsAccount.Standing) -> String {
-    standing == .waitingForApproval
-      ? "They appear here once an admin approves this phone."
-      : "On your Mac, open VibeField, click your face, then Connect your devices… with this same account."
-  }
+  // RETIRED 2026-11-02 (item 163): `noDesktopsFoot`, the foot under an empty list, which said "Mac". Settings is
+  // open only signed in, and it lists every desktop WI-L2 counts as known, so its list is never empty.
 
   /// "today, 18:02", "yesterday, 18:02", or the day — when a sleeping desktop
   /// was last heard.
@@ -107,8 +103,9 @@ public enum SettingsModel {
   }
 
   public static func abilities(_ desktop: SettingsDesktop) -> [Ability] {
-    // Its agents' terminals: a bare terminal is no body on the phone until
-    // PG-D5 brings them onto the remote cut (`thinking-phone-godview.md` §1).
+    // Its agents' terminals — and, since PG-3e, its bare terminals, which are
+    // bodies on the phone now that it reads the home's remote cut (PG-D5).
+    // (Corrected 2026-11-02: this said a bare terminal was no body until PG-D5.)
     let terminals: Ability =
       desktop.servesTerminals == false
       ? Ability(
@@ -116,7 +113,13 @@ public enum SettingsModel {
         detail: "\(desktop.name) doesn’t serve its terminals to your devices.", can: false)
       : Ability(title: "Open its agents’ terminals and type", detail: nil, can: true)
     return [
-      Ability(title: "Watch its agents", detail: nil, can: true),
+      // PG-3e (§5.3) — a desktop this phone cannot read says so (J-E1 (iii)'s
+      // words, at the lean); not said is not a refusal.
+      desktop.watchable == false
+        ? Ability(
+          title: "Watch its agents", detail: "\(desktop.name) runs a VibeField this phone can’t read.",
+          can: false)
+        : Ability(title: "Watch its agents", detail: nil, can: true),
       Ability(title: "Start agents in its folders", detail: nil, can: true),
       terminals,
       Ability(title: "Read and search its History", detail: nil, can: true),
@@ -190,7 +193,7 @@ public enum SettingsModel {
     case .dealt:
       return (
         frame,
-        "Dealt from your account, the way your Mac deals it, until a desktop of yours says who you are."
+        "Dealt from your account, the way your computer deals it, until a desktop of yours says who you are."
       )
     case .home(let desktop):
       return (

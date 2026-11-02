@@ -56,6 +56,7 @@ let package = Package(
     .library(name: "FieldFreeway", targets: ["FieldFreeway"]),
     .library(name: "FieldInput", targets: ["FieldInput"]),
     .library(name: "FieldSwarm", targets: ["FieldSwarm"]),
+    .library(name: "FieldSplash", targets: ["FieldSplash"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
     .library(name: "FieldHistory", targets: ["FieldHistory"]),
     .library(name: "FieldWorkspace", targets: ["FieldWorkspace"]),
@@ -215,13 +216,15 @@ let package = Package(
         .product(name: "Truffle", package: "truffle"),
         .product(name: "TruffleTailscale", package: "truffle"),
       ],
-      // The contracts' golden MESH board (`agent-mesh-open.valid.json`), byte
-      // for byte, so `-vf-demo-field-slice` draws the swarm over REAL-shaped
-      // rows through the real home path and the real fold (DS-8, 2026-10-01;
-      // it was the golden `field.agents.v1` slice until DS-D14 retired that
-      // reader). Only DEBUG code reads it (`FieldLink.goldenFixture`);
-      // resources are not conditional, so ~6 KB of inert JSON rides along in
-      // Release, which is the price of a screenshot gate with provenance.
+      // PG-3a's WITNESS remote board (`agent-remote-mesh-open.witness.json`),
+      // byte for byte, so `-vf-demo-field-slice` draws the swarm over
+      // REAL-shaped rows through the real home path and the real fold (PG-3e;
+      // corrected 2026-11-02: from DS-8 it was the contracts' golden FIELD mesh
+      // board, `agent-mesh-open.valid.json`, and before that the golden
+      // `field.agents.v1` slice until DS-D14 retired that reader). Only DEBUG
+      // code reads it (`FieldLink.goldenFixture`); resources are not
+      // conditional, so ~10 KB of inert JSON rides along in Release, which is
+      // the price of a screenshot gate with provenance.
       resources: [.copy("Fixtures")]
     ),
     // The terminal leg (IOS-3, re-footed at TM-5): everything that knows
@@ -288,6 +291,23 @@ let package = Package(
       resources: [.copy("Shaders"), .copy("Resources/marks.png")],
       linkerSettings: [.linkedFramework("Metal"), .linkedFramework("MetalKit")]
     ),
+    // The phone's splash (DESIGN.md §8 "The phone's splash"): vibefield-splash's iPhone look —
+    // Wormhole · Obsidian by night, Obsidian Light by day — drawn natively from its Metal bake,
+    // which apps/ios/scripts/vendor-splash.mjs vendors into `Splash/` at a pin (the shaders and the
+    // numbers generated, the runtime the splash project's own source; never edited here), and the
+    // gate that stands it over the home at launch. Unlike the swarm's shaders (D-i14) these are
+    // compiled with the app into the target's default.metallib: a splash is the one surface that
+    // cannot wait for a compile at first use. It names no other kit target but the design tokens.
+    .target(
+      name: "FieldSplash",
+      dependencies: ["FieldDesign"],
+      resources: [.process("Splash/SplashShaders.metal")],
+      linkerSettings: [.linkedFramework("Metal"), .linkedFramework("QuartzCore")]
+    ),
+    // The splash's runtime held to runtime.js's own phases, sizes and uniforms (the bake's
+    // `clock.json`, vendored with the splash at its pin, which `pnpm check:ios-fixtures` holds it to:
+    // no contracts directory carries it), and both looks drawn on this device's GPU, the dust among them.
+    .testTarget(name: "FieldSplashTests", dependencies: ["FieldSplash"], resources: [.copy("Fixtures")]),
     // The History tab (IOS-9b, H-D4): the ledger, a project, a session's
     // document and search — chrome family only, over VALUES (`HistoryCorpus`)
     // that today only the mock fills (`-vf-mock`) and the index reads will.
@@ -323,7 +343,7 @@ let package = Package(
       dependencies: [
         "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
         "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct", "FieldFreeway",
-        "FieldRoutedTerminal", "FieldSettings",
+        "FieldRoutedTerminal", "FieldSettings", "FieldSplash",
       ],
       resources: [.process("Resources")]
     ),
@@ -405,7 +425,15 @@ let package = Package(
     // untested: the integrator carried three state-machine bugs (the parked
     // poll, the card's ended face, the double attach) that no other target
     // could have caught.
-    .testTarget(name: "FieldHomeTests", dependencies: ["FieldHome"]),
+    //
+    // PG-4s — and the Godview views' bundle (PG-5…8): PG-3a's witness, which every view suite replays, the toolkit's
+    // golden (`phone-toolkit.golden.json`) and one golden per view (`phone-<view>.golden.json`), copied in byte for
+    // byte; `pnpm check:ios-fixtures` keeps the word true.
+    .testTarget(
+      name: "FieldHomeTests",
+      dependencies: ["FieldHome"],
+      resources: [.copy("Fixtures")]
+    ),
     // The History tab's DECISIONS (H-D4): ranking, the scope line, the search's
     // matching and counts, where a hit lands, the stepper's ring.
     .testTarget(

@@ -595,43 +595,52 @@ enum FieldHomeModel {
       canSignOut: account != nil)
   }
 
-  // MARK: - The phone's door (TS-7)
+  // MARK: - The way in (WI-1; TS-7's door, moved off the Field tab)
 
-  /// What stands on the Field page in place of the field's own empty words,
-  /// when the account's door has something to say (TS-7, DESIGN.md §9 "The
-  /// phone's door"). Nil is the field. Every word is `DoorPageView`'s; this
-  /// decides WHICH page, and is the one place that does.
+  /// What stands in the way in while the phone is signed out (WI-1, DESIGN.md §9 "The way in"), or nil:
+  /// signed in, the three tabs. Every word is `WayInView`'s; this decides WHICH page, and is the one
+  /// place that does.
   enum DoorPage: Equatable {
     /// No account: nothing remembered and no login live — before a first
     /// sign-in, while it is under way, after a Cancel and after Sign out. It
     /// yields only to approval and to a login. `failure` is a first sign-in's
     /// reason, or why the sheet could not be shown; `expecting` is the login a
-    /// Mac's code said to expect (TS-7b), said as "At Tailscale, pick ‹login›."
+    /// desktop's code said to expect (TS-7b), said as "At Tailscale, pick ‹login›."
     case welcome(failure: String?, expecting: String? = nil)
+    /// WI-2 — opened from a desktop's code by its link (the Camera) on a phone with no account: the welcome
+    /// steps aside for the desktop that sent you, and names the account to sign in with.
+    case fromCode(desktop: String, login: String)
     /// Signed in; an admin of the network approves new devices.
     case approval(machine: String?, adminConsole: URL?)
     /// The tailnet asks a remembered account to sign in again. Expired and
     /// removed are one page: the Swift node says neither (TS-7 Q1-b).
     case signInAgain(note: String?)
-    /// TS-7b (A:723) — signed in as one account while a Mac's code said to
+    /// TS-7b (A:723) — signed in as one account while a desktop's code said to
     /// expect another. Presentation only: the gate and the login are
     /// untouched. `byLink` — the code came by a link any page could have
     /// opened, so Keep this account is the primary act (EL7).
     case anotherAccount(current: String, expected: String, from: String, byLink: Bool)
+    /// WI-1 — an account, its node not up yet, and no desktop known: a hold. `note` is why it is not up
+    /// (a failure the mesh is already retrying).
+    case joining(login: String?, note: String?)
+    /// WI-1 — up, and the first answer (the gate, the listing) not in yet: a hold.
+    case looking(login: String)
     /// Up, the first listing answered, nothing online and nothing remembered.
-    /// `found` is the beat when the first desktop arrives: the placeholder row
-    /// becomes it, then the page yields (Q1-f).
-    case noDesktops(login: String, found: FoundDesktop?)
+    case noDesktops(login: String)
   }
 
+  /// The found beat's subject (WI-2): the desktop the phone first reached.
   struct FoundDesktop: Equatable {
     let name: String
     let platform: String?
   }
 
-  /// How long the found beat holds before the page yields to the field.
+  /// How long the found beat holds before the way in goes on (to the lock, then the hand-over).
   static let foundBeatHold: Duration = .milliseconds(1200)
 
+  /// WI-L2 — the way in's page, or nil for signed in: an account whose node is not asking, with a VibeField
+  /// desktop known (listed now, or remembered from an earlier listing). A desktop asleep keeps the phone
+  /// signed in; Tailscale asking again does not.
   static func doorPage(
     fixtureOwnsTheField: Bool,
     meshState: MeshModel.State,
@@ -644,62 +653,84 @@ enum FieldHomeModel {
     machineName: String?,
     adminConsole: URL?,
     signInNote: String?,
-    found: FoundDesktop?,
     expected: PhoneCodeExpectation? = nil
   ) -> DoorPage? {
-    // A fixture's photograph is of the field it stages; a door page over it
-    // would be this decision's, not the fixture's (it stamps its own).
+    // A fixture's photograph is of the tabs it stages; a page over it would be
+    // this decision's, not the fixture's (it stamps its own).
     if fixtureOwnsTheField { return nil }
     let live = (login?.isEmpty ?? true) ? nil : login
     let kept = (rememberedLogin?.isEmpty ?? true) ? nil : rememberedLogin
     let account = live ?? kept
     // TS-7b — a mismatch is caught at once, over any other page: the phone's
-    // account is not the one the Mac's code named.
+    // account is not the one the desktop's code named.
     if let expected, let account, !expected.matches(account) {
       return .anotherAccount(
         current: account, expected: expected.login, from: expected.from, byLink: expected.arrival == .link)
     }
-    let expecting = expected?.login
+    let known = listed + remembered > 0
+    // No account: the welcome, or — for a code that came by its link — the desktop that sent you.
+    func welcome(_ failure: String?) -> DoorPage {
+      guard let expected else { return .welcome(failure: failure) }
+      if expected.arrival == .link, failure == nil { return .fromCode(desktop: expected.from, login: expected.login) }
+      return .welcome(failure: failure, expecting: expected.login)
+    }
     switch meshState {
     case .needsMachineAuth:
       return .approval(machine: machineName, adminConsole: adminConsole)
     case .needsLogin:
-      return account == nil ? .welcome(failure: signInNote, expecting: expecting) : .signInAgain(note: signInNote)
+      return account == nil ? welcome(signInNote) : .signInAgain(note: signInNote)
     case .off, .starting, .stopping:
-      return account == nil ? .welcome(failure: signInNote, expecting: expecting) : nil
+      guard let account else { return welcome(signInNote) }
+      return known ? nil : .joining(login: account, note: nil)
     case .failed(let reason):
-      return account == nil ? .welcome(failure: reason, expecting: expecting) : nil
+      guard let account else { return welcome(reason) }
+      return known ? nil : .joining(login: account, note: reason)
     case .reconnecting:
-      return nil
+      // the mesh reconnects only for a remembered account
+      guard let account else { return .joining(login: nil, note: nil) }
+      return known ? nil : .joining(login: account, note: nil)
     case .up:
-      // Up with no login yet is the beat before the re-gate (or a status
-      // overlay that cannot name one): the field, never a page that would
-      // stand over a working mesh.
-      guard let account else { return nil }
-      if let found { return .noDesktops(login: account, found: found) }
-      guard isGated, hasListed, listed == 0, remembered == 0 else { return nil }
-      return .noDesktops(login: account, found: nil)
+      // Up with no login yet is the beat before the re-gate: still joining.
+      guard let account else { return .joining(login: nil, note: nil) }
+      if known { return nil }
+      // No desktops yet is an answer, never the blank before one.
+      guard isGated, hasListed else { return .looking(login: account) }
+      return .noDesktops(login: account)
     }
   }
 
-  /// The found beat's subject: the first desktop listed as "No desktops yet"
-  /// yields to the field, or nil for any other change of page.
-  static func foundDesktop(previous: DoorPage?, next: DoorPage?, desktops: [FieldDesktop]) -> FoundDesktop? {
-    guard case .noDesktops(_, nil) = previous, next == nil, let first = desktops.first else { return nil }
-    return FoundDesktop(name: first.name, platform: first.platform)
+  /// WI-2 — whether the way in ends here, with the found beat: a page that stood for a first sign-in yields to
+  /// signed in. "Another account?" kept is no arrival, and a launch that is signed in from its first frame
+  /// passes no page at all. Nor does Sign in again end the way in with a beat (WI-1's review, M4): §9 sets the
+  /// beat between the steps and the lock's offer, and Tailscale asking a remembered phone again is neither.
+  static func wayInEnds(previous: DoorPage?, next: DoorPage?) -> Bool {
+    guard let previous, next == nil else { return false }
+    switch previous {
+    case .anotherAccount, .signInAgain: return false
+    case .welcome, .fromCode, .approval, .joining, .looking, .noDesktops: return true
+    }
   }
 
-  /// TS-7c (DESIGN.md §9) — whether the field takes acts: none under a door.
-  /// No hold, no bloom, and a tap on a body opens no card.
-  static func fieldTakesActs(under door: DoorPage?) -> Bool {
-    door == nil
+  /// WI-1 (the review's M1) — whether the tabs stand: signed in, always; signed out, only until the splash stands
+  /// whole over them. A sign-out's splash comes back over the tabs, fading in over them (DESIGN.md §8 "The phone's
+  /// way in"), so they stay under it until it covers them, taking no touch meanwhile; a launch signed out never
+  /// mounts them, the splash covering from its first frame.
+  static func tabsStand(signedIn: Bool, splashCovers: Bool) -> Bool {
+    signedIn || !splashCovers
   }
 
-  /// TS-D22 (James, 2026-10-29) — whether the field drifts dimmed under the
-  /// door: only a page that stands over a live field, one with bodies on it.
-  /// An empty field under the welcome keeps its own ground.
-  static func doorDimsField(_ door: DoorPage?, liveBodies: Int) -> Bool {
-    door != nil && liveBodies > 0
+  /// WI-2 (WI-1's review, L3) — How it works' page when the way in's page changes: the tour stands only over the
+  /// welcome, so any other page ends it, and the welcome's return later does not bring back a page left mid-tour.
+  static func tourPage(_ page: Int?, after next: DoorPage?) -> Int? {
+    guard case .welcome = next else { return nil }
+    return page
+  }
+
+  /// The found beat's desktop: the home if it is listed, else the first desktop listed; nil while none
+  /// answers (signed in by a desktop remembered, asleep).
+  static func foundDesktop(home: String?, desktops: [FieldDesktop]) -> FoundDesktop? {
+    guard let desktop = desktops.first(where: { $0.deviceId == home }) ?? desktops.first else { return nil }
+    return FoundDesktop(name: desktop.name, platform: desktop.platform)
   }
 
   /// TS-7b — whether the expectation is met and goes: the node reports the
@@ -708,5 +739,24 @@ enum FieldHomeModel {
   static func expectationSettles(_ expected: PhoneCodeExpectation?, login: String?) -> Bool {
     guard let expected, let login, !login.isEmpty else { return false }
     return expected.matches(login)
+  }
+}
+
+// MARK: - The card's terminal (items 154, 162)
+
+extension FieldHomeModel {
+  /// The card's terminal face for its subject: the subject's join decided against its desktop's name and doors (the
+  /// devices store's `name` and `terminalMesh`). `.noJoin` with no subject.
+  static func cardTerminalFace(_ bubble: FieldBubble?, desktops: [FieldDesktop]) -> AgentTerminalFace {
+    guard let join = bubble?.join else { return .noJoin }
+    let desktop = desktops.first { $0.deviceId == join.deviceID }
+    return agentTerminalFace(
+      join: join, deviceName: desktop?.name, publishesTerminalDoors: desktop?.publishesTerminalDoors)
+  }
+
+  /// Whether the card offers RESUME for its subject, given its face: an agent's alone. A bare terminal has no run (its
+  /// board key is a floor session, which `agent.resume` would refuse), whatever its face.
+  static func offersResume(_ face: AgentTerminalFace, for bubble: FieldBubble?) -> Bool {
+    face.offersResume && bubble?.agent != nil
   }
 }

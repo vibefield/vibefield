@@ -7,6 +7,7 @@ import FieldMesh
 import FieldProduct
 import FieldRoutedTerminal
 import FieldSettings
+import FieldSplash
 import FieldWorkspace
 import FieldSwarm
 import FieldTerminal
@@ -41,8 +42,10 @@ public struct HomeScreen: View {
   @State private var mesh = MeshModel()
   /// TS-7 — the system's sign-in sheet; `syncSignInSheet` opens and closes it.
   @State private var signInSheet = TailscaleSignInSession()
-  /// TS-7 (Q1-f) — the desktop filling "No desktops yet"'s row for the beat.
-  @State private var foundDesktop: FieldHomeModel.FoundDesktop?
+  /// WI-2 — the way in's own end: the found beat, after a page that stood for signing in yields to signed in.
+  @State private var wayInEnding: FieldHomeModel.WayInStep?
+  /// WI-2 — How it works, from the welcome: the page standing (0…3), or nil.
+  @State private var tourPage: Int?
   /// TS-7b — the account a Mac's code said to expect, and its reader.
   private let expectationMemory = ExpectationMemory()
   @State private var macCodeReaderOpen = false
@@ -52,6 +55,14 @@ public struct HomeScreen: View {
   /// exactly like discovery's own door; nil means nobody has been asked, which
   /// is not the same as a mesh that answered with no agents.
   @State private var link: FieldLink?
+  /// PG-4s — the Godview view the Field page stands on, and the clock a still is taken at (nil: the live clock).
+  /// Outside every `#if`: only the DEBUG launch block writes them (`-vf-godview-view=`, `-vf-godview-now=`), so
+  /// Release draws the swarm on the live clock until the selector lands (its lander writes `godviewView`).
+  @State private var godviewView: GodviewViewChoice = .swarm
+  @State private var godviewNow: Date?
+  /// The launch flags are read once (the design check's N10): the DEBUG block runs again on every return to the
+  /// view, and a second read would undo the selector's pick in a DEBUG run launched with the flag.
+  @State private var godviewLaunchRead = false
   /// Whether an open is already in flight. Assigned synchronously by
   /// `openLink`, before it awaits the mesh node, because the window between
   /// that await and the assignment below is exactly where a second caller
@@ -218,21 +229,34 @@ public struct HomeScreen: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.openURL) private var openURL
+  /// WI-1 (the review's M1) — whether the splash stands whole over the home: the tabs stay under a sign-out's
+  /// splash until it does.
+  @Environment(\.splashCovers) private var splashCovers
 
   public init() {}
 
   /// One stage, two sources, projected by the pure functions in FieldAgents.
   ///
-  /// Since IOS-4b the agent half is the DAEMON's: `FieldLink` folds every
-  /// desktop's board — from `field.agents.v1` where the floor publishes it, and
-  /// over the door where it does not — into the same `AgentSnapshot` the mock
-  /// used to invent. An empty field with the mesh up is now a real answer
-  /// rather than a missing feature.
+  /// Since PG-3e the agent half is the HOME'S WINDOW: `FieldLink` holds the
+  /// home's remote board and maps its drawn rows straight to bubbles
+  /// (`FieldLink.bubbles`), body for body as the desktop draws them. The
+  /// scripted fleet keeps its own snapshots, behind the lab and the demo
+  /// arguments only. An empty field with the mesh up is a real answer rather
+  /// than a missing feature.
+  ///
+  /// `mockActive` is DEBUG-only, so its branch is too: the Release build reads
+  /// the link alone (the v2 check's M1).
   private var projected: [FieldBubble] {
-    liveAgents.compactMap(fieldBubble(from:)) + remoteField.snapshot.rows.map(fieldBubble(from:))
+    let sessions = remoteField.snapshot.rows.map(fieldBubble(from:))
+    #if DEBUG
+      if mockActive { return liveAgents.compactMap(fieldBubble(from:)) + sessions }
+    #endif
+    return (link?.bubbles ?? []) + sessions
   }
 
-  /// The agent rows, from whoever is entitled to give them.
+  /// The scripted fleet's rows, while it owns the field. Outside the mock this
+  /// is empty: the live field is `FieldLink.bubbles`.
   private var liveAgents: [AgentSnapshot] {
     #if DEBUG
       // The lab and the demo arguments own the field while they are up: what
@@ -244,14 +268,16 @@ public struct HomeScreen: View {
         return feed.agents
       }
     #endif
-    return link?.agents ?? []
+    return []
   }
 
   // --- IOS-6d: the field's ledgers ------------------------------------------
   /// The rows the field draws: the projection dressed by `FieldAssembly` —
-  /// every project's colour, the open card's pane, the unread marks, the
-  /// stale flags, the usage ledger. Folded on every projection and every
-  /// change of the card's subject, never derived twice.
+  /// every project's colour, the open card's pane (PG-3e: the usage ledger
+  /// retired; the owner's cost rides the row). Folded on every projection and
+  /// every change of the card's subject, never derived twice. (Corrected
+  /// 2026-11-02, PG-3e, the review's [2]: it listed the unread marks and the
+  /// stale flags among the fold's dress; they are the owner's, on the row.)
   @State private var bubbles: [FieldBubble] = []
   @State private var assembly = FieldAssembly(tint: .light)
   /// The project ledger's cache (D-i13): a project keeps its colour across
@@ -261,8 +287,7 @@ public struct HomeScreen: View {
   private func refold() {
     assembly.tint = colorScheme == .dark ? .dark : .light
     let before = assembly.projects
-    bubbles = assembly.fold(
-      projected, cardSubjectID: selection?.id, nowMs: Date().timeIntervalSince1970 * 1000)
+    bubbles = assembly.fold(projected, cardSubjectID: selection?.id)
     if assembly.projects != before { projectStore.save(assembly.projects) }
   }
   // --- end IOS-6d -----------------------------------------------------------
@@ -274,69 +299,21 @@ public struct HomeScreen: View {
     ZStack {
       // The swarm on Metal (IOS-6c/6d): the reference's renderer over the
       // dressed rows; the chrome slot's obstacles are the field's walls.
-      let door = doorPage
-      SwarmField(
-        bubbles: bubbles,
-        // IOS-9e — the field draws only while it is the page standing: the
-        // other two keep it alive under them, and a hidden Metal view
-        // rendering at 120 Hz is a battery spent on nobody.
-        isActive: scenePhase == .active && selectedTab == .field,
-        // TS-7 — under a door page the field drifts and takes no acts: a hold
-        // would open a launch sheet with no desktop to launch on.
-        showsEmptyState: door == nil,
-        // TS-D22 — over a live field the door's page stands on the Peek's dim.
-        scrim: FieldHomeModel.doorDimsField(door, liveBodies: bubbles.count) ? ChromePalette.searchScrim : nil,
-        // TS-7c — no card opens under a door either. Read at the tap, not at
-        // this render: the stage keeps the closure it was first handed.
-        onSelect: { bubble in
-          if FieldHomeModel.fieldTakesActs(under: doorPage) { openCard(on: bubble) }
-        },
-        onCreate: FieldHomeModel.fieldTakesActs(under: door) ? fieldHold : nil,
-        bloom: FieldHomeModel.fieldTakesActs(under: door) ? bloomMenu : nil,
-        onBloom: { choice in
-          // Q4 (a): the bloom opens the launch sheet on that desktop and profile
-          beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
-        }
-      ) {
-        chrome
+      // IOS-9e — the field draws only while it is the page standing: the
+      // other two keep it alive under them, and a hidden Metal view
+      // rendering at 120 Hz is a battery spent on nobody.
+      let active = scenePhase == .active && selectedTab == .field
+      // PG-4s — the Godview view the page stands on: the swarm, until PG-5…8
+      // add theirs. It stands where SwarmField stood, so the overlays below
+      // stay above every view.
+      GodviewStage(choice: godviewView, input: godviewInput(active: active)) {
+        swarmField(active: active)
       }
 
       ScanlinesOverlay()
         .ignoresSafeArea()
       VignetteOverlay()
         .ignoresSafeArea()
-
-      if let door {
-        DoorPageView(
-          page: door, onSignIn: performSignIn,
-          bottomClearance: AppBar.clearance(homeInset: homeInset, stepper: false),
-          onScan: { macCodeReaderOpen = true },
-          onSwitchAccount: switchAccount,
-          onKeepAccount: keepAccount)
-        .transition(.opacity)
-        // On the page rather than the stage: the stage already presents the
-        // swarm lab's cover, and one view presents one cover.
-        .fullScreenCover(isPresented: $macCodeReaderOpen) {
-          MacCodeReader(
-            onCode: { code in
-              macCodeReaderOpen = false
-              receive(code, arrival: .scanned)
-            },
-            onClose: { macCodeReaderOpen = false })
-        }
-      }
-    }
-    .animation(FieldMotion.ease(0.24), value: doorPage)
-    .onChange(of: doorPage) { previous, next in
-      // TS-7 (Q1-f) — "Your Mac appears here" keeps its promise: the first
-      // desktop to list fills the row for the beat, then the page yields.
-      guard let found = FieldHomeModel.foundDesktop(previous: previous, next: next, desktops: linkDesktops)
-      else { return }
-      foundDesktop = found
-      Task {
-        try? await Task.sleep(for: FieldHomeModel.foundBeatHold)
-        foundDesktop = nil
-      }
     }
     // The lab covers the stage (IOS-6c); presented here rather than on the
     // body's chain, which is already at the type-checker's limit.
@@ -360,17 +337,6 @@ public struct HomeScreen: View {
     .onChange(of: selection?.id) { refold() }
     .onChange(of: colorScheme) { refold() }
     // --- end IOS-6d
-    // IOS-8c — every listing teaches the account's memory: which desktops it
-    // has, and — from the first door that answers with a user id — its face.
-    .onChange(of: linkDesktops) {
-      rememberAccount()
-      syncHistoryDesktops()
-      workspaceLaunch?.update(workspaceDesktops)
-      readBloomProfiles()
-    }
-    // SP-6 — the home moved: the History groups re-order and the home's
-    // reader takes the shared door
-    .onChange(of: linkHome) { syncHistoryDesktops() }
     // IOS-8d — on the stage for the type-checker's sake, like the cover above.
     .confirmationDialog(
       SettingsWords.signOutTitle(login: accountLogin), isPresented: $signOutPending,
@@ -381,6 +347,49 @@ public struct HomeScreen: View {
     } message: {
       Text(SettingsWords.signOutMessage)
     }
+  }
+
+  /// The swarm's arm of the stage, its own function so the stage's builder stays inside what the type-checker
+  /// solves in reasonable time (the design check's S6). The stage's former SwarmField call, unchanged but for
+  /// `isActive`, which the stage computes once.
+  private func swarmField(active: Bool) -> some View {
+    // WI-1 — the field stands only signed in, so no page stands on it: the
+    // way in has the splash's field to itself (TS-7c and TS-D22 retired).
+    SwarmField(
+      bubbles: bubbles,
+      isActive: active,
+      onSelect: { bubble in openCard(on: bubble) },
+      onCreate: fieldHold,
+      bloom: bloomMenu,
+      onBloom: { choice in
+        // Q4 (a): the bloom opens the launch sheet on that desktop and profile
+        beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
+      }
+    ) {
+      chrome
+    }
+  }
+
+  /// PG-4s — everything a Godview view takes from the home screen: the link's drawn rows, the swarm's own unread
+  /// (its bubbles', S2) and colours, the open card's row, the clock and the bar's band. Under the mock fleet no link
+  /// stands, so a view draws empty (said; only the swarm draws the mock).
+  private func godviewInput(active: Bool) -> GodviewStageInput {
+    let rows = link?.rows ?? []
+    let projects = assembly.projects
+    let tint = assembly.tint
+    let frozen = godviewNow
+    return GodviewStageInput(
+      isActive: active,
+      rows: rows,
+      fieldIsLive: link?.fieldIsLive ?? false,
+      unreadIds: GodviewStageInput.unreadIds(bubbles: link?.bubbles ?? []),
+      activeId: GodviewStageInput.activeId(rows: rows, cardSubject: selection?.id),
+      colour: { GodviewStageInput.colour(of: $0, projects: projects, tint: tint) },
+      now: { frozen ?? Date() },
+      bandHeight: AppBar.band(homeInset: homeInset),
+      onOpen: { row in
+        if let bubble = bubbles.first(where: { $0.id == row.visualId }) { openCard(on: bubble) }
+      })
   }
 
   @ViewBuilder
@@ -458,7 +467,8 @@ public struct HomeScreen: View {
     guard let link else { return nil }
     let desktops = link.desktops.map { desktop in
       let asleep = desktop.state != .ready
-      let running = liveAgents.filter { $0.join?.deviceID == desktop.deviceId }.count
+      // bare terminals carry no join, so they are not counted, as before
+      let running = projected.filter { $0.agent?.join?.deviceID == desktop.deviceId }.count
       let profiles = (bloomProfiles[desktop.deviceId] ?? []).map { set in
         BloomProfile(
           id: set.id, label: set.kind == "native" ? LaunchModel.nativeLabel : set.label, isDefault: set.isDefault,
@@ -507,6 +517,142 @@ public struct HomeScreen: View {
     return workspaceDesktops.first { $0.id == place.desktop }
   }
 
+  // MARK: - WI-1: the two states
+
+  /// WI-1 (DESIGN.md §9 "The way in"; WI-L1) — the phone's two states. Signed in, the tabs. Signed out, nothing
+  /// here: the way in stands on the splash's own field, which this holds up (`.splashHolds`), and is drawn over
+  /// it (`.splashOverlay`). A sign-out keeps the tabs under the splash until it stands whole over them
+  /// (`FieldHomeModel.tabsStand`), so the splash fades in over the tabs, not over the panel. The hooks that teach
+  /// the account's memory live here, never on the tabs, so a first sign-in's listing is remembered while the way
+  /// in still stands.
+  private var standing: some View {
+    ZStack {
+      if FieldHomeModel.tabsStand(signedIn: wayInStep == nil, splashCovers: splashCovers) {
+        tabs
+          .allowsHitTesting(wayInStep == nil)
+          .accessibilityHidden(wayInStep != nil)
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .splashHolds(wayInStep != nil)
+    .splashOverlay { wayIn }
+    .onChange(of: doorPage) { previous, next in
+      // How it works stands only over the welcome: another page ends it (L3)
+      tourPage = FieldHomeModel.tourPage(tourPage, after: next)
+      // WI-2 — the found beat: a page that stood for a first sign-in yields to signed in
+      guard FieldHomeModel.wayInEnds(previous: previous, next: next) else { return }
+      let found = FieldHomeModel.foundDesktop(home: link?.home, desktops: linkDesktops)
+      let ending = FieldHomeModel.WayInStep.found(name: accountLogin.flatMap { faceStore.name(for: $0) }, desktop: found?.name)
+      wayInEnding = ending
+      Task {
+        try? await Task.sleep(for: FieldHomeModel.foundBeatHold)
+        if wayInEnding == ending { wayInEnding = nil }
+      }
+    }
+    // IOS-8c — every listing teaches the account's memory: which desktops it
+    // has, and — from the first door that answers with a user id — its face.
+    .onChange(of: linkDesktops) {
+      rememberAccount()
+      syncHistoryDesktops()
+      workspaceLaunch?.update(workspaceDesktops)
+      readBloomProfiles()
+    }
+    // SP-6 — the home moved: the History groups re-order and the home's
+    // reader takes the shared door
+    .onChange(of: linkHome) { syncHistoryDesktops() }
+    // The tabs mount at sign-in and unmount under the way in, and their hooks go
+    // with them. So the field folds what arrived while the way in stood (the
+    // stage's own refold hooks were not there to hear it), and the way in
+    // standing again (a sign-out, Tailscale asking again) takes the screen whole:
+    // nothing the tabs had open stays over it or comes back with them.
+    .onChange(of: wayInStep == nil) { _, signedIn in
+      if signedIn { refold() } else { closeWhatTheTabsOpened() }
+    }
+    #if DEBUG
+      // The mock's account moves while the way in stands too, so its hooks stand
+      // here rather than on the tabs.
+      .onChange(of: mockDesktopIsUp) { syncMockHistory() }
+      .onChange(of: mockFieldIsLive) { _, live in
+        if live == true { feed.start() } else { feed.stop() }
+      }
+    #endif
+  }
+
+  /// The way in's screen standing, or nil for signed in: How it works over the welcome, the way in's own end,
+  /// else the page the decision stands.
+  private var wayInStep: FieldHomeModel.WayInStep? {
+    #if DEBUG
+      if let stamped = demoAccount?.wayIn { return stamped }
+    #endif
+    if let wayInEnding { return wayInEnding }
+    guard let door = doorPage else { return nil }
+    if let tourPage, case .welcome = door { return .tour(tourPage) }
+    return .page(door)
+  }
+
+  @ViewBuilder
+  private var wayIn: some View {
+    if let step = wayInStep {
+      WayInView(
+        screen: FieldHomeModel.wayInScreen(step),
+        face: wayInFace,
+        faceSeed: accountSeed,
+        onAct: wayInAct)
+      .phoneAppearance(phoneLook)
+      // On the way in rather than the tabs: the reader is how a signed-out phone takes a desktop's code.
+      .fullScreenCover(isPresented: $macCodeReaderOpen) {
+        MacCodeReader(
+          onCode: { code in
+            macCodeReaderOpen = false
+            receive(code, arrival: .scanned)
+          },
+          onClose: { macCodeReaderOpen = false })
+      }
+    }
+  }
+
+  /// The face that takes the mark's place: the account's, once a desktop has said who you are.
+  private var wayInFace: UserFace? {
+    if case .face(let face) = accountFace.control { return face }
+    return nil
+  }
+
+  /// WI-1 — what the tabs had open closes under the way in: the card (and what it presented), Settings, the
+  /// launch sheet and the corner's menu. They are presented over the window, so they would stand over the way in.
+  private func closeWhatTheTabsOpened() {
+    selection = nil
+    closeCard()
+    closeSettings()
+    createSheet = nil
+    if accountMenuOpen { setAccountMenu(open: false) }
+  }
+
+  /// WI-1 — the way in's acts, each the home's own: the sign-in, the reader, the tour, and TS-7b's two.
+  private func wayInAct(_ act: FieldHomeModel.WayInAct) {
+    switch act {
+    case .continueWithTailscale, .signInAgain:
+      performSignIn()
+    case .scanCode:
+      macCodeReaderOpen = true
+    case .seeHowItWorks:
+      tourPage = 0
+    case .tour(let page):
+      tourPage = min(max(page, 0), 3)
+    case .welcome:
+      tourPage = nil
+    case .useAnotherAccount:
+      // Tailscale asking again, answered with another account: the full sign-out, then the welcome
+      signOut()
+    case .switchAccount:
+      switchAccount()
+    case .keepAccount, .startOver:
+      // the desktop's code is set aside: the welcome, or the account kept
+      keepAccount()
+    case .openAdminConsole(let url):
+      openURL(url)
+    }
+  }
+
   // MARK: - IOS-9e: the pages, and the bar over them
 
   /// Three pages under one bar. `TabView` hosted them until IOS-9e; its bar
@@ -541,12 +687,6 @@ public struct HomeScreen: View {
     }
     // Every push and pop opens the bar again, the way the system's does.
     .onChange(of: history.path) { history.barMinimized = false }
-    #if DEBUG
-      .onChange(of: mockDesktopIsUp) { syncMockHistory() }
-      .onChange(of: mockFieldIsLive) { _, live in
-        if live == true { feed.start() } else { feed.stop() }
-      }
-    #endif
   }
 
   /// The field, under the bar's glass to the screen's edge.
@@ -613,7 +753,7 @@ public struct HomeScreen: View {
   @ViewBuilder
   private var barRow: some View {
     ZStack(alignment: .bottom) {
-      if selectedTab != .search && !barFolded && !welcomeHidesCorner {
+      if selectedTab != .search && !barFolded {
         accountCorner
           .padding(.leading, AppBar.margin)
           .frame(maxWidth: .infinity, alignment: .bottomLeading)
@@ -815,7 +955,7 @@ public struct HomeScreen: View {
   /// What History's rows may offer, and how they are done.
   private var historyActs: HistoryActs {
     HistoryActs(
-      inField: { native in liveAgents.contains { $0.join?.nativeSessionID == native } },
+      inField: { native in projected.contains { $0.agent?.join?.nativeSessionID == native } },
       desktopAwake: { device in link?.desktops.first { $0.deviceId == device }?.state == .ready },
       canResume: { device, provider in
         fieldCatalogs[device].map { rows in rows.contains { $0.id == provider && $0.canResume } }
@@ -849,10 +989,11 @@ public struct HomeScreen: View {
 
   /// Jump to: the Field tab opens the card of the run that continues this
   /// conversation (joined by the field row's native id).
+  ///
+  /// PG-3e: found by the join's native id itself — a bubble's id is its BODY's
+  /// (the visual id), which a promoted row does not share with its run.
   private func jumpToRun(_ native: String) {
-    guard let agent = liveAgents.first(where: { $0.join?.nativeSessionID == native }),
-      let bubble = bubbles.first(where: { $0.id == agent.id })
-    else { return }
+    guard let bubble = bubbles.first(where: { $0.agent?.join?.nativeSessionID == native }) else { return }
     selectedTab = .field
     openCard(on: bubble)
   }
@@ -982,7 +1123,7 @@ public struct HomeScreen: View {
 
 
   public var body: some View {
-    tabs
+    standing
       .background(FieldPalette.panelBackground.ignoresSafeArea())
       .phoneAppearance(phoneLook)
     .onAppear {
@@ -1176,16 +1317,19 @@ public struct HomeScreen: View {
           mockActive = true
           feed.start()
         }
-        // `-vf-demo-field-slice`: the contracts' golden MESH board through the
-        // REAL home path (DS-8, 2026-10-01) — four desktops on the fixture's
-        // tailnet, the phone homing to the first whose door answers and reading
-        // the field through its `agent.subscribe {scope: "mesh"}`: the home's
-        // board, a live laptop's, a sleeping desktop's kept board GREYED, and a
-        // stale one with none. The network is an in-process door answering the
-        // contracts' own bytes, so the swarm AND the corner can be photographed
+        // `-vf-demo-field-slice`: PG-3a's WITNESS remote board through the
+        // REAL home path (PG-3e) — three desktops on the fixture's tailnet
+        // (Studio, the home; Loft, online, its rows arriving through the home;
+        // Attic, offline), the phone homing to Studio and reading the field
+        // through its `agent.subscribe {projection: "remote", scope: "mesh"}`:
+        // the home's window row for row, Loft's rows with their host, Attic's
+        // kept rows GREYED. The network is an in-process door answering the
+        // witness's own bytes, so the swarm AND the corner can be photographed
         // over real-shaped rows in both themes with no desktop and no tailnet.
         // It is not a demo path: nothing downstream of the door knows the
-        // difference, which is the point. (Before DS-8 this was the golden
+        // difference, which is the point. (Corrected 2026-11-02, PG-3e: from
+        // DS-8 it served the contracts' golden FIELD mesh board, four desktops
+        // — studio, laptop, air asleep, mini stale; before DS-8 the golden
         // `field.agents.v1` slice through the store reader, retired by DS-D14.)
         //
         // `link == nil` because this whole block runs again on every return to
@@ -1198,6 +1342,14 @@ public struct HomeScreen: View {
           fixture.start()
           link = fixture
           fixtureLink = true
+          reportCard()
+        }
+        // PG-4s — a still's view and clock (`-vf-godview-view=<id>`, `-vf-godview-now=<epoch ms>`). Neither is a
+        // fixture argument: alone they keep the live path, and they compose with `-vf-demo-field-slice`. Read once.
+        if !godviewLaunchRead {
+          godviewLaunchRead = true
+          if let view = GodviewViewChoice.launch(ProcessInfo.processInfo.arguments) { godviewView = view }
+          godviewNow = GodviewViewChoice.frozenNow(ProcessInfo.processInfo.arguments)
         }
         // `!demoRemoteActive` for the reason the line above carries: a second
         // appearance would otherwise replace a running fixture field with a
@@ -1401,16 +1553,34 @@ public struct HomeScreen: View {
           // --- end IOS-5d ------------------------------------------------
         }
         // --- end IOS-5c --------------------------------------------------
-        if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
+        let autoOpen = ProcessInfo.processInfo.arguments.first {
+          $0 == "-vf-auto-open-card" || $0.hasPrefix("-vf-auto-open-card=")
+        }
+        if let autoOpen {
           Task {
             try? await Task.sleep(for: .seconds(2))
+            // Item 154 (DEBUG) — `-vf-auto-open-card=<visual id>` opens THAT body's card, once the field draws it
+            // (ten seconds at most). A name the field never holds opens nothing, and says so: no silent fallback.
+            if autoOpen.hasPrefix("-vf-auto-open-card=") {
+              let named = String(autoOpen.dropFirst("-vf-auto-open-card=".count))
+              for _ in 0..<20 where !bubbles.contains(where: { $0.id == named }) {
+                try? await Task.sleep(for: .milliseconds(500))
+              }
+              guard let bubble = bubbles.first(where: { $0.id == named }) else {
+                print("[auto-open] no body \(named) on the field: no card opened")
+                return
+              }
+              print("[auto-open] opening \(named)")
+              openCard(on: bubble)
+              return
+            }
             // A bubble with a TERMINAL first when there is one: its face is
             // the one with an act on it, so it is what a screenshot run is
             // usually after. Since TM-5 that is a fold row whose join names a
             // session — a remote row is the DEBUG fixture's, and is kept as
             // the fallback for exactly that reason.
             let wanted =
-              bubbles.first(where: { $0.agent?.join?.hasTerminal == true })
+              bubbles.first(where: { $0.join?.hasTerminal == true })
               ?? bubbles.first(where: { $0.remote?.attachable == true })
               ?? bubbles.first(where: { $0.status == .working })
               ?? bubbles.first
@@ -1709,6 +1879,8 @@ public struct HomeScreen: View {
           homeMemory: HomeMemory())
         opened.start()
         link = opened
+        // PG-3f — a `.closeDoor` closes the link but leaves the card open: the new link hears it
+        reportCard()
       }
     }
   }
@@ -1982,7 +2154,7 @@ public struct HomeScreen: View {
   /// session runs on, as the link lists it (§13), and a plain screen while its
   /// platform is not said.
   private var cardSessionOS: DeviceMark.OS {
-    let device = cardBubble?.agent?.join?.deviceID ?? cardBubble?.remote?.deviceID
+    let device = cardBubble?.join?.deviceID ?? cardBubble?.remote?.deviceID
     return DeviceMark.OS(platform: link?.desktops.first { $0.deviceId == device }?.platform)
   }
 
@@ -2064,7 +2236,7 @@ public struct HomeScreen: View {
       opening: opening,
       actions: SettingsActions(
         // Both acts leave Settings first: the sign-in is the system's own
-        // sheet, and a signed-out phone's Field is the welcome.
+        // sheet, and a signed-out phone is the way in (WI-1).
         signIn: {
           closeSettings()
           performSignIn()
@@ -2200,9 +2372,9 @@ public struct HomeScreen: View {
       isHearing: link?.isHearing ?? false)
   }
 
-  // MARK: - TS-7: the account's door on the Field page
+  // MARK: - WI-1: the way in (TS-7's door, off the Field tab)
 
-  /// The page standing on the Field tab, or nil for the field — decided in
+  /// The way in's page while signed out, or nil for signed in — decided in
   /// `FieldHomeModel.doorPage`, where it is tested without a simulator.
   private var doorPage: FieldHomeModel.DoorPage? {
     var fixtureOwnsTheField = false
@@ -2224,7 +2396,6 @@ public struct HomeScreen: View {
       machineName: mesh.machineName,
       adminConsole: mesh.adminConsoleURL,
       signInNote: mesh.signInNote,
-      found: foundDesktop,
       expected: expectationMemory.expected())
   }
 
@@ -2278,16 +2449,6 @@ public struct HomeScreen: View {
         || argument.hasPrefix("-vf-mock") || argument.hasPrefix("-vf-swarm-lab")
     }
   #endif
-
-  /// TS-7 (Q1-e) — while the welcome stands on the Field tab its Continue is
-  /// the one act, said once: the corner steps aside there and stays on
-  /// History.
-  private var welcomeHidesCorner: Bool {
-    // A menu already open keeps its corner: the bar folds its neighbours
-    // under it, and an invisible menu would take the tabs with it.
-    guard selectedTab == .field, !accountMenuOpen, case .welcome = doorPage else { return false }
-    return true
-  }
 
   /// The field's hold, when no door page stands: the launch sheet on the
   /// usual place, or the scripted fleet's spawn under the mock.
@@ -2406,31 +2567,23 @@ public struct HomeScreen: View {
   // MARK: - IOS-4c: the agent card's terminal
 
   /// G3's join for the card's subject. `.noJoin` for a remote bubble or the
-  /// scripted fleet — neither has an agent row behind it.
+  /// scripted fleet — neither has an agent row behind it. (Item 154: a bare
+  /// terminal's pane join counts too, read through `FieldBubble.join`.)
   ///
   /// Both extra facts come from the DEVICES store rather than from a terminal
   /// listing: the desktop's name, and (TM-5a) whether it publishes its terminal
   /// doors on the tailnet. It is the same desktop either way, and the devices
   /// store is the only one of the two wires that still answers since TM-5.
   private var cardTerminalFace: AgentTerminalFace {
-    guard let join = cardBubble?.agent?.join else { return .noJoin }
-    let desktop = desktop(join.deviceID)
-    return agentTerminalFace(
-      join: join, deviceName: desktop?.name,
-      publishesTerminalDoors: desktop?.publishesTerminalDoors)
-  }
-
-  /// The field's row for a desktop, when it has one. `nil` is a desktop the
-  /// devices store has not named — which is not the same as one that answered.
-  private func desktop(_ deviceID: String) -> FieldDesktop? {
-    link?.desktops.first { $0.deviceId == deviceID }
+    FieldHomeModel.cardTerminalFace(cardBubble, desktops: link?.desktops ?? [])
   }
 
   /// The one act an ended run has: RESUME, over that desktop's door. The new
   /// run is NOT put on the field here — the board is the fold's to publish,
   /// and the next slice or delta shows it.
   private func resumeAction(_ join: AgentJoin?, runtimeRunId: String?) -> CardAction? {
-    guard cardTerminalFace.offersResume, let join, let runtimeRunId, let link else { return nil }
+    guard FieldHomeModel.offersResume(cardTerminalFace, for: cardBubble), let join, let runtimeRunId, let link
+    else { return nil }
     return CardAction(id: "resume", label: "RESUME") {
       Task {
         do {
@@ -2508,7 +2661,8 @@ public struct HomeScreen: View {
     // nothing about it. The store, the sheet and the door they call stay until
     // TM-3 retires the three together; the act that could not work is gone now.
     // IOS-4c — an ended run's one act.
-    if let resume = resumeAction(cardBubble?.agent?.join, runtimeRunId: cardBubble?.id) {
+    // PG-3e — a resume names the run's board KEY; a bubble's id is its body's. The mock has no key and keys by id.
+    if let resume = resumeAction(cardBubble?.join, runtimeRunId: cardBubble?.runKey ?? cardBubble?.id) {
       actions.append(resume)
     }
     return actions
@@ -2535,6 +2689,13 @@ public struct HomeScreen: View {
     }
   }
 
+  /// PG-3f (design v2 §4.1) — the phone is a screen: the link hears what the open card shows, by the body it follows
+  /// (`selection.id`, the VISUAL id), and reports the row under it to its owner. Called where the card opens and
+  /// closes, and at every link install.
+  private func reportCard() {
+    link?.show(visualId: selection?.id)
+  }
+
   /// Raise the card on a bubble, remembering it as the card's subject. Every
   /// path that opens a card comes through here so none of them can open one
   /// with no subject to fall back on.
@@ -2550,6 +2711,7 @@ public struct HomeScreen: View {
     inputCard.history = clipboardHistory
     // --- end IOS-5d
     selection = SessionSelection(id: bubble.id)
+    reportCard()
     // FW-D2 (James, 2026-10-17: "the terminal should already connect and show
     // the terminal content, no more attach button") — opening the card IS the
     // attach. A kept session comes back painted from its lane; any other mints
@@ -2698,11 +2860,12 @@ public struct HomeScreen: View {
     #endif
   }
 
-  /// The terminal sessions the field shows on one desktop: each run whose join names a PTY there.
+  /// The terminal sessions the field shows on one desktop: each run whose join names a PTY there, a bare terminal's
+  /// included (item 154), so its ticket is held before the tap as an agent's is.
   static func listedSessions(_ bubbles: [FieldBubble], on deviceID: String) -> Set<String> {
     Set(
       bubbles.compactMap { bubble -> String? in
-        guard let join = bubble.agent?.join, join.deviceID == deviceID, join.hosted != "none"
+        guard let join = bubble.join, join.deviceID == deviceID, join.hosted != "none"
         else { return nil }
         return join.runtimeSessionID
       })
@@ -2731,6 +2894,7 @@ public struct HomeScreen: View {
   private func closeCard() {
     let deviceID = attachedDeviceID
     cardBubble = nil
+    reportCard()
     attachedDeviceID = nil
     renderFailure = nil
     attachRefusal = nil

@@ -2,8 +2,8 @@ import Foundation
 
 // PG-3c — THE REMOTE CUT, read on the phone (`packages/contracts/src/agent-field.ts`: `MonitorAgentRow`,
 // `AgentRemoteRow`, and the mesh envelopes over it, `rows.ts`'s `rowsSnapshot`/`rowsDelta`/`meshRowsOpen`/
-// `meshRowsFrame`). Nothing asks for it yet: FieldLink still subscribes to the `field` cut (`phoneMesh`), and 3d's fold
-// is the first reader of these types.
+// `meshRowsFrame`). FieldLink asks for it since PG-3e (`phoneRemote`), through 3d's fold (`RemoteMeshCopy`). (Corrected
+// 2026-11-02: this said nothing asked for it yet, and FieldLink subscribed to the `field` cut, `phoneMesh`.)
 //
 // THE RULE THAT SETS THE SHAPE: the phone refuses a row exactly where the home's window refuses it. The window screens
 // each row with `AgentModelMeshRow.safeParse` (`field-app/src/godview/monitor/board-screen.ts`), so a row here is
@@ -19,7 +19,8 @@ import Foundation
 //
 // Residual parity gaps, by design: the window's union tries `AgentModelDeskRow` first, a this-desktop row a remote cut
 // never carries (it needs the field half at the root), so a row that is not a remote row but IS a desk row passes
-// there and is refused here; and a frame's own unknown keys are not named (the frame is an enum, as `AgentMeshFrame`).
+// there and is refused here; and a frame's own unknown keys are not named (the frame is an enum, as the field cut's
+// `AgentMeshFrame` was until PG-3e retired it).
 
 // MARK: - Strict reads
 
@@ -755,7 +756,8 @@ public struct AgentRemoteMeshDevice: Sendable, Equatable {
 
 /// The OPEN answer of `agent.subscribe {projection: "remote", scope: "mesh"}`: the home's board first, then every
 /// other self desktop's remote board as its owner cut it, each on its own chain. A malformed entry throws the whole
-/// open, as the window's parse does (it goes unavailable) — unlike `AgentMeshOpen`, which drops the device (Q-C2).
+/// open, as the window's parse does (it goes unavailable) — unlike the field cut's `AgentMeshOpen` (retired at PG-3e),
+/// which dropped the device (Q-C2).
 public struct AgentRemoteMeshOpen: Sendable, Equatable {
   public let devices: [AgentRemoteMeshDevice]
   public let unknownFields: [String]
@@ -774,7 +776,7 @@ public struct AgentRemoteMeshOpen: Sendable, Equatable {
 
 /// A later frame of the remote mesh board, one of three arms, tried in the contracts' union order: one desktop's
 /// delta, one desktop's snapshot (its reset), or its state changing — whose `asOf` is REQUIRED here (`rows.ts`), where
-/// `AgentMeshFrame` defaults a missing one to "".
+/// the field cut's `AgentMeshFrame` (retired at PG-3e) defaulted a missing one to "".
 public enum AgentRemoteMeshFrame: Sendable, Equatable {
   case delta(device: String, AgentRemoteMeshDelta)
   case snapshot(device: String, AgentRemoteMeshSnapshot)

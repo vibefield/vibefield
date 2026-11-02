@@ -94,8 +94,12 @@ public enum ChromeMaterial {
     radius: CGFloat = ChromeRadius.card,
     shadow: ChromeShadow? = ChromeShadow.card
   ) -> some View {
-    let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-    return shape
+    glass(in: RoundedRectangle(cornerRadius: radius, style: .continuous), shadow: shadow)
+  }
+
+  /// `.glass` in any shape (WI-2: the way in's acts, whose lower corners follow the screen's own).
+  public static func glass<S: InsettableShape>(in shape: S, shadow: ChromeShadow? = ChromeShadow.card) -> some View {
+    shape
       .fill(.ultraThinMaterial)
       .overlay {
         shape.fill(

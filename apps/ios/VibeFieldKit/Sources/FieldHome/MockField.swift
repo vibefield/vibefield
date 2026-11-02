@@ -109,8 +109,8 @@
     private static let studioHeard = FieldHomeModel.AsleepDesktop(
       deviceId: "dev-1", name: "studio", platform: "darwin", lastSeen: AccountFixtures.heard)
 
-    /// TS-7 — the Field page's door, through the real decision: the welcome
-    /// signed out, the approval page waiting, the field otherwise.
+    /// The way in's page, through the real decision (WI-1): the welcome signed
+    /// out, the approval page waiting, signed in (nil) otherwise.
     var door: FieldHomeModel.DoorPage? {
       let state: MeshModel.State =
         switch standing {
@@ -123,7 +123,7 @@
         fixtureOwnsTheField: false, meshState: state, rememberedLogin: nil, login: login, isGated: true,
         hasListed: true, listed: standing == .up ? 1 : 0, remembered: standing == .signedOut ? 0 : 2,
         machineName: AccountFixtures.machine, adminConsole: FieldTruffleRuntime.machinesAdminURL(controlURL: nil),
-        signInNote: nil, found: nil)
+        signInNote: nil)
     }
 
     /// TS-7 — whether the scripted fleet is the field: only while no door

@@ -133,20 +133,37 @@ const PAGES: readonly PageMeta[] = [
   },
 ] as const;
 
-const NAV_GROUPS: ReadonlyArray<{ label: string; pages: readonly SettingsPage[] }> = [
-  { label: "Account", pages: ["account", "devices"] },
-  { label: "Preferences", pages: ["general", "appearance", "canvas"] },
-  { label: "Workspace", pages: ["agents", "history", "plugins", "terminal"] },
-  { label: "Support", pages: ["updates", "diagnostics", "advanced"] },
+interface NavGroup {
+  readonly id: "account" | "preferences" | "workspace" | "support";
+  /** The eyebrow over the group's rows; null draws its rows with none (the account's rest, under the head). */
+  readonly label: string | null;
+  readonly pages: readonly SettingsPage[];
+}
+
+const NAV_GROUPS: ReadonlyArray<NavGroup> = [
+  { id: "account", label: "Account", pages: ["account", "devices"] },
+  { id: "preferences", label: "Preferences", pages: ["general", "appearance", "canvas"] },
+  { id: "workspace", label: "Workspace", pages: ["agents", "history", "plugins", "terminal"] },
+  { id: "support", label: "Support", pages: ["updates", "diagnostics", "advanced"] },
 ];
+
+/** The nav under the account head (DESIGN.md §8): the head IS the account, so the Account page folds into it and the
+ * group's eyebrow goes with it, while Devices stays as a row directly under the head ("one page under the head",
+ * TS-D3). Item 156 (2026-11-02): the whole group folded, so a connected Mac had no way to Devices from Settings. */
+const NAV_GROUPS_UNDER_HEAD: ReadonlyArray<NavGroup> = NAV_GROUPS.map((group) =>
+  group.id === "account"
+    ? { ...group, label: null, pages: group.pages.filter((page) => page !== "account") }
+    : group,
+);
 
 const PAGE_BY_ID = new Map(PAGES.map((page) => [page.id, page]));
 
 /** UA-D19 — the head of Settings when the account is known: the card that
  * replaces the gear tile and the word "Settings", and the other users as faces
- * under it. With it, the Account nav group folds away — the head IS the
- * account. Without it (a browser harness, an older shell) the dialog keeps its
- * gear head and the Account item, so the page is never unreachable. */
+ * under it. With it, the Account page folds into the head — the head IS the
+ * account — and Devices stays under it (`NAV_GROUPS_UNDER_HEAD`). Without it (a
+ * browser harness, an older shell) the dialog keeps its gear head and the whole
+ * Account group, so no page is ever unreachable. */
 export interface SettingsAccountHead {
   readonly me: {
     readonly userId: string;
@@ -442,8 +459,7 @@ export function SettingsDialog({
   children: ReactNode;
 }): ReactElement {
   const currentPage = PAGE_BY_ID.get(activePage) ?? PAGES[0]!;
-  const navGroups =
-    account === undefined ? NAV_GROUPS : NAV_GROUPS.filter((group) => group.label !== "Account");
+  const navGroups = account === undefined ? NAV_GROUPS : NAV_GROUPS_UNDER_HEAD;
   // A new page or subpage opens at its top.
   const scrollerRef = useRef<HTMLDivElement>(null);
   const subpageTitle = subpage?.title ?? head?.title ?? null;
@@ -484,11 +500,13 @@ export function SettingsDialog({
 
         <nav className="min-h-0 flex-1 overflow-y-auto py-2" aria-label="Settings categories">
           {navGroups.map((group) => (
-            <Fragment key={group.label}>
+            <Fragment key={group.id}>
               <div className="mb-4 last:mb-0">
-                <div className="vf-settings-nav-group mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-black/30 dark:text-white/30">
-                  {group.label}
-                </div>
+                {group.label !== null && (
+                  <div className="vf-settings-nav-group mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-black/30 dark:text-white/30">
+                    {group.label}
+                  </div>
+                )}
                 <div className="space-y-0.5">
                   {group.pages.map((pageId) => {
                     const page = PAGE_BY_ID.get(pageId);
@@ -521,7 +539,7 @@ export function SettingsDialog({
                   })}
                 </div>
               </div>
-              {group.label === "Workspace" && profiles !== undefined && (
+              {group.id === "workspace" && profiles !== undefined && (
                 <ProfilesNavGroup profiles={profiles} active={activePage === "profiles"} />
               )}
             </Fragment>
