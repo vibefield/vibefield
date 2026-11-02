@@ -29,6 +29,19 @@ private let oldDoor: LinkDoor.Script = { method, id, _ in
   }
 }
 
+/// What a modern door says while this phone is not yet let into the field (UA-P-1d's FORBIDDEN_SCOPE).
+private let notYet = "this phone is not yet approved for the field"
+
+/// A desktop that serves the cut and answers the field "not yet": a refusal of another kind than the old version's,
+/// transient (asked again on the sweep), never a ladder.
+private let notYetDoor: LinkDoor.Script = { method, id, _ in
+  switch method {
+  case "system.hello": return [frame(id: id, ack)]
+  case "agent.subscribe": return [failureFrame(id: id, kind: "FORBIDDEN_SCOPE", message: notYet)]
+  default: return []
+  }
+}
+
 /// A desktop that is old until the row upgrades it: from then its door serves `board`.
 private final class Upgrade: @unchecked Sendable {
   private let lock = NSLock()
@@ -144,6 +157,14 @@ private func row(_ deviceId: String, in link: FieldLink) -> FieldDesktop? {
     clock.advance(25)  // t30
     try await passAndSettle(mesh, counter)
     try await settle("the ask at its time") { await door.subscribes() >= 2 }
+    // EXACT at each rung (the review's [16]): `>= 2` alone absorbed an early ask that landed late under load
+    try await Task.sleep(for: .milliseconds(80))
+    let atThirty = await door.subscribes()
+    #expect(atThirty == 2, "one ask at t30 and none before it")
+    clock.advance(5)  // t35: where a ladder the hello reset would next be due
+    try await passAndSettle(mesh, counter)
+    let atThirtyFive = await door.subscribes()
+    #expect(atThirtyFive == 2, "the next rung is t90, not the hello's")
   }
 
   /// O3 — two old desktops: each is asked at 0, 30, 90 and 210 s, the field moving to whichever is due — never both
@@ -256,6 +277,14 @@ private func row(_ deviceId: String, in link: FieldLink) -> FieldDesktop? {
     try await passAndSettle(mesh, counter)
     try await passAndSettle(mesh, counter)
     try await settle("asked at its time") { await door.subscribes() >= 2 }
+    // EXACT at each rung (the review's [16])
+    try await Task.sleep(for: .milliseconds(80))
+    let atThirty = await door.subscribes()
+    #expect(atThirty == 2, "one ask at t30 and none before it")
+    clock.advance(5)  // t35: where a ladder the wake reset would next be due
+    try await passAndSettle(mesh, counter)
+    let atThirtyFive = await door.subscribes()
+    #expect(atThirtyFive == 2, "the next rung is t90, not the wake's")
   }
 
   /// S1 — the old desktop upgrades while ANOTHER is home: the home's board lists it live with its board, and that
@@ -290,5 +319,60 @@ private func row(_ deviceId: String, in link: FieldLink) -> FieldDesktop? {
     let upgraded = try #require(row("dev-laptop", in: link))
     let line = MeshDisplay.linkLine(desktop: upgraded)
     #expect(!line.contains("refused"))
+  }
+
+  /// O6 (PG-3e, the review's [9]; S1 as bound) — a former home's TRANSIENT refusal (its door refused the field for a
+  /// reason other than the old version's, so no ladder holds it) clears once the new home's board lists that desktop
+  /// live with its board: its words go with or without a record.
+  @Test func aFormerHomesTransientWordsClearWhenListedLive() async throws {
+    let door = LinkDoor(script: selfDoor)
+    await door.route(laptopDoorHost, notYetDoor)  // dev-laptop sorts first: the first home
+    await door.route(
+      studioDoorHost,
+      homeDoor([
+        MeshEntry(device: "dev-studio", rows: [remoteBoardRow(key: "s-1")]),
+        MeshEntry(device: "dev-laptop", rows: [remoteBoardRow(key: "l-1", device: "dev-laptop")]),
+      ]))
+    let (link, _, _, _) = try await standingLink(peers: [laptop, studio], door: door)
+    defer { link.stop() }
+    try await settle("the laptop home, its field refused") {
+      link.home == "dev-laptop" && row("dev-laptop", in: link)?.fieldRefusal != nil
+    }
+    #expect(link.laddered.isEmpty, "a refusal of another kind holds no ladder")
+
+    await door.refuse(laptopDoorHost)
+    await door.latest(to: laptopDoorHost)?.drop()
+    try await settle("re-homed, the laptop's agents drawn live") {
+      link.home == "dev-studio" && link.rows.map { $0.key } == ["s-1", "l-1"]
+    }
+    let former = try #require(row("dev-laptop", in: link))
+    #expect(former.fieldRefusal == nil, "listed live by the new home: its words go")
+  }
+
+  /// O7 (PG-3e, the review's [10]; M3 (a)'s scope) — the old desktop upgrades, and at its due ask its door refuses with
+  /// a DIFFERENT kind ("not yet", FORBIDDEN_SCOPE): it speaks the new protocol now, so its ladder record goes, and the
+  /// corner says the door's own words, not the old version's.
+  @Test func aLaterRefusalOfAnotherKindClearsTheLadder() async throws {
+    let clock = MovableClock(start)
+    let upgrade = Upgrade()
+    let door = LinkDoor(script: { method, id, params in
+      upgrade.done ? notYetDoor(method, id, params) : oldDoor(method, id, params)
+    })
+    let (link, mesh, counter) = try await oldHomeLink(door: door, clock: clock)
+    defer { link.stop() }
+    try await settle("the first refusal, on the ladder") { link.laddered == ["dev-studio"] }
+
+    upgrade.now()
+    clock.advance(30)  // t30: due
+    try await passAndSettle(mesh, counter)
+    try await settle("the second ask") { await door.subscribes() >= 2 }
+    try await settle("the door's own words") {
+      row("dev-studio", in: link)?.fieldRefusal?.contains("not yet") == true
+    }
+    #expect(link.laddered.isEmpty, "no ladder: a refusal of the new protocol is the sweep's")
+    let said = try #require(row("dev-studio", in: link))
+    let line = MeshDisplay.linkLine(desktop: said)
+    #expect(line.contains("not yet"))
+    #expect(!line.contains("expected {"))
   }
 }

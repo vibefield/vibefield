@@ -127,7 +127,8 @@ struct SettingsAccountTests {
 
   /// W2 (PG-3e, design v2 §5.3 with the v2 check's M2) — "Watch its agents" by the desktop's standing on the home's
   /// board: incompatible, or a refused field, is not watchable; asleep is (its kept board is drawn); a desktop the
-  /// board does not list yet, and every desktop while the home is not hearing, is not said.
+  /// board does not list yet, and every desktop while the home is not hearing, is not said — save a refused field,
+  /// which is read before the hearing (the review's [8]: the corner says it at the same moment).
   @Test("watching a desktop: its board decides, and not listed is not a refusal")
   func anIncompatibleBoardIsNotWatchable() {
     let desktops = [
@@ -142,7 +143,20 @@ struct SettingsAccountTests {
     #expect(watchable == [false, true, nil, false, true])
     let deaf = settings(meshState: .up, login: login, desktops: desktops, isHearing: false)
     let unsaid = deaf.desktops.map { $0.watchable }
-    #expect(unsaid == [nil, nil, nil, nil, nil])
+    #expect(unsaid == [nil, nil, nil, false, nil])
+  }
+
+  /// W3 (PG-3e, the review's [8]; §5.3, J-E1 (iii) as James picked) — a sole old home: its door refused the remote cut
+  /// (PRECONDITION_FAILED), so the phone hears no board at all, and its page reads "Watch its agents" unavailable,
+  /// as its corner row reads "the field was refused".
+  @Test("a sole old home is not watchable while the phone hears nothing")
+  func aSoleOldHomeIsNotWatchable() {
+    let studio = desktop(
+      id: "dev-studio", name: "Studio", fieldRefusal: #"expected { projection?: "full" | "field" | "model" }"#,
+      board: nil)
+    let deaf = settings(meshState: .up, login: login, home: "dev-studio", desktops: [studio], isHearing: false)
+    let watchable = deaf.desktops.map { $0.watchable }
+    #expect(watchable == [false])
   }
 
   @Test("a desktop's reach is the corner's word, and its own reason when it gave one")

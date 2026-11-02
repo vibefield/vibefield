@@ -64,6 +64,20 @@ private func handOff(_ door: LinkDoor) async throws {
   await connection.deliver(meshFrame(delta))
 }
 
+/// Loft's board re-attaches on a new epoch (its fieldd restarted): one mesh frame, its rows as the witness has them.
+@MainActor
+private func loftReattaches(_ door: LinkDoor) async throws {
+  let loftRows =
+    try R.openJSON()["devices"]?.arrayValue?.first { $0["device"]?.stringValue == loft }?["snapshot"]?["rows"]
+    ?? .array([])
+  let reattached = JSONValue.object([
+    "device": .string(loft),
+    "snapshot": .object(["epoch": .string(R.loftReattached), "revision": .int(1), "rows": loftRows]),
+  ])
+  let connection = try #require(await door.latest)
+  await connection.deliver(meshFrame(reattached))
+}
+
 /// A beat for a send that must NOT happen to have happened: "nothing sent" is evidence only after it.
 private func beat() async throws { try await Task.sleep(for: .milliseconds(80)) }
 
@@ -271,6 +285,8 @@ private func sentCount(_ door: LinkDoor) async -> Int { await reportsSent(door).
 
     link.show(visualId: nil)
     try await waitUntil("its own mark back") { link.bubbles.first { $0.id == "run-p-done" }?.unread == true }
+    // the unread flip is synchronous; an empty would travel the chain, the client and the connection (the review's [15])
+    try await beat()
     let sent = await reportsSent(door)
     #expect(sent.count == 2, "no empty for a recorded device")
   }
@@ -408,5 +424,56 @@ private func sentCount(_ door: LinkDoor) async -> Int { await reportsSent(door).
     await connection.deliver(meshFrame(meshState(R.attic, "asleep")))
     try await beat()
     #expect(await sentCount(door) == 1)
+  }
+
+  /// S18 (PG-3f, the review's [5]/[11]; rule 3) — a frame that moves ANOTHER desktop's epoch clears that desktop's
+  /// record, and the open card's row on the home is not sent again: the S3 resend is for a card whose own device moved.
+  @Test func anotherDesktopsNewEpochResendsNothing() async throws {
+    let reports = ReportScript()
+    reports.set(loft, .localityLocal)
+    let (link, door) = try await reportLink(reports)
+    defer { link.stop() }
+    link.show(visualId: "pty-p3")
+    try await waitUntil("Loft recorded") { link.reportAnswers.last?.outcome == .lasting(.noScreens) }
+    link.show(visualId: "pty-h1")  // the home's row: Loft is recorded, so no empty for it
+    try await waitUntil("the home's row reported") { link.reportAnswers.last?.outcome == .reported }
+
+    reports.set(loft, .ok)
+    try await loftReattaches(door)
+    try await beat()
+    try await beat()
+    #expect(await sentCount(door) == 2, "Loft moved; the card's row is the home's: nothing is sent")
+
+    link.show(visualId: "pty-p3")  // Loft's record went with its epoch: the home's empty, then Loft's report
+    try await waitUntil("Loft reported") { await sentCount(door) == 4 }
+    try await beat()
+    let sent = await reportsSent(door)
+    #expect(
+      sent == [report(["pty-p3"], loft), report(["pty-h1"], home), report([], home), report(["pty-p3"], loft)])
+  }
+
+  /// S19 (PG-3f, the review's [13]) — a pause ends the WHOLE chain, not its tail: a report queued behind one in flight,
+  /// across a pause and a resume on the same client, never lands after the resume's open sent the card's row.
+  @Test func aPauseEndsTheWholeChain() async throws {
+    let reports = ReportScript()
+    reports.queue(home, .silent)  // T1 stands until the row answers it
+    let (link, door) = try await reportLink(reports)
+    defer { link.stop() }
+    link.show(visualId: "pty-h1")  // T1, in flight
+    try await waitUntil("T1 in flight") { await sentCount(door) == 1 }
+    link.show(visualId: "pty-h2")  // T2, queued behind T1
+    link.show(visualId: "pty-h1")  // T3, the tail
+    link.pause()
+    link.resume()
+    try await waitUntil("the resume's open reports the card") { await sentCount(door) == 2 }
+
+    let connection = try #require(await door.latest)
+    let first = await connection.requests.first { $0.method == "agent.reportShown" }
+    let t1 = try #require(first?.id)
+    await connection.deliver(frame(id: t1, .object(["reported": .bool(true)])))
+    try await waitUntil("T1 answered") { link.reportAnswers.count == 2 }
+    try await beat()
+    let sent = await reportsSent(door)
+    #expect(sent == [report(["pty-h1"], home), report(["pty-h1"], home)], "T2 never lands after the open's report")
   }
 }

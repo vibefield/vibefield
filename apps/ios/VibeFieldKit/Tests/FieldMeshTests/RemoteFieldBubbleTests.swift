@@ -170,6 +170,18 @@ import Testing
     #expect(peerBody.title == "Loft · notes")
   }
 
+  /// M6b (PG-3e, the review's [1]; J-E3 as James picked) — a bubble with neither facet, a bare terminal on the home or
+  /// on a peer, wears the terminal prompt on its card's header and badge, never nothing; an agent wears its mark.
+  @Test func aBareTerminalWearsThePrompt() throws {
+    let shell = try Self.bubble(try R.row("pty-h2"))
+    #expect(shell.glyph == .terminalPrompt)
+    let peer = try Self.bubble(try R.row("pty-p1"))
+    #expect(peer.glyph == .terminalPrompt)
+    let agent = try Self.bubble(try R.row("run-h-partial"))
+    let mark = try #require(agent.agent?.markKey)
+    #expect(agent.glyph == .agentMark(mark))
+  }
+
   /// M7 — the names are the owner's words (sdk `words.js`): an empty folder name is an agent's provider label or a
   /// terminal's `terminal`; an empty model is the provider label, never the catalog's; an empty effort is none.
   @Test func namesAreTheOwnersWords() throws {

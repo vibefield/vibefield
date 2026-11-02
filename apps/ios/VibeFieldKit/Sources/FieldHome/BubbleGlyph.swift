@@ -14,13 +14,16 @@ struct BubbleGlyph: View {
   var letterSize: CGFloat = 44
 
   var body: some View {
-    if bubble.remote != nil {
+    switch bubble.glyph {
+    case .terminalPrompt:
       Image(AgentGlyph.terminalAsset, bundle: .module)
         .renderingMode(.template)
         .resizable()
         .scaledToFit()
-    } else if let agent = bubble.agent {
-      AgentGlyph(mark: agent.markKey, letterSize: letterSize)
+    case .agentMark(let mark):
+      AgentGlyph(mark: mark, letterSize: letterSize)
+    case nil:
+      EmptyView()
     }
   }
 }

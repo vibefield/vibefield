@@ -321,3 +321,20 @@ public struct FieldAssembly: Sendable {
     }
   }
 }
+
+/// PG-3e (the review's [1]; J-E3) — the mark a bubble wears, decided where a row can test it: `BubbleGlyph` draws it.
+public enum FieldBubbleGlyph: Equatable, Sendable {
+  /// The terminal prompt: a shell is running, and nothing says who drives it.
+  case terminalPrompt
+  /// An agent's mark, by its catalog mark key (`AgentGlyph`: the drawn glyph, or its letter).
+  case agentMark(String)
+}
+
+extension FieldBubble {
+  /// What `BubbleGlyph` draws for this bubble.
+  public var glyph: FieldBubbleGlyph? {
+    if remote != nil { return .terminalPrompt }
+    if let agent { return .agentMark(agent.markKey) }
+    return nil
+  }
+}

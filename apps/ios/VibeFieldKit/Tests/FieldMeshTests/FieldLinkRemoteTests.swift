@@ -243,10 +243,13 @@ final class HomePlan: @unchecked Sendable {
     #expect(still == once)
   }
 
-  /// L8 (PG-L5) — `stop()` drops the copy: baseline rows drawn, then nothing — rows, bubbles, the grey's flag.
+  /// L8 (PG-L5) — `stop()` drops the copy: baseline rows drawn, then nothing — rows, bubbles, the grey's flag. And the
+  /// COPY itself (the review's [4]): a link started again, homed and asked, its open withheld, draws nothing of the
+  /// last run's board (stop() clears the three fields by hand, so they alone could not fail).
   @Test func stopDropsTheCopy() async throws {
-    let plan = HomePlan([try R.openJSON()])
+    let plan = HomePlan([try R.openJSON(), nil])
     let (link, _, _) = try await Self.link(plan)
+    defer { link.stop() }
     try await waitUntil("the witness drawn") { !link.rows.isEmpty }
     #expect(!link.bubbles.isEmpty)
     #expect(link.fieldIsLive)
@@ -254,6 +257,14 @@ final class HomePlan: @unchecked Sendable {
     #expect(link.rows.isEmpty)
     #expect(link.bubbles.isEmpty)
     #expect(!link.fieldIsLive)
+
+    link.start()
+    try await waitUntil("homed and asked again, the open withheld") {
+      plan.subscribes == 2 && link.home == "dev-studio"
+    }
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(link.rows.isEmpty, "nothing of the last run's board")
+    #expect(link.bubbles.isEmpty)
   }
 
   /// L9 — pause keeps the field ("THE FIELD STANDS"), and resume re-subscribes for a fresh open that replaces it.

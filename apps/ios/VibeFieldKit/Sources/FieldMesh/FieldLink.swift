@@ -431,6 +431,9 @@ public final class FieldLink {
   /// (the v2 check's S1: it serves the field, whichever home answers for it), or `stop()`. While it stands it is the
   /// desktop's corner words (`refreshDesktops`), and the desktop is no home candidate until it is due.
   @ObservationIgnored private var remoteRefusals: [String: RemoteRefusal] = [:]
+  /// The devices on the remote cut's ladder: a `@testable` witness (the review's [10]: a later refusal of another kind
+  /// clears the record, and a row reads that it went).
+  internal var laddered: Set<String> { Set(remoteRefusals.keys) }
 
   // PG-3f (design v2 §4) — the phone is a screen.
   /// What the open card shows, by its VISUAL id (`show(visualId:)`); nil: the card is closed.

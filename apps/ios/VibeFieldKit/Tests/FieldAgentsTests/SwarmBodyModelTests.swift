@@ -71,6 +71,38 @@ private func model(
     #expect(formatRatePerHour(perHour: 96) == "$96/hr")
   }
 
+  /// R0 (PG-3e, the review's [0]; J1 (a), body for body) — the money rounds as the window's does. `formatUsd` is the
+  /// sdk's `Intl.NumberFormat('en-US')`: the shortest decimal, half away from zero. The rate's tenths are its
+  /// `toFixed(1)`: the exact binary value, an exact tie taking the larger. Every value was measured with node against
+  /// puppeteer-view-sdk 0.3.2's `toolkit/format.js` (2026-11-02); `String(format:)` rounds the binary value half to
+  /// even and missed each of the ties.
+  @Test func moneyRoundsAsTheWindowDoes() {
+    #expect(AgentCost(usd: 1.005, coverage: "complete").estimate == "~$1.01")
+    #expect(AgentCost(usd: 0.125, coverage: "complete").estimate == "~$0.13")
+    #expect(AgentCost(usd: 0.0045, coverage: "complete").estimate == "~$0.005")
+    #expect(formatUsd(2.675) == "$2.68")
+    #expect(formatUsd(1.115) == "$1.12")
+    #expect(formatUsd(8.345) == "$8.35")
+    #expect(formatUsd(0.995) == "$1.00")
+    #expect(formatUsd(9.995) == "$10.00")
+    #expect(formatUsd(0.0095) == "$0.010")
+    #expect(formatUsd(0.0125) == "$0.01")
+    #expect(formatUsd(1234.565) == "$1,234.57")
+    #expect(formatUsd(123_456_789.125) == "$123,456,789.13")
+    #expect(formatUsd(-1.005) == "$-1.01")
+    #expect(formatUsd(-0.001) == "$-0.00")
+    #expect(formatRatePerHour(perHour: 2.25) == "$2.3/hr")
+    #expect(formatRatePerHour(perHour: 1.25) == "$1.3/hr")
+    #expect(formatRatePerHour(perHour: 1.75) == "$1.8/hr")
+    #expect(formatRatePerHour(perHour: 1.005) == "$1.0/hr")
+    #expect(formatRatePerHour(perHour: 1.45) == "$1.4/hr")
+    #expect(formatRatePerHour(perHour: 1.05) == "$1.1/hr")
+    #expect(formatRatePerHour(perHour: 9.95) == "$9.9/hr")
+    #expect(formatRatePerHour(perHour: 9.995) == "$10.0/hr")
+    #expect(formatRatePerHour(perHour: 10.5) == "$11/hr")
+    #expect(formatRatePerHour(perHour: 0.125) == "$0.13/hr")
+  }
+
   @Test func lightsTheLadderAtEachStep() {
     #expect(burnLadder == [0.05, 0.15, 0.4, 1])
     #expect(burnFlames(costPerMin: 0.04) == 0)
