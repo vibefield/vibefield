@@ -611,6 +611,7 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
     folder: "/f/vela",
     createdAt: AT,
     updatedAt: AT,
+    turnedAt: null,
     session: { runtimeRunId: "run-Vela", terminalSessionId: "pty-vela", live: true },
   };
   const OWN: AgentFieldRow = {

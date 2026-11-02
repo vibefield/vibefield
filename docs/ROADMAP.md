@@ -390,6 +390,8 @@
     and Send, which pastes into the pane and leaves Return to you.
   - A new spark says hello with three starters. A thread's unread dot lasts until you open it. A thread takes one act
     at a time, and fieldd wakes a spark once.
+  - Its smoke:godview rung 11m is on main since M97 `f0e7bb465` (2026-11-02), row 23 green as run97b, with items 149
+    and 151 (LANDED "SP-1d — smoke:godview's rung 11m").
 - **CP-3, the person**: LANDED 11-01 (`ce6577783`, the mini's run 88; LANDED "CP-3"), on CP3-D1…D8, all A (James,
   10-31 06:31:34Z; `draft/compose-plane/cp3-the-person.md`). CP3-D3 is built as its fallback, B, until a session's
   permission mode is a fact VibeField reads.
@@ -398,12 +400,20 @@
     agents, each held for your OK.
   - Chat's row says it, with the orange dot and the note, and the thread shows its card, answered once for every
     window. A notify is one line on the status line, and an OS notice while no VibeField window is in front.
+- **TU-1, the turn fact and the one placement rule**: LANDED 11-02 (`57569bca3`, the mini's mint M96; LANDED "TU-1"),
+  on the read's seven marks (Q1 and Q2 A by James, 11-01 08:31:35Z, on the decision page; Q3–Q7 by VF-PM, 07:17Z) and
+  the plan's §12 (VF-PM, 14:01Z: (a′), O1 out, the pending tail named).
+  - fieldd keeps whether a spark, and each run's conversation, has worked (`turnedAt`), and Chat's hello reads it: a
+    spark that has worked never says hello again, across a restart or a wake. An ask alone is no turn.
+  - One rule places a run in an Agent Profile (`profileSetOfRun`) for @, the talk room, the needs-you Allow, the
+    compose room, the door and the New spark sheet's count. The board's row carries the profile its run is filed
+    under.
+  - A turn no fieldd saw (while it was down, or in a run a restart could not re-attach) is not kept. It is named
+    (Q4), not closed.
 - Next, in order:
-  - **TU-1**: the turn fact and the persona set on the board's row. All seven marks are ruled: Q1 and Q2 by James
-    (11-01 08:31:35Z, on the decision page), Q3–Q7 by VF-PM (07:17Z).
-    - After it, its own slice, **the handle** (VF-PM, 11-01 09:55Z): the needs-you card names a session by fieldd's
-      runLabel, and the lean is @'s handle ("vibe-field·2"), so two untitled sessions never read alike. A one-frame
-      visual goes to James only if it changes what he sees.
+  - **The handle** (VF-PM, 11-01 09:55Z), its own slice: the needs-you card names a session by fieldd's runLabel, and
+    the lean is @'s handle ("vibe-field·2"), so two untitled sessions never read alike. A one-frame visual goes to
+    James only if it changes what he sees.
   - **SP-1e**: CH-D2's live cards in Chat's thread, and Chat's pane as a card target.
   - **CP-4**: flows and the desk applier.
   - **CP-5**, which is MT-7: Codex and Grok, once their MCP processes can be named.
@@ -859,7 +869,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d and CP-3 (`ce6577783`, run 88) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | TU-1 (ruled) · the handle, after TU-1 · SP-1e · CP-4 · CP-5 |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88) and TU-1 (`57569bca3`, mint M96) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | the handle · SP-1e · CP-4 · CP-5 |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**

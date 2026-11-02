@@ -66,8 +66,15 @@ const VELA: SparkSummary = {
   folder: "/f/vela",
   createdAt: AT,
   updatedAt: AT,
+  // just hatched: fieldd has not seen her work
+  turnedAt: null,
   session: { runtimeRunId: "run-Vela", terminalSessionId: "pty-Vela", live: true },
 };
+
+/** When fieldd first saw Vela work (TU-1): her record's and her run's `turnedAt` once she has. */
+const TURNED = "2026-10-31T05:00:40.000Z";
+/** Vela once she has worked: her record says so. */
+const WORKED: SparkSummary = { ...VELA, turnedAt: TURNED };
 
 /** Vela's own run: up, idle, and no turn taken yet — unless a test says otherwise. */
 function own(over: Partial<AgentFieldRow> = {}): AgentFieldRow {
@@ -297,34 +304,47 @@ describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4)', (
     expect(hello()).toBeNull();
   });
 
-  it("never says hello for a spark that has had a turn: an idle spark with a transcript shows its pane alone", async () => {
-    await mountChat([own({ usage: { cumulativeTokens: 18_400 } })]);
+  it("never says hello for a spark that has worked: an idle spark with a transcript shows its pane alone", async () => {
+    // fieldd's record says it, though the board counts nothing (a re-attached run counts nothing it read back)
+    await mountChat([own({ turnedAt: TURNED })], WORKED);
     expect($(".vf-chat-pane")).not.toBeNull();
     expect($(".vf-chat-items")).toBeNull();
   });
 
-  it("says no hello for a woken spark: its resumed run is idle and has counted nothing from its transcript", async () => {
-    // Wake resumes the spark's session into a new run, which its record names; the board counts no usage read back
-    // from the transcript, so the run reads idle with nothing spent until its next live turn
+  it("says no hello for a woken spark that has worked: its resumed run carries the conversation's time", async () => {
+    // Wake resumes the spark's session into a new run, which its record names; the run inherits its conversation's
+    // turnedAt, and counts nothing from the transcript it reads back
     const WOKEN = "2026-11-01T09:00:00.000Z";
-    await mountChat([own({ runtimeRunId: "run-Vela2", createdAt: WOKEN, statusSince: WOKEN })], {
-      ...VELA,
-      updatedAt: WOKEN,
-      session: { runtimeRunId: "run-Vela2", terminalSessionId: "pty-Vela", live: true },
-    });
+    await mountChat(
+      [own({ runtimeRunId: "run-Vela2", createdAt: WOKEN, statusSince: WOKEN, turnedAt: TURNED })],
+      {
+        ...WORKED,
+        updatedAt: WOKEN,
+        session: { runtimeRunId: "run-Vela2", terminalSessionId: "pty-Vela", live: true },
+      },
+    );
     expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Vela's thread");
     expect($(".vf-chat-composer")).not.toBeNull();
     expect($(".vf-chat-items")).toBeNull();
   });
 
-  it("says no hello once the window saw a turn, though a later frame no longer counts it", async () => {
-    await mountChat([own({ usage: { cumulativeTokens: 18_400 } })]);
-    expect($(".vf-chat-items")).toBeNull();
-    // the same run in a later frame with nothing counted (a transcript read back): the turn the window saw stays seen
-    await act(async () => pushFrame?.({ revision: 1, rows: [own()] }, "snapshot"));
+  it("takes the hello away at its run's first turn, as the row says it, before the list is read again", async () => {
+    await mountChat();
+    expect(hello()).not.toBeNull();
+    // the row's push says the first turn; the list still says null until it is read again
+    await act(async () =>
+      pushFrame?.({ revision: 2, rows: [own({ turnedAt: TURNED })] }, "snapshot"),
+    );
     await settle();
     expect($(".vf-chat-composer")).not.toBeNull();
     expect($(".vf-chat-items")).toBeNull();
+  });
+
+  it("says hello under the line for a spark asleep before it ever worked, its run off the board", async () => {
+    await mountChat([], { ...VELA, session: { runtimeRunId: "run-Vela", live: false } });
+    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
+    expect(words(hello()?.querySelector(".vf-chat-hello-words") ?? null)).toBe(helloWords("Vela"));
+    expect(starters()).toHaveLength(3);
   });
 });
 
@@ -524,7 +544,7 @@ describe('what Chat lends Send while the queue holds an item (CP-3; DESIGN.md §
 
   it("lets a card in the thread stand without stopping Send; its own run's blocker, a menu in its pane, stops it", async () => {
     queued = [VELA_ASKS];
-    await mountChat([own({ usage: { cumulativeTokens: 18_400 } })]);
+    await mountChat([own({ turnedAt: TURNED })], WORKED);
     expect(words($(".vf-chat-thread-status"))).toBe("Asking you");
     const deps = await sendNow("and the docs too");
     expect(deps.blocked()).toBe(false);
@@ -539,7 +559,7 @@ describe('what Chat lends Send while the queue holds an item (CP-3; DESIGN.md §
               revision: 2,
               status: "blocked",
               blockers: [{ id: "p-1", kind: "permission", since: AT }],
-              usage: { cumulativeTokens: 18_400 },
+              turnedAt: TURNED,
             }),
           ],
           removed: [],
@@ -552,8 +572,8 @@ describe('what Chat lends Send while the queue holds an item (CP-3; DESIGN.md §
 
   it("hears a sleeping spark with an item only once its woken run says so (R-4), though its word says Asking you throughout", async () => {
     queued = [VELA_ASKS];
-    const asleep = { ...VELA, session: { runtimeRunId: "run-Vela", live: false } };
-    await mountChat([own({ alive: false, usage: { cumulativeTokens: 18_400 } })], asleep);
+    const asleep = { ...WORKED, session: { runtimeRunId: "run-Vela", live: false } };
+    await mountChat([own({ alive: false, turnedAt: TURNED })], asleep);
     expect(words($(".vf-chat-thread-status"))).toBe("Asking you");
     expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
     const deps = await sendNow("go on");
@@ -566,7 +586,7 @@ describe('what Chat lends Send while the queue holds an item (CP-3; DESIGN.md §
         {
           since: 1,
           revision: 2,
-          upserts: [own({ revision: 2, usage: { cumulativeTokens: 18_400 } })],
+          upserts: [own({ revision: 2, turnedAt: TURNED })],
           removed: [],
         },
         "delta",
@@ -621,7 +641,11 @@ describe("the thread's items never move or resize the pane (VF-PM's Q2: one rule
 
       // CP-3: the needs-you card stands by the same rule, in the hello's place, and its way out moves nothing either
       vi.useFakeTimers();
-      await act(async () => pushNeeds?.([VELA_ASKS]));
+      // a spark asks in a turn, which fieldd stamps: its own row says it has worked beside the item
+      await act(async () => {
+        pushFrame?.({ revision: 2, rows: [own({ turnedAt: TURNED })] }, "snapshot");
+        pushNeeds?.([VELA_ASKS]);
+      });
       expect(hello()).toBeNull();
       expect($(".vf-chat-items > .vf-needs-card")).not.toBeNull();
       expect($(".vf-chat-pane")).toBe(pane);
@@ -633,7 +657,7 @@ describe("the thread's items never move or resize the pane (VF-PM's Q2: one rule
         vi.advanceTimersByTime(180);
       });
       expect($(".vf-needs-card")).toBeNull();
-      // an item is a turn the window saw (a spark asks in a turn), so Vela is no longer new: no hello comes back
+      // its own row says it has worked, so Vela is no longer new: no hello comes back
       expect(hello()).toBeNull();
       expect($(".vf-chat-pane")).toBe(pane);
       expect({ box: box($(".vf-chat-pane")), flow: flow() }).toEqual(withHello);
@@ -693,7 +717,7 @@ describe("the catalog's hello plate (docs/UI_SYSTEM.md: the shipping view on fix
     await act(async () => root?.render(<ChatPreview state={state} />));
   }
 
-  it("draws a spark just hatched saying hello, and no hello where the shown spark has had a turn", async () => {
+  it("draws a spark just hatched saying hello, and no hello where the shown spark has worked", async () => {
     await plate("hello");
     expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Polaris's thread");
     expect(words($(".vf-chat-hello-words"))).toBe(helloWords("Polaris"));

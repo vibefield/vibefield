@@ -178,11 +178,14 @@ import {
   type CardPlayEvidence,
   type CardPlaySeen,
   cardPlayEvidenceLine,
+  chatSendEvidenceLine,
   gateOpen,
   judgeCardPlay,
+  judgeChatCardPlay,
   latestGate,
   markerFile,
   newCardPlayEvidence,
+  newChatSendEvidence,
   shellMarkerFailure,
 } from "./smoke-shell-marker";
 import {
@@ -214,6 +217,7 @@ import {
   HISTORY_SEED_WORDS,
   leakedVariables,
   readTypedAgentCalls,
+  readTypedAgentLines,
   type StagedTypedAgent,
   startupFilesRead,
   TYPED_AGENT_REFUSED_ARGUMENT,
@@ -10169,7 +10173,7 @@ export async function runSmokeGodview(opts: {
         const r = el.getBoundingClientRect();
         return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
       })()`)) as { x: number; y: number } | null;
-      if (at === null) throw new Error(`no ${selector} to press under Godview`);
+      if (at === null) throw new Error(`no ${selector} to press`);
       win.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
       await sleep(40);
       win.webContents.sendInputEvent({
@@ -10502,6 +10506,435 @@ export async function runSmokeGodview(opts: {
       win.webContents.off("console-message", hearLineKeys);
     }
     verdict["newSpark"] = newSpark;
+
+    // 11m. CHAT'S THREAD AND COMPOSER (SP-1d; DESIGN.md §8 "Chat's thread", "Chat's
+    //      composer") — a spark's own pane is its thread, and Send pastes the composer's
+    //      line into it by the road ⌘V takes, Return never pressed. The rung hatches a
+    //      spark of its own (VF-PM's ruling, 2026-11-01): ⌘N in Chat and Create, under
+    //      This Mac, where the godview smoke's typed-agent stub stands signed in for the
+    //      typed agent and records each line a session of it is given (`StubRecords`) —
+    //      never a vendor's agent, since the smoke's HOME holds no sign-in (EL7). The
+    //      thread mounts its live pane and the spark reads Ready; the composer's draft,
+    //      its keyboard placed as focusDeck places a pane's (run92b), takes a line typed
+    //      a key at a time (down, its character, up: a field's road, run85b), @ opens its
+    //      list with the hot row the one nearest the composer, and Esc folds it with the
+    //      text kept; Send says "Pasted into …'s pane — Return sends it", and no line
+    //      reaches the stub until the pane's own Return, which the harness presses. A card from the hand let go on the composer becomes a chip in
+    //      its draft, the card still in the hand. The no-deck case and two surfaces on one
+    //      seat are spark-pane.test.tsx's. Back to Godview's deck for 11h, which must stay
+    //      last; the spark's session ends with the run's teardown.
+    const stubLines = opts.typedAgent?.lines;
+    if (stubLines === undefined) {
+      // Honest, never a silent pass: the hatch needs the staged stub, as the typed-agent rows do
+      verdict["chatThread"] =
+        "unavailable: nothing was staged — an injected FIELDD_DATA_DIR is someone else's root";
+    } else {
+      const lines = stubLines;
+      const chatThread: Record<string, string> = {};
+      const nonce = `sp1d${Math.random().toString(36).slice(2, 10)}`;
+      const evidence = newChatSendEvidence(lines, nonce);
+      type ThreadFacts = {
+        view: string;
+        sheet: boolean;
+        refusal: string | null;
+        chosen: string | null;
+        name: string | null;
+        status: string | null;
+        pane: string | null;
+        session: string | null;
+        text: string | null;
+        at: string | null;
+        rows: number;
+        hot: number;
+        armed: boolean;
+        chips: number;
+        inPane: boolean;
+        inInput: boolean;
+        /** where the document's caret is: "editor" inside the composer's draft, else the node it is in (null: none) */
+        caret: string | null;
+        cards: number;
+      };
+      /** Chat's thread, its composer and the hand, as the page shows them now. */
+      const THREAD_FACTS = `(() => {
+        const thread = document.querySelector(".vf-chat-thread");
+        const pane = thread === null ? null : thread.querySelector(".vf-chat-pane");
+        const canvas =
+          pane === null ? null : pane.querySelector('canvas[aria-label^="Terminal session "]');
+        const input = document.querySelector(".vf-chat-input");
+        const at = document.querySelector(".vf-chat-at");
+        const rows = at === null ? [] : [...at.querySelectorAll(".vf-chat-at-row")];
+        const send = document.querySelector(".vf-chat-send");
+        const active = document.activeElement;
+        const selection = document.getSelection();
+        const anchor = selection === null || selection.rangeCount === 0 ? null : selection.anchorNode;
+        const chosen = document.querySelector('.vf-chat-row[aria-pressed="true"]');
+        return {
+          view: ${VIEW_NOW},
+          sheet: document.querySelector("body > .vf-new-spark") !== null,
+          refusal: document.querySelector(".vf-new-spark-refusal")?.textContent ?? null,
+          chosen: chosen === null ? null : chosen.getAttribute("data-spark"),
+          name: thread?.querySelector(".vf-chat-thread-name")?.textContent ?? null,
+          status: thread?.querySelector(".vf-chat-thread-status")?.textContent ?? null,
+          pane: pane === null ? null : pane.getAttribute("data-pane-state"),
+          session:
+            canvas === null
+              ? null
+              : (canvas.getAttribute("aria-label") ?? "").slice("Terminal session ".length),
+          text: input === null ? null : input.textContent,
+          at: at === null ? null : at.getAttribute("data-at"),
+          rows: rows.length,
+          hot: rows.findIndex((row) => row.getAttribute("data-hot") === "true"),
+          armed: send !== null && send.getAttribute("data-armed") === "true",
+          chips: input === null ? 0 : input.querySelectorAll(".vf-chat-chip").length,
+          inPane:
+            active !== null && pane !== null && pane.contains(active) &&
+            active.classList.contains("terminal-input"),
+          inInput: active !== null && input !== null && (active === input || input.contains(active)),
+          caret:
+            anchor === null
+              ? null
+              : input !== null && input.contains(anchor)
+                ? "editor"
+                : anchor.nodeName,
+          cards: document.querySelectorAll(".vf-cards-slot").length,
+        };
+      })()`;
+      const threadFacts = async (): Promise<ThreadFacts> =>
+        (await win.webContents.executeJavaScript(THREAD_FACTS)) as ThreadFacts;
+      /** The page's ear for the typed line: each keydown, keypress, beforeinput and input, counted by its type and its
+       * place ("draft" inside the composer's draft, else the node), with "!" where the page took its default.
+       * `done()` takes the ear away and answers the counts. */
+      const CHAT_EAR = `(() => {
+        const heard = {};
+        const types = ["keydown", "keypress", "beforeinput", "input"];
+        const ear = (event) => {
+          const target = event.target;
+          const where =
+            target instanceof Element && target.closest(".vf-chat-input") !== null
+              ? "draft"
+              : (target?.nodeName ?? "none");
+          setTimeout(() => {
+            const key = event.type + "@" + where + (event.defaultPrevented ? "!" : "");
+            heard[key] = (heard[key] ?? 0) + 1;
+          }, 0);
+        };
+        for (const type of types) document.addEventListener(type, ear, true);
+        globalThis.__vfChatEar = {
+          done: () => {
+            for (const type of types) document.removeEventListener(type, ear, true);
+            delete globalThis.__vfChatEar;
+            return heard;
+          },
+        };
+        return "ok";
+      })()`;
+      /** The keyboard PLACED in the composer's draft, its caret at the draft's end, as a person's press on its empty
+       * line leaves it: whether the document holds the focus after (null: no draft drawn). */
+      const PLACE_IN_DRAFT = `(() => {
+        const editor = document.querySelector(".vf-chat-input");
+        if (editor === null) return null;
+        editor.focus();
+        const selection = document.getSelection();
+        if (selection !== null) {
+          selection.selectAllChildren(editor);
+          selection.collapseToEnd();
+        }
+        return document.hasFocus();
+      })()`;
+      /** The thread's facts once `accept` holds them, or why not, with what was seen last. */
+      const untilThread = async (
+        label: string,
+        accept: (facts: ThreadFacts) => boolean,
+        timeoutMs: number,
+      ): Promise<ThreadFacts> => {
+        const deadline = Date.now() + timeoutMs;
+        let seen = await threadFacts();
+        while (!accept(seen) && Date.now() < deadline) {
+          await sleep(150);
+          seen = await threadFacts();
+        }
+        if (!accept(seen)) {
+          throw new Error(
+            `${label} did not happen within ${timeoutMs}ms (${JSON.stringify(seen)})`,
+          );
+        }
+        return seen;
+      };
+      const pressKeyOnce = (keyCode: string): void => {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+      };
+      /** The lines the stub's sessions were given that carry this rung's nonce. */
+      const givenNow = () =>
+        readTypedAgentLines(lines).filter((entry) => entry.line.includes(nonce));
+      try {
+        pressViewKey(win, "assistant");
+        await untilRenderer(
+          win,
+          "⌘4 to Chat for 11m",
+          `${VIEW_NOW} === "assistant" ? "ok" : ${VIEW_NOW}`,
+          10_000,
+        );
+        // 1. The hatch: ⌘N's sheet, and Create under This Mac for the typed agent the stub stands in for
+        const sheet = await openSheet("⌘N in Chat, to hatch 11m's spark");
+        const name = sheet.name ?? "";
+        // Create waits, disabled, on the sheet's opening reads (item 149; run89c pressed it before them): press it
+        // once it is enabled and its box has held across two reads, as a person's hand finds a still button
+        const CREATE = '.vf-new-spark-foot .vf-ui-button[data-variant="primary"]';
+        type CreateFacts = { disabled: boolean; box: string } | null;
+        const createFacts = async (): Promise<CreateFacts> =>
+          (await win.webContents.executeJavaScript(`(() => {
+            const el = document.querySelector(${JSON.stringify(CREATE)});
+            if (el === null) return null;
+            const r = el.getBoundingClientRect();
+            return {
+              disabled: el.disabled === true || el.getAttribute("aria-disabled") === "true",
+              box: [r.left, r.top, r.width, r.height].map((n) => Math.round(n)).join(","),
+            };
+          })()`)) as CreateFacts;
+        {
+          const waitFrom = Date.now();
+          const deadline = waitFrom + 10_000;
+          let last = await createFacts();
+          let still = false;
+          while (!still && Date.now() < deadline) {
+            await sleep(100);
+            const now = await createFacts();
+            still =
+              now !== null &&
+              last !== null &&
+              !now.disabled &&
+              !last.disabled &&
+              now.box === last.box;
+            last = now;
+          }
+          // what Create read as it was pressed, or last read when it never could: the evidence line carries both
+          evidence.create = {
+            state: last === null ? "absent" : last.disabled ? "disabled" : "enabled",
+            box: last?.box ?? null,
+            waitedMs: Date.now() - waitFrom,
+          };
+          if (!still) {
+            const said =
+              last === null
+                ? "absent"
+                : `${last.disabled ? "disabled" : "enabled"}, box ${last.box}`;
+            throw new Error(
+              `${name}'s Create was never enabled and still within 10000ms (it read ${said})`,
+            );
+          }
+        }
+        await pressAt(CREATE);
+        const hatched = await untilThread(
+          `Create ${name}: the sheet gone, and Chat on ${name}`,
+          (facts) =>
+            facts.refusal !== null ||
+            (!facts.sheet && facts.chosen !== null && facts.name === name),
+          20_000,
+        );
+        if (hatched.refusal !== null) throw new Error(`the hatch was refused: ${hatched.refusal}`);
+        evidence.spark = hatched.chosen;
+        // 2. Its thread: the spark's own pane live, and the spark heard (Ready)
+        const readyFrom = Date.now();
+        const live = await untilThread(
+          `${name}'s thread: its pane live and ${name} Ready`,
+          (facts) => facts.pane === "live" && facts.session !== null && facts.status === "Ready",
+          30_000,
+        );
+        const session = live.session;
+        if (session === null) throw new Error(`${name}'s pane names no session`);
+        evidence.waitedMs.ready = Date.now() - readyFrom;
+        evidence.session = session;
+        chatThread["the hatch"] =
+          `⌘N's sheet, Create ${name}: Chat chose ${name}, its pane live on ${session}, and ` +
+          `${name} Ready after ${evidence.waitedMs.ready}ms`;
+        // 3. The composer: a typed line, @'s list with the hot row nearest, Esc keeping the text. The draft takes the
+        // keyboard as every field in this smoke takes it (`focusDeck`'s rule, which says why): the window and its
+        // contents focused first, the half of a person's press that no synthesized event carries, then the focus
+        // PLACED in the draft, its caret at the end. A synthesized press runs none of Chromium's default actions: on
+        // the draft it blurred it to the body, where the frame stops every key under a cover (run92b), and a placed
+        // focus without the window's left the keys editing nothing (run85b). Each key then goes down, its character,
+        // up (`pressZoomKey`'s rule for a field). Where the focus and the caret stood as the focus was placed, and what
+        // the page heard of the keys, are recorded as they are read, so the evidence says which half a red is.
+        win.focus();
+        win.webContents.focus();
+        const inDocument = (await win.webContents.executeJavaScript(PLACE_IN_DRAFT)) as
+          | boolean
+          | null;
+        const placed = await threadFacts();
+        evidence.typing.focus = {
+          window: win.isFocused(),
+          contents: win.webContents.isFocused(),
+          document: inDocument === true,
+        };
+        const caret: { placed: string | null; held: string | null } = {
+          placed: placed.caret,
+          held: null,
+        };
+        evidence.typing.caret = caret;
+        if (inDocument === null)
+          throw new Error(`${name}'s thread has no draft to place the keyboard in`);
+        const held = await untilThread(
+          "the composer holding the keyboard, the caret in its draft",
+          (facts) => facts.inInput && facts.caret === "editor",
+          5_000,
+        );
+        caret.held = held.caret;
+        // the draft can take a character: one line tall, and the page would insert at its caret (item 151 — mounted
+        // under the sheet's inert root it stood 0 px tall, insertText disabled, and every key typed nothing)
+        const draft = (await win.webContents.executeJavaScript(`(() => {
+          const editor = document.querySelector(".vf-chat-input");
+          return editor === null
+            ? null
+            : { height: Math.round(editor.getBoundingClientRect().height), enabled: document.queryCommandEnabled("insertText") };
+        })()`)) as { height: number; enabled: boolean } | null;
+        evidence.typing.draft = draft;
+        if (draft === null || draft.height === 0 || !draft.enabled) {
+          throw new Error(
+            `${name}'s draft cannot take a character: ${JSON.stringify(draft)} (a 0 px draft or insertText disabled; item 151)`,
+          );
+        }
+        const typeKeys = async (text: string): Promise<void> => {
+          for (const character of text) {
+            win.webContents.sendInputEvent({ type: "keyDown", keyCode: character });
+            win.webContents.sendInputEvent({ type: "char", keyCode: character });
+            win.webContents.sendInputEvent({ type: "keyUp", keyCode: character });
+            await sleep(15);
+          }
+        };
+        await win.webContents.executeJavaScript(CHAT_EAR);
+        await typeKeys(nonce);
+        await sleep(100);
+        evidence.typing.heard = (await win.webContents.executeJavaScript(
+          "globalThis.__vfChatEar?.done() ?? null",
+        )) as Record<string, number> | null;
+        await untilThread("the typed line in the draft", (facts) => facts.text === nonce, 3_000);
+        await typeKeys(" @");
+        const opened = await untilThread(
+          "@'s list in the composer",
+          (facts) => facts.at === "rows" && facts.rows > 0,
+          5_000,
+        );
+        if (opened.hot !== opened.rows - 1) {
+          throw new Error(
+            `@'s hot row is not the one nearest the composer: ${JSON.stringify(opened)}`,
+          );
+        }
+        pressKeyOnce("Escape");
+        const kept = await untilThread("Esc folding @'s list", (facts) => facts.at === null, 3_000);
+        if (kept.text === null || !kept.text.includes(nonce) || !kept.inInput) {
+          throw new Error(
+            `Esc did not keep the composer's text and keyboard: ${JSON.stringify(kept)}`,
+          );
+        }
+        chatThread["the composer"] =
+          `its keyboard placed (window ${evidence.typing.focus?.window}, contents ` +
+          `${evidence.typing.focus?.contents}), then typed "${kept.text}" a key at a time (down, its character, up); ` +
+          `@ opened its list ` +
+          `(${opened.rows} rows, the hot one the nearest); Esc folded it, the text and the keyboard kept`;
+        // 4. Send: pasted, and never submitted until the pane's own Return
+        await untilThread("Send armed", (facts) => facts.armed, 3_000);
+        await pressAt(".vf-chat-send");
+        const note = await untilRendererValue(
+          win,
+          "the line saying Send pasted the line",
+          `document.querySelector(".vf-line-note")?.textContent ?? "no note"`,
+          25_000,
+          (value) => value.startsWith("Pasted into"),
+        );
+        evidence.note = note;
+        if (!note.includes(`${name}'s pane`) || !note.endsWith("Return sends it")) {
+          throw new Error(`Send said ${JSON.stringify(note)}`);
+        }
+        await sleep(400);
+        if (givenNow().length > 0) {
+          throw new Error(
+            `Send submitted the line: ${name}'s agent was given it before its Return`,
+          );
+        }
+        await untilThread(
+          "the pane holding the keyboard after Send",
+          (facts) => facts.inPane,
+          3_000,
+        );
+        // the input the paste opened, as the deck's markers read it (bounded: Send waited for it already)
+        const gateFrom = Date.now();
+        while (!gateOpen(latestGate(direct.history(), session)) && Date.now() - gateFrom < 3_000) {
+          await sleep(50);
+        }
+        evidence.waitedMs.inputBeforeReturn = Date.now() - gateFrom;
+        evidence.inputAllowed.Return = latestGate(direct.history(), session)?.inputAllowed ?? null;
+        pressKeyOnce("Return");
+        const givenBy = Date.now() + 10_000;
+        while (givenNow().length === 0 && Date.now() < givenBy) await sleep(50);
+        const given = givenNow()[0];
+        if (given === undefined) {
+          throw new Error(
+            `the pane's Return gave ${name}'s agent no line with ${nonce} within 10000ms ` +
+              `(${readTypedAgentLines(lines).length} line(s) recorded)`,
+          );
+        }
+        chatThread["Send"] =
+          `${note}; ${name}'s agent was given nothing for 400ms, and the pane's Return gave it ` +
+          `"${given.line}" (pid ${given.pid})`;
+        // 5. A card from the hand let go on the composer: a chip in the draft, the card kept
+        const handBefore = (await threadFacts()).cards;
+        const dealt = (await win.webContents.executeJavaScript(
+          `globalThis.__vfCards?.deal(${JSON.stringify(`a card for ${nonce}`)}) ?? "no lab"`,
+          true,
+        )) as string | null;
+        if (dealt === "no lab" || dealt === null) {
+          throw new Error(`the hand's lab door (window.__vfCards) dealt no card (${dealt})`);
+        }
+        // a dealt card rises into its place: the hand is counted once it stands there
+        const before = await untilThread(
+          "the dealt card in the hand",
+          (facts) => facts.cards === handBefore + 1,
+          3_000,
+        );
+        const centre = (await win.webContents.executeJavaScript(`(() => {
+          const box = document.querySelector(".vf-chat-composer")?.getBoundingClientRect();
+          return box === undefined ? null : { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+        })()`)) as { x: number; y: number } | null;
+        if (centre === null) throw new Error("Chat's composer is gone");
+        const play = (await win.webContents.executeJavaScript(
+          `globalThis.__vfCards.playAt(${centre.x}, ${centre.y})`,
+          true,
+        )) as CardPlaySeen;
+        evidence.play = play;
+        const misplayed = judgeChatCardPlay(play);
+        if (misplayed.length > 0) throw new Error(`the card did not play: ${misplayed.join("; ")}`);
+        await untilThread(
+          "the card a chip in the composer's draft",
+          (facts) => facts.chips === before.chips + 1,
+          3_000,
+        );
+        // the card stays in the hand: a held card may leave its place for the play, so the count is waited for
+        await untilThread(
+          `the hand holding its ${before.cards} card(s) again`,
+          (facts) => facts.cards === before.cards,
+          3_000,
+        );
+        const emptied = (await win.webContents.executeJavaScript(
+          "globalThis.__vfCards.clear()",
+          true,
+        )) as number;
+        chatThread["the card"] =
+          `${play.played?.note ?? "?"} (${play.answer?.label ?? "?"}): a chip in the draft, the ` +
+          `card still in the hand; ${emptied} card(s) cleared`;
+        console.log(chatSendEvidenceLine(evidence, null, latestGate(direct.history(), session)));
+        // back to Godview's deck for 11h, nothing focused in Chat
+        await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+        pressViewKey(win, "godview");
+        await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
+      } catch (error) {
+        const gateNow =
+          evidence.session === null ? null : latestGate(direct.history(), evidence.session);
+        console.log(chatSendEvidenceLine(evidence, error, gateNow));
+        throw error;
+      }
+      verdict["chatThread"] = chatThread;
+    }
 
     // 11h. THE LINE'S KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-2,
     //      §11) — the probes B and ⌘T owe before they ship, in 11g's form: a

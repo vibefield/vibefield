@@ -26,6 +26,7 @@ import {
   sparksPortOver,
   startSparksFeed,
 } from "../src/chat/sparks-feed";
+import { sparkIsNew } from "../src/chat/thread-items";
 import { THREAD_MARK_WORDS, type ThreadMark } from "../src/chat/thread-marks";
 import { sparkPaneOf } from "../src/chat/thread-pane-door";
 import { ChatPreview } from "../src/design-system/ChatPreview";
@@ -587,6 +588,39 @@ describe("the needs-you queue, as one window reads it (CP-3; needs.subscribe)", 
   });
 });
 
+describe("whether a spark has worked, as one window reads it (TU-1, Q1; the window side of EL9)", () => {
+  const golden = (name: string): unknown =>
+    JSON.parse(
+      readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), `../../contracts/fixtures/${name}`),
+        "utf8",
+      ),
+    );
+
+  it("reads fieldd's sparks and board as their goldens say them: new for a spark that has never worked, never for one that has or says neither", async () => {
+    const asked: string[] = [];
+    const client = {
+      request: async (method: string) => {
+        asked.push(method);
+        return golden("compose-sparks-list.turned.json");
+      },
+    } as unknown as FielddClient;
+    const sparks = await sparksPortOver(client).list();
+    expect(asked).toEqual(["compose.sparks.list"]);
+    expect(sparks.map((each) => each.turnedAt)).toEqual([
+      "2026-11-01T08:40:12.000Z",
+      null,
+      undefined,
+    ]);
+    const board = new FieldBoard();
+    expect(board.apply(golden("agent-field-snapshot.turned.json"), "snapshot")).toBe(true);
+    const entries = sparkEntriesOf(sparks, board.rows());
+    expect(
+      Object.fromEntries(entries.map((entry) => [entry.spark.name, sparkIsNew(entry)])),
+    ).toEqual({ Vela: false, Lyra: true, Juno: false });
+  });
+});
+
 /** A port the test drives: the list it answers, and the board it moves. */
 function scripted(listed: SparkSummary[]) {
   const port = {
@@ -668,6 +702,21 @@ describe("Chat, live (the feed and its acts)", () => {
     const after = port.lists;
     await act(async () => move([{ ...VELA_ASKS, revision: 3, lastActivityAt: AT }]));
     expect(port.lists).toBe(after);
+  });
+
+  it("asks the list again once when a spark's own run first works, and not for a later frame of the same time (D5)", async () => {
+    const { port, door, move } = scripted([VELA]);
+    stop = startSparksFeed(door);
+    mount(<Chat />);
+    await settle();
+    const own = row({ runtimeRunId: "run-Vela", spark: VELA.id, turnedAt: null });
+    await act(async () => move([own]));
+    const lists = port.lists;
+    // the row's push says the first turn: the spark's own record is read again, so its fact follows the row's
+    await act(async () => move([{ ...own, revision: 2, turnedAt: AT }]));
+    expect(port.lists).toBe(lists + 1);
+    await act(async () => move([{ ...own, revision: 3, turnedAt: AT, lastActivityAt: AT }]));
+    expect(port.lists).toBe(lists + 1);
   });
 
   it("mounts an awake spark's own pane as its thread, with no Show (SP-1d)", async () => {

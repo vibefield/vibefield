@@ -308,6 +308,51 @@ describe("ST-D5 — a person's durable Stop rides the field row", () => {
   });
 });
 
+describe("TU-1 — the row says whether its run has worked, and the profile it is filed under", () => {
+  it("carries a time, null or nothing, and the filed set's id or nothing; the goldens before TU-1 carry neither", () => {
+    const snapshot = AgentFieldSnapshot.parse(golden("agent-field-snapshot.turned.json"));
+    expect(snapshot.rows.map((row) => row.turnedAt)).toEqual([
+      "2026-11-01T08:40:12.000Z",
+      null,
+      undefined,
+    ]);
+    expect(snapshot.rows.map((row) => row.profileSet)).toEqual(["native", "work-7f3a", undefined]);
+    // a re-attached run keeps its time with no usage: a re-attach counts nothing
+    expect(snapshot.rows[0]?.usage).toBeUndefined();
+    for (const name of [
+      "agent-field-snapshot.valid.json",
+      "agent-field-snapshot.native-session.json",
+      "agent-field-snapshot.spark.json",
+      "agent-field-snapshot.stop.json",
+    ]) {
+      const older = AgentFieldSnapshot.parse(golden(name));
+      expect(
+        older.rows.every((row) => !("turnedAt" in row) && !("profileSet" in row)),
+        name,
+      ).toBe(true);
+    }
+  });
+
+  it("refuses a clock that is not one and a set that is not an id, rather than coercing them", () => {
+    const row = AgentFieldSnapshot.parse(golden("agent-field-snapshot.turned.json"))
+      .rows[0] as Record<string, unknown>;
+    expect(AgentFieldRow.safeParse(row).success).toBe(true);
+    for (const bad of [42, "", true]) {
+      expect(AgentFieldRow.safeParse({ ...row, turnedAt: bad }).success, String(bad)).toBe(false);
+    }
+    for (const bad of ["Work!", ""]) {
+      expect(AgentFieldRow.safeParse({ ...row, profileSet: bad }).success, bad).toBe(false);
+    }
+    // the desk row is a field row: it reads both keys the same way
+    expect(AgentDeskRow.parse(row)).toMatchObject({
+      turnedAt: "2026-11-01T08:40:12.000Z",
+      profileSet: "native",
+    });
+    expect(AgentDeskRow.safeParse({ ...row, turnedAt: 42 }).success).toBe(false);
+    expect(AgentDeskRow.safeParse({ ...row, profileSet: "Work!" }).success).toBe(false);
+  });
+});
+
 describe("DS-3 — the subscription's new options", () => {
   it("a mesh board is a board projection at a scope; today's callers ask none of it", () => {
     const parsed = AgentSubscribeParams.parse({ projection: "remote", scope: "mesh" });

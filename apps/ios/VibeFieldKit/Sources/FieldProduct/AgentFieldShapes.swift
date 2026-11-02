@@ -129,6 +129,14 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
   /// ST-D5 — the person's Stop while fieldd holds one; absent otherwise, and
   /// on a row from a daemon before ST.
   public let stop: AgentFieldStop?
+  /// TU-1 — the Agent Profile the run is filed under, by its id; absent when
+  /// none is filed, and on a row from a daemon before TU-1.
+  public let profileSet: String?
+  /// TU-1 — when fieldd first saw the run's conversation take a turn. The
+  /// phone reads only "a time or not": the wire's `null` (not yet) reads as
+  /// absent here (`WireObject.value`), and the phone draws no hello, so the
+  /// three states are the window's.
+  public let turnedAt: String?
   public let unknownFields: [String]
   /// Blockers that did not read. A row with one unreadable blocker is still a
   /// row — but the count is not nothing, so it rides rather than vanishing.
@@ -178,6 +186,8 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
     terminal = try object.decodeObject("terminal", AgentTerminalJoin.init(json:))
     nativeSessionId = object.string("nativeSessionId")
     stop = try object.decodeObject("stop", AgentFieldStop.init(json:))
+    profileSet = object.string("profileSet")
+    turnedAt = object.string("turnedAt")
     unknownFields = object.unknownFields
   }
 

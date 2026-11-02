@@ -28005,3 +28005,487 @@ version until a snapshot or an open replaces it, as a non-string key always did.
   (board-screen.test 8 → 9); cargo 33 ok.
 
 **Owed.** Nothing of the fixer's.
+
+## TU-1 — the turn fact and the one placement rule: fieldd keeps whether a spark, and each run's conversation, has worked (`turnedAt`), so Chat's hello reads fieldd's fact, and one rule places a run in an Agent Profile for @, the talk room, the needs-you Allow, the compose room, the door and the New spark sheet (2026-11-02; `1ec240268` → `60ce6a988`, six commits on main `0a97e59b6`, lane `co/tu1` in `/Volumes/SamsungRed/lanes/tu1`, in the mini's mint M96 `57569bca3` over main `50a66dd52`)
+
+James ruled Q1 A and Q2 A, both at their leans, by a board click on the decision page
+https://claude.ai/artifact/SAQ7UP8vqpTqsmVWPxQzWU at 2026-11-01 08:31:35Z ("Q1 A + Q2 A (both leans)"). VF-PM ruled
+Q3–Q7 at 07:17Z, and the plan's three questions (§12) at 14:01Z, all three at cp-landing's leans. The read is
+`lanes/co-plan/plans/turnfact-read.md` (its Status holds the seven rulings) and the plan is
+`lanes/co-plan/plans/tu1-plan.md`. TU-1 is the slice VF-PM ruled on 2026-10-31 (21:42Z and 22:13Z,
+`lanes/co-plan/rulings/wake-fieldd.md`). It pays SP-1d's two owed lines: the hello's open cases and @'s profile
+residual.
+- **Q1:** "new" is the spark's. Once a spark has worked it says no more hello, and fieldd writes the first turn on the
+  spark's record too.
+- **Q2:** work counts as a turn, and an ask does not. An ask seen before any work writes nothing.
+- **Q3:** one rule for the talk room, the compose room and the door's `#identify`.
+- **Q4:** the gap while fieldd is down is accepted and named. There is no EL8 petition. A rosetta check at re-attach
+  comes only if TU-1's red-first shows a wrong hello a person can see.
+- **Q5:** a native resume from History is stamped at birth.
+- **Q6:** `turnedAt` alone. Absent is an older record, `null` is never, and a time is turned.
+- **Q7:** the prefix is TU.
+- **§12 Q1 (a′):** a persona no profile lists is in no profile. fieldd reads the monitor's latest sets frame and
+  fails closed until one arrives.
+- **§12 Q2, O1 OUT:** the hello does not step back while a new spark's own agent asks. James picked Q2 A on the frame
+  that showed the hello over the ask, and chose that cost.
+- **§12 Q3:** a restart's pending tail is accepted as part of Q4's gap and named in Q4's words.
+
+**What.**
+- **Contracts, the kit and the row's two keys, one EL9 commit** (`1ec240268`):
+  - `turnedAt` (`z.string().min(1).nullable().optional()`) on `AgentSessionRecord`, `AgentSessionSummary`,
+    `AgentFieldRow` and `sparkFields` (so `SparkRecord` and `SparkSummary` carry it), and `AgentFieldRow.profileSet`.
+    `AgentDeskRow` and `AgentModelDeskRow` inherit both. `AgentRemoteRow` is untouched.
+  - The one rule, `profileSetOfRun(run, personaSets)`, with `personaSetsOf`, `NATIVE_PROFILE_SET_ID` and
+    `RunProfileFacts` in `contracts/src/agent-index.ts`: the profile the run is filed under; else This Mac's for a run
+    that names no persona; else the profile that lists its persona; else none (a persona no profile lists, or the
+    sets not read yet: `null`, fail closed).
+  - Four new goldens, and no mirrored golden edited: `agent-field-snapshot.turned.json` (mirrored into the kit),
+    `agent-session-record.turned.json`, `agent-session-summary.turned.json` and `compose-sparks-list.turned.json`.
+    The sparks list joins the field golden row for row.
+  - The kit's mirror (D4): its decoder learns `turnedAt` and `profileSet` only. A new `LaunchShapeTests` case
+    asserts both keys per row, and the exact keys it does not read: `["origin","spark"]` on a spark's rows.
+    `check-ios-fixtures` requires the mirror.
+  - system.html's "What a field row carries" gains a dated note. Godview's `NATIVE_PROFILE` is the contract's id.
+  - `pnpm gen` and `gen:check`: no diff. The agent plane and compose are TS-only.
+- **fieldd keeps whether a run has worked** (`50d9c6a5b`):
+  - `mirrorShowsTurn` (Q2, D2): the agent at work outside puppeteer's `starting` span, tokens spent, or an answer
+    written. `blocked` counts nothing. `LAUNCH_ACTIVITY` is typed by puppeteer-core's `MonitorActivityKind`, so a
+    pin that renames the word is red at its typecheck.
+  - `applyMonitor` stamps the signed record once (`stampTurn`): it re-reads the record, writes fieldd's own clock
+    (D8), leaves `updatedAt` alone (D9) and logs `fieldd.agents.session_turned`. A failed write logs
+    `fieldd.agents.turn_unrecorded`, and the row says what fieldd saw for this life.
+  - Every birth says its fact: a spawn and an adopt `null`, a resume the record's own (absent stays absent), History's
+    native resume its birth time (Q5), and a re-attach the record it re-reads. `enter`'s launch is a union on
+    `reattached`, so a birth that forgets the fact does not compile.
+  - The spark is told at the stamp and at every entry that carries a time (D7). `SparkService.turned` re-reads and
+    keeps the first time. Hatch writes `null`, and `#keep` re-reads before it writes (D6).
+  - api.html: dated notes on `agent.subscribe` and `compose.sparks.list`.
+- **fieldd's rooms on the one rule** (`32ffc6108`):
+  - The one rule's persona step (D1), `AgentMonitorService.personaSets()`: `null` until the first frame, then one
+    map per frame, over the same `agents.profileSets` frame Godview's backend reads. daemon.ts hands one closure to
+    the talk room, the Allow, the compose room and the door. Every `NATIVE` literal and every `profileOf` in the
+    tool plane is gone.
+  - The Allow says a run in no profile in its own words: "‹run› is in none of ‹spark›'s Agent Profiles" (fieldd's
+    ‹reason›; no DESIGN.md §9 word moved).
+  - `history_read` places by the rule over its own fresh read of the sets.
+  - D11: a re-attach files a record that names no set under the set puppeteer re-binds at attach, and never
+    overwrites a filed one.
+  - api.html: the tool plane's section note and `agent_send`'s row, first.
+- **The door fails closed until the profiles are read** (`cf5c4e67b`): a plain run the rule can place only by its
+  persona, before the first frame, is unsettled with the new reason `profiles-unread` (`DoorUnsettled`). It is listed
+  nothing with `ttlMs: 0`, asked again every `REASK_MS`, and placed once the frame lands.
+- **Chat's hello on the facts, and @ and the sheet on the rule** (`48f962df0`), DESIGN.md §8 first:
+  - `sparkIsNew`: a spark that never started is new; a spark whose run is pending is never new (D10); otherwise only
+    while the spark's record reads `null` and its own row says no time.
+  - Deleted: the hatch minute (`HATCH_RUN_MS`, `bornInItsHatch`), the turns-seen set (`turnSeen`, `#turnsSeen`,
+    `UNSPOKEN`, `turnShown`, `NO_TURNS`), `profileOfRow` and `sessionsByProfileOf`.
+  - D5: the feed asks the list again once per first turn (`boardSparksKey` marks `·turned`).
+  - @ places a session by `profileSetOfRun`. The New spark sheet's "Sees N sessions" counts by it too
+    (`usePersonSessions`, `sessionsSeenOf`).
+  - The catalog's fixtures carry `turnedAt` in place of the tokens that kept the hello off. The plates are unchanged.
+- **The critic's fixes** (`60ce6a988`, `lanes/co-plan/final-tu1.md` #1–#6; #7, the plan's own text, is outside the
+  commit):
+  - an awake spark whose run the board does not show yet is not new (W8), and DESIGN §8 says so;
+  - an Allow before the profiles are read is refused retryably, `PRECONDITION_FAILED {reason: "profiles-unread"}`:
+    the item stays open, nothing is spent, and the spark is told nothing. The talk room's `reach` and compose's
+    `scopedRun` answer `UNAVAILABLE` (retryable) in place of `outside` at that moment;
+  - DESIGN's words as built: Godview's two differences, the TU-1 lead on SP-1d's landed bullet, and "no agent can be
+    placed, nor a session its persona places" with a dated note. api.html's `needs.answer` row gains the reason.
+
+**Real vs not yet.**
+- Real, on fieldd's own facts, with nothing stubbed:
+  - the fact on the run's record, its summary, its row and the spark's record, kept across a restart, a re-attach, a
+    wake and a resume;
+  - Chat's hello read from it, so a spark that has worked never says hello again, and an ask alone is no turn;
+  - `profileSet` on the row, and the one rule (D1) for @, the talk room, the compose room (`agents_list`,
+    `agent_read`), the door, and (D3) the Allow, `history_read` and the New spark sheet's count;
+  - the kit reading both keys from its mirror.
+- What moved, EL7 (plan §4's table): a run filed under none whose persona a profile lists moves from This Mac's
+  sparks to that profile's. That is the one widening, and the ruled one. A persona no profile lists, and a persona's
+  run filed under none before the first frame, move from This Mac's to none. Filed runs and runs that name no persona
+  are placed as before.
+- Not yet, each named by a ruling or by the plan's §0.2:
+  - a turn no fieldd saw (Q4's gap, below);
+  - the remote cut, which carries neither key (below);
+  - Godview's tabs, which stay on the agent runtime's own placement (below);
+  - no rosetta check at re-attach (Q4's default; plan C5 not built).
+
+**Found.**
+- **fieldd already held the sets synchronously** (plan critique 3). The plan's first D1 dropped the persona step on
+  the premise that it did not, which would have made two placement rules in the product. `AgentMonitorService`
+  keeps the latest frame, and TU-1 exposes it read-only.
+- **The pending rule had to stay** (D10, critique 5; the read said delete it). A pending run is a live pane fieldd
+  does not drive, and Send's starters would paste into it.
+- **`#keep` spread a record it read before an `await`** (D6), so a wake would have erased a stamp written during it.
+  Both writers re-read now.
+- **A door identified before the first frame held a persona's plain run in no profile for its life** (MT-D4 keeps a
+  settled answer). C3's body named it; `cf5c4e67b` closed it.
+- **The hello could stand over a pending pane** while the board had not shown its run (final-tu1 #1): with no row,
+  an awake spark reading `null` was new, and the pending check never ran.
+- **An Allow pressed before the first frame failed for good, in untrue words** (final-tu1 #2): "is in none of …'s
+  Agent Profiles", the Allow spent and the spark told it. It waits now.
+- **A This Mac spawn files the set but names no persona** (measured in R3b), so an attach binds nothing for it. R3b
+  runs under a managed Work profile.
+- **C3's test files differ from the plan** (final-tu1 #9): compose's `agents_list` rows live in
+  `compose-verbs.test.ts`, not in tool-plane-service's.
+
+**Validation.**
+- **Reviews:** the plan's critique (`lanes/co-plan/plans/tu1-critique.md`, 19 findings) was folded before the build.
+  C2, C3, the door (C3b) and C4 each had a review, and the fixes commit closed the C3b and C4 reviews' minors. The
+  completeness critic (`lanes/co-plan/final-tu1.md`, at `48f962df0`) found no High, two Medium, five Low and two
+  Info. #1–#6 are fixed in `60ce6a988`, and #7 in the plan itself (`tu1-plan.md` rewritten to O1 OUT). #8 and #9 are
+  owed lines below.
+- **The build:** a usage-limit stop at about 15:50Z killed C4's first builder. Its partial edit was saved as a patch
+  (`lanes/tu1/c4-partial-design-20261101T2153Z.patch`), and C4 was rebuilt, the patch reused after a word-by-word check.
+- **Red first** in every behaviour commit, each at an assertion unless the export is the change:
+  - C1: contracts 7 of 715, fieldd 2 of 44, the monitor pin 1. The kit's red is the decoder's missing members, not
+    run on the parent;
+  - C2: agent-session-records 11 of 18, compose-sparks 4 of 17, and the real floor's TU-1 describe 6 of 6;
+  - C3: 11 rows (talk 3, compose-verbs 2, needs-queue 1, tool-plane-service 2, agent-monitor 2, R3b on the real
+    floor);
+  - the door: tool-plane-service's null row, at its first assertion;
+  - C4: 17 rows. new-spark's unit row is a TypeError (the signature is the change), and its assertion red is the
+    sheet's composed row;
+  - the fixes: thread-items W8, needs-queue's before-the-frame Allow, and the talk and compose before-the-frame rows.
+- **G4, the named guard:** its two fieldd rows (C2) pass by design, asserting the gap as named; their lines are
+  quoted under Owed. C4's window half printed `TU1_G4 {"case":"window","new":true,"quiet":true,"hello":["hello"]}`.
+  VF-PM read them at 21:55Z: no rosetta check, and both cases are named.
+- **The kit:** `LaunchShapeTests`, 14 passed, the new row among them, on the lane's own simulator
+  (`093F66ED-C6BC-429C-9046-BFBE6B683E6A`), shut down after.
+- **The lane light** on T `60ce6a988` (`lanes/tu1/light/tu1-light-20261101T230619Z/`): GREEN, 23:06:19Z → 23:14:06Z.
+  - Every step exited 0: biome (51 files), check:walls, check:retired, check:ios-fixtures (187 copies identical),
+    preflight (OK, with one warning, R23's `acp` candidate, a sibling's offering), glyphs --check, gen:check, cargo
+    layout_vector 1/1, and tsc on contracts, design-kit, field-app, fieldd and electron-shell.
+  - contracts whole: 54 files, 1501 tests.
+  - field-app whole: 284 files (+1 skipped), 3836 tests (+3 skipped).
+  - electron-shell whole: 163 files, 2484 tests (+3 skipped).
+  - fieldd whole: 230 files (+3 skipped), 2971 tests (+11 skipped), with FIELDD_ROSETTAD_BIN set.
+- **The merged-tree light** (`lanes/tu1/light/tu1-light-20261101T231423Z/`): the scratch merge `09063c8d6` of T and
+  main `50a66dd52` (tree `d7b8114a6`), 23:14:23Z → 23:21:06Z. GREEN, no reds.
+  - Every static step, gen:check, cargo and tsc exited 0.
+  - contracts 1501; field-app 3837; electron-shell 2484; fieldd 2972.
+  - Both sides touched DESIGN.md (TU-1 at lines 1705–1930, main at 5375) and `scripts/check-ios-fixtures.mjs` (118
+    against 699). Nothing is near.
+- **Run 96** (M96 `57569bca3`, a MERGE over main `50a66dd52`, minted by a9): GREEN.
+  - vitest 12,060 passed, 0 failed, 18 skipped: main +60. contracts +14 (agent-field, agent-index, agent-session,
+    compose, fixtures), fieldd +37, field-app +9.
+  - field-app's spark-status file went from 22 rows to 21. C4 (`48f962df0`) removed its row "says a turn was seen
+    while the spark is at work or waits on you, its run spent tokens, or the window saw one". That row tested the
+    window's interim turn reading (`SparkEntry.turnSeen`, `BesideTheBoard.turnsSeen`), and C4 deleted that reading.
+    The hello reads fieldd's `turnedAt` now, and fieldd's `mirrorShowsTurn` rows and the new thread-items rows test
+    what counts as a turn.
+  - cargo 33 ok. Pins: 67.
+- **Landed:** main moved to `57569bca3` at 2026-11-02 00:16:22Z: `50a66dd52..57569bca3`, 57 files, +2498 −410.
+
+**Owed.**
+- **Q4's gap and §12 Q3's pending tail**, named in Q4's words (plan §3.6, the words the records use; DESIGN.md §8's
+  open case says the same to the person):
+
+  > A turn no fieldd saw is not kept. While fieldd is down, and after a restart that could not re-attach a run (AR-4's
+  > pending, until fieldd resumes it at its next idle), the run's pane lives on field-native and can still be typed
+  > into. If that turn has ended by the time fieldd watches the conversation again (a re-attach, or the resume that
+  > replaces a pending run), nothing reports it: puppeteer replays only open work at attach, and Claude Code's
+  > transcript observer makes earlier messages a silent baseline. The record then says no turn yet. If the run is a
+  > spark's first and only session, the hello can stand over a conversation the person had while nothing watched it.
+  > While a run is pending, Chat never calls its spark new, so no hello stands over a pane fieldd does not drive. A run
+  > still mid-turn when fieldd attaches is seen working, and stamped then.
+
+  - G4's two lines, from C2's green run (each wrapped once after a comma here; each is one line in `50d9c6a5b`'s
+    body and in final-tu1.md):
+
+    ```
+    TU1_G4 {"case":"down-window","hatched":{"record":null,"row":null,"spark":null},
+      "reattached":{"reattached":true,"status":"idle","record":null,"row":null,"spark":null}}
+    TU1_G4 {"case":"pending-tail","pending":{"row":null,"spark":null},
+      "successor":{"record":null,"row":null,"spark":null}}
+    ```
+
+    After the re-attach, the run's record, its row and the spark all read `null`; on the pending tail, the successor
+    inherits the record's `null` and the spark stays `null`.
+  - VF-PM read G4 at 21:55Z: no rosetta check, and both cases are named. Closing the gap needs puppeteer to report
+    the transcript it reads back (an EL8 event) or the History index's turns (rosetta).
+- **Godview against (a′):** Godview's tabs (puppeteer-monitor's `resolveProfileSet`) draw under This Mac a persona's
+  run that no profile lists, where the rule says none. Before the first frame they also draw under This Mac a
+  persona's run filed under none. `agent-monitor.test.ts` holds both to exactly that. An EL8 event moves the sibling's
+  side.
+- **The remote cut (`AgentRemoteRow`) carries no `turnedAt`** and no row `profileSet`, as api.html's
+  `agent.subscribe` note says. The phone has no hello yet; its Chat (the PC track, IOS-11a…g) would need them.
+- **`field`'s retirement** (PG-L1): Chat reads the `field` projection (`sparks-feed.ts`). Both new keys ride the model
+  board's row through `projectDeskRow`, so a later move of Chat's board keeps them. Named, not built.
+- **The handle** (VF-PM, 2026-11-01 09:55Z) is its own slice, after TU-1: the needs-you card names a session by
+  fieldd's runLabel, and the lean is @'s handle ("vibe-field·2").
+- **"Try again in a moment" is untrue if the monitor's first profiles read fails** (final-tu1 #9). The seed read
+  is logged (`fieldd.monitor.profiles_unread`) and never retried, so `personaSets()` stays `null` until a profile
+  frame changes. Until then the Allow, the talk room and compose say "try again in a moment", a persona's run filed
+  under none is in no profile, and its door is asked again every `REASK_MS`. That is within (a′).
+- **`history_read` puts a persona two profiles list in the later one** (final-tu1 #8, C3's variance), as
+  puppeteer-monitor's `personaSets` does; main took the first. puppeteer files a persona in one set, so no live
+  answer moves.
+- **`mirrorShowsTurn` counts work only at status `"working"`** (the C2 review's note). puppeteer ranks a blocker
+  above an open activity, so a mirror that first reaches fieldd already `blocked` mid-turn, with no tokens and no
+  answer yet, stamps nothing until the run works again after the answer. A run stopped while so blocked is never
+  stamped, though Q2 counts its turn as work. The fix, if wanted: `blocked` with an open activity that is not
+  `starting`.
+- **rulings-2 is open only while a newer shell runs over an older leave-running fieldd** (plan risk 1). That fieldd
+  sends no `turnedAt`, so no hello, and no row `profileSet`, so @ falls back to the persona's profile until fieldd
+  restarts.
+- **`NewSparkSheet.tsx`'s two lines:** TU-1 changed its `:30` import and `:207` only, beside new-spark.ts's
+  `sessionsSeenOf`, and kept off the View, within item 149's line limits (VF-PM, 22:15Z: a1 fixes the sheet's Create
+  in lane r11m). Whichever of TU-1 and item 149 lands second merges over `:30` and `:207`.
+- **Before the first frame,** compose's `agents_list` leaves a persona's run filed under none out of the list, never
+  refusing the whole list. Its room's header and api.html say so.
+- **Out of scope, named:** a typed run's `--resume` (AR-7's adopt) reads `null` until its next live turn; `helloLeft`
+  stays per window (HN-D9); the phone reads `turnedAt` only as a time or not.
+- **The records outside these three files:** architecture.html's compose row (`:1774`) gains TU-1's SHAs, and the
+  read's Status (`lanes/co-plan/plans/turnfact-read.md`) flips to "BUILT … (LANDED TU-1)".
+- **Owed to the draft queue, on VF-PM's word, never a builder's** (plan §6, final-tu1's owed list):
+  - the compose-plane draft's NS-D4 reading: "its session has had no turn" is now spark-level (Q1);
+  - the Sparks page's notes on the hello, including that it now stands over a new spark's ask (Q2 A, O1 out);
+  - design-03's agent row field list, if it lists the row's fields (`turnedAt`, `profileSet`).
+- **James's look** in `pnpm dev`, posted by VF-PM at the landing: the lines below. The trust-menu line is the cost he
+  chose.
+
+James's first sight, in `pnpm dev`, Chat (⌘4):
+- a new spark says hello; a starter and Return in its pane, and the hello leaves for good;
+- a spark that has worked never greets again: woken, or after fieldd restarts alone, its thread shows its pane alone;
+- a spark put to sleep before it ever worked still says hello, under "Vela is asleep" and its Wake;
+- when a new spark's agent asks first (a trust menu at launch), the hello stays over the ask and the head says Needs
+  your OK; a click into the pane takes the hello away and shows the ask;
+- @ offers the sessions the talk room reaches: a Work session filed under Work, for a Work spark;
+- the New spark sheet's "Sees N sessions" places each session by the same rule.
+
+## SP-1d — smoke:godview's rung 11m: Chat's thread and composer, witnessed end to end through a spark the rung hatches (2026-11-01; smoke.ts and its testing helpers, in the mint M97 `f0e7bb465`)
+
+It pays SP-1d's owed line "Smoke rung 11m" (LANDED "SP-1d").
+
+**What.** 11m is SP-1d's rung, built in a1's lane (`hn/rung-11m`): five commits of testing code, the merge of TU-1
+(`a13d998fa`), and two product commits, item 149's and item 151's (their own entries, below).
+- **The stub** (`typed-agent.ts`, `217c312f7`):
+  - It says This Mac is signed in. `auth status --json` with no profile root bound answers `{"loggedIn":true}`, so
+    fieldd's hatch has a signed-in persona.
+  - It records each line a managed session is given (`StubRecords.lines`).
+  - Both are the godview variant's alone. The first-run smoke's stub still exits 1 and records nothing.
+  - `judgeChatCardPlay` and `SMOKE_CHAT_SEND` are in `smoke-shell-marker.ts`.
+- **The rung** (`smoke.ts`, `3f5dac904`), after 11l and before 11h:
+  1. ⌘N in Chat and Create hatch a spark under This Mac, and Chat chooses it.
+  2. Its own pane is live as its thread, and the spark reads Ready.
+  3. The composer types, @ opens its list with the hot row nearest, and Esc keeps the text.
+  4. Send says "Pasted into <name>'s pane — Return sends it". The stub is given no line for 400 ms, and gets it
+     only at the pane's own Return.
+  5. A card let go on the composer becomes a chip, and the hand keeps it.
+  6. `SMOKE_CHAT_SEND` prints either way.
+- **The typing** (`ad4a414dd`, run85b's fix, then `f503bbf11`, run92b's):
+  - `ad4a414dd` pressed the draft after a script's focus, then typed a key at a time: down, its character, up.
+    Run85b's road, a script's focus and then bare characters, had left the focused draft empty in the live window.
+  - Run92b proved the press wrong (M92's entry below). `f503bbf11` places the keyboard as `focusDeck` places a pane's:
+    the window and its contents focused, then the focus placed in the draft with its caret at the end. The keys are
+    unchanged.
+  - Probes on this Mac found the composer sound in isolation, and both roads too (`lanes/r11m/records/review.md`;
+    `light/rung92b-rehearsal.log`, CP-3's composer). A hidden window reproduces neither live red.
+  - SMOKE_CHAT_SEND's `typing` names the window's, contents' and document's focus as it was placed, where the caret
+    stood then and when the composer held it, and what the page heard of the keys. `create` names Create's state,
+    box and wait.
+  - Past both, the draft itself refused to insert (run95b): item 151, the empty draft 0 px tall, with its own entry.
+    Step 3 now reads the draft's height and insert as it holds the keyboard (`typing.draft`, in `f0e7bb465`).
+  - Prior art: on 2026-10-08, smoke:godview hit the same symptom (lane peek, its ⇧1 into the line's draft). Synthesized
+    keys into a focused contenteditable draft inserted nothing, even typed down/char/up. The trigger was a theme round
+    trip mid-run; its photos moved last. No theme changes before 11m today, and the press is what is new.
+- **Create when it is still** (`0f32a8e73`, run89c's fix, after item 149's `d69301328`):
+  - Step 1 waits up to 10 s, before its press, for the sheet's Create to be enabled with its box the same across two
+    reads 100 ms apart. A failure names the button's last state and its box.
+  - Run89c pressed Create before the sheet's opening reads settled, while Create was still enabled. Item 149 now keeps
+    Create disabled until then.
+- **Dropped, as ruled:** geometryHolder, and the no-deck and two-surface cases. Those are `spark-pane.test.tsx`'s.
+
+**Gates.**
+- **Red first:** 5 of 32 failed on main's code (`light/red-first.log`). Green at 32/32.
+- **The lane's light:** GREEN 09:12:17Z at the tip `ad4a414dd`, and 08:10:57Z at `3f5dac904` before it. Each ran
+  preflight, walls, deps, retired, ios-fixtures, biome, electron-shell's typecheck and the two unit files. The smoke's
+  bundle built at both tips.
+- **Run85b's red-first:** on the old helper, the evidence row failed 1 of 13; green at 32/32.
+- **The renderer JavaScript:** parsed and evaluated ad hoc against happy-dom Chat pages.
+- **M85** `67a15cbab` (the first two commits × main `ae430892b`):
+  - Run 85 was GREEN: verify exit 0 at 08:20:13Z; vitest 11,821/0/18, smoke-shell-marker 10 → 13 and typed-agent
+    17 → 19.
+  - Row 23 (run85b) went RED at step 3 at 08:34:03Z, so M85 is dead. Logs: `lanes/ts6/logs/mini/run85b/`.
+- **M86** `081eadf59` (the tip `ad4a414dd` × main `ae430892b`):
+  - Runs 86 and 86r went red on item 146, the repeated DST hour (09:00–10:00Z), not on 11m. Four fieldd real-floor
+    typed-agent rows failed: puppeteer-runtime 0.3.2's ps reader dates a process started in that hour 3600 s early.
+  - Run 86s is the proof: GREEN at 10:06:57Z, started after the DST hour. vitest 11,821/0/18, unchanged against run
+    85 (the fix's test lines are assertions in an existing row). The gateway rows came back at 80 s and 37 s, so item
+    146 is confirmed by its absence. Logs: `lanes/ts6/logs/mini/run86s/`.
+  - M86 was never landed. The order changed at 11:58Z: James was away with the mini locked, so item 146b (M87) and
+    CP-3 went first.
+- **M89** `9db27cede` (a MERGE of `ad4a414dd` over main `0a97e59b6`, where CP-3 and its records stand; merge-tree
+  `e19c3e4c5`, clean, with 0 files on both sides):
+  - Run 89 was GREEN at 12:49:37Z. vitest 12,001/0/18 is run 88's count plus 11m's five rows (smoke-shell-marker
+    10 → 13, typed-agent 17 → 19). cargo is unchanged. Logs: `lanes/ts6/logs/mini/run89/`.
+  - Read against CP-3 before the run, since a semantic red needs no shared file (run 82). CP-3 moved eight Chat files
+    on 11m's path, and every anchor the rung drives holds at `0a97e59b6`:
+    - the markup: the thread, its pane, the row, the draft, Send, @'s list and its hot row, the chips, the sheet;
+    - Send's note: "Pasted into <name>'s pane — Return sends it";
+    - the composer card's words, and Esc folding @ with the text kept.
+  - CP-3's `takeKeyboard` moves the keyboard only after mount.
+  - An idle, heard run still reads Ready, and Send's wait now reads `heard`, which an idle run is.
+  - A needs-you card stands only on the spark's items, and the stub raises none.
+  - M89 was never landed. James stayed away, and row 23's unlock watcher (run89b, armed 12:50:09Z, deadline 16:50Z)
+    never opened. Items 148 (M90) and 147 (M91) went first (16:02Z).
+  - Row 23 (run89c, at James's unlock) went RED at step 1 at 22:06:01Z: "Create Polaris: the sheet gone, and Chat on
+    Polaris did not happen within 20000ms". The sheet stood open with no refusal, and fieldd heard no hatch.
+    - The cause was a race: `openSheet` waits for the layer, the dialog, the name and the hatch, never for the
+      sheet's reads (`providers()`, `profileSets()`). Create was enabled before them, and `create()` returned in
+      silence while the agent or the profile was unread.
+    - That makes it a product defect, item 149, and a rung that pressed too soon. It is not CP-3's: the merge left the
+      sheet's files untouched. Both were fixed in the lane on VF-PM's ruling (22:13Z): `d69301328` and `0f32a8e73`.
+    - M89 is dead. Logs: `lanes/ts6/logs/mini/run89c/`.
+- **M92** `d74ccdee3` (a MERGE of `0f32a8e73` over main `5c41c10b2`, where item 147's records stand; merge-tree
+  `232a2f44c`, which equals the lit merged tree `fbf6649aa`), run 92 GREEN at 22:33:40Z: vitest 12,006/0/18
+  (main's 11,999, plus item 149's 2 and 11m's 5); cargo 33 ok.
+  - CP-3's reading carries over. Read against what items 148 and 147 moved (`0a97e59b6..5c41c10b2`: `packages/users`
+    and `packages/fieldd/test/index-timeline.test.ts`, none of the rung's files):
+    - Item 148 changes only how users.json and the layout stamp are created: tmp, fsync, then a link that fails
+      EEXIST. The path, the JSON, the 0600 mode and the refusal of a file that exists are unchanged. lock.ts moved
+      comments only, and no export moved.
+    - The rung names users.json's root alone: the stager's `vibefieldRoot`, and the walk's `users.root`. The stager
+      stages before the pair boots, so it never races a mint, and its refusal of a root holding a machine record
+      stands.
+    - Item 147 moved a fieldd test only, and nothing the rung drives.
+  - The scanners on a merged throwaway tree over `5c41c10b2` (item 147's records), before the packet
+    (`fbf6649aa`, a clean merge where only DESIGN.md is shared, auto-merged): walls clean; the smoke bundle builds;
+    field-app and electron-shell tsc exit 0. field-app 311/311 in 14 files (text-ramp, ui-system-boundaries,
+    design-system, the sheet and its model, the composer, @'s rows, the chords, CP-3's needs-card, the five DESIGN.md
+    readers). electron-shell 39/39 (typed-agent, smoke-shell-marker, CP-3's needs-notices).
+    Logs: `light/merged-fbf6649aa/`.
+  - Row 23 (run92b, the watcher armed on `d74ccdee3` at James's unlock, 22:34:27Z, HID idle 204 s) went RED
+    at 22:36:00Z, one step past run89c:
+    - Item 149's wait held: Create was pressed enabled and still, Polaris hatched (`--name Polaris` in calls.jsonl),
+      Ready after 1 ms, and its pane went live.
+    - Step 3 read "the composer holding the keyboard, the caret in its draft did not happen within 5000ms": inInput
+      false, caret null, inPane false, text "". The pane's gate was open (presentationReady, inputAllowed).
+    - The cause is the rung's, and smoke.ts names it (`focusDeck`): `sendInputEvent` runs none of Chromium's default
+      actions, so a synthesized mousedown blurs what was focused. `ad4a414dd`'s press on the draft blurred it to the
+      body, where `ViewFrame` stops every key under a cover. Fixed in the lane, `f503bbf11` (11m's typing above).
+    - M92 is dead. Logs: `lanes/ts6/logs/mini/run92b/`; the HOME `/private/tmp/vf-smoke-x4IJRm` is kept on the mini.
+- **M95** `1888a40e9` (a MERGE of `f503bbf11` over main `50a66dd52`, item 150's records; merge-tree `75ade16be`):
+  - Row 23, run95b (00:04:24Z), went RED one step further again. The placed keyboard held: window, contents and
+    document focused, caret placed and held "editor". Create read enabled at box 713,607,127,40 after 507 ms.
+    keydown and keypress reached the draft 12 times each, but "the typed line in the draft did not happen within
+    3000ms": text "", with no beforeinput and no input.
+  - M95 is dead. That made it item 151 (its entry below), found by three probe rows on M95's tree. They were never
+    minted and never landed: commits `probe/run95pN ^1888a40e9`, which a9 ran through `next BUNDLE`.
+    - run95p (`6ad82e84f`): five insertion roads all landed false, and queryCommandEnabled("insertText") was false.
+    - run95p2 (`0a65e4f05`): the refusal is the draft's own. Its box was 0 px tall with no children, while a fresh
+      contenteditable and a textarea at the body both inserted. The chain was clean, with user-select none from BODY
+      (ghosttea's workspace.css).
+    - run95p3 (`54bf86ec5`, the CSS fix in place): rung 11m walked GREEN, SMOKE_GODVIEW ok, every road inserting.
+      Its style trials read 24 px and enabled in all four, "today" included, because each injected style re-laid the
+      editor out. So the mini proves only that the fixed product types; the cause's split is the harness's (item
+      151's entry).
+    - Logs: `lanes/ts6/logs/mini/run95b/`, `run95p/`, `run95p2/` (chat-lines.txt), `run95p3/`.
+- **M97** `f0e7bb465`, the landing mint: STACKED. The tip `f0e7bb465` stands on main `2832987be` (TU-1's records, M96),
+  through the merge `a13d998fa` (first parent `f503bbf11`, second main), so the mint is the tip itself: run 97
+  GREEN, exit 0 at 01:34:36Z.
+  - vitest 12,071/0/18: main's 12,060 plus 11 (new-spark-sheet +2, smoke-shell-marker +3, typed-agent +2,
+    smoke-chat-thread new with 3, chat-composer +1). 0 FAIL rows; cargo 33 ok; "28 projects" ×4; MaxListeners 0; the
+    tree clean after verify (VF-PM's read of the lane copy).
+  - The tip carries rung 11m's commits, item 149 (`d69301328`), the merge of TU-1 and item 151 (`f0e7bb465`). No
+    probe code lands; step 3 keeps the one-line reader of the draft's height and insert.
+  - TU-1 merged clean onto the sheet: NewSparkSheet.tsx's `usePersonSessions` and `sessionsSeenOf` (new-spark.ts)
+    stand beside item 149's `ready`, its foot refusals and `create()`'s guard.
+  - Every later step's anchors were read against the shipping markup before (`f503bbf11`'s message); run95p3 walked
+    them all.
+  - The lane's light at `f0e7bb465` over main `2832987be`: GREEN 01:26:59Z. Preflight, walls, deps, retired,
+    ios-fixtures, biome, electron-shell and field-app typechecks; electron-shell 38/38 in 4 files; field-app 279/279
+    in 13 files (the sheet and its model, the composer, @'s rows, the chords, text-ramp, ui-system-boundaries,
+    design-system, the five DESIGN.md readers). The smoke bundle builds. Logs: `light/light-f0e7bb465/`.
+  - Row 23 ran on this tree, and M97 landed at 2026-11-02T01:45:46Z on its verdict, a fast-forward
+    `2832987be..f0e7bb465` (13 files, +879 −16).
+- **Row 23 (run97b, the mini's unlock window):** GREEN, exit 0 at 01:43:16Z. The watcher armed at 01:35:05Z on a
+  locked console, saw the unlock at 01:38:36Z, and opened the gate at 01:41:06Z after 157 s idle.
+  - The rows: SMOKE_GODVIEW ok with 136 verdict rows. chatThread's four (the hatch, the composer, Send, the card) and
+    every row after 11m (lineKeys, jumpTo, the timeline's, History's, the deck's away/edge/maximized, the warm open,
+    the photos) all walked.
+  - `SMOKE_CHAT_SEND`:
+    - failed null; create enabled at 713,607,127,40 after 507 ms;
+    - typing focus {window, contents, document} all true; caret placed and held "editor"; draft {height 24,
+      enabled true}; heard keydown, keypress, beforeinput and input at the draft 12 each;
+    - Send's note "Pasted into Polaris's pane — Return sends it"; inputAllowed Return true.
+    - The typed-agent copy holds the nonce `sp1d77goqzt4`, received in users/1/sparks/polaris (lines.jsonl sha256
+      d11c9c82…, calls.jsonl 18 calls). Logs: `lanes/ts6/logs/mini/run97b/`.
+  - The judge: `judgeChatCardPlay` found nothing. The card played on the target `prompt`: "Add to your message to
+    Polaris", then "Added to your message to Polaris", a chip in the draft, the card kept.
+  - Time: the row ran 130 s (01:41:06Z → 01:43:16Z). The person's input was untouched: HID idle 157 s ARMED and
+    286 s at the END.
+
+**Owed.**
+- Run85b's mechanism: run97b's `typing` record shows the road whole once the draft has its line (24 px, enabled;
+  every key heard and inserted). Run85b's empty draft, focus held and nothing inserted, matches item 151's
+  signature, but run85b recorded no box. Item 151 is its likely mechanism, never measured. Run89c never reached
+  step 3, and run92b's red was the press.
+- Item 146's upstream fix to puppeteer-runtime's ps reader, which belongs to item 146's own record.
+- Selection in the draft under workspace.css's `body { user-select: none }`: whether a person can drag-select their
+  own draft's text is unproven either way. A hand row (VF-PM carries it to James's).
+
+## Item 149 — the New spark sheet's Create waits, disabled, until its reads settle; an enabled Create pressed before them hatched nothing, in silence (2026-11-01; `d69301328`, in M97 `f0e7bb465`)
+
+**What.** A pre-existing SP-1c defect. Row 23's run89c on M89 surfaced it (11m's entry above).
+- The defect: Create was enabled once the name was non-empty. `create()` returns with nothing said while `agentId`
+  or `thinksUnder` is unread, and those settle only with the sheet's opening reads. A press in between hatched
+  nothing, refused nothing, and left the sheet open. A person who presses quickly after ⌘N met the same.
+- The fix, in the View and the sheet (`NewSparkSheetView.tsx`, `NewSparkSheet.tsx`, `new-spark.ts`):
+  - The view takes `ready`, true by default, so the catalog's plates are unchanged.
+  - The sheet passes `agentId !== undefined && thinksUnder !== undefined`, and Create waits on it.
+  - `create()`'s guard stays.
+- A read that fails is said at the foot, never a Create left disabled in silence (VF-PM's condition):
+  - the agents' sentence, as before;
+  - or "VibeField can't list your Agent Profiles right now" (`CANNOT_LIST_PROFILES`);
+  - an agent list with none that can be a spark already says so on its pill.
+- DESIGN.md §8 "The New spark sheet", its foot, gains a dated clause carrying both.
+- TU-1's C4 lines are untouched (`usePersonSessions`, `sessionsSeenOf`, the "sees N sessions" count), by VF-PM's
+  collision rule (22:15Z).
+
+**Gates.**
+- **Red first:** two rows in `new-spark-sheet.test.tsx` fail 2 of 12 on today's code
+  (`light/item149-red-first.log`): Create held until the reads, and the profiles' failure said at the foot.
+- **Green:** 134 tests in 7 files, every suite that mounts or scans the sheet (`item149-green.log`). field-app's
+  tsc exits 0. The lane's light at `0f32a8e73` was GREEN at 22:22:02Z: preflight,
+  walls, deps, retired, ios-fixtures, biome, both typechecks; electron-shell 32/32; field-app 275/275 in 13 files
+  (`light/light-0f32a8e73/`).
+- **M92's row 23 (run92b)** witnessed it live: Create was pressed enabled and still, and Polaris hatched.
+- **M97's run** carries it: run 97 GREEN at 01:34:36Z, vitest 12,071/0/18, cargo 33 ok.
+
+## Item 151 — the draft takes its first character: an empty draft mounted under the sheet's inert root stood 0 px tall, and nothing typed into it (2026-11-02; `f0e7bb465`, in M97 `f0e7bb465`)
+
+**What.** A product defect a person meets too, surfaced by row 23's run95b on M95 (11m's entry above).
+- After a hatch, the new thread's empty draft took the keyboard and refused every character. queryCommandEnabled
+  ("insertText") was false, and the box was 0 px tall.
+- The cause, reproduced in a hidden Electron window against the real ChatComposer
+  (`lanes/r11m/light/probe95p3-harness-untouched.log`):
+  - Mounted normally, the empty editor is one line (24 px) and enabled, even with user-select none.
+  - Mounted under an inert root that is then released, it stands 0 px tall with insert disabled. Chromium gives an
+    empty block its line only as a root editable, and the lift re-lays nothing out.
+  - The product does that. Create's success runs refreshSparks → chooseSpark → the face's fly, then onClose
+    (NewSparkSheet.tsx's Create), so the thread's composer mounts while `.field-wrap` is inert from the sheet's
+    modal (field.tsx `modal`).
+  - Under the same inert mount, min-height alone gives 24 px and enabled; user-select: text alone stays 0 px and
+    disabled.
+- The fix: `.vf-chat-input` gets `min-height: 24px`, its own line-height (no new constant), the cause in its comment.
+- The live proof: run95p3 walked rung 11m green on the mini with this CSS. Its style trials cannot split the cause,
+  because each injected style re-laid the editor out.
+
+**Gates.**
+- **Red first:** chat-composer.test.tsx's row holds the declaration in the stylesheet, since happy-dom lays out
+  nothing (`light/item151-red-first.log`: 1 failed on today's CSS). smoke-shell-marker's evidence row in the
+  `typing.draft` shape failed 1 of 13 first (`light/item151-reader-red-first.log`).
+- **Rung 11m's step 3** now fails on a 0 px draft or a disabled insert and names item 151; SMOKE_CHAT_SEND carries
+  `typing.draft`.
+- **Green:** field-app's chat-composer, text-ramp, ui-system-boundaries and design-system 97/97; electron-shell's
+  11m rows 38/38; tsc 0; biome clean; the lane's light GREEN at
+  `f0e7bb465` (01:26:59Z; field-app 279/279 in 13 files).
+- **M97's run** carries it: run 97 GREEN at 01:34:36Z, vitest 12,071/0/18, cargo 33 ok.
+
+**Owed.**
+- ghosttea-react 0.13.7's `dist/workspace.css` sets `body { user-select: none }` for the whole document
+  (GodviewDeck.tsx imports it). An upstream note: VF-PM carries it to the upstream topic, and nothing is fixed here.
+- The sheet's order: whether NewSparkSheet should close (lift the inert) before it chooses the spark, so a thread
+  never mounts under it. A sequencing question for SP-1c, named and not built.

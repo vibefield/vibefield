@@ -116,6 +116,7 @@ const launchFixtures = [
   "agents-profile-sets.valid.json",
   "agent-field-snapshot.native-session.json",
   "agent-field-snapshot.stop.json",
+  "agent-field-snapshot.turned.json",
 ];
 // History's ledger reads them: the fixture door serves these, its tests read them.
 const historyFixtures = [

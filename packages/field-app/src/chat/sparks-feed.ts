@@ -5,6 +5,7 @@ import {
   NeedsAnswerResult,
   NeedsItem,
   type NeedsItemId,
+  type RunProfileFacts,
   type SparkId,
   type SparkSummary,
 } from "@vibefield/contracts";
@@ -20,7 +21,8 @@ import { cellMarkOf, ThreadLedger, type ThreadMark, threadMarksOf } from "./thre
 // deltas at its floor), whose rows say whose session a run is (`spark`) and who started it (`origin`), and since CP-3
 // the needs-you queue (`needs.subscribe` — its open items, whole, at each change), which says what waits on you for
 // each spark, and is answered through the same feed (`needs.answer`, by an act's place). The list is asked again only
-// when the board's sparks change — one appears, or one's run leaves — never on a timer. A fieldd without the queue
+// when the board's sparks change — one appears, one's run leaves, or one's own run first works (TU-1: so the spark's
+// own `turnedAt` follows its row's within a round trip) — never on a timer. A fieldd without the queue
 // (one before CP-3) refuses its subscribe, and the list stands on the board: no item, said by nothing, never a guess.
 // It holds the window's one ledger of each thread's mark (`thread-marks.ts`): Chat says which thread is on screen
 // (`showThread`), and every reading latches what happened in the others. A module store, as the status line's is:
@@ -171,9 +173,9 @@ interface FeedState {
   /** the sparks that need you, or null before the first reading of the list, the board and the queue, each (so what
    * needed you then is no news) */
   readonly needing: readonly SparkEntry[] | null;
-  /** the person's live sessions on the board by the persona each runs as (its `profileId`; null for an agent's own
-   * folder), or null before the board is read: the New spark sheet's "Sees N sessions" (SP-1c) */
-  readonly sessions: ReadonlyMap<string | null, number> | null;
+  /** the person's live sessions as the board files them, or null before the board is read: the New spark sheet's
+   * "Sees N sessions" (SP-1c), placed by the one rule (`profileSetOfRun`) */
+  readonly sessions: readonly RunProfileFacts[] | null;
   /** the field board's rows as last read, null before the board is read, or "failed" while it can't be (its
    * subscription refused): @'s sessions in Chat's composer (SP-1d) */
   readonly rows: BoardRows;
@@ -232,9 +234,16 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/** The sparks on the board with a live run, as one key: the list is asked again whenever it changes. */
+/** The sparks on the board with a live run, each marked once its run has worked, as one key: the list is asked again
+ * when a spark's run appears or leaves, and when its own run first works, so the spark's own fact follows the row's
+ * push within a round trip (TU-1). */
 function boardSparksKey(rows: readonly AgentFieldRow[]): string {
-  return [...new Set(rows.filter((row) => row.alive && row.spark).map((row) => row.spark))]
+  const live = rows.filter((row) => row.alive && row.spark);
+  return [
+    ...new Set(
+      live.map((row) => `${row.spark}${typeof row.turnedAt === "string" ? "·turned" : ""}`),
+    ),
+  ]
     .sort()
     .join(" ");
 }
@@ -294,11 +303,6 @@ class RunningFeed {
   readonly #offReconnected: () => void;
   #open = true;
   #onBoard = "";
-  /** the sparks this window has seen have a turn, for its life and written nowhere (HN-D9's rule): a turn seen stays
-   * seen whatever the board counts after it. A fieldd restart replaces the window's document, and fieldd re-attaches
-   * only the runs a restart left (as it boots, and in its G5 retries after), so the set starts empty over a
-   * re-attached run (DESIGN.md §8 "Chat's thread", the open cases) */
-  readonly #turnsSeen = new Set<SparkId>();
   /** each thread's mark, for the feed's life (the window's) and written nowhere (HN-D9's rule) */
   readonly #ledger = new ThreadLedger();
   /** the last reading's entries, which a thread shown is read on */
@@ -445,7 +449,7 @@ class RunningFeed {
 
   /** One reading published. `first`: it follows the board's or the queue's first reading, whose needs are no news. */
   #derive(first = false): void {
-    const sessions = this.#boardRead ? sessionsByProfileOf(this.#rows) : null;
+    const sessions = this.#boardRead ? personSessionsOf(this.#rows) : null;
     const rows = this.#boardRefused !== null ? "failed" : this.#boardRead ? this.#rows : null;
     if (this.#sparks === null) {
       publish({
@@ -464,11 +468,7 @@ class RunningFeed {
       });
       return;
     }
-    const entries = sparkEntriesOf(this.#sparks, this.#rows, {
-      items: this.#items,
-      turnsSeen: this.#turnsSeen,
-    });
-    for (const entry of entries) if (entry.turnSeen) this.#turnsSeen.add(entry.spark.id);
+    const entries = sparkEntriesOf(this.#sparks, this.#rows, { items: this.#items });
     this.#entries = entries;
     this.#ledger.read(entries);
     const needing = entries.filter((entry) => entry.needsYou);
@@ -588,8 +588,8 @@ export function useCellMark(): ThreadMark | null {
   return useSyncExternalStore(subscribe, () => state.cell);
 }
 
-/** The person's live sessions by the persona each runs as, or null before the board is read. */
-export function useSessionTally(): ReadonlyMap<string | null, number> | null {
+/** The person's live sessions as the board files them, or null before the board is read. */
+export function usePersonSessions(): readonly RunProfileFacts[] | null {
   return useSyncExternalStore(subscribe, () => state.sessions);
 }
 
@@ -643,15 +643,11 @@ export function whenSparkEntry(
   });
 }
 
-/** The person's live sessions by persona (null: an agent's own folder); a spark's own session is not one of them. */
-function sessionsByProfileOf(rows: readonly AgentFieldRow[]): ReadonlyMap<string | null, number> {
-  const tally = new Map<string | null, number>();
-  for (const row of rows) {
-    if (!row.alive || row.spark !== undefined) continue;
-    const profile = row.profileId ?? null;
-    tally.set(profile, (tally.get(profile) ?? 0) + 1);
-  }
-  return tally;
+/** The person's live sessions, each by its two filing keys; a spark's own session is not one of them. */
+function personSessionsOf(rows: readonly AgentFieldRow[]): RunProfileFacts[] {
+  return rows
+    .filter((row) => row.alive && row.spark === undefined)
+    .map(({ profileSet, profileId }) => ({ profileSet, profileId }));
 }
 
 /** The needs no news now: those of `before` that still stand, and after a first reading the ones it found (standing

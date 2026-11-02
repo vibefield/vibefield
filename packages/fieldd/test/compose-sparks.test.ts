@@ -10,7 +10,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AgentProfileSet, AgentSessionSummary, SparkRecord } from "@vibefield/contracts";
 import { afterAll, describe, expect, it } from "vitest";
 import { type SparkLaunch, SparkService, SparkStore, sparkSlug } from "../src/tool-plane/sparks";
@@ -352,5 +353,108 @@ describe("hatch, list and open (CP-1c; NS-D1, NS-D5, CR-D11)", () => {
     await h.svc.open(vela.id, h.principal);
     expect(h.calls).toEqual(["resume:run-1", "resume:run-1"]);
     expect(h.svc.get(vela.id)?.session).toEqual({ runtimeRunId: "run-1-b" });
+  });
+});
+
+describe("TU-1 (Q1) — a spark says whether it has worked", () => {
+  const T1 = "2026-10-29T12:05:00.000Z";
+  const T2 = "2026-10-29T12:09:00.000Z";
+
+  it("is hatched never having worked, on its signed record and in its summary", async () => {
+    const h = service();
+    const vela = await h.svc.hatch(HATCH, h.principal);
+    expect(vela.turnedAt).toBeNull();
+    expect(h.svc.get(vela.id)?.turnedAt).toBeNull();
+    expect(store(h.root).get(vela.id)).toHaveProperty("turnedAt", null);
+    expect(h.svc.list().map((s) => s.turnedAt)).toEqual([null]);
+  });
+
+  it("keeps the first time it is told, and a later one changes nothing; a spark from before TU-1 is told too; a spark set aside, or one whose record cannot be written, is left alone without a throw; `updatedAt` never moves", async () => {
+    const h = service();
+    const vela = await h.svc.hatch(HATCH, h.principal);
+    const updatedAt = h.svc.get(vela.id)?.updatedAt;
+    h.svc.turned(vela.id, T1);
+    h.svc.turned(vela.id, T2);
+    expect(h.svc.get(vela.id)?.turnedAt).toBe(T1);
+    expect(h.svc.get(vela.id)?.updatedAt).toBe(updatedAt);
+    expect(h.svc.list().find((s) => s.id === vela.id)?.turnedAt).toBe(T1);
+
+    // a spark from before TU-1 says nothing, and is told as a hatched one is
+    const older = spark({ id: "sp-0123456789abcdef", name: "Juno", folder: "/f/sparks/juno" });
+    store(h.root).write(older);
+    expect(h.svc.get(older.id)).not.toHaveProperty("turnedAt");
+    h.svc.turned(older.id, T2);
+    expect(h.svc.get(older.id)).toEqual({ ...older, turnedAt: T2 });
+
+    // one an agent edited is set aside: not read, not written over
+    const forged = spark({ id: "sp-fedcba9876543210", name: "Lyra", folder: "/f/sparks/lyra" });
+    store(h.root).write(forged);
+    const path = store(h.root).path(forged.id);
+    const signed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    writeFileSync(path, JSON.stringify({ ...signed, profiles: ["work", "native", "home"] }), {
+      mode: 0o600,
+    });
+    const bytes = readFileSync(path, "utf8");
+    expect(() => h.svc.turned(forged.id, T1)).not.toThrow();
+    expect(readFileSync(path, "utf8")).toBe(bytes);
+    expect(() => h.svc.turned("sp-0000000000000000", T1)).not.toThrow();
+
+    // a record that cannot be written keeps what it says, and the caller hears no throw
+    const pyxis = await h.svc.hatch({ ...HATCH, name: "Pyxis" }, h.principal);
+    const dir = join(h.root, "fieldd", "sparks");
+    chmodSync(dir, 0o500);
+    try {
+      expect(() => h.svc.turned(pyxis.id, T1)).not.toThrow();
+    } finally {
+      chmodSync(dir, 0o700);
+    }
+    expect(h.svc.get(pyxis.id)?.turnedAt).toBeNull();
+  });
+
+  it("keeps a turn told while a wake's resume is under way: the wake keeps the record as it stands on disk (D6)", async () => {
+    const h = service();
+    const vela = await h.svc.hatch(HATCH, h.principal);
+    const answer = h.holdResume();
+    const waking = h.svc.open(vela.id, h.principal);
+    // the spark's record moves while the resume is held: its run took a turn
+    const records = store(h.root);
+    const current = records.get(vela.id);
+    if (current === undefined) throw new Error("the hatched spark's record did not read back");
+    records.write({ ...current, turnedAt: T1 });
+    answer();
+    await waking;
+    expect(h.svc.get(vela.id)?.session).toEqual({ runtimeRunId: "run-1-b" });
+    expect(h.svc.get(vela.id)?.turnedAt).toBe(T1);
+  });
+
+  it("produces what the sparks golden shows: every key a summary carries is the golden's, and each of the golden's three states (EL9)", async () => {
+    const golden = JSON.parse(
+      readFileSync(
+        join(
+          dirname(fileURLToPath(import.meta.url)),
+          "..",
+          "..",
+          "contracts",
+          "fixtures",
+          "compose-sparks-list.turned.json",
+        ),
+        "utf8",
+      ),
+    ) as { sparks: Array<Record<string, unknown>> };
+    const goldenKeys = new Set(golden.sparks.flatMap((s) => Object.keys(s)));
+    const stateOf = (s: Record<string, unknown>) =>
+      !("turnedAt" in s) ? "absent" : s["turnedAt"] === null ? "null" : typeof s["turnedAt"];
+    const h = service();
+    await h.svc.hatch(HATCH, h.principal);
+    const lyra = await h.svc.hatch({ ...HATCH, name: "Lyra" }, h.principal);
+    h.svc.turned(lyra.id, T1);
+    store(h.root).write(
+      spark({ id: "sp-0123456789abcdef", name: "Juno", folder: "/f/sparks/juno" }),
+    );
+    const produced = h.svc.list() as unknown as Array<Record<string, unknown>>;
+    for (const summary of produced)
+      expect(Object.keys(summary).filter((key) => !goldenKeys.has(key))).toEqual([]);
+    expect(new Set(produced.map(stateOf))).toEqual(new Set(golden.sparks.map(stateOf)));
+    expect(new Set(produced.map(stateOf))).toEqual(new Set(["absent", "null", "string"]));
   });
 });

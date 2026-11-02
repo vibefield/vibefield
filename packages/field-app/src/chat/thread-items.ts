@@ -1,4 +1,3 @@
-import type { AgentFieldRow, SparkSummary } from "@vibefield/contracts";
 import type { SparkStatus } from "@vibefield/design-kit/spark-face";
 import type { NeedsCard } from "./needs-card";
 import type { SparkEntry } from "./spark-status";
@@ -42,31 +41,17 @@ export interface HelloItem {
  * (`needs-card.ts`), and SP-1e's live cards to come. */
 export type ThreadItem = HelloItem | NeedsCard;
 
-/** A hatch writes the spark's record and starts its first run in the same call, so that run is born within this of the
- * record. A wake's run, resumed or started afresh, is born when the spark is woken, after it has slept. A run fieldd
- * re-attached after a restart keeps its birth, so this cannot tell how old a re-attached hatch run is (DESIGN.md's
- * open cases). */
-export const HATCH_RUN_MS = 60_000;
-
-/** The run is the one the spark hatched in: born within `HATCH_RUN_MS` after the spark's record. */
-function bornInItsHatch(run: AgentFieldRow, spark: SparkSummary): boolean {
-  const after = Date.parse(run.createdAt) - Date.parse(spark.createdAt);
-  return after >= 0 && after <= HATCH_RUN_MS;
-}
-
-/** NS-D4's "a new spark" (DESIGN.md §8 "Chat's thread", how "new" is read): its session has had no turn yet, read
- * cautiously, because the board counts a run's tokens only as they are spent live — a run that reads its transcript
- * back (a woken spark's, or one fieldd re-attached) counts nothing from it. A spark that never started is new. One
- * whose own run the board shows is new only while that run is the one it hatched in, fieldd is watching it (not
- * waiting to resume it), and the window has never seen the spark have a turn (`turnSeen`). One whose run the board
- * does not show is not said to be new: nothing there certifies it. Two cases stay open (DESIGN.md §8 "Chat's thread"): a
- * hatch run fieldd re-attached after a restart, read by the window that restart opened before the run's next live turn,
- * and a run born in the hatch run's place within its minute. */
-export function sparkIsNew(entry: SparkEntry): boolean {
-  const { spark, run } = entry;
-  if (run === null) return spark.session === undefined;
-  if (entry.turnSeen || run.pending !== undefined) return false;
-  return bornInItsHatch(run, spark);
+/** NS-D4's "a new spark" (DESIGN.md §8 "Chat's thread", how "new" is read; TU-1, Q1): it never started, or fieldd
+ * says it has never worked: its record (`turnedAt: null`) and its own run's row, which says a first turn before the
+ * list is read again. Never while fieldd waits to resume its run (AR-4's pending), nor while it is awake and the board
+ * does not show its run: nothing says fieldd watches that pane. Asleep, its run off the board, its record decides. A
+ * spark whose record says neither (one from before fieldd kept the fact) is new only if it never started: nothing
+ * else certifies it. An ask alone is no turn (Q2), so a spark whose own agent asks before it has worked is still new. */
+export function sparkIsNew({ spark, run }: SparkEntry): boolean {
+  if (spark.session === undefined) return true;
+  if (run === null) return spark.session.live === false && spark.turnedAt === null;
+  if (run.pending !== undefined) return false;
+  return spark.turnedAt === null && typeof run.turnedAt !== "string";
 }
 
 /** Quiet (DESIGN.md §8 "Chat's thread"): the spark is new, its draft is empty, its hello has not left — `helloLeft`

@@ -2919,6 +2919,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
       return { runtimeRunId: result.session.runtimeRunId };
     };
+    // TU-1 (Q3) — the one placement rule's persona map, from the monitor's latest Agent Profiles frame (the one
+    // Godview's rows are placed by), read at each use; null until the monitor holds a frame, so a persona's run filed
+    // under none is in no profile for those first moments. The talk room, the Allow, the compose room and the door read
+    // it.
+    const personaSets = () => monitor?.personaSets() ?? null;
     // CP-3 (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31; tool-plane/rooms/you/) — the needs-you queue:
     // a spark's questions, its held sends and spawns (signed records under LAYOUT.NEEDS_DIR, kept across a restart),
     // and every run's own ask, read from its blockers. An answer is told to its spark through its input queue, and
@@ -2941,9 +2946,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           spark: row.spark,
           startedBy: row.origin?.by === "spark" ? row.origin.spark : undefined,
           profileSet: row.profileSet,
+          profileId: row.profileId,
           live: agents.isLive(runtimeRunId),
         };
       },
+      personaSets,
       sparkSession: sparkSessionOf,
       spark: (id) => sparks.get(id),
       open: (id, principal) => sparks.open(id, principal),
@@ -2968,6 +2975,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       needs.onRunEnded(runtimeRunId);
       inputs.forget(runtimeRunId);
     });
+    // TU-1 (Q1) — a spark has worked once one of its own sessions has: its record keeps the first time told
+    agents.onSparkTurned((spark, at) => sparks.turned(spark, at));
     const kept = inputs.restore();
     if (kept > 0)
       logger.info("fieldd.inputs.restored", "Kept inputs wait for their sessions", { kept });
@@ -2984,6 +2993,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         : {
             runtimeRunId: row.runtimeRunId,
             profileSet: row.profileSet,
+            profileId: row.profileId,
             origin: row.origin,
             spark: row.spark,
             live: agents.isLive(row.runtimeRunId),
@@ -2995,6 +3005,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           .list()
           .sessions.map((row) => talkSession(row))
           .filter((s): s is TalkSession => s !== undefined),
+      personaSets,
       spawn: talkSpawn,
       enqueue: (runtimeRunId, text, from) =>
         inputs.enqueue(runtimeRunId, text, { kind: "spark", spark: from.spark, name: from.name }),
@@ -3007,9 +3018,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       native,
       lanes: laneLink,
       runForTerminal: (terminalSessionId) => agents.runForTerminal(terminalSessionId),
+      personaSets,
       spark: (id) => sparks.get(id),
       verbs: {
         profileSets: async () => (await agents.profiles.sets()).sets,
+        personaSets,
         agentLabel: agentLabelOf,
         models: (provider, profileSet) => agents.models({ provider, profileSet }),
         runs: () => agents.list().sessions,
