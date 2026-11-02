@@ -10,26 +10,39 @@
  * goldens show is fixed in its own item first). The semantic rows below do not read the goldens'
  * bytes, so a re-bless cannot carry a behaviour past them.
  */
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentModelMeshFrame } from "@vibefield/contracts";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   computePhoneGoldens,
   goldenChanges,
+  orphanGoldens,
   PHONE_BODY_GOLDEN,
+  PHONE_BODY_NOW_MS,
   PHONE_FOLD_GOLDEN,
   PHONE_GOLDEN_MIRRORS,
   PHONE_GOLDENS_COMMAND,
   PHONE_GOLDENS_DIR,
+  PHONE_GOLDENS_LIB_DIR,
+  PHONE_TOOLKIT_GOLDEN,
+  PHONE_VIEW_GOLDENS,
+  PHONE_VIEW_MIRROR,
   PHONE_VISIBLE,
+  PHONE_WITNESS_INPUTS,
   type PhoneBodyStep,
   type PhoneFoldStep,
   type PhoneGoldens,
+  type PhoneViewGoldens,
+  phoneAllGoldenFiles,
   phoneGoldenFiles,
+  phoneGoldenMirrors,
+  phoneViewGoldenName,
   phoneVisible,
   puppeteerVersions,
   readWitnessInputs,
+  unregisteredViewFiles,
 } from "../perf/lib/phone-goldens";
 import { BoardScreen } from "../src/godview/monitor/board-screen";
 
@@ -332,5 +345,149 @@ describe("PG-3a — the phone's parity goldens: the home's window over the witne
     expect(resync.rows?.find((row) => row.id === "pty-h1")?.unread).toBe(false);
     // and the old chain is still a gap after it
     expect(foldAt(8).gap).toBe(true);
+  });
+});
+
+/** PG-4s — a view the registry does not hold, passed as `views`: what a lane's line will do, proven with no lane. */
+const PROBE_NOTE = "PG-4s's probe view: each step's drawn ids, never over a defect";
+const probeLane: PhoneViewGoldens[string] = async () => ({
+  golden: {
+    note: PROBE_NOTE,
+    compute: ({ steps, nowMs }) =>
+      steps.map((step) => ({
+        at: step.at,
+        ...(step.gap === true ? { gap: true } : {}),
+        ids: (step.rows ?? []).map((row) => row.id),
+        nowMs,
+      })),
+  },
+});
+const probeViews: PhoneViewGoldens = { probe: probeLane };
+const PROBE_GOLDEN = phoneViewGoldenName("probe");
+
+describe("PG-4s — every phone golden has one writer, and a view's golden is one registry line", () => {
+  it("G1 — a registered view is written as phone-<view>.golden.json under the one header", async () => {
+    const files = await phoneAllGoldenFiles(goldens, probeViews);
+    expect(Object.keys(files)).toContain(PROBE_GOLDEN);
+    const bytes = files[PROBE_GOLDEN] ?? "";
+    expect(bytes.endsWith("}\n")).toBe(true);
+    const written = JSON.parse(bytes) as Record<string, unknown>;
+    expect(Object.keys(written)).toEqual([
+      "//",
+      "versions",
+      "self",
+      "view",
+      "nowMs",
+      "inputs",
+      "steps",
+    ]);
+    expect(written["//"]).toBe(PROBE_NOTE);
+    expect(written.versions).toEqual(puppeteerVersions());
+    expect(written.self).toBe("home");
+    expect(written.view).toBe("probe");
+    expect(written.nowMs).toBe(PHONE_BODY_NOW_MS);
+    expect(written.inputs).toEqual([...PHONE_WITNESS_INPUTS]);
+    const steps = written.steps as Array<{ at: unknown; ids: string[]; nowMs: number }>;
+    expect(steps.map((step) => step.at)).toEqual(goldens.fold.map((step) => step.at));
+    expect(steps[0]?.ids).toEqual(foldAt("open").drawn);
+    expect(steps[0]?.nowMs).toBe(PHONE_BODY_NOW_MS);
+  });
+
+  it("G2 — the window's drawn rows are kept whole at every step, cloned when recorded (Q-S9)", () => {
+    const { windowRows } = goldens;
+    expect(windowRows).toHaveLength(11);
+    expect(windowRows.map((step) => step.at)).toEqual(goldens.fold.map((step) => step.at));
+    expect(windowRows.map((step) => step.frame)).toEqual(goldens.fold.map((step) => step.frame));
+    for (const [index, step] of windowRows.entries()) {
+      const fold = goldens.fold[index];
+      if (step.gap === true) {
+        expect(fold?.gap).toBe(true);
+        expect(step.rows).toBeUndefined();
+        continue;
+      }
+      expect((step.rows ?? []).map((row) => row.id)).toEqual(fold?.drawn);
+    }
+    expect(windowRows.at(-1)?.gap).toBe(true);
+    // the clone: a later step never shares (so never rewrites) an earlier step's row
+    const open = windowRows[0]?.rows?.[0];
+    const next = windowRows[1]?.rows?.find((row) => row.id === open?.id);
+    expect(open).toBeDefined();
+    expect(next).toBeDefined();
+    expect(next).not.toBe(open);
+  });
+
+  it("G3 — the toolkit's golden is written, its clock pinned by wall components, never an instant", async () => {
+    const files = await phoneAllGoldenFiles(goldens);
+    expect(Object.keys(files)).toContain(PHONE_TOOLKIT_GOLDEN);
+    const toolkit = JSON.parse(files[PHONE_TOOLKIT_GOLDEN] ?? "{}") as {
+      calls?: { formatClock?: Array<Record<string, unknown>> };
+    };
+    const clock = toolkit.calls?.formatClock ?? [];
+    expect(clock.length).toBeGreaterThan(0);
+    for (const entry of clock) {
+      expect(Object.keys(entry).sort()).toEqual(["frac", "out", "wall", "withSeconds"]);
+      expect(entry.wall).toHaveLength(7);
+    }
+  });
+
+  it("G4 — a lane file the registry does not name is found; the real folder has none", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pg4s-lib-"));
+    try {
+      for (const name of ["phone-goldens.ts", "phone-goldens-zzz.ts", "other.ts"])
+        writeFileSync(join(dir, name), "");
+      expect(unregisteredViewFiles(dir, PHONE_VIEW_GOLDENS)).toEqual(["phone-goldens-zzz.ts"]);
+      expect(unregisteredViewFiles(dir, { ...PHONE_VIEW_GOLDENS, zzz: probeLane })).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    expect(unregisteredViewFiles(PHONE_GOLDENS_LIB_DIR)).toEqual([]);
+  });
+
+  it("G5 — a committed golden the one writer does not write is found; the real folder has none", async () => {
+    const files = await phoneAllGoldenFiles(goldens);
+    const dir = mkdtempSync(join(tmpdir(), "pg4s-goldens-"));
+    try {
+      for (const name of [PHONE_FOLD_GOLDEN, "phone-zzz.golden.json", "notes.json"])
+        writeFileSync(join(dir, name), "{}");
+      expect(orphanGoldens(dir, files)).toEqual(["phone-zzz.golden.json"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    expect(orphanGoldens(PHONE_GOLDENS_DIR, files)).toEqual([]);
+  });
+
+  it("G6a — every golden the one writer returns names the puppeteer packages and refuses a defect", async () => {
+    const files = await phoneAllGoldenFiles(goldens, probeViews);
+    expect(Object.keys(files)).toEqual(
+      expect.arrayContaining([
+        PHONE_FOLD_GOLDEN,
+        PHONE_BODY_GOLDEN,
+        PHONE_TOOLKIT_GOLDEN,
+        PROBE_GOLDEN,
+      ]),
+    );
+    for (const [name, bytes] of Object.entries(files)) {
+      const parsed = JSON.parse(bytes) as { versions: unknown; "//": string };
+      expect(parsed.versions, name).toEqual(puppeteerVersions());
+      expect(parsed["//"], name).toMatch(/never over a defect/);
+    }
+  });
+
+  it("G7 — the mirrors are derived from the registry: the toolkit's and each view's in FieldHomeTests", () => {
+    const mirrors = phoneGoldenMirrors(probeViews);
+    expect(mirrors[PROBE_GOLDEN]).toEqual([PHONE_VIEW_MIRROR]);
+    expect(mirrors[PHONE_TOOLKIT_GOLDEN]).toEqual([PHONE_VIEW_MIRROR]);
+    expect(mirrors[PHONE_FOLD_GOLDEN]).toEqual([
+      "apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures",
+      "apps/ios/VibeFieldKit/Tests/FieldProductTests/Fixtures",
+    ]);
+    expect(mirrors[PHONE_BODY_GOLDEN]).toEqual([
+      "apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures",
+    ]);
+  });
+
+  it("G7b — the mirrors the generator and the byte row read are the registry's", () => {
+    expect(PHONE_GOLDEN_MIRRORS[PHONE_TOOLKIT_GOLDEN]).toEqual([PHONE_VIEW_MIRROR]);
+    expect(PHONE_GOLDEN_MIRRORS).toEqual(phoneGoldenMirrors());
   });
 });

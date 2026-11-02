@@ -69,17 +69,65 @@ export const PHONE_WITNESS_INPUTS = [
  * old chain's delta that is the run's gap */
 export const PHONE_RESYNC_AFTER = 7;
 export const PHONE_GOLDENS_COMMAND = "pnpm --filter @vibefield/field-app phone:goldens";
+
+/** PG-4s — what a view lane's file exports (`perf/lib/phone-goldens-<view>.ts`): its golden's note and its compute.
+ * The header around them is this file's (`phoneAllGoldenFiles`), so a lane writes only these two. */
+export interface PhoneViewGolden {
+  /** the golden's "//": what it records, how, and by which paths; it says "never over a defect" */
+  note: string;
+  /** the golden's `steps`: JSON-safe and deterministic, each step keyed by its `at` as the fold's are */
+  compute(input: PhoneViewInput): unknown | Promise<unknown>;
+}
+/** What a view's compute reads: the window's drawn rows at every step of the witness run, and the clock. */
+export interface PhoneViewInput {
+  steps: readonly PhoneWindowStep[];
+  nowMs: number;
+}
+/** One step's drawn rows, whole, as the window hands them to its view. Named apart from the fold step's `drawn` (its
+ * ids) so `goldens.windowRows` and `step.drawn` cannot be misread (the design check's N2). */
+export interface PhoneWindowStep {
+  at: "open" | "resync" | number;
+  frame?: FrameKind;
+  gap?: true;
+  rows?: readonly AgentView[];
+}
+/** The registry's shape: a view's manifest id → its lane file, imported lazily (no ESM cycle with this file). */
+export type PhoneViewGoldens = Readonly<Record<string, () => Promise<{ golden: PhoneViewGolden }>>>;
+/** PG-4s — THE PER-VIEW GOLDENS. One line per view lane (PG-5…8), its key the view's manifest id, which is the kit's
+ * `GodviewViewChoice` raw value. `tsc` checks each literal path (`tsconfig.json` includes `perf`). */
+export const PHONE_VIEW_GOLDENS: PhoneViewGoldens = {
+  // list: () => import("./phone-goldens-list"),
+};
+export const phoneViewGoldenName = (view: string): string => `phone-${view}.golden.json`;
+/** where every view's golden and the toolkit's golden are mirrored: FieldHomeTests, where the views' suites run */
+export const PHONE_VIEW_MIRROR = "apps/ios/VibeFieldKit/Tests/FieldHomeTests/Fixtures";
+/** PG-4s (Q-S3 (a)) — the shared toolkit words, as the SDK says them over a fixed vector */
+export const PHONE_TOOLKIT_GOLDEN = "phone-toolkit.golden.json";
+/** this folder: where a view lane's `phone-goldens-<view>.ts` lives */
+export const PHONE_GOLDENS_LIB_DIR = import.meta.dirname;
+
 /** where the kit's copies live: PG-3c's, PG-3d's parity suite in FieldProductTests, and PG-3e's body parity suite in
  * FieldMeshTests, where the mapping from a drawn row to its bubble lives (`scripts/check-ios-fixtures.mjs`
  * OTHER_ORIGINS compares them). (Corrected 2026-11-02, PG-3e: the body golden was named for FieldAgentsTests, a
- * bundle that holds no copy and whose target reads no FieldProduct, so it could never run the golden.) */
-export const PHONE_GOLDEN_MIRRORS: Readonly<Record<string, readonly string[]>> = {
-  [PHONE_FOLD_GOLDEN]: [
-    "apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures",
-    "apps/ios/VibeFieldKit/Tests/FieldProductTests/Fixtures",
-  ],
-  [PHONE_BODY_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures"],
-};
+ * bundle that holds no copy and whose target reads no FieldProduct, so it could never run the golden.) PG-4s: the
+ * toolkit's golden and every registered view's, in FieldHomeTests, derived from the registry; `views` is for the
+ * parity test's probe. */
+export function phoneGoldenMirrors(
+  views: PhoneViewGoldens = PHONE_VIEW_GOLDENS,
+): Readonly<Record<string, readonly string[]>> {
+  // PG-4s (red): the skeleton names the two literal entries alone
+  void views;
+  return {
+    [PHONE_FOLD_GOLDEN]: [
+      "apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures",
+      "apps/ios/VibeFieldKit/Tests/FieldProductTests/Fixtures",
+    ],
+    [PHONE_BODY_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures"],
+  };
+}
+/** The mirrors of the registry as it stands; declared after it (a `const` read before its declaration is in its
+ * temporal dead zone). */
+export const PHONE_GOLDEN_MIRRORS = phoneGoldenMirrors();
 /** the body model's clock: a constant. It would date a birth's opening (none here); a running
  * terminal's elapsed line reads `runningSinceMs`, which is not passed (a clock value, never compared) */
 export const PHONE_BODY_NOW_MS = 1_790_803_300_000;
@@ -209,6 +257,9 @@ export interface PhoneBodyStep {
 export interface PhoneGoldens {
   fold: PhoneFoldStep[];
   body: PhoneBodyStep[];
+  /** PG-4s — the window's drawn rows at every step, whole: what a view's golden computes from. Never printed in the
+   * fold or body golden. */
+  windowRows: PhoneWindowStep[];
 }
 
 /** A frame scheduler drained by hand, once per step (the window's is the browser's frame). */
@@ -480,7 +531,8 @@ export async function computePhoneGoldens(input: {
     offFeed();
     feed.dispose();
   }
-  return { fold, body };
+  // PG-4s (red): the skeleton keeps no rows
+  return { fold, body, windowRows: [] };
 }
 
 const FOLD_NOTE =
@@ -543,6 +595,44 @@ export function phoneGoldenFiles(goldens: PhoneGoldens): Record<string, string> 
       "",
     )}\n`,
   };
+}
+
+/** PG-4s — the toolkit's golden: the SDK's own words over a fixed vector, one entry per call. */
+export function phoneToolkitGolden(): Record<string, unknown> {
+  // PG-4s (red): the skeleton records nothing
+  return {};
+}
+
+/** PG-4s — ONE WRITER OF EVERY PHONE GOLDEN: the fold and body goldens, the toolkit's, and one per registered view
+ * (`views` is for the parity test's probe). The generator writes exactly these, and the parity test compares them. */
+export async function phoneAllGoldenFiles(
+  goldens: PhoneGoldens,
+  views: PhoneViewGoldens = PHONE_VIEW_GOLDENS,
+): Promise<Record<string, string>> {
+  // PG-4s (red): the skeleton writes the two goldens alone
+  void views;
+  return phoneGoldenFiles(goldens);
+}
+
+/** PG-4s — a lane file (`phone-goldens-<view>.ts`) in `dir` whose view the registry does not name: a golden no
+ * one writes. */
+export function unregisteredViewFiles(
+  dir: string,
+  views: PhoneViewGoldens = PHONE_VIEW_GOLDENS,
+): string[] {
+  // PG-4s (red): the skeleton finds nothing
+  void dir;
+  void views;
+  return [];
+}
+
+/** PG-4s — a `phone-*.golden.json` in `dir` that `files` (the one writer's map) does not write: a golden committed
+ * and left behind. */
+export function orphanGoldens(dir: string, files: Readonly<Record<string, string>>): string[] {
+  // PG-4s (red): the skeleton finds nothing
+  void dir;
+  void files;
+  return [];
 }
 
 /** What moved between a committed golden and the computation: one line per step and field, for
