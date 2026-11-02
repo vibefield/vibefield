@@ -35,10 +35,11 @@
   fixed it). `nightly-20261028` may dispatch on the green head (`scripts/release-plan.mjs:62`: never from a red trunk).
   Since the audit's base (`bb1a2c823`): AL-9, items 82–84, TS-8a/8b, the TS-3a erratum, AO-6b3 and QW1 stack A landed;
   then HK, the EL8 to puppeteer 0.3.0 (`1469639a6`) and QW1 stack B (10-28).
-- **The live program.** §2: TS, AO, FG, AL, **AU (updates that wait)**, **PG (the phone's Godview)**, **HN (Cards in
-  Hand: the line, the hand, Artifacts in the head)**, QW1 (the Godview swarm's fix wave 1), PT-S (PORTALS' phone,
-  resumed 10-29), **CO (the compose plane: sparks and the tool plane, re-entered 10-28)**, the release rails, the EL8
-  watch, the fixer, upstream. The first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
+- **The live program.** §2: TS, AO, FG, AL, **AU (updates that wait)**, **PG (the phone's Godview)**, **WI (the
+  phone's way in)**, **HN (Cards in Hand: the line, the hand, Artifacts in the head)**, QW1 (the Godview swarm's fix
+  wave 1), PT-S (PORTALS' phone, resumed 10-29), **CO (the compose plane: sparks and the tool plane, re-entered
+  10-28)**, the release rails, the EL8 watch, the fixer, upstream. The first-beta blockers are §3 item 7. Everything
+  valid but unscheduled is §4.
 
 ## 2 Now — the active tracks
 
@@ -286,6 +287,19 @@
   dated notes at thinking-desktop-sync-plane :201 (PF6's close) and thinking-phone-godview §8's PG-9 line; from
   PG-3e, James's live look (J-E4, §5); from PG-4s, James's page (J-S1…J-S4, the switch and what other views keep),
   items 164 and 165 (the fixer's), and the swarm's still under the view flag at the first view lane (N12).
+
+**WI — the phone's way in** · the IOS session (lanes `lanes/wi`, `lanes/item163`) · law: the page *The Way In* (5cvau5EQ, v5; sources `draft/ios-pocket/way-in/`), DESIGN.md §8 "The phone's way in" and §9 "The way in"; DECISIONS WI
+- Ruled 11-02 11:13–11:15Z (James, on the page): WI-D1…D8 all A, the leans; "way in all ruled, now implement it"
+  (11:17Z). The laws WI-L1…L7.
+- Landed 11-02: **WI-4 and WI-1 with WI-2** (`40e447bfb` → `08d457f58`, as the merge M108 `8cfe4a59d`, run 108;
+  LANDED "WI-1 (with WI-2) and WI-4"): two states, the way in on the splash's field, every word DESIGN.md's. **Item
+  163** (LANDED "Item 163"): Settings' unreachable signed-out head and empty list retired; its last "Mac" says
+  computer.
+- Next: WI-3, the lock (FieldLock on LocalAuthentication; WI-D3…D7, WI-L5, WI-L6), on VF-PM's brief. Item 161 (a
+  dropped leg's re-mint has no backoff) is the same session's.
+- Owed: the quiet-window witness (LANDED "WI-1 …", Owed); L5's two words and the `inkTertiary` note (James); the
+  mark's fade (James's word on pushing vibefield-splash `9219e97`, then `markFades` opened); the Desktop slice (item
+  160's privacy line, Remove for a phone), held for James.
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -901,8 +915,8 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
 | PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |
-| IOS — companion | ACTIVE; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name); item 130 landed 10-31 (a sign-out clears History's cache, AP-D4); IOS-10a landed 11-01 (the phone's Settings, `a9a62c20a`); IOS-11 landed 11-02 (the phone's splash, James's PR #10, M104 `f2854bf2f`); WI-1 landed 11-02 (the way in, M108 `8cfe4a59d`; the WI row) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | WI-3, the lock (the WI row); items 163 and 161; the rebuild; TestFlight build 4 |
-| WI — the way in | ACTIVE; WI-4 and WI-1 (with WI-2) landed 11-02 (M108 `8cfe4a59d`, run 108): the two states, the way in on the splash's field; the mark keeps its place (`WayInView.markFades` shut) until James's word on its fade | the page *The Way In* (5cvau5EQ, v5; sources `draft/ios-pocket/way-in/`); DESIGN.md §8 "The phone's way in", §9 "The way in"; DECISIONS WI | WI-3, the lock (FieldLock; WI-D3…D7); the OWED witness (LANDED "WI-1 (with WI-2) and WI-4"); the Desktop slice, held for James (item 160) |
+| IOS — companion | ACTIVE; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name); item 130 landed 10-31 (a sign-out clears History's cache, AP-D4); IOS-10a landed 11-01 (the phone's Settings, `a9a62c20a`); IOS-11 landed 11-02 (the phone's splash, James's PR #10, M104 `f2854bf2f`); WI-1 landed 11-02 (the way in, M108 `8cfe4a59d`; the WI row) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md` | WI-3, the lock (the WI row); item 161; the rebuild; TestFlight build 4 |
+| WI — the way in | ACTIVE; WI-4 and WI-1 (with WI-2) landed 11-02 (M108 `8cfe4a59d`, run 108): the two states, the way in on the splash's field; item 163 landed 11-02 (Settings' unreachable signed-out head and empty list retired); the mark keeps its place (`WayInView.markFades` shut) until James's word on its fade | the page *The Way In* (5cvau5EQ, v5; sources `draft/ios-pocket/way-in/`); DESIGN.md §8 "The phone's way in", §9 "The way in"; DECISIONS WI | WI-3, the lock (FieldLock; WI-D3…D7); the OWED witness (LANDED "WI-1 (with WI-2) and WI-4"); the Desktop slice, held for James (item 160) |
 | UA — users and accounts | COMPLETE except witnesses | `specs/users-and-accounts.md`, `thinking-ua-phone-account.md` | the phone's second-account witness |
 | NF — native floor | COMPLETE; one owed line | `specs/native-floor.md` | item 52 (b)'s phone half |
 | LOG — logging and audit | PARKED; item 78 landed | `specs/logging-and-diagnostics.md` | LOG-39 for the beta |

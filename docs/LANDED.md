@@ -29545,3 +29545,59 @@ draws a choice he owns: the stage keeps the overlays above it (J-S3's lean) and 
 switch a person can make (James's J-S1…J-S4 rule it); the door gate (retired above). Items 164 (formatRatePerHour
 traps at 2^63 and above) and 165 (formatTokens' tie) are the fixer's, after this landing. The by-eye still of the
 swarm under the view flag (the design check's N12) is owed to the first view lane's stills.
+
+## Item 163 — Settings has no signed-out head and no empty list, both unreachable since WI-1, and its last "Mac" says computer (2026-11-02; `ac4771b6e` → `864c1e267`, two commits on main `b50b12cf1`, re-stacked from `dedd40a30` → `cc1cf8447` on `884502631`, lane `fix/item163` in `/Volumes/SamsungRed/lanes/item163`, in the mini's mint M110 `864c1e267`, stacked, run 110)
+
+**What it rests on.** VF-PM's review of WI-1 (13:16Z) named L8: SettingsModel.swift:28 and :68, the signed-out
+head's note and the empty list's foot, were unreachable and said "Mac". It was filed as item 163, the IOS
+session's after WI-1, and given at 14:28Z. Since WI-1, Settings is never open signed out (WI-L1): its Sign out closes
+it first (`SettingsActions.signOut`), and the way in standing closes what the tabs opened (`closeWhatTheTabsOpened`).
+Its rows are the link's desktops plus the account's remembered ones, which is `doorPage`'s `listed + remembered`
+(WI-L2), so its list is never empty either.
+
+**What** (4 files, +78 −88 over the two commits; the kit and one DESIGN.md line):
+- **The red** (`dedd40a30`, tests only): `headWhenSignedOut` (the signed-out head says nothing), `faceWords` (the
+  dealt face's note, exactly), and a new `computerNeverMac` (every word Settings says, for each standing and each
+  face source, holds no "Mac", as WI-1's reader row does).
+- **The fix** (`cc1cf8447`): the dead parts are RETIRED, not re-worded, each with a dated line.
+  - SettingsView's signed-out head (Continue with Tailscale and its note), so the head is always yours, and the
+    desktops section's empty state (None yet and its foot).
+  - `SettingsModel.noDesktopsFoot` with its row; `headLines(.signedOut)` says nothing.
+  - The one live "Mac", the dealt face's note on Account, says "the way your computer deals it": DESIGN.md §9's
+    amended rule applied, as WI-1's M2 did (VF-PM 14:42Z: no split).
+  - DESIGN.md §8, the phone's Settings: a dated *Retired 2026-11-02 (item 163)* line under WI's amendment.
+
+**Validation.**
+- The host loop (`lanes/item163/light/host.sh`: a macOS package whose model, inputs and test file are symlinks into
+  the lane, with stubs for FieldTerminal's route and the UIKit half; never the gate): RED at `dedd40a30`, 22 tests
+  in 2 suites, 4 issues, all on the three rows (SettingsModelTests.swift:86, :208, :235 twice); GREEN at the fix, 21
+  tests in 2 suites, 0 issues, the run's diff hash `173d2d3a9428` equal to `git diff dedd40a30 cc1cf8447`.
+- swiftc's typecheck for the iOS simulator (Debug, against the mint `8cfe4a59d`'s own kit products): FieldSettings
+  and SettingsModelTests rc 0, no warnings.
+- The kit on this Mac (VF-PM's slot, 14:42:30 → 14:47:20Z, the WI proof worktree detached at each commit;
+  `lanes/item163/light/slot163.sh`):
+  - FieldSettingsTests alone at `dedd40a30`: EXIT 65, 22 tests in 2 suites, 4 issues, exactly the host's;
+  - the full kit at `cc1cf8447` (its tree asserted): 15 runs, 1,514 tests, 0 red, 0 restarts, 0 issues
+    (FieldSettingsTests 21 in 2: one row in, one retired, so the mint's 1,514 holds);
+  - app Debug 14:46:09 → 14:46:27Z and Release 14:46:47 → 14:47:20Z, both built; iPhone 17 Pro
+    `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down after each run.
+- No quoted "Mac" is left in the kit's sources. The iOS fixtures: 198, pins 67 at the lane (unmoved); 202, pins 67
+  on the re-stacked tip (PG-4s moved main's count).
+- The re-stack over PG-4s and its records (VF-PM 14:51Z, main `b50b12cf1`): the two file sets are disjoint (4s and
+  its records touch 24 files, none in FieldSettings and not DESIGN.md; 163 touches 4); `git merge-tree
+  --write-tree b50b12cf1 cc1cf8447` is clean, tree `c60d7d3ef`, which the re-stacked tip's tree equals; the
+  range-diff reads `dedd40a30 = ac4771b6e` and `cc1cf8447 = 864c1e267`. So the slot's proof carries over, with no
+  re-light and no kit (VF-PM 14:48Z); the merged tree names `noDesktopsFoot` only in 163's two RETIRED lines.
+- **Run 110** (`864c1e267`, stacked on main `b50b12cf1`, a fast-forward, minted by a9 on VF-PM's GO): verify exit 0
+  at 14:58:20Z; vitest 12,111 passed, 0 failed, 18 skipped (871 files), ±0 on run 109 (the per-file diff is empty);
+  node 364/0; cargo 534 passed, 0 failed (33 results ok); typecheck and test, 28 projects; no MaxListeners warning;
+  the iOS fixtures 202, pins 67; the tree clean after (`lanes/ts6/logs/mini/run110/verify.clean.log`). The kit is
+  this Mac's slot, above, carried to `864c1e267` by the "=" range-diff.
+- **Landed:** main fast-forwarded to `864c1e267` on VF-PM's GO (2026-11-02 14:59:36Z).
+
+**Not built (said).** Settings' other signed-out words (Account's Tailscale card, "Not signed in", and its foot)
+are unreachable too but say nothing wrong; `SettingsAccount.Standing.signedOut` stays the model's word for no
+account. A DEBUG fixture that owns the field over the simulator's empty account (`-vf-demo-field-slice` with
+`-vf-open-settings`) now draws the head with no name and an empty list: a fixture's artifact, no product state.
+
+**Owed.** Nothing of this item's. Item 161 (a dropped leg re-mints with no backoff) is next, the same session's.
