@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldSettings
 import Foundation
 import Testing
 
@@ -26,6 +27,16 @@ struct MockAccountTests {
     #expect(face.canSignOut)
     #expect(mock.desktopIsUp)
     #expect(mock.login == "me@jamesyong42.com")
+  }
+
+  /// M2 (PG-3e, the v2 check) — the mock's studio, whose board the mock never lists, is watchable on its Settings page:
+  /// "not on the board" is not a refusal (the `mock-*` launches open this page).
+  @Test("the mock's studio can be watched: a board not listed is not a refusal")
+  func theMocksStudioCanBeWatched() throws {
+    let studio = try #require(MockAccount().settings.desktops.first { $0.name == "studio" })
+    let watch = SettingsModel.abilities(studio).first
+    #expect(watch?.title == "Watch its agents")
+    #expect(watch?.can == true)
   }
 
   @Test("a lost mesh puts both desktops to sleep and offers nothing: the phone re-dials by itself")

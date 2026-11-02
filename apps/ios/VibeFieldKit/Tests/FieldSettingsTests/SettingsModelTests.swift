@@ -24,9 +24,12 @@ struct SettingsModelTests {
   }
 
   private func desktop(
-    _ reach: SettingsDesktop.Reach, name: String = "studio", home: Bool = false, terminals: Bool? = true
+    _ reach: SettingsDesktop.Reach, name: String = "studio", home: Bool = false, terminals: Bool? = true,
+    watchable: Bool? = nil
   ) -> SettingsDesktop {
-    SettingsDesktop(id: "dev-1", name: name, platform: "darwin", reach: reach, isHome: home, servesTerminals: terminals)
+    SettingsDesktop(
+      id: "dev-1", name: name, platform: "darwin", reach: reach, isHome: home, servesTerminals: terminals,
+      watchable: watchable)
   }
 
   /// A fixed reader: British English (a 24-hour clock, no narrow spaces),
@@ -139,6 +142,19 @@ struct SettingsModelTests {
     // The welcome promises "Approve agents" — by typing into the pane, which
     // works — so nothing here may say approvals cannot be answered at all.
     #expect(!all.contains { $0.title.localizedCaseInsensitiveContains("answer approvals") })
+  }
+
+  /// W1 (PG-3e, design v2 §5.3) — a desktop this phone cannot read says so on its page, in J-E1 (iii)'s words; not
+  /// said, and readable, both read available.
+  @Test("watching a desktop: one the phone cannot read says so; not said is not a refusal")
+  func aDesktopThatCannotBeWatchedSaysSo() {
+    let refused = SettingsModel.abilities(desktop(.connected, watchable: false)).first
+    #expect(
+      refused == .init(title: "Watch its agents", detail: "studio runs a VibeField this phone can’t read.", can: false))
+    for said in [nil, true] as [Bool?] {
+      let watch = SettingsModel.abilities(desktop(.connected, watchable: said)).first
+      #expect(watch == .init(title: "Watch its agents", detail: nil, can: true), "watchable \(String(describing: said))")
+    }
   }
 
   @Test("terminals: served, not served, or not drawn when not said")

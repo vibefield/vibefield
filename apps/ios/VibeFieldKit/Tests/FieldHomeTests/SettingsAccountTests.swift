@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldProduct
 import FieldSettings
 import FieldTerminal
 import Foundation
@@ -19,11 +20,12 @@ struct SettingsAccountTests {
 
   private func desktop(
     id: String = "dev-1", name: String = "studio", state: FieldDesktop.State = .ready,
-    feed: FieldFeedSource = .door, terminals: Bool? = true, fieldRefusal: String? = nil
+    feed: FieldFeedSource = .door, terminals: Bool? = true, fieldRefusal: String? = nil,
+    board: AgentMeshDeviceState? = nil
   ) -> FieldDesktop {
     FieldDesktop(
       deviceId: id, name: name, platform: "darwin", state: state, feed: feed,
-      publishesTerminalDoors: terminals, fieldRefusal: fieldRefusal)
+      publishesTerminalDoors: terminals, fieldRefusal: fieldRefusal, board: board)
   }
 
   private func settings(
@@ -121,6 +123,26 @@ struct SettingsAccountTests {
     #expect(account.desktops.map(\.name) == ["mini", "studio"])
     let allAsleep = account.desktops.allSatisfy(\.isAsleep)
     #expect(allAsleep)
+  }
+
+  /// W2 (PG-3e, design v2 §5.3 with the v2 check's M2) — "Watch its agents" by the desktop's standing on the home's
+  /// board: incompatible, or a refused field, is not watchable; asleep is (its kept board is drawn); a desktop the
+  /// board does not list yet, and every desktop while the home is not hearing, is not said.
+  @Test("watching a desktop: its board decides, and not listed is not a refusal")
+  func anIncompatibleBoardIsNotWatchable() {
+    let desktops = [
+      desktop(id: "dev-1", name: "studio", board: .incompatible),
+      desktop(id: "dev-2", name: "loft", board: .asleep),
+      desktop(id: "dev-3", name: "attic", board: nil),
+      desktop(id: "dev-4", name: "mini", fieldRefusal: "the board ask is malformed", board: .live),
+      desktop(id: "dev-5", name: "air", board: .live),
+    ]
+    let hearing = settings(meshState: .up, login: login, desktops: desktops, isHearing: true)
+    let watchable = hearing.desktops.map { $0.watchable }
+    #expect(watchable == [false, true, nil, false, true])
+    let deaf = settings(meshState: .up, login: login, desktops: desktops, isHearing: false)
+    let unsaid = deaf.desktops.map { $0.watchable }
+    #expect(unsaid == [nil, nil, nil, nil, nil])
   }
 
   @Test("a desktop's reach is the corner's word, and its own reason when it gave one")
