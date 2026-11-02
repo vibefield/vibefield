@@ -27,18 +27,21 @@ public struct RemoteMeshCopy: Sendable {
     case ignored
   }
 
-  /// One frame's publication: the replica's, then the re-join's when the home's joins moved.
+  /// One frame's publication: the replica's, then the re-join's when the home's joins moved, and whether the drawn
+  /// rows moved. `moved` is what a caller redraws on.
   public struct Published: Sendable, Equatable {
     /// The replica's frame (`phone-goldens.ts` `changes`); nil: it published nothing.
     public let changes: RemotePublication?
     /// The re-join's frame when the joins moved (a kept failure shown or hidden); nil: none.
     public let rejoined: RemotePublication?
-    /// A desktop's standing moved: `drawn`'s `stale` may have, with no row change.
+    /// A desktop's standing was said again (a state frame, an open), whether or not a drawn `stale` changed.
     public let standingMoved: Bool
-    /// PG-3d (red, the review): whether a drawn row moved — not read yet, so always false.
-    public var rowsMoved: Bool { false }
+    /// The window's rows differ from the last frame's: a row's board half (its key, its pane join, a durable Stop) can
+    /// move with no replica change, and a standing can grey a row with none (the review's [2]).
+    public let rowsMoved: Bool
 
-    public var moved: Bool { changes != nil || rejoined != nil || standingMoved }
+    /// Something a caller draws moved: a publication, a re-join, a standing said, or a drawn row.
+    public var moved: Bool { changes != nil || rejoined != nil || standingMoved || rowsMoved }
   }
 
   /// The pipeline's stages, internal so a `@testable` suite can read the screen's hold and the replica's gaps.
@@ -57,6 +60,8 @@ public struct RemoteMeshCopy: Sendable {
   /// `frame` call began; nil for a frame that handed nothing (a state, a change of nothing). The golden's `fold`.
   public private(set) var handed: RemoteModelUpdate?
 
+  /// `gapBuffer` bounds what the replica holds during a gap; zero or more, as the window's replica requires (a negative
+  /// bound traps, where `createMonitorReplica` throws a RangeError).
   public init(gapBuffer: Int = RemoteModelReplica.defaultGapBuffer) {
     replica = RemoteModelReplica(gapBuffer: gapBuffer)
   }
@@ -132,12 +137,14 @@ public struct RemoteMeshCopy: Sendable {
     let rejoined = rejoin() ? replica.flush() : nil
     let fold = self.fold
     let standing = Dictionary(fold.devices.map { ($0.device, $0.state) }) { first, _ in first }
+    let before = windowRows
     windowRows = RemoteWindowRows.rows(
       model: replica.model, held: { fold.held($0) }, standing: standing,
       order: RemoteWindowRows.order(held: fold.heldRows, here: fold.here),
       sessionByRow: replica.visibility.sessionByRow, previous: &previous)
     defer { standingMoved = false }
-    return Published(changes: changes, rejoined: rejoined, standingMoved: standingMoved)
+    return Published(
+      changes: changes, rejoined: rejoined, standingMoved: standingMoved, rowsMoved: windowRows != before)
   }
 
   /// The window's visibility, handed anew when the home's joins moved. True when they did.

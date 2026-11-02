@@ -14,12 +14,17 @@ import Foundation
 /// One row of the model as the phone's replica holds it: the backend's `MonitorAgentRow`, as the remote cut carried
 /// it, with the reader's one fact joined — whether the row lives on the home (`modelRowFrom`, `model-board.ts`).
 ///
-/// Equality is the synthesized `==`, where the window asks `sameJson`. Three divergences, each of which costs at
-/// most one `updated` more or less on a wire that carries such a row, and none of which changes what is drawn
-/// (VF-PM, Q-D3 (a)):
+/// Equality is the synthesized `==`, where the window asks `sameJson`. Four divergences (VF-PM, Q-D3 (a); the fourth
+/// the review's [0]):
 /// - `unknownFields` keeps a key's NAME, not its value: a change in an unknown value is not seen here;
 /// - `writable` is compared as it came (`writable?`), where the window fills it from `attachable` before comparing;
-/// - an unrecognized `device.os` is kept (`.unrecognized`), where the window drops it before comparing.
+/// - an unrecognized `device.os` is kept (`.unrecognized`), where the window drops it before comparing;
+/// - Swift's `String ==` and its hashing use canonical equivalence, where JavaScript's `===` and `Map` compare UTF-16
+///   code units: text that differs only in its normalization (NFC against NFD) is one value here. In a row's text
+///   that costs at most one missing `updated`, with the same glyphs drawn; in an id it would fold two rows into one,
+///   which is latent, since every id is a generated ASCII run or session id.
+/// The first three cost at most one `updated` more or less on a wire that carries such a row; none changes the glyphs
+/// drawn.
 public struct RemoteModelRow: Sendable, Equatable, Identifiable {
   public let monitor: MonitorAgentRow
   /// The row lives on the home: its OWNER's device is the answering desktop (`device.self`, `model-board.ts:121`).
@@ -43,7 +48,8 @@ public struct RemoteModelRow: Sendable, Equatable, Identifiable {
 
 /// The contract's order, every snapshot's (`compareMonitorRows`, puppeteer-view-sdk `model.js`): agents before
 /// terminals, then by birth, then by id. The id tie-break compares UTF-16 code units, as JavaScript's `<` does —
-/// Swift's `String <` compares by Unicode scalars, which differs above the Basic Multilingual Plane.
+/// Swift's `String <` orders by canonical equivalence, which differs above the Basic Multilingual Plane (a surrogate
+/// pair against a high BMP unit) and inside it for text not in NFC, so the code units are compared directly.
 public func compareMonitorRows(_ left: RemoteModelRow, _ right: RemoteModelRow) -> Bool {
   let a = left.monitor
   let b = right.monitor
@@ -158,8 +164,11 @@ public struct RemoteModelReplica: Sendable {
   private var held: [RemoteModelChange] = []
   private var overflowed = false
 
+  /// `gapBuffer`: how many changes a gap holds for its snapshot, zero or more — a negative bound traps, as
+  /// `createMonitorReplica` throws a RangeError for one (the review's [1]).
   public init(gapBuffer: Int = Self.defaultGapBuffer) {
-    self.gapBuffer = max(0, gapBuffer)
+    precondition(gapBuffer >= 0, "gapBuffer must be zero or more")
+    self.gapBuffer = gapBuffer
   }
 
   /// A snapshot replaces the rows and heals a gap, replaying what the gap held that it does not; a change on the

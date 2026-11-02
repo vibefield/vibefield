@@ -17,8 +17,9 @@ import Foundation
 // `createRowOrder`'s): a value equality does their work.
 
 extension AgentRemoteRow {
-  /// A bare terminal's row that names its pane: the join every reader of one reads (`isTerminalBoardRow`). A peer's
-  /// terminal whose owner's doors are down names none, and ranks with the agents.
+  /// A bare terminal's row that names its pane: the join every reader of one reads (`isTerminalBoardRow`). A terminal
+  /// whose owner's doors are down names none: on the HOME it ranks with the agents (`RemoteWindowRows.order`); a
+  /// peer's row keeps its desktop's place whatever it names.
   public var isBareTerminal: Bool { isTerminal && terminal != nil }
 }
 
