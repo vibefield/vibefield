@@ -1,10 +1,12 @@
 import Foundation
 
-/// PG-3d — the phone's copy of its HOME's remote mesh board (PG-L1), the TWIN of `MeshBoardCopy` for the remote path:
+/// PG-3d — the phone's copy of its HOME's remote mesh board (PG-L1), the TWIN of the field cut's `MeshBoardCopy` (retired
+/// at PG-3e) for the remote path:
 /// the window's own pipeline (`createGodviewMonitorFeed`, `field-app/src/godview/monitor/model-replica.ts`) —
 /// `RemoteBoardScreen` → `RemoteModelBoard` → `RemoteModelReplica` → the window's rows — so `phone-fold.golden.json`
 /// pins it step by step without a socket (`PhoneFoldParityTests`). A value: it holds no class, no closure and no
-/// static state, so a fresh copy drops everything (PG-L5's reset). No caller until PG-3e.
+/// static state, so a fresh copy drops everything (PG-L5's reset). FieldLink's since PG-3e (corrected 2026-11-02: "no
+/// caller until PG-3e").
 ///
 /// What the caller does:
 /// - `open` on the open and on EVERY whole-mesh resync (PG-1c), `frame` on every later frame, `publish` once per frame

@@ -29105,3 +29105,281 @@ field's own mark as an image, for the loads the field doesn't draw.
   checkout.
 
 **Owed.** Nothing of these PRs'.
+
+## Item 157 — the kit's flaky rows: a re-tap before the client READ the frames acknowledgement, a stall racing its own witness, and a test door sharing another process's port
+
+(2026-11-02; two commits on lane `fix/item157` over main `4aa731cab`, the IOS session's: `6adcb59e5` and
+`c91484e93`; M105 is the merge `c737af492` of `c91484e93` and main `78edface0` (a9's mint, tree `a086493aa`), main
+fast-forwarded to it, run 105, landed 2026-11-02T12:37:47Z.) VF-PM's assignment at 10:04Z: the kit row
+`theCellASessionOpensOrComesBackOnIsSaidFocused` was red in 2 of 10 kit runs on 10-29, and the fix is test-side.
+
+**The three reds**, each read from its own log, by VF-PM's classes:
+- (i) The row (`LanesOverTheDoorTests.swift:262`): an ordering race, not load.
+  - `attachToLive` returned once the door had SENT the frames leg's acknowledgement, never once the client had READ
+    it.
+  - The row parks and re-taps at once. The re-tap's fast path ("back on its lane — no mint, no dial") needs
+    `hasLiveActivation`, which is false until that acknowledgement is read.
+  - When the attach task ran first, the attachment took the full road: a mint and a fresh attach, which this door
+    never acknowledges. So the `live` demand never came.
+  - Both reds' logs read `mint asked` before `frames acknowledged`. Their 5.04 s is the wait's 5 s plus 40 ms: the
+    work before the wait was fast.
+- (iii) "run 3: a stall said again names the phase it BEGAN in" (AttachLogTests, red in fd's PG-3e kit runs).
+  - A fixed 1 s `Thread.sleep` raced the witness's own timer with about 0.1 s of slack.
+  - Under load the stall ended on two lines, which never become three.
+  - `aStalledQueueIsSaid` (0.9 s against a 0.3 s threshold) had the same shape.
+- (iii) "C8: an attach to a session that had exited reads ended" (AttachDeadlineTests): environmental.
+  - A codex process held `127.0.0.1:64432`, the port the door was handed (`lsof`, 11:40Z).
+  - It answered every WebSocket upgrade with a non-101: 700 dials a leg in 5 s, every one −1011 naming that port.
+  - The test doors bound the wildcard address with `allowLocalEndpointReuse`, which let them share it.
+
+**The fix**, test-side only; the product is unchanged (7 files +61 −22):
+- `6adcb59e5` (+29 −15): `attachToLive` takes the row's `lanes` and returns once `lanes.client(holding:)` reports
+  the session live on both legs.
+  - All 11 call sites pass it.
+  - `leavingParksAndComingBackIsADemandNotADial` carried the same race, made unlikely by its wait for the park.
+  - The full road is the designed one (a fresh activation naming the one it replaces); a re-tap inside the
+    acknowledgement window pays a mint and an attach, and works.
+- `c91484e93` (6 files +32 −7):
+  - Run 3's fake main queue and `aStalledQueueIsSaid`'s are held on a semaphore until the row has read its lines.
+  - The five loopback test doors bind `127.0.0.1` itself, on a port free there, with no reuse: CellDoorHarness,
+    AttachDeadlineTests' silent listener, FakeCellDoor, LoopbackDoorTests and HistoryLoopbackDoorTests. Every one
+    binds any port and none rebinds a fixed one, so reuse bought nothing.
+
+**The witness**, on this Mac by `lanes/item157/kit157.sh` and `kitmint.sh`:
+- At `c91484e93`, 11:50:37Z → 11:56:57Z: the kit green, 14 runs, 1,470 tests, 0 red. The row was green in 0.048 s,
+  its log reading `frames acknowledged` → `parked on its lane` → `back on its lane — no mint, no dial`.
+- The red twin, on the same booted device, with the fix's order undone (the leave-and-come-back before the door's
+  acknowledgement): RED AS ITS OWN TIMEOUT. That is 2 issues, its timeout once, 0 other rows red, its log in the
+  10-29 reds' order. The file was restored and the tree checked clean.
+- At the mint `c737af492` over its tree `a086493aa` (VF-PM's last witness before the land, in a detached worktree
+  with its own derived data), 12:27:42Z → 12:36:17Z: 15 runs, 1,475 tests, 0 red. That is main's count, with PR #10's
+  splash tests in.
+- The simulator (iPhone 17 Pro F93EABF3-4281-4EB5-A5F6-A550FBE95CDC) was shut down after each run.
+- The guard matched only James's QA runner 64402 from his SSD checkout. It was waived by his 07:14Z word and logged
+  before each step.
+- On the twin's red, xcodebuild's own failure-diagnostics collector logged `unable to find utility "simctl"`. Its
+  xcrun resolves through xcode-select, which is James's, and only that xcresult's simulator diagnostics are missing.
+- Run 105 on the mini (a9's mint, verify exit 0, 12:09:27Z → 12:15:30Z): 12,103 passed, 0 failed, 18 skipped
+  (main's count: the change is the kit's alone); cargo 33 ok; the iOS fixtures 202.
+- The land (the fixer's, 12:37:47Z): main fast-forwarded to the merge, 7 files +61 −22 against `78edface0`.
+
+**Owed.**
+- Item 161, found here and filed: a dropped leg re-mints with no backoff after a failed handshake. Against a non-101
+  listener it runs about 140 cycles a second, each mint re-arms the step deadline so the stall is never said, and
+  the card reads "connecting" forever. It is the IOS session's, after WI-1.
+
+## PG-3e — the switch: the phone asks its home for `{remote, mesh}`, draws the home's window body for body (held to `phone-body.golden.json`), stands an old home on its own ladder, says a desktop it cannot read, and retires the field cut's read path; with PG-3f, the phone a screen of the desktop that owns its open card (2026-11-02; `570683be8` → `2afc9c512`, seventeen commits on main `d4eb2e74f`, lane `pg/3e` in `/Volumes/SamsungRed/lanes/pg3`, in the mini's mint M106 `c4d142181` over main `fa14e4073`, run 106)
+
+**What it rests on.**
+- J1 (a), James 2026-11-01 03:56Z: the phone equals the home's window row for row. 3d's copy (`RemoteMeshCopy`,
+  LANDED "PG-3d") is the board; 3e is its first owner, and `phone-body.golden.json` (PG-3a) is the body's yardstick.
+- The design `lanes/ios/pg3e-design.v2.md` (v1 `pg3e-design.raw.md`, 26 corrections folded; v2's check
+  `pg3e-design-check.v2.md`, "needs rework" on three musts, which VF-PM bound at v2's head rather than a third
+  rewrite): M1 (`projected` compiles in Release and keeps TS-7's mock gate), M2 ("hearing, not yet listed" is nil,
+  not a refusal), M3 (a) (the ladder keyed on the old home's PRECONDITION_FAILED alone), S1 and S2.
+- VF-PM's rulings, 2026-11-02 06:02Z, every question at the design's lean (`lanes/ios/pg3e-rulings.md`): Q-E1 (a) the
+  host loop over FieldMesh through a scratch target; Q-E3 the amendment accepted (a per-device ladder no hello
+  resets, cleared by an open that decodes); Q-E4 (a) the field row decoders kept, "no product caller, until PG-L1";
+  Q-E5 3f split off and stacked in this mint; Q-E7 three ids on a bubble; Q-E8 bare terminals drawn, no attach (item
+  154); Q-E9 (b); Q-E10 `latestReply` left (item 155); Q-E11 the template's three lines unfrozen here; Q-E12 the
+  owner's words; Q-E13 the sweep's two rows; Q-E14 the records below; Q-E15 a home's record clears on a re-home.
+- James's picks on the page *PG-3e — what the phone shows* (https://claude.ai/artifact/MPh6af9jhb8kYERorYh1ff, db
+  `decisions`), 2026-11-02 06:27–06:30Z, every pickable mark at its lean (a): J-E1 (i)–(iii) the three new lines in
+  DESIGN.md's voice, (ii) keeping the door's words; J-E2 a root-only run's colour moves to its folder's; J-E3 bare
+  terminals appear; J-E5 a crashed run that keeps its pane says what happened; J-E6 the model line takes the owner's
+  words; J-E7 the 30 s dim goes; J-E9 priced flames and the owner's totals; J-E10 peer agents wear their desktop, and
+  questions lead with their header. J-E4 (his live look) is owed below; J-E8 (the reply chips stay) was said, not
+  picked.
+
+**The design's §0, the brief corrected.** The brief's cites drifted (re-read at `af75a5509` and 3d's tip; v2 §0.1).
+The brief's :207-208 named any not-retryable refusal as the old home; it is PRECONDITION_FAILED alone (Q-E3, M3 (a)),
+and the brief carries a dated erratum at its source. 3d's §7 line ("the bubble's id is the model id") is dated as
+overridden by Q-E7 where it stands: the bubble's `id` is the VISUAL id, `modelId` the row's, `runKey` the board key.
+The fixture count is 201 + 2 − 4 = 199 on 3e's base (two mirrors in, the four field-mesh copies out, §0.6).
+
+**What, PG-3e** (C1–C12; the kit, two scripts and one contract comment, no contract shape, no fieldd, no lock or
+pin):
+- **The mirrors** (`570683be8`): `phone-body.golden.json` into FieldMeshTests' "remote" row, where its reader runs,
+  and `agent-report-shown.routed.json` into FieldProductTests'; `PHONE_GOLDEN_MIRRORS` names the right folder (a
+  dated correction; no golden byte moves). 201 → 203 identical; red with the rows and no copies, red on a flipped
+  byte.
+- **The owner's cost** (`3ead801a8` red, `7308a1d99`): the body reads `AgentCost` (usd, the wire's coverage word,
+  `burnPerHour`) from `bubble-model.js` 0.3.2: the flames divide the burn back to the per-minute ladder at 15
+  significant digits; `formatRatePerHour(perHour:)` (renamed so a per-minute caller fails to compile; J3 (a)); a
+  peer's agent wears its host after its model line; a question says its header first; the dress keeps a row's ids.
+  The phone's usage ledger retires whole (`UsageLedger.swift`, `costHistory`, the mock's 30 s buckets); the lab's
+  four rated stages get a priced total. Departure, said: the context percent floors only within ±1e9, past which the
+  phone reads `--` where the window prints `1e+21%` (`Int(_:)` trapped).
+- **The body, held to the golden** (`7476fd15d` red, `5acbd5d28`): `MonitorWords` (the sdk's `words.js` and its state
+  words; PG-4s reuses them, Q-E11) and `RemoteFieldBubble` (one drawn row → one swarm body: the three ids, the
+  owner's words, the wait as a blocker, permissions, the join from the board's `terminal`, stale as the row's, grey
+  while no live home answers; a bare terminal a hollow with no facet). `PhoneBodyParityTests` B0 drives every step of
+  `phone-body.golden.json` (open, frames 0…7, the resync, frame 8) and compares every body field by field.
+- **The switch** (`45f3fa8fb` red, `a2d0fcae5`): FieldLink asks `phoneRemote`, holds the home's board in 3d's copy
+  (open, frame, resync), publishes once per frame and draws `rows`/`bubbles`, assigned only when they differ. A gap
+  asks once and the rows stand; an open that does not read ends the subscription, the first included
+  (`refusedWhileArming`). `agents` goes; `FieldDesktop.board` is the desktop's standing. HomeScreen's `projected` is
+  the link's bubbles, or under `#if DEBUG` the mock's (M1). The phone's own unread, 30 s rule and deviceLive grey
+  retire (the row's marks ride). The demo door serves PG-3a's witness from `Sources/FieldMesh/Fixtures` (a required
+  mirror). About 70 old-vocabulary assertions rewritten against `rows`/`bubbles`.
+- **The old home's ladder** (`1dba700ae` red, `4c9ab64a9`): a pre-PG-2 desktop's `malformedBoardAsk`
+  (PRECONDITION_FAILED) is asked at 0, 30, 90, 210 s, then every 300, per device; no hello resets it; a newer desktop
+  is home first, the old one's corner reading "connected · the field was refused: …"; an open that decodes clears it.
+  Every other refusal is asked on the sweep as before (M3 (a)). S1: the words and the ladder stay in step across a
+  sleep and an upgrade behind another home.
+- **Settings** (`28d18c949` red, `72debbe43`): "Watch its agents" is unavailable with J-E1 (iii)'s words for an
+  incompatible board or a refused field, nil while not yet listed (M2: the mock and demo accounts stay available).
+  AgentTerminalFace's header gains its dated correction.
+- **The field cut's read path retired** (`7c858c1d8`): `MeshBoardCopy`, `AgentFieldProjection`, the field mesh
+  decoders, `phoneMesh`/`phoneField`, each with a dated "RETIRED 2026-11-02 (PG-3e)" line; the four
+  `agent-mesh-{open,frames}` copies leave the bundles (203 → 199). Departures, said: five transport suites read
+  `phoneField` (§0.6 counted none) and keep the wire on a test-local `fieldAsk`; `AgentJoinFoldTests` read the field
+  cut's join fold and retires, its facts pinned by RemoteFieldBubbleTests M4–M6.
+- **The contract's note** (`2afc9c512`, comment only): `methods.ts`'s MF-1 note, which said the phone asks
+  `{projection: "field"}` and 3e falsifies, gains its dated correction at its source (the errata rule).
+- **The review** (`52357b77a` red, `7ce2bb637`; wf_aa3cd0b9-c16, `lanes/ios/pg3e-review.json`, folded on fd's rulings
+  11:55Z), each fix 3e's or 3f's:
+  - the money rounds as the window's (J1 (a)): `formatUsd` as `Intl.NumberFormat` (the shortest decimal through
+    `Decimal`, half away from zero), `formatRatePerHour`'s tenths as `toFixed(1)`; every R0 value measured in node;
+  - a bare terminal, home or peer, wears the terminal prompt as its glyph (J-E3), not nothing;
+  - `watchable` reads the refusal before the hearing, so a sole old home says "can't read" as its corner says
+    "refused";
+  - a home's listing clears a desktop's words with or without a ladder record; a later refusal of another kind clears
+    the record (the desktop speaks the new protocol);
+  - 3f: the new-epoch resend only for the open card's own device and never twice; the report chain's generation drops
+    a stale queued send at pause, a lost home and `stop()`; `reportAnswers` keeps the last 32;
+  - dated corrections at their sources (`deviceLive`, `statusSince`, `lastEvidenceAt`, FieldBubble's header and
+    "exactly one facet", the README's ledgers and feed), the lab's stale caption, B7's comment.
+
+### PG-3f — the phone is a screen: the open card's model id, routed by its desktop through the home
+
+- **The sender** (`4e2d11d05` red, `3e1e8ee09`), PG-3b's rules (J2 (a), J3, J4 ahead of PU-I): `show(visualId:)`
+  keeps the card's visual id; every refold resolves the row under it among the drawn rows and sends on a change — the
+  old device's empty first when the device changes or the row goes, then the new row's model id. After every open the
+  effective row once (S2: an open sends once). No timer, no resend on a frame. The reports run on one chain, each
+  dropped if the home changed. Refusals read from `details`: `carried-cap` and `locality: "local"` recorded per
+  device with their board epoch, sent nothing until a new epoch, home, hello or `stop()`; everything else transient.
+  A recorded device's open card is held out of unread. HomeScreen reports where the card opens and closes and at both
+  link installs. The demo door answers `{reported: true}`.
+- Rows: E1 (the params equal `agent-report-shown.routed.json`), S1–S17 over the witness, D2 through the demo door.
+- Departure, said: the change rule's gate is `boardOpen` (an open that read), not N14's `homeSubscription != nil`,
+  because the first open lands inside `subscribe`, before the link holds the handle.
+
+**Validation.**
+- Red first, every pair: the host loop (a macOS scratch package over FieldProduct, FieldAgents and a scratch
+  FieldMesh target, Q-E1 (a); not the gate) and, from C6, the kit's red runner at each red commit's final SHA
+  ("RED-FIRST HOLDS"), the build green first; every commit re-proven at its final SHA
+  (`lanes/pg3/light/pg3e-commit-proof.log`, rows C1–C14, the script asserting each SHA is an ancestor of the tip).
+  Mutation probes, each red on the rows it targets and restored byte for byte (`pg3e-host-mutations.log`).
+- The whole kit's six reds at the 07:42Z tip were all test-side (`lanes/pg3/light/pg3e-triage.md`): two stale pins, a
+  pause-race premise, a method that does not exist, a load-bound wait (O3, now `settle` on the moving clock) and a
+  read before the door was dialled. No product code changed for any.
+- The merged tree `3f51784e8` (the C14 tip over main `4aa731cab`): the full kit, 1,465 tests, 0 red; the kit's FIRST
+  Release build, SUCCEEDED 11:29:43 → 11:32:24Z (M1's gate).
+- The review's slot on this Mac (VF-PM's GO 11:59Z; 12:06 → 12:26:54Z, each step under its own HOLD):
+  - the kit red runner at `52357b77a`, "RED-FIRST HOLDS", the five named suites red on the new rows alone;
+  - three kit mutation probes at `7ce2bb637`, on archived trees, each red on its own row: L8 (`stop()` without the
+    copy reset), S11 (the recorded-device guard on the empty) and O2 (a hello that clears the ladder);
+  - the merged tree `185b77706` (`2afc9c512` + main `78edface0`): contracts' fixtures 563/563; field-app's
+    phone-parity, text-ramp, ui-system-boundaries and design-system 77/77; the walls clean; the iOS fixtures 200
+    identical (main's 202 − 5 + 3: the field cut's five mesh copies out, the body golden, the routed report and the
+    demo door's witness in), pins 67; gen:check exit 0 at the tip `2afc9c512` (the merged worktree links no
+    plugin-cli, so its own gen freshness is the mint's verify);
+  - the full kit on `185b77706`: 15 runs, 1,477 tests, 0 red; the second Release build, SUCCEEDED 12:23:40 →
+    12:26:54Z; iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down after.
+- **Run 106** (`d47a0a574`, the MERGE shape: `2afc9c512` first, main `c737af492` second, minted by a9 on VF-PM's GO):
+  - vitest 12,103 passed, 0 failed, 18 skipped, ±0 on run 105 (3e changes no `.test.ts`; the per-file diff is empty);
+    cargo 33 ok; typecheck "28 projects" ×4; MaxListeners 0; the tree clean after the run.
+  - The iOS fixtures 200 (main's 202 − 5 + 3), pins 67. The kit is this Mac's gate: the slot above, and the kit over
+    `d47a0a574` itself (12:47:51 → 12:52:15Z, a detached worktree with its own derived data): 15 runs, 1,477 tests, 0
+    red; iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down after. M2's apps/ios is byte-identical.
+- **The re-cut:** item 157's records (`fa14e4073`) landed after the mint, so a9 re-cut 3e over them as `c4d142181`;
+  `git diff d47a0a574 c4d142181` is docs/LANDED.md +62 and docs/ROADMAP.md +3 (2 files, +65 −0), its stable patch-id
+  `7b7af72ae7106464` equal to `fa14e4073`'s own (a9, VF-PM and fd each read it). It lands on run 106, with no run of
+  its own (VF-PM 12:44Z).
+- **Landed:** main moved to `c4d142181` on VF-PM's GO (2026-11-02 12:53:30Z).
+
+**Not built (said).**
+- The bare terminal's attach (Q-E8; item 154, "no terminal to offer" and the bare-body frame) · `latestReply`, no
+  caller (Q-E10; item 155) · `RemoteSessionField`'s dead live path · phone Chat's `spark`/`origin` (Q-P5) · a desktop
+  window's peer-row reports (Q-P6) · the swarm catch-up beyond Q-P3's pieces · `field`'s server-side retirement
+  (PG-L1, one release of skew after the kit ships).
+- Kit flakes of the over-the-door helper's 5 s waits, seen in the whole kit, are not 3e's: item 157 (the IOS
+  session's; fixed test-side at `6adcb59e5`).
+
+**Owed.**
+- J-E4: James's live look, the phone against its home's window on one live board, with a 1 s settle (Q-P4).
+- At the PM's next draft slot (Q-E14): `thinking-ios-swarm` §1's 0.3.2 pins (Q-P3) and the brief's other draft rows
+  (:323-327); `thinking-phone-godview` §8's PG-3 "if"; design-mv §6; thinking-desktop-sync-plane :198-203; DS-L7.
+- PG-4s next (fd's), then PG-5…8 on the template as unfrozen here (Q-E11).
+
+## Items 154, 155 and 162 — a bare terminal's card attaches through its pane, a live run is never "ended", and the phone's second reply door retires (2026-11-02; `6016207a1` → `81bb2e8a6`, five commits on main `9e971cbf2`, lane `pg/items-154-155` in `/Volumes/SamsungRed/lanes/pgitems`, in the mini's mint M107 `81bb2e8a6` over main `9e971cbf2`, run 107)
+
+**What it rests on.** Items 154 and 155 were filed at PG-3e (Q-E8, Q-E10) and released to fd by VF-PM at 12:55Z, one
+lane off main `9e971cbf2`. Item 162 was found at 154's read (13:09Z) and widened at 13:18Z. fd ruled 154's shape (a)
+at 13:10Z, and VF-PM accepted it: no new words, so no stop for James.
+
+**What** (14 files, +308 −101; the kit, and one fieldd comment):
+- **Item 155** (`6016207a1`): `FieldLink.latestReply`, the door that asked a run's owner `agent.list` for one reply,
+  retires with `FieldLinkReplyTests`; each leaves a dated "RETIRED 2026-11-02 (item 155)" line. Since PG-3e the body
+  and the card read `monitorRow.reply.text` from the remote row. Readers 2 → 0 (both tests); `ownerDoor`,
+  `AgentListResult` and its fixture keep their other readers.
+- **Item 154** (`4eec543d5` red, `95b259764`): a bare terminal's bubble carries `terminalJoin`, read from the row's
+  `board.terminal`, and one accessor, `join = agent?.join ?? terminalJoin`, serves every join reader: the card's
+  terminal face, its OS badge (item 41), F1's ticket keyring and the DEBUG auto-open. FieldAssembly's dress keeps it
+  (F3). A bare terminal offers no Resume (`offersResume` needs an agent). The card's face and Resume moved,
+  unchanged, into `FieldHomeModel` to be testable.
+- **Item 162** (in 154's pair): a live agent with no terminal read `.exited` — "this run has ended — its terminal is
+  gone" — and offered RESUME on a live run. Two cases reach it:
+  - the owner WITHHOLDS a join while its doors are down, deleting `terminal` from the row (`attachableRows`,
+    `packages/fieldd/src/agent-field.ts:945-958`);
+  - a paneless live run carries `terminal: {hosted: "none"}`, `attachable: false` on a desktop whose doors are up,
+    and the contract's "none" is "no terminal is known", not ended
+    (`packages/contracts/src/agent-session.ts:116-119`). The witness has six such runs (run-h-partial, -nocwd, -root,
+    -quiet; run-p-done; run-a-idle).
+  - RemoteFieldBubble conflated the two (`board.terminal?.hosted ?? "none"`); the field cut's join did the same
+    (`AgentFieldProjection.swift:190-197` at `d4eb2e74f`), so it predates PG-3e.
+  - The fix, no new words or state: `AgentJoin.paneWithheld` is set when `terminal` is absent, and a join with no
+    terminal reads exited → `.exited`, withheld → `.notPublished(deviceName:)`, otherwise → `.noJoin` (the existing
+    "no terminal has been offered for this session"), with no Resume. Each branch cites its wire fact.
+  - fd's first clause ("no terminal on a live run means its doors are down") was falsified by the witness before any
+    code; the builder stopped on it (13:13Z).
+  - AgentTerminalFaceTests' three ended-run rows were re-pinned to `exited: true` in the red commit (their helper
+    defaulted to `false` while meaning an ended run); they stayed green there.
+- **The fieldd note** (`7b134c187`, comment only): `agent-field.ts:85-86` said FieldLink asks
+  `{projection: "field"}`; it gains its dated correction (false since PG-3e's switch).
+- **`-vf-auto-open-card=<visual id>`** (`81bb2e8a6`, DEBUG only, inside HomeScreen's existing `#if DEBUG`
+  :1003-1457): opens that body's card; an id the field never draws opens nothing and logs it. The bare flag keeps its
+  pick.
+
+**Validation.**
+- The host loop: red on exactly the seven host rows (M9–M14, F3), green 349 tests in 66 suites, at `8f0ed9179` and
+  `8607e7609`, the pair before the kit's fold. Each differs from its folded twin (`4eec543d5`, `95b259764`) by one
+  line in `CardTerminalFaceTests.swift`, a file the host package does not compile, so every host-compiled file is
+  byte-identical and the host result carries over; the kit ran at the folded SHAs themselves.
+- The kit on this Mac (VF-PM's slot, 13:22 → 13:35:48Z, each step under the HOLD;
+  `lanes/pgitems/light/pgitems-proof.log`):
+  - the first build at the red commit failed on `AgentProvider.claude` (a kit-only test file); the fix was folded
+    into the red commit and the branch replayed, said in its body;
+  - the red runner at `4eec543d5`: "RED-FIRST HOLDS", exactly the 12 named rows (C1–C5, M9–M14, F3), C6 green;
+  - the merged tree is the tip itself (already on `9e971cbf2`): fixtures 200 (unmoved), contracts 563/563, the walls
+    clean, biome on the fieldd file;
+  - the full kit: 15 runs, 1,488 tests, 0 red (3e's 1,477 + 13 new − 2 retired);
+  - the look over `-vf-demo-field-slice`, opened by the DEBUG argument, no input injected
+    (`lanes/pgitems/light/look-81bb2e8a6`): run-h-partial's card reads "not connected · no terminal has been offered
+    for this session", with no "ended" and no Resume; pty-h2's card opens its terminal face, which on the demo door
+    says "the mesh is not up on this device — connect it first". iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC`
+    shut down after.
+- No Release build (VF-PM's option (b)): the only DEBUG-gated change sits wholly inside an existing `#if DEBUG`
+  region and adds no conditional and no file (`lanes/pgitems/light/pgitems-release-b.txt`).
+- **Run 107** (`81bb2e8a6`, stacked on main `9e971cbf2`, a fast-forward, minted by a9 on VF-PM's GO):
+  - verify 13:42:14 → 13:50:17Z, exit 0: vitest 12,103 passed, 0 failed, 18 skipped, ±0 on run 106 (the lane changes
+    no `.test.ts`); cargo 534 passed, 0 failed (33 results); typecheck and test, 28 projects; no MaxListeners
+    warning; the tree clean after.
+  - The iOS fixtures 200 (unmoved), pins 67. The kit is this Mac's gate, above: 15 runs, 1,488 tests, 0 red.
+- **Landed:** main moved to `81bb2e8a6` on VF-PM's GO (2026-11-02 13:52:11Z).
+
+**Not built (said).** The attach itself over the demo door, which has no mesh. The look's console logged one "CoreSVG
+has logged an error" on run-h-partial's two launches; no SVG changed here, so it is unclaimed, and no item is filed.
+
+**Owed.** Nothing of these items'.

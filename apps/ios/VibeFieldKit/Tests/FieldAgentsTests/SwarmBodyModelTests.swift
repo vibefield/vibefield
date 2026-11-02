@@ -11,9 +11,9 @@ import Testing
 private let now = Date(timeIntervalSince1970: 1_788_688_800)  // 2026-09-06T10:00:00Z
 private let at = now.addingTimeInterval(-5)
 
-/// A ledger history with the given corrected total, its newest step the tallest.
-private func usageHistory(_ total: Double) -> UsageHistory {
-  UsageHistory(total: total, steps: (0..<usageStepCount).map { Double($0 + 1) * 100 })
+/// The owner's priced cost with the given total.
+private func priced(_ total: Double, perHour: Double? = nil) -> AgentCost {
+  AgentCost(usd: total, coverage: "complete", burnPerHour: perHour)
 }
 
 private func terminal(
@@ -62,12 +62,45 @@ private func model(
     #expect(formatElapsed(since: nil, now: now) == nil)
   }
 
+  /// J3 (a) — the rate takes USD an hour, as the sdk's `formatRatePerHour` does; the words are the same.
   @Test func formatsTheBurnRateByTheHour() {
-    #expect(formatRatePerHour(nil) == "—/hr")
-    #expect(formatRatePerHour(0.52) == "$31/hr")
-    #expect(formatRatePerHour(0.08) == "$4.8/hr")
-    #expect(formatRatePerHour(0.01) == "$0.60/hr")
-    #expect(formatRatePerHour(1.6) == "$96/hr")
+    #expect(formatRatePerHour(perHour: nil) == "—/hr")
+    #expect(formatRatePerHour(perHour: 31.2) == "$31/hr")
+    #expect(formatRatePerHour(perHour: 4.8) == "$4.8/hr")
+    #expect(formatRatePerHour(perHour: 0.6) == "$0.60/hr")
+    #expect(formatRatePerHour(perHour: 96) == "$96/hr")
+  }
+
+  /// R0 (PG-3e, the review's [0]; J1 (a), body for body) — the money rounds as the window's does. `formatUsd` is the
+  /// sdk's `Intl.NumberFormat('en-US')`: the shortest decimal, half away from zero. The rate's tenths are its
+  /// `toFixed(1)`: the exact binary value, an exact tie taking the larger. Every value was measured with node against
+  /// puppeteer-view-sdk 0.3.2's `toolkit/format.js` (2026-11-02); `String(format:)` rounds the binary value half to
+  /// even and missed each of the ties.
+  @Test func moneyRoundsAsTheWindowDoes() {
+    #expect(AgentCost(usd: 1.005, coverage: "complete").estimate == "~$1.01")
+    #expect(AgentCost(usd: 0.125, coverage: "complete").estimate == "~$0.13")
+    #expect(AgentCost(usd: 0.0045, coverage: "complete").estimate == "~$0.005")
+    #expect(formatUsd(2.675) == "$2.68")
+    #expect(formatUsd(1.115) == "$1.12")
+    #expect(formatUsd(8.345) == "$8.35")
+    #expect(formatUsd(0.995) == "$1.00")
+    #expect(formatUsd(9.995) == "$10.00")
+    #expect(formatUsd(0.0095) == "$0.010")
+    #expect(formatUsd(0.0125) == "$0.01")
+    #expect(formatUsd(1234.565) == "$1,234.57")
+    #expect(formatUsd(123_456_789.125) == "$123,456,789.13")
+    #expect(formatUsd(-1.005) == "$-1.01")
+    #expect(formatUsd(-0.001) == "$-0.00")
+    #expect(formatRatePerHour(perHour: 2.25) == "$2.3/hr")
+    #expect(formatRatePerHour(perHour: 1.25) == "$1.3/hr")
+    #expect(formatRatePerHour(perHour: 1.75) == "$1.8/hr")
+    #expect(formatRatePerHour(perHour: 1.005) == "$1.0/hr")
+    #expect(formatRatePerHour(perHour: 1.45) == "$1.4/hr")
+    #expect(formatRatePerHour(perHour: 1.05) == "$1.1/hr")
+    #expect(formatRatePerHour(perHour: 9.95) == "$9.9/hr")
+    #expect(formatRatePerHour(perHour: 9.995) == "$10.0/hr")
+    #expect(formatRatePerHour(perHour: 10.5) == "$11/hr")
+    #expect(formatRatePerHour(perHour: 0.125) == "$0.13/hr")
   }
 
   @Test func lightsTheLadderAtEachStep() {
@@ -164,8 +197,7 @@ private func model(
     let facet = AgentFacet(
       provider: .claude, modelName: "Fable 5.1", branch: "swarm", contextUsedPercent: 62.7,
       effort: AgentEffort(value: "high", intent: .observed),
-      monitorUsage: AgentUsage(cumulativeTokens: 999, costCoverage: .complete, costRatePerMin: 0.52),
-      usage: usageHistory(1.24))
+      cost: priced(1.24, perHour: 31.2))
     let body = model(agent(status: .working, facet: facet))
     #expect(body.state == .working)
     #expect(body.radius == 60)
@@ -177,8 +209,8 @@ private func model(
     #expect(body.ring == SwarmRing(percent: 62, hot: false))
     #expect(body.figures?.top == SwarmFigure(text: "62%", hot: false, none: false))
     #expect(body.figures?.bottom == SwarmFigure(text: "~$1.24", hot: false, none: false))
-    // The bottom figure is the ledger's corrected total; the burn is Core's own
-    // live rate on the fixed ladder — $0.52/min is the third step.
+    // The bottom figure is the owner's corrected total; the burn is the owner's
+    // own live rate on the fixed ladder — $31.2/hr is $0.52/min, the third step.
     #expect(body.burn == SwarmBurn(lit: 3, priced: true))
     #expect(body.light == .ink)
     #expect(body.title.hasSuffix("· $31/hr"))
@@ -188,36 +220,34 @@ private func model(
   }
 
   @Test func lightsTheBurnLadderByTheRateAndLeavesItUnreadWhereNothingPricesTheWork() {
-    func working(_ coverage: AgentCostCoverage?, _ rate: Double?) -> SwarmBodyModel {
+    func working(_ coverage: String?, _ perHour: Double?) -> SwarmBodyModel {
       model(
         agent(
           status: .working,
           facet: AgentFacet(
             provider: .claude, modelName: "Fable 5.1",
-            monitorUsage: AgentUsage(costCoverage: coverage, costRatePerMin: rate))))
+            cost: coverage.map { AgentCost(usd: 1, coverage: $0, burnPerHour: perHour) })))
     }
-    // The steps: under 5c calm, then 5c, 15c, 40c and a dollar a minute.
-    #expect(working(.complete, 0.04).burn == SwarmBurn(lit: 0, priced: true))
-    #expect(working(.complete, 0.05).burn == SwarmBurn(lit: 1, priced: true))
-    #expect(working(.complete, 0.39).burn == SwarmBurn(lit: 2, priced: true))
-    #expect(working(.complete, 0.4).burn == SwarmBurn(lit: 3, priced: true))
-    #expect(working(.complete, 12).burn == SwarmBurn(lit: 4, priced: true))
+    // The steps, by the hour: under $3 calm, then $3, $9, $24 and $60 (5c, 15c, 40c and a dollar a minute).
+    #expect(working("complete", 2.4).burn == SwarmBurn(lit: 0, priced: true))
+    #expect(working("complete", 3).burn == SwarmBurn(lit: 1, priced: true))
+    #expect(working("complete", 23.4).burn == SwarmBurn(lit: 2, priced: true))
+    #expect(working("complete", 24).burn == SwarmBurn(lit: 3, priced: true))
+    #expect(working("complete", 720).burn == SwarmBurn(lit: 4, priced: true))
     // A priced session that has not spent lately is calm; one with no pricing
     // lane at all is unread, and never reads as calm.
-    #expect(working(.complete, nil).burn == SwarmBurn(lit: 0, priced: true))
-    let unpriced = working(.unavailable, 9)
+    #expect(working("complete", nil).burn == SwarmBurn(lit: 0, priced: true))
+    let unpriced = working("unavailable", 540)
     #expect(unpriced.burn == SwarmBurn(lit: 0, priced: false))
     #expect(unpriced.title.hasSuffix("· —/hr"))
     // Partial coverage still prices what it saw.
-    #expect(working(.partial, 0.2).burn == SwarmBurn(lit: 2, priced: true))
-    // No usage at all — today's wire — is the missing lane, not a calm session.
+    #expect(working("partial", 12).burn == SwarmBurn(lit: 2, priced: true))
+    // No cost at all is the missing lane, not a calm session.
     #expect(working(nil, nil).burn == SwarmBurn(lit: 0, priced: false))
   }
 
   @Test func marksAPartialTotalWithAPlus() {
-    let facet = AgentFacet(
-      provider: .claude, modelName: "Fable 5.1",
-      usage: UsageHistory(total: 0.2, coverage: .partial, steps: [Double](repeating: 0, count: usageStepCount)))
+    let facet = AgentFacet(provider: .claude, modelName: "Fable 5.1", cost: AgentCost(usd: 0.2, coverage: "partial"))
     #expect(model(agent(status: .working, facet: facet)).figures?.bottom?.text == "~$0.20+")
   }
 
@@ -230,7 +260,7 @@ private func model(
 
   @Test func placesWorkingSessionsByEstimatedUSDLeastZeroAndMostOne() {
     func working(_ id: String, _ total: Double, status: AgentVisualStatus = .working) -> FieldBubble {
-      agent(id: id, status: status, facet: AgentFacet(provider: .claude, usage: usageHistory(total)))
+      agent(id: id, status: status, facet: AgentFacet(provider: .claude, cost: priced(total)))
     }
     let shares = workingShares([
       working("a", 100), working("b", 400), working("c", 1300), working("d", 9000, status: .idle),
@@ -407,5 +437,137 @@ private func model(
     #expect(body.watermark?.sprite == "claude")
     // The model name still comes first: the label is only its stand-in.
     #expect(body.title == "puppeteer · Fable 5.1 · Editing tokens.css")
+  }
+}
+
+/// PG-3e — the body reads its OWNER's cost (`AgentCost`, the remote cut's `cost`): the total and the shares from the
+/// owner's ledger, the flames from the owner's burn per hour (J3 (a)), the host on a peer's agent, the question's header
+/// before its prompt. The rows the body golden cannot reach (`phone-goldens.ts` BODY_NOTE; the body read §5), each
+/// transcribed from `bubble-model.js` 0.3.2.
+@Suite struct OwnersCostBodyTests {
+  private func owned(
+    id: String = "a", status: AgentVisualStatus = .working, cost: AgentCost? = nil, host: String? = nil,
+    blocker: AgentBlocker? = nil
+  ) -> FieldBubble {
+    FieldBubble(
+      id: id, project: "puppeteer", detail: "Editing tokens.css", status: status, identityKey: id, createdAt: now,
+      agent: AgentFacet(provider: .claude, modelName: "Opus 5.5", blocker: blocker, cost: cost),
+      color: SwarmColor(hex: "#6366f1"), host: host)
+  }
+
+  /// B1 — the flames read the owner's burn PER HOUR, divided back to the per-minute ladder and restored to fifteen
+  /// significant digits (`perMinute`, M27): 8.999999999999998 an hour divides raw to 0.14999999999999997, one flame,
+  /// and restores to 0.15, two. At a rung's exact multiple the restore cannot show, so 9.0 alone could not fail.
+  @Test func aWorkingBodyBurnsByTheHour() {
+    func lit(_ perHour: Double) -> Int? {
+      model(owned(cost: AgentCost(usd: 1, coverage: "complete", burnPerHour: perHour))).burn?.lit
+    }
+    #expect(lit(8.999999999999998) == 2)
+    #expect(lit(9.0) == 2)
+    #expect(lit(8.99) == 1)
+    #expect(lit(30) == 3)
+    let body = model(owned(cost: AgentCost(usd: 1, coverage: "complete", burnPerHour: 9)))
+    #expect(body.burn == SwarmBurn(lit: 2, priced: true))
+    #expect(body.title.hasSuffix("· $9.0/hr"))
+    // priced with no burn said: calm, never unpriced
+    #expect(model(owned(cost: AgentCost(usd: 1, coverage: "partial"))).burn == SwarmBurn(lit: 0, priced: true))
+  }
+
+  /// B2 — a coverage word this build does not know still shows its total, unpriced: `~$x` with no plus and `none`
+  /// false, and the ladder drawn unread (`formatEstimate`; `priced` is complete or partial only).
+  @Test func anUnrecognizedCoverageShowsItsTotalUnpriced() {
+    let body = model(owned(cost: AgentCost(usd: 0.62, coverage: "estimated", burnPerHour: 30)))
+    #expect(body.figures?.bottom == SwarmFigure(text: "~$0.62", hot: false, none: false))
+    #expect(body.burn == SwarmBurn(lit: 0, priced: false))
+  }
+
+  /// B3 — `unavailable` is no total, whatever its usd: a missing lane is never zero dollars (RFC 008).
+  @Test func unavailableIsNoTotal() {
+    let priced = model(owned(cost: AgentCost(usd: 0.62, coverage: "complete")))
+    #expect(priced.figures?.bottom == SwarmFigure(text: "~$0.62", hot: false, none: false))
+    let missing = model(owned(cost: AgentCost(usd: 0.62, coverage: "unavailable", burnPerHour: 30)))
+    #expect(missing.figures?.bottom == SwarmFigure(text: "—", hot: false, none: true))
+    #expect(missing.burn == SwarmBurn(lit: 0, priced: false))
+    // no cost at all reads the same
+    #expect(model(owned()).figures?.bottom == SwarmFigure(text: "—", hot: false, none: true))
+  }
+
+  /// B4 — a peer's agent wears its desktop's name under its model line, on all three agent branches (Q16; the
+  /// window's `hostLine`); the home's own agent wears none.
+  @Test func aPeersAgentWearsItsHost() {
+    let waiting = AgentBlocker(kind: .question, question: "Which order?")
+    for (status, blocker) in [(AgentVisualStatus.working, nil), (.idle, nil), (.blocked, waiting)] {
+      let body = model(owned(status: status, host: "Loft", blocker: blocker))
+      let keys = body.copy.map { $0.key }
+      #expect(keys.last == "host", "\(status)")
+      #expect(keys.firstIndex(of: "host") == keys.firstIndex(of: "model").map { $0 + 1 }, "\(status)")
+      let host = body.copy.last
+      #expect(host?.text == "Loft", "\(status)")
+      #expect(host?.style == SwarmCopyStyle.labelStacked, "\(status)")
+      #expect(host?.gapBefore == 3, "\(status)")
+      let home = model(owned(status: status, blocker: blocker)).copy.map { $0.key }
+      #expect(!home.contains("host"), "\(status)")
+    }
+  }
+
+  /// B5 — a question says its header first, then its prompt (`waitBodyLine`).
+  @Test func aQuestionSaysItsHeaderFirst() {
+    let blocker = AgentBlocker(kind: .question, header: "Peer order", question: "Which order?")
+    let body = model(owned(status: .blocked, blocker: blocker))
+    let state = body.copy.first { $0.key == "state" }
+    #expect(state?.text == "Peer order")
+    #expect(state?.lead?.kind == .icon("question"))
+    // a blank header is no header
+    let blank = AgentBlocker(kind: .question, header: "  ", question: "Which order?")
+    #expect(model(owned(status: .blocked, blocker: blank)).copy.first { $0.key == "state" }?.text == "Which order?")
+  }
+
+  /// N13 (the v2 check) — the percent's bound has no red row: past `Int`'s range the floor TRAPPED, and a trap is not
+  /// a red a suite can record. This pins it after the fact: an absurd or non-finite context reads `--` and no ring.
+  @Test func anAbsurdContextReadsDashes() {
+    for absurd in [1e21, -1e21, Double.infinity, Double.nan] {
+      let facet = AgentFacet(provider: .claude, modelName: "Opus 5.5", contextUsedPercent: absurd)
+      let working = model(owned(status: .working).with(facet))
+      #expect(working.figures?.top == SwarmFigure(text: "--", hot: false, none: true), "\(absurd)")
+      #expect(working.ring == nil, "\(absurd)")
+      #expect(working.accessibilityLabel.contains("CTX:--%"), "\(absurd)")
+    }
+    let edge = model(owned(status: .working).with(AgentFacet(provider: .claude, contextUsedPercent: 1e9)))
+    #expect(edge.figures?.top?.text == "1000000000%")
+    #expect(edge.ring == SwarmRing(percent: 100, hot: true))
+  }
+
+  /// B6 — partial coverage adds the plus.
+  @Test func partialAddsThePlus() {
+    let body = model(owned(cost: AgentCost(usd: 0.2, coverage: "partial", burnPerHour: 12)))
+    #expect(body.figures?.bottom == SwarmFigure(text: "~$0.20+", hot: false, none: false))
+    #expect(body.burn == SwarmBurn(lit: 2, priced: true))
+  }
+
+  /// B7 — the working shares rank by the owner's total: an unavailable total counts as 0, so it is the least here, and
+  /// 0.02 and 0.62 share 0.02 / 0.62 and 1; an idle body and a terminal do not count. (Corrected 2026-11-02, PG-3e, the
+  /// review's [20]: it said 0.02 and 0.62 share 0 and 1, which holds only without the unavailable row.)
+  @Test func workingSharesReadTheCost() {
+    let rows = [
+      owned(id: "a", cost: AgentCost(usd: 0.02, coverage: "complete")),
+      owned(id: "b", cost: AgentCost(usd: 0.62, coverage: "partial")),
+      owned(id: "c", cost: AgentCost(usd: 9, coverage: "unavailable")),
+      owned(id: "d", status: .idle, cost: AgentCost(usd: 40, coverage: "complete")),
+    ]
+    let shares = workingShares(rows)
+    #expect(shares["a"] == 0.02 / 0.62)
+    #expect(shares["b"] == 1)
+    #expect(shares["c"] == 0)
+    #expect(shares["d"] == nil)
+  }
+}
+
+private extension FieldBubble {
+  /// The same row with another facet (the rows above build their bubbles by hand).
+  func with(_ facet: AgentFacet) -> FieldBubble {
+    FieldBubble(
+      id: id, project: project, detail: detail, status: status, identityKey: identityKey, createdAt: createdAt,
+      agent: facet, remote: remote, color: color, stale: stale, active: active, mounted: mounted, unread: unread,
+      host: host, modelId: modelId, runKey: runKey)
   }
 }

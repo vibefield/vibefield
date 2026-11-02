@@ -433,25 +433,26 @@ private func clockedLink(
   /// door: the studio is the only desktop, so it is the home, and its mesh
   /// board carries its own rows.
   @Test func theDoorCarriesTheField() async throws {
-    let snapshot = snapshotFrame(revision: 5, rows: [boardRow(id: "run-door")])
+    let snapshot = snapshotFrame(revision: 5, rows: [remoteBoardRow(key: "run-door")])
     let (link, _, _, _) = try await standingLink(script: { method, id, params in
       switch method {
       case "system.hello": return [frame(id: id, ack)]
       case "device.list": return [frame(id: id, deviceListResult([deviceRow(name: "studio")]))]
       case "agent.subscribe":
-        #expect(params["projection"]?.stringValue == "field")
+        // PG-3e — the remote cut, with no interval written: the door floors a phone by its kind
+        #expect(params["projection"]?.stringValue == "remote")
         #expect(params["scope"]?.stringValue == "mesh")
-        #expect(params["minIntervalMs"] == .int(250))
+        #expect(params["minIntervalMs"] == nil)
         return [frame(id: id, .object(["subId": .string("s1"), "snapshot": snapshot]))]
       default: return []
       }
     })
     defer { link.stop() }
 
-    try await waitUntil("a body over the door") { link.agents.count == 1 }
-    #expect(link.agents.first?.id == "run-door")
-    #expect(link.agents.first?.project == "vibe-field")
-    #expect(classifyAgentStatus(link.agents.first?.state) == .working)
+    try await waitUntil("a body over the door") { link.rows.count == 1 }
+    #expect(link.rows.first?.key == "run-door")
+    #expect(link.bubbles.first?.project == "vibe-field")
+    #expect(link.bubbles.first?.status == .working)
     #expect(link.desktops.first?.feed == .door)
     #expect(link.isHearing)
     #expect(
@@ -462,7 +463,7 @@ private func clockedLink(
   /// Deltas move the board, and the row's own revision is what changed.
   @Test func aDeltaOverTheDoorMovesTheField() async throws {
     let snapshot = snapshotFrame(
-      revision: 5, rows: [boardRow(id: "run-1"), boardRow(id: "run-2")])
+      revision: 5, rows: [remoteBoardRow(key: "run-1"), remoteBoardRow(key: "run-2")])
     let (link, _, door, _) = try await standingLink(script: { method, id, _ in
       switch method {
       case "system.hello": return [frame(id: id, ack)]
@@ -473,19 +474,19 @@ private func clockedLink(
     })
     defer { link.stop() }
 
-    try await waitUntil("two bodies") { link.agents.count == 2 }
+    try await waitUntil("two bodies") { link.rows.count == 2 }
     await door.latest?.deliver(
       event(
         method: "agent.subscribe.delta", subId: "s1",
         payload: deltaFrame(
-          since: 5, revision: 6, upserts: [boardRow(id: "run-3")], removed: ["run-1"])))
-    try await waitUntil("the delta") { link.agents.map(\.id) == ["run-2", "run-3"] }
+          since: 5, revision: 6, upserts: [remoteBoardRow(key: "run-3")], removed: ["run-1"])))
+    try await waitUntil("the delta") { link.rows.map { $0.key } == ["run-2", "run-3"] }
   }
 
   /// A lost frame is repaired by RE-SUBSCRIBING for a fresh snapshot — the
   /// tolerant reader's own rule, with no ack protocol and nothing replayed.
   @Test func aRevisionGapReSubscribesInsteadOfGuessing() async throws {
-    let snapshot = snapshotFrame(revision: 5, rows: [boardRow(id: "run-1")])
+    let snapshot = snapshotFrame(revision: 5, rows: [remoteBoardRow(key: "run-1")])
     let (link, _, door, _) = try await standingLink(script: { method, id, _ in
       switch method {
       case "system.hello": return [frame(id: id, ack)]
@@ -496,7 +497,7 @@ private func clockedLink(
     })
     defer { link.stop() }
 
-    try await waitUntil("the first board") { link.agents.count == 1 }
+    try await waitUntil("the first board") { link.rows.count == 1 }
     await door.latest?.deliver(
       event(
         method: "agent.subscribe.delta", subId: "s1",
@@ -506,8 +507,9 @@ private func clockedLink(
     }
     // DS-8: the mesh board carries a chain per desktop, so the gap is caught by
     // the link's board copy; the repair is the client table's re-subscribe,
-    // and the table's own note says so.
-    #expect(link.notes.contains { $0.contains("does not continue") })
+    // and the table's own note says so. (PG-3e: the copy's own words, the
+    // remote board's "a delta since N, held M".)
+    #expect(link.notes.contains { $0.contains("a delta since 99") && $0.contains("re-subscribing") })
     #expect(
       link.client(for: "dev-studio")?.tolerantNotes.contains { $0.contains("re-subscribing") }
         == true)
@@ -516,7 +518,7 @@ private func clockedLink(
   /// Every row on a live board reaches the field, whatever vendor it names.
   @Test func anUnfamiliarProviderStillReachesTheField() async throws {
     let snapshot = snapshotFrame(
-      revision: 1, rows: [boardRow(id: "a"), boardRow(id: "b", kind: "hermes")])
+      revision: 1, rows: [remoteBoardRow(key: "a"), remoteBoardRow(key: "b", provider: "hermes")])
     let (link, _, _, _) = try await standingLink(script: { method, id, _ in
       switch method {
       case "system.hello": return [frame(id: id, ack)]
@@ -527,15 +529,15 @@ private func clockedLink(
     })
     defer { link.stop() }
 
-    try await waitUntil("both bodies") { link.agents.count == 2 }
-    #expect(link.agents.map(\.provider.rawValue) == ["claude", "hermes"])
+    try await waitUntil("both bodies") { link.rows.count == 2 }
+    #expect(link.bubbles.map { $0.agent?.provider.rawValue } == ["claude", "hermes"])
   }
 
   /// THE STORM. A burst of discovery edges around hello opened four
   /// subscriptions on one door; each streamed at 250 ms and fought over one
   /// revision, so every frame disagreed and triggered a resubscribe.
   @Test func aBurstOfPeerEventsOpensOneSubscription() async throws {
-    let snapshot = snapshotFrame(revision: 5, rows: [boardRow(id: "run-1")])
+    let snapshot = snapshotFrame(revision: 5, rows: [remoteBoardRow(key: "run-1")])
     // The door answers a subscribe SLOWLY, which is what leaves the arming
     // window open — a door that replies instantly closes it before a burst can
     // walk through, and the test would pass without the latch it is about.
@@ -556,7 +558,7 @@ private func clockedLink(
     try await waitUntil("ready") { link.desktops.first?.state == .ready }
     for _ in 0..<7 { await mesh.emit(.upsert(studio)) }
 
-    try await waitUntil("a board") { link.agents.count == 1 }
+    try await waitUntil("a board") { link.rows.count == 1 }
     try await Task.sleep(for: .milliseconds(200))
 
     let subscribes = await door.latest?.methods.filter { $0 == "agent.subscribe" }.count
@@ -601,7 +603,7 @@ private func clockedLink(
   /// And it CLEARS when a later subscribe lands: a reason that outlived its
   /// refusal would be a corner saying no over a field that is arriving.
   @Test func theRefusalClearsWhenTheFieldArrives() async throws {
-    let snapshot = snapshotFrame(revision: 1, rows: [boardRow(id: "run-1")])
+    let snapshot = snapshotFrame(revision: 1, rows: [remoteBoardRow(key: "run-1")])
     let refuseFirst = Refusal()
     let (link, _, door, _) = try await standingLink(script: { method, id, _ in
       switch method {
@@ -627,7 +629,7 @@ private func clockedLink(
     link.pause()
     link.resume()
     try await waitUntil("the field, and no reason left") {
-      link.agents.count == 1 && link.desktops.first?.fieldRefusal == nil
+      link.rows.count == 1 && link.desktops.first?.fieldRefusal == nil
     }
   }
 }
@@ -653,7 +655,7 @@ private final class Refusal: @unchecked Sendable {
   /// field STANDS. Emptying it on a two-second app switch would be a worse lie
   /// than a board that is a moment old.
   @Test func pausingDropsTheSubscriptionAndAsksNobody() async throws {
-    let snapshot = snapshotFrame(revision: 1, rows: [boardRow(id: "run-1")])
+    let snapshot = snapshotFrame(revision: 1, rows: [remoteBoardRow(key: "run-1")])
     let (link, _, _, probe) = try await standingLink(script: { method, id, _ in
       switch method {
       case "system.hello": return [frame(id: id, ack)]
@@ -663,7 +665,7 @@ private final class Refusal: @unchecked Sendable {
       }
     })
     defer { link.stop() }
-    try await waitUntil("a body") { link.agents.count == 1 }
+    try await waitUntil("a body") { link.rows.count == 1 }
 
     link.pause()
     #expect(link.isPaused)
@@ -711,54 +713,9 @@ private final class Refusal: @unchecked Sendable {
   }
 }
 
-// MARK: - The card's one question
-
-@MainActor
-@Suite struct FieldLinkReplyTests {
-  /// The field carries no reply text by design, so the card asks for one — for
-  /// ONE run, when it opens, and never for a body nobody is reading.
-  @Test func theCardAsksTheDoorForTheLatestReply() async throws {
-    let sessions = JSONValue.object([
-      "sessions": .array([
-        .object([
-          "runtimeRunId": .string("run-1"), "kind": .string("claude"),
-          "label": .string("Claude"), "device": .string("dev-studio"),
-          "tier": .string("managed"), "status": .string("idle"),
-          "createdAt": .string("2026-09-13T18:03:52.000Z"),
-          "stateChangedAt": .string("2026-09-13T18:03:52.000Z"),
-          "monitor": .object([
-            "lastAssistantMessage": .object([.init("text"): .string("the gate is green")])
-          ]),
-        ])
-      ])
-    ])
-    let (link, _, _, _) = try await standingLink(script: { method, id, _ in
-      switch method {
-      case "system.hello": return [frame(id: id, ack)]
-      case "agent.list": return [frame(id: id, sessions)]
-      default: return []
-      }
-    })
-    defer { link.stop() }
-    try await waitUntil("ready") { link.desktops.first?.state == .ready }
-
-    let reply = try await link.latestReply(runtimeRunId: "run-1", on: "dev-studio")
-    #expect(reply == "the gate is green")
-  }
-
-  /// A desktop with no door cannot be asked, and says that rather than
-  /// answering nothing.
-  @Test func askingADesktopWithNoDoorIsAnHonestRefusal() async throws {
-    let probe = LinkProbe(fallback: .unreachable("asleep"))
-    let (link, _, _, _) = try await standingLink(probe: probe)
-    defer { link.stop() }
-    try await waitUntil("the desktop") { !link.desktops.isEmpty }
-
-    await #expect(throws: FieldProductError.self) {
-      _ = try await link.latestReply(runtimeRunId: "run-1", on: "dev-studio")
-    }
-  }
-}
+// RETIRED 2026-11-02 (item 155): `FieldLinkReplyTests`, the two rows of `FieldLink.latestReply` (the card's one
+// question, and a desktop with no door refusing it honestly). The method retired with them: the reply rides the remote
+// row since PG-3e.
 
 // MARK: - The chip's vocabulary
 
@@ -825,7 +782,7 @@ private final class Refusal: @unchecked Sendable {
 
     let answer = try await link.resume(runtimeRunId: "run-exited", on: "dev-studio")
     #expect(answer["runtimeRunId"]?.stringValue == "run-new")
-    #expect(link.agents.isEmpty)
+    #expect(link.rows.isEmpty)
     #expect(await door.latest?.methods.contains("agent.resume") == true)
   }
 
@@ -878,10 +835,10 @@ private final class Refusal: @unchecked Sendable {
     defer { link.stop() }
     try await waitUntil("ready") { link.desktops.first?.state == .ready }
 
-    await publishAgentsSlice(mesh, agentsSlice(rows: [boardRow(id: "run-from-store")]))
+    await publishAgentsSlice(mesh, agentsSlice(rows: [remoteBoardRow(key: "run-from-store")]))
     await publishDevice(mesh, url: "ws://studio.tail.ts.net/t/secret")
     try await Task.sleep(for: .milliseconds(120))
-    #expect(link.agents.isEmpty)
+    #expect(link.rows.isEmpty)
     #expect(link.devices.slices.isEmpty)
     #expect(link.desktops.first?.feed == FieldFeedSource.none)
   }
@@ -897,13 +854,13 @@ private final class Refusal: @unchecked Sendable {
 
     await publishDevice(mesh, url: nil)
     await publishAgentsSlice(
-      mesh, agentsSlice(rows: [boardRow(id: "run-1"), boardRow(id: "run-2")]))
+      mesh, agentsSlice(rows: [remoteBoardRow(key: "run-1"), remoteBoardRow(key: "run-2")]))
     try await waitUntil("the slice's own name on the row") {
       link.devices.slices["dev-studio"] != nil
     }
     try await Task.sleep(for: .milliseconds(120))
     #expect(await mesh.isListening(to: retiredAgentsNamespace) == false)
-    #expect(link.agents.isEmpty)
+    #expect(link.rows.isEmpty)
     #expect(link.desktops.first?.feed == FieldFeedSource.none)
     #expect(link.desktops.first?.name == "studio")
   }
@@ -934,35 +891,56 @@ private final class Refusal: @unchecked Sendable {
 
 @MainActor
 @Suite struct GoldenFixtureStageTests {
-  /// `-vf-demo-field-slice` (DS-8) stages the contracts' GOLDEN mesh board
-  /// through the real home path, with no listener anywhere: four desktops on
-  /// the fixture's tailnet (one asleep and not listed), the phone homing to
-  /// the first whose door answers, and the field read through its mesh board
-  /// — the sleeping desktop's kept board drawn greyed. It used to stage the
-  /// golden `field.agents.v1` slice through the store reader, retired by
-  /// DS-D14.
-  @Test func theFixtureStagesItsDesktopsAndTheGoldenMeshBoard() async throws {
+  // RETIRED 2026-11-01 (PG-3e): `theFixtureStagesItsDesktopsAndTheGoldenMeshBoard` — the demo door's contracts
+  // golden mesh board, which left when the door switched to PG-3a's witness remote board (below, D1).
+
+  /// D1 (PG-3e) — `-vf-demo-field-slice` stages PG-3a's WITNESS remote board through the real home path: its three
+  /// desktops on the fixture's tailnet (Studio, the home, answering; Loft online and not answering, its rows arriving
+  /// through the home; Attic offline), the phone homing to Studio, and the window's rows drawn — Attic's, greyed.
+  /// Attic is absent from `desktops`: an offline peer never enters the sweep's table.
+  @Test func theDemoDoorDrawsTheWitness() async throws {
     let link = try #require(FieldLink.goldenFixture(schedule: briskSchedule))
     defer { link.stop() }
     link.start()
 
-    try await waitUntil("the golden through the home") { link.agents.count == 3 }
-    #expect(link.home == "dev-01HQ8ZK4M7")
-    #expect(link.agents.map(\.id) == ["run-here-w", "run-studio-q", "run-air-i"])
-    #expect(link.agents.map { $0.join?.deviceLive } == [true, true, false])
+    let golden = try MeshFixture.json("phone-fold.golden")
+    let open = (golden["steps"]?.arrayValue ?? []).first { $0["at"]?.stringValue == "open" }
+    let drawn = open?["drawn"]?.arrayValue?.compactMap { $0.stringValue } ?? []
+    let keys = open?["rows"]?.arrayValue?.compactMap { $0["key"]?.stringValue } ?? []
+    #expect(drawn.count == 11)
+    try await waitUntil("the witness through the home") { link.rows.count == 11 }
+    #expect(link.home == "dev-01HQ9S7UD1")
+    let ids = link.rows.map { $0.id }
+    #expect(ids == drawn)
+    let rowKeys = link.rows.map { $0.key }
+    #expect(rowKeys == keys)
+    let attic = link.rows.first { $0.id == "run-a-idle" }
+    #expect(attic?.stale == true)
 
-    // The names a beat later, from the home's roster.
-    try await waitUntil("three named desktops") {
-      link.desktops.map(\.name).sorted() == ["laptop", "mini", "studio"]
+    try await waitUntil("two named desktops") {
+      link.desktops.map { $0.name }.sorted() == ["Loft", "Studio"]
     }
-    let quiet = try #require(link.desktops.first { $0.name == "mini" })
-    #expect(quiet.state == .noDoor)
-    #expect(quiet.feed == FieldFeedSource.none, "listed stale on the board, with no board")
-    let laptopRow = try #require(link.desktops.first { $0.name == "laptop" })
-    #expect(laptopRow.state == .ready)
-    #expect(laptopRow.feed == .door)
-    #expect(link.endpointRefusals.isEmpty)
-    #expect(link.foreignDoors.isEmpty)
+    let studio = try #require(link.desktops.first { $0.name == "Studio" })
+    #expect(studio.state == .ready)
+    #expect(studio.feed == .door)
+    let loft = try #require(link.desktops.first { $0.name == "Loft" })
+    #expect(loft.state == .noDoor)
+    let names = link.desktops.map { $0.name }
+    #expect(!names.contains("Attic"))
+  }
+
+  /// D2 (PG-3f; the v2 check's S4) — the demo door hears the phone's report: the Loft's open card (`pty-p3`, model
+  /// `pty-p3`, key `run-p-ask`) is reported to the Loft through the home, and the door answers `{reported: true}`.
+  @Test func theDemoDoorHearsTheReport() async throws {
+    let link = try #require(FieldLink.goldenFixture(schedule: briskSchedule))
+    defer { link.stop() }
+    link.start()
+    try await waitUntil("the witness through the home") { link.rows.count == 11 }
+
+    link.show(visualId: "pty-p3")
+    try await waitUntil("the report answered") { !link.reportAnswers.isEmpty }
+    let answers = link.reportAnswers
+    #expect(answers == [.init(device: "dev-01HQ9S7XZ2", ids: ["pty-p3"], outcome: .reported)])
   }
 }
 
@@ -1231,8 +1209,8 @@ private func catalogBoard(_ id: Int64) -> String {
       "snapshot": snapshotFrame(
         revision: 1,
         rows: [
-          boardRow(id: "run-1"), boardRow(id: "run-2", kind: "zed", label: "Zed"),
-          boardRow(id: "run-3", kind: "acp", label: "ACP"),
+          remoteBoardRow(key: "run-1"), remoteBoardRow(key: "run-2", provider: "zed", label: "Zed"),
+          remoteBoardRow(key: "run-3", provider: "acp", label: "ACP"),
         ]),
     ]))
 }
@@ -1280,11 +1258,11 @@ private let catalogWait: Duration = .seconds(20)
     defer { link.stop() }
 
     try await waitUntil("the named field", timeout: catalogWait) {
-      link.agents.count == 3 && link.agents.first?.catalogEntry != nil
+      link.rows.count == 3 && link.bubbles.first?.agent?.catalogEntry != nil
     }
-    #expect(link.agents.map { $0.catalogEntry?.label } == ["Claude Code", nil, nil])
+    #expect(link.bubbles.map { $0.agent?.catalogEntry?.label } == ["Claude Code", nil, nil])
     #expect(
-      link.agents.compactMap { fieldBubble(from: $0)?.agent?.providerName } == [
+      link.bubbles.compactMap { $0.agent?.providerName } == [
         "Claude Code", "Zed", "ACP",
       ])
     // The door answered the phone WITHOUT the protocol row (AC-D7): the
@@ -1314,14 +1292,14 @@ private let catalogWait: Duration = .seconds(20)
     defer { link.stop() }
 
     try await waitUntil("an unnamed field and the ask", timeout: catalogWait) {
-      link.agents.count == 3 && tally.asks == 1
+      link.rows.count == 3 && tally.asks == 1
     }
     // PIN THE PRECONDITION: the bodies are on the field and nothing names them.
-    #expect(link.agents.allSatisfy { $0.catalogEntry == nil })
+    #expect(link.bubbles.allSatisfy { $0.agent?.catalogEntry == nil })
 
     await door.latest?.deliver(frame(id: try #require(tally.last), golden))
     try await waitUntil("the field renamed", timeout: catalogWait) {
-      link.agents.first?.catalogEntry?.label == "Claude Code"
+      link.bubbles.first?.agent?.catalogEntry?.label == "Claude Code"
     }
     #expect(tally.asks == 1)
   }
@@ -1346,13 +1324,13 @@ private let catalogWait: Duration = .seconds(20)
     try await waitUntil("the fallback note", timeout: catalogWait) {
       link.notes.contains { $0.contains("has no agent catalog for this phone") }
     }
-    try await waitUntil("the bodies", timeout: catalogWait) { link.agents.count == 3 }
+    try await waitUntil("the bodies", timeout: catalogWait) { link.rows.count == 3 }
     #expect(link.catalog.isEmpty)
-    #expect(link.agents.allSatisfy { $0.catalogEntry == nil })
+    #expect(link.bubbles.allSatisfy { $0.agent?.catalogEntry == nil })
     // named by the word each row carries — such a desktop stamps its
     // adapter's own — never blanked to the raw id
     #expect(
-      link.agents.compactMap { fieldBubble(from: $0)?.agent?.providerName } == [
+      link.bubbles.compactMap { $0.agent?.providerName } == [
         "Claude Code", "Zed", "ACP",
       ])
     #expect(link.desktops.first?.state == .ready)
@@ -1396,7 +1374,7 @@ private let catalogWait: Duration = .seconds(20)
       !link.catalog.isEmpty
     }
     #expect(tally.asks == 2)
-    #expect(link.agents.first?.catalogEntry?.label == "Claude Code")
+    #expect(link.bubbles.first?.agent?.catalogEntry?.label == "Claude Code")
   }
 
   /// Cached PER CONNECTION: the answer holds for the life of a socket, and a
@@ -1476,18 +1454,18 @@ private let catalogWait: Duration = .seconds(20)
     defer { link.stop() }
 
     try await waitUntil("the named field", timeout: catalogWait) {
-      link.agents.count == 3 && !link.catalog.isEmpty
+      link.rows.count == 3 && !link.catalog.isEmpty
     }
     await mesh.set(peers: [asleepCopy(studio)])
     await mesh.emit(.upsert(asleepCopy(studio)))
     try await waitUntil("the field greyed", timeout: catalogWait) {
-      link.agents.count == 3 && link.agents.allSatisfy { $0.join?.deviceLive == false }
+      link.rows.count == 3 && link.bubbles.allSatisfy { $0.agent?.join?.deviceLive == false }
     }
     #expect(link.home == nil)
     #expect(link.desktops.isEmpty)
     #expect(link.catalog.isEmpty)
     #expect(
-      link.agents.compactMap { fieldBubble(from: $0)?.agent?.providerName } == [
+      link.bubbles.compactMap { $0.agent?.providerName } == [
         "Claude Code", "Zed", "ACP",
       ])
   }
@@ -1777,33 +1755,28 @@ private final class ResumeGate: @unchecked Sendable {
   /// link — so a backgrounded phone kept a live subscription (bytes it had just
   /// promised not to spend), and the resume could not re-arm it (the slot was
   /// already full) and kept a board from before the pause.
+  ///
+  /// (PG-3e: the subscribe's answer is WITHHELD until the row delivers it, rather than delayed 150 ms. Under the full
+  /// kit's load a poll could wake after the delay, so the answer landed before the pause and the row read a field it
+  /// had never paused in front of — the premise, not the rule, went red: kit run tip-probe, 2026-11-02 07:42Z and
+  /// 09:19Z, "paused true", notes empty, and green alone.)
   @Test func aSubscribeInFlightAtPauseDoesNotSurviveIt() async throws {
-    let snapshot = snapshotFrame(revision: 1, rows: [boardRow(id: "run-1")])
-    let (link, _, door, _) = try await standingLink(
-      answerDelay: .milliseconds(150),
-      script: { method, id, _ in
-        switch method {
-        case "system.hello": return [frame(id: id, ack)]
-        case "agent.subscribe":
-          return [frame(id: id, .object(["subId": .string("s1"), "snapshot": snapshot]))]
-        default: return []
-        }
-      })
+    let snapshot = snapshotFrame(revision: 1, rows: [remoteBoardRow(key: "run-1")])
+    let plan = HomePlan([nil, snapshot])  // the first ask is answered by the row, the second by the door
+    let (link, _, door, _) = try await standingLink(script: plan.script)
     defer { link.stop() }
-    try await waitUntil("the subscribe in flight") {
-      await door.latest?.methods.contains("agent.subscribe") == true
-    }
+    try await waitUntil("the subscribe in flight") { plan.subscribes == 1 }
     link.pause()
+    // the late answer, after the pause
+    await door.latest?.deliver(plan.answer(1, snapshot))
     try await waitUntil("the late answer let go") {
       await door.latest?.methods.contains("system.unsubscribe") == true
     }
-    #expect(link.agents.isEmpty, "a paused link applies nothing the door sends")
+    #expect(link.rows.isEmpty, "a paused link applies nothing the door sends")
 
     link.resume()
-    try await waitUntil("a fresh subscribe on the way back") {
-      await (door.latest?.methods.filter { $0 == "agent.subscribe" }.count ?? 0) == 2
-    }
-    try await waitUntil("the board back") { link.agents.map(\.id) == ["run-1"] }
+    try await waitUntil("a fresh subscribe on the way back") { plan.subscribes == 2 }
+    try await waitUntil("the board back") { link.rows.map { $0.key } == ["run-1"] }
   }
 
   /// The same race with the pause AND the resume inside the window — an app
@@ -1816,7 +1789,7 @@ private final class ResumeGate: @unchecked Sendable {
   /// answer has landed — the order a loaded scheduler produced in the stagger
   /// row's bundle runs.
   @Test func aPauseAndResumeInsideTheAnswerStillComeBackFresh() async throws {
-    let snapshot = snapshotFrame(revision: 1, rows: [boardRow(id: "run-1")])
+    let snapshot = snapshotFrame(revision: 1, rows: [remoteBoardRow(key: "run-1")])
     let mesh = MeshRehearsal()
     await mesh.set(peers: [studio])
     let door = LinkDoor(answerDelay: .milliseconds(150)) { method, id, _ in
@@ -1843,7 +1816,7 @@ private final class ResumeGate: @unchecked Sendable {
     link.pause()
     link.resume()
     try await waitUntil("the window parked") { gate.parked == 1 }
-    try await waitUntil("the pre-pause answer landed") { link.agents.map(\.id) == ["run-1"] }
+    try await waitUntil("the pre-pause answer landed") { link.rows.map { $0.key } == ["run-1"] }
     try await Task.sleep(for: .milliseconds(60))  // its arm's continuation has run
 
     gate.releaseNext()

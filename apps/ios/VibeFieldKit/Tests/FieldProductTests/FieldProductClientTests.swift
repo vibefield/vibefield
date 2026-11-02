@@ -262,7 +262,7 @@ private func helloOnly(_ ack: JSONValue) -> FakeDoor.Script {
     let snapshots = Counter()
     let deltas = Counter()
     let handle = try await client.subscribe(
-      "agent.subscribe", params: AgentSubscribeParams.phoneField.json,
+      "agent.subscribe", params: fieldAsk.json,
       onSnapshot: { payload in
         snapshots.record((try? AgentFieldSnapshot(json: payload))?.rows.count ?? -1)
       },

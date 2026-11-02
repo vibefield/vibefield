@@ -51,8 +51,10 @@ const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.la
 // kit's own test reads too. PG-3a: the phone's parity goldens, the home's window over the witness
 // remote goldens (field-app computes them, `phone:goldens`), which the kit's fold and body model are
 // held to. PG-3c mirrors phone-fold (Tests/FieldMeshTests), and PG-3d again in
-// Tests/FieldProductTests, where its parity suite runs; phone-body mirrors at 3e, with its body
-// model (FieldAgentsTests reads no FieldProduct).
+// Tests/FieldProductTests, where its parity suite runs; PG-3e mirrors phone-body in
+// Tests/FieldMeshTests, where the mapping from a drawn row to its bubble runs. (Corrected
+// 2026-11-02, PG-3e: this said phone-body would mirror "with its body model" in FieldAgentsTests,
+// which reads no FieldProduct and so could never run the golden.)
 const OTHER_ORIGINS = new Map([
   ["project-ink.golden.json", join(root, "packages/design-kit/fixtures/project-ink.golden.json")],
   [
@@ -165,7 +167,9 @@ const tpFixtures = [
 ];
 // PG-3c — the remote cut the phone will read (`AgentRemoteRow`, its mesh open and frames) and
 // PG-3a's witness goldens, which the kit's fold (3d) and the home's window are both held to.
-// 3b's agent-report-shown.* join at 3e, with the reader that sends them.
+// PG-3e: 3b's routed report joins, beside the kit's encoder (FieldProductTests). Only `.routed`:
+// `.forwarded` is fieldd to fieldd and is never the phone's. (Corrected 2026-11-02, PG-3e: this
+// said "3b's agent-report-shown.* join at 3e".)
 const remoteWitness = [
   "agent-remote-mesh-open.witness.json",
   "agent-remote-mesh-frames.witness.json",
@@ -177,6 +181,7 @@ const remoteFixtures = [
   "agent-remote-mesh-open.valid.json",
   "agent-remote-mesh-frames.valid.json",
   "monitor-agent-row.valid.json",
+  "agent-report-shown.routed.json",
   ...remoteWitness,
 ];
 const requiredMirrors = [
@@ -200,12 +205,21 @@ const requiredMirrors = [
   // PG-3c — the remote cut's readers' goldens; PG-3d — the fold's parity golden beside them, which
   // the phone's copy of its home's board is held to step by step (PhoneFoldParityTests)
   ["remote", [...remoteFixtures, "phone-fold.golden.json"], ["Tests/FieldProductTests"]],
-  // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's
+  // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's;
+  // PG-3e — the body golden, which the drawn rows' bubbles are held to (PhoneBodyParityTests)
   [
     "remote",
-    [...remoteWitness, "agent-field-snapshot.project-keys.json", "phone-fold.golden.json"],
+    [
+      ...remoteWitness,
+      "agent-field-snapshot.project-keys.json",
+      "phone-fold.golden.json",
+      "phone-body.golden.json",
+    ],
     ["Tests/FieldMeshTests"],
   ],
+  // PG-3e — the demo door (`-vf-demo-field-slice`) serves the witness's open from the kit's own
+  // bundle; the field golden it served until the switch left that folder in the same commit
+  ["remote", ["agent-remote-mesh-open.witness.json"], ["Sources/FieldMesh"]],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {

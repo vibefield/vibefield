@@ -216,13 +216,15 @@ let package = Package(
         .product(name: "Truffle", package: "truffle"),
         .product(name: "TruffleTailscale", package: "truffle"),
       ],
-      // The contracts' golden MESH board (`agent-mesh-open.valid.json`), byte
-      // for byte, so `-vf-demo-field-slice` draws the swarm over REAL-shaped
-      // rows through the real home path and the real fold (DS-8, 2026-10-01;
-      // it was the golden `field.agents.v1` slice until DS-D14 retired that
-      // reader). Only DEBUG code reads it (`FieldLink.goldenFixture`);
-      // resources are not conditional, so ~6 KB of inert JSON rides along in
-      // Release, which is the price of a screenshot gate with provenance.
+      // PG-3a's WITNESS remote board (`agent-remote-mesh-open.witness.json`),
+      // byte for byte, so `-vf-demo-field-slice` draws the swarm over
+      // REAL-shaped rows through the real home path and the real fold (PG-3e;
+      // corrected 2026-11-02: from DS-8 it was the contracts' golden FIELD mesh
+      // board, `agent-mesh-open.valid.json`, and before that the golden
+      // `field.agents.v1` slice until DS-D14 retired that reader). Only DEBUG
+      // code reads it (`FieldLink.goldenFixture`); resources are not
+      // conditional, so ~10 KB of inert JSON rides along in Release, which is
+      // the price of a screenshot gate with provenance.
       resources: [.copy("Fixtures")]
     ),
     // The terminal leg (IOS-3, re-footed at TM-5): everything that knows

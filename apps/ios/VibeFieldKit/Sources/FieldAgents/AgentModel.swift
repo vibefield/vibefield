@@ -71,8 +71,11 @@ public struct AgentBlocker: Sendable, Equatable, Codable {
   public var kind: AgentBlockerKind
   /// An adapter's human-readable line for the blocker: what the body says first.
   public var detail: String?
-  /// A question blocker's question as asked (the first question's header, else
-  /// its prompt). fieldd's row does not carry it yet; the mock and a later door do.
+  /// PG-3e — a question's HEADER (`MonitorWait.header`): what a question body says first, before its prompt
+  /// (`waitBodyLine`, puppeteer-view-sdk `toolkit/words.js`).
+  public var header: String?
+  /// A question blocker's question as asked (its prompt). The remote cut's wait carries it beside the header; the
+  /// mock carries it alone.
   public var question: String?
   /// The tool a permission names — the one piece of evidence `field.agents.v1`
   /// flattens onto the row today.
@@ -81,11 +84,12 @@ public struct AgentBlocker: Sendable, Equatable, Codable {
   public var code: String?
 
   public init(
-    kind: AgentBlockerKind, detail: String? = nil, question: String? = nil, tool: String? = nil,
-    code: String? = nil
+    kind: AgentBlockerKind, detail: String? = nil, header: String? = nil, question: String? = nil,
+    tool: String? = nil, code: String? = nil
   ) {
     self.kind = kind
     self.detail = detail
+    self.header = header
     self.question = question
     self.tool = tool
     self.code = code
@@ -134,21 +138,28 @@ public enum AgentCostCoverage: String, Sendable, Codable {
   case unavailable
 }
 
-/// Corrected spend in one of Core's fixed thirty-second buckets
-/// (`MonitorCostBucket`), including the current bucket.
-public struct AgentCostBucket: Sendable, Equatable, Codable {
-  public var at: Date
-  public var costUsd: Double
-  public init(at: Date, costUsd: Double) {
-    self.at = at
-    self.costUsd = costUsd
+/// PG-3e — a run's cost as its OWNER priced it: the remote cut's `MonitorCost` (`cost {usd, coverage, burnPerHour?}`),
+/// the backend's own ledger, never one the phone keeps. `coverage` stays the WIRE word, open as the contract's is
+/// (`MonitorCostCoverage.unrecognized`), because a word this build does not know still shows its total, unpriced, as
+/// the window shows it (`formatEstimate`, `bubble-model.js`'s `priced`). `burnPerHour` is USD an hour (J3 (a)).
+public struct AgentCost: Sendable, Equatable {
+  public var usd: Double
+  public var coverage: String
+  public var burnPerHour: Double?
+
+  public init(usd: Double, coverage: String, burnPerHour: Double? = nil) {
+    self.usd = usd
+    self.coverage = coverage
+    self.burnPerHour = burnPerHour
   }
 }
 
 /// Core's usage for a run, in the mirror's own field names (`MonitorUsageState`):
 /// a corrected estimate that every source moves. The field never reads the
-/// tokens directly — `UsageLedger` folds the USD into the number the screen
-/// stands behind, and the body reads the live rate for the burn ladder.
+/// tokens directly: the body reads the USD, its coverage and the live rate,
+/// through `agentCost`. (Corrected 2026-11-02, PG-3e: `UsageLedger` folded the
+/// USD and its thirty-second buckets into a history the body drew; it retired,
+/// and so did the buckets, which it alone read.)
 ///
 /// The cost fields are decoded tolerantly (D-i18): `field.agents.v1` does not
 /// carry them yet and VibeField's puppeteer pin predates RFC 008, so on today's
@@ -167,8 +178,6 @@ public struct AgentUsage: Sendable, Equatable, Codable {
   /// Core's own live projection over its rate-eligible window — never a
   /// difference of UI snapshots.
   public var costRatePerMin: Double?
-  /// Corrected costs in fixed 30-second buckets, including the current one.
-  public var costHistory: [AgentCostBucket]
 
   public init(
     cumulativeTokens: Double? = nil,
@@ -180,8 +189,7 @@ public struct AgentUsage: Sendable, Equatable, Codable {
     samples: [AgentUsageSample] = [],
     costUsd: Double? = nil,
     costCoverage: AgentCostCoverage? = nil,
-    costRatePerMin: Double? = nil,
-    costHistory: [AgentCostBucket] = []
+    costRatePerMin: Double? = nil
   ) {
     self.cumulativeTokens = cumulativeTokens
     self.inputTokens = inputTokens
@@ -193,7 +201,6 @@ public struct AgentUsage: Sendable, Equatable, Codable {
     self.costUsd = costUsd
     self.costCoverage = costCoverage
     self.costRatePerMin = costRatePerMin
-    self.costHistory = costHistory
   }
 }
 
@@ -229,9 +236,15 @@ public struct AgentRuntimeState: Sendable, Equatable, Codable {
   public var usage: AgentUsage?
   /// When the current status began (the unread rule reads it, never the
   /// transition, so a turn that began and ended between two projections still
-  /// counts).
+  /// counts). (Corrected 2026-11-02, PG-3e, the review's [2]/[18]: the phone's
+  /// unread rule retired with `UnreadLedger`; the unread mark is the owner's,
+  /// on the row. Nothing on the phone reads this now; the body's elapsed clock
+  /// reads the row's own.)
   public var statusSince: Date?
   /// The monitor's `freshness.lastEvidenceAt`: stale evidence dims the body.
+  /// (Corrected 2026-11-02, PG-3e, the review's [2]/[18]: the phone's 30 s rule
+  /// retired (J-E7) and nothing reads this now; a body dims on the owner's
+  /// `stale` or while no live home answers, `row.stale || !fieldIsLive`.)
   public var lastEvidenceAt: Date?
 
   public init(
@@ -281,7 +294,11 @@ public struct AgentJoin: Sendable, Equatable, Codable {
   public var deviceID: String
   /// `local` · `remote` · `none`, the wire's own word. `none` is an exited run
   /// (or one whose PTY is gone), and it is the only value that means there is
-  /// nothing to attach to.
+  /// nothing to attach to. (Corrected 2026-11-02, item 162: the contract's
+  /// `none` is "no terminal is known (an ingested row, or a managed run whose
+  /// PTY is gone)", agent-session.ts:116-119, so a LIVE run can carry it;
+  /// whether the run ended is `exited`, and a pane the owner withheld is
+  /// `paneWithheld`.)
   public var hosted: String
   /// The floor's session id — the handle `terminal.v1.hosts` advertises and
   /// the one an attach takes. Absent for a run with no terminal.
@@ -299,17 +316,25 @@ public struct AgentJoin: Sendable, Equatable, Codable {
   /// the home is answering. `false` is a desktop asleep, stale or on another
   /// version — or a home that stopped answering — and the row STAYS, drawn
   /// greyed (`FieldAssembly` dresses it stale), because asleep is a state and
-  /// not an absence. `true` for a feed with no mesh behind it.
+  /// not an absence. `true` for a feed with no mesh behind it. (Corrected
+  /// 2026-11-02, PG-3e, the review's [2]: `FieldAssembly` no longer reads it;
+  /// the grey is `row.stale || !fieldIsLive` in `fieldBubble(from:)`, and this
+  /// flag rides the join for the card alone.)
   public var deviceLive: Bool
   /// PJ-7 (Q3) — the agent's own id for the conversation this run continues
   /// (the field row's `nativeSessionId`): what History's Jump to joins a
   /// session row to its card by. The id only, never the folder (EL7 B1); nil
   /// until the agent says it.
   public var nativeSessionID: String?
+  /// Items 154 and 162 — the owner WITHHELD this row's pane join: its terminal doors are down, so fieldd's
+  /// `attachableRows` (agent-field.ts) deleted the row's `terminal` (and set `monitorRow.attachable` false). Not the
+  /// same as `hosted: "none"`, which the row carries PRESENT for a run with no known pane. Never decoded from a wire
+  /// (the remote row's join is built in `fieldBubble(from:)`), so it has no key of its own to read.
+  public var paneWithheld: Bool
 
   public init(
     deviceID: String, hosted: String, runtimeSessionID: String? = nil, pending: Bool = false,
-    exited: Bool = false, deviceLive: Bool = true, nativeSessionID: String? = nil
+    exited: Bool = false, deviceLive: Bool = true, nativeSessionID: String? = nil, paneWithheld: Bool = false
   ) {
     self.deviceID = deviceID
     self.hosted = hosted
@@ -318,6 +343,7 @@ public struct AgentJoin: Sendable, Equatable, Codable {
     self.exited = exited
     self.deviceLive = deviceLive
     self.nativeSessionID = nativeSessionID
+    self.paneWithheld = paneWithheld
   }
 
   /// Whether the run has a terminal at all, by the wire's word.

@@ -540,11 +540,9 @@ import Testing
     #expect(decoded.runtimeRunId == "run-blocked")
   }
 
+  /// (PG-3e: `phoneField`'s own encoding left with it; the phone's one ask is pinned in `AgentRemoteSubscribeTests`.)
   @Test func theSubscribeParamsLeaveTheDesktopUnchangedByOmission() {
     #expect(AgentSubscribeParams().json == .object([:]))
-    #expect(
-      AgentSubscribeParams.phoneField.json
-        == .object(["projection": .string("field"), "minIntervalMs": .int(250)]))
   }
 }
 

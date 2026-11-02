@@ -271,8 +271,13 @@ import Testing
       try await Task.sleep(for: .milliseconds(400))
       #expect(lines.all.isEmpty, "a queue that answers wrote \(lines.all)")
 
-      target.async { Thread.sleep(forTimeInterval: 0.9) }
+      // Held until the row has read the stall line, then let go: a fixed sleep races the witness's own timer
+      // under load, as run 3's did (item 157, kit c9, 2026-11-02).
+      let release = DispatchSemaphore(value: 0)
+      target.async { release.wait() }
+      defer { release.signal() }
       try await Self.until("the stall to be said") { lines.first("main thread stalled") != nil }
+      release.signal()
       try await Self.until("the return to be said") {
         lines.first("main thread answered again") != nil
       }
@@ -301,7 +306,12 @@ import Testing
       witness.start()
       defer { witness.stop() }
 
-      target.async { Thread.sleep(forTimeInterval: 1.0) }
+      // Held until the row has read its three lines. A fixed 1 s left the third (0.05 + 0.2 + 0.3 + 0.3 s at the
+      // least) about 0.1 s of slack; under load a late tick ended the stall on two lines, and two never become
+      // three (item 157, kit c9, 2026-11-02).
+      let release = DispatchSemaphore(value: 0)
+      target.async { release.wait() }
+      defer { release.signal() }
       try await Self.until("the stall to be said three times") {
         lines.count("main thread stalled") >= 3
       }

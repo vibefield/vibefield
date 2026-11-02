@@ -3,68 +3,11 @@ import Testing
 
 @testable import FieldAgents
 
-// The reference's `unread.test.ts`, `project-tint.test.ts` and
-// `pane-colours.test.ts`, transcribed, plus the phone's own ledger fold.
+// The reference's `project-tint.test.ts` and `pane-colours.test.ts`, transcribed, plus the phone's own fold.
+// (PG-3e: `unread.test.ts`'s rows went with the phone's unread ledger, which retired — the row carries its owner's
+// mark — and so did the fold's 30 s and desktop-grey rows; F2 pins that the dress keeps the row's own marks.)
 
 private let t0: Double = 1_788_688_800_000  // 2026-09-06T10:00:00Z, epoch ms
-private func at(_ seconds: Double) -> Double { t0 + seconds * 1000 }
-
-private func row(
-  _ id: String, _ status: AgentVisualStatus, active: Bool = false, hasAgent: Bool = true,
-  statusSinceMs: Double? = at(-60)
-) -> UnreadCandidate {
-  UnreadCandidate(id: id, status: status, active: active, hasAgent: hasAgent, statusSinceMs: statusSinceMs)
-}
-
-@Suite struct UnreadLedgerTests {
-  @Test func neverMarksAnAgentOnFirstSightWhateverItsHistory() {
-    let ledger = UnreadLedger.empty.reconciling([row("a", .idle, statusSinceMs: at(-1))], nowMs: at(0))
-    #expect(ledger.unreadIDs.isEmpty)
-  }
-
-  @Test func marksAnAgentWhoseIdleBeganAfterItWasLastInFrontOfTheUser() {
-    let seen = UnreadLedger.empty.reconciling([row("a", .working)], nowMs: at(0))
-    let finished = seen.reconciling([row("a", .idle, statusSinceMs: at(30))], nowMs: at(31))
-    #expect(finished.unreadIDs == ["a"])
-    let later = finished.reconciling([row("a", .idle, statusSinceMs: at(30))], nowMs: at(90))
-    #expect(later.unreadIDs == ["a"])
-  }
-
-  @Test func marksATurnThatBeganAndEndedBetweenTwoProjections() {
-    let seen = UnreadLedger.empty.reconciling([row("a", .idle, statusSinceMs: at(-60))], nowMs: at(0))
-    let coalesced = seen.reconciling([row("a", .idle, statusSinceMs: at(5))], nowMs: at(6))
-    #expect(coalesced.unreadIDs == ["a"])
-  }
-
-  @Test func clearsTheMarkTheMomentTheAgentIsActiveAndStaysClearAfter() {
-    let seen = UnreadLedger.empty.reconciling([row("a", .working)], nowMs: at(0))
-    let finished = seen.reconciling([row("a", .idle, statusSinceMs: at(30))], nowMs: at(31))
-    let looked = finished.reconciling([row("a", .idle, active: true, statusSinceMs: at(30))], nowMs: at(40))
-    #expect(looked.unreadIDs.isEmpty)
-    let away = looked.reconciling([row("a", .idle, statusSinceMs: at(30))], nowMs: at(50))
-    #expect(away.unreadIDs.isEmpty)
-  }
-
-  @Test func isNotUnreadWhileWorkingAndDoesNotMarkATurnFinishedWhileActive() {
-    let seen = UnreadLedger.empty.reconciling([row("a", .working, active: true)], nowMs: at(0))
-    let stillActive = seen.reconciling([row("a", .idle, active: true, statusSinceMs: at(30))], nowMs: at(31))
-    #expect(stillActive.unreadIDs.isEmpty)
-    let busy = seen.reconciling([row("a", .working, statusSinceMs: at(30))], nowMs: at(31))
-    #expect(busy.unreadIDs.isEmpty)
-  }
-
-  @Test func ignoresBareTerminalsAndForgetsRemovedAgents() {
-    let seen = UnreadLedger.empty.reconciling(
-      [row("t", .working, hasAgent: false, statusSinceMs: nil), row("a", .working)], nowMs: at(0))
-    let done = seen.reconciling(
-      [row("t", .idle, hasAgent: false, statusSinceMs: nil), row("a", .idle, statusSinceMs: at(10))],
-      nowMs: at(11))
-    #expect(done.unreadIDs == ["a"])
-    let gone = done.reconciling([], nowMs: at(12))
-    #expect(gone.unreadIDs.isEmpty)
-    #expect(gone.seenAtByID.isEmpty)
-  }
-}
 
 @Suite struct ProjectTintTests {
   /// Goldens generated from the reference's `project-tint.ts` under Node 26 on
@@ -189,7 +132,7 @@ private func row(
     var assembly = FieldAssembly(tint: .light)
     let rows = assembly.fold(
       [agent("a", project: "vibe-field"), agent("b", project: "truffle"), agent("c", project: "vibe-field"), terminal("t")],
-      cardSubjectID: nil, nowMs: t0)
+      cardSubjectID: nil)
     #expect(rows[0].color == SwarmColor.project(0, .light))
     #expect(rows[1].color == SwarmColor.project(1, .light))
     // Two runs in one project share a colour.
@@ -197,108 +140,90 @@ private func row(
     #expect(rows[3].color == nil)
     // The deal is kept across folds and the theme only changes the tint.
     assembly.tint = .dark
-    let again = assembly.fold([agent("b", project: "truffle")], cardSubjectID: nil, nowMs: t0 + 1000)
+    let again = assembly.fold([agent("b", project: "truffle")], cardSubjectID: nil)
     #expect(again[0].color == SwarmColor.project(1, .dark))
   }
 
   @Test func theOpenCardsSubjectIsTheOnePane() {
     var assembly = FieldAssembly(tint: .light)
-    let rows = assembly.fold([agent("a", project: "p"), agent("b", project: "q")], cardSubjectID: "b", nowMs: t0)
+    let rows = assembly.fold([agent("a", project: "p"), agent("b", project: "q")], cardSubjectID: "b")
     #expect(rows[0].active == false)
     #expect(rows[0].mounted == false)
     #expect(rows[1].active)
     #expect(rows[1].mounted)
-    let closed = assembly.fold([agent("a", project: "p"), agent("b", project: "q")], cardSubjectID: nil, nowMs: t0 + 1)
+    let closed = assembly.fold([agent("a", project: "p"), agent("b", project: "q")], cardSubjectID: nil)
     #expect(closed[1].mounted == false)
     #expect(closed[1].active == false)
   }
 
-  @Test func joinsTheUsageLedgerAndMarksUnreadRowsAndNeverDimsAnIdleOne() {
+  /// F1 (PG-3e) — the dress never rebuilds a row: the ids a drawn row carries beside its body's (the host's name, the
+  /// model id a report names, the board key a resume names) ride through the fold exactly.
+  @Test func theDressKeepsTheRowsIds() {
     var assembly = FieldAssembly(tint: .light)
-    let working = AgentRuntimeState(
-      activeTurn: true, usage: AgentUsage(cumulativeTokens: 1_000, costUsd: 1, costCoverage: .complete), statusSince: now,
-      lastEvidenceAt: now)
-    var rows = assembly.fold([agent("a", project: "p", state: working)], cardSubjectID: nil, nowMs: t0)
-    // The ledger's total is RFC 008's USD, never the tokens.
-    #expect(rows[0].agent?.usage?.total == 1)
-    #expect(rows[0].agent?.usage?.coverage == .complete)
-    #expect(rows[0].unread == false)
-    #expect(rows[0].stale == false)
-    // The turn ends after the row was seen: the reply is unread until its card opens.
-    let done = AgentRuntimeState(
-      lastAssistantMessage: "Done.", usage: AgentUsage(cumulativeTokens: 1_400, costUsd: 1.4, costCoverage: .complete),
-      statusSince: now.addingTimeInterval(30), lastEvidenceAt: now.addingTimeInterval(30))
-    rows = assembly.fold([agent("a", project: "p", state: done)], cardSubjectID: nil, nowMs: t0 + 31_000)
-    #expect(rows[0].unread)
-    #expect(rows[0].agent?.usage?.total == 1.4)
-    rows = assembly.fold([agent("a", project: "p", state: done)], cardSubjectID: "a", nowMs: t0 + 32_000)
-    #expect(rows[0].unread == false)
-    // Q01 — an idle body never dims, however old its evidence.
-    rows = assembly.fold([agent("a", project: "p", state: done)], cardSubjectID: nil, nowMs: t0 + 31_000 + 30_001)
-    #expect(rows[0].stale == false)
+    let base = agent("pty-h2", project: "vibe-field")
+    let row = FieldBubble(
+      id: base.id, project: base.project, detail: base.detail, status: base.status, identityKey: base.identityKey,
+      createdAt: base.createdAt, agent: base.agent, host: "Loft", modelId: "run-h-launch", runKey: "run-h-launch-key")
+    let dressed = assembly.fold([row], cardSubjectID: nil)
+    #expect(dressed.count == 1)
+    #expect(dressed.first?.host == "Loft")
+    #expect(dressed.first?.modelId == "run-h-launch")
+    #expect(dressed.first?.runKey == "run-h-launch-key")
+    #expect(dressed.first?.id == "pty-h2")
   }
 
-  /// Q01 (James, 2026-10-27) — stale only while the agent should be talking,
-  /// working or blocked: evidence older than the freshness policy dims those
-  /// bodies, and a quiet idle agent is just idle.
-  @Test func onlyAWorkingOrBlockedAgentDimsWhenItsEvidenceIsOld() {
+  /// F3 (item 154) — the dress keeps a bare terminal's pane join: the card attaches through it, so a fold that rebuilt
+  /// the row (3e's lesson, F1) would leave the card with nothing to open.
+  @Test func theDressKeepsABareTerminalsJoin() {
     var assembly = FieldAssembly(tint: .light)
-    let old = now.addingTimeInterval(-31)
-    let quiet = AgentRuntimeState(statusSince: old, lastEvidenceAt: old)
-    let working = AgentRuntimeState(activeTurn: true, statusSince: old, lastEvidenceAt: old)
-    let waiting = AgentRuntimeState(
-      permissions: [AgentPermission(tool: "Bash")], statusSince: old, lastEvidenceAt: old)
-    let rows = assembly.fold(
-      [
-        agent("idle", project: "p", state: quiet), agent("working", project: "p", state: working),
-        agent("blocked", project: "p", state: waiting),
-      ], cardSubjectID: nil, nowMs: t0)
-    #expect(rows.map(\.status) == [.idle, .working, .blocked])
-    #expect(rows.map(\.stale) == [false, true, true])
-    // Fresh evidence dims nothing.
-    let fresh = AgentRuntimeState(activeTurn: true, statusSince: old, lastEvidenceAt: now)
-    let heard = assembly.fold([agent("working", project: "p", state: fresh)], cardSubjectID: nil, nowMs: t0)
-    #expect(heard[0].stale == false)
+    let join = AgentJoin(deviceID: "dev-studio", hosted: "local", runtimeSessionID: "pty-h2")
+    let row = FieldBubble(
+      id: "pty-h2", project: "", detail: "notes", status: .working, identityKey: "pty-h2", createdAt: now,
+      modelId: "pty-h2", runKey: "pty-h2", terminalJoin: join)
+    let dressed = assembly.fold([row], cardSubjectID: "pty-h2")
+    #expect(dressed.first?.terminalJoin == join)
+    #expect(dressed.first?.join == join)
   }
 
-  /// DS-8 / DS-L8 — a run whose DESKTOP is not live on the home's mesh board
-  /// (asleep, stale, another version) keeps its row and is dressed STALE: the
-  /// dim the freshness policy already draws, whatever the run's own evidence
-  /// clock says. Fresh evidence on such a row is the last thing its desktop
-  /// said, not a desktop answering now.
-  @Test func aRunWhoseDesktopIsNotLiveIsDressedStale() {
+  /// F2 (PG-3e) — the dress keeps the row's own marks: a remote-cut row carries its owner's `stale` and `unread`, so a
+  /// folded bubble keeps each exactly — whatever the phone's own clock and its ledger would have said of evidence an
+  /// hour old (Q01's 30 s rule and the phone's unread ledger, retired with the switch).
+  @Test func theDressKeepsTheRowsMarks() {
     var assembly = FieldAssembly(tint: .light)
-    let fresh = AgentRuntimeState(statusSince: now.addingTimeInterval(-60), lastEvidenceAt: now)
-    func run(_ id: String, desktopLive: Bool) -> FieldBubble {
-      let snapshot = AgentSnapshot(
-        id: id, runtimeSessionID: "r-\(id)", provider: .claude, project: "p", state: fresh,
-        createdAt: now,
-        join: AgentJoin(
-          deviceID: "dev-air", hosted: "local", runtimeSessionID: "pty-\(id)",
-          deviceLive: desktopLive))
-      return fieldBubble(from: snapshot)!
+    let hourOld = now.addingTimeInterval(-3_600)
+    func row(_ id: String, status: AgentVisualStatus, stale: Bool, unread: Bool) -> FieldBubble {
+      FieldBubble(
+        id: id, project: "p", detail: "d", status: status, identityKey: id, createdAt: hourOld,
+        agent: AgentFacet(provider: .claude, statusSince: hourOld, lastEvidenceAt: hourOld),
+        stale: stale, unread: unread, modelId: id, runKey: id)
     }
-    let rows = assembly.fold(
-      [run("awake", desktopLive: true), run("asleep", desktopLive: false)], cardSubjectID: nil,
-      nowMs: t0)
-    #expect(rows.map(\.id) == ["awake", "asleep"])
-    #expect(rows[0].stale == false)
-    #expect(rows[1].stale)
-    // The join says so, for any surface that wants the reason rather than the dim.
-    #expect(rows[1].agent?.join?.deviceLive == false)
+    let rows = [
+      row("marked", status: .idle, stale: true, unread: true),
+      row("clear", status: .working, stale: false, unread: false),
+      row("quiet", status: .blocked, stale: false, unread: true),
+    ]
+    let dressed = assembly.fold(rows, cardSubjectID: nil)
+    let stale = dressed.map { $0.stale }
+    let unread = dressed.map { $0.unread }
+    #expect(stale == [true, false, false])
+    #expect(unread == [true, false, true])
   }
 
   @Test func theProjectionCarriesTheMonitorsFacts() {
     let state = AgentRuntimeState(
       permissions: [AgentPermission(tool: "Bash")], effort: AgentEffort(value: "high", intent: .configured),
-      lastAssistantMessage: "May I?", usage: AgentUsage(cumulativeTokens: 5),
+      lastAssistantMessage: "May I?",
+      usage: AgentUsage(cumulativeTokens: 5, costUsd: 0.5, costCoverage: .partial, costRatePerMin: 0.2),
       statusSince: now, lastEvidenceAt: now)
     let bubble = agent("a", project: "p", state: state)
     #expect(bubble.status == .blocked)
     #expect(bubble.agent?.blockerKind == .permission)
     #expect(bubble.agent?.effort == AgentEffort(value: "high", intent: .configured))
     #expect(bubble.agent?.lastMessage == "May I?")
-    #expect(bubble.agent?.monitorUsage?.cumulativeTokens == 5)
+    // the usage reaches the body as the owner's cost: the USD, the word, and the rate by the hour (J3 (a))
+    #expect(bubble.agent?.cost == AgentCost(usd: 0.5, coverage: "partial", burnPerHour: 0.2 * 60))
+    #expect(agentCost(AgentUsage(cumulativeTokens: 5)) == nil)
+    #expect(agentCost(AgentUsage(costUsd: 2)) == AgentCost(usd: 2, coverage: "unavailable"))
     #expect(bubble.agent?.statusSince == now)
     // Not blocked: no kind, even with a stale blocker list nobody classified.
     #expect(agent("b", project: "p").agent?.blockerKind == nil)

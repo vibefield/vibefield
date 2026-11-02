@@ -6,7 +6,7 @@ import Testing
 @Suite struct RpcRequestFramingTests {
   @Test func aRequestIsJsonRpcTwoWithAnIntegerId() throws {
     let text = try RpcCodec.request(
-      id: 7, method: "agent.subscribe", params: AgentSubscribeParams.phoneField.json)
+      id: 7, method: "agent.subscribe", params: fieldAsk.json)
     let value = try JSONValue.parse(Data(text.utf8))
     #expect(value["jsonrpc"]?.stringValue == "2.0")
     #expect(value["id"] == .int(7))

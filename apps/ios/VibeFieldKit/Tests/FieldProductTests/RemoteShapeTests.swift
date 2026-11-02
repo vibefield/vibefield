@@ -148,6 +148,17 @@ enum Remote {
     "agent-remote-mesh-open.resync",
   ]
 
+  /// T1r (PG-3e) — 3b's routed report is in this bundle, beside the encoder that is held to it: the shown row's
+  /// MODEL id, routed by the desktop that owns it. Read as JSON: the golden is matched by value (it is pretty-printed).
+  @Test func theRoutedReportIsInThisBundle() throws {
+    let json = try Fixture.json("agent-report-shown.routed")
+    let ids = json["ids"]?.arrayValue?.compactMap { $0.stringValue } ?? []
+    #expect(ids == ["run-studio-q"])
+    #expect(json["device"]?.stringValue == "dev-desktop-b")
+    let keys = json.objectValue.map { Set($0.keys) } ?? []
+    #expect(keys == ["ids", "device"])
+  }
+
   /// T1 — every remote golden reads whole: no row refused, no key unknown at any level.
   @Test(arguments: goldens) func everyRemoteGoldenDecodes(name: String) throws {
     let json = try Fixture.json(name)
@@ -637,5 +648,19 @@ enum Remote {
       reset, .state(device: Remote.home, .live, asOf: "2026-09-30T21:20:00.000Z"),
     ])
     #expect(!screen.holds(Remote.home))
+  }
+}
+
+// PG-3f — the phone's report, held to 3b's routed golden.
+@Suite struct AgentReportShownTests {
+  /// E1 — the shown row's MODEL id, routed by the desktop that owns it, encodes as the contracts' golden, by value.
+  @Test func theRoutedReportEncodesAsTheGolden() throws {
+    let golden = try Fixture.json("agent-report-shown.routed")
+    let encoded = AgentReportShownParams(ids: ["run-studio-q"], device: "dev-desktop-b").json
+    #expect(encoded == golden)
+    // an empty list clears the report: the same shape, no ids
+    let cleared = AgentReportShownParams(ids: [], device: "dev-desktop-b").json
+    #expect(cleared == .object(["ids": .array([]), "device": .string("dev-desktop-b")]))
+    #expect(AgentReportShownParams.method == "agent.reportShown")
   }
 }

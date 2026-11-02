@@ -2806,6 +2806,11 @@ export const METHODS: MethodDef[] = [
   // Corrected 2026-10-01 (DS wave 2 landing, SP-L4): a `tailnet` principal's
   // bare ask — the FULL fold at the 16 ms tick — is REFUSED (FORBIDDEN_SCOPE,
   // `refuseBoardAsk`); the phone asks `{projection: "field"}` and does.
+  // *Corrected 2026-11-02 (PG-3e):* the phone asks the remote cut through its
+  // home (the kit's `AgentSubscribeParams.phoneRemote`, `{projection:
+  // "remote", scope: "mesh"}`, no interval: the door floors a phone by kind);
+  // the kit has no `field` reader, and `field` retires one release of skew
+  // after the kit ships (PG-L1).
   // DS-3 (2026-09-30, DS-D4) — `stream`, not `local`: the mesh board's
   // upstreams are this very door on each self desktop, asked by a PEER daemon
   // (`peer-fieldd`), which the D36 wall refuses on a `local` method. What stays

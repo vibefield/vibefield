@@ -13,18 +13,29 @@ import Testing
 /// leaving a session parks it on its lane, so coming back is a demand and not a
 /// dial.
 @Suite(.serialized) struct LanesOverTheDoorTests {
-  /// Attach `session` on `attachment` and walk the door through both legs'
-  /// acknowledgements and a seed, the way the door test's first row does.
+  /// Attach `session` on `attachment`, walk the door through both legs'
+  /// acknowledgements the way the door test's first row does, and return once
+  /// the CLIENT has read them: the session live on both legs of its lane.
   ///
   /// `sessionHandle`/`viewHandle` are the TRF1 identity the frames leg declares
   /// for this session, the seed frame's by default. A second session on the same
   /// lane needs its OWN: the client refuses two live activations claiming one
   /// session handle and fails the lane (RoutedTerminalClient's identity rule), so
   /// a row that attaches two must give the second distinct handles.
+  ///
+  /// The last wait is item 157's (2026-11-02). The door having SENT the frames
+  /// leg's acknowledgement is not the client having READ it, and a row that
+  /// leaves and comes back depends on the second: the re-tap's fast path ("back
+  /// on its lane — no mint, no dial") asks the client whether the activation is
+  /// live (`hasLiveActivation`, P5). Re-tapped first, the attachment took the
+  /// full road — a mint and a fresh attach this door never answers — and the
+  /// demand never came back: `theCellASessionOpensOrComesBackOnIsSaidFocused`,
+  /// red in 2 of 10 kit runs under load on 10-29, its log reading `mint asked`
+  /// before `frames acknowledged`. A longer wait could not have caught it.
   @MainActor
   private func attachToLive(
-    _ attachment: TerminalAttachment, session: String, door: CellDoorHarness, attaches: Int,
-    sessionHandle: String? = nil, viewHandle: String? = nil
+    _ attachment: TerminalAttachment, session: String, door: CellDoorHarness,
+    lanes: TerminalLanes, attaches: Int, sessionHandle: String? = nil, viewHandle: String? = nil
   ) async throws {
     let frames = try LaneFrames.load()
     let identity = try decodeTRF1Frame(frames.seed)
@@ -47,6 +58,9 @@ import Testing
         sessionHandle: sessionHandle ?? String(identity.sessionHandle),
         viewHandle: viewHandle ?? String(identity.viewHandle)),
       on: .frames)
+    try await AttachmentOverTheDoorTests.until("\(session) live on both legs of its lane") {
+      await MainActor.run { lanes.client(holding: session)?.hasLiveActivation(session) == true }
+    }
   }
 
   /// A second session's own TRF1 identity on the lane: the seed frame's
@@ -91,12 +105,12 @@ import Testing
 
     let rendered = AttachmentOverTheDoorTests.RenderedFrames()
     let first = TerminalAttachment(lanes: lanes, appearance: .default, scene: rendered.scene)
-    try await attachToLive(first, session: "sess-a", door: door, attaches: 1)
+    try await attachToLive(first, session: "sess-a", door: door, lanes: lanes, attaches: 1)
     let firstActivation = try #require(await door.controlAttach).activationId
     let second = TerminalAttachment(lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
     let own = try secondHandles()
     try await attachToLive(
-      second, session: "sess-b", door: door, attaches: 2,
+      second, session: "sess-b", door: door, lanes: lanes, attaches: 2,
       sessionHandle: own.session, viewHandle: own.view)
     try await laneOutlivesTheSecondAttach(rendered, firstActivation: firstActivation, door: door)
 
@@ -123,7 +137,7 @@ import Testing
       })
     let attachment = TerminalAttachment(
       lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
-    try await attachToLive(attachment, session: "sess-a", door: door, attaches: 1)
+    try await attachToLive(attachment, session: "sess-a", door: door, lanes: lanes, attaches: 1)
 
     await attachment.detach()
     try await AttachmentOverTheDoorTests.until("the park") {
@@ -155,13 +169,13 @@ import Testing
       door: { asked in try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: asked) })
     let rendered = AttachmentOverTheDoorTests.RenderedFrames()
     let first = TerminalAttachment(lanes: lanes, appearance: .default, scene: rendered.scene)
-    try await attachToLive(first, session: "sess-a", door: door, attaches: 1)
+    try await attachToLive(first, session: "sess-a", door: door, lanes: lanes, attaches: 1)
     let firstActivation = try #require(await door.controlAttach).activationId
     let second = TerminalAttachment(
       lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
     let own = try secondHandles()
     try await attachToLive(
-      second, session: "sess-b", door: door, attaches: 2,
+      second, session: "sess-b", door: door, lanes: lanes, attaches: 2,
       sessionHandle: own.session, viewHandle: own.view)
     try await laneOutlivesTheSecondAttach(rendered, firstActivation: firstActivation, door: door)
 
@@ -189,7 +203,7 @@ import Testing
       door: { asked in try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: asked) })
     let rendered = AttachmentOverTheDoorTests.RenderedFrames()
     let attachment = TerminalAttachment(lanes: lanes, appearance: .default, scene: rendered.scene)
-    try await attachToLive(attachment, session: "sess-a", door: door, attaches: 1)
+    try await attachToLive(attachment, session: "sess-a", door: door, lanes: lanes, attaches: 1)
     let activation = try #require(await door.controlAttach).activationId
     await door.sendUnit(
       try Script.frame(
@@ -236,14 +250,14 @@ import Testing
     // No legs up yet: sess-a's held ticket is taken and goes unused; the door mints.
     let first = TerminalAttachment(
       lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
-    try await attachToLive(first, session: "sess-a", door: door, attaches: 1)
+    try await attachToLive(first, session: "sess-a", door: door, lanes: lanes, attaches: 1)
     #expect(mints.count == 1)
     // The legs are up: sess-b attaches on its held ticket — no mint, no second hello.
     let second = TerminalAttachment(
       lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
     let own = try secondHandles()
     try await attachToLive(
-      second, session: "sess-b", door: door, attaches: 2,
+      second, session: "sess-b", door: door, lanes: lanes, attaches: 2,
       sessionHandle: own.session, viewHandle: own.view)
     #expect(mints.count == 1)
     #expect(await door.helloCount[.control] == 1)
@@ -272,7 +286,7 @@ import Testing
       try AttachmentOverTheDoorTests.ticketJSON(port: port)["route"]?["cellBootId"]?.stringValue)
     let attachment = TerminalAttachment(
       lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
-    try await attachToLive(attachment, session: "sess-a", door: door, attaches: 1)
+    try await attachToLive(attachment, session: "sess-a", door: door, lanes: lanes, attaches: 1)
     #expect(cells.said == [cell])
     await attachment.detach()
     attachment.attach(sessionID: "sess-a", cols: 80, rows: 24, deviceName: "studio")
@@ -296,7 +310,7 @@ import Testing
       door: { asked in try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: asked) })
     let first = TerminalAttachment(
       lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
-    try await attachToLive(first, session: "sess-a", door: door, attaches: 1)
+    try await attachToLive(first, session: "sess-a", door: door, lanes: lanes, attaches: 1)
     let second = TerminalAttachment(
       lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
     // sess-b's own TRF1 identity: on one lane the client fails the whole lane
@@ -304,7 +318,7 @@ import Testing
     // would then reach closed legs.
     let own = try secondHandles()
     try await attachToLive(
-      second, session: "sess-b", door: door, attaches: 2,
+      second, session: "sess-b", door: door, lanes: lanes, attaches: 2,
       sessionHandle: own.session, viewHandle: own.view)
     let activation = try #require(await door.controlAttach).activationId
 

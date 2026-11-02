@@ -230,16 +230,25 @@ public struct HomeScreen: View {
 
   /// One stage, two sources, projected by the pure functions in FieldAgents.
   ///
-  /// Since IOS-4b the agent half is the DAEMON's: `FieldLink` folds every
-  /// desktop's board — from `field.agents.v1` where the floor publishes it, and
-  /// over the door where it does not — into the same `AgentSnapshot` the mock
-  /// used to invent. An empty field with the mesh up is now a real answer
-  /// rather than a missing feature.
+  /// Since PG-3e the agent half is the HOME'S WINDOW: `FieldLink` holds the
+  /// home's remote board and maps its drawn rows straight to bubbles
+  /// (`FieldLink.bubbles`), body for body as the desktop draws them. The
+  /// scripted fleet keeps its own snapshots, behind the lab and the demo
+  /// arguments only. An empty field with the mesh up is a real answer rather
+  /// than a missing feature.
+  ///
+  /// `mockActive` is DEBUG-only, so its branch is too: the Release build reads
+  /// the link alone (the v2 check's M1).
   private var projected: [FieldBubble] {
-    liveAgents.compactMap(fieldBubble(from:)) + remoteField.snapshot.rows.map(fieldBubble(from:))
+    let sessions = remoteField.snapshot.rows.map(fieldBubble(from:))
+    #if DEBUG
+      if mockActive { return liveAgents.compactMap(fieldBubble(from:)) + sessions }
+    #endif
+    return (link?.bubbles ?? []) + sessions
   }
 
-  /// The agent rows, from whoever is entitled to give them.
+  /// The scripted fleet's rows, while it owns the field. Outside the mock this
+  /// is empty: the live field is `FieldLink.bubbles`.
   private var liveAgents: [AgentSnapshot] {
     #if DEBUG
       // The lab and the demo arguments own the field while they are up: what
@@ -251,14 +260,16 @@ public struct HomeScreen: View {
         return feed.agents
       }
     #endif
-    return link?.agents ?? []
+    return []
   }
 
   // --- IOS-6d: the field's ledgers ------------------------------------------
   /// The rows the field draws: the projection dressed by `FieldAssembly` —
-  /// every project's colour, the open card's pane, the unread marks, the
-  /// stale flags, the usage ledger. Folded on every projection and every
-  /// change of the card's subject, never derived twice.
+  /// every project's colour, the open card's pane (PG-3e: the usage ledger
+  /// retired; the owner's cost rides the row). Folded on every projection and
+  /// every change of the card's subject, never derived twice. (Corrected
+  /// 2026-11-02, PG-3e, the review's [2]: it listed the unread marks and the
+  /// stale flags among the fold's dress; they are the owner's, on the row.)
   @State private var bubbles: [FieldBubble] = []
   @State private var assembly = FieldAssembly(tint: .light)
   /// The project ledger's cache (D-i13): a project keeps its colour across
@@ -268,8 +279,7 @@ public struct HomeScreen: View {
   private func refold() {
     assembly.tint = colorScheme == .dark ? .dark : .light
     let before = assembly.projects
-    bubbles = assembly.fold(
-      projected, cardSubjectID: selection?.id, nowMs: Date().timeIntervalSince1970 * 1000)
+    bubbles = assembly.fold(projected, cardSubjectID: selection?.id)
     if assembly.projects != before { projectStore.save(assembly.projects) }
   }
   // --- end IOS-6d -----------------------------------------------------------
@@ -414,7 +424,8 @@ public struct HomeScreen: View {
     guard let link else { return nil }
     let desktops = link.desktops.map { desktop in
       let asleep = desktop.state != .ready
-      let running = liveAgents.filter { $0.join?.deviceID == desktop.deviceId }.count
+      // bare terminals carry no join, so they are not counted, as before
+      let running = projected.filter { $0.agent?.join?.deviceID == desktop.deviceId }.count
       let profiles = (bloomProfiles[desktop.deviceId] ?? []).map { set in
         BloomProfile(
           id: set.id, label: set.kind == "native" ? LaunchModel.nativeLabel : set.label, isDefault: set.isDefault,
@@ -901,7 +912,7 @@ public struct HomeScreen: View {
   /// What History's rows may offer, and how they are done.
   private var historyActs: HistoryActs {
     HistoryActs(
-      inField: { native in liveAgents.contains { $0.join?.nativeSessionID == native } },
+      inField: { native in projected.contains { $0.agent?.join?.nativeSessionID == native } },
       desktopAwake: { device in link?.desktops.first { $0.deviceId == device }?.state == .ready },
       canResume: { device, provider in
         fieldCatalogs[device].map { rows in rows.contains { $0.id == provider && $0.canResume } }
@@ -935,10 +946,11 @@ public struct HomeScreen: View {
 
   /// Jump to: the Field tab opens the card of the run that continues this
   /// conversation (joined by the field row's native id).
+  ///
+  /// PG-3e: found by the join's native id itself — a bubble's id is its BODY's
+  /// (the visual id), which a promoted row does not share with its run.
   private func jumpToRun(_ native: String) {
-    guard let agent = liveAgents.first(where: { $0.join?.nativeSessionID == native }),
-      let bubble = bubbles.first(where: { $0.id == agent.id })
-    else { return }
+    guard let bubble = bubbles.first(where: { $0.agent?.join?.nativeSessionID == native }) else { return }
     selectedTab = .field
     openCard(on: bubble)
   }
@@ -1262,16 +1274,19 @@ public struct HomeScreen: View {
           mockActive = true
           feed.start()
         }
-        // `-vf-demo-field-slice`: the contracts' golden MESH board through the
-        // REAL home path (DS-8, 2026-10-01) — four desktops on the fixture's
-        // tailnet, the phone homing to the first whose door answers and reading
-        // the field through its `agent.subscribe {scope: "mesh"}`: the home's
-        // board, a live laptop's, a sleeping desktop's kept board GREYED, and a
-        // stale one with none. The network is an in-process door answering the
-        // contracts' own bytes, so the swarm AND the corner can be photographed
+        // `-vf-demo-field-slice`: PG-3a's WITNESS remote board through the
+        // REAL home path (PG-3e) — three desktops on the fixture's tailnet
+        // (Studio, the home; Loft, online, its rows arriving through the home;
+        // Attic, offline), the phone homing to Studio and reading the field
+        // through its `agent.subscribe {projection: "remote", scope: "mesh"}`:
+        // the home's window row for row, Loft's rows with their host, Attic's
+        // kept rows GREYED. The network is an in-process door answering the
+        // witness's own bytes, so the swarm AND the corner can be photographed
         // over real-shaped rows in both themes with no desktop and no tailnet.
         // It is not a demo path: nothing downstream of the door knows the
-        // difference, which is the point. (Before DS-8 this was the golden
+        // difference, which is the point. (Corrected 2026-11-02, PG-3e: from
+        // DS-8 it served the contracts' golden FIELD mesh board, four desktops
+        // — studio, laptop, air asleep, mini stale; before DS-8 the golden
         // `field.agents.v1` slice through the store reader, retired by DS-D14.)
         //
         // `link == nil` because this whole block runs again on every return to
@@ -1284,6 +1299,7 @@ public struct HomeScreen: View {
           fixture.start()
           link = fixture
           fixtureLink = true
+          reportCard()
         }
         // `!demoRemoteActive` for the reason the line above carries: a second
         // appearance would otherwise replace a running fixture field with a
@@ -1487,16 +1503,34 @@ public struct HomeScreen: View {
           // --- end IOS-5d ------------------------------------------------
         }
         // --- end IOS-5c --------------------------------------------------
-        if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
+        let autoOpen = ProcessInfo.processInfo.arguments.first {
+          $0 == "-vf-auto-open-card" || $0.hasPrefix("-vf-auto-open-card=")
+        }
+        if let autoOpen {
           Task {
             try? await Task.sleep(for: .seconds(2))
+            // Item 154 (DEBUG) — `-vf-auto-open-card=<visual id>` opens THAT body's card, once the field draws it
+            // (ten seconds at most). A name the field never holds opens nothing, and says so: no silent fallback.
+            if autoOpen.hasPrefix("-vf-auto-open-card=") {
+              let named = String(autoOpen.dropFirst("-vf-auto-open-card=".count))
+              for _ in 0..<20 where !bubbles.contains(where: { $0.id == named }) {
+                try? await Task.sleep(for: .milliseconds(500))
+              }
+              guard let bubble = bubbles.first(where: { $0.id == named }) else {
+                print("[auto-open] no body \(named) on the field: no card opened")
+                return
+              }
+              print("[auto-open] opening \(named)")
+              openCard(on: bubble)
+              return
+            }
             // A bubble with a TERMINAL first when there is one: its face is
             // the one with an act on it, so it is what a screenshot run is
             // usually after. Since TM-5 that is a fold row whose join names a
             // session — a remote row is the DEBUG fixture's, and is kept as
             // the fallback for exactly that reason.
             let wanted =
-              bubbles.first(where: { $0.agent?.join?.hasTerminal == true })
+              bubbles.first(where: { $0.join?.hasTerminal == true })
               ?? bubbles.first(where: { $0.remote?.attachable == true })
               ?? bubbles.first(where: { $0.status == .working })
               ?? bubbles.first
@@ -1795,6 +1829,8 @@ public struct HomeScreen: View {
           homeMemory: HomeMemory())
         opened.start()
         link = opened
+        // PG-3f — a `.closeDoor` closes the link but leaves the card open: the new link hears it
+        reportCard()
       }
     }
   }
@@ -2068,7 +2104,7 @@ public struct HomeScreen: View {
   /// session runs on, as the link lists it (§13), and a plain screen while its
   /// platform is not said.
   private var cardSessionOS: DeviceMark.OS {
-    let device = cardBubble?.agent?.join?.deviceID ?? cardBubble?.remote?.deviceID
+    let device = cardBubble?.join?.deviceID ?? cardBubble?.remote?.deviceID
     return DeviceMark.OS(platform: link?.desktops.first { $0.deviceId == device }?.platform)
   }
 
@@ -2481,31 +2517,23 @@ public struct HomeScreen: View {
   // MARK: - IOS-4c: the agent card's terminal
 
   /// G3's join for the card's subject. `.noJoin` for a remote bubble or the
-  /// scripted fleet — neither has an agent row behind it.
+  /// scripted fleet — neither has an agent row behind it. (Item 154: a bare
+  /// terminal's pane join counts too, read through `FieldBubble.join`.)
   ///
   /// Both extra facts come from the DEVICES store rather than from a terminal
   /// listing: the desktop's name, and (TM-5a) whether it publishes its terminal
   /// doors on the tailnet. It is the same desktop either way, and the devices
   /// store is the only one of the two wires that still answers since TM-5.
   private var cardTerminalFace: AgentTerminalFace {
-    guard let join = cardBubble?.agent?.join else { return .noJoin }
-    let desktop = desktop(join.deviceID)
-    return agentTerminalFace(
-      join: join, deviceName: desktop?.name,
-      publishesTerminalDoors: desktop?.publishesTerminalDoors)
-  }
-
-  /// The field's row for a desktop, when it has one. `nil` is a desktop the
-  /// devices store has not named — which is not the same as one that answered.
-  private func desktop(_ deviceID: String) -> FieldDesktop? {
-    link?.desktops.first { $0.deviceId == deviceID }
+    FieldHomeModel.cardTerminalFace(cardBubble, desktops: link?.desktops ?? [])
   }
 
   /// The one act an ended run has: RESUME, over that desktop's door. The new
   /// run is NOT put on the field here — the board is the fold's to publish,
   /// and the next slice or delta shows it.
   private func resumeAction(_ join: AgentJoin?, runtimeRunId: String?) -> CardAction? {
-    guard cardTerminalFace.offersResume, let join, let runtimeRunId, let link else { return nil }
+    guard FieldHomeModel.offersResume(cardTerminalFace, for: cardBubble), let join, let runtimeRunId, let link
+    else { return nil }
     return CardAction(id: "resume", label: "RESUME") {
       Task {
         do {
@@ -2583,7 +2611,8 @@ public struct HomeScreen: View {
     // nothing about it. The store, the sheet and the door they call stay until
     // TM-3 retires the three together; the act that could not work is gone now.
     // IOS-4c — an ended run's one act.
-    if let resume = resumeAction(cardBubble?.agent?.join, runtimeRunId: cardBubble?.id) {
+    // PG-3e — a resume names the run's board KEY; a bubble's id is its body's. The mock has no key and keys by id.
+    if let resume = resumeAction(cardBubble?.join, runtimeRunId: cardBubble?.runKey ?? cardBubble?.id) {
       actions.append(resume)
     }
     return actions
@@ -2610,6 +2639,13 @@ public struct HomeScreen: View {
     }
   }
 
+  /// PG-3f (design v2 §4.1) — the phone is a screen: the link hears what the open card shows, by the body it follows
+  /// (`selection.id`, the VISUAL id), and reports the row under it to its owner. Called where the card opens and
+  /// closes, and at every link install.
+  private func reportCard() {
+    link?.show(visualId: selection?.id)
+  }
+
   /// Raise the card on a bubble, remembering it as the card's subject. Every
   /// path that opens a card comes through here so none of them can open one
   /// with no subject to fall back on.
@@ -2625,6 +2661,7 @@ public struct HomeScreen: View {
     inputCard.history = clipboardHistory
     // --- end IOS-5d
     selection = SessionSelection(id: bubble.id)
+    reportCard()
     // FW-D2 (James, 2026-10-17: "the terminal should already connect and show
     // the terminal content, no more attach button") — opening the card IS the
     // attach. A kept session comes back painted from its lane; any other mints
@@ -2773,11 +2810,12 @@ public struct HomeScreen: View {
     #endif
   }
 
-  /// The terminal sessions the field shows on one desktop: each run whose join names a PTY there.
+  /// The terminal sessions the field shows on one desktop: each run whose join names a PTY there, a bare terminal's
+  /// included (item 154), so its ticket is held before the tap as an agent's is.
   static func listedSessions(_ bubbles: [FieldBubble], on deviceID: String) -> Set<String> {
     Set(
       bubbles.compactMap { bubble -> String? in
-        guard let join = bubble.agent?.join, join.deviceID == deviceID, join.hosted != "none"
+        guard let join = bubble.join, join.deviceID == deviceID, join.hosted != "none"
         else { return nil }
         return join.runtimeSessionID
       })
@@ -2806,6 +2844,7 @@ public struct HomeScreen: View {
   private func closeCard() {
     let deviceID = attachedDeviceID
     cardBubble = nil
+    reportCard()
     attachedDeviceID = nil
     renderFailure = nil
     attachRefusal = nil

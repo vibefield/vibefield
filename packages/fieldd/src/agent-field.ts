@@ -84,6 +84,10 @@ export function refuseBoardAsk(
     // 2026-10-01): the PHONE is refused it too — a `tailnet` principal's bare
     // ask used to be the whole fold at the desktop's 16 ms tick; the phone
     // reads `field` (and does: FieldLink asks `{projection: "field"}`).
+    // *Corrected 2026-11-02 (PG-3e):* the phone's FieldLink asks the remote
+    // cut through its home (`phoneRemote`, `{projection: "remote", scope:
+    // "mesh"}`); no kit reads `field`, which stays served for older kits until
+    // PG-L1.
     if (principal === "peer-fieldd" || principal === "tailnet")
       return new RpcCallError(
         "FORBIDDEN_SCOPE",

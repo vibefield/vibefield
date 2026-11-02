@@ -102,9 +102,14 @@ public struct SettingsDesktop: Identifiable, Equatable, Sendable {
   /// Whether it serves its terminals to your devices (TM-5a); nil is "has
   /// not said", which is not a refusal.
   public let servesTerminals: Bool?
+  /// PG-3e (design v2 §5.3) — whether this phone can read this desktop's agents through its home: `false` for a
+  /// desktop the phone cannot read (its board incompatible, or its door refused the field); nil is "not said yet" —
+  /// not hearing, or not on the home's board yet — which is not a refusal, the same posture as `servesTerminals`.
+  public let watchable: Bool?
 
   public init(
-    id: String, name: String, platform: String?, reach: Reach, isHome: Bool, servesTerminals: Bool?
+    id: String, name: String, platform: String?, reach: Reach, isHome: Bool, servesTerminals: Bool?,
+    watchable: Bool? = nil
   ) {
     self.id = id
     self.name = name
@@ -112,6 +117,7 @@ public struct SettingsDesktop: Identifiable, Equatable, Sendable {
     self.reach = reach
     self.isHome = isHome
     self.servesTerminals = servesTerminals
+    self.watchable = watchable
   }
 
   public var isAsleep: Bool {

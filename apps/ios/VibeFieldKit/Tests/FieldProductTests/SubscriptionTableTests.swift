@@ -110,7 +110,7 @@ private func describe(delta payload: JSONValue) -> String {
     defer { client.close() }
     let seen = Seen()
     let handle = try await client.subscribe(
-      "agent.subscribe", params: AgentSubscribeParams.phoneField.json,
+      "agent.subscribe", params: fieldAsk.json,
       shape: .snapshotDelta(minIntervalMs: 250),
       onSnapshot: { seen.add(describe(snapshot: $0)) }, onDelta: { seen.add(describe(delta: $0)) })
     #expect(handle.cursor == SubscriptionCursor(epoch: fieldEpoch, revision: 64))
