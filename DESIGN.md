@@ -3155,6 +3155,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the group together, including Prints; one Undo restores the group and Escape cancels the move.
   Locked objects stay fixed. The group hit check runs once at pointer-down, with no new render pass.
 
+  **Edge rulers (2026-11-02):** the cutting mat's ruler strips stay above canvas objects as they move
+  across the edges. Their lighting and texture stay the same. ICE draws the strips after the objects
+  using the existing mat pipeline, with disjoint regions to avoid extra mat shading or doubled fades.
+
   **Prints (2026-11-02):** an image-backed canvas object, placed by image paste or a picture card dropped
   onto the desk. It is absent from the pegboard; existing and new prints display edge to edge without a white frame.
 
