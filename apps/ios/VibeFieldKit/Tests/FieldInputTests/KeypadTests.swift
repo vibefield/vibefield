@@ -327,6 +327,27 @@ struct KeypadRegressionTests {
     #expect(!model.shiftArmed)
   }
 
+  @Test(
+    "saved shortcut selections survive profile namespacing",
+    arguments: ["common", "claude", "tmux", "emacs", "screen"])
+  func legacyProfileSelection(id: String) {
+    let legacy = ComboCatalog.profile(id: id, tmuxPrefix: "a")
+    let current = ComboCatalog.profile(id: "keypad.\(id)", tmuxPrefix: "a")
+    #expect(legacy == current)
+    #expect(legacy.id == "keypad.\(id)")
+    if id == "tmux" {
+      #expect(legacy.combos[0].strokes == [.control("a"), TerminalKeystroke(.character("c"))])
+    }
+    if id == "claude" {
+      #expect(legacy.combos[0].strokes == [.shiftTab])
+    }
+  }
+
+  @Test("an unknown saved profile falls back to Common")
+  func unknownProfileSelection() {
+    #expect(ComboCatalog.profile(id: "removed-profile", tmuxPrefix: "b") == ComboCatalog.common)
+  }
+
   @Test("tmux uses the selected prefix without applying it to the command")
   func configuredPrefix() {
     let model = InputCardModel()

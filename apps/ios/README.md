@@ -308,6 +308,9 @@ Escape, Control, Alt, Shift, and ABC; navigation appears only in the larger pad.
 The arrow cluster keeps its spatial arrangement, Backspace and Enter are taller,
 and F1–F12 have their own page. Common shell shortcuts lead; Claude, tmux, Emacs,
 and Screen profiles are available, with a configurable tmux Control prefix.
+These are manually selected terminal-key profiles, independent of the session's
+agent identity. The picker reads ComboCatalog's profile data; saved IDs use the
+`keypad.` namespace and earlier unqualified selections still resolve.
 The native keyboard owns letters, numbers, and symbols. Keypad keys always send
 terminal events, preserving any unsent draft. Docked native keyboard measurements
 are retained per window size, rather than guessing the keypad height; its hosting

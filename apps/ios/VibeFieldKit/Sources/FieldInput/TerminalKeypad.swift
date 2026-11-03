@@ -10,7 +10,7 @@ struct TerminalKeypad: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.colorSchemeContrast) private var contrast
-  @AppStorage("terminal.keypad.profile") private var profile = "common"
+  @AppStorage("terminal.keypad.profile") private var profile = ComboCatalog.common.id
   @AppStorage("terminal.keypad.tmuxPrefix") private var tmuxPrefix = "b"
 
   private let gap: CGFloat = 8
@@ -22,13 +22,10 @@ struct TerminalKeypad: View {
     return value.count == 1 && value.first!.isASCII && value.first!.isLetter ? value.first! : "b"
   }
   private var pack: ComboPack {
-    switch profile {
-    case "claude": return ComboCatalog.claude
-    case "tmux": return ComboCatalog.tmux(prefix: prefix)
-    case "emacs": return ComboCatalog.emacs
-    case "screen": return ComboCatalog.screen
-    default: return ComboCatalog.common
-    }
+    ComboCatalog.profile(id: profile, tmuxPrefix: prefix)
+  }
+  private var profileSelection: Binding<String> {
+    Binding(get: { pack.id }, set: { profile = $0 })
   }
 
   var body: some View {
@@ -175,7 +172,7 @@ struct TerminalKeypad: View {
       HStack(spacing: gap) {
         VStack(alignment: .leading, spacing: 0) {
           profileMenu
-          if profile == "tmux" { prefixMenu }
+          if pack.id == ComboCatalog.tmux.id { prefixMenu }
         }
         .frame(width: 126, alignment: .leading)
         shortcutKeys(columns: 5)
@@ -183,7 +180,7 @@ struct TerminalKeypad: View {
     } else {
       VStack(spacing: gap) {
         HStack {
-          if profile == "tmux" {
+          if pack.id == ComboCatalog.tmux.id {
             prefixMenu
           } else {
             Text("Send to terminal").font(.system(size: 12))
@@ -219,12 +216,10 @@ struct TerminalKeypad: View {
 
   private var profileMenu: some View {
     Menu {
-      Picker("Shortcut profile", selection: $profile) {
-        Text("Common").tag("common")
-        Text("Claude").tag("claude")
-        Text("tmux").tag("tmux")
-        Text("Emacs").tag("emacs")
-        Text("Screen").tag("screen")
+      Picker("Shortcut profile", selection: profileSelection) {
+        ForEach(ComboCatalog.profiles(tmuxPrefix: prefix)) { candidate in
+          Text(candidate.title).tag(candidate.id)
+        }
       }
     } label: {
       HStack(spacing: 6) {

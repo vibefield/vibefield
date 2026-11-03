@@ -47,7 +47,7 @@ public struct ComboPack: Identifiable, Equatable, Sendable {
 public enum ComboCatalog {
 
   public static let common = ComboPack(
-    id: "common", title: "Common",
+    id: "keypad.common", title: "Common",
     combos: [
       control("common", "c", "Interrupt"), control("common", "r", "History"),
       control("common", "l", "Redraw"), control("common", "a", "Line start"),
@@ -57,22 +57,22 @@ public enum ComboCatalog {
     ])
 
   public static let claude = ComboPack(
-    id: "claude", title: "Claude",
+    id: "keypad.claude", title: "Claude",
     combos: [
       Combo(
-        id: "claude.mode", label: "⇧ Tab", subtitle: "Change mode",
+        id: "keypad.claude.mode", label: "⇧ Tab", subtitle: "Change mode",
         spoken: "Shift Tab", strokes: [.shiftTab]),
-      control("claude", "o", "Transcript"), control("claude", "t", "Task list"),
-      control("claude", "c", "Interrupt"), control("claude", "r", "History"),
-      control("claude", "l", "Redraw"), control("claude", "b", "Background"),
-      control("claude", "a", "Line start"), control("claude", "e", "Line end"),
+      control("keypad.claude", "o", "Transcript"), control("keypad.claude", "t", "Task list"),
+      control("keypad.claude", "c", "Interrupt"), control("keypad.claude", "r", "History"),
+      control("keypad.claude", "l", "Redraw"), control("keypad.claude", "b", "Background"),
+      control("keypad.claude", "a", "Line start"), control("keypad.claude", "e", "Line end"),
     ])
 
   /// Store the user's actual prefix, rather than sending the default to a
   /// differently configured tmux session. Prefix and command remain separate.
   public static func tmux(prefix: Character) -> ComboPack {
     ComboPack(
-      id: "tmux", title: "tmux",
+      id: "keypad.tmux", title: "tmux",
       combos: [
         prefixed("tmux", prefix: prefix, then: "c", subtitle: "New window"),
         prefixed("tmux", prefix: prefix, then: "n", subtitle: "Next window"),
@@ -89,7 +89,7 @@ public enum ComboCatalog {
   /// Emacs' own motion keys, which are also readline's defaults and therefore
   /// the ones that work in a bare shell.
   public static let emacs = ComboPack(
-    id: "emacs",
+    id: "keypad.emacs",
     title: "Emacs",
     combos: [
       control("emacs", "a", "line start"),
@@ -106,7 +106,7 @@ public enum ComboCatalog {
   /// the default `^B`; a user who has rebound it reads these as the shape
   /// rather than the binding.
   public static let tmux = ComboPack(
-    id: "tmux",
+    id: "keypad.tmux",
     title: "Tmux",
     combos: [
       prefixed("tmux", prefix: "b", then: "c", subtitle: "new window"),
@@ -119,7 +119,7 @@ public enum ComboCatalog {
 
   /// The line editor every shell shares.
   public static let readline = ComboPack(
-    id: "readline",
+    id: "keypad.readline",
     title: "Readline",
     combos: [
       control("readline", "r", "search"),
@@ -132,7 +132,7 @@ public enum ComboCatalog {
 
   /// screen, for the desktops that still run it.
   public static let screen = ComboPack(
-    id: "screen",
+    id: "keypad.screen",
     title: "Screen",
     combos: [
       prefixed("screen", prefix: "a", then: "c", subtitle: "new"),
@@ -143,6 +143,21 @@ public enum ComboCatalog {
   /// The page's order, which is also the order of how often a phone reaches
   /// for them: editing first, then the multiplexer.
   public static let packs: [ComboPack] = [emacs, tmux, readline, screen]
+
+  /// These are manually chosen terminal-key profiles, never agent identities.
+  /// Keep their persisted IDs in a separate namespace and let the picker read
+  /// this data; it must not infer a profile from the session's provider.
+  public static func profiles(tmuxPrefix: Character) -> [ComboPack] {
+    [common, claude, tmux(prefix: tmuxPrefix), emacs, screen]
+  }
+
+  /// The first keypad build stored unqualified profile IDs. Resolve them here
+  /// without changing the user's choice or maintaining a second program table.
+  public static func profile(id: String, tmuxPrefix: Character) -> ComboPack {
+    profiles(tmuxPrefix: tmuxPrefix).first {
+      $0.id == id || $0.id == "keypad.\(id)"
+    } ?? common
+  }
 
   /// A one-press combo: a single control chord, named.
   private static func control(_ pack: String, _ character: Character, _ subtitle: String) -> Combo {
