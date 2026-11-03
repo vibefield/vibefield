@@ -110,11 +110,7 @@
         "npm": "0.16.0"
       },
       "pnpm": {
-        "build": [
-          "--filter",
-          "@vibecook/ice",
-          "build"
-        ]
+        "build": ["--filter", "@vibecook/ice", "build"]
       }
     }
   }
