@@ -41,7 +41,13 @@ public final class TerminalScene {
 
   /// The shipping scene: a Metal view, made on first use.
   public init() {
-    makeView = { try GhostteaTerminalMetalView(terminalFrame: .zero) }
+    makeView = {
+      let view = try GhostteaTerminalMetalView(terminalFrame: .zero)
+      // TPv3 streams the host TextEngine's fixed 13pt display list. The phone's
+      // font setting changes its grid and must scale those remote glyphs too.
+      view.frameTextMetrics = GhostteaTextMetrics()
+      return view
+    }
     applying = nil
   }
 

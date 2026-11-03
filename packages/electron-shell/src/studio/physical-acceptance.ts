@@ -30,10 +30,17 @@ export async function runStudioPhysicalAcceptance(opts: {
   productWindow: BrowserWindow;
   studioWindow: BrowserWindow;
   studioPartition: string;
+  studioWasShown: () => boolean;
 }): Promise<void> {
   let ok = false;
   try {
     await assertWindowIsolation(opts);
+    // On macOS isVisible() becomes true before the native show notification.
+    // Hiding during that interval can leave Chromium's page visible indefinitely,
+    // so establish the real shown state before testing hidden-window publishing.
+    await waitFor("Studio's native show notification", PRODUCT_READY_TIMEOUT_MS, async () =>
+      opts.studioWasShown(),
+    );
     await waitForProduct(opts.productWindow);
     await waitForStudio(opts.studioWindow);
     await waitFor(

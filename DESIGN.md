@@ -5207,16 +5207,40 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   under it: "at 13pt the grid gains about five rows, three or four of them under the header, so a
   full-screen program's first lines are hidden on the phone". James's pick of T1 and F1 retires both
   the fade and that cost: the band holds no rows.)*
+- **The phone's terminal keypad** (updated 2026-11-02, James's keyboard review).
+  The expanded keypad uses a spatial arrow cluster with larger Backspace and Enter keys,
+  soft rounded caps, and a shared native glass surface. Its pages are **Navigate**, **Shortcuts**,
+  and **Fn**. Letters, numbers, and symbols remain on the system keyboard. While expanded, the
+  input card's rail keeps the mode switch, Esc, Ctrl, Alt, Shift, and **ABC**, without duplicating
+  the navigation keys below. Common shell shortcuts lead; Claude and tmux have named profiles,
+  tmux's Control prefix is configurable, and Emacs/Screen remain secondary choices. Action labels
+  describe terminal behavior: Ctrl-C interrupts, and clipboard copy remains a separate action.
+  Navigation and deletion keys repeat while held; shortcuts and Return do not. Page changes and
+  ABC/keypad swaps preserve the composer, draft, and terminal viewport at the current docked
+  keyboard size. Rotation and actual native keyboard configuration changes may resize it.
+  A new orientation uses UIKit's default until the native keyboard reports its actual size.
+  If the keypad is already open during that first rotation, the first ABC switch can adjust
+  once (40 pt on the iOS 26.5 simulator with predictions disabled); later swaps match exactly.
+  The input view owns one frame and one bottom inset; its SwiftUI host must never extend upward
+  across the composer's rounded bottom. Hardware typing continues while the keypad is visible.
+  Existing tap-to-focus, scroll-without-focus, floating paste/fold controls, and automatic folding
+  when another device takes the seat remain part of the input behavior.
 - **A live card another client is driving** (item 42's phone half; James, 2026-10-19 17:42Z: "studio
   is driving · touch to take it back"; the look ruled 21:38Z, "good, design all go with the lean").
   While the card's session has its geometry seat (DS-4) held by another client, the studio's window,
   a peer's window or another phone, the card goes on drawing the session at the holder's size, where
   the bullet above stands it, so some of the card's rows stand empty: the converse of the phone's
-  own seat, where the grid is the PTY's. The card says so in its empty rows, above the floating
-  input row, wherever they are (at the foot while the held screen stands top-left, at the top once
-  it anchors at the foot; as the spawn bloom's words take the field's widest empty space), in the
-  desktop's figure at the phone's scale: **studio**, the holder's name as fieldd minted it
-  (**Another device** when it minted none), full, and **is driving** at 40%, 800 at 56pt/1,
+  own seat, where the grid is the PTY's. **Updated 2026-11-02, James's phone review:** center the
+  complete message and its bloom between the header and floating input controls, independently
+  of the holder's rows. The bloom is decorative and must not widen the text layout. Long names
+  wrap to two lines and scale within the phone's margins. The fold-keyboard button sits outside
+  the input card, at its upper right. Paste and the show/fold controls share native Liquid Glass
+  and float over terminal content in both keyboard states. Their row reserves no space and never
+  moves the grid; only the composer and key rail inset the terminal. Paste reads the clipboard
+  only on a tap and respects the system's paste-permission prompt; the system Paste control's
+  opaque fill cannot supply this glass treatment. The message uses the desktop's figure at the phone's scale:
+  **studio**, the holder's name as fieldd minted it
+  (**Another device** when it minted none), full, and **is driving** at 40%, 800 starting at 56pt,
   −0.04em, haloed in the terminal's ground (40 and 18), over a veil of that ground at 62%, the
   content dimmed beneath it, never hidden and never blurred. Under them one caption line, **touch to
   take it back**, 12pt semibold at 72%. It names no size: the phone can see what it is drawing. The

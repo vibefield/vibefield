@@ -118,9 +118,9 @@ public enum MarksAtlas {
           bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
       else { return false }
-      // Row 0 at the top, like the texture.
-      context.translateBy(x: 0, y: CGFloat(height))
-      context.scaleBy(x: 1, y: -1)
+      // Drawing the CGImage directly preserves its top-to-bottom pixel rows
+      // in this bitmap buffer. A UIKit-style Y flip reverses the entire atlas,
+      // putting unrelated or empty tiles at the desktop's agent coordinates.
       context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
       return true
     }

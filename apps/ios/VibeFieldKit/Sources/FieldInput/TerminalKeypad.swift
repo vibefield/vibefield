@@ -2,483 +2,315 @@ import FieldDesign
 import FieldTerminal
 import SwiftUI
 
-/// The `⋯` keypad: our keys where the letters were.
-///
-/// The design's rule (§4, "What `⋯` does") is that tapping `⋯` REPLACES the
-/// system keyboard rather than stacking anything on it, so the card never
-/// moves — which is why this is an `inputView` in both modes rather than a
-/// sheet or a panel. Three pages, because the three have different natures:
-/// Keys and Combos are always key EVENTS, and Symbols is text in Draft and
-/// input in Live. `abc` gives the letters back.
-///
-/// **IOS-5v — it reads as a keyboard, because it is one.** The canvas gives the
-/// keypad the system keyboard's own ground (`#1F1F21` dark, `#D1D3D9` light)
-/// rather than the card's glass, and its keys the two fills a system keyboard
-/// uses: a bright cap for the letters-and-arrows half, a darker one for the
-/// named keys. That is the whole argument for the choice — what replaces the
-/// keyboard should sit where the keyboard sat.
+/// A task-focused keyboard with stable geometry across all three pages. Its
+/// keys always target the terminal; ABC restores the system's text keyboard.
 struct TerminalKeypad: View {
   let model: InputCardModel
-  // --- IOS-5e ---------------------------------------------------------------
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  // --- end IOS-5e -----------------------------------------------------------
+  var isAccessibilitySize = false
+  @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+  @Environment(\.colorSchemeContrast) private var contrast
+  @AppStorage("terminal.keypad.profile") private var profile = ComboCatalog.common.id
+  @AppStorage("terminal.keypad.tmuxPrefix") private var tmuxPrefix = "b"
 
-  /// The whole keypad's height at the base text step, close enough to a system
-  /// keyboard that the card does not jump when the two swap — the canvas's own
-  /// keyboard is 291 pt on a 402 pt phone. The accessibility step is
-  /// `InputCardMetrics.keypadHeight`, which the input view carrying this asks
-  /// for in UIKit terms.
-  static let height: CGFloat = 284
-
-  /// `.kb.keypad` — `gap: 6`, `padding: 8 6 0`.
-  private static let gap: CGFloat = 6
-  private static let padding: CGFloat = 6
-  private static let topPadding: CGFloat = 8
-
-  private var keyHeight: CGFloat { InputCardMetrics.keypadKeyHeight(for: dynamicTypeSize) }
-  /// `.kb.keypad .key.special` — 13, the same step as a rail key's label.
-  private var labelSize: CGFloat { InputCardMetrics.labelSize(for: dynamicTypeSize) }
-  private var glyphSize: CGFloat { InputCardMetrics.glyphSize(for: dynamicTypeSize) }
-  /// `.kb.keypad .key` — 15. A symbol's face IS the character, so it is set
-  /// larger than a named key's word: `|` at 13 pt is a hairline nobody can aim
-  /// at.
-  private var symbolSize: CGFloat { InputCardMetrics.keypadKeySize(for: dynamicTypeSize) }
-  /// The two pieces of prose on the keypad: a pack's heading, which is an
-  /// eyebrow (§3), and the line that says where a symbol goes.
-  private var noteSize: CGFloat { ChromeType.eyebrowSize }
+  private let gap: CGFloat = 8
+  private let radius: CGFloat = 17
+  private var labelSize: CGFloat { isAccessibilitySize ? 17 : 15 }
+  private var ink: Color { ChromePalette.ink }
+  private var prefix: Character {
+    let value = tmuxPrefix.lowercased()
+    return value.count == 1 && value.first!.isASCII && value.first!.isLetter ? value.first! : "b"
+  }
+  private var pack: ComboPack {
+    ComboCatalog.profile(id: profile, tmuxPrefix: prefix)
+  }
+  private var profileSelection: Binding<String> {
+    Binding(get: { pack.id }, set: { profile = $0 })
+  }
 
   var body: some View {
-    VStack(spacing: Self.gap) {
-      header
-      page
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // --- IOS-5e ---------------------------------------------------------
-        // The page change is a CROSS-FADE and has never been a slide: a page
-        // that flew in from the side would put the carousel this whole design
-        // replaced back on the keyboard, one layer down. Under Reduce Motion it
-        // is a cut, which is the one transition with no movement in it at all.
-        .id(model.keypadPage)
-        .transition(.opacity)
-        .animation(reduceMotion ? nil : FieldMotion.ease(0.14), value: model.keypadPage)
-      // --- end IOS-5e ---------------------------------------------------------
-    }
-    .padding(.horizontal, Self.padding)
-    .padding(.top, Self.topPadding)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    // `.kb.keypad` — the system keyboard's own ground, so the swap reads as a
-    // keyboard changing its keys rather than as a panel arriving.
-    .background(ChromePalette.keypadGround)
-  }
-
-  // MARK: - The page picker
-
-  /// `Keys · Symbols · Combos` in a segmented track, and the way out.
-  ///
-  /// The canvas draws the page picker as one `.seg` rather than three keys: the
-  /// pages are a choice among three, which is exactly what a segmented control
-  /// says and what three separate caps do not. `abc` sits at the right, where a
-  /// keyboard's own return key lives.
-  private var header: some View {
-    HStack(spacing: Self.gap) {
-      segmentedTrack
-      Button {
-        model.setKeypad(false)
-        // IOS-5e: the letters are coming back, which is a change to what the
-        // whole bottom of the screen is.
-        InputAnnouncement.post(InputAnnouncement.keypad(false))
-      } label: {
-        Text("abc")
-          .font(ChromeType.sans(labelSize + 1, .semibold, rounded: true))
-          .foregroundStyle(ChromePalette.keypadKeyInk)
-          .frame(width: dynamicTypeSize.isAccessibilitySize ? 72 : 64, height: headerHeight)
-          .background {
-            ChromeMaterial.key(
-              radius: ChromeRadius.keypadKey, fill: ChromePalette.keypadSpecialFill,
-              hairline: ChromePalette.keypadKeyHairline)
+    GeometryReader { geometry in
+      let wide = geometry.size.width > 560 && geometry.size.height < 300
+      Group {
+        if wide {
+          HStack(spacing: 12) {
+            pagePicker(vertical: true).frame(width: 100)
+            page(wide: true).frame(maxWidth: .infinity, maxHeight: .infinity)
           }
+        } else {
+          VStack(spacing: gap) {
+            page(wide: false).frame(maxWidth: .infinity, maxHeight: .infinity)
+            pagePicker(vertical: false).frame(height: 44)
+          }
+        }
       }
-      .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
-      .accessibilityLabel("Letters")
+      .padding(.horizontal, wide ? 18 : 12)
+      .padding(.top, wide ? 4 : 8)
+      .padding(.bottom, max(8, model.keypadGeometry.bottomInset))
+      .frame(maxWidth: 760, maxHeight: .infinity)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background { surface }
+    }
+    .clipped()
+    .accessibilityElement(children: .contain)
+  }
+
+  @ViewBuilder private var surface: some View {
+    let shape = UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28)
+    if reduceTransparency {
+      shape.fill(Color(uiColor: .secondarySystemBackground))
+    } else if #available(iOS 26, *) {
+      shape.fill(Color.clear)
+        .glassEffect(.regular, in: shape)
+    } else {
+      shape.fill(.regularMaterial)
     }
   }
 
-  /// `.seg` — a 32 pt track at radius 10 with 3 pt of padding, its thumb at 8.
-  private var segmentedTrack: some View {
-    HStack(spacing: 4) {
-      ForEach(KeypadPage.allCases, id: \.rawValue) { candidate in
+  private func pagePicker(vertical: Bool) -> some View {
+    let layout =
+      vertical ? AnyLayout(VStackLayout(spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))
+    return layout {
+      ForEach(KeypadPage.allCases, id: \.self) { candidate in
         Button {
-          // IOS-5e: `.selectionChanged` and only on an actual change — the
-          // system's texture for moving through a set of choices, and a
-          // selection haptic for re-picking the page you are on would be a
-          // buzz that reports nothing.
           guard model.keypadPage != candidate else { return }
           model.keypadPage = candidate
           InputHaptics.page()
         } label: {
           Text(candidate.title)
-            .font(ChromeType.sans(ChromeType.segmentSize, .semibold))
-            .foregroundStyle(
-              model.keypadPage == candidate
-                ? ChromePalette.segSelectedInk : ChromePalette.segInk
-            )
-            .lineLimit(1)
-            .frame(maxWidth: .infinity)
-            .frame(height: headerHeight - 6)
+            .font(.system(size: isAccessibilitySize ? 16 : 14, weight: .medium))
+            .foregroundStyle(model.keypadPage == candidate ? ink : ChromePalette.inkSecondary)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .background {
               if model.keypadPage == candidate {
-                RoundedRectangle(cornerRadius: ChromeRadius.segmentThumb, style: .continuous)
-                  .fill(ChromePalette.segSelected)
+                Capsule().fill(ink.opacity(colorScheme == .dark ? 0.11 : 0.07))
+                  .overlay { Capsule().strokeBorder(ink.opacity(0.08), lineWidth: 0.5) }
               }
             }
         }
-        .buttonStyle(KeyPressStyle(radius: ChromeRadius.segmentThumb))
+        .buttonStyle(.plain)
         .accessibilityLabel("\(candidate.title) page")
         .accessibilityAddTraits(model.keypadPage == candidate ? [.isSelected] : [])
+        .accessibilityIdentifier("keypad-page-\(candidate.rawValue)")
       }
     }
-    .padding(3)
-    .frame(height: headerHeight)
-    .background {
-      RoundedRectangle(cornerRadius: ChromeRadius.segment, style: .continuous)
-        .fill(ChromePalette.segTrack)
-    }
   }
 
-  private var headerHeight: CGFloat {
-    InputCardMetrics.keypadHeaderHeight(accessibility: dynamicTypeSize.isAccessibilitySize)
-  }
-
-  @ViewBuilder
-  private var page: some View {
+  @ViewBuilder private func page(wide: Bool) -> some View {
     switch model.keypadPage {
-    case .keys: keysPage
-    case .symbols: symbolsPage
-    case .combos: combosPage
+    case .keys: navigation(wide: wide)
+    case .combos: shortcuts(wide: wide)
+    case .functions:
+      keyGrid(columns: wide ? 6 : 4, count: 12) { index in
+        key("F\(index + 1)", label: "F\(index + 1)") { model.tapKey(.function(index + 1)) }
+      }
     }
   }
 
-  // MARK: - Keys
-
-  /// The named keys, the far ends, the arrows, the function row, and the two
-  /// latches.
-  ///
-  /// Every one of these is a key EVENT in both modes, including in Draft: the
-  /// rail already works that way and the design says so outright, so Backspace
-  /// here deletes in the terminal rather than in the draft. The draft has the
-  /// system keyboard's own backspace for that, one `abc` away.
-  private var keysPage: some View {
-    VStack(spacing: Self.gap) {
-      HStack(spacing: Self.gap) {
-        keyLabel("Esc", spoken: "Escape") { model.tapKey(.escape) }
-        keyLabel("Tab", spoken: "Tab") { model.tapKey(.tab) }
-        keyGlyph(.return, spoken: "Enter") { model.tapKey(.enter) }
-        keyGlyph(.backspace, spoken: "Backspace") { model.tapKey(.backspace) }
-      }
-      HStack(spacing: Self.gap) {
-        keyLabel("Home", spoken: "Home") { model.tapKey(.home) }
-        keyLabel("End", spoken: "End") { model.tapKey(.end) }
-        keyLabel("PgUp", spoken: "Page up") { model.tapKey(.pageUp) }
-        keyLabel("PgDn", spoken: "Page down") { model.tapKey(.pageDown) }
-      }
-      HStack(spacing: Self.gap) {
-        keyGlyph(.arrow, turn: -90, spoken: "Left arrow", special: false) { model.tapKey(.arrowLeft) }
-        keyGlyph(.arrow, turn: 180, spoken: "Down arrow", special: false) { model.tapKey(.arrowDown) }
-        keyGlyph(.arrow, spoken: "Up arrow", special: false) { model.tapKey(.arrowUp) }
-        keyGlyph(.arrow, turn: 90, spoken: "Right arrow", special: false) { model.tapKey(.arrowRight) }
-      }
-      functionRow
-      latchRow
-    }
-  }
-
-  /// F1…F12 scroll, because twelve keys at a tappable width do not fit a phone
-  /// and twelve keys at a fitting width are not tappable.
-  private var functionRow: some View {
-    ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: Self.gap) {
-        ForEach(1...12, id: \.self) { number in
-          Button {
-            model.tapKey(.function(number))
-          } label: {
-            Text("F\(number)")
-              .font(ChromeType.sans(labelSize, .semibold, rounded: true))
-              .foregroundStyle(ChromePalette.keypadKeyInk)
-              .frame(width: 46, height: keyHeight)
-              .background { keyFace(.special) }
+  private func navigation(wide: Bool) -> some View {
+    GeometryReader { geometry in
+      if wide {
+        let order = [0, 1, 2, 4, 5, 12, 13, 3, 9, 6, 7, 8, 10, 11]
+        keyGrid(columns: 7, count: order.count) { index in navigationKey(index: order[index]) }
+      } else {
+        let unit = max(1, (geometry.size.height - gap * 3) / 4)
+        HStack(spacing: gap) {
+          VStack(spacing: gap) {
+            keyGrid(columns: 3, count: 9) { index in navigationKey(index: index) }
+            HStack(spacing: gap) {
+              navigationKey(index: 9)
+              navigationKey(index: 10)
+              navigationKey(index: 11)
+            }.frame(height: unit)
           }
-          .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
-          .accessibilityLabel("F\(number)")
-        }
-      }
-    }
-    .frame(height: keyHeight)
-    .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-  }
-
-  /// The two sticky modifiers, side by side.
-  ///
-  /// Ctrl is the card's own latch — the same one the rail holds, so arming it
-  /// here and typing on the system keyboard after `abc` still gives a control
-  /// byte. Alt is the design's "explicit Alt latch lives on the keypad's Keys
-  /// page" (decision 4) and it is drawn AS a latch, but under it is IOS-5b's
-  /// Meta burst: one key, then gone. That is honest rather than convenient —
-  /// `.option` on the phone is a burst the kit encodes, and a second sticky
-  /// modifier with a second dot would be two promises this card cannot keep
-  /// apart at a glance.
-  private var latchRow: some View {
-    HStack(spacing: Self.gap) {
-      Button {
-        model.tapControl()
-        switch model.latch.phase {
-        case .armed: InputHaptics.arm()
-        case .locked: InputHaptics.lock()
-        case .off: InputHaptics.release()
-        }
-        // IOS-5e: the same sentence the rail's CTRL says, because it is the
-        // same latch. Two keys for one state would be two announcements only
-        // if the state were two things, and it is one.
-        InputAnnouncement.post(InputAnnouncement.latch(model.latch.phase))
-      } label: {
-        Text("Ctrl")
-          .font(ChromeType.sans(labelSize, .semibold, rounded: true))
-          .foregroundStyle(
-            model.latch.phase == .off
-              ? ChromePalette.keypadKeyInk : ChromePalette.keypadArmedInk
-          )
-          .frame(maxWidth: .infinity)
-          .frame(height: keyHeight)
-          .background { keyFace(model.latch.phase == .off ? .special : .armed) }
-          .overlay(alignment: .topTrailing) {
-            if model.latch.phase == .locked {
-              Circle()
-                .fill(ChromePalette.keypadArmedInk)
-                .frame(width: 5, height: 5)
-                .padding(5)
-            }
+          VStack(spacing: gap) {
+            navigationKey(index: 12)
+            navigationKey(index: 13)
           }
-      }
-      .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
-      .accessibilityLabel(model.latch.accessibilityLabel)
-      .accessibilityHint(model.latch.accessibilityHint)
-
-      Button {
-        model.armMeta()
-        InputHaptics.arm()
-        // IOS-5e: "Meta armed for the next key" — the key is drawn ALT and the
-        // burst is what it actually arms, so the sentence names the burst.
-        InputAnnouncement.post(InputAnnouncement.metaArmed)
-      } label: {
-        Text("Alt")
-          .font(ChromeType.sans(labelSize, .semibold, rounded: true))
-          .foregroundStyle(
-            model.metaArmed ? ChromePalette.keypadArmedInk : ChromePalette.keypadKeyInk
-          )
-          .frame(maxWidth: .infinity)
-          .frame(height: keyHeight)
-          .background { keyFace(model.metaArmed ? .armed : .special) }
-      }
-      .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
-      .accessibilityLabel(model.metaArmed ? "Alt armed for the next key" : "Alt")
-    }
-  }
-
-  // MARK: - Symbols
-
-  /// The shell's punctuation, three rows of ten.
-  ///
-  /// The brief's set verbatim; the LAYOUT is ours. Two rows of fifteen put a
-  /// 21 pt key on a phone, which is narrower than anything a thumb hits on
-  /// purpose — three rows of ten give the 33 pt the design itself cites as
-  /// "the width of an iOS letter key".
-  private static let symbolRows: [[Character]] = [
-    ["|", "~", "`", "^", "&", "*", "\\", "/", "-", "_"],
-    ["=", "+", "[", "]", "{", "}", "<", ">", ";", ":"],
-    ["'", "\"", ",", ".", "?", "!", "@", "#", "$", "%"],
-  ]
-
-  private var symbolsPage: some View {
-    VStack(spacing: Self.gap) {
-      ForEach(Array(Self.symbolRows.enumerated()), id: \.offset) { _, row in
-        HStack(spacing: Self.gap) {
-          ForEach(row, id: \.self) { character in
-            Button {
-              model.typeSymbol(character)
-            } label: {
-              Text(String(character))
-                .font(ChromeType.sans(symbolSize, .regular))
-                .foregroundStyle(ChromePalette.keypadKeyInk)
-                .frame(maxWidth: .infinity)
-                .frame(height: keyHeight)
-                .background { keyFace(.plain) }
-            }
-            .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
-            .accessibilityLabel(Self.spoken(character))
-          }
-        }
-      }
-      // The one line of prose on the keypad, and it earns its place: which of
-      // two things this page does depends on the mode, and the mode is a glyph
-      // on the rail behind the keypad.
-      Text(
-        model.mode == .draft
-          ? "Symbols go into the draft" : "Symbols go straight to the terminal"
-      )
-      .font(ChromeType.sans(noteSize, .medium))
-      .foregroundStyle(ChromePalette.inkTertiary)
-      .padding(.top, 2)
-    }
-  }
-
-  /// What VoiceOver says instead of reading the glyph, which it renders as
-  /// anything from silence to the wrong word depending on the voice.
-  private static func spoken(_ character: Character) -> String {
-    let names: [Character: String] = [
-      "|": "pipe", "~": "tilde", "`": "backtick", "^": "caret", "&": "ampersand",
-      "*": "asterisk", "\\": "backslash", "/": "slash", "-": "hyphen", "_": "underscore",
-      "=": "equals", "+": "plus", "[": "left bracket", "]": "right bracket",
-      "{": "left brace", "}": "right brace", "<": "less than", ">": "greater than",
-      ";": "semicolon", ":": "colon", "'": "apostrophe", "\"": "quote", ",": "comma",
-      ".": "period", "?": "question mark", "!": "exclamation mark", "@": "at sign",
-      "#": "number sign", "$": "dollar sign", "%": "percent",
-    ]
-    return names[character] ?? String(character)
-  }
-
-  // MARK: - Combos
-
-  /// The packs, each a heading over its keys.
-  ///
-  /// It scrolls: four packs of multi-key sequences do not fit 200 pt, and the
-  /// alternative — paging inside a page — is the carousel this whole design
-  /// replaced.
-  private var combosPage: some View {
-    ScrollView(.vertical, showsIndicators: false) {
-      VStack(alignment: .leading, spacing: 10) {
-        ForEach(ComboCatalog.packs) { pack in
-          VStack(alignment: .leading, spacing: Self.gap) {
-            // §3's eyebrow: 11 medium uppercase, tracking 0.06 em, 60%. A
-            // pack's name is a section label, which is the one place in this
-            // app that is not sentence case.
-            Text(pack.title)
-              .font(ChromeType.sans(noteSize, .medium))
-              .textCase(.uppercase)
-              .tracking(ChromeType.tracking(ChromeType.eyebrowTracking, of: noteSize))
-              .foregroundStyle(ChromePalette.segInk)
-            comboGrid(pack.combos)
-          }
-        }
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.bottom, 4)
-    }
-  }
-
-  /// Four to a row: a combo's face is `^B c` plus a word, which is twice the
-  /// width of a rail key and half the width of the screen.
-  private func comboGrid(_ combos: [Combo]) -> some View {
-    let rows = stride(from: 0, to: combos.count, by: 4).map {
-      Array(combos[$0..<min($0 + 4, combos.count)])
-    }
-    return VStack(spacing: Self.gap) {
-      ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-        HStack(spacing: Self.gap) {
-          ForEach(row) { combo in
-            Button {
-              model.sendCombo(combo)
-              InputHaptics.chord()
-            } label: {
-              // `.ck` — mono 14 semibold over a 10 medium subtitle at 55%. The
-              // sequence is data; the gloss under it is prose.
-              VStack(spacing: 3) {
-                Text(combo.label)
-                  .font(ChromeType.mono(labelSize + 1, .semibold))
-                  .foregroundStyle(ChromePalette.keypadKeyInk)
-                Text(combo.subtitle)
-                  .font(
-                    ChromeType.sans(
-                      InputCardMetrics.comboSubtitleSize(for: dynamicTypeSize), .medium)
-                  )
-                  .foregroundStyle(ChromePalette.inkTertiary)
-                  .lineLimit(1)
-                  .minimumScaleFactor(0.8)
-              }
-              .padding(.horizontal, 4)
-              .frame(maxWidth: .infinity)
-              .frame(height: keyHeight)
-              .background { keyFace(.special) }
-            }
-            .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
-            .accessibilityLabel(combo.accessibilityLabel)
-          }
-          // A short last row keeps the grid rather than stretching its keys.
-          if row.count < 4 {
-            ForEach(0..<(4 - row.count), id: \.self) { _ in
-              Color.clear.frame(maxWidth: .infinity).frame(height: keyHeight)
-            }
-          }
+          .frame(width: max(1, (geometry.size.width - gap * 3) / 4))
         }
       }
     }
   }
 
-  // MARK: - Chrome
+  @ViewBuilder private func navigationKey(index: Int) -> some View {
+    switch index {
+    case 0: key("Home", label: "Home") { model.tapKey(.home) }
+    case 1: key("Tab", label: "Tab") { model.tapKey(.tab) }
+    case 2: key("PgUp", label: "Page up", repeats: true) { model.tapKey(.pageUp) }
+    case 3: key("End", label: "End") { model.tapKey(.end) }
+    case 4:
+      key("", symbol: "arrow.up", label: "Up arrow", repeats: true, navigation: true) {
+        model.tapKey(.arrowUp)
+      }
+    case 5: key("PgDn", label: "Page down", repeats: true) { model.tapKey(.pageDown) }
+    case 6:
+      key("", symbol: "arrow.left", label: "Left arrow", repeats: true, navigation: true) {
+        model.tapKey(.arrowLeft)
+      }
+    case 7:
+      key("", symbol: "arrow.down", label: "Down arrow", repeats: true, navigation: true) {
+        model.tapKey(.arrowDown)
+      }
+    case 8:
+      key("", symbol: "arrow.right", label: "Right arrow", repeats: true, navigation: true) {
+        model.tapKey(.arrowRight)
+      }
+    case 9: key("⇧ Tab", label: "Shift Tab") { model.tapChord(.shiftTab) }
+    case 10: key("Delete", label: "Forward delete", repeats: true) { model.tapKey(.deleteForward) }
+    case 11: key("Space", label: "Space") { model.tapKey(.character(" ")) }
+    case 12:
+      key("", symbol: "delete.left", label: "Backspace", repeats: true) { model.tapKey(.backspace) }
+    default: key("", symbol: "return", label: "Enter") { model.tapKey(.enter) }
+    }
+  }
 
-  private func keyLabel(
-    _ text: String, spoken: String, action: @escaping () -> Void
+  @ViewBuilder private func shortcuts(wide: Bool) -> some View {
+    if wide {
+      // Keep the profile beside the grid in a short keyboard. A header above
+      // it would squeeze the shortcut targets below a comfortable tap size.
+      HStack(spacing: gap) {
+        VStack(alignment: .leading, spacing: 0) {
+          profileMenu
+          if pack.id == ComboCatalog.tmux.id { prefixMenu }
+        }
+        .frame(width: 126, alignment: .leading)
+        shortcutKeys(columns: 5)
+      }
+    } else {
+      VStack(spacing: gap) {
+        HStack {
+          if pack.id == ComboCatalog.tmux.id {
+            prefixMenu
+          } else {
+            Text("Send to terminal").font(.system(size: 12))
+              .foregroundStyle(ChromePalette.inkSecondary)
+          }
+          Spacer(minLength: 8)
+          profileMenu
+        }
+        .frame(height: 44)
+        shortcutKeys(columns: 3)
+      }
+    }
+  }
+
+  private var prefixMenu: some View {
+    Menu {
+      Button("Control B (default)") { tmuxPrefix = "b" }
+      Button("Control A") { tmuxPrefix = "a" }
+      Menu("Other Control key") {
+        ForEach(Array("cdefghijklmnopqrstuvwxyz"), id: \.self) { character in
+          Button("Control \(String(character).uppercased())") {
+            tmuxPrefix = String(character)
+          }
+        }
+      }
+    } label: {
+      Text("Prefix: ⌃\(String(prefix).uppercased())")
+        .font(.system(size: 13, weight: .medium)).frame(minHeight: 44)
+    }
+    .foregroundStyle(ink)
+    .accessibilityLabel("tmux prefix, Control \(String(prefix).uppercased())")
+  }
+
+  private var profileMenu: some View {
+    Menu {
+      Picker("Shortcut profile", selection: profileSelection) {
+        ForEach(ComboCatalog.profiles(tmuxPrefix: prefix)) { candidate in
+          Text(candidate.title).tag(candidate.id)
+        }
+      }
+    } label: {
+      HStack(spacing: 6) {
+        Text(pack.title)
+        Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
+      }
+      .font(.system(size: 14, weight: .medium))
+      .padding(.horizontal, 12).frame(minHeight: 44)
+    }
+    .foregroundStyle(ink)
+    .accessibilityLabel("Shortcut profile, \(pack.title)")
+    .accessibilityIdentifier("keypad-profile")
+  }
+
+  private func shortcutKeys(columns: Int) -> some View {
+    let combos = pack.combos
+    return keyGrid(columns: columns, count: combos.count) { index in
+      let combo = combos[index]
+      key(
+        combo.label.replacingOccurrences(of: "^", with: "⌃"),
+        subtitle: combo.subtitle, label: combo.accessibilityLabel
+      ) {
+        model.sendCombo(combo)
+        InputHaptics.chord()
+      }
+    }
+  }
+
+  private func keyGrid<Content: View>(
+    columns: Int, count: Int, @ViewBuilder content: @escaping (Int) -> Content
   ) -> some View {
-    Button(action: action) {
-      Text(text)
-        .font(ChromeType.sans(labelSize, .semibold, rounded: true))
-        .foregroundStyle(ChromePalette.keypadKeyInk)
-        .lineLimit(1)
-        .frame(maxWidth: .infinity)
-        .frame(height: keyHeight)
-        .background { keyFace(.special) }
+    let rows = (count + columns - 1) / columns
+    return VStack(spacing: gap) {
+      ForEach(0..<rows, id: \.self) { row in
+        HStack(spacing: gap) {
+          ForEach(0..<columns, id: \.self) { column in
+            let index = row * columns + column
+            if index < count {
+              content(index)
+            } else {
+              Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+          }
+        }.frame(maxHeight: .infinity)
+      }
     }
-    .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
-    .accessibilityLabel(spoken)
   }
 
-  private func keyGlyph(
-    _ glyph: FieldGlyphName, turn: Double = 0, spoken: String, special: Bool = true,
+  private func key(
+    _ text: String, symbol: String? = nil, subtitle: String? = nil,
+    label: String, repeats: Bool = false, navigation: Bool = false,
     action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
-      FieldGlyph(glyph, size: FieldGlyph.box(for: glyphSize), turn: turn)
-        .foregroundStyle(ChromePalette.keypadKeyInk)
-        .frame(maxWidth: .infinity)
-        .frame(height: keyHeight)
-        .background { keyFace(special ? .special : .plain) }
+      VStack(spacing: 4) {
+        if let symbol {
+          Image(systemName: symbol).font(
+            .system(size: isAccessibilitySize ? 25 : 22, weight: .regular))
+        } else {
+          Text(text).font(
+            .system(
+              size: labelSize, weight: .medium, design: subtitle == nil ? .default : .monospaced))
+        }
+        if let subtitle {
+          Text(subtitle).font(.system(size: isAccessibilitySize ? 12 : 11))
+            .foregroundStyle(ChromePalette.inkSecondary)
+            .lineLimit(1).minimumScaleFactor(0.85)
+        }
+      }
+      .foregroundStyle(ink)
+      .lineLimit(1)
+      .padding(.horizontal, 4)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+          .fill(
+            ink.opacity(
+              colorScheme == .dark ? (navigation ? 0.14 : 0.08) : (navigation ? 0.09 : 0.045))
+          )
+          .overlay {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+              .strokeBorder(
+                ink.opacity(contrast == .increased ? 0.35 : 0.1),
+                lineWidth: contrast == .increased ? 1 : 0.5)
+          }
+      }
+      .contentShape(RoundedRectangle(cornerRadius: radius))
     }
-    .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
-    .accessibilityLabel(spoken)
-  }
-
-  /// A keypad key's three faces (`.kb.keypad .key`, `.special`, `.armed`) — the
-  /// two fills a system keyboard uses plus the latched one. Radius 7, which is
-  /// the canvas's and a shade tighter than the rail's 9.
-  private func keyFace(_ face: KeypadKeyFace) -> some View {
-    ChromeMaterial.key(
-      radius: ChromeRadius.keypadKey, fill: face.fill,
-      hairline: ChromePalette.keypadKeyHairline)
-  }
-}
-
-/// `.kb.keypad .key` and its two variants.
-enum KeypadKeyFace {
-  /// The bright half of a system keyboard: arrows and symbols.
-  case plain
-  /// The darker half: the named keys, the function row, the combos.
-  case special
-  /// A latch that is on.
-  case armed
-
-  var fill: Color {
-    switch self {
-    case .plain: return ChromePalette.keypadKeyFill
-    case .special: return ChromePalette.keypadSpecialFill
-    case .armed: return ChromePalette.keypadArmedFill
-    }
+    .buttonStyle(KeyPressStyle(radius: radius))
+    .buttonRepeatBehavior(repeats ? .enabled : .disabled)
+    .accessibilityLabel(label)
+    .accessibilityIdentifier("keypad-key-\(label)")
   }
 }

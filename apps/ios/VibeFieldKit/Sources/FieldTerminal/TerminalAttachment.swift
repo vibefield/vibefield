@@ -170,6 +170,7 @@ public final class TerminalAttachment {
   @ObservationIgnored private var client: RoutedTerminalClient?
   @ObservationIgnored private var sink: RoutedTerminalFrameSink?
   @ObservationIgnored private var sessionID: String?
+  @ObservationIgnored private var copySequence: UInt64 = 0
   /// The session this attachment shows or last showed — how the home screen
   /// keeps a closed card's session live (`HomeScreen.keptAttachments`).
   public var attachedSessionID: String? { sessionID }
@@ -972,6 +973,33 @@ public final class TerminalAttachment {
     }
     noteScroll("viewport rows \(rows < 0 ? "up" : "down") sent")
     forward { $0.scroll(rows: rows, for: $1) }
+  }
+
+  /// Return host text without owning the device's pasteboard. The card writes
+  /// it only while this attachment still belongs to that card.
+  public func selectionText(_ selection: GhostteaTerminalSelection) async throws -> String {
+    guard let client, let sessionID, localPhase != .idle else {
+      throw RoutedSelectionError.unavailable
+    }
+    let binding = self.binding
+    copySequence &+= 1
+    let copy = copySequence
+    let text: String
+    do {
+      text = try await client.selectionText(
+        RoutedSelection(
+          startColumn: selection.anchor.column, startRow: selection.anchor.row,
+          endColumn: selection.focus.column, endRow: selection.focus.row), for: sessionID)
+    } catch {
+      // A superseded refusal must not replace feedback from a newer copy.
+      guard copy == copySequence else { throw CancellationError() }
+      throw error
+    }
+    try Task.checkCancellation()
+    guard self.binding == binding, self.client === client, self.sessionID == sessionID,
+      localPhase != .idle, copy == copySequence
+    else { throw CancellationError() }
+    return text
   }
 
   /// What the last scroll did, said when it CHANGES — one line per state, not

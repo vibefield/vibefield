@@ -3,15 +3,9 @@ import UIKit
 
 /// Whether the pasteboard holds something the user has not yet pasted here.
 ///
-/// It reads the change COUNT and never the contents. That distinction is the
-/// whole point: `changeCount` and `hasStrings` are metadata and cost nothing,
-/// while reading `UIPasteboard.general.string` is what raises the system's
-/// "allow paste?" alert. The design's paste chip exists so that paste is
-/// available exactly when it matters without paying for a permanent button
-/// (§4, "Where the clipboard button went"), and paying an alert for the
-/// privilege would undo that — so the chip is a `UIPasteControl`, which reads
-/// the contents under the system's own one-tap grant, and nothing on this path
-/// ever asks the pasteboard what it holds.
+/// It reads only `changeCount` and `hasStrings`, never clipboard contents.
+/// Showing the contextual paste chip therefore never requests paste access.
+/// Only an explicit tap on Paste reads the text, subject to iOS permission.
 ///
 /// Sampling is deliberately explicit rather than continuous: iOS gives no
 /// change notification for the general pasteboard from the background, so the

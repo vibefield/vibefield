@@ -29,6 +29,7 @@ export function createStudioHost(opts: {
   let productWindow: BrowserWindow | null = null;
   let desiredOpen = opts.openAtStartup;
   let physicalAcceptanceStarted = false;
+  let shownWindow: BrowserWindow | null = null;
   let productPortGeneration = 0;
   let studioPortGeneration = 0;
   const router = new StudioRouter(Date.now, () => {
@@ -87,6 +88,9 @@ export function createStudioHost(opts: {
       });
       const lifetime = context.adoptHostAuxiliary(next);
       window = next;
+      next.once("show", () => {
+        shownWindow = next;
+      });
       next.once("closed", () => {
         desiredOpen = false;
         router.closeStudio("studio-closed");
@@ -174,6 +178,7 @@ export function createStudioHost(opts: {
         productWindow,
         studioWindow,
         studioPartition: STUDIO_SESSION_PARTITION,
+        studioWasShown: () => shownWindow === studioWindow,
       });
     },
     dispose() {

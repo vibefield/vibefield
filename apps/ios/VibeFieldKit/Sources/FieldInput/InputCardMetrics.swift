@@ -135,22 +135,6 @@ public enum InputCardMetrics {
     size.isAccessibilitySize ? 17 : 15
   }
 
-  /// The whole keypad, which must stay close to a system keyboard's height or
-  /// the card jumps when the two swap. At the base step this is within a few
-  /// points of the canvas's own 291 pt keyboard.
-  ///
-  /// It grows by five key steps plus the page picker's, because that is what
-  /// the Keys page holds; a keypad that grew its keys and not its frame would
-  /// clip the latch row, which is the row the design put the Alt latch on.
-  public static func keypadHeight(accessibility: Bool) -> CGFloat {
-    accessibility ? 330 : 284
-  }
-
-  /// The page picker at the top of the keypad (`.seg`, 32 pt).
-  public static func keypadHeaderHeight(accessibility: Bool) -> CGFloat {
-    accessibility ? 38 : 32
-  }
-
   // MARK: - Width
 
   /// The card's widest, centred in whatever it is given.

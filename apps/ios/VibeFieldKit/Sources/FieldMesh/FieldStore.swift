@@ -114,6 +114,9 @@ public struct FieldStorePeer: Sendable, Equatable, Identifiable {
   /// are what pins a published `productEndpoint.url` to the peer that
   /// published it (EL7 M1).
   public let hostname: String?
+  /// The canonical DNS name from Layer 3, which may carry a collision suffix
+  /// that the machine's hostname does not.
+  public let dnsName: String?
   public let tailnetIPs: [String]
   /// UA-P-5 — the tailnet login that OWNS this peer, as Layer 3 reports it
   /// (`Peer.loginName`, RFC 025 §3.6 D7). It is the account boundary itself:
@@ -129,12 +132,13 @@ public struct FieldStorePeer: Sendable, Equatable, Identifiable {
 
   public init(
     id: String, deviceId: String?, online: Bool, hostname: String? = nil,
-    tailnetIPs: [String] = [], loginName: String? = nil
+    tailnetIPs: [String] = [], loginName: String? = nil, dnsName: String? = nil
   ) {
     self.id = id
     self.deviceId = deviceId
     self.online = online
     self.hostname = hostname
+    self.dnsName = dnsName
     self.tailnetIPs = tailnetIPs
     self.loginName = loginName
   }

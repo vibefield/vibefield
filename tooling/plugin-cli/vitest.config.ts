@@ -1,4 +1,7 @@
+import { createRequire } from "node:module";
 import { defineConfig } from "vitest/config";
+
+const sdkRequire = createRequire(createRequire(import.meta.url).resolve("@vibefield/plugin-sdk"));
 
 // The kit's suites spawn the kit itself: `bin/vibefield-plugin.mjs` as a child process, cold, running the kit's
 // TypeScript sources under Node's own type stripping, with nothing installed (DK-10, test/outside-workspace.test.ts).
@@ -16,6 +19,12 @@ import { defineConfig } from "vitest/config";
 // the ceiling a stall gets; a row whose product has a real bound asserts that bound in its own words, never through
 // this number.
 export default defineConfig({
+  resolve: {
+    // Artifact fixtures live outside the workspace. Resolve their host singleton
+    // to the SDK's actual peer: Vite's bare-ID fallback otherwise evaluates React
+    // from a fictitious cwd/react path when the pnpm store lives on another volume.
+    alias: [{ find: /^react$/, replacement: sdkRequire.resolve("react") }],
+  },
   test: {
     testTimeout: 30_000,
     hookTimeout: 30_000,
