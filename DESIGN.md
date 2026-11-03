@@ -3157,10 +3157,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   board is out. While an object is in hand the desk refuses the board (`open()` answers false), and
   the create is **faint by ink** with the tooltip **"Put it down first"** (R14). ICE's Objects pill,
   its ✕ and its ride on the drawer's edge are its demo's: here the drawer's handle is the line.
-  **The board rises behind the line** — the desk's own pegboard, its specimens hung by category
-  over their label tape — and **its lay keeps 88 at the foot** (I21:
-  `deskLayer({ tray: { foot: 88 } })`) so the last row clears the line and the board's scroll still
-  reaches it. **The stage behind it neither recedes nor dims** — the desk dims under the board
+  **The board rises behind the line** — the desk's own pegboard, its specimens arranged by category
+  over their label tape, without hooks, clips, shelves or rails (2026-11-02). **The bottom strip is
+  20 px**: a 16 px fade above a 4 px border (`deskLayer({ tray: { foot: 4, footFade: 16 } })`). The
+  controls float above the board, and its scroll still reaches the last row. **The stage behind it neither recedes nor dims** — the desk dims under the board
   itself (design-017), so the old sheet's backdrop, recede and stage hold do not come with it (R14).
   It hangs only the kinds whose plugin is on: the install set's disabled list filters the entries
   `tray.categories()` offers (P3c — the old sheet's filter, now the board's). **The filters are

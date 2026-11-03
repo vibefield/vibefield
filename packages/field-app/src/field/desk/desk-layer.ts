@@ -39,11 +39,10 @@ import { deskBlobs } from "./desk-blobs";
 export const DESK_HOLD = { top: 116, band: 100, travelMs: 560 } as const;
 
 /**
- * THE PEGBOARD'S FOOT (DESIGN.md §8 "The pegboard"; ICE I21 — `deskLayer({ tray: { foot } })`): the board's lay keeps 88
- * at its foot — the line's — so the last row clears the line and the board's scroll still reaches it; the board itself
- * runs to its edge behind the line.
+ * The pegboard's bottom edge: a 16 px fade into a 4 px border. The content reaches the narrow strip
+ * at the bottom of the board; the controls float above it.
  */
-export const DESK_TRAY = { foot: 88 } as const;
+export const DESK_TRAY = { foot: 4, footFade: 16 } as const;
 
 export const DESK_GRID: GridConfig = {
   fadeIn: GRID.fadeIn,
@@ -91,7 +90,7 @@ export interface FieldDeskLayerOptions {
  * adds none), the shipped hand (`text`), the document a note's typing commits into (`docs` — the
  * facade's, the one VibeField opens, autosaves and attaches presence to), the renderer-local byte
  * store (`blobs`, DK-D21), the grid, the hand's reserves (`hold`, DK-12 — the tools in hand under the head), the
- * pegboard's foot (`tray`, DK-13 — its lay clears the line), and the desk's LIVE pages when the stage lends them (PT-2:
+ * pegboard's bottom fade (`tray`, DK-13), and the desk's LIVE pages when the stage lends them (PT-2:
  * `services` — a portal kind's face; PT-S2, this Mac's Simulator devices beside them — a phone's attach; the kv service
  * rides later). The room's other people are VibeField's to draw (DK-16, DESIGN.md §8
  * "Peers on the mat"; ICE I26): `cursors: false`, so the host mounts no remote cursors of ICE's and nobody is drawn twice —
