@@ -6,8 +6,8 @@ import type { BrowserWindow } from "electron";
 //
 //   · the Lip's minimize, pressed: the deck says away, its panes take no
 //     demand (the marker's `active` false), the sheet is inert and unseen
-//     below the foot, no pane holds the keyboard, and the monitor alone has
-//     the window down to the covers' reserve (692 in the drawing's window);
+//     below the foot, no pane holds the keyboard, and the full-size monitor
+//     keeps its collision wall at the covers' reserve;
 //   · a body of the swarm — the one the active pane shows — brings them back:
 //     the same sessions in the panes, the edge where it was left, and the box
 //     the terminals fill laid out at most once per change (the marker's
@@ -46,8 +46,8 @@ export interface DeckAwayRungOptions {
   pressViewKey: (view: "godview") => void;
 }
 
-/** The covers' reserve above the window's foot (FC-D15): where the monitor
- * alone ends. */
+/** The covers' reserve above the window's foot (FC-D15): the swarm's wall
+ * target when the sheet is away, independent of its full-size canvas. */
 const COVER_RESERVE = 88;
 
 /** The body of the session the active pane shows: the swarm's list button the
@@ -68,6 +68,8 @@ const STAGE_NOW = `(() => {
     sheetTop: Math.round(sheet.getBoundingClientRect().top),
     focusInDeck: sheet.contains(document.activeElement),
     monitorFoot: Math.round(monitor.getBoundingClientRect().bottom),
+    allocation: monitor.getAttribute("data-stage-allocation"),
+    wallTop: stage.querySelector(".vf-godview-field-wall")?.getBoundingClientRect().top ?? null,
     windowFoot: window.innerHeight,
     minimize: Boolean(sheet.querySelector('button[aria-label="Minimize the terminals"]')),
   });
@@ -82,8 +84,29 @@ interface StageNow {
   sheetTop: number;
   focusInDeck: boolean;
   monitorFoot: number;
+  allocation: string | null;
+  wallTop: number | null;
   windowFoot: number;
   minimize: boolean;
+}
+
+/** The canvas stays full; only the collision-wall target makes room. */
+function fieldProblems(
+  seen: {
+    allocation: string | null;
+    monitorFoot: number | null;
+    windowFoot: number;
+    wallTop: number | null;
+  },
+  wallTop: number,
+): string[] {
+  const problems: string[] = [];
+  if (seen.allocation !== "full") problems.push(`the swarm allocation is ${seen.allocation}`);
+  if (seen.monitorFoot === null || Math.abs(seen.monitorFoot - seen.windowFoot) > 1)
+    problems.push(`the full-size canvas ends at ${seen.monitorFoot}, not ${seen.windowFoot}`);
+  if (seen.wallTop === null || Math.abs(seen.wallTop - wallTop) > 1)
+    problems.push(`the collision-wall target is ${seen.wallTop}, not ${wallTop}`);
+  return problems;
 }
 
 async function stageNow(win: BrowserWindow): Promise<StageNow> {
@@ -187,11 +210,7 @@ async function deckAwaySteps(
       `the sheet's top stands at ${away.sheetTop}, above the foot (${away.windowFoot})`,
     );
   }
-  if (Math.abs(away.monitorFoot - (away.windowFoot - COVER_RESERVE)) > 1) {
-    problems.push(
-      `the monitor alone ends at ${away.monitorFoot}, not at the reserve (${away.windowFoot - COVER_RESERVE})`,
-    );
-  }
+  problems.push(...fieldProblems(away, away.windowFoot - COVER_RESERVE));
   if (problems.length > 0) {
     throw new Error(`away is not fully away: ${problems.join("; ")} [${JSON.stringify(away)}]`);
   }
@@ -199,6 +218,7 @@ async function deckAwaySteps(
   const awayResizes = (awaySettled.wrapper?.bodyResizes ?? 0) - beforeWrapper.bodyResizes;
   verdict["away"] = {
     monitorFoot: away.monitorFoot,
+    wallTop: away.wallTop,
     windowFoot: away.windowFoot,
     bodyResizes: awayResizes,
   };
@@ -253,7 +273,7 @@ async function deckAwaySteps(
 // the smoke's own input (`sendInputEvent`: trusted moves, read at the window):
 //
 //   · held down 60 and let go slowly, the edge STAYS there and is remembered,
-//     and the monitor's field ends 12 above it;
+//     and the collision-wall target ends 12 above it while the canvas stays full;
 //   · held down past the line — less than 120 left — the stage says Minimize
 //     the terminals, and let go there they go AWAY, the remembered edge kept;
 //   · a body brings them back up at that remembered edge;
@@ -279,6 +299,8 @@ const LIP_NOW = `(() => {
     readout: stage.querySelector(".vf-godview-deck-readout")?.getAttribute("data-on") ?? null,
     sheetTop: sheet ? sheet.offsetTop : null,
     monitorFoot: monitor ? Math.round(monitor.getBoundingClientRect().bottom) : null,
+    allocation: monitor?.getAttribute("data-stage-allocation") ?? null,
+    wallTop: stage.querySelector(".vf-godview-field-wall")?.getBoundingClientRect().top ?? null,
     windowFoot: window.innerHeight,
   });
 })()`;
@@ -293,6 +315,8 @@ interface LipNow {
   readout: string | null;
   sheetTop: number | null;
   monitorFoot: number | null;
+  allocation: string | null;
+  wallTop: number | null;
   windowFoot: number;
 }
 
@@ -378,7 +402,7 @@ async function deckEdgeSteps(
   if (start.shift !== "" || start.remembered !== null) {
     return { unavailable: `the edge was not at rest (${start.shift || start.remembered})` };
   }
-  verdict["rest"] = { top: restTop, monitorFoot: start.monitorFoot };
+  verdict["rest"] = { top: restTop, monitorFoot: start.monitorFoot, wallTop: start.wallTop };
 
   // STAYS — 60 down, let go slowly
   await holdLip(win, start, start.y + 60, 6, 80);
@@ -396,6 +420,7 @@ async function deckEdgeSteps(
     remembered: there.remembered,
     field: there.field,
     monitorFoot: there.monitorFoot,
+    wallTop: there.wallTop,
   };
   if (Math.abs((stayed.wrapper?.top ?? 0) - (restTop + 60)) > 1) {
     throw new Error(
@@ -410,11 +435,8 @@ async function deckEdgeSteps(
   if (there.sheetTop === null || there.monitorFoot === null) {
     throw new Error("the stage lost its sheet or its monitor");
   }
-  if (Math.abs(there.sheetTop - 12 - there.monitorFoot) > 1) {
-    throw new Error(
-      `the monitor's field ends at ${there.monitorFoot}, not 12 above the edge (${there.sheetTop})`,
-    );
-  }
+  const field = fieldProblems(there, there.sheetTop - 12);
+  if (field.length > 0) throw new Error(`the dragged field: ${field.join("; ")}`);
 
   // AWAY — held past the line (70 left above the panes' foot), let go slowly
   const line = there.windowFoot - COVER_RESERVE - 70;
@@ -569,12 +591,13 @@ async function deckMaximizeSteps(
     "maximize to fill the window (the marker: maximized)",
     10_000,
   );
-  await stageAtRest(win, "the rise to the top");
+  const maximized = await stageAtRest(win, "the rise to the top");
   const full = await opts.settled();
   const bar = await barNow(win);
   const fullResizes = (full.wrapper?.bodyResizes ?? 0) - resizes;
   verdict["maximized"] = { top: full.wrapper?.top, bodyResizes: fullResizes, bar };
   const problems: string[] = [];
+  problems.push(...fieldProblems(maximized, 0));
   if (full.wrapper?.top !== 0) problems.push(`the sheet's top is ${full.wrapper?.top}, not 0`);
   if (fullResizes > 1) problems.push(`the terminals were laid out ${fullResizes} times`);
   if (bar.layout !== "maximized") problems.push(`the layout is ${bar.layout}`);

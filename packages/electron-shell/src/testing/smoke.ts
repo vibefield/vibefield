@@ -3930,7 +3930,7 @@ async function rectBeside(win: BrowserWindow, box: ObjectBox): Promise<ViewRect 
  *   QUARANTINE — a faulty clock laid (its `record` throws from its third call, its `hit` on every pick): three
  *     strikes and the desk quarantines it, `status().faults` naming it second, the desk's state still `ready`;
  *   FACES — each broken clock wears ICE's MISSING face where it lies: picked as its type by its box (the face
- *     is pickable), its pixels not what the desk draws beside it, its contrast below a drawn clock's; the bar's words
+ *     is pickable), its pixels not what the desk draws beside it, its interior contrast below a drawn clock's; the bar's words
  *     "Broken clock · can't draw", "Faulty clock · can't draw" (DK-11: R24's word for a faulted kind);
  *   THE REST DRAWS — a seconds clock laid beside them ticks on its own (its box's pixels change over a second
  *     and a half), its words its title alone, no other kind in `faults`; and the frame rate with the wind
@@ -4029,14 +4029,27 @@ async function kindFaultRows(
     faulty: await deskWords(win, faulty),
   };
   const beside = boxes.broken === null ? null : await rectBeside(win, boxes.broken);
+  // objectBox probes on an 8 px grid. Its bounds can include the missing
+  // face's bright outline for one placement but omit it for another. Compare
+  // interiors consistently, one probe step inside, rather than that edge.
+  const interior = (box: ObjectBox): ViewRect => {
+    const r = rectOf(box);
+    const inset = Math.min(8, r.width / 4, r.height / 4);
+    return {
+      x: r.x + inset,
+      y: r.y + inset,
+      width: r.width - 2 * inset,
+      height: r.height - 2 * inset,
+    };
+  };
   const pixels = {
-    ticking: boxes.ticking === null ? null : await boxPixels(win, rectOf(boxes.ticking)),
-    broken: boxes.broken === null ? null : await boxPixels(win, rectOf(boxes.broken)),
-    faulty: boxes.faulty === null ? null : await boxPixels(win, rectOf(boxes.faulty)),
+    ticking: boxes.ticking === null ? null : await boxPixels(win, interior(boxes.ticking)),
+    broken: boxes.broken === null ? null : await boxPixels(win, interior(boxes.broken)),
+    faulty: boxes.faulty === null ? null : await boxPixels(win, interior(boxes.faulty)),
     beside: beside === null ? null : await boxPixels(win, beside),
   };
   await sleep(1_500);
-  const tickedOn = boxes.ticking === null ? null : await boxPixels(win, rectOf(boxes.ticking));
+  const tickedOn = boxes.ticking === null ? null : await boxPixels(win, interior(boxes.ticking));
   const rateAfter = await frameRate();
   if (shotDir !== undefined) {
     mkdirSync(shotDir, { recursive: true });

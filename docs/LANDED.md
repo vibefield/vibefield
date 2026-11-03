@@ -29660,3 +29660,12 @@ are behind the terminal sheet. The driver now clips its search to the viewport a
 the real pointer hover and DOM hit checks still reject bubbles and chrome. Its old static diagnostic no longer
 claims Godview has no stop gesture: it names only the retired two-step shell chip, separate from agent Stop/Pause.
 The consumer PR records all desktop gate results and rechecks.
+
+Two further smoke assumptions were corrected from the physical evidence. The faulty-clock pixel box included
+its bright outline while the other boxes omitted theirs (the hit probes are 8 px apart); all three faces now
+use interior samples, with the existing contrast inequality unchanged. History's model-launch row now waits
+for the stub process's own launch record, as the ordinary New agent and Resume rows already do: configured
+intent reaching the fold is not evidence that the child has executed. Both changes are confined to the smoke
+harness; no product threshold, renderer behavior or launch policy changes.
+The deck's physical smoke now checks the full-size canvas and the collision-wall target separately when
+minimized, dragged and maximized; its old monitor-bottom checks described the retired resizing behavior.
