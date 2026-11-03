@@ -60,10 +60,10 @@ use super::wire::{
     AttachControlLeg, AttachFramesLeg, AttachRefused, CalibrationPing, ClaimGeometry,
     ConnectionAccepted, ConnectionHello, ConnectionRefused, DeclareDemand, InputOp, InputRefused,
     LegHeartbeat, LegHeartbeatAck, ProtocolLimits, ReceiverCapacities, ReleaseGeometry,
-    SceneApplied, SelectionTextRequest, SelectionTextResult, SendInput, SessionEvent,
+    RequestScene, SceneApplied, SelectionTextRequest, SelectionTextResult, SendInput, SessionEvent,
     SessionEventKind, Tagged, TransferGeometry, TransportCredit, TrfIdentity,
     GEOMETRY_EVENTS_CAPABILITY, INPUT_REFUSALS_CAPABILITY, JSON_MAX_SAFE_INTEGER,
-    SELECTION_TEXT_CAPABILITY, SESSION_EVENTS_CAPABILITY,
+    SCENE_REPAIR_CAPABILITY, SELECTION_TEXT_CAPABILITY, SESSION_EVENTS_CAPABILITY,
 };
 use crate::registries::terminal_pipeline as tp;
 use crate::registries::terminal_pipeline_close_codes as close;
@@ -719,12 +719,12 @@ impl PumpHost for DoorState {
         perform_on(self, effects);
     }
 
-    fn wants_frames(&self, activation_id: &str) -> bool {
+    fn scene_generation(&self, activation_id: &str) -> Option<(u64, u64)> {
         self.registry
             .lock()
             .unwrap()
             .activations
-            .wants_frames(activation_id)
+            .scene_generation(activation_id)
     }
 }
 
@@ -1113,6 +1113,10 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         && negotiated_capabilities
             .iter()
             .any(|c| c == INPUT_REFUSALS_CAPABILITY);
+    let scene_repair = channel == Channel::Frames
+        && negotiated_capabilities
+            .iter()
+            .any(|c| c == SCENE_REPAIR_CAPABILITY);
     let initial_windows = (channel == Channel::Frames).then(|| {
         hello
             .receiver_capacities
@@ -1271,7 +1275,7 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
                     Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) | Some(Ok(Message::Frame(_))) => {}
                     Some(Ok(Message::Binary(_))) => break (close::PROTOCOL, "PROTOCOL:binary-inbound".to_string()),
                     Some(Ok(Message::Text(text))) => {
-                        match handle_text(&state, &leg, &set_identity, channel, input_refusals, text.as_str()) {
+                        match handle_text(&state, &leg, &set_identity, channel, input_refusals, scene_repair, text.as_str()) {
                             Ok(keepalive) => {
                                 if keepalive {
                                     deadline.as_mut().reset(tokio::time::Instant::now() + ttl);
@@ -1540,6 +1544,7 @@ fn handle_text(
     set: &SetIdentity,
     channel: Channel,
     input_refusals: bool,
+    scene_repair: bool,
     text: &str,
 ) -> Result<bool, String> {
     let tag: Tagged = serde_json::from_str(text).map_err(|_| "untagged".to_string())?;
@@ -1649,6 +1654,22 @@ fn handle_text(
                 let mut reg = state.registry.lock().unwrap();
                 reg.activations.credit_returned(leg.connection_id, &msg)
             };
+            perform(state, effects);
+            Ok(false)
+        }
+        (Channel::Frames, "RequestScene") => {
+            if !scene_repair {
+                return Err("scene-repair-not-negotiated".to_string());
+            }
+            let msg: RequestScene =
+                serde_json::from_str(text).map_err(|e| format!("request-scene:{e}"))?;
+            let effects =
+                state
+                    .registry
+                    .lock()
+                    .unwrap()
+                    .activations
+                    .request_scene(leg, msg, unix_ms());
             perform(state, effects);
             Ok(false)
         }

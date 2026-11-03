@@ -254,6 +254,7 @@ private final class Lines: @unchecked Sendable {
           "resume", "session-events", RoutedTerminalContract.geometryEventsCapability,
           RoutedTerminalContract.inputRefusalsCapability,
           RoutedTerminalContract.selectionTextCapability,
+          RoutedTerminalContract.sceneRepairCapability,
         ])
   }
 

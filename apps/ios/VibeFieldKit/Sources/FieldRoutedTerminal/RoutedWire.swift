@@ -54,6 +54,7 @@ public enum RoutedMessageType: String, Sendable, Equatable, CaseIterable {
   case framesLegAttached = "FramesLegAttached"
   case transportCredit = "TransportCredit"
   case sceneApplied = "SceneApplied"
+  case requestScene = "RequestScene"
   case calibrationPing = "CalibrationPing"
 }
 
@@ -88,7 +89,7 @@ public enum RoutedLegVocabulary {
         .releaseGeometry, .transferGeometry, .sendInput, .selectionTextRequest,
       ]
     case .frames:
-      [.connectionHello, .legHeartbeat, .attachFramesLeg, .transportCredit, .sceneApplied, .calibrationPing]
+      [.connectionHello, .legHeartbeat, .attachFramesLeg, .transportCredit, .sceneApplied, .requestScene, .calibrationPing]
     }
   }
 }

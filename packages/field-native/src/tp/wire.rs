@@ -51,6 +51,7 @@ pub fn inbound_tags(channel: Channel) -> &'static [&'static str] {
             "AttachFramesLeg",
             "TransportCredit",
             "SceneApplied",
+            "RequestScene",
             "CalibrationPing",
         ],
     }
@@ -380,6 +381,16 @@ pub struct SceneApplied {
     pub activation_id: String,
     pub lease_epoch: u64,
     pub applied_content: SceneContentStamp,
+}
+
+/// Contracts `RequestScene`: repair an absent/rejected viewer scene without
+/// changing demand, the attached view, or geometry ownership.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestScene {
+    pub session_id: String,
+    pub activation_id: String,
+    pub lease_epoch: u64,
 }
 
 /// One dimension of the lease (`PresentationDimension` / `InputDimension`).
@@ -767,6 +778,7 @@ pub const CELL_CAPABILITIES: &[&str] = &[
     GEOMETRY_EVENTS_CAPABILITY,
     INPUT_REFUSALS_CAPABILITY,
     SELECTION_TEXT_CAPABILITY,
+    SCENE_REPAIR_CAPABILITY,
 ];
 
 /// The negotiated `session-events` capability string, spelled once.
@@ -777,6 +789,7 @@ pub const GEOMETRY_EVENTS_CAPABILITY: &str = "geometry-events";
 /// The negotiated `input-refusals` capability string, spelled once.
 pub const INPUT_REFUSALS_CAPABILITY: &str = "input-refusals";
 pub const SELECTION_TEXT_CAPABILITY: &str = "selection-text";
+pub const SCENE_REPAIR_CAPABILITY: &str = "scene-repair";
 
 pub fn capability_intersection(client: &[String]) -> Vec<String> {
     client
@@ -788,6 +801,23 @@ pub fn capability_intersection(client: &[String]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn scene_repair_fixture_is_frames_only_and_explicitly_negotiated() {
+        let request: super::RequestScene = serde_json::from_str(include_str!(
+            "../../../contracts/fixtures/tp-request-scene.valid.json"
+        ))
+        .unwrap();
+        assert_eq!(request.session_id, "session-repair");
+        assert_eq!(request.activation_id, "activation-repair");
+        assert_eq!(request.lease_epoch, 3);
+        assert_eq!(
+            super::capability_intersection(&["scene-repair".into()]),
+            ["scene-repair"]
+        );
+        assert!(super::inbound_tags(super::Channel::Frames).contains(&"RequestScene"));
+        assert!(!super::inbound_tags(super::Channel::Control).contains(&"RequestScene"));
+    }
+
     #[test]
     fn selection_fixtures_match_the_contracts_and_swift() {
         let request: super::SelectionTextRequest = serde_json::from_str(include_str!(

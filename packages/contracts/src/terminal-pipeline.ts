@@ -653,6 +653,7 @@ export const KNOWN_CAPABILITIES = [
   "paste-parts",
   "input-refusals",
   "selection-text",
+  "scene-repair",
 ] as const;
 export type KnownCapability = (typeof KNOWN_CAPABILITIES)[number];
 
@@ -1014,6 +1015,21 @@ export const SceneApplied = z
   })
   .passthrough();
 export type SceneApplied = z.infer<typeof SceneApplied>;
+
+/** Viewer → cell, frames leg, only after negotiating `scene-repair` on that
+ * leg. A missing/rejected local scene needs a complete replacement even when
+ * the PTY is idle. The cell verifies the current activation, read grant,
+ * lease epoch and live view, then coalesces a full catch-up through the normal
+ * credit-governed pump. No demand, view attachment, geometry ownership or
+ * activation sequence is reset. This is not an acknowledgement of content. */
+export const RequestScene = z
+  .object({
+    sessionId: z.string().min(1),
+    activationId: z.string().min(1),
+    leaseEpoch: Counter.max(Number.MAX_SAFE_INTEGER),
+  })
+  .passthrough();
+export type RequestScene = z.infer<typeof RequestScene>;
 
 export const PresentationDimension = z
   .object({
@@ -1768,6 +1784,7 @@ export const TpMessageType = z.enum([
   "FramesLegAttached",
   "TransportCredit",
   "SceneApplied",
+  "RequestScene",
   "CalibrationPing",
 ]);
 export type TpMessageType = z.infer<typeof TpMessageType>;
@@ -1800,6 +1817,7 @@ export const TP_MESSAGE_SCHEMAS: Readonly<Record<TpMessageType, ZodTypeAny>> = {
   FramesLegAttached,
   TransportCredit,
   SceneApplied,
+  RequestScene,
   CalibrationPing,
 };
 
@@ -1822,6 +1840,7 @@ export const TP_LEG_INBOUND: Readonly<Record<TransportChannel, readonly TpMessag
     "AttachFramesLeg",
     "TransportCredit",
     "SceneApplied",
+    "RequestScene",
     "CalibrationPing",
   ],
 };

@@ -68,8 +68,9 @@ pub trait PumpHost: Send + Sync + 'static {
     /// The pump could not converge within the bound. Said once per stall; the
     /// pump keeps waiting for the credit that recovers it.
     fn presentation_stopped(&self, activation_id: &str, reason: &'static str);
-    /// Does the activation want frames right now (demand live, view attached)?
-    fn wants_frames(&self, activation_id: &str) -> bool;
+    /// The live view's (attachment epoch, repair generation). A changed pair
+    /// requires a whole scene, including changes whose wakes coalesced.
+    fn scene_generation(&self, activation_id: &str) -> Option<(u64, u64)>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,19 +162,20 @@ async fn run_pump<H: PumpHost>(
         transfer_counter: 0,
     };
     let mut needs_full = true;
+    let mut last_scene_generation = None;
     loop {
         if pump.stop.load(Ordering::Acquire) {
             break;
         }
-        // Demand none (the view is detached): nothing should arrive, and
-        // whatever does is coalesced; the return to live repairs with a full.
-        if !pump.host.wants_frames(&pump.start.activation_id) {
-            // Observing demand-none IS the lineage break (§8) — mark it NOW, not
-            // lazily on a frame/notify. Otherwise a quiet demand-none window sets
-            // nothing, and on re-attach the WakePump and the engine's re-attach
-            // frame are both ready: if select takes the frame, `needs_full` is
-            // still false and a delta rides out where a catch-up must. Setting it
-            // here makes re-attach ALWAYS catch up, regardless of select ordering.
+        let scene_generation = pump.host.scene_generation(&pump.start.activation_id);
+        if scene_generation != last_scene_generation {
+            needs_full = true;
+            last_scene_generation = scene_generation;
+        }
+        // Corrected 2026-10-30: watching only the live bit missed a none ->
+        // live cycle whose wakes coalesced before this task ran. The attachment
+        // epoch remembers that break, so a new consumer receives a whole scene.
+        if scene_generation.is_none() {
             needs_full = true;
             tokio::select! {
                 _ = pump.notify.notified() => {}
@@ -203,15 +205,11 @@ async fn run_pump<H: PumpHost>(
                     if packet.session_handle != pump.start.session_handle {
                         continue;
                     }
-                    // Demand may have gone NONE while we were parked in this
-                    // select (a demand cycle, or a read-only viewer parking) —
-                    // `DeclareDemand{none}` sets demand and WakePumps, but the
-                    // wake and a pending frame are BOTH ready and select picks
-                    // one at random. A frame that arrives after demand-none must
-                    // NOT ride out as a delta: drop it (needs_full) so re-attach
-                    // repairs with a catch-up. This makes §8's "demand gone and
-                    // back breaks the lineage" hold by construction, not by timing.
-                    if !pump.host.wants_frames(&pump.start.activation_id) {
+                    // The frame and the wake can both be ready. Re-check the
+                    // attachment before sending a delta, including a whole
+                    // none -> live cycle that happened while select waited.
+                    let scene_generation = pump.host.scene_generation(&pump.start.activation_id);
+                    if scene_generation.is_none() || scene_generation != last_scene_generation {
                         needs_full = true;
                         continue;
                     }
@@ -514,9 +512,18 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
     use std::sync::Mutex;
 
-    #[derive(Default)]
     struct ReadyHost {
         seeds: AtomicUsize,
+        view_epoch: AtomicUsize,
+    }
+
+    impl Default for ReadyHost {
+        fn default() -> Self {
+            Self {
+                seeds: AtomicUsize::new(0),
+                view_epoch: AtomicUsize::new(1),
+            }
+        }
     }
 
     impl PumpHost for ReadyHost {
@@ -534,9 +541,91 @@ mod tests {
         fn presentation_stopped(&self, _: &str, reason: &'static str) {
             panic!("unexpected stop: {reason}");
         }
-        fn wants_frames(&self, _: &str) -> bool {
-            true
+        fn scene_generation(&self, _: &str) -> Option<(u64, u64)> {
+            let epoch = self.view_epoch.load(Ordering::SeqCst) as u64;
+            (epoch != 0).then_some((epoch, 0))
         }
+    }
+
+    /// The control reader can process none -> live before the pump runs again.
+    /// Notify coalesces those wakes; observing only the final live bit loses the
+    /// repair needed by the new consumer, which no longer holds the old base.
+    #[tokio::test]
+    async fn a_coalesced_park_and_reattach_sends_a_catchup_before_any_delta() {
+        let hub = FrameHub::new(32);
+        let session = idle_session(&hub);
+        let host = Arc::new(ReadyHost::default());
+        let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let pump = spawn_pump(
+            host.clone(),
+            PumpStart {
+                activation_id: "coalesced-reattach".into(),
+                session_id: session.id(),
+                lease_epoch: 0,
+                connection_id: 1,
+                credit_epoch: 1,
+                frames: LegRef {
+                    connection_id: 1,
+                    leg_generation: 1,
+                    out,
+                    bulk_credit: None,
+                    geometry_events: false,
+                    selection_credit: None,
+                },
+                session: session.clone(),
+                hub: hub.clone(),
+                session_handle: session.summary().handle.parse().unwrap(),
+                scene_epoch: SceneEpoch {
+                    cell_boot_id: "coalesced-reattach-test".into(),
+                    model_generation: 1,
+                },
+                max_chunk_bytes: 1024,
+                max_urgent_unit_bytes: 1 << 20,
+                seed_wait: Duration::from_secs(5),
+                catchup_bound: Duration::from_secs(5),
+            },
+        );
+        let seed_end = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                if let Outbound::Binary(bytes, _) | Outbound::Bulk(bytes, _) =
+                    received.recv().await.unwrap()
+                {
+                    let (header, _) = super::super::wire::decode_envelope(&bytes).unwrap();
+                    if header["kind"] == "transfer-end" {
+                        break header["activationSequence"].as_u64().unwrap();
+                    }
+                }
+            }
+        })
+        .await
+        .unwrap();
+
+        // No await between the two edges: the current-thread pump cannot see
+        // the parked state. A reattach refresh competes with the coalesced wake.
+        host.view_epoch.store(0, Ordering::SeqCst);
+        pump.notify.notify_one();
+        host.view_epoch.store(2, Ordering::SeqCst);
+        pump.notify.notify_one();
+        session.refresh().unwrap();
+        let next = tokio::time::timeout(Duration::from_secs(10), received.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        pump.stop();
+        pump.task.await.unwrap();
+        session.terminate(TerminationSource::User).unwrap();
+
+        let bytes = match next {
+            Outbound::Binary(bytes, _) | Outbound::Bulk(bytes, _) => bytes,
+            _ => panic!("expected a presentation unit"),
+        };
+        let (header, _) = super::super::wire::decode_envelope(&bytes).unwrap();
+        assert_eq!(
+            header["kind"], "transfer-begin",
+            "a new consumer needs a whole scene"
+        );
+        assert_eq!(header["transfer"]["kind"], "catchup");
+        assert_eq!(header["activationSequence"].as_u64(), Some(seed_end + 1));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -693,8 +782,8 @@ mod tests {
             assert_eq!(reason, "overload");
             self.stops.fetch_add(1, Ordering::SeqCst);
         }
-        fn wants_frames(&self, _: &str) -> bool {
-            true
+        fn scene_generation(&self, _: &str) -> Option<(u64, u64)> {
+            Some((1, 0))
         }
     }
 
