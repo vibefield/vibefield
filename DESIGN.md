@@ -3149,6 +3149,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   red · undo, reading "Page 1"; the whiteboard black, blue, red, green · eraser · undo · redo — and the example plugin's clock
   (`@ice-examples/desk-clock`) holds seconds · the 24-hour ring · an hour back · an hour ahead · the
   next dial, its own five drawings (§13), reading its time.
+  **Canvas gestures (2026-11-02):** click-drag on empty canvas draws a selection marquee; Shift-drag
+  adds to the selection. Trackpad scrolling pans, pinch zooms at the pointer, and Space-drag or a middle-button
+  drag pans explicitly. Dragging a selected object or the empty space inside a multi-selection moves
+  the group together, including Prints; one Undo restores the group and Escape cancels the move.
+  Locked objects stay fixed. The group hit check runs once at pointer-down, with no new render pass.
+
   **Prints (2026-11-02):** an image-backed canvas object, placed by image paste or a picture card dropped
   onto the desk. It is absent from the pegboard; existing and new prints display edge to edge without a white frame.
 
