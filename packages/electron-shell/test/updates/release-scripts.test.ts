@@ -420,7 +420,7 @@ describe("release-plan (D6, D7, D14)", () => {
       ["nightly-20261016", ".1"],
       ["nightly-20261016.1", ".2"],
       ["nightly-20261016.9", ".10"],
-    ]) {
+    ] as const) {
       expect(
         planRelease({ ...base, event: "workflow_dispatch", ref: "", lastNightlyTag }),
       ).toMatchObject({
