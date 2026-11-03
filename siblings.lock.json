@@ -102,12 +102,12 @@
     "ice": {
       "path": "../infinite-canvas-engine",
       "repository": "https://github.com/vibefield/infinite-canvas-engine.git",
-      "sha": "0d3307a39708a53315b056799b9111f06ac9e4e8",
+      "sha": "5714ca307c6f1f375debae6b05c94d1ae06e384d",
       "packages": {
         "@vibecook/ice": "packages/ice"
       },
       "release": {
-        "npm": "0.16.0"
+        "npm": "0.17.0"
       },
       "pnpm": {
         "build": ["--filter", "@vibecook/ice", "build"]
