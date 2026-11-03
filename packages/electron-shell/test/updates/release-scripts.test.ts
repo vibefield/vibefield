@@ -932,6 +932,43 @@ describe("release.yml's shape — the permissions table, as a test", () => {
     expect(jobs.get("plan")).not.toMatch(/--last-nightly-commit/);
   });
 
+  it.each(["flat", "named"])(
+    "stages the downloaded build payloads from a %s artifact layout",
+    (layout) => {
+      const dir = scratch();
+      const build = join(dir, "builds", ...(layout === "named" ? ["build-mac-arm64"] : []));
+      mkdirSync(build, { recursive: true });
+      mkdirSync(join(dir, "bin"));
+      // No earlier release: exercise the workflow's real staging shell without GitHub access.
+      writeFileSync(join(dir, "bin", "gh"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      writeFileSync(join(build, "VibeField.zip"), "installer bytes");
+      writeFileSync(join(build, "latest-mac.yml"), "unsigned feed");
+      writeFileSync(join(build, "hashes-mac-arm64.json"), "{}");
+      const step = stepsOf("sign").find(
+        (entry) => entry.name === "The previous releases' truth (D4, D5, D11)",
+      );
+      expect(step).toBeDefined();
+      const shell = step!.text.split("        run: |\n")[1]!.replace(/^ {10}/gm, "");
+      execFileSync("bash", ["-euc", shell], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+          CHANNEL: "nightly",
+          GITHUB_REPOSITORY: "test/release",
+        },
+      });
+      expect(readdirSync(join(dir, "release-out")).sort()).toEqual([
+        "VibeField.zip",
+        "latest-mac.yml",
+      ]);
+      expect(readFileSync(join(dir, "release-out", "VibeField.zip"), "utf8")).toBe(
+        "installer bytes",
+      );
+      expect(readFileSync(join(build, "hashes-mac-arm64.json"), "utf8")).toBe("{}");
+    },
+  );
+
   it("puts ONLY the build and sign jobs in release-signing", () => {
     for (const [job, text] of jobs)
       expect(/\n {4}environment: release-signing\n/.test(text), job).toBe(

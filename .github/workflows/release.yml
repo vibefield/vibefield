@@ -366,9 +366,9 @@ jobs:
           if [ -n "$manifest" ]; then
             gh release download "$manifest" --repo "$GITHUB_REPOSITORY" --dir previous-channel --pattern 'release-manifest.json'
           fi
-          for dir in builds/*/; do
-            find "$dir" -maxdepth 1 -type f ! -name 'hashes-*.json' -exec cp {} release-out/ \;
-          done
+          # download-artifact v8 extracts a single matched artifact directly into builds/;
+          # multiple matches get named subdirectories. Accept both layouts.
+          find builds -mindepth 1 -maxdepth 2 -type f ! -name 'hashes-*.json' -exec cp {} release-out/ \;
       # AU-6 (AU-D10 A; LC-19): the notes, from the SAME previous manifest Merge names in `previous`, written beside the
       # release (never an asset of their own) and merged INTO the manifest, so they ride under its one release
       # signature. A stable refuses here without apps/desktop/packaging/notes/<X.Y.Z>.txt; a first release of its
