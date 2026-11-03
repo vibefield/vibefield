@@ -107,6 +107,19 @@ private func publishAgentsSlice(
 
 @MainActor
 @Suite struct FieldLinkDiscoveryTests {
+  @Test func aSecondDesktopWithTheSameHostnameUsesItsOwnDoor() async throws {
+    let peer = FieldStorePeer(
+      id: studio.id, deviceId: studio.deviceId, online: true, hostname: studio.hostname,
+      tailnetIPs: ["100.64.0.3"], dnsName: "studio-1.tail.ts.net.")
+    let probe = LinkProbe(
+      answers: ["studio-1.tail.ts.net": .status(426)], fallback: .unreachable("old desktop is off"))
+    let (link, _, door, _) = try await standingLink(peers: [peer], probe: probe)
+    defer { link.stop() }
+    try await waitUntil("the canonical desktop door") { link.desktops.first?.state == .ready }
+    #expect(await probe.asked.allSatisfy { $0.host == "studio-1.tail.ts.net" })
+    #expect(await door.dialed.first?.host == "studio-1.tail.ts.net")
+  }
+
   /// The whole of UA-P-1a in one row: a peer on the tailnet, a door that
   /// admits this login, and a desktop.
   @Test func aPeerWhoseDoorAdmitsThisLoginBecomesADesktop() async throws {

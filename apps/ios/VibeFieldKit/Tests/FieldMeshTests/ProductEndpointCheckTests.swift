@@ -96,6 +96,32 @@ private let studioAddresses = ["studio", "100.64.0.2"]
 /// what was composed IS an address the mesh vouches for — and it is the line
 /// that would catch the composition ever learning a host from somewhere else.
 @Suite struct PeerDoorBuilderTests {
+  @Test func duplicateHostnamesUseTheirOwnCanonicalDNSNames() throws {
+    let original = try #require(peerProductDoorURL(
+      hostname: "studio", tailnetIPs: ["100.64.0.2"], magicDNSSuffix: "tail.ts.net",
+      dnsName: "studio.tail.ts.net.").url)
+    let candidate = try #require(peerProductDoorURL(
+      hostname: "studio", tailnetIPs: ["100.64.0.3"], magicDNSSuffix: "tail.ts.net",
+      dnsName: "STUDIO-1.tail.ts.net.").url)
+    #expect(original.host == "studio.tail.ts.net")
+    #expect(candidate.host == "studio-1.tail.ts.net")
+    #expect(candidate != original)
+    #expect(candidate.port == FieldMeshContract.productServePort)
+  }
+
+  @Test func canonicalDNSNameDoesNotNeedANameOrSuffixToBeInvented() throws {
+    let url = try #require(peerProductDoorURL(
+      hostname: nil, tailnetIPs: [], magicDNSSuffix: nil,
+      dnsName: "studio-1.tail.ts.net.").url)
+    #expect(url.host == "studio-1.tail.ts.net")
+  }
+
+  @Test func anEmptyCanonicalNameKeepsTheLegacyFallback() throws {
+    let url = try #require(peerProductDoorURL(
+      hostname: "studio", tailnetIPs: [], magicDNSSuffix: "tail.ts.net", dnsName: "").url)
+    #expect(url.host == "studio.tail.ts.net")
+  }
+
   @Test func theDoorIsThePeersOwnFullyQualifiedNameAndTheRegistryPort() throws {
     let verdict = peerProductDoorURL(
       hostname: "studio", tailnetIPs: ["100.64.0.2"], magicDNSSuffix: "tail.ts.net")

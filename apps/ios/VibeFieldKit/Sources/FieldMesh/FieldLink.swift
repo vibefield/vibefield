@@ -1019,7 +1019,8 @@ public final class FieldLink {
       }
 
       let verdict = peerProductDoorURL(
-        hostname: peer.hostname, tailnetIPs: peer.tailnetIPs, magicDNSSuffix: magicDNSSuffix)
+        hostname: peer.hostname, tailnetIPs: peer.tailnetIPs, magicDNSSuffix: magicDNSSuffix,
+        dnsName: peer.dnsName)
       switch verdict {
       case .refused(let reason):
         entry.doorURL = nil
