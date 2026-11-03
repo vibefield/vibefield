@@ -9,8 +9,6 @@ import { specimenFit } from "@vibecook/ice/kernel";
 
 /** The canon's numbers (§8; §10 "The mat's places"). */
 export const PEGBOARD = {
-  /** The board's lay keeps this at its foot (I21) — the line's 88 — so the last row clears the line. */
-  foot: 88,
   /** The filters stand this far in from the header band's sides. */
   inset: 12,
   /** The track: segments 30 tall in a padding of 3 — 36 in all, centred in the band's 48. */

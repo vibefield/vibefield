@@ -25,7 +25,7 @@ const segment = (h = 30) => ({ x0: 0, y0: 0, x1: 60, y1: h });
 describe("the filters' place (§8)", () => {
   it("passes the canon's place", () => {
     expect(judgeFiltersPlace(drawer, track(), [segment(), segment()])).toEqual([]);
-    expect(BOARD_PLACE).toEqual({ foot: 88, inset: 12, track: 36, segment: 30 });
+    expect(BOARD_PLACE).toEqual({ foot: 4, inset: 12, track: 36, segment: 30 });
   });
 
   it("names a track off the drawer's centre, out of the band, the wrong height, or a segment not 30", () => {

@@ -1305,6 +1305,29 @@ export async function runSmokeCanvas(opts: {
             profileSeed,
           )),
         );
+      } else if (process.argv.includes("--desk-copy")) {
+        // The copy and idle rows alone, for diagnosing their pointer interactions on the seeded desk.
+        try {
+          problems.push(
+            ...(await deskCopyRows({
+              win,
+              plugins: {
+                disable: (id) => opts.handle.client.request("plugins.disable", { id }),
+                enable: (id) => opts.handle.client.request("plugins.enable", { id }),
+              },
+              shotDir,
+              say: (line) => console.log(line),
+              ...(opts.copies === undefined ? {} : { copies: opts.copies }),
+              ...(opts.pictures === undefined ? {} : { pictures: opts.pictures }),
+            })),
+          );
+        } catch (error) {
+          problems.push(`HN-3: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+          // A failed copy row must not leave cards over the next row's drag target.
+          await win.webContents.executeJavaScript("globalThis.__vfCards?.clear()", true);
+        }
+        problems.push(...(await restRows({ win, say: (line) => console.log(line) })));
       } else if (process.argv.includes(LIVE_FLAG)) {
         // PT-2 — the live page's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs --smoke-canvas
         // --live-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
@@ -1436,6 +1459,9 @@ export async function runSmokeCanvas(opts: {
           );
         } catch (error) {
           problems.push(`HN-3: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+          // A failed copy row must not leave cards over the next row's drag target.
+          await win.webContents.executeJavaScript("globalThis.__vfCards?.clear()", true);
         }
         // DK-17b: the explorer's thumbnail taken while a selection stands is the desk without its marks (ICE I40's
         // purpose; testing/smoke-thumb.ts) — an object moved, its still owed and taken, read back; the move undone
@@ -2738,10 +2764,11 @@ async function presenceRestRow(win: BrowserWindow): Promise<string[]> {
   await js<number | null>(TAP); // what went out before the window is not the window's
   const session = await js<boolean>("globalThis.__vfDesk.peers().said !== null");
   const a = await stillnessSample(win);
-  const t0 = Date.now();
+  // The observation is an elapsed interval; wall-clock corrections must not shorten it.
+  const t0 = performance.now();
   await sleep(PRESENCE_REST.windowMs);
   const b = await stillnessSample(win);
-  const windowMs = Date.now() - t0;
+  const windowMs = performance.now() - t0;
   const keepalives = await js<number | null>(TAP);
   const moved = movedBy(a, b);
   console.log(

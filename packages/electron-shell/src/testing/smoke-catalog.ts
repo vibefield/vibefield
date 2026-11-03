@@ -312,12 +312,15 @@ ${PAGE_WORDS}
         words: [...wordsIn(shell.querySelector(".vf-wizard-steps")), ...wordsIn(root)],
       };
     },
-    /** the Text ramp (DESIGN.md §2.4), centred in the window: its box, and each chip's tier, ground and floor with the
-     * box its glyphs take */
+    showRamp: () => {
+      const ramp = document.querySelector("[data-ds-text-ramp]");
+      if (ramp !== null) centre(ramp);
+      return ramp !== null;
+    },
+    /** The Text ramp as it stands: reading geometry must not scroll again immediately before capture. */
     ramp: () => {
       const ramp = document.querySelector("[data-ds-text-ramp]");
       if (ramp === null) return null;
-      centre(ramp);
       return {
         view: { width: innerWidth, height: innerHeight },
         box: box(ramp),
@@ -505,10 +508,10 @@ export async function catalogRows(
       d.say(`CATALOG_THEME ${theme}`);
 
       // DESIGN.md §2.4's ramp, in pixels
-      const ramp = await page<RampSeen>("ramp()");
+      const shown = await page<boolean>("showRamp()");
       await sleep(CATALOG.settleMs);
       const seen = await page<RampSeen>("ramp()");
-      if (ramp === null || seen === null)
+      if (shown !== true || seen === null)
         problems.push(`by ${theme} the catalog's Text ramp did not stand`);
       else {
         const rect = rounded(seen.box);
