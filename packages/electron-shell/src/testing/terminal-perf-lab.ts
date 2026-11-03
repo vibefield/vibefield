@@ -1213,6 +1213,7 @@ export async function runTerminalPerfLab(opts: {
         floor: async () =>
           TerminalListResult.parse(await opts.handle.client.request("terminal.list", {})).terminals,
         monitorCount: () => monitor.current()?.agents,
+        inputAllowed: (sessionId) => direct.current(sessionId)?.inputAllowed === true,
       });
     }
 
