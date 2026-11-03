@@ -6865,7 +6865,8 @@ async function bloomRoster(
  * it: moved there, no body answers (the swarm's hover title stays away), and
  * the point is the swarm's own (no chrome over it). The swarm's bodies drift
  * on a canvas this harness cannot read, so the ground is probed, never assumed;
- * lower points first, leaving the arc room to open up.
+ * lower VISIBLE points first, leaving the arc room to open up. The canvas
+ * stays full size behind the deck, so its box alone is not the exposed ground.
  */
 async function swarmEmptyGround(win: BrowserWindow): Promise<{ x: number; y: number }> {
   const field = (await win.webContents.executeJavaScript(
@@ -6873,11 +6874,17 @@ async function swarmEmptyGround(win: BrowserWindow): Promise<{ x: number; y: num
       const swarm = document.querySelector(".vf-godview-monitor-stage .vf-monitor-swarm");
       if (!swarm) return null;
       const r = swarm.getBoundingClientRect();
-      return { left: r.left, top: r.top, width: r.width, height: r.height };
+      const deck = swarm.closest(".vf-godview")?.querySelector(".vf-godview-terminal-deck");
+      const left = Math.max(0, r.left);
+      const top = Math.max(0, r.top);
+      const right = Math.min(innerWidth, r.right);
+      const bottom = Math.min(innerHeight, r.bottom, deck?.getBoundingClientRect().top ?? r.bottom);
+      return { left, top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
     })()`,
     true,
   )) as { left: number; top: number; width: number; height: number } | null;
-  if (field === null) throw new Error("the stage shows no swarm to hold on");
+  if (field === null || field.width === 0 || field.height === 0)
+    throw new Error("the stage shows no exposed swarm to hold on");
   for (const fy of [0.72, 0.6, 0.84, 0.5]) {
     for (const fx of [0.5, 0.36, 0.64, 0.22, 0.78]) {
       const at = {
@@ -8683,22 +8690,11 @@ export async function runSmokeGodview(opts: {
       verdict["rehydratedCwd"] = rehydrated.find((t) => t.sessionId === replacement)?.cwd;
     }
 
-    // 10. THE KILL ROW (GT-D5) — WITHDRAWN 2026-09-13 (GT-6a), not moved.
-    //
-    //     It drove the deck's own two-step `kill session` chip and proved
-    //     both planes: the floor ended the named session, and the chip had
-    //     asked first. The chip is gone — the record's frame (§07) owns a
-    //     pane's chrome and no kill is in it — and Godview now offers no
-    //     end-a-session gesture at all, so there is no affordance left for
-    //     this row to drive. It is NOT rewritten to call `terminal.terminate`
-    //     through the door: row 9 above already does exactly that and takes
-    //     the stronger witness with it (the pane admitting a death it did not
-    //     cause). A smoke row that drives the door and calls it a UI witness
-    //     would be the green-washing the old row's own comment warned about.
-    //     When an end-a-session gesture comes back, this row comes back with
-    //     it — it is in this file's history at 522065df.
-    verdict["deckKillAffordance"] =
-      "withdrawn at GT-6a (record §07); no product gesture ends a session";
+    // 10. The original two-step shell `kill session` chip remains withdrawn
+    // (GT-6a, 2026-09-13). The agent's Stop/Pause controls are governed by the
+    // 2026-11-02 ruling. Row 9 proves a floor termination reaching the pane;
+    // it does not claim to exercise those agent controls through the UI.
+    verdict["legacyDeckKillChip"] = "withdrawn at GT-6a; distinct from agent Stop/Pause";
 
     // 11. THE CONFIG ROW (GT-3 rider). A real write through the product door,
     //     the floor's own reload verdict, and the one property that matters

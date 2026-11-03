@@ -29653,3 +29653,10 @@ preflight, they made `git -C` report VibeField's HEAD for both pinned siblings. 
 repository-local environment in the verification subprocess, so each cwd selects its own repository. The full
 verification hook remains mandatory. Reproduced the wrong HEAD under the inherited context and the exact Mille
 and Rosetta pins after clearing it; shell syntax and the full verification gate were checked before committing.
+
+**Desktop smoke correction.** The first Godview landing run exposed a stale geometry assumption in its spawn-bloom
+driver: it searched only the lower half of the swarm's box. With the deliberately full-size canvas, those points
+are behind the terminal sheet. The driver now clips its search to the viewport and the sheet's visible top edge;
+the real pointer hover and DOM hit checks still reject bubbles and chrome. Its old static diagnostic no longer
+claims Godview has no stop gesture: it names only the retired two-step shell chip, separate from agent Stop/Pause.
+The consumer PR records all desktop gate results and rechecks.
