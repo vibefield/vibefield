@@ -1,3 +1,4 @@
+import CryptoKit
 import FieldAgents
 import Metal
 import SwarmPhysics
@@ -62,6 +63,23 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
 }
 
 @Suite struct MarksAtlasTests {
+  /// The desktop SDK 0.3.2 uploads this PNG's red channel in top-to-bottom
+  /// order, without color conversion. Check the actual Metal bytes, including
+  /// tile gutters: a flipped upload can leave every tile coordinate correct
+  /// while showing a different agent's mark (or an empty tile).
+  @Test @MainActor func uploadedMarksMatchDesktopPixels() throws {
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let texture = try #require(MarksAtlas.makeTexture(device: device))
+    var red = [UInt8](repeating: 0, count: MarksAtlas.width * MarksAtlas.height)
+    red.withUnsafeMutableBytes { bytes in
+      texture.getBytes(
+        bytes.baseAddress!, bytesPerRow: MarksAtlas.width,
+        from: MTLRegionMake2D(0, 0, MarksAtlas.width, MarksAtlas.height), mipmapLevel: 0)
+    }
+    let digest = SHA256.hash(data: Data(red)).map { String(format: "%02x", $0) }.joined()
+    #expect(digest == "49b54415b1f1018b71aaf9b4fb417dc92589ae977e2040efdd02001752dd60ac")
+  }
+
   /// AC-5 — the atlas keeps NO ROSTER OF ITS OWN. Until this lane it pinned its
   /// nine providers here, so a new upstream agent drifted past it silently (the
   /// catalog design's §1.3, gap 4). It is held to the CATALOG now: every mark
