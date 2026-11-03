@@ -23,6 +23,7 @@ import {
   AgentFieldDelta,
   AgentFieldSlice,
   AgentFieldSnapshot,
+  AgentInterruptParams,
   AgentInterruptResult,
   AgentLastRunForgetResult,
   AgentLastRunResult,
@@ -31,6 +32,7 @@ import {
   AgentModelDeskRow,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
+  AgentPauseParams,
   AgentRecordedLanesParams,
   AgentRecordedLanesResult,
   AgentRemoteMeshFrame,
@@ -254,7 +256,14 @@ import {
   SystemShellAttachResult,
   SystemShellLeaveParams,
 } from "../src/shell-lease";
-import { TerminalBindingsFile, TerminalCreateParams, TerminalListResult } from "../src/terminal";
+import {
+  TerminalBindingsFile,
+  TerminalCreateParams,
+  TerminalListResult,
+  TerminalReleaseParams,
+  TerminalReleaseResult,
+  TerminalReleasesFile,
+} from "../src/terminal";
 import {
   AttachControlLeg,
   AttachFramesLeg,
@@ -517,6 +526,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // reader's hello value alone).
   "terminal-routes-stream": TerminalRoutesStreamPayload,
   "terminal-create-params": TerminalCreateParams,
+  "terminal-release-params": TerminalReleaseParams,
+  "terminal-release-result": TerminalReleaseResult,
+  "terminal-releases": TerminalReleasesFile,
   // IL-D4/IL-D5 (a) — `terminal.list` answering with every row and its age: the floor's own
   // stale cell (`terminal-list.stale-cell`), and fieldd's own half once the observed stream has
   // stopped reaching it (`terminal-list.link-silent`: every cell, `since` = the last delivery).
@@ -757,6 +769,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // Both arms of the interrupt's union: the refusal carries the FLOOR's own
   // word, never a sentence composed at the door.
   "agent-interrupt": AgentInterruptResult,
+  "agent-interrupt-params": AgentInterruptParams,
+  "agent-pause-params": AgentPauseParams,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,

@@ -86,6 +86,7 @@ import {
 } from "../src/godview/monitor/GodviewAgentsProvider";
 import { monitorHoldsKeys } from "../src/godview/monitor/launcher-keys";
 import type { RecordedLanesPort } from "../src/godview/monitor/monitor-history";
+import { PaneTransitions } from "../src/godview/monitor/pane-transitions";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import { HERE_DEVICE_ID } from "../src/godview/monitor/spawn-menu";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
@@ -743,6 +744,98 @@ describe("the monitor stage", () => {
     expect(recording.updates).toBeGreaterThan(updates);
   });
 
+  it("publishes the pane's target wall without changing a full-stage viewport, including under a scaled cover", async () => {
+    const fire = driveObservers();
+    const recording = createRecordingView("full-stage");
+    const fullView = {
+      ...recording.view,
+      manifest: { ...recording.view.manifest, stageAllocation: "full" as const },
+    };
+    const entry: MonitorViewEntry = {
+      id: "full-stage",
+      label: "FULL",
+      parameterGroups: [],
+      mark: recording.view.manifest.mark,
+      view: fullView,
+    };
+    const door = fakeDoor();
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const renderView = async (selected: MonitorViewEntry) =>
+      act(async () => {
+        root?.render(
+          <div className="vf-godview" data-godview-deck-edge="" data-godview-deck="up">
+            <GodviewAgentsProvider door={door}>
+              <GodviewMonitor view={selected} parameters={{}} door={door} panes={PANES} />
+            </GodviewAgentsProvider>
+            <span className="vf-godview-field-wall" />
+          </div>,
+        );
+      });
+    await renderView(entry);
+    await settle();
+    const stage = container.querySelector<HTMLElement>(".vf-godview-monitor-stage")!;
+    const shell = container.querySelector<HTMLElement>(".vf-godview")!;
+    const wall = container.querySelector<HTMLElement>(".vf-godview-field-wall")!;
+    const box = (top: number, height: number) =>
+      ({
+        left: 0,
+        right: 500,
+        width: 500,
+        top,
+        height,
+        bottom: top + height,
+      }) as DOMRect;
+    vi.spyOn(stage, "clientWidth", "get").mockReturnValue(1000);
+    vi.spyOn(stage, "clientHeight", "get").mockReturnValue(900);
+    stage.getBoundingClientRect = () => box(20, 450);
+    let floor = 280;
+    wall.getBoundingClientRect = () => box(20 + floor / 2, 0);
+    act(() => {
+      for (const publish of fire) publish();
+    });
+    await settle();
+    expect(stage.getAttribute("data-stage-allocation")).toBe("full");
+    expect(recording.lastInput?.stage).toMatchObject({
+      width: 1000,
+      height: 900,
+      insets: { bottom: 620 },
+    });
+    // Only the root's style/state changes: no ResizeObserver notification.
+    for (const [state, target] of [
+      ["away", 812],
+      ["up", 280],
+      ["up", 220],
+    ] as const) {
+      floor = target;
+      await act(async () => {
+        shell.setAttribute("data-godview-deck", state);
+        shell.style.setProperty("--vf-godview-deck-shift", `${target - 280}px`);
+        await nextTask();
+      });
+      await settle();
+      expect(recording.lastInput?.stage).toMatchObject({
+        width: 1000,
+        height: 900,
+        insets: { bottom: 900 - target },
+      });
+    }
+    expect(recording.mounts).toBe(1);
+    const flow = createRecordingView("flow-stage");
+    await renderView({ ...entry, id: "flow-stage", view: flow.view });
+    await settle();
+    expect(flow.lastInput?.stage.insets.bottom).toBe(0);
+    const beforeSwitch = recording.inputs.length;
+    await renderView(entry);
+    await settle();
+    // The full view first waits, then spawns from its own measured boundary.
+    expect(recording.inputs[beforeSwitch]?.stage.height).toBe(0);
+    expect(recording.lastInput?.stage.insets.bottom).toBe(680);
+    expect(recording.mounts).toBe(2);
+  });
+
   it("stands the head's slot beside the stage, never inside it: the stage's mask dissolves the field under the head, never the head (2026-10-12)", async () => {
     const host = await mountMonitor("swarm", null);
     expect(host.querySelector(".vf-stories-slot")).not.toBeNull();
@@ -1085,7 +1178,9 @@ describe("the monitor stage", () => {
     // cleanly beside it is hidden, as every dead row was.
     const live = managedSummary({ runtimeRunId: "run-crash", kind: "claude", label: "Claude" });
     const door = fakeDoor([live]);
+    const transitions = new PaneTransitions();
     const working: MonitorPaneFacts = {
+      transitions,
       sessionIds: ["run-crash-pty", "pane-1"],
       activeSessionId: "pane-1",
       sessions: [pane("run-crash-pty"), pane("pane-1")],
@@ -1115,6 +1210,7 @@ describe("the monitor stage", () => {
       door.push([crashed, ended]);
     });
     const dead: MonitorPaneFacts = {
+      transitions,
       sessionIds: ["run-crash-pty", "pane-1", "pane-9"],
       activeSessionId: "pane-1",
       sessions: [
@@ -3341,6 +3437,118 @@ describe("M59 — the body a row continues, and a create that answers", () => {
   }
 
   const rowOf = (recording: RecordingView, id: string) => recording.lastInput?.model.byId.get(id);
+
+  it("gives a newly published run its terminal identity on every view update", async () => {
+    const door = fakeDoor([]);
+    const { recording } = await mountSpied(door, {
+      sessionIds: ["pane-1"],
+      sessions: [pane("pane-1")],
+    });
+    const start = recording.inputs.length;
+    await act(async () => door.push(ROWS));
+    await settle();
+    const appearances = recording.inputs
+      .slice(start)
+      .flatMap((input) => input.model.agents.filter((row) => row.id === "run-codex"));
+    expect(appearances.length).toBeGreaterThan(0);
+    for (const row of appearances) expect(row.visualId).toBe("run-codex-pty");
+  });
+
+  it.each(["monitor first", "native first"])(
+    "keeps the same body on every manual-exit frame until shell placement (%s)",
+    async (order) => {
+      const live = managedSummary({ runtimeRunId: "manual-exit", terminalSessionId: "pty-exit" });
+      const dead = {
+        ...managedSummary({
+          runtimeRunId: "manual-exit",
+          terminalSessionId: "pty-exit",
+          alive: false,
+        }),
+        continuation: { persisted: true, resumable: true, exited: true },
+      };
+      const door = fakeDoor([live]);
+      const transitions = new PaneTransitions();
+      const attached: MonitorPaneFacts = {
+        transitions,
+        sessionIds: ["pty-exit"],
+        sessions: [pane("pty-exit")],
+      };
+      const completed: MonitorPaneFacts = {
+        ...attached,
+        sessions: [{ ...pane("pty-exit"), exited: true, exitOutcome: "completed" }],
+      };
+      const { recording, entry } = await mountSpied(door, attached);
+      const start = recording.inputs.length - 1;
+      const monitorExit = async () => {
+        await act(async () => door.push([dead]));
+        await settle();
+      };
+      const nativeExit = () => renderSpied(entry, door, completed);
+      if (order === "monitor first") {
+        await monitorExit();
+        await nativeExit();
+      } else {
+        await nativeExit();
+        await monitorExit();
+      }
+      // Inventory may announce the successor before terminal.create answers.
+      let finish!: () => void;
+      await act(async () => {
+        const birth = transitions.begin("pty-exit");
+        finish = birth.finish;
+        board?.floor([
+          terminalInfoOf(completed.sessions![0]!),
+          { ...terminalInfoOf(pane("next-shell")), creationId: birth.creationId },
+        ]);
+      });
+      await settle();
+      await act(async () => {
+        transitions.reserve("pty-exit", "next-shell");
+        transitions.commit("pty-exit", "next-shell");
+        finish();
+      });
+      await renderSpied(entry, door, {
+        transitions,
+        sessionIds: ["next-shell"],
+        sessions: [pane("next-shell")],
+      });
+      for (const input of recording.inputs.slice(start)) {
+        expect(input.model.agents.map((row) => row.visualId ?? row.id)).toEqual(["pty-exit"]);
+      }
+      expect(recording.lastInput?.model.agents[0]?.kind).toBe("terminal");
+    },
+  );
+
+  it.each(["crashed", "unknown", "detached"] as const)(
+    "releases an ended body's handoff when the native pane is %s",
+    async (outcome) => {
+      const dead = managedSummary({
+        runtimeRunId: "ended",
+        terminalSessionId: "pty-ended",
+        alive: false,
+      });
+      const door = fakeDoor([dead]);
+      const attached: MonitorPaneFacts = {
+        transitions: new PaneTransitions(),
+        sessionIds: ["pty-ended"],
+        sessions: [pane("pty-ended")],
+      };
+      const { recording, entry } = await mountSpied(door, attached);
+      expect(recording.lastInput?.model.agents).toHaveLength(1);
+      await renderSpied(entry, door, {
+        ...attached,
+        sessionIds: outcome === "detached" ? [] : attached.sessionIds,
+        sessions: [
+          {
+            ...pane("pty-ended"),
+            exited: true,
+            ...(outcome === "crashed" ? { exitOutcome: "crashed" as const } : {}),
+          },
+        ],
+      });
+      expect(recording.lastInput?.model.agents).toEqual([]);
+    },
+  );
 
   it("hands the view the shell's body for a launcher's agent, through the replica's join, and the same map while no body moved", async () => {
     const door = fakeDoor();

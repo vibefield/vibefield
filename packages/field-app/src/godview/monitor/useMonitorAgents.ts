@@ -32,6 +32,7 @@ import { createFindAgents, findJoinKey } from "./find-agents";
 import { useMonitorFeed } from "./GodviewAgentsProvider";
 import type { HeldModelRow } from "./model-board";
 import type { GodviewMonitorFeed, MonitorFeedState } from "./model-replica";
+import type { PaneTransitions } from "./pane-transitions";
 import { profileTabs } from "./profile-tabs";
 import type { LocalMountOutcome, MonitorDoor } from "./remote-door";
 import { spawnMenuOf, targetsHere } from "./spawn-menu";
@@ -129,6 +130,7 @@ export interface UseMonitorAgentsOptions {
 }
 
 export interface MonitorPaneFacts {
+  transitions?: PaneTransitions;
   terminalVisualIds?: ReadonlyMap<string, string>;
   sessionIds: readonly string[];
   activeSessionId?: string;
@@ -139,8 +141,8 @@ export interface MonitorPaneFacts {
   paneColors?: ReadonlyMap<string, string>;
   activePaneId?: string;
   /** The floor summaries of those panes' sessions (ghosttea's, as the deck
-   * holds them): what tells the window a pane has EXITED (its row is hidden)
-   * and what each pane's terminal is doing (M28). */
+   * holds them): the native exit outcome (a completed agent keeps its body
+   * through replacement) and what each pane's terminal is doing (M28). */
   sessions?: readonly SessionSummary[];
   /** GT-6b — the UI roster the deck last read (`terminal.roster`, TP-D4). The
    * backend lists the floor's PTYs itself now; the window reads this only for
@@ -380,15 +382,21 @@ export function useMonitorAgents({
   const orderFor = useMemo(createRowOrder, []);
   const orderKey = orderFor(held, here, panes).join("\n");
   const visualKey = [...(panes.terminalVisualIds ?? [])].map(([a, b]) => `${a}:${b}`).join("\n");
+  const transitionRevision = useSyncExternalStore(
+    panes.transitions?.subscribe ?? EMPTY_REPLICA.subscribe,
+    panes.transitions?.getSnapshot ?? (() => 0),
+    panes.transitions?.getSnapshot ?? (() => 0),
+  );
   const rowFacts = useMemo<WindowRowFacts>(
     () => ({
       standing: new Map(feedFacts.devices.map((entry) => [entry.device, entry.state] as const)),
       order: orderKey === "" ? NO_IDS : orderKey.split("\n"),
       sessionByRow: joins.sessionByRow,
       visualIds: panes.terminalVisualIds,
+      transitions: panes.transitions,
     }),
     // keyed by the facts, never by the arrays the deck and the feed republish
-    [standingKey, orderKey, joins, visualKey],
+    [standingKey, orderKey, joins, visualKey, panes.transitions],
   );
   /** Every row, in the stage's order, patched for this window (no device filter). */
   const agents = windowRows.rowsFor(model, rowFacts);
@@ -506,8 +514,11 @@ export function useMonitorAgents({
     // the claims' own clock rides along: `hintFor` reads the claims it versions
   }, [spawnHints, terminalSessionsKey, spawnsVersion]);
 
-  // The exited panes: a dead pane is the deck's face to draw, not a row — and a
-  // managed agent whose pane exited is dropped with it, as the seam dropped it.
+  // The deck replaces a completed agent with a shell. Keep its attached body
+  // while the native outcome is pending, then through the clean-exit handoff;
+  // the monitor and native exit feeds can arrive in either order. Placement
+  // retires the old row and transfers its visual identity in one transaction.
+  // Failed/unknown native exits still leave by the existing departure rule.
   // Q06 — save a crashed run: its failure is drawn on its body, dead pane or
   // not, until a screen has shown that pane and fieldd has acknowledged it
   // (`failed-bodies.ts`); then puppeteer removes the run and the row leaves.
@@ -516,12 +527,26 @@ export function useMonitorAgents({
     .map((session) => joins.rowBySession.get(session.id) ?? session.id)
     .sort()
     .join("\n");
+  const attached = new Set(panes.sessionIds);
+  const handoffKey = panes.transitions
+    ? (panes.sessions ?? [])
+        .filter(
+          (session) =>
+            attached.has(session.id) && (!session.exited || session.exitOutcome === "completed"),
+        )
+        .map((session) => joins.rowBySession.get(session.id) ?? session.id)
+        .sort()
+        .join("\n")
+    : "";
   const visible = useMemo(() => {
     const exited = new Set(exitedKey === "" ? [] : exitedKey.split("\n"));
+    const handoff = new Set(handoffKey === "" ? [] : handoffKey.split("\n"));
     const panesHere = joins.sessionByRow;
     return (row: MonitorAgentRow): boolean =>
-      (row.alive && !exited.has(row.id)) || keepsFailure(row, panesHere);
-  }, [exitedKey, joins]);
+      (row.alive && !exited.has(row.id)) ||
+      (row.device.self && row.kind === "agent" && handoff.has(row.id)) ||
+      keepsFailure(row, panesHere);
+  }, [exitedKey, handoffKey, joins]);
   const receded = useMemo(
     () =>
       chosenProfile === undefined
@@ -823,16 +848,36 @@ export function useMonitorAgents({
 
   // The views read the window's model cut. Commands and reads find this
   // render's facts through one stable ref; a host-fact change refreshes the cut.
+  // The source can publish before React renders this window's new joins.
+  // Pair that model with the board's current terminal identities, never with
+  // the previous render's session map (which briefly invents a second body).
+  const factsForView = useMemo(() => {
+    let source = model;
+    let facts = rowFacts;
+    return (current: MonitorModel): WindowRowFacts => {
+      if (current !== source) {
+        const currentHeld = feed?.heldRows() ?? NO_HELD;
+        facts = {
+          ...rowFacts,
+          sessionByRow: boardJoins(currentHeld, here).sessionByRow,
+          order: orderFor(currentHeld, here, panes),
+        };
+        source = current;
+      }
+      return facts;
+    };
+  }, [model, rowFacts, feed, here, orderFor, panes]);
   const agentsById = useMemo(() => new Map(agents.map((row) => [row.id, row] as const)), [agents]);
   const latest = useRef({
     viewRows: (current: MonitorModel) =>
-      narrow(windowRows.rowsFor(current, rowFacts), deviceChosen, here),
+      narrow(windowRows.rowsFor(current, factsForView(current)), deviceChosen, here),
     agentsById,
     select,
     createAt,
   });
   latest.current = {
-    viewRows: (current) => narrow(windowRows.rowsFor(current, rowFacts), deviceChosen, here),
+    viewRows: (current) =>
+      narrow(windowRows.rowsFor(current, factsForView(current)), deviceChosen, here),
     agentsById,
     select,
     createAt,
@@ -843,7 +888,7 @@ export function useMonitorAgents({
   );
   useLayoutEffect(() => {
     viewReplica.refresh();
-  }, [viewReplica, placed, chosenProfile, deviceChosen]);
+  }, [viewReplica, placed, chosenProfile, deviceChosen, transitionRevision]);
 
   // The view host reads its commands through the latest props; these reach the latest window too.
   const commands = useMemo<ViewSlotCommands>(

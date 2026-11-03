@@ -877,6 +877,7 @@ describe("TerminalService (NF-3, mock native)", () => {
       "terminal.openTicket": "terminal.attach",
       "terminal.create": "terminal.attach",
       "terminal.terminate": "terminal.attach",
+      "terminal.release": "terminal.attach",
       "terminal.renewAttach": "terminal.attach",
       "terminal.roster": "terminal.attach",
       // DS-4: the take's product door, declared for the phone (answers

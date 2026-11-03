@@ -312,7 +312,9 @@ vi.mock("@vibecook/ghosttea-react", () => ({
     finishPerformanceMeasurement: () => Promise.resolve({ backend: "test" }),
     listSessions: () => Promise.resolve(workspace.panes.map((pane) => ({ id: pane.session.id }))),
     createSession: () => Promise.resolve({ id: "s-created" }),
-    registerSession: () => undefined,
+    registerSession: (session: SessionSummary) => nativeSummaries.set(session.id, session),
+    sessionSummary: (id: string) =>
+      nativeSummaries.get(id) ?? (runtimeBirths.has(id) ? bornSummary(id) : undefined),
     listRemoteHosts: () => Promise.resolve([]),
     openRemoteSession: (deviceId: string, remoteSessionId: string) =>
       Promise.resolve({
@@ -385,7 +387,7 @@ type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSess
 let root: Root | null = null;
 let container: HTMLElement | null = null;
 let requests: Array<{ method: string; params: unknown }> = [];
-/** What `agent.interrupt` answers with — or, when it is an Error, throws. */
+/** What `agent.pause` answers with — or, when it is an Error, throws. */
 let interruptAnswer: unknown = { accepted: true };
 let terminateAnswer: Promise<unknown> | undefined;
 let createAnswer: Promise<unknown> | undefined;
@@ -398,8 +400,10 @@ let profileSetsFeed: unknown[] | null = null;
 /** Agents the fixture's `agent.providers` lists beside Claude. */
 let extraProviders: unknown[] = [];
 let spawnGate: Promise<void> | undefined;
+let releaseAnswer: Promise<unknown> | undefined;
 let rosterRows: Array<{ sessionId: string; workloadClass: string; health: string }> = [];
 const runtimeBirths = new Set<string>();
+const nativeSummaries = new Map<string, SessionSummary>();
 const runtimeEvents = new EventTarget();
 const usedSessions = new Set<string>();
 const remoteSessions = new Set<string>();
@@ -427,6 +431,7 @@ const fieldd = {
     // LR — the window's restore question: no picture of a last run here
     if (method === "agent.lastRun") return Promise.resolve({ state: "none" });
     if (method === "agent.lastRunForget") return Promise.resolve({ forgotten: false });
+    if (method === "terminal.release") return releaseAnswer ?? Promise.resolve({ accepted: true });
     if (method === "terminal.terminate")
       return terminateAnswer ?? Promise.resolve({ terminated: true });
     if (method === "terminal.openTicket") {
@@ -441,12 +446,15 @@ const fieldd = {
         // so the floor reports no cwd — which is the case `fallbackCwd` is for.
         // (ERRATA 2026-09-25, GT-8b: a ghosttea 0.12.0 floor reports the spawn
         // directory from creation, so this `cwd: null` is an older floor's.)
-        session: bornSummary("born-1", { cwd: null }),
+        session: bornSummary("born-1", {
+          cwd: null,
+          creationId: (params as { creationId?: string })?.creationId,
+        }),
         ...routedTicket("born-1"),
         ...(profileSet !== undefined && bindsProfiles ? { profileSet } : {}),
       });
     }
-    if (method === "agent.interrupt") {
+    if (method === "agent.pause") {
       return interruptAnswer instanceof Error
         ? Promise.reject(interruptAnswer)
         : Promise.resolve(interruptAnswer);
@@ -462,7 +470,10 @@ const fieldd = {
         session: resumed,
         terminal: {
           sessionId: "pty-resumed",
-          session: bornSummary("pty-resumed", { cwd: "/home/tester/rosetta" }),
+          session: bornSummary("pty-resumed", {
+            cwd: "/home/tester/rosetta",
+            programKind: "application",
+          }),
           ...routedTicket("pty-resumed"),
         },
       });
@@ -480,7 +491,10 @@ const fieldd = {
         session: spawned,
         terminal: {
           sessionId: "pty-launched",
-          session: bornSummary("pty-launched", { cwd: "/home/tester/vibe-field" }),
+          session: bornSummary("pty-launched", {
+            cwd: "/home/tester/vibe-field",
+            programKind: "application",
+          }),
           ...routedTicket("pty-launched"),
         },
       }));
@@ -697,6 +711,7 @@ beforeEach(() => {
   foldRows = [];
   foldFrame = null;
   interruptAnswer = { accepted: true };
+  releaseAnswer = undefined;
   terminateAnswer = undefined;
   createAnswer = undefined;
   bindsProfiles = true;
@@ -705,6 +720,7 @@ beforeEach(() => {
   spawnGate = undefined;
   rosterRows = [];
   runtimeBirths.clear();
+  nativeSummaries.clear();
   usedSessions.clear();
   remoteSessions.clear();
   workspace.panes = [{ id: "pane-1", session: stubSession("pty-1") }];
@@ -927,7 +943,123 @@ describe("the deck's pane frames", () => {
     expect(verb(frame, "resume")).toBeNull();
   });
 
-  it("stops the turn through agent.interrupt, with the run id the fold named", async () => {
+  it.each(
+    ["claude", "grok", "codex"].flatMap((kind) =>
+      (["working", "idle"] as const).map((status) => ({ kind, status })),
+    ),
+  )("ends $kind with one press while $status", async ({ kind, status }) => {
+    foldRows = [
+      managedSummary({ runtimeRunId: "run-42", terminalSessionId: "pty-1", kind, status }),
+    ];
+    const host = await mountDeck();
+    const stop = verb(frameFor(host, "pty-1"), "stop");
+    expect(stop?.getAttribute("aria-label")).toBe("Stop agent");
+    await act(async () => stop?.click());
+    await settle();
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
+      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+    ]);
+    expect(requests.some((call) => call.method === "agent.pause")).toBe(false);
+    expect(workspace.panes[0]?.session.id).toBe("born-1");
+    expect(paneOf(host, "pane-1")?.querySelector(".vf-pane-launcher")).not.toBeNull();
+  });
+
+  it("holds a Stop replacement announced before create answers, then morphs despite a late agent removal", async () => {
+    foldRows = [managedSummary({ terminalSessionId: "pty-1", status: "idle" })];
+    let answer!: (value: unknown) => void;
+    createAnswer = new Promise((resolve) => {
+      answer = resolve;
+    });
+    const host = await mountDeck();
+    await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
+    await settle();
+    expect(requests.filter((call) => call.method === "terminal.create")).toHaveLength(1);
+    await act(async () =>
+      board?.floor([
+        terminalInfoOf(stubSession("pty-1") as SessionSummary),
+        {
+          ...terminalInfoOf(stubSession("born-1") as SessionSummary),
+          creationId: (
+            requests.find((r) => r.method === "terminal.create")!.params as { creationId: string }
+          ).creationId,
+        },
+      ]),
+    );
+    await settle();
+    expect(host.querySelector('[data-session="born-1"]')).toBeNull();
+    await act(async () =>
+      answer({
+        sessionId: "born-1",
+        session: bornSummary("born-1"),
+        ...routedTicket("born-1"),
+      }),
+    );
+    await settle();
+    expect(workspace.panes[0]?.session.id).toBe("born-1");
+    expect(host.querySelectorAll("[data-visual-id]")).toHaveLength(1);
+    expect(host.querySelector('[data-session="born-1"]')?.getAttribute("data-visual-id")).toBe(
+      "pty-1",
+    );
+    // The backend still lists the stopped agent until its child finishes reaping.
+    expect(board?.rows()).not.toHaveLength(0);
+    await act(async () => foldFrame?.([]));
+    await settle();
+    expect(host.querySelectorAll("[data-visual-id]")).toHaveLength(1);
+  });
+
+  it("coalesces Stop across mirrored panes and returns both to one shell after confirmation", async () => {
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "mirror", session: stubSession("pty-1") },
+    ];
+    foldRows = [managedSummary({ terminalSessionId: "pty-1", status: "idle" })];
+    let finish!: (answer: unknown) => void;
+    terminateAnswer = new Promise((resolve) => {
+      finish = resolve;
+    });
+    const host = await mountDeck();
+    await act(async () => {
+      for (const stop of host.querySelectorAll<HTMLButtonElement>(".vf-pane-verb.is-stop")) {
+        stop.click();
+        stop.click();
+      }
+    });
+    await settle();
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toHaveLength(1);
+    expect(requests.filter((call) => call.method === "terminal.create")).toHaveLength(0);
+    expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(true);
+    // The run row may disappear before the termination reply and native metadata.
+    await act(async () => foldFrame?.([]));
+    await act(async () => finish({ terminated: true }));
+    await settle();
+    expect(workspace.panes.map((pane) => pane.session.id)).toEqual(["born-1", "born-1"]);
+    expect(requests.filter((call) => call.method === "terminal.create")).toHaveLength(1);
+  });
+
+  it("creates no replacement when the pane closes while Stop is pending", async () => {
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("other-shell") },
+    ];
+    foldRows = [managedSummary({ terminalSessionId: "pty-1", status: "working" })];
+    let finish!: (answer: unknown) => void;
+    terminateAnswer = new Promise((resolve) => {
+      finish = resolve;
+    });
+    const host = await mountDeck();
+    await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
+    await act(async () => {
+      workspace.panes = workspace.panes.slice(1);
+      workspace.activePaneId = "pane-2";
+      workspace.refresh();
+    });
+    await act(async () => finish({ terminated: true }));
+    await settle();
+    expect(requests.filter((call) => call.method === "terminal.create")).toHaveLength(0);
+    expect(workspace.panes.map((pane) => pane.session.id)).toEqual(["other-shell"]);
+  });
+
+  it("pauses a turn through agent.pause, retaining its pane", async () => {
     foldRows = [
       managedSummary({
         runtimeRunId: "run-42",
@@ -938,13 +1070,105 @@ describe("the deck's pane frames", () => {
       }),
     ];
     const host = await mountDeck();
-    await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
+    await act(async () => verb(frameFor(host, "pty-1"), "pause")?.click());
     await settle();
-    expect(requests.filter((call) => call.method === "agent.interrupt")).toEqual([
-      { method: "agent.interrupt", params: { runtimeRunId: "run-42" } },
+    expect(requests.filter((call) => call.method === "agent.pause")).toEqual([
+      { method: "agent.pause", params: { runtimeRunId: "run-42" } },
     ]);
-    // Delivered: the square goes hollow until the run leaves `working`.
-    expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(true);
+    expect(requests.some((call) => call.method === "terminal.terminate")).toBe(false);
+    expect(workspace.panes[0]?.session.id).toBe("pty-1");
+    // Delivery is not the same as an observed idle turn.
+    expect(frameFor(host, "pty-1")?.classList.contains("is-pausing")).toBe(true);
+    await act(async () =>
+      foldFrame?.([
+        managedSummary({ runtimeRunId: "run-42", terminalSessionId: "pty-1", status: "idle" }),
+      ]),
+    );
+    await settle();
+    expect(frameFor(host, "pty-1")?.classList.contains("is-pausing")).toBe(false);
+    expect(verb(frameFor(host, "pty-1"), "pause")?.disabled).toBe(true);
+    expect(workspace.panes[0]?.session.id).toBe("pty-1");
+    expect(requests.some((call) => call.method === "terminal.create")).toBe(false);
+  });
+
+  it("keeps the Pause ready when the daemon refuses the interrupt", async () => {
+    interruptAnswer = { accepted: false, reason: "the run is not alive" };
+    foldRows = [
+      managedSummary({
+        runtimeRunId: "run-43",
+        terminalSessionId: "pty-1",
+        status: "working",
+      }),
+    ];
+    const host = await mountDeck();
+    await act(async () => verb(frameFor(host, "pty-1"), "pause")?.click());
+    await settle();
+    expect(requests.some((call) => call.method === "agent.pause")).toBe(true);
+    expect(frameFor(host, "pty-1")?.classList.contains("is-pausing")).toBe(false);
+  });
+
+  it("reads a THROWN refusal as the state it is, not as a daemon it could not reach", async () => {
+    // fieldd refuses the two states a deck actually meets by THROWING: a run
+    // whose process has ended (`PRECONDITION_FAILED`, `details.state:
+    // "not-alive"`) and one it does not know (`NOT_FOUND`). Only the floor's
+    // own refusal comes back as `{accepted: false}`
+    // (`fieldd/src/agent-runtime.ts:755–789`). Before GT-6's review the catch
+    // logged "could not reach fieldd" at ERROR on a perfectly healthy daemon.
+    const rpc = Object.assign(
+      new Error(
+        "the session is not running under this daemon; interrupt is for a live, observed run",
+      ),
+      { name: "FielddRpcError", kind: "PRECONDITION_FAILED", details: { state: "not-alive" } },
+    );
+    interruptAnswer = rpc;
+    foldRows = [
+      managedSummary({ runtimeRunId: "run-44", terminalSessionId: "pty-1", status: "working" }),
+    ];
+    const host = await mountDeck();
+    await act(async () => verb(frameFor(host, "pty-1"), "pause")?.click());
+    await settle();
+    expect(requests.filter((call) => call.method === "agent.pause")).toEqual([
+      { method: "agent.pause", params: { runtimeRunId: "run-44" } },
+    ]);
+    // Not delivered, and said as a refusal: the square goes solid again rather
+    // than blinking at a turn nobody is stopping.
+    expect(frameFor(host, "pty-1")?.classList.contains("is-pausing")).toBe(false);
+    // And said at the right level, in the daemon's own word for the state.
+    expect(logged.filter((line) => line.event === "renderer.godview.interrupt_failed")).toEqual([]);
+    expect(
+      logged.filter((line) => line.event === "renderer.godview.interrupt_refused"),
+    ).toHaveLength(1);
+    expect(logged.find((line) => line.event === "renderer.godview.interrupt_refused")?.level).toBe(
+      "info",
+    );
+  });
+
+  it("refuses a shape the contract does not admit, rather than reading a stray field", async () => {
+    // The answer is PARSED now (the contract row exists): a body with no
+    // discriminant is not a delivery, whatever else it carries.
+    interruptAnswer = { ok: true, accepted: "yes" };
+    // An unreadable ANSWER is a different fact from a refused state: the parse
+    // throws, nothing names a state, and the error path is the honest one.
+    foldRows = [
+      managedSummary({ runtimeRunId: "run-45", terminalSessionId: "pty-1", status: "working" }),
+    ];
+    const host = await mountDeck();
+    await act(async () => verb(frameFor(host, "pty-1"), "pause")?.click());
+    await settle();
+    expect(frameFor(host, "pty-1")?.classList.contains("is-pausing")).toBe(false);
+    expect(
+      logged.filter((line) => line.event === "renderer.godview.interrupt_failed"),
+    ).toHaveLength(1);
+  });
+
+  it("does not send Pause to an idle agent", async () => {
+    foldRows = [managedSummary({ terminalSessionId: "pty-1", status: "idle" })];
+    const host = await mountDeck();
+    const pause = verb(frameFor(host, "pty-1"), "pause");
+    expect(pause?.disabled).toBe(true);
+    await act(async () => pause?.click());
+    expect(requests.some((call) => call.method === "agent.pause")).toBe(false);
+    expect(verb(frameFor(host, "pty-1"), "stop")?.disabled).toBe(false);
   });
 
   // ST-D4 (a) — the pane's own words for a Stop fieldd has not heard (`StopPaneState`)
@@ -995,79 +1219,32 @@ describe("the deck's pane frames", () => {
       { method: "terminal.terminate", params: { sessionId: "pty-1" } },
     ]);
     // the person's act, never fieldd's: no Stop is sent again
-    expect(requests.some((call) => call.method === "agent.interrupt")).toBe(false);
+    expect(requests.some((call) => call.method === "agent.pause")).toBe(false);
     expect(logged.some((entry) => entry.event === "renderer.godview.end_run")).toBe(true);
   });
 
-  it("keeps the square solid when the daemon refuses the interrupt", async () => {
-    interruptAnswer = { accepted: false, reason: "the run is not alive" };
-    foldRows = [
-      managedSummary({
-        runtimeRunId: "run-43",
-        terminalSessionId: "pty-1",
-        status: "working",
-      }),
-    ];
-    const host = await mountDeck();
-    await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
-    await settle();
-    expect(requests.some((call) => call.method === "agent.interrupt")).toBe(true);
-    expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(false);
-  });
-
-  it("reads a THROWN refusal as the state it is, not as a daemon it could not reach", async () => {
-    // fieldd refuses the two states a deck actually meets by THROWING: a run
-    // whose process has ended (`PRECONDITION_FAILED`, `details.state:
-    // "not-alive"`) and one it does not know (`NOT_FOUND`). Only the floor's
-    // own refusal comes back as `{accepted: false}`
-    // (`fieldd/src/agent-runtime.ts:755–789`). Before GT-6's review the catch
-    // logged "could not reach fieldd" at ERROR on a perfectly healthy daemon.
-    const rpc = Object.assign(
-      new Error(
-        "the session is not running under this daemon; interrupt is for a live, observed run",
-      ),
-      { name: "FielddRpcError", kind: "PRECONDITION_FAILED", details: { state: "not-alive" } },
-    );
-    interruptAnswer = rpc;
-    foldRows = [
-      managedSummary({ runtimeRunId: "run-44", terminalSessionId: "pty-1", status: "working" }),
-    ];
-    const host = await mountDeck();
-    await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
-    await settle();
-    expect(requests.filter((call) => call.method === "agent.interrupt")).toEqual([
-      { method: "agent.interrupt", params: { runtimeRunId: "run-44" } },
-    ]);
-    // Not delivered, and said as a refusal: the square goes solid again rather
-    // than blinking at a turn nobody is stopping.
-    expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(false);
-    // And said at the right level, in the daemon's own word for the state.
-    expect(logged.filter((line) => line.event === "renderer.godview.interrupt_failed")).toEqual([]);
-    expect(
-      logged.filter((line) => line.event === "renderer.godview.interrupt_refused"),
-    ).toHaveLength(1);
-    expect(logged.find((line) => line.event === "renderer.godview.interrupt_refused")?.level).toBe(
-      "info",
-    );
-  });
-
-  it("refuses a shape the contract does not admit, rather than reading a stray field", async () => {
-    // The answer is PARSED now (the contract row exists): a body with no
-    // discriminant is not a delivery, whatever else it carries.
-    interruptAnswer = { ok: true, accepted: "yes" };
-    // An unreadable ANSWER is a different fact from a refused state: the parse
-    // throws, nothing names a state, and the error path is the honest one.
-    foldRows = [
-      managedSummary({ runtimeRunId: "run-45", terminalSessionId: "pty-1", status: "working" }),
-    ];
-    const host = await mountDeck();
-    await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
-    await settle();
-    expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(false);
-    expect(
-      logged.filter((line) => line.event === "renderer.godview.interrupt_failed"),
-    ).toHaveLength(1);
-  });
+  it.each(["refusal", "malformed reply"])(
+    "keeps the agent pane on a Stop %s and permits retry",
+    async (failure) => {
+      terminateAnswer =
+        failure === "refusal"
+          ? refused(new FielddRpcError("UNAVAILABLE", "floor unavailable"))
+          : Promise.resolve({ terminated: "yes" });
+      foldRows = [managedSummary({ terminalSessionId: "pty-1", status: "working" })];
+      const host = await mountDeck();
+      await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
+      await settle();
+      expect(workspace.panes[0]?.session.id).toBe("pty-1");
+      expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(false);
+      expect(requests.filter((call) => call.method === "terminal.create")).toHaveLength(0);
+      expect(logged.some((line) => line.event === "renderer.godview.agent_stop_failed")).toBe(true);
+      terminateAnswer = undefined;
+      await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
+      await settle();
+      expect(workspace.panes[0]?.session.id).toBe("born-1");
+      expect(requests.filter((call) => call.method === "terminal.terminate")).toHaveLength(2);
+    },
+  );
 
   it("returns a completed agent to a fresh shell and launcher in the same background pane", async () => {
     workspace.panes = [
@@ -1097,17 +1274,74 @@ describe("the deck's pane frames", () => {
     expect(requests.filter((call) => call.method === "terminal.create")).toEqual([
       {
         method: "terminal.create",
-        params: { cwd: "/project/vibe-field", workloadClass: "interactive" },
+        params: {
+          creationId: expect.any(String),
+          cwd: "/project/vibe-field",
+          workloadClass: "interactive",
+        },
       },
     ]);
-    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
-      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+    expect(requests.filter((call) => call.method === "terminal.release")).toEqual([
+      { method: "terminal.release", params: { sessionId: "pty-1", condition: "exited" } },
     ]);
     expect(frameFor(host, "pty-1")).toBeNull();
     expect(verb(frameFor(host, "born-1"), "resume")).toBeNull();
     expect(paneOf(host, "pane-1")?.querySelector(".vf-pane-launcher")).not.toBeNull();
     expect(foldRows).toHaveLength(1); // Session history was not deleted.
   });
+
+  it.each(["after the shell is drawn", "before the replacement render"])(
+    "reaps the stopped agent's replacement when its pane closes %s",
+    async (timing) => {
+      workspace.panes = [
+        { id: "pane-1", session: stubSession("pty-1") },
+        { id: "pane-2", session: stubSession("empty-existing") },
+      ];
+      workspace.activePaneId = "pane-1";
+      foldRows = [managedSummary({ terminalSessionId: "pty-1", status: "working" })];
+      let finish!: (value: unknown) => void;
+      createAnswer = new Promise((resolve) => {
+        finish = resolve;
+      });
+      const host = await mountDeck();
+      await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
+      await act(async () => {
+        workspace.panes[0]!.session = stubSession("pty-1", {
+          exited: true,
+          exitOutcome: "completed",
+        });
+        workspace.refresh();
+      });
+      await settle();
+      const close = () => {
+        workspace.panes = workspace.panes.filter((pane) => pane.id !== "pane-1");
+        workspace.activePaneId = "pane-2";
+        workspace.refresh();
+      };
+      await act(async () => {
+        finish({ sessionId: "born-1", session: bornSummary("born-1"), ...routedTicket("born-1") });
+        // The replacement has landed in the workspace; React may batch its
+        // publication with the person's close before the deck observes it.
+        for (let i = 0; i < 30 && workspace.panes[0]?.session.id !== "born-1"; i += 1)
+          await Promise.resolve();
+        expect(workspace.panes[0]?.session.id).toBe("born-1");
+        if (timing === "before the replacement render") close();
+      });
+      if (timing === "after the shell is drawn") {
+        await settle();
+        await act(async () => close());
+      }
+      await settle();
+      expect(workspace.panes.map((pane) => pane.session.id)).toEqual(["empty-existing"]);
+      expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
+        { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+      ]);
+      expect(requests.filter((call) => call.method === "terminal.release")).toEqual([
+        { method: "terminal.release", params: { sessionId: "pty-1", condition: "exited" } },
+        { method: "terminal.release", params: { sessionId: "born-1", condition: "unused" } },
+      ]);
+    },
+  );
 
   it.each(["shell", "remote", "crash"])("does not reset a %s on exit", async (kind) => {
     workspace.panes = [
@@ -1185,8 +1419,8 @@ describe("the deck's pane frames", () => {
       await settle();
       expect(workspace.mounts).toEqual([]);
       expect(workspace.activePaneId).toBe("pane-2");
-      expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
-        { method: "terminal.terminate", params: { sessionId: "born-1" } },
+      expect(requests.filter((call) => call.method === "terminal.release")).toEqual([
+        { method: "terminal.release", params: { sessionId: "born-1", condition: "unused" } },
       ]);
     },
   );
@@ -1251,8 +1485,8 @@ describe("the deck's pane frames", () => {
       workspace.mount(stubSession("replacement"));
     });
     await settle();
-    expect(requests.filter((r) => r.method === "terminal.terminate")).toEqual([
-      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+    expect(requests.filter((r) => r.method === "terminal.release")).toEqual([
+      { method: "terminal.release", params: { sessionId: "pty-1", condition: "unused" } },
     ]);
   });
 
@@ -1264,7 +1498,7 @@ describe("the deck's pane frames", () => {
     await settle();
     rosterRows = [{ sessionId: "born-1", workloadClass: "interactive", health: "live" }];
     let accept!: (result: unknown) => void;
-    terminateAnswer = new Promise((resolve) => {
+    releaseAnswer = new Promise((resolve) => {
       accept = resolve;
     });
     expect(host.querySelector('output[data-session="born-1"]')).not.toBeNull();
@@ -1273,16 +1507,16 @@ describe("the deck's pane frames", () => {
       workspace.mount(stubSession("replacement"));
     });
     await settle();
-    expect(requests.filter((r) => r.method === "terminal.terminate")).toEqual([
-      { method: "terminal.terminate", params: { sessionId: "born-1" } },
+    expect(requests.filter((r) => r.method === "terminal.release")).toEqual([
+      { method: "terminal.release", params: { sessionId: "born-1", condition: "unused" } },
     ]);
-    expect(host.querySelector('output[data-session="born-1"]')).toBeNull();
+    expect(host.querySelector('output[data-session="born-1"]')).not.toBeNull();
     expect(host.querySelector('output[data-session="replacement"]')).not.toBeNull();
     await act(async () => {
-      accept({ terminated: true });
+      accept({ accepted: true });
     });
     await settle();
-    expect(host.querySelector('output[data-session="born-1"]')).toBeNull();
+    expect(host.querySelector('output[data-session="born-1"]')).not.toBeNull();
   });
 
   it("keeps an empty shell while mirrored, then reaps it when the last pane closes", async () => {
@@ -1300,16 +1534,16 @@ describe("the deck's pane frames", () => {
       workspace.mount(stubSession("replacement"));
     });
     await settle();
-    expect(requests.filter((r) => r.method === "terminal.terminate")).toEqual([]);
+    expect(requests.filter((r) => r.method === "terminal.release")).toEqual([]);
     await act(async () => {
       workspace.panes = workspace.panes.filter((pane) => pane.id !== "mirror");
       workspace.refresh();
     });
     await settle();
-    expect(requests.filter((r) => r.method === "terminal.terminate")).toHaveLength(1);
+    expect(requests.filter((r) => r.method === "terminal.release")).toHaveLength(1);
   });
 
-  it("cleans a shell closed during startup when native idle metadata arrives after detach", async () => {
+  it("cleans a shell closed during startup by queuing the native conditional check at detach", async () => {
     runtimeBirths.add("pty-1");
     workspace.panes[0]!.session.activity = { kind: "foreground-job" };
     await mountDeck();
@@ -1317,19 +1551,19 @@ describe("the deck's pane frames", () => {
       workspace.mount(stubSession("replacement"));
     });
     await settle();
-    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([]);
+    expect(requests.filter((call) => call.method === "terminal.release")).toHaveLength(1);
     await act(async () => {
       runtimeEvents.dispatchEvent(
         new CustomEvent("session-metadata", { detail: stubSession("pty-1") }),
       );
     });
     await settle();
-    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
-      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+    expect(requests.filter((call) => call.method === "terminal.release")).toEqual([
+      { method: "terminal.release", params: { sessionId: "pty-1", condition: "unused" } },
     ]);
   });
 
-  it.each(["input", "foreground", "agent", "remote"])(
+  it.each(["input", "agent", "remote"])(
     "retains a detached shell with %s evidence",
     async (kind) => {
       await mountDeck();
@@ -1359,11 +1593,11 @@ describe("the deck's pane frames", () => {
         workspace.mount(stubSession("replacement"));
       });
       await settle();
-      expect(requests.filter((r) => r.method === "terminal.terminate")).toEqual([]);
+      expect(requests.filter((r) => r.method === "terminal.release")).toEqual([]);
     },
   );
 
-  it("restores the detached bubble if the termination door refuses", async () => {
+  it("retains a cleanup intent when the owner cannot acknowledge it", async () => {
     const host = await mountDeck();
     await act(async () => {
       await deckDoor?.createTerminal();
@@ -1371,22 +1605,20 @@ describe("the deck's pane frames", () => {
     await settle();
     rosterRows = [{ sessionId: "born-1", workloadClass: "interactive", health: "live" }];
     let refuse!: (cause: unknown) => void;
-    terminateAnswer = new Promise((_resolve, reject) => {
+    releaseAnswer = new Promise((_resolve, reject) => {
       refuse = reject;
     });
     await act(async () => {
       workspace.mount(stubSession("replacement"));
     });
     await settle();
-    expect(host.querySelector('output[data-session="born-1"]')).toBeNull();
+    expect(host.querySelector('output[data-session="born-1"]')).not.toBeNull();
     await act(async () => {
       refuse(new Error("denied"));
     });
     await settle();
     expect(host.querySelector('output[data-session="born-1"]')).not.toBeNull();
-    expect(logged.some((line) => line.event === "renderer.godview.unused_pane_close_failed")).toBe(
-      true,
-    );
+    expect(localStorage.getItem("vf-terminal-release-v1:born-1:unused")).not.toBeNull();
   });
 
   it("names a fresh split by the folder the deck opened it in, not 'terminal' (PU-14b)", async () => {
@@ -1597,6 +1829,7 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(launcherFor(host, "born-1")).not.toBeNull();
     // typed into, so the launcher goes and the reaper will never close it
     usedSessions.add("born-1");
+    nativeSummaries.set("born-1", { ...nativeSummaries.get("born-1")!, inputUsed: true });
     workspace.refresh();
     await settle();
     expect(launcherFor(host, "born-1")).toBeNull();
@@ -1615,6 +1848,30 @@ describe("the empty pane launcher (QL-1)", () => {
     });
     await settle();
     expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([]);
+  });
+
+  it("restores the launcher for an untouched owned shell after runtime replacement", async () => {
+    const host = await mountDeck();
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    await settle();
+    expect(launcherFor(host, "born-1")).not.toBeNull();
+    await act(async () => retryTerminalPool(["born-1"]));
+    runtimeBirths.clear();
+    workspace.refresh();
+    await settle();
+    expect(launcherFor(host, "born-1")).not.toBeNull();
+    // A different session takes its pane: the restored unused receipt owns cleanup.
+    await act(async () => {
+      workspace.panes = [{ id: "pane-1", session: stubSession("pty-2") }];
+      workspace.refresh();
+    });
+    await settle();
+    expect(requests.filter((call) => call.method === "terminal.release")).toContainEqual({
+      method: "terminal.release",
+      params: { sessionId: "born-1", condition: "unused" },
+    });
   });
 
   it("never draws on a peer's pane — attached from the mesh, or a replica the runtime says is remote", async () => {
@@ -1730,7 +1987,7 @@ describe("the empty pane launcher (QL-1)", () => {
     });
     await settle();
     expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([
-      { method: "agent.spawn", params: { provider: "claude" } },
+      { method: "agent.spawn", params: { creationId: expect.any(String), provider: "claude" } },
     ]);
   });
 
@@ -1790,7 +2047,7 @@ describe("the empty pane launcher (QL-1)", () => {
     });
     await settle();
     expect(requests.filter((call) => call.method === "agent.spawn")).toHaveLength(1);
-    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([]);
+    expect(requests.filter((call) => call.method === "terminal.release")).toEqual([]);
     expect(
       host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
     ).toBe("pty-launched");
@@ -1810,12 +2067,25 @@ describe("the empty pane launcher (QL-1)", () => {
     await settle();
     // a launch sends no profile (QL-D3 as revised): fieldd resolves the default
     expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([
-      { method: "agent.spawn", params: { provider: "claude", cwd: "/home/tester/vibe-field" } },
+      {
+        method: "agent.spawn",
+        params: {
+          creationId: expect.any(String),
+          provider: "claude",
+          cwd: "/home/tester/vibe-field",
+        },
+      },
     ]);
     expect(workspace.panes[0]?.session.id).toBe("pty-launched");
-    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
-      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
-    ]);
+    const releases = requests.filter((call) => call.method === "terminal.release");
+    expect(releases.length).toBeGreaterThan(0);
+    // Attachment cleanup and explicit handoff may deliver the same idempotent
+    // intent again after acknowledgement. Every delivery remains conditional.
+    for (const release of releases)
+      expect(release).toEqual({
+        method: "terminal.release",
+        params: { sessionId: "pty-1", condition: "unused" },
+      });
     expect(
       host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
     ).toBe("pty-1");
@@ -1832,9 +2102,15 @@ describe("the empty pane launcher (QL-1)", () => {
     });
     await settle();
     expect(workspace.panes[0]?.session.id).toBe("pty-launched");
-    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
-      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
-    ]);
+    const releases = requests.filter((call) => call.method === "terminal.release");
+    expect(releases.length).toBeGreaterThan(0);
+    // Attachment cleanup and explicit handoff may deliver the same idempotent
+    // intent again after acknowledgement. Every delivery remains conditional.
+    for (const release of releases)
+      expect(release).toEqual({
+        method: "terminal.release",
+        params: { sessionId: "pty-1", condition: "unused" },
+      });
     expect(
       host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
     ).toBe("pty-1");
@@ -1858,16 +2134,16 @@ describe("the empty pane launcher (QL-1)", () => {
     });
     await settle();
     expect(workspace.panes[0]?.session.id).toBe("pty-launched");
-    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([]);
+    expect(requests.filter((call) => call.method === "terminal.release")).toEqual([]);
     expect(
       host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
     ).toBe("pty-launched");
   });
 
-  it("restores distinct bubbles when the audited shell release is refused", async () => {
+  it("keeps committed identity when predecessor cleanup loses its acknowledgement", async () => {
     runtimeBirths.add("pty-1");
     let refuse!: (cause: Error) => void;
-    terminateAnswer = new Promise((_resolve, reject) => {
+    releaseAnswer = new Promise((_resolve, reject) => {
       refuse = reject;
     });
     const host = await mountDeck();
@@ -1884,7 +2160,7 @@ describe("the empty pane launcher (QL-1)", () => {
     await settle();
     expect(
       host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
-    ).toBe("pty-launched");
+    ).toBe("pty-1");
   });
 
   it("names the profile a pane was born under — New · Under Work — marks an agent it holds no sign-in for, and launches under it (SB-3)", async () => {
@@ -1908,6 +2184,7 @@ describe("the empty pane launcher (QL-1)", () => {
         personas: [
           {
             profileId: "w-claude",
+            creationId: expect.any(String),
             provider: "claude",
             label: "Claude",
             kind: "managed",
@@ -1947,7 +2224,12 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([
       {
         method: "agent.spawn",
-        params: { provider: "claude", cwd: "/home/tester/vibe-field", profileSet: "work" },
+        params: {
+          creationId: expect.any(String),
+          provider: "claude",
+          cwd: "/home/tester/vibe-field",
+          profileSet: "work",
+        },
       },
     ]);
   });
@@ -2017,7 +2299,7 @@ describe("births under an Agent Profile (SB-3)", () => {
       outcome = await deckDoor?.createTerminal({ profileSet: "work" });
     });
     expect(outcome).toEqual({ state: "mounted", sessionId: "born-1", placement: "replace" });
-    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([]);
+    expect(requests.filter((call) => call.method === "terminal.release")).toEqual([]);
   });
 
   it("gives a ⌘D split the set of the shell it splits; an unbound shell's split and the door's plain create get none", async () => {
@@ -2056,7 +2338,9 @@ describe("births under an Agent Profile (SB-3)", () => {
       workspace.refresh();
     });
     await settle();
-    expect(creates()).toEqual([{ cwd: "/project/vibe-field", workloadClass: "interactive" }]);
+    expect(creates()).toEqual([
+      { creationId: expect.any(String), cwd: "/project/vibe-field", workloadClass: "interactive" },
+    ]);
     const paneMeta = workspaceProps["paneMeta"] as (session: unknown, paneId: string) => unknown;
     expect(paneMeta(stubSession("pty-1"), "pane-1")).not.toHaveProperty("profileSet");
   });

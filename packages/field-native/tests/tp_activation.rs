@@ -64,6 +64,7 @@ fn spawn_session(source: &DirectSessions) -> Arc<Session> {
     let hub = FrameHub::new(64);
     let session = Session::spawn(
         SpawnOptions {
+            creation_id: None,
             executable: "/bin/sh".into(),
             args: vec![],
             cwd: None,

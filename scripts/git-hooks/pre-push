@@ -12,6 +12,15 @@ done
 
 if [ -z "$SKIP_VERIFY" ]; then
   echo "pre-push: running 'pnpm verify' (SKIP_VERIFY=1 to bypass)..." >&2
-  pnpm verify || exit 1
+  (
+    # Git exports this worktree's repository context to hooks. Verification
+    # also reads sibling repositories: let their own cwd select their Git
+    # directory instead of inheriting this worktree's HEAD and index.
+    git_local_env=$(git rev-parse --local-env-vars) || exit 1
+    for git_env_name in $git_local_env; do
+      unset "$git_env_name"
+    done
+    pnpm verify
+  ) || exit 1
 fi
 exit 0

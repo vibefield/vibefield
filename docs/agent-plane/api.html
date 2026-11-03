@@ -1615,9 +1615,19 @@
                     <td><p><code>AgentInterruptParams</code> → <code>AgentInterruptResult</code> (a discriminated union on <code>accepted</code>)</p></td>
                     <td><p><code>agent.control</code></p></td>
                     <td><p>no</p></td>
-                    <td><p>The run's <code>Agent.stopTurn()</code>, the turn stop its adapter names (Q08, 2026-10-27); <code>AgentHost.automateTerminal</code>'s interrupt operation (⌃C) only while the adapter names none. The row's <code>stopKey</code> says which key.</p></td>
+                    <td><p>The run's <code>Agent.stopTurn()</code>, the turn stop its adapter names (Q08, 2026-10-27); <code>AgentHost.automateTerminal</code>'s interrupt operation (⌃C) only while the adapter names none. The row's <code>stopKey</code> says which key.
+                      Pane Stop uses <code>terminal.terminate</code>. Pause is a separate command below.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>agent-session.test.ts</code>, <code>agent-stop-key.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent.pause</span></td>
+                    <td><p><code>AgentPauseParams</code> → <code>AgentInterruptResult</code></p></td>
+                    <td><p><code>agent.control</code></p></td><td><p>no</p></td>
+                    <td><p>One declared turn cancellation while working; idle, unknown, or unsupported cancellation refuses.
+                      No fallback key, retry, or termination. Concurrent presses and an unheard request on the same
+                      turn coalesce. Older daemons refuse the unknown method instead of ignoring a safety flag.</p></td>
+                    <td><span class="badge tone-built">Built</span></td><td><p><code>agent-session.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent.list</span></td>
@@ -2238,6 +2248,12 @@
                   <tr><td><span class="route">terminal.renewAttach</span></td><td><p><code>TerminalRenewAttachResult</code></p></td><td><p>yes</p></td><td><p>A compare-and-set on the generation the caller holds, idempotent by request id, so a retried renewal returns the grant it already got.</p></td></tr>
                   <tr><td><span class="route">freeway.approve</span></td><td><p><code>FreewayApproveResult</code></p></td><td><p>no</p></td><td><p>F1 (2026-10-17): the phone's approval for its freeway link — minted only for a node fieldd's roster correlates to a phone row (never a desktop's, never a node that publishes no device), under the floor's per-boot freeway key, audited like a ticket. The link's host mints every terminal grant after it from its own keyring, so a tap needs no fieldd round trip. Refused <code>UNAVAILABLE {service: "freeway"}</code> while the host is down. F1b (2026-10-31): routable for FW-D5 — the phone asks its home with <code>device</code> naming another desktop, the home forwards it whole, and that desktop mints under its own floor's key for a self peer daemon carrying <code>onBehalfOf.clientDeviceId</code> (the phone, as the home's roster correlated its node): the phone's node read from the owner's own roster, the linked login, the peer's self set; authorized as the peer, audited as the phone. A peer with no phone behind it, or naming a desktop, is <code>FORBIDDEN_SCOPE</code>; a phone the owner's roster does not know is <code>UNAVAILABLE uncorrelated</code>; an owner the home cannot reach is PeerLink's <code>UNAVAILABLE {service: "peer-link", device, state}</code>. Never replayed from a receipt: a same-key retry mints afresh.</p></td></tr>
                   <tr><td><span class="route">terminal.terminate</span></td><td><p>—</p></td><td><p>yes</p></td><td><p>Closes an agent's pane. Idempotent by intent: terminating an already-exited session is the normal race when the ladder and a click converge.</p></td></tr>
+                  <tr><td><span class="route">terminal.release</span></td>
+                    <td><p><code>TerminalReleaseParams</code> → <code>TerminalReleaseResult</code></p></td>
+                    <td><p>yes</p></td><td><p>Conditional cleanup of an unused interactive shell or an exited PTY.
+                      Requires <code>terminal.attach</code>; federates to the owner. <code>accepted: true</code>
+                      acknowledges durable queue adoption, not immediate deletion. Every native attempt checks
+                      current attachments and lifetime input; busy/attached owners defer. Requires Ghosttea protocol 1.18.</p></td></tr>
                   <tr><td><span class="route">terminal.list · sessions · roster · get</span></td><td><p>inventories</p></td><td><p>yes</p></td><td><p>Four doors over three projections for three readers, with <code>get</code> answering one row. The fold joins against the inventory; the roster is the UI's view and carries no placement. Since SB-2 a roster row names the Agent Profile its shell was born under (<code>profileSet</code>, from fieldd's record, still naming a profile deleted since).</p></td></tr>
                 </tbody>
               </table>

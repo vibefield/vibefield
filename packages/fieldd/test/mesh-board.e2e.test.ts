@@ -17,9 +17,9 @@
 //   · the upstream is reference-counted: the last reader out closes it;
 //   · the door's refusals: a peer never gets the full projection or the mesh.
 // PG-2 (2026-10-31): the board here is the model's `remote` cut (the `desk` cut
-// before it), so each row is the owner's model row and its joins, a bare
-// terminal's among them, and a run's row arrives once its owner's backend has
-// assembled it; the phone reads it at its home at its own floor.
+// before it), so each row is the owner's model row and its joins. A run's row
+// arrives once its owner's backend has assembled it, without duplicating its
+// dedicated PTY; the phone reads it at its home at its own floor.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -66,13 +66,19 @@ const ENDPOINTS = {
 const observed = (sessionId: string, cellBootId: string) => ({
   generation: 0,
   bootId: "mock-boot",
-  terminals: [{ sessionId, pid: 42, cell: { cellInstanceId: 1, cellBootId } }],
+  terminals: [
+    {
+      sessionId,
+      pid: 42,
+      cell: { cellInstanceId: 1, cellBootId, workloadClass: "agent" as const },
+    },
+  ],
   workers: [],
 });
 
-/** A run whose record the fold re-lists at boot, because the (mocked) floor
- * still lists its PTY — MF-1f's restart path, the agent-field daemon suite's
- * way of making a fold non-empty without a real floor. */
+/** A run whose record the fold re-lists at boot because the (mocked) floor
+ * still lists its dedicated PTY. The exited agent keeps that PTY claimed;
+ * it must not appear again as a bare terminal on either desktop's board. */
 function writeRun(dataDir: string, runtimeRunId: string, pane: string): void {
   const at = "2026-09-30T12:00:00.000Z";
   const record: AgentSessionRecord = {
@@ -330,15 +336,13 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     const onA = await windowOn(A.daemon);
     const meshA = await openMesh(onA);
     // this desktop's own board is in the open itself, first and live; its run's
-    // row is there once its backend has assembled it, beside its bare terminal
+    // row is there once its backend has assembled it, with no duplicate PTY row
     expect(meshA.open.devices[0]).toMatchObject({ device: "dev-a", state: "live" });
     await until(
       () => heldRows(meshA.open, meshFrames(onA, meshA.subId), "dev-a").includes(A.run),
       3 * beat,
     );
-    expect(heldRows(meshA.open, meshFrames(onA, meshA.subId), "dev-a")).toEqual(
-      [A.run, A.pane].sort(),
-    );
+    expect(heldRows(meshA.open, meshFrames(onA, meshA.subId), "dev-a")).toEqual([A.run]);
     // the other desktop is LISTED from the start, and its board arrives on the stream
     expect(meshA.open.devices.map((entry) => entry.device)).toEqual(["dev-a", "dev-b"]);
     await until(
@@ -509,9 +513,7 @@ describe("DS-3 — the mesh board across two real daemons", () => {
       "asleep",
     ]);
     // the reader still holds B's last board, and a new reader is answered with it
-    expect(heldRows(meshA.open, meshFrames(onA, meshA.subId), "dev-b")).toEqual(
-      [B.run, B.pane].sort(),
-    );
+    expect(heldRows(meshA.open, meshFrames(onA, meshA.subId), "dev-b")).toEqual([B.run]);
     const late = await openMesh(onA);
     expect(late.open.devices.find((entry) => entry.device === "dev-b")).toMatchObject({
       state: "asleep",

@@ -98,6 +98,13 @@ describe("agent.* registry rows (AR-3)", () => {
         subscription: false,
       },
       {
+        method: "agent.pause",
+        scope: "agent.control",
+        idempotent: false,
+        locality: "federate",
+        subscription: false,
+      },
+      {
         method: "agent.list",
         scope: "agent.observe",
         idempotent: true,

@@ -74,6 +74,10 @@
     "fieldd",
     "shell-relaunches.json"
   ],
+  "TERMINAL_RELEASES_FILE": [
+    "fieldd",
+    "terminal-releases.json"
+  ],
   "TERMINAL_BINDINGS_FILE": [
     "fieldd",
     "terminal-bindings.json"
