@@ -179,6 +179,19 @@ describe("AU-1 (LC-2) — releaseName: one friendly name for a version", () => {
     expect(releaseName("0.1.0-nightly.20261002")).toBe("the Oct 2 nightly");
   });
 
+  it("names and resolves numbered nightlies, while rejecting noncanonical revisions", () => {
+    const version = "0.1.0-nightly.20261103.1";
+    expect(releaseName(version)).toBe("the Nov 3 nightly (revision 1)");
+    expect(releaseChannelOf(version)).toBe("nightly");
+    expect(releaseTagOf(version)).toBe("nightly-20261103.1");
+    expect(NIGHTLY_TAG_PATTERN.test(releaseTagOf(version)!)).toBe(true);
+    for (const revision of ["0", "01", "-1", "1.2", "foo"]) {
+      expect(NIGHTLY_TAG_PATTERN.test(`nightly-20261103.${revision}`)).toBe(false);
+      expect(releaseChannelOf(`0.1.0-nightly.20261103.${revision}`)).toBeNull();
+      expect(releaseTagOf(`0.1.0-nightly.20261103.${revision}`)).toBeNull();
+    }
+  });
+
   it("says a nightly whose day is not a real date as its exact version", () => {
     expect(releaseName("0.1.0-nightly.20261399")).toBe("VibeField 0.1.0-nightly.20261399");
     expect(releaseName("0.1.0-nightly.20260230", { start: true })).toBe(

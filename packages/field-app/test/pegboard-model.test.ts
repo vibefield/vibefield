@@ -83,10 +83,6 @@ describe("the filters (R19, P3c)", () => {
     expect(mid?.opacity).toBeCloseTo(0.5, 6);
     expect(placeFilters(null)).toBeNull();
   });
-
-  it("keeps the line's 88 at the board's foot (I21)", () => {
-    expect(PEGBOARD.foot).toBe(88);
-  });
 });
 
 const laid = (

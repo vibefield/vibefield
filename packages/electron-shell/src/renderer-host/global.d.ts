@@ -72,6 +72,7 @@ declare global {
     vibefieldStudioAppearance: ProductAppearanceRendererApi;
     vibefield: {
       readonly platform: ShellPlatform;
+      readonly haptics: { zoomTick(): void };
       claimLiveSurfacePortBridge(): string;
       submitRendererLogs(serializedBatch: string): boolean;
       getConnection(): Promise<WindowConnection>;

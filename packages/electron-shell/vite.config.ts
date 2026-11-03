@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
 import { milleAliases } from "../../scripts/mille-aliases.mjs";
-import { readLock, siblingDir } from "../../scripts/siblings.mjs";
+import { linkedPackages, readLock, siblingDir } from "../../scripts/siblings.mjs";
 import {
   hostSingletons,
   isExpectedSingletonWarning,
@@ -23,6 +23,7 @@ const repoRoot = join(import.meta.dirname, "..", "..");
 // graph (watched, HMR'd), never through the dev runner's watchers.
 const siblingEntries = Object.values(readLock(repoRoot)?.siblings ?? {});
 const siblingRoots = siblingEntries.map((entry) => siblingDir(repoRoot, entry));
+const linkedIce = linkedPackages(repoRoot).has("@vibecook/ice");
 // AR-8c's second list — the checkouts a LINKED package links in turn (rosetta's
 // room took `@vibecook/mille*` as `link:` rows of its own) — retired at RD-5a
 // (2026-10-14): the room is a registry package, its mille dependencies take this
@@ -105,12 +106,17 @@ export default defineConfig(({ mode }) => ({
       mode === "live-surfaces-lab"
         ? ["spike-live-surfaces-lab.html"]
         : ["index.html", "studio-product.html", "studio.html", "design-system.html"],
-    include: [
-      "@vibefield/field-app > @vibecook/ice/desk",
-      "@vibefield/field-app > @vibecook/ice/desk/engine",
-      "@vibefield/field-app > @vibecook/ice/desk/objects",
-      "@vibefield/field-app > @vibecook/ice/desk/kit",
-    ],
+    // Linked ICE stays entirely in Vite's source graph. Prebundling only its
+    // desk entries duplicates their shared core beside the raw index/react
+    // entries and registers components such as PrefabId twice on first load.
+    include: linkedIce
+      ? []
+      : [
+          "@vibefield/field-app > @vibecook/ice/desk",
+          "@vibefield/field-app > @vibecook/ice/desk/engine",
+          "@vibefield/field-app > @vibecook/ice/desk/objects",
+          "@vibefield/field-app > @vibecook/ice/desk/kit",
+        ],
     // AR-0 sibling mode, corrected 2026-09-13: the optimizer registry is keyed
     // by the BARE specifier, so the whole graph gets ONE `zod` entry — and
     // `tryOptimizedResolve` returns that flat hit before it ever compares the
@@ -129,7 +135,7 @@ export default defineConfig(({ mode }) => ({
     // Still so since puppeteer 0.2.3 (2026-10-26): the published packages
     // declare zod `^4.6.6` and pnpm installs it under each of them, beside this
     // workspace's zod 3 — the same two copies, now from the registry.
-    exclude: ["zod"],
+    exclude: ["zod", ...(linkedIce ? ["@vibecook/ice"] : [])],
   },
   build: {
     // A catalog bundle is useful for isolated inspection, but it is development

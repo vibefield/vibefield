@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // WP12 (build-wp12-updater.md D6, D7, D14; L3a) — the release workflow's PLAN: which release this run is, before
 // anything is built. One answer, as JSON (and as `key=value` lines for `$GITHUB_OUTPUT` with `--github-output`):
-//   - a `schedule` or `workflow_dispatch` run is a NIGHTLY: tag `nightly-YYYYMMDD` (UTC), version
-//     `<product>-nightly.YYYYMMDD` — the one version a tool stamps (D6, RM-D7's stated exception) — and it is SKIPPED
-//     when main is red or unchanged since the last PUBLISHED nightly (RL4 (a)), or when today's nightly tag already
-//     exists (a tag name is burned once used, D7: a second nightly in one UTC day waits for the next);
+//   - a `schedule` or `workflow_dispatch` run is a NIGHTLY: tag `nightly-YYYYMMDD[.N]` (UTC), version
+//     `<product>-nightly.YYYYMMDD[.N]` — the one version a tool stamps (D6, RM-D7's stated exception) — and it is SKIPPED
+//     when main is red or unchanged since the last PUBLISHED nightly (RL4 (a)). Schedules run once per UTC day;
+//     manual dispatches can append .N to the tag and version for another release that day. Tags are never reused (D7).
 //   - a pushed `v*` tag is a BETA (`vX.Y.Z-beta.N`) or a STABLE (`vX.Y.Z`), whose version must already be the committed
 //     product version (betas and stables are commit-bumped, RM-D7); a mismatch refuses the run.
 // Nightlies and betas are GitHub prereleases; only a stable is `latest` (`releases/latest/download/` reaches stable, D4).
@@ -55,10 +55,14 @@ export function planRelease({
   const builtAt = new Date(now).toISOString();
   if (event === "schedule" || event === "workflow_dispatch") {
     const day = utcDay(now);
+    const previous = /^nightly-(\d{8})(?:\.([1-9]\d*))?$/.exec(lastNightlyTag ?? "");
+    const usedToday = previous?.[1] === day;
+    const revision =
+      usedToday && event === "workflow_dispatch" ? `.${BigInt(previous[2] ?? "0") + 1n}` : "";
     const base = {
       channel: "nightly",
-      tag: `nightly-${day}`,
-      version: `${productVersion}-nightly.${day}`,
+      tag: `nightly-${day}${revision}`,
+      version: `${productVersion}-nightly.${day}${revision}`,
       prerelease: true,
       makeLatest: false,
       commit,
@@ -68,11 +72,11 @@ export function planRelease({
       return { ...base, skip: true, reason: "main is red: no nightly from a red trunk" };
     if (lastPublishedNightlyCommit !== null && lastPublishedNightlyCommit === commit)
       return { ...base, skip: true, reason: "main is unchanged since the last published nightly" };
-    if (lastNightlyTag === base.tag)
+    if (usedToday && event === "schedule")
       return {
         ...base,
         skip: true,
-        reason: `today's nightly exists (${base.tag}); a tag name is used once (D7), so the next waits for tomorrow`,
+        reason: `today's nightly exists (${lastNightlyTag}); schedules run once per UTC day; dispatch manually for a numbered revision`,
       };
     return { ...base, skip: false };
   }

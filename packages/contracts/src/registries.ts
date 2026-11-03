@@ -1890,6 +1890,8 @@ export const LAYOUT_ROOT_LEVEL = [
  * else. Payload schemas live in shell.ts; call sites import these names — a raw
  * `vibefield:` literal outside contracts is a boundary violation (wall R6). */
 export const IPC_CHANNELS = {
+  /** renderer → main event, no payload: acknowledge a user-driven zoom landmark. */
+  zoomHaptic: "vibefield:shell:zoom-haptic",
   /** renderer → main invoke, once per webContents generation: WindowConnection */
   windowBootstrap: "vibefield:shell:window-bootstrap",
   /** main → renderer event, once per close attempt: CloseRequest */

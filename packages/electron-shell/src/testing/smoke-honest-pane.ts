@@ -714,7 +714,7 @@ export function noticeCapsule(view: readonly [number, number]): {
 export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
   const { say, win } = d;
   const h = paneHands(d);
-  const { js, until, press, move, key, drag, census, rows } = h;
+  const { js, until, press, move, key, census, rows } = h;
   const problems: string[] = [];
   const said: Partial<Record<keyof HonestSeen, unknown>> = {};
   const ambient = await js<string>("globalThis.__vfDesk.ambient()");
@@ -930,16 +930,16 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     mkdirSync(d.shotDir, { recursive: true });
     writeFileSync(join(d.shotDir, name), (await win.capturePage()).toPNG());
   };
-  /** The view panned by a drag on the bare mat. */
+  /** The view panned by a Space-drag on the bare mat. */
   const pan = async (dx: number, dy: number): Promise<void> => {
     const off = await h.deskAt();
     const mat = await js<{ x: number; y: number } | null>(BARE_FOR(dx, dy));
     if (mat === null) throw new Error("no bare mat to pan the desk from");
     const from = { x: off.left + mat.x, y: off.top + mat.y };
-    await drag(from, { x: from.x + dx, y: from.y + dy }, 8, 300);
+    await h.pan(from, { x: from.x + dx, y: from.y + dy }, 8, 300);
     await sleep(500);
   };
-  /** The view panned by drags on the bare mat until the pane's middle stands in the window. */
+  /** The view panned by Space-drags on the bare mat until the pane's middle stands in the window. */
   const bringBack = async (e: number): Promise<void> => {
     const view = await js<{ w: number; h: number }>("({ w: innerWidth, h: innerHeight })");
     for (let i = 0; i < 16; i += 1) {

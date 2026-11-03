@@ -195,7 +195,11 @@ overrides:
   # calendar's hand) idle unless the object in hand is their own, so a held
   # pane no longer keeps them following and the desk can sleep under it. No
   # API change against portals.4; strata 0.13.0 and loro ^1.13.8 unchanged.
-  "@vibecook/ice": 0.16.0
+  # EL8 2026-11-03: 0.16.0 → 0.17.0 — native desk navigation and zoom feedback,
+  # marquee/group movement, viewport gobo, foreground rulers, retired-widget
+  # data preservation, and a simpler tray with passive borderless Prints.
+  # strata 0.13.0 and loro ^1.13.8 are unchanged.
+  "@vibecook/ice": 0.17.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -413,7 +417,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.16.0'
+  - '@vibecook/ice@0.17.0'
   # EL8 2026-11-02: reviewed Ghosttea 0.14.0, published inside the release-age window.
   # The prior 0.13.8 rows were retained through the install that regenerated the lock, then removed.
   - '@vibecook/ghosttea-client@0.14.0'

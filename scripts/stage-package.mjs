@@ -300,6 +300,13 @@ const PLAN = [
           produce: "pnpm --filter @vibefield/desktop run build:live-surfaces-native",
         },
         {
+          stage: "bin/desktop-haptics.node",
+          from: "apps/desktop/build/native/macos/desktop-haptics.node",
+          kind: "file",
+          mode: DATA_MODE,
+          produce: "pnpm --filter @vibefield/electron-shell build",
+        },
+        {
           // SNAP-D5/D9: the screenshot helper is a nested BUNDLE — TCC keys Screen
           // Recording consent on it — staged whole so its Info.plist, PkgInfo and
           // signature seal travel with the executable. OPTIONAL like field-native: a

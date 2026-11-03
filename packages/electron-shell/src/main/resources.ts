@@ -70,6 +70,8 @@ export interface DesktopResources {
    * helper: a screenshot is a peripheral, so an absent helper is an honest
    * `helper-missing` at capture time — never a refusal to boot. */
   readonly screenshotHelperPath: string | null;
+  /** Optional macOS presentation feedback, loaded only for a focused user gesture. */
+  readonly desktopHapticsPath?: string | null;
   /** AR-8 (L3) — History's index daemon, handed to fieldd as FIELDD_ROSETTAD_BIN
    * when nothing in the environment names one. Packaged: beside fieldd, where
    * the stager puts it when `pnpm siblings:build` produced one. Development:
@@ -206,6 +208,10 @@ export function resolveDevelopmentResources(opts: {
             ),
           }
         : null,
+    desktopHapticsPath:
+      platform === "darwin"
+        ? join(opts.repoRoot, "apps/desktop/build/native/macos/desktop-haptics.node")
+        : null,
     screenshotHelperPath: screenshotHelperPath(
       join(
         opts.repoRoot,
@@ -264,6 +270,7 @@ export function resolvePackagedResources(opts: {
           }
         : null,
     screenshotHelperPath: screenshotHelperPath(bin, platform),
+    desktopHapticsPath: platform === "darwin" ? join(bin, "desktop-haptics.node") : null,
     rosettadPath: join(bin, exe("rosettad", platform)),
     pluginRoots: {
       bundled: [join(opts.resourcesPath, "plugins", "bundled")],

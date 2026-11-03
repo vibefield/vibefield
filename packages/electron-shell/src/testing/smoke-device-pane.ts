@@ -592,7 +592,7 @@ export function headBand(
 export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
   const { say, win } = d;
   const h = paneHands(d);
-  const { js, until, press, move, key, drag, census, rows } = h;
+  const { js, until, press, move, key, pan, census, rows } = h;
   const problems: string[] = [];
   const said: Partial<Record<keyof DeviceSeen, unknown>> = {};
   const ambient = await js<string>("globalThis.__vfDesk.ambient()");
@@ -752,7 +752,7 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
     if (p === null) throw new Error(`the held bar has no ${id}`);
     await press(p);
   };
-  /** The view panned by drags on the bare mat until the pane's middle stands in the window (its delete's press needs it). */
+  /** The view panned by Space-drags on the bare mat until the pane's middle stands in the window (its delete's press needs it). */
   const bringBack = async (e: number): Promise<void> => {
     const view = await js<{ w: number; h: number }>("({ w: innerWidth, h: innerHeight })");
     const off = await h.deskAt();
@@ -768,7 +768,7 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
       const mat = await js<{ x: number; y: number } | null>(BARE_FOR(step.dx, step.dy));
       if (mat === null) throw new Error("no bare mat to pan the desk from");
       const from = { x: off.left + mat.x, y: off.top + mat.y };
-      await drag(from, { x: from.x + step.dx, y: from.y + step.dy }, 8, 300);
+      await pan(from, { x: from.x + step.dx, y: from.y + step.dy }, 8, 300);
       await sleep(500);
     }
   };

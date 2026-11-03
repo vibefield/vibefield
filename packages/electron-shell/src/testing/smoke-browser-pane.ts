@@ -8,7 +8,7 @@
 //             the line's create, the PORTALS chip chosen once the board's slide is done, the Browser specimen taken off it by
 //             the pointer and dropped there: ONE pane more, the one selection, its kind neither refused nor struck, the
 //             board folded, the pane over no other object;
-//   FACE    — the pane brought to the middle (a drag on the bare mat), at actual size, then its PAGE captured
+//   FACE    — the pane brought to the middle (a Space-drag on the bare mat), at actual size, then its PAGE captured
 //             without the marks (the region inside the clear border and under the engraved head — a flat page fails here
 //             whatever the head and the glass draw): a face by its colours and its contrast, by day and by night — by day
 //             the sample's LIGHT page (never the mat, never the desk's missing face), the night's page (the desk's dark
@@ -362,8 +362,7 @@ const OTHERS = (beside: readonly string[]): string => `(() => {
 })()`;
 
 /**
- * A point where a press PANS (nothing takes it — the bare mat, or a calendar's paper, which pans too) from which a drag by
- * (dx, dy) stays inside the desk (desk CSS px).
+ * A point where nothing picks, from which a Space-drag by (dx, dy) stays inside the desk (desk CSS px).
  */
 export const BARE_FOR = (dx: number, dy: number): string => `(() => {
   const d = globalThis.__vfDesk; const el = document.querySelector("[data-desk]"); const r = el.getBoundingClientRect();
@@ -433,6 +432,13 @@ export interface PaneHands {
   press(at: { x: number; y: number }, clickCount?: number): Promise<void>;
   /** A press-drag-release by the primary button, in steps. */
   drag(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    steps?: number,
+    holdMs?: number,
+  ): Promise<void>;
+  /** Space-drag pans the camera while preserving the primary drag for objects and marquee selection. */
+  pan(
     from: { x: number; y: number },
     to: { x: number; y: number },
     steps?: number,
@@ -522,6 +528,14 @@ export function paneHands(d: PaneRowsDriver): PaneHands {
       clickCount: 1,
     });
   };
+  const pan: PaneHands["pan"] = async (from, to, steps, holdMs): Promise<void> => {
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Space" });
+    try {
+      await drag(from, to, steps, holdMs);
+    } finally {
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Space" });
+    }
+  };
   const key = async (keyCode: string, modifiers: ("meta" | "control")[] = []): Promise<void> => {
     win.webContents.sendInputEvent({ type: "keyDown", keyCode, modifiers });
     win.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
@@ -583,6 +597,7 @@ export function paneHands(d: PaneRowsDriver): PaneHands {
     move,
     press,
     drag,
+    pan,
     key,
     undoKey,
     pressSelector,
@@ -649,15 +664,15 @@ export async function layObject(
     readonly hung: readonly string[];
   }
 > {
-  const { js, until, drag, key, pressSelector, deskAt } = h;
+  const { js, until, drag, pan, key, pressSelector, deskAt } = h;
   const census = async (): Promise<number> =>
     (await js<Record<string, number>>("globalThis.__vfDesk.census()"))[kind.type] ?? 0;
   const rows = (): Promise<PaneRow[]> =>
     js(`globalThis.__vfDesk.objects(${JSON.stringify(kind.type)})`);
   const othersRead = OTHERS(kind.beside ?? [kind.type]);
 
-  // ── CLEAR GROUND: actual size (⌘0, the head's zoom act), then the view panned — drags on the bare mat (or a calendar's
-  // paper: a press there pans too), each held before its release so no inertia carries the pan on — until the drop point
+  // ── CLEAR GROUND: actual size (⌘0, the head's zoom act), then the view panned with Space-drags on the bare mat,
+  // each held before its release so no inertia carries the pan on — until the drop point
   // stands over ground 600 units clear of every object on the board: found in WORLD units, each object's rect and the
   // camera off the door — never by a pick, which a calendar's paper does not answer ──────────────────────────────────────
   await key("Escape");
@@ -695,7 +710,7 @@ export async function layObject(
     const mat = await js<{ x: number; y: number } | null>(BARE_FOR(-step.dx, -step.dy));
     if (mat === null) throw new Error("no bare mat to pan the desk from");
     const from = { x: deskOff.left + mat.x, y: deskOff.top + mat.y };
-    await drag(from, { x: from.x - step.dx, y: from.y - step.dy }, 8, 300);
+    await pan(from, { x: from.x - step.dx, y: from.y - step.dy }, 8, 300);
     await sleep(500);
     off = await offBy();
   }
@@ -770,11 +785,11 @@ export async function layObject(
   return { laid, object, view, deskOff, hung: board.specimens.map((s) => s.type) };
 }
 
-/** The laid pane brought to the middle of the view by drags on the bare mat (the FACE row's first step). */
+/** The laid pane brought to the middle of the view by Space-drags on the bare mat (the FACE row's first step). */
 export async function paneToMiddle(h: PaneHands, e: number, at: LaidAt): Promise<void> {
-  const { js, drag, rows, frame } = h;
+  const { js, pan, rows, frame } = h;
   const { view, deskOff } = at;
-  // ── the pane brought to the middle by a drag on the bare mat ──────────────────────────────────────────────────
+  // ── the pane brought to the middle by a Space-drag on the bare mat ──────────────────────────────────────────────────
   for (let i = 0; i < 3; i += 1) {
     const f = await frame();
     if (f === null) break;
@@ -786,7 +801,7 @@ export async function paneToMiddle(h: PaneHands, e: number, at: LaidAt): Promise
     const mat = await js<{ x: number; y: number } | null>(BARE(40));
     if (mat === null) break;
     const from = { x: deskOff.left + mat.x, y: deskOff.top + mat.y };
-    await drag(from, { x: from.x + by.dx, y: from.y + by.dy }, 6);
+    await pan(from, { x: from.x + by.dx, y: from.y + by.dy }, 6);
     await sleep(400);
     // a drag on the mat may have let the selection go: take it again by a click on the pane's head
     if ((await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0")) === 0) {

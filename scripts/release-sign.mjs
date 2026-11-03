@@ -38,7 +38,7 @@ export const SECRET_ENV = "VIBEFIELD_RELEASE_SECRET";
 /** TRUST_FRESHNESS_DAYS.updatePolicy — the policy's and the heads' freshness */
 export const FRESH_DAYS = 60;
 export const TAG_PATTERNS = {
-  nightly: /^nightly-\d{8}$/,
+  nightly: /^nightly-\d{8}(?:\.[1-9]\d*)?$/,
   beta: /^v\d+\.\d+\.\d+-beta\.\d+$/,
   stable: /^v\d+\.\d+\.\d+$/,
 };

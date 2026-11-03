@@ -22,7 +22,7 @@ import {
   emitDeskUnavailableMarker,
 } from "../development-console";
 import { sayStatus, withdrawStatus } from "../frame/status-line";
-import { getHost } from "../host";
+import { getHost, peekHost } from "../host";
 import { getRendererLogger } from "../logging";
 import { currentWindowClient } from "../plugin-host/plugin-client";
 import { getPluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
@@ -48,6 +48,7 @@ import { announceMissing } from "./desk/desk-notices";
 import { objectWords } from "./desk/desk-object-words";
 import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./desk/desk-words";
 import { PeersOnTheMat } from "./desk/peers/PeersOnTheMat";
+import { bindDeskZoomFeedback } from "./desk/zoom-feedback";
 
 // THE CANVAS STAGE (§5.4.3; DK-3, the host swap): the DESK drawn — ICE's `<Desk engine layer>` over
 // this generation's engine, mounted INSIDE the generation-keyed recede wrapper, so one stage lifetime
@@ -303,6 +304,9 @@ export function CanvasStage({
     // the plates and the rulers' atlas, the moment the mat is here
     const feed = feedDesk(handle, ce);
     const undoDoor = installDeskDoor(desk, feed.platesSet);
+    const haptics = peekHost()?.haptics;
+    const undoZoomFeedback =
+      haptics === undefined ? () => {} : bindDeskZoomFeedback(ce, () => haptics.zoomTick());
     // the status line says each type the desk draws as missing — once (desk-notices.ts)
     const announce = (): void => {
       announceMissing(Object.keys(deskCensus(ce)), words);
@@ -402,6 +406,7 @@ export function CanvasStage({
       feed.dispose();
       withdrawStatus("desk-degraded");
       undoDoor();
+      undoZoomFeedback();
       unpublish();
       if (deskRef.current === desk) deskRef.current = null;
       if (handleRef.current === handle) handleRef.current = null;

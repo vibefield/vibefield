@@ -2,7 +2,6 @@ import type { CanvasEngine, DocSession } from "@vibecook/ice";
 import type { BlobStore } from "@vibecook/ice/desk/kit";
 import {
   BOARD_TYPE,
-  CALENDAR_TYPE,
   MINIMAT_TYPE,
   NOTE_TYPE,
   NOTEBOOK_TYPE,
@@ -10,16 +9,10 @@ import {
   printRect,
 } from "@vibecook/ice/desk/objects";
 
-// THE FIRST-RUN BOARD — THE PRODUCT'S (DK-3's six; rewritten at DK-8): ICE's six reference kinds and VibeField's own
-// comment pad, laid as the product's composition — a WORKING COLUMN on the left (the note, the comment pad and the
-// notebook side by side; the mini mat "Inbox" under them; the whiteboard; the print last) and the desk CALENDAR beside
-// it on the right, its 1760 × 1852 sheet (the calendar's law; never resized) lying next to the others, never under
-// them: one object among the six, not the ground (DK-6's stills had it under all of them). The column is centred on the
-// calendar's height, so where the arrival band's 0.5 floor (`frameContent`) cannot hold the calendar's height (a window
-// under ~930 CSS px tall) the frame trims the calendar's top and foot before the column's rows; a window under ~1250 CSS
-// px wide trims both sides' edges too. The bootstrap default doc alone is seeded (the B3 registry-open
-// law); user-created boards open empty. The print needs a picture: the seed's sample goes into the byte store FIRST,
-// and only then is the print laid naming its hash — so the desk never meets a print whose picture is not there yet.
+// The first-run board uses the app's five active ICE kinds and VibeField's comment pad, in a
+// working column: note, comment pad and notebook side by side; Inbox below; whiteboard; print.
+// The calendar is retired from the product. Only the bootstrap default board is seeded;
+// user-created boards open empty. The print's bytes are stored before its object is placed.
 //
 // THE EXAMPLE CLOCK is not the product's (the orchestrator's ruling 1 at DK-8: "an example is an example"): a user's
 // first board never carries it. It is a DEV/SMOKE SWITCH — laid only where the run asks for the examples: a dev build
@@ -117,15 +110,13 @@ export interface SeedOptions {
 }
 
 /** The product's composition, laid at once (the print follows its picture) — and the example clock where the run asks. */
-export function seedObjects(now: Date, opts: SeedOptions = {}): readonly SeedObject[] {
-  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+export function seedObjects(_now: Date, opts: SeedOptions = {}): readonly SeedObject[] {
   const product: SeedObject[] = [
     { type: NOTE_TYPE, cx: 100, cy: 330, props: { seed: 1 } },
     SEED_PAD,
     { type: NOTEBOOK_TYPE, cx: 570, cy: 330, props: { seed: 3, angle: 0.05 } },
     { type: MINIMAT_TYPE, cx: 320, cy: 750, props: { name: "Inbox" } },
     { type: BOARD_TYPE, cx: 240, cy: 1180, props: {} },
-    { type: CALENDAR_TYPE, cx: 1620, cy: 926, props: { month } },
   ];
   return opts.examples === true ? [...product, SEED_CLOCK] : product;
 }
@@ -134,13 +125,12 @@ export function seedObjects(now: Date, opts: SeedOptions = {}): readonly SeedObj
 export const SEED_PRINT_AT = { cx: 200, cy: 1520 } as const;
 
 /** The types the product's seed lays, one each — the census a first-run board holds while the product's plugins are
- * on (ICE's six and the comment pad; the example clock joins it only where the run asks for the examples). */
+ * on (ICE's five active kinds and the comment pad; the example clock joins it only where the run asks for the examples). */
 export const SEED_TYPES: readonly string[] = [
   NOTE_TYPE,
   MINIMAT_TYPE,
   BOARD_TYPE,
   NOTEBOOK_TYPE,
-  CALENDAR_TYPE,
   PHOTO_TYPE,
   SEED_PAD.type,
 ];

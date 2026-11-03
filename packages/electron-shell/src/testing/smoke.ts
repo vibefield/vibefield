@@ -368,18 +368,17 @@ interface CanvasFacts {
  * them R3F islands — a count the desk no longer draws a single one of (every
  * VibeField widget type is faceless on the desk until DK-8). What a first-run
  * board must hold now is the DESK's seed (field/desk/desk-seed.ts; DK-8 the
- * product's: ICE's six and the comment pad), read off the open document through
+ * product's: ICE's five active kinds and the comment pad), read off the open document through
  * `window.__vfDesk.census()` — GPU on or off, since it counts the world, not
  * pixels. `widgetTypes` is still printed, and no longer judged. */
 const CANVAS_CENSUS = {
-  /** The PRODUCT's first board (DK-8), one object each: ICE's six (`@vibecook/ice/desk/objects`'s ids) and
+  /** The PRODUCT's first board (DK-8), one object each: ICE's five active kinds (`@vibecook/ice/desk/objects`'s ids) and
    * VibeField's own comment pad (`plugins/comment-pad`, staged with the product's plugins). */
   seed: [
     "desk.note",
     "desk.minimat",
     "desk.board",
     "desk.notebook",
-    "desk.calendar",
     "desk.photo",
     "vibefield.comment-pad",
   ],
@@ -723,7 +722,7 @@ async function padProps(win: BrowserWindow): Promise<Record<string, unknown>[] |
 }
 
 /** A point of BARE MAT nearest the window's middle — no object picked there, and the desk's own element under it (no
- * chrome): where a drag pans the desk. */
+ * chrome): where Space-drag pans the desk. */
 async function bareMatPoint(win: BrowserWindow): Promise<{ x: number; y: number } | null> {
   return (await win.webContents.executeJavaScript(
     `(() => {
@@ -798,7 +797,7 @@ async function commentPadCensusRow(win: BrowserWindow): Promise<string[]> {
  * DK-8 (DK-D14) — VIBEFIELD'S OWN KIND IN THE PRODUCT: the comment pad (`plugins/comment-pad`, a plugin kind through
  * `@vibefield/plugin-sdk/desk` alone, staged with the product's plugins) — on the first board (its census, 1); DRAWN
  * (its kind not refused at the desk's mount — its WGSL compiled on the host's device — and its block picked on the
- * drawn frame); the view wheeled in over it (the plain wheel zooms about the pointer); then A LINE TYPED: a tap where
+ * drawn frame); the view pinched in over it (Ctrl-wheel zooms about the pointer); then A LINE TYPED: a tap where
  * the desk receives it puts the desk's one editor on the pad (its text part — the editor's focus is the lease's),
  * the line goes in a character at a time (`char` events — an editor types from `char`), and the session's end (1 s
  * without input) lands it in the pad's `ink` cell — read back through the door — and the board's save is
@@ -827,11 +826,10 @@ async function commentPadRow(
     console.log(`SMOKE_CANVAS_PAD ${JSON.stringify(facts)}`);
     return { problems, typed: false };
   }
-  // THE PAD BROUGHT TO THE MIDDLE AND WHEELED IN, by the desk's own input: a drag on the bare mat pans it (the select
-  // tool pans the bare mat, DK-D29) until the pad's centre is the window's — at the arrival a pad may lie under the
-  // head's strip — then the plain wheel, about the pad's centre (it zooms about the pointer), a step at a time until
-  // the pad is about two thirds of the window tall. Chromium's wheel sign is the reverse of the DOM's: the row reads
-  // the pad's box after its first step and turns the wheel the other way if the pad got smaller.
+  // Bring the pad to the middle with Space-drag, then pinch about its centre using Ctrl-wheel. A primary
+  // drag now selects a marquee and ordinary scrolling pans. Small pinch deltas approach two thirds of the
+  // window height without overshooting at the desk's exponential zoom rate. Chromium's wheel sign is the
+  // reverse of the DOM's: read the first step and turn the other way if the pad got smaller.
   const view = await js<{ w: number; h: number }>("({ w: innerWidth, h: innerHeight })");
   const centreOf = (s: PadOnScreen) => ({
     x: (s.box.x0 + s.box.x1) / 2,
@@ -849,7 +847,12 @@ async function commentPadRow(
     if (Math.hypot(by.dx, by.dy) < 24) break;
     const from = await bareMatPoint(win);
     if (from === null) break;
-    await dragFrom(win, from, by);
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Space" });
+    try {
+      await dragFrom(win, from, by);
+    } finally {
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Space" });
+    }
     seen = await padOnScreen(win);
     pans.push({ from, by, ...(seen === null ? {} : { padAfter: centreOf(seen) }) });
   }
@@ -860,13 +863,17 @@ async function commentPadRow(
     return { problems, typed: false };
   }
   const at = centreOf(seen);
+  if (Math.hypot(at.x - view.w / 2, at.y - view.h / 2) >= 24) {
+    problems.push(`Space-drag did not centre the comment pad (${JSON.stringify(pans)})`);
+  }
   const step = async (dir: number): Promise<PadOnScreen | null> => {
     win.webContents.sendInputEvent({
       type: "mouseWheel",
       x: at.x,
       y: at.y,
       deltaX: 0,
-      deltaY: 120 * dir,
+      deltaY: 24 * dir,
+      modifiers: ["control"],
     });
     await sleep(300); // the camera settles (its spring)
     return padOnScreen(win);
@@ -886,13 +893,13 @@ async function commentPadRow(
   }
   facts.zoomed = { before, after: height(after), steps };
   if (after === null) {
-    problems.push("the comment pad left the view when it was wheeled in over");
+    problems.push("the comment pad left the view when pinched in over");
     console.log(`SMOKE_CANVAS_PAD ${JSON.stringify(facts)}`);
     return { problems, typed: false };
   }
   seen = after;
   if (height(seen) <= before)
-    problems.push(`the wheel did not zoom in over the pad (${JSON.stringify(facts.zoomed)})`);
+    problems.push(`the pinch did not zoom in over the pad (${JSON.stringify(facts.zoomed)})`);
   // A TAP on the pad's first writing line (under its binding — pad units 24 + 8 + the hand's 17, of its 280), where
   // the desk receives it: the editor is lent to the pad's text part, the caret where the tap fell
   const tap = {
@@ -1276,6 +1283,33 @@ export async function runSmokeCanvas(opts: {
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
+      const runPeers = async (): Promise<void> => {
+        try {
+          problems.push(
+            ...(await peersRows({
+              win,
+              openPeer: async () => {
+                const peer = smokeWindow({
+                  mode: "smoke-canvas",
+                  preloadPath: opts.preloadPath,
+                  show: true,
+                });
+                opts.registry.adoptAuxiliary(peer);
+                const ready = waitForConsole(peer, "DESK_READY ", 60_000);
+                await loadRenderer(peer, "smoke-canvas", opts.viteUrl, { presenceRelay: "1" });
+                await ready;
+                await bootRevealed(peer, "the peer's desk revealed");
+                await sleep(800);
+                return peer;
+              },
+              shotDir,
+              say: (line) => console.log(line),
+            })),
+          );
+        } catch (error) {
+          problems.push(`DK-16 PEERS: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      };
       const profileSeed = profileSeedUrl(process.argv);
       if (profileSeed !== undefined) {
         // BP-D7 — smoke:profile's PHASE A, its rows ALONE after the boot's: one pane laid, pointed at the row's own fixture,
@@ -1298,6 +1332,31 @@ export async function runSmokeCanvas(opts: {
             profileSeed,
           )),
         );
+      } else if (process.argv.includes("--peers")) {
+        await runPeers();
+      } else if (process.argv.includes("--desk-copy")) {
+        // The copy and idle rows alone, for diagnosing their pointer interactions on the seeded desk.
+        try {
+          problems.push(
+            ...(await deskCopyRows({
+              win,
+              plugins: {
+                disable: (id) => opts.handle.client.request("plugins.disable", { id }),
+                enable: (id) => opts.handle.client.request("plugins.enable", { id }),
+              },
+              shotDir,
+              say: (line) => console.log(line),
+              ...(opts.copies === undefined ? {} : { copies: opts.copies }),
+              ...(opts.pictures === undefined ? {} : { pictures: opts.pictures }),
+            })),
+          );
+        } catch (error) {
+          problems.push(`HN-3: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+          // A failed copy row must not leave cards over the next row's drag target.
+          await win.webContents.executeJavaScript("globalThis.__vfCards?.clear()", true);
+        }
+        problems.push(...(await restRows({ win, say: (line) => console.log(line) })));
       } else if (process.argv.includes(LIVE_FLAG)) {
         // PT-2 — the live page's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs --smoke-canvas
         // --live-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
@@ -1429,6 +1488,9 @@ export async function runSmokeCanvas(opts: {
           );
         } catch (error) {
           problems.push(`HN-3: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+          // A failed copy row must not leave cards over the next row's drag target.
+          await win.webContents.executeJavaScript("globalThis.__vfCards?.clear()", true);
         }
         // DK-17b: the explorer's thumbnail taken while a selection stands is the desk without its marks (ICE I40's
         // purpose; testing/smoke-thumb.ts) — an object moved, its still owed and taken, read back; the move undone
@@ -1458,31 +1520,7 @@ export async function runSmokeCanvas(opts: {
         // idle 8 s, under the board, under a cover and when it leaves its window, the smoke playing the mesh between them;
         // then the desk's faults on its own device — a degraded desk's banner, a lost device's card, each Reload a remount
         // that draws again (testing/smoke-peers.ts)
-        try {
-          problems.push(
-            ...(await peersRows({
-              win,
-              openPeer: async () => {
-                const peer = smokeWindow({
-                  mode: "smoke-canvas",
-                  preloadPath: opts.preloadPath,
-                  show: true,
-                });
-                opts.registry.adoptAuxiliary(peer);
-                const ready = waitForConsole(peer, "DESK_READY ", 60_000);
-                await loadRenderer(peer, "smoke-canvas", opts.viteUrl, { presenceRelay: "1" });
-                await ready;
-                await bootRevealed(peer, "the peer's desk revealed");
-                await sleep(800);
-                return peer;
-              },
-              shotDir,
-              say: (line) => console.log(line),
-            })),
-          );
-        } catch (error) {
-          problems.push(`DK-16 PEERS: ${error instanceof Error ? error.message : String(error)}`);
-        }
+        await runPeers();
         try {
           problems.push(...(await faultRows({ win, shotDir, say: (line) => console.log(line) })));
         } catch (error) {
@@ -2731,10 +2769,11 @@ async function presenceRestRow(win: BrowserWindow): Promise<string[]> {
   await js<number | null>(TAP); // what went out before the window is not the window's
   const session = await js<boolean>("globalThis.__vfDesk.peers().said !== null");
   const a = await stillnessSample(win);
-  const t0 = Date.now();
+  // The observation is an elapsed interval; wall-clock corrections must not shorten it.
+  const t0 = performance.now();
   await sleep(PRESENCE_REST.windowMs);
   const b = await stillnessSample(win);
-  const windowMs = Date.now() - t0;
+  const windowMs = performance.now() - t0;
   const keepalives = await js<number | null>(TAP);
   const moved = movedBy(a, b);
   console.log(

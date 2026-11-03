@@ -178,7 +178,8 @@ export function deskCensus(engine: CanvasEngine): Record<string, number> {
   engine.world.query(objectsQ).each((batch) => {
     for (const row of batch) {
       const type = engine.world.get(batch.entity(row), PrefabId)?.id;
-      if (typeof type === "string") out[type] = (out[type] ?? 0) + 1;
+      if (typeof type === "string" && engine.catalog.retiredWidget(type) === undefined)
+        out[type] = (out[type] ?? 0) + 1;
     }
   });
   return out;

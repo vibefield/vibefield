@@ -214,6 +214,64 @@ import Testing
     client.close()
   }
 
+  /// A client attached and then cut off at the frames leg, whose every fresh
+  /// ticket is minted at once and whose door then turns every dial away before
+  /// its handshake, as a port held by another process answering each upgrade
+  /// with an HTTP error does (item 157's C8).
+  private func turnedAway(mints: TicketMints, stepDeadline: Duration = .seconds(20))
+    async throws -> RoutedTerminalClient
+  {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let session = session
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(
+        ticketProvider: { _ in
+          mints.calls += 1
+          return try TicketFactory.make(sessionId: session)
+        },
+        viewId: "view-1", stepDeadline: stepDeadline))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    transport.unreachable = ["/control", "/frames"]
+    await live.frames.hangUp(code: nil)
+    return client
+  }
+
+  /// Item 161 — a dial the door turns away is re-minted on a backoff. The mint
+  /// SUCCEEDED, so the asking task returned once `open` dialed; the failed
+  /// handshake then asked again in a fresh task whose backoff began anew and
+  /// waited nothing before its mint: about 140 mints and dials a second against
+  /// the real door. An upper bound, so a loaded host can only pass it sooner.
+  @Test func aDialTheDoorTurnsAwayIsReMintedOnTheBackoff() async throws {
+    let mints = TicketMints()
+    let client = try await turnedAway(mints: mints)
+    try await settle("the first re-mint") { mints.calls >= 1 }
+    try await Task.sleep(for: .milliseconds(600))
+    // 100 ms, then 200, then 400: three asks in 0.6 s, four at most
+    #expect(mints.calls <= 5, "\(mints.calls) mints in 0.6 s")
+    client.close()
+  }
+
+  /// …and a set that never comes up says so (item 161). Every re-mint moved the
+  /// attach's step (the ticket, then the dial), and each move re-armed fix8's
+  /// deadline, so the stall was never said and the card read "connecting"
+  /// forever. The reach has one deadline, from the first dial turned away, that
+  /// no re-mint re-arms. The row waits on its own clock and then ASSERTS, so a
+  /// client that never stops fails it by its expectation, not by a timeout.
+  @Test func aSetThatNeverComesUpStopsWaitingAtTheDial() async throws {
+    let mints = TicketMints()
+    let client = try await turnedAway(mints: mints, stepDeadline: .milliseconds(400))
+    let enough = ContinuousClock.now.advanced(by: .seconds(3))
+    while client.state != .stalled(.dial), ContinuousClock.now < enough {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(client.state == .stalled(.dial))
+    #expect(mints.calls >= 2, "it asked again before it stopped")
+    client.close()
+  }
+
   /// The door's two answers for a session it lost: its cell gone (retryable, the
   /// beat before its inventory catches up), then no such terminal (final).
   private nonisolated static let cellGone = FieldProductError(

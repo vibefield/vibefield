@@ -784,7 +784,7 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 
 | Material | Means | Wears it | On the desk |
 |---|---|---|---|
-| **paper** | writable | notes, the notebook's pages, the calendar, the whiteboard's face; off the desk, the hand's cards (§5, HN-D1) | drawn |
+| **paper** | writable | notes, the notebook's pages, the whiteboard's face; off the desk, the hand's cards (§5, HN-D1) | drawn |
 | **ink** | drawn by hand | strokes on a board or a page, a note's handwriting | drawn |
 | **pictures** | a captured image | prints; off the desk, the print on a picture card (§8 "The hand") | drawn — device-local until the upload plane (DK-D21) |
 | **string** | a relation | wires, mind-map edges, patch cables | not yet — STRING |
@@ -3135,21 +3135,36 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   12px in the slot's own ink with a 1px inner ring (black/14; white/20 by night) so a black ink
   reads on the night glass, in a 28 × 32 cell; the one in hand wears a 1.5px foreground ring 2px
   off the dot — the ring the notch's pin wore (§8 "Edge trays", retired at HN-8); a dot grows 1.18× under the pointer (160ms, pop). A **mode
-  without one** (the eraser, the calendar's pen) is a 32 cell, the inverted solid while it is the
-  one in hand (`aria-pressed`); an **action** (`kind: "action"` — undo, today, a page) is a 32
+  without one** (the eraser) is a 32 cell, the inverted solid while it is the
+  one in hand (`aria-pressed`); an **action** (`kind: "action"` — undo, a page) is a 32
   cell; a slot with no `kind` waits, faint by ink. Glyphs by §13's table (R2). **The readout**
-  (MC-D9, I22's `HeldAnchor.readout` — "Page 1", "September") is ONE slot after the tools, before
+  (MC-D9, I22's `HeldAnchor.readout` — "Page 1", a clock's time) is ONE slot after the tools, before
   Done, since the string carries no position (R13): 12/500 `tabular-nums` in secondary ink, at
   least 44 wide, padded 0 4; a kind that says none shows none. **Done** is VibeField's primary at
   32: the inverted solid, 13/500, padded 0 15, no glyph, the chip shadow (`0 4px 10px` black/14,
   /40 by night); 0.9 opacity under the pointer and 0.96 pressed (R13); it runs `ops.putDown()`.
   Tooltips say the slot's `label` and its `hint` the frame's way — "Felt pen  1", "Eraser  E",
-  "Put it down  Esc". **The specimens:** of ICE's six built-ins (the note, the print, the notebook,
-  the whiteboard, the calendar, the mini mat) three open — the notebook ‹ › · felt, ball, fountain,
-  red · undo, reading "Page 1"; the whiteboard black, blue, red, green · eraser · undo · redo; the
-  calendar ‹ › · today · pen, reading "September" — and the example plugin's clock
+  "Put it down  Esc". **The specimens:** VibeField uses five of ICE's built-ins (the note, the print,
+  the notebook, the whiteboard and the mini mat). Two open — the notebook ‹ › · felt, ball, fountain,
+  red · undo, reading "Page 1"; the whiteboard black, blue, red, green · eraser · undo · redo — and the example plugin's clock
   (`@ice-examples/desk-clock`) holds seconds · the 24-hour ring · an hour back · an hour ahead · the
   next dial, its own five drawings (§13), reading its time.
+  **Canvas gestures (2026-11-02):** click-drag on empty canvas draws a selection marquee; Shift-drag
+  adds to the selection. Trackpad scrolling pans, pinch zooms at the pointer, and Space-drag or a middle-button
+  drag pans explicitly. Dragging a selected object or the empty space inside a multi-selection moves
+  the group together, including Prints; one Undo restores the group and Escape cancels the move.
+  Locked objects stay fixed. The group hit check runs once at pointer-down, with no new render pass.
+
+  **Edge rulers (2026-11-02):** the cutting mat's ruler strips stay above canvas objects as they move
+  across the edges. Their lighting and texture stay the same. ICE draws the strips after the objects
+  using the existing mat pipeline, with disjoint regions to avoid extra mat shading or doubled fades.
+
+  **Prints (2026-11-02):** an image-backed canvas object, placed by image paste or a picture card dropped
+  onto the desk. It is absent from the pegboard; existing and new prints display edge to edge without a white frame.
+
+  **Calendar retired (2026-11-02):** its implementation stays in ICE, but VibeField does not mount its
+  renderer, drivers or input. It is absent from the tray and new-board seeds; saved calendar rows,
+  entries and pins remain dormant and recoverable, without appearing on the canvas.
 - **The pegboard — Objects, behind the line** (Chrome on the Mat §3.4–§3.5; MC-D7 ⊕ Objects, B,
   ruled through One Frame's lock; MC-D3 ruled 2026-10-01: segmented; One Frame §7; ICE I21; R14,
   R19, R21; DK-13): **the door is the line's create on Canvas** (§8, the line): Objects, B, calling
@@ -3157,10 +3172,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   board is out. While an object is in hand the desk refuses the board (`open()` answers false), and
   the create is **faint by ink** with the tooltip **"Put it down first"** (R14). ICE's Objects pill,
   its ✕ and its ride on the drawer's edge are its demo's: here the drawer's handle is the line.
-  **The board rises behind the line** — the desk's own pegboard, its specimens hung by category
-  over their label tape — and **its lay keeps 88 at the foot** (I21:
-  `deskLayer({ tray: { foot: 88 } })`) so the last row clears the line and the board's scroll still
-  reaches it. **The stage behind it neither recedes nor dims** — the desk dims under the board
+  **The board rises behind the line** — the desk's own pegboard, its specimens arranged by category
+  over their label tape, without hooks, clips, shelves or rails (2026-11-02). **The bottom strip is
+  20 px**: a 16 px fade above a 4 px border (`deskLayer({ tray: { foot: 4, footFade: 16 } })`). The
+  controls float above the board, and its scroll still reaches the last row. **The stage behind it neither recedes nor dims** — the desk dims under the board
   itself (design-017), so the old sheet's backdrop, recede and stage hold do not come with it (R14).
   It hangs only the kinds whose plugin is on: the install set's disabled list filters the entries
   `tray.categories()` offers (P3c — the old sheet's filter, now the board's). **The filters are
@@ -3173,8 +3188,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   inside the hairline — padded 3; the thumb is solid chrome with the hairline (by night the line's
   edge, the strong hairline — R19) and `0 2px 6px` black/12, **sliding 300ms on the island curve**
   across widths; segments 30 tall, padded 0 15, 13/500 sentence case, in tertiary ink at rest and
-  primary on the one chosen. **All** first, then `tray.categories()` in the lay's order — the six
-  built-ins' Paper and Surfaces, the example clock's Things, and whatever a plugin's kind declares —
+  primary on the one chosen. **All** first, then `tray.categories()` in the lay's order — the
+  creatable built-ins' Paper and Surfaces, the example clock's Things, and whatever a plugin's kind declares —
   **no counts**. Past the band's width
   they scroll inside it, the far end fading under the tray's mask; a click, or ← → Home End,
   chooses (`tray.category(id)`). **Chrome does not dim by night**: the anchor's `night` is not read

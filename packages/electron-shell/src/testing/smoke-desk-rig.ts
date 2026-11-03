@@ -196,31 +196,34 @@ const ARM_LANDED = (type: string, before: number): string => `(() => {
 })()`;
 
 /** The release's region before the take — a bitmap kept in the page (a bitmap never crosses `executeJavaScript`). */
-const KEEP_BEFORE = (rect: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}): string => `(async () => {
+const KEEP_BEFORE = (
+  rect: { x: number; y: number; width: number; height: number },
+  whole = false,
+): string => `(async () => {
   globalThis.__vfTakeBefore?.close?.();
-  globalThis.__vfTakeBefore = await globalThis.__vfDesk.capture({ rect: ${JSON.stringify(rect)}, marks: false });
+  globalThis.__vfTakeBefore = await globalThis.__vfDesk.capture(${JSON.stringify(whole ? { marks: false } : { rect, marks: false })});
   return globalThis.__vfTakeBefore !== undefined;
 })()`;
 
 /** The region after the take against the one before: px changed (a channel off by more than 24), distinct colours (5 bits a
  * channel), luma range — read in the renderer. */
-const FACE_AFTER = (rect: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}): string => `(async () => {
+const FACE_AFTER = (
+  rect: { x: number; y: number; width: number; height: number },
+  wholeBefore = false,
+): string => `(async () => {
   const before = globalThis.__vfTakeBefore;
   const after = await globalThis.__vfDesk.capture({ rect: ${JSON.stringify(rect)}, marks: false });
   if (before === undefined || after === undefined) { after?.close(); return null; }
   const w = after.width, h = after.height;
-  const read = (src) => { const c = new OffscreenCanvas(w, h); const x = c.getContext("2d"); x.drawImage(src, 0, 0, w, h); return x.getImageData(0, 0, w, h).data; };
-  const a = read(before), b = read(after);
+  const read = (src, whole = false) => {
+    const c = new OffscreenCanvas(w, h); const x = c.getContext("2d");
+    if (whole) {
+      const scale = src.width / document.querySelector("[data-desk]").getBoundingClientRect().width;
+      x.drawImage(src, ${rect.x} * scale, ${rect.y} * scale, w, h, 0, 0, w, h);
+    } else x.drawImage(src, 0, 0, w, h);
+    return x.getImageData(0, 0, w, h).data;
+  };
+  const a = read(before, ${wholeBefore}), b = read(after);
   after.close(); before.close(); globalThis.__vfTakeBefore = undefined;
   let changed = 0; const colors = new Set(); let lo = 255, hi = 0;
   for (let i = 0; i < b.length; i += 4) {
@@ -345,13 +348,17 @@ export async function deskRigRows(d: DeskRigDriver): Promise<string[]> {
         if (drop === null)
           throw new Error("no point where nothing picks in the board's upper half to drop on");
         const half = TAKE.region / 2;
-        const rect = {
+        let rect = {
           x: drop.x - half,
           y: drop.y - half,
           width: TAKE.region,
           height: TAKE.region,
         };
-        if (!(await js<boolean>(KEEP_BEFORE(rect))))
+        // The mini mat shares the cutting mat's vinyl. Its centre can be identical to the ground now that
+        // the gobo is fixed in the viewport, so sample its printed border after the take. Keep the whole
+        // before image for that crop; the same pixel-change and contrast requirements still apply.
+        const sampleEdge = specimen.type === "desk.minimat";
+        if (!(await js<boolean>(KEEP_BEFORE(rect, sampleEdge))))
           throw new Error("the capture door answered nothing before the take");
         const before = (await census())[specimen.type] ?? 0;
         const at = await raise(category.id);
@@ -411,12 +418,29 @@ export async function deskRigRows(d: DeskRigDriver): Promise<string[]> {
           `(globalThis.__vfDesk.status().faults ?? []).some((f) => f.kind === ${JSON.stringify(specimen.type)})`,
         );
         const folded = !(await board()).open;
-        const face = await js<TakeSeen["face"]>(FACE_AFTER(rect));
+        if (sampleEdge) {
+          rect = await js<typeof rect>(`(() => {
+            const box = globalThis.__vfDesk.anchor()?.box;
+            if (box === undefined || box === null) throw new Error("no mini-mat selection to sample");
+            const view = document.querySelector("[data-desk]").getBoundingClientRect();
+            // MINIMAT's printed frame is 32 world units inside the sheet; selection brackets stand 6 CSS px out.
+            const margin = 32 * globalThis.__vfDesk.camera().zoom;
+            const top = box.y0 + 6 + margin, bottom = box.y1 - 6 - margin;
+            const line = top >= 4 && top <= view.height - 4 ? top : bottom;
+            if (line < 4 || line > view.height - 4) throw new Error("no visible mini-mat border to sample");
+            return {
+              x: Math.round(Math.max(0, Math.min(view.width - 64, (box.x0 + box.x1) / 2 - 32))),
+              y: Math.round(line - 4),
+              width: 64, height: 8,
+            };
+          })()`);
+        }
+        const face = await js<TakeSeen["face"]>(FACE_AFTER(rect, sampleEdge));
         await shoot(`dk-18-take-${specimen.type}.png`, {
-          x0: to.x - half,
-          y0: to.y - half,
-          x1: to.x + half,
-          y1: to.y + half,
+          x0: at.desk.left + rect.x,
+          y0: at.desk.top + rect.y,
+          x1: at.desk.left + rect.x + rect.width,
+          y1: at.desk.top + rect.y + rect.height,
         });
         // one undo step takes it back
         await key("z", [process.platform === "darwin" ? "meta" : "control"]);

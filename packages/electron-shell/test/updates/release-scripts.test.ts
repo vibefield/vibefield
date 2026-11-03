@@ -161,6 +161,32 @@ describe("release-sign → release-verify: what the sign step writes, the client
     });
   });
 
+  it("signs and verifies a numbered nightly with the client's complete trust chain", async () => {
+    const trust = devTrust();
+    const dir = releaseDir();
+    const tag = "nightly-20261016.1";
+    for (const name of ["latest-mac.yml", "release-manifest.json"]) {
+      const path = join(dir, name);
+      writeFileSync(
+        path,
+        readFileSync(path, "utf8")
+          .replaceAll("nightly.20261016", "nightly.20261016.1")
+          .replaceAll("nightly-20261016", tag),
+      );
+    }
+    sign({ dir, tag, trustRoot: trust.path, secret: trust.release.secretKey });
+    expect(
+      ChannelHeads.parse(JSON.parse(readFileSync(join(dir, "channels.json"), "utf8"))).heads
+        .nightly,
+    ).toBe(tag);
+    await expect(
+      verifyReleaseDir({ dir, tag, channel: "nightly", rootKeys: trust.rootKeys, now: NOW + 1000 }),
+    ).resolves.toEqual({
+      unsigned: false,
+      verified: ["latest-mac.yml", "release-manifest.json"],
+    });
+  });
+
   it("a feed altered after signing is refused by the chain, naming its state", async () => {
     const trust = devTrust();
     const dir = releaseDir();
@@ -382,23 +408,45 @@ describe("release-plan (D6, D7, D14)", () => {
     );
   });
 
-  it("a second nightly in one UTC day is skipped: today's tag name is already used (D7)", () => {
+  it("schedules stay daily; dispatches use the next unused revision on the same UTC day", () => {
+    for (const lastNightlyTag of ["nightly-20261016", "nightly-20261016.1"]) {
+      expect(planRelease({ ...base, event: "schedule", ref: "", lastNightlyTag })).toMatchObject({
+        skip: true,
+        reason: expect.stringMatching(/today's nightly exists/),
+      });
+    }
+    for (const [lastNightlyTag, suffix] of [
+      ["nightly-20261015.9", ""],
+      ["nightly-20261016", ".1"],
+      ["nightly-20261016.1", ".2"],
+      ["nightly-20261016.9", ".10"],
+    ] as const) {
+      expect(
+        planRelease({ ...base, event: "workflow_dispatch", ref: "", lastNightlyTag }),
+      ).toMatchObject({
+        skip: false,
+        tag: `nightly-20261016${suffix}`,
+        version: `0.1.0-nightly.20261016${suffix}`,
+      });
+    }
     expect(
       planRelease({
         ...base,
         event: "workflow_dispatch",
         ref: "",
         lastNightlyTag: "nightly-20261016",
-      }),
-    ).toMatchObject({ skip: true, reason: expect.stringMatching(/today's nightly exists/) });
+        mainGreen: false,
+      }).skip,
+    ).toBe(true);
     expect(
       planRelease({
         ...base,
         event: "workflow_dispatch",
         ref: "",
-        lastNightlyTag: "nightly-20261015",
-      }),
-    ).toMatchObject({ skip: false, tag: "nightly-20261016" });
+        lastNightlyTag: "nightly-20261016",
+        lastPublishedNightlyCommit: base.commit,
+      }).skip,
+    ).toBe(true);
   });
 
   it("a pushed beta tag is a prerelease; a stable tag is latest; both must be the committed version", () => {
@@ -930,6 +978,75 @@ describe("release.yml's shape — the permissions table, as a test", () => {
     // "unchanged since the last nightly" reads the newest PUBLISHED nightly, never the newest tag
     expect(jobs.get("plan")).toMatch(/--last-published-nightly-commit "\$LAST_PUBLISHED_COMMIT"/);
     expect(jobs.get("plan")).not.toMatch(/--last-nightly-commit/);
+  });
+
+  it.each(["flat", "named"])(
+    "stages the downloaded build payloads from a %s artifact layout",
+    (layout) => {
+      const dir = scratch();
+      const build = join(dir, "builds", ...(layout === "named" ? ["build-mac-arm64"] : []));
+      mkdirSync(build, { recursive: true });
+      mkdirSync(join(dir, "bin"));
+      // No earlier release: exercise the workflow's real staging shell without GitHub access.
+      writeFileSync(join(dir, "bin", "gh"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      writeFileSync(join(build, "VibeField.zip"), "installer bytes");
+      writeFileSync(join(build, "latest-mac.yml"), "unsigned feed");
+      writeFileSync(join(build, "hashes-mac-arm64.json"), "{}");
+      const step = stepsOf("sign").find(
+        (entry) => entry.name === "The previous releases' truth (D4, D5, D11)",
+      );
+      expect(step).toBeDefined();
+      const shell = step!.text.split("        run: |\n")[1]!.replace(/^ {10}/gm, "");
+      execFileSync("bash", ["-euc", shell], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+          CHANNEL: "nightly",
+          GITHUB_REPOSITORY: "test/release",
+        },
+      });
+      expect(readdirSync(join(dir, "release-out")).sort()).toEqual([
+        "VibeField.zip",
+        "latest-mac.yml",
+      ]);
+      expect(readFileSync(join(dir, "release-out", "VibeField.zip"), "utf8")).toBe(
+        "installer bytes",
+      );
+      expect(readFileSync(join(build, "hashes-mac-arm64.json"), "utf8")).toBe("{}");
+    },
+  );
+
+  it("chooses nightly revisions in numeric order, including .10 after .9", () => {
+    const dir = scratch();
+    const git = (...args: string[]) =>
+      execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git("init");
+    git(
+      "-c",
+      "user.name=Release test",
+      "-c",
+      "user.email=release@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "fixture",
+    );
+    for (const tag of [
+      "nightly-20261102.99",
+      "nightly-20261103",
+      "nightly-20261103.1",
+      "nightly-20261103.9",
+      "nightly-20261103.10",
+    ])
+      git("tag", tag);
+    const command = /last=\$\((git tag [^\n]+)\)/.exec(jobs.get("plan") ?? "")?.[1];
+    expect(command).toBeDefined();
+    expect(execFileSync("bash", ["-euc", command!], { cwd: dir, encoding: "utf8" }).trim()).toBe(
+      "nightly-20261103.10",
+    );
   });
 
   it("puts ONLY the build and sign jobs in release-signing", () => {

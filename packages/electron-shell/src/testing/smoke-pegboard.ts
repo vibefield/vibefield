@@ -2,7 +2,7 @@
 // line"; R14, R19, R21, P3c; ICE I21). Driven by the line's own create and the keyboard, over the first board, each row read
 // back off the DOM the chrome drew and off the desk's door (`window.__vfDesk`: the tray's anchor and the specimens as the
 // desk DREW them — ICE's own witness — the selection's anchor, the census, the pegboard's counters):
-//   OPEN      — the create pressed: the board rises behind the line (the tray's `open`, its lay keeping 88 at the foot —
+//   OPEN      — the create pressed: the board rises behind the line (the tray's `open`, its lay keeping 4 at the foot —
 //               the frame's `foot`), the create's plus turned 135° into ✕ ("Close  Esc"), the stage neither receded nor
 //               dimmed by the chrome (no backdrop, no recede), Objects the frame's open surface;
 //   BAR       — scope 5: a selection made first, the selection bar HIDDEN while the board is out (ICE's anchor answers no
@@ -39,8 +39,8 @@ export interface Rect {
 
 /** The canon's numbers (§8 "The pegboard"; §10). */
 export const BOARD_PLACE = {
-  /** the lay's foot (I21) */
-  foot: 88,
+  /** the narrow bottom border (desk-layer.ts DESK_TRAY; I21) */
+  foot: 4,
   /** the filters 12 in from the band's sides */
   inset: 12,
   /** the track 36 tall (segments 30 + padding 3), centred in the band's 48 */
@@ -420,7 +420,9 @@ export async function pegboardRows(d: BoardRowsDriver): Promise<string[]> {
   )
     problems.push(`OPEN: the plus was not turned 135° (${out.create?.turn})`);
   if (board.foot !== BOARD_PLACE.foot)
-    problems.push(`OPEN: the board's lay keeps ${board.foot} at its foot, not 88 (I21)`);
+    problems.push(
+      `OPEN: the board's lay keeps ${board.foot} at its foot, not ${BOARD_PLACE.foot} (I21)`,
+    );
   if (out.sheet !== "false" || out.backdrop)
     problems.push(
       `OPEN: the stage receded or dimmed behind the board (sheet ${out.sheet}, backdrop ${out.backdrop})`,

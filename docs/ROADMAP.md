@@ -25,7 +25,7 @@
   (LANDED "WP12 — the first signed nightly is published", "W11 — the signed apply passes on the Mac mini"). Each
   nightly takes James's two `release-signing` clicks. The app is `0.1.0` (`apps/desktop/package.json`) and stays
   `0.1.0` until the commit that cuts `v0.9.0-beta.1` (WP12-D6 as amended; James, 2026-10-28, the housekeeping page
-  (Q7)): tags `nightly-YYYYMMDD` (`scripts/release-plan.mjs`), version and title `0.1.0-nightly.YYYYMMDD`. 0.9.0 is
+  (Q7)): tags `nightly-YYYYMMDD[.N]` (`scripts/release-plan.mjs`), version and title `0.1.0-nightly.YYYYMMDD[.N]`. Manual dispatch can publish a numbered revision on the same UTC day (James, 2026-11-03); scheduled releases remain daily, and existing tags are never reused. 0.9.0 is
   tagged when RL6's four goals hold (the browser pane in a packaged build · History and Godview dogfooded daily ·
   prod-shape deps · the release rails; `draft/docket/release-docket.html`), as betas `v0.9.0-beta.N`, then stable
   after a soak; 1.0.0 at P0's exits (AR-6, the signed beta, the two-account witness).
@@ -553,6 +553,8 @@
   item 157 (the kit's lane helper returns once the client has READ both legs' acknowledgements, so a re-tap takes the
   fast path its row tests; run 3's stall is held until its lines are read, and the loopback test doors bind 127.0.0.1
   with no reuse; test-only: `c91484e93` as the merge `c737af492`, run 105; LANDED "Item 157") ·
+  item 166 (the app workspace's Package.resolved moves to the kit's ghosttea 0.13.7 and truffle 0.7.23, the Swift
+  file every EL8 since 2026-09-16 left at 0.10.1: `62dfa4ba2` as M111, a fast-forward, run 111; LANDED "Item 166") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).

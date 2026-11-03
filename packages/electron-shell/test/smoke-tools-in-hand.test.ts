@@ -123,17 +123,15 @@ describe("the way back (§8: back over it 200 ms after it lands)", () => {
   });
 });
 
-describe("the four specimens (§8's own list)", () => {
-  it("are the notebook, the whiteboard, the calendar and the clock, each tool in its declared order with its runs", () => {
+describe("the three active specimens (§8's own list)", () => {
+  it("are the notebook, the whiteboard and the clock, each tool in its declared order with its runs", () => {
     expect(HAND_SPECIMENS.map((s) => [s.name, s.type])).toEqual([
       ["notebook", "desk.notebook"],
       ["whiteboard", "desk.board"],
-      ["calendar", "desk.calendar"],
       ["clock", "vibefield.example.desk-clock"],
     ]);
     expect(HAND_SPECIMENS[0]?.readout?.test("Page 1")).toBe(true);
-    expect(HAND_SPECIMENS[2]?.readout?.test("September")).toBe(true);
-    expect(HAND_SPECIMENS[3]?.readout?.test("10:08:42")).toBe(true);
+    expect(HAND_SPECIMENS[2]?.readout?.test("10:08:42")).toBe(true);
     expect(HAND_SPECIMENS[1]?.readout).toBeNull();
   });
 });
