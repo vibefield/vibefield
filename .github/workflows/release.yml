@@ -220,6 +220,20 @@ jobs:
         env:
           VERSION: ${{ needs.plan.outputs.version }}
         run: node scripts/release-plan.mjs stamp --version "$VERSION"
+      # GitHub's macOS network can drop stapler's HTTP/3 ticket lookup with NSURLError -1005.
+      # Keep Apple's signing/notarization checks; force HTTPS over TCP on this ephemeral runner only.
+      # https://github.com/actions/runner-images/issues/14924
+      - name: Use TCP for Apple notarization tickets
+        if: runner.os == 'macOS' && vars.VIBEFIELD_MAC_SIGNING == 'true'
+        run: |
+          set -euo pipefail
+          # Do not overwrite an active firewall policy if the hosted runner's defaults change.
+          if ! sudo pfctl -s info | grep '^Status: Disabled' >/dev/null; then
+            echo "::error::Refusing to replace an active or unrecognized packet-filter ruleset."
+            exit 1
+          fi
+          printf '%s\n' 'block return out quick proto udp from any to any port 443' | sudo pfctl -f -
+          sudo pfctl -E
       - name: Package, signed (J4 — the Apple credentials exist)
         if: vars.VIBEFIELD_MAC_SIGNING == 'true'
         working-directory: apps/desktop
