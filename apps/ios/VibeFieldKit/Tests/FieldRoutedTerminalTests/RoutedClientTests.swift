@@ -138,7 +138,7 @@ import Testing
     #expect(framesHello?["receiverCapacities"]?["perActivationCreditBytes"]?.intValue == 524_288)
     // Only capabilities this client can actually honour.
     let advertised = controlHello?["capabilities"]?.arrayValue?.compactMap(\.stringValue)
-    #expect(advertised == ["resume", "session-events", "geometry-events", "input-refusals"])
+    #expect(advertised == ["resume", "session-events", "geometry-events", "input-refusals", "selection-text"])
     client.close()
   }
 

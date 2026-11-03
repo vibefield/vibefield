@@ -79,6 +79,135 @@ export async function measureTerminalPaneRegression(options: {
       "initial empty shell exited",
     );
     results.initialEmptyProcessExitMs = performance.now() - firstReplacingAt;
+    // Exercise the shipping selection formatter and keyboard handlers. The
+    // clipboard endpoint is private to this lab window, so the person's OS
+    // clipboard is neither read nor overwritten.
+    await read(`Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async text => { window.__vfQaCopy = text; }, readText: async () => '' }
+    })`);
+    const key = (name: string, code: string) =>
+      read(`(() => {
+      const input = document.querySelector('.ghostty-pane.is-active .terminal-input');
+      input.focus();
+      input.dispatchEvent(new KeyboardEvent('keydown', {
+        key: ${JSON.stringify(name)}, code: ${JSON.stringify(code)}, metaKey: true,
+        bubbles: true, cancelable: true
+      }));
+    })()`);
+    const copyAll = async (): Promise<string | null> => {
+      await read("window.__vfQaCopy = null");
+      await key("a", "KeyA");
+      await key("c", "KeyC");
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        const value = await read<string | null>("window.__vfQaCopy");
+        if (value !== null) return value;
+        await sleep(25);
+      }
+      return null;
+    };
+    const scrollState = () =>
+      read<{ now: number; max: number } | null>(`(() => {
+      const bar = document.querySelector('.ghostty-pane.is-active [role="scrollbar"]');
+      return bar ? { now: Number(bar.getAttribute('aria-valuenow')), max: Number(bar.getAttribute('aria-valuemax')) } : null;
+    })()`);
+    const behaviorSession = (await panes())[0]!.session;
+    const unicodeWitness = "G14-GRID-中-é-👩‍💻-🛙X";
+    const graphicsWitness = "G14-GRAPHICS-👩‍💻ab▀X";
+    try {
+      await pasteTerminalLine(
+        win,
+        behaviorSession,
+        `i=1; while [ "$i" -le 160 ]; do printf 'G14-ROW-%03d\\n' "$i"; i=$((i+1)); done; printf '%s\\n' '${unicodeWitness}' '${graphicsWitness}'`,
+      );
+      await until(
+        async () => ((await scrollState())?.max ?? 0) > 100,
+        "generated scrollback available",
+      );
+      const copied = await copyAll();
+      check(copied !== null, "routed copy did not produce clipboard text");
+      results.selectionCopy = { status: "passed" };
+      if (copied !== null)
+        check(
+          copied.includes("G14-ROW-001") &&
+            copied.includes("G14-ROW-160") &&
+            copied.includes(unicodeWitness) &&
+            copied.includes(graphicsWitness),
+          "copy must preserve scrollback and Unicode text",
+        );
+      await key("Home", "Home");
+      await until(async () => (await scrollState())?.now === 0, "scroll to history start");
+      writeFileSync(join(out, "history-top.png"), (await win.webContents.capturePage()).toPNG());
+      await key("End", "End");
+      await until(async () => {
+        const state = await scrollState();
+        return state !== null && state.now === state.max;
+      }, "scroll to live bottom");
+
+      await pasteTerminalLine(
+        win,
+        behaviorSession,
+        `sh -c 'printf "\\033[?1049h\\033[2J\\033[HG14-ALT-SCREEN"; IFS= read -r qa_reply; printf "\\033[?1049l"'`,
+      );
+      await until(
+        async () => (await scrollState()) === null,
+        "alternate screen without main history",
+      );
+      if (copied !== null) {
+        const alternate = await copyAll();
+        check(
+          alternate?.includes("G14-ALT-SCREEN") && !alternate.includes("G14-ROW-001"),
+          "alternate selection must not contain the main buffer",
+        );
+      }
+      await sleep(150);
+      writeFileSync(
+        join(out, "alternate-screen.png"),
+        (await win.webContents.capturePage()).toPNG(),
+      );
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+      await until(async () => (await scrollState()) !== null, "main history restored");
+      if (copied !== null)
+        check(
+          (await copyAll())?.includes(unicodeWitness),
+          "alternate-screen exit must restore main text",
+        );
+
+      await pasteTerminalLine(win, behaviorSession, "sleep 1; printf 'G14-HIDDEN-OUTPUT\\n'");
+      await read(`document.querySelector('[aria-label="Minimize the terminals"]').click()`);
+      await until(
+        () => read<boolean>(`Boolean(document.querySelector('[data-godview-deck="away"]'))`),
+        "deck hidden",
+      );
+      await sleep(1_500);
+      check(
+        (await options.floor()).some((row) => row.sessionId === behaviorSession),
+        "hidden terminal process was lost",
+      );
+      await read("window.__vfGodviewDeck.up()");
+      await inputReady();
+      if (copied !== null)
+        await until(
+          async () => (await copyAll())?.includes("G14-HIDDEN-OUTPUT") === true,
+          "hidden output recovered on restore",
+        );
+      await sleep(750);
+      results.behaviors = {
+        scrollTopAndBottom: true,
+        alternateScreenRoundTrip: true,
+        hiddenProcessRetained: true,
+        hiddenOutputText:
+          copied !== null ? "copy-verified" : "requires terminal-behaviors.png review",
+      };
+      writeFileSync(
+        join(out, "terminal-behaviors.png"),
+        (await win.webContents.capturePage()).toPNG(),
+      );
+    } finally {
+      await read("delete navigator.clipboard; delete window.__vfQaCopy");
+    }
     // The geometry/switching witnesses below need two retained sessions.
     await pasteTerminalLine(win, (await panes())[0]!.session, "printf 'base retention witness\\n'");
     await sleep(150);

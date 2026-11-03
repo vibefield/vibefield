@@ -55,7 +55,7 @@ import Testing
     #expect(capacities?["perActivationCreditBytes"]?.intValue == 524_288)
     #expect(
       await door.advertisedCapabilities == [
-        "resume", "session-events", "geometry-events", "input-refusals",
+        "resume", "session-events", "geometry-events", "input-refusals", "selection-text",
       ])
 
     try await settle("control attach") { await door.controlAttach != nil }

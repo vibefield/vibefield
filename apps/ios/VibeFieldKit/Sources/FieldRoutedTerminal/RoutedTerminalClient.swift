@@ -347,6 +347,15 @@ public final class RoutedTerminalClient {
   private var control: RoutedLeg?
   private var frames: RoutedLeg?
   private var controlAccepted: RoutedConnectionAccepted?
+  private struct SelectionRead {
+    let sessionId: String
+    let activationId: String
+    let leaseEpoch: Int64
+    let continuation: CheckedContinuation<String, any Error>
+    let timeout: Task<Void, Never>
+  }
+  private var selectionReads: [String: SelectionRead] = [:]
+  var selectionDeadline: Duration = .seconds(5)
   private var framesAccepted: RoutedConnectionAccepted?
   private var ticket: RoutedTerminalTicket?
   private var grants: [String: RoutedGrant] = [:]
@@ -570,6 +579,7 @@ public final class RoutedTerminalClient {
   /// passenger's.
   public func forget(sessionId: String) {
     guard sessions[sessionId] != nil else { return }
+    cancelSelections(for: sessionId)
     declare(demand: .none, for: sessionId)
     renewals[sessionId]?.cancel()
     renewals[sessionId] = nil
@@ -584,6 +594,75 @@ public final class RoutedTerminalClient {
   }
 
   // MARK: The control verbs
+
+  /// Read exact host text over the control leg. Requests are never replayed
+  /// after reconnect, and a late response cannot answer another activation.
+  public func selectionText(_ selection: RoutedSelection, for sessionId: String) async throws -> String {
+    guard controlAccepted?.negotiated(RoutedTerminalContract.selectionTextCapability) == true else {
+      throw RoutedSelectionError.unsupported
+    }
+    guard let session = sessions[sessionId], session.control == .attached,
+      !session.activationEnded, session.rights.contains(.read),
+      let grant = grants[sessionId], grant.expiresAt > Self.nowMs()
+    else { throw RoutedSelectionError.unavailable }
+    guard selectionReads.count < 16 else { throw RoutedSelectionError.busy }
+    let requestId = UUID().uuidString.lowercased()
+    let epoch = leaseEpoch(for: sessionId)
+    let body: [String: JSONValue] = [
+      "requestId": .string(requestId), "sessionId": .string(sessionId),
+      "activationId": .string(session.activationId), "leaseEpoch": .int(epoch),
+      "startColumn": .int(Int64(selection.startColumn)), "startRow": .int(Int64(selection.startRow)),
+      "endColumn": .int(Int64(selection.endColumn)), "endRow": .int(Int64(selection.endRow)),
+      "selectAll": .bool(selection.selectAll),
+    ]
+    guard try RoutedWire.encode(.selectionTextRequest, body).utf8.count <= limits.maxControlMessageBytes else {
+      throw RoutedSelectionError.tooLarge
+    }
+    return try await withTaskCancellationHandler {
+      try Task.checkCancellation()
+      return try await withCheckedThrowingContinuation { continuation in
+        let timeout = Task { [weak self, selectionDeadline] in
+          do { try await Task.sleep(for: selectionDeadline) } catch { return }
+          self?.finishSelection(requestId, .failure(RoutedSelectionError.timedOut))
+        }
+        selectionReads[requestId] = SelectionRead(
+          sessionId: sessionId, activationId: session.activationId, leaseEpoch: epoch,
+          continuation: continuation, timeout: timeout)
+        control?.send(.selectionTextRequest, body)
+      }
+    } onCancel: {
+      Task { @MainActor [weak self] in
+        self?.finishSelection(requestId, .failure(CancellationError()))
+      }
+    }
+  }
+
+  private func finishSelection(_ requestId: String, _ result: Result<String, any Error>) {
+    guard let pending = selectionReads.removeValue(forKey: requestId) else { return }
+    pending.timeout.cancel()
+    pending.continuation.resume(with: result)
+  }
+
+  private func cancelSelections(for sessionId: String? = nil) {
+    for (requestId, pending) in selectionReads where sessionId == nil || pending.sessionId == sessionId {
+      finishSelection(requestId, .failure(CancellationError()))
+    }
+  }
+
+  private func receiveSelection(_ body: JSONValue) {
+    guard controlAccepted?.negotiated(RoutedTerminalContract.selectionTextCapability) == true,
+      let result = try? RoutedSelectionResult(json: body)
+    else { fail("invalid selection response"); return }
+    // A timeout or cancelled request may already be gone; never reuse its id.
+    guard let pending = selectionReads[result.requestId] else { return }
+    guard result.sessionId == pending.sessionId, result.activationId == pending.activationId,
+      result.leaseEpoch == pending.leaseEpoch
+    else { fail("selection response names a different activation"); return }
+    guard let session = sessions[result.sessionId], !session.activationEnded,
+      session.activationId == pending.activationId, session.rights.contains(.read)
+    else { finishSelection(result.requestId, .failure(CancellationError())); return }
+    finishSelection(result.requestId, result.result.mapError { $0 as any Error })
+  }
 
   /// Typed text. Nil when sent (or held at the input gate, which says why
   /// elsewhere); a refusal, with its numbers, when it is too large to send.
@@ -689,6 +768,7 @@ public final class RoutedTerminalClient {
   /// of whether anyone is watching.
   public func declare(demand: RoutedDemand, for sessionId: String) {
     guard var session = sessions[sessionId] else { return }
+    if demand == .none { cancelSelections(for: sessionId) }
     session.demand = demand
     session.demandSequence += 1
     sessions[sessionId] = session
@@ -1113,6 +1193,8 @@ public final class RoutedTerminalClient {
 
   private func handle(_ type: RoutedMessageType, _ body: JSONValue) {
     switch type {
+    case .selectionTextResult:
+      receiveSelection(body)
     case .controlLegAttached:
       guard let attached = try? RoutedControlLegAttached(json: body) else { return }
       guard var session = sessions[attached.sessionId],
@@ -2096,6 +2178,7 @@ public final class RoutedTerminalClient {
   /// refuses — a face saying "connected" over a socket that is not there.
   private func endActivation(_ session: inout RoutedSessionState, reason: String) {
     guard !session.activationEnded else { return }
+    cancelSelections(for: session.sessionId)
     session.activationEnded = true
     // Law (2)/(3): the account goes DRAINING — already-admitted bytes are never
     // pretended away — and stays reported until the cell has seen them.
@@ -2126,6 +2209,7 @@ public final class RoutedTerminalClient {
   }
 
   private func teardownLegs() {
+    cancelSelections()
     // Every activation rode these legs, so none outlives them. A failure that
     // tore the legs down used to leave its sessions reading attached, and the
     // card's RETRY took that for a live lane — "back on its lane, no mint, no

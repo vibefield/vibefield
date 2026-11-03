@@ -2198,6 +2198,21 @@ public struct HomeScreen: View {
           UIPasteboard.general.string = text
           noteCopied(bytes: text.utf8.count)
         },
+        onSelectionCommit: { selection in
+          Task {
+            do {
+              let text = try await attachment.selectionText(selection)
+              guard self.attachment === attachment, !text.isEmpty else { return }
+              UIPasteboard.general.string = text
+              noteCopied(bytes: text.utf8.count)
+            } catch is CancellationError {
+              // The card or activation changed while its copy was in flight.
+            } catch {
+              guard self.attachment === attachment else { return }
+              noteCopyResult("copy unavailable — \(error.localizedDescription)")
+            }
+          }
+        },
         onRenderFailure: { renderFailure = $0 },
         // The tap raises the card's own input, never a bare keyboard — and
         // only where this device may type (K-D2): a view-only terminal's tap
@@ -2934,10 +2949,14 @@ public struct HomeScreen: View {
   /// expires, because a stale "copied" line would sit on top of a real status
   /// the terminal wanted to say.
   private func noteCopied(bytes: Int) {
-    copiedNote = "copied \(bytes) bytes"
+    noteCopyResult("copied \(bytes) bytes")
+  }
+
+  private func noteCopyResult(_ text: String) {
+    copiedNote = text
     Task {
       try? await Task.sleep(for: .seconds(2))
-      copiedNote = nil
+      if copiedNote == text { copiedNote = nil }
     }
   }
 

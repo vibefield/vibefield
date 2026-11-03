@@ -20,8 +20,8 @@ use super::wire::{
     ControlLegAttached, DeclareDemand, DemandAccepted, FramesAttachOutcome, FramesLegAttached,
     GeometryCommitted, GeometryHolder, GeometryHolderFace, GeometryRefused, GeometryState,
     GeometryStateHolder, LeaseDimension, ReceiverCapacities, ReleaseGeometry, SceneApplied,
-    SceneContentStamp, SceneEpoch, SendInput, SourceDemandMode, TransferGeometry, TransportCredit,
-    TrfIdentity, JSON_MAX_SAFE_INTEGER,
+    SceneContentStamp, SceneEpoch, SelectionTextRequest, SendInput, SourceDemandMode,
+    TransferGeometry, TransportCredit, TrfIdentity, JSON_MAX_SAFE_INTEGER,
 };
 use crate::registries::terminal_pipeline as tp;
 use std::collections::{HashMap, VecDeque};
@@ -48,6 +48,8 @@ use tokio::sync::Semaphore;
 #[derive(Debug)]
 pub enum Outbound {
     Text(String),
+    /// At most two selection responses wait on a slow control writer.
+    SelectionText(String, tokio::sync::OwnedSemaphorePermit),
     Binary(Vec<u8>, Option<Arc<str>>),
     Bulk(Vec<u8>, Arc<str>),
     Close(u16, String),
@@ -85,6 +87,7 @@ pub struct LegRef {
     pub out: UnboundedSender<Outbound>,
     pub bulk_credit: Option<Arc<Semaphore>>,
     pub geometry_events: bool,
+    pub selection_credit: Option<Arc<Semaphore>>,
 }
 
 impl LegRef {
@@ -1354,6 +1357,29 @@ impl ActivationTable {
             .map(|text| Effect::Send(leg.clone(), text))
     }
 
+    /// Selection is authorized by READ, independent of the input lease. A
+    /// lagging/read-only viewer can copy; a foreign, expired or revoked one
+    /// cannot. The door holds the registry guard through the engine read so
+    /// revocation and selection have a single ordering.
+    pub fn selection_view<'a>(
+        &'a self,
+        leg: &LegRef,
+        msg: &SelectionTextRequest,
+        now_ms: u64,
+    ) -> Option<&'a str> {
+        let a = self.by_id.get(&msg.activation_id)?;
+        if a.control.connection_id != leg.connection_id
+            || a.session_id != msg.session_id
+            || a.lease_epoch != msg.lease_epoch
+            || !a.has_right(AttachRight::Read)
+            || !a.grant_live(now_ms)
+            || matches!(a.presentation, Presentation::Revoked(_))
+        {
+            return None;
+        }
+        a.view.as_ref().map(|(view, _)| view.as_str())
+    }
+
     /// `SendInput` (§5.4, TP-S3-input) — the cell-side gate for one input op.
     /// PURE read: it resolves the caller activation, applies every cell-side
     /// fence, and hands back the coordinates the door feeds ghosttea (whose own
@@ -2257,6 +2283,7 @@ mod tests {
                 out: tx,
                 bulk_credit: None,
                 geometry_events: false,
+                selection_credit: None,
             },
             rx,
         )
@@ -4782,6 +4809,72 @@ mod tests {
             "the leg d1 left hears no more of s1"
         );
         assert_eq!(seat_states(&mut d_newer_rx), vec![empty_seat(2, (46, 30))]);
+    }
+
+    #[test]
+    fn selection_read_requires_owned_live_read_grant_but_not_input() {
+        let mut table = ActivationTable::new("cb");
+        let (control, _rx) = leg(1);
+        let (foreign, _other_rx) = leg(2);
+        perform(table.attach_control(AttachControlInput {
+            now_ms: 2_000,
+            set: &set(),
+            leg: &control,
+            msg: control_msg("copy-a", None, true),
+            claims: claims("s1", 1, &[AttachRight::Read]),
+            session_known: true,
+        }));
+        table.view_attached("copy-a", "engine-owned-view", 7);
+        let request = SelectionTextRequest {
+            request_id: "request-1".into(),
+            session_id: "s1".into(),
+            activation_id: "copy-a".into(),
+            lease_epoch: 0,
+            start_column: 0,
+            start_row: 0,
+            end_column: 79,
+            end_row: 159,
+            select_all: true,
+        };
+        assert_eq!(
+            table.selection_view(&control, &request, 3_000),
+            Some("engine-owned-view")
+        );
+        assert!(table.selection_view(&foreign, &request, 3_000).is_none());
+        for changed in [
+            SelectionTextRequest {
+                session_id: "other-session".into(),
+                ..request.clone()
+            },
+            SelectionTextRequest {
+                activation_id: "other-activation".into(),
+                ..request.clone()
+            },
+            SelectionTextRequest {
+                lease_epoch: 99,
+                ..request.clone()
+            },
+        ] {
+            assert!(table.selection_view(&control, &changed, 3_000).is_none());
+        }
+        assert!(table
+            .selection_view(
+                &control,
+                &request,
+                table.by_id["copy-a"].grant_expires_at_ms
+            )
+            .is_none());
+        table.by_id.get_mut("copy-a").unwrap().rights.clear();
+        assert!(table.selection_view(&control, &request, 3_000).is_none());
+        table
+            .by_id
+            .get_mut("copy-a")
+            .unwrap()
+            .rights
+            .push(AttachRight::Read);
+        table.by_id.get_mut("copy-a").unwrap().presentation =
+            Presentation::Revoked("test-revocation");
+        assert!(table.selection_view(&control, &request, 3_000).is_none());
     }
 
     /// TP-S3-input — every cell-side gate of `send_input`, walked in sequence:

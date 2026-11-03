@@ -231,6 +231,10 @@ final class RoutedLeg {
       callbacks.onBinary(data)
       return false
     case .text(let text):
+      if let accepted, text.utf8.count > accepted.limits.maxControlMessageBytes {
+        fail(.protocolViolation("a control message exceeded its negotiated limit"))
+        return true
+      }
       let allowed = RoutedLegVocabulary.inbound(channel)
       let message: RoutedTaggedMessage
       do {

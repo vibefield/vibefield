@@ -43,6 +43,8 @@ public enum RoutedMessageType: String, Sendable, Equatable, CaseIterable {
   case releaseGeometry = "ReleaseGeometry"
   case transferGeometry = "TransferGeometry"
   case sendInput = "SendInput"
+  case selectionTextRequest = "SelectionTextRequest"
+  case selectionTextResult = "SelectionTextResult"
   case sessionEvent = "SessionEvent"
   case inputRefused = "InputRefused"
   case geometryCommitted = "GeometryCommitted"
@@ -71,7 +73,7 @@ public enum RoutedLegVocabulary {
       [
         .connectionAccepted, .connectionRefused, .legHeartbeatAck, .controlLegAttached,
         .attachRefused, .demandAccepted, .cellActivationStatus, .geometryCommitted,
-        .geometryRefused, .sessionEvent, .geometryState, .inputRefused,
+        .geometryRefused, .sessionEvent, .geometryState, .inputRefused, .selectionTextResult,
       ]
     case .frames:
       [.connectionAccepted, .connectionRefused, .legHeartbeatAck, .framesLegAttached, .attachRefused]
@@ -83,7 +85,7 @@ public enum RoutedLegVocabulary {
     case .control:
       [
         .connectionHello, .legHeartbeat, .attachControlLeg, .declareDemand, .claimGeometry,
-        .releaseGeometry, .transferGeometry, .sendInput,
+        .releaseGeometry, .transferGeometry, .sendInput, .selectionTextRequest,
       ]
     case .frames:
       [.connectionHello, .legHeartbeat, .attachFramesLeg, .transportCredit, .sceneApplied, .calibrationPing]

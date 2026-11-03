@@ -50,7 +50,7 @@ import Testing
     #expect(
       RoutedLegVocabulary.outbound(.control) == [
         .connectionHello, .legHeartbeat, .attachControlLeg, .declareDemand, .claimGeometry,
-        .releaseGeometry, .transferGeometry, .sendInput,
+        .releaseGeometry, .transferGeometry, .sendInput, .selectionTextRequest,
       ])
     #expect(
       RoutedLegVocabulary.outbound(.frames) == [
@@ -61,7 +61,7 @@ import Testing
       RoutedLegVocabulary.inbound(.control) == [
         .connectionAccepted, .connectionRefused, .legHeartbeatAck, .controlLegAttached,
         .attachRefused, .demandAccepted, .cellActivationStatus, .geometryCommitted,
-        .geometryRefused, .sessionEvent, .geometryState, .inputRefused,
+        .geometryRefused, .sessionEvent, .geometryState, .inputRefused, .selectionTextResult,
       ])
     #expect(
       RoutedLegVocabulary.inbound(.frames) == [

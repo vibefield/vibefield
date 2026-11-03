@@ -77,16 +77,19 @@ public enum RoutedTerminalContract {
   ///   cell answers a `SendInput` it turned away with `InputRefused` only when
   ///   asked. This client reads it and the card says the input went nowhere,
   ///   so it advertises it.
+  /// - `selection-text` — copy exact host text with read authority, bounded
+  ///   replies and cancellation when its activation ends.
   /// - `snapshot-demand` — NOT advertised: the phone's demand is `none` or
   ///   `live`, the core profile's own pair.
   /// - `profiling-envelope` — NOT advertised: nothing on the phone consumes the
   ///   timestamps yet, and asking for bytes nobody reads is a cost, not a hedge.
-  public static let capabilities = ["resume", "session-events", "geometry-events", "input-refusals"]
+  public static let capabilities = ["resume", "session-events", "geometry-events", "input-refusals", "selection-text"]
 
   public static let resumeCapability = "resume"
   public static let sessionEventsCapability = "session-events"
   public static let geometryEventsCapability = "geometry-events"
   public static let inputRefusalsCapability = "input-refusals"
+  public static let selectionTextCapability = "selection-text"
 
   /// The lease's and the exit's WORDS this client branches on (audit C5, C8;
   /// the fixer's review, finding 8). Their lists are the contracts':

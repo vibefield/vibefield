@@ -39,6 +39,7 @@ export const ROUTED_CLIENT_CAPABILITIES: readonly string[] = [
   "resume",
   "session-events",
   "geometry-events",
+  "selection-text",
 ];
 
 /** The host verbs a control leg carries to this adapter — the contract's own

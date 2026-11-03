@@ -276,6 +276,8 @@ import {
   ProductSessionRosterItem,
   ProtocolLimits,
   SceneApplied,
+  SelectionTextRequest,
+  SelectionTextResult,
   SendInput,
   SessionAttachGrant,
   SessionEvent,
@@ -794,6 +796,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "tp-send-input": SendInput,
   // audit C5's answer half — a SendInput the cell refused at its gate, told in words (`input-refusals`).
   "tp-input-refused": InputRefused,
+  "tp-selection-text-request": SelectionTextRequest,
+  "tp-selection-text-result": SelectionTextResult,
   "tp-session-event": SessionEvent,
   "tp-envelope-header": PresentationEnvelopeHeader,
   "tp-attach-refused": AttachRefused,

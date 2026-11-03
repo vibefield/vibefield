@@ -60,9 +60,10 @@ use super::wire::{
     AttachControlLeg, AttachFramesLeg, AttachRefused, CalibrationPing, ClaimGeometry,
     ConnectionAccepted, ConnectionHello, ConnectionRefused, DeclareDemand, InputOp, InputRefused,
     LegHeartbeat, LegHeartbeatAck, ProtocolLimits, ReceiverCapacities, ReleaseGeometry,
-    SceneApplied, SendInput, SessionEvent, SessionEventKind, Tagged, TransferGeometry,
-    TransportCredit, TrfIdentity, GEOMETRY_EVENTS_CAPABILITY, INPUT_REFUSALS_CAPABILITY,
-    SESSION_EVENTS_CAPABILITY,
+    SceneApplied, SelectionTextRequest, SelectionTextResult, SendInput, SessionEvent,
+    SessionEventKind, Tagged, TransferGeometry, TransportCredit, TrfIdentity,
+    GEOMETRY_EVENTS_CAPABILITY, INPUT_REFUSALS_CAPABILITY, JSON_MAX_SAFE_INTEGER,
+    SELECTION_TEXT_CAPABILITY, SESSION_EVENTS_CAPABILITY,
 };
 use crate::registries::terminal_pipeline as tp;
 use crate::registries::terminal_pipeline_close_codes as close;
@@ -1213,6 +1214,11 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         out: out_tx.clone(),
         bulk_credit,
         geometry_events,
+        selection_credit: (channel == Channel::Control
+            && negotiated_capabilities
+                .iter()
+                .any(|c| c == SELECTION_TEXT_CAPABILITY))
+        .then(|| Arc::new(Semaphore::new(2))),
     };
     let set_identity = SetIdentity {
         client_id: claims.client_id.clone(),
@@ -1342,6 +1348,11 @@ async fn writer_task(
             }
         }
         match lanes.pick() {
+            Pick::Urgent(Outbound::SelectionText(t, _permit)) => {
+                if sink.send(Message::Text(t.into())).await.is_err() {
+                    break;
+                }
+            }
             Pick::Urgent(Outbound::Text(t)) => {
                 if sink.send(Message::Text(t.into())).await.is_err() {
                     break;
@@ -1597,6 +1608,12 @@ fn handle_text(
                 reg.activations.release_geometry(leg, msg)
             });
             perform(state, effects);
+            Ok(false)
+        }
+        (Channel::Control, "SelectionTextRequest") => {
+            let msg: SelectionTextRequest =
+                serde_json::from_str(text).map_err(|e| format!("selection-text:{e}"))?;
+            handle_selection_text(state, leg, &msg)?;
             Ok(false)
         }
         (Channel::Control, "SendInput") => {
@@ -1918,6 +1935,76 @@ fn perform_geometry_op(
             Err(_) => GeometryOutcome::EngineRefused,
         },
     }
+}
+
+/// Read on the authenticated leg, with no input/geometry side effects. The
+/// response fits the negotiated control limit or returns TOO_LARGE, never a
+/// truncated copy. Reserving one of two reply slots before formatting bounds
+/// memory queued behind a slow writer. An exhausted slot times out client-side.
+fn handle_selection_text(
+    state: &Arc<DoorState>,
+    leg: &LegRef,
+    msg: &SelectionTextRequest,
+) -> Result<(), String> {
+    let credit = leg
+        .selection_credit
+        .as_ref()
+        .ok_or("unnegotiated-selection-text")?;
+    if msg.request_id.is_empty()
+        || msg.request_id.len() > 64
+        || msg.session_id.is_empty()
+        || msg.session_id.len() > 256
+        || msg.activation_id.is_empty()
+        || msg.activation_id.len() > 256
+        || msg.lease_epoch > JSON_MAX_SAFE_INTEGER
+    {
+        return Err("invalid-selection-identity".into());
+    }
+    let Ok(permit) = credit.clone().try_acquire_owned() else {
+        return Ok(());
+    };
+    let text = {
+        // Registry -> engine is the existing authority lock order. The engine
+        // is a leaf; keeping this guard prevents a read after revocation.
+        let reg = state.registry.lock().unwrap();
+        reg.activations
+            .selection_view(leg, msg, unix_ms())
+            .and_then(|view| {
+                state
+                    .config
+                    .source
+                    .session(&msg.session_id)?
+                    .selection_text(
+                        view,
+                        msg.start_column,
+                        msg.start_row,
+                        msg.end_column,
+                        msg.end_row,
+                        msg.select_all,
+                    )
+                    .ok()
+            })
+    };
+    let mut response = SelectionTextResult {
+        request_id: &msg.request_id,
+        session_id: &msg.session_id,
+        activation_id: &msg.activation_id,
+        lease_epoch: msg.lease_epoch,
+        error: text.is_none().then_some("UNAVAILABLE"),
+        text,
+    };
+    let mut encoded = tagged("SelectionTextResult", &response);
+    if encoded.len() > state.config.protocol_limits.max_control_message_bytes as usize {
+        response.text = None;
+        response.error = Some("TOO_LARGE");
+        encoded = tagged("SelectionTextResult", &response);
+    }
+    // Even the refusal's identity can exceed an unusually small configured
+    // limit. Never put an oversized response on the control stream.
+    if encoded.len() <= state.config.protocol_limits.max_control_message_bytes as usize {
+        let _ = leg.out.send(Outbound::SelectionText(encoded, permit));
+    }
+    Ok(())
 }
 
 /// A `SendInput` the table ruled on. On `Proceed` the door runs the engine input

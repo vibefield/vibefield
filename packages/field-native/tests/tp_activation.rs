@@ -2671,3 +2671,106 @@ async fn a_lagged_bus_reconciles_the_lease_against_the_source() {
     let _ = session.terminate(TerminationSource::User);
     h.door.shutdown().await;
 }
+
+// Selection copies use the same authenticated session authority as the live
+// terminal, but require only read rights. No second PTY or text replica.
+#[tokio::test]
+async fn selection_copy_reads_unicode_and_history_and_refuses_foreign_or_oversized_requests() {
+    let h = harness_cfg(|config| {
+        // A small negotiated limit makes the refusal practical to exercise.
+        config.protocol_limits.max_control_message_bytes = 8_192;
+    })
+    .await;
+    let session = spawn_session(&h.source);
+    let sid = session.id();
+    let (mut control, negotiated) =
+        connect_control(&h, "copy-set", json!(["selection-text"])).await;
+    assert_eq!(negotiated, json!(["selection-text"]));
+    let grant = h
+        .minter
+        .transport(TransportSpec::basic("copy-set", 1, "copy-frames"));
+    let mut frames = dial(&h.door.frames_url()).await;
+    send_json(
+        &mut frames,
+        serde_json::from_str(&hello("frames", &grant, Some(caps(8_388_608, 2_097_152)))).unwrap(),
+    )
+    .await;
+    expect_text(next_reply(&mut frames).await, "ConnectionAccepted");
+    attach_both(
+        &h,
+        &mut control,
+        &mut frames,
+        &sid,
+        "copy-a",
+        &["read"],
+        true,
+    )
+    .await;
+    // The clean /bin/sh fixture has the C locale: send an ASCII script so
+    // its line editor cannot reinterpret UTF-8 input before printf emits it.
+    let unicode = "COPY-中-é-👩‍💻-🛙X";
+    let escaped = unicode
+        .as_bytes()
+        .iter()
+        .map(|byte| format!("\\{byte:03o}"))
+        .collect::<String>();
+    type_into(&session, &format!("printf '{escaped}\\n'; i=1; while [ $i -le 160 ]; do printf 'COPY-ROW-%03d\\n' $i; i=$((i+1)); done\n"));
+    let request = json!({"type":"SelectionTextRequest","requestId":"copy-1","sessionId":sid,
+        "activationId":"copy-a","leaseEpoch":0,"startColumn":0,"startRow":0,
+        "endColumn":79,"endRow":159,"selectAll":true});
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        send_json(&mut control, request.clone()).await;
+        let reply = next_text_of(&mut control, "SelectionTextResult").await;
+        if let Some(text) = reply["text"].as_str() {
+            if text.contains("COPY-ROW-160") {
+                assert!(text.contains("COPY-ROW-001"));
+                assert!(text.lines().any(|line| line == unicode), "the copy must contain the actual Unicode output, not the echoed command: {text}");
+                break;
+            }
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "PTY history did not become copyable: {reply}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    for (field, value) in [
+        ("sessionId", json!("foreign")),
+        ("activationId", json!("foreign")),
+        ("leaseEpoch", json!(99)),
+    ] {
+        let mut invalid = request.clone();
+        invalid[field] = value;
+        send_json(&mut control, invalid).await;
+        let reply = next_text_of(&mut control, "SelectionTextResult").await;
+        assert_eq!(reply["error"], "UNAVAILABLE");
+        assert!(reply.get("text").is_none());
+    }
+    type_into(
+        &session,
+        "i=1; while [ $i -le 2000 ]; do printf 'COPY-BOUNDS-%04d\\n' $i; i=$((i+1)); done\n",
+    );
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        send_json(&mut control, request.clone()).await;
+        let reply = next_text_of(&mut control, "SelectionTextResult").await;
+        if reply["error"] == "TOO_LARGE" {
+            assert!(reply.get("text").is_none());
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "large selection was not refused: {reply}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    // The same connection remains useful after a refused full-history copy.
+    let mut small = request.clone();
+    small["selectAll"] = json!(false);
+    small["endRow"] = json!(0);
+    send_json(&mut control, small).await;
+    assert!(next_text_of(&mut control, "SelectionTextResult").await["text"].is_string());
+    session.terminate(TerminationSource::User).unwrap();
+    h.door.shutdown().await;
+}
