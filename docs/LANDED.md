@@ -29740,3 +29740,37 @@ Latency remains unqualified by James's direction because the host was busy. Phys
 real Wi-Fi/cellular transitions, long device suspension and an attached hardware keyboard are not claimed.
 The first keyboard rotation can still recalibrate once before a native height has been measured; later
 switches use the measured height. Ghosttea's three existing SSH-production readiness blockers remain open.
+
+## EL8 — published-dependency phone qualification and desktop harness alignment (2026-11-02)
+
+The final physical iPhone run now uses the exact remote Ghosttea `v0.14.0` and Truffle `v0.7.26`
+revisions recorded above, with package-plugin validation enabled and no source overlay. All 910
+terminal/input/routed/Freeway/mesh tests pass, with zero failures and the single opt-in tailnet skip.
+The separate live-tailnet run passes both native bundled-font parity and two independent production
+Metal clients against the released desktop host: PTY input, Unicode copy, mirrored frames, resize
+handoff, park/resume, fresh-link redial and idle-scene repair. Device captures were reviewed in dark,
+light and transparent appearances at 13 px and dark at 18 px; the block-glyph mascot has no row seams.
+The temporary QA app/configuration was removed and the ephemeral host stopped cleanly.
+
+Thirteen of the fourteen desktop landing gates passed on the first full run. Studio's hidden-publisher
+check exposed a native-window timing precondition: on Electron 43.1.1/macOS, `isVisible()` becomes true
+before the native `show` event. Hiding in that interval leaves `document.visibilityState` visible even
+though the native window is hidden, reproduced in a standalone Electron fixture. The Studio host now
+records its actual show event, and the physical gate waits for it before exercising hide. The unchanged
+hidden-state, live-publish, reload/replay and close/restore assertions then pass, completing all fourteen
+gates across the full run and the focused Studio rerun.
+
+The additional pane regression initially timed out while reading copied output, although its screenshot
+showed the typed command and result. Main's October 29 clipboard change (`c3d8e1874`, HN-5) routes terminal
+writes through Electron's copy door; the migration harness still intercepted `navigator.clipboard` and
+its lab window lacked the host diagnostics port. The lab now installs that production port and captures
+writes through the same isolated main-process sink as the desktop smokes. It neither reads nor replaces
+the person's system clipboard. All original assertions pass: ordinary typing, Unicode selection/copy,
+scrollback, alternate screen, hidden-process retention/output, resumed input, pane geometry and empty
+session replacement/cleanup. No product renderer, transport or selection behavior changed in this follow-up.
+
+The original failures, minimal visibility reproduction, successful reruns, device result bundles and
+appearance captures are retained in the publication evidence directory named above. The full verification
+gate remains required for this follow-up. CI and final review status are tracked on
+[PR #12](https://github.com/vibefield/vibefield/pull/12); no consumer merge is included. The latency and
+additional hardware/network qualification limits recorded above remain unchanged.

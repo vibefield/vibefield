@@ -935,6 +935,8 @@ export async function runTerminalPerfLab(opts: {
    * view owner the way the menu does. */
   setView: (view: FrameView) => void;
   beforeExit: () => Promise<void>;
+  /** Text reaching main's real copy door, kept instead of writing the system clipboard. */
+  copies?: readonly string[];
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
   const scenarioName = process.env["VF_PERF_SCENARIO"] ?? "deck-4";
@@ -1205,9 +1207,13 @@ export async function runTerminalPerfLab(opts: {
     );
 
     if (scenarioName === "pane-regression") {
+      if (opts.copies === undefined) {
+        throw new Error("pane-regression requires the isolated host clipboard capture");
+      }
       await measureTerminalPaneRegression({
         win,
         out: outDir,
+        copies: opts.copies,
         split: () => pressChord(win, "d"),
         close: () => pressChord(win, "w"),
         floor: async () =>

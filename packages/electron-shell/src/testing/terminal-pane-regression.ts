@@ -16,6 +16,7 @@ const check = (ok: unknown, message: string): void => {
 export async function measureTerminalPaneRegression(options: {
   win: BrowserWindow;
   out: string;
+  copies: readonly string[];
   split(): void;
   close(): void;
   floor(): Promise<readonly { sessionId: string }[]>;
@@ -80,13 +81,9 @@ export async function measureTerminalPaneRegression(options: {
       "initial empty shell exited",
     );
     results.initialEmptyProcessExitMs = performance.now() - firstReplacingAt;
-    // Exercise the shipping selection formatter and keyboard handlers. The
-    // clipboard endpoint is private to this lab window, so the person's OS
-    // clipboard is neither read nor overwritten.
-    await read(`Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText: async text => { window.__vfQaCopy = text; }, readText: async () => '' }
-    })`);
+    // Exercise the shipping selection formatter, keyboard handlers and Electron
+    // copy door. Main captures writes for this lab; the person's OS clipboard is
+    // neither read nor overwritten. Browser clipboard stubs cannot observe this door.
     const key = (name: string, code: string) =>
       read(`(() => {
       const input = document.querySelector('.ghostty-pane.is-active .terminal-input');
@@ -97,13 +94,13 @@ export async function measureTerminalPaneRegression(options: {
       }));
     })()`);
     const copyAll = async (): Promise<string | null> => {
-      await read("window.__vfQaCopy = null");
+      const before = options.copies.length;
       await key("a", "KeyA");
       await key("c", "KeyC");
       const deadline = Date.now() + 5_000;
       while (Date.now() < deadline) {
-        const value = await read<string | null>("window.__vfQaCopy");
-        if (value !== null) return value;
+        const value = options.copies[before];
+        if (value !== undefined) return value;
         await sleep(25);
       }
       return null;
