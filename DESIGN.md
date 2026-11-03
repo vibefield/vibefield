@@ -3149,6 +3149,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   red · undo, reading "Page 1"; the whiteboard black, blue, red, green · eraser · undo · redo — and the example plugin's clock
   (`@ice-examples/desk-clock`) holds seconds · the 24-hour ring · an hour back · an hour ahead · the
   next dial, its own five drawings (§13), reading its time.
+  **Prints (2026-11-02):** an image-backed canvas object, placed by image paste or a picture card dropped
+  onto the desk. It is absent from the pegboard; existing and new prints display edge to edge without a white frame.
+
   **Calendar retired (2026-11-02):** its implementation stays in ICE, but VibeField does not mount its
   renderer, drivers or input. It is absent from the tray and new-board seeds; saved calendar rows,
   entries and pins remain dormant and recoverable, without appearing on the canvas.
@@ -3175,8 +3178,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   inside the hairline — padded 3; the thumb is solid chrome with the hairline (by night the line's
   edge, the strong hairline — R19) and `0 2px 6px` black/12, **sliding 300ms on the island curve**
   across widths; segments 30 tall, padded 0 15, 13/500 sentence case, in tertiary ink at rest and
-  primary on the one chosen. **All** first, then `tray.categories()` in the lay's order — the six
-  built-ins' Paper and Surfaces, the example clock's Things, and whatever a plugin's kind declares —
+  primary on the one chosen. **All** first, then `tray.categories()` in the lay's order — the
+  creatable built-ins' Paper and Surfaces, the example clock's Things, and whatever a plugin's kind declares —
   **no counts**. Past the band's width
   they scroll inside it, the far end fading under the tray's mask; a click, or ← → Home End,
   chooses (`tray.category(id)`). **Chrome does not dim by night**: the anchor's `night` is not read
