@@ -183,8 +183,8 @@ export type ReleaseManifest = z.infer<typeof ReleaseManifest>;
 
 export const CHANNEL_HEADS_FILE = "channels.json" as const;
 
-/** A nightly's tag: `nightly-YYYYMMDD`, never reused (RL4 (a); Immutable Releases burns a deleted release's name). */
-export const NIGHTLY_TAG_PATTERN = /^nightly-\d{8}$/;
+/** A nightly's tag: `nightly-YYYYMMDD[.N]`, never reused (RL4 (a); Immutable Releases burns a deleted release's name). */
+export const NIGHTLY_TAG_PATTERN = /^nightly-\d{8}(?:\.[1-9]\d*)?$/;
 /** A beta's tag: `vX.Y.Z-beta.N` (EDP-36). */
 export const BETA_TAG_PATTERN = /^v\d+\.\d+\.\d+-beta\.\d+$/;
 /** A stable's tag: `vX.Y.Z` with no prerelease (EDP-36's re-tag of the last beta's commit). */
@@ -794,8 +794,8 @@ const RELEASE_NAME_MONTHS = [
   "Nov",
   "Dec",
 ] as const;
-/** `release-plan.mjs`'s nightly version, `<X.Y.Z>-nightly.<YYYYMMDD>`, its UTC plan day. */
-const NIGHTLY_VERSION_PATTERN = /^\d+\.\d+\.\d+-nightly\.(\d{4})(\d{2})(\d{2})$/;
+/** `release-plan.mjs`'s nightly version, `<X.Y.Z>-nightly.<YYYYMMDD>[.N]`, its UTC plan day and optional revision. */
+const NIGHTLY_VERSION_PATTERN = /^\d+\.\d+\.\d+-nightly\.(\d{4})(\d{2})(\d{2})(?:\.([1-9]\d*))?$/;
 /** `release-plan.mjs`'s beta version: the tag without its `v`. */
 const BETA_VERSION_PATTERN = /^(\d+\.\d+\.\d+)-beta\.(\d+)$/;
 
@@ -811,7 +811,7 @@ export function releaseName(version: string, options: { readonly start?: boolean
     const day = new Date(Date.UTC(Number(nightly[1]), month, date));
     if (day.getUTCMonth() === month && day.getUTCDate() === date) {
       const the = options.start === true ? "The" : "the";
-      return `${the} ${RELEASE_NAME_MONTHS[month]} ${date} nightly`;
+      return `${the} ${RELEASE_NAME_MONTHS[month]} ${date} nightly${nightly[4] === undefined ? "" : ` (revision ${nightly[4]})`}`;
     }
   }
   const beta = BETA_VERSION_PATTERN.exec(version);
@@ -880,7 +880,8 @@ export function releaseChannelOf(version: string): UpdateChannel | null {
  * `STABLE_TAG_PATTERN` whenever it is not null. */
 export function releaseTagOf(version: string): string | null {
   const nightly = NIGHTLY_VERSION_PATTERN.exec(version);
-  if (nightly !== null) return `nightly-${nightly[1]}${nightly[2]}${nightly[3]}`;
+  if (nightly !== null)
+    return `nightly-${nightly[1]}${nightly[2]}${nightly[3]}${nightly[4] === undefined ? "" : `.${nightly[4]}`}`;
   return BETA_VERSION_PATTERN.test(version) || /^\d+\.\d+\.\d+$/.test(version)
     ? `v${version}`
     : null;

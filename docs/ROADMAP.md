@@ -25,7 +25,7 @@
   (LANDED "WP12 — the first signed nightly is published", "W11 — the signed apply passes on the Mac mini"). Each
   nightly takes James's two `release-signing` clicks. The app is `0.1.0` (`apps/desktop/package.json`) and stays
   `0.1.0` until the commit that cuts `v0.9.0-beta.1` (WP12-D6 as amended; James, 2026-10-28, the housekeeping page
-  (Q7)): tags `nightly-YYYYMMDD` (`scripts/release-plan.mjs`), version and title `0.1.0-nightly.YYYYMMDD`. 0.9.0 is
+  (Q7)): tags `nightly-YYYYMMDD[.N]` (`scripts/release-plan.mjs`), version and title `0.1.0-nightly.YYYYMMDD[.N]`. Manual dispatch can publish a numbered revision on the same UTC day (James, 2026-11-03); scheduled releases remain daily, and existing tags are never reused. 0.9.0 is
   tagged when RL6's four goals hold (the browser pane in a packaged build · History and Godview dogfooded daily ·
   prod-shape deps · the release rails; `draft/docket/release-docket.html`), as betas `v0.9.0-beta.N`, then stable
   after a soak; 1.0.0 at P0's exits (AR-6, the signed beta, the two-account witness).
