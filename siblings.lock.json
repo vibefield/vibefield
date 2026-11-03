@@ -95,6 +95,24 @@
           "names": ["react", "react-dom", "@types/react", "@types/react-dom"]
         }
       }
+    },
+    "ice": {
+      "path": "../infinite-canvas-engine",
+      "repository": "https://github.com/vibefield/infinite-canvas-engine.git",
+      "sha": "8a0f0a2f60ee6bd3e15f3523a320e37a1ba1f34c",
+      "packages": {
+        "@vibecook/ice": "packages/ice"
+      },
+      "release": {
+        "npm": "0.16.0"
+      },
+      "pnpm": {
+        "build": [
+          "--filter",
+          "@vibecook/ice",
+          "build"
+        ]
+      }
     }
   }
 }
