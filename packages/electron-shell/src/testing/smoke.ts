@@ -1283,6 +1283,33 @@ export async function runSmokeCanvas(opts: {
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
+      const runPeers = async (): Promise<void> => {
+        try {
+          problems.push(
+            ...(await peersRows({
+              win,
+              openPeer: async () => {
+                const peer = smokeWindow({
+                  mode: "smoke-canvas",
+                  preloadPath: opts.preloadPath,
+                  show: true,
+                });
+                opts.registry.adoptAuxiliary(peer);
+                const ready = waitForConsole(peer, "DESK_READY ", 60_000);
+                await loadRenderer(peer, "smoke-canvas", opts.viteUrl, { presenceRelay: "1" });
+                await ready;
+                await bootRevealed(peer, "the peer's desk revealed");
+                await sleep(800);
+                return peer;
+              },
+              shotDir,
+              say: (line) => console.log(line),
+            })),
+          );
+        } catch (error) {
+          problems.push(`DK-16 PEERS: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      };
       const profileSeed = profileSeedUrl(process.argv);
       if (profileSeed !== undefined) {
         // BP-D7 — smoke:profile's PHASE A, its rows ALONE after the boot's: one pane laid, pointed at the row's own fixture,
@@ -1305,6 +1332,8 @@ export async function runSmokeCanvas(opts: {
             profileSeed,
           )),
         );
+      } else if (process.argv.includes("--peers")) {
+        await runPeers();
       } else if (process.argv.includes("--desk-copy")) {
         // The copy and idle rows alone, for diagnosing their pointer interactions on the seeded desk.
         try {
@@ -1491,31 +1520,7 @@ export async function runSmokeCanvas(opts: {
         // idle 8 s, under the board, under a cover and when it leaves its window, the smoke playing the mesh between them;
         // then the desk's faults on its own device — a degraded desk's banner, a lost device's card, each Reload a remount
         // that draws again (testing/smoke-peers.ts)
-        try {
-          problems.push(
-            ...(await peersRows({
-              win,
-              openPeer: async () => {
-                const peer = smokeWindow({
-                  mode: "smoke-canvas",
-                  preloadPath: opts.preloadPath,
-                  show: true,
-                });
-                opts.registry.adoptAuxiliary(peer);
-                const ready = waitForConsole(peer, "DESK_READY ", 60_000);
-                await loadRenderer(peer, "smoke-canvas", opts.viteUrl, { presenceRelay: "1" });
-                await ready;
-                await bootRevealed(peer, "the peer's desk revealed");
-                await sleep(800);
-                return peer;
-              },
-              shotDir,
-              say: (line) => console.log(line),
-            })),
-          );
-        } catch (error) {
-          problems.push(`DK-16 PEERS: ${error instanceof Error ? error.message : String(error)}`);
-        }
+        await runPeers();
         try {
           problems.push(...(await faultRows({ win, shotDir, say: (line) => console.log(line) })));
         } catch (error) {

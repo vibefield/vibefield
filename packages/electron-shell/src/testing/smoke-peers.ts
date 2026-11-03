@@ -27,6 +27,7 @@
 //             handling, so the drag row proves the page's path over the strip, not what a real pointer entering it does;
 //   GONE    — B closed: its peer leaves A's roster;
 //   COUNTERS — the layer placed every move and rendered only for the roster and its own verdicts.
+// `--peers` beside `--smoke-canvas` runs the presence rows alone after boot.
 // And, on A again (`?deskFaults=1`), THE DESK'S FAULTS on its own device:
 //   BANNER  — one uncaptured validation error: `degraded`, the status line holding ICE's message and a Reload, the desk
 //             drawing on beneath it; dk-16-banner.png; the Reload a remount, the line cleared;
@@ -469,6 +470,13 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
     await sleep(600);
   };
 
+  // These rows also run alone, before any earlier row has put A's pointer on its desk.
+  a.webContents.sendInputEvent({ type: "mouseMove", x: 420, y: 300 });
+  await until(
+    "A's own presence cursor before the cover row",
+    5_000,
+    async () => (await door(a)).said?.cursor != null,
+  );
   const b = await d.openPeer();
   // THE MESH, played: each window's presence handed to the other as its lane hands a room's
   let relaying = true;
