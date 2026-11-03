@@ -20,6 +20,7 @@ struct TerminalKeystrokeTests {
       (.tab, 0x2b, "Tab"),
       (.enter, 0x28, "Enter"),
       (.backspace, 0x2a, "Backspace"),
+      (.deleteForward, 0x4c, "Delete"),
       (.arrowRight, 0x4f, "ArrowRight"),
       (.arrowLeft, 0x50, "ArrowLeft"),
       (.arrowDown, 0x51, "ArrowDown"),

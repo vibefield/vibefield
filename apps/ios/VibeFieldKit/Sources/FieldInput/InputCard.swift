@@ -92,9 +92,7 @@ public struct InputCard: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
-    .animation(FieldMotion.ease(0.18), value: model.keypadShown)
     // --- end IOS-5d -----------------------------------------------------------
-    .animation(FieldMotion.ease(0.24), value: model.keyboardOwner)
     // --- end IOS-5c
   }
 
@@ -104,11 +102,7 @@ public struct InputCard: View {
   /// two translucent layers read as two rather than as haze.
   private var card: some View {
     VStack(spacing: Self.rowGap) {
-      if model.mode == .draft {
-        draftRow
-      } else {
-        terminalStrip
-      }
+      inputRow
       rail
     }
     .padding(Self.padding)
@@ -117,81 +111,50 @@ public struct InputCard: View {
 
   // MARK: - Row 1
 
-  /// Draft: the `+`, the field and Send.
-  ///
-  /// Both of the design's other controls are here now: `+` at the far left
-  /// (IOS-5d — Scan text · Snippets · Clipboard history; the attach items wait
-  /// on a mesh file verb, K-D6) and the mic immediately left of Send (IOS-5d's
-  /// rider — it needed the Speech framework and its usage strings). Send is the
-  /// one prominent control: the canvas's `.circle.prominent`, the desktop
-  /// Composer's own foot.
-  ///
-  /// The row's spacing is ZERO, like the canvas's: every control is a 44 pt
-  /// `.target` around a 28 pt circle, so the air between them is the targets'
-  /// own and the whole row is still one unbroken strip of tappable chrome.
-  private var draftRow: some View {
-    HStack(alignment: .bottom, spacing: 0) {
-      // --- IOS-5d: the far left of the row, the desktop Composer's own foot.
+  /// Keep the composer mounted across mode changes. Removing a first-responder
+  /// UITextView makes UIKit hide the keyboard before the terminal or keypad
+  /// can take it, so `>_` used to close and reopen the keyboard on every tap.
+  /// The outgoing responder now stays available until the incoming one takes.
+  private var inputRow: some View {
+    HStack(alignment: .bottom, spacing: model.mode == .draft ? 0 : Self.keyGap) {
       PlusMenu(model: model)
-      // --- end IOS-5d
-      ComposerField(
-        model: model,
-        height: $composerHeight,
-        keyboardAppearance: colorScheme == .dark ? .dark : .light,
-        // IOS-5v: `.field` — SF 17/22, the one piece of prose on the card, so
-        // it is the one size here that scales as prose.
-        textSize: InputCardMetrics.composerTextSize(for: dynamicTypeSize)
-      )
-      .frame(height: max(rowHeight, composerHeight))
+      ZStack(alignment: .leading) {
+        ComposerField(
+          model: model,
+          height: $composerHeight,
+          keyboardAppearance: colorScheme == .dark ? .dark : .light,
+          textSize: InputCardMetrics.composerTextSize(for: dynamicTypeSize)
+        )
+        .frame(height: max(rowHeight, composerHeight))
+        .opacity(model.mode == .draft ? 1 : 0)
+        .accessibilityHidden(model.mode != .draft)
+        if model.mode == .live { terminalStrip }
+      }
+      .frame(height: model.mode == .draft ? max(rowHeight, composerHeight) : rowHeight)
+      .clipped()
 
-      // --- IOS-5d mic ---
-      DictationKey(model: model)
-      // --- end IOS-5d mic ---
-
-      sendKey
+      if model.mode == .draft {
+        DictationKey(model: model)
+        sendKey
+      }
     }
   }
 
-  /// Live: the strip and Enter. The draft is not gone — it is held in the
-  /// model and comes back untouched when the mode flips.
-  ///
-  /// The strip carries no fill of its own (the canvas's `.strip` is a bare
-  /// row): in this mode the field is not a field, and drawing a key-shaped box
-  /// where the text goes would promise one.
+  /// The terminal mode's readout replaces the composer's visible contents.
   private var terminalStrip: some View {
-    HStack(spacing: Self.keyGap) {
-      // --- IOS-5d: the same door, in the same place. The design's strip keeps
-      // `+` where the composer had it — a snippet is as useful with the
-      // terminal holding the keys as with the draft holding them.
-      PlusMenu(model: model)
-      // --- end IOS-5d
-      HStack(spacing: 8) {
-        FieldGlyph(.prompt, size: FieldGlyph.box(for: glyphSize))
-        Text("Typing into terminal")
-          .font(
-            ChromeType.sans(InputCardMetrics.stripSize(for: dynamicTypeSize), .semibold)
-          )
-          // IOS-5e: one line, always. At accessibility sizes on the narrowest
-          // phone this sentence is wider than the strip, and both other ways
-          // out are worse than an ellipsis — wrapping makes the strip taller
-          // than the row it shares, and shrinking makes it the one label on the
-          // card smaller than the keys beside it.
-          .lineLimit(1)
-          .truncationMode(.tail)
-      }
-      .foregroundStyle(ChromePalette.inkStrip)
-      .padding(.horizontal, 10)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .frame(height: rowHeight)
-      .accessibilityElement()
-      // A truncated strip still says the whole sentence: the ellipsis is a fact
-      // about the width, not about the mode.
-      .accessibilityLabel("Typing into terminal")
-
-      key(
-        glyph: .return, label: "Enter", width: rowHeight,
-        action: { model.tapKey(.enter) })
+    HStack(spacing: 8) {
+      FieldGlyph(.prompt, size: FieldGlyph.box(for: glyphSize))
+      Text("Typing into terminal")
+        .font(ChromeType.sans(InputCardMetrics.stripSize(for: dynamicTypeSize), .semibold))
+        .lineLimit(1)
+        .truncationMode(.tail)
     }
+    .foregroundStyle(ChromePalette.inkStrip)
+    .padding(.horizontal, 10)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .frame(height: rowHeight)
+    .accessibilityElement()
+    .accessibilityLabel("Typing into terminal")
   }
 
   /// Send is never disabled. `.circle.quiet` with an empty draft, and the
@@ -257,35 +220,54 @@ public struct InputCard: View {
         })
       escapeKey
       controlKey
-      key(text: "Tab", label: "Tab", fan: .tab, action: { model.tapKey(.tab) })
-      key(
-        glyph: .arrow, turn: -90, label: "Left arrow", tone: .nav, fan: KeyFan.arrow(.arrowLeft),
-        action: { model.tapKey(.arrowLeft) })
-      key(
-        glyph: .arrow, turn: 180, label: "Down arrow", tone: .nav, fan: KeyFan.arrow(.arrowDown),
-        action: { model.tapKey(.arrowDown) })
-      key(
-        glyph: .arrow, label: "Up arrow", tone: .nav, fan: KeyFan.arrow(.arrowUp),
-        action: { model.tapKey(.arrowUp) })
-      key(
-        glyph: .arrow, turn: 90, label: "Right arrow", tone: .nav, fan: KeyFan.arrow(.arrowRight),
-        action: { model.tapKey(.arrowRight) })
-      // --- IOS-5d ------------------------------------------------------------
-      // The keypad key. It lights while the keypad is up, like every other key
-      // on this card that is holding a state — and it carries no fan: the
-      // design's long-press (the keypad's last page) is what a tap already
-      // does, the page being remembered.
-      key(
-        glyph: .ellipsis,
-        label: model.keypadShown ? "Letters" : "Terminal keypad",
-        tone: model.keypadShown ? .on : .normal,
-        action: {
-          model.toggleKeypad()
-          // IOS-5e: the letters just left, or came back. Without this a screen
-          // reader finds out by exploring the keyboard again and meeting a
-          // different one.
-          InputAnnouncement.post(InputAnnouncement.keypad(model.keypadShown))
-        })
+      if model.keypadShown {
+        key(
+          text: "Alt", label: model.metaArmed ? "Alt armed" : "Alt",
+          tone: model.metaArmed ? .armed : .normal
+        ) {
+          model.toggleMeta()
+        }
+        key(
+          text: "Shift", label: model.shiftArmed ? "Shift armed" : "Shift",
+          tone: model.shiftArmed ? .armed : .normal
+        ) {
+          model.toggleShift()
+        }
+        key(text: "ABC", label: "Letters", tone: .on) {
+          model.setKeypad(false)
+          InputAnnouncement.post(InputAnnouncement.keypad(false))
+        }
+      } else {
+        key(text: "Tab", label: "Tab", fan: .tab, action: { model.tapKey(.tab) })
+        key(
+          glyph: .arrow, turn: -90, label: "Left arrow", tone: .nav, fan: KeyFan.arrow(.arrowLeft),
+          action: { model.tapKey(.arrowLeft) })
+        key(
+          glyph: .arrow, turn: 180, label: "Down arrow", tone: .nav, fan: KeyFan.arrow(.arrowDown),
+          action: { model.tapKey(.arrowDown) })
+        key(
+          glyph: .arrow, label: "Up arrow", tone: .nav, fan: KeyFan.arrow(.arrowUp),
+          action: { model.tapKey(.arrowUp) })
+        key(
+          glyph: .arrow, turn: 90, label: "Right arrow", tone: .nav, fan: KeyFan.arrow(.arrowRight),
+          action: { model.tapKey(.arrowRight) })
+        // --- IOS-5d ------------------------------------------------------------
+        // The keypad key. It lights while the keypad is up, like every other key
+        // on this card that is holding a state — and it carries no fan: the
+        // design's long-press (the keypad's last page) is what a tap already
+        // does, the page being remembered.
+        key(
+          glyph: .ellipsis,
+          label: model.keypadShown ? "Letters" : "Terminal keypad",
+          tone: model.keypadShown ? .on : .normal,
+          action: {
+            model.toggleKeypad()
+            // IOS-5e: the letters just left, or came back. Without this a screen
+            // reader finds out by exploring the keyboard again and meeting a
+            // different one.
+            InputAnnouncement.post(InputAnnouncement.keypad(model.keypadShown))
+          })
+      }
       // --- end IOS-5d --------------------------------------------------------
     }
     // --- IOS-5e: the rail is one thing, and VoiceOver should say so before it
@@ -324,9 +306,9 @@ public struct InputCard: View {
   /// Escape when tapped — the burst rides the next keystroke, and Escape is one.
   private var escapeKey: some View {
     key(
-      text: model.metaArmed ? "Meta" : "Esc",
+      text: model.metaArmed && !model.keypadShown ? "Meta" : "Esc",
       label: model.metaArmed ? "Escape, Meta armed for the next key" : "Escape",
-      tone: model.metaArmed ? .armed : .normal,
+      tone: model.metaArmed && !model.keypadShown ? .armed : .normal,
       fan: .escape,
       action: { model.tapKey(.escape) })
   }

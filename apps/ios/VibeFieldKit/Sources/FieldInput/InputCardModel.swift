@@ -83,23 +83,18 @@ public enum CardSurface: String, Identifiable, Equatable, Sendable {
   public var id: String { rawValue }
 }
 
-/// Which face of the `⋯` keypad is showing.
-///
-/// Three pages rather than one long grid, because the three have different
-/// natures: Keys and Combos are always key EVENTS, while Symbols is text in
-/// Draft and input in Live. Mixing them would make one keypad whose keys mean
-/// two things depending on where on it you press.
+/// Terminal-only keys. Letters, numbers, and symbols stay on the system keyboard.
 public enum KeypadPage: String, Equatable, Sendable, CaseIterable {
   case keys
-  case symbols
   case combos
+  case functions
 
-  /// The segmented row's face. Mono 9 heavy, like every other label here.
+  /// The page picker's visible label.
   public var title: String {
     switch self {
-    case .keys: return "Keys"
-    case .symbols: return "Symbols"
-    case .combos: return "Combos"
+    case .keys: return "Navigate"
+    case .combos: return "Shortcuts"
+    case .functions: return "Fn"
     }
   }
 }
@@ -208,6 +203,8 @@ public final class InputCardModel {
   /// encodes. One shot rather than a latch: a second phase here would be a
   /// second sticky modifier with no dot to tell it from the first.
   public private(set) var metaArmed = false
+  public private(set) var shiftArmed = false
+  @ObservationIgnored let keypadGeometry = KeypadGeometry()
   /// Which rail key's long-press fan is open, or none. Opened and closed
   /// through `showFan`/`closeFan`, which also mind the keyboard.
   ///
@@ -283,6 +280,7 @@ public final class InputCardModel {
   @ObservationIgnored private var expiryTask: Task<Void, Never>?
   // --- IOS-5b: the burst's own clock, on the arm's discipline ---------------
   @ObservationIgnored private var metaExpiryTask: Task<Void, Never>?
+  @ObservationIgnored private var shiftExpiryTask: Task<Void, Never>?
   /// Whether the composer held the keyboard when the fan opened. See
   /// `closeFan` — it restores, and never raises.
   @ObservationIgnored private var keyboardWasUpBeforeFan = false
@@ -325,7 +323,7 @@ public final class InputCardModel {
   public func tapChord(_ stroke: TerminalKeystroke) {
     let carried = consumeModifiers()
     var stroke = stroke
-    stroke.modifiers.formUnion(carried.intersection(.option))
+    stroke.modifiers.formUnion(carried.intersection([.option, .shift]))
     emit(.keystroke(stroke))
   }
 
@@ -354,6 +352,44 @@ public final class InputCardModel {
   public func armMeta() {
     metaArmed = true
     restartMetaExpiry()
+  }
+
+  public func toggleMeta() {
+    if metaArmed {
+      metaExpiryTask?.cancel()
+      metaExpired()
+    } else {
+      armMeta()
+    }
+  }
+
+  public func toggleShift() {
+    shiftExpiryTask?.cancel()
+    shiftArmed.toggle()
+    guard shiftArmed else { return }
+    shiftExpiryTask = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(3))
+      guard !Task.isCancelled else { return }
+      self?.shiftArmed = false
+    }
+  }
+
+  /// Hardware input received by the Live keypad's responder follows the same
+  /// sink and modifier rules as the terminal's software keyboard.
+  public func typeKeypadText(_ text: String) {
+    guard mode == .live, keypadShown else { return }
+    for character in text {
+      if character.isNewline { tapKey(.enter) }
+      else if character == "\t" { tapKey(.tab) }
+      else if !interceptCharacter(character) { emit(.typeText(String(character))) }
+    }
+  }
+
+  public func sendKeypadHardware(_ stroke: TerminalKeystroke) {
+    guard mode == .live, keypadShown else { return }
+    var stroke = stroke
+    stroke.modifiers.formUnion(consumeModifiers())
+    emit(.keystroke(stroke))
   }
 
   /// The burst's window elapsed. Public for the same reason `latchExpired` is:
@@ -606,7 +642,7 @@ public final class InputCardModel {
     // IOS-5b: the burst counts too. A Meta-armed letter typed into the composer
     // is `Esc x` on the wire, and leaving it in the draft would swallow the
     // burst the user just armed.
-    guard latch.phase != .off || metaArmed else { return false }
+    guard latch.phase != .off || metaArmed || shiftArmed else { return false }
     let modifiers = consumeModifiers()
     emit(.keystroke(TerminalKeystroke(.character(character), modifiers: modifiers)))
     return true
@@ -704,6 +740,9 @@ public final class InputCardModel {
     metaExpiryTask?.cancel()
     metaExpiryTask = nil
     openFan = nil
+    shiftArmed = false
+    shiftExpiryTask?.cancel()
+    shiftExpiryTask = nil
     keyboardWasUpBeforeFan = false
     // --- end IOS-5b ---------------------------------------------------------
     // --- IOS-5d: every door the card opened closes with it. `keypadPage` is
@@ -762,7 +801,7 @@ public final class InputCardModel {
   /// modifier the user just armed, which is the same rule `interceptCharacter`
   /// enforces for the system keyboard.
   public func typeSymbol(_ character: Character) {
-    if latch.phase != .off || metaArmed {
+    if latch.phase != .off || metaArmed || shiftArmed {
       let modifiers = consumeModifiers()
       emit(.keystroke(TerminalKeystroke(.character(character), modifiers: modifiers)))
       return
@@ -886,6 +925,12 @@ public final class InputCardModel {
       metaArmed = false
       metaExpiryTask?.cancel()
       metaExpiryTask = nil
+    }
+    if shiftArmed {
+      modifiers.insert(.shift)
+      shiftArmed = false
+      shiftExpiryTask?.cancel()
+      shiftExpiryTask = nil
     }
     // --- end IOS-5b ---
     return modifiers

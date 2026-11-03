@@ -151,7 +151,7 @@ reach states no `simctl` touch can:
 | `-vf-demo-input-fan` | opens the CTRL long-press fan three seconds in — the ten chords in two rows, anchored above the key. The only way to a fan without a finger, and the fan is the whole of IOS-5b that a screenshot can show |
 | `-vf-demo-input-meta` | holds ESC in its armed META state by re-arming the burst once a second. The burst is a 3 s window BY DESIGN and a screenshot run is slower than that, so the fixture keeps re-arming rather than pretending the window is longer; the state in the picture is the real one |
 | `-vf-demo-input-dictating` | forces the mic's listening look — the prominent circle, breathing unless Reduce Motion is on — and seeds the draft through the same `appendDictation` a real partial would use. Listening otherwise wants two permission alerts answered by a finger and a voice to speak into a simulator, so this is the only way to a picture of the state; it opens no audio session and asks Speech for nothing. Our own pixels, never a claim that anything was heard |
-| `-vf-demo-input-keypad[=symbols\|=combos]` | brings the `⋯` keypad up three seconds in — on the **Keys** page, or on `=symbols` / `=combos`. The keypad REPLACES the system keyboard, so it is reachable only by tapping `⋯`, and a screenshot has no finger. It waits because the card has to be on screen first: a keypad needs a responder to rise under. Add `-vf-demo-input-live` to see the same keypad riding the hidden responder (K-D5) with the terminal holding the mode |
+| `-vf-demo-input-keypad[=combos\|=functions]` | brings the `⋯` keypad up three seconds in — on **Navigate**, or **Shortcuts** / **Fn** with the optional suffix. The keypad replaces the system keyboard. It waits because the card has to be on screen first: a keypad needs a responder to rise under. Add `-vf-demo-input-live` to see the same keypad riding the hidden responder (K-D5) with the terminal holding the mode |
 | `-vf-demo-input-plus` | opens the `+` menu — Scan text · Snippets · Clipboard history, with the glyph rotated 45° to `×` (and not rotated under Reduce Motion). The attach items the design also lists are ABSENT rather than greyed out (K-D6, below) |
 | `-vf-demo-input-snippets` | opens the Snippets sheet holding ONE fixture snippet (`STATUS` · `git status --short`, sends Enter) in a scratch `UserDefaults` suite that is wiped at launch — a fixture must never write into, or read out of, what a real user saved |
 | `-vf-demo-input-history` | opens the Clipboard History sheet on two fixture entries in the same scratch suite. The real ring is fed only by pastes made THROUGH this card; nothing in the app ever reads the pasteboard's contents on its own |
@@ -302,11 +302,26 @@ never onto the wire (a misheard word would already be a command down there;
 recognition stays on the device where the device supports it, the audio is
 streamed and stored nowhere, no transcript is logged), and `+`, which opens
 Scan Text, Snippets and Clipboard History; `⋯` at the end of the rail replaces
-the system keyboard with our own keypad of three pages — Keys, Symbols, Combos —
-and `abc` gives the letters back. All of it answers the reader as well as the
+the system keyboard with three terminal-only pages — Navigate, Shortcuts, Fn —
+and `ABC` gives the letters back. The expanded rail holds the mode switch,
+Escape, Control, Alt, Shift, and ABC; navigation appears only in the larger pad.
+The arrow cluster keeps its spatial arrangement, Backspace and Enter are taller,
+and F1–F12 have their own page. Common shell shortcuts lead; Claude, tmux, Emacs,
+and Screen profiles are available, with a configurable tmux Control prefix.
+The native keyboard owns letters, numbers, and symbols. Keypad keys always send
+terminal events, preserving any unsent draft. Docked native keyboard measurements
+are retained per window size, rather than guessing the keypad height; its hosting
+view draws inside that frame without applying another keyboard safe area. The
+composer stays mounted when switching input modes, allowing the incoming responder
+to take focus without dismissing and reopening the keyboard. Its custom input view
+also stays in place until that handoff finishes. The
+first ABC switch after rotating an already-open keypad can recalibrate the new
+orientation's height; subsequent switches use the measured size. The
+Live keypad responder forwards hardware typing and shortcuts through the normal
+input sink. All of it answers the reader as well as the
 terminal: at accessibility text sizes the rail and the composer step from 44 pt
-to 52 pt and every key label from 13 to 15 and no further (`InputCardMetrics`, a
-pure function with its own tests — a key's face is a key's face, not prose); Reduce Motion stops the `+` glyph turning, the mic
+to 52 pt and their key labels from 13 to 15 (`InputCardMetrics`). Keypad labels
+grow from 15 to 17 within the existing keyboard frame. Reduce Motion stops the `+` glyph turning, the mic
 breathing and the fan scaling out of its key, leaving the cross-fades that carry
 no movement; VoiceOver hears "Control armed" / "Control locked" / "Control
 released", "Meta armed for the next key", "Typing into terminal" / "Drafting"
@@ -368,10 +383,10 @@ text sources ship and the attach half arrives with the verb. **The keypad in
 Live rides a hidden responder (K-D5)**: ghosttea's Metal view is `final` and
 exposes no input view of its own, so a zero-size `UIKeyInput` takes the keyboard
 off it and brings the keypad up in its place; the keys still reach the terminal
-through the card's own sink, but while the keypad is up a paired hardware
-keyboard types into nothing. The fix upstream is one line (`customInputView` on
-the Metal view) and the petition is batched into the next planned pin bump, per
-K-D5. The keypad's "Record" — the design's fourth combo entry, which would
+through the card's own sink. Since the 2026-11-02 redesign, that responder also
+forwards ordinary text, deletion, and hardware shortcuts through the same sink;
+Command shortcuts remain in UIKit's responder chain. The keypad's "Record" —
+the design's fourth combo entry, which would
 capture a sequence off the rail into a new key — is not built. Two shapes of the
 design are ours rather than its: a fan opens on the long press and its keys are
 TAPPED (the design's slide-and-release wants the fan drawn inside the card's own

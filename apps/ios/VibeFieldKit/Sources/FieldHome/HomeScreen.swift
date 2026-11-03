@@ -2986,7 +2986,7 @@ public struct HomeScreen: View {
     // --- IOS-5d ------------------------------------------------------------
     /// The names IOS-5d's fixtures answer to, in one place.
     ///
-    /// `-vf-demo-input-keypad` takes an optional page (`=symbols`, `=combos`),
+    /// `-vf-demo-input-keypad` takes an optional page (`=combos`, `=functions`),
     /// which is why it is a PREFIX rather than a flag: three arguments for
     /// three pages would be three ways to say the same thing.
     private enum DemoArguments {

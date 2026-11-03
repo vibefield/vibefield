@@ -1,6 +1,6 @@
 import FieldTerminal
 
-/// A named sequence of keystrokes — the keypad's third page.
+/// A named sequence of keystrokes on the keypad's Shortcuts page.
 ///
 /// A combo is a SCRIPT, not a chord: `^B c` is two presses (`control("b")`,
 /// then a plain `c`), and the terminal on the far end reads them exactly as it
@@ -39,12 +39,52 @@ public struct ComboPack: Identifiable, Equatable, Sendable {
   public let combos: [Combo]
 }
 
-/// The four packs the design names (§4, "Where combos happen").
+/// Terminal shortcut profiles, led by Common and Claude.
 ///
 /// "Record" — the design's fourth entry, which would capture a sequence off
 /// the rail into a new key — is ABSENT rather than present and inert (D-i6):
 /// recording wants a store, an editor and a name, which is a slice of its own.
 public enum ComboCatalog {
+
+  public static let common = ComboPack(
+    id: "common", title: "Common",
+    combos: [
+      control("common", "c", "Interrupt"), control("common", "r", "History"),
+      control("common", "l", "Redraw"), control("common", "a", "Line start"),
+      control("common", "e", "Line end"), control("common", "w", "Delete word"),
+      control("common", "u", "Delete left"), control("common", "k", "Delete right"),
+      control("common", "y", "Yank"),
+    ])
+
+  public static let claude = ComboPack(
+    id: "claude", title: "Claude",
+    combos: [
+      Combo(
+        id: "claude.mode", label: "⇧ Tab", subtitle: "Change mode",
+        spoken: "Shift Tab", strokes: [.shiftTab]),
+      control("claude", "o", "Transcript"), control("claude", "t", "Task list"),
+      control("claude", "c", "Interrupt"), control("claude", "r", "History"),
+      control("claude", "l", "Redraw"), control("claude", "b", "Background"),
+      control("claude", "a", "Line start"), control("claude", "e", "Line end"),
+    ])
+
+  /// Store the user's actual prefix, rather than sending the default to a
+  /// differently configured tmux session. Prefix and command remain separate.
+  public static func tmux(prefix: Character) -> ComboPack {
+    ComboPack(
+      id: "tmux", title: "tmux",
+      combos: [
+        prefixed("tmux", prefix: prefix, then: "c", subtitle: "New window"),
+        prefixed("tmux", prefix: prefix, then: "n", subtitle: "Next window"),
+        prefixed("tmux", prefix: prefix, then: "p", subtitle: "Previous window"),
+        prefixed("tmux", prefix: prefix, then: "%", subtitle: "Split side"),
+        prefixed("tmux", prefix: prefix, then: "\"", subtitle: "Split below"),
+        prefixed("tmux", prefix: prefix, then: "o", subtitle: "Next pane"),
+        prefixed("tmux", prefix: prefix, then: "z", subtitle: "Zoom pane"),
+        prefixed("tmux", prefix: prefix, then: "[", subtitle: "Copy mode"),
+        prefixed("tmux", prefix: prefix, then: "d", subtitle: "Detach"),
+      ])
+  }
 
   /// Emacs' own motion keys, which are also readline's defaults and therefore
   /// the ones that work in a bare shell.

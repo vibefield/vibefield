@@ -5200,6 +5200,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   under it: "at 13pt the grid gains about five rows, three or four of them under the header, so a
   full-screen program's first lines are hidden on the phone". James's pick of T1 and F1 retires both
   the fade and that cost: the band holds no rows.)*
+- **The phone's terminal keypad** (updated 2026-11-02, James's keyboard review).
+  The expanded keypad uses a spatial arrow cluster with larger Backspace and Enter keys,
+  soft rounded caps, and a shared native glass surface. Its pages are **Navigate**, **Shortcuts**,
+  and **Fn**. Letters, numbers, and symbols remain on the system keyboard. While expanded, the
+  input card's rail keeps the mode switch, Esc, Ctrl, Alt, Shift, and **ABC**, without duplicating
+  the navigation keys below. Common shell shortcuts lead; Claude and tmux have named profiles,
+  tmux's Control prefix is configurable, and Emacs/Screen remain secondary choices. Action labels
+  describe terminal behavior: Ctrl-C interrupts, and clipboard copy remains a separate action.
+  Navigation and deletion keys repeat while held; shortcuts and Return do not. Page changes and
+  ABC/keypad swaps preserve the composer, draft, and terminal viewport at the current docked
+  keyboard size. Rotation and actual native keyboard configuration changes may resize it.
+  A new orientation uses UIKit's default until the native keyboard reports its actual size.
+  If the keypad is already open during that first rotation, the first ABC switch can adjust
+  once (40 pt on the iOS 26.5 simulator with predictions disabled); later swaps match exactly.
+  The input view owns one frame and one bottom inset; its SwiftUI host must never extend upward
+  across the composer's rounded bottom. Hardware typing continues while the keypad is visible.
+  Existing tap-to-focus, scroll-without-focus, floating paste/fold controls, and automatic folding
+  when another device takes the seat remain part of the input behavior.
 - **A live card another client is driving** (item 42's phone half; James, 2026-10-19 17:42Z: "studio
   is driving · touch to take it back"; the look ruled 21:38Z, "good, design all go with the lean").
   While the card's session has its geometry seat (DS-4) held by another client, the studio's window,
