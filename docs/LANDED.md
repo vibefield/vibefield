@@ -29669,3 +29669,74 @@ intent reaching the fold is not evidence that the child has executed. Both chang
 harness; no product threshold, renderer behavior or launch policy changes.
 The deck's physical smoke now checks the full-size canvas and the collision-wall target separately when
 minimized, dragged and maximized; its old monitor-bottom checks described the retired resizing behavior.
+
+## EL8 — Ghostty 1.4 through released Ghosttea 0.14.0; terminal and phone regression fixes (2026-11-02)
+
+**What.** Godview's routed terminals recover scene state before accepting resumed input and copy selections
+through the authenticated host. The phone preserves mirrored font advances when its font size changes and
+uses the desktop's canonical mesh DNS name, including collision suffixes. Ghosttea's native block-glyph
+geometry fix closes the black seams in Claude's mascot at small phone font sizes. The latest main's
+owner-atomic terminal release, correlated creation and full-size swarm canvas are retained.
+
+The iOS terminal keeps scrolling from opening a hidden keyboard. Its header fades over full-height terminal
+content, the footer blends into the pane and shows context usage, and the glass paste/keyboard controls float
+without reserving blank terminal space. The fold control sits outside the composer; a remote driver folds
+the keyboard automatically, with a centered overlay and a fitted device name. The terminal keypad uses
+navigation, shortcuts and function keys, preserves the selected keyboard through typing-mode changes,
+and removes the redundant enter action. Swarm atlas orientation and packed SVG path parsing match the
+desktop's agent icons. Saved keypad profile IDs are kept separate from agent identities.
+
+**Release order and exact dependencies.** Truffle's canonical DNS metadata fix landed in
+[#247](https://github.com/vibecook-dev/truffle/pull/247); Release Please
+[#248](https://github.com/vibecook-dev/truffle/pull/248) published the complete 0.7.26 family.
+Its Swift tag `v0.7.26` resolves to `101889f676d32989e2c32295c3b608ccd5972c02`.
+Ghosttea [#101](https://github.com/vibecook-dev/ghosttea/pull/101) then merged, and signed immutable
+tag [`v0.14.0`](https://github.com/vibecook-dev/ghosttea/releases/tag/v0.14.0) at
+`86d816ee7920e6ffd0c8cfce24272e8802ceec76` published seven Rust crates and ten npm packages.
+Registry versions/checksums and the release's macOS, Windows and Linux package-install checks passed.
+The checksum-pinned Apple artifact is `ghosttea-apple-native-fcf9a17cce90`, with native source digest
+`5c36ad009576b86696efe06e1c1cc359fdaf7c8076dae57c367bbc8bdb270282`.
+
+This consumer moves Ghosttea's npm, Cargo and Swift pins together to 0.14.0 and both Swift lockfiles to
+the exact tags. Preflight, sibling coordinates, release-age exceptions and generated key-catalog provenance
+move in the same dependency event. Only the six consumed Ghosttea npm packages and six Rust crates change
+in those locks; unrelated resolutions stay fixed. The catalog's supported settings are unchanged. Swift
+Truffle moves to 0.7.26 to match Ghosttea's exact declaration; desktop Truffle Rust/core and all five npm
+sidecars stay together at 0.7.24, as the amended TB decision records. Source overlays are disabled.
+
+**Qualification.** The final iPhone app builds from the production manifests and published native artifact,
+with package-plugin validation enabled. The same exact released graph passes 910 simulator tests, zero
+failures, with only the opt-in real-tailnet test skipped. The earlier physical iPhone candidate run passed
+910 tests with zero failures and the same single opt-in skip; it used the identical release source tree and
+native artifact through a QA-only local Ghosttea root dependency. That distinction remains in the evidence.
+The separate Home and Swarm presentation suites pass 186 tests with no failures or skips on the released graph.
+
+The complete `pnpm verify` gate passes against the released dependencies: 12,534 TypeScript tests pass with
+17 declared skips; 544 Rust tests pass with 15 declared ignores. Import boundaries, dependency single-copy
+checks, iOS fixture consistency, icons, typecheck, lint, rustfmt, clippy, bundle budgets and generated-file
+freshness all pass. Nx reused 27 unchanged project results; the daemon project ran again with one worker,
+passing all 2,996 active tests (11 declared skips). Three daemon lifecycle checks had failed under heavy
+local concurrency; their focused serial run passed 51 tests, and the full serial run passes without changing
+assertions or deadlines. `NX_PARALLEL=1` and Vitest's worker limits bound local resource use, matching the
+repository's existing serial-file strategy for daemon tests in CI.
+
+The desktop landing gates and final tagged-dependency iPhone/live-tailnet runs are tracked in
+[consumer PR #12](https://github.com/vibefield/vibefield/pull/12). At this commit the physical rerun is waiting
+for the iPhone to reconnect; the PR stays in draft while final qualification remains pending.
+
+**Qualification environment correction.** The SSD-backed nested worktree exposed Vite's fallback for a bare
+React import from a temporary plugin artifact: it evaluated the CommonJS module at a fictitious `cwd/react`
+path and could not resolve React's relative implementation. The plugin CLI test configuration now resolves
+that exact singleton to the SDK's actual peer. All 32 existing artifact checks pass; no assertion or refusal
+was relaxed. An inherited `NO_COLOR` combined with Nx's `FORCE_COLOR` also added Node warnings to strict fake
+daemon stderr assertions; clearing the conflicting host setting fixes those checks without product changes.
+
+The reproducible qualification tools live under `tooling/ghostty-qualification`. Build caches remain on the
+portable SSD. Local evidence is under `artifacts/ghostty-1.4-manual-20261030/evidence/publication-20261102`
+in the Ghosttea workspace, including original failed attempts and `.xcresult` bundles. The original manual
+testing worktrees and their local configurations are preserved separately from this publication worktree.
+
+Latency remains unqualified by James's direction because the host was busy. Physical Windows GPU behavior,
+real Wi-Fi/cellular transitions, long device suspension and an attached hardware keyboard are not claimed.
+The first keyboard rotation can still recalibrate once before a native height has been measured; later
+switches use the measured height. Ghosttea's three existing SSH-production readiness blockers remain open.

@@ -18,6 +18,15 @@ source, result bundles and any baseline binaries needed for comparison.
 
 ## Build an isolated phone app
 
+For final release qualification, keep source overlays off and resolve the exact
+published Ghosttea and Truffle versions in the production manifests. The
+generator uses those manifests directly; the same build command below then
+tests the release graph. Review and approve Ghosttea's Metal compiler plugin
+for that package revision in Xcode before building, with plugin validation
+enabled. Record both resolved revisions with the results.
+
+For an unpublished native candidate only, use the source overlay procedure:
+
 Build Ghosttea's local native frameworks first, then enable Vibefield's Ghosttea
 sibling overlay. The local Swift link must target `apple/GhostteaKit`, whose
 manifest consumes the freshly built frameworks. The repository-root Ghosttea

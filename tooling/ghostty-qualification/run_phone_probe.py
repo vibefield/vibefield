@@ -75,7 +75,7 @@ def main():
                 "-destination", "platform=iOS,id=" + args.device,
                 "-resultBundlePath", str(args.result),
                 "-only-testing:FieldTerminalTests/GhosttyMigrationRemoteTests",
-                "-skipPackagePluginValidation", "-parallel-testing-enabled", "NO",
+                "-parallel-testing-enabled", "NO",
             ], env=environment, stdout=log, stderr=subprocess.STDOUT)
         return result.returncode
     finally:
