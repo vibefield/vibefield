@@ -92,6 +92,7 @@ import {
   registerUsersUpdate,
   registerViewSet,
   registerWindowBootstrap,
+  registerZoomHaptic,
 } from "./ipc";
 import { installLifecycle, type LifecycleFlow } from "./lifecycle";
 import { LinkNoticeObserver } from "./link-notices";
@@ -175,6 +176,7 @@ import { installWindowChords } from "./window-chords";
 import { hasInsetLights, LightsRegistry } from "./window-lights";
 import { WindowRegistry } from "./window-policy";
 import { createMainWindow, loadRenderer } from "./windows";
+import { createDesktopHaptics } from "./zoom-haptics";
 
 // The composition root (ESR §5.2.1): mode → lock → lifecycle → CSP → supervisor
 // → windows/IPC. Nothing else lives here — no discovery, no polling, no payload
@@ -1615,6 +1617,19 @@ async function main(
   });
   viewStates = views;
   registerViewSet(registry, viewStates, logger.child({ component: "ipc.view" }));
+  registerZoomHaptic(
+    registry,
+    (sender) =>
+      !sender.isDestroyed() &&
+      sender.isFocused() &&
+      BrowserWindow.fromWebContents(sender)?.isFocused() === true,
+    createDesktopHaptics({
+      platform: process.platform,
+      path: resources.desktopHapticsPath ?? null,
+      onError: (error) =>
+        logger.warn("desktop.haptics.unavailable", "Trackpad feedback is unavailable", { error }),
+    }),
+  );
   // Godview round 3 (GV-D11, GV-D6): the page says its deck's state by name and
   // main owns what follows — where the window's lights stand, composed with the
   // view above, and whether ⌘W is lent to the panes. The lights exist only on a

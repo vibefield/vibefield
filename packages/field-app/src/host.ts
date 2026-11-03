@@ -241,6 +241,8 @@ export interface FieldHost {
   readonly browserData?: FieldBrowserDataHost;
   /** Item 102 — the clipboard's read (`FieldClipboardHost`); absent where no main reads it. */
   readonly clipboard?: FieldClipboardHost;
+  /** Optional native tactile feedback; browser hosts provide no implementation. */
+  readonly haptics?: { zoomTick(): void };
   readonly platform?: ShellPlatform;
   readonly view?: FieldViewHost;
   /** Optional like `view`: a browser harness has no main to own the theme, and

@@ -88,6 +88,25 @@ describe("resolveDevelopmentResources", () => {
     expect(dev.fielddNeedsNodeMode).toBe(true);
   });
 
+  it("resolves the optional desktop haptic adapter only on macOS", () => {
+    expect(dev.desktopHapticsPath).toBe(
+      join(REPO, "apps/desktop/build/native/macos/desktop-haptics.node"),
+    );
+    for (const platform of ["win32", "linux"] as const) {
+      expect(
+        resolveDevelopmentResources({ repoRoot: REPO, electronExecPath: ELECTRON, platform })
+          .desktopHapticsPath,
+      ).toBeNull();
+    }
+    expect(
+      resolvePackagedResources({
+        resourcesPath: RESOURCES,
+        electronExecPath: ELECTRON,
+        platform: "darwin",
+      }).desktopHapticsPath,
+    ).toBe(join(RESOURCES, "bin", "desktop-haptics.node"));
+  });
+
   it("uses the cargo debug profile — legal here, forbidden in a package (EDP-13)", () => {
     expect(dev.fieldNativePath).toBe(join(REPO, "target", "debug", "field-native"));
   });

@@ -74,6 +74,7 @@ export function mountProductHost(
     host: {
       forceOnboarding: __VIBEFIELD_FORCE_ONBOARDING__,
       platform: window.vibefield.platform,
+      haptics: { zoomTick: () => window.vibefield.haptics.zoomTick() },
       logger: logging.logger,
       diagnostics: {
         query: (query) => window.vibefield.diagnostics.query(query),

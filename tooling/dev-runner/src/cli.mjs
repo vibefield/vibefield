@@ -125,6 +125,12 @@ async function main() {
   log.info("building the repository-owned native sidecar");
   await runTracked(cargoCommand, ["build", "-p", "field-native"], "field-native build");
 
+  await runTracked(
+    process.execPath,
+    ["apps/desktop/packaging/build-haptics.mjs"],
+    "desktop haptics build",
+  );
+
   log.info("starting watched Electron/fieldd builds and the Vite renderer");
   builds = await startEsbuildWatches({
     paths,

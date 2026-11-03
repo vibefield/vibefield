@@ -52,6 +52,7 @@ import type { ThemeOwner } from "./theme";
 import type { ViewRegistry } from "./view";
 import type { LightsRegistry } from "./window-lights";
 import type { WindowRegistry } from "./window-policy";
+import { createZoomHapticDoor } from "./zoom-haptics";
 
 // The closed IPC surface, main side (ESR §6.2–6.3): handlers wiring pure policy
 // to ipcMain. The bootstrap handler awaits supervisor.ensure() itself —
@@ -552,4 +553,20 @@ export function registerScreenshotStillKept(
   ipcMain.handle(IPC_CHANNELS.screenshotStillKept, (event, raw: unknown) =>
     door(event.sender, raw),
   );
+}
+
+/** Fire-and-forget feedback has no arguments, return channel, or native handle. */
+export function registerZoomHaptic(
+  registry: WindowRegistry,
+  focused: (sender: WebContents) => boolean,
+  perform: () => void,
+): void {
+  const door = createZoomHapticDoor<WebContents>({
+    owns: (sender) => registry.owns(sender),
+    focused,
+    perform,
+  });
+  ipcMain.on(IPC_CHANNELS.zoomHaptic, (event, ...args: unknown[]) => {
+    door(event.sender, event.senderFrame === event.sender.mainFrame, args.length);
+  });
 }

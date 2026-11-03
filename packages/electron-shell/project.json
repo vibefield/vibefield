@@ -7,7 +7,23 @@
       "outputs": [
         "{projectRoot}/dist/main",
         "{projectRoot}/dist/preload",
-        "{projectRoot}/dist/testing"
+        "{projectRoot}/dist/testing",
+        "{workspaceRoot}/apps/desktop/build/native/macos/desktop-haptics.node"
+      ],
+      "inputs": [
+        "production",
+        "^production",
+        {
+          "env": "NODE_ENV"
+        },
+        {
+          "env": "VITE_SPIKE"
+        },
+        "{workspaceRoot}/apps/desktop/native/macos/haptics/**/*",
+        "{workspaceRoot}/apps/desktop/packaging/build-haptics.mjs",
+        {
+          "runtime": "node -p \"process.platform + process.arch\""
+        }
       ]
     },
     "build:renderer": {
