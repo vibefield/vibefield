@@ -47,7 +47,12 @@ export const DESK_TRAY = { foot: 88 } as const;
 
 export const DESK_GRID: GridConfig = {
   fadeIn: GRID.fadeIn,
-  mat: { ...DEFAULT_MAT_CONFIG, ruler: { ...DEFAULT_MAT_CONFIG.ruler, on: true, margin: 0 } },
+  mat: {
+    ...DEFAULT_MAT_CONFIG,
+    // The room's light stays over the viewport while the desk moves underneath it.
+    gobo: { ...DEFAULT_MAT_CONFIG.gobo, space: "viewport" },
+    ruler: { ...DEFAULT_MAT_CONFIG.ruler, on: true, margin: 0 },
+  },
 };
 
 /** The desk dressed for one of the app's two themes: ICE's shipped theme and palette (D7), the
