@@ -1680,6 +1680,14 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "federate",
   }),
+
+  defineMethod({
+    surface: "product",
+    method: "terminal.release",
+    scope: "terminal.attach",
+    idempotent: true,
+    locality: "federate",
+  }),
   // DS-4 (DS-D5's note; TPv3 §6 amended 2026-09-30) — the TAKE as a product door,
   // for a host that cannot speak a cell's control leg (the phone's kit, DS-4b). A
   // routed runtime takes over its own control leg and never calls it. Declared so
@@ -2720,6 +2728,14 @@ export const METHODS: MethodDef[] = [
   defineMethod({
     surface: "product",
     method: "agent.interrupt",
+    scope: "agent.control",
+    idempotent: false,
+    locality: "federate",
+  }),
+
+  defineMethod({
+    surface: "product",
+    method: "agent.pause",
     scope: "agent.control",
     idempotent: false,
     locality: "federate",

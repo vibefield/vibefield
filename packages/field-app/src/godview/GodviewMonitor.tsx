@@ -581,7 +581,13 @@ export function GodviewMonitor({
   // Every view reads it (MV-4…MV-6): the list's and the timeline's band and
   // gutter are its insets, the swarm steers around its obstacles. The CSS
   // variables the legacy views read off the stage are gone with them.
-  const [stageGeometry, setStageGeometry] = useState<StageGeometry>(EMPTY_STAGE);
+  const fullStage =
+    "stageAllocation" in view.view.manifest && view.view.manifest.stageAllocation === "full";
+  const [measuredStage, setMeasuredStage] = useState({ fullStage, geometry: EMPTY_STAGE });
+  // A newly allocated view waits for its own measurement. Reusing a flow
+  // view's geometry would spawn full-stage bodies behind the terminal pane.
+  const stageGeometry =
+    measuredStage.fullStage === fullStage ? measuredStage.geometry : EMPTY_STAGE;
   // MV-W4 — the motion a view may make: none while the viewer asks for reduced
   // motion, and none while the stage's animations switch is off (the lab's
   // kill switch, the catalog's still stage, and the window's own Godview while
@@ -621,7 +627,7 @@ export function GodviewMonitor({
   // at 48, plus 8 — DESIGN.md §8 "Godview's head — Stories"): a silent strip
   // publishes the reserve where it published 0, and a strip with something to
   // say stands below the reserve (godview.css), so its bottom is past it. The
-  // flow views read the inset; the swarm reads `obstacles` and never the inset
+  // flow views read the top inset; the swarm reads the head's `obstacles`
   // (the SDK: insets are advisory, obstacles are the chrome's rectangles), so
   // the reserve is its first obstacle — the band across the stage's top that
   // holds the head's row, the window's lights and the search button — and its
@@ -631,10 +637,19 @@ export function GodviewMonitor({
     const chrome = chromeRef.current;
     const claims = claimsRef.current;
     if (!stage || !chrome || !claims || typeof ResizeObserver === "undefined") return;
+    const root = stage.closest<HTMLElement>(".vf-godview");
+    const wall = fullStage ? root?.querySelector<HTMLElement>(".vf-godview-field-wall") : null;
     const publish = (): void => {
       const stageRect = stage.getBoundingClientRect();
       const chromeRect = chrome.getBoundingClientRect();
-      const chromeRight = Math.round(chromeRect.right - stageRect.left);
+      // Layout pixels, even while the cover scales the entire stage.
+      const width = stage.clientWidth || Math.round(stageRect.width);
+      const height = stage.clientHeight || Math.round(stageRect.height);
+      const sx = stageRect.width > 0 ? width / stageRect.width : 1;
+      const sy = stageRect.height > 0 ? height / stageRect.height : 1;
+      const chromeRight = Math.round((chromeRect.right - stageRect.left) * sx);
+      const floor = wall ? (wall.getBoundingClientRect().top - stageRect.top) * sy : height;
+      const bottomInset = Math.max(0, Math.min(height, height - floor));
       // A strip with nothing to say takes no room of its own: it publishes the
       // head's reserve, and the view's own band then measures from there.
       // The GAP is not published — the list's own stylesheet adds its band to
@@ -649,31 +664,36 @@ export function GodviewMonitor({
       const bottom =
         claimsRect.height === 0
           ? HEAD_RESERVE
-          : Math.max(HEAD_RESERVE, Math.round(claimsRect.bottom - stageRect.top));
+          : Math.max(HEAD_RESERVE, Math.round((claimsRect.bottom - stageRect.top) * sy));
       // the same measurement as the view host's stage (MV-D19): the chrome's
       // right edge as the left inset, the strip's bottom as the top one, both
       // elements as obstacles — unrounded, the rectangles the swarm measured
       // off these two elements itself before it ported, so its bodies steer
       // exactly as they did — after the head's reserve, the stage's own width
       const rect = (box: DOMRect) => ({
-        x: box.left - stageRect.left,
-        y: box.top - stageRect.top,
-        width: box.width,
-        height: box.height,
+        x: (box.left - stageRect.left) * sx,
+        y: (box.top - stageRect.top) * sy,
+        width: box.width * sx,
+        height: box.height * sy,
       });
       const measured: StageGeometry = {
-        width: Math.round(stageRect.width),
-        height: Math.round(stageRect.height),
-        insets: { top: bottom, right: 0, bottom: 0, left: chromeRight },
+        width,
+        height,
+        insets: { top: bottom, right: 0, bottom: Math.round(bottomInset), left: chromeRight },
         obstacles: [
-          { x: 0, y: 0, width: stageRect.width, height: HEAD_RESERVE },
+          { x: 0, y: 0, width, height: HEAD_RESERVE },
           rect(chromeRect),
           ...(claimsRect.height === 0 ? [] : [rect(claimsRect)]),
         ],
       };
       // M176 item 1: every tick measures a fresh object; one that measures the
       // same keeps the stage held (the SDK's own rule), so it renders nothing
-      setStageGeometry((current) => keepStage(current, measured));
+      setMeasuredStage((current) => {
+        const geometry = keepStage(current.geometry, measured);
+        return current.fullStage === fullStage && geometry === current.geometry
+          ? current
+          : { fullStage, geometry };
+      });
     };
     const observer = new ResizeObserver(publish);
     observer.observe(chrome);
@@ -681,9 +701,21 @@ export function GodviewMonitor({
     // the stage itself too: a window that resizes moves the stage's size
     // without resizing the column or the strip
     observer.observe(stage);
+    // A pane moves without resizing the full stage. Its owner changes these
+    // attributes for both programmatic travel and each pointer/keyboard move.
+    const movement = wall && root ? new MutationObserver(publish) : null;
+    if (movement && root) {
+      movement.observe(root, {
+        attributes: true,
+        attributeFilter: ["style", "data-godview-deck"],
+      });
+    }
     publish();
-    return () => observer.disconnect();
-  }, []);
+    return () => {
+      observer.disconnect();
+      movement?.disconnect();
+    };
+  }, [fullStage]);
 
   // SB-3 — while the view holds the keys (the spawn bloom held open, or opened
   // for the keys: its `report`, MV-D8) the monitor holds them (QL-D2's other
@@ -894,6 +926,7 @@ export function GodviewMonitor({
       <section
         ref={stageRef}
         className={MONITOR_STAGE_CLASS}
+        data-stage-allocation={fullStage ? "full" : undefined}
         inert={still}
         {...(still ? { "data-still": "" } : {})}
         aria-label={

@@ -2,7 +2,7 @@ import FieldDesign
 import FieldInput
 import SwiftUI
 
-/// Item 42 — the readout a live card stands in its empty rows while another
+/// Item 42 — the readout centered in a live card while another
 /// client drives its session (DESIGN.md §8, "A live card another client is
 /// driving"; Phone A, ruled 2026-10-19 21:38Z). The desktop's held-edge figure
 /// at the phone's scale: the holder's name huge and "is driving" at 40%, one
@@ -11,8 +11,8 @@ import SwiftUI
 /// host hands this view the ground's ramp: a glow inside the sheet's edge and a
 /// bloom behind the words, the desktop's recipe in that ink.
 ///
-/// It fills the live card. The words stand in the card's empty rows
-/// (`FieldHomeModel.seatWordsCentre`); the veil covers the card and the glow
+/// It fills the live card. The words and their bloom share the center between
+/// the header and floating controls; the veil covers the card and the glow
 /// the sheet. The entrance plays once, as the readout first stands, after the
 /// 400ms wait (`FieldHomeModel.SeatEntrance`), then holds still; the readout
 /// leaves at once, with the view. None of it takes a touch: one on the grid
@@ -40,17 +40,15 @@ struct SeatReadoutView: View {
         .opacity(shown ? 1 : 0)
         .animation(entrance(Entrance.veil, FieldMotion.plainEase), value: entered)
       glow
-      GeometryReader { proxy in
-        let band = FieldHomeModel.liveCardBand
-        let centre = FieldHomeModel.seatWordsCentre(
-          grid: proxy.size.height - band, heldRows: readout.heldRows,
-          lineHeight: readout.lineHeight, footReserve: ClosedRow.footprint(for: dynamicTypeSize))
-        ZStack {
-          bloom
-          words
-        }
-        .position(x: proxy.size.width / 2, y: band + centre)
-      }
+      words
+        .frame(maxWidth: .infinity)
+        // A decorative bloom must not propose its 600pt width to the text.
+        // The card, minus these margins, is the name's actual fitting width.
+        .background { bloom }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 24)
+        .padding(.top, FieldHomeModel.liveCardBand)
+        .padding(.bottom, InputOverlay.footprint(for: dynamicTypeSize))
     }
     // M6: under reduced motion the whole of it fades in over 100ms, after the
     // same wait, and nothing in it moves.
@@ -125,12 +123,12 @@ struct SeatReadoutView: View {
         .offset(y: shown ? 0 : Entrance.captionRise)
         .animation(entrance(Entrance.caption, FieldMotion.island), value: entered)
     }
-    .padding(.horizontal, 24)
+    .multilineTextAlignment(.center)
   }
 
-  /// One line of the huge words: 800 at 56pt with a line height of 1 — the
-  /// line's box is the size and the glyphs overflow it, as CSS's do — at
-  /// −0.04em, a long name scaled to the card's width and never cut. Haloed in
+  /// The name can wrap to two lines and scale within the card's width. Its
+  /// measured height participates in centering the entire message, so a long
+  /// name neither overflows horizontally nor pushes the caption down. Haloed in
   /// the ground (the desktop's 40 and 18: CSS blurs, half each as SwiftUI's
   /// radius, as the kit's shadows convert them) and drawn letter by letter on
   /// the entrance's clock (`SeatLetters`).
@@ -140,14 +138,14 @@ struct SeatReadoutView: View {
       .font(ChromeType.sans(size, .heavy))
       .tracking(FieldHomeModel.seatWordsTracking * size)
       .foregroundStyle(ink)
-      .lineLimit(1)
+      .lineLimit(figure == .name ? 2 : 1)
       .minimumScaleFactor(0.4)
       .textRenderer(SeatLetters(clock: shown ? Entrance.length : 0, figure: figure, size: size))
       .animation(
         reduceMotion ? nil : .linear(duration: Entrance.length).delay(FieldHomeModel.seatVeilWait),
         value: entered)
       .fixedSize(horizontal: false, vertical: true)
-      .frame(height: size)
+      .frame(maxWidth: .infinity)
       .shadow(color: ground.solid, radius: 20)
       .shadow(color: ground.solid, radius: 9)
   }

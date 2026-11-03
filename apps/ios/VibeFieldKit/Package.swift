@@ -18,7 +18,9 @@ import PackageDescription
 // renders the lock's value back. The line itself, not a file this manifest reads and not the environment: SwiftPM
 // caches a manifest's evaluation keyed on its contents plus its environment, never a file it reads, so a file flips
 // nothing until the cache misses, and Xcode's GUI evaluates with a fixed environment (§3, measured 2026-10-15).
-let truffleRelease: Version? = "0.7.23"
+// EL8 2026-11-02: Ghosttea 0.14.0 and Swift Truffle 0.7.26 publish canonical DNS metadata.
+// Desktop Rust/core and npm sidecars retain 0.7.24; this Swift dependency has no sidecar.
+let truffleRelease: Version? = "0.7.26"
 let truffleDependency: Package.Dependency =
   if let release = truffleRelease {
     .package(url: "https://github.com/vibecook-dev/truffle.git", exact: release)
@@ -30,7 +32,7 @@ let truffleDependency: Package.Dependency =
 // siblings.lock.json's ghosttea `release.swift`, never by hand: the exact tag in the committed shape, and the checkout
 // (`../ghosttea-0.11.2`, reached through `.window/ghosttea` so the path package keeps the package's own identity, as
 // `.window/truffle` does) while `pnpm siblings use ghosttea` renders it nil.
-let ghostteaRelease: Version? = "0.13.7"
+let ghostteaRelease: Version? = "0.14.0"
 let ghostteaDependency: Package.Dependency =
   if let release = ghostteaRelease {
     .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: release)

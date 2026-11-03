@@ -1,0 +1,11 @@
+{
+  "requestId": "copy-1",
+  "sessionId": "sess-01J8Z3K9",
+  "activationId": "act-copy-1",
+  "leaseEpoch": 7,
+  "startColumn": 0,
+  "startRow": 0,
+  "endColumn": 79,
+  "endRow": 159,
+  "selectAll": true
+}

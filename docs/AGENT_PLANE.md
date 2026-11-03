@@ -60,7 +60,9 @@ records nothing. The seam's row is in [architecture](agent-plane/architecture.ht
 [api](agent-plane/api.html).* The ownership law assigns
 transcript ingestion solely to rosetta; architecture names the pre-existing runtime adapter readers that
 still need migration. MV adds no reader and does not claim that separate gap is closed. Find and usage
-are host chrome with injected ports, outside the sandboxed views.
+are host chrome with injected ports, outside the sandboxed views. A view may request full-stage
+allocation in its SDK manifest: the host measures the terminal edge as `stage.insets.bottom`;
+the swarm owns its eased collision wall and keeps its canvas and world at full size (DESIGN.md §8).
 
 ## The five family pages
 

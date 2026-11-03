@@ -548,10 +548,16 @@ export async function historyNewAgentAtModelRung(
     }
     if (row === undefined)
       throw new Error(`the new run's fold row does not show the model and the effort: ${seen}`);
-    // the stub's own record: launched with them, as the adapter translates them
-    const launch = readTypedAgentCalls(staged.calls)
-      .slice(callsBefore)
-      .find((candidate) => candidate.argv.includes("--session-id"));
+    // Configured intent can reach the fold before the child runs. Wait for
+    // its own launch record, as the ordinary New agent and Resume rows do.
+    let launch: { argv: string[] } | undefined;
+    const ran = Date.now() + 15_000;
+    while (Date.now() < ran && launch === undefined) {
+      launch = readTypedAgentCalls(staged.calls)
+        .slice(callsBefore)
+        .find((candidate) => candidate.argv.includes("--session-id"));
+      if (launch === undefined) await sleep(250);
+    }
     const flag = (name: string): string | undefined => {
       const at = launch?.argv.indexOf(name) ?? -1;
       return at < 0 ? undefined : launch?.argv[at + 1];

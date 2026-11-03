@@ -68,6 +68,34 @@ struct KeyboardOwnerTests {
     #expect(model.keyboardOwner == .none)
   }
 
+  @Test("folding prevents a departing popover from reopening the keyboard", arguments: [false, true])
+  func foldingCancelsPopoverRestoration(live: Bool) {
+    for menu in [false, true] {
+      let model = InputCardModel()
+      model.draft = "keep this unsent draft"
+      if live { model.toggleMode() } else { model.requestKeyboard() }
+      var acts: [InputAct] = []
+      model.sink = { acts.append($0); return true }
+      let requests = model.keyboardRequests
+      if menu { model.showPlusMenu() } else { model.showFan(.control) }
+
+      model.dismissKeyboard()
+      #expect(model.openFan == nil)
+      #expect(!model.plusMenuOpen)
+      // UIKit may deliver the popover's dismissal after the remote driver
+      // appeared. That callback must not focus the phone and reclaim its seat.
+      if menu { model.closePlusMenu() } else { model.closeFan() }
+      #expect(model.keyboardOwner == .none)
+      #expect(model.draft == "keep this unsent draft")
+      #expect(acts.isEmpty)
+      #expect(model.keyboardRequests == requests)
+
+      // An explicit tap can still open the current input mode afterwards.
+      model.requestKeyboard()
+      #expect(model.keyboardOwner == (live ? .terminal : .composer))
+    }
+  }
+
   @Test("KEYBOARD asks the right responder back")
   func requestGoesToTheCurrentMode() {
     let model = InputCardModel()

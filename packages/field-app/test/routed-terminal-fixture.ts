@@ -68,6 +68,8 @@ export function bornSummary(
     id: sessionId,
     handle: "1",
     executable: "/bin/zsh",
+    inputUsed: false,
+    programKind: "interactive-shell",
     cols: 80,
     rows: 24,
     exited: false,

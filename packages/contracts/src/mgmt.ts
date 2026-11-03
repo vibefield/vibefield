@@ -94,6 +94,8 @@ export type ObservedTerminalCell = z.infer<typeof ObservedTerminalCell>;
 
 export const ObservedTerminal = z
   .object({
+    creationId: z.string().optional(),
+    inputUsed: z.boolean().optional(),
     sessionId: z.string(),
     pid: z.number().int().optional(),
     /** epoch millis. LAW: wire timestamps are ALWAYS integers — bare z.number()

@@ -19,9 +19,9 @@ use super::wire::{
     tagged, AttachControlLeg, AttachFramesLeg, AttachRefused, CellActivationStatus, ClaimGeometry,
     ControlLegAttached, DeclareDemand, DemandAccepted, FramesAttachOutcome, FramesLegAttached,
     GeometryCommitted, GeometryHolder, GeometryHolderFace, GeometryRefused, GeometryState,
-    GeometryStateHolder, LeaseDimension, ReceiverCapacities, ReleaseGeometry, SceneApplied,
-    SceneContentStamp, SceneEpoch, SendInput, SourceDemandMode, TransferGeometry, TransportCredit,
-    TrfIdentity, JSON_MAX_SAFE_INTEGER,
+    GeometryStateHolder, LeaseDimension, ReceiverCapacities, ReleaseGeometry, RequestScene,
+    SceneApplied, SceneContentStamp, SceneEpoch, SelectionTextRequest, SendInput, SourceDemandMode,
+    TransferGeometry, TransportCredit, TrfIdentity, JSON_MAX_SAFE_INTEGER,
 };
 use crate::registries::terminal_pipeline as tp;
 use std::collections::{HashMap, VecDeque};
@@ -48,6 +48,8 @@ use tokio::sync::Semaphore;
 #[derive(Debug)]
 pub enum Outbound {
     Text(String),
+    /// At most two selection responses wait on a slow control writer.
+    SelectionText(String, tokio::sync::OwnedSemaphorePermit),
     Binary(Vec<u8>, Option<Arc<str>>),
     Bulk(Vec<u8>, Arc<str>),
     Close(u16, String),
@@ -85,6 +87,7 @@ pub struct LegRef {
     pub out: UnboundedSender<Outbound>,
     pub bulk_credit: Option<Arc<Semaphore>>,
     pub geometry_events: bool,
+    pub selection_credit: Option<Arc<Semaphore>>,
 }
 
 impl LegRef {
@@ -154,6 +157,9 @@ pub struct Activation {
     /// is advancing again once the worker applies it (presenting once more).
     pub resume_revision: Option<u64>,
     pub pump_running: bool,
+    /// A viewer repair request advances this without detaching its view.
+    /// The pump observes the generation even when its wake notifications coalesce.
+    pub scene_repair_generation: u64,
     /// C5 — the lag ledger: every unit sent in this lineage and not yet
     /// covered by a `SceneApplied`, as (revision, when sent), oldest first.
     /// The lag call is the age of its FRONT (`lagging`).
@@ -788,7 +794,10 @@ impl ActivationTable {
             // the scene is not advancing, and the lease says why in the
             // spec's own word for both dimensions (`overload`), not `pending`
             a.input = Input::Suspended(reason);
-        } else if a.presentation != Presentation::Presenting {
+        } else if a.presentation != Presentation::Presenting
+            || a.demand != SourceDemandMode::Live
+            || a.view.is_none()
+        {
             a.input = Input::Suspended("pending");
         } else if now_ms + tp::ATTACH_RENEWAL_MARGIN_MS >= a.grant_expires_at_ms {
             a.input = Input::Suspended("right-expired");
@@ -1354,6 +1363,29 @@ impl ActivationTable {
             .map(|text| Effect::Send(leg.clone(), text))
     }
 
+    /// Selection is authorized by READ, independent of the input lease. A
+    /// lagging/read-only viewer can copy; a foreign, expired or revoked one
+    /// cannot. The door holds the registry guard through the engine read so
+    /// revocation and selection have a single ordering.
+    pub fn selection_view<'a>(
+        &'a self,
+        leg: &LegRef,
+        msg: &SelectionTextRequest,
+        now_ms: u64,
+    ) -> Option<&'a str> {
+        let a = self.by_id.get(&msg.activation_id)?;
+        if a.control.connection_id != leg.connection_id
+            || a.session_id != msg.session_id
+            || a.lease_epoch != msg.lease_epoch
+            || !a.has_right(AttachRight::Read)
+            || !a.grant_live(now_ms)
+            || matches!(a.presentation, Presentation::Revoked(_))
+        {
+            return None;
+        }
+        a.view.as_ref().map(|(view, _)| view.as_str())
+    }
+
     /// `SendInput` (§5.4, TP-S3-input) — the cell-side gate for one input op.
     /// PURE read: it resolves the caller activation, applies every cell-side
     /// fence, and hands back the coordinates the door feeds ghosttea (whose own
@@ -1584,6 +1616,7 @@ impl ActivationTable {
             seed_revision: None,
             resume_revision: None,
             pump_running: false,
+            scene_repair_generation: 0,
             unacked: VecDeque::new(),
             last_status_sent_at: None,
         };
@@ -1830,6 +1863,12 @@ impl ActivationTable {
                 }
             }
             (_, _) => {
+                // The view is about to go away; close input before that effect
+                // runs, even while the last applied picture still presents.
+                if matches!(a.input, Input::Allowed) {
+                    a.input = Input::Suspended("pending");
+                    effects.push(Self::status_effect(a));
+                }
                 if let Some((view_id, _)) = a.view.clone() {
                     effects.push(Effect::DetachView {
                         activation_id: a.activation_id.clone(),
@@ -1844,6 +1883,31 @@ impl ActivationTable {
             }
         }
         effects
+    }
+
+    /// A negotiated repair on this activation's current frames leg. A stale,
+    /// parked, revoked or expired reader cannot ask the engine to render.
+    pub fn request_scene(&mut self, leg: &LegRef, msg: RequestScene, now_ms: u64) -> Vec<Effect> {
+        let Some(a) = self.by_id.get_mut(&msg.activation_id) else {
+            return Vec::new();
+        };
+        if a.frames.as_ref().is_none_or(|f| {
+            f.connection_id != leg.connection_id || f.leg_generation != leg.leg_generation
+        }) || a.session_id != msg.session_id
+            || a.lease_epoch != msg.lease_epoch
+            || !a.has_right(AttachRight::Read)
+            || !a.grant_live(now_ms)
+            || a.demand != SourceDemandMode::Live
+            || a.view.is_none()
+            || !a.pump_running
+            || matches!(a.presentation, Presentation::Revoked(_))
+        {
+            return Vec::new();
+        }
+        a.scene_repair_generation = a.scene_repair_generation.wrapping_add(1);
+        vec![Effect::WakePump {
+            activation_id: a.activation_id.clone(),
+        }]
     }
 
     /// `SceneApplied` from the worker: progress, the lease answered.
@@ -2065,11 +2129,16 @@ impl ActivationTable {
             .and_then(|l| l.can_admit(activation_id, bytes, class))
     }
 
-    /// Does the activation want frames right now (demand live and the view attached)?
-    pub fn wants_frames(&self, activation_id: &str) -> bool {
-        self.by_id
-            .get(activation_id)
-            .is_some_and(|a| a.demand == SourceDemandMode::Live && a.view.is_some())
+    /// The live view's (attachment epoch, repair generation). A pump notices
+    /// both a rapid park/reattach and a repair even when their wakes coalesce.
+    pub fn scene_generation(&self, activation_id: &str) -> Option<(u64, u64)> {
+        let a = self.by_id.get(activation_id)?;
+        if a.demand != SourceDemandMode::Live {
+            return None;
+        }
+        a.view
+            .as_ref()
+            .map(|(_, epoch)| (*epoch, a.scene_repair_generation))
     }
 
     /// Invalidate one activation: the lease revoked on the control leg (if it
@@ -2257,6 +2326,7 @@ mod tests {
                 out: tx,
                 bulk_credit: None,
                 geometry_events: false,
+                selection_credit: None,
             },
             rx,
         )
@@ -2588,6 +2658,63 @@ mod tests {
     }
 
     type Rx = tokio::sync::mpsc::UnboundedReceiver<Outbound>;
+
+    #[test]
+    fn scene_repair_requires_the_current_live_reader_and_preserves_its_view() {
+        for fence in [
+            "none",
+            "connection",
+            "leg-generation",
+            "session",
+            "lease",
+            "read",
+            "expired",
+            "parked",
+            "detached",
+            "stopped-pump",
+            "revoked",
+        ] {
+            let mut t = ActivationTable::new("cb");
+            let (_, _crx, mut frames, _frx) = presenting_activation(&mut t, "a1", "s1", 10);
+            let mut request = RequestScene {
+                activation_id: "a1".into(),
+                session_id: "s1".into(),
+                lease_epoch: 0,
+            };
+            let a = t.by_id.get_mut("a1").unwrap();
+            match fence {
+                "connection" => frames.connection_id += 100,
+                "leg-generation" => frames.leg_generation += 1,
+                "session" => request.session_id = "other".into(),
+                "lease" => request.lease_epoch += 1,
+                "read" => a.rights.retain(|right| *right != AttachRight::Read),
+                "expired" => a.grant_expires_at_ms = 3_000,
+                "parked" => a.demand = SourceDemandMode::None,
+                "detached" => a.view = None,
+                "stopped-pump" => a.pump_running = false,
+                "revoked" => a.presentation = Presentation::Revoked("replaced"),
+                "none" => {}
+                _ => unreachable!(),
+            }
+            let view = a.view.clone();
+            let accepted = a.accepted.clone();
+            let input = a.input;
+            let demand_sequence = a.demand_sequence;
+            let effects = t.request_scene(&frames, request, 4_000);
+            let a = t.get("a1").unwrap();
+            if fence == "none" {
+                assert!(matches!(effects.as_slice(), [Effect::WakePump { .. }]));
+                assert_eq!(t.scene_generation("a1"), Some((7, 1)));
+            } else {
+                assert!(effects.is_empty(), "fence {fence}");
+                assert_eq!(a.scene_repair_generation, 0, "fence {fence}");
+            }
+            assert_eq!(a.view, view);
+            assert_eq!(a.accepted, accepted, "a repair is not an acknowledgement");
+            assert_eq!(a.input, input);
+            assert_eq!(a.demand_sequence, demand_sequence);
+        }
+    }
 
     /// An input-granted activation on legs of its own, both attached with the
     /// view up — PENDING (no seed yet). The receivers are drained.
@@ -4784,6 +4911,72 @@ mod tests {
         assert_eq!(seat_states(&mut d_newer_rx), vec![empty_seat(2, (46, 30))]);
     }
 
+    #[test]
+    fn selection_read_requires_owned_live_read_grant_but_not_input() {
+        let mut table = ActivationTable::new("cb");
+        let (control, _rx) = leg(1);
+        let (foreign, _other_rx) = leg(2);
+        perform(table.attach_control(AttachControlInput {
+            now_ms: 2_000,
+            set: &set(),
+            leg: &control,
+            msg: control_msg("copy-a", None, true),
+            claims: claims("s1", 1, &[AttachRight::Read]),
+            session_known: true,
+        }));
+        table.view_attached("copy-a", "engine-owned-view", 7);
+        let request = SelectionTextRequest {
+            request_id: "request-1".into(),
+            session_id: "s1".into(),
+            activation_id: "copy-a".into(),
+            lease_epoch: 0,
+            start_column: 0,
+            start_row: 0,
+            end_column: 79,
+            end_row: 159,
+            select_all: true,
+        };
+        assert_eq!(
+            table.selection_view(&control, &request, 3_000),
+            Some("engine-owned-view")
+        );
+        assert!(table.selection_view(&foreign, &request, 3_000).is_none());
+        for changed in [
+            SelectionTextRequest {
+                session_id: "other-session".into(),
+                ..request.clone()
+            },
+            SelectionTextRequest {
+                activation_id: "other-activation".into(),
+                ..request.clone()
+            },
+            SelectionTextRequest {
+                lease_epoch: 99,
+                ..request.clone()
+            },
+        ] {
+            assert!(table.selection_view(&control, &changed, 3_000).is_none());
+        }
+        assert!(table
+            .selection_view(
+                &control,
+                &request,
+                table.by_id["copy-a"].grant_expires_at_ms
+            )
+            .is_none());
+        table.by_id.get_mut("copy-a").unwrap().rights.clear();
+        assert!(table.selection_view(&control, &request, 3_000).is_none());
+        table
+            .by_id
+            .get_mut("copy-a")
+            .unwrap()
+            .rights
+            .push(AttachRight::Read);
+        table.by_id.get_mut("copy-a").unwrap().presentation =
+            Presentation::Revoked("test-revocation");
+        assert!(table.selection_view(&control, &request, 3_000).is_none());
+    }
+
     /// TP-S3-input — every cell-side gate of `send_input`, walked in sequence:
     /// the Proceed carries the CELL-owned fence coordinates; a foreign leg, an
     /// unknown activation, a stale lease epoch, the renewal-margin backstop, a
@@ -4889,8 +5082,8 @@ mod tests {
             t.send_input(&control, &msg("a1", "s1", 0, 4), 600_000),
             InputDecision::Drop(InputDrop::RightExpired)
         ));
-        // demand none parks the view; the lease is untouched, but there is
-        // nothing to type into — reachable, not defensive
+        // Parking must close input immediately, before the engine detach,
+        // and the periodic lease refresh must not reopen it over a stale scene.
         perform(t.declare_demand(
             &control,
             DeclareDemand {
@@ -4905,10 +5098,13 @@ mod tests {
                 },
             },
         ));
+        assert_eq!(t.by_id["a1"].input, Input::Suspended("pending"));
         t.view_detached("a1");
+        perform(t.tick(3_001));
+        assert_eq!(t.by_id["a1"].input, Input::Suspended("pending"));
         assert!(matches!(
             t.send_input(&control, &msg("a1", "s1", 0, 5), 3_000),
-            InputDecision::Drop(InputDrop::NoView)
+            InputDecision::Drop(InputDrop::Lease("pending"))
         ));
 
         // a read-only viewer: presenting, but input = revoked{not-granted}
@@ -5043,7 +5239,7 @@ mod tests {
         assert_eq!(answer(&t, &foreign, &msg("a1", "s1", 0), 3_200), None);
         assert_eq!(answer(&t, &control, &msg("a1", "s9", 0), 3_200), None);
 
-        // demand none parks the view: nothing to type into, said so
+        // demand none closes the input lease before detaching the view.
         perform(t.declare_demand(
             &control,
             DeclareDemand {
@@ -5061,7 +5257,7 @@ mod tests {
         t.view_detached("a1");
         assert_eq!(
             answer(&t, &control, &msg("a1", "s1", 0), 3_300),
-            Some("no-view")
+            Some("pending")
         );
 
         // an overload stop: the lease's word again

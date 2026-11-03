@@ -97,6 +97,10 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionSummary {
+    #[serde(default)]
+    pub creation_id: Option<String>,
+    #[serde(default)]
+    pub input_used: Option<bool>,
     pub id: String,
     #[serde(default)]
     pub pid: Option<u32>,

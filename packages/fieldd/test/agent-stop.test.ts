@@ -41,6 +41,16 @@ describe("ST-D3 — which runs fieldd can read", () => {
 });
 
 describe("ST-D2/D3 — the one step a Stop takes at its bound", () => {
+  it("never retries Pause, even while a delayed observation still says working", () => {
+    expect(nextStopStep(stop(), READABLE_WORKING, true)).toBe("unheard");
+    expect(nextStopStep(stop({ stage: "resent" }), READABLE_WORKING, true)).toBe("unheard");
+    expect(nextStopStep(stop(), READABLE_IDLE, true)).toBe("unheard");
+    expect(nextStopStep(stop(), READABLE_UNKNOWN, true)).toBe("unheard");
+    expect(nextStopStep(stop({ stage: "heard" }), READABLE_WORKING, true)).toBe("none");
+    expect(
+      nextStopStep(stop({ stage: "resent", unheardAt: UNHEARD_AT }), READABLE_WORKING, true),
+    ).toBe("none");
+  });
   it("sends a Stop not heard once more, whatever the run's status says", () => {
     for (const facts of [READABLE_WORKING, READABLE_IDLE, UNREADABLE]) {
       expect(nextStopStep(stop(), facts)).toBe("resend");

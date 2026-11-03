@@ -236,8 +236,8 @@ private final class Lines: @unchecked Sendable {
   }
 
   /// `geometry-events` is advertised on the CONTROL hello — the leg the cell
-  /// announces a seat on — beside `resume`, `session-events` and C5's
-  /// `input-refusals`, and nothing else new.
+  /// announces a seat on — beside `resume`, `session-events`, `input-refusals`,
+  /// and the optional selection-text read operation.
   @Test func theControlHelloAdvertisesGeometryEvents() async throws {
     let transport = ScriptedTransport()
     let client = makeClient(transport)
@@ -253,6 +253,8 @@ private final class Lines: @unchecked Sendable {
         == [
           "resume", "session-events", RoutedTerminalContract.geometryEventsCapability,
           RoutedTerminalContract.inputRefusalsCapability,
+          RoutedTerminalContract.selectionTextCapability,
+          RoutedTerminalContract.sceneRepairCapability,
         ])
   }
 

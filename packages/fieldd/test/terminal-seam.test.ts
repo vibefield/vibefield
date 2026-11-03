@@ -110,6 +110,68 @@ async function poll<T>(
 // WIN-6: ConPTY terminal hosting is live on Windows (the kill matrix runs on the
 // box in field-native/tests/terminal_unit.rs), so this seam runs on both platforms.
 describe("the terminal seam (NF-3, real field-native)", () => {
+  it("correlates the first inventory birth and conditionally releases only a lifetime-unused shell", async () => {
+    const dataDir = await spawnNative();
+    const daemon = await boot({ dataDir, controlPort: 0, dataPort: 0 });
+    const grant = daemon.tokens.mint(["terminal.attach"], "lifecycle-seam");
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", resolve);
+      ws.once("error", reject);
+    });
+    cleanup.push(() => ws.close());
+    const rpc = new WsRpc(ws);
+    await helloAs(rpc, grant.token);
+    const shell = process.platform === "win32" ? SHELL : "/bin/sh";
+    const created = (await rpc.call("terminal.create", { shell, creationId: "handoff-one" })) as {
+      sessionId: string;
+      session: { creationId: string; inputUsed: boolean; programKind: string };
+    };
+    expect(created.session).toMatchObject({
+      creationId: "handoff-one",
+      inputUsed: false,
+      programKind: "interactive-shell",
+    });
+    const row = await poll(async () => {
+      const { terminals } = (await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] };
+      return terminals.find((item) => item.sessionId === created.sessionId);
+    });
+    expect(row).toMatchObject({ creationId: "handoff-one", inputUsed: false });
+    expect(
+      await rpc.call("terminal.release", { sessionId: created.sessionId, condition: "unused" }),
+    ).toEqual({ accepted: true });
+    await poll(
+      async () => {
+        const { sessions } = (await rpc.call("terminal.sessions", {})) as {
+          sessions: Array<{ id: string }>;
+        };
+        return sessions.some((item) => item.id === created.sessionId) ? undefined : true;
+      },
+      10_000,
+      "conditional native cleanup of the unused shell",
+    );
+
+    const used = (await rpc.call("terminal.create", { shell })) as { sessionId: string };
+    expect(
+      await daemon.terminals.automate(used.sessionId, { kind: "text", text: "echo lifecycle\n" }),
+    ).toEqual({ accepted: true });
+    await poll(async () => {
+      const { sessions } = (await rpc.call("terminal.sessions", {})) as {
+        sessions: Array<{ id: string; inputUsed: boolean }>;
+      };
+      return sessions.find((item) => item.id === used.sessionId && item.inputUsed);
+    });
+    expect(
+      await rpc.call("terminal.release", { sessionId: used.sessionId, condition: "unused" }),
+    ).toEqual({ accepted: true });
+    // A later create/read goes through the same owner after the conditional request.
+    const retained = (await rpc.call("terminal.sessions", {})) as {
+      sessions: Array<{ id: string }>;
+    };
+    expect(retained.sessions.some((item) => item.id === used.sessionId)).toBe(true);
+    await rpc.call("terminal.terminate", { sessionId: used.sessionId });
+  }, 60_000);
+
   it("create → observe → ticket-attach → automate → terminate, one authority", async () => {
     const dataDir = await spawnNative();
     const daemon = await boot({ dataDir, controlPort: 0, dataPort: 0 });

@@ -332,6 +332,11 @@
   adapter-named stop), re-attach Step 1 and the write-word ruling (James, 10-28 04:22Z), with puppeteer's half of every
   lane from the registry (Q01/Q02, Q03, Q05's ledger, Q07, Q09, Q12's drawing, Q14, Q16, Q21, the Hermes bearer). Fix
   wave 1 is complete.
+- **Godview lifecycle QA (2026-11-02):** stable pane identity through launch/exit, terminal-owner
+  release with durable retry, and full-size swarm geometry with an eased terminal wall. James's
+  new ruling makes Stop end the agent and adds Pause for one current-turn cancellation. The
+  consumer adopts published Ghosttea 0.13.8 and Puppeteer 0.3.3; LANDED records the release
+  coordinates, unchanged phone parity values and verification.
 - Next: QA wave 1, the plan's run on main (VF-PM's grant and James's display). §2.6's fold is owed at Step 3's custody
   slice (design-02:13; its erratum stands since 10-27); RA-D6's own item is owed (§6).
 
@@ -636,7 +641,7 @@
 | AH | AH-4's runtime on main since `cce684ce3` (08-03), unledgered by its own rule until review + witnesses · AH-1 two-client proof · AH-3 physical closeout · AH-5 the phone list · device-retirement GC | an owner; GC with TS's "forget a device" | `specs/artifact-hub.md` |
 | PLUG follow-ups | the KIT slice · third-party listing (P8e: TD registry + R2 process host; PA-24, §20.5, §21.8) · sideload · R2 `host:"process"` · PRC-5's power loss (§6) · PRC residual policies (§14–§15) · per-section undo/⌘Z/timeline (D29′, P7) | first-party publishing; third-party plugins; a Settings history design; runtime validation is tracked separately in §6 | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` |
 | TP / TC | D6's cell half, C5, D5, the lineage break (§6) · TC RATIFIED as built (Q6: TC-D1/D2 as amended by WG-D1, D3, D15, L1c at TM-1); TC-S4…S8 (vault, broker, replay, drain-migrate, warm tiers) parked · TP-S4…S6 (S4's typeable mirror struck) | a TP lane · a ghosttea next-major or a P0 witness across a floor restart · measured demand | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md` |
-| GT | G29 upstream (then GT-D22's file half) · GT-D22 (§5) · smoke row 13b: attach through DS-4e to a second staged desktop · no kill control in Godview (Q2): a session ends by the agent's quit, ⌘Q (AL-3) or reaping | G29's release · the two-desktop run | `specs/godview-terminal.md` |
+| GT | G29 upstream (then GT-D22's file half) · GT-D22 (§5) · smoke row 13b: attach through DS-4e to a second staged desktop · Q2 superseded 2026-11-02: Stop ends the agent; Pause cancels its current turn and keeps it open | G29's release · the two-desktop run | `specs/godview-terminal.md` |
 | IOS | the rebuild and TestFlight (§5) · phone Settings ("Settings in a Pocket", page Hof2zWpt, revised 2026-10-31 against `02c902a8d`: 8 marks, none picked yet; IOS-10a LANDED 2026-11-01 as `a9a62c20a`, run 67, at the page's leans, after FW, SP and PG; next: its later slices, LANDED "IOS-10a") · the phone's splash (IOS-11, James's PR #10) LANDED 2026-11-02 in M104 `f2854bf2f`, run 104, LANDED "PR #9 and PR #10"; on it, The Way In (track WI, page 5cvau5EQ; WI-D1…D8 ruled A by James 2026-11-02 11:13–11:15Z) is ACTIVE, §8's WI row: WI-1 LANDED 2026-11-02 in M108 `8cfe4a59d`, run 108, LANDED "WI-1 (with WI-2) and WI-4"; next on it WI-3, the lock · K-D5's ghosttea `customInputView` petition (unfiled) | James rebuilds; external TestFlight | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `apps/ios/TESTFLIGHT.md` |
 | NF | COMPLETE; owed: item 52 (b)'s phone half (its routed ghosttea client) · headless floor-on-tailnet rows over TS-1's authKey path (`029af0e6f`) if wanted · native-floor §7 into the T posture | an NF lane | `specs/native-floor.md` |
 | Native push (APNs) | SP-D8: the relay after AR-6; pairing is the account; README's `services/push-relay` row is deferred | AR-6 | `thinking-native-push.md`, design-06 L4 |

@@ -9,6 +9,7 @@ import {
   type AgentLastRunForgetResult,
   type AgentLastRunResult,
   AgentModelsParams,
+  AgentPauseParams,
   AgentRecordedLanesParams,
   AgentResumeParams,
   AgentSpawnParams,
@@ -172,6 +173,7 @@ import {
   type TerminalCreateOpenResponse,
   TerminalCreateParams,
   type TerminalListResult,
+  TerminalReleaseParams,
   TerminalRenewAttachParams,
   type TerminalRosterResult,
   type TerminalRuntimeSessionsResult,
@@ -1894,6 +1896,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // honest refusal until then). A test seam's rewriter outranks both.
     let egressCellRewriter: EgressCellRewriter | undefined;
     const terminals = new TerminalService({
+      releasesFile: join(config.dataDir, ...LAYOUT.TERMINAL_RELEASES_FILE),
       link: native,
       logger: logger.child({ component: "terminal.service" }),
       ...(config.terminalBirthWaitMs !== undefined
@@ -3843,7 +3846,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(selected ? { modelSelection: true } : {}),
           },
         },
-        () => agents.spawn(parsed.data, ctx.principal, ctx.onBehalfOf),
+        () =>
+          terminals.withCreation(parsed.data.creationId, () =>
+            agents.spawn(parsed.data, ctx.principal, ctx.onBehalfOf),
+          ),
         (result) => ({
           outcome: "succeeded",
           attrs: {
@@ -3885,7 +3891,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           target,
           attrs: { ...attrs, ...(resume.cwd !== undefined ? { cwd: resume.cwd } : {}) },
         },
-        () => agents.resume(resume, ctx.principal, ctx.onBehalfOf),
+        () =>
+          terminals.withCreation(parsed.data.creationId, () =>
+            agents.resume(resume, ctx.principal, ctx.onBehalfOf),
+          ),
         (result) => ({
           outcome: "succeeded",
           attrs: {
@@ -3924,6 +3933,29 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: { runtimeRunId: parsed.data.runtimeRunId },
         },
         () => agents.interrupt(parsed.data),
+        (result) =>
+          result.accepted
+            ? { outcome: "succeeded", attrs: { accepted: true } }
+            : {
+                outcome: "denied",
+                reasonCode: "REFUSED",
+                // the floor's own word, never a sentence composed here
+                attrs: { accepted: false, reason: result.reason },
+              },
+      );
+    });
+    api.register("agent.pause", async (ctx, params) => {
+      const parsed = AgentPauseParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { runtimeRunId }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agent.session.interrupt",
+          target: { kind: "agent-session", id: parsed.data.runtimeRunId },
+          attrs: { runtimeRunId: parsed.data.runtimeRunId, mode: "pause" },
+        },
+        () => agents.pause(parsed.data),
         (result) =>
           result.accepted
             ? { outcome: "succeeded", attrs: { accepted: true } }
@@ -4654,6 +4686,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       runtime: agents.runtime,
       fold: { list: () => agents.list(), subscribe: (emit) => agents.subscribe(emit) },
       terminals: {
+        creationIdOf: (id) => terminals.creationIdOf(id),
         list: () => (terminals.observation() !== undefined ? terminals.list() : undefined),
         onInventory: (listener) => terminals.onInventory(listener),
         profileSetOf: (sessionId) => terminals.profileSetOf(sessionId),
@@ -5041,6 +5074,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { sessionId: string }", false);
       return terminals.takeGeometry(parsed.data.sessionId);
+    });
+    api.register("terminal.release", async (ctx, params) => {
+      const parsed = TerminalReleaseParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected {sessionId, condition}", false);
+      return audit.required(
+        ctx,
+        {
+          action: "terminal.session.release",
+          target: { kind: "terminal", id: parsed.data.sessionId },
+          attrs: { condition: parsed.data.condition },
+        },
+        () => terminals.release(parsed.data),
+        () => ({ outcome: "succeeded", attrs: { queued: true } }),
+      );
     });
     api.register("terminal.terminate", async (ctx, params) => {
       const sessionId = requireSessionId(params);

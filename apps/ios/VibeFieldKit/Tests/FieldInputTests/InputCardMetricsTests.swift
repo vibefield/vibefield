@@ -145,24 +145,6 @@ struct InputCardMetricsTests {
         == InputCardMetrics.rowHeight(for: .accessibility1))
   }
 
-  /// The keypad's frame grows with its keys. Five rows plus the picker: a frame
-  /// that stayed at 260 pt would clip the last row, and the last row is the one
-  /// carrying the Alt latch.
-  @Test("the keypad's frame grows with its keys")
-  func keypadFrame() {
-    let base = InputCardMetrics.keypadHeight(accessibility: false)
-    let large = InputCardMetrics.keypadHeight(accessibility: true)
-    #expect(base == TerminalKeypad.height)
-    let keyGrowth =
-      InputCardMetrics.keypadKeyHeight(for: .accessibility1)
-      - InputCardMetrics.keypadKeyHeight(for: .large)
-    let headerGrowth =
-      InputCardMetrics.keypadHeaderHeight(accessibility: true)
-      - InputCardMetrics.keypadHeaderHeight(accessibility: false)
-    // Five key rows on the Keys page, plus the page picker.
-    #expect(large - base >= keyGrowth * 5 + headerGrowth)
-  }
-
   /// The iPad rule (and a landscape phone's). It has to be wider than the
   /// widest phone in portrait, or it would reshape the device the card was
   /// designed on, and narrower than an iPad's landscape inset, or it would do

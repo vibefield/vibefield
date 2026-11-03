@@ -39,6 +39,7 @@ export const ROUTED_CLIENT_CAPABILITIES: readonly string[] = [
   "resume",
   "session-events",
   "geometry-events",
+  "selection-text",
 ];
 
 /** The host verbs a control leg carries to this adapter — the contract's own
@@ -688,7 +689,7 @@ export function createRoutedTerminalHost(
     // for one message is refused here, in words (`onInputRefusal`), never parted.
     // `input.encodeInputs` takes its place when the seam can send an ordered
     // list all-or-none and name the leg's capabilities (D6's upstream half).
-    encodeInput: input.encodeInput,
+    encodeInput: (context) => input.encodeInput(context),
   };
 
   return {

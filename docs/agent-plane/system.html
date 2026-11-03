@@ -1499,29 +1499,46 @@
               </div>
               <div class="contract-row">
                 <strong>Agent exits return the pane to a shell</strong>
-                <p>
-                  The class is <code>keep-until-explicit-close</code>, not <code>keep-until-exit</code>:
-                  custody survives long enough for the renderer to replace the ended PTY safely.
-                  <strong>Correction 2026-09-28:</strong> a local managed agent's confirmed
-                  <code>completed</code> native exit creates a fresh interactive shell in the same
-                  folder and conditionally replaces its current pane attachments. Pane identity,
-                  layout, focus and fullscreen stay intact; the empty-pane launcher returns.
-                  The audited <code>terminal.terminate</code> door then releases the old PTY.
-                  Conversation history remains resumable. Failed exits retain their diagnostic
-                  surface; monitor liveness alone never replaces a live process. A late birth
-                  whose pane closed or changed is released without mounting elsewhere.
-                </p>
+                <p><strong>Lifecycle ownership, 2026-11-02.</strong> The native PTY owner records
+                  accepted human and automation input for the session's lifetime. Conditional release
+                  checks that fact, activity, and every attached view under the same gate that admits
+                  input and attachments. A successful release seals the session against late input or
+                  attachment. Unknown input ownership never means unused.</p>
+                <p>A local managed agent's clean native exit, or an accepted explicit Stop, creates
+                  one interactive shell and replaces only panes still attached to that session. The
+                  replacement preserves pane layout, focus, fullscreen and spatial bubble identity.
+                  A dedicated agent PTY remains claimed until cleanup; a user-shell run instead gives
+                  its surviving shell back. Both orders of native exit and monitor withdrawal are
+                  supported. Failed exits retain their diagnostic pane.</p>
+                <p>Placement commits the replacement. <code>terminal.release {condition: "exited"}</code>
+                  then releases the predecessor; a late or unplaceable birth uses <code>condition: "unused"</code>.
+                  Neither cleanup failure rolls back placement or repeats creation. A failed create
+                  remains visible with recovery guidance: creation is not idempotent and is not blindly
+                  retried after an ambiguous response. History remains available for resumption.</p>
               </div>
               <div class="contract-row">
-                <strong>Empty-pane launcher handoff (2026-09-28 correction)</strong>
-                <p>A shell's startup foreground job is temporary activity, not lifetime input evidence.
-                  The shared <code>UnusedPaneSessions</code> retains its birth receipt and defers a
-                  detached busy shell until native idle metadata. An accepted launcher replacement
-                  explicitly releases the unused source through <code>terminal.terminate</code> after
-                  its last attachment moves; mirrored or used shells stay alive. The successor inherits
-                  a separate <code>visualId</code>, so Swarm keeps its body while runtime, action and
-                  usage identities remain unchanged. Restored shells are never inferred unused.
-                  A new shell is also released if an agent-exit replacement throws.</p>
+                <strong>Correlated handoffs and durable cleanup (2026-11-02)</strong>
+                <p>The window assigns an opaque <code>creationId</code> before a replacement request.
+                  The native owner's first summary and fieldd's monitor model carry it, so inventory
+                  arriving before the RPC response already identifies the successor. Only that birth
+                  shares the predecessor's <code>visualId</code>; unrelated and concurrent births stay
+                  visible. A committed handoff cannot be undone by cleanup failure. If another client
+                  used the predecessor, the owner retains it and its used-shell row becomes a distinct body.</p>
+                <p><code>UnusedPaneSessions</code> retains delivery responsibility until acknowledgement.
+                  The renderer persists conditional intents in an outbox; fieldd acknowledges only after
+                  persisting its queue under the user root, including the owning cell. Fieldd retries
+                  attachment, startup activity, and transport failures. Native release/gone completes
+                  cleanup; used/not-shell discharges it without killing. Renderer reload and fieldd
+                  restart replay obligations. Browser storage is delivery bookkeeping, never authority
+                  to classify or terminate a shell. Restored launchers use native lifetime facts.</p>
+                <p>The separate <code>agent.pause</code> door sends one adapter-declared turn cancellation
+                  while working. It never guesses a fallback key, retries a key, or escalates to termination.
+                  An unheard cancellation remains reported and repeated presses are coalesced until the
+                  turn changes. Pane Stop uses <code>terminal.terminate</code> and ends the process.
+                  The existing <code>agent.interrupt</code> durable-stop API keeps its own policy.</p>
+                <p>This source change spans VibeField, Puppeteer and Ghosttea (lifecycle protocol 1.18).
+                  The sibling overlay validates them together; coordinated releases and pinned dependency
+                  updates are required before distribution. The canvas and physics allocation are unchanged.</p>
               </div>
               <div class="contract-row">
                 <strong>A typed run lives on the interactive cell (AR-7)</strong>

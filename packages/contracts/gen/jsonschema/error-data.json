@@ -428,6 +428,12 @@
     "ObservedTerminal": {
       "type": "object",
       "properties": {
+        "creationId": {
+          "type": "string"
+        },
+        "inputUsed": {
+          "type": "boolean"
+        },
         "sessionId": {
           "type": "string"
         },

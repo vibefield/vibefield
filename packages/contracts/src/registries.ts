@@ -1663,6 +1663,7 @@ export const LAYOUT = {
    * fieldd's, because nothing below it can hold a session's metadata, and on
    * disk because the floor outlives fieldd — a restarted fieldd still says
    * which profile a surviving shell was born under. */
+  TERMINAL_RELEASES_FILE: ["fieldd", "terminal-releases.json"],
   TERMINAL_BINDINGS_FILE: ["fieldd", "terminal-bindings.json"],
   /** MV-3a (L4) — the project colour's IDENTITY (`ProjectIdentityFile`,
    * 0600): which project key was dealt which colour sequence, and the next

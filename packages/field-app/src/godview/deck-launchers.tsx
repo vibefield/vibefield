@@ -24,7 +24,12 @@ import {
   useSyncExternalStore,
 } from "react";
 import { getRendererLogger } from "../logging";
-import { adoptCreatedTerminal, terminalSessionProfileSet, useTerminalPool } from "../terminal/pool";
+import {
+  adoptCreatedTerminal,
+  isRemoteTerminalSession,
+  terminalSessionProfileSet,
+  useTerminalPool,
+} from "../terminal/pool";
 import { paneCwd, readDeviceHost } from "./deck-restore";
 import { launcherAgents, launcherPortOver } from "./launcher-doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
@@ -43,63 +48,35 @@ import type { MonitorDoor } from "./monitor/remote-door";
 // doors (`launcher-doors.ts`). A launch or a resume lands in the launcher's own
 // pane through the deck's door (`mountLocal` with `replacing`, serialized with
 // every other mount); the fresh shell it replaces then has no pane, no input
-// and a birth receipt. The deck explicitly finishes that handoff after mount;
+// and native lifetime-unused evidence. The deck finishes that handoff after mount;
 // the pool coalesces it with any final-attachment cleanup already in flight.
 
 /* ── the gate (QL-D7 as revised 2026-09-28) ─────────────────────────────── */
 
-/**
- * The shells born through the deck's own new-pane door (`createSplitSession`),
- * PER RUNTIME. Ghosttea's own birth receipt (`sessionCreatedHere`) covers the
- * workspace's first shell, which it creates itself; a split is born through
- * fieldd's `terminal.create` and REGISTERED with the runtime, which ghosttea
- * (rightly) does not count as a birth — so the deck says so here, once per
- * split. A rehydrated pane is not recorded: a restored layout's shells never
- * qualify.
- *
- * Keyed by the runtime the split was born under, because every other fact the
- * gate reads is that runtime's: `sessionHasInput` and `sessionCreatedHere` are
- * its memory, and the deck's reaper (`UnusedPaneSessions`) is rebuilt with it.
- * A pool retry replaces the runtime and forgets which shells had input; a
- * module-wide record would have outlived that and shown the launcher over a
- * USED shell, and a launch there would replace a PTY the new reaper never
- * held a receipt for — a leak. Under the new runtime the old splits are
- * simply not born here, exactly as the reaper treats them.
- */
-const bornShells = new WeakMap<object, Set<string>>();
-
-/** The deck's new-pane door made this shell under `runtime` (one line in
- * `createSplitSession`). No runtime yet, no record: nothing could say later
- * whether it had input. */
-export function recordBornShell(runtime: object | null, sessionId: string): void {
-  if (runtime === null) return;
-  let born = bornShells.get(runtime);
-  if (born === undefined) {
-    born = new Set();
-    bornShells.set(runtime, born);
-  }
-  born.add(sessionId);
-}
-
-/** Born in this view, under THIS runtime: the deck's record of its splits, or
- * ghosttea's own receipt for the births it made (the workspace's first shell). */
-export function bornInThisView(
-  runtime: (object & Pick<GhostteaTerminalRuntime, "sessionCreatedHere">) | null,
-): (sessionId: string) => boolean {
-  if (runtime === null) return () => false;
-  const born = bornShells.get(runtime);
-  return (sessionId) => born?.has(sessionId) === true || runtime.sessionCreatedHere(sessionId);
+/** The native owner's lifetime input fact, with immediate local consumption
+ * while the next metadata update is in flight. Unknown never means unused. */
+export function isUnusedShell(
+  runtime: Pick<GhostteaTerminalRuntime, "sessionSummary" | "sessionHasInput"> | null,
+  sessionId: string,
+): boolean {
+  const session = runtime?.sessionSummary(sessionId);
+  return (
+    !isRemoteTerminalSession(sessionId) &&
+    session?.programKind === "interactive-shell" &&
+    session.inputUsed === false &&
+    runtime?.sessionHasInput(sessionId) !== true
+  );
 }
 
 /** What the gate asks of the session's world, apart from its summary. */
 export interface FreshShellFacts {
-  /** Born in this view: the deck's new-pane door, or the workspace's first shell. */
-  bornHere(sessionId: string): boolean;
+  /** The local terminal owner declares lifetime-unused interactive-shell state. */
+  unused(sessionId: string): boolean;
   /** Input reached it from this view (ghosttea's `sessionHasInput`). */
   hasInput(sessionId: string): boolean;
   /** The fold names a run in it (the pane frame's agent facet). */
   hasAgent(sessionId: string): boolean;
-  /** A peer's replica, attached — never born here, said anyway. */
+  /** A peer's session is outside this window's automatic cleanup policy. */
   isRemote(sessionId: string): boolean;
 }
 
@@ -109,10 +86,8 @@ type GateSession = Pick<SessionSummary, "id"> & {
 };
 
 /**
- * The sessions whose panes may show a launcher: born in this view, no agent
- * facet, not exited, no input from this view. Startup jobs do not make a shell
- * used or dismiss its launcher. Restored and attached sessions have no birth
- * receipt, so they never qualify.
+ * Local unused interactive shells with no agent facet, exit, or pending local input.
+ * Restored shells need the same native lifetime fact; idle activity proves nothing.
  */
 export function freshShellIds(
   sessions: readonly GateSession[],
@@ -120,7 +95,7 @@ export function freshShellIds(
 ): ReadonlySet<string> {
   const fresh = new Set<string>();
   for (const session of sessions) {
-    if (!facts.bornHere(session.id)) continue;
+    if (!facts.unused(session.id)) continue;
     if (session.exited === true) continue;
     if (facts.hasAgent(session.id) || facts.hasInput(session.id) || facts.isRemote(session.id)) {
       continue;
@@ -161,6 +136,7 @@ export interface GodviewDeckLaunchersProps {
   /** The deck's door: its serialized mount and the Agent Profiles feed. */
   door: MonitorDoor | null;
   onReplaced(previousSessionId: string, nextSessionId: string): boolean;
+  beginReplacement?(previous: string): import("./monitor/pane-transitions").PaneBirth;
   prepareReplacement(previousSessionId: string, nextSessionId: string): () => void;
 }
 
@@ -176,6 +152,7 @@ export function GodviewDeckLaunchers({
   door,
   onReplaced,
   prepareReplacement,
+  beginReplacement,
 }: GodviewDeckLaunchersProps): ReactElement | null {
   const fieldd = useFielddClient();
   // SB-3: the pool's record of which shell was born under which Agent Profile
@@ -186,7 +163,7 @@ export function GodviewDeckLaunchers({
   const sessions = panes.map((pane) => pane.session as GateSession & SessionSummary);
 
   const fresh = freshShellIds(sessions, {
-    bornHere: bornInThisView(runtime),
+    unused: (id) => isUnusedShell(runtime, id),
     hasInput: (id) => runtime?.sessionHasInput(id) === true,
     hasAgent: (id) => paneAgents.runs.has(id),
     isRemote: (id) => runtime?.remoteSession(id) !== undefined,
@@ -298,6 +275,7 @@ export function GodviewDeckLaunchers({
     () =>
       launcherPortOver({
         client: fieldd,
+        beginReplacement,
         providers: () => providersRef.current,
         profileSetOf: terminalSessionProfileSet,
         profileSets: () => profileSetsRef.current,
@@ -336,7 +314,7 @@ export function GodviewDeckLaunchers({
           };
         },
       }),
-    [fieldd, door, onReplaced, prepareReplacement],
+    [fieldd, door, onReplaced, prepareReplacement, beginReplacement],
   );
 
   // QL-2: the launch lands on the agent's first frame, which the runtime

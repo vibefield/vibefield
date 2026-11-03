@@ -105,20 +105,25 @@ public func verifyProductEndpoint(
 /// builder ever learns a host from somewhere other than the peer, this refuses
 /// it the same day rather than the day somebody reads the diff.
 ///
-/// The preference is the fully-qualified MagicDNS name, then a tailnet IP —
+/// The backend's canonical DNS name takes precedence: a hostname plus the
+/// tailnet suffix can name a different machine when Tailscale adds `-1` to
+/// resolve a collision. Only when the backend supplies no DNS name do we use
+/// the legacy hostname/suffix derivation, then a tailnet IP —
 /// the bare slug is deliberately last, because a phone that has no suffix of
 /// its own is a phone whose resolver may answer a short name from the public
 /// DNS.
 public func peerProductDoorURL(
-  hostname: String?, tailnetIPs: [String], magicDNSSuffix: String?
+  hostname: String?, tailnetIPs: [String], magicDNSSuffix: String?, dnsName: String? = nil
 ) -> ProductEndpointVerdict {
-  let addresses = ([hostname] + tailnetIPs.map { Optional($0) })
+  let canonical = canonicalPeerDNSName(dnsName)
+  let addresses = ([hostname, canonical] + tailnetIPs.map { Optional($0) })
     .compactMap { $0 }
     .filter { !$0.isEmpty }
   guard !addresses.isEmpty else {
     return .refused("this desktop has no address the mesh will vouch for")
   }
-  guard let host = dialHost(hostname: hostname, tailnetIPs: tailnetIPs, suffix: magicDNSSuffix)
+  guard let host = canonical
+    ?? dialHost(hostname: hostname, tailnetIPs: tailnetIPs, suffix: magicDNSSuffix)
   else {
     return .refused("this desktop has no address the mesh will vouch for")
   }
@@ -132,7 +137,15 @@ public func peerProductDoorURL(
   return .ok(url)
 }
 
-/// The best spelling of "where this peer answers", in order.
+/// Tailscale may report an absolute DNS name with its root dot. Preserve the
+/// exact backend name, removing only that dot for URL/ATS host matching.
+func canonicalPeerDNSName(_ raw: String?) -> String? {
+  guard let raw else { return nil }
+  let name = raw.hasSuffix(".") ? String(raw.dropLast()) : raw
+  return name.isEmpty ? nil : name.lowercased()
+}
+
+/// The best spelling when the backend supplied no canonical DNS name.
 private func dialHost(hostname: String?, tailnetIPs: [String], suffix: String?) -> String? {
   let slug = hostname?.lowercased()
   if let slug, !slug.isEmpty, let suffix = suffix?.lowercased(), !suffix.isEmpty,

@@ -417,11 +417,14 @@ async function main(
   // Mac). So in a MARKED run (`VF_SMOKE_RUN`, run-smoke.mjs's mark — testing/smoke-daemons.ts)
   // the copy door KEEPS the words instead of writing them and answers as it would: the act's own
   // record (`wrote`) stays the witness, and the canvas smoke reads what arrived here.
-  const harnessCopies: string[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
+  // The terminal lab observes the same real copy door; it must isolate the clipboard too.
+  const keepHarnessClipboard =
+    process.env["VF_SMOKE_RUN"] !== undefined || MODE === "terminal-perf-lab";
+  const harnessCopies: string[] | null = keepHarnessClipboard ? [] : null;
   // HN-5 — the same for a copy's picture: the clipboard's picture door keeps its PNG's size here
   // in a marked run, and the words written beside it in `harnessCopies`, instead of writing them,
   // and answers as it would.
-  const harnessPictures: number[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
+  const harnessPictures: number[] | null = keepHarnessClipboard ? [] : null;
   const installDiagnostics = (window: Electron.BrowserWindow): void => {
     let supportDialogOpen = false;
     installLocalDiagnosticsPort({
@@ -1939,7 +1942,9 @@ async function main(
       viteUrl: VITE_URL,
       setView,
       beforeExit: closeEvidence,
+      ...(harnessCopies === null ? {} : { copies: harnessCopies }),
       onWindow: (window) => {
+        installDiagnostics(window);
         installRendererLogging({
           window,
           sink: shellLogging.renderer,

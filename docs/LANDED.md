@@ -29660,3 +29660,176 @@ the re-stack over item 163 (M110) and its records (15:02:47Z → 15:02:58Z, logs
   The guard's one hit was James's QA runner 64402 from the SSD checkout, waived by its cwd; dev-stack-check 0/0.
 
 **Owed.** Nothing of the fixer's.
+
+## GV — terminal owners govern pane lifecycle; EL8 to Ghosttea 0.13.8 and Puppeteer 0.3.3 (2026-11-02)
+
+**What.** Godview keeps a pane's visual identity through launch, agent handoff and exit. A correlated creation
+request joins the newborn terminal to its pane before the monitor can draw a second bubble. Dedicated agent
+terminals stay claimed through exit; shells with accepted input keep their own identity. A durable release outbox
+asks the terminal owner to remove an unattached unused shell or exited session, retries failures, and acknowledges
+cleanup only after the owner answers. Attachment and lifetime input evidence are checked atomically by Ghosttea;
+releasing ownership seals new attachments independently of ordinary process termination, which still permits
+reading retained final output. Stop and manual `/exit` use the same lifecycle facts.
+
+The swarm canvas and physics world stay full size. The terminal pane moves an eased collision wall, without
+rescaling the rendered bubbles or teleporting their positions. James's new Stop/Pause ruling is recorded at its
+sources in DESIGN and DECISIONS: Stop ends the agent; Pause sends one provider-declared current-turn cancellation
+and keeps the session open, with no automatic retry or termination. The legacy `agent.interrupt` command retains
+its existing policy for other callers.
+
+**Release order.** The source changes landed upstream before their releases and this consumer:
+- Ghosttea [#99](https://github.com/vibecook-dev/ghosttea/pull/99), then release
+  [#100](https://github.com/vibecook-dev/ghosttea/pull/100): `v0.13.8` at
+  `fb6f13d5aad06cba0b5982a1233a24395a313958`, npm/Cargo/Swift together. Apple artifact
+  `ghosttea-apple-native-be8c80c9cfd3` is the release's checksum-pinned binary.
+- Puppeteer [#55](https://github.com/vibefield/puppeteer/pull/55), then Release Please
+  [#56](https://github.com/vibefield/puppeteer/pull/56): `v0.3.3` at
+  `52d09c8e84951b9a355a6700eac2dfc1290a9fa0`. Its publish workflow also passed the clean npm consumer check.
+
+The consumer uses exact published versions with local source overlays disabled. Manifests, preflight expectations,
+release-age exemptions, sibling coordinates and all three package-manager locks move together. The npm lock
+changes only the 26 Ghosttea/Puppeteer packages; unrelated package resolutions are unchanged. Cargo changes only
+the six Ghosttea crates. Swift resolves the release and downloads its Apple artifact; the production native build
+passes against the published crate.
+
+**Phone parity re-bless.** The phone fold, body and toolkit goldens and their four kit mirrors were regenerated
+by the existing writer. Only the `versions` headers change from 0.3.2 to 0.3.3; every behavioral value is unchanged
+(checked after removing those headers). No drawing, wording, geometry or witness input was re-blessed.
+
+The terminal key catalog was regenerated from `ghosttea-config` 0.13.8 as well: only its source-version comment
+and `GHOSTTY_KEYS_SOURCE.version` change. The first production gate caught that metadata still naming 0.13.7;
+the key catalog itself is unchanged.
+
+**Validation on the published dependencies.** `pnpm verify` passed with source overlays off: 12,163 Vitest
+tests passed (17 skipped), 364 Node tests passed, and 534 Rust tests passed (14 ignored), plus preflight, walls,
+single-copy checks, all 202 fixture mirrors / 67 contract values, typechecks, lint, rustfmt/clippy, production
+bundle assertions and generated-file freshness. The first full run also saw one gateway shutdown assertion
+(`agent-gateway-panes`, row 11b: exit 0 instead of 75); the unchanged isolated case and the final full suite
+passed. No gateway behavior or assertion was changed. The consumer PR records the desktop landing-gate verdict.
+
+**Push-hook correction.** Git exports the active worktree's repository variables to `pre-push`; inherited by
+preflight, they made `git -C` report VibeField's HEAD for both pinned siblings. The hook now clears Git's
+repository-local environment in the verification subprocess, so each cwd selects its own repository. The full
+verification hook remains mandatory. Reproduced the wrong HEAD under the inherited context and the exact Mille
+and Rosetta pins after clearing it; shell syntax and the full verification gate were checked before committing.
+
+**Desktop smoke correction.** The first Godview landing run exposed a stale geometry assumption in its spawn-bloom
+driver: it searched only the lower half of the swarm's box. With the deliberately full-size canvas, those points
+are behind the terminal sheet. The driver now clips its search to the viewport and the sheet's visible top edge;
+the real pointer hover and DOM hit checks still reject bubbles and chrome. Its old static diagnostic no longer
+claims Godview has no stop gesture: it names only the retired two-step shell chip, separate from agent Stop/Pause.
+The consumer PR records all desktop gate results and rechecks.
+
+Two further smoke assumptions were corrected from the physical evidence. The faulty-clock pixel box included
+its bright outline while the other boxes omitted theirs (the hit probes are 8 px apart); all three faces now
+use interior samples, with the existing contrast inequality unchanged. History's model-launch row now waits
+for the stub process's own launch record, as the ordinary New agent and Resume rows already do: configured
+intent reaching the fold is not evidence that the child has executed. Both changes are confined to the smoke
+harness; no product threshold, renderer behavior or launch policy changes.
+The deck's physical smoke now checks the full-size canvas and the collision-wall target separately when
+minimized, dragged and maximized; its old monitor-bottom checks described the retired resizing behavior.
+
+## EL8 — Ghostty 1.4 through released Ghosttea 0.14.0; terminal and phone regression fixes (2026-11-02)
+
+**What.** Godview's routed terminals recover scene state before accepting resumed input and copy selections
+through the authenticated host. The phone preserves mirrored font advances when its font size changes and
+uses the desktop's canonical mesh DNS name, including collision suffixes. Ghosttea's native block-glyph
+geometry fix closes the black seams in Claude's mascot at small phone font sizes. The latest main's
+owner-atomic terminal release, correlated creation and full-size swarm canvas are retained.
+
+The iOS terminal keeps scrolling from opening a hidden keyboard. Its header fades over full-height terminal
+content, the footer blends into the pane and shows context usage, and the glass paste/keyboard controls float
+without reserving blank terminal space. The fold control sits outside the composer; a remote driver folds
+the keyboard automatically, with a centered overlay and a fitted device name. The terminal keypad uses
+navigation, shortcuts and function keys, preserves the selected keyboard through typing-mode changes,
+and removes the redundant enter action. Swarm atlas orientation and packed SVG path parsing match the
+desktop's agent icons. Saved keypad profile IDs are kept separate from agent identities.
+
+**Release order and exact dependencies.** Truffle's canonical DNS metadata fix landed in
+[#247](https://github.com/vibecook-dev/truffle/pull/247); Release Please
+[#248](https://github.com/vibecook-dev/truffle/pull/248) published the complete 0.7.26 family.
+Its Swift tag `v0.7.26` resolves to `101889f676d32989e2c32295c3b608ccd5972c02`.
+Ghosttea [#101](https://github.com/vibecook-dev/ghosttea/pull/101) then merged, and signed immutable
+tag [`v0.14.0`](https://github.com/vibecook-dev/ghosttea/releases/tag/v0.14.0) at
+`86d816ee7920e6ffd0c8cfce24272e8802ceec76` published seven Rust crates and ten npm packages.
+Registry versions/checksums and the release's macOS, Windows and Linux package-install checks passed.
+The checksum-pinned Apple artifact is `ghosttea-apple-native-fcf9a17cce90`, with native source digest
+`5c36ad009576b86696efe06e1c1cc359fdaf7c8076dae57c367bbc8bdb270282`.
+
+This consumer moves Ghosttea's npm, Cargo and Swift pins together to 0.14.0 and both Swift lockfiles to
+the exact tags. Preflight, sibling coordinates, release-age exceptions and generated key-catalog provenance
+move in the same dependency event. Only the six consumed Ghosttea npm packages and six Rust crates change
+in those locks; unrelated resolutions stay fixed. The catalog's supported settings are unchanged. Swift
+Truffle moves to 0.7.26 to match Ghosttea's exact declaration; desktop Truffle Rust/core and all five npm
+sidecars stay together at 0.7.24, as the amended TB decision records. Source overlays are disabled.
+
+**Qualification.** The final iPhone app builds from the production manifests and published native artifact,
+with package-plugin validation enabled. The same exact released graph passes 910 simulator tests, zero
+failures, with only the opt-in real-tailnet test skipped. The earlier physical iPhone candidate run passed
+910 tests with zero failures and the same single opt-in skip; it used the identical release source tree and
+native artifact through a QA-only local Ghosttea root dependency. That distinction remains in the evidence.
+The separate Home and Swarm presentation suites pass 186 tests with no failures or skips on the released graph.
+
+The complete `pnpm verify` gate passes against the released dependencies: 12,534 TypeScript tests pass with
+17 declared skips; 544 Rust tests pass with 15 declared ignores. Import boundaries, dependency single-copy
+checks, iOS fixture consistency, icons, typecheck, lint, rustfmt, clippy, bundle budgets and generated-file
+freshness all pass. Nx reused 27 unchanged project results; the daemon project ran again with one worker,
+passing all 2,996 active tests (11 declared skips). Three daemon lifecycle checks had failed under heavy
+local concurrency; their focused serial run passed 51 tests, and the full serial run passes without changing
+assertions or deadlines. `NX_PARALLEL=1` and Vitest's worker limits bound local resource use, matching the
+repository's existing serial-file strategy for daemon tests in CI.
+
+The desktop landing gates and final tagged-dependency iPhone/live-tailnet runs are tracked in
+[consumer PR #12](https://github.com/vibefield/vibefield/pull/12). At this commit the physical rerun is waiting
+for the iPhone to reconnect; the PR stays in draft while final qualification remains pending.
+
+**Qualification environment correction.** The SSD-backed nested worktree exposed Vite's fallback for a bare
+React import from a temporary plugin artifact: it evaluated the CommonJS module at a fictitious `cwd/react`
+path and could not resolve React's relative implementation. The plugin CLI test configuration now resolves
+that exact singleton to the SDK's actual peer. All 32 existing artifact checks pass; no assertion or refusal
+was relaxed. An inherited `NO_COLOR` combined with Nx's `FORCE_COLOR` also added Node warnings to strict fake
+daemon stderr assertions; clearing the conflicting host setting fixes those checks without product changes.
+
+The reproducible qualification tools live under `tooling/ghostty-qualification`. Build caches remain on the
+portable SSD. Local evidence is under `artifacts/ghostty-1.4-manual-20261030/evidence/publication-20261102`
+in the Ghosttea workspace, including original failed attempts and `.xcresult` bundles. The original manual
+testing worktrees and their local configurations are preserved separately from this publication worktree.
+
+Latency remains unqualified by James's direction because the host was busy. Physical Windows GPU behavior,
+real Wi-Fi/cellular transitions, long device suspension and an attached hardware keyboard are not claimed.
+The first keyboard rotation can still recalibrate once before a native height has been measured; later
+switches use the measured height. Ghosttea's three existing SSH-production readiness blockers remain open.
+
+## EL8 — published-dependency phone qualification and desktop harness alignment (2026-11-02)
+
+The final physical iPhone run now uses the exact remote Ghosttea `v0.14.0` and Truffle `v0.7.26`
+revisions recorded above, with package-plugin validation enabled and no source overlay. All 910
+terminal/input/routed/Freeway/mesh tests pass, with zero failures and the single opt-in tailnet skip.
+The separate live-tailnet run passes both native bundled-font parity and two independent production
+Metal clients against the released desktop host: PTY input, Unicode copy, mirrored frames, resize
+handoff, park/resume, fresh-link redial and idle-scene repair. Device captures were reviewed in dark,
+light and transparent appearances at 13 px and dark at 18 px; the block-glyph mascot has no row seams.
+The temporary QA app/configuration was removed and the ephemeral host stopped cleanly.
+
+Thirteen of the fourteen desktop landing gates passed on the first full run. Studio's hidden-publisher
+check exposed a native-window timing precondition: on Electron 43.1.1/macOS, `isVisible()` becomes true
+before the native `show` event. Hiding in that interval leaves `document.visibilityState` visible even
+though the native window is hidden, reproduced in a standalone Electron fixture. The Studio host now
+records its actual show event, and the physical gate waits for it before exercising hide. The unchanged
+hidden-state, live-publish, reload/replay and close/restore assertions then pass, completing all fourteen
+gates across the full run and the focused Studio rerun.
+
+The additional pane regression initially timed out while reading copied output, although its screenshot
+showed the typed command and result. Main's October 29 clipboard change (`c3d8e1874`, HN-5) routes terminal
+writes through Electron's copy door; the migration harness still intercepted `navigator.clipboard` and
+its lab window lacked the host diagnostics port. The lab now installs that production port and captures
+writes through the same isolated main-process sink as the desktop smokes. It neither reads nor replaces
+the person's system clipboard. All original assertions pass: ordinary typing, Unicode selection/copy,
+scrollback, alternate screen, hidden-process retention/output, resumed input, pane geometry and empty
+session replacement/cleanup. No product renderer, transport or selection behavior changed in this follow-up.
+
+The original failures, minimal visibility reproduction, successful reruns, device result bundles and
+appearance captures are retained in the publication evidence directory named above. The full verification
+gate remains required for this follow-up. CI and final review status are tracked on
+[PR #12](https://github.com/vibefield/vibefield/pull/12); no consumer merge is included. The latency and
+additional hardware/network qualification limits recorded above remain unchanged.

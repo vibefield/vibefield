@@ -212,6 +212,9 @@ export type TerminalSessionActivity = z.infer<typeof TerminalSessionActivity>;
 
 export const TerminalRuntimeSession = z
   .object({
+    creationId: z.string().nullable().optional(),
+    inputUsed: z.boolean().nullable().optional(),
+    programKind: z.enum(["interactive-shell", "application", "auto"]).nullable().optional(),
     id: z.string().min(1),
     /** ghosttea/TRF1 u64, represented as decimal text on JSON wires */
     handle: z.string().regex(/^(0|[1-9][0-9]*)$/),
@@ -251,6 +254,7 @@ export type TerminalRuntimeSessionsResult = z.infer<typeof TerminalRuntimeSessio
  * is NOT among its callers: the workspace creates its own panes. */
 export const TerminalCreateParams = z
   .object({
+    creationId: z.string().min(1).max(128).optional(),
     cwd: z.string().optional(),
     /** absolute shell path; default = the user's login shell */
     shell: z.string().optional(),
@@ -719,3 +723,22 @@ export const TerminalLinkOpenResult = z
   .object({ outcome: z.enum(["opened", "revealed"]) })
   .passthrough();
 export type TerminalLinkOpenResult = z.infer<typeof TerminalLinkOpenResult>;
+
+/** An owner-side conditional release, durably queued before acknowledgement. */
+export const TerminalReleaseParams = z
+  .object({
+    sessionId: z.string().min(1),
+    condition: z.enum(["unused", "exited"]),
+  })
+  .passthrough();
+export type TerminalReleaseParams = z.infer<typeof TerminalReleaseParams>;
+export const TerminalReleaseResult = z.object({ accepted: z.literal(true) }).passthrough();
+/** Persist the owner chosen at acceptance; retries must not guess another cell. */
+export const TerminalReleaseIntent = TerminalReleaseParams.extend({
+  cellBootId: z.string().optional(),
+});
+export type TerminalReleaseIntent = z.infer<typeof TerminalReleaseIntent>;
+export const TerminalReleasesFile = z.object({
+  version: z.literal(1),
+  pending: z.array(TerminalReleaseIntent),
+});

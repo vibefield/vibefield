@@ -126,7 +126,7 @@ exit). See DECISIONS TB for every bump since.
 - `apps/desktop` installs the mesh sidecar from npm. The core and its sidecar move together in one EL8 event, never
   one plane alone (TB's revert note). The sidecar's protocol, and what each protocol adds, are in TB.
 - The kit's truffle row is the exact URL package that `Package.swift`'s `truffleRelease` names, rendered from the
-  lock's `release.swift`. It may trail the cargo plane. SwiftPM must agree with the truffle version that the pinned
+  lock's `release.swift`. It may differ from the cargo plane. SwiftPM must agree with the truffle version that the pinned
   ghosttea's own manifest declares exact, so the Swift plane moves in the EL8 of the first ghosttea that declares the
   new truffle (TB, the split of 2026-10-27).
 - T6 retired the `.vibefield/sidecar/` override and `.env`'s `FIELD_NATIVE_SIDECAR_PATH`. `pnpm dev` hands the floor

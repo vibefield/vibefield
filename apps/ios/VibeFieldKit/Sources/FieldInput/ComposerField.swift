@@ -108,6 +108,7 @@ struct ComposerField: UIViewRepresentable {
 
   func updateUIView(_ view: InputTextView, context: Context) {
     context.coordinator.model = model
+    view.acceptsTouchInput = model.mode == .draft
     view.keyboardAppearance = keyboardAppearance
     // --- IOS-5e: the reader's text size reached the card, and the draft is the
     // one thing on it that is prose. The placeholder follows the same size, or
@@ -125,10 +126,10 @@ struct ComposerField: UIViewRepresentable {
     }
     context.coordinator.applyFocus(model.responderRole(for: .composer), to: view)
     // --- IOS-5d: the `⋯` keypad rises in the system keyboard's place.
-    // --- IOS-5e: and it is told the reader's text size, because its height
-    // depends on it and a `UIInputView` that is not in a window yet cannot ask.
+    // Keep its input view while yielding to the Live keypad host. Clearing it
+    // mid-handoff briefly restores the native keyboard on the outgoing field.
     context.coordinator.applyKeypad(
-      model.keypadShown && model.mode == .draft,
+      model.keypadShown,
       accessibility: context.environment.dynamicTypeSize.isAccessibilitySize,
       to: view)
     // --- end IOS-5e
@@ -205,6 +206,7 @@ struct ComposerField: UIViewRepresentable {
       appliedFocus = role
       guard role != .yield else { return }
       Task { @MainActor in
+        guard self.model.responderRole(for: .composer) == role else { return }
         if role == .take {
           guard !view.isFirstResponder else { return }
           view.becomeFirstResponder()
@@ -227,13 +229,12 @@ struct ComposerField: UIViewRepresentable {
     /// are: it re-lays the keyboard, and doing that inside a SwiftUI update
     /// pass resizes this view's own ancestors mid-pass.
     func applyKeypad(_ wanted: Bool, accessibility: Bool, to view: UITextView) {
-      // IOS-5e: a text-size change while the keypad is already up is its own
-      // reason to reload — the keyboard keeps whatever frame it committed until
-      // it is asked again.
-      var sizeChanged = false
+      // Reload only for a new keyboard frame. Dynamic Type updates the keys
+      // inside that frame without growing the keyboard over the composer.
+      _ = model.keypadGeometry.height
+      let sizeChanged = keypad?.updateHeight() ?? false
       if let keypad, keypad.isAccessibilitySize != accessibility {
         keypad.isAccessibilitySize = accessibility
-        sizeChanged = true
       }
       guard appliedKeypad != wanted || sizeChanged else { return }
       if appliedKeypad != wanted {
@@ -290,6 +291,13 @@ struct ComposerField: UIViewRepresentable {
 
 /// A `UITextView` with a placeholder, which UIKit still does not give one.
 final class InputTextView: UITextView {
+  // Disabling UIView interaction (including SwiftUI's allowsHitTesting) resigns
+  // its first responder immediately. Reject touches without disabling the view
+  // so the hidden composer can yield directly to the incoming responder.
+  var acceptsTouchInput = true
+  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+    acceptsTouchInput && super.point(inside: point, with: event)
+  }
   var placeholder: String = "" {
     didSet {
       placeholderLabel.text = placeholder
@@ -302,6 +310,26 @@ final class InputTextView: UITextView {
   }
 
   private let placeholderLabel = UILabel()
+  private var keyboardViewport = CGSize.zero
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    guard let window else { return }
+    let viewport = window.bounds.size
+    guard keyboardViewport != viewport else { return }
+    let hadViewport = keyboardViewport != .zero
+    keyboardViewport = viewport
+    guard hadViewport, isFirstResponder, inputView == nil else { return }
+    // A native keyboard can retain its pre-rotation avoidance inset until the
+    // next input-view reload. Refresh it as the window settles, before the user
+    // swaps keyboards, so that swap does not move the composer a second time.
+    Task { @MainActor [weak self] in
+      guard let self, self.window?.bounds.size == viewport,
+        self.isFirstResponder, self.inputView == nil
+      else { return }
+      self.reloadInputViews()
+    }
+  }
 
   /// The text inset is set HERE rather than by the caller, because the
   /// placeholder is pinned against it: setting it afterwards left the label at
