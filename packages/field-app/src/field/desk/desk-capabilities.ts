@@ -1,5 +1,4 @@
 import { type CanvasEngine, gateVerdict, type WidgetType } from "@vibecook/ice";
-import { DESK_OBJECTS } from "@vibecook/ice/desk/objects";
 import type { PluginRegistrySnapshot } from "@vibefield/contracts";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import { getRendererLogger } from "../../logging";
@@ -7,6 +6,7 @@ import {
   getPluginRegistrySnapshot,
   subscribePluginRegistry,
 } from "../../plugin-host/plugin-registry-store";
+import { FIELD_DESK_OBJECTS } from "./desk-objects";
 
 // THE PACK MARKERS (DK-4; DK-D17 ruled 2 Oct; r2 R5): ICE gates PLACEMENT on a board's pack markers — a type
 // whose pack the board does not carry is refused `pack-disabled` at every create, insert and drop, and the
@@ -36,7 +36,7 @@ export function capabilityTypes(
   registry: PluginRegistry<WidgetType>,
   snapshot: PluginRegistrySnapshot | null,
 ): string[] {
-  const types = DESK_OBJECTS.map((kind) => kind.type);
+  const types = FIELD_DESK_OBJECTS.map((kind) => kind.type);
   for (const plugin of registry.all()) {
     if (snapshot?.plugins.find((record) => record.id === plugin.id)?.enabled === false) continue;
     for (const object of plugin.objectContributions) types.push(object.type);

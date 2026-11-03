@@ -368,18 +368,17 @@ interface CanvasFacts {
  * them R3F islands — a count the desk no longer draws a single one of (every
  * VibeField widget type is faceless on the desk until DK-8). What a first-run
  * board must hold now is the DESK's seed (field/desk/desk-seed.ts; DK-8 the
- * product's: ICE's six and the comment pad), read off the open document through
+ * product's: ICE's five active kinds and the comment pad), read off the open document through
  * `window.__vfDesk.census()` — GPU on or off, since it counts the world, not
  * pixels. `widgetTypes` is still printed, and no longer judged. */
 const CANVAS_CENSUS = {
-  /** The PRODUCT's first board (DK-8), one object each: ICE's six (`@vibecook/ice/desk/objects`'s ids) and
+  /** The PRODUCT's first board (DK-8), one object each: ICE's five active kinds (`@vibecook/ice/desk/objects`'s ids) and
    * VibeField's own comment pad (`plugins/comment-pad`, staged with the product's plugins). */
   seed: [
     "desk.note",
     "desk.minimat",
     "desk.board",
     "desk.notebook",
-    "desk.calendar",
     "desk.photo",
     "vibefield.comment-pad",
   ],

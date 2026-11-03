@@ -1,5 +1,5 @@
 // DK-12 — THE TOOLS IN HAND, IN THE PRODUCT (smoke:canvas; DESIGN.md §8 "Tools in hand"; R13; ICE I20, I22). Each of the
-// four specimens — ICE's notebook, whiteboard and calendar, and the example plugin's clock — is selected by a tap where the
+// three specimens — ICE's notebook and whiteboard, and the example plugin's clock — is selected by a tap where the
 // desk receives it and PICKED UP by the desk's own ⏎ (ICE's keymap: `ops.open`), and the rows read back off the DOM the
 // chrome drew, off the desk's door (`window.__vfDesk`: the anchor, the object in hand and where the desk drew it, the bar's
 // counters) and off the browser's own transition events:
@@ -7,7 +7,7 @@
 //              declared order with the 6 gap where the run changes (pages · inks · tools), the readout's text, Done's tip;
 //              the held object's READING FIT inside the layer's reserves (116 under the top, 100 over the foot — I20's
 //              `hold`), centred in that band; a tool USED through the bar (`ops.useHeldTool`: a page turned, a pen chosen,
-//              the eraser taken up, a month turned, an hour moved — each read back); Done puts it down — the bar hidden
+//              the eraser taken up, an hour moved — each read back); Done puts it down — the bar hidden
 //              while the object flies home and back over it, the bar over the selection again;
 //   TRAVEL    — the travel's own timing, from `transitionstart`/`transitionend` on the one element: the transform over the
 //              anchor's 560 ms on the island curve, the rows' cross-fade over its last 120 ms, the glass's width with them;
@@ -56,13 +56,6 @@ export const HAND_SPECIMENS: readonly HandSpecimen[] = [
     type: "desk.board",
     tools: ["marker:black", "marker:blue", "marker:red", "marker:green", "+eraser", "undo", "redo"],
     readout: null,
-  },
-  {
-    name: "calendar",
-    type: "desk.calendar",
-    tools: ["month:-1", "month:1", "+today", "pen"],
-    readout:
-      /^(January|February|March|April|May|June|July|August|September|October|November|December)$/u,
   },
   {
     name: "clock",
