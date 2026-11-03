@@ -2164,6 +2164,7 @@ mod tests {
         use ghosttea::{FrameHub, SessionEnvironment, SessionProgramKind, TextEngine};
         Session::spawn(
             SpawnOptions {
+                creation_id: None,
                 executable: "/bin/sh".into(),
                 args: vec![],
                 cwd: None,

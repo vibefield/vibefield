@@ -193,37 +193,38 @@ const PIN_EXPECTATIONS = [
   // 0.13.4 → 0.13.5 on 2026-10-26 (the EL8 to the harfrust shaper, ghosttea #89): the same six again.
   // 0.13.5 → 0.13.6 on 2026-10-26 (the EL8 to the render worker's and the claim's fixes, ghosttea #92–#94): the same six again.
   // 0.13.6 → 0.13.7 on 2026-10-27 (the EL8 with truffle 0.7.23, ghosttea #96's Windows C runtime): the same six again.
-  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.13\.7"\s*$/m, label: 'ghosttea = "=0.13.7"' },
+  // 0.13.7 → 0.13.8 on 2026-11-02: owner-atomic release and correlated terminal creation (GV lifecycle).
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.13\.8"\s*$/m, label: 'ghosttea = "=0.13.8"' },
   // TM-1 (2026-09-14): the ghosttea-truffle row is GONE with the crate — the TSP1
   // adapter left the floor (`thinking-terminal-mesh-cells.md`, TM-D1 ruled T), so
   // there is no second ghosttea consumer to keep in lockstep; the ghosttea row
   // alone carries truffle-core's version agreement now.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-client":\s*0\.13\.7\s*$/m,
-    label: '"@vibecook/ghosttea-client": 0.13.7',
+    re: /"@vibecook\/ghosttea-client":\s*0\.13\.8\s*$/m,
+    label: '"@vibecook/ghosttea-client": 0.13.8',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-electron":\s*0\.13\.7\s*$/m,
-    label: '"@vibecook/ghosttea-electron": 0.13.7',
+    re: /"@vibecook\/ghosttea-electron":\s*0\.13\.8\s*$/m,
+    label: '"@vibecook/ghosttea-electron": 0.13.8',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-react":\s*0\.13\.7\s*$/m,
-    label: '"@vibecook/ghosttea-react": 0.13.7',
+    re: /"@vibecook\/ghosttea-react":\s*0\.13\.8\s*$/m,
+    label: '"@vibecook/ghosttea-react": 0.13.8',
     package: "@vibecook/ghosttea-react",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-protocol":\s*0\.13\.7\s*$/m,
-    label: '"@vibecook/ghosttea-protocol": 0.13.7',
+    re: /"@vibecook\/ghosttea-protocol":\s*0\.13\.8\s*$/m,
+    label: '"@vibecook/ghosttea-protocol": 0.13.8',
   },
   // The EL8 to 0.13.1 (2026-10-22/23): terminal-perf's frame reader joins the event (it had no row; the lock held 0.10.1).
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-frame":\s*0\.13\.7\s*$/m,
-    label: '"@vibecook/ghosttea-frame": 0.13.7',
+    re: /"@vibecook\/ghosttea-frame":\s*0\.13\.8\s*$/m,
+    label: '"@vibecook/ghosttea-frame": 0.13.8',
   },
   // RD-5a (2026-10-14): rosetta's TypeScript packages are exact registry pins,
   // published from the revision the lock still pins for rosettad's build. Anchored
@@ -242,47 +243,48 @@ const PIN_EXPECTATIONS = [
   },
   // RD-5's exit for puppeteer's npm plane (2026-10-26, 0.2.3): the seven rows are exact `@vibefield/puppeteer-*`,
   // 0.3.2 since 2026-10-29 (CP-1d's per-run briefing prerequisite), published from the tag v0.3.2 (95a70aa7), the
-  // revision the lock pins. Anchored to the line's end like rosetta's.
+  // revision the lock pinned. 0.3.3 since 2026-11-02 (GV lifecycle, v0.3.3 = 52d09c8e).
+  // Anchored to the line's end like rosetta's.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-runtime":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-runtime": 0.3.2',
+    re: /"@vibefield\/puppeteer-runtime":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-runtime": 0.3.3',
     package: "@vibefield/puppeteer-runtime",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-builtin-providers": 0.3.2',
+    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-builtin-providers": 0.3.3',
     package: "@vibefield/puppeteer-builtin-providers",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-core":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-core": 0.3.2',
+    re: /"@vibefield\/puppeteer-core":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-core": 0.3.3',
     package: "@vibefield/puppeteer-core",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-record":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-record": 0.3.2',
+    re: /"@vibefield\/puppeteer-record":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-record": 0.3.3',
     package: "@vibefield/puppeteer-record",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-monitor":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-monitor": 0.3.2',
+    re: /"@vibefield\/puppeteer-monitor":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-monitor": 0.3.3',
     package: "@vibefield/puppeteer-monitor",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-view-sdk": 0.3.2',
+    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-view-sdk": 0.3.3',
     package: "@vibefield/puppeteer-view-sdk",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-views":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-views": 0.3.2',
+    re: /"@vibefield\/puppeteer-views":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-views": 0.3.3',
     package: "@vibefield/puppeteer-views",
   },
 ];

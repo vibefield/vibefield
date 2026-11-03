@@ -675,6 +675,7 @@ export type AgentModelsResult = z.infer<typeof AgentModelsResult>;
  * unmounted `missing-cwd`. Never beside `cwd`: a body naming both is refused. */
 export const AgentSpawnParams = z
   .object({
+    creationId: z.string().min(1).max(128).optional(),
     provider: AgentProviderId,
     cwd: z.string().optional(),
     place: PlaceRef.optional(),
@@ -717,6 +718,7 @@ export type AgentSpawnResult = z.infer<typeof AgentSpawnResult>;
  * is refused (PRECONDITION_FAILED): re-attaching to a live process is AR-4's. */
 export const AgentResumeRunParams = z
   .object({
+    creationId: z.string().min(1).max(128).optional(),
     runtimeRunId: z.string().min(1),
     cwd: z.string().optional(),
   })
@@ -742,6 +744,7 @@ export type AgentResumeRunParams = z.infer<typeof AgentResumeRunParams>;
  * `missing-cwd` when that folder is gone, or when the row names none. */
 export const AgentResumeNativeParams = z
   .object({
+    creationId: z.string().min(1).max(128).optional(),
     provider: AgentProviderId,
     nativeSessionId: z.string().min(1).max(256),
     cwd: z.string().optional(),

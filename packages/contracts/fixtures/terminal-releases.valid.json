@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "pending": [
+    { "sessionId": "shell-1", "condition": "unused", "cellBootId": "cell-1" },
+    { "sessionId": "agent-1", "condition": "exited", "cellBootId": "cell-2" }
+  ]
+}

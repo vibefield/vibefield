@@ -66,7 +66,7 @@ describe("the words a stopping pane says (DESIGN.md §8, §9)", () => {
       state: "still-running",
       word: "Still",
       rest: "running",
-      caption: "the stop was sent twice and not heard ·",
+      caption: "the cancellation was not confirmed ·",
       act: "end-run",
     };
     // a run whose status cannot be read, after its second bound
@@ -146,7 +146,7 @@ describe("the stopping pane (the shipping view)", () => {
     expect(view.querySelector(".vf-godview-stop-state-word")?.textContent).toBe("Still");
     expect(view.querySelector(".vf-godview-stop-state-rest")?.textContent).toBe("running");
     expect(view.querySelector(".vf-godview-stop-state-caption")?.textContent).toBe(
-      "the stop was sent twice and not heard · End run",
+      "the cancellation was not confirmed · End run",
     );
     const buttons = view.querySelectorAll("button");
     expect(buttons).toHaveLength(1);

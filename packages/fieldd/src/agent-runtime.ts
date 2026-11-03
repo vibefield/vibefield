@@ -546,6 +546,9 @@ interface ManagedEntry {
   /** ST — the person's Stop while this fieldd holds one (ST-D8: not across a restart), and its bound's timer */
   stop?: AgentStopState | undefined;
   stopTimer?: NodeJS.Timeout | undefined;
+  /** Pause keeps the process open even when its turn cancellation is unheard. */
+  stopKeepOpen?: boolean | undefined;
+  pauseRequest?: Promise<AgentInterruptResult> | undefined;
   /** TU-1 — the record's `turnedAt`, held here so a publish never reads the disk: seeded at entry, a time once fieldd
    * stamps the first turn it sees (`stampTurn`) */
   turnedAt: string | null | undefined;
@@ -1864,6 +1867,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    *    `accepted` means the stop was delivered, never that the agent obeyed
    *    it. */
   async interrupt(params: AgentInterruptParams): Promise<AgentInterruptResult> {
+    return this.requestStop(params, false);
+  }
+
+  async pause(params: AgentInterruptParams): Promise<AgentInterruptResult> {
+    return this.requestStop(params, true);
+  }
+
+  private async requestStop(
+    params: AgentInterruptParams,
+    keepOpen: boolean,
+  ): Promise<AgentInterruptResult> {
     const entry = this.managed.get(params.runtimeRunId);
     if (entry === undefined || entry.exiting) {
       const known =
@@ -1887,17 +1901,40 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // the same words the host itself would answer with — no floor, no act
       return { accepted: false, reason: "no-terminal-host" };
     }
-    const result = await this.deliverStop(entry, host);
-    this.logger.info("fieldd.agents.interrupted", "An agent run was interrupted", {
-      runtimeRunId: params.runtimeRunId,
-      sessionId: entry.info.terminalSessionId,
-      // what was sent, in puppeteer's words: a key, or the agent's own control
-      stop: stopKeyOf(entry.agent.turnStop) ?? "native",
-      accepted: result.accepted,
-      ...(result.accepted ? {} : { reason: result.reason }),
-    });
-    if (result.accepted) this.stopSent(entry);
-    return result.accepted ? { accepted: true } : { accepted: false, reason: result.reason };
+    if (keepOpen) {
+      if (entry.stop?.stage === "terminating") return { accepted: false, reason: "ending" };
+      if (entry.status !== "working") return { accepted: false, reason: "not-working" };
+      if (entry.pauseRequest !== undefined) return entry.pauseRequest;
+      if (entry.stop !== undefined && entry.stop.stage !== "heard") {
+        return entry.stopKeepOpen
+          ? { accepted: true }
+          : { accepted: false, reason: "stop-in-progress" };
+      }
+    }
+    const deliver = async (): Promise<AgentInterruptResult> => {
+      const result = await this.deliverStop(entry, host, keepOpen);
+      this.logger.info("fieldd.agents.interrupted", "An agent run was interrupted", {
+        runtimeRunId: params.runtimeRunId,
+        sessionId: entry.info.terminalSessionId,
+        // what was sent, in puppeteer's words: a key, or the agent's own control
+        stop: stopKeyOf(entry.agent.turnStop) ?? "native",
+        accepted: result.accepted,
+        keepOpen: keepOpen,
+        ...(result.accepted ? {} : { reason: result.reason }),
+      });
+      if (result.accepted) this.stopSent(entry, keepOpen);
+      return result.accepted ? { accepted: true } : { accepted: false, reason: result.reason };
+    };
+    if (!keepOpen) return deliver();
+    // Install before delivery: simultaneous clicks from mirrored panes send
+    // one cancellation, including while a native control is still answering.
+    const request = Promise.resolve()
+      .then(deliver)
+      .finally(() => {
+        if (entry.pauseRequest === request) entry.pauseRequest = undefined;
+      });
+    entry.pauseRequest = request;
+    return request;
   }
 
   /** The run's OWN stop, delivered: the floor's interrupt, or the agent's declared turn stop (Q08). The one thing a
@@ -1905,7 +1942,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private async deliverStop(
     entry: ManagedEntry,
     host: TerminalAgentHost,
+    keepOpen = false,
   ): Promise<{ accepted: true } | { accepted: false; reason: string }> {
+    if (keepOpen && (entry.exiting || entry.status !== "working"))
+      return { accepted: false, reason: "not-working" };
+    if (keepOpen && entry.agent.turnStop === undefined)
+      return { accepted: false, reason: "turn-stop-unavailable" };
     return entry.agent.turnStop === undefined
       ? await host.automateTerminal(entry.info.terminalSessionId, { kind: "interrupt" })
       : await entry.agent.stopTurn();
@@ -1928,11 +1970,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** ST — a person's Stop was delivered: it is held as SENT until the run is heard to stop, and its bound is armed. A
    * second press while one is held changes nothing: the first Stop's clock and stage stand. */
-  private stopSent(entry: ManagedEntry): void {
+  private stopSent(entry: ManagedEntry, keepOpen = false): void {
     // the delivery was awaited: a run that exited, was replaced, or a fieldd stopping meanwhile holds no Stop
     if (this.disposed || entry.exiting || this.managed.get(entry.info.runtimeRunId) !== entry)
       return;
-    if (entry.stop !== undefined && entry.stop.stage !== "heard") return;
+    if (
+      entry.stop !== undefined &&
+      entry.stop.stage !== "heard" &&
+      (!keepOpen || entry.stop.unheardAt === undefined)
+    ) {
+      if (keepOpen) entry.stopKeepOpen = true;
+      return;
+    }
+    entry.stopKeepOpen = keepOpen;
     entry.stop = { sentAt: this.now().toISOString(), stage: "sent" };
     if (heardByStatus(entry.stop, this.stopFacts(entry))) this.stopHeard(entry, "status");
     else this.armStop(entry);
@@ -1975,7 +2025,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (entry === undefined || entry.exiting || entry.stop === undefined) return;
     entry.stopTimer = undefined;
     const stop = entry.stop;
-    const step = nextStopStep(stop, this.stopFacts(entry));
+    const step = nextStopStep(stop, this.stopFacts(entry), entry.stopKeepOpen);
     const afterMs = this.now().getTime() - Date.parse(stop.sentAt);
     if (step === "none") return;
     if (step === "unheard") {
@@ -2000,7 +2050,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           async () =>
             host === null
               ? { accepted: false as const, reason: "no-terminal-host" }
-              : await this.deliverStop(entry, host),
+              : await this.deliverStop(entry, host, entry.stopKeepOpen),
           (result) =>
             result.accepted
               ? { outcome: "succeeded" }

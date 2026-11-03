@@ -3858,6 +3858,8 @@ fn is_governed_here(session: &SessionSummary) -> bool {
 /// reads it when the floor's `session-exited` never reached it.
 fn observed_row(session: &SessionSummary) -> ObservedTerminal {
     ObservedTerminal {
+        creation_id: session.creation_id.clone(),
+        input_used: session.input_used,
         session_id: session.id.clone(),
         pid: session.pid.map(i64::from),
         created_at: session.created_at_ms.and_then(|ms| i64::try_from(ms).ok()),

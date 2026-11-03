@@ -181,7 +181,13 @@ export function GodviewStage({
       {tuningPanel}
       {/* where the sheet rests, held still whatever the sheet does — the
           edge measures rest off it (`deck-edge.ts`) */}
-      {deckEdge ? <span className="vf-godview-deck-rest" aria-hidden="true" /> : null}
+      {deckEdge ? (
+        <>
+          <span className="vf-godview-deck-rest" aria-hidden="true" />
+          {/* Target geometry, independent of the sheet's compositor travel. */}
+          <span className="vf-godview-field-wall" aria-hidden="true" />
+        </>
+      ) : null}
       {/* The deck is a sheet over the monitor (§8): the Lip along its top
           edge, then the well set into the frame, and in the well the body —
           the positioned box every deck face fills (`inset: 0`), so the faces

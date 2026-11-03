@@ -5,12 +5,7 @@ import {
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
-import {
-  AgentInterruptResult,
-  AgentSpawnResult,
-  type DeviceInfo,
-  TerminalTerminateResult,
-} from "@vibefield/contracts";
+import { AgentInterruptResult, AgentSpawnResult, type DeviceInfo } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   ChromeBoundary,
@@ -37,6 +32,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import {
   emitGodviewColdOpenMarker,
@@ -57,9 +53,11 @@ import {
   adoptRemoteTerminalSession,
   createTerminalSession,
   floorReadWithin,
+  isRemoteTerminalSession,
   openDormantTransport,
   readRemoteTerminalSession,
   refreshTerminalRoster,
+  releaseTerminalSession,
   remoteTerminalDeviceFlipped,
   retryTerminalPool,
   type TerminalFault,
@@ -75,7 +73,7 @@ import {
 } from "../terminal/pool";
 import { afterNextFrame, godviewColdOpen } from "./cold-open";
 import { deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
-import { bornInThisView, GodviewDeckLaunchers, recordBornShell } from "./deck-launchers";
+import { GodviewDeckLaunchers, isUnusedShell } from "./deck-launchers";
 import { type DeckPlacement, type DeckShape, deckPlacement } from "./deck-placement";
 import {
   DECK_STORAGE_KEY,
@@ -108,6 +106,7 @@ import {
   usagePortOver,
 } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
+import { PaneTransitions } from "./monitor/pane-transitions";
 import { instrumentDevicesPort } from "./monitor/perf/door-instruments";
 
 import type {
@@ -386,6 +385,12 @@ export function GodviewDeck({
   const error: TerminalFault | null = pool.fault;
   // A runtime replacement loses its input history; keep earlier shells conservatively.
   const unusedPanes = useMemo(() => new UnusedPaneSessions<SessionSummary>(), [runtime]);
+  const endedSessions = useMemo(() => new Set<string>(), [runtime]);
+  const endingRequests = useMemo(
+    () => new Map<string, Promise<{ accepted: boolean }>>(),
+    [runtime],
+  );
+  const [, publishEndedSession] = useState(0);
   /** Published by the sidebar probe. Read only to REPORT what the deck holds
    * (the marker below); the deck does not drive panes through it any more —
    * that was the adopt sweep GT-2e deleted. */
@@ -410,14 +415,22 @@ export function GodviewDeck({
    * `emptyPaneOf`, which forgets it once the pane shows anything else or the
    * shell has been typed into. */
   const emptyPane = useRef<{ paneId: string; sessionId: string } | null>(null);
-  const [terminalVisualIds, setTerminalVisualIds] = useState<ReadonlyMap<string, string>>(
-    () => new Map(),
+  const transitions = useMemo(() => new PaneTransitions(), []);
+  useSyncExternalStore(transitions.subscribe, transitions.getSnapshot, transitions.getSnapshot);
+  const terminalVisualIds = transitions.visualIds();
+  const beginReplacement = useCallback(
+    (previous: string) => transitions.begin(previous),
+    [transitions],
   );
-  const transferBubble = useCallback((previous: string, next: string): void => {
-    setTerminalVisualIds((current) =>
-      new Map(current).set(next, current.get(previous) ?? previous),
-    );
-  }, []);
+  const handoffBirths = useRef(new Map<string, { previous: string; finish(): void }>());
+  const settleHandoff = (next: string, accepted: boolean): void => {
+    const pending = handoffBirths.current.get(next);
+    if (pending === undefined) return;
+    if (accepted) transitions.commit(pending.previous, next);
+    else transitions.rollback(pending.previous, next);
+    handoffBirths.current.delete(next);
+    pending.finish();
+  };
   /** AR-4b — the door's mounts, one at a time (see `mountLocal`). Each entry
    * settles: the floor reads inside one are bounded (`floorReadWithin`,
    * 2026-10-11), so an entry that cannot finish fails in words and the next
@@ -867,8 +880,13 @@ export function GodviewDeck({
   // so the same end state is reached by saying it once instead of by saying the
   // opposite and being corrected.
   const bornSession = useCallback(
-    async (cwd: string | undefined, profileSet?: string): Promise<SessionSummary | null> => {
+    async (
+      cwd: string | undefined,
+      profileSet?: string,
+      creationId?: string,
+    ): Promise<SessionSummary | null> => {
       const created = await createTerminalSession({
+        ...(creationId === undefined ? {} : { creationId }),
         ...(cwd !== undefined ? { cwd } : {}),
         // TC-D6(c): the class is the scrollback cap AND the placement hint. A
         // pane a person types into is interactive by definition.
@@ -960,7 +978,7 @@ export function GodviewDeck({
    * and that is the honest outcome: a pane that could not be born should not be
    * drawn as though it were. */
   const createSplitSession = useCallback(
-    async (activeSession: DeckSession): Promise<SessionSummary> => {
+    async (activeSession: DeckSession, creationId?: string): Promise<SessionSummary> => {
       // SB-3: the door's ask, taken (and cleared) before the first await, so a
       // ⌘D after it cannot inherit it. With none, the new shell is born under
       // its SOURCE PANE's set: the active pane for a ⌘D split, the pane the
@@ -983,7 +1001,7 @@ export function GodviewDeck({
         birth?.cwd ?? paneCwd({ cwd: activeSession.cwd }, readDeviceHost()) ?? shell?.home;
       let born: SessionSummary | null;
       try {
-        born = await bornSession(cwd, profileSet);
+        born = await bornSession(cwd, profileSet, creationId);
       } catch (cause) {
         // Ghosttea catches this throw and answers `undefined`; the door's
         // `failed` carries fieldd's own words from here instead (SB-3).
@@ -991,10 +1009,15 @@ export function GodviewDeck({
         throw cause;
       }
       if (born === null) throw new Error("the floor did not report the session it just created");
-      recordBornShell(runtime, born.id); // QL-D7: a new pane's shell, which may show the launcher
       return born;
     },
     [bornSession, shell, runtime, paneSetOf],
+  );
+
+  // The workspace supplies its split axis as a second argument; it is not a birth identity.
+  const createWorkspaceSession = useCallback(
+    (session: DeckSession) => createSplitSession(session),
+    [createSplitSession],
   );
 
   /**
@@ -1174,7 +1197,7 @@ export function GodviewDeck({
     (context: GhostteaWorkspaceContext): string | null => {
       const only = context.panes.length === 1 ? context.panes[0]?.session.id : undefined;
       if (runtime === null || only === undefined || runtime.sessionHasInput(only)) return null;
-      return bornInThisView(runtime)(only) || openingBirth.current === only ? only : null;
+      return isUnusedShell(runtime, only) || openingBirth.current === only ? only : null;
     },
     [runtime],
   );
@@ -1571,50 +1594,85 @@ export function GodviewDeck({
       .map((pane) => pane.session)
       .filter(
         (session) =>
-          paneAgents.runs.has(session.id) && runtime?.remoteSession(session.id) === undefined,
+          (paneAgents.runs.has(session.id) || endedSessions.has(session.id)) &&
+          !isRemoteTerminalSession(session.id) &&
+          runtime?.remoteSession(session.id) === undefined,
+      )
+      .map((session) =>
+        endedSessions.has(session.id) ? { ...session, endedByHost: true } : session,
       ),
     {
-      createShell: (session) =>
-        createSplitSession({
-          ...session,
-          cwd: paneAgents.agents.get(session.id)?.cwd ?? session.cwd,
-        }),
+      createShell: async (session) => {
+        const birth = beginReplacement(session.id);
+        try {
+          const born = await createSplitSession(
+            {
+              ...session,
+              cwd: paneAgents.agents.get(session.id)?.cwd ?? session.cwd,
+            },
+            birth.creationId,
+          );
+          handoffBirths.current.set(born.id, { previous: session.id, finish: birth.finish });
+          transitions.reserve(session.id, born.id);
+          return born;
+        } catch (cause) {
+          birth.finish();
+          throw cause;
+        }
+      },
       replaceSession: (id, next) => {
         const replaced = workspaceRef.current?.replaceSession?.(id, next) ?? false;
-        if (replaced) transferBubble(id, next.id);
+        if (replaced) {
+          // Placement and a close can reach React in one batch. Record the
+          // actual handoff before the cleanup tracker sees the final layout.
+          unusedPanes.placed(next);
+        }
+        settleHandoff(next.id, replaced);
         return replaced;
       },
-      releaseSession: terminateTerminalSession,
-      onError: (cause) =>
+      releaseSession: (id, condition) => {
+        if (condition === "unused") settleHandoff(id, false);
+        return releaseTerminalSession(id, condition);
+      },
+      onError: (cause) => {
+        sayOnLine(
+          "Could not return this pane to a shell. You can open a new terminal or resume the session.",
+        );
         getRendererLogger()
           .child({ component: "godview" })
           .error(
             "renderer.godview.agent_exit_shell_failed",
             "Could not return the ended agent pane to a shell",
             cause,
-          ),
+          );
+      },
     },
   );
   const shellUsed = useCallback(
     (session: SessionSummary): boolean =>
-      runtime?.sessionHasInput(session.id) === true ||
+      !isUnusedShell(runtime, session.id) ||
       session.exited ||
       paneAgents.runs.has(session.id) ||
       runtime?.remoteSession(session.id) !== undefined,
     [runtime, paneAgents.runs],
   );
-  const releaseUnusedShell = useCallback((sessionId: string, onFailure?: () => void): void => {
-    void terminateTerminalSession(sessionId).catch((cause: unknown) => {
-      onFailure?.();
-      getRendererLogger()
-        .child({ component: "godview" })
-        .error(
-          "renderer.godview.unused_pane_close_failed",
-          "Could not close the unused shell",
-          cause,
-        );
-    });
-  }, []);
+  const releaseUnusedShell = useCallback(
+    (sessionId: string): void => {
+      if (!unusedPanes.holds(sessionId)) return;
+      void releaseTerminalSession(sessionId, "unused")
+        .then(() => unusedPanes.release(sessionId))
+        .catch((cause: unknown) => {
+          getRendererLogger()
+            .child({ component: "godview" })
+            .error(
+              "renderer.godview.unused_pane_close_failed",
+              "Could not close the unused shell",
+              cause,
+            );
+        });
+    },
+    [unusedPanes],
+  );
 
   /**
    * N16 (a) and the lead's rule (2026-10-12) — ⌘W ON THE LAST PANE EMPTIES IT.
@@ -1666,14 +1724,19 @@ export function GodviewDeck({
       releaseUnusedShell(fresh.id);
       return;
     }
+    unusedPanes.placed(fresh);
     emptyPane.current = { paneId: pane.id, sessionId: fresh.id };
-  }, [createSplitSession, paneAgents.agents, releaseUnusedShell]);
+  }, [createSplitSession, paneAgents.agents, releaseUnusedShell, unusedPanes]);
   const emptyLastPaneNow = useRef(emptyLastPane);
   emptyLastPaneNow.current = emptyLastPane;
 
   useLayoutEffect(() => {
     if (runtime === null || workspace === undefined) return;
-    const bornHere = bornInThisView(runtime);
+    for (const sessionId of endedSessions) {
+      if (!workspace.panes.some((pane) => pane.session.id === sessionId))
+        endedSessions.delete(sessionId);
+    }
+    const bornHere = (id: string) => isUnusedShell(runtime, id);
     for (const { session } of workspace.panes) {
       if (bornHere(session.id)) unusedPanes.created(session.id);
     }
@@ -1683,7 +1746,7 @@ export function GodviewDeck({
       (session) => session.activity.kind === "foreground-job",
     ))
       releaseUnusedShell(session.id);
-  }, [workspace, runtime, unusedPanes, shellUsed, releaseUnusedShell]);
+  }, [workspace, runtime, unusedPanes, shellUsed, releaseUnusedShell, endedSessions]);
   useEffect(() => {
     if (runtime === null) return;
     const observe = (event: Event): void => {
@@ -1706,18 +1769,18 @@ export function GodviewDeck({
       if (
         runtime === null ||
         showing.length !== 1 ||
-        !bornInThisView(runtime)(previous) ||
+        !isUnusedShell(runtime, previous) ||
         runtime.sessionHasInput(previous) ||
         paneRuns.current.has(previous) ||
         runtime.remoteSession(previous) !== undefined
       )
         return () => undefined;
-      transferBubble(previous, next);
+      transitions.reserve(previous, next);
       // The monitor can publish the agent before the workspace finishes mounting.
       // Reserve its body now; failed placement restores distinct terminal bodies.
-      return () => setTerminalVisualIds((current) => new Map(current).set(next, next));
+      return () => transitions.rollback(previous, next);
     },
-    [runtime, transferBubble],
+    [runtime, transitions],
   );
   const onLauncherReplaced = useCallback(
     (previous: string, next: string): boolean => {
@@ -1725,21 +1788,18 @@ export function GodviewDeck({
       // input delivered while the agent started must keep its original shell.
       if (
         runtime === null ||
-        !bornInThisView(runtime)(previous) ||
+        !isUnusedShell(runtime, previous) ||
         runtime.sessionHasInput(previous) ||
         paneRuns.current.has(previous) ||
         runtime.remoteSession(previous) !== undefined ||
         workspaceRef.current?.panes.some((pane) => pane.session.id === previous)
       )
         return false;
-      unusedPanes.release(previous);
-      transferBubble(previous, next);
-      releaseUnusedShell(previous, () =>
-        setTerminalVisualIds((current) => new Map(current).set(next, next)),
-      );
+      transitions.commit(previous, next);
+      releaseUnusedShell(previous);
       return true;
     },
-    [runtime, unusedPanes, transferBubble, releaseUnusedShell],
+    [runtime, unusedPanes, transitions, releaseUnusedShell],
   );
 
   /** The runs the verbs are aimed with, read at CALL time: the verbs object
@@ -1769,16 +1829,12 @@ export function GodviewDeck({
   /**
    * THE VERBS the deck lends the frame.
    *
-   * `stop` is `agent.interrupt` on the fold's RUN — the one door AR-6-0 adds
-   * for exactly this. Since Q08 fieldd sends the run's own turn stop, the one
-   * its adapter names (a key the floor delivers, yielding to a human
-   * mid-keystroke, or the agent's own control), and the floor's ⌃C only while
-   * the adapter names none. The verb names no key itself: the frame's title
-   * takes it from the run's row (`local.stopKey`, `pane-frame-facts.ts`), so
-   * the title and the act are the same fieldd fact. It answers whether the
-   * interrupt was DELIVERED, which is what turns the square hollow; a run the
-   * fold does not name, a refusal and a failure are all "not accepted", and
-   * each says so in the log rather than on a button that lies.
+   * `stop` ends the managed session through the terminal owner's termination
+   * path. Its confirmed receipt returns attached panes to a fresh shell through
+   * the same guarded handoff as a clean native exit. This is provider-neutral:
+   * Escape and Ctrl+C are task controls, not reliable ways to end an agent.
+   * `pause` sends the run's own turn cancellation once through agent.pause, so an unheard
+   * cancellation cannot escalate into ending the agent.
    *
    * `resume` is `agent.resume` — the existing door — and the answer carries the
    * new run beside the SAME routed create ticket a birth gets, so the pool
@@ -1792,7 +1848,38 @@ export function GodviewDeck({
     const log = () => getRendererLogger().child({ component: "godview" });
     const runFor = (sessionId: string): string | undefined => paneRuns.current.get(sessionId);
     return {
-      stop: async (sessionId) => {
+      stopKind: "session" as const,
+      stop: (sessionId) => {
+        const pending = endingRequests.get(sessionId);
+        if (pending !== undefined) return pending;
+        if (endedSessions.has(sessionId)) return { accepted: true };
+        const runtimeRunId = runFor(sessionId);
+        if (runtimeRunId === undefined) return { accepted: false };
+        const request = (async (): Promise<{ accepted: boolean }> => {
+          try {
+            await terminateTerminalSession(sessionId);
+            // The terminal owner accepted the end request. Its metadata or
+            // the agent row may disappear before this receipt reaches us.
+            endedSessions.add(sessionId);
+            publishEndedSession((version) => version + 1);
+            return { accepted: true };
+          } catch (cause) {
+            log().error("renderer.godview.agent_stop_failed", "Could not stop the agent", cause, {
+              runtimeRunId,
+              sessionId,
+            });
+            sayOnLine(
+              `Could not stop agent — ${cause instanceof Error ? cause.message : String(cause)}`,
+            );
+            return { accepted: false };
+          } finally {
+            endingRequests.delete(sessionId);
+          }
+        })();
+        endingRequests.set(sessionId, request);
+        return request;
+      },
+      pause: async (sessionId: string) => {
         const runtimeRunId = runFor(sessionId);
         if (runtimeRunId === undefined) return { accepted: false };
         const refused = (reason: string): { accepted: false } => {
@@ -1807,7 +1894,7 @@ export function GodviewDeck({
           // the same): a shape this cannot read is not a delivery, and the
           // discriminated union is what says which of the two answers it is.
           const answer = AgentInterruptResult.parse(
-            await fieldd.request("agent.interrupt", { runtimeRunId }),
+            await fieldd.request("agent.pause", { runtimeRunId }),
           );
           return answer.accepted ? { accepted: true } : refused(answer.reason);
         } catch (cause) {
@@ -1823,7 +1910,7 @@ export function GodviewDeck({
           if (state !== undefined) return refused(state);
           log().error(
             "renderer.godview.interrupt_failed",
-            "the stop verb could not reach fieldd",
+            "the pause verb could not reach fieldd",
             cause,
           );
           return { accepted: false };
@@ -1875,25 +1962,24 @@ export function GodviewDeck({
       // Ghosttea routes its configured zoom binding to the same controller.
       zoomShortcut: getHost().platform === "darwin" ? "⌘⇧↵" : "⌃⇧↵",
     };
-  }, [fieldd, mountSummaryNow]);
+  }, [fieldd, mountSummaryNow, endedSessions, endingRequests]);
 
   /**
    * ST-D4 (a) — THE PERSON'S END RUN, from a pane whose run's Stop fieldd will
    * take no further (`StopPaneState`'s "Still running"): `terminal.terminate`
    * on the pane's own session, the floor's ladder, the act fieldd's escalation
    * takes for a run whose status it can read. The run's exit is the Stop heard,
-   * and the pane shows it as any exit. A ref, so the stable frame below reads
+   * and the same shell handoff as Stop follows. A ref, so the stable frame below reads
    * the current client without being rebuilt.
    */
   const endRun = useRef<(sessionId: string) => void>(() => undefined);
   endRun.current = (sessionId) => {
     const log = getRendererLogger().child({ component: "godview" });
-    fieldd.request("terminal.terminate", { sessionId }).then(
+    void Promise.resolve(frameVerbs.stop?.(sessionId)).then(
       (answer) => {
-        const { terminated } = TerminalTerminateResult.parse(answer);
+        if (!answer?.accepted) return;
         log.info("renderer.godview.end_run", "the person ended a run a Stop did not stop", {
           sessionId,
-          terminated,
         });
       },
       (cause: unknown) =>
@@ -2112,6 +2198,7 @@ export function GodviewDeck({
       // …and every live PTY the floor holds (GT-6b), pane or no pane.
       floor: floorRoster,
       terminalVisualIds,
+      transitions,
       // …and the Agent Profile each shell was born under (SB-3, fieldd's words)
       profileSets: pool.profileSets,
     });
@@ -2122,6 +2209,7 @@ export function GodviewDeck({
     floorRoster,
     framePaneColors,
     terminalVisualIds,
+    transitions,
     pool.profileSets,
   ]);
 
@@ -2384,7 +2472,7 @@ export function GodviewDeck({
           // every interactive pane birth — without the deck intercepting
           // anything or becoming a second authority over what a pane holds. The
           // workspace still asks; it just gets its session from the product door.
-          createSplitSession={createSplitSession}
+          createSplitSession={createWorkspaceSession}
           splitSizing="equal"
           onTogglePaneZoom={zoom.toggle}
           initialCwd={shell.home}
@@ -2457,6 +2545,7 @@ export function GodviewDeck({
         {/* QL-1: a fresh shell's launcher, beside its frame (`deck-launchers.tsx`). */}
         <ChromeBoundary name="Launchers" retryKey={launchersRetryKey}>
           <GodviewDeckLaunchers
+            beginReplacement={beginReplacement}
             onReplaced={onLauncherReplaced}
             prepareReplacement={prepareLauncherReplacement}
             deckRef={zoomHostRef}

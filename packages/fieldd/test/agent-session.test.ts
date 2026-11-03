@@ -4335,6 +4335,103 @@ describe("ST — a durable Stop (the real floor)", () => {
     console.log(`DS_HEARD ${JSON.stringify({ row: "ladder", boundMs: 500, heardMs })}`);
   }, 120_000);
 
+  it("Pause refuses an agent without declared turn cancellation instead of sending an interrupt key", async () => {
+    const box = await setup({ floor: "real", observed: true });
+    const win = await window(box.daemon, [...DECK, "agent.control"], "pause-unsupported");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    scriptedEvent(box, spawned.terminal.sessionId, { type: "turn:started" });
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.status === "working",
+      "working before unsupported pause",
+    );
+    expect(await win.call("agent.pause", { runtimeRunId: runId })).toEqual({
+      accepted: false,
+      reason: "turn-stop-unavailable",
+    });
+    expect(box.turnStops).toEqual([]);
+    expect(
+      (
+        await box.daemon.agents.runtime
+          .agent(spawned.terminal.sessionId)
+          ?.submitPrompt({ text: "still-open" })
+      )?.status,
+    ).toBe("confirmed");
+  }, 60_000);
+
+  it("Pause keeps an unresponsive working agent alive after both bounds and coalesces repeated presses", async () => {
+    const box = await setup({
+      floor: "real",
+      program: IGNORES_INT,
+      observed: true,
+      turnStop: true,
+      stopHeardWithinMs: 500,
+    });
+    const { daemon, dataDir, turnStops } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "pause-unheard");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    await trapped(box);
+    await catReady(box, paneId);
+    scriptedEvent(box, paneId, { type: "turn:started" });
+    await rowWhere(win, runId, (row) => row.status === "working", "the turn working");
+    const params = { runtimeRunId: runId };
+    expect(
+      await Promise.all([win.call("agent.pause", params), win.call("agent.pause", params)]),
+    ).toEqual([{ accepted: true }, { accepted: true }]);
+    const unheard = await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.unheardAt !== undefined,
+      "Pause left unheard",
+    );
+    expect(unheard.stop?.stage).toBe("sent");
+    expect(unheard.continuation?.exited).not.toBe(true);
+    expect(escalations(dataDir, runId).map((entry) => entry.attrs?.["stage"])).toEqual([]);
+    expect(await win.call("agent.pause", params)).toEqual({ accepted: true });
+    expect(turnStops).toEqual([paneId]);
+    // Prove the PTY is still responsive, not just a stale monitor row.
+    expect(
+      (await daemon.agents.runtime.agent(paneId)?.submitPrompt({ text: "alive-after-pause" }))
+        ?.status,
+    ).toBe("confirmed");
+  }, 120_000);
+
+  it("Pause sends no key when idle and stops retrying when the turn ends, leaving the agent open", async () => {
+    const box = await setup({
+      floor: "real",
+      observed: true,
+      turnStop: true,
+      stopHeardWithinMs: 500,
+    });
+    const { daemon, turnStops, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "pause-idle");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    const params = { runtimeRunId: runId };
+    scriptedEvent(box, paneId, { type: "turn:started" });
+    scriptedEvent(box, paneId, { type: "turn:completed" });
+    await rowWhere(win, runId, (row) => row.status === "idle", "the turn idle");
+    expect(await win.call("agent.pause", params)).toEqual({
+      accepted: false,
+      reason: "not-working",
+    });
+    expect(turnStops).toEqual([]);
+    scriptedEvent(box, paneId, { type: "turn:started" });
+    await rowWhere(win, runId, (row) => row.status === "working", "a new turn working");
+    expect(await win.call("agent.pause", params)).toEqual({ accepted: true });
+    scriptedEvent(box, paneId, { type: "turn:completed" });
+    await rowWhere(win, runId, (row) => row.stop?.stage === "heard", "Pause heard by status");
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    expect(turnStops).toEqual([paneId]);
+    expect(escalations(dataDir, runId)).toEqual([]);
+    expect((await rowOf(win, runId))?.continuation?.exited).not.toBe(true);
+  }, 120_000);
+
   it("hears a Stop by a readable status leaving working: no second send, the pane lives, and the next turn lets it go", async () => {
     const box = await setup({
       floor: "real",

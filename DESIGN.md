@@ -360,8 +360,8 @@ minimize** (built 2026-10-11 with the terminals away; §8) is a control of
 in the terminal's ink at 64%; under the pointer the full ink on a 10% fill of it, 120ms on `ease`;
 under the keyboard's focus the pill's outline, 1px in text main, 1 off. It stands above the lip's
 hit, so the edge never takes its press. **The monitor's field** (built 2026-10-11, §8 "The monitor
-makes room"; re-ruled 2026-10-19) ends `--vf-godview-deck-field-gap` above the deck's edge as last
-set, and never above where it ends at rest. **The well**
+makes room"; re-ruled 2026-11-02) fills the stage for swarm, whose bottom physics wall eases toward
+the deck's edge less `--vf-godview-deck-field-gap`. Flow views end above the edge as last set, no higher than rest. **The well**
 the panes sit in stands 8 in from the sheet's sides and its foot (inside the cover its foot is
 the window's reserve, §10), corners `--vf-godview-deck-well-radius` (a selected pane's 8, the 1
 gap, the 1 edge), the panes 1 in from it and clipped at 9; drawn OVER the panes, the edge as a 1px
@@ -4045,19 +4045,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   bottom edge, 40. The reach is a place in the window, the same with the bar above the monitor
   and without it, and a lip at 104 is clear of the head, its foot at 48, and of the app's drag
   strip, the window's top 52, §10.)*
-  **The monitor makes room** (round 3, W4; built 2026-10-11; re-ruled 2026-10-19): its field
-  **ends 12 above the deck's edge** as it was last set, and **never above where it ends at
-  rest** — so at rest the field is at its least, and it only grows. An edge set below rest grows
-  it; an edge set above rest leaves it as it is at rest, and the sheet slides OVER the field, the
-  bodies still moving beneath. Measured once per change — a let-go, a key, a double-click, a
-  window that moves the bounds — and never once per frame of a drag: a held edge moves the sheet
-  and its terminals, not the field. At rest the field ends 12 above the sheet. *(2026-10-19,
-  James: "for the swarm squeeze issue, let's tackle this way, when at the default terminal pane
-  height, the swarm area is at its min height, so when user move the terminal pane further up,
-  no more squeezing the swarm bounds". Until then an edge set above rest shrank the field to 12
-  above it, down to a floor of 220 from the window's top, and the swarm's fit shrank the crowd
-  with it. The rule W4 replaced — "upward the monitor does NOT shrink — its tuned height … is
-  its minimum" — is this one, with rest in place of the tuned height that N15 retired.)*
+  **The monitor makes room** (re-ruled 2026-11-02, James: keep the canvas and physics area full,
+  ease the wall when the terminal pane moves). The swarm's canvas and world keep the whole stage's
+  width and height through dragging, minimizing and restoring. The terminal sheet moves over them.
+  Its top edge, less `--vf-godview-deck-field-gap` (12), is the target of the swarm's bottom wall;
+  minimized, the target is the stage's foot, clear of the cover's existing bottom reserve. The host
+  hands that target to the portable view as `stage.insets.bottom`, never as a smaller canvas.
+  The wall and the centre's pull ease together on a critically damped spring (ω = 12 s⁻¹), keeping
+  velocity when retargeted; collisions move bodies, never a translation of their coordinates.
+  While the wall travels, physics solves at steps no longer than 1/120 s so it cannot jump through
+  the crowd at the low physics-rate setting. A held edge retargets as it moves. Actual window
+  resizing still resizes the backing store and draws in the same paint. Motion off freezes the
+  simulation as before. The flow views retain their existing allocation: no smaller than rest,
+  and measured once on release. This replaces the swarm's 2026-10-19 minimum-height rule.
   **A let-go decides** (round 3, W4; built 2026-10-11 — *replaced* "The deck keeps at least
   120px — above the cover's reserve, inside the cover"). Held, the edge follows the pointer and
   the terminals resize with it (rows only, so no reflow of history), on down past the line to 24
@@ -4094,8 +4094,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   arrives laid out as it was — away, the sheet keeps the very box it had, out of the flow and
   below the window's foot, so it is not laid out again at all, and a rise to the edge it left
   lays it out not at all either. Only a person's drag resizes as it goes, rows
-  only. The monitor's field is resized once per change too, to its end size — on arrival, and at
-  a rise's start — never once per frame of the travel. Under reduced motion the deck is at its
+  only. Flow views resize once per change, to their end size — on arrival, and at a rise's start.
+  The swarm keeps its full canvas and eases its bottom physics wall throughout (§8 above). Under reduced motion the deck is at its
   end at once.
   **The deck has one state — `away · up · maximized`** (round 3, GV-D5, GV-D6 and GV-D11; built
   2026-10-11). Godview's overlay owns it and alone publishes it; the stage draws the state
@@ -4295,7 +4295,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **A run a Stop has not stopped** (track ST, ST-D4 (a); ruled by James on the board: the place
     at `ds-d4-place`, Accept, 2026-10-31 06:16:32Z, and the look at `ds-d4-look`, "Accept all
     three", 06:29:00Z, as VF-PM proposed them at 06:16Z and in the convention read of 06:26Z).
-    fieldd holds a person's Stop as sent until it hears the run stop (the field row's `stop`;
+    **Amended 2026-11-02 (James's Godview QA ruling):** the pane's **Stop agent** ends the
+    process through `terminal.terminate`. A separate **Pause current turn** uses `agent.pause`:
+    one provider-declared cancellation while working, with no fallback key, retry or termination.
+    Concurrent presses and an unconfirmed cancellation on the same turn coalesce. The legacy
+    `agent.interrupt` command retains ST's resend/escalation policy for its existing callers;
+    the two-send mechanics below describe that command. Pause never escalates to ending the run.
+    For that legacy command, fieldd holds a person's Stop as sent until it hears the run stop (the field row's `stop`;
     `thinking-ar-durable-stop.md`). The pane speaks only in the two states a press cannot answer
     itself, in the held-edge readout's figure (above), with its recipe and its reduced motion:
     - **Sent, and sent again** (the stages `sent`, `resent`): the pane adds nothing. The frame's
@@ -4312,10 +4318,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       words are **Ending** and **the run** at 40%, over **it did not stop after two sends · ending
       it**. The pane colour lights it, as item 42's does: nothing is asked of the person. It holds
       until the exit, the ladder's 4 s at most.
-    - **Still running** (`unheardAt`): fieldd sent the stop twice and cannot tell whether the turn
-      stopped (its status cannot be read, ST-D3), or the ladder could not be placed. The words are
-      **Still** and **running** at 40%, in text main as item 42's are, over **the stop was sent
-      twice and not heard ·** and then **End run**. The light, item 42's two insets and its bloom,
+    - **Still running** (`unheardAt`): the cancellation was not confirmed, or the legacy
+      interrupt's termination ladder could not be placed. This includes a Pause sent once;
+      the caption must not claim a retry. The words are
+      **Still** and **running** at 40%, in text main as item 42's are, over **the cancellation
+      was not confirmed ·** and then **End run**. The light, item 42's two insets and its bloom,
       takes the attention fill (`--vf-orange`, §2.5: needs you, Godview's ring-1) in place of the
       pane colour, and the caption, the small state word that has to be read, takes the attention
       ink (§2.7), not ink 72%. S-4 protects a face's identity, and a pane's glow is not one.
@@ -4324,9 +4331,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       takes none. Item 42's press takes the seat back; here the press answers nothing, so the act
       lives in the figure or nowhere the person is looking. It is a text button in the caption's
       size and weight, named "End run", and its words take the danger text (`--vf-red`, §2.5 as
-      AU-0 amended it), because it ends a process. It is **one press, with no second step**: the
-      person's Stop was the first, fieldd's two sends were its honest repetition, and the caption
-      is the confirm's "what this does" line, so a two-step would be a third press for one intent.
+      AU-0 amended it), because it ends a process. It is **one press, with no second step**:
+      **End run** names that act. After Pause, choosing it is a separate, explicit decision to
+      end the agent; an unconfirmed Pause alone never makes that decision for the person.
       It is `terminal.terminate` on the pane's own session (idempotent, the floor's ladder), and
       the pane then shows the exit as any exit does.
     - **Heard** (`heard`): by an exit, the pane shows the exit as any exit does (the frame's
@@ -5362,9 +5369,11 @@ limit, the size is rounded up and the limit down, so the two never read as equal
 1024s (`panels/DeskReadout.tsx`).*
 
 **A Stop's words** (track ST, ST-D4; ruled with §8's pane state, `ds-d4-place` 2026-10-31
-06:16:32Z and `ds-d4-look` 06:29:00Z). The press is answered by the frame: **Stopping the
-turn…**. While fieldd ends a turn that did not stop: **Ending the run**. When fieldd cannot tell:
-**Still running** · "the stop was sent twice and not heard" · **End run**. A stop that was only
+06:16:32Z and `ds-d4-look` 06:29:00Z; amended by James's 2026-11-02 Stop/Pause ruling).
+The pane's **Stop agent** answers **Stopping agent…**. **Pause current turn** answers
+**Pausing current turn…** and keeps the agent open. The legacy turn-stop control still answers
+**Stopping the turn…**; its escalation says **Ending the run**. When cancellation is unconfirmed:
+**Still running** · "the cancellation was not confirmed" · **End run**. A request that was only
 sent is never "interrupted", and a live pane is never "Stopped": Stopped is an exit's word.
 
 **The person's queue's words** (track CO, CP-3; CP3-D1…D8 ruled A by James, 2026-10-31 06:31:34Z). An item's acts

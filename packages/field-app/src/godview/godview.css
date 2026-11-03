@@ -2154,6 +2154,40 @@
 /* The terminals away (GV-D6, L5): the monitor alone ends at 692 too — the
    covers' reserve — and a field under the line is the head's to draw. */
 .vf-cover .vf-godview[data-godview-deck="away"]:not([data-godview-deck-motion])
-  .vf-godview-monitor-stage {
+  .vf-godview-monitor-stage:not([data-stage-allocation="full"]) {
   margin-bottom: 88px;
+}
+
+/* Swarm lends the sheet a full viewport. Only its collision wall makes room;
+   the canvas and its coordinate system stay fixed throughout the sheet's travel. */
+.vf-godview[data-godview-deck-edge] .vf-godview-monitor-stage[data-stage-allocation="full"] {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  flex: none;
+  margin: 0;
+}
+
+/* The host measures this target in stage coordinates and hands it to the view.
+   Live deck-shift follows the hand; field-shift still belongs to flow views. */
+.vf-godview-field-wall {
+  position: absolute;
+  top: calc(
+    var(--vf-godview-deck-rest) +
+    var(--vf-godview-deck-shift, 0px) -
+    var(--vf-godview-deck-field-gap)
+  );
+  left: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.vf-godview[data-godview-deck="away"] .vf-godview-field-wall {
+  top: calc(100% - var(--vf-godview-panes-foot));
+}
+
+.vf-godview[data-godview-deck="maximized"] .vf-godview-field-wall {
+  top: 0;
 }

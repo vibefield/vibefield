@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomBytes } from "node:crypto";
 import { existsSync, constants as fsConstants } from "node:fs";
 import { type FileHandle, open, rm } from "node:fs/promises";
@@ -9,6 +10,7 @@ import {
   GhostteaAutomationClient,
   GhostteaConfigDocumentConflictError,
   GhostteaRequestError,
+  SESSION_LIFECYCLE_PROTOCOL_MINOR,
   type SessionExitedEvent,
 } from "@vibecook/ghosttea-client";
 import {
@@ -53,6 +55,7 @@ import {
   type TerminalObservation,
   TerminalOpenTicket,
   type TerminalOpenTicketResponse,
+  type TerminalReleaseParams,
   type TerminalRenewAttachParams,
   type TerminalRenewAttachResult,
   type TerminalRosterResult,
@@ -266,7 +269,10 @@ type GhostteaConfigSnapshot = Awaited<ReturnType<GhostteaAutomationClient["getCo
 type GhostteaConfigDocument = Awaited<ReturnType<GhostteaAutomationClient["getConfigDocument"]>>;
 type GhostteaConfigDiagnostic = GhostteaConfigSnapshot["diagnostics"][number];
 
+import { TerminalReleases } from "./terminal-releases";
+
 export interface TerminalServiceOptions {
+  releasesFile?: string | undefined;
   link: TerminalLink;
   logger?: Logger;
   /** injectable for tests; production = the user's login shell */
@@ -604,6 +610,9 @@ export class TerminalService {
    * recorded at the birth, reported by the create and the roster, ended by
    * the inventory that no longer lists the session. */
   private readonly bindings: TerminalBindingStore;
+  private readonly releases: TerminalReleases;
+  private readonly creation = new AsyncLocalStorage<string>();
+  private readonly bornCreationIds = new Map<string, string>();
 
   // ---- IL-D4: how old the inventory is (`draft/thinking-inventory-latency.md` §4) ----
   private readonly timings: TerminalInventoryTimings;
@@ -634,6 +643,30 @@ export class TerminalService {
   constructor(private readonly opts: TerminalServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
     this.bindings = opts.bindings ?? new TerminalBindingStore({ logger: this.logger });
+    this.releases = new TerminalReleases({
+      file: opts.releasesFile,
+      logger: this.logger,
+      release: async ({ sessionId, condition, cellBootId }) => {
+        let cell: CellTarget;
+        try {
+          cell =
+            cellBootId === undefined
+              ? await this.sessionCellForOp(sessionId, "release")
+              : this.cellByBootId(cellBootId);
+        } catch (error) {
+          // A retired cell's sessions cannot survive it. A disconnected or
+          // unavailable owner is different and keeps the durable obligation.
+          if (
+            error instanceof RpcCallError &&
+            (error.details as { state?: string } | undefined)?.state === "cell_gone"
+          )
+            return "gone";
+          throw error;
+        }
+        const client = await this.connectedClient(cell);
+        return client.releaseSession(sessionId, condition);
+      },
+    });
     this.minter = new TerminalGrantMinter(undefined, undefined, opts.holderFaces);
     this.timings = {
       staleMs: TERMINAL_INVENTORY.STALE_MS,
@@ -749,6 +782,7 @@ export class TerminalService {
           // a placed session follows its tag from here on (see `bornIn`)
           for (const terminal of this.terminals) {
             this.bornIn.delete(terminal.sessionId);
+            this.bornCreationIds.delete(terminal.sessionId);
             this.bornUnseen.delete(terminal.sessionId);
           }
           // SB-2 — a bound shell's record ends with its session
@@ -1357,6 +1391,37 @@ export class TerminalService {
    * touched, and a set that is gone, a runtime that cannot answer or a binding
    * that cannot be made refuses the create in fieldd's words — never an unbound
    * shell in its place. `bound` is the audit's fact; the variables never are. */
+  creationIdOf(sessionId: string): string | undefined {
+    return (
+      this.bornCreationIds.get(sessionId) ??
+      this.terminals.find((row) => row.sessionId === sessionId)?.creationId
+    );
+  }
+
+  withCreation<T>(creationId: string | undefined, action: () => Promise<T>): Promise<T> {
+    return creationId === undefined ? action() : this.creation.run(creationId, action);
+  }
+
+  async release(params: TerminalReleaseParams): Promise<{ accepted: true }> {
+    this.refuseWhileStopping();
+    const cell = await this.sessionCellForOp(params.sessionId, "release");
+    const client = await this.connectedClient(cell);
+    if ((client.serverProtocolMinor ?? 0) < SESSION_LIFECYCLE_PROTOCOL_MINOR)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "terminal owner does not support conditional release",
+        false,
+        { service: "terminal", state: "lifecycle-unsupported" },
+      );
+    this.releases.enqueue({
+      sessionId: params.sessionId,
+      condition: params.condition,
+      ...(cell.key === LEGACY_CELL_KEY ? {} : { cellBootId: cell.key }),
+    });
+    void this.releases.flush();
+    return { accepted: true };
+  }
+
   async create(params: TerminalCreateParams): Promise<{
     sessionId: string;
     session: TerminalRuntimeSession;
@@ -1417,6 +1482,7 @@ export class TerminalService {
       basename(executable) === INTEGRATED_SHELL ? this.integrationFor(executable) : undefined;
     const overrides = this.overridesFor(binding, integration);
     const born = await this.birth(cell, client, executable, {
+      ...(params.creationId === undefined ? {} : { creationId: params.creationId }),
       executable,
       args: explicit ? [] : ["-l"],
       cwd: params.cwd ?? homedir(),
@@ -1696,13 +1762,18 @@ export class TerminalService {
   }> {
     this.birthsInFlight += 1;
     try {
-      const summary = await client.createSession(options);
+      const creationId = options.creationId ?? this.creation.getStore();
+      const summary = await client.createSession({
+        ...options,
+        ...(creationId === undefined ? {} : { creationId }),
+      });
       if (cell.key !== LEGACY_CELL_KEY) this.bornIn.set(summary.id, cell.key);
       this.bornUnseen.add(summary.id);
       // The routed renderer needs the engine's real decimal handle before it
       // can mount. Carry the summary from the birth that already has it;
       // waiting for observed inventory here would recreate GT-1's race.
       const session = TerminalRuntimeSession.parse(summary);
+      if (session.creationId != null) this.bornCreationIds.set(session.id, session.creationId);
       for (const listener of [...this.birthListeners]) {
         try {
           listener({ sessionId: session.id, pid: session.pid });
@@ -1921,6 +1992,7 @@ export class TerminalService {
     try {
       await client.terminate(sessionId, "application");
       this.bornIn.delete(sessionId);
+      this.bornCreationIds.delete(sessionId);
       return { terminated: true };
     } catch (error) {
       if (!client.connected) throw this.unavailable("the terminal floor died mid-terminate", error);
@@ -2140,6 +2212,7 @@ export class TerminalService {
 
   dispose(): void {
     this.disposed = true;
+    this.releases.dispose();
     this.opts.supervision?.off("transition", this.onSupervision);
     this.armAgeTimer(undefined, 0);
     this.connecting.clear();
@@ -2701,6 +2774,7 @@ export class TerminalService {
       this.heardExits.set(sessionId, event);
       setTimeout(() => {
         this.bornIn.delete(sessionId);
+        this.bornCreationIds.delete(sessionId);
         if (this.heardExits.get(sessionId) === event) this.heardExits.delete(sessionId);
       }, BORN_IN_EXIT_GRACE_MS).unref?.();
       // WP12 L2b — a birth that ended before any inventory listed it is no longer live

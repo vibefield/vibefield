@@ -24,6 +24,7 @@ import {
   outcomeUnknownKey,
   requestResolvingOutcome,
 } from "../forwarded-call";
+import type { PaneBirth } from "./monitor/pane-transitions";
 import { NATIVE_PROFILE } from "./monitor/profile-tabs";
 
 // THE EMPTY PANE LAUNCHER'S PORT (QL-1, thinking-ql-empty-pane-launcher.md),
@@ -49,6 +50,8 @@ export interface LauncherDoorClient extends KeyedCallClient {
 
 export interface LauncherPortDeps {
   client: LauncherDoorClient;
+  /** Correlate only this birth with the pane it is replacing. */
+  beginReplacement?: ((previous: string) => PaneBirth) | undefined;
   /** The latest `agent.providers` rows, read at call time: whether a past
    * session's agent can resume it here is the row's `resumable`. */
   providers(): readonly AgentProviderSummary[];
@@ -462,53 +465,66 @@ export function launcherPortOver(deps: LauncherPortDeps): LauncherPort {
     },
 
     async launch(request) {
-      // the shell this launcher sits on, and so the pane's profile
-      const profileSet = deps.profileSetOf?.(request.sessionId);
-      let answered: unknown;
+      const birth = deps.beginReplacement?.(request.sessionId);
       try {
-        // DS-D15 — one logical launch: an outcome-unknown is asked once more
-        // with its key (today only a launch routed to another desktop is keyed;
-        // a local one never fails that way, so this is one request)
-        answered = await requestResolvingOutcome(deps.client, "agent.spawn", {
-          provider: request.providerId,
-          ...(request.cwd !== undefined ? { cwd: request.cwd } : {}),
-          ...(profileSet !== undefined ? { profileSet } : {}),
-        });
-      } catch (cause) {
-        const under =
-          profileSet === undefined
-            ? undefined
-            : {
-                set:
-                  deps.profileSets?.().find((set) => set.id === profileSet)?.label ?? "its profile",
-                agent:
-                  deps.providers().find((provider) => provider.id === request.providerId)?.label ??
-                  request.providerId,
-              };
-        return { accepted: false, reason: refusalReason(cause, under) };
+        // the shell this launcher sits on, and so the pane's profile
+        const profileSet = deps.profileSetOf?.(request.sessionId);
+        let answered: unknown;
+        try {
+          // DS-D15 — one logical launch: an outcome-unknown is asked once more
+          // with its key (today only a launch routed to another desktop is keyed;
+          // a local one never fails that way, so this is one request)
+          answered = await requestResolvingOutcome(deps.client, "agent.spawn", {
+            ...(birth === undefined ? {} : { creationId: birth.creationId }),
+            provider: request.providerId,
+            ...(request.cwd !== undefined ? { cwd: request.cwd } : {}),
+            ...(profileSet !== undefined ? { profileSet } : {}),
+          });
+        } catch (cause) {
+          const under =
+            profileSet === undefined
+              ? undefined
+              : {
+                  set:
+                    deps.profileSets?.().find((set) => set.id === profileSet)?.label ??
+                    "its profile",
+                  agent:
+                    deps.providers().find((provider) => provider.id === request.providerId)
+                      ?.label ?? request.providerId,
+                };
+          return { accepted: false, reason: refusalReason(cause, under) };
+        }
+        return await place(answered, { paneId: request.paneId, replacing: request.sessionId });
+      } finally {
+        birth?.finish();
       }
-      return await place(answered, { paneId: request.paneId, replacing: request.sessionId });
     },
 
     async resume(request) {
-      const known = facts.get(request.session.key);
-      if (known === undefined) return { accepted: false, reason: "no agent here can resume it" };
-      const cwd = request.session.cwd ?? request.cwd;
-      let answered: unknown;
+      const birth = deps.beginReplacement?.(request.sessionId);
       try {
-        answered = await requestResolvingOutcome(deps.client, "agent.resume", {
-          provider: known.provider,
-          nativeSessionId: known.nativeSessionId,
-          ...(cwd !== undefined ? { cwd } : {}),
-          ...(known.profileId !== undefined ? { profileId: known.profileId } : {}),
-          ...(request.session.title !== UNTITLED_SESSION
-            ? { title: request.session.title.slice(0, 256) }
-            : {}),
-        });
-      } catch (cause) {
-        return { accepted: false, reason: refusalReason(cause) };
+        const known = facts.get(request.session.key);
+        if (known === undefined) return { accepted: false, reason: "no agent here can resume it" };
+        const cwd = request.session.cwd ?? request.cwd;
+        let answered: unknown;
+        try {
+          answered = await requestResolvingOutcome(deps.client, "agent.resume", {
+            ...(birth === undefined ? {} : { creationId: birth.creationId }),
+            provider: known.provider,
+            nativeSessionId: known.nativeSessionId,
+            ...(cwd !== undefined ? { cwd } : {}),
+            ...(known.profileId !== undefined ? { profileId: known.profileId } : {}),
+            ...(request.session.title !== UNTITLED_SESSION
+              ? { title: request.session.title.slice(0, 256) }
+              : {}),
+          });
+        } catch (cause) {
+          return { accepted: false, reason: refusalReason(cause) };
+        }
+        return await place(answered, { paneId: request.paneId, replacing: request.sessionId });
+      } finally {
+        birth?.finish();
       }
-      return await place(answered, { paneId: request.paneId, replacing: request.sessionId });
     },
   };
 }
