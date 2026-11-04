@@ -50,11 +50,16 @@ extension LockPhase {
 }
 
 #if DEBUG
-  /// `-vf-lock=<faceid|touchid|passcode>[-open]` (WI-3) — the lock on, on a phone with that method: every ask missed,
-  /// so a screenshot run photographs the curtain after a miss in each method's words; or, with `-open`, every ask
-  /// passed, so Settings › Lock can be photographed as it stands with the lock on (a simulator has no passcode, so
-  /// the real lock stands down there). Its settings are kept in memory, never in the phone's own, and it cannot run in
-  /// Release.
+  /// `-vf-lock=<faceid|touchid|passcode|none>[-open]` (WI-3): the lock on, on a phone with that method, its settings
+  /// kept in memory, never in the phone's own; it cannot run in Release. Every ask misses, so a screenshot run
+  /// photographs the curtain after a miss in each method's words. With `-open` every ask passes, so Settings › Lock can
+  /// be photographed with the lock on: no script passes the real ask, and no agent injects input. `none` is a phone
+  /// with no passcode: the lock stands down at launch, and Settings › Lock shows its switch dimmed over §9's foot. Any
+  /// other value stamps nothing.
+  ///
+  /// (Corrected 2026-11-04, WI-3's review pass: this said that a simulator has no passcode, so the real lock stands
+  /// down there. The photographs at `8a3804658` showed otherwise: the iPhone 17 Pro simulator answers as a
+  /// passcode-only phone, and its Settings › Lock showed the passcode set's off foot.)
   @MainActor
   enum LockFixtures {
     static let argument = "-vf-lock="
@@ -63,12 +68,14 @@ extension LockPhase {
       guard let value = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(argument) })?.dropFirst(argument.count)
       else { return nil }
       let open = value.hasSuffix("-open")
-      let method: LockMethod =
-        switch open ? value.dropLast("-open".count) : value {
-        case "touchid": .touchID
-        case "passcode": .passcode
-        default: .faceID
-        }
+      let method: LockMethod
+      switch open ? value.dropLast("-open".count) : value {
+      case "faceid": method = .faceID
+      case "touchid": method = .touchID
+      case "passcode": method = .passcode
+      case "none": method = .none
+      default: return nil
+      }
       return FieldLock(authenticator: Stamped(method, answer: open ? .passed : .missed), keeping: Kept())
     }
 
