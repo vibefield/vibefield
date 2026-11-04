@@ -37,7 +37,7 @@ enum SpendList {
   }
 
   /// Array.prototype.sort with a numeric comparator: stable, a zero (or NaN) keeping the input's order.
-  private static func stableSorted<T>(_ items: [T], by compare: (T, T) -> Double) -> [T] {
+  static func stableSorted<T>(_ items: [T], by compare: (T, T) -> Double) -> [T] {
     items.enumerated()
       .sorted { left, right in
         let order = compare(left.element, right.element)
@@ -47,7 +47,7 @@ enum SpendList {
   }
 
   /// `a || b` over two numbers: the first unless it is 0 or NaN.
-  private static func or(_ first: Double, _ second: Double) -> Double { first != 0 && !first.isNaN ? first : second }
+  static func or(_ first: Double, _ second: Double) -> Double { first != 0 && !first.isNaN ? first : second }
 
   /// `bySpend` (:18): most spent first; equal spend, the elder first.
   static func bySpend(_ entries: [Entry]) -> [String] {

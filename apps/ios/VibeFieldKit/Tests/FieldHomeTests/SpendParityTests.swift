@@ -469,6 +469,10 @@ struct SpendParityTests {
 
   /// V8 — the inks: `rgbToOklch`, a sibling's tone (the second born a step darker, the third and on a step lighter, in
   /// either ground) and the lifted fill the tag sits on, over fixed hexes; `siblingIndex` with ties by birth and id.
+  /// The tones and fills — what the phone draws — are EXACT. `rgbToOklch`'s own readings are held within 1e-12 (L, C)
+  /// and 1e-6° (H), said: V8's `Math.cbrt`, `hypot` and `atan2` are its fdlibm ports, not Darwin's libm, so the last
+  /// bits differ (measured 2026-11-04: ≤ 2.5e-16 in L and C, ≤ 5.7e-14° in H), and a grey's hue is the atan2 of two
+  /// ~1e-8 numbers, which turns those bits into 1.4e-7° (#888888).
   @Test func theInks() throws {
     let vectors = try SpendGolden.vectors()
     let inks = vectors["ink"]?.arrayValue ?? []
@@ -477,9 +481,11 @@ struct SpendParityTests {
       let hex = entry["hex"]?.stringValue ?? "?"
       let colour = try #require(SwarmColor(hex: hex), "\(hex) parses")
       let oklch = entry["oklch"]
-      let said = SpendInk.Oklch(
-        l: oklch?["l"]?.doubleValue ?? .nan, c: oklch?["c"]?.doubleValue ?? .nan, h: oklch?["h"]?.doubleValue ?? .nan)
-      #expect(SpendInk.rgbToOklch(colour) == said, "rgbToOklch(\(hex))")
+      let ink = SpendInk.rgbToOklch(colour)
+      let l = abs(ink.l - (oklch?["l"]?.doubleValue ?? .nan))
+      let c = abs(ink.c - (oklch?["c"]?.doubleValue ?? .nan))
+      let h = abs(ink.h - (oklch?["h"]?.doubleValue ?? .nan))
+      #expect(l <= 1e-12 && c <= 1e-12 && h <= 1e-6, "rgbToOklch(\(hex)): off by \(l), \(c), \(h)°")
       for tone in entry["tone"]?.arrayValue ?? [] {
         let dark = tone["dark"]?.boolValue ?? false
         for (sib, rgba) in (tone["sibs"]?.arrayValue ?? []).enumerated() {
