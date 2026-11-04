@@ -27,8 +27,9 @@ struct RainView: View {
   }
 }
 
-/// The empty stage (RainView.js:261, `rain.css:173-200`): the desktop's two lines, verbatim (fd's Q8), in the rain's
-/// type — the stream's green at 65%, Courier New, centred; the line below in the skin's faint text.
+/// The empty stage (RainView.js:261, `rain.css:173-200`): the desktop's two lines (fd's Q8; the second in the phone's
+/// words, `RainField.emptyLine`), in the rain's type — the stream's green at 65%, Courier New, centred; the line below
+/// in the skin's faint text.
 struct RainEmpty: View {
   let skin: GodviewSkin
 

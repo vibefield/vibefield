@@ -35,9 +35,11 @@ enum RainDice: RainRandom {
 
 @MainActor
 final class RainField {
-  /// The empty stage's words, verbatim (RainView.js:261; fd's Q8).
+  /// The empty stage's words (RainView.js:261; fd's Q8): the desktop's title verbatim, and its line in the phone's
+  /// words, as the list and spend say it. A NAMED DEVIATION (the words rule: on the phone no word names a key, hover
+  /// or a pane): the desktop says "Launch an agent from a terminal pane.". Draft word: James's eye (VF-PM 2026-11-04).
   static let emptyTitle = "NO ACTIVE AGENTS"
-  static let emptyLine = "Launch an agent from a terminal pane."
+  static let emptyLine = "Launch an agent from a terminal."
 
   /// The phone keeps the desktop's defaults: it has no parameter panel.
   let parameters = RainParameters.defaults
