@@ -28,15 +28,15 @@ struct GodviewSkin: Equatable, Sendable {
   /// Each colour, light and dark: DESIGN.md §2.7's instrument palette, one line each in `Key`'s order. `pnpm
   /// check:ios-fixtures` reads every line against tokens.css's `--vf-godview-{light,dark}-<key>`, so keep the shape.
   static let table: [(key: Key, light: UInt32, dark: UInt32)] = [
-    (.monitorBg, 0x000000, 0x000000),
-    (.panelBg, 0x000000, 0x000000),
-    (.panelBorder, 0x000000, 0x000000),
-    (.textMain, 0x000000, 0x000000),
-    (.textMuted, 0x000000, 0x000000),
-    (.textFaint, 0x000000, 0x000000),
-    (.controlHoverBorder, 0x000000, 0x000000),
-    (.controlHoverBg, 0x000000, 0x000000),
-    (.idleBg, 0x000000, 0x000000),
+    (.monitorBg, 0xF7F7F7, 0x0A0A0A),
+    (.panelBg, 0xFFFFFF, 0x111111),
+    (.panelBorder, 0xE0E0E0, 0x333333),
+    (.textMain, 0x111111, 0xFFFFFF),
+    (.textMuted, 0x888888, 0x777777),
+    (.textFaint, 0xB8B8B8, 0x555555),
+    (.controlHoverBorder, 0x777777, 0xA8A8A8),
+    (.controlHoverBg, 0xF2F2F2, 0x242424),
+    (.idleBg, 0xE5E5E5, 0x2A2A2A),
   ]
 
   /// The look it is resolved for (HS's `colorScheme`, which follows the phone's Appearance through the window). A
