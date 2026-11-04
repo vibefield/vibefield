@@ -46,6 +46,11 @@ enum TimelineSchedule: Equatable, Sendable {
   case perSecond
 }
 
+/// SKELETON (PG-6 red): the lanes' layers, bottom first, as the view draws them today.
+enum TimelineLayer: CaseIterable, Sendable {
+  case wakes, terminalsRule, terminalsLabel, names, heads, targets
+}
+
 struct GodviewTimelineView: View {
   let input: GodviewStageInput
 

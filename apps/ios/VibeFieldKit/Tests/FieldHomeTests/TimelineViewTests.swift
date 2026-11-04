@@ -250,6 +250,23 @@ struct TimelineViewTests {
     }
   }
 
+  // MARK: - H11 the lanes' layers
+
+  /// H11 — the lanes' layers stack as timeline.css stacks them, bottom first: the wakes' canvas and the terminals'
+  /// rule (z auto, in document order; the rule is the divider's `::before`, :435-443), the heads (z 1, :576-578), the
+  /// names with their fade into the ground (z 2, :457-471), the terminals' LABEL above that fade (`span`, z 3,
+  /// :445-454), and the lanes as controls (z 9, :818-820). The label under the names' ground is hidden but for its
+  /// tail (5d2637895f4b's stills: "ALS" at y ≈ 520 pt).
+  @Test func theLanesLayersStackAsTheStylesheet() throws {
+    let order = TimelineLayer.allCases
+    #expect(order == [.wakes, .terminalsRule, .heads, .names, .terminalsLabel, .targets])
+    let names = try #require(order.firstIndex(of: .names))
+    let label = try #require(order.firstIndex(of: .terminalsLabel))
+    let rule = try #require(order.firstIndex(of: .terminalsRule))
+    #expect(label > names, "the label stands above the names' fade")
+    #expect(rule < names, "the rule runs under it")
+  }
+
   // MARK: - H10 the words rule
 
   /// H10 — THE WORDS RULE (VF-PM via fd, 2026-11-04): on the phone no word, label or title names a key, hover or a
