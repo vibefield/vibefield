@@ -46,9 +46,20 @@ enum TimelineSchedule: Equatable, Sendable {
   case perSecond
 }
 
-/// SKELETON (PG-6 red): the lanes' layers, bottom first, as the view draws them today.
+/// The lanes' layers, bottom first, as timeline.css stacks them; the view draws them in this order (H11).
 enum TimelineLayer: CaseIterable, Sendable {
-  case wakes, terminalsRule, terminalsLabel, names, heads, targets
+  /// The wakes' canvas (z auto).
+  case wakes
+  /// The terminals' rule, the divider's `::before` (z auto, :435-443): under the names' fade.
+  case terminalsRule
+  /// The heads (z 1, :576-578).
+  case heads
+  /// The names and their fade into the ground (z 2, :457-471).
+  case names
+  /// The terminals' label, the divider's `span` on its own ground (z 3, :445-454): above the names' fade.
+  case terminalsLabel
+  /// The lanes as controls (z 9, :818-820).
+  case targets
 }
 
 struct GodviewTimelineView: View {
@@ -253,17 +264,9 @@ struct GodviewTimelineView: View {
     let commands = TimelinePaint.wakes(paint, inks: draw.inks, timeZone: timeZone)
     return ScrollView(.vertical) {
       ZStack(alignment: .topLeading) {
-        Canvas { context, _ in
-          TimelineCanvasReplay.draw(commands, in: context, hourFont: .system(size: 7.5, weight: .bold))
+        ForEach(TimelineLayer.allCases, id: \.self) { layer in
+          self.layer(layer, draw, commands: commands)
         }
-        .frame(width: draw.columns.x1, height: height)
-        .accessibilityHidden(true)
-        if let divider = draw.placement.divider {
-          terminalsDivider(width: draw.columns.width, inks: draw.inks).offset(y: divider)
-        }
-        names(draw)
-        heads(draw)
-        targets(draw)
       }
       .frame(width: draw.columns.width, height: height, alignment: .topLeading)
     }
@@ -275,20 +278,51 @@ struct GodviewTimelineView: View {
     .simultaneousGesture(pinching(draw))
   }
 
-  /// `TERMINALS`: the quiet group's divider (timeline.css:424-454).
-  private func terminalsDivider(width: Double, inks: TimelineInks) -> some View {
-    ZStack(alignment: .leading) {
-      Rectangle().fill(TimelineCanvasReplay.color(input.skin.ink(.panelBorder))).frame(height: 1)
-      Text(TimelineWords.terminals)
-        .font(.system(size: 7.5, weight: .black))
-        .tracking(0.6)
-        .foregroundStyle(TimelineCanvasReplay.color(input.skin.ink(.textFaint)))
-        .padding(.trailing, 6)
-        .background(TimelineCanvasReplay.color(inks.ground))
-        .padding(.leading, 14)
+  /// One of the lanes' layers (`TimelineLayer`, bottom first).
+  @ViewBuilder private func layer(_ layer: TimelineLayer, _ draw: Draw, commands: [TimelineCanvas]) -> some View {
+    switch layer {
+    case .wakes:
+      Canvas { context, _ in
+        TimelineCanvasReplay.draw(commands, in: context, hourFont: .system(size: 7.5, weight: .bold))
+      }
+      .frame(width: draw.columns.x1, height: draw.rowsHeight)
+      .accessibilityHidden(true)
+    case .terminalsRule:
+      if let divider = draw.placement.divider { terminalsRule(width: draw.columns.width).offset(y: divider) }
+    case .heads:
+      heads(draw)
+    case .names:
+      names(draw)
+    case .terminalsLabel:
+      if let divider = draw.placement.divider {
+        terminalsLabel(width: draw.columns.width, inks: draw.inks).offset(y: divider)
+      }
+    case .targets:
+      targets(draw)
     }
-    .frame(width: width, height: TimelineLayout.divider)
-    .accessibilityHidden(true)
+  }
+
+  /// `TERMINALS`, the quiet group's divider (timeline.css:424-454): its rule, the full width at the divider's middle,
+  /// under the names' fade.
+  private func terminalsRule(width: Double) -> some View {
+    Rectangle()
+      .fill(TimelineCanvasReplay.color(input.skin.ink(.panelBorder)))
+      .frame(width: width, height: 1)
+      .frame(width: width, height: TimelineLayout.divider)
+      .accessibilityHidden(true)
+  }
+
+  /// The divider's label, on its own ground (the `span`'s background), above the names' fade.
+  private func terminalsLabel(width: Double, inks: TimelineInks) -> some View {
+    Text(TimelineWords.terminals)
+      .font(.system(size: 7.5, weight: .black))
+      .tracking(0.6)
+      .foregroundStyle(TimelineCanvasReplay.color(input.skin.ink(.textFaint)))
+      .padding(.trailing, 6)
+      .background(TimelineCanvasReplay.color(inks.ground))
+      .padding(.leading, 14)
+      .frame(width: width, height: TimelineLayout.divider, alignment: .leading)
+      .accessibilityHidden(true)
   }
 
   /// The names float over the wakes' far end: no rail, a fade into the ground (timeline.css:457-471).
