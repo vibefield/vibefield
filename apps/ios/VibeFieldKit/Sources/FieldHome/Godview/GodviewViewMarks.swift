@@ -34,8 +34,47 @@ enum GodviewViewMarks {
   /// The bar's monoline weight, in grid units.
   static let weight: CGFloat = 1.6
 
-  /// The five manifests' faces (puppeteer-views `views/{swarm,list,rain,timeline,spend}/index.ts`).
-  static let faces: [String: GodviewViewFace] = [:]
+  /// The five manifests' faces (puppeteer-views `views/{swarm,list,rain,timeline,spend}/index.ts`, `mark:`), each
+  /// path as the manifest groups it.
+  static let faces: [String: GodviewViewFace] = [
+    // Three bodies: rings.
+    "swarm": GodviewViewFace(label: "SWARM", paths: [[ring(7.5, 8, 3)], [ring(16, 6.5, 2.2)], [ring(13, 16, 4.2)]]),
+    // Three rules.
+    "list": GodviewViewFace(
+      label: "LIST", paths: [[stroke(5, 7, 19, 7), stroke(5, 12, 19, 12), stroke(5, 17, 19, 17)]]),
+    // Three broken columns.
+    "rain": GodviewViewFace(
+      label: "RAIN",
+      paths: [[
+        stroke(7, 4, 7, 9), stroke(7, 12.5, 7, 15), stroke(12, 3, 12, 5.5), stroke(12, 8.5, 12, 16.5),
+        stroke(17, 5, 17, 8.5), stroke(17, 12, 17, 18),
+      ]]),
+    // Three spans stopping short of the now line, and the now line.
+    "timeline": GodviewViewFace(
+      label: "TIMELINE",
+      paths: [
+        [stroke(4.5, 7.5, 12.5, 7.5), stroke(8, 12, 16.5, 12), stroke(4.5, 16.5, 9.5, 16.5)],
+        [stroke(19.5, 4.5, 19.5, 19.5)],
+      ]),
+    // A line climbing to the now line, its head a dot as wide as the held mark's disc.
+    "spend": GodviewViewFace(
+      label: "SPEND",
+      paths: [
+        [stroke(3.5, 18.5, 8, 14), stroke(8, 14, 11.5, 16.5), stroke(11.5, 16.5, 17, 9)],
+        [stroke(20.5, 4, 20.5, 20)],
+        [stroke(17, 9, 17, 9, width: 4.4)],
+      ]),
+  ]
+
+  private static func stroke(
+    _ x1: CGFloat, _ y1: CGFloat, _ x2: CGFloat, _ y2: CGFloat, width: CGFloat = weight
+  ) -> GodviewViewFace.Part {
+    .stroke(from: CGPoint(x: x1, y: y1), to: CGPoint(x: x2, y: y2), width: width)
+  }
+
+  private static func ring(_ x: CGFloat, _ y: CGFloat, _ radius: CGFloat) -> GodviewViewFace.Part {
+    .ring(center: CGPoint(x: x, y: y), radius: radius)
+  }
 }
 
 extension GodviewViewChoice {
@@ -49,17 +88,59 @@ extension GodviewViewChoice {
 extension GodviewViewFace {
   /// Each path as the view SDK writes the manifest's filled outline (`mark-outline.js`): what the marks golden holds.
   var outlines: [String] {
-    []
+    paths.map { $0.map(Self.outline).joined() }
   }
 
   /// One part's filled outline, as `strokeOutline` / `ringOutline` write it.
   static func outline(_ part: Part) -> String {
-    ""
+    switch part {
+    case .stroke(let from, let to, let width):
+      return strokeOutline(from: from, to: to, width: Double(width))
+    case .ring(let center, let radius):
+      return ringOutline(center: center, radius: Double(radius), width: Double(GodviewViewMarks.weight))
+    }
+  }
+
+  /// `strokeOutline`: one side of the stroke half its width off the line, a round cap, the other side, a round cap.
+  private static func strokeOutline(from: CGPoint, to: CGPoint, width: Double) -> String {
+    let half = width / 2
+    let (fx, fy, tx, ty) = (Double(from.x), Double(from.y), Double(to.x), Double(to.y))
+    let dx = tx - fx
+    let dy = ty - fy
+    let length = hypot(dx, dy)
+    if length == 0 { return disc(fx, fy, half, sweep: 0) }
+    let nx = (-dy / length) * half
+    let ny = (dx / length) * half
+    let cap = "\(unit(half)) \(unit(half)) 0 0 0"
+    return "M\(unit(fx + nx)) \(unit(fy + ny))L\(unit(tx + nx)) \(unit(ty + ny))"
+      + "A\(cap) \(unit(tx - nx)) \(unit(ty - ny))L\(unit(fx - nx)) \(unit(fy - ny))"
+      + "A\(cap) \(unit(fx + nx)) \(unit(fy + ny))Z"
+  }
+
+  /// `ringOutline`: the outer edge, and the inner one wound the other way (a hole) while the circle is wider than its
+  /// stroke.
+  private static func ringOutline(center: CGPoint, radius: Double, width: Double) -> String {
+    let half = width / 2
+    let (cx, cy) = (Double(center.x), Double(center.y))
+    return disc(cx, cy, radius + half, sweep: 0) + (radius > half ? disc(cx, cy, radius - half, sweep: 1) : "")
+  }
+
+  /// `disc`: a disc as one subpath of two half arcs, wound by `sweep`.
+  private static func disc(_ cx: Double, _ cy: Double, _ r: Double, sweep: Int) -> String {
+    let radius = "\(unit(r)) \(unit(r))"
+    return "M\(unit(cx - r)) \(unit(cy))A\(radius) 0 1 \(sweep) \(unit(cx + r)) \(unit(cy))"
+      + "A\(radius) 0 1 \(sweep) \(unit(cx - r)) \(unit(cy))Z"
   }
 
   /// A coordinate as `mark-outline.js`'s `unit` writes it: to four places, rounded as `Math.round` rounds (a tie
   /// toward +∞), with no `-0`, in JavaScript's digits.
   static func unit(_ value: Double) -> String {
-    ""
+    let scaled = value * 1e4
+    var whole = scaled.rounded(.down)
+    if scaled - whole >= 0.5 { whole += 1 }
+    let rounded = whole / 1e4
+    if rounded == 0 { return "0" }
+    if rounded == rounded.rounded(.towardZero), abs(rounded) < 1e15 { return String(Int64(rounded)) }
+    return "\(rounded)"
   }
 }
