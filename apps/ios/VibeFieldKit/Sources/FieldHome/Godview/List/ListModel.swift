@@ -14,7 +14,8 @@ import Foundation
 // `.deviceWord`, `StateWords.kindTerminal`/`.kindRemote`, `GodviewFormat.formatPercent` and `GodviewRecede.every`.
 // Held to `phone-list.golden.json` (the shipping view over the home's window, step by step) by FieldHomeTests'
 // ListViewTests. Not transcribed: the spawn menu (PG-D10 (a)), and `＋ TERMINAL` is not drawn on the phone (fd's Q1
-// ruling, a named deviation: the golden records it, `drawsNewTerminal` pins its absence).
+// ruling, a named deviation: the golden records it, `drawsNewTerminal` pins its absence). The empty hint names no
+// pane (deviation 5, fd's words rule; pinned by H12, which scans every word the list says).
 
 /// One row as the list reads it on the phone: the remote cut's row, and what only this window joins (the desktop's
 /// `AgentView`): whether it lives on the home, its greying, the open card, receding and a pane's attachment.
@@ -75,9 +76,11 @@ struct ListModel: Equatable {
 
   /// The list's name for a screen reader (AgentList.tsx:81).
   static let listLabel = "Running agent list"
-  /// The empty state's two lines (AgentList.tsx:116-119), drawn when there are no rows.
+  /// The empty state's two lines (AgentList.tsx:116-119), drawn when there are no rows. The hint drops the desktop's
+  /// "pane" (deviation 5, fd's words rule: no phone view names a key, hover or a pane; the phone's one pane is the
+  /// open card, D-i12).
   static let emptyTitle = "NO ACTIVE AGENTS"
-  static let emptyHint = "Launch an agent from a terminal pane."
+  static let emptyHint = "Launch an agent from a terminal."
   /// The toolbar's button as the desktop words it (AgentList.tsx:96). The phone does not draw it (fd's Q1: no create
   /// door in the stage input; the phone's spawn is its bloom, PG-D10 (a)).
   static let newTerminalWord = "＋ TERMINAL"

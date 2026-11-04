@@ -8,13 +8,16 @@ import Foundation
 // is the skin's (`GodviewSkin`, PG-4t's, the SDK's MONITOR_SKIN) or the row's dealt one, named here by role and
 // resolved by `ListView`; no hex literal here (DESIGN.md).
 //
-// THE NAMED DEVIATIONS (each from the desktop's list, on purpose; the packet carries them):
+// THE NAMED DEVIATIONS (each from the desktop's list, on purpose; the packet carries them; 1 and 5 are words, the
+// model's):
 //   1. no `＋ TERMINAL` (fd's Q1, PG-D10 (a)): the toolbar keeps the button's height, so the rows stand where the
 //      desktop's do;
 //   2. no hover (fd's Q2/Q3: touch has none), LC:81-84 and :45-49 are not drawn, and no press look is added;
 //   3. the lit row's border is TEXT MAIN (James's J-S4 drawing, accepted 2026-11-04 01:14Z), not the row's colour
 //      (LC:90-94); its ground stays the skin's control hover;
-//   4. a provider the phone's glyph catalog has no asset for wears its letter (fd's Q4; AgentGlyph).
+//   4. a provider the phone's glyph catalog has no asset for wears its letter (fd's Q4; AgentGlyph);
+//   5. the empty hint says "Launch an agent from a terminal.", not the desktop's "… from a terminal pane." (fd's words
+//      rule: no phone view names a key, hover or a pane); `ListModel.emptyHint`, pinned by H12 and E1.
 
 enum ListPaint {
   /// A colour by its role: the skin's, or the row's own.

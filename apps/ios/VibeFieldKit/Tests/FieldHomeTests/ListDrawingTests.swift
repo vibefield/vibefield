@@ -6,9 +6,10 @@ import Testing
 @testable import FieldProduct
 
 // PG-5 — THE LIST, DRAWN (host + kit; D3 kit only): the numbers and inks `ListView` draws with, held to list.css at
-// puppeteer-views 0.3.3 (`52d09c8e`, `e79fc53d`; LC) and to the four named deviations (ListPaint's header): no
+// puppeteer-views 0.3.3 (`52d09c8e`, `e79fc53d`; LC) and to the named deviations (ListPaint's header): no
 // `＋ TERMINAL` (H11 in the model's suite), no hover, the lit border in text main (J-S4), a letter for a provider with
-// no asset. The pixels themselves are the stills', by eye.
+// no asset; the fifth, the empty hint's words, is the model suite's (H12, E1). The pixels themselves are the stills',
+// by eye.
 //
 // No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 

@@ -8,7 +8,7 @@ import SwiftUI
 // stands in `GodviewStage.framed` (a FLOW stage, PG-4t: from the screen's top to the band's top), fills it with the
 // skin's ground and pads its own words by `input.insets(.flow).top`, the Stories row's reserve (insets are data,
 // DESIGN.md "Stage insets replace host padding rules"). It draws no scanlines, no vignette and no dissolve: the
-// stage's (J-S3, PG-4t). The four named deviations are ListPaint's header's.
+// stage's (J-S3, PG-4t). The five named deviations are ListPaint's header's.
 
 struct ListView: View {
   let input: GodviewStageInput
