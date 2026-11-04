@@ -24,9 +24,18 @@ struct RainGeometry: Equatable, Sendable {
   static let unmeasured = RainGeometry(columns: 0, rows: 0, cell: 14, width: 0, height: 0)
 
   /// The stage at `width` × `height` points: at least one column and one row.
-  static func measure(width: Double, height: Double, fontSize: Double) -> RainGeometry { .unmeasured }
-}
+  static func measure(width: Double, height: Double, fontSize: Double) -> RainGeometry {
+    RainGeometry(
+      columns: max(1, floorCells(width / fontSize)), rows: max(1, floorCells(height / fontSize)), cell: fontSize,
+      width: width, height: height)
+  }
 
+  /// `Math.floor` of a cell count; a count that is no number (a stage not laid out) is none, so the floor of one wins.
+  private static func floorCells(_ cells: Double) -> Int {
+    let floored = cells.rounded(.down)
+    return floored.isFinite ? Int(floored) : 0
+  }
+}
 
 /// One canvas call the frame makes, in its order.
 enum RainOp: Equatable, Sendable {
@@ -75,7 +84,13 @@ struct RainFrame {
   mutating func sync(
     width: Double, height: Double, fontSize: Double, order: [String], random: inout some RainRandom
   ) {
-    geometry = RainGeometry.measure(width: width, height: height, fontSize: fontSize)
+    let measured = RainGeometry.measure(width: width, height: height, fontSize: fontSize)
+    geometry = measured
+    drops = RainStreams.reconcile(agents: order, columns: measured.columns, previous: drops) { agentId in
+      let y = random.next() * Double(measured.rows)
+      let speed = 0.3 + random.next() * 0.4
+      return RainDrop(agentId: agentId, y: y, speed: speed)
+    }
   }
 
   /// `draw` (:109-211): one frame's ops over `agents` (the window's rows, `agentsRef`). `elapsed` nil is a still (no
@@ -84,12 +99,105 @@ struct RainFrame {
   mutating func plan(
     agents: [RainAgent], parameters: RainParameters, palette: RainPalette, hovered: String? = nil, elapsed: Double?,
     random: inout some RainRandom
-  ) -> [RainOp] { [] }
+  ) -> [RainOp] {
+    let still = elapsed == nil
+    let (columns, rows, cell) = (geometry.columns, geometry.rows, geometry.cell)
+    let byId = Self.byId(agents)
+    var ops: [RainOp] = [.stage(width: geometry.width, height: geometry.height, fill: palette.stage)]
+
+    // A receded column keeps falling, faint (:118-126).
+    let every = GodviewRecede.every(byId.values.map(\.receded))
+    for id in recedes.keys where byId[id] == nil { recedes[id] = nil }
+    for agent in byId.values {
+      let target = GodviewRecede.target(receded: agent.receded, every: every)
+      if let elapsed {
+        recedes[agent.id] = GodviewRecede.approach(recedes[agent.id] ?? target, toward: target, deltaMs: elapsed)
+      } else {
+        recedes[agent.id] = target
+      }
+    }
+
+    for (column, drop) in drops.entries {
+      if column >= columns { continue }
+      guard let agent = byId[drop.agentId] else { continue }
+      let data = RainStreams.data(agent)
+      let tailLength = RainStreams.tailLength(
+        agent, rows: rows, tailMultiplier: parameters.tailMultiplier, dataLength: data.count)
+      let presentation = palette.presentation(agent.status)
+      let hoveredHere = hovered == agent.id
+      // Hover only brightens; the phone's lit row heads in the dark text main (J-S4), the desktop's active one in
+      // `activeHead` — the same white on the rain's ground.
+      let headColor = hoveredHere ? palette.activeHead : (agent.lit ? palette.litHead : presentation.head)
+      let tailRgb = hoveredHere ? palette.hoverTailRgb : presentation.tail
+      if !still { drop.y += presentation.speed ?? drop.speed * parameters.speedMultiplier }
+      if drop.y - tailLength > Double(rows) { drop.y = 0 }
+      let headRow = Int(drop.y.rounded(.down))
+      let showHead = agent.status != .idle
+      let x = Double(column) * cell + cell / 2
+      let weight = recedes[agent.id] ?? 1
+
+      // `glyphAt` (:173-186): one roll per glyph in a moving frame, a second for a scrambled one. A blocked stream's
+      // text block stays clear so the stuck agent is the one you can read; an idle one never scrambles.
+      func glyph(_ row: Int, _ distance: Double) -> UInt16 {
+        let plain = data[row % data.count]
+        if still { return plain }
+        let scramble: Double
+        switch agent.status {
+        case .working: scramble = parameters.scrambleWorking
+        case .blocked: scramble = distance < Double(data.count) ? 0 : parameters.scramblePending
+        case .idle: scramble = 0
+        }
+        return random.next() < scramble ? Self.matrixGlyph(random.next()) : plain
+      }
+
+      let first = min(headRow, rows - 1)
+      let last = max(-1, Int((drop.y - tailLength).rounded(.down)))
+      var row = first
+      while row > last {
+        if row < 0 { break }
+        let distance = drop.y - Double(row)
+        if showHead && distance < 1 {
+          row -= 1
+          continue
+        }
+        let opacity = GodviewFormat.jsMax0(1 - distance / tailLength)
+        let unit = glyph(row, distance)
+        ops.append(
+          .glyph(
+            RainGlyph(
+              unit: unit, x: x, y: Double(row) * cell, ink: .faded(rgb: tailRgb, opacity: opacity), alpha: weight,
+              blur: 0, glowRgb: nil)))
+        row -= 1
+      }
+      if showHead && headRow >= 0 && headRow < rows {
+        let blur = hoveredHere || agent.lit ? parameters.headGlow * 1.5 : parameters.headGlow
+        let unit = glyph(headRow, 0)
+        ops.append(
+          .glyph(
+            RainGlyph(
+              unit: unit, x: x, y: Double(headRow) * cell, ink: .solid(headColor), alpha: weight, blur: blur,
+              glowRgb: tailRgb)))
+      }
+    }
+    return ops
+  }
 
   /// `agentAt` (:241-249): the row whose stream runs under a point's x, in the stage's points. Columns run the full
   /// height, so the point's row never matters; a column with no stream, or a stream whose row is gone, is no one.
-  func agent(atX x: Double, among agents: [RainAgent]) -> RainAgent? { nil }
+  func agent(atX x: Double, among agents: [RainAgent]) -> RainAgent? {
+    guard let column = Int(exactly: (x / geometry.cell).rounded(.down)),
+      let drop = drops.drop(at: column)
+    else { return nil }
+    return Self.byId(agents)[drop.agentId]
+  }
 
   /// `matrixGlyph` (:6): `String.fromCharCode(0x30a0 + Math.random() * 96)`, a katakana; `fromCharCode` truncates.
-  static func matrixGlyph(_ roll: Double) -> UInt16 { 0 }
+  static func matrixGlyph(_ roll: Double) -> UInt16 {
+    UInt16((12_448 + roll * 96).rounded(.towardZero))
+  }
+
+  /// `new Map(agents.map((agent) => [agent.id, agent]))`: a repeated id keeps its last row.
+  private static func byId(_ agents: [RainAgent]) -> [String: RainAgent] {
+    Dictionary(agents.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+  }
 }

@@ -24,7 +24,12 @@ struct Mulberry32: RainRandom, Equatable, Sendable {
 
   init(seed: UInt32) { state = seed }
 
-  mutating func next() -> Double { 0 }
+  mutating func next() -> Double {
+    state &+= 0x6d2b_79f5
+    var t = (state ^ (state >> 15)) &* (1 | state)
+    t = (t &+ ((t ^ (t >> 7)) &* (61 | t))) ^ t
+    return Double(t ^ (t >> 14)) / 4_294_967_296
+  }
 }
 
 extension Mulberry32 {
@@ -33,5 +38,11 @@ extension Mulberry32 {
 
   /// The first `-vf-godview-rain-seed=<n>`: a seeded generator, or nil when it is absent or names no 32-bit word (the
   /// caller rolls the system's). Matched with its `=`, so a longer flag never parses as this one.
-  static func launch(_ arguments: [String]) -> Mulberry32? { nil }
+  static func launch(_ arguments: [String]) -> Mulberry32? {
+    let prefix = argument + "="
+    guard let text = arguments.first(where: { $0.hasPrefix(prefix) })?.dropFirst(prefix.count),
+      let seed = UInt32(text)
+    else { return nil }
+    return Mulberry32(seed: seed)
+  }
 }

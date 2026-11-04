@@ -29,8 +29,19 @@ struct RainMotion: Equatable, Sendable {
 
   /// `tick` (:33-45), one display frame at `time` (ms): nil when the cap skips it, else the frame's `deltaMs`, the
   /// time since the last draw, never negative.
-  mutating func tick(_ time: Double) -> Double? { nil }
+  mutating func tick(_ time: Double) -> Double? {
+    if let fps, fps > 0 {
+      accumulated += time - previousTime
+      previousTime = time
+      let interval = 1000 / fps
+      if accumulated < interval { return nil }
+      accumulated = min(accumulated - interval, interval)
+    }
+    let delta = GodviewFormat.jsMax0(time - drawnAt)
+    drawnAt = time
+    return delta
+  }
 
   /// `wanted` (:48, less `disposed`): the loop runs only while animations are on and motion is not reduced.
-  static func wanted(animations: Bool, reducedMotion: Bool) -> Bool { false }
+  static func wanted(animations: Bool, reducedMotion: Bool) -> Bool { animations && !reducedMotion }
 }
