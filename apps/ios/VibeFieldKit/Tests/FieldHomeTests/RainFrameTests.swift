@@ -27,7 +27,7 @@ extension RainViewTests.Parity {
     let height = still["height"]?.doubleValue ?? .nan
     let seed = UInt32(truncatingIfNeeded: still["seed"]?.intValue ?? -1)
     let rainDraws = Int(still["rainDraws"]?.intValue ?? -1)
-    let steps = try RainGolden.windowSteps()
+    let steps = try HomeFixture.witnessSteps()
     let rows = try #require(steps.first?.rows, "the open's rows")
     let agents = rows.map { RainAgent(row: $0) }
     let order = agents.map { $0.id }
@@ -53,7 +53,7 @@ extension RainViewTests {
   struct Frame {
     /// The witness open's agents named, in the window's order; `activeId` lights one.
     static func agents(_ ids: [String], activeId: String? = nil, lightsOpenCard: Bool = true) throws -> [RainAgent] {
-      let steps = try RainGolden.windowSteps()
+      let steps = try HomeFixture.witnessSteps()
       let rows = try #require(steps.first?.rows, "the open's rows")
       let named = rows.filter { ids.contains($0.id) }
       #expect(named.count == ids.count, "the witness draws \(ids)")

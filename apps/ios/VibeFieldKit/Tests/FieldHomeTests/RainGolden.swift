@@ -6,16 +6,13 @@ import Testing
 
 // PG-8 — THE RAIN'S GOLDEN, READ: `phone-rain.golden.json` (field-app's `perf/lib/phone-goldens-rain.ts`, puppeteer-
 // views 0.3.3's rain over the window's rows of the witness run), mirrored into this bundle byte for byte
-// (`pnpm check:ios-fixtures`); and the witness driven through `RemoteMeshCopy` as FieldLink drives it — the open,
-// frames 0…7, PG-1c's resync delivered after frame 7 as an open, then the old chain's delta, the gap — so every step's
-// drawn rows are the phone's own (`PhoneBodyParityTests`' path). No value in a parity row is hand-copied.
+// (`pnpm check:ios-fixtures`), paired step for step with the witness as PG-4t's `HomeFixture.witnessSteps` walks it
+// through `RemoteMeshCopy` (the open, frames 0…7, PG-1c's resync after frame 7, then the gap), so every step's drawn
+// rows are the phone's own. No value in a parity row is hand-copied.
 //
 // No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 
 enum RainGolden {
-  /// PG-1c — the whole-mesh resync is delivered after this frame (`PHONE_RESYNC_AFTER`).
-  static let resyncAfter = 7
-
   static func load() throws -> JSONValue { try HomeFixture.json("phone-rain.golden") }
 
   /// The golden's steps, every one.
@@ -38,57 +35,10 @@ enum RainGolden {
     step["at"].map { $0.stringValue ?? "\($0.intValue ?? -1)" } ?? "?"
   }
 
-  /// One step of the witness run on the phone: its label, and the window's drawn rows (nil at the gap).
-  struct WindowStep {
-    let at: String
-    let rows: [RemoteFieldRow]?
-  }
-
-  /// The witness through the phone's copy, step by step, as the golden's steps are cut.
-  static func windowSteps() throws -> [WindowStep] {
-    let open = try AgentRemoteMeshOpen(json: try HomeFixture.json("agent-remote-mesh-open.witness"))
-    let frames = try (HomeFixture.json("agent-remote-mesh-frames.witness").arrayValue ?? [])
-      .map(AgentRemoteMeshFrame.init(json:))
-    let resync = try AgentRemoteMeshOpen(json: try HomeFixture.json("agent-remote-mesh-open.resync"))
-    var copy = RemoteMeshCopy()
-    var out: [WindowStep] = []
-    _ = copy.open(open, now: HomeFixture.now)
-    _ = copy.publish()
-    out.append(WindowStep(at: "open", rows: copy.drawn()))
-    enum Delivery {
-      case frame(Int, AgentRemoteMeshFrame)
-      case resync(AgentRemoteMeshOpen)
-    }
-    var deliveries: [Delivery] = []
-    for (index, frame) in frames.enumerated() {
-      deliveries.append(.frame(index, frame))
-      if index == resyncAfter { deliveries.append(.resync(resync)) }
-    }
-    for delivery in deliveries {
-      let outcome: RemoteMeshCopy.Outcome
-      let label: String
-      switch delivery {
-      case .frame(let index, let frame):
-        label = "\(index)"
-        outcome = copy.frame(frame, now: HomeFixture.now)
-      case .resync(let open):
-        label = "resync"
-        outcome = copy.open(open, now: HomeFixture.now)
-      }
-      if case .gap = outcome {
-        out.append(WindowStep(at: label, rows: nil))
-        break
-      }
-      _ = copy.publish()
-      out.append(WindowStep(at: label, rows: copy.drawn()))
-    }
-    return out
-  }
-
   /// The golden's steps beside the phone's, paired by `at`; the two runs must agree step for step.
-  static func paired() throws -> [(golden: JSONValue, phone: WindowStep)] {
+  static func paired() throws -> [(golden: JSONValue, phone: HomeFixture.WitnessStep)] {
     let golden = try steps()
-    let phone = try windowSteps()
+    let phone = try HomeFixture.witnessSteps()
     let goldenAts = golden.map(at)
     let phoneAts = phone.map(\.at)
     #expect(goldenAts == phoneAts, "the golden's steps are the witness run's")

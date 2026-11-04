@@ -25,7 +25,8 @@ extension RainViewTests.Parity {
   /// false: PG:430).
   @Test func everyRowIsSpokenAsTheDesktopSaysIt() throws {
     for (golden, phone) in try RainGolden.paired() {
-      guard let rows = phone.rows else { continue }
+      if phone.gap { continue }
+      let rows = phone.rows
       let expected = golden["spoken"]?.arrayValue ?? []
       let agents = rows.map { RainAgent(row: $0) }
       let mine = agents.map(\.spoken)
@@ -51,7 +52,7 @@ extension RainViewTests.Hand {
   /// and is "open". The host's join finds it by the card's subject (`GodviewStageInput.activeId`). With the switch
   /// thrown nothing is lit. The goldens light nothing (PG:430); the frame's half (its head, its glow) is pair 4's.
   @Test func theOpenCardsRowIsLit() throws {
-    let steps = try RainGolden.windowSteps()
+    let steps = try HomeFixture.witnessSteps()
     let rows = try #require(steps.first?.rows, "the open's rows")
     let row = rows.first { $0.id == "pty-h3" }
     let subject = try #require(row?.visualId, "pty-h3 is drawn")

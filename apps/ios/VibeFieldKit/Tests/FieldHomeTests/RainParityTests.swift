@@ -14,11 +14,12 @@ struct RainViewTests {
     /// G1 — what each column says, at every step, in the window's order.
     @Test func everyColumnSaysTheDesktopsData() throws {
       for (golden, phone) in try RainGolden.paired() {
-        guard let rows = phone.rows else {
+        if phone.gap {
           let gap = golden["gap"]?.boolValue
           #expect(gap == true, "step \(phone.at): the gap")
           continue
         }
+        let rows = phone.rows
         let expected = golden["rows"]?.arrayValue ?? []
         let ids = rows.map(\.id)
         let goldenIds = expected.map { $0["id"]?.stringValue ?? "" }
@@ -37,7 +38,8 @@ struct RainViewTests {
       let counts = (open["rows"]?.arrayValue?.first?["tails"]?.arrayValue ?? []).count
       #expect(counts == RainGoldenShape.rows.count, "the golden measures the tails at [3, 20, 54, 65]")
       for (golden, phone) in try RainGolden.paired() {
-        guard let rows = phone.rows else { continue }
+        if phone.gap { continue }
+        let rows = phone.rows
         for (row, record) in zip(rows, golden["rows"]?.arrayValue ?? []) {
           let agent = RainAgent(row: row)
           let length = RainStreams.data(agent).count
@@ -56,7 +58,8 @@ struct RainViewTests {
       var previous: [Int: RainColumns] = [:]
       var births: [Int: Double] = [:]
       for (golden, phone) in try RainGolden.paired() {
-        guard let rows = phone.rows else { continue }
+        if phone.gap { continue }
+        let rows = phone.rows
         let expected = golden["columns"]?.arrayValue ?? []
         let counts = expected.map { Int($0["columns"]?.intValue ?? -1) }
         #expect(counts == RainGoldenShape.columns, "step \(phone.at): the column counts")
