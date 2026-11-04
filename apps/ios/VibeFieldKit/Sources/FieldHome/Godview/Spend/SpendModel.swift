@@ -24,7 +24,9 @@ enum SpendModel {
   // The view's fixed words (`SpendView.js` :616-643), the window's.
   static let colcapText = "Spent in the last 10 minutes"
   static let emptyTitle = "NO ACTIVE AGENTS"
-  static let emptyHint = "Launch an agent from a terminal pane."
+  /// The empty view's hint: the window's names a pane (`Dropped.emptyHint`), so the phone says the list's words, word
+  /// for word. Draft word: James's eye (VF-PM 2026-11-04).
+  static let emptyHint = "Launch an agent from a terminal."
   /// The key that lets go of a set moment (`NOW_KEY`), and its legend from the toolkit's one table (`keys.js` :16).
   static let nowKey = "End"
   static let nowLegend = "↘"
@@ -478,22 +480,43 @@ enum SpendModel {
       label: label)
   }
 
-  // MARK: - The stage (pair 5)
+  // MARK: - The stage (pair 5: what the view reads from the phone's stage)
 
-  /// The rows as spend reads them from the stage. RED SKELETON.
-  static func agents(_ rows: [RemoteFieldRow], unreadIds: Set<String>, activeId: String?) -> [SpendAgent] { [] }
+  /// The rows as spend reads them from the stage: the window's `self` (the row's own join), the STAGE's unread
+  /// (`unreadIds`, S2: the open card's row held out, never the row's raw `unread`), and active for the open card's row
+  /// alone (`activeId`, Q-S6 (a)).
+  static func agents(_ rows: [RemoteFieldRow], unreadIds: Set<String>, activeId: String?) -> [SpendAgent] {
+    rows.map {
+      SpendAgent(
+        monitor: $0.row.monitor, isSelf: $0.isSelf, unread: unreadIds.contains($0.id), active: $0.id == activeId)
+    }
+  }
 
-  /// The view's own box under the reserve. RED SKELETON.
-  static func box(width: Double, height: Double, topInset: Double) -> (width: Double, height: Double) { (0, 0) }
+  /// The view's own box (`stageBox`, SpendView.js:67): the stage less the reserve its words start below
+  /// (`GodviewStageInput.insets(.flow).top`); the phone clears nothing on the left. Never negative.
+  static func box(width: Double, height: Double, topInset: Double) -> (width: Double, height: Double) {
+    (Swift.max(0, width), Swift.max(0, height - topInset))
+  }
 
-  /// The clock as the view reads it. RED SKELETON.
-  static func nowMs(_ date: Date) -> Double { 0 }
+  /// The clock as the view reads it: whole ms, as `Date.now()` is; the nearest, so a still's frozen
+  /// `-vf-godview-now=<ms>` comes back to the ms through its `Date`.
+  static func nowMs(_ date: Date) -> Double {
+    (date.timeIntervalSince1970 * 1000).rounded()
+  }
 
-  /// How often now moves. RED SKELETON.
-  static func clockEveryMs(_ g: Geometry) -> Double { 0 }
+  /// How often now moves (SpendView.js:407-410): about a pixel at a time, never more often than every 250 ms nor less
+  /// often than once a second.
+  static func clockEveryMs(_ g: Geometry) -> Double {
+    Swift.min(1000, Swift.max(250, SpendScale.windowMs / Swift.max(1, g.x1 - g.x0)))
+  }
 
-  /// A drag on the list as the wheel's steps. RED SKELETON.
-  static func listSteps(from: Double, to: Double, rowH: Double) -> Int { 0 }
+  /// A drag on the list as the wheel's steps (fd's Q3): every whole row of travel from where the drag began is one
+  /// step, a finger moving up stepping the list down. Not finite, or no row height: no steps.
+  static func listSteps(from: Double, to: Double, rowH: Double) -> Int {
+    guard from.isFinite, to.isFinite, rowH.isFinite, rowH > 0 else { return 0 }
+    func rows(_ y: Double) -> Int { Int(Swift.min(1e6, Swift.max(-1e6, (-y / rowH).rounded(.towardZero)))) }
+    return rows(to) - rows(from)
+  }
 
   // MARK: - Acts
 
