@@ -38,7 +38,7 @@ import {
   type SubscriptionStatus,
 } from "@vibefield/rosetta-protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { assetSourceOver } from "../src/history/asset-source";
+import { assetSourceOver, blobType } from "../src/history/asset-source";
 import {
   catalogPortOver,
   catalogStatusOf,
@@ -492,6 +492,36 @@ describe("the catalog port's rows (AR-8c; PJ-4 H1)", () => {
         search: { ...building.search!, progress: { done: 1, total: 2, stage: "unknown" } },
       })?.searchProgress,
     ).toBeNull();
+  });
+
+  it("rosetta 0.1.3: hands the room each runtime's admission course, and none it cannot read", () => {
+    const cold = IndexStatus.parse(fixture("index-status.cold-start.json"));
+    const courses = (status: IndexStatus) =>
+      catalogStatusOf(status)?.ingest?.runtimes.map((row) => [
+        row.runtime_id,
+        row.admission_course,
+      ]);
+    // the not-imported face reads when a pending session opens from this
+    expect(courses(cold)).toEqual([
+      ["rt_5f0c9a2e1b7d4c3a", "per_tree"],
+      ["rt_9c1d7e3a5b2f4068", "at_runtime_close"],
+    ]);
+    // a course fieldd folded to unknown, or none named, is no course: the
+    // room infers one as it does for a daemon that predates the field
+    const unnamed = {
+      ...cold,
+      runtimes: cold.runtimes.map((row, index) => ({
+        ...row,
+        backfill:
+          row.backfill === undefined
+            ? undefined
+            : index === 0
+              ? { ...row.backfill, admissionCourse: "unknown" as const }
+              : (({ admissionCourse: _, ...rest }) => rest)(row.backfill),
+      })),
+    };
+    for (const row of catalogStatusOf(unnamed)?.ingest?.runtimes ?? [])
+      expect(row, row.runtime_id).not.toHaveProperty("admission_course");
   });
 
   it("PJ-4 (H2): splits ONE project.figures answer into the panel's figures and its usage, nulls kept null", () => {
@@ -1272,8 +1302,10 @@ describe("the asset source (AR-8c, AR-D40 (a))", () => {
       },
     );
     expect(await assets.imageAssetUrl(asset("a"), "full")).toBe("blob:history/1");
+    // rosetta 0.1.3: a recorded original with no bundle is asked by recipe,
+    // its full rendition too
     expect(rest.reads[0]).toEqual({
-      url: "http://127.0.0.1:44000/api/assets/a.webp",
+      url: "http://127.0.0.1:44000/api/assets/a.webp?image=full&v=1",
       authorization: "Rosetta-Grant g1",
     });
     expect(await assets.imageAssetUrl(asset("b"), "full")).toBe("blob:history/2");
@@ -1294,6 +1326,49 @@ describe("the asset source (AR-8c, AR-D40 (a))", () => {
       "blob:history/4",
     ]);
     expect(assets.size).toBe(0);
+  });
+
+  it("rosetta 0.1.3: a recorded original comes back WebP, and its object URL says so; bytes that are not WebP keep the type the timeline recorded", async () => {
+    const WEBP = new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0]);
+    const rest = rosettadFetch(new Set(), (path, headers) =>
+      path === "/api/assets/shot.png"
+        ? new Response(WEBP, { status: 200, headers: { ...headers, "content-type": "image/webp" } })
+        : null,
+    );
+    const rosetta = new RosettaClient({
+      baseUrl: "http://127.0.0.1:44000",
+      credential: { kind: "grant", grant: "g1" },
+      fetchFn: rest.fetchFn,
+    });
+    const types: string[] = [];
+    const assets = assetSourceOver(
+      { anyClient: () => rosetta },
+      {
+        createObjectURL: (blob) => {
+          types.push(blob.type);
+          return `blob:history/${types.length}`;
+        },
+        revokeObjectURL: () => undefined,
+      },
+    );
+    const png: AssetRef = {
+      url: "/api/assets/shot.png",
+      digest: "shot",
+      media_type: "image/png",
+      byte_len: 13,
+    };
+    expect(await assets.imageAssetUrl(png, "full")).toBe("blob:history/1");
+    expect(rest.reads[0]?.url).toBe("http://127.0.0.1:44000/api/assets/shot.png?image=full&v=1");
+    const svg: AssetRef = {
+      url: "/api/assets/mark.svg",
+      digest: "mark",
+      media_type: "image/svg+xml",
+      byte_len: 3,
+    };
+    await assets.imageAssetUrl(svg, "full");
+    expect(types).toEqual(["image/webp", "image/svg+xml"]);
+    expect(blobType(new Uint8Array([0x52, 0x49, 0x46, 0x46]), "image/png")).toBe("image/png");
+    assets.dispose();
   });
 
   it("keeps no failure — the next ask reads again — and answers null with no session open", async () => {

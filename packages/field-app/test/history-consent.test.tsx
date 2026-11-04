@@ -379,4 +379,56 @@ describe("History's consent slot (AO-3, AO-D9)", () => {
     for (const toggle of switches()) await act(async () => toggle.click());
     expect(button("Bring in history").disabled).toBe(true);
   });
+  it("rosetta 0.1.3 (ux:X7): tells its host once the grant has landed — the room asks its status then — and not when it was refused", async () => {
+    const mountSlot = async (client: FielddClient, onGranted: () => void) => {
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+      await act(async () => {
+        root?.render(
+          createElement(FielddProvider, { client }, createElement(HistoryConsent, { onGranted })),
+        );
+      });
+      await answered();
+    };
+
+    const granted = vi.fn();
+    const client = fieldd();
+    let landEnroll: (value: unknown) => void = () => undefined;
+    const request = client.request as unknown as ReturnType<typeof vi.fn>;
+    const answer = request.getMockImplementation();
+    request.mockImplementation(async (method: string, params: unknown) =>
+      method === "index.enroll"
+        ? await new Promise((resolve) => {
+            landEnroll = resolve;
+          })
+        : answer?.(method, params),
+    );
+    await mountSlot(client, granted);
+    await act(async () => button("Bring in history").click());
+    // enroll answers once the restarted service is ready: not before
+    expect(granted).not.toHaveBeenCalled();
+    await act(async () => {
+      landEnroll({ changed: true });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(granted).toHaveBeenCalledTimes(1);
+    await unmount();
+
+    const refused = vi.fn();
+    const refusing = fieldd();
+    const refuse = refusing.request as unknown as ReturnType<typeof vi.fn>;
+    const ordinary = refuse.getMockImplementation();
+    refuse.mockImplementation(async (method: string, params: unknown) => {
+      if (method === "index.enroll") throw new Error("the index refused the set");
+      return ordinary?.(method, params);
+    });
+    await mountSlot(refusing, refused);
+    await act(async () => button("Bring in history").click());
+    await answered();
+    expect(container?.querySelector('[role="alert"]')?.textContent).toBe(
+      "the index refused the set",
+    );
+    expect(refused).not.toHaveBeenCalled();
+  });
 });

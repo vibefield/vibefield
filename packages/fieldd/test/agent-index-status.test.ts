@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { IndexStatus } from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
-import type { StatusResponse } from "@vibefield/rosetta-protocol";
+import type { RuntimeBackfill, RuntimeRow, StatusResponse } from "@vibefield/rosetta-protocol";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { EnrollmentStore, IndexService, type RosettaProjectBackfill } from "../src/agent-index";
 import type { RosettadSupervisor } from "../src/rosettad-supervisor";
@@ -67,12 +67,12 @@ const body = (over: { daemon?: Partial<NonNullable<StatusResponse["daemon"]>> } 
   }) satisfies StatusResponse;
 
 /** The service over a scripted daemon answering the two reads `status()` makes. */
-const service = (status: unknown, phase = "ready") => {
+const service = (status: unknown, phase = "ready", runtimes: readonly RuntimeRow[] = []) => {
   const dir = mkdtempSync(join(tmpdir(), "vf-index-status-"));
   dirs.push(dir);
   const fetchFn: typeof fetch = async (input) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    const answer = url.endsWith("/api/status") ? status : { runtimes: [] };
+    const answer = url.endsWith("/api/status") ? status : { runtimes };
     return new Response(JSON.stringify(answer), {
       status: 200,
       headers: { "x-rosetta-protocol-version": String(PROTOCOL) },
@@ -158,5 +158,100 @@ describe("AO-4 — index.status feeds History's first reading", () => {
     expect(status).not.toHaveProperty("startedAt");
     expect(status).not.toHaveProperty("projects");
     expect(keying).not.toHaveBeenCalled();
+  });
+});
+
+/** A discovered runtime as `/api/runtimes` lists it. */
+const runtimeRow = (id: string, kind: string, root: string): RuntimeRow => ({
+  id,
+  kind,
+  data_root: root,
+  enabled: true,
+  account: null,
+  config: null,
+  skills: null,
+  versions_seen: null,
+  discovered_at: 1,
+});
+
+/** Its cold-backfill meters as `/api/status` carries them, with a course. */
+const backfillOf = (
+  runtimeId: string,
+  kind: string,
+  course: RuntimeBackfill["admission_course"],
+): RuntimeBackfill => ({
+  kind,
+  runtime_id: runtimeId,
+  label: null,
+  state: "streaming",
+  files_total: 4,
+  bytes_total: 400,
+  files_skimmed: 4,
+  bytes_streamed: 100,
+  sessions_total: 3,
+  records: 9,
+  ...(course === undefined ? {} : { admission_course: course }),
+});
+
+describe("rosetta 0.1.3 — a runtime's admission course reaches History's room", () => {
+  it("is mirrored when the daemon names it, absent when it names none, and an unheard-of word folds to unknown", async () => {
+    const rows = [
+      runtimeRow("rt-claude", "claude-code", "~/.claude"),
+      runtimeRow("rt-codex", "codex", "~/.codex"),
+      runtimeRow("rt-pi", "pi", "~/.pi"),
+      runtimeRow("rt-grok", "grok", "~/.grok"),
+      runtimeRow("rt-opencode", "opencode", "~/.local/share/opencode"),
+    ];
+    const daemon = body().daemon;
+    const status = IndexStatus.parse(
+      await service(
+        body({
+          daemon: {
+            ingest: {
+              ...daemon.ingest,
+              runtimes: [
+                backfillOf("rt-claude", "claude-code", "per_tree"),
+                backfillOf("rt-codex", "codex", "at_runtime_close"),
+                backfillOf("rt-pi", "pi", "at_publication"),
+                // a daemon that predates the field, and one that names none
+                backfillOf("rt-grok", "grok", undefined),
+                backfillOf("rt-opencode", "opencode", null),
+              ],
+            },
+          },
+        }),
+        "ready",
+        rows,
+      ).status(),
+    );
+    const courses = Object.fromEntries(
+      status.runtimes.map((row) => [row.runtimeId, row.backfill?.admissionCourse]),
+    );
+    expect(courses).toEqual({
+      "rt-claude": "per_tree",
+      "rt-codex": "at_runtime_close",
+      "rt-pi": "at_publication",
+      "rt-grok": undefined,
+      "rt-opencode": undefined,
+    });
+    expect(status.runtimes.find((row) => row.runtimeId === "rt-grok")?.backfill).not.toHaveProperty(
+      "admissionCourse",
+    );
+
+    const odd = backfillOf("rt-claude", "claude-code", "per_tree") as unknown as Record<
+      string,
+      unknown
+    >;
+    odd.admission_course = "per_hour";
+    const folded = IndexStatus.parse(
+      await service(
+        body({
+          daemon: { ingest: { ...daemon.ingest, runtimes: [odd as unknown as RuntimeBackfill] } },
+        }),
+        "ready",
+        rows.slice(0, 1),
+      ).status(),
+    );
+    expect(folded.runtimes[0]?.backfill?.admissionCourse).toBe("unknown");
   });
 });

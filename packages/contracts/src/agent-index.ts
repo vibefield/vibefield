@@ -236,6 +236,22 @@ export const IndexDaemonHealth = z
   .passthrough();
 export type IndexDaemonHealth = z.infer<typeof IndexDaemonHealth>;
 
+/** rosetta's `AdmissionCourse` (mirrored; rosetta 0.1.3, 2026-11-03) plus the
+ * tolerant reader's own answer: what a runtime's not-yet-imported sessions wait
+ * for on the daemon's current cold attempt — a fresh build's per-tree
+ * admission (`per_tree`), the whole runtime at once (`at_runtime_close`), or a
+ * resumed build that opens nothing new until it publishes (`at_publication`).
+ * It names no order, position or time. A course this build has never heard of
+ * folds to `unknown`, which History's room reads as no course named. */
+export const INDEX_ADMISSION_COURSES = [
+  "per_tree",
+  "at_runtime_close",
+  "at_publication",
+  "unknown",
+] as const;
+export const IndexAdmissionCourse = z.enum(INDEX_ADMISSION_COURSES).catch("unknown");
+export type IndexAdmissionCourse = (typeof INDEX_ADMISSION_COURSES)[number];
+
 /** Cold-backfill meters for one runtime (rosetta `RuntimeBackfill`, mirrored;
  * skims measure in files, streams in bytes). */
 export const IndexRuntimeBackfill = z
@@ -247,6 +263,9 @@ export const IndexRuntimeBackfill = z
     bytesStreamed: z.number().int().nonnegative(),
     sessionsTotal: z.number().int().nonnegative(),
     records: z.number().int().nonnegative(),
+    /** when this runtime's pending sessions open (rosetta 0.1.3); absent when
+     * the daemon names none — a warm start, or one that predates it */
+    admissionCourse: IndexAdmissionCourse.optional(),
   })
   .passthrough();
 export type IndexRuntimeBackfill = z.infer<typeof IndexRuntimeBackfill>;

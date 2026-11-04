@@ -20,6 +20,7 @@ import {
   type ProjectSummary,
 } from "@vibefield/contracts";
 import type {
+  AdmissionCourse,
   BackfillState,
   ContributionRow,
   DayUsageResponse,
@@ -154,6 +155,13 @@ const BACKFILL_STATES: ReadonlySet<string> = new Set<BackfillState>([
   "preparing",
   "applying",
   "done",
+]);
+/** rosetta 0.1.3's courses: a course fieldd folded to `unknown` is none the
+ * room can read, so it infers one as it does for a daemon that names none. */
+const ADMISSION_COURSES: ReadonlySet<string> = new Set<AdmissionCourse>([
+  "per_tree",
+  "at_runtime_close",
+  "at_publication",
 ]);
 const STREAM_STATES: ReadonlySet<string> = new Set<StreamState>([
   "pending",
@@ -373,7 +381,9 @@ export function selfOf(sources: readonly IndexCatalogSource[] | undefined): stri
  * not up (the supervisor's own phase: unconfigured, starting, restarting,
  * failed, stopped), which the port answers as a refusal in fieldd's words.
  * AO-4: everything the room's first reading draws is fed — the per-project
- * fold, the search build's stage, the daemon's clock. */
+ * fold, the search build's stage, the daemon's clock. Rosetta 0.1.3: each
+ * runtime's admission course, which the room's not-imported face reads — when
+ * a session it has not reached yet opens (until then the room inferred it). */
 export function catalogStatusOf(status: IndexStatus, now = Date.now()): CatalogStatus | null {
   if (!INGEST_PHASES.has(status.phase)) return null;
   const runtimes: RuntimeBackfill[] = [];
@@ -391,6 +401,10 @@ export function catalogStatusOf(status: IndexStatus, now = Date.now()): CatalogS
       bytes_streamed: backfill.bytesStreamed,
       sessions_total: backfill.sessionsTotal,
       records: backfill.records,
+      // what the room's not-imported face says a pending session waits for
+      ...(backfill.admissionCourse !== undefined && ADMISSION_COURSES.has(backfill.admissionCourse)
+        ? { admission_course: backfill.admissionCourse as AdmissionCourse }
+        : {}),
     });
   }
   const ingest: IngestProgress = {
@@ -640,7 +654,7 @@ export interface HistoryCatalogPort extends CatalogPort {
    * pings are noted and the listing is read again when it shows. */
   setActive(active: boolean): void;
   /** The index's state in the frame's words while it cannot answer, or null:
-   * what the room says under "rosettad is not answering". */
+   * what the room says under "History isn't answering". */
   words(): string | null;
   /** fix7 — the index's phase as `index.status` last answered it (null:
    * not answered yet, or fieldd itself did not answer): the frame's act for a
@@ -922,7 +936,7 @@ export function catalogPortOver(
     const fail = (cause: unknown, ask: () => void): void => {
       say("listing", refusalWords(cause));
       // an index this desktop does not run is not one that is coming: the room
-      // says "rosettad is not answering", not "Connecting to rosettad"
+      // says it is not answering, never that it is still being reached
       const unconfigured = refusalOf(cause).details?.["state"] === "unconfigured";
       if (askAgain(cause) && !unconfigured) {
         retry(ask);

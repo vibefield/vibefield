@@ -44,7 +44,8 @@ import "./history-room-glass.css";
 // layer that ends at the reserve, so a dialog never sits under the line, and
 // starts at the head band's foot, so a dialog never covers the band or the
 // frame's search button in it), the prefix it keeps its preferences under, the
-// words of its two honest states that are the host's to say, where it opens
+// words of its two honest states that are the host's to say (their titles too,
+// since rosetta 0.1.3), where it opens
 // (`openAt` — the Peek's picks, 2026-10-08) and the empty transcript in
 // VibeField's words, naming the key the frame's search button prints
 // (DESIGN.md §8 "History"). The room's own search — its strip's launcher and
@@ -90,12 +91,22 @@ export function historyEmptyPrompt(keys: ViewKeys): string {
   return `Pick a session, or search with ${keys === "mac" ? "⌘F" : "Ctrl+F"}.`;
 }
 
+/** The titles of the room's disconnected face, in VibeField's words (DESIGN.md
+ * §8 "History", §9 "The agents' words": the daemon is never named on screen).
+ * Rosetta 0.1.3 lets the host title it (RO-28, rosetta#27); until then the room
+ * said "rosettad is not answering" and "Connecting to rosettad". Reaching the
+ * index says what the chunk's own face said before it (`HistoryOpening.tsx`),
+ * so History's open reads as one state; the reader's closed face is the
+ * room's. The line under them stays the frame's (`unavailable`). */
+export const HISTORY_UNAVAILABLE_TITLE = "History isn't answering";
+export const HISTORY_CONNECTING_TITLE = "Opening History…";
+
 export interface HistoryRoomViewProps {
   /** The room's ports: fieldd's in the product, the package's fixtures in the
    * catalog. */
   ports: RoomPorts;
   /** The index's state in the frame's words, said under the room's own
-   * "rosettad is not answering" when the catalog cannot answer. */
+   * "History isn't answering" when the catalog cannot answer. */
   unavailable?: string | null;
   /** The chosen session, on mount and on every change — Resume's subject. */
   onSelect?: ((selection: RoomSelection | null) => void) | undefined;
@@ -179,6 +190,8 @@ export function HistoryRoomView({
           storagePrefix={HISTORY_STORAGE_PREFIX}
           storage={store}
           unavailable={unavailable}
+          unavailableTitle={HISTORY_UNAVAILABLE_TITLE}
+          connectingTitle={HISTORY_CONNECTING_TITLE}
           consent={consent}
           emptyPrompt={emptyPrompt}
           onSelect={onSelect}
@@ -219,6 +232,7 @@ export function PeekReaderView({
         surface="host"
         storagePrefix={HISTORY_STORAGE_PREFIX}
         storage={null}
+        unavailableTitle={HISTORY_UNAVAILABLE_TITLE}
       />
     </div>
   );

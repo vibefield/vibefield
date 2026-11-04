@@ -46,7 +46,11 @@ export function storedAssetPath(asset: AssetRef): string | null {
 
 /** The path and query of one rendition under the client's origin — rosetta's
  * own spelling (`RosettaClient.imageAssetUrl`: the rendition's member when the
- * timeline names one, else the full member asked for that recipe). */
+ * timeline names one, else the full member asked for that recipe). *Rosetta
+ * 0.1.3:* a recorded original (an image the timeline names no WebP bundle for)
+ * is always asked by recipe, `?image=full&v=1` included, and the daemon
+ * answers WebP for it — so `mediaType` is what the timeline recorded, not
+ * always what comes back (`blobType`). */
 function renditionOf(
   client: RosettaClient,
   asset: AssetRef,
@@ -58,6 +62,15 @@ function renditionOf(
     ref: { ...rendition, url: `${url.pathname}${url.search}` },
     mediaType: rendition.media_type,
   };
+}
+
+/** What the bytes are, for the object URL's type: WebP by its own signature
+ * (`RIFF····WEBP` — what rosettad answers a recipe with), else what the
+ * timeline recorded (an original it serves as itself: SVG, AVIF). The client
+ * hands the room bytes, never the response's type. */
+export function blobType(bytes: Uint8Array, recorded: string): string {
+  const tag = (at: number) => String.fromCharCode(...bytes.subarray(at, at + 4));
+  return bytes.length >= 12 && tag(0) === "RIFF" && tag(8) === "WEBP" ? "image/webp" : recorded;
 }
 
 export function assetSourceOver(
@@ -104,7 +117,9 @@ export function assetSourceOver(
           const { ref, mediaType } = renditionOf(client, asset, variant);
           const bytes = await client.readAsset(ref);
           if (disposed) return null;
-          const url = create(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mediaType }));
+          const url = create(
+            new Blob([bytes as Uint8Array<ArrayBuffer>], { type: blobType(bytes, mediaType) }),
+          );
           keep(key, url);
           return url;
         } catch {

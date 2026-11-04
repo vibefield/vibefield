@@ -17,6 +17,8 @@ import {
   INDEX_RECENT_DEFAULT_LIMIT,
   IndexActivityResponse,
   type IndexActivityResult,
+  type IndexAdmissionCourse,
+  IndexAdmissionCourse as IndexAdmissionCourseSchema,
   IndexContributionResponse,
   IndexDayUsageResponse,
   type IndexDiscoveriesResult,
@@ -980,6 +982,7 @@ export class IndexService {
               bytesStreamed: Number(backfill.bytes_streamed),
               sessionsTotal: Number(backfill.sessions_total),
               records: Number(backfill.records),
+              ...admissionCourseOf(backfill),
             },
           }
         : {}),
@@ -2216,6 +2219,19 @@ function foldSearchProgress(value: unknown): IndexSearchBuildProgress | undefine
     total,
     ...(stage !== undefined ? { stage: IndexSearchBuildStage.parse(stage) } : {}),
   };
+}
+
+/** rosetta 0.1.3 — when the runtime's pending sessions open on the daemon's
+ * cold attempt, mirrored: a daemon that names none (null, or one that predates
+ * the field) sends no course, and a word this build never heard of folds to
+ * `unknown` rather than refusing the status it rides in. */
+function admissionCourseOf(backfill: RuntimeBackfill): {
+  admissionCourse?: IndexAdmissionCourse;
+} {
+  const course: unknown = backfill.admission_course;
+  return course === undefined || course === null
+    ? {}
+    : { admissionCourse: IndexAdmissionCourseSchema.parse(course) };
 }
 
 /** A count or a clock reading from a CAST body, or undefined when the value is

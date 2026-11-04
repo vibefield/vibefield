@@ -75,7 +75,7 @@ export function HistorySection(): ReactElement {
       </Specimen>
 
       <Specimen
-        title="rosettad is not answering — the index's state, inside the frame"
+        title="History isn't answering — the index's state, inside the frame"
         source="history/doors.ts"
         bleed
       >

@@ -27,7 +27,8 @@
         "filesSkimmed": 5912,
         "bytesStreamed": 4100000000,
         "sessionsTotal": 5240,
-        "records": 1203311
+        "records": 1203311,
+        "admissionCourse": "per_tree"
       }
     },
     {
@@ -43,7 +44,8 @@
         "filesSkimmed": 412,
         "bytesStreamed": 0,
         "sessionsTotal": 398,
-        "records": 0
+        "records": 0,
+        "admissionCourse": "at_runtime_close"
       }
     }
   ],

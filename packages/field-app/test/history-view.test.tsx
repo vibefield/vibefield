@@ -1247,3 +1247,143 @@ describe("PJ-6 — New agent's pages turn in place, over the real room", () => {
     expect(rowKeyed("model\u001fopus")()).toBeNull();
   }, 30_000);
 });
+
+describe("History's consent slot over the room (rosetta 0.1.3, ux:X7)", () => {
+  it("a grant that lands asks the room's status at once, not at the consent pause's next poll", async () => {
+    const CATALOG = fixture("agent-catalog.valid.json");
+    let granted = false;
+    let landEnroll: (() => void) | null = null;
+    const client = fieldd(
+      () => SPAWNED,
+      undefined,
+      (method) => {
+        switch (method) {
+          case "agent.catalog":
+            return CATALOG;
+          case "index.discoveries":
+            return {
+              discoveries: [
+                {
+                  kind: "claude-code",
+                  agent: "claude",
+                  dataRoot: "~/.claude",
+                  installed: true,
+                  files: 40,
+                  bytes: 6_200_000_000,
+                  newestModifiedMs: Date.now(),
+                  consented: granted,
+                },
+              ],
+            };
+          case "index.status": {
+            // the index waits for consent until the record names the set — a
+            // fresh one, its projection not published yet (rosettad's own
+            // status then: not canonical, search building)
+            const live = fixture("index-status.valid.json");
+            return granted
+              ? live
+              : {
+                  ...live,
+                  phase: "awaiting_consent",
+                  search: {
+                    ...(live.search as object),
+                    canonicalReady: false,
+                    readiness: "building",
+                  },
+                };
+          }
+          case "index.enroll":
+            // fieldd answers once the restarted service is ready
+            return new Promise((resolve) => {
+              landEnroll = () => {
+                granted = true;
+                resolve({ changed: true, status: fixture("index-status.valid.json") });
+              };
+            });
+          case "setup.answer":
+          case "setup.moment":
+            return { ok: true };
+          default:
+            return undefined;
+        }
+      },
+    );
+    const statusAsks = () => client.calls.filter((call) => call.method === "index.status").length;
+    mount(client);
+    to("history");
+    await until(
+      () => historySlot()?.querySelector("#vf-history-consent-title"),
+      "the consent slot in the room's place",
+    );
+    const bringIn = await until(
+      () =>
+        Array.from(historySlot()?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
+          (button) => button.textContent === "Bring in history" && !button.disabled,
+        ),
+      "Bring in history, the census answered",
+    );
+    await act(async () => bringIn.click());
+    // land the grant just after one of the room's polls, so its next is the
+    // consent pause's 2.5 s away: only an ask the grant made comes sooner
+    const before = statusAsks();
+    await until(() => (statusAsks() > before ? true : null), "a status poll", 4_000);
+    const polled = statusAsks();
+    await act(async () => landEnroll?.());
+    await until(
+      () => (statusAsks() > polled ? true : null),
+      "the room's status asked again once the grant landed",
+      500,
+    );
+    await until(
+      () => (historySlot()?.querySelector("#vf-history-consent-title") ? null : true),
+      "the room past its consent slot",
+      1_000,
+    );
+  }, 20_000);
+});
+
+describe("the room's disconnected face in VibeField's words (rosetta 0.1.3, RO-28)", () => {
+  const unconfigured = () =>
+    Object.assign(new Error("the agent index is unconfigured"), {
+      kind: "UNAVAILABLE",
+      retryable: false,
+      details: { service: "index", state: "unconfigured" },
+    });
+  const titleOf = (face: string) =>
+    historySlot()?.querySelector(`.ah-frame [data-face="${face}"] strong`)?.textContent;
+
+  it("titles an index that is still being reached as History's open, and one that cannot answer as History, never the daemon", async () => {
+    // fieldd answers nothing yet: the room is reaching the index
+    const reaching = fieldd(
+      () => SPAWNED,
+      undefined,
+      (method) =>
+        method === "project.list" || method === "index.sessions" || method === "index.status"
+          ? new Promise(() => undefined)
+          : undefined,
+    );
+    mount(reaching);
+    to("history");
+    expect(await until(() => titleOf("connecting"), "the connecting face")).toBe(
+      "Opening History…",
+    );
+    act(() => root?.unmount());
+    host?.remove();
+
+    // an index this desktop does not run: the feed closes with fieldd's words
+    const refusing = fieldd(
+      () => SPAWNED,
+      undefined,
+      (method) =>
+        method === "project.list" || method === "index.sessions"
+          ? Promise.reject(unconfigured())
+          : undefined,
+    );
+    mount(refusing);
+    to("history");
+    expect(await until(() => titleOf("not-answering"), "the closed face")).toBe(
+      "History isn't answering",
+    );
+    expect(historySlot()?.textContent).not.toMatch(/rosettad/i);
+  });
+});
