@@ -113,7 +113,7 @@ export type PhoneViewGoldens = Readonly<Record<string, () => Promise<{ golden: P
 /** PG-4s — THE PER-VIEW GOLDENS. One line per view lane (PG-5…8), its key the view's manifest id, which is the kit's
  * `GodviewViewChoice` raw value. `tsc` checks each literal path (`tsconfig.json` includes `perf`). */
 export const PHONE_VIEW_GOLDENS: PhoneViewGoldens = {
-  // list: () => import("./phone-goldens-list"),
+  list: () => import("./phone-goldens-list"),
   spend: () => import("./phone-goldens-spend"),
 };
 export const phoneViewGoldenName = (view: string): string => `phone-${view}.golden.json`;

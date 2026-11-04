@@ -50,7 +50,7 @@ const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.la
 const PHONE_GODVIEW = join(root, "packages/field-app/test/fixtures/phone-godview");
 // biome-ignore format: one golden per line, so each view lane's line merges keep-both
 const phoneViewGoldens = [
-  // "phone-list.golden.json",
+  "phone-list.golden.json",
   "phone-spend.golden.json",
 ];
 // Goldens whose origin is another package than the contracts — a design
