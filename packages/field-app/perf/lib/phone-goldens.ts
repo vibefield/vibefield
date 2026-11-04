@@ -26,6 +26,7 @@ import {
 import {
   bubbleModel,
   DEFAULT_SWARM_PARAMETERS,
+  MONITOR_VIEWS,
   type SwarmBubbleModel,
   workingShares,
 } from "@vibefield/puppeteer-views";
@@ -787,7 +788,11 @@ export function phoneMarksGolden(): Record<string, unknown> {
   return {
     "//": MARKS_NOTE,
     versions: puppeteerVersions(),
-    views: [],
+    views: MONITOR_VIEWS.map(({ id, label, mark }) => ({
+      id,
+      label,
+      mark: { viewBox: mark.viewBox, paths: [...mark.paths] },
+    })),
   };
 }
 
