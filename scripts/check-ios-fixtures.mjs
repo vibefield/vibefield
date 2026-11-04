@@ -444,6 +444,60 @@ const OS_MARKS_IOS = join(
   );
 }
 
+// PG-4t — the phone's monitor skin (DESIGN.md §2.7; §8 "The monitor view owns
+// its drawing"): the nine colours of puppeteer-view-sdk's MONITOR_SKIN, which
+// `GodviewSkin.swift` carries one line each as `(.key, 0xLIGHT, 0xDARK)`. Each
+// value is held to tokens.css's `--vf-godview-{light,dark}-<key>`, all 18, and
+// a red names the key. (field-app's phone-parity row holds the key names to
+// the SDK's own list; this script reads no package.)
+{
+  const SKIN_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldHome/Godview/GodviewSkin.swift";
+  const TOKENS = "packages/design-kit/src/tokens.css";
+  const read = (file) => {
+    try {
+      return readFileSync(join(root, file), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const swift = read(SKIN_SWIFT);
+  const tokens = read(TOKENS);
+  const cases = new Map(
+    [...swift.matchAll(/^ {4}case (\w+) = "([a-z-]+)"$/gm)].map(([, name, raw]) => [name, raw]),
+  );
+  const lines = [...swift.matchAll(/^ {4}\(\.(\w+), 0x([0-9A-Fa-f]{6}), 0x([0-9A-Fa-f]{6})\),$/gm)];
+  const named = lines.map(([, name]) => name);
+  if (cases.size === 0 || lines.length !== cases.size) {
+    problems.push(
+      `${SKIN_SWIFT} has ${cases.size} skin keys and ${lines.length} table lines\n` +
+        "  fix: one `(.key, 0xLIGHT, 0xDARK),` line per Key case (or move this script's pattern with the declaration)",
+    );
+  }
+  for (const name of cases.keys()) {
+    if (named.filter((line) => line === name).length !== 1) {
+      problems.push(`${SKIN_SWIFT}'s skin key ${name} needs exactly one table line`);
+    }
+  }
+  for (const [, name, light, dark] of lines) {
+    const raw = cases.get(name);
+    for (const [look, copy] of [
+      ["light", light],
+      ["dark", dark],
+    ]) {
+      checked += 1;
+      const pattern = new RegExp(`^\\s*--vf-godview-${look}-${raw}: #([0-9a-fA-F]{6});$`, "m");
+      const origin = raw === undefined ? null : (pattern.exec(tokens)?.[1]?.toLowerCase() ?? null);
+      if (origin !== copy.toLowerCase()) {
+        problems.push(
+          `${SKIN_SWIFT}'s ${look} ${name} is #${copy.toLowerCase()} but ${TOKENS}'s ` +
+            `--vf-godview-${look}-${raw ?? name} is ${origin === null ? "unreadable" : `#${origin}`}\n` +
+            "  fix: copy the token's value exactly (DESIGN.md §2.7 first, if the token moved)",
+        );
+      }
+    }
+  }
+}
+
 // The same argument one level up: the REGISTRY VALUES the phone speaks.
 //
 // `registries.ts` says ports, scopes, stores and the app id exist there and

@@ -14,6 +14,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentModelMeshFrame } from "@vibefield/contracts";
+import { MONITOR_SKIN } from "@vibefield/puppeteer-view-sdk";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   computePhoneGoldens,
@@ -505,5 +506,30 @@ describe("PG-4s — every phone golden has one writer, and a view's golden is on
   it("G7b — the mirrors the generator and the byte row read are the registry's", () => {
     expect(PHONE_GOLDEN_MIRRORS[PHONE_TOOLKIT_GOLDEN]).toEqual([PHONE_VIEW_MIRROR]);
     expect(PHONE_GOLDEN_MIRRORS).toEqual(phoneGoldenMirrors());
+  });
+});
+
+describe("PG-4t — the phone's monitor skin", () => {
+  it("T2 — GodviewSkin's keys are MONITOR_SKIN's colours; its other names are the four the kit names", () => {
+    const swift = readFileSync(
+      join(
+        process.cwd(),
+        "../../apps/ios/VibeFieldKit/Sources/FieldHome/Godview/GodviewSkin.swift",
+      ),
+      "utf8",
+    );
+    const keys = [...swift.matchAll(/^ {4}case \w+ = "([a-z-]+)"$/gm)].map(([, raw]) => `--${raw}`);
+    const colours = MONITOR_SKIN.filter((name) => !name.startsWith("--vf-"));
+    expect(keys).toHaveLength(9);
+    expect([...keys].sort()).toEqual([...colours].sort());
+    // The easings and the sans: FieldMotion's curves and ChromeType.sans (DESIGN.md §8 "The monitor view owns its
+    // drawing"); a tenth name the SDK adds reds here, and the phone answers it first.
+    const others = MONITOR_SKIN.filter((name) => name.startsWith("--vf-"));
+    expect([...others].sort()).toEqual([
+      "--vf-ease-island",
+      "--vf-ease-lift",
+      "--vf-ease-pop",
+      "--vf-font-sans",
+    ]);
   });
 });
