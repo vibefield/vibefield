@@ -661,6 +661,11 @@ public struct HomeScreen: View {
       if signedIn { refold() } else { closeWhatTheTabsOpened() }
     }
     #if DEBUG
+      // WI-1's OWED witness — signed out, the slice's link waits for the tabs to be down: a launch signed out stands
+      // them until the splash covers them, and the stage's hooks would fold a board that came before then.
+      .onChange(of: tabsStanding) { _, standing in
+        if !standing, fieldSliceSignedIn == false { installFieldSlice() }
+      }
       // The mock's account moves while the way in stands too, so its hooks stand
       // here rather than on the tabs.
       .onChange(of: mockDesktopIsUp) { syncMockHistory() }
@@ -669,6 +674,34 @@ public struct HomeScreen: View {
       }
     #endif
   }
+
+  /// Whether the tabs stand: signed in, or signed out until the splash covers them (`FieldHomeModel.tabsStand`).
+  private var tabsStanding: Bool {
+    FieldHomeModel.tabsStand(signedIn: wayInStep == nil, splashCovers: splashCovers)
+  }
+
+  #if DEBUG
+    /// `-vf-demo-field-slice`: PG-3a's WITNESS remote board through the real home path (the comment where the launch
+    /// reads it). Once (`link == nil`). Under WI-1's OWED witness's stamp, the self sign-in follows, and then the
+    /// witness's own reading of the field (`FieldSliceSignIn.reading`).
+    private func installFieldSlice() {
+      guard link == nil, let fixture = FieldLink.goldenFixture() else { return }
+      fixture.start()
+      link = fixture
+      fixtureLink = true
+      reportCard()
+      guard let delay = FieldSliceSignIn.launch(ProcessInfo.processInfo.arguments), fieldSliceSignedIn == false
+      else { return }
+      Task {
+        try? await Task.sleep(for: delay)
+        print("[field-slice] signing in by itself after \(delay)")
+        fieldSliceSignedIn = true
+        // the found beat, then the hand-over, then the tabs' mount and its refold
+        try? await Task.sleep(for: FieldHomeModel.foundBeatHold + .seconds(2))
+        print(FieldSliceSignIn.reading(bubbles.map(\.id)))
+      }
+    }
+  #endif
 
   /// The way in's screen standing, or nil for signed in: How it works over the welcome, the way in's own end,
   /// else the page the decision stands.
@@ -1459,22 +1492,13 @@ public struct HomeScreen: View {
         // the view: without it a disappear/reappear built a SECOND fixture
         // link and stranded the first, which is the live path's own stranding
         // bug wearing a fixture.
+        //
+        // WI-1's OWED witness — signed out (`-vf-demo-field-slice-signed-out`), the slice waits until the tabs are
+        // down (`installFieldSlice`, from `standing`), so its board can only arrive under the way in.
         if ProcessInfo.processInfo.arguments.contains("-vf-demo-field-slice"), link == nil,
-          let fixture = FieldLink.goldenFixture()
+          fieldSliceSignedIn != false || !tabsStanding
         {
-          fixture.start()
-          link = fixture
-          fixtureLink = true
-          reportCard()
-          // WI-1's OWED witness — the welcome stands over the slice while its board folds; then the phone signs in
-          // by itself, with no input and no board change (`FieldSliceSignIn`)
-          if let delay = FieldSliceSignIn.launch(ProcessInfo.processInfo.arguments), fieldSliceSignedIn == false {
-            Task {
-              try? await Task.sleep(for: delay)
-              print("[field-slice] signing in by itself after \(delay)")
-              fieldSliceSignedIn = true
-            }
-          }
+          installFieldSlice()
         }
         // PG-4s — a still's view and clock (`-vf-godview-view=<id>`, `-vf-godview-now=<epoch ms>`). Neither is a
         // fixture argument: alone they keep the live path, and they compose with `-vf-demo-field-slice`. Read once.

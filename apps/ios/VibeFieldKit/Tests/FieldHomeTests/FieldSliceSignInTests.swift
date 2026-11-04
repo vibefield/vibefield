@@ -39,4 +39,12 @@ struct FieldSliceSignInTests {
         previous: FieldSliceSignIn.door(signedIn: false), next: FieldSliceSignIn.door(signedIn: true)))
     #expect(FieldHomeModel.afterFoundBeat(offer: nil) == nil)
   }
+
+  @Test("the witness's reading: how many bodies the field holds, and whether pty-h1 is one")
+  func reading() {
+    #expect(
+      FieldSliceSignIn.reading(["run-h-partial", "pty-h1"])
+        == "[field-slice] after the sign-in the field holds 2 bodies (pty-h1 drawn)")
+    #expect(FieldSliceSignIn.reading([]) == "[field-slice] after the sign-in the field holds 0 bodies (pty-h1 absent)")
+  }
 }
