@@ -1,3 +1,4 @@
+import FieldMesh
 import FieldProduct
 import Foundation
 import Testing
@@ -27,8 +28,10 @@ extension RainViewTests {
       return field
     }
 
-    /// H12 — an empty window: no stream, no element to say, the bare stage, and the desktop's two lines verbatim
-    /// (RainView.js:261; fd's Q8). The mock fleet draws this.
+    /// H12 — an empty window: no stream, no element to say, the bare stage, and the desktop's two lines
+    /// (RainView.js:261; fd's Q8) — the second with the phone's words, as the list and spend say it: the desktop's
+    /// "Launch an agent from a terminal pane." names a pane, which the phone has none of (the words rule; a draft
+    /// word for James's eye). The mock fleet draws this.
     @Test func anEmptyWindowShowsTheDesktopsWords() {
       let field = Self.field([])
       #expect(field.isEmpty)
@@ -37,7 +40,22 @@ extension RainViewTests {
       let still = field.still()
       #expect(still == [.stage(width: 402, height: 781, fill: RainPalette.rain.stage)])
       #expect(RainField.emptyTitle == "NO ACTIVE AGENTS")
-      #expect(RainField.emptyLine == "Launch an agent from a terminal pane.")
+      #expect(RainField.emptyLine == "Launch an agent from a terminal.")
+    }
+
+    /// H18 — the words rule: on the phone no word the rain says of its own names a key, hover or a pane — its empty
+    /// stage, a lit row's value, the fallback name, the status words and MonitorWords' fixed lines its button lines
+    /// carry. A row's reply and detail are the agent's own text, data the rain passes on, not its words.
+    @Test func noWordTheRainSaysNamesAKeyHoverOrAPane() {
+      let words: [String] = [
+        RainField.emptyTitle, RainField.emptyLine, "open", MonitorWords.terminalName, MonitorWords.pendingLine,
+        MonitorWords.startingLine, MonitorWords.StateWords.blocked,
+      ] + [MonitorRowStatus.idle, .working, .blocked].map { $0.rawValue }
+      let banned: Set<String> = ["key", "keys", "hover", "hovers", "hovered", "pane", "panes"]
+      for line in words {
+        let found = line.lowercased().split { !$0.isLetter }.map(String.init).filter { banned.contains($0) }
+        #expect(found.isEmpty, "\"\(line)\" names \(found)")
+      }
     }
 
     /// H13 — the lifetime. The field waits for its stage (the desktop's sync bails with no container), so rows that
