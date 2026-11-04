@@ -15,7 +15,9 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   case swarm
   // PG-5…8: one case each, here.
   case list
+  /// PG-8 — the rain (puppeteer-views `views/rain`): a `.flow` picture view, its stage painted whole (`RainView`).
   case rain
+  case timeline
   case spend
 
   /// PG-4t — the defaults key the pick is kept under, per phone and across a sign-out (`SignOutSweep.kept`): the
@@ -213,6 +215,7 @@ struct GodviewStage<Swarm: View>: View {
     // PG-5…8: `case .<view>: framed(<View>View(input: input))`
     case .list: framed(ListView(input: input))
     case .rain: framed(RainView(input: input))
+    case .timeline: framed(GodviewTimelineView(input: input))
     case .spend: framed(SpendView(input: input))
     }
   }

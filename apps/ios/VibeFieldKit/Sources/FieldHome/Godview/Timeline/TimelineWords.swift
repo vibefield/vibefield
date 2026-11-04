@@ -34,6 +34,10 @@ enum TimelineWords {
   static let notRecorded = "not recorded"
   /// The readout's length where it has none to give (`readoutAt` :51): an en dash.
   static let noLength = "–"
+  /// The empty stage's words (`TimelineView.js:882`), upstream's verbatim on the phone too (fd's Q13: a puppeteer
+  /// finding, not changed here).
+  static let noAgents = ""
+  static let noAgentsHint = ""
 
   /// `spanWord`: a span's state as the readout words it — `blocked · <what it waits on>`, `reply unseen`, or the
   /// status.
