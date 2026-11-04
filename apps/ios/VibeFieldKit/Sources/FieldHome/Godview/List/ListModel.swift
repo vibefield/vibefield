@@ -80,6 +80,7 @@ struct ListModel: Equatable {
   /// "pane" (deviation 5, fd's words rule: no phone view names a key, hover or a pane; the phone's one pane is the
   /// open card, D-i12).
   static let emptyTitle = "NO ACTIVE AGENTS"
+  /// Draft word: James's eye (VF-PM 2026-11-04). New copy he has not seen; his change is this line and E1's pin.
   static let emptyHint = "Launch an agent from a terminal."
   /// The toolbar's button as the desktop words it (AgentList.tsx:96). The phone does not draw it (fd's Q1: no create
   /// door in the stage input; the phone's spawn is its bloom, PG-D10 (a)).

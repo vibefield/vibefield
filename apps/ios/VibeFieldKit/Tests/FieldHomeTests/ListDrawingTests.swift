@@ -105,7 +105,9 @@ struct ListDrawingTests {
   #if canImport(UIKit)
     /// D3 (kit) — the mark: the witness's providers (claude, codex) have drawn assets, as the golden's `svg` says; a
     /// provider with none wears its letter (deviation 4: the SDK draws a path for six the phone letters), and no id
-    /// wears `?`.
+    /// wears `?`. On the main actor: `AgentGlyph.drawnAsset(for:)` is a View's static, main-actor-isolated (the early
+    /// kit compile's four Swift 6 isolation warnings).
+    @MainActor
     @Test func theMarks() {
       let claude = AgentGlyph.drawnAsset(for: "claude")
       #expect(claude != nil)
