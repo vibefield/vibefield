@@ -29833,3 +29833,69 @@ appearance captures are retained in the publication evidence directory named abo
 gate remains required for this follow-up. CI and final review status are tracked on
 [PR #12](https://github.com/vibefield/vibefield/pull/12); no consumer merge is included. The latency and
 additional hardware/network qualification limits recorded above remain unchanged.
+
+## Item 161 — a set that never comes up waits longer before each re-mint, and stops waiting at the dial when its one deadline runs out (2026-11-02; `e88415106` → `7f2a86ab9`, two commits on main `30d8ae4fe`, re-stacked from `789a12c38` → `818f6fd65` on `cf50fede4`, lane `fix/item161` in `/Volumes/SamsungRed/lanes/item161`, in the mini's mint M112 `7f2a86ab9`, stacked, run 112)
+
+**What it rests on.** Found during item 157 (C8): another process held a door's port and answered every WebSocket
+upgrade with a non-101, and the phone's leg re-minted and re-dialled about 140 times a second while the card read
+"connecting" for ever. VF-PM filed it as item 161, the IOS session's after WI-1 (11:55Z), gave it at 15:03Z and
+approved the plan at 15:05Z: two files, no API change, no new words.
+
+**What** (2 files, +138 −4; the kit only):
+- **The red** (`789a12c38`, tests only): `turnedAway` (attached, then cut off at the frames leg; every fresh ticket
+  minted at once; the scripted door turns every dial away before its handshake, `ScriptedTransport.unreachable`), and
+  two rows that fail on main by ASSERTION, never by a settle's timeout (VF-PM 15:05Z):
+  - `aDialTheDoorTurnsAwayIsReMintedOnTheBackoff`: at most 5 mints in 0.6 s after the first re-mint (an upper bound,
+    so a loaded host can only pass it sooner);
+  - `aSetThatNeverComesUpStopsWaitingAtTheDial`: with a 400 ms step deadline, `.stalled(.dial)`, polled on the row's
+    own 3 s clock and then asserted.
+- **The fix** (`818f6fd65`, `RoutedTerminalClient` only):
+  - the spin: the backoff lived in each asking task and grew only while mints FAILED; a mint that succeeded ended
+    the task, and the failed handshake asked again in a fresh task with no wait. Now `legFailed` counts the sets in a
+    row that never came up (`unreachedSets`, both legs never accepted), and the re-mint waits
+    `reachBackoff(after:cap:)` first: 100 ms, doubling, at most `Options.maxBackoff`;
+  - the silence: fix8's step deadline was re-armed by every step change, and the loop flipped the ticket, then the
+    dial, every cycle. Now ONE `stepDeadline` covers the run (`armReachDeadline`), armed at its first failure and
+    re-armed by no re-mint; it stops the attach at the dial (`.stalled(.dial)`: the card's existing words and RETRY)
+    while the client is still trying, with the run and its last failure in `lastRefusal`;
+  - `endReach` ends the run when a set comes up, at a stall and at `close`. Unchanged: a set that came up and was
+    then lost re-mints at once; the pre-authentication rule; `.dial`'s words.
+
+**Validation.**
+- The host loop (`lanes/item161/light/host.sh`: a macOS package whose FieldProduct, FieldRoutedTerminal and
+  FieldRoutedTerminalTests are directory symlinks into the lane, whole, no stubs; never the gate): the base 170 tests
+  in 26 suites green (the kit's own routed run); RED at `789a12c38`, 172 in 26 with 2 issues (1,149 mints in 0.6 s;
+  `.connecting` at the row's 3 s clock); GREEN at `818f6fd65`, 172 in 26, 0 issues, the two rows 5 of 5 on repeat,
+  the run's diff hash `dd643259adbe` equal to the commit's.
+- The first red commit (never reported) capped the helper's backoff at 100 ms, which hid the doubling: the fix's
+  first green read 7 mints. The helper took the default cap and the red was amended before any report (said to
+  VF-PM, 15:13Z).
+- swiftc's typecheck for the iOS simulator (Debug, against the kit products built at `cc1cf8447`):
+  FieldRoutedTerminal and all 12 of its test files rc 0.
+- The kit on this Mac (VF-PM's slot, 15:13:34 → 15:20:08Z, the WI proof worktree detached at each commit;
+  `lanes/item161/light/slot161.sh`):
+  - FieldRoutedTerminalTests alone at `789a12c38`: EXIT 65, 172 tests in 26 suites, 2 issues, both the rows'
+    assertions (1,067 mints; `.reconnecting` at 3 s);
+  - the full kit at `818f6fd65` (its tree asserted): 15 runs, 1,540 tests, 0 red, 0 restarts, 0 issues (163's 1,514
+    + PG-4s's 24 + these 2);
+  - app Debug 15:17:30 → 15:18:09Z and Release 15:18:30 → 15:20:08Z, both built; iPhone 17 Pro
+    `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down after each run.
+- The re-stack over item 166 and its records (VF-PM 15:21Z, main `30d8ae4fe`): the file sets are disjoint (166 and
+  its records touch the app workspace's Package.resolved and two docs; 161 touches its two Swift files); `git
+  merge-tree --write-tree 30d8ae4fe 818f6fd65` is clean, tree `59481a79a`, which the re-stacked tip's tree equals;
+  the range-diff reads `789a12c38 = e88415106` and `818f6fd65 = 7f2a86ab9`; the iOS fixtures on the tip 202, pins 67.
+  So the slot's proof carries over, with no re-light and no kit. The slot's app builds ran over `cf50fede4`'s stale
+  Package.resolved (rewritten and restored); the re-stacked tree carries 166's, which a build leaves byte-identical
+  (166's witness).
+- **Run 112** (`7f2a86ab9`, stacked on main `30d8ae4fe`, a fast-forward, minted by a9 on VF-PM's GO): verify exit 0
+  at 15:28:11Z; vitest 12,111 passed, 0 failed, 18 skipped (871 files), ±0 on run 111 (the per-file diff is empty);
+  node 364/0; cargo 534 passed, 0 failed (33 results ok); typecheck and test, 28 projects; no MaxListeners warning;
+  the iOS fixtures 202, pins 67; the tree clean after (`lanes/ts6/logs/mini/run112/verify.clean.log`). The kit is
+  this Mac's slot, above, carried to `7f2a86ab9` by the "=" range-diff.
+- **Landed:** main fast-forwarded to `7f2a86ab9` on VF-PM's GO (2026-11-02 15:30:36Z).
+
+**Not built (said).** A line of its own for a dial the door turned away, OPEN for James's word: the stall says
+`.dial`'s existing words, "the dial over the mesh got no answer", and whether a refused upgrade deserves other
+words is his to say (VF-PM's dashboard, 15:05Z).
+
+**Owed.** Nothing of this item's.
