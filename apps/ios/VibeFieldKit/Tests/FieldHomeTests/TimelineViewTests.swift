@@ -186,6 +186,24 @@ struct TimelineViewTests {
     #expect(early.scale.spanMs == span)
   }
 
+  /// H6b — THE STILL LAW (GodviewViewChoice.swift:25: "a still: every view draws one frame and runs no loop, no
+  /// transition and no timer"): a still draws once, whatever else holds; live, a tween with motion allowed redraws
+  /// every frame, and anything else once a second (TV:600-615, the desktop's still view keeping time).
+  @Test func aStillDrawsOnceAndALiveViewKeepsTime() {
+    for tweening in [false, true] {
+      for reduceMotion in [false, true] {
+        let still = GodviewTimelineView.schedule(isStill: true, tweening: tweening, reduceMotion: reduceMotion)
+        #expect(still == .still, "a still, tweening \(tweening), reduce motion \(reduceMotion)")
+      }
+    }
+    let landing = GodviewTimelineView.schedule(isStill: false, tweening: true, reduceMotion: false)
+    #expect(landing == .everyFrame, "live, a tween landing with motion")
+    let reduced = GodviewTimelineView.schedule(isStill: false, tweening: true, reduceMotion: true)
+    #expect(reduced == .perSecond, "live, a tween under Reduce Motion lands at once")
+    let idle = GodviewTimelineView.schedule(isStill: false, tweening: false, reduceMotion: false)
+    #expect(idle == .perSecond, "live, no tween")
+  }
+
   // MARK: - H7 an undealt agent
 
   /// H7 — an agent with no dealt colour works in the neutral ramp (EndedLaneView's `colour`, view.d.ts: "the neutral

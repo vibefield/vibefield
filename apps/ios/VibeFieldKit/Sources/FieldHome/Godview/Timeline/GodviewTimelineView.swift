@@ -34,8 +34,18 @@ import SwiftUI
 // RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): no history is lent, so nothing of the record is drawn — the ended runs'
 // rows and pointer (TV:344-355, :821-855), the record's sentence (TV:859-861), the tall canvas (TV:427-445).
 
+/// How the stage redraws.
+enum TimelineSchedule: Equatable, Sendable {
+  case still
+  case everyFrame
+  case perSecond
+}
+
 struct GodviewTimelineView: View {
   let input: GodviewStageInput
+
+  /// SKELETON (PG-6 red): how the stage redraws.
+  static func schedule(isStill: Bool, tweening: Bool, reduceMotion: Bool) -> TimelineSchedule { .perSecond }
 
   @Environment(\.colorScheme) private var scheme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
