@@ -50,6 +50,12 @@ struct LockWordsTests {
     #expect(w.passcodeToo == "Your iPhone passcode works too.")
     #expect(w.toggleLine == "Touch ID opens VibeField. When Touch ID can’t, your iPhone passcode does.")
     #expect(w.requireHead == "Require Touch ID")
+    #expect(
+      w.requireFoot
+        == "While VibeField is locked, the app switcher shows its mark. Changing these asks Touch ID first.")
+    #expect(
+      w.offFoot
+        == "VibeField opens without Touch ID. Anyone holding this phone unlocked can open your agents’ terminals.")
     for word in Self.all(w) {
       #expect(!word.contains("Face ID"), "\(word)")
     }

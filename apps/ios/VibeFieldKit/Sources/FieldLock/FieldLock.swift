@@ -221,8 +221,10 @@ public final class FieldLock {
     return true
   }
 
-  /// One ask, the method read fresh first: a phone with no passcode is never asked.
+  /// One ask, the method read fresh first: a phone with no passcode is never asked. One at a time: a second tap
+  /// before iOS's own ask is up (the way in's Lock with Face ID) asks nothing, and changes nothing.
   private func ask() async -> LockAnswer {
+    guard !askOpen else { return .missed }
     method = authenticator.method
     guard method != .none else { return .unavailable }
     askOpen = true

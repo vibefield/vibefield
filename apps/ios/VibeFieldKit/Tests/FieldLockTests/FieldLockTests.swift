@@ -10,7 +10,10 @@ final class FakeAsk: LockAuthenticator {
   var method: LockMethod
   var answers: [LockAnswer] = []
   var during: (() -> Void)?
+  /// The first ask stays up until the row releases it, as iOS's sheet does while the person looks.
+  var holdsFirst = false
   private(set) var reasons: [String] = []
+  private var held: CheckedContinuation<Void, Never>?
 
   init(_ method: LockMethod = .faceID) {
     self.method = method
@@ -21,7 +24,13 @@ final class FakeAsk: LockAuthenticator {
   func ask(reason: String) async -> LockAnswer {
     reasons.append(reason)
     during?()
+    if holdsFirst && reasons.count == 1 { await withCheckedContinuation { held = $0 } }
     return answers.isEmpty ? .passed : answers.removeFirst()
+  }
+
+  func release() {
+    held?.resume()
+    held = nil
   }
 }
 
@@ -273,5 +282,19 @@ struct FieldLockTests {
         == "VibeField opens without Face ID. Anyone holding this phone unlocked can open your agents’ terminals.")
     #expect(await lock.setOn(true))
     #expect(lock.switchFoot == "Face ID opens VibeField. When Face ID can’t, your iPhone passcode does.")
+  }
+
+  @Test("one ask at a time: a second tap while iOS's ask is up asks nothing, and the first's answer stands")
+  func oneAskAtATime() async {
+    let lock = make(on: false)
+    ask.holdsFirst = true
+    let first = Task { await lock.setOn(true) }
+    for _ in 0..<100 where ask.asks == 0 { await Task.yield() }
+    #expect(ask.asks == 1)
+    #expect(await lock.setOn(true) == false)
+    #expect(ask.asks == 1)
+    ask.release()
+    #expect(await first.value)
+    #expect(lock.isOn && keeping.lockOn)
   }
 }
