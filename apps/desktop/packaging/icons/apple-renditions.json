@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "sourceSha256": "4305fba6397c2e2e30670ee3e2603d7a9e3a4c7cc6e74e48c315b1e4664be6d4",
+  "xcodeBuild": "17F113",
+  "sha256": {
+    "appleComposerRendition": "c0504749d4957882cb53060b91c74c825fc7813801e8177c05b74297f8a62319",
+    "appleComposerDarkRendition": "abe1c05e883f2491d4595d8a6c69266482d9532e08f3a85a18f6d496f2cc3f00",
+    "appleFallbackIcns": "ee034c7dc4c886a79787e3541b7e3e08e5a7848448eae41bd3775b1af2b1f488"
+  }
+}

@@ -6242,7 +6242,10 @@ size the SF Symbol had, and the swarm's CoreGraphics sprites are the Instrument 
 not an icon — the coin's marks (§2.8), the catalog's fixture stills (and the edge tray's notch and
 drawer, until HN-8 retired them, §8) — and, on the desk, two named exceptions: the bar's ONE path renderer for a kind's own drawing
 (R2; one component, allow-listed) and the peers' pointer arrow (R17; §8, peers on the mat).
-**Kept exact, outside this set:** the tray and app masters, the three vendor marks (AR-L1),
+**Kept exact, outside this set:** the tray and app masters (James's selected
+`vibefield-icon-collection-v2`, 2026-11-03, superseding the previous masters; reviewed
+source pixels and recipe in `apps/desktop/packaging/icon-source`, packaging mapping in
+`icon-collection.mjs`), the three vendor marks (AR-L1),
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
 other allowed file; a phone, wherever a surface marks one, wears the mark macOS wears, Apple's,
 since iOS's own is a word — James, DS-3: "do not use texts, use OS icons instead" — and no surface

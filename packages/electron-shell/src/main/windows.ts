@@ -17,6 +17,7 @@ export function createMainWindow(opts: {
   mode: ShellMode;
   preloadPath: string;
   show: boolean;
+  iconPath?: string | null;
   /** MV-3c — offscreen rendering, for a lab window that is never shown (the
    * Godview perf lab and capture, M31/M32); every other window leaves it unset */
   offscreen?: { deviceScaleFactor: number } | undefined;
@@ -30,6 +31,7 @@ export function createMainWindow(opts: {
     height: 780,
     show: opts.show,
     title: "VibeField",
+    ...(opts.iconPath ? { icon: opts.iconPath } : {}),
     // The pre-paint is `--vf-field-ground` (DESIGN.md §2.1, #04050F), the first face's ground (track FG); main
     // can't read CSS, so this is its named projection (FG-D25, UI_SYSTEM.md), held equal by wearing-the-mat.
     backgroundColor: "#04050f",

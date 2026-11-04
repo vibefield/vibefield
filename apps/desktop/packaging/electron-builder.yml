@@ -106,6 +106,8 @@ extraResources:
     to: bin
   - from: build/stage/tray
     to: tray
+  - from: build/stage/icons
+    to: icons
   - from: build/stage/plugins
     to: plugins
   # WP8b: the stage's public identity — the trust-root document, its signatures and release-identity.json
@@ -130,8 +132,8 @@ afterPack: packaging/after-pack.mjs
 
 # Apple platforms use the layered Icon Composer source; electron-builder 26 compiles it with
 # Xcode 26 actool into Assets.car (light, dark and tinted appearances) plus an ICNS fallback. The
-# other platform icons are generated deterministically from the same package's layers
-# (icons/README.md). Paths are explicit so builder defaults cannot silently select a stale
+# other platform icons are copied from the reviewed studio collection with its optical tuning
+# preserved (icons/README.md). Paths are explicit so builder defaults cannot silently select a stale
 # conventional filename.
 
 # The staged app declares no dependencies and ships no node_modules, so there is nothing to

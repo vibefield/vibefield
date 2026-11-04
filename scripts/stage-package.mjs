@@ -375,6 +375,13 @@ const PLAN = [
     from: "apps/desktop/packaging/tray",
     kind: "dir",
   },
+  ...["app.ico", "app-1024.png"].map((file) => ({
+    stage: `icons/${file}`,
+    from: `apps/desktop/packaging/icons/${file}`,
+    kind: "file",
+    mode: DATA_MODE,
+    produce: "pnpm --filter @vibefield/desktop icons:generate",
+  })),
 ];
 
 // ---- the produced outputs (WP8b) ----------------------------------------------
@@ -418,7 +425,7 @@ const runProducer = (command, extra = []) => {
 // missing, and it DROPS an empty one (the WP8 plan's addendum: no bundle examined before WP8 had a
 // Resources/plugins) — since WP8 the bundled root and identity/ are produced, so neither is empty by
 // construction. The tray is required and validated by the icon gate before staging.
-const STAGE_ROOTS = ["app", "bin", "tray", "plugins/bundled", "identity"];
+const STAGE_ROOTS = ["app", "bin", "tray", "icons", "plugins/bundled", "identity"];
 
 // ---- §7.3 "must never ship" ------------------------------------------------
 // package-census.mjs owns the canonical list; this is the same policy applied to STAGE-relative

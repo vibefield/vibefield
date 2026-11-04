@@ -107,6 +107,30 @@ describe("resolveDevelopmentResources", () => {
     ).toBe(join(RESOURCES, "bin", "desktop-haptics.node"));
   });
 
+  it("uses the reviewed window icon from explicit development and packaged resource paths", () => {
+    expect(dev.windowIconPath).toBeNull();
+    for (const [platform, file] of [
+      ["win32", "app.ico"],
+      ["linux", "app-1024.png"],
+    ] as const) {
+      expect(
+        resolveDevelopmentResources({ repoRoot: REPO, electronExecPath: ELECTRON, platform })
+          .windowIconPath,
+      ).toBe(join(REPO, "apps", "desktop", "packaging", "icons", file));
+      expect(
+        resolvePackagedResources({ resourcesPath: RESOURCES, electronExecPath: ELECTRON, platform })
+          .windowIconPath,
+      ).toBe(join(RESOURCES, "icons", file));
+    }
+    expect(
+      resolvePackagedResources({
+        resourcesPath: RESOURCES,
+        electronExecPath: ELECTRON,
+        platform: "darwin",
+      }).windowIconPath,
+    ).toBeNull();
+  });
+
   it("uses the cargo debug profile — legal here, forbidden in a package (EDP-13)", () => {
     expect(dev.fieldNativePath).toBe(join(REPO, "target", "debug", "field-native"));
   });
@@ -281,7 +305,9 @@ describe("resolvePackagedResources", () => {
       expect(set.macTemplate1x).toMatch(/Template\.png$/);
       expect(set.macTemplate2x).toMatch(/Template@2x\.png$/);
       expect(set.windowsIco.endsWith(".ico")).toBe(true);
+      expect(set.windowsDarkIco.endsWith("-dark.ico")).toBe(true);
       expect(set.linuxPng.endsWith(".png")).toBe(true);
+      expect(set.linuxDarkPng.endsWith("-dark.png")).toBe(true);
     }
     // distinct art per state — not one file reused four times
     const ones = new Set(
@@ -292,7 +318,9 @@ describe("resolvePackagedResources", () => {
       macTemplate1x: expect.stringMatching(/[\\/]fieldUpdateTemplate\.png$/),
       macTemplate2x: expect.stringMatching(/[\\/]fieldUpdateTemplate@2x\.png$/),
       windowsIco: expect.stringMatching(/[\\/]field-update\.ico$/),
+      windowsDarkIco: expect.stringMatching(/[\\/]field-update-dark\.ico$/),
       linuxPng: expect.stringMatching(/[\\/]field-linux-update\.png$/),
+      linuxDarkPng: expect.stringMatching(/[\\/]field-linux-update-dark\.png$/),
     });
   });
 });

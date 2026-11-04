@@ -18,6 +18,12 @@ connection, whole mesh through it), EL3/EL7 as ever.
 
 ## Layout
 
+The app icon is the reviewed `vibefield-icon-collection-v2` family (2026-11-03).
+`App/Assets.xcassets/AppIcon.appiconset` contains its default, dark, and grayscale tinted
+1024 px RGB exports. Both build configurations already select `AppIcon`. The desktop
+packaging icon generator installs and checks these exact files from the shared reviewed
+collection; see [icon sources and regeneration](../desktop/packaging/icons/README.md).
+
 | Path | What |
 |---|---|
 | `VibeField.xcodeproj` | thin composition shell — hand-authored pbxproj (synthetic IDs, the GhostteaApp convention; objectVersion 60 since Xcode touched it); no product code |

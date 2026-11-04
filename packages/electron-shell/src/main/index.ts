@@ -2184,7 +2184,12 @@ async function main(
   primaryWindowOpener = () =>
     registry.revealPrimary(() => {
       performance.mark("vf:shell:window-created");
-      const window = createMainWindow({ mode: MODE, preloadPath: PRELOAD_PATH, show: true });
+      const window = createMainWindow({
+        mode: MODE,
+        preloadPath: PRELOAD_PATH,
+        show: true,
+        iconPath: resources.windowIconPath,
+      });
       return {
         window,
         prepare: async () => {
