@@ -173,6 +173,24 @@ struct GodviewStillFlagTests {
     }
   }
 
+  /// D1 — `-vf-godview-dissolve=off`, the whole argument, is the one way to turn the dissolve off; a stage input
+  /// dissolves unless told (Release never reads the flag, so it always dissolves).
+  @MainActor
+  @Test func theDissolveFlagIsTheWholeArgument() {
+    let off = GodviewViewChoice.dissolves(["VibeField", "-vf-godview-dissolve=off"])
+    #expect(!off)
+    let others: [[String]] = [
+      [], ["-vf-godview-dissolve"], ["-vf-godview-dissolve=on"], ["-vf-godview-dissolve=offx"],
+      ["-vf-godview-dissolve=off "], ["-vf-godview-still"],
+    ]
+    for arguments in others {
+      let on = GodviewViewChoice.dissolves(arguments)
+      #expect(on, "\(arguments)")
+    }
+    let input = StageInputs.make(topInset: 108, bandHeight: 93)
+    #expect(input.dissolves)
+  }
+
   /// S10 — the latch's three flags compose: one argument list names the view, the clock and the still.
   @Test func theThreeFlagsCompose() {
     let arguments = [

@@ -25,6 +25,9 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   static let stillArgument = "-vf-godview-still"
   /// PG-4t — a still's name: the Stories row says this view's name and holds it, with no deadline.
   static let sayArgument = "-vf-godview-say"
+  /// PG-4t — a frame-meter run without the dissolve (DEBUG): the stage draws its view unmasked, so a meter reads a
+  /// frame's time with and without it on the same build.
+  static let dissolveOffArgument = "-vf-godview-dissolve=off"
 
   /// PG-4t — the registry's order (PV `monitor/registry.ts:28-34` at `52d09c8e`): the order the Stories row draws
   /// its circles in, whatever order the cases landed in.
@@ -59,6 +62,12 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   /// none. Matched with its `=`, as `launch` is.
   static func said(_ arguments: [String]) -> GodviewViewChoice? {
     value(of: sayArgument, in: arguments).flatMap(GodviewViewChoice.init(rawValue:))
+  }
+
+  /// PG-4t — whether the stage dissolves under the row: always, unless `-vf-godview-dissolve=off` is given, the
+  /// whole argument.
+  static func dissolves(_ arguments: [String]) -> Bool {
+    true
   }
 
   /// PG-4t — whether `-vf-godview-still` is given: the whole argument, so a longer flag is never this one.
@@ -112,6 +121,9 @@ struct GodviewStageInput {
   /// PG-4t — a still (`-vf-godview-still`, DEBUG; always false in Release): draw one frame, run no loop, no
   /// transition and no timer.
   var isStill: Bool
+  /// PG-4t — the stage dissolves under the row (always in Release; DEBUG's `-vf-godview-dissolve=off` turns it off for
+  /// a frame meter's run). Defaulted, so a view lane's input needs no new argument.
+  var dissolves: Bool = true
   /// A row tapped: the card on its body.
   var onOpen: @MainActor (RemoteFieldRow) -> Void
 
