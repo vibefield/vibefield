@@ -163,7 +163,7 @@ gobo plates are the product's assets; the engine ships the mat's law and its two
 | Token | Value | Use |
 |---|---|---|
 | `--vf-card` | `#1C1C1E` | the dark-elevated content surface (iOS) — both themes; no product wearer since HN-1 (2026-10-29): the clipboard's tiles and the capture's fly-in ghost retired with the left tray, and the catalog's Foundations swatch shows it until a token pass removes it, doc first. The hand's cards have their own stock (§5) |
-| `--vf-card-deep` | `#000000` | the deepest content surface: the terminal preview's miniature cards (Settings → Terminal) |
+| `--vf-card-deep` | `#000000` | the deepest content surface: the terminal preview's miniature cards (Settings → Terminal). The phone's spend view writes its moment tag's words in it at 92 %, ringed in the stage skin's `monitor-bg`, as the window's tag does through `--mv-spend-deep` (spend.css:234-235); the skin carries no such ink, so the constant lives in `Godview/Spend/SpendInks.swift` (`SpendInks.deep`) |
 | content surfaces | per object | committed gradients/colors are content, not theme; on the desk each kind draws its own (§5.1's materials). Kept as values: the weather `linear-gradient(135deg, #3A86FF 0%, #1D4ED8 55%, #0B2AB5 100%)`, which the catalog's weather card carries as its own content (`docs/UI_SYSTEM.md`), and the note's sticky `#F6E7A9` (`--vf-note-surface`) |
 | `--vf-fill` | light `#F2F2F7` · dark `#2C2C2E` | inset fills: segmented tracks, chip resting |
 | `--vf-fill-hover` | light `#E5E5EA` · dark `#2C2C2E` (opaque) | hover step of the above |
