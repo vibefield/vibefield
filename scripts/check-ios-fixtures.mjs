@@ -48,6 +48,7 @@ const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.la
 // PG-4s — the phone's Godview views (PG-5…8): the witness each view suite replays, the toolkit's golden, and one
 // golden per view, which its lane names here (ONE line; both uses below derive from it). FieldHomeTests reads them.
 const PHONE_GODVIEW = join(root, "packages/field-app/test/fixtures/phone-godview");
+// biome-ignore format: one golden per line, so each view lane's line merges keep-both
 const phoneViewGoldens = [
   // "phone-list.golden.json",
 ];
