@@ -30,7 +30,7 @@ public struct HomeRoot: View {
   }
 
   /// The app's lock: LocalAuthentication's ask, the settings in UserDefaults. A Debug run with `-vf-lock=<method>`
-  /// stamps the curtain after a miss, for its photograph (README).
+  /// stamps the lock for a photograph (README).
   private static func makeLock() -> FieldLock {
     #if DEBUG
       if let stamped = LockFixtures.stamped() { return stamped }
@@ -50,9 +50,11 @@ extension LockPhase {
 }
 
 #if DEBUG
-  /// `-vf-lock=<faceid|touchid|passcode>` (WI-3) — the lock on and every ask missed, on a phone with that method, so
-  /// a screenshot run photographs the curtain after a miss in each method's words. Its settings are kept in memory,
-  /// never in the phone's own, and it cannot run in Release.
+  /// `-vf-lock=<faceid|touchid|passcode>[-open]` (WI-3) — the lock on, on a phone with that method: every ask missed,
+  /// so a screenshot run photographs the curtain after a miss in each method's words; or, with `-open`, every ask
+  /// passed, so Settings › Lock can be photographed as it stands with the lock on (a simulator has no passcode, so
+  /// the real lock stands down there). Its settings are kept in memory, never in the phone's own, and it cannot run in
+  /// Release.
   @MainActor
   enum LockFixtures {
     static let argument = "-vf-lock="
@@ -60,19 +62,24 @@ extension LockPhase {
     static func stamped() -> FieldLock? {
       guard let value = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(argument) })?.dropFirst(argument.count)
       else { return nil }
+      let open = value.hasSuffix("-open")
       let method: LockMethod =
-        switch value {
+        switch open ? value.dropLast("-open".count) : value {
         case "touchid": .touchID
         case "passcode": .passcode
         default: .faceID
         }
-      return FieldLock(authenticator: Missed(method), keeping: Kept())
+      return FieldLock(authenticator: Stamped(method, answer: open ? .passed : .missed), keeping: Kept())
     }
 
-    final class Missed: LockAuthenticator {
+    final class Stamped: LockAuthenticator {
       let method: LockMethod
-      init(_ method: LockMethod) { self.method = method }
-      func ask(reason: String) async -> LockAnswer { .missed }
+      let answer: LockAnswer
+      init(_ method: LockMethod, answer: LockAnswer) {
+        self.method = method
+        self.answer = answer
+      }
+      func ask(reason: String) async -> LockAnswer { answer }
     }
 
     final class Kept: LockKeeping {
