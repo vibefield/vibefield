@@ -73,6 +73,8 @@ struct LockCurtain: UIViewRepresentable {
     private var window: UIWindow?
     private var host: UIHostingController<LockCurtainFace>?
     private var leaving: UIViewPropertyAnimator?
+    /// The state the face last stood in: a miss puts the way in's places on it, and VoiceOver is told.
+    private var shown: FieldLock.State?
 
     func apply(in scene: UIWindowScene?) {
       guard let curtain, let scene else { return }
@@ -90,10 +92,18 @@ struct LockCurtain: UIViewRepresentable {
     private func stand(_ face: LockCurtainFace, in scene: UIWindowScene) {
       leaving?.stopAnimation(true)
       leaving = nil
+      let missed = face.state == .missed && shown != .missed
+      shown = face.state
       if let host, let window {
         host.rootView = face
         window.alpha = 1
         window.isHidden = false
+        // the window was announced when it stood; a miss after iOS's ask brings the curtain its words and its
+        // Unlock, and VoiceOver's focus is nowhere (iOS's sheet had it): the screen changed, so say so, once the
+        // face has drawn them
+        if missed {
+          Task { @MainActor in UIAccessibility.post(notification: .screenChanged, argument: nil) }
+        }
         return
       }
       let window = UIWindow(windowScene: scene)
@@ -128,6 +138,7 @@ struct LockCurtain: UIViewRepresentable {
 
     func tearDown() {
       leaving = nil
+      shown = nil
       window?.isHidden = true
       window?.rootViewController = nil
       window = nil
