@@ -61,7 +61,60 @@ extension HomeFixture {
   /// The witness replayed: every step through the gap. A fault THROWS with its step's label (a trap would end every
   /// suite in the process); a run is never returned short.
   static func witnessSteps(now: String = HomeFixture.now) throws -> [WitnessStep] {
-    []
+    let open = try AgentRemoteMeshOpen(json: try json("agent-remote-mesh-open.witness"))
+    guard let list = try json("agent-remote-mesh-frames.witness").arrayValue else {
+      throw WitnessReplayFault(step: "frames", what: "agent-remote-mesh-frames.witness.json is not an array")
+    }
+    let frames = try list.map(AgentRemoteMeshFrame.init(json:))
+    let resync = try AgentRemoteMeshOpen(json: try json("agent-remote-mesh-open.resync"))
+
+    var copy = RemoteMeshCopy()
+    let opened = copy.open(open, now: now)
+    guard opened == .applied else { throw WitnessReplayFault(step: "open", what: "\(opened)") }
+    _ = copy.publish()
+    var steps = [WitnessStep(at: "open", frame: nil, gap: false, rows: copy.drawn())]
+
+    enum Delivery {
+      case frame(Int, AgentRemoteMeshFrame)
+      case resync
+    }
+    var deliveries: [Delivery] = []
+    for (index, frame) in frames.enumerated() {
+      deliveries.append(.frame(index, frame))
+      if index == resyncAfter { deliveries.append(.resync) }
+    }
+    for delivery in deliveries {
+      let at: String
+      let kind: String
+      let outcome: RemoteMeshCopy.Outcome
+      switch delivery {
+      case .frame(let index, let frame):
+        at = "\(index)"
+        kind = frameKind(frame)
+        outcome = copy.frame(frame, now: now)
+      case .resync:
+        at = "resync"
+        kind = "resync"
+        outcome = copy.open(resync, now: now)
+      }
+      if case .gap = outcome {
+        steps.append(WitnessStep(at: at, frame: kind, gap: true, rows: []))
+        return steps
+      }
+      guard outcome == .applied else { throw WitnessReplayFault(step: at, what: "\(outcome)") }
+      _ = copy.publish()
+      steps.append(WitnessStep(at: at, frame: kind, gap: false, rows: copy.drawn()))
+    }
+    throw WitnessReplayFault(step: "end", what: "the witness ran out with no gap after \(steps.count) steps")
+  }
+
+  /// PG's `frameKind`: a frame's kind is its case.
+  private static func frameKind(_ frame: AgentRemoteMeshFrame) -> String {
+    switch frame {
+    case .delta: "delta"
+    case .snapshot: "snapshot"
+    case .state: "state"
+    }
   }
 
   /// The replay could not go on: at which step, and what the copy answered.
