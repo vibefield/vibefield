@@ -36,8 +36,8 @@ enum TimelineWords {
   static let noLength = "–"
   /// The empty stage's words (`TimelineView.js:882`), upstream's verbatim on the phone too (fd's Q13: a puppeteer
   /// finding, not changed here).
-  static let noAgents = ""
-  static let noAgentsHint = ""
+  static let noAgents = "NO ACTIVE AGENTS"
+  static let noAgentsHint = "Launch an agent from a terminal pane."
 
   /// `spanWord`: a span's state as the readout words it — `blocked · <what it waits on>`, `reply unseen`, or the
   /// status.

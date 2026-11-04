@@ -72,6 +72,50 @@ struct TimelineInks: Equatable, Sendable {
     return "rgba(\(byte(colour.r)), \(byte(colour.g)), \(byte(colour.b)), \(fourPlaces(colour.a)))"
   }
 
+  /// `color-mix(in oklch, a <weight>, b)` for two opaque colours, as the stylesheet mixes a project's colour into a
+  /// body's ground and its words' ink (timeline.css:626-636, :771-773): OKLab by Björn Ottosson's matrices, lightness
+  /// and chroma mixed linearly, the hue along the shorter arc; a hue a grey cannot hold (chroma under 1e-6) is
+  /// powerless and takes the other's (CSS Color 4 §12.4); the result clipped into sRGB. Held by eye (the still pair):
+  /// no golden reaches the stylesheet.
+  static func mix(_ a: SwarmColor, _ b: SwarmColor, weight: Double) -> SwarmColor {
+    let (la, ca, ha) = oklch(a)
+    let (lb, cb, hb) = oklch(b)
+    let hueA = ca < 1e-6 ? hb : ha
+    let hueB = cb < 1e-6 ? ha : hb
+    var delta = hueB - hueA
+    if delta > .pi { delta -= 2 * .pi } else if delta < -.pi { delta += 2 * .pi }
+    let l = la * weight + lb * (1 - weight)
+    let c = ca * weight + cb * (1 - weight)
+    let h = hueA + delta * (1 - weight)
+    return srgb(l: l, a: c * cos(h), b: c * sin(h), alpha: a.a * weight + b.a * (1 - weight))
+  }
+
+  private static func oklch(_ colour: SwarmColor) -> (Double, Double, Double) {
+    func linear(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+    let (r, g, b) = (linear(colour.r), linear(colour.g), linear(colour.b))
+    let l = cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+    let m = cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+    let s = cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+    let lightness = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s
+    let labA = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
+    let labB = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+    return (lightness, (labA * labA + labB * labB).squareRoot(), atan2(labB, labA))
+  }
+
+  private static func srgb(l lightness: Double, a: Double, b: Double, alpha: Double) -> SwarmColor {
+    let l = pow(lightness + 0.3963377774 * a + 0.2158037573 * b, 3)
+    let m = pow(lightness - 0.1055613458 * a - 0.0638541728 * b, 3)
+    let s = pow(lightness - 0.0894841775 * a - 1.2914855480 * b, 3)
+    func gamma(_ c: Double) -> Double {
+      let clipped = max(0, min(1, c))
+      return clipped <= 0.0031308 ? clipped * 12.92 : 1.055 * pow(clipped, 1 / 2.4) - 0.055
+    }
+    return SwarmColor(
+      r: gamma(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+      g: gamma(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+      b: gamma(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s), a: alpha)
+  }
+
   /// `+value.toFixed(4)` as JavaScript prints it: the four-place decimal nearest the EXACT binary value, an exact tie
   /// the larger (`toFixed`), its trailing zeros dropped (`+` makes it a number again). A tie is exact only where the
   /// expansion ends at the fifth place's 5, which forty places show (as `tenths`, SwarmBodyModel.swift, reads
