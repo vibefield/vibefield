@@ -68,8 +68,9 @@
   `8828601ed`) and 84 (`68296443f`).
 - Next: **AO-7 (Get)** waits on James's puppeteer release with `installRecipe`. 0.3.0 (PUBLISHED 10-28 08:19Z, #48
   alone) does not carry it, read at its tag (`d0aa1224`), so AO-7 waits on a later release (0.3.x or 0.4.0; §3 item
-  3). AO-8: rosetta #23–#26 (RO-24…RO-27) shipped in 0.1.2 and are pinned at `3948bcf` (10-29);
-  their VibeField RPC/UI wiring remains follow-on work. Rosetta #27 (RO-28) and puppeteer #47 (PU-19) remain filed.
+  3). AO-8: rosetta #23–#26 (RO-24…RO-27) shipped in 0.1.2 (`3948bcf`, 10-29); their VibeField RPC/UI wiring
+  remains follow-on work. Rosetta #27 (RO-28) shipped in 0.1.3 (`8e8f496`, EL8 11-04) and History titles its
+  disconnected face with it; the line under the title is still fieldd's sentence. Puppeteer #47 (PU-19) remains filed.
 - Owed: the desk rows (`pnpm smoke`, `smoke:studio`, `smoke:godview` on a display); the first-run spike (`thinking-agent-onboarding.md` §9).
 
 **FG — the first run on the field** · vibe-field-a5 (lane `fg/build`) · law `draft/thinking-first-run-glass.md` §7, DESIGN.md §2.1/§5/§6/§8/§13 (page sources `draft/first-run-glass/`)
@@ -912,7 +913,7 @@
 | ghosttea | 0.13.7 on cargo (`=0.13.7`), npm and Swift | `5ba36785b`; no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
 | ICE | `@vibecook/ice` 0.16.0 exact (overrides row) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | EL8 |
 | puppeteer | `@vibefield/puppeteer-*` 0.3.0 exact (tag v0.3.0 = `d0aa1224`) | the EL8 `1469639a6` (10-28; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
-| rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.2 exact · rosettad built from `../rosetta-pin` at `3948bcf` | EL8 10-29; matching npm and daemon releases; adopting daemon archives remains RD-D7 |
+| rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.3 exact · rosettad built from `../rosetta-pin` at `8e8f496` (protocol and store schema 29) | EL8 11-04 (0.1.2 at `3948bcf`, 10-29); matching npm and daemon releases; adopting daemon archives remains RD-D7 |
 | mille | `link:../mille-pin` at `c8160d5` (`@vibecook/mille`, `mille-ui`) | FS-1b; no release past v0.3.4; exit RD-6 |
 | rustc | 1.99.1 (`rust-toolchain.toml`) | EL8 |
 
@@ -926,7 +927,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
   James says) · T13, the one T row for T7's route-name pinning (Q22; owed, not drafted); T7's other follow-ups (the per-direction idle reap, a held
   route id's refusal, loopback pages) are recorded as accepted.
 - **rosetta:** RO-24…RO-27 (#23–#26) shipped in 0.1.2; VibeField RPC/UI adoption remains follow-on work. RO-28 (#27,
-  AO-8) remains filed, with RO-8 (retire/forget a runtime), RO-11 (`/ws/meta`'s removal event and resumable stamp,
+  AO-8) shipped in 0.1.3 and is adopted (the face's titles). Still filed: RO-8 (retire/forget a runtime), RO-11 (`/ws/meta`'s removal event and resumable stamp,
   DS-6's follower's ask; DS-7 landed without it, the follower still diffs snapshots), RO-17…RO-23, and RO-10's
   follow-ups. RO-4's remainder is adopting the released daemon archives (RD-D7). RO-31 (a copy port in rosetta's room;
   History's Copy waits on it, HN-5).

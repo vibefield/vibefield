@@ -735,16 +735,13 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
         30_000,
       );
 
-      // the member rosetta's room opens: an optimized WebP and its four
-      // renditions, on rosettad's own content-addressed route
-      expect(asset.media_type).toBe("image/webp");
-      expect(asset.url).toBe(`/api/assets/${asset.digest}.webp`);
-      expect(Object.keys(asset.image_variants ?? {}).sort()).toEqual([
-        "preview",
-        "rail",
-        "tile",
-        "tile2x",
-      ]);
+      // the member rosetta's room opens, on rosettad's own content-addressed
+      // route: since rosetta 0.1.3 the recorded original, stored once, with no
+      // rendition map — each rendition is the daemon's WebP, made on demand
+      // (`?image=<variant>&v=1`, rosetta 1301bdb)
+      expect(asset.media_type).toBe("image/png");
+      expect(asset.url).toBe(`/api/assets/${asset.digest}.png`);
+      expect(asset.image_variants ?? null).toBeNull();
       // D1: the room's gate is answered — it was null, so the room asked for no
       // rendition and said "Image data was not recorded"
       expect(ports.assets.attachmentAssetUrl(asset)).toBe(asset.url);
@@ -752,6 +749,8 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
         expect(await ports.assets.imageAssetUrl(asset, variant)).toMatch(/^blob:hxs\/\d+$/);
       }
       expect(blobs).toHaveLength(2);
+      // and each object URL says WebP, what the bytes are — never the PNG the
+      // timeline recorded
       for (const blob of blobs) {
         const bytes = new Uint8Array(await blob.arrayBuffer());
         expect(blob.type).toBe("image/webp");

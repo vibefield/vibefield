@@ -38,7 +38,7 @@ export const HISTORY_STATES = [
 ] as const;
 export type HistoryState = (typeof HISTORY_STATES)[number];
 
-/** The words the frame says under "rosettad is not answering" in the
+/** The words the frame says under "History isn't answering" in the
  * unavailable plate — fieldd's own UNAVAILABLE message for an index that is
  * coming up, as `history/doors.ts` says it. */
 export const FIXTURE_UNAVAILABLE_WORDS = "The agent index is starting";

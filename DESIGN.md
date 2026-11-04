@@ -4817,7 +4817,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     answer keeps the room's own **"rosettad is not answering"** (or "Connecting to rosettad") with
     fieldd's own words under it — "The agent index is starting", "The agent index is failed: …",
     "The history catalog has not read the index yet (connecting)", "Fieldd is not answering
-    (reconnecting)" — never a blank. **An index that has FAILED carries its act** (fix7,
+    (reconnecting)" — never a blank. *Amended 2026-11-03 (the rosetta 0.1.3 integration; RO-28,
+    rosetta#27, lets the host title the face):* the titles are VibeField's — **"History isn't
+    answering"**, and **"Opening History…"** while the index is still being reached (the words the
+    chunk's own face says before it, so History's open reads as one state); the transcript reader's
+    closed face says the same title. fieldd's sentences under them are unchanged and still owed
+    their person's terms (below). **An index that has FAILED carries its act** (fix7,
     2026-10-14 — until then the failed sentence named "the restart affordance" and no window
     offered one): under the room's words, centred in the room's box and 48 above the reserve, the
     frame's own band — **Restart the index** (`UiButton`, primary), then what it did in the line's
@@ -5774,6 +5779,9 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - Two wait on their libraries:
   - History's not-answering title is rosetta's room's own ("rosettad is not answering"), and the host only words
     the line under it. "History isn't answering. VibeField is restarting it." is a rosetta petition (AO-8).
+    *Corrected 2026-11-03:* rosetta 0.1.3 carries the petition (RO-28, rosetta#27: `unavailableTitle`,
+    `connectingTitle`), and the integration branch passes "History isn't answering"; the line under it is
+    still fieldd's sentence.
   - The launcher's refusal carries a reason and no act in puppeteer's views, so "Sign in to Codex in Work…" rides
     AO-7's puppeteer release.
 - A words slice diffs its built words against the page's §10 states table before its packet (the lane's

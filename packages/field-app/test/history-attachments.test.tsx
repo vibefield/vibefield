@@ -6,10 +6,12 @@
  * recorded image read "Image data was not recorded". Here the shipping
  * composition — `HistoryRoomView` with VibeField's asset source
  * (`assetSourceOver`) over rosetta's own client — draws the room's demo
- * session, whose first prompt carries two optimized images: each tile is an
- * `<img>` on an object URL made from bytes read with the session's grant, and
- * the "not recorded" words are nowhere. (The bytes from a real rosettad under a
- * real grant: `history-witness.test.ts`, its synthesized home's D1 row.)
+ * session, whose first prompt carries two images: each tile is an `<img>` on
+ * an object URL made from bytes read with the session's grant, and the "not
+ * recorded" words are nowhere. (The bytes from a real rosettad under a real
+ * grant: `history-witness.test.ts`, its synthesized home's D1 row.) *Rosetta
+ * 0.1.3:* the demo's prompt holds a legacy WebP bundle beside a recorded
+ * original, which is asked by recipe and answered WebP (rosetta 1301bdb).
  */
 import { PROTOCOL_VERSION, RosettaClient } from "@vibefield/rosetta-protocol";
 import { createDemoPorts, createRoomDemo } from "@vibefield/rosetta-room/fixtures";
@@ -84,11 +86,14 @@ describe("History draws a recorded image (D1)", () => {
       baseUrl: "http://127.0.0.1:47000",
       credential: { kind: "grant", grant: "g1" },
       fetchFn: (async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(String(input));
         reads.push({
-          path: new URL(String(input)).pathname,
+          path: `${url.pathname}${url.search}`,
           authorization: new Headers(init?.headers).get("authorization"),
         });
-        return new Response(new Uint8Array([0x52, 0x49, 0x46, 0x46]), {
+        // what rosettad answers a member or a recipe with: WebP
+        const webp = [0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50];
+        return new Response(new Uint8Array(webp), {
           status: 200,
           headers: { "x-rosetta-protocol-version": String(PROTOCOL_VERSION) },
         });
@@ -136,12 +141,14 @@ describe("History draws a recorded image (D1)", () => {
     for (const tile of tiles) {
       expect(tile.querySelector("img")?.getAttribute("src")).toMatch(/^blob:history\/\d+$/);
     }
-    // each tile's rendition, read from rosettad's own route with the grant
+    // each tile's rendition, read from rosettad's own route with the grant: a
+    // bundle's member as itself, the recorded original by recipe
     expect(reads.length).toBeGreaterThanOrEqual(2);
     for (const read of reads) {
-      expect(read.path).toMatch(/^\/api\/assets\/[0-9a-f]{64}\.webp$/);
+      expect(read.path).toMatch(/^\/api\/assets\/[0-9a-f]{64}(\.webp|\.png\?image=[a-z0-9]+&v=1)$/);
       expect(read.authorization).toBe("Rosetta-Grant g1");
     }
+    expect(reads.some((read) => read.path.includes(".png?image="))).toBe(true);
     expect(blobs.every((blob) => blob.type === "image/webp")).toBe(true);
   }, 15_000);
 });

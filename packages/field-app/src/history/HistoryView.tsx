@@ -8,7 +8,7 @@ import {
   ProjectGetResult,
 } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
-import type { RoomSelection, RoomTarget } from "@vibefield/rosetta-room";
+import type { HistoryRoomHandle, RoomSelection, RoomTarget } from "@vibefield/rosetta-room";
 import {
   type ReactElement,
   useCallback,
@@ -471,9 +471,15 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     [ports],
   );
   const [keys] = useState(() => viewKeysOf(getHost().platform));
+  // The room's handle, kept here so the consent slot's grant can ask the
+  // room's status at once (rosetta 0.1.3's `refreshStatus`, ux:X7) rather
+  // than at the consent pause's next poll.
+  const room = useRef<HistoryRoomHandle | null>(null);
+  const onGranted = useCallback(() => room.current?.refreshStatus(), []);
 
   return (
     <HistoryRoomMount
+      roomRef={room}
       ports={ports}
       unavailable={words}
       act={
@@ -483,7 +489,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
           <HistoryNewAgentPast />
         </>
       }
-      consent={<HistoryConsent />}
+      consent={<HistoryConsent onGranted={onGranted} />}
       onSelect={setSelection}
       openAt={openAt}
       keys={keys}
