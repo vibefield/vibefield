@@ -17,11 +17,41 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
 
   static let argument = "-vf-godview-view"
   static let nowArgument = "-vf-godview-now"
+  /// PG-4t — a still: every view draws one frame and runs no loop, no transition and no timer.
+  static let stillArgument = "-vf-godview-still"
+
+  /// PG-4t — the registry's order (PV `monitor/registry.ts:28-34` at `52d09c8e`): the order the Stories row draws
+  /// its circles in, whatever order the cases landed in.
+  static let registryOrder = ["swarm", "list", "rain", "timeline", "spend"]
+
+  /// PG-4t — the ids given, in the registry's order; an id the registry does not name is dropped.
+  static func ordered(_ ids: Set<String>) -> [String] {
+    []  // PG-4t (red): the skeleton
+  }
+
+  /// PG-4t — the views the Stories row draws: every case the phone has, in the registry's order, and nothing else
+  /// (VF-PM, 2026-11-04: never a placeholder; one ringed circle while only the swarm exists).
+  static var shown: [GodviewViewChoice] {
+    []  // PG-4t (red): the skeleton
+  }
+
+  /// PG-4t (J-S3, drop) — whether the scanlines and the vignette stand over this view: over the swarm only, never
+  /// another view (the desktop paints them over every view, `GodviewStage.tsx:178-179`; the phone differs on purpose).
+  var wearsAtmosphere: Bool { self == .swarm }
+
+  /// PG-4t — the stage this view takes, as its manifest asks (puppeteer-view-sdk `stageAllocation`): the swarm's
+  /// alone is `'full'`, so it runs under the bar's band; every other view's stage ends at the band.
+  var allocation: GodviewStageAllocation { self == .swarm ? .full : .flow }
 
   /// The first `-vf-godview-view=<id>`: its view, or nil when it is absent or names none (the caller keeps `.swarm`,
   /// the desktop's own fallback, `monitorViewFor`). Matched with its `=`, so a longer flag never parses as this one.
   static func launch(_ arguments: [String]) -> GodviewViewChoice? {
     value(of: argument, in: arguments).flatMap(GodviewViewChoice.init(rawValue:))
+  }
+
+  /// PG-4t — whether `-vf-godview-still` is given: the whole argument, so a longer flag is never this one.
+  static func still(_ arguments: [String]) -> Bool {
+    false  // PG-4t (red): the skeleton
   }
 
   /// The first `-vf-godview-now=<epoch ms>` (Q-S5 (a)): the frozen clock a still is taken at, or nil (the live
@@ -60,8 +90,25 @@ struct GodviewStageInput {
   /// The bar's band, the view's bottom inset (`AppBar.band(homeInset:)`; DESIGN.md "Stage insets replace host
   /// padding rules").
   var bandHeight: CGFloat
+  /// PG-4t — the Stories row's reserve, the stage's TOP inset, from the screen's top (the stage is full-bleed, so
+  /// stage space is screen space; `GodviewStories.reserve(safeTop:)`, 108 on an island phone). DATA, never host
+  /// padding (DESIGN.md "Stage insets replace host padding rules"): a view of words and controls keeps them below it;
+  /// a picture paints its whole stage and keeps its own words below it.
+  var topInset: CGFloat
+  /// PG-4t — the monitor skin, resolved for the phone's look (DESIGN.md §8 "The monitor view owns its drawing").
+  var skin: GodviewSkin
+  /// PG-4t — a still (`-vf-godview-still`, DEBUG; always false in Release): draw one frame, run no loop, no
+  /// transition and no timer.
+  var isStill: Bool
   /// A row tapped: the card on its body.
   var onOpen: @MainActor (RemoteFieldRow) -> Void
+
+  /// PG-4t — the stage's chrome as insets inside a view of this allocation's stage: the reserve at the top always;
+  /// the bar's band at the bottom only inside a `.full` stage, which runs under the bar (a `.flow` stage ends at the
+  /// band, where `framed` ends it). The pure helper a word view reads; nothing pads by it but the view itself.
+  func insets(_ allocation: GodviewStageAllocation) -> EdgeInsets {
+    EdgeInsets()  // PG-4t (red): the skeleton
+  }
 
   /// The open card's row: the drawn row whose VISUAL id is the card's subject (`selection.id`), by its model id.
   nonisolated static func activeId(rows: [RemoteFieldRow], cardSubject: String?) -> String? {
@@ -81,6 +128,32 @@ struct GodviewStageInput {
   /// The model ids the swarm draws unread (S2): `Set(bubbles.filter(\.unread).compactMap(\.modelId))`.
   nonisolated static func unreadIds(bubbles: [FieldBubble]) -> Set<String> {
     Set(bubbles.filter { $0.unread }.compactMap { $0.modelId })
+  }
+}
+
+/// PG-4t — the stage a view takes (puppeteer-view-sdk's `stageAllocation`, mirrored from the manifests): on the
+/// desktop it decides the stage's BOTTOM, the field wall (`GodviewMonitor.tsx:585-591`); every stage runs to the top.
+enum GodviewStageAllocation: Sendable {
+  /// The stage ends at the bar's band: list, rain, timeline, spend.
+  case flow
+  /// The stage runs under the bar, the band an obstacle: the swarm's alone (`stageAllocation: 'full'`).
+  case full
+}
+
+/// PG-4t — the dissolve over the stage (DESIGN.md §8 "The phone's Stories row"): a mask, clear down to the row's
+/// axis and whole from the reserve, laid in the stage's own frame, whatever the view. Built from frames, so it needs
+/// no geometry reader.
+struct GodviewDissolve: View {
+  let topInset: CGFloat
+
+  var body: some View {
+    let fade = GodviewStories.dissolve(topInset: topInset)
+    VStack(spacing: 0) {
+      Color.clear.frame(height: fade.from)
+      LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+        .frame(height: fade.to - fade.from)
+      Color.black
+    }
   }
 }
 

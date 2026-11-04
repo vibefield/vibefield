@@ -60,6 +60,8 @@ public struct HomeScreen: View {
   /// Release draws the swarm on the live clock until the selector lands (its lander writes `godviewView`).
   @State private var godviewView: GodviewViewChoice = .swarm
   @State private var godviewNow: Date?
+  /// PG-4t — a still (`-vf-godview-still`): written only by the same DEBUG launch latch, so Release never draws one.
+  @State private var godviewStill = false
   /// The launch flags are read once (the design check's N10): the DEBUG block runs again on every return to the
   /// view, and a second read would undo the selector's pick in a DEBUG run launched with the flag.
   @State private var godviewLaunchRead = false
@@ -125,6 +127,9 @@ public struct HomeScreen: View {
   /// rests where iOS 26 rests its own (`AppBar.bottomGap`), and rides the
   /// keyboard only while search is typing.
   @State private var homeInset: CGFloat = 34
+  /// PG-4t — the safe area's top line, read beside `homeInset`: where the Stories row stands and how deep the stage's
+  /// reserve is (`GodviewStories`). 62 is the iPhone 17's, the bar's measured phone, until the first read.
+  @State private var safeTop: CGFloat = 62
   /// The bottom inset WITH the keyboard. Above the home inset only while a
   /// software keyboard stands — a hardware keyboard (the simulator with the
   /// Mac's attached, an iPad's) raises none, and the row must stay at rest.
@@ -383,6 +388,9 @@ public struct HomeScreen: View {
       colour: { GodviewStageInput.colour(of: $0, projects: projects, tint: tint) },
       now: { frozen ?? Date() },
       bandHeight: AppBar.band(homeInset: homeInset),
+      topInset: GodviewStories.reserve(safeTop: safeTop),
+      skin: GodviewSkin(scheme: colorScheme),
+      isStill: godviewStill,
       onOpen: { row in
         if let bubble = bubbles.first(where: { $0.id == row.visualId }) { openCard(on: bubble) }
       })
@@ -665,8 +673,12 @@ public struct HomeScreen: View {
     .background {
       GeometryReader { geo in
         Color.clear
-          .onAppear { homeInset = geo.safeAreaInsets.bottom }
+          .onAppear {
+            homeInset = geo.safeAreaInsets.bottom
+            safeTop = geo.safeAreaInsets.top
+          }
           .onChange(of: geo.safeAreaInsets.bottom) { _, inset in homeInset = inset }
+          .onChange(of: geo.safeAreaInsets.top) { _, inset in safeTop = inset }
       }
       .ignoresSafeArea(.keyboard)
     }
