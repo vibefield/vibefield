@@ -48,7 +48,7 @@ struct ListView: View {
     }
     .background(skin.monitorBg)
     .accessibilityElement(children: .contain)
-    .accessibilityLabel("Running agent list")
+    .accessibilityLabel(ListModel.listLabel)
   }
 
   /// The toolbar: the count alone (deviation 1: no `＋ TERMINAL`), at the button's height.

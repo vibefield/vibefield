@@ -73,6 +73,8 @@ struct ListModel: Equatable {
   /// In the order drawn.
   let rows: [ListRowModel]
 
+  /// The list's name for a screen reader (AgentList.tsx:81).
+  static let listLabel = "Running agent list"
   /// The empty state's two lines (AgentList.tsx:116-119), drawn when there are no rows.
   static let emptyTitle = "NO ACTIVE AGENTS"
   static let emptyHint = "Launch an agent from a terminal pane."

@@ -66,6 +66,23 @@ struct ListViewTests {
 
   static func px(_ value: Double) -> String { "\(Int(value))px" }
 
+  /// The desktop's empty hint (AgentList.tsx:118), as a golden records it; the phone's names no pane (H12).
+  static let desktopEmptyHint = "Launch an agent from a terminal pane."
+
+  /// What a phone view never says (fd's words rule): a key, hover or a pane, by word or by symbol.
+  static let neverOnThePhone: Set<String> = [
+    "pane", "panes", "hover", "hovers", "hovered", "hovering", "key", "keys", "keyboard", "shortcut",
+    "shortcuts", "return", "enter", "esc", "escape", "tab", "end", "arrow", "arrows", "press", "click",
+  ]
+  static let keySymbols = "⌘⌥⇧⌃⏎↩↑↓←→"
+
+  /// The words and symbols of `text` that `neverOnThePhone` or `keySymbols` name.
+  static func named(_ text: String) -> [String] {
+    let words = text.lowercased().split { !$0.isLetter }.map(String.init).filter { neverOnThePhone.contains($0) }
+    let symbols = text.filter { keySymbols.contains($0) }.map(String.init)
+    return words + symbols
+  }
+
   /// One drawn step against the golden's.
   static func compare(_ model: ListModel, _ recorded: JSONValue, at: String) {
     let section = recorded["section"]
@@ -85,7 +102,7 @@ struct ListViewTests {
       let title = empty?["title"]?.stringValue
       let hint = empty?["hint"]?.stringValue
       #expect(title == ListModel.emptyTitle, "step \(at)")
-      #expect(hint == ListModel.emptyHint, "step \(at)")
+      #expect(hint == Self.desktopEmptyHint, "step \(at): the desktop's hint, recorded (the phone's drops the pane)")
     } else {
       let none = empty?.isNull
       #expect(none == true, "step \(at): no empty state while rows stand")
@@ -354,6 +371,35 @@ struct ListViewTests {
     #expect(ListModel.drawsNewTerminal == false)
   }
 
+  /// H12 — fd's words rule for every PG view: on the phone a view's words, its accessibility labels and titles
+  /// among them, never name a key, hover or a pane (the phone's one pane is the open card, D-i12). Every word the
+  /// list says: its name, the empty state, and at every witness step the count and each row's words and label. The
+  /// desktop's empty hint names "a terminal pane"; the phone's drops the pane (deviation 5). The desktop's row
+  /// label (AgentList.tsx:168-170) and the toolkit's words name none of these.
+  @Test func thePhonesWordsNameNoKeyHoverOrPane() throws {
+    var said = [ListModel.listLabel, ListModel.emptyTitle, ListModel.emptyHint]
+    var rowsSaid = 0
+    let steps = try HomeFixture.witnessSteps()
+    for step in steps where !step.gap {
+      let model = ListModel.of(ListModel.inputs(rows: step.rows, activeId: nil, fieldIsLive: true))
+      said.append(model.count)
+      for row in model.rows {
+        rowsSaid += 1
+        said += [row.project, row.branch ?? "", row.detail, row.context, row.label]
+        switch row.agent {
+        case .agent(_, let modelWord, let account): said += [modelWord, account ?? ""]
+        case .host(let host): said.append(host)
+        case .terminal(let word): said.append(word)
+        }
+      }
+    }
+    #expect(rowsSaid > 0, "the witness's rows were read")
+    for text in said {
+      let named = Self.named(text)
+      #expect(named.isEmpty, "\"\(text)\" names \(named)")
+    }
+  }
+
   // MARK: - The empty list, the refused row, self and peer, the lifetime
 
   /// E1 — no rows: the empty state's two lines (`AgentList.tsx:116-119`), `0 SESSIONS`, nothing drawn. The mock fleet
@@ -364,7 +410,7 @@ struct ListViewTests {
     #expect(empty.count == "0 SESSIONS")
     #expect(empty.allReceded == false)
     #expect(ListModel.emptyTitle == "NO ACTIVE AGENTS")
-    #expect(ListModel.emptyHint == "Launch an agent from a terminal pane.")
+    #expect(ListModel.emptyHint == "Launch an agent from a terminal.", "the phone's hint drops the pane (H12)")
   }
 
   /// E2 — a row the cut refuses (a status this build does not know) never reaches the list: it draws the rest, and
