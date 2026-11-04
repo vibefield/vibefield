@@ -146,8 +146,8 @@
   "FG-4b", "FG-5", "FG-6", "FG-6's follow-up slice", "FG-6's follow-up 2 and class C", "FG-6c", "FG-O2",
   "FG-O2's judge", "FG-O2's judge, its fix", "FG-6's catalog", "FG-6's frozen frame", "FG-6's follow-up 3",
   "FG, the catalog judged", "FG, the catalog judged's follow-up 1").
-- Next: none built; on VF-PM's word: the glass's literals (item 136), James's product question (the living logo off the
-  held frame) and his eye list (Owed).
+- Next: none built; on VF-PM's word: James's product question (the living logo off the held frame) and his eye list
+  (Owed). The glass's literals, item 136, landed 2026-11-04 (`cc8894c46`, M117, run 117; LANDED "Item 136").
 - Owed: James's eye list from row 32: Agents with nine installed (PU-L, drafted, would bring nine into the walk),
   History with six rows, Profiles' five cards, and a login opened from This Mac's row (not walked: its Cancel comes
   into view on the fade's top at zero margin; a margin of 10 like the add's, or the slot's `nearest` on the add's
@@ -170,14 +170,15 @@
   wears it until that is ruled.
   The catalog judged's two seams are VF-PM's rulings at a5's leans (02:17Z: row
   32's fourth walk on an in-memory partition, the frame at FG-L2's 736), James's to overturn; its ramp is James's word
-  (02:26:44Z). Owed with it: item 136 (the glass's own literals, a placeholder's witness with them), the iOS kit's
-  ChromePalette ramp, and the walk window's one `desktop.security.unregistered_webcontents` log. Row 32's red at run69b
+  (02:26:44Z). Owed with it: the iOS kit's ChromePalette ramp and the walk window's one
+  `desktop.security.unregistered_webcontents` log; item 136 landed 11-04 (LANDED "Item 136"). Row 32's red at run69b
   was the class of the catalog judged's follow-up 1 (VF-PM 03:00Z), answered at run72b: 02 field (saving) with no word
   short by day or by night, the deck's two head words passed over as off at 6.5–6.6:1 by day and 6.6–7.1:1 by night. Its
   two calls are VF-PM's rulings at a5's lean (03:00Z: the off group says so, §7's Off row; 03:01Z: the off deck's words
   at t4, measured), James's to overturn. Owed with it: each off control's own dim onto §7's Off row, their words printed
-  and none judged (at run72b, 24 words at 2.3–7.1:1, 2 under §2.4's 3:1 on A6 users (opening)); a segmented control's
-  off state (FacePicker's frame switch, latent); and item 136.
+  and none judged (at run72b, 24 words at 2.3–7.1:1, 2 under §2.4's 3:1 on A6 users (opening)); and a segmented
+  control's off state (FacePicker's frame switch, latent). Item 136 landed 11-04 (LANDED "Item 136"); owed with it:
+  row 32's judge on its inks (the stills move by its deltas; an off field's 3:1), and James's veto on the deltas.
 
 **AL — what Quit means** · better-quit (lanes `al2`, `al/chords`, `al/chords-2`) · law `draft/thinking-app-lifecycle.md` v0.2 §8, ESR §7.3 (amended), design-00 EL1
 - Landed: AL-1…AL-3 (`7ebb1eeda` · `5eea4b2d5` · `697beb199`; AL-4 folded in), AL-5, AL-7, AL-8a, **AL-9** (`933d2fba3`,
@@ -562,6 +563,8 @@
   items 164 and 165 (the burn rate and the token counts print JavaScript's digits through FieldAgents' `JSNumber`:
   no trap at 2^63, ∞ or NaN, and a tie the window's way: `84482a1fe` as M114, a fast-forward over the icon studio's
   lint fix `78ef3515a`, run 114; LANDED "Items 164 and 165" and "The icon studio, biome-clean") ·
+  item 136 (the Setup Assistant's actions, fields and headlines wear tokens, its one placeholder at 4.5:1 or more:
+  `cc8894c46` as M117, a fast-forward, run 117; LANDED "Item 136") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).

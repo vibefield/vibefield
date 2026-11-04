@@ -26331,6 +26331,10 @@ Checks), in the commits' own order:
   tokens, the name field's placeholder (`views/field.tsx`, black and white at 30%, about 1.9:1 by day) and
   `primaryCls`'s and `quietCls`'s fills (`wizard-ui.tsx`), projected through tokens.css, DESIGN.md first; a placeholder
   needs a witness of its own, since no walk reads one (a `::placeholder` is no text node).
+  > **Errata (2026-11-04, item 136; the fixer):** "the name field's placeholder (`views/field.tsx`, black and
+  > white at 30%, about 1.9:1 by day)" was false. The name field never carried a placeholder attribute, so its
+  > `placeholder:text-black/30` styled nothing. The wizard's one placeholder is the Tailscale key's, which carried
+  > no colour. Corrected at DESIGN.md §8 and by item 136 (LANDED "Item 136").
 - The iOS kit's ChromePalette ramp: its `inkFaint` carries words that are read, an IOS slice's, on §2.4's law.
 - The walk window's one `desktop.security.unregistered_webcontents` log: whether main registers a smoke window or its
   backstop names one as a smoke's, owed and not built.
@@ -26577,6 +26581,10 @@ rebased onto main `be1a21ec0` unchanged, its range-diff `=`; Checks):
 - Item 136, the wizard's own Tailwind literals outside the tokens: the name field's placeholder (`views/field.tsx`,
   about 1.9:1 by day) and its `disabled:opacity-45` while saving, and `primaryCls`'s and `quietCls`'s fills
   (`wizard-ui.tsx`), projected through tokens.css, DESIGN.md first; a placeholder needs a witness of its own.
+  > **Errata (2026-11-04, item 136; the fixer):** "the name field's placeholder (`views/field.tsx`, about 1.9:1
+  > by day)" was false. The name field never carried a placeholder attribute, so its
+  > `placeholder:text-black/30` styled nothing. The wizard's one placeholder is the Tailscale key's, which carried
+  > no colour. Corrected at DESIGN.md §8 and by item 136 (LANDED "Item 136").
 - James's look: the slice's two calls are VF-PM's rulings at a5's lean (03:00Z: the fix in the markup, §7's Off row;
   03:01Z: the off deck's words at t4, measured), James's to overturn. His product question stands, named and not built:
   whether the browser's glass wears the field's living mark anywhere but the held frame (a failed pass's glass, its
@@ -30143,3 +30151,81 @@ row (fold 4). 4/4's message stands as written; fold 4's message is its correctio
 - James's word on the draft words (DESIGN.md §9's as-built note): the Touch ID swap, the passcode-only set, the
   ask's reason, and **Require passcode**. Any change is one commit across DESIGN.md §9, `LockWords.swift` and
   LockWordsTests.
+
+## Item 136 — the Setup Assistant's actions, fields and headlines wear tokens: no colour of its own, and its one placeholder at 4.5:1 or more by day and by night (2026-11-04; `359711aba` → `cc8894c46`, two commits on main `f6fb1fa06`, cut as `2091c9bc6` → `dcb70bf7c` on `571bec4c8` and re-stacked once with its patches unchanged, lane `fix/item136` in `/Volumes/SamsungRed/lanes/item136`, in the mini's mint M117 `cc8894c46`, stacked, run 117)
+
+**What it rests on.** "FG, the catalog judged" closed item 127 on the ramp and named its remainder item 136: the
+wizard's own Tailwind literals outside the tokens, `primaryCls`'s and `quietCls`'s fills and the name field's
+placeholder, projected through the tokens, DESIGN.md first, a placeholder with a witness of its own since no walk
+reads one. "FG, the catalog judged's follow-up 1" carried it as owed. VF-PM gave it to the fixer, GO 01:57Z.
+- *A falsified claim, corrected at its source:* the name field shows no placeholder. Its input never carried one, so
+  its `placeholder:text-black/30` (2.1:1 on white) styled nothing. The chapter's one placeholder is the Tailscale
+  key's ("tskey-auth-…", Connect), which wore the browser's default ink. DESIGN.md §8's line naming it (:3652) now
+  carries the dated correction. The two ledger lines that repeat it ("about 1.9:1 by day", in both entries above)
+  each carry a dated erratum of their own (2026-11-04).
+
+**What** (8 files, +201 −7: field-app and DESIGN.md; tokens.css untouched, no token added or moved):
+- **DESIGN.md first** (§8 "The Setup Assistant's glass"): that correction, and a dated paragraph closing the entry,
+  "Its actions, fields and headlines wear tokens". The primary is §8's inverted solid (`--vf-foreground` with
+  `--vf-foreground-inverse`), the kit's own primary. The quiet action stands on the foreground at 5%, 10% on hover
+  (by night 10% and 15%), its words at t1. A field is a control's face (`--vf-chrome-solid`, by night
+  `--vf-field-surface`), edged in `--vf-hairline-strong`, its words at t1, its focus the foreground at 25% with a
+  ring at 5% (7% by night), and off at 0.45 while it saves, as the kit's field. Its placeholder wears t3. The
+  headlines are `--vf-foreground`.
+- **The red** (`359711aba`, tests only): two rows in `ui-system-boundaries.test.ts`, over every `.tsx` and `.css`
+  under `src/boot/onboarding` (found by a recursive read, so a new pane is covered the day it lands):
+  - "keeps the Setup Assistant's own compositions free of colour literals of any spelling": no hex or colour
+    function, no black, white or grey utility at any alpha or state, and no named black or white in its stylesheet
+    (a `url()` is read past). At the red: connect.tsx:205, field.tsx:93, welcome.tsx:22 and wizard-ui.tsx:34, :39
+    and :606.
+  - "gives every placeholder in the Setup Assistant a token ink that reads at 4.5:1 on its field": an input that
+    shows one wears `.vf-wizard-field`, whose `::placeholder` is a ramp token. The row resolves it as the glass
+    re-projects it (`.vf-wizard-shell`) and computes its ratio from tokens.css over the field's face. At the red:
+    views/connect.tsx (the key's input, no composition).
+- **The fix** (`cc8894c46`):
+  - wizard-ui.css gains `.vf-wizard-primary`, `.vf-wizard-quiet` (its hover; by night), `.vf-wizard-field` (its
+    placeholder and focus; by night) and `.vf-wizard-headline`: var() and color-mix only, as primitives.css writes
+    them. They are unlayered, so they win over Tailwind 4's utilities (`@layer utilities`), and a state's colour is
+    set there with its rest, never by a utility beside it.
+  - The class strings keep the wizard's own sizes and lose every colour: `primaryCls`, `quietCls` and the pane's
+    headline (wizard-ui.tsx), Welcome's headline (welcome.tsx), the name field (field.tsx) and the key field
+    (connect.tsx). The key field gains the name field's focus ring and transition, which it lacked.
+  - onboarding-wizard.test.tsx reads the quiet button's t1 where it now lives, `.vf-wizard-quiet` in wizard-ui.css.
+- **The deltas** (VF-PM's at its lean, 01:57Z and 02:10Z), named to James, his to veto:
+  - (a) the primary by day from `#000` to the foreground `#1C1C1E`, by night from `#fff` to `#F5F5F7`, its words
+    with it;
+  - (b) the field's night edge from white 10% to `--vf-hairline-strong` (15%), its night words from 90% to t1 (85%);
+  - (d) Welcome's and the panes' headlines, `text-black dark:text-white`, to `--vf-foreground`, the same shift as
+    (a). The scan found them; the brief had not named them.
+  - (c), a note and not a look: the catalog mounts the shipping views, so no catalog file changed and nothing is
+    re-blessed here; its stills move by (a), (b) and (d).
+  - By day the field's edge, words and face are the values they were (10%, 85%, white); by night its face is the 6%
+    it was.
+
+**Validation.**
+- The placeholder's ratios, computed by the row from tokens.css: t3 on the glass is the glass's own 80% by day,
+  8.9:1 on the field's white; by night 8.2:1 over the night `--vf-chrome-solid`. The night figure is a floor: that
+  chrome is lighter than the field's real face (white 6% over the smoke).
+- The red on its own tree (`2091c9bc6`, tree `90e9d44fc`, a detached worktree, vitest's binary run directly):
+  ui-system-boundaries 2 failed, 44 passed; biome and field-app's typecheck clean.
+- The light at `dcb70bf7c` (`light136.sh`, under a HOLD turn, 02:07:29Z → 02:08:30Z; logs
+  `lanes/item136/light/green-fix/`): 14 files, 286 passed, 0 failed (ui-system-boundaries, onboarding-wizard,
+  wearing-the-mat, design-system, wizard-frame, wizard-steps, field-glass, glass-look, profiles-pane, setup-sheet,
+  agents-pane, history-consent, boot-root, boot-machine); biome on the 7 code files clean;
+  `pnpm --filter @vibefield/field-app typecheck` exit 0; the lane clean after.
+- The re-stack (2026-11-04 02:34Z) onto `f6fb1fa06`, WI-3 and its records. DESIGN.md is the one shared file, its two
+  edits apart. range-diff "=" for both commits; the tree `959e5673f` is `git merge-tree`'s; ui-system-boundaries
+  on it 46 passed.
+- **Run 117** (`cc8894c46`, stacked on main `f6fb1fa06`, a fast-forward, minted by a9 on VF-PM's GO; VF-PM's read,
+  02:45Z): FAIL rows 0; vitest 12,192 passed, 0 failed, 18 skipped (878 files), run 116 + 2, the per-file diff naming
+  ui-system-boundaries alone, 44 → 46; cargo 34 results ok, 0 FAILED; "28 projects" four times; no MaxListeners
+  warning; the iOS fixtures 205, pins 67; Nx cache 0 (`lanes/ts6/logs/mini/run117/verify.clean.log`).
+- **Landed:** main fast-forwarded to `cc8894c46` on VF-PM's GO (2026-11-04 02:44:28Z).
+
+**Not claimed.** No walk has read these inks. Row 32's judge walks the catalog's frames at its next run: their
+stills move by (a), (b) and (d), and whether an off field's words (0.45 while it saves) hold §2.4's 3:1 is its
+measurement. No token moved for it, and no number for it is claimed here.
+
+**Owed.** Row 32's judge on these inks, the stills and an off field's 3:1 with them; James's veto on (a), (b) and
+(d). This entry pays "FG, the catalog judged's follow-up 1"'s owed line "Item 136, the wizard's own Tailwind literals
+outside the tokens", its placeholder's witness with it. Its `disabled:opacity-45` stays: the kit's field's 0.45.
