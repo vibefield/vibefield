@@ -193,6 +193,23 @@ describe("createBootstrapHandler (once per generation)", () => {
     expect(scopes).not.toContain("shell.open");
   });
 
+  it("IOS-12a: the window keeps every spark and needs door it had, by the doors' own scopes", async () => {
+    const daemon = fakeDaemon();
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
+    await handler({ sender: fakeSender(1).wc });
+    const mint = daemon.request.mock.calls.find(([method]) => method === "system.mintWindowToken");
+    const scopes = (mint?.[1] as { scopes: string[] } | undefined)?.scopes ?? [];
+    // read off the registry rows, so a door that moves scope moves this with it
+    for (const door of METHODS.filter(
+      (method) => method.method.startsWith("compose.sparks.") || method.method.startsWith("needs."),
+    ))
+      expect(scopes, door.method).toContain(door.scope);
+  });
+
   it("distinct senders mint distinct tokens with their own labels", async () => {
     const daemon = fakeDaemon();
     const handler = createBootstrapHandler({

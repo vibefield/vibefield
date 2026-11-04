@@ -111,6 +111,7 @@ enum Remote {
     let monitor = row.monitorRow
     let levels: [(String, [String]?)] = [
       ("row", row.unknownFields), ("terminal", row.terminal?.unknownFields), ("stop", row.stop?.unknownFields),
+      ("origin", row.origin?.unknownFields),
       ("monitorRow", monitor.unknownFields), ("activity", monitor.activity?.unknownFields),
       ("project", monitor.project.unknownFields), ("provider", monitor.provider?.unknownFields),
       ("effort", monitor.effort?.unknownFields), ("context", monitor.context?.unknownFields),
@@ -143,7 +144,7 @@ enum Remote {
 
 @Suite struct RemoteGoldenTests {
   static let goldens = [
-    "agent-remote-row.valid", "agent-remote-row.terminal", "agent-remote-mesh-open.valid",
+    "agent-remote-row.valid", "agent-remote-row.terminal", "agent-remote-row.spark", "agent-remote-mesh-open.valid",
     "agent-remote-mesh-frames.valid", "agent-remote-mesh-open.witness", "agent-remote-mesh-frames.witness",
     "agent-remote-mesh-open.resync",
   ]
@@ -262,6 +263,13 @@ enum Remote {
     #expect(terminal.monitorRow.cost == nil)
     #expect(terminal.monitorRow.tier == nil)
     #expect(terminal.monitorRow.project.branch == .notLooked)
+    #expect(agent.spark == nil && agent.origin == nil && terminal.spark == nil)
+
+    // IOS-12a — a spark's own run: Chat on the phone reads the spark's status by it
+    let spark = try AgentRemoteRow(json: try Fixture.json("agent-remote-row.spark"))
+    #expect(spark.spark == "sp-7k2m9q4x")
+    #expect(spark.origin == AgentSessionOrigin(by: "you", spark: nil, run: nil, call: nil, unknownFields: []))
+    #expect(Remote.unknowns(spark) == [:])
 
     let model = try MonitorAgentRow(json: try Fixture.json("monitor-agent-row.valid"))
     #expect(model.project.seq == 2)
@@ -391,6 +399,13 @@ enum Remote {
     RowEdit(name: "stop null", path: [.key("stop")], value: .null),
     RowEdit(name: "root kind null", path: [.key("kind")], value: .null),
     .monitor("steps hold a word", [.key("cost"), .key("series"), .key("steps"), .index(0)], .string("zero")),
+    // IOS-12a — a spark is an id (`/^sp-[0-9a-z]{6,32}$/`), never coerced; an origin names someone
+    RowEdit(name: "spark `sp-Vela01`", path: [.key("spark")], value: .string("sp-Vela01")),
+    RowEdit(name: "spark `sp-12345`", path: [.key("spark")], value: .string("sp-12345")),
+    RowEdit(name: "spark `vela0001`", path: [.key("spark")], value: .string("vela0001")),
+    RowEdit(name: "spark null", path: [.key("spark")], value: .null),
+    RowEdit(name: "origin names no one", path: [.key("origin")], value: .object(["spark": .string("sp-vela01")])),
+    RowEdit(name: "origin.call 0", path: [.key("origin")], value: .object(["by": .string("flow"), "call": .int(0)])),
   ]
 
   /// T8 — each edit refuses the row, named by its key; its unedited baseline reads first.
@@ -431,6 +446,13 @@ enum Remote {
       json: edited(terminal, [.key("stop")], .object(["sentAt": .string(""), "stage": .string("sent")])))
     #expect(goodStop.stop?.stage == "sent")
     #expect(goodStop.unknownFields.isEmpty)
+    // IOS-12a — nor at `spark` or `origin`
+    let badSpark = try AgentRemoteRow(json: edited(terminal, [.key("spark")], .string("sp-Vela01")))
+    #expect(badSpark.spark == nil)
+    #expect(badSpark.unknownFields == ["spark"])
+    let badOrigin = try AgentRemoteRow(json: edited(terminal, [.key("origin")], .object([:])))
+    #expect(badOrigin.origin == nil)
+    #expect(badOrigin.unknownFields == ["origin"])
 
     let paneless = edited(edited(terminal, [.key("terminal")], nil), [.key("nativeSessionId")], .string(""))
     #expect(AgentRemoteRow.split([paneless]).refused.map(\.key) == ["pty-h2"])

@@ -1,0 +1,53 @@
+{
+  "items": [
+    {
+      "id": "ny-3f9a1c0b7e2d4a61",
+      "kind": "question",
+      "state": "open",
+      "from": {
+        "name": "Vela",
+        "session": "run-12",
+        "spark": "sp-7k2m9q4x"
+      },
+      "spark": "sp-7k2m9q4x",
+      "asked": "2026-10-31T16:02:10.118Z",
+      "words": "Push the fix to main now, or hold it for the review?",
+      "choices": ["Push", "Hold", "Not now"],
+      "device": "dev-01HQ9S7UD1"
+    },
+    {
+      "id": "ny-8c41d2e09a77b305",
+      "kind": "held-send",
+      "state": "open",
+      "from": {
+        "name": "Vela",
+        "session": "run-12",
+        "spark": "sp-7k2m9q4x"
+      },
+      "spark": "sp-7k2m9q4x",
+      "asked": "2026-10-31T16:04:51.502Z",
+      "words": "run the tests in packages/fieldd and tell me what fails",
+      "choices": ["Allow", "Not now"],
+      "count": 2,
+      "to": {
+        "session": "run-31",
+        "name": "claude·2"
+      },
+      "device": "dev-01HQ9S7UD1"
+    }
+  ],
+  "desktops": [
+    {
+      "device": "dev-01HQ9S7UD1",
+      "state": "answered"
+    },
+    {
+      "device": "dev-01HQ9S7XZ2",
+      "state": "timeout"
+    },
+    {
+      "device": "dev-01HQ9S7Y44",
+      "state": "asleep"
+    }
+  ]
+}

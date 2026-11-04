@@ -1577,7 +1577,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     };
     const box = await setup({ floor: "real", profiles: true, briefing, exerciseDoor: true });
     const { daemon, dataDir, sessions } = box;
-    const win = await window(daemon, [...DECK, "agents.manage"], "cp1d");
+    const win = await window(daemon, [...DECK, "agents.manage", "sparks.use"], "cp1d");
     await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
     const providers = (await win.call("agent.providers", {})) as AgentProvidersResult;
     expect(providers.providers.find((p) => p.id === "scripted")?.briefing).toEqual(briefing);
@@ -1686,7 +1686,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       ],
     });
     const { daemon, dataDir } = box;
-    const win = await window(daemon, [...DECK, "agents.manage"], "cp3");
+    const win = await window(daemon, [...DECK, "agents.manage", "sparks.use"], "cp3");
     await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
     // a notice is an event: only a window listening when it is told hears it
     const notices = (await win.call("needs.notices.subscribe", {})) as { subId: string };
@@ -1777,7 +1777,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       },
     });
     const { daemon, dataDir } = box;
-    const win = await window(daemon, [...DECK, "agents.manage"], "cp3-wake");
+    const win = await window(daemon, [...DECK, "agents.manage", "sparks.use"], "cp3-wake");
     await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
     const { spark } = (await win.call("compose.sparks.hatch", {
       name: "Vela",
