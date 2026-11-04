@@ -112,9 +112,21 @@ enum SpendModel {
       let t: Double
       let near: String?
     }
+    /// A finger down on the chart, and its token: the one its lift and its gesture's reset name.
     struct Press: Equatable, Sendable {
       let x: Double
       let y: Double
+      let token: Int
+    }
+    /// A finger down on the list: its token, where it came down, the row it came down on, the whole rows its drag
+    /// has stepped, and whether it is still down (the list holds its order only while it is).
+    struct ListTouch: Equatable, Sendable {
+      let token: Int
+      let x: Double
+      let y: Double
+      let row: String?
+      var applied: Int
+      var down: Bool
     }
     var pointer: Pointer?
     var held: Double?
@@ -123,6 +135,9 @@ enum SpendModel {
     var listOffset = 0
     var yShown: Double?
     var press: Press?
+    var list: ListTouch?
+    /// The touches so far: each new one's token is the next.
+    var touches = 0
   }
 
   struct Hero: Equatable, Sendable {
@@ -557,15 +572,17 @@ enum SpendModel {
     state.hover = near
   }
 
-  /// A finger comes down on the chart (`onHitDown`).
-  static func press(_ state: inout State, x: Double, y: Double) {
-    state.press = State.Press(x: x, y: y)
+  /// A finger comes down on the chart (`onHitDown`). RED SKELETON: no token of its own.
+  @discardableResult
+  static func press(_ state: inout State, x: Double, y: Double) -> Int {
+    state.press = State.Press(x: x, y: y, token: 0)
+    return 0
   }
 
   /// A finger lifts from the chart (`onHitUp`). A press that travelled more than 4 pt is no tap: nothing pans the
   /// window, and a stray drag sets nothing. A line within reach opens (its id is returned for the host to open);
   /// empty chart sets the moment there, and a tap on the moment lets it go.
-  static func lift(_ frame: Frame, _ state: inout State, x: Double, y: Double) -> String? {
+  static func lift(_ frame: Frame, _ state: inout State, x: Double, y: Double, token: Int) -> String? {
     let from = state.press
     state.press = nil
     guard let from, abs(x - from.x) <= 4, abs(y - from.y) <= 4 else { return nil }
@@ -579,8 +596,8 @@ enum SpendModel {
     return nil
   }
 
-  /// The touch is cancelled (`onPointerCancel`).
-  static func cancel(_ state: inout State) {
+  /// The touch's gesture is over (its reset). RED SKELETON: the window's `onPointerCancel`, whatever the token.
+  static func cancel(_ state: inout State, token: Int) {
     state.press = nil
   }
 
@@ -605,6 +622,19 @@ enum SpendModel {
     state.listHeld = nil
     state.hover = nil
   }
+
+  /// A finger comes down on the list. RED SKELETON.
+  @discardableResult
+  static func touchList(_ frame: Frame, _ state: inout State, x: Double, y: Double) -> Int { 0 }
+
+  /// The finger on the list moves. RED SKELETON.
+  static func dragList(_ input: Input, _ state: inout State, token: Int, y: Double) {}
+
+  /// The finger lifts from the list. RED SKELETON.
+  static func liftList(_ state: inout State, token: Int, x: Double, y: Double) -> String? { nil }
+
+  /// The list touch's gesture is over (its reset). RED SKELETON.
+  static func cancelList(_ state: inout State, token: Int) {}
 
   /// A step of the list by one whole row in `deltaY`'s direction (the wheel's `Math.sign`), only while it has more
   /// rows than slots, never past its ends. A NaN steps nowhere.

@@ -87,13 +87,17 @@ extension SpendParityTests {
     #expect(SpendModel.clockEveryMs(huge) == 250)
   }
 
-  /// H14 — a drag on the list (fd's Q3): every whole row of travel is one step of the wheel, a finger moving up
-  /// stepping the list down; back where it began, no steps.
+  /// H14 — a drag on the list (fd's Q3): every whole row of travel FROM WHERE IT BEGAN is one step of the wheel, a
+  /// finger moving up stepping the list down; back where it began, no steps. *(Corrected 2026-11-04, the order-proof
+  /// pair: this row held the rows' boundaries crossed, not the travel, and its `(-108, -60)` said -1 for 48 pt of
+  /// travel against its own words; from 280, the first step came after 54 pt only by chance of where the finger was.)*
   @Test func aDragOnTheListStepsWholeRows() {
     #expect(SpendModel.listSteps(from: 0, to: -53, rowH: 54) == 0)
     #expect(SpendModel.listSteps(from: 0, to: -54, rowH: 54) == 1)
     #expect(SpendModel.listSteps(from: 0, to: -108, rowH: 54) == 2)
-    #expect(SpendModel.listSteps(from: -108, to: -60, rowH: 54) == -1)
+    #expect(SpendModel.listSteps(from: -108, to: -60, rowH: 54) == 0)
+    #expect(SpendModel.listSteps(from: 280, to: 227, rowH: 54) == 0)
+    #expect(SpendModel.listSteps(from: 280, to: 226, rowH: 54) == 1)
     #expect(SpendModel.listSteps(from: -60, to: 0, rowH: 54) == -1)
     #expect(SpendModel.listSteps(from: 0, to: 70, rowH: 30) == -2)
     #expect(SpendModel.listSteps(from: 0, to: .nan, rowH: 30) == 0)

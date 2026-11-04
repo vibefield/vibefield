@@ -157,7 +157,7 @@ struct SpendView: View {
         // a touch the system took away never lifted: it taps nothing, and the finger is gone
         guard !touching, chartDown != nil else { return }
         chartDown = nil
-        SpendModel.cancel(&state)
+        SpendModel.cancel(&state, token: state.press?.token ?? 0)
         SpendModel.leave(&state)
       }
   }
@@ -179,7 +179,8 @@ struct SpendView: View {
       .onEnded { value in
         chartDown = nil
         let frame = SpendModel.frame(model, state)
-        let opened = SpendModel.lift(frame, &state, x: value.location.x, y: value.location.y)
+        let token = state.press?.token ?? 0
+        let opened = SpendModel.lift(frame, &state, x: value.location.x, y: value.location.y, token: token)
         SpendModel.leave(&state)
         if let opened { open(opened) }
       }

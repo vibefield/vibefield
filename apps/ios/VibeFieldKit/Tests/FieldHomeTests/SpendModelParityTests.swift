@@ -82,9 +82,9 @@ enum SpendDOM {
     let first = settled(input, &state)
     let point = at(first, t, top: true)
     SpendModel.point(first, &state, x: point.x, y: point.y)
-    SpendModel.press(&state, x: point.x, y: point.y)
+    let token = SpendModel.press(&state, x: point.x, y: point.y)
     let pointed = settled(input, &state)
-    _ = SpendModel.lift(pointed, &state, x: point.x, y: point.y)
+    _ = SpendModel.lift(pointed, &state, x: point.x, y: point.y, token: token)
     SpendModel.leave(&state)
   }
 }
@@ -435,38 +435,38 @@ extension SpendParityTests {
 
   /// H9 — touch (fd's Q3, the pointer's own semantics): a lift more than 4 pt from its press is no tap and sets
   /// nothing; a tap on empty chart sets the moment there; a tap on the set moment (within 8 pt) lets it go; a tap on a
-  /// line within reach opens it and sets nothing; a cancelled touch taps nothing; a drag on the list steps whole rows.
+  /// line within reach opens it and sets nothing; a cancelled touch (its gesture's reset, and no lift) taps nothing; a
+  /// drag on the list steps whole rows.
   @Test func touchKeepsThePointersSemantics() throws {
     let input = try Self.openInput()
     var state = SpendModel.State()
     let frame = SpendDOM.settled(input, &state)
     let empty = SpendDOM.at(frame, SpendWitness.nowMs - 120_000, top: true)
 
-    SpendModel.press(&state, x: empty.x, y: empty.y)
-    let dragged = SpendModel.lift(frame, &state, x: empty.x + 5, y: empty.y)
+    let drag = SpendModel.press(&state, x: empty.x, y: empty.y)
+    let dragged = SpendModel.lift(frame, &state, x: empty.x + 5, y: empty.y, token: drag)
     #expect(dragged == nil && state.held == nil, "a drag is no tap")
 
-    SpendModel.press(&state, x: empty.x, y: empty.y)
-    SpendModel.cancel(&state)
-    let cancelled = SpendModel.lift(frame, &state, x: empty.x, y: empty.y)
-    #expect(cancelled == nil && state.held == nil, "a cancelled touch taps nothing")
+    let cancelled = SpendModel.press(&state, x: empty.x, y: empty.y)
+    SpendModel.cancel(&state, token: cancelled)
+    #expect(state.held == nil, "a cancelled touch taps nothing")
 
-    SpendModel.press(&state, x: empty.x, y: empty.y)
-    let tapped = SpendModel.lift(frame, &state, x: empty.x + 4, y: empty.y - 4)
+    let tap = SpendModel.press(&state, x: empty.x, y: empty.y)
+    let tapped = SpendModel.lift(frame, &state, x: empty.x + 4, y: empty.y - 4, token: tap)
     #expect(tapped == nil && state.held != nil, "a tap on empty chart sets the moment")
 
     let held = SpendDOM.settled(input, &state)
     #expect(held.now != nil, "the Now pill shows")
-    SpendModel.press(&state, x: empty.x + 7, y: empty.y)
-    _ = SpendModel.lift(held, &state, x: empty.x + 7, y: empty.y)
+    let again = SpendModel.press(&state, x: empty.x + 7, y: empty.y)
+    _ = SpendModel.lift(held, &state, x: empty.x + 7, y: empty.y, token: again)
     #expect(state.held == nil, "a tap on the moment lets it go")
 
     let line = try #require(frame.lines.first { $0.id == "pty-h1" })
     let spent = SpendSeries.spentAt(line, frame.span.ta, frame.span.tb) ?? .nan
     let g = frame.g
     let head = (x: g.x1, y: g.y1 - (spent / max(1e-9, frame.yMax)) * (g.y1 - g.y0))
-    SpendModel.press(&state, x: head.x, y: head.y)
-    let opened = SpendModel.lift(frame, &state, x: head.x, y: head.y)
+    let onLine = SpendModel.press(&state, x: head.x, y: head.y)
+    let opened = SpendModel.lift(frame, &state, x: head.x, y: head.y, token: onLine)
     #expect(opened == "pty-h1" && state.held == nil, "a tap on a line opens it")
 
     let short = SpendModel.Input(
@@ -485,5 +485,136 @@ extension SpendParityTests {
     }
     let end = SpendDOM.settled(short, &list).fit.maxOffset
     #expect(list.listOffset == end, "never past its end")
+  }
+
+  /// H15 — a chart touch ends the same in either order (fd's order-proof cancel). A gesture's end comes to the view
+  /// twice, its lift (`onEnded`) and its reset (the gesture state's), in an order no host row or still can witness, and
+  /// a cancelled touch is its reset alone. So each names the press it began by its token: lift-then-reset and
+  /// reset-then-lift each tap once, on empty chart and on a line; a second lift taps nothing; a reset alone taps
+  /// nothing and lets the finger go; an older press's lift or reset does nothing to a newer press.
+  @Test func aChartTouchEndsTheSameInEitherOrder() throws {
+    let input = try Self.openInput()
+    var base = SpendModel.State()
+    let frame = SpendDOM.settled(input, &base)
+    let empty = SpendDOM.at(frame, SpendWitness.nowMs - 120_000, top: true)
+
+    var a = base
+    SpendModel.point(frame, &a, x: empty.x, y: empty.y)
+    let ta = SpendModel.press(&a, x: empty.x, y: empty.y)
+    let liftedA = SpendModel.lift(frame, &a, x: empty.x, y: empty.y, token: ta)
+    SpendModel.cancel(&a, token: ta)
+    var b = base
+    SpendModel.point(frame, &b, x: empty.x, y: empty.y)
+    let tb = SpendModel.press(&b, x: empty.x, y: empty.y)
+    SpendModel.cancel(&b, token: tb)
+    let gone = b.pointer == nil && b.hover == nil
+    let liftedB = SpendModel.lift(frame, &b, x: empty.x, y: empty.y, token: tb)
+    let heldA = a.held
+    let heldB = b.held
+    #expect(liftedA == nil && liftedB == nil)
+    #expect(heldA != nil && heldA == heldB, "one tap on empty chart, in either order")
+    #expect(gone, "the reset lets the finger go")
+    let twice = SpendModel.lift(frame, &b, x: empty.x, y: empty.y, token: tb)
+    let heldTwice = b.held
+    #expect(twice == nil && heldTwice == heldB, "never two (a second would let the moment go)")
+
+    let line = try #require(frame.lines.first { $0.id == "pty-h1" })
+    let spent = SpendSeries.spentAt(line, frame.span.ta, frame.span.tb) ?? .nan
+    let g = frame.g
+    let head = (x: g.x1, y: g.y1 - (spent / max(1e-9, frame.yMax)) * (g.y1 - g.y0))
+    var c = base
+    let tc = SpendModel.press(&c, x: head.x, y: head.y)
+    let openedC = SpendModel.lift(frame, &c, x: head.x, y: head.y, token: tc)
+    SpendModel.cancel(&c, token: tc)
+    var d = base
+    let td = SpendModel.press(&d, x: head.x, y: head.y)
+    SpendModel.cancel(&d, token: td)
+    let openedD = SpendModel.lift(frame, &d, x: head.x, y: head.y, token: td)
+    let openedTwice = SpendModel.lift(frame, &d, x: head.x, y: head.y, token: td)
+    #expect(openedC == "pty-h1" && openedD == "pty-h1", "one open on a line, in either order")
+    #expect(openedTwice == nil, "never two")
+
+    var e = base
+    SpendModel.point(frame, &e, x: empty.x, y: empty.y)
+    let te = SpendModel.press(&e, x: empty.x, y: empty.y)
+    SpendModel.cancel(&e, token: te)
+    let cancelled = e.held == nil && e.pointer == nil && e.hover == nil
+    #expect(cancelled, "a reset alone taps nothing and lets the finger go")
+
+    var f = base
+    let old = SpendModel.press(&f, x: empty.x, y: empty.y)
+    SpendModel.point(frame, &f, x: empty.x, y: empty.y)
+    let new = SpendModel.press(&f, x: empty.x, y: empty.y)
+    #expect(new != old, "each press its own token")
+    SpendModel.cancel(&f, token: old)
+    let kept = f.pointer != nil
+    let stale = SpendModel.lift(frame, &f, x: empty.x, y: empty.y, token: old)
+    let staleHeld = f.held
+    #expect(kept, "an older press's reset leaves the newer finger")
+    #expect(stale == nil && staleHeld == nil, "an older press's lift taps nothing")
+    _ = SpendModel.lift(frame, &f, x: empty.x, y: empty.y, token: new)
+    let ownHeld = f.held
+    #expect(ownHeld != nil, "the newer press's own lift taps")
+  }
+
+  /// H16 — a list touch ends the same in either order (the same hazard on the list). The finger down holds the order
+  /// and lights the row it came down on. A tap opens that row once, whether its lift or its reset comes first; a second
+  /// lift opens nothing; a reset alone opens nothing and lets the list go. A drag of a whole row steps the list one
+  /// row, back again steps it back, and a drag opens nothing. An older touch's reset or lift leaves a newer hold.
+  @Test func aListTouchEndsTheSameInEitherOrder() throws {
+    let whole = try Self.openInput()
+    let input = SpendModel.Input(
+      agents: whole.agents, nowMs: whole.nowMs, width: 402, height: 480, timeZone: whole.timeZone,
+      measure: whole.measure)  // the "open · short" step's box: 402 × (588 − 108)
+    var base = SpendModel.State()
+    let frame = SpendDOM.settled(input, &base)
+    try #require(frame.fit.more, "the short list has more rows than slots")
+    let row = try #require(frame.rows.first { !$0.hidden })
+    let at = (x: row.x + 20, y: row.top + row.height / 2)
+
+    var a = base
+    let ta = SpendModel.touchList(frame, &a, x: at.x, y: at.y)
+    let heldOrder = a.listHeld
+    let lit = a.hover
+    #expect(heldOrder == frame.order && lit == row.id, "the finger holds the order and lights its row")
+    let openedA = SpendModel.liftList(&a, token: ta, x: at.x, y: at.y)
+    SpendModel.cancelList(&a, token: ta)
+    var b = base
+    let tb = SpendModel.touchList(frame, &b, x: at.x, y: at.y)
+    SpendModel.cancelList(&b, token: tb)
+    let letGo = b.listHeld == nil && b.hover == nil
+    let openedB = SpendModel.liftList(&b, token: tb, x: at.x, y: at.y)
+    let twice = SpendModel.liftList(&b, token: tb, x: at.x, y: at.y)
+    #expect(openedA == row.id && openedB == row.id, "one open, in either order")
+    #expect(letGo, "the reset lets the list go")
+    #expect(twice == nil, "never two")
+
+    var c = base
+    let tc = SpendModel.touchList(frame, &c, x: at.x, y: at.y)
+    SpendModel.cancelList(&c, token: tc)
+    let cancelled = c.listHeld == nil && c.hover == nil
+    #expect(cancelled, "a reset alone opens nothing and lets the list go")
+
+    var d = base
+    let td = SpendModel.touchList(frame, &d, x: at.x, y: at.y)
+    let up = at.y - frame.g.rowH - 1  // a whole row and a point: no rounding can call it less
+    SpendModel.dragList(input, &d, token: td, y: up)
+    let stepped = d.listOffset
+    SpendModel.dragList(input, &d, token: td, y: at.y)
+    let back = d.listOffset
+    SpendModel.dragList(input, &d, token: td, y: up)
+    let dragged = SpendModel.liftList(&d, token: td, x: at.x, y: up)
+    let released = d.listHeld == nil
+    #expect(stepped == 1 && back == 0, "a whole row of drag steps one row, and back")
+    #expect(dragged == nil && released, "a drag opens nothing, and the list lets go")
+
+    var e = base
+    let old = SpendModel.touchList(frame, &e, x: at.x, y: at.y)
+    let new = SpendModel.touchList(frame, &e, x: at.x, y: at.y)
+    #expect(new != old, "each touch its own token")
+    SpendModel.cancelList(&e, token: old)
+    let stale = SpendModel.liftList(&e, token: old, x: at.x, y: at.y)
+    let kept = e.listHeld
+    #expect(stale == nil && kept == frame.order, "an older touch's reset or lift leaves the newer hold")
   }
 }
