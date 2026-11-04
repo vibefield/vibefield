@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Worker, WorkerOptions } from "node:worker_threads";
+import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PluginRegistryService } from "../src/plugin-registry";
 import { ServiceHost } from "../src/service-host";
@@ -51,13 +52,38 @@ class ProtocolWorker extends EventEmitter {
   }
 }
 
+/** The host's record of each stop (item 168): how its admitted calls and its cleanup ended. */
+type Drain = { calls: unknown; cleanup: unknown };
+
+/** The host's log, its stop records kept. */
+function drainRecorder(): { drains: Drain[]; logger: Logger } {
+  const drains: Drain[] = [];
+  const at = (event: string, _message: string, attrs?: LogFields): void => {
+    if (event === "fieldd.plugin_service.deactivated")
+      drains.push({ calls: attrs?.["calls"], cleanup: attrs?.["cleanup"] });
+  };
+  const logger: Logger = {
+    child: () => logger,
+    trace: at,
+    debug: at,
+    info: at,
+    warn: at,
+    error: (event, message, _error, attrs) => at(event, message, attrs),
+    fatal: (event, message, _error, attrs) => at(event, message, attrs),
+    isLevelEnabled: () => true,
+  };
+  return { drains, logger };
+}
+
 async function createHarness(callDelayMs: number | null): Promise<{
   host: ServiceHost;
   worker: ProtocolWorker;
   handlers: ServiceProviderHandlers;
   drainCalls: () => number;
+  drains: Drain[];
 }> {
   const worker = new ProtocolWorker(callDelayMs);
+  const recorder = drainRecorder();
   let handlers: ServiceProviderHandlers | undefined;
   let drainCount = 0;
   const registry = {
@@ -110,6 +136,7 @@ async function createHarness(callDelayMs: number | null): Promise<{
     controlPort: () => 1,
     workerFactory: factory,
     deadlines: { activateMs: 500, deactivateMs: DEADLINE_MS },
+    logger: recorder.logger,
     mintServiceLease: async (_pluginId, scopes) => ({
       tokenId: "lease-1",
       token: "lease-secret",
@@ -121,7 +148,7 @@ async function createHarness(callDelayMs: number | null): Promise<{
   });
   await host.start(id);
   if (handlers === undefined) throw new Error("fixture provider did not register");
-  return { host, worker, handlers, drainCalls: () => drainCount };
+  return { host, worker, handlers, drainCalls: () => drainCount, drains: recorder.drains };
 }
 
 // DEBTS (s-debts-fieldd.md Appendix 3) — the deadline is measured on the
@@ -146,7 +173,7 @@ describe("ServiceHost absolute drain deadline (PRC-2)", () => {
   });
 
   it("shares one deadline between admitted-call drain and worker cleanup", async () => {
-    const { host, worker, handlers } = await createHarness(55);
+    const { host, worker, handlers, drains } = await createHarness(55);
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const admitted = handlers.call("slow", {}, { kind: "shell-main" });
 
@@ -158,10 +185,12 @@ describe("ServiceHost absolute drain deadline (PRC-2)", () => {
     expect(elapsed).toBe(DEADLINE_MS);
     expect(worker.posted.filter((message) => message["t"] === "deactivate")).toHaveLength(1);
     expect(worker.terminateCalls).toBe(1);
+    // the host's own record names the deadline: calls drained, the cleanup never answered
+    expect(drains).toEqual([{ calls: "drained", cleanup: "deadline" }]);
   });
 
   it("fails a stuck admitted call at the deadline and force-terminates once", async () => {
-    const { host, worker, handlers, drainCalls } = await createHarness(null);
+    const { host, worker, handlers, drainCalls, drains } = await createHarness(null);
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const admitted = handlers.call("slow", {}, { kind: "shell-main" });
     const outcome = admitted.catch((error: unknown) => error);
@@ -173,5 +202,7 @@ describe("ServiceHost absolute drain deadline (PRC-2)", () => {
     expect(worker.posted.filter((message) => message["t"] === "deactivate")).toHaveLength(0);
     expect(worker.terminateCalls).toBe(1);
     expect(drainCalls()).toBe(1);
+    // the calls met the deadline, so no cleanup window was offered: terminated at once
+    expect(drains).toEqual([{ calls: "deadline", cleanup: "skipped" }]);
   });
 });

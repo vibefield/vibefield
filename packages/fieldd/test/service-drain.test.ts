@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SOCKETS } from "@vibefield/contracts";
+import type { NodeLogging } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
@@ -35,6 +36,7 @@ async function setup(): Promise<FielddDaemon> {
   const daemon = await bootstrap({
     dataDir,
     controlPort: 0,
+    logRoot: join(dataDir, "logs"),
     pluginRoots: { devLinked: [pluginRoot] },
   });
   cleanup.push(() => daemon.stop());
@@ -57,6 +59,32 @@ const serviceState = (daemon: FielddDaemon): string =>
   daemon.plugins.snapshot().plugins.find((plugin) => plugin.id === id)?.service ?? "missing";
 const routePublished = (daemon: FielddDaemon): boolean =>
   daemon.services.snapshot().providers.some((provider) => provider.namespace === namespace);
+
+// Item 168: a stop's outcome is read from the host's own record of it, never from wall time.
+// Each row's claim is that the drain SETTLED (every admitted call answered, the worker's
+// correlated `deactivated` received) rather than that its deadline
+// (PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS) cut it. A loaded host slows a settled drain; it does not
+// change which way the drain ended.
+const logs = (daemon: FielddDaemon): NodeLogging => {
+  if (daemon.logging === null) throw new Error("the drain rows boot fieldd with a logRoot");
+  return daemon.logging;
+};
+type Drain = { calls: unknown; cleanup: unknown };
+/** Each stop of this plugin the host recorded after `cursor`: how its calls and cleanup ended. */
+function drainsSince(daemon: FielddDaemon, cursor: number): Drain[] {
+  const read = logs(daemon).readSince(
+    cursor,
+    64,
+    (record) =>
+      record.event === "fieldd.plugin_service.deactivated" && record.attrs?.["pluginId"] === id,
+  );
+  expect(read.droppedSincePrevious).toBe(0);
+  return read.records.map((record) => ({
+    calls: record.attrs?.["calls"],
+    cleanup: record.attrs?.["cleanup"],
+  }));
+}
+const SETTLED = [{ calls: "drained", cleanup: "acknowledged" }];
 
 describe("ServiceHost route drain (PRC-2 / §18.2)", () => {
   it("disable enters the shared typed drain before worker cleanup", async () => {
@@ -90,7 +118,7 @@ describe("ServiceHost route drain (PRC-2 / §18.2)", () => {
     await until(() => serviceState(daemon) === "active", 8_000);
     const rpc = await openRpc(daemon);
 
-    const startedAt = Date.now();
+    const cursor = logs(daemon).recent().newestCursor;
     const reloading = rpc.call("plugins.reload", { id });
     let reloaded = false;
     void reloading.then(
@@ -107,7 +135,7 @@ describe("ServiceHost route drain (PRC-2 / §18.2)", () => {
 
     expect(during.data?.kind).toBe("UNAVAILABLE");
     await reloading;
-    expect(Date.now() - startedAt).toBeLessThan(1_500);
+    expect(drainsSince(daemon, cursor)).toEqual(SETTLED);
     await until(() => serviceState(daemon) === "active", 8_000);
   });
 
@@ -118,14 +146,14 @@ describe("ServiceHost route drain (PRC-2 / §18.2)", () => {
 
     const oldCall = rpc.call(`${namespace}.slow`, { msg: "old", delayMs: 150 });
     await new Promise((resolve) => setTimeout(resolve, 20));
-    const startedAt = Date.now();
+    const cursor = logs(daemon).recent().newestCursor;
     const reloading = rpc.call("plugins.reload", { id });
     await until(() => !routePublished(daemon), 2_000);
 
     expect((await rpc.callErr(`${namespace}.echo`, { msg: "new" })).data?.kind).toBe("UNAVAILABLE");
     await expect(oldCall).resolves.toEqual({ echo: "old" });
     await reloading;
-    expect(Date.now() - startedAt).toBeLessThan(1_500);
+    expect(drainsSince(daemon, cursor)).toEqual(SETTLED);
     await until(() => serviceState(daemon) === "active", 8_000);
   });
 
@@ -139,7 +167,7 @@ describe("ServiceHost route drain (PRC-2 / §18.2)", () => {
     };
     expect(sub.snapshot).toEqual({ kind: "snapshot", value: { n: 0 } });
 
-    const startedAt = Date.now();
+    const cursor = logs(daemon).recent().newestCursor;
     const reloading = rpc.call("plugins.reload", { id });
     let reloaded = false;
     void reloading.then(
@@ -168,7 +196,7 @@ describe("ServiceHost route drain (PRC-2 / §18.2)", () => {
       ),
     ).toBe(true);
     await reloading;
-    expect(Date.now() - startedAt).toBeLessThan(1_500);
+    expect(drainsSince(daemon, cursor)).toEqual(SETTLED);
     await new Promise((resolve) => setTimeout(resolve, 50));
     const terminal = rpc.notifications.filter(
       (notification) =>
