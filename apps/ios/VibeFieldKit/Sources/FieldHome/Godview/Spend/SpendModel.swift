@@ -35,6 +35,19 @@ enum SpendModel {
   static let windowLabel =
     "Spend: what each agent spent in the last ten minutes, a line each from $0, and each run's total in the list. "
     + "Up and down move between agents, Return opens one, End lets go of a set moment."
+  /// RED SKELETON (the words rule): still the window's.
+  static let viewLabel = windowLabel
+
+  /// The window's words the phone does not say (fd's words rule for every PG lane: a view's words never name a key,
+  /// hover or a pane, for the phone has none), each a NAMED deviation pinned against the golden.
+  enum Dropped {
+    /// The view's label: its key sentence.
+    static let viewLabel = " Up and down move between agents, Return opens one, End lets go of a set moment."
+    /// Each row's label but a row not yet started.
+    static let rowLabel = " Open in your pane."
+    /// The Now pill's title: its key.
+    static let nowTitle = " (End)"
+  }
 
   /// `geometryFor`'s layout.
   struct Geometry: Equatable, Sendable {

@@ -112,9 +112,18 @@ extension SpendParityTests {
   /// title and label). A clock word is said in the suite's zone.
   @Test func theCompositionStepByStep() throws {
     let zone = try SpendGolden.zone()
-    let inputs = try Self.viewInputs()
-    #expect(inputs.count == 18)
-    for (at, agents, nowMs, act) in inputs {
+    let frames = try Self.viewFrames(zone: zone)
+    #expect(frames.count == 18)
+    for (at, frame, golden) in frames {
+      Self.compareView(frame, golden["view"], zone: zone, at: at)
+      Self.compareRows(frame.rows, golden["viewRows"]?.arrayValue ?? [], zone: zone, at: at)
+    }
+  }
+
+  /// Every step the golden mounted the view at, laid out as its acts left it, beside its golden step.
+  private static func viewFrames(zone: TimeZone) throws -> [(at: String, frame: SpendModel.Frame, golden: JSONValue)] {
+    var out: [(at: String, frame: SpendModel.Frame, golden: JSONValue)] = []
+    for (at, agents, nowMs, act) in try viewInputs() {
       let golden = try SpendGolden.step(at)
       let box = SpendDOM.box(golden["stage"])
       let input = SpendModel.Input(
@@ -134,10 +143,9 @@ extension SpendParityTests {
         let shown = SpendDOM.settled(input, &state)
         SpendModel.scrollList(shown, &state, deltaY: 1)
       }
-      let frame = SpendDOM.settled(input, &state)
-      Self.compareView(frame, golden["view"], zone: zone, at: at)
-      Self.compareRows(frame.rows, golden["viewRows"]?.arrayValue ?? [], zone: zone, at: at)
+      out.append((at, SpendDOM.settled(input, &state), golden))
     }
+    return out
   }
 
   private static func compareView(_ frame: SpendModel.Frame, _ view: JSONValue?, zone: TimeZone, at: String) {
@@ -146,7 +154,9 @@ extension SpendParityTests {
     let rootClasses = SpendDOM.classes(root?["className"], base: "vf-monitor-spend")
     #expect(rootClasses == (g.compact ? ["is-compact"] : []), "\(at): root classes")
     #expect(SpendDOM.px(root?["list"]) == g.listW, "\(at): the list's width")
-    #expect(root?["label"]?.stringValue == SpendModel.windowLabel, "\(at): the view's label")
+    // the phone's words name no key (fd's words rule): the window's label is the phone's and its key sentence
+    let viewLabel = SpendModel.viewLabel + SpendModel.Dropped.viewLabel
+    #expect(root?["label"]?.stringValue == viewLabel, "\(at): the view's label, less its key sentence")
 
     let hero = view?["hero"]
     let heroClasses = SpendDOM.classes(hero?["className"], base: "vf-monitor-spend-hero")
@@ -220,7 +230,8 @@ extension SpendParityTests {
     let now = view?["now"]
     #expect((frame.now == nil) == (now == nil), "\(at): the Now pill")
     if let pill = frame.now, let now {
-      #expect(now["title"]?.stringValue == SpendModel.nowTitle, "\(at): Now title")
+      let title = SpendModel.nowTitle + SpendModel.Dropped.nowTitle
+      #expect(now["title"]?.stringValue == title, "\(at): Now title, less its key")
       #expect(now["label"]?.stringValue == SpendModel.nowLabel, "\(at): Now label")
       #expect(now["keys"]?.stringValue == SpendModel.nowKey, "\(at): Now key")
       #expect(now["legend"]?.stringValue == SpendModel.nowLegend, "\(at): Now legend")
@@ -267,8 +278,36 @@ extension SpendParityTests {
       #expect(row.stateTone?.rawValue == said["stateTone"]?.stringValue, "\(tag): state tone")
       #expect(row.glyph?.rawValue == said["glyph"]?.stringValue, "\(tag): glyph")
       #expect(row.title == said["title"]?.stringValue, "\(tag): title")
+      // the phone's words name no pane (fd's words rule): every row the window says it opens in your pane, the
+      // phone says less those words; a row not yet started the window never said it of
       let label = SpendGolden.clocks(said["label"]?.stringValue ?? "?", zone: zone)
-      #expect(row.label == label, "\(tag): label")
+      let dropped = row.state.key == .before ? "" : SpendModel.Dropped.rowLabel
+      #expect(row.label + dropped == label, "\(tag): label, less the window's pane words")
+    }
+  }
+
+  /// H10 — the phone's words (fd's words rule for every PG lane): a view's words, its accessibility labels and titles
+  /// included, never name a key, hover or a pane, for the phone has none. Three NAMED deviations from the window, each
+  /// pinned against the golden in P7: the view's label drops its key sentence, each row's label "Open in your
+  /// pane.", the Now pill's title "(End)". The ↘ legend stays (Q3).
+  @Test func thePhonesWordsNameNoKeyNorPane() throws {
+    let phoneLabel =
+      "Spend: what each agent spent in the last ten minutes, a line each from $0, and each run's total in the list."
+    #expect(SpendModel.viewLabel == phoneLabel)
+    let keySentence = " Up and down move between agents, Return opens one, End lets go of a set moment."
+    #expect(SpendModel.Dropped.viewLabel == keySentence)
+    #expect(SpendModel.Dropped.rowLabel == " Open in your pane.")
+    #expect(SpendModel.Dropped.nowTitle == " (End)")
+    #expect(SpendModel.nowTitle == "Back to now" && SpendModel.nowLabel == "Back to now")
+    #expect(SpendModel.nowLegend == "↘")
+    let banned = ["pane", "Pane", "Up and down", "Return opens", "End lets go", "(End)", "hover", "Hover"]
+    var said = [SpendModel.viewLabel, SpendModel.nowTitle, SpendModel.nowLabel]
+    let frames = try Self.viewFrames(zone: try SpendGolden.zone())
+    for (_, frame, _) in frames { said += frame.rows.flatMap { [$0.label, $0.title] } }
+    #expect(said.count > 100)
+    for words in said {
+      let named = banned.filter { words.contains($0) }
+      #expect(named.isEmpty, "\"\(words)\" names \(named)")
     }
   }
 
