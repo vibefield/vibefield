@@ -51,7 +51,7 @@ struct TimelineMapStrip: View {
       tools
         .frame(width: max(0, columns.width - columns.x1 - 18), alignment: .trailing)
         .offset(x: columns.x1 + 10, y: 7)
-      Text("SINCE \(GodviewFormat.formatClock(ms: startMs, timeZone: timeZone))")
+      Text(TimelineWords.since(GodviewFormat.formatClock(ms: startMs, timeZone: timeZone)))
         .font(.system(size: 7.5, weight: .black))
         .tracking(0.525)
         .foregroundStyle(TimelineCanvasReplay.color(skin.ink(.textFaint)))
@@ -98,7 +98,7 @@ struct TimelineMapStrip: View {
         .onEnded { _ in finger = nil }
     )
     .accessibilityElement()
-    .accessibilityLabel("The head\u{2019}s moment in the day")
+    .accessibilityLabel(TimelineWords.mapLabel)
     .accessibilityValue(valueText)
     .accessibilityAdjustableAction { direction in
       switch direction {
@@ -171,7 +171,7 @@ struct TimelineMapStrip: View {
       if columns.narrow {
         Button { onSpan(next.spanMs) } label: { Text(preset?.label ?? "—") }
           .buttonStyle(TimelineToolStyle(skin: skin, pressed: false, home: false))
-          .accessibilityLabel("Span \(preset?.label ?? "custom"); \(next.title)")
+          .accessibilityLabel(TimelineWords.spanLabel(preset?.label, next: next.title))
       } else {
         HStack(spacing: 0) {
           ForEach(TimelineScale.presets, id: \.id) { choice in
@@ -188,7 +188,7 @@ struct TimelineMapStrip: View {
         TimelineNowMark().timelineMark(size: 12, strokeWidth: 1.6, colour: skin.ink(.textMain))
       }
       .buttonStyle(TimelineToolStyle(skin: skin, pressed: following, home: !following))
-      .accessibilityLabel(following ? "Following now" : "Back to now")
+      .accessibilityLabel(following ? TimelineWords.followingNow : TimelineWords.backToNow)
       .accessibilityAddTraits(following ? .isSelected : [])
     }
   }

@@ -131,9 +131,10 @@ struct GodviewTimelineView: View {
     let span = (draw.scale.spanMs / 1000).rounded() * 1000
     let value =
       draw.following
-      ? "Now, \(GodviewFormat.formatClock(ms: draw.nowMs, timeZone: timeZone))"
-      : "\(GodviewFormat.formatClock(ms: draw.t1, timeZone: timeZone)), "
-        + "\(GodviewFormat.formatWords(ms: draw.nowMs - draw.t1)) ago"
+      ? TimelineWords.nowValue(GodviewFormat.formatClock(ms: draw.nowMs, timeZone: timeZone))
+      : TimelineWords.pastValue(
+        GodviewFormat.formatClock(ms: draw.t1, timeZone: timeZone),
+        ago: GodviewFormat.formatWords(ms: draw.nowMs - draw.t1))
     let x1 = draw.columns.x1
     return TimelineMapStrip(
       columns: draw.columns, layers: layers, startMs: start, nowMs: draw.nowMs, t0: draw.t0, t1: draw.t1,
@@ -241,6 +242,8 @@ struct GodviewTimelineView: View {
     }
     .scrollBounceBehavior(.basedOnSize)
     .frame(width: draw.columns.width, height: draw.bodyHeight)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(TimelineWords.bodyLabel)
     .simultaneousGesture(panning(draw))
     .simultaneousGesture(pinching(draw))
   }
@@ -249,7 +252,7 @@ struct GodviewTimelineView: View {
   private func terminalsDivider(width: Double, inks: TimelineInks) -> some View {
     ZStack(alignment: .leading) {
       Rectangle().fill(TimelineCanvasReplay.color(input.skin.ink(.panelBorder))).frame(height: 1)
-      Text("TERMINALS")
+      Text(TimelineWords.terminals)
         .font(.system(size: 7.5, weight: .black))
         .tracking(0.6)
         .foregroundStyle(TimelineCanvasReplay.color(input.skin.ink(.textFaint)))

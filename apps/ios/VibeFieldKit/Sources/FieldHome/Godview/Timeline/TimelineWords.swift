@@ -34,10 +34,37 @@ enum TimelineWords {
   static let notRecorded = "not recorded"
   /// The readout's length where it has none to give (`readoutAt` :51): an en dash.
   static let noLength = "–"
-  /// The empty stage's words (`TimelineView.js:882`), upstream's verbatim on the phone too (fd's Q13: a puppeteer
-  /// finding, not changed here).
+
+  // THE VIEW'S OWN WORDS (TimelineView.js), every one the phone says, here so the hand row H10 reads them all. THE
+  // WORDS RULE (VF-PM via fd, 2026-11-04): on the phone no word, label or title names a key, hover or a pane.
+
+  /// The empty stage's words (`TimelineView.js:882`), as transcribed.
   static let noAgents = "NO ACTIVE AGENTS"
   static let noAgentsHint = "Launch an agent from a terminal pane."
+  /// The body's group label (`TimelineView.js:861`, its aria-label), as transcribed.
+  static let bodyLabel =
+    "Agents over time. Up and down light a lane, Enter opens it, left and right move through time, "
+    + "minus and equals zoom."
+  /// The map of the day's label (`TimelineView.js:856`, its aria-label).
+  static let mapLabel = "The head\u{2019}s moment in the day"
+  /// The now tool's label, following now and looking back (`TimelineView.js:859`).
+  static let followingNow = "Following now"
+  static let backToNow = "Back to now"
+  /// The terminals' divider (`TimelineView.js:878`).
+  static let terminals = "TERMINALS"
+
+  /// The map's since words (`TimelineView.js:515`): the day's start as a clock.
+  static func since(_ clock: String) -> String { "SINCE \(clock)" }
+
+  /// The narrow head's span tool (`TimelineView.js:859`): the span shown (`custom` off the presets), then what a tap
+  /// does, the next preset's title.
+  static func spanLabel(_ label: String?, next title: String) -> String { "Span \(label ?? "custom"); \(title)" }
+
+  /// The map's value following now (`TimelineView.js:804`, its aria-valuetext).
+  static func nowValue(_ clock: String) -> String { "Now, \(clock)" }
+
+  /// The map's value looking back (`TimelineView.js:805`): the head's clock, then how long ago.
+  static func pastValue(_ clock: String, ago words: String) -> String { "\(clock), \(words) ago" }
 
   /// `spanWord`: a span's state as the readout words it — `blocked · <what it waits on>`, `reply unseen`, or the
   /// status.

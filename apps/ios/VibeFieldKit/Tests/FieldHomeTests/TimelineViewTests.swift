@@ -7,8 +7,8 @@ import Testing
 @testable import FieldHome
 
 // PG-6 — THE TIMELINE'S HAND ROWS: what no golden reaches, each held to the desktop source line it cites (the read's
-// §7, H1–H9). TimelineView's layout is its own (never exported), the phone's tolerance and its joins are the phone's,
-// and J-S4's active treatment is James's. The golden rows are `Timeline*ParityTests`.
+// §7, H1–H9; H10, the words rule). TimelineView's layout is its own (never exported), the phone's tolerance and its
+// joins are the phone's, and J-S4's active treatment is James's. The golden rows are `Timeline*ParityTests`.
 //
 // No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 
@@ -117,12 +117,13 @@ struct TimelineViewTests {
 
   // MARK: - H4 empty
 
-  /// H4 — no rows, no lanes; the empty stage says upstream's words (TimelineView.js:882, verbatim: fd's Q13).
+  /// H4 — no rows, no lanes; the empty stage says upstream's title (TimelineView.js:882) and the phone's hint, its pane
+  /// dropped by the words rule (H10; draft word: James's eye (VF-PM 2026-11-04)).
   @Test func anEmptyFieldSaysSo() {
     let set = TimelineLanes.lanes([], nowMs: TimelineGolden.nowMs)
     #expect(set.all.isEmpty)
     #expect(TimelineWords.noAgents == "NO ACTIVE AGENTS")
-    #expect(TimelineWords.noAgentsHint == "Launch an agent from a terminal pane.")
+    #expect(TimelineWords.noAgentsHint == "Launch an agent from a terminal.")
   }
 
   // MARK: - H5 active (J-S4)
@@ -210,6 +211,45 @@ struct TimelineViewTests {
       #expect(tick.t.truncatingRemainder(dividingBy: 3_600_000) == 1_800_000, "\(tick.t)")
     }
   }
+
+  // MARK: - H10 the words rule
+
+  /// H10 — THE WORDS RULE (VF-PM via fd, 2026-11-04): on the phone no word, label or title names a key, hover or a
+  /// pane. Every word the view says, pinned: the desktop's where it names none, and the named drops where it did —
+  /// the body's label keeps its first sentence (TimelineView.js:861; "Up and down light a lane, Enter opens it, left
+  /// and right move through time, minus and equals zoom." dropped) and the empty hint loses its pane (:882; draft
+  /// word: James's eye (VF-PM 2026-11-04)). NOW's key legend (`keyLegend(NOW_KEY)`, :859) and the map's hover title
+  /// (:856, "The whole day. Press to put the head there; drag to play it back.") are never drawn, so no word here
+  /// carries them. Then every word and every preset is scanned for a key, hover or pane.
+  @Test func thePhonesWordsNameNoKeyHoverOrPane() {
+    let pinned: [(phone: String, words: String)] = [
+      (TimelineWords.noAgents, "NO ACTIVE AGENTS"),
+      (TimelineWords.noAgentsHint, "Launch an agent from a terminal."),
+      (TimelineWords.bodyLabel, "Agents over time"),
+      (TimelineWords.mapLabel, "The head\u{2019}s moment in the day"),
+      (TimelineWords.followingNow, "Following now"),
+      (TimelineWords.backToNow, "Back to now"),
+      (TimelineWords.terminals, "TERMINALS"),
+      (TimelineWords.since("9:41"), "SINCE 9:41"),
+      (TimelineWords.spanLabel("1H", next: "Show 4 hours"), "Span 1H; Show 4 hours"),
+      (TimelineWords.spanLabel(nil, next: "Show 15 minutes"), "Span custom; Show 15 minutes"),
+      (TimelineWords.nowValue("9:41"), "Now, 9:41"),
+      (TimelineWords.pastValue("9:12", ago: "29m"), "9:12, 29m ago"),
+    ]
+    for (phone, words) in pinned {
+      #expect(phone == words, "\(words)")
+    }
+    let said = pinned.map { $0.phone } + TimelineScale.presets.flatMap { [$0.label, $0.title] }
+    for word in said {
+      let hit = word.range(of: Self.keyHoverPane, options: .regularExpression)
+      #expect(hit == nil, "\(word)")
+    }
+  }
+
+  /// A key, hover or pane: the words for them in any case, and the keys' own names as a keyboard prints them.
+  static let keyHoverPane =
+    #"(?i:\b(panes?|hover\w*|keys?|keyboard|arrows?|press\w*|click\w*|minus|equals)\b)"#
+    + #"|\b(Enter|End|Home|Esc|Escape|Tab|Return|Space|Up|Down|Left|Right)\b"#
 
   // MARK: - Readers
 
