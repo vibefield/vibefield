@@ -189,7 +189,9 @@ struct TimelineViewTests {
   /// H6b — THE STILL LAW (GodviewViewChoice.swift:25: "a still: every view draws one frame and runs no loop, no
   /// transition and no timer"): a still draws once, whatever else holds; live, a tween with motion allowed redraws
   /// every frame, and anything else once a second (TV:600-615, the desktop's still view keeping time).
-  @Test func aStillDrawsOnceAndALiveViewKeepsTime() {
+  /// On the main actor: `schedule` is a static of a SwiftUI View, which the iOS SDK isolates to it (the kit's four
+  /// Swift 6 warnings at 5d2637895f4b; pg5's precedent).
+  @Test @MainActor func aStillDrawsOnceAndALiveViewKeepsTime() {
     for tweening in [false, true] {
       for reduceMotion in [false, true] {
         let still = GodviewTimelineView.schedule(isStill: true, tweening: tweening, reduceMotion: reduceMotion)
