@@ -15,12 +15,19 @@
 
     /// How long the welcome stands before the sign-in, or nil when the launch does not stamp it over the slice.
     static func launch(_ arguments: [String]) -> Duration? {
-      nil
+      guard arguments.contains(slice),
+        let stamp = arguments.first(where: { $0 == argument || $0.hasPrefix(argument + "=") })
+      else { return nil }
+      guard let seconds = Int(stamp.dropFirst(argument.count + 1)), seconds > 0 else { return defaultDelay }
+      return .seconds(seconds)
     }
 
     /// The way in's page over the slice, through the real decision: the welcome signed out, none signed in.
     static func door(signedIn: Bool) -> FieldHomeModel.DoorPage? {
-      nil
+      FieldHomeModel.doorPage(
+        fixtureOwnsTheField: false, meshState: signedIn ? .up : .off, rememberedLogin: nil,
+        login: signedIn ? AccountFixtures.login : nil, isGated: true, hasListed: true, listed: signedIn ? 1 : 0,
+        remembered: 0, machineName: AccountFixtures.machine, adminConsole: nil, signInNote: nil)
     }
   }
 #endif

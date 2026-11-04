@@ -92,6 +92,11 @@ public struct HomeScreen: View {
     /// question: the scripted fleet and the demo peer own the field's ROWS
     /// and install no link at all.
     @State private var fixtureLink = false
+    /// WI-1's OWED witness — `-vf-demo-field-slice-signed-out`: false while the welcome stands over the slice, true
+    /// once the phone has signed in by itself, nil when the launch does not stamp it. Read here, before the first
+    /// frame, so the way in stands from the first frame and the tabs never mount before the sign-in.
+    @State private var fieldSliceSignedIn: Bool? =
+      FieldSliceSignIn.launch(ProcessInfo.processInfo.arguments) == nil ? nil : false
   #endif
   @State private var selection: SessionSelection?
   /// The card's SUBJECT, remembered rather than looked up fresh every frame.
@@ -1461,6 +1466,15 @@ public struct HomeScreen: View {
           link = fixture
           fixtureLink = true
           reportCard()
+          // WI-1's OWED witness — the welcome stands over the slice while its board folds; then the phone signs in
+          // by itself, with no input and no board change (`FieldSliceSignIn`)
+          if let delay = FieldSliceSignIn.launch(ProcessInfo.processInfo.arguments), fieldSliceSignedIn == false {
+            Task {
+              try? await Task.sleep(for: delay)
+              print("[field-slice] signing in by itself after \(delay)")
+              fieldSliceSignedIn = true
+            }
+          }
         }
         // PG-4s — a still's view and clock (`-vf-godview-view=<id>`, `-vf-godview-now=<epoch ms>`). Neither is a
         // fixture argument: alone they keep the live path, and they compose with `-vf-demo-field-slice`. Read once.
@@ -2510,6 +2524,7 @@ public struct HomeScreen: View {
     #if DEBUG
       if let demoAccount { return demoAccount.door }
       if let mock { return mock.door }
+      if let signedIn = fieldSliceSignedIn { return FieldSliceSignIn.door(signedIn: signedIn) }
       fixtureOwnsTheField = Self.fixtureArguments || mockActive || fixtureLink || demoRemoteActive
     #endif
     _ = identityEpoch
