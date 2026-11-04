@@ -52,6 +52,12 @@ enum SpendDOM {
     Set((value?.stringValue ?? "").split(separator: " ").map(String.init).filter { $0 != base })
   }
 
+  /// The box the view lays out in: the stage less the reserve its words start below (`{width, height, top}`).
+  static func box(_ stage: JSONValue?) -> (width: Double, height: Double) {
+    let height = stage?["height"]?.doubleValue ?? .nan
+    return (stage?["width"]?.doubleValue ?? .nan, height - (stage?["top"]?.doubleValue ?? .nan))
+  }
+
   /// The steady frame after the view's effects: the top landed (still), a passed moment let go.
   static func settled(_ input: SpendModel.Input, _ state: inout SpendModel.State) -> SpendModel.Frame {
     for _ in 0..<4 {
@@ -86,8 +92,7 @@ enum SpendDOM {
 extension SpendParityTests {
   /// The rows and acts behind each step the golden mounted the view at (the witness steps are paired by `at`).
   private static func viewInputs() throws -> [(at: String, agents: [SpendAgent], nowMs: Double, act: String?)] {
-    let open = try SpendWitness.steps().first { $0.at == "open" }?.rows ?? []
-    let agents = SpendWitness.agents(open)
+    let agents = try SpendWitness.open()
     let vectors = try SpendGolden.vectors()
     let lines = try (vectors["seriesRows"]?.arrayValue ?? []).map(SpendGolden.agent)
     let now = SpendWitness.nowMs
@@ -111,11 +116,10 @@ extension SpendParityTests {
     #expect(inputs.count == 18)
     for (at, agents, nowMs, act) in inputs {
       let golden = try SpendGolden.step(at)
-      let stage = golden["stage"]
-      let width = stage?["width"]?.doubleValue ?? .nan
-      let height = stage?["height"]?.doubleValue ?? .nan
+      let box = SpendDOM.box(golden["stage"])
       let input = SpendModel.Input(
-        agents: agents, nowMs: nowMs, width: width, height: height, timeZone: zone, measure: SpendDOM.averageGlyph)
+        agents: agents, nowMs: nowMs, width: box.width, height: box.height, timeZone: zone,
+        measure: SpendDOM.averageGlyph)
       var state = SpendModel.State()
       if let moment = golden["moment"]?.doubleValue {
         let frame = SpendDOM.settled(input, &state)
@@ -291,17 +295,14 @@ extension SpendParityTests {
 
   /// The witness's open, as spend reads it, at the golden's stage.
   private static func openInput(_ agents: [SpendAgent]? = nil) throws -> SpendModel.Input {
-    let open = try SpendWitness.steps().first { $0.at == "open" }?.rows ?? []
-    let stage = try SpendGolden.step("open")["stage"]
+    let box = SpendDOM.box(try SpendGolden.step("open")["stage"])
     return SpendModel.Input(
-      agents: agents ?? SpendWitness.agents(open), nowMs: SpendWitness.nowMs,
-      width: stage?["width"]?.doubleValue ?? .nan, height: stage?["height"]?.doubleValue ?? .nan,
+      agents: try agents ?? SpendWitness.open(), nowMs: SpendWitness.nowMs, width: box.width, height: box.height,
       timeZone: try SpendGolden.zone(), measure: SpendDOM.averageGlyph)
   }
 
   private static func witnessAgent(_ id: String) throws -> SpendAgent {
-    let open = try SpendWitness.steps().first { $0.at == "open" }?.rows ?? []
-    let found = SpendWitness.agents(open).first { $0.id == id }
+    let found = try SpendWitness.open().first { $0.id == id }
     return try #require(found, "the witness's \(id)")
   }
 
@@ -365,8 +366,7 @@ extension SpendParityTests {
 
   /// H5 — terminals only: spend draws agents alone, so a field of terminals is empty.
   @Test func terminalsAloneAreEmpty() throws {
-    let open = try SpendWitness.steps().first { $0.at == "open" }?.rows ?? []
-    let terminals = SpendWitness.agents(open).filter { $0.monitor.kind == .terminal }
+    let terminals = try SpendWitness.open().filter { $0.monitor.kind == .terminal }
     try #require(!terminals.isEmpty, "the witness carries terminals")
     var state = SpendModel.State()
     let input = try Self.openInput(terminals)
@@ -428,7 +428,7 @@ extension SpendParityTests {
 
     let short = SpendModel.Input(
       agents: input.agents, nowMs: input.nowMs, width: 402, height: 480, timeZone: input.timeZone,
-      measure: input.measure)
+      measure: input.measure)  // the "open · short" step's box: 402 × (588 − 108)
     var list = SpendModel.State()
     let before = SpendDOM.settled(short, &list)
     try #require(before.fit.more, "the short list has more rows than slots")

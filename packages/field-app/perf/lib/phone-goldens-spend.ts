@@ -1,6 +1,3 @@
-import { realpathSync } from "node:fs";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import type { AgentView, MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
 import {
   countingCommands,
@@ -12,6 +9,7 @@ import { formatClock, parseCssColor } from "@vibefield/puppeteer-view-sdk/toolki
 import { spendMonitorView } from "@vibefield/puppeteer-views";
 import { act } from "react";
 import type { PhoneViewGolden, PhoneViewInput, PhoneWindowStep } from "./phone-goldens";
+import { importPuppeteerViews } from "./puppeteer-views-path";
 
 /**
  * PG-7 — THE SPEND VIEW'S GOLDEN: what puppeteer-views' spend says over the home's window at every witness step,
@@ -30,13 +28,9 @@ import type { PhoneViewGolden, PhoneViewInput, PhoneWindowStep } from "./phone-g
  * `formatClock(ms)`; the kit expands it with its own `formatClock`, held to the toolkit's golden.
  */
 
-const FIELD_APP = join(import.meta.dirname, "..", "..");
-
-/** PG-4t lands the shared by-path loader (fd, Q1); this is its local stand-in, one function. */
-async function spendModule<T>(file: string): Promise<T> {
-  const views = realpathSync(join(FIELD_APP, "node_modules", "@vibefield", "puppeteer-views"));
-  return (await import(pathToFileURL(join(views, "dist", "views", "spend", file)).href)) as T;
-}
+/** One of spend's own modules, by its path under the installed dist (PG-4t's shared loader: its REAL path, so the
+ * shipping view and these readings are one module instance). */
+const spendModule = <T>(file: string): Promise<T> => importPuppeteerViews<T>(`views/spend/${file}`);
 type Series =
   typeof import("../../node_modules/@vibefield/puppeteer-views/dist/views/spend/spend-series.js");
 type Scale =
@@ -72,16 +66,24 @@ async function loadSpend(): Promise<Spend> {
   };
 }
 
-/** The phone's frame the view lays out in (Q8): a NAMED PLACEHOLDER until PG-4t's constants (402 × 874, less the
- * top safe area 62, the Stories row about 70 and `AppBar.band(homeInset: 34)` = 93), and one compact size (under
- * the view's 418). The kit reads both from this golden's steps, never a copy. */
-export const PHONE_SPEND_STAGE_PLACEHOLDER = { width: 402, height: 649 } as const;
-export const PHONE_SPEND_COMPACT_STAGE = { width: 402, height: 400 } as const;
+/** A stage as the phone's Godview hands it (PG-4t): from the screen's top to the band's top, and `top`, the Stories
+ * row's reserve (`GodviewStageInput.topInset`), which a word view's words start below (the window's `insets.top`, so
+ * spend lays out in width × (height − top), its ground under the whole). */
+interface Stage {
+  readonly width: number;
+  readonly height: number;
+  readonly top: number;
+}
+/** The iPhone 17 Pro's stage (fd, from PG-4t's constants): 874 − the band's 93 = 781, the reserve 108 (island phones);
+ * spend lays out in 402 × 673. The kit's rows read it from this golden's steps, never a copy. */
+export const PHONE_SPEND_STAGE: Stage = { width: 402, height: 781, top: 108 };
+/** One compact size (the view's box under its 418: the one-line rows), 402 × 400 under the same reserve. */
+export const PHONE_SPEND_COMPACT_STAGE: Stage = { width: 402, height: 508, top: 108 };
 /** A list shorter than its rows (seven slots for the witness's nine): the "more" row, the dock, the hidden rows. */
-const SHORT_STAGE = { width: 402, height: 480 } as const;
+const SHORT_STAGE: Stage = { width: 402, height: 588, top: 108 };
 
 const NOTE =
-  "PG-7 — the phone's spend view golden (fd's ruling of the read, 2026-11-04 01:24Z): puppeteer-views' spend over the home's window rows (phone-fold.golden.json's drawn rows, whole) at every witness step, at nowMs. Per step, from spend's own modules BY PATH (the exports map gives spendSet and spendMeters; the rest by realpath under field-app's node_modules/@vibefield/puppeteer-views/dist/views/spend/, imported by file URL): meters (spendMeters' lines: id, bornMs, total, partial, recorded, points [t, v]) and unpriced; atNow (each line at now: its head, spent and spentPoints in the window, value, rate, state, status words, burn, figure); names (spendNames); order (listOrder by total); sib (siblingIndex); scale (moneyScale full and compact, moneyTicks, axisMoney). Then the SHIPPING view, spendMonitorView mounted in happy-dom (Date.now held at nowMs, motion off, the light fixture palette; happy-dom lays out nothing and draws no canvas, so the view measures at the stage with its own averageGlyph and paints nothing): view (the root, hero, colcap, head, the y and x axes, the chips, the more row, the empty state, the Now pill, the tag) and viewRows (each list row's id, state, classes, words, places). Extra steps: 'open · compact' (the one-line form), 'open · pointed' (a pointer on the chart near a line), 'open · moment' (a moment set by a click on empty chart two minutes back, inside the recorded buckets, the pointer gone), 'open · moment · unrecorded' (the same five minutes back, before the buckets begin: every started row says 'not recorded'), 'open · short' (a list shorter than its rows, 402 × 480: the more row, the dock, the hidden rows), 'open · short · scrolled' (the same a row on, by the wheel), 'lines · before' (the series vectors' rows mounted at the vectors' now, a moment set before two of them are born), 'empty' (no rows), and 'vectors' (fixed inputs over every spend word and number, each row {in…, out}; a non-JSON input or output is a tagged string: 'NaN', 'Infinity', '-Infinity', 'undefined'). A clock word is {{clock:<ms>}}, checked against formatClock(ms) when written: zone-free. Not here: colours (the window's rows carry 'currentColor', no theme; the ink is pinned by the vectors' fixed hexes), the canvas (by eye, Q2). GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens); pinned byte for byte by packages/field-app/test/phone-parity.test.ts, the kit's copy by pnpm check:ios-fixtures. A puppeteer EL8 moves it: regenerate and copy to the kit in the same commit. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
+  "PG-7 — the phone's spend view golden (fd's ruling of the read, 2026-11-04 01:24Z): puppeteer-views' spend over the home's window rows (phone-fold.golden.json's drawn rows, whole) at every witness step, at nowMs. Per step, from spend's own modules BY PATH (the exports map gives spendSet and spendMeters; the rest by realpath under field-app's node_modules/@vibefield/puppeteer-views/dist/views/spend/, imported by file URL): meters (spendMeters' lines: id, bornMs, total, partial, recorded, points [t, v]) and unpriced; atNow (each line at now: its head, spent and spentPoints in the window, value, rate, state, status words, burn, figure); names (spendNames); order (listOrder by total); sib (siblingIndex); scale (moneyScale full and compact, moneyTicks, axisMoney). Then the SHIPPING view, spendMonitorView mounted in happy-dom (Date.now held at nowMs, motion off, the light fixture palette; happy-dom lays out nothing and draws no canvas, so the view measures at the stage with its own averageGlyph and paints nothing): view (the root, hero, colcap, head, the y and x axes, the chips, the more row, the empty state, the Now pill, the tag) and viewRows (each list row's id, state, classes, words, places). Each view step records its stage {width, height, top}: from the screen's top to the band's top, and the Stories row's reserve the view's words start below (PG-4t; the iPhone 17 Pro's 402 × 781, top 108), mounted as the stage's insets.top, so the view lays out in width × (height − top). Extra steps: 'open · compact' (the one-line form), 'open · pointed' (a pointer on the chart near a line), 'open · moment' (a moment set by a click on empty chart two minutes back, inside the recorded buckets, the pointer gone), 'open · moment · unrecorded' (the same five minutes back, before the buckets begin: every started row says 'not recorded'), 'open · short' (a list shorter than its rows, 402 × 480: the more row, the dock, the hidden rows), 'open · short · scrolled' (the same a row on, by the wheel), 'lines · before' (the series vectors' rows mounted at the vectors' now, a moment set before two of them are born), 'empty' (no rows), and 'vectors' (fixed inputs over every spend word and number, each row {in…, out}; a non-JSON input or output is a tagged string: 'NaN', 'Infinity', '-Infinity', 'undefined'). A clock word is {{clock:<ms>}}, checked against formatClock(ms) when written: zone-free. Not here: colours (the window's rows carry 'currentColor', no theme; the ink is pinned by the vectors' fixed hexes), the canvas (by eye, Q2). GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens); pinned byte for byte by packages/field-app/test/phone-parity.test.ts, the kit's copy by pnpm check:ios-fixtures. A puppeteer EL8 moves it: regenerate and copy to the kit in the same commit. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
 
 /** A number as the golden carries it: JSON's own, or a tag for what JSON cannot hold. */
 type Tagged = number | "NaN" | "Infinity" | "-Infinity" | "undefined";
@@ -360,7 +362,7 @@ function readView(root: HTMLElement, clocks: ViewClocks) {
 
 type Mounted = { root: HTMLElement; unmount(): void };
 /** The shipping view on a detached element (its clock is the caller's `heldClock`). */
-function mountView(rows: readonly AgentView[], size: { width: number; height: number }): Mounted {
+function mountView(rows: readonly AgentView[], size: Stage): Mounted {
   const root = document.createElement("div");
   document.body.appendChild(root);
   const input = fixtureInput({
@@ -368,7 +370,7 @@ function mountView(rows: readonly AgentView[], size: { width: number; height: nu
     stage: {
       width: size.width,
       height: size.height,
-      insets: { top: 0, right: 0, bottom: 0, left: 0 },
+      insets: { top: size.top, right: 0, bottom: 0, left: 0 },
       obstacles: [],
     },
     theme: fixtureTheme("light", { animations: false }),
@@ -405,7 +407,7 @@ function heldClock<T>(nowMs: number, work: () => T): T {
 function viewStep(
   spend: Spend,
   rows: readonly AgentView[],
-  size: { width: number; height: number },
+  size: Stage,
   nowMs: number,
   act2?: (
     root: HTMLElement,
@@ -413,7 +415,7 @@ function viewStep(
   ) => number | null,
 ) {
   const { ta, tb } = spend.scale.spendWindow(nowMs);
-  const g = spend.view.geometryFor(size.width, size.height);
+  const g = spend.view.geometryFor(size.width, size.height - size.top);
   // the births the rows say "starts" at: each line's at now (`lineAt` begins a birth after now at now), each unpriced
   // row's own
   const meters = spend.series.spendMeters(rows);
@@ -688,7 +690,7 @@ const INK_HEXES = [
 ];
 
 const PHONE_SIZES: ReadonlyArray<readonly [number, number]> = [
-  [402, 649],
+  [402, 673],
   [393, 640],
   [402, 400],
   [430, 700],
@@ -1108,7 +1110,7 @@ function vectors(spend: Spend) {
 async function compute(input: PhoneViewInput): Promise<unknown[]> {
   const spend = await loadSpend();
   const { nowMs } = input;
-  const stage = PHONE_SPEND_STAGE_PLACEHOLDER;
+  const stage = PHONE_SPEND_STAGE;
   const steps: unknown[] = [];
   let open: readonly AgentView[] | undefined;
   for (const step of input.steps as readonly PhoneWindowStep[]) {
@@ -1136,9 +1138,9 @@ async function compute(input: PhoneViewInput): Promise<unknown[]> {
       return t;
     }),
   });
-  // a click on empty chart sets the moment, and the pointer then leaves (fd 01:44Z, 2): two minutes back, inside
-  // what the buckets recorded, the rows read real money then; five minutes back, before the witness's buckets
-  // begin, every started row honestly says "not recorded"
+  // a click on empty chart sets the moment, and the pointer then leaves (fd, accepting pair 1: a held moment inside
+  // the record): two minutes back, inside what the buckets recorded, the rows read real money then; five minutes
+  // back, before the witness's buckets begin, every started row honestly says "not recorded"
   for (const [at, back] of [
     ["open · moment", 120_000],
     ["open · moment · unrecorded", 300_000],

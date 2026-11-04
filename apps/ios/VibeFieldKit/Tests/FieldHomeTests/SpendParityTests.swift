@@ -130,43 +130,10 @@ enum SpendGolden {
   }
 }
 
-/// PG-4t lands the shared `HomeFixture.witnessSteps(...)` (fd, Q7); this is its private stand-in: the witness open,
-/// frames 0…7, PG-1c's resync after frame 7 (delivered as an open), and frame 8's gap, through `RemoteMeshCopy` as
-/// FieldLink drives it (`PhoneBodyParityTests`' path).
+/// The witness as spend reads it: PG-4t's shared replay (`HomeFixture.witnessSteps`: the open, frames 0…7, the
+/// resync, frame 8's gap), each step's rows joined as the window joins them.
 enum SpendWitness {
-  static let nowMs = 1_790_803_300_000.0
-
-  struct Step {
-    let at: String
-    /// nil: the gap (the window asks again, and the run ends).
-    let rows: [RemoteFieldRow]?
-  }
-
-  static func steps() throws -> [Step] {
-    let open = try AgentRemoteMeshOpen(json: try HomeFixture.json("agent-remote-mesh-open.witness"))
-    let list = try HomeFixture.json("agent-remote-mesh-frames.witness").arrayValue ?? []
-    let frames = try list.map(AgentRemoteMeshFrame.init(json:))
-    let resync = try AgentRemoteMeshOpen(json: try HomeFixture.json("agent-remote-mesh-open.resync"))
-    var copy = RemoteMeshCopy()
-    var out: [Step] = []
-    _ = copy.open(open, now: HomeFixture.now)
-    _ = copy.publish()
-    out.append(Step(at: "open", rows: copy.drawn()))
-    for (index, frame) in frames.enumerated() {
-      if case .gap = copy.frame(frame, now: HomeFixture.now) {
-        out.append(Step(at: "\(index)", rows: nil))
-        return out
-      }
-      _ = copy.publish()
-      out.append(Step(at: "\(index)", rows: copy.drawn()))
-      if index == 7 {
-        _ = copy.open(resync, now: HomeFixture.now)
-        _ = copy.publish()
-        out.append(Step(at: "resync", rows: copy.drawn()))
-      }
-    }
-    return out
-  }
+  static let nowMs = Double(HomeFixture.nowMs)
 
   /// The rows as spend reads them: the window's `self`, the row's own unread (no card is open in a replay, so it is
   /// the stage's `unreadIds`), not active.
@@ -174,15 +141,21 @@ enum SpendWitness {
     rows.map { SpendAgent(monitor: $0.row.monitor, isSelf: $0.isSelf, unread: $0.unread, active: false) }
   }
 
+  /// The open's rows, as spend reads them.
+  static func open() throws -> [SpendAgent] {
+    let steps = try HomeFixture.witnessSteps()
+    let open = try #require(steps.first { $0.at == "open" }, "the witness opens")
+    return agents(open.rows)
+  }
+
   /// Each witness step that draws, beside its golden step.
   static func paired() throws -> [(at: String, agents: [SpendAgent], golden: JSONValue)] {
     let golden = try SpendGolden.steps()
     var out: [(at: String, agents: [SpendAgent], golden: JSONValue)] = []
-    for step in try steps() {
-      guard let rows = step.rows else { continue }
+    for step in try HomeFixture.witnessSteps() where !step.gap {
       let match = golden.first { SpendGolden.label($0["at"]) == step.at }
       let found = try #require(match, "the golden has no step \(step.at)")
-      out.append((step.at, agents(rows), found))
+      out.append((step.at, agents(step.rows), found))
     }
     return out
   }
@@ -194,7 +167,7 @@ struct SpendParityTests {
 
   /// W0 — the replay has the golden's witness steps: the open, frames 0…7, the resync, and frame 8's gap.
   @Test func theReplayIsTheGoldensRun() throws {
-    let replay = try SpendWitness.steps().map { $0.at + ($0.rows == nil ? " gap" : "") }
+    let replay = try HomeFixture.witnessSteps().map { $0.at + ($0.gap ? " gap" : "") }
     let golden = try SpendGolden.steps()
       .filter { $0["frame"] != nil || SpendGolden.label($0["at"]) == "open" }
       .map { SpendGolden.label($0["at"]) + ($0["gap"]?.boolValue == true ? " gap" : "") }
