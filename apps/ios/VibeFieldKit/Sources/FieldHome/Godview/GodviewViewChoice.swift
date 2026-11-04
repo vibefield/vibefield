@@ -26,13 +26,13 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
 
   /// PG-4t — the ids given, in the registry's order; an id the registry does not name is dropped.
   static func ordered(_ ids: Set<String>) -> [String] {
-    []  // PG-4t (red): the skeleton
+    registryOrder.filter { ids.contains($0) }
   }
 
   /// PG-4t — the views the Stories row draws: every case the phone has, in the registry's order, and nothing else
   /// (VF-PM, 2026-11-04: never a placeholder; one ringed circle while only the swarm exists).
   static var shown: [GodviewViewChoice] {
-    []  // PG-4t (red): the skeleton
+    ordered(Set(allCases.map { $0.rawValue })).compactMap(GodviewViewChoice.init(rawValue:))
   }
 
   /// PG-4t (J-S3, drop) — whether the scanlines and the vignette stand over this view: over the swarm only, never
@@ -51,7 +51,7 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
 
   /// PG-4t — whether `-vf-godview-still` is given: the whole argument, so a longer flag is never this one.
   static func still(_ arguments: [String]) -> Bool {
-    false  // PG-4t (red): the skeleton
+    arguments.contains(stillArgument)
   }
 
   /// The first `-vf-godview-now=<epoch ms>` (Q-S5 (a)): the frozen clock a still is taken at, or nil (the live
@@ -107,7 +107,7 @@ struct GodviewStageInput {
   /// the bar's band at the bottom only inside a `.full` stage, which runs under the bar (a `.flow` stage ends at the
   /// band, where `framed` ends it). The pure helper a word view reads; nothing pads by it but the view itself.
   func insets(_ allocation: GodviewStageAllocation) -> EdgeInsets {
-    EdgeInsets()  // PG-4t (red): the skeleton
+    EdgeInsets(top: topInset, leading: 0, bottom: allocation == .full ? bandHeight : 0, trailing: 0)
   }
 
   /// The open card's row: the drawn row whose VISUAL id is the card's subject (`selection.id`), by its model id.
@@ -159,23 +159,34 @@ struct GodviewDissolve: View {
 
 /// The stage: one view mounted at a time (DESIGN.md "The host mounts one at a time"). The swarm arm is HS's own
 /// SwarmField, handed in, because it captures HS's privates (the card, the hold, the bloom). It stands where
-/// SwarmField stood, so the scanlines and the vignette stay above every view.
+/// SwarmField stood. *(Corrected 2026-11-04, PG-4t: this said "so the scanlines and the vignette stay above every
+/// view". J-S3 (drop) puts them over the swarm only: HS lays them by `GodviewViewChoice.wearsAtmosphere`.)*
+///
+/// PG-4t — the stage runs under the Stories row to the screen's top, and the WHOLE stage dissolves under the row,
+/// whatever the view: clear at the row's axis, whole at the reserve (`GodviewDissolve`). The row, the bar and the
+/// swarm's scanlines and vignette stand outside it, so none of them is masked.
 struct GodviewStage<Swarm: View>: View {
   let choice: GodviewViewChoice
   let input: GodviewStageInput
   @ViewBuilder let swarm: () -> Swarm
 
   var body: some View {
+    arm.mask { GodviewDissolve(topInset: input.topInset) }
+  }
+
+  @ViewBuilder
+  private var arm: some View {
     switch choice {
     case .swarm: swarm()
     // PG-5…8: `case .<view>: framed(<View>View(input: input))`
     }
   }
 
-  /// What a non-swarm view stands in (Q-S7 (a)), written once so no lane re-derives it: the bar's band as its bottom
-  /// inset (DESIGN.md "Stage insets replace host padding rules"). No door stands over the field since WI-1, so there
-  /// is no gate or dim to lay. No caller at PG-4s; the first view lane's still pins its look.
+  /// What a non-swarm view stands in (Q-S7 (a)), written once so no lane re-derives it: a `.flow` stage ends at the
+  /// bar's band, the one inset the host lays; a `.full` one runs under the bar. The top is never padded: the reserve
+  /// is data on `input.topInset` (DESIGN.md "Stage insets replace host padding rules"), and a view's ground fills its
+  /// stage from the screen's top. No door stands over the field since WI-1, so there is no gate or dim to lay.
   func framed(_ view: some View) -> some View {
-    view.padding(.bottom, input.bandHeight)
+    view.padding(.bottom, choice.allocation == .flow ? input.bandHeight : 0)
   }
 }

@@ -23,22 +23,25 @@ enum GodviewStories {
   /// The row's top from the screen's top: 8 under the island's foot on an island phone (56), and 8 under the safe
   /// area's top line where that line stands higher — a notch, a status bar, a phone on its side.
   static func top(safeTop: CGFloat) -> CGFloat {
-    0  // PG-4t (red): the skeleton
+    min(max(safeTop, 0), islandFoot) + under
   }
 
   /// The row's reserve, its foot plus 8, from the screen's top: the stage's top inset (the stage is full-bleed, so
   /// stage space is screen space). 108 on an island phone.
   static func reserve(safeTop: CGFloat) -> CGFloat {
-    0  // PG-4t (red): the skeleton
+    top(safeTop: safeTop) + circle + reserveGap
   }
 
   /// The dissolve over the stage: clear down to `from` (the row's axis), whole from `to` (the reserve).
   static func dissolve(topInset: CGFloat) -> (from: CGFloat, to: CGFloat) {
-    (0, 0)  // PG-4t (red): the skeleton
+    (max(0, topInset - fadeSpan), topInset)
   }
 
   /// The circles' left edges, `count` of them, the row centred on `width`.
   static func circleMinX(count: Int, width: CGFloat) -> [CGFloat] {
-    []  // PG-4t (red): the skeleton
+    guard count > 0 else { return [] }
+    let row = CGFloat(count) * circle + CGFloat(count - 1) * gap
+    let first = (width - row) / 2
+    return (0..<count).map { first + CGFloat($0) * (circle + gap) }
   }
 }

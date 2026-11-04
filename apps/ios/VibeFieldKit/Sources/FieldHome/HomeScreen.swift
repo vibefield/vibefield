@@ -305,16 +305,21 @@ public struct HomeScreen: View {
       // rendering at 120 Hz is a battery spent on nobody.
       let active = scenePhase == .active && selectedTab == .field
       // PG-4s — the Godview view the page stands on: the swarm, until PG-5…8
-      // add theirs. It stands where SwarmField stood, so the overlays below
-      // stay above every view.
+      // add theirs. It stands where SwarmField stood. (Corrected 2026-11-04,
+      // PG-4t: this said "so the overlays below stay above every view". J-S3
+      // (drop) puts them over the swarm only: the gate below is the one place.)
+      // PG-4t — the stage runs under the Stories row and dissolves under it
+      // (GodviewStage's mask), whatever the view.
       GodviewStage(choice: godviewView, input: godviewInput(active: active)) {
         swarmField(active: active)
       }
 
-      ScanlinesOverlay()
-        .ignoresSafeArea()
-      VignetteOverlay()
-        .ignoresSafeArea()
+      if godviewView.wearsAtmosphere {
+        ScanlinesOverlay()
+          .ignoresSafeArea()
+        VignetteOverlay()
+          .ignoresSafeArea()
+      }
     }
     // The lab covers the stage (IOS-6c); presented here rather than on the
     // body's chain, which is already at the type-checker's limit.
@@ -409,6 +414,16 @@ public struct HomeScreen: View {
       .swarmObstacle()
       .allowsHitTesting(false)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    // PG-4t — the Stories row's reserve, the bar band's twin across the
+    // stage's top: the swarm steers by it and reads no inset (DESIGN.md §8
+    // "The phone's Stories row"). The stage runs to the screen's top, so the
+    // band runs from 0 to the reserve.
+    Color.clear
+      .frame(maxWidth: .infinity)
+      .frame(height: GodviewStories.reserve(safeTop: safeTop))
+      .swarmObstacle()
+      .allowsHitTesting(false)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     // RETIRED 2026-09-23 (IOS-8g): the TERMINAL chip in the top-right. What it
     // opened is the session card's `···` now; the field's corners are the
     // account's and the tab bar's.
@@ -697,10 +712,12 @@ public struct HomeScreen: View {
     .onChange(of: history.path) { history.barMinimized = false }
   }
 
-  /// The field, under the bar's glass to the screen's edge.
+  /// The field, under the bar's glass to the screen's edge. PG-4t — and under
+  /// the Stories row to the screen's top: the stage is full-bleed, so its
+  /// space is the screen's and its top inset is the row's reserve.
   private var fieldTab: some View {
     stage
-      .ignoresSafeArea(.container, edges: .bottom)
+      .ignoresSafeArea(.container, edges: [.top, .bottom])
   }
 
   private var historyTab: some View {
@@ -1354,10 +1371,12 @@ public struct HomeScreen: View {
         }
         // PG-4s — a still's view and clock (`-vf-godview-view=<id>`, `-vf-godview-now=<epoch ms>`). Neither is a
         // fixture argument: alone they keep the live path, and they compose with `-vf-demo-field-slice`. Read once.
+        // PG-4t — and the still itself (`-vf-godview-still`): every view draws one frame.
         if !godviewLaunchRead {
           godviewLaunchRead = true
           if let view = GodviewViewChoice.launch(ProcessInfo.processInfo.arguments) { godviewView = view }
           godviewNow = GodviewViewChoice.frozenNow(ProcessInfo.processInfo.arguments)
+          godviewStill = GodviewViewChoice.still(ProcessInfo.processInfo.arguments)
         }
         // `!demoRemoteActive` for the reason the line above carries: a second
         // appearance would otherwise replace a running fixture field with a
