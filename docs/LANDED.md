@@ -29494,6 +29494,12 @@ keeps its place on every step. The Desktop slice is held for James: item 160's p
   slice's four desktops draw". The field slice starts signed out on a static board; Sign in; no board change. Item
   154's `-vf-auto-open-card=<id>` drives it: green reads "[auto-open] opening <id>", and with `12363ac27`'s refold
   reverted the red expected is "[auto-open] no body <id> on the field".
+  > **Closed (2026-11-04, M120; the IOS session):** witnessed in the Debug app on the simulator, light and dark,
+  > by the stamp `-vf-demo-field-slice-signed-out`. As committed, the field held 11 bodies after the sign-in and
+  > read "[auto-open] opening pty-h1". With the refold reverted, it held 0 and read "[auto-open] no body pty-h1 on
+  > the field". Two words here no longer hold. The board has had three desktops since PG-3e (2026-11-02), not
+  > four. The sign-in is the stamp's own, not a tap: no OS input runs on this Mac (LANDED "WI-1 — the owed
+  > witness", run 120).
 - L5, words open for James: the joining note "Couldn’t connect — ‹reason›." and the tour's "Next", both outside §9's
   text.
 - A design note for James, not a fold: the 12 pt `inkTertiary` notes read faintly where the field's rays cross them
@@ -30455,3 +30461,106 @@ the record says so, and no probe ran one. The record is an info line, so a host 
 too; the rows boot fieldd at its default level.
 
 **Owed.** Nothing of this item's. Its filing line in "WI-3" (run 115) carries a dated note closing it.
+
+## WI-1 — the owed witness: the welcome over the field slice, a sign-in by itself, and the slice's bodies drawn through the refold (2026-11-04; `21aa0b3ec` → `576172d99`, three commits on main `bf4e834b9`, cut as `b4146e3d5` → `fbc9517b7` on `f6fb1fa06` and re-stacked three times with their patches unchanged, lane `wi/owed-witness` in `/Volumes/SamsungRed/lanes/wi1w/vibe-field`, the IOS session's, in the mini's mint M120 `576172d99`, stacked, run 120)
+
+**What it rests on.**
+- LANDED "WI-1 (with WI-2) and WI-4", Owed: the OWED witness (VF-PM 2026-11-02 13:20Z, accepted as owed at
+  14:08Z), "after Sign in with no board change, the slice's four desktops draw", red with `12363ac27`'s refold
+  reverted. No kit suite hosts a view, so this witness belongs to the Debug app.
+- VF-PM shaped it on 2026-11-04 (the short shape, 02:59Z). It accepted the witness at `fbc9517b7` at 03:50Z and the
+  re-witness at `f516b702b` at 04:54Z.
+- Times are this session's clock: its transcript and the scripts' own `date -u`.
+
+**What** (4 files, +138 −5, all under `apps/ios`). The stamp is DEBUG only. One private helper, `tabsStanding`
+(reading `FieldHomeModel.tabsStand`), stands outside DEBUG, and a Release build uses it nowhere.
+- **The red** (`21aa0b3ec`, cut as `b4146e3d5`):
+  - `FieldSliceSignIn` with stub bodies;
+  - `FieldSliceSignInTests`, four rows: the launch (the stamp rides only on `-vf-demo-field-slice`; 4 s bare, its own
+    seconds given), the door, the hand-over, and the reading.
+- **The stamp** (`0ca4a40ed`): `-vf-demo-field-slice-signed-out[=<seconds>]`, beside `-vf-demo-field-slice`.
+  - From the first frame the welcome stands over the slice through the real decision: `FieldHomeModel.doorPage`, with
+    the fixture no longer owning the field.
+  - After the delay the phone signs in by itself. The way in ends (`wayInEnds`), the found beat holds, and the
+    hand-over offers no lock (`-vf-lock=none`).
+  - `12363ac27`'s refold runs on that sign-in, as it does on a person's.
+  - The README's row: the witness is
+    `-vf-demo-field-slice -vf-demo-field-slice-signed-out=6 -vf-lock=none -vf-auto-open-card=pty-h1`.
+- **The fold** (`576172d99`, VF-PM 02:59Z):
+  - The slice's link installs only once the tabs are down (`FieldHomeModel.tabsStand(signedIn:splashCovers:)`
+    false).
+  - The stamp reads the field itself, 2 s after the found beat: "[field-slice] after the sign-in the field holds N
+    bodies (pty-h1 drawn|absent)".
+
+**Validation** (this Mac; the iPhone 17 Pro simulator `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC`, iOS 26.5; Xcode 26.6
+17F113; every build at nice 19, guarded, never beside another xcodebuild; the simulator shut down after each slot):
+- **Red in the kit** (`b4146e3d5`, 02:48–02:49Z): FieldHomeTests, 155 tests in 22 suites, 7 issues, EXIT 65.
+- **The host typecheck** (`tc.sh`, no xcodebuild): rc 0 at `fbc9517b7`.
+- **Red in the app.** The refold line was reverted in the proof worktree only, never committed, and the Debug app built
+  over it. Slot 2 at `fbc9517b7` (03:41:41Z; `lanes/wi1w/light/slot2-wi1w.out`, `console2-red-light.log`) and slot 3
+  at `f516b702b` (04:45:06Z; `slot3-wi1w.out`, `console3-red-light.log`) each read:
+  - "[field-slice] after the sign-in the field holds 0 bodies (pty-h1 absent)";
+  - "[auto-open] no body pty-h1 on the field: no card opened".
+- **The witness at `fbc9517b7`** (slot 2, 03:42–03:47Z):
+  - The kit (`lanes/wi/logs/witness-fbc9517b7/`): 17 runs, 1,613 tests, one red run (FieldTerminalTests, 175 in 34
+    suites) with 9 issues. One is item 167. The other eight are the load's: seven attach rows (AttachLogTests ×5,
+    AttachDeadlineTests ×1, AttachmentOverTheDoorTests ×1 with two issues) hit their 60 s limits or timed out, with
+    the kit armed at load1 107.
+  - The proof that it was the load: FieldTerminalTests alone at load1 18–20 (03:50:56Z;
+    `lanes/wi/logs/suite-fbc9517b7-wi1w-quiet-ft-035056/`) read 175 in 34 with item 167 alone.
+  - Debug ✓, Release ✓.
+- **The re-witness at `f516b702b`** (slot 3, 04:43:18–04:52:44Z; `lanes/wi1w/light/slot3-wi1w-b22dda52.sh`, its log
+  `slot3-wi1w.out`; the kit's logs under `lanes/wi/logs/witness-f516b702b/`):
+  - The kit built for testing ✓; 16 runs, 1,627 tests, one red run, one issue: item 167
+    (`TerminalSurfaceKeyboardTests.swift:31:27`, no `UIWindowScene` in a package-hosted kit). The kit armed at load1
+    115.
+  - Debug ✓, ONE Release ✓.
+  - FieldTerminalTests alone (load1 59–64): 175 in 34, item 167 alone.
+  - The kit log's `xcrun: error: unable to find utility "simctl"` is xcodebuild's own diagnostics collection after
+    167's failure (`IDETestOperationsObserverDebug`), not a step of ours. `fbc9517b7`'s log has it once too.
+- **Green in the app**, light and dark, at both tips (`console2-green-{light,dark}.log` at `fbc9517b7`,
+  `console3-green-{light,dark}.log` at `f516b702b`, all in `lanes/wi1w/light/`), each reading:
+  - "[field-slice] signing in by itself after 6.0 seconds";
+  - "[auto-open] opening pty-h1";
+  - "[field-slice] after the sign-in the field holds 11 bodies (pty-h1 drawn)".
+  - The pictures (`lanes/wi1w/light/slot3-green-{light,dark}-{before,after}.png`, 1206 × 2622) show the welcome over
+    the slice at 5 s, and pty-h1's card open over the field at 11.5 s.
+- **The re-stacks**: `fbc9517b7` on `f6fb1fa06` → `f516b702b` on `00d78236c` (PG-4t's records) → `a5fe05820` on
+  `8dc80cc1d` (item 168) → `576172d99` on `bf4e834b9` (168's records), with range-diff `=` for all three commits each
+  time.
+  - `apps/ios` is `ad24f2284` at the last three.
+  - The diff from the witnessed `f516b702b` to T is main's own `00d78236c..bf4e834b9`, byte for byte (hash
+    `ec5abfd693ec`), so the slot 3 witness carries.
+- **Run 120** (M120 `576172d99`, stacked on `bf4e834b9`): green, verify exit 0 at 05:05:42Z (VF-PM's read).
+  - vitest 12,197 passed, 0 failed, 18 skipped; cargo 34 ok; fixtures 224, unchanged; the tree clean.
+- **Landed:** main fast-forwarded `bf4e834b9..576172d99` on VF-PM's GO (2026-11-04T05:10:32Z, the fixer's stamp).
+
+**Found (said).**
+- **The console capture.**
+  - `simctl launch --stdout=<file>` caught 0 bytes. Slot 2's first attempt (03:37:56Z) stopped at exit 31 ("the RED
+    run gave no reading; no witness"; `lanes/wi1w/light/slot2-wi1w.stop31.out`): a file is block-buffered, and the
+    terminate drops the buffer.
+  - `--console-pty` caught nothing on the first launch after a boot (slot 1's red and its green light).
+  - The form that reads: install, one warm-up launch with no arguments, then `--console-pty` with
+    `SIMCTL_CHILD_NSUnbufferedIO=YES`, as Xcode sets it.
+- **The fixture's timing.**
+  - Slot 1's green dark read "[auto-open] opening pty-h1" BEFORE "[field-slice] signing in by itself after 4.0
+    seconds". The link had installed at the first appear, while the tabs still stood (until the splash covered them),
+    so the board folded and opened before the way in stood. A reverted refold could not be seen.
+  - The fold installs the link only once the tabs are down. The stamp reads the field itself after the sign-in,
+    rather than leaning on the auto-open's line alone.
+- **The owed line's "four desktops"** was the golden board DS-8 served. PG-3e (2026-11-02) moved
+  `-vf-demo-field-slice` to PG-3a's witness board: three desktops (Studio's seven rows, Loft's three through the home,
+  Attic's kept row). That makes eleven bodies, the count green read.
+
+**Not claimed.**
+- The sign-in is the stamp's own, through the real decision: the door page goes from the welcome to none, then
+  `wayInEnds`, the found beat and the hand-over. No tap on Continue with Tailscale was made and no tailnet sign-in
+  ran: no OS input runs on this Mac.
+- The corner reads the real mesh, down on the simulator, so pty-h1's card in the pictures says "the mesh is not up on
+  this device — connect it first". The fixture's link carries only the field.
+- No whole kit ran on a quiet host: slot 3's armed at load1 115.
+
+**Owed.** Nothing of this slice's. The WI-1 entry's Owed line carries a dated note closing it. The way in's other
+owed rows stand as recorded: L5's two words, the `inkTertiary` note, the mark's fade, the lock's hand rows and draft
+words (James), and the Desktop slice, held for James.
