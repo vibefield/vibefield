@@ -41,15 +41,15 @@ struct RainAgent: Equatable, Sendable {
   static let lightsOpenCard = true
 
   /// `agentName` (RainView.tsx:76-78, .js:36-38): an agent by its model's word, anything else `terminal`.
-  var name: String { "" }
+  var name: String { kind == .agent ? model : "terminal" }
 
   /// What the rain's accessible button says for the row (the list, RainView.tsx:381-393, .js:280): project, name,
   /// status, the line.
-  var spoken: String { "" }
+  var spoken: String { "\(projectName), \(name), \(status.rawValue): \(detail)" }
 
   /// The button's current mark (`aria-current` while `active`, the list), said as the swarm says its open body on the
   /// phone (`FieldSwarm/SwarmField.swift:242`).
-  var accessibilityValue: String? { nil }
+  var accessibilityValue: String? { lit ? "open" : nil }
 }
 
 extension RainAgent {
@@ -67,6 +67,6 @@ extension RainAgent {
     model = MonitorWords.modelWord(monitor)
     usedPercent = monitor.kind == .agent ? monitor.context?.usedPercent : nil
     detail = MonitorWords.detailLine(monitor, isSelf: row.isSelf)
-    lit = false
+    lit = lightsOpenCard && activeId == monitor.id
   }
 }

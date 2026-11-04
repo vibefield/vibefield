@@ -51,11 +51,27 @@ struct RainPalette: Equatable, Sendable {
 
   /// DESIGN.md §2.7's table, as `tokens.css` declares it.
   static let rain = RainPalette(
-    stage: "", activeHead: "", hoverTailRgb: "", working: Stream(head: "", tailRgb: ""),
-    blocked: Stream(head: "", tailRgb: ""), idle: Stream(head: "", tailRgb: ""), inkWorking: "", inkBlocked: "",
-    inkIdle: "", focus: "", textPrimary: "", litHead: "", emptyInkOpacity: 0)
+    stage: "#000000",
+    activeHead: "#ffffff",
+    hoverTailRgb: "217, 70, 239",
+    working: Stream(head: "#ffffff", tailRgb: "0, 255, 0"),
+    blocked: Stream(head: "#fef08a", tailRgb: "234, 179, 8"),
+    idle: Stream(head: "#94a3b8", tailRgb: "71, 85, 105"),
+    inkWorking: "#4ade80",
+    inkBlocked: "#fde047",
+    inkIdle: "#cbd5e1",
+    focus: "#22c55e",
+    textPrimary: "rgba(255,255,255,1)",
+    litHead: "#ffffff",
+    emptyInkOpacity: 0.65)
 
   /// `statusPresentation` (RainView.tsx:66-74): blocked crawls (stuck, and impossible to miss where everything else
   /// moves), idle drifts, working runs at its own drop's speed.
-  func presentation(_ status: MonitorRowStatus) -> Presentation { Presentation(head: "", tail: "", speed: nil) }
+  func presentation(_ status: MonitorRowStatus) -> Presentation {
+    switch status {
+    case .working: Presentation(head: working.head, tail: working.tailRgb, speed: nil)
+    case .blocked: Presentation(head: blocked.head, tail: blocked.tailRgb, speed: 0.02)
+    case .idle: Presentation(head: idle.head, tail: idle.tailRgb, speed: 0.1)
+    }
+  }
 }
