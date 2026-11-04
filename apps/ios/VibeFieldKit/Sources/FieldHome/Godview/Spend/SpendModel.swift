@@ -30,13 +30,11 @@ enum SpendModel {
   static let nowLegend = "↘"
   static let nowWords = "Now"
   static let nowLabel = "Back to now"
-  static let nowTitle = "Back to now (End)"
-  /// The window's own label for the view.
-  static let windowLabel =
-    "Spend: what each agent spent in the last ten minutes, a line each from $0, and each run's total in the list. "
-    + "Up and down move between agents, Return opens one, End lets go of a set moment."
-  /// RED SKELETON (the words rule): still the window's.
-  static let viewLabel = windowLabel
+  /// The Now pill's title: the window's, less its key (`Dropped.nowTitle`).
+  static let nowTitle = "Back to now"
+  /// The view's label: the window's, less its key sentence (`Dropped.viewLabel`).
+  static let viewLabel =
+    "Spend: what each agent spent in the last ten minutes, a line each from $0, and each run's total in the list."
 
   /// The window's words the phone does not say (fd's words rule for every PG lane: a view's words never name a key,
   /// hover or a pane, for the phone has none), each a NAMED deviation pinned against the golden.
@@ -441,17 +439,15 @@ enum SpendModel {
     let mounted = false
     let provider = row.agent.monitor.provider?.label ?? "its provider"
     let said = row.status.text
+    // the window's words, less its " Open in your pane." (`Dropped.rowLabel`): the phone has no pane
     let label =
       before
       ? "\(row.name.one), \(what), had not started then; \(said)."
       : row.unrecorded
-        ? "\(row.name.one), \(what): what it had spent then was not recorded (its row carries only its total). "
-          + "Open in your pane."
+        ? "\(row.name.one), \(what): what it had spent then was not recorded (its row carries only its total)."
         : row.priced
-          ? "\(row.name.one), \(what), \(est)\(said.isEmpty ? "" : ", \(said)")\(mounted ? ", in a pane" : ""). "
-            + "Open in your pane."
-          : "\(row.name.one): \(provider) reports no cost, so it isn't drawn\(said.isEmpty ? "" : "; \(said)"). "
-            + "Open in your pane."
+          ? "\(row.name.one), \(what), \(est)\(said.isEmpty ? "" : ", \(said)")\(mounted ? ", in a pane" : "")."
+          : "\(row.name.one): \(provider) reports no cost, so it isn't drawn\(said.isEmpty ? "" : "; \(said)")."
     let taskPart = row.name.task.isEmpty ? "" : " · \(row.name.task)"
     let title =
       row.priced
