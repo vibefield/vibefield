@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldLock
 import FieldSplash
 import SwiftUI
 
@@ -6,13 +7,77 @@ import SwiftUI
 /// mounted under it once the field shows. The window wears the phone's Appearance from the first
 /// frame here, before the home that also applies it is built, so the splash comes up in the
 /// appearance the home will wear (Obsidian by night, Obsidian Light by day) and never turns over.
+///
+/// WI-3 — and the lock (DESIGN.md §9 "The lock"): the root holds it, tells it the scene's phase, and stands its
+/// curtain (`LockCurtain`), a window over everything the home shows, the home's sheets among them.
 public struct HomeRoot: View {
   @AppStorage(PhoneAppearance.storageKey) private var phoneLook: PhoneAppearance = .auto
+  @Environment(\.scenePhase) private var scenePhase
+  @State private var lock = HomeRoot.makeLock()
 
   public init() {}
 
   public var body: some View {
-    SplashGate { HomeScreen() }
+    SplashGate { HomeScreen(lock: lock) }
       .phoneAppearance(phoneLook)
+      .background {
+        LockCurtain(
+          covers: lock.covers, state: lock.state, method: lock.method, active: scenePhase != .background,
+          look: phoneLook, onUnlock: { Task { await lock.unlock() } })
+      }
+      .onAppear { lock.phase(LockPhase(scenePhase)) }
+      .onChange(of: scenePhase) { _, phase in lock.phase(LockPhase(phase)) }
+  }
+
+  /// The app's lock: LocalAuthentication's ask, the settings in UserDefaults. A Debug run with `-vf-lock=<method>`
+  /// stamps the curtain after a miss, for its photograph (README).
+  private static func makeLock() -> FieldLock {
+    #if DEBUG
+      if let stamped = LockFixtures.stamped() { return stamped }
+    #endif
+    return FieldLock(authenticator: DeviceOwnerAuthenticator(), keeping: DefaultsLockKeeping())
   }
 }
+
+extension LockPhase {
+  init(_ phase: ScenePhase) {
+    switch phase {
+    case .active: self = .active
+    case .background: self = .background
+    default: self = .inactive
+    }
+  }
+}
+
+#if DEBUG
+  /// `-vf-lock=<faceid|touchid|passcode>` (WI-3) — the lock on and every ask missed, on a phone with that method, so
+  /// a screenshot run photographs the curtain after a miss in each method's words. Its settings are kept in memory,
+  /// never in the phone's own, and it cannot run in Release.
+  @MainActor
+  enum LockFixtures {
+    static let argument = "-vf-lock="
+
+    static func stamped() -> FieldLock? {
+      guard let value = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(argument) })?.dropFirst(argument.count)
+      else { return nil }
+      let method: LockMethod =
+        switch value {
+        case "touchid": .touchID
+        case "passcode": .passcode
+        default: .faceID
+        }
+      return FieldLock(authenticator: Missed(method), keeping: Kept())
+    }
+
+    final class Missed: LockAuthenticator {
+      let method: LockMethod
+      init(_ method: LockMethod) { self.method = method }
+      func ask(reason: String) async -> LockAnswer { .missed }
+    }
+
+    final class Kept: LockKeeping {
+      var lockOn = true
+      var lockDelay: LockDelay? = .oneMinute
+    }
+  }
+#endif

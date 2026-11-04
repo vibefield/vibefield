@@ -3,6 +3,7 @@ import FieldDesign
 import FieldFreeway
 import FieldHistory
 import FieldInput
+import FieldLock
 import FieldMesh
 import FieldProduct
 import FieldRoutedTerminal
@@ -229,8 +230,13 @@ public struct HomeScreen: View {
   /// WI-1 (the review's M1) — whether the splash stands whole over the home: the tabs stay under a sign-out's
   /// splash until it does.
   @Environment(\.splashCovers) private var splashCovers
+  /// WI-3 — the lock (FieldLock, held by `HomeRoot`, which stands its curtain): the way in offers it last, the
+  /// corner's Lock now and Settings › Lock change it, and locking folds the card's keyboard.
+  private let lock: FieldLock
 
-  public init() {}
+  public init(lock: FieldLock) {
+    self.lock = lock
+  }
 
   /// One stage, two sources, projected by the pure functions in FieldAgents.
   ///
@@ -542,8 +548,14 @@ public struct HomeScreen: View {
       wayInEnding = ending
       Task {
         try? await Task.sleep(for: FieldHomeModel.foundBeatHold)
-        if wayInEnding == ending { wayInEnding = nil }
+        // WI-3 — then the lock, offered last while the phone can lock and it is off (WI-D3 A); then the hand-over
+        if wayInEnding == ending { wayInEnding = FieldHomeModel.afterFoundBeat(offer: lockOffered) }
       }
+    }
+    // WI-3 — locking folds the card's keyboard by its own fold, as another device taking the seat does: the
+    // keyboard stands in a window of the system's, over the curtain
+    .onChange(of: lock.state) { _, state in
+      if state != .open { inputCard.dismissKeyboard() }
     }
     // IOS-8c — every listing teaches the account's memory: which desktops it
     // has, and — from the first door that answers with a user id — its face.
@@ -590,7 +602,7 @@ public struct HomeScreen: View {
   private var wayIn: some View {
     if let step = wayInStep {
       WayInView(
-        screen: FieldHomeModel.wayInScreen(step),
+        screen: FieldHomeModel.wayInScreen(step, lock: lockOffered),
         face: wayInFace,
         faceSeed: accountSeed,
         onAct: wayInAct)
@@ -605,6 +617,12 @@ public struct HomeScreen: View {
           onClose: { macCodeReaderOpen = false })
       }
     }
+  }
+
+  /// WI-3 — the method the way in will offer the lock in, while it will (the lock off and a passcode set): the
+  /// steps' third bar is named for it, and the found beat goes on to it.
+  private var lockOffered: LockMethod? {
+    lock.canOffer ? lock.method : nil
   }
 
   /// The face that takes the mark's place: the account's, once a desktop has said who you are.
@@ -646,8 +664,16 @@ public struct HomeScreen: View {
       keepAccount()
     case .openAdminConsole(let url):
       openURL(url)
-    case .lockOn, .notNow, .unlock:
-      break
+    case .lockOn:
+      // Lock with Face ID: iOS asks (its first time is its own question), then the hand-over; a miss stays here
+      Task {
+        if await lock.setOn(true) { wayInEnding = nil }
+      }
+    case .notNow:
+      wayInEnding = nil
+    case .unlock:
+      // the curtain's own act; the way in never shows it
+      Task { await lock.unlock() }
     }
   }
 
@@ -823,7 +849,9 @@ public struct HomeScreen: View {
   private var barTyping: Bool { selectedTab == .search && keyboardInset > homeInset + 40 }
 
   private var accountCorner: some View {
-    AccountCornerView(
+    // WI-3 — Lock now, only while the lock is on
+    let onLockNow: (() -> Void)? = lock.isOn ? { lockNow() } : nil
+    return AccountCornerView(
       face: accountFace,
       isOpen: accountMenuOpen,
       seed: accountSeed,
@@ -845,8 +873,15 @@ public struct HomeScreen: View {
       onSignIn: {
         setAccountMenu(open: false)
         performSignIn()
-      }
+      },
+      onLockNow: onLockNow
     )
+  }
+
+  /// WI-3 — the corner's Lock now: the menu folds, the curtain stands at once, and Face ID asks over it.
+  private func lockNow() {
+    setAccountMenu(open: false)
+    lock.lockNow()
   }
 
   private var searchCircle: some View {
@@ -1375,7 +1410,7 @@ public struct HomeScreen: View {
         // --- end IOS-5e ---------------------------------------------------
         // IOS-10a — `-vf-open-settings[=<page>]`: Settings, at its root or
         // at one page (`account`, `desktop:<id>`, `appearance`, `terminal`,
-        // `about`, `acknowledgements`), for a photograph run.
+        // `about`, `acknowledgements`, `lock`), for a photograph run.
         if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-open-settings") }) {
           settingsOpening = FieldHomeModel.settingsOpening(argument: argument)
           settingsSheetOpen = true
@@ -2236,6 +2271,7 @@ public struct HomeScreen: View {
       account: settingsAccount,
       terminal: terminalAppearance,
       opening: opening,
+      lock: lock,
       actions: SettingsActions(
         // Both acts leave Settings first: the sign-in is the system's own
         // sheet, and a signed-out phone is the way in (WI-1).
