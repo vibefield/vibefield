@@ -30564,3 +30564,555 @@ too; the rows boot fieldd at its default level.
 **Owed.** Nothing of this slice's. The WI-1 entry's Owed line carries a dated note closing it. The way in's other
 owed rows stand as recorded: L5's two words, the `inkTertiary` note, the mark's fade, the lock's hand rows and draft
 words (James), and the Desktop slice, held for James.
+
+## PG-7 — the spend view: the window's spend panel on the phone's stage, every reading the window's to the bit (2026-11-04; `b7bb4bc95` → `3974cf25a`, 19 commits on PG-4t's tip `690cb4e31`, lane `pg/7-spend` in `/Volumes/SamsungRed/lanes/pg7-spend/vibe-field`, the first of the three merges in the stacked mint `125578165`: `fe45ac739` into main `62916410a` (tree `6213ddb363fc`), run 123)
+
+**What it rests on.** PG-4t is the stage and the shared head (LANDED "PG-4t"): the lane stood on `3ddde3eac` and was
+rebased onto 4t's final tip `690cb4e31` with 0 conflicts (range-diff 17 "=" and 1 "!", context only;
+`lanes/pg7-spend/light/rebase-final-range-diff.txt`). The brief is `lanes/ios/PG7-BRIEF.md`, and fd accepted the read
+(`lanes/pg7-spend/light/read-pg7.md`). The source is puppeteer-views 0.3.3 (pin `52d09c8e`, spend `5abe8f75`). The
+rulings carried, cited by content:
+- Q3, touch: a finger on the chart is the pointer, a lift within 4 pt is the click, a drag sets nothing, a drag on
+  the list steps whole rows by its travel; no keys, no hover, no focus.
+- fd's order-proof rule: a lift and its gesture's reset are one tap in either order, and each acts only on the
+  touch it began.
+- Q11: an undealt project's colour is the skin's faint ink. Q5: the tag's ink is `--vf-card-deep` at 92 %.
+- fd's tolerance: V8's `rgbToOklch` alone compares within L, C ≤ 1e-12 and H ≤ 1e-6°; every drawn value is exact.
+Times below are the scripts' own `date -u`.
+
+**What** (23 files, +8,192 −1: 18 under `apps/ios`, DESIGN.md, three in field-app, and the fixtures check):
+- **The golden first** (`b7bb4bc95` red, `355d55cac`, `877876432`). `perf/lib/phone-goldens-spend.ts` mounts the
+  SHIPPING `spendMonitorView` in happy-dom over 4t's witness, at the stage 402 × 781 with insets.top 108. It writes
+  `phone-spend.golden.json` (256,556 B) and the kit's byte-identical mirror; one `PHONE_VIEW_GOLDENS` line and one
+  `phoneViewGoldens` line register it. It is zone-free (the clock's words are tokens), checked under Asia/Kolkata
+  and Pacific/Kiritimati. `877876432` holds a moment inside the record: two minutes back the rows read real money,
+  five minutes back they say "not recorded".
+- **The readings** (`25c474f13` → `02d7312d3`): `SpendSeries`, `SpendScale` and `SpendList`, the meters, the lines,
+  the scales and the watchlist, transcribed with JavaScript's arithmetic (`JSNumber.round` for `Math.round`).
+- **The words and the inks** (`5eef9bed4` → `2a2d1a353`): `SpendWords`, `SpendNumber` and `SpendInk`.
+- **The composition** (`bef43e4ea` → `6743b5068`): `SpendModel`, the hero, the head, the axes, the list and the tag
+  at the window's own places.
+- **On 4t's shared head** (`67e1c93f6`): the shared loader, the witness step by step, the stage under the row.
+- **The phone's words** (`c713ca9f3` → `052de896e`, then `bf5e55361`): four named deviations from the window, each
+  kept as `SpendModel.Dropped` and read against the golden by H10:
+  - the view's label drops its key sentence;
+  - every row's label drops " Open in your pane.";
+  - the Now pill's title drops " (End)"; the ↘ legend stays;
+  - the empty view's hint is "Launch an agent from a terminal." (the list's words) for the window's "Launch an
+    agent from a terminal pane.", a draft word: James's eye (VF-PM 2026-11-04).
+- **The canvas's scene** (`86d4129c7` → `97a32ce03`): `SpendScene`, the grid, the now line, the lines, the heads,
+  the cross, the ghost and a start, each where the frame puts it.
+- **The stage** (`109a7d2c1` → `bf5e55361`): `GodviewViewChoice`'s `case spend` and its arm
+  `case .spend: framed(SpendView(input: input))`; the stage helpers; and the three kit-only files, `SpendInks`,
+  `SpendPaint` and `SpendView` (a `TimelineView` clock paused in a still, the canvas, the list, the touch).
+- **Touch, order-proof** (`38284d91b` → `2c6f174fb`): each press and each list touch carries a token. A lift acts
+  only on its own press; a reset cancels only a press still open and leaves it for its own lift; an older touch's
+  lift or reset leaves a newer one alone. A drag on the list steps `trunc((from − to) / rowH)` rows.
+- **No row is ever mounted** (`3974cf25a`): the window's `let mounted = false` and its two dead branches go; the
+  phone mounts no pane (H6). `Flag.mounted` stays.
+- **DESIGN.md** (`bf5e55361`): one sentence on the `--vf-card-deep` row (:166): the spend tag's words are that ink
+  at 92 %, ringed in `monitor-bg`, as the window's `--mv-spend-deep` (spend.css:234-235). No new token (Q5); the
+  constant is `SpendInks.deep`.
+
+**Validation.**
+- Red first on every pair, by assertion on skeletons (`lanes/pg7-spend/light/*red*.log`):
+  - the golden (`b7bb4bc95`): phone-parity 2 of 21 failed; the fixtures check red on the missing mirror;
+  - the readings: 240 issues;
+  - the words and the inks: 1,040 issues;
+  - the composition: 328 issues;
+  - the phone's words: 335 issues (H10 159, the composition 176);
+  - the scene: 57 issues;
+  - the stage's host rows: 15 issues in six rows;
+  - the order-proof pair: 13 issues in three rows (H15, H16 and the drag's step).
+- 25 mutation probes over the pairs, each red on the rows it aims at and no other
+  (`lanes/pg7-spend/light/host-*-mutate-*.log`).
+- The host loop at the tip (`lanes/pg7-spend/light/hostkit`, `swift test -j 4`): 309 tests in 50 suites, 0 issues,
+  0 source warnings (`lanes/pg7-spend/light/host-mounted-fix.log`).
+- TS at the final rebase (03:55:48–03:56:44Z, `lanes/pg7-spend/light/rebase-final-light.log`; `3974cf25a` touches
+  no TS): `tsc` 0; GEN twice, 0 changed; the fixtures 225 identical; phone-parity 26/26.
+- **The first kit slot** (04:00:12–04:12:38Z, on fd's proof merge `c8ca8da5c` of `f8deba6b7` and `2c6f174fb`, tree
+  `f1a1cb1d55d9`): GREEN, but the tip's first compile carried two "will never be executed" warnings (Found).
+- **PG-7's M120 witness** (fd's pinned `8da30d23`; this Mac, Xcode 26.6, iPhone 17 Pro `F93EABF3`;
+  `lanes/pg7-spend/light/kit/logs/tree-33d8e4c6fe64/slot.out`):
+  - proof `5f5e63c1b` (`576172d99` + `3974cf25a`), tree `33d8e4c6fe64`, apps/ios `5718a022ad16`;
+  - two starts stopped before any build (05:07:28Z, a DF stop at / 9 GiB; 05:27:56Z, a verify stop); the slot ran
+    06:04:45–06:18:28Z;
+  - (a) red first at `109a7d2c1`, run as exactly 2 tests: K2 `theInksAreTheSwarmsAndTheSkins()` 16 issues and K3
+    `theViewStandsOnTheStage()` 8 issues, by assertion in SpendKitTests.swift alone;
+  - (b) the Spend files' first compile at the tip: 0 errors, 0 warnings. The kit: 16 runs, 1,672 tests, green but
+    item 167 (TerminalSurfaceKeyboardTests:31). PG-7's "the spend view" with K2 and K3 lit, 4t's nine and sign-out
+    passed;
+  - (c) VibeField Debug (73 s), VibeField-Mock Debug (5 s) and ONE Release (220 s), each BUILD SUCCEEDED;
+  - warnings: only the two dead branches at the RED build (SpendModel :451/:467), 0 at the tip.
+- **The stills** (fd's pinned `a1d546a2`, 06:19:04–06:22:28Z, 4 of 4, 0 red;
+  `lanes/pg7-spend/light/stills/tree-33d8e4c6fe64/stills.out`), from the slot's own Debug build:
+  - at `/Volumes/SamsungRed/lanes/ios/stills/pg7-spend/33d8e4c6fe64-…`: `light.png`, `light-said.png`,
+    `dark.png` and `dark-said.png`;
+  - the stage's ground is `monitor-bg` in each (#f7f7f7 light, #0a0a0a dark); inked 3.8 %, 3.8 %, 3.8 % and 3.9 %
+    of the stage band y 120–781 pt;
+  - each shows the hero "~$8.60+ $8.9/hr now", the chart under "Spent in the last 10 minutes" ($0–$0.7, the dashed
+    now line, two lines), and nine rows under "BY SPEND / TOTAL", their state words in their tones;
+  - no meter: spend pauses its `TimelineView`s in a still.
+- **The base moved.** Local main became `62916410a` at 06:10:47Z, James's own commit ("Icons: apply the v2
+  collection…", unpushed). Against it, apps/ios differed from the lane's lit subtree by five files (the
+  `AppIcon.appiconset` PNGs and `Contents.json`, and `apps/ios/README.md`), and DESIGN.md by James's
+  design-reference edit. So by the tree-hash rule the M120 witness did NOT carry.
+- **The stacked mint** (VF-PM, 06:53Z then 06:56Z), in landing order pg7 → pg5 → pg8:
+  - `fe45ac739` = merge(`62916410a`, `3974cf25a`), tree `6213ddb363fc`, clean;
+  - `e48c48430` = merge(`fe45ac739`, `a06690c28`), tree `87b53892151b`;
+  - `c556d1428` = merge(`e48c48430`, `c928fb22b`), tree `92160076f239` (apps/ios `d20cebec44c5`, DESIGN.md
+    `3f423d0875c0`);
+  - the first-parent chain `c556d1428` → `e48c48430` → `fe45ac739` → `62916410a` is main after the land; in all,
+    55 files, +15,501 −3 over `62916410a`.
+- **The stack's one kit turn** (fd; pg8's pinned `c25d6578` in `--tree` mode on the ref-less `ad3a207d6`, whose tree
+  `92160076f239` is T's byte for byte), 06:55:19–07:03:06Z:
+  - (b) the kit, 06:57:59–06:59:40Z: 16 runs, 1,738 tests, one red, item 167 (TerminalSurfaceKeyboardTests:31).
+    PG-7's "the spend view", PG-5's two, PG-8's seven, 4t's nine and sign-out passed;
+  - (c) Debug 66 s, Mock 5 s, ONE Release 133 s, each BUILD SUCCEEDED;
+  - the verdict: "PG-8 KIT SLOT (tree) at ad3a207d6…: GREEN (the full kit green but item 167; both app schemes
+    and ONE Release built) 07:03:06Z";
+  - no stills on this turn (VF-PM 06:53Z): the icon set and README touch no view. PG-7's stills stand by its lit
+    subtree.
+- `fe45ac739` carries by PG-7's M120 lit subtree plus this final tree.
+- **The stack's two fixes**, each its own commit on T (VF-PM, 07:11Z and 07:17Z; LANDED "PG-8" has both
+  whole): F `655080328` takes the three golden modules, this lane's among them, to the SDK's `/testing`
+  entry by dynamic import (wall R8, Found); F2 `125578165` re-blesses the rain's golden alone. The kit turn
+  on F2's tree `4d5007c2f992` (07:20:27–07:27:23Z) witnesses the landed tree: green but item 167, 16 runs, 1,738
+  tests, with this lane's suites passing, and Debug, Mock and ONE Release built.
+- **Run 122** on T `c556d1428` was RED before it armed, at preflight's wall R8 (Found). T was never minted alone.
+- **Run 123** (`125578165`, the stacked mint: the three merges, then F and F2; minted by a9 on VF-PM's GO): run 123 on
+  the mini, 07:35:46Z: `pnpm verify` exit 0 — vitest 12,217 passed / 0 failed / 18 skipped over 881 files (run 121
+  +10: phone-goldens-list 8, phone-goldens-rain 2), phone-parity 26/26, node 364/0, cargo 544/0 in 34 suites, 0 error
+  TS, the iOS fixtures 227 copies identical (+3 view goldens), pins 67, walls 0.
+- **Landed:** main fast-forwarded through `fe45ac739`, `e48c48430`, `c556d1428`, `655080328` and `125578165` on
+  VF-PM's GO (2026-11-04T07:40:01Z, the fixer's stamp).
+
+**Not witnessed (said).**
+- **The tap.** No agent injects input. H9, H15 and H16 pin the acts a touch drives, in either order of a gesture's
+  two ends; the gestures' delivery on a phone is James's hand row.
+- **The empty stage.** No launch flag stages an empty field. H10 holds its words; its look is a hand row.
+- **The Now pill's backdrop blur.** Not drawn: its ground is the panel at 88 %.
+- **CSS weights 450, 550 and 650.** Drawn at the named weight at or below.
+- **A device.** The kit and the stills ran on the simulator only.
+
+**Found (said).**
+- **Wall R8, found at run 122's preflight.** `perf/lib/phone-goldens-spend.ts:7` imported the SDK's
+  test-only `/testing` entry statically, from the lane's red golden commit `b7bb4bc95` on. R8 covers every
+  field-app source that is not a test or spike path, and perf/lib is neither. The kit never runs the walls,
+  and no lane ran preflight on its proof. F `655080328` reaches it by dynamic `import()`, R8's own hatch.
+- **The SAID pill, for James's eye.** The Stories row's name pill (4t's, `-vf-godview-say=`) reaches about 131 pt
+  against the reserve's 108. In spend's `-said` stills the "Spend" pill (x 198–258 pt, y 107–140 pt with its
+  shadow, read as the difference from the plain still) lies over the list head's "BY" and the top of its "S" (the
+  head's glyphs at x 233–289, y 127–135 pt) for its 1.4 s. The hero and "TOTAL" stand clear. VF-PM routes it to
+  James's eye beside J-S2. It is not a lane red.
+- **Two dead branches, and the summary that hid them.** The window's `let mounted = false` was transcribed with
+  its branches. The first kit slot's tip compile flagged both as "will never be executed" (SpendModel :468/:484 at
+  `2c6f174fb`; :451/:467 at the red `109a7d2c1`). The host loop had printed one of them since the composition
+  pair, and `host.sh`'s summary hid it. `3974cf25a` removes the constant and both branches, and `host.sh` now
+  prints every source warning. The re-slot's tip compile reads 0 warnings.
+- **A generator defect, caught before the golden landed.** The generator printed the host's own zone in a row's
+  "starts" (births taken from meters, not lines at now). It now reads lines at now, behind a throwing guard.
+- **H14's erratum at its source (2026-11-04).** The list's drag counted row boundaries crossed, not travel. It is
+  corrected to `trunc((from − to) / rowH)`, with a dated note on the row.
+
+**Not built.**
+- A launch flag that stages an empty field, and a still of it.
+- A DEBUG frame meter for spend.
+- The Now pill's backdrop blur.
+- Keys, hover and focus (Q3), and a mounted row (H6).
+
+**Owed.**
+- The hint "Launch an agent from a terminal.": a draft word, James's eye (VF-PM 2026-11-04).
+- The SAID pill: James's eye beside J-S2.
+- The stills: James's eye.
+- The tap and the empty stage's look: James's hand rows.
+- A device run.
+
+## PG-5 — the list view: the desktop's agent list on the phone's stage, its lines kept whole at 402 pt (2026-11-04; `c5569bc95` → `a06690c28`, 11 commits on PG-4t's tip `690cb4e31`, lane `pg/5-list` in `/Volumes/SamsungRed/lanes/pg5-list/vibe-field`, the second of the three merges in the stacked mint `125578165`: `e48c48430` over PG-7's `fe45ac739` (tree `87b53892151b`), run 123)
+
+**What it rests on.**
+- PG-4t is the stage (LANDED "PG-4t"). The lane stood first on its SHARED HEAD `3ddde3eac`, then on its final tip
+  `690cb4e31`. It reads `input.insets(.flow)`, `input.skin`, `input.isStill` and `HomeFixture.witnessSteps`.
+- The source is puppeteer-views 0.3.3 at the lock's pin `52d09c8e`: `views/list/AgentList.tsx` and `list.css`
+  (`e79fc53d`), `list-parameters.ts` and `index.ts` (`5abe8f75`). `git diff 95a70aa7 52d09c8e` over the list's
+  sources is empty.
+- fd ruled the read (`lanes/pg5-list/light/read-pg5.md`) at 01:21Z: Q1–Q10. James's J-S picks (01:12–01:14Z) set
+  the lit row (J-S4) and the atmosphere (J-S3).
+- The lane was born at `f978b385a`. It rebased onto `84482a1fe`, then `3ddde3eac`, then `690cb4e31`, with 0
+  conflicts each time (`light/rebase{1,2,3}-range-diff.log`).
+- Times below are the scripts' own `date -u`. fd's relay labels after 01:40Z ran ahead of the clock (fd's
+  erratum), so rulings are cited by content.
+
+**What** (12 files, +2,121 −2: seven under `apps/ios`, four in field-app, and one line of the fixtures check):
+- **The golden** (`c5569bc95` → `47fea400e`): `phone-list.golden.json`, 40,072 bytes.
+  - It mounts the root export `listMonitorView` through its own `mount`, under React's `act`, in happy-dom.
+  - It runs over the window's drawn rows at each of the witness's 11 steps, with the manifest's defaults and no
+    capabilities (PG-D10 (a)).
+  - It reads the count, the toolbar's word, the empty state, and each row's flags, cells and label. Ids are the
+    view's own: each row is pressed and `commands.select` read.
+  - It has one writer (`phoneAllGoldenFiles`) and one registry line. The kit's copy is the fixtures check's.
+- **The model** (`69e4b21e2` → `efe819250`): `ListModel`.
+  - The order is the desktop's: receded last, agents before terminals, blocked, working, idle, then birth, sorted
+    stably. Then the count ("N SESSIONS" or "S OF N SESSIONS") and every row's words, through the toolkit.
+- **The drawing** (`053b65477` → `9852de65d`):
+  - `ListPaint`: list.css's numbers, with every colour named by role and resolved against the skin, or the row's
+    dealt colour. No hex literal.
+  - `ListView` stands in `framed`. Its ground fills the stage, and its words start at
+    `input.insets(.flow).top + 11`.
+  - Rows are lazy. A tap calls `input.onOpen`. Weight and border fade on `FieldMotion.plainEase`, with no animation
+    under `-vf-godview-still`.
+  - Each row's screen-reader label is the desktop's `aria-label`, and the lit row is selected.
+  - `GodviewViewChoice` gains one case and one arm.
+- **The words rule** (`3537424b4` → `e8c3ff50f`): H12 scans every word the list says. The empty hint drops "pane".
+  `fdd9295be` marks the hint a draft word for James's eye, and puts D3 `theMarks` on the main actor.
+- **The lines** (`6a61d6aeb` → `a06690c28`): deviation 6, below.
+- **The six named deviations** (ListPaint's header):
+  1. no `＋ TERMINAL`;
+  2. no hover and no press look;
+  3. the lit row's border is text main (J-S4), not the row's colour;
+  4. a provider with no glyph asset wears its letter;
+  5. the empty hint says "Launch an agent from a terminal." (a draft word);
+  6. VF-PM's (B) at 402 pt, with a fixed floor:
+     - every cell is the desktop's one line with the tail ellipsis;
+     - the model breaks only at a space, two lines at most;
+     - the detail runs two lines, then the ellipsis;
+     - the agent column's floor is fixed at 8 glyphs after the mark (60.51 pt), so the detail is 49.49 pt.
+
+**Validation.**
+- Red first on every pair, by assertion:
+  - LG1–LG8 on an empty compute;
+  - the model's 17 rows: 163 issues;
+  - D1, D2, D4, D5 and D6: 19 issues;
+  - H12 and E1: 2 issues, H12's one the hint's "pane";
+  - D7–D9: 107 issues, all in ListDrawingTests.swift (`light/host-b-red.log`).
+  - The model's and the drawing's host reds ran against stand-ins of 4t's names, before 4t's head existed; the
+    kit's R1 below re-witnesses the drawing's.
+- Six mutation probes, each red where it must, each file restored byte for byte:
+  - working ranked after idle;
+  - the peer's lead dropped;
+  - ties broken backwards (H8 alone holds the stable sort);
+  - the lit border in text muted;
+  - stale weighed over recede;
+  - "press Return" in the list's name.
+- The host loop at the tip (`light/hostkit` over the lane, `swift test -j 4`): 83 tests in 13 suites, 0 issues, 0
+  source warnings (`light/host-b-green.log`). No 4t stand-in remains; one macOS `AgentGlyph` shim does.
+- TS at `690cb4e31`:
+  - LG and phone-parity: 34/34;
+  - field-app's `tsc --noEmit`: 0;
+  - `phone:goldens` twice, all five unchanged;
+  - the fixtures: 225 identical, 67 pins (`light/r3-*.log`);
+  - biome: clean on the lane's four TS and JS files (`light/r2-biome.log`).
+- fd's early kit compile at `f7eea9212` (02:44:48–02:47:18Z): FieldHomeTests 194 tests in 29 suites, 0 issues.
+- **The kit slot** at `7b3c5814cda8` (04:12:51–04:22:19Z; this Mac, Xcode 26.6, iPhone 17 Pro `F93EABF3`):
+  - R1 red first at `053b65477`;
+  - 1,647 tests, item 167 alone;
+  - three apps.
+  - Its stills (at `ea0897042448`) showed the wrapping (Found).
+- **The M120 witness**: proof `f1872f50d` (`576172d99` + `a06690c28`), tree `c598f280957a`, apps/ios
+  `a882849a221a`.
+  - The kit slot GREEN 06:23:07–06:32:18Z (pinned `c279de4d`). Two earlier starts stopped at their own guards
+    before any build: 05:08:05Z, a DF STOP; 05:28:34Z, a VERIFY STOP.
+  - (a) R1 red first at `053b65477`: five rows by assertion, the pins D3 and V8 passing.
+  - (b) the FATAL "no Swift warning in a PG-5 file" passed. 16 runs, 1,655 tests, item 167 alone.
+  - (c) Debug 61 s, Mock 4 s, ONE Release 148 s.
+  - The stills, 4 of 4, 06:32:53–06:34:28Z (pinned `82e2ae95`), at
+    `lanes/ios/stills/pg5-list/c598f280957a-*.png`:
+    - light #f7f7f7, inked 1.9%; dark #0a0a0a, inked 2.0%;
+    - each `-said` still differs from its twin;
+    - fd by eye: no word breaks inside itself, and the detail is two lines ending "…".
+  - No meter: the view does not animate.
+- **The base moved.** Local main became `62916410a` at 06:10:47Z: James's own icons commit, unpushed.
+  - Against it, apps/ios differed by five files: the `AppIcon.appiconset` four and `apps/ios/README.md`. DESIGN.md
+    differed too, so the M120 witness did not carry by tree hash.
+  - VF-PM ruled one STACKED mint, pg7 → pg5 → pg8:
+    - `fe45ac739` = merge(`62916410a`, `3974cf25a`), tree `6213ddb363fc`;
+    - `e48c48430` = merge(`fe45ac739`, `a06690c28`), tree `87b53892151b`;
+    - `c556d1428` = merge(`e48c48430`, `c928fb22b`), tree `92160076f239` (apps/ios `d20cebec44c5`, DESIGN.md
+      `3f423d0875c0`).
+  - In all, 55 files, +15,501 −3 over `62916410a`.
+- **The keep-both resolution**, named here once for the three lanes. Stacked, PG-5 over PG-7 and PG-8 over that,
+  each conflicted in three files, because each lane adds its one line at the same spot:
+  - `GodviewViewChoice.swift`: the case and the stage's arm;
+  - `packages/field-app/perf/lib/phone-goldens.ts`: `PHONE_VIEW_GOLDENS`;
+  - `scripts/check-ios-fixtures.mjs`: `phoneViewGoldens`.
+  - VF-PM's pre-check ran each lane alone, so it could not see this.
+  - fd resolved keep-both in the registry's order: swarm, list, rain, timeline, spend.
+  - PG-7's side kept the commented `// list` placeholders. They go where list's real line arrives (PG-5's own
+    change).
+  - Markers: 0. The kit turn below witnesses the result.
+- **The stack's one kit turn** (fd; pg8's pinned `c25d6578` in `--tree` mode on the ref-less `ad3a207d6`, tree
+  `92160076f239`, T's byte for byte), 06:55:19–07:03:06Z:
+  - the kit, 06:57:59–06:59:40Z: 16 runs, 1,738 tests, one red, item 167 (TerminalSurfaceKeyboardTests:31);
+  - PG-5's "the list view" and "the list view, drawn" passed, beside PG-7's, PG-8's seven, 4t's nine and
+    sign-out;
+  - the apps: Debug 66 s, Mock 5 s, ONE Release 133 s, each BUILD SUCCEEDED.
+  - No stills on this turn (VF-PM 06:53Z): the icons and the README touch no view.
+  - `e48c48430` carries by the lane's M120 lit subtree plus this final tree.
+- **The stack's two fixes**, each its own commit on T (VF-PM, 07:11Z and 07:17Z; LANDED "PG-8" has both
+  whole): F `655080328` takes the three golden modules, this lane's among them, to the SDK's `/testing`
+  entry by dynamic import (wall R8, Found); F2 `125578165` re-blesses the rain's golden alone. The kit turn
+  on F2's tree `4d5007c2f992` (07:20:27–07:27:23Z) witnesses the landed tree: green but item 167, 16 runs, 1,738
+  tests, with this lane's suites passing, and Debug, Mock and ONE Release built.
+- **Run 122** on T `c556d1428` was RED before it armed, at preflight's wall R8 (Found). T was never minted alone.
+- **Run 123** (`125578165`, the stacked mint: the three merges, then F and F2; minted by a9 on VF-PM's GO): run 123 on
+  the mini, 07:35:46Z: `pnpm verify` exit 0 — vitest 12,217 passed / 0 failed / 18 skipped over 881 files (run 121
+  +10: phone-goldens-list 8, phone-goldens-rain 2), phone-parity 26/26, node 364/0, cargo 544/0 in 34 suites, 0 error
+  TS, the iOS fixtures 227 copies identical (+3 view goldens), pins 67, walls 0.
+- **Landed:** main fast-forwarded through `fe45ac739`, `e48c48430`, `c556d1428`, `655080328` and `125578165` on
+  VF-PM's GO (2026-11-04T07:40:01Z, the fixer's stamp).
+
+**Not witnessed (said).**
+- **The tap.** A row is a `Button` calling `input.onOpen`, and no agent injects input. It is James's hand row.
+- **The empty stage's look.** No launch flag stages an empty field. E1 and H12 hold its words.
+- **The desktop's clip of the model.** That the bare text is clipped with no ellipsis is a reading of the CSS
+  rules, not a measurement. The desktop's goldens at the pin are 680 pt and wider, and cut nothing.
+- **A device.** The stills and the kit ran on the simulator only.
+
+**Found (said).**
+- **Wall R8, found at run 122's preflight.** `perf/lib/phone-goldens-list.ts:6` imported the SDK's
+  test-only `/testing` entry statically, from the lane's red golden commit `c5569bc95` on. R8 covers every
+  field-app source that is not a test or spike path, and perf/lib is neither. The kit never runs the walls,
+  and no lane ran preflight on its proof. F `655080328` reaches it by dynamic `import()`, R8's own hatch.
+- **The lines were not the desktop's.** fd's look at `ea0897042448-light-said.png` found two faults: the model
+  broke inside words ("Haik|u", "Sonn|et", "termina|l"), and the detail wrapped to seven lines.
+  - The desktop draws every cell ONE line: `white-space: nowrap; overflow: hidden; text-overflow: ellipsis`
+    (list.css LC:137-157, :180-186).
+  - The phone's words set no line limit.
+  - No rule in list.css breaks a word, so there is no desktop item.
+  - VF-PM ruled (B), then the fixed floor: deviation 6.
+- **SF Mono's advance is 1266/2048 em** (SFNSMono.ttf's hmtx, regular and italic alike): 5.5635 pt at 9 pt. It
+  explained the still exactly: 4 glyphs in the model's 27.04 pt, 7 in the terminal's 43.04, 12 in the detail's
+  66.96. D10 pins it against the platform's own font.
+- **A 40 s wait at the early kit compile.** Four tests in three suites, the first to touch UIKit's assets and
+  colours, each passed after 40.14–40.18 s, ending within 41 ms of each other. It was one shared wait, not added
+  up. With the simulator booted first, the slot's `theMarks` took 0.234 s. The cause is likely the cold simulator
+  under load, not isolated.
+- **The lane's own claim was false**: "0 source warnings". It covered the host only. The early kit compile found
+  four Swift 6 isolation warnings in the kit-only `theMarks`
+  (`drawnAsset(for:)` is main-actor-isolated). `fdd9295be` fixed them, and the slot's fatal check witnesses it.
+  AgentGlyphTests has the same pattern; it is not this lane's.
+- **The SAID pill, for James's eye.** The Stories row's name pill ("List", `-vf-godview-say=list`) stands at about
+  x 206–249, y 108–132 pt.
+  - Its glyphs read at x 207–237, y 108–124.
+  - In the list, it stands over the toolbar band's middle, right of "11 SESSIONS", where nothing is drawn. It
+    covers no word.
+  - Its soft shadow, at most 7 of 255 per channel, reaches y 178, over the first row's agent cell.
+  - These are read from the `c598f280957a` light and `-said` pair.
+  - VF-PM routes it to James's eye beside J-S2. It is not a lane red.
+
+**Not built.**
+- The desktop's spawn menu and `＋ TERMINAL` (PG-D10 (a)).
+- Hover.
+- (A), the faithful one line, and (C), projectWidth 90: the overturns of deviation 6.
+- A DEBUG parameter flag (fd, Q8: no new scope; the defaults 38/150 stand).
+- The GodviewPreview (Q9, on fd's word).
+
+**Owed.**
+- James's eye:
+  - the draft word "Launch an agent from a terminal.";
+  - deviation 6's look, with (A) or (C) as a follow-up pair;
+  - the said pill, beside J-S2.
+- James's hand rows: the tap and the empty stage's look.
+- `lanes/pg5-list/light/hostkit`, removed after the land.
+
+## PG-8 — the rain view: puppeteer-views' rain on the phone's stage, its still frame the desktop's op for op (2026-11-04; `07bf70bc1` → `c928fb22b`, 15 commits on PG-4t's tip `690cb4e31`, lane `pg/8-rain` in `/Volumes/SamsungRed/lanes/pg8-rain/vibe-field`, the third of the three merges in the stacked mint `125578165`: `c556d1428` over PG-5's `e48c48430` (tree `92160076f239`), then the stack's two fixes F `655080328` and F2 `125578165`, run 123)
+
+**What it rests on.** PG-4t is the stage (LANDED "PG-4t"): the full-bleed stage under the Stories row, its reserve
+and band as data, the dissolve in one place, `HomeFixture.witnessSteps` and `importPuppeteerViews`. The lane was
+born on the shared head `3ddde3eac` and rebased three times with 0 conflicts each:
+- over `84482a1fe`: 3 "=";
+- onto `3ddde3eac`: 8 "=" and 2 "!" (context only);
+- onto 4t's final tip `690cb4e31`: 14 "=" and 1 "!", pair 5's green, whose context moved in 4t's
+  GodviewViewChoice.swift (`rebase-690cb4e31.range-diff.txt`).
+
+What is transcribed is puppeteer-views 0.3.3's rain (`views/rain/RainView.js`, `rain-streams.js`) and the SDK
+toolkit (`words.js`, `motion.js`), into Swift 6. fd's rulings are cited by content: the loop runs only while the
+field is on screen (Q1), no pane wash (Q4), the seed flag (Q7), and no cost, `unread`, `stale` or `fieldIsLive`
+(Q9). James's J-S4 lights the open card's row. Times below are the scripts' own `date -u`.
+
+**What** (27 files, +5,188 over `e48c48430`: 22 under `apps/ios` (+3,749), DESIGN.md (+25), three in field-app
+and the fixtures check):
+- **The palette's words first** (`07bf70bc1`, DESIGN.md only): §2.7 "The rain's palette", each role → token →
+  value, the phone's lit stream in the dark text main (J-S4).
+- **The golden** (`c3c048f7b` red, `b88cf4a66` green, `c266c3285` re-blessed to 4t's stage):
+  `phone-rain.golden.json` is the shipping rain mounted in happy-dom with a recording 2D context and mulberry32(1),
+  over the witness run per step. Its still frame is at the full-bleed stage, 402 × 781 (33 × 65 cells, dpr 3):
+  585 ops and 44 rain rolls. It is 90,048 bytes (`2eb55e5e…`), mirrored into the kit's fixtures.
+- **Streams and parameters** (`58b9a4a5d` red, `46de5b91f` green): `RainStreams` (ordered columns, reconcile,
+  UTF-16 data, `CTX` through FieldAgents' `JSNumber`, tails) and `RainParameters`.
+- **Row, words and palette** (`09b5eed16` red, `7ad97f6a9` green): `RainAgent` (the button line, "open" on the lit
+  row, J-S4's one switch `RainAgent.lightsOpenCard`) and `RainPalette`.
+- **Frame, dice and cadence** (`e6dcfcd4d` red, `dc987d12e` green): `RainFrame` (the plan in Map insertion order,
+  the alphabetic baseline, the wrap, one roll per glyph in a moving frame), `RainRandom` (Mulberry32 and the
+  DEBUG `-vf-godview-rain-seed=`) and `RainMotion` (the desktop's 30 fps cap, its float remainder kept). Then
+  `c18c5a41f` walked the suite through 4t's `HomeFixture.witnessSteps` and retired its own walk.
+- **Field, renderer and arm** (`97f138a9e` red, `2a9360c69` green):
+  - `RainField` holds the stage's lifetime and its still;
+  - `RainAtlas` is an r8 CoreText atlas of CourierNewPS-BoldMT (ASCII alnum, `%.`, U+30A0…U+3100);
+  - `RainRenderer` draws instanced quads in plan order, premultiplied over bgra8Unorm, from a shader compiled at
+    runtime (no Package.swift line);
+  - `RainSurface` is an `MTKView` paused off screen, one still per change when stopped, one accessibility element
+    per row in the window's order, and a tap that opens the row under it;
+  - `RainView` sets the empty words below the stage's top inset;
+  - the arm: `case rain` and `case .rain: framed(RainView(input: input))` in GodviewViewChoice.swift.
+- **The words rule** (`a550451e1` red, `c928fb22b` green): the empty stage says "NO ACTIVE AGENTS" over "Launch an
+  agent from a terminal.", as the list and spend say it, where the desktop says "…from a terminal pane." H18 holds
+  that no word the rain says names a key, a hover or a pane.
+
+**Validation.**
+- Red first on every pair, by assertion on skeletons, on the host (`lanes/pg8-rain/light/hostkit`, Swift 6 mode,
+  `swift test -j 4`):
+  - the golden: PT's byte row and the fixtures check (`p1-red.log`);
+  - streams and parameters: 10 of 10 (`host-p2-red2.log`);
+  - row, words and palette: 5 tests, 22 issues (`host-p3-red.log`);
+  - frame, dice and cadence: 10 tests, 28 issues (`host-p4-red.log`). Two runs before it are disclosed: a stray
+    brace that did not compile (`.brace`), and H11 passing vacuously (`.weak-h11`), hardened before the red;
+  - field, renderer and arm: 9 of 45, 25 issues, 15 in RainFieldTests and 10 in RainRendererTests
+    (`host-p5-red.log`);
+  - the words rule: 2 issues (`host-words-red.log`).
+- G6 holds the still frame op for op: 585 ops, 44 rolls (`host-p4-green.log`).
+- At the tip, after the rebase onto `690cb4e31` (`p690-rebase.log`, 03:54:05–03:54:25Z): GEN twice byte-stable
+  (`2eb55e5e`, 90,048 bytes), the goldens unchanged, biome 0, phone-parity 26/26, the iOS fixtures 225 (4t's 224
+  and the rain's golden), and the host loop 68 tests in 13 suites with 4t's tests linked, 0 issues.
+- field-app's `tsc --noEmit` 0 at the golden's pair (`p1-tsc.log`).
+- fd's early kit compile at `de2df5f5f`, pair 5's green before the last rebase (02:42:29–02:44:47Z):
+  FieldHomeTests 207 tests in 34 suites, 0 issues.
+- **The commit slot** on fd's proof `82a7dac55` (`f8deba6b7` + `c928fb22b`, tree `60c0c7ada50f`; 04:31:09–04:42:05Z,
+  pinned `c25d6578`; this Mac, Xcode 26.6, iPhone 17 Pro `F93EABF3`):
+  - the proof checks passed first: the two parents, the tree merge-tree's own, `690cb4e31` and the red under the
+    lane's tip;
+  - (a) R1 red first in the kit at `97f138a9e`, by assertion: it built in 125 s, so its `CGFloat == Double`
+    `#expect` compiled. The run had 37 tests and 31 issues: pair 5's 15 and 10, and 6 in RainKitTests (the
+    device at :26 and :27; the elements at :41, :44, :46 and :47). The face row passed, and pairs 2–4's three
+    suites passed at the red. The fallback probe (`probe-plan.md`) was not used;
+  - (b) 16 runs, 1,661 tests. The one red is item 167 (TerminalSurfaceKeyboardTests:31). The seven rain suites,
+    4t's nine and sign-out passed;
+  - (c) Debug (64 s), Mock (4 s) and ONE Release (148 s) built.
+- **The stills there** (04:56:42–05:05:29Z, pinned `a2a1b59c`): six stills and one meter run before a DF STOP
+  (/ at 9 GiB from the host's swap). They found the seed finding (Found).
+- **The M120 merged-tree turn** on fd's proof `b5172b240` (`576172d99` + `c928fb22b`, tree `43369cb3451c`,
+  apps/ios `e8c731c068d9`; 06:35:08–06:42:02Z), with (a) carried:
+  - (b) 16 runs, 1,665 tests, 1 issue (item 167). The seven rain suites, 4t's nine and sign-out passed;
+  - (c) Debug (52 s), Mock (4 s) and ONE Release (144 s) built, with 0 warnings in the PG files.
+- **The M120 stills** (06:42:38–06:47:35Z, pinned `dcfbfb8b`), six at
+  `lanes/ios/stills/pg8-rain/tree-43369cb3451c-*.png`, 0 failed checks:
+  - all six on `-vf-demo-field-slice -vf-godview-view=rain -vf-godview-now=1790803300000 -vf-godview-still`
+    and `-vf-lock=none`;
+  - the stage reads the rain's ground `#000000`, 2.1–2.3% of it inked, in both looks;
+  - seed 1 twice: the SAME pixels in the stage band (`1896774873c7eed8`); seed 2: OTHER pixels
+    (`683ccacd2c656f95`);
+  - said, never judged: "outside the rain: system glass: 89 px differ, max delta 1, x 113.0–289.0, y 80.7–99.7 pt".
+- **The frame meter** (the same build, 30 + 8 s a run, on · off · on · off, the first window dropped, medians;
+  load 159–305):
+  - 30 Hz and frame p50 33.3 ms in all four;
+  - frame p95 49.8 and 49.9 ms with the dissolve, 50.0 and 50.0 without; max 59.4 and 50.7 with, 51.5 and 50.6
+    without;
+  - encode p50 4.8 and 5.0 ms with, 3.4 and 3.9 without (about +1.1 to +1.4 ms); encode p95 8.8 and 9.1 with,
+    10.5 and 8.2 without, mixed.
+- **The stack's one kit turn** (fd; pinned `c25d6578` in `--tree` mode on the ref-less `ad3a207d6`, tree
+  `92160076f239`, T's byte for byte; 06:55:19–07:03:06Z): 16 runs, 1,738 tests, one red, item 167. PG-7's and
+  PG-5's suites, the seven rain suites, 4t's nine and sign-out passed. Debug 66 s, Mock 5 s and ONE Release 133 s
+  built. No stills on this turn (VF-PM 06:53Z): the icon set and README touch no view, and the stills above stand
+  by the lane's lit subtree.
+- **F and F2**, two commits on T (VF-PM, 07:11Z and 07:17Z), each plain, so the first-parent chain is the three
+  merges, then F, then F2:
+  - F `655080328`, wall R8 (Found), on a worktree of T (`lanes/views122/vibe-field`): red, the walls' three
+    enforced rows, one per view module; green, the walls clean, field-app's `tsc --noEmit` 0 (src, test, perf),
+    biome clean, phone-goldens-list.test.ts 8/8. apps/ios untouched (`d20cebec44c5`).
+  - F2 `125578165`, the re-bless (Found): red on F, phone-parity.test.ts 1 of 26 ("phone-rain.golden.json is not
+    what the computation writes; moved: step open: still"), and the pair's own rows RS1 and RS2
+    (test/phone-goldens-rain.test.ts) by assertion, `otherDraws` 1 with the rain alone against 0 after the list.
+    Green: RS1 and RS2 2/2, phone-parity 26/26, phone-goldens-list 8/8; `phone:goldens` byte-identical on a
+    second run; the iOS fixtures 227 identical, pins 67; the walls clean; `tsc` 0; biome clean.
+  - The re-bless moves two lines of phone-rain.golden.json and its kit copy: the note's one clause, and
+    `"otherDraws":1` removed from the still record. The ops and every other step are byte for byte the same, so
+    the drawn frame is unchanged and the turn below takes no stills.
+  - **The kit turn on F2's tree** `4d5007c2f992` (apps/ios `ff52794ae88e`, DESIGN.md `3f423d0875c0`; the pinned
+    `c25d6578` in `--tree` mode), 07:20:27–07:27:23Z, GREEN but item 167:
+    - the kit, 07:22:32–07:24:12Z: 16 runs, 1,738 tests, one red, item 167 (TerminalSurfaceKeyboardTests:31);
+      the seven rain suites ("parity with the desktop's rain" reads the re-blessed copy), PG-7's, PG-5's two,
+      4t's nine and sign-out passed;
+    - Debug 61 s, Mock 4 s and ONE Release 124 s, each BUILD SUCCEEDED;
+    - the verdict: "PG-8 KIT SLOT (tree) at 125578165…: GREEN (the full kit green but item 167; both app
+      schemes and ONE Release built) 07:27:23Z".
+- **Run 122** on T `c556d1428` was RED before it armed, at preflight's wall R8 (Found). T was never minted alone.
+- **Run 123** (`125578165`, the stacked mint: the three merges, then F and F2; minted by a9 on VF-PM's GO): run 123 on
+  the mini, 07:35:46Z: `pnpm verify` exit 0 — vitest 12,217 passed / 0 failed / 18 skipped over 881 files (run 121
+  +10: phone-goldens-list 8, phone-goldens-rain 2), phone-parity 26/26, node 364/0, cargo 544/0 in 34 suites, 0 error
+  TS, the iOS fixtures 227 copies identical (+3 view goldens), pins 67, walls 0.
+- **Landed:** main fast-forwarded through `fe45ac739`, `e48c48430`, `c556d1428`, `655080328` and `125578165` on
+  VF-PM's GO (2026-11-04T07:40:01Z, the fixer's stamp).
+
+**Not witnessed (said).**
+- **The tap.** No agent injects input. H15 (`aTapOpensTheRowUnderIt`) pins the row a column opens, through
+  `RainFrame.agent(atX:among:)`; the recognizer's delivery on a phone is a hand row.
+- **The empty stage on the phone.** No launch flag stages an empty field; `-vf-demo-field-slice` always carries
+  the witness's rows. H12 and H18 hold its words; its look is a hand row.
+- **A device's 120 Hz.** The meter ran on the simulator only. H16 holds the cap's ticks at 60 and 120 Hz.
+- **The phone still beside the desktop's** (Q11's harness, the desktop capture at the phone's measured frame). It
+  is what settles the glow σ (Not built, Owed).
+
+**Found (said).**
+- **Wall R8, found at run 122's preflight.** `perf/lib/phone-goldens-rain.ts:13` imported the SDK's
+  test-only `/testing` entry statically, from the lane's red golden commit `c3c048f7b` on. R8 covers every
+  field-app source that is not a test or spike path, and perf/lib is neither. The kit never runs the walls,
+  and no lane ran preflight on its proof. F `655080328` reaches it by dynamic `import()`, R8's own hatch.
+- **The still record counted process history** (F2, 2026-11-04). `otherDraws` counted the Math.random calls other
+  code made during the still's mount. The one such call is React's `enqueueTask` (react.development.js:529), which
+  draws once per process, the first time `act` queues a task. The rain's still is its first mount, so the count
+  was 1 with this golden alone (the lane's runs) and 0 after the list's golden in one process (the stack), and
+  phone-parity was red on T for it. Nothing on the phone read it (RainFrameTests reads `rainDraws` alone, :29).
+  VF-PM ruled (A), drop the count, at 07:17Z; (B), re-blessing it to 0, would flip on any reorder of the registry.
+  The guard that no other draw comes BEFORE the rain's stays. The lesson: a golden must not count a
+  process-global, one-time effect (DECISIONS PG).
+- **The dissolve's cost is in the encode, not the frame** (fd's erratum to the lane's packet, at its source). The
+  packet's "costs nothing the meter can see" read the frame columns alone. The frame is the same with and without
+  (30 Hz, p95 49.8–49.9 against 50.0 ms), and the encode p50 is about 1.1–1.4 ms higher with it, under load
+  159–305.
+- **The seed finding.** At `82a7dac55` the stills read "SEED 1 TWICE DIFFERS" (`591a7117…` against `9050eced…`),
+  and VF-PM ruled it a red until explained.
+  - A seeded still is deterministic: the stage band, y 120–781 pt, is bit-identical across launches
+    (`1896774873c7eed8` at `82a7dac55` and again at M120), and seed 2 differs.
+  - The whole frame differs by system-drawn iOS 26 Liquid Glass on the swarm circle's bare rim: 2 px ±1 at
+    `82a7dac55`, at (189.3, 93.7) and (159.3, 94.3) pt, 21.9 and 22.0 pt from its centre (174, 78); 89 px ±1 at
+    M120, in the row band y 80.7–99.7 pt.
+  - The glass is `.liquidGlassCircle()` (GodviewStoriesRow.swift:58), which is
+    `glassEffect(.regular.interactive(), in: .circle)` (LiquidGlass.swift:22). The rain circle's rim is under its
+    opaque 2 pt ring; the swarm's ring is at opacity 0. fd confirmed it independently (05:12:05Z). No code fault:
+    no red/green pair.
+  - The stills check now digests the band and SAYS the rest (`dcfbfb8b`).
+- **A note against PG-4t's entry (2026-11-04)**: a whole-frame golden of the phone's stage must mask the Stories
+  row's circles. A bare circle rim is system-drawn Liquid Glass and is not bit-stable across launches (2 px ±1 at
+  `82a7dac55`; 89 px ±1 on the M120 tree).
+- **The SAID pill, for James's eye.** 4t's name pill (`-vf-godview-say=rain`) reaches 131.7 pt, past the 108 pt
+  reserve. In the rain it stands at x 205–251, y 108–132 pt and covers the top two glyphs of the stream in column
+  20 (about 114–132 pt) for its 1.4 s; the rain has no line of words there. Not a lane red.
+- **The dropped doc line (2026-11-04).** fd's keep-both in the stack's third merge dropped this lane's doc line
+  above `case rain` in GodviewViewChoice.swift, "/// PG-8 — the rain (puppeteer-views `views/rain`): a `.flow`
+  picture view, its stage painted whole (`RainView`).", the only line lost; the tree stands as witnessed.
+- **H16 corrects read-pg8:** the 30 fps cap at 120 Hz draws on ticks 4, 8, 13, 16, 21 (the float remainder), not
+  strictly every 4th; at 60 Hz on 2, 4, 7, 8, 11. Transcribed exactly.
+- **U+3100:** `matrixGlyph` truncates, so a roll a hair under 1 lands one past the katakana block. The atlas carries
+  it; mulberry32 never reaches it.
+- **H10's home row is `run-h-quiet`:** the witness's `pty-h3` is a crashed run that the window keeps only while its
+  wait is the failure.
+- **F1:** the touched tail is magenta (`--vf-godview-rain-hover-tail` `#d946ef`), though RainView.tsx says hover
+  "gains NO color of its own". It waits in the tooltip's packet for James's pick.
+- **The lane's own packet claim was false:** it said the commit slot's (b) never ran. It ran green at `82a7dac55`
+  (04:34:10–04:42:04Z, above); the packet carries a dated correction.
+
+**Not built.**
+- J-R3 (b), a per-arm opt-out of the dissolve for the rain (James's; (a) is built).
+- The touch tooltip (H3, James's): `RainTouchPeek.hovered` is always nil, and a tap opens the card.
+- The pane wash (Q4): the phone mounts no panes.
+- Scanlines or a vignette over the rain (J-S3).
+- Cost, `unread`, `stale` and `fieldIsLive` (Q9), for parity with the desktop's rain.
+
+**Owed.**
+- The draft word "Launch an agent from a terminal.": James's eye (VF-PM 2026-11-04).
+- The glow σ, 0.288675 × blur + 0.5 device pixels from memory of Blink's `BlurRadiusToStdDev`: the phone still
+  beside the desktop's settles it; a fix is one constant (`RainAtlas.glowSigma`).
+- F1's magenta tail and the tooltip: James's.
+- The tap and the empty stage: James's hand rows. A device's 120 Hz meter.
+- The SAID pill: VF-PM routes it to James beside J-S2.
+- PG-6 restores the dropped doc line, comment-only, when it adds `case timeline`.
