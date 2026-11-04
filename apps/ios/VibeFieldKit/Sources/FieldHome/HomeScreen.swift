@@ -69,6 +69,9 @@ public struct HomeScreen: View {
   @State private var godviewSaying = GodviewStorySaying()
   /// PG-4t — a still (`-vf-godview-still`): written only by the same DEBUG launch latch, so Release never draws one.
   @State private var godviewStill = false
+  /// PG-4t — the dissolve under the Stories row; only the DEBUG latch turns it off (`-vf-godview-dissolve=off`), for
+  /// a frame meter's run, so Release always dissolves.
+  @State private var godviewDissolves = true
   /// The launch flags are read once (the design check's N10): the DEBUG block runs again on every return to the
   /// view, and a second read would undo the selector's pick in a DEBUG run launched with the flag.
   @State private var godviewLaunchRead = false
@@ -448,6 +451,7 @@ public struct HomeScreen: View {
       topInset: GodviewStories.reserve(safeTop: safeTop),
       skin: GodviewSkin(scheme: colorScheme),
       isStill: godviewStill,
+      dissolves: godviewDissolves,
       onOpen: { row in
         if let bubble = bubbles.first(where: { $0.id == row.visualId }) { openCard(on: bubble) }
       })
@@ -1425,13 +1429,14 @@ public struct HomeScreen: View {
         // fixture argument: alone they keep the live path, and they compose with `-vf-demo-field-slice`. Read once.
         // PG-4t — and the still itself (`-vf-godview-still`): every view draws one frame. The view flag is the
         // run's override and never writes the person's pick; `-vf-godview-say=<id>` holds that view's name, with no
-        // deadline (a still cannot tap).
+        // deadline (a still cannot tap); `-vf-godview-dissolve=off` draws the stage unmasked, for a frame meter.
         if !godviewLaunchRead {
           godviewLaunchRead = true
           let arguments = ProcessInfo.processInfo.arguments
           if let view = GodviewViewChoice.launch(arguments) { godviewLaunch = view }
           godviewNow = GodviewViewChoice.frozenNow(arguments)
           godviewStill = GodviewViewChoice.still(arguments)
+          godviewDissolves = GodviewViewChoice.dissolves(arguments)
           if let said = GodviewViewChoice.said(arguments) { godviewSaying = .held(said) }
         }
         // `!demoRemoteActive` for the reason the line above carries: a second

@@ -67,7 +67,7 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   /// PG-4t — whether the stage dissolves under the row: always, unless `-vf-godview-dissolve=off` is given, the
   /// whole argument.
   static func dissolves(_ arguments: [String]) -> Bool {
-    true
+    !arguments.contains(dissolveOffArgument)
   }
 
   /// PG-4t — whether `-vf-godview-still` is given: the whole argument, so a longer flag is never this one.
@@ -194,8 +194,13 @@ struct GodviewStage<Swarm: View>: View {
   let input: GodviewStageInput
   @ViewBuilder let swarm: () -> Swarm
 
+  /// The mask's ONE place: a frame meter's DEBUG run (`input.dissolves` false) draws the arm unmasked.
   var body: some View {
-    arm.mask { GodviewDissolve(topInset: input.topInset) }
+    if input.dissolves {
+      arm.mask { GodviewDissolve(topInset: input.topInset) }
+    } else {
+      arm
+    }
   }
 
   @ViewBuilder
