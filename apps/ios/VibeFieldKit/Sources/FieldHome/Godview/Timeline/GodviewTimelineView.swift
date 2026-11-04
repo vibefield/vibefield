@@ -336,7 +336,7 @@ struct GodviewTimelineView: View {
     }
   }
 
-  /// The empty stage (TV:882; timeline.css:854-875), upstream's words verbatim (fd's Q13).
+  /// The empty stage (TV:882; timeline.css:854-875): upstream's title, the hint without its pane (the words rule).
   private var empty: some View {
     VStack(spacing: 7) {
       Text(TimelineWords.noAgents)

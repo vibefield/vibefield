@@ -36,15 +36,20 @@ enum TimelineWords {
   static let noLength = "–"
 
   // THE VIEW'S OWN WORDS (TimelineView.js), every one the phone says, here so the hand row H10 reads them all. THE
-  // WORDS RULE (VF-PM via fd, 2026-11-04): on the phone no word, label or title names a key, hover or a pane.
+  // WORDS RULE (VF-PM via fd, 2026-11-04): on the phone no word, label or title names a key, hover or a pane. Its
+  // named drops: the empty hint's pane and the body label's keys (below); NOW's key legend (`keyLegend(NOW_KEY)`,
+  // :859) and the map's hover title (:856, "The whole day. Press to put the head there; drag to play it back."),
+  // which the phone never draws.
 
-  /// The empty stage's words (`TimelineView.js:882`), as transcribed.
+  /// The empty stage's words (`TimelineView.js:882`). The title is upstream's. The hint drops upstream's "pane"
+  /// ("Launch an agent from a terminal pane."): the same words in every view's empty stage.
   static let noAgents = "NO ACTIVE AGENTS"
-  static let noAgentsHint = "Launch an agent from a terminal pane."
-  /// The body's group label (`TimelineView.js:861`, its aria-label), as transcribed.
-  static let bodyLabel =
-    "Agents over time. Up and down light a lane, Enter opens it, left and right move through time, "
-    + "minus and equals zoom."
+  // draft word: James's eye (VF-PM 2026-11-04)
+  static let noAgentsHint = "Launch an agent from a terminal."
+  /// The body's group label (`TimelineView.js:861`, its aria-label): its first sentence. The keys' sentence ("Up and
+  /// down light a lane, Enter opens it, left and right move through time, minus and equals zoom.") is dropped; the
+  /// phone's lanes are its targets, each a button.
+  static let bodyLabel = "Agents over time"
   /// The map of the day's label (`TimelineView.js:856`, its aria-label).
   static let mapLabel = "The head\u{2019}s moment in the day"
   /// The now tool's label, following now and looking back (`TimelineView.js:859`).

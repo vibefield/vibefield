@@ -163,7 +163,7 @@ struct TimelineMapStrip: View {
   }
 
   /// The tools: the narrow head's one preset button that cycles (the wide head's group), and NOW. No key legend:
-  /// the phone has no keys (fd's Q2), so NOW is the 22 pt tool its siblings are.
+  /// the phone has no keys (fd's Q2) and names none (the words rule), so NOW is the 22 pt tool its siblings are.
   private var tools: some View {
     let index = preset.flatMap { current in TimelineScale.presets.firstIndex { $0.id == current.id } }
     let next = TimelineScale.presets[((index ?? -1) + 1) % TimelineScale.presets.count]
