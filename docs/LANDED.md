@@ -31116,3 +31116,235 @@ and the fixtures check):
 - The tap and the empty stage: James's hand rows. A device's 120 Hz meter.
 - The SAID pill: VF-PM routes it to James beside J-S2.
 - PG-6 restores the dropped doc line, comment-only, when it adds `case timeline`.
+  *Closed (2026-11-04, LANDED "PG-6"): PG-6 restored it byte for byte, comment-only, at `371f18eda`, the commit
+  that adds `case timeline`; it landed in M124 `7e2369bd3`, run 124.*
+
+## PG-6 — the timeline view: puppeteer-views' timeline on the phone's stage, its wakes and inks the desktop's call for call (2026-11-04; `9c7a4f57e` → `91ced30cb`, 18 commits on main `125578165`, lane `pg/6-timeline` in `/Volumes/SamsungRed/lanes/pg6-timeline/vibe-field`, M124 `7e2369bd3`, a MERGE into main `8817e5563` (merge-tree `f59b080a5429`), run 124)
+
+**What it rests on.**
+- PG-4t is the stage (LANDED "PG-4t"). The view reads `input.insets(.flow)`, `input.skin` (its `rgb(_:)`
+  numbers), `input.isStill`, `input.now`, `input.activeId`, `HomeFixture.witnessSteps` and
+  `importPuppeteerViews`.
+- PG-7, PG-5 and PG-8 landed first, as the stacked mint `c556d1428` (run 122), with records `125578165`. Main
+  `8817e5563` is `125578165` plus their docs (LANDED "PG-7", "PG-5", "PG-8"; run 123). This lane stands on
+  `125578165`.
+- The source is puppeteer-views 0.3.3 at the lock's pin `52d09c8e`: `views/timeline`, byte-identical to 0.3.2's
+  `95a70aa7`, its last change `5abe8f75`. Line cites are to field-app's installed dist, `TimelineView.js` (TV).
+- fd ruled the read (`lanes/pg6-timeline/light/read-pg6.md`):
+  - Q1, runtime only: no history is lent, so nothing of the record is transcribed;
+  - Q2: no keys, no hover, no focus ring;
+  - Q4, the fixed vectors in the open step; Q6, the ledger's colour; Q7, the ticks zone-free;
+  - Q10, the shared witness; Q12, touch.
+- James's J-S picks (01:12–01:14Z; VF-PM 01:18Z) set the stage (J-S1 A, J-S3 drop) and the lit lane (J-S4).
+- The lane was born at `f978b385a` (first commit `a80a9dc59`) and rebased four times
+  (`light/rebase-*-range-diff.log`): onto `84482a1fe`, onto 4t's shared head `3ddde3eac`, onto 4t's final tip
+  `690cb4e31` (one conflict, GodviewViewChoice.swift's arm), and onto the landed stack `125578165` (Validation).
+- The shas below are the landed lane's. Before the last rebase the same 18 commits were `c3f485814` →
+  `c602520df`; the map is `light/rebase-125-range-diff.log`.
+- Times below are the scripts' own `date -u`. Rulings are cited by content.
+
+**What** (25 files, +6,569 −0: 14 under `apps/ios/VibeFieldKit/Sources`, seven under its Tests, three in
+field-app, and one line of the fixtures check):
+- **The golden** (`9c7a4f57e`, the open step re-blessed at `0593f1402`): `phone-timeline.golden.json`, 233,092
+  bytes (first blessed at 202,593).
+  - It is puppeteer-views' timeline over the window's drawn rows at each of the witness's 11 steps (the last a
+    gap), at `PHONE_BODY_NOW_MS`, following now on the default hour.
+  - Per step: each lane's model, words and readouts (live, and 1, 30 and 54 minutes back), `laneContentKey`, the
+    day's start and head per preset, each lane's wake at the default scale, and the map's summary.
+  - The open step adds the fixed vectors:
+    - the map's Float32 arrays whole;
+    - the held-scale wakes and the scale's calls;
+    - `ticksBetween` pinned zone-free, by wall components;
+    - `formatElapsed`, `laneWaitWords`, `laneAlpha`, `wakeRadius` and the outline words over synthetic runs;
+    - `addCoverage`, `smooth` and `pulseScales`;
+    - the inks (`resolveTimelineInks` over godview.css and tokens.css, both looks);
+    - `paintWakes`' stream, 228 calls a look, recorded through a Proxy 2D context and a recording Path2D. The ticks'
+      hairlines are elided to one `{op: "ticks"}`, because `ticksBetween` reads the host's zone there;
+    - `rgbaCss` at its byte and `toFixed(4)` ties, 12 entries.
+  - Its breakdown at pair 3: head 3,589 · pulseArrays 14,856 · vectors 43,414 · inks 1,495 · paint 27,225 · per
+    step 142,514.
+  - It has one writer and one registry line, between rain and spend, and one line of the fixtures check.
+- **The model** (`9c7a4f57e` → `3abcbd615`): TimelineLanes, TimelineWords, TimelineScale, TimelineFormat and
+  TimelineParameters.
+  - `islandEase` is the SDK's own bisection over `cubic-bezier(0.25, 1, 0.3, 1)` (timeline-scale.js:58), not
+    `FieldMotion`'s curve, so a tween's values are the golden's.
+  - Whole numbers print through FieldAgents' `JSNumber.whole`.
+- **The geometry** (`1561ce25f` → `6f7c625af`): WakeGeometry and PulseMap. Float32 is JavaScript's: read the
+  float32, promote it, add in double, store once.
+- **The paint** (`0593f1402` → `bba101c2e`):
+  - TimelineInks: `resolveTimelineInks`, its `css` the toolkit's `rgbaCss`, and color-mix(in oklch) for the two
+    opaque mixes the stylesheet makes;
+  - TimelinePaint: `paintWakes` call for call, `paintPulse` as its three layers, and `TimelineCanvasReplay`, which
+    replays the stream into a SwiftUI Canvas.
+- **The view** (`371f18eda` → `fe2bbf617`, then `328d112a4` onto 4t's names): TimelineLayout, TimelineHeads,
+  TimelineMap and GodviewTimelineView.
+  - It stands in `framed`. Its words start at `input.insets(.flow).top`, and its ground is the skin's monitor-bg.
+  - A tap opens a lane's card (`input.onOpen`). A horizontal drag pans. A pinch zooms about its centre (240 ms,
+    island). The map is pressed or dragged to put the head there. NOW glides (600 ms). VoiceOver adjusts the map
+    by 5 minutes.
+  - The clock is `input.now()`. A tween's progress reads the frame's time. The zone is `TimeZone.current`.
+- **J-S4**: `TimelineActive.lights(row:activeId:)` is the one place. The open card's lane wears its name
+  underlined and a 4 pt band at its edge, in text main. Its VoiceOver target carries `.isSelected`.
+- **The words rule** (`4884afb6a` → `727d159e7`): four named drops.
+  1. The empty hint "Launch an agent from a terminal pane." becomes "Launch an agent from a terminal." (TV:882), a
+     draft word for James's eye (VF-PM 2026-11-04).
+  2. The body's aria-label (TV:861) keeps "Agents over time" and drops its keys' sentence.
+  3. NOW's key legend (`keyLegend(NOW_KEY)`, "End", TV:859) is never drawn.
+  4. The map's hover title (TV:856) is not carried.
+- **The day label and the underline** (`e05946c70` → `076d243cb`).
+  - `dayLabel` asks the platform for the desktop's skeleton, `dateFormat(fromTemplate: "Ed", …)`.
+  - The active name's underline is the stylesheet's: a 1 pt rule in text main, its top 3 pt under the baseline.
+- **The still law** (`dc4943df5` → `81d3c8493`), **H6b on the main actor** (`e4d4e89dc`) and **the lanes'
+  layers** (`8fc0b9412` → `91ced30cb`): three fixes, each in Found.
+- **GodviewViewChoice** (`371f18eda`): `case timeline` between rain and spend, its arm between theirs, and pg8's
+  restored doc line above `case rain` (Found).
+- **The named deviations** (`light/packet-pg6.md` §4):
+  - the words rule's four drops;
+  - a cut through a surrogate pair keeps U+FFFD (`laneWaitWords`);
+  - a fraction under 1e-4 prints Swift's exponent;
+  - `ticksBetween` returns none for a non-positive step;
+  - the day label's order is the platform's (Found);
+  - not transcribed: every history-only function (Q1, named in the files' headers), and `stepLight` (Q2).
+
+**Validation.**
+- Red first on every pair, by assertion, on the host loop:
+  - the model: 398 issues, 12 tests in 1 suite (`light/host-p1-red3.log`);
+  - the geometry: 587 issues, 7 tests in 1 suite (`light/host-p2-red.log`);
+  - the paint: 16 issues, 21 tests in 3 suites (`light/host-p3-red.log`);
+  - the view: 28 issues, 34 tests in 4 suites (`light/host-p4-red.log`);
+  - the words: 5 issues, 35 tests in 4 suites (`light/host-p6-red.log`);
+  - the day label and the underline: 3 issues, 36 tests in 4 suites (`light/host-p7-red.log`);
+  - the still law: 5 issues, 93 tests in 15 suites (`light/host-p9-red.log`);
+  - the layers: 2 issues, 94 tests in 15 suites (`light/host-p10-red.log`).
+  - The model's, geometry's, paint's and view's reds ran against stand-ins of 4t's names, before 4t's head
+    existed.
+- The host loop at the tip (`light/hostkit`, `swift test -j 4`, 4t's host rows linked): 94 tests in 15 suites
+  passed (`light/host-p11.log`).
+  - The host kit's SwarmTheme is a scratch stand-in, because the real one is UIKit. So no host row resolves the
+    phone's palette.
+  - Three empty stand-ins, for ListView, RainView and SpendView, let the real GodviewViewChoice.swift build on
+    macOS. Their suites are the kit's.
+- **The rebase onto the landed stack `125578165`:** 16 "=", 2 "!" (`light/rebase-125-range-diff.log`).
+  - Commit 1: two keep-both conflicts, phone-goldens.ts and check-ios-fixtures.mjs, resolved in the registry's
+    order (list, rain, timeline, spend).
+  - Commit 7: a silent wrong auto-merge, stopped as `edit` and amended at `371f18eda` (Found).
+- The TS lights:
+  - mine at `91ced30cb`, 07:43:28–07:44:16Z (`light/p11-lights.log`): the walls `--enforce` clean; field-app's
+    `tsc --noEmit` exit 0; all eight goldens unchanged, the tree 0 dirty after; phone-parity 26/26; the
+    fixtures 228 copies, 67 pins; biome clean on the lane's three TS and JS files;
+  - fd's on the proof `27233c890` (07:47Z): walls clean, tsc 0, goldens byte-identical, parity 26/26, fixtures 228.
+- **The first kit slot** on fd's proof `4f1d3c3db` (M120 `576172d99` + `f6081a35f`, the lane's tip before the
+  last rebase), tree `5d2637895f4b`, pinned `e0a45811`: GREEN 05:50:14–06:01:36Z.
+  - Two earlier starts stopped at their own guards before any build: 05:06:52Z, a DF STOP (/ at 9 GiB); 05:27:18Z,
+    a VERIFY STOP.
+  - (a) the probe: T10 and the kit's T11 live by assertion. (b) 16 runs, 1,666 tests, item 167 alone, and four PG
+    warnings (Found). (c) Debug 64 s, Mock 4 s, ONE Release 185 s.
+  - Its stills, 4 of 4 at 06:04:03Z (`lanes/ios/stills/pg6-timeline/5d2637895f4b-*.png`), showed TERMINALS hidden
+    (Found).
+- **The re-slot** on fd's proof `27233c890` (`125578165` + `91ced30cb`), tree `04200cbaaa5a`, which is the tip's
+  own (apps/ios `f717769d218b`, DESIGN.md `3f423d0875c0`). Pinned `6be5323d`, 07:46:34–07:57:22Z; this Mac,
+  Xcode 26.6, iPhone 17 Pro `F93EABF3`.
+  - (a) THE PROBE, 07:46:35–07:49:01Z: T10 and the kit's T11 live by assertion. It is said as a liveness probe,
+    never as red-first (fd's ruling). T11's red-first is the host's, at `0593f1402`.
+    - ONE line is mutated in an archived copy, never in the lane: `ink: theme.ink` → `ink: theme.neutral`.
+    - TimelineInksKitTests runs alone: 2 tests, 13 issues, all by assertion, in both looks. T10's issues are at
+      TimelineInksKitTests.swift:40, and the kit's T11's at TimelinePaintParityTests.swift:76.
+  - (b) the kit, 07:51:24–07:52:32Z: 16 runs, 1,778 tests, one red, item 167 alone
+    (TerminalSurfaceKeyboardTests:31). PG-6's five suites, 4t's nine and sign-out passed. 0 PG warnings.
+  - (c) Debug 85 s, Mock 5 s, ONE Release 197 s, each BUILD SUCCEEDED.
+- **The stills** (pinned `884d1339`; the slot's own Debug app; 07:57:25–07:58:51Z), 4 of 4 at
+  `lanes/ios/stills/pg6-timeline/04200cbaaa5a-{light,light-said,dark,dark-said}.png`:
+  - read over x 15–393, y 120–780 pt: light #f7f7f7, inked 4.4%; dark #0a0a0a, inked 5.2%;
+  - TERMINALS stands whole, and the row shows five circles in registry order, the timeline's ringed;
+  - no meter: the view does not animate in a still.
+- **The MERGE into `8817e5563`** is clean: `git merge-tree --write-tree 8817e5563 91ced30cb` is `f59b080a5429`,
+  with apps/ios `f717769d218b` and DESIGN.md `3f423d0875c0`, the proof's. `8817e5563` is `125578165` plus docs
+  only (DECISIONS, LANDED, ROADMAP). So the re-slot and the stills carry to the mint by tree hash.
+- **Run 124** (`7e2369bd3`, the MERGE of `91ced30cb` into `8817e5563`, minted by a9 on VF-PM's GO): run 124 on the
+  mini, 08:10:36Z: `pnpm verify` exit 0 — vitest 12,217 passed / 0 failed / 18 skipped over 881 files (= run 123; PG-6
+  adds no TS test file), node 364/0, cargo 544/0 in 34 suites, 0 error TS, the iOS fixtures 228 copies identical (+1,
+  the phone-timeline golden's mirror), pins 67, walls clean.
+- **Landed:** main fast-forwarded to `7e2369bd3` on VF-PM's GO (2026-11-04T08:13:22Z, the fixer's stamp), 25 files
+  +6,569.
+
+**Not witnessed (said).**
+- **The touch.** No agent injects input: the tap, the pan, the pinch, the map's press and drag, and NOW's glide.
+  - T8's golden rows hold the scale moves they call. The gestures are James's hand rows.
+  - No gesture reads in `onEnded` state that a reset clears: the view has no `@GestureState`.
+- **The empty stage's look.** No launch flag stages an empty field. H4 and H10 hold its words.
+- **The lit lane's look** (J-S4): only an open card lights a lane, and no still opens one. H5 and H5b pin the one
+  place and the rule's numbers.
+- **The map's pulse and the oklch mixes.** No golden reaches them; the stills are their only witness.
+- **The day label on iOS.** The stills' window shows no day boundary. The kit's H1 ("WED 4") is the runtime's word.
+- **A device.** The kit and the stills ran on the simulator only.
+
+**Found (said).**
+- **The kit's four Swift 6 warnings**, kit only: TimelineViewTests.swift:195/199/201/203, at the first slot's
+  build of `f6081a35f` (tree `5d2637895f4b`).
+  - H6b called a View's main-actor static, `schedule(isStill:tweening:reduceMotion:)`, from a nonisolated test.
+    The host's macOS SDK does not isolate it, so the host never saw them.
+  - Fixed at `e4d4e89dc` (`@Test @MainActor`). The re-slot reads 0 PG warnings.
+- **The TERMINALS label's stacking fault.** fd found it on `5d2637895f4b`'s stills: only "ALS" showed, at y ≈ 520
+  pt.
+  - It was COVERED by the names column's ground, opaque to its width − 70 (timeline.css:457-471), because the
+    phone drew the divider before the names.
+  - timeline.css stacks the label (`span`, z 3) above the names (z 2), and the rule (`::before`, z auto) under
+    them.
+  - Red `8fc0b9412`: H11, 2 issues by assertion (`light/host-p10-red.log`). Green `91ced30cb`: `TimelineLayer` in
+    that z order, drawn by `ForEach(TimelineLayer.allCases)`. The re-slot's stills show the label whole.
+- **Git's silent wrong auto-merge of GodviewViewChoice.swift.** Rebasing onto `125578165`, git merged the file
+  with NO conflict, but wrong:
+  - `case timeline` landed right after `case swarm`, above the `// PG-5…8` placeholder;
+  - its arm landed above the placeholder comment.
+  - fd's GO predicted it from a trial merge-tree of `125578165` + `c602520df`. The commit was stopped as `edit` and
+    amended at `371f18eda`: the case between rain and spend, the arm between theirs.
+  - The registry order is a hand check. No row pins the cases' declaration order: the Stories row orders by
+    `registryOrder` (GodviewViewChoice.swift:39) whatever the order of the cases.
+- **The restored rain doc line.** The keep-both in the stacked mint `c556d1428`'s third merge dropped pg8's doc
+  line above `case rain`.
+  - `371f18eda` restores it, comment only, byte-identical to pg8's lane GodviewViewChoice.swift:17, on VF-PM's
+    ruling (07:06Z) that this lane restore it in the commit that adds `case timeline`:
+    "/// PG-8 — the rain (puppeteer-views `views/rain`): a `.flow` picture view, its stage painted whole
+    (`RainView`)."
+  - fd closes PG-8's Owed line at its source.
+- **The SAID pill, for James's eye.** The Stories row's name pill ("Timeline", `-vf-godview-say=timeline`),
+  measured as the difference of the `04200cbaaa5a` light and `-said` stills (`light/pill/`):
+  - its body (a difference over 24 of 255) stands at x 220–290, y 107–133 pt, its glyphs at x 231–279, y 115–125;
+  - the map strip runs y 116–153 pt. So for its 1.4 s the body covers the strip's upper ticks, right of "14:00"
+    (its ink ends at x 204) and left of the head's knob (x 297–306);
+  - its soft shadow moves the strip's lower ticks by 10 of 255 at most, and the wake's tip by 6;
+  - it covers no word: "14:00" moves by 1, the clock chip by 3, and the 1H and NOW tools by 0.
+  - VF-PM routes it to James's eye beside J-S2. It is not a lane red.
+- **The still law's 1 Hz timer.** Writing stills.sh, I found the view still mounted its once-a-second redraw,
+  `TimelineView(.periodic(from: .now, by: 1))`, in a still, against GodviewViewChoice.swift:25 ("no loop, no
+  transition and no timer").
+  - Red `dc4943df5`: H6b, 5 issues by assertion (`light/host-p9-red.log`). Green `81d3c8493`:
+    `schedule(isStill:tweening:reduceMotion:)`. A still draws once, at its frozen clock, with no TimelineView.
+    Live, a tween landing with motion allowed redraws every frame; anything else, once a second.
+  - The pictures are the same, because a still's clock was already frozen.
+- **The underline's numbers were declared, not applied** (mine): `.underline` took the font's metrics. fd ruled
+  (a), parity: red `e05946c70`, green `076d243cb`.
+- **No kit-buildable red for T10 or the kit's T11.**
+  - Every commit before `328d112a4` names pre-4t stand-ins (`GodviewSkin.resolve`, a SwarmColor skin).
+  - T10 was born at `371f18eda` over inks real since `bba101c2e`, and the kit's T11 was born green at `328d112a4`.
+  - T10's only red is the probe. T11's red-first is the host's, at `0593f1402` (16 issues).
+- **The day label's order.** The desktop asks its ICU in the user's locale: Node (ICU 78.3, CLDR 48), en-US, gives
+  `d EEE`, "30 WED".
+  - Apple's Foundation gives `EEE d`, "WED 30", for the same skeleton `Ed` in the same locale.
+  - fd ruled keep: the platform's localized order is the intent, and a fixed pattern would be wrong in every
+    other locale. It is a visible difference, for James's eye.
+
+**Not built.**
+- The record: no history is lent (Q1). The ended lanes, the record's sentence and the tall canvas are named, not
+  transcribed.
+- Keys, hover and the focus ring (Q2), and so `stepLight` and the key legend.
+- A DESIGN.md row (ruled three times). J-S4 and touch-selects are one sentence in 4t's phone sub-bullet.
+
+**Owed.**
+- James's eye:
+  - the draft word "Launch an agent from a terminal.";
+  - the day label's order, "WED 30" on the phone against "30 WED" on the desktop;
+  - the said pill, beside J-S2;
+  - the map's pulse and the oklch mixes, in the stills.
+- James's hand rows: the touch, the empty stage's look, and the lit lane's look with an open card.
+- `lanes/pg6-timeline/light/hostkit`, removed after the land.
