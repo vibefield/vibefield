@@ -72,15 +72,21 @@ export async function encodePng({ width, height, rgba, opaque = false }) {
   if (typeof opaque !== "boolean") throw new TypeError("opaque must be a boolean");
   if (opaque) {
     for (let at = 3; at < data.length; at += 4) {
-      if (data[at] !== 255) throw new Error("Opaque PNG requires every pixel to be opaque; composite the background first");
+      if (data[at] !== 255)
+        throw new Error(
+          "Opaque PNG requires every pixel to be opaque; composite the background first",
+        );
     }
   }
   if (typeof CompressionStream !== "function") {
-    throw new Error("PNG export requires CompressionStream support; use a current browser or Node 22+");
+    throw new Error(
+      "PNG export requires CompressionStream support; use a current browser or Node 22+",
+    );
   }
   const channels = opaque ? 3 : 4;
   const stride = width * channels + 1;
-  if (stride * height > U32_MAX) throw new RangeError("PNG scanlines exceed the supported 4 GiB size");
+  if (stride * height > U32_MAX)
+    throw new RangeError("PNG scanlines exceed the supported 4 GiB size");
   const scanlines = new Uint8Array(stride * height);
   // Filter 0 keeps the representation simple and lossless. DEFLATE performs compression.
   for (let y = 0; y < height; y++) {
@@ -94,9 +100,11 @@ export async function encodePng({ width, height, rgba, opaque = false }) {
       }
     }
   }
-  const compressed = new Uint8Array(await new Response(
-    new Blob([scanlines]).stream().pipeThrough(new CompressionStream("deflate")),
-  ).arrayBuffer());
+  const compressed = new Uint8Array(
+    await new Response(
+      new Blob([scanlines]).stream().pipeThrough(new CompressionStream("deflate")),
+    ).arrayBuffer(),
+  );
   const header = new Uint8Array(13);
   const headerView = new DataView(header.buffer);
   headerView.setUint32(0, width);
@@ -127,7 +135,12 @@ function pngInfo(input) {
   if (data[24] !== 8 || ![2, 6].includes(data[25])) {
     throw new TypeError("Icon entry must be an 8-bit RGB or RGBA PNG");
   }
-  return { data, width: view.getUint32(16), height: view.getUint32(20), bits: data[25] === 6 ? 32 : 24 };
+  return {
+    data,
+    width: view.getUint32(16),
+    height: view.getUint32(20),
+    bits: data[25] === 6 ? 32 : 24,
+  };
 }
 
 /**
@@ -141,11 +154,13 @@ export function encodeIco(entries) {
   }
   const seen = new Set();
   const images = entries.map(({ size, data }) => {
-    if (!Number.isInteger(size) || size < 1 || size > 256) throw new RangeError("ICO size must be 1–256 pixels");
+    if (!Number.isInteger(size) || size < 1 || size > 256)
+      throw new RangeError("ICO size must be 1–256 pixels");
     if (seen.has(size)) throw new Error(`Duplicate ICO size: ${size}`);
     seen.add(size);
     const png = pngInfo(data);
-    if (png.width !== size || png.height !== size) throw new Error(`ICO ${size}px entry has mismatched PNG dimensions`);
+    if (png.width !== size || png.height !== size)
+      throw new Error(`ICO ${size}px entry has mismatched PNG dimensions`);
     return { size, ...png };
   });
   const header = new Uint8Array(6 + images.length * 16);
@@ -154,7 +169,8 @@ export function encodeIco(entries) {
   view.setUint16(4, images.length, true);
   let offset = header.length;
   images.forEach(({ size, bits, data }, i) => {
-    if (offset + data.length > U32_MAX) throw new RangeError("ICO exceeds the supported 4 GiB size");
+    if (offset + data.length > U32_MAX)
+      throw new RangeError("ICO exceeds the supported 4 GiB size");
     const at = 6 + i * 16;
     header[at] = size === 256 ? 0 : size;
     header[at + 1] = header[at];
@@ -168,8 +184,17 @@ export function encodeIco(entries) {
 }
 
 const ICNS_SIZES = Object.freeze({
-  icp4: 16, icp5: 32, icp6: 64, ic07: 128, ic08: 256, ic09: 512, ic10: 1024,
-  ic11: 32, ic12: 64, ic13: 256, ic14: 512,
+  icp4: 16,
+  icp5: 32,
+  icp6: 64,
+  ic07: 128,
+  ic08: 256,
+  ic09: 512,
+  ic10: 1024,
+  ic11: 32,
+  ic12: 64,
+  ic13: 256,
+  ic14: 512,
 });
 
 /**
@@ -178,10 +203,12 @@ const ICNS_SIZES = Object.freeze({
  * This does not compile an Icon Composer asset or replace Xcode's Assets.car compilation.
  */
 export function encodeIcns(entries) {
-  if (!Array.isArray(entries) || entries.length < 1) throw new RangeError("ICNS needs at least one representation");
+  if (!Array.isArray(entries) || entries.length < 1)
+    throw new RangeError("ICNS needs at least one representation");
   const seen = new Set();
   const chunks = entries.map(({ type, data }) => {
-    if (!Object.hasOwn(ICNS_SIZES, type)) throw new TypeError(`Unsupported PNG-backed ICNS type: ${type}`);
+    if (!Object.hasOwn(ICNS_SIZES, type))
+      throw new TypeError(`Unsupported PNG-backed ICNS type: ${type}`);
     if (seen.has(type)) throw new Error(`Duplicate ICNS type: ${type}`);
     seen.add(type);
     const png = pngInfo(data);
@@ -202,11 +229,25 @@ export function encodeIcns(entries) {
 }
 
 function safeName(name) {
-  if (typeof name !== "string" || name.length === 0 || /[\\<>:"|?*\u0000-\u001f\u007f]/u.test(name)) {
+  if (
+    typeof name !== "string" ||
+    name.length === 0 ||
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: refusing them is the point
+    /[\\<>:"|?*\u0000-\u001f\u007f]/u.test(name)
+  ) {
     throw new TypeError("ZIP entry needs a safe relative filename");
   }
   const segments = name.split("/");
-  if (segments.some((part) => !part || part === "." || part === ".." || /[. ]$/u.test(part) || /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/iu.test(part))) {
+  if (
+    segments.some(
+      (part) =>
+        !part ||
+        part === "." ||
+        part === ".." ||
+        /[. ]$/u.test(part) ||
+        /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/iu.test(part),
+    )
+  ) {
     throw new TypeError(`ZIP entry has an unsafe path: ${name}`);
   }
   const encoded = utf8(name);
@@ -220,7 +261,8 @@ function safeName(name) {
  * Paths must be safe on macOS, Linux and Windows; case-insensitive duplicate paths are refused.
  */
 export function zipStore(entries) {
-  if (!Array.isArray(entries) || entries.length > 65535) throw new RangeError("ZIP supports at most 65535 files");
+  if (!Array.isArray(entries) || entries.length > 65535)
+    throw new RangeError("ZIP supports at most 65535 files");
   const localParts = [];
   const centralParts = [];
   const seen = new Set();
@@ -264,7 +306,8 @@ export function zipStore(entries) {
     centralSize += central.length + filename.length;
     offset += local.length + filename.length + data.length;
   }
-  if (offset + centralSize + 22 > U32_MAX) throw new RangeError("ZIP requires ZIP64 for this archive");
+  if (offset + centralSize + 22 > U32_MAX)
+    throw new RangeError("ZIP requires ZIP64 for this archive");
   const end = new Uint8Array(22);
   const e = new DataView(end.buffer);
   e.setUint32(0, 0x06054b50, true);
