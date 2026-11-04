@@ -26797,3 +26797,44 @@ recorded nothing. So nothing told a person, later, how VibeField last quit. AL-7
 
 **Owed.** The idle bound's own stop (AL-5) and a signal are fieldd's, not a shell's exit, and leave the kept record as
 it was. The draft's §8.1 line is folded at the next queue opening.
+
+
+## EL8 — Rosetta 0.1.3: progressive cold import, its first-import UX, and History on the new room (2026-11-04)
+
+The Rosetta pin moves from `3948bcf595bc54b7e9ac04894eba84de69a022e6` to
+`8e8f49688e4b4d610643df2472b43e26ea87f46d` (rosetta main, PR #40, a squash merge), the source of both
+`npm-v0.1.3` and `v0.1.3`. The exact `@vibefield/rosetta-protocol` and `@vibefield/rosetta-room` overrides,
+preflight expectations, the lock's sha and release coordinate, minimumReleaseAgeExclude and the pnpm lock move
+together. Wire protocol and store schema move 27 → 29: fieldd refuses any other protocol, and the first start
+of the new rosettad over an existing data root rebuilds its projection once (the schema debt,
+`rosettad-supervisor.ts`).
+
+The host's adoption rides the same branch (`cbdb93f3`, with the overlay fix `9fce840d`): the consent slot's
+grant asks the room's status at once (`refreshStatus`, ux:X7); each runtime's admission course reaches the
+not-imported face (`IndexAdmissionCourse`); the disconnected face is titled "History isn't answering" and
+"Opening History…" (RO-28, #27); a recorded original's renditions are labelled WebP. The release also carries
+the room's bounded brisk re-ask (50 × 100 ms, then the consent pause) and an unshown grant ranked before a
+complete archive's 30 s poll — both found while integrating.
+
+Release proof: the npm release run 41890188880 first stopped at its verify job on one timing row of rosetta's
+cold-import characterization (`[ux:X9]`, `largestStepAtMostHalf`, on the Linux xvfb runner; the same job passed
+in PR #40's CI) and skipped the publish; its re-run passed and published. Both npm tarballs' `dist` are byte for
+byte the build of `clients/ts` and `clients/room` at `8e8f496`. The pin tool passed R23 (10 rows, 9 kinds; the
+standing `acp` candidate warning), the consumers' typecheck (28 projects) and gen:check.
+
+Verification, in the committed shape (the npm 0.1.3 packages, rosettad built from `../rosetta-pin` at `8e8f496`
+with `FIELDD_ROSETTAD_BIN`), on a scratch worktree (temp data roots only):
+- preflight: green but for this host's compiler (rustc 1.99.1 not installed; field-native and cargo-typify were
+  built with 1.97.1); check:walls clean; check:deps ok; check:ios-fixtures 186 identical; render --check the
+  lock's; typecheck 28 projects; biome 0 errors; gen:check clean.
+- contracts 1,434; dev-runner 343; field-app whole 271 files, 3,547 tests; fieldd whole 2,839 passed and 11
+  skipped (the three real-field-native files run with the OS temp directory: a long TMPDIR passes macOS's
+  104-byte socket path), its rosettad/index/agent-index/agent-runtime/agent-session set 387 passed and 4
+  skipped (packaged-history needs a packaged build; two rows need a real agent).
+- Not run: `pnpm verify` whole, Rust tests and clippy (no Rust change here), the iOS kit, and the desk gates
+  (`pnpm gate:landing`, `smoke:godview` and the rest open windows on a display) — owed at landing.
+
+Found on the way: during an EL8 that moves the rows, `pnpm siblings use --none` fails its frozen install
+before it un-aligns the overlay, so the hidden hoist keeps pointing into the checkout; `unalignOverlay` run by
+hand restored the store's 0.1.3 copies. A second `use --none` after the install does not: the overlay is
+already gone, so it has nothing to un-align. Owed: `use --none` should un-align before its install.
