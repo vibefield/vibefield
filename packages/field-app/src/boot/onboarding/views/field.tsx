@@ -90,7 +90,7 @@ export function OnboardingFieldPaneView({
               disabled={writing}
               autoFocus={autoFocus}
               onChange={(event) => onNameChange(event.target.value)}
-              className="h-10 rounded-[12px] border border-black/10 bg-white px-3.5 text-[15px] text-black/85 outline-none transition-[border-color,box-shadow] placeholder:text-black/30 focus:border-black/25 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)] motion-reduce:transition-none disabled:opacity-45 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-white/25 dark:focus:shadow-[0_0_0_3px_rgba(255,255,255,0.07)]"
+              className="vf-wizard-field h-10 rounded-[12px] border px-3.5 text-[15px] outline-none transition-[border-color,box-shadow] motion-reduce:transition-none disabled:opacity-45"
             />
           </label>
           <FaceDeck

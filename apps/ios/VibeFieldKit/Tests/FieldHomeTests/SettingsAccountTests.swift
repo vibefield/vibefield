@@ -185,6 +185,7 @@ struct SettingsAccountTests {
     #expect(opening("-vf-open-settings=theme") == SettingsOpening([.terminal], terminalPage: .theme))
     #expect(opening("-vf-open-settings=effects") == SettingsOpening([.terminal], terminalPage: .effects))
     #expect(opening("-vf-open-settings=acknowledgements") == SettingsOpening([.about, .acknowledgements]))
+    #expect(opening("-vf-open-settings=lock") == SettingsOpening([.lock]))
     #expect(opening("-vf-open-settings=desktop:dev-2") == SettingsOpening([.desktop("dev-2")]))
     #expect(opening("-vf-open-settings=desktop:") == .root)
     #expect(opening("-vf-open-settings=nowhere") == .root)

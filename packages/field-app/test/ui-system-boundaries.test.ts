@@ -19,6 +19,68 @@ const catalogPageSources = (): string => {
   return [source("design-system/DesignSystemPage.tsx"), ...sections].join("\n");
 };
 
+/** UA-7's spelling of a colour literal: a hex, or a colour function. */
+const COLOUR_LITERAL = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|lab|lch)\(/i;
+
+/** The Setup Assistant's own modules and stylesheet (item 136), discovered so a new pane is covered the moment it
+ * exists: every .tsx and .css under boot/onboarding, as paths relative to it. */
+const ONBOARDING_ROOT = join(PACKAGE_ROOT, "src", "boot", "onboarding");
+const onboardingFiles = (): string[] =>
+  (readdirSync(ONBOARDING_ROOT, { recursive: true }) as string[])
+    .filter((file) => /\.(?:tsx|css)$/.test(file))
+    .sort();
+
+/** A token's value in one theme's block of tokens.css (`:root` or `.dark`), as written. */
+const tokenValue = (tokens: string, theme: ":root" | ".dark", name: string): string => {
+  const start = tokens.indexOf(`\n${theme} {`);
+  const block = tokens.slice(start, tokens.indexOf("\n}", start));
+  const value = new RegExp(`\\s${name}:\\s*([^;]+);`).exec(block)?.[1]?.trim();
+  if (start < 0 || value === undefined) throw new Error(`${name} has no value in ${theme}`);
+  return value;
+};
+
+/** An sRGB colour as tokens.css spells one: `#rgb`, `#rrggbb`, or `rgb(r g b / a%)`. */
+const parseColour = (value: string): { rgb: [number, number, number]; alpha: number } => {
+  const hex = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(value)?.[1];
+  if (hex !== undefined) {
+    const full = hex.length === 3 ? [...hex].map((digit) => digit + digit).join("") : hex;
+    return {
+      rgb: [0, 2, 4].map((at) => Number.parseInt(full.slice(at, at + 2), 16)) as [
+        number,
+        number,
+        number,
+      ],
+      alpha: 1,
+    };
+  }
+  const fn = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*(?:\/\s*([\d.]+)%)?\s*\)$/.exec(value);
+  if (fn === null) throw new Error(`not a colour this row reads: ${value}`);
+  return {
+    rgb: [Number(fn[1]), Number(fn[2]), Number(fn[3])],
+    alpha: fn[4] === undefined ? 1 : Number(fn[4]) / 100,
+  };
+};
+
+/** WCAG 2's contrast of an ink, composited at its alpha, over an opaque ground. */
+const contrastOver = (ink: string, ground: string): number => {
+  const over = parseColour(ground);
+  const word = parseColour(ink);
+  const mix = (a: number, b: number): number => a * word.alpha + b * (1 - word.alpha);
+  const shown: [number, number, number] = [
+    mix(word.rgb[0], over.rgb[0]),
+    mix(word.rgb[1], over.rgb[1]),
+    mix(word.rgb[2], over.rgb[2]),
+  ];
+  const linear = (channel: number): number => {
+    const c = channel / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = ([r, g, b]: readonly [number, number, number]): number =>
+    0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+  const [a, b] = [luminance(shown), luminance(over.rgb)];
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+};
+
 describe("UI system ownership boundaries", () => {
   it("keeps the app and catalog stylesheets as manifests", () => {
     const appManifest = source("styles.css");
@@ -269,6 +331,62 @@ describe("UI system ownership boundaries", () => {
       readFileSync(join(PACKAGE_ROOT, "../design-kit/src/face.css"), "utf8"),
     ]) {
       expect(stylesheet).not.toMatch(/#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|lab|lch)\(/i);
+    }
+  });
+
+  it("keeps the Setup Assistant's own compositions free of colour literals of any spelling (item 136)", () => {
+    // Its actions, fields and headlines wear tokens (DESIGN.md §5 "Setup Assistant", §8's inverted solid;
+    // docs/UI_SYSTEM.md, tokens → compositions): no hex or colour function, no black/white/grey utility at any alpha
+    // or state in its class strings, and no named black or white in its stylesheet.
+    const utility =
+      /(?:^|[\s"'`])(?:[a-z-]+:)*(?:bg|text|border|ring|ring-offset|shadow|outline|fill|stroke|divide|from|via|to|caret|accent|decoration)-(?:black|white|neutral|gray|slate|zinc|stone)\b/;
+    const offenders: string[] = [];
+    for (const file of onboardingFiles()) {
+      const text = readFileSync(join(ONBOARDING_ROOT, file), "utf8");
+      text.split("\n").forEach((line, index) => {
+        const named =
+          file.endsWith(".css") &&
+          /:\s*[^;]*\b(?:black|white)\b/i.test(line.replace(/url\([^)]*\)/g, "url()"));
+        if (COLOUR_LITERAL.test(line) || utility.test(line) || named) {
+          offenders.push(`${file}:${index + 1}`);
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("gives every placeholder in the Setup Assistant a token ink that reads at 4.5:1 on its field (item 136)", () => {
+    // A placeholder is a word that is read (DESIGN.md §2.4), and no walk can witness it: a `::placeholder` is no text
+    // node. So the witness is this row: every input of the chapter that shows one wears `.vf-wizard-field`, whose
+    // placeholder is a ramp token; the token is resolved as the glass re-projects it (`.vf-wizard-shell`), and its
+    // ratio over the field's face is computed from tokens.css: by day the opaque `--vf-chrome-solid`, by night the
+    // night `--vf-chrome-solid`, lighter than the field's real face there (white 6% over the smoke), so a bound.
+    const inputs = onboardingFiles()
+      .filter((file) => file.endsWith(".tsx"))
+      .flatMap((file) =>
+        [...readFileSync(join(ONBOARDING_ROOT, file), "utf8").matchAll(/<input\b[\s\S]*?\/>/g)]
+          .map((match) => ({ file, tag: match[0] }))
+          .filter(({ tag }) => /\splaceholder=/.test(tag)),
+      );
+    expect(inputs.length).toBeGreaterThan(0);
+    expect(
+      inputs.filter(({ tag }) => !/\bvf-wizard-field\b/.test(tag)).map(({ file }) => file),
+    ).toEqual([]);
+
+    const css = readFileSync(join(ONBOARDING_ROOT, "wizard-ui.css"), "utf8");
+    const ink = /\.vf-wizard-field::placeholder\s*\{[^}]*?\bcolor:\s*var\((--[\w-]+)\)/.exec(
+      css,
+    )?.[1];
+    expect(ink).toMatch(/^--vf-text-/);
+    const shell = /\.vf-wizard-shell\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    const projected = new RegExp(`${ink}:\\s*var\\((--[\\w-]+)\\)`).exec(shell)?.[1] ?? ink ?? "";
+    const tokens = readFileSync(join(PACKAGE_ROOT, "../design-kit/src/tokens.css"), "utf8");
+    for (const theme of [":root", ".dark"] as const) {
+      const ratio = contrastOver(
+        tokenValue(tokens, theme, projected),
+        tokenValue(tokens, theme, "--vf-chrome-solid"),
+      );
+      expect(ratio, `${theme} ${projected}`).toBeGreaterThanOrEqual(4.5);
     }
   });
 

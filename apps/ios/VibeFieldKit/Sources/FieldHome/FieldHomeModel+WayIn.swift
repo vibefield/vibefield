@@ -1,3 +1,4 @@
+import FieldLock
 import Foundation
 
 // WI-1/WI-2 (DESIGN.md §9 "The way in", §8 "The phone's way in") — what the way in draws for each of its
@@ -13,6 +14,10 @@ extension FieldHomeModel {
     /// The found beat: your face in the mark's place, the desktop the phone first reached (nil while none
     /// answers).
     case found(name: String?, desktop: String?)
+    /// WI-3 — the lock, offered as the way in's last step (WI-D3 A), in the words of this phone's method.
+    case lockOffer(LockMethod)
+    /// WI-3 — the curtain after a miss or a Cancel (WI-D5 A): the way in's three places on the lock's splash.
+    case locked(LockMethod)
   }
 
   /// What one screen of the way in draws.
@@ -64,6 +69,8 @@ extension FieldHomeModel {
     }
 
     var steps: Steps?
+    /// The steps' names, one bar each: two, and the lock's third while the way in will offer it (WI-3).
+    var stepNames: [String] = WayInWords.steps
     /// The tour's back, at the top's left.
     var back: WayInAct?
     var picture: Picture = .mark
@@ -84,6 +91,12 @@ extension FieldHomeModel {
     case keepAccount
     case startOver
     case openAdminConsole(URL)
+    /// WI-3 — Lock with Face ID: the lock turns on, asking first.
+    case lockOn
+    /// WI-3 — Not now: the hand-over, the lock left off.
+    case notNow
+    /// WI-3 — Unlock with Face ID, on the curtain.
+    case unlock
   }
 
   /// VibeField's site, where How it works sends a newcomer and No desktops yet sends its link.
@@ -98,14 +111,37 @@ extension FieldHomeModel {
     static let scanTheCode = "Scan the code on your computer"
     static let seeHowItWorks = "New to VibeField? See how it works"
     static func pick(_ login: String) -> String { "At Tailscale, pick \(login)." }
-    /// Where you are, by name. Face ID's step comes with the lock it offers (WI-3): until then the way in has
-    /// two steps, and never promises a third that does not come.
+    /// Where you are, by name: two steps, and the lock's third (named for the method) only while the way in will
+    /// offer it (WI-3), so it never promises a step that does not come.
     static let steps = ["Sign in", "Your computer"]
     static let sendTheLink = "Send the link to my computer"
   }
 
-  /// One screen of the way in, for a step.
-  static func wayInScreen(_ step: WayInStep) -> WayInScreen {
+  /// The way in's steps' names: its two, and the lock's while it will be offered (`lock`, the phone's method).
+  static func wayInSteps(lock: LockMethod?) -> [String] {
+    guard let lock, lock != LockMethod.none else { return WayInWords.steps }
+    return WayInWords.steps + [LockWords(lock).step]
+  }
+
+  /// What the way in shows once the found beat has held: the lock's offer while the phone can lock and the lock is
+  /// off (`offer`, the method), else nothing, and the hand-over.
+  static func afterFoundBeat(offer: LockMethod?) -> WayInStep? {
+    guard let offer, offer != LockMethod.none else { return nil }
+    return .lockOffer(offer)
+  }
+
+  /// One screen of the way in, for a step. `lock` is the phone's method while the way in will offer the lock.
+  static func wayInScreen(_ step: WayInStep, lock: LockMethod? = nil) -> WayInScreen {
+    var screen = baseScreen(step)
+    switch step {
+    case .lockOffer(let method): screen.stepNames = wayInSteps(lock: method)
+    case .locked, .tour: break
+    case .page, .found: screen.stepNames = wayInSteps(lock: lock)
+    }
+    return screen
+  }
+
+  private static func baseScreen(_ step: WayInStep) -> WayInScreen {
     let words = WayInWords.self
     switch step {
     case .page(.welcome(let failure, let expecting)):
@@ -197,6 +233,23 @@ extension FieldHomeModel {
 
     case .tour(let page):
       return tourScreen(page)
+
+    case .lockOffer(let method):
+      // WI-D3 A: the way in's last step, on by default: Lock leads, Not now beside it, and where to change it
+      let lock = LockWords(method)
+      return WayInScreen(
+        steps: .step(3),
+        words: .init(title: lock.offerTitle, line: AttributedString(lock.offerLine)),
+        acts: [
+          .primary(lock.lockWith, .lockOn), .secondary(LockWords.notNow, .notNow), .note(LockWords.offerNote),
+        ])
+
+    case .locked(let method):
+      // WI-D5 A: the curtain after a miss or a Cancel, its one act, and the passcode's note where it is the fallback
+      let lock = LockWords(method)
+      var acts: [WayInScreen.Act] = [.primary(lock.unlockWith, .unlock)]
+      if let too = lock.passcodeToo { acts.append(.note(too)) }
+      return WayInScreen(words: .init(title: LockWords.lockedTitle), acts: acts)
     }
   }
 

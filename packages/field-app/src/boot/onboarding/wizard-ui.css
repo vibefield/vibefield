@@ -783,3 +783,59 @@
       vf-glass-clear-logo 300ms ease both;
   }
 }
+
+/* The glass's actions and fields (item 136; DESIGN.md §8 "The Setup Assistant's glass", its closing paragraph): the
+   wizard's own sizes stay in the class strings (wizard-ui.tsx, the views), and every colour is a token here. These
+   rules are unlayered, so they win over Tailwind's utilities; a state's colour is set here with its rest, never by a
+   utility beside them. */
+.vf-wizard-primary {
+  color: var(--vf-foreground-inverse);
+  background: var(--vf-foreground);
+}
+
+.vf-wizard-quiet {
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 5%, transparent);
+}
+
+.vf-wizard-quiet:hover {
+  color: var(--vf-foreground);
+  background: color-mix(in srgb, var(--vf-foreground) 10%, transparent);
+}
+
+.dark .vf-wizard-quiet {
+  background: color-mix(in srgb, var(--vf-foreground) 10%, transparent);
+}
+
+.dark .vf-wizard-quiet:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 15%, transparent);
+}
+
+.vf-wizard-field {
+  border-color: var(--vf-hairline-strong);
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+}
+
+.dark .vf-wizard-field {
+  background: var(--vf-field-surface);
+}
+
+/* A placeholder is a word that is read (§2.4): t3, which the glass re-projects to its own t2 (`.vf-wizard-shell`) */
+.vf-wizard-field::placeholder {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-wizard-field:focus {
+  border-color: color-mix(in srgb, var(--vf-foreground) 25%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vf-foreground) 5%, transparent);
+}
+
+.dark .vf-wizard-field:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vf-foreground) 7%, transparent);
+}
+
+/* The headlines, Welcome's and each pane's */
+.vf-wizard-headline {
+  color: var(--vf-foreground);
+}

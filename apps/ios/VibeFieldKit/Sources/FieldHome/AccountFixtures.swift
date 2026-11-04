@@ -1,5 +1,6 @@
 #if DEBUG
   import FieldDesign
+  import FieldLock
   import FieldMesh
   import FieldSettings
   import Foundation
@@ -70,6 +71,12 @@
         // WI-2 — the found beat, held: your face in the mark's place, the desktop the phone first reached.
         var demo = make(.up, login: login, face: fox, desktops: [ready("studio")], hearing: true)
         demo.wayIn = .found(name: nil, desktop: "studio")
+        return demo
+      // WI-3 — the lock, offered as the way in's last step after the found beat (WI-D3 A), in Face ID's words and in
+      // a passcode-only phone's
+      case "lock-offer", "lock-offer-passcode":
+        var demo = make(.up, login: login, face: fox, desktops: [ready("studio")], hearing: true)
+        demo.wayIn = .lockOffer(name == "lock-offer" ? .faceID : .passcode)
         return demo
       // WI-1 — the way in's two holds: signed in and joining the network, then looking for a desktop
       case "joining":

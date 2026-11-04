@@ -132,6 +132,8 @@ public enum SettingsRoute: Hashable, Sendable {
   case desktop(String)
   case appearance
   case terminal
+  /// WI-3 — This phone › Lock.
+  case lock
   case about
   case acknowledgements
 }

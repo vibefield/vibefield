@@ -3707,6 +3707,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Finish setting up's sheet, and the field's own pass and the still's CSS glass, which read it (FG-D24). Settings
   keeps its ramp: these panes' words on its chrome are §2.4's own question (item 127), as is the name field's
   placeholder, which stands on the input's own white, a control's face.
+  *Corrected 2026-11-04 (item 136, the fixer; VF-PM 01:57Z):* the name field shows no placeholder: its input has
+  never carried one, so its `placeholder:text-black/30` (2.1:1 on white) styled nothing. The chapter's one
+  placeholder is the Tailscale key's ("tskey-auth-…", Connect), which wore the browser's default ink; both fields
+  now wear the glass's field and its placeholder ink (the paragraph that closes this entry).
   *Corrected 2026-10-31 (track FG, row 32 at run59b, the judge's first live run; the fix at VF-PM's leans, 20:46Z and
   20:56Z, James's to overturn; DESIGN.md first, built in the fix's slice):* the judge's model ran high. On the
   walk's own stills by day, two inks fell short on the 75% milk: t2 at 4.1–4.4:1 (Agents' "its own updater",
@@ -3723,6 +3727,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   error (an error pane under the judge is owed). The milk stays 75% (James's "b"). By day t2 now stands close to
   t1 (80% against 85%), so on the glass the quiet words are told from the reading ones by their size and place
   more than by their shade.
+  *Its actions, fields and headlines wear tokens (2026-11-04, item 136, the fixer; VF-PM's GO 01:57Z, James's to
+  overturn):* the glass keeps its own sizes (its actions 40 tall, its fields 40 tall at radius 12 and 15px, the key's
+  13px mono) and no colour of its own. The primary is §8's inverted solid, `--vf-foreground` with
+  `--vf-foreground-inverse` (by day `#1C1C1E` where it was black, by night `#F5F5F7` where it was white), the kit's
+  own primary. The quiet action stands on the foreground at 5%, 10% on hover (by night 10% and 15%), its words at t1.
+  A field is a control's face: `--vf-chrome-solid` by day and `--vf-field-surface` by night, edged in
+  `--vf-hairline-strong` (by night 15% where it was 10%), its words at t1 (by night 85% where they were 90%), its
+  focus the foreground at 25% with a ring of it at 5% (7% by night), and off at 0.45 while it saves, as the kit's
+  field. Its placeholder is a word that is read, so it wears t3, which the glass re-projects to its own 80% by day
+  (8.9:1 on the field's white) and t2 by night (8.2:1 over the night chrome, a bound lighter than the field's
+  face); `ui-system-boundaries.test.ts` computes both from `tokens.css` and holds every placeholder of the chapter to
+  4.5:1, since no walk can witness one. The headlines (Welcome's and each pane's) are `--vf-foreground`. Whether an
+  off field's words hold §2.4's 3:1 is row 32's measurement; no token moved.
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
@@ -3826,6 +3843,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   width + 80 by 440, centred 83 pt under the centre; the acts' glass rounds its top corners 32 and its bottom ones 47
   (continuous). The found beat ends the first way in only: §9 sets it between the steps and the lock's offer, and
   Tailscale asking again is neither, so after **Sign in again** the splash leaves for the tabs with no beat.
+  *As built 2026-11-04 (WI-3):* the capsule shows three bars again, the third named for the method (**Face ID**,
+  **Touch ID** or **Passcode**), whenever the way in will offer the lock: the lock off and a passcode set. The lock
+  stands on a window of its own over everything the phone shows, the card and every other sheet among them (they
+  stand over the gate, so the gate's hold could not cover them). It holds the splash's own surface, which draws the
+  launch picture until its field is up, so the app switcher shows the launch picture and a return reads as the
+  launch. Face ID asks over it, and a miss puts the way in's three places on it: the title on the words line,
+  **Unlock with Face ID** in the glass's first slot and "Your iPhone passcode works too." as its note. It leaves by
+  a 240ms plain `ease` fade (120ms under Reduce Motion). Its honest cost: at a launch with the lock on, the gate's
+  splash runs under the curtain, so two of the splash's surfaces draw until Face ID passes. Locking folds the
+  card's keyboard by the card's own fold, as another device taking the seat does. The corner's **Lock now** stands
+  just above **Settings…** while the lock is on, wearing SF Symbols' `lock`, as the corner's other rows wear theirs.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -5374,6 +5402,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   its note) and the empty list's **None yet** with its foot. Settings is never open signed out, since a Sign out
   leaves it first and the way in stands alone (WI-L1), and it lists every desktop WI-L2 counts as known, so neither
   was reachable. Both said "Mac"; the face's dealt note says "the way your computer deals it" (§9: "computer").
+  *As built 2026-11-04 (WI-3):* **This phone** › **Lock** wears the desk's shut padlock (§13: `tape`, the phone's
+  `lock`) and reads **On** or **Off**. Its page holds §9's switch and line, **Require Face ID** with its four times
+  and its foot, and the off and no-passcode feet. A change asks first, and a miss or a Cancel leaves it as it was.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -5665,6 +5696,17 @@ passcode in iOS Settings to lock VibeField." Nothing is answered from outside th
 approvals come (planned), a notification's act opens VibeField behind it. A lost phone is closed from elsewhere
 (WI-L7): removed from your Tailscale network, it reaches nothing, and its keys never leave it in a backup
 (truffle keeps their folder out of iCloud and computer backups).
+*As built 2026-11-04 (WI-3; the words added here are drafts pending James, carried by VF-PM beside L5's two):*
+every word names the method the phone has, by substitution. With Touch ID, "Touch ID" stands wherever "Face ID"
+does. With only a passcode: **Lock VibeField with your passcode.** · "This phone can type into your agents’
+terminals. Your passcode keeps that to you." · **Lock with passcode** · **Not now**; a miss says **VibeField is
+locked.** · **Unlock with passcode**, and "Your iPhone passcode works too." goes, since the passcode is the method;
+Settings says "Your iPhone passcode opens VibeField.", **Require passcode**, "Changing these asks for your
+passcode first." and "VibeField opens without your passcode. …". Where iOS shows the app's own reason with the ask
+(Touch ID and the passcode; Face ID shows the one above), it says "Only you can open VibeField on this iPhone."
+With no passcode set the phone cannot lock: the way in offers nothing and has two steps, and a lock that was on
+stands down (VibeField opens, the switch is off and the no-passcode foot shows), since a lock that cannot ask must
+not hold the door.
 
 **The freeway's refusals** (track FW, F1b's kit half; FW-D5; added 2026-11-01). The phone asks its home desktop to
 approve its connection to each desktop, and when a desktop says no, the phone says it in these words. ‹desktop› is
@@ -6161,6 +6203,10 @@ the desk's chrome draws it from this set by this table, never by a guess:
 | `agents` · `ellipsis` · `check` | `agents` · `ellipsis` · `check` |
 | `{ path }` · `{ path, fill: true }` | the bar's own path renderer: the path in the 24-unit box, stroked 2 in the bar's ink, or filled |
 | any other name | **`missing`** — said once, never another glyph |
+
+**The phone's lock** (WI-3, 2026-11-04): Settings › This phone › **Lock** wears `tape`, the shut padlock, named
+`lock` in the phone's set (`FieldGlyphName.lock`), as ICE's `lock` is drawn by it above; `tape` joins the iOS
+picks (`tooling/glyphs/picks.json`).
 
 **`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
 hatches — for a name the set does not hold; an act that declares no glyph at all shows its label

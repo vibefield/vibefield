@@ -107,7 +107,7 @@ struct WayInView: View {
   private var top: some View {
     ZStack {
       if let steps = screen.steps {
-        StepsCapsule(steps: steps)
+        StepsCapsule(steps: steps, names: screen.stepNames)
           .transition(.opacity)
       }
       if let back = screen.back {
@@ -334,13 +334,15 @@ struct WayInView: View {
 /// The top's capsule: three bars and the step's name, or the tour's four dots (DESIGN.md §8 "The phone's way in").
 struct StepsCapsule: View {
   let steps: FieldHomeModel.WayInScreen.Steps
+  /// One bar each (WI-3: the lock's third while the way in will offer it).
+  let names: [String]
 
   var body: some View {
     HStack(spacing: 10) {
       switch steps {
       case .step(let step):
         HStack(spacing: 4) {
-          ForEach(1...Self.count, id: \.self) { bar in
+          ForEach(1...max(names.count, 1), id: \.self) { bar in
             Capsule()
               .fill(bar <= step ? ChromePalette.ink : ChromePalette.keyFill)
               .overlay {
@@ -349,7 +351,7 @@ struct StepsCapsule: View {
               .frame(width: 22, height: 4)
           }
         }
-        Text(Self.name(step))
+        Text(Self.name(step, of: names))
           .font(ChromeType.sans(12, .semibold))
           .foregroundStyle(ChromePalette.ink)
       case .dots(let page):
@@ -369,16 +371,15 @@ struct StepsCapsule: View {
     .accessibilityLabel(label)
   }
 
-  /// The way in's steps (two until the lock's, WI-3).
-  nonisolated static var count: Int { FieldHomeModel.WayInWords.steps.count }
-
-  nonisolated static func name(_ step: Int) -> String {
-    FieldHomeModel.WayInWords.steps[min(max(step, 1), count) - 1]
+  /// A step's name, held to the names there are.
+  nonisolated static func name(_ step: Int, of names: [String]) -> String {
+    guard !names.isEmpty else { return "" }
+    return names[min(max(step, 1), names.count) - 1]
   }
 
   private var label: String {
     switch steps {
-    case .step(let step): "Step \(min(max(step, 1), Self.count)) of \(Self.count), \(Self.name(step))"
+    case .step(let step): "Step \(min(max(step, 1), names.count)) of \(names.count), \(Self.name(step, of: names))"
     case .dots(let page): "How it works, page \(page + 1) of 4"
     }
   }
