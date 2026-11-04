@@ -15,6 +15,7 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   case swarm
   // PG-5…8: one case each, here.
   case list
+  case rain
   case spend
 
   /// PG-4t — the defaults key the pick is kept under, per phone and across a sign-out (`SignOutSweep.kept`): the
@@ -211,6 +212,7 @@ struct GodviewStage<Swarm: View>: View {
     case .swarm: swarm().transition(.opacity)
     // PG-5…8: `case .<view>: framed(<View>View(input: input))`
     case .list: framed(ListView(input: input))
+    case .rain: framed(RainView(input: input))
     case .spend: framed(SpendView(input: input))
     }
   }

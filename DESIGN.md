@@ -302,6 +302,31 @@ colour there tells nothing. The card's bubble draws its band and its light in **
 `#111111` by day, `#FFFFFF` by night, never a dealt pane colour. James: "on mobile there is only
 one pane, so color no longer make sense, so just keep the glow it generic white, black instead".
 
+**The rain's palette** (written down 2026-11-04, PG-8, from the tokens the desktop's rain has read since MV-4,
+puppeteer-views `monitor/palette.js` `readMonitorPalette`; the phone's rain projects the same values, Swift twins in
+`Godview/Rain/RainPalette.swift`, held to `tokens.css` through `phone-rain.golden.json`). The rain paints the dark
+material in BOTH themes (its stylesheet: "deliberately paints black"), so none of these is keyed per mode:
+
+| Role | Token | Value |
+|---|---|---|
+| the rain's ground (§2.2's deepest surface; the rain's own since PG-8) | `--vf-card-deep` | `#000000` |
+| a working stream: its head / its tail | `--vf-godview-rain-working-head` / `--vf-godview-rain-working-tail` | `#ffffff` / `#00ff00` |
+| a blocked stream: its head / its tail | `--vf-godview-rain-waiting-head` / `--vf-godview-rain-waiting-tail` | `#fef08a` / `#eab308` |
+| an idle stream: its head / its tail (an idle stream draws no head; the token stands for the palette's shape) | `--vf-godview-rain-idle-head` / `--vf-godview-rain-idle-tail` | `#94a3b8` / `#475569` |
+| the desktop's lit stream (its pane's session, `activeHead`): the working head's token | `--vf-godview-rain-working-head` | `#ffffff` |
+| the desktop's hovered stream's tail | `--vf-godview-rain-hover-tail` | `#d946ef` |
+| the rain's own words over its stage, by status (the desktop's tooltip): working / blocked / idle | `--vf-godview-rain-green` / `--vf-godview-rain-waiting` / `--vf-godview-rain-idle` | `#4ade80` / `#fde047` / `#cbd5e1` |
+| a focused control's ring on the rain's stage | `--vf-godview-rain-green-focus` | `#22c55e` |
+| the empty stage's words ("NO ACTIVE AGENTS"): the green at 65% | `--vf-godview-rain-green` | `#4ade80` at 65% |
+| **the phone's lit stream** (J-S4, James 2026-11-04: the open card's row lit in **text main**, D-i12): its head | `--vf-godview-dark-text-main` | `#ffffff` |
+
+The phone's lit stream reads text main in the DARK palette, never `#111111`: the rain's stage is the dark material in
+both themes, and text main by day is black on black (VF-PM 2026-11-04 01:40Z). Its glow is the lit stream's, the head
+glow ×1.5, as the desktop's. A stream's type is the rain's own drawing (§8 "The monitor view owns its drawing"): bold
+12px Courier New, a cell per glyph, its glow a blur of the tail's colour at the head (10, ×1.5 lit). The tooltip's
+border, ground and glow are literals in the rain's stylesheet; they come here before any surface draws them on the
+phone (its touch form is James's, unpicked).
+
 The deck sheet's shadow is §5's *Sheet* recipe, keyed to Godview's OWN mode switch rather than
 the app's theme (Godview can be dark over a light field). Its geometry: top corners
 `--vf-godview-deck-radius` 12px; **the Lip** (GV-D7; built 2026-10-11) `--vf-godview-deck-lip` 30px
