@@ -454,18 +454,17 @@ enum SpendModel {
     let task =
       row.priced
       ? SpendWords.fitWords(what, max: g.listW - 35 - stateWidth - 12, measure: { input.measure($0, .row) }) : ""
-    // the phone mounts no pane (`agent.attachment`), so no row is ever `is-mounted` nor says it is in one
-    let mounted = false
     let provider = row.agent.monitor.provider?.label ?? "its provider"
     let said = row.status.text
-    // the window's words, less its " Open in your pane." (`Dropped.rowLabel`): the phone has no pane
+    // the window's words, less its " Open in your pane." (`Dropped.rowLabel`): the phone has no pane. Nor does it
+    // mount one (`agent.attachment`), so no row says the window's ", in a pane", and none is `is-mounted` (H6).
     let label =
       before
       ? "\(row.name.one), \(what), had not started then; \(said)."
       : row.unrecorded
         ? "\(row.name.one), \(what): what it had spent then was not recorded (its row carries only its total)."
         : row.priced
-          ? "\(row.name.one), \(what), \(est)\(said.isEmpty ? "" : ", \(said)")\(mounted ? ", in a pane" : "")."
+          ? "\(row.name.one), \(what), \(est)\(said.isEmpty ? "" : ", \(said)")."
           : "\(row.name.one): \(provider) reports no cost, so it isn't drawn\(said.isEmpty ? "" : "; \(said)")."
     let taskPart = row.name.task.isEmpty ? "" : " · \(row.name.task)"
     let title =
@@ -481,7 +480,6 @@ enum SpendModel {
     if before { flags.insert(.before) }
     if docked != nil { flags.insert(.docked) }
     if docked == 0 { flags.insert(.dockFirst) }
-    if mounted { flags.insert(.mounted) }
     // J-S4 (a), fd's Q9: the open card's row; spend draws it only through the pane square, which the phone has not
     if row.agent.active { flags.insert(.active) }
     return Row(
