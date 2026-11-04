@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentModelMeshFrame } from "@vibefield/contracts";
 import { MONITOR_SKIN } from "@vibefield/puppeteer-view-sdk";
+import { MONITOR_VIEWS } from "@vibefield/puppeteer-views";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   computePhoneGoldens,
@@ -44,6 +45,7 @@ import {
   readWitnessInputs,
   unregisteredViewFiles,
 } from "../perf/lib/phone-goldens";
+import { importPuppeteerViews } from "../perf/lib/puppeteer-views-path";
 import { BoardScreen } from "../src/godview/monitor/board-screen";
 
 const HOME = "dev-01HQ9S7UD1";
@@ -531,5 +533,37 @@ describe("PG-4t — the phone's monitor skin", () => {
       "--vf-ease-pop",
       "--vf-font-sans",
     ]);
+  });
+});
+
+describe("PG-4t — a puppeteer-views module by its path", () => {
+  it("L1 — the registry by path is the root's own module: the installed package, not a second copy", async () => {
+    const registry = await importPuppeteerViews<{ MONITOR_VIEWS: typeof MONITOR_VIEWS }>(
+      "monitor/registry.js",
+    );
+    expect(registry.MONITOR_VIEWS).toBe(MONITOR_VIEWS);
+  });
+
+  it("L2 — it never leaves dist, and loads only .js", async () => {
+    for (const path of [
+      "../package.json",
+      "views/../../package.json",
+      "/etc/hosts",
+      "monitor/registry.d.ts",
+    ]) {
+      await expect(importPuppeteerViews(path), path).rejects.toThrow(
+        /never leaves dist|loads only \.js/,
+      );
+    }
+  });
+
+  it("L3 — a path the installed package lacks rejects with the path and the version", async () => {
+    const { views } = puppeteerVersions();
+    await expect(importPuppeteerViews("views/nope/missing.js")).rejects.toThrow(
+      "views/nope/missing.js",
+    );
+    await expect(importPuppeteerViews("views/nope/missing.js")).rejects.toThrow(
+      `puppeteer-views ${views}`,
+    );
   });
 });
