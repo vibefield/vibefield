@@ -29899,3 +29899,105 @@ approved the plan at 15:05Z: two files, no API change, no new words.
 words is his to say (VF-PM's dashboard, 15:05Z).
 
 **Owed.** Nothing of this item's.
+
+## The icon studio, biome-clean — main was red at verify's lint stage (2026-11-04; `78ef3515a`, one commit on main `f978b385a`, lane `fix/lint-icon-studio` in `/Volumes/SamsungRed/lanes/lint-icon-studio`, the fixer's, in the mini's mint M114 `84482a1fe` under items 164 and 165, stacked, run 114)
+
+**What it rests on.** Run 113 stopped at verify's lint stage: `biome check .` found 53 errors, every one in
+tooling/icon-studio, from James's `6e02a8fbc` (feat: add local cross-platform icon studio). VF-PM gave the fix to the
+fixer at 01:30Z (James told; his to veto).
+
+**What** (13 files; no behavior change):
+- biome.jsonc excludes `tooling/icon-studio/vendor` (the Wormhole Dust renderer, vendored as spark-face's engines
+  are; vendor/SOURCE.json names its source page and its one patch) and the GENERATED `src/living-assets.mjs`
+  (build.mjs writes it; it stays at its committed bytes, which build.mjs reproduces).
+- `biome check --write` (safe fixes only): the format, organizeImports, two `let` → `const`, two regex escapes.
+- By hand: `type="button"` ×16 (the page has no form); `role="group"` on two labelled divs, each with a
+  biome-ignore for useSemanticElements (a fieldset would draw a border); five forEach block bodies; and safeName's
+  control-character class with a biome-ignore, "refusing them is the point".
+
+**Validation.**
+- Before and after: the icon studio's 33 tests pass, the same 33 names; `pnpm lint` reads 0 errors (53 at
+  `f978b385a`); build.mjs builds; check:walls, check:retired, check:deps and icons:check are clean.
+- **Run 114** (`84482a1fe`, items 164 and 165 over this commit, stacked on `f978b385a`; VF-PM's read, 01:48Z):
+  verify exit 0, its lint stage `Checked 3091 files … No fixes applied` with 0 errors, where run 113 had stopped.
+- **Landed:** main fast-forwarded to `84482a1fe`, this commit with it, on VF-PM's GO (2026-11-04 01:47:13Z).
+
+**Owed.** Nothing of the fixer's. Sixteen warnings and an info stand in the studio (studio.css's `!important`s and
+specificity order); they do not fail lint.
+
+## Items 164 and 165 — the burn rate and the token counts print JavaScript's digits: no trap at 2^63 or ∞, and a tie the window's way (2026-11-04; `5bbf4b763` → `84482a1fe`, two commits on `78ef3515a` (the icon studio's lint fix) on main `f978b385a`, cut as `1bf56185e` → `827222c05` on `30d8ae4fe` and re-stacked three times with their patches unchanged, lane `fix/item164` in `/Volumes/SamsungRed/lanes/item164`, in the mini's mint M114 `84482a1fe`, stacked, run 114)
+
+**What it rests on.** PG-4s's design check (§0.4 item 6, Q-S12) found two latent kit defects at its tip, neither
+4s's: `formatRatePerHour` trapped for `perHour >= 2^63` (`Int(perHour.rounded())`), and `formatTokens` broke a tie
+to even (`String(format: "%.1fk")`: 8250 read `8.2k` where the window says `8.3k`). VF-PM filed them as items 164
+and 165, the fixer's, and gave them at 2026-11-02 15:14Z.
+- The widening, approved by VF-PM at 15:23Z: `formatTokens` also trapped on NaN, ±∞ and every count past Int's
+  range, and rounded a negative tie away from zero where `Math.round` takes +∞ (-2.5 read `-3`, the window `-2`).
+  The same function and the same trap class, so one fix.
+- VF-PM's two guards (15:23Z): `phone-toolkit.golden.json` byte-identical with GodviewToolkitParityTests green, and
+  GodviewFormat.swift (fd's, PG-4s) changed only by the import and its call sites, nothing reworded.
+- It lands on the icon studio's lint fix (`78ef3515a`, the entry above): run 113 was red at verify's lint stage on
+  James's icon studio, so these two commits went over that fix for run 114.
+
+**What** (4 files, +102 −41; the kit only):
+- **The red** (`5bbf4b763`, tests only): two rows in SwarmBodyModelTests' FormatTokensTests, every value measured
+  with node against puppeteer-view-sdk's `toolkit/format.js` (0.3.2 at the cut, 0.3.3 on this base, the same words):
+  - `anAbsurdRateSaysJavaScriptsDigits` (164): `$9223372036854776000/hr`, `$1e+21/hr`, `$Infinity/hr` and the rest;
+  - `tokenCountsRoundAsTheWindowDoes` (165): the ties (`8.3k`, `1.3M`), the negative ties, and NaN, ±∞ and absurd
+    counts (`NaNM`, `InfinityM`, `-Infinity`, `1e+294M`).
+- **The fix** (`84482a1fe`):
+  - FieldAgents gains `JSNumber` (`JSNumber.swift`). `round` is `Math.round`: the nearest whole number, a tie toward
+    +∞, NaN and ±∞ unchanged, its fraction exact so 0.49999999999999994 stays 0. `whole` is Number::toString for a
+    whole number, MOVED UNCHANGED from GodviewFormat, so the Godview toolkit and the formatters print a number one
+    way.
+  - `formatRatePerHour`'s whole dollars and `formatTokens`' whole counts are `JSNumber.whole(JSNumber.round(…))`;
+    `formatTokens`' tenths are `tenths`, PG-3e's `toFixed(1)` (its doc now names both callers). Each doc comment
+    carries a dated correction (2026-11-02, items 164 and 165).
+  - GodviewFormat.swift: `import FieldAgents`, the 7 call sites `whole(` → `JSNumber.whole(`, and its `whole`
+    removed. Its old lines :1–:100 are now :2–:101; :101–:123 (the blank, `whole`'s doc and func) are gone, to
+    JSNumber.swift :15–:36; :124 is :102.
+
+**Validation.**
+- Host proofs on this Mac (swiftc builds FieldAgents and SwarmPhysics for macOS, no xcodebuild; logs
+  `lanes/item164/light/`):
+  - `host164.sh`, one value per process: at the red's base, 38 values, 18 differ from the SDK, 12 of them traps
+    (exit 133); at the fix, 0 differ, 0 traps (against 0.3.2 on 11-02 and 0.3.3 on 11-04);
+  - `sweep164.sh`: 222,402 values (every count 0…20,000, every 50th 990,000…10,010,000, 22,000 seeded random rates
+    and counts to 1e300), 0 differ;
+  - `gv164.sh` / `gv164b.sh`: GodviewFormat built at the base and at the fix, 450,051 inputs through all four words,
+    0 lines differ; the golden's 40 K1/K2 words, 0 missed at both; the golden byte-identical (`6670adbd9a8dfab6` on
+    this base: James's `a82aceceb` moved only its version stamps, 0.3.2 → 0.3.3).
+- `pnpm typecheck` in the lane at `5e83c347d` (the same apps/ios and packages trees as `84482a1fe`), under a HOLD
+  turn: 28 projects, exit 0.
+- The kit on this Mac (VF-PM's slots; iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC`, shut down after each):
+  - 2026-11-02 at `1bf56185e`/`827222c05` (ghosttea 0.13.7): FieldAgentsTests alone RED, then the full kit 15
+    runs, 1,540 tests (PG-4s's 1,538 + these 2), 0 issues; app Debug 65 s and Release 99 s, both built.
+  - 2026-11-04 at `d2dc8dffd`/`5e83c347d` (ghosttea 0.14.0, truffle 0.7.26; `slot164b.sh`, its own package cache):
+    - FieldAgentsTests alone at the red: EXIT 65, 12 issues, every one an assertion of 165's rows; and the trap
+      values crashed the xctest process (3 fatal "Double value cannot be converted to Int"), taking ProjectInkTests,
+      SwarmBodyModelTests and SwarmColorTests down with it. A trap is a crash by nature: this is the honest red.
+    - The full kit at the fix: 15 runs, 1,562 tests raw, ONE issue, not this item's (below); every row of this item
+      and GodviewToolkitParityTests' four words passed.
+    - App Debug 143 s and ONE Release 145 s, both built; the app workspace's Package.resolved byte-identical after.
+  - *The kit's one issue is item 167 (2026-11-04, filed by VF-PM):* James's TerminalSurfaceKeyboardTests
+    (`0c4590d7a`, 2026-11-02) finds no connected UIWindowScene at its first `#require` in the package-hosted xctest.
+    Alone it was red at main `f978b385a` and at `5e83c347d` alike (`slot164c.sh`); FieldTerminal does not depend on
+    FieldAgents.
+- The re-stacks (2026-11-04): onto `6e02a8fbc` (James's work since `30d8ae4fe`, item 161 among it, and his icon
+  studio), onto `f978b385a` (item 161's records) and onto `78ef3515a` (the lint fix). Each range-diff reads "=";
+  the tree equals `git merge-tree`; James touched none of the four files, and apps/ios's tree (`c42dedb3360e`) is
+  the one the kit ran. The lane's sibling worktrees moved to the new lock
+  (`refresh164.sh`); preflight OK. The iOS fixtures on the tip 205, pins 67.
+- **Run 114** (`84482a1fe`, stacked on main `f978b385a` with the lint fix under it, a fast-forward, minted by a9 on
+  VF-PM's GO; VF-PM's read, 01:48Z): verify exit 0; vitest 12,190 passed, 0 failed, 18 skipped (878 files), +79 on
+  run 112, all from James's work and his icon studio, none from these two commits; cargo 544 passed, 0 failed (34
+  results ok); typecheck and test, 28 projects; biome 3,091 files, no fixes; no MaxListeners warning; the iOS
+  fixtures 205, pins 67; the tree clean after (`lanes/ts6/logs/mini/run114/verify.clean.log`). The kit is this
+  Mac's 11-04 slot, above, carried to `84482a1fe` by its unchanged apps/ios tree.
+- **Landed:** main fast-forwarded to `84482a1fe`, the lint fix with it, on VF-PM's GO (2026-11-04 01:47:13Z).
+
+**Not built (said).** Below $1 an hour, NaN, -∞ and huge negative rates go to `formatUsd`, which keeps its
+documented words for a value with no decimal (`$nan/hr`, where the window says `$NaN/hr`): no trap, and PG-3e's own
+comment says so.
+
+**Owed.** Nothing of this item's. GodviewFormat's moved line cites are fd's to re-point in his lane file.

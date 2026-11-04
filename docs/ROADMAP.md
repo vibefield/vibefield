@@ -285,8 +285,8 @@
   (PG-L1); from PG-3a, at a draft slot PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's
   remote-cut self-check); from PG-9a, a failed release's empty carried again (not built), and at a draft slot the
   dated notes at thinking-desktop-sync-plane :201 (PF6's close) and thinking-phone-godview §8's PG-9 line; from
-  PG-3e, James's live look (J-E4, §5); from PG-4s, James's page (J-S1…J-S4, the switch and what other views keep),
-  items 164 and 165 (the fixer's), and the swarm's still under the view flag at the first view lane (N12).
+  PG-3e, James's live look (J-E4, §5); from PG-4s, James's page (J-S1…J-S4, the switch and what other views keep)
+  and the swarm's still under the view flag at the first view lane (N12).
 
 **WI — the phone's way in** · the IOS session (lanes `lanes/wi`, `lanes/item163`) · law: the page *The Way In* (5cvau5EQ, v5; sources `draft/ios-pocket/way-in/`), DESIGN.md §8 "The phone's way in" and §9 "The way in"; DECISIONS WI
 - Ruled 11-02 11:13–11:15Z (James, on the page): WI-D1…D8 all A, the leans; "way in all ruled, now implement it"
@@ -555,6 +555,9 @@
   with no reuse; test-only: `c91484e93` as the merge `c737af492`, run 105; LANDED "Item 157") ·
   item 166 (the app workspace's Package.resolved moves to the kit's ghosttea 0.13.7 and truffle 0.7.23, the Swift
   file every EL8 since 2026-09-16 left at 0.10.1: `62dfa4ba2` as M111, a fast-forward, run 111; LANDED "Item 166") ·
+  items 164 and 165 (the burn rate and the token counts print JavaScript's digits through FieldAgents' `JSNumber`:
+  no trap at 2^63, ∞ or NaN, and a tie the window's way: `84482a1fe` as M114, a fast-forward over the icon studio's
+  lint fix `78ef3515a`, run 114; LANDED "Items 164 and 165" and "The icon studio, biome-clean") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
