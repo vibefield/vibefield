@@ -31,13 +31,31 @@ struct RainAgent: Equatable, Sendable {
   let usedPercent: Double?
   /// `detailLine(agent)` (SDK words :64): the line the accessible button says.
   let detail: String
+  /// The open card's row, lit (J-S4): `RainAgent.lightsOpenCard` and the card's subject. The desktop's `active`.
+  var lit = false
   /// The host's join; the phone's is always false.
   var receded = false
+
+  /// J-S4 — ACCEPTED by James (2026-11-04 01:12–01:14Z): a view lights the open card's row. The ONE switch: false
+  /// stops the rain lighting it (its head back to its status's, its glow ×1, no "open"), whatever else stands.
+  static let lightsOpenCard = true
+
+  /// `agentName` (RainView.tsx:76-78, .js:36-38): an agent by its model's word, anything else `terminal`.
+  var name: String { "" }
+
+  /// What the rain's accessible button says for the row (the list, RainView.tsx:381-393, .js:280): project, name,
+  /// status, the line.
+  var spoken: String { "" }
+
+  /// The button's current mark (`aria-current` while `active`, the list), said as the swarm says its open body on the
+  /// phone (`FieldSwarm/SwarmField.swift:242`).
+  var accessibilityValue: String? { nil }
 }
 
 extension RainAgent {
-  /// The rain's reading of one drawn row.
-  init(row: RemoteFieldRow) {
+  /// The rain's reading of one drawn row; `activeId` is the open card's row, by model id (`GodviewStageInput
+  /// .activeId`). `lightsOpenCard` is J-S4's switch, a parameter only so the hand rows can throw it.
+  init(row: RemoteFieldRow, activeId: String? = nil, lightsOpenCard: Bool = RainAgent.lightsOpenCard) {
     let monitor = row.row.monitor
     id = monitor.id
     kind = monitor.kind
@@ -49,5 +67,6 @@ extension RainAgent {
     model = MonitorWords.modelWord(monitor)
     usedPercent = monitor.kind == .agent ? monitor.context?.usedPercent : nil
     detail = MonitorWords.detailLine(monitor, isSelf: row.isSelf)
+    lit = false
   }
 }
