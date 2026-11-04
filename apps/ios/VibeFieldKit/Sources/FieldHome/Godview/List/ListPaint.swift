@@ -17,7 +17,12 @@ import Foundation
 //      (LC:90-94); its ground stays the skin's control hover;
 //   4. a provider the phone's glyph catalog has no asset for wears its letter (fd's Q4; AgentGlyph);
 //   5. the empty hint says "Launch an agent from a terminal.", not the desktop's "… from a terminal pane." (fd's words
-//      rule: no phone view names a key, hover or a pane); `ListModel.emptyHint`, pinned by H12 and E1.
+//      rule: no phone view names a key, hover or a pane); `ListModel.emptyHint`, pinned by H12 and E1;
+//   6. at the phone's 402 pt (VF-PM's (B) and the fixed floor, 2026-11-04): the desktop draws every cell ONE line
+//      (`nowrap`, the tail ellipsis; the model clipped bare; LC:137-157, :159-163, :180-186). The phone keeps that
+//      line for every cell but two: the MODEL breaks only at a space, two lines at most, and the DETAIL runs two lines
+//      before the ellipsis. The agent column takes a FIXED floor of 8 glyphs after the mark (60.51 pt), out of the
+//      detail's share (49.49 pt), so the grid never reflows with its data. Pinned by D7–D10.
 
 enum ListPaint {
   /// A colour by its role: the skin's, or the row's own.
@@ -142,24 +147,38 @@ enum ListPaint {
   }
   /// Every cell but the model and the detail: the desktop's ONE line (`white-space: nowrap`), cut with the tail
   /// ellipsis (`text-overflow: ellipsis`).
-  static let cellLines: Int? = nil
+  static let cellLines: Int? = 1
   /// The detail: two lines, then the desktop's tail ellipsis (deviation 6; the desktop's is one line).
-  static let detailLines: Int? = nil
+  static let detailLines: Int? = 2
   /// The model: at most two lines, broken ONLY at a space (deviation 6; the desktop's is one line, clipped bare).
-  static let modelLinesMax: Int? = nil
+  static let modelLinesMax: Int? = 2
   /// The agent column's FIXED floor, in glyphs of the model after the mark and its gap (deviation 6, fd's ruling): 8
   /// fits `terminal`, the longest word the list itself draws, and the witness's widest model word, "GPT-5.5". Fixed,
   /// so the grid never reflows with its data, as the desktop's never does; a longer word is cut, never broken.
   static let agentFloorGlyphs = 8
   /// The floor in points, `columns(…, agentFloor:)`'s argument: the mark, its gap and `agentFloorGlyphs` of the mono
   /// (60.51 at 9 pt). 0 is the desktop's grid.
-  static let agentFloor = 0.0
+  static let agentFloor = markSize + agentGap + Double(agentFloorGlyphs) * monoAdvanceEm * smallSize
 
   /// The model's lines in a column `glyphs` wide: whole words joined by single spaces, a new line only at a space, at
   /// most `modelLinesMax` lines (the last takes the rest, cut by the view). A word wider than the line stands alone on
   /// its line, cut by the view, never broken inside.
   static func modelLines(_ label: String, glyphs: Int) -> [String] {
-    [label]
+    let words = label.split(separator: " ").map(String.init)
+    guard let first = words.first else { return [label] }
+    let most = modelLinesMax ?? Int.max
+    var lines: [String] = []
+    var line = first
+    for word in words.dropFirst() {
+      if lines.count + 1 < most && line.count + 1 + word.count > glyphs {
+        lines.append(line)
+        line = word
+      } else {
+        line += " " + word
+      }
+    }
+    lines.append(line)
+    return lines
   }
 
   // MARK: - The empty stage (LC:199-227)
