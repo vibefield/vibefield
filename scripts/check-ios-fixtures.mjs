@@ -74,6 +74,8 @@ const OTHER_ORIGINS = new Map([
   ],
   // PG-4s — the toolkit's golden, and each view's from the one list above
   ["phone-toolkit.golden.json", join(PHONE_GODVIEW, "phone-toolkit.golden.json")],
+  // PG-4t — the views' faces, which the Stories row draws
+  ["phone-marks.golden.json", join(PHONE_GODVIEW, "phone-marks.golden.json")],
   ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
 ]);
 // Goldens VENDORED from a sibling project outside this workspace, so there is no origin here to
@@ -234,7 +236,7 @@ const requiredMirrors = [
   // Never empty: the witness stands in it from PG-4s on, so the row always asserts something.
   [
     "phone-view",
-    [...remoteWitness, "phone-toolkit.golden.json", ...phoneViewGoldens],
+    [...remoteWitness, "phone-toolkit.golden.json", "phone-marks.golden.json", ...phoneViewGoldens],
     ["Tests/FieldHomeTests"],
   ],
 ];
@@ -258,6 +260,7 @@ for (const [set, fixtures, folders] of requiredMirrors) {
     "phone-fold.golden.json",
     "phone-body.golden.json",
     "phone-toolkit.golden.json",
+    "phone-marks.golden.json",
     ...phoneViewGoldens,
   ]);
   let committed = [];

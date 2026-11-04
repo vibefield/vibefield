@@ -28,6 +28,7 @@ import {
   PHONE_GOLDENS_COMMAND,
   PHONE_GOLDENS_DIR,
   PHONE_GOLDENS_LIB_DIR,
+  PHONE_MARKS_GOLDEN,
   PHONE_TOOLKIT_GOLDEN,
   PHONE_VIEW_GOLDENS,
   PHONE_VIEW_MIRROR,
@@ -39,6 +40,7 @@ import {
   type PhoneViewGoldens,
   phoneAllGoldenFiles,
   phoneGoldenMirrors,
+  phoneMarksGolden,
   phoneViewGoldenName,
   phoneVisible,
   puppeteerVersions,
@@ -565,5 +567,30 @@ describe("PG-4t — a puppeteer-views module by its path", () => {
     await expect(importPuppeteerViews("views/nope/missing.js")).rejects.toThrow(
       `puppeteer-views ${views}`,
     );
+  });
+});
+
+describe("PG-4t — the marks golden", () => {
+  it("T1 — the registry's five faces in its order, the Stories row's; mirrored where the row's suite runs", () => {
+    const golden = phoneMarksGolden() as {
+      views: Array<{ id: string; label: string; mark: { viewBox: string; paths: string[] } }>;
+    };
+    expect(golden.views.map((view) => view.id)).toEqual([
+      "swarm",
+      "list",
+      "rain",
+      "timeline",
+      "spend",
+    ]);
+    expect(golden.views.map((view) => view.id)).toEqual(MONITOR_VIEWS.map((view) => view.id));
+    for (const [index, view] of golden.views.entries()) {
+      const entry = MONITOR_VIEWS[index];
+      expect(view.label, view.id).toBe(entry?.label);
+      expect(view.mark, view.id).toEqual({
+        viewBox: entry?.mark.viewBox,
+        paths: [...(entry?.mark.paths ?? [])],
+      });
+    }
+    expect(PHONE_GOLDEN_MIRRORS[PHONE_MARKS_GOLDEN]).toEqual([PHONE_VIEW_MIRROR]);
   });
 });

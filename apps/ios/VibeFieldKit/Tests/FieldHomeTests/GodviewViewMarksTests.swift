@@ -1,4 +1,5 @@
 import CoreGraphics
+import FieldProduct
 import Testing
 
 @testable import FieldHome
@@ -24,6 +25,27 @@ struct GodviewViewMarksTests {
     #expect(ids == Set(GodviewViewChoice.registryOrder))
     let labels = GodviewViewChoice.registryOrder.map { GodviewViewMarks.faces[$0]?.label }
     #expect(labels == ["SWARM", "LIST", "RAIN", "TIMELINE", "SPEND"])
+  }
+
+  /// M1 — every face is its manifest's, as the installed registry carries it (the marks golden, this bundle's copy):
+  /// the ids in the registry's order (the row's `registryOrder`), each label, each mark's grid, and each path as
+  /// mark-outline writes it.
+  @Test func everyFaceIsItsManifests() throws {
+    let golden = try HomeFixture.json("phone-marks.golden")
+    let views = golden["views"]?.arrayValue ?? []
+    let ids = views.map { $0["id"]?.stringValue ?? "" }
+    #expect(ids == GodviewViewChoice.registryOrder)
+    for view in views {
+      let id = view["id"]?.stringValue ?? ""
+      let face = GodviewViewMarks.faces[id]
+      let label = view["label"]?.stringValue
+      #expect(face?.label == label, "\(id)")
+      let viewBox = view["mark"]?["viewBox"]?.stringValue
+      #expect(viewBox == "0 0 24 24", "\(id): the bar's grid")
+      let paths = (view["mark"]?["paths"]?.arrayValue ?? []).map { $0.stringValue ?? "" }
+      let outlines = face?.outlines ?? []
+      #expect(outlines == paths, "\(id)")
+    }
   }
 
   /// MK1 — a coordinate in `unit`'s digits: four places, a tie toward +∞, no `-0`, no trailing `.0`.
