@@ -1,10 +1,4 @@
 import type { AgentView, MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
-import {
-  countingCommands,
-  fixtureInput,
-  fixtureModel,
-  fixtureTheme,
-} from "@vibefield/puppeteer-view-sdk/testing";
 import { formatClock, parseCssColor } from "@vibefield/puppeteer-view-sdk/toolkit";
 import { spendMonitorView } from "@vibefield/puppeteer-views";
 import { act } from "react";
@@ -45,7 +39,12 @@ type Params =
   typeof import("../../node_modules/@vibefield/puppeteer-views/dist/views/spend/spend-parameters.js");
 type ViewFile =
   typeof import("../../node_modules/@vibefield/puppeteer-views/dist/views/spend/SpendView.js");
+/** The SDK's test-only entry, reached by dynamic `import()`: wall R8 forbids a static import of it from field-app's
+ * production sources (perf/lib is one), and names dynamic `import()` as the sanctioned hatch. */
+type SdkTesting = typeof import("@vibefield/puppeteer-view-sdk/testing");
+const sdkTesting = (): Promise<SdkTesting> => import("@vibefield/puppeteer-view-sdk/testing");
 interface Spend {
+  testing: SdkTesting;
   series: Series;
   scale: Scale;
   list: List;
@@ -56,6 +55,7 @@ interface Spend {
 }
 async function loadSpend(): Promise<Spend> {
   return {
+    testing: await sdkTesting(),
     series: await spendModule<Series>("spend-series.js"),
     scale: await spendModule<Scale>("spend-scale.js"),
     list: await spendModule<List>("spend-list.js"),
@@ -362,7 +362,8 @@ function readView(root: HTMLElement, clocks: ViewClocks) {
 
 type Mounted = { root: HTMLElement; unmount(): void };
 /** The shipping view on a detached element (its clock is the caller's `heldClock`). */
-function mountView(rows: readonly AgentView[], size: Stage): Mounted {
+function mountView(testing: SdkTesting, rows: readonly AgentView[], size: Stage): Mounted {
+  const { countingCommands, fixtureInput, fixtureModel, fixtureTheme } = testing;
   const root = document.createElement("div");
   document.body.appendChild(root);
   const input = fixtureInput({
@@ -429,7 +430,7 @@ function viewStep(
     y: y === "zero" ? g.y1 - 1 : g.y0 + 4,
   });
   return heldClock(nowMs, () => {
-    const mounted = mountView(rows, size);
+    const mounted = mountView(spend.testing, rows, size);
     try {
       const moment = act2 ? act2(mounted.root, at) : null;
       const chips = [g.x0 + ((tb - ta) / (tb - ta)) * (g.x1 - g.x0)];

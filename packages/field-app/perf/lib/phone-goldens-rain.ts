@@ -7,11 +7,6 @@ import type {
   MonitorViewInstance,
 } from "@vibefield/puppeteer-view-sdk";
 import {
-  countingCommands,
-  fixtureInput,
-  parameterDefaults,
-} from "@vibefield/puppeteer-view-sdk/testing";
-import {
   DEFAULT_RAIN_PARAMETERS,
   normalizeRainParameters,
   RAIN_PARAMETER_GROUPS,
@@ -24,6 +19,11 @@ import {
 } from "@vibefield/puppeteer-views";
 import { act } from "react";
 import type { PhoneViewGolden, PhoneViewInput, PhoneWindowStep } from "./phone-goldens";
+
+/** The SDK's test-only entry, reached by dynamic `import()`: wall R8 forbids a static import of it from field-app's
+ * production sources (perf/lib is one), and names dynamic `import()` as the sanctioned hatch. */
+type SdkTesting = typeof import("@vibefield/puppeteer-view-sdk/testing");
+const sdkTesting = (): Promise<SdkTesting> => import("@vibefield/puppeteer-view-sdk/testing");
 
 /**
  * PG-8 — THE RAIN VIEW'S GOLDEN: what puppeteer-views' rain says and draws over the window's rows at every step of the
@@ -247,6 +247,7 @@ async function mounted(
   palette: MonitorPalette,
   draw: boolean,
 ): Promise<Mounted> {
+  const { countingCommands, fixtureInput, parameterDefaults } = await sdkTesting();
   const host = document.createElement("div");
   document.body.append(host);
   const theme: MonitorTheme = {
