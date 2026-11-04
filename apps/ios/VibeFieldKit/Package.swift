@@ -59,6 +59,7 @@ let package = Package(
     .library(name: "FieldInput", targets: ["FieldInput"]),
     .library(name: "FieldSwarm", targets: ["FieldSwarm"]),
     .library(name: "FieldSplash", targets: ["FieldSplash"]),
+    .library(name: "FieldLock", targets: ["FieldLock"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
     .library(name: "FieldHistory", targets: ["FieldHistory"]),
     .library(name: "FieldWorkspace", targets: ["FieldWorkspace"]),
@@ -338,14 +339,21 @@ let package = Package(
     // glances, this phone's own preferences. It draws what FieldHome hands it
     // (`SettingsAccount`) and asks nothing of the mesh, so it takes no mesh
     // product; FieldTerminal is here for its Terminal page.
-    .target(name: "FieldSettings", dependencies: ["FieldDesign", "FieldTerminal"]),
+    // WI-3 — and its Lock page, which reads and changes the lock (FieldLock).
+    .target(name: "FieldSettings", dependencies: ["FieldDesign", "FieldTerminal", "FieldLock"]),
     .testTarget(name: "FieldSettingsTests", dependencies: ["FieldSettings", "FieldDesign"]),
+    // WI-3 — the lock (DESIGN.md §9 "The lock"; WI-D3…D7, WI-L5…L7): its rules and its words, over
+    // LocalAuthentication's `.deviceOwnerAuthentication`, so the passcode is iOS's own fallback. No UI and no mesh:
+    // the curtain that draws it is FieldHome's, so every rule (the time away, the cover, the ask before a change,
+    // the stand-down) tests without a simulator, against its own clock and a fake ask.
+    .target(name: "FieldLock"),
+    .testTarget(name: "FieldLockTests", dependencies: ["FieldLock"]),
     .target(
       name: "FieldHome",
       dependencies: [
         "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
         "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct", "FieldFreeway",
-        "FieldRoutedTerminal", "FieldSettings", "FieldSplash",
+        "FieldRoutedTerminal", "FieldSettings", "FieldSplash", "FieldLock",
       ],
       resources: [.process("Resources")]
     ),

@@ -1,3 +1,4 @@
+import FieldLock
 import Foundation
 
 // WI-1/WI-2 (DESIGN.md §9 "The way in", §8 "The phone's way in") — what the way in draws for each of its
@@ -13,6 +14,10 @@ extension FieldHomeModel {
     /// The found beat: your face in the mark's place, the desktop the phone first reached (nil while none
     /// answers).
     case found(name: String?, desktop: String?)
+    /// WI-3 — the lock, offered as the way in's last step (WI-D3 A), in the words of this phone's method.
+    case lockOffer(LockMethod)
+    /// WI-3 — the curtain after a miss or a Cancel (WI-D5 A): the way in's three places on the lock's splash.
+    case locked(LockMethod)
   }
 
   /// What one screen of the way in draws.
@@ -64,6 +69,8 @@ extension FieldHomeModel {
     }
 
     var steps: Steps?
+    /// The steps' names, one bar each: two, and the lock's third while the way in will offer it (WI-3).
+    var stepNames: [String] = WayInWords.steps
     /// The tour's back, at the top's left.
     var back: WayInAct?
     var picture: Picture = .mark
@@ -84,6 +91,12 @@ extension FieldHomeModel {
     case keepAccount
     case startOver
     case openAdminConsole(URL)
+    /// WI-3 — Lock with Face ID: the lock turns on, asking first.
+    case lockOn
+    /// WI-3 — Not now: the hand-over, the lock left off.
+    case notNow
+    /// WI-3 — Unlock with Face ID, on the curtain.
+    case unlock
   }
 
   /// VibeField's site, where How it works sends a newcomer and No desktops yet sends its link.
@@ -104,8 +117,19 @@ extension FieldHomeModel {
     static let sendTheLink = "Send the link to my computer"
   }
 
-  /// One screen of the way in, for a step.
-  static func wayInScreen(_ step: WayInStep) -> WayInScreen {
+  /// The way in's steps' names: its two, and the lock's while it will be offered (`lock`, the phone's method).
+  static func wayInSteps(lock: LockMethod?) -> [String] {
+    WayInWords.steps
+  }
+
+  /// What the way in shows once the found beat has held: the lock's offer while the phone can lock and the lock is
+  /// off (`offer`, the method), else nothing, and the hand-over.
+  static func afterFoundBeat(offer: LockMethod?) -> WayInStep? {
+    nil
+  }
+
+  /// One screen of the way in, for a step. `lock` is the phone's method while the way in will offer the lock.
+  static func wayInScreen(_ step: WayInStep, lock: LockMethod? = nil) -> WayInScreen {
     let words = WayInWords.self
     switch step {
     case .page(.welcome(let failure, let expecting)):
@@ -197,6 +221,9 @@ extension FieldHomeModel {
 
     case .tour(let page):
       return tourScreen(page)
+
+    case .lockOffer, .locked:
+      return WayInScreen(words: .init(title: ""))
     }
   }
 

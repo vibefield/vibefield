@@ -646,6 +646,8 @@ public struct HomeScreen: View {
       keepAccount()
     case .openAdminConsole(let url):
       openURL(url)
+    case .lockOn, .notNow, .unlock:
+      break
     }
   }
 

@@ -1,3 +1,4 @@
+import FieldLock
 import Foundation
 import Testing
 
@@ -51,17 +52,73 @@ struct WayInScreenTests {
     #expect(s.acts == [.primary("Continue with Tailscale", .continueWithTailscale), .link("Not yours? Start over", .startOver)])
   }
 
-  @Test("the steps say where you are: Sign in, then Your computer (Face ID's comes with the lock, WI-3)")
+  @Test("the steps say where you are: Sign in, then Your computer, and the lock's third only while it will be offered")
   func steps() {
     #expect(screen(.joining(login: login, note: nil)).steps == .step(1))
     #expect(screen(.approval(machine: nil, adminConsole: nil)).steps == .step(1))
     #expect(screen(.looking(login: login)).steps == .step(2))
     #expect(screen(.noDesktops(login: login)).steps == .step(2))
     #expect(FieldHomeModel.wayInScreen(.found(name: "James", desktop: "studio")).steps == .step(2))
-    #expect(FieldHomeModel.WayInWords.steps == ["Sign in", "Your computer"])
-    #expect(StepsCapsule.count == 2)
-    #expect(StepsCapsule.name(2) == "Your computer")
-    #expect(StepsCapsule.name(3) == "Your computer")
+    let two = ["Sign in", "Your computer"]
+    #expect(FieldHomeModel.WayInWords.steps == two)
+    #expect(screen(.looking(login: login)).stepNames == two, "no lock to offer: never a step that does not come")
+    #expect(FieldHomeModel.wayInSteps(lock: nil) == two)
+    #expect(FieldHomeModel.wayInSteps(lock: .faceID) == ["Sign in", "Your computer", "Face ID"])
+    #expect(FieldHomeModel.wayInSteps(lock: .touchID) == ["Sign in", "Your computer", "Touch ID"])
+    #expect(FieldHomeModel.wayInSteps(lock: .passcode) == ["Sign in", "Your computer", "Passcode"])
+    #expect(FieldHomeModel.wayInSteps(lock: LockMethod.none) == two, "a phone that cannot lock has two steps")
+    for page: FieldHomeModel.DoorPage in [.joining(login: login, note: nil), .looking(login: login)] {
+      #expect(
+        FieldHomeModel.wayInScreen(.page(page), lock: .faceID).stepNames == ["Sign in", "Your computer", "Face ID"])
+    }
+    #expect(
+      FieldHomeModel.wayInScreen(.found(name: "James", desktop: "studio"), lock: .faceID).stepNames.count == 3)
+    #expect(StepsCapsule.name(2, of: two) == "Your computer")
+    #expect(StepsCapsule.name(3, of: two) == "Your computer")
+    #expect(StepsCapsule.name(3, of: FieldHomeModel.wayInSteps(lock: .faceID)) == "Face ID")
+  }
+
+  @Test("the lock's offer, the way in's last step: Lock with Face ID leading, Not now, and where to change it (WI-D3 A)")
+  func lockOffer() {
+    let s = FieldHomeModel.wayInScreen(.lockOffer(.faceID), lock: .faceID)
+    #expect(s.steps == .step(3))
+    #expect(s.stepNames == ["Sign in", "Your computer", "Face ID"])
+    #expect(s.picture == .mark)
+    #expect(s.words.title == "Lock VibeField with Face ID.")
+    #expect(line(s) == "This phone can type into your agents’ terminals. Face ID keeps that to you.")
+    #expect(s.words.note == nil)
+    #expect(!s.words.hold)
+    #expect(
+      s.acts == [
+        .primary("Lock with Face ID", .lockOn), .secondary("Not now", .notNow),
+        .note("You can change this in Settings › Lock."),
+      ])
+    let passcode = FieldHomeModel.wayInScreen(.lockOffer(.passcode), lock: .passcode)
+    #expect(passcode.words.title == "Lock VibeField with your passcode.")
+    #expect(passcode.stepNames.last == "Passcode")
+    #expect(passcode.acts.first == .primary("Lock with passcode", .lockOn))
+  }
+
+  @Test("the curtain after a miss: VibeField is locked., Unlock with Face ID, and the passcode's note (WI-D5 A)")
+  func locked() {
+    let s = FieldHomeModel.wayInScreen(.locked(.faceID))
+    #expect(s.steps == nil, "the lock is not a step of the way in")
+    #expect(s.picture == .mark)
+    #expect(s.words.title == "VibeField is locked.")
+    #expect(s.words.line == nil)
+    #expect(s.acts == [.primary("Unlock with Face ID", .unlock), .note("Your iPhone passcode works too.")])
+    let touch = FieldHomeModel.wayInScreen(.locked(.touchID))
+    #expect(touch.acts == [.primary("Unlock with Touch ID", .unlock), .note("Your iPhone passcode works too.")])
+    let passcode = FieldHomeModel.wayInScreen(.locked(.passcode))
+    #expect(passcode.acts == [.primary("Unlock with passcode", .unlock)], "the passcode is the method: no “too”")
+  }
+
+  @Test("after the found beat: the lock's offer while the phone can lock and the lock is off, else the hand-over")
+  func afterFoundBeat() {
+    #expect(FieldHomeModel.afterFoundBeat(offer: .faceID) == .lockOffer(.faceID))
+    #expect(FieldHomeModel.afterFoundBeat(offer: .passcode) == .lockOffer(.passcode))
+    #expect(FieldHomeModel.afterFoundBeat(offer: nil) == nil)
+    #expect(FieldHomeModel.afterFoundBeat(offer: LockMethod.none) == nil)
   }
 
   @Test("the holds: a status line and no acts, so the glass steps away")
@@ -173,6 +230,7 @@ struct WayInScreenTests {
     steps += [
       .page(.welcome(failure: nil)), .page(.signInAgain(note: nil)), .page(.noDesktops(login: login)),
       .page(.joining(login: login, note: nil)), .page(.looking(login: login)), .found(name: "James", desktop: "studio"),
+      .lockOffer(.faceID), .lockOffer(.passcode), .locked(.faceID), .locked(.touchID),
     ]
     for step in steps {
       let s = FieldHomeModel.wayInScreen(step)
