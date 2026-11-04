@@ -70,17 +70,19 @@ enum TimelineLayout {
     return Placement(placed: placed, divider: dividerY, height: y + 4)
   }
 
-  /// `dayLabel`: a midnight tick's words, the short weekday and the day, upper-cased. The desktop asks its own ICU
-  /// (`toLocaleDateString(undefined, {weekday: 'short', day: 'numeric'})`); the phone asks the platform's for the same
-  /// template, so the ORDER is each platform's (en_US: Node's `4 WED`, the phone's `WED 4`; measured 2026-11-04).
-  /// SKELETON (PG-6 red): the template the phone asks the platform for.
-  static let daySkeleton = "EEEd"
+  /// `dayLabel`: a midnight tick's words, the short weekday and the day, upper-cased. The desktop asks its own ICU in
+  /// the user's locale (`toLocaleDateString(undefined, {weekday: 'short', day: 'numeric'})`); the phone asks the
+  /// platform's for the same skeleton in the same locale, so the ORDER is each platform's — a named deviation, fd
+  /// RULED keep (2026-11-04): en_US is `d EEE`, `4 WED`, on Node (ICU 78.3, CLDR 48) and `EEE d`, `WED 4`, on Apple's
+  /// Foundation. A fixed pattern would be wrong in every other locale.
+  /// The desktop's skeleton: `{weekday: 'short', day: 'numeric'}` is CLDR's `Ed`.
+  static let daySkeleton = "Ed"
 
   static func dayLabel(_ t: Double, timeZone: TimeZone, locale: Locale) -> String {
     let formatter = DateFormatter()
     formatter.locale = locale
     formatter.timeZone = timeZone
-    formatter.setLocalizedDateFormatFromTemplate(daySkeleton)
+    formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: daySkeleton, options: 0, locale: locale)
     // `toUpperCase`, not `toLocaleUpperCase`: the locale-free upper case
     return formatter.string(from: Date(timeIntervalSince1970: t / 1000)).uppercased()
   }

@@ -25,11 +25,14 @@ import SwiftUI
 
 /// J-S4: whether a drawn row's lane wears the active treatment — it is the open card's row.
 enum TimelineActive {
-  /// The underline under the active lane's name (timeline.css:553-557).
+  /// The underline under the active lane's name (timeline.css:553-557): `text-decoration-thickness` and
+  /// `text-underline-offset`, which measures from the alphabetic baseline.
   static let underlineThickness = 1.0
   static let underlineOffset = 3.0
-  /// SKELETON (PG-6 red): the rule the name row draws for the underline.
-  static var underlineRule: (height: Double, baselineGuide: Double) { (0, 0) }
+  /// The rule the name row draws for it (SwiftUI's `underline` takes the font's own metrics): its height, and its
+  /// `lastTextBaseline` guide in its own space, so that aligned to the name's baseline its top falls `underlineOffset`
+  /// under it.
+  static var underlineRule: (height: Double, baselineGuide: Double) { (underlineThickness, -underlineOffset) }
   /// The band at the active lane's edge (timeline.css:559-573, `.is-active`).
   static let bandWidth = 4.0
   static let bandInset = 5.0
@@ -178,7 +181,14 @@ struct TimelineNameRow: View {
             .font(.system(size: 11, weight: terminal ? .semibold : .bold))
             .tracking(-0.11)
             .foregroundStyle(TimelineCanvasReplay.color(terminal ? skin.ink(.textMuted) : skin.ink(.textMain)))
-            .underline(lane.row.active, color: TimelineCanvasReplay.color(skin.ink(.textMain)))
+            .overlay(alignment: Alignment(horizontal: .leading, vertical: .lastTextBaseline)) {
+              if lane.row.active {
+                Rectangle()
+                  .fill(TimelineCanvasReplay.color(skin.ink(.textMain)))
+                  .frame(height: TimelineActive.underlineRule.height)
+                  .alignmentGuide(.lastTextBaseline) { _ in CGFloat(TimelineActive.underlineRule.baselineGuide) }
+              }
+            }
             .lineLimit(1)
             .truncationMode(.tail)
         }
