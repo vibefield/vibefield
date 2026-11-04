@@ -601,6 +601,20 @@ is the star alone, with no disc.
 | History's rows · "Lyra started this" (EW-D1, *proposed*) | 20 px · 18 px | framed · framed |
 | A flow's board head · its byline (FL-D2, *proposed*) | 26 px · 18 px | framed on paper |
 
+*On the phone (PC-D6 A, the design page Chat in a Pocket, ruled 2026-11-04; drawn from IOS-12b):* the kit
+transcribes `agentDNA` into Swift, held to goldens the vendored engine deals (IOS-12a's fixture), as `FaceDeckTests`
+holds the user face. The flat star (the same DNA in SwiftUI) draws until the star's shader lands in Metal (IOS-12e),
+held to the engine's own stills; one stage per screen, as the Mac's kit draws.
+
+| Surface (phone) | Size | Form |
+|---|---|---|
+| Chat's list row | 48 pt | framed, its cut ring the paper; live while it works |
+| A thread's head · a pane's head | 30 pt | framed, on the glass; live |
+| A message's lead | 28 pt | framed, a still |
+| A Needs-you card · the note | 22 pt | framed, a still |
+| The Field's rim (EW-D1, *proposed*) | 20 pt | framed on the bubble |
+| New spark's sky | 120 pt | free, on the night |
+
 **Still and live.** A face that is not moving is a *still*: one small WebGL2 canvas draws it once and
 keeps the picture, cached by its seed, status, size, frame, ground and theme. A *live* face moves
 (blinks, gaze, its status's motion), drawn by one layer over the window only while a live face is
@@ -5438,6 +5452,46 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *As built 2026-11-04 (WI-3):* **This phone** › **Lock** wears the desk's shut padlock (§13: `tape`, the phone's
   `lock`) and reads **On** or **Off**. Its page holds §9's switch and line, **Require Face ID** with its four times
   and its foot, and the off and no-passcode feet. A change asks first, and a miss or a Cancel leaves it as it was.
+- **The phone's Chat** (track IOS, ruled 2026-11-04 from the design page *Chat in a Pocket*: PC-D1 and PC-D3…D8 A,
+  James; PC-D2 carried A; the laws PC-L1…L5). Nothing is drawn yet: IOS-12a carries the wire, and IOS-12b…g draw it,
+  in that order. One Chat, two sizes (PC-L1): the Mac's sparks, words, statuses and rulings at touch pitch. Every
+  read and act rides the phone's home, and a spark lives on the desktop that hatched it (PC-L2). Its words are §9
+  "Chat on the phone".
+  - **The bar, with three tabs** (PC-D1 A): **Field** · **History** · **Chat** in the same capsule. The row stays 62
+    tall, 21 from the sides and the foot (IOS-9e). The capsule stays 188 wide: 8 inset and three tabs of 57⅓. The pill
+    is the tab plus 8, the overhang today's 94 has on 86: 65⅓ × 54. The glyphs: Field's asset at 26, History's symbol
+    at 22, and Chat's §13 message cut as `tab-chat`, as the Mac's cell wears it. The labels are 10 semibold; "History",
+    37 wide, sits under the tab's 57. The badge (PC-D5 A) is §2.5's orange with the count of sparks that need you, 20;
+    with none, a cyan dot of 10 while a thread is unread. In a thread the bar steps aside and the composer takes its
+    place, as Messages does, and back brings it back (380ms).
+  - **A spark's row** (CH-D1, newest activity first): 76 tall, 16 from the sides, its separator from the words' edge.
+    Its face is 48, framed, live while it works (§2.10). The name is 17 semibold and the time 15 tertiary, by the
+    Mac's rule (now, 9:41 AM, a weekday, a date). Its status's word is 15 tertiary, and in the attention ink for
+    Asking you, Needs your OK, Stuck and Rate limited (S-4). Its dot is 10: orange until you open the thread, even
+    after the need ends, else cyan while unread (PC-L5). Held, it opens a context menu: **Open its pane** · **Wake**
+    or **Put to sleep** · **Its profile**.
+  - **Needs you** heads the list while anything waits (PC-D4 A; CP-D12, one queue). One card stands for each item of
+    CP-3's queue that is a spark's, on a pale fill with a 1.5 orange ring while it waits, its choices as 36 capsules
+    with the first inverted. VibeField's own items are answered on the card, and the record says you did. An agent's
+    own ask has one act, **Answer in its pane** (PC-L3). Answered, the card says what you said and leaves the group
+    after 2.4s; in the thread it stays as said. An answer here is answered for every window and device.
+  - **The thread** (PC-D2): the spark's transcript drawn as Chat, read through the home.
+    - Your words sit right, on the fill, corners 20, at most 82% wide, 15 at 21 (History's).
+    - Its words sit left, its face at 28 framed leading each run of them.
+    - An act is one line per vibefield tool call, its glyph at 14, tertiary 13.
+    - A fact is a wake ("VibeField: …"), drawn centred at 12 and never as your words.
+    - The receipt sits under your last words at 11.5: Queued, Delivered, Waking ‹name›… (PC-D3 A; CP2-D2).
+    - New rows that arrive while you read up the page show History's arrival pill, "3 new ↓", 36.
+    - Live cards (CH-D2 A: a crew, a review loop, a watch) wait on SP-1e's data, as the Mac's do; until then the
+      thread shows words and acts.
+    - Its pane is one tap away in ⋯, never inside the thread.
+  - **The composer**: + at 48 and the field 48 tall, 16 from the sides and 21 from the foot; over the keys, 10 and 8.
+    The draft is 17 regular on one line, "Message ‹name›…", with the mic inside it until there are words, then send
+    (inverted). + opens the input card's own (Snippets, Clipboard, Scan text; a photo waits for a door). The mic is
+    the phone's Dictation, 36. @'s list is a solid menu from the composer up, corners 26, rows 48 and 56, the nearest
+    hot. Return sends: no pane stands in front of you, so nothing waits for a second Return (PC-D3 A).
+  - **New spark** (PC-D8 A): the sheet at touch pitch makes the spark on your home desktop, said and not asked; its
+    sky is the hatch, free, at 120 (§2.10).
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -5755,6 +5809,20 @@ the message: the refusal's kind, whether it may be asked again, and its details 
   desktop.
 - "this phone isn't connected to its home desktop" — there is no home to ask through. The phone asks again once it is.
 - A refusal the phone has no words for keeps the desktop's own.
+
+**Chat on the phone** (track IOS, ruled 2026-11-04, PC-D1…D8; where each word stands is §8 "The phone's Chat").
+‹name› is a spark's and ‹desktop› the field's name for a desktop. The tab is **Chat**. The list's subtitle counts
+what is true: "4 sparks on studio · 2 need you". Its groups are **Needs you** and **Sparks**; empty, it says "No
+sparks yet." · "A spark is an agent VibeField starts to run your other agents." The draft's placeholder is "Message
+‹name›…". A send's receipt (PC-D3 A; CP2-D2) is **Queued**, "Queued · ‹name› is busy; it lands when it’s done",
+"Queued · it lands after you answer ‹name›", **Delivered** or "Waking ‹name›…". Not sent, it says why: "Not
+delivered: ‹name›’s session ended", or, when the send is uncertain and is never resent, "‹name› may not have it: look
+in its pane". Every state is in words (PC-L4). A spark asleep: "‹name› is asleep · a message wakes it", with
+**Wake**. Its desktop asleep: "‹desktop› is asleep. These are as it last said; your words wait here until it
+wakes.", on a card "‹desktop› is asleep · answer when it wakes", and under a draft "Waits here until ‹desktop›
+wakes". Needs you says who asks ("‹name› asks", "research·3 asks"), an agent's own ask says **Answer in its pane**,
+and an answer says "You said ‹choice›". The note says "‹name› needs you". New spark says "Runs on ‹desktop›, your
+home" and **Create ‹name›**, and refuses with "‹name› is taken" or "‹profile› has no ‹agent› sign-in".
 
 **The agents' words** (track AO, ruled 2026-10-27; AO-L8, no machinery on screen). One word per thing,
 in the Setup Assistant, Settings, History and the launcher alike. An **agent** is named by the
