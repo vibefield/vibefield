@@ -225,7 +225,8 @@ extension SpendParityTests {
 
     let empty = view?["empty"].map(SpendGolden.strings)
     #expect(frame.empty == (empty != nil), "\(at): empty")
-    if let empty { #expect(empty == [SpendModel.emptyTitle, SpendModel.emptyHint], "\(at): empty words") }
+    // the window's hint names a pane; the phone's does not (fd's words rule, the fourth deviation)
+    if let empty { #expect(empty == [SpendModel.emptyTitle, SpendModel.Dropped.emptyHint], "\(at): empty words") }
 
     let now = view?["now"]
     #expect((frame.now == nil) == (now == nil), "\(at): the Now pill")
@@ -287,9 +288,10 @@ extension SpendParityTests {
   }
 
   /// H10 — the phone's words (fd's words rule for every PG lane): a view's words, its accessibility labels and titles
-  /// included, never name a key, hover or a pane, for the phone has none. Three NAMED deviations from the window, each
+  /// included, never name a key, hover or a pane, for the phone has none. Four NAMED deviations from the window, each
   /// pinned against the golden in P7: the view's label drops its key sentence, each row's label "Open in your
-  /// pane.", the Now pill's title "(End)". The ↘ legend stays (Q3).
+  /// pane.", the Now pill's title "(End)", and the empty view's hint says "a terminal", not "a terminal pane", word
+  /// for word as the list's (a draft word: James's eye, VF-PM 2026-11-04). The ↘ legend stays (Q3).
   @Test func thePhonesWordsNameNoKeyNorPane() throws {
     let phoneLabel =
       "Spend: what each agent spent in the last ten minutes, a line each from $0, and each run's total in the list."
@@ -300,8 +302,10 @@ extension SpendParityTests {
     #expect(SpendModel.Dropped.nowTitle == " (End)")
     #expect(SpendModel.nowTitle == "Back to now" && SpendModel.nowLabel == "Back to now")
     #expect(SpendModel.nowLegend == "↘")
+    #expect(SpendModel.emptyHint == "Launch an agent from a terminal.")
+    #expect(SpendModel.Dropped.emptyHint == "Launch an agent from a terminal pane.")
     let banned = ["pane", "Pane", "Up and down", "Return opens", "End lets go", "(End)", "hover", "Hover"]
-    var said = [SpendModel.viewLabel, SpendModel.nowTitle, SpendModel.nowLabel]
+    var said = [SpendModel.viewLabel, SpendModel.nowTitle, SpendModel.nowLabel, SpendModel.emptyHint]
     let frames = try Self.viewFrames(zone: try SpendGolden.zone())
     for (_, frame, _) in frames { said += frame.rows.flatMap { [$0.label, $0.title] } }
     #expect(said.count > 100)

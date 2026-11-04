@@ -14,6 +14,7 @@ import SwiftUI
 enum GodviewViewChoice: String, CaseIterable, Sendable {
   case swarm
   // PG-5…8: one case each, here.
+  case spend
 
   /// PG-4t — the defaults key the pick is kept under, per phone and across a sign-out (`SignOutSweep.kept`): the
   /// kit's convention (`vibefield.phone.appearance`). An id the phone has no view for reads as the swarm, the
@@ -208,6 +209,7 @@ struct GodviewStage<Swarm: View>: View {
     switch choice {
     case .swarm: swarm().transition(.opacity)
     // PG-5…8: `case .<view>: framed(<View>View(input: input))`
+    case .spend: framed(SpendView(input: input))
     }
   }
 

@@ -45,6 +45,8 @@ enum SpendModel {
     static let rowLabel = " Open in your pane."
     /// The Now pill's title: its key.
     static let nowTitle = " (End)"
+    /// The empty view's hint, whole: the window's names a pane.
+    static let emptyHint = "Launch an agent from a terminal pane."
   }
 
   /// `geometryFor`'s layout.
@@ -475,6 +477,23 @@ enum SpendModel {
       stateText: one ? nil : said, stateTone: one ? nil : row.status.tone, glyph: one ? nil : glyph, title: title,
       label: label)
   }
+
+  // MARK: - The stage (pair 5)
+
+  /// The rows as spend reads them from the stage. RED SKELETON.
+  static func agents(_ rows: [RemoteFieldRow], unreadIds: Set<String>, activeId: String?) -> [SpendAgent] { [] }
+
+  /// The view's own box under the reserve. RED SKELETON.
+  static func box(width: Double, height: Double, topInset: Double) -> (width: Double, height: Double) { (0, 0) }
+
+  /// The clock as the view reads it. RED SKELETON.
+  static func nowMs(_ date: Date) -> Double { 0 }
+
+  /// How often now moves. RED SKELETON.
+  static func clockEveryMs(_ g: Geometry) -> Double { 0 }
+
+  /// A drag on the list as the wheel's steps. RED SKELETON.
+  static func listSteps(from: Double, to: Double, rowH: Double) -> Int { 0 }
 
   // MARK: - Acts
 
