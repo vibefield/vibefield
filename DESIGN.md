@@ -2602,9 +2602,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Godview, with no key and no glyph — its panel is §1.1's temporary one, unchanged, and open to
     whoever could open it before.
   - **The phone's Stories row** (PG-4t, 2026-11-04; James ruled J-S1 A, J-S2 (ii), J-S3 drop and J-S4 accept on
-    the PG-4s page, 01:12–01:14Z; VF-PM's rulings 01:18Z–01:46Z): this head, carried to the phone's Field page. It
-    is a frame piece: it stands over the stage, outside the swarm, and never moves when the view changes; only its
-    ring does.
+    the PG-4s page, 01:12–01:14Z; VF-PM's rulings 01:18Z–01:41Z — *corrected 2026-11-04: this said 01:46Z, the
+    label on the relay, which ran ahead of the clock; it was sent at 01:40:59Z*): this head, carried to the phone's
+    Field page. It is a frame piece: it stands over the stage, outside the swarm, and never moves when the view
+    changes; only its ring does.
     - **The row:** one glass circle per view the phone has — the bar's glass (`liquidGlassCircle`: the system's
       Liquid Glass on iOS 26, the chrome family's circle glass below it) — **44** across (the touch floor), **10**
       apart, the row centred on the screen. Its top is **8** under the Dynamic Island's foot (**48**) on a phone
@@ -2648,6 +2649,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **The scanlines and the vignette stand over the swarm only** (J-S3, drop). The desktop paints them on the
       stage over every view (`GodviewStage.tsx:178-179`); the phone differs on purpose. The row stands above them
       and wears neither: the frame's glass carries neither.
+    - **Every view lights the open card's row** (J-S4, James 2026-11-04; added 2026-11-04): on the phone each view
+      lights the row of the card standing open — the list's row, the timeline's lane, spend's line, the rain's
+      stream — in text main (§2.7), and touch selects: no hover, no keys.
     - **Reduced motion:** the stage fades in 90ms; the ring and the label change at once.
     - **VoiceOver** reads the row as a group of buttons, "Views", each its view's name ("Swarm view"), the current
       one selected; the label is not read again. The circles keep their size at every text size, as the bar's do,
