@@ -52,6 +52,7 @@ const PHONE_GODVIEW = join(root, "packages/field-app/test/fixtures/phone-godview
 const phoneViewGoldens = [
   "phone-list.golden.json",
   "phone-rain.golden.json",
+  "phone-timeline.golden.json",
   "phone-spend.golden.json",
 ];
 // Goldens whose origin is another package than the contracts — a design
