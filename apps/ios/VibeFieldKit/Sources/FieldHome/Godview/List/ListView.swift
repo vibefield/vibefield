@@ -19,7 +19,8 @@ struct ListView: View {
     let drawn = Dictionary(input.rows.map { ($0.id, $0) }) { first, _ in first }
     GeometryReader { stage in
       let columns = ListPaint.columns(
-        width: stage.size.width, projectWidth: ListModel.Parameters.defaults.projectWidth)
+        width: stage.size.width, projectWidth: ListModel.Parameters.defaults.projectWidth,
+        agentFloor: ListPaint.agentFloor)
       VStack(alignment: .leading, spacing: 0) {
         toolbar(model.count, skin: skin)
         if model.isEmpty {
@@ -107,10 +108,9 @@ private struct ListRowView: View {
         dot.frame(width: ListPaint.dotColumn)
         project.frame(width: ListModel.Parameters.defaults.projectWidth, alignment: .leading)
         agent.frame(width: columns.agent, alignment: .leading)
-        words(row.detail, ink: ListPaint.detailInk)
+        words(row.detail, ink: ListPaint.detailInk, lines: ListPaint.detailLines)
           .frame(width: columns.detail, alignment: .leading)
-        words(row.context, ink: ListPaint.contextInk)
-          .monospacedDigit()
+        words(row.context, ink: ListPaint.contextInk, digits: true)
           .frame(width: ListPaint.contextColumn, alignment: .trailing)
       }
       .padding(.leading, ListPaint.leftBorder + ListPaint.rowInset)
@@ -164,7 +164,12 @@ private struct ListRowView: View {
         AgentGlyph(mark: providerId, letterSize: ListPaint.markSize)
           .frame(width: ListPaint.markSize, height: ListPaint.markSize)
           .foregroundStyle(ListView.color(ListPaint.modelInk, skin: skin))
-        words(model, ink: ListPaint.modelInk)
+        let glyphs = ListPaint.glyphs(fitting: columns.agent - ListPaint.markSize - ListPaint.agentGap)
+        VStack(alignment: .leading, spacing: 0) {
+          ForEach(Array(ListPaint.modelLines(model, glyphs: glyphs).enumerated()), id: \.offset) { _, line in
+            words(line, ink: ListPaint.modelInk)
+          }
+        }
         if let account {
           Text(account)
             .font(FieldType.mono(ListPaint.accountSize))
@@ -175,14 +180,20 @@ private struct ListRowView: View {
     case .host(let host):
       words(host, ink: ListPaint.hostInk)
     case .terminal(let word):
-      words(word, ink: ListPaint.terminalInk).italic()
+      words(word, ink: ListPaint.terminalInk, italic: true)
     }
   }
 
-  private func words(_ text: String, ink: ListPaint.Ink) -> Text {
-    Text(text)
-      .font(FieldType.mono(ListPaint.smallSize))
+  /// A cell's words in the 9 pt mono: `lines` at most (the desktop's one by default, `ListPaint.cellLines`), cut with
+  /// the tail ellipsis.
+  private func words(
+    _ text: String, ink: ListPaint.Ink, lines: Int? = ListPaint.cellLines, italic: Bool = false, digits: Bool = false
+  ) -> some View {
+    let set = Text(text).font(FieldType.mono(ListPaint.smallSize)).italic(italic)
+    return (digits ? set.monospacedDigit() : set)
       .foregroundStyle(ListView.color(ink, skin: skin))
+      .lineLimit(lines)
+      .truncationMode(.tail)
   }
 
   /// The lit row's ground (LC:90-94).

@@ -66,13 +66,15 @@ enum ListPaint {
 
   /// The agent and detail columns' widths at a stage `width` wide (LC:63-65's `minmax(0, .9fr)` and
   /// `minmax(0, 1.4fr)`): what the rows' box, the row's border and inset, the three fixed columns and the four gaps
-  /// leave, shared .9 : 1.4, never below 0.
-  static func columns(width: Double, projectWidth: Double) -> (agent: Double, detail: Double) {
+  /// leave, shared .9 : 1.4, never below 0. An `agentFloor` (deviation 6, `ListPaint.agentFloor`) widens the agent
+  /// column to it, out of the detail's share, never past what is free; 0 is the desktop's grid.
+  static func columns(width: Double, projectWidth: Double, agentFloor: Double = 0) -> (agent: Double, detail: Double) {
     let box = width - 2 * rowsSide
     let content = box - leftBorder - border - 2 * rowInset
-    let free = content - dotColumn - projectWidth - contextColumn - 4 * columnGap
-    let fr = max(0, free) / (agentShare + detailShare)
-    return (agent: fr * agentShare, detail: fr * detailShare)
+    let free = max(0, content - dotColumn - projectWidth - contextColumn - 4 * columnGap)
+    let fr = free / (agentShare + detailShare)
+    let agent = min(max(fr * agentShare, agentFloor), free)
+    return (agent: agent, detail: free - agent)
   }
 
   /// LC:101-113 — a row's weight. A receded row's rule comes after the stale one's at the same specificity, so a row
@@ -127,6 +129,38 @@ enum ListPaint {
   /// LC:193-197 — the context: faint, right-aligned, tabular.
   static let contextInk = Ink.textFaint
   static let toolbarInk = Ink.textFaint
+
+  // MARK: - Lines and cuts (LC:137-157, :180-186; deviation 6)
+
+  /// SF Mono's advance, every glyph alike (SFNSMono.ttf's hmtx: 1266 of 2048 units, regular and italic): what one
+  /// line of the list's mono holds, `glyphs(fitting:size:)`.
+  static let monoAdvanceEm = 1266.0 / 2048.0
+  /// How many glyphs of the mono at `size` stand on a line `width` wide (a hair of slack, so a width made of whole
+  /// glyphs is never one short by rounding).
+  static func glyphs(fitting width: Double, size: Double = smallSize) -> Int {
+    Int((max(0, width) / (monoAdvanceEm * size) + 1e-9).rounded(.down))
+  }
+  /// Every cell but the model and the detail: the desktop's ONE line (`white-space: nowrap`), cut with the tail
+  /// ellipsis (`text-overflow: ellipsis`).
+  static let cellLines: Int? = nil
+  /// The detail: two lines, then the desktop's tail ellipsis (deviation 6; the desktop's is one line).
+  static let detailLines: Int? = nil
+  /// The model: at most two lines, broken ONLY at a space (deviation 6; the desktop's is one line, clipped bare).
+  static let modelLinesMax: Int? = nil
+  /// The agent column's FIXED floor, in glyphs of the model after the mark and its gap (deviation 6, fd's ruling): 8
+  /// fits `terminal`, the longest word the list itself draws, and the witness's widest model word, "GPT-5.5". Fixed,
+  /// so the grid never reflows with its data, as the desktop's never does; a longer word is cut, never broken.
+  static let agentFloorGlyphs = 8
+  /// The floor in points, `columns(…, agentFloor:)`'s argument: the mark, its gap and `agentFloorGlyphs` of the mono
+  /// (60.51 at 9 pt). 0 is the desktop's grid.
+  static let agentFloor = 0.0
+
+  /// The model's lines in a column `glyphs` wide: whole words joined by single spaces, a new line only at a space, at
+  /// most `modelLinesMax` lines (the last takes the rest, cut by the view). A word wider than the line stands alone on
+  /// its line, cut by the view, never broken inside.
+  static func modelLines(_ label: String, glyphs: Int) -> [String] {
+    [label]
+  }
 
   // MARK: - The empty stage (LC:199-227)
 

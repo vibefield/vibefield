@@ -1,6 +1,15 @@
+import CoreText
 import FieldAgents
 import Foundation
 import Testing
+
+#if canImport(UIKit)
+  import UIKit
+  private typealias PlatformFont = UIFont
+#elseif canImport(AppKit)
+  import AppKit
+  private typealias PlatformFont = NSFont
+#endif
 
 @testable import FieldHome
 @testable import FieldProduct
@@ -100,6 +109,89 @@ struct ListDrawingTests {
   @Test func theFlagNamesTheList() {
     let chosen = GodviewViewChoice.launch(["VibeField", "-vf-godview-view=list"])
     #expect(chosen == .list)
+  }
+
+  /// D7 — the cells' lines (VF-PM's (B), 2026-11-04, deviation 6): every cell is the desktop's ONE line with the tail
+  /// ellipsis (LC:137-157, :180-186: `nowrap`, `text-overflow: ellipsis`), but the detail, TWO lines then the ellipsis,
+  /// and the model, at most TWO lines broken only at a space.
+  @Test func theCellsLines() {
+    let cell = ListPaint.cellLines
+    #expect(cell == 1)
+    let detail = ListPaint.detailLines
+    #expect(detail == 2)
+    let model = ListPaint.modelLinesMax
+    #expect(model == 2)
+  }
+
+  /// D8 — the model breaks ONLY at a space, two lines at most, never inside a word ("Haik|u", "Sonn|et" impossible):
+  /// a word wider than the line stands alone and is cut, and a third line's words join the second, cut.
+  @Test func theModelBreaksOnlyAtASpace() {
+    let opus = ListPaint.modelLines("Opus 5.5", glyphs: 4)
+    #expect(opus == ["Opus", "5.5"])
+    let sonnet = ListPaint.modelLines("Sonnet 5.5", glyphs: 6)
+    #expect(sonnet == ["Sonnet", "5.5"])
+    let whole = ListPaint.modelLines("Sonnet 5.5", glyphs: 10)
+    #expect(whole == ["Sonnet 5.5"])
+    let hyphen = ListPaint.modelLines("GPT-5.5", glyphs: 4)
+    #expect(hyphen == ["GPT-5.5"], "a hyphen is no space: the word stands alone, cut, never GPT- / 5.5")
+    let three = ListPaint.modelLines("a b c", glyphs: 1)
+    #expect(three == ["a", "b c"])
+    let spaced = ListPaint.modelLines("Opus  5.5", glyphs: 4)
+    #expect(spaced == ["Opus", "5.5"])
+    let empty = ListPaint.modelLines("", glyphs: 4)
+    #expect(empty == [""])
+  }
+
+  /// D9 — the agent column's FIXED floor (deviation 6, fd's ruling): the mark, its gap and 8 glyphs of the mono, 60.51
+  /// pt at 9 pt, whatever the rows say (the grid never reflows with its data). At the phone's 402 pt it comes out of the
+  /// detail's share (49.49 pt, 8 glyphs a line, 2 lines). At every witness step, every model line holds whole words
+  /// that fit, and the terminal's and the host's words fit alone. 0 is still D5's desktop grid.
+  @Test func theAgentColumnHasItsFixedFloor() throws {
+    let advance = ListPaint.monoAdvanceEm * ListPaint.smallSize
+    let fixed = ListPaint.markSize + ListPaint.agentGap + 8 * advance
+    let glyphs = ListPaint.agentFloorGlyphs
+    #expect(glyphs == 8)
+    let floor = ListPaint.agentFloor
+    #expect(abs(floor - fixed) < 1e-9)
+    let phone = ListPaint.columns(width: 402, projectWidth: 150, agentFloor: floor)
+    #expect(abs(phone.agent - fixed) < 1e-9)
+    #expect(abs(phone.detail - (110 - fixed)) < 1e-9)
+    let modelGlyphs = ListPaint.glyphs(fitting: phone.agent - ListPaint.markSize - ListPaint.agentGap)
+    #expect(modelGlyphs == 8)
+    let detailGlyphs = ListPaint.glyphs(fitting: phone.detail)
+    #expect(detailGlyphs == 8)
+    let aloneGlyphs = ListPaint.glyphs(fitting: phone.agent)
+    let steps = try HomeFixture.witnessSteps()
+    for step in steps where !step.gap {
+      let model = ListModel.of(ListModel.inputs(rows: step.rows, activeId: nil, fieldIsLive: true))
+      for row in model.rows {
+        switch row.agent {
+        case .agent(_, let label, _):
+          let lines = ListPaint.modelLines(label, glyphs: modelGlyphs)
+          #expect(lines.count <= 2, "step \(step.at): \(label)")
+          #expect(lines.joined(separator: " ") == label, "step \(step.at): whole words, \(label)")
+          for line in lines { #expect(line.count <= modelGlyphs, "step \(step.at): \(line) is cut") }
+        case .terminal(let word), .host(let word):
+          #expect(word.count <= aloneGlyphs, "step \(step.at): \(word) is cut")
+        }
+      }
+    }
+  }
+
+  /// D10 (a pin) — the advance the lines are counted by is SF Mono's (SFNSMono.ttf's hmtx: every glyph 1266 of 2048
+  /// units, regular and italic), as the platform's monospaced system font measures it at the list's 9 pt.
+  @Test func theAdvanceIsSFMonos() {
+    #expect(ListPaint.monoAdvanceEm == 1266.0 / 2048.0)
+    let size = CGFloat(ListPaint.smallSize)
+    let font = PlatformFont.monospacedSystemFont(ofSize: size, weight: .regular) as CTFont
+    var character: UniChar = 0x30
+    var glyph = CGGlyph()
+    let found = CTFontGetGlyphsForCharacters(font, &character, &glyph, 1)
+    #expect(found)
+    var advance = CGSize.zero
+    _ = CTFontGetAdvancesForGlyphs(font, .horizontal, &glyph, &advance, 1)
+    let measured = Double(advance.width)
+    #expect(abs(measured - ListPaint.monoAdvanceEm * ListPaint.smallSize) < 1e-6, "measured \(measured)")
   }
 
   #if canImport(UIKit)
