@@ -7,8 +7,8 @@ import Testing
 
 // PG-6 — THE TIMELINE'S WAKES AND ITS MAP OF THE DAY, HELD TO PUPPETEER'S OWN: every row reads
 // `phone-timeline.golden.json` (field-app's `perf/lib/phone-goldens-timeline.ts`), mirrored into this bundle byte for
-// byte. The wakes are lane-local, as the golden records them (`wakeRecord`: the default scale and, at the open, the held
-// one; cy at half the lane), and the map is drawn at the golden's stage (`pulseOf`). Equality is exact, Float32
+// byte. The wakes are lane-local, as the golden records them (`wakeRecord`: the default scale and, at the open, the
+// held one; cy at half the lane), and the map is drawn at the golden's stage (`pulseOf`). Equality is exact, Float32
 // included: a map value is the float32 the golden holds, read back as a double.
 //
 // No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).

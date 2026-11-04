@@ -65,30 +65,130 @@ struct PulseMap: Equatable, Sendable {
   /// `SMOOTH_RADIUS` and `SMOOTH_SIGMA`: σ 4 buckets ≈ 8 px.
   static let smoothRadius = 10
   static let smoothSigma = 4.0
+  /// `KERNEL`: the gaussian's weights, offset −10…10; `KERNEL_SUM` their sum, added left to right.
+  static let kernel: [Double] = (0...(2 * smoothRadius)).map { index in
+    let offset = Double(index - smoothRadius)
+    return exp(-(offset * offset) / (2 * smoothSigma * smoothSigma))
+  }
+  static let kernelSum = kernel.reduce(0, +)
 
   /// `pulseRowsFor`: every agent lane (not only those in view) but a receded one — the map counts what the stage
   /// counts.
   static func rows(_ lanes: [TimelineLane], nowMs: Double) -> [PulseRow] {
-    []
+    lanes.filter { $0.kind == .agent && !$0.receded }.map {
+      PulseRow(colour: $0.colour, status: $0.current.status, fromMs: $0.current.fromMs, endMs: nowMs)
+    }
   }
 
   /// `addCoverage`: the fraction of each bucket [start + i·dt, start + (i+1)·dt) that [a, b) covers, added into `into`.
-  static func addCoverage(_ into: inout [Float], startMs: Double, dt: Double, a: Double, b: Double) {}
+  static func addCoverage(_ into: inout [Float], startMs: Double, dt: Double, a: Double, b: Double) {
+    if b <= a { return }
+    let first = max(0, ((a - startMs) / dt).rounded(.down))
+    let last = min(Double(into.count - 1), ((b - startMs) / dt).rounded(.down))
+    var index = first
+    while index <= last {
+      let s0 = startMs + index * dt
+      let bucket = Int(index)
+      into[bucket] = Float(Double(into[bucket]) + max(0, min(b, s0 + dt) - max(a, s0)) / dt)
+      index += 1
+    }
+  }
 
   /// `smooth`: a normalised gaussian over buckets, edges held, so the ridge rolls instead of stepping.
   static func smooth(_ values: [Float]) -> [Float] {
-    []
+    let count = values.count
+    var out = [Float](repeating: 0, count: count)
+    for index in 0..<count {
+      var sum = 0.0
+      for offset in -smoothRadius...smoothRadius {
+        sum += kernel[offset + smoothRadius] * Double(values[min(count - 1, max(0, index + offset))])
+      }
+      out[index] = Float(sum / kernelSum)
+    }
+    return out
   }
 
   /// `pulseScales`: work fills its zone (at most 6 px an agent), the waits theirs, never larger than work's.
   static func scales(maxUp: Double, maxDown: Double, up: Double, down: Double) -> (kUp: Double, kDn: Double) {
-    (0, 0)
+    let kUp = min(up / max(0.5, maxUp), 6)
+    return (kUp, min(down / max(0.5, maxDown), kUp))
   }
 
   /// `pulseMap`: the rows' coverage of the day from `startMs` to `nowMs`, bucketed, smoothed and stacked.
   init(_ rows: [PulseRow], startMs: Double, nowMs: Double, geometry: PulseGeometry) {
-    let none = PulseBand(colour: nil, top: [], bottom: [])
-    self.init(xs: [], work: [], blocked: none, unseen: none, base: 0, kUp: 0, kDn: 0)
+    let width = geometry.width
+    // `Math.round` ties toward +∞; past the floor of 40 every rounded value is positive, where that is away from zero.
+    let count = Int(max(40, (width / 2).rounded(.toNearestOrAwayFromZero)))
+    let dt = max(1, nowMs - startMs) / Double(count)
+    // The bands in the order rows first name them, keyed as the SDK keys them: by the colour's string.
+    var keys: [String] = []
+    var colours: [SwarmColor?] = []
+    var work: [[Float]] = []
+    var blocked = [Float](repeating: 0, count: count)
+    var unseen = [Float](repeating: 0, count: count)
+    for row in rows {
+      let key = row.colour?.hex ?? ""
+      let band: Int
+      if let known = keys.firstIndex(of: key) {
+        band = known
+      } else {
+        band = keys.count
+        keys.append(key)
+        colours.append(row.colour)
+        work.append([Float](repeating: 0, count: count))
+      }
+      let a = max(row.fromMs, startMs)
+      switch row.status {
+      case .working: Self.addCoverage(&work[band], startMs: startMs, dt: dt, a: a, b: row.endMs)
+      case .blocked: Self.addCoverage(&blocked, startMs: startMs, dt: dt, a: a, b: row.endMs)
+      case .unseen: Self.addCoverage(&unseen, startMs: startMs, dt: dt, a: a, b: row.endMs)
+      case .idle: break
+      }
+    }
+    // The project that worked most lies on the line, the least at the crest; a tie keeps the order of first naming.
+    let sums = work.map { values in values.reduce(0.0) { $0 + Double($1) } }
+    let rank = work.indices.sorted { a, b in
+      let order = sums[b] - sums[a]
+      return (order != 0 && !order.isNaN ? order : Double(a - b)) < 0
+    }
+    let bands = rank.map { Self.smooth(work[$0]) }
+    let blockedSmooth = Self.smooth(blocked)
+    let unseenSmooth = Self.smooth(unseen)
+    var maxUp = 0.0
+    var maxDown = 0.0
+    for index in 0..<count {
+      maxUp = max(maxUp, bands.reduce(0.0) { $0 + Double($1[index]) })
+      maxDown = max(maxDown, Double(blockedSmooth[index]) + Double(unseenSmooth[index]))
+    }
+    let (kUp, kDn) = Self.scales(maxUp: maxUp, maxDown: maxDown, up: geometry.up, down: geometry.down)
+    let base = 1.5 + geometry.up
+    let xs = (0..<count).map { Float((Double($0) + 0.5) / Double(count) * width) }
+
+    var cumulative = [Float](repeating: 0, count: count)
+    var workBands: [PulseBand] = []
+    for (position, values) in bands.enumerated() {
+      var top = [Float](repeating: 0, count: count)
+      var bottom = [Float](repeating: 0, count: count)
+      for index in 0..<count {
+        bottom[index] = Float(base - Double(cumulative[index]) * kUp)
+        cumulative[index] = Float(Double(cumulative[index]) + Double(values[index]))
+        top[index] = Float(base - Double(cumulative[index]) * kUp)
+      }
+      workBands.append(PulseBand(colour: colours[rank[position]], top: top, bottom: bottom))
+    }
+    // A wait hung under the line, below `lower`.
+    func hang(_ lower: [Float], _ values: [Float]) -> PulseBand {
+      var top = [Float](repeating: 0, count: count)
+      var bottom = [Float](repeating: 0, count: count)
+      for index in 0..<count {
+        top[index] = Float(base + Double(lower[index]) * kDn)
+        bottom[index] = Float(base + (Double(lower[index]) + Double(values[index])) * kDn)
+      }
+      return PulseBand(colour: nil, top: top, bottom: bottom)
+    }
+    self.init(
+      xs: xs, work: workBands, blocked: hang([Float](repeating: 0, count: count), blockedSmooth),
+      unseen: hang(blockedSmooth, unseenSmooth), base: base, kUp: kUp, kDn: kDn)
   }
 
   private init(
