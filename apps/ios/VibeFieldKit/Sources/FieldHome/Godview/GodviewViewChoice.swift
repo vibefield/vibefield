@@ -15,6 +15,10 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   case swarm
   // PG-5…8: one case each, here.
 
+  /// PG-4t — the defaults key the pick is kept under, per phone and across a sign-out (`SignOutSweep.kept`): the
+  /// kit's convention (`vibefield.phone.appearance`). An id the phone has no view for reads as the swarm, the
+  /// desktop's own fallback (`monitorViewFor`).
+  static let storageKey = ""
   static let argument = "-vf-godview-view"
   static let nowArgument = "-vf-godview-now"
   /// PG-4t — a still: every view draws one frame and runs no loop, no transition and no timer.

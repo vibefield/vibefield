@@ -61,6 +61,11 @@ public struct ChromeShadow: Sendable {
       }),
     radius: 15, y: 11)
 
+  /// PG-4t — §5's island shadow, `--vf-shadow-island`: `0 8px 30px`, black at
+  /// 8% by day and 40% by night. The Stories row's name pill (DESIGN.md §8
+  /// "The phone's Stories row").
+  public static let island = ChromeShadow(color: .clear, radius: 0, y: 0)
+
   /// The switch's knob — the design kit's `0 1px 3px rgb(0 0 0 / 18%)`
   /// (`.vf-ui-switch__thumb`).
   public static let knob = ChromeShadow(

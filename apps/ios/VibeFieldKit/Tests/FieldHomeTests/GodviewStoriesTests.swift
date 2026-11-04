@@ -133,6 +133,22 @@ struct GodviewStoriesViewsTests {
     }
   }
 
+  /// P2b — the pick is kept under `vibefield.godview.view` (the kit's convention), and an id the phone has no view
+  /// for reads as the swarm, as the desktop's `monitorViewFor` falls back.
+  @Test func thePickIsKeptAndAnUnknownOneIsTheSwarm() throws {
+    #expect(GodviewViewChoice.storageKey == "vibefield.godview.view")
+    let suite = "pg4t.godview.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let key = GodviewViewChoice.storageKey
+    defaults.set("bogus", forKey: key)
+    let unknown = AppStorage(wrappedValue: GodviewViewChoice.swarm, key, store: defaults).wrappedValue
+    #expect(unknown == .swarm)
+    defaults.set("swarm", forKey: key)
+    let known = AppStorage(wrappedValue: GodviewViewChoice.swarm, key, store: defaults).wrappedValue
+    #expect(known == .swarm)
+  }
+
   /// S7 / S7b — the stage's chrome as data inside a view's stage: the reserve on top always; the bar's band at the
   /// bottom only inside a full stage, which runs under the bar (a flow stage ends at the band).
   @MainActor
