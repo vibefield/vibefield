@@ -30001,3 +30001,145 @@ documented words for a value with no decimal (`$nan/hr`, where the window says `
 comment says so.
 
 **Owed.** Nothing of this item's. GodviewFormat's moved line cites are fd's to re-point in his lane file.
+
+## WI-3 — the lock: Face ID over a curtain above everything, the way in's last step, and Settings › Lock (2026-11-04; `80a9e2092` → `ae2d44c00`, eight commits on main `571bec4c8`, cut as `6847b64cb` → `8a3804658` on `f978b385a`, folded to `d7f4c0808` on `84482a1fe` and re-stacked twice with their patches unchanged, lane `wi/lock` in `/Volumes/SamsungRed/lanes/wi3/vibe-field`, the IOS session's, in the mini's mint M116 `ae2d44c00`, stacked, run 116 after run 115's red)
+
+**What it rests on.** WI-D3…D7 A and the laws WI-L5…L7 (James, on the page *The Way In*, 2026-11-02
+11:13–11:15Z; "way in all ruled, now implement it", 11:17Z). VF-PM's GO for WI-3 reached this session at 01:00:38Z
+(labelled 01:02Z), accepting six calls on the lean:
+- the curtain is a window of its own above the app's sheets, holding the splash's surface;
+- the lock stands signed in or out, a phone preference;
+- every word names the phone's method, by substitution;
+- Lock now shows only while the lock is on, above Settings…;
+- the Settings glyph `FieldGlyphName.lock` is "tape";
+- a lock that cannot ask stands down (a removed passcode), with its test.
+Times below are this session's clock (its transcript and the scripts' own `date -u`). VF-PM's labels from 01:36Z
+to 01:48Z ran a few minutes ahead of it (VF-PM, 01:53:06Z).
+
+**What** (28 files, +1,447 −35: 26 under `apps/ios`, and two outside, admitted by name):
+- **The words first** (`80a9e2092`, DESIGN.md only, +29):
+  - §9's lock by method: Face ID's as ruled. The Touch ID swap, the passcode-only set and the ask's reason ("Only
+    you can open VibeField on this iPhone.") are marked DRAFTS pending James.
+  - §8's way in and phone Settings as built: the steps' three bars, the curtain's window, Lock now.
+  - §13's phone padlock.
+- **The red** (`b7556eae7`, +685 −18):
+  - FieldLock with stub bodies;
+  - FieldLockTests (the lock's rules, 14 rows) and LockWordsTests (5 rows);
+  - the way in's lock rows in WayInScreenTests, and Settings' `lock` opening in SettingsAccountTests.
+- **The lock** (`16be130de`, 21 files, +664 −59):
+  - `FieldLock`, a new module that names no SwiftUI. The scene's phases, a `ContinuousClock` and an ask go in;
+    whether the curtain stands (`covers`) and what it says come out.
+    - When it asks: a launch with the lock on asks once the scene is active, and so does a return past the delay
+      (a minute to start; Settings offers Immediately, 1, 5 and 15 minutes). Lock now asks at once.
+    - Every change asks first, and a miss or a Cancel changes nothing.
+    - The inactive that iOS's own ask causes is not "away" (`askOpen`).
+    - A lock that cannot ask stands down.
+  - `DeviceOwnerAuthenticator`: LocalAuthentication's `.deviceOwnerAuthentication`, so the passcode is iOS's own
+    fallback. Face ID shows the Info.plist's ruled `NSFaceIDUsageDescription`, set in the pbxproj for both
+    configurations.
+  - `LockCurtain`: a `UIWindow` at `.alert + 1` hosting `SplashField`, the splash's own surface (new in
+    FieldSplash).
+    - It stands at once, so the app switcher's picture is the launch picture.
+    - A miss puts the way in's three places on it: **VibeField is locked.**, **Unlock with ‹method›**, and "Your
+      iPhone passcode works too." where the passcode is the fallback.
+    - It leaves by the splash's exit: 240 ms plain `ease`, half under Reduce Motion.
+  - The way in's last step. While the phone can lock and the lock is off, the found beat hands to the offer:
+    **Lock VibeField with ‹method›.**, Lock with ‹method› / Not now, and "You can change this in Settings › Lock."
+    The steps' third bar names the method.
+  - Settings › This phone › Lock (`LockPage`):
+    - **Lock VibeField**, never "Use Face ID", and **Require ‹method›** with its four times;
+    - the switch and the tick move only once the lock has changed;
+    - on a phone with no passcode, the switch is dimmed over §9's foot.
+  - The account corner's **Lock now**, above Settings…, shows only while the lock is on. A lock folds the keyboard.
+  - `tooling/glyphs/picks.json` gains "tape" on iOS, with `glyph-tape` generated (`build.mjs --check`: fresh, 21
+    on iOS).
+  - One typecheck repair: a closure for Lock now, where a method reference crashed swiftc's diagnostics (said in
+    the commit).
+- **The stamp** (`c6b52ac63`): `-vf-lock=<method>[-open]` (DEBUG only), so the photographs can show the curtain after
+  a miss and Settings › Lock with the lock on.
+- **The review pass** (asked 01:41:44Z, as WI-1's; four folds appended with the four above unrewritten; accepted
+  01:53:06Z):
+  - HIGH (`f82536e1f`): the stand-down needs iOS's own `passcodeNotSet`.
+    - Before: `DeviceOwnerAuthenticator.method` read EVERY refusal of the owner policy as `.none`, and `.none`
+      stands the lock down and keeps it off. The ask's own split (`passcodeNotSet` → `.unavailable`, anything else
+      → `.missed`) never ran, because `FieldLock.ask` checks the method first.
+    - Now: any other refusal keeps the phone's method, and the ask answers it, so the door stays shut.
+    - The rule made explicit, not a reproduced failure: no other refusal of the owner policy on a phone is named.
+  - LOW (`7634ce68e`): one ask at a time, owned by the lock. Two taps on the way in's Lock with Face ID asked twice.
+    Touch ID's two feet are now pinned word for word.
+  - MEDIUM (`599b5652c`): VoiceOver is told of a miss. The curtain's window was announced only when it stood, and
+    VoiceOver's focus after iOS's sheet was nowhere.
+  - LOW (`ae2d44c00`): the false simulator claim corrected at its source (below), and `-vf-lock=none`. An unknown
+    stamp value now stamps nothing; it read as Face ID before.
+
+**Validation.**
+- The host loop (`lanes/wi3/light/hostkit`: a macOS package whose FieldLock and FieldLockTests are directory symlinks
+  into the lane, whole; never the gate):
+  - RED: 18 of its 19 rows by assertion, 89 issues (01:07:29Z);
+  - GREEN: 19 tests in 2 suites, 0 issues (01:14:39Z, and again with the rest of the green at 01:26:34Z);
+  - fold 1: red 7 issues, then 22/3/0;
+  - fold 2: red 2 issues, then 23/3/0.
+- swiftc's typecheck for the simulator (`light/tc.sh`, against the kit built at the red): every changed module rc 0,
+  and again after the folds (FieldLock and its tests, FieldAgents, FieldHome).
+- The kit slot on this Mac (VF-PM's word reached it 01:27:37Z; the WI-3 proof worktree detached at each commit):
+  - build-for-testing at the red `6064b7b26`, 01:22:02 → 01:24:20Z;
+  - FieldLockTests and FieldHomeTests at the red, 01:27:43 → 01:30:26Z: EXIT 65, by assertion, 110 issues in all.
+    FieldLock read 19 tests in 2 suites with 89 issues; FieldHome 152 in 21 with 21, all in the four lock rows;
+  - the witness at the green `54944275e` (tree `b3a2a1241`), 01:30:32 → 01:37:02Z: the kit 16 runs, 1,582 tests,
+    1 red run whose one issue is item 167 (James's TerminalSurfaceKeyboardTests:31, no `UIWindowScene` in the
+    package-hosted kit); app Debug and ONE Release built;
+  - the photographs at `8a3804658`: 18 of 18 by 01:41:05Z (`lanes/wi3/light/photos-8a3804658`).
+- The re-stack onto `84482a1fe` (items 164 and 165, M114): 0 conflicts, range-diff "=" ×4, the file sets disjoint.
+- The re-witness at the folded tip `d7f4c0808` (tree `ea5cc861f`, apps/ios `7a28f09f5`), 01:52:05 → 02:02:48Z,
+  from load1 19.84:
+  - build-for-testing EXIT 0 (01:52:51Z);
+  - the kit: 16 runs, 1,588 tests (1,582, the folds' 4, and 164/165's 2); the one red run is item 167 again
+    (01:54:47Z);
+  - app Debug (01:56:04Z) and ONE Release (01:58:20Z) built;
+  - the photographs 20 of 20 by 02:02:45Z (`lanes/wi3/light/photos-d7f4c0808`), the no-passcode foot shot for
+    the first time;
+  - iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down at 02:02:48Z.
+- The re-stack over the records `571bec4c8` is docs only:
+  - the diff from `d7f4c0808` to `ae2d44c00` is byte for byte `84482a1fe` → `571bec4c8` (docs/LANDED.md and
+    docs/ROADMAP.md; shasum `e3a6ce12f858` both ways);
+  - apps/ios is `7a28f09f5` at both, so the re-witness carries to the tip by tree.
+  - VF-PM's pre-read (02:04:33Z): the tip's tree `fdf6fcddd` equals the merge-tree; Package.swift adds targets
+    only.
+- **Run 115** (`ae2d44c00`, stacked on main `571bec4c8`, minted by a9 on VF-PM's GO): RED on one timing row
+  that is not this slice's. fieldd's `test/service-drain.test.ts`, "lets an admitted old-generation call settle
+  before teardown" (PRC-2 / §18.2), asserts under 1,500 ms of wall time and read 1,866 ms while James used the
+  mini's console. VF-PM filed it as item 168. The per-file diff against run 114 was empty, and the kit plane
+  green. a9 re-armed the same `ae2d44c00` once, as run 116, when the mini's load fell.
+- **Run 116** (`ae2d44c00`, the same mint, M116): verify exit 0 at 02:29:39Z (armed 02:23:21Z at load1 2.91).
+  - vitest 12,190 passed, 0 failed, 18 skipped (878 files); the per-file diff against run 114 is empty (VF-PM's
+    read).
+  - The drain row read 1,464 ms on the quiet host.
+  - cargo 34 results ok; typecheck and test, 28 projects; the iOS fixtures 205, pins 67; the tree clean after
+    (`lanes/ts6/logs/mini/run116/verify.clean.log`).
+  - The kit is this Mac's re-witness, above, carried to `ae2d44c00` by its unchanged apps/ios tree.
+- **Landed:** main fast-forwarded to `ae2d44c00` on VF-PM's GO (2026-11-04 02:31:20Z).
+
+**Found (said).** The iPhone 17 Pro simulator answers `.deviceOwnerAuthentication` as a passcode-only phone, not as a
+phone without a passcode. Its unstamped Settings › Lock showed "VibeField opens without your passcode. …" over a
+live switch. 4/4's message, the stamp's doc comment, its README row and a message to VF-PM had said "a simulator
+has no passcode, so the real lock stands down there". That is corrected, dated, at the doc comment and the README
+row (fold 4). 4/4's message stands as written; fold 4's message is its correction.
+
+**Not built (said).**
+- Nothing ties the pbxproj's `NSFaceIDUsageDescription` ("VibeField uses Face ID so only you can open it on this
+  iPhone.") to DESIGN.md §9. A kit test reading the app's project file would be a cross-tree read: not taken.
+- The curtain's glass is the way in's one height, 210 (WI-L4: "Three places, and nothing moves"). After a miss it
+  holds one act and a note, a third of it empty, as How it works' first two pages already hold one act. Fitting
+  each glass to what it holds would be a WI-L4 change for every screen, the shipped tour's included. That is
+  James's, named to him as such; it is not a mark.
+
+**Owed.**
+- James's four hand rows, on a phone:
+  - the real Face ID path: a launch, a return past the delay, a miss and Unlock, the passcode fallback; and no
+    curtain flash during Settings › Lock's own ask;
+  - the app switcher's picture over an open card: the curtain, never the card or its keyboard;
+  - Lock now folding the keyboard on a device;
+  - VoiceOver over the curtain: it lands on a miss's words, and the modal host hides the app's windows under it.
+- James's word on the draft words (DESIGN.md §9's as-built note): the Touch ID swap, the passcode-only set, the
+  ask's reason, and **Require passcode**. Any change is one commit across DESIGN.md §9, `LockWords.swift` and
+  LockWordsTests.
