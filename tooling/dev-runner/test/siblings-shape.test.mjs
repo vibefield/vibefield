@@ -401,6 +401,41 @@ test("align links a linked package's dependencies and peers from the store, and 
   );
 });
 
+test("align takes a dependency the hoist does not hold from the root's own install — a `link:` row, one copy — and names one neither holds", (t) => {
+  // 2026-11-03: rosetta's room depends on mille, which this tree installs as `link:` rows into `../mille-pin`;
+  // pnpm never hoists a link:, so the hoist held no mille and `use rosetta` failed in its postinstall
+  const { dir, root } = fixture(t);
+  quiet(() => useSiblings(root, ["history", "--no-install"]));
+  const store = join(root, "node_modules", ".pnpm");
+  for (const [name, at] of [
+    ["react", "react@19.2.7/node_modules/react"],
+    [
+      "@x/history-protocol",
+      "@x+history-protocol@0.1.1_react@19.2.7/node_modules/@x/history-protocol",
+    ],
+  ]) {
+    mkdirSync(join(store, at), { recursive: true });
+    writeFileSync(join(store, at, "package.json"), `${JSON.stringify({ name })}\n`);
+    mkdirSync(dirname(join(store, "node_modules", name)), { recursive: true });
+    symlinkSync(join(store, at), join(store, "node_modules", name));
+  }
+  // `@x/codec` is the host's `link:` row: in the root's node_modules, never in the hoist
+  const linked = join(dir, "codec-pin", "packages", "codec");
+  mkdirSync(linked, { recursive: true });
+  writeFileSync(join(linked, "package.json"), `${JSON.stringify({ name: "@x/codec" })}\n`);
+  assert.deepEqual(alignOverlay(root), ["@x/history-protocol → @x/codec"]);
+  mkdirSync(join(root, "node_modules", "@x"), { recursive: true });
+  symlinkSync(linked, join(root, "node_modules", "@x", "codec"));
+  assert.deepEqual(alignOverlay(root), []);
+  const checkout = join(dir, "history", "clients", "ts");
+  assert.equal(realpathSync(join(checkout, "node_modules", "@x", "codec")), realpathSync(linked));
+  // the hoist still comes first where it holds the name
+  assert.equal(
+    realpathSync(join(checkout, "node_modules", "react")),
+    realpathSync(join(store, "react@19.2.7/node_modules/react")),
+  );
+});
+
 // --- RD-3: the cargo and Swift overlays ---------------------------------------------------------------------------
 
 const REV = "d".repeat(40);
