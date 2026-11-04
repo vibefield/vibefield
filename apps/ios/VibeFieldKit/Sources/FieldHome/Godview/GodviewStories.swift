@@ -49,7 +49,8 @@ enum GodviewStories {
   /// A view's name as the row says it: its manifest label in sentence case (SWARM is "Swarm"); a label already in
   /// mixed case is kept as written.
   static func name(label: String) -> String {
-    label
+    guard label == label.uppercased(), let first = label.first else { return label }
+    return String(first) + label.dropFirst().lowercased()
   }
 }
 
@@ -68,21 +69,33 @@ struct GodviewStorySaying: Equatable, Sendable {
 
   /// A name held with no deadline: a still's (`-vf-godview-say=<id>`), which cannot tap.
   static func held(_ view: GodviewViewChoice) -> GodviewStorySaying {
-    GodviewStorySaying()
+    var saying = GodviewStorySaying()
+    saying.view = view
+    return saying
   }
 
   /// A circle tapped at `now`: its name, for 1.4 s from now. Another circle's name goes at once (never two); the
   /// same circle's 1.4 s starts again.
-  mutating func say(_ view: GodviewViewChoice, at now: Date) {}
+  mutating func say(_ view: GodviewViewChoice, at now: Date) {
+    self.view = view
+    until = now.addingTimeInterval(Self.stand)
+  }
 
   /// The name standing at `now`, or nil.
   func shown(at now: Date) -> GodviewViewChoice? {
-    nil
+    guard let view else { return nil }
+    guard let until else { return view }
+    return now < until ? view : nil
   }
 
   /// The deadline's task: the name goes once its 1.4 s is out; a held name stays.
-  mutating func expire(at now: Date) {}
+  mutating func expire(at now: Date) {
+    if let until, now >= until { drop() }
+  }
 
   /// The page left, or the scene went to the background: the name goes, held or not.
-  mutating func drop() {}
+  mutating func drop() {
+    view = nil
+    until = nil
+  }
 }

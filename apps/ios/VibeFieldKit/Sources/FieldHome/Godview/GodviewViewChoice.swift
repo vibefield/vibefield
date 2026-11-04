@@ -54,7 +54,7 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   /// PG-4t — the first `-vf-godview-say=<id>`: the view whose name a still holds, or nil when it is absent or names
   /// none. Matched with its `=`, as `launch` is.
   static func said(_ arguments: [String]) -> GodviewViewChoice? {
-    nil
+    value(of: sayArgument, in: arguments).flatMap(GodviewViewChoice.init(rawValue:))
   }
 
   /// PG-4t — whether `-vf-godview-still` is given: the whole argument, so a longer flag is never this one.
