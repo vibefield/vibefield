@@ -3650,6 +3650,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Finish setting up's sheet, and the field's own pass and the still's CSS glass, which read it (FG-D24). Settings
   keeps its ramp: these panes' words on its chrome are §2.4's own question (item 127), as is the name field's
   placeholder, which stands on the input's own white, a control's face.
+  *Corrected 2026-11-04 (item 136, the fixer; VF-PM 01:57Z):* the name field shows no placeholder: its input has
+  never carried one, so its `placeholder:text-black/30` (2.1:1 on white) styled nothing. The chapter's one
+  placeholder is the Tailscale key's ("tskey-auth-…", Connect), which wore the browser's default ink; both fields
+  now wear the glass's field and its placeholder ink (the paragraph that closes this entry).
   *Corrected 2026-10-31 (track FG, row 32 at run59b, the judge's first live run; the fix at VF-PM's leans, 20:46Z and
   20:56Z, James's to overturn; DESIGN.md first, built in the fix's slice):* the judge's model ran high. On the
   walk's own stills by day, two inks fell short on the 75% milk: t2 at 4.1–4.4:1 (Agents' "its own updater",
@@ -3666,6 +3670,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   error (an error pane under the judge is owed). The milk stays 75% (James's "b"). By day t2 now stands close to
   t1 (80% against 85%), so on the glass the quiet words are told from the reading ones by their size and place
   more than by their shade.
+  *Its actions, fields and headlines wear tokens (2026-11-04, item 136, the fixer; VF-PM's GO 01:57Z, James's to
+  overturn):* the glass keeps its own sizes (its actions 40 tall, its fields 40 tall at radius 12 and 15px, the key's
+  13px mono) and no colour of its own. The primary is §8's inverted solid, `--vf-foreground` with
+  `--vf-foreground-inverse` (by day `#1C1C1E` where it was black, by night `#F5F5F7` where it was white), the kit's
+  own primary. The quiet action stands on the foreground at 5%, 10% on hover (by night 10% and 15%), its words at t1.
+  A field is a control's face: `--vf-chrome-solid` by day and `--vf-field-surface` by night, edged in
+  `--vf-hairline-strong` (by night 15% where it was 10%), its words at t1 (by night 85% where they were 90%), its
+  focus the foreground at 25% with a ring of it at 5% (7% by night), and off at 0.45 while it saves, as the kit's
+  field. Its placeholder is a word that is read, so it wears t3, which the glass re-projects to its own 80% by day
+  (8.9:1 on the field's white) and t2 by night (8.2:1 over the night chrome, a bound lighter than the field's
+  face); `ui-system-boundaries.test.ts` computes both from `tokens.css` and holds every placeholder of the chapter to
+  4.5:1, since no walk can witness one. The headlines (Welcome's and each pane's) are `--vf-foreground`. Whether an
+  off field's words hold §2.4's 3:1 is row 32's measurement; no token moved.
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
