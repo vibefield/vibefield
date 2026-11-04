@@ -5557,7 +5557,10 @@ What VibeField tells a spark lands in its session as one marked line of facts, n
 without a closing stop, so that lines waiting together join with " · ". Every value a fact quotes stays on its line:
 a line break or a run of spaces in a question, a choice or a name is said as one space, a name is cut at 64
 characters and a question at 120, the last of them "…". An answer to a sleeping spark wakes it, and lands as its first
-input (CP3-D7 A); a spark that cannot be woken hears it when it next wakes.
+input (CP3-D7 A); a spark that cannot be woken hears it when it next wakes. An answer counts as heard only once the
+spark's session confirms it took the line (item 158, CO-Q9 B): a session that ends before then leaves the answer owed,
+and the spark's next session hears it; a line VibeField cannot confirm is never sent again (CP2-D2). A card's "Vela
+hears it when it wakes" keeps its meaning: the fact is not in the spark's queue yet (below, the needs-you card).
 - an answer: "VibeField: you answered Vela's question "Push the fix?": Yes" — Not now is said the same way;
 - a held send allowed: "VibeField: you allowed Vela's words to Claude Code; they wait for its next idle moment, and its
   later words to Claude Code are not held"; not allowed: "VibeField: you held back Vela's words to Claude Code (Not
@@ -5567,6 +5570,11 @@ input (CP3-D7 A); a spark that cannot be woken hears it when it next wakes.
 - a held spawn allowed: "VibeField: you allowed Vela one more agent: Claude Code started as ‹session›"; not allowed:
   "VibeField: you said Not now to one more agent for Vela: limit, 8 live agents is the most a spark may run"; one
   allowed that could not start: "VibeField: the agent you allowed Vela could not start: ‹reason›";
+- a spark's words its session gave no echo for (as built since CP-2): "VibeField: your words to Claude Code are
+  uncertain: no echo came; read the session to see";
+- a spark's words a restart broke into while they were being sent (item 158): "VibeField: VibeField restarted while
+  your words to Claude Code were being sent, and cannot tell whether they arrived (read the session to see); they will
+  not be sent again". It is said once, when that session is next heard, or once VibeField finds the session gone;
 - an act a restart finds begun and never recorded done (the restart broke into it, or the disk did not take the record
   of its end): "VibeField: VibeField restarted, and cannot tell whether it finished acting on your answer about Vela's
   words to Claude Code (read the session to see); Vela's later words to Claude Code are held again", and for a spawn,
