@@ -33,6 +33,9 @@ public enum FieldGlyphName: String, CaseIterable, Sendable {
   case package
   case outward
   case document
+  /// WI-3 — Settings › This phone › Lock: the desk's shut padlock, `tape` (DESIGN.md §13; ICE's `lock` is drawn by
+  /// it too).
+  case lock = "tape"
 
   var assetName: String { "glyph-\(rawValue)" }
 }

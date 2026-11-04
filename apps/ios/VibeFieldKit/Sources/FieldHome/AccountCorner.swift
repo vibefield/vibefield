@@ -9,8 +9,8 @@ import SwiftUI
 /// the island's curve into a 276 pt panel of solid chrome, corners concentric
 /// with the circle. The face never moves, so the second tap lands on the same
 /// face and folds it away. It reads bottom-up, nearest first: you · your
-/// desktops · Settings… · Sign in (only while the tailnet asks for it) · Sign
-/// out farthest from the thumb. There is no connect or disconnect: the phone
+/// desktops · Settings… · Lock now (only while the lock is on, WI-3) · Sign in
+/// (only while the tailnet asks for it) · Sign out farthest from the thumb. There is no connect or disconnect: the phone
 /// stays on the mesh by itself while it is signed in (2026-10-18).
 ///
 /// Every word is `FieldHomeModel.accountFace`'s; this draws what it is handed.
@@ -36,6 +36,8 @@ struct AccountCornerView: View {
   let onSettings: () -> Void
   let onSignOut: () -> Void
   let onSignIn: () -> Void
+  /// WI-3 — Lock now: the curtain at once, then Face ID. Nil while the lock is off, and the row is not drawn.
+  let onLockNow: (() -> Void)?
 
   /// The circle's diameter — the bar's row, so the corner and the search
   /// circle are one size — and the menu's corner radius twice over.
@@ -228,6 +230,9 @@ struct AccountCornerView: View {
       }
       if face.offersSignIn {
         AccountMenuRow(glyph: "key", label: face.signInWord, action: onSignIn)
+      }
+      if let onLockNow {
+        AccountMenuRow(glyph: "lock", label: "Lock now", action: onLockNow)
       }
       AccountMenuRow(glyph: "gearshape", label: "Settings…", action: onSettings)
       separator

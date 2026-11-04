@@ -1,3 +1,4 @@
+import FieldAgents
 import Foundation
 
 // PG-4s — THE NUMBERS THE VIEWS PRINT, transcribed from puppeteer-view-sdk 0.3.2 at the pin `95a70aa7`,
@@ -20,10 +21,10 @@ enum GodviewFormat {
     let seconds = jsRoundClamped(ms / second)
     let minutes = (seconds / 60).rounded(.down)
     let hours = (minutes / 60).rounded(.down)
-    if minutes < 1 { return "\(whole(seconds))s" }
-    if hours < 1 { return "\(whole(minutes))m" }
+    if minutes < 1 { return "\(JSNumber.whole(seconds))s" }
+    if hours < 1 { return "\(JSNumber.whole(minutes))m" }
     let rest = minutes.truncatingRemainder(dividingBy: 60)
-    return truthy(rest) ? "\(whole(hours))h \(pad2(rest))m" : "\(whole(hours))h"
+    return truthy(rest) ? "\(JSNumber.whole(hours))h \(pad2(rest))m" : "\(JSNumber.whole(hours))h"
   }
 
   /// `formatWords`: a length as a screen reader says it — `under a minute`, `1 hour 4 minutes`.
@@ -33,8 +34,8 @@ enum GodviewFormat {
     let hours = (minutes / 60).rounded(.down)
     let rest = minutes.truncatingRemainder(dividingBy: 60)
     let parts = [
-      truthy(hours) ? "\(whole(hours)) hour\(hours == 1 ? "" : "s")" : "",
-      truthy(rest) ? "\(whole(rest)) minute\(rest == 1 ? "" : "s")" : "",
+      truthy(hours) ? "\(JSNumber.whole(hours)) hour\(hours == 1 ? "" : "s")" : "",
+      truthy(rest) ? "\(JSNumber.whole(rest)) minute\(rest == 1 ? "" : "s")" : "",
     ]
     return parts.filter { !$0.isEmpty }.joined(separator: " ")
   }
@@ -95,30 +96,7 @@ enum GodviewFormat {
 
   /// `pad2` (format.ts :15): `String(value).padStart(2, '0')`.
   private static func pad2(_ value: Double) -> String {
-    let text = whole(value)
+    let text = JSNumber.whole(value)
     return text.count < 2 ? String(repeating: "0", count: 2 - text.count) + text : text
-  }
-
-  /// `String(value)` for a whole number, as JavaScript prints it (Number::toString): its shortest round-trip digits,
-  /// padded with zeros below 1e21 (`2777777777777777700`), an exponent from 1e21 (`1e+25`); `NaN`, `Infinity`.
-  static func whole(_ value: Double) -> String {
-    if value.isNaN { return "NaN" }
-    if value.isInfinite { return value < 0 ? "-Infinity" : "Infinity" }
-    if value == 0 { return "0" }
-    let sign = value < 0 ? "-" : ""
-    let magnitude = abs(value)
-    if magnitude < 9_007_199_254_740_992 { return sign + String(Int64(magnitude)) }
-    // Swift's description is the same shortest round-trip digits, in its own notation
-    let text = magnitude.description
-    if magnitude >= 1e21 { return sign + text }
-    guard let e = text.firstIndex(where: { $0 == "e" || $0 == "E" }) else {
-      return sign + (text.hasSuffix(".0") ? String(text.dropLast(2)) : text)
-    }
-    let mantissa = text[..<e]
-    let exponent = Int(text[text.index(after: e)...].filter { $0 != "+" }) ?? 0
-    let digits = mantissa.filter { $0 != "." }
-    let integral = mantissa.firstIndex(of: ".").map { mantissa.distance(from: mantissa.startIndex, to: $0) }
-      ?? mantissa.count
-    return sign + digits + String(repeating: "0", count: max(0, exponent + integral - digits.count))
   }
 }

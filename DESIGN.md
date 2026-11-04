@@ -284,6 +284,7 @@ the general chrome palette.
 | panel border | `#E0E0E0` | `#333333` |
 | text main / muted / faint | `#111111 / #888888 / #B8B8B8` | `#FFFFFF / #777777 / #555555` |
 | idle body / text | `#E5E5E5 / #666666` | `#2A2A2A / #AAAAAA` |
+| control hover border / ground (added 2026-11-04, PG-4t: tokens.css has carried the pair since at least 2026-08-08 as `--vf-godview-{light,dark}-control-hover-*`; this table never had it) | `#777777 / #F2F2F2` | `#A8A8A8 / #242424` |
 | working body / text | `#222222 / #FFFFFF` | `#EEEEEE / #111111` |
 | terminal ground / divider | `#ECE8DC / #D2CEC3` | `#282C34 / #414650` |
 | deck sheet shadow (§8, the deck's edge) | `0 -20px 40px rgba(0,0,0,0.08)` | `0 -20px 40px rgba(0,0,0,0.4)` |
@@ -2494,6 +2495,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   button beside it does, also where Settings → Terminal → Look holds Godview's own mode (§1.1) —
   and stands over the terminals' sheet and over Godview's scanlines and vignette: the frame's glass
   carries neither.
+  The phone carries this head to its Field page: "The phone's Stories row", the last point below.
   - **A circle** is the line's glass (§5) with its hairline, the island shadow and the line's
     lift. It holds its view's **mark** from the view's manifest (MV-D6): filled, in a 22 box
     centred, in secondary ink; primary on the current view and under the pointer or the focus.
@@ -2599,6 +2601,64 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **System control**, now an act in the palette's "On this view" group while the view is
     Godview, with no key and no glyph — its panel is §1.1's temporary one, unchanged, and open to
     whoever could open it before.
+  - **The phone's Stories row** (PG-4t, 2026-11-04; James ruled J-S1 A, J-S2 (ii), J-S3 drop and J-S4 accept on
+    the PG-4s page, 01:12–01:14Z; VF-PM's rulings 01:18Z–01:41Z — *corrected 2026-11-04: this said 01:46Z, the
+    label on the relay, which ran ahead of the clock; it was sent at 01:40:59Z*): this head, carried to the phone's
+    Field page. It is a frame piece: it stands over the stage, outside the swarm, and never moves when the view
+    changes; only its ring does.
+    - **The row:** one glass circle per view the phone has — the bar's glass (`liquidGlassCircle`: the system's
+      Liquid Glass on iOS 26, the chrome family's circle glass below it) — **44** across (the touch floor), **10**
+      apart, the row centred on the screen. Its top is `min(safe top, 48) + 8` from the screen's top: **56** on
+      every island phone, and 8 under the safe area's top line where that line stands higher (a notch, a status
+      bar, a phone on its side). *Corrected 2026-11-04 (PG-4t's stills): this said "**8** under the Dynamic
+      Island's foot (**48**) on a phone with an island". 48 is frame A's island (y 11, 37 tall). The iPhone 17
+      Pro's own screenshots draw its island at 14.0–50.7 pt, so there the row stands 5.3 under it. The rule is as
+      built and witnessed; whether the row stands 8 under each phone's own island is James's, open.* The circles
+      stand apart; they never melt.
+    - **A circle** holds its view's mark from its manifest (MV-D6), filled, in a **22** box centred, in the bar's
+      ink (`ChromePalette.ink`: black at 92% by day, white by night) on every circle — the desktop rests its marks
+      in secondary ink; the phone's are all the bar's — drawn as one shape, so the ink never doubles where a mark's
+      strokes meet. A view whose manifest draws no mark shows its label's initial, in the label's 12/500. The phone
+      carries the manifests' marks transcribed once, held to them by a golden.
+    - **The current view's ring is the circle's own edge** (J-S2 (ii)): **2** in the bar's ink inside its 44, in
+      place of the edge. Nothing grows, shifts or clips. It changes in 120ms `ease`.
+    - **Its name is said under it when it is tapped** — touch has no hover: this head's label without its keys —
+      solid chrome (`--vf-chrome-solid`), 24 tall, 8 under the circle and centred on it, corners 12, padded 0 10,
+      ringed by the strong hairline, with the island shadow (§5; on the phone `ChromeShadow.island`: black at 8% by
+      day and 40% by night, 8 down, SwiftUI radius 15 for CSS's 30 blur); the view's manifest label in sentence
+      case, 12/500 in the bar's ink. It appears in 140ms `ease`, 3 down into place, stands **1.4s** from the tap
+      (the views track's note), and leaves in 140ms `ease`. A tap on another circle moves it there and starts its
+      1.4s again; a tap on the current circle says its name and changes nothing else.
+    - **A tap picks the view.** The stage changes in place, a 180ms `ease` fade (the view switch, §6), and the
+      frame never moves (§1, the one frame). One view is mounted at a time (§8 "The monitor view owns its
+      drawing"): the swarm leaves the stage under another view and is laid again when it comes back. The pick is
+      kept on the phone across launches and a sign-out; a stored view the phone no longer has falls back to the
+      swarm. No haptic: the bar's own tabs are silent.
+    - **The views that exist, and no placeholder:** the row draws the views the phone has, in the registry's order
+      (swarm · list · rain · timeline · spend), centred, and never a greyed or an "Add a view" circle (N13 (a)).
+      While the phone has only the swarm it is one circle, ringed (VF-PM, 2026-11-04): the frame and its reserve
+      stand from the first build, and the row grows as views land.
+    - **The stage runs under the row**, to the screen's top, as the stage runs under this head. The row's reserve
+      is its foot plus 8: `min(safe top, 48) + 60` from the screen's top, **108** on an island phone. It is the
+      stage's top inset, handed to every view as data, never as host padding: a view of words and controls (the
+      list, the timeline, spend) keeps them below it; a picture (the rain) paints its whole stage from the screen's
+      top and keeps its own words below it; the swarm steers by it as an obstacle across the stage's top, the bar
+      band's twin. A view's stage ends at the bar's band; the swarm's alone runs under the bar (its manifest's
+      `stageAllocation: 'full'`), steering by the band.
+    - **The stage dissolves under the row**, whatever the view: clear at the row's axis (its top + 22, **78** on an
+      island phone) to whole at the reserve, a 30 ramp, as the desktop's dissolves from 28 to 56. The stage is
+      masked, never the row, the bar, or the swarm's scanlines and vignette; what shows through is the phone's
+      ground, §2.7's panel.
+    - **The scanlines and the vignette stand over the swarm only** (J-S3, drop). The desktop paints them on the
+      stage over every view (`GodviewStage.tsx:178-179`); the phone differs on purpose. The row stands above them
+      and wears neither: the frame's glass carries neither.
+    - **Every view lights the open card's row** (J-S4, James 2026-11-04; added 2026-11-04): on the phone each view
+      lights the row of the card standing open — the list's row, the timeline's lane, spend's line, the rain's
+      stream — in text main (§2.7), and touch selects: no hover, no keys.
+    - **Reduced motion:** the stage fades in 90ms; the ring and the label change at once.
+    - **VoiceOver** reads the row as a group of buttons, "Views", each its view's name ("Swarm view"), the current
+      one selected; the label is not read again. The circles keep their size at every text size, as the bar's do,
+      and show the name in the large content viewer.
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
   it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
@@ -3666,6 +3726,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Finish setting up's sheet, and the field's own pass and the still's CSS glass, which read it (FG-D24). Settings
   keeps its ramp: these panes' words on its chrome are §2.4's own question (item 127), as is the name field's
   placeholder, which stands on the input's own white, a control's face.
+  *Corrected 2026-11-04 (item 136, the fixer; VF-PM 01:57Z):* the name field shows no placeholder: its input has
+  never carried one, so its `placeholder:text-black/30` (2.1:1 on white) styled nothing. The chapter's one
+  placeholder is the Tailscale key's ("tskey-auth-…", Connect), which wore the browser's default ink; both fields
+  now wear the glass's field and its placeholder ink (the paragraph that closes this entry).
   *Corrected 2026-10-31 (track FG, row 32 at run59b, the judge's first live run; the fix at VF-PM's leans, 20:46Z and
   20:56Z, James's to overturn; DESIGN.md first, built in the fix's slice):* the judge's model ran high. On the
   walk's own stills by day, two inks fell short on the 75% milk: t2 at 4.1–4.4:1 (Agents' "its own updater",
@@ -3682,6 +3746,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   error (an error pane under the judge is owed). The milk stays 75% (James's "b"). By day t2 now stands close to
   t1 (80% against 85%), so on the glass the quiet words are told from the reading ones by their size and place
   more than by their shade.
+  *Its actions, fields and headlines wear tokens (2026-11-04, item 136, the fixer; VF-PM's GO 01:57Z, James's to
+  overturn):* the glass keeps its own sizes (its actions 40 tall, its fields 40 tall at radius 12 and 15px, the key's
+  13px mono) and no colour of its own. The primary is §8's inverted solid, `--vf-foreground` with
+  `--vf-foreground-inverse` (by day `#1C1C1E` where it was black, by night `#F5F5F7` where it was white), the kit's
+  own primary. The quiet action stands on the foreground at 5%, 10% on hover (by night 10% and 15%), its words at t1.
+  A field is a control's face: `--vf-chrome-solid` by day and `--vf-field-surface` by night, edged in
+  `--vf-hairline-strong` (by night 15% where it was 10%), its words at t1 (by night 85% where they were 90%), its
+  focus the foreground at 25% with a ring of it at 5% (7% by night), and off at 0.45 while it saves, as the kit's
+  field. Its placeholder is a word that is read, so it wears t3, which the glass re-projects to its own 80% by day
+  (8.9:1 on the field's white) and t2 by night (8.2:1 over the night chrome, a bound lighter than the field's
+  face); `ui-system-boundaries.test.ts` computes both from `tokens.css` and holds every placeholder of the chapter to
+  4.5:1, since no walk can witness one. The headlines (Welcome's and each pane's) are `--vf-foreground`. Whether an
+  off field's words hold §2.4's 3:1 is row 32's measurement; no token moved.
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
@@ -3785,6 +3862,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   width + 80 by 440, centred 83 pt under the centre; the acts' glass rounds its top corners 32 and its bottom ones 47
   (continuous). The found beat ends the first way in only: §9 sets it between the steps and the lock's offer, and
   Tailscale asking again is neither, so after **Sign in again** the splash leaves for the tabs with no beat.
+  *As built 2026-11-04 (WI-3):* the capsule shows three bars again, the third named for the method (**Face ID**,
+  **Touch ID** or **Passcode**), whenever the way in will offer the lock: the lock off and a passcode set. The lock
+  stands on a window of its own over everything the phone shows, the card and every other sheet among them (they
+  stand over the gate, so the gate's hold could not cover them). It holds the splash's own surface, which draws the
+  launch picture until its field is up, so the app switcher shows the launch picture and a return reads as the
+  launch. Face ID asks over it, and a miss puts the way in's three places on it: the title on the words line,
+  **Unlock with Face ID** in the glass's first slot and "Your iPhone passcode works too." as its note. It leaves by
+  a 240ms plain `ease` fade (120ms under Reduce Motion). Its honest cost: at a launch with the lock on, the gate's
+  splash runs under the curtain, so two of the splash's surfaces draw until Face ID passes. Locking folds the
+  card's keyboard by the card's own fold, as another device taking the seat does. The corner's **Lock now** stands
+  just above **Settings…** while the lock is on, wearing SF Symbols' `lock`, as the corner's other rows wear theirs.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -4494,6 +4582,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   in the sans reads the token, never a copied stack). Both host themes define the colours; the
   shared token sheet defines the easings and the sans. A new shared name changes the contract
   first; a view never copies a curve or reads an undeclared host token.
+  On the phone the skin's nine colours are §2.7's, resolved for the phone's look and handed to every Godview view
+  by its stage under the SDK's own names (`GodviewSkin`: `--panel-bg` is `panelBg`); its easings are §6's curves as
+  the kit names them and its sans the system's. Its stage insets are the Stories row's reserve and the bar's band
+  (§8 "The phone's Stories row"; PG-4t, 2026-11-04).
   Stage insets replace host padding rules, including the timeline's former extra 11px (MV-6).
   **The head reads the manifest:** each view supplies its filled mark and its focus keys; the host
   has no view mark table. The declared keys are said in the circle's label, after the view's name
@@ -5329,6 +5421,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   its note) and the empty list's **None yet** with its foot. Settings is never open signed out, since a Sign out
   leaves it first and the way in stands alone (WI-L1), and it lists every desktop WI-L2 counts as known, so neither
   was reachable. Both said "Mac"; the face's dealt note says "the way your computer deals it" (§9: "computer").
+  *As built 2026-11-04 (WI-3):* **This phone** › **Lock** wears the desk's shut padlock (§13: `tape`, the phone's
+  `lock`) and reads **On** or **Off**. Its page holds §9's switch and line, **Require Face ID** with its four times
+  and its foot, and the off and no-passcode feet. A change asks first, and a miss or a Cancel leaves it as it was.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -5620,6 +5715,17 @@ passcode in iOS Settings to lock VibeField." Nothing is answered from outside th
 approvals come (planned), a notification's act opens VibeField behind it. A lost phone is closed from elsewhere
 (WI-L7): removed from your Tailscale network, it reaches nothing, and its keys never leave it in a backup
 (truffle keeps their folder out of iCloud and computer backups).
+*As built 2026-11-04 (WI-3; the words added here are drafts pending James, carried by VF-PM beside L5's two):*
+every word names the method the phone has, by substitution. With Touch ID, "Touch ID" stands wherever "Face ID"
+does. With only a passcode: **Lock VibeField with your passcode.** · "This phone can type into your agents’
+terminals. Your passcode keeps that to you." · **Lock with passcode** · **Not now**; a miss says **VibeField is
+locked.** · **Unlock with passcode**, and "Your iPhone passcode works too." goes, since the passcode is the method;
+Settings says "Your iPhone passcode opens VibeField.", **Require passcode**, "Changing these asks for your
+passcode first." and "VibeField opens without your passcode. …". Where iOS shows the app's own reason with the ask
+(Touch ID and the passcode; Face ID shows the one above), it says "Only you can open VibeField on this iPhone."
+With no passcode set the phone cannot lock: the way in offers nothing and has two steps, and a lock that was on
+stands down (VibeField opens, the switch is off and the no-passcode foot shows), since a lock that cannot ask must
+not hold the door.
 
 **The freeway's refusals** (track FW, F1b's kit half; FW-D5; added 2026-11-01). The phone asks its home desktop to
 approve its connection to each desktop, and when a desktop says no, the phone says it in these words. ‹desktop› is
@@ -6116,6 +6222,10 @@ the desk's chrome draws it from this set by this table, never by a guess:
 | `agents` · `ellipsis` · `check` | `agents` · `ellipsis` · `check` |
 | `{ path }` · `{ path, fill: true }` | the bar's own path renderer: the path in the 24-unit box, stroked 2 in the bar's ink, or filled |
 | any other name | **`missing`** — said once, never another glyph |
+
+**The phone's lock** (WI-3, 2026-11-04): Settings › This phone › **Lock** wears `tape`, the shut padlock, named
+`lock` in the phone's set (`FieldGlyphName.lock`), as ICE's `lock` is drawn by it above; `tape` joins the iOS
+picks (`tooling/glyphs/picks.json`).
 
 **`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
 hatches — for a name the set does not hold; an act that declares no glyph at all shows its label

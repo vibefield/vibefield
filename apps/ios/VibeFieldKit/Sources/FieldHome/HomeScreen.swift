@@ -3,6 +3,7 @@ import FieldDesign
 import FieldFreeway
 import FieldHistory
 import FieldInput
+import FieldLock
 import FieldMesh
 import FieldProduct
 import FieldRoutedTerminal
@@ -56,10 +57,22 @@ public struct HomeScreen: View {
   /// is not the same as a mesh that answered with no agents.
   @State private var link: FieldLink?
   /// PG-4s — the Godview view the Field page stands on, and the clock a still is taken at (nil: the live clock).
-  /// Outside every `#if`: only the DEBUG launch block writes them (`-vf-godview-view=`, `-vf-godview-now=`), so
-  /// Release draws the swarm on the live clock until the selector lands (its lander writes `godviewView`).
-  @State private var godviewView: GodviewViewChoice = .swarm
+  /// PG-4t — the person's pick, kept on this phone across launches and a sign-out (`SignOutSweep.kept`); a stored id
+  /// the phone has no view for reads as the swarm. A DEBUG launch's `-vf-godview-view=` stands for its run alone and
+  /// never writes the store; a tap clears it. *(Corrected 2026-11-04, PG-4t: this said "only the DEBUG launch block
+  /// writes them … until the selector lands (its lander writes `godviewView`)". The selector is the Stories row: a
+  /// tap writes the pick, and `godviewView` is the override, else the pick.)*
+  @AppStorage(GodviewViewChoice.storageKey) private var godviewStored: GodviewViewChoice = .swarm
+  @State private var godviewLaunch: GodviewViewChoice?
+  private var godviewView: GodviewViewChoice { godviewLaunch ?? godviewStored }
   @State private var godviewNow: Date?
+  /// PG-4t — the name the Stories row says (1.4 s from a tap; held, for a still, by `-vf-godview-say=`).
+  @State private var godviewSaying = GodviewStorySaying()
+  /// PG-4t — a still (`-vf-godview-still`): written only by the same DEBUG launch latch, so Release never draws one.
+  @State private var godviewStill = false
+  /// PG-4t — the dissolve under the Stories row; only the DEBUG latch turns it off (`-vf-godview-dissolve=off`), for
+  /// a frame meter's run, so Release always dissolves.
+  @State private var godviewDissolves = true
   /// The launch flags are read once (the design check's N10): the DEBUG block runs again on every return to the
   /// view, and a second read would undo the selector's pick in a DEBUG run launched with the flag.
   @State private var godviewLaunchRead = false
@@ -125,6 +138,9 @@ public struct HomeScreen: View {
   /// rests where iOS 26 rests its own (`AppBar.bottomGap`), and rides the
   /// keyboard only while search is typing.
   @State private var homeInset: CGFloat = 34
+  /// PG-4t — the safe area's top line, read beside `homeInset`: where the Stories row stands and how deep the stage's
+  /// reserve is (`GodviewStories`). 62 is the iPhone 17's, the bar's measured phone, until the first read.
+  @State private var safeTop: CGFloat = 62
   /// The bottom inset WITH the keyboard. Above the home inset only while a
   /// software keyboard stands — a hardware keyboard (the simulator with the
   /// Mac's attached, an iPad's) raises none, and the row must stay at rest.
@@ -229,8 +245,13 @@ public struct HomeScreen: View {
   /// WI-1 (the review's M1) — whether the splash stands whole over the home: the tabs stay under a sign-out's
   /// splash until it does.
   @Environment(\.splashCovers) private var splashCovers
+  /// WI-3 — the lock (FieldLock, held by `HomeRoot`, which stands its curtain): the way in offers it last, the
+  /// corner's Lock now and Settings › Lock change it, and locking folds the card's keyboard.
+  private let lock: FieldLock
 
-  public init() {}
+  public init(lock: FieldLock) {
+    self.lock = lock
+  }
 
   /// One stage, two sources, projected by the pure functions in FieldAgents.
   ///
@@ -300,16 +321,31 @@ public struct HomeScreen: View {
       // rendering at 120 Hz is a battery spent on nobody.
       let active = scenePhase == .active && selectedTab == .field
       // PG-4s — the Godview view the page stands on: the swarm, until PG-5…8
-      // add theirs. It stands where SwarmField stood, so the overlays below
-      // stay above every view.
+      // add theirs. It stands where SwarmField stood. (Corrected 2026-11-04,
+      // PG-4t: this said "so the overlays below stay above every view". J-S3
+      // (drop) puts them over the swarm only: the gate below is the one place.)
+      // PG-4t — the stage runs under the Stories row and dissolves under it
+      // (GodviewStage's mask), whatever the view.
       GodviewStage(choice: godviewView, input: godviewInput(active: active)) {
         swarmField(active: active)
       }
+      // A pick changes the stage in place: §6's view switch, a 180 ms `ease` fade (90 under reduced motion); a
+      // still changes nothing.
+      .animation(
+        godviewStill
+          ? nil
+          : FieldMotion.plainEase(reduceMotion ? GodviewStories.stageFadeReduced : GodviewStories.stageFade),
+        value: godviewView)
 
-      ScanlinesOverlay()
-        .ignoresSafeArea()
-      VignetteOverlay()
-        .ignoresSafeArea()
+      if godviewView.wearsAtmosphere {
+        ScanlinesOverlay()
+          .ignoresSafeArea()
+        VignetteOverlay()
+          .ignoresSafeArea()
+      }
+
+      // PG-4t — the Stories row: last, so it stands above the overlays and wears neither, outside the swarm.
+      storiesRow
     }
     // The lab covers the stage (IOS-6c); presented here rather than on the
     // body's chain, which is already at the type-checker's limit.
@@ -343,6 +379,41 @@ public struct HomeScreen: View {
     } message: {
       Text(SettingsWords.signOutMessage)
     }
+  }
+
+  /// PG-4t — the Stories row (DESIGN.md §8 "The phone's Stories row"), 8 under the island on the full-bleed
+  /// stage, its own property so the stage's builder stays small. The space between its circles has no fill, so a
+  /// touch there reaches the swarm. Its name goes at its deadline, and at once when the page leaves or the scene
+  /// does.
+  private var storiesRow: some View {
+    GodviewStoriesRow(
+      views: GodviewViewChoice.shown, current: godviewView, saying: godviewSaying, isStill: godviewStill,
+      onPick: pickView
+    )
+    .padding(.top, GodviewStories.top(safeTop: safeTop))
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .task(id: godviewSaying.until) {
+      guard let until = godviewSaying.until else { return }
+      let wait = until.timeIntervalSinceNow
+      if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+      guard !Task.isCancelled else { return }
+      godviewSaying.expire(at: Date())
+    }
+    .onChange(of: selectedTab) { _, tab in
+      if tab != .field { godviewSaying.drop() }
+    }
+    .onChange(of: scenePhase) { _, phase in
+      if phase != .active { godviewSaying.drop() }
+    }
+  }
+
+  /// PG-4t — a circle tapped: the stage stands on its view, kept on this phone (a DEBUG launch's override cleared),
+  /// and its name is said for 1.4 s. A tap on the current circle says its name and changes nothing else. No haptic:
+  /// the bar's own tabs are silent.
+  private func pickView(_ view: GodviewViewChoice) {
+    godviewLaunch = nil
+    if godviewStored != view { godviewStored = view }
+    godviewSaying.say(view, at: Date())
   }
 
   /// The swarm's arm of the stage, its own function so the stage's builder stays inside what the type-checker
@@ -383,6 +454,10 @@ public struct HomeScreen: View {
       colour: { GodviewStageInput.colour(of: $0, projects: projects, tint: tint) },
       now: { frozen ?? Date() },
       bandHeight: AppBar.band(homeInset: homeInset),
+      topInset: GodviewStories.reserve(safeTop: safeTop),
+      skin: GodviewSkin(scheme: colorScheme),
+      isStill: godviewStill,
+      dissolves: godviewDissolves,
       onOpen: { row in
         if let bubble = bubbles.first(where: { $0.id == row.visualId }) { openCard(on: bubble) }
       })
@@ -401,6 +476,16 @@ public struct HomeScreen: View {
       .swarmObstacle()
       .allowsHitTesting(false)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    // PG-4t — the Stories row's reserve, the bar band's twin across the
+    // stage's top: the swarm steers by it and reads no inset (DESIGN.md §8
+    // "The phone's Stories row"). The stage runs to the screen's top, so the
+    // band runs from 0 to the reserve.
+    Color.clear
+      .frame(maxWidth: .infinity)
+      .frame(height: GodviewStories.reserve(safeTop: safeTop))
+      .swarmObstacle()
+      .allowsHitTesting(false)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     // RETIRED 2026-09-23 (IOS-8g): the TERMINAL chip in the top-right. What it
     // opened is the session card's `···` now; the field's corners are the
     // account's and the tab bar's.
@@ -542,8 +627,14 @@ public struct HomeScreen: View {
       wayInEnding = ending
       Task {
         try? await Task.sleep(for: FieldHomeModel.foundBeatHold)
-        if wayInEnding == ending { wayInEnding = nil }
+        // WI-3 — then the lock, offered last while the phone can lock and it is off (WI-D3 A); then the hand-over
+        if wayInEnding == ending { wayInEnding = FieldHomeModel.afterFoundBeat(offer: lockOffered) }
       }
+    }
+    // WI-3 — locking folds the card's keyboard by its own fold, as another device taking the seat does: the
+    // keyboard stands in a window of the system's, over the curtain
+    .onChange(of: lock.state) { _, state in
+      if state != .open { inputCard.dismissKeyboard() }
     }
     // IOS-8c — every listing teaches the account's memory: which desktops it
     // has, and — from the first door that answers with a user id — its face.
@@ -590,7 +681,7 @@ public struct HomeScreen: View {
   private var wayIn: some View {
     if let step = wayInStep {
       WayInView(
-        screen: FieldHomeModel.wayInScreen(step),
+        screen: FieldHomeModel.wayInScreen(step, lock: lockOffered),
         face: wayInFace,
         faceSeed: accountSeed,
         onAct: wayInAct)
@@ -605,6 +696,12 @@ public struct HomeScreen: View {
           onClose: { macCodeReaderOpen = false })
       }
     }
+  }
+
+  /// WI-3 — the method the way in will offer the lock in, while it will (the lock off and a passcode set): the
+  /// steps' third bar is named for it, and the found beat goes on to it.
+  private var lockOffered: LockMethod? {
+    lock.canOffer ? lock.method : nil
   }
 
   /// The face that takes the mark's place: the account's, once a desktop has said who you are.
@@ -646,6 +743,16 @@ public struct HomeScreen: View {
       keepAccount()
     case .openAdminConsole(let url):
       openURL(url)
+    case .lockOn:
+      // Lock with Face ID: iOS asks (its first time is its own question), then the hand-over; a miss stays here
+      Task {
+        if await lock.setOn(true) { wayInEnding = nil }
+      }
+    case .notNow:
+      wayInEnding = nil
+    case .unlock:
+      // the curtain's own act; the way in never shows it
+      Task { await lock.unlock() }
     }
   }
 
@@ -665,8 +772,12 @@ public struct HomeScreen: View {
     .background {
       GeometryReader { geo in
         Color.clear
-          .onAppear { homeInset = geo.safeAreaInsets.bottom }
+          .onAppear {
+            homeInset = geo.safeAreaInsets.bottom
+            safeTop = geo.safeAreaInsets.top
+          }
           .onChange(of: geo.safeAreaInsets.bottom) { _, inset in homeInset = inset }
+          .onChange(of: geo.safeAreaInsets.top) { _, inset in safeTop = inset }
       }
       .ignoresSafeArea(.keyboard)
     }
@@ -685,10 +796,12 @@ public struct HomeScreen: View {
     .onChange(of: history.path) { history.barMinimized = false }
   }
 
-  /// The field, under the bar's glass to the screen's edge.
+  /// The field, under the bar's glass to the screen's edge. PG-4t — and under
+  /// the Stories row to the screen's top: the stage is full-bleed, so its
+  /// space is the screen's and its top inset is the row's reserve.
   private var fieldTab: some View {
     stage
-      .ignoresSafeArea(.container, edges: .bottom)
+      .ignoresSafeArea(.container, edges: [.top, .bottom])
   }
 
   private var historyTab: some View {
@@ -821,7 +934,9 @@ public struct HomeScreen: View {
   private var barTyping: Bool { selectedTab == .search && keyboardInset > homeInset + 40 }
 
   private var accountCorner: some View {
-    AccountCornerView(
+    // WI-3 — Lock now, only while the lock is on
+    let onLockNow: (() -> Void)? = lock.isOn ? { lockNow() } : nil
+    return AccountCornerView(
       face: accountFace,
       isOpen: accountMenuOpen,
       seed: accountSeed,
@@ -843,8 +958,15 @@ public struct HomeScreen: View {
       onSignIn: {
         setAccountMenu(open: false)
         performSignIn()
-      }
+      },
+      onLockNow: onLockNow
     )
+  }
+
+  /// WI-3 — the corner's Lock now: the menu folds, the curtain stands at once, and Face ID asks over it.
+  private func lockNow() {
+    setAccountMenu(open: false)
+    lock.lockNow()
   }
 
   private var searchCircle: some View {
@@ -1342,10 +1464,17 @@ public struct HomeScreen: View {
         }
         // PG-4s — a still's view and clock (`-vf-godview-view=<id>`, `-vf-godview-now=<epoch ms>`). Neither is a
         // fixture argument: alone they keep the live path, and they compose with `-vf-demo-field-slice`. Read once.
+        // PG-4t — and the still itself (`-vf-godview-still`): every view draws one frame. The view flag is the
+        // run's override and never writes the person's pick; `-vf-godview-say=<id>` holds that view's name, with no
+        // deadline (a still cannot tap); `-vf-godview-dissolve=off` draws the stage unmasked, for a frame meter.
         if !godviewLaunchRead {
           godviewLaunchRead = true
-          if let view = GodviewViewChoice.launch(ProcessInfo.processInfo.arguments) { godviewView = view }
-          godviewNow = GodviewViewChoice.frozenNow(ProcessInfo.processInfo.arguments)
+          let arguments = ProcessInfo.processInfo.arguments
+          if let view = GodviewViewChoice.launch(arguments) { godviewLaunch = view }
+          godviewNow = GodviewViewChoice.frozenNow(arguments)
+          godviewStill = GodviewViewChoice.still(arguments)
+          godviewDissolves = GodviewViewChoice.dissolves(arguments)
+          if let said = GodviewViewChoice.said(arguments) { godviewSaying = .held(said) }
         }
         // `!demoRemoteActive` for the reason the line above carries: a second
         // appearance would otherwise replace a running fixture field with a
@@ -1373,7 +1502,7 @@ public struct HomeScreen: View {
         // --- end IOS-5e ---------------------------------------------------
         // IOS-10a — `-vf-open-settings[=<page>]`: Settings, at its root or
         // at one page (`account`, `desktop:<id>`, `appearance`, `terminal`,
-        // `about`, `acknowledgements`), for a photograph run.
+        // `about`, `acknowledgements`, `lock`), for a photograph run.
         if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-open-settings") }) {
           settingsOpening = FieldHomeModel.settingsOpening(argument: argument)
           settingsSheetOpen = true
@@ -2234,6 +2363,7 @@ public struct HomeScreen: View {
       account: settingsAccount,
       terminal: terminalAppearance,
       opening: opening,
+      lock: lock,
       actions: SettingsActions(
         // Both acts leave Settings first: the sign-in is the system's own
         // sheet, and a signed-out phone is the way in (WI-1).

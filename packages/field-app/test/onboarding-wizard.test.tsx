@@ -1657,7 +1657,10 @@ describe("Setup Assistant", () => {
     expect(factCls).toContain("text-[var(--vf-text-tertiary)]");
     expect(eyebrowCls).toContain("text-[var(--vf-text-tertiary)]");
     expect(voiceCls).toContain("text-[var(--vf-text-secondary)]");
-    expect(quietCls).toContain("text-[var(--vf-text-primary)]");
+    // (item 136, 2026-11-04: the quiet button's colours are its composition's, `.vf-wizard-quiet` in wizard-ui.css,
+    // so its t1 is read there)
+    expect(quietCls).toContain("vf-wizard-quiet");
+    expect(WIZARD_CSS).toMatch(/\n\.vf-wizard-quiet \{[^}]*color: var\(--vf-text-primary\);/u);
     for (const cls of [factCls, eyebrowCls, voiceCls, quietCls])
       expect(cls).not.toMatch(/text-(black|white)\b/u);
   });

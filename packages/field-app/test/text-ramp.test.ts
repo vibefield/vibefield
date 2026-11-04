@@ -126,7 +126,6 @@ const T4_USES: Readonly<Record<string, number>> = {
   "packages/field-app/src/account/FacePicker.css · .vf-face-picker-choices[data-disabled] .vf-face-picker-any-label": 1,
   "packages/field-app/src/account/MeMenu.css · .vf-me-row:disabled": 1,
   "packages/field-app/src/account/door/door.css · .vf-door-device[data-ghost] .vf-door-device-disc": 1,
-  "packages/field-app/src/boot/onboarding/wizard-ui.css · .vf-wizard-input:disabled": 1,
   "packages/field-app/src/chat/chat-composer.css · .vf-chat-mic": 1,
   "packages/field-app/src/chat/new-spark-sheet.css · .vf-new-spark-menu-head[data-off]": 1,
   "packages/field-app/src/field/desk/bar/selection-bar.css · .vf-bar-cell[data-disabled]:active": 1,

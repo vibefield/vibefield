@@ -31,12 +31,12 @@ import "./wizard-ui.css";
 
 /** Primary action — the §8 chip canon's inverted solid, at full-window size. */
 export const primaryCls =
-  "inline-flex h-10 items-center justify-center rounded-full bg-black px-5 text-[13px] font-medium text-white shadow-md transition-[transform,opacity] hover:opacity-90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vf-select)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--vf-canvas-bg)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:bg-white dark:text-black";
+  "vf-wizard-primary inline-flex h-10 items-center justify-center rounded-full px-5 text-[13px] font-medium shadow-md transition-[transform,opacity] hover:opacity-90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vf-select)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--vf-canvas-bg)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none";
 
 /** Quiet action — skips, backs, second thoughts. Its words stand at t1 on its fill in both themes, so they read at
  * 4.5:1 on the glass (DESIGN.md §5, FG-O2's judge). */
 export const quietCls =
-  "inline-flex h-10 items-center justify-center rounded-full bg-black/5 px-4 text-[13px] font-medium text-[var(--vf-text-primary)] transition-[background-color,color,transform] hover:bg-black/10 hover:text-[var(--vf-foreground)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vf-select)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:bg-white/10 dark:hover:bg-white/15";
+  "vf-wizard-quiet inline-flex h-10 items-center justify-center rounded-full px-4 text-[13px] font-medium transition-[background-color,color,transform] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vf-select)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none";
 
 // The glass's words wear the ramp (DESIGN.md §2.4; §10: product code consumes tokens): an eyebrow and a fact at t3,
 // a voice at t2, and on the glass both read as its own t2 (§5, FG-O2's judge); an error wears the attention ink, on
@@ -606,7 +606,7 @@ export function WizardPane({
     >
       <div className="vf-wizard-pane-head">
         {size === "sheet" && <span className={eyebrowCls}>{eyebrow}</span>}
-        <h1 className="text-[28px] font-light leading-[1.15] tracking-[-0.02em] text-black dark:text-white">
+        <h1 className="vf-wizard-headline text-[28px] font-light leading-[1.15] tracking-[-0.02em]">
           {title}
         </h1>
         {voice !== undefined && <p className={voiceCls}>{voice}</p>}

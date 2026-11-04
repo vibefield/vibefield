@@ -89,7 +89,7 @@ export function OnboardingFieldPaneView({
               autoFocus={autoFocus}
               onChange={(event) => onNameChange(event.target.value)}
               autoComplete="given-name"
-              className="vf-wizard-input"
+              className="vf-wizard-field h-10 min-w-0 w-full rounded-[12px] border px-3.5 text-[15px] outline-none transition-[border-color,box-shadow] motion-reduce:transition-none disabled:opacity-45"
             />
           </label>
           <FaceDeck

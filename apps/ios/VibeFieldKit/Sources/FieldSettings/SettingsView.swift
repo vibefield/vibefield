@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldLock
 import FieldTerminal
 import SwiftUI
 
@@ -19,6 +20,8 @@ import SwiftUI
 public struct SettingsView: View {
   private let account: SettingsAccount
   @Binding private var terminal: TerminalAppearance
+  /// WI-3 — the lock, for This phone › Lock (nil where no lock is held: the page and its row are not drawn).
+  private let lock: FieldLock?
   private let actions: SettingsActions
   /// Settings' own routes, then the Terminal page's: two kinds of value, so a
   /// `NavigationPath` rather than an array of one.
@@ -30,10 +33,11 @@ public struct SettingsView: View {
   ///   Terminal (`.terminal`), with Settings one step back.
   public init(
     account: SettingsAccount, terminal: Binding<TerminalAppearance>, opening: SettingsOpening = .root,
-    actions: SettingsActions
+    lock: FieldLock? = nil, actions: SettingsActions
   ) {
     self.account = account
     _terminal = terminal
+    self.lock = lock
     self.actions = actions
     var path = NavigationPath()
     for route in opening.routes { path.append(route) }
@@ -74,6 +78,12 @@ public struct SettingsView: View {
         }
         NavigationLink(value: SettingsRoute.terminal) {
           ChromeRow("Terminal", lead: .glyph(.terminal), value: terminal.shownThemeName)
+        }
+        if let lock {
+          // WI-3 — the desk's shut padlock (§13 `tape`, the phone's `lock`), and whether it is on
+          NavigationLink(value: SettingsRoute.lock) {
+            ChromeRow(LockWords.row, lead: .glyph(.lock), value: LockWords.rowValue(isOn: lock.isOn))
+          }
         }
       } header: {
         ChromeListHead("This phone")
@@ -176,6 +186,10 @@ public struct SettingsView: View {
       AppearancePage(look: $look)
     case .terminal:
       TerminalSettingsPage(appearance: $terminal)
+    case .lock:
+      if let lock {
+        LockPage(lock: lock)
+      }
     case .about:
       AboutPage(desktops: account.desktops)
     case .acknowledgements:

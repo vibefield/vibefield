@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1014,6 +1014,64 @@ describe("release.yml's shape — the permissions table, as a test", () => {
         "installer bytes",
       );
       expect(readFileSync(join(build, "hashes-mac-arm64.json"), "utf8")).toBe("{}");
+    },
+  );
+
+  it.each(["Disabled", "Enabled", "unrecognized"])(
+    "routes Apple tickets over TCP only with an inactive packet filter (%s)",
+    (state) => {
+      const steps = stepsOf("build");
+      const step = steps.find((entry) => entry.name === "Use TCP for Apple notarization tickets");
+      expect(step).toBeDefined();
+      expect(step!.text).toContain(
+        "if: runner.os == 'macOS' && vars.VIBEFIELD_MAC_SIGNING == 'true'",
+      );
+      expect(steps.indexOf(step!)).toBeLessThan(
+        steps.findIndex(
+          (entry) => entry.name === "Package, signed (J4 — the Apple credentials exist)",
+        ),
+      );
+      const dir = scratch();
+      mkdirSync(join(dir, "bin"));
+      // Execute the workflow's real shell, with every privileged call intercepted by the fixture.
+      writeFileSync(
+        join(dir, "bin", "sudo"),
+        `#!/bin/sh
+printf '%s\n' "$*" >> "$PF_CALLS"
+case "$*" in
+  'pfctl -s info') printf 'Status: %s\n' "$PF_STATE" ;;
+  'pfctl -f -') cat > "$PF_RULES" ;;
+  'pfctl -E') ;;
+  *) exit 99 ;;
+esac
+`,
+        { mode: 0o755 },
+      );
+      const shell = step!.text.split("        run: |\n")[1]!.replace(/^ {10}/gm, "");
+      const result = spawnSync("bash", ["-euc", shell], {
+        cwd: dir,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+          PF_STATE: state,
+          PF_CALLS: join(dir, "calls"),
+          PF_RULES: join(dir, "rules"),
+        },
+      });
+      const calls = readFileSync(join(dir, "calls"), "utf8").trim().split("\n");
+      if (state === "Disabled") {
+        expect(result.status, result.stderr).toBe(0);
+        expect(calls).toEqual(["pfctl -s info", "pfctl -f -", "pfctl -E"]);
+        expect(readFileSync(join(dir, "rules"), "utf8")).toBe(
+          "block return out quick proto udp from any to any port 443\n",
+        );
+      } else {
+        expect(result.status).toBe(1);
+        expect(result.stdout).toContain("Refusing to replace");
+        expect(calls).toEqual(["pfctl -s info"]);
+        expect(readdirSync(dir)).not.toContain("rules");
+      }
     },
   );
 

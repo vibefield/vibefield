@@ -26331,6 +26331,10 @@ Checks), in the commits' own order:
   tokens, the name field's placeholder (`views/field.tsx`, black and white at 30%, about 1.9:1 by day) and
   `primaryCls`'s and `quietCls`'s fills (`wizard-ui.tsx`), projected through tokens.css, DESIGN.md first; a placeholder
   needs a witness of its own, since no walk reads one (a `::placeholder` is no text node).
+  > **Errata (2026-11-04, item 136; the fixer):** "the name field's placeholder (`views/field.tsx`, black and
+  > white at 30%, about 1.9:1 by day)" was false. The name field never carried a placeholder attribute, so its
+  > `placeholder:text-black/30` styled nothing. The wizard's one placeholder is the Tailscale key's, which carried
+  > no colour. Corrected at DESIGN.md §8 and by item 136 (LANDED "Item 136").
 - The iOS kit's ChromePalette ramp: its `inkFaint` carries words that are read, an IOS slice's, on §2.4's law.
 - The walk window's one `desktop.security.unregistered_webcontents` log: whether main registers a smoke window or its
   backstop names one as a smoke's, owed and not built.
@@ -26577,6 +26581,10 @@ rebased onto main `be1a21ec0` unchanged, its range-diff `=`; Checks):
 - Item 136, the wizard's own Tailwind literals outside the tokens: the name field's placeholder (`views/field.tsx`,
   about 1.9:1 by day) and its `disabled:opacity-45` while saving, and `primaryCls`'s and `quietCls`'s fills
   (`wizard-ui.tsx`), projected through tokens.css, DESIGN.md first; a placeholder needs a witness of its own.
+  > **Errata (2026-11-04, item 136; the fixer):** "the name field's placeholder (`views/field.tsx`, about 1.9:1
+  > by day)" was false. The name field never carried a placeholder attribute, so its
+  > `placeholder:text-black/30` styled nothing. The wizard's one placeholder is the Tailscale key's, which carried
+  > no colour. Corrected at DESIGN.md §8 and by item 136 (LANDED "Item 136").
 - James's look: the slice's two calls are VF-PM's rulings at a5's lean (03:00Z: the fix in the markup, §7's Off row;
   03:01Z: the off deck's words at t4, measured), James's to overturn. His product question stands, named and not built:
   whether the browser's glass wears the field's living mark anywhere but the held frame (a failed pass's glass, its
@@ -29855,3 +29863,636 @@ launch missed the live-field startup assertions. The catalog walk still reports 
 on its first day-mode Welcome capture and the ChatGPT Pro plan label in the day/night ready-profile
 fixtures. Those desktop findings remain open before merge; this slice is being committed and pushed
 with the successful code gate and the original captures retained for follow-up.
+
+### CI follow-up — terminal route publication is one transition (2026-11-04)
+
+PR #15's verify run `41751926663` failed before the model-selection test could launch an agent:
+both terminal cells were serving at +177 ms, but fieldd held revision 3 with only the agent cell
+for the entire 30-second readiness budget. Each supervisor updated the route registry under its
+mutex, then released that mutex before publishing its copied snapshot. Concurrent announcements
+could therefore publish out of order, giving a stale snapshot a newer revision. Concurrent
+endings could similarly resurrect removed rows in the published snapshot.
+
+The registry mutex now covers mutation, composition and publication for both upsert and removal.
+The regression runs eight concurrent cell writers through 256 birth/end cycles and checks the
+complete snapshot and revision after each group finishes. It failed on the unchanged code with
+five ended cells still published, and passes with the atomic publication. Readiness budgets,
+retry policies and CI assertions are unchanged.
+
+Main `bf4e834b9` is integrated to resolve the PR's conflicts. The refined onboarding structure and
+form submission remain, with main's shared field styles supplying the token colors, placeholder
+ink and focus treatment for both inputs. The unused parallel input style is removed.
+
+## Item 161 — a set that never comes up waits longer before each re-mint, and stops waiting at the dial when its one deadline runs out (2026-11-02; `e88415106` → `7f2a86ab9`, two commits on main `30d8ae4fe`, re-stacked from `789a12c38` → `818f6fd65` on `cf50fede4`, lane `fix/item161` in `/Volumes/SamsungRed/lanes/item161`, in the mini's mint M112 `7f2a86ab9`, stacked, run 112)
+
+**What it rests on.** Found during item 157 (C8): another process held a door's port and answered every WebSocket
+upgrade with a non-101, and the phone's leg re-minted and re-dialled about 140 times a second while the card read
+"connecting" for ever. VF-PM filed it as item 161, the IOS session's after WI-1 (11:55Z), gave it at 15:03Z and
+approved the plan at 15:05Z: two files, no API change, no new words.
+
+**What** (2 files, +138 −4; the kit only):
+- **The red** (`789a12c38`, tests only): `turnedAway` (attached, then cut off at the frames leg; every fresh ticket
+  minted at once; the scripted door turns every dial away before its handshake, `ScriptedTransport.unreachable`), and
+  two rows that fail on main by ASSERTION, never by a settle's timeout (VF-PM 15:05Z):
+  - `aDialTheDoorTurnsAwayIsReMintedOnTheBackoff`: at most 5 mints in 0.6 s after the first re-mint (an upper bound,
+    so a loaded host can only pass it sooner);
+  - `aSetThatNeverComesUpStopsWaitingAtTheDial`: with a 400 ms step deadline, `.stalled(.dial)`, polled on the row's
+    own 3 s clock and then asserted.
+- **The fix** (`818f6fd65`, `RoutedTerminalClient` only):
+  - the spin: the backoff lived in each asking task and grew only while mints FAILED; a mint that succeeded ended
+    the task, and the failed handshake asked again in a fresh task with no wait. Now `legFailed` counts the sets in a
+    row that never came up (`unreachedSets`, both legs never accepted), and the re-mint waits
+    `reachBackoff(after:cap:)` first: 100 ms, doubling, at most `Options.maxBackoff`;
+  - the silence: fix8's step deadline was re-armed by every step change, and the loop flipped the ticket, then the
+    dial, every cycle. Now ONE `stepDeadline` covers the run (`armReachDeadline`), armed at its first failure and
+    re-armed by no re-mint; it stops the attach at the dial (`.stalled(.dial)`: the card's existing words and RETRY)
+    while the client is still trying, with the run and its last failure in `lastRefusal`;
+  - `endReach` ends the run when a set comes up, at a stall and at `close`. Unchanged: a set that came up and was
+    then lost re-mints at once; the pre-authentication rule; `.dial`'s words.
+
+**Validation.**
+- The host loop (`lanes/item161/light/host.sh`: a macOS package whose FieldProduct, FieldRoutedTerminal and
+  FieldRoutedTerminalTests are directory symlinks into the lane, whole, no stubs; never the gate): the base 170 tests
+  in 26 suites green (the kit's own routed run); RED at `789a12c38`, 172 in 26 with 2 issues (1,149 mints in 0.6 s;
+  `.connecting` at the row's 3 s clock); GREEN at `818f6fd65`, 172 in 26, 0 issues, the two rows 5 of 5 on repeat,
+  the run's diff hash `dd643259adbe` equal to the commit's.
+- The first red commit (never reported) capped the helper's backoff at 100 ms, which hid the doubling: the fix's
+  first green read 7 mints. The helper took the default cap and the red was amended before any report (said to
+  VF-PM, 15:13Z).
+- swiftc's typecheck for the iOS simulator (Debug, against the kit products built at `cc1cf8447`):
+  FieldRoutedTerminal and all 12 of its test files rc 0.
+- The kit on this Mac (VF-PM's slot, 15:13:34 → 15:20:08Z, the WI proof worktree detached at each commit;
+  `lanes/item161/light/slot161.sh`):
+  - FieldRoutedTerminalTests alone at `789a12c38`: EXIT 65, 172 tests in 26 suites, 2 issues, both the rows'
+    assertions (1,067 mints; `.reconnecting` at 3 s);
+  - the full kit at `818f6fd65` (its tree asserted): 15 runs, 1,540 tests, 0 red, 0 restarts, 0 issues (163's 1,514
+    + PG-4s's 24 + these 2);
+  - app Debug 15:17:30 → 15:18:09Z and Release 15:18:30 → 15:20:08Z, both built; iPhone 17 Pro
+    `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down after each run.
+- The re-stack over item 166 and its records (VF-PM 15:21Z, main `30d8ae4fe`): the file sets are disjoint (166 and
+  its records touch the app workspace's Package.resolved and two docs; 161 touches its two Swift files); `git
+  merge-tree --write-tree 30d8ae4fe 818f6fd65` is clean, tree `59481a79a`, which the re-stacked tip's tree equals;
+  the range-diff reads `789a12c38 = e88415106` and `818f6fd65 = 7f2a86ab9`; the iOS fixtures on the tip 202, pins 67.
+  So the slot's proof carries over, with no re-light and no kit. The slot's app builds ran over `cf50fede4`'s stale
+  Package.resolved (rewritten and restored); the re-stacked tree carries 166's, which a build leaves byte-identical
+  (166's witness).
+- **Run 112** (`7f2a86ab9`, stacked on main `30d8ae4fe`, a fast-forward, minted by a9 on VF-PM's GO): verify exit 0
+  at 15:28:11Z; vitest 12,111 passed, 0 failed, 18 skipped (871 files), ±0 on run 111 (the per-file diff is empty);
+  node 364/0; cargo 534 passed, 0 failed (33 results ok); typecheck and test, 28 projects; no MaxListeners warning;
+  the iOS fixtures 202, pins 67; the tree clean after (`lanes/ts6/logs/mini/run112/verify.clean.log`). The kit is
+  this Mac's slot, above, carried to `7f2a86ab9` by the "=" range-diff.
+- **Landed:** main fast-forwarded to `7f2a86ab9` on VF-PM's GO (2026-11-02 15:30:36Z).
+
+**Not built (said).** A line of its own for a dial the door turned away, OPEN for James's word: the stall says
+`.dial`'s existing words, "the dial over the mesh got no answer", and whether a refused upgrade deserves other
+words is his to say (VF-PM's dashboard, 15:05Z).
+
+**Owed.** Nothing of this item's.
+
+## The icon studio, biome-clean — main was red at verify's lint stage (2026-11-04; `78ef3515a`, one commit on main `f978b385a`, lane `fix/lint-icon-studio` in `/Volumes/SamsungRed/lanes/lint-icon-studio`, the fixer's, in the mini's mint M114 `84482a1fe` under items 164 and 165, stacked, run 114)
+
+**What it rests on.** Run 113 stopped at verify's lint stage: `biome check .` found 53 errors, every one in
+tooling/icon-studio, from James's `6e02a8fbc` (feat: add local cross-platform icon studio). VF-PM gave the fix to the
+fixer at 01:30Z (James told; his to veto).
+
+**What** (13 files; no behavior change):
+- biome.jsonc excludes `tooling/icon-studio/vendor` (the Wormhole Dust renderer, vendored as spark-face's engines
+  are; vendor/SOURCE.json names its source page and its one patch) and the GENERATED `src/living-assets.mjs`
+  (build.mjs writes it; it stays at its committed bytes, which build.mjs reproduces).
+- `biome check --write` (safe fixes only): the format, organizeImports, two `let` → `const`, two regex escapes.
+- By hand: `type="button"` ×16 (the page has no form); `role="group"` on two labelled divs, each with a
+  biome-ignore for useSemanticElements (a fieldset would draw a border); five forEach block bodies; and safeName's
+  control-character class with a biome-ignore, "refusing them is the point".
+
+**Validation.**
+- Before and after: the icon studio's 33 tests pass, the same 33 names; `pnpm lint` reads 0 errors (53 at
+  `f978b385a`); build.mjs builds; check:walls, check:retired, check:deps and icons:check are clean.
+- **Run 114** (`84482a1fe`, items 164 and 165 over this commit, stacked on `f978b385a`; VF-PM's read, 01:48Z):
+  verify exit 0, its lint stage `Checked 3091 files … No fixes applied` with 0 errors, where run 113 had stopped.
+- **Landed:** main fast-forwarded to `84482a1fe`, this commit with it, on VF-PM's GO (2026-11-04 01:47:13Z).
+
+**Owed.** Nothing of the fixer's. Sixteen warnings and an info stand in the studio (studio.css's `!important`s and
+specificity order); they do not fail lint.
+
+## Items 164 and 165 — the burn rate and the token counts print JavaScript's digits: no trap at 2^63 or ∞, and a tie the window's way (2026-11-04; `5bbf4b763` → `84482a1fe`, two commits on `78ef3515a` (the icon studio's lint fix) on main `f978b385a`, cut as `1bf56185e` → `827222c05` on `30d8ae4fe` and re-stacked three times with their patches unchanged, lane `fix/item164` in `/Volumes/SamsungRed/lanes/item164`, in the mini's mint M114 `84482a1fe`, stacked, run 114)
+
+**What it rests on.** PG-4s's design check (§0.4 item 6, Q-S12) found two latent kit defects at its tip, neither
+4s's: `formatRatePerHour` trapped for `perHour >= 2^63` (`Int(perHour.rounded())`), and `formatTokens` broke a tie
+to even (`String(format: "%.1fk")`: 8250 read `8.2k` where the window says `8.3k`). VF-PM filed them as items 164
+and 165, the fixer's, and gave them at 2026-11-02 15:14Z.
+- The widening, approved by VF-PM at 15:23Z: `formatTokens` also trapped on NaN, ±∞ and every count past Int's
+  range, and rounded a negative tie away from zero where `Math.round` takes +∞ (-2.5 read `-3`, the window `-2`).
+  The same function and the same trap class, so one fix.
+- VF-PM's two guards (15:23Z): `phone-toolkit.golden.json` byte-identical with GodviewToolkitParityTests green, and
+  GodviewFormat.swift (fd's, PG-4s) changed only by the import and its call sites, nothing reworded.
+- It lands on the icon studio's lint fix (`78ef3515a`, the entry above): run 113 was red at verify's lint stage on
+  James's icon studio, so these two commits went over that fix for run 114.
+
+**What** (4 files, +102 −41; the kit only):
+- **The red** (`5bbf4b763`, tests only): two rows in SwarmBodyModelTests' FormatTokensTests, every value measured
+  with node against puppeteer-view-sdk's `toolkit/format.js` (0.3.2 at the cut, 0.3.3 on this base, the same words):
+  - `anAbsurdRateSaysJavaScriptsDigits` (164): `$9223372036854776000/hr`, `$1e+21/hr`, `$Infinity/hr` and the rest;
+  - `tokenCountsRoundAsTheWindowDoes` (165): the ties (`8.3k`, `1.3M`), the negative ties, and NaN, ±∞ and absurd
+    counts (`NaNM`, `InfinityM`, `-Infinity`, `1e+294M`).
+- **The fix** (`84482a1fe`):
+  - FieldAgents gains `JSNumber` (`JSNumber.swift`). `round` is `Math.round`: the nearest whole number, a tie toward
+    +∞, NaN and ±∞ unchanged, its fraction exact so 0.49999999999999994 stays 0. `whole` is Number::toString for a
+    whole number, MOVED UNCHANGED from GodviewFormat, so the Godview toolkit and the formatters print a number one
+    way.
+  - `formatRatePerHour`'s whole dollars and `formatTokens`' whole counts are `JSNumber.whole(JSNumber.round(…))`;
+    `formatTokens`' tenths are `tenths`, PG-3e's `toFixed(1)` (its doc now names both callers). Each doc comment
+    carries a dated correction (2026-11-02, items 164 and 165).
+  - GodviewFormat.swift: `import FieldAgents`, the 7 call sites `whole(` → `JSNumber.whole(`, and its `whole`
+    removed. Its old lines :1–:100 are now :2–:101; :101–:123 (the blank, `whole`'s doc and func) are gone, to
+    JSNumber.swift :15–:36; :124 is :102.
+
+**Validation.**
+- Host proofs on this Mac (swiftc builds FieldAgents and SwarmPhysics for macOS, no xcodebuild; logs
+  `lanes/item164/light/`):
+  - `host164.sh`, one value per process: at the red's base, 38 values, 18 differ from the SDK, 12 of them traps
+    (exit 133); at the fix, 0 differ, 0 traps (against 0.3.2 on 11-02 and 0.3.3 on 11-04);
+  - `sweep164.sh`: 222,402 values (every count 0…20,000, every 50th 990,000…10,010,000, 22,000 seeded random rates
+    and counts to 1e300), 0 differ;
+  - `gv164.sh` / `gv164b.sh`: GodviewFormat built at the base and at the fix, 450,051 inputs through all four words,
+    0 lines differ; the golden's 40 K1/K2 words, 0 missed at both; the golden byte-identical (`6670adbd9a8dfab6` on
+    this base: James's `a82aceceb` moved only its version stamps, 0.3.2 → 0.3.3).
+- `pnpm typecheck` in the lane at `5e83c347d` (the same apps/ios and packages trees as `84482a1fe`), under a HOLD
+  turn: 28 projects, exit 0.
+- The kit on this Mac (VF-PM's slots; iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC`, shut down after each):
+  - 2026-11-02 at `1bf56185e`/`827222c05` (ghosttea 0.13.7): FieldAgentsTests alone RED, then the full kit 15
+    runs, 1,540 tests (PG-4s's 1,538 + these 2), 0 issues; app Debug 65 s and Release 99 s, both built.
+  - 2026-11-04 at `d2dc8dffd`/`5e83c347d` (ghosttea 0.14.0, truffle 0.7.26; `slot164b.sh`, its own package cache):
+    - FieldAgentsTests alone at the red: EXIT 65, 12 issues, every one an assertion of 165's rows; and the trap
+      values crashed the xctest process (3 fatal "Double value cannot be converted to Int"), taking ProjectInkTests,
+      SwarmBodyModelTests and SwarmColorTests down with it. A trap is a crash by nature: this is the honest red.
+    - The full kit at the fix: 15 runs, 1,562 tests raw, ONE issue, not this item's (below); every row of this item
+      and GodviewToolkitParityTests' four words passed.
+    - App Debug 143 s and ONE Release 145 s, both built; the app workspace's Package.resolved byte-identical after.
+  - *The kit's one issue is item 167 (2026-11-04, filed by VF-PM):* James's TerminalSurfaceKeyboardTests
+    (`0c4590d7a`, 2026-11-02) finds no connected UIWindowScene at its first `#require` in the package-hosted xctest.
+    Alone it was red at main `f978b385a` and at `5e83c347d` alike (`slot164c.sh`); FieldTerminal does not depend on
+    FieldAgents.
+- The re-stacks (2026-11-04): onto `6e02a8fbc` (James's work since `30d8ae4fe`, item 161 among it, and his icon
+  studio), onto `f978b385a` (item 161's records) and onto `78ef3515a` (the lint fix). Each range-diff reads "=";
+  the tree equals `git merge-tree`; James touched none of the four files, and apps/ios's tree (`c42dedb3360e`) is
+  the one the kit ran. The lane's sibling worktrees moved to the new lock
+  (`refresh164.sh`); preflight OK. The iOS fixtures on the tip 205, pins 67.
+- **Run 114** (`84482a1fe`, stacked on main `f978b385a` with the lint fix under it, a fast-forward, minted by a9 on
+  VF-PM's GO; VF-PM's read, 01:48Z): verify exit 0; vitest 12,190 passed, 0 failed, 18 skipped (878 files), +79 on
+  run 112, all from James's work and his icon studio, none from these two commits; cargo 544 passed, 0 failed (34
+  results ok); typecheck and test, 28 projects; biome 3,091 files, no fixes; no MaxListeners warning; the iOS
+  fixtures 205, pins 67; the tree clean after (`lanes/ts6/logs/mini/run114/verify.clean.log`). The kit is this
+  Mac's 11-04 slot, above, carried to `84482a1fe` by its unchanged apps/ios tree.
+- **Landed:** main fast-forwarded to `84482a1fe`, the lint fix with it, on VF-PM's GO (2026-11-04 01:47:13Z).
+
+**Not built (said).** Below $1 an hour, NaN, -∞ and huge negative rates go to `formatUsd`, which keeps its
+documented words for a value with no decimal (`$nan/hr`, where the window says `$NaN/hr`): no trap, and PG-3e's own
+comment says so.
+
+**Owed.** Nothing of this item's. GodviewFormat's moved line cites are fd's to re-point in his lane file.
+
+## WI-3 — the lock: Face ID over a curtain above everything, the way in's last step, and Settings › Lock (2026-11-04; `80a9e2092` → `ae2d44c00`, eight commits on main `571bec4c8`, cut as `6847b64cb` → `8a3804658` on `f978b385a`, folded to `d7f4c0808` on `84482a1fe` and re-stacked twice with their patches unchanged, lane `wi/lock` in `/Volumes/SamsungRed/lanes/wi3/vibe-field`, the IOS session's, in the mini's mint M116 `ae2d44c00`, stacked, run 116 after run 115's red)
+
+**What it rests on.** WI-D3…D7 A and the laws WI-L5…L7 (James, on the page *The Way In*, 2026-11-02
+11:13–11:15Z; "way in all ruled, now implement it", 11:17Z). VF-PM's GO for WI-3 reached this session at 01:00:38Z
+(labelled 01:02Z), accepting six calls on the lean:
+- the curtain is a window of its own above the app's sheets, holding the splash's surface;
+- the lock stands signed in or out, a phone preference;
+- every word names the phone's method, by substitution;
+- Lock now shows only while the lock is on, above Settings…;
+- the Settings glyph `FieldGlyphName.lock` is "tape";
+- a lock that cannot ask stands down (a removed passcode), with its test.
+Times below are this session's clock (its transcript and the scripts' own `date -u`). VF-PM's labels from 01:36Z
+to 01:48Z ran a few minutes ahead of it (VF-PM, 01:53:06Z).
+
+**What** (28 files, +1,447 −35: 26 under `apps/ios`, and two outside, admitted by name):
+- **The words first** (`80a9e2092`, DESIGN.md only, +29):
+  - §9's lock by method: Face ID's as ruled. The Touch ID swap, the passcode-only set and the ask's reason ("Only
+    you can open VibeField on this iPhone.") are marked DRAFTS pending James.
+  - §8's way in and phone Settings as built: the steps' three bars, the curtain's window, Lock now.
+  - §13's phone padlock.
+- **The red** (`b7556eae7`, +685 −18):
+  - FieldLock with stub bodies;
+  - FieldLockTests (the lock's rules, 14 rows) and LockWordsTests (5 rows);
+  - the way in's lock rows in WayInScreenTests, and Settings' `lock` opening in SettingsAccountTests.
+- **The lock** (`16be130de`, 21 files, +664 −59):
+  - `FieldLock`, a new module that names no SwiftUI. The scene's phases, a `ContinuousClock` and an ask go in;
+    whether the curtain stands (`covers`) and what it says come out.
+    - When it asks: a launch with the lock on asks once the scene is active, and so does a return past the delay
+      (a minute to start; Settings offers Immediately, 1, 5 and 15 minutes). Lock now asks at once.
+    - Every change asks first, and a miss or a Cancel changes nothing.
+    - The inactive that iOS's own ask causes is not "away" (`askOpen`).
+    - A lock that cannot ask stands down.
+  - `DeviceOwnerAuthenticator`: LocalAuthentication's `.deviceOwnerAuthentication`, so the passcode is iOS's own
+    fallback. Face ID shows the Info.plist's ruled `NSFaceIDUsageDescription`, set in the pbxproj for both
+    configurations.
+  - `LockCurtain`: a `UIWindow` at `.alert + 1` hosting `SplashField`, the splash's own surface (new in
+    FieldSplash).
+    - It stands at once, so the app switcher's picture is the launch picture.
+    - A miss puts the way in's three places on it: **VibeField is locked.**, **Unlock with ‹method›**, and "Your
+      iPhone passcode works too." where the passcode is the fallback.
+    - It leaves by the splash's exit: 240 ms plain `ease`, half under Reduce Motion.
+  - The way in's last step. While the phone can lock and the lock is off, the found beat hands to the offer:
+    **Lock VibeField with ‹method›.**, Lock with ‹method› / Not now, and "You can change this in Settings › Lock."
+    The steps' third bar names the method.
+  - Settings › This phone › Lock (`LockPage`):
+    - **Lock VibeField**, never "Use Face ID", and **Require ‹method›** with its four times;
+    - the switch and the tick move only once the lock has changed;
+    - on a phone with no passcode, the switch is dimmed over §9's foot.
+  - The account corner's **Lock now**, above Settings…, shows only while the lock is on. A lock folds the keyboard.
+  - `tooling/glyphs/picks.json` gains "tape" on iOS, with `glyph-tape` generated (`build.mjs --check`: fresh, 21
+    on iOS).
+  - One typecheck repair: a closure for Lock now, where a method reference crashed swiftc's diagnostics (said in
+    the commit).
+- **The stamp** (`c6b52ac63`): `-vf-lock=<method>[-open]` (DEBUG only), so the photographs can show the curtain after
+  a miss and Settings › Lock with the lock on.
+- **The review pass** (asked 01:41:44Z, as WI-1's; four folds appended with the four above unrewritten; accepted
+  01:53:06Z):
+  - HIGH (`f82536e1f`): the stand-down needs iOS's own `passcodeNotSet`.
+    - Before: `DeviceOwnerAuthenticator.method` read EVERY refusal of the owner policy as `.none`, and `.none`
+      stands the lock down and keeps it off. The ask's own split (`passcodeNotSet` → `.unavailable`, anything else
+      → `.missed`) never ran, because `FieldLock.ask` checks the method first.
+    - Now: any other refusal keeps the phone's method, and the ask answers it, so the door stays shut.
+    - The rule made explicit, not a reproduced failure: no other refusal of the owner policy on a phone is named.
+  - LOW (`7634ce68e`): one ask at a time, owned by the lock. Two taps on the way in's Lock with Face ID asked twice.
+    Touch ID's two feet are now pinned word for word.
+  - MEDIUM (`599b5652c`): VoiceOver is told of a miss. The curtain's window was announced only when it stood, and
+    VoiceOver's focus after iOS's sheet was nowhere.
+  - LOW (`ae2d44c00`): the false simulator claim corrected at its source (below), and `-vf-lock=none`. An unknown
+    stamp value now stamps nothing; it read as Face ID before.
+
+**Validation.**
+- The host loop (`lanes/wi3/light/hostkit`: a macOS package whose FieldLock and FieldLockTests are directory symlinks
+  into the lane, whole; never the gate):
+  - RED: 18 of its 19 rows by assertion, 89 issues (01:07:29Z);
+  - GREEN: 19 tests in 2 suites, 0 issues (01:14:39Z, and again with the rest of the green at 01:26:34Z);
+  - fold 1: red 7 issues, then 22/3/0;
+  - fold 2: red 2 issues, then 23/3/0.
+- swiftc's typecheck for the simulator (`light/tc.sh`, against the kit built at the red): every changed module rc 0,
+  and again after the folds (FieldLock and its tests, FieldAgents, FieldHome).
+- The kit slot on this Mac (VF-PM's word reached it 01:27:37Z; the WI-3 proof worktree detached at each commit):
+  - build-for-testing at the red `6064b7b26`, 01:22:02 → 01:24:20Z;
+  - FieldLockTests and FieldHomeTests at the red, 01:27:43 → 01:30:26Z: EXIT 65, by assertion, 110 issues in all.
+    FieldLock read 19 tests in 2 suites with 89 issues; FieldHome 152 in 21 with 21, all in the four lock rows;
+  - the witness at the green `54944275e` (tree `b3a2a1241`), 01:30:32 → 01:37:02Z: the kit 16 runs, 1,582 tests,
+    1 red run whose one issue is item 167 (James's TerminalSurfaceKeyboardTests:31, no `UIWindowScene` in the
+    package-hosted kit); app Debug and ONE Release built;
+  - the photographs at `8a3804658`: 18 of 18 by 01:41:05Z (`lanes/wi3/light/photos-8a3804658`).
+- The re-stack onto `84482a1fe` (items 164 and 165, M114): 0 conflicts, range-diff "=" ×4, the file sets disjoint.
+- The re-witness at the folded tip `d7f4c0808` (tree `ea5cc861f`, apps/ios `7a28f09f5`), 01:52:05 → 02:02:48Z,
+  from load1 19.84:
+  - build-for-testing EXIT 0 (01:52:51Z);
+  - the kit: 16 runs, 1,588 tests (1,582, the folds' 4, and 164/165's 2); the one red run is item 167 again
+    (01:54:47Z);
+  - app Debug (01:56:04Z) and ONE Release (01:58:20Z) built;
+  - the photographs 20 of 20 by 02:02:45Z (`lanes/wi3/light/photos-d7f4c0808`), the no-passcode foot shot for
+    the first time;
+  - iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` shut down at 02:02:48Z.
+- The re-stack over the records `571bec4c8` is docs only:
+  - the diff from `d7f4c0808` to `ae2d44c00` is byte for byte `84482a1fe` → `571bec4c8` (docs/LANDED.md and
+    docs/ROADMAP.md; shasum `e3a6ce12f858` both ways);
+  - apps/ios is `7a28f09f5` at both, so the re-witness carries to the tip by tree.
+  - VF-PM's pre-read (02:04:33Z): the tip's tree `fdf6fcddd` equals the merge-tree; Package.swift adds targets
+    only.
+- **Run 115** (`ae2d44c00`, stacked on main `571bec4c8`, minted by a9 on VF-PM's GO): RED on one timing row
+  that is not this slice's. fieldd's `test/service-drain.test.ts`, "lets an admitted old-generation call settle
+  before teardown" (PRC-2 / §18.2), asserts under 1,500 ms of wall time and read 1,866 ms while James used the
+  mini's console. VF-PM filed it as item 168. The per-file diff against run 114 was empty, and the kit plane
+  green. a9 re-armed the same `ae2d44c00` once, as run 116, when the mini's load fell.
+  > **Closed (2026-11-04, item 168; the fixer):** the row no longer bounds wall time. It reads the host's own
+  > record of the stop, `{ calls: "drained", cleanup: "acknowledged" }`, as the file's other two reload rows do;
+  > a loaded host slows a drain that settled but cannot turn it red (LANDED "Item 168", run 119).
+- **Run 116** (`ae2d44c00`, the same mint, M116): verify exit 0 at 02:29:39Z (armed 02:23:21Z at load1 2.91).
+  - vitest 12,190 passed, 0 failed, 18 skipped (878 files); the per-file diff against run 114 is empty (VF-PM's
+    read).
+  - The drain row read 1,464 ms on the quiet host.
+  - cargo 34 results ok; typecheck and test, 28 projects; the iOS fixtures 205, pins 67; the tree clean after
+    (`lanes/ts6/logs/mini/run116/verify.clean.log`).
+  - The kit is this Mac's re-witness, above, carried to `ae2d44c00` by its unchanged apps/ios tree.
+- **Landed:** main fast-forwarded to `ae2d44c00` on VF-PM's GO (2026-11-04 02:31:20Z).
+
+**Found (said).** The iPhone 17 Pro simulator answers `.deviceOwnerAuthentication` as a passcode-only phone, not as a
+phone without a passcode. Its unstamped Settings › Lock showed "VibeField opens without your passcode. …" over a
+live switch. 4/4's message, the stamp's doc comment, its README row and a message to VF-PM had said "a simulator
+has no passcode, so the real lock stands down there". That is corrected, dated, at the doc comment and the README
+row (fold 4). 4/4's message stands as written; fold 4's message is its correction.
+
+**Not built (said).**
+- Nothing ties the pbxproj's `NSFaceIDUsageDescription` ("VibeField uses Face ID so only you can open it on this
+  iPhone.") to DESIGN.md §9. A kit test reading the app's project file would be a cross-tree read: not taken.
+- The curtain's glass is the way in's one height, 210 (WI-L4: "Three places, and nothing moves"). After a miss it
+  holds one act and a note, a third of it empty, as How it works' first two pages already hold one act. Fitting
+  each glass to what it holds would be a WI-L4 change for every screen, the shipped tour's included. That is
+  James's, named to him as such; it is not a mark.
+
+**Owed.**
+- James's four hand rows, on a phone:
+  - the real Face ID path: a launch, a return past the delay, a miss and Unlock, the passcode fallback; and no
+    curtain flash during Settings › Lock's own ask;
+  - the app switcher's picture over an open card: the curtain, never the card or its keyboard;
+  - Lock now folding the keyboard on a device;
+  - VoiceOver over the curtain: it lands on a miss's words, and the modal host hides the app's windows under it.
+- James's word on the draft words (DESIGN.md §9's as-built note): the Touch ID swap, the passcode-only set, the
+  ask's reason, and **Require passcode**. Any change is one commit across DESIGN.md §9, `LockWords.swift` and
+  LockWordsTests.
+
+## Item 136 — the Setup Assistant's actions, fields and headlines wear tokens: no colour of its own, and its one placeholder at 4.5:1 or more by day and by night (2026-11-04; `359711aba` → `cc8894c46`, two commits on main `f6fb1fa06`, cut as `2091c9bc6` → `dcb70bf7c` on `571bec4c8` and re-stacked once with its patches unchanged, lane `fix/item136` in `/Volumes/SamsungRed/lanes/item136`, in the mini's mint M117 `cc8894c46`, stacked, run 117)
+
+**What it rests on.** "FG, the catalog judged" closed item 127 on the ramp and named its remainder item 136: the
+wizard's own Tailwind literals outside the tokens, `primaryCls`'s and `quietCls`'s fills and the name field's
+placeholder, projected through the tokens, DESIGN.md first, a placeholder with a witness of its own since no walk
+reads one. "FG, the catalog judged's follow-up 1" carried it as owed. VF-PM gave it to the fixer, GO 01:57Z.
+- *A falsified claim, corrected at its source:* the name field shows no placeholder. Its input never carried one, so
+  its `placeholder:text-black/30` (2.1:1 on white) styled nothing. The chapter's one placeholder is the Tailscale
+  key's ("tskey-auth-…", Connect), which wore the browser's default ink. DESIGN.md §8's line naming it (:3652) now
+  carries the dated correction. The two ledger lines that repeat it ("about 1.9:1 by day", in both entries above)
+  each carry a dated erratum of their own (2026-11-04).
+
+**What** (8 files, +201 −7: field-app and DESIGN.md; tokens.css untouched, no token added or moved):
+- **DESIGN.md first** (§8 "The Setup Assistant's glass"): that correction, and a dated paragraph closing the entry,
+  "Its actions, fields and headlines wear tokens". The primary is §8's inverted solid (`--vf-foreground` with
+  `--vf-foreground-inverse`), the kit's own primary. The quiet action stands on the foreground at 5%, 10% on hover
+  (by night 10% and 15%), its words at t1. A field is a control's face (`--vf-chrome-solid`, by night
+  `--vf-field-surface`), edged in `--vf-hairline-strong`, its words at t1, its focus the foreground at 25% with a
+  ring at 5% (7% by night), and off at 0.45 while it saves, as the kit's field. Its placeholder wears t3. The
+  headlines are `--vf-foreground`.
+- **The red** (`359711aba`, tests only): two rows in `ui-system-boundaries.test.ts`, over every `.tsx` and `.css`
+  under `src/boot/onboarding` (found by a recursive read, so a new pane is covered the day it lands):
+  - "keeps the Setup Assistant's own compositions free of colour literals of any spelling": no hex or colour
+    function, no black, white or grey utility at any alpha or state, and no named black or white in its stylesheet
+    (a `url()` is read past). At the red: connect.tsx:205, field.tsx:93, welcome.tsx:22 and wizard-ui.tsx:34, :39
+    and :606.
+  - "gives every placeholder in the Setup Assistant a token ink that reads at 4.5:1 on its field": an input that
+    shows one wears `.vf-wizard-field`, whose `::placeholder` is a ramp token. The row resolves it as the glass
+    re-projects it (`.vf-wizard-shell`) and computes its ratio from tokens.css over the field's face. At the red:
+    views/connect.tsx (the key's input, no composition).
+- **The fix** (`cc8894c46`):
+  - wizard-ui.css gains `.vf-wizard-primary`, `.vf-wizard-quiet` (its hover; by night), `.vf-wizard-field` (its
+    placeholder and focus; by night) and `.vf-wizard-headline`: var() and color-mix only, as primitives.css writes
+    them. They are unlayered, so they win over Tailwind 4's utilities (`@layer utilities`), and a state's colour is
+    set there with its rest, never by a utility beside it.
+  - The class strings keep the wizard's own sizes and lose every colour: `primaryCls`, `quietCls` and the pane's
+    headline (wizard-ui.tsx), Welcome's headline (welcome.tsx), the name field (field.tsx) and the key field
+    (connect.tsx). The key field gains the name field's focus ring and transition, which it lacked.
+  - onboarding-wizard.test.tsx reads the quiet button's t1 where it now lives, `.vf-wizard-quiet` in wizard-ui.css.
+- **The deltas** (VF-PM's at its lean, 01:57Z and 02:10Z), named to James, his to veto:
+  - (a) the primary by day from `#000` to the foreground `#1C1C1E`, by night from `#fff` to `#F5F5F7`, its words
+    with it;
+  - (b) the field's night edge from white 10% to `--vf-hairline-strong` (15%), its night words from 90% to t1 (85%);
+  - (d) Welcome's and the panes' headlines, `text-black dark:text-white`, to `--vf-foreground`, the same shift as
+    (a). The scan found them; the brief had not named them.
+  - (c), a note and not a look: the catalog mounts the shipping views, so no catalog file changed and nothing is
+    re-blessed here; its stills move by (a), (b) and (d).
+  - By day the field's edge, words and face are the values they were (10%, 85%, white); by night its face is the 6%
+    it was.
+
+**Validation.**
+- The placeholder's ratios, computed by the row from tokens.css: t3 on the glass is the glass's own 80% by day,
+  8.9:1 on the field's white; by night 8.2:1 over the night `--vf-chrome-solid`. The night figure is a floor: that
+  chrome is lighter than the field's real face (white 6% over the smoke).
+- The red on its own tree (`2091c9bc6`, tree `90e9d44fc`, a detached worktree, vitest's binary run directly):
+  ui-system-boundaries 2 failed, 44 passed; biome and field-app's typecheck clean.
+- The light at `dcb70bf7c` (`light136.sh`, under a HOLD turn, 02:07:29Z → 02:08:30Z; logs
+  `lanes/item136/light/green-fix/`): 14 files, 286 passed, 0 failed (ui-system-boundaries, onboarding-wizard,
+  wearing-the-mat, design-system, wizard-frame, wizard-steps, field-glass, glass-look, profiles-pane, setup-sheet,
+  agents-pane, history-consent, boot-root, boot-machine); biome on the 7 code files clean;
+  `pnpm --filter @vibefield/field-app typecheck` exit 0; the lane clean after.
+- The re-stack (2026-11-04 02:34Z) onto `f6fb1fa06`, WI-3 and its records. DESIGN.md is the one shared file, its two
+  edits apart. range-diff "=" for both commits; the tree `959e5673f` is `git merge-tree`'s; ui-system-boundaries
+  on it 46 passed.
+- **Run 117** (`cc8894c46`, stacked on main `f6fb1fa06`, a fast-forward, minted by a9 on VF-PM's GO; VF-PM's read,
+  02:45Z): FAIL rows 0; vitest 12,192 passed, 0 failed, 18 skipped (878 files), run 116 + 2, the per-file diff naming
+  ui-system-boundaries alone, 44 → 46; cargo 34 results ok, 0 FAILED; "28 projects" four times; no MaxListeners
+  warning; the iOS fixtures 205, pins 67; Nx cache 0 (`lanes/ts6/logs/mini/run117/verify.clean.log`).
+- **Landed:** main fast-forwarded to `cc8894c46` on VF-PM's GO (2026-11-04 02:44:28Z).
+
+**Not claimed.** No walk has read these inks. Row 32's judge walks the catalog's frames at its next run: their
+stills move by (a), (b) and (d), and whether an off field's words (0.45 while it saves) hold §2.4's 3:1 is its
+measurement. No token moved for it, and no number for it is claimed here.
+
+**Owed.** Row 32's judge on these inks, the stills and an off field's 3:1 with them; James's veto on (a), (b) and
+(d). This entry pays "FG, the catalog judged's follow-up 1"'s owed line "Item 136, the wizard's own Tailwind literals
+outside the tokens", its placeholder's witness with it. Its `disabled:opacity-45` stays: the kit's field's 0.45.
+
+## PG-4t — the phone's Stories row: one glass circle per view under the island, the stage full-bleed under it and dissolving in one place, the monitor skin and the views' marks, and the shared head the view lanes stand on (2026-11-04; `49b8c1339` → `690cb4e31`, 21 commits on main `84482a1fe`, lane `pg/4t` in `/Volumes/SamsungRed/lanes/pg4t/vibe-field`, M118 `f8deba6b7`, a MERGE into main `4d8c28869` (tree `8ff15d1700bc`), run 118)
+
+**What it rests on.** PG-4s is the scaffold (LANDED "PG-4s"). James ruled the PG-4s page's four marks, J-S1 A,
+J-S2 (ii), J-S3 drop and J-S4 accept (2026-11-04 01:12–01:14Z; VF-PM's rulings 01:18Z–01:41Z, as DESIGN.md §8
+carries them). fd accepted the read (`lanes/pg4t/light/read-pg4t.md`) in steps: C0–C3, then the SHARED HEAD
+`3ddde3eac`, which the four view lanes PG-5…8 stack on. The lane was born at `f978b385a` and rebased onto
+`84482a1fe` (items 164 and 165) with 0 conflicts. Times below are the scripts' own `date -u`. fd's relay labels after
+01:40Z ran ahead of the clock (fd's erratum), so rulings are cited by content.
+
+**What** (23 files, +1,825 −24: 17 under `apps/ios`, DESIGN.md, four in field-app, and the fixtures check):
+- **The words first** (`49b8c1339`, DESIGN.md only): §8's "The phone's Stories row", §2.7's control-hover row and
+  the skin's sentence. J-S4's sentence followed in a dated commit (`9408440ad`), which also corrects a relay label
+  ("01:46Z" → 01:41Z) at its source.
+- **The stage runs under the row** (`f87b26199`). `GodviewStage` is full-bleed:
+  - its top inset is the row's reserve, `min(safe top, 48) + 60` (108 on an island phone), handed to every view as
+    data; `framed` pads only the bottom band;
+  - the dissolve (78 → 108) masks the whole arm in ONE place, `GodviewStage.body`. DEBUG `-vf-godview-dissolve=off`
+    (`690cb4e31`) is the only way past it, for a frame meter;
+  - the scanlines and the vignette stand over the swarm only (J-S3).
+- **The monitor skin** (`433896a2f`): `GodviewSkin`, §2.7's nine colours in both looks, as `rgb(_:)` numbers and as
+  `Color` accessors. The fixtures check pins its 18 values against tokens.css; T2 holds its keys to `MONITOR_SKIN`.
+- **The witness, step by step** (`6bd187de9`): `HomeFixture.witnessSteps`, the signature the view lanes asked for.
+- **The loader** (`3ddde3eac`, the SHARED HEAD): `importPuppeteerViews(path)` imports a puppeteer-views module by
+  its real path (Found, below).
+- **The name the row says** (`15b44d233`): `GodviewStorySaying`, one name at a time for 1.4 s from the tap.
+  `-vf-godview-say=<id>` holds one for a still.
+- **The views' faces** (`e94101e4a`, `519ad8ad4`): the five manifests' marks transcribed once and mark-outline.js's
+  writer in Swift, held byte for byte to `phone-marks.golden.json` (3,102 bytes, blessed from the installed
+  registry; M1 mutation-probed).
+- **The row** (`93437713c`): `GodviewStoriesRow`.
+  - One `liquidGlassCircle` per view the phone has (one ringed circle while only the swarm exists): 44 across,
+    10 apart, centred, its top at `min(safe top, 48) + 8`.
+  - The mark in `ChromePalette.ink`; the current view's 2 pt ring, in 120 ms; the name's pill with the new
+    `ChromeShadow.island`; VoiceOver's "Views" and "Swarm view", the current circle selected.
+  - The pick is `@AppStorage("vibefield.godview.view")`, kept across a sign-out (`SignOutSweep.kept`). A DEBUG
+    launch override never writes it.
+- **Flags** (DEBUG): `-vf-godview-view=`, `-vf-godview-now=`, `-vf-godview-still`, `-vf-godview-say=<id>`,
+  `-vf-godview-dissolve=off`.
+
+**Validation.**
+- Red first on every pair, by assertion on skeletons:
+  - the geometry, the views and the still flag: 9 rows, 96 issues;
+  - the skin: 9 issues;
+  - the witness W1–W4: 8 issues;
+  - the loader L1–L3;
+  - the name: 15 issues;
+  - the faces: 24 issues;
+  - the pick's key P2b;
+  - the marks golden T1 and M1;
+  - the dissolve flag D1: 1 issue. Its first host run did not compile (D1 lacked `@MainActor`) and was re-run;
+    only its assertion red counts.
+- The host loop at the tip (`lanes/pg4t/light/hostkit`, Swift 6 mode, `swift test -j 4`): 56 tests in 11 suites,
+  0 issues.
+- TS: phone-parity 26/26; field-app's `tsc --noEmit` 0; biome clean on every file the lane touches; the walls 0.
+- The fixtures: 224 identical (206 copies and the skin's 18), pins 67. The view lanes count from 206.
+- fd's early kit at `f87b26199` (02:08:56–02:10:56Z): FieldHomeTests 160 tests in 24 suites, 0 issues.
+- fd's compile turns on pg8's `de2df5f5f` and pg5's `f7eea9212`, each stacked on the head (02:42–02:47Z): every
+  PG-4t suite passed.
+- **The kit slot at `690cb4e31`** (03:00:05–03:11:36Z; this Mac, Xcode 26.6, iPhone 17 Pro `F93EABF3`):
+  - red first in the kit, each by assertion:
+    - K1 at `6255511a1`: 4 issues, the island shadow;
+    - K2 there: 1 issue, SignOutTests:88;
+    - K4 at `c3776beff`: 14 issues, GodviewSkinPaletteTests:37;
+  - the kit: 15 runs, 1,597 tests. The one red is item 167 (TerminalSurfaceKeyboardTests:31, no `UIWindowScene`);
+  - VibeField Debug (69 s), VibeField-Mock Debug (4 s) and ONE Release (167 s) built, with 0 warnings in PG-4t's
+    files.
+- **The merged tree.** Main had moved apps/ios since the lane's base (WI-3 and item 136), so the slot's tree was not
+  the mint's.
+  - `git merge-tree --write-tree 4d8c28869 690cb4e31` is `8ff15d1700bc` (apps/ios `48c5b6881730`, DESIGN.md
+    `ac61a3c10694`). A trial rebase gave 21 "=" and the same tree.
+  - The hunks in HomeScreen.swift and DESIGN.md are apart.
+  - WI-3's curtain is a `UIWindow` at `.alert + 1` above the main window, so it stands over the row, as DESIGN.md
+    §8's way in says it stands "over everything the phone shows" (:3847-3848 on the merged tree).
+- **The merged-tree turn** on fd's proof merge `16cf8436ec36` (tree `8ff15d1700bc`; 03:24:48–03:32:17Z), with the
+  reds carried from the slot:
+  - the kit: 16 runs, 1,623 tests. FieldLockTests' new run (23 tests in 3 suites) passed. The one red is item 167;
+  - all nine PG-4t suites and the sign-out suite passed;
+  - Debug (59 s), Mock (4 s) and ONE Release (144 s) built, with 0 warnings in PG-4t's files.
+- **The stills** on the same tree (03:32:18–03:36:34Z), from a Debug build carrying WI-3's `-vf-lock=`, with
+  `-vf-lock=none` standing the lock down:
+  - four, at `/Volumes/SamsungRed/lanes/ios/stills/pg4t/16cf8436ec36…`: `-light-row.png`, `-light-row-said.png`,
+    `-dark-row.png` and `-dark-row-said.png`;
+  - each shows one ringed circle under the island, with the pill saying "Swarm" in the two `-said` stills;
+  - read from the pixels: the ring at 56.0–58.0 pt in both looks, the island at 14.0–50.7 pt.
+- **The frame meter** (the same build; 30 + 8 s a run, on · off · on · off):
+  - 60 Hz and p50 16.7 ms in all four, 0 long frames;
+  - p95 17.0 and 16.7 with the dissolve, 16.7 and 16.7 without;
+  - max 20.0 and 17.9 with, 17.4 and 18.4 without.
+  - No measurable cost, on the simulator's 60 Hz and a loaded host.
+- **The carry rule** (fd): if main moved before the land, the witness carried only if the re-merge's apps/ios
+  subtree and DESIGN.md blob equalled `48c5b6881730` and `ac61a3c10694`. Main did not move: the mint's parents are
+  `690cb4e31` and `4d8c28869`, and its tree is the proof merge's, `8ff15d1700bc`. So the merged-tree turn and the
+  stills carry to the mint by tree hash.
+- **N12** (PG-4s's owed swarm still) is met by the four stills above, photographed under 4t's stage (the row, the
+  dissolve mask, the physics centre risen), not 4s's bare stage; the swarm's own draw is 4s's unchanged (no file
+  under `FieldSwarm` moved; the swarm's arm gained only the stage's `.transition(.opacity)`).
+- **Run 118** (`f8deba6b7`, the MERGE of `690cb4e31` into main `4d8c28869`, minted by a9 on VF-PM's GO; VF-PM's
+  read, 03:54Z): verify exit 0 at 03:52:56Z (armed 03:47:09Z at load1 3.49); FAIL rows 0; vitest 12,197 passed,
+  0 failed, 18 skipped (881 files), run 117 + 5; cargo 34 results ok, 0 FAILED; "28 projects" four times; no
+  MaxListeners warning; the iOS fixtures 224, pins 67; the tree clean after
+  (`lanes/ts6/logs/mini/run118/verify.clean.log`). The kit is the merged-tree turn above, carried by tree.
+- **Landed:** main fast-forwarded to `f8deba6b7` on VF-PM's GO (2026-11-04 03:55:17Z), 23 files +1,825 −24.
+
+**Not witnessed (said).**
+- **The tap at y 56–62.** The circle's top 6 pt stand in the status bar's band, and no agent injects input. S1 (the
+  top, 56) and S3 (44 across) pin the frame; the touch is James's hand row.
+- **SwarmField's top safe area (0).** No DEBUG print exists for it. The code path holds it: `fieldTab` ignores the
+  top safe area (HomeScreen.swift:802-804). No pixel can tell it: the swarm's ground and the page's are one
+  panel-bg.
+- **A device's 120 Hz.** The meter ran on the simulator only.
+
+**Found (said).**
+- **A second module instance.** Importing a puppeteer-views module by its link path gave a `MONITOR_VIEWS` that
+  deep-equalled the root's but was not the same object: Vite loads puppeteer's packages by their real store path.
+  The loader imports `realpathSync(file)`, and L1 pins it.
+- **The island's foot is not 48 on the iPhone 17 Pro.**
+  - The simulator's screenshots carry the Dynamic Island, at 14.0–50.7 pt. 48 is frame A's island (the PG-4s page:
+    y 11, 37 tall).
+  - The row stands 5.3 under this phone's island, not 8, and never touches it.
+  - The rule `min(safe top, 48) + 8` = 56 is as built and witnessed, and VF-PM ruled that it stands. James's (i)
+    56 or (ii) 8 under each phone's own island is open.
+  - The sentence "8 under the island's foot (48)" stood at five places. DESIGN.md:2611-2613 is corrected and dated
+    in these records. GodviewStories.swift:14 and :42, S1's doc and name (GodviewStoriesTests.swift:16) and
+    HomeScreen.swift:384 follow in a comment-only pair after this landing, worded by James's answer.
+- **The brief's premise was false.** It said main's move since `84482a1fe` was docs and field-app only. It moved
+  apps/ios (WI-3, item 136), so the merged tree had its own turn.
+- **The lane's own claim was false**: "a simulator screenshot carries no island" (stills.sh's header, the
+  packet's draft).
+  - The stills' row reader read the island by day (30.0 pt).
+  - Its fix rides the same comment-only pair: a scan from below the measured foot (51 pt), or one that skips a run
+    longer than the ring's 6 px.
+  - Not re-run: the pixel readings above are a read of the PNGs.
+
+**Not built.**
+- J-R3 (b), one per-arm opt-out of the dissolve for Rain (James's, on the rain peek page; (a) is built).
+- A DEBUG print of the safe area and the island.
+- A still of the lock's curtain over the row (fd: not needed).
+- Any view beyond the swarm: PG-5…8 add theirs, and the row grows as they land.
+
+**Owed.**
+- J-R3 and the island question: James's.
+- The tap at y 56–62: James's hand row.
+- A device's 120 Hz meter.
+- The comment-only pair after this landing: the island's words in the Swift comments, S1's doc and name, and the
+  stills reader and its header.
+- `lanes/pg4t/light/trial-rebase`, removed after the land.
+- PG-5…8 mint as merges over this landing.
+
+## Item 168 — fieldd's drain rows read the host's own record of each stop, never the wall clock: a stop's deactivated record says how its calls and its cleanup ended (2026-11-04; `36aaa4364` → `8dc80cc1d`, two commits on main `00d78236c`, lane `fix/item168` in `/Volumes/SamsungRed/lanes/item168`, in the mini's mint M119 `8dc80cc1d`, stacked, run 119)
+
+**What it rests on.** Run 115 (WI-3's) was red on one timing row not its own. fieldd's `test/service-drain.test.ts`,
+"lets an admitted old-generation call settle before teardown" (PRC-2 / §18.2), asserted
+`expect(Date.now() - startedAt).toBeLessThan(1_500)` and read 1,866 ms while James used the mini's console; the
+row's time had crept across runs, 1,746 ms (run 112), 2,642 (run 114) and 3,276 (run 115). VF-PM filed it as item 168
+(02:15Z) and gave it to the fixer (02:55Z): prove what the bound means by the daemon's own seam, never by wall time,
+with no number loosened and no sleep, the plan first. The plan (02:58Z) was accepted as written (03:00Z).
+- What the bounds stood for. The file asserted the same bound three times (:110, :128, :171). In the full daemon the
+  drain deadline is `PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS`, 5,000 ms, so each bound meant "the stop did not wait out
+  the 5 s". `stopCandidate` (service-host.ts) settles in two steps: `waitForPendingCalls` (every admitted call
+  answered, or the deadline, which fails them "provider drain deadline exceeded") and `waitForDeactivation` (the
+  worker's correlated `deactivated`, its exit, or its timer at the remaining deadline). Both paths end in
+  `worker.terminate()` inside the deadline, so the census, the controller's lifecycle events and the host's record
+  read the same either way, and the wall time was the only witness.
+- Why not a fake clock. service-drain-deadline.test.ts drives the deadline by the injected `deadlines.deactivateMs`
+  on a ServiceHost built by hand, under fake timers. The full-daemon file cannot fake the clock (ws, worker threads,
+  `until`'s own timers), and bootstrap has no seam for the service deadlines.
+
+**What** (3 files, +97 −18; fieldd only; no contract, fixture or DESIGN.md change):
+- **The red** (`36aaa4364`, tests only):
+  - service-drain.test.ts boots fieldd with a `logRoot`, so the host's records are readable in process
+    (`daemon.logging`). The three bounds and their `startedAt` go. Each reload row takes the log cursor before the
+    reload and, after `await reloading`, reads the one `fieldd.plugin_service.deactivated` record of this plugin
+    (`readSince`, nothing dropped): `{ calls: "drained", cleanup: "acknowledged" }`.
+  - service-drain-deadline.test.ts records the host's log in `createHarness`, and its two fake-clock rows read the
+    same record on the deadline's side: `{ calls: "drained", cleanup: "deadline" }` (the call drains at 55 ms, the
+    worker never acknowledges) and `{ calls: "deadline", cleanup: "skipped" }` (a stuck call).
+- **The fix** (`8dc80cc1d`, service-host.ts alone):
+  - `waitForDeactivation` resolves with why it finished: "acknowledged", "exited", "deadline" or "unsent".
+  - `stopCandidate` keeps how the calls ended ("drained" or "deadline") and how the cleanup ended: the wait's end;
+    "deadline" too when the calls drained with no window left; "skipped" when the calls met the deadline and the
+    worker was ended at once; "none" for both when the candidate was no longer the live worker.
+  - The existing `fieldd.plugin_service.deactivated` info record carries `calls` and `cleanup` beside its `pluginId`.
+    No order, timing, event or deadline changes, and no other test pins the record's fields.
+
+**Validation.**
+- The red at `36aaa4364` (`light168.sh red-36aaa4364 drain`, a HOLD turn, 04:24:31Z → 04:27:17Z): 2 files, 5 failed
+  and 1 passed (the disable row, which had no bound). Each failed at its record read, in 206–801 ms, against a
+  record with no `calls` and no `cleanup`; each read found exactly one record.
+- The light at `8dc80cc1d` (`light168.sh green-8dc80cc1d full`, one HOLD turn, 04:42:26Z → 04:42:53Z; logs
+  `lanes/item168/light/`): 9 files, 43 passed, 0 skipped (plugin-update-manager 9, service-lease-fence 1,
+  service-controller 10, service-drain-deadline 2, logging 1, service-controller-e2e 1, product-surface 11,
+  service-drain 4, service-host 4); biome on the 3 files clean; `pnpm --filter @vibefield/fieldd typecheck` exit 0.
+- The probes, scratch only: a detached worktree (`lanes/item168/probe`) restored to its commit after each, one file
+  each, the logs and each probe's diff in `lanes/item168/probes/`.
+  - **P4, the load, on main's own test** (`00d78236c`; a 2 s `Atomics.wait` stall of the test thread, the daemon's
+    own, before each reload row's `await reloading`): the three rows red at the bound, 2,069, 2,177 and 2,057 ms
+    against 1,500. The item's lottery, reproduced.
+  - **P4 on the fix:** the three rows green (3.0, 3.0 and 2.8 s), the record "acknowledged". The stall no longer
+    decides.
+  - **P2, the correlation broken** (`waitForDeactivation` matching `requestId + 1`): the three rows red at the read,
+    each record `{ calls: "drained", cleanup: "deadline" }`, at 5.35–5.56 s, the real deadline.
+  - **P3, the cleanup held past the deadline** (a fixture copy whose disposer waits 6 s): the three rows red, the
+    same record, at 5.38–5.49 s.
+  - **P1, as first made, counts as nothing.** It asked the fixture's `slow` for `delayMs: 60_000`. The method's input
+    schema caps `delayMs` at 1,000, so the call was refused before admission, the drain had nothing to wait for and
+    the row passed; its early rejection, held by nothing, was vitest's one unhandled error. It stays as it ran.
+  - **P1b, the proof** (new files, `probe168b.py` and `probe168brun.sh`): the old call admitted as the row admits it
+    (`delayMs: 150`) and held by a fixture copy whose `slow` waits 60 s whatever it is asked. Red: the call rejected
+    "provider drain deadline exceeded", the record `{ calls: "deadline", cleanup: "skipped" }`, 6.2 s, no unhandled
+    error.
+- **Run 119** (`8dc80cc1d`, stacked on main `00d78236c`, a fast-forward, minted by a9 on VF-PM's GO; VF-PM's read of
+  `run119/verify.clean.log`): verify exit 0 at 04:52:18Z; vitest 12,197 passed, 0 failed, 18 skipped (878 files);
+  cargo 544 passed, 0 failed (34 results ok); "28 projects" four times; no MaxListeners warning; fixtures 224; the
+  tree clean after. service-drain's 4 rows took 5,894 ms and the deadline file's 2 took 442 ms, and no row reads the
+  wall clock.
+- **Landed:** main fast-forwarded to `8dc80cc1d` on VF-PM's GO (2026-11-04 04:53:52Z).
+
+**Not claimed.** A stall longer than the 5 s deadline reads "deadline" honestly, since the host's own clock ran out;
+the record says so, and no probe ran one. The record is an info line, so a host whose log level drops info drops it
+too; the rows boot fieldd at its default level.
+
+**Owed.** Nothing of this item's. Its filing line in "WI-3" (run 115) carries a dated note closing it.
