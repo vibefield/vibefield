@@ -8,17 +8,29 @@ import LocalAuthentication
 public final class DeviceOwnerAuthenticator: LockAuthenticator {
   public init() {}
 
-  /// The method this phone has now. A biometric that is set up (or locked out, which the passcode answers) names
-  /// itself; one that is not set up leaves the passcode; no passcode at all is `.none`.
+  /// The method this phone has now (`method(canAsk:…)` reads LocalAuthentication's answers).
   public var method: LockMethod {
     let context = LAContext()
     var error: NSError?
-    guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else { return .none }
+    let canAsk = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error)
     var biometricError: NSError?
     let biometric = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &biometricError)
-    let lockedOut = biometricError?.code == LAError.biometryLockout.rawValue
+    return Self.method(
+      canAsk: canAsk, askError: error?.code, biometric: biometric, biometricError: biometricError?.code,
+      sensor: context.biometryType)
+  }
+
+  /// A biometric that is set up (or locked out, which the passcode answers) names itself; one that is not set up
+  /// leaves the passcode; no passcode at all is `.none`. Only iOS's own word that no passcode is set reads `.none`:
+  /// the lock stands down on it and keeps that, so any other refusal keeps the phone's method, and the ask answers
+  /// it (a miss leaves the curtain and its Unlock).
+  static func method(
+    canAsk: Bool, askError: Int?, biometric: Bool, biometricError: Int?, sensor: LABiometryType
+  ) -> LockMethod {
+    if !canAsk && askError == LAError.passcodeNotSet.rawValue { return .none }
+    let lockedOut = biometricError == LAError.biometryLockout.rawValue
     guard biometric || lockedOut else { return .passcode }
-    switch context.biometryType {
+    switch sensor {
     case .faceID: return .faceID
     case .touchID: return .touchID
     default: return .passcode
