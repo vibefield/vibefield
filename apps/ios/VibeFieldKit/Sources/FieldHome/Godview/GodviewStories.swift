@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 // PG-4t — THE PHONE'S STORIES ROW, AS NUMBERS (DESIGN.md §8 "The phone's Stories row"): Godview's head carried to
 // the Field page. Every number is that point's; the row's view is `GodviewStoriesRow` (kit-only, it reads the chrome
@@ -44,4 +45,44 @@ enum GodviewStories {
     let first = (width - row) / 2
     return (0..<count).map { first + CGFloat($0) * (circle + gap) }
   }
+
+  /// A view's name as the row says it: its manifest label in sentence case (SWARM is "Swarm"); a label already in
+  /// mixed case is kept as written.
+  static func name(label: String) -> String {
+    label
+  }
+}
+
+/// The name said under a tapped circle (DESIGN.md §8 "The phone's Stories row"): one at a time, for 1.4 s from the
+/// tap. Pure, so a host row drives it with dates; HS holds it, and a task keyed by `until` drops it at its deadline.
+struct GodviewStorySaying: Equatable, Sendable {
+  /// How long a name stands from its tap: the views track's note.
+  static let stand: TimeInterval = 1.4
+
+  /// The view whose name is said, or nil.
+  private(set) var view: GodviewViewChoice?
+  /// When it goes; nil with a view is a name held with no deadline (`-vf-godview-say`, DEBUG, for a still).
+  private(set) var until: Date?
+
+  init() {}
+
+  /// A name held with no deadline: a still's (`-vf-godview-say=<id>`), which cannot tap.
+  static func held(_ view: GodviewViewChoice) -> GodviewStorySaying {
+    GodviewStorySaying()
+  }
+
+  /// A circle tapped at `now`: its name, for 1.4 s from now. Another circle's name goes at once (never two); the
+  /// same circle's 1.4 s starts again.
+  mutating func say(_ view: GodviewViewChoice, at now: Date) {}
+
+  /// The name standing at `now`, or nil.
+  func shown(at now: Date) -> GodviewViewChoice? {
+    nil
+  }
+
+  /// The deadline's task: the name goes once its 1.4 s is out; a held name stays.
+  mutating func expire(at now: Date) {}
+
+  /// The page left, or the scene went to the background: the name goes, held or not.
+  mutating func drop() {}
 }

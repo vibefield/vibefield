@@ -171,6 +171,90 @@ struct GodviewStillFlagTests {
   }
 }
 
+@Suite("PG-4t — the name the row says")
+struct GodviewStorySayingTests {
+  let t = Date(timeIntervalSince1970: 1_790_803_300)
+
+  /// S5 — the manifest's label in sentence case; a label in mixed case is kept as written.
+  @Test func theNameIsTheLabelInSentenceCase() {
+    let cases: [(label: String, name: String)] = [
+      ("SWARM", "Swarm"), ("LIST", "List"), ("RAIN", "Rain"), ("TIMELINE", "Timeline"), ("SPEND", "Spend"),
+      ("Swarm", "Swarm"), ("McRain", "McRain"), ("S", "S"), ("", ""),
+    ]
+    for (label, expected) in cases {
+      let name = GodviewStories.name(label: label)
+      #expect(name == expected, "\(label)")
+    }
+  }
+
+  /// S6 — a name stands 1.4 s from its tap: shown at t+1.399, gone at t+1.4.
+  @Test func aNameStandsOnePointFourSeconds() {
+    var saying = GodviewStorySaying()
+    let before = saying.shown(at: t)
+    #expect(before == nil)
+    saying.say(.swarm, at: t)
+    let at = saying.shown(at: t)
+    let last = saying.shown(at: t.addingTimeInterval(1.399))
+    let gone = saying.shown(at: t.addingTimeInterval(1.4))
+    #expect(at == .swarm)
+    #expect(last == .swarm)
+    #expect(gone == nil)
+    #expect(saying.until == t.addingTimeInterval(GodviewStorySaying.stand))
+    #expect(GodviewStorySaying.stand == 1.4)
+  }
+
+  /// S6 — a second tap at t+1.0 restarts the 1.4 s (on another circle the name moves there at once: one name, never
+  /// two; there is one case today, and the rule is the same tap's).
+  @Test func aSecondTapRestartsTheStand() {
+    var saying = GodviewStorySaying()
+    saying.say(.swarm, at: t)
+    saying.say(.swarm, at: t.addingTimeInterval(1.0))
+    let still = saying.shown(at: t.addingTimeInterval(2.399))
+    let gone = saying.shown(at: t.addingTimeInterval(2.4))
+    #expect(still == .swarm)
+    #expect(gone == nil)
+    #expect(saying.view == .swarm)
+  }
+
+  /// S6 — the deadline's task drops the name only once its stand is out; a page that leaves drops it at once.
+  @Test func theDeadlineAndALeavingPageDropTheName() {
+    var saying = GodviewStorySaying()
+    saying.say(.swarm, at: t)
+    saying.expire(at: t.addingTimeInterval(1.0))
+    #expect(saying.view == .swarm, "too early: the name stands")
+    saying.expire(at: t.addingTimeInterval(1.4))
+    #expect(saying == GodviewStorySaying())
+    saying.say(.swarm, at: t)
+    saying.drop()
+    #expect(saying == GodviewStorySaying())
+  }
+
+  /// S6 — a held name (a still's) has no deadline: it stands at any time and the deadline's task keeps it; a
+  /// leaving page drops it.
+  @Test func aHeldNameStandsUntilThePageLeaves() {
+    var saying = GodviewStorySaying.held(.swarm)
+    let later = saying.shown(at: t.addingTimeInterval(3600))
+    #expect(later == .swarm)
+    #expect(saying.until == nil)
+    saying.expire(at: t.addingTimeInterval(3600))
+    #expect(saying.view == .swarm)
+    saying.drop()
+    #expect(saying.view == nil)
+  }
+
+  /// S8 — `-vf-godview-say=<id>`: the first, matched with its `=`; an id the phone has no view for is nil.
+  @Test func theSayFlagNamesAView() {
+    let swarm = GodviewViewChoice.said(["VibeField", "-vf-godview-say=swarm"])
+    #expect(swarm == .swarm)
+    let first = GodviewViewChoice.said(["-vf-godview-say=swarm", "-vf-godview-say=bogus"])
+    #expect(first == .swarm)
+    for arguments in [[], ["-vf-godview-say=bogus"], ["-vf-godview-sayx=swarm"], ["-vf-godview-say"], ["-vf-godview-view=swarm"]] {
+      let none = GodviewViewChoice.said(arguments)
+      #expect(none == nil, "\(arguments)")
+    }
+  }
+}
+
 /// A stage input built by hand: the witness's facts left empty, the chrome's numbers given.
 @MainActor
 enum StageInputs {

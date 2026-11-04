@@ -19,6 +19,8 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   static let nowArgument = "-vf-godview-now"
   /// PG-4t — a still: every view draws one frame and runs no loop, no transition and no timer.
   static let stillArgument = "-vf-godview-still"
+  /// PG-4t — a still's name: the Stories row says this view's name and holds it, with no deadline.
+  static let sayArgument = "-vf-godview-say"
 
   /// PG-4t — the registry's order (PV `monitor/registry.ts:28-34` at `52d09c8e`): the order the Stories row draws
   /// its circles in, whatever order the cases landed in.
@@ -47,6 +49,12 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   /// the desktop's own fallback, `monitorViewFor`). Matched with its `=`, so a longer flag never parses as this one.
   static func launch(_ arguments: [String]) -> GodviewViewChoice? {
     value(of: argument, in: arguments).flatMap(GodviewViewChoice.init(rawValue:))
+  }
+
+  /// PG-4t — the first `-vf-godview-say=<id>`: the view whose name a still holds, or nil when it is absent or names
+  /// none. Matched with its `=`, as `launch` is.
+  static func said(_ arguments: [String]) -> GodviewViewChoice? {
+    nil
   }
 
   /// PG-4t — whether `-vf-godview-still` is given: the whole argument, so a longer flag is never this one.
