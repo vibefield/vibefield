@@ -38,15 +38,18 @@ extension RainViewTests {
       view.apply(rows: rows, activeId: "pty-h3", isActive: false, moving: false)
       let elements = (view.accessibilityElements as? [RainRowElement]) ?? []
       let ids = elements.map { $0.id }
-      #expect(ids == rows.map { $0.id })
+      let rowIds = rows.map { $0.id }
+      #expect(ids == rowIds)
       let labels = elements.map { $0.accessibilityLabel ?? "" }
       let spoken = rows.map { RainAgent(row: $0, activeId: "pty-h3").spoken }
       #expect(labels == spoken)
       let values = elements.map { $0.accessibilityValue ?? "-" }
-      #expect(values == rows.map { $0.id == "pty-h3" ? "open" : "-" })
+      let openOnly = rows.map { $0.id == "pty-h3" ? "open" : "-" }
+      #expect(values == openOnly)
       let first = try #require(elements.first)
       let column = try #require(view.field.columns(of: first.id).first)
-      #expect(first.accessibilityFrameInContainerSpace.minX == Double(column) * 12)
+      let left = Double(first.accessibilityFrameInContainerSpace.minX)
+      #expect(left == Double(column) * 12, "the element stands in its first stream's column")
       view.apply(rows: [], activeId: nil, isActive: false, moving: false)
       let none = (view.accessibilityElements as? [RainRowElement]) ?? []
       #expect(none.isEmpty)

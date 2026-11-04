@@ -36,8 +36,8 @@ enum RainDice: RainRandom {
 @MainActor
 final class RainField {
   /// The empty stage's words, verbatim (RainView.js:261; fd's Q8).
-  static let emptyTitle = ""
-  static let emptyLine = ""
+  static let emptyTitle = "NO ACTIVE AGENTS"
+  static let emptyLine = "Launch an agent from a terminal pane."
 
   /// The phone keeps the desktop's defaults: it has no parameter panel.
   let parameters = RainParameters.defaults
@@ -60,31 +60,65 @@ final class RainField {
   var running: Bool { motion != nil }
 
   /// The agents effect (:79-83): the window's drawn rows, the open card's row lit (J-S4), then a reconcile.
-  func show(rows: [RemoteFieldRow], activeId: String?) {}
+  func show(rows: [RemoteFieldRow], activeId: String?) {
+    self.rows = rows
+    agents = rows.map { RainAgent(row: $0, activeId: activeId) }
+    sync()
+  }
 
   /// The resize observer (:100-101): the stage's size in points, then a reconcile.
-  func resize(width: Double, height: Double) {}
+  func resize(width: Double, height: Double) {
+    guard size.width != width || size.height != height else { return }
+    size = (width, height)
+    sync()
+  }
 
   /// The loop started or stopped (`createMotionLoop`'s `reconcile`): a start reads the clock (ms), so the first
   /// delta counts from it and a pause never arrives as one giant step.
-  func run(_ wanted: Bool, now: Double) {}
+  func run(_ wanted: Bool, now: Double) {
+    if wanted {
+      if motion == nil { motion = RainMotion(now: now, fps: parameters.refreshRate) }
+    } else {
+      motion = nil
+    }
+  }
 
   /// One display frame at `time` (ms): the moving frame's ops when the cap lets it draw, else nil (no draw, the last
   /// frame stands). A stopped loop draws nothing here.
-  func tick(_ time: Double) -> [RainOp]? { nil }
+  func tick(_ time: Double) -> [RainOp]? {
+    guard var motion, let elapsed = motion.tick(time) else { return nil }
+    self.motion = motion
+    return frame.plan(
+      agents: agents, parameters: parameters, palette: palette, hovered: RainTouchPeek.hovered, elapsed: elapsed,
+      random: &dice)
+  }
 
   /// The field where it stands (`stillRef`): no drop falls, no glyph scrambles, nothing rolled.
-  func still() -> [RainOp] { [] }
+  func still() -> [RainOp] {
+    frame.plan(
+      agents: agents, parameters: parameters, palette: palette, hovered: RainTouchPeek.hovered, elapsed: nil,
+      random: &dice)
+  }
 
   /// A tap at `x` points (`agentAt` then the click, :241-249, :276-279): the row whose stream runs under it.
-  func row(atX x: Double) -> RemoteFieldRow? { nil }
+  func row(atX x: Double) -> RemoteFieldRow? {
+    guard let agent = frame.agent(atX: x, among: agents) else { return nil }
+    return rows.first { $0.id == agent.id }
+  }
 
   /// The columns a row's streams run in, in draw order: where its accessibility element stands.
-  func columns(of id: String) -> [Int] { [] }
+  func columns(of id: String) -> [Int] {
+    frame.drops.entries.filter { $0.drop.agentId == id }.map(\.column)
+  }
 
   /// `sync` bails while the canvas has no container (:63-65): the phone's, until the stage is laid out, so no drop is
   /// rolled for a 0 × 0 stage.
-  private func sync() {}
+  private func sync() {
+    guard size.width > 0, size.height > 0 else { return }
+    frame.sync(
+      width: size.width, height: size.height, fontSize: parameters.fontSize, order: agents.map(\.id),
+      random: &dice)
+  }
 }
 
 /// OPEN (H3), rain's touch tooltip, proposed in light/read-pg8.md §8; not built. The slot where the card would stand

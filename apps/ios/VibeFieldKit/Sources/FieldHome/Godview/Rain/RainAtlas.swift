@@ -96,7 +96,7 @@ final class RainAtlas {
       let fallback = CTFontCreateUIFontForLanguage(.userFixedPitch, fontSize * self.scale, nil) ?? named
       font = CTFontCreateCopyWithSymbolicTraits(fallback, 0, nil, .traitBold, .traitBold) ?? fallback
     }
-    resolvedFontName = ""
+    resolvedFontName = CTFontCopyPostScriptName(font) as String
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(
       pixelFormat: .r8Unorm, width: size, height: size, mipmapped: false)
     descriptor.usage = [.shaderRead]
@@ -105,13 +105,72 @@ final class RainAtlas {
     }
     texture.label = "rain atlas"
     self.texture = texture
+    // The closed set, rasterised now: a frame never waits on CoreText. A unit with no ink is no region.
+    for unit in Self.units { _ = glyph(unit) }
   }
 
   /// The unit's glyph, rasterised on first sight; nil for a unit with no ink (whitespace) or a full atlas.
-  func glyph(_ unit: UInt16) -> RainAtlasRegion? { nil }
+  func glyph(_ unit: UInt16) -> RainAtlasRegion? {
+    if let known = glyphs[unit] { return known }
+    guard let line = line(unit) else { return nil }
+    let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+    if ink.isNull || ink.isEmpty { return nil }
+    let left = Int(ceil(-ink.minX)) + 1
+    let ascent = Int(ceil(ink.maxY)) + 1
+    let width = left + Int(ceil(ink.maxX)) + 1
+    let height = ascent + Int(ceil(-ink.minY)) + 1
+    guard let slot = allocate(width: width, height: height) else { return nil }
+    context.saveGState()
+    context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+    context.textPosition = CGPoint(x: slot.x + left, y: slot.y + ascent)
+    context.setFillColor(gray: 1, alpha: 1)
+    CTLineDraw(line, context)
+    context.restoreGState()
+    let region = region(slot, width: width, height: height, left: -left, top: -ascent, line: line)
+    glyphs[unit] = region
+    dirty = true
+    return region
+  }
 
   /// A head's glow at `blur` (the canvas's `shadowBlur`): the glyph's coverage blurred, padded by three σ.
-  func glow(_ unit: UInt16, blur: Double) -> RainAtlasRegion? { nil }
+  func glow(_ unit: UInt16, blur: Double) -> RainAtlasRegion? {
+    let key = GlowKey(unit: unit, blur: blur)
+    if let known = glows[key] { return known }
+    guard blur > 0, let line = line(unit) else { return nil }
+    let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+    if ink.isNull || ink.isEmpty { return nil }
+    let sigma = Self.glowSigma(blur: blur)
+    let pad = Int(ceil(sigma * 3))
+    let left = Int(ceil(-ink.minX)) + 1 + pad
+    let ascent = Int(ceil(ink.maxY)) + 1 + pad
+    let width = left + Int(ceil(ink.maxX)) + 1 + pad
+    let height = ascent + Int(ceil(-ink.minY)) + 1 + pad
+    guard let slot = allocate(width: width, height: height) else { return nil }
+    var coverage = [UInt8](repeating: 0, count: width * height)
+    coverage.withUnsafeMutableBytes { raw in
+      guard
+        let scratch = CGContext(
+          data: raw.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+          space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)
+      else { return }
+      scratch.translateBy(x: 0, y: CGFloat(height))
+      scratch.scaleBy(x: 1, y: -1)
+      scratch.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+      scratch.textPosition = CGPoint(x: left, y: ascent)
+      scratch.setFillColor(gray: 1, alpha: 1)
+      CTLineDraw(line, scratch)
+    }
+    let blurred = Self.gaussian(coverage, width: width, height: height, sigma: sigma)
+    for row in 0..<height {
+      for column in 0..<width {
+        bytes[(slot.y + row) * size + slot.x + column] = blurred[row * width + column]
+      }
+    }
+    let region = region(slot, width: width, height: height, left: -left, top: -ascent, line: line)
+    glows[key] = region
+    dirty = true
+    return region
+  }
 
   /// Upload the bitmap when a glyph or a glow was added since the last frame.
   func flush() {

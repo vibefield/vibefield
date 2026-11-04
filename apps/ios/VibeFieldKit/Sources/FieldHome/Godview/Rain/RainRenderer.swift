@@ -27,7 +27,45 @@ final class RainRenderer {
   let compileMs: Double
 
   init(device: MTLDevice) throws {
-    throw RainPaintError.compile("the skeleton compiles nothing")
+    self.device = device
+    guard let queue = device.makeCommandQueue() else { throw RainPaintError.noDevice }
+    queue.label = "rain"
+    self.queue = queue
+    let started = Date()
+    let library: MTLLibrary
+    do {
+      library = try device.makeLibrary(source: Self.shaderSource, options: MTLCompileOptions())
+    } catch {
+      throw RainPaintError.compile("\(error)")
+    }
+    let descriptor = MTLRenderPipelineDescriptor()
+    descriptor.label = "rain"
+    descriptor.vertexFunction = library.makeFunction(name: "rain_vs")
+    descriptor.fragmentFunction = library.makeFunction(name: "rain_fs")
+    guard let attachment = descriptor.colorAttachments[0] else { throw RainPaintError.pipeline("no attachment") }
+    attachment.pixelFormat = Self.pixelFormat
+    attachment.isBlendingEnabled = true
+    attachment.rgbBlendOperation = .add
+    attachment.alphaBlendOperation = .add
+    attachment.sourceRGBBlendFactor = .one
+    attachment.sourceAlphaBlendFactor = .one
+    attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+    attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    do {
+      pipeline = try device.makeRenderPipelineState(descriptor: descriptor)
+    } catch {
+      throw RainPaintError.pipeline("\(error)")
+    }
+    compileMs = Date().timeIntervalSince(started) * 1000
+    let samplerDescriptor = MTLSamplerDescriptor()
+    samplerDescriptor.minFilter = .linear
+    samplerDescriptor.magFilter = .linear
+    samplerDescriptor.sAddressMode = .clampToEdge
+    samplerDescriptor.tAddressMode = .clampToEdge
+    guard let sampler = device.makeSamplerState(descriptor: samplerDescriptor) else {
+      throw RainPaintError.pipeline("no sampler")
+    }
+    self.sampler = sampler
   }
 
   /// THE RAIN'S ONE SHADER, as a Swift string: compiled from source at first use (D-i14, the swarm's pattern,
@@ -85,23 +123,75 @@ final class RainRenderer {
 
   /// The plan's ops as the pass draws them: the clear colour (the stage's fill) and the quads, in order.
   static func instances(_ ops: [RainOp], atlas: RainAtlas) -> (clear: SIMD4<Float>, quads: [RainInstance]) {
-    (.zero, [])
+    var clear = SIMD4<Float>(0, 0, 0, 1)
+    var quads: [RainInstance] = []
+    quads.reserveCapacity(ops.count + 32)
+    for op in ops {
+      switch op {
+      case .stage(_, _, let fill):
+        clear = colour(fill, opacity: 1)
+      case .glyph(let glyph):
+        guard let region = atlas.glyph(glyph.unit) else { continue }
+        let penX = glyph.x - region.advance / 2
+        if glyph.blur > 0, let rgb = glyph.glowRgb, let glow = atlas.glow(glyph.unit, blur: glyph.blur) {
+          quads.append(quad(glow, penX: penX, baseline: glyph.y, colour: channels(rgb, opacity: glyph.alpha)))
+        }
+        let ink: SIMD4<Float>
+        switch glyph.ink {
+        case .solid(let fill): ink = colour(fill, opacity: glyph.alpha)
+        case .faded(let rgb, let opacity): ink = channels(rgb, opacity: opacity * glyph.alpha)
+        }
+        quads.append(quad(region, penX: penX, baseline: glyph.y, colour: ink))
+      }
+    }
+    return (clear, quads)
   }
 
   /// Encode one frame's quads into a pass that cleared to the stage, at `viewport` points.
   func encode(
     _ quads: [RainInstance], atlas: RainAtlas, viewport: SIMD2<Float>, into encoder: MTLRenderCommandEncoder
-  ) {}
+  ) {
+    guard !quads.isEmpty else { return }
+    atlas.flush()
+    let length = quads.count * MemoryLayout<RainInstance>.stride
+    guard let buffer = quads.withUnsafeBytes({ device.makeBuffer(bytes: $0.baseAddress!, length: length) }) else {
+      return
+    }
+    var uniforms = viewport
+    encoder.setRenderPipelineState(pipeline)
+    encoder.setVertexBuffer(buffer, offset: 0, index: 0)
+    encoder.setVertexBytes(&uniforms, length: MemoryLayout<SIMD2<Float>>.stride, index: 1)
+    encoder.setFragmentTexture(atlas.texture, index: 0)
+    encoder.setFragmentSamplerState(sampler, index: 0)
+    encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4, instanceCount: quads.count)
+  }
 
   nonisolated private static func quad(
     _ region: RainAtlasRegion, penX: Double, baseline: Double, colour: SIMD4<Float>
   ) -> RainInstance {
-    RainInstance(rect: .zero, uv: .zero, color: colour)
+    let x0 = penX + region.left
+    let y0 = baseline + region.top
+    return RainInstance(
+      rect: SIMD4(Float(x0), Float(y0), Float(x0 + region.width), Float(y0 + region.height)),
+      uv: SIMD4(region.u0, region.v0, region.u1, region.v1), color: colour)
   }
 
   /// `#rrggbb` at an opacity; anything else is no colour (transparent).
-  nonisolated static func colour(_ hex: String, opacity: Double) -> SIMD4<Float> { .zero }
+  nonisolated static func colour(_ hex: String, opacity: Double) -> SIMD4<Float> {
+    let digits = hex.utf8.dropFirst()
+    guard hex.hasPrefix("#"), digits.count == 6,
+      let value = UInt32(String(decoding: digits, as: UTF8.self), radix: 16)
+    else { return .zero }
+    let red = Float((value >> 16) & 0xFF) / 255
+    let green = Float((value >> 8) & 0xFF) / 255
+    let blue = Float(value & 0xFF) / 255
+    return SIMD4(red, green, blue, Float(opacity))
+  }
 
   /// `"r, g, b"` (the reader's `hexToRgb255`) at an opacity.
-  nonisolated static func channels(_ rgb: String, opacity: Double) -> SIMD4<Float> { .zero }
+  nonisolated static func channels(_ rgb: String, opacity: Double) -> SIMD4<Float> {
+    let parts = rgb.split(separator: ",").compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }
+    guard parts.count == 3 else { return .zero }
+    return SIMD4(parts[0] / 255, parts[1] / 255, parts[2] / 255, Float(opacity))
+  }
 }
