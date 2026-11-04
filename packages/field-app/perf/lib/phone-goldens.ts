@@ -114,6 +114,7 @@ export type PhoneViewGoldens = Readonly<Record<string, () => Promise<{ golden: P
  * `GodviewViewChoice` raw value. `tsc` checks each literal path (`tsconfig.json` includes `perf`). */
 export const PHONE_VIEW_GOLDENS: PhoneViewGoldens = {
   // list: () => import("./phone-goldens-list"),
+  spend: () => import("./phone-goldens-spend"),
 };
 export const phoneViewGoldenName = (view: string): string => `phone-${view}.golden.json`;
 /** where every view's golden and the toolkit's golden are mirrored: FieldHomeTests, where the views' suites run */
