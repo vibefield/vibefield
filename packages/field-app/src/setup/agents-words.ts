@@ -8,11 +8,11 @@ export const AGENTS_WORDS = {
   /** while the inventory has not answered, or could not: no claim yet */
   plainTitle: "Your agents.",
   voice:
-    "VibeField found these on this Mac. It runs them as they are, with your settings and sign-ins, and keeps them up to date.",
+    "These agents are on this Mac. Use them with your existing settings and sign-ins. VibeField keeps them up to date.",
   /** nothing installed */
   firstTitle: "Add your first agent.",
   firstVoice:
-    "VibeField runs the coding agents you install, as they are, with your settings and sign-ins, and keeps them up to date.",
+    "Choose a coding agent to work with. VibeField uses its settings and sign-ins, and keeps it up to date.",
   /** Settings → Agents' own sentence, until Get (AO-7) */
   firstFact: "Install one, and it appears here.",
   lookAgain: "Look again",

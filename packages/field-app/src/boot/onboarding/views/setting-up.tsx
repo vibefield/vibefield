@@ -38,7 +38,7 @@ export const DESK_LINE = "Opening your field…";
 
 /** History's first pass has run 8s past the desk (AO-D4): said over Start now. */
 export const START_NOW_LINE =
-  "Finding sessions in a history this size takes longer. It carries on in History.";
+  "Your history is still loading. You can start now and follow its progress in History.";
 
 export function OnboardingSettingUpPaneView({
   phases,
@@ -76,11 +76,11 @@ export function OnboardingSettingUpPaneView({
         title="That did not save."
         actions={
           <>
-            <button type="submit" className={primaryCls}>
-              Try again
-            </button>
             <button type="button" className={quietCls} onClick={onContinueAnyway}>
               Continue anyway
+            </button>
+            <button type="submit" className={primaryCls}>
+              Try again
             </button>
           </>
         }
@@ -119,7 +119,7 @@ export function OnboardingSettingUpPaneView({
           line={`Welcome to your field, ${name}.`}
           // DESIGN.md §8's discoverability, said once: a face does not say
           // "settings" the way the gear it replaced did.
-          sub={`Your face in the bottom-left corner opens Settings — so does ${settingsChord}.`}
+          sub={`Open Settings from your face in the bottom-left corner, or press ${settingsChord}.`}
           ink
         />
       ) : (
@@ -140,8 +140,8 @@ export function OnboardingSettingUpPaneView({
 function CompletionFailure({ reason }: { reason: string }): ReactElement {
   return (
     <div className="flex flex-col gap-1">
-      <WizardError reason={`Setup could not be recorded. ${reason}`} />
-      <span className={factCls}>Continuing without it means setup asks again next time.</span>
+      <WizardError reason={`Your setup couldn't be saved. ${reason}`} />
+      <span className={factCls}>If you continue, you'll see setup again next time.</span>
     </div>
   );
 }

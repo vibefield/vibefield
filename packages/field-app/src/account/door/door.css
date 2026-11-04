@@ -29,6 +29,16 @@
   font-size: 12px;
 }
 
+.vf-door-partner[data-compact] {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.vf-door-partner[data-compact] .vf-door-partner-words {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* ---- What VibeField can see: replaces the constellation in place ---- */
 .vf-door-see {
   display: flex;

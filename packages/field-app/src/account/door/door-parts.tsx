@@ -13,43 +13,46 @@ import "./door.css";
 
 /** The partner line: Tailscale's mark where trust is decided (§13, TS-D4), and
  * what a person needs to know before the click (TS-L4). */
-export function PartnerLine(): ReactElement {
+export function PartnerLine({ compact = false }: { compact?: boolean }): ReactElement {
   return (
-    <div className="vf-door-partner">
+    <div className="vf-door-partner" data-compact={compact || undefined}>
       <TailscaleMark size={56} />
       <div className="vf-door-partner-words">
         <p>
-          Private network by Tailscale. Free for personal use; signing in creates an account if you
-          don't have one.
+          Private connections with Tailscale. Free for personal use. Signing in creates an account
+          if you don't have one.
         </p>
         <p className="vf-door-quiet">
-          Use the account you use for your own devices. A work account joins your company's network.
+          Use your personal account for your own devices. A work account joins your company's
+          network.
         </p>
       </div>
     </div>
   );
 }
 
-/** "What VibeField can see" — replaces the constellation IN PLACE, so the pane
- * keeps its height (§8). Five facts, each one sentence. */
+/** Five privacy facts. The wizard gives these the full body width, within its fixed frame. */
 export const WHAT_VIBEFIELD_CAN_SEE: ReadonlyArray<readonly [string, string]> = [
   [
-    "VibeField learns",
-    "your Tailscale login and which of your devices are signed in. Nothing else about your account.",
+    "Your login and devices.",
+    "VibeField sees your Tailscale login and signed-in devices. Nothing else about your account.",
   ],
   [
-    "It's its own device.",
-    "VibeField joins your network as its own device, separate from any Tailscale app you run. No VPN prompt; this Mac's network settings don't change.",
+    "Your network settings stay the same.",
+    "VibeField joins as a separate device, alongside any Tailscale app you use. No VPN prompt or changes to this Mac's network settings.",
   ],
   [
     "Only you can reach this Mac.",
-    "Other people on a shared network can see the device exists; VibeField refuses them.",
+    "Others on a shared network can see that the device exists, but VibeField blocks their access.",
   ],
   [
-    "Your work goes device to device,",
-    "encrypted end to end. VibeField runs no servers. Tailscale sees which devices connect, never what they send.",
+    "Encrypted from device to device.",
+    "Your work travels directly, encrypted end to end. VibeField runs no servers. Tailscale sees connections, never their contents.",
   ],
-  ["Undo it any time:", "Settings → Devices → Disconnect. Your field stays on this Mac."],
+  [
+    "Disconnect whenever you like.",
+    "Settings → Devices → Disconnect. Your field stays on this Mac.",
+  ],
 ];
 
 export function WhatVibeFieldCanSee(): ReactElement {

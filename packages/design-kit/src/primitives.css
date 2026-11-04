@@ -292,6 +292,11 @@
   box-shadow: 0 2px 6px rgb(0 0 0 / 8%);
 }
 
+.vf-ui-segmented:disabled button {
+  color: var(--vf-text-faint);
+  cursor: default;
+}
+
 /* the thumb placed: it is the choice's look, and the chosen segment is only its label over it */
 .vf-ui-segmented[data-thumb="placed"] button[aria-pressed="true"] {
   border-color: transparent;

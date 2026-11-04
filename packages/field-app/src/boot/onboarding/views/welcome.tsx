@@ -5,7 +5,7 @@ import { primaryCls, voiceCls, WizardHold, WizardPane, WizardStatus } from "../w
 export function OnboardingDerivingPaneView(): ReactElement {
   return (
     <WizardHold face="deriving">
-      <WizardStatus line="Reading what this field already knows…" />
+      <WizardStatus line="Getting your field ready…" />
     </WizardHold>
   );
 }
@@ -23,7 +23,7 @@ export function OnboardingWelcomePaneView({
         Welcome.
       </h1>
       <p className={`vf-wizard-hold-voice ${voiceCls}`}>
-        Manage all your agents and compose your agentic workflow in one place.
+        Your agents, sessions, and projects. Together in one field.
       </p>
       <div className="vf-wizard-hold-actions">
         <button type="submit" className={primaryCls}>
@@ -42,8 +42,8 @@ export function OnboardingWelcomeBackPaneView({
   return (
     <WizardPane
       eyebrow="VibeField"
-      title="Your field now lives in a user."
-      voice="Everything you had is exactly where you left it — it just moved under a user, so this machine can hold more than one. Two questions and you are back."
+      title="Welcome back."
+      voice="Your work is right where you left it. Give your field a name and a face, so everyone on this computer can have their own."
       actions={
         <button type="submit" className={primaryCls}>
           Continue

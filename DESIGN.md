@@ -2645,7 +2645,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   "offline · not linked" in words — the ordinary first-run state, never red (UA-P-D1).
   **Discoverability**, because a face does not say "settings": the tooltip ("James ·
   Account"), `⌘,`, the tray's Settings…, and the Setup Assistant's last pane saying it once
-  ("Your face in the bottom-left corner opens Settings — so does ⌘,.").
+  ("Open Settings from your face in the bottom-left corner, or press ⌘,.").
   *As built (UA-7, 2026-09-22):* `⌘,` did not exist before this — the app menu's `appMenu`
   role carries no Settings item — so it is bound where `⌘K` is, and toggles (a held chord's repeats do nothing).
   *AU-D12 (2026-10-29) puts Settings… `⌘,` in the app menu (AU-4). On macOS a key equivalent the menu shows
@@ -2779,13 +2779,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   shell: nothing on it grows the shell. **Ask:** the eyebrow "Your devices", the title "Your field,
   on every device.", a small constellation — your face at the centre, This Mac solid beside it, a
   phone and another computer as dashed ghosts — beside three reasons, titles only ("Answer your
-  agents from your phone" · "Open sessions running on your other computers" · "Keep documents in
-  step across your desks"), and under them the **partner line**: Tailscale's mark (§13), "Private
-  network by Tailscale. Free for personal use; signing in creates an account if you don't have
-  one." and "Use the account you use for your own devices. A work account joins your company's
-  network." One primary act, **Continue with Tailscale** (↩), then **Not now** (esc), then a quiet
-  **Other ways to sign in**. "What VibeField can see", a quiet link, REPLACES the constellation in
-  place: VibeField learns your login and which of your devices are signed in; it joins as its own
+  agents from your phone" · "Continue sessions on another computer" · "Keep your documents in sync"), and under them the **partner line**: Tailscale's mark (§13), "Private connections with Tailscale. Free for personal use. Signing in creates an account if you
+  don't have one." and "Use your personal account for your own devices. A work account joins
+  your company's network." One primary act, **Continue with Tailscale** (↩), then **Not now** (esc), then a quiet
+  **Other ways to sign in**. Both it and **What VibeField can see** are text links in the body,
+  outside the footer. The privacy view replaces the entire device overview with five full-width
+  facts; the reasons and partner line do not remain beside or below it. **Back to your devices**
+  restores the overview. The facts retain the same promises: VibeField learns your login and which of your devices are signed in; it joins as its own
   device, with no VPN prompt and no change to this Mac's network settings; only you can reach this
   Mac; your work goes device to device and Tailscale sees which devices connect, never what they
   send; VibeField sends Tailscale no device logs (TS-D15); Settings → Devices → Disconnect undoes
@@ -3385,33 +3385,32 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   agents that are missing follow with **Get**, which becomes **Install** and names what will run ("Runs
   Anthropic's installer: curl -fsSL https://claude.ai/install.sh | bash", the command in mono) before it
   runs it (AO-D5, AO-L7). Preview agents wait behind **More agents**. With nothing installed the title is
-  "Add your first agent." and Claude Code and Codex come first. Voice: "VibeField found these on this Mac.
-  It runs them as they are, with your settings and sign-ins, and keeps them up to date." An install runs
+  "Add your first agent." and Claude Code and Codex come first. Voice: "These agents are on this Mac. Use them with your existing settings and sign-ins.
+  VibeField keeps them up to date." An install runs
   on after Continue, and the last pane reports it. Later: "Add agents anytime in Settings → Agents."
   *Built 2026-10-27, AO-5b, until Get (AO-7):* a missing agent's row says **Not on this Mac** in the
   secondary ink where Get will stand, its mark at half ink; "Claude Code and Codex first" is the catalog's
   supported rows in its own order; More agents lists the preview rows VibeField installs and updates
   (`offers.distribution`), so a protocol is never offered as an agent to get. With nothing installed the
-  voice is "VibeField runs the coding agents you install, as they are, with your settings and sign-ins,
-  and keeps them up to date.", under the rows Settings → Agents' own sentence "Install one, and it
+  voice is "Choose a coding agent to work with. VibeField uses its settings and sign-ins,
+  and keeps it up to date.", under the rows Settings → Agents' own sentence "Install one, and it
   appears here." with **Look again**, and the later line under them. The title claims only what the
   inventory said: "Your agents." while it has not answered ("Looking on this Mac…") or could not
   ("VibeField couldn't read the agents on this Mac.", with **Try again**, a fresh read), and the voice
-  says "VibeField found these" only once it has found them (before that, the first-agent voice), and
+  says "These agents are on this Mac" only once it has found them (before that, the first-agent voice), and
   Continue then moves on recording nothing. Continue records the step answered when an agent is on this Mac, put
   off when none is. *Corrected 2026-10-27 (AO-6a): this note said "Looking for your agents…" and "…on
   this Mac right now." with no Try again; the page's §10 states table, which governs, says it as above.*
-  **Profiles — "Every subscription, side by side."** Taught with the person's own sign-ins: **This Mac**
+  **Profiles — "Your accounts, side by side."** Taught with the person's own sign-ins: **This Mac**
   as a card, each agent with who it is signed in as and its plan by name ("Claude Max"), and beside it a
-  dashed card, **Add a profile…**, which grows into the pane in place (M1). Voice: "A profile holds one
-  sign-in for each agent. This Mac is your first: it uses the accounts your agents are already signed in
-  to." The offer: "Another plan, for work or a client? Give it a profile." The fact: "Profiles keep their
-  sign-ins apart, so they work at the same time and never sign each other out." Adding is one field a
-  step: a name (placeholder "Work, a client, Personal…"), the agent, then that agent's own login in the
+  dashed card, **Add a profile…**, which grows into the pane in place (M1). Voice: "This Mac uses your agents' existing sign-ins. Add a profile for another set of accounts,
+  with one sign-in per agent." The offer: "Keep work, personal, or client accounts separate." The fact:
+  "Use accounts side by side without signing each other out." Adding is one field a
+  step: a name (placeholder "Work, Personal, or a client name"), the agent, then that agent's own login in the
   pane (the Sign-in terminal, "This runs in Work's folder, so the sign-in lands there and nowhere else").
   The profile is kept once its first agent says who signed in (AO-D7); Cancel leaves nothing behind.
-  Done: "Work is ready. It starts with clean settings: its own skills and servers." Later: "Add one
-  anytime in Settings → Agent Profiles."
+  Done: "Work is ready, with its own settings, skills, and servers." Later: "Manage profiles in
+  Settings → Agent Profiles."
   *Built 2026-10-27, AO-5b:* the cards stack (the pane is the glass's one column): This Mac's rows are
   Agent Profiles' own (`profilePage`), each saying "Signed in as {who}" with the plan it runs on by name
   at the trailing edge, or "Not signed in" with **Sign in…**, which runs the agent's own login in the
@@ -3442,10 +3441,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   **History — "Bring in your past sessions."** One row per agent that has history on this Mac, an agent
   no longer installed included: the mark, the label, its size (§9, as Finder counts it), when it was last
   used and where it lives (`~/.claude`, mono), and a switch. **Every switch starts on** (AO-D3); nothing
-  is read before the button. Voice: "Search everything your agents did on this Mac, and pick up any
-  session where it left off." Under the rows, two sentences: how long the first reading takes ("About a
+  is read before the button. Voice: "Find your agents' past conversations on this Mac and pick up
+  where you left off." Under the rows, two sentences: how long the first reading takes ("About a
   minute on a quiet Mac, one time only. History fills in while you work.") and where it stays ("Your
-  history stays on your devices. VibeField reads it here and never uploads it."). The acts: **Bring in
+  history stays on your devices. Nothing is uploaded."). The acts: **Bring in
   history** (the primary), **Not now** (recorded as later), and with every switch off the primary reads
   **Continue without history** (recorded as no). Not enough space says so with both numbers. Later:
   "Bring it in anytime from History."
@@ -3458,9 +3457,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   until a file is checked, and "History isn't available right now." with no wait when it cannot start). The live
   phase breathes (§6); a done one takes its ✓. It waits
   for the desk and History's first pass only, and for no more than 8s past the desk, then offers **Start
-  now** under "Finding sessions in a history this size takes longer. It carries on in History." Then
-  its title becomes "Welcome to your field, {name}." in place, with the line "Your face in the
-  bottom-left corner opens Settings — so does ⌘,", and the glass hands the window to the desk it opened
+  now** under "Your history is still loading. You can start now and follow its progress in History." Then
+  its title becomes "Welcome to your field, {name}." in place, with the line "Open Settings from your
+  face in the bottom-left corner, or press ⌘,.", and the glass hands the window to the desk it opened
   (§6, the hand-over). A second user's chapter is the same and its end has no welcome beat (UA §6.2).
 - **The users chooser** (Setup, second-user variant; 2026-09-22): Back from a new user's pane 2
   opens it, because that user already exists by then — the chooser is where you choose who to
@@ -3539,7 +3538,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   560 wide — its head at the top, its body 20 under it, its foot on the bottom (the actions, and the line
   under them, whose room is always kept) — so the actions stand at one height on every step. A pane only
   fades in (240ms `ease`, 160ms reduced), the old one out first (120ms); nothing rises, slides or
-  recentres. AO's and TS's panes keep their markup and words without their eyebrows (FG-L7). **A load**
+  recentres. **Onboarding refinement (2026-11-01, requested in desktop QA):** Back stands alone
+  at the footer's leading edge; secondary actions precede the primary action at the trailing edge,
+  in reading and keyboard order. The later-home line sits under the actions, right aligned. The
+  body is bounded above the footer; long device details scroll inside it with 4px focus-ring room
+  and the existing 20px scroll fade. The footer never covers a disclosure or control. Device
+  overview uses a 208px constellation beside three short benefits, followed by the two text links
+  and a compact partner line (the existing 56px vendor mark, 12px copy). Privacy and alternate sign-in views use the
+  full body width. The face preview keeps its 96px art in a 136px column; its equal-width frame
+  choices use 32px buttons and 12px labels, separated from the preview by 16px. Inputs use the
+  existing fill, hairline, text and focus tokens. Profiles keep their card heading visible while
+  the list scrolls, and long account and plan names wrap within their columns. The scrolling
+  viewport clips to the header's rounded top corners, including the card's 1px hairline, so no
+  square card edge shows behind the pinned heading. The Add a profile
+  offer stands below the scrolling cards, always visible; once opened, its steps and sign-in
+  join the cards and scroll into view. Copy leads with
+  the choice being made, uses short sentences, and keeps the later destination and account-creation
+  disclosure explicit. No authentication or privacy promises change.
+  AO's and TS's panes keep their markup and words without their eyebrows (FG-L7). **A load**
   (FG-L5, FG-D20) is the logo and one line: the glass's rows `1fr | the logo | 1fr`, the line 26 under the
   logo (400, 14px/1.4, t2, tabular figures) with its sub (12px, t2, told by its
   size), and no buttons; a way out shows only
@@ -3615,7 +3631,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   (32px, light), AO's line 10 under it (420 at most), Get started 28 under that. Setting up is one line (FG-D21 B),
   the work's own words: "Opening your field…" over the boot's stage, then History's first pass ("Finding your
   history…", then "Discovering conversations…" over its files checked), and at the end the welcome on the same line,
-  in ink, over "Your face in the bottom-left corner opens Settings — so does ⌘,". Start now and its reason (360 at
+  in ink, over "Open Settings from your face in the bottom-left corner, or press ⌘,.". Start now and its reason (360 at
   most, 8 above it) stand under the line when AO-D4's 8s give them, fading in over 240ms. What went wrong stays a
   pane: the answers not saved, and the desk that could not open, in the boot's words with its Retry. The band's
   Setting up segment fills with the boot's own progress (260ms linear; at once reduced), then stands full. The logo

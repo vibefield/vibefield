@@ -40,7 +40,7 @@ import {
 // exits), approval, arrival, the refusals re-voiced, and other ways in. The
 // machinery is the shared door (account/use-link-door.ts); this file draws it
 // in the wizard's glass and keeps the shell's height (nothing here grows it:
-// "What VibeField can see" and the phone's code REPLACE the constellation).
+// Privacy and alternate sign-in details use the full body, above the fixed footer).
 // On the glass its two waits are loads (FG-L5, FG-4b): the link's read, and
 // Tailscale opening — the logo and one line, with a way out after 6s.
 
@@ -105,13 +105,13 @@ export interface ConnectPaneProps {
 
 const REASONS = [
   "Answer your agents from your phone",
-  "Open sessions running on your other computers",
-  "Keep documents in step across your desks",
+  "Continue sessions on another computer",
+  "Keep your documents in sync",
 ] as const;
 
 function Reasons(): ReactElement {
   return (
-    <ul className="flex flex-col gap-1.5">
+    <ul className="vf-wizard-device-reasons">
       {REASONS.map((reason) => (
         <li key={reason} className={voiceCls}>
           {reason}
@@ -126,6 +126,18 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
   const frame = useWizardFrame();
   const [aside, setAside] = useState<ConnectAside>(props.initialAside ?? "constellation");
   const [key, setKey] = useState("");
+  const detailPanel = useRef<HTMLElement>(null);
+  const privacyLink = useRef<HTMLButtonElement>(null);
+  const otherWaysLink = useRef<HTMLButtonElement>(null);
+  const previousAside = useRef(aside);
+  useEffect(() => {
+    if (previousAside.current === aside) return;
+    const returningTo = previousAside.current === "why" ? privacyLink : otherWaysLink;
+    previousAside.current = aside;
+    (aside === "constellation" ? returningTo.current : detailPanel.current)?.focus({
+      preventScroll: true,
+    });
+  }, [aside]);
   const thisMac = unlinkedWord(platform).replace(/ only$/, "");
 
   // the ask's ghosts: This Mac, and what connecting would bring
@@ -171,47 +183,49 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
         return <WhatVibeFieldCanSee />;
       case "other":
         return (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              className={quietCls}
-              onClick={() => {
-                setAside("phone");
-                props.onBegin({ browser: false });
-              }}
-            >
-              Sign in on your phone
-            </button>
-            <button type="button" className={quietCls} onClick={() => setAside("key")}>
-              Use an auth key
-            </button>
+          <div className="vf-wizard-device-detail">
+            <p className={voiceCls}>Use your phone, or connect with a Tailscale auth key.</p>
+            <div className="vf-wizard-device-choices">
+              <button
+                type="button"
+                className={quietCls}
+                onClick={() => {
+                  setAside("phone");
+                  props.onBegin({ browser: false });
+                }}
+              >
+                Sign in on your phone
+              </button>
+              <button type="button" className={quietCls} onClick={() => setAside("key")}>
+                Use an auth key
+              </button>
+            </div>
             <p className={factCls}>
-              An auth key is for a Mac with no browser: make one in the admin console under Settings
-              → Keys, untagged. It is used once and never stored.
+              For a computer without a browser, create an untagged auth key in the Tailscale admin
+              console under Settings → Keys. VibeField uses it once and never stores it.
             </p>
           </div>
         );
       case "key":
         return (
-          <div className="flex flex-col gap-2">
-            <input
-              type="password"
-              aria-label="Tailscale auth key"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="tskey-auth-…"
-              value={key}
-              onChange={(event) => setKey(event.target.value)}
-              className="h-10 rounded-[12px] border border-black/10 bg-white px-3.5 font-mono text-[13px] text-black/85 outline-none focus:border-black/25 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/90"
-            />
-            <button
-              type="button"
-              className={primaryCls}
-              disabled={key.trim().length === 0 || step.kind === "pending"}
-              onClick={() => props.onBegin({ authKey: key.trim() })}
-            >
-              Sign in with the key
-            </button>
+          <div className="vf-wizard-device-detail">
+            <p className={voiceCls}>
+              Create an untagged auth key in the Tailscale admin console under Settings → Keys.
+              VibeField uses it once and never stores it.
+            </p>
+            <label className="flex flex-col gap-2">
+              <span className={factCls}>Tailscale auth key</span>
+              <input
+                type="password"
+                aria-label="Tailscale auth key"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="tskey-auth-…"
+                value={key}
+                onChange={(event) => setKey(event.target.value)}
+                className="vf-wizard-input font-mono"
+              />
+            </label>
           </div>
         );
       default:
@@ -219,24 +233,16 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
     }
   };
 
-  const whyLink =
-    aside === "why" ? (
+  const detailBack =
+    aside !== "constellation" ? (
       <button
         type="button"
-        className={`${factCls} self-start underline`}
+        className="vf-wizard-text-action"
         onClick={() => setAside("constellation")}
       >
         Back to your devices
       </button>
-    ) : (
-      <button
-        type="button"
-        className={`${factCls} self-start underline`}
-        onClick={() => setAside("why")}
-      >
-        What VibeField can see
-      </button>
-    );
+    ) : null;
 
   switch (face.kind) {
     case "loading":
@@ -260,19 +266,17 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
           track="ts"
           title="Your field, on every device."
           onSubmit={props.onContinue}
+          back={<BackAction onBack={onBack} />}
           actions={
-            <>
-              <button type="submit" className={primaryCls}>
-                Continue
-              </button>
-              <BackAction onBack={onBack} />
-            </>
+            <button type="submit" className={primaryCls}>
+              Continue
+            </button>
           }
         >
           <p className={factCls}>
             {face.kind === "loading"
-              ? "Asking this Mac about its link…"
-              : "This daemon does not report link status, so there is nothing to connect from here. Everything local keeps working."}
+              ? "Checking your device connection…"
+              : "Device connections aren't available right now. You can keep working on this Mac and try again later in Settings → Devices."}
           </p>
         </WizardPane>
       );
@@ -282,7 +286,13 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
       const refusal = face.kind === "refused" ? face : null;
       const title =
         refusal === null
-          ? "Your field, on every device."
+          ? aside === "why"
+            ? "What VibeField can see."
+            : aside === "other"
+              ? "Choose how to connect."
+              : aside === "key"
+                ? "Connect with an auth key."
+                : "Your field, on every device."
           : refusal.state === "login_already_linked"
             ? "That account already has a field here."
             : refusal.state === "login_unavailable"
@@ -295,23 +305,18 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
           track="ts"
           title={title}
           later={LATER_ON_DEVICES}
+          back={<BackAction onBack={onBack} />}
           onSubmit={() => {
             // a refused sign-in kept its identity, so asking again with it lands
             // on the same account: "Use another account" starts over
-            if (refusal === null) props.onBegin();
+            if (step.kind === "pending") return;
+            if (refusal === null && aside === "key") {
+              if (key.trim().length > 0) props.onBegin({ authKey: key.trim() });
+            } else if (refusal === null) props.onBegin();
             else if (canBegin) props.onSignInAgain();
           }}
           actions={
             <>
-              {canBegin && (
-                <button type="submit" className={primaryCls} disabled={step.kind === "pending"}>
-                  {step.kind === "pending"
-                    ? LINK_ACT_PENDING_LABEL
-                    : refusal === null
-                      ? LINK_ACT_LABEL
-                      : "Use another account"}
-                </button>
-              )}
               {refusal?.state === "login_already_linked" && props.onNewUser !== undefined && (
                 <button type="button" className={quietCls} onClick={props.onNewUser}>
                   New user…
@@ -325,24 +330,65 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
                 />
               )}
               <SkipAction label="Not now" onSkip={props.onSkip} />
-              {refusal === null && aside === "constellation" && (
-                <button type="button" className={quietCls} onClick={() => setAside("other")}>
-                  Other ways to sign in
+              {canBegin && (
+                <button
+                  type="submit"
+                  className={primaryCls}
+                  disabled={
+                    step.kind === "pending" ||
+                    (refusal === null && aside === "key" && key.trim().length === 0)
+                  }
+                >
+                  {step.kind === "pending"
+                    ? LINK_ACT_PENDING_LABEL
+                    : refusal !== null
+                      ? "Use another account"
+                      : aside === "key"
+                        ? "Connect with auth key"
+                        : LINK_ACT_LABEL}
                 </button>
               )}
-              <BackAction onBack={onBack} />
             </>
           }
         >
           {refusal === null ? (
-            <>
-              <div className="grid grid-cols-[1fr_1.1fr] items-center gap-4">
+            aside === "constellation" ? (
+              <>
+                <div className="vf-wizard-device-overview">
+                  <Constellation face={me.face} seed={me.seed} devices={ghosts} />
+                  <Reasons />
+                </div>
+                <div className="vf-wizard-device-links">
+                  <button
+                    ref={privacyLink}
+                    type="button"
+                    className="vf-wizard-text-action"
+                    onClick={() => setAside("why")}
+                  >
+                    What VibeField can see
+                  </button>
+                  <button
+                    ref={otherWaysLink}
+                    type="button"
+                    className="vf-wizard-text-action"
+                    onClick={() => setAside("other")}
+                  >
+                    Other ways to sign in
+                  </button>
+                </div>
+                <PartnerLine compact />
+              </>
+            ) : (
+              <section
+                ref={detailPanel}
+                tabIndex={-1}
+                aria-label={title}
+                className="vf-wizard-device-detail"
+              >
                 {asideBody(<Constellation face={me.face} seed={me.seed} devices={ghosts} />)}
-                <Reasons />
-              </div>
-              {whyLink}
-              <PartnerLine />
-            </>
+                {detailBack}
+              </section>
+            )
           ) : (
             <div className="flex flex-col gap-1.5">
               <p className={voiceCls}>
@@ -369,15 +415,15 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
             title="VibeField's network part is missing."
             voice="Reinstall VibeField to connect. Everything local keeps working."
             onSubmit={props.onSkip}
+            back={
+              <button type="button" className={quietCls} onClick={props.onCancel}>
+                Cancel
+              </button>
+            }
             actions={
-              <>
-                <button type="submit" className={primaryCls}>
-                  Not now
-                </button>
-                <button type="button" className={quietCls} onClick={props.onCancel}>
-                  Cancel
-                </button>
-              </>
+              <button type="submit" className={primaryCls}>
+                Not now
+              </button>
             }
           />
         );
@@ -408,27 +454,24 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
               ? slow
                 ? SLOW_NOTE
                 : undefined
-              : "Tailscale opened in your browser. This pane follows on its own."
+              : "Sign in to Tailscale in your browser. Setup will continue here automatically."
           }
           onSubmit={props.onOpenAgain}
+          back={
+            <button type="button" className={quietCls} onClick={props.onCancel}>
+              Cancel
+            </button>
+          }
           actions={
             <>
+              {!opening && (
+                <CopyButton label="Copy link" copy={props.onCopyLink} className={quietCls} />
+              )}
               {!opening && (
                 <button type="submit" className={primaryCls}>
                   Open again
                 </button>
               )}
-              {!opening && (
-                <CopyButton label="Copy link" copy={props.onCopyLink} className={quietCls} />
-              )}
-              {!opening && aside !== "phone" && (
-                <button type="button" className={quietCls} onClick={() => setAside("phone")}>
-                  Sign in on your phone
-                </button>
-              )}
-              <button type="button" className={quietCls} onClick={props.onCancel}>
-                Cancel
-              </button>
             </>
           }
         >
@@ -436,7 +479,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
             <div className="flex items-center gap-4">
               <SignInQr text={face.authUrl} label="Scan to sign in on your phone" />
               <p className={factCls}>
-                Scan with your phone's camera, then sign in there. This Mac completes on its own.
+                Scan with your phone's camera and sign in. Setup will continue here automatically.
               </p>
             </div>
           ) : (
@@ -447,6 +490,15 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
               Tailscale will ask to connect <span className="font-mono">{face.machineName}</span>.
               That's this Mac.
             </p>
+          )}
+          {!opening && aside !== "phone" && (
+            <button
+              type="button"
+              className="vf-wizard-text-action"
+              onClick={() => setAside("phone")}
+            >
+              Sign in on your phone
+            </button>
           )}
         </WizardPane>
       );
@@ -471,24 +523,24 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
           onSubmit={props.onContinue}
           actions={
             <>
-              <button type="submit" className={primaryCls}>
-                Tell me when it's approved
-              </button>
               <CopyButton
-                label="Copy a request for your admin"
+                label="Copy approval request"
                 copy={(from) => props.onCopyText(request, from)}
                 className={quietCls}
               />
-              <button type="button" className={quietCls} onClick={props.onSignInAgain}>
-                Use another account
+              <button type="submit" className={primaryCls}>
+                Tell me when it's approved
               </button>
             </>
           }
         >
           <WaitingSteps live="join" />
+          <button type="button" className="vf-wizard-text-action" onClick={props.onSignInAgain}>
+            Use another account
+          </button>
           {face.adminUrl !== null && (
             <a
-              className={`${factCls} self-start underline`}
+              className="vf-wizard-text-action"
               href={face.adminUrl}
               target="_blank"
               rel="noreferrer"
@@ -509,22 +561,27 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
           track="ts"
           title="Your network requires device logs."
           later={LATER_ON_DEVICES}
-          voice="Your Tailscale network's admin turned on network logging, which needs every device to send its logs to Tailscale. VibeField sends none, so this Mac can't join this network."
+          voice="This network requires every device to send logs to Tailscale. VibeField doesn't send them by default. Allow logs to join, or continue without connecting."
           onSubmit={props.onSendLogs}
           actions={
             <>
+              <SkipAction label="Not now" onSkip={props.onSkip} />
               <button type="submit" className={primaryCls} disabled={step.kind === "pending"}>
                 Send logs on this network
               </button>
-              {face.adminUrl !== null && (
-                <a className={quietCls} href={face.adminUrl} target="_blank" rel="noreferrer">
-                  Manage in Tailscale ↗
-                </a>
-              )}
-              <SkipAction label="Not now" onSkip={props.onSkip} />
             </>
           }
         >
+          {face.adminUrl !== null && (
+            <a
+              className="vf-wizard-text-action"
+              href={face.adminUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Manage in Tailscale ↗
+            </a>
+          )}
           {step.kind === "failed" && <WizardError reason={step.reason} />}
         </WizardPane>
       );
@@ -543,9 +600,6 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
             onSubmit={props.onContinue}
             actions={
               <>
-                <button type="submit" className={primaryCls}>
-                  Continue
-                </button>
                 {machine !== null && (
                   <CopyButton
                     label="Copy"
@@ -558,6 +612,9 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
                     Manage in Tailscale ↗
                   </a>
                 )}
+                <button type="submit" className={primaryCls}>
+                  Continue
+                </button>
               </>
             }
           >
@@ -595,16 +652,16 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
           onSubmit={props.onContinue}
           actions={
             <>
-              {alone && aside !== "phone" && (
-                <button type="button" className={primaryCls} onClick={() => setAside("phone")}>
+              {!alone && aside !== "phone" && (
+                <button type="button" className={quietCls} onClick={() => setAside("phone")}>
                   Add your phone
                 </button>
               )}
               <button type="submit" className={alone && aside !== "phone" ? quietCls : primaryCls}>
                 Continue
               </button>
-              {!alone && aside !== "phone" && (
-                <button type="button" className={quietCls} onClick={() => setAside("phone")}>
+              {alone && aside !== "phone" && (
+                <button type="button" className={primaryCls} onClick={() => setAside("phone")}>
                   Add your phone
                 </button>
               )}
@@ -622,11 +679,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
           ) : (
             <Constellation face={me.face} seed={me.seed} devices={arrived} arriving />
           )}
-          <button
-            type="button"
-            className={`${factCls} self-start underline`}
-            onClick={props.onSignInAgain}
-          >
+          <button type="button" className="vf-wizard-text-action" onClick={props.onSignInAgain}>
             Not this account? Sign in again
           </button>
         </WizardPane>
@@ -651,11 +704,11 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
           onSubmit={props.onContinue}
           actions={
             <>
-              <button type="button" className={primaryCls} onClick={props.onRenew}>
-                {face.reason === "removed" ? "Connect again" : "Sign in again"}
-              </button>
               <button type="submit" className={quietCls}>
                 Continue
+              </button>
+              <button type="button" className={primaryCls} onClick={props.onRenew}>
+                {face.reason === "removed" ? "Connect again" : "Sign in again"}
               </button>
             </>
           }

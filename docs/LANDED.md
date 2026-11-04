@@ -29833,3 +29833,25 @@ appearance captures are retained in the publication evidence directory named abo
 gate remains required for this follow-up. CI and final review status are tracked on
 [PR #12](https://github.com/vibefield/vibefield/pull/12); no consumer merge is included. The latency and
 additional hardware/network qualification limits recorded above remain unchanged.
+
+## FG — onboarding copy, navigation and profile scrolling (2026-11-03)
+
+The desktop QA refinements from November 1 are prepared against current main. Welcome, agent, account,
+history, device and completion copy now names the choice and its later Settings destination directly.
+Back stands at the leading edge of the footer; secondary choices precede the primary action. Device
+privacy and alternate sign-in details use the full scrolling body, clear of the footer, and return
+keyboard focus to the link that opened them. Auth-key submission follows the form's own submit path.
+
+The face-frame switch has equal, compact choices and obeys its disabled state while saving. Profile
+card headings stay visible during scrolling, with the scrollport clipped to their rounded outline so
+the card's square edge cannot show behind them. Long account and plan names wrap. Add a profile stays
+below the scrolling cards until opened, when its steps and sign-in join the list and scroll into view.
+The design authority and existing catalog, consent, navigation and profile tests move with the views;
+focused regressions cover disabled frame changes, disclosure focus and auth-key submission.
+
+The full `pnpm verify` gate passes, including 12,191 Vitest tests and 544 Rust tests. The physical
+day, night and no-WebGPU onboarding walks pass; day required an unchanged retry after the first
+launch missed the live-field startup assertions. The catalog walk still reports contrast failures
+on its first day-mode Welcome capture and the ChatGPT Pro plan label in the day/night ready-profile
+fixtures. Those desktop findings remain open before merge; this slice is being committed and pushed
+with the successful code gate and the original captures retained for follow-up.

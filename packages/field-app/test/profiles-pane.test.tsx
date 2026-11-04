@@ -57,6 +57,25 @@ const read = (path: string): string =>
 
 const PROFILES_CSS = read("../src/setup/profiles-pane.css");
 
+/** Compare the flat rules' declarations, allowing independent styling such as corner clipping. */
+const cssRules = (css: string): Record<string, Record<string, string>> =>
+  Object.fromEntries(
+    [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
+      ([, selector = "", body = ""]) => [
+        selector.trim(),
+        Object.fromEntries(
+          body
+            .split(";")
+            .filter((declaration) => declaration.trim().length > 0)
+            .map((declaration) => {
+              const colon = declaration.indexOf(":");
+              return [declaration.slice(0, colon).trim(), declaration.slice(colon + 1).trim()];
+            }),
+        ),
+      ],
+    ),
+  );
+
 /** One number a stylesheet states, by the rule that states it. */
 function px(css: string, rule: RegExp): number {
   const found = css.match(rule)?.[1];
@@ -392,10 +411,10 @@ describe("the Profiles pane on the wizard's glass", () => {
     const client = daemon(feedOf([THIS_MAC]), [install("claude"), install("codex")]);
     const onDone = vi.fn();
     await mount(client, onDone);
-    expect(text()).toContain("Every subscription, side by side.");
+    expect(text()).toContain("Your accounts, side by side.");
     expect(text()).toContain("Signed in as me@home.example");
-    expect(text()).toContain("Another plan, for work or a client? Give it a profile.");
-    expect(text()).toContain("Add one anytime in Settings → Agent Profiles.");
+    expect(text()).toContain("Keep work, personal, or client accounts separate.");
+    expect(text()).toContain("Manage profiles in Settings → Agent Profiles.");
     await click("Continue");
     expect(client.request).toHaveBeenCalledWith("setup.answer", {
       step: "profiles",
@@ -464,9 +483,7 @@ describe("the Profiles pane on the wizard's glass", () => {
         ],
       },
     ]);
-    expect(text()).toContain(
-      "Work is ready. It starts with clean settings: its own skills and servers.",
-    );
+    expect(text()).toContain("Work is ready, with its own settings, skills, and servers.");
     expect(client.request).not.toHaveBeenCalledWith(
       "agents.profileSets.discard",
       expect.anything(),
@@ -541,7 +558,9 @@ describe("the Profiles pane on the wizard's glass", () => {
       expect(PROFILES_CSS).toContain(
         '.vf-wizard-shell[data-size="glass"] .vf-profiles-pane {\n  min-height: 0;\n}',
       );
-      expect(PROFILES_CSS).toContain(scrollsWithin(".vf-profiles-pane-cards"));
+      expect(cssRules(PROFILES_CSS)).toMatchObject(
+        cssRules(scrollsWithin(".vf-profiles-pane-cards")),
+      );
     } finally {
       if (original === undefined) Reflect.deleteProperty(proto, "scrollIntoView");
       else proto.scrollIntoView = original;

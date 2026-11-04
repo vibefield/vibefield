@@ -121,10 +121,12 @@ describe("DESIGN.md §2.4 — the ramp holds its floors on every chrome ground",
  * dot, a disc, a glyph) or a control that is off. A new use fails here until it is named, and a word that is read takes
  * t3. The catalog's own styles (`design-system/`) are development material and are not the product's. */
 const T4_USES: Readonly<Record<string, number>> = {
+  "packages/design-kit/src/primitives.css · .vf-ui-segmented:disabled button": 1,
   "packages/design-kit/src/primitives.css · .vf-ui-status-dot": 1,
   "packages/field-app/src/account/FacePicker.css · .vf-face-picker-choices[data-disabled] .vf-face-picker-any-label": 1,
   "packages/field-app/src/account/MeMenu.css · .vf-me-row:disabled": 1,
   "packages/field-app/src/account/door/door.css · .vf-door-device[data-ghost] .vf-door-device-disc": 1,
+  "packages/field-app/src/boot/onboarding/wizard-ui.css · .vf-wizard-input:disabled": 1,
   "packages/field-app/src/chat/chat-composer.css · .vf-chat-mic": 1,
   "packages/field-app/src/chat/new-spark-sheet.css · .vf-new-spark-menu-head[data-off]": 1,
   "packages/field-app/src/field/desk/bar/selection-bar.css · .vf-bar-cell[data-disabled]:active": 1,

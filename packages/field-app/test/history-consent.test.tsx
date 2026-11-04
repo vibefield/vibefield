@@ -264,7 +264,7 @@ describe("the History pane (AO-3)", () => {
     expect(container?.textContent).toContain("6.2 GB · last used today");
     expect(container?.textContent).toContain("1.1 GB · last used yesterday");
     expect(container?.textContent).toContain("About a minute on a quiet Mac");
-    expect(container?.textContent).toContain("VibeField reads it here and never uploads it.");
+    expect(container?.textContent).toContain("Nothing is uploaded.");
     // nothing is read before the button
     expect(client.request).not.toHaveBeenCalledWith("index.enroll", expect.anything());
 

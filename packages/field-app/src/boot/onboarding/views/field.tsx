@@ -45,16 +45,14 @@ export function OnboardingFieldPaneView({
   return (
     <WizardPane
       eyebrow={eyebrow}
-      title="What should this field call you?"
-      voice="A name and a face — both yours to change later in Settings."
+      title="Make yourself at home."
+      voice="Choose a name and a face for your field. You can change both in Settings."
       onSubmit={onSubmit}
+      back={<BackAction onBack={onBack} />}
       actions={
-        <>
-          <button type="submit" className={primaryCls} disabled={writing}>
-            {writing ? "Saving…" : "Continue"}
-          </button>
-          <BackAction onBack={onBack} />
-        </>
+        <button type="submit" className={primaryCls} disabled={writing}>
+          {writing ? "Saving…" : "Continue"}
+        </button>
       }
     >
       <div className="vf-wizard-identity">
@@ -90,7 +88,8 @@ export function OnboardingFieldPaneView({
               disabled={writing}
               autoFocus={autoFocus}
               onChange={(event) => onNameChange(event.target.value)}
-              className="h-10 rounded-[12px] border border-black/10 bg-white px-3.5 text-[15px] text-black/85 outline-none transition-[border-color,box-shadow] placeholder:text-black/30 focus:border-black/25 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)] motion-reduce:transition-none disabled:opacity-45 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-white/25 dark:focus:shadow-[0_0_0_3px_rgba(255,255,255,0.07)]"
+              autoComplete="given-name"
+              className="vf-wizard-input"
             />
           </label>
           <FaceDeck
