@@ -34,8 +34,8 @@ struct TimelineInks: Equatable, Sendable {
   /// `resolveTimelineInks`: the swarm's resolved theme and the monitor's skin, for one scheme.
   init(theme: SwarmTheme, skin: GodviewSkin) {
     self.init(
-      dark: !(theme.ink.luminance < 0.5), ground: skin.monitorBg, ink: theme.ink, muted: skin.textMuted,
-      faint: theme.neutral, border: skin.panelBorder, grid: theme.grid, orange: theme.orange, blue: theme.blue,
+      dark: !(theme.ink.luminance < 0.5), ground: skin.ink(.monitorBg), ink: theme.ink, muted: skin.ink(.textMuted),
+      faint: theme.neutral, border: skin.ink(.panelBorder), grid: theme.grid, orange: theme.orange, blue: theme.blue,
       orangeInk: theme.stateInk.orange, blueInk: theme.stateInk.blue, orangeGround: theme.stateGround.orange,
       blueGround: theme.stateGround.blue)
   }
@@ -131,5 +131,15 @@ struct TimelineInks: Equatable, Sendable {
       }
     }
     return TimelineFormat.number(Double(fixed) ?? .nan)
+  }
+}
+
+extension GodviewSkin {
+  /// The key's colour as the timeline paints it: PG-4t's `0xRRGGBB` (`rgb(_:)`) as an opaque `SwarmColor`, the one
+  /// type every ink here, `css` and the canvas replay take.
+  func ink(_ key: Key) -> SwarmColor {
+    let value = rgb(key)
+    return SwarmColor(
+      r: Double((value >> 16) & 0xFF) / 255, g: Double((value >> 8) & 0xFF) / 255, b: Double(value & 0xFF) / 255)
   }
 }

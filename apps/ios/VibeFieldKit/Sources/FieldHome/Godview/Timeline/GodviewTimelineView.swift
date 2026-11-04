@@ -23,9 +23,9 @@ import SwiftUI
 // keeps time (TV:600-615). Motion is off under Reduce Motion and in a still (`input.isStill`): tweens land at once and
 // no ring plays.
 //
-// THE STAGE (J-S1 A, J-S2 (ii), J-S3 drop; names-4t): the view stands in `GodviewStage.framed` (the band below it) and
-// runs from the screen's top; its words start at `input.topInset` (the Stories row's reserve), and its ground fills
-// the stage. It draws no scanlines, no vignette and no dissolve (the stage's).
+// THE STAGE (J-S1 A, J-S2 (ii), J-S3 drop; names-4t): the view stands in `GodviewStage.framed` (a `.flow` stage, the
+// band below it) and runs from the screen's top; its words start at `input.insets(.flow).top` (the Stories row's
+// reserve), and its ground fills the stage. It draws no scanlines, no vignette and no dissolve (the stage's).
 //
 // TOUCH (the read's §5, fd's Q12): a tap opens a lane's card (`input.onOpen`); a horizontal drag in the track pans; a
 // pinch zooms about its centre (240 ms, island); the map is pressed or dragged to put the head there. No hover, no
@@ -60,7 +60,7 @@ struct GodviewTimelineView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in stage(size: proxy.size, frame: context.date) }
       }
     }
-    .background(TimelineCanvasReplay.color(input.skin.monitorBg))
+    .background(TimelineCanvasReplay.color(input.skin.ink(.monitorBg)))
   }
 
   // MARK: - One draw
@@ -88,7 +88,7 @@ struct GodviewTimelineView: View {
   private func draw(size: CGSize, frame: Date) -> Draw {
     let nowMs = Self.ms(input.now())
     let set = laneSet(nowMs: nowMs)
-    let bodyHeight = max(0, size.height - input.topInset - TimelineLayout.mapStrip - TimelineLayout.axis)
+    let bodyHeight = max(0, size.height - top - TimelineLayout.mapStrip - TimelineLayout.axis)
     let (scale, following) = current(nowMs: nowMs, frameMs: Self.frameMs(frame))
     return Draw(
       nowMs: nowMs, set: set, columns: TimelineLayout.columns(width: size.width),
@@ -97,6 +97,10 @@ struct GodviewTimelineView: View {
       inks: TimelineInks(theme: SwarmTheme.resolve(scheme), skin: input.skin))
   }
 
+  /// Where the words start: the stage's top inset as a `.flow` stage takes it (the band is `framed`'s, so the bottom
+  /// is 0 here).
+  private var top: CGFloat { input.insets(.flow).top }
+
   @ViewBuilder private func stage(size: CGSize, frame: Date) -> some View {
     let draw = draw(size: size, frame: frame)
     VStack(alignment: .leading, spacing: 0) {
@@ -104,10 +108,10 @@ struct GodviewTimelineView: View {
       axis(draw)
       lanes(draw)
     }
-    .padding(.top, input.topInset)
+    .padding(.top, top)
     .frame(width: size.width, height: size.height, alignment: .topLeading)
     .overlay {
-      if draw.placement.placed.isEmpty { empty.padding(.top, input.topInset) }
+      if draw.placement.placed.isEmpty { empty.padding(.top, top) }
     }
   }
 
@@ -160,7 +164,8 @@ struct GodviewTimelineView: View {
           Text(tickLabel(mark.t))
             .font(.system(size: 9, weight: .bold).monospacedDigit())
             .tracking(0.27)
-            .foregroundStyle(TimelineCanvasReplay.color(mark.hour ? input.skin.textMuted : input.skin.textFaint))
+            .foregroundStyle(
+              TimelineCanvasReplay.color(input.skin.ink(mark.hour ? .textMuted : .textFaint)))
             .fixedSize()
             .position(x: (mark.t - draw.t0) * draw.k, y: 6 + 5.5)
         }
@@ -173,7 +178,7 @@ struct GodviewTimelineView: View {
     }
     .frame(width: draw.columns.width, height: TimelineLayout.axis, alignment: .topLeading)
     .overlay(alignment: .bottom) {
-      Rectangle().fill(TimelineCanvasReplay.color(input.skin.panelBorder)).frame(height: 1)
+      Rectangle().fill(TimelineCanvasReplay.color(input.skin.ink(.panelBorder))).frame(height: 1)
     }
     .accessibilityHidden(true)
   }
@@ -199,12 +204,12 @@ struct GodviewTimelineView: View {
     return Text(text)
       .font(.system(size: 9, weight: .bold).monospacedDigit())
       .tracking(0.18)
-      .foregroundStyle(TimelineCanvasReplay.color(draw.following ? draw.inks.ground : skin.textMuted))
+      .foregroundStyle(TimelineCanvasReplay.color(draw.following ? draw.inks.ground : skin.ink(.textMuted)))
       .padding(.horizontal, 6)
       .frame(height: 16)
-      .background(shape.fill(TimelineCanvasReplay.color(draw.following ? skin.textMain : draw.inks.ground)))
+      .background(shape.fill(TimelineCanvasReplay.color(draw.following ? skin.ink(.textMain) : draw.inks.ground)))
       .overlay {
-        if !draw.following { shape.strokeBorder(TimelineCanvasReplay.color(skin.textFaint), lineWidth: 1) }
+        if !draw.following { shape.strokeBorder(TimelineCanvasReplay.color(skin.ink(.textFaint)), lineWidth: 1) }
       }
       .background(RoundedRectangle(cornerRadius: 7).fill(TimelineCanvasReplay.color(draw.inks.ground)).padding(-3))
       .fixedSize()
@@ -243,11 +248,11 @@ struct GodviewTimelineView: View {
   /// `TERMINALS`: the quiet group's divider (timeline.css:424-454).
   private func terminalsDivider(width: Double, inks: TimelineInks) -> some View {
     ZStack(alignment: .leading) {
-      Rectangle().fill(TimelineCanvasReplay.color(input.skin.panelBorder)).frame(height: 1)
+      Rectangle().fill(TimelineCanvasReplay.color(input.skin.ink(.panelBorder))).frame(height: 1)
       Text("TERMINALS")
         .font(.system(size: 7.5, weight: .black))
         .tracking(0.6)
-        .foregroundStyle(TimelineCanvasReplay.color(input.skin.textFaint))
+        .foregroundStyle(TimelineCanvasReplay.color(input.skin.ink(.textFaint)))
         .padding(.trailing, 6)
         .background(TimelineCanvasReplay.color(inks.ground))
         .padding(.leading, 14)
@@ -281,14 +286,14 @@ struct GodviewTimelineView: View {
     let skin = input.skin
     return ZStack(alignment: .topLeading) {
       if draw.following {
-        Rectangle().fill(TimelineCanvasReplay.color(skin.textMain.withAlpha(0.32)))
+        Rectangle().fill(TimelineCanvasReplay.color(skin.ink(.textMain).withAlpha(0.32)))
           .frame(width: 1, height: draw.rowsHeight)
       } else {
         Path { path in
           path.move(to: CGPoint(x: 0.5, y: 0))
           path.addLine(to: CGPoint(x: 0.5, y: draw.rowsHeight))
         }
-        .stroke(TimelineCanvasReplay.color(skin.textFaint), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+        .stroke(TimelineCanvasReplay.color(skin.ink(.textFaint)), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
         .frame(width: 1, height: draw.rowsHeight)
       }
       ForEach(draw.placement.placed, id: \.lane.id) { placed in
@@ -334,10 +339,10 @@ struct GodviewTimelineView: View {
       Text(TimelineWords.noAgents)
         .font(.system(size: 11, weight: .heavy))
         .tracking(1.98)
-        .foregroundStyle(TimelineCanvasReplay.color(input.skin.textMuted))
+        .foregroundStyle(TimelineCanvasReplay.color(input.skin.ink(.textMuted)))
       Text(TimelineWords.noAgentsHint)
         .font(.system(size: 9))
-        .foregroundStyle(TimelineCanvasReplay.color(input.skin.textFaint))
+        .foregroundStyle(TimelineCanvasReplay.color(input.skin.ink(.textFaint)))
     }
     .multilineTextAlignment(.center)
     .frame(maxWidth: .infinity, maxHeight: .infinity)

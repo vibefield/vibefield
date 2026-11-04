@@ -6,64 +6,14 @@ import Testing
 
 @testable import FieldHome
 
-// PG-6 — THE WITNESS RUN, STEP BY STEP, AND THE TIMELINE GOLDEN'S READERS. `steps()` is a PRIVATE STAND-IN for PG-4t's
-// shared `HomeFixture.witnessSteps` (fd's Q10 ruling, 2026-11-04), of its shape: the open, frames 0…7, PG-1c's resync
-// after frame 7, then the old chain's delta at 8, which is the gap; each step's drawn rows as `RemoteMeshCopy` draws
-// them, driven exactly as `PhoneBodyParityTests` drives it (FieldMeshTests). It goes when the shared one lands, with no
-// output change. `rows(_:ledger:)` joins a step's drawn rows as HomeScreen's `godviewInput` does.
+// PG-6 — THE TIMELINE GOLDEN'S READERS over the witness run, step by step. The run is PG-4t's shared
+// `HomeFixture.witnessSteps()` (fd's Q10 ruling, 2026-11-04: the open, frames 0…7, PG-1c's resync after frame 7, then
+// the old chain's delta at 8, which is the gap; each step's drawn rows as `RemoteMeshCopy` draws them).
+// `rows(_:ledger:)` joins a step's drawn rows as HomeScreen's `godviewInput` does.
 //
 // No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 
 enum TimelineWitness {
-  /// One step of the run: its `at` as the golden spells it ("open", "resync", or the frame's index), and its rows.
-  struct Step {
-    let at: String
-    let gap: Bool
-    let rows: [RemoteFieldRow]
-  }
-
-  /// PG-1c: the whole-mesh resync is delivered after this frame (`PHONE_RESYNC_AFTER`).
-  static let resyncAfter = 7
-
-  static func steps() throws -> [Step] {
-    let open = try AgentRemoteMeshOpen(json: try HomeFixture.json("agent-remote-mesh-open.witness"))
-    let frames = try (try HomeFixture.json("agent-remote-mesh-frames.witness").arrayValue ?? [])
-      .map(AgentRemoteMeshFrame.init(json:))
-    let resync = try AgentRemoteMeshOpen(json: try HomeFixture.json("agent-remote-mesh-open.resync"))
-    var copy = RemoteMeshCopy()
-    guard copy.open(open, now: HomeFixture.now) == .applied else { throw Unread(what: "the witness open") }
-    _ = copy.publish()
-    var steps = [Step(at: "open", gap: false, rows: copy.drawn())]
-    for (index, frame) in frames.enumerated() {
-      let deliveries: [Delivery] = index == resyncAfter ? [.frame(index, frame), .resync] : [.frame(index, frame)]
-      for delivery in deliveries {
-        let outcome: RemoteMeshCopy.Outcome
-        let at: String
-        switch delivery {
-        case .frame(let index, let frame):
-          at = "\(index)"
-          outcome = copy.frame(frame, now: HomeFixture.now)
-        case .resync:
-          at = "resync"
-          outcome = copy.open(resync, now: HomeFixture.now)
-        }
-        if case .gap = outcome {
-          steps.append(Step(at: at, gap: true, rows: []))
-          return steps
-        }
-        guard outcome == .applied else { throw Unread(what: "step \(at): \(outcome)") }
-        _ = copy.publish()
-        steps.append(Step(at: at, gap: false, rows: copy.drawn()))
-      }
-    }
-    return steps
-  }
-
-  private enum Delivery {
-    case frame(Int, AgentRemoteMeshFrame)
-    case resync
-  }
-
   /// The timeline's rows for one step, joined as HomeScreen's `godviewInput` joins them: the swarm's own unread (its
   /// bubbles', `GodviewStageInput.unreadIds`) and the ledger's colour (`GodviewStageInput.colour`), the ledger dealt
   /// over the step's drawn agents in order as `FieldBubble.swift:331` deals; no open card, so nothing active.
@@ -81,10 +31,12 @@ enum TimelineWitness {
   }
 
   /// Every step's lanes at the golden's clock, beside the golden's step.
-  static func walk(_ visit: (_ golden: JSONValue, _ set: TimelineLaneSet, _ step: Step) throws -> Void) throws {
+  static func walk(
+    _ visit: (_ golden: JSONValue, _ set: TimelineLaneSet, _ step: HomeFixture.WitnessStep) throws -> Void
+  ) throws {
     let golden = try TimelineGolden.load()
     let goldenSteps = golden["steps"]?.arrayValue ?? []
-    let mine = try steps()
+    let mine = try HomeFixture.witnessSteps()
     let goldenCount = goldenSteps.count
     let mineCount = mine.count
     #expect(goldenCount == mineCount, "the run's steps")
@@ -99,17 +51,12 @@ enum TimelineWitness {
       try visit(goldenStep, set, step)
     }
   }
-
-  struct Unread: Error, CustomStringConvertible {
-    let what: String
-    var description: String { "the witness did not read: \(what)" }
-  }
 }
 
 /// `phone-timeline.golden.json`, mirrored into this bundle byte for byte (pnpm check:ios-fixtures).
 enum TimelineGolden {
-  /// `PHONE_BODY_NOW_MS`: the golden's clock.
-  static let nowMs = 1_790_803_300_000.0
+  /// `PHONE_BODY_NOW_MS`: the golden's clock (`HomeFixture.nowMs`).
+  static let nowMs = Double(HomeFixture.nowMs)
 
   static func load() throws -> JSONValue { try HomeFixture.json("phone-timeline.golden") }
 

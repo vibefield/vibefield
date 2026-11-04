@@ -158,32 +158,32 @@ struct TimelineNameRow: View {
     let sub = TimelineWords.subLine(lane)
     let two = h >= 30 && lane.kind == .agent && !sub.isEmpty
     let terminal = lane.kind == .terminal
-    let markColour = terminal ? skin.textMuted : (lane.colour ?? skin.textMuted)
+    let markColour = terminal ? skin.ink(.textMuted) : (lane.colour ?? skin.ink(.textMuted))
     ZStack(alignment: .leading) {
       if lane.row.active {
         UnevenRoundedRectangle(bottomTrailingRadius: 2, topTrailingRadius: 2)
-          .fill(TimelineCanvasReplay.color(skin.textMain))
+          .fill(TimelineCanvasReplay.color(skin.ink(.textMain)))
           .frame(width: TimelineActive.bandWidth, height: max(0, h - 2 * TimelineActive.bandInset))
       }
       VStack(alignment: .leading, spacing: 2) {
         HStack(spacing: 5) {
           if !lane.row.isSelf {
-            TimelinePeerMark().timelineMark(size: 11, strokeWidth: 2, colour: skin.textMuted)
+            TimelinePeerMark().timelineMark(size: 11, strokeWidth: 2, colour: skin.ink(.textMuted))
               .accessibilityLabel("on \(lane.row.monitor.device.name)")
           }
           TimelineFolderMark(terminal: terminal).timelineMark(size: 11, strokeWidth: 2, colour: markColour)
           Text(TimelineWords.name(lane))
             .font(.system(size: 11, weight: terminal ? .semibold : .bold))
             .tracking(-0.11)
-            .foregroundStyle(TimelineCanvasReplay.color(terminal ? skin.textMuted : skin.textMain))
-            .underline(lane.row.active, color: TimelineCanvasReplay.color(skin.textMain))
+            .foregroundStyle(TimelineCanvasReplay.color(terminal ? skin.ink(.textMuted) : skin.ink(.textMain)))
+            .underline(lane.row.active, color: TimelineCanvasReplay.color(skin.ink(.textMain)))
             .lineLimit(1)
             .truncationMode(.tail)
         }
         if two {
           Text(sub)
             .font(.system(size: 9))
-            .foregroundStyle(TimelineCanvasReplay.color(skin.textMuted))
+            .foregroundStyle(TimelineCanvasReplay.color(skin.ink(.textMuted)))
             .lineLimit(1)
             .truncationMode(.tail)
             .padding(.leading, 16)
@@ -233,21 +233,22 @@ struct TimelineHeadRow: View {
     case (_, .none):
       Color.clear
     case (_, .unrecorded):
-      circle.strokeBorder(TimelineCanvasReplay.color(skin.textFaint), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+      circle.strokeBorder(
+        TimelineCanvasReplay.color(skin.ink(.textFaint)), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
     case (true, .working):
       circle.strokeBorder(
-        TimelineCanvasReplay.color(skin.textMuted), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+        TimelineCanvasReplay.color(skin.ink(.textMuted)), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
     case (true, _):
-      circle.fill(TimelineCanvasReplay.color(skin.panelBorder))
+      circle.fill(TimelineCanvasReplay.color(skin.ink(.panelBorder)))
     case (false, .working):
-      let between = TimelineInks.mix(colour, skin.idleBg, weight: 0.42)
+      let between = TimelineInks.mix(colour, skin.ink(.idleBg), weight: 0.42)
       circle
         .fill(
           RadialGradient(
             stops: [
               .init(color: TimelineCanvasReplay.color(colour), location: 0.30),
               .init(color: TimelineCanvasReplay.color(between), location: 0.56),
-              .init(color: TimelineCanvasReplay.color(skin.idleBg), location: 0.80),
+              .init(color: TimelineCanvasReplay.color(skin.ink(.idleBg)), location: 0.80),
             ], center: .center, startRadius: 0, endRadius: size / 2 * 2.squareRoot())
         )
         .overlay(circle.strokeBorder(TimelineCanvasReplay.color(colour.withAlpha(0.75)), lineWidth: 1.5))
@@ -269,8 +270,8 @@ struct TimelineHeadRow: View {
           if readout.owed && motion { TimelineOwedRing(colour: light) }
         }
     case (false, .idle):
-      circle.fill(TimelineCanvasReplay.color(skin.idleBg))
-        .overlay(circle.strokeBorder(TimelineCanvasReplay.color(skin.textFaint), lineWidth: 1))
+      circle.fill(TimelineCanvasReplay.color(skin.ink(.idleBg)))
+        .overlay(circle.strokeBorder(TimelineCanvasReplay.color(skin.ink(.textFaint)), lineWidth: 1))
     }
   }
 
@@ -301,13 +302,13 @@ struct TimelineHeadRow: View {
   /// The readout's inks (timeline.css:767-797): work in the project's ink (deepened toward the main ink on a light
   /// ground), the waits in theirs, rest muted, a moment with no state faint; a terminal's length muted.
   private var bigColour: SwarmColor {
-    if terminal { return skin.textMuted }
+    if terminal { return skin.ink(.textMuted) }
     switch readout.tone {
-    case .working: return inks.dark ? colour : TimelineInks.mix(colour, skin.textMain, weight: 0.74)
+    case .working: return inks.dark ? colour : TimelineInks.mix(colour, skin.ink(.textMain), weight: 0.74)
     case .blocked: return inks.orangeInk
     case .unseen: return inks.blueInk
-    case .idle: return skin.textMuted
-    case .none, .unrecorded: return skin.textFaint
+    case .idle: return skin.ink(.textMuted)
+    case .none, .unrecorded: return skin.ink(.textFaint)
     }
   }
 
@@ -315,8 +316,8 @@ struct TimelineHeadRow: View {
     switch readout.tone {
     case .blocked: inks.orangeInk
     case .unseen: inks.blueInk
-    case .none, .unrecorded: skin.textFaint
-    case .working, .idle: skin.textMuted
+    case .none, .unrecorded: skin.ink(.textFaint)
+    case .working, .idle: skin.ink(.textMuted)
     }
   }
 }

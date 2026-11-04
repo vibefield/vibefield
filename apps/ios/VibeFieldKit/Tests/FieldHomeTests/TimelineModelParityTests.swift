@@ -366,7 +366,7 @@ struct TimelineModelParityTests {
   /// A lane of the witness open, for the vectors that need one.
   static func anyLane() throws -> TimelineLane? {
     var ledger = ProjectLedger.empty
-    let open = try TimelineWitness.steps().first
+    let open = try HomeFixture.witnessSteps().first
     let rows = TimelineWitness.rows(open?.rows ?? [], ledger: &ledger)
     return TimelineLanes.lanes(rows, nowMs: TimelineGolden.nowMs).agents.first
   }

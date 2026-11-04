@@ -62,6 +62,7 @@ import {
   zoomAt,
 } from "@vibefield/puppeteer-views";
 import type { PhoneViewGolden, PhoneViewInput } from "./phone-goldens";
+import { importPuppeteerViews } from "./puppeteer-views-path";
 
 type InksModule =
   typeof import("../../node_modules/@vibefield/puppeteer-views/dist/views/timeline/timeline-inks.js");
@@ -584,18 +585,8 @@ function alphaCalls(): Array<Record<string, unknown>> {
 
 /** field-app's root, and the files read from beside it (`import.meta.dirname`, as `phone-goldens.ts` finds its own). */
 const FIELD_APP = join(import.meta.dirname, "..", "..");
-const VIEWS_DIST = join(FIELD_APP, "node_modules", "@vibefield", "puppeteer-views", "dist");
 const TOKENS_CSS = join(FIELD_APP, "..", "design-kit", "src", "tokens.css");
 const GODVIEW_CSS = join(FIELD_APP, "src", "godview", "godview.css");
-
-/**
- * STAND-IN for PG-4t's `importPuppeteerViews` (`perf/lib/puppeteer-views-path.ts`), retired at the rebase over 4t: a
- * file of puppeteer-views' dist by its path, past the package's exports (`timeline-inks.js` and `timeline-paint.js`
- * are not root exports), as the view's own build reaches it.
- */
-async function importViewsFile<M>(path: string): Promise<M> {
-  return (await import(join(VIEWS_DIST, path))) as M;
-}
 
 /** A custom property's declared value in `css`: the first declaration of exactly `name`. */
 function declared(css: string, name: string): string {
@@ -758,10 +749,12 @@ function placeLanes(set: TimelineLaneSet): {
 
 /** The inks at both themes, and `paintWakes` over the open's lanes at the default window in each (Q4, Q7). */
 async function inksAndPaint(set: TimelineLaneSet, nowMs: number): Promise<Record<string, unknown>> {
-  const { resolveTimelineInks } = await importViewsFile<InksModule>(
+  const { resolveTimelineInks } = await importPuppeteerViews<InksModule>(
     "views/timeline/timeline-inks.js",
   );
-  const { paintWakes } = await importViewsFile<PaintModule>("views/timeline/timeline-paint.js");
+  const { paintWakes } = await importPuppeteerViews<PaintModule>(
+    "views/timeline/timeline-paint.js",
+  );
   const { lanes, height } = placeLanes(set);
   const window = {
     width: TRACK,

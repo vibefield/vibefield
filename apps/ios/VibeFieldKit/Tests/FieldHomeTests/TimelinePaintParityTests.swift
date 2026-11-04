@@ -10,8 +10,9 @@ import Testing
 // `paintWakes` through a recording 2D context, over the open's lanes at the default window, light and dark), and the
 // inks' `css` (`rgbaCss`) over the golden's vector. Each call is compared as one line of text, the numbers printed as
 // JavaScript prints them, so a difference reads as the call that differs. The ticks' hairlines are elided on both sides
-// (their instants are the host's zone; `ticksBetween` is held zone-free by the model rows). The paint's inks are the
-// golden's numbers; the phone's own inks (SwarmTheme and the skin, through UIKit) are the kit's T10.
+// (their instants are the host's zone; `ticksBetween` is held zone-free by the model rows). Here the paint's inks are
+// the golden's numbers (on the host loop SwarmTheme is a scratch stand-in); the phone's own inks (SwarmTheme and the
+// skin, through UIKit) are the kit's T10, and the same stream painted with them its T11 (`TimelineInksKitTests`).
 //
 // No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 
@@ -30,11 +31,19 @@ struct TimelinePaintParityTests {
     }
   }
 
-  /// T11 — `paintWakes`' stream over the open's lanes at the default window, in each theme.
+  /// T11 — `paintWakes`' stream over the open's lanes at the default window, in each theme, with the golden's inks.
   @Test(arguments: ["light", "dark"])
   func theWakesPaintIsTheTimelines(theme: String) throws {
     let open = try TimelineGolden.open()
-    let inks = try Self.inks(open, theme: theme)
+    try Self.wakesPaint(theme: theme, inks: try Self.inks(open, theme: theme))
+  }
+
+  // MARK: - Readers
+
+  /// `paintWakes`' stream over the open's lanes at the default window in `theme`, painted with `inks`, against the
+  /// golden's: the host row hands the golden's own inks, the kit's (`TimelineInksKitTests`) the phone's.
+  static func wakesPaint(theme: String, inks: TimelineInks) throws {
+    let open = try TimelineGolden.open()
     let paint = open["paint"]
     let streams = paint?["streams"]?.arrayValue ?? []
     let stream = streams.first { $0["theme"]?.stringValue == theme }
@@ -69,8 +78,6 @@ struct TimelinePaintParityTests {
     }
     #expect(seen, "the run has an open step")
   }
-
-  // MARK: - Readers
 
   /// The golden's inks for `theme`, as numbers.
   static func inks(_ open: JSONValue, theme: String) throws -> TimelineInks {

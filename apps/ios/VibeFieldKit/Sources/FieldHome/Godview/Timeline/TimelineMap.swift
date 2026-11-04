@@ -54,7 +54,7 @@ struct TimelineMapStrip: View {
       Text("SINCE \(GodviewFormat.formatClock(ms: startMs, timeZone: timeZone))")
         .font(.system(size: 7.5, weight: .black))
         .tracking(0.525)
-        .foregroundStyle(TimelineCanvasReplay.color(skin.textFaint))
+        .foregroundStyle(TimelineCanvasReplay.color(skin.ink(.textFaint)))
         .lineLimit(1)
         .frame(width: max(0, columns.width - columns.x1 - 24), alignment: .trailing)
         .offset(x: columns.x1 + 16, y: 33)
@@ -71,7 +71,7 @@ struct TimelineMapStrip: View {
     let shape = RoundedRectangle(cornerRadius: 6)
     let ground = TimelineCanvasReplay.color(inks.ground.withAlpha(inks.dark ? 0.38 : 0.30))
     return ZStack(alignment: .topLeading) {
-      shape.fill(TimelineCanvasReplay.color(skin.panelBg.withAlpha(0.55)))
+      shape.fill(TimelineCanvasReplay.color(skin.ink(.panelBg).withAlpha(0.55)))
       pulse
       // Outside the window in view the day goes gray, so colour stands only where you are looking.
       pulse.grayscale(1).opacity(0.9)
@@ -83,7 +83,7 @@ struct TimelineMapStrip: View {
         }
       Rectangle().fill(ground).frame(width: left)
       Rectangle().fill(ground).frame(width: max(0, width - right)).offset(x: right)
-      shape.strokeBorder(TimelineCanvasReplay.color(skin.panelBorder.withAlpha(0.6)), lineWidth: 1)
+      shape.strokeBorder(TimelineCanvasReplay.color(skin.ink(.panelBorder).withAlpha(0.6)), lineWidth: 1)
       knob.offset(x: right)
       if let finger { tip(at: finger) }
     }
@@ -127,13 +127,13 @@ struct TimelineMapStrip: View {
 
   /// The head on the map: a 2 pt line with a 9 pt knob, filled while following now and hollow while looking back.
   private var knob: some View {
-    let main = TimelineCanvasReplay.color(skin.textMain)
+    let main = TimelineCanvasReplay.color(skin.ink(.textMain))
     let ground = TimelineCanvasReplay.color(inks.ground)
     return ZStack(alignment: .top) {
       RoundedRectangle(cornerRadius: 1)
         .fill(main)
         .frame(width: 2, height: PulseGeometry(width: width).height + 4)
-        .shadow(color: TimelineCanvasReplay.color(skin.textMain.withAlpha(0.45)), radius: 4.5)
+        .shadow(color: TimelineCanvasReplay.color(skin.ink(.textMain).withAlpha(0.45)), radius: 4.5)
       Circle()
         .fill(following ? main : ground)
         .overlay {
@@ -156,7 +156,7 @@ struct TimelineMapStrip: View {
       .foregroundStyle(TimelineCanvasReplay.color(inks.ground))
       .padding(.horizontal, 6)
       .padding(.vertical, 2)
-      .background(RoundedRectangle(cornerRadius: 4).fill(TimelineCanvasReplay.color(skin.textMain)))
+      .background(RoundedRectangle(cornerRadius: 4).fill(TimelineCanvasReplay.color(skin.ink(.textMain))))
       .fixedSize()
       .position(x: min(width - 20, max(20, x)), y: PulseGeometry(width: width).height + 5 + 8.5)
       .accessibilityHidden(true)
@@ -181,11 +181,11 @@ struct TimelineMapStrip: View {
               .accessibilityAddTraits(choice.id == preset?.id ? .isSelected : [])
           }
         }
-        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(TimelineCanvasReplay.color(skin.panelBorder)))
+        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(TimelineCanvasReplay.color(skin.ink(.panelBorder))))
       }
       Button(action: onNow) {
         // pressed (following) or the way home (looking back), NOW wears the main ink either way
-        TimelineNowMark().timelineMark(size: 12, strokeWidth: 1.6, colour: skin.textMain)
+        TimelineNowMark().timelineMark(size: 12, strokeWidth: 1.6, colour: skin.ink(.textMain))
       }
       .buttonStyle(TimelineToolStyle(skin: skin, pressed: following, home: !following))
       .accessibilityLabel(following ? "Following now" : "Back to now")
@@ -204,8 +204,8 @@ struct TimelineToolStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     let lit = pressed || configuration.isPressed
-    let ink = lit || home ? skin.textMain : skin.textMuted
-    let border = home ? skin.textMain : (lit ? skin.controlHoverBorder : skin.panelBorder)
+    let ink = lit || home ? skin.ink(.textMain) : skin.ink(.textMuted)
+    let border = home ? skin.ink(.textMain) : (lit ? skin.ink(.controlHoverBorder) : skin.ink(.panelBorder))
     return configuration.label
       .font(.system(size: 9, weight: .bold))
       .tracking(0.54)
@@ -213,7 +213,7 @@ struct TimelineToolStyle: ButtonStyle {
       .lineLimit(1)
       .padding(.horizontal, 5)
       .frame(minWidth: 22, minHeight: 22, maxHeight: 22)
-      .background(TimelineCanvasReplay.color(lit ? skin.controlHoverBg : .transparent))
+      .background(TimelineCanvasReplay.color(lit ? skin.ink(.controlHoverBg) : .transparent))
       .overlay {
         if !grouped {
           RoundedRectangle(cornerRadius: 5).strokeBorder(TimelineCanvasReplay.color(border), lineWidth: 1)
