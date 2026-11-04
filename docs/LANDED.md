@@ -30118,6 +30118,9 @@ to 01:48Z ran a few minutes ahead of it (VF-PM, 01:53:06Z).
   before teardown" (PRC-2 / §18.2), asserts under 1,500 ms of wall time and read 1,866 ms while James used the
   mini's console. VF-PM filed it as item 168. The per-file diff against run 114 was empty, and the kit plane
   green. a9 re-armed the same `ae2d44c00` once, as run 116, when the mini's load fell.
+  > **Closed (2026-11-04, item 168; the fixer):** the row no longer bounds wall time. It reads the host's own
+  > record of the stop, `{ calls: "drained", cleanup: "acknowledged" }`, as the file's other two reload rows do;
+  > a loaded host slows a drain that settled but cannot turn it red (LANDED "Item 168", run 119).
 - **Run 116** (`ae2d44c00`, the same mint, M116): verify exit 0 at 02:29:39Z (armed 02:23:21Z at load1 2.91).
   - vitest 12,190 passed, 0 failed, 18 skipped (878 files); the per-file diff against run 114 is empty (VF-PM's
     read).
@@ -30377,3 +30380,78 @@ carries them). fd accepted the read (`lanes/pg4t/light/read-pg4t.md`) in steps: 
   stills reader and its header.
 - `lanes/pg4t/light/trial-rebase`, removed after the land.
 - PG-5…8 mint as merges over this landing.
+
+## Item 168 — fieldd's drain rows read the host's own record of each stop, never the wall clock: a stop's deactivated record says how its calls and its cleanup ended (2026-11-04; `36aaa4364` → `8dc80cc1d`, two commits on main `00d78236c`, lane `fix/item168` in `/Volumes/SamsungRed/lanes/item168`, in the mini's mint M119 `8dc80cc1d`, stacked, run 119)
+
+**What it rests on.** Run 115 (WI-3's) was red on one timing row not its own. fieldd's `test/service-drain.test.ts`,
+"lets an admitted old-generation call settle before teardown" (PRC-2 / §18.2), asserted
+`expect(Date.now() - startedAt).toBeLessThan(1_500)` and read 1,866 ms while James used the mini's console; the
+row's time had crept across runs, 1,746 ms (run 112), 2,642 (run 114) and 3,276 (run 115). VF-PM filed it as item 168
+(02:15Z) and gave it to the fixer (02:55Z): prove what the bound means by the daemon's own seam, never by wall time,
+with no number loosened and no sleep, the plan first. The plan (02:58Z) was accepted as written (03:00Z).
+- What the bounds stood for. The file asserted the same bound three times (:110, :128, :171). In the full daemon the
+  drain deadline is `PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS`, 5,000 ms, so each bound meant "the stop did not wait out
+  the 5 s". `stopCandidate` (service-host.ts) settles in two steps: `waitForPendingCalls` (every admitted call
+  answered, or the deadline, which fails them "provider drain deadline exceeded") and `waitForDeactivation` (the
+  worker's correlated `deactivated`, its exit, or its timer at the remaining deadline). Both paths end in
+  `worker.terminate()` inside the deadline, so the census, the controller's lifecycle events and the host's record
+  read the same either way, and the wall time was the only witness.
+- Why not a fake clock. service-drain-deadline.test.ts drives the deadline by the injected `deadlines.deactivateMs`
+  on a ServiceHost built by hand, under fake timers. The full-daemon file cannot fake the clock (ws, worker threads,
+  `until`'s own timers), and bootstrap has no seam for the service deadlines.
+
+**What** (3 files, +97 −18; fieldd only; no contract, fixture or DESIGN.md change):
+- **The red** (`36aaa4364`, tests only):
+  - service-drain.test.ts boots fieldd with a `logRoot`, so the host's records are readable in process
+    (`daemon.logging`). The three bounds and their `startedAt` go. Each reload row takes the log cursor before the
+    reload and, after `await reloading`, reads the one `fieldd.plugin_service.deactivated` record of this plugin
+    (`readSince`, nothing dropped): `{ calls: "drained", cleanup: "acknowledged" }`.
+  - service-drain-deadline.test.ts records the host's log in `createHarness`, and its two fake-clock rows read the
+    same record on the deadline's side: `{ calls: "drained", cleanup: "deadline" }` (the call drains at 55 ms, the
+    worker never acknowledges) and `{ calls: "deadline", cleanup: "skipped" }` (a stuck call).
+- **The fix** (`8dc80cc1d`, service-host.ts alone):
+  - `waitForDeactivation` resolves with why it finished: "acknowledged", "exited", "deadline" or "unsent".
+  - `stopCandidate` keeps how the calls ended ("drained" or "deadline") and how the cleanup ended: the wait's end;
+    "deadline" too when the calls drained with no window left; "skipped" when the calls met the deadline and the
+    worker was ended at once; "none" for both when the candidate was no longer the live worker.
+  - The existing `fieldd.plugin_service.deactivated` info record carries `calls` and `cleanup` beside its `pluginId`.
+    No order, timing, event or deadline changes, and no other test pins the record's fields.
+
+**Validation.**
+- The red at `36aaa4364` (`light168.sh red-36aaa4364 drain`, a HOLD turn, 04:24:31Z → 04:27:17Z): 2 files, 5 failed
+  and 1 passed (the disable row, which had no bound). Each failed at its record read, in 206–801 ms, against a
+  record with no `calls` and no `cleanup`; each read found exactly one record.
+- The light at `8dc80cc1d` (`light168.sh green-8dc80cc1d full`, one HOLD turn, 04:42:26Z → 04:42:53Z; logs
+  `lanes/item168/light/`): 9 files, 43 passed, 0 skipped (plugin-update-manager 9, service-lease-fence 1,
+  service-controller 10, service-drain-deadline 2, logging 1, service-controller-e2e 1, product-surface 11,
+  service-drain 4, service-host 4); biome on the 3 files clean; `pnpm --filter @vibefield/fieldd typecheck` exit 0.
+- The probes, scratch only: a detached worktree (`lanes/item168/probe`) restored to its commit after each, one file
+  each, the logs and each probe's diff in `lanes/item168/probes/`.
+  - **P4, the load, on main's own test** (`00d78236c`; a 2 s `Atomics.wait` stall of the test thread, the daemon's
+    own, before each reload row's `await reloading`): the three rows red at the bound, 2,069, 2,177 and 2,057 ms
+    against 1,500. The item's lottery, reproduced.
+  - **P4 on the fix:** the three rows green (3.0, 3.0 and 2.8 s), the record "acknowledged". The stall no longer
+    decides.
+  - **P2, the correlation broken** (`waitForDeactivation` matching `requestId + 1`): the three rows red at the read,
+    each record `{ calls: "drained", cleanup: "deadline" }`, at 5.35–5.56 s, the real deadline.
+  - **P3, the cleanup held past the deadline** (a fixture copy whose disposer waits 6 s): the three rows red, the
+    same record, at 5.38–5.49 s.
+  - **P1, as first made, counts as nothing.** It asked the fixture's `slow` for `delayMs: 60_000`. The method's input
+    schema caps `delayMs` at 1,000, so the call was refused before admission, the drain had nothing to wait for and
+    the row passed; its early rejection, held by nothing, was vitest's one unhandled error. It stays as it ran.
+  - **P1b, the proof** (new files, `probe168b.py` and `probe168brun.sh`): the old call admitted as the row admits it
+    (`delayMs: 150`) and held by a fixture copy whose `slow` waits 60 s whatever it is asked. Red: the call rejected
+    "provider drain deadline exceeded", the record `{ calls: "deadline", cleanup: "skipped" }`, 6.2 s, no unhandled
+    error.
+- **Run 119** (`8dc80cc1d`, stacked on main `00d78236c`, a fast-forward, minted by a9 on VF-PM's GO; VF-PM's read of
+  `run119/verify.clean.log`): verify exit 0 at 04:52:18Z; vitest 12,197 passed, 0 failed, 18 skipped (878 files);
+  cargo 544 passed, 0 failed (34 results ok); "28 projects" four times; no MaxListeners warning; fixtures 224; the
+  tree clean after. service-drain's 4 rows took 5,894 ms and the deadline file's 2 took 442 ms, and no row reads the
+  wall clock.
+- **Landed:** main fast-forwarded to `8dc80cc1d` on VF-PM's GO (2026-11-04 04:53:52Z).
+
+**Not claimed.** A stall longer than the 5 s deadline reads "deadline" honestly, since the host's own clock ran out;
+the record says so, and no probe ran one. The record is an info line, so a host whose log level drops info drops it
+too; the rows boot fieldd at its default level.
+
+**Owed.** Nothing of this item's. Its filing line in "WI-3" (run 115) carries a dated note closing it.

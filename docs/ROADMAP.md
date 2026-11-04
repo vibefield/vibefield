@@ -576,6 +576,9 @@
   lint fix `78ef3515a`, run 114; LANDED "Items 164 and 165" and "The icon studio, biome-clean") ·
   item 136 (the Setup Assistant's actions, fields and headlines wear tokens, its one placeholder at 4.5:1 or more:
   `cc8894c46` as M117, a fast-forward, run 117; LANDED "Item 136") ·
+  item 168 (fieldd's drain rows read the host's own record of each stop, never the wall clock: the stop's
+  deactivated record says how its calls and its cleanup ended; `8dc80cc1d` as M119, a fast-forward, run 119;
+  LANDED "Item 168") ·
   item 122's floor half (paid: idle,
   idle-class, the ramp of run 53's verify and the peak of run 55's, load1 34.09–42.52, warm max 201 ms against the 15 s,
   0 missed; LANDED "item 122's floor half, measured"; nothing owed).
