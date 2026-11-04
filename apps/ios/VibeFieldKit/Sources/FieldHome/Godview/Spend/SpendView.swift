@@ -20,7 +20,8 @@ import UIKit
 //   pointer. A lift within 4 pt of its press is the click: it opens a line in reach, else sets the moment, else lets
 //   it go within 8 pt of it. A drag sets nothing, and a cancelled touch taps nothing. A finger on the list holds its
 //   order and lights its row; a drag on the list steps it a whole row at a time, and a tap opens a row. There are no
-//   keys, no hover and no focus ring.
+//   keys, no hover and no focus ring. A gesture's end comes twice, its lift and its state's reset, in either order;
+//   every act names its touch by token, so either order is the same one tap (H15, H16).
 // - The words name no key, hover or pane (fd's words rule; the four named deviations are `SpendModel.Dropped`).
 // - SwiftUI names no 450, 550 or 650 weight, so each is the named weight at or below it (`SpendType.weight`). The
 //   Now pill's backdrop blur is not drawn: its ground is the panel at 88 %, as the window's is under the blur.
@@ -30,17 +31,15 @@ struct SpendView: View {
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var state = SpendModel.State()
-  /// Where the finger on the chart came down (the window's `press` ref is the model's `state.press`).
+  /// The finger on the chart: where it came down (a new start is a new touch) and its press's token, which its lift
+  /// and its reset name.
   @State private var chartDown: CGPoint?
-  /// The finger on the list: where it came down and how many whole rows the drag has stepped.
-  @State private var listDown: ListTouch?
+  @State private var chartToken: Int?
+  /// The finger on the list: the same two.
+  @State private var listDown: CGPoint?
+  @State private var listToken: Int?
   @GestureState private var chartTouching = false
   @GestureState private var listTouching = false
-
-  private struct ListTouch: Equatable {
-    let start: CGPoint
-    var applied: Int
-  }
 
   /// What lets a set moment go or the top ease: the frame's target and whether a held moment has slid out.
   private struct Settle: Equatable {
@@ -154,11 +153,10 @@ struct SpendView: View {
       .accessibilityHidden(true)
       .placedAt(g.x0 - 6, g.y0 - 14)
       .onChange(of: chartTouching) { _, touching in
-        // a touch the system took away never lifted: it taps nothing, and the finger is gone
-        guard !touching, chartDown != nil else { return }
+        // the gesture's reset, before or after its lift: the finger is gone (its press stays for its own lift)
+        guard !touching, let token = chartToken else { return }
         chartDown = nil
-        SpendModel.cancel(&state, token: state.press?.token ?? 0)
-        SpendModel.leave(&state)
+        SpendModel.cancel(&state, token: token)
       }
   }
 
@@ -171,15 +169,17 @@ struct SpendView: View {
           let start = value.startLocation
           let frame = SpendModel.frame(model, state)
           SpendModel.point(frame, &state, x: start.x, y: start.y)
-          SpendModel.press(&state, x: start.x, y: start.y)
+          chartToken = SpendModel.press(&state, x: start.x, y: start.y)
         }
         let frame = SpendModel.frame(model, state)
         SpendModel.point(frame, &state, x: value.location.x, y: value.location.y)
       }
       .onEnded { value in
+        // its lift, before or after the reset: the press it began, once
+        guard let token = chartToken else { return }
         chartDown = nil
+        chartToken = nil
         let frame = SpendModel.frame(model, state)
-        let token = state.press?.token ?? 0
         let opened = SpendModel.lift(frame, &state, x: value.location.x, y: value.location.y, token: token)
         SpendModel.leave(&state)
         if let opened { open(opened) }
@@ -368,9 +368,10 @@ struct SpendView: View {
     .contentShape(Rectangle())
     .gesture(listTouch(model))
     .onChange(of: listTouching) { _, touching in
-      guard !touching, listDown != nil else { return }
+      // the gesture's reset, before or after its lift: the list lets go (the touch stays for its own lift)
+      guard !touching, let token = listToken else { return }
       listDown = nil
-      SpendModel.letGoOfList(&state)
+      SpendModel.cancelList(&state, token: token)
     }
     .placedAt(g.lx0, g.ly0)
   }
@@ -392,45 +393,28 @@ struct SpendView: View {
     .frame(width: head.width, height: head.slim ? 14 : 22)
   }
 
-  /// A finger on the list: it holds the order and lights its row; a drag steps whole rows; a tap opens a row.
+  /// A finger on the list (in the box's own space, as the model's rows are): it holds the order and lights its row;
+  /// a drag steps whole rows; a tap opens the row it came down on.
   private func listTouch(_ model: SpendModel.Input) -> some Gesture {
-    DragGesture(minimumDistance: 0)
+    DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space))
       .updating($listTouching) { _, touching, _ in touching = true }
       .onChanged { value in
-        if listDown?.start != value.startLocation {
-          listDown = ListTouch(start: value.startLocation, applied: 0)
+        if listDown != value.startLocation {
+          listDown = value.startLocation
           let frame = SpendModel.frame(model, state)
-          SpendModel.holdList(frame, &state)
-          if let row = Self.row(at: value.startLocation, frame) { state.hover = row.id }
+          listToken = SpendModel.touchList(frame, &state, x: value.startLocation.x, y: value.startLocation.y)
         }
-        guard var touch = listDown else { return }
-        let rowH = SpendModel.frame(model, state).g.rowH
-        let steps = SpendModel.listSteps(from: touch.start.y, to: value.location.y, rowH: rowH)
-        while touch.applied != steps {
-          let step = steps > touch.applied ? 1 : -1
-          let frame = SpendModel.frame(model, state)
-          SpendModel.scrollList(frame, &state, deltaY: Double(step))
-          touch.applied += step
-        }
-        listDown = touch
+        guard let token = listToken else { return }
+        SpendModel.dragList(model, &state, token: token, y: value.location.y)
       }
       .onEnded { value in
-        let frame = SpendModel.frame(model, state)
-        let still =
-          listDown?.applied == 0 && abs(value.location.x - value.startLocation.x) <= 4
-          && abs(value.location.y - value.startLocation.y) <= 4
-        let tapped = still ? Self.row(at: value.location, frame) : nil
+        // its lift, before or after the reset: the touch it began, once
+        guard let token = listToken else { return }
         listDown = nil
-        SpendModel.letGoOfList(&state)
-        if let tapped { open(tapped.id) }
+        listToken = nil
+        let tapped = SpendModel.liftList(&state, token: token, x: value.location.x, y: value.location.y)
+        if let tapped { open(tapped) }
       }
-  }
-
-  /// The row under a point of the list (the list's own space: the head's corner is its origin).
-  private static func row(at point: CGPoint, _ frame: SpendModel.Frame) -> SpendModel.Row? {
-    let x = point.x + frame.g.lx0
-    let y = point.y + frame.g.ly0
-    return frame.rows.first { !$0.hidden && x >= $0.x && x < $0.x + $0.width && y >= $0.top && y < $0.top + $0.height }
   }
 
   /// No agents (`.vf-monitor-spend-empty`): its title and its hint, centred in the box.

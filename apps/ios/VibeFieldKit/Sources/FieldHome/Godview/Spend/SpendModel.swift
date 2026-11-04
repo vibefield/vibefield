@@ -529,8 +529,7 @@ enum SpendModel {
   /// step, a finger moving up stepping the list down. Not finite, or no row height: no steps.
   static func listSteps(from: Double, to: Double, rowH: Double) -> Int {
     guard from.isFinite, to.isFinite, rowH.isFinite, rowH > 0 else { return 0 }
-    func rows(_ y: Double) -> Int { Int(Swift.min(1e6, Swift.max(-1e6, (-y / rowH).rounded(.towardZero)))) }
-    return rows(to) - rows(from)
+    return Int(Swift.min(1e6, Swift.max(-1e6, ((from - to) / rowH).rounded(.towardZero))))
   }
 
   // MARK: - Acts
@@ -572,20 +571,26 @@ enum SpendModel {
     state.hover = near
   }
 
-  /// A finger comes down on the chart (`onHitDown`). RED SKELETON: no token of its own.
+  // The view hears a gesture's end twice, its lift (`onEnded`) and its gesture state's reset, in an order no host
+  // row can witness; a cancelled touch is its reset alone. So every touch has a token, and each act names the touch
+  // it began: either order is the same one tap (fd's order-proof cancel, H15 and H16).
+
+  /// A finger comes down on the chart (`onHitDown`): a new press, its token the next touch's.
   @discardableResult
   static func press(_ state: inout State, x: Double, y: Double) -> Int {
-    state.press = State.Press(x: x, y: y, token: 0)
-    return 0
+    state.touches += 1
+    state.press = State.Press(x: x, y: y, token: state.touches)
+    return state.touches
   }
 
-  /// A finger lifts from the chart (`onHitUp`). A press that travelled more than 4 pt is no tap: nothing pans the
-  /// window, and a stray drag sets nothing. A line within reach opens (its id is returned for the host to open);
-  /// empty chart sets the moment there, and a tap on the moment lets it go.
+  /// A finger lifts from the chart (`onHitUp`), ending the press it names, once: an older press's lift, or a second,
+  /// taps nothing. A press that travelled more than 4 pt is no tap: nothing pans the window, and a stray drag sets
+  /// nothing. A line within reach opens (its id is returned for the host to open); empty chart sets the moment there,
+  /// and a tap on the moment lets it go.
   static func lift(_ frame: Frame, _ state: inout State, x: Double, y: Double, token: Int) -> String? {
-    let from = state.press
+    guard let from = state.press, from.token == token else { return nil }
     state.press = nil
-    guard let from, abs(x - from.x) <= 4, abs(y - from.y) <= 4 else { return nil }
+    guard abs(x - from.x) <= 4, abs(y - from.y) <= 4 else { return nil }
     let t = tAt(frame, x)
     if let near = nearest(frame, t, y) { return near }
     if let pinned = frame.pinned, abs(xOf(frame.g, frame.span, t) - xOf(frame.g, frame.span, pinned)) < 8 {
@@ -596,9 +601,15 @@ enum SpendModel {
     return nil
   }
 
-  /// The touch's gesture is over (its reset). RED SKELETON: the window's `onPointerCancel`, whatever the token.
+  /// The touch's gesture is over (its reset), lifted or not; a cancelled touch's only end (the window's
+  /// `onPointerCancel`). The finger is gone. It acts only on the press it names, and only while that press is open:
+  /// after its lift, or once a newer press began, it does nothing. It leaves the press for its own lift, so a reset
+  /// that comes first still lets that lift tap, once; a cancelled touch never lifts, so it taps nothing, and the next
+  /// press takes its place.
   static func cancel(_ state: inout State, token: Int) {
-    state.press = nil
+    guard state.press?.token == token else { return }
+    state.pointer = nil
+    state.hover = nil
   }
 
   /// The finger leaves the chart (`onHitLeave`).
@@ -623,18 +634,52 @@ enum SpendModel {
     state.hover = nil
   }
 
-  /// A finger comes down on the list. RED SKELETON.
+  /// A finger comes down on the list: it holds the order (SV-D12) and lights the row it is on (the row's
+  /// `onPointerEnter`, which a touch fires as it comes down). Its token names its drag, its lift and its reset.
   @discardableResult
-  static func touchList(_ frame: Frame, _ state: inout State, x: Double, y: Double) -> Int { 0 }
+  static func touchList(_ frame: Frame, _ state: inout State, x: Double, y: Double) -> Int {
+    state.touches += 1
+    let row = frame.rows.first {
+      !$0.hidden && x >= $0.x && x < $0.x + $0.width && y >= $0.top && y < $0.top + $0.height
+    }
+    state.list = State.ListTouch(token: state.touches, x: x, y: y, row: row?.id, applied: 0, down: true)
+    holdList(frame, &state)
+    if let row { state.hover = row.id }
+    return state.touches
+  }
 
-  /// The finger on the list moves. RED SKELETON.
-  static func dragList(_ input: Input, _ state: inout State, token: Int, y: Double) {}
+  /// The finger on the list moves: every whole row of travel from where it came down is one step of the wheel
+  /// (`listSteps`, then `scrollList` on the frame each step starts from). Only the touch it names.
+  static func dragList(_ input: Input, _ state: inout State, token: Int, y: Double) {
+    guard var touch = state.list, touch.token == token else { return }
+    let steps = listSteps(from: touch.y, to: y, rowH: geometryFor(width: input.width, height: input.height).rowH)
+    while touch.applied != steps {
+      let step = steps > touch.applied ? 1 : -1
+      scrollList(frame(input, state), &state, deltaY: Double(step))
+      touch.applied += step
+    }
+    state.list = touch
+  }
 
-  /// The finger lifts from the list. RED SKELETON.
-  static func liftList(_ state: inout State, token: Int, x: Double, y: Double) -> String? { nil }
+  /// The finger lifts from the list, ending the touch it names, once. A touch that stepped no row and travelled no
+  /// more than 4 pt is a tap on the row it came down on (its id is returned for the host to open). The list lets go.
+  static func liftList(_ state: inout State, token: Int, x: Double, y: Double) -> String? {
+    guard let touch = state.list, touch.token == token else { return nil }
+    state.list = nil
+    if touch.down { letGoOfList(&state) }
+    guard touch.applied == 0, abs(x - touch.x) <= 4, abs(y - touch.y) <= 4 else { return nil }
+    return touch.row
+  }
 
-  /// The list touch's gesture is over (its reset). RED SKELETON.
-  static func cancelList(_ state: inout State, token: Int) {}
+  /// The list touch's gesture is over (its reset), lifted or not: the list lets go. It acts only on the touch it
+  /// names, while its finger is down. The touch stays for its own lift, so a reset that comes first still lets that
+  /// lift tap, once.
+  static func cancelList(_ state: inout State, token: Int) {
+    guard var touch = state.list, touch.token == token, touch.down else { return }
+    touch.down = false
+    state.list = touch
+    letGoOfList(&state)
+  }
 
   /// A step of the list by one whole row in `deltaY`'s direction (the wheel's `Math.sign`), only while it has more
   /// rows than slots, never past its ends. A NaN steps nowhere.
