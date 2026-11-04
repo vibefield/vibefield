@@ -30,6 +30,16 @@ import Testing
     #expect(onControl.type == .sessionEvent)
   }
 
+  @Test func sceneRepairUsesTheSharedGoldenOnTheFramesLegOnly() throws {
+    let body = try #require(try Vector.json("tp-request-scene.valid").objectValue)
+    let wire = try RoutedWire.encode(.requestScene, body)
+    let decoded = try RoutedWire.decode(wire, allowed: RoutedLegVocabulary.outbound(.frames))
+    #expect(decoded.body == .object(body))
+    #expect(throws: RoutedWire.DecodeFailure.notAllowedHere(.requestScene)) {
+      try RoutedWire.decode(wire, allowed: RoutedLegVocabulary.outbound(.control))
+    }
+  }
+
   @Test func anUnknownTagIsNamedRatherThanGuessedAt() throws {
     #expect(throws: RoutedWire.DecodeFailure.unknownType("SomeFutureVerb")) {
       try RoutedWire.decode(
@@ -50,18 +60,18 @@ import Testing
     #expect(
       RoutedLegVocabulary.outbound(.control) == [
         .connectionHello, .legHeartbeat, .attachControlLeg, .declareDemand, .claimGeometry,
-        .releaseGeometry, .transferGeometry, .sendInput,
+        .releaseGeometry, .transferGeometry, .sendInput, .selectionTextRequest,
       ])
     #expect(
       RoutedLegVocabulary.outbound(.frames) == [
         .connectionHello, .legHeartbeat, .attachFramesLeg, .transportCredit, .sceneApplied,
-        .calibrationPing,
+        .requestScene, .calibrationPing,
       ])
     #expect(
       RoutedLegVocabulary.inbound(.control) == [
         .connectionAccepted, .connectionRefused, .legHeartbeatAck, .controlLegAttached,
         .attachRefused, .demandAccepted, .cellActivationStatus, .geometryCommitted,
-        .geometryRefused, .sessionEvent, .geometryState, .inputRefused,
+        .geometryRefused, .sessionEvent, .geometryState, .inputRefused, .selectionTextResult,
       ])
     #expect(
       RoutedLegVocabulary.inbound(.frames) == [

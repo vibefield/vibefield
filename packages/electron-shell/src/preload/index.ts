@@ -339,6 +339,11 @@ ipcRenderer.on(IPC_CHANNELS.themeState, (_event, raw: unknown) => {
 
 contextBridge.exposeInMainWorld("vibefield", {
   platform,
+  haptics: {
+    zoomTick: (): void => {
+      if (platform === "darwin") ipcRenderer.send(IPC_CHANNELS.zoomHaptic);
+    },
+  },
   // One-shot same-world bridge authentication. renderer-host claims this
   // synchronously before mounting field-app; later plugin code can neither
   // recover the nonce nor forge the preload's transferred-port message.

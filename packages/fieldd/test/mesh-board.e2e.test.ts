@@ -17,9 +17,9 @@
 //   · the upstream is reference-counted: the last reader out closes it;
 //   · the door's refusals: a peer never gets the full projection or the mesh.
 // PG-2 (2026-10-31): the board here is the model's `remote` cut (the `desk` cut
-// before it), so each row is the owner's model row and its joins, a bare
-// terminal's among them, and a run's row arrives once its owner's backend has
-// assembled it; the phone reads it at its home at its own floor.
+// before it), so each row is the owner's model row and its joins. A run's row
+// arrives once its owner's backend has assembled it, without duplicating its
+// dedicated PTY; the phone reads it at its home at its own floor.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -66,13 +66,19 @@ const ENDPOINTS = {
 const observed = (sessionId: string, cellBootId: string) => ({
   generation: 0,
   bootId: "mock-boot",
-  terminals: [{ sessionId, pid: 42, cell: { cellInstanceId: 1, cellBootId } }],
+  terminals: [
+    {
+      sessionId,
+      pid: 42,
+      cell: { cellInstanceId: 1, cellBootId, workloadClass: "agent" as const },
+    },
+  ],
   workers: [],
 });
 
-/** A run whose record the fold re-lists at boot, because the (mocked) floor
- * still lists its PTY — MF-1f's restart path, the agent-field daemon suite's
- * way of making a fold non-empty without a real floor. */
+/** A run whose record the fold re-lists at boot because the (mocked) floor
+ * still lists its dedicated PTY. The exited agent keeps that PTY claimed;
+ * it must not appear again as a bare terminal on either desktop's board. */
 function writeRun(dataDir: string, runtimeRunId: string, pane: string): void {
   const at = "2026-09-30T12:00:00.000Z";
   const record: AgentSessionRecord = {
@@ -130,7 +136,11 @@ const registryPeer = (deviceId: string, host: string, online = true) => ({
  * which the other desktop's registry row correlates to this desktop's slice:
  * the peer kind is the transport's to give. `routes` resolves lazily: the
  * doors exist only once both daemons are up. */
-function sidecar(routes: Record<string, () => string>, node: string): WsCtor {
+function sidecar(
+  routes: Record<string, () => string>,
+  node: string,
+  dialled: WebSocket[] = [],
+): WsCtor {
   class SidecarSim extends WebSocket {
     constructor(url: string) {
       const host = Object.keys(routes).find((name) => url.includes(name));
@@ -138,6 +148,8 @@ function sidecar(routes: Record<string, () => string>, node: string): WsCtor {
       super(url.includes(".ts.net") ? target : url, {
         headers: { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": node },
       });
+      // PG-3b — every socket this desktop's peer link dialled, so a row can cut one (a network blip)
+      dialled.push(this);
     }
   }
   return SidecarSim;
@@ -150,6 +162,8 @@ interface Side {
   pane: string;
   /** this daemon's loopback door with its route secret — what the OTHER dials */
   door: string;
+  /** the sockets its peer link dialled, latest last */
+  dialled: WebSocket[];
 }
 
 async function bootSide(
@@ -165,6 +179,7 @@ async function bootSide(
   const run = `run-${deviceId}`;
   const pane = `pane-${deviceId}`;
   writeRun(dataDir, run, pane);
+  const dialled: WebSocket[] = [];
 
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   mock.meshDeviceId = deviceId;
@@ -182,10 +197,10 @@ async function bootSide(
     dataDir,
     controlPort: 0,
     dataPort: 0,
-    peerWebSocket: sidecar({ [`${peer.host}.tailnet.ts.net`]: route }, `node-${deviceId}`),
+    peerWebSocket: sidecar({ [`${peer.host}.tailnet.ts.net`]: route }, `node-${deviceId}`, dialled),
   });
   cleanup.push(() => daemon.stop());
-  return { daemon, mock, run, pane };
+  return { daemon, mock, run, pane, dialled };
 }
 
 async function doorOf(side: Omit<Side, "door">): Promise<string> {
@@ -240,6 +255,23 @@ async function windowOn(daemon: FielddDaemon): Promise<WsRpc> {
   const rpc = new WsRpc(ws);
   await helloAs(rpc, daemon.tokens.mint(["agent.observe"], "ds3-window").token);
   return rpc;
+}
+
+/** A phone on a desktop's tailnet door: a WhoIs-verified self login, not a daemon. */
+async function phoneOn(door: string): Promise<WsRpc> {
+  const ws = new WebSocket(door, { headers: { "Tailscale-User-Login": TEST_LOGIN } });
+  cleanup.push(() => ws.close());
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", () => resolve());
+    ws.once("error", reject);
+  });
+  const phone = new WsRpc(ws);
+  await phone.call("system.hello", {
+    contractsVersion: CONTRACTS_VERSION,
+    minCompatible: CONTRACTS_VERSION,
+    clientKind: "ios",
+  });
+  return phone;
 }
 
 /** The mesh frames a reader has heard for one subscription, in order. */
@@ -304,15 +336,13 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     const onA = await windowOn(A.daemon);
     const meshA = await openMesh(onA);
     // this desktop's own board is in the open itself, first and live; its run's
-    // row is there once its backend has assembled it, beside its bare terminal
+    // row is there once its backend has assembled it, with no duplicate PTY row
     expect(meshA.open.devices[0]).toMatchObject({ device: "dev-a", state: "live" });
     await until(
       () => heldRows(meshA.open, meshFrames(onA, meshA.subId), "dev-a").includes(A.run),
       3 * beat,
     );
-    expect(heldRows(meshA.open, meshFrames(onA, meshA.subId), "dev-a")).toEqual(
-      [A.run, A.pane].sort(),
-    );
+    expect(heldRows(meshA.open, meshFrames(onA, meshA.subId), "dev-a")).toEqual([A.run]);
     // the other desktop is LISTED from the start, and its board arrives on the stream
     expect(meshA.open.devices.map((entry) => entry.device)).toEqual(["dev-a", "dev-b"]);
     await until(
@@ -483,9 +513,7 @@ describe("DS-3 — the mesh board across two real daemons", () => {
       "asleep",
     ]);
     // the reader still holds B's last board, and a new reader is answered with it
-    expect(heldRows(meshA.open, meshFrames(onA, meshA.subId), "dev-b")).toEqual(
-      [B.run, B.pane].sort(),
-    );
+    expect(heldRows(meshA.open, meshFrames(onA, meshA.subId), "dev-b")).toEqual([B.run]);
     const late = await openMesh(onA);
     expect(late.open.devices.find((entry) => entry.device === "dev-b")).toMatchObject({
       state: "asleep",
@@ -495,8 +523,12 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     });
   }, 60_000);
 
-  it("the upstream is reference-counted: shared by two readers, closed when the last one leaves", async () => {
-    const { A } = await bootPair();
+  // PG-9a (item 135, 2026-11-01) — this row pinned the close at the last reader's leaving. The hub now lingers
+  // `AGENT_FIELD.MESH_HUB_LINGER_MS` first, so a reader back inside it (a phone's app switch, its gap repair)
+  // rejoins the standing hub; the close past the linger is pinned on the clock in `mesh-board.test.ts`, and here
+  // the daemon's own stop is what ends a linger at once.
+  it("the upstream is reference-counted: shared by two readers, kept through the linger when the last one leaves, and closed at once when the board stops", async () => {
+    const { A, B } = await bootPair();
     const onA = await windowOn(A.daemon);
     const first = await openMesh(onA);
     const second = await openMesh(onA);
@@ -506,6 +538,28 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     await onA.call("system.unsubscribe", { subId: first.subId });
     expect(A.daemon.federatedSubs.size).toBe(1);
     await onA.call("system.unsubscribe", { subId: second.subId });
+    // the last reader left: the hub lingers, and B's upstream with it
+    expect(A.daemon.meshBoard.size).toBe(1);
+    expect(A.daemon.federatedSubs.size).toBe(1);
+    // a reader back inside the linger is answered from the standing hub: B live on the chain it was on
+    const heardEpoch = [
+      first.open.devices.find((entry) => entry.device === "dev-b")?.snapshot?.epoch,
+      ...meshFrames(onA, first.subId)
+        .filter((frame) => frame.device === "dev-b")
+        .map((frame) => ("snapshot" in frame ? frame.snapshot.epoch : undefined)),
+    ]
+      .filter((epoch) => epoch !== undefined)
+      .at(-1);
+    expect(heardEpoch?.startsWith(`${B.daemon.bootId}.`)).toBe(true);
+    const back = await openMesh(onA);
+    const b = back.open.devices.find((entry) => entry.device === "dev-b");
+    expect(b?.state).toBe("live");
+    expect(b?.snapshot?.epoch).toBe(heardEpoch);
+    expect(A.daemon.federatedSubs.size).toBe(1);
+    await onA.call("system.unsubscribe", { subId: back.subId });
+    expect(A.daemon.meshBoard.size).toBe(1);
+    // the daemon stopping does not wait out a linger
+    A.daemon.meshBoard.dispose();
     expect(A.daemon.meshBoard.size).toBe(0);
     expect(A.daemon.federatedSubs.size).toBe(0);
   }, 60_000);
@@ -690,5 +744,95 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     const bRow = peerBoard().get(B.run);
     expect(AgentRemoteRow.parse(bRow)).not.toHaveProperty("label");
     expect(AgentModelDeskRow.safeParse(bRow).success).toBe(false);
+  }, 60_000);
+
+  // PG-3b (PG-D6 (a), J2 (a) 2026-11-01) — the phone is a screen of the desktop that owns the row: its report is
+  // routed by `device` through its home, carried only while it holds the home's `{remote, mesh}` board, and kept on
+  // the owner as a screen of its own under the home's peer connection; the board's close takes it away. The owner's
+  // mark is read in its backend's ledger (`seenAt`): a row a screen shows is seen at every flush, so a turn ending
+  // then is read; once nothing shows it, its seen time stands still, and a turn ending after it is marked
+  // (puppeteer-monitor's `reconcileUnread`). This rig has no live runtime to end a turn on B (the fold's run is a
+  // record, exited); the unit rows (agent-screens.test.ts) drive the turns and read `unread` itself.
+  it("PG-3b — the phone's report reaches the owner through its home, only while it holds the home's mesh board", async () => {
+    const { A, B } = await bootPair();
+    const phone = await phoneOn(A.door);
+    const mesh = await openMesh(phone);
+    await until(
+      () => heldBoard(mesh.open, meshFrames(phone, mesh.subId), "dev-b").has(B.run),
+      5_000,
+    );
+    const shown = heldBoard(mesh.open, meshFrames(phone, mesh.subId), "dev-b").get(B.run);
+    const id = AgentRemoteRow.parse(shown).monitorRow.id;
+    expect(AgentRemoteRow.parse(shown).monitorRow.unread).toBe(false);
+    const seen = (): number | undefined => B.daemon.agentMonitor()?.backend.seenAt().get(id);
+    /** a flush of B's backend: a window's model board opening there is a screen's first report */
+    const flushB = async (): Promise<void> => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      const window = await windowOn(B.daemon);
+      await window.call("agent.subscribe", { projection: "model" });
+    };
+    // routed by the row's device through the home: carried, and B keeps it as the phone's own screen
+    const before = Date.now();
+    expect(await phone.call("agent.reportShown", { ids: [id], device: "dev-b" })).toEqual({
+      reported: true,
+    });
+    expect(B.daemon.agentScreens.size.carried).toBe(1);
+    const reported = seen() ?? 0;
+    expect(reported).toBeGreaterThanOrEqual(before);
+    // shown: every flush of B's backend sees it again
+    await flushB();
+    expect(seen() ?? 0).toBeGreaterThan(reported);
+    // a network blip: A's socket to B goes. B forgets the screens that connection carried, and when A's link
+    // answers its re-dial, A carries the phone's report again under the new connection
+    const cut = A.dialled.at(-1);
+    if (cut === undefined) throw new Error("A dialled no peer socket");
+    cut.terminate();
+    await until(
+      () => B.daemon.agentScreens.size.carried === 0,
+      5_000,
+      "B forgets the cut connection's screens",
+    );
+    await until(
+      () => B.daemon.agentScreens.size.carried === 1,
+      10_000,
+      "the re-dial carries the report again",
+    );
+    expect(A.dialled.length).toBeGreaterThan(1);
+    const replayed = seen() ?? 0;
+    await flushB();
+    expect(seen() ?? 0).toBeGreaterThan(replayed);
+    // the home's own rows: routed to itself, served by its own screen (the remote board is one)
+    expect(await phone.call("agent.reportShown", { ids: [A.pane], device: "dev-a" })).toEqual({
+      reported: true,
+    });
+    expect(A.daemon.agentScreens.size.carried).toBe(0);
+    // a second reader behind the same home is a second screen, never the first one's
+    const ipad = await phoneOn(A.door);
+    const ipadMesh = await openMesh(ipad);
+    expect(await ipad.call("agent.reportShown", { ids: [B.pane], device: "dev-b" })).toEqual({
+      reported: true,
+    });
+    expect(B.daemon.agentScreens.size.carried).toBe(2);
+    expect(await ipad.call("agent.reportShown", { ids: [], device: "dev-b" })).toEqual({
+      reported: true,
+    });
+    expect(B.daemon.agentScreens.size.carried).toBe(1);
+    // a reader with no board at the home is refused there, and nothing reaches B
+    const bare = await phoneOn(A.door);
+    const refused = await bare.callErr("agent.reportShown", { ids: [id], device: "dev-b" });
+    expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(refused.data?.details).toEqual({ state: "no-screen" });
+    expect(B.daemon.agentScreens.size.carried).toBe(1);
+    // the phone's board closes: the home sends B the empty report, and B's screen for it goes
+    await phone.call("system.unsubscribe", { subId: mesh.subId });
+    await until(() => B.daemon.agentScreens.size.carried === 0, 5_000);
+    const after = await phone.callErr("agent.reportShown", { ids: [id], device: "dev-b" });
+    expect(after.data?.details).toEqual({ state: "no-screen" });
+    // shown nowhere now: B's flushes leave its seen time where it stood, so a turn ending now is the owner's mark
+    await flushB();
+    const released = seen();
+    await flushB();
+    expect(seen()).toBe(released);
+    await ipad.call("system.unsubscribe", { subId: ipadMesh.subId });
   }, 60_000);
 });

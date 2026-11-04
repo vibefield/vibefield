@@ -373,7 +373,7 @@ const FACE_ROW = (key: string): string =>
 export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
   const { say } = d;
   const h = paneHands(d);
-  const { js, until, press, drag, key, census, rows, frame, theme } = h;
+  const { js, until, press, pan, key, census, rows, frame, theme } = h;
   const problems: string[] = [];
   const ambient = await js<string>("globalThis.__vfDesk.ambient()");
   const themeWas = await js<string>("globalThis.__vfDesk.theme()");
@@ -452,7 +452,7 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
       await sleep(250);
     }
   };
-  /** `e` brought to the middle of the view by drags on the bare mat, judged by the camera (no selection needed); said whole if
+  /** `e` brought to the middle of the view by Space-drags on the bare mat, judged by the camera (no selection needed); said whole if
    * eight drags do not bring it there. */
   const bringToMiddle = async (e: number): Promise<void> => {
     for (let i = 0; ; i += 1) {
@@ -503,7 +503,7 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
         );
       }
       const from = { x: v.left + mat.x, y: v.top + mat.y };
-      await drag(from, { x: from.x + step.dx, y: from.y + step.dy }, 8, 300);
+      await pan(from, { x: from.x + step.dx, y: from.y + step.dy }, 8, 300);
       // measured once the camera holds, not after a fixed wait: the camera has inertia, and a release it reads as moving
       // glides on
       await settledCamera();
@@ -646,7 +646,7 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
       const mat = await js<{ x: number; y: number } | null>(BARE_FOR_PAN(step.dx));
       if (mat === null) throw new Error("no bare mat to pan the pane away from");
       const from = { x: at.deskOff.left + mat.x, y: at.deskOff.top + mat.y };
-      await drag(from, { x: from.x + step.dx, y: from.y + step.dy }, 8, 300);
+      await pan(from, { x: from.x + step.dx, y: from.y + step.dy }, 8, 300);
       pans.push(step);
       await sleep(500);
     }
@@ -671,7 +671,7 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
       const mat = await js<{ x: number; y: number } | null>(BARE_FOR_PAN(-step.dx));
       if (mat === null) throw new Error("no bare mat to pan the pane back from");
       const from = { x: at.deskOff.left + mat.x, y: at.deskOff.top + mat.y };
-      await drag(from, { x: from.x - step.dx, y: from.y - step.dy }, 8, 300);
+      await pan(from, { x: from.x - step.dx, y: from.y - step.dy }, 8, 300);
       await sleep(500);
     }
 

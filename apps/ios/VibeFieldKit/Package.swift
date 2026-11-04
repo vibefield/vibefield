@@ -18,7 +18,9 @@ import PackageDescription
 // renders the lock's value back. The line itself, not a file this manifest reads and not the environment: SwiftPM
 // caches a manifest's evaluation keyed on its contents plus its environment, never a file it reads, so a file flips
 // nothing until the cache misses, and Xcode's GUI evaluates with a fixed environment (§3, measured 2026-10-15).
-let truffleRelease: Version? = "0.7.23"
+// EL8 2026-11-02: Ghosttea 0.14.0 and Swift Truffle 0.7.26 publish canonical DNS metadata.
+// Desktop Rust/core and npm sidecars retain 0.7.24; this Swift dependency has no sidecar.
+let truffleRelease: Version? = "0.7.26"
 let truffleDependency: Package.Dependency =
   if let release = truffleRelease {
     .package(url: "https://github.com/vibecook-dev/truffle.git", exact: release)
@@ -30,7 +32,7 @@ let truffleDependency: Package.Dependency =
 // siblings.lock.json's ghosttea `release.swift`, never by hand: the exact tag in the committed shape, and the checkout
 // (`../ghosttea-0.11.2`, reached through `.window/ghosttea` so the path package keeps the package's own identity, as
 // `.window/truffle` does) while `pnpm siblings use ghosttea` renders it nil.
-let ghostteaRelease: Version? = "0.13.7"
+let ghostteaRelease: Version? = "0.14.0"
 let ghostteaDependency: Package.Dependency =
   if let release = ghostteaRelease {
     .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: release)
@@ -56,6 +58,8 @@ let package = Package(
     .library(name: "FieldFreeway", targets: ["FieldFreeway"]),
     .library(name: "FieldInput", targets: ["FieldInput"]),
     .library(name: "FieldSwarm", targets: ["FieldSwarm"]),
+    .library(name: "FieldSplash", targets: ["FieldSplash"]),
+    .library(name: "FieldLock", targets: ["FieldLock"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
     .library(name: "FieldHistory", targets: ["FieldHistory"]),
     .library(name: "FieldWorkspace", targets: ["FieldWorkspace"]),
@@ -215,13 +219,15 @@ let package = Package(
         .product(name: "Truffle", package: "truffle"),
         .product(name: "TruffleTailscale", package: "truffle"),
       ],
-      // The contracts' golden MESH board (`agent-mesh-open.valid.json`), byte
-      // for byte, so `-vf-demo-field-slice` draws the swarm over REAL-shaped
-      // rows through the real home path and the real fold (DS-8, 2026-10-01;
-      // it was the golden `field.agents.v1` slice until DS-D14 retired that
-      // reader). Only DEBUG code reads it (`FieldLink.goldenFixture`);
-      // resources are not conditional, so ~6 KB of inert JSON rides along in
-      // Release, which is the price of a screenshot gate with provenance.
+      // PG-3a's WITNESS remote board (`agent-remote-mesh-open.witness.json`),
+      // byte for byte, so `-vf-demo-field-slice` draws the swarm over
+      // REAL-shaped rows through the real home path and the real fold (PG-3e;
+      // corrected 2026-11-02: from DS-8 it was the contracts' golden FIELD mesh
+      // board, `agent-mesh-open.valid.json`, and before that the golden
+      // `field.agents.v1` slice until DS-D14 retired that reader). Only DEBUG
+      // code reads it (`FieldLink.goldenFixture`); resources are not
+      // conditional, so ~10 KB of inert JSON rides along in Release, which is
+      // the price of a screenshot gate with provenance.
       resources: [.copy("Fixtures")]
     ),
     // The terminal leg (IOS-3, re-footed at TM-5): everything that knows
@@ -288,6 +294,23 @@ let package = Package(
       resources: [.copy("Shaders"), .copy("Resources/marks.png")],
       linkerSettings: [.linkedFramework("Metal"), .linkedFramework("MetalKit")]
     ),
+    // The phone's splash (DESIGN.md §8 "The phone's splash"): vibefield-splash's iPhone look —
+    // Wormhole · Obsidian by night, Obsidian Light by day — drawn natively from its Metal bake,
+    // which apps/ios/scripts/vendor-splash.mjs vendors into `Splash/` at a pin (the shaders and the
+    // numbers generated, the runtime the splash project's own source; never edited here), and the
+    // gate that stands it over the home at launch. Unlike the swarm's shaders (D-i14) these are
+    // compiled with the app into the target's default.metallib: a splash is the one surface that
+    // cannot wait for a compile at first use. It names no other kit target but the design tokens.
+    .target(
+      name: "FieldSplash",
+      dependencies: ["FieldDesign"],
+      resources: [.process("Splash/SplashShaders.metal")],
+      linkerSettings: [.linkedFramework("Metal"), .linkedFramework("QuartzCore")]
+    ),
+    // The splash's runtime held to runtime.js's own phases, sizes and uniforms (the bake's
+    // `clock.json`, vendored with the splash at its pin, which `pnpm check:ios-fixtures` holds it to:
+    // no contracts directory carries it), and both looks drawn on this device's GPU, the dust among them.
+    .testTarget(name: "FieldSplashTests", dependencies: ["FieldSplash"], resources: [.copy("Fixtures")]),
     // The History tab (IOS-9b, H-D4): the ledger, a project, a session's
     // document and search — chrome family only, over VALUES (`HistoryCorpus`)
     // that today only the mock fills (`-vf-mock`) and the index reads will.
@@ -316,14 +339,21 @@ let package = Package(
     // glances, this phone's own preferences. It draws what FieldHome hands it
     // (`SettingsAccount`) and asks nothing of the mesh, so it takes no mesh
     // product; FieldTerminal is here for its Terminal page.
-    .target(name: "FieldSettings", dependencies: ["FieldDesign", "FieldTerminal"]),
+    // WI-3 — and its Lock page, which reads and changes the lock (FieldLock).
+    .target(name: "FieldSettings", dependencies: ["FieldDesign", "FieldTerminal", "FieldLock"]),
     .testTarget(name: "FieldSettingsTests", dependencies: ["FieldSettings", "FieldDesign"]),
+    // WI-3 — the lock (DESIGN.md §9 "The lock"; WI-D3…D7, WI-L5…L7): its rules and its words, over
+    // LocalAuthentication's `.deviceOwnerAuthentication`, so the passcode is iOS's own fallback. No UI and no mesh:
+    // the curtain that draws it is FieldHome's, so every rule (the time away, the cover, the ask before a change,
+    // the stand-down) tests without a simulator, against its own clock and a fake ask.
+    .target(name: "FieldLock"),
+    .testTarget(name: "FieldLockTests", dependencies: ["FieldLock"]),
     .target(
       name: "FieldHome",
       dependencies: [
         "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
         "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct", "FieldFreeway",
-        "FieldRoutedTerminal", "FieldSettings",
+        "FieldRoutedTerminal", "FieldSettings", "FieldSplash", "FieldLock",
       ],
       resources: [.process("Resources")]
     ),
@@ -405,7 +435,15 @@ let package = Package(
     // untested: the integrator carried three state-machine bugs (the parked
     // poll, the card's ended face, the double attach) that no other target
     // could have caught.
-    .testTarget(name: "FieldHomeTests", dependencies: ["FieldHome"]),
+    //
+    // PG-4s — and the Godview views' bundle (PG-5…8): PG-3a's witness, which every view suite replays, the toolkit's
+    // golden (`phone-toolkit.golden.json`) and one golden per view (`phone-<view>.golden.json`), copied in byte for
+    // byte; `pnpm check:ios-fixtures` keeps the word true.
+    .testTarget(
+      name: "FieldHomeTests",
+      dependencies: ["FieldHome"],
+      resources: [.copy("Fixtures")]
+    ),
     // The History tab's DECISIONS (H-D4): ranking, the scope line, the search's
     // matching and counts, where a hit lands, the stepper's ring.
     .testTarget(

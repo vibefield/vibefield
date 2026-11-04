@@ -3,10 +3,11 @@
 // construction and the freshness row passes for the right reason — a fixture
 // that faked the bytes would make `manifest-stale` untestable.
 
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { emitManifest } from "@vibefield/plugin-build";
+import { onTestFinished } from "vitest";
 
 export const FIXTURE_ID = "com.example.fixture";
 
@@ -107,7 +108,7 @@ export function objectRendererModule(
 }
 
 export function makePlugin(opts: FixtureOptions = {}): string {
-  const root = mkdtempSync(join(tmpdir(), "vf-plugin-cli-"));
+  const root = freshDir("vf-plugin-cli-");
   if (opts.rawManifest !== undefined)
     writeFileSync(join(root, "vibefield.plugin.json"), opts.rawManifest);
   else emitManifest(baseManifest(opts.manifest), join(root, "vibefield.plugin.json"));
@@ -120,8 +121,13 @@ export function makePlugin(opts: FixtureOptions = {}): string {
   return root;
 }
 
+/** A fresh empty directory under the OS temp dir, removed when the running test finishes, pass or fail (item 153:
+ * before, every run left ~95 behind). Only callable inside a test: onTestFinished throws anywhere else, so a
+ * directory made at describe scope fails loudly instead of leaking. `makePlugin`'s roots are made here too. */
 export function freshDir(prefix = "vf-plugin-cli-out-"): string {
-  return mkdtempSync(join(tmpdir(), prefix));
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  onTestFinished(() => rmSync(dir, { recursive: true, force: true, maxRetries: 3 }));
+  return dir;
 }
 
 /** The codes present in a verdict list, for terse assertions. */

@@ -158,9 +158,9 @@ const PIN_EXPECTATIONS = [
   // truffle-core #229 (the sidecar's stderr forwarder), the crate and the five npm sidecars together again.
   // 0.7.23 → 0.7.24 on 2026-10-27, THE SPLIT (James's ruling a): the crate and the five npm sidecars (protocol 11)
   // move, the kit's Swift plane stays 0.7.23 because ghosttea 0.13.7 declares it exact (0.7.24 changes no Swift).
-  // So the table holds BOTH, each anchored to the line's end so a prerelease never passes: the cargo row at 0.7.24
-  // and the Swift row at 0.7.23, until the first ghosttea that declares 0.7.24 rejoins them (DECISIONS TB). The
-  // Swift row stands aside while the dev overlay links truffle, which renders that line nil on purpose (RD-3).
+  // EL8 2026-11-02: Ghosttea 0.14.0 pins Swift Truffle 0.7.26, publishing the canonical DNS metadata fix.
+  // Desktop Rust and sidecars stay together at 0.7.24; the Swift plane has no sidecar. Both rows remain exact.
+  // The Swift row stands aside while the dev overlay links truffle and renders it nil (RD-3).
   // Cargo.toml's closure note carries every event and every place they touched.
   {
     file: "Cargo.toml",
@@ -169,21 +169,22 @@ const PIN_EXPECTATIONS = [
   },
   {
     file: "apps/ios/VibeFieldKit/Package.swift",
-    re: /^let truffleRelease: Version\? = "0\.7\.23"$/m,
+    re: /^let truffleRelease: Version\? = "0\.7\.26"$/m,
     label:
-      'let truffleRelease: Version? = "0.7.23" (the split: the Swift plane stays until a ghosttea declares 0.7.24)',
+      'let truffleRelease: Version? = "0.7.26" (matches Ghosttea 0.14.0; desktop Rust/sidecar stays 0.7.24)',
     overlay: "truffle",
   },
   // The FINAL 0.16.0 on `latest` since PORTALS PT-6b (M24 LT1–LT5; LT5 — I52 — the reference
   // kinds' drivers idle unless their own object is in hand). Before it, prereleases on `next`
   // from PT-2 (0.16.0-portals.2 — LT1 + LT2, the live face and the hand's input; PT-3:
   // 0.16.0-portals.3, LT3's render half contained; PT-5a: 0.16.0-portals.4, LT4 — the asks
-  // PORTALS found); DK-18 had pinned 0.15.0 FINAL, the cutover's release. Anchored to the
-  // line's end, so `0.16.0` never passes for a later `0.16.0-…` or `0.16.01`.
+  // PORTALS found); DK-18 had pinned 0.15.0 FINAL, the cutover's release.
+  // 0.17.0 (2026-11-03) adds native desk navigation, zoom feedback, retired-widget data,
+  // and presentation controls. The anchor rejects prereleases and longer version suffixes.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ice":\s*0\.16\.0\s*$/m,
-    label: '"@vibecook/ice": 0.16.0',
+    re: /"@vibecook\/ice":\s*0\.17\.0\s*$/m,
+    label: '"@vibecook/ice": 0.17.0',
   },
   // The EL8 to ghosttea 0.13.1 (2026-10-22/23): the five ghosttea rows move together, and since this event each is
   // anchored to the line's end like ice's, so a later `0.13.1-…` never passes for the release. The cargo row and the
@@ -193,37 +194,39 @@ const PIN_EXPECTATIONS = [
   // 0.13.4 → 0.13.5 on 2026-10-26 (the EL8 to the harfrust shaper, ghosttea #89): the same six again.
   // 0.13.5 → 0.13.6 on 2026-10-26 (the EL8 to the render worker's and the claim's fixes, ghosttea #92–#94): the same six again.
   // 0.13.6 → 0.13.7 on 2026-10-27 (the EL8 with truffle 0.7.23, ghosttea #96's Windows C runtime): the same six again.
-  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.13\.7"\s*$/m, label: 'ghosttea = "=0.13.7"' },
+  // 0.13.7 → 0.13.8 on 2026-11-02: owner-atomic release and correlated terminal creation (GV lifecycle).
+  // 0.13.8 → 0.14.0 on 2026-11-02: Ghostty 1.4 migration and verified Swift Truffle 0.7.26.
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.14\.0"\s*$/m, label: 'ghosttea = "=0.14.0"' },
   // TM-1 (2026-09-14): the ghosttea-truffle row is GONE with the crate — the TSP1
   // adapter left the floor (`thinking-terminal-mesh-cells.md`, TM-D1 ruled T), so
   // there is no second ghosttea consumer to keep in lockstep; the ghosttea row
   // alone carries truffle-core's version agreement now.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-client":\s*0\.13\.7\s*$/m,
-    label: '"@vibecook/ghosttea-client": 0.13.7',
+    re: /"@vibecook\/ghosttea-client":\s*0\.14\.0\s*$/m,
+    label: '"@vibecook/ghosttea-client": 0.14.0',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-electron":\s*0\.13\.7\s*$/m,
-    label: '"@vibecook/ghosttea-electron": 0.13.7',
+    re: /"@vibecook\/ghosttea-electron":\s*0\.14\.0\s*$/m,
+    label: '"@vibecook/ghosttea-electron": 0.14.0',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-react":\s*0\.13\.7\s*$/m,
-    label: '"@vibecook/ghosttea-react": 0.13.7',
+    re: /"@vibecook\/ghosttea-react":\s*0\.14\.0\s*$/m,
+    label: '"@vibecook/ghosttea-react": 0.14.0',
     package: "@vibecook/ghosttea-react",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-protocol":\s*0\.13\.7\s*$/m,
-    label: '"@vibecook/ghosttea-protocol": 0.13.7',
+    re: /"@vibecook\/ghosttea-protocol":\s*0\.14\.0\s*$/m,
+    label: '"@vibecook/ghosttea-protocol": 0.14.0',
   },
   // The EL8 to 0.13.1 (2026-10-22/23): terminal-perf's frame reader joins the event (it had no row; the lock held 0.10.1).
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-frame":\s*0\.13\.7\s*$/m,
-    label: '"@vibecook/ghosttea-frame": 0.13.7',
+    re: /"@vibecook\/ghosttea-frame":\s*0\.14\.0\s*$/m,
+    label: '"@vibecook/ghosttea-frame": 0.14.0',
   },
   // RD-5a (2026-10-14): rosetta's TypeScript packages are exact registry pins,
   // published from the revision the lock still pins for rosettad's build. Anchored
@@ -242,47 +245,48 @@ const PIN_EXPECTATIONS = [
   },
   // RD-5's exit for puppeteer's npm plane (2026-10-26, 0.2.3): the seven rows are exact `@vibefield/puppeteer-*`,
   // 0.3.2 since 2026-10-29 (CP-1d's per-run briefing prerequisite), published from the tag v0.3.2 (95a70aa7), the
-  // revision the lock pins. Anchored to the line's end like rosetta's.
+  // revision the lock pinned. 0.3.3 since 2026-11-02 (GV lifecycle, v0.3.3 = 52d09c8e).
+  // Anchored to the line's end like rosetta's.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-runtime":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-runtime": 0.3.2',
+    re: /"@vibefield\/puppeteer-runtime":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-runtime": 0.3.3',
     package: "@vibefield/puppeteer-runtime",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-builtin-providers": 0.3.2',
+    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-builtin-providers": 0.3.3',
     package: "@vibefield/puppeteer-builtin-providers",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-core":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-core": 0.3.2',
+    re: /"@vibefield\/puppeteer-core":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-core": 0.3.3',
     package: "@vibefield/puppeteer-core",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-record":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-record": 0.3.2',
+    re: /"@vibefield\/puppeteer-record":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-record": 0.3.3',
     package: "@vibefield/puppeteer-record",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-monitor":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-monitor": 0.3.2',
+    re: /"@vibefield\/puppeteer-monitor":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-monitor": 0.3.3',
     package: "@vibefield/puppeteer-monitor",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-view-sdk": 0.3.2',
+    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-view-sdk": 0.3.3',
     package: "@vibefield/puppeteer-view-sdk",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-views":\s*0\.3\.2\s*$/m,
-    label: '"@vibefield/puppeteer-views": 0.3.2',
+    re: /"@vibefield\/puppeteer-views":\s*0\.3\.3\s*$/m,
+    label: '"@vibefield/puppeteer-views": 0.3.3',
     package: "@vibefield/puppeteer-views",
   },
 ];

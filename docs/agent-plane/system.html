@@ -1499,29 +1499,46 @@
               </div>
               <div class="contract-row">
                 <strong>Agent exits return the pane to a shell</strong>
-                <p>
-                  The class is <code>keep-until-explicit-close</code>, not <code>keep-until-exit</code>:
-                  custody survives long enough for the renderer to replace the ended PTY safely.
-                  <strong>Correction 2026-09-28:</strong> a local managed agent's confirmed
-                  <code>completed</code> native exit creates a fresh interactive shell in the same
-                  folder and conditionally replaces its current pane attachments. Pane identity,
-                  layout, focus and fullscreen stay intact; the empty-pane launcher returns.
-                  The audited <code>terminal.terminate</code> door then releases the old PTY.
-                  Conversation history remains resumable. Failed exits retain their diagnostic
-                  surface; monitor liveness alone never replaces a live process. A late birth
-                  whose pane closed or changed is released without mounting elsewhere.
-                </p>
+                <p><strong>Lifecycle ownership, 2026-11-02.</strong> The native PTY owner records
+                  accepted human and automation input for the session's lifetime. Conditional release
+                  checks that fact, activity, and every attached view under the same gate that admits
+                  input and attachments. A successful release seals the session against late input or
+                  attachment. Unknown input ownership never means unused.</p>
+                <p>A local managed agent's clean native exit, or an accepted explicit Stop, creates
+                  one interactive shell and replaces only panes still attached to that session. The
+                  replacement preserves pane layout, focus, fullscreen and spatial bubble identity.
+                  A dedicated agent PTY remains claimed until cleanup; a user-shell run instead gives
+                  its surviving shell back. Both orders of native exit and monitor withdrawal are
+                  supported. Failed exits retain their diagnostic pane.</p>
+                <p>Placement commits the replacement. <code>terminal.release {condition: "exited"}</code>
+                  then releases the predecessor; a late or unplaceable birth uses <code>condition: "unused"</code>.
+                  Neither cleanup failure rolls back placement or repeats creation. A failed create
+                  remains visible with recovery guidance: creation is not idempotent and is not blindly
+                  retried after an ambiguous response. History remains available for resumption.</p>
               </div>
               <div class="contract-row">
-                <strong>Empty-pane launcher handoff (2026-09-28 correction)</strong>
-                <p>A shell's startup foreground job is temporary activity, not lifetime input evidence.
-                  The shared <code>UnusedPaneSessions</code> retains its birth receipt and defers a
-                  detached busy shell until native idle metadata. An accepted launcher replacement
-                  explicitly releases the unused source through <code>terminal.terminate</code> after
-                  its last attachment moves; mirrored or used shells stay alive. The successor inherits
-                  a separate <code>visualId</code>, so Swarm keeps its body while runtime, action and
-                  usage identities remain unchanged. Restored shells are never inferred unused.
-                  A new shell is also released if an agent-exit replacement throws.</p>
+                <strong>Correlated handoffs and durable cleanup (2026-11-02)</strong>
+                <p>The window assigns an opaque <code>creationId</code> before a replacement request.
+                  The native owner's first summary and fieldd's monitor model carry it, so inventory
+                  arriving before the RPC response already identifies the successor. Only that birth
+                  shares the predecessor's <code>visualId</code>; unrelated and concurrent births stay
+                  visible. A committed handoff cannot be undone by cleanup failure. If another client
+                  used the predecessor, the owner retains it and its used-shell row becomes a distinct body.</p>
+                <p><code>UnusedPaneSessions</code> retains delivery responsibility until acknowledgement.
+                  The renderer persists conditional intents in an outbox; fieldd acknowledges only after
+                  persisting its queue under the user root, including the owning cell. Fieldd retries
+                  attachment, startup activity, and transport failures. Native release/gone completes
+                  cleanup; used/not-shell discharges it without killing. Renderer reload and fieldd
+                  restart replay obligations. Browser storage is delivery bookkeeping, never authority
+                  to classify or terminate a shell. Restored launchers use native lifetime facts.</p>
+                <p>The separate <code>agent.pause</code> door sends one adapter-declared turn cancellation
+                  while working. It never guesses a fallback key, retries a key, or escalates to termination.
+                  An unheard cancellation remains reported and repeated presses are coalesced until the
+                  turn changes. Pane Stop uses <code>terminal.terminate</code> and ends the process.
+                  The existing <code>agent.interrupt</code> durable-stop API keeps its own policy.</p>
+                <p>This source change spans VibeField, Puppeteer and Ghosttea (lifecycle protocol 1.18).
+                  The sibling overlay validates them together; coordinated releases and pinned dependency
+                  updates are required before distribution. The canvas and physics allocation are unchanged.</p>
               </div>
               <div class="contract-row">
                 <strong>A typed run lives on the interactive cell (AR-7)</strong>
@@ -1676,6 +1693,13 @@
               (<code>createRemoteSubscription</code>, <code>projectRemoteRow</code>) for every other screen. The
               <code>desk</code> cut is retired; each window's mesh board asks the peers for <code>remote</code>, and
               the phone's door is open at its home, though the kit reads <code>field</code> until PG-3.
+              <em>As built 2026-11-01 (PG-3b; PG-D6 (a), J2 (a)):</em> unread is the owner's mark, and every screen
+              reports to the backend that owns the row. A window's <code>model</code> board or a phone's
+              <code>remote</code> board makes its connection a screen of this desktop's backend (by kind,
+              <code>SCREEN_BOARDS</code>; no other caller's board clears a mark); a phone's report for another
+              desktop's row is routed by <code>device</code> through its home and kept on the owner as that
+              reader's own screen (<code>agent-screens.ts</code>; api.html's <code>agent.reportShown</code> row has
+              the keying and the lifetime). Only this desktop's window acknowledges a failure (Q06).
             </p>
             <p>
               <code>GodviewAgentsProvider</code> owns the window's one model subscription and replica. The deck,
@@ -1754,6 +1778,10 @@
               the card it jumps to — the id, never the folder. Deliberately absent: <code>lastAssistantMessage</code>, a blocker's
               <code>input</code>/<code>questions</code>/<code>detail</code>, the title, and the mirror
               itself. A field row says what a run is doing, never what it said.
+              <em>Amended 2026-11-01 (TU-1):</em> the row also carries <code>turnedAt</code> (a clock: whether
+              its run has worked) and <code>profileSet</code> (the id of the Agent Profile it is filed under, never
+              its folder or its label). This list never named three keys the row has carried since SP-1b and ST-D5:
+              <code>spark</code>, <code>origin</code> and <code>stop</code>.
             </p>
             <p class="section-note">
               Two narrowings are worth naming because they are easy to undo by accident. The

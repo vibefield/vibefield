@@ -84,6 +84,8 @@ struct SignOutTests {
     #expect(SignOutSweep.kept.contains("fieldterminal.appearance.v1"))
     // IOS-10a — this phone's own look is the person's too.
     #expect(SignOutSweep.kept.contains("vibefield.phone.appearance"))
+    // PG-4t — the Godview view this phone stands on is the person's too.
+    #expect(SignOutSweep.kept.contains("vibefield.godview.view"))
     #expect(defaults.string(forKey: "vf.terminal.appearance.test") == "dark")
   }
 

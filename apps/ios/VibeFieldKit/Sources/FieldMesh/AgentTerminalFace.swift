@@ -28,6 +28,16 @@ import Foundation
 // the same projection with no such filter, so a board that arrived over a
 // desktop's own door carries its joins regardless. That is exactly the case a
 // pre-attach face has to cover, and the capability is what covers it.
+//
+// *Corrected 2026-11-02 (PG-3e):* the paragraph above is the FIELD cut's, and
+// the phone no longer reads it. Since PG-3e it reads its home's REMOTE cut
+// (`agent.subscribe {projection: "remote", scope: "mesh"}`), whose rows carry
+// the pane join as `terminal`, and fieldd gates that board by the same
+// `attachableRows` (PG-2, `agent-model-board.ts`): while a desktop's doors are
+// down its join and its `monitorRow.attachable` are withheld. (The door-fed
+// field board had been gated so since PG-1a; the store carrier retired at
+// DS-D14.) The capability stays this face's word for WHY a missing attach is
+// missing, which a withheld join does not say.
 
 /// What an agent's card can offer for its terminal.
 public enum AgentTerminalFace: Sendable, Equatable {
@@ -41,7 +51,9 @@ public enum AgentTerminalFace: Sendable, Equatable {
   case unobserved(AgentTerminalAddress)
 
   /// The run has ended and its pane is gone with it: `hosted: "none"`, nothing
-  /// to open. RESUME is the only act, and it goes over the door.
+  /// to open. RESUME is the only act, and it goes over the door. (Corrected
+  /// 2026-11-02, item 162: an ended run, `exited`, with no pane; `hosted:
+  /// "none"` alone is "no terminal is known", which a live run can be.)
   case exited
 
   /// MF-1f's row: the process ended and the floor STILL lists its PTY. Both
@@ -57,6 +69,8 @@ public enum AgentTerminalFace: Sendable, Equatable {
 
   /// The feed gave no join at all — the scripted fleet, or a producer that
   /// carries no terminal field. Nothing is offered and nothing is claimed.
+  /// Item 162: also a LIVE run its desktop hosts no pane for (an ingested
+  /// row), which is the same honest absence.
   case noJoin
 }
 
@@ -103,14 +117,27 @@ public struct AgentTerminalAddress: Sendable, Equatable {
 /// An ENDED run is decided before any of this: a session that is gone has
 /// nothing to attach to whatever the desktop publishes, and saying "the doors
 /// are off" about a terminal that does not exist would be the wrong sentence.
+/// (Corrected 2026-11-02, item 162: "ended" is the join's `exited`, never a
+/// missing terminal alone. A live run with no pane reads `.noJoin`, and a live
+/// run whose pane the owner withheld reads `.notPublished`.)
 public func agentTerminalFace(
   join: AgentJoin?, deviceName: String? = nil, publishesTerminalDoors: Bool? = nil
 ) -> AgentTerminalFace {
   guard let join else { return .noJoin }
 
-  // An ended run has nothing to attach to. The wire's word wins.
-  guard join.hasTerminal else { return .exited }
-  guard let sessionID = join.runtimeSessionID else { return .exited }
+  // A join with no terminal. Item 162 (2026-11-02): this read every such run as ENDED, so a live run said "this run
+  // has ended" and offered RESUME. The contract's `hosted: "none"` is "no terminal is known (an ingested row, or a
+  // managed run whose PTY is gone)" (agent-session.ts:116-119): the ended reading comes from `exited` alone.
+  guard join.hasTerminal, let sessionID = join.runtimeSessionID else {
+    // An ended run (`!alive && !pending`): nothing to attach to, RESUME the one act. The wire's word wins.
+    if join.exited { return .exited }
+    // The owner withheld the pane: its doors are down (`attachableRows` deleted the row's `terminal`, agent-field.ts),
+    // so the face says so by the desktop's name, even when the desktop's `terminalMesh` is unsaid.
+    if join.paneWithheld { return .notPublished(deviceName: deviceName) }
+    // A live run its desktop hosts no pane for (`terminal: {hosted: "none"}` present, `attachable: false`): nothing to
+    // offer, nothing claimed.
+    return .noJoin
+  }
 
   let address = AgentTerminalAddress(
     deviceID: join.deviceID,

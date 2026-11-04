@@ -2,6 +2,7 @@ import {
   AGENT_CATALOG,
   type AgentSessionSummary,
   createAgentCatalogReaders,
+  profileSetOfRun,
 } from "@vibefield/contracts";
 import type { AgentMonitorState } from "@vibefield/puppeteer-core";
 import type { MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
@@ -40,7 +41,10 @@ const pending = summary({
   monitor: false,
   pending: "re-attach refused",
 });
-const exited = summary({ runtimeRunId: "run-exited", status: "idle", exited: true });
+const exited = {
+  ...summary({ runtimeRunId: "run-exited", status: "idle", exited: true }),
+  spawnedBy: "user-shell",
+};
 
 function asking(base: AgentSessionSummary, prompt: string): AgentSessionSummary {
   const monitor = base.monitor;
@@ -86,10 +90,16 @@ describe("hostRunFromSummary — the fold's row as the backend's host record", (
     expect(run.terminalIdentity).toBeUndefined();
   });
 
-  it("an exited run is not alive and claims no PTY — its shell is a bare terminal again (AR-7)", () => {
+  it("an exited typed run is not alive and claims no PTY — its shell is a bare terminal again (AR-7)", () => {
     const run = hostRunFromSummary(exited);
     expect(run.alive).toBe(false);
     expect(run.terminalSessionId).toBeUndefined();
+  });
+
+  it("an exited app run keeps its dedicated PTY claim until the pane releases it", () => {
+    const run = hostRunFromSummary(summary({ exited: true }));
+    expect(run.alive).toBe(false);
+    expect(run.terminalSessionId).toBe("run-1-pty");
   });
 
   it("a pending run is alive by its PTY and says what drives it (AR-4)", () => {
@@ -332,6 +342,82 @@ describe("the hosted backend — the model's rows for the fold's fixtures", () =
       { profileId: "claude-native", providerLabel: catalog.entry("claude")?.label, loggedIn: true },
     ]);
     expect(set.isDefault).toBe(true);
+  });
+});
+
+// TU-1 (Q3, §12 Q1 (a′)) — the rooms place a run by `profileSetOfRun` over the monitor's persona map, the frame the
+// backend places Godview's rows by. The two agree for every run but a persona no profile lists (and, before the first
+// frame, a persona's run filed under none), which the backend calls This Mac's and the rule none: the one named
+// difference, held here to exactly that. A pin that moves puppeteer-monitor's chain is red here at its EL8 event.
+describe("the rooms' rule is Godview's chain (TU-1)", () => {
+  const work = nativeSet({
+    id: "work",
+    kind: "managed",
+    label: "Work",
+    default: false,
+    personas: [
+      {
+        profileId: "claude-work",
+        provider: "claude",
+        label: "Claude Code",
+        kind: "managed",
+        createdAt: "2026-09-01T00:00:00.000Z",
+        identity: { loggedIn: true, verifiedAt: "2026-09-13T09:00:00.000Z" },
+      },
+    ],
+  });
+  const runs: AgentSessionSummary[] = [
+    { ...summary({ runtimeRunId: "run-filed" }), profileSet: "work" },
+    { ...summary({ runtimeRunId: "run-persona" }), profileId: "claude-work" },
+    { ...summary({ runtimeRunId: "run-orphan" }), profileId: "claude-gone" },
+    summary({ runtimeRunId: "run-plain" }),
+    // filed under a profile that does not list its persona: the filed set wins
+    { ...summary({ runtimeRunId: "run-moved" }), profileSet: "work", profileId: "claude-native" },
+  ];
+  /** Each run as `[id, Godview's placement, the rooms' placement]`. */
+  const placements = (monitor: Awaited<ReturnType<typeof testMonitor>>) =>
+    runs.map((run) => [
+      run.runtimeRunId,
+      monitor.row(run.runtimeRunId).profileSet,
+      profileSetOfRun(run, monitor.service.personaSets()),
+    ]);
+
+  it("places every run where Godview does, but a persona no profile lists, which Godview calls This Mac's and the rule none", async () => {
+    const monitor = await testMonitor({
+      summaries: runs,
+      profiles: profileSetsFrame([nativeSet(), work]),
+    });
+    expect(placements(monitor)).toEqual([
+      ["run-filed", "work", "work"],
+      ["run-persona", "work", "work"],
+      ["run-orphan", "native", undefined],
+      ["run-plain", "native", "native"],
+      ["run-moved", "work", "work"],
+    ]);
+    monitor.service.dispose();
+  });
+
+  it("holds no persona map before the first frame, so a persona's run filed under none is in none; the frame that lands places it", async () => {
+    const monitor = await testMonitor({ summaries: runs });
+    expect(monitor.service.personaSets()).toBeNull();
+    expect(placements(monitor)).toEqual([
+      ["run-filed", "work", "work"],
+      ["run-persona", "native", undefined],
+      ["run-orphan", "native", undefined],
+      ["run-plain", "native", "native"],
+      ["run-moved", "work", "work"],
+    ]);
+    monitor.profiles.publish(profileSetsFrame([nativeSet(), work]));
+    expect(monitor.service.personaSets()).toEqual(
+      new Map([
+        ["claude-native", "native"],
+        ["claude-work", "work"],
+      ]),
+    );
+    expect(placements(monitor)[1]).toEqual(["run-persona", "work", "work"]);
+    // one map per frame, however often the rooms ask
+    expect(monitor.service.personaSets()).toBe(monitor.service.personaSets());
+    monitor.service.dispose();
   });
 });
 
@@ -578,6 +664,26 @@ describe("the hosted backend — screens (L5, M20), and the marks that outlive t
 });
 
 describe("the hosted backend — a shell promoted to an agent keeps its body (M22)", () => {
+  it.each([true, false])(
+    "a launched run keeps one body through manual exit with its PTY initially listed: %s",
+    async (initiallyListed) => {
+      const live = summary({ runtimeRunId: "run-launched", status: "idle" });
+      const pty = floorTerminal({ sessionId: "run-launched-pty", cwd: "/repo" });
+      const monitor = await testMonitor({
+        summaries: [live],
+        terminals: initiallyListed ? [pty] : [],
+      });
+      const id = monitor.row("run-launched").id;
+      monitor.terminals.observe([pty]);
+      const dead = summary({ runtimeRunId: "run-launched", status: "idle", exited: true });
+      monitor.fold.publish([dead]);
+      expect(monitor.rows().map((row) => `${row.kind}:${row.id}`)).toEqual([`agent:${id}`]);
+      expect(monitor.row("run-launched")).toMatchObject({ alive: false, attachable: true });
+      expect(monitor.service.terminalRows()).toEqual([]);
+      monitor.service.dispose();
+    },
+  );
+
   it("the bare terminal's row id becomes the agent's; the terminal row leaves; the run is found through idOf", async () => {
     const monitor = await testMonitor({
       summaries: [],

@@ -41,28 +41,33 @@ private func homedLink(
   return (link, mesh)
 }
 
-/// The two-desktop board the studio serves as a home.
+/// The two-desktop board the studio serves as a home — the home's own entry
+/// first, as a home lists itself (PG-3e: the copy keeps the open's order, so
+/// the rows read home first).
 private let studioBoard = [
-  MeshEntry(device: "dev-laptop", rows: [boardRow(id: "l-1", device: "dev-laptop")]),
-  MeshEntry(device: "dev-studio", rows: [boardRow(id: "s-1")]),
+  MeshEntry(device: "dev-studio", rows: [remoteBoardRow(key: "s-1")]),
+  MeshEntry(device: "dev-laptop", rows: [remoteBoardRow(key: "l-1", device: "dev-laptop")]),
 ]
 
 /// The same two desktops, as the LAPTOP serves them once the studio is gone:
 /// the laptop's run has moved on, and the studio is asleep with its last board.
 private let laptopBoard = [
   MeshEntry(
-    device: "dev-laptop", rows: [boardRow(id: "l-1", status: "idle", device: "dev-laptop")]),
-  MeshEntry(device: "dev-studio", state: "asleep", rows: [boardRow(id: "s-1")]),
+    device: "dev-laptop", rows: [remoteBoardRow(key: "l-1", device: "dev-laptop", status: "idle")]),
+  MeshEntry(device: "dev-studio", state: "asleep", rows: [remoteBoardRow(key: "s-1")]),
 ]
 
+/// A row's drawn status, found by its board key (PG-3e: the link draws
+/// `FieldBubble`s; the board key is each one's `runKey`).
 @MainActor
-private func status(of id: String, in link: FieldLink) -> AgentVisualStatus? {
-  link.agents.first { $0.id == id }.flatMap { classifyAgentStatus($0.state) }
+private func status(of key: String, in link: FieldLink) -> AgentVisualStatus? {
+  link.bubbles.first { $0.runKey == key }?.status
 }
 
+/// Whether a row's desktop reads live, found by its board key.
 @MainActor
-private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
-  link.agents.first { $0.id == id }?.join?.deviceLive
+private func desktopLive(_ key: String, in link: FieldLink) -> Bool? {
+  link.bubbles.first { $0.runKey == key }?.agent?.join?.deviceLive
 }
 
 // MARK: - Which desktop is home
@@ -76,18 +81,19 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
   @Test func theHomeIsTheLastHomeWhenItAnswers() async throws {
     let door = LinkDoor(script: selfDoor)
     await door.route(laptopDoorHost, homeDoor([MeshEntry(device: "dev-laptop")]))
-    await door.route(studioDoorHost, homeDoor([MeshEntry(device: "dev-studio", rows: [boardRow(id: "s-1")])]))
+    await door.route(studioDoorHost, homeDoor([MeshEntry(device: "dev-studio", rows: [remoteBoardRow(key: "s-1")])]))
     let (link, _) = try await homedLink(door: door)
     defer { link.stop() }
 
     try await waitUntil("the field through the remembered home") {
-      link.agents.map(\.id) == ["s-1"]
+      link.rows.map { $0.key } == ["s-1"]
     }
     #expect(link.home == "dev-studio")
     #expect(await door.dials(to: studioDoorHost) == 1)
     #expect(await door.dials(to: laptopDoorHost) == 0, "one door: the home's")
     let ask = try await settledRequest(door, "agent.subscribe", host: studioDoorHost)
-    #expect(ask.params == AgentSubscribeParams.phoneMesh.json)
+    let asked = AgentSubscribeParams.phoneRemote.json
+    #expect(ask.params == asked, "the remote cut (PG-3e)")
   }
 
   /// No last home that answers: the FIRST self desktop whose door answers, in
@@ -101,7 +107,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     let door = LinkDoor(script: selfDoor)
     await door.route(
       miniDoorHost,
-      homeDoor([MeshEntry(device: "dev-mini", rows: [boardRow(id: "m-1", device: "dev-mini")])]))
+      homeDoor([MeshEntry(device: "dev-mini", rows: [remoteBoardRow(key: "m-1", device: "dev-mini")])]))
     await door.route(studioDoorHost, homeDoor([MeshEntry(device: "dev-studio")]))
     let (link, _, _, _) = try await standingLink(
       peers: [mine(laptop), mine(mini), mine(studio)], probe: probe, selfLogin: alice, door: door,
@@ -109,7 +115,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     defer { link.stop() }
 
     try await waitUntil("the field through the first that answers") {
-      link.agents.map(\.id) == ["m-1"]
+      link.rows.map { $0.key } == ["m-1"]
     }
     #expect(link.home == "dev-mini")
     #expect(await door.dials(to: miniDoorHost) == 1)
@@ -139,11 +145,14 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     let (link, _) = try await homedLink(door: door)
     defer { link.stop() }
 
-    try await waitUntil("both desktops' rows") { link.agents.count == 2 }
-    // device order, then each board's own
-    #expect(link.agents.map(\.id) == ["l-1", "s-1"])
-    #expect(link.agents.map { $0.join?.deviceID } == ["dev-laptop", "dev-studio"])
-    #expect(link.agents.allSatisfy { $0.join?.deviceLive == true })
+    try await waitUntil("both desktops' rows") { link.rows.count == 2 }
+    // the home's own rows first, then the other desktops' in the board's order
+    // (PG-3e: `RemoteWindowRows.order`, the desktop's own window order)
+    let keys = link.rows.map { $0.key }
+    let devices = link.bubbles.map { $0.agent?.join?.deviceID }
+    #expect(keys == ["s-1", "l-1"])
+    #expect(devices == ["dev-studio", "dev-laptop"])
+    #expect(link.bubbles.allSatisfy { $0.agent?.join?.deviceLive == true })
     #expect(await door.dials(to: laptopDoorHost) == 0)
 
     try await waitUntil("the laptop named by the home's roster") {
@@ -162,53 +171,92 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     await door.route(studioDoorHost, homeDoor(studioBoard))
     let (link, _) = try await homedLink(door: door)
     defer { link.stop() }
-    try await waitUntil("both desktops' rows") { link.agents.count == 2 }
+    try await waitUntil("both desktops' rows") { link.rows.count == 2 }
 
     let home = try #require(await door.latest(to: studioDoorHost))
     await home.deliver(meshFrame(meshState("dev-laptop", "asleep")))
     try await waitUntil("the laptop's row greyed") { desktopLive("l-1", in: link) == false }
-    #expect(link.agents.map(\.id) == ["l-1", "s-1"], "the row stays")
+    let kept = link.rows.map { $0.key }
+    #expect(kept == ["s-1", "l-1"], "the row stays")
     #expect(desktopLive("s-1", in: link) == true)
 
     var assembly = FieldAssembly(tint: .light)
-    let dressed = assembly.fold(
-      link.agents.compactMap(fieldBubble(from:)), cardSubjectID: nil, nowMs: 1_757_808_001_000)
-    #expect(dressed.first { $0.id == "l-1" }?.stale == true)
-    #expect(dressed.first { $0.id == "s-1" }?.stale == false)
+    let dressed = assembly.fold(link.bubbles, cardSubjectID: nil)
+    #expect(dressed.first { $0.runKey == "l-1" }?.stale == true)
+    #expect(dressed.first { $0.runKey == "s-1" }?.stale == false)
 
     await home.deliver(meshFrame(meshState("dev-laptop", "live")))
     try await waitUntil("the laptop live again") { desktopLive("l-1", in: link) == true }
   }
 
-  /// The contracts' own golden, through the home: every desktop it lists on its
-  /// own chain — the sleeping one's kept board drawn greyed, the stale one
-  /// listed with none — and then the golden frames, in order, moving them.
-  @Test func theGoldenMeshBoardDrawsThroughTheHome() async throws {
-    let golden = try MeshFixture.json("agent-mesh-open.valid")
-    let frames = try #require(try MeshFixture.json("agent-mesh-frames.valid").arrayValue)
+  /// PG-3e — PG-3a's witness, through the home: the link draws what the copy draws, open by frame by resync, the
+  /// three desktops in the board's order — the home's rows first, the loft's beside them, the attic's kept greyed —
+  /// and the old chain's delta after the resync is a GAP the link repairs by asking the home again (the body
+  /// golden's own walk, `PhoneBodyParityTests.theBodyGoldenStepByStep`, at the link's seam).
+  @Test func theWitnessDrawsThroughTheHome() async throws {
+    let witness = try RemoteRows.openJSON()
+    let frames = try #require(try MeshFixture.json("agent-remote-mesh-frames.witness").arrayValue)
+    let resync = try MeshFixture.json("agent-remote-mesh-open.resync")
     let door = LinkDoor { method, id, _ in
       switch method {
       case "system.hello": return [frame(id: id, ack)]
       case "agent.subscribe":
-        return [frame(id: id, .object(["subId": .string("m1"), "snapshot": golden]))]
+        return [frame(id: id, .object(["subId": .string("m1"), "snapshot": witness]))]
       default: return []
       }
     }
     let (link, _, _, _) = try await standingLink(door: door)
     defer { link.stop() }
 
-    try await waitUntil("the golden's three boards") { link.agents.count == 3 }
-    #expect(link.agents.map(\.id) == ["run-here-w", "run-studio-q", "run-air-i"])
-    #expect(link.agents.map { $0.join?.deviceLive } == [true, true, false])
+    // the copy, driven by hand as the link drives it: what each step should draw
+    var copy = RemoteMeshCopy()
+    copy.open(try RemoteRows.open(), now: RemoteRows.now)
+    _ = copy.publish()
+    let opened = copy.drawn().map { $0.key }
+    let openedStale = copy.drawn().map(\.stale)
+    #expect(opened.count > 2)
+    try await waitUntil("the witness drawn") { link.rows.map { $0.key } == opened }
+    let stale = link.rows.map(\.stale)
+    #expect(stale == openedStale)
+    let atticRows = link.rows.filter { $0.device == RemoteRows.attic }.count
+    let atticGrey = link.bubbles.filter { $0.agent?.join?.deviceID == RemoteRows.attic }
+      .allSatisfy { $0.agent?.join?.deviceLive == false }
+    #expect(atticRows > 0, "the asleep desktop's kept board is drawn")
+    #expect(atticGrey)
 
     let home = try #require(await door.latest)
-    for payload in frames { await home.deliver(meshFrame(payload)) }
-    try await waitUntil("the frames applied") {
-      link.agents.map(\.id) == ["run-studio-q", "run-air-i"]
-        && link.agents.allSatisfy { $0.join?.deviceLive == true }
+    let parsed = try frames.map(AgentRemoteMeshFrame.init(json:))
+    for index in 0...PhoneFoldResync.after {
+      _ = copy.frame(parsed[index], now: RemoteRows.now)
+      _ = copy.publish()
+      await home.deliver(meshFrame(frames[index]))
     }
-    #expect(status(of: "run-studio-q", in: link) == .working)
+    let framed = copy.drawn().map { $0.key }
+    try await waitUntil("the frames applied") { link.rows.map { $0.key } == framed }
+
+    copy.open(try RemoteRows.resync(), now: RemoteRows.now)
+    _ = copy.publish()
+    await home.deliver(event(method: "agent.snapshot", subId: "m1", payload: resync))
+    let resynced = copy.drawn().map { $0.key }
+    try await waitUntil("the resync replaced the board") { link.rows.map { $0.key } == resynced }
+    let subscribes = await home.methods.filter { $0 == "agent.subscribe" }.count
+    #expect(subscribes == 1, "a resync asks the home for nothing")
     #expect(!link.notes.contains { $0.contains("re-subscribing") })
+
+    // the old chain's next delta continues nothing the resync stands at
+    let gapping = parsed[PhoneFoldResync.after + 1]
+    let outcome = copy.frame(gapping, now: RemoteRows.now)
+    guard case .gap = outcome else {
+      Issue.record("the witness's last frame should gap after the resync, read \(outcome)")
+      return
+    }
+    await home.deliver(meshFrame(frames[PhoneFoldResync.after + 1]))
+    try await waitUntil("a fresh subscribe") {
+      await home.methods.filter { $0 == "agent.subscribe" }.count >= 2
+    }
+    #expect(link.notes.contains { $0.contains("— re-subscribing") })
+    // the fresh open is the witness again: the board it draws is the open's
+    try await waitUntil("the fresh open drawn") { link.rows.map { $0.key } == opened }
   }
 
   /// PG-1c — the door's resync of a phone behind its cap: the whole mesh,
@@ -218,10 +266,10 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
   @Test func aMidStreamMeshSnapshotReplacesTheBoardWithoutAskingAgain() async throws {
     let door = LinkDoor(script: selfDoor)
     await door.route(
-      studioDoorHost, homeDoor([MeshEntry(device: "dev-studio", rows: [boardRow(id: "s-1")])]))
+      studioDoorHost, homeDoor([MeshEntry(device: "dev-studio", rows: [remoteBoardRow(key: "s-1")])]))
     let (link, _) = try await homedLink(door: door)
     defer { link.stop() }
-    try await waitUntil("the board") { link.agents.map(\.id) == ["s-1"] }
+    try await waitUntil("the board") { link.rows.map { $0.key } == ["s-1"] }
 
     let home = try #require(await door.latest(to: studioDoorHost))
     // the deltas the door held are never sent: the resync stands at revision 14
@@ -230,18 +278,17 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
         method: "agent.snapshot", subId: "m1",
         payload: meshOpen([
           MeshEntry(
-            device: "dev-studio", rows: [boardRow(id: "s-2"), boardRow(id: "s-3")], revision: 14)
+            device: "dev-studio", rows: [remoteBoardRow(key: "s-2"), remoteBoardRow(key: "s-3")], revision: 14)
         ])))
     try await waitUntil("the resync replaced the board") {
-      Set(link.agents.map(\.id)) == ["s-2", "s-3"]
+      Set(link.rows.map { $0.key }) == ["s-2", "s-3"]
     }
     // the next delta continues from the snapshot's revision
     await home.deliver(
       meshFrame(meshDelta("dev-studio", since: 14, revision: 15, removed: ["s-2"])))
-    try await waitUntil("the next delta applied") { link.agents.map(\.id) == ["s-3"] }
+    try await waitUntil("the next delta applied") { link.rows.map { $0.key } == ["s-3"] }
     #expect(await home.methods.filter { $0 == "agent.subscribe" }.count == 1)
-    #expect(
-      !link.notes.contains { $0.contains("re-subscribing") || $0.contains("does not continue") })
+    #expect(!link.notes.contains { $0.contains("re-subscribing") })
   }
 
   /// A frame that does not continue its desktop's chain is a GAP: the phone
@@ -249,19 +296,21 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
   /// it lands — a repair is not a reason to draw nothing.
   @Test func aGapAsksTheHomeForAFreshBoard() async throws {
     let door = LinkDoor(script: selfDoor)
-    await door.route(studioDoorHost, homeDoor([MeshEntry(device: "dev-studio", rows: [boardRow(id: "s-1")])]))
+    await door.route(studioDoorHost, homeDoor([MeshEntry(device: "dev-studio", rows: [remoteBoardRow(key: "s-1")])]))
     let (link, _) = try await homedLink(door: door)
     defer { link.stop() }
-    try await waitUntil("the board") { link.agents.map(\.id) == ["s-1"] }
+    try await waitUntil("the board") { link.rows.map { $0.key } == ["s-1"] }
 
     let home = try #require(await door.latest(to: studioDoorHost))
     await home.deliver(
-      meshFrame(meshDelta("dev-studio", since: 9, revision: 10, upserts: [boardRow(id: "s-9")])))
+      meshFrame(meshDelta("dev-studio", since: 9, revision: 10, upserts: [remoteBoardRow(key: "s-9")])))
     try await waitUntil("a fresh subscribe") {
       await home.methods.filter { $0 == "agent.subscribe" }.count >= 2
     }
-    #expect(link.agents.map(\.id) == ["s-1"], "the board stays; s-9 continued nothing")
-    #expect(link.notes.contains { $0.contains("does not continue") })
+    let stayed = link.rows.map { $0.key }
+    #expect(stayed == ["s-1"], "the board stays; s-9 continued nothing")
+    // PG-3e: the copy's own reason (`RemoteModelBoard`'s "a delta since N, held M"), then the repair
+    #expect(link.notes.contains { $0.contains("a delta since 9") && $0.contains("re-subscribing") })
   }
 
   /// UA-P-5's law, kept under a home: a desktop THIS phone established is not
@@ -276,10 +325,10 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     defer { link.stop() }
 
     try await waitUntil("the laptop refused and the studio's row drawn") {
-      link.foreignDoors["dev-laptop"] != nil && link.agents.map(\.id) == ["s-1"]
+      link.foreignDoors["dev-laptop"] != nil && link.rows.map { $0.key } == ["s-1"]
     }
     try await Task.sleep(for: .milliseconds(80))
-    #expect(link.agents.map(\.id) == ["s-1"])
+    #expect(link.rows.map { $0.key } == ["s-1"])
   }
 }
 
@@ -308,7 +357,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
       probe: probe, door: door, memory: memory, schedule: idleSchedule)
     defer { link.stop() }
     try await waitUntil("the field through the studio") {
-      link.home == "dev-studio" && link.agents.count == 2
+      link.home == "dev-studio" && link.rows.count == 2
     }
     let asked = await probe.asks(of: laptopDoorHost)
 
@@ -320,7 +369,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
       "one pass: the laptop asked once, and its answer moved the field")
 
     try await waitUntil("the laptop's board") { status(of: "l-1", in: link) == .idle }
-    #expect(link.agents.map(\.id) == ["l-1", "s-1"], "nothing drawn twice")
+    #expect(link.rows.map { $0.key } == ["l-1", "s-1"], "nothing drawn twice")
     #expect(desktopLive("s-1", in: link) == false, "asleep on the new home's board")
     #expect(await door.dials(to: laptopDoorHost) == 1)
     try await waitUntil("the new home remembered") { memory.lastHome(for: alice) == "dev-laptop" }
@@ -339,7 +388,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
       options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5), clock: clock))
     defer { link.stop() }
     try await waitUntil("the field through the studio") {
-      link.home == "dev-studio" && link.agents.count == 2
+      link.home == "dev-studio" && link.rows.count == 2
     }
     // The LAST frame the home sends before going quiet — its roster's answer —
     // landed: any frame is liveness, so one arriving after the clock moved
@@ -355,7 +404,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     try await waitUntil("re-homed to the laptop") { link.home == "dev-laptop" }
     #expect(silent.silentDoorCloses == 1)
     try await waitUntil("the laptop's board") { status(of: "l-1", in: link) == .idle }
-    #expect(link.agents.map(\.id) == ["l-1", "s-1"])
+    #expect(link.rows.map { $0.key } == ["l-1", "s-1"])
   }
 
   /// A home whose door STOPS this phone (INCOMPATIBLE — another contracts
@@ -369,13 +418,13 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     }
     await door.route(
       laptopDoorHost,
-      homeDoor([MeshEntry(device: "dev-laptop", rows: [boardRow(id: "l-1", device: "dev-laptop")])]))
+      homeDoor([MeshEntry(device: "dev-laptop", rows: [remoteBoardRow(key: "l-1", device: "dev-laptop")])]))
     let memory = scratchHomeMemory()
     let (link, _) = try await homedLink(door: door, memory: memory)
     defer { link.stop() }
 
     try await waitUntil("homed to the laptop") {
-      link.home == "dev-laptop" && link.agents.map(\.id) == ["l-1"]
+      link.home == "dev-laptop" && link.rows.map { $0.key } == ["l-1"]
     }
     #expect(await door.dials(to: studioDoorHost) == 1)
     #expect(
@@ -399,7 +448,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     }
     await door.route(
       laptopDoorHost,
-      homeDoor([MeshEntry(device: "dev-laptop", rows: [boardRow(id: "l-1", device: "dev-laptop")])]))
+      homeDoor([MeshEntry(device: "dev-laptop", rows: [remoteBoardRow(key: "l-1", device: "dev-laptop")])]))
     let (link, mesh) = try await homedLink(door: door, counter: counter, clock: clock)
     defer { link.stop() }
     try await waitUntil("homed to the laptop, the studio refused") {
@@ -431,7 +480,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     }
     let (link, _) = try await homedLink(door: door, budget: ledger)
     defer { link.stop() }
-    try await waitUntil("home ready") { link.agents.count == 2 }
+    try await waitUntil("home ready") { link.rows.count == 2 }
     let history = try #require(link.openHistoryDoor("dev-laptop"))
     defer { history.client.close() }
     _ = try await history.client.call("index.projects")
@@ -462,7 +511,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     }
     let (link, _) = try await homedLink(door: door, budget: ledger)
     defer { link.stop() }
-    try await waitUntil("the field through the studio") { link.agents.count == 2 }
+    try await waitUntil("the field through the studio") { link.rows.count == 2 }
 
     let ticket = try await link.openTerminalTicket(on: "dev-laptop", sessionId: "pty-l")
     #expect(ticket["from"]?.stringValue == "laptop")
@@ -500,7 +549,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
       options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(30)),
       budget: ledger)
     defer { link.stop() }
-    try await waitUntil("the field through the studio") { link.agents.count == 2 }
+    try await waitUntil("the field through the studio") { link.rows.count == 2 }
 
     let first = Task { try await link.openTerminalTicket(on: "dev-laptop", sessionId: "pty-1") }
     let firstAsk = try await settledRequest(door, "terminal.openTicket", host: laptopDoorHost)
@@ -530,7 +579,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     await door.route(studioDoorHost, homeDoor(studioBoard))
     let (link, _) = try await homedLink(probe: probe, door: door)
     defer { link.stop() }
-    try await waitUntil("the field through the studio") { link.agents.count == 2 }
+    try await waitUntil("the field through the studio") { link.rows.count == 2 }
 
     do {
       _ = try await link.openTerminalTicket(on: "dev-laptop", sessionId: "pty")
@@ -551,7 +600,7 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     await door.route(studioDoorHost, homeDoor(studioBoard))
     let (link, _) = try await homedLink(probe: probe, door: door)
     defer { link.stop() }
-    try await waitUntil("the field through the studio") { link.agents.count == 2 }
+    try await waitUntil("the field through the studio") { link.rows.count == 2 }
 
     do {
       _ = try await link.workspaceCall(on: "dev-laptop", method: "workspace.roots")
@@ -559,6 +608,83 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     } catch let error as FieldProductError {
       #expect(error.unavailable?.service == "workspace")
       #expect(error.unavailable?.state == "no_door")
+    }
+    #expect(await door.dials(to: laptopDoorHost) == 0)
+  }
+  // MARK: F1b's kit half — the approval rides the home's door
+
+  /// F1b (FW-D5; FW-R3, FW-R6) — the phone's freeway approval for ANOTHER
+  /// desktop is asked of the HOME: `freeway.approve {device}` on the home's
+  /// door, which forwards it whole to that desktop (M63). The other desktop's
+  /// door is never dialled for it — the owner mints, and only the ask rides the
+  /// home. The answer comes back unread, as the owner minted it.
+  @Test func anApprovalForAnotherDesktopRidesTheHomesDoor() async throws {
+    let ledger = PhoneConnectionBudget()
+    let door = LinkDoor(script: selfDoor)
+    await door.route(studioDoorHost) { method, id, params in
+      if method == "freeway.approve" {
+        return [frame(id: id, .object(["minted": params["device"] ?? .string("the home"), "expiresAt": .int(1)]))]
+      }
+      return homeDoor(studioBoard)(method, id, params)
+    }
+    await door.route(laptopDoorHost) { method, id, _ in
+      method == "system.hello" ? [frame(id: id, ack)] : []
+    }
+    let (link, _) = try await homedLink(door: door, budget: ledger)
+    defer { link.stop() }
+    try await waitUntil("the field through the studio") { link.rows.count == 2 }
+
+    let approved = try await link.approveFreeway(on: "dev-laptop")
+    #expect(approved["minted"]?.stringValue == "dev-laptop")
+    let asked = try await settledRequest(door, "freeway.approve", host: studioDoorHost)
+    #expect(asked.params == .object(["device": .string("dev-laptop")]))
+    #expect(await door.dials(to: laptopDoorHost) == 0, "the owner's door is not dialled for it")
+    #expect(await door.dials(to: studioDoorHost) == 1, "the home's own door: no second dial")
+    #expect(ledger.inUse(.door(desktop: "dev-laptop")) == 0)
+  }
+
+  /// The home's own link asks the home with nothing more: `freeway.approve {}`.
+  @Test func theHomesOwnApprovalAsksNothingMore() async throws {
+    let door = LinkDoor(script: selfDoor)
+    await door.route(studioDoorHost) { method, id, params in
+      if method == "freeway.approve" { return [frame(id: id, .object(["expiresAt": .int(1)]))] }
+      return homeDoor(studioBoard)(method, id, params)
+    }
+    let (link, _) = try await homedLink(door: door)
+    defer { link.stop() }
+    try await waitUntil("the field through the studio") { link.rows.count == 2 }
+
+    _ = try await link.approveFreeway(on: "dev-studio")
+    let asked = try await settledRequest(door, "freeway.approve", host: studioDoorHost)
+    #expect(asked.params == .object([:]))
+  }
+
+  /// The owner's refusal comes back through the home as the owner said it —
+  /// its kind, its retryability, its `{service, state}` — for the link to put
+  /// into the phone's words (`FreewayApproval.said`); FieldLink reads nothing.
+  @Test func anOwnersRefusalComesBackThroughTheHomeAsSent() async throws {
+    let door = LinkDoor(script: selfDoor)
+    await door.route(studioDoorHost) { method, id, params in
+      if method == "freeway.approve" {
+        return [
+          failureFrame(
+            id: id, kind: "UNAVAILABLE", message: "uncorrelated", retryable: true,
+            details: .object(["service": .string("freeway"), "state": .string("uncorrelated")]))
+        ]
+      }
+      return homeDoor(studioBoard)(method, id, params)
+    }
+    let (link, _) = try await homedLink(door: door)
+    defer { link.stop() }
+    try await waitUntil("the field through the studio") { link.rows.count == 2 }
+
+    do {
+      _ = try await link.approveFreeway(on: "dev-laptop")
+      Issue.record("a refused approval was handed back as granted")
+    } catch let error as FieldProductError {
+      #expect(error.unavailable?.service == "freeway")
+      #expect(error.unavailable?.state == "uncorrelated")
+      #expect(error.retryable)
     }
     #expect(await door.dials(to: laptopDoorHost) == 0)
   }

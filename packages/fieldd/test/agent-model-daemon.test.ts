@@ -25,12 +25,12 @@ import { helloAs, WsRpc } from "./ws-rpc";
 // MV-3a (MV-D18, L5, L8) — the model board as the DAEMON serves it, and the
 // report of what a window shows. The fold is made non-empty the way
 // `agent-field-daemon.test.ts` does it: a signed record stamped with an exit
-// whose PTY the (mocked) floor still lists. That one PTY is the witness for
-// two things at once — the exited run's row (alive: false, claiming no PTY) and
-// the same PTY as a bare TERMINAL row of the model's own kind, which only this
-// desktop's windows receive.
+// whose dedicated PTY the (mocked) floor still lists. Its exited run remains
+// one agent row, never a duplicate terminal row. An independent interactive
+// shell supplies the terminal row, which carries its own identity and joins.
 
 const PANE = "pane-1";
+const SHELL = "shell-1";
 const RUN = "run-daemon-1";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -100,6 +100,13 @@ async function boot(): Promise<{ daemon: FielddDaemon; mock: MockMgmtServer }> {
         cwd: "/repo",
         cell: { cellInstanceId: 1, cellBootId: "cell-a", workloadClass: "agent" },
       },
+      {
+        sessionId: SHELL,
+        pid: 43,
+        createdAt: Date.parse("2026-09-13T11:59:00.000Z"),
+        cwd: "/repo",
+        cell: { cellInstanceId: 1, cellBootId: "cell-a", workloadClass: "interactive" },
+      },
     ],
     workers: [],
   };
@@ -131,7 +138,7 @@ async function window(daemon: FielddDaemon): Promise<WsRpc> {
 }
 
 describe("MV-3a — the model board through the door, and the report of what a window shows", () => {
-  it("answers a window the model's rows: the exited run's row and its PTY as a terminal row; the report clears through the board's screen", async () => {
+  it("answers a window with one exited agent and an independent shell, without duplicating the agent's PTY; the report clears through the board's screen", async () => {
     const { daemon, mock } = await boot();
     await poll(() =>
       daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : undefined,
@@ -159,16 +166,19 @@ describe("MV-3a — the model board through the door, and the report of what a w
         for (const id of payload.removed ?? []) held.delete(id);
       }
       const run = held.get(RUN) as Record<string, unknown> | undefined;
-      const pane = held.get(PANE);
-      return run?.["monitorRow"] !== undefined && pane !== undefined ? { run, pane } : undefined;
+      expect(held.has(PANE)).toBe(false);
+      const shell = held.get(SHELL);
+      return run?.["monitorRow"] !== undefined && shell !== undefined ? { run, shell } : undefined;
     });
     const run = AgentDeskRow.parse(rows.run);
     expect(run).toMatchObject({ kind: "scripted", alive: false });
+    // The run has ended, but its dedicated PTY still exists and owns the
+    // pane identity until release. It remains attachable for its final output.
     expect(run.monitorRow).toMatchObject({
-      id: RUN,
+      id: PANE,
       kind: "agent",
       alive: false,
-      attachable: false,
+      attachable: true,
       provider: { id: "scripted" },
     });
     // MV-3d — the window's run row carries the chrome's facts beside the model:
@@ -193,24 +203,25 @@ describe("MV-3a — the model board through the door, and the report of what a w
     }
     // PG-2 (PG-D5, EL7 B1) — the bare terminal rides the remote cut, its
     // directory by its folder: the path stays on the window's own row
-    expect(remoteRows.find((row) => row.runtimeRunId === PANE)).toMatchObject({
+    expect(remoteRows.some((row) => row.runtimeRunId === PANE)).toBe(false);
+    expect(remoteRows.find((row) => row.runtimeRunId === SHELL)).toMatchObject({
       kind: "terminal",
       monitorRow: { kind: "terminal", detail: "repo" },
     });
-    const pane = AgentDeskTerminalRow.parse(rows.pane);
-    expect(pane).toMatchObject({
-      runtimeRunId: PANE,
+    const shell = AgentDeskTerminalRow.parse(rows.shell);
+    expect(shell).toMatchObject({
+      runtimeRunId: SHELL,
       kind: "terminal",
       terminal: {
         hosted: "local",
-        runtimeSessionId: PANE,
+        runtimeSessionId: SHELL,
         cellBootId: "cell-a",
-        workloadClass: "agent",
+        workloadClass: "interactive",
       },
-      monitorRow: { id: PANE, kind: "terminal", detail: "/repo", project: { name: "repo" } },
+      monitorRow: { id: SHELL, kind: "terminal", detail: "/repo", project: { name: "repo" } },
     });
     // with the board open, the connection's screen takes the report
-    expect(await rpc.call("agent.reportShown", { ids: [PANE] })).toEqual({ reported: true });
+    expect(await rpc.call("agent.reportShown", { ids: [PANE, SHELL] })).toEqual({ reported: true });
     expect(await rpc.call("agent.reportShown", { ids: [] })).toEqual({ reported: true });
     // the mesh scope lists this desktop first, with the same rows
     const mesh = (await rpc.call("agent.subscribe", { projection: "model", scope: "mesh" })) as {
@@ -219,7 +230,7 @@ describe("MV-3a — the model board through the door, and the report of what a w
     const open = AgentModelMeshOpen.parse(mesh.snapshot);
     expect(open.devices[0]?.state).toBe("live");
     expect(open.devices[0]?.snapshot?.rows.map((row) => row.runtimeRunId).sort()).toEqual(
-      [PANE, RUN].sort(),
+      [SHELL, RUN].sort(),
     );
     // L12, the LIVE measurement: a floor change (a PTY born, then gone) to the
     // window's frame, through the mock floor's push, the backend's tick, the
@@ -245,6 +256,13 @@ describe("MV-3a — the model board through the door, and the report of what a w
             createdAt: Date.parse("2026-09-13T11:59:00.000Z"),
             cwd: "/repo",
             cell: { cellInstanceId: 1, cellBootId: "cell-a", workloadClass: "agent" },
+          },
+          {
+            sessionId: SHELL,
+            pid: 43,
+            createdAt: Date.parse("2026-09-13T11:59:00.000Z"),
+            cwd: "/repo",
+            cell: { cellInstanceId: 1, cellBootId: "cell-a", workloadClass: "interactive" },
           },
           {
             sessionId,

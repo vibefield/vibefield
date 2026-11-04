@@ -12,6 +12,7 @@ public enum TerminalKey: Hashable, Sendable {
   case tab
   case enter
   case backspace
+  case deleteForward
   case arrowUp
   case arrowDown
   case arrowLeft
@@ -77,6 +78,7 @@ extension TerminalKeystroke {
     case .tab: return Self.event(0x2b, modifiers: kitModifiers)
     case .enter: return Self.event(0x28, modifiers: kitModifiers)
     case .backspace: return Self.event(0x2a, modifiers: kitModifiers)
+    case .deleteForward: return Self.event(0x4c, modifiers: kitModifiers)
     case .arrowRight: return Self.event(0x4f, modifiers: kitModifiers)
     case .arrowLeft: return Self.event(0x50, modifiers: kitModifiers)
     case .arrowDown: return Self.event(0x51, modifiers: kitModifiers)

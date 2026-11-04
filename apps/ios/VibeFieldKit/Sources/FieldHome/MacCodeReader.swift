@@ -4,13 +4,15 @@ import SwiftUI
 import UIKit
 import VisionKit
 
-/// TS-7b — "Scan the code on your Mac": the in-app reader for the code the
-/// Mac's Add your phone shows (`PhoneCode`). Scan Text's shape (FieldInput),
-/// for a QR: a full-screen cover, black in both themes, VisionKit's own
-/// scanner, and the honest absence on a device with none (every simulator).
+/// TS-7b — "Scan the code on your computer" (since WI-1 the way in's own
+/// cover): the in-app reader for the code a desktop's Add your phone shows
+/// (`PhoneCode`). Scan Text's shape (FieldInput), for a QR: a full-screen
+/// cover, black in both themes, VisionKit's own scanner, and the honest
+/// absence on a device with none (every simulator). Its words are `Words`:
+/// the phone says "computer" where it said "Mac" (DESIGN.md §9).
 ///
-/// A code is taken the moment it is read — there is one on the Mac's screen
-/// and nothing to choose between. A QR that is not ours is said, once, and the
+/// A code is taken the moment it is read — there is one on the computer's
+/// screen and nothing to choose between. A QR that is not ours is said, once, and the
 /// reader keeps looking; nothing leaves it but a parsed code.
 struct MacCodeReader: View {
   let onCode: (PhoneCode) -> Void
@@ -51,11 +53,11 @@ struct MacCodeReader: View {
       Image(systemName: "qrcode.viewfinder")
         .font(.system(size: 26, weight: .regular))
         .foregroundStyle(ChromePalette.inkTertiary)
-      Text("Scanning needs a camera on this device")
+      Text(Words.noCamera)
         .font(ChromeType.sans(ChromeType.sheetTitleSize, .semibold))
         .foregroundStyle(ChromePalette.ink)
         .multilineTextAlignment(.center)
-      Text("Nothing was read")
+      Text(Words.nothingRead)
         .font(ChromeType.sans(ChromeType.sheetBodySize))
         .foregroundStyle(ChromePalette.inkTertiary)
     }
@@ -65,7 +67,7 @@ struct MacCodeReader: View {
   private var chrome: some View {
     VStack {
       HStack {
-        Text("Scan the code on your Mac")
+        Text(Words.title)
           .font(ChromeType.sans(ChromeType.stripSize, .semibold))
           .foregroundStyle(ChromePalette.ink)
           .padding(.horizontal, 16)
@@ -73,14 +75,14 @@ struct MacCodeReader: View {
           .background { Capsule().fill(ChromePalette.keyFill) }
         Spacer(minLength: 0)
         Button(action: onClose) {
-          Text("Close")
+          Text(Words.close)
         }
         .buttonStyle(ChromePillStyle(.secondary))
-        .accessibilityLabel("Close the reader")
+        .accessibilityLabel(Words.closeLabel)
       }
       Spacer(minLength: 0)
       if scannerReady {
-        Text(refused ? "That code isn’t from VibeField on a Mac" : "Point the camera at Add your phone on your Mac")
+        Text(refused ? Words.refused : Words.point)
           .font(ChromeType.sans(ChromeType.sheetBodySize))
           .foregroundStyle(ChromePalette.ink)
           .padding(.horizontal, 16)
@@ -89,6 +91,22 @@ struct MacCodeReader: View {
       }
     }
     .padding(16)
+  }
+}
+
+extension MacCodeReader {
+  /// The reader's words, every one of them (WI-1's review, M2): the phone says "computer" where it said "Mac"
+  /// (DESIGN.md §9), and the title is the welcome's own act.
+  enum Words {
+    static let title = "Scan the code on your computer"
+    static let point = "Point the camera at Add your phone on your computer"
+    static let refused = "That code isn’t from VibeField on a computer"
+    static let noCamera = "Scanning needs a camera on this device"
+    static let nothingRead = "Nothing was read"
+    static let close = "Close"
+    static let closeLabel = "Close the reader"
+
+    static let all = [title, point, refused, noCamera, nothingRead, close, closeLabel]
   }
 }
 

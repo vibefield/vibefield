@@ -162,6 +162,17 @@ interface ServiceWorkerCandidate extends RuntimeTargetCandidate {
   invalidateCredential(grantGeneration: number): void;
 }
 
+/** How a stop's admitted calls ended (item 168): all answered, or failed at the drain deadline;
+ * "none" when this candidate was no longer the live worker, so no drain ran for it. */
+type DrainCalls = "drained" | "deadline" | "none";
+/** How a deactivation wait ended: the worker's correlated `deactivated`, its exit, the remaining
+ * deadline, or a deactivate that could not be posted. */
+type DeactivationEnd = "acknowledged" | "exited" | "deadline" | "unsent";
+/** How a stop's worker cleanup ended: a deactivation wait's end; "deadline" too when the calls
+ * drained with no window left; "skipped" when the calls met the deadline and the worker was ended
+ * at once; "none" as above. */
+type DrainCleanup = DeactivationEnd | "skipped" | "none";
+
 interface ServiceActivationSource {
   readonly record: PluginRecord;
   readonly manifest: PluginManifestV1;
@@ -1019,15 +1030,22 @@ export class ServiceHost {
     const generation = candidate.generation;
     const deadlineMs = this.cfg.deadlines?.deactivateMs ?? PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS;
     const deadlineAt = Date.now() + deadlineMs;
+    // The drain's own reason (item 168), on its deactivated record: a drain that settled and one
+    // its deadline cut both end in terminate() inside the deadline, so only this record tells them
+    // apart, never the wall time.
+    let calls: DrainCalls = "none";
+    let cleanup: DrainCleanup = "none";
 
     if (e.worker === worker && e.generation === generation) {
       const callsDrained = await this.waitForPendingCalls(e, deadlineAt);
+      calls = callsDrained ? "drained" : "deadline";
       if (!callsDrained) this.failPendingCalls(e, "provider drain deadline exceeded");
 
       if (e.worker === worker && e.generation === generation) {
         const remaining = Math.max(0, deadlineAt - Date.now());
         if (callsDrained && remaining > 0)
-          await this.waitForDeactivation(worker, generation, remaining);
+          cleanup = await this.waitForDeactivation(worker, generation, remaining);
+        else cleanup = callsDrained ? "deadline" : "skipped";
         if (e.worker === worker && e.generation === generation) await worker.terminate();
       }
       e.detachOutput?.();
@@ -1050,6 +1068,8 @@ export class ServiceHost {
       else e.state = "inactive";
       this.logger.info("fieldd.plugin_service.deactivated", "Plugin service worker deactivated", {
         pluginId,
+        calls,
+        cleanup,
       });
     }
   }
@@ -1124,17 +1144,17 @@ export class ServiceHost {
     worker: Worker,
     generation: number,
     deadlineMs: number,
-  ): Promise<void> {
+  ): Promise<DeactivationEnd> {
     const requestId = this.nextDeactivationId++;
-    return new Promise<void>((resolveWait) => {
+    return new Promise<DeactivationEnd>((resolveWait) => {
       let finished = false;
-      const finish = (): void => {
+      const finish = (end: DeactivationEnd): void => {
         if (finished) return;
         finished = true;
         clearTimeout(timer);
         worker.off("message", onMessage);
         worker.off("exit", onExit);
-        resolveWait();
+        resolveWait(end);
       };
       const onMessage = (msg: Record<string, unknown>): void => {
         if (
@@ -1142,16 +1162,16 @@ export class ServiceHost {
           msg["requestId"] === requestId &&
           msg["generation"] === generation
         )
-          finish();
+          finish("acknowledged");
       };
-      const onExit = (): void => finish();
-      const timer = setTimeout(finish, deadlineMs);
+      const onExit = (): void => finish("exited");
+      const timer = setTimeout(() => finish("deadline"), deadlineMs);
       worker.on("message", onMessage);
       worker.on("exit", onExit);
       try {
         worker.postMessage({ t: "deactivate", requestId, generation });
       } catch {
-        finish();
+        finish("unsent");
       }
     });
   }

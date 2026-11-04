@@ -423,7 +423,33 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * liveness, a wait, a birth or a death; L12's signal) waits on any remote
  * board: the leading edge goes out once that long has passed since the last
  * frame, or once the board's own floor has, whichever is shorter. DESK_TEXT_CHARS
- * keeps its name: it bounds every text the remote cut carries (PG-D2). */
+ * keeps its name: it bounds every text the remote cut carries (PG-D2).
+ *
+ * PG-3b (the 3b review [1], 2026-11-01) — CARRIED_SCREENS_PER_PEER bounds the
+ * screens one peer daemon's connection may open on an owner for the readers
+ * behind it (`agent.reportShown` carried through a home, keyed by
+ * `onBehalfOf`). One key is one reader connection at the home. One person's
+ * phones and tablets, each reconnect a new key until its empty report lands, are
+ * a handful, so 64 is an order of magnitude above honest use. It also bounds the
+ * owner's memory for one peer: each set holds at most 4096 ids, so at most
+ * 262 144 ids per peer connection. A report that would open the 65th is refused
+ * `{state: "no-screen", reason: "carried-cap"}`; the screens already open stand.
+ *
+ * PG-9a (PG-L4.4's linger half, item 135, 2026-11-01) — MESH_HUB_LINGER_MS is how long a mesh board's hub stands
+ * after its last reader leaves before it disposes (its upstreams, its local board). A phone's app switch and its gap
+ * repair each unsubscribe and re-subscribe the phone's board, and the phone is the only reader of its hub: an
+ * immediate close tore down every peer's upstream on each, and the new hub answered every other desktop `stale` on a
+ * new epoch until each re-attached (the grey flash). A reader back within the linger rejoins the standing hub:
+ * every peer's epoch and `live` state stand. 60 s covers an ordinary app switch (a glance at another app, a
+ * notification answered) with margin and a gap repair's milliseconds many times over; its cost is the hub's
+ * upstreams on the desktop↔desktop links and the home's own board for that long, nothing on the phone's radio.
+ * MESH_LINGERING_HUBS_MAX (the PG-9a review [0]) bounds how many hubs may linger at once on one daemon: hubs are
+ * keyed by {projection, floor}, and a floor is any integer a reader asks (16 ms to 60 s), so a same-uid reader
+ * looping subscribe and unsubscribe over distinct floors would leave one lingering hub per value: a local board here
+ * and an upstream on every peer each, beyond what the per-connection subscription cap bounds (EL7). Past the bound
+ * the OLDEST lingering hub closes at once. Honest readers stand up two or three hubs: the phone's (`field|250`
+ * today, `remote|1000` from PG-3e), a window's `model`, and a window's `remote` where one is read, so 4 keeps
+ * each of them lingering with room for one more. */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
@@ -436,6 +462,9 @@ export const AGENT_FIELD = {
   MESH_HEARTBEAT_MS: 1_000,
   MESH_STALE_BEATS: 3,
   FULL_TICK_MS: 16,
+  CARRIED_SCREENS_PER_PEER: 64,
+  MESH_HUB_LINGER_MS: 60_000,
+  MESH_LINGERING_HUBS_MAX: 4,
 } as const;
 
 /** Item 87 (2026-10-29) — a managed run's exit, as fieldd closes it. puppeteer's `handleProcessExit`
@@ -1215,6 +1244,8 @@ export const SCOPES = [
   // record — the active executable per provider, updates — the native.admin
   // posture. Both are local-only forever: consent is an act of the person at
   // this device; neither enters TAILNET_SCOPES or any plugin eligibility table.
+  // Since CP-0 and CP-3 `agents.manage` is also the person's acts on the agents
+  // and sparks of this device: the `compose.sparks.*` and `needs.*` doors.
   "index.manage",
   "agents.manage",
   // AR-5b (the review's EL7 lens) — two CONTENT reads, split off the census
@@ -1632,6 +1663,7 @@ export const LAYOUT = {
    * fieldd's, because nothing below it can hold a session's metadata, and on
    * disk because the floor outlives fieldd — a restarted fieldd still says
    * which profile a surviving shell was born under. */
+  TERMINAL_RELEASES_FILE: ["fieldd", "terminal-releases.json"],
   TERMINAL_BINDINGS_FILE: ["fieldd", "terminal-bindings.json"],
   /** MV-3a (L4) — the project colour's IDENTITY (`ProjectIdentityFile`,
    * 0600): which project key was dealt which colour sequence, and the next
@@ -1665,8 +1697,18 @@ export const LAYOUT = {
    * CLAUDE.md written for it. The person's, to open in Finder; fieldd's records never live in it. */
   SPARK_HOMES_DIR: ["sparks"],
   /** CP-2 (CP2-D3) — each session's input queue, one file per run, 0600 in a 0700 directory: a spark's words and
-   * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. */
+   * fieldd's wakes that wait for the session's next idle moment, kept across a fieldd restart. Since CP-3 (LEANS P3)
+   * each `AgentInputQueueFile` is signed with AGENT_INPUTS_KEY_FILE's secret (0600, made once, never overwritten), so
+   * an agent that edits one cannot speak as a spark or as VibeField: an unsigned or forged queue is set aside at
+   * restore, never delivered. That holds against an edit; the key is 0600 to the same uid, as the sparks' is (EL7). */
   AGENT_INPUTS_DIR: ["fieldd", "inputs"],
+  AGENT_INPUTS_KEY_FILE: ["fieldd", "inputs.key"],
+  /** CP-3 (cp3-the-person.md §5.1) — the needs-you queue: one `NeedsRecord` per item, 0600 in a 0700 directory, each
+   * signed with NEEDS_KEY_FILE's secret (0600, made once, never overwritten), so an agent that edits one cannot answer
+   * it, allow itself a session or put words in a spark's mouth: an unsigned or forged record is set aside, never served.
+   * That holds against an edit; the key is 0600 to the same uid, as the sparks' is (EL7). */
+  NEEDS_DIR: ["fieldd", "needs"],
+  NEEDS_KEY_FILE: ["fieldd", "needs.key"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
@@ -1848,6 +1890,8 @@ export const LAYOUT_ROOT_LEVEL = [
  * else. Payload schemas live in shell.ts; call sites import these names — a raw
  * `vibefield:` literal outside contracts is a boundary violation (wall R6). */
 export const IPC_CHANNELS = {
+  /** renderer → main event, no payload: acknowledge a user-driven zoom landmark. */
+  zoomHaptic: "vibefield:shell:zoom-haptic",
   /** renderer → main invoke, once per webContents generation: WindowConnection */
   windowBootstrap: "vibefield:shell:window-bootstrap",
   /** main → renderer event, once per close attempt: CloseRequest */

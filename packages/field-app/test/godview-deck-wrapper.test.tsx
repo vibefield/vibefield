@@ -358,11 +358,12 @@ describe("away (GV-D6 — nothing, fully away)", () => {
       /top: calc\(var\(--vf-godview-deck-rest\) \+ var\(--vf-godview-deck-shift, 0px\)\);/,
     );
     expect(placed).toMatch(/bottom: 0;/);
-    // the monitor alone: the window, to the covers' reserve (L5, FC-D15)
+    // Flow views end at the covers' reserve (L5, FC-D15). Full-stage views
+    // receive that reserve as a physics-wall target instead of a canvas margin.
     expect(rule(`${arrived} .vf-godview-monitor-stage`)).toContain("flex: 1 1 0;");
-    expect(rule(`.vf-cover ${arrived} .vf-godview-monitor-stage`)).toContain(
-      "margin-bottom: 88px;",
-    );
+    expect(
+      rule(`.vf-cover ${arrived} .vf-godview-monitor-stage:not([data-stage-allocation="full"])`),
+    ).toContain("margin-bottom: 88px;");
   });
 });
 

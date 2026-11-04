@@ -64,6 +64,7 @@ fn spawn_session(source: &DirectSessions) -> Arc<Session> {
     let hub = FrameHub::new(64);
     let session = Session::spawn(
         SpawnOptions {
+            creation_id: None,
             executable: "/bin/sh".into(),
             args: vec![],
             cwd: None,
@@ -234,6 +235,23 @@ fn expect_text(reply: Reply, type_: &str) -> Value {
 
 /// Open both legs with one transport grant; returns (control, frames, creditEpoch).
 async fn connect(h: &Harness, set: &str, generation: u64, caps: Value) -> (Ws, Ws, u64) {
+    connect_with_frames_capabilities(
+        h,
+        set,
+        generation,
+        caps,
+        json!(["resume", "something-unknown"]),
+    )
+    .await
+}
+
+async fn connect_with_frames_capabilities(
+    h: &Harness,
+    set: &str,
+    generation: u64,
+    caps: Value,
+    capabilities: Value,
+) -> (Ws, Ws, u64) {
     let grant = h.minter.transport(TransportSpec::basic(
         set,
         generation,
@@ -249,7 +267,13 @@ async fn connect(h: &Harness, set: &str, generation: u64, caps: Value) -> (Ws, W
     let mut frames = dial(&h.door.frames_url()).await;
     send_json(
         &mut frames,
-        serde_json::from_str(&hello("frames", &grant, Some(caps))).unwrap(),
+        serde_json::from_str(&hello_with_capabilities(
+            "frames",
+            &grant,
+            Some(caps),
+            capabilities,
+        ))
+        .unwrap(),
     )
     .await;
     let accepted = expect_text(next_reply(&mut frames).await, "ConnectionAccepted");
@@ -266,6 +290,95 @@ fn caps(connection: u64, per_activation: u64) -> Value {
         "maxConcurrentActivations": 16,
         "maxConcurrentSeeds": 2,
     })
+}
+
+/// An idle viewer asks for a complete scene without giving up the resize seat.
+/// The sequence stays monotonic, the TRF1 is self-contained, and the same holder
+/// can resize again using the revision it held before the repair.
+#[tokio::test]
+async fn idle_scene_repair_preserves_geometry_and_the_activation_sequence() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let (mut control, mut frames, _) = connect_with_frames_capabilities(
+        &h,
+        "set-repair",
+        1,
+        caps(4_000_000, 2_000_000),
+        json!(["scene-repair"]),
+    )
+    .await;
+    attach_both(
+        &h,
+        &mut control,
+        &mut frames,
+        &session_id,
+        "act-repair",
+        &["geometry", "input", "read"],
+        true,
+    )
+    .await;
+    let (_, _, stamp, _, seed_headers) = receive_transfer(&mut frames).await;
+    scene_applied(&mut frames, &session_id, "act-repair", &stamp).await;
+    let claim = json!({
+        "type": "ClaimGeometry", "sessionId": session_id, "activationId": "act-repair",
+        "leaseEpoch": 0, "claimant": { "clientId": "win:1#1", "viewId": "repair-view" },
+        "cols": 80, "rows": 24, "expectRevision": 0,
+    });
+    send_json(&mut control, claim.clone()).await;
+    let held = next_geometry(&mut control, "GeometryCommitted").await;
+    let before = session.control_state();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    send_json(&mut frames, json!({
+        "type": "RequestScene", "sessionId": session_id, "activationId": "act-repair", "leaseEpoch": 0,
+    })).await;
+    let (kind, _, repaired, bytes, headers) = receive_transfer(&mut frames).await;
+    assert_eq!(kind, "catchup");
+    let trf = Trf1Header::parse(&bytes).expect("a valid complete TRF1");
+    assert!(trf.full_snapshot && trf.glyph_catalog_reset);
+    assert!(
+        headers[0]["activationSequence"].as_u64().unwrap()
+            > seed_headers.last().unwrap()["activationSequence"]
+                .as_u64()
+                .unwrap()
+    );
+    assert_eq!(
+        session.control_state(),
+        before,
+        "repair cannot change control or PTY size"
+    );
+    scene_applied(&mut frames, &session_id, "act-repair", &repaired).await;
+    let mut resize = claim;
+    resize["expectRevision"] = held["geometryRevision"].clone();
+    resize["cols"] = json!(92);
+    send_json(&mut control, resize).await;
+    let resized = next_geometry(&mut control, "GeometryCommitted").await;
+    assert_eq!(resized["holder"], held["holder"]);
+    assert_eq!(
+        resized["geometryRevision"].as_u64().unwrap(),
+        held["geometryRevision"].as_u64().unwrap() + 1
+    );
+    assert_eq!(session.control_state().1, 92);
+    h.door.shutdown().await;
+}
+
+#[tokio::test]
+async fn scene_repair_without_negotiation_is_a_protocol_error() {
+    let h = harness().await;
+    let (_control, mut frames, _) =
+        connect(&h, "set-no-repair", 1, caps(4_000_000, 2_000_000)).await;
+    send_json(
+        &mut frames,
+        json!({
+            "type": "RequestScene", "sessionId": "s", "activationId": "a", "leaseEpoch": 0,
+        }),
+    )
+    .await;
+    match tokio::time::timeout(Duration::from_secs(3), frames.next()).await {
+        Ok(Some(Ok(Message::Close(Some(frame))))) => assert_eq!(u16::from(frame.code), 4003),
+        other => panic!("expected protocol close, got {other:?}"),
+    }
+    h.door.shutdown().await;
 }
 
 async fn attach_both(
@@ -2669,5 +2782,108 @@ async fn a_lagged_bus_reconciles_the_lease_against_the_source() {
     assert_eq!(revoked["activationId"], "act-lag");
     assert_eq!(revoked["presentation"]["reason"], "removed");
     let _ = session.terminate(TerminationSource::User);
+    h.door.shutdown().await;
+}
+
+// Selection copies use the same authenticated session authority as the live
+// terminal, but require only read rights. No second PTY or text replica.
+#[tokio::test]
+async fn selection_copy_reads_unicode_and_history_and_refuses_foreign_or_oversized_requests() {
+    let h = harness_cfg(|config| {
+        // A small negotiated limit makes the refusal practical to exercise.
+        config.protocol_limits.max_control_message_bytes = 8_192;
+    })
+    .await;
+    let session = spawn_session(&h.source);
+    let sid = session.id();
+    let (mut control, negotiated) =
+        connect_control(&h, "copy-set", json!(["selection-text"])).await;
+    assert_eq!(negotiated, json!(["selection-text"]));
+    let grant = h
+        .minter
+        .transport(TransportSpec::basic("copy-set", 1, "copy-frames"));
+    let mut frames = dial(&h.door.frames_url()).await;
+    send_json(
+        &mut frames,
+        serde_json::from_str(&hello("frames", &grant, Some(caps(8_388_608, 2_097_152)))).unwrap(),
+    )
+    .await;
+    expect_text(next_reply(&mut frames).await, "ConnectionAccepted");
+    attach_both(
+        &h,
+        &mut control,
+        &mut frames,
+        &sid,
+        "copy-a",
+        &["read"],
+        true,
+    )
+    .await;
+    // The clean /bin/sh fixture has the C locale: send an ASCII script so
+    // its line editor cannot reinterpret UTF-8 input before printf emits it.
+    let unicode = "COPY-中-é-👩‍💻-🛙X";
+    let escaped = unicode
+        .as_bytes()
+        .iter()
+        .map(|byte| format!("\\{byte:03o}"))
+        .collect::<String>();
+    type_into(&session, &format!("printf '{escaped}\\n'; i=1; while [ $i -le 160 ]; do printf 'COPY-ROW-%03d\\n' $i; i=$((i+1)); done\n"));
+    let request = json!({"type":"SelectionTextRequest","requestId":"copy-1","sessionId":sid,
+        "activationId":"copy-a","leaseEpoch":0,"startColumn":0,"startRow":0,
+        "endColumn":79,"endRow":159,"selectAll":true});
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        send_json(&mut control, request.clone()).await;
+        let reply = next_text_of(&mut control, "SelectionTextResult").await;
+        if let Some(text) = reply["text"].as_str() {
+            if text.contains("COPY-ROW-160") {
+                assert!(text.contains("COPY-ROW-001"));
+                assert!(text.lines().any(|line| line == unicode), "the copy must contain the actual Unicode output, not the echoed command: {text}");
+                break;
+            }
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "PTY history did not become copyable: {reply}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    for (field, value) in [
+        ("sessionId", json!("foreign")),
+        ("activationId", json!("foreign")),
+        ("leaseEpoch", json!(99)),
+    ] {
+        let mut invalid = request.clone();
+        invalid[field] = value;
+        send_json(&mut control, invalid).await;
+        let reply = next_text_of(&mut control, "SelectionTextResult").await;
+        assert_eq!(reply["error"], "UNAVAILABLE");
+        assert!(reply.get("text").is_none());
+    }
+    type_into(
+        &session,
+        "i=1; while [ $i -le 2000 ]; do printf 'COPY-BOUNDS-%04d\\n' $i; i=$((i+1)); done\n",
+    );
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        send_json(&mut control, request.clone()).await;
+        let reply = next_text_of(&mut control, "SelectionTextResult").await;
+        if reply["error"] == "TOO_LARGE" {
+            assert!(reply.get("text").is_none());
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "large selection was not refused: {reply}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    // The same connection remains useful after a refused full-history copy.
+    let mut small = request.clone();
+    small["selectAll"] = json!(false);
+    small["endRow"] = json!(0);
+    send_json(&mut control, small).await;
+    assert!(next_text_of(&mut control, "SelectionTextResult").await["text"].is_string());
+    session.terminate(TerminationSource::User).unwrap();
     h.door.shutdown().await;
 }

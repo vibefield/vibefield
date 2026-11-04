@@ -137,12 +137,14 @@ extension FieldStoreDoors {
   private static func peerView(_ peer: Peer) -> FieldStorePeer {
     FieldStorePeer(
       id: peer.tailscaleId, deviceId: peer.deviceId, online: peer.online,
-      hostname: peer.hostname, tailnetIPs: peer.tailnetIPs, loginName: peer.loginName)
+      hostname: peer.hostname, tailnetIPs: peer.tailnetIPs, loginName: peer.loginName,
+      dnsName: peer.dnsName)
   }
 
   /// Every address the mesh says this peer answers at: its slugged tailscale
   /// hostname and its tailnet IPs.
   static func addresses(_ peer: Peer) -> [String] {
-    ([peer.hostname] + peer.tailnetIPs).filter { !$0.isEmpty }
+    ([peer.hostname] + [canonicalPeerDNSName(peer.dnsName)].compactMap { $0 }
+      + peer.tailnetIPs).filter { !$0.isEmpty }
   }
 }

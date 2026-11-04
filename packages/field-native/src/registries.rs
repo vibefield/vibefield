@@ -270,6 +270,7 @@ pub mod layout {
     pub const SHELL_EXIT: &[&str] = &["fieldd", "shell-exit.json"];
     pub const MANAGER_EXIT: &[&str] = &["fieldd", "manager-exit.json"];
     pub const SHELL_RELAUNCHES: &[&str] = &["fieldd", "shell-relaunches.json"];
+    pub const TERMINAL_RELEASES_FILE: &[&str] = &["fieldd", "terminal-releases.json"];
     pub const TERMINAL_BINDINGS_FILE: &[&str] = &["fieldd", "terminal-bindings.json"];
     pub const PROJECT_IDENTITY_FILE: &[&str] = &["fieldd", "project-identity.json"];
     pub const SETUP_LEDGER_FILE: &[&str] = &["fieldd", "setup.json"];
@@ -279,6 +280,9 @@ pub mod layout {
     pub const SPARKS_KEY_FILE: &[&str] = &["fieldd", "sparks.key"];
     pub const SPARK_HOMES_DIR: &[&str] = &["sparks"];
     pub const AGENT_INPUTS_DIR: &[&str] = &["fieldd", "inputs"];
+    pub const AGENT_INPUTS_KEY_FILE: &[&str] = &["fieldd", "inputs.key"];
+    pub const NEEDS_DIR: &[&str] = &["fieldd", "needs"];
+    pub const NEEDS_KEY_FILE: &[&str] = &["fieldd", "needs.key"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
     pub const RESTART_INTENT_FILE: &[&str] = &["native", "restart-intent.json"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
@@ -342,6 +346,7 @@ pub mod layout {
         ("SHELL_EXIT", SHELL_EXIT),
         ("MANAGER_EXIT", MANAGER_EXIT),
         ("SHELL_RELAUNCHES", SHELL_RELAUNCHES),
+        ("TERMINAL_RELEASES_FILE", TERMINAL_RELEASES_FILE),
         ("TERMINAL_BINDINGS_FILE", TERMINAL_BINDINGS_FILE),
         ("PROJECT_IDENTITY_FILE", PROJECT_IDENTITY_FILE),
         ("SETUP_LEDGER_FILE", SETUP_LEDGER_FILE),
@@ -351,6 +356,9 @@ pub mod layout {
         ("SPARKS_KEY_FILE", SPARKS_KEY_FILE),
         ("SPARK_HOMES_DIR", SPARK_HOMES_DIR),
         ("AGENT_INPUTS_DIR", AGENT_INPUTS_DIR),
+        ("AGENT_INPUTS_KEY_FILE", AGENT_INPUTS_KEY_FILE),
+        ("NEEDS_DIR", NEEDS_DIR),
+        ("NEEDS_KEY_FILE", NEEDS_KEY_FILE),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
         ("RESTART_INTENT_FILE", RESTART_INTENT_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),

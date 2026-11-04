@@ -95,6 +95,10 @@ export async function restRows(d: RestRowsDriver): Promise<string[]> {
       }
       await sleep(50);
     }
+    if (ms === null)
+      say(
+        `SMOKE_CANVAS_REST_TIMEOUT ${JSON.stringify(await js("({ rest: globalThis.__vfDesk.rest(), anchor: globalThis.__vfDesk.anchor() })"))}`,
+      );
     const w1 = await wakes();
     const grew: Record<string, number> = {};
     for (const [reason, n] of Object.entries(w1)) {

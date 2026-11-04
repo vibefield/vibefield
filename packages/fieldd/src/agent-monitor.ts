@@ -1,11 +1,13 @@
-import type {
-  AgentCatalogReaders,
-  AgentListResult,
-  AgentProfileSet,
-  AgentSessionSummary,
-  AgentSessionTerminal,
-  AgentsProfileSetsListResult,
-  TerminalInfo,
+import {
+  type AgentCatalogReaders,
+  type AgentListResult,
+  type AgentProfileSet,
+  type AgentProfileSetId,
+  type AgentSessionSummary,
+  type AgentSessionTerminal,
+  type AgentsProfileSetsListResult,
+  personaSetsOf,
+  type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import {
@@ -31,6 +33,7 @@ import type {
   MonitorModelSnapshot,
   MonitorPastSnapshot,
 } from "@vibefield/puppeteer-view-sdk/model";
+import { isTypedRun } from "./agent-typed-run";
 
 // MV-3a (MV-D22, MV-D18) — THE MONITOR BACKEND, BESIDE THE RUNTIME.
 //
@@ -80,6 +83,7 @@ export interface AgentMonitorTerminals {
   onInventory(listener: (rows: readonly TerminalInfo[]) => void): () => void;
   /** SB-2 — the Agent Profile the shell was born under, from the bindings record */
   profileSetOf(sessionId: string): string | undefined;
+  creationIdOf?(sessionId: string): string | undefined;
 }
 
 /** This device, read per facts: DeviceService swaps its fallback id for the mesh
@@ -159,6 +163,10 @@ export interface AgentMonitorService {
    * with the model now (`agent.recordedLanes`); never rejects. Undefined when
    * this desktop has no record source (no history port). */
   readPast(window: { sinceMs: number; untilMs: number }): Promise<MonitorPastSnapshot | undefined>;
+  /** TU-1 (Q3) — each persona to the Agent Profile listing it, over the latest `agents.profileSets` frame, the one the
+   * backend places Godview's rows by; null until the first frame arrives. The rooms and the door place a run by it
+   * (`profileSetOfRun`). */
+  personaSets(): ReadonlyMap<string, AgentProfileSetId> | null;
   dispose(): void;
 }
 
@@ -194,10 +202,10 @@ function epochMs(iso: string | undefined): number | undefined {
  *    stamped with an exit is not alive however fresh its mirror (`alive:
  *    false` outranks the runtime's word); with no mirror the PTY decides;
  *    with a mirror the backend reads the runtime's live state itself;
- *  · the PTY join is `terminal.runtimeSessionId` for a LOCAL terminal — and
- *    an EXITED run claims none: its shell outlives it (a `user-shell` run,
- *    AR-7), so the pane is a bare terminal again, which is what the stage
- *    drew for it before (a dead run was no row; its pane was a terminal);
+ *  · the PTY join is `terminal.runtimeSessionId` for a LOCAL terminal. Only
+ *    an exited `user-shell` run releases its claim (AR-7): its shell outlives
+ *    it. An app run owns its dedicated PTY through exit and pane replacement;
+ *    releasing that claim early invents a bare shell beside the ended run;
  *  · AR-4's `replaced` names the PTY the run took the place of, so the old
  *    pane is not a phantom terminal during the hand-over;
  *  · the project's key is the rule the renderer's `projectKey` wrote
@@ -211,7 +219,10 @@ function epochMs(iso: string | undefined): number | undefined {
  *    stays listed among the host's terminals as long as the floor lists it
  *    (the README's host contract); the backend dedupes the one the run claims.
  */
-export function hostRunFromSummary(summary: AgentSessionSummary): MonitorHostRun {
+export function hostRunFromSummary(
+  summary: AgentSessionSummary,
+  creationId?: string,
+): MonitorHostRun {
   const exited = summary.continuation?.exited === true;
   const terminal = summary.terminal;
   const pty = terminal?.hosted === "local" ? terminal.runtimeSessionId : undefined;
@@ -224,12 +235,13 @@ export function hostRunFromSummary(summary: AgentSessionSummary): MonitorHostRun
   const workspace = summary.workspace;
   return {
     runtimeRunId: summary.runtimeRunId,
+    ...(creationId === undefined ? {} : { creationId }),
     createdAt: epochMs(summary.createdAt) ?? 0,
     provider: {
       id: summary.kind,
       label: summary.label.trim() === "" ? summary.kind : summary.label,
     },
-    ...(pty !== undefined && !exited ? { terminalSessionId: pty } : {}),
+    ...(pty !== undefined && !(exited && isTypedRun(summary)) ? { terminalSessionId: pty } : {}),
     ...(terminal?.replaced !== undefined ? { replacedTerminalSessionId: terminal.replaced } : {}),
     ...(projectKey !== undefined ? { projectKey } : {}),
     ...(workspace !== undefined
@@ -261,6 +273,10 @@ export function hostTerminalFrom(
   const workloadClass = info.cell?.workloadClass;
   return {
     sessionId: info.sessionId,
+    ...(workloadClass === "interactive" && info.exited !== true && info.inputUsed !== undefined
+      ? { inputUsed: info.inputUsed }
+      : {}),
+    ...(info.creationId === undefined ? {} : { creationId: info.creationId }),
     createdAt: info.createdAt ?? 0,
     ...(info.cwd !== undefined && info.cwd !== "" ? { cwd: info.cwd } : {}),
     ...(info.title !== undefined && info.title !== "" ? { title: info.title } : {}),
@@ -309,13 +325,21 @@ export function hostFactsFrom(input: {
   rows: AgentListResult;
   terminals: readonly TerminalInfo[] | undefined;
   profileSetOf: (sessionId: string) => string | undefined;
+  creationIdOf?: ((sessionId: string) => string | undefined) | undefined;
   device: { id: string; name?: string | undefined; platform?: string | undefined };
   profileSets: AgentsProfileSetsListResult | null;
   catalog: Pick<AgentCatalogReaders, "entry">;
 }): MonitorHostFacts {
   return {
     device: deviceRefFrom(input.device),
-    runs: input.rows.sessions.map(hostRunFromSummary),
+    runs: input.rows.sessions.map((row) =>
+      hostRunFromSummary(
+        row,
+        row.terminal?.hosted === "local" && row.terminal.runtimeSessionId !== undefined
+          ? input.creationIdOf?.(row.terminal.runtimeSessionId)
+          : undefined,
+      ),
+    ),
     terminals: (input.terminals ?? []).map((info) =>
       hostTerminalFrom(info, input.profileSetOf(info.sessionId)),
     ),
@@ -367,6 +391,11 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
   const logger = (opts.logger ?? createNoopLogger()).child({ component: "agent.monitor" });
   let rows: AgentListResult = opts.fold.list();
   let profileSets: AgentsProfileSetsListResult | null = null;
+  // the persona map of the frame it was read from, made once per frame
+  let personas: {
+    frame: AgentsProfileSetsListResult;
+    map: ReadonlyMap<string, AgentProfileSetId>;
+  } | null = null;
   let facts: MonitorHostFacts | null = null;
   const hostListeners = new Set<() => void>();
   const wake = (): void => {
@@ -380,6 +409,7 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
           rows,
           terminals: opts.terminals.list(),
           profileSetOf: (sessionId) => opts.terminals.profileSetOf(sessionId),
+          creationIdOf: (sessionId) => opts.terminals.creationIdOf?.(sessionId),
           device: opts.devices.current(),
           profileSets,
           catalog: opts.catalog,
@@ -570,6 +600,12 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
       return true;
     },
     readPast: (window) => backend.readPast(window),
+    personaSets() {
+      if (profileSets === null) return null;
+      if (personas?.frame !== profileSets)
+        personas = { frame: profileSets, map: personaSetsOf(profileSets.sets) };
+      return personas.map;
+    },
     dispose() {
       if (disposed) return;
       disposed = true;

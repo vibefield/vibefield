@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   AGENT_CATALOG,
+  type AgentFieldRow,
   type AgentModelsResult,
   type AgentProfileSet,
   type AgentProviderSummary,
@@ -12,6 +15,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NewSparkSheet } from "../src/chat/NewSparkSheet";
 import type { NewSparkPort } from "../src/chat/new-spark";
+import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import { FIXTURE_NATIVE, FIXTURE_WORK } from "../src/design-system/profiles-fixtures";
 
 // THE NEW SPARK SHEET (SP-1c; DESIGN.md §8 "The New spark sheet"), through the shipping controller and view over a
@@ -97,7 +101,10 @@ function portOf(sets: readonly AgentProfileSet[] = [FIXTURE_NATIVE]) {
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
+let stopFeed: (() => void) | null = null;
 afterEach(async () => {
+  stopFeed?.();
+  stopFeed = null;
   await act(async () => root?.unmount());
   root = null;
   host?.remove();
@@ -269,6 +276,61 @@ describe("the New spark sheet", () => {
     );
   });
 
+  it("counts the sessions its profiles see by the one rule, as @ and agent_send place them (TU-1)", async () => {
+    // the window's feed over a board of the person's two sessions and a spark's own: one filed under Work naming no
+    // persona (Work's, never This Mac's), one naming neither (This Mac's); the spark's own session is not his
+    const at = "2026-10-31T09:00:00.000Z";
+    const run = (
+      over: Partial<AgentFieldRow> & Pick<AgentFieldRow, "runtimeRunId">,
+    ): AgentFieldRow => ({
+      revision: 1,
+      kind: THINKER.id,
+      label: THINKER.label,
+      tier: "managed",
+      device: "dev-1",
+      status: "idle",
+      statusSince: at,
+      stateChangedAt: at,
+      createdAt: at,
+      alive: true,
+      blockers: [],
+      ...over,
+    });
+    const rows = [
+      run({ runtimeRunId: "run-work", profileSet: FIXTURE_WORK.id }),
+      run({ runtimeRunId: "run-mac" }),
+      run({ runtimeRunId: "run-spark", spark: "sp-vela0001", profileSet: FIXTURE_NATIVE.id }),
+    ];
+    const board: SparksPort = {
+      list: async () => [],
+      watch: async (onFrame) => {
+        onFrame({ revision: 1, rows }, "snapshot");
+        return () => undefined;
+      },
+      watchNeeds: async (onItems) => {
+        onItems([]);
+        return () => undefined;
+      },
+      answer: async () => {
+        throw new Error("nothing is answered here");
+      },
+      onReconnected: () => () => undefined,
+      open: async () => {
+        throw new Error("nothing is woken here");
+      },
+    };
+    stopFeed = startSparksFeed(board);
+    await open(portOf([FIXTURE_NATIVE, FIXTURE_WORK]));
+    const reach = () => $(".vf-new-spark-reach")?.textContent ?? "";
+    // This Mac alone, the one it thinks under: the session naming neither
+    expect(reach()).toMatch(/^Sees 1 session · /u);
+    const work = [...(host?.querySelectorAll<HTMLElement>(".vf-new-spark-chip") ?? [])].find(
+      (element) => element.textContent?.includes(FIXTURE_WORK.label),
+    );
+    await press(work ?? null);
+    expect(reach()).toMatch(/^Sees 2 sessions · /u);
+  });
+
   it("stays for its leave when it folds, then goes; opened again, it is a sheet of its own", async () => {
     const port = portOf();
     const onClose = vi.fn();
@@ -291,5 +353,49 @@ describe("the New spark sheet", () => {
     );
     await settle();
     expect($<HTMLInputElement>(".vf-new-spark-name")?.value).toBe("Polaris");
+  });
+
+  it("draws the agent's mark on its pill at 18, as DESIGN gives it, since the mark draws at its text's size (SP-1d's final critique 4)", async () => {
+    await open(portOf());
+    // the mark is the agent's own, drawn at 1em: its box's font size is its size, never the pill's 13
+    expect($(".vf-new-spark-agent-mark svg")?.getAttribute("width")).toBe("1em");
+    const css = readFileSync(join(process.cwd(), "src/chat/new-spark-sheet.css"), "utf8");
+    const rule = css.match(/^\.vf-new-spark-agent-mark \{([^}]*)\}/m)?.[1] ?? "";
+    expect(rule).toMatch(/inline-size: 18px;/);
+    expect(rule).toMatch(/font-size: 18px;/);
+    expect(rule).toMatch(/line-height: 1;/);
+  });
+
+  it("keeps Create disabled until its agent and the profile it thinks under are read, then hatches (item 149)", async () => {
+    const port = portOf();
+    let offer: (providers: AgentProviderSummary[]) => void = () => undefined;
+    port.providers.mockImplementationOnce(
+      () =>
+        new Promise<AgentProviderSummary[]>((done) => {
+          offer = done;
+        }),
+    );
+    await open(port);
+    // its reads still out: a press now would hatch nothing, so the button cannot be pressed
+    expect(named("Create Polaris")?.hasAttribute("disabled")).toBe(true);
+    await press(named("Create Polaris"));
+    await settle();
+    expect(port.hatch).not.toHaveBeenCalled();
+    await act(async () => offer(PROVIDERS));
+    await settle();
+    expect(named("Create Polaris")?.hasAttribute("disabled")).toBe(false);
+    await press(named("Create Polaris"));
+    await settle();
+    expect(port.hatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("says at its foot when its profiles can't be read, Create disabled, never a silent button (item 149)", async () => {
+    const port = portOf();
+    port.profileSets.mockRejectedValueOnce(new Error("fieldd is restarting"));
+    await open(port);
+    expect($('[role="alert"]')?.textContent).toBe(
+      "VibeField can't list your Agent Profiles right now",
+    );
+    expect(named("Create Polaris")?.hasAttribute("disabled")).toBe(true);
   });
 });

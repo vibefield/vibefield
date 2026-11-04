@@ -1,7 +1,8 @@
 /**
  * smoke:godview's shell markers and the routed input gate, the parts a test can hold (testing/smoke-shell-marker.ts):
  * what a wait for a shell marker says when it ends without one — "never created" told apart from "created empty" — a
- * session's input gate read off the direct-terminal markers, and 11h's card play: its judge and its line of evidence.
+ * session's input gate read off the direct-terminal markers, and 11h's card play: its judge and its line of evidence;
+ * and 11m's (SP-1d): a card played onto Chat's composer, and the line its rung prints.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,12 +11,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CARD_PLAY_EVIDENCE,
   type CardPlaySeen,
+  CHAT_SEND_EVIDENCE,
   cardPlayEvidenceLine,
+  chatSendEvidenceLine,
   gateOpen,
   judgeCardPlay,
+  judgeChatCardPlay,
   latestGate,
   markerFile,
   newCardPlayEvidence,
+  newChatSendEvidence,
   shellMarkerFailure,
 } from "../src/testing/smoke-shell-marker";
 
@@ -145,5 +150,82 @@ describe("11h's card play, as the hand's lab door answers it (R-T 2)", () => {
       waitedMs: { inputBeforeReturn: null },
       gateNow: null,
     });
+  });
+});
+
+describe("11m's card play into Chat's composer, as the hand's lab door answers it (SP-1d)", () => {
+  const added: CardPlaySeen = {
+    at: { x: 760, y: 640 },
+    target: "prompt",
+    answer: { ok: true, label: "Add to your message to Polaris" },
+    played: { ok: true, note: "Added to your message to Polaris" },
+    refused: null,
+  };
+
+  it("passes a card the composer's prompt answered and added", () => {
+    expect(judgeChatCardPlay(added)).toEqual([]);
+  });
+
+  it("names no answer, a play that never reached a place, a place that is not the prompt, and an outcome that is no add", () => {
+    expect(judgeChatCardPlay(null)).toEqual(["the hand's lab door answered nothing"]);
+    const covered = "no place takes a card there — div.vf-new-spark is on top";
+    const unplayed = { ...added, target: null, answer: null, played: null, refused: covered };
+    expect(judgeChatCardPlay(unplayed)).toEqual([`nothing was played: ${covered}`]);
+    const pasted = { ...added, target: "pane", played: { ok: true, note: "Pasted into Polaris" } };
+    expect(judgeChatCardPlay(pasted)).toEqual([
+      "the place that took the card is pane, not the composer's prompt",
+      'the play said "Pasted into Polaris"',
+    ]);
+  });
+});
+
+describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
+  it("prints the rung's facts on ONE line, its cause when it failed and null when it passed", () => {
+    const evidence = newChatSendEvidence("/tmp/typed-agent/lines.jsonl", "sp1d-abc");
+    expect(evidence.typing).toEqual({ focus: null, caret: null, draft: null, heard: null });
+    expect(evidence.create).toBeNull();
+    evidence.spark = "spark-1";
+    evidence.session = "s-pane";
+    evidence.note = "Pasted into Polaris's pane — Return sends it";
+    evidence.create = { state: "enabled", box: "612,690,96,32", waitedMs: 340 };
+    evidence.typing.focus = { window: true, contents: true, document: true };
+    evidence.typing.caret = { placed: "editor", held: "editor" };
+    evidence.typing.draft = { height: 24, enabled: true };
+    evidence.typing.heard = { "keydown@draft": 8, "keypress@draft": 8, "input@draft": 8 };
+    evidence.inputAllowed.Return = true;
+    evidence.play = {
+      at: { x: 760, y: 640 },
+      target: "prompt",
+      answer: { ok: true, label: "Add to your message to Polaris" },
+      played: { ok: true, note: "Added to your message to Polaris" },
+      refused: null,
+    };
+    evidence.waitedMs.ready = 640;
+    evidence.waitedMs.inputBeforeReturn = 12;
+    const passed = chatSendEvidenceLine(evidence, null, null);
+    expect(passed.startsWith(CHAT_SEND_EVIDENCE)).toBe(true);
+    expect(JSON.parse(passed.slice(CHAT_SEND_EVIDENCE.length))).toEqual({
+      failed: null,
+      spark: "spark-1",
+      session: "s-pane",
+      lines: "/tmp/typed-agent/lines.jsonl",
+      nonce: "sp1d-abc",
+      note: "Pasted into Polaris's pane — Return sends it",
+      create: { state: "enabled", box: "612,690,96,32", waitedMs: 340 },
+      typing: {
+        focus: { window: true, contents: true, document: true },
+        caret: { placed: "editor", held: "editor" },
+        draft: { height: 24, enabled: true },
+        heard: { "keydown@draft": 8, "keypress@draft": 8, "input@draft": 8 },
+      },
+      inputAllowed: { Return: true },
+      play: evidence.play,
+      waitedMs: { ready: 640, inputBeforeReturn: 12 },
+      gateNow: null,
+    });
+    const failed = chatSendEvidenceLine(evidence, new Error("no sp1d-abc in the lines"), null);
+    expect(JSON.parse(failed.slice(CHAT_SEND_EVIDENCE.length)).failed).toBe(
+      "no sp1d-abc in the lines",
+    );
   });
 });

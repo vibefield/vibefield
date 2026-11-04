@@ -1,0 +1,549 @@
+{
+  "devices": [
+    {
+      "device": "dev-01HQ9S7UD1",
+      "state": "live",
+      "asOf": "2026-09-30T21:20:00.000Z",
+      "snapshot": {
+        "epoch": "fieldd-9b04c1e27a6d5f30.13",
+        "revision": 84,
+        "rows": [
+          {
+            "runtimeRunId": "run-h-turn",
+            "revision": 8,
+            "device": "dev-01HQ9S7UD1",
+            "terminal": {
+              "hosted": "local",
+              "runtimeSessionId": "pty-h1",
+              "workloadClass": "agent"
+            },
+            "nativeSessionId": "7c2e9a41-3b5d-4f60-8e1a-9d4c2b7f0e35",
+            "monitorRow": {
+              "id": "pty-h1",
+              "kind": "agent",
+              "createdAt": 1790800100000,
+              "status": "idle",
+              "statusSince": 1790803150000,
+              "stale": false,
+              "alive": true,
+              "observed": true,
+              "detail": "Each desktop keeps its place in the order now; the fold's tests are green.",
+              "activity": {
+                "kind": "idle",
+                "since": 1790803150000
+              },
+              "project": {
+                "name": "vibe-field",
+                "branch": "pg/3a"
+              },
+              "provider": {
+                "id": "claude",
+                "label": "Claude Code"
+              },
+              "model": "Opus 5.5",
+              "effort": {
+                "value": "high",
+                "intent": "observed"
+              },
+              "context": {
+                "usedPercent": 62
+              },
+              "reply": {
+                "text": "Each desktop keeps its place in the order now; the fold's tests are green.",
+                "at": 1790803149000,
+                "final": true
+              },
+              "cost": {
+                "usd": 2.1,
+                "coverage": "complete",
+                "burnPerHour": 0.9,
+                "series": {
+                  "stepMs": 30000,
+                  "steps": [0.04, 0.06, 0.03, 0.02, 0],
+                  "lastStepAt": 1790803170000
+                }
+              },
+              "tokens": {
+                "total": 201440,
+                "perMinute": 0
+              },
+              "unread": false,
+              "device": {
+                "id": "dev-01HQ9S7UD1",
+                "name": "Studio",
+                "os": "mac"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": true,
+              "writable": true
+            }
+          },
+          {
+            "runtimeRunId": "run-h-partial",
+            "revision": 13,
+            "device": "dev-01HQ9S7UD1",
+            "terminal": {
+              "hosted": "none"
+            },
+            "nativeSessionId": "0e4b7d19-6a2c-4c85-b1f3-5d8e2a9c7b40",
+            "monitorRow": {
+              "id": "run-h-partial",
+              "kind": "agent",
+              "createdAt": 1790800300000,
+              "status": "idle",
+              "statusSince": 1790803240000,
+              "stale": false,
+              "alive": true,
+              "observed": true,
+              "detail": "The swarm reads the host line from the row's device, never the board.",
+              "activity": {
+                "kind": "idle",
+                "since": 1790803240000
+              },
+              "project": {
+                "name": "puppeteer",
+                "branch": "views/body"
+              },
+              "provider": {
+                "id": "codex",
+                "label": "Codex"
+              },
+              "model": "GPT-5.5",
+              "effort": {
+                "value": "medium",
+                "intent": "configured"
+              },
+              "context": {
+                "usedPercent": 85
+              },
+              "reply": {
+                "text": "The swarm reads the host line from the row's device, never the board.",
+                "at": 1790803239000,
+                "final": true
+              },
+              "cost": {
+                "usd": 0.71,
+                "coverage": "partial",
+                "burnPerHour": 4.2,
+                "series": {
+                  "stepMs": 30000,
+                  "steps": [0.24, 0.26, 0.25, 0.06, 0],
+                  "lastStepAt": 1790803230000
+                }
+              },
+              "tokens": {
+                "total": 104900,
+                "perMinute": 0
+              },
+              "unread": true,
+              "device": {
+                "id": "dev-01HQ9S7UD1",
+                "name": "Studio",
+                "os": "mac"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": false,
+              "writable": false
+            }
+          },
+          {
+            "runtimeRunId": "run-h-nocwd",
+            "revision": 3,
+            "device": "dev-01HQ9S7UD1",
+            "terminal": {
+              "hosted": "none"
+            },
+            "nativeSessionId": "4f8a2c6e-1d3b-4e7a-9c5f-8b2d6e0a4c19",
+            "monitorRow": {
+              "id": "run-h-nocwd",
+              "kind": "agent",
+              "createdAt": 1790800400000,
+              "status": "idle",
+              "statusSince": 1790803060000,
+              "stale": false,
+              "alive": true,
+              "observed": true,
+              "detail": "Ready.",
+              "activity": {
+                "kind": "idle",
+                "since": 1790803060000
+              },
+              "project": {
+                "name": "Claude Code"
+              },
+              "provider": {
+                "id": "claude",
+                "label": "Claude Code"
+              },
+              "model": "Sonnet 5.5",
+              "context": {
+                "usedPercent": 12
+              },
+              "cost": {
+                "usd": 0.05,
+                "coverage": "complete",
+                "burnPerHour": 0
+              },
+              "tokens": {
+                "total": 24100,
+                "perMinute": 0
+              },
+              "unread": false,
+              "device": {
+                "id": "dev-01HQ9S7UD1",
+                "name": "Studio",
+                "os": "mac"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": false,
+              "writable": false
+            }
+          },
+          {
+            "runtimeRunId": "run-h-root",
+            "revision": 2,
+            "device": "dev-01HQ9S7UD1",
+            "terminal": {
+              "hosted": "none"
+            },
+            "nativeSessionId": "9b1d5f3a-7e2c-4a68-b0d4-3c9e7a1f5b82",
+            "monitorRow": {
+              "id": "run-h-root",
+              "kind": "agent",
+              "createdAt": 1790800500000,
+              "status": "idle",
+              "statusSince": 1790803070000,
+              "stale": false,
+              "alive": true,
+              "observed": true,
+              "detail": "Ready.",
+              "activity": {
+                "kind": "idle",
+                "since": 1790803070000
+              },
+              "project": {
+                "name": "vibe-field"
+              },
+              "provider": {
+                "id": "claude",
+                "label": "Claude Code"
+              },
+              "model": "Opus 5.5",
+              "effort": {
+                "value": "low",
+                "intent": "configured"
+              },
+              "context": {
+                "usedPercent": 5
+              },
+              "cost": {
+                "usd": 0.01,
+                "coverage": "complete",
+                "burnPerHour": 0
+              },
+              "tokens": {
+                "total": 8800,
+                "perMinute": 0
+              },
+              "unread": false,
+              "device": {
+                "id": "dev-01HQ9S7UD1",
+                "name": "Studio",
+                "os": "mac"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": false,
+              "writable": false
+            }
+          },
+          {
+            "runtimeRunId": "run-h-crash",
+            "revision": 5,
+            "device": "dev-01HQ9S7UD1",
+            "terminal": {
+              "hosted": "local",
+              "runtimeSessionId": "pty-h3",
+              "workloadClass": "agent"
+            },
+            "nativeSessionId": "1f5b9d3e-6a0c-4e72-8b4f-2d6a0e8c4f95",
+            "monitorRow": {
+              "id": "pty-h3",
+              "kind": "agent",
+              "createdAt": 1790800650000,
+              "status": "blocked",
+              "statusSince": 1790803010000,
+              "stale": true,
+              "alive": false,
+              "observed": true,
+              "detail": "The process exited with code 1.",
+              "project": {
+                "name": "ice",
+                "branch": "main"
+              },
+              "provider": {
+                "id": "claude",
+                "label": "Claude Code"
+              },
+              "model": "Opus 5.5",
+              "effort": {
+                "value": "high",
+                "intent": "observed"
+              },
+              "context": {
+                "usedPercent": 33
+              },
+              "wait": {
+                "kind": "failure",
+                "since": 1790803010000,
+                "detail": "The process exited with code 1."
+              },
+              "reply": {
+                "text": "Rebuilding the arbitration table.",
+                "at": 1790803005000,
+                "final": false
+              },
+              "cost": {
+                "usd": 0.88,
+                "coverage": "complete",
+                "burnPerHour": 0
+              },
+              "tokens": {
+                "total": 72400,
+                "perMinute": 0
+              },
+              "unread": false,
+              "device": {
+                "id": "dev-01HQ9S7UD1",
+                "name": "Studio",
+                "os": "mac"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": true,
+              "writable": true
+            }
+          },
+          {
+            "runtimeRunId": "run-h-typed",
+            "revision": 1,
+            "device": "dev-01HQ9S7UD1",
+            "terminal": {
+              "hosted": "local",
+              "runtimeSessionId": "pty-h2",
+              "workloadClass": "interactive"
+            },
+            "nativeSessionId": "6b0e4a8c-3f7d-4d21-9e5b-2a8c6f0d4e17",
+            "monitorRow": {
+              "id": "pty-h2",
+              "kind": "agent",
+              "createdAt": 1790803190000,
+              "status": "working",
+              "statusSince": 1790803190000,
+              "stale": false,
+              "alive": true,
+              "observed": true,
+              "detail": "Reading the notes folder.",
+              "activity": {
+                "kind": "tool",
+                "line": "Read · todo.md",
+                "since": 1790803195000
+              },
+              "project": {
+                "name": "notes"
+              },
+              "provider": {
+                "id": "claude",
+                "label": "Claude Code"
+              },
+              "model": "Opus 5.5",
+              "effort": {
+                "value": "high",
+                "intent": "configured"
+              },
+              "context": {
+                "usedPercent": 3
+              },
+              "reply": {
+                "text": "Reading the notes folder.",
+                "at": 1790803194000,
+                "final": false
+              },
+              "cost": {
+                "usd": 0.02,
+                "coverage": "complete",
+                "burnPerHour": 1.8
+              },
+              "tokens": {
+                "total": 4200,
+                "perMinute": 4200
+              },
+              "unread": false,
+              "device": {
+                "id": "dev-01HQ9S7UD1",
+                "name": "Studio",
+                "os": "mac"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": true,
+              "writable": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "device": "dev-01HQ9S7XZ2",
+      "state": "live",
+      "asOf": "2026-09-30T21:20:14.000Z",
+      "snapshot": {
+        "epoch": "fieldd-5d2c8f1a0b7e4c93.5",
+        "revision": 4,
+        "rows": [
+          {
+            "runtimeRunId": "run-p-ask",
+            "revision": 1,
+            "device": "dev-01HQ9S7XZ2",
+            "terminal": {
+              "hosted": "local",
+              "runtimeSessionId": "pty-p3",
+              "workloadClass": "agent"
+            },
+            "nativeSessionId": "5e9c3a7f-2b4d-4f18-8a6c-1d7e5b9f3a20",
+            "monitorRow": {
+              "id": "pty-p3",
+              "kind": "agent",
+              "createdAt": 1790800200000,
+              "status": "working",
+              "statusSince": 1790803260000,
+              "stale": false,
+              "alive": true,
+              "observed": true,
+              "detail": "Keeping each desktop's rows in the board's order.",
+              "activity": {
+                "kind": "tool",
+                "line": "Edit · model-board.ts",
+                "since": 1790803262000
+              },
+              "project": {
+                "name": "puppeteer",
+                "branch": "mv/land"
+              },
+              "provider": {
+                "id": "claude",
+                "label": "Claude Code"
+              },
+              "model": "Opus 5.5",
+              "effort": {
+                "value": "high",
+                "intent": "observed"
+              },
+              "context": {
+                "usedPercent": 44
+              },
+              "reply": {
+                "text": "Keeping each desktop's rows in the board's order.",
+                "at": 1790803261000,
+                "final": false
+              },
+              "cost": {
+                "usd": 1.31,
+                "coverage": "complete",
+                "burnPerHour": 2.4,
+                "series": {
+                  "stepMs": 30000,
+                  "steps": [0, 0, 0, 0.02, 0.05],
+                  "lastStepAt": 1790803260000
+                }
+              },
+              "tokens": {
+                "total": 139600,
+                "perMinute": 5700
+              },
+              "unread": false,
+              "device": {
+                "id": "dev-01HQ9S7XZ2",
+                "name": "Loft",
+                "os": "linux"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": true,
+              "writable": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "device": "dev-01HQ9S7Y44",
+      "state": "asleep",
+      "asOf": "2026-09-29T07:02:10.000Z",
+      "snapshot": {
+        "epoch": "fieldd-0c1d7e9a4b2f6385.2",
+        "revision": 9,
+        "rows": [
+          {
+            "runtimeRunId": "run-a-idle",
+            "revision": 4,
+            "device": "dev-01HQ9S7Y44",
+            "terminal": {
+              "hosted": "none"
+            },
+            "nativeSessionId": "8d2f6b0a-4c7e-4a19-b3d5-0e6a2c8f4b73",
+            "monitorRow": {
+              "id": "run-a-idle",
+              "kind": "agent",
+              "createdAt": 1790650000000,
+              "status": "idle",
+              "statusSince": 1790660000000,
+              "stale": false,
+              "alive": true,
+              "observed": true,
+              "detail": "Ready.",
+              "activity": {
+                "kind": "idle",
+                "since": 1790660000000
+              },
+              "project": {
+                "name": "dotfiles",
+                "branch": "main"
+              },
+              "provider": {
+                "id": "claude",
+                "label": "Claude Code"
+              },
+              "model": "Haiku 5.5",
+              "context": {
+                "usedPercent": 9
+              },
+              "cost": {
+                "usd": 0.4,
+                "coverage": "complete",
+                "burnPerHour": 0
+              },
+              "tokens": {
+                "total": 61000,
+                "perMinute": 0
+              },
+              "unread": false,
+              "device": {
+                "id": "dev-01HQ9S7Y44",
+                "name": "Attic",
+                "os": "windows"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": false,
+              "writable": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

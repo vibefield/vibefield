@@ -169,12 +169,12 @@ export function describeSeat(seat: SessionSeat | undefined): SeatPaneFace | unde
  *
  *   · **Ending** **the run**, over "it did not stop after two sends · ending
  *     it": fieldd is ending a run whose turn did not stop (`terminating`).
- *   · **Still** **running**, over "the stop was sent twice and not heard ·"
+ *   · **Still** **running**, over "the cancellation was not confirmed ·"
  *     and **End run**: fieldd will take it no further (`unheardAt`), and the
  *     person ends the run.
  *
  * A Stop only sent, or sent again, says nothing here: the frame's own verb
- * says "Stopping the turn…" from the press. Nor does one heard: an exit shows
+ * says "Pausing current turn…" from the press. Nor does one heard: an exit shows
  * as any exit, and a turn that stopped leaves its pane live. A stage this
  * build does not know is still stopping (the contract's open words).
  */
@@ -198,7 +198,7 @@ export function describeStop(stop: AgentStopState | undefined): StopPaneFace | u
       state: "still-running",
       word: "Still",
       rest: "running",
-      caption: "the stop was sent twice and not heard ·",
+      caption: "the cancellation was not confirmed ·",
       act: "end-run",
     };
   }

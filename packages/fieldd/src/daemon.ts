@@ -9,9 +9,8 @@ import {
   type AgentLastRunForgetResult,
   type AgentLastRunResult,
   AgentModelsParams,
+  AgentPauseParams,
   AgentRecordedLanesParams,
-  AgentReportShownParams,
-  type AgentReportShownResult,
   AgentResumeParams,
   AgentSpawnParams,
   AgentSubscribeParams,
@@ -109,6 +108,9 @@ import {
   type NativeLinkHealth,
   type NativeLinkState,
   type NativeRestartReason,
+  NEEDS_NAME_MAX,
+  NeedsAnswerParams,
+  needsOutcomeOf,
   PluginsDisableParams,
   PluginsEnableParams,
   PluginsGetParams,
@@ -171,6 +173,7 @@ import {
   type TerminalCreateOpenResponse,
   TerminalCreateParams,
   type TerminalListResult,
+  TerminalReleaseParams,
   TerminalRenewAttachParams,
   type TerminalRosterResult,
   type TerminalRuntimeSessionsResult,
@@ -219,6 +222,7 @@ import { LastRunKeeper, modelBoardSource } from "./agent-last-run";
 import { createModelSubscription, createRemoteSubscription } from "./agent-model-board";
 import { type AgentMonitorService, createAgentMonitorService } from "./agent-monitor";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
+import { type AgentScreens, createAgentScreens } from "./agent-screens";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
 import { AgentWaker, isIdleRow } from "./agent-waker";
 import {
@@ -355,6 +359,9 @@ import {
 import { TokenService } from "./token-service";
 import { composeProjects, ToolPlaneService } from "./tool-plane";
 import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
+import { NeedsQueue } from "./tool-plane/rooms/you/queue";
+import { NeedsStore } from "./tool-plane/rooms/you/store";
+import { oneLine } from "./tool-plane/rooms/you/words";
 import { SparkService, SparkStore } from "./tool-plane/sparks";
 import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
@@ -706,6 +713,11 @@ export interface FielddDaemon {
   /** DS-3 — the mesh board (`agent.subscribe {scope: "mesh"}`); tests read
    * how many hubs, and so how many sets of upstreams, are standing. */
   meshBoard: MeshBoard;
+  /** PG-3b — the screens `agent.reportShown` reaches (`agent-screens.ts`);
+   * tests read how many connection screens, readers and carried screens stand. */
+  agentScreens: AgentScreens;
+  /** PG-3b — the monitor backend beside the runtime, null until it is built; tests read its ledger (`seenAt`). */
+  agentMonitor: () => AgentMonitorService | null;
   /** C6-6 — the artifact hub (registry over the mesh serve facade). */
   artifacts: ArtifactService;
   plugins: PluginRegistryService;
@@ -1272,6 +1284,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // stays null and every commit takes the same path it always did.
     let docSync: DocSyncService | null = null;
     let toolPlane: ToolPlaneService | null = null;
+    // CP-3 — the needs-you queue, bound with the tool plane below; its one timer (the re-attach's settle) stops with it
+    let needsQueue: NeedsQueue | null = null;
     let presenceRooms: PresenceRoomRouter | null = null;
     // DS-5 (DS-D6) — the holders slice, bound once DeviceService exists below.
     let docHolders: DocHoldersService | null = null;
@@ -1882,6 +1896,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // honest refusal until then). A test seam's rewriter outranks both.
     let egressCellRewriter: EgressCellRewriter | undefined;
     const terminals = new TerminalService({
+      releasesFile: join(config.dataDir, ...LAYOUT.TERMINAL_RELEASES_FILE),
       link: native,
       logger: logger.child({ component: "terminal.service" }),
       ...(config.terminalBirthWaitMs !== undefined
@@ -2026,6 +2041,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AL-7 — the shell lease reads its holders' closes; late-bound because it counts the floor's sessions, and the
     // terminal service is constructed after the api.
     let shellLeaseRef: ShellLease | null = null;
+    // PG-3b — a peer connection's carried screens go with it; late-bound because
+    // the screens are built with the monitor's doors, after the api.
+    let agentScreensRef: AgentScreens | null = null;
     let shellAbsenceRef: ShellAbsence | null = null;
     const api = new ProductApi({
       // UA-D12 — ephemeral default; the fixed registry number is legacy
@@ -2043,7 +2061,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // UA-4 — the door's comparison value (UA-D13): read fresh per hello, so
       // a capture landing mid-uptime activates the law without a restart
       getLinkedLogin: () => links.status().link?.login ?? null,
-      onConnectionClosed: (connectionId) => shellLeaseRef?.closed(connectionId),
+      onConnectionClosed: (connectionId) => {
+        shellLeaseRef?.closed(connectionId);
+        agentScreensRef?.connectionClosed(connectionId);
+      },
     });
     diagnosticsService.register(api);
     shellApi = api;
@@ -2814,15 +2835,27 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       logger: logger.child({ component: "compose.sparks" }),
     });
     // CP-2 (`draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31) — every session's one input queue (CP-L5), kept
-    // under LAYOUT.AGENT_INPUTS_DIR across a restart (CP2-D3), and the waker that tells a spark what its runs did (CP-D4,
+    // under LAYOUT.AGENT_INPUTS_DIR across a restart (CP2-D3), signed under LAYOUT.AGENT_INPUTS_KEY_FILE since CP-3 so
+    // a file an agent wrote is never delivered (LEANS P3), and the waker that tells a spark what its runs did (CP-D4,
     // CP2-D6). A spark's words land marked as its own and sent on the person's behalf (CP2-D1), at the session's idle.
     const runRow = (runtimeRunId: string) =>
       agents.list().sessions.find((row) => row.runtimeRunId === runtimeRunId);
     const sparkSessionOf = (sparkId: string): string | undefined =>
       agents.list().sessions.find((row) => row.spark === sparkId && agents.isLive(row.runtimeRunId))
         ?.runtimeRunId;
+    /** An agent's label in the catalog (R23b: a lookup, never a compare). */
+    const agentLabelOf = (provider: string | undefined): string | undefined =>
+      (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === provider)?.label;
+    /** How a run is named in a wake, an item and a notice: its title, else its row's label (the catalog's, AC-D4), else
+     * its id; one line, cut at NEEDS_NAME_MAX (critique 8: the one place a run's name is bounded). */
+    const runLabel = (runtimeRunId: string): string => {
+      const row = runRow(runtimeRunId);
+      const named = [row?.title, row?.label].find((s) => s !== undefined && s.trim() !== "");
+      return oneLine(named ?? runtimeRunId, NEEDS_NAME_MAX);
+    };
     const inputs = new AgentInputQueues({
       dir: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_DIR),
+      keyPath: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_KEY_FILE),
       deliver: (runtimeRunId, text) => agents.submit(runtimeRunId, text),
       isIdle: (runtimeRunId) => isIdleRow(agents.monitorOf(runtimeRunId)),
       onOutcome: (runtimeRunId, input, outcome, reason) => {
@@ -2870,37 +2903,100 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         return origin?.by === "spark" ? origin.spark : undefined;
       },
       sparkSession: sparkSessionOf,
-      label: (runtimeRunId) => {
-        const row = runRow(runtimeRunId);
-        return (
-          row?.title ??
-          (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === row?.provider)
-            ?.label ??
-          runtimeRunId
-        );
-      },
+      label: runLabel,
       logger: logger.child({ component: "waker" }),
     });
+    // the one spawn a spark's agents start by: the talk room's, and the needs-you queue's Allow one more
+    const talkSpawn: TalkDeps["spawn"] = async (launch, spark) => {
+      const result = await agents.spawn(
+        {
+          provider: launch.agent,
+          cwd: launch.cwd,
+          profileSet: launch.profileSet,
+          ...(launch.model !== undefined ? { modelSelection: launch.model } : {}),
+        },
+        // the spark's own door principal: a run's ticket rights follow it (read only), never the person's
+        { kind: "mcp-agent" },
+        undefined,
+        { origin: { by: "spark", spark } },
+      );
+      return { runtimeRunId: result.session.runtimeRunId };
+    };
+    // TU-1 (Q3) — the one placement rule's persona map, from the monitor's latest Agent Profiles frame (the one
+    // Godview's rows are placed by), read at each use; null until the monitor holds a frame, so a persona's run filed
+    // under none is in no profile for those first moments. The talk room, the Allow, the compose room and the door read
+    // it.
+    const personaSets = () => monitor?.personaSets() ?? null;
+    // CP-3 (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31; tool-plane/rooms/you/) — the needs-you queue:
+    // a spark's questions, its held sends and spawns (signed records under LAYOUT.NEEDS_DIR, kept across a restart),
+    // and every run's own ask, read from its blockers. An answer is told to its spark through its input queue, and
+    // resumes a sleeping spark through compose.sparks.open's own wake, so a window's open meanwhile is that same wake
+    // (CP3-D7 A; SparkService.open joins it per spark).
+    const needs = new NeedsQueue({
+      store: new NeedsStore({
+        dir: join(config.dataDir, ...LAYOUT.NEEDS_DIR),
+        keyPath: join(config.dataDir, ...LAYOUT.NEEDS_KEY_FILE),
+        logger: logger.child({ component: "needs" }),
+      }),
+      inputs,
+      run: (runtimeRunId) => {
+        const row = runRow(runtimeRunId);
+        // an exited row is a dead pane the deck still shows: no run to send to
+        if (row === undefined || row.continuation?.exited === true) return undefined;
+        return {
+          runtimeRunId,
+          label: runLabel(runtimeRunId),
+          spark: row.spark,
+          startedBy: row.origin?.by === "spark" ? row.origin.spark : undefined,
+          profileSet: row.profileSet,
+          profileId: row.profileId,
+          live: agents.isLive(runtimeRunId),
+        };
+      },
+      personaSets,
+      sparkSession: sparkSessionOf,
+      spark: (id) => sparks.get(id),
+      open: (id, principal) => sparks.open(id, principal),
+      spawn: talkSpawn,
+      agentLabel: agentLabelOf,
+      logger: logger.child({ component: "needs" }),
+    });
+    needsQueue = needs;
     agents.onRunMonitor((runtimeRunId, mirror) => {
       waker.onMonitor(runtimeRunId, mirror);
-      // a spark whose own session is live again takes the wakes held for it
+      needs.onRunMonitor(runtimeRunId, mirror);
+      // a spark whose own session is live again takes the wakes held for it, and the answers owed to it
       const sparkOf = runRow(runtimeRunId)?.spark;
-      if (sparkOf !== undefined) waker.onSparkLive(sparkOf, runtimeRunId);
+      if (sparkOf !== undefined) {
+        waker.onSparkLive(sparkOf, runtimeRunId);
+        needs.onSparkLive(sparkOf, runtimeRunId);
+      }
       void inputs.poke(runtimeRunId);
     });
     agents.onRunEnded((runtimeRunId) => {
       waker.onEnded(runtimeRunId);
+      needs.onRunEnded(runtimeRunId);
       inputs.forget(runtimeRunId);
     });
+    // TU-1 (Q1) — a spark has worked once one of its own sessions has: its record keeps the first time told
+    agents.onSparkTurned((spark, at) => sparks.turned(spark, at));
     const kept = inputs.restore();
     if (kept > 0)
       logger.info("fieldd.inputs.restored", "Kept inputs wait for their sessions", { kept });
+    // read only: no run has re-attached yet, so what ended while fieldd was down is judged once that has settled
+    const keptNeeds = needs.restore();
+    if (keptNeeds > 0)
+      logger.info("fieldd.needs.restored", "Kept needs-you records wait for the person", {
+        kept: keptNeeds,
+      });
+    needs.reconcileWhenSettled(() => agents.reattachSettled());
     const talkSession = (row: ReturnType<typeof runRow>): TalkSession | undefined =>
       row === undefined
         ? undefined
         : {
             runtimeRunId: row.runtimeRunId,
             profileSet: row.profileSet,
+            profileId: row.profileId,
             origin: row.origin,
             spark: row.spark,
             live: agents.isLive(row.runtimeRunId),
@@ -2912,36 +3008,25 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           .list()
           .sessions.map((row) => talkSession(row))
           .filter((s): s is TalkSession => s !== undefined),
-      spawn: async (launch, spark) => {
-        const result = await agents.spawn(
-          {
-            provider: launch.agent,
-            cwd: launch.cwd,
-            profileSet: launch.profileSet,
-            ...(launch.model !== undefined ? { modelSelection: launch.model } : {}),
-          },
-          // the spark's own door principal: a run's ticket rights follow it (read only), never the person's
-          { kind: "mcp-agent" },
-          undefined,
-          { origin: { by: "spark", spark } },
-        );
-        return { runtimeRunId: result.session.runtimeRunId };
-      },
+      personaSets,
+      spawn: talkSpawn,
       enqueue: (runtimeRunId, text, from) =>
         inputs.enqueue(runtimeRunId, text, { kind: "spark", spark: from.spark, name: from.name }),
       interrupt: (runtimeRunId) => agents.interrupt({ runtimeRunId }),
       end: (runtimeRunId) => agents.endRun(runtimeRunId),
       watch: (spark, runtimeRunId, on) => waker.watch(spark, runtimeRunId, on),
+      holds: needs,
     };
     toolPlane = new ToolPlaneService({
       native,
       lanes: laneLink,
       runForTerminal: (terminalSessionId) => agents.runForTerminal(terminalSessionId),
+      personaSets,
       spark: (id) => sparks.get(id),
       verbs: {
         profileSets: async () => (await agents.profiles.sets()).sets,
-        agentLabel: (provider) =>
-          (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === provider)?.label,
+        personaSets,
+        agentLabel: agentLabelOf,
         models: (provider, profileSet) => agents.models({ provider, profileSet }),
         runs: () => agents.list().sessions,
         runFacts: (runtimeRunId) => {
@@ -2971,6 +3056,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           index.search({ q, runtime, limit, ...(afterMs !== undefined ? { afterMs } : {}) }),
       },
       talk,
+      you: { queue: needs, label: runLabel },
       audit,
       version: FIELDD_VERSION,
       logger: logger.child({ component: "compose" }),
@@ -3760,7 +3846,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(selected ? { modelSelection: true } : {}),
           },
         },
-        () => agents.spawn(parsed.data, ctx.principal, ctx.onBehalfOf),
+        () =>
+          terminals.withCreation(parsed.data.creationId, () =>
+            agents.spawn(parsed.data, ctx.principal, ctx.onBehalfOf),
+          ),
         (result) => ({
           outcome: "succeeded",
           attrs: {
@@ -3802,7 +3891,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           target,
           attrs: { ...attrs, ...(resume.cwd !== undefined ? { cwd: resume.cwd } : {}) },
         },
-        () => agents.resume(resume, ctx.principal, ctx.onBehalfOf),
+        () =>
+          terminals.withCreation(parsed.data.creationId, () =>
+            agents.resume(resume, ctx.principal, ctx.onBehalfOf),
+          ),
         (result) => ({
           outcome: "succeeded",
           attrs: {
@@ -3841,6 +3933,29 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: { runtimeRunId: parsed.data.runtimeRunId },
         },
         () => agents.interrupt(parsed.data),
+        (result) =>
+          result.accepted
+            ? { outcome: "succeeded", attrs: { accepted: true } }
+            : {
+                outcome: "denied",
+                reasonCode: "REFUSED",
+                // the floor's own word, never a sentence composed here
+                attrs: { accepted: false, reason: result.reason },
+              },
+      );
+    });
+    api.register("agent.pause", async (ctx, params) => {
+      const parsed = AgentPauseParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { runtimeRunId }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agent.session.interrupt",
+          target: { kind: "agent-session", id: parsed.data.runtimeRunId },
+          attrs: { runtimeRunId: parsed.data.runtimeRunId, mode: "pause" },
+        },
+        () => agents.pause(parsed.data),
         (result) =>
           result.accepted
             ? { outcome: "succeeded", attrs: { accepted: true } }
@@ -3982,36 +4097,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
      * exist (below). Null only in the window before that. */
     let meshBoard: MeshBoard | null = null;
     /** MV-3a (L5, M20) — the screens, one per product connection that holds a
-     * model board: opened with the connection's first model board, forgotten
-     * with its last (a window opens one; two share the connection's screen).
-     * A call with no connection id (none a product door mints) has no screen.
-     * Q05: forgetting a screen keeps the unread marks — a reload's new
-     * connection and a Godview opened again find them (`agent-monitor.ts`).
-     * Q06: only this desktop's own window looks for the person, so only its
-     * screen's reports acknowledge a crashed run's failure; a plugin holding
-     * `agent.observe` opens a screen that acknowledges nothing. */
-    const screens = new Map<string, { count: number; close: () => void }>();
-    const openScreen = (ctx: CallerContext): (() => void) | null => {
-      const service = monitor;
-      const id = ctx.connection?.id;
-      if (service === null || id === undefined) return null;
-      let held = screens.get(id);
-      if (held === undefined) {
-        held = { count: 0, close: service.openScreen(id, { acknowledges: ownWindow(ctx) }) };
-        screens.set(id, held);
-      }
-      const screen = held;
-      screen.count += 1;
-      let open = true;
-      return () => {
-        if (!open) return;
-        open = false;
-        screen.count -= 1;
-        if (screen.count > 0) return;
-        screens.delete(id);
-        screen.close();
-      };
-    };
+     * board showing the model; PG-3b (PG-D6 (a)) — a `remote` board is one too,
+     * a `{remote, mesh}` board makes its connection a READER whose reports this
+     * desktop carries to the rows' owners, and a peer's carried report is a
+     * screen of its own here, keyed by `onBehalfOf` under that peer's
+     * connection (DS-L7 as amended 2026-11-01). Q05: forgetting a screen keeps
+     * the unread marks. Q06: only this desktop's own window acknowledges
+     * (`ownWindow`); a phone, a plugin and a carried screen acknowledge nothing.
+     * The rules are `agent-screens.ts`'s. */
+    const screens = createAgentScreens({
+      monitor: () => monitor,
+      acknowledges: ownWindow,
+      carry: (ctx, device, params) => api.forwardFor(ctx, device, "agent.reportShown", params),
+      logger: logger.child({ component: "agent.screens" }),
+    });
+    agentScreensRef = screens;
     // MF-1 (§5, §10.2) — one door, four projections. Absent params or
     // `projection: "full"` is the subscription the desktop has always had,
     // unchanged: whole `AgentListResult` frames at the fold's own 16 ms tick,
@@ -4050,7 +4150,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const floor = boardFloor(ctx.principal.kind, parsed.data);
       // MV-3a (L5, M20) — a window's model board IS its screen: what it reports
       // shown clears unread marks, and the screen is forgotten with the board.
-      const screen = projection === "model" ? openScreen(ctx) : null;
+      // PG-3b — a remote board is a screen as well, and `{remote, mesh}` a reader.
+      const screen = screens.openBoard(ctx, { projection, scope });
       try {
         if (scope === "mesh") {
           if (meshBoard === null)
@@ -4093,26 +4194,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // MV-3a (L5) — `agent.reportShown {ids}`: which rows the window shows in
     // its active pane, by model id, forwarded to the backend for its unread
-    // marks. The screen is the connection's model board — refused without one.
-    api.register("agent.reportShown", (ctx, params) => {
-      const parsed = AgentReportShownParams.safeParse(params ?? {});
-      if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { ids: string[] }", false);
-      const screenId = ctx.connection?.id;
-      if (
-        monitor === null ||
-        screenId === undefined ||
-        !monitor.reportShown(screenId, parsed.data.ids)
-      )
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          'no model board is open on this connection — subscribe agent.subscribe {projection: "model"} first; the board is the screen',
-          false,
-          { state: "no-screen" },
-        );
-      const result: AgentReportShownResult = { reported: true };
-      return result;
-    });
+    // marks. The screen is the connection's board — refused without one.
+    // PG-3b — routed by `device`: the home carries it only for a reader of its
+    // mesh board, in order per owner (the hook runs after the door's gates and
+    // before the carry); the owner serves a carried one as that reader's screen.
+    api.register("agent.reportShown", (ctx, params) => screens.report(ctx, params));
+    api.wrapForward("agent.reportShown", (ctx, device, params, carry) =>
+      screens.forward(ctx, device, params, carry),
+    );
     // LR (2026-10-15) — what this desktop's last run left, and the answer that
     // lets it go. This desktop's windows' alone, as the `model` board it
     // pictures is: a peer and a phone are refused as that board refuses them.
@@ -4597,6 +4686,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       runtime: agents.runtime,
       fold: { list: () => agents.list(), subscribe: (emit) => agents.subscribe(emit) },
       terminals: {
+        creationIdOf: (id) => terminals.creationIdOf(id),
         list: () => (terminals.observation() !== undefined ? terminals.list() : undefined),
         onInventory: (listener) => terminals.onInventory(listener),
         profileSetOf: (sessionId) => terminals.profileSetOf(sessionId),
@@ -4984,6 +5074,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { sessionId: string }", false);
       return terminals.takeGeometry(parsed.data.sessionId);
+    });
+    api.register("terminal.release", async (ctx, params) => {
+      const parsed = TerminalReleaseParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected {sessionId, condition}", false);
+      return audit.required(
+        ctx,
+        {
+          action: "terminal.session.release",
+          target: { kind: "terminal", id: parsed.data.sessionId },
+          attrs: { condition: parsed.data.condition },
+        },
+        () => terminals.release(parsed.data),
+        () => ({ outcome: "succeeded", attrs: { queued: true } }),
+      );
     });
     api.register("terminal.terminate", async (ctx, params) => {
       const sessionId = requireSessionId(params);
@@ -5974,7 +6079,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) }",
+          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|desktop.keepRunningOnQuit|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) }",
           false,
         );
       }
@@ -6083,6 +6188,51 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         async () => ({ spark: await sparks.open(id, ctx.principal) }),
         () => ({ outcome: "succeeded" }),
       );
+    });
+    // CP-3 — the needs-you queue's doors (compose.ts; METHODS rows under agents.manage, local, CP3-D6 A): the
+    // window's. The list and its subscription are unaudited reads, as compose.sparks.list is; an answer is audited.
+    api.register("needs.list", (ctx) => {
+      requireDesktopCaller(ctx);
+      return { items: needs.list() };
+    });
+    api.registerSubscription("needs.subscribe", (ctx, _params, emit) => {
+      requireDesktopCaller(ctx);
+      const off = needs.onChange((items) => emit({ items }));
+      return { snapshot: { items: needs.list() }, dispose: off };
+    });
+    api.register("needs.answer", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = NeedsAnswerParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { item, choice }, the choice an act's place among the item's choices",
+          false,
+        );
+      const { item, choice } = parsed.data;
+      const answered = await audit.required(
+        ctx,
+        // the act by its place, never the words (CP-L6): an item's words are an agent's
+        { action: "needs.answer", target: { kind: "needs-item", id: item }, attrs: { choice } },
+        () => needs.answer(item, choice, ctx.principal),
+        (r) => ({
+          outcome: needsOutcomeOf(r.item.answer) === "failed" ? "failed" : "succeeded",
+          attrs: {
+            kind: r.item.kind,
+            outcome: r.item.answer?.outcome ?? "done",
+            told: r.item.answer?.told ?? false,
+            // critique 20a: an answer that resumed or started a sleeping spark says which run it woke
+            ...(r.woke !== undefined ? { woke: r.woke } : {}),
+          },
+        }),
+      );
+      return { item: answered.item };
+    });
+    // notify's carrier (CP3-D5 A): an event, never kept, so the snapshot is empty by design
+    api.registerSubscription("needs.notices.subscribe", (ctx, _params, emit) => {
+      requireDesktopCaller(ctx);
+      const off = needs.onNotice((notice) => emit({ notices: [notice] }));
+      return { snapshot: { notices: [] }, dispose: off };
     });
     api.register("setup.moment", (ctx, params) => {
       requireDesktopCaller(ctx);
@@ -6451,6 +6601,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ),
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
+    // PG-3b (the 3b review [13]) — a re-dialled link to an owner is a new
+    // connection there, which forgot the screens it carried for this desktop's
+    // readers: each reader's last report to it is carried again
+    peers.on("link-ready", (event: { deviceId: string }) => screens.linkReady(event.deviceId));
     // DS-2 (DS-D15) — the receipt of one of THIS daemon's keyed forwards, so a
     // UI can show applied / refused / outcome-unknown; the retry is the same
     // call carrying the same key (forward-receipts.ts), never this door.
@@ -6479,6 +6633,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       openLocal: (projection, minIntervalMs, emit) =>
         openLocalBoard(projection, minIntervalMs, emit),
       logger,
+      // PG-3b (the fold check [2]) — an owner's upstream back on the same link
+      // (a hub's resync, a wake) closed and re-opened its remote board there,
+      // so the screens this desktop's readers had carried are carried again
+      onUpstreamReady: (device) => screens.linkReady(device),
     });
     meshBoard = board;
     // DS-6 — history across desktops: every self peer's catalog replicated,
@@ -6914,6 +7072,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         links.stop();
         await presenceRooms?.stop();
         toolPlane?.stop();
+        needsQueue?.stop();
         docSync?.stop();
         laneLink.close();
         docs.dispose();
@@ -6966,6 +7125,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       runtimeDiagnostics.dispose();
       await presenceRooms?.stop();
       toolPlane?.stop();
+      needsQueue?.stop();
       docSync?.stop();
       laneLink.close();
       docs.dispose();
@@ -7420,6 +7580,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           docLane.close();
           await presenceRooms?.stop();
           toolPlane?.stop();
+          needsQueue?.stop();
           docSync?.stop();
           laneLink.close();
           docs.dispose();
@@ -7487,6 +7648,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       egressRoutes,
       federatedSubs,
       meshBoard: board,
+      agentScreens: screens,
+      agentMonitor: () => monitor,
       artifacts,
       plugins,
       services,

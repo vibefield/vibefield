@@ -91,6 +91,39 @@ describe("SettingsDialog head (UA-D19)", () => {
     expect(onSelectPage).toHaveBeenCalledWith("account");
   });
 
+  // Item 156 (2026-11-02, James's QA): the whole Account group folded with the head, Devices with it, so a connected
+  // Mac had no way to Settings → Devices from the sidebar. DESIGN.md §8: Devices is "one page under the head".
+  it("keeps Devices as the first row directly under the head when Account folds into it (item 156)", async () => {
+    const onSelectPage = await mount(ACCOUNT());
+    const nav = container?.querySelector('nav[aria-label="Settings categories"]');
+    const devices = container?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Devices settings"]',
+    );
+    expect(devices).not.toBeNull();
+    expect(container?.querySelector('button[aria-label="Account settings"]')).toBeNull();
+    // the first row of the nav, under no eyebrow of its own: the head above it is the account
+    expect(nav?.querySelector("button")).toBe(devices);
+    expect(navLabels()[0]).toBe("Preferences");
+    await act(async () => devices?.click());
+    expect(onSelectPage).toHaveBeenCalledWith("devices");
+  });
+
+  it("marks Devices as the current page while it is open under the head", async () => {
+    await mount(ACCOUNT(), "devices");
+    expect(
+      container
+        ?.querySelector('button[aria-label="Devices settings"]')
+        ?.getAttribute("aria-current"),
+    ).toBe("page");
+  });
+
+  it("without the head keeps the whole Account group, Account and Devices under its eyebrow", async () => {
+    await mount(undefined);
+    expect(navLabels()[0]).toBe("Account");
+    expect(container?.querySelector('button[aria-label="Account settings"]')).not.toBeNull();
+    expect(container?.querySelector('button[aria-label="Devices settings"]')).not.toBeNull();
+  });
+
   it("stays a dialog named Settings to assistive tech", async () => {
     await mount(ACCOUNT());
     const dialog = container?.querySelector('[role="dialog"]');

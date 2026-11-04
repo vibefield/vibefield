@@ -23,6 +23,7 @@ import {
   AgentFieldDelta,
   AgentFieldSlice,
   AgentFieldSnapshot,
+  AgentInterruptParams,
   AgentInterruptResult,
   AgentLastRunForgetResult,
   AgentLastRunResult,
@@ -31,6 +32,7 @@ import {
   AgentModelDeskRow,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
+  AgentPauseParams,
   AgentRecordedLanesParams,
   AgentRecordedLanesResult,
   AgentRemoteMeshFrame,
@@ -112,12 +114,21 @@ import {
   LocalArtifactIntent,
 } from "../src/artifacts";
 import {
+  AgentInputQueueFile,
+  ComposeAgentSendOutput,
+  ComposeAgentSpawnOutput,
   ComposeAgentsAvailableOutput,
   ComposeAgentsListOutput,
   ComposeHistorySearchOutput,
   ComposeReadOutput,
   ComposeSparksHatchParams,
   ComposeSparksListResult,
+  NeedsAnswerParams,
+  NeedsAnswerResult,
+  NeedsItem,
+  NeedsListResult,
+  NeedsNotices,
+  NeedsRecord,
   SparkRecord,
 } from "../src/compose";
 import { DeviceInfo, DeviceNameFile, DeviceRenameParams, DeviceSlice } from "../src/devices";
@@ -245,7 +256,14 @@ import {
   SystemShellAttachResult,
   SystemShellLeaveParams,
 } from "../src/shell-lease";
-import { TerminalBindingsFile, TerminalCreateParams, TerminalListResult } from "../src/terminal";
+import {
+  TerminalBindingsFile,
+  TerminalCreateParams,
+  TerminalListResult,
+  TerminalReleaseParams,
+  TerminalReleaseResult,
+  TerminalReleasesFile,
+} from "../src/terminal";
 import {
   AttachControlLeg,
   AttachFramesLeg,
@@ -266,7 +284,10 @@ import {
   PresentationStatus,
   ProductSessionRosterItem,
   ProtocolLimits,
+  RequestScene,
   SceneApplied,
+  SelectionTextRequest,
+  SelectionTextResult,
   SendInput,
   SessionAttachGrant,
   SessionEvent,
@@ -505,6 +526,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // reader's hello value alone).
   "terminal-routes-stream": TerminalRoutesStreamPayload,
   "terminal-create-params": TerminalCreateParams,
+  "terminal-release-params": TerminalReleaseParams,
+  "terminal-release-result": TerminalReleaseResult,
+  "terminal-releases": TerminalReleasesFile,
   // IL-D4/IL-D5 (a) — `terminal.list` answering with every row and its age: the floor's own
   // stale cell (`terminal-list.stale-cell`), and fieldd's own half once the observed stream has
   // stopped reaching it (`terminal-list.link-silent`: every cell, `since` = the last delivery).
@@ -745,6 +769,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // Both arms of the interrupt's union: the refusal carries the FLOOR's own
   // word, never a sentence composed at the door.
   "agent-interrupt": AgentInterruptResult,
+  "agent-interrupt-params": AgentInterruptParams,
+  "agent-pause-params": AgentPauseParams,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,
@@ -770,6 +796,7 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "tp-attach-frames-leg": AttachFramesLeg,
   "tp-frames-leg-attached": FramesLegAttached,
   "tp-scene-applied": SceneApplied,
+  "tp-request-scene": RequestScene,
   "tp-cell-activation-status": CellActivationStatus,
   "tp-presentation-status": PresentationStatus,
   "tp-declare-demand": DeclareDemand,
@@ -785,6 +812,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "tp-send-input": SendInput,
   // audit C5's answer half — a SendInput the cell refused at its gate, told in words (`input-refusals`).
   "tp-input-refused": InputRefused,
+  "tp-selection-text-request": SelectionTextRequest,
+  "tp-selection-text-result": SelectionTextResult,
   "tp-session-event": SessionEvent,
   "tp-envelope-header": PresentationEnvelopeHeader,
   "tp-attach-refused": AttachRefused,
@@ -860,6 +889,18 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "compose-agents-list": ComposeAgentsListOutput,
   "compose-agent-read": ComposeReadOutput,
   "compose-history-search": ComposeHistorySearchOutput,
+  // CP-2's input queue as fieldd keeps it, signed since CP-3 (LEANS P3): the signature rides the passthrough
+  "agent-input-queue": AgentInputQueueFile,
+  // CP-3 (the person): the held answers of agent_send and agent_spawn, the needs-you queue's items and doors, a
+  // notify's frame, and the record fieldd keeps per item (the unsigned body; its signature rides the passthrough)
+  "compose-agent-send": ComposeAgentSendOutput,
+  "compose-agent-spawn": ComposeAgentSpawnOutput,
+  "needs-item": NeedsItem,
+  "needs-list": NeedsListResult,
+  "needs-answer-params": NeedsAnswerParams,
+  "needs-answer-result": NeedsAnswerResult,
+  "needs-notices": NeedsNotices,
+  "needs-record": NeedsRecord,
   // IOS-8f — who this desktop's person is: a written face with a name, and the deal with none
   "user-me": UserMeResult,
 };

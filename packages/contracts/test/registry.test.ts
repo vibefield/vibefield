@@ -363,6 +363,13 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
     expect(PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS).toBe(250);
   });
 
+  it("PG-9a — a mesh hub lingers a minute after its last reader: past an app switch, far past a gap repair", () => {
+    // PG-L4.4's "~60 s"; the reason is the registry's note beside the constant
+    expect(AGENT_FIELD.MESH_HUB_LINGER_MS).toBe(60_000);
+    // the PG-9a review [0]: past a handful, the oldest lingering hub closes at once
+    expect(AGENT_FIELD.MESH_LINGERING_HUBS_MAX).toBe(4);
+  });
+
   it("keeps a census of the scope-null product subscriptions, whose reach is their handler's", () => {
     // `scope: null` passes every hello'd principal through the registry's
     // gate — a phone included — and only a handler can narrow it, which the
@@ -673,13 +680,13 @@ describe("MF-1 — the field's two new doors and its store (§10.1)", () => {
 });
 
 // DS-4 (design-06 §6; design-04 §7's 2026-09-30 note) — a terminal on another
-// desktop: the three doors a window's daemon forwards to the owner are
+// desktop: the control doors a window's daemon forwards to the owner are
 // `federate`, everything else on the terminal surface stays this device's.
 // DS-4e (2026-10-01, the lead's ruling (B)) — and the READ a window mounts a
 // remote pane from: `terminal.sessions`, the owner's exact engine summaries
 // (the decimal `handle` the routed runtime mounts by exists nowhere else).
 describe("DS-4 — the terminal doors routable to the owner", () => {
-  it("reclassifies exactly openTicket, renewAttach, terminate and the sessions read", () => {
+  it("routes openTicket, renewAttach, terminate, release and the sessions read to the owner", () => {
     const localities = Object.fromEntries(
       METHODS.filter(
         (m) =>
@@ -697,6 +704,7 @@ describe("DS-4 — the terminal doors routable to the owner", () => {
       "terminal.renewAttach": "federate",
       "terminal.roster": "local",
       "terminal.terminate": "federate",
+      "terminal.release": "federate",
       "terminal.takeGeometry": "local",
       "terminal.link.open": "local",
     });

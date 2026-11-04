@@ -92,6 +92,7 @@ import {
   registerUsersUpdate,
   registerViewSet,
   registerWindowBootstrap,
+  registerZoomHaptic,
 } from "./ipc";
 import { installLifecycle, type LifecycleFlow } from "./lifecycle";
 import { LinkNoticeObserver } from "./link-notices";
@@ -122,6 +123,7 @@ import {
   rendererPolicyMode,
   smokeSimctlDeveloperDir,
 } from "./modes";
+import { NeedsNoticeObserver } from "./needs-notices";
 import { readCensus, requestConsentedStop } from "./pair-stop";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
@@ -174,6 +176,7 @@ import { installWindowChords } from "./window-chords";
 import { hasInsetLights, LightsRegistry } from "./window-lights";
 import { WindowRegistry } from "./window-policy";
 import { createMainWindow, loadRenderer } from "./windows";
+import { createDesktopHaptics } from "./zoom-haptics";
 
 // The composition root (ESR §5.2.1): mode → lock → lifecycle → CSP → supervisor
 // → windows/IPC. Nothing else lives here — no discovery, no polling, no payload
@@ -248,6 +251,9 @@ let restoreAfterAbortedQuit: (() => void) | null = null;
 /** AU-5 — install on quit, the updater's (assigned once it exists); null in a build with no updater and after teardown,
  * when a person's quit installs nothing. */
 let quitInstaller: ((context: { readonly ended: number }) => Promise<void>) | null = null;
+/** AL-6 (AL-D2) — a person's quit with Keep running when VibeField quits on: into the menu bar (true), or not (false:
+ * the quit goes on). Assigned once the status item exists; null before and after teardown, when a quit quits. */
+let quitKeepsRunning: (() => boolean) | null = null;
 /** P8b-2 — the live fieldd client the plugin protocol authorizes against. Null
  * until the pair is up, which is the honest state: with no authority reachable,
  * no plugin module is servable. */
@@ -411,11 +417,14 @@ async function main(
   // Mac). So in a MARKED run (`VF_SMOKE_RUN`, run-smoke.mjs's mark — testing/smoke-daemons.ts)
   // the copy door KEEPS the words instead of writing them and answers as it would: the act's own
   // record (`wrote`) stays the witness, and the canvas smoke reads what arrived here.
-  const harnessCopies: string[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
+  // The terminal lab observes the same real copy door; it must isolate the clipboard too.
+  const keepHarnessClipboard =
+    process.env["VF_SMOKE_RUN"] !== undefined || MODE === "terminal-perf-lab";
+  const harnessCopies: string[] | null = keepHarnessClipboard ? [] : null;
   // HN-5 — the same for a copy's picture: the clipboard's picture door keeps its PNG's size here
   // in a marked run, and the words written beside it in `harnessCopies`, instead of writing them,
   // and answers as it would.
-  const harnessPictures: number[] | null = process.env["VF_SMOKE_RUN"] === undefined ? null : [];
+  const harnessPictures: number[] | null = keepHarnessClipboard ? [] : null;
   const installDiagnostics = (window: Electron.BrowserWindow): void => {
     let supportDialogOpen = false;
     installLocalDiagnosticsPort({
@@ -857,6 +866,8 @@ async function main(
     trayController?.update({ link: observedLink });
   };
   let statusItemForced = BACKGROUND_RELAUNCH && MODE === "production";
+  /** AL-6 — the effective `desktop.keepRunningOnQuit`, off until the preferences are read */
+  let keepRunningOnQuit = false;
   const applyPreferences = (raw: unknown): void => {
     observedSnapshots.preferences = raw;
     observedSnapshots.hasPreferences = true;
@@ -876,6 +887,7 @@ async function main(
       backgroundShell: parsed.data.backgroundShell,
     });
     screenshotShortcut?.setEnabled(parsed.data.screenshotHotkey);
+    keepRunningOnQuit = parsed.data.keepRunningOnQuit;
     enforceBackgroundEscapeHatch();
   };
   const applyEvidenceHealth = (raw: unknown): void => {
@@ -1271,6 +1283,41 @@ async function main(
           error,
         ),
     );
+    // CP-3 (CP3-D5 A) — an agent's notify, said outside the app while no
+    // VibeField window is in front; the window's status line says it inside.
+    // A click opens Chat, whoever told it. A smoke never puts one on the
+    // person's screen.
+    const needsNotices = new NeedsNoticeObserver(
+      bundle.handles,
+      {
+        focused: () => BrowserWindow.getFocusedWindow() !== null,
+        notify: (words) => {
+          if (isSmokeLike(MODE) || !Notification.isSupported()) return;
+          const notice = new Notification({ title: words.title, body: words.body });
+          notice.on("click", () => {
+            void revealPrimaryWindow().then(
+              (window) => {
+                if (!window.isDestroyed()) viewStates?.ensure(window.webContents).set(words.opens);
+              },
+              (error: unknown) => {
+                logger.error(
+                  "desktop.needs_notice.reveal_failed",
+                  "The notice could not open its view",
+                  error,
+                );
+              },
+            );
+          });
+          notice.show();
+        },
+      },
+      (error) =>
+        logger.error(
+          "desktop.needs_notice.observe_failed",
+          "Agents' notices could not follow fieldd",
+          error,
+        ),
+    );
     const offerConnect = (): void => {
       trayController?.update({ connectDevices: connectAsks.offersConnect() });
     };
@@ -1312,6 +1359,7 @@ async function main(
         stopOffer();
         trayController?.update({ connectDevices: false });
         linkNotices.dispose();
+        needsNotices.dispose();
         shellProvider.dispose();
         stopDaemonBootFence();
         stopPluginModuleClient();
@@ -1572,6 +1620,19 @@ async function main(
   });
   viewStates = views;
   registerViewSet(registry, viewStates, logger.child({ component: "ipc.view" }));
+  registerZoomHaptic(
+    registry,
+    (sender) =>
+      !sender.isDestroyed() &&
+      sender.isFocused() &&
+      BrowserWindow.fromWebContents(sender)?.isFocused() === true,
+    createDesktopHaptics({
+      platform: process.platform,
+      path: resources.desktopHapticsPath ?? null,
+      onError: (error) =>
+        logger.warn("desktop.haptics.unavailable", "Trackpad feedback is unavailable", { error }),
+    }),
+  );
   // Godview round 3 (GV-D11, GV-D6): the page says its deck's state by name and
   // main owns what follows — where the window's lights stand, composed with the
   // view above, and whether ⌘W is lent to the panes. The lights exist only on a
@@ -1881,7 +1942,9 @@ async function main(
       viteUrl: VITE_URL,
       setView,
       beforeExit: closeEvidence,
+      ...(harnessCopies === null ? {} : { copies: harnessCopies }),
       onWindow: (window) => {
+        installDiagnostics(window);
         installRendererLogging({
           window,
           sink: shellLogging.renderer,
@@ -2121,7 +2184,12 @@ async function main(
   primaryWindowOpener = () =>
     registry.revealPrimary(() => {
       performance.mark("vf:shell:window-created");
-      const window = createMainWindow({ mode: MODE, preloadPath: PRELOAD_PATH, show: true });
+      const window = createMainWindow({
+        mode: MODE,
+        preloadPath: PRELOAD_PATH,
+        show: true,
+        iconPath: resources.windowIconPath,
+      });
       return {
         window,
         prepare: async () => {
@@ -2503,7 +2571,8 @@ async function main(
       newUser: async () => {
         await createAndAttach({});
       },
-      quit: () => app.quit(),
+      // AL-6 — the status item's Quit VibeField quits, even while Keep running when VibeField quits is on
+      quit: () => (lifecycleFlow === null ? app.quit() : lifecycleFlow.quitFully()),
     },
     onError: (stage, error) => {
       logger.error(
@@ -2732,14 +2801,32 @@ async function main(
   const stopWindowObservation = registry.onPrimaryChanged((windowOpen) => {
     if (windowOpen) primaryHasOpened = true;
     if (windowOpen && statusItemForced) {
-      // AL-5 — the window is open: the relaunch's menu-bar-only presence ends, the Dock icon comes back
+      // AL-5 — the window is open: the relaunch's menu-bar-only presence ends, the Dock icon comes back (AL-6's
+      // background too)
       statusItemForced = false;
       app.dock?.show();
+      trayController?.update({ inBackground: false });
       if (observedSnapshots.hasPreferences) applyPreferences(observedSnapshots.preferences);
     }
     trayController?.update({ windowOpen });
   });
   shellDisposers.add(stopWindowObservation);
+  // AL-6 (AL-D2, §5.8) — Keep running when VibeField quits: a person's quit closes the window and leaves VibeField in
+  // the menu bar, AL-5's presence (no Dock icon, the status item forced and saying so); nothing stops. Opening a window
+  // ends it. macOS alone, and never without a status item to stay in.
+  quitKeepsRunning = () => {
+    const controller = trayController;
+    if (process.platform !== "darwin" || isSmokeLike(MODE) || !keepRunningOnQuit) return false;
+    if (controller === null) return false;
+    statusItemForced = true;
+    controller.update({ showTray: true, inBackground: true });
+    app.dock?.hide();
+    registry.primary()?.close();
+    return true;
+  };
+  shellDisposers.add(() => {
+    quitKeepsRunning = null;
+  });
   if (observedSnapshots.hasPreferences) applyPreferences(observedSnapshots.preferences);
 
   if (statusItemForced && trayController !== null) {
@@ -2953,6 +3040,7 @@ if (!hasInstanceLock) {
       logger,
       closeLogging: closeEvidence,
       getQuitGate: () => quitGate,
+      keepRunningOnQuit: () => quitKeepsRunning?.() ?? false,
       onQuitAborted: () => restoreAfterAbortedQuit?.(),
       installOnQuit: async (context) => {
         await quitInstaller?.(context);

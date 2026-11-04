@@ -19,6 +19,68 @@ const catalogPageSources = (): string => {
   return [source("design-system/DesignSystemPage.tsx"), ...sections].join("\n");
 };
 
+/** UA-7's spelling of a colour literal: a hex, or a colour function. */
+const COLOUR_LITERAL = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|lab|lch)\(/i;
+
+/** The Setup Assistant's own modules and stylesheet (item 136), discovered so a new pane is covered the moment it
+ * exists: every .tsx and .css under boot/onboarding, as paths relative to it. */
+const ONBOARDING_ROOT = join(PACKAGE_ROOT, "src", "boot", "onboarding");
+const onboardingFiles = (): string[] =>
+  (readdirSync(ONBOARDING_ROOT, { recursive: true }) as string[])
+    .filter((file) => /\.(?:tsx|css)$/.test(file))
+    .sort();
+
+/** A token's value in one theme's block of tokens.css (`:root` or `.dark`), as written. */
+const tokenValue = (tokens: string, theme: ":root" | ".dark", name: string): string => {
+  const start = tokens.indexOf(`\n${theme} {`);
+  const block = tokens.slice(start, tokens.indexOf("\n}", start));
+  const value = new RegExp(`\\s${name}:\\s*([^;]+);`).exec(block)?.[1]?.trim();
+  if (start < 0 || value === undefined) throw new Error(`${name} has no value in ${theme}`);
+  return value;
+};
+
+/** An sRGB colour as tokens.css spells one: `#rgb`, `#rrggbb`, or `rgb(r g b / a%)`. */
+const parseColour = (value: string): { rgb: [number, number, number]; alpha: number } => {
+  const hex = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(value)?.[1];
+  if (hex !== undefined) {
+    const full = hex.length === 3 ? [...hex].map((digit) => digit + digit).join("") : hex;
+    return {
+      rgb: [0, 2, 4].map((at) => Number.parseInt(full.slice(at, at + 2), 16)) as [
+        number,
+        number,
+        number,
+      ],
+      alpha: 1,
+    };
+  }
+  const fn = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*(?:\/\s*([\d.]+)%)?\s*\)$/.exec(value);
+  if (fn === null) throw new Error(`not a colour this row reads: ${value}`);
+  return {
+    rgb: [Number(fn[1]), Number(fn[2]), Number(fn[3])],
+    alpha: fn[4] === undefined ? 1 : Number(fn[4]) / 100,
+  };
+};
+
+/** WCAG 2's contrast of an ink, composited at its alpha, over an opaque ground. */
+const contrastOver = (ink: string, ground: string): number => {
+  const over = parseColour(ground);
+  const word = parseColour(ink);
+  const mix = (a: number, b: number): number => a * word.alpha + b * (1 - word.alpha);
+  const shown: [number, number, number] = [
+    mix(word.rgb[0], over.rgb[0]),
+    mix(word.rgb[1], over.rgb[1]),
+    mix(word.rgb[2], over.rgb[2]),
+  ];
+  const linear = (channel: number): number => {
+    const c = channel / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = ([r, g, b]: readonly [number, number, number]): number =>
+    0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+  const [a, b] = [luminance(shown), luminance(over.rgb)];
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+};
+
 describe("UI system ownership boundaries", () => {
   it("keeps the app and catalog stylesheets as manifests", () => {
     const appManifest = source("styles.css");
@@ -110,6 +172,8 @@ describe("UI system ownership boundaries", () => {
     expect(catalogCss).not.toMatch(/^\.vf-chat(?:\b|-)/m);
     // SP-1c: the New spark sheet's plate stages it over Chat; the sheet's rules are the product's
     expect(catalogCss).not.toMatch(/^\.vf-new-spark(?:\b|-)/m);
+    // CP-3: the needs-you card's plates are boxes on the canvas's ground; the card's rules are the product's
+    expect(catalogCss).not.toMatch(/^\.vf-needs(?:\b|-)/m);
     // FG-6: the first run's frames box the shipping field and glass; their rules are boot.css's and
     // wizard-ui.css's, and the field's still is the field's own rule, never a copy of its picture
     expect(catalogCss).not.toMatch(/^\.vf-(?:field|splash|wizard)(?:\b|-)/m);
@@ -140,6 +204,9 @@ describe("UI system ownership boundaries", () => {
     const fixtures = source("design-system/chat-fixtures.ts");
     expect(preview).toMatch(/<ChatPanelView\s/u);
     expect(fixtures).toContain("sparkEntriesOf");
+    // SP-1d: the thread's items are the product's own reading of the shown spark, never a drawn copy of the hello
+    expect(preview).toContain("threadItemsOf");
+    expect(preview).not.toMatch(/<ThreadItemsView\s/u);
     for (const file of [preview, fixtures]) {
       expect(file).not.toMatch(/className="vf-chat/);
       expect(file).not.toContain("<style");
@@ -150,6 +217,83 @@ describe("UI system ownership boundaries", () => {
     }
     // the frame's cover mounts the same preview, as it mounts History's
     expect(source("design-system/ViewFramePreview.tsx")).toContain("<ChatPreview");
+  });
+
+  it("keeps the needs-you card's fixture an ADAPTER — the shipping card over the product's reading of fixture items (CP-3)", () => {
+    // The catalog stands in for what fieldd answers — the queue's items, and what an answer hands back — and runs
+    // them through the PRODUCT's own card (`needsCardOf`, `waitingCardOf`); the card it mounts is the shipping one,
+    // standing in the shipping thread items on the live plate under the product's own controller over a fixture door.
+    // Never the card's classes, never a stylesheet, never the product's doors, its feed, the status line or the host.
+    const preview = source("design-system/NeedsCardPreview.tsx");
+    const fixtures = source("design-system/chat-fixtures.ts");
+    const chat = source("design-system/ChatPreview.tsx");
+    expect(preview).toMatch(/<NeedsCardView\s/u);
+    expect(preview).toMatch(/<ThreadItemsView\s/u);
+    expect(preview).toContain("useNeedsCard(");
+    expect(fixtures).toContain("needsCardOf(");
+    expect(chat).toContain("waitingCardOf(");
+    for (const file of [preview, fixtures, chat]) {
+      expect(file).not.toMatch(/className="vf-needs/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("sparksPortOver");
+      expect(file).not.toContain("startSparksFeed");
+      expect(file).not.toContain("useNeedsAnswerer");
+      expect(file).not.toContain("sayStatus");
+    }
+    expect(preview).not.toMatch(/className="vf-chat/);
+    expect(source("design-system/sections/ChromeSection.tsx")).toMatch(
+      /<NeedsCardLivePlate\s*\/>/u,
+    );
+    expect(source("design-system/sections/ChromeSection.tsx")).toMatch(/<NeedsCardPlates\s*\/>/u);
+  });
+
+  it("never mounts the thread's live pane in Chat's catalog — the pane's place is the shipping view's words (SP-1d)", () => {
+    // A catalog holds no terminal pool ("a host, never a painter"): the live pane (`SparkPane`, the controller) and the
+    // pool are never reached from Chat's plates, and no picture of a terminal stands in. The pane's place is the
+    // shipping `SparkPaneView`, in the words the product's pane says for the state a plate shows.
+    const preview = source("design-system/ChatPreview.tsx");
+    const fixtures = source("design-system/chat-fixtures.ts");
+    expect(preview).toMatch(/<SparkPaneView\s/u);
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/<SparkPane[\s/>]/u);
+      expect(file).not.toMatch(/from "\.\.\/chat\/SparkPane"/u);
+      expect(file).not.toContain("terminal/pool");
+      expect(file).not.toContain("useTerminalPool");
+      expect(file).not.toContain("terminalPoolRuntime");
+      expect(file).not.toContain("@vibecook/ghosttea-react");
+    }
+  });
+
+  it("keeps Chat's composer fixture an ADAPTER — the shipping view over fixture drafts and @ rows, never its controller (SP-1d)", () => {
+    // The catalog stands in for what the composer's controller would hand its view — a draft, @'s rows read by the
+    // product's own `atRowsOf`, an agent's menu read by the controller's own `agentChipMenuOf` — and mounts the
+    // shipping `ChatComposerView`. Never the controller (it registers the hand's place and sends), never the hand's
+    // registry, never the product's doors or feed.
+    const preview = source("design-system/ChatPreview.tsx");
+    const fixtures = source("design-system/chat-fixtures.ts");
+    expect(preview).toMatch(/<ChatComposerView\s/u);
+    expect(fixtures).toContain("atRowsOf");
+    // one reading of an agent's chip menu (SP-1d's fix review): the controller and the plates both call it, and
+    // neither reads the sheet's `agentMenuOf` beside it
+    for (const file of [source("chat/ChatComposer.tsx"), fixtures]) {
+      expect(file).toContain("agentChipMenuOf(");
+      expect(file).not.toContain("agentMenuOf(");
+    }
+    // rulings-5: a plate's blank and armed are the draft's own readings, and a send under way is one fact handed to
+    // the panel and the composer, never a busy drawn on one of them alone
+    expect(fixtures).toContain("draftBlank");
+    expect(fixtures).toContain("draftSendable");
+    expect(preview).toContain("CHAT_SENDING");
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/<ChatComposer[\s/>]/u);
+      expect(file).not.toMatch(/from "\.\.\/chat\/ChatComposer"/u);
+      expect(file).not.toContain("cardTargets");
+      expect(file).not.toContain("sendToThread");
+      expect(file).not.toContain("sparksPortOver");
+      expect(file).not.toContain("newSparkPortOver");
+    }
   });
 
   it("keeps the New spark sheet's fixture an ADAPTER — the product's sheet over a fixture port, never its markup (SP-1c)", () => {
@@ -187,6 +331,62 @@ describe("UI system ownership boundaries", () => {
       readFileSync(join(PACKAGE_ROOT, "../design-kit/src/face.css"), "utf8"),
     ]) {
       expect(stylesheet).not.toMatch(/#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|lab|lch)\(/i);
+    }
+  });
+
+  it("keeps the Setup Assistant's own compositions free of colour literals of any spelling (item 136)", () => {
+    // Its actions, fields and headlines wear tokens (DESIGN.md §5 "Setup Assistant", §8's inverted solid;
+    // docs/UI_SYSTEM.md, tokens → compositions): no hex or colour function, no black/white/grey utility at any alpha
+    // or state in its class strings, and no named black or white in its stylesheet.
+    const utility =
+      /(?:^|[\s"'`])(?:[a-z-]+:)*(?:bg|text|border|ring|ring-offset|shadow|outline|fill|stroke|divide|from|via|to|caret|accent|decoration)-(?:black|white|neutral|gray|slate|zinc|stone)\b/;
+    const offenders: string[] = [];
+    for (const file of onboardingFiles()) {
+      const text = readFileSync(join(ONBOARDING_ROOT, file), "utf8");
+      text.split("\n").forEach((line, index) => {
+        const named =
+          file.endsWith(".css") &&
+          /:\s*[^;]*\b(?:black|white)\b/i.test(line.replace(/url\([^)]*\)/g, "url()"));
+        if (COLOUR_LITERAL.test(line) || utility.test(line) || named) {
+          offenders.push(`${file}:${index + 1}`);
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("gives every placeholder in the Setup Assistant a token ink that reads at 4.5:1 on its field (item 136)", () => {
+    // A placeholder is a word that is read (DESIGN.md §2.4), and no walk can witness it: a `::placeholder` is no text
+    // node. So the witness is this row: every input of the chapter that shows one wears `.vf-wizard-field`, whose
+    // placeholder is a ramp token; the token is resolved as the glass re-projects it (`.vf-wizard-shell`), and its
+    // ratio over the field's face is computed from tokens.css: by day the opaque `--vf-chrome-solid`, by night the
+    // night `--vf-chrome-solid`, lighter than the field's real face there (white 6% over the smoke), so a bound.
+    const inputs = onboardingFiles()
+      .filter((file) => file.endsWith(".tsx"))
+      .flatMap((file) =>
+        [...readFileSync(join(ONBOARDING_ROOT, file), "utf8").matchAll(/<input\b[\s\S]*?\/>/g)]
+          .map((match) => ({ file, tag: match[0] }))
+          .filter(({ tag }) => /\splaceholder=/.test(tag)),
+      );
+    expect(inputs.length).toBeGreaterThan(0);
+    expect(
+      inputs.filter(({ tag }) => !/\bvf-wizard-field\b/.test(tag)).map(({ file }) => file),
+    ).toEqual([]);
+
+    const css = readFileSync(join(ONBOARDING_ROOT, "wizard-ui.css"), "utf8");
+    const ink = /\.vf-wizard-field::placeholder\s*\{[^}]*?\bcolor:\s*var\((--[\w-]+)\)/.exec(
+      css,
+    )?.[1];
+    expect(ink).toMatch(/^--vf-text-/);
+    const shell = /\.vf-wizard-shell\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    const projected = new RegExp(`${ink}:\\s*var\\((--[\\w-]+)\\)`).exec(shell)?.[1] ?? ink ?? "";
+    const tokens = readFileSync(join(PACKAGE_ROOT, "../design-kit/src/tokens.css"), "utf8");
+    for (const theme of [":root", ".dark"] as const) {
+      const ratio = contrastOver(
+        tokenValue(tokens, theme, projected),
+        tokenValue(tokens, theme, "--vf-chrome-solid"),
+      );
+      expect(ratio, `${theme} ${projected}`).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -596,6 +796,9 @@ describe("UI system ownership boundaries", () => {
     for (const model of ["reachLift(", "reachedIndex(", "textCardOf(", "termCardOf("])
       expect(fixture).toContain(model);
     expect(fixture).toMatch(/raised \? layoutRaised : layoutCards/u);
+    // SP-1d: the reach in Chat is the product's own, never its 20 copied
+    expect(fixture).toMatch(/reach=\{[^}]*CHAT_REACH/u);
+    expect(fixture).not.toMatch(/(?:lift|band): \d/u);
     expect(fixture).not.toMatch(/className="[^"]*vf-cards?(?:-|\b)/u);
     expect(fixture).not.toContain("<style");
     for (const door of [/\bgetHost\b/u, /\bcardsStore\b/u, /\buseCards\b/u, /<Cards\s/u])
@@ -771,6 +974,8 @@ describe("UI system ownership boundaries", () => {
       // DK-3 — when the desk can't draw: the stage's card and the status line's banner
       "DeskUnavailableView",
       "StatusLineView",
+      // CP-3 — an agent's notify on the line, said through the window's own notice, never a copy of its words
+      "needsNoticeStatus",
       "LiveSurfaceView",
       "PaneFramePreview",
       "PaneFrameChrome",
@@ -966,6 +1171,15 @@ describe("UI system ownership boundaries", () => {
       // SP-1b — Chat
       "chat/ChatView.tsx",
       "chat/ChatPanelView.tsx",
+      // SP-1d — the thread
+      "chat/SparkPane.tsx",
+      "chat/SparkPaneView.tsx",
+      "chat/ThreadItemsView.tsx",
+      // CP-3 — the needs-you card
+      "chat/NeedsCardView.tsx",
+      // SP-1d — Chat's composer
+      "chat/ChatComposer.tsx",
+      "chat/ChatComposerView.tsx",
       // SP-1c — the New spark sheet
       "chat/NewSparkSheet.tsx",
       "chat/NewSparkSheetView.tsx",
@@ -1008,7 +1222,9 @@ describe("UI system ownership boundaries", () => {
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",
       "chat/chat.css",
+      "chat/chat-composer.css",
       "chat/new-spark-sheet.css",
+      "chat/needs-card.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }

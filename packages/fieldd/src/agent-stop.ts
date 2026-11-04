@@ -6,6 +6,9 @@
 // be read is left to the person (ST-D3, "Still running · End run"): an unreadable status cannot tell a turn that will
 // not stop from one that already has, and ending a healthy agent's process is not what a Stop of its turn means.
 // This module is the rule alone, pure; agent-runtime holds the timers, delivers and ends.
+// Amended 2026-11-02 (James's Stop/Pause ruling): the pane's Stop uses terminal.terminate. This ladder remains for
+// legacy agent.interrupt callers. agent.pause passes keepOpen: one declared cancellation, then an unheard mark,
+// never a retry or termination; a second cancellation key can quit an agent whose observation is delayed.
 
 import type { AgentStopState } from "@vibefield/contracts";
 
@@ -37,10 +40,13 @@ export type StopStep = "resend" | "terminate" | "unheard" | "none";
 /** ST-D2/D3 — the one step a Stop takes at its bound. A `sent` Stop is sent once more. A `resent` one on a run that
  * reads `working` is ended through the floor's ladder; one whose status cannot be read is marked unheard and left to
  * the person. A `terminating` or `heard` Stop, or one already unheard, takes no step. */
-export function nextStopStep(stop: AgentStopState, facts: StopFacts): StopStep {
+export function nextStopStep(stop: AgentStopState, facts: StopFacts, keepOpen = false): StopStep {
   if (stop.stage === "heard" || stop.unheardAt !== undefined) return "none";
+  // Observation may lag cancellation. A second key could quit an already-idle CLI.
+  if (keepOpen) return "unheard";
   if (stop.stage === "sent") return "resend";
-  if (stop.stage === "resent") return facts.readable && facts.working ? "terminate" : "unheard";
+  if (stop.stage === "resent")
+    return !keepOpen && facts.readable && facts.working ? "terminate" : "unheard";
   return "none";
 }
 

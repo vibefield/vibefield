@@ -65,6 +65,9 @@ pub async fn accept(
     let secret = config.path_secret.clone();
     let callback = move |req: &Request, resp: Response| -> Result<Response, ErrorResponse> {
         let candidate = req.uri().path().strip_prefix("/f/").unwrap_or("");
+        // The sidecar joins GET / to its /f/<secret> target. Accept that
+        // single root suffix; extra separators and child paths remain invalid.
+        let candidate = candidate.strip_suffix('/').unwrap_or(candidate);
         if secret.is_empty() || !same(candidate.as_bytes(), secret.as_bytes()) {
             return Err(status(404));
         }
@@ -215,6 +218,49 @@ mod tests {
 
     const PEER_HELLO: &[u8] =
         br#"{"type":"FreewayPeerHello","protocol":{"major":1,"minor":0},"capabilities":[]}"#;
+
+    #[tokio::test]
+    async fn a_proxy_forwarded_root_reaches_an_admitted_peer() {
+        // Truffle's reverse proxy joins its /f/<secret> target with GET /.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move { serve_one(&listener).await });
+        let identity = [
+            ("tailscale-user-login", "person@example.com"),
+            ("tailscale-node-id", "nDESK"),
+        ];
+        let mut ws = dial(port, "/f/s3cret/", &identity).await.unwrap();
+        ws.send(Message::Binary(link_frame(PEER_HELLO).unwrap().into()))
+            .await
+            .unwrap();
+        let Some(Ok(Message::Binary(reply))) = ws.next().await else {
+            panic!("a welcome through the proxy root")
+        };
+        let welcome: Value = serde_json::from_slice(decode(&reply).unwrap().payload).unwrap();
+        assert_eq!(welcome["type"], "FreewayWelcome");
+        assert_eq!(server.await.unwrap().unwrap().device_id, "dev-desktop-b");
+    }
+
+    #[tokio::test]
+    async fn the_proxy_root_suffix_still_requires_the_whole_secret_and_identity() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            for _ in 0..5 {
+                assert!(serve_one(&listener).await.is_none());
+            }
+        });
+        let identity = [
+            ("tailscale-user-login", "person@example.com"),
+            ("tailscale-node-id", "nDESK"),
+        ];
+        for path in ["/f/guess/", "/f/s3cret//", "/f/s3cret/child", "/f/s3cre/"] {
+            assert_eq!(dial(port, path, &identity).await.err(), Some(404));
+        }
+        let login_only = [("tailscale-user-login", "person@example.com")];
+        assert_eq!(dial(port, "/f/s3cret/", &login_only).await.err(), Some(403));
+        server.await.unwrap();
+    }
 
     #[tokio::test]
     async fn the_door_hears_only_the_secret_path_and_only_with_an_identity() {

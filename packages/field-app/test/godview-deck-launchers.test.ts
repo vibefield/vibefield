@@ -2,19 +2,16 @@
 /**
  * THE LAUNCHER'S GATE (QL-D7 as revised 2026-09-28), as the deck computes it.
  *
- * A pane shows the empty pane launcher while its session was born in this view
- * (the deck's new-pane door, or the workspace's first shell — ghosttea's birth
- * receipt), has no agent facet, has not exited, has had no input and is not a peer's. Restored and attached sessions have no
- * receipt and never qualify. Pure: the deck supplies the facts.
+ * The terminal owner declares an interactive shell unused for its entire lifetime.
+ * No browser receipt grants that status; restored shells need the same native fact.
  */
 
 import { describe, expect, it } from "vitest";
 import {
-  bornInThisView,
   type FreshShellFacts,
   freshShellIds,
+  isUnusedShell,
   launcherCwds,
-  recordBornShell,
 } from "../src/godview/deck-launchers";
 
 function facts(
@@ -22,7 +19,7 @@ function facts(
 ): FreshShellFacts {
   const has = (key: keyof FreshShellFacts) => (id: string) => overrides[key]?.includes(id) === true;
   return {
-    bornHere: has("bornHere"),
+    unused: has("unused"),
     hasInput: has("hasInput"),
     hasAgent: has("hasAgent"),
     isRemote: has("isRemote"),
@@ -41,11 +38,11 @@ describe("the fresh shells", () => {
     { id: "peer", exited: false, activity: { kind: "idle" } },
   ];
 
-  it("admits only a shell born here with no agent, no input, no exit, not a peer's", () => {
+  it("admits only an owner-declared unused shell with no agent, no input, no exit, not a peer's", () => {
     const fresh = freshShellIds(
       sessions,
       facts({
-        bornHere: ["split", "first", "typed", "agent", "gone", "busy", "peer"],
+        unused: ["split", "first", "typed", "agent", "gone", "busy", "peer"],
         hasInput: ["typed"],
         hasAgent: ["agent"],
         isRemote: ["peer"],
@@ -54,30 +51,36 @@ describe("the fresh shells", () => {
     expect([...fresh].sort()).toEqual(["busy", "first", "split"]);
   });
 
-  it("never admits a restored or attached session, however empty", () => {
+  it("never admits a session with unknown input ownership", () => {
     expect(freshShellIds(sessions, facts({})).size).toBe(0);
   });
 
-  it("reads a split's birth from the deck's record and the first shell's from ghosttea's receipt", () => {
-    const runtime = { sessionCreatedHere: (id: string) => id === "first" };
-    recordBornShell(runtime, "split");
-    const bornHere = bornInThisView(runtime);
-    expect(["split", "first", "restored"].map(bornHere)).toEqual([true, true, false]);
-    // no runtime yet: nothing is born here, and nothing is recorded
-    recordBornShell(null, "early");
-    expect(["split", "first", "early"].map(bornInThisView(null))).toEqual([false, false, false]);
+  it("reads lifetime input from the terminal owner, surviving a runtime replacement", () => {
+    const session = { programKind: "interactive-shell", inputUsed: false };
+    const runtime = () => ({ sessionSummary: () => session, sessionHasInput: () => false });
+    expect(isUnusedShell(runtime() as never, "shell")).toBe(true);
+    session.inputUsed = true; // accepted input on any device or automation client
+    expect(isUnusedShell(runtime() as never, "shell")).toBe(false);
   });
 
-  it("forgets a split's birth when the runtime is replaced — the reaper and the input history go with it", () => {
-    const before = { sessionCreatedHere: () => false };
-    const after = { sessionCreatedHere: () => false };
-    recordBornShell(before, "split");
-    expect(bornInThisView(before)("split")).toBe(true);
-    // a pool retry: the new runtime never saw the split's input, and the new
-    // reaper holds no receipt for it, so the gate must not either
-    expect(bornInThisView(after)("split")).toBe(false);
-    recordBornShell(after, "split-2");
-    expect(bornInThisView(before)("split-2")).toBe(false);
+  it("fails closed for unknown ownership, applications, and local input awaiting metadata", () => {
+    for (const session of [undefined, {}, { programKind: "application", inputUsed: false }]) {
+      expect(
+        isUnusedShell(
+          { sessionSummary: () => session, sessionHasInput: () => false } as never,
+          "shell",
+        ),
+      ).toBe(false);
+    }
+    expect(
+      isUnusedShell(
+        {
+          sessionSummary: () => ({ programKind: "interactive-shell", inputUsed: false }),
+          sessionHasInput: () => true,
+        } as never,
+        "shell",
+      ),
+    ).toBe(false);
   });
 });
 

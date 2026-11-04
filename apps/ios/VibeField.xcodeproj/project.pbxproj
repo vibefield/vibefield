@@ -193,14 +193,14 @@
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = VibeField;
+				INFOPLIST_KEY_CFBundleDisplayName = "$(VIBEFIELD_APP_DISPLAY_NAME)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSCameraUsageDescription = "VibeField reads text through the camera so a line you can see becomes a line you can send, and reads the code on your Mac so this phone signs in to the same account.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "VibeField uses Face ID so only you can open it on this iPhone.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "VibeField reaches your desktops over your private tailnet.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used for dictation into the terminal draft, and nothing it hears is recorded or kept.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns dictation into the terminal draft, on this device when this device can.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -208,10 +208,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jamesyong.vibefield.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(VIBEFIELD_APP_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VIBEFIELD_APP_BUNDLE_IDENTIFIER = com.jamesyong.vibefield.ios;
+				VIBEFIELD_APP_DISPLAY_NAME = VibeField;
 			};
 			name = Debug;
 		};
@@ -226,14 +228,14 @@
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = VibeField;
+				INFOPLIST_KEY_CFBundleDisplayName = "$(VIBEFIELD_APP_DISPLAY_NAME)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSCameraUsageDescription = "VibeField reads text through the camera so a line you can see becomes a line you can send, and reads the code on your Mac so this phone signs in to the same account.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "VibeField uses Face ID so only you can open it on this iPhone.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "VibeField reaches your desktops over your private tailnet.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used for dictation into the terminal draft, and nothing it hears is recorded or kept.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns dictation into the terminal draft, on this device when this device can.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -241,10 +243,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jamesyong.vibefield.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(VIBEFIELD_APP_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VIBEFIELD_APP_BUNDLE_IDENTIFIER = com.jamesyong.vibefield.ios;
+				VIBEFIELD_APP_DISPLAY_NAME = VibeField;
 			};
 			name = Release;
 		};

@@ -13,8 +13,11 @@ import { requestView } from "./view-state";
 // waits for a deck that can place, and the deck REVEALS the run's floor
 // session by that rule, in the focused pane; a peer's run, which has no floor
 // session here, is selected through the find door Godview publishes as it
-// opens. From Chat (SP-1b) it is a spark's Show: its own session's pane, by
-// the same path from History's.
+// opens. From Chat (SP-1b) it was a spark's Show: its own session's pane, by
+// the same path from History's. *SP-1d (2026-10-31):* Show retired — the
+// spark's pane is mounted in Chat's thread (`chat/SparkPane.tsx`), so Chat
+// opened nothing here. *CP-3 (2026-10-31):* a needs-you card's Show, on an
+// agent's own ask, opens that agent's pane by the same path (`ChatView`).
 
 /** How long a pick from History waits for Godview's deck (or its monitor) —
  * mounted on Godview's first open — to be able to show the run (Resume's). */

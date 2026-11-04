@@ -1680,6 +1680,14 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "federate",
   }),
+
+  defineMethod({
+    surface: "product",
+    method: "terminal.release",
+    scope: "terminal.attach",
+    idempotent: true,
+    locality: "federate",
+  }),
   // DS-4 (DS-D5's note; TPv3 §6 amended 2026-09-30) — the TAKE as a product door,
   // for a host that cannot speak a cell's control leg (the phone's kit, DS-4b). A
   // routed runtime takes over its own control leg and never calls it. Declared so
@@ -2724,6 +2732,14 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "federate",
   }),
+
+  defineMethod({
+    surface: "product",
+    method: "agent.pause",
+    scope: "agent.control",
+    idempotent: false,
+    locality: "federate",
+  }),
   defineMethod({
     surface: "product",
     method: "agent.list",
@@ -2743,12 +2759,23 @@ export const METHODS: MethodDef[] = [
   // for every screen, while the fold's row, the record and the resume verb
   // stay. Any other caller's screen (a plugin's, under this same scope)
   // acknowledges nothing (`agent-monitor.ts` `openScreen`).
+  // PG-3b (PG-D6 (a): unread is the owner's mark and the phone is a screen;
+  // J2 (a), James 2026-11-01 03:55Z) — `federate`, routed by `device`: a
+  // phone's `remote` board is a screen as a window's `model` board is (by
+  // kind, `SCREEN_BOARDS`), and a phone reports another
+  // desktop's rows through its home, which carries the report only for a
+  // connection holding a `{remote, mesh}` board (else `no-screen`). The owner
+  // keys what it carries by `onBehalfOf` under the carrying peer connection,
+  // restrict-only (DS-L7 as amended 2026-11-01): a reader behind the home is
+  // a screen of its own, forgotten when its board at the home closes (the
+  // home sends an empty report) or the peer connection does. A carried report
+  // acknowledges nothing; acknowledgement stays this desktop's window's (Q06).
   defineMethod({
     surface: "product",
     method: "agent.reportShown",
     scope: "agent.observe",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   // LR (2026-10-15) — `agent.lastRun`: the picture this desktop's last run left
   // and the sessions in it that did not survive (agent-field.ts
@@ -2795,6 +2822,11 @@ export const METHODS: MethodDef[] = [
   // Corrected 2026-10-01 (DS wave 2 landing, SP-L4): a `tailnet` principal's
   // bare ask — the FULL fold at the 16 ms tick — is REFUSED (FORBIDDEN_SCOPE,
   // `refuseBoardAsk`); the phone asks `{projection: "field"}` and does.
+  // *Corrected 2026-11-02 (PG-3e):* the phone asks the remote cut through its
+  // home (the kit's `AgentSubscribeParams.phoneRemote`, `{projection:
+  // "remote", scope: "mesh"}`, no interval: the door floors a phone by kind);
+  // the kit has no `field` reader, and `field` retires one release of skew
+  // after the kit ships (PG-L1).
   // DS-3 (2026-09-30, DS-D4) — `stream`, not `local`: the mesh board's
   // upstreams are this very door on each self desktop, asked by a PEER daemon
   // (`peer-fieldd`), which the D36 wall refuses on a `local` method. What stays
@@ -2812,6 +2844,13 @@ export const METHODS: MethodDef[] = [
   // board's floors (250 / 100 ms, `AGENT_FIELD`); `scope: "mesh"` is the rows
   // protocol (`meshRowsOpen`/`meshRowsFrame`), each device's chain at the
   // floor of its projection.
+  // *Erratum 2026-11-01 (PG-3b; found by PG-3's verifiers): "refuses it to a
+  // PEER daemon and NOT to a phone, so a phone that asks `{}` is served it" is
+  // false. `refuseBoardAsk` (fieldd `agent-field.ts`, the `projection ===
+  // "full"` arm) refuses the bare ask to `tailnet` as to `peer-fieldd`
+  // (FORBIDDEN_SCOPE, "a phone reads remote (SP-L4)"), as the 2026-10-01
+  // correction above says; SP-L4 holds at the door. A phone reads `remote`
+  // (PG-2), or `field` until PG-3 moves it.*
   // PG-2 (PG-L1, PG-D8 (a), 2026-10-31) — `desk` retired into `remote`, the
   // model's cut for every other screen. The floor declared is the least any
   // caller is served: a peer daemon's (`REMOTE_MIN_INTERVAL_MS`, a peer
@@ -2888,5 +2927,42 @@ export const METHODS: MethodDef[] = [
     scope: "agents.manage",
     idempotent: true,
     locality: "local",
+  }),
+  // CP-3 (`draft/compose-plane/cp3-the-person.md`, CP3-D6 A) — the needs-you queue's doors for the window, beside the
+  // sparks': `agents.manage` and `local`, because answering an item may start an agent or send words on the person's
+  // behalf, an act of the person at this device. `approval.respond` stays reserved for AR-6's answers to an agent's own
+  // asks. Not reachable from the tailnet, so each subscription is a bare `true`: the phone reaches none of them until
+  // PG rules its scope.
+  defineMethod({
+    surface: "product",
+    method: "needs.list",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "needs.subscribe",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  // Declarative: answered once, an item is answered for every window; the same answer again answers it as it is.
+  defineMethod({
+    surface: "product",
+    method: "needs.answer",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  // notify's carrier (CP3-D5 A): an event, never kept, heard by every window's status line and by main's OS notice.
+  defineMethod({
+    surface: "product",
+    method: "needs.notices.subscribe",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
   }),
 ];

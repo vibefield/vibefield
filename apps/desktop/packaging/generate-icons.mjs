@@ -8,15 +8,15 @@ import { tmpdir } from "node:os";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { crc32, deflateSync, inflateSync } from "node:zlib";
+import { inflateSync } from "node:zlib";
 import { Resvg } from "@resvg/resvg-js";
+import { COLLECTION_ASSETS, loadIconCollection } from "./icon-collection.mjs";
 
 const execFileAsync = promisify(execFile);
 const packagingRoot = dirname(fileURLToPath(import.meta.url));
 const iconRoot = join(packagingRoot, "icons");
 const trayRoot = join(packagingRoot, "tray");
-// The phone's icon is drawn from the same Icon Composer layers as the desktop's, so the two
-// never carry different marks (until 2026-10-09 it was a hand-made copy of the desktop master).
+// The phone and conventional desktop assets are the exact reviewed studio exports.
 const iosIconRoot = resolve(
   packagingRoot,
   "..",
@@ -37,29 +37,16 @@ const appleComposerDarkRenditionPath = join(iconRoot, "app-macos-dark-1024.png")
 const APPLE_ICON_TOOLCHAIN_BUILD = "17F113";
 const appleFallbackIconPath = join(iconRoot, "app.icns");
 
-const APP_ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 256];
-const APP_LINUX_SIZES = [16, 24, 32, 48, 64, 96, 128, 256, 512];
-const APP_RENDER_SIZES = [...new Set([...APP_ICO_SIZES, ...APP_LINUX_SIZES, 1024])].sort(
-  (a, b) => a - b,
-);
-// Drawn straight from the vector, the mark's band thins under a pixel at the small platform
-// sizes (the twist's hairline first), so they draw it heavier: one output pixel (half a pixel
-// each side, the optical weight the previous master's small sizes carried) at FULL and under,
-// easing by log size to none at NONE, so neighbouring sizes never jump in weight.
-const OPTICAL_WEIGHT_FULL_SIZE = 32;
-const OPTICAL_WEIGHT_NONE_SIZE = 128;
+const APP_ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];
 // The mark layers are the lab's vectors on a 1024 canvas (see README.md).
 const MARK_CANVAS = 1024;
-// The conventional platforms' tile: the lab's icon mask, a superellipse (n = 5) at full bleed.
-const TILE_EXPONENT = 5;
 const IOS_ICON_SIZE = 1024;
 const IOS_ICONS = [
-  { file: "AppIcon.png", appearance: null, ground: "#FFFFFF", mark: "light", grayscale: false },
+  { file: "AppIcon.png", appearance: null, ground: "#FFFFFF", grayscale: false },
   {
     file: "AppIcon-Dark.png",
     appearance: "dark",
     ground: "#000000",
-    mark: "dark",
     grayscale: false,
   },
   // Tinted: the system tints a grayscale icon, so it gets the dark art with its lights in grey.
@@ -67,42 +54,11 @@ const IOS_ICONS = [
     file: "AppIcon-Tinted.png",
     appearance: "tinted",
     ground: "#000000",
-    mark: "dark",
     grayscale: true,
   },
 ];
-const TRAY_ICO_SIZES = [16, 20, 24, 32];
-const TRAY_STATES = [
-  {
-    kind: "base",
-    mac1x: "fieldTemplate.png",
-    mac2x: "fieldTemplate@2x.png",
-    windows: "field-ready.ico",
-    linux: "field-linux.png",
-  },
-  {
-    kind: "attention",
-    mac1x: "fieldAttentionTemplate.png",
-    mac2x: "fieldAttentionTemplate@2x.png",
-    windows: "field-attention.ico",
-    linux: "field-linux-attention.png",
-  },
-  // AU-4 (AU-D12, AU-G14): an install waits on the person — the mark with one plain dot, no bang
-  {
-    kind: "update",
-    mac1x: "fieldUpdateTemplate.png",
-    mac2x: "fieldUpdateTemplate@2x.png",
-    windows: "field-update.ico",
-    linux: "field-linux-update.png",
-  },
-  {
-    kind: "offline",
-    mac1x: "fieldOfflineTemplate.png",
-    mac2x: "fieldOfflineTemplate@2x.png",
-    windows: "field-offline.ico",
-    linux: "field-linux-offline.png",
-  },
-];
+const TRAY_ICO_SIZES = [16, 20, 24, 32, 40, 48, 64];
+const TRAY_STATES = ["ready", "attention", "update", "offline"];
 const APPLE_ICNS_CHUNKS = [
   ["ic13", 256],
   ["ic11", 32],
@@ -111,7 +67,6 @@ const APPLE_ICNS_CHUNKS = [
 ];
 const STATIC_SOURCE_FILES = new Set(["README.md", "app.icon/icon.json", "tray-master.svg"]);
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const TILE_PATH = superellipsePath(MARK_CANVAS / 2, TILE_EXPONENT, 720);
 // The band of a mark layer: its far and near halves, each filled and outlined in the ink (the
 // outline is what leaves the twist's hairline); the lights are stroked paths without a fill.
 const BAND_PATTERN =
@@ -123,19 +78,30 @@ if (args.size > 0) {
   throw new Error(`unknown icon generator option(s): ${[...args].join(", ")}`);
 }
 
+const collection = await loadIconCollection(join(packagingRoot, "icon-source"));
+// Materialize sources before native compilation; check mode remains read-only.
+if (!checkOnly) {
+  for (const asset of COLLECTION_ASSETS.filter((entry) =>
+    ["apple-source", "ios-metadata", "tray-svg"].includes(entry.role),
+  )) {
+    const path = resolve(packagingRoot, asset.target);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, collection.files.get(asset.source));
+  }
+}
+
 const [trayMaster, builderConfig, appleIconDefinition, iosIconContents] = await Promise.all([
   readFile(trayMasterPath, "utf8"),
   readFile(builderConfigPath, "utf8"),
   readFile(join(appleIconPath, "icon.json"), "utf8"),
   readFile(join(iosIconRoot, "Contents.json"), "utf8"),
 ]);
-assertSquareMaster(trayMaster, "tray");
+assertLayerSvg(trayMaster, "tray master");
 assertBuilderIconConfig(builderConfig);
 const appleIconSource = await validateAppleIconSource(appleIconDefinition);
 validateIosIconContents(iosIconContents);
-const trayPath = extractSinglePath(trayMaster);
 const appleAssets = await compileAppleIconAssets();
-const generated = generateAssets({ marks: appleIconSource.marks, trayPath, ...appleAssets });
+const generated = generateAssets(appleAssets);
 
 if (!checkOnly) {
   for (const [path, asset] of generated.outputs) {
@@ -150,104 +116,73 @@ await validateGeneratedTree({
   sourceFiles: new Set([...STATIC_SOURCE_FILES, ...appleIconSource.sourceFiles]),
 });
 console.log(
-  `icons ${checkOnly ? "current" : "generated"}: ${generated.outputs.size} files, app ${APP_RENDER_SIZES.length} conventional raster sizes, macOS light + dark renditions and the official ICNS fallback, iOS light/dark/tinted, tray ${TRAY_STATES.length} states`,
+  `icons ${checkOnly ? "current" : "generated"}: ${generated.outputs.size} files from the reviewed studio collection, native macOS light/dark + ICNS, iOS light/dark/tinted, tray ${TRAY_STATES.length} states at 18pt/2x and light/dark on Windows/Linux`,
 );
 
 function generateAssets({
-  marks,
-  trayPath,
   appleComposerRendition,
   appleComposerDarkRendition,
   appleFallbackIcns,
+  appleMetadata,
 }) {
   const outputs = new Map();
-  // iOS icons are compared by their decoded pixels, not their bytes (see encodeRgbPng).
   const pixelOutputs = new Map();
-  const pngs = new Map();
-  const appImages = new Map();
-  const { developmentDockIcon } = validateAppleFallbackIcns(appleFallbackIcns);
-
-  for (const size of APP_RENDER_SIZES) {
-    const image = render(conventionalSvg(marks.light, size), size);
-    assertApplicationPixels(image, size);
-    appImages.set(size, image);
-  }
-
-  addPng("icons/app-1024.png", appImages.get(1024));
-  add("icons/app-macos-1024.png", appleComposerRendition);
-  add("icons/app-macos-dark-1024.png", appleComposerDarkRendition);
-  add("icons/app-macos-dock.png", developmentDockIcon);
-  for (const size of APP_LINUX_SIZES) {
-    addPng(`icons/linux/${size}x${size}.png`, appImages.get(size));
-  }
-
-  const appIco = encodeIco(APP_ICO_SIZES.map((size) => appImages.get(size)));
-  add("icons/app.ico", appIco);
-  add("icons/app.icns", appleFallbackIcns);
-  // Keep both conventional ICNS paths visually aligned with the Icon Composer
-  // source for consumers that cannot read Assets.car or app.icon directly.
-  add("icon.icns", appleFallbackIcns);
-
-  for (const icon of IOS_ICONS) {
-    const image = render(iosSvg(marks[icon.mark], icon.ground, icon.grayscale), IOS_ICON_SIZE);
-    assertIosPixels(image, icon);
-    const path = join(iosIconRoot, icon.file);
-    if (outputs.has(path)) throw new Error(`duplicate generated asset: ${icon.file}`);
-    outputs.set(path, encodeRgbPng(image, `iOS ${icon.file}`));
-    pixelOutputs.set(path, rgbPixels(image));
-  }
-
-  const statePngs = new Map();
-  for (const state of TRAY_STATES) {
-    const templateSvg = traySvg(trayPath, state.kind, "template");
-    const mac1x = render(templateSvg, 16);
-    const mac2x = render(templateSvg, 32);
-    assertTemplatePixels(mac1x, `${state.kind} 1x`);
-    assertTemplatePixels(mac2x, `${state.kind} 2x`);
-    addPng(`tray/${state.mac1x}`, mac1x);
-    addPng(`tray/${state.mac2x}`, mac2x);
-
-    const dualSvg = traySvg(trayPath, state.kind, "dual-tone");
-    const windows = TRAY_ICO_SIZES.map((size) => render(dualSvg, size));
-    for (const image of windows) assertDualTonePixels(image, `${state.kind} ${image.width}px`);
-    add(`tray/${state.windows}`, encodeIco(windows));
-    const linux = render(dualSvg, 32);
-    assertDualTonePixels(linux, `${state.kind} Linux`);
-    addPng(`tray/${state.linux}`, linux);
-    statePngs.set(state.kind, { mac1x, mac2x, linux });
-  }
-
-  for (const family of ["mac1x", "mac2x", "linux"]) {
-    const hashes = new Set(
-      TRAY_STATES.map((state) => digest(statePngs.get(state.kind)[family].png)),
-    );
-    if (hashes.size !== TRAY_STATES.length) {
-      throw new Error(`tray ${family} state variants are not visually distinct`);
+  const stateFamilies = new Map();
+  for (const asset of COLLECTION_ASSETS) {
+    const bytes = collection.files.get(asset.source);
+    const path = resolve(packagingRoot, asset.target);
+    outputs.set(path, bytes);
+    if (["app-png", "template-png", "tray-png"].includes(asset.role)) {
+      validatePng(bytes, asset.size, asset.size, asset.source);
+      const image = decodePng(bytes, asset.size);
+      if (asset.role === "app-png") assertApplicationPixels(image, asset.size);
+      else if (asset.role === "template-png") assertTemplatePixels(image, asset.source);
+      else assertDualTonePixels(image, asset.source);
+    } else if (asset.role === "ios-png") {
+      const decoded = readRgbPng(bytes, asset.source);
+      if (decoded.width !== IOS_ICON_SIZE || decoded.height !== IOS_ICON_SIZE) {
+        throw new Error(`${asset.source} must be 1024x1024`);
+      }
+      assertIosPixels(
+        decodePng(bytes, IOS_ICON_SIZE),
+        IOS_ICONS.find((icon) => icon.file === asset.file),
+      );
+      pixelOutputs.set(path, decoded.rgb);
+    } else if (asset.role === "app-ico" || asset.role === "tray-ico") {
+      validateIco(bytes, asset.role === "app-ico" ? APP_ICO_SIZES : TRAY_ICO_SIZES, asset.source);
+      // Decode every actual ICO representation; a valid directory alone is not sufficient.
+      for (let index = 0; index < bytes.readUInt16LE(4); index++) {
+        const entry = 6 + index * 16;
+        const size = bytes[entry] || 256;
+        const start = bytes.readUInt32LE(entry + 12);
+        const image = decodePng(bytes.subarray(start, start + bytes.readUInt32LE(entry + 8)), size);
+        if (asset.role === "app-ico") assertApplicationPixels(image, size);
+        else assertDualTonePixels(image, `${asset.source} ${size}px`);
+      }
+    } else if (asset.role === "app-svg") {
+      assertLayerSvg(bytes.toString("utf8"), asset.source);
+    }
+    if (asset.state) {
+      const family = `${asset.role}:${asset.scale ?? asset.appearance}`;
+      if (!stateFamilies.has(family)) stateFamilies.set(family, new Set());
+      stateFamilies.get(family).add(digest(bytes));
     }
   }
-
-  validateIco(appIco, APP_ICO_SIZES, "application ICO");
-  for (const state of TRAY_STATES) {
-    validateIco(
-      outputs.get(join(packagingRoot, "tray", state.windows)),
-      TRAY_ICO_SIZES,
-      `${state.kind} tray ICO`,
-    );
+  for (const [family, hashes] of stateFamilies) {
+    if (hashes.size !== TRAY_STATES.length)
+      throw new Error(`Tray ${family} states must be distinct`);
   }
-
-  return { outputs, pixelOutputs, pngs };
-
-  function add(relativePath, buffer) {
-    const path = join(packagingRoot, relativePath);
-    if (outputs.has(path)) throw new Error(`duplicate generated asset: ${relativePath}`);
-    outputs.set(path, buffer);
-  }
-
-  function addPng(relativePath, image) {
-    validatePng(image.png, image.width, image.height, relativePath);
-    add(relativePath, image.png);
-    pngs.set(join(packagingRoot, relativePath), image);
-  }
+  const { developmentDockIcon } = validateAppleFallbackIcns(appleFallbackIcns);
+  for (const [file, bytes] of [
+    ["icons/app-macos-1024.png", appleComposerRendition],
+    ["icons/app-macos-dark-1024.png", appleComposerDarkRendition],
+    ["icons/app-macos-dock.png", developmentDockIcon],
+    ["icons/app.icns", appleFallbackIcns],
+    ["icon.icns", appleFallbackIcns],
+    ["icons/apple-renditions.json", appleMetadata],
+  ])
+    outputs.set(join(packagingRoot, file), bytes);
+  return { outputs, pixelOutputs };
 }
 
 async function compileAppleIconAssets() {
@@ -261,13 +196,19 @@ async function compileAppleIconAssets() {
   if (toolchain === null) {
     let committed;
     try {
-      const [appleComposerRendition, appleComposerDarkRendition, appleFallbackIcns] =
+      const [appleComposerRendition, appleComposerDarkRendition, appleFallbackIcns, appleMetadata] =
         await Promise.all([
           readFile(appleComposerRenditionPath),
           readFile(appleComposerDarkRenditionPath),
           readFile(appleFallbackIconPath),
+          readFile(join(iconRoot, "apple-renditions.json")),
         ]);
-      committed = { appleComposerRendition, appleComposerDarkRendition, appleFallbackIcns };
+      committed = {
+        appleComposerRendition,
+        appleComposerDarkRendition,
+        appleFallbackIcns,
+        appleMetadata,
+      };
     } catch (error) {
       if (error?.code === "ENOENT") {
         throw new Error(
@@ -275,6 +216,23 @@ async function compileAppleIconAssets() {
         );
       }
       throw error;
+    }
+    const metadata = JSON.parse(committed.appleMetadata.toString("utf8"));
+    if (metadata.version !== 1 || metadata.sourceSha256 !== collection.appleSourceSha256) {
+      throw new Error(
+        "macOS renditions belong to a different icon source; run icons:generate with the pinned Xcode toolchain",
+      );
+    }
+    for (const key of [
+      "appleComposerRendition",
+      "appleComposerDarkRendition",
+      "appleFallbackIcns",
+    ]) {
+      if (metadata.sha256?.[key] !== digest(committed[key])) {
+        throw new Error(
+          `Committed native icon changed: ${key}; regenerate with the pinned Xcode toolchain`,
+        );
+      }
     }
     validateAppleComposerRendition(committed.appleComposerRendition, "light");
     validateAppleComposerRendition(committed.appleComposerDarkRendition, "dark");
@@ -353,7 +311,22 @@ async function compileAppleIconAssets() {
     validateAppleComposerRendition(appleComposerRendition, "light");
     validateAppleComposerRendition(appleComposerDarkRendition, "dark");
     validateAppleFallbackIcns(appleFallbackIcns);
-    return { appleComposerRendition, appleComposerDarkRendition, appleFallbackIcns };
+    const assets = { appleComposerRendition, appleComposerDarkRendition, appleFallbackIcns };
+    const appleMetadata = Buffer.from(
+      `${JSON.stringify(
+        {
+          version: 1,
+          sourceSha256: collection.appleSourceSha256,
+          xcodeBuild: APPLE_ICON_TOOLCHAIN_BUILD,
+          sha256: Object.fromEntries(
+            Object.entries(assets).map(([key, bytes]) => [key, digest(bytes)]),
+          ),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return { ...assets, appleMetadata };
   } catch (error) {
     const detail = [error?.message, error?.stderr, error?.stdout]
       .filter((value) => typeof value === "string" && value.trim().length > 0)
@@ -458,151 +431,6 @@ function decodePng(png, size) {
   );
 }
 
-/** Windows and Linux take the default (light) appearance on the lab's tile. */
-function conventionalSvg(mark, size) {
-  const ease =
-    Math.log2(OPTICAL_WEIGHT_NONE_SIZE / size) /
-    Math.log2(OPTICAL_WEIGHT_NONE_SIZE / OPTICAL_WEIGHT_FULL_SIZE);
-  const weight = (Math.min(1, Math.max(0, ease)) * MARK_CANVAS) / size;
-  return `<svg width="${MARK_CANVAS}" height="${MARK_CANVAS}" viewBox="0 0 ${MARK_CANVAS} ${MARK_CANVAS}" xmlns="http://www.w3.org/2000/svg"><path d="${TILE_PATH}" fill="#FFFFFF"/>${markContent(mark, weight)}</svg>`;
-}
-
-/** iOS takes a full-bleed opaque square (the system masks it), one per appearance. */
-function iosSvg(mark, ground, grayscale) {
-  const open = grayscale
-    ? '<defs><filter id="grey" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="0"/></filter></defs><g filter="url(#grey)">'
-    : "<g>";
-  return `<svg width="${MARK_CANVAS}" height="${MARK_CANVAS}" viewBox="0 0 ${MARK_CANVAS} ${MARK_CANVAS}" xmlns="http://www.w3.org/2000/svg">${open}<rect width="${MARK_CANVAS}" height="${MARK_CANVAS}" fill="${ground}"/>${markContent(mark, 0)}</g></svg>`;
-}
-
-/** A mark layer's drawing without its root element; `weight` (canvas px) widens the band. */
-function markContent(svg, weight) {
-  const inner = svg.slice(svg.indexOf(">", svg.search(/<svg\b/i)) + 1, svg.lastIndexOf("</svg>"));
-  if (weight <= 0) return inner;
-  return inner.replace(BAND_PATTERN, (_, d, ink, width) => {
-    const widened = (Number(width) + weight).toFixed(2);
-    return `<path d="${d}" fill="${ink}" stroke="${ink}" stroke-width="${widened}"`;
-  });
-}
-
-function superellipsePath(radius, exponent, steps) {
-  const points = [];
-  for (let index = 0; index < steps; index += 1) {
-    const angle = (2 * Math.PI * index) / steps;
-    const c = Math.cos(angle);
-    const s = Math.sin(angle);
-    const x = radius + radius * Math.sign(c) * Math.abs(c) ** (2 / exponent);
-    const y = radius + radius * Math.sign(s) * Math.abs(s) ** (2 / exponent);
-    points.push(`${x.toFixed(2)} ${y.toFixed(2)}`);
-  }
-  return `M${points.join("L")}Z`;
-}
-
-function traySvg(path, state, style) {
-  const template = style === "template";
-  const base = template
-    ? `<path d="${path}" fill="#000000" stroke="#000000" stroke-width="24" stroke-linejoin="round"/>`
-    : `<path d="${path}" fill="#ffffff" stroke="#ffffff" stroke-width="64" stroke-linejoin="round"/><path d="${path}" fill="#202124" stroke="#202124" stroke-width="24" stroke-linejoin="round"/>`;
-  // The attention and offline badges are a disk merged into the band, their glyph cut out of it. The update's is a
-  // plain dot (AU-4, AU-D12): merged, it would read as a bump on the mark, so it stands apart instead — a ring is cut
-  // from the mark alone around the badge's centre, and the dot is drawn whole inside it, after the mask.
-  const badge =
-    state === "base" || state === "update"
-      ? ""
-      : template
-        ? '<circle cx="374" cy="318" r="66" fill="#000000" stroke="#000000" stroke-width="24"/>'
-        : '<circle cx="374" cy="318" r="66" fill="#ffffff" stroke="#ffffff" stroke-width="64"/><circle cx="374" cy="318" r="66" fill="#202124" stroke="#202124" stroke-width="24"/>';
-  const cutout =
-    state === "attention"
-      ? '<rect x="365" y="275" width="18" height="51" rx="9" fill="black"/><circle cx="374" cy="346" r="11" fill="black"/>'
-      : state === "offline"
-        ? '<rect x="341" y="309" width="66" height="18" rx="9" fill="black"/>'
-        : state === "update"
-          ? '<circle cx="374" cy="318" r="96" fill="black"/>'
-          : "";
-  const dot =
-    state !== "update"
-      ? ""
-      : template
-        ? '<circle cx="374" cy="318" r="58" fill="#000000"/>'
-        : '<circle cx="374" cy="318" r="78" fill="#ffffff"/><circle cx="374" cy="318" r="58" fill="#202124"/>';
-  const mask =
-    state === "base"
-      ? ""
-      : `<mask id="status-cutout" maskUnits="userSpaceOnUse" x="0" y="0" width="480" height="480"><rect width="480" height="480" fill="white"/>${cutout}</mask>`;
-  const maskAttribute = state === "base" ? "" : ' mask="url(#status-cutout)"';
-  return `<svg width="480" height="480" viewBox="0 0 480 480" xmlns="http://www.w3.org/2000/svg"><defs>${mask}</defs><g${maskAttribute}>${base}${badge}</g>${dot}</svg>`;
-}
-
-function encodeIco(images) {
-  const headerSize = 6 + images.length * 16;
-  const header = Buffer.alloc(headerSize);
-  header.writeUInt16LE(0, 0);
-  header.writeUInt16LE(1, 2);
-  header.writeUInt16LE(images.length, 4);
-  let offset = headerSize;
-  for (const [index, image] of images.entries()) {
-    const entry = 6 + index * 16;
-    header.writeUInt8(image.width === 256 ? 0 : image.width, entry);
-    header.writeUInt8(image.height === 256 ? 0 : image.height, entry + 1);
-    header.writeUInt8(0, entry + 2);
-    header.writeUInt8(0, entry + 3);
-    header.writeUInt16LE(1, entry + 4);
-    header.writeUInt16LE(32, entry + 6);
-    header.writeUInt32LE(image.png.length, entry + 8);
-    header.writeUInt32LE(offset, entry + 12);
-    offset += image.png.length;
-  }
-  return Buffer.concat([header, ...images.map((image) => image.png)]);
-}
-
-/** App Store icons may carry no alpha channel (ITMS-90717), and resvg writes RGBA, so iOS icons
- * are re-encoded here as 8-bit RGB. zlib's compressed bytes are not promised across Node
- * releases, so these files are checked by their decoded pixels (readRgbPng), never their bytes. */
-function encodeRgbPng(image, label) {
-  const rgb = rgbPixels(image, label);
-  const stride = image.width * 3;
-  const scanlines = Buffer.alloc((stride + 1) * image.height);
-  for (let y = 0; y < image.height; y += 1) {
-    scanlines[y * (stride + 1)] = 0;
-    rgb.copy(scanlines, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
-  }
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(image.width, 0);
-  header.writeUInt32BE(image.height, 4);
-  header.writeUInt8(8, 8);
-  header.writeUInt8(2, 9);
-  return Buffer.concat([
-    PNG_SIGNATURE,
-    pngChunk("IHDR", header),
-    pngChunk("IDAT", deflateSync(scanlines, { level: 9 })),
-    pngChunk("IEND", Buffer.alloc(0)),
-  ]);
-}
-
-function pngChunk(type, data) {
-  const head = Buffer.alloc(8);
-  head.writeUInt32BE(data.length, 0);
-  head.write(type, 4, "ascii");
-  const tail = Buffer.alloc(4);
-  tail.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
-  return Buffer.concat([head, data, tail]);
-}
-
-function rgbPixels(image, label = "iOS icon") {
-  const rgb = Buffer.alloc(image.width * image.height * 3);
-  for (let index = 0; index < image.width * image.height; index += 1) {
-    if (image.pixels[index * 4 + 3] !== 255) {
-      throw new Error(
-        `${label} must be opaque; pixel ${index} has alpha ${image.pixels[index * 4 + 3]}`,
-      );
-    }
-    image.pixels.copy(rgb, index * 3, index * 4, index * 4 + 3);
-  }
-  return rgb;
-}
-
-/** The pixels of an 8-bit RGB PNG (any row filter), for comparing what encodeRgbPng wrote. */
 function readRgbPng(buffer, label) {
   if (!buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
     throw new Error(`${label} is not a PNG`);
@@ -738,15 +566,6 @@ function validateAppleFallbackIcns(buffer) {
     throw new Error(`${label} has no Apple-padded ic13 representation for development`);
   }
   return { developmentDockIcon };
-}
-
-function assertSquareMaster(svg, label) {
-  if (!/viewBox="0 0 480 480"/.test(svg)) {
-    throw new Error(`${label} master must retain the reviewed 480x480 viewBox`);
-  }
-  if (/<(?:text|image|script|foreignObject)\b/i.test(svg)) {
-    throw new Error(`${label} master may contain vector geometry only`);
-  }
 }
 
 function assertBuilderIconConfig(config) {
@@ -1133,25 +952,16 @@ function countPixels(image) {
   return counts;
 }
 
-function extractSinglePath(svg) {
-  const paths = extractPaths(svg);
-  if (paths.length !== 1 || paths[0].length === 0) {
-    throw new Error(`tray master must contain exactly one non-empty path; found ${paths.length}`);
-  }
-  return paths[0];
-}
-
-function extractPaths(svg) {
-  return [...svg.matchAll(/<path\s+d="([^"]+)"[^>]*\/>/g)].map((match) => match[1]);
-}
-
 function assertApplicationPixels(image, size) {
   const label = `application icon ${size}px`;
   if ([0, size - 1].some((x) => [0, size - 1].some((y) => image.pixels[(y * size + x) * 4 + 3]))) {
     throw new Error(`${label} must keep the tile's transparent corners`);
   }
   const counts = countPixels(image);
-  if (counts.white < counts.visible * 0.5) throw new Error(`${label} lost its white ground`);
+  // The reviewed v2 glow occupies more of the 16px tile; its unmodified export
+  // keeps 47% pure white. Larger representations retain the majority-white check.
+  if (counts.white < counts.visible * (size <= 16 ? 0.4 : 0.5))
+    throw new Error(`${label} lost its white ground`);
   // At 16px the band is antialiased rather than carrying a fully black centre pixel; it must
   // still read clearly dark against the white ground.
   if (counts.darkest >= (size > 16 ? 60 : 160)) throw new Error(`${label} lost its black mark`);

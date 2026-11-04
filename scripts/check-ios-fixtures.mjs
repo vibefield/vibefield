@@ -6,6 +6,7 @@
 // workspace. A copy is only evidence while it is identical — and this lane
 // shipped a "byte for byte" claim that was already false by one line of
 // formatting, with nothing to notice. This is the thing that notices.
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
@@ -44,13 +45,48 @@ function jsonFiles(dir) {
 // so the copy half now has the pin half's posture below.
 const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.lane.json"]);
 
+// PG-4s — the phone's Godview views (PG-5…8): the witness each view suite replays, the toolkit's golden, and one
+// golden per view, which its lane names here (ONE line; both uses below derive from it). FieldHomeTests reads them.
+const PHONE_GODVIEW = join(root, "packages/field-app/test/fixtures/phone-godview");
+// biome-ignore format: one golden per line, so each view lane's line merges keep-both
+const phoneViewGoldens = [
+  "phone-list.golden.json",
+  "phone-rain.golden.json",
+  "phone-timeline.golden.json",
+  "phone-spend.golden.json",
+];
 // Goldens whose origin is another package than the contracts — a design
 // decision both apps compute, not a wire shape — compared byte for byte all
 // the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
-// kit's own test reads too.
+// kit's own test reads too. PG-3a: the phone's parity goldens, the home's window over the witness
+// remote goldens (field-app computes them, `phone:goldens`), which the kit's fold and body model are
+// held to. PG-3c mirrors phone-fold (Tests/FieldMeshTests), and PG-3d again in
+// Tests/FieldProductTests, where its parity suite runs; PG-3e mirrors phone-body in
+// Tests/FieldMeshTests, where the mapping from a drawn row to its bubble runs. (Corrected
+// 2026-11-02, PG-3e: this said phone-body would mirror "with its body model" in FieldAgentsTests,
+// which reads no FieldProduct and so could never run the golden.)
 const OTHER_ORIGINS = new Map([
   ["project-ink.golden.json", join(root, "packages/design-kit/fixtures/project-ink.golden.json")],
+  [
+    "phone-fold.golden.json",
+    join(root, "packages/field-app/test/fixtures/phone-godview/phone-fold.golden.json"),
+  ],
+  [
+    "phone-body.golden.json",
+    join(root, "packages/field-app/test/fixtures/phone-godview/phone-body.golden.json"),
+  ],
+  // PG-4s — the toolkit's golden, and each view's from the one list above
+  ["phone-toolkit.golden.json", join(PHONE_GODVIEW, "phone-toolkit.golden.json")],
+  // PG-4t — the views' faces, which the Stories row draws
+  ["phone-marks.golden.json", join(PHONE_GODVIEW, "phone-marks.golden.json")],
+  ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
 ]);
+// Goldens VENDORED from a sibling project outside this workspace, so there is no origin here to
+// compare with: each is pinned by its sha256 beside the files it tests, and the vendoring script's
+// own `--check` holds them all to their pins below (needing no sibling checkout). The phone's
+// splash (DESIGN.md §8 "The phone's splash"): runtime.js's goldens for the Swift runtime, vendored
+// with the shaders and the runtime from vibefield-splash's Metal bake.
+const VENDORED = new Map([["splash-clock.json", "apps/ios/scripts/vendor-splash.mjs"]]);
 
 const problems = [];
 let checked = 0;
@@ -106,6 +142,7 @@ const launchFixtures = [
   "agents-profile-sets.valid.json",
   "agent-field-snapshot.native-session.json",
   "agent-field-snapshot.stop.json",
+  "agent-field-snapshot.turned.json",
 ];
 // History's ledger reads them: the fixture door serves these, its tests read them.
 const historyFixtures = [
@@ -143,6 +180,25 @@ const tpFixtures = [
   "tp-cell-activation-status.exited.json",
   "tp-cell-activation-status.removed.json",
 ];
+// PG-3c — the remote cut the phone will read (`AgentRemoteRow`, its mesh open and frames) and
+// PG-3a's witness goldens, which the kit's fold (3d) and the home's window are both held to.
+// PG-3e: 3b's routed report joins, beside the kit's encoder (FieldProductTests). Only `.routed`:
+// `.forwarded` is fieldd to fieldd and is never the phone's. (Corrected 2026-11-02, PG-3e: this
+// said "3b's agent-report-shown.* join at 3e".)
+const remoteWitness = [
+  "agent-remote-mesh-open.witness.json",
+  "agent-remote-mesh-frames.witness.json",
+  "agent-remote-mesh-open.resync.json",
+];
+const remoteFixtures = [
+  "agent-remote-row.valid.json",
+  "agent-remote-row.terminal.json",
+  "agent-remote-mesh-open.valid.json",
+  "agent-remote-mesh-frames.valid.json",
+  "monitor-agent-row.valid.json",
+  "agent-report-shown.routed.json",
+  ...remoteWitness,
+];
 const requiredMirrors = [
   ["freeway", freewayFixtures, ["Tests/FieldFreewayTests"]],
   ["tp", tpFixtures, ["Tests/FieldRoutedTerminalTests"]],
@@ -161,6 +217,31 @@ const requiredMirrors = [
   ["face", ["face-deal.vector.json"], ["Tests/FieldDesignTests"]],
   // IOS-8f — `user.me`'s answers, read by the kit's own `UserMeResult`
   ["user-me", ["user-me.valid.json", "user-me.dealt.json"], ["Tests/FieldProductTests"]],
+  // PG-3c — the remote cut's readers' goldens; PG-3d — the fold's parity golden beside them, which
+  // the phone's copy of its home's board is held to step by step (PhoneFoldParityTests)
+  ["remote", [...remoteFixtures, "phone-fold.golden.json"], ["Tests/FieldProductTests"]],
+  // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's;
+  // PG-3e — the body golden, which the drawn rows' bubbles are held to (PhoneBodyParityTests)
+  [
+    "remote",
+    [
+      ...remoteWitness,
+      "agent-field-snapshot.project-keys.json",
+      "phone-fold.golden.json",
+      "phone-body.golden.json",
+    ],
+    ["Tests/FieldMeshTests"],
+  ],
+  // PG-3e — the demo door (`-vf-demo-field-slice`) serves the witness's open from the kit's own
+  // bundle; the field golden it served until the switch left that folder in the same commit
+  ["remote", ["agent-remote-mesh-open.witness.json"], ["Sources/FieldMesh"]],
+  // PG-4s — the Godview views' bundle: the witness every view suite replays, the toolkit's golden and each view's.
+  // Never empty: the witness stands in it from PG-4s on, so the row always asserts something.
+  [
+    "phone-view",
+    [...remoteWitness, "phone-toolkit.golden.json", "phone-marks.golden.json", ...phoneViewGoldens],
+    ["Tests/FieldHomeTests"],
+  ],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
@@ -175,6 +256,30 @@ for (const [set, fixtures, folders] of requiredMirrors) {
   }
 }
 
+// PG-4s (Q-S8) — a view's golden committed in field-app but named in no list here would never reach the phone: every
+// `phone-*.golden.json` beside fold, body and the toolkit's must be in `phoneViewGoldens`.
+{
+  const named = new Set([
+    "phone-fold.golden.json",
+    "phone-body.golden.json",
+    "phone-toolkit.golden.json",
+    "phone-marks.golden.json",
+    ...phoneViewGoldens,
+  ]);
+  let committed = [];
+  try {
+    committed = readdirSync(PHONE_GODVIEW).filter((name) => /^phone-.+\.golden\.json$/.test(name));
+  } catch {
+    problems.push(`the phone's goldens folder is unreadable: ${relative(root, PHONE_GODVIEW)}`);
+  }
+  for (const name of committed) {
+    if (!named.has(name))
+      problems.push(
+        `${relative(root, join(PHONE_GODVIEW, name))} is committed but not mirrored: add it to phoneViewGoldens`,
+      );
+  }
+}
+
 for (const searchRoot of searchRoots) {
   for (const copy of jsonFiles(searchRoot)) {
     const name = copy.slice(copy.lastIndexOf("/") + 1);
@@ -182,7 +287,7 @@ for (const searchRoot of searchRoots) {
     try {
       statSync(origin);
     } catch {
-      if (!LANE_AUTHORED.has(name)) {
+      if (!LANE_AUTHORED.has(name) && !VENDORED.has(name)) {
         problems.push(
           `${relative(root, copy)} has no origin in packages/contracts/fixtures — a golden was ` +
             "deleted or renamed and this phone-side copy is now unchecked\n" +
@@ -200,6 +305,18 @@ for (const searchRoot of searchRoots) {
           `  fix: cp ${relative(root, origin)} ${relative(root, copy)}`,
       );
     }
+  }
+}
+
+// The vendored files, each held to its pin by the script that vendored it (VENDORED, above).
+for (const script of new Set(VENDORED.values())) {
+  try {
+    execFileSync(process.execPath, [join(root, script), "--check"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    checked += 1;
+  } catch (error) {
+    problems.push(`${script} --check: ${String(error.stderr ?? error.message).trim()}`);
   }
 }
 
@@ -324,32 +441,6 @@ const OS_MARKS_IOS = join(
     TOKENS,
     PALETTE_SWIFT,
   );
-  // TS-D22 — the Peek's scrim on the phone: `ChromePalette.searchScrim` is `--vf-search-scrim`'s
-  // two alphas, black on both sides.
-  const scrimCopy =
-    /public static let searchScrim = dynamic\(\s*light: 0x000000, lightAlpha: ([0-9.]+), dark: 0x000000, darkAlpha: ([0-9.]+)\)/.exec(
-      palette,
-    );
-  const alpha = (percent) => (percent === null ? null : (Number(percent) / 100).toFixed(2));
-  compare(
-    "search scrim (light)",
-    alpha(field(tokens, /--vf-search-scrim: rgb\(0 0 0 \/ (\d+)%\);/)),
-    scrimCopy?.[1] ?? null,
-    TOKENS,
-    PALETTE_SWIFT,
-  );
-  compare(
-    "search scrim (dark)",
-    alpha(
-      field(
-        tokens,
-        /--vf-search-scrim: rgb\(0 0 0 \/ \d+%\);[\s\S]*?--vf-search-scrim: rgb\(0 0 0 \/ (\d+)%\);/,
-      ),
-    ),
-    scrimCopy?.[2] ?? null,
-    TOKENS,
-    PALETTE_SWIFT,
-  );
   compare(
     "machines admin URL",
     field(read(ADMIN_ORIGIN), /facts\.admin_url\.as_deref\(\),\s*Some\("([^"]+)"\)/),
@@ -357,6 +448,60 @@ const OS_MARKS_IOS = join(
     ADMIN_ORIGIN,
     ADMIN_SWIFT,
   );
+}
+
+// PG-4t — the phone's monitor skin (DESIGN.md §2.7; §8 "The monitor view owns
+// its drawing"): the nine colours of puppeteer-view-sdk's MONITOR_SKIN, which
+// `GodviewSkin.swift` carries one line each as `(.key, 0xLIGHT, 0xDARK)`. Each
+// value is held to tokens.css's `--vf-godview-{light,dark}-<key>`, all 18, and
+// a red names the key. (field-app's phone-parity row holds the key names to
+// the SDK's own list; this script reads no package.)
+{
+  const SKIN_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldHome/Godview/GodviewSkin.swift";
+  const TOKENS = "packages/design-kit/src/tokens.css";
+  const read = (file) => {
+    try {
+      return readFileSync(join(root, file), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const swift = read(SKIN_SWIFT);
+  const tokens = read(TOKENS);
+  const cases = new Map(
+    [...swift.matchAll(/^ {4}case (\w+) = "([a-z-]+)"$/gm)].map(([, name, raw]) => [name, raw]),
+  );
+  const lines = [...swift.matchAll(/^ {4}\(\.(\w+), 0x([0-9A-Fa-f]{6}), 0x([0-9A-Fa-f]{6})\),$/gm)];
+  const named = lines.map(([, name]) => name);
+  if (cases.size === 0 || lines.length !== cases.size) {
+    problems.push(
+      `${SKIN_SWIFT} has ${cases.size} skin keys and ${lines.length} table lines\n` +
+        "  fix: one `(.key, 0xLIGHT, 0xDARK),` line per Key case (or move this script's pattern with the declaration)",
+    );
+  }
+  for (const name of cases.keys()) {
+    if (named.filter((line) => line === name).length !== 1) {
+      problems.push(`${SKIN_SWIFT}'s skin key ${name} needs exactly one table line`);
+    }
+  }
+  for (const [, name, light, dark] of lines) {
+    const raw = cases.get(name);
+    for (const [look, copy] of [
+      ["light", light],
+      ["dark", dark],
+    ]) {
+      checked += 1;
+      const pattern = new RegExp(`^\\s*--vf-godview-${look}-${raw}: #([0-9a-fA-F]{6});$`, "m");
+      const origin = raw === undefined ? null : (pattern.exec(tokens)?.[1]?.toLowerCase() ?? null);
+      if (origin !== copy.toLowerCase()) {
+        problems.push(
+          `${SKIN_SWIFT}'s ${look} ${name} is #${copy.toLowerCase()} but ${TOKENS}'s ` +
+            `--vf-godview-${look}-${raw ?? name} is ${origin === null ? "unreadable" : `#${origin}`}\n` +
+            "  fix: copy the token's value exactly (DESIGN.md §2.7 first, if the token moved)",
+        );
+      }
+    }
+  }
 }
 
 // The same argument one level up: the REGISTRY VALUES the phone speaks.
@@ -687,6 +832,16 @@ pins.push(
     ["RESTARTING", "restarting"],
     ["DOOR_DOWN", "doorDown"],
   ].map(([key, swift]) => freewayPin("FREEWAY_CODES", key, swift, { indent: 4 })),
+  // F1b — `freeway.approve`'s refusals the phone says in words (`FreewayApproval.said`): the
+  // service and the three states, each read from FREEWAY_APPROVAL's own block.
+  ...[
+    ["SERVICE", "service"],
+    ["STATE_UNREAD", "stateUnread"],
+    ["STATE_DOWN", "stateDown"],
+    ["STATE_UNCORRELATED", "stateUncorrelated"],
+  ].map(([key, swift]) =>
+    freewayPin("FREEWAY_APPROVAL", key, swift, { indent: 4, value: '"[a-z-]+"' }),
+  ),
 );
 
 const pinProblems = [];

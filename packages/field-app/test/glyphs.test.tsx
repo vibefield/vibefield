@@ -235,6 +235,25 @@ describe("the glyph set", () => {
     });
   });
 
+  // SP-1d (§13): Chat's starters wear `agents`, `panes` and `duplicate`, already among the 64; each
+  // one's tooltip says so, after where else the chrome draws it.
+  it("says Chat's three starters wear agents, panes and duplicate (SP-1d)", () => {
+    expect([GLYPH_META.agents.role, GLYPH_META.panes.role, GLYPH_META.duplicate.role]).toEqual([
+      "The Agents page and its head glyph; Chat's first starter",
+      "The Godview toggle: the deck's own silhouette; Chat's second starter",
+      "Duplicate on the desk's selection bar (⌘D); a taped selection does not offer it; Chat's third starter",
+    ]);
+  });
+
+  // CP-3 (§13): the needs-you card's answered line wears `check`, and `exclaim` when the act was not
+  // done, both among the 64; each one's tooltip says so, after where else the chrome draws it.
+  it("says the needs-you card's answered line wears check and exclaim (CP-3)", () => {
+    expect([GLYPH_META.check.role, GLYPH_META.exclaim.role]).toEqual([
+      "An agent row's done mark; the row paints it green (§2.5); the needs-you card's answered line",
+      "The swarm's failed mark; the needs-you card's answered line when the act was not done",
+    ]);
+  });
+
   it("keeps the committed drawings and the phone's template assets fresh", () => {
     // The generator is the source; data.ts and FieldGlyphs.xcassets are its
     // outputs. A drawing edited by hand in either place fails here.

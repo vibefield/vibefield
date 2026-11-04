@@ -23,8 +23,8 @@
 # (HTTP 403, 17:03Z and 17:23Z) after a push changed workflows. The `tag` job makes it while the planned commit IS main's
 # head; publish asserts it and creates the release on it. A red nightly leaves its tag with no release.
 #
-# TRIGGERS: a schedule and a manual dispatch make a NIGHTLY (`nightly-YYYYMMDD`, skipped when main is red or unchanged
-# since the last nightly — RL4 (a)); a pushed `v*` tag makes a BETA (`vX.Y.Z-beta.N`) or a STABLE (`vX.Y.Z`), whose
+# TRIGGERS: a schedule and a manual dispatch make a NIGHTLY (`nightly-YYYYMMDD[.N]`, skipped when main is red or unchanged
+# since the last nightly — RL4 (a)); manual dispatch can make a numbered revision on the same day. A pushed `v*` tag makes a BETA (`vX.Y.Z-beta.N`) or a STABLE (`vX.Y.Z`), whose
 # version must already be committed (RM-D7). The `v*` ruleset keeps those tags human; `nightly-*` tags are created by
 # the publish job (D7, J2).
 #
@@ -88,13 +88,12 @@ jobs:
           conclusion=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow verify.yml --branch main --commit "$SHA" \
             --limit 1 --json conclusion --jq '.[0].conclusion // empty')
           if [ "$conclusion" = "success" ]; then echo "green=true" >> "$GITHUB_OUTPUT"; else echo "green=false" >> "$GITHUB_OUTPUT"; fi
-          # the newest nightly TAG by name (nightly-YYYYMMDD sorts by day; a lightweight tag's creatordate is its
-          # commit's): today's is used once (D7)
-          last=$(git tag --list 'nightly-*' --sort=-refname | head -n 1)
+          # Version order keeps revision .10 after .9. A lightweight tag's creatordate is its commit's.
+          last=$(git tag --list 'nightly-*' --sort=-version:refname | head -n 1)
           if [ -n "$last" ]; then echo "lastTag=$last" >> "$GITHUB_OUTPUT"; fi
           # the newest PUBLISHED nightly: "unchanged" is judged against it, never against a tag a red nightly left
-          published=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,isDraft \
-            --jq '[.[] | select(.isDraft | not) | .tagName | select(startswith("nightly-"))] | sort | last // empty')
+          published=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,isDraft,createdAt \
+            --jq '[.[] | select(.isDraft | not) | select(.tagName | startswith("nightly-"))] | sort_by(.createdAt) | last | .tagName // empty')
           if [ -n "$published" ]; then
             echo "lastPublishedCommit=$(git rev-list -n 1 "$published")" >> "$GITHUB_OUTPUT"
           fi
@@ -221,6 +220,20 @@ jobs:
         env:
           VERSION: ${{ needs.plan.outputs.version }}
         run: node scripts/release-plan.mjs stamp --version "$VERSION"
+      # GitHub's macOS network can drop stapler's HTTP/3 ticket lookup with NSURLError -1005.
+      # Keep Apple's signing/notarization checks; force HTTPS over TCP on this ephemeral runner only.
+      # https://github.com/actions/runner-images/issues/14924
+      - name: Use TCP for Apple notarization tickets
+        if: runner.os == 'macOS' && vars.VIBEFIELD_MAC_SIGNING == 'true'
+        run: |
+          set -euo pipefail
+          # Do not overwrite an active firewall policy if the hosted runner's defaults change.
+          if ! sudo pfctl -s info | grep '^Status: Disabled' >/dev/null; then
+            echo "::error::Refusing to replace an active or unrecognized packet-filter ruleset."
+            exit 1
+          fi
+          printf '%s\n' 'block return out quick proto udp from any to any port 443' | sudo pfctl -f -
+          sudo pfctl -E
       - name: Package, signed (J4 — the Apple credentials exist)
         if: vars.VIBEFIELD_MAC_SIGNING == 'true'
         working-directory: apps/desktop
@@ -342,7 +355,7 @@ jobs:
           set -euo pipefail
           mkdir -p previous previous-channel release-out
           case "$CHANNEL" in
-            nightly) same='^nightly-[0-9]{8}$' ;;
+            nightly) same='^nightly-[0-9]{8}([.][1-9][0-9]*)?$' ;;
             beta) same='^v[0-9]+[.][0-9]+[.][0-9]+-beta[.][0-9]+$' ;;
             stable) same='^v[0-9]+[.][0-9]+[.][0-9]+$' ;;
             *) echo "unknown channel $CHANNEL"; exit 1 ;;
@@ -366,9 +379,9 @@ jobs:
           if [ -n "$manifest" ]; then
             gh release download "$manifest" --repo "$GITHUB_REPOSITORY" --dir previous-channel --pattern 'release-manifest.json'
           fi
-          for dir in builds/*/; do
-            find "$dir" -maxdepth 1 -type f ! -name 'hashes-*.json' -exec cp {} release-out/ \;
-          done
+          # download-artifact v8 extracts a single matched artifact directly into builds/;
+          # multiple matches get named subdirectories. Accept both layouts.
+          find builds -mindepth 1 -maxdepth 2 -type f ! -name 'hashes-*.json' -exec cp {} release-out/ \;
       # AU-6 (AU-D10 A; LC-19): the notes, from the SAME previous manifest Merge names in `previous`, written beside the
       # release (never an asset of their own) and merged INTO the manifest, so they ride under its one release
       # signature. A stable refuses here without apps/desktop/packaging/notes/<X.Y.Z>.txt; a first release of its

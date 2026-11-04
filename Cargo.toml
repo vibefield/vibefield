@@ -323,7 +323,11 @@ truffle-core = "=0.7.24"
 # Windows build). The Ghostty VT artifacts are re-released as ghostty-vt-1dceb4dd5089 from the
 # same Ghostty commit (f8041e84); the patch adds MSVC-only flags, and ghosttea says the macOS
 # library is byte-identical (re-read here: see the event's LANDED). Tag v0.13.7 = 3eee581c.
-ghosttea = "=0.13.7"
+# EL8 (2026-11-02, GV lifecycle): 0.13.8 adds owner-atomic conditional release, lifetime
+# input evidence and correlated creation. All npm and Swift consumers move with this crate.
+# EL8 (2026-11-02): 0.14.0 adopts Ghostty 1.4 and routed recovery/copy. All Ghosttea planes
+# move together; the matching Swift Truffle pin is 0.7.26, with desktop core/sidecars still 0.7.24.
+ghosttea = "=0.14.0"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry
 # (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is

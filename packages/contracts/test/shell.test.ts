@@ -240,8 +240,9 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
   // meet at it in a merge and conflict out loud, where a number in the title
   // went stale in silence (item 102, found at HN's rebase rehearsal).
   it("exposes exactly its channel keys, in order", () => {
-    expect(Object.keys(IPC_CHANNELS)).toHaveLength(36);
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(37);
     expect(Object.keys(IPC_CHANNELS)).toEqual([
+      "zoomHaptic",
       "windowBootstrap",
       "prepareClose",
       "closeResult",
@@ -287,6 +288,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
 
   it("pins the exact channel strings (a new or renamed channel must move the spec table first)", () => {
     expect(IPC_CHANNELS).toEqual({
+      zoomHaptic: "vibefield:shell:zoom-haptic",
       windowBootstrap: "vibefield:shell:window-bootstrap",
       prepareClose: "vibefield:shell:prepare-close",
       closeResult: "vibefield:shell:close-result",
@@ -662,6 +664,8 @@ describe("tray shell commands and app preferences", () => {
       confirmQuit: true,
       // TS-4: nor connectAsks; the asks to connect stay on until the person turns them off
       connectAsks: true,
+      // AL-6: nor keepRunningOnQuit; a quit quits until the person says otherwise
+      keepRunningOnQuit: false,
     });
     expect(AppPreferences.safeParse({ showTray: true }).success).toBe(false);
     // UA-6: the posture is part of the EFFECTIVE snapshot, so a caller can

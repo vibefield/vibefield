@@ -7,11 +7,12 @@ import {
   type WidgetType,
 } from "@vibecook/ice";
 import type { BlobStore } from "@vibecook/ice/desk/kit";
-import { DESK_ENGINE, DESK_OBJECTS } from "@vibecook/ice/desk/objects";
+import { DESK_ENGINE } from "@vibecook/ice/desk/objects";
 import type { ObjectContribution, PluginManifestV1, PluginRecord } from "@vibefield/contracts";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
 import { deskBlobs } from "./field/desk/desk-blobs";
+import { FIELD_DESK_OBJECTS, RETIRED_DESK_OBJECTS } from "./field/desk/desk-objects";
 import { type SeedOptions, seedDesk } from "./field/desk/desk-seed";
 import { getRendererLogger } from "./logging";
 import {
@@ -293,8 +294,8 @@ export async function prepareFieldPlugins(
 
 /** THE DESK (DK-2, ruled DK-D11/D29): VibeField's engine is ICE's desk preset —
  * `desk.desk` the root canvas type, its tools (`desk.select` in hand, `pan`), the
- * scale-free zoom, the plain wheel zooming about the pointer, the zoom-through —
- * with the desk's six reference kinds FIRST and VibeField's own types after them.
+ * scale-free zoom, scrolling to pan, pinch to zoom, drag to marquee, and zoom-through —
+ * with the app's active reference kinds FIRST and VibeField's own types after them.
  * The engine is CREATED here; nothing mounts it until DK-3's `<Desk>`. */
 function fieldEngineOpts(
   registry: PluginRegistry<WidgetType>,
@@ -302,7 +303,8 @@ function fieldEngineOpts(
 ): CanvasEngineOpts {
   return {
     ...DESK_ENGINE,
-    widgets: [...DESK_OBJECTS, ...registry.allWidgets().values(), ...ghosts],
+    widgets: [...FIELD_DESK_OBJECTS, ...registry.allWidgets().values(), ...ghosts],
+    retiredWidgets: RETIRED_DESK_OBJECTS,
   };
 }
 

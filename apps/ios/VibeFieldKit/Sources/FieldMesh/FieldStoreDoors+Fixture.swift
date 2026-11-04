@@ -80,30 +80,37 @@
   }
 
   extension FieldLink {
-    /// `-vf-demo-field-slice` (DS-8, 2026-10-01): the contracts' GOLDEN mesh
-    /// board through the REAL home path.
+    /// `-vf-demo-field-slice` (PG-3e): PG-3a's WITNESS remote board through the
+    /// REAL home path.
     ///
     /// The link discovers the peers, probes their doors, homes to the first
     /// that answers, dials it, says hello, and reads the field through the
-    /// home's `agent.subscribe {projection: "field", scope: "mesh"}` — every
+    /// home's `agent.subscribe {projection: "remote", scope: "mesh"}` — every
     /// step the live phone takes. What is fake is the NETWORK: an in-process
-    /// door that answers the contracts' own bytes
-    /// (`agent-mesh-open.valid.json`, byte for byte under `Fixtures/`), so the
-    /// swarm and the corner can be photographed over real-shaped rows in both
-    /// themes with no desktop and no tailnet. The golden lists four desktops:
-    /// the home (`studio`, live), `laptop` (live), `air` (asleep — its kept
-    /// board draws GREYED, and the tailnet does not list it, so the corner
-    /// shows it only from memory) and `mini` (stale on the board, and its door
-    /// does not answer this phone: "not serving").
+    /// door that answers the witness's own bytes
+    /// (`agent-remote-mesh-open.witness.json`, byte for byte under
+    /// `Fixtures/`), so the swarm and the corner can be photographed over
+    /// real-shaped rows in both themes with no desktop and no tailnet. The
+    /// witness lists three desktops: the home (`Studio`, live, seven rows),
+    /// `Loft` (live, its door not answering this phone — its three rows arrive
+    /// through the home, wearing their host) and `Attic` (asleep, offline on
+    /// the tailnet — its kept row draws GREYED, and the corner does not list
+    /// it). The home is `dev-01HQ9S7UD1`, the board's first desktop and the
+    /// first id in device order, so the copy's `here` and the link's home are
+    /// one desktop.
     ///
-    /// Before DS-8 this mounted the golden `field.agents.v1` slice through the
-    /// store reader; that reader is retired (DS-D14).
+    /// (Corrected 2026-11-02, PG-3e: from DS-8 this served the contracts'
+    /// golden FIELD mesh board, `agent-mesh-open.valid.json`, over four
+    /// desktops — studio, laptop, air, mini — through `{projection: "field"}`;
+    /// before DS-8 it mounted the golden `field.agents.v1` slice through the
+    /// store reader, retired by DS-D14.)
     public static func goldenFixture(
       schedule: FieldDiscoverySchedule = .init()
     ) -> FieldLink? {
       guard
         let url = Bundle.module.url(
-          forResource: "agent-mesh-open.valid", withExtension: "json", subdirectory: "Fixtures"),
+          forResource: "agent-remote-mesh-open.witness", withExtension: "json",
+          subdirectory: "Fixtures"),
         let data = try? Data(contentsOf: url),
         let open = try? JSONValue.parse(data)
       else { return nil }
@@ -122,10 +129,11 @@
   }
 
   /// The fixture's in-process door: every desktop's door answers the same way
-  /// — hello as a self desktop, the golden's roster, and the golden mesh board
-  /// — because only the HOME is ever dialled for the field. Nothing else is
-  /// answered (NOT_FOUND), so an act on the fixture fails honestly rather than
-  /// pretending a desktop did something.
+  /// — hello as a self desktop, the witness's roster, and the witness's remote
+  /// board — because only the HOME is ever dialled for the field — and, since
+  /// PG-3f, the phone's `agent.reportShown` (`{reported: true}`: a report is
+  /// not an act). Nothing else is answered (NOT_FOUND), so an act on the
+  /// fixture fails honestly rather than pretending a desktop did something.
   struct FixtureHome: ProductTransport {
     struct Desktop: Sendable {
       let deviceId: String
@@ -135,19 +143,17 @@
       let answers: Bool
     }
 
-    /// The golden's four desktops, as the fixture's tailnet lists them.
+    /// The witness's three desktops, as the fixture's tailnet lists them (PG-3e: the golden field board's four
+    /// until the switch).
     static let desktops = [
       Desktop(
-        deviceId: "dev-01HQ8ZK4M7", name: "studio", address: "100.64.0.11", online: true,
+        deviceId: "dev-01HQ9S7UD1", name: "Studio", address: "100.64.0.11", online: true,
         answers: true),
       Desktop(
-        deviceId: "dev-01HQ9S7UD1", name: "laptop", address: "100.64.0.12", online: true,
-        answers: true),
-      Desktop(
-        deviceId: "dev-01HQA1RL4P", name: "air", address: "100.64.0.13", online: false,
+        deviceId: "dev-01HQ9S7XZ2", name: "Loft", address: "100.64.0.12", online: true,
         answers: false),
       Desktop(
-        deviceId: "dev-01HQB3M1N1", name: "mini", address: "100.64.0.14", online: true,
+        deviceId: "dev-01HQ9S7Y44", name: "Attic", address: "100.64.0.13", online: false,
         answers: false),
     ]
 
@@ -223,6 +229,9 @@
           ]))
       case "agent.subscribe":
         return Self.frame(id: id, result: .object(["subId": .string("fixture"), "snapshot": open]))
+      // PG-3f — the phone's report, heard: the home routes it to the row's owner (`device`), and it lands
+      case "agent.reportShown":
+        return Self.frame(id: id, result: .object(["reported": .bool(true)]))
       default:
         let error = JSONValue.object([
           "jsonrpc": .string("2.0"), "id": .int(id),

@@ -28,6 +28,7 @@ use std::time::{Duration, Instant};
 fn a_terminated_session_concludes_while_its_program_never_reads_a_large_paste() {
     let session = Session::spawn(
         SpawnOptions {
+            creation_id: None,
             executable: "/bin/sh".into(),
             args: vec!["-c".into(), "stty -echo; exec sleep 30".into()],
             cwd: None,

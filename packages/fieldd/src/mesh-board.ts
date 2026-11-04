@@ -50,6 +50,17 @@ import { RpcCallError } from "./native-link";
 // here — a hub per {projection, floor} opens them when its first reader arrives
 // and closes them when its last one leaves (PF6), and the manager shares them
 // with any window that routed the same question by `device`.
+// Amended 2026-11-01 (PG-9a, item 135): the last one's leaving starts the
+// hub's LINGER (`AGENT_FIELD.MESH_HUB_LINGER_MS`), and the close is the
+// linger's end; a reader who arrives inside it rejoins the hub as it stands.
+// The phone is the only reader of its hub, and its app switch and its gap
+// repair each unsubscribe and subscribe again: an immediate close tore down
+// every peer's upstream on each, and the new hub answered every other desktop
+// `stale` on a new epoch until each re-attached — the grey flash. The daemon
+// stopping (`MeshBoard.dispose`) waits for no linger. At most
+// `AGENT_FIELD.MESH_LINGERING_HUBS_MAX` hubs linger at once, the oldest closing
+// at once past it: a floor is any integer a reader asks, and an unbounded
+// linger would stand up a hub per value (the PG-9a review [0], EL7).
 //
 // WHICH peers are desktops: the roster lists phones too (a phone is a self node
 // with no fieldd behind it) and cannot say so directly — a phone publishes no
@@ -164,6 +175,12 @@ export interface MeshBoardOptions {
   retryMinMs?: number;
   retryMaxMs?: number;
   logger?: Logger;
+  /** PG-3b (the fold check [2]) — an owner's upstream is back: attached and its snapshot applied, at the first attach
+   * and at each re-attach this hub makes (a resync, a wake after asleep). A re-dial is link-ready's (PeerLink), not
+   * this. Every hub announces it, and duplicates are harmless because a report replaces its set. What this daemon
+   * carries for its readers beside that upstream is carried again then (`agent-screens.ts` `linkReady`). Absent:
+   * nothing is told. */
+  onUpstreamReady?: (device: string) => void;
 }
 
 interface Resolved {
@@ -178,6 +195,7 @@ interface Resolved {
   retryMinMs: number;
   retryMaxMs: number;
   logger: Logger;
+  onUpstreamReady: (device: string) => void;
 }
 
 /** A board as the relay holds it: the owner's chain, the owner's rows. */
@@ -276,6 +294,15 @@ const copyOf = (board: HeldBoard): HeldBoard => ({
   rows: new Map(board.rows),
 });
 
+/** What a hub tells its `MeshBoard` about its life: its linger began (its last
+ * reader left), a reader rejoined it inside the linger, it closed. The board
+ * bounds the lingering hubs by these (the PG-9a review [0]). */
+interface HubLife {
+  lingering(): void;
+  rejoined(): void;
+  closed(): void;
+}
+
 /** One board per {projection, floor}: the readers that asked the same
  * question share its upstreams and its held boards. */
 class BoardHub {
@@ -292,6 +319,8 @@ class BoardHub {
   readonly #local: LocalBoard;
   readonly #sweeper: ReturnType<typeof setInterval>;
   readonly #onRoster = (): void => this.#reconcile();
+  /** PG-9a — set while the hub has no reader and waits out its linger */
+  #linger: ReturnType<typeof setTimeout> | null = null;
   #disposed = false;
 
   constructor(
@@ -299,7 +328,7 @@ class BoardHub {
     private readonly projection: BoardProjection,
     private readonly floor: number,
     private readonly kept: KeptBoards,
-    private readonly onClosed: () => void,
+    private readonly life: HubLife,
   ) {
     // This desktop's own board, on its own chain; it is always `live` (the
     // daemon answering IS its liveness) and needs no heartbeat.
@@ -315,6 +344,13 @@ class BoardHub {
   /** A reader joins: it is answered with every device as the hub holds it,
    * and hears every later frame. */
   join(member: Member): MeshBoardReader {
+    // PG-9a — a reader back inside the linger keeps the hub as it stands:
+    // its upstreams, each peer's epoch and state, its own board
+    if (this.#linger !== null) {
+      clearTimeout(this.#linger);
+      this.#linger = null;
+      this.life.rejoined();
+    }
     const open = this.#openAnswer();
     this.#members.add(member);
     let left = false;
@@ -329,15 +365,33 @@ class BoardHub {
         if (left) return;
         left = true;
         this.#members.delete(member);
-        if (this.#members.size === 0) this.dispose();
+        if (this.#members.size === 0) this.#startLinger();
       },
     };
   }
 
-  /** The last reader left (or the daemon stops): every upstream closes. */
+  /** PG-9a — the last reader left: the hub stands for the linger, then closes
+   * unless a reader has joined since (`join` cancels it). */
+  #startLinger(): void {
+    if (this.#disposed || this.#linger !== null) return;
+    this.#linger = setTimeout(() => {
+      this.#linger = null;
+      if (this.#members.size === 0) this.dispose();
+    }, AGENT_FIELD.MESH_HUB_LINGER_MS);
+    this.#linger.unref?.();
+    // last: the board may close an older lingering hub now, past its bound
+    this.life.lingering();
+  }
+
+  /** The linger ended with no reader (or the daemon stops, at once): every
+   * upstream closes. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    if (this.#linger !== null) {
+      clearTimeout(this.#linger);
+      this.#linger = null;
+    }
     clearInterval(this.#sweeper);
     this.opts.roster.off("changed", this.#onRoster);
     this.opts.links.off("link-changed", this.#onRoster);
@@ -346,7 +400,7 @@ class BoardHub {
     try {
       this.#local.dispose();
     } finally {
-      this.onClosed();
+      this.life.closed();
     }
   }
 
@@ -533,6 +587,9 @@ class BoardHub {
           peer.backoffMs = this.opts.retryMinMs;
           this.#onUpstream(peer, generation, snapshot, "snapshot");
           start?.(); // what followed the snapshot on the wire, after it
+          // PG-3b — the owner's upstream is back: what rides beside it is carried again
+          if (!this.#disposed && generation === peer.generation)
+            this.opts.onUpstreamReady(peer.device);
         },
         (error: unknown) => {
           if (this.#disposed || generation !== peer.generation) return;
@@ -674,10 +731,22 @@ class BoardHub {
  * The mesh board's hubs, one per {projection, floor}. A hub exists exactly
  * while it has a reader: the first `open` builds it and opens its upstreams,
  * the last reader's dispose closes them.
+ * Amended 2026-11-01 (PG-9a, item 135): a hub exists while it has a reader and
+ * for `AGENT_FIELD.MESH_HUB_LINGER_MS` after its last one leaves; an `open`
+ * inside that rejoins it, and the linger's end closes its upstreams. `dispose`
+ * (the daemon stopping) closes every hub at once, lingering or not. At most
+ * `AGENT_FIELD.MESH_LINGERING_HUBS_MAX` hubs linger at once; past it the oldest
+ * lingering hub closes at once (the PG-9a review [0]).
  */
 export class MeshBoard {
   readonly #opts: Resolved;
   readonly #hubs = new Map<string, BoardHub>();
+  /** PG-9a (the review [0]) — the hubs waiting out a linger, oldest first (a
+   * Set iterates in insertion order): entering the linger appends, a rejoin or
+   * a close removes. At most `AGENT_FIELD.MESH_LINGERING_HUBS_MAX`; past it the
+   * oldest closes at once, so a reader churning distinct floors cannot stand up
+   * a lingering hub (a local board here, an upstream on every peer) per value. */
+  readonly #lingering = new Set<BoardHub>();
   /** each desktop's last board, by projection (`KeptBoards`) */
   readonly #kept = new Map<"field" | "remote", Map<string, HeldBoard>>();
   #disposed = false;
@@ -695,6 +764,7 @@ export class MeshBoard {
       retryMinMs: opts.retryMinMs ?? 1_000,
       retryMaxMs: opts.retryMaxMs ?? 30_000,
       logger: (opts.logger ?? createNoopLogger()).child({ component: "mesh.board" }),
+      onUpstreamReady: opts.onUpstreamReady ?? (() => {}),
     };
   }
 
@@ -727,8 +797,22 @@ export class MeshBoard {
           kept.set(device, board);
         },
       };
-      const created: BoardHub = new BoardHub(this.#opts, projection, minIntervalMs, keeper, () => {
-        if (this.#hubs.get(key) === created) this.#hubs.delete(key);
+      const created: BoardHub = new BoardHub(this.#opts, projection, minIntervalMs, keeper, {
+        lingering: () => {
+          this.#lingering.add(created);
+          for (const oldest of this.#lingering) {
+            if (this.#lingering.size <= AGENT_FIELD.MESH_LINGERING_HUBS_MAX) break;
+            this.#lingering.delete(oldest);
+            oldest.dispose();
+          }
+        },
+        rejoined: () => {
+          this.#lingering.delete(created);
+        },
+        closed: () => {
+          this.#lingering.delete(created);
+          if (this.#hubs.get(key) === created) this.#hubs.delete(key);
+        },
       });
       hub = created;
       this.#hubs.set(key, hub);
@@ -753,7 +837,8 @@ export class MeshBoard {
     };
   }
 
-  /** How many hubs are standing — each one is a set of open upstreams. */
+  /** How many hubs are standing — each one is a set of open upstreams, a
+   * lingering one's included (PG-9a). */
   get size(): number {
     return this.#hubs.size;
   }
@@ -762,5 +847,6 @@ export class MeshBoard {
     this.#disposed = true;
     for (const hub of [...this.#hubs.values()]) hub.dispose();
     this.#hubs.clear();
+    this.#lingering.clear();
   }
 }

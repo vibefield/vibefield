@@ -27,7 +27,9 @@ import Testing
   /// needs to keep driving it.
   private func attached(
     transport: ScriptedTransport, sink: any RoutedFrameSink, client: RoutedTerminalClient,
-    legGeneration: Int64 = 1
+    legGeneration: Int64 = 1,
+    controlCapabilities: [String] = ["resume", "session-events"],
+    framesCapabilities: [String] = ["resume", "session-events"]
   ) async throws -> (control: ScriptedConnection, frames: ScriptedConnection, activation: String) {
     let control = transport.connection(for: "/control")
     let frames = transport.connection(for: "/frames")
@@ -37,9 +39,11 @@ import Testing
       return onControl && onFrames
     }
     try await control.deliver(
-      .connectionAccepted, try Script.accepted(channel: .control, legGeneration: legGeneration))
+      .connectionAccepted, try Script.accepted(
+        channel: .control, legGeneration: legGeneration, capabilities: controlCapabilities))
     try await frames.deliver(
-      .connectionAccepted, try Script.accepted(channel: .frames, legGeneration: legGeneration))
+      .connectionAccepted, try Script.accepted(
+        channel: .frames, legGeneration: legGeneration, capabilities: framesCapabilities))
     try await settle("control attach") {
       await control.lastSent("AttachControlLeg") != nil
     }
@@ -138,7 +142,9 @@ import Testing
     #expect(framesHello?["receiverCapacities"]?["perActivationCreditBytes"]?.intValue == 524_288)
     // Only capabilities this client can actually honour.
     let advertised = controlHello?["capabilities"]?.arrayValue?.compactMap(\.stringValue)
-    #expect(advertised == ["resume", "session-events", "geometry-events", "input-refusals"])
+    #expect(advertised == [
+      "resume", "session-events", "geometry-events", "input-refusals", "selection-text", "scene-repair",
+    ])
     client.close()
   }
 
@@ -205,6 +211,64 @@ import Testing
     mints.handOutLive = true
     try await settle("the set to come back") { transport.dials.count == 4 }
     #expect(!client.needsTicket)
+    client.close()
+  }
+
+  /// A client attached and then cut off at the frames leg, whose every fresh
+  /// ticket is minted at once and whose door then turns every dial away before
+  /// its handshake, as a port held by another process answering each upgrade
+  /// with an HTTP error does (item 157's C8).
+  private func turnedAway(mints: TicketMints, stepDeadline: Duration = .seconds(20))
+    async throws -> RoutedTerminalClient
+  {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let session = session
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(
+        ticketProvider: { _ in
+          mints.calls += 1
+          return try TicketFactory.make(sessionId: session)
+        },
+        viewId: "view-1", stepDeadline: stepDeadline))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    transport.unreachable = ["/control", "/frames"]
+    await live.frames.hangUp(code: nil)
+    return client
+  }
+
+  /// Item 161 — a dial the door turns away is re-minted on a backoff. The mint
+  /// SUCCEEDED, so the asking task returned once `open` dialed; the failed
+  /// handshake then asked again in a fresh task whose backoff began anew and
+  /// waited nothing before its mint: about 140 mints and dials a second against
+  /// the real door. An upper bound, so a loaded host can only pass it sooner.
+  @Test func aDialTheDoorTurnsAwayIsReMintedOnTheBackoff() async throws {
+    let mints = TicketMints()
+    let client = try await turnedAway(mints: mints)
+    try await settle("the first re-mint") { mints.calls >= 1 }
+    try await Task.sleep(for: .milliseconds(600))
+    // 100 ms, then 200, then 400: three asks in 0.6 s, four at most
+    #expect(mints.calls <= 5, "\(mints.calls) mints in 0.6 s")
+    client.close()
+  }
+
+  /// …and a set that never comes up says so (item 161). Every re-mint moved the
+  /// attach's step (the ticket, then the dial), and each move re-armed fix8's
+  /// deadline, so the stall was never said and the card read "connecting"
+  /// forever. The reach has one deadline, from the first dial turned away, that
+  /// no re-mint re-arms. The row waits on its own clock and then ASSERTS, so a
+  /// client that never stops fails it by its expectation, not by a timeout.
+  @Test func aSetThatNeverComesUpStopsWaitingAtTheDial() async throws {
+    let mints = TicketMints()
+    let client = try await turnedAway(mints: mints, stepDeadline: .milliseconds(400))
+    let enough = ContinuousClock.now.advanced(by: .seconds(3))
+    while client.state != .stalled(.dial), ContinuousClock.now < enough {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(client.state == .stalled(.dial))
+    #expect(mints.calls >= 2, "it asked again before it stopped")
     client.close()
   }
 
@@ -690,6 +754,92 @@ import Testing
 
   /// Demand is per-activation, sequenced, and idempotent to re-send. `none`
   /// detaches the cell's view; `live` attaches it.
+  @Test func parkingStopsInputBeforeTheCellsLeaseCatchesUp() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    defer { client.close() }
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    await live.frames.deliver(.binary(try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(10), payload: Data("TRF1-seed".utf8))))
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 1))
+    try await settle("input allowed") { client.sessions[session]?.inputAllowed == true }
+
+    client.declare(demand: .none, for: session)
+    #expect(client.sessions[session]?.inputAllowed == false)
+    client.send(text: "must not reach a parked view", to: session)
+    try await settle("park sent") { await live.control.lastSent("DeclareDemand") != nil }
+    #expect(await live.control.allSent("SendInput").isEmpty)
+    // A delayed status from the cell cannot authorize typing into a parked view.
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 2))
+    try await settle("late status") { client.sessions[session]?.status?.cellStatusSequence == 2 }
+    #expect(client.sessions[session]?.inputAllowed == false)
+  }
+
+  /// Real Truffle repro: an in-flight frame and cached allowed status reopened
+  /// the local gate before the host had processed none/live. The first key
+  /// after returning to the pane was then refused as pending by the host.
+  @Test func resumingWaitsForItsDemandAcknowledgementAndFreshInputStatus() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    defer { client.close() }
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    await live.frames.deliver(.binary(try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(10), payload: Data("TRF1-seed".utf8))))
+    try await live.control.deliver(.cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 1))
+    try await settle("initial input") { client.sessions[session]?.inputAllowed == true }
+
+    client.declare(demand: .none, for: session)
+    client.requestReseed(for: session)
+    client.declare(demand: .live, for: session)
+    try await settle("both demands") { await live.control.allSent("DeclareDemand").count == 2 }
+    let demands = await live.control.allSent("DeclareDemand")
+    // These were already on the wire before the host processed the park.
+    await live.frames.deliver(.binary(try Script.frame(
+      session: session, activation: live.activation, sequence: 2, creditEpoch: 1, base: nil,
+      result: Script.stamp(11), payload: Data("TRF1-old-frame".utf8))))
+    try await live.control.deliver(.cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 2))
+    try await settle("old frame and status") {
+      client.sessions[session]?.appliedContent == Script.stamp(11)
+        && client.sessions[session]?.status?.cellStatusSequence == 2
+    }
+    #expect(client.sessions[session]?.inputAllowed == false)
+    client.send(text: "too early", to: session)
+    try await live.control.deliver(.demandAccepted, ["demandSequence": demands[0]["demandSequence"]!])
+    try await live.control.deliver(.cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 3))
+    try await settle("status before live ack") { client.sessions[session]?.status?.cellStatusSequence == 3 }
+    #expect(client.sessions[session]?.inputAllowed == false)
+    try await live.control.deliver(.demandAccepted, ["demandSequence": demands[1]["demandSequence"]!])
+    // Even a replay of the most recent status cannot acknowledge the new view.
+    try await live.control.deliver(.cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 3))
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(client.sessions[session]?.inputAllowed == false)
+    try await live.control.deliver(.cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 4,
+                    input: "suspended", reason: "pending"))
+    try await settle("host still attaching") { client.sessions[session]?.status?.cellStatusSequence == 4 }
+    #expect(client.sessions[session]?.inputAllowed == false)
+    try await live.control.deliver(.cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 5))
+    try await settle("resumed input") { client.sessions[session]?.inputAllowed == true }
+    client.send(text: "after confirmation", to: session)
+    try await settle("confirmed key sent") { await live.control.lastSent("SendInput") != nil }
+    #expect(await live.control.allSent("SendInput").count == 1)
+  }
+
   @Test func demandIsSequencedPerActivation() async throws {
     let transport = ScriptedTransport()
     let sink = RoutedFrameRecorder()
@@ -705,6 +855,30 @@ import Testing
     #expect(demands[1]["demand"]?["mode"]?.stringValue == "live")
     #expect(demands[0]["activationId"]?.stringValue == live.activation)
     client.close()
+  }
+
+  @Test func demandAcknowledgementsCannotResumeAnotherSessionOnTheSameLane() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    defer { client.close() }
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    let other = "sess-other-demand"
+    client.open(try TicketFactory.make(sessionId: other))
+    try await settle("second session") { client.sessions[other] != nil }
+    for id in [session, other] {
+      client.declare(demand: .none, for: id)
+      client.declare(demand: .live, for: id)
+    }
+    try await settle("four demands") { await live.control.allSent("DeclareDemand").count == 4 }
+    let demands = await live.control.allSent("DeclareDemand")
+    #expect(Set(demands.compactMap { $0["demandSequence"]?.intValue }).count == 4)
+    try await live.control.deliver(.demandAccepted, ["demandSequence": demands[1]["demandSequence"]!])
+    try await settle("first acknowledged") { client.sessions[session]?.awaitingDemandAcknowledgement == false }
+    #expect(client.sessions[other]?.awaitingDemandAcknowledgement == true)
+    try await live.control.deliver(.demandAccepted, ["demandSequence": demands[3]["demandSequence"]!])
+    try await settle("second acknowledged") { client.sessions[other]?.awaitingDemandAcknowledgement == false }
   }
 
   // MARK: Frames and credits
@@ -735,6 +909,75 @@ import Testing
     client.close()
   }
 
+  @Test func anExplicitSceneRepairIsCoalescedAndOnlyAWholeSceneReopensInput() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    defer { client.close() }
+    client.open(try ticket())
+    let live = try await attached(
+      transport: transport, sink: sink, client: client, framesCapabilities: ["scene-repair"])
+    let seed = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(100), payload: Data("TRF1-full".utf8))
+    await live.frames.deliver(.binary(seed))
+    try await live.control.deliver(.cellActivationStatus, Script.status(
+      session: session, activation: live.activation, sequence: 1, leaseTtlMs: .max))
+    try await settle("ready before repair") { client.sessions[session]?.inputAllowed == true }
+    let demandSequence = client.sessions[session]?.demandSequence
+    let demands = await live.control.allSent("DeclareDemand").count
+
+    client.requestReseed(for: session)
+    client.requestReseed(for: session)
+    try await settle("one explicit repair") { await live.frames.allSent("RequestScene").count == 1 }
+    let request = await live.frames.lastSent("RequestScene")
+    #expect(request?["sessionId"]?.stringValue == session)
+    #expect(request?["activationId"]?.stringValue == live.activation)
+    #expect(request?["leaseEpoch"]?.intValue == (try ticket()).leaseEpoch)
+    #expect(client.sessions[session]?.inputAllowed == false)
+
+    // A delta already in flight can still fit the sink, but it cannot satisfy
+    // an explicit request to replace the complete scene.
+    let delta = try Script.frame(
+      session: session, activation: live.activation, sequence: 2, creditEpoch: 1,
+      base: Script.stamp(100), result: Script.stamp(101), payload: Data("TRF1-delta".utf8))
+    await live.frames.deliver(.binary(delta))
+    try await settle("in-flight delta applied") { await sink.content?.sceneRevision == 101 }
+    #expect(client.sessions[session]?.inputAllowed == false)
+    client.requestReseed(for: session)
+
+    let full = try Script.transferUnits(
+      session: session, activation: live.activation, creditEpoch: 1, firstSequence: 3,
+      kind: "catchup", base: Script.stamp(101), result: Script.stamp(102), payload: Data("TRF1-repair".utf8))
+    for unit in full { await live.frames.deliver(.binary(unit)) }
+    try await settle("whole scene restores input") { client.sessions[session]?.inputAllowed == true }
+    #expect(client.sessions[session]?.appliedContent?.sceneRevision == 102)
+    #expect(client.sessions[session]?.demand == .live)
+    #expect(client.sessions[session]?.demandSequence == demandSequence)
+    #expect(await live.control.allSent("DeclareDemand").count == demands)
+    #expect(await live.control.allSent("ReleaseGeometry").isEmpty)
+    #expect(await live.frames.allSent("RequestScene").count == 1)
+  }
+
+  @Test func sceneRepairNeedsTheFramesCapabilityAndALiveReader() async throws {
+    for framesCapable in [false, true] {
+      let transport = ScriptedTransport()
+      let sink = RoutedFrameRecorder()
+      let client = client(transport, sink: sink)
+      defer { client.close() }
+      client.open(try ticket())
+      let live = try await attached(
+        transport: transport, sink: sink, client: client,
+        controlCapabilities: ["scene-repair"],
+        framesCapabilities: framesCapable ? ["scene-repair"] : [])
+      if framesCapable { client.declare(demand: .none, for: session) }
+      client.requestReseed(for: session)
+      try await Task.sleep(for: .milliseconds(40))
+      #expect(await live.frames.allSent("RequestScene").isEmpty)
+      #expect(client.sessions[session]?.awaitingSceneRepair == false)
+    }
+  }
+
   /// A delta applies against the base the SINK holds — the only place that can
   /// answer it. When the sink has moved on, the honest repair is a reseed, not a
   /// delta onto the wrong scene.
@@ -743,7 +986,8 @@ import Testing
     let sink = RoutedFrameRecorder()
     let client = client(transport, sink: sink)
     client.open(try ticket())
-    let live = try await attached(transport: transport, sink: sink, client: client)
+    let live = try await attached(
+      transport: transport, sink: sink, client: client, framesCapabilities: ["scene-repair"])
 
     let seed = try Script.frame(
       session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
@@ -765,6 +1009,9 @@ import Testing
     try await settle("the lineage break") { client.sessions[session]?.frames == .seeding }
     #expect(client.sessions[session]?.appliedContent == nil)
     #expect(await sink.deltaFrames == 2)
+    try await settle("lineage requests a full scene") {
+      await live.frames.allSent("RequestScene").count == 1
+    }
     client.close()
   }
 
@@ -923,7 +1170,8 @@ import Testing
     let client = RoutedTerminalClient(
       transport: transport, sink: sink, options: .init(viewId: "view-1"))
     client.open(try ticket())
-    let live = try await attached(transport: transport, sink: sink, client: client)
+    let live = try await attached(
+      transport: transport, sink: sink, client: client, framesCapabilities: ["scene-repair"])
 
     // Self-contained frames — no base — which is what a seed is however it is
     // framed. Both roads into the sink are exercised: a transfer and a bare
@@ -935,6 +1183,9 @@ import Testing
     try await settle("the first refusal") { client.sessions[session]?.frames == .seeding }
 
     for (index, revision) in [Int64(2), Int64(3)].enumerated() {
+      try await settle("repair request before its response") {
+        await live.frames.allSent("RequestScene").count == index + 1
+      }
       let frame = try Script.frame(
         session: session, activation: live.activation, sequence: Int64(10 + index), creditEpoch: 1,
         base: nil, result: Script.stamp(revision), payload: Data("TRF1".utf8))
@@ -956,6 +1207,8 @@ import Testing
     // Still nothing was ever acknowledged, and nothing is claimed.
     #expect(await live.frames.lastSent("SceneApplied") == nil)
     #expect(client.sessions[session]?.appliedContent == nil)
+    #expect(await live.frames.allSent("RequestScene").count == 2)
+    #expect(await live.control.allSent("ReleaseGeometry").isEmpty)
     client.close()
   }
 

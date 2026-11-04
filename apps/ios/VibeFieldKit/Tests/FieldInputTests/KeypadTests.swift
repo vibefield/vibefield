@@ -1,5 +1,6 @@
 import FieldTerminal
 import Testing
+import UIKit
 
 @testable import FieldInput
 
@@ -14,7 +15,10 @@ struct KeypadTests {
   private func card() -> (InputCardModel, Recorder) {
     let model = InputCardModel()
     let recorder = Recorder()
-    model.sink = { recorder.acts.append($0); return true }
+    model.sink = {
+      recorder.acts.append($0)
+      return true
+    }
     return (model, recorder)
   }
 
@@ -245,5 +249,116 @@ struct PlusMenuTests {
     model.reset()
     model.menuDidLeave()
     #expect(model.surface == nil)
+  }
+}
+
+@MainActor
+@Suite("keypad geometry and input routing")
+struct KeypadRegressionTests {
+  @Test("native height survives keypad handoffs, floating keyboards, and rotation")
+  func keyboardMeasurements() {
+    let geometry = KeypadGeometry()
+    let portrait = CGRect(x: 0, y: 0, width: 402, height: 874)
+    geometry.updateViewport(portrait.size, bottomInset: 34)
+    geometry.recordNativeKeyboard(CGRect(x: 0, y: 566, width: 402, height: 308), in: portrait)
+    #expect(geometry.height == 308)
+    geometry.recordNativeKeyboard(CGRect(x: 50, y: 400, width: 300, height: 260), in: portrait)
+    #expect(geometry.height == 308, "a floating keyboard must not change the docked size")
+    geometry.recordNativeKeyboard(CGRect(x: 0, y: 820, width: 402, height: 54), in: portrait)
+    #expect(geometry.height == 308, "a hardware accessory bar is not a keyboard")
+    let landscape = CGRect(x: 0, y: 0, width: 874, height: 402)
+    geometry.updateViewport(landscape.size, bottomInset: 21)
+    geometry.recordNativeKeyboard(CGRect(x: 0, y: 202, width: 874, height: 200), in: landscape)
+    #expect(geometry.height == 200)
+    geometry.updateViewport(portrait.size, bottomInset: 34)
+    #expect(geometry.height == 308)
+    geometry.recordNativeKeyboard(CGRect(x: 0, y: 522, width: 402, height: 352), in: portrait)
+    #expect(
+      geometry.height == 352, "native language/prediction height replaces the old measurement")
+  }
+
+  @Test("Live keypad text and hardware shortcuts reach the same sink once")
+  func hardwareInput() {
+    let model = InputCardModel()
+    var acts: [InputAct] = []
+    model.sink = {
+      acts.append($0)
+      return true
+    }
+    model.draft = "preserved"
+    model.toggleMode()
+    model.setKeypad(true)
+    let responder = KeypadResponderView()
+    responder.model = model
+    responder.insertText("aé🙂")
+    responder.deleteBackward()
+    responder.insertText("\n")
+    model.sendKeypadHardware(.control("r"))
+    #expect(
+      acts == [
+        .typeText("a"), .typeText("é"), .typeText("🙂"),
+        .keystroke(TerminalKeystroke(.backspace)), .keystroke(TerminalKeystroke(.enter)),
+        .keystroke(.control("r")),
+      ])
+    #expect(model.draft == "preserved")
+    model.dismissKeyboard()
+    responder.insertText("stale")
+    #expect(acts.count == 6, "a folded keypad must not send late input")
+  }
+
+  @Test("Shift is one-shot, composes with Control, and resets with the session")
+  func shiftModifier() {
+    let model = InputCardModel()
+    var acts: [InputAct] = []
+    model.sink = {
+      acts.append($0)
+      return true
+    }
+    model.toggleShift()
+    model.tapKey(.tab)
+    #expect(acts == [.keystroke(.shiftTab)])
+    #expect(!model.shiftArmed)
+    model.tapControl()
+    model.toggleShift()
+    model.tapKey(.arrowLeft)
+    #expect(acts.last == .keystroke(TerminalKeystroke(.arrowLeft, modifiers: [.control, .shift])))
+    model.toggleShift()
+    model.reset()
+    #expect(!model.shiftArmed)
+  }
+
+  @Test(
+    "saved shortcut selections survive profile namespacing",
+    arguments: ["common", "claude", "tmux", "emacs", "screen"])
+  func legacyProfileSelection(id: String) {
+    let legacy = ComboCatalog.profile(id: id, tmuxPrefix: "a")
+    let current = ComboCatalog.profile(id: "keypad.\(id)", tmuxPrefix: "a")
+    #expect(legacy == current)
+    #expect(legacy.id == "keypad.\(id)")
+    if id == "tmux" {
+      #expect(legacy.combos[0].strokes == [.control("a"), TerminalKeystroke(.character("c"))])
+    }
+    if id == "claude" {
+      #expect(legacy.combos[0].strokes == [.shiftTab])
+    }
+  }
+
+  @Test("an unknown saved profile falls back to Common")
+  func unknownProfileSelection() {
+    #expect(ComboCatalog.profile(id: "removed-profile", tmuxPrefix: "b") == ComboCatalog.common)
+  }
+
+  @Test("tmux uses the selected prefix without applying it to the command")
+  func configuredPrefix() {
+    let model = InputCardModel()
+    var acts: [InputAct] = []
+    model.sink = {
+      acts.append($0)
+      return true
+    }
+    model.sendCombo(ComboCatalog.tmux(prefix: "a").combos[0])
+    #expect(acts == [.keystroke(.control("a")), .keystroke(TerminalKeystroke(.character("c")))])
+    #expect(ComboCatalog.common.combos[0].strokes == [.control("c")])
+    #expect(ComboCatalog.claude.combos[0].strokes == [.shiftTab])
   }
 }

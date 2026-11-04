@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldSettings
 import Foundation
 import Testing
 
@@ -26,6 +27,16 @@ struct MockAccountTests {
     #expect(face.canSignOut)
     #expect(mock.desktopIsUp)
     #expect(mock.login == "me@jamesyong42.com")
+  }
+
+  /// M2 (PG-3e, the v2 check) — the mock's studio, whose board the mock never lists, is watchable on its Settings page:
+  /// "not on the board" is not a refusal (the `mock-*` launches open this page).
+  @Test("the mock's studio can be watched: a board not listed is not a refusal")
+  func theMocksStudioCanBeWatched() throws {
+    let studio = try #require(MockAccount().settings.desktops.first { $0.name == "studio" })
+    let watch = SettingsModel.abilities(studio).first
+    #expect(watch?.title == "Watch its agents")
+    #expect(watch?.can == true)
   }
 
   @Test("a lost mesh puts both desktops to sleep and offers nothing: the phone re-dials by itself")
@@ -56,7 +67,7 @@ struct MockAccountTests {
     #expect(mock.face.control == .face(AccountFixtures.fox))
   }
 
-  @Test("TS-7: the Field page's door follows the standing — the welcome signed out, the field signed in")
+  @Test("WI-1: the way in follows the standing — the welcome signed out, the tabs signed in")
   func door() {
     let mock = MockAccount()
     #expect(mock.door == nil)
@@ -79,7 +90,7 @@ struct MockAccountTests {
           machine: AccountFixtures.machine, adminConsole: URL(string: "https://login.tailscale.com/admin/machines")))
   }
 
-  @Test("TS-7: the scripted fleet is the field only while no door stands — none under the welcome or the approval")
+  @Test("WI-1: the scripted fleet is the field only while signed in — none under the welcome or the approval")
   func fleetOnlyWithoutADoor() {
     let mock = MockAccount()
     #expect(mock.fieldIsLive)

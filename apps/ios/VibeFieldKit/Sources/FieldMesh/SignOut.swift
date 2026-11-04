@@ -45,11 +45,12 @@ public struct SignOutSweep: Sendable {
 
   /// The defaults keys that belong to the person and survive a sign-out —
   /// named so a test can prove each one is still there afterwards: the
-  /// terminal appearance, the snippets, the clipboard history, and this
-  /// phone's own look (IOS-10a's Appearance, `PhoneAppearance.storageKey`).
+  /// terminal appearance, the snippets, the clipboard history, this
+  /// phone's own look (IOS-10a's Appearance, `PhoneAppearance.storageKey`),
+  /// and the Godview view it stands on (PG-4t, `GodviewViewChoice.storageKey`).
   public static let kept: [String] = [
     "fieldterminal.appearance.v1", "vf.input.snippets", "vf.input.clipboardHistory",
-    "vibefield.phone.appearance",
+    "vibefield.phone.appearance", "vibefield.godview.view",
   ]
 
   @discardableResult

@@ -9122,10 +9122,16 @@ impl ObservedState {
 #[doc = "    \"createdAt\": {"]
 #[doc = "      \"type\": \"integer\""]
 #[doc = "    },"]
+#[doc = "    \"creationId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"cwd\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
 #[doc = "    \"exited\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
+#[doc = "    \"inputUsed\": {"]
 #[doc = "      \"type\": \"boolean\""]
 #[doc = "    },"]
 #[doc = "    \"persistence\": {"]
@@ -9155,10 +9161,22 @@ pub struct ObservedTerminal {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub created_at: ::std::option::Option<i64>,
+    #[serde(
+        rename = "creationId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub creation_id: ::std::option::Option<::std::string::String>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub cwd: ::std::option::Option<::std::string::String>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub exited: ::std::option::Option<bool>,
+    #[serde(
+        rename = "inputUsed",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub input_used: ::std::option::Option<bool>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub persistence: ::std::option::Option<::std::string::String>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
@@ -17628,11 +17646,16 @@ pub mod builder {
             ::std::string::String,
         >,
         created_at: ::std::result::Result<::std::option::Option<i64>, ::std::string::String>,
+        creation_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         cwd: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
         >,
         exited: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
+        input_used: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         persistence: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
@@ -17649,8 +17672,10 @@ pub mod builder {
             Self {
                 cell: Ok(Default::default()),
                 created_at: Ok(Default::default()),
+                creation_id: Ok(Default::default()),
                 cwd: Ok(Default::default()),
                 exited: Ok(Default::default()),
+                input_used: Ok(Default::default()),
                 persistence: Ok(Default::default()),
                 pid: Ok(Default::default()),
                 session_id: Err("no value supplied for session_id".to_string()),
@@ -17679,6 +17704,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for created_at: {e}"));
             self
         }
+        pub fn creation_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.creation_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for creation_id: {e}"));
+            self
+        }
         pub fn cwd<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
@@ -17697,6 +17732,16 @@ pub mod builder {
             self.exited = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for exited: {e}"));
+            self
+        }
+        pub fn input_used<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.input_used = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for input_used: {e}"));
             self
         }
         pub fn persistence<T>(mut self, value: T) -> Self
@@ -17748,8 +17793,10 @@ pub mod builder {
             Ok(Self {
                 cell: value.cell?,
                 created_at: value.created_at?,
+                creation_id: value.creation_id?,
                 cwd: value.cwd?,
                 exited: value.exited?,
+                input_used: value.input_used?,
                 persistence: value.persistence?,
                 pid: value.pid?,
                 session_id: value.session_id?,
@@ -17762,8 +17809,10 @@ pub mod builder {
             Self {
                 cell: Ok(value.cell),
                 created_at: Ok(value.created_at),
+                creation_id: Ok(value.creation_id),
                 cwd: Ok(value.cwd),
                 exited: Ok(value.exited),
+                input_used: Ok(value.input_used),
                 persistence: Ok(value.persistence),
                 pid: Ok(value.pid),
                 session_id: Ok(value.session_id),

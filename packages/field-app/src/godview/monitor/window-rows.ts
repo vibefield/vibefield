@@ -1,6 +1,7 @@
 import type { RowsDeviceState } from "@vibefield/contracts";
 import type { AgentView, MonitorModel } from "@vibefield/puppeteer-view-sdk/model";
 import { type HeldModelRow, isTerminalBoardRow } from "./model-board";
+import type { PaneTransitions } from "./pane-transitions";
 import type { MonitorPaneFacts } from "./useMonitorAgents";
 
 /**
@@ -37,6 +38,7 @@ import type { MonitorPaneFacts } from "./useMonitorAgents";
  */
 
 export interface WindowRowFacts {
+  readonly transitions?: PaneTransitions | undefined;
   /** each desktop's standing on the board (DS-L8), by device id */
   readonly standing: ReadonlyMap<string, RowsDeviceState>;
   /** the ids in the order the stage draws them (`rowOrder`) */
@@ -68,10 +70,19 @@ export function createWindowRows(): WindowRows {
   let previousVisual: ReadonlyMap<string, string> = new Map();
   let lastModel: MonitorModel | undefined;
   let lastFacts: WindowRowFacts | undefined;
+  let lastTransition: number | undefined;
   let last: readonly AgentView[] = Object.freeze([]);
   return {
     rowsFor(model, facts) {
-      if (model === lastModel && facts === lastFacts) return last;
+      const transition = facts.transitions?.getSnapshot();
+      if (model === lastModel && facts === lastFacts && transition === lastTransition) return last;
+      facts.transitions?.reconcile(
+        new Set(
+          model.agents
+            .filter((row) => row.device.self)
+            .map((row) => facts.sessionByRow.get(row.id) ?? row.id),
+        ),
+      );
       // the stage's order: the facts' ids first, then whatever the model holds beyond them
       const ordered: AgentView[] = [];
       const placed = new Set<string>();
@@ -87,9 +98,14 @@ export function createWindowRows(): WindowRows {
       const visuals = new Map<string, string>();
       for (const row of ordered) {
         const session = row.device.self ? facts.sessionByRow.get(row.id) : undefined;
+        if (row.device.self && facts.transitions?.shows(row.id, session, row.inputUsed) === false)
+          continue;
         const visualId =
+          (row.device.self
+            ? facts.transitions?.visualId(session ?? row.id, row.creationId, row.inputUsed)
+            : undefined) ??
           (session === undefined ? undefined : facts.visualIds?.get(session)) ??
-          previousVisual.get(row.id) ??
+          (row.creationId === undefined ? previousVisual.get(row.id) : undefined) ??
           session ??
           row.id;
         visuals.set(row.id, visualId);
@@ -131,6 +147,7 @@ export function createWindowRows(): WindowRows {
           : Object.freeze(rows);
       lastModel = model;
       lastFacts = facts;
+      lastTransition = transition;
       return last;
     },
   };

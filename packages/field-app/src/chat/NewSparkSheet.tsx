@@ -11,6 +11,8 @@ import { NewSparkSheetView } from "./NewSparkSheetView";
 import {
   agentLine,
   agentMenuOf,
+  CANNOT_LIST_AGENTS,
+  CANNOT_LIST_PROFILES,
   dealSeed,
   defaultProfileOf,
   effortOf,
@@ -26,7 +28,7 @@ import {
   startsOf,
   suggestName,
 } from "./new-spark";
-import { chooseSpark, refreshSparks, useSessionTally, useSparksReading } from "./sparks-feed";
+import { chooseSpark, refreshSparks, usePersonSessions, useSparksReading } from "./sparks-feed";
 
 // THE NEW SPARK SHEET, THE CONTROLLER (SP-1c; DESIGN.md §8 "The New spark sheet"). It reads what the sheet offers —
 // the agents that can be a spark (`agent.providers[].briefing`), the Agent Profiles, an agent's picker when its menu
@@ -147,8 +149,10 @@ function Sheet({
       const home = defaultProfileOf(profileSets)?.id;
       setThinksUnder((held) => held ?? home);
       setProfiles((held) => (held.length > 0 || home === undefined ? held : [home]));
-      if (offered.status === "rejected")
-        setRefusal({ at: "foot", words: "VibeField can't list its agents right now" });
+      // Create waits on these reads (item 149): one that failed is said at the foot, the agents' first, so Create is
+      // never left waiting in silence (an agent list with none that can be a spark says so on its pill)
+      if (offered.status === "rejected") setRefusal({ at: "foot", words: CANNOT_LIST_AGENTS });
+      else if (home === undefined) setRefusal({ at: "foot", words: CANNOT_LIST_PROFILES });
     });
     return () => {
       live = false;
@@ -204,8 +208,7 @@ function Sheet({
     () => (thinksUnder === undefined ? profiles : [...new Set([...profiles, thinksUnder])]),
     [profiles, thinksUnder],
   );
-  const tally = useSessionTally();
-  const sessions = sessionsSeenOf(tally, sets, seen);
+  const sessions = sessionsSeenOf(usePersonSessions(), sets, seen);
 
   const reroll = useCallback(() => {
     setSeed(dealSeed());
@@ -270,6 +273,7 @@ function Sheet({
       }
       refusal={refusal}
       creating={creating}
+      ready={agentId !== undefined && thinksUnder !== undefined}
       hatchRef={hatch}
       onName={(next) => {
         setName(next);

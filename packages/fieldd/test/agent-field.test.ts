@@ -196,6 +196,9 @@ const maximalSummary = (): AgentSessionSummary => ({
     stage: "resent",
     unheardAt: "2026-09-13T10:05:36.000Z",
   },
+  // TU-1 — the run has worked, and the profile it is filed under
+  turnedAt: "2026-09-13T10:04:10.000Z",
+  profileSet: "work-7f3a",
 });
 
 describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
@@ -221,12 +224,13 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     // PJ-7 — the native id joined the row in a golden of its own: the slice's
     // is the kit's mirror and stays byte for byte as it shipped. SP-1b — the
     // spark and the origin joined it in another golden of their own, and
-    // ST-D5's Stop the same way.
+    // ST-D5's Stop the same way, and TU-1's turn and filed set.
     const rows = [
       "agent-field-slice.valid.json",
       "agent-field-snapshot.native-session.json",
       "agent-field-snapshot.spark.json",
       "agent-field-snapshot.stop.json",
+      "agent-field-snapshot.turned.json",
     ].flatMap(
       (name) =>
         (
@@ -345,6 +349,18 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     expect(heard.stop).toEqual({ sentAt: stop.sentAt, stage: "heard", heardBy: "status" });
     // a run with no Stop carries no key at all
     expect(Object.keys(projectFieldRow(summary({})))).not.toContain("stop");
+  });
+
+  it("TU-1 — keeps the fold's turnedAt as it says it — a time, null kept, absent left off — and its filed set", () => {
+    const fresh = projectFieldRow({ ...summary({}), turnedAt: null, profileSet: "work-7f3a" });
+    expect(fresh.turnedAt).toBeNull();
+    expect(fresh.profileSet).toBe("work-7f3a");
+    const turned = projectFieldRow({ ...summary({}), turnedAt: "2026-09-13T10:04:10.000Z" });
+    expect(turned.turnedAt).toBe("2026-09-13T10:04:10.000Z");
+    // a fold row that says neither (a record from before TU-1, a run filed nowhere) carries neither key at all
+    const older = Object.keys(projectFieldRow(summary({})));
+    expect(older).not.toContain("turnedAt");
+    expect(older).not.toContain("profileSet");
   });
 
   it("names the FOLDER and never the path (EL7 B1), honestly about git", () => {

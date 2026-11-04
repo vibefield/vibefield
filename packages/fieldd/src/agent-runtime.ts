@@ -107,6 +107,7 @@ import {
 import {
   foldStatus,
   mirrorOf,
+  mirrorShowsTurn,
   recordForRun,
   SessionRecordStore,
   stopKeyOf,
@@ -545,6 +546,12 @@ interface ManagedEntry {
   /** ST — the person's Stop while this fieldd holds one (ST-D8: not across a restart), and its bound's timer */
   stop?: AgentStopState | undefined;
   stopTimer?: NodeJS.Timeout | undefined;
+  /** Pause keeps the process open even when its turn cancellation is unheard. */
+  stopKeepOpen?: boolean | undefined;
+  pauseRequest?: Promise<AgentInterruptResult> | undefined;
+  /** TU-1 — the record's `turnedAt`, held here so a publish never reads the disk: seeded at entry, a time once fieldd
+   * stamps the first turn it sees (`stampTurn`) */
+  turnedAt: string | null | undefined;
 }
 
 /** Item 124 — one birth's identity (`AgentRuntimeService.identity`): each attempt of a briefed birth has its own. */
@@ -738,6 +745,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     (runtimeRunId: string, mirror: AgentMonitorMirror | undefined) => void
   >();
   private readonly runEndedListeners = new Set<(runtimeRunId: string) => void>();
+  /** TU-1 (Q1) — the sparks service hears each time a spark's own session is known to have worked */
+  private readonly sparkTurnedListeners = new Set<(spark: SparkId, at: string) => void>();
   private publishTimer: NodeJS.Timeout | null = null;
   private disposed = false;
 
@@ -1301,6 +1310,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           : {}),
         ...(compose?.origin !== undefined ? { origin: compose.origin } : {}),
         ...(compose?.spark !== undefined ? { spark: compose.spark } : {}),
+        // TU-1 — a new conversation, which has not worked yet
+        turnedAt: null,
       });
     });
     return this.ticketed(entry, principal, terminals, forwardedFor);
@@ -1543,6 +1554,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(launched !== undefined ? { modelSelection: launched } : {}),
         ...(previous?.spark !== undefined ? { spark: previous.spark } : {}),
         ...(previous?.origin !== undefined ? { origin: previous.origin } : {}),
+        // TU-1 (Q5) — History lists conversations that have worked: this one is born turned
+        turnedAt: this.now().toISOString(),
       });
     });
     return {
@@ -1854,6 +1867,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    *    `accepted` means the stop was delivered, never that the agent obeyed
    *    it. */
   async interrupt(params: AgentInterruptParams): Promise<AgentInterruptResult> {
+    return this.requestStop(params, false);
+  }
+
+  async pause(params: AgentInterruptParams): Promise<AgentInterruptResult> {
+    return this.requestStop(params, true);
+  }
+
+  private async requestStop(
+    params: AgentInterruptParams,
+    keepOpen: boolean,
+  ): Promise<AgentInterruptResult> {
     const entry = this.managed.get(params.runtimeRunId);
     if (entry === undefined || entry.exiting) {
       const known =
@@ -1877,17 +1901,40 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // the same words the host itself would answer with — no floor, no act
       return { accepted: false, reason: "no-terminal-host" };
     }
-    const result = await this.deliverStop(entry, host);
-    this.logger.info("fieldd.agents.interrupted", "An agent run was interrupted", {
-      runtimeRunId: params.runtimeRunId,
-      sessionId: entry.info.terminalSessionId,
-      // what was sent, in puppeteer's words: a key, or the agent's own control
-      stop: stopKeyOf(entry.agent.turnStop) ?? "native",
-      accepted: result.accepted,
-      ...(result.accepted ? {} : { reason: result.reason }),
-    });
-    if (result.accepted) this.stopSent(entry);
-    return result.accepted ? { accepted: true } : { accepted: false, reason: result.reason };
+    if (keepOpen) {
+      if (entry.stop?.stage === "terminating") return { accepted: false, reason: "ending" };
+      if (entry.status !== "working") return { accepted: false, reason: "not-working" };
+      if (entry.pauseRequest !== undefined) return entry.pauseRequest;
+      if (entry.stop !== undefined && entry.stop.stage !== "heard") {
+        return entry.stopKeepOpen
+          ? { accepted: true }
+          : { accepted: false, reason: "stop-in-progress" };
+      }
+    }
+    const deliver = async (): Promise<AgentInterruptResult> => {
+      const result = await this.deliverStop(entry, host, keepOpen);
+      this.logger.info("fieldd.agents.interrupted", "An agent run was interrupted", {
+        runtimeRunId: params.runtimeRunId,
+        sessionId: entry.info.terminalSessionId,
+        // what was sent, in puppeteer's words: a key, or the agent's own control
+        stop: stopKeyOf(entry.agent.turnStop) ?? "native",
+        accepted: result.accepted,
+        keepOpen: keepOpen,
+        ...(result.accepted ? {} : { reason: result.reason }),
+      });
+      if (result.accepted) this.stopSent(entry, keepOpen);
+      return result.accepted ? { accepted: true } : { accepted: false, reason: result.reason };
+    };
+    if (!keepOpen) return deliver();
+    // Install before delivery: simultaneous clicks from mirrored panes send
+    // one cancellation, including while a native control is still answering.
+    const request = Promise.resolve()
+      .then(deliver)
+      .finally(() => {
+        if (entry.pauseRequest === request) entry.pauseRequest = undefined;
+      });
+    entry.pauseRequest = request;
+    return request;
   }
 
   /** The run's OWN stop, delivered: the floor's interrupt, or the agent's declared turn stop (Q08). The one thing a
@@ -1895,7 +1942,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private async deliverStop(
     entry: ManagedEntry,
     host: TerminalAgentHost,
+    keepOpen = false,
   ): Promise<{ accepted: true } | { accepted: false; reason: string }> {
+    if (keepOpen && (entry.exiting || entry.status !== "working"))
+      return { accepted: false, reason: "not-working" };
+    if (keepOpen && entry.agent.turnStop === undefined)
+      return { accepted: false, reason: "turn-stop-unavailable" };
     return entry.agent.turnStop === undefined
       ? await host.automateTerminal(entry.info.terminalSessionId, { kind: "interrupt" })
       : await entry.agent.stopTurn();
@@ -1918,11 +1970,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** ST — a person's Stop was delivered: it is held as SENT until the run is heard to stop, and its bound is armed. A
    * second press while one is held changes nothing: the first Stop's clock and stage stand. */
-  private stopSent(entry: ManagedEntry): void {
+  private stopSent(entry: ManagedEntry, keepOpen = false): void {
     // the delivery was awaited: a run that exited, was replaced, or a fieldd stopping meanwhile holds no Stop
     if (this.disposed || entry.exiting || this.managed.get(entry.info.runtimeRunId) !== entry)
       return;
-    if (entry.stop !== undefined && entry.stop.stage !== "heard") return;
+    if (
+      entry.stop !== undefined &&
+      entry.stop.stage !== "heard" &&
+      (!keepOpen || entry.stop.unheardAt === undefined)
+    ) {
+      if (keepOpen) entry.stopKeepOpen = true;
+      return;
+    }
+    entry.stopKeepOpen = keepOpen;
     entry.stop = { sentAt: this.now().toISOString(), stage: "sent" };
     if (heardByStatus(entry.stop, this.stopFacts(entry))) this.stopHeard(entry, "status");
     else this.armStop(entry);
@@ -1965,7 +2025,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (entry === undefined || entry.exiting || entry.stop === undefined) return;
     entry.stopTimer = undefined;
     const stop = entry.stop;
-    const step = nextStopStep(stop, this.stopFacts(entry));
+    const step = nextStopStep(stop, this.stopFacts(entry), entry.stopKeepOpen);
     const afterMs = this.now().getTime() - Date.parse(stop.sentAt);
     if (step === "none") return;
     if (step === "unheard") {
@@ -1990,7 +2050,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           async () =>
             host === null
               ? { accepted: false as const, reason: "no-terminal-host" }
-              : await this.deliverStop(entry, host),
+              : await this.deliverStop(entry, host, entry.stopKeepOpen),
           (result) =>
             result.accepted
               ? { outcome: "succeeded" }
@@ -2080,6 +2140,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return () => this.runEndedListeners.delete(listener);
   }
 
+  /** TU-1 (Q1, D7) — a spark's own session has worked, and when: told at the stamp of its first turn, and again each
+   * time such a run enters the fold with a time (a resume that inherits one, History's resume, a re-attach), so a
+   * spark's write a crash lost converges at the next entry. The listener's write is idempotent. */
+  onSparkTurned(listener: (spark: SparkId, at: string) => void): () => void {
+    this.sparkTurnedListeners.add(listener);
+    return () => this.sparkTurnedListeners.delete(listener);
+  }
+
   /** CP-2 — agent_stop: end a live run through the floor's own terminate, as the person's Stop does. */
   async endRun(runtimeRunId: string): Promise<void> {
     const entry = this.managed.get(runtimeRunId);
@@ -2165,10 +2233,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * caller to its pane; fieldd maps the pane to its run here and never walks itself. Managed and pending runs only:
    * an exited run's pane holds no process that could have called. MT-0's settle rule reads the rest from the run's
    * record: whether it exists and verifies, the spark it names when the run is a spark's own session (CP-1c writes it
-   * at hatch), and the profile set it was filed under. */
-  runForTerminal(
-    terminalSessionId: string,
-  ): { runtimeRunId: string; verified: boolean; spark?: SparkId; profileSet?: string } | undefined {
+   * at hatch), the profile set it was filed under (a re-attach files a record from before AR-S5, TU-1 D11), and its
+   * persona, so the door places the run by the rule the rooms read (`profileSetOfRun`). */
+  runForTerminal(terminalSessionId: string):
+    | {
+        runtimeRunId: string;
+        verified: boolean;
+        spark?: SparkId;
+        profileSet?: string;
+        profileId?: string;
+      }
+    | undefined {
     const runtimeRunId = this.byTerminal.get(terminalSessionId);
     if (runtimeRunId === undefined) return undefined;
     if (!this.managed.has(runtimeRunId) && !this.pending.has(runtimeRunId)) return undefined;
@@ -2178,6 +2253,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       verified: record !== undefined,
       ...(record?.spark ? { spark: record.spark } : {}),
       ...(record?.profileSet ? { profileSet: record.profileSet } : {}),
+      ...(record?.profileId ? { profileId: record.profileId } : {}),
     };
   }
 
@@ -2775,9 +2851,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       attach?: AgentSessionAttach | undefined;
       /** the floor session this run replaced (resume-when-idle) */
       replaced?: string | undefined;
-      /** AR-4 — the record already exists: this run was re-attached, and the
-       * inventory row that proved its PTY alive rides along */
-      reattached?: { record: AgentSessionRecord; terminal: TerminalInfo } | undefined;
       /** AR-7 — the run was ADOPTED in a terminal the person's own shell
        * owns: the process that became the agent, and the floor's row for
        * that terminal when it lists one */
@@ -2797,11 +2870,26 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       spark?: SparkId | undefined;
       /** Item 124 — born without its briefing; the fold's row says so, the record never does */
       door?: "off" | undefined;
-    },
+    } & (
+      | {
+          /** AR-4 — the record already exists: this run was re-attached, and the
+           * inventory row that proved its PTY alive rides along. Whether its
+           * conversation has worked is the record's, read from the disk here. */
+          reattached: { record: AgentSessionRecord; terminal: TerminalInfo };
+          turnedAt?: never;
+        }
+      | {
+          reattached?: undefined;
+          /** TU-1 — a birth says whether its conversation has worked (`recordForRun`'s `turnedAt`) */
+          turnedAt: string | null | undefined;
+        }
+    ),
   ): ManagedEntry {
     const info = agent.info;
     const now = this.now().toISOString();
+    let turnedAt: string | null | undefined;
     if (launch.reattached === undefined) {
+      turnedAt = launch.turnedAt;
       // item 121 — a PTY TC-D4's fallback put off the agent cell (spawned or
       // resumed; an adopted run's terminal is the person's shell, never ours)
       const placement =
@@ -2823,6 +2911,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           modelSelection: launch.modelSelection,
           origin: launch.origin,
           spark: launch.spark,
+          turnedAt,
         }),
       );
       if (placement !== undefined) this.ledgerPlacement(info, placement);
@@ -2830,12 +2919,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // the record as it stands on disk: an attach record the adapter reported
       // while it attached is already there, and the boot's copy predates it
       const current = this.records.read(info.runtimeRunId) ?? launch.reattached.record;
+      // TU-1 — the conversation's turn fact is the record's, and the spread below keeps it
+      turnedAt = current.turnedAt;
       this.records.write({
         ...current,
         runtimeEpoch: info.runtimeEpoch,
         continuation: { ...info.continuation },
         reattach: { state: "attached", at: now },
         updatedAt: now,
+        // TU-1 (D11) — a record from before AR-S5 is filed under the set puppeteer bound the run to at this attach,
+        // so the door (the record) and the rooms (the summary) read one filed fact; a filed set is never overwritten
+        ...(current.profileSet === undefined && info.profileSetId !== undefined
+          ? { profileSet: info.profileSetId }
+          : {}),
       });
     }
     // FS-1a — the folder this run works in is a place of the files service
@@ -2875,6 +2971,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       origin: launch.origin ?? launch.reattached?.record.origin,
       spark: launch.spark ?? launch.reattached?.record.spark,
       door: launch.door,
+      turnedAt,
     };
     if (this.disposed) {
       // the service stopped while this run was being born or attached: the
@@ -2901,6 +2998,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.managed.set(info.runtimeRunId, entry);
     this.byTerminal.set(info.terminalSessionId, info.runtimeRunId);
     this.settleEarlyExit(info.terminalSessionId);
+    // TU-1 (D7) — a spark's session that enters having worked tells its spark again
+    if (typeof turnedAt === "string") this.sparkTurned(entry, turnedAt);
     const current = this.runtime.monitorState(info.runtimeRunId);
     if (current !== undefined) this.applyMonitor(entry, current);
     this.logger.info(
@@ -2971,6 +3070,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       ingress: input.launched.ingress,
       attach: input.launched.attach,
       adopted: { process: input.process, terminal: row },
+      // TU-1 — fieldd saw no turn of it yet (a typed `--resume` too, until its next turn here)
+      turnedAt: null,
     });
     // A preparation slower than the launcher's patience leaves fieldd holding
     // a run whose process gave up and left: over before it began. The watch
@@ -3158,6 +3259,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         // CP-1c — and who started it, and the spark it is: a spark woken in its last session is still that spark
         ...(record.origin !== undefined ? { origin: record.origin } : {}),
         ...(record.spark !== undefined ? { spark: record.spark } : {}),
+        // TU-1 (Q1, Q5) — the same conversation continued: whether it has worked is the record's, absent kept absent
+        turnedAt: record.turnedAt,
       });
     });
   }
@@ -4515,7 +4618,60 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     const evidence = mirror?.freshness?.lastEvidenceAt;
     if (evidence !== undefined) entry.lastActivityAt = evidence;
+    // TU-1 (Q2) — the first turn fieldd sees is kept, once
+    if (typeof entry.turnedAt !== "string" && mirrorShowsTurn(mirror)) this.stampTurn(entry);
     this.refreshContinuation(entry);
+  }
+
+  /** TU-1 (Q2, D8, D9) — the run's first turn, as fieldd saw it: fieldd's own clock at the fold, written once onto
+   * the run's signed record, re-read first (as `supersede` does). `updatedAt` stays as it stands: it orders the records
+   * and moves Chat's list, and the turn's activity reaches both as `lastActivityAt`. A record another path stamped
+   * keeps its time. A record that cannot be written, or does not verify, keeps nothing: the row says what fieldd saw
+   * for this fieldd's life, and after a restart the record says what it holds. */
+  private stampTurn(entry: ManagedEntry): void {
+    const { runtimeRunId } = entry.info;
+    let at = this.now().toISOString();
+    try {
+      const record = this.records.read(runtimeRunId);
+      if (typeof record?.turnedAt === "string") at = record.turnedAt;
+      else if (record === undefined) this.turnUnrecorded(runtimeRunId, "no verified record");
+      else {
+        this.records.write({ ...record, turnedAt: at });
+        this.logger.info("fieldd.agents.session_turned", "A managed session took its first turn", {
+          runtimeRunId,
+          ...(entry.spark !== undefined ? { spark: entry.spark } : {}),
+        });
+      }
+    } catch (error) {
+      this.turnUnrecorded(runtimeRunId, error instanceof Error ? error.message : String(error));
+    }
+    entry.turnedAt = at;
+    this.sparkTurned(entry, at);
+  }
+
+  private turnUnrecorded(runtimeRunId: string, reason: string): void {
+    this.logger.warn(
+      "fieldd.agents.turn_unrecorded",
+      "A session's first turn could not be kept on its record; its row says it until fieldd stops",
+      { runtimeRunId, reason },
+    );
+  }
+
+  /** TU-1 (Q1) — a spark's own session has worked: its listeners hear the spark and the time (`onSparkTurned`). Only
+   * a spark's own sessions count; a run a spark started is not the spark working. */
+  private sparkTurned(entry: ManagedEntry, at: string): void {
+    const { spark } = entry;
+    if (spark === undefined) return;
+    for (const listener of this.sparkTurnedListeners) {
+      try {
+        listener(spark, at);
+      } catch (err) {
+        this.logger.warn("fieldd.agents.turn_listener_failed", "A spark's turn listener threw", {
+          runtimeRunId: entry.info.runtimeRunId,
+          reason: (err as Error).message,
+        });
+      }
+    }
   }
 
   /** puppeteer learns the native session id after the launch; the record
@@ -4769,6 +4925,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         door: entry.door,
         stopKey: stopKeyOf(entry.agent.turnStop),
         stop: entry.stop,
+        turnedAt: entry.turnedAt,
         createdAt: entry.createdAt,
         stateChangedAt: entry.stateChangedAt,
         lastActivityAt: entry.lastActivityAt,

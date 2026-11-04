@@ -58,13 +58,69 @@ public struct SwarmBurn: Equatable, Sendable {
   }
 }
 
-/// The burn rate as people price work: by the hour.
-public func formatRatePerHour(_ costPerMin: Double?) -> String {
-  guard let costPerMin else { return "—/hr" }
-  let perHour = costPerMin * 60
-  if perHour >= 10 { return "$\(Int(perHour.rounded()))/hr" }
-  if perHour >= 1 { return String(format: "$%.1f/hr", perHour) }
+/// The burn rate as people price work: by the hour. Takes USD an HOUR, the owner's `burnPerHour` (J3 (a); sdk
+/// `toolkit/format.js` `formatRatePerHour`). (Corrected 2026-11-02, PG-3e: it took USD a minute and multiplied, which
+/// was the swarm's own copy; the words are the same.) (Corrected 2026-11-02, item 164: the whole dollars were
+/// `Int(perHour.rounded())`, which trapped from 2^63 and at ∞, and a peer's `burnPerHour` is unbounded; they are
+/// `Math.round`'s digits, `$1e+21/hr` and `$Infinity/hr` as the window says them.)
+public func formatRatePerHour(perHour: Double?) -> String {
+  guard let perHour else { return "—/hr" }
+  if perHour >= 10 { return "$\(JSNumber.whole(JSNumber.round(perHour)))/hr" }
+  if perHour >= 1 { return "$\(tenths(perHour))/hr" }
   return "\(formatUsd(perHour))/hr"
+}
+
+/// JavaScript's `toFixed(1)` for a value from 1 to 10 (the rate's dollars, the token count's thousands and millions):
+/// the tenth nearest the EXACT binary value, and on an exact tie the larger. (PG-3e, the review's [0]:
+/// `String(format: "%.1f")` breaks the tie to even, so 2.25 read `2.2` where the window reads `2.3`. Away from a tie
+/// the two agree; a tie is exact only when the binary value's expansion ends at its hundredths' 5, which forty places
+/// show.)
+func tenths(_ value: Double) -> String {
+  let expansion = String(format: "%.40f", value)
+  if let point = expansion.firstIndex(of: ".") {
+    let tail = expansion[expansion.index(point, offsetBy: 2)...]  // from the hundredths on
+    if tail.first == "5", tail.dropFirst().allSatisfy({ $0 == "0" }) {
+      return String(format: "%.1f", value + 0.05)
+    }
+  }
+  return String(format: "%.1f", value)
+}
+
+/// The per-minute rate the owner's per-hour burn was multiplied from, for the ladder: dividing back can land an ulp
+/// away, and fifteen significant digits restore it, so the flames light exactly where the window lights them
+/// (`bubble-model.js` `perMinute`, M27: `Number((burnPerHour / 60).toPrecision(15))`).
+func perMinute(_ burnPerHour: Double) -> Double {
+  let divided = burnPerHour / 60
+  return Double(String(format: "%.15g", divided)) ?? divided
+}
+
+extension AgentCost {
+  /// The total a body draws and the shares rank by: none where nothing was priced (`costTotal`; RFC 008: a missing
+  /// lane is unavailable, never zero). A word this build does not know still has its total.
+  public var total: Double? { coverage == "unavailable" ? nil : usd }
+  /// Whether the ladder is read: complete or partial only (`priced`). An unknown word is drawn unpriced.
+  public var priced: Bool { coverage == "complete" || coverage == "partial" }
+  /// The estimate as a body prints it (`formatEstimate`): `~$7.03`, `+` while partial, `—` when unavailable.
+  public var estimate: String {
+    guard let total else { return "—" }
+    return "~\(formatUsd(total))\(coverage == "partial" ? "+" : "")"
+  }
+}
+
+/// A context percent the body can floor: finite, and inside a bound an `Int` holds with room. The contract's
+/// `usedPercent` is an unbounded number, and `Int(_:)` traps past `Int`'s range; beyond the bound the body reads `--`
+/// where the window would print `1e+21%` (a phone-only deviation at absurd values, PG-3e).
+func flooredPercent(_ value: Double?) -> Int? {
+  guard let value, value.isFinite, abs(value) <= 1e9 else { return nil }
+  return Int(value.rounded(.down))
+}
+
+/// A row from another desktop wears its host's name, the desktop's name alone: the body's last line, in the
+/// terminal's label style (the window's `hostLine`, Q16). It is not in the one-line ladder, so it goes first.
+private func hostLine(_ name: String) -> CopyLine {
+  CopyLine(
+    key: "host", text: name, style: SwarmCopyStyle.labelStacked, opacity: SwarmWeight.supporting, tone: .ink,
+    gapBefore: 3)
 }
 
 public struct SwarmFigure: Equatable, Sendable {
@@ -220,37 +276,42 @@ func blockerMark(_ kind: AgentBlockerKind) -> (icon: String, word: String) {
 
 /// What a blocked body says in the name's place: what it is actually waiting
 /// on, in the blocker's OWN evidence before the reply's — the question as
-/// asked, the detail an adapter gave, the tool a permission names, the
-/// failure's code — and only then the latest reply, and only then the bare word.
+/// asked (its header, else its prompt), the detail an adapter gave, the tool a
+/// permission names, the failure's code — and only then the latest reply, and
+/// only then the bare word (`waitBodyLine`, puppeteer-view-sdk `toolkit/words.js`).
 func blockerText(_ blocker: AgentBlocker, message: String?) -> String {
   func trimmed(_ value: String?) -> String? {
     guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
     return value
   }
-  if blocker.kind == .question, let asked = trimmed(blocker.question) { return asked }
+  if blocker.kind == .question, let asked = trimmed(blocker.header) ?? trimmed(blocker.question) { return asked }
   if let detail = trimmed(blocker.detail) { return detail }
   if blocker.kind == .permission, let tool = blocker.tool, !tool.isEmpty { return tool }
   if blocker.kind == .failure, let code = blocker.code, !code.isEmpty { return code }
   return message ?? blockerMark(blocker.kind).word
 }
 
-/// Compact token counts: 820, 8.1k, 24k, 384k, 1.2M, 24M.
+/// Compact token counts: 820, 8.1k, 24k, 384k, 1.2M, 24M (the sdk's `toolkit/format.js` `formatTokens`).
+/// (Corrected 2026-11-02, item 165: the tenths were `String(format: "%.1f")`, which broke an exact tie to even, 8250
+/// `8.2k` where the window says `8.3k`; and the whole counts were `Int(...rounded())`, which trapped on NaN, ±∞ and
+/// past Int's range and rounded a negative tie away from zero. They are `toFixed(1)` and `Math.round`'s digits.)
 public func formatTokens(_ count: Double) -> String {
-  if count < 1000 { return "\(Int(count.rounded()))" }
-  if count < 10_000 { return String(format: "%.1fk", count / 1000) }
-  if count < 1_000_000 { return "\(Int((count / 1000).rounded()))k" }
-  if count < 10_000_000 { return String(format: "%.1fM", count / 1_000_000) }
-  return "\(Int((count / 1_000_000).rounded()))M"
+  if count < 1000 { return JSNumber.whole(JSNumber.round(count)) }
+  if count < 10_000 { return "\(tenths(count / 1000))k" }
+  if count < 1_000_000 { return "\(JSNumber.whole(JSNumber.round(count / 1000)))k" }
+  if count < 10_000_000 { return "\(tenths(count / 1_000_000))M" }
+  return "\(JSNumber.whole(JSNumber.round(count / 1_000_000)))M"
 }
 
 /// Each working session's place among the working sessions by estimated USD:
 /// 0 for the least, 1 for the most, everything else in between; all 0 when
 /// they tie or there is only one. Terminals without an agent do not count.
+/// The USD is the owner's priced total (`costTotal`): none counts as 0.
 public func workingShares(_ bubbles: [FieldBubble]) -> [String: Double] {
   var totals: [(String, Double)] = []
   for bubble in bubbles {
     guard bubble.status == .working, let agent = bubble.agent else { continue }
-    totals.append((bubble.id, agent.usage?.total ?? 0))
+    totals.append((bubble.id, agent.cost?.total ?? 0))
   }
   var shares: [String: Double] = [:]
   guard let least = totals.map(\.1).min(), let most = totals.map(\.1).max() else { return shares }
@@ -291,11 +352,13 @@ private struct StateLine {
 public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
   let bubble = input.bubble
   let parameters = input.parameters
-  let percent: Int? = bubble.agent?.contextUsedPercent.flatMap { $0.isFinite ? Int($0.rounded(.down)) : nil }
+  let percent = flooredPercent(bubble.agent?.contextUsedPercent)
   let contextLabel = percent.map { String(format: "CTX:%02d%%", $0) } ?? "CTX:--%"
 
   guard let facet = bubble.agent else {
     let remote = bubble.remote
+    // PG-3e — a peer's bare terminal on the remote cut names its host on the bubble; a mesh session on its facet.
+    let host = bubble.host ?? remote?.deviceName
     let running = bubble.status == .working
     let elapsed = running ? formatElapsed(since: input.runningSince, now: input.now) : nil
     var copy: [CopyLine] = [
@@ -323,12 +386,7 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
     // cannot be read as one of this machine's terminals. No write mark: a peer is
     // writable by default (James, 2026-10-28); whether your keys arrive is the
     // pane's to say at attach.
-    if let remote {
-      copy.append(
-        CopyLine(
-          key: "host", text: remote.deviceName,
-          style: SwarmCopyStyle.labelStacked, opacity: SwarmWeight.supporting, tone: .ink, gapBefore: 3))
-    }
+    if let host { copy.append(hostLine(host)) }
     let status = bubble.status.rawValue
     return SwarmBodyModel(
       id: bubble.id,
@@ -350,11 +408,12 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
       mounted: bubble.mounted,
       watermark: nil,
       blockerKind: nil,
-      accessibilityLabel: remote.map {
-        "on \($0.deviceName), \(bubble.project), remote session, \(status)"
+      accessibilityLabel: host.map {
+        "on \($0), \(bubble.project), remote session, \(status)"
       } ?? "\(bubble.project), unassigned terminal, \(status)",
-      // a peer row's detail already leads with its desk (FieldBubble's remote detail), so the hover is that line
-      title: bubble.detail)
+      // a mesh session's detail already leads with its desk (FieldBubble's remote detail), so the hover is that
+      // line; a remote-cut terminal's detail is its owner's line, and the window's title leads it with the host
+      title: bubble.host.map { "\($0) · \(bubble.detail)" } ?? bubble.detail)
   }
 
   let appearance = bubble.status
@@ -375,17 +434,19 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
     gapBefore: 3)
   let message = latestMessage(facet)
   let watermark = SwarmWatermark(sprite: facet.markKey, opacity: SwarmWeight.watermark)
+  // A peer's agent wears its host under the model line, as a peer's terminal does (Q16). A screen reader hears its
+  // desktop in the line under its name already, so the accessible name adds nothing for it.
+  let host = bubble.host.map { [hostLine($0)] } ?? []
 
   if appearance == .working {
-    // The held total is the UI's ledger: corrected USD across a bubble's runs,
-    // cached ones included. The RATE is Core's own live projection over its
-    // rate-eligible window — never a difference of UI snapshots, which a
-    // correction could otherwise turn into new spend.
-    let total = facet.usage?.total
-    let liveUsage = facet.monitorUsage
-    let coverage = liveUsage?.costCoverage
-    let priced = coverage == .complete || coverage == .partial
-    let ratePerMin: Double? = priced ? (liveUsage?.costRatePerMin ?? 0) : nil
+    // The total is the OWNER's ledger: corrected USD across a bubble's runs,
+    // cached ones included. The RATE is the owner's own live projection, by
+    // the hour (J3 (a)) — never a difference of snapshots, which a correction
+    // could otherwise turn into new spend.
+    let cost = facet.cost
+    let total = cost?.total
+    let priced = cost?.priced ?? false
+    let perHour: Double? = priced ? (cost?.burnPerHour ?? 0) : nil
     var copy: [CopyLine] = []
     if let branch = facet.branch {
       copy.append(
@@ -398,8 +459,8 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
         key: "name", text: bubble.project, style: SwarmCopyStyle.workingName, opacity: SwarmWeight.title,
         tone: .ink, gapBefore: facet.branch == nil ? 0 : 1, lead: projectFolder(SwarmCopyStyle.workingName)))
     copy.append(modelLine)
-    let rate = formatRatePerHour(ratePerMin)
-    let partial = facet.usage?.coverage == .partial
+    copy += host
+    let rate = formatRatePerHour(perHour: perHour)
     return SwarmBodyModel(
       id: bubble.id,
       state: .working,
@@ -410,10 +471,9 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
       copyMaxWidthRatio: 0.8,
       figures: SwarmFigures(
         top: SwarmFigure(text: percent.map { "\($0)%" } ?? "--", hot: percent.map { $0 >= 80 } ?? false, none: percent == nil),
-        bottom: SwarmFigure(
-          text: total.map { "~\(formatUsd($0))\(partial ? "+" : "")" } ?? "—", hot: false, none: total == nil)),
+        bottom: SwarmFigure(text: cost?.estimate ?? "—", hot: false, none: total == nil)),
       ring: ring,
-      burn: SwarmBurn(lit: ratePerMin.map { burnFlames(costPerMin: $0) } ?? 0, priced: priced),
+      burn: SwarmBurn(lit: perHour.map { burnFlames(costPerMin: perMinute($0)) } ?? 0, priced: priced),
       light: .ink,
       hollow: false,
       running: false,
@@ -464,6 +524,7 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
         gapBefore: 2, lineHeight: 1.15, lead: CopyLead(kind: .icon(state.icon), size: 11, width: 8, gap: 3)))
   }
   copy.append(modelLine)
+  copy += host
   let light: SwarmLightTone? = appearance == .blocked ? .orange : bubble.unread ? .blue : nil
   return SwarmBodyModel(
     id: bubble.id,

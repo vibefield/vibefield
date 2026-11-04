@@ -1,4 +1,4 @@
-import type { AgentProfileSet } from "@vibefield/contracts";
+import { type AgentProfileSet, NATIVE_PROFILE_SET_ID } from "@vibefield/contracts";
 import type { ProfileTab } from "@vibefield/puppeteer-views";
 import type { MonitorAgent } from "./types";
 
@@ -7,8 +7,8 @@ import type { MonitorAgent } from "./types";
 // session runs under, the strip and what a chosen tab recedes. `GodviewMonitor`
 // draws them; nothing here dials.
 
-/** The native set's id: the agents' own folders ("This Mac"). */
-export const NATIVE_PROFILE = "native";
+/** The native set's id: the agents' own folders ("This Mac"), as contracts mirrors it from puppeteer. */
+export const NATIVE_PROFILE = NATIVE_PROFILE_SET_ID;
 
 /**
  * The profile a row's session runs under, or undefined for a row under none.

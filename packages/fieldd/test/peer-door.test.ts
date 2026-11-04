@@ -156,6 +156,33 @@ describe("PeerLink.doorState", () => {
     expect(drops).toBe(0);
   });
 
+  // PG-3b (the 3b review [13]) — every answered dial is announced, the first and each re-dial after a blip, so what
+  // a daemon carried on the old socket (a reader's report, which the owner forgot with that connection) is carried
+  // again; `link-changed` says only the first, since a blip keeps the link `connected`.
+  it("PG-3b: link-ready is announced at the first answered dial and again at each re-dial", async () => {
+    let server: import("ws").WebSocket | undefined;
+    const d = await door((msg, ws) => {
+      server = ws;
+      if (msg.method === "device.subscribe") answer(ws, msg.id, { subId: "s-1", snapshot: {} });
+      else answer(ws, msg.id, { devices: [] });
+    });
+    const { link } = linkTo(d.url);
+    const ready: string[] = [];
+    link.on("link-ready", (ev: { deviceId: string }) => ready.push(ev.deviceId));
+    await link.subscribe(
+      "dev-b",
+      "device.subscribe",
+      {},
+      () => {},
+      () => {},
+    );
+    expect(ready).toEqual(["dev-b"]);
+    server?.terminate();
+    await until(() => link.doorState("dev-b") === "silent", 3_000);
+    await until(() => ready.length === 2, 5_000);
+    expect(ready).toEqual(["dev-b", "dev-b"]);
+  });
+
   it("a door that never answers the dial is silent once the deadline passes", async () => {
     const { link } = linkTo("ws://127.0.0.1:1/", { callTimeoutMs: 300 });
     await expect(link.request("dev-b", "device.list", {})).rejects.toMatchObject({

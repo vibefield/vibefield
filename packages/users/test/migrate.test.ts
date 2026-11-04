@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -11,6 +10,7 @@ import {
   readUsersFile,
   usersLockPath,
 } from "../src";
+import { tempDir } from "./temp-dir";
 
 const noSleep = { sleep: (_ms: number) => Promise.resolve() };
 
@@ -103,7 +103,7 @@ function inventory(dir: string): Map<string, string> {
 
 describe("flat-v1 → users-v2 migration (§4)", () => {
   it("moves the nine regions byte-identically, strangers stay, stamp lands last", async () => {
-    const root = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-migrate-")));
+    const root = canonicalRoot(tempDir("vf-migrate-"));
     const seeded = seedLegacy(root);
     expect(detectLayoutState(root)).toBe("legacy");
     const ensured = await ensureUsersRoot(root, { name: "james", ...noSleep });
@@ -119,7 +119,7 @@ describe("flat-v1 → users-v2 migration (§4)", () => {
   });
 
   it("is idempotent: a second run migrates nothing and keeps identity", async () => {
-    const root = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-migrate-idem-")));
+    const root = canonicalRoot(tempDir("vf-migrate-idem-"));
     seedLegacy(root);
     const first = await ensureUsersRoot(root, { ...noSleep });
     const second = await ensureUsersRoot(root, { ...noSleep });
@@ -129,7 +129,7 @@ describe("flat-v1 → users-v2 migration (§4)", () => {
   });
 
   it("fresh install mints (previous: fresh) with no moves", async () => {
-    const root = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-fresh-")));
+    const root = canonicalRoot(tempDir("vf-fresh-"));
     expect(detectLayoutState(root)).toBe("fresh");
     const ensured = await ensureUsersRoot(root, { name: "new", ...noSleep });
     expect(ensured.created).toBe(true);
@@ -138,7 +138,7 @@ describe("flat-v1 → users-v2 migration (§4)", () => {
   });
 
   it("a kill between two moves re-runs to convergence", async () => {
-    const root = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-migrate-kill-")));
+    const root = canonicalRoot(tempDir("vf-migrate-kill-"));
     const seeded = seedLegacy(root);
     let moves = 0;
     await expect(
@@ -162,7 +162,7 @@ describe("flat-v1 → users-v2 migration (§4)", () => {
   });
 
   it("migration-vs-mint race: the waiter refuses typed, then converges", async () => {
-    const root = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-migrate-race-")));
+    const root = canonicalRoot(tempDir("vf-migrate-race-"));
     seedLegacy(root);
     // a live "migration" holds the lock
     writeFileSync(usersLockPath(root), JSON.stringify({ pid: process.pid, role: "migrate" }));
@@ -185,11 +185,11 @@ describe("flat-v1 → users-v2 migration (§4)", () => {
   });
 
   it("smoke-injected roots refuse to mint or migrate (typed)", async () => {
-    const fresh = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-nomint-")));
+    const fresh = canonicalRoot(tempDir("vf-nomint-"));
     await expect(ensureUsersRoot(fresh, { allowMint: false })).rejects.toMatchObject({
       kind: "users-mint-refused",
     });
-    const legacy = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-nomigrate-")));
+    const legacy = canonicalRoot(tempDir("vf-nomigrate-"));
     seedLegacy(legacy);
     await expect(ensureUsersRoot(legacy, { allowMint: false })).rejects.toMatchObject({
       kind: "users-mint-refused",
@@ -204,7 +204,7 @@ describe("flat-v1 → users-v2 migration (§4)", () => {
   // and the whole ladder was dead code under the suite.
   describe("the legacy-pair stop ladder (§4.3)", () => {
     it("SIGTERM honored: the pair is stopped and no SIGKILL follows", async () => {
-      const root = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-migrate-term-")));
+      const root = canonicalRoot(tempDir("vf-migrate-term-"));
       seedLegacyWithLivePair(root, [4242, 4243]);
       const pair = fakePair([4242, 4243], ["SIGTERM"]);
       const clock = stubbedClock();
@@ -228,7 +228,7 @@ describe("flat-v1 → users-v2 migration (§4)", () => {
     });
 
     it("SIGTERM ignored: SIGKILL follows, but only after the 5s wait", async () => {
-      const root = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-migrate-kill-ladder-")));
+      const root = canonicalRoot(tempDir("vf-migrate-kill-ladder-"));
       seedLegacyWithLivePair(root, [4242, 4243]);
       const pair = fakePair([4242, 4243], ["SIGKILL"]);
       const clock = stubbedClock();
@@ -251,7 +251,7 @@ describe("flat-v1 → users-v2 migration (§4)", () => {
     });
 
     it("both ignored: it refuses typed, names the pids, and moves nothing", async () => {
-      const root = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-migrate-unkillable-")));
+      const root = canonicalRoot(tempDir("vf-migrate-unkillable-"));
       seedLegacyWithLivePair(root, [4242, 4243]);
       const pair = fakePair([4242, 4243], []); // a pair that outlives both signals
       const clock = stubbedClock();
@@ -278,7 +278,7 @@ describe("flat-v1 → users-v2 migration (§4)", () => {
   });
 
   it("an entry present on BOTH sides refuses typed — the migration never guesses", async () => {
-    const root = canonicalRoot(mkdtempSync(join(tmpdir(), "vf-bothsides-")));
+    const root = canonicalRoot(tempDir("vf-bothsides-"));
     seedLegacy(root);
     mkdirSync(join(root, "users", "1", "docs"), { recursive: true });
     writeFileSync(join(root, "users", "1", "docs", "impostor"), "who put this here");

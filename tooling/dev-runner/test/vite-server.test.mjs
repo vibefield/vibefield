@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import test from "node:test";
 import { resolveConfig } from "vite";
+import { linkedPackages } from "../../../scripts/siblings.mjs";
 import { workspacePaths } from "../src/paths.mjs";
 import { rendererDevelopmentDefines } from "../src/vite-server.mjs";
 
@@ -32,6 +33,7 @@ test("the onboarding dev define overrides the packaged renderer default", async 
 });
 
 test("product, Studio, and browser catalog share one dependency optimizer graph", async () => {
+  const linkedIce = linkedPackages(workspacePaths.repoRoot).has("@vibecook/ice");
   const configs = await Promise.all(
     ["development", "design"].map((mode) =>
       resolveConfig(
@@ -52,8 +54,20 @@ test("product, Studio, and browser catalog share one dependency optimizer graph"
       "studio.html",
       "design-system.html",
     ]);
-    // DK-1 (ICE 0.14.0): the desk's entries took the row R3F's fiber held.
-    assert.ok(config.optimizeDeps.include.includes("@vibefield/field-app > @vibecook/ice/desk"));
+    // Registry ICE is optimized as one family; linked ICE stays in the source
+    // graph so its desk and root entries cannot register the same core twice.
+    assert.deepEqual(
+      config.optimizeDeps.include.filter((id) => id.includes("@vibecook/ice")),
+      linkedIce
+        ? []
+        : [
+            "@vibefield/field-app > @vibecook/ice/desk",
+            "@vibefield/field-app > @vibecook/ice/desk/engine",
+            "@vibefield/field-app > @vibecook/ice/desk/objects",
+            "@vibefield/field-app > @vibecook/ice/desk/kit",
+          ],
+    );
+    assert.equal(config.optimizeDeps.exclude.includes("@vibecook/ice"), linkedIce);
     assert.ok(
       !config.optimizeDeps.include.some(
         (id) => id.includes("@react-three/") || id.endsWith("three"),

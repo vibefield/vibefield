@@ -33,7 +33,12 @@ import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewDeckState } from "../src/frame/deck-door";
-import { DEFAULT_DECK_APPEARANCE } from "../src/godview/deck-appearance";
+import {
+  DEFAULT_DECK_APPEARANCE,
+  type DeckAppearance,
+  resetDeckAppearanceForTest,
+  setDeckAppearance,
+} from "../src/godview/deck-appearance";
 import {
   clampDeckShift,
   DECK_EDGE_STORAGE_KEY,
@@ -52,15 +57,19 @@ import {
 } from "../src/godview/deck-edge";
 import { DECK_FALL_MS, DECK_RISE_MS, DECK_TRAVEL_GRACE_MS } from "../src/godview/deck-state";
 import {
+  type DeckPaneLook,
+  godviewTerminalEffects,
   godviewTerminalGroundStyle,
   godviewTerminalTheme,
   terminalGround,
+  useDeckPaneLook,
 } from "../src/godview/deck-theme";
 import {
   getDeckWrapperFacts,
   resetDeckWrapperFactsForTest,
 } from "../src/godview/deck-wrapper-witness";
 import { GodviewStage } from "../src/godview/GodviewStage";
+import type { GodviewTheme } from "../src/godview/GodviewTuningPanel";
 import { GodviewMiniature } from "../src/panels/terminal/GodviewMiniature";
 import { BUILTIN_THEMES } from "../src/panels/terminal/theme-view";
 
@@ -1075,6 +1084,44 @@ describe("the deck sheet's ground", () => {
       "--vf-godview-terminal-bg": "rgb(40 44 52)",
       "--vf-godview-terminal-ink": "rgb(255 255 255)",
     });
+  });
+
+  it("is what a deck pane's look hands any surface showing a deck session, beside the deck's own theme and effects, from the one projection (useDeckPaneLook; SP-1d)", () => {
+    const looks: DeckPaneLook[] = [];
+    function Probe({ mode }: { readonly mode: GodviewTheme }): null {
+      looks.push(useDeckPaneLook(mode));
+      return null;
+    }
+    const chosen: DeckAppearance = {
+      ...DEFAULT_DECK_APPEARANCE,
+      lightThemeName: "Solarized Light",
+      darkThemeName: "Solarized Dark",
+      shaderEffects: ["ghosttea:crt"],
+      shaderAnimate: false,
+    };
+    resetDeckAppearanceForTest();
+    root = createRoot(host);
+    try {
+      for (const appearance of [DEFAULT_DECK_APPEARANCE, chosen]) {
+        act(() => setDeckAppearance(appearance));
+        for (const mode of ["light", "dark"] as const) {
+          act(() => root?.render(<Probe mode={mode} />));
+          const look = looks.at(-1);
+          expect(look?.theme, `${mode}`).toEqual(godviewTerminalTheme(appearance, mode));
+          expect(look?.effects, `${mode}`).toEqual(godviewTerminalEffects(appearance));
+          expect(look?.ground, `${mode}`).toEqual(godviewTerminalGroundStyle(appearance, mode));
+        }
+      }
+      // held still across renders the viewer did not cause; the effects across a change of mode
+      const before = looks.at(-1);
+      act(() => root?.render(<Probe mode="dark" />));
+      expect(looks.at(-1)).toBe(before);
+      act(() => root?.render(<Probe mode="light" />));
+      expect(looks.at(-1)?.effects).toBe(before?.effects);
+      expect(looks.at(-1)?.theme).not.toBe(before?.theme);
+    } finally {
+      resetDeckAppearanceForTest();
+    }
   });
 });
 

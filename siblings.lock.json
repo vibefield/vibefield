@@ -1,10 +1,10 @@
 {
-  "//": "AR-0 sibling mode — machine-coupled checkouts pinned by revision. Rewritten 2026-10-29 at the EL8 to puppeteer 0.3.2 and again at the EL8 to rosetta 0.1.2, and 2026-11-04 at the EL8 to rosetta 0.1.3 (the comment had kept ghosttea 0.13.1 and truffle 0.7.19, true until their later EL8s); the history is LANDED's and DECISIONS' RD rows. Each entry carries two coordinates (RD-1, 2026-10-15, thinking-release-deps.md §2): the checkout the dev overlay links (`path`, `sha` and the planes' keys) and, per released plane, `release` — the version the committed tree names. A plane with a `release` is committed in prod shape (exact registry rows); a plane without one is committed in dev shape (link: rows, path patches) until RD-5 records its release. `node scripts/siblings.mjs render --prod` writes the committed rows from this file and the pre-commit hook checks them. Today: puppeteer — npm exact `@vibefield/puppeteer-*` 0.3.2 since 2026-10-29 (0.2.3 from 2026-10-26, when the `@vibecook/puppeteer-*` scope its link: rows carried retired), published from the tag v0.3.2 = 95a70aa7, the commit npm's provenance names; no build reads its checkout. rosetta — npm exact `@vibefield/rosetta-protocol` and `-room` 0.1.3 (EL8, 2026-11-04; published from rosetta main 8e8f496, tags npm-v0.1.3 and v0.1.3); rosettad is built from the same pinned release source (the `cargo` key). Installing the published daemon archives remains RD-D7. The checkout is DEDICATED to its pin (`../rosetta-pin`, W-D10, 2026-10-03): James's working checkout `../rosetta` is nothing this repo reads; `node scripts/siblings.mjs fetch rosetta` creates it at the pin and `pnpm siblings:build` builds rosettad from it. ghosttea — released on every plane, 0.13.7 at the tag v0.13.7: npm and Swift exact, and cargo in the REGISTRY form (`release.cargo` a version string, thinking-release-deps.md §13: no [patch.crates-io] row, its [workspace.dependencies] row rendered `=0.13.7`). truffle — this file records its Swift plane alone: `release.swift` 0.7.23, the version ghosttea 0.13.7 declares exact, at the commit of truffle's 0.7.23 release. Its cargo plane (`truffle-core = \"=0.7.24\"`, Cargo.toml) and npm plane (the five sidecars 0.7.24, apps/desktop) are exact registry pins outside this file since the RFC 025 window closed for them (2026-09-16); they moved to 0.7.24 without the Swift plane on 2026-10-27 (THE SPLIT, James's ruling a). mille — unreleased: its npm plane is committed as link: rows into `../mille-pin` (FS-1b) until its release. A sibling whose every plane is released needs no checkout (puppeteer, ghosttea, truffle); its entry stays as the dev overlay's coordinate (`pnpm siblings use NAME` links it, `node scripts/siblings.mjs fetch NAME` creates the checkout). `pnpm preflight` verifies presence, revision, dirtiness (warn), that the committed rows agree with this file, that a declared SwiftPM link resolves to the pinned checkout and the kit manifest names it, and that a declared Go sidecar (a `go` key; none today) is built and fresh (warn). `pnpm siblings:pin` records the current HEADs deliberately (EL8: upgrades are events, never drift), then proves wall R23, the consumers' typecheck and gen:check at them. EXIT — npm (RD-5, superseding W-D8's 'delete the entry'): record the sibling's `release.npm` here (`render --prod` then writes the exact rows) and keep the entry — its checkout coordinate is what the dev overlay links.",
+  "//": "AR-0 sibling mode — machine-coupled checkouts pinned by revision. Rewritten 2026-11-04 at the EL8 to rosetta 0.1.3 and before that 2026-11-02 for the Ghostty 1.4 EL8 to Ghosttea 0.14.0, retaining Puppeteer 0.3.3 and the latest Godview lifecycle changes; the history is LANDED's and DECISIONS' RD rows. Each entry carries two coordinates (RD-1, 2026-10-15, thinking-release-deps.md §2): the checkout the dev overlay links (`path`, `sha` and the planes' keys) and, per released plane, `release` — the version the committed tree names. A plane with a `release` is committed in prod shape (exact registry rows); a plane without one is committed in dev shape (link: rows, path patches) until RD-5 records its release. `node scripts/siblings.mjs render --prod` writes the committed rows from this file and the pre-commit hook checks them. Today: puppeteer — npm exact `@vibefield/puppeteer-*` 0.3.3 (EL8, 2026-11-02), at release tag v0.3.3 = 52d09c8e; no build reads its checkout. rosetta — npm exact `@vibefield/rosetta-protocol` and `-room` 0.1.3 (EL8, 2026-11-04; published from rosetta main 8e8f496, tags npm-v0.1.3 and v0.1.3); rosettad is built from the same pinned release source (the `cargo` key). Installing the published daemon archives remains RD-D7. The checkout is DEDICATED to its pin (`../rosetta-pin`, W-D10, 2026-10-03): James's working checkout `../rosetta` is nothing this repo reads; `node scripts/siblings.mjs fetch rosetta` creates it at the pin and `pnpm siblings:build` builds rosettad from it. ghosttea — released on every plane, 0.14.0 at the signed tag v0.14.0 = 86d816ee: npm and Swift exact, and cargo in the REGISTRY form (`release.cargo` a version string, thinking-release-deps.md §13: no [patch.crates-io] row, its [workspace.dependencies] row rendered `=0.14.0`). truffle — this file records its Swift plane alone: `release.swift` 0.7.26, the exact version ghosttea 0.14.0 declares, at verified tag v0.7.26. The 2026-11-02 Swift update publishes the canonical DNS-name fix used by the phone. Its cargo plane (`truffle-core = \"=0.7.24\"`, Cargo.toml) and npm plane (the five sidecars 0.7.24, apps/desktop) are exact registry pins outside this file since the RFC 025 window closed for them (2026-09-16); they moved to 0.7.24 without the Swift plane on 2026-10-27 (THE SPLIT, James's ruling a). mille — unreleased: its npm plane is committed as link: rows into `../mille-pin` (FS-1b) until its release. A sibling whose every plane is released needs no checkout (puppeteer, ghosttea, truffle); its entry stays as the dev overlay's coordinate (`pnpm siblings use NAME` links it, `node scripts/siblings.mjs fetch NAME` creates the checkout). `pnpm preflight` verifies presence, revision, dirtiness (warn), that the committed rows agree with this file, that a declared SwiftPM link resolves to the pinned checkout and the kit manifest names it, and that a declared Go sidecar (a `go` key; none today) is built and fresh (warn). `pnpm siblings:pin` records the current HEADs deliberately (EL8: upgrades are events, never drift), then proves wall R23, the consumers' typecheck and gen:check at them. EXIT — npm (RD-5, superseding W-D8's 'delete the entry'): record the sibling's `release.npm` here (`render --prod` then writes the exact rows) and keep the entry — its checkout coordinate is what the dev overlay links.",
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
       "repository": "https://github.com/vibefield/puppeteer.git",
-      "sha": "95a70aa77aad6bb0ca30805651797cffb153e1c2",
+      "sha": "52d09c8e84951b9a355a6700eac2dfc1290a9fa0",
       "packages": {
         "@vibefield/puppeteer-runtime": "packages/runtime",
         "@vibefield/puppeteer-builtin-providers": "packages/builtin-providers",
@@ -15,7 +15,7 @@
         "@vibefield/puppeteer-view-sdk": "packages/view-sdk"
       },
       "release": {
-        "npm": "0.3.2"
+        "npm": "0.3.3"
       }
     },
     "rosetta": {
@@ -37,29 +37,32 @@
     "truffle": {
       "path": "../truffle-rfc025",
       "repository": "https://github.com/vibecook-dev/truffle.git",
-      "sha": "0b83a2ceac54b60c54c01ab5b95fad480bc7d6bc",
+      "sha": "101889f676d32989e2c32295c3b608ccd5972c02",
       "swift": {
         "manifest": "apps/ios/VibeFieldKit/Package.swift",
         "link": "apps/ios/VibeFieldKit/.window/truffle"
       },
       "release": {
-        "swift": "0.7.23"
+        "swift": "0.7.26"
       }
     },
     "ghosttea": {
       "path": "../ghosttea-0.11.2",
       "repository": "https://github.com/vibecook-dev/ghosttea.git",
-      "sha": "3eee581c14b05850c90bea09536d4bc6b856223b",
+      "sha": "86d816ee7920e6ffd0c8cfce24272e8802ceec76",
       "javascript": {
         "workspaces": [
           "@vibecook/ghosttea-protocol",
+          "@vibecook/ghosttea-client",
           "@vibecook/ghosttea-frame",
           "@vibecook/ghosttea",
           "@vibecook/ghosttea-react"
         ]
       },
       "packages": {
-        "@vibecook/ghosttea-react": "packages/ghosttea-react"
+        "@vibecook/ghosttea-react": "packages/ghosttea-react",
+        "@vibecook/ghosttea-client": "packages/ghosttea-client",
+        "@vibecook/ghosttea-protocol": "packages/ghosttea-protocol"
       },
       "patch": {
         "ghosttea": "native/ghosttea",
@@ -74,9 +77,9 @@
         "link": "apps/ios/VibeFieldKit/.window/ghosttea"
       },
       "release": {
-        "npm": "0.13.7",
-        "cargo": "0.13.7",
-        "swift": "0.13.7"
+        "npm": "0.14.0",
+        "cargo": "0.14.0",
+        "swift": "0.14.0"
       }
     },
     "mille": {
@@ -94,6 +97,20 @@
           "from": "packages/field-app",
           "names": ["react", "react-dom", "@types/react", "@types/react-dom"]
         }
+      }
+    },
+    "ice": {
+      "path": "../infinite-canvas-engine",
+      "repository": "https://github.com/vibefield/infinite-canvas-engine.git",
+      "sha": "5714ca307c6f1f375debae6b05c94d1ae06e384d",
+      "packages": {
+        "@vibecook/ice": "packages/ice"
+      },
+      "release": {
+        "npm": "0.17.0"
+      },
+      "pnpm": {
+        "build": ["--filter", "@vibecook/ice", "build"]
       }
     }
   }

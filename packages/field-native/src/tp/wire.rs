@@ -43,6 +43,7 @@ pub fn inbound_tags(channel: Channel) -> &'static [&'static str] {
             "ReleaseGeometry",
             "TransferGeometry",
             "SendInput",
+            "SelectionTextRequest",
         ],
         Channel::Frames => &[
             "ConnectionHello",
@@ -50,6 +51,7 @@ pub fn inbound_tags(channel: Channel) -> &'static [&'static str] {
             "AttachFramesLeg",
             "TransportCredit",
             "SceneApplied",
+            "RequestScene",
             "CalibrationPing",
         ],
     }
@@ -381,6 +383,16 @@ pub struct SceneApplied {
     pub applied_content: SceneContentStamp,
 }
 
+/// Contracts `RequestScene`: repair an absent/rejected viewer scene without
+/// changing demand, the attached view, or geometry ownership.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestScene {
+    pub session_id: String,
+    pub activation_id: String,
+    pub lease_epoch: u64,
+}
+
 /// One dimension of the lease (`PresentationDimension` / `InputDimension`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -573,6 +585,35 @@ pub struct GeometryState {
     pub rows: u16,
 }
 
+/// Optional `selection-text` read. The activation determines the engine view;
+/// the requester cannot name another viewer or bypass the read grant.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectionTextRequest {
+    pub request_id: String,
+    pub session_id: String,
+    pub activation_id: String,
+    pub lease_epoch: u64,
+    pub start_column: u16,
+    pub start_row: u32,
+    pub end_column: u16,
+    pub end_row: u32,
+    pub select_all: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectionTextResult<'a> {
+    pub request_id: &'a str,
+    pub session_id: &'a str,
+    pub activation_id: &'a str,
+    pub lease_epoch: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<&'static str>,
+}
+
 /// Contracts `SendInput` (client → cell, CONTROL leg; §5.4, TP-S3-input) — the
 /// terminal-input verb. The leading fields are the activation triple plus the
 /// monotonic `input_sequence` fence; `op` mirrors ghosttea's input serde so it
@@ -736,6 +777,8 @@ pub const CELL_CAPABILITIES: &[&str] = &[
     SESSION_EVENTS_CAPABILITY,
     GEOMETRY_EVENTS_CAPABILITY,
     INPUT_REFUSALS_CAPABILITY,
+    SELECTION_TEXT_CAPABILITY,
+    SCENE_REPAIR_CAPABILITY,
 ];
 
 /// The negotiated `session-events` capability string, spelled once.
@@ -745,6 +788,8 @@ pub const SESSION_EVENTS_CAPABILITY: &str = "session-events";
 pub const GEOMETRY_EVENTS_CAPABILITY: &str = "geometry-events";
 /// The negotiated `input-refusals` capability string, spelled once.
 pub const INPUT_REFUSALS_CAPABILITY: &str = "input-refusals";
+pub const SELECTION_TEXT_CAPABILITY: &str = "selection-text";
+pub const SCENE_REPAIR_CAPABILITY: &str = "scene-repair";
 
 pub fn capability_intersection(client: &[String]) -> Vec<String> {
     client
@@ -756,6 +801,48 @@ pub fn capability_intersection(client: &[String]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn scene_repair_fixture_is_frames_only_and_explicitly_negotiated() {
+        let request: super::RequestScene = serde_json::from_str(include_str!(
+            "../../../contracts/fixtures/tp-request-scene.valid.json"
+        ))
+        .unwrap();
+        assert_eq!(request.session_id, "session-repair");
+        assert_eq!(request.activation_id, "activation-repair");
+        assert_eq!(request.lease_epoch, 3);
+        assert_eq!(
+            super::capability_intersection(&["scene-repair".into()]),
+            ["scene-repair"]
+        );
+        assert!(super::inbound_tags(super::Channel::Frames).contains(&"RequestScene"));
+        assert!(!super::inbound_tags(super::Channel::Control).contains(&"RequestScene"));
+    }
+
+    #[test]
+    fn selection_fixtures_match_the_contracts_and_swift() {
+        let request: super::SelectionTextRequest = serde_json::from_str(include_str!(
+            "../../../contracts/fixtures/tp-selection-text-request.valid.json"
+        ))
+        .unwrap();
+        let result: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../contracts/fixtures/tp-selection-text-result.unicode.json"
+        ))
+        .unwrap();
+        assert_eq!(request.request_id, result["requestId"]);
+        assert_eq!(request.session_id, result["sessionId"]);
+        assert_eq!(request.lease_epoch, 7);
+        assert!(request.select_all);
+        let response = super::SelectionTextResult {
+            request_id: &request.request_id,
+            session_id: &request.session_id,
+            activation_id: &request.activation_id,
+            lease_epoch: request.lease_epoch,
+            text: Some("中-é-👩‍💻-🛙X\nrow 160".into()),
+            error: None,
+        };
+        assert_eq!(serde_json::to_value(response).unwrap(), result);
+    }
+
     use super::*;
 
     fn fixture(name: &str) -> Value {

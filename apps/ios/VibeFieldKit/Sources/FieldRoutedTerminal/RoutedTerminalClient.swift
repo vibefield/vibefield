@@ -164,8 +164,16 @@ public struct RoutedSessionState: Sendable {
     // First: a run that exited takes no keys whatever the legs say, and a key
     // sent to it went nowhere with no word (the audit's P8, 2026-10-17).
     if let exit { return "the run exited — \(exit.outcome)" }
+    // Parking detaches the host view immediately. A cached picture and a
+    // delayed "allowed" lease must not authorize keys or inertial scrolling.
+    guard demand == .live else { return "this view is parked" }
+    guard !awaitingDemandAcknowledgement else { return "the cell has not resumed this view" }
+    guard !awaitingSceneRepair else { return "waiting for a complete scene" }
     if let held = presentationHeldBecause { return held }
     guard let status else { return "the cell has said nothing yet" }
+    if let after = inputStatusAfterDemand, status.cellStatusSequence <= after {
+      return "waiting for the resumed view's input status"
+    }
     guard case .allowed = status.input else { return "the cell holds input: \(status.input)" }
     guard rights.contains(.input) else { return "this view has no input right" }
     guard inputRightLive else { return "the input right ran out" }
@@ -180,6 +188,10 @@ public struct RoutedSessionState: Sendable {
   internal var nowMs: Int64 = 0
   internal var inputSequence: Int64 = 0
   internal var demandSequence: Int64 = 0
+  /// A resumed view cannot reuse an allowed status from before it was parked.
+  /// Wait for its own demand acknowledgement, then a newer cell status.
+  internal var awaitingDemandAcknowledgement = false
+  internal var inputStatusAfterDemand: Int64?
   /// DS-4b — the seat as last ANNOUNCED to this client: the revision its next
   /// verb must expect, and the holder (nil = empty, or never heard of). The
   /// cell pushes nothing to a displaced holder, so this is learned from
@@ -201,6 +213,9 @@ public struct RoutedSessionState: Sendable {
   /// `RoutedTerminalClient.maxRefusedRepairs`, and what happens at the bound is
   /// written on `repairRefused`.
   internal var refusedRepairs = 0
+  /// Coalesce repair requests until a complete replacement actually applies.
+  /// An intervening accepted delta cannot reopen input over a missing scene.
+  internal var awaitingSceneRepair = false
 
   public var leaseLive: Bool { nowMs < leaseDeadlineMs }
   public var inputRightLive: Bool { nowMs < inputRightDeadlineMs }
@@ -347,6 +362,15 @@ public final class RoutedTerminalClient {
   private var control: RoutedLeg?
   private var frames: RoutedLeg?
   private var controlAccepted: RoutedConnectionAccepted?
+  private struct SelectionRead {
+    let sessionId: String
+    let activationId: String
+    let leaseEpoch: Int64
+    let continuation: CheckedContinuation<String, any Error>
+    let timeout: Task<Void, Never>
+  }
+  private var selectionReads: [String: SelectionRead] = [:]
+  var selectionDeadline: Duration = .seconds(5)
   private var framesAccepted: RoutedConnectionAccepted?
   private var ticket: RoutedTerminalTicket?
   private var grants: [String: RoutedGrant] = [:]
@@ -362,6 +386,13 @@ public final class RoutedTerminalClient {
   private var pumps: [Task<Void, Never>] = []
   /// "Re-mint once, then UNAVAILABLE" — the pre-authentication rule, counted.
   private var preAuthRetried = false
+  /// Item 161 — the sets in a row that failed before both legs were accepted (a
+  /// dial the door turned away, a handshake that never finished), and the ONE
+  /// deadline over the whole run (`armReachDeadline`). A set that comes up ends
+  /// the run (`accepted`), and so does a stop (`stall`, `close`).
+  private var unreachedSets = 0
+  private var reachTimer: Task<Void, Never>?
+  private var reachToken = 0
   /// SP-2 (g) — the two legs' budget slots, and a dial waiting for them.
   private var legGrant: PhoneConnectionBudget.Grant?
   private var legGrantTask: Task<Void, Never>?
@@ -429,6 +460,10 @@ public final class RoutedTerminalClient {
   }
 
   private var geometryAsks: [GeometryAsk] = []
+  /// DemandAccepted names only a sequence. Allocate across the whole set so
+  /// two sessions on one control leg cannot acknowledge each other's demand.
+  /// This is also monotonic within every activation, as the wire requires.
+  private var nextDemandSequence: Int64 = 0
   /// A take asked before its session's control leg attached: held, the newest
   /// grid kept, and sent the moment the leg attaches with the right.
   private var pendingTakes: [String: Grid] = [:]
@@ -557,6 +592,7 @@ public final class RoutedTerminalClient {
 
   public func close() {
     closed = true
+    endReach()
     teardown()
     state = .off
     reconcileStep()
@@ -570,6 +606,7 @@ public final class RoutedTerminalClient {
   /// passenger's.
   public func forget(sessionId: String) {
     guard sessions[sessionId] != nil else { return }
+    cancelSelections(for: sessionId)
     declare(demand: .none, for: sessionId)
     renewals[sessionId]?.cancel()
     renewals[sessionId] = nil
@@ -584,6 +621,75 @@ public final class RoutedTerminalClient {
   }
 
   // MARK: The control verbs
+
+  /// Read exact host text over the control leg. Requests are never replayed
+  /// after reconnect, and a late response cannot answer another activation.
+  public func selectionText(_ selection: RoutedSelection, for sessionId: String) async throws -> String {
+    guard controlAccepted?.negotiated(RoutedTerminalContract.selectionTextCapability) == true else {
+      throw RoutedSelectionError.unsupported
+    }
+    guard let session = sessions[sessionId], session.control == .attached,
+      !session.activationEnded, session.rights.contains(.read),
+      let grant = grants[sessionId], grant.expiresAt > Self.nowMs()
+    else { throw RoutedSelectionError.unavailable }
+    guard selectionReads.count < 16 else { throw RoutedSelectionError.busy }
+    let requestId = UUID().uuidString.lowercased()
+    let epoch = leaseEpoch(for: sessionId)
+    let body: [String: JSONValue] = [
+      "requestId": .string(requestId), "sessionId": .string(sessionId),
+      "activationId": .string(session.activationId), "leaseEpoch": .int(epoch),
+      "startColumn": .int(Int64(selection.startColumn)), "startRow": .int(Int64(selection.startRow)),
+      "endColumn": .int(Int64(selection.endColumn)), "endRow": .int(Int64(selection.endRow)),
+      "selectAll": .bool(selection.selectAll),
+    ]
+    guard try RoutedWire.encode(.selectionTextRequest, body).utf8.count <= limits.maxControlMessageBytes else {
+      throw RoutedSelectionError.tooLarge
+    }
+    return try await withTaskCancellationHandler {
+      try Task.checkCancellation()
+      return try await withCheckedThrowingContinuation { continuation in
+        let timeout = Task { [weak self, selectionDeadline] in
+          do { try await Task.sleep(for: selectionDeadline) } catch { return }
+          self?.finishSelection(requestId, .failure(RoutedSelectionError.timedOut))
+        }
+        selectionReads[requestId] = SelectionRead(
+          sessionId: sessionId, activationId: session.activationId, leaseEpoch: epoch,
+          continuation: continuation, timeout: timeout)
+        control?.send(.selectionTextRequest, body)
+      }
+    } onCancel: {
+      Task { @MainActor [weak self] in
+        self?.finishSelection(requestId, .failure(CancellationError()))
+      }
+    }
+  }
+
+  private func finishSelection(_ requestId: String, _ result: Result<String, any Error>) {
+    guard let pending = selectionReads.removeValue(forKey: requestId) else { return }
+    pending.timeout.cancel()
+    pending.continuation.resume(with: result)
+  }
+
+  private func cancelSelections(for sessionId: String? = nil) {
+    for (requestId, pending) in selectionReads where sessionId == nil || pending.sessionId == sessionId {
+      finishSelection(requestId, .failure(CancellationError()))
+    }
+  }
+
+  private func receiveSelection(_ body: JSONValue) {
+    guard controlAccepted?.negotiated(RoutedTerminalContract.selectionTextCapability) == true,
+      let result = try? RoutedSelectionResult(json: body)
+    else { fail("invalid selection response"); return }
+    // A timeout or cancelled request may already be gone; never reuse its id.
+    guard let pending = selectionReads[result.requestId] else { return }
+    guard result.sessionId == pending.sessionId, result.activationId == pending.activationId,
+      result.leaseEpoch == pending.leaseEpoch
+    else { fail("selection response names a different activation"); return }
+    guard let session = sessions[result.sessionId], !session.activationEnded,
+      session.activationId == pending.activationId, session.rights.contains(.read)
+    else { finishSelection(result.requestId, .failure(CancellationError())); return }
+    finishSelection(result.requestId, result.result.mapError { $0 as any Error })
+  }
 
   /// Typed text. Nil when sent (or held at the input gate, which says why
   /// elsewhere); a refusal, with its numbers, when it is too large to send.
@@ -660,28 +766,38 @@ public final class RoutedTerminalClient {
 
   /// Ask for a fresh authoritative scene.
   ///
-  /// There is no "send me a seed" verb on the wire, and inventing one would be
-  /// this client claiming a surface the cell does not have. The cell's OWN
-  /// trigger for a reseed is a `SceneApplied` that does not advance, so that is
-  /// exactly what this does: it drops the applied stamp, which stops this client
-  /// reporting progress it can no longer back up, and the cell sends a seed.
-  /// The same mechanism `lineageBroke` uses when the sink rejects a delta —
-  /// stated once, in one place, with one behaviour.
-  ///
-  /// *Corrected 2026-10-17 (the scroll audit; the second audit's D2): the cell
-  /// has no such trigger. `scene_applied` only records (`tp/activation.rs`), and
-  /// the pump reseeds on start, hub lag, starvation, oversize and demand `none`
-  /// only (`tp/presentation.rs`) — so on an idle session this asks the cell for
-  /// nothing, and input stays held until output moves. What works today is a
-  /// demand cycle (`none` → `live`), which also detaches the view and releases
-  /// the geometry seat. A real repair verb is owed in the contract (TM's).*
+  /// Corrected 2026-10-30: dropping `SceneApplied` never caused the host to
+  /// repair an idle scene. `scene-repair` now negotiates `RequestScene` on the
+  /// frames leg. It replaces the scene without parking the view or releasing
+  /// geometry. Older hosts receive no unknown verb; their existing demand or
+  /// reconnect recovery remains necessary.
   public func requestReseed(for sessionId: String) {
     guard var session = sessions[sessionId] else { return }
     session.appliedContent = nil
     session.frames = .seeding
     session.lastSeedReason = "the viewer asked for a fresh scene"
     sessions[sessionId] = session
-    options.log("frames: a fresh scene asked for — input waits for a seed session=\(sessionId)")
+    requestSceneIfPossible(for: sessionId)
+  }
+
+  private func requestSceneIfPossible(for sessionId: String) {
+    guard var session = sessions[sessionId], !session.awaitingSceneRepair,
+      session.demand == .live, session.control == .attached,
+      session.framesAttachSent, session.identity != nil,
+      session.rights.contains(.read), let frames
+    else { return }
+    guard framesAccepted?.negotiated(RoutedTerminalContract.sceneRepairCapability) == true else {
+      options.log("frames: this host cannot repair a scene without reattachment session=\(sessionId)")
+      return
+    }
+    session.awaitingSceneRepair = true
+    sessions[sessionId] = session
+    frames.send(.requestScene, [
+      "sessionId": .string(sessionId),
+      "activationId": .string(session.activationId),
+      "leaseEpoch": .int(leaseEpoch(for: sessionId)),
+    ])
+    options.log("frames: a complete scene requested without releasing geometry session=\(sessionId)")
   }
 
   /// Declare what this viewer wants. `live` attaches the cell's view (and starts
@@ -689,8 +805,14 @@ public final class RoutedTerminalClient {
   /// of whether anyone is watching.
   public func declare(demand: RoutedDemand, for sessionId: String) {
     guard var session = sessions[sessionId] else { return }
+    if demand == .none { cancelSelections(for: sessionId) }
+    if session.demand != demand {
+      session.awaitingDemandAcknowledgement = demand == .live
+      session.inputStatusAfterDemand = nil
+    }
     session.demand = demand
-    session.demandSequence += 1
+    nextDemandSequence += 1
+    session.demandSequence = nextDemandSequence
     sessions[sessionId] = session
     control?.send(
       .declareDemand,
@@ -1034,6 +1156,7 @@ public final class RoutedTerminalClient {
     // a control leg negotiates `session-events`), so both are reported.
     negotiatedCapabilities = Array(Set(control.capabilities).union(frames.capabilities)).sorted()
     preAuthRetried = false
+    endReach()
     state = .attached == state ? .attached : .ready
     startCreditPump()
     for sessionId in grants.keys { attach(sessionId: sessionId) }
@@ -1113,6 +1236,8 @@ public final class RoutedTerminalClient {
 
   private func handle(_ type: RoutedMessageType, _ body: JSONValue) {
     switch type {
+    case .selectionTextResult:
+      receiveSelection(body)
     case .controlLegAttached:
       guard let attached = try? RoutedControlLegAttached(json: body) else { return }
       guard var session = sessions[attached.sessionId],
@@ -1270,7 +1395,18 @@ public final class RoutedTerminalClient {
       sessions[status.sessionId] = session
 
     case .demandAccepted:
-      break
+      guard let sequence = body["demandSequence"]?.intValue, sequence > 0,
+        let sessionId = sessions.first(where: { $0.value.demandSequence == sequence })?.key,
+        var session = sessions[sessionId], !session.activationEnded,
+        session.demand == .live, session.awaitingDemandAcknowledgement
+      else { return }
+      session.awaitingDemandAcknowledgement = false
+      // Frames travel on another leg: a buffered frame can arrive before the
+      // host has reattached this view. Neither it nor an old allowed status is
+      // proof of readiness. The control ack orders the next status after the
+      // demand; the cell's own input dimension still decides when to open.
+      session.inputStatusAfterDemand = session.status?.cellStatusSequence ?? -1
+      sessions[sessionId] = session
 
     case .geometryCommitted:
       guard let committed = try? RoutedGeometryCommitted(json: body) else { return }
@@ -1510,7 +1646,7 @@ public final class RoutedTerminalClient {
           if applied {
             self.options.log("frames: the \(kind) to \(content) is on the glass session=\(sessionId)")
             self.frameApplied(
-              sessionId: sessionId, activationId: activationId, content: content)
+              sessionId: sessionId, activationId: activationId, content: content, wholeScene: true)
           } else {
             // A full frame IS the repair. One the sink will not take leaves
             // nothing to fall back to, so it is counted rather than asked for
@@ -1553,17 +1689,15 @@ public final class RoutedTerminalClient {
         payload, session: sessionId, activation: activationId, base: base, result: result)
       guard let self else { return }
       if applied {
-        self.frameApplied(sessionId: sessionId, activationId: activationId, content: result)
+        self.frameApplied(sessionId: sessionId, activationId: activationId, content: result, wholeScene: base == nil)
       } else if base == nil {
         // A frame with NO base is self-contained: it is the repair, not a
         // step onto one. Refusing it is the same answer a refused transfer
         // gives and is counted the same way.
         self.repairRefused(sessionId: sessionId, activationId: activationId)
       } else {
-        // The sink holds a scene this delta does not describe. The honest
-        // repair is a reseed, and the cell's own trigger for one is a
-        // `SceneApplied` that does not advance — so this client says nothing it
-        // cannot back up and marks the lineage broken instead.
+        // The sink holds a scene this delta does not describe. Ask explicitly
+        // for a complete scene rather than waiting for idle output to advance.
         self.lineageBroke(sessionId: sessionId, activationId: activationId)
       }
       // fix8 — the frame landed a hop after its unit: the attach's step moves
@@ -1591,11 +1725,12 @@ public final class RoutedTerminalClient {
 
   /// The sink took the frame. Only now is the scene this client's to claim.
   private func frameApplied(
-    sessionId: String, activationId: String, content: RoutedSceneStamp
+    sessionId: String, activationId: String, content: RoutedSceneStamp, wholeScene: Bool
   ) {
     guard var session = sessions[sessionId], session.activationId == activationId else { return }
     session.appliedContent = content
     session.frames = .active
+    if wholeScene { session.awaitingSceneRepair = false }
     // The bound below counts CONSECUTIVE refusals, so an applied frame clears
     // it: a sink that can show this scene is not a build that cannot show any.
     session.refusedRepairs = 0
@@ -1631,15 +1766,15 @@ public final class RoutedTerminalClient {
     if !already {
       options.log("frames: a delta did not fit the scene held — input waits for a seed session=\(sessionId)")
     }
+    requestSceneIfPossible(for: sessionId)
   }
 
   /// An AUTHORITATIVE scene the sink refused — a completed transfer, or a
   /// self-contained frame with no base. Both are the repair a lineage break
   /// asks for, so there is nothing further to fall back to.
   ///
-  /// The repair is asked for again the same way a lineage break asks for it
-  /// (drop the applied stamp; the cell's own trigger for a seed is a
-  /// `SceneApplied` that does not advance) — but only up to a BOUND, because
+  /// The repair is requested explicitly on a negotiated frames leg, but only
+  /// up to a BOUND, because
   /// the state this exists to prevent is a phone that asks for a scene it can
   /// never show and a cell that keeps sending one. A build whose TRF1 reader
   /// cannot parse what this cell renders would otherwise sit in that loop
@@ -1653,6 +1788,7 @@ public final class RoutedTerminalClient {
   private func repairRefused(sessionId: String, activationId: String) {
     guard var session = sessions[sessionId], session.activationId == activationId else { return }
     session.refusedRepairs += 1
+    session.awaitingSceneRepair = false
     let refusals = session.refusedRepairs
     session.appliedContent = nil
     options.log(
@@ -1662,6 +1798,7 @@ public final class RoutedTerminalClient {
       session.frames = .seeding
       session.lastSeedReason = "the sink would not take the scene the cell sent"
       sessions[sessionId] = session
+      requestSceneIfPossible(for: sessionId)
       return
     }
     let reason =
@@ -1747,6 +1884,10 @@ public final class RoutedTerminalClient {
 
   private func legFailed(_ failure: RoutedLegFailure, on channel: RoutedChannel) {
     lastRefusal = failure.description
+    // Item 161 — whether this set ever came up: both legs accepted. One that
+    // did not (a dial the door turned away, a handshake that never finished)
+    // lengthens the run of such sets, and the next mint waits its backoff.
+    let cameUp = controlAccepted != nil && framesAccepted != nil
     // Losing or replacing ONE leg invalidates every activation on the SET: the
     // other leg's activations are no longer two-legged, so they are not
     // activations. The cell already made this decision on its side.
@@ -1761,6 +1902,16 @@ public final class RoutedTerminalClient {
       state = .failed(reason: failure.description)
       return
     }
+    var pause = Duration.zero
+    if !cameUp {
+      unreachedSets += 1
+      pause = Self.reachBackoff(after: unreachedSets, cap: options.maxBackoff)
+      armReachDeadline()
+      let parts = pause.components
+      options.log(
+        "the set never came up (\(unreachedSets) in a row): the next mint waits "
+          + "\(parts.seconds * 1000 + parts.attoseconds / 1_000_000_000_000_000) ms")
+    }
     switch failure {
     case .preAuthenticationRefused:
       // "Re-mint once, then UNAVAILABLE." The count is kept here because nothing
@@ -1772,15 +1923,61 @@ public final class RoutedTerminalClient {
         return
       }
       preAuthRetried = true
-      requestFreshTicket(for: sessionId, because: .reconnecting)
+      requestFreshTicket(for: sessionId, because: .reconnecting, after: pause)
     case .closed(let code, _) where code == RoutedTerminalContract.CloseCode.staleRoute:
-      requestFreshTicket(for: sessionId, because: .staleRoute)
+      requestFreshTicket(for: sessionId, because: .staleRoute, after: pause)
     case .protocolViolation(let reason):
       state = .failed(reason: reason)
     case .closed, .dropped:
-      requestFreshTicket(for: sessionId, because: .reconnecting)
+      requestFreshTicket(for: sessionId, because: .reconnecting, after: pause)
     }
     _ = channel
+  }
+
+  /// Item 161 — the wait before the mint after `failures` sets in a row never
+  /// came up: 100 ms, doubling, at most `cap`. A first set that comes up and
+  /// is then lost waits nothing; that loss is no sign the door will refuse.
+  static func reachBackoff(after failures: Int, cap: Duration) -> Duration {
+    guard failures > 0 else { return .zero }
+    return min(Duration.milliseconds(100) * (1 << min(failures - 1, 16)), cap)
+  }
+
+  /// Item 161 — the one deadline over a run of sets that never came up, armed
+  /// at the first and re-armed by none after it. Each re-mint moves `step` (the
+  /// ticket, then the dial), and fix8's deadline is re-armed by every move, so a
+  /// door that turned every dial away left the card "connecting" for ever. When
+  /// it fires while the client is still trying, the attach stops at the dial,
+  /// with the run and its last failure kept in `lastRefusal`.
+  private func armReachDeadline() {
+    guard reachTimer == nil else { return }
+    reachToken &+= 1
+    let token = reachToken
+    let limit = options.stepDeadline
+    reachTimer = Task { [weak self] in
+      try? await Task.sleep(for: limit)
+      guard !Task.isCancelled, let self, token == self.reachToken else { return }
+      self.reachTimer = nil
+      guard !self.closed else { return }
+      switch self.state {
+      case .connecting, .reconnecting, .staleRoute:
+        let run = self.unreachedSets
+        let last = self.lastRefusal ?? "-"
+        self.options.log.error("the reach stopped: \(run) sets in a row never came up — the last: \(last)")
+        self.stall(at: .dial)
+        self.lastRefusal = "the attach stopped waiting at dial: \(run) sets in a row never came up — the last: \(last)"
+      case .off, .ready, .attached, .refused, .failed, .stalled:
+        return
+      }
+    }
+  }
+
+  /// Item 161 — the run of sets that never came up is over: one came up, or the
+  /// client stopped.
+  private func endReach() {
+    unreachedSets = 0
+    reachToken &+= 1
+    reachTimer?.cancel()
+    reachTimer = nil
   }
 
   private enum TicketReason {
@@ -1798,7 +1995,9 @@ public final class RoutedTerminalClient {
   /// `GRANT_NONCE_REPLAYED` — terminal for that grant. Every leg replacement is
   /// a fresh mint, and a client that retried the socket instead would spin
   /// against a refusal that can never become an acceptance.
-  private func requestFreshTicket(for sessionId: String, because reason: TicketReason) {
+  private func requestFreshTicket(
+    for sessionId: String, because reason: TicketReason, after pause: Duration = .zero
+  ) {
     switch reason {
     case .reconnecting: state = .reconnecting
     case .staleRoute: state = .staleRoute
@@ -1811,6 +2010,10 @@ public final class RoutedTerminalClient {
     needsTicket = false
     let token = generation
     Task { [weak self] in
+      // Item 161 — after a set that never came up, the mint waits first. The
+      // delay below grows only while mints fail: a mint that succeeds ends this
+      // task, so against a door that turns every dial away it never grew.
+      if pause > .zero { try? await Task.sleep(for: pause) }
       // The session the set is re-minted through: the one it lost, until the
       // door says that one is gone (below).
       var asking = sessionId
@@ -2096,6 +2299,7 @@ public final class RoutedTerminalClient {
   /// refuses — a face saying "connected" over a socket that is not there.
   private func endActivation(_ session: inout RoutedSessionState, reason: String) {
     guard !session.activationEnded else { return }
+    cancelSelections(for: session.sessionId)
     session.activationEnded = true
     // Law (2)/(3): the account goes DRAINING — already-admitted bytes are never
     // pretended away — and stays reported until the cell has seen them.
@@ -2126,6 +2330,7 @@ public final class RoutedTerminalClient {
   }
 
   private func teardownLegs() {
+    cancelSelections()
     // Every activation rode these legs, so none outlives them. A failure that
     // tore the legs down used to leave its sessions reading attached, and the
     // card's RETRY took that for a live lane — "back on its lane, no mint, no
@@ -2266,6 +2471,7 @@ public final class RoutedTerminalClient {
   /// and their slots, a dial waiting for a slot, every re-mint and renewal of
   /// this generation — and the state says where it stopped.
   private func stall(at step: AttachStep) {
+    endReach()
     lastRefusal = "the attach stopped waiting at \(step.rawValue)"
     let parts = options.stepDeadline.components
     let seconds = max(1, parts.seconds + (parts.attoseconds > 0 ? 1 : 0))

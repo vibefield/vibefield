@@ -19,7 +19,7 @@ export function OnboardingWelcomePaneView({
 }): ReactElement {
   return (
     <WizardHold face="welcome" card onSubmit={onContinue}>
-      <h1 className="text-[32px] font-light leading-[1.15] tracking-[-0.02em] text-black dark:text-white">
+      <h1 className="vf-wizard-headline text-[32px] font-light leading-[1.15] tracking-[-0.02em]">
         Welcome.
       </h1>
       <p className={`vf-wizard-hold-voice ${voiceCls}`}>

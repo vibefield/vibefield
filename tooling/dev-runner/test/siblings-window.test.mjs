@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import test from "node:test";
+import test, { afterEach } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   cargoBuildFreshness,
@@ -32,8 +32,22 @@ import {
 
 const REPO_ROOT = resolve(fileURLToPath(import.meta.url), "../../../..");
 
+// Item 153 (2026-11-02): every fixture root a row makes is removed when the row ends. Before, each run left ~22 behind
+// under the OS temp dir, among them one `truffle-fixture` beside the roots that every go fixture shared.
+let cleanup = [];
+afterEach(() => {
+  for (const dispose of cleanup.reverse()) dispose();
+  cleanup = [];
+});
+
+function tempRoot(prefix) {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  cleanup.push(() => rmSync(dir, { recursive: true, force: true, maxRetries: 3 }));
+  return dir;
+}
+
 function fixtureRoot({ cargoToml = null, lock = null } = {}) {
-  const root = mkdtempSync(join(tmpdir(), "vf-siblings-"));
+  const root = tempRoot("vf-siblings-");
   if (cargoToml !== null) writeFileSync(join(root, "Cargo.toml"), cargoToml);
   if (lock !== null) writeFileSync(join(root, "siblings.lock.json"), JSON.stringify(lock, null, 2));
   return root;
@@ -160,10 +174,13 @@ test("nx.json actually CONSUMES the sibling stamp", async () => {
 /** A fixture tree with a go sibling: the checkout's module (one .go source) and,
  * optionally, a built binary under <root>/target/debug. `built: "stale"` makes
  * the binary older than the source, which is the only thing the freshness rule
- * looks at. */
+ * looks at. The repo and its sibling checkout sit side by side inside one temp
+ * root of the fixture's own, as the lock's `../truffle-fixture` spells them. */
 function goFixture({ built = "fresh" } = {}) {
-  const root = mkdtempSync(join(tmpdir(), "vf-stage-"));
-  const checkout = join(root, "..", "truffle-fixture");
+  const base = tempRoot("vf-stage-");
+  const root = join(base, "vibe-field");
+  mkdirSync(root);
+  const checkout = join(base, "truffle-fixture");
   const moduleDir = join(checkout, "packages/sidecar-slim");
   mkdirSync(moduleDir, { recursive: true });
   writeFileSync(join(moduleDir, "main.go"), "package main\n");
@@ -305,7 +322,7 @@ test("stage-package.mjs stages the lock's own rosettad, optionally (AR-8, L3)", 
  * than the binary unless a row moves one; `depInfo(binary)` overrides the
  * record — a function, because the record names the binary the fixture made. */
 function cargoFixture({ depInfo } = {}) {
-  const checkout = mkdtempSync(join(tmpdir(), "vf-rosetta-"));
+  const checkout = tempRoot("vf-rosetta-");
   const sources = {
     lib: join(checkout, "crates/pipeline/src/lib.rs"),
     capture: join(checkout, "crates/pipeline/src/capture/mod.rs"),

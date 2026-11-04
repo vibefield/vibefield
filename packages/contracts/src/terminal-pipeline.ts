@@ -652,6 +652,8 @@ export const KNOWN_CAPABILITIES = [
   "geometry-events",
   "paste-parts",
   "input-refusals",
+  "selection-text",
+  "scene-repair",
 ] as const;
 export type KnownCapability = (typeof KNOWN_CAPABILITIES)[number];
 
@@ -1013,6 +1015,21 @@ export const SceneApplied = z
   })
   .passthrough();
 export type SceneApplied = z.infer<typeof SceneApplied>;
+
+/** Viewer → cell, frames leg, only after negotiating `scene-repair` on that
+ * leg. A missing/rejected local scene needs a complete replacement even when
+ * the PTY is idle. The cell verifies the current activation, read grant,
+ * lease epoch and live view, then coalesces a full catch-up through the normal
+ * credit-governed pump. No demand, view attachment, geometry ownership or
+ * activation sequence is reset. This is not an acknowledgement of content. */
+export const RequestScene = z
+  .object({
+    sessionId: z.string().min(1),
+    activationId: z.string().min(1),
+    leaseEpoch: Counter.max(Number.MAX_SAFE_INTEGER),
+  })
+  .passthrough();
+export type RequestScene = z.infer<typeof RequestScene>;
 
 export const PresentationDimension = z
   .object({
@@ -1715,6 +1732,31 @@ export function decodePresentationEnvelope(bytes: Uint8Array): PresentationEnvel
 // the leg's inbound set is a PROTOCOL error after acceptance and
 // HELLO_MALFORMED before it (the first frame must be ConnectionHello).
 
+/** Negotiated `selection-text` reads on the authenticated control leg.
+ * The cell supplies the engine view. Only a live read grant authorizes this;
+ * input/geometry rights are unnecessary. Oversized text is refused, not cut. */
+const SelectionTextIdentity = z.object({
+  requestId: z.string().min(1).max(64),
+  sessionId: z.string().min(1).max(256),
+  activationId: z.string().min(1).max(256),
+  leaseEpoch: Counter.max(Number.MAX_SAFE_INTEGER),
+});
+export const SelectionTextRequest = SelectionTextIdentity.extend({
+  startColumn: z.number().int().min(0).max(65_535),
+  startRow: z.number().int().min(0).max(4_294_967_295),
+  endColumn: z.number().int().min(0).max(65_535),
+  endRow: z.number().int().min(0).max(4_294_967_295),
+  selectAll: z.boolean(),
+}).passthrough();
+export type SelectionTextRequest = z.infer<typeof SelectionTextRequest>;
+export const SelectionTextResult = SelectionTextIdentity.extend({
+  text: z.string().optional(),
+  error: z.enum(["UNAVAILABLE", "TOO_LARGE"]).optional(),
+})
+  .passthrough()
+  .refine((value) => (value.text !== undefined) !== (value.error !== undefined));
+export type SelectionTextResult = z.infer<typeof SelectionTextResult>;
+
 export const TpMessageType = z.enum([
   "ConnectionHello",
   "ConnectionAccepted",
@@ -1731,6 +1773,8 @@ export const TpMessageType = z.enum([
   "ReleaseGeometry",
   "TransferGeometry",
   "SendInput",
+  "SelectionTextRequest",
+  "SelectionTextResult",
   "SessionEvent",
   "InputRefused",
   "GeometryCommitted",
@@ -1740,6 +1784,7 @@ export const TpMessageType = z.enum([
   "FramesLegAttached",
   "TransportCredit",
   "SceneApplied",
+  "RequestScene",
   "CalibrationPing",
 ]);
 export type TpMessageType = z.infer<typeof TpMessageType>;
@@ -1761,6 +1806,8 @@ export const TP_MESSAGE_SCHEMAS: Readonly<Record<TpMessageType, ZodTypeAny>> = {
   ReleaseGeometry,
   TransferGeometry,
   SendInput,
+  SelectionTextRequest,
+  SelectionTextResult,
   SessionEvent,
   InputRefused,
   GeometryCommitted,
@@ -1770,6 +1817,7 @@ export const TP_MESSAGE_SCHEMAS: Readonly<Record<TpMessageType, ZodTypeAny>> = {
   FramesLegAttached,
   TransportCredit,
   SceneApplied,
+  RequestScene,
   CalibrationPing,
 };
 
@@ -1784,6 +1832,7 @@ export const TP_LEG_INBOUND: Readonly<Record<TransportChannel, readonly TpMessag
     "ReleaseGeometry",
     "TransferGeometry",
     "SendInput",
+    "SelectionTextRequest",
   ],
   frames: [
     "ConnectionHello",
@@ -1791,6 +1840,7 @@ export const TP_LEG_INBOUND: Readonly<Record<TransportChannel, readonly TpMessag
     "AttachFramesLeg",
     "TransportCredit",
     "SceneApplied",
+    "RequestScene",
     "CalibrationPing",
   ],
 };
@@ -1812,6 +1862,7 @@ export const TP_LEG_OUTBOUND: Readonly<Record<TransportChannel, readonly TpMessa
     // `SessionEvent` on `session-events`.
     "GeometryState",
     "InputRefused",
+    "SelectionTextResult",
   ],
   frames: [
     "ConnectionAccepted",

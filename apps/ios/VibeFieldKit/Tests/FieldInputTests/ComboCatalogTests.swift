@@ -49,7 +49,10 @@ struct ComboCatalogTests {
   func remainingPacks() {
     #expect(ComboCatalog.readline.combos.map(\.label) == ["^R", "^L", "^U", "^W", "^C", "^D"])
     #expect(ComboCatalog.screen.combos.map(\.label) == ["^A c", "^A n", "^A d"])
-    #expect(ComboCatalog.packs.map(\.id) == ["emacs", "tmux", "readline", "screen"])
+    #expect(
+      ComboCatalog.packs.map(\.id) == [
+        "keypad.emacs", "keypad.tmux", "keypad.readline", "keypad.screen",
+      ])
   }
 
   /// Ids are what `ForEach` renders by, and `^A` appears in two packs.
@@ -71,7 +74,10 @@ struct SendComboTests {
   private func card() -> (InputCardModel, Recorder) {
     let model = InputCardModel()
     let recorder = Recorder()
-    model.sink = { recorder.acts.append($0); return true }
+    model.sink = {
+      recorder.acts.append($0)
+      return true
+    }
     return (model, recorder)
   }
 

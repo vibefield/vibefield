@@ -1,9 +1,11 @@
 import {
+  type AgentProfileSetId,
   type CallerContext,
   type ComposeProject,
   isServedTool,
   type NativeDoorPane,
   type ProjectListResult,
+  profileSetOfRun,
   type SparkId,
   type SparkRecord,
   TOOL_SCHEMAS,
@@ -30,6 +32,14 @@ import {
   type TalkVerbName,
   type TalkVerbs,
 } from "./rooms/talk/verbs";
+import {
+  createYouVerbs,
+  isYouVerb,
+  runYou,
+  type YouDeps,
+  type YouVerbName,
+  type YouVerbs,
+} from "./rooms/you/verbs";
 
 // MT-0 — the tool plane in fieldd (`draft/thinking-tool-plane.md`, ruled 2026-10-30; CP-1b's compose door,
 // generalised). One door and one catalog (MT-L1): every caller fieldd can name reaches the `vibefield` MCP server through
@@ -39,7 +49,9 @@ import {
 // the caller's Agent Profiles by its room, and written to the audit log before it acts (CP-L6). A refusal is a tool
 // result with a fact the model can act on, never a protocol error (the study's §8). CP-2 (ruled 2026-10-31) adds the
 // talk room: a spark's six acting rows (start, watch, send, interrupt, stop), each answered by `rooms/talk/` and
-// recorded as sent on the person's behalf.
+// recorded as sent on the person's behalf. CP-3 (ruled 2026-10-31) adds the you room: a spark's ask_user and every
+// agent's notify, answered by `rooms/you/` over the needs-you queue; a call that raised an item names it on its
+// audit outcome, and the words never enter the log.
 
 /** The audit seam (audit-service.ts `required`), as the plane calls it. */
 export interface ToolPlaneAudit {
@@ -51,17 +63,21 @@ export interface ToolPlaneAudit {
       attrs?: Record<string, string | number | boolean>;
     },
     effect: () => Promise<T> | T,
-    describeOutcome?: (value: T) => { outcome?: "succeeded" | "failed" | "denied" },
+    describeOutcome?: (value: T) => {
+      outcome?: "succeeded" | "failed" | "denied";
+      attrs?: Record<string, string | number | boolean>;
+    },
   ): Promise<T>;
 }
 
 /** A pane's run as its session record says (AgentRuntime.runForTerminal): whether that record exists and verifies,
- * the spark it names, and the profile set it was filed under. */
+ * the spark it names, the profile set it was filed under, and its persona. */
 export interface DoorRun {
   readonly runtimeRunId: string;
   readonly verified: boolean;
   readonly spark?: SparkId;
   readonly profileSet?: string;
+  readonly profileId?: string;
 }
 
 export interface ToolPlaneServiceOptions {
@@ -69,11 +85,15 @@ export interface ToolPlaneServiceOptions {
   readonly lanes: DoorLanes;
   /** The run in a pane (managed and pending runs only). */
   runForTerminal(terminalSessionId: string): DoorRun | undefined;
+  /** TU-1 — each persona to the profile listing it (the monitor's latest frame); null until fieldd has read one */
+  personaSets(): ReadonlyMap<string, AgentProfileSetId> | null;
   /** A spark's record, when it verifies (CP-1c's store). */
   spark(id: SparkId): SparkRecord | undefined;
   readonly verbs: VerbDeps;
   /** CP-2's talk room (start, watch, send, interrupt, stop); absent, its rows answer `unavailable`. */
   readonly talk?: TalkDeps;
+  /** CP-3's you room (ask_user, notify); absent, its rows answer `unavailable`. */
+  readonly you?: YouDeps;
   readonly audit: ToolPlaneAudit;
   /** fieldd's version, for the server's `serverInfo`. */
   readonly version: string;
@@ -81,9 +101,6 @@ export interface ToolPlaneServiceOptions {
   readonly now?: () => number;
   readonly logger?: Logger;
 }
-
-/** The profile a run is filed under when its record names none: This Mac's (verbs.ts's profileOf). */
-const NATIVE = "native";
 
 const toMcp = (tool: (typeof SERVED_TOOLS)[number]): McpTool => ({
   name: tool.name,
@@ -200,16 +217,24 @@ const factOf = (err: RpcCallError): string => {
   return typeof named === "string" && FACTS.has(named) ? named : (FACT_OF[err.kind] ?? "failed");
 };
 
+/** The needs-you item a call raised (ask_user's `item`, a held send's or spawn's `held`), for its audit outcome. */
+const itemOf = (out: unknown): string | undefined => {
+  const { item, held } = (out ?? {}) as { item?: unknown; held?: unknown };
+  return typeof item === "string" ? item : typeof held === "string" ? held : undefined;
+};
+
 export class ToolPlaneService {
   readonly #door: DoorService;
   readonly #verbs: ComposeVerbs;
   readonly #talk: TalkVerbs | undefined;
+  readonly #you: YouVerbs | undefined;
   readonly #logger: Logger;
 
   constructor(private readonly opts: ToolPlaneServiceOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
     this.#verbs = createComposeVerbs(opts.verbs);
     this.#talk = opts.talk ? createTalkVerbs(opts.talk) : undefined;
+    this.#you = opts.you ? createYouVerbs(opts.you) : undefined;
     this.#door = new DoorService({
       native: opts.native,
       lanes: opts.lanes,
@@ -258,7 +283,10 @@ export class ToolPlaneService {
   }
 
   /** The settle rule's evidence (door.ts): a run is settled only by a record that verifies, and a spark's run only by
-   * a spark that does too. */
+   * a spark that does too. A plain run holds the profile the one rule places it in (TU-1, `profileSetOfRun`). One the
+   * rule can place only by its persona, before fieldd has read the Agent Profiles, is unsettled (`profiles-unread`):
+   * it holds none and is asked again, so the monitor's first frame places it. A run the rule places in none with the
+   * profiles read is settled holding none: its record verified, and what it says is "in no profile". */
   #identify(pane: NativeDoorPane | undefined): DoorCaller {
     if (!pane) return { kind: "outside" };
     const run = this.opts.runForTerminal(pane.terminalSessionId);
@@ -266,8 +294,13 @@ export class ToolPlaneService {
     const { runtimeRunId } = run;
     if (!run.verified)
       return { kind: "run", runtimeRunId, profiles: [], unsettled: "record-unverified" };
-    if (run.spark === undefined)
-      return { kind: "run", runtimeRunId, profiles: [run.profileSet ?? NATIVE] };
+    if (run.spark === undefined) {
+      const personaSets = this.opts.personaSets();
+      const profile = profileSetOfRun(run, personaSets);
+      if (profile === undefined && personaSets === null)
+        return { kind: "run", runtimeRunId, profiles: [], unsettled: "profiles-unread" };
+      return { kind: "run", runtimeRunId, profiles: profile === undefined ? [] : [profile] };
+    }
     const spark = this.opts.spark(run.spark);
     if (!spark) return { kind: "run", runtimeRunId, profiles: [], unsettled: "spark-unverified" };
     return { kind: "spark", sparkId: spark.id, runtimeRunId, profiles: [...spark.profiles] };
@@ -318,6 +351,7 @@ export class ToolPlaneService {
     const room = (): Promise<unknown> => {
       if (isComposeVerb(name)) return runVerb(this.#verbs, name, held, parsed.data);
       if (isTalkVerb(name)) return this.#runTalk(caller, name, parsed.data);
+      if (isYouVerb(name)) return this.#runYou(caller, name, parsed.data);
       throw new RpcCallError("UNAVAILABLE", `${name} has no room in this daemon`, false);
     };
     try {
@@ -334,7 +368,11 @@ export class ToolPlaneService {
           },
         },
         room,
-        () => ({ outcome: "succeeded" }),
+        // the item a call raised, never its words (cp2 §5.6)
+        (value) => {
+          const item = itemOf(value);
+          return { outcome: "succeeded", ...(item !== undefined ? { attrs: { item } } : {}) };
+        },
       );
       return { structured: out, text: JSON.stringify(out) };
     } catch (err) {
@@ -367,5 +405,33 @@ export class ToolPlaneService {
       },
       input,
     );
+  }
+
+  /** A you row's call: a spark's (by its record's name) or a settled plain run's (by its label, MT-D11). */
+  #runYou(caller: DoorCaller, name: YouVerbName, input: unknown): Promise<unknown> {
+    const you = this.opts.you;
+    if (this.#you === undefined || you === undefined)
+      throw new RpcCallError("UNAVAILABLE", "the you room is not running", true);
+    if (caller.kind === "spark") {
+      const spark = this.opts.spark(caller.sparkId);
+      if (spark === undefined)
+        throw new RpcCallError("UNAVAILABLE", "the spark's record is unavailable", true);
+      return runYou(
+        this.#you,
+        name,
+        { kind: "spark", sparkId: spark.id, name: spark.name, runtimeRunId: caller.runtimeRunId },
+        input,
+      );
+    }
+    if (caller.kind === "run" && isSettled(caller))
+      return runYou(
+        this.#you,
+        name,
+        { kind: "run", runtimeRunId: caller.runtimeRunId, name: you.label(caller.runtimeRunId) },
+        input,
+      );
+    throw new RpcCallError("PRECONDITION_FAILED", `${name} is not this session's`, false, {
+      fact: "forbidden",
+    });
   }
 }

@@ -347,6 +347,17 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
       return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
     })()`);
     if (at === null) throw new Error(`no ${selector} to press`);
+    win.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
+    await sleep(300); // let hover-driven chrome settle before testing the actual hit target
+    const target = await js<{ hit: boolean; under: string | null }>(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      const under = document.elementFromPoint(${at.x}, ${at.y});
+      return { hit: el?.contains(under) === true, under: under?.outerHTML.slice(0, 400) ?? null };
+    })()`);
+    if (!target.hit) {
+      await shoot("hn-3-covered-control.png");
+      throw new Error(`${selector} is covered after hover (${JSON.stringify({ at, target })})`);
+    }
     await press(at);
   };
   const point = async (type: string): Promise<{ x: number; y: number }> => {
@@ -514,6 +525,14 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
   // ── TWO: the clock and the note, copied from the bar grown into its MENU — ONE card, "2 objects" ─────────────
   {
     const row = (p: string): string => `TWO: ${p}`;
+    // The seed layout can put this group's bar in the hand's reach band. Clear the previous rows' output
+    // before moving the pointer there: a card rising on hover would cover More between down and up.
+    await js("globalThis.__vfCards?.clear()");
+    await until(
+      "the preceding cards cleared",
+      5_000,
+      'document.querySelector(".vf-cards .vf-card") === null',
+    );
     await select("desk.note", ["shift"]);
     await barShown("the bar over two", `globalThis.__vfDesk.anchor()?.count === 2`);
     const box = await js<Box | null>("globalThis.__vfDesk.anchor()?.box ?? null");

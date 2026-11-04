@@ -6,6 +6,10 @@ import Foundation
 /// where a bubble came from. Since IOS-6a it is also the reference's
 /// `MonitorAgent` row: the project's colour, the pane it is worked in, the
 /// unread mark and the stale flag ride the row, dressed by `FieldAssembly`.
+/// (Corrected 2026-11-02, PG-3e, the review's [2]: the unread mark and the
+/// stale flag are the OWNER's, read off the row by `fieldBubble(from:)`, the
+/// grey being `row.stale || !fieldIsLive`; `FieldAssembly` dresses only the
+/// colour and the open card's pane.)
 
 /// What an agent bubble knows that a terminal cannot.
 public struct AgentFacet: Sendable, Equatable {
@@ -33,12 +37,11 @@ public struct AgentFacet: Sendable, Equatable {
   public let effort: AgentEffort?
   /// The root agent's latest reply; the body shows its first line.
   public let lastMessage: String?
-  /// Core's usage, verbatim — the ledger's INPUT, never drawn.
-  public let monitorUsage: AgentUsage?
-  /// The UI's display history of the run's USD (`UsageLedger`): the corrected
-  /// total and the buckets. The body reads this for the total and
-  /// `monitorUsage` for the live rate. Filled at assembly.
-  public var usage: UsageHistory?
+  /// PG-3e — the run's cost as its owner priced it (the remote cut's `cost`): the body's total, the working shares'
+  /// rank and the burn per hour. nil: no cost said, or not yet observed. (Corrected 2026-11-02, PG-3e: the facet
+  /// carried Core's usage verbatim beside the phone's own `UsageLedger` history, which the body read for its total;
+  /// both retired with the ledger. The owner keeps the ledger now.)
+  public let cost: AgentCost?
   public let statusSince: Date?
   public let lastEvidenceAt: Date?
   /// G3's join: where this run's terminal is, and on whose desktop. nil for a
@@ -66,8 +69,7 @@ public struct AgentFacet: Sendable, Equatable {
     blocker: AgentBlocker? = nil,
     effort: AgentEffort? = nil,
     lastMessage: String? = nil,
-    monitorUsage: AgentUsage? = nil,
-    usage: UsageHistory? = nil,
+    cost: AgentCost? = nil,
     statusSince: Date? = nil,
     lastEvidenceAt: Date? = nil,
     join: AgentJoin? = nil,
@@ -82,8 +84,7 @@ public struct AgentFacet: Sendable, Equatable {
     self.blocker = blocker
     self.effort = effort
     self.lastMessage = lastMessage
-    self.monitorUsage = monitorUsage
-    self.usage = usage
+    self.cost = cost
     self.statusSince = statusSince
     self.lastEvidenceAt = lastEvidenceAt
     self.join = join
@@ -122,6 +123,12 @@ public struct RemoteFacet: Sendable, Equatable {
 /// One citizen of the field. Exactly one facet is non-nil: a bubble is an
 /// agent's or a peer's, and the absent facet is what tells the model to draw a
 /// hollow rather than a body.
+///
+/// (Corrected 2026-11-02, PG-3e, design v2 §2.3 and the review's [1]: on the
+/// remote cut a BARE terminal, home or peer, has NEITHER facet —
+/// `fieldBubble(from: RemoteFieldRow)` maps every terminal row with `agent: nil,
+/// remote: nil`. It is a hollow, and its glyph is the terminal prompt
+/// (`glyph`). At most one facet is non-nil; never both.)
 public struct FieldBubble: Identifiable, Sendable, Equatable {
   public let id: String
   /// The headline.
@@ -139,7 +146,8 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   /// the centre light. nil is the ramp — a bare terminal belongs to no
   /// project, and an agent whose project has not been dealt yet wears it too.
   public var color: SwarmColor?
-  /// Evidence recency is presentation metadata, never a fourth status.
+  /// Evidence recency is presentation metadata, never a fourth status. Since PG-3e the row's own: a home row's
+  /// owner's `stale`, a peer's desktop standing, or the phone-only grey while no live home answers.
   public var stale: Bool
   /// Worked in the pane the user has in front of them: the open card's subject.
   public var active: Bool
@@ -147,8 +155,21 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   /// are the theme's ink, never a pane colour: one pane needs no colour to
   /// tell it from another (James, 2026-10-18).
   public var mounted: Bool
-  /// Finished something while another session had the card (`UnreadLedger`).
+  /// A reply nobody has looked at, by its OWNER's mark (`MonitorAgentRow.unread`) since PG-3e: a row the desktop's
+  /// window showed is never unread. (Corrected 2026-11-02, PG-3e: it was the phone's own `UnreadLedger`'s, "finished
+  /// something while another session had the card", which retired.)
   public var unread: Bool
+  /// PG-3e — the desktop a PEER's row lives on, by name: the host line every body from another desktop wears (the
+  /// window's `hostLine`, agent or terminal). nil on the home's own rows and on every source with no desktop.
+  public let host: String?
+  /// PG-3e — the row's MODEL id (`MonitorAgentRow.id`), which `agent.reportShown` names. nil on the mock.
+  public let modelId: String?
+  /// PG-3e — the row's board KEY (`runtimeRunId`), which a resume or a stop names. nil on the mock.
+  public let runKey: String?
+  /// Item 154 — a BARE terminal's pane join (the remote row's `terminal`): the session its card attaches to, on the
+  /// desktop that owns it. Not a facet (the facet doc's "at most one" stands): a bare terminal still draws hollow, and
+  /// an agent's join stays its facet's. Read through `join`, never directly. nil on every agent and on the mock.
+  public let terminalJoin: AgentJoin?
 
   public init(
     id: String,
@@ -163,7 +184,11 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     stale: Bool = false,
     active: Bool = false,
     mounted: Bool = false,
-    unread: Bool = false
+    unread: Bool = false,
+    host: String? = nil,
+    modelId: String? = nil,
+    runKey: String? = nil,
+    terminalJoin: AgentJoin? = nil
   ) {
     self.id = id
     self.project = project
@@ -178,7 +203,15 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     self.active = active
     self.mounted = mounted
     self.unread = unread
+    self.host = host
+    self.modelId = modelId
+    self.runKey = runKey
+    self.terminalJoin = terminalJoin
   }
+
+  /// Item 154 — the card's join, whatever the body is: an agent's run, or a bare terminal's pane. Every reader of a
+  /// card's terminal reads this (the face, the badge's desktop, the keyring's sessions, the DEBUG auto-open).
+  public var join: AgentJoin? { agent?.join ?? terminalJoin }
 }
 
 /// nil when the session has left the field (exited/failed) — the same law as
@@ -209,7 +242,7 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
       blocker: status == .blocked ? agentBlocker(state) : nil,
       effort: state?.effort,
       lastMessage: state?.lastAssistantMessage,
-      monitorUsage: state?.usage,
+      cost: agentCost(state?.usage),
       statusSince: state?.statusSince,
       lastEvidenceAt: state?.lastEvidenceAt,
       join: snapshot.join,
@@ -217,8 +250,20 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
     // NEVER both facets. "Exactly one facet is non-nil" is what tells the
     // renderer to draw a body rather than a hollow, so an agent whose PTY is
     // published does NOT become a remote bubble — the card resolves the join
-    // itself (`agentTerminalFace`).
+    // itself (`agentTerminalFace`). (Corrected 2026-11-02, PG-3e: "at most
+    // one" — a bare terminal on the remote cut has neither; see `FieldBubble`.)
     remote: nil)
+}
+
+/// PG-3e — a snapshot's usage as the owner's cost: the USD, its coverage word, and the per-minute rate as USD an hour
+/// (J3 (a)). No USD is no cost, which draws the same "—", unpriced, as a cost the owner says is unavailable. A USD
+/// with no coverage word reads `unavailable`, the ledger's own default for a run with none, so no total is drawn
+/// that nothing priced.
+public func agentCost(_ usage: AgentUsage?) -> AgentCost? {
+  guard let usage, let usd = usage.costUsd else { return nil }
+  return AgentCost(
+    usd: usd, coverage: usage.costCoverage?.rawValue ?? AgentCostCoverage.unavailable.rawValue,
+    burnPerHour: usage.costRatePerMin.map { $0 * 60 })
 }
 
 /// Ported from the desktop's `monitorAgentFromRemote`, where every clause is a
@@ -259,76 +304,58 @@ public func fieldBubble(from row: RemoteSessionRow) -> FieldBubble {
       cwdLabel: label))
 }
 
-// MARK: - The field's ledgers (the desktop's `assembleMonitorAgents` + its folds)
+// MARK: - The field's ledger (the desktop's `assembleMonitorAgents` + its folds)
 
 /// Everything the field decides ABOUT the rows rather than from them, folded
-/// once per projection: the project colours (D-i13), the one pane (D-i12),
-/// the usage ledger, the unread marks, the stale flags. A plain
-/// value the home screen keeps and folds; every rule inside is a pure
+/// once per projection: the project colours (D-i13) and the one pane (D-i12).
+/// A plain value the home screen keeps and folds; every rule inside is a pure
 /// function with its own tests.
+///
+/// (Corrected 2026-11-02, PG-3e: it folded a usage ledger, an unread ledger,
+/// the 30 s freshness rule and the DS-8 desktop grey too. The row carries its
+/// owner's cost, `unread` and `stale` now, and the phone-only grey is the
+/// link's (`FieldLink.fieldIsLive`), so the dress only colours and mounts.)
 public struct FieldAssembly: Sendable {
   public var projects: ProjectLedger
-  public var usage: UsageLedger
-  public var unread: UnreadLedger
   /// The theme's tint; the home screen swaps it with the colour scheme.
   public var tint: ProjectTint
 
-  /// The reference's freshness policy: evidence older than this dims the body.
-  public static let staleAfterMs: Double = 30_000
-  public init(
-    tint: ProjectTint,
-    projects: ProjectLedger = .empty,
-    usage: UsageLedger = .empty,
-    unread: UnreadLedger = .empty
-  ) {
+  public init(tint: ProjectTint, projects: ProjectLedger = .empty) {
     self.tint = tint
     self.projects = projects
-    self.usage = usage
-    self.unread = unread
   }
 
-  /// Fold one projection and dress its rows.
-  public mutating func fold(
-    _ bubbles: [FieldBubble], cardSubjectID: String?, nowMs: Double
-  ) -> [FieldBubble] {
+  /// Fold one projection and dress its rows. `cardSubjectID` is the open card's body: the VISUAL id
+  /// (`selection.id`), which a bubble's `id` is.
+  public mutating func fold(_ bubbles: [FieldBubble], cardSubjectID: String?) -> [FieldBubble] {
     projects = projects.dealing(bubbles.filter { $0.agent != nil }.map(\.project))
-    // The row's id IS the run (AR-4b), so the ledger's run key is the id; the
-    // native session id does not ride the row, and the reference's fold holds
-    // a run's history across projections without it.
-    usage = usage.reconciling(
-      bubbles.map { UsageReading(id: $0.id, runId: $0.id, usage: $0.agent?.monitorUsage) }, nowMs: nowMs)
-    unread = unread.reconciling(
-      bubbles.map { bubble in
-        UnreadCandidate(
-          id: bubble.id,
-          status: bubble.status,
-          active: bubble.id == cardSubjectID,
-          hasAgent: bubble.agent != nil,
-          statusSinceMs: bubble.agent?.statusSince.map { $0.timeIntervalSince1970 * 1000 })
-      }, nowMs: nowMs)
     return bubbles.map { bubble in
+      // Never rebuilt: every fact the row carries rides through the dress — its ids (F1), its owner's `stale` and
+      // `unread` (F2).
       var dressed = bubble
-      if var facet = bubble.agent {
-        facet.usage = usage.history(of: bubble.id)
-        dressed = FieldBubble(
-          id: bubble.id, project: bubble.project, detail: bubble.detail, status: bubble.status,
-          identityKey: bubble.identityKey, createdAt: bubble.createdAt, agent: facet, remote: bubble.remote)
+      if bubble.agent != nil {
         dressed.color = projects.seqByKey[bubble.project].map { SwarmColor.project($0, tint) }
-        // Q01 (James, 2026-10-27) — stale only while the agent should be
-        // talking: a quiet idle agent is just idle, as puppeteer's monitor
-        // rules it for Godview. Q02's open tool is not on the field row yet,
-        // so a long silent tool still dims here (owed: the row carries it).
-        if let evidence = facet.lastEvidenceAt, bubble.status != .idle {
-          dressed.stale = nowMs - evidence.timeIntervalSince1970 * 1000 > Self.staleAfterMs
-        }
-        // DS-8 (DS-L8) — a run whose desktop is not live on the phone's home
-        // keeps its row, greyed: the same dim, whatever its own evidence says.
-        if facet.join?.deviceLive == false { dressed.stale = true }
       }
-      dressed.unread = unread.unreadIDs.contains(bubble.id)
       dressed.active = bubble.id == cardSubjectID
       dressed.mounted = dressed.active
       return dressed
     }
+  }
+}
+
+/// PG-3e (the review's [1]; J-E3) — the mark a bubble wears, decided where a row can test it: `BubbleGlyph` draws it.
+public enum FieldBubbleGlyph: Equatable, Sendable {
+  /// The terminal prompt: a shell is running, and nothing says who drives it.
+  case terminalPrompt
+  /// An agent's mark, by its catalog mark key (`AgentGlyph`: the drawn glyph, or its letter).
+  case agentMark(String)
+}
+
+extension FieldBubble {
+  /// What `BubbleGlyph` draws for this bubble: an agent its mark; anything else a terminal, the prompt (a peer's
+  /// terminal session, and since PG-3e a bare terminal on the home or a peer, which has neither facet).
+  public var glyph: FieldBubbleGlyph {
+    if remote == nil, let agent { return .agentMark(agent.markKey) }
+    return .terminalPrompt
   }
 }

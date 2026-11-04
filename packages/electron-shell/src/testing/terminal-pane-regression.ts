@@ -16,10 +16,12 @@ const check = (ok: unknown, message: string): void => {
 export async function measureTerminalPaneRegression(options: {
   win: BrowserWindow;
   out: string;
+  copies: readonly string[];
   split(): void;
   close(): void;
   floor(): Promise<readonly { sessionId: string }[]>;
   monitorCount(): number | undefined;
+  inputAllowed(sessionId: string): boolean;
 }): Promise<void> {
   const { win, out } = options;
   const results: Record<string, unknown> = {};
@@ -43,14 +45,14 @@ export async function measureTerminalPaneRegression(options: {
     }
   };
   const inputReady = () =>
-    until(
-      () =>
-        read<boolean>(`(() => {
+    until(async () => {
+      const active = (await panes()).find((pane) => pane.active);
+      if (!active || !options.inputAllowed(active.session)) return false;
+      return read<boolean>(`(() => {
         const input = document.querySelector('.ghostty-pane.is-active .terminal-input');
-        return input && !input.readOnly;
-      })()`),
-      "active pane accepting input",
-    );
+        return input && !input.readOnly && !input.closest('[inert]');
+      })()`);
+    }, "active pane accepting input");
   try {
     await until(
       () => read<boolean>("!document.querySelector('.vf-splash')"),
@@ -79,6 +81,289 @@ export async function measureTerminalPaneRegression(options: {
       "initial empty shell exited",
     );
     results.initialEmptyProcessExitMs = performance.now() - firstReplacingAt;
+    // Exercise the shipping selection formatter, keyboard handlers and Electron
+    // copy door. Main captures writes for this lab; the person's OS clipboard is
+    // neither read nor overwritten. Browser clipboard stubs cannot observe this door.
+    const key = (name: string, code: string) =>
+      read(`(() => {
+      const input = document.querySelector('.ghostty-pane.is-active .terminal-input');
+      input.focus();
+      input.dispatchEvent(new KeyboardEvent('keydown', {
+        key: ${JSON.stringify(name)}, code: ${JSON.stringify(code)}, metaKey: true,
+        bubbles: true, cancelable: true
+      }));
+    })()`);
+    const copyAll = async (): Promise<string | null> => {
+      const before = options.copies.length;
+      await key("a", "KeyA");
+      await key("c", "KeyC");
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        const value = options.copies[before];
+        if (value !== undefined) return value;
+        await sleep(25);
+      }
+      return null;
+    };
+    const scrollState = () =>
+      read<{ now: number; max: number } | null>(`(() => {
+      const bar = document.querySelector('.ghostty-pane.is-active [role="scrollbar"]');
+      return bar ? { now: Number(bar.getAttribute('aria-valuenow')), max: Number(bar.getAttribute('aria-valuemax')) } : null;
+    })()`);
+    const behaviorSession = (await panes())[0]!.session;
+    const unicodeWitness = "G14-GRID-中-é-👩‍💻-🛙X";
+    const graphicsWitness = "G14-GRAPHICS-👩‍💻ab▀X";
+    try {
+      // Paste and Return do not prove that ordinary keydowns reach the PTY.
+      // Click the shipping input surface, then send window-local key events.
+      // Nothing is injected into whichever other app owns OS keyboard focus.
+      const inputPoint = await read<{ x: number; y: number }>(`(() => {
+        const input = document.querySelector('.ghostty-pane.is-active .terminal-input');
+        const bounds = input.getBoundingClientRect();
+        // The fresh-shell launcher occupies the center; use the visible prompt.
+        return { x: Math.round(bounds.left + 30), y: Math.round(bounds.top + 30) };
+      })()`);
+      win.webContents.sendInputEvent({
+        type: "mouseDown",
+        button: "left",
+        clickCount: 1,
+        ...inputPoint,
+      });
+      win.webContents.sendInputEvent({
+        type: "mouseUp",
+        button: "left",
+        clickCount: 1,
+        ...inputPoint,
+      });
+      await until(
+        () =>
+          read<boolean>(
+            "document.activeElement?.matches('.ghostty-pane.is-active .terminal-input') === true",
+          ),
+        "click focuses the terminal input",
+      );
+      for (const character of "echo vfkeyboard123") {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: character });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: character });
+      }
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+      await until(
+        async () =>
+          (await copyAll())?.split(/\r?\n/u).some((line) => line.trim() === "vfkeyboard123") ===
+          true,
+        "ordinary typed command executes and its output returns",
+      );
+      results.ordinaryKeyboard = { clickFocus: true, typedCommandExecuted: true };
+      // Opt-in lifecycle probe: stop only this lab renderer's main-thread JS,
+      // long enough for the real cell's 15-second control heartbeat to lapse.
+      // The native PTY and frame worker keep running. This exercises the same
+      // control-leg recovery as an occluded/throttled window without touching
+      // the person's signed-in application or sending OS-wide input.
+      if (process.env.VIBEFIELD_TERMINAL_REGRESSION_CONTROL_STALL === "1") {
+        const exhaust = process.env.VIBEFIELD_TERMINAL_REGRESSION_EXHAUST_RETRIES === "1";
+        if (exhaust) {
+          await read(`(() => {
+            const send = WebSocket.prototype.send, log = console.log;
+            let remaining = 5;
+            window.__vfQaRouted = {};
+            console.log = function(...args) {
+              if (typeof args[0] === 'string' && args[0].startsWith('GODVIEW_DIRECT_TERMINAL ')) {
+                const state = JSON.parse(args[0].slice('GODVIEW_DIRECT_TERMINAL '.length));
+                window.__vfQaRouted[state.sessionId] = state;
+              }
+              return log.apply(this, args);
+            };
+            WebSocket.prototype.send = function(data) {
+              const result = send.call(this, data);
+              if (remaining > 0 && typeof data === 'string' && JSON.parse(data).type === 'AttachControlLeg') {
+                remaining -= 1;
+                this.close(4004, 'lab-control-timeout');
+              }
+              return result;
+            };
+            window.__vfQaRestoreTransport = () => {
+              WebSocket.prototype.send = send;
+              console.log = log;
+            };
+          })()`);
+        }
+        const debug = win.webContents.debugger;
+        debug.attach("1.3");
+        try {
+          await debug.sendCommand("Debugger.enable");
+          await debug.sendCommand("Debugger.pause");
+          await sleep(20_000);
+          await debug.sendCommand("Debugger.resume");
+        } finally {
+          debug.detach();
+        }
+        if (exhaust) {
+          await until(
+            () =>
+              read<boolean>(
+                `window.__vfQaRouted[${JSON.stringify(behaviorSession)}]?.unavailableReason === 'recovery-exhausted'`,
+              ),
+            "the real control retry budget is exhausted",
+            30_000,
+          );
+          await read(`document.querySelector('[aria-label="Minimize the terminals"]').click()`);
+          await until(
+            () => read<boolean>(`Boolean(document.querySelector('[data-godview-deck="away"]'))`),
+            "failed deck is hidden",
+          );
+          await read("window.__vfGodviewDeck.up()");
+          await until(
+            () =>
+              read<boolean>(
+                `window.__vfQaRouted[${JSON.stringify(behaviorSession)}]?.inputAllowed === true`,
+              ),
+            "restored Godview reacquires a live input lease",
+            30_000,
+          );
+          await read("window.__vfQaRestoreTransport()");
+          results.exhaustedControlRecovery = { liveInputLeaseRestored: true };
+        } else {
+          await sleep(3_000);
+        }
+        await read(`document.querySelector('.ghostty-pane.is-active .terminal-input').focus()`);
+        for (const character of "echo vfaftertimeout123") {
+          win.webContents.sendInputEvent({ type: "keyDown", keyCode: character });
+          win.webContents.sendInputEvent({ type: "keyUp", keyCode: character });
+        }
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+        await until(
+          async () =>
+            (await copyAll())
+              ?.split(/\r?\n/u)
+              .some((line) => line.trim() === "vfaftertimeout123") === true,
+          "typing resumes after control heartbeat loss",
+          30_000,
+        );
+        results.controlTimeoutRecovery = { typedCommandExecuted: true };
+      }
+      await pasteTerminalLine(
+        win,
+        behaviorSession,
+        `i=1; while [ "$i" -le 160 ]; do printf 'G14-ROW-%03d\\n' "$i"; i=$((i+1)); done; printf '%s\\n' '${unicodeWitness}' '${graphicsWitness}'`,
+      );
+      await until(
+        async () => ((await scrollState())?.max ?? 0) > 100,
+        "generated scrollback available",
+      );
+      const copied = await copyAll();
+      check(copied !== null, "routed copy did not produce clipboard text");
+      results.selectionCopy = { status: "passed" };
+      if (copied !== null)
+        check(
+          copied.includes("G14-ROW-001") &&
+            copied.includes("G14-ROW-160") &&
+            copied.includes(unicodeWitness) &&
+            copied.includes(graphicsWitness),
+          "copy must preserve scrollback and Unicode text",
+        );
+      await key("Home", "Home");
+      await until(async () => (await scrollState())?.now === 0, "scroll to history start");
+      writeFileSync(join(out, "history-top.png"), (await win.webContents.capturePage()).toPNG());
+      await key("End", "End");
+      await until(async () => {
+        const state = await scrollState();
+        return state !== null && state.now === state.max;
+      }, "scroll to live bottom");
+
+      await pasteTerminalLine(
+        win,
+        behaviorSession,
+        `sh -c 'printf "\\033[?1049h\\033[2J\\033[HG14-ALT-SCREEN"; IFS= read -r qa_reply; printf "\\033[?1049l"'`,
+      );
+      await until(
+        async () => (await scrollState()) === null,
+        "alternate screen without main history",
+      );
+      if (copied !== null) {
+        const alternate = await copyAll();
+        check(
+          alternate?.includes("G14-ALT-SCREEN") && !alternate.includes("G14-ROW-001"),
+          "alternate selection must not contain the main buffer",
+        );
+      }
+      await sleep(150);
+      writeFileSync(
+        join(out, "alternate-screen.png"),
+        (await win.webContents.capturePage()).toPNG(),
+      );
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+      await until(async () => (await scrollState()) !== null, "main history restored");
+      if (copied !== null)
+        check(
+          (await copyAll())?.includes(unicodeWitness),
+          "alternate-screen exit must restore main text",
+        );
+
+      await pasteTerminalLine(win, behaviorSession, "sleep 1; printf 'G14-HIDDEN-OUTPUT\\n'");
+      await read(`document.querySelector('[aria-label="Minimize the terminals"]').click()`);
+      await until(
+        () => read<boolean>(`Boolean(document.querySelector('[data-godview-deck="away"]'))`),
+        "deck hidden",
+      );
+      await until(
+        async () => !options.inputAllowed(behaviorSession),
+        "hidden pane closes its input gate",
+      );
+      await sleep(1_500);
+      check(
+        (await options.floor()).some((row) => row.sessionId === behaviorSession),
+        "hidden terminal process was lost",
+      );
+      await read("window.__vfGodviewDeck.up()");
+      await inputReady();
+      // The first ready notification after demand none/live must be safe to
+      // type against; a stale pre-park lease used to open this gate too soon.
+      await read(`document.querySelector('.ghostty-pane.is-active .terminal-input').focus()`);
+      await until(
+        () =>
+          read<boolean>(
+            "document.activeElement?.matches('.ghostty-pane.is-active .terminal-input') === true",
+          ),
+        "restored pane receives keyboard focus",
+      );
+      for (const character of "echo vfresumedinput123") {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: character });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: character });
+      }
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+      await until(
+        async () =>
+          (await copyAll())?.split(/\r?\n/u).some((line) => line.trim() === "vfresumedinput123") ===
+          true,
+        "first typed command after showing the deck executes",
+      );
+      results.resumedInput = { firstReadyCommandExecuted: true };
+      if (copied !== null)
+        await until(
+          async () => (await copyAll())?.includes("G14-HIDDEN-OUTPUT") === true,
+          "hidden output recovered on restore",
+        );
+      await sleep(750);
+      results.behaviors = {
+        scrollTopAndBottom: true,
+        alternateScreenRoundTrip: true,
+        hiddenProcessRetained: true,
+        hiddenOutputText:
+          copied !== null ? "copy-verified" : "requires terminal-behaviors.png review",
+      };
+      writeFileSync(
+        join(out, "terminal-behaviors.png"),
+        (await win.webContents.capturePage()).toPNG(),
+      );
+    } finally {
+      await read(`window.__vfQaRestoreTransport?.();
+        delete window.__vfQaRestoreTransport; delete window.__vfQaRouted;
+        delete navigator.clipboard; delete window.__vfQaCopy`);
+    }
     // The geometry/switching witnesses below need two retained sessions.
     await pasteTerminalLine(win, (await panes())[0]!.session, "printf 'base retention witness\\n'");
     await sleep(150);

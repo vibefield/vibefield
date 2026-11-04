@@ -111,8 +111,6 @@ public final class MockAgentField {
     var pricePerToken: Double?
     var costUsd: Double = 0
     var ratePerMin: Double = 0
-    /// Core's thirty-second buckets, the current one last.
-    var buckets: [AgentCostBucket] = []
   }
 
   public init(seed: UInt64? = nil, clock: @escaping () -> Date = { .now }) {
@@ -228,19 +226,18 @@ public final class MockAgentField {
     let sample = AgentUsageSample(
       at: clock(), cumulativeTokens: burn.total, inputTokens: burn.input, outputTokens: burn.output)
     usage.samples = Array((usage.samples + [sample]).suffix(40))
-    // The USD lane, as Core projects it: the corrected total, the coverage,
-    // the live rate and the buckets — or the lane missing altogether, which
-    // is not the same as a rate of zero.
+    // The USD lane, as Core projects it: the corrected total, the coverage
+    // and the live rate — or the lane missing altogether, which is not the
+    // same as a rate of zero. (PG-3e: the thirty-second buckets went with
+    // `UsageLedger`, their one reader.)
     if burn.pricePerToken != nil {
       usage.costUsd = burn.costUsd
       usage.costCoverage = .complete
       usage.costRatePerMin = burn.ratePerMin
-      usage.costHistory = Array(burn.buckets.suffix(usageStepCount + 1))
     } else {
       usage.costUsd = nil
       usage.costCoverage = .unavailable
       usage.costRatePerMin = nil
-      usage.costHistory = []
     }
     next.usage = usage
     return next
@@ -325,13 +322,6 @@ public final class MockAgentField {
             let cost = spent * price
             burn.costUsd += cost
             burn.ratePerMin = rate * price
-            let bucketAt = Date(
-              timeIntervalSince1970: (now.timeIntervalSince1970 / (usageStepMs / 1000)).rounded(.down) * (usageStepMs / 1000))
-            if let last = burn.buckets.last, last.at == bucketAt {
-              burn.buckets[burn.buckets.count - 1].costUsd += cost
-            } else {
-              burn.buckets.append(AgentCostBucket(at: bucketAt, costUsd: cost))
-            }
           }
           burns[agent.id] = burn
         }

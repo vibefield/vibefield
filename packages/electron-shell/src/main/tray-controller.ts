@@ -44,6 +44,7 @@ export type TrayNativeInspectionReason =
   | "settled"
   | "state-change"
   | "display-change"
+  | "appearance-change"
   | "interaction";
 
 export interface TrayNativeState {
@@ -63,6 +64,7 @@ export interface TrayRuntime {
   createTray(image: unknown): NativeTrayPort;
   inspectTray(tray: NativeTrayPort): TrayNativeInspection;
   watchDisplays(callback: () => void): () => void;
+  watchAppearance(callback: () => void): () => void;
   buildMenu(items: readonly TrayMenuItem[]): unknown;
   schedule(callback: () => void, delayMs: number): unknown;
   cancelSchedule(handle: unknown): void;
@@ -122,6 +124,8 @@ export class TrayController {
   private nativeInspectionHandle: unknown | null = null;
   private pendingInspectionReason: TrayNativeInspectionReason | null = null;
   private readonly stopDisplayObservation: () => void;
+  private readonly stopAppearanceObservation: () => void;
+  private imageNeedsRefresh = false;
   private disposed = false;
   private createFailed = false;
   private imageKind: TrayImageKind | null = null;
@@ -138,6 +142,17 @@ export class TrayController {
       });
     } catch (error) {
       this.stopDisplayObservation = () => undefined;
+      options.onError("inspect", error);
+    }
+    try {
+      this.stopAppearanceObservation = options.runtime.watchAppearance(() => {
+        if (this.disposed) return;
+        this.imageNeedsRefresh = true;
+        this.scheduleRefresh();
+        this.scheduleNativeInspection("appearance-change");
+      });
+    } catch (error) {
+      this.stopAppearanceObservation = () => undefined;
       options.onError("inspect", error);
     }
     this.reconcileVisibility();
@@ -219,6 +234,7 @@ export class TrayController {
     this.cancelRefresh();
     this.cancelNativeInspection();
     this.stopDisplayObservation();
+    this.stopAppearanceObservation();
     this.destroyTray();
     this.publishDesktopState();
   }
@@ -254,6 +270,7 @@ export class TrayController {
       }
       this.tray = candidate;
       this.imageKind = kind;
+      this.imageNeedsRefresh = false;
       this.imageInspection = inspection;
       this.inspectNative("created", true);
       this.scheduleNativeInspection("settled");
@@ -354,11 +371,12 @@ export class TrayController {
     const tray = this.tray;
     if (this.disposed || tray === null || !this.snapshot.showTray) return;
     const nextKind = trayImageKind(this.snapshot);
-    if (nextKind !== this.imageKind) {
+    if (nextKind !== this.imageKind || this.imageNeedsRefresh) {
       try {
         const { image, inspection } = this.loadInspectedImage(nextKind);
         tray.setImage(image);
         this.imageKind = nextKind;
+        this.imageNeedsRefresh = false;
         this.imageInspection = inspection;
       } catch (error) {
         this.options.onError("image", error);

@@ -61,20 +61,53 @@ func deviceSlice(name: String, url: String?) -> JSONValue {
   return .object(fields)
 }
 
-func boardRow(
-  id: String, status: String = "working", kind: String = "claude", label: String = "Claude Code",
-  device: String = "dev-studio"
+/// PG-3e — a row of the REMOTE cut (`AgentRemoteRow`), as the home's mesh board carries it since 3e: the board key,
+/// the owner, the pane join and the owner's `monitorRow` (a minimal valid one, modelled on
+/// `monitor-agent-row.valid.json`). `key` is the board key (`runtimeRunId`), `id` the model id (the key unless said).
+/// `kind: "terminal"` is a bare terminal: the root's `kind`, a pane join (its own session unless said), no provider.
+func remoteBoardRow(
+  key: String, id: String? = nil, device: String = "dev-studio", deviceName: String? = nil,
+  status: String = "working", kind: String = "agent", terminal: JSONValue? = nil, unread: Bool = false,
+  stale: Bool = false, observed: Bool = true, alive: Bool = true, pending: Bool? = nil,
+  createdAt: Int64 = 1_790_800_000_000, provider: String = "claude", label: String = "Claude Code",
+  project: String = "vibe-field", nativeSessionId: String? = nil, wait: JSONValue? = nil, cost: JSONValue? = nil,
+  reply: String? = nil, revision: Int64 = 1
 ) -> JSONValue {
-  .object([
-    "runtimeRunId": .string(id), "revision": .int(1), "kind": .string(kind),
-    "label": .string(label), "tier": .string("managed"),
-    "device": .string(device), "status": .string(status),
-    "statusSince": .string("2026-09-13T18:42:11.000Z"),
-    "stateChangedAt": .string("2026-09-13T18:42:11.000Z"),
-    "createdAt": .string("2026-09-13T18:03:52.000Z"),
-    "alive": .bool(true), "blockers": .array([]),
-    "project": .object(["name": .string("vibe-field")]),
-  ])
+  let isTerminal = kind == "terminal"
+  var monitor: [String: JSONValue] = [
+    "id": .string(id ?? key), "kind": .string(isTerminal ? "terminal" : "agent"), "createdAt": .int(createdAt),
+    "status": .string(status), "statusSince": .int(createdAt + 60_000), "stale": .bool(stale), "alive": .bool(alive),
+    "observed": .bool(observed), "detail": .string(isTerminal ? project : "working on it"),
+    "project": .object(["name": .string(project)]), "unread": .bool(unread),
+    "device": .object(["id": .string(device), "name": .string(deviceName ?? device)]), "attachable": .bool(true),
+  ]
+  if !isTerminal { monitor["provider"] = .object(["id": .string(provider), "label": .string(label)]) }
+  if let pending { monitor["pending"] = .bool(pending) }
+  if let wait { monitor["wait"] = wait }
+  if let cost { monitor["cost"] = cost }
+  if let reply { monitor["reply"] = .object(["text": .string(reply)]) }
+  var row: [String: JSONValue] = [
+    "runtimeRunId": .string(key), "revision": .int(revision), "device": .string(device),
+    "monitorRow": .object(monitor),
+  ]
+  if isTerminal {
+    row["kind"] = .string("terminal")
+    row["terminal"] = terminal ?? .object(["hosted": .string("local"), "runtimeSessionId": .string(id ?? key)])
+  } else if let terminal {
+    row["terminal"] = terminal
+  }
+  if let nativeSessionId { row["nativeSessionId"] = .string(nativeSessionId) }
+  return .object(row)
+}
+
+/// PG-3e — the subscribe answer that carries a whole open as JSON (the witness's own, or one edited from it).
+func remoteSubscribed(id: Int64, subId: String = "m1", _ open: JSONValue) -> String {
+  frame(id: id, .object(["subId": .string(subId), "snapshot": open]))
+}
+
+/// PG-3e — a whole-mesh resync (PG-1c) on the stream: an open delivered as the subscription's `.snapshot` event.
+func meshResync(subId: String = "m1", _ open: JSONValue) -> String {
+  event(method: "agent.subscribe.snapshot", subId: subId, payload: open)
 }
 
 // MARK: - The home's mesh board (DS-8)
@@ -92,7 +125,7 @@ struct MeshEntry {
   var chain: String { epoch ?? "\(device).1" }
 }
 
-/// `AgentMeshOpen`, as the home's door answers `agent.subscribe {scope: "mesh"}`.
+/// `AgentRemoteMeshOpen`, as the home's door answers `agent.subscribe {projection: "remote", scope: "mesh"}`.
 func meshOpen(_ entries: [MeshEntry]) -> JSONValue {
   .object([
     "devices": .array(
@@ -145,18 +178,103 @@ func meshFrame(subId: String = "m1", _ payload: JSONValue) -> String {
   event(method: "agent.subscribe.delta", subId: subId, payload: payload)
 }
 
-/// A self desktop serving as a HOME: hello, its roster, and its mesh board.
+/// A self desktop serving as a HOME: hello, its roster, its mesh board and — PG-3f — its answers to
+/// `agent.reportShown` (`reports`, ok for every device unless the row scripts otherwise).
 func homeDoor(
-  _ entries: [MeshEntry], subId: String = "m1", roster: [JSONValue] = []
+  _ entries: [MeshEntry], subId: String = "m1", roster: [JSONValue] = [],
+  reports: ReportScript = ReportScript()
 ) -> LinkDoor.Script {
-  { method, id, _ in
+  { method, id, params in
     switch method {
     case "system.hello": return [frame(id: id, ack)]
     case "device.list": return [frame(id: id, deviceListResult(roster))]
     case "agent.subscribe": return [meshSubscribed(id: id, subId: subId, entries)]
+    case "agent.reportShown": return reports.answer(id: id, params: params)
     default: return []
     }
   }
+}
+
+/// PG-3f (design v2 §4.5) — how a home answers `agent.reportShown`, per device the report names: each device's queued
+/// answers first, in order, then its standing answer (`ok` unless set). The refusals are fieldd's own shapes
+/// (`agent-screens.ts`, `product-api.ts`): the sender reads their `details`, never their kind.
+final class ReportScript: @unchecked Sendable {
+  enum Answer: Sendable {
+    /// `{reported: true}`.
+    case ok
+    /// `{state: "no-screen"}` and no reason: no board open for this reader yet. Transient.
+    case noScreen
+    /// `{state: "no-screen", reason: "carried-cap"}`: the owner's bound. Lasting.
+    case carriedCap
+    /// `{method, locality: "local"}`: an owner, or a home, without PG-3b. Lasting.
+    case localityLocal
+    /// NOT_FOUND with no details (a door that does not know the method). Transient.
+    case noDetails
+    /// UNAVAILABLE, retryable. Transient.
+    case unavailable
+    /// No answer at all: the call stands until the socket goes (S14's report in flight).
+    case silent
+  }
+
+  private let lock = NSLock()
+  private var queued: [String: [Answer]] = [:]
+  private var standing: [String: Answer] = [:]
+
+  init() {}
+
+  /// The device's next answers, in order, before its standing one.
+  func queue(_ device: String, _ answers: Answer...) {
+    lock.withLock { queued[device, default: []] += answers }
+  }
+
+  /// The device's answer from now on.
+  func set(_ device: String, _ answer: Answer) { lock.withLock { standing[device] = answer } }
+
+  func answer(id: Int64, params: JSONValue) -> [String] {
+    let device = params["device"]?.stringValue ?? ""
+    let next: Answer = lock.withLock {
+      if var list = queued[device], !list.isEmpty {
+        let first = list.removeFirst()
+        queued[device] = list
+        return first
+      }
+      return standing[device] ?? .ok
+    }
+    switch next {
+    case .silent:
+      return []
+    case .ok:
+      return [frame(id: id, .object(["reported": .bool(true)]))]
+    case .noScreen:
+      return [failureFrame(
+        id: id, kind: "PRECONDITION_FAILED", message: "no board is open on this connection",
+        details: .object(["state": .string("no-screen")]))]
+    case .carriedCap:
+      return [failureFrame(
+        id: id, kind: "PRECONDITION_FAILED", message: "this peer connection carries 8 readers' screens already",
+        details: .object(["state": .string("no-screen"), "reason": .string("carried-cap")]))]
+    case .localityLocal:
+      return [failureFrame(
+        id: id, kind: "NOT_FOUND", message: "agent.reportShown is local to its desktop",
+        details: .object(["method": .string("agent.reportShown"), "locality": .string("local")]))]
+    case .noDetails:
+      return [failureFrame(id: id, kind: "NOT_FOUND", message: "unknown method agent.reportShown")]
+    case .unavailable:
+      return [failureFrame(
+        id: id, kind: "UNAVAILABLE", message: "the owner is not answering", retryable: true,
+        details: .object(["service": .string("fieldd"), "state": .string("offline")]))]
+    }
+  }
+}
+
+/// PG-3f — the params of every `agent.reportShown` the door received, connection by connection, in order.
+func reportsSent(_ door: LinkDoor) async -> [JSONValue] {
+  await door.requests("agent.reportShown")
+}
+
+/// One report's params, as the phone must send them.
+func report(_ ids: [String], _ device: String) -> JSONValue {
+  .object(["ids": .array(ids.map(JSONValue.string)), "device": .string(device)])
 }
 
 // MARK: - A scripted probe
@@ -235,6 +353,25 @@ actor LinkDoor: ProductTransport {
   func dials(to host: String) -> Int { connections.filter { $0.host == host }.count }
   func latest(to host: String) -> LinkConnection? {
     connections.last { $0.host == host }?.connection
+  }
+
+  /// `agent.subscribe` requests across every connection to `host` (PG-3e's old-home rows: a home that moves opens a
+  /// new client, so a desktop's asks are its connections' together).
+  func subscribes(to host: String) async -> Int {
+    var total = 0
+    for (dialed, connection) in connections where dialed == host {
+      total += await connection.methods.filter { $0 == "agent.subscribe" }.count
+    }
+    return total
+  }
+
+  /// The params of every `method` request across every connection this door served, in connection order.
+  func requests(_ method: String) async -> [JSONValue] {
+    var sent: [JSONValue] = []
+    for (_, connection) in connections {
+      sent += await connection.requests.filter { $0.method == method }.map(\.params)
+    }
+    return sent
   }
 
   /// `agent.subscribe` requests across every connection this door served.
@@ -578,19 +715,5 @@ final class ManualProductClock: ProductClock, @unchecked Sendable {
   var parked: Int { lock.withLock { sleepers.count } }
 }
 
-// MARK: - The contracts' own bytes, in this bundle
-
-enum MeshFixture {
-  static func json(_ name: String) throws -> JSONValue {
-    guard
-      let url = Bundle.module.url(
-        forResource: name, withExtension: "json", subdirectory: "Fixtures")
-    else { throw MissingFixture(name: name) }
-    return try JSONValue.parse(try Data(contentsOf: url))
-  }
-
-  struct MissingFixture: Error, CustomStringConvertible {
-    let name: String
-    var description: String { "fixture `\(name).json` is not in the FieldMeshTests bundle" }
-  }
-}
+// The contracts' own bytes, in this bundle: `MeshFixture` (MeshFixture.swift, its own file since PG-3e, so the host
+// inner loop's scratch target can read the body golden without this harness, which builds on iOS alone).

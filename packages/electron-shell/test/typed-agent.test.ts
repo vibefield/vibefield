@@ -18,12 +18,14 @@ import {
   leakedVariables,
   personEnvironment,
   readTypedAgentCalls,
+  readTypedAgentLines,
   STUB_STANDING,
   stageFirstRun,
   stageTypedAgent,
   startupFilesRead,
   TYPED_AGENT_ID,
   TYPED_AGENT_MODELS,
+  TYPED_AGENT_PROFILE_ROOT,
 } from "../src/testing/typed-agent";
 
 // AR-7 — the godview smoke's typed-agent fixture, its PURE and on-disk halves:
@@ -195,6 +197,8 @@ describe("the stub at a terminal — a sign-in stands for the first run, and for
     const status = spawnSync(staged.stub, ["auth", "status", "--json"], { stdio: "ignore" });
     expect(status.status).toBe(1);
     expect(readTypedAgentCalls(staged.calls).map((call) => call.tty)).toEqual([false]);
+    // and no record of a session's lines: that is the godview smoke's alone (11m)
+    expect(staged.lines).toBeUndefined();
   });
 
   it.skipIf(!terminals)(
@@ -358,13 +362,63 @@ describe("the stub — the smoke's own stand-in, run as the program it is", () =
     const left = exited(session);
     session.stdin?.end();
     expect(await left).toBe(0);
-    // a sign-in's status, a usage read: nothing to answer, and no wait
-    const status = spawnSync(staged.stub, ["auth", "status", "--json"], { stdio: "ignore" });
-    expect(status.status).toBe(1);
+    // a run that is no session and no sign-in's read (a usage read, say): nothing to answer, and no wait
+    const usage = spawnSync(staged.stub, ["usage"], { stdio: "ignore" });
+    expect(usage.status).toBe(1);
     expect(readTypedAgentCalls(staged.calls).map((call) => call.argv)).toEqual([
       ["--session-id", "s-2"],
-      ["auth", "status", "--json"],
+      ["usage"],
     ]);
+  });
+
+  it("says This Mac is signed in, and no profile: `auth status --json` answers loggedIn only with no profile root bound (11m's hatch)", () => {
+    const staged = stageTypedAgent({
+      vibefieldRoot: root(),
+      source: {},
+      ownerHome: "/Users/owner",
+    });
+    // the environment named whole, so a profile root the test's own shell holds never decides it
+    const env = { PATH: process.env["PATH"] ?? "" };
+    const mac = spawnSync(staged.stub, ["auth", "status", "--json"], { encoding: "utf8", env });
+    expect(mac.status).toBe(0);
+    expect(JSON.parse(mac.stdout)).toEqual({ loggedIn: true });
+    const profile = spawnSync(staged.stub, ["auth", "status", "--json"], {
+      encoding: "utf8",
+      env: { ...env, [TYPED_AGENT_PROFILE_ROOT]: join(staged.person, "a-profile") },
+    });
+    expect(profile.status).toBe(1);
+    expect(profile.stdout).toBe("");
+  });
+
+  it("records each line a managed session is given, in `lines`: 11m's witness that a sent line reached the agent", async () => {
+    const staged = stageTypedAgent({
+      vibefieldRoot: root(),
+      source: {},
+      ownerHome: "/Users/owner",
+    });
+    const lines = staged.lines;
+    if (lines === undefined) throw new Error("the godview smoke's stub records no lines");
+    const child = spawn(staged.stub, ["--session-id", "s-3"], {
+      cwd: staged.work,
+      stdio: ["pipe", "pipe", "ignore"],
+    });
+    const left = exited(child);
+    let said = "";
+    await new Promise<void>((ready) =>
+      child.stdout?.on("data", (chunk: Buffer) => {
+        said += chunk.toString("utf8");
+        if (said.includes("Type exit to leave")) ready();
+      }),
+    );
+    // nothing yet: a line is recorded when it is submitted, never as it is typed
+    expect(readTypedAgentLines(lines)).toEqual([]);
+    child.stdin?.write("pasted words 11m\n");
+    child.stdin?.write("exit\n");
+    expect(await left).toBe(0);
+    const record = readTypedAgentLines(lines);
+    expect(record.map((entry) => entry.line)).toEqual(["pasted words 11m", "exit"]);
+    expect(record[0]?.pid).toBe(child.pid);
+    expect(record[0]?.cwd).toBe(realpathSync(staged.work));
   });
 });
 
@@ -426,8 +480,15 @@ describe("what the step reads back", () => {
   });
 
   const zsh = spawnSync("zsh", ["-fc", "print ok"], { encoding: "utf8" }).stdout?.trim() === "ok";
+  // Item 145 (2026-11-01) — one real login, interactive zsh over the staged HOME, synchronous: a loaded host stretches
+  // it, and vitest's 5 s default cut it at 7,573 ms (items 142–143's electron-shell whole, 05:13Z), in the minute the
+  // release-notes row ran 7,436 (item 143): the host, not the row. Measured in this Mac's logged suites since 10-29
+  // (24 runs): 14 under vitest's 300 ms report threshold, the rest 456–1,354 ms; the mini's 76, 72 under it and the
+  // rest 311–439. Its claim is the startup files' order and silence, never a time: 15 s, as release-notes' row and
+  // smoke-profile's LAUNCHER_ROW_BUDGET_MS (item 93), is about twice the worst this Mac has logged.
   it.skipIf(!zsh)(
     "the person's startup files run in a real zsh, each saying so with its shell's pid, and parse without a word on stderr",
+    { timeout: 15_000 },
     () => {
       const staged = stageTypedAgent({
         vibefieldRoot: root(),

@@ -16,7 +16,7 @@ import { createRequire } from "node:module";
 import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import { leftByRun, SMOKE_RUN_ENV } from "../apps/desktop/packaging/smoke-daemons.mjs";
+import { leftByRun, leftNames, SMOKE_RUN_ENV } from "../apps/desktop/packaging/smoke-daemons.mjs";
 import { assertLabProfileProof, withLabProfile } from "./godview-lab-arms.mjs";
 
 const args = process.argv.slice(2);
@@ -78,9 +78,7 @@ try {
     assertLabProfileProof(verdict.profile, "Godview smoke", { expectedId: id });
     if (daemons.left.length > 0) {
       throw new Error(
-        `${daemons.left.length} process(es) of this run outlived the smoke (reaped): ${daemons.left
-          .map((p) => `${p.name} ${p.pid}`)
-          .join(", ")}`,
+        `${daemons.left.length} process(es) of this run outlived the smoke (reaped): ${leftNames(daemons)}`,
       );
     }
     return 0;

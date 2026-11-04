@@ -121,7 +121,7 @@ function trayDoor(engine: CanvasEngine): TestDoor {
       scroll,
       face: DRAWER_OUT.h,
       head: DRAWER.header,
-      foot: 88,
+      foot: 4,
     };
   };
   const self: TestDoor = {

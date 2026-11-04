@@ -8,7 +8,7 @@ import Testing
 /// Item 42 (James, 2026-10-19 17:42Z: "studio is driving · touch to take it
 /// back"; the look ruled 21:38Z, Phone A) — a live card another client is
 /// driving (DESIGN.md §8): what its readout says and when it stands, where its
-/// words stand in the card's empty rows, its entrance, the held veil's figures,
+/// words enter, the held veil's figures,
 /// and when a card on the screen takes the empty seat a holder let go of.
 enum SeatFixtures {
   static let studio = holder("win-desk-incarnation-1", name: "studio", kind: "window", os: "macos")
@@ -30,7 +30,7 @@ enum SeatFixtures {
   }
 }
 
-@Suite("item 42 — the readout a live card stands in its empty rows while another client drives")
+@Suite("item 42 — the readout while another client drives")
 struct SeatReadoutTests {
   @Test("another client's hold is named as fieldd minted it, with its rows and the line height they stand in")
   func anotherClientsHold() {
@@ -104,77 +104,11 @@ struct SeatReadoutTests {
     #expect(FieldHomeModel.seatVeilWait == 0.4)
   }
 
-  @Test("the figure is the desktop's at the phone's scale: 800 at 56pt/1, −0.04em, the caption 12pt")
+  @Test("the figure starts at 56pt, −0.04em, with a 12pt caption")
   func theFigure() {
     #expect(FieldHomeModel.seatWordsSize == 56)
     #expect(FieldHomeModel.seatWordsTracking == -0.04)
     #expect(FieldHomeModel.seatCaptionSize == 12)
-    // the two lines, 4 apart, and the caption's line 18 under them (typed apart: a sum of four literals in
-    // `#expect` is more than the type checker resolves in reasonable time)
-    let block: CGFloat = 56 * 2 + 4 + 18 + 15
-    #expect(FieldHomeModel.seatWordsHeight == block)
-  }
-}
-
-/// The words stand in the card's empty rows: at the foot while the held screen
-/// stands top-left (the anchor at the foot rides ghosttea 0.10.2). The card
-/// here is 700pt of grid at 19pt rows — its text 2pt down and 8pt up, 36 rows
-/// of its own.
-@Suite("item 42 — the readout's words stand in the card's empty rows")
-struct SeatWordsCentreTests {
-  @Test("the held screen top-left: the words stand in the middle of the empty rows at the foot")
-  func theEmptyRowsAtTheFoot() {
-    // the held rows' foot: 2 + 24 × 19 = 458; the grid's text foot: 700 − 8 = 692. `#expect` types each
-    // side alone, so a sum of literals is an Int unless it is said to be a CGFloat
-    #expect(
-      FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 24, lineHeight: 19)
-        == CGFloat(458 + 692) / 2)
-  }
-
-  @Test("held rows that reach the card's own last row leave no empty rows: the words stand over the grid's middle")
-  func noEmptyRows() {
-    #expect(FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 36, lineHeight: 19) == 350)
-    #expect(FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 40, lineHeight: 19) == 350)
-  }
-
-  @Test("empty rows too few for the words are no room either")
-  func tooLittleRoom() {
-    // 2 + 30 × 19 = 572 leaves 120pt above the foot; the words take 149
-    #expect(FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 30, lineHeight: 19) == 350)
-  }
-
-  @Test("the floating input row's footprint is kept clear: the words stand above the key and the chips")
-  func aboveTheFloatingRow() {
-    // the floating row's footprint, 62: the foot is 700 − 62 = 638; the held rows end at 458
-    #expect(
-      FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 24, lineHeight: 19, footReserve: 62)
-        == CGFloat(458 + 638) / 2)
-    // a reserve inside the text's own 8pt changes nothing
-    #expect(
-      FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 24, lineHeight: 19, footReserve: 4)
-        == CGFloat(458 + 692) / 2)
-    // 2 + 27 × 19 = 515 leaves 123pt above the row, under the words' 149: no room
-    #expect(
-      FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 27, lineHeight: 19, footReserve: 62) == 350)
-  }
-
-  @Test("a line height not known yet or no held rows is the middle, never a guess; a broken grid is its top")
-  func unknowns() {
-    #expect(FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 24, lineHeight: nil) == 350)
-    #expect(FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 24, lineHeight: 0) == 350)
-    #expect(FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 24, lineHeight: .nan) == 350)
-    #expect(FieldHomeModel.seatWordsCentre(grid: 700, heldRows: 0, lineHeight: 19) == 350)
-    #expect(FieldHomeModel.seatWordsCentre(grid: .nan, heldRows: 24, lineHeight: 19) == 0)
-    #expect(FieldHomeModel.seatWordsCentre(grid: -10, heldRows: 24, lineHeight: 19) == 0)
-  }
-
-  /// The rows are counted from where the text stands: item 41's padding and
-  /// the renderer's own 2pt origin (`GhostteaTerminalLayout.verticalPadding`).
-  @Test("the text's margins are the presentation's padding and the renderer's origin")
-  func theTextMargins() {
-    let padding = presentationConfig(for: .default).paddingY
-    #expect(FieldHomeModel.liveCardTextTop == CGFloat(padding[0]) + 2)
-    #expect(FieldHomeModel.liveCardTextFoot == CGFloat(padding[1]) + 2)
   }
 }
 

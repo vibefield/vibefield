@@ -61,6 +61,17 @@ public struct ChromeShadow: Sendable {
       }),
     radius: 15, y: 11)
 
+  /// PG-4t — §5's island shadow, `--vf-shadow-island`: `0 8px 30px`, black at
+  /// 8% by day and 40% by night. The Stories row's name pill (DESIGN.md §8
+  /// "The phone's Stories row").
+  public static let island = ChromeShadow(
+    color: Color(
+      UIColor { traits in
+        traits.userInterfaceStyle == .dark
+          ? UIColor(white: 0, alpha: 0.40) : UIColor(white: 0, alpha: 0.08)
+      }),
+    radius: 15, y: 8)
+
   /// The switch's knob — the design kit's `0 1px 3px rgb(0 0 0 / 18%)`
   /// (`.vf-ui-switch__thumb`).
   public static let knob = ChromeShadow(
@@ -94,8 +105,12 @@ public enum ChromeMaterial {
     radius: CGFloat = ChromeRadius.card,
     shadow: ChromeShadow? = ChromeShadow.card
   ) -> some View {
-    let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-    return shape
+    glass(in: RoundedRectangle(cornerRadius: radius, style: .continuous), shadow: shadow)
+  }
+
+  /// `.glass` in any shape (WI-2: the way in's acts, whose lower corners follow the screen's own).
+  public static func glass<S: InsettableShape>(in shape: S, shadow: ChromeShadow? = ChromeShadow.card) -> some View {
+    shape
       .fill(.ultraThinMaterial)
       .overlay {
         shape.fill(

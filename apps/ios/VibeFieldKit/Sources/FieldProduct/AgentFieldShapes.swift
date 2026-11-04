@@ -82,6 +82,12 @@ public struct AgentFieldStop: Sendable, Equatable, Decodable {
 }
 
 /// One agent, as the field draws it.
+///
+/// *2026-11-02 (PG-3e, Q-E4 (a)):* no product caller. The phone reads the
+/// remote cut since PG-3e, and this decoder, `AgentFieldSnapshot`,
+/// `AgentFieldDelta` and `AgentFieldSlice` stay as the contracts' field shapes'
+/// mirror — the launch set's three copies and the transport suites read them —
+/// until PG-L1 decides the field cut's end.
 public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
   public let runtimeRunId: String
   /// fieldd's PER-ROW counter, bumped only when a PROJECTED field changed —
@@ -129,6 +135,14 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
   /// ST-D5 — the person's Stop while fieldd holds one; absent otherwise, and
   /// on a row from a daemon before ST.
   public let stop: AgentFieldStop?
+  /// TU-1 — the Agent Profile the run is filed under, by its id; absent when
+  /// none is filed, and on a row from a daemon before TU-1.
+  public let profileSet: String?
+  /// TU-1 — when fieldd first saw the run's conversation take a turn. The
+  /// phone reads only "a time or not": the wire's `null` (not yet) reads as
+  /// absent here (`WireObject.value`), and the phone draws no hello, so the
+  /// three states are the window's.
+  public let turnedAt: String?
   public let unknownFields: [String]
   /// Blockers that did not read. A row with one unreadable blocker is still a
   /// row — but the count is not nothing, so it rides rather than vanishing.
@@ -178,6 +192,8 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
     terminal = try object.decodeObject("terminal", AgentTerminalJoin.init(json:))
     nativeSessionId = object.string("nativeSessionId")
     stop = try object.decodeObject("stop", AgentFieldStop.init(json:))
+    profileSet = object.string("profileSet")
+    turnedAt = object.string("turnedAt")
     unknownFields = object.unknownFields
   }
 
@@ -246,7 +262,8 @@ public struct AgentFieldDelta: Sendable, Equatable, Decodable {
 ///
 /// **RETIRED 2026-10-01 (DS-D14, DS wave 3):** no phone reads this slice and no
 /// desktop publishes it — the field arrives through the home's mesh board
-/// (`AgentMeshOpen` below, DS-8). The decoder stays as the mirror of the
+/// (DS-8; the REMOTE one since PG-3e, `AgentRemoteMeshOpen` — corrected
+/// 2026-11-02: it named the retired `AgentMeshOpen`). The decoder stays as the mirror of the
 /// contracts' schema, which stays as the record of an older desktop's slice,
 /// pinned by the same goldens.
 ///
@@ -301,6 +318,8 @@ public struct AgentSubscribeParams: Sendable, Equatable {
   public enum Projection: String, Sendable, Equatable {
     case full
     case field
+    /// PG-3 — the home's REMOTE cut (`AgentRemoteRow`, `AgentRemoteShapes.swift`), the phone's one ask since PG-3e.
+    case remote
   }
 
   /// DS-3 — `local` (the door's default) is the answering desktop's own board;
@@ -320,17 +339,16 @@ public struct AgentSubscribeParams: Sendable, Equatable {
     self.minIntervalMs = minIntervalMs
   }
 
-  /// The phone's own subscription: the field projection at the cadence §5 sets
-  /// (`AGENT_FIELD.MIN_INTERVAL_MS`), which the swarm's 30 Hz physics
-  /// interpolates between.
-  public static let phoneField = AgentSubscribeParams(projection: .field, minIntervalMs: 250)
+  // RETIRED 2026-11-02 (PG-3e): `phoneField` (the field projection at 250 ms, the phone's first ask, which no
+  // product code had sent since DS-8) and `phoneMesh` (DS-8's field projection of the home's MESH board, the
+  // phone's one ask until the switch). The phone asks `phoneRemote` alone; there is no fallback to `field` (Q-P2).
 
-  /// DS-8 — the phone's ONE subscription since it homes to one desktop: the
-  /// field projection of the home's MESH board (DS-D13; every aggregated door
-  /// takes `scope: "mesh"`), at the field's floor. Never `desk` — the home
-  /// refuses it to a phone (SP-L4) — and never `full`.
-  public static let phoneMesh = AgentSubscribeParams(
-    projection: .field, scope: .mesh, minIntervalMs: 250)
+  /// PG-3 — the phone's Godview door (SP-L4 as amended): the home's REMOTE cut of
+  /// its mesh board. No `minIntervalMs`: the door floors the ask by the caller's
+  /// kind (`boardFloor`, fieldd/src/agent-field.ts), so the kit holds no copy of a
+  /// registry number. FieldLink's one ask since PG-3e (corrected 2026-11-02: it
+  /// was "unused until 3e; FieldLink asks `phoneMesh`").
+  public static let phoneRemote = AgentSubscribeParams(projection: .remote, scope: .mesh)
 
   public var json: JSONValue {
     var fields: [String: JSONValue] = [:]
@@ -382,81 +400,10 @@ public enum AgentMeshDeviceState: Sendable, Equatable {
   public var isLive: Bool { self == .live }
 }
 
-/// One desktop's entry in the mesh board's open answer: its state, when that
-/// was established, and — once it has answered — its own board on its own
-/// `{epoch, revision}` chain. A desktop that has not answered is still LISTED,
-/// with no snapshot.
-public struct AgentMeshDevice: Sendable, Equatable {
-  public let device: String
-  public let state: AgentMeshDeviceState
-  /// ISO-8601, as the home wrote it — when `state` was last established.
-  public let asOf: String
-  public let snapshot: AgentFieldSnapshot?
-  public let unknownFields: [String]
-
-  public init(json: JSONValue) throws {
-    var object = try WireObject(shape: "AgentMeshDevice", value: json)
-    device = try object.requiredString("device")
-    state = AgentMeshDeviceState(wire: try object.requiredString("state"))
-    asOf = try object.requiredString("asOf")
-    snapshot = try object.decodeObject("snapshot", AgentFieldSnapshot.init(json:))
-    unknownFields = object.unknownFields
-  }
-}
-
-/// The OPEN answer of `agent.subscribe {scope: "mesh"}` (DS-D4): every self
-/// desktop the home's roster lists. The home MULTIPLEXES and never re-folds —
-/// a peer's revisions arrive as the peer numbered them, so each desktop is its
-/// own chain and nothing here is renumbered.
-public struct AgentMeshOpen: Sendable, Equatable {
-  public let devices: [AgentMeshDevice]
-  /// Entries that did not read, named. One unreadable desktop never costs the
-  /// others their rows.
-  public let droppedDevices: [String]
-  public let unknownFields: [String]
-
-  public init(json: JSONValue) throws {
-    var object = try WireObject(shape: "AgentMeshOpen", value: json)
-    var dropped: [String] = []
-    devices = try object.rows("devices", AgentMeshDevice.init(json:), dropped: &dropped)
-    droppedDevices = dropped
-    unknownFields = object.unknownFields
-  }
-}
-
-/// A later frame of the mesh board, one of three arms: one desktop's delta,
-/// relayed verbatim · one desktop's snapshot (that desktop's RESET — a reader
-/// replaces its copy of that desktop and nothing else) · one desktop's state
-/// changing. A desktop that stops answering sends only the state change: its
-/// last board stays with the reader, greyed (DS-L8).
-public enum AgentMeshFrame: Sendable, Equatable {
-  case delta(device: String, AgentFieldDelta)
-  case snapshot(device: String, AgentFieldSnapshot)
-  case state(device: String, AgentMeshDeviceState, asOf: String)
-
-  public init(json: JSONValue) throws {
-    var object = try WireObject(shape: "AgentMeshFrame", value: json)
-    let device = try object.requiredString("device")
-    if let delta = try object.decodeObject("delta", AgentFieldDelta.init(json:)) {
-      self = .delta(device: device, delta)
-    } else if let snapshot = try object.decodeObject("snapshot", AgentFieldSnapshot.init(json:)) {
-      self = .snapshot(device: device, snapshot)
-    } else if let state = object.string("state") {
-      self = .state(
-        device: device, AgentMeshDeviceState(wire: state), asOf: object.string("asOf") ?? "")
-    } else {
-      throw WireDecodeError(
-        shape: "AgentMeshFrame", reason: "names no delta, no snapshot and no state")
-    }
-  }
-
-  /// The desktop this frame is about.
-  public var device: String {
-    switch self {
-    case .delta(let device, _), .snapshot(let device, _), .state(let device, _, _): device
-    }
-  }
-}
+// RETIRED 2026-11-02 (PG-3e): `AgentMeshDevice`, `AgentMeshOpen` and `AgentMeshFrame`, the FIELD mesh board's
+// decoders (DS-8), with their reader `MeshBoardCopy`. The phone reads the home's REMOTE mesh board
+// (`AgentRemoteMeshOpen`/`AgentRemoteMeshFrame`, `AgentRemoteShapes.swift`). `AgentMeshDeviceState` above stays: every
+// remote device entry and 3d's fold read it.
 
 // MARK: - The two doors §10.1 mints beside the field (G7, G4)
 

@@ -26,7 +26,12 @@ import {
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
-import type { AgentMonitorState, AgentTurnStop, TerminalKey } from "@vibefield/puppeteer-core";
+import type {
+  AgentMonitorState,
+  AgentTurnStop,
+  MonitorActivityKind,
+  TerminalKey,
+} from "@vibefield/puppeteer-core";
 import type { AgentSessionInfo } from "@vibefield/puppeteer-runtime";
 import { isTypedRun, SPAWNED_BY_SHELL } from "./agent-typed-run";
 
@@ -164,7 +169,10 @@ export class SessionRecordStore {
   /** The root's signing key: read, or minted once (32 random bytes, base64,
    * 0600, created without overwrite so two writers cannot both mint). A key
    * that other users could read is worthless as evidence: set aside, re-minted,
-   * and every record signed with it reads as untrusted from then on. */
+   * and every record signed with it reads as untrusted from then on. An exposed
+   * key and a malformed one are each replaced on the pass that finds them, and
+   * the second pass reads what was minted (the one record signer,
+   * signed-record.ts, carries the same rule). */
   private signingKey(): Buffer {
     if (this.key !== undefined) return this.key;
     const path = this.opts.keyPath;
@@ -180,21 +188,21 @@ export class SessionRecordStore {
             { aside },
           );
           renameSync(path, aside);
-          continue;
+        } else {
+          const key = Buffer.from(readFileSync(path, "utf8").trim(), "base64");
+          if (key.length === 32) {
+            this.key = key;
+            return key;
+          }
+          const aside = `${path}.unreadable-${Date.now()}`;
+          this.logger.error(
+            "fieldd.agents.session_key_unreadable",
+            "The session-record signing key is malformed; set aside and re-minted",
+            undefined,
+            { aside },
+          );
+          renameSync(path, aside);
         }
-        const key = Buffer.from(readFileSync(path, "utf8").trim(), "base64");
-        if (key.length === 32) {
-          this.key = key;
-          return key;
-        }
-        const aside = `${path}.unreadable-${Date.now()}`;
-        this.logger.error(
-          "fieldd.agents.session_key_unreadable",
-          "The session-record signing key is malformed; set aside and re-minted",
-          undefined,
-          { aside },
-        );
-        renameSync(path, aside);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
@@ -355,6 +363,10 @@ export function recordForRun(input: {
   origin?: AgentSessionOrigin | undefined;
   /** CP-1c — the spark the run is the own session of */
   spark?: SparkId | undefined;
+  /** TU-1 (Q5, Q6) — whether the conversation has worked, at birth: `null` for a new conversation, the record's own
+   * for a resume of one (absent stays absent), the birth's time for a native resume from History. Required, so every
+   * birth says which. */
+  turnedAt: string | null | undefined;
 }): AgentSessionRecord {
   const { info } = input;
   return {
@@ -396,6 +408,7 @@ export function recordForRun(input: {
     ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
     ...(input.origin !== undefined ? { origin: input.origin } : {}),
     ...(input.spark !== undefined ? { spark: input.spark } : {}),
+    ...(input.turnedAt !== undefined ? { turnedAt: input.turnedAt } : {}),
   };
 }
 
@@ -422,6 +435,20 @@ export function foldStatus(monitor: AgentMonitorMirror | undefined): AgentStatus
     default:
       return "unknown";
   }
+}
+
+/** puppeteer's launch span (`monitor/project.js`, RFC 001): `working` while a run has no process yet, which is no
+ * turn. Typed by the pin's own activity words, so a pin that renames it is red at its typecheck. */
+const LAUNCH_ACTIVITY: MonitorActivityKind = "starting";
+
+/** TU-1 (Q2) — the mirror shows the run's conversation taking a turn: at work (never the launch's own span), tokens
+ * spent, or an answer written. Never an ask alone: `blocked` counts nothing, so a trust or permission menu at launch is
+ * no turn, and the turn it guards is seen when the run works. Pure. */
+export function mirrorShowsTurn(mirror: AgentMonitorMirror | undefined): boolean {
+  if (mirror === undefined) return false;
+  if (mirror.status === "working" && mirror.activity?.kind !== LAUNCH_ACTIVITY) return true;
+  if ((mirror.usage?.cumulativeTokens ?? 0) > 0) return true;
+  return mirror.lastAssistantMessage !== undefined;
 }
 
 /** puppeteer's monitor state as the contract's mirror, or undefined (logged
@@ -470,6 +497,8 @@ export interface SummarizeInput {
   door?: "off" | undefined;
   /** ST — the person's Stop while fieldd holds one */
   stop?: AgentStopState | undefined;
+  /** TU-1 — the run's `turnedAt` as fieldd holds it (its record's, or the stamp this fieldd wrote) */
+  turnedAt?: string | null | undefined;
 }
 
 /** Q08 — the floor's own interrupt, which is ⌃C (ghosttea encodes it `\x03`),
@@ -526,6 +555,7 @@ export function summarizeManaged(input: SummarizeInput): AgentSessionSummary {
     ...(input.spark !== undefined ? { spark: input.spark } : {}),
     ...(input.door !== undefined ? { door: input.door } : {}),
     ...(input.stop !== undefined ? { stop: input.stop } : {}),
+    ...(input.turnedAt !== undefined ? { turnedAt: input.turnedAt } : {}),
   };
 }
 
@@ -577,6 +607,7 @@ export function summarizeExitedRecord(input: SummarizeExitedInput): AgentSession
     continuation: { persisted: true, resumable: input.resumable ?? true, exited: true },
     ...(record.origin !== undefined ? { origin: record.origin } : {}),
     ...(record.spark !== undefined ? { spark: record.spark } : {}),
+    ...(record.turnedAt !== undefined ? { turnedAt: record.turnedAt } : {}),
   };
 }
 
@@ -659,5 +690,6 @@ export function summarizePending(input: SummarizePendingInput): AgentSessionSumm
     ...(record.spawnedBy !== undefined ? { spawnedBy: record.spawnedBy } : {}),
     ...(record.origin !== undefined ? { origin: record.origin } : {}),
     ...(record.spark !== undefined ? { spark: record.spark } : {}),
+    ...(record.turnedAt !== undefined ? { turnedAt: record.turnedAt } : {}),
   };
 }

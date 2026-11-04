@@ -53,7 +53,9 @@ function harness(
   const nativeStates: TrayNativeState[] = [];
   let placement = initialPlacement;
   let displayCallback: (() => void) | null = null;
+  let appearanceCallback: (() => void) | null = null;
   const stopDisplayObservation = vi.fn();
+  const stopAppearanceObservation = vi.fn();
   const runtime: TrayRuntime = {
     platform,
     guid: platform === "darwin" ? "c524c40e-05b6-4d89-bbb9-82ba4e97ea91" : null,
@@ -82,6 +84,10 @@ function harness(
     watchDisplays: vi.fn((callback) => {
       displayCallback = callback;
       return stopDisplayObservation;
+    }),
+    watchAppearance: vi.fn((callback) => {
+      appearanceCallback = callback;
+      return stopAppearanceObservation;
     }),
     buildMenu: vi.fn((items) => {
       menus.push(items);
@@ -119,6 +125,10 @@ function harness(
     desktopStates,
     nativeStates,
     stopDisplayObservation,
+    stopAppearanceObservation,
+    emitAppearanceChange() {
+      appearanceCallback?.();
+    },
     setPlacement(next: TrayPlacement) {
       placement = next;
     },
@@ -291,6 +301,35 @@ describe("TrayController", () => {
     expect(h.trays[0]?.destroy).toHaveBeenCalledTimes(1);
     expect(h.runtime.buildMenu).toHaveBeenCalledTimes(1);
     expect(h.stopDisplayObservation).toHaveBeenCalledTimes(1);
+    expect(h.stopAppearanceObservation).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes the current status image on a theme change without creating another tray", () => {
+    const h = harness("win32", false, { evidence: "degraded" });
+    h.emitAppearanceChange();
+    h.emitAppearanceChange();
+    vi.advanceTimersByTime(100);
+    expect(h.runtime.loadImage).toHaveBeenLastCalledWith("attention");
+    expect(h.runtime.loadImage).toHaveBeenCalledTimes(2);
+    expect(h.trays).toHaveLength(1);
+    expect(h.trays[0]?.setImage).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(150);
+    expect(h.onError).not.toHaveBeenCalled();
+    h.controller.dispose();
+    h.emitAppearanceChange();
+    vi.runAllTimers();
+    expect(h.runtime.loadImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps appearance changes safe while the tray is hidden", () => {
+    const h = harness("linux", false, { showTray: false });
+    h.emitAppearanceChange();
+    vi.runAllTimers();
+    expect(h.trays).toHaveLength(0);
+    h.controller.update({ showTray: true });
+    expect(h.trays).toHaveLength(1);
+    expect(h.runtime.loadImage).toHaveBeenCalledTimes(1);
+    h.controller.dispose();
   });
 });
 

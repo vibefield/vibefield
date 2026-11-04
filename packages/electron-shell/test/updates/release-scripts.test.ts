@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -156,6 +156,32 @@ describe("release-sign → release-verify: what the sign step writes, the client
       now: NOW + 1000,
     });
     expect(verified).toEqual({
+      unsigned: false,
+      verified: ["latest-mac.yml", "release-manifest.json"],
+    });
+  });
+
+  it("signs and verifies a numbered nightly with the client's complete trust chain", async () => {
+    const trust = devTrust();
+    const dir = releaseDir();
+    const tag = "nightly-20261016.1";
+    for (const name of ["latest-mac.yml", "release-manifest.json"]) {
+      const path = join(dir, name);
+      writeFileSync(
+        path,
+        readFileSync(path, "utf8")
+          .replaceAll("nightly.20261016", "nightly.20261016.1")
+          .replaceAll("nightly-20261016", tag),
+      );
+    }
+    sign({ dir, tag, trustRoot: trust.path, secret: trust.release.secretKey });
+    expect(
+      ChannelHeads.parse(JSON.parse(readFileSync(join(dir, "channels.json"), "utf8"))).heads
+        .nightly,
+    ).toBe(tag);
+    await expect(
+      verifyReleaseDir({ dir, tag, channel: "nightly", rootKeys: trust.rootKeys, now: NOW + 1000 }),
+    ).resolves.toEqual({
       unsigned: false,
       verified: ["latest-mac.yml", "release-manifest.json"],
     });
@@ -382,23 +408,45 @@ describe("release-plan (D6, D7, D14)", () => {
     );
   });
 
-  it("a second nightly in one UTC day is skipped: today's tag name is already used (D7)", () => {
+  it("schedules stay daily; dispatches use the next unused revision on the same UTC day", () => {
+    for (const lastNightlyTag of ["nightly-20261016", "nightly-20261016.1"]) {
+      expect(planRelease({ ...base, event: "schedule", ref: "", lastNightlyTag })).toMatchObject({
+        skip: true,
+        reason: expect.stringMatching(/today's nightly exists/),
+      });
+    }
+    for (const [lastNightlyTag, suffix] of [
+      ["nightly-20261015.9", ""],
+      ["nightly-20261016", ".1"],
+      ["nightly-20261016.1", ".2"],
+      ["nightly-20261016.9", ".10"],
+    ] as const) {
+      expect(
+        planRelease({ ...base, event: "workflow_dispatch", ref: "", lastNightlyTag }),
+      ).toMatchObject({
+        skip: false,
+        tag: `nightly-20261016${suffix}`,
+        version: `0.1.0-nightly.20261016${suffix}`,
+      });
+    }
     expect(
       planRelease({
         ...base,
         event: "workflow_dispatch",
         ref: "",
         lastNightlyTag: "nightly-20261016",
-      }),
-    ).toMatchObject({ skip: true, reason: expect.stringMatching(/today's nightly exists/) });
+        mainGreen: false,
+      }).skip,
+    ).toBe(true);
     expect(
       planRelease({
         ...base,
         event: "workflow_dispatch",
         ref: "",
-        lastNightlyTag: "nightly-20261015",
-      }),
-    ).toMatchObject({ skip: false, tag: "nightly-20261016" });
+        lastNightlyTag: "nightly-20261016",
+        lastPublishedNightlyCommit: base.commit,
+      }).skip,
+    ).toBe(true);
   });
 
   it("a pushed beta tag is a prerelease; a stable tag is latest; both must be the committed version", () => {
@@ -692,7 +740,16 @@ describe("release-notes (AU-6)", () => {
     expect(ReleaseNotes.parse(eight)).toEqual(eight);
   });
 
-  it("reads the log as git writes it: no merges, newest first, a folded Release-note: trailer unfolded", () => {
+  // Item 143 (2026-11-01) — this row is twelve `git` starts in a row (the fixture repo's eleven, then readCommits' log),
+  // synchronous, so a loaded host stretches it, and vitest's 5 s default cut it at 5,074 ms (AL-6's light, load ~117).
+  // Measured in this Mac's logged suites since the row came (AU-6b, 2026-10-29; 24 runs): a median 898 ms, p90 2,649,
+  // the greens' worst 4,646; the mini's 116 verify runs, a median 1,001 and a worst 1,736. Then items 142–143's own
+  // electron-shell whole (2026-11-01 05:13Z) ran it 7,436 ms, green, in the minute typed-agent's real-zsh row ran 7,573
+  // (item 145): the host stretched, not the row. Its claim is the log's reading, never a time: 15 s, smoke-profile's
+  // LAUNCHER_ROW_BUDGET_MS (item 93), is about twice the worst this Mac has logged.
+  it("reads the log as git writes it: no merges, newest first, a folded Release-note: trailer unfolded", {
+    timeout: 15_000,
+  }, () => {
     const dir = scratch();
     let at = 1_790_000_000;
     // place-scanner's temporary repo: its own identity, no global or system config; each commit a minute later
@@ -921,6 +978,133 @@ describe("release.yml's shape — the permissions table, as a test", () => {
     // "unchanged since the last nightly" reads the newest PUBLISHED nightly, never the newest tag
     expect(jobs.get("plan")).toMatch(/--last-published-nightly-commit "\$LAST_PUBLISHED_COMMIT"/);
     expect(jobs.get("plan")).not.toMatch(/--last-nightly-commit/);
+  });
+
+  it.each(["flat", "named"])(
+    "stages the downloaded build payloads from a %s artifact layout",
+    (layout) => {
+      const dir = scratch();
+      const build = join(dir, "builds", ...(layout === "named" ? ["build-mac-arm64"] : []));
+      mkdirSync(build, { recursive: true });
+      mkdirSync(join(dir, "bin"));
+      // No earlier release: exercise the workflow's real staging shell without GitHub access.
+      writeFileSync(join(dir, "bin", "gh"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      writeFileSync(join(build, "VibeField.zip"), "installer bytes");
+      writeFileSync(join(build, "latest-mac.yml"), "unsigned feed");
+      writeFileSync(join(build, "hashes-mac-arm64.json"), "{}");
+      const step = stepsOf("sign").find(
+        (entry) => entry.name === "The previous releases' truth (D4, D5, D11)",
+      );
+      expect(step).toBeDefined();
+      const shell = step!.text.split("        run: |\n")[1]!.replace(/^ {10}/gm, "");
+      execFileSync("bash", ["-euc", shell], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+          CHANNEL: "nightly",
+          GITHUB_REPOSITORY: "test/release",
+        },
+      });
+      expect(readdirSync(join(dir, "release-out")).sort()).toEqual([
+        "VibeField.zip",
+        "latest-mac.yml",
+      ]);
+      expect(readFileSync(join(dir, "release-out", "VibeField.zip"), "utf8")).toBe(
+        "installer bytes",
+      );
+      expect(readFileSync(join(build, "hashes-mac-arm64.json"), "utf8")).toBe("{}");
+    },
+  );
+
+  it.each(["Disabled", "Enabled", "unrecognized"])(
+    "routes Apple tickets over TCP only with an inactive packet filter (%s)",
+    (state) => {
+      const steps = stepsOf("build");
+      const step = steps.find((entry) => entry.name === "Use TCP for Apple notarization tickets");
+      expect(step).toBeDefined();
+      expect(step!.text).toContain(
+        "if: runner.os == 'macOS' && vars.VIBEFIELD_MAC_SIGNING == 'true'",
+      );
+      expect(steps.indexOf(step!)).toBeLessThan(
+        steps.findIndex(
+          (entry) => entry.name === "Package, signed (J4 — the Apple credentials exist)",
+        ),
+      );
+      const dir = scratch();
+      mkdirSync(join(dir, "bin"));
+      // Execute the workflow's real shell, with every privileged call intercepted by the fixture.
+      writeFileSync(
+        join(dir, "bin", "sudo"),
+        `#!/bin/sh
+printf '%s\n' "$*" >> "$PF_CALLS"
+case "$*" in
+  'pfctl -s info') printf 'Status: %s\n' "$PF_STATE" ;;
+  'pfctl -f -') cat > "$PF_RULES" ;;
+  'pfctl -E') ;;
+  *) exit 99 ;;
+esac
+`,
+        { mode: 0o755 },
+      );
+      const shell = step!.text.split("        run: |\n")[1]!.replace(/^ {10}/gm, "");
+      const result = spawnSync("bash", ["-euc", shell], {
+        cwd: dir,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+          PF_STATE: state,
+          PF_CALLS: join(dir, "calls"),
+          PF_RULES: join(dir, "rules"),
+        },
+      });
+      const calls = readFileSync(join(dir, "calls"), "utf8").trim().split("\n");
+      if (state === "Disabled") {
+        expect(result.status, result.stderr).toBe(0);
+        expect(calls).toEqual(["pfctl -s info", "pfctl -f -", "pfctl -E"]);
+        expect(readFileSync(join(dir, "rules"), "utf8")).toBe(
+          "block return out quick proto udp from any to any port 443\n",
+        );
+      } else {
+        expect(result.status).toBe(1);
+        expect(result.stdout).toContain("Refusing to replace");
+        expect(calls).toEqual(["pfctl -s info"]);
+        expect(readdirSync(dir)).not.toContain("rules");
+      }
+    },
+  );
+
+  it("chooses nightly revisions in numeric order, including .10 after .9", () => {
+    const dir = scratch();
+    const git = (...args: string[]) =>
+      execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git("init");
+    git(
+      "-c",
+      "user.name=Release test",
+      "-c",
+      "user.email=release@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "fixture",
+    );
+    for (const tag of [
+      "nightly-20261102.99",
+      "nightly-20261103",
+      "nightly-20261103.1",
+      "nightly-20261103.9",
+      "nightly-20261103.10",
+    ])
+      git("tag", tag);
+    const command = /last=\$\((git tag [^\n]+)\)/.exec(jobs.get("plan") ?? "")?.[1];
+    expect(command).toBeDefined();
+    expect(execFileSync("bash", ["-euc", command!], { cwd: dir, encoding: "utf8" }).trim()).toBe(
+      "nightly-20261103.10",
+    );
   });
 
   it("puts ONLY the build and sign jobs in release-signing", () => {

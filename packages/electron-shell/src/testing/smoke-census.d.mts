@@ -35,3 +35,6 @@ export declare function stillRunning(
   ps?: Ps,
   spelling?: PsSpelling,
 ): number[];
+/** Item 142 — whether `pid` is gone by the kernel's own reading (`ps` shows it no line or a zombie), never by the run's
+ * mark. */
+export declare function goneByKernel(pid: number, ps?: Ps): boolean;

@@ -202,7 +202,7 @@ export function OnboardingConnectPaneView(props: ConnectPaneProps): ReactElement
               placeholder="tskey-auth-…"
               value={key}
               onChange={(event) => setKey(event.target.value)}
-              className="h-10 rounded-[12px] border border-black/10 bg-white px-3.5 font-mono text-[13px] text-black/85 outline-none focus:border-black/25 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/90"
+              className="vf-wizard-field h-10 rounded-[12px] border px-3.5 font-mono text-[13px] outline-none transition-[border-color,box-shadow] motion-reduce:transition-none"
             />
             <button
               type="button"

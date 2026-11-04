@@ -1,0 +1,752 @@
+// @vitest-environment happy-dom
+/**
+ * SP-1d — THE THREAD'S FIRST WORDS (DESIGN.md §8 "Chat's thread": the thread's items, the hello and three starters;
+ * NS-D4 A; CH-D5 A; VF-PM's Q2, 2026-10-31): a new spark's hello and its starters stand in the thread's foot, over
+ * the pane, on the shipping `ThreadItemsView` under Chat's real controller (`ChatView`) and a running feed. Send's road
+ * itself is `thread-send.test.ts`'s; here `sendToThread` is scripted, so a starter is seen to go the way the
+ * composer's Send goes, and what each outcome leaves standing. The data is `thread-items.test.ts`'s; the pane taking
+ * the keyboard is `spark-pane.test.tsx`'s.
+ */
+
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  AGENT_CATALOG,
+  type AgentFieldRow,
+  type NeedsItem,
+  type SparkSummary,
+} from "@vibefield/contracts";
+import { act, type ReactElement, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NO_HANDLES } from "../src/chat/at-rows";
+import type { ComposerPort } from "../src/chat/ChatComposer";
+import { ChatView } from "../src/chat/ChatView";
+import { NEEDS_IDLE, needsNamesOf } from "../src/chat/needs-card";
+import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
+import { ThreadItemsView } from "../src/chat/ThreadItemsView";
+import { helloWords, STARTERS, type ThreadItem } from "../src/chat/thread-items";
+import type { ThreadSendDeps, ThreadSendOutcome } from "../src/chat/thread-send";
+import { ChatPreview } from "../src/design-system/ChatPreview";
+import type { ChatState } from "../src/design-system/chat-fixtures";
+import type { FrameSurface } from "../src/frame/frame-surface";
+import { hearLineSays } from "../src/frame/line-door";
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** Send's road, scripted: what each send was handed (and the world Chat lent the last one), and what it comes to. */
+const road = vi.hoisted(() => ({
+  sent: [] as { readonly text: string; readonly stills: readonly string[] }[],
+  /** what Chat's controller lent the last send: the facts Send reads of the spark (CP-3) */
+  deps: null as ThreadSendDeps | null,
+  outcome: (): Promise<ThreadSendOutcome> => Promise.resolve({ state: "pasted" }),
+}));
+vi.mock("../src/chat/thread-send", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/chat/thread-send")>();
+  return {
+    ...actual,
+    sendToThread: (deps: ThreadSendDeps, text: string, stills: readonly string[]) => {
+      road.sent.push({ text, stills });
+      road.deps = deps;
+      return road.outcome();
+    },
+  };
+});
+
+const AT = "2026-10-31T05:00:00.000Z";
+const AGENT = AGENT_CATALOG[0];
+
+const VELA: SparkSummary = {
+  id: "sp-vela0001",
+  name: "Vela",
+  face: { seed: 7 },
+  agent: AGENT.id,
+  profiles: ["native"],
+  thinksUnder: "native",
+  folder: "/f/vela",
+  createdAt: AT,
+  updatedAt: AT,
+  // just hatched: fieldd has not seen her work
+  turnedAt: null,
+  session: { runtimeRunId: "run-Vela", terminalSessionId: "pty-Vela", live: true },
+};
+
+/** When fieldd first saw Vela work (TU-1): her record's and her run's `turnedAt` once she has. */
+const TURNED = "2026-10-31T05:00:40.000Z";
+/** Vela once she has worked: her record says so. */
+const WORKED: SparkSummary = { ...VELA, turnedAt: TURNED };
+
+/** Vela's own run: up, idle, and no turn taken yet — unless a test says otherwise. */
+function own(over: Partial<AgentFieldRow> = {}): AgentFieldRow {
+  return {
+    runtimeRunId: "run-Vela",
+    revision: 1,
+    kind: AGENT.id,
+    label: AGENT.label,
+    tier: "managed",
+    device: "dev-1",
+    status: "idle",
+    statusSince: AT,
+    stateChangedAt: AT,
+    createdAt: AT,
+    alive: true,
+    blockers: [],
+    spark: VELA.id,
+    terminal: { hosted: "local", runtimeSessionId: "pty-Vela" },
+    ...over,
+  };
+}
+
+const PORT: ComposerPort = {
+  profileSets: async () => [],
+  models: async () => {
+    throw new Error("no picker here");
+  },
+};
+
+/** The board's frames as the feed hears them: a test hands it another, within the same window's life. */
+let pushFrame: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
+/** The needs-you queue's open items as the feed's first reading hears them (CP-3); none unless a test says. */
+let queued: readonly NeedsItem[] = [];
+/** The queue's next frame, whole, as needs.subscribe sends it. */
+let pushNeeds: ((items: readonly NeedsItem[]) => void) | null = null;
+
+function feed(
+  rows: AgentFieldRow[],
+  record: SparkSummary,
+  open: SparksPort["open"] = async () => record,
+): SparksPort {
+  return {
+    list: async () => [record],
+    watch: async (onFrame) => {
+      pushFrame = onFrame;
+      onFrame({ revision: 1, rows }, "snapshot");
+      return () => undefined;
+    },
+    watchNeeds: async (onItems) => {
+      pushNeeds = onItems;
+      onItems(queued);
+      return () => undefined;
+    },
+    answer: async () => {
+      throw new Error("nothing is answered here");
+    },
+    onReconnected: () => () => undefined,
+    open,
+  };
+}
+
+/** Vela's question in the needs-you queue (CP-3): a card in her thread, never a menu in her pane. */
+const VELA_ASKS: NeedsItem = {
+  id: "ny-velaasks01",
+  kind: "question",
+  state: "open",
+  from: { name: "Vela", session: "run-Vela", spark: VELA.id },
+  spark: VELA.id,
+  asked: AT,
+  words: "Push the fix?",
+  choices: ["Push", "Not now"],
+};
+
+let root: Root | null = null;
+let host: HTMLElement | null = null;
+let stopFeed: (() => void) | null = null;
+let stopHearing: (() => void) | null = null;
+let said: string[] = [];
+
+beforeEach(() => {
+  road.sent = [];
+  road.deps = null;
+  queued = [];
+  road.outcome = () => Promise.resolve({ state: "pasted" });
+  said = [];
+  stopHearing = hearLineSays((text) => said.push(text));
+});
+
+afterEach(() => {
+  act(() => root?.unmount());
+  host?.remove();
+  root = null;
+  host = null;
+  stopFeed?.();
+  stopFeed = null;
+  pushFrame = null;
+  pushNeeds = null;
+  vi.useRealTimers();
+  stopHearing?.();
+  stopHearing = null;
+});
+
+/** Chat as the frame mounts it, over a feed of Vela and her own run (and the wake it answers, `open`). */
+async function mountChat(
+  rows: AgentFieldRow[] = [own()],
+  record: SparkSummary = VELA,
+  open?: SparksPort["open"],
+): Promise<void> {
+  stopFeed = startSparksFeed(feed(rows, record, open));
+  function Owner(): ReactElement {
+    const [surface, setSurface] = useState<FrameSurface | null>(null);
+    return <ChatView active surface={surface} onSurfaceChange={setSurface} port={PORT} />;
+  }
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => root?.render(<Owner />));
+  await settle();
+}
+
+const settle = () => act(async () => undefined);
+const $ = (selector: string): HTMLElement | null =>
+  host?.querySelector<HTMLElement>(selector) ?? null;
+const hello = (): HTMLElement | null => $(".vf-chat-hello");
+const starters = (): HTMLButtonElement[] => [
+  ...(host?.querySelectorAll<HTMLButtonElement>(".vf-chat-starter") ?? []),
+];
+/** The words an element shows, each text a word apart, as a person reads them. */
+function words(element: Element | null): string {
+  if (element === null) return "";
+  const parts: string[] = [];
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    const text = node.textContent?.replace(/\s+/gu, " ").trim();
+    if (text) parts.push(text);
+  }
+  return parts.join(" ");
+}
+
+/** Type into the draft as the browser leaves it: the text in the editor, the caret at its end, an input event. */
+function typeText(text: string): void {
+  act(() => {
+    const field = $(".vf-chat-input");
+    if (field === null) throw new Error("no draft");
+    field.focus();
+    field.textContent = "";
+    const node = document.createTextNode(text);
+    field.append(node);
+    const range = document.createRange();
+    range.setStart(node, node.length);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4)', () => {
+  it("draws a new spark's hello in the thread's foot: one card, its face as the lead, the three starters", async () => {
+    await mountChat();
+    const card = hello();
+    expect(card?.closest(".vf-chat-items")?.parentElement?.className).toBe("vf-chat-foot");
+    expect(words(card?.querySelector(".vf-chat-hello-words") ?? null)).toBe(helloWords("Vela"));
+    const face = card?.querySelector(".vf-spark-face");
+    expect(face?.getAttribute("data-framed")).toBe("true");
+    // the starters are the design kit's buttons, each its glyph and its words, in the page's order
+    expect(starters().map((button) => words(button))).toEqual(STARTERS.map((s) => s.words));
+    expect(starters().every((button) => button.classList.contains("vf-ui-button"))).toBe(true);
+    expect(
+      starters().map((button) => button.querySelector(".vf-glyph")?.getAttribute("data-glyph")),
+    ).toEqual(["agents", "panes", "duplicate"]);
+  });
+
+  it("sends a starter pressed as Send sends: pasted into the pane, Return left to you, and the hello leaves", async () => {
+    await mountChat();
+    await act(async () => starters()[0]?.click());
+    await settle();
+    expect(road.sent).toEqual([
+      { text: "Spawn 4 Grok agents to research a topic each", stills: [] },
+    ]);
+    expect(said).toEqual(["Pasted into Vela's pane — Return sends it"]);
+    // the first send takes them away for the window's life
+    expect(hello()).toBeNull();
+  });
+
+  it("keeps the hello when a starter's paste is not taken, and says why in Send's own words", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    await mountChat();
+    await act(async () => starters()[1]?.click());
+    // while its send runs the starters wait, and a second press sends nothing
+    expect($(".vf-chat-starters")?.getAttribute("aria-busy")).toBe("true");
+    await act(async () => starters()[2]?.click());
+    expect(road.sent.map((send) => send.text)).toEqual(["Keep track of my agents in vibe-field"]);
+    await act(async () => finish({ state: "no-terminals" }));
+    await settle();
+    expect(said).toEqual(["Not sent — this window has no terminals"]);
+    expect(hello()).not.toBeNull();
+    expect($(".vf-chat-starters")?.hasAttribute("aria-busy")).toBe(false);
+  });
+
+  it("leaves the moment the draft holds anything, and comes back when it is emptied", async () => {
+    await mountChat();
+    expect(hello()).not.toBeNull();
+    typeText("h");
+    expect(hello()).toBeNull();
+    typeText("");
+    expect(hello()).not.toBeNull();
+  });
+
+  it("leaves for the window's life once the composer's send is pasted", async () => {
+    await mountChat();
+    typeText("look at the failing test");
+    await act(async () => {
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    await settle();
+    expect(road.sent.map((send) => send.text)).toEqual(["look at the failing test"]);
+    // the draft is cleared by the send, and the hello does not come back
+    expect($(".vf-chat-input")?.textContent).toBe("");
+    expect(hello()).toBeNull();
+  });
+
+  it("never says hello for a spark that has worked: an idle spark with a transcript shows its pane alone", async () => {
+    // fieldd's record says it, though the board counts nothing (a re-attached run counts nothing it read back)
+    await mountChat([own({ turnedAt: TURNED })], WORKED);
+    expect($(".vf-chat-pane")).not.toBeNull();
+    expect($(".vf-chat-items")).toBeNull();
+  });
+
+  it("says no hello for a woken spark that has worked: its resumed run carries the conversation's time", async () => {
+    // Wake resumes the spark's session into a new run, which its record names; the run inherits its conversation's
+    // turnedAt, and counts nothing from the transcript it reads back
+    const WOKEN = "2026-11-01T09:00:00.000Z";
+    await mountChat(
+      [own({ runtimeRunId: "run-Vela2", createdAt: WOKEN, statusSince: WOKEN, turnedAt: TURNED })],
+      {
+        ...WORKED,
+        updatedAt: WOKEN,
+        session: { runtimeRunId: "run-Vela2", terminalSessionId: "pty-Vela", live: true },
+      },
+    );
+    expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Vela's thread");
+    expect($(".vf-chat-composer")).not.toBeNull();
+    expect($(".vf-chat-items")).toBeNull();
+  });
+
+  it("takes the hello away at its run's first turn, as the row says it, before the list is read again", async () => {
+    await mountChat();
+    expect(hello()).not.toBeNull();
+    // the row's push says the first turn; the list still says null until it is read again
+    await act(async () =>
+      pushFrame?.({ revision: 2, rows: [own({ turnedAt: TURNED })] }, "snapshot"),
+    );
+    await settle();
+    expect($(".vf-chat-composer")).not.toBeNull();
+    expect($(".vf-chat-items")).toBeNull();
+  });
+
+  it("says hello under the line for a spark asleep before it ever worked, its run off the board", async () => {
+    await mountChat([], { ...VELA, session: { runtimeRunId: "run-Vela", live: false } });
+    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
+    expect(words(hello()?.querySelector(".vf-chat-hello-words") ?? null)).toBe(helloWords("Vela"));
+    expect(starters()).toHaveLength(3);
+  });
+});
+
+describe("one act at a time into a thread, a wake's, a starter's or Send's (DESIGN.md §8 \"Chat's thread\", \"Chat's composer\")", () => {
+  const press = (key: string) =>
+    act(async () => {
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }),
+      );
+    });
+
+  it("keeps Send waiting while a starter's send runs, so two messages never sit in the agent's one input", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    await mountChat();
+    await act(async () => starters()[0]?.click());
+    // typed during the starter's wait: the hello leaves, and Send waits, busy
+    typeText("and summarise it");
+    expect(hello()).toBeNull();
+    expect($(".vf-chat-send")?.getAttribute("aria-busy")).toBe("true");
+    await press("Enter");
+    await act(async () => $(".vf-chat-send")?.click());
+    expect(road.sent.map((send) => send.text)).toEqual([
+      "Spawn 4 Grok agents to research a topic each",
+    ]);
+    await act(async () => finish({ state: "pasted" }));
+    await settle();
+    expect($(".vf-chat-send")?.hasAttribute("aria-busy")).toBe(false);
+    // the starter's send done, Send sends what was typed meanwhile
+    road.outcome = () => Promise.resolve({ state: "pasted" });
+    await press("Enter");
+    await settle();
+    expect(road.sent.map((send) => send.text)).toEqual([
+      "Spawn 4 Grok agents to research a topic each",
+      "and summarise it",
+    ]);
+  });
+
+  it("keeps the starters waiting while Send's send runs", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    await mountChat();
+    typeText("look at the failing test");
+    await press("Enter");
+    // the draft emptied while Send's send runs, the hello comes back: its starters wait
+    typeText("");
+    expect(hello()).not.toBeNull();
+    expect($(".vf-chat-starters")?.getAttribute("aria-busy")).toBe("true");
+    await act(async () => starters()[1]?.click());
+    expect(road.sent.map((send) => send.text)).toEqual(["look at the failing test"]);
+    await act(async () => finish({ state: "not-taking" }));
+    await settle();
+    expect($(".vf-chat-starters")?.hasAttribute("aria-busy")).toBe(false);
+  });
+
+  it("keeps Wake waiting while a send runs into an asleep thread, so the spark is woken once", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    const asleep: SparkSummary = { ...VELA, session: { runtimeRunId: "run-Vela", live: false } };
+    const opened: string[] = [];
+    await mountChat([], asleep, async (spark) => {
+      opened.push(spark);
+      return asleep;
+    });
+    const wake = (): HTMLButtonElement | null =>
+      host?.querySelector<HTMLButtonElement>(".vf-chat-thread-line button") ?? null;
+    expect(words(wake())).toBe("Wake");
+    typeText("carry on with the migration");
+    // the send's own wake is the one: Wake pressed in Return's tick, before the hold is drawn, asks for none …
+    await act(async () => {
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+      wake()?.click();
+    });
+    expect(road.sent.map((send) => send.text)).toEqual(["carry on with the migration"]);
+    expect(opened).toEqual([]);
+    // … and drawn, the line's Wake waits
+    expect(wake()?.disabled).toBe(true);
+    await act(async () => wake()?.click());
+    expect(opened).toEqual([]);
+    await act(async () => finish({ state: "pasted" }));
+    await settle();
+    expect(wake()?.disabled).toBe(false);
+  });
+
+  it("turns away a Return pressed in Wake's own tick by the thread's hold, before Send is drawn busy: nothing sent, said or let go (final critique 11)", async () => {
+    let woken: () => void = () => undefined;
+    const asleep: SparkSummary = { ...VELA, session: { runtimeRunId: "run-Vela", live: false } };
+    const opened: string[] = [];
+    await mountChat([], asleep, (spark) => {
+      opened.push(spark);
+      return new Promise((resolve) => {
+        woken = () => resolve(asleep);
+      });
+    });
+    const wake = (): HTMLButtonElement | null =>
+      host?.querySelector<HTMLButtonElement>(".vf-chat-thread-line button") ?? null;
+    typeText("carry on with the migration");
+    // Wake, then Return in the same tick: the hold is Wake's, though Send is not drawn busy yet
+    await act(async () => {
+      wake()?.click();
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(opened).toEqual(["sp-vela0001"]);
+    expect(road.sent).toEqual([]);
+    expect(said).toEqual([]);
+    // the hold stands, Wake's, until its wake ends: Send waits, and the draft is kept
+    expect($(".vf-chat-send")?.getAttribute("aria-busy")).toBe("true");
+    expect($(".vf-chat-input")?.textContent).toBe("carry on with the migration");
+    await act(async () => woken());
+    await settle();
+    expect($(".vf-chat-send")?.hasAttribute("aria-busy")).toBe(false);
+  });
+});
+
+describe("what a send reads of Chat when no pane settled (DESIGN.md §8 \"Chat's composer\"; SP-1d's fix review)", () => {
+  it("lends Send the thread on screen and the spark asleep as Chat stands at the time it asks, never as it stood at the press", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    await mountChat();
+    await act(async () => starters()[0]?.click());
+    const lent = road.deps;
+    if (lent === null) throw new Error("no send");
+    expect(lent.onScreen()).toBe(true);
+    expect(lent.asleep()).toBe(false);
+    // Vela's run ends while the send waits: she reads Asleep, her thread draws no pane, and it is still on screen
+    await act(async () => pushFrame?.({ revision: 2, rows: [own({ alive: false })] }, "snapshot"));
+    await settle();
+    expect($(".vf-chat-pane")).toBeNull();
+    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
+    expect(lent.asleep()).toBe(true);
+    expect(lent.onScreen()).toBe(true);
+    // Chat goes: no thread is on screen
+    act(() => root?.unmount());
+    root = null;
+    expect(lent.onScreen()).toBe(false);
+    await act(async () => finish({ state: "fell-asleep" }));
+  });
+
+  it("lends Send the pane its thread draws now, whether Chat reads its list, and a pane wait that ends once the spark reads asleep (final critique 7)", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    await mountChat();
+    await act(async () => starters()[0]?.click());
+    const lent = road.deps;
+    if (lent === null) throw new Error("no send");
+    // this window has no terminals: the thread's pane says so, and that is the pane it draws now
+    expect(lent.paneNow()).toEqual({ state: "no-terminals", door: null });
+    expect(lent.sparksReading()).toBe("ready");
+    // asleep, its thread draws no pane: a wait for one answers at once, never at the 20 s
+    await act(async () => pushFrame?.({ revision: 2, rows: [own({ alive: false })] }, "snapshot"));
+    await settle();
+    expect(lent.paneNow()).toBeNull();
+    const waited = await Promise.race([
+      lent.pane(20_000),
+      new Promise<"waited">((resolve) => setTimeout(() => resolve("waited"), 50)),
+    ]);
+    expect(waited).toBeNull();
+    // the window's feed starts again under the send, and its list is not read until it answers
+    stopFeed?.();
+    stopFeed = null;
+    expect(lent.sparksReading()).toBe("opening");
+    await act(async () => finish({ state: "sparks-unread", reading: "opening" }));
+  });
+});
+
+describe('what Chat lends Send while the queue holds an item (CP-3; DESIGN.md §8 "Chat\'s composer", as amended)', () => {
+  const sendNow = async (text: string): Promise<ThreadSendDeps> => {
+    typeText(text);
+    await act(async () => {
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    await settle();
+    if (road.deps === null) throw new Error("nothing was sent");
+    return road.deps;
+  };
+
+  it("lets a card in the thread stand without stopping Send; its own run's blocker, a menu in its pane, stops it", async () => {
+    queued = [VELA_ASKS];
+    await mountChat([own({ turnedAt: TURNED })], WORKED);
+    expect(words($(".vf-chat-thread-status"))).toBe("Asking you");
+    const deps = await sendNow("and the docs too");
+    expect(deps.blocked()).toBe(false);
+    // the same spark's own run then asks in its pane: Send would paste into its menu
+    await act(async () =>
+      pushFrame?.(
+        {
+          since: 1,
+          revision: 2,
+          upserts: [
+            own({
+              revision: 2,
+              status: "blocked",
+              blockers: [{ id: "p-1", kind: "permission", since: AT }],
+              turnedAt: TURNED,
+            }),
+          ],
+          removed: [],
+        },
+        "delta",
+      ),
+    );
+    expect(deps.blocked()).toBe(true);
+  });
+
+  it("hears a sleeping spark with an item only once its woken run says so (R-4), though its word says Asking you throughout", async () => {
+    queued = [VELA_ASKS];
+    const asleep = { ...WORKED, session: { runtimeRunId: "run-Vela", live: false } };
+    await mountChat([own({ alive: false, turnedAt: TURNED })], asleep);
+    expect(words($(".vf-chat-thread-status"))).toBe("Asking you");
+    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
+    const deps = await sendNow("go on");
+    expect(deps.needsWake).toBe(true);
+    expect(await deps.heard(0)).toBe(false);
+    // woken: its run is back on the board, idle, and heard
+    const heard = deps.heard(5_000);
+    await act(async () =>
+      pushFrame?.(
+        {
+          since: 1,
+          revision: 2,
+          upserts: [own({ revision: 2, turnedAt: TURNED })],
+          removed: [],
+        },
+        "delta",
+      ),
+    );
+    expect(await heard).toBe(true);
+  });
+});
+
+describe("the thread's items never move or resize the pane (VF-PM's Q2: one rule for every item)", () => {
+  it("toggling the hello, or standing a needs-you card, leaves the pane's box as it stood: the same element, the same flow, the items out of it", async () => {
+    // The product's stylesheet, in the document, so the column computes as it does in the window. happy-dom lays
+    // nothing out (every rect is 0 × 0), so the measure is the box's own terms: the pane is the same element, styled
+    // the same, and the foot holds the same things IN FLOW with the hello and without it — the items stand out of
+    // the flow, absolute in the foot, so the foot's height, and the pane's (`flex: 1 1 auto`, every height the head
+    // and the foot leave), cannot change. The pixels are James's eye at the landing.
+    const here = dirname(fileURLToPath(import.meta.url));
+    const sheet = document.createElement("style");
+    sheet.textContent = readFileSync(join(here, "../src/chat/chat.css"), "utf8");
+    document.head.appendChild(sheet);
+    try {
+      await mountChat();
+      const pane = $(".vf-chat-pane");
+      const box = (element: HTMLElement | null) => {
+        if (element === null) throw new Error("no pane");
+        const style = getComputedStyle(element);
+        return [style.flex, style.height, style.minHeight, style.marginTop, style.marginBottom];
+      };
+      /** What stands in the column's flow, and in the foot's: an absolute child is out of both. */
+      const flow = () => {
+        const inFlow = (parent: Element | null) =>
+          [...(parent?.children ?? [])]
+            .filter((child) => getComputedStyle(child).position !== "absolute")
+            .map((child) => child.className || child.tagName);
+        return { column: inFlow($(".vf-chat-thread")), foot: inFlow($(".vf-chat-foot")) };
+      };
+      const items = $(".vf-chat-items");
+      expect(items).not.toBeNull();
+      expect(getComputedStyle(items as HTMLElement).position).toBe("absolute");
+      const withHello = { box: box(pane), flow: flow() };
+      expect(withHello.box[0]).toMatch(/^1 1 auto/u);
+
+      typeText("h");
+      expect(hello()).toBeNull();
+      expect($(".vf-chat-pane")).toBe(pane);
+      expect({ box: box($(".vf-chat-pane")), flow: flow() }).toEqual(withHello);
+
+      typeText("");
+      expect(hello()).not.toBeNull();
+      expect($(".vf-chat-pane")).toBe(pane);
+      expect({ box: box($(".vf-chat-pane")), flow: flow() }).toEqual(withHello);
+
+      // CP-3: the needs-you card stands by the same rule, in the hello's place, and its way out moves nothing either
+      vi.useFakeTimers();
+      // a spark asks in a turn, which fieldd stamps: its own row says it has worked beside the item
+      await act(async () => {
+        pushFrame?.({ revision: 2, rows: [own({ turnedAt: TURNED })] }, "snapshot");
+        pushNeeds?.([VELA_ASKS]);
+      });
+      expect(hello()).toBeNull();
+      expect($(".vf-chat-items > .vf-needs-card")).not.toBeNull();
+      expect($(".vf-chat-pane")).toBe(pane);
+      expect({ box: box($(".vf-chat-pane")), flow: flow() }).toEqual(withHello);
+      await act(async () => pushNeeds?.([]));
+      expect($(".vf-needs-card")?.hasAttribute("data-leaving")).toBe(true);
+      expect({ box: box($(".vf-chat-pane")), flow: flow() }).toEqual(withHello);
+      act(() => {
+        vi.advanceTimersByTime(180);
+      });
+      expect($(".vf-needs-card")).toBeNull();
+      // its own row says it has worked, so Vela is no longer new: no hello comes back
+      expect(hello()).toBeNull();
+      expect($(".vf-chat-pane")).toBe(pane);
+      expect({ box: box($(".vf-chat-pane")), flow: flow() }).toEqual(withHello);
+    } finally {
+      sheet.remove();
+    }
+  });
+
+  it("draws every kind of item by its own case (the seam CP-3 extended; a kind left undrawn fails to compile)", () => {
+    const DRAWN = ["hello", "needs"] as const satisfies readonly ThreadItem["kind"][];
+    // a kind in the union that this list does not name is a type error here, as it is in `ThreadItemsView`
+    const undrawn: [Exclude<ThreadItem["kind"], (typeof DRAWN)[number]>] extends [never]
+      ? true
+      : false = true;
+    expect(undrawn).toBe(true);
+    const items: Record<(typeof DRAWN)[number], ThreadItem> = {
+      hello: {
+        kind: "hello",
+        face: { seed: 7, status: "hello" },
+        words: helloWords("Vela"),
+        starters: STARTERS,
+      },
+      needs: {
+        kind: "needs",
+        item: VELA_ASKS,
+        names: needsNamesOf(VELA_ASKS, NO_HANDLES),
+        spark: { id: VELA.id, name: VELA.name },
+        of: 1,
+        waits: true,
+        act: NEEDS_IDLE,
+        leaving: false,
+        reduced: false,
+      },
+    };
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => root?.render(<ThreadItemsView items={DRAWN.map((kind) => items[kind])} />));
+    expect(
+      [...(host.querySelectorAll(".vf-chat-items > *") ?? [])].map((item) =>
+        item.getAttribute("data-item"),
+      ),
+    ).toEqual([...DRAWN]);
+    // with no act handed in (the catalog), a starter pressed does nothing, nor does a card's act
+    act(() => starters()[0]?.click());
+    act(() => host?.querySelector<HTMLButtonElement>(".vf-needs-act")?.click());
+    expect(road.sent).toEqual([]);
+  });
+});
+
+describe("the catalog's hello plate (docs/UI_SYSTEM.md: the shipping view on fixtures)", () => {
+  async function plate(state: ChatState): Promise<void> {
+    act(() => root?.unmount());
+    host?.remove();
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => root?.render(<ChatPreview state={state} />));
+  }
+
+  it("draws a spark just hatched saying hello, and no hello where the shown spark has worked", async () => {
+    await plate("hello");
+    expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Polaris's thread");
+    expect(words($(".vf-chat-hello-words"))).toBe(helloWords("Polaris"));
+    expect(starters()).toHaveLength(3);
+    expect($(".vf-chat-composer")).not.toBeNull();
+    for (const state of ["list", "finding", "gone", "fault", "asleep"] as const) {
+      await plate(state);
+      expect(hello(), state).toBeNull();
+    }
+  });
+
+  it("draws the starters waiting while a starter's send runs, and at rest on the hello's own plate", async () => {
+    await plate("starting");
+    expect(words($(".vf-chat-hello-words"))).toBe(helloWords("Polaris"));
+    expect($(".vf-chat-starters")?.getAttribute("aria-busy")).toBe("true");
+    expect(starters()).toHaveLength(3);
+    await plate("hello");
+    expect($(".vf-chat-starters")?.hasAttribute("aria-busy")).toBe(false);
+  });
+});
+
+describe("the hello's words are DESIGN.md's (§8 \"Chat's thread\", §9 \"Chat's words\")", () => {
+  it("says exactly the words the canon records", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const design = readFileSync(join(here, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
+    for (const text of [helloWords("Vela"), ...STARTERS.map((starter) => starter.words)]) {
+      expect(design, text).toContain(text);
+    }
+  });
+});

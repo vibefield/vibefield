@@ -323,7 +323,12 @@ describe("createRoutedTerminalHost — TP-S3f routed session events (G24)", () =
   }
 
   it("advertises resume plus the load-bearing session-events and geometry-events capabilities", () => {
-    expect(ROUTED_CLIENT_CAPABILITIES).toEqual(["resume", "session-events", "geometry-events"]);
+    expect(ROUTED_CLIENT_CAPABILITIES).toEqual([
+      "resume",
+      "session-events",
+      "geometry-events",
+      "selection-text",
+    ]);
   });
 
   it("coalesces concurrent getSession reads into one inventory snapshot", async () => {

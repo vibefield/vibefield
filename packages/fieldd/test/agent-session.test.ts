@@ -46,6 +46,7 @@ import {
   type AgentAccountUsageBatch,
   type AgentCatalogEntry,
   AgentFieldRow,
+  AgentInputQueueFile,
   type AgentListResult,
   type AgentProvidersResult,
   AgentSessionRecord,
@@ -60,7 +61,11 @@ import {
   type AgentsProfilesListResult,
   type AgentsProfilesLoginResult,
   type ComposeSparksHatchResult,
+  type ComposeSparksListResult,
+  ComposeSparksOpenResult,
   LAYOUT,
+  NeedsAnswerResult,
+  NeedsListResult,
   type PlaceFacts,
   SOCKETS,
   type SparkRecord,
@@ -75,6 +80,7 @@ import {
   type AgentAttachRecord,
   AgentAttachRefusedError,
   type AgentBriefingCapabilities,
+  type AgentEvent,
   type AgentHost,
   type AgentModelService,
   type AgentProfile,
@@ -241,7 +247,7 @@ type ScriptedCandidates = Map<string, Parameters<AgentAdapterBinding["events"]["
  * declaration) and records each press, by its terminal; absent, the binding
  * names none, as an adapter that has not been censused yet. `observed` — ST:
  * the binding witnesses its turns (`native-hooks`), and a row moves its status
- * by handing the kept listener a turn (`scriptedTurn`); absent, it reads as
+ * by handing the kept listener a turn (`scriptedEvent`); absent, it reads as
  * `terminal-only`, a status fieldd cannot read. */
 function scriptedBinding(
   host: AgentHost,
@@ -466,6 +472,8 @@ function scriptedProvider(
     facts?: boolean;
     briefing?: AgentBriefingCapabilities;
     exerciseDoor?: boolean;
+    /** CP-3 — the calls the door's client makes, in order (absent: one agents_list) */
+    doorCalls?: readonly DoorCall[];
   } = {},
 ): AgentProvider {
   let counter = 0;
@@ -517,7 +525,13 @@ function scriptedProvider(
       if (doorRecipe)
         writeFileSync(
           briefingFile,
-          JSON.stringify({ server: doorRecipe, output: join(envOut, `session-${n}.tools.json`) }),
+          JSON.stringify({
+            server: doorRecipe,
+            output: join(envOut, `session-${n}.tools.json`),
+            ...(extra.doorCalls === undefined
+              ? {}
+              : { calls: extra.doorCalls, typed: join(envOut, `session-${n}.typed`) }),
+          }),
         );
       const { runtimeSessionId } = await options.host.spawnTerminal({
         command: "/bin/sh",
@@ -637,10 +651,17 @@ interface Box {
   observed: ScriptedCandidates;
 }
 
+/** One tools/call the door's client makes (test/fixtures/spark-mcp-client.mjs). */
+interface DoorCall {
+  readonly name: string;
+  readonly arguments: Record<string, unknown>;
+}
+
 interface SetupConfig {
   floor: "mock" | "real";
   briefing?: AgentBriefingCapabilities;
   exerciseDoor?: boolean;
+  doorCalls?: readonly DoorCall[];
   /** AR-S4d — the keychain fieldd keeps server values in (default: a map; never the machine's) */
   secretStore?: SecretStore;
   realAgent?: boolean;
@@ -801,6 +822,7 @@ async function setup(config: SetupConfig): Promise<Box> {
             profiles: config.profiles === true,
             ...(config.briefing === undefined ? {} : { briefing: config.briefing }),
             ...(config.exerciseDoor === undefined ? {} : { exerciseDoor: config.exerciseDoor }),
+            ...(config.doorCalls === undefined ? {} : { doorCalls: config.doorCalls }),
             seen,
             ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
             models,
@@ -875,24 +897,33 @@ async function setup(config: SetupConfig): Promise<Box> {
   };
 }
 
-/** ST — the observed scripted agent reports a turn, as an adapter's native hook would: `turn:started` reads as
- * `working`, `turn:completed` as idle. */
-function scriptedTurn(
-  box: Box,
-  runtimeSessionId: string,
-  type: "turn:started" | "turn:completed",
-): void {
+/** What the observed scripted agent can report, in puppeteer's own event shapes: a turn's start and end, and a
+ * permission asked and answered. */
+type ScriptedEvent = Extract<
+  AgentEvent,
+  {
+    type:
+      | "turn:started"
+      | "turn:completed"
+      | "interaction:permission-requested"
+      | "interaction:permission-resolved";
+  }
+>;
+
+/** ST, TU-1 — the observed scripted agent reports an event, as an adapter's native hook would: `turn:started` reads
+ * as `working` and `turn:completed` as idle; a permission requested reads as `blocked` until it is resolved. */
+function scriptedEvent(box: Box, runtimeSessionId: string, event: ScriptedEvent): void {
   const listener = box.observed.get(runtimeSessionId);
   if (listener === undefined) throw new Error(`no observed binding on ${runtimeSessionId}`);
   const session = box.sessions.find((s) => s.runtimeSessionId === runtimeSessionId);
   listener({
-    type,
+    type: event.type,
     sessionId: session?.sessionId ?? runtimeSessionId,
     timestamp: new Date().toISOString(),
     monotonicTime: performance.now(),
     source: "native-hook",
     confidence: "authoritative",
-    event: { type },
+    event,
   } as Parameters<typeof listener>[0]);
 }
 
@@ -1620,16 +1651,195 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
     }, 25_000);
     expect(plainProof.error).toBeUndefined();
+    // CP-3 (MT-D11): telling the person is every agent's, under its harness's own ask (MT-D7: not in its allowance)
     expect(plainProof.listed.tools.map((tool: { name: string }) => tool.name)).toEqual([
       "history_search",
       "history_read",
       "projects_list",
+      "notify",
     ]);
     // MT-L2: a call is held to its row again, so a spark's row answers a plain run as the fact `forbidden`.
     expect(plainProof.called.isError).toBe(true);
     expect(plainProof.called.structuredContent?.fact).toBe("forbidden");
     await win.call("terminal.terminate", { sessionId: ordinary.terminal.sessionId });
   }, 90_000);
+
+  // CP-3 — the person, through the real door: a spark's ask_user and notify reach the window's doors, and the window's
+  // answer joins the spark's own signed input queue as one marked line of facts. The scripted agent's terminal-only
+  // monitor may read idle at any moment, so the fact is witnessed where it is: kept in the queue, or already in the
+  // spark's terminal (the door's client keeps what it reads). When it lands is needs-queue.test.ts's witness.
+  it("CP-3 — a spark asks and tells through the floor's door; the window answers, and the answer reaches it through its input queue", async () => {
+    const briefing: AgentBriefingCapabilities = {
+      mcpServers: true,
+      allowTools: true,
+      instructions: true,
+      mcpServerProcess: "terminal",
+    };
+    const box = await setup({
+      floor: "real",
+      profiles: true,
+      briefing,
+      exerciseDoor: true,
+      doorCalls: [
+        { name: "ask_user", arguments: { question: "Push the fix?", choices: ["Push", "Hold"] } },
+        { name: "notify", arguments: { text: "the build\nis green" } },
+      ],
+    });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agents.manage"], "cp3");
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    // a notice is an event: only a window listening when it is told hears it
+    const notices = (await win.call("needs.notices.subscribe", {})) as { subId: string };
+    const { spark } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const runId = spark.session!.runtimeRunId;
+    const proof = await poll(async () => {
+      const path = join(box.envOut, "session-1.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(proof.error).toBeUndefined();
+    const [asked, told] = proof.calls as { structuredContent: Record<string, unknown> }[];
+    expect(asked?.structuredContent).toEqual({ item: expect.stringMatching(/^ny-/), queued: true });
+    expect(told?.structuredContent).toEqual({ sent: true });
+    const item = asked!.structuredContent.item as string;
+
+    const heard = await poll(async () => {
+      const frame = win.notifications.find(
+        (n) => n.method === "needs.notices.delta" && n.params.subId === notices.subId,
+      );
+      return frame?.params.payload as { notices: { from: unknown; words: string }[] } | undefined;
+    }, 10_000);
+    expect(heard.notices).toEqual([
+      expect.objectContaining({
+        from: { name: "Vela", session: runId, spark: spark.id },
+        words: "the build is green",
+      }),
+    ]);
+
+    const listed = NeedsListResult.parse(await win.call("needs.list", {}));
+    expect(listed.items).toEqual([
+      expect.objectContaining({
+        id: item,
+        kind: "question",
+        spark: spark.id,
+        choices: ["Push", "Hold", "Not now"],
+      }),
+    ]);
+    const answered = NeedsAnswerResult.parse(await win.call("needs.answer", { item, choice: 0 }));
+    expect(answered.item.answer).toMatchObject({ choice: 0, outcome: "done", told: true });
+    expect(NeedsListResult.parse(await win.call("needs.list", {})).items).toEqual([]);
+    // the witness: the fact, marked as VibeField's, kept in the spark's own signed queue or already in its terminal
+    const fact = 'VibeField: you answered Vela\'s question "Push the fix?": Push';
+    const landed = await poll(async () => {
+      const typed = join(box.envOut, "session-1.typed");
+      if (existsSync(typed) && readFileSync(typed, "utf8").includes(fact)) return "in its terminal";
+      const keptPath = join(dataDir, ...LAYOUT.AGENT_INPUTS_DIR, `${runId}.json`);
+      if (!existsSync(keptPath)) return undefined;
+      const kept = AgentInputQueueFile.parse(JSON.parse(readFileSync(keptPath, "utf8")));
+      expect((kept as { signature?: string }).signature ?? "").toMatch(/^[0-9a-f]{64}$/);
+      return kept.inputs.some((input) => markedText(input) === fact) ? "kept" : undefined;
+    }, 15_000);
+    expect(["kept", "in its terminal"]).toContain(landed);
+    await win.call("terminal.terminate", { sessionId: box.sessions[0]!.runtimeSessionId });
+  }, 90_000);
+
+  // CP-3 — needs.answer is a second caller of the sparks' one wake (SparkService.open; SP-1d's join, per spark): an
+  // answer to a sleeping spark's question wakes it to tell it, so a window's Wake (compose.sparks.open) under way at
+  // that moment must be the same wake. The resume's birth is held until the answer has asked its own open (the queue
+  // asks it in the same turn as it drops the item from every window's list), so the two meet inside one wake. Two
+  // wakes would resume once and, the conversation claimed, start the spark again beside it: two births, two runs.
+  it("CP-3 — an answer that wakes a sleeping spark while a window's Wake wakes it is that same wake: one birth, one run", async () => {
+    const briefing: AgentBriefingCapabilities = {
+      mcpServers: true,
+      allowTools: true,
+      instructions: true,
+      mcpServerProcess: "terminal",
+    };
+    // every birth is held here while the row holds `wakes`; the hatch's is not
+    const births: string[] = [];
+    let wakes: Promise<void> = Promise.resolve();
+    const box = await setup({
+      floor: "real",
+      profiles: true,
+      briefing,
+      exerciseDoor: true,
+      doorCalls: [
+        { name: "ask_user", arguments: { question: "Push the fix?", choices: ["Push", "Hold"] } },
+      ],
+      afterBirth: async (paneId) => {
+        births.push(paneId);
+        await wakes;
+      },
+    });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agents.manage"], "cp3-wake");
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    const { spark } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const runId = spark.session!.runtimeRunId;
+    const proof = await poll(async () => {
+      const path = join(box.envOut, "session-1.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    const [asked] = proof.calls as { structuredContent: Record<string, unknown> }[];
+    const item = asked?.structuredContent.item as string;
+    expect(item).toMatch(/^ny-/);
+    // Vela sleeps
+    await win.call("terminal.terminate", { sessionId: box.sessions[0]!.runtimeSessionId });
+    await poll(async () => (readRecord(dataDir, runId).exited ? true : undefined), 15_000);
+    const needs = (await win.call("needs.subscribe", {})) as { subId: string };
+
+    let release: () => void = () => undefined;
+    wakes = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Wake, from the window: its resume's birth is held
+    const woken = win.call("compose.sparks.open", { spark: spark.id });
+    await poll(async () => (births.length === 2 ? true : undefined), 25_000, "the wake's birth");
+    // the answer, meanwhile: once its item has left the list, its own open has been asked
+    const answering = win.call("needs.answer", { item, choice: 0 });
+    await poll(
+      async () =>
+        win.notifications.some(
+          (n) =>
+            n.method === "needs.delta" &&
+            n.params.subId === needs.subId &&
+            !NeedsListResult.parse(n.params.payload).items.some((each) => each.id === item),
+        )
+          ? true
+          : undefined,
+      10_000,
+      "the answered item leaving the list",
+    );
+    release();
+    const [opened, answered] = await Promise.all([woken, answering]);
+    const run = ComposeSparksOpenResult.parse(opened).spark.session?.runtimeRunId;
+    expect(run).toBeDefined();
+    expect(NeedsAnswerResult.parse(answered).item.answer).toMatchObject({
+      choice: 0,
+      outcome: "done",
+    });
+    // one wake: one birth after the hatch's, and one run of Vela's that has not exited
+    expect(births).toHaveLength(2);
+    expect(box.sessions).toHaveLength(2);
+    expect(
+      daemon.agents
+        .list()
+        .sessions.filter((row) => row.spark === spark.id && !row.continuation?.exited)
+        .map((row) => row.runtimeRunId),
+    ).toEqual([run]);
+    await win.call("terminal.terminate", { sessionId: box.sessions[1]!.runtimeSessionId });
+  }, 120_000);
 
   // CP-2 — the talk room's two ports on the real floor. The queue's idle gate is agent-input-queue.test.ts's: the
   // scripted agent observes only its terminal, so its monitor never says idle on cue, and this row witnesses what the
@@ -4082,7 +4292,7 @@ describe("ST — a durable Stop (the real floor)", () => {
     const paneId = spawned.terminal.sessionId;
     await trapped(box);
     await catReady(box, paneId);
-    scriptedTurn(box, paneId, "turn:started");
+    scriptedEvent(box, paneId, { type: "turn:started" });
     await rowWhere(win, runId, (row) => row.status === "working", "the observed run working");
 
     const pressedAt = Date.now();
@@ -4125,6 +4335,103 @@ describe("ST — a durable Stop (the real floor)", () => {
     console.log(`DS_HEARD ${JSON.stringify({ row: "ladder", boundMs: 500, heardMs })}`);
   }, 120_000);
 
+  it("Pause refuses an agent without declared turn cancellation instead of sending an interrupt key", async () => {
+    const box = await setup({ floor: "real", observed: true });
+    const win = await window(box.daemon, [...DECK, "agent.control"], "pause-unsupported");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    scriptedEvent(box, spawned.terminal.sessionId, { type: "turn:started" });
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.status === "working",
+      "working before unsupported pause",
+    );
+    expect(await win.call("agent.pause", { runtimeRunId: runId })).toEqual({
+      accepted: false,
+      reason: "turn-stop-unavailable",
+    });
+    expect(box.turnStops).toEqual([]);
+    expect(
+      (
+        await box.daemon.agents.runtime
+          .agent(spawned.terminal.sessionId)
+          ?.submitPrompt({ text: "still-open" })
+      )?.status,
+    ).toBe("confirmed");
+  }, 60_000);
+
+  it("Pause keeps an unresponsive working agent alive after both bounds and coalesces repeated presses", async () => {
+    const box = await setup({
+      floor: "real",
+      program: IGNORES_INT,
+      observed: true,
+      turnStop: true,
+      stopHeardWithinMs: 500,
+    });
+    const { daemon, dataDir, turnStops } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "pause-unheard");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    await trapped(box);
+    await catReady(box, paneId);
+    scriptedEvent(box, paneId, { type: "turn:started" });
+    await rowWhere(win, runId, (row) => row.status === "working", "the turn working");
+    const params = { runtimeRunId: runId };
+    expect(
+      await Promise.all([win.call("agent.pause", params), win.call("agent.pause", params)]),
+    ).toEqual([{ accepted: true }, { accepted: true }]);
+    const unheard = await rowWhere(
+      win,
+      runId,
+      (row) => row.stop?.unheardAt !== undefined,
+      "Pause left unheard",
+    );
+    expect(unheard.stop?.stage).toBe("sent");
+    expect(unheard.continuation?.exited).not.toBe(true);
+    expect(escalations(dataDir, runId).map((entry) => entry.attrs?.["stage"])).toEqual([]);
+    expect(await win.call("agent.pause", params)).toEqual({ accepted: true });
+    expect(turnStops).toEqual([paneId]);
+    // Prove the PTY is still responsive, not just a stale monitor row.
+    expect(
+      (await daemon.agents.runtime.agent(paneId)?.submitPrompt({ text: "alive-after-pause" }))
+        ?.status,
+    ).toBe("confirmed");
+  }, 120_000);
+
+  it("Pause sends no key when idle and stops retrying when the turn ends, leaving the agent open", async () => {
+    const box = await setup({
+      floor: "real",
+      observed: true,
+      turnStop: true,
+      stopHeardWithinMs: 500,
+    });
+    const { daemon, turnStops, dataDir } = box;
+    const win = await window(daemon, [...DECK, "agent.control"], "pause-idle");
+    const spawned = await bornRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    const params = { runtimeRunId: runId };
+    scriptedEvent(box, paneId, { type: "turn:started" });
+    scriptedEvent(box, paneId, { type: "turn:completed" });
+    await rowWhere(win, runId, (row) => row.status === "idle", "the turn idle");
+    expect(await win.call("agent.pause", params)).toEqual({
+      accepted: false,
+      reason: "not-working",
+    });
+    expect(turnStops).toEqual([]);
+    scriptedEvent(box, paneId, { type: "turn:started" });
+    await rowWhere(win, runId, (row) => row.status === "working", "a new turn working");
+    expect(await win.call("agent.pause", params)).toEqual({ accepted: true });
+    scriptedEvent(box, paneId, { type: "turn:completed" });
+    await rowWhere(win, runId, (row) => row.stop?.stage === "heard", "Pause heard by status");
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    expect(turnStops).toEqual([paneId]);
+    expect(escalations(dataDir, runId)).toEqual([]);
+    expect((await rowOf(win, runId))?.continuation?.exited).not.toBe(true);
+  }, 120_000);
+
   it("hears a Stop by a readable status leaving working: no second send, the pane lives, and the next turn lets it go", async () => {
     const box = await setup({
       floor: "real",
@@ -4137,12 +4444,12 @@ describe("ST — a durable Stop (the real floor)", () => {
     const spawned = await bornRun(box, win);
     const runId = spawned.session.runtimeRunId;
     const paneId = spawned.terminal.sessionId;
-    scriptedTurn(box, paneId, "turn:started");
+    scriptedEvent(box, paneId, { type: "turn:started" });
     await rowWhere(win, runId, (row) => row.status === "working", "the observed run working");
 
     expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
     await rowWhere(win, runId, (row) => row.stop?.stage === "sent", "the Stop held as sent");
-    scriptedTurn(box, paneId, "turn:completed");
+    scriptedEvent(box, paneId, { type: "turn:completed" });
     const heard = await rowWhere(
       win,
       runId,
@@ -4155,7 +4462,7 @@ describe("ST — a durable Stop (the real floor)", () => {
     expect(turnStops).toEqual([paneId]);
     expect((await rowOf(win, runId))?.continuation?.exited).not.toBe(true);
     // the next turn lets the heard Stop go
-    scriptedTurn(box, paneId, "turn:started");
+    scriptedEvent(box, paneId, { type: "turn:started" });
     await rowWhere(
       win,
       runId,
@@ -4163,6 +4470,382 @@ describe("ST — a durable Stop (the real floor)", () => {
       "the Stop let go",
     );
   }, 120_000);
+});
+
+// TU-1 — fieldd keeps whether a run has worked (`turnedAt`, ruled in `turnfact-read.md`): the first turn it sees is
+// stamped once on the run's signed record and pushed on its row, never for an ask alone (Q2); a resume carries the
+// conversation's fact and History's resume is born turned (Q5); a spark's own session tells the spark (Q1); a
+// re-attach files a record from before AR-S5 under the set it binds (D11); and the down-window gap is named, not closed
+// (Q4, G4). The scripted agent's observed binding plays the adapter's hooks.
+describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () => {
+  /** The run's row as a window reads it. */
+  async function rowOf(win: WsRpc, runtimeRunId: string) {
+    const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+    return rows.find((r) => r.runtimeRunId === runtimeRunId);
+  }
+  /** Waits until the run's row satisfies `ok`, saying what the row held when it gave up. */
+  async function rowWhere(
+    win: WsRpc,
+    runtimeRunId: string,
+    ok: (row: AgentListResult["sessions"][number]) => boolean,
+    what: string,
+    ms = 15_000,
+  ) {
+    return await poll(
+      async (seen) => {
+        const row = await rowOf(win, runtimeRunId);
+        seen({
+          status: row?.status ?? null,
+          turnedAt:
+            row === undefined ? "no row" : row.turnedAt === undefined ? "absent" : row.turnedAt,
+          continuation: row?.continuation ?? null,
+        });
+        return row !== undefined && ok(row) ? row : undefined;
+      },
+      ms,
+      what,
+    );
+  }
+  /** The run's row on the field projection, as Chat's board and the phone read it. */
+  async function fieldRowOf(win: WsRpc, runtimeRunId: string) {
+    const sub = (await win.call("agent.subscribe", { projection: "field" })) as {
+      snapshot: { rows: Record<string, unknown>[] };
+    };
+    return sub.snapshot.rows.find((r) => r["runtimeRunId"] === runtimeRunId);
+  }
+  async function spawnRun(box: Box, win: WsRpc) {
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    await joinedRow(win, spawned.session.runtimeRunId);
+    return spawned;
+  }
+  async function endRun(win: WsRpc, dataDir: string, spawned: AgentSpawnResult) {
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(
+      async () => (readRecord(dataDir, spawned.session.runtimeRunId).exited ? true : undefined),
+      15_000,
+      "the run's exit on its record",
+    );
+  }
+  /** The spark's own signed record, as fieldd keeps it. */
+  const sparkRecord = (box: Box, id: string) =>
+    new SparkStore({
+      dir: join(box.dataDir, ...LAYOUT.SPARKS_DIR),
+      keyPath: join(box.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+    }).get(id);
+  const sparkSays = async (win: WsRpc, id: string) =>
+    ((await win.call("compose.sparks.list", {})) as ComposeSparksListResult).sparks.find(
+      (s) => s.id === id,
+    )?.turnedAt;
+  /** A spark hatched through the window's door: its first and only session, on the scripted agent. */
+  async function hatchVela(box: Box, win: WsRpc) {
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    const { spark } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const runId = spark.session?.runtimeRunId;
+    const paneId = box.sessions.at(-1)?.runtimeSessionId;
+    if (runId === undefined || paneId === undefined)
+      throw new Error("the hatch started no session");
+    await joinedRow(win, runId);
+    return { spark, runId, paneId };
+  }
+  const SPARKS = { floor: "real", profiles: true, briefing: SPARK_BRIEFING } as const;
+
+  it("stamps the first turn once on the signed record, and the row pushes it; the stamp leaves `updatedAt`; a resume carries the conversation's fact, null or a time (Q2, Q5, D2, D8, D9)", async () => {
+    const box = await setup({ floor: "real", observed: true });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, DECK, "tu1a");
+    // a run that never worked — its launch span is no turn (D2) — ends, and is resumed: still never worked
+    const first = await spawnRun(box, win);
+    expect(readRecord(dataDir, first.session.runtimeRunId)).toHaveProperty("turnedAt", null);
+    expect(await rowOf(win, first.session.runtimeRunId)).toHaveProperty("turnedAt", null);
+    await endRun(win, dataDir, first);
+    const resumed = (await born(win, "agent.resume", {
+      runtimeRunId: first.session.runtimeRunId,
+    })) as AgentSpawnResult;
+    const runId = resumed.session.runtimeRunId;
+    const paneId = resumed.terminal.sessionId;
+    await joinedRow(win, runId);
+    expect(readRecord(dataDir, runId)).toHaveProperty("turnedAt", null);
+    expect(await fieldRowOf(win, runId)).toHaveProperty("turnedAt", null);
+
+    // its first turn: fieldd's clock, on the record and on the row
+    const before = readRecord(dataDir, runId);
+    scriptedEvent(box, paneId, { type: "turn:started" });
+    const turned = await rowWhere(
+      win,
+      runId,
+      (row) => typeof row.turnedAt === "string",
+      "the row saying its run has worked",
+    );
+    const record = readRecord(dataDir, runId);
+    expect(typeof record.turnedAt).toBe("string");
+    const at = String(record.turnedAt);
+    expect(turned.turnedAt).toBe(at);
+    expect(Date.parse(at)).toBeGreaterThanOrEqual(Date.parse(record.createdAt));
+    expect(record.updatedAt).toBe(before.updatedAt);
+    expect((await fieldRowOf(win, runId))?.["turnedAt"]).toBe(at);
+    // once: the turn's end and the next turn change nothing
+    scriptedEvent(box, paneId, { type: "turn:completed" });
+    await rowWhere(win, runId, (row) => row.status === "idle", "the turn's end");
+    scriptedEvent(box, paneId, { type: "turn:started" });
+    await rowWhere(win, runId, (row) => row.status === "working", "the next turn");
+    expect(readRecord(dataDir, runId).turnedAt).toBe(at);
+    expect((await rowOf(win, runId))?.turnedAt).toBe(at);
+
+    // a resume continues the conversation: its successor is born having worked, at the conversation's time
+    await endRun(win, dataDir, resumed);
+    const next = (await born(win, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    expect(readRecord(dataDir, next.session.runtimeRunId).turnedAt).toBe(at);
+    expect((await rowOf(win, next.session.runtimeRunId))?.turnedAt).toBe(at);
+    await win.call("terminal.terminate", { sessionId: next.terminal.sessionId });
+  }, 120_000);
+
+  it("writes nothing for an ask seen before any work: a permission asked at launch is no turn, and the work after it is (Q2)", async () => {
+    const box = await setup({ floor: "real", observed: true });
+    const { daemon, dataDir } = box;
+    const win = await window(daemon, DECK, "tu1b");
+    const spawned = await spawnRun(box, win);
+    const runId = spawned.session.runtimeRunId;
+    const paneId = spawned.terminal.sessionId;
+    scriptedEvent(box, paneId, {
+      type: "interaction:permission-requested",
+      requestId: "perm-1",
+      tool: "Bash",
+      presentation: "native-tui",
+    });
+    const asking = await rowWhere(win, runId, (row) => row.status === "blocked", "the run asking");
+    expect(asking).toHaveProperty("turnedAt", null);
+    expect(readRecord(dataDir, runId)).toHaveProperty("turnedAt", null);
+    scriptedEvent(box, paneId, {
+      type: "interaction:permission-resolved",
+      requestId: "perm-1",
+      outcome: "allowed",
+    });
+    const answered = await rowWhere(win, runId, (row) => row.status === "idle", "the ask answered");
+    expect(answered).toHaveProperty("turnedAt", null);
+    expect(readRecord(dataDir, runId)).toHaveProperty("turnedAt", null);
+    scriptedEvent(box, paneId, { type: "turn:started" });
+    const turned = await rowWhere(
+      win,
+      runId,
+      (row) => typeof row.turnedAt === "string",
+      "the work after the ask",
+    );
+    expect(readRecord(dataDir, runId).turnedAt).toBe(turned.turnedAt);
+    await win.call("terminal.terminate", { sessionId: paneId });
+  }, 90_000);
+
+  it("is born having worked when History resumes a conversation, and tells the spark whose session it was (Q5, D7)", async () => {
+    const box = await setup({ floor: "real", catalog: FILED_CATALOG, briefing: SPARK_BRIEFING });
+    const { daemon, dataDir, envOut } = box;
+    const win = await window(daemon, DECK, "tu1c");
+    await indexReady(win);
+    const spawned = await spawnRun(box, win);
+    fileConversations(box, [spawned.session.sessionId]);
+    await endRun(win, dataDir, spawned);
+    // a spark from before TU-1, whose own session this was: it says nothing yet
+    const spark = keepLegacySpark(box, spawned.session.runtimeRunId);
+    expect(sparkRecord(box, spark.id)).not.toHaveProperty("turnedAt");
+    const asked = Date.now();
+    const resumed = (await born(win, "agent.resume", {
+      provider: "scripted",
+      nativeSessionId: spawned.session.sessionId,
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const record = readRecord(dataDir, resumed.session.runtimeRunId);
+    expect(typeof record.turnedAt).toBe("string");
+    const at = String(record.turnedAt);
+    expect(Date.parse(at)).toBeGreaterThanOrEqual(asked);
+    expect((await rowOf(win, resumed.session.runtimeRunId))?.turnedAt).toBe(at);
+    expect(record.spark).toBe(spark.id);
+    expect(sparkRecord(box, spark.id)?.turnedAt).toBe(at);
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 90_000);
+
+  it("tells a spark its own session has worked, and a re-attach keeps the run's time though nothing is replayed (Q1; the kill matrix)", async () => {
+    const config = { ...SPARKS, attach: true, observed: true };
+    const first = await setup(config);
+    const win1 = await window(first.daemon, [...DECK, "agents.manage"], "tu1d1");
+    const { spark, runId, paneId } = await hatchVela(first, win1);
+    expect(await sparkSays(win1, spark.id)).toBeNull();
+    scriptedEvent(first, paneId, { type: "turn:started" });
+    const turned = await rowWhere(
+      win1,
+      runId,
+      (row) => typeof row.turnedAt === "string",
+      "the spark's session saying it has worked",
+    );
+    const at = turned.turnedAt;
+    expect(await sparkSays(win1, spark.id)).toBe(at);
+    expect(sparkRecord(first, spark.id)?.turnedAt).toBe(at);
+    scriptedEvent(first, paneId, { type: "turn:completed" });
+    await rowWhere(win1, runId, (row) => row.status === "idle", "the turn's end");
+
+    // ── the restart: the run is released and re-attached; the attach replays nothing it counted ──
+    await first.daemon.stop();
+    const second = await setup({ ...config, restartOf: first });
+    const win2 = await window(second.daemon, [...DECK, "agents.manage"], "tu1d2");
+    const row = await rowWhere(
+      win2,
+      runId,
+      (r) => r.continuation?.reattached === true,
+      "the run re-attached",
+      20_000,
+    );
+    expect(row.monitor?.usage?.cumulativeTokens ?? 0).toBe(0);
+    expect(row.monitor?.lastAssistantMessage).toBeUndefined();
+    expect(row.turnedAt).toBe(at);
+    const record = readRecord(first.dataDir, runId);
+    expect(record.runtimeEpoch).toBe(2);
+    expect(record.reattach).toMatchObject({ state: "attached" });
+    expect(record.turnedAt).toBe(at);
+    expect(await sparkSays(win2, spark.id)).toBe(at);
+    await win2.call("terminal.terminate", { sessionId: paneId });
+  }, 150_000);
+
+  // R3b (D11, critique 6) — a re-attach files a record from before AR-S5 under the set puppeteer binds the run to at
+  // that attach, so the door (the record, `runForTerminal`) and the rooms (the summary) place it by one filed fact; a
+  // record that names a set keeps it, whatever the attach binds.
+  it("files a record from before AR-S5 under the set its re-attach binds, so the door reads the rooms' fact; a filed set is never moved (D11)", async () => {
+    const config = { floor: "real", profiles: true, attach: true } as const;
+    const first = await setup(config);
+    const win1 = await window(first.daemon, DECK, "tu1r1");
+    // a Work profile with a sign-in of its own: a run under it names its persona, which an attach binds again
+    const made = (await win1.call("agents.profileSets.create", {
+      label: "Work",
+    })) as AgentsProfileSetsSetResult;
+    const { persona } = (await win1.call("agents.profiles.create", {
+      set: made.set.id,
+      provider: "scripted",
+    })) as AgentsProfilesCreateResult;
+    const work = { profileSet: made.set.id, profileId: persona.profileId };
+    const spawnUnderWork = async () => {
+      const spawned = (await born(win1, "agent.spawn", {
+        provider: "scripted",
+        cwd: first.envOut,
+        profileSet: work.profileSet,
+      })) as AgentSpawnResult;
+      await joinedRow(win1, spawned.session.runtimeRunId);
+      return spawned;
+    };
+    const legacy = await spawnUnderWork();
+    const filed = await spawnUnderWork();
+    const record0 = readRecord(first.dataDir, legacy.session.runtimeRunId);
+    expect({ profileSet: record0.profileSet, profileId: record0.profileId }).toEqual(work);
+    await first.daemon.stop();
+    // the first: a record from before AR-S5 (its persona, no set); the second: filed under a set the attach does not
+    // bind
+    const { profileSet: _set, ...older } = record0;
+    first.records.write(older);
+    first.records.write({
+      ...readRecord(first.dataDir, filed.session.runtimeRunId),
+      profileSet: "native",
+    });
+
+    const second = await setup({ ...config, restartOf: first });
+    const win2 = await window(second.daemon, DECK, "tu1r2");
+    for (const run of [legacy, filed])
+      await rowWhere(
+        win2,
+        run.session.runtimeRunId,
+        (r) => r.continuation?.reattached === true,
+        "the run re-attached",
+        20_000,
+      );
+    const row = await rowOf(win2, legacy.session.runtimeRunId);
+    const record = readRecord(first.dataDir, legacy.session.runtimeRunId);
+    expect({ record: record.profileSet, row: row?.profileSet }).toEqual({
+      record: work.profileSet,
+      row: work.profileSet,
+    });
+    expect(second.daemon.agents.runForTerminal(legacy.terminal.sessionId)).toEqual({
+      runtimeRunId: legacy.session.runtimeRunId,
+      verified: true,
+      ...work,
+    });
+    expect(readRecord(first.dataDir, filed.session.runtimeRunId).profileSet).toBe("native");
+    for (const run of [legacy, filed])
+      await win2.call("terminal.terminate", { sessionId: run.terminal.sessionId });
+  }, 150_000);
+
+  // G4 (Q4, a named guard; plans/tu1-plan.md §3.6): it asserts the gap, so it passes by design, and its TU1_G4 lines
+  // are its reading. A spark's first and only session; fieldd stops (it releases the run, whose pane lives on the
+  // floor) and starts again. The scripted adapter replays no history when it attaches, as Claude Code's transcript
+  // observer makes earlier messages a silent baseline: a turn the person took in the pane while fieldd was down would
+  // change nothing fieldd can see, so this row stands for that turn without typing one.
+  it("TU-1 G4 — the down-window gap, named (Q4): a turn no fieldd saw stays unseen", async () => {
+    const config = { ...SPARKS, attach: true, observed: true };
+    const first = await setup(config);
+    const win1 = await window(first.daemon, [...DECK, "agents.manage"], "tu1g1");
+    const { spark, runId, paneId } = await hatchVela(first, win1);
+    const hatched = {
+      record: readRecord(first.dataDir, runId).turnedAt,
+      row: (await rowOf(win1, runId))?.turnedAt,
+      spark: await sparkSays(win1, spark.id),
+    };
+    expect(hatched).toEqual({ record: null, row: null, spark: null });
+
+    // ── fieldd down, the pane alive; the turn taken there is one fieldd never sees ──
+    await first.daemon.stop();
+    const second = await setup({ ...config, restartOf: first });
+    const win2 = await window(second.daemon, [...DECK, "agents.manage"], "tu1g2");
+    const row = await rowWhere(
+      win2,
+      runId,
+      (r) => r.continuation?.reattached === true,
+      "the run re-attached",
+      20_000,
+    );
+    const reattached = {
+      reattached: row.continuation?.reattached,
+      status: row.status,
+      record: readRecord(first.dataDir, runId).turnedAt,
+      row: row.turnedAt,
+      spark: await sparkSays(win2, spark.id),
+    };
+    console.log(`TU1_G4 ${JSON.stringify({ case: "down-window", hatched, reattached })}`);
+    expect(reattached).toMatchObject({ reattached: true, record: null, row: null, spark: null });
+    await win2.call("terminal.terminate", { sessionId: paneId });
+  }, 150_000);
+
+  // G4's pending tail (§12 Q3, accepted in Q4's words): a restart that could not re-attach holds the run pending, its
+  // pane typeable and nothing watching it, until fieldd resumes it (at its next idle, or by hand as here). The
+  // successor continues the conversation and inherits the record's null, so a turn taken while it was pending is
+  // unseen too.
+  it("TU-1 G4 — the pending tail, named (Q3): a run no restart could re-attach is resumed still saying it has never worked", async () => {
+    const first = await setup(SPARKS);
+    const win1 = await window(first.daemon, [...DECK, "agents.manage"], "tu1p1");
+    const { spark, runId } = await hatchVela(first, win1);
+    await first.daemon.stop();
+    const second = await setup({ ...SPARKS, restartOf: first });
+    const win2 = await window(second.daemon, [...DECK, "agents.manage"], "tu1p2");
+    const held = await rowWhere(
+      win2,
+      runId,
+      (r) => r.continuation?.pending !== undefined,
+      "the run held pending",
+      20_000,
+    );
+    const pending = { row: held.turnedAt, spark: await sparkSays(win2, spark.id) };
+    const resumed = (await born(win2, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    const successor = {
+      record: readRecord(first.dataDir, resumed.session.runtimeRunId).turnedAt,
+      row: (await rowOf(win2, resumed.session.runtimeRunId))?.turnedAt,
+      spark: await sparkSays(win2, spark.id),
+    };
+    console.log(`TU1_G4 ${JSON.stringify({ case: "pending-tail", pending, successor })}`);
+    expect(pending).toEqual({ row: null, spark: null });
+    expect(successor).toEqual({ record: null, row: null, spark: null });
+    await win2.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 150_000);
 });
 
 // Item 97 — an exit fieldd never heard. AR-6-0 reddened three times after item 87 with its run never

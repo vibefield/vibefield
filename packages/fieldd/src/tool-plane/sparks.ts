@@ -1,34 +1,31 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import {
   type AgentModelSelection,
   type AgentProfileSet,
   type AgentSessionSummary,
   type ComposeSparksHatchParams,
-  canonicalJson,
   type SparkId,
   SparkRecord,
   type SparkSummary,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "../native-link";
+import { RecordSigner, type SetAsideWhy } from "../signed-record";
 import type { GrantPrincipal } from "../terminal-grants";
 
 // CP-1c — the sparks fieldd keeps, and the three doors the window calls (the compose plane, version 2; compose.ts;
 // NS-D1, NS-D2 B, NS-D5, CR-D11).
 //
 // A spark is a record fieldd keeps (LAYOUT.SPARKS_DIR) and a folder of its own (LAYOUT.SPARK_HOMES_DIR/<slug>/), where
-// its session works with the brief written for it. Each record carries an HMAC-SHA256 over its canonical JSON, keyed
-// by a secret made once per user root (LAYOUT.SPARKS_KEY_FILE): SessionRecordStore's pattern. A spark's profiles bound
-// what its verbs reach (TL-D5), so an agent that edits the file must not widen them: a record that is unsigned, does
-// not verify, does not parse, or is exposed to other users is set aside and never served.
+// its session works with the brief written for it. Each record is signed by the one record signer (signed-record.ts)
+// under a secret made once per user root (LAYOUT.SPARKS_KEY_FILE). A spark's profiles bound what its verbs reach
+// (TL-D5), so an agent that edits the file must not widen them: a record that is unsigned, does not verify, does not
+// parse, or is exposed to other users is set aside and never served.
 //
 // CP-1d wires route A (co-spark-door-route): AgentRuntimeService rebuilds the briefing at every process birth,
 // through AgentSparkBriefings. Keeping that handoff at the runtime also covers resumes outside this service.
-
-/** The secret's bytes, and the signature's: an HMAC-SHA256 over the record's canonical JSON (contracts' one form). */
-const KEY_BYTES = 32;
 
 export interface SparkStoreOptions {
   readonly dir: string;
@@ -37,11 +34,12 @@ export interface SparkStoreOptions {
 }
 
 export class SparkStore {
-  #key: Buffer | undefined;
+  readonly #signer: RecordSigner;
   readonly #logger: Logger;
 
   constructor(private readonly opts: SparkStoreOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
+    this.#signer = new RecordSigner({ keyPath: opts.keyPath, logger: this.#logger });
   }
 
   /** A new spark's id: never reused, never its name. */
@@ -85,7 +83,7 @@ export class SparkStore {
     const temp = `${path}.${process.pid}.tmp`;
     writeFileSync(
       temp,
-      `${JSON.stringify({ ...unsigned, signature: this.#sign(unsigned) }, null, 2)}\n`,
+      `${JSON.stringify({ ...unsigned, signature: this.#signer.sign(unsigned) }, null, 2)}\n`,
       {
         mode: 0o600,
       },
@@ -94,25 +92,13 @@ export class SparkStore {
   }
 
   #read(path: string): SparkRecord | undefined {
-    try {
-      if ((statSync(path).mode & 0o077) !== 0) return this.#setAside(path, "exposed");
-      const { signature, ...unsigned } = JSON.parse(readFileSync(path, "utf8")) as Record<
-        string,
-        unknown
-      >;
-      if (typeof signature !== "string") return this.#setAside(path, "unsigned");
-      const want = Buffer.from(this.#sign(unsigned), "hex");
-      const given = Buffer.from(signature, "hex");
-      if (given.length !== want.length || !timingSafeEqual(given, want))
-        return this.#setAside(path, "forged");
-      const parsed = SparkRecord.safeParse(unsigned);
-      return parsed.success ? parsed.data : this.#setAside(path, "unreadable");
-    } catch {
-      return this.#setAside(path, "unreadable");
-    }
+    const read = this.#signer.read(path);
+    if ("why" in read) return this.#setAside(path, read.why);
+    const parsed = SparkRecord.safeParse(read.body);
+    return parsed.success ? parsed.data : this.#setAside(path, "unreadable");
   }
 
-  #setAside(path: string, why: string): undefined {
+  #setAside(path: string, why: SetAsideWhy): undefined {
     this.#logger.warn(
       "fieldd.compose.spark_set_aside",
       "A spark's record was set aside and is not served",
@@ -122,26 +108,6 @@ export class SparkStore {
       },
     );
     return undefined;
-  }
-
-  #sign(unsigned: unknown): string {
-    return createHmac("sha256", this.#signingKey()).update(canonicalJson(unsigned)).digest("hex");
-  }
-
-  #signingKey(): Buffer {
-    if (this.#key) return this.#key;
-    mkdirSync(dirname(this.opts.keyPath), { recursive: true, mode: 0o700 });
-    try {
-      // made once, never overwritten: a second fieldd that races the first reads the winner's secret
-      writeFileSync(this.opts.keyPath, randomBytes(KEY_BYTES).toString("hex"), {
-        mode: 0o600,
-        flag: "wx",
-      });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    }
-    this.#key = Buffer.from(readFileSync(this.opts.keyPath, "utf8").trim(), "hex");
-    return this.#key;
   }
 }
 
@@ -215,6 +181,8 @@ const refused = (message: string, reason: string, details: Record<string, string
 /** The `compose.sparks.*` doors' work: hatch (NS-D1, NS-D5), list, and open (CR-D11, CP-D14). */
 export class SparkService {
   readonly #logger: Logger;
+  /** The wake under way for each spark, until it answers or refuses (`open`). */
+  readonly #opening = new Map<SparkId, Promise<SparkSummary>>();
 
   constructor(private readonly opts: SparkServiceOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
@@ -265,14 +233,40 @@ export class SparkService {
       folder,
       createdAt: now,
       updatedAt: now,
+      // TU-1 (Q1) — hatched, and never worked: NS-D4's hello is for this spark
+      turnedAt: null,
     };
     this.opts.store.write(spark);
     return this.#summary(await this.#launch(spark, principal), this.opts.runs());
   }
 
   /** Wake a spark: a live session is answered as it is; a sleeping one is resumed in its last session, or started
-   * again in its folder when that cannot be resumed. */
-  async open(id: SparkId, principal: GrantPrincipal): Promise<SparkSummary> {
+   * again in its folder when that cannot be resumed.
+   *
+   * One wake per spark (SP-1d): an open asked while one is under way — two windows, or a window and the shell, since
+   * `compose.sparks.open` is local and its door admits only this desktop's shell and windows (`requireDesktopCaller`)
+   * — is answered by that wake, its run or its refusal. Asked again, the resume would be refused (the runtime claims
+   * the conversation it continues), the daemon's resume reads that refusal as cannot-be-resumed, and the spark would
+   * be started again beside the run it is waking into. The wake is joined per spark, not per caller: the door decides
+   * who may open a spark and audits each caller before this is asked, and inside the wake the principal decides
+   * nothing — it binds only the terminal ticket a birth mints, which this service never hands on.
+   *
+   * *Added 2026-11-01 (CP-3):* a second door wakes a spark through this open: `needs.answer`, whose answer to a
+   * sleeping spark's item resumes it to tell it (`NeedsQueue`'s `open`, CP3-D7 A). That door is this desktop's too, and
+   * audits the answer before the queue asks, so an answer and a window's open at once are one wake and one run.
+   *
+   * Not joined yet: a resume of the spark's session already under way through another door (`agent.resume`, as
+   * Godview's Resume asks it). The daemon's resume wrapper reads its PRECONDITION_FAILED (state `resuming` or
+   * `replaced`) as cannot-be-resumed, so this wake starts the spark again beside it; the wrapper owes the fix. */
+  open(id: SparkId, principal: GrantPrincipal): Promise<SparkSummary> {
+    const under = this.#opening.get(id);
+    if (under !== undefined) return under;
+    const wake = this.#wake(id, principal).finally(() => this.#opening.delete(id));
+    this.#opening.set(id, wake);
+    return wake;
+  }
+
+  async #wake(id: SparkId, principal: GrantPrincipal): Promise<SparkSummary> {
     const spark = this.opts.store.get(id);
     if (!spark) throw new RpcCallError("NOT_FOUND", "no such spark", false);
     const runs = this.opts.runs();
@@ -302,10 +296,35 @@ export class SparkService {
     return this.#keep(spark, runtimeRunId);
   }
 
+  /** The session a spark thinks in now, kept on the record as it stands on disk: the record in hand was read before
+   * the wake's or the launch's await, and a turn told meanwhile (`turned`) must survive this write (TU-1, D6). */
   #keep(spark: SparkRecord, runtimeRunId: string): SparkRecord {
-    const next = { ...spark, session: { runtimeRunId }, updatedAt: this.opts.now().toISOString() };
+    const current = this.opts.store.get(spark.id) ?? spark;
+    const next = {
+      ...current,
+      session: { runtimeRunId },
+      updatedAt: this.opts.now().toISOString(),
+    };
     this.opts.store.write(next);
     return next;
+  }
+
+  /** TU-1 (Q1) — one of the spark's own sessions has worked (the runtime's `onSparkTurned`): the first time told is
+   * kept on its signed record, re-read first; a later one is the same fact, and changes nothing. `updatedAt` stays as
+   * it stands (Chat's list moves on the session's activity, not on this). A spark gone or set aside is left alone, and
+   * a write that fails is logged: the session's own record keeps the fact, and its next entry tells the spark again. */
+  turned(id: SparkId, at: string): void {
+    const current = this.opts.store.get(id);
+    if (current === undefined || typeof current.turnedAt === "string") return;
+    try {
+      this.opts.store.write({ ...current, turnedAt: at });
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.compose.spark_turn_unrecorded",
+        "A spark's first turn could not be kept on its record",
+        { spark: id, reason: error instanceof Error ? error.message : String(error) },
+      );
+    }
   }
 
   #liveRun(spark: SparkRecord, runs: readonly AgentSessionSummary[]) {

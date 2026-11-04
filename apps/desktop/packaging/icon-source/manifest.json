@@ -1,0 +1,238 @@
+{
+  "version": 1,
+  "collection": "vibefield-icon-collection-v2",
+  "selected": "2026-11-03",
+  "generator": "VibeField Icon Studio",
+  "files": [
+    {
+      "path": "ios/Assets.xcassets/AppIcon.appiconset/AppIcon-Dark.png",
+      "bytes": 81273,
+      "sha256": "0a405e6036c017372001532a748ff2d13d6f2b49fc0084d4a6e90d30a7c80577"
+    },
+    {
+      "path": "ios/Assets.xcassets/AppIcon.appiconset/AppIcon-Tinted.png",
+      "bytes": 63109,
+      "sha256": "311132a495d961c1e6c4786f874eaef522388011d72c00520a94d0d12b34a830"
+    },
+    {
+      "path": "ios/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
+      "bytes": 83550,
+      "sha256": "341e44be9e2fcf393b0ec4dc6d7be192837661724201f94e0e22333b4454637f"
+    },
+    {
+      "path": "ios/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "bytes": 699,
+      "sha256": "ffa35648c16ba571da9bb5e6ebfbd0c340aac2470658d51ec8357fea39f4fbcf"
+    },
+    {
+      "path": "linux/hicolor/1024x1024/apps/vibefield.png",
+      "bytes": 95783,
+      "sha256": "e27cfeeb2bc66b65ccfe0d3b937a4412a581e6ca91aa728154c65ebdd661b056"
+    },
+    {
+      "path": "linux/hicolor/128x128/apps/vibefield.png",
+      "bytes": 5167,
+      "sha256": "6989b08510e0def23934f08e1705a43693bee0e908a34f61f5d296d213d575ad"
+    },
+    {
+      "path": "linux/hicolor/16x16/apps/vibefield.png",
+      "bytes": 490,
+      "sha256": "15765a978ce6809712afc04347d531b6836b2372b2f5724171741959079ff821"
+    },
+    {
+      "path": "linux/hicolor/24x24/apps/vibefield.png",
+      "bytes": 717,
+      "sha256": "c86692a0a29ba489eb5353f904f8bbf6120c671128200fba99dbf28be1d1d616"
+    },
+    {
+      "path": "linux/hicolor/256x256/apps/vibefield.png",
+      "bytes": 13630,
+      "sha256": "f460dba2906b6dac411569e296ebd6e98b3ab0e20977e9dd7a1efee4dd1d47bf"
+    },
+    {
+      "path": "linux/hicolor/32x32/apps/vibefield.png",
+      "bytes": 953,
+      "sha256": "41fa148b98b74f7c47b0db38e17d51ea2f17a9ed59bb028d41ed6180d73f096a"
+    },
+    {
+      "path": "linux/hicolor/48x48/apps/vibefield.png",
+      "bytes": 1487,
+      "sha256": "ab7334810453c0292f41010031296ba6da6ff3e7c822c84ff773bbc4dc80633e"
+    },
+    {
+      "path": "linux/hicolor/512x512/apps/vibefield.png",
+      "bytes": 37469,
+      "sha256": "d711b0c529b084b066cee460ebcadc68e2b138c60f25eada94ffb504f0c38753"
+    },
+    {
+      "path": "linux/hicolor/64x64/apps/vibefield.png",
+      "bytes": 2083,
+      "sha256": "ac6a70c1397beaff24e16408c574e60be132fb1fa94cf1f9a871c09a4c49fa13"
+    },
+    {
+      "path": "linux/hicolor/96x96/apps/vibefield.png",
+      "bytes": 3478,
+      "sha256": "817bfd508c15c97c43e5b9eeb43330a8f975857068dbe2d0915455528affa2cc"
+    },
+    {
+      "path": "linux/hicolor/scalable/apps/vibefield.svg",
+      "bytes": 68515,
+      "sha256": "2a2af28cd4d4336f600f3cf1c73d531f1c216e32475bfe159b524b77cd5347a0"
+    },
+    {
+      "path": "macos/vibefield.icon/Assets/mark-dark.svg",
+      "bytes": 60416,
+      "sha256": "cc1a15e0f868aa3596d9f09de23aef65c42454fac6af1321f85867763eaa0ba1"
+    },
+    {
+      "path": "macos/vibefield.icon/Assets/mark-light.svg",
+      "bytes": 60416,
+      "sha256": "bc57e9c2f089aace5c0f95b5f1b7b3e74f841e480cc8f5816291ac6393d488b7"
+    },
+    {
+      "path": "macos/vibefield.icon/icon.json",
+      "bytes": 1115,
+      "sha256": "c122ccd9f95e92311a5f0e82732dfb0bc5c6116975c40f1c64a5249312fa5801"
+    },
+    {
+      "path": "recipe.json",
+      "bytes": 7017,
+      "sha256": "7bf559964568f656fece5c14d9615d2415bd93467c4bace51ea8b227a266f8ae"
+    },
+    {
+      "path": "tray/linux/dark/vibefield-attention-32.png",
+      "bytes": 1262,
+      "sha256": "620ff6cdb38c4596ec3d85243f84dbff81557a42c61cdabc123bba2dbafcaf17"
+    },
+    {
+      "path": "tray/linux/dark/vibefield-offline-32.png",
+      "bytes": 1240,
+      "sha256": "57ae41b3b3c2ee20cddc88767dbb9c2ee5880ea08bc1df82dbb3bdec3eb356ba"
+    },
+    {
+      "path": "tray/linux/dark/vibefield-ready-32.png",
+      "bytes": 1124,
+      "sha256": "ad0b4d6daad2794482d592a0defae4128b851f9ede6951e61da83297a5856254"
+    },
+    {
+      "path": "tray/linux/dark/vibefield-update-32.png",
+      "bytes": 1165,
+      "sha256": "f69c191e9e4235ec73199cfc7e2fb6f7b30ba0349d96f4d9f6854b5c167c4171"
+    },
+    {
+      "path": "tray/linux/light/vibefield-attention-32.png",
+      "bytes": 1154,
+      "sha256": "d3b83a4adfc082ca581f7bd43780bd8ec567bfb8103ee9aeb5f20f22fa6d3202"
+    },
+    {
+      "path": "tray/linux/light/vibefield-offline-32.png",
+      "bytes": 1131,
+      "sha256": "4edd56ef90d404abbeb2504bceb7275dccce88fb1681c02e1cbb132b6bee31af"
+    },
+    {
+      "path": "tray/linux/light/vibefield-ready-32.png",
+      "bytes": 1023,
+      "sha256": "cd1d978f7150ae4e7967e4be2549b0d76f872ba5ca926d3ebd2044694fc20c3f"
+    },
+    {
+      "path": "tray/linux/light/vibefield-update-32.png",
+      "bytes": 1072,
+      "sha256": "db73b549798fdbd9d915502822e27ce41d711af6670a89bd43393a2a7f03b201"
+    },
+    {
+      "path": "tray/macos/18pt/vibefieldAttentionTemplate.png",
+      "bytes": 363,
+      "sha256": "8036ac58d22746086462b45747c21ac36c30d89430311cc7bf5f0ea1113c492b"
+    },
+    {
+      "path": "tray/macos/18pt/vibefieldAttentionTemplate@2x.png",
+      "bytes": 636,
+      "sha256": "277e774957f5996abd5092788d074c8cde7415dc783bf4c09892b06c90836085"
+    },
+    {
+      "path": "tray/macos/18pt/vibefieldOfflineTemplate.png",
+      "bytes": 361,
+      "sha256": "b3adb12ec088de0bbc014f319ec626f2feb82a5a1752367e985f1e363fb9cf3e"
+    },
+    {
+      "path": "tray/macos/18pt/vibefieldOfflineTemplate@2x.png",
+      "bytes": 634,
+      "sha256": "b748bfad875089cde62f7160e4d7484ce938b7b2b1bc74b756e4c0043d9166fe"
+    },
+    {
+      "path": "tray/macos/18pt/vibefieldTemplate.png",
+      "bytes": 329,
+      "sha256": "1c47a27a3fc66ba4f4e767307f50502797b48b3f147bc64d2adc9fbebfa79383"
+    },
+    {
+      "path": "tray/macos/18pt/vibefieldTemplate@2x.png",
+      "bytes": 559,
+      "sha256": "b12fd028e1332ea510e934b39ef46d4a15946b609f3db030e9702c6743b04128"
+    },
+    {
+      "path": "tray/macos/18pt/vibefieldUpdateTemplate.png",
+      "bytes": 328,
+      "sha256": "cb6ee0cdbed66c5ecea105e45ad49ec0cb3a4465930df2364c7d5fd52c2a9619"
+    },
+    {
+      "path": "tray/macos/18pt/vibefieldUpdateTemplate@2x.png",
+      "bytes": 574,
+      "sha256": "7b92417df1239e4478aab4f82f08e5068d3f42967e54da0dc9cd393f888a7812"
+    },
+    {
+      "path": "tray/macos/vibefieldTemplate.svg",
+      "bytes": 9866,
+      "sha256": "c6a6a008f8cdafb4ec6c007fb50fd9d8deeec6d2e320dcd3c731f5435dc54498"
+    },
+    {
+      "path": "tray/windows/dark/vibefield-attention.ico",
+      "bytes": 9048,
+      "sha256": "e74b14c7932c96c49ac954b0c4e5e0d9395b403cbacec1c9b4a3b49700684545"
+    },
+    {
+      "path": "tray/windows/dark/vibefield-offline.ico",
+      "bytes": 8881,
+      "sha256": "d14eed41a5096fad70f7f2429995160e57dfe8af0b712bee3bf28e0d148a0b4a"
+    },
+    {
+      "path": "tray/windows/dark/vibefield-ready.ico",
+      "bytes": 8057,
+      "sha256": "7d63253b801b7f3ef44f71f7f8143240e24c153c1aa5cc10fa5a2b6f2956dd0a"
+    },
+    {
+      "path": "tray/windows/dark/vibefield-update.ico",
+      "bytes": 8433,
+      "sha256": "9b42d88e24e378fba382fa4000cacabe610dee87c0f172a5cd27b75384aaa3d7"
+    },
+    {
+      "path": "tray/windows/light/vibefield-attention.ico",
+      "bytes": 8372,
+      "sha256": "a138ea0f93dcf6a246fb27bef4d28a274c58c97d6b3feaa072c668ef7ae5a107"
+    },
+    {
+      "path": "tray/windows/light/vibefield-offline.ico",
+      "bytes": 8195,
+      "sha256": "fdc58279d33ec676bd3e40eb3a907ff9216c779e9b4a38442896297aaccb6c70"
+    },
+    {
+      "path": "tray/windows/light/vibefield-ready.ico",
+      "bytes": 7415,
+      "sha256": "c2893863c7df757af72903e2a1a6c1683038d02200115832005ef7b344c5d539"
+    },
+    {
+      "path": "tray/windows/light/vibefield-update.ico",
+      "bytes": 7791,
+      "sha256": "96dcd6f34bef35479861c13a08e1578c26719f9f9c45bfc204723fc031ecfc3f"
+    },
+    {
+      "path": "windows/vibefield-1024.png",
+      "bytes": 95783,
+      "sha256": "e27cfeeb2bc66b65ccfe0d3b937a4412a581e6ca91aa728154c65ebdd661b056"
+    },
+    {
+      "path": "windows/vibefield.ico",
+      "bytes": 29966,
+      "sha256": "27dd1192129624bf76e67cecfe2fedfa6f54a65fa61b5383caf820296770e5c3"
+    }
+  ]
+}

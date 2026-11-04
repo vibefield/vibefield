@@ -37,7 +37,9 @@ export interface TrayImageSet {
   readonly macTemplate1x: string;
   readonly macTemplate2x: string;
   readonly windowsIco: string;
+  readonly windowsDarkIco: string;
   readonly linuxPng: string;
+  readonly linuxDarkPng: string;
 }
 
 export interface DesktopResources {
@@ -47,6 +49,8 @@ export interface DesktopResources {
    * after app.whenReady(); a packaged app keeps bundle-owned icon selection and
    * therefore carries null. */
   readonly developmentDockIconPath: string | null;
+  /** Windows/Linux titlebar and taskbar icon; macOS keeps its bundle-owned icon. */
+  readonly windowIconPath: string | null;
   /** the program to exec: the standalone fieldd executable when packaged
    * (EDP-14), Electron-as-node from the repo bundle in development */
   readonly fielddCommand: string;
@@ -70,6 +74,8 @@ export interface DesktopResources {
    * helper: a screenshot is a peripheral, so an absent helper is an honest
    * `helper-missing` at capture time — never a refusal to boot. */
   readonly screenshotHelperPath: string | null;
+  /** Optional macOS presentation feedback, loaded only for a focused user gesture. */
+  readonly desktopHapticsPath?: string | null;
   /** AR-8 (L3) — History's index daemon, handed to fieldd as FIELDD_ROSETTAD_BIN
    * when nothing in the environment names one. Packaged: beside fieldd, where
    * the stager puts it when `pnpm siblings:build` produced one. Development:
@@ -99,25 +105,33 @@ const TRAY_BASENAMES: Readonly<Record<TrayImageKind, TrayImageSet>> = {
     macTemplate1x: "fieldTemplate.png",
     macTemplate2x: "fieldTemplate@2x.png",
     windowsIco: "field-ready.ico",
+    windowsDarkIco: "field-ready-dark.ico",
     linuxPng: "field-linux.png",
+    linuxDarkPng: "field-linux-dark.png",
   },
   attention: {
     macTemplate1x: "fieldAttentionTemplate.png",
     macTemplate2x: "fieldAttentionTemplate@2x.png",
     windowsIco: "field-attention.ico",
+    windowsDarkIco: "field-attention-dark.ico",
     linuxPng: "field-linux-attention.png",
+    linuxDarkPng: "field-linux-attention-dark.png",
   },
   update: {
     macTemplate1x: "fieldUpdateTemplate.png",
     macTemplate2x: "fieldUpdateTemplate@2x.png",
     windowsIco: "field-update.ico",
+    windowsDarkIco: "field-update-dark.ico",
     linuxPng: "field-linux-update.png",
+    linuxDarkPng: "field-linux-update-dark.png",
   },
   offline: {
     macTemplate1x: "fieldOfflineTemplate.png",
     macTemplate2x: "fieldOfflineTemplate@2x.png",
     windowsIco: "field-offline.ico",
+    windowsDarkIco: "field-offline-dark.ico",
     linuxPng: "field-linux-offline.png",
+    linuxDarkPng: "field-linux-offline-dark.png",
   },
 };
 
@@ -129,7 +143,9 @@ function trayLayout(dir: string): Readonly<Record<TrayImageKind, TrayImageSet>> 
       macTemplate1x: join(dir, names.macTemplate1x),
       macTemplate2x: join(dir, names.macTemplate2x),
       windowsIco: join(dir, names.windowsIco),
+      windowsDarkIco: join(dir, names.windowsDarkIco),
       linuxPng: join(dir, names.linuxPng),
+      linuxDarkPng: join(dir, names.linuxDarkPng),
     };
   }
   return out;
@@ -177,6 +193,17 @@ export function resolveDevelopmentResources(opts: {
       "icons",
       "app-macos-dock.png",
     ),
+    windowIconPath:
+      platform === "darwin"
+        ? null
+        : join(
+            opts.repoRoot,
+            "apps",
+            "desktop",
+            "packaging",
+            "icons",
+            platform === "win32" ? "app.ico" : "app-1024.png",
+          ),
     fielddCommand: opts.electronExecPath,
     fielddArgs: [join(opts.repoRoot, "packages", "fieldd", "dist", "bin.cjs")],
     // Development runs the bundle through Electron's own node — building a
@@ -205,6 +232,10 @@ export function resolveDevelopmentResources(opts: {
               "live-surface-adapter.node",
             ),
           }
+        : null,
+    desktopHapticsPath:
+      platform === "darwin"
+        ? join(opts.repoRoot, "apps/desktop/build/native/macos/desktop-haptics.node")
         : null,
     screenshotHelperPath: screenshotHelperPath(
       join(
@@ -247,6 +278,10 @@ export function resolvePackagedResources(opts: {
   return {
     packaged: true,
     developmentDockIconPath: null,
+    windowIconPath:
+      platform === "darwin"
+        ? null
+        : join(opts.resourcesPath, "icons", platform === "win32" ? "app.ico" : "app-1024.png"),
     // A REAL executable, not Electron wearing a hat (EDP-14). Its sidecars —
     // service-harness.mjs and loro_wasm_bg.wasm, and since FS-1a the files
     // worker's files-host.cjs and mille's native engine — are staged beside it
@@ -264,6 +299,7 @@ export function resolvePackagedResources(opts: {
           }
         : null,
     screenshotHelperPath: screenshotHelperPath(bin, platform),
+    desktopHapticsPath: platform === "darwin" ? join(bin, "desktop-haptics.node") : null,
     rosettadPath: join(bin, exe("rosettad", platform)),
     pluginRoots: {
       bundled: [join(opts.resourcesPath, "plugins", "bundled")],

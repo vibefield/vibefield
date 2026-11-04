@@ -1,5 +1,5 @@
 import { DESKTOP_TRAY_GUID } from "@vibefield/contracts";
-import { Menu, type NativeImage, nativeImage, screen, Tray } from "electron";
+import { Menu, type NativeImage, nativeImage, nativeTheme, screen, Tray } from "electron";
 import type { DesktopResources, TrayImageKind, TrayImageSet } from "./resources";
 import type {
   NativeTrayPort,
@@ -12,6 +12,22 @@ import type { TrayMenuItem, TrayPlatform } from "./tray-model";
 function assertImage(image: NativeImage, path: string): NativeImage {
   if (image.isEmpty()) throw new Error(`tray image is empty or unreadable: ${path}`);
   return image;
+}
+
+function trayImagePath(paths: TrayImageSet, platform: TrayPlatform): string {
+  if (platform === "darwin") return paths.macTemplate1x;
+  // Windows allows a light app theme alongside a dark taskbar (and vice versa).
+  const dark =
+    platform === "win32"
+      ? nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
+      : nativeTheme.shouldUseDarkColors;
+  return platform === "win32"
+    ? dark
+      ? paths.windowsDarkIco
+      : paths.windowsIco
+    : dark
+      ? paths.linuxDarkPng
+      : paths.linuxPng;
 }
 
 export function loadTrayImage(
@@ -29,7 +45,7 @@ export function loadTrayImage(
     image.setTemplateImage(true);
     return image;
   }
-  const path = platform === "win32" ? paths.windowsIco : paths.linuxPng;
+  const path = trayImagePath(paths, platform);
   return assertImage(nativeImage.createFromPath(path), path);
 }
 
@@ -103,14 +119,7 @@ export function createElectronTrayRuntime(
       const native = image as NativeImage;
       const size = native.getSize();
       const paths = resources.tray[kind];
-      const sourcePath =
-        platform === "darwin"
-          ? paths.macTemplate1x
-          : platform === "win32"
-            ? paths.windowsIco
-            : platform === "linux"
-              ? paths.linuxPng
-              : null;
+      const sourcePath = trayImagePath(paths, platform);
       return {
         sourcePath,
         width: size.width,
@@ -149,6 +158,14 @@ export function createElectronTrayRuntime(
         screen.off("display-added", listener);
         screen.off("display-removed", listener);
         screen.off("display-metrics-changed", listener);
+      };
+    },
+    watchAppearance: (callback) => {
+      // AppKit tints the template itself; conventional tray assets must switch.
+      if (platform !== "win32" && platform !== "linux") return () => undefined;
+      nativeTheme.on("updated", callback);
+      return () => {
+        nativeTheme.off("updated", callback);
       };
     },
     buildMenu: electronMenu,
