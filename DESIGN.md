@@ -284,6 +284,7 @@ the general chrome palette.
 | panel border | `#E0E0E0` | `#333333` |
 | text main / muted / faint | `#111111 / #888888 / #B8B8B8` | `#FFFFFF / #777777 / #555555` |
 | idle body / text | `#E5E5E5 / #666666` | `#2A2A2A / #AAAAAA` |
+| control hover border / ground (added 2026-11-04, PG-4t: tokens.css has carried the pair since at least 2026-08-08 as `--vf-godview-{light,dark}-control-hover-*`; this table never had it) | `#777777 / #F2F2F2` | `#A8A8A8 / #242424` |
 | working body / text | `#222222 / #FFFFFF` | `#EEEEEE / #111111` |
 | terminal ground / divider | `#ECE8DC / #D2CEC3` | `#282C34 / #414650` |
 | deck sheet shadow (§8, the deck's edge) | `0 -20px 40px rgba(0,0,0,0.08)` | `0 -20px 40px rgba(0,0,0,0.4)` |
@@ -2494,6 +2495,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   button beside it does, also where Settings → Terminal → Look holds Godview's own mode (§1.1) —
   and stands over the terminals' sheet and over Godview's scanlines and vignette: the frame's glass
   carries neither.
+  The phone carries this head to its Field page: "The phone's Stories row", the last point below.
   - **A circle** is the line's glass (§5) with its hairline, the island shadow and the line's
     lift. It holds its view's **mark** from the view's manifest (MV-D6): filled, in a 22 box
     centred, in secondary ink; primary on the current view and under the pointer or the focus.
@@ -2599,6 +2601,57 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **System control**, now an act in the palette's "On this view" group while the view is
     Godview, with no key and no glyph — its panel is §1.1's temporary one, unchanged, and open to
     whoever could open it before.
+  - **The phone's Stories row** (PG-4t, 2026-11-04; James ruled J-S1 A, J-S2 (ii), J-S3 drop and J-S4 accept on
+    the PG-4s page, 01:12–01:14Z; VF-PM's rulings 01:18Z–01:46Z): this head, carried to the phone's Field page. It
+    is a frame piece: it stands over the stage, outside the swarm, and never moves when the view changes; only its
+    ring does.
+    - **The row:** one glass circle per view the phone has — the bar's glass (`liquidGlassCircle`: the system's
+      Liquid Glass on iOS 26, the chrome family's circle glass below it) — **44** across (the touch floor), **10**
+      apart, the row centred on the screen. Its top is **8** under the Dynamic Island's foot (**48**) on a phone
+      with an island, and 8 under the safe area's top line where that line stands higher (a notch, a status bar, a
+      phone on its side): `min(safe top, 48) + 8`, 56 on every island phone. The circles stand apart; they never
+      melt.
+    - **A circle** holds its view's mark from its manifest (MV-D6), filled, in a **22** box centred, in the bar's
+      ink (`ChromePalette.ink`: black at 92% by day, white by night) on every circle — the desktop rests its marks
+      in secondary ink; the phone's are all the bar's — drawn as one shape, so the ink never doubles where a mark's
+      strokes meet. A view whose manifest draws no mark shows its label's initial, in the label's 12/500. The phone
+      carries the manifests' marks transcribed once, held to them by a golden.
+    - **The current view's ring is the circle's own edge** (J-S2 (ii)): **2** in the bar's ink inside its 44, in
+      place of the edge. Nothing grows, shifts or clips. It changes in 120ms `ease`.
+    - **Its name is said under it when it is tapped** — touch has no hover: this head's label without its keys —
+      solid chrome (`--vf-chrome-solid`), 24 tall, 8 under the circle and centred on it, corners 12, padded 0 10,
+      ringed by the strong hairline, with the island shadow (§5; on the phone `ChromeShadow.island`: black at 8% by
+      day and 40% by night, 8 down, SwiftUI radius 15 for CSS's 30 blur); the view's manifest label in sentence
+      case, 12/500 in the bar's ink. It appears in 140ms `ease`, 3 down into place, stands **1.4s** from the tap
+      (the views track's note), and leaves in 140ms `ease`. A tap on another circle moves it there and starts its
+      1.4s again; a tap on the current circle says its name and changes nothing else.
+    - **A tap picks the view.** The stage changes in place, a 180ms `ease` fade (the view switch, §6), and the
+      frame never moves (§1, the one frame). One view is mounted at a time (§8 "The monitor view owns its
+      drawing"): the swarm leaves the stage under another view and is laid again when it comes back. The pick is
+      kept on the phone across launches and a sign-out; a stored view the phone no longer has falls back to the
+      swarm. No haptic: the bar's own tabs are silent.
+    - **The views that exist, and no placeholder:** the row draws the views the phone has, in the registry's order
+      (swarm · list · rain · timeline · spend), centred, and never a greyed or an "Add a view" circle (N13 (a)).
+      While the phone has only the swarm it is one circle, ringed (VF-PM, 2026-11-04): the frame and its reserve
+      stand from the first build, and the row grows as views land.
+    - **The stage runs under the row**, to the screen's top, as the stage runs under this head. The row's reserve
+      is its foot plus 8: `min(safe top, 48) + 60` from the screen's top, **108** on an island phone. It is the
+      stage's top inset, handed to every view as data, never as host padding: a view of words and controls (the
+      list, the timeline, spend) keeps them below it; a picture (the rain) paints its whole stage from the screen's
+      top and keeps its own words below it; the swarm steers by it as an obstacle across the stage's top, the bar
+      band's twin. A view's stage ends at the bar's band; the swarm's alone runs under the bar (its manifest's
+      `stageAllocation: 'full'`), steering by the band.
+    - **The stage dissolves under the row**, whatever the view: clear at the row's axis (its top + 22, **78** on an
+      island phone) to whole at the reserve, a 30 ramp, as the desktop's dissolves from 28 to 56. The stage is
+      masked, never the row, the bar, or the swarm's scanlines and vignette; what shows through is the phone's
+      ground, §2.7's panel.
+    - **The scanlines and the vignette stand over the swarm only** (J-S3, drop). The desktop paints them on the
+      stage over every view (`GodviewStage.tsx:178-179`); the phone differs on purpose. The row stands above them
+      and wears neither: the frame's glass carries neither.
+    - **Reduced motion:** the stage fades in 90ms; the ring and the label change at once.
+    - **VoiceOver** reads the row as a group of buttons, "Views", each its view's name ("Swarm view"), the current
+      one selected; the label is not read again. The circles keep their size at every text size, as the bar's do,
+      and show the name in the large content viewer.
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
   it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
@@ -4478,6 +4531,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   in the sans reads the token, never a copied stack). Both host themes define the colours; the
   shared token sheet defines the easings and the sans. A new shared name changes the contract
   first; a view never copies a curve or reads an undeclared host token.
+  On the phone the skin's nine colours are §2.7's, resolved for the phone's look and handed to every Godview view
+  by its stage under the SDK's own names (`GodviewSkin`: `--panel-bg` is `panelBg`); its easings are §6's curves as
+  the kit names them and its sans the system's. Its stage insets are the Stories row's reserve and the bar's band
+  (§8 "The phone's Stories row"; PG-4t, 2026-11-04).
   Stage insets replace host padding rules, including the timeline's former extra 11px (MV-6).
   **The head reads the manifest:** each view supplies its filled mark and its focus keys; the host
   has no view mark table. The declared keys are said in the circle's label, after the view's name
