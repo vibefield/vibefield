@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>VibeField · Icon studio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='19' font-size='25'%3E∞%3C/text%3E%3C/svg%3E">
+  <style>/* STUDIO_STYLE */</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top"><img id="brand-mark" alt="VibeField" width="48" height="22"><span>VibeField<span class="brand-divider">/</span><strong>Icon studio</strong></span></a>
+    <div class="top-actions"><span id="save-status" class="save-status">Local workspace</span><button id="import-button" class="button quiet">Import look</button><button id="save-recipe" class="button quiet">Save recipe</button><button id="export-all" class="button primary"><span aria-hidden="true">↓</span> Export selected</button></div>
+  </header>
+  <div class="workspace" id="top">
+    <aside class="sidebar" aria-label="Artwork controls">
+      <div class="panel-heading"><span class="eyebrow">ART DIRECTION</span><button class="text-button" id="reset">Reset</button></div>
+      <div class="field"><label for="recipe-name">Collection name</label><input id="recipe-name" maxlength="64" value="VibeField" spellcheck="false"></div>
+      <div class="starter-grid" id="starters" aria-label="Starting looks"></div>
+      <div class="field two-fields"><div><label for="field-style">Background</label><select id="field-style"><option value="plain">Plain</option><option value="dust">Dust</option></select></div><div><label for="palette">Palette</label><select id="palette"></select></div></div>
+      <div class="field two-fields ground-fields"><label>Light ground<input id="light-ground" type="color" value="#ffffff"></label><label>Dark ground<input id="dark-ground" type="color" value="#000000"></label></div>
+      <div class="panel-divider"></div>
+      <div class="panel-heading"><span class="eyebrow">TUNE THE ARTWORK</span><span class="small-label" id="parameter-count"></span></div>
+      <input id="control-search" type="search" placeholder="Find a parameter…" aria-label="Find a parameter">
+      <div id="controls"></div>
+      <div class="panel-divider"></div>
+      <details open class="control-section"><summary>Small symbols <span>Tray & web</span></summary>
+        <div class="field"><label for="tray-weight">Menu bar weight <output id="tray-weight-value">1.60×</output></label><input id="tray-weight" type="range" min="1" max="3" step="0.05" value="1.6"></div>
+        <div class="field"><label for="favicon-weight">Favicon weight <output id="favicon-weight-value">1.40×</output></label><input id="favicon-weight" type="range" min="1" max="3" step="0.05" value="1.4"></div>
+        <div class="field"><label for="favicon-style">Favicon treatment</label><select id="favicon-style"><option value="tile">Ribbon on a tile</option><option value="mark">Ribbon only</option></select></div>
+        <p class="microcopy">A stronger silhouette at small sizes. Menu bar assets use a monochrome ribbon; 16 px favicons drop the edge lights.</p>
+      </details>
+      <div class="sidebar-foot">Artwork stays on this device.<br>Recipes and export bundles are yours to keep.</div>
+    </aside>
+    <main>
+      <section class="intro"><div><div class="eyebrow">ONE IDENTITY, EVERY SURFACE</div><h1>Your icon family.</h1><p>Tune once. Inspect at real size. Export for every platform.</p></div><div id="renderer-status" class="status-pill"><i></i> Vector ready</div></section>
+      <div class="notice" id="notice" hidden role="status"></div>
+      <section class="hero-grid" aria-label="Main artwork preview">
+        <div class="artboard" id="artboard">
+          <div class="artboard-top"><span id="hero-platform">macOS</span><div class="segmented" aria-label="Appearance"><button data-appearance="light" aria-pressed="true">Light</button><button data-appearance="dark" aria-pressed="false">Dark</button><button data-appearance="tinted" aria-pressed="false">Tinted</button></div></div>
+          <div class="hero-art"><img id="hero-image" width="288" height="288" alt="Current app icon"><div id="safe-guide" hidden aria-hidden="true"></div></div>
+          <div class="artboard-bottom"><span id="hero-spec">1024 px source · platform mask preview</span><label class="check-inline"><input type="checkbox" id="show-guide"> Safe area</label></div>
+        </div>
+        <div class="export-panel"><div class="panel-heading"><span class="eyebrow">EXPORT COLLECTION</span><span class="small-label" id="target-count">8 selected</span></div><div id="targets"></div><div class="export-note"><span class="note-icon">↳</span><p>Each platform gets its own sizes, masks, and optical weight.</p></div><button id="export-panel-button" class="button primary full">Download collection <span>↓</span></button></div>
+      </section>
+      <div class="transport"><div class="transport-left"><button class="button quiet" id="play" aria-pressed="false">▷ Preview motion</button><label for="time">Frame <input id="time" type="number" min="0" max="3600" step="0.1" value="2"><span>s</span></label></div><label class="check-inline"><input type="checkbox" id="icon-at-rest" checked> Hold icon at rest for export</label></div>
+      <section id="family" class="section"><div class="section-title"><div><span class="eyebrow">PLATFORM PREVIEWS</span><h2>At home, everywhere.</h2></div><span class="small-label">Choose a surface to inspect</span></div><div id="platform-cards" class="platform-grid"></div></section>
+      <section id="small" class="section"><div class="section-title"><div><span class="eyebrow">OPTICAL SIZES</span><h2>Small is its own design.</h2></div><span class="small-label">Actual CSS sizes · 1× raster</span></div><div class="size-comparison"><div class="size-row light-row" id="small-light"></div><div class="size-row dark-row" id="small-dark"></div></div><p class="section-caption">The ribbon gains weight as it shrinks. Dust uses the original lab’s light-preserving downsampling and size tuning.</p></section>
+      <section id="symbols" class="section"><div class="section-title"><div><span class="eyebrow">MENU BAR & BROWSER</span><h2>A clear signal, in a few pixels.</h2></div><button data-export="tray" class="button quiet">Export tray set ↓</button></div><div class="symbols-grid"><div class="symbol-card"><div class="menu-mock light-menu"><span class="menu-word">VibeField</span><span>File</span><span>View</span><div class="menu-right"><img data-tray="ready" data-tone="light" alt="Ready tray icon"><span>◒</span><span>9:41</span></div></div><div class="menu-mock dark-menu"><span class="menu-word">VibeField</span><span>File</span><span>View</span><div class="menu-right"><img data-tray="ready" data-tone="dark" alt="Ready tray icon on dark"><span>◒</span><span>9:41</span></div></div><div class="tray-states" id="tray-states"></div><div class="card-foot">Template artwork · black + alpha · 1× and 2×</div></div><div class="symbol-card"><div class="browser-mock"><div class="browser-tab"><img id="favicon-preview" width="16" height="16" alt="16 pixel favicon"><span>VibeField — a place to build</span><span class="tab-x">×</span></div><div class="address-bar"><span>⌕</span> vibefield.dev</div><div class="browser-empty"><img id="touch-preview" width="56" height="56" alt="Website home screen icon"><span>VibeField</span></div></div><div class="card-foot"><span>Adaptive SVG · favicon ICO · touch · PWA</span><button data-export="web" class="text-button">Export ↓</button></div></div></div></section>
+      <section id="spatial" class="section spatial-section"><div class="spatial-copy"><span class="eyebrow">DESIGNED FOR DEPTH</span><h2>The mark, in space.</h2><p>Two separate layers let visionOS bring the ribbon forward. The system supplies the circular crop, depth, and lighting.</p><label class="check-inline"><input id="explode" type="checkbox" checked> Separate the layers</label><button data-export="visionos" class="button quiet">Export visionOS stack ↓</button></div><div class="spatial-stage exploded" id="spatial-stage"><div class="spatial-back"><img id="spatial-back" alt="visionOS background layer"></div><div class="spatial-front"><img id="spatial-front" alt="visionOS foreground ribbon layer"></div><span class="layer-label back-label">01 / BACKGROUND</span><span class="layer-label front-label">02 / LIVING MARK</span></div></section>
+      <section id="motion" class="section"><div class="section-title"><div><span class="eyebrow">THE LIVING LOGO</span><h2>The original, in motion.</h2></div><button data-export="logo" class="button quiet">Export SVG masters ↓</button></div><div class="living-pair"><div><img id="living-light" width="198" height="88" alt="Original animated black ribbon"><span>Light surface</span></div><div><img id="living-dark" width="198" height="88" alt="Original animated white ribbon"><span>Dark surface</span></div></div><p class="section-caption">The shipping animated SVGs are preserved as originals. Your tuned artwork exports separately as static SVG masters. Animation rests automatically with Reduce Motion.</p></section>
+      <footer><span>VibeField / Icon studio</span><span>Built from Wormhole Dust and the living mark.</span><button id="download-page" class="text-button">Save portable studio ↓</button></footer>
+    </main>
+  </div>
+  <!-- Validate JSON after selection: macOS file associations can reject valid .json files in MIME-filtered pickers. -->
+  <input id="import-file" type="file" aria-label="Import a JSON recipe" hidden>
+  <dialog id="export-dialog" aria-labelledby="export-title"><div class="export-dialog-content"><div class="eyebrow">PACKAGING YOUR ARTWORK</div><h2 id="export-title">Building your collection.</h2><p id="export-progress" aria-live="polite">Preparing…</p><progress id="export-meter" max="1" value="0"></progress><div id="export-result"></div><div class="dialog-actions"><button id="cancel-export" class="button quiet">Cancel</button><button id="close-export" class="button primary" hidden>Done</button></div></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script type="module">/* STUDIO_SCRIPT */</script>
+</body>
+</html>

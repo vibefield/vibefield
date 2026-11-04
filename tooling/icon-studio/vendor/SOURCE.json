@@ -1,0 +1,16 @@
+{
+  "source": "Wormhole Dust(1).html",
+  "sha256": "e7ad810b52b40c8c9dcd18752f0cb69999f183a4227fc6b894d9670f6d58e8ff",
+  "sections": [
+    "mark.js",
+    "small.js",
+    "palettes.js"
+  ],
+  "note": "Renderer and shaders extracted unchanged from the supplied self-contained page. Original active project: ../vf-splash. No lab UI or service adapters included.",
+  "patches": [
+    {
+      "name": "background-only-small-pass",
+      "reason": "Allow the same tuned light-space downsampling for Icon Composer and visionOS background layers as for composited exports. smallSlot.prepare accepts mark=false and keys the cache by it; the absent mark target is cleared."
+    }
+  ]
+}
