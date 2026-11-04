@@ -228,7 +228,8 @@
 **PG — the phone's Godview** · vibe-field-fd (lane `lanes/ios`) · law `draft/thinking-phone-godview.md` §7/§8 (the page *The Phone's Godview*, AAYgPk8o), `design-mv.md`, `design-06-sync-planes.md`
 - Ruled 10-29 08:17–08:30Z (James, on the page): all ten (a), nine at their leans; PG-D3 (a), native transcriptions,
   against the lean. PG-D11 A at 16:22:36Z (the PM board): the phone's queue cap is 256 KiB. James put the phone's
-  Godview ahead of the Settings track on 10-31 21:09Z.
+  Godview ahead of the Settings track on 10-31 21:09Z. The Stories row's marks, 11-04 01:12–01:14Z (James, on the
+  PG-4s page): J-S1 A, J-S2 (ii), J-S3 drop, J-S4 accept.
 - Landed 10-31: **PG-1a…1c**, the desktop's efficiencies first (PG-D9): the model's attach promise withdrawn with the
   join (`e9a57b4b6`), the key-only relay and the window's per-desktop screen (`f2d76f7bf`, `8a3b64ced`), and tailnet
   backpressure at 256 KiB (`2392b0ef8`, `83e08f1e1`), as the merge `1790be95f`, run 18 (LANDED "PG-1a…1c"). **PG-0**,
@@ -273,11 +274,19 @@
   held to `phone-toolkit.golden.json`, the view choice and its stage inputs, and the per-view golden registry, empty
   and live; the Field page stands on the swarm until PG-5…8 add theirs. The door gate the design drew is not built:
   WI-1 retired the page it gated, found at the merge.
+  **PG-4t** (11-04), the Stories row (`49b8c1339` → `690cb4e31`, the MERGE M118 `f8deba6b7` into `4d8c28869`, run
+  118; LANDED "PG-4t"): one glass circle per view the phone has, under the island at `min(safe top, 48) + 8`, its
+  ring the circle's own edge and its name said on a tap (J-S1…J-S4 as ruled); the stage full-bleed under it,
+  dissolving in one place; the monitor skin, the views' marks held to `phone-marks.golden.json`, and the shared head
+  `3ddde3eac` the view lanes stack on. The kit green on the merged tree, with its stills and a frame meter. N12
+  (PG-4s's owed swarm still) is met by 4t's four swarm stills on the merged tree, photographed under 4t's stage (the
+  row, the dissolve mask, the physics centre risen), not 4s's bare stage; the swarm's own draw is 4s's unchanged.
 - Next: PG-5…PG-8 (list, timeline, spend, rain, native) IN PARALLEL, four lanes on one brief template
-  (`lanes/ios/PG5-8-BRIEF-TEMPLATE.md`, brought to the landed scaffold by Q-S13's dated pass), landing in green order
-  (James 2026-11-01 22:47Z; PG-D4 as amended); a view lane adds one `phoneViewGoldens` line and one registry entry →
-  PG-9 (the per-device resume cursors, `agent.get`, the measured rates; L4.4's linger half is PG-9a's). PU-I is filed
-  by James.
+  (`lanes/ios/PG5-8-BRIEF-TEMPLATE.md`, brought to the landed scaffold by Q-S13's dated pass), each rebased onto
+  PG-4t's final tip `690cb4e31` (its head `3ddde3eac` beneath) and minted as a merge into main over `f8deba6b7`, its
+  kit slot on a proof merge of the same two, landing in green order (James 2026-11-01 22:47Z; PG-D4 as amended); a
+  view lane adds one `phoneViewGoldens` line and one registry entry → PG-9 (the per-device resume cursors,
+  `agent.get`, the measured rates; L4.4's linger half is PG-9a's). PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both
   on the shed; the cap read on the phone under the link conditioner (PG-9); from PG-1d, the F-H2 rider (the board's
   gate and the ticket mint read different things) and an old owner's run-id fallback (a design question); from PG-2,
@@ -286,8 +295,10 @@
   (PG-L1); from PG-3a, at a draft slot PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's
   remote-cut self-check); from PG-9a, a failed release's empty carried again (not built), and at a draft slot the
   dated notes at thinking-desktop-sync-plane :201 (PF6's close) and thinking-phone-godview §8's PG-9 line; from
-  PG-3e, James's live look (J-E4, §5); from PG-4s, James's page (J-S1…J-S4, the switch and what other views keep)
-  and the swarm's still under the view flag at the first view lane (N12).
+  PG-3e, James's live look (J-E4, §5); from PG-4t, J-R3 (James's: the dissolve over Rain, (a) built), the island
+  question (James's: the row at 56 as built, or 8 under each phone's own island, the iPhone 17 Pro's ending at 50.7),
+  the tap at y 56–62 (James's hand row), a device's 120 Hz frame meter, and the comment-only pair after the land (the
+  island's words in the Swift comments and S1, the stills reader).
 
 **WI — the phone's way in** · the IOS session (lanes `lanes/wi`, `lanes/item163`, `lanes/wi3`) · law: the page *The Way In* (5cvau5EQ, v5; sources `draft/ios-pocket/way-in/`), DESIGN.md §8 "The phone's way in" and §9 "The way in"; DECISIONS WI
 - Ruled 11-02 11:13–11:15Z (James, on the page): WI-D1…D8 all A, the leans; "way in all ruled, now implement it"
@@ -912,7 +923,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6, FG-5, FG-6c, FG-O2, FG-O2's judge and its fix, FG-6's catalog, FG-6's frozen frame 10-31, FG-6's follow-up 3, the catalog judged and its follow-up 1 11-01 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | the glass's literals (item 136) → James's product question |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
-| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31; PG-3 (3a…3f), PG-9a and PG-4s 11-01…11-02 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-5…8, four lanes in parallel; then PG-9 |
+| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31; PG-3 (3a…3f), PG-9a and PG-4s 11-01…11-02; PG-4t 11-04 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-5…8, four lanes in parallel; then PG-9 |
 | HN — Cards in Hand | BUILT; B1–B3 (HN-0…HN-8) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | the console-window smoke rows; D10 (James) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |

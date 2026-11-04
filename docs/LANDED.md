@@ -30229,3 +30229,151 @@ measurement. No token moved for it, and no number for it is claimed here.
 **Owed.** Row 32's judge on these inks, the stills and an off field's 3:1 with them; James's veto on (a), (b) and
 (d). This entry pays "FG, the catalog judged's follow-up 1"'s owed line "Item 136, the wizard's own Tailwind literals
 outside the tokens", its placeholder's witness with it. Its `disabled:opacity-45` stays: the kit's field's 0.45.
+
+## PG-4t — the phone's Stories row: one glass circle per view under the island, the stage full-bleed under it and dissolving in one place, the monitor skin and the views' marks, and the shared head the view lanes stand on (2026-11-04; `49b8c1339` → `690cb4e31`, 21 commits on main `84482a1fe`, lane `pg/4t` in `/Volumes/SamsungRed/lanes/pg4t/vibe-field`, M118 `f8deba6b7`, a MERGE into main `4d8c28869` (tree `8ff15d1700bc`), run 118)
+
+**What it rests on.** PG-4s is the scaffold (LANDED "PG-4s"). James ruled the PG-4s page's four marks, J-S1 A,
+J-S2 (ii), J-S3 drop and J-S4 accept (2026-11-04 01:12–01:14Z; VF-PM's rulings 01:18Z–01:41Z, as DESIGN.md §8
+carries them). fd accepted the read (`lanes/pg4t/light/read-pg4t.md`) in steps: C0–C3, then the SHARED HEAD
+`3ddde3eac`, which the four view lanes PG-5…8 stack on. The lane was born at `f978b385a` and rebased onto
+`84482a1fe` (items 164 and 165) with 0 conflicts. Times below are the scripts' own `date -u`. fd's relay labels after
+01:40Z ran ahead of the clock (fd's erratum), so rulings are cited by content.
+
+**What** (23 files, +1,825 −24: 17 under `apps/ios`, DESIGN.md, four in field-app, and the fixtures check):
+- **The words first** (`49b8c1339`, DESIGN.md only): §8's "The phone's Stories row", §2.7's control-hover row and
+  the skin's sentence. J-S4's sentence followed in a dated commit (`9408440ad`), which also corrects a relay label
+  ("01:46Z" → 01:41Z) at its source.
+- **The stage runs under the row** (`f87b26199`). `GodviewStage` is full-bleed:
+  - its top inset is the row's reserve, `min(safe top, 48) + 60` (108 on an island phone), handed to every view as
+    data; `framed` pads only the bottom band;
+  - the dissolve (78 → 108) masks the whole arm in ONE place, `GodviewStage.body`. DEBUG `-vf-godview-dissolve=off`
+    (`690cb4e31`) is the only way past it, for a frame meter;
+  - the scanlines and the vignette stand over the swarm only (J-S3).
+- **The monitor skin** (`433896a2f`): `GodviewSkin`, §2.7's nine colours in both looks, as `rgb(_:)` numbers and as
+  `Color` accessors. The fixtures check pins its 18 values against tokens.css; T2 holds its keys to `MONITOR_SKIN`.
+- **The witness, step by step** (`6bd187de9`): `HomeFixture.witnessSteps`, the signature the view lanes asked for.
+- **The loader** (`3ddde3eac`, the SHARED HEAD): `importPuppeteerViews(path)` imports a puppeteer-views module by
+  its real path (Found, below).
+- **The name the row says** (`15b44d233`): `GodviewStorySaying`, one name at a time for 1.4 s from the tap.
+  `-vf-godview-say=<id>` holds one for a still.
+- **The views' faces** (`e94101e4a`, `519ad8ad4`): the five manifests' marks transcribed once and mark-outline.js's
+  writer in Swift, held byte for byte to `phone-marks.golden.json` (3,102 bytes, blessed from the installed
+  registry; M1 mutation-probed).
+- **The row** (`93437713c`): `GodviewStoriesRow`.
+  - One `liquidGlassCircle` per view the phone has (one ringed circle while only the swarm exists): 44 across,
+    10 apart, centred, its top at `min(safe top, 48) + 8`.
+  - The mark in `ChromePalette.ink`; the current view's 2 pt ring, in 120 ms; the name's pill with the new
+    `ChromeShadow.island`; VoiceOver's "Views" and "Swarm view", the current circle selected.
+  - The pick is `@AppStorage("vibefield.godview.view")`, kept across a sign-out (`SignOutSweep.kept`). A DEBUG
+    launch override never writes it.
+- **Flags** (DEBUG): `-vf-godview-view=`, `-vf-godview-now=`, `-vf-godview-still`, `-vf-godview-say=<id>`,
+  `-vf-godview-dissolve=off`.
+
+**Validation.**
+- Red first on every pair, by assertion on skeletons:
+  - the geometry, the views and the still flag: 9 rows, 96 issues;
+  - the skin: 9 issues;
+  - the witness W1–W4: 8 issues;
+  - the loader L1–L3;
+  - the name: 15 issues;
+  - the faces: 24 issues;
+  - the pick's key P2b;
+  - the marks golden T1 and M1;
+  - the dissolve flag D1: 1 issue. Its first host run did not compile (D1 lacked `@MainActor`) and was re-run;
+    only its assertion red counts.
+- The host loop at the tip (`lanes/pg4t/light/hostkit`, Swift 6 mode, `swift test -j 4`): 56 tests in 11 suites,
+  0 issues.
+- TS: phone-parity 26/26; field-app's `tsc --noEmit` 0; biome clean on every file the lane touches; the walls 0.
+- The fixtures: 224 identical (206 copies and the skin's 18), pins 67. The view lanes count from 206.
+- fd's early kit at `f87b26199` (02:08:56–02:10:56Z): FieldHomeTests 160 tests in 24 suites, 0 issues.
+- fd's compile turns on pg8's `de2df5f5f` and pg5's `f7eea9212`, each stacked on the head (02:42–02:47Z): every
+  PG-4t suite passed.
+- **The kit slot at `690cb4e31`** (03:00:05–03:11:36Z; this Mac, Xcode 26.6, iPhone 17 Pro `F93EABF3`):
+  - red first in the kit, each by assertion:
+    - K1 at `6255511a1`: 4 issues, the island shadow;
+    - K2 there: 1 issue, SignOutTests:88;
+    - K4 at `c3776beff`: 14 issues, GodviewSkinPaletteTests:37;
+  - the kit: 15 runs, 1,597 tests. The one red is item 167 (TerminalSurfaceKeyboardTests:31, no `UIWindowScene`);
+  - VibeField Debug (69 s), VibeField-Mock Debug (4 s) and ONE Release (167 s) built, with 0 warnings in PG-4t's
+    files.
+- **The merged tree.** Main had moved apps/ios since the lane's base (WI-3 and item 136), so the slot's tree was not
+  the mint's.
+  - `git merge-tree --write-tree 4d8c28869 690cb4e31` is `8ff15d1700bc` (apps/ios `48c5b6881730`, DESIGN.md
+    `ac61a3c10694`). A trial rebase gave 21 "=" and the same tree.
+  - The hunks in HomeScreen.swift and DESIGN.md are apart.
+  - WI-3's curtain is a `UIWindow` at `.alert + 1` above the main window, so it stands over the row, as DESIGN.md
+    §8's way in says it stands "over everything the phone shows" (:3847-3848 on the merged tree).
+- **The merged-tree turn** on fd's proof merge `16cf8436ec36` (tree `8ff15d1700bc`; 03:24:48–03:32:17Z), with the
+  reds carried from the slot:
+  - the kit: 16 runs, 1,623 tests. FieldLockTests' new run (23 tests in 3 suites) passed. The one red is item 167;
+  - all nine PG-4t suites and the sign-out suite passed;
+  - Debug (59 s), Mock (4 s) and ONE Release (144 s) built, with 0 warnings in PG-4t's files.
+- **The stills** on the same tree (03:32:18–03:36:34Z), from a Debug build carrying WI-3's `-vf-lock=`, with
+  `-vf-lock=none` standing the lock down:
+  - four, at `/Volumes/SamsungRed/lanes/ios/stills/pg4t/16cf8436ec36…`: `-light-row.png`, `-light-row-said.png`,
+    `-dark-row.png` and `-dark-row-said.png`;
+  - each shows one ringed circle under the island, with the pill saying "Swarm" in the two `-said` stills;
+  - read from the pixels: the ring at 56.0–58.0 pt in both looks, the island at 14.0–50.7 pt.
+- **The frame meter** (the same build; 30 + 8 s a run, on · off · on · off):
+  - 60 Hz and p50 16.7 ms in all four, 0 long frames;
+  - p95 17.0 and 16.7 with the dissolve, 16.7 and 16.7 without;
+  - max 20.0 and 17.9 with, 17.4 and 18.4 without.
+  - No measurable cost, on the simulator's 60 Hz and a loaded host.
+- **The carry rule** (fd): if main moved before the land, the witness carried only if the re-merge's apps/ios
+  subtree and DESIGN.md blob equalled `48c5b6881730` and `ac61a3c10694`. Main did not move: the mint's parents are
+  `690cb4e31` and `4d8c28869`, and its tree is the proof merge's, `8ff15d1700bc`. So the merged-tree turn and the
+  stills carry to the mint by tree hash.
+- **N12** (PG-4s's owed swarm still) is met by the four stills above, photographed under 4t's stage (the row, the
+  dissolve mask, the physics centre risen), not 4s's bare stage; the swarm's own draw is 4s's unchanged (no file
+  under `FieldSwarm` moved; the swarm's arm gained only the stage's `.transition(.opacity)`).
+- **Run 118** (`f8deba6b7`, the MERGE of `690cb4e31` into main `4d8c28869`, minted by a9 on VF-PM's GO; VF-PM's
+  read, 03:54Z): verify exit 0 at 03:52:56Z (armed 03:47:09Z at load1 3.49); FAIL rows 0; vitest 12,197 passed,
+  0 failed, 18 skipped (881 files), run 117 + 5; cargo 34 results ok, 0 FAILED; "28 projects" four times; no
+  MaxListeners warning; the iOS fixtures 224, pins 67; the tree clean after
+  (`lanes/ts6/logs/mini/run118/verify.clean.log`). The kit is the merged-tree turn above, carried by tree.
+- **Landed:** main fast-forwarded to `f8deba6b7` on VF-PM's GO (2026-11-04 03:55:17Z), 23 files +1,825 −24.
+
+**Not witnessed (said).**
+- **The tap at y 56–62.** The circle's top 6 pt stand in the status bar's band, and no agent injects input. S1 (the
+  top, 56) and S3 (44 across) pin the frame; the touch is James's hand row.
+- **SwarmField's top safe area (0).** No DEBUG print exists for it. The code path holds it: `fieldTab` ignores the
+  top safe area (HomeScreen.swift:802-804). No pixel can tell it: the swarm's ground and the page's are one
+  panel-bg.
+- **A device's 120 Hz.** The meter ran on the simulator only.
+
+**Found (said).**
+- **A second module instance.** Importing a puppeteer-views module by its link path gave a `MONITOR_VIEWS` that
+  deep-equalled the root's but was not the same object: Vite loads puppeteer's packages by their real store path.
+  The loader imports `realpathSync(file)`, and L1 pins it.
+- **The island's foot is not 48 on the iPhone 17 Pro.**
+  - The simulator's screenshots carry the Dynamic Island, at 14.0–50.7 pt. 48 is frame A's island (the PG-4s page:
+    y 11, 37 tall).
+  - The row stands 5.3 under this phone's island, not 8, and never touches it.
+  - The rule `min(safe top, 48) + 8` = 56 is as built and witnessed, and VF-PM ruled that it stands. James's (i)
+    56 or (ii) 8 under each phone's own island is open.
+  - The sentence "8 under the island's foot (48)" stood at five places. DESIGN.md:2611-2613 is corrected and dated
+    in these records. GodviewStories.swift:14 and :42, S1's doc and name (GodviewStoriesTests.swift:16) and
+    HomeScreen.swift:384 follow in a comment-only pair after this landing, worded by James's answer.
+- **The brief's premise was false.** It said main's move since `84482a1fe` was docs and field-app only. It moved
+  apps/ios (WI-3, item 136), so the merged tree had its own turn.
+- **The lane's own claim was false**: "a simulator screenshot carries no island" (stills.sh's header, the
+  packet's draft).
+  - The stills' row reader read the island by day (30.0 pt).
+  - Its fix rides the same comment-only pair: a scan from below the measured foot (51 pt), or one that skips a run
+    longer than the ring's 6 px.
+  - Not re-run: the pixel readings above are a read of the PNGs.
+
+**Not built.**
+- J-R3 (b), one per-arm opt-out of the dissolve for Rain (James's, on the rain peek page; (a) is built).
+- A DEBUG print of the safe area and the island.
+- A still of the lock's curtain over the row (fd: not needed).
+- Any view beyond the swarm: PG-5…8 add theirs, and the row grows as they land.
+
+**Owed.**
+- J-R3 and the island question: James's.
+- The tap at y 56–62: James's hand row.
+- A device's 120 Hz meter.
+- The comment-only pair after this landing: the island's words in the Swift comments, S1's doc and name, and the
+  stills reader and its header.
+- `lanes/pg4t/light/trial-rebase`, removed after the land.
+- PG-5…8 mint as merges over this landing.

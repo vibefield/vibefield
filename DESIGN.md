@@ -2608,10 +2608,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     changes; only its ring does.
     - **The row:** one glass circle per view the phone has — the bar's glass (`liquidGlassCircle`: the system's
       Liquid Glass on iOS 26, the chrome family's circle glass below it) — **44** across (the touch floor), **10**
-      apart, the row centred on the screen. Its top is **8** under the Dynamic Island's foot (**48**) on a phone
-      with an island, and 8 under the safe area's top line where that line stands higher (a notch, a status bar, a
-      phone on its side): `min(safe top, 48) + 8`, 56 on every island phone. The circles stand apart; they never
-      melt.
+      apart, the row centred on the screen. Its top is `min(safe top, 48) + 8` from the screen's top: **56** on
+      every island phone, and 8 under the safe area's top line where that line stands higher (a notch, a status
+      bar, a phone on its side). *Corrected 2026-11-04 (PG-4t's stills): this said "**8** under the Dynamic
+      Island's foot (**48**) on a phone with an island". 48 is frame A's island (y 11, 37 tall). The iPhone 17
+      Pro's own screenshots draw its island at 14.0–50.7 pt, so there the row stands 5.3 under it. The rule is as
+      built and witnessed; whether the row stands 8 under each phone's own island is James's, open.* The circles
+      stand apart; they never melt.
     - **A circle** holds its view's mark from its manifest (MV-D6), filled, in a **22** box centred, in the bar's
       ink (`ChromePalette.ink`: black at 92% by day, white by night) on every circle — the desktop rests its marks
       in secondary ink; the phone's are all the bar's — drawn as one shape, so the ink never doubles where a mark's
