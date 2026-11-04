@@ -3769,6 +3769,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   width + 80 by 440, centred 83 pt under the centre; the acts' glass rounds its top corners 32 and its bottom ones 47
   (continuous). The found beat ends the first way in only: §9 sets it between the steps and the lock's offer, and
   Tailscale asking again is neither, so after **Sign in again** the splash leaves for the tabs with no beat.
+  *As built 2026-11-04 (WI-3):* the capsule shows three bars again, the third named for the method (**Face ID**,
+  **Touch ID** or **Passcode**), whenever the way in will offer the lock: the lock off and a passcode set. The lock
+  stands on a window of its own over everything the phone shows, the card and every other sheet among them (they
+  stand over the gate, so the gate's hold could not cover them). It holds the splash's own surface, which draws the
+  launch picture until its field is up, so the app switcher shows the launch picture and a return reads as the
+  launch. Face ID asks over it, and a miss puts the way in's three places on it: the title on the words line,
+  **Unlock with Face ID** in the glass's first slot and "Your iPhone passcode works too." as its note. It leaves by
+  a 240ms plain `ease` fade (120ms under Reduce Motion). Its honest cost: at a launch with the lock on, the gate's
+  splash runs under the curtain, so two of the splash's surfaces draw until Face ID passes. Locking folds the
+  card's keyboard by the card's own fold, as another device taking the seat does. The corner's **Lock now** stands
+  just above **Settings…** while the lock is on, wearing SF Symbols' `lock`, as the corner's other rows wear theirs.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -5313,6 +5324,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   its note) and the empty list's **None yet** with its foot. Settings is never open signed out, since a Sign out
   leaves it first and the way in stands alone (WI-L1), and it lists every desktop WI-L2 counts as known, so neither
   was reachable. Both said "Mac"; the face's dealt note says "the way your computer deals it" (§9: "computer").
+  *As built 2026-11-04 (WI-3):* **This phone** › **Lock** wears the desk's shut padlock (§13: `tape`, the phone's
+  `lock`) and reads **On** or **Off**. Its page holds §9's switch and line, **Require Face ID** with its four times
+  and its foot, and the off and no-passcode feet. A change asks first, and a miss or a Cancel leaves it as it was.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -5604,6 +5618,17 @@ passcode in iOS Settings to lock VibeField." Nothing is answered from outside th
 approvals come (planned), a notification's act opens VibeField behind it. A lost phone is closed from elsewhere
 (WI-L7): removed from your Tailscale network, it reaches nothing, and its keys never leave it in a backup
 (truffle keeps their folder out of iCloud and computer backups).
+*As built 2026-11-04 (WI-3; the words added here are drafts pending James, carried by VF-PM beside L5's two):*
+every word names the method the phone has, by substitution. With Touch ID, "Touch ID" stands wherever "Face ID"
+does. With only a passcode: **Lock VibeField with your passcode.** · "This phone can type into your agents’
+terminals. Your passcode keeps that to you." · **Lock with passcode** · **Not now**; a miss says **VibeField is
+locked.** · **Unlock with passcode**, and "Your iPhone passcode works too." goes, since the passcode is the method;
+Settings says "Your iPhone passcode opens VibeField.", **Require passcode**, "Changing these asks for your
+passcode first." and "VibeField opens without your passcode. …". Where iOS shows the app's own reason with the ask
+(Touch ID and the passcode; Face ID shows the one above), it says "Only you can open VibeField on this iPhone."
+With no passcode set the phone cannot lock: the way in offers nothing and has two steps, and a lock that was on
+stands down (VibeField opens, the switch is off and the no-passcode foot shows), since a lock that cannot ask must
+not hold the door.
 
 **The freeway's refusals** (track FW, F1b's kit half; FW-D5; added 2026-11-01). The phone asks its home desktop to
 approve its connection to each desktop, and when a desktop says no, the phone says it in these words. ‹desktop› is
@@ -6100,6 +6125,10 @@ the desk's chrome draws it from this set by this table, never by a guess:
 | `agents` · `ellipsis` · `check` | `agents` · `ellipsis` · `check` |
 | `{ path }` · `{ path, fill: true }` | the bar's own path renderer: the path in the 24-unit box, stroked 2 in the bar's ink, or filled |
 | any other name | **`missing`** — said once, never another glyph |
+
+**The phone's lock** (WI-3, 2026-11-04): Settings › This phone › **Lock** wears `tape`, the shut padlock, named
+`lock` in the phone's set (`FieldGlyphName.lock`), as ICE's `lock` is drawn by it above; `tape` joins the iOS
+picks (`tooling/glyphs/picks.json`).
 
 **`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
 hatches — for a name the set does not hold; an act that declares no glyph at all shows its label
