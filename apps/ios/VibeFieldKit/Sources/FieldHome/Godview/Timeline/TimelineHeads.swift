@@ -28,6 +28,8 @@ enum TimelineActive {
   /// The underline under the active lane's name (timeline.css:553-557).
   static let underlineThickness = 1.0
   static let underlineOffset = 3.0
+  /// SKELETON (PG-6 red): the rule the name row draws for the underline.
+  static var underlineRule: (height: Double, baselineGuide: Double) { (0, 0) }
   /// The band at the active lane's edge (timeline.css:559-573, `.is-active`).
   static let bandWidth = 4.0
   static let bandInset = 5.0

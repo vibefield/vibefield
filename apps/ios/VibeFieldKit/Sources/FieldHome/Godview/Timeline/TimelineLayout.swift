@@ -73,11 +73,14 @@ enum TimelineLayout {
   /// `dayLabel`: a midnight tick's words, the short weekday and the day, upper-cased. The desktop asks its own ICU
   /// (`toLocaleDateString(undefined, {weekday: 'short', day: 'numeric'})`); the phone asks the platform's for the same
   /// template, so the ORDER is each platform's (en_US: Node's `4 WED`, the phone's `WED 4`; measured 2026-11-04).
+  /// SKELETON (PG-6 red): the template the phone asks the platform for.
+  static let daySkeleton = "EEEd"
+
   static func dayLabel(_ t: Double, timeZone: TimeZone, locale: Locale) -> String {
     let formatter = DateFormatter()
     formatter.locale = locale
     formatter.timeZone = timeZone
-    formatter.setLocalizedDateFormatFromTemplate("EEEd")
+    formatter.setLocalizedDateFormatFromTemplate(daySkeleton)
     // `toUpperCase`, not `toLocaleUpperCase`: the locale-free upper case
     return formatter.string(from: Date(timeIntervalSince1970: t / 1000)).uppercased()
   }

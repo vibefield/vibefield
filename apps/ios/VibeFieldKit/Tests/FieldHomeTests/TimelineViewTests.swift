@@ -60,10 +60,17 @@ struct TimelineViewTests {
     #expect(none == TimelineLayout.Placement(placed: [], divider: nil, height: 6), "no lanes")
   }
 
-  /// H1 — `dayLabel` (:83-85) for a midnight tick in en_US: the phone's ICU says `WED 4` where Node's says `4 WED`.
+  /// H1 — `dayLabel` (:83-85) for a midnight tick in en_US. The phone asks the platform for the desktop's own
+  /// skeleton, CLDR's `Ed` (`{weekday: 'short', day: 'numeric'}`), so the ORDER is each platform's: Apple's data
+  /// says `EEE d`, `WED 4`, where Node's (ICU 78.3, CLDR 48) says `d EEE`, `4 WED`. fd RULED keep (2026-11-04): the
+  /// desktop asks the user's locale, so the platform's localized order is the intent.
   @Test func theDayLabelIsThePlatformsShortWeekdayAndDay() throws {
     let utc = try #require(TimeZone(identifier: "UTC"))
-    let label = TimelineLayout.dayLabel(1_793_750_400_000, timeZone: utc, locale: Locale(identifier: "en_US"))
+    let enUS = Locale(identifier: "en_US")
+    #expect(TimelineLayout.daySkeleton == "Ed")
+    let pattern = DateFormatter.dateFormat(fromTemplate: TimelineLayout.daySkeleton, options: 0, locale: enUS)
+    #expect(pattern == "EEE d")
+    let label = TimelineLayout.dayLabel(1_793_750_400_000, timeZone: utc, locale: enUS)
     #expect(label == "WED 4")
   }
 
@@ -150,6 +157,17 @@ struct TimelineViewTests {
       let weights = [TimelineLanes.alpha(active, index: 0, lit: lit), TimelineLanes.alpha(quiet, index: 0, lit: lit)]
       #expect(weights[0] == weights[1], "lit \(lit)")
     }
+  }
+
+  /// H5b — the active name's underline is the stylesheet's (timeline.css:553-557): 1 thick, its top 3 under the
+  /// name's baseline (`text-underline-offset` measures from the alphabetic baseline), drawn as a rule the name row
+  /// sizes and aligns by `TimelineActive.underlineRule`, never the font's own underline.
+  @Test func theActiveNamesUnderlineIsTheStylesheets() {
+    #expect(TimelineActive.underlineThickness == 1)
+    #expect(TimelineActive.underlineOffset == 3)
+    let rule = TimelineActive.underlineRule
+    #expect(rule.height == TimelineActive.underlineThickness, "the rule's height")
+    #expect(rule.baselineGuide == -TimelineActive.underlineOffset, "the rule's baseline guide")
   }
 
   // MARK: - H6 the frozen clock
