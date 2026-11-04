@@ -18,10 +18,12 @@ import SwiftUI
 // - the empty stage (TV:882) and the reader's list (TV:882-887), which are the lanes' accessibility elements here.
 //
 // THE CLOCK (the read's §1): now is `input.now()` (live, or frozen under `-vf-godview-now=`); a tween's progress reads
-// the frame's own time, never now; the local zone is `TimeZone.current`, handed to every word that reads one. While a
-// tween lands with motion allowed the schedule runs every frame; otherwise once a second, as the desktop's still view
-// keeps time (TV:600-615). Motion is off under Reduce Motion and in a still (`input.isStill`): tweens land at once and
-// no ring plays.
+// the frame's own time, never now; the local zone is `TimeZone.current`, handed to every word that reads one. The
+// schedule (`schedule(isStill:tweening:reduceMotion:)`, H6b): a still (`input.isStill`) draws ONCE at its frozen clock,
+// with no TimelineView at all (the still law, GodviewViewChoice.swift:25: one frame, no loop, no transition, no
+// timer); live, a tween landing with motion allowed redraws every frame, and anything else once a second, as the
+// desktop's still view keeps time (TV:600-615). Motion is off under Reduce Motion and in a still: tweens land at once
+// and no ring plays.
 //
 // THE STAGE (J-S1 A, J-S2 (ii), J-S3 drop; names-4t): the view stands in `GodviewStage.framed` (a `.flow` stage, the
 // band below it) and runs from the screen's top; its words start at `input.insets(.flow).top` (the Stories row's
@@ -36,16 +38,23 @@ import SwiftUI
 
 /// How the stage redraws.
 enum TimelineSchedule: Equatable, Sendable {
+  /// Once, at the frozen clock: a still runs no timer.
   case still
+  /// Every frame, while a tween lands with motion allowed.
   case everyFrame
+  /// Once a second, keeping time.
   case perSecond
 }
 
 struct GodviewTimelineView: View {
   let input: GodviewStageInput
 
-  /// SKELETON (PG-6 red): how the stage redraws.
-  static func schedule(isStill: Bool, tweening: Bool, reduceMotion: Bool) -> TimelineSchedule { .perSecond }
+  /// How the stage redraws: a still once, whatever else holds; live, every frame while a tween lands with motion
+  /// allowed, else once a second.
+  static func schedule(isStill: Bool, tweening: Bool, reduceMotion: Bool) -> TimelineSchedule {
+    if isStill { return .still }
+    return tweening && !reduceMotion ? .everyFrame : .perSecond
+  }
 
   @Environment(\.colorScheme) private var scheme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -64,9 +73,12 @@ struct GodviewTimelineView: View {
 
   var body: some View {
     GeometryReader { proxy in
-      if tween != nil && motion {
+      switch Self.schedule(isStill: input.isStill, tweening: tween != nil, reduceMotion: reduceMotion) {
+      case .still:
+        stage(size: proxy.size, frame: input.now())
+      case .everyFrame:
         TimelineView(.animation) { context in stage(size: proxy.size, frame: context.date) }
-      } else {
+      case .perSecond:
         TimelineView(.periodic(from: .now, by: 1)) { context in stage(size: proxy.size, frame: context.date) }
       }
     }
