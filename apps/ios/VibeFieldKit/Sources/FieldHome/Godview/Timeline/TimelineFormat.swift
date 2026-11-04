@@ -1,3 +1,4 @@
+import FieldAgents
 import Foundation
 
 // PG-6 — THE TIMELINE'S OWN LENGTH WORD, transcribed from puppeteer-view-sdk 0.3.3 at the lock's `52d09c8e` (identical
@@ -21,17 +22,13 @@ enum TimelineFormat {
     return "\(number(minutes)):\(pad2(seconds.truncatingRemainder(dividingBy: 60)))"
   }
 
-  /// `String(value)` for the numbers the timeline prints (whole lengths and ms instants): a whole number below 2^53 by
-  /// its digits, NaN and ±Infinity by name, −0 as `0`, and anything else by Swift's shortest round-trip digits, which
-  /// are JavaScript's for every value the timeline makes. Past those (a whole number from 2^53, or below 1e-6) Swift
-  /// spells the digits its own way: a phone-only DEVIATION, unreachable from ms; FieldAgents' `JSNumber` replaces this
-  /// at the rebase over items 164/165.
+  /// `String(value)` for the numbers the timeline prints (whole lengths and ms instants): a whole number, NaN and ±∞
+  /// as FieldAgents' `JSNumber.whole` prints them (JavaScript's own digits, items 164/165), and a fraction by Swift's
+  /// shortest round-trip digits, which are JavaScript's from 1e-4 up. Below 1e-4 Swift writes an exponent where
+  /// JavaScript writes digits down to 1e-6 (`1e-05` against `0.00001`), and its exponent's own way below that (`1e-07`
+  /// against `1e-7`): a phone-only DEVIATION, unreachable from a ms instant (measured on this Mac, 2026-11-04).
   static func number(_ value: Double) -> String {
-    if value.isNaN { return "NaN" }
-    if value.isInfinite { return value < 0 ? "-Infinity" : "Infinity" }
-    if value == 0 { return "0" }
-    if value == value.rounded(.towardZero), abs(value) < 9_007_199_254_740_992 { return String(Int64(value)) }
-    return "\(value)"
+    value.isFinite && value != value.rounded(.towardZero) ? "\(value)" : JSNumber.whole(value)
   }
 
   /// `Math.max(0, value)`: NaN stays NaN, and −0 becomes 0.
