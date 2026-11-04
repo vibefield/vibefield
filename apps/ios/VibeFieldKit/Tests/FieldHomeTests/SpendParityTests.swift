@@ -65,6 +65,69 @@ enum SpendGolden {
     let isSelf = entry["self"]?.boolValue ?? true
     return SpendAgent(monitor: row, isSelf: isSelf, unread: row.unread, active: false)
   }
+
+  /// The zone the suite reads clock words in: a half-hour offset, so a zone the golden leaked would show.
+  static func zone() throws -> TimeZone {
+    try #require(TimeZone(identifier: "Asia/Kolkata"), "the suite's zone")
+  }
+
+  /// A golden text with every zone-free `{{clock:<ms>}}` said by the phone's own `formatClock` in `zone`.
+  static func clocks(_ text: String, zone: TimeZone) -> String {
+    var out = ""
+    var rest = Substring(text)
+    while let open = rest.range(of: "{{clock:"), let close = rest[open.upperBound...].range(of: "}}") {
+      out += rest[..<open.lowerBound]
+      let ms = Double(rest[open.upperBound..<close.lowerBound]) ?? .nan
+      out += GodviewFormat.formatClock(ms: ms, timeZone: zone)
+      rest = rest[close.upperBound...]
+    }
+    return out + rest
+  }
+
+  /// A state as the golden records it (`{key, sinceMs, glyph?, words?}`); nil for a key spend does not have.
+  static func state(_ value: JSONValue?) -> SpendWords.State? {
+    guard let key = SpendWords.State.Key(rawValue: value?["key"]?.stringValue ?? "") else { return nil }
+    var state = SpendWords.State(key: key, sinceMs: value?["sinceMs"]?.doubleValue ?? .nan)
+    state.glyph = (value?["glyph"]?.stringValue).flatMap(SpendWords.Glyph.init(rawValue:))
+    state.words = value?["words"]?.stringValue
+    return state
+  }
+
+  /// Words and their tone (`{text, tone}`), the clock words said in `zone`.
+  static func said(_ value: JSONValue?, zone: TimeZone) -> SpendWords.Said? {
+    guard let text = value?["text"]?.stringValue,
+      let tone = SpendWords.Tone(rawValue: value?["tone"]?.stringValue ?? "")
+    else { return nil }
+    return SpendWords.Said(text: clocks(text, zone: zone), tone: tone)
+  }
+
+  /// `spendNames`' map as the golden lists it (`[{id, name, one, task, model}]`).
+  static func names(_ value: JSONValue?) -> [String: SpendWords.Name] {
+    var out: [String: SpendWords.Name] = [:]
+    for entry in value?.arrayValue ?? [] {
+      out[entry["id"]?.stringValue ?? ""] = SpendWords.Name(
+        name: entry["name"]?.stringValue ?? "?", one: entry["one"]?.stringValue ?? "?",
+        task: entry["task"]?.stringValue ?? "?", model: entry["model"]?.stringValue ?? "?")
+    }
+    return out
+  }
+
+  /// `[{id, n}]` as a map.
+  static func indices(_ value: JSONValue?) -> [String: Int] {
+    var out: [String: Int] = [:]
+    for entry in value?.arrayValue ?? [] { out[entry["id"]?.stringValue ?? ""] = Int(entry["n"]?.intValue ?? -1) }
+    return out
+  }
+
+  /// A vector list's rows by id.
+  static func agents(_ value: JSONValue?) throws -> [String: SpendAgent] {
+    var out: [String: SpendAgent] = [:]
+    for entry in value?.arrayValue ?? [] {
+      let row = try Self.agent(entry)
+      out[row.id] = row
+    }
+    return out
+  }
 }
 
 /// PG-4t lands the shared `HomeFixture.witnessSteps(...)` (fd, Q7); this is its private stand-in: the witness open,
@@ -147,7 +210,8 @@ struct SpendParityTests {
     for (at, agents, golden) in try SpendWitness.paired() {
       let meters = SpendSeries.spendMeters(agents)
       let lines = golden["meters"]?.arrayValue ?? []
-      #expect(meters.lines.map(\.id) == lines.compactMap { $0["id"]?.stringValue }, "step \(at): the lines")
+      let ids = meters.lines.map { $0.id }
+      #expect(ids == lines.compactMap { $0["id"]?.stringValue }, "step \(at): the lines")
       for (meter, line) in zip(meters.lines, lines) {
         #expect(meter.bornMs == line["bornMs"]?.doubleValue, "step \(at) \(meter.id): bornMs")
         #expect(meter.total == line["total"]?.doubleValue, "step \(at) \(meter.id): total")
@@ -157,9 +221,10 @@ struct SpendParityTests {
         #expect(meter.points == points, "step \(at) \(meter.id): points")
       }
       let unpriced = golden["unpriced"]?.arrayValue ?? []
-      #expect(meters.unpriced.map(\.id) == unpriced.compactMap { $0["id"]?.stringValue }, "step \(at): unpriced")
-      #expect(
-        meters.unpriced.map(\.bornMs) == unpriced.compactMap { $0["bornMs"]?.doubleValue }, "step \(at): births")
+      let unpricedIds = meters.unpriced.map { $0.id }
+      #expect(unpricedIds == unpriced.compactMap { $0["id"]?.stringValue }, "step \(at): unpriced")
+      let births = meters.unpriced.map { $0.bornMs }
+      #expect(births == unpriced.compactMap { $0["bornMs"]?.doubleValue }, "step \(at): births")
     }
   }
 
@@ -170,7 +235,8 @@ struct SpendParityTests {
     for (at, agents, golden) in try SpendWitness.paired() {
       let set = SpendSeries.spendAt(SpendSeries.spendMeters(agents), nowMs: SpendWitness.nowMs)
       let lines = golden["atNow"]?.arrayValue ?? []
-      #expect(set.lines.map(\.id) == lines.compactMap { $0["id"]?.stringValue }, "step \(at): the lines")
+      let ids = set.lines.map { $0.id }
+      #expect(ids == lines.compactMap { $0["id"]?.stringValue }, "step \(at): the lines")
       for (line, said) in zip(set.lines, lines) {
         let head = SpendGolden.points(.array([said["head"] ?? .null])).first
         #expect(line.points.last == head, "step \(at) \(line.id): the head")
@@ -215,6 +281,69 @@ struct SpendParityTests {
     }
   }
 
+  /// P3 — each line's words at now: its state (its key, since when, its glyph, the wait's words), its status words and
+  /// their tone (a clock word said in the suite's zone), the burn the hero adds, and the figure the list prints.
+  @Test func eachLinesWordsAtNowStepByStep() throws {
+    let zone = try SpendGolden.zone()
+    let nowMs = SpendWitness.nowMs
+    let span = SpendScale.spendWindow(nowMs: nowMs)
+    for (at, agents, golden) in try SpendWitness.paired() {
+      let set = SpendSeries.spendSet(agents, nowMs: nowMs)
+      let lines = golden["atNow"]?.arrayValue ?? []
+      #expect(set.lines.count == lines.count, "step \(at): the lines")
+      for (line, said) in zip(set.lines, lines) {
+        let state = SpendWords.spendStateAt(bornMs: line.bornMs, agent: line.agent, t: span.tb, nowMs: nowMs)
+        #expect(state == SpendGolden.state(said["state"]), "step \(at) \(line.id): state")
+        let value = SpendSeries.valueAt(line, span.tb)
+        let rate = value == nil ? nil : SpendSeries.rateAt(line, span.tb)
+        let unrecorded = state.key != .before && value == nil
+        let status =
+          unrecorded
+          ? SpendWords.notRecorded : SpendWords.stateWords(state, t: span.tb, perMinute: rate, timeZone: zone)
+        #expect(status == SpendGolden.said(said["status"], zone: zone), "step \(at) \(line.id): status")
+        let burn = unrecorded ? nil : SpendWords.printedBurn(state, perMinute: rate)
+        #expect(burn == SpendGolden.number(said["burn"]), "step \(at) \(line.id): burn")
+        let figure = SpendWords.est(value, partial: line.partial)
+        #expect(figure == said["figure"]?.stringValue, "step \(at) \(line.id): figure")
+      }
+    }
+  }
+
+  /// P4 — the names every row goes by at every step (`spendNames` over the lines, then the unpriced): its project,
+  /// the one-line form that tells its siblings apart, its task line and its model.
+  @Test func theNamesStepByStep() throws {
+    for (at, agents, golden) in try SpendWitness.paired() {
+      let meters = SpendSeries.spendMeters(agents)
+      let named = meters.lines.map { $0.agent } + meters.unpriced.map { $0.agent }
+      let names = SpendWords.spendNames(named)
+      let said = SpendGolden.names(golden["names"])
+      #expect(names == said, "step \(at)")
+      #expect(said.count == named.count, "step \(at): one name a row")
+    }
+  }
+
+  /// P5b — the scale's labels at every step (`axisMoney`, as short as the step allows), over the ticks P5 holds.
+  @Test func theScaleLabelsStepByStep() throws {
+    for (at, _, golden) in try SpendWitness.paired() {
+      for key in ["full", "compact"] {
+        let scale = golden["scale"]?[key]
+        let step = scale?["step"]?.doubleValue ?? .nan
+        let labels = SpendGolden.numbers(scale?["ticks"]).map { SpendWords.axisMoney($0, step: step) }
+        #expect(labels == SpendGolden.strings(scale?["labels"]), "step \(at) \(key)")
+      }
+    }
+  }
+
+  /// P6 — the siblings at every step (`siblingIndex`): the order each line was born in among its project's.
+  @Test func theSiblingsStepByStep() throws {
+    for (at, agents, golden) in try SpendWitness.paired() {
+      let lines = SpendSeries.spendMeters(agents).lines
+      let rows = lines.map { SpendInk.Born(id: $0.id, project: $0.agent.monitor.project.name, bornMs: $0.bornMs) }
+      let sib = SpendInk.siblingIndex(rows)
+      #expect(sib == SpendGolden.indices(golden["sib"]), "step \(at)")
+    }
+  }
+
   // MARK: - The vectors
 
   /// V0 — the constants and the window.
@@ -243,6 +372,136 @@ struct SpendParityTests {
       let said = SpendNumber.fixed(value, places)
       #expect(said == entry["out"]?.stringValue, "(\(value)).toFixed(\(places))")
     }
+  }
+
+  /// V1 — the money words: `money` (the toolkit's `formatUsd`, thousands as whole dollars written out with commas, even
+  /// past 1e21), `est` (the tilde, a plus when partial), `perHour` (the burn by the hour: `$0/hr` at none, a tenth from
+  /// $1, whole dollars from $10, `$Infinity/hr` as the window says it) and `axisMoney` (as short as the step allows).
+  @Test func theMoneyWords() throws {
+    let vectors = try SpendGolden.vectors()
+    let money = vectors["money"]?.arrayValue ?? []
+    #expect(money.count >= 23)
+    for entry in money {
+      let value = SpendGolden.number(entry["in"])
+      #expect(SpendWords.money(value) == entry["out"]?.stringValue, "money(\(String(describing: value)))")
+    }
+    for entry in vectors["est"]?.arrayValue ?? [] {
+      let value = SpendGolden.number(entry["in"])
+      let partial = entry["partial"]?.boolValue ?? false
+      let said = SpendWords.est(value, partial: partial)
+      #expect(said == entry["out"]?.stringValue, "est(\(String(describing: value)), \(partial))")
+    }
+    let rates = vectors["perHour"]?.arrayValue ?? []
+    #expect(rates.count >= 17)
+    for entry in rates {
+      let perMinute = SpendGolden.number(entry["in"])
+      #expect(SpendWords.perHour(perMinute) == entry["out"]?.stringValue, "perHour(\(String(describing: perMinute)))")
+    }
+    for entry in vectors["axisMoney"]?.arrayValue ?? [] {
+      let value = entry["in"]?.doubleValue ?? .nan
+      let step = entry["step"]?.doubleValue ?? .nan
+      #expect(SpendWords.axisMoney(value, step: step) == entry["out"]?.stringValue, "axisMoney(\(value), \(step))")
+    }
+  }
+
+  /// V5 — `fitWords`: text cut at a word to a width (here the view's `averageGlyph`, 6.4 a UTF-16 unit), an
+  /// ellipsis after the last word that fits, nothing when no word does.
+  @Test func fitWordsCutsAtAWord() throws {
+    let measure = { (text: String) in Double(text.utf16.count) * 6.4 }
+    let entries = try SpendGolden.vectors()["fitWords"]?.arrayValue ?? []
+    #expect(entries.count >= 8)
+    for entry in entries {
+      let text = entry["in"]?.stringValue ?? "?"
+      let max = entry["max"]?.doubleValue ?? .nan
+      #expect(SpendWords.fitWords(text, max: max, measure: measure) == entry["out"]?.stringValue, "\(text) in \(max)")
+    }
+  }
+
+  /// V6 — the row's words: `taskOf` (the toolkit's detail line, its first line, leading marks off, nothing when it
+  /// only repeats the project or the status) and `modelOf` over rows the witness lacks (a reply's punctuation, CRLF,
+  /// digits, kana, a pending and an unobserved run, two peers, no model, no provider); `spendNames` over sibling
+  /// groups.
+  @Test func theRowWords() throws {
+    let vectors = try SpendGolden.vectors()
+    let words = vectors["words"]?.arrayValue ?? []
+    #expect(words.count >= 19)
+    for entry in words {
+      let agent = try SpendGolden.agent(entry)
+      #expect(SpendWords.taskOf(agent) == entry["taskOf"]?.stringValue, "taskOf(\(agent.id))")
+      #expect(SpendWords.modelOf(agent) == entry["modelOf"]?.stringValue, "modelOf(\(agent.id))")
+    }
+    let rows = try SpendGolden.agents(vectors["nameRows"])
+    let groups = vectors["names"]?.arrayValue ?? []
+    #expect(groups.count == 3)
+    for group in groups {
+      let ids = SpendGolden.strings(group["rows"])
+      let agents = ids.compactMap { rows[$0] }
+      #expect(agents.count == ids.count, "every named row decodes")
+      #expect(SpendWords.spendNames(agents) == SpendGolden.names(group["out"]), "spendNames(\(ids))")
+    }
+  }
+
+  /// V7 — a row's state at a moment (`spendStateAt`: before its birth, unknown before its state began, a wait's glyph,
+  /// a reply nobody opened), whether it waits on the person, the burn it prints and its words, over rows × moments ×
+  /// rates the witness lacks (every wait kind, a clock skewed ahead, a run younger than the window).
+  @Test func theStateWords() throws {
+    let vectors = try SpendGolden.vectors()
+    let zone = try SpendGolden.zone()
+    let nowMs = vectors["nowMs"]?.doubleValue ?? .nan
+    let rows = try SpendGolden.agents(vectors["stateRows"])
+    let entries = vectors["states"]?.arrayValue ?? []
+    #expect(entries.count >= 100)
+    for entry in entries {
+      let id = entry["id"]?.stringValue ?? "?"
+      let agent = try #require(rows[id], "the state row \(id)")
+      let t = entry["t"]?.doubleValue ?? .nan
+      let rate = SpendGolden.number(entry["rate"])
+      let born = Double(agent.monitor.createdAt)
+      let state = SpendWords.spendStateAt(bornMs: born, agent: agent, t: t, nowMs: nowMs)
+      #expect(state == SpendGolden.state(entry["state"]), "\(id) at \(t): state")
+      #expect(SpendWords.waits(state) == entry["waits"]?.boolValue, "\(id) at \(t): waits")
+      let burn = SpendWords.printedBurn(state, perMinute: rate)
+      #expect(burn == SpendGolden.number(entry["burn"]), "\(id) at \(t), \(String(describing: rate)): burn")
+      let said = SpendWords.stateWords(state, t: t, perMinute: rate, timeZone: zone)
+      #expect(said == SpendGolden.said(entry, zone: zone), "\(id) at \(t), \(String(describing: rate)): words")
+    }
+  }
+
+  /// V8 — the inks: `rgbToOklch`, a sibling's tone (the second born a step darker, the third and on a step lighter, in
+  /// either ground) and the lifted fill the tag sits on, over fixed hexes; `siblingIndex` with ties by birth and id.
+  @Test func theInks() throws {
+    let vectors = try SpendGolden.vectors()
+    let inks = vectors["ink"]?.arrayValue ?? []
+    #expect(inks.count == 8)
+    for entry in inks {
+      let hex = entry["hex"]?.stringValue ?? "?"
+      let colour = try #require(SwarmColor(hex: hex), "\(hex) parses")
+      let oklch = entry["oklch"]
+      let said = SpendInk.Oklch(
+        l: oklch?["l"]?.doubleValue ?? .nan, c: oklch?["c"]?.doubleValue ?? .nan, h: oklch?["h"]?.doubleValue ?? .nan)
+      #expect(SpendInk.rgbToOklch(colour) == said, "rgbToOklch(\(hex))")
+      for tone in entry["tone"]?.arrayValue ?? [] {
+        let dark = tone["dark"]?.boolValue ?? false
+        for (sib, rgba) in (tone["sibs"]?.arrayValue ?? []).enumerated() {
+          let c = SpendGolden.numbers(rgba)
+          try #require(c.count == 4, "an rgba is four numbers")
+          let expected = SwarmColor(r: c[0], g: c[1], b: c[2], a: c[3])
+          let toned = SpendInk.siblingTone(colour, sib: sib, dark: dark)
+          #expect(toned == expected, "siblingTone(\(hex), \(sib), dark: \(dark))")
+        }
+      }
+      for (sib, fill) in SpendGolden.strings(entry["fill"]).enumerated() {
+        #expect(SpendInk.liftedFill(colour, sib: sib) == fill, "liftedFill(\(hex), \(sib))")
+      }
+    }
+    let index = vectors["siblingIndex"]
+    let rows = (index?["rows"]?.arrayValue ?? []).map {
+      SpendInk.Born(
+        id: $0["id"]?.stringValue ?? "?", project: $0["project"]?.stringValue ?? "?",
+        bornMs: $0["bornMs"]?.doubleValue ?? .nan)
+    }
+    #expect(rows.count == 6)
+    #expect(SpendInk.siblingIndex(rows) == SpendGolden.indices(index?["out"]))
   }
 
   /// V2 — the scale's numbers: `niceStep`, `moneyScale` with its ticks, `easeTop` (a new high never jumps), and the
@@ -360,7 +619,8 @@ struct SpendParityTests {
     #expect(agents.count == 10)
     let meters = SpendSeries.spendMeters(agents)
     let lines = vectors["seriesMeters"]?.arrayValue ?? []
-    #expect(meters.lines.map(\.id) == lines.compactMap { $0["id"]?.stringValue })
+    let ids = meters.lines.map { $0.id }
+    #expect(ids == lines.compactMap { $0["id"]?.stringValue })
     for (meter, line) in zip(meters.lines, lines) {
       #expect(meter.bornMs == line["bornMs"]?.doubleValue, "\(meter.id): bornMs")
       #expect(meter.total == line["total"]?.doubleValue, "\(meter.id): total")
@@ -369,7 +629,8 @@ struct SpendParityTests {
       #expect(meter.points == SpendGolden.points(line["points"]), "\(meter.id): points")
     }
     let unpriced = vectors["seriesUnpriced"]?.arrayValue ?? []
-    #expect(meters.unpriced.map(\.id) == unpriced.compactMap { $0["id"]?.stringValue })
+    let unpricedIds = meters.unpriced.map { $0.id }
+    #expect(unpricedIds == unpriced.compactMap { $0["id"]?.stringValue })
     let readings = vectors["seriesAt"]?.arrayValue ?? []
     #expect(readings.count == meters.lines.count)
     for (meter, said) in zip(meters.lines, readings) {

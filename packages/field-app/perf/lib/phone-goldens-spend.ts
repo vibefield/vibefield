@@ -702,6 +702,9 @@ function vectors(spend: Spend) {
     2500.49,
     99_999.5,
     1e9,
+    // from 1e21 toLocaleString still writes the digits out, where String() turns to an exponent
+    1e21,
+    1.2345678901234566e25,
   ];
   const PER_MINUTE: readonly Tagged[] = [
     "undefined",
@@ -720,6 +723,7 @@ function vectors(spend: Spend) {
     0.5,
     10,
     1e15,
+    "Infinity",
   ];
   const AXIS: ReadonlyArray<readonly [number, number]> = [
     [0, 1],
