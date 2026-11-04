@@ -144,3 +144,38 @@ extension GodviewViewFace {
     return "\(rounded)"
   }
 }
+
+/// A view's mark as one shape: every part drawn opaque black on its 24 grid, scaled to the frame it is given — the
+/// MASK the row lays its ink through, so the ink never doubles where a mark's strokes meet. A round-capped stroke
+/// covers what the manifest's filled outline covers; a stroke of no length is its dot.
+struct GodviewMark: View {
+  let face: GodviewViewFace
+
+  var body: some View {
+    Canvas { context, size in
+      let scale = min(size.width, size.height) / GodviewViewMarks.grid
+      context.translateBy(
+        x: (size.width - GodviewViewMarks.grid * scale) / 2, y: (size.height - GodviewViewMarks.grid * scale) / 2)
+      context.scaleBy(x: scale, y: scale)
+      for path in face.paths {
+        for part in path { Self.draw(part, in: &context) }
+      }
+    }
+  }
+
+  private static func draw(_ part: GodviewViewFace.Part, in context: inout GraphicsContext) {
+    switch part {
+    case .stroke(let from, let to, let width) where from == to:
+      let dot = CGRect(x: from.x - width / 2, y: from.y - width / 2, width: width, height: width)
+      context.fill(Path(ellipseIn: dot), with: .color(.black))
+    case .stroke(let from, let to, let width):
+      var line = Path()
+      line.move(to: from)
+      line.addLine(to: to)
+      context.stroke(line, with: .color(.black), style: StrokeStyle(lineWidth: width, lineCap: .round))
+    case .ring(let center, let radius):
+      let circle = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+      context.stroke(Path(ellipseIn: circle), with: .color(.black), lineWidth: GodviewViewMarks.weight)
+    }
+  }
+}

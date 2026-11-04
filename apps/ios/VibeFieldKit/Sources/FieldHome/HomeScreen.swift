@@ -56,10 +56,17 @@ public struct HomeScreen: View {
   /// is not the same as a mesh that answered with no agents.
   @State private var link: FieldLink?
   /// PG-4s — the Godview view the Field page stands on, and the clock a still is taken at (nil: the live clock).
-  /// Outside every `#if`: only the DEBUG launch block writes them (`-vf-godview-view=`, `-vf-godview-now=`), so
-  /// Release draws the swarm on the live clock until the selector lands (its lander writes `godviewView`).
-  @State private var godviewView: GodviewViewChoice = .swarm
+  /// PG-4t — the person's pick, kept on this phone across launches and a sign-out (`SignOutSweep.kept`); a stored id
+  /// the phone has no view for reads as the swarm. A DEBUG launch's `-vf-godview-view=` stands for its run alone and
+  /// never writes the store; a tap clears it. *(Corrected 2026-11-04, PG-4t: this said "only the DEBUG launch block
+  /// writes them … until the selector lands (its lander writes `godviewView`)". The selector is the Stories row: a
+  /// tap writes the pick, and `godviewView` is the override, else the pick.)*
+  @AppStorage(GodviewViewChoice.storageKey) private var godviewStored: GodviewViewChoice = .swarm
+  @State private var godviewLaunch: GodviewViewChoice?
+  private var godviewView: GodviewViewChoice { godviewLaunch ?? godviewStored }
   @State private var godviewNow: Date?
+  /// PG-4t — the name the Stories row says (1.4 s from a tap; held, for a still, by `-vf-godview-say=`).
+  @State private var godviewSaying = GodviewStorySaying()
   /// PG-4t — a still (`-vf-godview-still`): written only by the same DEBUG launch latch, so Release never draws one.
   @State private var godviewStill = false
   /// The launch flags are read once (the design check's N10): the DEBUG block runs again on every return to the
@@ -313,6 +320,13 @@ public struct HomeScreen: View {
       GodviewStage(choice: godviewView, input: godviewInput(active: active)) {
         swarmField(active: active)
       }
+      // A pick changes the stage in place: §6's view switch, a 180 ms `ease` fade (90 under reduced motion); a
+      // still changes nothing.
+      .animation(
+        godviewStill
+          ? nil
+          : FieldMotion.plainEase(reduceMotion ? GodviewStories.stageFadeReduced : GodviewStories.stageFade),
+        value: godviewView)
 
       if godviewView.wearsAtmosphere {
         ScanlinesOverlay()
@@ -320,6 +334,9 @@ public struct HomeScreen: View {
         VignetteOverlay()
           .ignoresSafeArea()
       }
+
+      // PG-4t — the Stories row: last, so it stands above the overlays and wears neither, outside the swarm.
+      storiesRow
     }
     // The lab covers the stage (IOS-6c); presented here rather than on the
     // body's chain, which is already at the type-checker's limit.
@@ -353,6 +370,41 @@ public struct HomeScreen: View {
     } message: {
       Text(SettingsWords.signOutMessage)
     }
+  }
+
+  /// PG-4t — the Stories row (DESIGN.md §8 "The phone's Stories row"), 8 under the island on the full-bleed
+  /// stage, its own property so the stage's builder stays small. The space between its circles has no fill, so a
+  /// touch there reaches the swarm. Its name goes at its deadline, and at once when the page leaves or the scene
+  /// does.
+  private var storiesRow: some View {
+    GodviewStoriesRow(
+      views: GodviewViewChoice.shown, current: godviewView, saying: godviewSaying, isStill: godviewStill,
+      onPick: pickView
+    )
+    .padding(.top, GodviewStories.top(safeTop: safeTop))
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .task(id: godviewSaying.until) {
+      guard let until = godviewSaying.until else { return }
+      let wait = until.timeIntervalSinceNow
+      if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+      guard !Task.isCancelled else { return }
+      godviewSaying.expire(at: Date())
+    }
+    .onChange(of: selectedTab) { _, tab in
+      if tab != .field { godviewSaying.drop() }
+    }
+    .onChange(of: scenePhase) { _, phase in
+      if phase != .active { godviewSaying.drop() }
+    }
+  }
+
+  /// PG-4t — a circle tapped: the stage stands on its view, kept on this phone (a DEBUG launch's override cleared),
+  /// and its name is said for 1.4 s. A tap on the current circle says its name and changes nothing else. No haptic:
+  /// the bar's own tabs are silent.
+  private func pickView(_ view: GodviewViewChoice) {
+    godviewLaunch = nil
+    if godviewStored != view { godviewStored = view }
+    godviewSaying.say(view, at: Date())
   }
 
   /// The swarm's arm of the stage, its own function so the stage's builder stays inside what the type-checker
@@ -1371,12 +1423,16 @@ public struct HomeScreen: View {
         }
         // PG-4s — a still's view and clock (`-vf-godview-view=<id>`, `-vf-godview-now=<epoch ms>`). Neither is a
         // fixture argument: alone they keep the live path, and they compose with `-vf-demo-field-slice`. Read once.
-        // PG-4t — and the still itself (`-vf-godview-still`): every view draws one frame.
+        // PG-4t — and the still itself (`-vf-godview-still`): every view draws one frame. The view flag is the
+        // run's override and never writes the person's pick; `-vf-godview-say=<id>` holds that view's name, with no
+        // deadline (a still cannot tap).
         if !godviewLaunchRead {
           godviewLaunchRead = true
-          if let view = GodviewViewChoice.launch(ProcessInfo.processInfo.arguments) { godviewView = view }
-          godviewNow = GodviewViewChoice.frozenNow(ProcessInfo.processInfo.arguments)
-          godviewStill = GodviewViewChoice.still(ProcessInfo.processInfo.arguments)
+          let arguments = ProcessInfo.processInfo.arguments
+          if let view = GodviewViewChoice.launch(arguments) { godviewLaunch = view }
+          godviewNow = GodviewViewChoice.frozenNow(arguments)
+          godviewStill = GodviewViewChoice.still(arguments)
+          if let said = GodviewViewChoice.said(arguments) { godviewSaying = .held(said) }
         }
         // `!demoRemoteActive` for the reason the line above carries: a second
         // appearance would otherwise replace a running fixture field with a

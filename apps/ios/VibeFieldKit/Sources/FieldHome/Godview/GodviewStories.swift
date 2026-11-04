@@ -20,6 +20,24 @@ enum GodviewStories {
   /// The dissolve's ramp, from the row's axis to the reserve: half a circle and the reserve's gap (the desktop's
   /// 28 → 56).
   static let fadeSpan: CGFloat = circle / 2 + reserveGap
+  /// A circle's mark box, centred: the desktop's 22.
+  static let markBox: CGFloat = 22
+  /// The current view's ring, the circle's own edge, inside its 44.
+  static let ring: CGFloat = 2
+  /// The name pill: 24 tall, 8 under its circle, corners 12, padded 0 10; its words 12/500.
+  static let labelHeight: CGFloat = 24
+  static let labelGap: CGFloat = 8
+  static let labelCorner: CGFloat = 12
+  static let labelPad: CGFloat = 10
+  static let labelSize: CGFloat = 12
+  /// The name's entrance: 3 down into place.
+  static let labelDrop: CGFloat = 3
+  /// The fades, §6's plain `ease`: the ring 120 ms, the name 140 ms in and out, the stage 180 ms (90 under reduced
+  /// motion, where the ring and the name change at once).
+  static let ringFade: Double = 0.12
+  static let labelFade: Double = 0.14
+  static let stageFade: Double = 0.18
+  static let stageFadeReduced: Double = 0.09
 
   /// The row's top from the screen's top: 8 under the island's foot on an island phone (56), and 8 under the safe
   /// area's top line where that line stands higher — a notch, a status bar, a phone on its side.

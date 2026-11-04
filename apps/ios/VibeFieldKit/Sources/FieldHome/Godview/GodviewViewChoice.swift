@@ -18,7 +18,7 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   /// PG-4t — the defaults key the pick is kept under, per phone and across a sign-out (`SignOutSweep.kept`): the
   /// kit's convention (`vibefield.phone.appearance`). An id the phone has no view for reads as the swarm, the
   /// desktop's own fallback (`monitorViewFor`).
-  static let storageKey = ""
+  static let storageKey = "vibefield.godview.view"
   static let argument = "-vf-godview-view"
   static let nowArgument = "-vf-godview-now"
   /// PG-4t — a still: every view draws one frame and runs no loop, no transition and no timer.
@@ -189,7 +189,7 @@ struct GodviewStage<Swarm: View>: View {
   @ViewBuilder
   private var arm: some View {
     switch choice {
-    case .swarm: swarm()
+    case .swarm: swarm().transition(.opacity)
     // PG-5…8: `case .<view>: framed(<View>View(input: input))`
     }
   }
@@ -197,8 +197,9 @@ struct GodviewStage<Swarm: View>: View {
   /// What a non-swarm view stands in (Q-S7 (a)), written once so no lane re-derives it: a `.flow` stage ends at the
   /// bar's band, the one inset the host lays; a `.full` one runs under the bar. The top is never padded: the reserve
   /// is data on `input.topInset` (DESIGN.md "Stage insets replace host padding rules"), and a view's ground fills its
-  /// stage from the screen's top. No door stands over the field since WI-1, so there is no gate or dim to lay.
+  /// stage from the screen's top. No door stands over the field since WI-1, so there is no gate or dim to lay. It
+  /// fades in and out as the stage changes view (the host's 180 ms `ease`; DESIGN.md §6, the view switch).
   func framed(_ view: some View) -> some View {
-    view.padding(.bottom, choice.allocation == .flow ? input.bandHeight : 0)
+    view.padding(.bottom, choice.allocation == .flow ? input.bandHeight : 0).transition(.opacity)
   }
 }
