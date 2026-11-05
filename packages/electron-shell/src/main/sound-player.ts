@@ -35,14 +35,13 @@ export function createSoundPlayer(options: {
   let state: SoundPlayerState | null = null;
   let addon: NativeSoundPlayer | null = null;
 
-  const resolveState = (): SoundPlayerState => {
-    if (state !== null) return state;
-    if (options.platform !== "darwin") return (state = "unsupported");
+  const loadState = (): SoundPlayerState => {
+    if (options.platform !== "darwin") return "unsupported";
     const path = options.path;
-    if (path === null) return (state = "missing");
+    if (path === null) return "missing";
     try {
       if (!isAbsolute(path)) throw new Error("sound player path must be absolute");
-      if (!(options.exists ?? existsSync)(path)) return (state = "missing");
+      if (!(options.exists ?? existsSync)(path)) return "missing";
       const raw = (options.load ?? createRequire(__filename))(path);
       if (
         typeof raw !== "object" ||
@@ -52,11 +51,17 @@ export function createSoundPlayer(options: {
         throw new Error("sound player has an invalid export surface");
       }
       addon = raw as NativeSoundPlayer;
-      return (state = "ready");
+      return "ready";
     } catch (error) {
       options.onError?.(error);
-      return (state = "failed");
+      return "failed";
     }
+  };
+
+  // Settled on the first ask and never retried: a player that would not start says so once.
+  const resolveState = (): SoundPlayerState => {
+    state ??= loadState();
+    return state;
   };
 
   return {
