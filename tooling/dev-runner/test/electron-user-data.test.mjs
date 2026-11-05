@@ -16,8 +16,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { hostname, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   CARRIED_ENTRIES,
   carryLegacyElectronState,
@@ -216,9 +217,13 @@ test("a live Electron's lock on the old folder stops the carry: a live profile i
     assert.deepEqual(result, { carried: [], reason: "old-folder-in-use" });
     assert.equal(existsSync(join(d.to, "Local Storage")), false);
     const words = carryWords(result, d);
-    assert.match(words, /holds a running Electron's lock, so nothing was carried/);
-    // never a promise of a later carry: this run's Electron writes `Local State` in the new folder
-    assert.doesNotMatch(words, /restart/);
+    // a REFUSAL (prod-builder's L3 review): the runner stops, so one restart carries — nothing is stranded
+    assert.match(words, /holds a running Electron's lock, so pnpm dev did not start/);
+    assert.match(words, /then run pnpm dev again, and the desk's own state is carried once into/);
+    assert.match(
+      words,
+      /Nothing was carried, nothing was started, and the old folder is left as it was/,
+    );
   } finally {
     d.done();
   }
@@ -322,4 +327,25 @@ test("the runner's words name the new folder, what was carried and that the old 
     carryWords({ carried: [], reason: "no-old-folder" }, { from: "/a", to: "/b" }),
     null,
   );
+});
+
+test("BP-1c review: the runner stops on old-folder-in-use, before any Electron, and only there", () => {
+  // cli.mjs is the runner's entry (top-level main()), so its shape is held by its source
+  const cli = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "cli.mjs"),
+    "utf8",
+  );
+  const carry = cli.indexOf("carryLegacyElectronState({ from, to })");
+  const refuse = cli.indexOf('await shutdown(1, "BP-1c: the old Electron folder is in use");');
+  const firstElectron = cli.indexOf("createElectronStack(");
+  assert.ok(carry > 0 && refuse > carry, "the refusal follows the carry");
+  assert.ok(
+    firstElectron === -1 || firstElectron > refuse,
+    "no Electron is created before the refusal",
+  );
+  assert.match(
+    cli,
+    /if \(result\.reason === "old-folder-in-use"\) \{\n\s+\/\/[^\n]*\n\s+\/\/[^\n]*\n\s+carryRefused = true;/u,
+  );
+  assert.equal(cli.match(/carryRefused = true;/gu)?.length, 1);
 });

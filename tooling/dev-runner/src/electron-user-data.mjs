@@ -157,9 +157,10 @@ export function carryWords(result, { from, to }) {
     return `BP-1c: Electron's userData is now ${to} (the desk browser keeps its sign-ins there); carried ${result.carried.join(", ")} from ${from}, which is left as it was`;
   }
   if (result.reason === "old-folder-in-use") {
-    // never a promise of a later carry: this run's Electron writes `Local State` in the new folder, and a carry happens
-    // only before Chromium has run there (`already-moved`)
-    return `BP-1c: Electron's userData is now ${to}; ${from} holds a running Electron's lock, so nothing was carried from it (the theme and the renderer's storage start afresh in the new folder), and the old folder is left as it was`;
+    // a REFUSAL (prod-builder's L3 review, 2026-11-05 03:46Z): starting would let this run's Electron write `Local State`
+    // in the new folder, and a carry happens only before Chromium has run there (`already-moved`), so the desk's theme,
+    // storage and stills would be stranded in the old folder for good. The runner stops instead; one restart carries.
+    return `BP-1c: ${from} holds a running Electron's lock, so pnpm dev did not start: quit the VibeField dev app that still uses it, then run pnpm dev again, and the desk's own state is carried once into ${to}. Nothing was carried, nothing was started, and the old folder is left as it was`;
   }
   if (result.reason === "nothing-to-carry") {
     return `BP-1c: Electron's userData is now ${to}; ${from} is left as it was (nothing of the desk's own to carry)`;

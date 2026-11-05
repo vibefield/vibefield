@@ -104,17 +104,27 @@ async function main() {
   // from the folder it used before, under the lock (no other runner starts an Electron meanwhile), before any Electron
   // starts; the old folder is left as it was. Each entry comes across whole or not at all; one that could not is a
   // warning naming it, and a failed carry never stops the run.
+  let carryRefused = false;
   try {
     const from = paths.legacyElectronUserData;
     const to = paths.electronUserData;
     const result = carryLegacyElectronState({ from, to });
     const words = carryWords(result, { from, to });
-    if (words !== null && result.failed !== undefined) log.warn(words);
+    if (result.reason === "old-folder-in-use") {
+      // the one refusal (prod-builder 03:46Z): a live Electron on the old folder means starting now would foreclose
+      // the carry for good (`carryWords` says why); the runner stops before any Electron starts
+      carryRefused = true;
+      log.error(words);
+    } else if (words !== null && result.failed !== undefined) log.warn(words);
     else if (words !== null) log.info(words);
   } catch (error) {
     log.warn(
       `BP-1c: the desk's own state was not carried from ${paths.legacyElectronUserData}: ${error instanceof Error ? error.message : String(error)} (the old folder is left as it was)`,
     );
+  }
+  if (carryRefused) {
+    await shutdown(1, "BP-1c: the old Electron folder is in use");
+    return;
   }
   commandServer = await startRunnerCommandServer({
     endpoint: paths.commandEndpoint,
