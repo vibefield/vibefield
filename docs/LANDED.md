@@ -34088,3 +34088,33 @@ contracts (7 of them fixtures), 5 fieldd sources and 8 fieldd tests.
   (`1e78cc107`), so that line closes in this entry.
 - For James's eye (draft words; not a hold): "Couldn't pause Vela's turn: …", "VibeField can't read this spark's
   conversation; nothing was changed", and the thread's and the head's words as DESIGN.md §9 lists them.
+
+## Item 179 — the logging sanitizer's seed-fuzz row carries its own 30 s timeout, so a loaded CI runner's clock is no red (2026-11-05)
+
+(2026-11-05; one commit `ff6f2667b` on lane `fix/179` over main `9dca71d7d`, the fixer's; M148 is `ff6f2667b` itself,
+a fast-forward of main `9dca71d7d`, run 148, landed 2026-11-05T10:24:57Z; cut as `343d1acc8` over `0fd07b0ce`,
+re-cut once onto A2's records with its diff unchanged.) Filed by VF-PM at 09:58Z from push 93's verify.
+
+**The red.** Push 93's verify (run `42001017462`, main `95812bf26`, attempt 1, done 09:54:20Z) failed on one row:
+`@vibefield/logging`'s `test/sanitize.test.ts` › "seed-fuzzes arbitrary graphs without throwing, leaking, or
+exceeding the record cap", at 5582 ms with "Test timed out in 5000ms."
+- The row loops over 512 seeds under vitest's default 5,000 ms. The file is unchanged since `f91c935d3` (2026-07-23),
+  and `packages/logging` had 0 files in `470f16af9..95812bf26`.
+- The mini read the same row at 704, 1,120, 925 and 1,225 ms on runs 144–147 (their verify logs). So the red was the
+  loaded runner's clock, not a change.
+
+**The fix.** `packages/logging/test/sanitize.test.ts:304`: the row's `});` becomes `}, 30_000);`, one line, +1 −1.
+- The 512-seed loop and its six assertions are unchanged: no throw, a record, at most 64 KiB, no `FUZZ_SECRET`, no
+  newline, and `LogRecordV1` parses.
+- `30_000` is the repo's precedent for a slow row (`packages/field-app/test/doc-manager.test.ts`, three rows).
+- Nothing ran on this Mac, by VF-PM's 10:01Z ruling: the lane has no install, and the mint's verify is the proof.
+
+**The witness.** Run 148 on the mini (a9's mint, M148 the commit itself, stacked on `9dca71d7d`; read by VF-PM
+at 10:24Z): "== ts6-mini verify done (verify 0) 10:22:51Z". Every file's count equals run 147's: vitest 12,865
+passed, 0 failed, 20 skipped; logging 54 and 1 skipped; node 450; cargo 545. The row itself passed in 1,023 ms,
+under its new 30,000 ms limit.
+- The land (the fixer's `land-stack5.sh`, 2026-11-05T10:24:57Z): main fast-forwarded from `9dca71d7d`, 1 file
+  +1 −1. The guard was clear and dev-stack-check read 0/0.
+
+**Owed.** Push 93's verify was re-run as attempt 2 at 09:58:04Z, under the same run id. Its verdict is read at push
+94; it was still in progress at this entry (gh, 10:25:06Z).
