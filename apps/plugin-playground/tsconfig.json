@@ -10,6 +10,9 @@
     // @webgpu/types: the still's Dawn device (DK-11, src/still.ts) — this CLI's own `webgpu` devDependency
     "types": ["node", "vite/client", "@webgpu/types"],
     "noEmit": true,
+    // SD-2: @vibefield/sound (a zero-dependency root, SD-1) writes `.ts` specifiers so plain node runs it; a
+    // program that typechecks its source must accept them (this program emits nothing)
+    "allowImportingTsExtensions": true,
     // an app, not a library — same reason field-app sets it: no declaration
     // emit, so types inferred from ice's transitive strata dep raise no TS2742
     "declaration": false

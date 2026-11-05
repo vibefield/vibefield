@@ -2073,6 +2073,16 @@ export const IPC_CHANNELS = {
    * (LC-18): the shell session grants no Chromium permission (ESP §7.4), so the
    * web's own write is denied there by law. */
   clipboardWriteImage: "vibefield:clipboard:write-image",
+  /** renderer → main event: SoundAttention (shell.ts) — which floor session the window's person is typing into and
+   * where each shown session sits across the window (SD-2; DESIGN.md §14 rules 3 and 9). Main takes it from the
+   * window in front alone and maps sessions to runs itself; nothing comes back. */
+  soundAttention: "vibefield:sound:attention",
+  /** renderer → main invoke: SoundPreviewParams → SoundPreviewResult — a Play in Settings → Sound (DESIGN.md §8):
+   * one of the family, never the mark, played now through the path an agent's sound takes. */
+  soundPreview: "vibefield:sound:preview",
+  /** renderer → main invoke, no payload → SoundPlayerState — whether this Mac can play the sounds, and if not
+   * why: Settings → Sound says it in the switch's own line (§8). */
+  soundState: "vibefield:sound:state",
 } as const;
 
 /** HN-4 (2026-10-29) — a retained still's read cap: the most a still may weigh when

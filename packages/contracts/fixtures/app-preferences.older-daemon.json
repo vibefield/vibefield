@@ -1,0 +1,9 @@
+{
+  "showTray": true,
+  "backgroundShell": false,
+  "screenshotHotkey": true,
+  "syncPosture": "opt-in",
+  "confirmQuit": true,
+  "connectAsks": true,
+  "keepRunningOnQuit": false
+}

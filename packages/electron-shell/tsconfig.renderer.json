@@ -5,6 +5,9 @@
     "jsx": "react-jsx",
     "types": ["vite/client"],
     "noEmit": true,
+    // SD-2: @vibefield/sound (a zero-dependency root, SD-1) writes `.ts` specifiers so plain node runs it; a
+    // program that typechecks its source must accept them (this program emits nothing)
+    "allowImportingTsExtensions": true,
     "declaration": false
   },
   "include": ["src/renderer-host"]

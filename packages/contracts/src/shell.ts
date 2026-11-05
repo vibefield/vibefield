@@ -459,6 +459,12 @@ export const APP_PREFERENCE_KEYS = {
   /** AL-6 (AL-D2, §5.8) — macOS: a person's quit closes the windows and keeps VibeField in the menu bar, its terminal
    * service running; the status item's Quit VibeField is the quit. Off until the person turns it on */
   KEEP_RUNNING_ON_QUIT: "desktop.keepRunningOnQuit",
+  /** SD-2 (SD-D19; DESIGN.md §8 "Settings → Sound") — Play sounds: on from the first run, the person's, so off on each
+   * of their desktops */
+  SOUNDS: "desktop.sounds",
+  /** SD-2 (SD-D22; DESIGN.md §14 "Quiet") — the moment Quiet ends, in epoch milliseconds; null ends it now. It rides
+   * the same settings doc as every preference, so the person's desktops go quiet together */
+  SOUNDS_QUIET_UNTIL: "desktop.soundsQuietUntil",
 } as const;
 
 export const AppPreferenceKey = z.enum([
@@ -469,6 +475,8 @@ export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.CONFIRM_QUIT,
   APP_PREFERENCE_KEYS.CONNECT_ASKS,
   APP_PREFERENCE_KEYS.KEEP_RUNNING_ON_QUIT,
+  APP_PREFERENCE_KEYS.SOUNDS,
+  APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL,
 ]);
 export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
 
@@ -492,6 +500,11 @@ export const AppPreferences = z
     connectAsks: z.boolean().default(true),
     // AL-6: off by default, including snapshots from an older daemon.
     keepRunningOnQuit: z.boolean().default(false),
+    // SD-2 (SD-D19): on by default, including snapshots from an older daemon.
+    sounds: z.boolean().default(true),
+    // SD-2 (SD-D22): OPTIONAL, never required — absent is no Quiet, as an older daemon's snapshot says. An integer
+    // count of epoch milliseconds; Quiet holds while now is before it, and ends by itself at it.
+    soundsQuietUntil: z.number().int().nonnegative().optional(),
   })
   .passthrough();
 export type AppPreferences = z.infer<typeof AppPreferences>;
@@ -499,18 +512,68 @@ export type AppPreferences = z.infer<typeof AppPreferences>;
 export const AppPreferenceSetParams = z
   .object({
     key: AppPreferenceKey,
-    // Not every preference is a switch any more (UA-6): the posture is a word.
+    // Not every preference is a switch any more (UA-6): the posture is a word,
+    // and Quiet (SD-2) a moment, or null to end it.
     // A union rather than `z.any()` — the setter still refuses what no key can hold.
-    value: z.union([z.boolean(), MeshSyncPosture]),
+    value: z.union([z.boolean(), MeshSyncPosture, z.number().int().nonnegative(), z.null()]),
   })
   .passthrough()
   .refine(
     ({ key, value }) =>
       key === APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE
         ? typeof value === "string"
-        : typeof value === "boolean",
+        : key === APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL
+          ? typeof value === "number" || value === null
+          : typeof value === "boolean",
     "preference value does not match its key",
   );
+
+// SD-2 (DESIGN.md §14 "Where it plays", §8 "Settings → Sound") — what the window and main trade about sound, over
+// IPC_CHANNELS.soundAttention, .soundPreview and .soundState. The cues are the family's ids in `@vibefield/sound`,
+// written out here because contracts imports nothing of it (both are zero-dependency roots).
+
+/** The attention door's bounds: one id's length, and the most places one window shows. */
+export const SOUND_ATTENTION = {
+  MAX_ID: 256,
+  MAX_PLACES: 64,
+} as const;
+
+const SoundSessionId = z.string().min(1).max(SOUND_ATTENTION.MAX_ID);
+
+/** Which floor session the person is typing into (none while the window lacks the keyboard), and where each shown
+ * session sits across the window, −1 (left) … 1 (right). Main maps sessions to runs (`terminal.runtimeSessionId`). */
+export const SoundAttention = z
+  .object({
+    focused: SoundSessionId.nullable(),
+    places: z.record(SoundSessionId, z.number().min(-1).max(1)),
+  })
+  .passthrough()
+  .refine(
+    ({ places }) => Object.keys(places).length <= SOUND_ATTENTION.MAX_PLACES,
+    "more places than a window shows",
+  );
+export type SoundAttention = z.infer<typeof SoundAttention>;
+
+/** What a Play in Settings may play: the family, never the mark (SD-D18). */
+export const SoundPreviewCue = z.enum(["failed", "done", "question", "approval", "settle"]);
+export type SoundPreviewCue = z.infer<typeof SoundPreviewCue>;
+
+export const SoundPreviewParams = z.object({ cue: SoundPreviewCue }).passthrough();
+export type SoundPreviewParams = z.infer<typeof SoundPreviewParams>;
+
+/** Played, or why not: Play sounds is off, there is no player, or the system refused the file. */
+export const SoundPreviewResult = z.union([
+  z.object({ played: z.literal(true) }).passthrough(),
+  z
+    .object({ played: z.literal(false), reason: z.enum(["off", "unavailable", "failed"]) })
+    .passthrough(),
+]);
+export type SoundPreviewResult = z.infer<typeof SoundPreviewResult>;
+
+/** Whether this Mac can play the sounds: ready, or off macOS, a build without the player, or one it would not
+ * start (§8 says each in the switch's own line). */
+export const SoundPlayerState = z.enum(["ready", "unsupported", "missing", "failed"]);
+export type SoundPlayerState = z.infer<typeof SoundPlayerState>;
 export type AppPreferenceSetParams = z.infer<typeof AppPreferenceSetParams>;
 
 // AH-3 — the static Electron-main provider. These are ProductAPI contracts,

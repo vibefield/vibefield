@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { APP_PREFERENCE_KEYS } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
@@ -102,6 +104,21 @@ describe("app preferences", () => {
     expect(
       effectiveAppPreferences({ [APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE]: "paranoid" }).syncPosture,
     ).toBe("automatic");
+  });
+
+  it("answers the golden snapshot contracts parses, from the doc values that write it (SD-2, EL9)", () => {
+    const golden = JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../contracts/fixtures/app-preferences.sounds.json"),
+        "utf8",
+      ),
+    ) as { soundsQuietUntil: number };
+    expect(
+      effectiveAppPreferences({
+        [APP_PREFERENCE_KEYS.SOUNDS]: true,
+        [APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL]: golden.soundsQuietUntil,
+      }),
+    ).toEqual(golden);
   });
 
   it("resolves intent: the doc answers for itself, silence defers to the posture", () => {

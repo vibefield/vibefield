@@ -696,6 +696,8 @@ describe("tray shell commands and app preferences", () => {
       connectAsks: true,
       // AL-6: nor keepRunningOnQuit; a quit quits until the person says otherwise
       keepRunningOnQuit: false,
+      // SD-2: nor sounds; they play until the person turns them off (and with no Quiet, no soundsQuietUntil)
+      sounds: true,
     });
     expect(AppPreferences.safeParse({ showTray: true }).success).toBe(false);
     // UA-6: the posture is part of the EFFECTIVE snapshot, so a caller can

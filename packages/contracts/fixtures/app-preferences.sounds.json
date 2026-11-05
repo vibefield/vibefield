@@ -1,0 +1,11 @@
+{
+  "showTray": true,
+  "backgroundShell": true,
+  "screenshotHotkey": true,
+  "syncPosture": "automatic",
+  "confirmQuit": true,
+  "connectAsks": true,
+  "keepRunningOnQuit": false,
+  "sounds": true,
+  "soundsQuietUntil": 1793980800000
+}

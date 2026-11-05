@@ -6152,7 +6152,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|desktop.keepRunningOnQuit|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) }",
+          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|desktop.keepRunningOnQuit|desktop.sounds|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) | desktop.soundsQuietUntil (epoch ms or null) }",
           false,
         );
       }

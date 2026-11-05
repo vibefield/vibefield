@@ -252,6 +252,7 @@ import {
   ScreenshotHelperEvent,
 } from "../src/screenshot";
 import { SetupAnswerParams, SetupLedger, SetupMomentParams } from "../src/setup";
+import { AppPreferences } from "../src/shell";
 import {
   DiagnosticsLastExitResult,
   ShellExitRecord,
@@ -916,6 +917,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "needs-record": NeedsRecord,
   // IOS-8f — who this desktop's person is: a written face with a name, and the deal with none
   "user-me": UserMeResult,
+  // SD-2 — the effective preferences fieldd answers, with Play sounds and a Quiet, and an older daemon's without them
+  "app-preferences": AppPreferences,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.
