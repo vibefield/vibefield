@@ -49,10 +49,11 @@ September 24, 2026 and never uploaded (no `upload-5.log`). Both archives stay un
 `apps/ios/build/testflight/`; neither reached App Store Connect, whose newest build
 is still **3**. *(Read 2026-11-05, LP-4, from that directory on James's Mac.)*
 
-**The fix (LP-4, 2026-11-05):** the helper now authenticates with an **App Store
-Connect API key** for both the archive and the export, instead of xcodebuild's
-lookup of the Apple account signed in to Xcode, which is the step that failed for
-builds 2–4. See [The App Store Connect API key](#the-app-store-connect-api-key).
+**The fix (LP-4, 2026-11-05):** the helper's upload now authenticates with an
+**App Store Connect API key** instead of xcodebuild's lookup of the Apple account
+signed in to Xcode, which is the step that failed for builds 2–4. The archive
+still signs with Xcode's account, as archives 1–5 did. See
+[The App Store Connect API key](#the-app-store-connect-api-key).
 
 ## App identity and prerequisites
 
@@ -116,8 +117,8 @@ export ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 # The archive signs with Xcode's account; the key is read at upload only.
 bash apps/ios/scripts/testflight.sh archive 6
 
-# Stop the agents running as you, then upload that exact archive for internal
-# TestFlight only (the default) ...
+# Stop the agents running as you (the helper refuses while one runs), then upload
+# that exact archive for internal TestFlight only (the default) ...
 bash apps/ios/scripts/testflight.sh upload 6
 # ... or for the App Store and external TestFlight.
 bash apps/ios/scripts/testflight.sh upload 6 store
@@ -172,6 +173,17 @@ as archives 1–5 did, and gets the key only when `ASC_ARCHIVE_KEY=1` asks:
 | `ASC_KEYCHAIN_SERVICE` | *optional:* the keychain item's service (default `vibefield-asc`) |
 | `ASC_KEY_PATH` | *optional override:* a `.p8` file outside the repository, read instead of the keychain |
 | `ASC_ARCHIVE_KEY` | *optional:* `1` makes `archive` use the key too, for an archive Xcode's account cannot sign; the key is then decoded for the whole Release build |
+| `VIBEFIELD_ASC_AGENTS_RUNNING` | *optional:* `revoke-the-key-afterwards` reads the key although agents run as you (the guard below); then revoke the key (step 4) |
+
+**The recommended route: a release account.** Release from a macOS user account
+kept for releases alone, not James's own. The key lives in THAT account's login
+keychain (steps 2 and 3 run there), Xcode is signed in to the team there, and the
+archive and the upload run there, from a checkout of its own. No agent and no dev
+app run under it, so it is the only place where "no agent runs as the same user"
+is true by construction. Creating that account is James's hand. Xcode's
+Organizer, used by hand (above), stays the fallback no agent can reach: it reads
+no key file. The rest of this section is the route in James's own account, and
+what it does not cover.
 
 **Why the keychain (EL7).** This Mac runs many agents as James's own user, and
 same-user agents are the adversary (CLAUDE.md, EL7). A `.p8` kept as a file is
@@ -191,39 +203,66 @@ length of `upload`), never for the Release compile unless `ASC_ARCHIVE_KEY=1`
 asks. Run `upload` with no agent running as James. If one was running, treat the
 key as exposed and revoke it (step 4).
 
+**The accident guard.** Before it reads the key (`upload`, and `archive` with
+`ASC_ARCHIVE_KEY=1`), the helper counts the processes running as you named
+`claude`, `codex` and `fieldd` (the packaged app's daemon; a dev app's fieldd runs
+under Electron's name). It prints the three counts, never a process ID or a
+command line, and refuses while any of them runs. The guard prevents accidents.
+It is no boundary: a process running as you can rename itself, and an agent
+started under another name is not counted.
+`VIBEFIELD_ASC_AGENTS_RUNNING=revoke-the-key-afterwards` reads the key anyway;
+then revoke the key when the run ends (step 4). Any other value is refused.
+
 1. In App Store Connect, **Users and Access > Integrations > App Store Connect
    API > Team Keys**, generate a key for the Shikang Yong team. Give it the
    **Admin** role: automatic signing with `-allowProvisioningUpdates` may create
    the cloud-managed Apple Distribution certificate and profiles, which a
    narrower role may not be allowed to do.
 2. Download the `.p8` once (Apple keeps no copy), store it in the login keychain
-   and delete the download. By hand, in Terminal, not from an agent: for the
-   moment `security` runs, the encoded key is on its command line.
+   and delete the download. Do it by hand, in Terminal, with NO agent running as
+   James: until the `rm`, the download is a plain file that every process running
+   as James can read.
 
    ```sh
-   security add-generic-password -s vibefield-asc -a <KEY ID> -T "" -U \
-     -w "$(base64 -i ~/Downloads/AuthKey_<KEY ID>.p8)"
+   { printf 'add-generic-password -s vibefield-asc -a <KEY ID> -T "" -U -w '
+     base64 -i ~/Downloads/AuthKey_<KEY ID>.p8; } | security -i
    rm ~/Downloads/AuthKey_<KEY ID>.p8
    ```
 
+   `security -i` reads the command from its input, so the encoded key is on no
+   command line, where `ps` would show it to every process running as James.
+   `printf` is the shell's own, and `base64` is given only the file's name. Never
+   put the key after `-w` on a command line. Ending the line with `-w` to be
+   asked for it does not work either: that prompt keeps 128 characters, and the
+   encoded key is over 300. Do not paste it anywhere: the clipboard is readable
+   by every process running as James.
    `-T ""` empties the item's trusted-application list (by default `security`
    itself, and so anything that runs it, would read it without asking). The key
    is stored as one base64 line because the keychain hands multi-line data back
-   as hex.
+   as hex. The helper's first read checks that the item decodes to a `.p8` key.
 3. Export `ASC_KEY_ID` and `ASC_ISSUER_ID` in the shell that runs the helper
    (nothing loads them from a file in the repository). At each run macOS asks to
    let `security` use the item: choose **Allow**, never **Always Allow**, which
-   would trust `security`, and every process that runs it, from then on. In a
-   session with no screen to ask on (SSH), the read fails; `ASC_KEY_PATH` is the
-   fallback there.
+   would trust `security`, and every process that runs it, from then on. A
+   `vibefield-asc` prompt you did not just cause with your own `upload` (or an
+   `ASC_ARCHIVE_KEY=1` archive) is something else asking for the key: choose
+   **Deny**, and revoke the key (step 4). In a session with no screen to ask on
+   (SSH), the read fails; `ASC_KEY_PATH` is the fallback there.
 4. Revoke the key on the same App Store Connect page at once if it is ever
    exposed. With `ASC_KEY_PATH`, revoke it when the release session ends and
-   delete the file.
+   delete the file. If the helper was killed or crashed before it removed its
+   temporary directory, the decoded key is still in it: remove it, from a shell
+   of the same user, and revoke the key.
 
-**What is printed.** The helper prints only the variables' names. xcodebuild
-opens its output with its whole command line ("Command line invocation:"), so
-the helper masks the key file's path and the two IDs as `<ASC_KEY_PATH>`,
-`<ASC_KEY_ID>` and `<ASC_ISSUER_ID>` before the terminal and `archive-N.log` /
+   ```sh
+   rm -rf "${TMPDIR:-/tmp}"/vibefield-asc.*
+   ```
+
+**What is printed.** The helper prints only the variables' names and the
+guard's three counts. xcodebuild opens its output with its whole command line
+("Command line invocation:"), so the helper masks the key file's path and the
+two IDs as `<ASC_KEY_PATH>`, `<ASC_KEY_ID>` and `<ASC_ISSUER_ID>` before the
+terminal and `archive-N.log` /
 `upload-N.log` see them. A key path containing spaces may not be masked whole,
 since xcodebuild escapes it in that echo; the keychain's temporary path has
 none. The key's contents never reach a command line or an output stream.
@@ -237,9 +276,11 @@ to try Xcode's account anyway, or use Xcode Organizer as described above. The
 helper refuses a key path inside the repository, one ID without the other (or
 `ASC_KEY_PATH` without both), a key ID that is not letters and digits, a keychain
 item that does not decode to a `.p8` key, `ASC_ARCHIVE_KEY=1` without the IDs,
-and an `ASC_ARCHIVE_KEY` other than `1` or unset. Every refusal that needs no key
-(an existing archive, a missing one, the wrong bundle ID or team) comes before
-the keychain is asked.
+an `ASC_ARCHIVE_KEY` other than `1` or unset, a `VIBEFIELD_ASC_AGENTS_RUNNING`
+other than `revoke-the-key-afterwards` or unset, and, without that variable, a
+key read while an agent runs as you (the guard). Every refusal that needs no key
+(an existing archive, a missing one, the wrong bundle ID or team, the guard)
+comes before the keychain is asked.
 
 On Xcode 26.6 build `17F113`, the helper supplies
 `-Xfrontend -disable-large-loadable-types-reg2mem`. Without it, Swift 6.3.3 crashes

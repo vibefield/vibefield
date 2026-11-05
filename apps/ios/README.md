@@ -200,7 +200,9 @@ Store Connect API key (its IDs in `ASC_KEY_ID` and `ASC_ISSUER_ID`, the key in t
 login keychain and decoded for the export alone; TESTFLIGHT.md says how and what
 that file's lifetime exposes; LP-4,
 2026-11-05 — until then the upload used Xcode's Apple account, whose command-line
-lookup failed as "Failed to Use Accounts"):
+lookup failed as "Failed to Use Accounts"). It refuses to read the key while a
+`claude`, `codex` or `fieldd` runs as you, a guard against accidents and no
+boundary; TESTFLIGHT.md recommends releasing from a macOS account with no agents:
 
 ```sh
 # From the repository root. N = the next unused build number (TESTFLIGHT.md names the last).

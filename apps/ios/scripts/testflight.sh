@@ -40,12 +40,24 @@ did); `upload` uses an App Store Connect API key.
                   whole Release build, not only for the export.
 They reach xcodebuild as -authenticationKeyPath / -authenticationKeyID /
 -authenticationKeyIssuerID with -allowProvisioningUpdates. The helper prints only
-the variables' names, and masks the key's path and IDs in xcodebuild's echo of
-its own command line before the terminal and the logs see it. The key's contents
-are never printed.
+the variables' names (and the guard's counts, below), and masks the key's path
+and IDs in xcodebuild's echo of its own command line before the terminal and
+the logs see it. The key's contents are never printed.
 Without them, `upload` refuses, since xcodebuild's account lookup is what failed
 as "Failed to Use Accounts" for builds 2-4. ASC_AUTH=xcode makes `upload` try
 Xcode's account anyway.
+
+The accident guard: before it reads the key (`upload`, and `archive` with
+ASC_ARCHIVE_KEY=1), the helper counts your processes named claude, codex and
+fieldd, prints the three counts (never a process ID or a command line), and
+refuses while any runs. It prevents ACCIDENTS and is NO BOUNDARY: a process
+running as you can rename itself.
+  VIBEFIELD_ASC_AGENTS_RUNNING=revoke-the-key-afterwards
+                  reads the key with agents running anyway. Then revoke the key
+                  in App Store Connect when the run ends. Any other value is
+                  refused.
+The recommended route is a macOS user account kept for releases, with no agent
+and no dev app under it (apps/ios/TESTFLIGHT.md).
 
 Archives and logs are in apps/ios/build/testflight/. Choose a new build number
 for each archive: an existing archive is never overwritten. Xcode also manages
@@ -100,6 +112,14 @@ archive="$output/VibeField-$build_number.xcarchive"
 mkdir -p "$output"
 
 # Every refusal that needs no key comes before the keychain is asked.
+agents_override="revoke-the-key-afterwards"
+case "${VIBEFIELD_ASC_AGENTS_RUNNING:-}" in
+  "" | "$agents_override") ;;
+  *)
+    echo "VIBEFIELD_ASC_AGENTS_RUNNING is $agents_override (read the key with agents running, then revoke it) or unset." >&2
+    exit 2
+    ;;
+esac
 case "$action" in
   archive)
     if [[ -e "$archive" ]]; then
@@ -157,6 +177,45 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
 
+# The accident guard (VF-PM's ruling on LP-4's signing review, 2026-11-05). Before the
+# key is read, count this user's processes by exact name and refuse while an agent
+# runs. It prevents ACCIDENTS (an upload started from, or beside, an agent) and is NO
+# BOUNDARY: macOS's pgrep matches the name a process gives itself (its argv[0]'s last
+# component), and a process running as you can rename itself. `-a` counts pgrep's own
+# ancestors too, so an agent that runs this helper counts itself. `fieldd` is the
+# packaged app's daemon by its executable's name. Only the counts are printed, never a
+# process ID or a command line; a pgrep that cannot answer refuses, it never passes.
+refuse_while_agents_run() {
+  local name pids status count total=0 counts=""
+  for name in claude codex fieldd; do
+    status=0
+    pids="$(pgrep -a -x -U "$UID" "$name")" || status=$?
+    case "$status" in
+      0) count="$(printf '%s\n' "$pids" | wc -l | tr -d ' ')" ;;
+      1) count=0 ;;
+      *)
+        echo "Could not count the processes running as you (pgrep exited $status), so the key is not read." >&2
+        exit 1
+        ;;
+    esac
+    counts+="${counts:+, }$name $count"
+    total=$((total + count))
+  done
+  echo "Processes running as you, by name: $counts."
+  if [[ $total -eq 0 ]]; then
+    return 0
+  fi
+  if [[ "${VIBEFIELD_ASC_AGENTS_RUNNING:-}" == "$agents_override" ]]; then
+    echo "VIBEFIELD_ASC_AGENTS_RUNNING=$agents_override: reading the key with agents running." >&2
+    echo "Treat the key as exposed: revoke it in App Store Connect when this run ends (apps/ios/TESTFLIGHT.md, step 4)." >&2
+    return 0
+  fi
+  echo "Refusing to read the App Store Connect API key while an agent runs as you. Stop them," >&2
+  echo "or release from an account with none (apps/ios/TESTFLIGHT.md). This guard prevents accidents;" >&2
+  echo "it is no boundary. To go on anyway: VIBEFIELD_ASC_AGENTS_RUNNING=$agents_override, then revoke the key." >&2
+  exit 1
+}
+
 ids_set=0
 for name in ASC_KEY_ID ASC_ISSUER_ID; do
   if [[ -n "${!name:-}" ]]; then ids_set=$((ids_set + 1)); fi
@@ -186,6 +245,7 @@ elif [[ $ids_set -eq 2 && -n "${ASC_KEY_PATH:-}" ]]; then
     echo "ASC_KEY_PATH is inside the repository. Keep the .p8 key outside it, or in the login keychain." >&2
     exit 1
   fi
+  refuse_while_agents_run
   key_mode="file"
   key_path="$ASC_KEY_PATH"
   echo "Authenticating with the App Store Connect API key file named by ASC_KEY_PATH."
@@ -195,6 +255,7 @@ elif [[ $ids_set -eq 2 ]]; then
     echo "ASC_KEY_ID is not an App Store Connect key ID (letters and digits only)." >&2
     exit 1
   fi
+  refuse_while_agents_run
   keychain_service="${ASC_KEYCHAIN_SERVICE:-vibefield-asc}"
   key_tmp="$(mktemp -d "${TMPDIR:-/tmp}/vibefield-asc.XXXXXX")"
   chmod 700 "$key_tmp"
