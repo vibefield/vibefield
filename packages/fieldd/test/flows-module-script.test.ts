@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type FlowScript, flowScriptOf } from "../src/flows/module-script";
+import { applyEdits, type FlowScript, flowScriptOf } from "../src/flows/module-script";
 import { bytesOf, runOnHost } from "./flows-run-harness";
 
 // CP-4a2a (the review bth-1142Z, findings 5, 6 and 10; cp-landing 12:22Z) — acorn's rewrite of the approved bytes
@@ -270,5 +270,32 @@ describe("the re-read's residuals (bth-1322Z: N3, N4, N5)", () => {
         "A -\\u002d> B, then impor\\u0074(x) | and eva\\u006c(y)",
       ],
     });
+  });
+});
+
+describe("the one-pass apply (the second re-read bth-1345Z, L3)", () => {
+  it("L3a · edits that touch, or insert where another starts, apply in the text's order", () => {
+    const edits = [
+      { start: 4, end: 6, text: "EF" },
+      { start: 1, end: 2, text: "B" },
+      { start: 2, end: 4, text: "CD" },
+      { start: 2, end: 2, text: "^" },
+    ];
+    expect(applyEdits("abcdef", edits)).toBe("aB^CDEF");
+  });
+
+  it("L3b · two edits that overlap are refused out loud, never applied by duplicating or dropping text", () => {
+    // what the rewrite never makes today (tokens and comments never overlap, an export's span is skipped); a future
+    // edit that did would otherwise hand on a different script without a word
+    const crossed = [
+      { start: 1, end: 4, text: "X" },
+      { start: 2, end: 5, text: "Y" },
+    ];
+    expect(() => applyEdits("abcdef", crossed)).toThrow(/overlap/);
+    const inside = [
+      { start: 1, end: 4, text: "X" },
+      { start: 3, end: 3, text: "^" },
+    ];
+    expect(() => applyEdits("abcdef", inside)).toThrow(/overlap/);
   });
 });

@@ -61,10 +61,23 @@ const SES_HTML = /<!--|-->/;
 const SES_IMPORT = /(^|[^.]|\.\.\.)\bimport(?=\s*(?:\(|\/[/*]))/;
 const SES_EVAL = /(^|[^.])\beval(?=\s*\()/;
 
-interface Edit {
+/** One edit of the module's text: `text` in place of `start` up to `end` (`start === end` inserts). */
+export interface Edit {
   readonly start: number;
   readonly end: number;
   readonly text: string;
+}
+
+/** `text` with `edits` applied in one pass, in the text's order, the result built once (N4). */
+export function applyEdits(text: string, edits: readonly Edit[]): string {
+  const parts: string[] = [];
+  let at = 0;
+  for (const edit of [...edits].sort((a, b) => a.start - b.start || a.end - b.end)) {
+    parts.push(text.slice(at, edit.start), edit.text);
+    at = edit.end;
+  }
+  parts.push(text.slice(at));
+  return parts.join("");
 }
 
 type AnyNode = Node & {
@@ -307,14 +320,7 @@ export function flowScriptOf(bytes: Uint8Array): FlowScript {
 
   // one pass, in the text's order (no two edits overlap: a token or comment inside an export's span is skipped), the
   // script built once
-  const parts: string[] = [];
-  let at = 0;
-  for (const edit of [...edits].sort((a, b) => a.start - b.start || a.end - b.end)) {
-    parts.push(text.slice(at, edit.start), edit.text);
-    at = edit.end;
-  }
-  parts.push(text.slice(at));
-  const body = parts.join("");
+  const body = applyEdits(text, edits);
   // the opening stays on the module's first line, so every line keeps its number
   return { kind: "script", script: `(async () => {${body}\nreturn ${defaultName};\n})()` };
 }
