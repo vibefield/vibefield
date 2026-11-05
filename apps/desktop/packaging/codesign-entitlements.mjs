@@ -11,7 +11,7 @@
 // `out/mac/MacTargetHelper.js` `getOptionsForFile`). The Rust daemons, the Go sidecar and the native helpers execute no
 // JIT, so least privilege is none at all. The ONE table below says which entry of `Contents/Resources/bin` is which;
 // packaging/sign-mac.mjs signs by it, and verify-live-surface-release.mjs reads every signature back against it.
-import { lstatSync, readdirSync } from "node:fs";
+import { closeSync, lstatSync, openSync, readdirSync, readSync } from "node:fs";
 import { join, relative } from "node:path";
 import { isMachO } from "../../../scripts/host-links.mjs";
 
@@ -87,15 +87,54 @@ export function withBinEntitlements(optionsForFile, app, nativePlist) {
   };
 }
 
+/** `MH_EXECUTE`, the Mach-O file type of a program (a `.node` is `MH_BUNDLE`, a `.dylib` `MH_DYLIB`). */
+export const MH_EXECUTE = 0x2;
+
+function thinFileType(header) {
+  const magic = header.readUInt32BE(0);
+  // little-endian thin (arm64, x86_64: the bytes `cf fa ed fe`), then big-endian thin
+  if (magic === 0xcffaedfe || magic === 0xcefaedfe) return header.readUInt32LE(12);
+  if (magic === 0xfeedfacf || magic === 0xfeedface) return header.readUInt32BE(12);
+  return null;
+}
+
+/** A Mach-O file's `filetype` (the header's fourth word): a thin file's, or a fat file's first slice's (every slice of
+ * one file is the same kind). null for anything it cannot read that way. */
+export function machOFileType(path) {
+  const fd = openSync(path, "r");
+  try {
+    const header = Buffer.alloc(24);
+    const read = readSync(fd, header, 0, header.length, 0);
+    if (read < 16) return null;
+    const magic = header.readUInt32BE(0);
+    if (magic === 0xcafebabe || magic === 0xcafebabf) {
+      // fat (big-endian): the first fat_arch's (or fat_arch_64's) offset sits at byte 16 either way
+      if (read < (magic === 0xcafebabe ? 20 : 24)) return null;
+      const offset =
+        magic === 0xcafebabe ? header.readUInt32BE(16) : Number(header.readBigUInt64BE(16));
+      const slice = Buffer.alloc(16);
+      return readSync(fd, slice, 0, slice.length, offset) < 16 ? null : thinFileType(slice);
+    }
+    return thinFileType(header);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** Each top-level entry of a `bin/` directory as the policy reads it: a bundle (`.app`, `.framework` — what the signer
- * seals as one), a Mach-O file, and whether that Mach-O is executable. */
+ * seals as one), a Mach-O file, and whether that Mach-O is a program. A program is what its header says it is
+ * (`MH_EXECUTE`), never its mode: a `.node` staged 0755 is still a library, and needs no row. A Mach-O whose type
+ * cannot be read falls back to its executable bit. */
 export function readBinEntries(binDir) {
   return readdirSync(binDir, { withFileTypes: true })
     .map((entry) => {
       const path = join(binDir, entry.name);
       const bundle = entry.isDirectory() && /\.(app|framework)$/u.test(entry.name);
       const machO = entry.isFile() && lstatSync(path).size >= 4 && isMachO(path);
-      const executable = machO && (lstatSync(path).mode & 0o111) !== 0;
+      const fileType = machO ? machOFileType(path) : null;
+      const executable =
+        machO &&
+        (fileType === null ? (lstatSync(path).mode & 0o111) !== 0 : fileType === MH_EXECUTE);
       return { name: entry.name, bundle, machO, executable };
     })
     .sort((a, b) => (a.name < b.name ? -1 : 1));

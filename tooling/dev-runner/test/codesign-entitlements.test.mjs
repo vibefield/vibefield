@@ -27,6 +27,8 @@ import {
   entitlementFailures,
   entitlementKeys,
   entitlementProfile,
+  MH_EXECUTE,
+  machOFileType,
   readBinEntries,
   unclassifiedBinEntries,
   withBinEntitlements,
@@ -155,24 +157,59 @@ test("LP-6: the signer's per-file options swap only a none path's entitlements, 
   assert.throws(() => withBinEntitlements(undefined, app, "/native.plist"), /no optionsForFile/u);
 });
 
-/** A bin/ with a thin 64-bit Mach-O header for each executable (enough for `isMachO`), on every platform. */
+/** A thin 64-bit arm64 Mach-O header of `filetype` (2 MH_EXECUTE, 8 MH_BUNDLE): enough for `isMachO` and
+ * `machOFileType`, on every platform. */
+function machOHeader(filetype) {
+  const header = Buffer.alloc(16);
+  header.writeUInt32LE(0xfeedfacf, 0); // the bytes cf fa ed fe
+  header.writeUInt32LE(0x0100000c, 4); // CPU_TYPE_ARM64
+  header.writeUInt32LE(filetype, 12);
+  return header;
+}
+
+/** A bin/ with a Mach-O header for each executable and library, on every platform. A library is staged 0755 on
+ * purpose: its header, not its mode, says it is not a program. */
 function stageBin(t, names) {
   const app = mkdtempSync(join(tmpdir(), "vf-lp6-"));
   t.after(() => rmSync(app, { recursive: true, force: true }));
   const bin = join(app, "Contents", "Resources", "bin");
   mkdirSync(bin, { recursive: true });
-  const machO = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0x0c, 0x00, 0x00, 0x01]);
   for (const [name, kind] of Object.entries(names)) {
     const path = join(bin, name);
     if (kind === "bundle") mkdirSync(join(path, "Contents", "MacOS"), { recursive: true });
     else if (kind === "script") writeFileSync(path, "#!/bin/sh\nexit 0\n");
     else if (kind === "data") writeFileSync(path, "export {};\n");
-    else writeFileSync(path, machO);
-    if (kind === "exec" || kind === "script") chmodSync(path, 0o755);
-    if (kind === "library") chmodSync(path, 0o644);
+    else writeFileSync(path, machOHeader(kind === "library" ? 8 : 2));
+    if (kind === "exec" || kind === "script" || kind === "library") chmodSync(path, 0o755);
   }
   return { app, bin };
 }
+
+test("LP-6: a Mach-O's kind is its header's filetype — thin, or a fat file's first slice — never its mode", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "vf-lp6-type-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const thin = join(dir, "thin");
+  writeFileSync(thin, machOHeader(MH_EXECUTE));
+  assert.equal(machOFileType(thin), MH_EXECUTE);
+  const library = join(dir, "library.node");
+  writeFileSync(library, machOHeader(8));
+  chmodSync(library, 0o755);
+  assert.equal(machOFileType(library), 8);
+  // fat (big-endian header): one fat_arch whose slice starts at 4096
+  const fat = Buffer.alloc(4096 + 16);
+  fat.writeUInt32BE(0xcafebabe, 0);
+  fat.writeUInt32BE(1, 4);
+  fat.writeUInt32BE(0x0100000c, 8);
+  fat.writeUInt32BE(4096, 16);
+  fat.writeUInt32BE(16, 20);
+  machOHeader(MH_EXECUTE).copy(fat, 4096);
+  writeFileSync(join(dir, "fat"), fat);
+  assert.equal(machOFileType(join(dir, "fat")), MH_EXECUTE);
+  // too short to say: null (readBinEntries then falls back to the executable bit)
+  writeFileSync(join(dir, "short"), Buffer.from([0xcf, 0xfa, 0xed, 0xfe]));
+  assert.equal(machOFileType(join(dir, "short")), null);
+  if (process.platform === "darwin") assert.equal(machOFileType("/usr/bin/true"), MH_EXECUTE);
+});
 
 test("LP-6: an executable or a bundle the table does not name is unclassified; libraries, data and scripts are not", (t) => {
   const { bin } = stageBin(t, {
