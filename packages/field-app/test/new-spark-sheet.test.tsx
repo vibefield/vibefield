@@ -41,8 +41,17 @@ const PROVIDERS: AgentProviderSummary[] = [
       instructions: true,
       mcpServerProcess: "terminal",
     },
+    // CP-5a: the catalog's claim as fieldd answers it, which the menu reads
+    offers: { spawn: true, spark: true },
   },
-  { id: OTHER.id, label: OTHER.label, available: true, resumable: false, personas: [] },
+  {
+    id: OTHER.id,
+    label: OTHER.label,
+    available: true,
+    resumable: false,
+    personas: [],
+    offers: { spawn: true, spark: false },
+  },
 ];
 
 const MODELS: AgentModelsResult = {

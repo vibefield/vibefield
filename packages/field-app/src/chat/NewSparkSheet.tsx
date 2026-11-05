@@ -31,11 +31,11 @@ import {
 import { chooseSpark, refreshSparks, usePersonSessions, useSparksReading } from "./sparks-feed";
 
 // THE NEW SPARK SHEET, THE CONTROLLER (SP-1c; DESIGN.md §8 "The New spark sheet"). It reads what the sheet offers —
-// the agents that can be a spark (`agent.providers[].briefing`), the Agent Profiles, an agent's picker when its menu
-// opens (`agent.models`) — holds what the person chose, and hatches (`compose.sparks.hatch`). Created, the spark's
-// face flies from the sky to its row in Chat, Chat chooses it, and the sheet folds. A refusal is said under what it
-// is about (`refusalOf`), and the sheet stays. Like the Peek it is drawn outside the field, which is out of reach and
-// recedes while it stands (`field.tsx`), and it stays for its leave.
+// the agents that can be a spark (`agent.providers[].offers.spark`, CP-5a), the Agent Profiles, an agent's picker
+// when its menu opens (`agent.models`) — holds what the person chose, and hatches (`compose.sparks.hatch`). Created,
+// the spark's face flies from the sky to its row in Chat, Chat chooses it, and the sheet folds. A refusal is said
+// under what it is about (`refusalOf`), and the sheet stays. Like the Peek it is drawn outside the field, which is out
+// of reach and recedes while it stands (`field.tsx`), and it stays for its leave.
 
 /** How long Create waits for the new spark's row to draw before the face flies (the list re-reads its records). */
 const ROW_WAIT_MS = 1_500;

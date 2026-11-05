@@ -25,9 +25,11 @@ import { FIXTURE_HATCHED } from "./spark-fixtures";
 
 // The New spark sheet on fixtures (SP-1c; docs/UI_SYSTEM.md): what fieldd would answer the sheet — the agents it
 // offers, the Agent Profiles, an agent's picker, a hatch — behind the product's own port (`NewSparkPort`), and the
-// sheet's still states read through the product's own helpers (`chat/new-spark.ts`). The catalog's first three agents
-// stand in, never a literal id (R23b): the first takes VibeField's tools, the second declares the briefing with a
-// process the door cannot name, and the third declares none.
+// sheet's still states read through the product's own helpers (`chat/new-spark.ts`). The catalog's first four agents
+// stand in, never a literal id (R23b). As fieldd answers them (CP-5a, CP5-Q1 (b)): the catalog lets the first be a
+// spark (`offers.spark`); it does not let the second or the third yet (one declares the briefing on a process the
+// door cannot name, one declares none), so they are listed disabled; and the fourth is not installed here, so the menu
+// leaves it out.
 
 export const NEW_SPARK_STATES = ["live", "menu", "profiles", "taken"] as const;
 export type NewSparkState = (typeof NEW_SPARK_STATES)[number];
@@ -57,6 +59,7 @@ const PROVIDERS: AgentProviderSummary[] = [
       instructions: true,
       mcpServerProcess: "terminal",
     },
+    offers: { spawn: true, spark: true },
   },
   {
     id: AGENT_CATALOG[1].id,
@@ -68,8 +71,9 @@ const PROVIDERS: AgentProviderSummary[] = [
       mcpServers: true,
       allowTools: true,
       instructions: true,
-      mcpServerProcess: "app-server",
+      mcpServerProcess: "helper",
     },
+    offers: { spawn: true, spark: false },
   },
   {
     id: AGENT_CATALOG[2].id,
@@ -77,6 +81,15 @@ const PROVIDERS: AgentProviderSummary[] = [
     available: true,
     resumable: false,
     personas: [],
+    offers: { spawn: true, spark: false },
+  },
+  {
+    id: AGENT_CATALOG[3].id,
+    label: AGENT_CATALOG[3].label,
+    available: false,
+    resumable: false,
+    personas: [],
+    offers: { spawn: true, spark: false },
   },
 ];
 

@@ -16,8 +16,8 @@ import type { FielddClient } from "@vibefield/fieldd-client";
 
 // THE NEW SPARK SHEET'S MODEL (SP-1c; DESIGN.md §8 "The New spark sheet"; NS-D1 A, NS-D2 B, NS-D5). Pure but for the
 // port at its foot: what the sheet suggests, which agents can be a spark, what Create sends, and where a refusal is
-// said. Every agent id is the catalog's and opaque (AR-L1): a spark's agent is whichever row of `agent.providers`
-// declares the briefing, never a name compared here.
+// said. Every agent id is the catalog's and opaque (AR-L1): a spark's agent is whichever row of `agent.providers` the
+// catalog lets be one (`offers.spark`, CP-5a), never a name compared here.
 
 /** The names the sheet suggests, each a star (the Sparks page's list). Each suggestion lands in a different palette
  * from the last on the page; here the face is dealt apart (NS-D2 B), so the list is only names. */
@@ -67,20 +67,38 @@ export const CANNOT_LIST_AGENTS = "VibeField can't list its agents right now";
  * foot, since Create waits on the profile the spark thinks under and never waits in silence. */
 export const CANNOT_LIST_PROFILES = "VibeField can't list your Agent Profiles right now";
 
-/** The agents the sheet lists: every offered agent, a spark's when it declares all three briefing fields and a process
- * the door can name (CP-1d's gate, read from `agent.providers[].briefing`). */
+/** The agents the sheet lists (CP5-Q1 (b), DESIGN.md §8): the ones the catalog lets be a spark first, then the ones
+ * installed here it does not let yet, disabled with why; one not installed here is not listed. Each keeps
+ * `agent.providers`' order inside its kind. */
 export function sparkAgentsOf(providers: readonly AgentProviderSummary[]): SparkAgent[] {
-  return providers.map((provider) => {
-    const briefing = provider.briefing;
-    const takes =
-      briefing?.mcpServers === true &&
-      briefing.allowTools === true &&
-      briefing.instructions === true &&
-      briefing.mcpServerProcess === "terminal";
-    return takes
-      ? { id: provider.id, label: provider.label, takes }
-      : { id: provider.id, label: provider.label, takes, why: CANNOT_TAKE_TOOLS };
-  });
+  const installed = providers.filter((provider) => provider.available);
+  const sparks = installed.filter(canBeSpark);
+  const notYet = installed.filter((provider) => !canBeSpark(provider));
+  return [
+    ...sparks.map((provider) => ({ id: provider.id, label: provider.label, takes: true })),
+    ...notYet.map((provider) => ({
+      id: provider.id,
+      label: provider.label,
+      takes: false,
+      why: CANNOT_TAKE_TOOLS,
+    })),
+  ];
+}
+
+/** Whether the catalog lets the agent be a spark here: `offers.spark`, fieldd's word on the claim for this device (the
+ * hatch's own verdict, CP-5a). A row with no key comes from a daemon older than the claim, whose own hatch reads the
+ * facts alone, so the sheet reads them too: all three briefing fields, and a process the door can name (CP-1d). This
+ * fallback retires once no older daemon can be adopted. */
+function canBeSpark(provider: AgentProviderSummary): boolean {
+  const claim = provider.offers?.spark;
+  if (typeof claim === "boolean") return claim;
+  const briefing = provider.briefing;
+  return (
+    briefing?.mcpServers === true &&
+    briefing.allowTools === true &&
+    briefing.instructions === true &&
+    briefing.mcpServerProcess === "terminal"
+  );
 }
 
 /** The default Agent Profile: the one marked default, else the first (This Mac on a fresh install). */
