@@ -740,8 +740,9 @@ field, heard"; the page *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`)
      - build-provenance attestations on the DMG and zip;
      - the version-less `VibeField-mac-arm64.dmg` on stables (LP-D17).
    - **Phase 2, the product blockers** (5–18 Nov, parallel lanes):
-     - **A** BP-D9 (a) as ruled (`lp/bp9`) → R4, row 31 (`smoke:profile`) on a signed nightly · R3 (the mini) → BP-2,
-       downloads (BP-D2: "at the first beta") → BP-D5's row with UA's user removal.
+     - **A** BP-D9 (a) as ruled: LANDED 2026-11-05 (BP-1c, M134 `da1a3d695`) → R4, row 31 (`smoke:profile`) on a
+       signed nightly · R3 (the mini) → BP-2, downloads (BP-D2: "at the first beta") → BP-D5's row with UA's user
+       removal.
      - **B** AR-7j, typed agents managed in the packaged app (LP-D1, D2): LANDED 2026-11-05 (M128 `45c3680a3`, LANDED
        "AR-7j"). Owed: its packaged row `verify-agents-package` (desk-gates row 34) green on the first signed build,
        with the start cost measured.

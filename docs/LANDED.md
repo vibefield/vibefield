@@ -32485,3 +32485,67 @@ fieldd sources and 9 fieldd tests):
 - The release notes say that a production build draws Godview's tunables at their defaults.
 - audit.yml's chacha20 `--precise` bump (a yanked version, Q28), a later cargo step.
 - Item 170 stays OPEN. It narrows at LP-6b to the sidecar's T14 petition.
+
+## BP-1c — the desk browser keeps its sign-ins (BP-D9 (a)): the desk profiles live inside Electron's userData in `pnpm dev`, every smoke and row 31, as in the packaged app, and a shell that cannot keep them says so (2026-11-05; `0f484509f` → `da1a3d695`, 9 commits on main `42869dd3c`, lane `lp/bp9` in `/Volumes/SamsungRed/lanes/lp-bp9/vibe-field`, minted as M134 `da1a3d695`, run 134)
+
+**What it rests on.**
+- BP-D9 (a), ruled by James on 2026-11-05 ("under each user account's data"; DECISIONS BP-D9, flipped in AR-7j's
+  records), and `draft/thinking-browser-profile.md` §3·8. A `session.fromPath` profile writes its cookie database
+  only inside Electron's userData (four Electron 43.1.1 probes).
+- The lane was built code-only in wave 1 off `f599761bc` and reviewed through two lenses. Its fixes landed as 3 more
+  commits, plus one light fix (TS2769). prod-builder's review (03:46Z) made one recommendation, ruled in by VF-PM:
+  the runner refuses to start while the old folder's Electron runs. prod-builder RE-GO'd at `5087e43bc` (03:48Z).
+- Rebased three times before the mint: onto `005d713c2`, `764913ca5` and `42869dd3c`. 26 of its 27 files are equal by
+  patch-id, and docs/desk-gates.md differs in context only. The pre-rebase tip `5087e43bc` is kept as
+  `lp/bp9-pre-rebase`. VF-PM's times are the receiver's (VF-PM's clock erratum, 03:50Z).
+
+**What landed.**
+- Production is unchanged: the packaged app's data root was already inside its userData.
+- `pnpm dev` keeps the dev desk's sign-ins:
+  - `paths.mjs` `devLayoutFor` makes Electron's userData the dev root, with the data root under it.
+  - The desk's own state (theme, renderer storage, the OPFS stills) is carried ONCE, by copy, from the old
+    `.vibefield/dev/electron-user-data`, and only before Chromium has run in the new folder. Each entry is staged
+    beside its name and renamed in once whole, and nothing is ever overwritten.
+  - While an Electron still holds the old folder's lock, the runner REFUSES to start, before any Electron is created.
+    It says to quit that app and run again, so the carry is never foreclosed. The old folder is left as it was.
+- Every smoke has ONE fresh home, `/tmp/vf-smoke-*` (a fresh mkdtemp), that is both its Electron profile and its data
+  root, as a packaged app's is.
+  - Main takes a handed home only with the exact name, a matching `VF_SMOKE_RUN` and no data root in it yet.
+  - The launcher removes only a home it minted, on a green run; a red home is kept.
+- Row 31 (`smoke:profile`) runs as production does: phase B's userData IS its data root, and phase A's plaintext
+  control nests the same way.
+- Main checks at start where the desk's profiles lie (`browser-profiles-placement.ts`). Outside userData (a
+  FIELDD_DATA_DIR or `--user-data-dir` set apart) means `until-quit`: logged, and said in Settings → Browser data.
+  - The shell's state gains `DesktopBrowserSignIns` (`kept` | `until-quit`) in contracts' `shell.ts`. It is not in
+    the generated schemas.
+
+**Validation.**
+- This Mac, from inside the lane (nice 19, guard clear), each rc=0:
+  - at `bbcc1dd81` (05:16:41–05:18:27Z): preflight; contracts, electron-shell and field-app typecheck; vitest
+    contracts 65/65, electron-shell 5 files 58/58 and field-app 2 files 12/12; `node --test` 26/26; biome; walls;
+  - at `da1a3d695` (05:32:21–05:32:32Z), the docs-only move: preflight, biome and walls.
+- The mini (a9), run 134: minted `mint/lp-bp9` = `da1a3d695` (tree `f2be298f9bfd`, stacked on `42869dd3c`), and `pnpm
+  verify` armed at 05:34:33Z, exit 0 at 05:40:16Z.
+  - vitest 12,473 passed, 0 failed, 20 skipped. Its +29 are L3's: browser-data-section +2, browser-profiles-placement
+    6 (new), fieldd-native +3, shell 64 → 65, smoke-daemons +4, smoke-profile 9 → 22. One more row ran, unskipped:
+    executable-arch's release row, because L6's stage had built `target/release/field-native` in the mini's lane
+    (that host's state, not L3's).
+  - `node --test` 424/0, +17: electron-user-data (the carry, stale and live locks, `old-folder-in-use`), paths and
+    browser-profile-smoke's phases.
+  - cargo 545/0, 29 projects, biome 3152 files, gen:check exit 0. Logs: `lanes/ts6/logs/mini/run134/`.
+
+**Found.**
+- The browser PANE cannot say "can't keep sign-ins". Only the Settings card and the log say it. That is item 174
+  (PORTALS: `LiveSurfaceBrowserStateV1`, the R10 door and `plugins/browser`), OPEN.
+- A smoke started by hand with no `--user-data-dir` had main mint its home, and `removeSmokeRoot` then ran
+  `rmSync(home)` from inside the live Electron on a green teardown. Fixed here (`a86c3ab0d`); DK-5's rule ("only a
+  parent can remove it whole") holds again.
+
+**Owed.**
+- Row 31 (`smoke:profile`) green on a SIGNED nightly at James's unlock, and the packaged "kept" log line on the first
+  signed nightly (prod-builder).
+- The `until-quit` state is said in Settings only for now: the pane's line is item 174's.
+- A launcher that starts the shell with its own `--user-data-dir` (a dev shortcut, a test harness) gets `until-quit`.
+  Each such launcher is to be found and moved inside, or left saying so.
+- **James:** his next `pnpm dev` after the land carries his dev desk's state once. Quit any VibeField dev app first,
+  or the runner refuses and says so. Deleting the old `.vibefield/dev/electron-user-data` afterwards is his hand.
