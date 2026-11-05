@@ -12,9 +12,16 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentProfileSet, AgentSessionSummary, SparkRecord } from "@vibefield/contracts";
-import { afterAll, describe, expect, it } from "vitest";
+import {
+  type AgentProfileSet,
+  type AgentSessionSummary,
+  createAgentCatalogReaders,
+  type SparkRecord,
+} from "@vibefield/contracts";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { AgentBriefings } from "../src/agent-briefing";
 import { type SparkLaunch, SparkService, SparkStore, sparkSlug } from "../src/tool-plane/sparks";
+import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
 
 // CP-1c — the sparks fieldd keeps and the doors' work (the compose plane, version 2; NS-D1, NS-D2 B, NS-D5, CR-D11).
 // What must hold: an agent that edits a spark's record cannot widen what the spark reaches; a hatch refuses what the
@@ -237,6 +244,37 @@ describe("hatch, list and open (CP-1c; NS-D1, NS-D5, CR-D11)", () => {
       throw new Error("unsupported briefing");
     });
     await expect(h.svc.hatch(HATCH, h.principal)).rejects.toThrow("unsupported briefing");
+    expect(h.svc.list()).toEqual([]);
+    expect(h.launched).toEqual([]);
+    expect(existsSync(join(h.root, "sparks"))).toBe(false);
+  });
+
+  // CP-5a — the daemon's own gate (`AgentBriefings.requireSupported`, as daemon.ts hands it to the service), over a
+  // table whose row for the agent does not claim `spark`: refused before a fact is read, and nothing is written.
+  it("refuses an agent the catalog does not let be a spark (`spark-not-offered`), leaving no folder and no record", async () => {
+    const capabilities = vi.fn(() => ({
+      mcpServers: true,
+      allowTools: true,
+      instructions: true,
+      mcpServerProcess: "terminal" as const,
+    }));
+    const gate = new AgentBriefings({
+      spark: () => undefined,
+      catalog: createAgentCatalogReaders(
+        SCRIPTED_CATALOG.map((row) =>
+          row.id === HATCH.agent ? { ...row, offers: { ...row.offers, spark: false } } : row,
+        ),
+      ),
+      capabilities,
+      door: async () => {
+        throw new Error("the hatch's gate never asks the door");
+      },
+    });
+    const h = service([], (provider) => gate.requireSupported(provider));
+    await expect(h.svc.hatch(HATCH, h.principal)).rejects.toMatchObject({
+      details: { reason: "spark-not-offered", provider: HATCH.agent },
+    });
+    expect(capabilities).not.toHaveBeenCalled();
     expect(h.svc.list()).toEqual([]);
     expect(h.launched).toEqual([]);
     expect(existsSync(join(h.root, "sparks"))).toBe(false);

@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { NativeDoorInfoResult, SparkId, SparkRecord } from "@vibefield/contracts";
+import type {
+  AgentCatalogReaders,
+  NativeDoorInfoResult,
+  SparkId,
+  SparkRecord,
+} from "@vibefield/contracts";
 import { SERVED_TOOLS } from "@vibefield/contracts/tools";
 import {
   type AgentBriefingCapabilities,
@@ -31,6 +36,8 @@ export class AgentBriefings {
   constructor(
     private readonly opts: {
       spark(id: SparkId): SparkRecord | undefined;
+      /** CP-5a (skeleton): the catalog's readers, not read yet */
+      catalog?: AgentCatalogReaders;
       capabilities(provider: string): AgentBriefingCapabilities | undefined;
       door(): Promise<NativeDoorInfoResult>;
     },
@@ -121,6 +128,36 @@ export class AgentBriefings {
     if (capability.mcpServerProcess !== "terminal") return "spark-door-identity-unsupported";
     return undefined;
   }
+}
+
+/** Why an agent cannot be a spark here, by fieldd's reason. */
+export type SparkRefusal =
+  | "spark-not-offered"
+  | "spark-briefing-unsupported"
+  | "spark-door-identity-unsupported";
+
+/** CP-5a (skeleton): the facts alone, as CP-1d's gate reads them. */
+export function sparkFactsRefusal(
+  capability: AgentBriefingCapabilities | undefined,
+  instructions = true,
+): SparkRefusal | undefined {
+  if (
+    !capability?.mcpServers ||
+    !capability.allowTools ||
+    (instructions && !capability.instructions)
+  )
+    return "spark-briefing-unsupported";
+  if (capability.mcpServerProcess !== "terminal") return "spark-door-identity-unsupported";
+  return undefined;
+}
+
+/** CP-5a (skeleton): the hatch's verdict — the claim is not read yet. */
+export function sparkHatchRefusal(
+  _catalog: AgentCatalogReaders,
+  _provider: string,
+  capability: () => AgentBriefingCapabilities | undefined,
+): SparkRefusal | undefined {
+  return sparkFactsRefusal(capability());
 }
 
 /** The door lines every briefing shares: the floor's bridge, as `native.door.info` names it. */

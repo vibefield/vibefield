@@ -57,7 +57,7 @@ describe("the agent catalog (AC-1)", () => {
     expect(new Set(roots).size).toBe(roots.length);
   });
 
-  it("a claim needs its seam: history ⇒ rosetta + a root; spawn/resume/reattach/usage/distribution/personas/invoke ⇒ puppeteer", () => {
+  it("a claim needs its seam: history ⇒ rosetta + a root; spawn/resume/reattach/usage/distribution/personas/invoke/spark ⇒ puppeteer", () => {
     for (const row of rows) {
       if (row.offers.history) {
         expect(row.seams.rosetta, row.id).not.toBeNull();
@@ -225,6 +225,7 @@ describe("the agent catalog (AC-1)", () => {
           distribution: false,
           personas: false,
           invoke: false,
+          spark: false,
         },
         surfaces: { desktop: false, phone: false },
       },
@@ -237,6 +238,41 @@ describe("the agent catalog (AC-1)", () => {
     expect(readers.visible().map((r) => r.id)).toEqual(["x"]);
     expect(readers.entry("claude")).toBeUndefined();
     expect(AGENT_CATALOG_READERS.table).toBe(AGENT_CATALOG);
+  });
+
+  // CP-5a (CP5-Q9 (a), ruled 2026-11-04) — whether VibeField lets the agent be a spark is a claim like the others,
+  // held to the pin's briefing declaration by R23 at preflight. What this file can hold is the table's own rule: the
+  // claim is made only on a `supported` row, after a live spark is witnessed here, and a `deprecated` row may keep it
+  // (its sparks still wake, AC-D3). R23 holds the same rule (`claim-status`).
+  it("spark (CP-5a): a capability every row decides, claimed only on a supported row and kept by a deprecated one", () => {
+    expect(AGENT_CAPABILITIES).toContain("spark");
+    for (const row of rows) {
+      expect(typeof row.offers.spark, row.id).toBe("boolean");
+      if (row.offers.spark) expect(["supported", "deprecated"], row.id).toContain(row.status);
+    }
+    // the table makes the claim somewhere, and only where it is witnessed (Claude Code at CP-5a)
+    expect(rows.filter((row) => row.offers.spark).map((row) => row.id)).toEqual(["claude"]);
+    expect(isOffered("claude", "spark")).toBe(true);
+    expect(isOffered("codex", "spark")).toBe(false);
+    // the table is strict: a row without the key is a typo, never "not claimed"
+    const base = AgentCatalogEntry.parse(AGENT_CATALOG[0]);
+    const { spark: _unsent, ...older } = base.offers;
+    expect(() => AgentCatalogEntry.parse({ ...base, offers: older })).toThrow();
+  });
+
+  it("spark (CP-5a) on the wire: an older daemon's offers lack it and read as unclaimed; the readers answer a deprecated row's claim as visible, never offered", () => {
+    const bare = { id: "x", label: "X", available: true, resumable: true, personas: [] };
+    const older = AgentProviderSummary.parse({ ...bare, offers: { spawn: true, invoke: true } });
+    expect(older.offers?.spark).toBeUndefined();
+    const claimed = AgentProviderSummary.parse({ ...bare, offers: { spawn: true, spark: true } });
+    expect(claimed.offers?.spark).toBe(true);
+    const base = AgentCatalogEntry.parse(AGENT_CATALOG[0]);
+    const readers = createAgentCatalogReaders([
+      { ...base, id: "kept", status: "deprecated", offers: { ...base.offers, spark: true } },
+    ]);
+    expect(readers.isOffered("kept", "spark")).toBe(false);
+    expect(readers.isVisible("kept")).toBe(true);
+    expect(readers.entry("kept")?.offers.spark).toBe(true);
   });
 
   it("task roots (PJ-D21): `~/…` globs on the rows that make task folders, read across the table", () => {

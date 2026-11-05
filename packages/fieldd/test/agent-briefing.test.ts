@@ -1,11 +1,17 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { NativeDoorInfoResult, SparkRecord } from "@vibefield/contracts";
+import {
+  type AgentCatalogEntry,
+  createAgentCatalogReaders,
+  type NativeDoorInfoResult,
+  type SparkRecord,
+} from "@vibefield/contracts";
 import type { AgentBriefingCapabilities } from "@vibefield/puppeteer-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentBriefings } from "../src/agent-briefing";
+import { AgentBriefings, sparkFactsRefusal, sparkHatchRefusal } from "../src/agent-briefing";
 import { SparkStore } from "../src/tool-plane/sparks";
+import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -19,7 +25,12 @@ const supported: AgentBriefingCapabilities = {
 };
 
 // `null` is an agent that declares no briefing at all (a default parameter would read `undefined` as `supported`).
-function harness(capability: AgentBriefingCapabilities | null = supported, doorDown = false) {
+// The catalog is the test seam's table, whose scripted row claims `spark` (CP-5a), unless a test composes another.
+function harness(
+  capability: AgentBriefingCapabilities | null = supported,
+  doorDown = false,
+  catalog: readonly AgentCatalogEntry[] = SCRIPTED_CATALOG,
+) {
   const root = mkdtempSync(join(tmpdir(), "vf-briefing-"));
   roots.push(root);
   const spark: SparkRecord = {
@@ -47,12 +58,14 @@ function harness(capability: AgentBriefingCapabilities | null = supported, doorD
     if (doorDown) throw new Error("the floor offers no door");
     return info;
   });
+  const capabilities = vi.fn(() => capability ?? undefined);
   const service = new AgentBriefings({
     spark: (id) => store.get(id),
-    capabilities: () => capability ?? undefined,
+    catalog: createAgentCatalogReaders(catalog),
+    capabilities,
     door,
   });
-  return { service, spark, store, root, brief, info, door };
+  return { service, spark, store, root, brief, info, door, capabilities };
 }
 
 describe("CP-1d: a fresh briefing for each spark process", () => {
@@ -172,5 +185,83 @@ describe("MT-0: a plain run's briefing, which degrades and never refuses", () =>
     await expect(h.service.prepare(h.spark.id, "scripted")).rejects.toThrow(
       "the floor offers no door",
     );
+  });
+});
+
+// CP-5a (CP5-Q9 (a), ruled 2026-11-04) — whether VibeField lets the agent be a spark is the catalog's claim, and the
+// gate reads it before any fact: hatch needs the row offered and claiming (`isOffered(id, "spark")`), every later
+// birth needs it visible and claiming, so a deprecated agent's sparks still wake (AC-D3). A plain run reads no claim.
+describe("CP-5a: the catalog's spark claim, read before the facts", () => {
+  const unclaimed = catalogWith("scripted", { offers: { ...SCRIPTED_ROW.offers, spark: false } });
+  const notOffered = { details: { reason: "spark-not-offered", provider: "scripted" } };
+
+  it("refuses an unclaimed row `spark-not-offered` at hatch and at every birth, before a fact, the brief or the door is read", async () => {
+    const h = harness(supported, false, unclaimed);
+    expect(() => h.service.requireSupported("scripted")).toThrow(
+      "VibeField does not offer this agent as a spark",
+    );
+    expect(() => h.service.requireSupported("scripted")).toThrow(
+      expect.objectContaining(notOffered),
+    );
+    await expect(h.service.prepare(h.spark.id, "scripted")).rejects.toMatchObject(notOffered);
+    expect(h.capabilities).not.toHaveBeenCalled();
+    expect(h.door).not.toHaveBeenCalled();
+  });
+
+  it("refuses an agent the catalog never decided on, whatever it declares", () => {
+    const h = harness();
+    expect(() => h.service.requireSupported("nobody")).toThrow(
+      expect.objectContaining({ details: { reason: "spark-not-offered", provider: "nobody" } }),
+    );
+    expect(h.capabilities).not.toHaveBeenCalled();
+  });
+
+  it("hatches only an offered row; a deprecated row that keeps its claim is born again, a declined one is not", async () => {
+    const deprecated = harness(supported, false, catalogWith("scripted", { status: "deprecated" }));
+    expect(() => deprecated.service.requireSupported("scripted")).toThrow(
+      expect.objectContaining(notOffered),
+    );
+    expect((await deprecated.service.prepare(deprecated.spark.id, "scripted")).allowTools).toEqual([
+      "vibefield/*",
+    ]);
+    const declined = harness(supported, false, catalogWith("scripted", { status: "declined" }));
+    await expect(declined.service.prepare(declined.spark.id, "scripted")).rejects.toMatchObject(
+      notOffered,
+    );
+    expect(declined.door).not.toHaveBeenCalled();
+  });
+
+  it("reads the facts after the claim: a claimed row the pin cannot brief keeps CP-1d's reasons", async () => {
+    const h = harness({ ...supported, mcpServerProcess: "helper" });
+    expect(() => h.service.requireSupported("scripted")).toThrow(
+      expect.objectContaining({
+        details: { reason: "spark-door-identity-unsupported", provider: "scripted" },
+      }),
+    );
+    expect(h.capabilities).toHaveBeenCalled();
+  });
+
+  it("leaves a plain run's briefing to the facts alone (MT-D9): an unclaimed agent's run is still briefed", async () => {
+    const h = harness(supported, false, unclaimed);
+    expect((await h.service.forRun("scripted")).allowTools).toHaveLength(3);
+  });
+
+  it("exports the one predicate: the hatch's verdict is the claim, then the facts", () => {
+    const claimed = createAgentCatalogReaders(SCRIPTED_CATALOG);
+    const none = createAgentCatalogReaders(unclaimed);
+    const asked = vi.fn(() => supported);
+    expect(sparkHatchRefusal(none, "scripted", asked)).toBe("spark-not-offered");
+    // the declaration is read only once the claim stands
+    expect(asked).not.toHaveBeenCalled();
+    expect(sparkHatchRefusal(claimed, "scripted", () => supported)).toBeUndefined();
+    expect(
+      sparkHatchRefusal(claimed, "scripted", () => ({ ...supported, instructions: false })),
+    ).toBe("spark-briefing-unsupported");
+    expect(
+      sparkHatchRefusal(claimed, "scripted", () => ({ ...supported, mcpServerProcess: "helper" })),
+    ).toBe("spark-door-identity-unsupported");
+    expect(sparkFactsRefusal(undefined)).toBe("spark-briefing-unsupported");
+    // a plain run's facts need no instructions
+    expect(sparkFactsRefusal({ ...supported, instructions: false }, false)).toBeUndefined();
   });
 });

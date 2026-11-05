@@ -34,6 +34,7 @@ const [FIRST, SECOND, THIRD] = [AGENT_CATALOG[0], AGENT_CATALOG[1], AGENT_CATALO
 const provider = (
   entry: { readonly id: string; readonly label: string },
   briefing?: AgentProviderSummary["briefing"],
+  offers?: AgentProviderSummary["offers"],
 ): AgentProviderSummary => ({
   id: entry.id,
   label: entry.label,
@@ -41,6 +42,7 @@ const provider = (
   resumable: true,
   personas: [],
   ...(briefing === undefined ? {} : { briefing }),
+  ...(offers === undefined ? {} : { offers }),
 });
 
 const BRIEFED = { mcpServers: true, allowTools: true, instructions: true } as const;
@@ -92,11 +94,43 @@ describe("the name it suggests", () => {
 });
 
 describe("the agents a spark can think with", () => {
-  it("are the agents that declare all three briefing fields and a process the door can name", () => {
+  // CP-5a, CP5-Q1 (b) (ruled by James 2026-11-04, as NS-D1 A drew it): the catalog's claim, as fieldd answers it for
+  // this device (`offers.spark`), decides; the installed ones it does not let yet follow, disabled with why; one not
+  // installed here is not listed.
+  it("lists the agents the catalog lets be a spark first, then the installed ones it does not let yet, disabled with why; one not installed is absent", () => {
     const agents = sparkAgentsOf([
-      provider(FIRST, { ...BRIEFED, mcpServerProcess: "terminal" }),
-      provider(SECOND, { ...BRIEFED, mcpServerProcess: "app-server" }),
+      provider(FIRST, undefined, { spawn: true, spark: false }),
+      provider(SECOND, undefined, { spawn: true, spark: true }),
+      { ...provider(THIRD, undefined, { spawn: true, spark: true }), available: false },
+    ]);
+    expect(agents).toEqual([
+      { id: SECOND.id, label: SECOND.label, takes: true },
+      { id: FIRST.id, label: FIRST.label, takes: false, why: CANNOT_TAKE_TOOLS },
+    ]);
+    // an installed one that is not let yet is listed whatever else it lacks
+    expect(sparkAgentsOf([{ ...provider(FIRST, undefined, { spark: false }) }])).toEqual([
+      { id: FIRST.id, label: FIRST.label, takes: false, why: CANNOT_TAKE_TOOLS },
+    ]);
+  });
+
+  it("reads the claim, never the facts: fieldd's `offers.spark` is the hatch's own verdict for this device", () => {
+    const agents = sparkAgentsOf([
+      provider(FIRST, { ...BRIEFED, mcpServerProcess: "terminal" }, { spark: false }),
+      provider(SECOND, { ...BRIEFED, mcpServerProcess: "helper" }, { spark: true }),
+    ]);
+    expect(agents.map((agent) => [agent.id, agent.takes])).toEqual([
+      [SECOND.id, true],
+      [FIRST.id, false],
+    ]);
+  });
+
+  // §12 Q10's lean, ruled 2026-11-04: a daemon older than the claim (a newer shell adopts one, leave-running) sends
+  // `offers` without the key, or none at all, and its own hatch is gated by the facts alone — so the sheet reads them
+  it("reads a row with no `spark` key, from a daemon older than the claim, by the briefing it declares", () => {
+    const agents = sparkAgentsOf([
+      provider(SECOND, { ...BRIEFED, mcpServerProcess: "app-server" }, { spawn: true }),
       provider(THIRD),
+      provider(FIRST, { ...BRIEFED, mcpServerProcess: "terminal" }, { spawn: true }),
     ]);
     expect(agents).toEqual([
       { id: FIRST.id, label: FIRST.label, takes: true },

@@ -1666,7 +1666,16 @@ function pinned(id, ports, root = null, extra = {}) {
   };
 }
 
-const FULL = ["spawn", "resume", "reattach", "usage", "distribution", "personas", "invoke"];
+const FULL = [
+  "spawn",
+  "resume",
+  "reattach",
+  "usage",
+  "distribution",
+  "personas",
+  "invoke",
+  "spark",
+];
 
 /** The canned puppeteer pin the verdict fixtures and the enforce driver share. */
 function fixturePuppeteer() {
@@ -1683,6 +1692,8 @@ function fixturePuppeteer() {
       }),
       // composed WITHOUT a profiles port: no native root to spell
       pinned("nu", ["spawn"]),
+      // a pin that implements spark, for a row whose status may not claim it
+      pinned("kap", ["spawn", "spark"]),
     ],
   };
 }
@@ -1769,6 +1780,8 @@ function rottenCatalog() {
       layoutRoot: "~/.nu",
       offers: { spawn: true, history: true },
     }),
+    // claim-status: spark claimed on a preview row (CP5-Q9: claimed on a supported row alone)
+    row("kap", { offers: { spawn: true, spark: true } }),
     // (no row for `delta` → pin-undecided; none for `zeta` → kind-undecided)
   ];
 }
@@ -1783,6 +1796,7 @@ const ROTTEN_EXPECTED = [
   "FAIL kind-registered omega",
   "FAIL pin-claim iota",
   "FAIL pin-compose mu",
+  "FAIL claim-status kap",
   "FAIL pin-undecided delta",
   "FAIL kind-undecided zeta",
 ];
@@ -1818,6 +1832,8 @@ function cleanCatalog() {
     without("mu", "resume"),
     rotten.get("xi"),
     rotten.get("nu"),
+    // unclaimed on a preview row whose pin implements it: no candidate (the claim waits for its promotion)
+    without("kap", "spark"),
   ];
 }
 
@@ -1923,6 +1939,76 @@ function selfTestVerdicts(check) {
     JSON.stringify(typed),
   );
 
+  // The spark rule (CP-5a; CP5-Q9 (a), ruled 2026-11-04): whether VibeField lets the agent be a spark. The pin's
+  // half is the briefing it declares (`descriptor.briefing`: all three fields, and a process the door can name,
+  // `mcpServerProcess: "terminal"`), read here through the port reader itself so the shapes are the pin's own; the
+  // table's half is the status (claimed on a supported row, after a live spark is witnessed here; kept by a
+  // deprecated one, whose sparks still wake, AC-D3). Four rotten shapes: no fields, a helper's process (until CP-5c
+  // widens the rule to a host-spawned helper, one per run), a supported row leaving it unclaimed, a preview row
+  // claiming it.
+  const briefed = (id, briefing) => ({
+    ...portsOf({
+      descriptor: { id, label: id, ...(briefing === undefined ? {} : { briefing }) },
+      createSession() {},
+    }),
+    root: null,
+    rootVia: null,
+  });
+  const whole = { mcpServers: true, allowTools: true, instructions: true };
+  const sparking = {
+    ok: true,
+    providers: [
+      briefed("sig", { ...whole, mcpServerProcess: "terminal" }),
+      briefed("omi", { mcpServers: true, allowTools: false, instructions: false }),
+      briefed("hel", { ...whole, mcpServerProcess: "helper" }),
+      briefed("ups", { ...whole, mcpServerProcess: "terminal" }),
+      briefed("pre", { ...whole, mcpServerProcess: "terminal" }),
+      briefed("lat", { ...whole, mcpServerProcess: "terminal" }),
+      briefed("dep", { ...whole, mcpServerProcess: "terminal" }),
+    ],
+  };
+  const sparked = judge(
+    [
+      row("sig", { status: "supported", offers: { spawn: true, spark: true } }),
+      row("omi", { status: "supported", offers: { spawn: true, spark: true } }),
+      row("hel", { status: "supported", offers: { spawn: true, spark: true } }),
+      row("ups", { status: "supported", offers: { spawn: true } }),
+      row("pre", { offers: { spawn: true, spark: true } }),
+      row("lat", { offers: { spawn: true } }),
+      row("dep", { status: "deprecated", offers: { spawn: true, spark: true } }),
+      row("dec", {
+        status: "declined",
+        seams: { puppeteer: null, rosetta: null },
+        offers: { spark: true },
+        surfaces: { desktop: false, phone: false },
+      }),
+    ],
+    sparking,
+    { ok: true, kinds: new Map() },
+  );
+  const sparkGot = sparked.map((f) => `${f.level} ${f.cls} ${f.subject}`).sort();
+  check(
+    "spark is the pin's whole briefing on a terminal and a supported row's claim: claimed without the fields or on a helper is red, unclaimed on a supported row warns, claimed on a preview or declined row is red, kept on a deprecated one and unclaimed on a preview one are quiet",
+    JSON.stringify(sparkGot) ===
+      JSON.stringify(
+        [
+          "FAIL claim-status dec",
+          "FAIL claim-status pre",
+          "FAIL pin-claim dec",
+          "FAIL pin-claim hel",
+          "FAIL pin-claim omi",
+          "WARN candidate ups",
+        ].sort(),
+      ) &&
+      sparked
+        .filter((f) => f.cls === "pin-claim" && f.subject !== "dec")
+        .every((f) => f.message.includes("`descriptor.briefing`")) &&
+      sparked
+        .filter((f) => f.cls === "claim-status")
+        .every((f) => f.message.includes("`spark`") && f.message.includes("supported")),
+    JSON.stringify(sparked),
+  );
+
   // AC-D10: no rosettad is a WARN in a daily run, a FAIL when required; the
   // table's own history fact holds either way.
   const absent = { ok: false, cls: "unverified", message: "rosetta half UNVERIFIED (fixture)" };
@@ -1966,6 +2052,16 @@ async function selfTestReaders(check) {
     ...extra,
   });
   const full = provider("full", {
+    descriptor: {
+      id: "full",
+      label: "full",
+      briefing: {
+        mcpServers: true,
+        allowTools: true,
+        instructions: true,
+        mcpServerProcess: "terminal",
+      },
+    },
     launch: {
       provider: {
         id: "full",
@@ -2000,7 +2096,7 @@ async function selfTestReaders(check) {
   };
   check(
     "the port reader: every port, a bare provider, a port that refuses (a launch port with no native grammar is not invoke)",
-    ports(full) === "spawn resume reattach usage distribution personas invoke" &&
+    ports(full) === "spawn resume reattach usage distribution personas invoke spark" &&
       ports(bare) === "spawn" &&
       ports(refusing) === "spawn" &&
       portsOf(refusing).profilesPort === true,
@@ -2032,6 +2128,27 @@ async function selfTestReaders(check) {
     "invoke needs a grammar that CLASSIFIES: a nativeInvocation without classifies: true (absent, or false) is not invoke",
     ports(unsaid) === "spawn resume" && ports(unclassified) === "spawn resume",
     `${ports(unsaid)} | ${ports(unclassified)}`,
+  );
+  // CP-5a: spark is the descriptor's briefing WHOLE on a terminal — the gate's facts (fieldd's agent-briefing.ts),
+  // clause for clause. A field false or absent, a helper's or an external process, an undeclared process, or no
+  // declaration at all is not spark.
+  const briefing = (id, declared) =>
+    provider(id, { descriptor: { id, label: id, briefing: declared } });
+  const fields = { mcpServers: true, allowTools: true, instructions: true };
+  const sparkShapes = [
+    briefing("terminal", { ...fields, mcpServerProcess: "terminal" }),
+    briefing("helper", { ...fields, mcpServerProcess: "helper" }),
+    briefing("external", { ...fields, mcpServerProcess: "external" }),
+    briefing("unsaid", fields),
+    briefing("brief-less", { mcpServers: true, allowTools: true, mcpServerProcess: "terminal" }),
+    briefing("allow-less", { ...fields, allowTools: false, mcpServerProcess: "terminal" }),
+    bare,
+  ].map(ports);
+  check(
+    "spark needs the whole briefing on a terminal: a helper, an external or an undeclared process, a missing or false field, or no declaration is not spark",
+    JSON.stringify(sparkShapes) ===
+      JSON.stringify(["spawn spark", "spawn", "spawn", "spawn", "spawn", "spawn", "spawn"]),
+    JSON.stringify(sparkShapes),
   );
 
   const runtime = {

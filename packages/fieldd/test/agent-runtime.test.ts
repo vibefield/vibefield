@@ -51,6 +51,7 @@ import {
   type AgentsReleasesResult,
   type AgentsSetActiveResult,
   type AgentsUpdateResult,
+  catalogEntry,
   type IndexDiscoveriesResult,
   type IndexEnrollmentRecord,
   type IndexStatus,
@@ -2002,6 +2003,7 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     distribution: false,
     personas: false,
     invoke: false,
+    spark: false,
   };
 
   it("agent.providers lists the catalog's visible rows — the decision, the claims, our label, the index's state — in the table's order", async () => {
@@ -2037,6 +2039,29 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     expect(acp?.offers?.history).toBe(false);
     expect(acp).not.toHaveProperty("history");
     expect(JSON.stringify(providers)).not.toContain("/");
+  });
+
+  // CP-5a (CP5-Q9 (a)) — `offers.spark` is the hatch's own verdict for this device, over the REAL pin's briefing
+  // declarations: the table's claim, and the composed provider's facts through the gate's one predicate.
+  it("agent.providers says spark as the hatch would: claimed and passing, claimed on a pin that lacks the facts, unclaimed", async () => {
+    const { daemon } = await setup({
+      // a claim the pin cannot honour (its adapter's MCP children start under a helper): R23 fails it at preflight,
+      // and the device answers false rather than the table's word
+      catalog: catalogWith("codex", {
+        offers: { ...(catalogEntry("codex")?.offers ?? NONE), spark: true },
+      }),
+    });
+    await ready(daemon);
+    const win = await window(daemon, ["agent.spawn"], "c1s");
+    const { providers } = (await win.call("agent.providers", {})) as AgentProvidersResult;
+    const offered = (id: string) => providers.find((p) => p.id === id)?.offers?.spark;
+    expect(offered("claude")).toBe(true);
+    expect(offered("codex")).toBe(false);
+    expect(offered("grok")).toBe(false);
+    // the catalog door answers the table's word, undecorated
+    const reader = await window(daemon, ["agent.observe"], "c1t");
+    const { catalog } = (await reader.call("agent.catalog", {})) as AgentCatalogResult;
+    expect(catalog.find((r) => r.id === "codex")?.offers.spark).toBe(true);
   });
 
   it("agent.catalog answers the visible rows for the surface; the phone never sees the protocol row; a declined row never leaves fieldd; it reads on agent.observe", async () => {
