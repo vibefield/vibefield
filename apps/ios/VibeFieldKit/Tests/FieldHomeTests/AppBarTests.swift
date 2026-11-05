@@ -1,4 +1,6 @@
 import CoreGraphics
+import FieldAgents
+import Foundation
 import Testing
 
 @testable import FieldHome
@@ -51,13 +53,71 @@ struct AppBarTests {
     #expect(AppBar.meltSpacing < 24)
   }
 
-  @Test("the capsule is the system's: two 86 pt tabs, the pill 94 × 54 standing 4 pt inside")
+  /// IOS-12b (PC-D1 A; DESIGN.md §8 "The phone's Chat") — the capsule keeps the system's 188 and its 8 pt inset, and
+  /// holds three tabs: 172 / 3 = 57⅓ each, the pill the tab plus 8 (the overhang 94 had on 86), so it still stands
+  /// 4 pt inside. A third is not a binary fraction: the sums are held to a hair, not to the bit.
+  @Test("the capsule is the system's 188: three tabs of 57⅓, the pill 65⅓ × 54 standing 4 pt inside")
   func theCapsule() {
     #expect(AppBar.capsuleWidth == 188)
+    #expect(AppBar.capsuleInset == 8)
+    #expect(AppTab.capsule == [.field, .history, .chat])
+    #expect(abs(AppBar.tabWidth - 172.0 / 3) < 1e-9)
+    #expect(abs(AppBar.capsuleInset * 2 + AppBar.tabWidth * 3 - 188) < 1e-9)
+    #expect(abs(AppBar.pillWidth - (AppBar.tabWidth + 8)) < 1e-9)
+    #expect(AppBar.pillHeight == 54)
     let pillInsetSide = AppBar.capsuleInset + (AppBar.tabWidth - AppBar.pillWidth) / 2
     let pillInsetTop = (AppBar.height - AppBar.pillHeight) / 2
-    #expect(pillInsetSide == 4)
+    #expect(abs(pillInsetSide - 4) < 1e-9)
     #expect(pillInsetTop == 4)
+  }
+
+  /// VF-PM's Q1 (2026-11-05, at the lean; DESIGN.md §8): Chat's `tab-chat` is drawn at History's 22, Field's own
+  /// asset keeps its 26.
+  @Test("Chat stands third, its glyph History's size, 22")
+  func chatGlyph() {
+    #expect(AppBar.chatGlyph == 22)
+    #expect(AppBar.chatGlyph == AppBar.symbolSize)
+    #expect(AppBar.fieldGlyph == 26)
+    #expect(AppTab.chat.title == "Chat")
+    // hoisted: no key path inside an #expect argument (T10f's kit trap)
+    let titles = AppTab.capsule.map { $0.title }
+    #expect(titles == ["Field", "History", "Chat"])
+  }
+
+  /// PC-D5 A, "one need, one count" (VF-PM's Q2; DESIGN.md §8): Chat's mark is the orange count of the sparks that
+  /// need you; with none, a cyan dot while a thread is unread; else nothing. Field's is its own agents waiting.
+  /// History wears none.
+  @Test("Chat's mark: the count of sparks that need you, else the cyan dot while a thread is unread")
+  func chatMark() {
+    #expect(TabMark.chat(needing: 2, unread: false) == .count(2))
+    #expect(TabMark.chat(needing: 2, unread: true) == .count(2))
+    #expect(TabMark.chat(needing: 0, unread: true) == .unread)
+    #expect(TabMark.chat(needing: 0, unread: false) == TabMark.none)
+    #expect(TabMark.field(waiting: 3) == .count(3))
+    #expect(TabMark.field(waiting: 0) == TabMark.none)
+    // the dot: 10 pt of `--vf-cyan`, where the design page sets it off the glyph's centre
+    #expect(AppBar.dotSize == 10)
+    #expect(AppBar.dotOffset == CGSize(width: 13, height: -9))
+    #expect(AppBar.badgeSize == 20)
+  }
+
+  /// One need, one count: a spark's own run, or an agent a spark started, waiting on you is counted on Chat (with its
+  /// spark), never again on Field. Field counts a blocked run that is no spark's.
+  @Test("Field's count is your own agents waiting: a spark's runs are counted on Chat")
+  func fieldCountsYourOwn() {
+    let at = Date(timeIntervalSince1970: 1_790_803_300)
+    func bubble(_ id: String, _ status: AgentVisualStatus, ofSpark: Bool) -> FieldBubble {
+      FieldBubble(
+        id: id, project: "vibe-field", detail: "", status: status, identityKey: id, createdAt: at, ofSpark: ofSpark)
+    }
+    let bubbles = [
+      bubble("yours-asks", .blocked, ofSpark: false),
+      bubble("yours-works", .working, ofSpark: false),
+      bubble("vela-asks", .blocked, ofSpark: true),
+      bubble("lyra-agent-asks", .blocked, ofSpark: true),
+    ]
+    #expect(TabMark.fieldWaiting(bubbles) == 1)
+    #expect(TabMark.fieldWaiting([]) == 0)
   }
 
   @Test("the row rests where iOS 26 rests its own bar, 21 pt up from the edge on this phone")

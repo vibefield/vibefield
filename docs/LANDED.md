@@ -31732,3 +31732,176 @@ script and the lock):
   the "Wire truth" bullet: "Beside it, `sound` (DESIGN.md §14 in code, track SD) is a second zero-dependency root
   that Electron main, the renderer and plain-node tools all import; wall R31 keeps its source to its own files."
 - `pnpm commit-draft` of `draft/sound` (VF-PM's queue). The mark's clearance check before it ships (§14's limits).
+
+## IOS-12b — phone Chat's tab and list: the bar's third tab, each spark as the Mac reads it, its face, and each desktop's last word (2026-11-05; `d2971415f` → `8255a10b3`, 19 commits on main `3d96c43d7`, lane `ios/12b` in `/Volumes/SamsungRed/lanes/ios12b/vibe-field`, stacked as M127 `8255a10b3`, run 127)
+
+**What it rests on.**
+- PC-D1, D5 and D6, each A (James, 2026-11-04, on the page *Chat in a Pocket*; DECISIONS PC).
+- IOS-12a (LANDED "IOS-12a"): the federated lists under `sparks.use`, the remote row's `spark` and `origin`, the
+  face's DNA golden.
+- SP-1b's rule as the Mac draws it (`packages/field-app/src/chat/spark-status.ts`), which the phone ports.
+- VF-PM's rulings at 00:53Z, before the build:
+  - Q1: the Chat glyph at 22, History's size; the design page drew it at 23.
+  - Q2: Field's badge counts the rows with no `spark` and `origin.by != "spark"`; Chat counts the sparks that need
+    you.
+  - Q3: the flat star's golden beside the DNA golden.
+  - Q4: the commits staged face → bar → list, one packet, one STACKED mint.
+- The lane was cut on `f599761bc` (James's PR #15) and rebased onto `3d96c43d7` before the mint (VF-PM 03:00Z). The
+  range-diff is 19 "=". The pre-rebase tip `eb7aeb69f` (kept as `ios/12b-pre-rebase`) has T's apps/ios
+  (`235975705380`), so its kit runs and stills carry by the tree-hash rule.
+
+**What** (55 files, +6,708 −87):
+- **Where the files are.**
+  - Under `apps/ios/VibeFieldKit`: 23 in Sources and 24 in Tests, 14 of them fixture copies, plus Package.swift.
+  - One each: the iOS README, DESIGN.md, biome.jsonc, field-app's spark-face test and the fixtures check.
+  - Two in design-kit.
+- **DESIGN.md first.**
+  - §8: the bar's Chat glyph at 22; one need, one count.
+  - §9 "Chat on the phone": new away lines, all VF-PM's words and for James's eye. Two are a desktop's last word
+    (01:33Z), beside the existing asleep line. Three are a desktop never heard (02:06Z).
+- **The face** (PC-D6 A, the flat star until IOS-12e).
+  - FieldDesign's `SparkEngine` and `Mulberry32` port design-kit's `agentDNA`; `SparkFlatStar` ports
+    `flat-star.ts`.
+  - Two goldens hold them. One is IOS-12a's DNA golden. The other is the new `spark-flat-star.golden.json`, which
+    `spark-dna-golden.mjs` writes and `--check`s.
+  - Over 24 seeds the outline matches to the last digit, and the eyes match at every scale the phone draws.
+  - `SparkFlatFace` draws it in a Canvas, with FlatStarView's box.
+- **The bar** (PC-D1 A, PC-D5 A).
+  - `AppTab.chat`: three tabs of 57⅓ in the 188 capsule, and the pill at 65⅓ × 54.
+  - `tab-chat` is design-kit's `message` at 22; `check:ios-fixtures` holds its path to the kit.
+  - Field's badge counts only your own agents waiting (`AgentRemoteRow.ofSpark`).
+  - Chat's mark is the count of sparks that need you. With none, it is a cyan dot (`ChromePalette.info`,
+    `--vf-cyan`) while a thread is unread.
+- **The list** (SP-1b on the phone).
+  - `SparkShapes` reads the home's merged `compose.sparks.list` and `needs.list` as strictly as zod. A spark it
+    cannot read is refused by its id, alone.
+  - `SparkEntries` is `spark-status.ts`'s rule: a spark's own run, its agents' runs, its items, its status (19 words
+    pinned to `statuses.ts`), PC-D5's count, and newest activity first.
+  - `ThreadLedger` keeps SP-1d's marks.
+- **Chat's feed.**
+  - The home's door asks both lists with `scope: "mesh"`. It asks again when a door is handed over, when the board's
+    live-spark key changes, on each `needs.subscribe` frame (the home's queue, and each desktop that answered, through
+    the home), and after a wake. Never on a timer.
+  - A desktop that did not answer keeps its last word (PC-L4).
+- **The page.**
+  - History's large title and paper.
+  - A subtitle that counts what is true.
+  - A line for each desktop that did not answer (`ChatAway.lines`).
+  - Rows of 76: the face at 48, the status word, the time and the dot.
+  - Wake (`compose.sparks.open`) in the row's menu and its accessibility actions.
+- **The note.** "‹name› needs you" stands over the bar for 2.4 s when a need STARTS while another page stands, and a
+  tap opens Chat. The first whole reading is no news.
+- **`-vf-mock`.** `ChatFixtureDoor` (DEBUG) answers the contracts' merged lists byte for byte. `-vf-mock-tab=chat` and
+  `-vf-mock-chat-away` stamp the page.
+- **The one WireObject exception.** WireObject reads `null` as absent. But `SparkSummary.turnedAt: null` MEANS
+  "hatched and never worked" (`never`), and an absent key means `unknown`, so that one field is read raw
+  (`object.fields["turnedAt"]`).
+- **Pin-class: one line.** In `apps/ios/VibeFieldKit/Package.swift`, FieldHome's `resources` gains
+  `.copy("Fixtures")`.
+  - It holds the demo door's two merged lists: about 2.6 KB of inert JSON in Release.
+  - FieldMesh already makes the same trade (`Package.swift:226-231`).
+  - No dependency, product or release line moves.
+
+**Validation.**
+- **Host lights at `5fe2468ce`** (`lanes/ios12b/host-lights-5fe2468ce.log`, clean porcelain):
+  - `spark-dna-golden.mjs --check`: "24 seeds each, the engine's";
+  - check-ios-fixtures: 249 copies, 86 pins;
+  - `check-import-boundaries --enforce`, biome and design-kit tsc: all clean;
+  - field-app's spark-face vitest: 19/19;
+  - field-app tsc: 0 errors, after the lane's mille build (Found 2).
+
+  An independent Python cross-check of the flat star found 0 diffs over 24 outlines.
+- **Kit slots on this Mac** (Xcode 26.6 17F113, iOS 26.5, iPhone 17 Pro `F93EABF3`, under `lanes/co-plan/HOLD` with
+  the wait rule; the simulator was shut down after each):
+  - face: RED at build at `41ba8ed88`. `Mulberry32` moved into FieldDesign, and three rain test files lacked its
+    import. `5cddd678d` fixes it. GREEN at `1f2803c12`, 01:02:39Z.
+  - bar: GREEN at `d8defc71b`, 01:18:51Z.
+  - list-a: RED at `362eef77e`, 1 of 39, because `turnedAt: null` was read as unknown. `d6f8b69db` fixes it, and the
+    exception above is that fix. GREEN at `d6f8b69db`, 01:42:13Z, 39 tests.
+  - list: GREEN at `5fe2468ce`, 02:01:57Z: 3 runs, 41 tests, 10 rows.
+- **The list slot at the pre-rebase tip, on the Mac mini.** It moved there at 02:32Z on James's "Make sure Mac mini
+  is also utilized", and a9 ran it.
+  - "IOS-12b KIT SLOT (list) at eb7aeb69f1b1055da3920a488a62641b7895a98d (tree e3a2eb04057d) on the mini: GREEN —
+    Xcode 27.2 Build version 27B52 simulator 1F155533-579F-408B-9B90-FC4AD8B318B0; … no issue, no failure, no crash
+    02:36:25Z".
+  - 3 runs, 42 tests, 0 red. All five suites and all 11 rows passed.
+  - So the list stage is proved on both toolchains.
+- **Stills** (the mini, iOS 27.0, iPhone 17 `1F155533`, 1206 × 2622). Each is at the pre-rebase tip, looked at, and
+  whole, under `lanes/ios/stills/ios12b/tree-e3a2eb04057d-`:
+  - `light-field` (`f93fe0067d0da21f`): Field 1 (your own agent waiting) and Chat 1 (Vela). One need, one count.
+  - `light-chat` (`c5c4385f89ef617a`): mini said as never heard; Kiwi asleep, then Vela asking you.
+  - `light-away` (`4e0ff57140616b48`): with no door, the home's last word.
+  - The dark three are a witness, not a gate (VF-PM 02:48Z, on PG's N12):
+    owed on the mini (a9), delivered after the mint; their shas come in a follow-up records line.
+- **The packet:** STACKED; VF-PM pre-checked it (`lanes/ios12b/IOS-12b-packet.md`).
+- **Run 127** (`8255a10b3`, minted by a9 on VF-PM's GO, stacked on `3d96c43d7`; the run is T, tree `a9b59b303dc6`):
+  "== ts6-mini verify done (verify 0) 02:58:31Z; HEAD 8255a10b31395d0faed452add9265af2189efdd7" (the Mac mini: Apple
+  M4, macOS 26.7.2, node v26.5.0, rustc 1.99.1; armed 02:52:37Z). `pnpm verify` exit 0: vitest 12,354 passed / 0
+  failed / 18 skipped over 887 files (run 126 +1: spark-face 18 → 19), node 365/0, cargo 545/0 in 34 suites, 29
+  projects typechecked and tested, biome 3,130 files, wall R31 PASS, the iOS fixtures 249 copies identical, pins 86,
+  0 FAIL rows; no re-run.
+- **Landed:** main fast-forwarded `3d96c43d7` → `8255a10b3` on VF-PM's GO (2026-11-05T03:01:21Z, the fixer's stamp).
+
+**Not witnessed (said).**
+- **Two desktops live.** The merge, the carry and the away lines are held by the contracts' merged goldens and the
+  feed's fake door. No second desktop answered, or slept, under a real phone.
+- **The note's look.** No launch flag stages a need that starts after the first whole reading. ChatFeedTests' row holds
+  its rule, and its look is a hand row.
+- **What comes later.** The thread: a row opens nothing until IOS-12c, which waits on SP-7. Needs you is IOS-12d, and
+  the glow star IOS-12e.
+
+**Found (said).**
+1. **An away line claimed a last word the phone never heard.**
+   - The merged golden showed it: mini (`dev-01HQ9S7Y44`), asleep with no spark, was said as "These are as it last
+     said".
+   - So was every cold start with the home asleep. That is the common case, because the list lives in memory.
+   - VF-PM ruled (i) at 02:06Z, and the fix rode 12b. DESIGN §9 gained three never-heard lines first. Then came the red
+     row "a desktop never heard is said as never heard, never as its last word", and the green, `ChatAway.lines`.
+2. **The lane's field-app tsc was red until mille was built.** It was the lane, not 12b.
+   - mklane ran with SKIP_MILLE=1 (VF-PM 01:06Z), so R24's built `@vibecook/mille/remote` did not resolve (log
+     `field-app-tsc-before-mille.log`).
+   - The lane's mille build under the HOLD (`mille-js.log`, 124 s) brought it to 0 errors.
+3. **Neither tab mark has a ring.** The orange count and the cyan dot sit on the glyph's corner with no paper ring
+   against the glass. A hand row, for James's eye in the stills.
+4. **Rows are not tappable before 12c.** A tap that opens nothing is the honest state until the thread exists.
+5. **IOS-12a's `you` downgrade edge is untouched by 12b.** 12b sends no say, since the composer is 12c's; its one write
+   is a wake.
+6. **An edit to a running slot script corrupted that run** (01:39Z). Bash reads a script as it runs. Every run since
+   goes from a frozen copy (`kit/run-<stage>-<tip>.sh`).
+7. **This Mac's stills run stopped under swap pressure** (02:07Z).
+   - Swap was 98% full. fseventsd held 8.7 GiB at 02:07Z (VF-PM read 14.9 GiB at 02:14Z), and the relief is James's.
+   - A `simctl terminate` hung, and stopping the run skipped its EXIT trap, because bash runs a trap only after its
+     foreground child returns.
+   - The HOLD and the simulator were cleaned by hand: a lone `simctl shutdown`, 4 s. The 9:41 status-bar override
+     was left on `F93EABF3`.
+   - The runs then moved to the mini.
+8. **TH-1's flush at the say door** (VF-PM 01:22Z). Nothing in 12b assumes a say comes before a held wake.
+9. **A spark's ask does not move its row's time or order.**
+   - Vela has asked you since Oct 31, but its row says Oct 29 and stands below Kiwi.
+   - This is CH-D1 as the Mac rules it (`spark-status.ts:179`): items are not activity. The phone matches the Mac.
+   - It is a question for James's eye on both platforms.
+10. **The contracts fixture's two sparks deal near-twin faces.** Seeds 2846113027 and 1048573 both deal palette 8 and
+    close 5-point stars. That is the engine's deal, and the phone is held to it.
+
+**Rulings during the build** (VF-PM):
+- 00:53Z: Q1–Q4.
+- 01:13Z: the HOLD's wait rule.
+- 01:33Z: §9's two away lines (a timeout or unreachable "isn't answering"; incompatible "runs a build this phone can't
+  read").
+- 01:58Z: the lane's mille build, then tsc.
+- 02:04Z: Found 1 rides 12b.
+- 02:06Z: ruling (i), the never-heard lines, with incompatible's for symmetry.
+- 02:15Z: the runs deferred on swap.
+- 02:32Z: the runs to the mini.
+- 02:48Z: the dark stills are a witness, not a gate.
+
+**Errata, corrected at their sources.** None. No claim 12b wrote was falsified after it was written. My description of
+the chat stills to a9 (Vela first, "studio and loft") was wrong. The code was right by the Mac's rule (Found 9), and the
+packet says so.
+
+**Owed.**
+- The three dark stills on the mini (a9), unless delivered above.
+- The two-desktop run (James).
+- For James's eye: §9's away lines, Found 3 and Found 9.
+- Next for the IOS session: IOS-13a (Settings for App Review, the 0.9 launch; ruled 02:29Z).
+- On IOS-12: 12e and 12f. 12c waits on SP-7 (NOT landed), and 12d on 12c.

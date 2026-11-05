@@ -170,6 +170,10 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   /// desktop that owns it. Not a facet (the facet doc's "at most one" stands): a bare terminal still draws hollow, and
   /// an agent's join stays its facet's. Read through `join`, never directly. nil on every agent and on the mock.
   public let terminalJoin: AgentJoin?
+  /// IOS-12b (PC-D5 A, one need, one count) — the run is a spark's (`AgentRemoteRow.ofSpark`): its own session, or an
+  /// agent it started. Its wait is counted on Chat, with its spark, so Field's badge leaves it out; its bubble still
+  /// turns orange. false on every run a person started, on every bare terminal and on the mock.
+  public let ofSpark: Bool
 
   public init(
     id: String,
@@ -188,7 +192,8 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     host: String? = nil,
     modelId: String? = nil,
     runKey: String? = nil,
-    terminalJoin: AgentJoin? = nil
+    terminalJoin: AgentJoin? = nil,
+    ofSpark: Bool = false
   ) {
     self.id = id
     self.project = project
@@ -207,6 +212,7 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     self.modelId = modelId
     self.runKey = runKey
     self.terminalJoin = terminalJoin
+    self.ofSpark = ofSpark
   }
 
   /// Item 154 — the card's join, whatever the body is: an agent's run, or a bare terminal's pane. Every reader of a

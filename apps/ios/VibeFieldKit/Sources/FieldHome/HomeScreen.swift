@@ -117,10 +117,18 @@ public struct HomeScreen: View {
   /// destructive, and the sentence says what goes and what stays.
   @State private var signOutPending = false
   // --- IOS-9a/9e: the two tabs, search, and the account in one bar ---------
-  /// Which page stands: the field, History, or search.
+  /// Which page stands: the field, History, Chat (IOS-12b), or search.
   @State private var selectedTab: AppTab = .field
   /// The page search goes back to when it closes.
   @State private var tabBeforeSearch: AppTab = .field
+  /// IOS-12b — Chat's feed, through the home (its one door), and the threads'
+  /// marks (SP-1d): both for the app's life, written nowhere.
+  @State private var chat = ChatFeed()
+  @State private var chatLedger = ThreadLedger()
+  /// The note over the bar (S-4): which needs are new, and the spark it says.
+  @State private var chatNotes = ChatNotes()
+  @State private var chatNote: SparkSummary?
+  @State private var chatNoteSaid = 0
   /// The History tab's stack, its landed search and whether its scroll has
   /// folded the bar — shared with search, so a hit can land across the switch.
   @State private var history = HistoryRouter()
@@ -804,9 +812,12 @@ public struct HomeScreen: View {
     ZStack {
       fieldTab.page(visible: selectedTab == .field)
       historyTab.page(visible: selectedTab == .history)
+      chatTab.page(visible: selectedTab == .chat)
       searchTab.page(visible: selectedTab == .search)
     }
+    .background { chatHooks }
     .overlay { bar }
+    .overlay(alignment: .bottom) { chatNoteOverlay }
     .background {
       GeometryReader { geo in
         Color.clear
@@ -850,6 +861,138 @@ public struct HomeScreen: View {
     .safeAreaInset(edge: .bottom, spacing: 0) {
       Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing || slotProject != nil || slotSession != nil))
     }
+  }
+
+  /// IOS-12b (PC-D1 A) — Chat's page: its sparks, SP-1b's reading over the
+  /// home's rows, newest activity first.
+  private var chatTab: some View {
+    let entries = chatEntries
+    return ChatPage(
+      entries: entries, ledger: chatLedger, desktops: chatDesktopNames(entries), away: chatAway,
+      heard: chat.reading.heard, onWake: { spark in Task { try? await chat.wake(spark) } }
+    )
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: false))
+    }
+  }
+
+  /// IOS-12b — Chat's list: every spark the home lists, read by SP-1b's rule
+  /// over the home's rows and the needs-you queue.
+  private var chatEntries: [SparkEntry] {
+    SparkEntries.entries(
+      sparks: chat.reading.sparks, rows: (link?.rows ?? []).map(\.board), items: chat.reading.items)
+  }
+
+  /// Chat's mark on the bar (PC-D5 A): the sparks that need you, else the
+  /// cyan dot while a thread is unread.
+  private var chatMark: TabMark {
+    TabMark.chat(needing: SparkEntries.needing(chatEntries), unread: !chatLedger.unread.isEmpty)
+  }
+
+  /// Chat's hooks, on an invisible view of their own so the screen's chain
+  /// stays inside what the type-checker solves: the door follows the home,
+  /// the list follows the board's live sparks, the ledger reads each reading,
+  /// and the way back from the background asks again.
+  private var chatHooks: some View {
+    Color.clear
+      .onChange(of: linkHome, initial: true) { syncChatDoor() }
+      .onChange(of: link?.fieldIsLive) { syncChatDoor() }
+      #if DEBUG
+        .onChange(of: mockActive) { syncChatDoor() }
+      #endif
+      .onChange(of: link?.rows) { _, rows in chat.board((rows ?? []).map(\.board)) }
+      .onChange(of: chatEntries) { _, entries in
+        chatLedger.read(entries)
+        noteIfNew(entries)
+      }
+      .onChange(of: selectedTab) { _, tab in
+        if tab == .chat { chatNote = nil }
+      }
+      .onChange(of: scenePhase) { _, phase in
+        if phase == .active { chat.refresh() }
+      }
+  }
+
+  /// S-4 — a spark that starts to need you while another page stands says so
+  /// over the bar for 2.4 s; the first whole reading is no news.
+  private func noteIfNew(_ entries: [SparkEntry]) {
+    let whole = chat.reading.heard && chat.reading.needsHeard
+    guard let entry = chatNotes.read(entries, elsewhere: selectedTab != .chat, whole: whole) else { return }
+    chatNoteSaid += 1
+    let said = chatNoteSaid
+    withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : FieldMotion.island(0.42)) { chatNote = entry.spark }
+    Task {
+      try? await Task.sleep(for: ChatNoteView.lasts)
+      guard said == chatNoteSaid else { return }
+      withAnimation(.easeInOut(duration: 0.2)) { chatNote = nil }
+    }
+  }
+
+  /// The note, 12 above the bar's row, while another page stands (search keeps the bar's place).
+  @ViewBuilder
+  private var chatNoteOverlay: some View {
+    if let spark = chatNote, selectedTab != .chat, selectedTab != .search, !accountMenuOpen {
+      ChatNoteView(spark: spark) {
+        chatNote = nil
+        selectedTab = .chat
+      }
+      .padding(.bottom, AppBar.bottomGap(homeInset: homeInset) + AppBar.height + ChatNoteView.gap)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+      .ignoresSafeArea(.container, edges: .bottom)
+      .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+  }
+
+  /// Chat's door: the home's own client while the home answers; none while
+  /// it does not, and the list stands as the home last said (PC-L4).
+  private func syncChatDoor() {
+    #if DEBUG
+      if mockActive {
+        chat.attach(ChatFixtureDoor.shared, home: ChatFixtureDoor.home)
+        // `-vf-mock-chat-away`: the home answers once and then sleeps, so the page stands as it last said
+        if ProcessInfo.processInfo.arguments.contains("-vf-mock-chat-away") {
+          Task {
+            try? await Task.sleep(for: .seconds(1))
+            chat.attach(nil, home: nil)
+          }
+        }
+        return
+      }
+    #endif
+    guard let link, let home = link.home, link.fieldIsLive, let client = link.client(for: home) else {
+      chat.attach(nil, home: nil)
+      return
+    }
+    chat.attach(client, home: home)
+  }
+
+  /// A desktop's name for Chat's words: the field's, else the demo's; the
+  /// home's when nothing names one.
+  private func chatName(_ device: String?) -> String {
+    #if DEBUG
+      if mockActive, let name = ChatFixtureDoor.names[device ?? ChatFixtureDoor.home] { return name }
+    #endif
+    let id = device ?? linkHome
+    return linkDesktops.first { $0.deviceId == id }?.name ?? "your home"
+  }
+
+  /// The desktops the sparks live on, by name, in the list's order.
+  private func chatDesktopNames(_ entries: [SparkEntry]) -> [String] {
+    var names: [String] = []
+    for entry in entries {
+      let name = chatName(entry.spark.device)
+      if !names.contains(name) { names.append(name) }
+    }
+    return names
+  }
+
+  /// The desktops that did not answer (PC-L4), each its last word or never
+  /// heard (`ChatAway.lines`): every one the merge says did not answer, or
+  /// the home itself while no door answers — asleep when the tailnet no
+  /// longer lists it, else not answering.
+  private var chatAway: [ChatAway] {
+    ChatAway.lines(
+      chat.reading, home: linkHome, homeListed: linkDesktops.contains { $0.deviceId == linkHome }, name: chatName)
   }
 
   private var searchTab: some View {
@@ -924,7 +1067,8 @@ public struct HomeScreen: View {
                 .padding(.leading, AppBar.margin)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-              TabCapsule(selection: $selectedTab, waiting: waitingCount, pill: tabPill)
+              TabCapsule(
+                selection: $selectedTab, field: .field(waiting: waitingCount), chat: chatMark, pill: tabPill)
                 .liquidGlassCapsule()
                 .glassID("tabs", in: barGlass)
             }
@@ -1205,8 +1349,9 @@ public struct HomeScreen: View {
     withAnimation(AccountCornerView.grow) { accountMenuOpen = open }
   }
 
-  /// The Field tab's orange count (§2.5): the agents waiting on the person.
-  private var waitingCount: Int { bubbles.filter { $0.status == .blocked }.count }
+  /// The Field tab's orange count (§2.5): your own agents waiting on you. A
+  /// spark's runs are counted on Chat, once (PC-D5 A, one need, one count).
+  private var waitingCount: Int { TabMark.fieldWaiting(bubbles) }
 
   /// SP-6 — what History reads: the link's self desktops, each over its own
   /// door (the home's shared, the rest opened for the reading — SP-D2 (a)),
@@ -1301,7 +1446,7 @@ public struct HomeScreen: View {
         // tailnet. The account is `MockAccount`'s (signed in, 🦊, studio up
         // and mini asleep; every act in the corner moves its standing), the
         // field is the scripted fleet, History is the records' corpus and
-        // search runs over it. `-vf-mock-tab=history|search` opens a page,
+        // search runs over it. `-vf-mock-tab=history|chat|search` opens a page,
         // `-vf-mock-open` grows the corner's menu, `-vf-mock-signed-out`
         // starts on the `Sign in` circle, `-vf-mock-search=<q>` fills the
         // search field, `-vf-mock-landed` lands the second hit of the first
@@ -1321,6 +1466,7 @@ public struct HomeScreen: View {
           if let tab = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-tab=") }) {
             switch tab.dropFirst("-vf-mock-tab=".count) {
             case "history": selectedTab = .history
+            case "chat": selectedTab = .chat
             case "search": openSearch()
             default: selectedTab = .field
             }

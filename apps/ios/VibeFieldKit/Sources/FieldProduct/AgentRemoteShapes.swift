@@ -24,14 +24,15 @@ import Foundation
 
 // MARK: - Strict reads
 
+// Shared with the spark doors' readers (`SparkShapes.swift`, IOS-12b), which keep this cut's posture.
 extension WireObject {
-  fileprivate func mismatch(_ key: String, _ expected: String) -> WireDecodeError {
+  func mismatch(_ key: String, _ expected: String) -> WireDecodeError {
     WireDecodeError(shape: shape, reason: "`\(key)` is not \(expected)")
   }
 
   /// The value at a KNOWN key as zod reads it: absent is nil, `null` is refused (`.optional()` is not
   /// `.nullable()`), and the key is marked read either way.
-  fileprivate mutating func present(_ key: String) throws -> JSONValue? {
+  mutating func present(_ key: String) throws -> JSONValue? {
     let raw = fields[key]
     _ = value(key)
     guard let raw else { return nil }
@@ -40,52 +41,52 @@ extension WireObject {
   }
 
   /// Absent → nil; present with another JSON type → the row is refused (zod's posture on a known key).
-  fileprivate mutating func typedString(_ key: String) throws -> String? {
+  mutating func typedString(_ key: String) throws -> String? {
     guard let raw = try present(key) else { return nil }
     guard let text = raw.stringValue else { throw mismatch(key, "a string") }
     return text
   }
 
   /// An integer: 5.0 reads, 5.5 refuses (`JSONValue.intValue`, as `z.number().int()`).
-  fileprivate mutating func typedInt(_ key: String) throws -> Int64? {
+  mutating func typedInt(_ key: String) throws -> Int64? {
     guard let raw = try present(key) else { return nil }
     guard let number = raw.intValue else { throw mismatch(key, "an integer") }
     return number
   }
 
-  fileprivate mutating func typedDouble(_ key: String) throws -> Double? {
+  mutating func typedDouble(_ key: String) throws -> Double? {
     guard let raw = try present(key) else { return nil }
     guard let number = raw.doubleValue else { throw mismatch(key, "a number") }
     return number
   }
 
-  fileprivate mutating func typedBool(_ key: String) throws -> Bool? {
+  mutating func typedBool(_ key: String) throws -> Bool? {
     guard let raw = try present(key) else { return nil }
     guard let flag = raw.boolValue else { throw mismatch(key, "a boolean") }
     return flag
   }
 
-  fileprivate func missing(_ key: String) -> WireDecodeError {
+  func missing(_ key: String) -> WireDecodeError {
     WireDecodeError(shape: shape, reason: "missing `\(key)`")
   }
 
   /// Required text, where "" is a value (`z.string()` with no `.min`).
-  fileprivate mutating func text(_ key: String) throws -> String {
+  mutating func text(_ key: String) throws -> String {
     guard let text = try typedString(key) else { throw missing(key) }
     return text
   }
 
   /// Required text inside a UTF-16 length bound (`z.string().min(a).max(b)`).
-  fileprivate mutating func text(_ key: String, _ bound: ClosedRange<Int>) throws -> String {
+  mutating func text(_ key: String, _ bound: ClosedRange<Int>) throws -> String {
     try bounded(key, try text(key), bound)
   }
 
-  fileprivate mutating func typedString(_ key: String, _ bound: ClosedRange<Int>) throws -> String? {
+  mutating func typedString(_ key: String, _ bound: ClosedRange<Int>) throws -> String? {
     guard let text = try typedString(key) else { return nil }
     return try bounded(key, text, bound)
   }
 
-  fileprivate func bounded(_ key: String, _ text: String, _ bound: ClosedRange<Int>) throws -> String {
+  func bounded(_ key: String, _ text: String, _ bound: ClosedRange<Int>) throws -> String {
     guard bound.contains(text.utf16.count) else {
       throw WireDecodeError(
         shape: shape,
@@ -94,40 +95,40 @@ extension WireObject {
     return text
   }
 
-  fileprivate mutating func integer(_ key: String) throws -> Int64 {
+  mutating func integer(_ key: String) throws -> Int64 {
     guard let number = try typedInt(key) else { throw missing(key) }
     return number
   }
 
   /// A required integer at or above a floor (`.nonnegative()` is 0, `.positive()` is 1).
-  fileprivate mutating func integer(_ key: String, atLeast floor: Int64) throws -> Int64 {
+  mutating func integer(_ key: String, atLeast floor: Int64) throws -> Int64 {
     try atLeast(key, try integer(key), floor)
   }
 
-  fileprivate mutating func typedInt(_ key: String, atLeast floor: Int64) throws -> Int64? {
+  mutating func typedInt(_ key: String, atLeast floor: Int64) throws -> Int64? {
     guard let number = try typedInt(key) else { return nil }
     return try atLeast(key, number, floor)
   }
 
-  fileprivate func atLeast(_ key: String, _ number: Int64, _ floor: Int64) throws -> Int64 {
+  func atLeast(_ key: String, _ number: Int64, _ floor: Int64) throws -> Int64 {
     guard number >= floor else {
       throw WireDecodeError(shape: shape, reason: "`\(key)` is \(number), below \(floor)")
     }
     return number
   }
 
-  fileprivate mutating func number(_ key: String) throws -> Double {
+  mutating func number(_ key: String) throws -> Double {
     guard let number = try typedDouble(key) else { throw missing(key) }
     return number
   }
 
-  fileprivate mutating func flag(_ key: String) throws -> Bool {
+  mutating func flag(_ key: String) throws -> Bool {
     guard let flag = try typedBool(key) else { throw missing(key) }
     return flag
   }
 
   /// A CLOSED word (a zod enum or literal): absent → nil, a word this build does not know → refused.
-  fileprivate mutating func closed<W: RawRepresentable>(_ key: String, _: W.Type) throws -> W?
+  mutating func closed<W: RawRepresentable>(_ key: String, _: W.Type) throws -> W?
   where W.RawValue == String {
     guard let word = try typedString(key) else { return nil }
     guard let value = W(rawValue: word) else {
@@ -136,29 +137,29 @@ extension WireObject {
     return value
   }
 
-  fileprivate mutating func requiredClosed<W: RawRepresentable>(_ key: String, _ type: W.Type) throws -> W
+  mutating func requiredClosed<W: RawRepresentable>(_ key: String, _ type: W.Type) throws -> W
   where W.RawValue == String {
     guard let value = try closed(key, type) else { throw missing(key) }
     return value
   }
 
   /// A known key read strictly by `read`: absent → nil, `null` → refused, a value `read` refuses → refused.
-  fileprivate mutating func strict<T>(_ key: String, _ read: (JSONValue) throws -> T) throws -> T? {
+  mutating func strict<T>(_ key: String, _ read: (JSONValue) throws -> T) throws -> T? {
     guard let raw = try present(key) else { return nil }
     return try read(raw)
   }
 
   /// A sub-shape read strictly: absent → nil, `null` or a non-object → refused, a malformed one → refused.
-  fileprivate mutating func strictObject<T>(_ key: String, _ make: (JSONValue) throws -> T) throws -> T? {
+  mutating func strictObject<T>(_ key: String, _ make: (JSONValue) throws -> T) throws -> T? {
     try strict(key, make)
   }
 
-  fileprivate mutating func requiredObject<T>(_ key: String, _ make: (JSONValue) throws -> T) throws -> T {
+  mutating func requiredObject<T>(_ key: String, _ make: (JSONValue) throws -> T) throws -> T {
     guard let value = try strictObject(key, make) else { throw missing(key) }
     return value
   }
 
-  fileprivate mutating func requiredArray(strict key: String) throws -> [JSONValue] {
+  mutating func requiredArray(strict key: String) throws -> [JSONValue] {
     guard let raw = try present(key) else { throw missing(key) }
     guard let elements = raw.arrayValue else { throw mismatch(key, "an array") }
     return elements
@@ -166,7 +167,7 @@ extension WireObject {
 
   /// A key the window's union does not read on this row: kept when it reads, left UNREAD (so it is named in
   /// `unknownFields`) when it does not, and never a refusal.
-  fileprivate mutating func tolerant<T>(_ key: String, _ read: (JSONValue) throws -> T) -> T? {
+  mutating func tolerant<T>(_ key: String, _ read: (JSONValue) throws -> T) -> T? {
     guard let raw = fields[key], let value = try? read(raw) else { return nil }
     _ = self.value(key)
     return value
@@ -593,6 +594,11 @@ public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
   public let unknownFields: [String]
 
   public var id: String { runtimeRunId }
+
+  /// IOS-12b (PC-D5 A, one need, one count; DESIGN.md §8 "The phone's Chat") — the run is a spark's: its own session
+  /// (`spark`, whoever its origin names), or an agent a spark started (`origin.by == "spark"`, as SP-1b's `agentRunsOf`
+  /// reads it). Its wait is counted on Chat, with its spark; Field's badge counts only the runs that are no spark's.
+  public var ofSpark: Bool { spark != nil || origin?.by == "spark" }
 
   public init(json: JSONValue) throws {
     var object = try WireObject(shape: "AgentRemoteRow", value: json)

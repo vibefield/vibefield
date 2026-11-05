@@ -5484,10 +5484,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **The bar, with three tabs** (PC-D1 A): **Field** · **History** · **Chat** in the same capsule. The row stays 62
     tall, 21 from the sides and the foot (IOS-9e). The capsule stays 188 wide: 8 inset and three tabs of 57⅓. The pill
     is the tab plus 8, the overhang today's 94 has on 86: 65⅓ × 54. The glyphs: Field's asset at 26, History's symbol
-    at 22, and Chat's §13 message cut as `tab-chat`, as the Mac's cell wears it. The labels are 10 semibold; "History",
-    37 wide, sits under the tab's 57. The badge (PC-D5 A) is §2.5's orange with the count of sparks that need you, 20;
-    with none, a cyan dot of 10 while a thread is unread. In a thread the bar steps aside and the composer takes its
-    place, as Messages does, and back brings it back (380ms).
+    at 22, and Chat's §13 message cut as `tab-chat`, as the Mac's cell wears it, at 22, History's size (VF-PM
+    2026-11-05, at IOS-12b; the design page drew the two non-Field glyphs at 23). The labels are 10 semibold;
+    "History", 37 wide, sits under the tab's 57. The badge (PC-D5 A) is §2.5's orange with the count of sparks that
+    need you, 20; with none, a cyan dot of 10 while a thread is unread. One need is one count: Field's badge counts
+    only your own agents (a run with no spark, and not started by one), and a spark's need, or its agents' asks, is
+    counted once, on Chat. In a thread the bar steps aside and the composer takes its place, as Messages does, and
+    back brings it back (380ms).
   - **A spark's row** (CH-D1, newest activity first): 76 tall, 16 from the sides, its separator from the words' edge.
     Its face is 48, framed, live while it works (§2.10). The name is 17 semibold and the time 15 tertiary, by the
     Mac's rule (now, 9:41 AM, a weekday, a date). Its status's word is 15 tertiary, and in the attention ink for
@@ -5864,7 +5867,18 @@ delivered: ‹name›’s session ended", or, when the send is uncertain and is 
 in its pane". Every state is in words (PC-L4). A spark asleep: "‹name› is asleep · a message wakes it", with
 **Wake**. Its desktop asleep: "‹desktop› is asleep. These are as it last said; your words wait here until it
 wakes.", on a card "‹desktop› is asleep · answer when it wakes", and under a draft "Waits here until ‹desktop›
-wakes". Needs you says who asks ("‹name› asks", "research·3 asks"), an agent's own ask says **Answer in its pane**,
+wakes". Its desktop not answering the home's merge (a timeout, or unreachable: one fact to the person): "‹desktop›
+isn't answering. These are as it last said; your words wait here until it answers." Its desktop answering with a
+build the home can't merge (incompatible), never said as not answering: "‹desktop› runs a build this phone can't
+read. These are as it last said; your words wait here until it's updated." *(VF-PM 2026-11-05, at IOS-12b: the merge
+says five words and the page drew one; for James's eye.)* "As it last said" stands only while the list carries a
+spark or an ask of that desktop (with no door, of any desktop: the home's last word). A desktop the phone has never
+heard is said in its own line for the same fact, never as a last word and never as a blank. The list lives in memory,
+so a cold start is the common case: "‹desktop› is asleep. Its sparks show here when it wakes.", "‹desktop› isn't
+answering. Its sparks show here when it answers.", "‹desktop› runs a build this phone can't read. Its sparks show
+here when it's updated." *(VF-PM 2026-11-05 02:06Z, at IOS-12b's Found: "as it last said" about a desktop never heard
+is a false claim; for James's eye.)* Needs you says who asks ("‹name› asks", "research·3
+asks"), an agent's own ask says **Answer in its pane**,
 and an answer says "You said ‹choice›". The note says "‹name› needs you". New spark says "Runs on ‹desktop›, your
 home" and **Create ‹name›**, and refuses with "‹name› is taken" or "‹profile› has no ‹agent› sign-in".
 

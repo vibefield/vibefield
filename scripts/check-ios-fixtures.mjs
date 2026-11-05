@@ -70,6 +70,11 @@ const OTHER_ORIGINS = new Map([
   // IOS-12a (PC-D6 A) — the spark face's DNA golden, generated from the vendored engine by
   // packages/design-kit/scripts/spark-dna-golden.mjs, which the phone's agentDNA (IOS-12b) is held to
   ["spark-dna.golden.json", join(root, "packages/design-kit/fixtures/spark-dna.golden.json")],
+  // IOS-12b — the flat star's golden beside it (the same generator, from flat-star.ts), which SparkFlatStar is held to
+  [
+    "spark-flat-star.golden.json",
+    join(root, "packages/design-kit/fixtures/spark-flat-star.golden.json"),
+  ],
   [
     "phone-fold.golden.json",
     join(root, "packages/field-app/test/fixtures/phone-godview/phone-fold.golden.json"),
@@ -204,6 +209,21 @@ const remoteFixtures = [
   "agent-report-shown.routed.json",
   ...remoteWitness,
 ];
+// IOS-12b — Chat on the phone: the home's lists of the sparks and of the needs-you queue (`scope: "mesh"`, IOS-12a),
+// and an item of each kind, which the kit's `SparkSummary` / `NeedsItem` readers (FieldProductTests) parse.
+const sparkFixtures = [
+  "compose-sparks-list.valid.json",
+  "compose-sparks-list.merged.json",
+  "compose-sparks-list.turned.json",
+  "needs-list.valid.json",
+  "needs-list.merged.json",
+  "needs-item.question.json",
+  "needs-item.held-send.json",
+  "needs-item.held-send-cut.json",
+  "needs-item.held-spawn.json",
+  "needs-item.agent-ask.json",
+  "needs-item.unknown-kind.json",
+];
 const requiredMirrors = [
   ["freeway", freewayFixtures, ["Tests/FieldFreewayTests"]],
   ["tp", tpFixtures, ["Tests/FieldRoutedTerminalTests"]],
@@ -221,12 +241,20 @@ const requiredMirrors = [
   // IOS-8f — the face deal's vector: the phone deals from the desktop's own deck and hash
   ["face", ["face-deal.vector.json"], ["Tests/FieldDesignTests"]],
   // IOS-12a (PC-D6 A) — the spark face's DNA golden: the phone deals a spark's face from the desktop's own engine
-  ["spark-face", ["spark-dna.golden.json"], ["Tests/FieldDesignTests"]],
+  [
+    "spark-face",
+    ["spark-dna.golden.json", "spark-flat-star.golden.json"],
+    ["Tests/FieldDesignTests"],
+  ],
   // IOS-8f — `user.me`'s answers, read by the kit's own `UserMeResult`
   ["user-me", ["user-me.valid.json", "user-me.dealt.json"], ["Tests/FieldProductTests"]],
   // PG-3c — the remote cut's readers' goldens; PG-3d — the fold's parity golden beside them, which
   // the phone's copy of its home's board is held to step by step (PhoneFoldParityTests)
   ["remote", [...remoteFixtures, "phone-fold.golden.json"], ["Tests/FieldProductTests"]],
+  // IOS-12b — the sparks' and the needs' lists, and each kind of item, read by Chat on the phone
+  ["sparks", sparkFixtures, ["Tests/FieldProductTests"]],
+  // and the two merged lists Chat's demo door answers under `-vf-mock` (ChatFixtureDoor, DEBUG)
+  ["sparks", ["compose-sparks-list.merged.json", "needs-list.merged.json"], ["Sources/FieldHome"]],
   // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's;
   // PG-3e — the body golden, which the drawn rows' bubbles are held to (PhoneBodyParityTests)
   [
@@ -455,6 +483,72 @@ const OS_MARKS_IOS = join(
     ADMIN_ORIGIN,
     ADMIN_SWIFT,
   );
+}
+
+// IOS-12b — Chat's tab glyph (DESIGN.md §8 "The phone's Chat": §13's
+// `message` cut as `tab-chat`, as the Mac's cell wears it): a template SVG
+// beside `tab-field`, held to design-kit's glyph data — its one stroke, at
+// §13's weight of 2.
+{
+  const GLYPHS = "packages/design-kit/src/glyphs/data.ts";
+  const COPY =
+    "apps/ios/VibeFieldKit/Sources/FieldHome/Resources/Glyphs.xcassets/tab-chat.imageset/chat.svg";
+  const read = (file) => {
+    try {
+      return readFileSync(join(root, file), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const d =
+    /^ {2}message: \{"kind":"instrument","strokes":\[\["path",\{"d":"([^"]+)"\}\]\],"fills":\[\]\},$/m.exec(
+      read(GLYPHS),
+    )?.[1];
+  const svg = read(COPY);
+  checked += 1;
+  if (d === undefined || !svg.includes(` d="${d}"`) || !svg.includes('stroke-width="2"')) {
+    problems.push(
+      `${COPY} is not ${GLYPHS}'s \`message\` (${d === undefined ? "its stroke is unreadable" : "path or weight differ"})\n` +
+        "  fix: copy the glyph's path exactly, stroked at 2 in its 24 box (or move this script's pattern with the data)",
+    );
+  }
+}
+
+// IOS-12b — §2.5's hues on the phone's chrome (DESIGN.md §2.5; the bar's cyan
+// dot, §8 "The phone's Chat", PC-D5 A): each state colour `ChromePalette`
+// names is tokens.css's own, read from both files and compared.
+{
+  const TOKENS = "packages/design-kit/src/tokens.css";
+  const PALETTE_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldDesign/ChromePalette.swift";
+  const read = (file) => {
+    try {
+      return readFileSync(join(root, file), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const tokens = read(TOKENS);
+  const palette = read(PALETTE_SWIFT);
+  for (const [name, token] of [
+    ["attention", "orange"],
+    ["green", "green"],
+    ["red", "red"],
+    ["info", "cyan"],
+  ]) {
+    checked += 1;
+    const hex = (pattern, text) => pattern.exec(text)?.[1]?.toLowerCase() ?? null;
+    const origin = hex(new RegExp(`^\\s*--vf-${token}: #([0-9a-fA-F]{6});$`, "m"), tokens);
+    const copy = hex(
+      new RegExp(`^ {2}public static let ${name} = solid\\(0x([0-9A-Fa-f]{6})\\)$`, "m"),
+      palette,
+    );
+    if (origin === null || copy === null || origin !== copy) {
+      problems.push(
+        `${PALETTE_SWIFT}'s ${name} is ${copy ?? "unreadable"} but ${TOKENS}'s --vf-${token} is ${origin ?? "unreadable"}\n` +
+          "  fix: copy the token's value exactly (or move this script's pattern with the declaration)",
+      );
+    }
+  }
 }
 
 // PG-4t — the phone's monitor skin (DESIGN.md §2.7; §8 "The monitor view owns
@@ -850,6 +944,36 @@ pins.push(
     freewayPin("FREEWAY_APPROVAL", key, swift, { indent: 4, value: '"[a-z-]+"' }),
   ),
 );
+
+// IOS-12b — a spark's words (DESIGN.md §2.10): Chat's list on the phone says design-kit's own. The ids are read
+// from `statuses.ts`, so a status added there with no word on the phone is a pin nobody can read: red.
+const SPARK_STATUSES_TS = "packages/design-kit/src/spark-face/statuses.ts";
+const SPARK_ENTRIES_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldProduct/SparkEntries.swift";
+{
+  let ids = [];
+  try {
+    const table = readFileSync(join(root, SPARK_STATUSES_TS), "utf8");
+    ids = [...table.matchAll(/\{ id: "([a-z]+)", word: "[^"]+" \}/g)].map((match) => match[1]);
+  } catch {
+    ids = [];
+  }
+  if (ids.length === 0) problems.push(`no spark statuses read from ${SPARK_STATUSES_TS}`);
+  pins.push(
+    ...ids.map((id) => ({
+      name: `SPARK_STATUSES.${id}`,
+      origin: {
+        file: SPARK_STATUSES_TS,
+        pattern: new RegExp(`\\{ id: "${id}", word: "([^"]+)" \\}`),
+        label: `SPARK_STATUSES ${id}`,
+      },
+      copy: {
+        file: SPARK_ENTRIES_SWIFT,
+        pattern: new RegExp(`^ {4}case \\.${id}: "([^"]+)"$`, "m"),
+        label: `SparkStatus.${id}.word`,
+      },
+    })),
+  );
+}
 
 const pinProblems = [];
 const notices = [];

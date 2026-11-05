@@ -1,0 +1,45 @@
+{
+  "sparks": [
+    {
+      "id": "sp-7k2m9q4x",
+      "name": "Vela",
+      "face": {
+        "seed": 2846113027
+      },
+      "agent": "claude",
+      "modelSelection": {
+        "modelId": "claude-opus-5-5",
+        "controls": {
+          "effort": "high"
+        }
+      },
+      "profiles": ["work", "native"],
+      "thinksUnder": "work",
+      "folder": "/Users/you/Library/Application Support/VibeField/users/u-1f3a/sparks/vela",
+      "createdAt": "2026-10-29T11:02:10.118Z",
+      "updatedAt": "2026-10-29T11:02:10.118Z",
+      "session": {
+        "runtimeRunId": "run-12",
+        "terminalSessionId": "sess-01JB7Q2V",
+        "live": true
+      }
+    },
+    {
+      "id": "sp-3hd81pqa",
+      "name": "Lyra",
+      "face": {
+        "seed": 90210417
+      },
+      "agent": "claude",
+      "profiles": ["native"],
+      "thinksUnder": "native",
+      "folder": "/Users/you/Library/Application Support/VibeField/users/u-1f3a/sparks/lyra",
+      "createdAt": "2026-10-29T11:20:00.000Z",
+      "updatedAt": "2026-10-29T11:20:00.000Z",
+      "session": {
+        "runtimeRunId": "run-9",
+        "live": false
+      }
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  flatStar,
   loadSparklings,
   SPARK_NEEDS_YOU,
   SPARK_STATUSES,
@@ -118,6 +119,37 @@ describe("DESIGN.md §2.10 — the phone's face golden (IOS-12a, PC-D6 A)", () =
     expect(GOLDEN.palettes).toEqual(
       engines.PALETTES.slice(0, 12).map(({ name, c, deep }) => ({ name, c, deep })),
     );
+  });
+});
+
+describe("DESIGN.md §2.10 — the phone's flat star golden (IOS-12b, PC-D6 A)", () => {
+  // The flat star the phone draws (IOS-12b's SparkFlatStar in Swift), over the kit's byte-identical copy: for each seed,
+  // flat-star.ts's outline and eyes at each face scale, from the engine's body and eyes. A row that fails means the
+  // engine or flat-star.ts moved: regenerate on purpose (`node packages/design-kit/scripts/spark-dna-golden.mjs`).
+  const FLAT = JSON.parse(
+    readFileSync(join(KIT, "fixtures/spark-flat-star.golden.json"), "utf8"),
+  ) as {
+    faceScales: number[];
+    seeds: Array<{
+      seed: number;
+      outline: string;
+      eyes: Array<{ faceScale: number; pair: unknown }>;
+    }>;
+  };
+
+  it("is what flat-star.ts draws for every seed: the outline, and the eyes at every face scale", () => {
+    expect(FLAT.faceScales).toEqual([1, 1.12, 1.25]);
+    expect(FLAT.seeds).toHaveLength(24);
+    for (const row of FLAT.seeds) {
+      const dna = engines.agentDNA(row.seed);
+      const body = engines.makeBody(row.seed, dna.body);
+      const eyes = engines.makeEyes(row.seed, dna.eyes);
+      expect(flatStar(body, eyes, 1).outline, `outline ${row.seed}`).toBe(row.outline);
+      for (const { faceScale, pair } of row.eyes)
+        expect(flatStar(body, eyes, faceScale).eyes, `eyes ${row.seed} at ${faceScale}`).toEqual(
+          pair,
+        );
+    }
   });
 });
 

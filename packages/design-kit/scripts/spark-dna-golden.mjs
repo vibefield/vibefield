@@ -7,6 +7,12 @@
 // the twelve palettes a spark draws from, as a face draws them (its name, its colours, its backdrop). No stills: they
 // are WebGL2 renders, and IOS-12e holds its Metal star to the engine's own.
 //
+// IOS-12b (VF-PM's Q3, 2026-11-05): beside it, the flat star's golden (`spark-flat-star.golden.json`): what design-kit's
+// `flat-star.ts` draws for the same seeds from the engine's body and eyes — the outline as its SVG path, and the two
+// pill eyes at each face scale the phone draws (1, 1.12 and 1.25; `sparkFaceScale`). It records only what a seed's
+// outline and eyes ARE. The phone's flat star (IOS-12b) is held to it, and field-app's spark-face test holds it to
+// flat-star.ts.
+//
 // A change to the engine changes every spark's face, so this file moves only on purpose:
 //   node packages/design-kit/scripts/spark-dna-golden.mjs           writes the golden
 //   node packages/design-kit/scripts/spark-dna-golden.mjs --check   exits 1 when the golden is not the engine's
@@ -20,6 +26,7 @@ import vm from "node:vm";
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ENGINE = join(KIT, "src/spark-face/vendor/sparks.js");
 const GOLDEN = join(KIT, "fixtures/spark-dna.golden.json");
+const FLAT_GOLDEN = join(KIT, "fixtures/spark-flat-star.golden.json");
 
 /** The seeds the golden deals: the ends of the range, the seeds the contracts' fixtures and the kit's tests wear, and
  * an even spread across the 32 bits. */
@@ -63,6 +70,30 @@ export function dealSparkDna(engine) {
   };
 }
 
+/** The face scales the phone draws a flat star at (`sparkFaceScale`: 1 above 48, 1.12 to 48, 1.25 to 32). */
+export const SPARK_FACE_SCALES = [1, 1.12, 1.25];
+
+/** The flat star's golden: for each seed, the outline and the eyes `flatStar` draws from the engine's body and eyes. */
+export function dealSparkFlatStar(engine, flatStar) {
+  return {
+    "//": "IOS-12b (PC-D6 A; VF-PM Q3). design-kit's flat star for each seed of the DNA golden: the outline (its SVG path) and the two pill eyes at each face scale. Regenerate on purpose: node packages/design-kit/scripts/spark-dna-golden.mjs (then the kit's copy: pnpm check:ios-fixtures names it).",
+    faceScales: SPARK_FACE_SCALES,
+    seeds: SPARK_DNA_SEEDS.map((seed) => {
+      const dna = engine.agentDNA(seed);
+      const body = engine.makeBody(seed, dna.body);
+      const eyes = engine.makeEyes(seed, dna.eyes);
+      return {
+        seed,
+        outline: flatStar(body, eyes, 1).outline,
+        eyes: SPARK_FACE_SCALES.map((faceScale) => ({
+          faceScale,
+          pair: flatStar(body, eyes, faceScale).eyes,
+        })),
+      };
+    }),
+  };
+}
+
 /** The engine, loaded as the window loads it: one IIFE that sets `window.Sparklings`. */
 function loadEngine() {
   const context = vm.createContext({ window: {} });
@@ -72,19 +103,29 @@ function loadEngine() {
 
 const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
+  const engine = loadEngine();
+  // flat-star.ts imports only types, so Node loads it as it stands (type stripping)
+  const { flatStar } = await import("../src/spark-face/flat-star.ts");
   // through JSON once, so the vm realm's arrays and objects are plain ones
-  const text = `${JSON.stringify(JSON.parse(JSON.stringify(dealSparkDna(loadEngine()))), null, 2)}\n`;
+  const render = (golden) => `${JSON.stringify(JSON.parse(JSON.stringify(golden)), null, 2)}\n`;
+  const goldens = [
+    ["spark-dna", GOLDEN, render(dealSparkDna(engine))],
+    ["spark-flat-star", FLAT_GOLDEN, render(dealSparkFlatStar(engine, flatStar))],
+  ];
   if (process.argv.includes("--check")) {
-    const kept = readFileSync(GOLDEN, "utf8");
-    if (kept !== text) {
-      console.error(
-        `spark-dna golden: ${GOLDEN} is not what the vendored engine deals; regenerate on purpose`,
-      );
-      process.exit(1);
+    let stale = false;
+    for (const [name, path, text] of goldens) {
+      if (readFileSync(path, "utf8") !== text) {
+        console.error(
+          `${name} golden: ${path} is not what the vendored engine deals; regenerate on purpose`,
+        );
+        stale = true;
+      }
     }
-    console.log(`spark-dna golden: ${SPARK_DNA_SEEDS.length} seeds, the engine's`);
+    if (stale) process.exit(1);
+    console.log(`spark goldens: ${SPARK_DNA_SEEDS.length} seeds each, the engine's`);
   } else {
-    writeFileSync(GOLDEN, text);
-    console.log(`spark-dna golden: wrote ${SPARK_DNA_SEEDS.length} seeds`);
+    for (const [, path, text] of goldens) writeFileSync(path, text);
+    console.log(`spark goldens: wrote ${goldens.length}, ${SPARK_DNA_SEEDS.length} seeds each`);
   }
 }

@@ -355,7 +355,9 @@ let package = Package(
         "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct", "FieldFreeway",
         "FieldRoutedTerminal", "FieldSettings", "FieldSplash", "FieldLock",
       ],
-      resources: [.process("Resources")]
+      // IOS-12b — `Fixtures`: the contracts' own sparks and needs lists, which Chat's demo door answers under
+      // `-vf-mock` (`ChatFixtureDoor`, DEBUG only); `pnpm check:ios-fixtures` keeps them byte for byte.
+      resources: [.process("Resources"), .copy("Fixtures")]
     ),
     .testTarget(name: "SwarmPhysicsTests", dependencies: ["SwarmPhysics"]),
     // The face (IOS-8a, DESIGN.md §2.8): the deal, the hash, the tilt and the
