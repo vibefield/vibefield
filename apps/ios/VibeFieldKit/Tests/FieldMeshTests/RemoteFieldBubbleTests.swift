@@ -147,6 +147,23 @@ import Testing
     #expect(pending?.exited == false)
   }
 
+  /// IOS-12b (PC-D5 A, one need, one count) — the bubble carries whose its run is, so Field's badge leaves a spark's
+  /// to Chat: its own session (`spark`), or an agent it started (`origin.by == "spark"`). A run you started is yours.
+  @Test func aSparksRunIsLeftToChat() throws {
+    let ask = try R.row("run-p-ask")
+    let yours = try Self.bubble(ask)
+    #expect(yours.status == .blocked)
+    #expect(!yours.ofSpark)
+    let own = try Self.bubble(R.edited(ask, ["spark"], .string("sp-vela01")))
+    #expect(own.ofSpark)
+    #expect(own.status == .blocked)
+    let started = try Self.bubble(
+      R.edited(ask, ["origin"], .object(["by": .string("spark"), "spark": .string("sp-vela01")])))
+    #expect(started.ofSpark)
+    let person = try Self.bubble(R.edited(ask, ["origin"], .object(["by": .string("you")])))
+    #expect(!person.ofSpark)
+  }
+
   /// M6 — a bare terminal is a hollow with no facet; a peer's wears its host (Q-E8: no attach in 3e, so no join).
   @Test func aBareTerminalIsHollowAndAPeersWearsItsHost() throws {
     let shell = try Self.bubble(try R.row("pty-h2"))
