@@ -534,8 +534,11 @@ export const AGENT_STOP = {
  *    JSON can nest about 32,000 deep, deeper than canonical JSON's recursion goes.
  *  - HOST_CALLS_WAITING_MAX, HOST_LOG_LINES_MAX: a run's calls waiting on their answers at once, and the log lines it
  *    says in its life (bth's review P1, ruled 11:46Z). A script that yields each turn answers its pings, so the ping
- *    never bounds it: past either, fieldd ends the host as `flood` (FLOW_HOST_ENDINGS). The first is far past
- *    CALLS_MAX and LIVE_STEPS_MAX, so a `parallel` held at the cap is never ended for waiting. */
+ *    never bounds it: past either, fieldd ends the host as `flood` (FLOW_HOST_ENDINGS). Both are a flow's own
+ *    ceilings (bth's re-read N2, 13:22Z). A `parallel` is `Promise.all`, which sends every call before any answer
+ *    or hold reaches it, so a fan-out of more than 256 at once ends `flood` at its 257th call, before CALLS_MAX's
+ *    hold (CP-4a2b's) could ask at the 41st; and a run that logs once an item ends `flood` at its 10,001st line.
+ *    Whether a held run refuses its calls fast, or DESIGN.md says the ceiling, is CP-4a2b's. */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
