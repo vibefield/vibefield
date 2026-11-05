@@ -25,7 +25,7 @@ struct LockPage: View {
         }
         .disabled(asking || (lock.method == LockMethod.none && !lock.isOn))
       } header: {
-        ChromeListHead(tags: [FactTag("This phone")])
+        ChromeListHead(tags: [FactTag(DeviceWord.current.This)])
       } footer: {
         ChromeListFoot(lock.switchFoot)
       }

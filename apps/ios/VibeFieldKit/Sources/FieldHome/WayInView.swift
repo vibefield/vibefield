@@ -315,7 +315,7 @@ struct WayInView: View {
       Image(systemName: "key")
         .font(.system(size: 17, weight: .regular))
         .foregroundStyle(ChromePalette.inkSecondary)
-      Text("This phone")
+      Text(DeviceWord.current.This)
         .font(ChromeType.sans(15, .medium))
         .foregroundStyle(ChromePalette.ink)
       Spacer(minLength: 8)
@@ -336,7 +336,7 @@ struct WayInView: View {
         }
         .font(ChromeType.sans(13, .semibold))
         .foregroundStyle(ChromePalette.ink)
-        .accessibilityLabel(copied ? "Copied" : "Copy this phone’s name")
+        .accessibilityLabel(copied ? "Copied" : SettingsWords.copyName(DeviceWord.current))
       }
     }
     .padding(.horizontal, 14)

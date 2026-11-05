@@ -34,7 +34,7 @@ struct AccountPage: View {
             .frame(maxWidth: .infinity)
         }
       } footer: {
-        ChromeListFoot(SettingsWords.signOutMessage)
+        ChromeListFoot(SettingsWords.signOutMessage(DeviceWord.current))
       }
       .chromeRows()
     }
@@ -48,7 +48,7 @@ struct AccountPage: View {
       Button("Sign out", role: .destructive) { actions.signOut() }
       Button("Cancel", role: .cancel) {}
     } message: {
-      Text(SettingsWords.signOutMessage)
+      Text(SettingsWords.signOutMessage(DeviceWord.current))
     }
   }
 
@@ -80,7 +80,7 @@ struct AccountPage: View {
   }
 
   private var faceSection: some View {
-    let words = SettingsModel.faceWords(account.faceSource, face: account.face)
+    let words = SettingsModel.faceWords(account.faceSource, face: account.face, device: DeviceWord.current)
     return Section {
       HStack(spacing: 12) {
         Group {
@@ -107,7 +107,7 @@ struct AccountPage: View {
   private var faceTags: [FactTag] {
     switch account.faceSource {
     case .none: [FactTag("No desktop yet", line: .dashed)]
-    case .dealt: [FactTag("This phone")]
+    case .dealt: [FactTag(DeviceWord.current.This)]
     case .home(let desktop): [FactTag("From \(desktop)")]
     }
   }
@@ -116,7 +116,7 @@ struct AccountPage: View {
 
   private var tailscaleSection: some View {
     let state = SettingsModel.tailscaleState(account.standing)
-    let foot = SettingsModel.tailscaleFoot(account.standing)
+    let foot = SettingsModel.tailscaleFoot(account.standing, device: DeviceWord.current)
     return Section {
       HStack(spacing: 14) {
         TailscaleMark(size: 56)
@@ -162,7 +162,7 @@ struct AccountPage: View {
         }
       }
     } header: {
-      ChromeListHead("Tailscale", tags: [FactTag("This phone")])
+      ChromeListHead("Tailscale", tags: [FactTag(DeviceWord.current.This)])
     } footer: {
       ChromeListFoot(foot.text, attention: foot.wantsTheUser)
     }
@@ -175,8 +175,8 @@ struct AccountPage: View {
     Section {
       if let machine = account.machineName {
         HStack(spacing: 12) {
-          ChromeRow("This phone", value: machine, valueIsMono: true)
-          CopyButton(text: machine, label: "Copy this phone’s name")
+          ChromeRow(DeviceWord.current.This, value: machine, valueIsMono: true)
+          CopyButton(text: machine, label: SettingsWords.copyName(DeviceWord.current))
         }
       }
       if let tailnet = account.tailnet {
@@ -185,7 +185,7 @@ struct AccountPage: View {
     } header: {
       ChromeListHead("Network details")
     } footer: {
-      ChromeListFoot("Named as Tailscale names them, so you can find this phone on Tailscale’s own page.")
+      ChromeListFoot(SettingsWords.networkFoot(DeviceWord.current))
     }
     .chromeRows()
   }

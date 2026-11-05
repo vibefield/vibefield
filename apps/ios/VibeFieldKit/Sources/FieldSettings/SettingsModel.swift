@@ -24,12 +24,12 @@ public enum SettingsModel {
   /// the door's own words when the network asks for the person (TS-7). Signed
   /// out, nothing: Settings is never open signed out (WI-L1). RETIRED 2026-11-02
   /// (item 163): the signed-out head's note, which said "Mac".
-  public static func headLines(_ account: SettingsAccount) -> (status: Line?, note: String?) {
+  public static func headLines(_ account: SettingsAccount, device: DeviceWord) -> (status: Line?, note: String?) {
     switch account.standing {
     case .signInAgain:
       return (
         Line("Sign in to Tailscale again", wantsTheUser: true),
-        "This phone can’t reach your desktops until you do. Nothing here is lost."
+        "\(device.This) can’t reach your desktops until you do. Nothing here is lost."
       )
     case .waitingForApproval:
       return (
@@ -102,7 +102,7 @@ public enum SettingsModel {
     public let can: Bool
   }
 
-  public static func abilities(_ desktop: SettingsDesktop) -> [Ability] {
+  public static func abilities(_ desktop: SettingsDesktop, device: DeviceWord) -> [Ability] {
     // Its agents' terminals — and, since PG-3e, its bare terminals, which are
     // bodies on the phone now that it reads the home's remote cut (PG-D5).
     // (Corrected 2026-11-02: this said a bare terminal was no body until PG-D5.)
@@ -117,7 +117,7 @@ public enum SettingsModel {
       // words, at the lean); not said is not a refusal.
       desktop.watchable == false
         ? Ability(
-          title: "Watch its agents", detail: "\(desktop.name) runs a VibeField this phone can’t read.",
+          title: "Watch its agents", detail: "\(desktop.name) runs a VibeField \(device.this) can’t read.",
           can: false)
         : Ability(title: "Watch its agents", detail: nil, can: true),
       Ability(title: "Start agents in its folders", detail: nil, can: true),
@@ -142,10 +142,12 @@ public enum SettingsModel {
   /// already read stays (DS-L8: a sleeping desktop's rows stay; History keeps
   /// what was opened, and says so in its own words); only what needs the
   /// desktop itself waits — its terminals, and search, which runs on its index.
-  public static func asleepFoot(_ desktop: SettingsDesktop, standing: SettingsAccount.Standing) -> String {
+  public static func asleepFoot(
+    _ desktop: SettingsDesktop, standing: SettingsAccount.Standing, device: DeviceWord
+  ) -> String {
     standing == .signInAgain
-      ? "What you already opened from it stays on this phone. Its terminals and search answer once you sign in to Tailscale again."
-      : "Tailscale doesn’t list \(desktop.name) right now: it’s asleep, or VibeField isn’t running on it. What you already opened from it stays on this phone; its terminals and search answer when it wakes."
+      ? "What you already opened from it stays on \(device.this). Its terminals and search answer once you sign in to Tailscale again."
+      : "Tailscale doesn’t list \(desktop.name) right now: it’s asleep, or VibeField isn’t running on it. What you already opened from it stays on \(device.this); its terminals and search answer when it wakes."
   }
 
   // MARK: - Account
@@ -162,21 +164,23 @@ public enum SettingsModel {
     }
   }
 
-  public static func tailscaleFoot(_ standing: SettingsAccount.Standing) -> Line {
+  public static func tailscaleFoot(_ standing: SettingsAccount.Standing, device: DeviceWord) -> Line {
     switch standing {
     case .signInAgain:
-      Line("This phone can’t reach your desktops until you do. Nothing here is lost.", wantsTheUser: true)
+      Line("\(device.This) can’t reach your desktops until you do. Nothing here is lost.", wantsTheUser: true)
     case .waitingForApproval:
       Line("An admin of your Tailscale network approves new devices.")
     case .signedOut, .connected, .connecting, .couldNotConnect:
-      Line("While you’re signed in, this phone stays connected by itself.")
+      Line("While you’re signed in, \(device.this) stays connected by itself.")
     }
   }
 
   /// The face's row value — how it is framed, the desktop's own word for it
   /// (`FaceFrame`) — and the section's foot. Whose word the face is rides on
   /// the section's tag, so the row does not say it twice.
-  public static func faceWords(_ source: SettingsAccount.FaceSource, face: UserFace?) -> (value: String, foot: String) {
+  public static func faceWords(
+    _ source: SettingsAccount.FaceSource, face: UserFace?, device: DeviceWord
+  ) -> (value: String, foot: String) {
     let frame: String =
       switch face?.frame {
       case .some(.sticker): "Sticker"
@@ -187,7 +191,7 @@ public enum SettingsModel {
     case .none:
       return (
         "None yet",
-        "A desktop says who you are once this phone reaches one. Until then the corner is a plain circle, "
+        "A desktop says who you are once \(device.this) reaches one. Until then the corner is a plain circle, "
           + "never a face it would have to take back."
       )
     case .dealt:
@@ -198,8 +202,8 @@ public enum SettingsModel {
     case .home(let desktop):
       return (
         frame,
-        "\(desktop) says who you are, and this phone wears the face and the name you chose there. "
-          + "Change them on \(desktop), in Settings › Account; the phone takes them the next time it connects."
+        "\(desktop) says who you are, and \(device.this) wears the face and the name you chose there. "
+          + "Change them on \(desktop), in Settings › Account; \(device.this) takes them the next time it connects."
       )
     }
   }

@@ -19,10 +19,9 @@ struct AppearancePage: View {
         }
         .padding(.vertical, 16)
       } header: {
-        ChromeListHead("Look", tags: [FactTag("This phone"), FactTag("Live")])
+        ChromeListHead("Look", tags: [FactTag(DeviceWord.current.This), FactTag("Live")])
       } footer: {
-        ChromeListFoot(
-          "Settings, History, the field and every sheet follow it. It’s this phone’s own; your desktops keep theirs.")
+        ChromeListFoot(SettingsWords.lookFoot(DeviceWord.current))
       }
       .chromeRows()
     }

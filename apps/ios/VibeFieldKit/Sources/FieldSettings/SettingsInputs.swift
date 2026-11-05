@@ -182,9 +182,35 @@ public enum SettingsWords {
   /// this phone read from your desktops (AP-D4's History half, item 130, the
   /// merge `6130153f8`: `HistoryDesktops.signedOut` beside `SignOutSweep`);
   /// Appearance — this phone's look — and the terminal's look stay.
-  public static let signOutMessage =
-    "This phone forgets your Tailscale sign-in, your desktops and the History it read from them, your face "
-    + "and your project colours. Appearance, the terminal’s look, snippets and clipboard history stay."
+  public static func signOutMessage(_ device: DeviceWord) -> String {
+    "\(device.This) forgets your Tailscale sign-in, your desktops and the History it read from them, your face "
+      + "and your project colours. Appearance, the terminal’s look, snippets and clipboard history stay."
+  }
+
+  /// IOS-13a (Q1) — the views' words that name the device, lifted here so every one is said by substitution and
+  /// tested without a simulator.
+  /// Appearance's foot.
+  public static func lookFoot(_ device: DeviceWord) -> String {
+    "Settings, History, the field and every sheet follow it. It’s \(device.this)’s own; your desktops keep theirs."
+  }
+  /// Network details' Copy, to a screen reader (and approval's, on the way in).
+  public static func copyName(_ device: DeviceWord) -> String { "Copy \(device.this)’s name" }
+  /// Network details' foot.
+  public static func networkFoot(_ device: DeviceWord) -> String {
+    "Named as Tailscale names them, so you can find \(device.this) on Tailscale’s own page."
+  }
+  /// The short list's foot, on Acknowledgements.
+  public static func builtWith(_ device: DeviceWord) -> String {
+    "VibeField on \(device.this) is built with these, among others, each under its own licence."
+  }
+  /// A desktop's page: the head over what the device can do with it, and its foot.
+  public static func fromThis(_ device: DeviceWord) -> String { "From \(device.this) you can" }
+  public static func sameThings(_ device: DeviceWord) -> String {
+    "Your desktops give \(device.this) the same things, because it is you. Another account’s "
+      + "desktop gives it nothing, and isn’t shown."
+  }
+  /// A desktop page whose desktop has left the list.
+  public static func notOnThis(_ device: DeviceWord) -> String { "Not on \(device.this) now" }
 
   /// TS-7 (DESIGN.md §13): the phone wears Tailscale's mark on its sign-in and
   /// in Settings › Account, so About says this.

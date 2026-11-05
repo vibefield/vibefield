@@ -390,7 +390,7 @@ public struct HomeScreen: View {
       Button("Sign out", role: .destructive) { confirmSignOut() }
       Button("Cancel", role: .cancel) {}
     } message: {
-      Text(SettingsWords.signOutMessage)
+      Text(SettingsWords.signOutMessage(DeviceWord.current))
     }
   }
 
@@ -727,7 +727,7 @@ public struct HomeScreen: View {
   private var wayIn: some View {
     if let step = wayInStep {
       WayInView(
-        screen: FieldHomeModel.wayInScreen(step, lock: lockOffered),
+        screen: FieldHomeModel.wayInScreen(step, lock: lockOffered, device: DeviceWord.current),
         face: wayInFace,
         faceSeed: accountSeed,
         onAct: wayInAct)

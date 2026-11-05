@@ -23,7 +23,7 @@ struct AboutPage: View {
       Section {
         ChromeRow("Version", value: SettingsModel.version(info: info))
       } header: {
-        ChromeListHead("This phone", tags: [FactTag("Read-only")])
+        ChromeListHead(DeviceWord.current.This, tags: [FactTag("Read-only")])
       }
       .chromeRows()
       if !desktops.isEmpty {
@@ -180,7 +180,7 @@ struct AcknowledgementsPage: View {
     } header: {
       ChromeListHead("Built with")
     } footer: {
-      ChromeListFoot("VibeField on this phone is built with these, among others, each under its own licence.")
+      ChromeListFoot(SettingsWords.builtWith(DeviceWord.current))
     }
     .chromeRows()
   }

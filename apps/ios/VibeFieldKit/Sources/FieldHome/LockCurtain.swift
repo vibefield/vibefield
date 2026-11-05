@@ -1,5 +1,6 @@
 import FieldDesign
 import FieldLock
+import FieldSettings
 import FieldSplash
 import SwiftUI
 import UIKit
@@ -160,7 +161,7 @@ struct LockCurtainFace: View {
       SplashField(active: active)
       if state == .missed {
         WayInView(
-          screen: FieldHomeModel.wayInScreen(.locked(method)), face: nil, faceSeed: "",
+          screen: FieldHomeModel.wayInScreen(.locked(method), device: DeviceWord.current), face: nil, faceSeed: "",
           onAct: { act in if act == .unlock { onUnlock() } }
         )
         .transition(.opacity)

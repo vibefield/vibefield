@@ -132,8 +132,8 @@ extension FieldHomeModel {
   }
 
   /// One screen of the way in, for a step. `lock` is the phone's method while the way in will offer the lock.
-  static func wayInScreen(_ step: WayInStep, lock: LockMethod? = nil) -> WayInScreen {
-    var screen = baseScreen(step)
+  static func wayInScreen(_ step: WayInStep, lock: LockMethod? = nil, device: DeviceWord) -> WayInScreen {
+    var screen = baseScreen(step, device: device)
     switch step {
     case .lockOffer(let method): screen.stepNames = wayInSteps(lock: method)
     case .locked, .tour: break
@@ -142,7 +142,7 @@ extension FieldHomeModel {
     return screen
   }
 
-  private static func baseScreen(_ step: WayInStep) -> WayInScreen {
+  private static func baseScreen(_ step: WayInStep, device: DeviceWord) -> WayInScreen {
     let words = WayInWords.self
     switch step {
     case .page(.welcome(let failure, let expecting)):
@@ -184,7 +184,7 @@ extension FieldHomeModel {
         picture: .face,
         words: .init(
           title: "Sign in to Tailscale again.",
-          line: AttributedString("This phone can’t reach your desktops until you do. Nothing here is lost."),
+          line: AttributedString("\(device.This) can’t reach your desktops until you do. Nothing here is lost."),
           note: note),
         acts: [
           .primary("Sign in again", .signInAgain),
@@ -203,7 +203,8 @@ extension FieldHomeModel {
         steps: .step(1),
         words: .init(
           title: "Another account?",
-          line: AttributedString(anotherAccountLine(current: current, expected: expected, from: from, byLink: byLink))),
+          line: AttributedString(
+            anotherAccountLine(current: current, expected: expected, from: from, byLink: byLink, device: device))),
         acts: acts)
 
     case .page(.joining(let login, let note)):
@@ -234,7 +235,7 @@ extension FieldHomeModel {
           hold: true))
 
     case .tour(let page):
-      return tourScreen(page)
+      return tourScreen(page, device: device)
 
     case .lockOffer(let method):
       // WI-D3 A: the way in's last step, on by default: Lock leads, Not now beside it, and where to change it
@@ -256,7 +257,7 @@ extension FieldHomeModel {
   }
 
   /// How it works, four pages (WI-2; WI-D1 A: optional, and again in Settings › About).
-  private static func tourScreen(_ page: Int) -> WayInScreen {
+  private static func tourScreen(_ page: Int, device: DeviceWord) -> WayInScreen {
     let page = min(max(page, 0), 3)
     let back: WayInAct = page == 0 ? .welcome : .tour(page - 1)
     let next = WayInScreen.Act.primary("Next", .tour(page + 1))
@@ -283,12 +284,13 @@ extension FieldHomeModel {
         words: .init(
           title: "No VibeField account.",
           line: AttributedString(
-            "Your phone reaches your computer over your own Tailscale network, encrypted end to end. VibeField runs no session relay.")),
+            "\(device.This) reaches your computer over your own Tailscale network, encrypted end to end. "
+              + "VibeField runs no session relay.")),
         acts: [next, .tailscale("Connecting your devices requires a Tailscale account.")])
     default:
       var line = AttributedString("Get VibeField at ")
       line += bold("vibefield.dev")
-      line += AttributedString(". When its setup connects your devices, it shows a code for this phone.")
+      line += AttributedString(". When its setup connects your devices, it shows a code for \(device.this).")
       return WayInScreen(
         steps: .dots(3), back: back, picture: .art(.tour(3)),
         words: .init(
@@ -299,9 +301,11 @@ extension FieldHomeModel {
   }
 
   /// TS-7b (A:723) — both logins named; the desktop's name is drawn as plain text.
-  static func anotherAccountLine(current: String, expected: String, from: String, byLink: Bool) -> String {
+  static func anotherAccountLine(
+    current: String, expected: String, from: String, byLink: Bool, device: DeviceWord
+  ) -> String {
     let came = byLink ? "the link you opened" : "the code you scanned"
-    return "This phone is signed in as \(current), but \(came) came from \(from), signed in as \(expected)."
+    return "\(device.This) is signed in as \(current), but \(came) came from \(from), signed in as \(expected)."
   }
 
   /// "Connect your devices…" in the desktop menu's own weight, so the eye finds the words it will look for on

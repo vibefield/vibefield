@@ -35,7 +35,7 @@ struct DesktopPage: View {
         ChromeListHead("This desktop", tags: [FactTag("Read-only")])
       } footer: {
         if desktop.isAsleep {
-          ChromeListFoot(SettingsModel.asleepFoot(desktop, standing: standing))
+          ChromeListFoot(SettingsModel.asleepFoot(desktop, standing: standing, device: DeviceWord.current))
         }
       }
       .chromeRows()
@@ -44,7 +44,7 @@ struct DesktopPage: View {
       // says so in its head and is not asked for anything (DS-L9).
       if desktop.reach == .connected {
         Section {
-          ForEach(SettingsModel.abilities(desktop), id: \.title) { ability in
+          ForEach(SettingsModel.abilities(desktop, device: DeviceWord.current), id: \.title) { ability in
             HStack(spacing: 12) {
               ChromeRow(ability.title, detail: ability.detail)
               if ability.can {
@@ -58,11 +58,9 @@ struct DesktopPage: View {
             .accessibilityElement(children: .combine)
           }
         } header: {
-          ChromeListHead("From this phone you can")
+          ChromeListHead(SettingsWords.fromThis(DeviceWord.current))
         } footer: {
-          ChromeListFoot(
-            "Your desktops give your phone the same things, because it is you. Another account’s "
-              + "desktop gives it nothing, and isn’t shown.")
+          ChromeListFoot(SettingsWords.sameThings(DeviceWord.current))
         }
         .chromeRows()
       }

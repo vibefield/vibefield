@@ -86,7 +86,7 @@ public struct SettingsView: View {
           }
         }
       } header: {
-        ChromeListHead("This phone")
+        ChromeListHead(DeviceWord.current.This)
       }
       .chromeRows()
       Section {
@@ -108,7 +108,7 @@ public struct SettingsView: View {
   /// head, Continue with Tailscale and its note.
   @ViewBuilder
   private var head: some View {
-    let lines = SettingsModel.headLines(account)
+    let lines = SettingsModel.headLines(account, device: DeviceWord.current)
     NavigationLink(value: SettingsRoute.account) {
       HStack(spacing: 14) {
         AccountMark(account: account, size: 60, dot: lines.status?.wantsTheUser == true)
@@ -176,7 +176,9 @@ public struct SettingsView: View {
         // forgotten): say so rather than draw a blank.
         List {
           Section {
-            ChromeRow("Not on this phone now", detail: "It returns to Your desktops the next time it answers.")
+            ChromeRow(
+              SettingsWords.notOnThis(DeviceWord.current),
+              detail: "It returns to Your desktops the next time it answers.")
           }
           .chromeRows()
         }
