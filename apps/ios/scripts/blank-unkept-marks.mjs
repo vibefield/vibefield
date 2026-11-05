@@ -6,6 +6,10 @@
 //   node apps/ios/scripts/blank-unkept-marks.mjs           blanks the unkept tiles, rewrites the png, prints the pin
 //   node apps/ios/scripts/blank-unkept-marks.mjs --check   the committed png against the table and the pin (no write)
 //
+// `pnpm check:ios-fixtures` (in `pnpm verify`) runs `--check` (scripts/check-ios-fixtures.mjs,
+// EDITED_IN_PLACE), so a `candidates`/`kept` edit the png does not follow is red in the gate, not
+// only when FieldSwarmTests runs on the kit slot.
+//
 // Why a blanking and not a re-bake: the atlas's generator (research/svg-sdf, which baked
 // @lobehub/icons-static-svg@1.94.0 into 64-texel signed-distance tiles) is not in this repo. So the
 // two kept tiles stay the generator's bytes, untouched, and each unkept tile becomes transparent

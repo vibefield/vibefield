@@ -95,6 +95,13 @@ const OTHER_ORIGINS = new Map([
 // splash (DESIGN.md §8 "The phone's splash"): runtime.js's goldens for the Swift runtime, vendored
 // with the shaders and the runtime from vibefield-splash's Metal bake.
 const VENDORED = new Map([["splash-clock.json", "apps/ios/scripts/vendor-splash.mjs"]]);
+// Bundle assets a script EDITED in place, whose generator is not in this repo: each script's own
+// `--check` holds the asset to the Swift table it serves and to its test's pin, below with the
+// vendored ones, so a table edit the asset does not follow is red here and not only on the kit
+// slot. LP-4 — the swarm's mark atlas (FieldSwarm/Resources/marks.png), every tile but Claude
+// Code's and Codex's blanked, held to MarksAtlas.swift's `candidates` and `kept` and to
+// FieldSwarmTests' `uploadedMarksMatchDesktopPixels`.
+const EDITED_IN_PLACE = ["apps/ios/scripts/blank-unkept-marks.mjs"];
 
 const problems = [];
 let checked = 0;
@@ -346,8 +353,9 @@ for (const searchRoot of searchRoots) {
   }
 }
 
-// The vendored files, each held to its pin by the script that vendored it (VENDORED, above).
-for (const script of new Set(VENDORED.values())) {
+// The vendored files, each held to its pin by the script that vendored it (VENDORED, above), and
+// the assets edited in place, each held by the script that edited it (EDITED_IN_PLACE, above).
+for (const script of new Set([...VENDORED.values(), ...EDITED_IN_PLACE])) {
   try {
     execFileSync(process.execPath, [join(root, script), "--check"], {
       stdio: ["ignore", "pipe", "pipe"],
