@@ -168,6 +168,53 @@ mac:
   target: [dmg, zip]
   minimumSystemVersion: "14.0" # LP-1: the real floor (the screenshot helper targets macos14.0); = policy/*.json floors.os
   icon: packaging/icons/app.icon
+  # Item 181 (2026-11-05): the usage strings macOS shows when something asks for a protected resource. Electron's own
+  # Info.plist carries five generic ones ("This app needs access to the camera"), and this block replaces them: the
+  # builder deep-assigns extendInfo over Electron's plist and deletes a key set to null (app-builder-lib macPackager.js
+  # :404-411), BEFORE signing, so the signature covers them. The release overlay extends this file, so every package
+  # carries the same words.
+  # WHO ASKS. Electron main spawns fieldd and the native plane spawns every terminal, and nothing disclaims
+  # responsibility, so a program running in a VibeField terminal, an agent included, asks AS VibeField (Apple TN3179):
+  # macOS shows these words and records the choice for the whole app.
+  # THE WALL. The hardened runtime gates seven classes behind entitlements this app does not hold
+  # (entitlements.mac.plist: allow-jit alone): the camera, the microphone, Apple Events, Contacts, Calendars (Reminders
+  # ride it), Photos and location; speech recognition records through the microphone. On a SIGNED package they are
+  # refused with no prompt (EL7: one Allow would open a class to every agent). Their strings stay declared: on an
+  # unsigned package of ours opened by LaunchServices nothing hardens the app, and a missing string is TCC's kill of
+  # the asking program where a present one prompts. Opening a class is James's call, per class: its entitlement lands
+  # with its string. The audit, and the three states its test holds: tooling/dev-runner/test/usage-strings.test.mjs.
+  # No key exists for screen recording (the system's own prompt). NSBonjourServices is omitted: nothing we ship
+  # browses a service type.
+  extendInfo:
+    # walled on a signed package (no entitlement)
+    NSCameraUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to use the camera. VibeField itself doesn't."
+    NSMicrophoneUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to use the microphone. VibeField itself doesn't."
+    NSAppleEventsUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to control another app."
+    NSContactsUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to read your contacts."
+    NSCalendarsFullAccessUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to read and change your calendars."
+    NSRemindersFullAccessUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to read and change your reminders."
+    # the same two under their pre-macOS 14 names: a program built on an older SDK may ask by them
+    NSCalendarsUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to read and change your calendars."
+    NSRemindersUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to read and change your reminders."
+    NSPhotoLibraryUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to use your photo library."
+    NSLocationUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to know your location."
+    NSLocationWhenInUseUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to know your location."
+    NSSpeechRecognitionUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to turn speech into text."
+    # entitlement-free: these prompt as VibeField today
+    NSBluetoothAlwaysUsageDescription: "A program running in a VibeField terminal, or a website open in its browser, wants to use Bluetooth. VibeField itself doesn't."
+    NSAudioCaptureUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to record the sound your Mac is playing."
+    NSDesktopFolderUsageDescription: "VibeField and the programs in its terminals need this to work with projects kept on your Desktop."
+    NSDocumentsFolderUsageDescription: "VibeField and the programs in its terminals need this to work with projects kept in your Documents folder."
+    NSDownloadsFolderUsageDescription: "VibeField and the programs in its terminals need this to work with files in your Downloads folder."
+    NSRemovableVolumesUsageDescription: "VibeField and the programs in its terminals need this to work with projects kept on an external drive."
+    NSNetworkVolumesUsageDescription: "VibeField and the programs in its terminals need this to work with projects kept on a network drive."
+    NSFileProviderDomainUsageDescription: "VibeField and the programs in its terminals need this to work with projects kept in iCloud Drive or another synced folder."
+    NSLocalNetworkUsageDescription: "VibeField connects your devices directly over your local network, and the programs in its terminals may reach devices on it."
+    NSAppDataUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to read another app's data."
+    NSAppBundlesUsageDescription: "A program running in a VibeField terminal, such as an agent you started, wants to update or remove another app."
+    NSSystemAdministrationUsageDescription: "A program running in a VibeField terminal wants to change a system setting, which needs an administrator."
+    # deprecated (Apple); macOS 14, the floor, reads NSBluetoothAlwaysUsageDescription
+    NSBluetoothPeripheralUsageDescription: null
   # Explicit nested-code inventory. It is inert while identity remains null,
   # but becomes the inside-out signing list when WP10 enables signing; the SCK
   # helper and its Node-API adapter must never be left as unsigned loose code.
