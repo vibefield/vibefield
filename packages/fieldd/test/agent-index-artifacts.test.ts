@@ -136,10 +136,10 @@ const page = (entries: ArtifactEntry[], over: Partial<ArtifactPage> = {}): Artif
   ...over,
 });
 
-/** The service over a scripted daemon: each request is answered by `answer` (a body, or a status with one). The body
- * is RAW TEXT on purpose: some are ones `JSON.stringify` cannot make. */
+/** The service over a scripted daemon: each request is answered by `answer` (a body, a status with one, or the body
+ * for the nth request, from 1). The body is RAW TEXT on purpose: some are ones `JSON.stringify` cannot make. */
 const service = (
-  answer: string | { status: number; body?: string },
+  answer: string | { status: number; body?: string } | ((n: number) => string),
   opts: { phase?: string; protocol?: number } = {},
 ) => {
   const dir = mkdtempSync(join(tmpdir(), "vf-index-artifacts-"));
@@ -155,8 +155,13 @@ const service = (
           ? input.toString()
           : (input as Request).url,
     );
-    const status = typeof answer === "string" ? 200 : answer.status;
-    const body = typeof answer === "string" ? answer : (answer.body ?? "");
+    const status = typeof answer === "object" ? answer.status : 200;
+    const body =
+      typeof answer === "function"
+        ? answer(urls.length)
+        : typeof answer === "string"
+          ? answer
+          : (answer.body ?? "");
     return new Response(body, {
       status,
       headers: {
@@ -283,20 +288,75 @@ describe("IndexService.artifacts — the library reader (MA-3a)", () => {
       }),
       JSON.stringify({ entries: "nope", next_cursor: null, canonical_ready: true }),
     ];
+    // ONE token that no encoding changes, so a line that carried the asked path (`?q=zqsecretzq…`) would be caught
+    // here; the spaced form is checked raw and form-encoded as well
+    const asks = [
+      { q: "zqsecretzq", words: ["zqsecretzq"] },
+      { q: "secret words", words: ["secret words", "secret+words", "secret%20words"] },
+    ];
     for (const body of bodies) {
-      const { index, said } = service(body);
-      const error = await refusal(index.artifacts({ q: "secret words", limit: 100 }));
-      expect(error.kind, `UNAVAILABLE for ${body.slice(0, 40)}`).toBe("UNAVAILABLE");
-      expect(error.retryable).toBe(true);
-      expect(error.details).toEqual({ service: "index", state: "malformed" });
-      expect(
-        said.some((line) => line.level === "warn"),
-        "the reader warned that it could not read the page",
-      ).toBe(true);
-      expect(JSON.stringify(said), "no log line carries the ask's words (EL7)").not.toContain(
-        "secret words",
-      );
+      for (const ask of asks) {
+        const { index, said, urls } = service(body);
+        const error = await refusal(index.artifacts({ q: ask.q, limit: 100 }));
+        expect(urls[0], "the ask reached the daemon with its words").toContain("q=");
+        expect(error.kind, `UNAVAILABLE for ${body.slice(0, 40)}`).toBe("UNAVAILABLE");
+        expect(error.retryable).toBe(true);
+        expect(error.details).toEqual({ service: "index", state: "malformed" });
+        const warned = said.filter((line) => line.level === "warn");
+        expect(warned.length, "the reader warned that it could not read the page").toBeGreaterThan(
+          0,
+        );
+        for (const line of said) {
+          const route = line.attrs?.route;
+          if (route !== undefined) {
+            expect(route, `${line.event} names the route, never the asked path`).toBe(
+              "/api/artifacts",
+            );
+          }
+        }
+        const text = JSON.stringify(said);
+        for (const word of ask.words) {
+          expect(text, `no log line carries the ask's words (EL7): ${word}`).not.toContain(word);
+        }
+      }
     }
+  });
+
+  it("says a page it cannot read at warn once per member, and at debug after (the apps table reads on a timer)", async () => {
+    const unreadable = (n: number): string =>
+      JSON.stringify({
+        entries: [
+          ...Array.from({ length: n }, (_, at) => entry(`ok-${at}`)),
+          { ...entry("bad"), publication: { title: "no id" } },
+        ],
+        next_cursor: null,
+        canonical_ready: true,
+      });
+    // the same member at another entry's index on each read, then another member
+    const other = JSON.stringify({ entries: "nope", next_cursor: null, canonical_ready: true });
+    const bodies = [unreadable(0), unreadable(2), unreadable(0), other, other];
+    const { index, said } = service((n) => bodies[Math.min(n, bodies.length) - 1] ?? "");
+    for (let n = 0; n < 3; n += 1) {
+      const error = await refusal(index.artifacts({ limit: 100 }));
+      expect(error.details, `read ${n + 1} is malformed`).toEqual({
+        service: "index",
+        state: "malformed",
+      });
+    }
+    const lines = said.filter((line) => line.event === "fieldd.index.artifacts_malformed");
+    expect(
+      lines.map((line) => line.level),
+      "one warn for the member, then debug, whatever its index",
+    ).toEqual(["warn", "debug", "debug"]);
+
+    await refusal(index.artifacts({ limit: 100 }));
+    await refusal(index.artifacts({ limit: 100 }));
+    expect(
+      said
+        .filter((line) => line.event === "fieldd.index.artifacts_malformed")
+        .map((line) => line.level),
+      "another member is said at warn once of its own",
+    ).toEqual(["warn", "debug", "debug", "warn", "debug"]);
   });
 
   it("refuses with the daemon's phase while it is not ready, and sends nothing", async () => {

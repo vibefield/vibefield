@@ -21,6 +21,7 @@ import {
   type MadeAppPreview,
   ROWS,
 } from "@vibefield/contracts";
+import type { LogFields, Logger } from "@vibefield/logging";
 import type { ArtifactEntry } from "@vibefield/rosetta-protocol";
 import { PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -968,6 +969,507 @@ describe("IndexApps — the standing on every frame (MA-3a; contracts OWNER_STAN
       libraryReady: true,
       previewsBase: BASE,
     });
+  });
+});
+
+// ── the review's rows (MA-3a review fixes): what the green does past the red's rows ──
+
+interface Said {
+  level: string;
+  event: string;
+  attrs: LogFields | undefined;
+}
+
+/** A logger that keeps every line it is told (the event, the level, the attributes). */
+const recorder = (): { said: Said[]; logger: Logger } => {
+  const said: Said[] = [];
+  const at =
+    (level: string) =>
+    (event: string, _message: string, attrs?: LogFields): void => {
+      said.push({ level, event, attrs });
+    };
+  const logger: Logger = {
+    child: () => logger,
+    trace: at("trace"),
+    debug: at("debug"),
+    info: at("info"),
+    warn: at("warn"),
+    error: (event, _message, _error, attrs) => {
+      said.push({ level: "error", event, attrs });
+    },
+    fatal: (event, _message, _error, attrs) => {
+      said.push({ level: "fatal", event, attrs });
+    },
+    isLevelEnabled: () => true,
+  };
+  return { said, logger };
+};
+
+/** Hold the asks `which` picks until `release()`; each held ask reads the library as it stands at the release. */
+const holding = (lib: Library, which: (ask: IndexArtifactsRead, n: number) => boolean) => {
+  const releases: Array<() => void> = [];
+  lib.hold = (ask, n) =>
+    which(ask, n)
+      ? new Promise<void>((resolve) => {
+          releases.push(resolve);
+        })
+      : undefined;
+  return {
+    get held(): number {
+      return releases.length;
+    },
+    release(): void {
+      lib.hold = undefined;
+      for (const release of releases.splice(0)) release();
+    },
+  };
+};
+
+describe("IndexApps — what a frame reads now, and the cap (MA-3a review)", () => {
+  beforeEach(() => {
+    useFakeClock();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const preview = (n: number): MadeAppPreview => ({
+    id: `01JC4MA0PV000000000000000${n}`,
+    digest: hex(`jpeg:${n}`),
+    pageDigest: hex(`page:a:${n}`),
+    capturedAt: 5_000 + n,
+  });
+
+  it("a restamp that lands while a walk reads survives that walk's landing (the preview is read when the frame is made)", async () => {
+    const lib = library([app("a", 3), app("b", 2), app("c", 1)]);
+    const stamped = new Map<string, ReturnType<AppIntentStamps["of"]>>();
+    const stamps: AppIntentStamps = { of: (appId) => stamped.get(appId) };
+    const held = holding(lib, (_ask, n) => n === 2);
+    const { apps, catalog } = appsOver(lib, { walkPage: 1, stamps });
+    catalog.land();
+    await advance(0);
+    expect(held.held, "the first walk's second page is held").toBe(1);
+    expect(apps.table.get(id("a")), "a, read on page 1, has no preview yet").not.toHaveProperty(
+      "preview",
+    );
+
+    // a capture finishes while the walk reads: 3b says so once (`previews-changed`)
+    stamped.set(id("a"), { preview: preview(1) });
+    apps.restampIntents([id("a")]);
+    expect(apps.table.get(id("a"))?.preview, "restamped at once").toEqual(preview(1));
+
+    held.release();
+    await advance(0);
+    expect(apps.ready, "the walk landed").toBe(true);
+    expect(apps.table.get(id("a"))?.preview, "the landing keeps the new preview").toEqual(
+      preview(1),
+    );
+  });
+
+  it("at the cap a walking frame removes nothing: it keeps an app still in the library, holds a new one back, and the landing makes the ROWS newest", async () => {
+    const lib = library([app("a", 300), app("b", 200), app("c", 100)]);
+    const { apps, catalog } = appsOver(lib, { walkPage: 1, rowCap: 3, resnapshotMs: 1_000 });
+    const sizes: number[] = [];
+    apps.table.onDelta(() => sizes.push(apps.table.size));
+    catalog.land();
+    await advance(0);
+    expect(apps.table.keys().sort(), "the first walk holds the three").toEqual(
+      [id("a"), id("b"), id("c")].sort(),
+    );
+
+    lib.apps = [app("n", 400), app("a", 300), app("c", 100)]; // b left the library, n arrived
+    const at = lib.calls.length;
+    const held = holding(lib, (_ask, n) => n === at + 2);
+    await advance(1_000);
+    expect(held.held, "the cadence's walk is held on its second page").toBe(1);
+    expect(apps.table.has(id("c")), "c is still in the library: the walking frame kept it").toBe(
+      true,
+    );
+    expect(apps.table.has(id("b")), "nothing is removed while walking, b included").toBe(true);
+    expect(apps.table.has(id("n")), "the new app waits for the landing").toBe(false);
+    held.release();
+    await advance(0);
+    expect(apps.table.keys().sort(), "the landing: the ROWS newest of what the walk read").toEqual(
+      [id("n"), id("a"), id("c")].sort(),
+    );
+    expect(Math.max(...sizes), "the table never held more than ROWS").toBeLessThanOrEqual(3);
+
+    // a walk that gives up at the cap removes nothing either
+    const second = library([app("a", 300), app("b", 200), app("c", 100)]);
+    const other = appsOver(second, { walkPage: 1, rowCap: 3, resnapshotMs: 1_000 });
+    other.catalog.land();
+    await advance(0);
+    const firstWalk = second.calls.length;
+    second.apps = [app("n", 400), app("a", 300), app("c", 100)];
+    second.fail = (ask) => (ask.cursor !== undefined ? expired() : undefined);
+    await advance(1_000);
+    expect(
+      heads(second.calls.slice(firstWalk)).filter((head) => head === "head"),
+      "the walk read n at every head and gave up",
+    ).toHaveLength(1 + MADE_APP_LIMITS.WALK_RESTARTS);
+    expect(
+      other.apps.table.keys().sort(),
+      "a walk that gave up removed nothing: c (still in the library) and b (gone) both held",
+    ).toEqual([id("a"), id("b"), id("c")].sort());
+  });
+
+  it("a re-read at the cap holds a newer app back and owes a walk, which lands it; an older one owes nothing", async () => {
+    const lib = library([app("a", 300), app("b", 200), app("c", 100)]);
+    const { apps, catalog } = appsOver(lib, { rowCap: 3, walkPage: 50, rereadPage: 20 });
+    const sizes: number[] = [];
+    apps.table.onDelta(() => sizes.push(apps.table.size));
+    catalog.land();
+    await advance(0);
+    expect(apps.table.size, "the first walk filled the cap").toBe(3);
+
+    const at = lib.calls.length;
+    lib.apps = [app("n", 400), ...lib.apps];
+    const held = holding(lib, (ask) => ask.limit === 50);
+    catalog.moved("sessions");
+    await advance(MADE_APP_LIMITS.REREAD_DELAY_MS);
+    expect(
+      lib.calls.slice(at).map((ask) => ask.limit),
+      "the re-read, then the walk it owed",
+    ).toEqual([20, 50]);
+    expect(held.held, "the owed walk is held").toBe(1);
+    expect(apps.table.has(id("c")), "the re-read removed nothing").toBe(true);
+    expect(apps.table.has(id("n")), "n waits for the walk's landing").toBe(false);
+    held.release();
+    await advance(0);
+    expect(apps.table.keys().sort(), "the walk landed the ROWS newest").toEqual(
+      [id("n"), id("a"), id("b")].sort(),
+    );
+    expect(Math.max(...sizes), "the table never held more than ROWS").toBeLessThanOrEqual(3);
+
+    // apps older than every row held: none of them would be a row, so no walk is owed
+    const now = lib.calls.length;
+    lib.apps = [...lib.apps, app("old", 50)];
+    catalog.moved("sessions");
+    await advance(MADE_APP_LIMITS.REREAD_MIN_INTERVAL_MS);
+    expect(
+      lib.calls.slice(now).map((ask) => ask.limit),
+      "a re-read alone",
+    ).toEqual([20]);
+    expect(apps.table.keys().sort()).toEqual([id("n"), id("a"), id("b")].sort());
+  });
+
+  it("a sessions change while the first walk reads owes a re-read once it lands (its head may predate the change)", async () => {
+    const lib = library([app("a", 2), app("b", 1)]);
+    const held = holding(lib, (_ask, n) => n === 2);
+    const { apps, catalog } = appsOver(lib, { walkPage: 1 });
+    catalog.land();
+    await advance(0);
+    expect(held.held, "the first walk's second page is held").toBe(1);
+
+    // an ingest the first page could not have seen, and the catalog's word of it
+    lib.apps = [app("n", 3), ...lib.apps];
+    catalog.moved("sessions");
+    held.release();
+    await advance(0);
+    expect(apps.ready, "the first walk landed").toBe(true);
+    expect(apps.table.has(id("n")), "its head predates n").toBe(false);
+
+    const walked = lib.calls.length;
+    await advance(MADE_APP_LIMITS.REREAD_DELAY_MS);
+    expect(lib.calls.slice(walked), "the re-read the change owed").toEqual([
+      { limit: MADE_APP_LIMITS.REREAD_PAGE },
+    ]);
+    expect(apps.table.has(id("n")), "which reads n").toBe(true);
+  });
+
+  it("a threads change re-roots the held rows as one frame and reads nothing: a child whose thread reached the catalog after its app was read", async () => {
+    const lib = library([app("from-child", 2, { session: "child-1" }), app("plain", 1)]);
+    const { apps, catalog } = appsOver(lib);
+    catalog.land();
+    await advance(0);
+    expect(apps.table.get(id("from-child")), "read before its thread: no root").not.toHaveProperty(
+      "rootSessionId",
+    );
+    const reads = lib.calls.length;
+    const revision = apps.table.revision;
+
+    catalog.threads.upsert([thread("child-1", "root-1")]);
+    catalog.moved("threads");
+    const child = apps.table.get(id("from-child"));
+    expect(child?.rootSessionId, "its root, through threads").toBe("root-1");
+    expect(apps.table.revision, "as one frame").toBe(revision + 1);
+    expect(lib.calls, "and nothing read").toHaveLength(reads);
+
+    // member for member the row a fresh read makes, so the next read moves nothing
+    const fresh = appsOver(library([...lib.apps]), { catalog });
+    await advance(0);
+    expect(fresh.apps.ready, "a fresh table over the same catalog").toBe(true);
+    expect(JSON.stringify(child), "the fresh read's row").toBe(
+      JSON.stringify(fresh.apps.table.get(id("from-child"))),
+    );
+    expect(apps.table.get(id("plain")), "a top-level app names no root").not.toHaveProperty(
+      "rootSessionId",
+    );
+
+    // the thread left (its session is a root now): the root goes with it
+    catalog.threads.remove(["child-1"]);
+    catalog.moved("threads");
+    expect(apps.table.get(id("from-child")), "its own root again").not.toHaveProperty(
+      "rootSessionId",
+    );
+    expect(lib.calls, "still nothing read").toHaveLength(reads);
+  });
+
+  it("a page with no entries that still points on is no completed walk: it lands nothing, and says walk-stalled", async () => {
+    const lib = library([app("x", 3), app("y", 2), app("z", 1)]);
+    let stalled = false;
+    const catalog = new CatalogStandIn();
+    const apps = new IndexApps({
+      catalog,
+      artifacts: async (ask) =>
+        stalled ? { entries: [], next_cursor: "on", canonical_ready: true } : lib.read(ask),
+      resnapshotMs: 1_000,
+    });
+    cleanup.push(() => apps.dispose());
+    apps.start();
+    catalog.land();
+    await advance(0);
+    expect(apps.table.size, "the first walk landed the three").toBe(3);
+
+    stalled = true;
+    await advance(1_000);
+    expect(apps.table.keys().sort(), "a stalled walk removes nothing").toEqual(
+      [id("x"), id("y"), id("z")].sort(),
+    );
+    expect(apps.refusal, "and says why").toEqual({ read: "walk-stalled" });
+
+    stalled = false;
+    lib.apps = [app("x", 3)];
+    await advance(1_000);
+    expect(apps.table.keys(), "the next completed walk removes what left").toEqual([id("x")]);
+    expect(apps.refusal, "and clears the word").toBeNull();
+  });
+});
+
+describe("IndexApps — the reads' cadence and words (MA-3a review)", () => {
+  beforeEach(() => {
+    useFakeClock();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("a first walk rosetta refuses is tried again at the floor, doubling up to the cadence; refusal says why, and the streak warns once", async () => {
+    const floor = MADE_APP_LIMITS.REREAD_MIN_INTERVAL_MS;
+    const lib = library([app("a", 1)]);
+    lib.fail = () =>
+      new RpcCallError("UNAVAILABLE", "the agent index answered a malformed library", true, {
+        service: "index",
+        state: "malformed",
+      });
+    const { said, logger } = recorder();
+    const { apps, catalog } = appsOver(lib, { logger, resnapshotMs: floor * 3 });
+    catalog.land();
+    await advance(0);
+    expect(lib.calls, "the first walk").toHaveLength(1);
+    expect(apps.ready, "it did not land").toBe(false);
+    expect(apps.refusal, "why, in the refusal's own words").toEqual({
+      read: "walk",
+      kind: "UNAVAILABLE",
+      state: "malformed",
+    });
+
+    await advance(floor - 1);
+    expect(lib.calls, "no retry before the floor").toHaveLength(1);
+    await advance(1);
+    expect(lib.calls, "the floor's retry").toHaveLength(2);
+    await advance(2 * floor - 1);
+    expect(lib.calls, "the next waits twice the floor").toHaveLength(2);
+    await advance(1);
+    expect(lib.calls, "the second retry").toHaveLength(3);
+    await advance(3 * floor - 1);
+    expect(lib.calls, "four floors is past the cadence, which caps it").toHaveLength(3);
+    await advance(1);
+    expect(lib.calls, "the third retry, at the cadence").toHaveLength(4);
+    expect(
+      said
+        .filter((line) => line.event === "fieldd.index_apps.read_failed")
+        .map((line) => line.level),
+      "one warn for the streak, then debug",
+    ).toEqual(["warn", "debug", "debug", "debug"]);
+
+    lib.fail = undefined;
+    await advance(3 * floor);
+    expect(apps.ready, "the retry that is answered lands").toBe(true);
+    expect(apps.refusal, "and clears the word").toBeNull();
+    expect(lib.calls, "one more walk").toHaveLength(5);
+  });
+
+  it("PIN — one read at a time: a re-read due while a walk reads waits for it, and a walk due while a re-read reads waits for that", async () => {
+    const lib = library([app("a", 2), app("b", 1)]);
+    const cadence = 60_000;
+    const { apps, catalog } = appsOver(lib, { walkPage: 1, rereadPage: 5, resnapshotMs: cadence });
+    catalog.land();
+    await advance(0);
+    expect(apps.ready, "the first walk landed").toBe(true);
+
+    const at = lib.calls.length;
+    const walk = holding(lib, (_ask, n) => n === at + 2);
+    await advance(cadence);
+    expect(walk.held, "the cadence's walk is held on its second page").toBe(1);
+    catalog.moved("sessions");
+    await advance(MADE_APP_LIMITS.REREAD_MIN_INTERVAL_MS + MADE_APP_LIMITS.REREAD_DELAY_MS);
+    expect(
+      lib.calls.slice(at).map((ask) => ask.limit),
+      "no re-read beside the walk",
+    ).toEqual([1, 1]);
+    walk.release();
+    await advance(0);
+    await advance(MADE_APP_LIMITS.REREAD_DELAY_MS);
+    expect(
+      lib.calls.slice(at).map((ask) => ask.limit),
+      "the walk, then the re-read it held back",
+    ).toEqual([1, 1, 5]);
+
+    const again = lib.calls.length;
+    const reread = holding(lib, (ask) => ask.limit === 5);
+    catalog.moved("sessions");
+    await advance(MADE_APP_LIMITS.REREAD_MIN_INTERVAL_MS);
+    expect(reread.held, "the next re-read is held").toBe(1);
+    await advance(cadence);
+    expect(
+      lib.calls.slice(again).map((ask) => ask.limit),
+      "no walk beside the re-read",
+    ).toEqual([5]);
+    reread.release();
+    await advance(0);
+    expect(
+      lib.calls.slice(again).map((ask) => ask.limit),
+      "the re-read, then the walk it held back",
+    ).toEqual([5, 1, 1]);
+  });
+
+  it("PIN — heardAt is when the library last answered a page: null before any, then each read's time", async () => {
+    const lib = library([app("a", 1)]);
+    const { apps, catalog } = appsOver(lib);
+    expect(apps.heardAt, "nothing heard yet").toBeNull();
+    catalog.land();
+    await advance(0);
+    const first = apps.heardAt;
+    expect(first, "the walk's page").toBe(Date.now());
+    catalog.moved("sessions");
+    await advance(MADE_APP_LIMITS.REREAD_DELAY_MS);
+    expect(apps.heardAt, "the re-read's page, later").toBe(Date.now());
+    expect(apps.heardAt ?? 0).toBeGreaterThan(first ?? 0);
+
+    lib.fail = () => expired();
+    catalog.moved("sessions");
+    await advance(MADE_APP_LIMITS.REREAD_MIN_INTERVAL_MS);
+    expect(apps.heardAt, "a refused read is not heard").toBe(
+      first === null ? null : first + MADE_APP_LIMITS.REREAD_DELAY_MS,
+    );
+  });
+
+  it("PIN — a previews base that is not a root https URL is no standing: stripped from every frame, and said once without its URL", async () => {
+    const { said, logger } = recorder();
+    let base = "https://studio.tail1234.ts.net:14211/previews/";
+    const { apps, catalog } = appsOver(library([app("a", 1)]), {
+      previewsBase: () => base,
+      logger,
+    });
+    catalog.land();
+    await advance(0);
+    expect(apps.standing(), "a base with a path is none").toEqual({ libraryReady: true });
+    base = "http://studio.tail1234.ts.net:14211/";
+    apps.standingChanged();
+    expect(apps.standing(), "nor is one that is not https").toEqual({ libraryReady: true });
+    const pump = apps.pump({ emit: () => undefined, digestIntervalMs: 0 });
+    cleanup.push(() => pump.dispose());
+    expect(snapshotOf(pump.open), "no frame declares it").not.toHaveProperty("previewsBase");
+    expect(
+      said
+        .filter((line) => line.event === "fieldd.index_apps.previews_base_refused")
+        .map((line) => line.level),
+      "said once",
+    ).toEqual(["warn"]);
+    expect(JSON.stringify(said), "never its URL (EL7)").not.toContain("tail1234");
+  });
+});
+
+describe("IndexApps — validate or strip, member by member (MA-3a review; the lead's C16)", () => {
+  beforeEach(() => {
+    useFakeClock();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("PIN — a stamp's preview the contract does not read is stripped, and so is one that carries a url", async () => {
+    const good: MadeAppPreview = {
+      id: "01JC4MA0PV0000000000000001",
+      digest: hex("jpeg"),
+      pageDigest: hex("page:a:1"),
+      capturedAt: 5_000,
+    };
+    const stamped = new Map<string, unknown>([
+      [id("bad-id"), { preview: { ...good, id: "not a ulid" } }],
+      [id("bad-digest"), { preview: { ...good, digest: "NOT-HEX" } }],
+      [id("with-url"), { preview: { ...good, url: "https://elsewhere.example/x.jpg" } }],
+      [id("good"), { preview: { ...good, extra: "never rides" } }],
+    ]);
+    const stamps = { of: (appId: string) => stamped.get(appId) } as AppIntentStamps;
+    const names = ["bad-id", "bad-digest", "with-url", "good"];
+    const { apps, catalog } = appsOver(library(names.map((name, n) => app(name, 10 - n))), {
+      stamps,
+    });
+    catalog.land();
+    await advance(0);
+    for (const name of names.slice(0, 3)) {
+      expect(apps.table.get(id(name)), `${name} is a row`).toBeDefined();
+      expect(apps.table.get(id(name)), `${name} rides no preview`).not.toHaveProperty("preview");
+    }
+    expect(apps.table.get(id("good"))?.preview, "the good one, by projection").toEqual(good);
+  });
+
+  it("PIN — an optional fact the contract does not read costs that fact, never the row: digest, hosted url, native id, project", async () => {
+    const notHex = app("not-hex", 6);
+    const tooLong = "n".repeat(MADE_APP_LIMITS.NATIVE_ID_CHARS + 1);
+    const entries: ArtifactEntry[] = [
+      {
+        ...notHex,
+        asset: notHex.asset === null ? null : { ...notHex.asset, digest: "NOT-A-DIGEST" },
+      },
+      {
+        ...app("http", 5),
+        publication: { ...app("http", 5).publication, url: "http://example.com/a" },
+      },
+      {
+        ...app("long-native", 4),
+        publication: { ...app("long-native", 4).publication, native_id: tooLong },
+      },
+      {
+        ...app("empty-native", 3),
+        publication: { ...app("empty-native", 3).publication, native_id: "" },
+      },
+      { ...app("no-project", 2), project_id: "" },
+      { ...app("null-project", 1), project_id: null },
+    ];
+    const { apps, catalog } = appsOver(library(entries));
+    catalog.land();
+    await advance(0);
+    expect(apps.table.size, "every entry is a row").toBe(entries.length);
+    const row = (name: string) => apps.table.get(id(name));
+    expect(row("not-hex"), "a digest that is not blake3 hex is none").not.toHaveProperty("digest");
+    expect(row("not-hex")?.byteLen, "the asset's size stays").toBe(notHex.asset?.byte_len);
+    expect(row("http"), "an http link is no hosted link").not.toHaveProperty("hostedUrl");
+    expect(row("long-native"), "a native id past NATIVE_ID_CHARS is none").not.toHaveProperty(
+      "nativeId",
+    );
+    expect(row("empty-native"), "nor is an empty one").not.toHaveProperty("nativeId");
+    expect(row("no-project"), "an empty project is no project").not.toHaveProperty("projectId");
+    expect(row("null-project")).not.toHaveProperty("projectId");
+    for (const held of apps.table.rows()) {
+      expect(IndexCatalogApp.safeParse(held).success, `${held.filename} parses`).toBe(true);
+      expect(
+        Object.values(held).some((value) => value === undefined),
+        `${held.filename} holds no undefined member`,
+      ).toBe(false);
+    }
   });
 });
 

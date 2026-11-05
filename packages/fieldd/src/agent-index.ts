@@ -19,7 +19,7 @@ import {
   type IndexActivityResult,
   type IndexAdmissionCourse,
   IndexAdmissionCourse as IndexAdmissionCourseSchema,
-  type IndexArtifactPageResponse,
+  IndexArtifactPageResponse,
   IndexContributionResponse,
   IndexDayUsageResponse,
   type IndexDiscoveriesResult,
@@ -599,6 +599,8 @@ const SEARCH_BODY_KEYS = Object.keys(IndexSearchResponse.shape);
 /** the same, for `/api/projects` (QL) */
 const PROJECTS_BODY_KEYS = Object.keys(IndexProjectsResponse.shape);
 const TIMELINE_BODY_KEYS = Object.keys(IndexTimelinePageResponse.shape);
+/** the same, for `/api/artifacts` (MA-3a, the library) */
+const ARTIFACTS_BODY_KEYS = Object.keys(IndexArtifactPageResponse.shape);
 /** the same, for `/api/activity` (TL, protocol 27) */
 const ACTIVITY_BODY_KEYS = Object.keys(IndexActivityResponse.shape);
 /** TL — `/api/activity`'s own ceiling (rosetta's MAX_LIMIT): a day's sessions
@@ -628,6 +630,9 @@ export class IndexService {
   private rollCall: { pid: number | null; kinds: ReadonlyMap<string, string> } | null = null;
   /** the tolerant reader's logging half: `<shape>.<key>` said once, ever */
   private readonly seenUnknownFields = new Set<string>();
+  /** MA-3a — a library page fieldd cannot read, said at warn once per member path (an entry's index as `*`), then at
+   * debug: the apps table reads the library on a timer, so one unreadable entry would otherwise warn every read */
+  private readonly artifactsMalformedSaid = new Set<string>();
   /** AC-3 — the catalog's readers (the kind → id column for the projections) */
   private readonly catalog: AgentCatalogReaders;
   private readonly onTransition: ((state: RosettadState) => void) | null;
@@ -1756,13 +1761,60 @@ export class IndexService {
    * "cursor-expired"}`, the caller's to read again from the head; a 400
    * (rosetta's `bad_request`: a filter past its bound, or a cursor that is not
    * one or was minted for another ask) is PRECONDITION_FAILED `{reason:
-   * "bad-filter"}`; a body fieldd cannot vouch for is `malformed`. A log line
-   * names the route, never the ask (EL7: `q` is the reader's own words). */
+   * "bad-filter"}`; a body fieldd cannot vouch for is `malformed`, said at warn
+   * once per member path and at debug after. A log line names the route, never
+   * the ask (EL7: `q` is the reader's own words). */
   async artifacts(params: IndexArtifactsRead): Promise<IndexArtifactPageResponse> {
-    // MA-3a RED — the skeleton: no read, an empty page that is not ready. The
-    // green reads the route through `getBody` with the error map above.
-    void params;
-    return { entries: [], next_cursor: null, canonical_ready: false };
+    this.requireReady();
+    const query = new URLSearchParams();
+    if (params.q !== undefined) query.set("q", params.q);
+    if (params.agent !== undefined) query.set("agent", params.agent);
+    if (params.project !== undefined) query.set("project", params.project);
+    if (params.artifactId !== undefined) query.set("artifact_id", params.artifactId);
+    if (params.cursor !== undefined) query.set("cursor", params.cursor);
+    query.set("limit", String(params.limit));
+    const body = await this.getBody(`/api/artifacts?${query}`, {
+      onStatus: (status) =>
+        status === 410
+          ? new RpcCallError(
+              "PRECONDITION_FAILED",
+              "the library moved under the cursor; read again from the head",
+              false,
+              { service: "index", reason: "cursor-expired" },
+            )
+          : status === 400
+            ? new RpcCallError(
+                "PRECONDITION_FAILED",
+                "the agent index refused the library ask's filter or cursor",
+                false,
+                { service: "index", reason: "bad-filter" },
+              )
+            : undefined,
+    });
+    const parsed = IndexArtifactPageResponse.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const member =
+        issue === undefined
+          ? "?"
+          : issue.path.map((part) => (typeof part === "number" ? "*" : String(part))).join(".");
+      const fields = {
+        issue: issue === undefined ? "?" : `${issue.path.join(".")}: ${issue.message}`,
+      };
+      const message = "The index answered a library page fieldd cannot read";
+      if (this.artifactsMalformedSaid.has(member)) {
+        this.logger.debug("fieldd.index.artifacts_malformed", message, fields);
+      } else {
+        this.artifactsMalformedSaid.add(member);
+        this.logger.warn("fieldd.index.artifacts_malformed", message, fields);
+      }
+      throw new RpcCallError("UNAVAILABLE", "the agent index answered a malformed library", true, {
+        service: "index",
+        state: "malformed",
+      });
+    }
+    this.noteUnknownFields("artifacts", body, ARTIFACTS_BODY_KEYS);
+    return parsed.data;
   }
 
   /** One aggregate GET, parsed. A 503 is rosetta's "not before canonical
