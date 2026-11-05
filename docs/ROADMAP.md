@@ -628,6 +628,15 @@ phone"; DECISIONS PC
     them. `acorn` and `ses` are pinned in fieldd behind wall R32.
   - Nothing calls it yet: the five `flows.*` doors are declared with no handler.
   - For James's eye (draft words; not a hold): "VibeField can't read the flows it keeps; nothing was changed".
+- **CP-4a2a, the flow host**: LANDED 11-05 (`c07039551`, the mini's mint M159, run 159; LANDED "CP-4a2a"), on
+  the CO round's CP-4 marks and the step-0 plan (`step0-cp4a2.md`; 4A2-Q1…Q10 ruled by VF-PM 08:51Z, Q7 re-ruled (b)
+  11:46Z).
+  - fieldd starts one child per run, as its own executable in the `flows-host` role. The script runs locked down in a
+    worker inside it, under V8's own cap, on a bounded pipe; a spinning script, a heap past its cap, a broken bound
+    or a flood ends the host, said in fieldd's words.
+  - fieldd journals each call and answer, every line MAC'd, and a host started again replays what the journal holds.
+  - Nothing calls it yet: the runs, a step's lines and the doors' handlers are CP-4a2b's.
+  - For James's eye (draft words; not a hold): DESIGN.md §9's five sentences for a run's host.
 - **SP-1e2, the crew and its card**: LANDED 11-05 in two halves, fieldd's (`068cab410`, the mini's mint M146, run 146;
   LANDED "SP-1e2") and the renderer's (`320d4b882`, the mini's mint M156, run 156; LANDED "SP-1e2's renderer half"),
   on the CO round's SPE marks (all at the leans) and the step-0 plans (`step0-sp1e2.md`, SPE-Q26…Q40 at the leans,
@@ -660,7 +669,7 @@ phone"; DECISIONS PC
 - Next, in order (the CO waves matrix, `lanes/co-plan/plans/co-waves-matrix.md`):
   - **SP-1e4** (SP-1e: CH-D2's live cards in Chat's thread): Stop all and Pause all on the crew card, now that the
     card has landed (SP-1e2). SP-1e3 stays HELD.
-  - **CP-4a2** (the host and `ses`, the journal, the runs, the doors' handlers), TH-1 having landed (CP4-S16); then
+  - **CP-4a2b** (the runs, a step's lines, the doors' handlers, the verbs; its owed list in LANDED "CP-4a2a"); then
     CP-4b…4f: Chat, the desk applier, Godview's flow mark, the watchdog, the board's light edits.
   - **CP-5b…5d**, which is MT-7: Codex and Grok, once their MCP processes can be named; Grok also once it takes a
     spark's brief and allowance (PU-O). Only CP-5c's Codex claim commit waits for step 7's profile card (CP5-Q2 (d),
@@ -1210,7 +1219,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — the sound identity | ACTIVE since 11-05 (SD-D1…D22 ruled at the leans); SD-1 landed 11-05 (DESIGN.md §14 and `@vibefield/sound`, M126 `1ebe7b461`, run 126); SD-2 landed 11-05 (the desktop hears it, M138 `9e5b6eec8`, run 138) | DESIGN.md §14; `draft/sound/design-sound.md` | SD-3, away |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146), TH-1/TH-2 (`d5c6995fb`, mint M147) and SP-1e2's card (`320d4b882`, mint M156) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e4 · CP-4a2…4f · CP-5b…d |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146), TH-1/TH-2 (`d5c6995fb`, mint M147), SP-1e2's card (`320d4b882`, mint M156) and CP-4a2a (`c07039551`, mint M159) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e4 · CP-4a2b…4f · CP-5b…d |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**

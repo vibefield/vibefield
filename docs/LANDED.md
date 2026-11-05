@@ -34970,3 +34970,481 @@ clean-Mac row meets", and ruled with prod-builder from 11:33Z to 11:54Z. Item 18
   this entry's records.
 - 3h: Keep and Hide as replicated intent.
 - 3f: serving, after rosetta 0.1.4's EL8.
+
+## CP-4a2a — the flow host: a run's script in a locked-down worker inside its own child of fieldd, on a bounded pipe, with fieldd's journal and its replay, and nothing calling it yet (track CO) (2026-11-05; `509f42603` → `c07039551`, 60 commits on main `266a70c37`, lane `cp-4a2a` in `/Volumes/SamsungRed/lanes/co-cp4a1/vibe-field`, stacked as M159 `c07039551`, run 159)
+
+**What it rests on.**
+- CP-4a1 (`1a3ca5f24`, run 143): the flow library, fieldd's signed flow records (item 172's fifth store) and the
+  static read; `acorn` and `ses` pinned behind wall R32, `ses` imported by nothing until this lane.
+- The plan of record, `lanes/co-plan/plans/step0-cp4a2.md` §12, on the CO round's CP-4 marks. VF-PM ruled 4A2-Q1…Q10
+  at 08:51Z. 4A2-Q2 (b) cut CP-4a2 in two: this lane is the host, its packaging, the journal and its replay, with no
+  agent; the runs, a step's lines, the doors' handlers and the verbs are CP-4a2b's.
+- **4A2-Q7, moved twice on its evidence** (plan §4's dated errata):
+  - (a) as first ruled, a heap cap on `execArgv`, is impossible: a packaged SEA parses no Node options.
+  - Q7 re-ruled (a), measured (10:57Z): a cap measured by pong, built (`adcdae2b1`, `88815662d`), then superseded
+    at 11:46Z: a non-yielding allocator never pongs, and a spinning host could not hear its `disconnect` or SIGTERM
+    (bth's review, findings 2 and 3).
+  - Q7 re-ruled (b) (11:46Z): the script in a worker_threads Worker inside the host, under V8's own cap
+    (`resourceLimits`), built (`0275b8e8b`, `51df6ab70`).
+- **The review's rulings** (VF-PM 11:46Z, through cp-landing): all ten CONFIRMED findings fixed in this lane, reds
+  first; P1–P4 fixed; P5 and P6 Owed. The split of 12:22Z gave findings 5, 6 and 10, H2b and P4 to bsp's branch
+  (`cp-4a2a-ms`), joined at its end.
+- **SES's source censors** (VF-PM 11:30Z, amended 12:40Z): a person's words that hold `import(`, `eval(`, `<!--` or
+  `-->` are escaped by fieldd's rewrite with their values whole; a real call is left to SES, which refuses it at
+  evaluate with the file's own line (one refuser). Not SES's `__evade*` options.
+- **A cut answer in the script** (finding 7, RULED (a) 12:48Z by cp-landing, VF-PM 12:52Z): the pipe's `answer`
+  carries `cut`, and the script hears the text with "…" after it.
+- **bth's re-read** (bth-1322Z), RULED by VF-PM 13:26Z as drawn: N1 is the resident cap alone
+  (`FLOW_LIMITS.HOST_RSS_MB` = 512, provisional); shadowing the binary constructors is a Found for 4a2b, not built;
+  N2's words are corrected in the lane, and the hold that refuses fast is Owed; N6 refuses an over-bound run with a
+  named reason; N1–N6 are this entry's Found. VF-PM accepted N5 (b)'s built fix at 13:40Z.
+- TH-1 (`d5c6995fb`, run 147) had landed (CP4-S16). Item 178's one sidecar table (`ed533687f`, run 151) is where the
+  host's bundle ships.
+
+**What** (49 files, +5,710 −58 against main `266a70c37`): DESIGN.md, architecture.html, 9 in contracts (5 fixtures),
+24 in fieldd, the walls' script, the notices script, the SEA builder, fieldd's one sidecar table, the census baseline
+and 9 in the dev runner. No Rust, no lock.
+- **Pin-class** (the one ERE over the 49 files; GO'd): `packages/fieldd/package.json` 1/1 (`0cea9c8fe`: its build
+  script gains `&& node scripts/flows-host-build.mjs` alone, no dependency) and `scripts/check-import-boundaries.mjs`
+  65/3 (R32's host clause 55/3; P4 7/0 and 4/1). Release-class: none (0 `.github/` paths).
+- **Release-adjacent** (each GO'd by prod-builder; Validation):
+  `build-fieldd-sea.mjs` 121/0, `fieldd-sidecars.mjs` 9/0, `third-party-notices.mjs` 6/0, and
+  `package-manifest.json` 29/25, the census a9 generated.
+- **Doc first** (`509f42603`, `d61501a21`):
+  - architecture.html: the flow host's seam row.
+  - DESIGN.md §9 "When a run's script cannot go on": a run's host ended, in fieldd's words, and the dated amendment,
+    a run's journal as one of a flow's records.
+- **Contracts** (`5371b12f2`):
+  - flows.ts: a run's journal (head, call, answer, log and end lines, `flowJournalLineOf`); a call's key;
+    FLOW_HOST_ENDINGS.
+  - registries.ts: FLOW_LIMITS' seven host rows (HOST_HEAP_MB, HOST_RSS_MB from `f424ee175`, HOST_PING_MS,
+    HOST_PING_MISSES, ARGS_DEPTH_MAX, HOST_CALLS_WAITING_MAX, HOST_LOG_LINES_MAX), each provisional, and FLOW_HOST,
+    the host's honest refusal (`flows`, `unconfigured`).
+  - 5 fixtures: the journal's head, call, answer and forged lines, and the host's UNAVAILABLE.
+- **R32's host clause** (`fb0c37790`, PIN-CLASS): the child imports `ses`, `@endo/*`, `node:` built-ins, its own
+  folder and `flows/protocol` alone.
+- **The host** (red `0489562fe`, green `0cea9c8fe`):
+  - fieldd starts one child per run, as its own executable in the closed `flows-host` role (`roles.ts`, `bin.ts`,
+    `flows/launch.ts`), or `flows-host.cjs` under the development runtime, and `unconfigured` where neither is.
+  - Its environment is PATH alone.
+  - acorn rewrites the module into one script (`module-script.ts`).
+  - The supervisor starts, pings and ends it.
+  - `598a58ff8` names the one variable macOS adds to every process.
+- **Q7 re-ruled (a), measured** (red `adcdae2b1`, green `88815662d`): the cap measured by pong. Superseded by Q7
+  (b), kept in the history.
+- **The journal and its replay** (red `0a2f844e7`, green `ba1a436d0`), CP4-S15 and CP-D9:
+  - one JSONL file per run under the flows store, each line MAC'd over the line before it, read in item 172's order.
+    A line that isn't fieldd's sets the run aside as lost.
+  - replay answers a call the journal holds by its key and `#n`, and journals a new call before it is handed on,
+    then its answer.
+- **P3 into the journal** (red `f6573c097`, green `38d9cce29`):
+  - the store's own tail is the anchor while fieldd lives; the durable anchor is Owed.
+  - a torn piece is dropped before the next line (Found 1).
+  - a keyless format reads forged.
+  - `FlowReplay.call` never throws.
+  - the answer is JSON's own value before it is signed.
+- **Q7 (b), the worker** (red `0275b8e8b`, green `51df6ab70`):
+  - the script runs in a worker_threads Worker from the same bundle, under `maxOldGenerationSizeMb`. Past it,
+    ERR_WORKER_OUT_OF_MEMORY is `memory`.
+  - the host's own thread keeps the pipe, its end and SIGTERM, and runs no script. It doesn't lock down, said in its
+    header.
+  - the pong's heap is telemetry.
+  - V8's heap line is read from a bounded stderr tail.
+- **The fd-3 transport** (red `263aec49a`, green `c3b8d761f`), H1/P2:
+  - each side reads a plain pipe, one JSON message per line, with an import-free FrameReader that refuses a line past
+    its bound before it holds it whole.
+  - past 64 KiB and the envelope, or not JSON, the run ends `protocol`.
+  - `done.value` is bounded again.
+  - `threw` is cut in the child, and its textOf is total.
+- **The host ships** (`a311e8e43`, RELEASE-ADJACENT, re-cut on top as a new commit with no carry claim, ruled 11:34Z):
+  - the `flows-host.cjs` row in item 178's one table (`fieldd-sidecars.mjs`, `notices: { bundle: true }`), so
+    stage-package.mjs is untouched.
+  - the NODE_BUNDLES row.
+  - the SEA builder's role spelling and probe C3, on fd 3.
+  - the dev runner's watch, paths, planes and snapshot rows.
+  - notices-rows' count restated (9 + 9 + 7).
+  - worker-roles trimmed to the spelling half.
+- **The review's fixes** (bcp4):
+  - finding 7's search (`7388e19d1`, `8b4d04efe`) and its mark (`d293a3ca8`, `cbe7d9d1c`).
+  - finding 8 (`c582db3c7`, `4022ed356`): an 'error' settles a run only for a spawn with no pid.
+  - finding 9 (`a0f1c0f98`, `b8d9a0203`): `ready` is the spawned pid, and a Stop before READY sends nothing.
+  - P1a (`87e4cf42d`, `0aea2b9e3`): liveness is the pong alone. HOST_CALLS_WAITING_MAX 256 and HOST_LOG_LINES_MAX
+    10,000 end a run `flood`.
+  - P1b (`e39e4f687`, `83f899c17`): ARGS_DEPTH_MAX 32 at every door: the child, fieldd's reader, replay's answers
+    and the journal's read. It stays local to the flows; contracts' canonicalJson is untouched.
+  - P1c (`951e15e65`, `4e4fd8d9a`): nothing a host's frame starts throws at fieldd's pipe.
+  - the comments (`1efdeb3e2`): H4's macOS key, and probe C3's.
+- **The rewrite and the sandbox** (bsp, from `cp-4a2a-ms`):
+  - findings 5, 6 and 10 (red `827ceeb04`, green `fab4ff995`): the censor escape, `preserveParens`, and an
+    `export`'s line breaks kept.
+  - the parser differential, REQUIRED by VF-PM 12:41Z (`776467ad6`).
+  - H2b, nine rows on the real host (`7eb2b5417`).
+  - P4, R32 holding `flows/protocol.ts` import-free (red `1d02ccb1a`, green `0f9187763`, PIN-CLASS).
+- **The re-read's fixes** (bth-1322Z; cp-landing 13:24Z):
+  - N1 (red `f424ee175`, green `55755ce21`): the host's own thread reads its RSS every 50 ms against `rssMb`
+    (FLOW_LIMITS.HOST_RSS_MB, 512 provisional, VF-PM 13:26Z). Past it, the host says `memory` and SIGKILLs
+    itself. V8's heap cap cannot see a typed array's backing store. `f424ee175` touches the SEA builder's probe
+    C3 (RELEASE-ADJACENT, 7/1).
+  - N2 (`f68735a8c`): registries.ts says the flood bounds are a flow's own ceilings. A fan-out past 256 at once
+    ends `flood` before any hold can ask.
+  - N6 (red `9b8162be3`, green `23707066f`): fieldd builds a run's frame once and sizes it before any host starts.
+    Past TO_FLOW_HOST_FRAME_MAX, the run is `refused`.
+  - docs (`8ccce90c0`): §9's Q7 header and the review's 11:46Z, and the seam row's resident cap.
+  - N3/N4/N5a/N5b, bsp (red `75d1c6a57`, test only, 93+/0−; green `b4f6d842a`, `module-script.ts` only,
+    104+/16−; joined by cherry-pick from `cp-4a2a-ms2`, 2/2 "="; VF-PM accepted N5b's built fix 13:40Z):
+    - N3: a string literal holding a pattern is edited in its own raw text (`escapedAt`), one character as `\uXXXX`
+      at each place, so a line continuation and a raw U+2028/9 stay where they were;
+    - N4: the edits are applied in one forward pass, joined once;
+    - N5 (a): a regex literal holding a pattern becomes `new (/(?:)/.constructor)(source, flags)`, the realm's
+      RegExp whatever the script binds to the name;
+    - N5 (b): a tagged template whose tag is not String.raw gets a string's raw-text escapes, so its tag receives
+      the strings and substitutions it wrote; untagged templates and String.raw keep the `${""}` cut.
+- **The second re-read's fixes** (bth-1345Z; VF-PM 13:48Z, the last fix round):
+  - R1 (red `50978aaec`, green `597a25644`): at the run's end the host terminates its worker, and its cap holds
+    until it leaves. Every leave goes through one `leave(code)`, which terminates the worker without blocking and
+    exits once it has gone, never by a `process.exit()` that waits on one long builtin. Past the cap after the end,
+    the host is killed with no frame.
+  - the stale cite (`ccc2ea246`, comments): HOST_RSS_MB cites VF-PM's 13:26Z ruling, 512 provisional, correcting
+    the bodies of `f424ee175` and `55755ce21`, which stay as written.
+  - R2 (red `cd46f20ad`, green `bef7968d2`): the host's memory is the higher of its resident size and its worker's
+    own count (`worker.getHeapStatistics()`: external memory and heap), against ONE cap, HOST_RSS_MB. The resident
+    size is read at once every tick, with one count asked at a time. The row's door is a test preload
+    (`--require`, rss reading 1 byte), with no door in product code.
+  - L2 (red `a6f2d60be`, green `9113e7872`): startFlowHost keeps the `run` frame's line it sized, and READY writes
+    that line as it is.
+  - L1 and L3, bsp (`module-script.ts`; joined by cherry-pick from `cp-4a2a-ms3`, 3/3 "="):
+    - L1 (`cb193a4bb`, comments, 15+/7−): String.raw is String.raw only as written (`String.raw`, `String["raw"]`).
+      An alias is a script's own tag and gets the raw-text escapes, said in the header.
+    - L3 (red `ab7b8628b`, green `c2db6adfb`): `applyEdits` refuses an edit that starts inside another, out loud
+      (`EditsOverlap`), and flowScriptOf refuses the flow with it. No edit list the rewrite makes today overlaps,
+      so it guards a future regression.
+  - leave()'s bound, stated (`1e1448c51`, comments): a worker that does not go (one long builtin, under the cap)
+    holds the host until it does. After a `shutdown`, fieldd's SIGKILL at its 2 s grace ends it; with fieldd gone,
+    the builtin's own end does, its memory held to the cap meanwhile.
+- **The census baseline** (`d2bdbb6bc`, the re-cut of a9's `819fcc75e`): `--update` on the mini at 14:27Z, never by
+  hand. packages/fieldd gains `dist/flows-host.cjs` (246,680 B): 105 → 106 files, 43,336,965 → 43,887,500 B. Its
+  blob `d9ef87b67bab` was GO'd at 14:31Z.
+- **Run 158's red, fixed in the test** (`c07039551`, test only, `flows-host.test.ts` 27/13; VF-PM ruled the fix at
+  14:50Z): H25 and H28 hold on an ask that is never answered, so only the cap can end them, on a fast host or a slow
+  one. Their `< 7` call counts are dropped, and no assert reads a time (Found 14).
+
+**Validation.**
+- **This Mac, light runs, one named file each** (fieldd's are speed, not proof):
+  - On the joined tree, 13:11Z: flows-host 29/29, flows-replay 10/10, flows-journal 13/13, flows-records 11/11,
+    record-stores 39/39, flows-module-script 11/11, flows-sandbox 9/9.
+  - contracts flows 24/24, fixtures 671/671.
+  - fieldd and contracts tsc 0; the walls `--self-test` "all passed".
+  - the dev runner's notices-rows 10, worker-roles 3, esbuild-watches 12, runtime-planes 3, runtime-snapshot 12.
+  - bsp's last, at L1 and L3 (`module-script.ts` byte-identical at T): flows-module-script 18/18, flows-sandbox
+    9/9, flows-host 31/31 before H27–H29, flows-replay 10/10, fieldd tsc 0.
+  - biome clean on each commit's staged files; pairwise and a trial merge before every commit.
+- **Every red failed on its assertion, with the wrong value shown** (each commit's body names its lines). P1c's red
+  also showed the bug itself: two Unhandled Errors, the handler's throws escaping fieldd's pipe.
+- **The census gap job** (a9, the mini, 14:27:09–14:27:27Z, at the lane's then tip `5a92de67e`; its logs in
+  `lanes/co-plan/lanes/co-cp4a1/cp4a2/a9-census-5a92de67e/`): bundle:assert rc 0; census:assert rc 1 on the one
+  drift, "present but UNEXPECTED (1): packages/fieldd/dist/flows-host.cjs"; `--update`; `--assert --strict` "no
+  drift", rc 0, 0 CANNOT RUN.
+- **prod-builder's four GOs, one per release-adjacent blob** (read-only, by blob; its three GO messages, 13:16Z,
+  14:21Z and 14:31Z):
+  - `build-fieldd-sea.mjs` `3b7839c0ec8d`, 121/0: 14:21Z, the re-GO after N1 (`f424ee175`), first GO'd at 13:16Z as
+    `6f8c3b2c3880`. The delta is probe C3's `limits`, one key per line, gaining `rssMb: 512`.
+  - `package-manifest.json` `d9ef87b67bab`, 29/25: 14:31Z, a9's patch reproduced byte for byte.
+  - `fieldd-sidecars.mjs` `4916d73651e0`, 9/0: 13:16Z.
+  - `third-party-notices.mjs` `8a1d63d71b22`, 6/0: 13:16Z.
+  - The 13:16Z GO also covered the census `--update` shape (105 → 106, `package-manifest.json` alone) and the
+    pin-class lines, and predicted the notices: 653 components exactly, 329..337 licence texts.
+- **The moves** (every re-cut carried, never re-proven):
+  - onto `be195e5b4` (carry v3, cp-landing 12:30Z): 12/17 patch-id equal; 3 context-only, each a ruled ALLOW union:
+    - architecture.html;
+    - registries.ts and fixtures.test.ts with MA-1's rows (28+/1−, 6+/0−, equal);
+    - record-stores.test.ts with item 177's `sessionsCase` (3 lines: CASES and two `resign`s).
+    Two commits lost only their probe-C3 hunk to the re-cut ship commit. 33/34 unshared files are byte-identical,
+    the one other the ruled worker-roles trim.
+  - onto `bcf2a58dd`: 18/18 "=".
+  - bsp's six joined by cherry-pick: 6/6 "=".
+  - onto `18bb15a74`: 39/39 "=".
+  - onto `0e4fc5306` (SP-1e2r's records): DESIGN.md and architecture.html shared, the lane's +29/−0 and +41/−16
+    carried (carry v3, (1b)); range-diff 58/58 "=". Then the census commit went on top.
+  - onto `32192ed1f` and `266a70c37` (M-A and its records): 0 files shared; range-diff 59/59 "=" at each, 59/59
+    patch-ids; the fixer's pre-check clean (14:34Z). Then `c07039551` went on top of `d2bdbb6bc`, places 1–59
+    unchanged.
+- **The expected counts** (bth's parser via bsp over `18bb15a74..2d3004e48`, nothing run; the deltas are the claim),
+  against run 157's:
+  - contracts 1734 → 1747: flows.test 16 → 24, fixtures.test +5 (the five new wire fixtures);
+  - fieldd 3328 → 3416 | 14: flows-host 34, flows-module-script 18, flows-journal 13, flows-replay 10 and
+    flows-sandbox 9 (five new files), record-stores +4 (the seventh case × U1–U4);
+  - field-app 4031 and electron-shell 2668 | 2, unchanged; node 466 → 472 (esbuild-watches 9 → 12, worker-roles 3
+    new); cargo 545; biome 3352 → 3376 (24 added files); vitest 13,133 → 13,234;
+  - the stage 152 files; the notices 653 components exactly, 329..337 licence texts (337 expected), 11 left out;
+  - the census 106 files, 43,887,500 B (the `--update`'s measure), "no drift".
+  - `c07039551` adds no row: flows-host stays 34 ("Tests  34 passed (34)", three runs alone on this Mac).
+- **Run 158, RED** (a9's mint of `d2bdbb6bc`, verify exit 1 at 14:42:13Z; `lanes/ts6/logs/mini/run158/`):
+  - verify (`verify.clean.log`): H25 "expected 7 to be less than 7" at `flows-host.test.ts:592`, after `memory` at
+    its 7th call.
+  - flows-host alone on the quiet mini (`rest158-d2bdbb6bc/flows-host-alone.log`): "Tests  2 failed | 32 passed
+    (34)". H25 `{ kind: 'done', value: 6 }` where `{ kind: 'ended', why: 'memory' }` at :589, the whole row in 84 ms;
+    H28 "expected 7 to be less than 7" at :696.
+  - The caps worked; the rows were timing-bound (Found 14). `c07039551` fixes the rows. test:rust 545/0 and
+    gen:check 0 in the same rest.
+- **N1's real-cap probe, from run 158** (VF-PM 13:26Z; `run158/n1-d2bdbb6bc/n1.log`, probe `6e12b0ed…`): four
+  256 MiB Uint8Arrays under the real HOST_RSS_MB (rssMb 512, heapMb 128), each followed by an answered ask. "N1
+  real-cap probe: PASS": the host's RSS read 56.1 MB at READY and 75.8 MB waiting (the baseline; this Mac's one-off
+  at 13:27Z read 56 and 76), then 328.0 MB at "kept 1"; asks heard ["start", "kept 1"]; `memory`, by SIGKILL, 0
+  stragglers; 75% free before. The probe now carries the same hold (sha256 `0bce9712…`).
+- **The mint, run 159, and the full light** (VF-PM 12:16Z: a lane's full light is its mint on the mini), at
+  `c07039551`, tree `20269f8db0be`, on `266a70c37`:
+  - `lanes/ts6/logs/mini/run159/run159.out` (sha256
+    `b6481dab9ff8f6325088d34a6c26795193f14cb4f84c8b3fd7ccbc2852ebed59`): "ts6-mini verify ARMED 15:00:22Z";
+    "verify exit 0 15:05:59Z"; "test target:  NX   Successfully ran target test for 29 projects"; "cargo test
+    results: ok 34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+  - `verify.log` (sha256 `3af46ebe30a0715adf75952681a9cc140a9681d63d5a3f9b92d1a18a2a4f46e3`; its clean copy
+    `verify.clean.log`, `55161b3c4de022fd09e7389db8abfa2b6d31df34bee4c7394a3bc6836108c247`):
+    - contracts "Tests  1747 passed (1747)"; fieldd "Test Files  255 passed | 4 skipped (259)", "Tests  3416
+      passed | 14 skipped (3430)"; field-app "Tests  4031 passed (4031)"; electron-shell "Tests  2668 passed | 2
+      skipped (2670)";
+    - node "ℹ tests 472", "ℹ fail 0"; biome "Checked 3376 files"; cargo 545 passed in 34 suites ("test result:
+      ok" each), clippy at `-D warnings` clean;
+    - the census "TOTAL 106 files across 9 packages: 43,892,178 bytes", "no drift", "census assert OK — no §7.3
+      violation". Read row by row against the baseline (blob `d9ef87b67bab`, measured at T₀ `5a92de67e` on
+      `0e4fc5306`), it differs in exactly two rows: fieldd `dist/bin.cjs` 8,608,500 → 8,612,697 (+4,197) and
+      electron-shell `dist/main/index.cjs` 2,800,856 → 2,801,337 (+481), +4,678 in all. They are the two bundles
+      M-A's `32192ed1f` changed; the lane changed neither after T₀ (`c07039551` is test only). The strict assert
+      counts files, never bytes, so "no drift";
+    - vitest 13,234 | 0 | 20 over 937 files run (fieldd's 4 opt-in files skipped whole), every count the expected
+      counts named;
+    - the lane's files: flows-host "(34 tests)", H25 and H28 green among them; flows-module-script 18,
+      flows-journal 13, flows-replay 10, flows-sandbox 9, flows-records 11, record-stores 39; contracts flows 24 and
+      fixtures 672.
+  - `run159-next.out` (`1edeed84b61e11a1a74a63f5663d266f76412b6c926ede32c952df0284412076`): "preflight exit 0 · 1
+    WARN/FAIL lines", R23's `acp` candidate (the standing warning).
+  - `run159-hid.log` (`48170959f6069717e34cfb8267147b50d1e7f9fecd9e5b57b9da0772c001ac43`): the console locked, HID
+    idle, from 15:00:21Z to 15:05:59Z.
+  - Step 2 (a9, after verify; `run159/s159b-c07039551.out`, sha256
+    `3fc7718c4062ab92772b2a33c26d57714fc370b77b88ee30105045b4a7dc9f71`, "s159b done (rc 0 …)" at 15:12:48Z; its logs
+    in `run159/s159b-c07039551/`):
+    - the tip rows at T (`B1-flows-host.log` `567a4032…`, `B2-module-script.log` `91a5a625…`): flows-host "Tests
+      34 passed (34)"; flows-module-script "Tests  18 passed (18)", N4's row among them passed ("N4 · the rewrite
+      is one pass", 102ms; it prints no ratio);
+    - the stage pass, fresh on T (`C1-stage.log` `d92bfcfe…`, `C2-verify.log` `fc7ba82e…`): `package:stage` rc 0,
+      0 "stage REFUSED: the notices rows" lines; "stage verify OK — 152 files, 299,476,011 bytes (285.60 MB);
+      complete"; "653 components, 337 distinct licence texts, 11 left out"; legal/ 4 entries; ses 2.3.0 NOTICE
+      files 0;
+    - probe C3 (`build-fieldd-sea.mjs --verify`, exit 0; `D-sea.log` `085abf01…`): "ok   flows-host role: ready in
+      73 ms, one agent call answered, the realm frozen, no process in the compartment";
+    - its SEA tmp, kept for James's reap (Owed):
+      `/Users/jasper/vf-lanes/verify/sea-c3-tmp` on the mini, 145M (a9, 15:08:05Z);
+    - N1's real-cap probe at T (`E-n1.log` `b0f41adb…`; probe `0bce9712…`, at its defaults): "N1 real-cap probe:
+      PASS"; rss MB ready 56.1, waiting 75.7, kept 1 328.0; asks heard ["start","kept 1"]; `memory`, SIGKILL, 0
+      stragglers; the heap stats are not printed by the probe (Owed);
+    - M1, the 22 reds, each at its own commit in a clean checkout, every failure an AssertionError (0 vitest
+      timeouts, 0 load failures), failed | passed:
+      - `0489562fe` flows-host 14 | 0; `adcdae2b1` flows-host 3 | 14;
+      - `0a2f844e7` flows-journal 9 | 0, flows-replay 6 | 0, record-stores 4 | 35;
+      - `f6573c097` flows-journal 2 | 10 (J6d, J8), flows-replay 2 | 6 (P6, P7), contracts flows.test 24 | 0;
+      - `0275b8e8b` flows-host 4 | 15 (H7b, H8, H8b, H8d); `263aec49a` flows-host 8 | 13, flows-replay 1 | 7;
+      - `7388e19d1`, `c582db3c7` and `a0f1c0f98` flows-host 1 failed each; `87e4cf42d` flows-host 2 | 24 and
+        contracts flows.test 24 | 0;
+      - `e39e4f687` flows-host 2 | 26, flows-journal 1 | 12 (J9), flows-replay 1 | 8; `951e15e65` flows-host 1 | 28,
+        with vitest's "2 unhandled errors" (the handler's throws escaping fieldd's pipe);
+      - `d293a3ca8` flows-host 2 | 27, flows-replay 1 | 9 (P9); `827ceeb04` flows-module-script 8 | 0;
+      - `1d02ccb1a` the walls' `--self-test` rc 1 on its one FAIL row, "FAIL  R32 detected in
+        packages/fieldd/src/flows/protocol.ts", with 136 PASS;
+      - `f424ee175` flows-host 1 | 29 (H25); `9b8162be3` flows-host 2 | 29; `75d1c6a57` flows-module-script 5 | 11;
+      - `50978aaec` flows-host 2 | 30, H27 "expected 1096.546875 to be less than 768"; `cd46f20ad` flows-host
+        2 | 31; `a6f2d60be` flows-host 3 | 31; `ab7b8628b` flows-module-script 1 | 17 (L3b).
+    - Run 158's race in the rows before `c07039551`: `9b8162be3`, `50978aaec`, `cd46f20ad` and `a6f2d60be` each also
+      red H25 ("{ kind: 'done', value: 6 }"), and `a6f2d60be` H28 ("expected 7 to be less than 7"), all by
+      assertion; `c07039551` fixes the rows at T.
+- **Landed:** The fixer's ff `266a70c37` → `c07039551` at 2026-11-05T15:16:57Z
+
+**The review.** bth's adversarial review, read-only, of c1–c7 at `585f74678`:
+`lanes/co-plan/lanes/co-cp4a1/cp4a2/review-bth-1142Z.md` (sent to cp-landing 11:41Z). Its sha256 is
+`ef4eac7629c25db1505e90776eac3ba5e73098a09843b7ca0109219f9f65ab0e` as it stands, corrected at its source by H2b-6
+(Found 5); `752db89c3b6f872d…` before that correction. 10 CONFIRMED, 6 PLAUSIBLE, each closed:
+1. HIGH, `threw` uncut and fieldd's IPC buffering any frame: cut in the child and the fd-3 FrameReader
+   (`c3b8d761f`).
+2. HIGH, a spinning host outliving fieldd: the worker (`51df6ab70`; H7b).
+3. HIGH, no heap cap: V8's own, on the worker (`51df6ab70`; H8, H8b, H8c, H8d).
+4. MEDIUM, a throw no text reads hanging its run: textOf total and `run().catch` (`c3b8d761f`; H16).
+5. MEDIUM, SES's censors refusing a person's words: the escape (`fab4ff995`, `776467ad6`; flows-module-script's
+   rows, D1–D3).
+6. MEDIUM, a parenthesized default: `preserveParens` (`fab4ff995`).
+7. LOW-MED, a cut overshooting to "": the binary search (`8b4d04efe`; H14b) and the mark (`cbe7d9d1c`; H14, P9).
+8. LOW-MED, an 'error' settling a live child's run: (`4022ed356`; H18).
+9. LOW, `ready` ignoring a Stop: (`b8d9a0203`; H19).
+10. LOW, lines drifting across `export\n`: (`fab4ff995`).
+- P1, no per-run budget and no depth bound: `0aea2b9e3`, `83f899c17`, `4e4fd8d9a` (rows H20–H24, replay's P8,
+  journal's J9).
+- P2, 64 KiB held only by the honest child: fd 3 (`c3b8d761f`; row H17).
+- P3, a missing tail looking like a crash: the store's own tail, a keyless format forged, the round-tripped answer
+  (`38d9cce29`; rows J6d, J8, J8b, replay's P6 and P7); the durable anchor Owed.
+(Test row ids are each file's own: replay's P6–P9 are not the review's P-numbers.)
+- P4, R32 never holding protocol.ts: (`0f9187763`).
+- P5 and P6: Owed (below).
+- Clean areas, named by the review ("None survived, per area"):
+  - the sandbox's escapes: the four function constructors, thenables, top-level `arguments`, a nested Compartment
+    and the Error hooks, now pinned as H2b's nine rows;
+  - the environment (PATH alone; argv and the pipe carry no key, token or path);
+  - the rewrite's export handling, which works on the AST;
+  - surrogates;
+  - R32's relative paths.
+
+**The re-read.** bth's adversarial re-read, read-only, of the fixes at `822111496`:
+`lanes/co-plan/lanes/co-cp4a1/cp4a2/reread-bth-1322Z.md`. Its sha256 was `541a17ba…` as cp-landing relayed it
+(13:24Z); `7c6d9e10…` with its 13:27Z addendum; and is
+`f68627d9f1cce5391f25b40b806fec7689c70a25b1ed95c2b0ea27a3c29ca25b` with N4's correction (13:43Z). All 10
+findings and P1–P4 are CLOSED, each with the line that closes it. It found six new findings and one PLAUSIBLE, each
+closed or carried:
+- N1, HIGH, typed arrays' backing stores outside V8's heap cap: the RSS cap (`f424ee175`, `55755ce21`; H25).
+  VF-PM ruled N1 to be the RSS cap alone (13:26Z).
+- N2, MEDIUM, a fan-out past 256 ends `flood`, so the registries' claim was false: the words (`f68735a8c`); the
+  hold Owed.
+- N3, MEDIUM-LOW, re-escaped strings lose their raw line breaks: edited in their own raw text (`75d1c6a57`,
+  `b4f6d842a`; N3a, N3b).
+- N4, LOW, the rewrite's apply is quadratic: one pass (`75d1c6a57`, `b4f6d842a`; N4).
+- N5, LOW, two "value kept" claims hold only for the common case: the realm's RegExp and a tag's own strings
+  (`75d1c6a57`, `b4f6d842a`; N5a, N5b).
+- N6, LOW, the run frame unbounded against the host's reader: sized before any host starts (`9b8162be3`,
+  `23707066f`; H26).
+- N7, PLAUSIBLE, the SEA's worker witnessed by probe C3 alone: probe C3 on run 159's packaged build (Validation).
+
+**The second re-read.** bth's, read-only, of `822111496..3a6d8d7b3`:
+`lanes/co-plan/lanes/co-cp4a1/cp4a2/reread2-bth-1345Z.md`, sha256
+`c89bc20e938a7fa722199c70d1c9fd54fcccb9a5ccac7ad9bf78c620bbcc551b`. N1–N6 are all CLOSED, with nothing HIGH. VF-PM ruled
+13:48Z: build R1, R2 and L2, the last fix round. After bth's short third read, anything MEDIUM or lower goes to Owed
+4a2b; only a HIGH re-opens.
+- R1, MEDIUM-LOW, the RSS cap stopped at the run's end while the worker still ran: `50978aaec`, `597a25644` (H27).
+- R2, MEDIUM, PLAUSIBLE, macOS's resident size under-reads under pressure: `cd46f20ad`, `bef7968d2` (H28).
+- L1, LOW, an aliased String.raw gets escapes: said in words (`cb193a4bb`; cp-landing 13:47Z: state it, no code).
+- L2, LOW, the sized frame not frozen: `a6f2d60be`, `9113e7872` (H29).
+- L3, LOW, the one-pass apply relies on no overlap: refused out loud (`ab7b8628b`, `c2db6adfb`; L3a, L3b).
+
+**The third read.** bth's, read-only, of `3a6d8d7b3..2d3004e48`, the last fix round's:
+`lanes/co-plan/lanes/co-cp4a1/cp4a2/reread3-bth-1416Z.md`, sha256
+`12d20103d43dd8acf679f0551566188432bb8f058695efe5ef9b4d13d95c43e4`. Nothing HIGH, so nothing re-opens. R1, R2, L1,
+L2 and L3 are CLOSED, each with the line that closes it. Two new LOWs, O1 and O2, go to Owed 4a2b (VF-PM's
+boundary, 13:48Z). The hunts that came up empty:
+- `leave()` racing the resident kill: whichever comes first, the end is right, and a double kill is harmless;
+- `leave()` racing a frame: once `said` is set nothing more is said, and fieldd drops what a leaving worker
+  forwards after `#chosen`;
+- a count ask that never settles: the tick reads `rss()` first and awaits nothing, so it cannot stall. The residue
+  is one builtin's size, and such a call can fill only uniform bytes, which the compressor shrinks;
+- the preload door: it enters only through the test helper's `nodeArgs`, and the product's spawn carries only its
+  launch, with the environment PATH alone;
+- L2's line reaching the pipe unchanged;
+- L3's refusal path: only `EditsOverlap` is caught, and the flow is `refused` before any host starts.
+
+**The fourth read.** bth's, read-only, of `c07039551` alone (run 158's red, test only):
+`lanes/co-plan/lanes/co-cp4a1/cp4a2/reread4-bth-1457Z.md`, sha256
+`27c2eb5ddc58bcfc006b9998e8102bea69b729249f55eec5884425a8960b6e32`. CLOSED, nothing HIGH. The rows are deterministic
+on a fast host and a slow one:
+- the hold is `new Promise(() => {})`, so `done` and `threw` are impossible, and `unanswered`, `flood` and `fatal`
+  cannot win. If the cap never fires, the run waits at the hold and the row fails by its value (`'timeout'`);
+- dropping `< 7` is no loss: the script cannot end, so "ended before the script's end" holds by construction;
+- H28 still isolates the worker's count (the preload's rss reads 1 byte), and `answeredToEnd`'s `holds` has one
+  caller, H28.
+One LOW, O3, goes to Owed 4a2b; it predates `c07039551`.
+
+**Found.**
+1. **A torn tail glued to the next line (J6d).** After a crash mid-write, a restarted fieldd appended its next line
+   straight after the piece the disk never finished, so the two read as one line that doesn't parse and the run read
+   lost. The store now drops the piece first (ftruncate to its last whole line) and logs it.
+2. **A shared `/g` regex's `lastIndex`.** Left by a `.test()`, it made `matchAll` skip a string's first match: the
+   probe showed "import //" unescaped. The censor tests are global-free now (bsp, `fab4ff995`).
+3. **SES's censors are textual** (the probe, `probe/probe-2026-11-05T112653376Z.json`): ses 2.3.0 refuses `import(`,
+   `eval(`, `<!--` and `-->` anywhere in a script's text, strings and comments included, so a prompt holding them
+   could never run. That became the 11:30Z ruling and the escape.
+4. **macOS's own key (H4).** `__CF_USER_TEXT_ENCODING` is the macOS loader's own key, set in every process the system
+   starts, whatever environment it was handed. The child's environment is PATH alone plus that key, which is the
+   system's, never fieldd's.
+5. **H2b-6, corrected at its source.** The review read `Error.prepareStackTrace` and `captureStackTrace` as absent.
+   Under ses 2.3.0 on V8 both are SES's tamed methods, so the row first went red. It now proves them powerless, and
+   the review file carries a dated correction where it said otherwise.
+6. **V8's heap cap does not hold a typed array (N1).** `resourceLimits` caps the worker's V8 heap. ArrayBuffer and
+   typed-array backing stores are the embedder's, outside it, and SES leaves ArrayBuffer, Uint8Array and DataView in
+   every compartment. On this Mac, a script kept 384 MiB past a 128 MB heap cap and every ping, and ran to its end
+   (`f424ee175`'s red). The host's own thread now holds a resident cap. bth also read that shadowing the 13
+   constructors that hand out a buffer is possible under ses 2.3.0 (VF-PM: for 4a2b; Owed below).
+   The resident cap holds to within what a script allocates in one 50 ms read (this Mac: ~+104 MB with 64 MiB
+   fills, `n1/real-cap-small-1348Z.log`; cp-landing 13:49Z).
+7. **A held `parallel` was said never to flood (N2).** `Promise.all` sends every call before any hold reaches it, so
+   a fan-out past 256 ends `flood` at its 257th call. The words were wrong at their source and in the plan's note,
+   both corrected.
+8. **A re-escaped string moved the lines after it (N3).** Writing a literal again from its cooked value dropped a
+   line continuation and wrote a raw U+2028 as an escape, so V8's and acorn's lines moved by one (finding 10's
+   class, by another road). SES numbers its refusals by line feeds alone, so its own line never moved.
+9. **The rewrite's apply was quadratic (N4), and its estimate was 20× too high.** The re-read estimated 1–2 s at
+   64 KiB of comments. Measured on this Mac (bsp's row and a node probe, 13:34Z): 54 ms at 21,800 comment lines
+   (64 KiB, about 11× a parse), 199 ms at 43,600, 1.66 s at 87,200 and 7.1 s at 174,400. One pass costs about one
+   parse at every size. The estimate is corrected at its source (the re-read's N4, a dated *Corrected* line).
+10. **Two "value kept" claims held only for the common case (N5).** A script's own `RegExp` took a rewritten
+   regex, and a script's own tag saw the `${""}` cuts as extra strings.
+11. **The host could refuse its own run (N6).** TO_FLOW_HOST_FRAME_MAX covered the script's escapes, not the input:
+   a script and an input each within its own bound made a frame the host's reader refused (`fatal`, "fieldd's pipe
+   carried a frame this host does not read", `9b8162be3`'s red). fieldd now sizes the frame first.
+12. **`process.exit()` waits on the worker (R1).** It blocks the host's thread until the worker's thread ends, and a
+   worker inside one long builtin does not end mid-call. On the red's host, fieldd's `shutdown` reached it, and the
+   host held a 1 GiB fill started after `done` to its end: 1,097 MB, exit code 0 at 659 ms (`n1/debug-r1.mjs`). A
+   cap kept running would not have helped, since that thread was blocked. Every leave now terminates the worker
+   without blocking.
+13. **A row that raced fieldd (R1's first cut).** Through the supervisor, H27 raced fieldd's own immediate
+   `shutdown`: on the red's code it read 76 MB once and 1,049 MB once. With the green's terminate at `done`, the
+   fill never starts (~73 MB). The red was amended before its green (`aaee12a5c` → `50978aaec`) to the direct door,
+   with no fieldd and no `shutdown`, sampling the host's peak: three reds in a row at 1,096–1,097 MB.
+14. **Run 158's red on H25/H28: one 50 ms read.** The resident cap holds to within what a script allocates in one
+   50 ms read: a fast host allocated 384 MiB inside one (run 158, the mini; H25's whole row in 84 ms), so H25/H28
+   now hold the memory on a never-answered ask and only the cap can end them; the asserts read no time
+   (`c07039551`). VF-PM accepted dropping "the last call is hold" (14:57Z): on a slow host the cap fires before the
+   hold.
+
+**Owed.**
+- **To CP-4a2b** (VF-PM 14:35Z, one line each; MEDIUM or lower by the 13:48Z boundary):
+  - O1 (bth's third read): `leave()` has no deadline of its own (`flows/host/main.ts:87-97`). With fieldd gone, a
+    worker inside one long builtin under the cap holds the host until the builtin ends. Fix: a last-resort SIGKILL
+    of itself in `leave()`, after ~2 s.
+  - O2 (bth's third read): the NaN guard. `external_memory + used_heap_size` (`flows/host/main.ts:185`) is NaN if a
+    later Node drops or renames a field, and NaN is never past the cap. Fix: `Number.isFinite`, ending the run
+    `fatal` on a count it cannot read; H28 witnesses the field today.
+  - O3 (LOW, bth's fourth read): no row holds the RSS read alone. Since R2, either reading can end H25, so a
+    regression in the RSS read alone would pass on the worker's count, and the RSS read is the only measure for
+    memory that is neither heap nor external (e.g. V8's malloced zone memory). Fix: a row with the worker's count
+    disabled by a test knob.
+  - JournalTail: the durable journal anchor, `JournalTail {seq, mac}` in the run's own signed record. Until then a
+    restart reads a cut tail as `kept`, and DESIGN.md §9 says so.
+  - "an answer was cut" on the step's card, from the journal's `cut`: a script cannot tell a cut from an agent whose
+    message really ended in "…" (plan §12's note).
+  - the static read naming a real `import()` or `eval` before approval (a FLOW_READ_REFUSALS reason). In 4a2a, SES
+    refuses it at evaluate.
+  - P5: DK-18's leak check rides `VF_SMOKE_RUN` in the environment, so a host with PATH alone is invisible to it.
+  - P6: under `pnpm dev`, SIGUSR1 opens the host's inspector (bin.ts guards the SEA only).
+  - N2's fast refusal while held (VF-PM 13:26Z): a held run refuses its calls at once, so waiting never reaches
+    HOST_CALLS_WAITING_MAX. HOST_LOG_LINES_MAX's ceiling is a flow's own, said where its words are.
+  - the literal-caps drift test (prod-builder's NOTE, 14:21Z): probe C3 spells `heapMb: 128` and `rssMb: 512` as
+    literals, and their truth is FLOW_LIMITS. Fix: a one-assert test reading registries.ts beside the probe's
+    frame, for both caps, folded into the slice that moves the number.
+  - the `worker.getHeapStatistics()` baseline on the mini (bth's R2 ask): not printed by the probe (it prints rss,
+    asks, end, exit and stragglers only; VF-PM 14:43Z); a probe line printing `external_memory + used_heap_size` is
+    Owed to 4a2b.
+  - acorn in `bin.cjs`'s notices (the mint brief's Owed; cp-landing 14:59Z). Today fieldd's `bin.cjs` holds no
+    acorn, ses, `@endo` or `src/flows/` (prod-builder's notices prediction).
+  - bth's 13:27Z Found (VF-PM 13:26Z: for 4a2b, not built in 4a2a): shadow 13 globals in the compartment
+    (ArrayBuffer, DataView, the nine integer typed arrays, TextEncoder and Compartment), each pinned `undefined` by
+    a row, as prevention on top of the RSS cap, never instead of it.
+- **Named, not built:** bth's `arrayBuffers` in the pong's telemetry (N1's fix, not in the ruled list). R32's host
+  clause admits every `node:` built-in, and its file walk skips symlinks while esbuild follows them (bsp's
+  `0f9187763`).
+- **Known, left as is** (cp-landing 13:58Z): a 143-character comment line at `build-fieldd-sea.mjs:699`
+  (`a311e8e43`). It is cosmetic, biome does not hold comment widths, and touching it would move a RELEASE-ADJACENT
+  blob again.
+- **For James's reap:** probe C3's SEA tmp from the mint, kept (VF-PM 14:43Z: agents delete nothing):
+  `/Users/jasper/vf-lanes/verify/sea-c3-tmp` on the mini, 145M (a9, 15:08:05Z).
+- **Closes no item.**
+- **For James's eye** (draft words; not a hold): DESIGN.md §9's five sentences for a run's host:
+  - "VibeField ended ‹flow›: it stopped answering." (`unanswered`)
+  - "VibeField ended ‹flow›: it used more memory than a flow may." (`memory`)
+  - "VibeField ended ‹flow›: it sent something VibeField can't read." (`protocol`)
+  - "VibeField ended ‹flow›: it sent more than a flow may." (`flood`)
+  - "VibeField can't run flows: this copy of VibeField is missing the file it runs them with. Reinstall VibeField."
+    (`unconfigured`)
+  - and §9's amendment on a run's journal, with its cut-tail sentence.
+- The records beyond LANDED, ROADMAP and DECISIONS: architecture.html's flow host row reads Built, at `c07039551`.
