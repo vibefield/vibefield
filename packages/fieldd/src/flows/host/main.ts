@@ -80,7 +80,10 @@ function end(message: Extract<FromFlowHost, { t: "done" | "threw" | "fatal" | "m
 
 /** Leave with `code`, never blocking this thread on the worker: `process.exit()` waits for the worker's thread to end,
  * and a worker inside one long builtin does not end mid-call. So the worker is terminated, the host exits once it has
- * gone, and the resident read runs meanwhile (bth's second re-read R1). Nothing more is said. */
+ * gone, and the resident read runs meanwhile (bth's second re-read R1). Nothing more is said. The bound, stated: a
+ * worker that does not go (one long builtin, under the cap) holds the host until it does. When fieldd asked
+ * (`shutdown`), fieldd's own SIGKILL after its grace (FlowHostTimings.stopGraceMs, 2 s) ends the host. When fieldd
+ * is gone (its pipe closed), the builtin's own end does, its memory held to the cap meanwhile. */
 function leave(code: number): void {
   if (leaving) return;
   leaving = true;
