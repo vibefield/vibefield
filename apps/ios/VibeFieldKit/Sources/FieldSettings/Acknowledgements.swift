@@ -16,6 +16,11 @@ public struct AcknowledgementsDoc: Equatable, Sendable {
     public var roles: [String]
     /// Its texts, by id, in the order it names them.
     public var texts: [String]
+    /// The generator's note on the part, when it sets one (schema 1's optional `note`). Kept; DESIGN.md does not draw
+    /// it yet.
+    public var note: String? = nil
+    /// VibeField's own component, not a third party's (schema 1's optional `own: true`). Kept; not drawn yet.
+    public var own: Bool = false
     public var id: String { "\(ecosystem)/\(name)" }
   }
 
@@ -63,7 +68,9 @@ public enum Acknowledgements {
   }
 
   private static let topKeys: Set<String> = ["schema", "note", "pins", "tailscaleKit", "components", "texts"]
-  private static let partKeys: Set<String> = ["ecosystem", "name", "version", "licence", "roles", "texts"]
+  private static let partKeys: Set<String> = [
+    "ecosystem", "name", "version", "licence", "roles", "texts", "note", "own",
+  ]
   private static let textKeys: Set<String> = ["id", "kind", "files", "body"]
 
   public static func parse(_ data: Data) -> AcknowledgementsState {
@@ -84,7 +91,8 @@ public enum Acknowledgements {
         AcknowledgementsDoc.Part(
           ecosystem: component["ecosystem"] as? String ?? "", name: name,
           version: component["version"] as? String ?? "", licence: licence,
-          roles: component["roles"] as? [String] ?? [], texts: component["texts"] as? [String] ?? []))
+          roles: component["roles"] as? [String] ?? [], texts: component["texts"] as? [String] ?? [],
+          note: component["note"] as? String, own: component["own"] as? Bool ?? false))
       unknown += component.keys.filter { !partKeys.contains($0) }.map { "\(name).\($0)" }
     }
     var texts: [String: AcknowledgementsDoc.LicenceText] = [:]
