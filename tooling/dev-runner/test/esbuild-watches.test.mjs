@@ -78,6 +78,7 @@ test("a rebuilt shim moves the daemon identity, so the pair restarts as for bin.
     agentShimOutput: join(root, "agent-shim.cjs"),
     filesHostOutput: join(root, "files-host.cjs"),
     transcriptHostOutput: join(root, "transcript-host.cjs"),
+    flowsHostOutput: join(root, "flows-host.cjs"),
     milleNativeOutput: join(root, "mille.test-triple.node"),
     nativeOutput: join(root, "field-native"),
     cellOutput: join(root, "field-terminal-host"),
@@ -204,6 +205,7 @@ test("a rebuilt files worker moves the daemon identity, never the shell's", asyn
     agentShimOutput: join(root, "agent-shim.cjs"),
     filesHostOutput: join(root, "files-host.cjs"),
     transcriptHostOutput: join(root, "transcript-host.cjs"),
+    flowsHostOutput: join(root, "flows-host.cjs"),
     milleNativeOutput: join(root, "mille.test-triple.node"),
     nativeOutput: join(root, "field-native"),
     cellOutput: join(root, "field-terminal-host"),
@@ -290,6 +292,7 @@ test("a rebuilt transcript worker moves the daemon identity, never the shell's",
     agentShimOutput: join(root, "agent-shim.cjs"),
     filesHostOutput: join(root, "files-host.cjs"),
     transcriptHostOutput: join(root, "transcript-host.cjs"),
+    flowsHostOutput: join(root, "flows-host.cjs"),
     milleNativeOutput: join(root, "mille.test-triple.node"),
     nativeOutput: join(root, "field-native"),
     cellOutput: join(root, "field-terminal-host"),
@@ -301,4 +304,86 @@ test("a rebuilt transcript worker moves the daemon identity, never the shell's",
   await writeFile(paths.transcriptHostOutput, "worker-two");
   assert.notEqual(await daemonIdentity(), before);
   assert.equal(shellPlaneInputs(paths).includes(paths.transcriptHostOutput), false);
+});
+
+// CP-4a2a (4A2-Q1 (a)) — a run's flow host's bundle: fieldd's own definition (scripts/flows-host-build.mjs), as the
+// transcript worker's is, and ses and its own files alone.
+function flowsHostDefinition(paths = workspacePaths) {
+  const definition = esbuildDefinitions(paths).find(
+    (candidate) => candidate.name === "fieldd-flows-host",
+  );
+  assert.ok(
+    definition,
+    "no fieldd-flows-host definition: under pnpm dev fieldd has no flow host to start",
+  );
+  return definition;
+}
+
+test("the runner builds the flow host beside the daemon's bundle, with fieldd's own options and its sandbox plugin", async () => {
+  const definition = flowsHostDefinition();
+  const options = await definition.options();
+  assert.equal(options.outfile, workspacePaths.flowsHostOutput);
+  assert.equal(dirname(options.outfile), dirname(workspacePaths.fielddOutput));
+  assert.equal(options.absWorkingDir, FIELDD_ROOT);
+  assert.ok(
+    options.plugins.some((plugin) => plugin.name === "vibefield-flows-host-sandbox-only"),
+    "the flow host's build lost the plugin that keeps all but the sandbox out of it",
+  );
+  assert.equal(definition.afterBuild, undefined, "the flow host stages nothing beside itself");
+});
+
+test("the runner's flow host is byte-identical to the one fieldd's own build makes, and carries ses alone", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "vf-dev-flows-host-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const runnerOutput = join(root, "runner", "flows-host.cjs");
+  const fielddOutput = join(root, "fieldd", "flows-host.cjs");
+  const runner = await context(
+    await flowsHostDefinition({ ...workspacePaths, flowsHostOutput: runnerOutput }).options(),
+  );
+  try {
+    await runner.rebuild();
+  } finally {
+    await runner.dispose();
+  }
+  const own = await import(join(FIELDD_ROOT, "scripts", "flows-host-build.mjs"));
+  const fieldd = await context(own.flowsHostBuildOptions({ outfile: fielddOutput }));
+  try {
+    await fieldd.rebuild();
+  } finally {
+    await fieldd.dispose();
+  }
+  const [ours, theirs] = await Promise.all([readFile(runnerOutput), readFile(fielddOutput)]);
+  assert.ok(ours.length > 0, "the runner's build wrote an empty host");
+  assert.ok(ours.equals(theirs), "the runner's flow host differs from fieldd's build");
+  assert.ok(ours.includes("node_modules/ses/"), "the flow host carries no ses");
+  for (const absent of ["@vibefield/", "@vibecook/", "node_modules/acorn/", "node_modules/zod/"])
+    assert.equal(ours.includes(absent), false, `the flow host carries ${absent}`);
+});
+
+test("a rebuilt flow host moves the daemon identity, never the shell's", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "vf-dev-flows-host-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const paths = {
+    repoRoot: root,
+    mainOutput: join(root, "main.cjs"),
+    preloadOutput: join(root, "preload.cjs"),
+    studioPreloadOutput: join(root, "studio.cjs"),
+    fielddOutput: join(root, "bin.cjs"),
+    serviceHarnessOutput: join(root, "service-harness.mjs"),
+    fielddWasm: join(root, "loro_wasm_bg.wasm"),
+    agentShimOutput: join(root, "agent-shim.cjs"),
+    filesHostOutput: join(root, "files-host.cjs"),
+    transcriptHostOutput: join(root, "transcript-host.cjs"),
+    flowsHostOutput: join(root, "flows-host.cjs"),
+    milleNativeOutput: join(root, "mille.test-triple.node"),
+    nativeOutput: join(root, "field-native"),
+    cellOutput: join(root, "field-terminal-host"),
+    freewayOutput: join(root, "field-freeway-host"),
+  };
+  const daemonIdentity = () => computeBuildId(root, daemonPlaneInputs(paths, []));
+  await writeFile(paths.flowsHostOutput, "host-one");
+  const before = await daemonIdentity();
+  await writeFile(paths.flowsHostOutput, "host-two");
+  assert.notEqual(await daemonIdentity(), before);
+  assert.equal(shellPlaneInputs(paths).includes(paths.flowsHostOutput), false);
 });

@@ -1906,6 +1906,12 @@ export const NODE_BUNDLES = [
     base: "packages/fieldd",
     role: "fieldd's transcript worker",
   },
+  // CP-4a2a: a run's flow host, a bundle of its own beside the executable (bin/flows-host.cjs): ses and its @endo parts.
+  {
+    file: "packages/fieldd/dist/flows-host.cjs",
+    base: "packages/fieldd",
+    role: "fieldd's flow host",
+  },
   {
     file: "packages/fieldd/dist/service-harness.mjs",
     base: "packages/fieldd",

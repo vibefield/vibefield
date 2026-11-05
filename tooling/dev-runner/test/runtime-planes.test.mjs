@@ -21,6 +21,7 @@ async function fixture(t) {
     agentShimOutput: join(root, "agent-shim.cjs"),
     filesHostOutput: join(root, "files-host.cjs"),
     transcriptHostOutput: join(root, "transcript-host.cjs"),
+    flowsHostOutput: join(root, "flows-host.cjs"),
     milleNativeOutput: join(root, "mille.test-triple.node"),
     nativeOutput: join(root, "field-native"),
     cellOutput: join(root, "field-terminal-host"),

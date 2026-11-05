@@ -107,8 +107,9 @@ test("item 178: dropping any one row of any of the three tables reads red, namin
     );
     dropped.push(s.name);
   }
-  // eight notices rows, the eight stage rows that carry or embed them, six sidecars
-  assert.equal(dropped.length, 8 + 8 + 6, `rows dropped one at a time: ${dropped.length}`);
+  // nine notices rows, the nine stage rows that carry or embed them, seven sidecars (CP-4a2a, 2026-11-05: the flow
+  // host's bundle, flows-host.cjs, joins each table)
+  assert.equal(dropped.length, 9 + 9 + 7, `rows dropped one at a time: ${dropped.length}`);
 });
 
 test("item 178: each sidecar declares ONE source for its notices, and only JavaScript can be a bundle", () => {

@@ -76,6 +76,15 @@ export const SIDECARS = [
     why: "the transcript worker's bundle — the executable's transcript-host role loads it from beside itself",
     notices: { bundle: true },
   }),
+  // CP-4a2a (4A2-Q1 (a)) — a run's flow host, one child per run. The executable re-runs ITSELF with
+  // `--vibefield-role=flows-host` and that role loads this bundle from beside it (bin.ts, flows/launch.ts), as the
+  // transcript worker's role loads its own; the bundle starts the run's script in a worker from its own file (4A2-Q7
+  // (b)). It carries ses and the host's own files, nothing else of VibeField's (wall R32's host clause).
+  sidecar({
+    name: "flows-host.cjs",
+    why: "a run's flow host's bundle — the executable's flows-host role loads it from beside itself",
+    notices: { bundle: true },
+  }),
   // FS-1a: mille's native engine. `process.dlopen` needs a real path, and fieldd hands the worker this one explicitly
   // (workspace/launch.ts); never embeddable. fieldd's build stages it from the installed per-platform package.
   sidecar({

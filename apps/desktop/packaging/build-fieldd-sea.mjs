@@ -65,6 +65,7 @@ const MANIFEST_NAME = "fieldd.sea.manifest.json";
 // script imports no TypeScript). bin.ts dispatches on the FIRST argument alone.
 const FILES_HOST_ROLE_ARG = "--vibefield-role=files-host";
 const TRANSCRIPT_HOST_ROLE_ARG = "--vibefield-role=transcript-host";
+const FLOWS_HOST_ROLE_ARG = "--vibefield-role=flows-host";
 const AGENT_SHIM_ROLE_ARG = "--vibefield-role=agent-shim";
 
 // AR-7j (electron-security-packaging.md §9.3, fuse-matrix.mjs's RunAsNode row) — the role makes
@@ -504,6 +505,7 @@ function agentShimProbe({ exe, root, deadlineMs = 30_000 }) {
     "",
     FILES_HOST_ROLE_ARG,
     TRANSCRIPT_HOST_ROLE_ARG,
+    FLOWS_HOST_ROLE_ARG,
     AGENT_SHIM_ROLE_ARG,
   ];
   return new Promise((done) => {
@@ -689,6 +691,107 @@ function transcriptHostProbe({ exe, folder, deadlineMs = 30_000 }) {
       dir: folder,
       allowedOrigins: [],
       generation: 1,
+    });
+  });
+}
+
+/** CP-4a2a — run the executable as fieldd runs a run's flow host: the role argument, its pipe on fd 3 (one JSON message
+ * a line) and an environment of PATH alone, then one script (already rewritten, as fieldd's module-script.ts hands it) that makes one call and
+ * reports whether the realm is locked down, its call answered, its end read, and a shutdown. The script runs in the
+ * host's worker (4A2-Q7 (b)), so its `done` is also the witness that the packaged executable starts that worker from
+ * the bundle beside it. */
+function flowsHostProbe({ exe, deadlineMs = 30_000 }) {
+  const script = [
+    '(async () => {const meta = { name: "Probe" };',
+    "const __vibefieldFlowDefault = async function () {",
+    '  return [await agent("probe"), Object.isFrozen(Array.prototype), typeof process];',
+    "};",
+    "return __vibefieldFlowDefault;",
+    "})()",
+  ].join("\n");
+  return new Promise((done) => {
+    const started = Date.now();
+    const child = spawn(exe, [FLOWS_HOST_ROLE_ARG], {
+      cwd: "/",
+      env: { PATH: "/usr/bin:/bin" },
+      stdio: ["ignore", "ignore", "pipe", "pipe"],
+    });
+    const pipe = child.stdio[3];
+    const tell = (message) => {
+      if (pipe.writable) pipe.write(`${JSON.stringify(message)}\n`);
+    };
+    pipe.on("error", () => {
+      // the child left: its exit says how
+    });
+    let stderr = "";
+    let settled = false;
+    const result = {};
+    const finish = (outcome) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      tell({ t: "shutdown" });
+      let reported = false;
+      const report = () => {
+        if (reported) return;
+        reported = true;
+        clearTimeout(hard);
+        done({ ...result, ...outcome, stderr });
+      };
+      const hard = setTimeout(() => child.kill("SIGKILL"), 5_000);
+      child.once("exit", report);
+      if (child.exitCode !== null || child.signalCode !== null) report();
+    };
+    const timer = setTimeout(
+      () => finish({ ok: false, reason: `no answer within ${deadlineMs} ms` }),
+      deadlineMs,
+    );
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    const heard = (m) => {
+      if (m?.t === "ready") {
+        result.readyMs = Date.now() - started;
+        tell({
+          t: "run",
+          script,
+          input: {},
+          limits: { callMaxBytes: 64 * 1024, logMaxChars: 200, heapMb: 128 },
+        });
+      } else if (m?.t === "call") {
+        result.call = m.what;
+        tell({ t: "answer", id: m.id, ok: true, value: "answered" });
+      } else if (m?.t === "done") {
+        const [answer, frozen, processKind] = Array.isArray(m.value) ? m.value : [];
+        result.value = m.value;
+        finish({ ok: answer === "answered" && frozen === true && processKind === "undefined" });
+      } else if (m?.t === "threw" || m?.t === "fatal" || m?.t === "memory") {
+        finish({
+          ok: false,
+          reason: `${m.t}: ${m.message ?? m.reason ?? "its worker passed its heap"}`,
+        });
+      }
+    };
+    let buffered = "";
+    pipe.setEncoding("utf8");
+    pipe.on("data", (chunk) => {
+      buffered += chunk;
+      for (let i = buffered.indexOf("\n"); i >= 0; i = buffered.indexOf("\n")) {
+        const line = buffered.slice(0, i);
+        buffered = buffered.slice(i + 1);
+        let m;
+        try {
+          m = JSON.parse(line);
+        } catch {
+          finish({ ok: false, reason: "the host's pipe carried a line that is not JSON" });
+          return;
+        }
+        heard(m);
+      }
+    });
+    child.once("error", (e) => finish({ ok: false, reason: `spawn failed: ${e.message}` }));
+    child.once("exit", (code, signal) => {
+      if (!settled) finish({ ok: false, reason: `exited early (${signal ?? code})` });
     });
   });
 }
@@ -970,6 +1073,17 @@ async function verify({ exe, manifest }) {
       c2.ok
         ? `transcript-host role: ready in ${c2.readyMs} ms on 127.0.0.1:${c2.port}, a ticket held`
         : `transcript-host role: ${c2.reason ?? `the ticket's port ${c2.ticketPort} is not the listener's ${c2.port}`}${c2.stderr ? ` — stderr: ${c2.stderr.trim().split("\n").slice(-3).join(" / ")}` : ""}`,
+    );
+
+    // Probe C3 (CP-4a2a) — the executable in its flows-host ROLE: the host loads its bundle staged beside it, locks the
+    // realm down, says ready on its IPC pipe, runs one script whose one call fieldd answers, and reports the realm
+    // frozen and no `process` in the compartment. The packaged half of a run's host.
+    const c3 = await flowsHostProbe({ exe: cleanExe });
+    say(
+      c3.ok === true,
+      c3.ok
+        ? `flows-host role: ready in ${c3.readyMs} ms, one ${c3.call} call answered, the realm frozen, no process in the compartment`
+        : `flows-host role: ${c3.reason ?? `the script said ${JSON.stringify(c3.value)}`}${c3.stderr ? ` — stderr: ${c3.stderr.trim().split("\n").slice(-3).join(" / ")}` : ""}`,
     );
 
     // Probe D (AR-7j, LP-D1) — the executable in its agent-shim ROLE, exactly as every

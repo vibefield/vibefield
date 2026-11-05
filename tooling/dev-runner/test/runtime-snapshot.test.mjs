@@ -38,6 +38,7 @@ async function fixture(t) {
     agentShimOutput: join(source, "agent-shim.cjs"),
     filesHostOutput: join(source, "files-host.cjs"),
     transcriptHostOutput: join(source, "transcript-host.cjs"),
+    flowsHostOutput: join(source, "flows-host.cjs"),
     milleNativeOutput: join(source, "mille.test-triple.node"),
     nativeOutput: join(source, "field-native"),
     cellOutput: join(source, "field-terminal-host"),
@@ -54,6 +55,7 @@ async function fixture(t) {
     writeFile(paths.agentShimOutput, "shim-one"),
     writeFile(paths.filesHostOutput, "files-host-one"),
     writeFile(paths.transcriptHostOutput, "transcript-host-one"),
+    writeFile(paths.flowsHostOutput, "flows-host-one"),
     writeFile(paths.milleNativeOutput, "mille-one"),
     writeFile(paths.nativeOutput, "native-one"),
     writeFile(paths.cellOutput, "cell-one"),
@@ -114,13 +116,18 @@ test("publishes one immutable, executable runtime generation", async (t) => {
     await readFile(join(runtime.root, "fieldd", "transcript-host.cjs"), "utf8"),
     "transcript-host-one",
   );
+  // CP-4a2a — and a run's flow host
+  assert.equal(
+    await readFile(join(runtime.root, "fieldd", "flows-host.cjs"), "utf8"),
+    "flows-host-one",
+  );
   assert.equal(await readFile(runtime.nativeOutput, "utf8"), "native-one");
 
   await writeFile(paths.mainOutput, "main-two");
   assert.equal(await readFile(join(runtime.appRoot, "main", "index.cjs"), "utf8"), "main-one");
 });
 
-test("hands the daemon fieldd's seven files, the agent shim, the files worker and the transcript worker beside bin.cjs", async (t) => {
+test("hands the daemon fieldd's eight files, the agent shim, the files worker, the transcript worker and the flow host beside bin.cjs", async (t) => {
   // The gateway looks for `agent-shim.cjs` beside the daemon's own bundle and
   // offers no launcher without it (AR-7b), so a shim left in dist/ reaches no
   // one: the daemon runs from this directory.
@@ -136,6 +143,7 @@ test("hands the daemon fieldd's seven files, the agent shim, the files worker an
     "agent-shim.cjs",
     "bin.cjs",
     "files-host.cjs",
+    "flows-host.cjs",
     "loro_wasm_bg.wasm",
     "mille.test-triple.node",
     "service-harness.mjs",

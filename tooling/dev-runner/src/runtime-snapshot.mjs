@@ -73,6 +73,8 @@ export async function stageRuntimeSnapshot({
         paths.transcriptHostOutput,
         join(temporary, "fieldd", basename(paths.transcriptHostOutput)),
       ),
+      // CP-4a2a — a run's flow host's bundle, beside bin.cjs
+      copyFile(paths.flowsHostOutput, join(temporary, "fieldd", basename(paths.flowsHostOutput))),
       copyFile(paths.nativeOutput, layout.nativeOutput),
       // TC-S2 — the floor spawns its cell as its own SIBLING, so the cell rides beside it
       copyFile(paths.cellOutput, layout.cellOutput),

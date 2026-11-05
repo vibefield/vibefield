@@ -101,6 +101,8 @@ export const workspacePaths = Object.freeze({
   filesHostOutput: join(repoRoot, "packages", "fieldd", "dist", "files-host.cjs"),
   // TH-1 (TH0-Q5 (b)) — the transcript worker's bundle, beside the daemon's (mille-free: no engine beside it)
   transcriptHostOutput: join(repoRoot, "packages", "fieldd", "dist", "transcript-host.cjs"),
+  // CP-4a2a — a run's flow host's bundle, beside the daemon's (one child per run, started from beside bin.cjs)
+  flowsHostOutput: join(repoRoot, "packages", "fieldd", "dist", "flows-host.cjs"),
   milleNativeOutput: join(
     repoRoot,
     "packages",

@@ -28,6 +28,8 @@ export function daemonPlaneInputs(paths, pluginProjects) {
     paths.milleNativeOutput,
     // TH-1 — and the transcript worker, the same way
     paths.transcriptHostOutput,
+    // CP-4a2a — and the flow host: a rebuilt host is staged beside the daemon that starts it
+    paths.flowsHostOutput,
     paths.nativeOutput,
     // TC-S2 — the cell the floor spawns beside itself: a rebuilt cell bounces the pair
     paths.cellOutput,

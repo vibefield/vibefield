@@ -15,6 +15,12 @@ async function transcriptHostBuild(paths) {
   return import(join(dirname(dirname(paths.fielddEntry)), "scripts", "transcript-host-build.mjs"));
 }
 
+/** CP-4a2a — fieldd's own definition of a run's flow host's bundle (the plugin that keeps all but the sandbox out of
+ * it), loaded from the package that owns it, as the transcript worker's is. */
+async function flowsHostBuild(paths) {
+  return import(join(dirname(dirname(paths.fielddEntry)), "scripts", "flows-host-build.mjs"));
+}
+
 /** The watched bundles, as data: a test builds one exactly as the watch below does. */
 export function esbuildDefinitions(paths) {
   return [
@@ -123,6 +129,18 @@ export function esbuildDefinitions(paths) {
         (await transcriptHostBuild(paths)).transcriptHostBuildOptions({
           fielddRoot: dirname(dirname(paths.fielddEntry)),
           outfile: paths.transcriptHostOutput,
+        }),
+    },
+    {
+      // CP-4a2a (4A2-Q1 (a)): fieldd's sixth bundle, a run's flow host, ses and its own files alone. Its options are
+      // fieldd's own (`scripts/flows-host-build.mjs`), read at build time, as the transcript worker's are.
+      name: "fieldd-flows-host",
+      outfile: paths.flowsHostOutput,
+      cwd: dirname(dirname(paths.fielddEntry)),
+      options: async () =>
+        (await flowsHostBuild(paths)).flowsHostBuildOptions({
+          fielddRoot: dirname(dirname(paths.fielddEntry)),
+          outfile: paths.flowsHostOutput,
         }),
     },
   ];
