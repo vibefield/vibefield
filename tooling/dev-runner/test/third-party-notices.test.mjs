@@ -13,6 +13,7 @@ import {
   forThisHost,
   GHOSTTY_LICENCE,
   GO_SNAPSHOT,
+  ghostteaEcosystem,
   goBuildInfo,
   hostTarget,
   IOS_OUTPUT,
@@ -257,6 +258,46 @@ test("classification reads a licence's own words, and a NOTICE file is a notice 
   assert.equal(kindOfExpression("LGPL-3.0-or-later"), "LGPL");
   assert.equal(kindOfExpression("Unicode-3.0"), "Unicode");
   assert.equal(kindOfExpression(null), "Other");
+});
+
+test("classification: the X11 spelling of MIT keeps its attribution clause, and a licence in comment markers is still its licence", () => {
+  // bytemuck's MIT says "this permission notice (including the next paragraph) shall be included": MIT, never the
+  // no-attribution MIT-0, which is the same grant with the attribution sentence gone
+  const x11 = mit("Daniel Gee").replace(
+    "this permission notice shall",
+    "this permission notice (including the next paragraph) shall",
+  );
+  assert.ok(x11.includes("(including the next paragraph)"));
+  assert.equal(classifyText(x11), "MIT");
+  assert.equal(classifyText(MIT_BODY.replace(/The above copyright notice[^.]*\.\n?/, "")), "MIT-0");
+  // untrusted's LICENSE.txt is ISC written as `//` lines; a C header's ` * ` lines are the same case
+  const slashes = ISC.split("\n")
+    .map((line) => (line ? `// ${line}` : "//"))
+    .join("\n");
+  const stars = ["/*", ...ISC.split("\n").map((line) => ` * ${line}`), " */"].join("\n");
+  assert.equal(classifyText(slashes), "ISC");
+  assert.equal(classifyText(stars), "ISC");
+  // classification only: the printed body keeps every character, so its id is its own
+  const ledger = createLedger();
+  const id = ledger.addText(slashes, "LICENSE.txt");
+  assert.equal(ledger.texts.get(id).kind, "ISC");
+  assert.ok(ledger.texts.get(id).body.startsWith("// ISC License"));
+  assert.notEqual(id, textId(ISC));
+});
+
+test("ghosttea's iOS components: a crate is a lower-case name at a semver version, a C library its archive carries never is", () => {
+  assert.equal(ghostteaEcosystem({ name: "anyhow", version: "1.0.103" }), "crate");
+  assert.equal(ghostteaEcosystem({ name: "zstd-sys", version: "2.0.16+zstd.1.5.7" }), "crate");
+  assert.equal(ghostteaEcosystem({ name: "libssh2", version: "libssh2-1.11.1" }), "other");
+  // a library the native table names is C whatever its version reads like
+  assert.equal(ghostteaEcosystem({ name: "libssh2", version: "1.11.1" }), "other");
+  assert.equal(ghostteaEcosystem({ name: "OpenSSL", version: "openssl-3.5.7" }), "other");
+  assert.equal(
+    ghostteaEcosystem({ name: "Ghostty VT", version: "83fb95624b0439ee660c2679b43b38c8b63769cd" }),
+    "other",
+  );
+  assert.equal(ghostteaEcosystem({ name: "TailscaleKit", version: "d1dc45d0" }), "swift");
+  assert.equal(ghostteaEcosystem({ name: "Truffle Swift", version: "101889f6" }), "swift");
 });
 
 test("esbuild's module comments name the packages a bundle carries, at their innermost node_modules", () => {

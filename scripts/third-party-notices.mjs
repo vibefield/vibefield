@@ -138,12 +138,27 @@ export const KIND_ORDER = [
 export const COPYLEFT = new Set(["MPL-2.0", "LGPL", "GPL", "AGPL"]);
 
 /**
+ * A text's words for classifying it: the comment markers a licence copied out of a source header keeps at each
+ * line's start (`// `, `# `, ` * `, `/*`) are not its words (untrusted's LICENSE.txt is ISC written as `//` lines).
+ * Classification only: a text's id and its printed body keep every character.
+ */
+const wordsOf = (body) =>
+  collapse(
+    normalizeText(body)
+      .split("\n")
+      .map((line) => line.replace(/^\s*(?:\/\/+|\/\*+|\*+\/?|#+|;+)[ \t]?/, ""))
+      .join("\n"),
+  );
+
+/**
  * Which licence a text is, read from its words (a NOTICE file is a notice whatever it quotes). The
  * title-bearing licences are read from the text's head first: the MPL's own text names the GPL, and an
- * Apache appendix can quote anything, so "mentions" is not "is".
+ * Apache appendix can quote anything, so "mentions" is not "is". MIT and MIT-0 differ by the attribution
+ * clause alone, which the X11 spelling writes as "this permission notice (including the next paragraph) shall be
+ * included" (bytemuck's): MIT, never the no-attribution MIT-0.
  */
 export function classifyText(body, file = "") {
-  const t = collapse(body);
+  const t = wordsOf(body);
   const head = t.slice(0, 400);
   if (/notice|third[-_ ]?party/i.test(file)) return "Notices";
   if (/Mozilla Public License,? (Version|v\.?) ?2\.0/i.test(head)) return "MPL-2.0";
@@ -162,7 +177,9 @@ export function classifyText(body, file = "") {
   if (/creativecommons\.org\/licenses\/by\/3\.0|Attribution 3\.0|\bCC BY 3\.0\b/i.test(t))
     return "CC-BY-3.0";
   if (/Permission is hereby granted, free of charge/i.test(t))
-    return /above copyright notice and this permission notice shall be included/i.test(t)
+    return /above copyright notice and this permission notice(?:\s*\([^)]*\))?\s*shall be included/i.test(
+      t,
+    )
       ? "MIT"
       : "MIT-0";
   if (/Redistribution and use in source and binary forms/i.test(t))
@@ -1982,6 +1999,18 @@ const GHOSTTEA_COMPONENT_TARGET = [
   { component: /^libssh2$/, target: "GhostteaAppleNative" },
 ];
 
+/**
+ * The ecosystem of a component in ghosttea's iOS notices, whose index names no kind. A crate is a lower-case name at a
+ * semver version (`anyhow 1.0.103`); a native library its archive carries is "other" whatever its name looks like
+ * (`libssh2 libssh2-1.11.1` is C, and no crates.io page of that name and version exists).
+ */
+export function ghostteaEcosystem(c) {
+  if (/^(TailscaleKit|Truffle Swift)$/.test(c.name)) return "swift";
+  if (GHOSTTEA_COMPONENT_TARGET.some((g) => g.component.test(c.name))) return "other";
+  const semver = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/.test(c.version ?? "");
+  return semver && /^[a-z0-9_-]+$/.test(c.name) ? "crate" : "other";
+}
+
 export const IOS_VENDORED = [
   { ...LOBE_ICONS, role: "the agents' marks" },
   { ...SIMPLE_ICONS, role: "the desktops' OS marks" },
@@ -2072,13 +2101,7 @@ export function iosAcknowledgements({
         .map((d) => ({ file: d.file, body: d.body }));
       const font = /\.(ttf|otf)$/i.test(c.name);
       ledger.add({
-        ecosystem: font
-          ? "asset"
-          : /^[a-z0-9_-]+$/.test(c.name)
-            ? "crate"
-            : /^(TailscaleKit|Truffle Swift)$/.test(c.name)
-              ? "swift"
-              : "other",
+        ecosystem: font ? "asset" : ghostteaEcosystem(c),
         name: c.name,
         version: c.version,
         licence: c.licence,
