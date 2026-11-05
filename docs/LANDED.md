@@ -7546,6 +7546,8 @@ Next: source cadence and session-local frame fan-out, native snapshot/logical-st
 **Known limits, in words a person meets.** *An agent started inside `tmux` or `screen` in a pane runs on its own, unmanaged* — the multiplexer's server is not in the pane's process tree, so the shim finds no terminal of ours and falls through as the rule says (AR7-D14, James: accept as a limit, documented; refusing it is buildable later with the multiplexer's markers). *Everything a pane starts inherits the launcher directory*: an editor opened from a pane reaches our launcher and runs the real binary after the shim's start, one gateway round trip and one `ps -A` — the latency against the bare binary is unmeasured. *While fieldd is away*, a name typed in a pane waits 8 s and is then refused — a version query included, because the shim cannot classify without the host; the budget is the kit's 8 s after a clean stop and after a crash alike. *Panes older than the landing are never integrated* — a shell's environment is fixed at birth; open a new pane. *After a later fieldd adopts the floor* (an app relaunched from the Dock after a launch from a terminal; a dev-runner restart with another PATH), zsh panes restore that fieldd's ZDOTDIR and non-zsh panes are born with its PATH. *A person whose Claude settings turn hooks off, or whose shell sets `CLAUDE_CODE_SIMPLE`/`CLAUDE_CODE_SAFE_MODE`*, is refused by name in our panes with the adapter's sentence — while the SPAWN button still launches that Claude unobserved (`7cb15dd` held back). *(2026-09-28, later that day — AR7-D1 ruled: `7cb15dd` taken; the SPAWN button refuses that Claude too, see §AR-7 · rulings.)* *A vendor flag the adapter's table has never seen is a refusal naming it* until the table learns it (the census makes that a release's red list). Claude's refused set: `--session-id`, `--settings`, `--bare`, `--safe-mode`, `--fork-session`, `--teleport`, `-w/--worktree`, `--tmux` alone, `--handle-uri`, print-only flags without `-p`, a mapped option twice; Codex's: `--add-dir`, `-p/--profile`, `-C/--cd`, `--worktree`, `--no-daemon`, `--oss`, `--local-provider`, `--approve-for-me`, `--dangerously-bypass-hook-trust`, `--strict-config`, `fork`, `-c` for the permission keys, settings into a resume, a prompt before `resume`; a typed Codex runs against a private app-server the adapter starts, its resume forms keep the thread's own policy, and an untrusted working directory is unmeasured; Claude's `defaultToAgentsView` is not modeled. *A launch caught in a fieldd stop* can be adopted by the old daemon with its answer dropped, then re-attached by the next, so the shim's retry is refused once as "another agent is already running in this pane" — itself — and works on the next try. zsh only: a bash, fish or sh pane gets the kit's best-effort PATH, a profile that prepends the real binary wins, and the audit's `integrated: true` says the variables were sent, not honoured (AR7-D8; James's D3). *(2026-09-28, later that day — AR7-D3 ruled zsh-only: those panes are now born plain, `integrated: false`; see §AR-7 · rulings.)* The gateway does not start on win32. Only `pnpm dev` offers launchers until AR-7j gives the packaged daemon a runtime; the leak detector (AR-7f) is not built. The phone reads neither `spawnedBy` nor `resumable`: a typed run held across a fieldd restart shows there as an unknown row, and its resume is refused with a sentence the phone may not show. The rendezvous file is a same-uid lever while fieldd is unreachable (the accepted EL7 class: same uid can already replace the launchers); every floor session's pid is on the shells list, agent PTYs included, bounded to the 1,024 lowest pids. In the Godview smoke: Claude's usage service may still read the macOS keychain, Homebrew prefixes are searched regardless of the search path, panes open in the owner's home directory while `$HOME` is the person's, and the runner's own variable names reach the agent.
 
 **Owed.** AR-7j (a launcher runtime in the packaged build); AR-7f the leak detector; bash and fish integration (AR7-D8) or the first landing restricted to zsh — James's D3; the multiplexer case if James wants it; a kit petition for `PUPPETEER_SHIM_RETRY_MS` or the 8 s accepted, and the app-restart budget measured — D2; win32's gateway start decided — D4; `7cb15dd` kept, dropped or reworded — D1; D13 read as accepted with D1 — a word, D5; the floor's environment recorded at its spawn and read at adoption (or the equality assumption stated in design-02/03) — B7; the shim's latency against the bare binary; the phone against a typed row; two kit petitions from W4 — a `materializeIntegration` (VibeField now publishes the kit's own `.zshenv` itself, ahead of the launchers, with a copy of the kit's private `publishFile`) and a `rehash` in the precmd hook when the shim directory gains entries (a name that resolved to the real binary before its launcher landed stays hashed in that pane until `rehash` or a PATH change); James's own dogfood of R1/R2 under `pnpm dev` — the first real vendor binary typed into a VibeField pane under strict — before or after the landing, D6. AR7-D1…D16 await the DECISIONS flip at landing.
+  > **Closed by AR-7j (M128 `45c3680a3`, 2026-11-05):** AR-7j, the launcher runtime in the packaged build, landed;
+  > the rest of this Owed line stands. See LANDED "AR-7j".
 
 ## TP — WebGPU review fixes: reserved atlas positions, owned pixels and honest pins (2026-09-28)
 
@@ -8554,6 +8556,9 @@ Within it sit the contract's 21 marks (MV-D1…D22, D16 marks only), built as `d
 - A smoke that dies early leaves rosettad orphaned (ppid 1).
 - Shipped Rust binaries embed `~/.cargo/registry` paths carrying the build user's name; `--remap-path-prefix` would fix it.
 - The staged shim is not yet a launcher under a SEA fieldd (AR-7j).
+  > **Closed by AR-7j (M128 `45c3680a3`, 2026-11-05):** the sealed shim is now a launcher under a SEA fieldd: fieldd's
+  > own executable runs it in the closed `--vibefield-role=agent-shim` role, and never the home's copy. See LANDED
+  > "AR-7j".
 - A signed build with no rosettad or screenshot helper fails codesign while release stages with `--require-complete`.
 - Petition: the room titles the unconfigured state "rosettad is not answering", which names a daemon to a person.
 
@@ -31905,3 +31910,89 @@ packet says so.
 - For James's eye: §9's away lines, Found 3 and Found 9.
 - Next for the IOS session: IOS-13a (Settings for App Review, the 0.9 launch; ruled 02:29Z).
 - On IOS-12: 12e and 12f. 12c waits on SP-7 (NOT landed), and 12d on 12c.
+
+## AR-7j — agents typed into a pane are managed in the packaged app: fieldd's own executable runs every launcher in one closed role (2026-11-05; `66037db65` → `45c3680a3`, 5 commits on main `dbb8c76ad`, lane `lp/ar7j` in `/Volumes/SamsungRed/lanes/lp-ar7j/vibe-field`, minted as M128 `45c3680a3`, run 128)
+
+**What it rests on.**
+- LP-D1 and LP-D2 (James, 2026-11-05 01:04Z, at the leans, on the page *VibeField 0.9 Launch*; DECISIONS LP). D1: the
+  beta waits for AR-7j. D2: a closed `--vibefield-role=agent-shim` role in fieldd's own SEA, with a second SEA as the
+  fallback.
+- AR-7 (LANDED "AR-7"): the kit's launchers (`#!/bin/sh … exec <command> <args…> <home>/lib/agent-shim.cjs "$@"`) and
+  `SpawnThroughShimRuntime {command, args?, env?}`. puppeteer needed no change.
+- The lane was built code-only in wave 1, cut on `f599761bc`, reviewed through two lenses (8 findings; 6 fixed in 2
+  commits, and 1 raised twice handed to L1 as release-class), and rebased onto `dbb8c76ad` before the mint (VF-PM
+  03:28Z). The pre-rebase tip `8705d251e` is kept as `lp/ar7j-pre-rebase`. `packages/fieldd` (`dd000a2415c8`) and
+  `apps/desktop/packaging` (`cdc3f599c289`) are identical at both tips, so the mini's witness carries by hash.
+
+**What landed.**
+- `packages/fieldd/src/roles.ts` (new, no imports): `FILES_HOST_ROLE_ARG` and its bundle moved here, plus
+  `AGENT_SHIM_ROLE_ARG`, `AGENT_SHIM_BUNDLE` and `roleOf`. `roleOf` reads `argv[2]` only (a typed `claude
+  --vibefield-role=…` never picks a role), and `agentShimArgv` drops `argv[3]`, the home's user-writable copy of the
+  shim, unread.
+- `bin.ts`: roles dispatch before the daemon's module graph loads; contracts, logging, users, boot-env and daemon are
+  dynamic imports inside `main()`.
+  - The agent-shim role loads only the SEALED `agent-shim.cjs` beside the executable. It runs no `main()`, reads no
+    `FIELDD_*` and prints no readiness line.
+  - A missing sealed shim, or a `--vibefield-role=` this build lacks, prints one line in the person's words and exits
+    127. The daemon never starts.
+  - Under a SEA, `refuseInspectorSignal()` is the daemon's and the files worker's first statement, so SIGUSR1 opens no
+    inspector.
+- `agent-gateway.ts` `chooseLauncherRuntime`, case 2b: a SEA that can exec in place, with the sealed shim beside it,
+  offers `{command: execPath, args: [role]}` (`own-executable`). A SEA NEVER falls back to a `node` on PATH. The dev
+  rules are unchanged.
+- `build-fieldd-sea.mjs`: `agent-shim.cjs` is sealed among the SIDECARS. The SEA config sets `execArgvExtension:
+  "none"`, so NODE_OPTIONS is ignored. `--verify` gains its role probes: D (the launcher's exact argv, one pid, the
+  poisoned home copy never run, the agent's SIGUSR1 as under a plain Node), E (no sealed shim: 127) and F (an unknown
+  role: 127, no daemon).
+- `verify-agents-package.mjs` (new) runs `packaged-typed-agent.test.ts` against the signed SEA and the packaged floor.
+  It has three rows: a typed run adopted and `--bare` refused; the start cost and the publish time after a relaunch,
+  REPORTED and never failed; and the signed executable's hardening.
+  - The pair and the person are staged from an explicit list of variables, never the runner's environment.
+  - It is wired after the History verifier in `run-macos-release.mjs` and is desk-gates row 34 (agents:package).
+- `docs/agent-plane/system.html:2250` (the seam's owning page) carries "Corrected 2026-11-05 (AR-7j)".
+
+**Validation.**
+- This Mac, 03:15:56–03:16:26Z, on `45c3680a3` (nice 19, guard clear): `pnpm install --frozen-lockfile`, `pnpm
+  preflight`, fieldd typecheck (no Nx cache), biome on the touched files and `check:walls`, each rc=0. The same set
+  passed on `8705d251e` at 03:08–03:11Z.
+- The mini (a9), 03:11:37–03:13:07Z, on `8705d251e`:
+  - The five fieldd files: Test Files 4 passed | 1 skipped; Tests 132 passed | 3 skipped (packaged-typed-agent, which
+    needs `FIELDD_TEST_AGENTS_PACKAGE`).
+  - `build-fieldd-sea.mjs --verify` exit 0 in 11 s, the first proof on a real SEA (Node 26.5.0). It accepted
+    `execArgvExtension: "none"` and ignored NODE_OPTIONS. Every probe passed:
+    - A: SIGUSR1 opened no inspector, and the daemon kept running.
+    - D: the stub returned status 7, in one pid.
+    - E: 127, "this copy of VibeField is missing the file it starts agents with. Reinstall VibeField."
+    - F: 127, "it was set up by another version of VibeField".
+    - A hostile `node_modules` beside the executable, and as cwd, was ignored.
+- Release-class: L1 carries the unsigned path's `verify-agents-package.mjs` line in release.yml. L1 is minted on top of
+  this.
+- **Run 128** (`45c3680a3`, minted by a9 on VF-PM's GO, stacked on `dbb8c76ad`; the run is T, tree `00ff6ee12ef9`):
+  "== ts6-mini verify done (verify 0) 03:24:24Z; HEAD 45c3680a3d36b5e119091587dbaac5bf8ff628d7" (the Mac mini: Apple
+  M4, macOS 26.7.2, node v26.5.0, rustc 1.99.1; armed 03:18:26Z; load 15.74 25.36 17.91). `pnpm verify` exit 0:
+  vitest 12,366 passed / 0 failed / 21 skipped over 888 files (run 127 +12: agent-gateway 93 → 95, agent-shim-role 10
+  new, packaged-typed-agent 3 new and skipped without `FIELDD_TEST_AGENTS_PACKAGE`), node 365, cargo 545/0 in 34
+  suites, 29 projects typechecked and tested, biome 3,135 files, the iOS fixtures 249, pins 86, 0 FAIL rows; no re-run.
+  Logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run128/`.
+- **Landed:** main fast-forwarded `dbb8c76ad` → `45c3680a3` on VF-PM's GO (2026-11-05T03:26:38Z, the fixer's stamp).
+
+**Found.**
+- Probe D's single run took 343 ms end to end on an idle M4: the role's boot of a 152 MB SEA (no code cache) plus the
+  stub. This hints that the ~250 ms budget is exceeded. The median of 20 interleaved runs is the packaged row's, on the
+  first signed package.
+- Launchers name the executable's absolute path. A moved or translocated app leaves them stale until fieldd's next boot
+  rewrites them (sh then says 127).
+
+**Owed.**
+- James's three questions, landed as RECORDED RESIDUALS with the lane's defaults (VF-PM 03:28Z). His later answer would
+  be an amendment, not a blocker:
+  - (1) The SIGUSR1 window from the executable's start to `bin.ts`'s first statement. The default is to accept it; the
+    alternative, `--disable-sigusr1`, closes it but leaves every typed agent born with SIGUSR1 blocked.
+  - (2) The start cost over ~250 ms. The default is to REPORT it for the beta and block later on a measured number.
+  - (3) Embedding or hash-checking the shim. The default is no, because the kit's launchers (0700) and rendezvous (0600)
+    in the shim home stay same-uid writable, as under `pnpm dev`. The role closes only the home copy of the shim.
+- The packaged witness rows on the first signed package (row 34 with `--require-signed`).
+- ESP §9.3 (draft) records the two residuals: the SIGUSR1 window, and the same-uid shim home. They are queued to
+  `draft/launch/` for the next draft slot.
+- `scripts/stage-package.mjs:244-249` still says a packaged gateway offers no launcher. L5's packet carries a dated
+  correction.
