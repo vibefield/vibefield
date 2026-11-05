@@ -3,6 +3,7 @@ import {
   type AgentMonitorMirror,
   type ComposeSparksCrewsFrame,
   type CrewId,
+  crewSharedModelOf,
   SPARK_CREW_MEMBERS_MAX,
   SPARK_CREWS_KEPT,
   type SparkCrew,
@@ -97,11 +98,19 @@ export function crewFactsOf(
 
 /** SP-1e2's renderer half — a crew's act line in VibeField's words (DESIGN.md §9, the crew card): "Started 4 agents ·
  * Opus 5.5 · high", "Started 1 agent · …", the model alone when no member names an effort, and the count alone when
- * the members differ or a model is not named yet (`crewSharedModelOf`, the rule Chat's card head reads too).
- * (red: a skeleton) */
-export function crewActText(_members: readonly SparkCrewMember[]): string {
-  return "";
+ * the members differ or a model is not named yet (`crewSharedModelOf`, the rule Chat's card head reads too). */
+export function crewActText(members: readonly SparkCrewMember[]): string {
+  const count = `Started ${members.length} ${members.length === 1 ? "agent" : "agents"}`;
+  const shared = crewSharedModelOf(members);
+  if (shared === null) return count;
+  return shared.effort === undefined
+    ? `${count} · ${shared.model}`
+    : `${count} · ${shared.model} · ${shared.effort}`;
 }
+
+/** How many crews' last act lines a fieldd holds, so a later change can tell whether its words moved: past a spark's
+ * kept crews many times over, and the oldest goes first (a crew it forgot writes its line again at its next change). */
+const SAID_HELD = 4 * SPARK_CREWS_KEPT;
 
 /** The newest SPARK_CREWS_KEPT crews, oldest first. */
 const newest = (crews: readonly SparkCrew[]): SparkCrew[] =>
@@ -139,12 +148,16 @@ export class SparkCrews {
   /** each spark's crews, as last read or written */
   readonly #crews = new Map<SparkId, readonly SparkCrew[]>();
   readonly #listeners = new Set<(spark: SparkId) => void>();
+  readonly #act: SparkCrewsOptions["act"];
+  /** the words of the last act line written for each crew this lifetime, oldest first (SAID_HELD) */
+  readonly #said = new Map<CrewId, string>();
 
   constructor(opts: SparkCrewsOptions) {
     this.#store = opts.store;
     this.#logger = opts.logger ?? createNoopLogger();
     this.#now = opts.now ?? (() => new Date());
     this.#mint = opts.mintId ?? mintCrewId;
+    this.#act = opts.act;
   }
 
   /** A talk call of this spark's begins: its crew stays open until the answer is called (SPE-Q29 (a)). */
@@ -182,17 +195,18 @@ export class SparkCrews {
    * in the spark's own run the spawn was asked in (a held start allowed after a restart names its crew's run so). */
   started(spark: SparkId, crew: CrewJoin, start: CrewStart): void {
     const at = this.#now().toISOString();
-    this.#keep(spark, (crews) => {
-      const kept = crews.find((c) => c.id === crew.id);
-      if (kept === undefined)
+    const kept = this.#keep(spark, (crews) => {
+      const held = crews.find((c) => c.id === crew.id);
+      if (held === undefined)
         return newest([
           ...crews,
           { id: crew.id, sparkRun: crew.sparkRun, at, members: [memberOf(start, at)] },
         ]);
-      if (kept.members.some((m) => m.runtimeRunId === start.runtimeRunId)) return undefined;
-      if (kept.members.length >= SPARK_CREW_MEMBERS_MAX) return this.#full(spark, crew.id);
-      return withMembers(crews, crew.id, [...kept.members, memberOf(start, at)]);
+      if (held.members.some((m) => m.runtimeRunId === start.runtimeRunId)) return undefined;
+      if (held.members.length >= SPARK_CREW_MEMBERS_MAX) return this.#full(spark, crew.id);
+      return withMembers(crews, crew.id, [...held.members, memberOf(start, at)]);
     });
+    if (kept) this.#say(spark, crew.id);
   }
 
   /** A crew member's board row: its model and effort as the row first names them; a member resumed in a new run
@@ -248,6 +262,7 @@ export class SparkCrews {
       ]);
     });
     if (!kept) this.#emit(row.spark);
+    else this.#say(row.spark, row.crew);
   }
 
   /** A run ended: a spark's own run closes its open crew; a member is kept, Ended at its time, named as fieldd names
@@ -384,6 +399,33 @@ export class SparkCrews {
     this.#crews.set(spark, crews);
     for (const crew of crews)
       for (const member of crew.members) this.#members.set(member.runtimeRunId, spark);
+  }
+
+  /** The crew's act line (SR-Q1 (a)): written into the spark's run the crew was made in when its words differ from
+   * the last line written for it, so a join or a model first named rewrites it and an end never does. A sink that
+   * throws is logged; the record stands. */
+  #say(spark: SparkId, id: CrewId): void {
+    const act = this.#act;
+    if (act === undefined) return;
+    const crew = this.#read(spark).find((c) => c.id === id);
+    if (crew === undefined) return;
+    const text = crewActText(crew.members);
+    if (this.#said.get(id) === text) return;
+    this.#said.delete(id);
+    this.#said.set(id, text);
+    if (this.#said.size > SAID_HELD) {
+      const oldest = this.#said.keys().next().value;
+      if (oldest !== undefined) this.#said.delete(oldest);
+    }
+    try {
+      act(spark, crew.sparkRun, id, text);
+    } catch (err) {
+      this.#logger.warn("fieldd.crews.act_failed", "A crew's act line could not be written", {
+        spark,
+        crew: id,
+        reason: (err as Error).message,
+      });
+    }
   }
 
   #emit(spark: SparkId): void {

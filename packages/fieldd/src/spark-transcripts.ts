@@ -613,16 +613,16 @@ export class SparkTranscriptRecorder {
   }
 
   /** VibeField's own act, in the spark's run's file: a wake that told it something, an answer you gave, a notify, and
-   * (SP-1e2) a crew's line, which names its crew. (red: `fields` is accepted and not yet written) */
+   * (SP-1e2) a crew's line, which names its crew: a later line of the same crew replaces it where it first stood. */
   act(
     spark: SparkId,
     runtimeRunId: string,
     what: string,
     text: string,
-    _fields?: { readonly crew?: CrewId | undefined },
+    fields?: { readonly crew?: CrewId | undefined },
   ): void {
     if (text.trim() === "") return;
-    this.store.append(spark, runtimeRunId, { kind: "act", what, text });
+    this.store.append(spark, runtimeRunId, { kind: "act", what, text, crew: fields?.crew });
   }
 
   /** The tool plane served one of VibeField's own tools to the spark's run: the MCP tool asked for and not yet ended
