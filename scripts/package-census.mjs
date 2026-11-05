@@ -11,6 +11,12 @@
 // manifest drift prints and exits 0. Only a §7.3 "must never ship" hit is fatal, because
 // that class is a leak rather than churn. HARDENING IS A ONE-LINE FLIP — pass `--strict`
 // (or default `strict` to true below) once WP4's staging allowlist makes drift meaningful.
+//
+// Corrected 2026-11-05 (LP-6c, VF-PM's ruling): the flip is made where the gate runs, not
+// here. `pnpm verify` runs `census:assert` right after bundle:assert: it builds what
+// bundle:assert leaves out (fieldd and every plugin package), then `--assert --strict`, so on
+// main any drift from the committed baseline is red. The tool's default stays report-first
+// for a bare run and for package-preview.yml's PR-time report.
 import {
   existsSync,
   lstatSync,

@@ -188,3 +188,40 @@ test("LP-6: the census's singleton rule names the prefix the renderer build rese
     /const SINGLETON = \/\\\/assets\\\/singleton-\[\^\/\]\+\$\/u;/u,
   );
 });
+
+// LP-6c (2026-11-05, VF-PM's ruling at 06:37Z): the census is main's gate. `pnpm verify` runs it STRICT, right after
+// bundle:assert has built the shell and the renderer, so a shipped file the committed baseline does not name reddens
+// verify, and so CI, instead of printing drift nobody reads (package-preview.yml, PR-time only, stays non-strict).
+test("LP-6c: verify runs the census strict, after the build it inventories", () => {
+  const { scripts } = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8"));
+  assert.match(scripts.verify, /pnpm bundle:assert && pnpm census:assert && /u);
+  // --assert refuses a tree where any package that declares a build has no dist/. bundle:assert
+  // has built electron-shell, so census:assert builds the rest it inventories: fieldd and
+  // every plugin package.
+  assert.match(scripts["census:assert"], /^pnpm --filter @vibefield\/fieldd /u);
+  assert.match(
+    scripts["census:assert"],
+    / --filter "\.\/plugins\/\*" --filter "\.\/examples\/plugins\/\*" /u,
+  );
+  assert.match(scripts["census:assert"], / run --if-present build && /u);
+  assert.match(scripts["census:assert"], /node scripts\/package-census\.mjs --assert --strict$/u);
+});
+
+// Every file the stager copies from a package's dist/ by a literal path is one the baseline names, so a new shipped
+// bundle (SD-2's main/sound-worker.cjs was the one that had none) cannot reach a package without its census row. Rows
+// whose path is computed (fieldd's SEA, mille's per-arch .node) and directories (the renderer's assets) are the
+// census's own shapes, held by the strict assert itself.
+test("LP-6c: the baseline names every bundle the stager copies by a literal dist path", () => {
+  const stager = readFileSync(join(REPO, "scripts/stage-package.mjs"), "utf8");
+  const manifest = JSON.parse(
+    readFileSync(join(REPO, "apps/desktop/packaging/package-manifest.json"), "utf8"),
+  );
+  const rows = [
+    ...stager.matchAll(/from: "(packages\/[^/"]+)\/(dist\/[^"]+\.(?:cjs|mjs|js|wasm|node))"/gu),
+  ];
+  assert.ok(rows.length >= 6, `the stager's literal dist rows: found ${rows.length}`);
+  const unnamed = rows
+    .filter(([, pkg, file]) => !(file in (manifest.packages[pkg]?.files ?? {})))
+    .map(([, pkg, file]) => `${pkg}/${file}`);
+  assert.deepEqual(unnamed, [], `staged with no census row: ${unnamed.join(", ")}`);
+});
