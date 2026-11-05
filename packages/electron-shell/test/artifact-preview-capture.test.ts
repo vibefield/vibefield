@@ -474,6 +474,7 @@ const MADE_PAGE_REQUESTS: ReadonlyArray<RigRequest & { admitted: boolean }> = [
     admitted: false,
   },
   { url: "https://cdn.jsdelivr.net/npm/x/index.html", resourceType: "subFrame", admitted: false },
+  { url: "https://cdn.jsdelivr.net/npm/x/embed.html", resourceType: "object", admitted: false },
 ];
 
 describe("MA-3c — a made app's capture admits its allowHosts", () => {
@@ -583,13 +584,15 @@ describe("MA-3c — the guard's allowHosts rule (isAllowedPreviewRequest)", () =
     expect(verdicts(rows), "each lookalike's verdict").toEqual(all(rows, false));
   });
 
-  it("PIN: never admits a document from an allowHosts host: mainFrame and subFrame stay on the app's origin", () => {
+  it("PIN: never admits a document from an allowHosts host: mainFrame, subFrame and object stay on the app's origin", () => {
     expect(
       verdicts([
         ["https://cdn.jsdelivr.net/", "mainFrame"],
         ["https://cdn.jsdelivr.net/npm/x/index.html", "subFrame"],
+        ["https://cdn.jsdelivr.net/npm/x/index.html", "object"],
         [`${MADE_ORIGIN}/`, "mainFrame"],
         [`${MADE_ORIGIN}/frame.html`, "subFrame"],
+        [`${MADE_ORIGIN}/embed.html`, "object"],
       ]),
       "each document's verdict",
     ).toEqual([
@@ -599,8 +602,14 @@ describe("MA-3c — the guard's allowHosts rule (isAllowedPreviewRequest)", () =
         resourceType: "subFrame",
         admitted: false,
       },
+      {
+        url: "https://cdn.jsdelivr.net/npm/x/index.html",
+        resourceType: "object",
+        admitted: false,
+      },
       { url: `${MADE_ORIGIN}/`, resourceType: "mainFrame", admitted: true },
       { url: `${MADE_ORIGIN}/frame.html`, resourceType: "subFrame", admitted: true },
+      { url: `${MADE_ORIGIN}/embed.html`, resourceType: "object", admitted: true },
     ]);
   });
 

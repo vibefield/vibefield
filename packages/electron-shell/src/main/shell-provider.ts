@@ -335,6 +335,9 @@ export class RecoveringShellProvider {
       await this.native.openExternal(params.data.url);
       return ShellOpenLinkResult.parse({ opened: true });
     }
+    // MA-3c: a made app's `allowHosts` rides the parsed params to the capture unchanged, and its
+    // `digest` is validated on the way out. A hidden window still refuses; fieldd runs an owed
+    // capture at the next open on this desktop (L11 as ruled), so a show sends nothing.
     if (call.method === "shell.webcontents.captureArtifactPreview") {
       const params = ShellWebContentsCaptureArtifactPreviewParams.parse(call.params);
       const parent = this.native.parentWindow();

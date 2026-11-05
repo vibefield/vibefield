@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { lstat, mkdir, open, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -140,6 +140,8 @@ export class ArtifactPreviewCapture {
     throwIfAborted(signal);
     const partition = `${PREVIEW_PARTITION_PREFIX}${this.#randomId()}`;
     const targetOrigin = new URL(params.url).origin;
+    // MA-3c: a made app's served-shell hosts (absent for a live artifact: its origin alone).
+    const allowHosts = params.allowHosts ?? [];
     const targetDir = join(this.#previewRoot, params.artifactId);
     const targetPath = join(targetDir, "thumbnail.jpg");
     const tempPath = join(targetDir, `.${this.#randomId()}.thumbnail.jpg.tmp`);
@@ -165,7 +167,12 @@ export class ArtifactPreviewCapture {
       captureSession.setPermissionCheckHandler(() => false);
       captureSession.webRequest.onBeforeRequest(ALL_URLS, (details, callback) => {
         callback({
-          cancel: !isAllowedPreviewRequest(targetOrigin, details.url, details.resourceType),
+          cancel: !isAllowedPreviewRequest(
+            targetOrigin,
+            details.url,
+            details.resourceType,
+            allowHosts,
+          ),
         });
       });
       requestGuardInstalled = true;
@@ -228,11 +235,14 @@ export class ArtifactPreviewCapture {
       const jpeg = encodeBoundedJpeg(normalized);
       verifyJpeg(this.#native.decodeImage(jpeg), jpeg);
       const title = sanitizePreviewTitle(window.webContents.getTitle());
+      // MA-3c (MA-D10 (b)): the digest names the bytes this capture commits, taken before the
+      // replace and never by re-reading the destination, which a later writer may already own.
+      const digest = createHash("sha256").update(jpeg).digest("hex");
       await atomicReplace(tempPath, targetPath, jpeg, signal);
-      // MA-3c RED: the answer carries no `digest` yet, and `params.allowHosts` does not reach the guard.
       return ShellWebContentsCaptureArtifactPreviewResult.parse({
         captured: true,
         ...(title !== undefined ? { title } : {}),
+        digest,
       });
     } catch (error) {
       if (signal.aborted) {
@@ -307,21 +317,32 @@ export function isAllowedTopLevelNavigation(targetOrigin: string, candidate: str
 /** The capture's request guard. HTTPS to the target's exact origin, and `data:` / same-origin `blob:` for a
  * subresource. MA-3c (MA-D10 (b)): a made app's page also loads from the hosts its served shell names, so
  * `allowHosts` (the capture params' `MadeAppReach`, bare canonical hosts) admits an HTTPS SUBRESOURCE whose host is
- * exactly one of them, on the default port, with no credentials. Never a document (`mainFrame`, `subFrame`): those
- * stay on the target's origin, as top-level navigation does. Absent or empty: the live artifact's guard, unchanged.
- * MA-3c RED: the parameter is declared and not yet read. */
+ * exactly one of them, on the default port, with no credentials. Never a document: Electron's webRequest names three
+ * kinds that can hold one (`mainFrame`, `subFrame`, and `object` for an `<object>`/`<embed>`, whose data may be
+ * HTML), and all three stay on the target's origin, as top-level navigation does. Absent or empty: the live
+ * artifact's guard, unchanged. */
 export function isAllowedPreviewRequest(
   targetOrigin: string,
   candidate: string,
   resourceType?: string,
-  _allowHosts: readonly string[] = [],
+  allowHosts: readonly string[] = [],
 ): boolean {
   const topLevel = resourceType === "mainFrame";
   try {
     const url = new URL(candidate);
     if (url.protocol === "data:") return !topLevel;
     if (url.protocol === "blob:") return !topLevel && url.origin === targetOrigin;
-    return url.protocol === "https:" && url.origin === targetOrigin;
+    if (url.protocol !== "https:") return false;
+    if (url.origin === targetOrigin) return true;
+    if (topLevel || resourceType === "subFrame" || resourceType === "object") return false;
+    // The parser has already folded the host's case, spelled an IDN as punycode and dropped
+    // `:443`, so exact membership is the whole host rule; a port or credentials are refused.
+    return (
+      url.port === "" &&
+      url.username === "" &&
+      url.password === "" &&
+      allowHosts.includes(url.hostname)
+    );
   } catch {
     return false;
   }

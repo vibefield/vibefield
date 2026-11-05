@@ -923,10 +923,16 @@ describe("MA-3c — a made app's capture through the provider", () => {
       }),
     );
     expect(captureArtifactPreview, "the native capture").not.toHaveBeenCalled();
+    // L11 has no show event: the provider holds no listener for one, so nothing can answer a show
+    // later. Counted, not waited for.
+    const windowEvents = hidden as unknown as EventEmitter;
+    expect(
+      { show: windowEvents.listenerCount("show"), restore: windowEvents.listenerCount("restore") },
+      "the provider's listeners for a show on the window",
+    ).toEqual({ show: 0, restore: 0 });
     const before = client.requests.length;
-    (hidden as unknown as EventEmitter).emit("show");
-    (hidden as unknown as EventEmitter).emit("restore");
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    windowEvents.emit("show");
+    windowEvents.emit("restore");
     expect(client.requests.slice(before), "what a show sent fieldd").toEqual([]);
     expect(
       client.requests.map((request) => request.method),
