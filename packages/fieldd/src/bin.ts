@@ -1,27 +1,44 @@
 // fieldd standalone entry (Track A): ensure the native plane, then bootstrap.
 // Spawned by the Electron shell (adopt-or-spawn) or run by hand:
 //   FIELDD_DATA_DIR=… FIELDD_NATIVE_BIN=…/field-native node dist/bin.cjs
+//
+// THE SAME ENTRY RUNS EVERY ROLE (roles.ts): a packaged fieldd is a single
+// executable, so its files worker and its agents' launcher runtime are this
+// executable again with a role as its first argument. So NOTHING but builtins
+// and roles.ts is imported at this file's top: the daemon's whole module graph —
+// the contracts, logging, the users root, the boot environment and the daemon —
+// is imported inside `main()`, and esbuild's bundle (package.json's first step,
+// cjs) leaves a module reached only by `import()` unevaluated until it is
+// called. A role pays for builtins and its own bundle, and an agent typed in a
+// pane waits for nothing of the daemon's.
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { FIELDD_TRUST_ROOT_ENV, FIELDD_TRUST_ROOT_KEYS_ENV } from "@vibefield/contracts";
-import { pairLogRoot, resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
-import { ensureUsersRoot, rootAboveUserRoot } from "@vibefield/users";
+import { dirname, join } from "node:path";
 import {
-  defaultDataRoot,
-  nativeAlive,
-  nativeMgmtEndpoint,
-  outliveStdioReaders,
-  splitPathList,
-} from "./boot-env";
-import { FILES_HOST_BUNDLE, FILES_HOST_ROLE_ARG } from "./workspace/launch";
+  AGENT_SHIM_BUNDLE,
+  AGENT_SHIM_EXIT_UNAVAILABLE,
+  agentShimArgv,
+  agentShimUnavailable,
+  FILES_HOST_BUNDLE,
+  roleOf,
+  unknownRoleLine,
+} from "./roles";
 
 async function main(): Promise<void> {
+  // Imported in the order the file's top once imported them; none of them writes.
+  const { FIELDD_TRUST_ROOT_ENV, FIELDD_TRUST_ROOT_KEYS_ENV } = await import(
+    "@vibefield/contracts"
+  );
+  const { pairLogRoot, resolvePlatformLogRoot } = await import("@vibefield/logging");
+  const { ensureUsersRoot, rootAboveUserRoot } = await import("@vibefield/users");
+  const { defaultDataRoot, nativeAlive, nativeMgmtEndpoint, outliveStdioReaders, splitPathList } =
+    await import("./boot-env");
   // AL-1 — before anything writes: this process outlives the shell that reads its stdio (boot-env.ts).
   outliveStdioReaders();
   // FS-1a — the daemon's module graph loads HERE, never at the bundle's top:
-  // the same bundle runs as the files worker (below), which must not carry it
+  // the same bundle runs as the files worker and the agent shim (below), which
+  // must not carry it
   const { bootstrap } = await import("./daemon");
   // UA-1 — a supervisor-spawned fieldd receives the resolved USER root
   // explicitly; a standalone/headless run receives the VibeField ROOT (or the
@@ -191,19 +208,111 @@ async function main(): Promise<void> {
   daemon.onShutdownRequest(shutdown);
 }
 
-if (process.argv.includes(FILES_HOST_ROLE_ARG)) {
+/** Whether this process is fieldd's single executable (a packaged build). */
+function isSea(): boolean {
+  try {
+    const builtin = process.getBuiltinModule?.("node:sea") as { isSea?: () => boolean } | undefined;
+    return builtin?.isSea?.() === true;
+  } catch {
+    // a Node with no such module is no single executable
+    return false;
+  }
+}
+
+/** Where a role's sealed bundle stands: beside the executable when fieldd is a
+ * single executable (F-11: a SEA's `__dirname` is that directory too, said
+ * here by the executable's own path rather than leaned on), beside this bundle
+ * otherwise — `dist/` in development. */
+function sealedDirectory(): string {
+  return isSea() ? dirname(process.execPath) : __dirname;
+}
+
+/** AR-7j (electron-security-packaging.md §9.3) — a packaged process of fieldd's
+ * that STAYS (the daemon, the files worker) opens no inspector by a signal. On
+ * Node, SIGUSR1 opens one on 127.0.0.1, and a same-uid process may send it. A
+ * listener of our own takes the signal from Node's inspector (measured on a plain
+ * Node 26.5.0: SIGUSR1 then opens nothing and the process runs on; the SEA's own
+ * reading is build-fieldd-sea --verify's and desk-gates row 34's), from this
+ * statement on; the executable's own start, before its first statement runs, is
+ * the window that remains.
+ *
+ * Not the blob's `--disable-sigusr1`: that flag leaves SIGUSR1 BLOCKED for the
+ * whole process (Node blocks it at start and only the inspector's handler
+ * unblocks it), and the agent-shim role execs the agent in place, which keeps
+ * the mask — every agent typed in a packaged pane, and whatever it starts that
+ * does not reset its mask, would be born deaf to SIGUSR1, unlike under
+ * `pnpm dev` (measured on a plain Node 26.5.0: `kill -USR1 $$` after the flag's execve
+ * leaves sh running; without it sh dies 158). So the agent-shim role leaves
+ * SIGUSR1 to Node, as a plain Node would: it holds nothing a process of the
+ * same uid lacks, and lives only until the exec. Development (no single
+ * executable) is left as it was. */
+function refuseInspectorSignal(): void {
+  if (!isSea()) return;
+  process.on("SIGUSR1", () => {
+    // taken from the inspector, and nothing more: the process runs on
+  });
+}
+
+/** A start that failed, in words a log may keep: the logging library's own
+ * sanitizer, and — should that library itself not load — the error's message
+ * with the home directory said as `~`. */
+async function startFailure(error: unknown): Promise<string> {
+  try {
+    const { serializeError } = await import("@vibefield/logging");
+    return serializeError(error, { aliases: { home: homedir() } }).message;
+  } catch {
+    const message = error instanceof Error ? error.message : String(error);
+    const home = homedir();
+    return home === "" ? message : message.split(home).join("~");
+  }
+}
+
+const role = roleOf(process.argv);
+if (role === "files-host") {
   // FS-1a (L1) — the files worker's ROLE. A packaged fieldd is a single
   // executable that runs only its own blob, so fieldd starts its worker as
   // ITSELF with this argument (workspace/launch.ts), and the role loads the
   // worker's bundle staged beside the executable — the service harness's
   // precedent. The worker speaks only on its IPC pipe; started without one it
   // says so and leaves (host/main.ts).
-  const script = join(__dirname, FILES_HOST_BUNDLE);
+  refuseInspectorSignal();
+  const script = join(sealedDirectory(), FILES_HOST_BUNDLE);
   createRequire(script)(script);
+} else if (role === "agent-shim") {
+  // AR-7j — the agents' launcher runtime in a packaged build: every launcher
+  // execs `<this executable> --vibefield-role=agent-shim <home>/lib/agent-shim.cjs
+  // "$@"` (agent-gateway.ts `chooseLauncherRuntime`; the kit writes the line).
+  // The role runs puppeteer's shim SEALED beside the executable, as if `node
+  // <sealed> "$@"` had started it — never the home's copy at argv[3]
+  // (`agentShimArgv` drops it unread; what that does and does not close is said
+  // there). It runs no daemon, reads no FIELDD_* variable and writes no
+  // readiness line: the shim is the whole of it, and it execs the agent in place
+  // (one pid from the prompt to the agent, as under a real Node). SIGUSR1 is
+  // left to Node (`refuseInspectorSignal` says why), so the agent is born with
+  // it as under a plain Node.
+  const sealed = join(sealedDirectory(), AGENT_SHIM_BUNDLE);
+  process.argv = agentShimArgv(process.argv, process.execPath, sealed);
+  try {
+    createRequire(sealed)(sealed);
+  } catch {
+    // the sealed file is gone or broken (a damaged install): one line in the
+    // person's terminal and the kit's "cannot run" status — never a stack trace
+    process.stderr.write(`${agentShimUnavailable(process.env["PUPPETEER_SHIM_NAME"])}\n`);
+    process.exit(AGENT_SHIM_EXIT_UNAVAILABLE);
+  }
+} else if (role === "unknown") {
+  // A role this build does not have — a launcher another build of VibeField
+  // wrote, still standing in a pane that outlived it (field-native outlives
+  // fieldd). One line and the kit's cannot-run status, never the daemon: a
+  // daemon booted from a pane would take the person's real root (its FIELDD_*
+  // variables are stripped there) and print its readiness line into their
+  // terminal. This build's fieldd rewrites the launchers at its next start.
+  process.stderr.write(`${unknownRoleLine(process.env["PUPPETEER_SHIM_NAME"])}\n`);
+  process.exit(AGENT_SHIM_EXIT_UNAVAILABLE);
 } else {
-  main().catch((e: unknown) => {
-    const error = serializeError(e, { aliases: { home: homedir() } });
-    process.stderr.write(`fieldd failed to start: ${error.message}\n`);
+  refuseInspectorSignal();
+  main().catch(async (e: unknown) => {
+    process.stderr.write(`fieldd failed to start: ${await startFailure(e)}\n`);
     process.exit(1);
   });
 }

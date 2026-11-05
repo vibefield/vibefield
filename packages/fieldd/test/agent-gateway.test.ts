@@ -86,6 +86,7 @@ import {
   offeredLaunch,
   refusalReasonCode,
   type ShellIntegration,
+  sealedAgentShim,
   shimHomeIsDurable,
   startedWithSession,
 } from "../src/agent-gateway";
@@ -97,6 +98,7 @@ import {
 } from "../src/agent-runtime";
 import { endTypedProcess, typedRunProof } from "../src/agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "../src/audit-service";
+import { AGENT_SHIM_ROLE_ARG } from "../src/roles";
 // `born` names a terminal's birth in this file's rows; the agent's is `birth`
 import { born as birth } from "./agent-birth";
 import {
@@ -385,14 +387,64 @@ describe("the launcher's runtime — one rule, four cases (AR-7b)", () => {
     expect(chosen).toEqual({ runtime: { command: real }, source: "path-node", version: "24.3.0" });
   });
 
-  it("case 4 — a packaged fieldd (a single executable) has no launcher runtime, whatever its PATH holds", async () => {
+  it("case 2b (AR-7j) — a packaged fieldd (a single executable) runs its launchers on ITSELF, in the agent-shim role, when its sealed shim stands beside it — and a node on its PATH is never asked", async () => {
+    const root = scratch();
+    // a node that would qualify stands on the PATH: a single executable names none
+    nodeIn(join(root, "real"));
+    const executable = join(root, "VibeField.app", "Contents", "Resources", "bin", "fieldd");
+    const looked: string[] = [];
+    const chosen = await chooseLauncherRuntime(
+      facts({
+        sea: true,
+        execPath: executable,
+        nodeVersion: "26.5.0",
+        path: join(root, "real"),
+        // the facts' own probe throws: asking the PATH's node would be red
+        exists: (path) => {
+          looked.push(path);
+          return path === sealedAgentShim(executable);
+        },
+      }),
+    );
+    expect(chosen).toEqual({
+      runtime: { command: executable, args: [AGENT_SHIM_ROLE_ARG] },
+      source: "own-executable",
+      version: "26.5.0",
+    });
+    // the sealed copy is the one beside the executable, and it is the only file looked for
+    expect(sealedAgentShim(executable)).toBe(
+      join(root, "VibeField.app", "Contents", "Resources", "bin", "agent-shim.cjs"),
+    );
+    expect(looked).toEqual([sealedAgentShim(executable)]);
+    // the role's word, as the kit will write it into every launcher
+    expect(AGENT_SHIM_ROLE_ARG).toBe("--vibefield-role=agent-shim");
+  });
+
+  it("case 4 for a single executable — its sealed shim missing, or its Node unable to exec in place — is NO runtime, whatever its PATH holds: never a node from PATH", async () => {
     const root = scratch();
     nodeIn(join(root, "real"));
-    const chosen = await chooseLauncherRuntime(
-      facts({ sea: true, path: join(root, "real"), probe: async () => "26.0.0" }),
+    const packaged = {
+      sea: true,
+      execPath: join(root, "bin", "fieldd"),
+      path: join(root, "real"),
+      // the facts' own probe throws: asking the PATH's node would be red
+    };
+    const missing = await chooseLauncherRuntime(
+      facts({ ...packaged, nodeVersion: "26.5.0", exists: () => false }),
     );
-    expect(chosen.runtime).toBeUndefined();
-    expect("reason" in chosen ? chosen.reason : "").toContain("AR-7j");
+    expect(missing.runtime).toBeUndefined();
+    expect("reason" in missing ? missing.reason : "").toContain(
+      `its sealed shim is not beside it (${join(root, "bin", "agent-shim.cjs")})`,
+    );
+    const old = await chooseLauncherRuntime(
+      facts({ ...packaged, nodeVersion: "23.10.0", exists: () => true }),
+    );
+    expect(old.runtime).toBeUndefined();
+    expect("reason" in old ? old.reason : "").toContain("Node 23.10.0 cannot exec in place");
+    for (const chosen of [missing, old])
+      expect("reason" in chosen ? chosen.reason : "").toContain(
+        "a single executable never runs a launcher on a node from PATH",
+      );
   });
 });
 
@@ -1364,8 +1416,8 @@ describe("the gateway's start, refresh and stop (AR-7b)", () => {
     async () => {
       const box = await unit({
         launcher: null,
-        // a packaged fieldd: a single executable
-        runtimeFacts: { sea: true, electron: undefined },
+        // a packaged fieldd — a single executable — without its sealed shim beside it
+        runtimeFacts: { sea: true, electron: undefined, exists: () => false },
       });
       await materializeShims({
         home: box.home,
@@ -1387,8 +1439,67 @@ describe("the gateway's start, refresh and stop (AR-7b)", () => {
       );
       expect(said.length).toBe(1);
       expect(said[0]?.level).toBe("warn");
-      expect(String(said[0]?.attrs["reason"])).toContain("AR-7j");
+      expect(String(said[0]?.attrs["reason"])).toContain("its sealed shim is not beside it");
       expect(withheldSaid(box)).toEqual([]);
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "AR-7j — a packaged fieldd's launchers exec its OWN executable in the agent-shim role, on the home's shim path the role drops; the home still holds the kit's copy",
+    async () => {
+      const executable = join(
+        realpathSync(mkdtempSync(join(tmpdir(), "vf-sea-"))),
+        "Resources",
+        "bin",
+        "fieldd",
+      );
+      cleanup.push(() => rmSync(dirname(dirname(dirname(executable))), { recursive: true }));
+      const box = await unit({
+        launcher: null,
+        runtimeFacts: {
+          sea: true,
+          electron: undefined,
+          execPath: executable,
+          nodeVersion: "26.5.0",
+          exists: (path) => path === sealedAgentShim(executable),
+        },
+      });
+      onePane(box);
+      await box.gateway.start();
+      const layout = spawnThroughLayout(box.home);
+      expect(box.gateway.state()).toMatchObject({
+        listening: true,
+        names: [TYPED_COMMAND],
+        launcher: { command: executable, source: "own-executable" },
+      });
+      expect([...box.gateway.launchers()]).toEqual([TYPED_PROVIDER]);
+      // the kit was handed the role as the runtime, and wrote it into the launcher
+      expect(box.kit.materialized.at(-1)?.runtime).toEqual({
+        command: executable,
+        args: [AGENT_SHIM_ROLE_ARG],
+      });
+      const launcher = readFileSync(join(layout.shimDirectory, TYPED_COMMAND), "utf8");
+      const execLine = launcher.split("\n").find((line) => line.startsWith("exec "));
+      expect(execLine).toBe(
+        `exec '${executable}' '${AGENT_SHIM_ROLE_ARG}' '${layout.script}' "$@"`,
+      );
+      // no variable of a runtime's: the role needs none, and the shim strips none
+      expect(launcher).toContain("PUPPETEER_SHIM_STRIP=''");
+      // the home's copy is the kit's file still — the role never runs it, a fieldd
+      // under a real Node that adopts this home would
+      expect(readFileSync(layout.script).equals(readFileSync(shimScript))).toBe(true);
+      const said = box.logged.filter(
+        (entry) => entry.event === "fieldd.agents.gateway_launcher_runtime",
+      );
+      expect(said.map((entry) => entry.attrs)).toEqual([
+        {
+          source: "own-executable",
+          command: executable,
+          args: [AGENT_SHIM_ROLE_ARG],
+          version: "26.5.0",
+        },
+      ]);
     },
     PROCESS_BUDGET_MS,
   );
@@ -1632,11 +1743,11 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
   it(
     "A2 — answers wherever the integration stands, launcher or none — a former boot's home written again and emptied of launchers, a row that stopped offering — since a launcher that lands later is found by a shell born before it; and answers nothing only where no home is written at all: nothing to offer from, and nothing of ours on the device",
     async () => {
-      // no program can run a launcher; a former boot's home is written again, emptied of
-      // launchers — and still points a shell at itself
+      // no program can run a launcher (a single executable without its sealed shim); a former
+      // boot's home is written again, emptied of launchers — and still points a shell at itself
       const packaged = await unit({
         launcher: null,
-        runtimeFacts: { sea: true, electron: undefined },
+        runtimeFacts: { sea: true, electron: undefined, exists: () => false },
       });
       await materializeShims({
         home: packaged.home,

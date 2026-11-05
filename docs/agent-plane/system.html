@@ -2248,6 +2248,14 @@
                   to read your agents' sessions here" — where a developer's build names the variable
                   (<code>rosettad-supervisor.ts</code> <code>rosettadUnconfigured</code>). The shim staged is
                   not yet a launcher: a single-executable fieldd chooses no launcher runtime (AR-7j).
+                  <em>Corrected 2026-11-05 (AR-7j): the staged shim is the launchers' now. A single-executable
+                  fieldd runs every launcher on its own executable in one closed role
+                  (<code>--vibefield-role=agent-shim</code>, <code>packages/fieldd/src/roles.ts</code>, picked by
+                  the first argument alone), and the role runs this sealed <code>agent-shim.cjs</code>, never the
+                  shim home's copy (<code>agent-gateway.ts</code> <code>chooseLauncherRuntime</code>; a single
+                  executable never falls to a node on PATH). <code>docs/desk-gates.md</code> row 34 witnesses it
+                  on the signed package. The shim home's launchers and rendezvous stay writable by the same uid,
+                  as under <code>pnpm dev</code>.</em>
                   <span class="badge tone-built">Built</span>
                 </p>
               </div>
