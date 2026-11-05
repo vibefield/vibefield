@@ -520,6 +520,12 @@ export const AGENT_STOP = {
  *    worker's resourceLimits are no node option, so both builds hold it. A worker past it is ended by V8, and so is a
  *    host V8 aborts whole for its heap, its run saying it used more memory than a flow may (DESIGN.md §9 "When a run's
  *    script cannot go on"). Each pong's `used_heap_size` is telemetry;
+ *  - HOST_RSS_MB: the host's resident memory, MEASURED by the host's own thread (`process.memoryUsage.rss()`, every
+ *    50 ms; bth's re-read N1, ruled 2026-11-05 13:24Z; 512 pending VF-PM's number). V8's cap holds the worker's heap
+ *    and nothing outside it, and a typed array's backing store is outside it (SES leaves ArrayBuffer and Uint8Array in
+ *    every compartment), so a script that keeps them and awaits between them passes HOST_HEAP_MB and every ping. Past
+ *    it the host says `memory` and SIGKILLs itself (an exit can wait out one long builtin), and its run ends as V8's
+ *    cap's does;
  *  - HOST_PING_MS, HOST_PING_MISSES: fieldd pings a live host every HOST_PING_MS, and ends one that misses
  *    HOST_PING_MISSES in a row (a script that spins never yields to its pipe), its run saying it stopped answering. A
  *    script awaiting its calls answers every ping, so a slow step is never mistaken for a spinning script.
@@ -537,6 +543,7 @@ export const FLOW_LIMITS = {
   CALLS_MORE: 20,
   LIVE_STEPS_MAX: 8,
   HOST_HEAP_MB: 128,
+  HOST_RSS_MB: 512,
   HOST_PING_MS: 5_000,
   HOST_PING_MISSES: 3,
   ARGS_DEPTH_MAX: 32,

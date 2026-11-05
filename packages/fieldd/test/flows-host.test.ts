@@ -89,6 +89,7 @@ async function host(
     input?: Record<string, string>;
     timings?: Partial<FlowHostTimings>;
     heapMb?: number;
+    rssMb?: number;
     launch?: FlowsHostLaunch;
     environment?: NodeJS.ProcessEnv;
   } = {},
@@ -101,6 +102,7 @@ async function host(
     environment: opts.environment ?? PATH_ONLY,
     ...(opts.timings !== undefined ? { timings: opts.timings } : {}),
     ...(opts.heapMb !== undefined ? { heapMb: opts.heapMb } : {}),
+    ...(opts.rssMb !== undefined ? { rssMb: opts.rssMb } : {}),
   });
   runs.push(run);
   return run;
@@ -161,6 +163,7 @@ function runOf(file: Uint8Array): ToFlowHost {
       callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
       logMaxChars: 200,
       heapMb: FLOW_LIMITS.HOST_HEAP_MB,
+      rssMb: FLOW_LIMITS.HOST_RSS_MB,
       argsDepthMax: FLOW_LIMITS.ARGS_DEPTH_MAX,
     },
   };
@@ -505,6 +508,39 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
         }),
       });
       expect(await within(split.ended)).toEqual({ kind: "ended", why: "memory" });
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H25: memory V8's heap cap cannot see (typed arrays' backing stores) ends a run `memory` at the host's resident cap, though the script awaits between them (bth's re-read N1)",
+    async () => {
+      // each 64 MiB array is filled, so its pages are resident, and each is followed by an answered ask, so every ping
+      // is answered and the old generation stays small: neither V8's cap nor the ping can end it, the host's RSS cap
+      // must. The host idles near 76 MB with its worker locked down (measured 13:27Z), so 160 MB is passed at the
+      // second array; the real number's row is the mini's (4 × 256 MiB under HOST_RSS_MB).
+      const { handler, calls } = scripted(() => ({ ok: true, value: "yes" }));
+      const run = await host(
+        flow(
+          [
+            'await ask("start");',
+            "const kept = [];",
+            "for (let i = 0; i < 6; i += 1) {",
+            "  kept.push(new Uint8Array(64 * 1024 * 1024).fill(1));",
+            '  await ask("more?");',
+            "}",
+            "return kept.length;",
+          ].join("\n"),
+        ),
+        { handler, rssMb: 160 },
+      );
+      const pid = await within(run.ready);
+      expect(typeof pid).toBe("number");
+      expect(await within(run.ended)).toEqual({ kind: "ended", why: "memory" });
+      // it started under its cap, and was ended before its script finished
+      expect(calls[0]?.args).toEqual(["start"]);
+      expect(calls.length).toBeLessThan(7);
+      expect(alive(pid as number)).toBe(false);
     },
     ROW_MS,
   );

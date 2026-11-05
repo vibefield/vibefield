@@ -444,7 +444,7 @@ export type FlowJournalKind = (typeof FLOW_JOURNAL_KINDS)[number];
 
 /** Why fieldd ended a run's host, OPEN (4A2-Q7; DESIGN.md §9 "When a run's script cannot go on"): `unanswered`
  * (it missed FLOW_LIMITS.HOST_PING_MISSES pings: a script that spins), `memory` (V8 ended its worker past
- * FLOW_LIMITS.HOST_HEAP_MB) or `protocol` (its pipe carried a frame past its bound, or one that is not JSON: the child
+ * FLOW_LIMITS.HOST_HEAP_MB, or the host's resident memory passed HOST_RSS_MB; bth's re-read N1) or `protocol` (its pipe carried a frame past its bound, or one that is not JSON: the child
  * no longer holds its own bounds; bth's review P2, ruled 2026-11-05 11:46Z) or `flood` (more calls waiting at once
  * than FLOW_LIMITS.HOST_CALLS_WAITING_MAX, or more log lines than HOST_LOG_LINES_MAX; bth's review P1). A run whose
  * host fieldd ended is never started again; a new run starts from the top. */

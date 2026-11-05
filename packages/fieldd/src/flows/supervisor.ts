@@ -106,6 +106,8 @@ export interface FlowHostOptions {
   readonly timings?: Partial<FlowHostTimings>;
   /** the V8 old-generation cap on the host's worker, MB (FLOW_LIMITS.HOST_HEAP_MB by default; tests lower it) */
   readonly heapMb?: number;
+  /** the host's resident memory cap, MB (FLOW_LIMITS.HOST_RSS_MB by default; tests lower it) */
+  readonly rssMb?: number;
   /** the environment the child's PATH is read from; fieldd's own by default */
   readonly environment?: NodeJS.ProcessEnv;
   readonly logger?: Logger;
@@ -234,6 +236,7 @@ class FlowHostChild {
   readonly #pipe: Duplex;
   readonly #stderr: string[] = [];
   readonly #heapMb: number;
+  readonly #rssMb: number;
   /** the last of the child's stderr, where V8's heap line is looked for */
   #stderrTail = "";
   /** the heap the worker last said it used (a pong's telemetry), bytes */
@@ -259,6 +262,7 @@ class FlowHostChild {
     this.#script = script;
     this.#t = { ...DEFAULT_TIMINGS, ...opts.timings };
     this.#heapMb = opts.heapMb ?? FLOW_LIMITS.HOST_HEAP_MB;
+    this.#rssMb = opts.rssMb ?? FLOW_LIMITS.HOST_RSS_MB;
     this.#logger = opts.logger ?? createNoopLogger();
     const ready = new Promise<number | undefined>((resolve) => {
       this.#ready = resolve;
@@ -376,6 +380,7 @@ class FlowHostChild {
             callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
             logMaxChars: FLOW_LOG_MAX,
             heapMb: this.#heapMb,
+            rssMb: this.#rssMb,
             argsDepthMax: FLOW_LIMITS.ARGS_DEPTH_MAX,
           },
         });
