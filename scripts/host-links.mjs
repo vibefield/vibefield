@@ -26,11 +26,27 @@
 // truffle's sidecar: each built by its own project's build) is said and not failed, so the gap stays visible until
 // that build remaps too.
 //
+// LP-6b (item 170, 2026-11-05) — EVERY shipped Mach-O, counted. prod-builder's strings scan of the published
+// nightly-20261104 counted field-native 790, field-terminal-host 378 and field-freeway-host 199 registry paths, rosettad
+// 450, mille.darwin-arm64.node 176 plus its own install name (`otool -D`:
+// `/Users/runner/work/vibefield/mille-pin/target/…/libmille_binding.dylib`; built here it is the SSD's
+// `/Volumes/SamsungRed/rust/target/…`), and truffle's Go sidecar 924 under `hostedtoolcache`, 921 under `go/pkg/mod`
+// and 4 under `work/truffle`; zero in the main executable, desktop-haptics, live-surface-adapter, the capture helper and
+// Electron's helpers (a local package of 2026-11-03 reads the same counts, `/Users/<name>` for `/Users/runner`). So the
+// gate now walks the whole package — bin/*, every .node, the helper executables, Electron's own — and counts each marker
+// per file: CI's home, the cargo and Go caches, a target's `deps/` (a dylib's install name) and this host's own target
+// directories FAIL wherever they are found, but in the ONE named exception (truffle's sidecar, BUILDER_PATH_EXCEPTIONS:
+// Go, built by truffle's CI and installed from npm, nothing staging can rewrite — its petition asks for `-trimpath`).
+// rustc's `/rustc/<commit>/` prefix is counted and said, never failed: it is the toolchain's own virtual path for the
+// standard library, the same on every machine (Node's binary, fieldd, carries its compiler's too). The builds that make
+// the rest pass remap under the release switch (scripts/build-paths.mjs), and the stage rewrites mille's install name.
+//
 // Usage: node scripts/host-links.mjs (--app <VibeField.app> | --dir <dir>) [--launch <bin dir>]   (exit 1 on any; the
 // launch check needs macOS)
 import { spawnSync } from "node:child_process";
-import { closeSync, existsSync, lstatSync, openSync, readdirSync, readSync } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { closeSync, lstatSync, openSync, readdirSync, readFileSync, readSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FLOOR_BINARIES } from "./native-floor.mjs";
 
@@ -176,52 +192,175 @@ export function auditHostLinks(root, commandsOf = dependencyCommandsOf) {
   return problems;
 }
 
-/** LP-6: the build host's own paths, as no shipped binary may carry them — a cargo registry checkout under a home
- * directory (`~/.cargo/registry`), and GitHub's macOS runner's home. */
-export const BUILDER_PATH_MARKERS = ["/.cargo/registry", "/Users/runner"];
+/** LP-6, widened at LP-6b (item 170): a build host's own paths, as no shipped Mach-O may carry them. Each FAILS the gate
+ * wherever it is found, but under a row of BUILDER_PATH_EXCEPTIONS that names that file and that marker. */
+export const BUILDER_PATH_MARKERS = [
+  // GitHub's macOS runner's home: every path a CI build writes (its checkouts, CARGO_HOME, the tool cache)
+  "/Users/runner",
+  // a dependency's panic locations and `file!()`: its cargo registry checkout, under any home
+  "/.cargo/registry",
+  // the same for a git dependency's checkout
+  "/.cargo/git/checkouts",
+  // a rustup toolchain's own files (its rust-src), under any home
+  "/.rustup/toolchains",
+  // GitHub's tool cache: a Go GOROOT, any setup-* toolchain
+  "hostedtoolcache",
+  // Go's module cache
+  "/go/pkg/mod",
+  // a cargo target's deps directory: a dylib's OWN install name (mille's .node, built on CI or on the SSD alike)
+  "/release/deps/",
+];
 
-/** The binaries whose release build remaps its paths (build-native-release.mjs): a builder path in one fails. */
-export const REMAPPED = FLOOR_BINARIES;
+/** Counted and said, never failed: rustc's virtual prefix for the standard library it ships (`/rustc/<commit>/library/…`).
+ * It is the same on every machine — the compiler's commit, not the builder's path — and no stable flag removes it from a
+ * std panic location; Node's own binary (fieldd) carries its compiler's too (read 2026-11-05 on the 11-03 package:
+ * field-native 171, rosettad 257, fieldd 96). */
+export const TOOLCHAIN_MARKERS = ["/rustc/"];
 
-/** The markers a file's bytes contain, read a MiB at a time with an overlap, so one across a read's edge is found. */
-export function builderPathsIn(file, markers = BUILDER_PATH_MARKERS, chunkSize = 1 << 20) {
-  const needles = markers.map((marker) => Buffer.from(marker, "utf8"));
-  const overlap = Math.max(...needles.map((needle) => needle.length)) - 1;
+/** The ONE named exception (item 170), by file name: what it may carry, the measurement, why, and where its fix waits.
+ * Any OTHER marker in it fails like anywhere else, and a row that matched nothing in a package says so (retire it). */
+export const BUILDER_PATH_EXCEPTIONS = {
+  "sidecar-slim": {
+    markers: ["/Users/runner", "hostedtoolcache", "/go/pkg/mod"],
+    measured:
+      "nightly-20261104 (prod-builder's strings scan): hostedtoolcache 924, /go/pkg/mod 921, /Users/runner/work/truffle 4",
+    reason:
+      "Go, built by truffle's CI (release-sidecar.yml's `go build` without -trimpath) and installed from npm " +
+      "(@vibecook/truffle-sidecar-*): the GOROOT, module-cache and checkout paths sit in the pclntab Go's own runtime " +
+      "reads, which no staging step can rewrite",
+    petition:
+      "the truffle -trimpath petition (draft/launch/truffle-trimpath-petition.md; upstream on James's word)",
+  },
+};
+
+function readTextOrNull(path) {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+/** The local target path patterns: each cargo target directory this host sets for every build — the environment's
+ * (CARGO_TARGET_DIR, CARGO_BUILD_TARGET_DIR) and the user config's `target-dir` (`$CARGO_HOME/config.toml`, or its
+ * legacy `config`; James's Mac shares /Volumes/SamsungRed/rust/target across checkouts). Absolute ones only. A path
+ * under one is a build tree's, never a shipped binary's. A sibling's own `.cargo/config.toml` (rosetta's SSD target) is
+ * not read: `/release/deps/` stands for any target's install name, and the remap writes OUT_DIR paths as `/target`. */
+export function hostTargetMarkers({
+  env = process.env,
+  home = homedir(),
+  read = readTextOrNull,
+} = {}) {
   const found = new Set();
+  const add = (path) => {
+    if (typeof path !== "string" || !isAbsolute(path)) return;
+    const trimmed = path.replace(/\/+$/u, "");
+    if (trimmed !== "") found.add(trimmed);
+  };
+  add(env.CARGO_TARGET_DIR);
+  add(env.CARGO_BUILD_TARGET_DIR);
+  const cargoHome = env.CARGO_HOME || join(home, ".cargo");
+  for (const name of ["config.toml", "config"]) {
+    const text = read(join(cargoHome, name));
+    if (text === null) continue;
+    for (const m of text.matchAll(/^\s*(?:build\.)?target-dir\s*=\s*["']([^"']+)["']/gmu))
+      add(m[1]);
+  }
+  return [...found];
+}
+
+/** How many times each marker occurs in a file's bytes, read a MiB at a time with an overlap, so one across a read's
+ * edge counts once (a match ending inside the carried bytes was counted by the window before). */
+export function builderPathCounts(
+  file,
+  markers = [...BUILDER_PATH_MARKERS, ...TOOLCHAIN_MARKERS],
+  chunkSize = 1 << 20,
+) {
+  const unique = [...new Set(markers)];
+  const needles = unique.map((marker) => Buffer.from(marker, "utf8"));
+  const overlap = Math.max(0, ...needles.map((needle) => needle.length - 1));
+  const counts = Object.fromEntries(unique.map((marker) => [marker, 0]));
   const fd = openSync(file, "r");
   try {
     const chunk = Buffer.alloc(chunkSize);
     let carry = Buffer.alloc(0);
     let position = 0;
-    while (found.size < markers.length) {
+    for (;;) {
       const read = readSync(fd, chunk, 0, chunk.length, position);
       if (read === 0) break;
       position += read;
       const window = Buffer.concat([carry, chunk.subarray(0, read)]);
       needles.forEach((needle, i) => {
-        if (window.includes(needle)) found.add(markers[i]);
+        for (
+          let at = window.indexOf(needle);
+          at !== -1;
+          at = window.indexOf(needle, at + needle.length)
+        )
+          if (at + needle.length > carry.length) counts[unique[i]] += 1;
       });
       carry = window.subarray(Math.max(0, window.length - overlap));
     }
   } finally {
     closeSync(fd);
   }
-  return markers.filter((marker) => found.has(marker));
+  return counts;
 }
 
-/** The builder-path gate over a tree: `problems` for a Mach-O of REMAPPED's carrying a marker
- * (`BUILDER PATH  <file>: <markers>`), `notes` for any other Mach-O that does — built elsewhere, said, not failed. */
-export function auditBuilderPaths(root, enforced = REMAPPED, markers = BUILDER_PATH_MARKERS) {
+/** The markers a file's bytes contain (LP-6's question; build-native-release's scan of what it just built). */
+export function builderPathsIn(file, markers = BUILDER_PATH_MARKERS, chunkSize = 1 << 20) {
+  const counts = builderPathCounts(file, markers, chunkSize);
+  return markers.filter((marker) => counts[marker] > 0);
+}
+
+const counted = (counts, markers) => markers.map((m) => `${m} ×${counts[m]}`).join(", ");
+
+/** The builder-path gate over a tree, every Mach-O in it, each marker counted per file:
+ *  - `problems`: `BUILDER PATH  <file>: <marker> ×<n>, …` — a failing marker (BUILDER_PATH_MARKERS and `host`, this
+ *    host's own target directories) anywhere but under its file's exception row;
+ *  - `excepted`: `EXCEPTION  <file>: … — <reason>; measured …; <petition>` — said, not failed;
+ *  - `notes`: rustc's own prefix (TOOLCHAIN_MARKERS), said, never failed; and an exception row whose file carried none
+ *    of its markers (`retire the row`). */
+export function auditBuilderPaths(
+  root,
+  {
+    markers = BUILDER_PATH_MARKERS,
+    host = [],
+    toolchain = TOOLCHAIN_MARKERS,
+    exceptions = BUILDER_PATH_EXCEPTIONS,
+    countsOf = builderPathCounts,
+  } = {},
+) {
+  const failing = [...new Set([...markers, ...host])];
   const problems = [];
+  const excepted = [];
   const notes = [];
+  const exceptionFiles = new Map();
   for (const file of machOFiles(root)) {
-    const found = builderPathsIn(file, markers);
-    if (found.length === 0) continue;
-    const line = `${relative(root, file)}: ${found.join(", ")}`;
-    if (enforced.includes(basename(file))) problems.push(`BUILDER PATH  ${line}`);
-    else notes.push(`builder path (built elsewhere; said, not failed)  ${line}`);
+    const counts = countsOf(file, [...failing, ...toolchain]);
+    const rel = relative(root, file);
+    const name = basename(file).replace(/\.exe$/u, "");
+    const row = Object.hasOwn(exceptions, name) ? exceptions[name] : undefined;
+    const hits = failing.filter((m) => counts[m] > 0);
+    const allowed = row === undefined ? [] : hits.filter((m) => row.markers.includes(m));
+    const failed = hits.filter((m) => !allowed.includes(m));
+    if (row !== undefined) exceptionFiles.set(name, [...(exceptionFiles.get(name) ?? []), allowed]);
+    if (failed.length > 0) problems.push(`BUILDER PATH  ${rel}: ${counted(counts, failed)}`);
+    if (allowed.length > 0)
+      excepted.push(
+        `EXCEPTION  ${rel}: ${counted(counts, allowed)} — ${row.reason}; measured ${row.measured}; ${row.petition}`,
+      );
+    const said = toolchain.filter((m) => counts[m] > 0);
+    if (said.length > 0)
+      notes.push(
+        `toolchain path (rustc's own; said, never failed)  ${rel}: ${counted(counts, said)}`,
+      );
   }
-  return { problems, notes };
+  for (const [name, seen] of exceptionFiles)
+    if (seen.every((allowed) => allowed.length === 0))
+      notes.push(
+        `exception ${name}: carries none of ${exceptions[name].markers.join(", ")} now — retire its row in scripts/host-links.mjs`,
+      );
+  return { problems, excepted, notes };
 }
 
 /** The launch check: each of LAUNCHED in `binDir` runs `--version`, exits 0 and names itself; one line per failure. */
@@ -260,17 +399,18 @@ function main(argv) {
   const problems = auditHostLinks(root);
   if (launchDir !== undefined && process.platform === "darwin")
     problems.push(...launchCheck(resolve(launchDir)).map((p) => `LAUNCH  ${p}`));
-  // LP-6: the builder-path scan, over the app's bin/ (Electron's own frameworks are upstream's) or the whole --dir
-  const appBin = app !== undefined ? join(root, "Contents", "Resources", "bin") : undefined;
-  const scanned = appBin !== undefined && existsSync(appBin) ? appBin : root;
-  const builder = auditBuilderPaths(scanned);
+  // LP-6b: the builder-path scan over EVERY Mach-O the tree holds (bin/*, each .node, the helpers, Electron's own), with
+  // this host's own target directories as markers beside the fixed ones
+  const host = hostTargetMarkers();
+  const builder = auditBuilderPaths(root, { host });
   problems.push(...builder.problems);
-  for (const note of builder.notes) console.log(note);
+  for (const line of [...builder.excepted, ...builder.notes]) console.log(line);
   for (const p of problems) console.error(p);
   console.log(
     `host-links: ${files.length} Mach-O file(s) under ${root}; ${problems.length === 0 ? "no host link, no builder path" : `${problems.length} problem(s)`}` +
       `${launchDir === undefined || process.platform !== "darwin" ? "" : `; launched ${LAUNCHED.join(", ")} --version`}` +
-      `; builder paths scanned under ${relative(root, scanned) || "."} (${REMAPPED.join(", ")} enforced)`,
+      `; builder paths counted in every one (${[...BUILDER_PATH_MARKERS, ...host].join(", ")}; ` +
+      `${builder.excepted.length} excepted: ${Object.keys(BUILDER_PATH_EXCEPTIONS).join(", ")})`,
   );
   return problems.length === 0 ? 0 : 1;
 }

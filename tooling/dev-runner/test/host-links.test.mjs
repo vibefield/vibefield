@@ -4,9 +4,11 @@
 // build is --locked (its HARFBUZZ_SYS_NO_PKG_CONFIG=1 retired with harfbuzz-sys at the EL8 to ghosttea 0.13.5).
 // LP-6: the release build remaps the builder's paths (`--remap-path-prefix` through CARGO_ENCODED_RUSTFLAGS, the caller's
 // own flags kept), and the gate fails a builder path in the floor's set while saying one in a binary built elsewhere.
+// LP-6b (item 170): the gate counts every marker in EVERY Mach-O of the package and fails each one we build — prod-builder's
+// counts of nightly-20261104 are its expected red below — with truffle's Go sidecar the one named exception.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -18,15 +20,18 @@ import {
 import {
   auditBuilderPaths,
   auditHostLinks,
+  BUILDER_PATH_EXCEPTIONS,
   BUILDER_PATH_MARKERS,
+  builderPathCounts,
   builderPathsIn,
   dependencyCommandsOf,
   hostLinks,
+  hostTargetMarkers,
   imageCommands,
   isMachO,
   LAUNCHED,
   launchCheck,
-  REMAPPED,
+  TOOLCHAIN_MARKERS,
 } from "../../../scripts/host-links.mjs";
 
 const HOMEBREW = "/opt/homebrew/opt/harfbuzz/lib/libharfbuzz.0.dylib";
@@ -192,20 +197,48 @@ test("THE release build of field-native is --locked", () => {
   assert.deepEqual(RELEASE_BUILD_ARGS, ["build", "--release", "--locked", "-p", "field-native"]);
 });
 
-test("LP-6: a builder path is found anywhere in a file, across a read's edge too", () => {
+test("LP-6b: every marker is counted, once each, across a read's edge too", () => {
   const dir = mkdtempSync(join(tmpdir(), "vf-builder-paths-"));
   try {
-    assert.deepEqual(BUILDER_PATH_MARKERS, ["/.cargo/registry", "/Users/runner"]);
+    assert.deepEqual(BUILDER_PATH_MARKERS, [
+      "/Users/runner",
+      "/.cargo/registry",
+      "/.cargo/git/checkouts",
+      "/.rustup/toolchains",
+      "hostedtoolcache",
+      "/go/pkg/mod",
+      "/release/deps/",
+    ]);
+    assert.deepEqual(TOOLCHAIN_MARKERS, ["/rustc/"]);
     const file = join(dir, "field-native");
-    // a 64-byte read with the registry path straddling the first edge, the runner's home far past it
-    const body = Buffer.alloc(300, 0x2e);
+    // 64-byte reads: the registry path straddles the first edge, the runner's home sits far past it, and the
+    // toolchain's prefix twice more; nothing is counted twice for sitting in the carried bytes
+    const body = Buffer.alloc(400, 0x2e);
     body.write("/Users/me/.cargo/registry/src/x", 50);
     body.write("/Users/runner/work", 250);
+    body.write("/rustc/58cf8f9c/library/core", 300);
+    body.write("/rustc/58cf8f9c/library/std", 360);
     writeFileSync(file, body);
-    assert.deepEqual(builderPathsIn(file, BUILDER_PATH_MARKERS, 64), BUILDER_PATH_MARKERS);
+    const counts = builderPathCounts(file, [...BUILDER_PATH_MARKERS, ...TOOLCHAIN_MARKERS], 64);
+    assert.equal(counts["/.cargo/registry"], 1);
+    assert.equal(counts["/Users/runner"], 1);
+    assert.equal(counts["/rustc/"], 2);
+    assert.equal(counts["hostedtoolcache"], 0);
+    // the same bytes read whole say the same
+    assert.deepEqual(
+      builderPathCounts(file, [...BUILDER_PATH_MARKERS, ...TOOLCHAIN_MARKERS]),
+      counts,
+    );
+    assert.deepEqual(builderPathsIn(file, BUILDER_PATH_MARKERS, 64), [
+      "/Users/runner",
+      "/.cargo/registry",
+    ]);
+    // what the release build's remap writes is no builder path
     writeFileSync(
       file,
-      Buffer.from("/cargo/registry/src/index.crates.io-0/tokio-1/src/lib.rs\0/rustup/x"),
+      Buffer.from(
+        "/cargo/registry/src/index.crates.io-0/tokio-1/src/lib.rs\0/rustup/x\0/vibefield/packages/x\0/target/release/build/y/out/z.rs",
+      ),
     );
     assert.deepEqual(builderPathsIn(file), []);
   } finally {
@@ -213,30 +246,179 @@ test("LP-6: a builder path is found anywhere in a file, across a read's edge too
   }
 });
 
-test("LP-6: the gate fails a builder path in the floor's set, and only says one in a binary built elsewhere", () => {
+/** A tiny Mach-O stand-in (thin 64-bit magic) carrying `parts`, each [text, times]. */
+function machOWith(path, parts) {
+  writeFileSync(
+    path,
+    Buffer.concat([
+      Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0, 0]),
+      ...parts.map(([text, times]) => Buffer.from(`${text}\0`.repeat(times))),
+    ]),
+  );
+}
+
+test("LP-6b: THE EXPECTED RED — today's artifacts at prod-builder's counts fail in every binary we build, the sidecar is the one exception", () => {
   const dir = mkdtempSync(join(tmpdir(), "vf-builder-paths-"));
   try {
-    assert.deepEqual(REMAPPED, ["field-native", "field-terminal-host", "field-freeway-host"]);
-    const machO = (name, tail) =>
-      writeFileSync(
-        join(dir, name),
-        Buffer.concat([Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0, 0]), Buffer.from(tail)]),
-      );
-    machO("field-native", "panicked at /Users/runner/.cargo/registry/src/q/quinn-proto/src/lib.rs");
-    machO("field-terminal-host", "panicked at /cargo/registry/src/q/tokio/src/lib.rs");
-    machO("rosettad", "panicked at /Users/me/.cargo/registry/src/q/tokio/src/lib.rs");
-    machO("sidecar-slim", "/Users/runner/hostedtoolcache/go/1.27.3/arm64");
-    writeFileSync(
-      join(dir, "notes.mjs"),
-      "// /Users/runner/.cargo/registry — not a Mach-O, never read",
+    // nightly-20261104 as prod-builder's strings scan counted it (item 170), every CI path under /Users/runner
+    const bin = join(dir, "Contents", "Resources", "bin");
+    const helpers = join(
+      dir,
+      "Contents",
+      "Frameworks",
+      "VibeField Helper (GPU).app",
+      "Contents",
+      "MacOS",
     );
+    const framework = join(
+      dir,
+      "Contents",
+      "Frameworks",
+      "Electron Framework.framework",
+      "Versions",
+      "A",
+    );
+    for (const d of [bin, helpers, framework]) mkdirSync(d, { recursive: true });
+    const registry =
+      "/Users/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.3/src/lib.rs";
+    const std = "/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/panicking.rs";
+    machOWith(join(bin, "field-native"), [
+      [registry, 790],
+      [std, 171],
+    ]);
+    machOWith(join(bin, "field-terminal-host"), [[registry, 378]]);
+    machOWith(join(bin, "field-freeway-host"), [[registry, 199]]);
+    machOWith(join(bin, "rosettad"), [[registry, 450]]);
+    machOWith(join(bin, "mille.darwin-arm64.node"), [
+      [
+        "/Users/runner/work/vibefield/mille-pin/target/aarch64-apple-darwin/release/deps/libmille_binding.dylib",
+        1,
+      ],
+      [registry, 176],
+    ]);
+    machOWith(join(bin, "sidecar-slim"), [
+      ["/Users/runner/hostedtoolcache/go/1.27.3/arm64/src/runtime/proc.go", 924],
+      ["/Users/runner/go/pkg/mod/tailscale.com@v1.104.1/tsnet/tsnet.go", 921],
+      ["/Users/runner/work/truffle/truffle/packages/sidecar-slim/main.go", 4],
+    ]);
+    // Node's own binary: its compiler's std prefix and Node's build host, which is no marker of ours
+    machOWith(join(bin, "fieldd"), [
+      [std, 96],
+      ["/Users/admin/build/ws/deps/crates/vendor/temporal_rs/src/lib.rs", 3],
+    ]);
+    machOWith(join(bin, "desktop-haptics.node"), [["@rpath/desktop-haptics.node", 1]]);
+    machOWith(join(helpers, "VibeField Helper (GPU)"), [["helper", 1]]);
+    machOWith(join(framework, "Electron Framework"), [
+      ["/Volumes/Preboot/Cryptexes/OS/System/Library", 3],
+    ]);
+    writeFileSync(join(bin, "files-host.cjs"), `// ${registry} — not a Mach-O, never read`);
+
+    const gate = auditBuilderPaths(dir);
+    assert.deepEqual(gate.problems, [
+      "BUILDER PATH  Contents/Resources/bin/field-freeway-host: /Users/runner ×199, /.cargo/registry ×199",
+      "BUILDER PATH  Contents/Resources/bin/field-native: /Users/runner ×790, /.cargo/registry ×790",
+      "BUILDER PATH  Contents/Resources/bin/field-terminal-host: /Users/runner ×378, /.cargo/registry ×378",
+      "BUILDER PATH  Contents/Resources/bin/mille.darwin-arm64.node: /Users/runner ×177, /.cargo/registry ×176, /release/deps/ ×1",
+      "BUILDER PATH  Contents/Resources/bin/rosettad: /Users/runner ×450, /.cargo/registry ×450",
+    ]);
+    assert.equal(gate.excepted.length, 1);
+    assert.match(
+      gate.excepted[0],
+      /^EXCEPTION {2}Contents\/Resources\/bin\/sidecar-slim: \/Users\/runner ×1849, hostedtoolcache ×924, \/go\/pkg\/mod ×921 — Go, built by truffle's CI .* installed from npm .*; measured nightly-20261104 .*; the truffle -trimpath petition \(draft\/launch\/truffle-trimpath-petition\.md/u,
+    );
+    assert.deepEqual(gate.notes, [
+      "toolchain path (rustc's own; said, never failed)  Contents/Resources/bin/field-native: /rustc/ ×171",
+      "toolchain path (rustc's own; said, never failed)  Contents/Resources/bin/fieldd: /rustc/ ×96",
+    ]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("LP-6b: the exception names its file AND its markers — any other marker in the sidecar fails, and a clean one asks to retire the row", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vf-builder-paths-"));
+  try {
+    assert.deepEqual(Object.keys(BUILDER_PATH_EXCEPTIONS), ["sidecar-slim"]);
+    assert.deepEqual(BUILDER_PATH_EXCEPTIONS["sidecar-slim"].markers, [
+      "/Users/runner",
+      "hostedtoolcache",
+      "/go/pkg/mod",
+    ]);
+    machOWith(join(dir, "sidecar-slim"), [
+      ["/Users/runner/go/pkg/mod/x.go", 2],
+      ["/Users/me/.cargo/registry/src/y.rs", 1],
+    ]);
+    const gate = auditBuilderPaths(dir);
+    assert.deepEqual(gate.problems, ["BUILDER PATH  sidecar-slim: /.cargo/registry ×1"]);
+    assert.match(
+      gate.excepted[0],
+      /^EXCEPTION {2}sidecar-slim: \/Users\/runner ×2, \/go\/pkg\/mod ×2 — /u,
+    );
+    // truffle built it with -trimpath: the row has nothing left to excuse
+    machOWith(join(dir, "sidecar-slim"), [["tailscale.com@v1.104.1/tsnet/tsnet.go", 3]]);
     assert.deepEqual(auditBuilderPaths(dir), {
-      problems: ["BUILDER PATH  field-native: /.cargo/registry, /Users/runner"],
+      problems: [],
+      excepted: [],
       notes: [
-        "builder path (built elsewhere; said, not failed)  rosettad: /.cargo/registry",
-        "builder path (built elsewhere; said, not failed)  sidecar-slim: /Users/runner",
+        "exception sidecar-slim: carries none of /Users/runner, hostedtoolcache, /go/pkg/mod now — retire its row in scripts/host-links.mjs",
       ],
     });
+    // the same bytes under another name are no exception
+    machOWith(join(dir, "sidecar-slim"), [["/Users/runner/go/pkg/mod/x.go", 1]]);
+    machOWith(join(dir, "other-sidecar"), [["/Users/runner/go/pkg/mod/x.go", 1]]);
+    assert.deepEqual(auditBuilderPaths(dir).problems, [
+      "BUILDER PATH  other-sidecar: /Users/runner ×1, /go/pkg/mod ×1",
+    ]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("LP-6b: this host's own target directories are markers too — the SSD's install name fails where no CI marker would", () => {
+  const read = (files) => (path) => files[path] ?? null;
+  assert.deepEqual(
+    hostTargetMarkers({
+      env: {},
+      home: "/Users/me",
+      read: read({
+        "/Users/me/.cargo/config.toml":
+          '# shared\n[build]\ntarget-dir = "/Volumes/SamsungRed/rust/target/"\n',
+      }),
+    }),
+    ["/Volumes/SamsungRed/rust/target"],
+  );
+  assert.deepEqual(
+    hostTargetMarkers({
+      env: {
+        CARGO_TARGET_DIR: "/Volumes/ssd/lane",
+        CARGO_BUILD_TARGET_DIR: "relative/t",
+        CARGO_HOME: "/h",
+      },
+      home: "/Users/me",
+      read: read({
+        "/h/config": "build.target-dir = '/Volumes/ssd/shared'\n",
+        "/h/config.toml": "[net]\n",
+      }),
+    }),
+    ["/Volumes/ssd/lane", "/Volumes/ssd/shared"],
+  );
+  assert.deepEqual(hostTargetMarkers({ env: {}, home: "/nowhere", read: () => null }), []);
+  const dir = mkdtempSync(join(tmpdir(), "vf-builder-paths-"));
+  try {
+    // mille's .node as the 11-03 local package carries it: the SSD's install name, a registry under the builder's home
+    machOWith(join(dir, "mille.darwin-arm64.node"), [
+      [
+        "/Volumes/SamsungRed/rust/target/aarch64-apple-darwin/release/deps/libmille_binding.dylib",
+        1,
+      ],
+      ["/Users/me/.cargo/registry/src/index.crates.io-0/notify-6.1.1/src/lib.rs", 176],
+    ]);
+    assert.deepEqual(
+      auditBuilderPaths(dir, { host: ["/Volumes/SamsungRed/rust/target"] }).problems,
+      [
+        "BUILDER PATH  mille.darwin-arm64.node: /.cargo/registry ×176, /release/deps/ ×1, /Volumes/SamsungRed/rust/target ×1",
+      ],
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
