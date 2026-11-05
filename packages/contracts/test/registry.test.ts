@@ -858,15 +858,18 @@ describe("item 172 — fieldd's signed stores when the disk does not answer (REC
       READ_TRIES: 3,
       SERVICE_COMPOSE: "compose",
       SERVICE_NEEDS: "needs",
+      SERVICE_FLOWS: "flows",
       STATE_UNREADABLE: "records-unreadable",
     });
   });
 
-  it("its three refusals parse as ErrorData, each an UNAVAILABLE with the row's service and state", () => {
+  it("its four refusals parse as ErrorData, each an UNAVAILABLE with the row's service and state", () => {
     const refusals = [
       ["error-data.compose-records-unreadable.json", RECORD_STORES.SERVICE_COMPOSE, true],
       ["error-data.compose-inputs-unreadable.json", RECORD_STORES.SERVICE_COMPOSE, false],
       ["error-data.needs-records-unreadable.json", RECORD_STORES.SERVICE_NEEDS, false],
+      // CP-4a1 — the flow records, item 172's fifth store: read at each ask, so retryable
+      ["error-data.flows-records-unreadable.json", RECORD_STORES.SERVICE_FLOWS, true],
     ] as const;
     for (const [file, service, retryable] of refusals) {
       const data = ErrorData.parse(

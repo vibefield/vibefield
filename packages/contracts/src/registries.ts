@@ -887,16 +887,18 @@ export const USER_ME = {
 
 /** Item 172 (DESIGN.md §9 "What VibeField keeps, when it cannot read it") — fieldd's signed stores (a spark's record,
  * LAYOUT.SPARKS_DIR; the needs-you queue, NEEDS_DIR; the sessions' input queues, AGENT_INPUTS_DIR; each spark's kept
- * record, SPARK_FILES_DIR) when the disk does not answer. READ_TRIES: how many times one read is tried before the
+ * record, SPARK_FILES_DIR; and, CP-4a1's fifth, the flow records, FLOWS_DIR) when the disk does not answer. READ_TRIES: how many times one read is tried before the
  * store says it cannot read; the file stays where it is, never set aside and never written over. A door that reads a
  * store that cannot answer refuses UNAVAILABLE {service, state: STATE_UNREADABLE}, never with an empty list:
  * SERVICE_COMPOSE for the spark doors (the sparks, read at each ask, so retryable) and for a say or a spark's send (the
  * input queues, read once at boot, so not until fieldd restarts), SERVICE_NEEDS for the needs-you doors (read once at
- * boot). TS-only: no native reader. */
+ * boot), SERVICE_FLOWS for the flow records (read at each ask, so retryable; its doors come with CP-4a2). TS-only: no
+ * native reader. */
 export const RECORD_STORES = {
   READ_TRIES: 3,
   SERVICE_COMPOSE: "compose",
   SERVICE_NEEDS: "needs",
+  SERVICE_FLOWS: "flows",
   STATE_UNREADABLE: "records-unreadable",
 } as const;
 
