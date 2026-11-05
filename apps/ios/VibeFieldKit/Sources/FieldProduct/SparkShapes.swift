@@ -191,8 +191,10 @@ public struct SparkSummary: Sendable, Equatable, Identifiable {
     _ = try object.text("folder", 1...Int.max)
     createdAt = try object.text("createdAt", 1...Int.max)
     updatedAt = try object.text("updatedAt", 1...Int.max)
-    // `turnedAt` is the one nullable key: null is `never`, absent is `unknown`
-    if let raw = object.value("turnedAt") {
+    // `turnedAt` is the one nullable key: null is `never`, absent is `unknown` (read from the raw fields: the
+    // reader's own accessors read `null` as absent)
+    if let raw = object.fields["turnedAt"] {
+      _ = object.value("turnedAt")
       if raw.isNull {
         turned = .never
       } else if let at = raw.stringValue, !at.isEmpty {
