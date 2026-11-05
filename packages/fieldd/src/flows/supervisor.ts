@@ -280,7 +280,7 @@ class FlowHostChild {
       // a frame nested past its bound is read as one that broke its bounds, before anything recursive reads it
       (raw) =>
         nestsWithin(raw, FLOW_LIMITS.ARGS_DEPTH_MAX + FLOW_FRAME_DEPTH_ENVELOPE)
-          ? this.#hear(raw)
+          ? this.#heard(raw)
           : this.#unread("too-deep"),
       (why) => this.#unread(why),
     );
@@ -320,6 +320,23 @@ class FlowHostChild {
       why,
     });
     this.#end({ kind: "ended", why: "protocol" }, "kill");
+  }
+
+  /** A frame read, heard so that nothing it starts throws at fieldd's pipe (bth's review P1): a throw here would be
+   * the 'data' listener's, uncaught, and would end fieldd. A handler's own throw is caught where it is called; this
+   * catch is fieldd's last word, and it ends the run rather than the daemon. */
+  #heard(raw: unknown): void {
+    try {
+      this.#hear(raw);
+    } catch (error) {
+      this.#logger.warn("fieldd.flows.host.hear", "fieldd could not act on a flow host's message", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.#end(
+        { kind: "fatal", reason: "fieldd could not act on its flow host's message" },
+        "kill",
+      );
+    }
   }
 
   #hear(raw: unknown): void {
@@ -364,7 +381,15 @@ class FlowHostChild {
           this.#flood("log lines");
           return;
         }
-        if (this.#chosen === undefined) this.#opts.handler.log(cutText(message.text, FLOW_LOG_MAX));
+        if (this.#chosen !== undefined) return;
+        try {
+          this.#opts.handler.log(cutText(message.text, FLOW_LOG_MAX));
+        } catch (error) {
+          // a log line the handler cannot take is passed over: the run goes on
+          this.#logger.warn("fieldd.flows.host.handler", "A flow log line's handler failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
         return;
       case "pong":
         this.#heardAt = Date.now();
@@ -412,7 +437,14 @@ class FlowHostChild {
       return;
     }
     this.#waiting += 1;
-    this.#opts.handler.call({ what, args }).then(
+    let said: Promise<FlowHostAnswer>;
+    try {
+      said = this.#opts.handler.call({ what, args });
+    } catch (error) {
+      // a handler that throws as it is called is a handler that failed: refused below, in fieldd's words
+      said = Promise.reject(error);
+    }
+    said.then(
       (answer) => {
         this.#waiting -= 1;
         this.#answer(id, answer);
