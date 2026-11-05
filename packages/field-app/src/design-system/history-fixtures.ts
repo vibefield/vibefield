@@ -4,6 +4,7 @@ import {
   type AgentProfileSet,
   type AgentProviderSummary,
   type DeviceInfo,
+  type IndexArtifactsResult,
   type IndexCatalogSource,
   type IndexSession,
   type ProjectFiguresDayResult,
@@ -12,7 +13,12 @@ import {
 } from "@vibefield/contracts";
 import type { CatalogPort, CatalogStatus, HostPort, RoomPorts } from "@vibefield/rosetta-room";
 import { createDemoPorts, createRoomDemo, type RoomDemo } from "@vibefield/rosetta-room/fixtures";
-import { catalogPortOver, type HistoryCatalogPort, type HistoryDoorClient } from "../history/doors";
+import {
+  type ArtifactReader,
+  catalogPortOver,
+  type HistoryCatalogPort,
+  type HistoryDoorClient,
+} from "../history/doors";
 
 // History's FIXTURE ADAPTER (AR-8c; docs/UI_SYSTEM.md "Catalog fidelity"). The
 // catalog mounts the SHIPPING `HistoryRoomView` over the room package's own
@@ -366,10 +372,44 @@ function fixtureFigures(demo: RoomDemo, key: string): ProjectFiguresResult {
   };
 }
 
+/* ── the library (MA-4b): this desktop's made pages, for the room's port ── */
+
+// What the plate's fixture fieldd answers `index.artifacts` with, in the
+// contract's shape, so the SHIPPING library port (`history/doors.ts`) maps it
+// as it maps fieldd's: one app per demo project that has a session here, made
+// in that project's newest session by its agent (the catalog's, read by the
+// demo runtime's kind — never an agent id written here), newest first. The
+// first is presented twice (Versions: `appId` asks its every presentation);
+// one was not kept (`not_captured`, the room's honest card). The filters the
+// door takes narrow it as fieldd would (`q` in the title, `kind`,
+// `projectKey`, `appId`). No path, no recovered-from, no asset URL: the
+// contract carries none. Each kept page's bytes are a plain HTML document
+// (`fixtureArtifactReader`), read in place of the session port's
+// read-through. The room keeps the library's launcher dormant until RO-37,
+// so no plate draws it yet; 4d's plate opens it over this.
+
+/** `index.artifacts`, as the fixture fieldd answers the plate. */
+function fixtureArtifacts(demo: RoomDemo, params: Record<string, unknown>): IndexArtifactsResult {
+  // MA-4b RED — the skeleton: an empty library, read whole. The green builds
+  // the demo's apps and narrows them by the ask.
+  void demo;
+  void params;
+  return { entries: [], canonicalReady: true };
+}
+
+/** A kept page's bytes, for the plate's library port. */
+function fixtureArtifactReader(demo: RoomDemo): ArtifactReader {
+  // MA-4b RED — the skeleton: no bytes. The green answers each kept page's
+  // document.
+  void demo;
+  return async () => new Uint8Array();
+}
+
 /** A fieldd that answers History's doors from the demo, as a window is
  * answered: `project.list`, the keyed listing, no threads, the merged
  * figures, a day's hours, and pings that never move. Data only — the
- * adapter, the room and their CSS are the shipping ones. */
+ * adapter, the room and their CSS are the shipping ones. MA-4b: and
+ * `index.artifacts`, this desktop's library (above). */
 export function historyProjectsClient(demo: RoomDemo): HistoryDoorClient {
   const sources: IndexCatalogSource[] = [
     {
@@ -393,6 +433,8 @@ export function historyProjectsClient(demo: RoomDemo): HistoryDoorClient {
           return { rows: fixtureSessions(demo), sources };
         case "index.threads":
           return { rows: [] };
+        case "index.artifacts":
+          return fixtureArtifacts(demo, params);
         case "agent.models":
           return fixtureModels(
             demo,
@@ -456,13 +498,17 @@ const CATALOG_DESKTOP: HostPort = {
 };
 
 /** History by project: the demo's room, its catalog the SHIPPING adapter
- * over the fixture fieldd (the index's own state is the demo's). */
+ * over the fixture fieldd (the index's own state is the demo's); MA-4b: its
+ * library's bytes the fixture's kept pages. */
 function projectsPorts(
   demo: RoomDemo,
   client: HistoryDoorClient,
 ): { ports: RoomPorts; catalog: HistoryCatalogPort } {
   const ports = createDemoPorts(demo);
-  const shipping = catalogPortOver(client, { now: () => demo.now });
+  const shipping = catalogPortOver(client, {
+    now: () => demo.now,
+    readArtifact: fixtureArtifactReader(demo),
+  });
   const catalog: HistoryCatalogPort = { ...shipping, status: ports.catalog.status };
   return { ports: { ...ports, catalog, host: CATALOG_DESKTOP }, catalog };
 }

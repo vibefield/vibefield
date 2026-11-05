@@ -1,6 +1,7 @@
 import {
   AGENT_CATALOG_READERS,
   INDEX_MESH,
+  type IndexArtifactEntry,
   type IndexCatalogSource,
   type IndexPhase,
   type IndexSearchBuildProgress,
@@ -21,6 +22,9 @@ import {
 } from "@vibefield/contracts";
 import type {
   AdmissionCourse,
+  ArtifactEntry,
+  ArtifactListRequest,
+  ArtifactPage,
   BackfillState,
   ContributionRow,
   DayUsageResponse,
@@ -507,6 +511,107 @@ export function dayUsageOf(result: ProjectFiguresDayResult): DayUsageResponse {
   };
 }
 
+/* ── the library: this desktop's made pages as rosetta's (MA-4b) ────────── */
+
+// MA-4b (the build plan's 4b; thinking-mini-apps.md §4.7): the room's
+// `artifacts` port — its library of the pages agents presented — over
+// `index.artifacts`, fieldd's read of ONE desktop's library (the list is
+// bearer-only at rosettad, so it rides fieldd as control-rate JSON), and the
+// bytes over the direct plane with that session's grant (`ArtifactReader`,
+// the session port's read-through; EL2). The ask names no `device`: the page
+// is THIS desktop's library, so the device guard holds with no filter here —
+// another desktop's apps are the shelf's ("From your agents", the fold).
+//
+// DORMANT IN THE ROOM UNTIL RO-37. rosetta 0.1.3's room draws its library's
+// launcher only inside its own search strip, which VibeField's host does not
+// draw (`HistoryRoomView.tsx`: no `search` prop), and its handle has no opener;
+// the dialog mounts closed and asks nothing. The port is wired so that RO-37's
+// launcher handle (4d) lights it with no change here.
+//
+// The seam's law (AR-L1, MA-L5): contract shapes in, rosetta's out, and no
+// path for ANY caller — rosetta's `publication.path` and `recovered_from` are
+// paths on its desktop and its `asset.url` a daemon-relative one, so the room
+// is handed `path: null`, `recovered_from: null` and `asset: null` (the
+// contract carries none of them; nothing here synthesizes one).
+
+/** The page `index.artifacts` admits at most (`IndexArtifactsParams`' `limit`:
+ * rosetta's own bound). */
+export const ARTIFACT_PAGE_MAX_LIMIT = 100;
+
+/** How the library port reads one presentation's bytes: the session port's
+ * read-through (`session-port.ts`, `readArtifact`), never through fieldd. */
+export type ArtifactReader = (
+  sessionId: string,
+  publicationId: string,
+  signal?: AbortSignal,
+) => Promise<Uint8Array>;
+
+/** The room's library ask as `index.artifacts`' params, or null when nothing
+ * can match it (a project or an app id outside the contract's grammar — no
+ * project or app is spelled so), which the port answers as an empty page
+ * without asking. Each filter in the contract's spelling: `q` trimmed (≤ 512;
+ * blank is none); the agent as rosetta's `kind` only when the catalog maps it
+ * (the room's "unknown" is no kind rosetta files under, so the port filters it
+ * itself, as it filters every page by the room's agent); the project as the
+ * PJ key it is (`projectKey`; fieldd resolves it to this desktop's rosetta
+ * projects); `artifact_id` as `appId` (one app's every presentation); the
+ * cursor as the previous page answered it; the limit clamped to 1..100. An
+ * absent member is not sent. */
+export function artifactParamsOf(request: ArtifactListRequest): Record<string, unknown> | null {
+  // MA-4b RED — the skeleton: asks for nothing the room asked. The green
+  // spells each filter as the contract does.
+  void request;
+  return {};
+}
+
+/** One presentation `index.artifacts` answered, as rosetta's `ArtifactEntry`.
+ * The publication's columns as the contract carries them (an absent one is
+ * the honest null; `source_offset` — a raw-record coordinate the room never
+ * reads and fieldd never carries — is 0); `path`, `recovered_from` and
+ * `asset` null (above). The project is the PJ key fieldd joined the entry to
+ * (`projectKey`; the room's project ids are PJ keys, `projectRowOf`), named as
+ * the listing names it (`projectNames`, the key → the room's row name); a key
+ * the listing does not hold is unnamed, and rosetta's own project name is
+ * never used (History lists VibeField's projects, PJ-4). The agent is the
+ * room's runtime kind (`runtimeKindOf(provider)`), as every session row is
+ * filed, so the room's agent filter and its card agree. An availability this
+ * build cannot read (`unknown`) is not offered as a local copy:
+ * `not_captured`. */
+export function artifactEntryOf(
+  entry: IndexArtifactEntry,
+  projectNames: ReadonlyMap<string, string>,
+): ArtifactEntry {
+  // MA-4b RED — the skeleton: a typed entry that carries none of the
+  // contract's facts. The green maps each column as above.
+  void entry;
+  void projectNames;
+  return {
+    publication: {
+      id: "",
+      artifact_id: "",
+      session_id: "",
+      timeline_id: "",
+      title: "",
+      filename: "",
+      path: null,
+      url: null,
+      native_id: null,
+      version: null,
+      published_at: null,
+      source_offset: 0,
+    },
+    availability: "not_captured",
+    captured_at: null,
+    recovered_from: null,
+    asset: null,
+    agent: "unknown",
+    session_title: null,
+    project_id: null,
+    project_name: null,
+    presentations: 0,
+  };
+}
+
 /* ── words: the index's state as the frame says it ──────────────────────── */
 
 /** A refusal fieldd expressed by throwing, read structurally. */
@@ -626,6 +731,10 @@ function refiledSessions(before: MetaState, after: MetaState): Set<string> {
 
 export interface CatalogPortOptions {
   readonly now?: () => number;
+  /** MA-4b — how the library's bytes are read (the session port's
+   * read-through). The port offers the room its library (`artifacts`) only
+   * with one: a host that cannot read a page offers no library. */
+  readonly readArtifact?: ArtifactReader;
 }
 
 /** A regroup the room has been handed (PJ-4): the key moves the pings
@@ -1184,6 +1293,32 @@ export function catalogPortOver(
       };
     },
 
+    // MA-4b — the library (dormant in the room until RO-37: see "the library"
+    // above). `list` asks `index.artifacts` for one page of this desktop's
+    // library (`artifactParamsOf`; an ask nothing can match is an empty page,
+    // not asked), maps each entry (`artifactEntryOf`, named from the newest
+    // listing), keeps the room's agent filter on the mapped kinds, and hands
+    // back the page's cursor and `canonical_ready`. A cursor the library moved
+    // under (fieldd's PRECONDITION_FAILED `cursor-expired`) is rosetta's own
+    // `CursorExpiredError`, so the room's loader reads again from the head;
+    // any other refusal is said in fieldd's words. `read` is the reader's.
+    artifacts: {
+      // MA-4b RED — the skeleton: an empty page that is not ready, and no
+      // bytes. The green asks the door and the reader, and is offered only
+      // with `options.readArtifact`.
+      async list(request: ArtifactListRequest, signal?: AbortSignal): Promise<ArtifactPage> {
+        void request;
+        void signal;
+        return { entries: [], next_cursor: null, canonical_ready: false };
+      },
+      async read(sessionId: string, publicationId: string, signal?: AbortSignal) {
+        void sessionId;
+        void publicationId;
+        void signal;
+        return new Uint8Array();
+      },
+    },
+
     setActive(next) {
       if (active === next) return;
       active = next;
@@ -1286,7 +1421,13 @@ export function historyPortsOver(
   client: HistoryDoorClient,
   options: HistoryPortsOptions,
 ): HistoryPorts {
-  const catalog = catalogPortOver(client, options.catalog);
+  // MA-4b — the library's bytes ride the session port's read-through (its
+  // open lease's grant, or a one-shot ticket outside the leases)
+  const catalog = catalogPortOver(client, {
+    ...options.catalog,
+    readArtifact: (sessionId, publicationId, signal) =>
+      sessions.readArtifact(sessionId, publicationId, signal),
+  });
   // DS-7 — a session on another desktop is opened by its owner's ticket
   const sessions = sessionPortOver(client, options.sessions, (sessionId) =>
     sessionHomeOf(catalog.listing(), sessionId),

@@ -17,11 +17,21 @@
  * ones (`project.figures`, H2), its pings `project.subscribe` (whose
  * `regrouped` re-keys the selection), and THE DEVICE GUARD (V6): nothing of
  * another desktop — a row, a path — reaches the room.
+ *
+ * MA-4b (the build plan's 4b): the room's LIBRARY port — `index.artifacts`
+ * (the contract's fixture, EL9) mapped into rosetta's `ArtifactPage` with no
+ * path for any caller, the PJ key as each entry's project and the room's
+ * runtime kind as its agent, paged with the room's cursor and its
+ * `cursor_expired`; its bytes read through the session port OUTSIDE the
+ * leases (never `open()`, which releases the room's own), bounded at 16 MiB,
+ * from the session's own desktop (DS-7); and the projects plate's fixture
+ * library under the shipping port. Dormant in the room until RO-37.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  IndexArtifactsResult,
   IndexSessionsResult,
   IndexStatus,
   IndexThreadsResult,
@@ -31,20 +41,33 @@ import {
   type ProjectSummary,
 } from "@vibefield/contracts";
 import {
+  type ArtifactListRequest,
   type AssetRef,
+  CursorExpiredError,
   type MetaState,
   PROTOCOL_VERSION,
   RosettaClient,
   type SubscriptionStatus,
 } from "@vibefield/rosetta-protocol";
+import { createRoomDemo } from "@vibefield/rosetta-room/fixtures";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  FIXTURE_DESKTOP,
+  historyProjectsClient,
+  historyProjectsFixture,
+} from "../src/design-system/history-fixtures";
 import { assetSourceOver, blobType } from "../src/history/asset-source";
 import {
+  type ArtifactReader,
+  artifactEntryOf,
+  artifactParamsOf,
   catalogPortOver,
   catalogStatusOf,
   dayUsageOf,
+  type HistoryCatalogPort,
   type HistoryDoorClient,
   type HistoryRegroup,
+  historyPortsOver,
   metaStateOf,
   pingParts,
   projectRowOf,
@@ -57,6 +80,8 @@ import {
 } from "../src/history/doors";
 import { isHandedToRoom, projectsHereOf } from "../src/history/host-model";
 import {
+  ARTIFACT_READ_MAX_BYTES,
+  ARTIFACT_TOO_LARGE,
   FILE_TARGET_REFUSAL,
   sessionPortOver,
   TICKET_RENEW_LEAD_MS,
@@ -1414,6 +1439,517 @@ describe("the asset source (AR-8c, AR-D40 (a))", () => {
       "/api/sessions/s1/timeline/t1/read/0",
     ]) {
       expect(assets.attachmentAssetUrl({ ...asset("ab12"), url }), url).toBeNull();
+    }
+  });
+});
+
+/* ── MA-4b: the room's library — index.artifacts as rosetta's page ──────── */
+
+/** `index.artifacts`' answer (EL9: the contract's own fixture): this
+ * desktop's library — an app's newest presentation, kept, and its older one,
+ * recovered from another file and missing. */
+const LIBRARY = IndexArtifactsResult.parse(fixture("index-artifacts.valid.json"));
+const KEPT = LIBRARY.entries[0]!;
+const OLDER = LIBRARY.entries[1]!;
+
+/** The room's library ask with no filter, as its loader sends it. */
+const ASK: ArtifactListRequest = {
+  q: null,
+  agent: null,
+  project: null,
+  artifact_id: null,
+  cursor: null,
+  limit: 100,
+};
+
+/** The bytes rosettad answers for a page in these rows. */
+const PAGE_BYTES = [60, 104, 49, 62];
+
+const ticketCalls = (door: { calls: Array<{ method: string; params: unknown }> }) =>
+  door.calls.filter((call) => call.method === "index.openTicket");
+const libraryCalls = (door: { calls: Array<{ method: string; params: unknown }> }) =>
+  door.calls.filter((call) => call.method === "index.artifacts").map((call) => call.params);
+
+/** The port's library, asserted offered (a guard, not a red). */
+function libraryOf(catalog: HistoryCatalogPort) {
+  const library = catalog.artifacts;
+  expect(library, "the catalog port offers the room its library").toBeDefined();
+  return library as NonNullable<typeof library>;
+}
+
+/** A fieldd for the library rows: the listing (so the port knows the
+ * projects' names) and `index.artifacts`, scripted. */
+function libraryDoor(answer: (params: Record<string, unknown>) => unknown) {
+  return client({
+    "project.list": () => PROJECTS,
+    "index.sessions": () => SESSIONS,
+    "index.threads": () => ({ rows: [] }),
+    "index.status": () => fixture("index-status.valid.json"),
+    "index.artifacts": answer,
+  });
+}
+
+const noRead: ArtifactReader = async () => new Uint8Array();
+
+describe("MA-4b — the room's library: index.artifacts as rosetta's ArtifactPage (dormant until RO-37)", () => {
+  const names = new Map([[VIBE_FIELD, "vibe-field · code"]]);
+
+  it("maps an entry field by field into rosetta's ArtifactEntry — no path, no recovered-from, no asset; the PJ key named as the listing names it; the agent as the room's runtime kind", () => {
+    expect(artifactEntryOf(KEPT, names)).toEqual({
+      publication: {
+        id: KEPT.presentationId,
+        artifact_id: KEPT.appId,
+        session_id: "ses-9b2f0c7d",
+        timeline_id: "artifact-message-1",
+        title: "Checkout design review",
+        filename: "checkout.html",
+        path: null,
+        url: "https://claude.ai/code/artifact/review",
+        native_id: "review",
+        version: "2",
+        published_at: 1793836800000,
+        source_offset: 0,
+      },
+      availability: "captured",
+      captured_at: 1793836805000,
+      recovered_from: null,
+      asset: null,
+      agent: "claude-code",
+      session_title: "Review checkout",
+      project_id: VIBE_FIELD,
+      project_name: "vibe-field · code",
+      presentations: 2,
+    });
+    // the older presentation was recovered from another file: a path
+    // upstream, a flag in the contract — the room is handed neither
+    const older = artifactEntryOf(OLDER, names);
+    expect(older.publication.version, "the older presentation").toBe("1");
+    expect(older.availability).toBe("missing");
+    expect(older.recovered_from).toBeNull();
+    expect(older.captured_at).toBeNull();
+    expect(older.asset).toBeNull();
+    expect(older.publication.path).toBeNull();
+  });
+
+  it("before any listing a project is its key, unnamed — never rosetta's own name; no catalog row is the room's unknown; an availability this build cannot read is no local copy", () => {
+    const strange = IndexArtifactsResult.parse({
+      entries: [{ ...KEPT, availability: "smudged" }],
+      canonicalReady: true,
+    }).entries[0]!;
+    const mapped = artifactEntryOf(strange, new Map());
+    expect(mapped.project_id, "the PJ key fieldd joined").toBe(VIBE_FIELD);
+    expect(mapped.project_name, "rosetta's project name is not History's").toBeNull();
+    expect(mapped.availability).toBe("not_captured");
+    const { provider: _provider, ...unmapped } = KEPT;
+    expect(artifactEntryOf(unmapped, names).agent).toBe("unknown");
+  });
+
+  it("asks in the contract's spelling — words trimmed and bounded, the agent's kind only when the catalog maps it, the PJ project, one app's history, the cursor, the limit clamped — and an ask nothing can match is none", () => {
+    expect(
+      artifactParamsOf({
+        q: "  checkout  ",
+        agent: "claude-code",
+        project: VIBE_FIELD,
+        artifact_id: null,
+        cursor: "c1",
+        limit: 100,
+      }),
+    ).toEqual({ q: "checkout", kind: "claude-code", projectKey: VIBE_FIELD, cursor: "c1", limit: 100 });
+    expect(artifactParamsOf(ASK)).toEqual({ limit: 100 });
+    expect(artifactParamsOf({ ...ASK, limit: null })).toEqual({});
+    expect(artifactParamsOf({ ...ASK, artifact_id: KEPT.appId })).toEqual({
+      appId: KEPT.appId,
+      limit: 100,
+    });
+    expect(artifactParamsOf({ ...ASK, q: "   ", cursor: "", limit: 500 })).toEqual({ limit: 100 });
+    expect(artifactParamsOf({ ...ASK, limit: 0 })).toEqual({ limit: 1 });
+    expect(artifactParamsOf({ ...ASK, q: "x".repeat(600) })?.["q"]).toHaveLength(512);
+    // the room's "unknown" (a session no catalog row maps) is no kind rosetta
+    // files under: never sent, the port filters it itself
+    expect(artifactParamsOf({ ...ASK, agent: "unknown" })).toEqual({ limit: 100 });
+    // a project or an app spelled outside the contract's grammar: nothing can match
+    expect(artifactParamsOf({ ...ASK, project: "not a key" })).toBeNull();
+    expect(artifactParamsOf({ ...ASK, artifact_id: "app-1" })).toBeNull();
+  });
+
+  it("pages this desktop's library through index.artifacts — the room's cursor in, the next one out, canonicalReady kept — each entry named from the listing", async () => {
+    const pages = [
+      {
+        entries: [{ ...KEPT, projectName: "rosetta's own name" }],
+        nextCursor: "c2",
+        canonicalReady: false,
+      },
+      { entries: [OLDER], canonicalReady: true },
+    ];
+    const door = libraryDoor((params) => (params["cursor"] === "c2" ? pages[1] : pages[0]));
+    const catalog = catalogPortOver(door, { readArtifact: noRead });
+    const feed = catalog.subscribeMeta({ onChange: () => undefined, onStatus: () => undefined });
+    await flush();
+    const library = libraryOf(catalog);
+    const first = await library.list(ASK);
+    expect(
+      first.entries.map((entry) => entry.publication.id),
+      "the first page's entries",
+    ).toEqual([KEPT.presentationId]);
+    expect(first.entries[0]?.project_name, "the listing's name").toBe("vibe-field");
+    expect(first.next_cursor).toBe("c2");
+    expect(first.canonical_ready).toBe(false);
+    const second = await library.list({ ...ASK, cursor: "c2" });
+    expect(second.entries.map((entry) => entry.publication.id)).toEqual([OLDER.presentationId]);
+    expect(second.next_cursor).toBeNull();
+    expect(second.canonical_ready).toBe(true);
+    // this desktop's library: no device is named
+    expect(libraryCalls(door)).toEqual([{ limit: 100 }, { cursor: "c2", limit: 100 }]);
+    feed.close();
+  });
+
+  it("keeps the room's agent filter on the mapped kinds: a kind the catalog maps narrows at the library; the room's unknown is filtered here", async () => {
+    const { provider: _provider, kind: _kind, ...unmapped } = OLDER;
+    const door = libraryDoor(() => ({ entries: [KEPT, unmapped], canonicalReady: true }));
+    const library = libraryOf(catalogPortOver(door, { readArtifact: noRead }));
+    const known = await library.list({ ...ASK, agent: "claude-code" });
+    expect(
+      known.entries.map((entry) => entry.publication.id),
+      "a kind the catalog maps",
+    ).toEqual([KEPT.presentationId]);
+    const unknown = await library.list({ ...ASK, agent: "unknown" });
+    expect(unknown.entries.map((entry) => entry.publication.id)).toEqual([OLDER.presentationId]);
+    expect(libraryCalls(door)).toEqual([{ kind: "claude-code", limit: 100 }, { limit: 100 }]);
+  });
+
+  it("a cursor the library moved under is rosetta's own cursor_expired — the room's loader reads again from the head; any other refusal is said in fieldd's words", async () => {
+    let refuse: () => never = () => {
+      throw Object.assign(new Error("the library moved under the cursor; read again from the head"), {
+        kind: "PRECONDITION_FAILED",
+        retryable: false,
+        details: { service: "index", reason: "cursor-expired" },
+      });
+    };
+    const library = libraryOf(catalogPortOver(libraryDoor(() => refuse()), { readArtifact: noRead }));
+    const expired = await library.list({ ...ASK, cursor: "c2" }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(expired, "fieldd's cursor-expired").toBeInstanceOf(CursorExpiredError);
+    expect(expired).toMatchObject({ status: 410, code: "cursor_expired" });
+    refuse = () => {
+      throw Object.assign(new Error("the agent index is starting"), {
+        kind: "UNAVAILABLE",
+        retryable: true,
+        details: { service: "index", state: "starting" },
+      });
+    };
+    await expect(library.list(ASK)).rejects.toThrow("The agent index is starting (starting)");
+  });
+
+  it("an ask nothing can match is an empty page, settled, and the door is never asked", async () => {
+    const door = libraryDoor(() => LIBRARY);
+    const library = libraryOf(catalogPortOver(door, { readArtifact: noRead }));
+    expect(await library.list({ ...ASK, project: "not a key" })).toEqual({
+      entries: [],
+      next_cursor: null,
+      canonical_ready: true,
+    });
+    expect(libraryCalls(door)).toEqual([]);
+  });
+
+  it("offers the library only with a reader, and its read IS the reader's — the session's grant, never fieldd", async () => {
+    const door = libraryDoor(() => LIBRARY);
+    expect(catalogPortOver(door).artifacts, "no reader, no library").toBeUndefined();
+    const asked: Array<[string, string]> = [];
+    const page = new Uint8Array(PAGE_BYTES);
+    const library = libraryOf(
+      catalogPortOver(door, {
+        readArtifact: async (sessionId, publicationId) => {
+          asked.push([sessionId, publicationId]);
+          return page;
+        },
+      }),
+    );
+    expect([...(await library.read("ses-9b2f0c7d", KEPT.presentationId))]).toEqual(PAGE_BYTES);
+    expect(asked).toEqual([["ses-9b2f0c7d", KEPT.presentationId]]);
+    expect(door.calls, "a read asks fieldd nothing").toEqual([]);
+  });
+
+  it("the window's ports: the room's library reads through the session port — a one-shot ticket and rosettad's content route", async () => {
+    const door = client({ "index.openTicket": () => ticket(44000, "g1", Date.now() + 600_000) });
+    const rest = pageFetch();
+    const ports = historyPortsOver(door, { platform: null, sessions: { fetchFn: rest.fetchFn } });
+    const library = libraryOf(ports.catalog);
+    expect([...(await library.read("s1", KEPT.presentationId))]).toEqual(PAGE_BYTES);
+    expect(rest.reads).toEqual([
+      {
+        url: `http://127.0.0.1:44000/api/sessions/s1/artifacts/${KEPT.presentationId}/content`,
+        authorization: "Rosetta-Grant g1",
+      },
+    ]);
+    ports.dispose();
+  });
+});
+
+/** rosettad's REST for the page rows: a page's content route answers
+ * `PAGE_BYTES` unless `page` scripts it; everything else as `rosettadFetch`. */
+function pageFetch(
+  refuseOnce: Set<string> = new Set(),
+  page: (headers: Record<string, string>) => Response | null = () => null,
+) {
+  return rosettadFetch(refuseOnce, (path, headers) =>
+    /^\/api\/sessions\/[^/]+\/artifacts\/[^/]+\/content$/.test(path)
+      ? (page(headers) ?? new Response(new Uint8Array(PAGE_BYTES), { status: 200, headers }))
+      : null,
+  );
+}
+
+describe("MA-4b — the session port reads a page outside its leases", () => {
+  const PUB = KEPT.presentationId;
+  const content = (port: number, session = "s1") =>
+    `http://127.0.0.1:${port}/api/sessions/${session}/artifacts/${PUB}/content`;
+  const MIB = 1024 * 1024;
+
+  it("with no lease open: ONE ticket for that session, the content route with its grant, the bytes — and nothing left behind: no lease, no renewal", async () => {
+    vi.useFakeTimers({ now: 2_000_000 });
+    const door = client({ "index.openTicket": () => ticket(44100, "g1", 2_000_000 + 600_000) });
+    const rest = pageFetch();
+    const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
+    expect([...(await port.readArtifact("s1", PUB))], "the page's bytes").toEqual(PAGE_BYTES);
+    expect(rest.reads).toEqual([{ url: content(44100), authorization: "Rosetta-Grant g1" }]);
+    expect(ticketCalls(door).map((call) => call.params)).toEqual([{ sessionId: "s1" }]);
+    expect(port.anyClient(), "no lease is left behind").toBeNull();
+    await vi.advanceTimersByTimeAsync(30 * 60_000);
+    expect(ticketCalls(door), "a one-shot ticket is never renewed").toHaveLength(1);
+    port.dispose();
+  });
+
+  it("with the room's lease open on that session: its grant reads the page — no ticket of its own — and the room's lease and stream are untouched (never open(), which releases it)", async () => {
+    FakeSocket.opened = [];
+    const tickets = [ticket(44200, "g1", Date.now() + 600_000)];
+    const door = client({ "index.openTicket": () => tickets.shift() });
+    const rest = pageFetch();
+    const port = sessionPortOver(door, {
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      fetchFn: rest.fetchFn,
+    });
+    const session = await port.open("s1");
+    const statuses: SubscriptionStatus[] = [];
+    session.subscribeSession("s1", { onStatus: (status) => statuses.push(status) });
+    const socket = FakeSocket.opened[0];
+    socket?.serve({ frame: "hello", protocol_version: PROTOCOL_VERSION, stamp: null });
+    socket?.serve({ frame: "caught_up", stamp: { epoch: 1, seq: 0 } });
+    const lease = port.anyClient();
+    expect([...(await port.readArtifact("s1", PUB))], "the page's bytes").toEqual(PAGE_BYTES);
+    expect(rest.reads.at(-1)).toEqual({ url: content(44200), authorization: "Rosetta-Grant g1" });
+    expect(ticketCalls(door), "the lease's grant, no ticket of its own").toHaveLength(1);
+    expect(socket?.closed, "the room's stream stays open").toBe(false);
+    expect(statuses.at(-1)).toBe("live");
+    expect(port.anyClient(), "the room's lease stands").toBe(lease);
+    await expect(session.timelineEntry("s1", "t1")).resolves.toMatchObject({ timeline_id: "t1" });
+    port.dispose();
+  });
+
+  it("a lease open on ANOTHER session lends nothing: the page's session gets a one-shot ticket, and that lease is left alone", async () => {
+    const tickets = [
+      ticket(44300, "g-s2", Date.now() + 600_000),
+      ticket(44301, "g-s1", Date.now() + 600_000),
+    ];
+    const door = client({ "index.openTicket": () => tickets.shift() });
+    const rest = pageFetch();
+    const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
+    await port.open("s2");
+    expect([...(await port.readArtifact("s1", PUB))], "the page's bytes").toEqual(PAGE_BYTES);
+    expect(rest.reads.at(-1)).toEqual({ url: content(44301), authorization: "Rosetta-Grant g-s1" });
+    expect(ticketCalls(door).map((call) => call.params)).toEqual([
+      { sessionId: "s2" },
+      { sessionId: "s1" },
+    ]);
+    expect(port.anyClient()?.baseUrl, "the other session's lease stands").toBe(
+      "http://127.0.0.1:44300",
+    );
+    port.dispose();
+  });
+
+  it("an expired grant on a page read is renewed once and read again — a one-shot's by one more ticket, a lease's by its own renewal", async () => {
+    const route = `/api/sessions/s1/artifacts/${PUB}/content`;
+    const once = [ticket(44400, "g1", Date.now() + 600_000), ticket(44400, "g2", Date.now() + 600_000)];
+    const door = client({ "index.openTicket": () => once.shift() });
+    const rest = pageFetch(new Set([route]));
+    const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
+    expect([...(await port.readArtifact("s1", PUB))], "a one-shot's page").toEqual(PAGE_BYTES);
+    expect(rest.reads.map((read) => read.authorization)).toEqual([
+      "Rosetta-Grant g1",
+      "Rosetta-Grant g2",
+    ]);
+    expect(port.anyClient(), "no lease is left behind").toBeNull();
+    port.dispose();
+
+    const leased = [
+      ticket(44500, "g1", Date.now() + 600_000),
+      ticket(44500, "g2", Date.now() + 600_000),
+    ];
+    const leaseDoor = client({ "index.openTicket": () => leased.shift() });
+    const leaseRest = pageFetch(new Set([route]));
+    const leasePort = sessionPortOver(leaseDoor, { fetchFn: leaseRest.fetchFn });
+    await leasePort.open("s1");
+    expect([...(await leasePort.readArtifact("s1", PUB))], "a lease's page").toEqual(PAGE_BYTES);
+    expect(leaseRest.reads.map((read) => read.authorization)).toEqual([
+      "Rosetta-Grant g1",
+      "Rosetta-Grant g2",
+    ]);
+    expect(ticketCalls(leaseDoor)).toHaveLength(2);
+    leasePort.dispose();
+  });
+
+  it(`bounded at ${ARTIFACT_READ_MAX_BYTES} bytes: a page at the bound reads whole; one past it is refused in the room's words, its body not read past the bound — nor at all when its length says so`, async () => {
+    const door = client({ "index.openTicket": () => ticket(44600, "g1", Date.now() + 600_000) });
+    let serve: (headers: Record<string, string>) => Response = (headers) =>
+      new Response(new Uint8Array(ARTIFACT_READ_MAX_BYTES), { status: 200, headers });
+    const rest = pageFetch(new Set(), (headers) => serve(headers));
+    const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
+    expect((await port.readArtifact("s1", PUB)).byteLength, "a page at the bound").toBe(
+      ARTIFACT_READ_MAX_BYTES,
+    );
+    // past it, streamed with no declared length
+    let pulls = 0;
+    const stream = (): ReadableStream<Uint8Array> =>
+      new ReadableStream<Uint8Array>(
+        {
+          pull(controller) {
+            pulls += 1;
+            if (pulls > 64) controller.close();
+            else controller.enqueue(new Uint8Array(MIB));
+          },
+        },
+        { highWaterMark: 0 },
+      );
+    serve = (headers) => new Response(stream(), { status: 200, headers });
+    await expect(port.readArtifact("s1", PUB), "a streamed page past the bound").rejects.toThrow(
+      ARTIFACT_TOO_LARGE,
+    );
+    expect(pulls, "the body is not read past the bound").toBeLessThanOrEqual(
+      ARTIFACT_READ_MAX_BYTES / MIB + 2,
+    );
+    // a length that says it is past the bound: no body is read
+    pulls = 0;
+    serve = (headers) =>
+      new Response(stream(), {
+        status: 200,
+        headers: { ...headers, "content-length": String(ARTIFACT_READ_MAX_BYTES + 1) },
+      });
+    await expect(port.readArtifact("s1", PUB), "a declared length past the bound").rejects.toThrow(
+      ARTIFACT_TOO_LARGE,
+    );
+    expect(pulls, "a declared length past the bound reads no body").toBe(0);
+    port.dispose();
+  });
+
+  it("DS-7: a page on a session another desktop holds is read by that desktop's ticket; one the listing calls asleep is said so at once, never asked", async () => {
+    const door = client({
+      "index.openTicket": () => ({ ...ticket(44700, "g1", Date.now() + 600_000), device: LAPTOP }),
+    });
+    const rest = pageFetch();
+    const port = sessionPortOver(door, { fetchFn: rest.fetchFn }, (id) =>
+      id === "s1" ? { device: LAPTOP, name: "Laptop", asleep: false } : null,
+    );
+    expect([...(await port.readArtifact("s1", PUB))], "the page's bytes").toEqual(PAGE_BYTES);
+    expect(ticketCalls(door).map((call) => call.params)).toEqual([
+      { sessionId: "s1", device: LAPTOP },
+    ]);
+    port.dispose();
+
+    const asleepDoor = client({
+      "index.openTicket": () => ticket(44701, "g1", Date.now() + 600_000),
+    });
+    const asleep = sessionPortOver(asleepDoor, {}, (id) =>
+      id === "s1" ? { device: LAPTOP, name: "Laptop", asleep: true } : null,
+    );
+    await expect(asleep.readArtifact("s1", PUB)).rejects.toThrow(
+      "Laptop is asleep — its transcript opens when it wakes",
+    );
+    expect(ticketCalls(asleepDoor), "an asleep desktop is never asked").toEqual([]);
+  });
+
+  it("a ticket fieldd refuses is said in the room's words, and a road refusal at once, in its desktop's name — never retried behind a spinner", async () => {
+    const off = client({
+      "index.openTicket": () => {
+        throw Object.assign(new Error("the direct plane is off"), {
+          kind: "UNAVAILABLE",
+          retryable: false,
+          details: { service: "index", state: "direct-plane-off" },
+        });
+      },
+    });
+    await expect(sessionPortOver(off).readArtifact("s1", PUB)).rejects.toThrow(
+      "This desktop has the direct plane switched off — its transcripts can't be read here",
+    );
+    const road = client({
+      "index.openTicket": () => {
+        throw Object.assign(new Error("refused"), {
+          kind: "UNAVAILABLE",
+          retryable: true,
+          details: { service: "peer-link", device: LAPTOP, state: "unreachable" },
+        });
+      },
+    });
+    const port = sessionPortOver(road, {}, (id) =>
+      id === "s1" ? { device: LAPTOP, name: "Laptop", asleep: false } : null,
+    );
+    await expect(port.readArtifact("s1", PUB)).rejects.toThrow(
+      "Laptop isn't answering — its transcript opens when it does",
+    );
+    expect(ticketCalls(road), "said at once").toHaveLength(1);
+  });
+});
+
+describe("MA-4b — the History plate's fixture library (the projects plate)", () => {
+  const NOW = 1_793_836_800_000;
+
+  it("the plate's fixture fieldd answers index.artifacts in the contract's shape: one app per demo project with a session here, under its PJ key, by its agent; one presented twice, one not kept; its filters narrow", async () => {
+    const demo = createRoomDemo(NOW);
+    const door = historyProjectsClient(demo);
+    const answer = IndexArtifactsResult.parse(await door.request("index.artifacts", {}));
+    const projects = new Set(demo.meta.sessions.flatMap((row) => row.project_id ?? []));
+    expect(answer.entries, "one app per demo project with a session").toHaveLength(projects.size);
+    const sessions = new Set(demo.meta.sessions.map((row) => row.id));
+    for (const entry of answer.entries) {
+      expect(entry.device, entry.title).toBe(FIXTURE_DESKTOP);
+      expect(sessions.has(entry.sessionId), entry.sessionId).toBe(true);
+      expect(entry.projectKey?.startsWith("p1:demo-"), entry.title).toBe(true);
+      expect(entry.provider, entry.title).toBeDefined();
+    }
+    expect(answer.canonicalReady).toBe(true);
+    const twice = answer.entries.find((entry) => entry.versions > 1);
+    expect(twice, "an app presented twice").toBeDefined();
+    expect(
+      answer.entries.some((entry) => entry.availability !== "captured"),
+      "an app whose page was not kept",
+    ).toBe(true);
+    const versions = IndexArtifactsResult.parse(
+      await door.request("index.artifacts", { appId: twice?.appId }),
+    );
+    expect(versions.entries.map((entry) => entry.appId)).toEqual([twice?.appId, twice?.appId]);
+    const key = answer.entries[0]?.projectKey;
+    const narrowed = IndexArtifactsResult.parse(
+      await door.request("index.artifacts", { projectKey: key }),
+    );
+    expect(narrowed.entries.every((entry) => entry.projectKey === key)).toBe(true);
+    expect(narrowed.entries.length).toBeLessThan(answer.entries.length);
+  });
+
+  it("through the SHIPPING library port the plate's apps reach the room as rosetta's entries — no path — and each kept page reads as an HTML document", async () => {
+    const plate = historyProjectsFixture(NOW);
+    const library = libraryOf(plate.catalog);
+    const page = await library.list(ASK);
+    expect(page.entries.length, "the plate's library").toBeGreaterThanOrEqual(3);
+    for (const entry of page.entries) {
+      expect(entry.publication.path).toBeNull();
+      expect(entry.project_id?.startsWith("p1:demo-"), entry.publication.title).toBe(true);
+    }
+    const kept = page.entries.filter((entry) => entry.availability === "captured");
+    expect(kept.length, "kept pages").toBeGreaterThan(0);
+    for (const entry of kept) {
+      const text = new TextDecoder().decode(
+        await library.read(entry.publication.session_id, entry.publication.id),
+      );
+      expect(text.toLowerCase().startsWith("<!doctype html>"), entry.publication.title).toBe(true);
     }
   });
 });

@@ -47,6 +47,17 @@ import type { SessionClient, SessionPort } from "@vibefield/rosetta-room";
 // spinner; a renewal keeps its patient retry, since the open stream outlives
 // its grant. A recorded file there is rosetta's `wrong-scope` (the
 // owner mints a forwarded ticket `read` alone), said as FILE_TARGET_REFUSAL.
+//
+// MA-4b (2026-11-05): the room's LIBRARY reads one presentation's bytes —
+// rosettad's `/api/sessions/{id}/artifacts/{pub}/content`, a grant route, so
+// it needs THAT session's grant (`readArtifact`). It never opens a lease:
+// `open()` releases any lease already held for the session, which would cut
+// the room's own stream of the transcript it is reading. A lease open on the
+// session lends its grant (renewed once, as every lease read is); otherwise
+// the read mints ONE ticket of its own, outside `leases` — from the session's
+// own desktop (DS-7, `homeOf`), never renewed, nothing left behind. A page is
+// bounded at `ARTIFACT_READ_MAX_BYTES`: a larger one is refused in the room's
+// own words, its body not read past the bound.
 
 /** How long before a grant's `expiresAt` its lease asks for the next one
  * (`INDEX_TICKET.TTL_MS` is ten minutes); a shorter grant renews at half its
@@ -66,6 +77,15 @@ export const TICKET_RETRY_MAX_MS = 10_000;
  * through, and a file that is gone is rosetta's own not_found.* */
 export const FILE_TARGET_REFUSAL =
   "Recorded files can't open here yet — no file door on the desktop";
+
+/** MA-4b — the most a page read through this port may hold: rosetta's own
+ * capture bound (a larger source is `too_large`) and the room's preview cap. */
+export const ARTIFACT_READ_MAX_BYTES = 16 * 1024 * 1024;
+
+/** What a page read past `ARTIFACT_READ_MAX_BYTES` answers: the room's own
+ * words for that bound (its library's `too_large`), since inside History the
+ * room's words stand as rosetta wrote them (DESIGN.md §9). */
+export const ARTIFACT_TOO_LARGE = "Source exceeds the 16 MiB limit";
 
 /** The refusals a fresh grant cannot change: the minter gives the same window
  * the same scopes, and the route is the room's — so a read refused for one of
@@ -105,6 +125,10 @@ export interface HistorySessionPort extends SessionPort {
   /** The newest open session's client: every grant opens every asset, so the
    * asset source reads through whichever session is being read. */
   anyClient(): RosettaClient | null;
+  /** MA-4b — one presentation's bytes, for the room's library: through the
+   * session's open lease when there is one, else a one-shot ticket outside
+   * the leases; at most `ARTIFACT_READ_MAX_BYTES`. */
+  readArtifact(sessionId: string, publicationId: string, signal?: AbortSignal): Promise<Uint8Array>;
   /** Let go of every lease (the view unmounting). */
   dispose(): void;
 }
@@ -419,6 +443,14 @@ export function sessionPortOver(
     anyClient() {
       const open = [...leases.values()].filter((lease) => !lease.closed && lease.client !== null);
       return open[open.length - 1]?.client ?? null;
+    },
+    async readArtifact(sessionId, publicationId, signal) {
+      // MA-4b RED — the skeleton: no ticket, no read, no bytes. The green
+      // reads through the open lease or a one-shot ticket, bounded.
+      void sessionId;
+      void publicationId;
+      void signal;
+      return new Uint8Array();
     },
     dispose() {
       for (const lease of [...leases.values()]) release(lease);
