@@ -1,5 +1,5 @@
 {
-  "hash": "eed73a71bc25b4356dea893a2d1ae9d6d96022c28fd2bbbbbf192607df01287c",
-  "text": "export const meta = { name: \"Release check\", phases: [\"Review\", \"Ship\"], input: { target: \"session\" } };\n\nexport default async function ({ target }) {\n  const review = await phase(\"Review\", () =>\n    agent(`Review the change in ${target}. List each finding with file and line.`, {\n      agent: \"codex\",\n      model: \"gpt-5.5\",\n      label: \"review\",\n    }),\n  );\n  log(`review: ${review.text.length} characters`);\n  if ((await ask(\"Push the release?\", [\"Push\", \"Hold\"])) === \"Push\") {\n    await phase(\"Ship\", () => agent(\"Push the branch.\", { in: target, label: \"ship\" }));\n  }\n}\n",
+  "hash": "ffe093265fa8ada081e77b87d6311a7a0079580e98c7739307e85d3c6c471870",
+  "text": "export const meta = {\n  name: \"Release check\",\n  phases: [\"Review\", \"Ship\"],\n  input: { target: \"session\" },\n};\n\nexport default async function ({ target }) {\n  const review = await phase(\"Review\", () =>\n    agent(`Review the change in ${target}. List each finding with file and line.`, {\n      agent: \"codex\",\n      model: \"gpt-5.5\",\n      label: \"review\",\n    }),\n  );\n  log(`review: ${review.text.length} characters`);\n  if ((await ask(\"Push the release?\", [\"Push\", \"Hold\"])) === \"Push\") {\n    await phase(\"Ship\", () => agent(\"Push the branch.\", { in: target, label: \"ship\" }));\n  }\n}\n",
   "flow": "release-check"
 }

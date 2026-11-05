@@ -8,14 +8,14 @@
   },
   "calls": [
     {
-      "line": 5,
+      "line": 9,
       "agent": "codex",
       "model": "gpt-5.5",
       "phase": "Review",
       "label": "review"
     },
     {
-      "line": 13,
+      "line": 17,
       "phase": "Ship",
       "label": "ship",
       "in": true
@@ -23,7 +23,7 @@
   ],
   "gates": [
     {
-      "line": 12,
+      "line": 16,
       "question": "Push the release?",
       "choices": ["Push", "Hold"]
     }
