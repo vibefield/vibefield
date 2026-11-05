@@ -77,6 +77,8 @@ export interface FlowHostOptions {
   readonly input: Readonly<Record<string, string>>;
   readonly handler: FlowCallHandler;
   readonly timings?: Partial<FlowHostTimings>;
+  /** the heap a host may use, MB (FLOW_LIMITS.HOST_HEAP_MB by default; tests lower it). RED (Q7's rows): not read yet */
+  readonly heapMb?: number;
   /** the environment the child's PATH is read from; fieldd's own by default */
   readonly environment?: NodeJS.ProcessEnv;
   readonly logger?: Logger;

@@ -86,6 +86,7 @@ async function host(
     handler?: FlowCallHandler;
     input?: Record<string, string>;
     timings?: Partial<FlowHostTimings>;
+    heapMb?: number;
     launch?: FlowsHostLaunch;
     environment?: NodeJS.ProcessEnv;
   } = {},
@@ -97,13 +98,21 @@ async function host(
     handler: opts.handler ?? scripted().handler,
     environment: opts.environment ?? PATH_ONLY,
     ...(opts.timings !== undefined ? { timings: opts.timings } : {}),
+    ...(opts.heapMb !== undefined ? { heapMb: opts.heapMb } : {}),
   });
   runs.push(run);
   return run;
 }
 
-/** A stand-in child that speaks the protocol and says, as its one log line, what `report` evaluates to in it. */
-function standIn(report: string): FlowsHostLaunch {
+/** A stand-in child that speaks the protocol: at `run` it does `onRun` (JavaScript, in the child), and it answers each
+ * ping with `heap` bytes in use (a heap fact the row states; the real allocation is the mini's). */
+function standIn({
+  onRun = "",
+  heap = 4 * 1024 * 1024,
+}: {
+  onRun?: string;
+  heap?: number;
+} = {}): FlowsHostLaunch {
   const dir = mkdtempSync(join(inject("fielddRunRoot"), "vf-fh-stand-in-"));
   const file = join(dir, "stand-in.cjs");
   writeFileSync(
@@ -111,7 +120,8 @@ function standIn(report: string): FlowsHostLaunch {
     [
       "process.send({ t: 'ready', pid: process.pid });",
       "process.on('message', (m) => {",
-      `  if (m && m.t === 'run') process.send({ t: 'log', text: JSON.stringify(${report}) });`,
+      `  if (m && m.t === 'run') { ${onRun} }`,
+      `  if (m && m.t === 'ping') process.send({ t: 'pong', n: m.n, heap: ${heap} });`,
       "  if (m && m.t === 'shutdown') process.exit(0);",
       "});",
     ].join("\n"),
@@ -184,7 +194,7 @@ describe("CP-4a2a — the flow host: lockdown, the compartment, the environment"
   );
 
   it(
-    "H3: the clock and randomness are tamed in the compartment (inferred: ses 2.3.0's tame-date and tame-math)",
+    "H3: the clock and randomness are tamed in the compartment (measured on this Mac, ses 2.3.0, 2026-11-05)",
     async () => {
       const run = await host(
         flow(
@@ -209,7 +219,10 @@ describe("CP-4a2a — the flow host: lockdown, the compartment, the environment"
       const { handler, logs } = scripted();
       await host(flow("return 1;"), {
         handler,
-        launch: standIn("Object.keys(process.env).sort()"),
+        launch: standIn({
+          onRun:
+            "process.send({ t: 'log', text: JSON.stringify(Object.keys(process.env).sort()) });",
+        }),
         environment: {
           PATH: PATH_ONLY.PATH,
           FIELDD_TOKEN: "a daemon secret",
@@ -306,6 +319,69 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       expect(first).toEqual({ t: "ready", pid: child.pid });
       child.disconnect();
       expect(await within(exited)).toEqual({ code: 0, signal: null });
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H8: a pong past HOST_HEAP_MB ends the host as `memory` (4A2-Q7 (a): a cap measured by pong, not enforced by V8)",
+    async () => {
+      // the heap fact is the stand-in's to state; the cap is FLOW_LIMITS'
+      const over = (FLOW_LIMITS.HOST_HEAP_MB + 1) * 1024 * 1024;
+      const run = await host(flow("return 1;"), {
+        launch: standIn({ heap: over }),
+        timings: { pingMs: 100 },
+      });
+      const pid = await within(run.ready);
+      expect(typeof pid).toBe("number");
+      expect(await within(run.ended)).toEqual({ kind: "ended", why: "memory" });
+      expect(alive(pid as number)).toBe(false);
+      // a heap under the cap is a host at work: it answers, and is never ended for it
+      const under = await host(flow("return 1;"), {
+        launch: standIn({ heap: 1024 * 1024 }),
+        timings: { pingMs: 100 },
+      });
+      expect(typeof (await within(under.ready))).toBe("number");
+      expect(await within(under.ended, 600)).toBe("timeout");
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H8b: the real host's pong carries the heap it uses: under a cap it has passed, it is ended as `memory`",
+    async () => {
+      // a cap of 1 MB, which any Node's heap passes: the real child's own used_heap_size, read from its pong
+      const run = await host(flow('await agent("wait");'), {
+        heapMb: 1,
+        timings: { pingMs: 100 },
+      });
+      const pid = await within(run.ready);
+      expect(typeof pid).toBe("number");
+      expect(await within(run.ended)).toEqual({ kind: "ended", why: "memory" });
+      expect(alive(pid as number)).toBe(false);
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H8c: a host V8 aborts for its heap between pongs is read as `memory`: by SIGABRT, or by the heap line on stderr",
+    async () => {
+      const aborted = await host(flow("return 1;"), {
+        launch: standIn({ onRun: "process.kill(process.pid, 'SIGABRT');" }),
+      });
+      expect(await within(aborted.ended)).toEqual({ kind: "ended", why: "memory" });
+      const said = await host(flow("return 1;"), {
+        launch: standIn({
+          onRun:
+            "process.stderr.write('FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\\n', () => process.exit(134));",
+        }),
+      });
+      expect(await within(said.ended)).toEqual({ kind: "ended", why: "memory" });
+      // a child that leaves any other way is a host that left, never `memory`
+      const left = await host(flow("return 1;"), {
+        launch: standIn({ onRun: "process.exit(3);" }),
+      });
+      expect(await within(left.ended)).toEqual({ kind: "left", code: 3, signal: null });
     },
     ROW_MS,
   );
