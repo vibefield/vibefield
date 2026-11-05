@@ -1873,8 +1873,10 @@
                         call to the run's scope and does it with its own services, and the journal's answers come back
                         the same way. A call the journal already answered is answered from it again, by its key and its
                         <code>#n</code>, so a child started again replays and sends nothing twice. The child holds no
-                        door, no token, no key and no file access; its environment is <code>PATH</code> alone, so no
-                        <code>FIELD_*</code> or <code>FIELDD_*</code> variable reaches it (EL7; 4A2-Q6 (b)). The script
+                        door, no token, no key and no file access; its environment is <code>PATH</code>, plus
+                        <code>VF_SMOKE_RUN</code> when fieldd has it (a smoke's run mark: no secret, and the script
+                        cannot read it; CP-4a2b's M-h, Q-B5 (a)), so no <code>FIELD_*</code> or <code>FIELDD_*</code>
+                        variable reaches it (EL7; 4A2-Q6 (b), amended). The script
                         runs in a worker thread inside the child, under V8's own cap on its heap (the worker's
                         <code>resourceLimits</code>, which a packaged executable honours though it takes no heap flag),
                         so a script that spins never holds the child's own thread. The worker answers fieldd's ping:
@@ -2035,12 +2037,18 @@
                   "acorn only under packages/fieldd/src/flows and ses only under packages/fieldd/src/flows/host (the
                   flow host's child); packages/fieldd/src/flows imports no @vibefield/puppeteer-* and no
                   @vibefield/rosetta-* package; packages/fieldd/src/flows/host imports only ses, @endo/*, node:
-                  built-ins, its own files and ../protocol" (CP-4a1, 2026-11-05; the host clause, CP-4a2a). The flow
+                  built-ins, its own files and ../protocol; packages/fieldd/src/flows/protocol.ts imports nothing;
+                  nothing outside packages/fieldd/src/flows/host imports a file under it" (CP-4a1, 2026-11-05; the
+                  host clause and protocol.ts's, CP-4a2a; the folder clause, CP-4a2b's M-h). The flow
                   host's own rule, which R29 reserved for it: the parser and the sandbox stay in the one folder that runs
                   scripts, so no other daemon code parses or evaluates a person's script, and a step's result reaches
                   flows through fieldd's own interface, never a vendor's package (AR-L1). The host clause keeps the child
                   to its sandbox and its pipe: no contracts, no parser and no daemon file, so it holds no key, no door and
-                  no record (EL7). The plan named it R31; SD-1's sound wall took R31 first.
+                  no record (EL7). The folder clause keeps <code>ses</code> out of fieldd's own realm (its bundle, or a
+                  test's vitest) through one of the child's files, which no textual <code>ses</code> rule sees: the
+                  child is started as its own bundle, never imported (Q-B11 (a), CL-H1). The plan named it R31; SD-1's
+                  sound wall took R31 first. <em>Corrected 2026-11-05 (CP-4a2b's M-h records):</em> the quote lacked
+                  protocol.ts's clause, in R32's description since CP-4a2a's <code>0f9187763</code>.
                 </p>
               </div>
             </div>

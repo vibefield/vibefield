@@ -35612,3 +35612,198 @@ Item 183 closes in this entry.
 - MA-4, the desk, held at its mint for James's 0.9 word.
 - Not pinned: the home's cross-desktop project join on a routed `index.artifacts` page, its malformed-page refusal
   and the `not-a-root-url` log line.
+
+## CP-4a2b's M-h — the flow host's tail: a leaving host's own deadline, a count it cannot read, no inspector by SIGUSR1, the static read's three refusals, the compartment's three pins, a smoke's run mark and R32's folder clause (track CO) (2026-11-05; `d90a9915a` → `aebd6a80b`, 14 commits on main `560fcfdf0`, built in two halves by bcp4 and bsp, stacked as M163 `aebd6a80b` on vf-m1, run 163)
+
+**What it rests on.**
+- CP-4a2a (`c07039551`, run 159; LANDED "CP-4a2a"): the flow host, its packaging, the journal and its replay, with
+  nothing calling it, and its Owed list to CP-4a2b (VF-PM 14:35Z).
+- The plan of record, `lanes/co-plan/plans/step0-cp4a2b.md`, with its §13a (`step0-cp4a2b-13a-runs-DRAFT.md`, bcp4's)
+  and its §13b (`step0-cp4a2b-13b-doors-DRAFT.md`, bsp's), RULED by VF-PM in one sitting at 16:24Z. M-h carries
+  these of its rows:
+  - Q-A0 (a): FOUR mints, in the order M-h, M-r1, M-r2, M-d. M-h is the host's tail: 13a's slices 1–2 and
+    13b.9–14, with R32's new clause.
+  - J3 = Q-A3 = D1 (a) CONFIRMED, and N2 RE-RULED from "refuses at once" to "never heard", with a dated correction at
+    N2's source (`step0-cp4a2.md`, "Re-ruled 2026-11-05 16:24Z"): the supervisor drops every call after `stop()`
+    (`#chosen`), so N2 needs no host code.
+  - Q-A6 (a): the literal-caps drift test now.
+  - Q-B3 (a): SES 2.3.0's three censor patterns over module-script's output.
+  - Q-B4 (a), NARROWED to WebAssembly, SharedArrayBuffer and Atomics, the finding accepted by VF-PM at 16:36Z.
+  - Q-B5 (a): `smoke-census.mjs` is release-adjacent if it is under `apps/desktop/packaging/`. It is under
+    `packages/electron-shell/src/testing/`, so it is test tooling (VF-PM 22:20Z).
+  - Q-B11 (a): R32's new clause, with `scripts/check-import-boundaries.mjs` named PIN-CLASS in M-h's GO.
+- CP-4a2a's Owed, as the plan placed it ("Owed from CP-4a2a (LANDED), placed"): O1, O2 and P6 to 13a's slice 1; O3
+  and the literal-caps drift to its slice 2; the static refusal, the 13 globals (narrowed) and P5 to 13b.9–14; N2 to
+  D1, with no code. JournalTail is M-r1's (13a's slice 5); the heap-stats line is a9's probe preload, with no tree
+  commit; acorn's notices are the stage prediction and H1's grep; the cut on the card is 13b's contract and words,
+  which 13a's `runs.ts` sets.
+
+**Who built it, and how it came to T.**
+- bcp4 built 13a's slices 1–2 (three commits) and bsp built 13b.9–14 and R32 (eleven), each half on `bbd7e198d`.
+- The join: bsp's eleven cherry-picked onto bcp4's three, its tip `aef21c3a0` on `bbd7e198d`, range-diff 11/11 "=".
+- The cut onto `560fcfdf0` (push 101, MA-3e M-B's records): carry-check v3 HOLDS (shared none · 14/14 patch-ids
+  equal · 19/19 unshared files byte-identical), range-diff 14/14 "=".
+- The packet, `lanes/co-plan/lanes/co-cp4a1/cp4a2b/` (cp-landing 22:28Z), each file by its sha256:
+  - the brief `a9-mint-brief-M-h-aebd6a80b.md` (`c75f9c50…`) and the numstat (`c855ec8f…`);
+  - `series-map-aebd6a80b.txt` (`a56a3681…`), `carry-check-aebd6a80b.txt` (`88292418…`) and
+    `range-diff-aebd6a80b.txt` (`12072805…`);
+  - the bundle `cp-4a2b-mh-aebd6a80b.bundle`, 41,206 B (`400b1553…`), requiring only `560fcfdf0`; its head
+    `co/cp-4a2b-mh-mint-aebd6a80b`.
+- The mint host: vf-m1, the first mint there. The mini is offline (James, via VF-PM 22:04Z).
+
+**What** (19 files, +749 −26 against main `560fcfdf0`; no install: no lock, Cargo, toolchain, siblings,
+pnpm-workspace, package.json or field-native path):
+- **Pin-class** (the one ERE over the 19 files; named in M-h's GO): `scripts/check-import-boundaries.mjs` 31/7, wall
+  R32's new clause. Its `--self-test` showed exactly the two new fixtures FAIL at the red (`f1aead677`), and all
+  pass at T.
+- **No release-adjacent file:** nothing under `apps/desktop/packaging/`; `smoke-census.mjs` 6/1 is test tooling
+  (Q-B5 (a); VF-PM 22:20Z). `build-fieldd-sea.mjs` is untouched.
+- Outside §13b.M's matrix: `packages/fieldd/src/flows/module-script.ts` 40/1 (`sesShapesOf`, the patterns' one copy).
+- **13a's slice 1** (bcp4; red `d90a9915a`, green `dcfe95c7a`), CP-4a2a's Owed O1, O2 and P6:
+  - O1, `flows/host/main.ts` `leave()`: past `leaveMs` a leaving host SIGKILLs itself, so a worker inside one long
+    builtin no longer holds it when fieldd is gone. `leaveMs` is the run's (supervisor.ts's `runFrameOf`: the run's
+    `stopGraceMs`, 2 s by default); a run that names none, or one that is no time, gets the host's own 2 s.
+  - O2: a worker's count (`external_memory + used_heap_size`) that is not finite ends the run `fatal` ("the host
+    cannot read its worker's memory"), never held to a cap NaN is never past.
+  - P6: `runFlowsHost`'s first statement takes SIGUSR1 from the inspector, under every launch; the development
+    launch (launch.ts) passes `--disable-sigusr1` before the bundle; the packaged role keeps bin.ts's own listener.
+  - The new rows H30, H31, H32 and H32b (`flows-host.test.ts`), and H13 now expecting the flag before the bundle,
+    with `test/fixtures/flows/heap-stats-stub.cjs`: a `--require` preload a row hands its direct host alone (modes
+    `stuck`, `missing`, `reject`, `rss`), named by nothing in src/.
+  - bcp4's two notes:
+    - probe C3 sends no `leaveMs` (`build-fieldd-sea.mjs:759-765`, release-adjacent, untouched), so
+      `FlowHostLimits.leaveMs?` is optional (protocol.ts), its default the host's 2 s;
+    - `flowsHostLaunch()` (`test/flows-host-bundle.ts`, not among the 19 files) keeps the pre-P6 shape, the bundle
+      with no flag, for H32b: a host started on its own listener alone. Its doc line still calls it "the
+      development rule (launch.ts)".
+- **13a's slice 2** (bcp4; `2ca22b9c5`, test only), each red shown by a named mutation on a saved copy, never
+  committed (`lanes/co-plan/lanes/co-cp4a1/cp4a2/speed/mh/s2-mut-*.log`):
+  - H33 (O3): the resident read alone ends a held run `memory`, the worker's count refused (the stub's `rss` and
+    `reject`). The mutation `if (false)` on the RSS check: "expected 'timeout' to deeply equal { t: 'memory' }".
+  - H35 (N2, "never heard"): a handler that stops the run inside the 41st of 300 parallel calls is called 41 times,
+    and the run ends `stopped`, never `flood`. The mutation, `#call`'s `#chosen` line removed: "expected 256 to be
+    41".
+  - H34 (Q-A6 (a)), `tooling/dev-runner/test/worker-roles.test.mjs`: probe C3's literal `heapMb` and `rssMb` equal
+    registries.ts's HOST_HEAP_MB and HOST_RSS_MB. The mutation `rssMb: 256`: "actual: 256, expected: 512".
+- **13b.9–10, the static read's three refusals** (bsp; docs `378275bf6`; C5 red `46a413b13`, green `c38ca67fb`; red
+  `48a498d9a`, green `d9f40d1df`), Q-B3 (a):
+  - DESIGN.md §9 gains "What a flow's read refuses", before "A flow's lines", its three words PROPOSED.
+  - contracts: FLOW_READ_REFUSALS gains `import`, `eval` and `html-comment`, the list still OPEN, with the fixture
+    `flow-read.refused-import.json` (EL9). TS only: no Rust, no `pnpm gen`.
+  - fieldd: `sesShapesOf` (module-script.ts) runs SES 2.3.0's three source tests over the script the run evaluates,
+    and `readFlow` (static-read.ts) refuses each shape with its line, so the card and the run are one verdict (S19,
+    12 cases on the real host). A read now parses twice; 13b.16's cache by hash is M-d's.
+- **13b.11–12, the compartment's pins** (bsp; red `9ea48d740`, green `b59cf72e0`), Q-B4 (a) as narrowed:
+  - `PINNED_UNDEFINED` (compartment.ts): WebAssembly, SharedArrayBuffer and Atomics are the compartment's OWN
+    properties, undefined. Its comment says why each name is or is not pinned.
+  - The record line, verbatim: "SES 2.3.0 omits them; the pin is ours so a bump cannot re-admit them". So H2c-n (×3)
+    and H2c-i are green at red, and H2c-own is the one true red; H2c-0 pins what stays.
+  - Q-B4 (a)'s trade, said here as ruled: the typed arrays stay, so a host can overshoot HOST_RSS_MB by about 0.4 GB
+    inside one 50 ms read, which the cap still ends; pinning them would cost the in-tree end-to-end memory witness
+    (H25, H27, H28, H2b-7). The pins are prevention on top of the RSS cap, never instead of it (VF-PM 13:26Z).
+- **13b.13–14, P5** (bsp; red `2fbc78fd8`, green `cdcca2db4`), Q-B5 (a), amending 4A2-Q6 (b):
+  - supervisor.ts `flowsHostEnvironment`: the host gets PATH, plus VF_SMOKE_RUN when fieldd has it, the smoke's run
+    mark, by which a smoke's census finds a flow host it leaves. It is no secret, and the compartment has no
+    `process`, so a script cannot read it (P5a).
+  - `smoke-census.mjs`: `processName` names each host fieldd starts by its role, in both spellings (P5b). It names
+    files-host by role too: a fix of the same class of miss, since the old `/files-host/` row sat below the packaged
+    fieldd row, so a packaged files worker had been named "fieldd".
+- **R32's folder clause** (bsp; red `f1aead677`, green `aebd6a80b`; PIN-CLASS), Q-B11 (a), CL-H1: nothing outside
+  `packages/fieldd/src/flows/host` imports a file under it, so `ses` never reaches fieldd's realm through one of the
+  child's files. One shared `relativeTarget` helper, `flowsHostMayImport`'s verdicts unchanged, and two self-test
+  fixtures (`runs-evaluate.ts`, `evaluates-a-flow.test.ts`). `--enforce` over the tree is the mint's.
+
+**Validation.**
+- **This Mac, light runs, one named file each** (each commit's body; fieldd's are speed, not proof):
+  - 13a: flows-host whole 38/38 at slice 1 and 40/40 at slice 2; each of slice 2's mutations 1 failed, by assertion;
+    worker-roles 4/4;
+  - 13b: flows-static-read 19/19, flows-sandbox 27/27, flows-records 11/11, flows-module-script 18/18; contracts
+    flows and fixtures 698; smoke-daemons 19/19; `check-import-boundaries --self-test` "self-test: all passed";
+  - tsc and biome clean at each. Not run on the Mac: the memory rows H25, H27 and H28, each filling a host past
+    512 MB. They are the mint's.
+- **Every red failed on its assertion on this Mac** (each red commit's body names its lines):
+  - `d90a9915a` flows-host 5 failed (H30, H31, H32, H32b, H13); `46a413b13` contracts 1 failed (C5, three
+    `undefined`);
+  - `48a498d9a` flows-static-read 4 failed and flows-sandbox 6 failed (S18 and S19's six admitted cases green at
+    red, as pins);
+  - `9ea48d740` flows-sandbox 1 failed (H2c-own); `2fbc78fd8` P5a failed (H4 passed beside it) and smoke-daemons 1
+    failed (P5b, `fieldd` where `flows-host` was expected);
+  - `f1aead677` the walls' `--self-test`: exactly the two new fixtures FAIL, "self-test: FAILURES present".
+- **The expected counts** (the brief's, bsp's count of each file at T, nothing run; the deltas are the claim), over
+  run 162's (`verify.clean.log` `79dd1418…`, HEAD `ac2fc574f`):
+  - fieldd 3457 | 14 (+30): flows-host 34 → 41 (+7: H30, H31, H32, H32b, H33, H35, P5a); flows-sandbox 9 → 27 (+18:
+    S19 ×12, H2c-n ×3, H2c-own, H2c-i, H2c-0); flows-static-read 14 → 19 (+5);
+  - contracts 1751 (+2: C5, and fixtures.test.ts's row for `flow-read.refused-import.json`); electron-shell
+    2669 | 2 (+1: P5b); field-app 4069 (+0);
+  - vitest 13,318 | 0 | 20 (+33); node 473 (+1: H34); cargo 545 (no Rust); biome 3379 (+2 added files:
+    `heap-stats-stub.cjs`, `flow-read.refused-import.json`);
+  - the census "no drift": no new packaged file, since `flows-host.cjs` changes bytes only and the strict assert
+    counts files.
+- **The mint, run 163, and the full light** (vf-m1's first mint), at `aebd6a80b`, tree `fb3caf93d103`, on
+  `560fcfdf0`:
+  - `lanes/ts6/logs/m1/run163/run163.out` (sha256
+    `25238865ae011757fc9e325ce09a3d23ce7dbb5e28dd1e2b055f0587f8939679`): "ts6-mini verify ARMED 22:47:23Z"; "verify
+    exit 0 22:52:26Z"; "test target:  NX   Successfully ran target test for 29 projects"; "cargo test results: ok
+    34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+  - `verify.log` (sha256 `8a19b012c716e2ab9481a356e098b521041f0283e85def14843901dadea326fc`; its clean copy
+    `verify.clean.log`, `d705825437cba9eeae3a5ff81af537d8b7d8ced08eb829a1aa4aaf331b7c89c2`):
+    - fieldd "Tests  3457 passed | 14 skipped (3471)", contracts "Tests  1751 passed (1751)" and field-app "Tests
+      4069 passed (4069)", each as the brief expected;
+    - electron-shell "Tests  2668 passed | 3 skipped (2671)": vf-m1 reads 2668|3 / 13,317|0|21 (executable-arch
+      skips until its first stage). vf-m1's dry run at `560fcfdf0` (`dry-m1/verify.clean.log`,
+      `e5b8feaa68feb58ee692c353c91de0abf3352515d62e504c149d48521f35450e`) reads "2667 passed | 3 skipped (2670)",
+      so T is that base + 1 (P5b);
+    - vitest 13,317 | 0 | 21 over 938 files run (4 skipped whole); node "ℹ tests 473", "ℹ fail 0"; biome "Checked
+      3379 files"; cargo 545 passed in 34 suites ("test result: ok" each);
+    - `cargo clippy --workspace --all-targets -- -D warnings` clean;
+    - the census "TOTAL 106 files across 9 packages: 44,018,867 bytes", "no drift", "census assert OK — no §7.3
+      violation";
+    - the lane's files: "✓ test/flows-host.test.ts (41 tests) 11559ms" (H25, H27 and H28 among them),
+      "flows-sandbox.test.ts (27 tests)", "flows-static-read.test.ts (19 tests)".
+  - `run163-next.out` (`023e91aa363a1d59532c476367729d9e0f75d04c60add4a1ad90dd71e6e6a658`): "preflight exit 0 · 1
+    WARN/FAIL lines", R23's `acp` candidate (the standing warning).
+  - `run163-hid.log` (`60957e10ea4db094bbb2fab689807c705de8950d530c16263ac5980a4d19276a`): "22:47:22Z console:
+    locked No; HID idle 775s" to "22:52:26Z END console: locked No; HID idle 1079s".
+  - vf-m1's first run, apart from the verdict (a9): setup 22:31:56 → 22:36:20Z, every stage exit 0, preflight 0;
+    Mac16,10 M4, macOS 27.2 (26B123), node v26.5.0, pnpm 11.13.1, rustc 1.99.1; the dry verify at `560fcfdf0`
+    green at 22:45:52Z.
+- **The witness** (the brief's step 2, each red at its own sha, red where named and green at T; the memory rows,
+  run on the mint alone):
+  - `run163/s163r-aebd6a80b.out` (sha256 `056146b10d72e8d367a06b9064f5ec7206ca9cac71b583f18d2a79e4c894ff99`; a9,
+    22:53:12–22:55:22Z), each red in a clean checkout at its own sha, failed | passed:
+    - `d90a9915a` flows-host 5 | 33 (H30, H31, H32, H32b, H13); `46a413b13` contracts flows.test 1 | 24 (C5);
+    - `48a498d9a` flows-static-read + flows-sandbox 10 | 30 (S15, S16, S17, the S15–S17 line-order row, S19's 6
+      refused); S18 and S19's 6 admitted green at red (7 ✓); `9ea48d740` flows-sandbox 1 | 26 (H2c-own alone;
+      H2c-n ×3, H2c-i and H2c-0 green at red);
+    - `2fbc78fd8` flows-host 1 | 40 (P5a), smoke-daemons 1 | 18 (P5b); `f1aead677` the walls' `--self-test` rc 1
+      on exactly the two new fixtures (`runs-evaluate.ts`, `evaluates-a-flow.test.ts`), 137 PASS;
+    - every failure an AssertionError (R3's ten in eight shared error blocks), 0 vitest timeouts, 0 load failures;
+      back at T the tree clean, 0 stragglers.
+  - The memory rows at T: H25, H27 and H28 each passed in verify; free memory before the reds 81%.
+  - Kept for James's reap: none.
+- **Landed:** The fixer's ff `560fcfdf0` → `aebd6a80b` at 2026-11-05T22:58:23Z
+
+**Owed.**
+- **The static read's fourth refusal word** (VF-PM 22:20Z, Q-B3's follow-on; ruled 22:51Z), owed to M-d's doors,
+  naming its four shapes: a static `import`, a re-export, non-UTF-8 bytes, and `import.meta`.
+  - T stands. static-read.ts's header names three of them as the run's to refuse ("imports or re-exports a module,
+    or is not UTF-8"), and `import.meta` is not in it (nor in module-script.ts at T, by `git grep`). M-d writes the
+    header with the fourth word. VF-PM's 22:20Z "as it does" is corrected by VF-PM (22:51Z): the header names three.
+  - `d9f40d1df`'s finding, the word's reason: the read offers a static `import … from` that every run refuses.
+- **P5's real proof** (`cdcca2db4`'s body): no smoke starts a flow yet, so the witness is P5a and P5b; a smoke that
+  starts one is the proof.
+- **CL-H1's other half** (`aebd6a80b`'s body, "for a9"): at the stage pass, `bin.cjs`'s module comments name no
+  `node_modules/ses/`, no `@endo/` and no `src/flows/host/`. No stage runs on this mint.
+- **"PATH alone" in five comments at T**, where the host's environment is now PATH plus the run mark:
+  `packages/fieldd/src/bin.ts:299`, `flows/host/main.ts:18`, `flows/host/worker.ts:22`, `flows/supervisor.ts:29` and
+  `test/flows-run-harness.ts:2` (`git grep` at T; supervisor.ts's doc at `flowsHostEnvironment` names the mark).
+  Fixed in M-r1 (VF-PM 22:51Z): one comment-only commit of bsp's.
+- **M-r1, M-r2 and M-d**, in Q-A0 (a)'s order: the seams other owners hold (13a's slices 3–6, JournalTail among
+  them); the flow's own engine (slices 7–15); CP4-S18's refusal, the doors, the verbs (unserved until CP-4b) and the
+  kill matrix (slice 16).
+- **Closes no item.**
+- **For James's eye** (draft words; not a hold): DESIGN.md §9's three refusals, "it calls import(), which a flow may
+  not", "it calls eval(), which a flow may not" and "it has `<!--` or `-->` in its code, which a flow may not",
+  drawn on the page `BgAp9CF2i7wYuJ4BzXbi6P` with the sitting's rows 1, 2, 4, 8 and 14.
+- The records beyond LANDED, ROADMAP and DECISIONS: architecture.html's flow host row names the run mark beside PATH,
+  and its R32 row quotes the wall's description at T, with a dated correction.
