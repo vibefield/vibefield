@@ -34118,3 +34118,172 @@ under its new 30,000 ms limit.
 
 **Owed.** Push 93's verify was re-run as attempt 2 at 09:58:04Z, under the same run id. Its verdict is read at push
 94; it was still in progress at this entry (gh, 10:25:06Z).
+
+## Item 177 — the sessions' records are one of fieldd's signed stores: SessionRecordStore runs on the one RecordSigner with its base64 key, and a sign-out or a set's delete refuses before it changes anything (track CO) (2026-11-05; `e39983a5a` → `7b4ec2b90`, 6 commits on main `af6a2ccc9`, lane `co/items177` in `/Volumes/SamsungRed/lanes/items177/vibe-field`, stacked as M149 `7b4ec2b90`, run 149)
+
+**What it rests on.**
+- Item 177, filed 2026-11-05 04:30Z by cp-landing on VF-PM's number, from item 172's green (LANDED "Item 172",
+  Found 1). SessionRecordStore kept its own copy of the signed-record rule, outside RecordSigner. The plan of record
+  is `lanes/co-plan/plans/item-177-session-record-store-own-hmac-rule.md`, corrected at 04:32Z: a record's errno
+  threw the whole list, and nothing was set aside.
+- The store is AR-3's: the record of each session fieldd manages (`agent-sessions.ts`), signed since AR-4b under a
+  base64 key. It moves onto item 172's seam: `signed-record.ts`'s RecordSigner and StoreGuard, the four-kind read,
+  and UNAVAILABLE {service, state: "records-unreadable"}.
+- Step 0 (`lanes/co-plan/lanes/items177/step0.md`, 05:18Z) came on VF-PM's GO (05:12Z). At 05:17–05:20Z VF-PM
+  upheld D1 (the readers that only look keep catching) and ruled D2 (B): the signer reads the key as it is written
+  (`keyEncoding`), with no migration. cp-landing ruled (c) at 08:08Z: the store takes no ordinal, and the count is
+  §9's, by landing order.
+- Step 0's read corrected item 172's Found 1 at its source: the boot's re-attach never stopped (`agent-runtime.ts`
+  catches at :3403). What threw unguarded was a sign-out, a set's delete and the sweep, the first two after retiring.
+
+**What** (16 files, +530 −181 against main; no Rust, no pin-class file).
+- **DESIGN.md §9** (`:6229`): "What VibeField keeps, when it cannot read it" names items 172 and 177 and counts
+  seven kinds. Its list ends with the record of each session it manages (AR-3). A paragraph of its own (`:6248`):
+  - the sessions' records are read again at each ask;
+  - signing out of an agent and deleting a set refuse first: "VibeField can't read the sessions it keeps; nothing
+    was changed";
+  - where VibeField only looks at them (the start's re-attach, Timeline's past runs, the order agents are offered in,
+    a folder's places), it says so in fieldd's log and goes on with none.
+- **contracts:** `RECORD_STORES.SERVICE_AGENTS = "agents"` (`registries.ts:932`). It is TS-only, and `gen:check`
+  holds `registries.rs` untouched. One fixture, `error-data.agents-records-unreadable.json` (retryable), is parsed in
+  registry.test.ts. `docs/agent-plane/api.html` (`:1808`, `:1812`): `agents.profiles.delete` and
+  `agents.profileSets.delete` refuse with it before a login pane is ended, a sign-in retired or a session stopped.
+- **fieldd `signed-record.ts`:** `RecordSignerOptions.keyEncoding`, `"hex"` or `"base64"` (hex the default), read
+  and mint. base64 is the padded 44-character form the store always made, minted with its newline.
+  `UNREADABLE_WORDS.sessions` (`:60`) is DESIGN.md §9's line.
+- **fieldd `agent-sessions.ts`:** SessionRecordStore (`:67`) runs on RecordSigner (`keyEncoding: "base64"`, `:90`)
+  and a StoreGuard (store "sessions", format 1, `:96`).
+  - Its refusal is UNAVAILABLE {agents, records-unreadable}, retryable: the records are read at each ask.
+  - A folder it cannot list, or a record the disk does not answer, refuses. A newer format is held: never served,
+    set aside or written over. `readable()` (`:139`) throws the refusal.
+  - Its own HMAC, key, canonical JSON and exposed check are gone (+92 −165).
+- **The doors:** `agent-profiles.ts`' signOut asks `sessions.readable()` for a managed sign-in before it ends a
+  login pane or retires anything (`:588`; This Mac's sign-out reads no record). deleteSet asks before it marks the
+  set deleting (`:336`). `agent-runtime.ts`' `readable()` (`:2466`) asks the store. The readers that only look still
+  catch, log and answer empty (D1), and the sweep keeps catching.
+- **Tests:**
+  - record-stores.test.ts: `describe.each(CASES)` gains `sessionsCase` (U1–U4 for the sessions), and R7 names
+    agent-sessions.ts. Item 177's two describes add S1, S4 and S5. The pre-177 records are in
+    `test/fixtures/sessions-pre177/`: written by the old store, kept byte for byte, under a base64 TEST key.
+  - agent-profiles.test.ts adds S2 and S3; agent-session.test.ts adds B177, on the real floor.
+
+**The commits** (at T, oldest first; the re-cut left every patch-id as it was):
+1. `e39983a5a` DESIGN.md §9, first.
+2. `e6ef09796` contracts, and api.html's two doors.
+3. `e332f3359` the red, on a skeleton: U1–U4 for the sessions, R7, S1, S2 and S3.
+4. `c960a4a8c` the red-2: S4, and S5 as a pin on the store's own canonical JSON.
+5. `ed6459ea9` the green: the store on the signer, the doors asking first, and S5 turned into the signer's check.
+- **Named apart: `7b4ec2b90`, the ordinal-free tip** (cp-landing's (c)). The sessions' store loses "sixth" at five
+  sites in four files: a describe title, a class doc over two lines, and two comments (+5 −5). It came after the
+  code move's carry checks, so those stand on the moved chain alone.
+
+**Validation.**
+- **The red, on the mini** (a9), at `5187413f7` (the red-2 before the moves), 06:33:43Z. The five files
+  (record-stores, agent-profiles, signed-record, agent-session-records, needs-words): Test Files 2 failed | 3 passed
+  (5); Tests 9 failed | 69 passed (78). Every failure is an AssertionError, and S5's pin passed.
+- **The green, on the mini,** at `29ee93377` (the green, on `764913ca5`), from 06:33:49Z:
+  - the five files: 78 passed (78);
+  - B177 alone (`-t "B177"`): 1 passed | 83 skipped (84), on its first run;
+  - the full fieldd suite: Test Files 235 passed | 4 skipped (239); Tests 3086 passed | 14 skipped (3100), 0 failed;
+  - the fieldd typecheck: 0.
+  - The host: jaspers-Mac-mini, Apple M4, macOS 26.7.2, node v26.5.0, rustc 1.99.1. field-native was built from the
+    tree, and preflight was 0 with R23's standing `acp` line. Logs:
+    `/Volumes/SamsungRed/lanes/ts6/logs/mini/co-items177-29ee93377/items177-29ee93377/`.
+- **This Mac** (light; nice 19, guard clear; fieldd vitest only as named unit speed runs, never a witness): each
+  commit's readers and typechecks, and pairwise exit 0 before every commit. Among them: contracts 1548, registry.test
+  50, fixtures.test 586, check:ios-fixtures (249 copies, 86 pins), gen:check, field-app 2231, electron-shell 241 and
+  sound 96. Logs: `lanes/co-plan/lanes/items177/logs/`.
+- **The moves.** The chain was proven on `764913ca5` (item 172's records) and carried as main moved, never
+  re-proven:
+  - onto `eb8d90d59` as `918585b69` (07:41Z), and onto `b8c013220` as `10303542a` (07:43Z), each patch-id the same;
+  - **the code move onto `9dca71d7d`** (A2's records), as `493e85b51` (`codemove177.py`, 10:13:41–10:13:50Z, on
+    VF-PM's GO). It ran by VF-PM's rule for a lane that shares files with its base (07:56–07:58Z):
+    - **8 shared files, with 33 lane hunk regions in them at T.** There were 32 before the move: §9's count
+      paragraph is two hunks now, with CP-4a1's and A2's list items between them. **2 regions conflicted, and each
+      was resolved by its ruled rule** (`resolve177.py`, with its self-test). They are the ALLOW hunks:
+      - **ALLOW 1, DESIGN.md §9's count paragraph:** "items 172 and 177", "seven kinds", and the list's ", and the
+        record of each session it manages (AR-3)", re-wrapped at 120;
+      - **ALLOW 2, record-stores.test.ts, exactly three unions:** the SessionRecordStore import, sorted by module
+        path; `CASES`, main's five, then `sessionsCase`; and R7's row for agent-sessions.ts, in sorted order.
+      - Every other hunk merged clean.
+    - check 2: `493e85b51`'s `:packages` (`dfa1b8639db0`) and its tree equal the in-memory replay's.
+    - (1a): three patch-ids moved (DESIGN, contracts, the red). Each of those commits touches shared files, so (1b)
+      decided them. The red-2's and the green's patch-ids are equal.
+    - (1b): the 6 non-ruled shared files' +/- lines are equal; the 2 ruled ones differ by exactly their ruled regions.
+    - (1c): 8/8 unshared files are byte-identical. `carry-check.sh` STOPped on the two ruled files alone, by design.
+    - The light at `493e85b51` ran in the window cp-landing relayed (10:16:51–10:17:42Z). The frozen install (CP-4a1
+      moved fieldd's package.json), gen:check (the tree clean), contracts and fieldd tsc, biome `--changed`, the
+      walls (self-test and enforce) and preflight were each exit 0. preflight's 2 WARNs stand on main.
+    - Then `66d2fee23`, the ordinal-free commit, in the same window: biome, both tscs and the walls, exit 0.
+  - **the re-cut onto `af6a2ccc9`** (179's records), as `7b4ec2b90` (`recut177.py`, 10:35:29–10:35:33Z, on
+    cp-landing's GO). **No file is shared**: 179 touched `sanitize.test.ts`, and its records LANDED.md. So the carry
+    is (1c) alone, and no light ran.
+    - All 6 diffs are byte-identical, all 6 patch-ids equal, and 16/16 blobs byte-identical.
+    - The whole diff's md5 is `04e068fc0b7b…` on both sides.
+    - T's tree (`ff6a26c19a78`) and `:packages` (`664375964108`) equal the replay's. carry-check: "CARRY HOLDS".
+  - The kept tips: `co/items177-pre-eb8d` → `29ee93377`, `co/items177-pre-9dca71d7d` → `10303542a`, and
+    `co/items177-pre-af6a2ccc9` → `66d2fee23`.
+- **The expected counts**, read from the diff without running anything. bth's parser counted each changed test file
+  at both commits, and every loop- and `.each`-made row across all 980 test files was listed at both ends; the two
+  listings are identical. Against run 147's counts, with 179's 0:
+  - fieldd +10 → 3192 | 0 | 14: record-stores +7 (S1, S4, S5 and `sessionsCase`'s 4 rows), agent-profiles +2,
+    agent-session +1;
+  - contracts +2 → 1656: registry.test +1, and fixtures.test +1 (626 → 627 wire fixtures);
+  - vitest +12 → 12,877 | 0 | 20 over 925 files; node 450; cargo 545.
+- **Run 149** (`7b4ec2b90`, tree `ff6a26c19a78`, the landing mint; the mini; `lanes/ts6/logs/mini/run149/`):
+  - The mint's name is `mint/co-items177`. By (a), the older mint of that name was renamed aside as
+    `mint/co-items177-29ee93377`.
+  - `run149.out` (sha256 `1374af6848016b97b7b15aab3a6f138a83b3d46f389964403d7f862c163d1bbc`): "ts6-mini verify ARMED
+    10:38:52Z"; "verify exit 0 10:44:19Z"; "test target:  NX   Successfully ran target test for 29 projects";
+    "cargo test results: ok 34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+  - `verify.log` (sha256 `694812b739e439626befb62d7512e591a6fdfa32e3c2bfd0135657dd04a7e339`; its clean copy
+    `verify.clean.log`, `84544b712d665bc61120a4fd2b6c5ceaeb228df69c0d908656521ba24c9e32b9`): fieldd "Tests  3192
+    passed | 14 skipped (3206)"; contracts "Tests  1656 passed (1656)"; the census "census assert — against
+    apps/desktop/packaging/package-manifest.json", "no drift"; node "ℹ tests 450", "ℹ fail 0". Every count the packet
+    expected held: vitest 12,877 | 0 | 20 over 925 files, cargo 545 in 34 suites. 177's files read record-stores
+    "(35 tests)", agent-profiles "(14 tests)", agent-session "(84 tests | 2 skipped)", registry "(51 tests)" and
+    fixtures "(638 tests)", against run 147's 28, 12, 83, 50 and 637.
+  - `run149-next.out` (`7a089ba021c452c68958b3e9392dd30ee519a7fa448f7589ac5243f9e3a009c4`): "the locks stand: no
+    re-install"; "preflight exit 0 · 1 WARN/FAIL lines", R23's `acp` candidate (the standing warning).
+  - `run149-hid.log` (`90861ee5343364f720ced33e9d2d73baa36a095a9312775fa6ddd56c441e7f37`): the console locked, HID
+    idle, from 10:38:52Z to 10:44:19Z.
+  - No stage pass ran: 177 changes no dependency, no bundle and no dist file (step 2 expected none).
+- **Landed:** The fixer's ff `af6a2ccc9` → `7b4ec2b90` at 2026-11-05T10:48:06Z
+
+**What is real, what is stubbed.**
+- Real: the sessions' records are one of fieldd's signed stores. What fieldd cannot read is said in its log, and
+  held or refused. A record is never set aside for a disk that did not answer, and never written over. The two doors
+  that act on the records refuse before they change anything. A record signed before 177 verifies after it (S1, S5),
+  and the key is kept as it was written.
+- Stubbed: nothing.
+
+**Found.**
+1. **The half-done act.** Before this, a sign-out retired the sign-in and THEN threw a raw errno at liveUnder. A
+   set's delete retired its sign-ins and then threw at stopUnder (`agent-profiles.ts` :594/:597 and :345/:352 at
+   `764913ca5`). Both ask first now (S2, S3, B177).
+2. **The session key's two events are renamed.** `fieldd.agents.session_key_exposed` and
+   `fieldd.agents.session_key_unreadable` become the signer's `fieldd.records.key_set_aside` {key, why, aside}. They
+   have no reader: `git grep` at main finds only their emitter.
+3. **The key read is stricter.** The old read took any text that Buffer.from decoded to 32 bytes (unpadded,
+   URL-safe). The new one takes exactly the padded form, the only form the store ever minted.
+4. **A newer VibeField's session record was set aside as unreadable,** because the schema's `format: z.literal(1)`
+   refuses it, and it was written over at its run's next write. It is held now (S4).
+5. **contracts' canonicalJson gives the bytes the store's own copy signed.** S5's pin passed on the skeleton against
+   three records the old store wrote: a plain one, a nested one (quotes, a backslash, non-ASCII and an emoji), and
+   one with its keys reversed. After the copy was gone, it passed as the signer's check.
+6. **Item 172's erratum, ROADMAP's leg.** The owed line's item 177 clause ("a list that throws stops the boot's
+   re-attach") was false. This entry's ROADMAP edit drops the clause with the item. The same line's CO-1b clause
+   drops too: "TH-1 and TH-2" closed it (built in `1e78cc107`).
+
+**Owed.**
+- James's draft words: "VibeField can't read the sessions it keeps; nothing was changed" (DESIGN.md §9,
+  `e39983a5a`). They are on his list as PROPOSED, and not a hold.
+- Nothing is owed to a screen for this refusal (read at `96606efa9`; the lines are the same at T):
+  - field-app's Settings › Profiles draws fieldd's own words through `refusalSentence` (`ProfilesSection.tsx:605`,
+    `:628`; `use-account.ts:79`).
+  - Its four silent callers (`use-profile-sign-in.ts:145`, `:222`, `:239`, `:248`) remove a fresh, empty sign-in.
+    They stay true: nothing is retired.
+  - The phone calls neither door.
+- **Closed by this entry:**
+  - item 177 (FILED in "Item 172", Found 1, and named in its Owed);
+  - "CP-3"'s Owed line "SessionRecordStore is still on its own HMAC, with a base64 key…".

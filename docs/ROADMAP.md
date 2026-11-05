@@ -567,11 +567,9 @@ phone"; DECISIONS PC
     Nothing writes it yet: 1′, SP-1e2 and TH-1 each add theirs. Later slices join the settle with one `joinSettle`.
   - **CO-1b**: fieldd names an untitled session by its agent in its folder ("Claude Code in vibe-field"), and a reason
     after a colon says "it" for a session its sentence names.
-  - Owed: item 169 (a say delivered before a fieldd restart is forgotten) · item 177 (SessionRecordStore's own copy of
-    the signed-record rule: a list that throws stops the boot's re-attach) · 1′'s held wakes (item 152) · CO-Q9's
-    second half (fieldd's own wakes, unaudited) · CO-1b's trailing words in field-app and electron-shell, at A2's
-    rebase · the screens that draw item 172's refusal (a store fieldd cannot read): the phone's Chat (sparks, needs,
-    needs.subscribe) and field-app's needs board.
+  - Owed: item 169 (a say delivered before a fieldd restart is forgotten) · 1′'s held wakes (item 152) · CO-Q9's
+    second half (fieldd's own wakes, unaudited) · the screens that draw item 172's refusal (a store fieldd cannot
+    read): the phone's Chat (sparks, needs, needs.subscribe) and field-app's needs board.
   - For James's eye (draft words; not a hold): a dropped answer's "Vela's session ended before it took this", and
     CO-1b's names ("Claude Code in vibe-field"; "…: it ended"; "work is not one of Vela's Agent Profiles").
 - **CP-5a, the spark claim**: LANDED 11-05 (`fc70097e3`, the mini's mint M140, run 140, stacked; LANDED "CP-5a"), on
@@ -613,6 +611,14 @@ phone"; DECISIONS PC
   - Chat's thread draws that conversation; Send goes through `compose.sparks.say`; the pane leaves Chat; the head
     carries Jump to, Wake and Pause.
   - Not here: Copy a message, TH-3's marks, the crew card's act line (SP-1e2's renderer half, next).
+- **Item 177, the sessions' records on the one signer**: LANDED 11-05 (`7b4ec2b90`, the mini's mint M149, run 149;
+  LANDED "Item 177"), on item 172's Found 1 (filed 04:30Z by cp-landing) and the step-0 shape (`step0.md`; VF-PM's
+  GO 05:12Z, D1 upheld, D2 (B)).
+  - SessionRecordStore runs on RecordSigner and item 172's StoreGuard. Its key is read and made as base64, as it
+    always was (`keyEncoding`), so a record signed before 177 verifies after it.
+  - A sign-out and a set's delete ask first, and refuse UNAVAILABLE {agents, records-unreadable} before anything is
+    retired. The readers that only look go on with none, and say so in fieldd's log.
+  - For James's eye (draft words; not a hold): "VibeField can't read the sessions it keeps; nothing was changed".
 - Next, in order (the CO waves matrix, `lanes/co-plan/plans/co-waves-matrix.md`):
   - **SP-1e2's renderer half → SP-1e4** (SP-1e: CH-D2's live cards in Chat's thread): the crew card in field-app, on
     TH's thread, with the act line's `crew?` now that TH-1 has landed; then SP-1e4, Stop all and Pause all. SP-1e3
