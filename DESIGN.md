@@ -1822,8 +1822,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         your OK", "Needs your OK · vibe-field·2", "Needs your OK · Claude Code". Wherever the card names a session, a
         session @ offers in this thread is named by its handle, as @ names it (§8 "Chat's composer", two sessions with
         one name): "vibe-field", "vibe-field·2". A session @ offers no handle is named as fieldd names a run: its
-        title, else its agent's label in the catalog, else its id, so an untitled Claude Code session @ does not offer
-        is "Claude Code".
+        title, else its agent's label in the catalog in its folder, else that label, else its id, so an untitled Claude
+        Code session @ does not offer is "Claude Code in vibe-field", and "Claude Code" while fieldd knows no folder for
+        it (the examples here name one so).
         > **HANDLE (2026-11-02):** this said every session is named as fieldd names a run, so two untitled Claude Code
         > sessions both read "Claude Code" while @ beside the card says "vibe-field" and "vibe-field·2". The card now
         > names a session as @ does, one rule read twice, and fieldd's name only where @ offers none (track CO, the
@@ -1833,6 +1834,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         > rises before the Agent Profiles are read says fieldd's name, then the handle; it is announced once, in the
         > words it rose with. An answer said on the status line names a session as its card did when you pressed. The
         > question, the sub and the failed line below name a session so.
+        > **CO-1b (2026-11-05, CO-Q4 (b)):** fieldd's name was the title, else the agent's label, else the id, so two
+        > untitled sessions in two folders both read "Claude Code" where @ offers no handle. fieldd now says the agent
+        > in its folder, the folder @ and the board read (the last part of the session's working directory). Two in
+        > one folder still read alike there, (b)'s named cost. An item keeps the name it was asked with, so one asked
+        > before fieldd read the session's folder says "Claude Code".
       - **the question:** 14/500 in primary ink at 1.45, what you are asked. That is the spark's own question; "Vela
         wants to send to Claude Code"; "Vela wants another agent: Claude Code in vibe-field" (the catalog's label, then
         the folder when fieldd names one); "Claude Code asks to run Bash", or "Claude Code asks for your OK" when its
@@ -1887,7 +1893,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         Couldn't send Vela's words to Claude Code: ‹reason›"; "You said Allow one more · Couldn't start the agent:
         ‹reason›"; for any other item, "Couldn't finish it: ‹reason›" after what you said. A session @ offers is said
         by its handle, as the eyebrow names it (the note above): "Couldn't send Vela's words to vibe-field·2:
-        ‹reason›";
+        ‹reason›". The ‹reason› names no session the line already names, so a send's says "it" (CO-1b): "Couldn't
+        send Vela's words to vibe-field·2: it ended";
       - an answer the spark has not heard, because it sleeps and could not be woken yet: "You said Yes · Vela hears it
         when it wakes: ‹fieldd's words›". When both hold, the act's failure is what the line says.
       When the answer returns and its card is no longer on screen (you left the thread, or Chat is not the view), the
@@ -3122,11 +3129,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   timeline"**.
   *Amended 2026-10-31 (CP-3, CP3-D5 A; §9 "An agent's notify"):* **an agent's notify** is said
   here too, in every window: "Vela — the build is green". The teller comes first, named as fieldd
-  names it (a spark by its name, a session by its title, else its agent's label, else its id),
-  then a dash, then its words; the name is never the agent's own words, so a notice cannot pass
-  as another teller's. It is one line, cut with an ellipsis at the line's width and never
-  wrapped, and it stands 2.4s like any plain notice. At most two of one teller's notices wait
-  their turn, and a third from that teller sheds that teller's oldest waiting one, never the one
+  names it (a spark by its name, a session by its title, else its agent's label in its folder,
+  else that label, else its id; CO-1b, 2026-11-05), then a dash, then its words; the name is
+  never the agent's own words, so a notice cannot pass as another teller's. It is one line, cut
+  with an ellipsis at the line's width and never wrapped, and it stands 2.4s like any plain
+  notice. At most two of one teller's notices wait their turn, and a third from that teller
+  sheds that teller's oldest waiting one, never the one
   standing, so one agent's notices never hold back another's (PF4's watermark). The line says
   only what is told while the window listens: a notice told before it is no news. While no
   VibeField window is in front, main says it outside the app as well (§9). An answer given on a
@@ -5654,16 +5662,27 @@ below), and the spark's next session hears it; a line VibeField cannot confirm i
   either way, and a spawn's yes was for that one agent. An act is never done twice (CP2-D2).
 
 "Claude Code" is the catalog's label (R23b): the agent a spawn starts, and a session fieldd names by its title, else by
-its agent's label, else by its id (§8 "Chat's thread", the needs-you card). ‹reason› is fieldd's own words for what
-stopped it.
+its agent's label in its folder ("Claude Code in vibe-field"), else by that label, else by its id (§8 "Chat's thread",
+the needs-you card); the facts above name a session fieldd knows no folder for. ‹reason› is fieldd's own words for what
+stopped it, and names no session its sentence already names: "VibeField: Vela's words to Claude Code in vibe-field
+were not sent: it is not running".
 
 > **HANDLE (2026-11-02):** the pointer above sent you to a card that named a session as fieldd does. The card now
 > names a session @ offers by @'s handle ("vibe-field·2"), and fieldd's name only where @ offers none (§8 "Chat's
 > thread", the eyebrow's note). These facts are fieldd's own words, and still name a session by its title, else its
 > agent's label, else its id; so does a ‹reason› after a colon on the card.
 
+> **CO-1b (2026-11-05, CO-Q4 (b)):** the note above said these facts, and a ‹reason› after a colon, name a session by
+> its title, else its agent's label, else its id. fieldd now names an untitled session by its agent in its folder, the
+> folder @ and the board read, and a ‹reason› says "it" for the session its sentence names, so the card's line never
+> names one session twice, by @'s handle and by fieldd's name ("Couldn't send Vela's words to vibe-field·2: it
+> ended"). A spark's own name in a reason stands ("Vela's session is not running yet"): the sentence names the spark,
+> not a session. A spawn's refusal names the agent asked for ("Couldn't start the agent: Claude Code is in none of
+> Vela's Agent Profiles"), since its sentence names none.
+
 **An agent's notify** (CP-3, CP3-D5 A) is said as its teller, named as fieldd names it (a spark by its name, a session
-by its title, else its agent's label, else its id: "Vela", "Claude Code"), then its words on one line: each line break
+by its title, else its agent's label in its folder, else that label, else its id: "Vela", "Claude Code in vibe-field",
+"Claude Code"), then its words on one line: each line break
 or run of spaces is one space, and the words are cut at 140 characters, the last of them "…". In every window it is the
 status line's note (§8 "The status line"). At most two of one teller's notices wait their turn there, and a third from
 the same teller sheds that teller's oldest waiting one, so one agent's notices never hold back another's (PF4's
