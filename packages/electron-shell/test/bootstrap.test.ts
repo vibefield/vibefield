@@ -210,6 +210,37 @@ describe("createBootstrapHandler (once per generation)", () => {
       expect(scopes, door.method).toContain(door.scope);
   });
 
+  it("MA-4a: the window holds every door From your agents asks — apps.use for the open and the mark — and still not shell.open", async () => {
+    const daemon = fakeDaemon();
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
+    await handler({ sender: fakeSender(1).wc });
+    const mint = daemon.request.mock.calls.find(([method]) => method === "system.mintWindowToken");
+    const scopes = (mint?.[1] as { scopes: string[] } | undefined)?.scopes ?? [];
+    // read off the registry rows, so a door that moves scope moves this with it: the feed, its
+    // pings, Versions and the project names, then the two acts (the lead's ruling on L4, C1)
+    const asked = [
+      "index.apps.list",
+      "index.apps.subscribe",
+      "index.artifacts",
+      "project.list",
+      "artifact.open",
+      "artifact.mark",
+    ];
+    const doors = METHODS.filter((method) => asked.includes(method.method));
+    expect(doors.map((door) => door.method).sort()).toEqual([...asked].sort());
+    expect(
+      doors.filter((door) => door.method.startsWith("artifact.")).map((door) => door.scope),
+    ).toEqual(["apps.use", "apps.use"]);
+    for (const door of doors) expect(scopes, door.method).toContain(door.scope);
+    // the home opens the URL through its shell (RULINGS L4, C2): the window is not widened to the
+    // plugin-eligible shell.open
+    expect(scopes).not.toContain("shell.open");
+  });
+
   it("distinct senders mint distinct tokens with their own labels", async () => {
     const daemon = fakeDaemon();
     const handler = createBootstrapHandler({

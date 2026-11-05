@@ -168,6 +168,9 @@ describe("UI system ownership boundaries", () => {
     );
     // HN-8 (PL-D2): the package circle's plates stage it, and never restyle it
     expect(catalogCss).not.toMatch(/^\.vf-package-/m);
+    // MA-4a (the lead's C18): From your agents' plates stage the shipping group at the shelf's
+    // width, and never restyle a made tile; its rules are made-apps.css's
+    expect(catalogCss).not.toMatch(/^\.vf-apps(?:\b|-)/m);
     // SP-1b: Chat's plate is a box on the frame's ground; the panel's rules are the product's
     expect(catalogCss).not.toMatch(/^\.vf-chat(?:\b|-)/m);
     // SP-1c: the New spark sheet's plate stages it over Chat; the sheet's rules are the product's
@@ -789,6 +792,27 @@ describe("UI system ownership boundaries", () => {
     expect(source("design-system/styles/scenes.css")).toMatch(
       /\.vf-ds-shelf-stage \{[^}]*504px\);[^}]*container-type: inline-size;/u,
     );
+  });
+
+  it("keeps From your agents' plate on its own fixture adapter, at the shelf's width — the shipping MadeApps, never its markup (MA-4a)", () => {
+    // The catalog stands in for what a host supplies — the client's answers, the clock and the
+    // image transport (`frame/apps/design-system.tsx`, beside the shipping group, the Hub's
+    // `/design-system` door's shape) — and stages the group where the Hub's plate stands, in the
+    // 504 container the pill's sheet gives its Apps shelf. Never the group's classes, never a
+    // stylesheet, never the window's client.
+    const adapter = source("frame/apps/design-system.tsx");
+    expect(adapter).toMatch(/<MadeApps\s/u);
+    expect(adapter).toContain("madeAppsPreviewClient(state)");
+    expect(adapter).not.toMatch(/className="vf-apps/u);
+    expect(adapter).not.toContain("<style");
+    expect(adapter).not.toContain("useFielddClient");
+    expect(adapter).not.toContain("getHost");
+    // …and its plate MOUNTED on the page, in the shelf's stage, not merely defined
+    const page = source("design-system/sections/SurfacesSection.tsx");
+    expect(page).toContain('from "../../frame/apps/design-system"');
+    expect(page).toMatch(/<div className="vf-ds-shelf-stage">\s*<MadeAppsPreview state=\{state\} \/>/u);
+    expect(page).not.toMatch(/className="vf-apps/u);
+    expect(page).not.toMatch(/<MadeApps\s/u);
   });
 
   it("keeps the edge tray, its catalog plates and its suite gone (HN-8) — Artifacts' doors are the head's", () => {
