@@ -121,6 +121,9 @@ function harness(
   const root = mkdtempSync(join(tmpdir(), "vf-plane-needs-"));
   roots.push(root);
   const notices: unknown[] = [];
+  /** TH-1 — what the plane told the spark's transcript: its acts, and each call a spark's run made */
+  const acts: unknown[] = [];
+  const served: unknown[] = [];
   const needs = new NeedsQueue({
     store: new NeedsStore({ dir: join(root, "needs"), keyPath: join(root, "needs.key") }),
     inputs: { wake: () => true, enqueue: () => ({ id: "in-1", position: 1 }) },
@@ -204,7 +207,12 @@ function harness(
         } as IndexSearchResult;
       },
     },
-    you: { queue: needs, label: (run) => (run === "run-7" ? "claude·7" : run) },
+    you: {
+      queue: needs,
+      label: (run) => (run === "run-7" ? "claude·7" : run),
+      appendAct: (spark, run, act) => void acts.push({ spark, run, ...act }),
+    },
+    onServed: (caller) => void served.push(caller),
     audit,
     version: "0.1.0",
     now: () => clock.t,
@@ -225,7 +233,21 @@ function harness(
   const frame = (sets: readonly AgentProfileSet[]) => {
     personaSets = personaSetsOf(sets);
   };
-  return { plane, ask, call, answers, audited, searched, settle, needs, notices, clock, frame };
+  return {
+    plane,
+    ask,
+    call,
+    answers,
+    audited,
+    searched,
+    settle,
+    needs,
+    notices,
+    clock,
+    frame,
+    acts,
+    served,
+  };
 }
 
 const names = (answer: { result: { tools: { name: string }[] } }) =>
@@ -514,6 +536,22 @@ describe("the you room (CP-3; MT-D11, CP3-D2 A, CP3-D5 A)", () => {
       "tools.ask_user denied",
       "tools.notify succeeded",
       "tools.notify succeeded",
+    ]);
+  });
+
+  it("TH-1 — keeps a spark's notify in its transcript, and tells it each call its run made, answered or refused; a plain run's neither (CO-Q1 (b), TH-Q1 (ii))", async () => {
+    const h = harness();
+    await h.plane.ensureStarted();
+    h.call(1001, 31, "notify", { text: "the build is green" });
+    h.call(1002, 32, "notify", { text: "done" });
+    h.call(1001, 33, "no_such_tool");
+    await h.settle();
+    expect(h.acts).toEqual([
+      { spark: SPARK.id, run: "run-12", what: "notify", text: "the build is green" },
+    ]);
+    expect(h.served).toEqual([
+      { sparkId: SPARK.id, runtimeRunId: "run-12" },
+      { sparkId: SPARK.id, runtimeRunId: "run-12" },
     ]);
   });
 

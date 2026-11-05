@@ -1076,6 +1076,16 @@ const readRecord = (dataDir: string, runtimeRunId: string) =>
     ),
   );
 
+/** TH-1 — a spark's run's transcript as fieldd kept it: its lines in order (spark-transcripts.ts), or none */
+const transcriptOf = (dataDir: string, spark: string, runtimeRunId: string) => {
+  const path = join(dataDir, ...LAYOUT.SPARK_FILES_DIR, spark, `${runtimeRunId}.jsonl`);
+  if (!existsSync(path)) return [];
+  return readFileSync(path, "utf8")
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+};
+
 /** every JSONL ledger under the user root (the `.integrity.json` checkpoints
  * beside them are not records) */
 function auditLedgers(dataDir: string): string[] {
@@ -1610,6 +1620,22 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       expect.arrayContaining(["agent_spawn", "agent_send", "agent_interrupt", "agent_stop"]),
     );
     expect(doorProof.called.isError).not.toBe(true);
+    // TH-1 — the hatch began the spark's conversation in its transcript, kept in fieldd's own folder for the spark,
+    // never in its home (the agent's cwd); your words there with their receipt, before any paste of them
+    const said = (await win.call("compose.sparks.say", {
+      spark: spark.id,
+      text: "carry on with the migration",
+      requestId: "say-th1-cp1d-0001",
+    })) as { state: string };
+    const hatched = transcriptOf(dataDir, spark.id, runId);
+    expect(hatched[0]).toMatchObject({ kind: "run", runtimeRunId: runId, fresh: true, seq: 1 });
+    expect(hatched.find((line) => line["kind"] === "you")).toMatchObject({
+      via: "chat",
+      text: "carry on with the migration",
+      requestId: "say-th1-cp1d-0001",
+      state: said.state,
+    });
+    expect(join(dataDir, ...LAYOUT.SPARK_FILES_DIR).startsWith(spark.folder)).toBe(false);
 
     await win.call("terminal.terminate", { sessionId: first.runtimeSessionId });
     await poll(async () => (readRecord(dataDir, runId).exited ? true : undefined), 15_000);
@@ -1632,6 +1658,12 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(record.origin).toEqual({ by: "you" });
     expect(JSON.stringify(record)).not.toContain(revised);
     expect(JSON.stringify(record)).not.toContain("mcpServers");
+    // TH-1 — the resume continues the conversation in a run of its own
+    expect(transcriptOf(dataDir, spark.id, resumed.session.runtimeRunId)[0]).toMatchObject({
+      kind: "run",
+      fresh: false,
+      seq: 1,
+    });
     await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
 
     const ordinary = (await born(win, "agent.spawn", {
@@ -1646,6 +1678,10 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     ]);
     expect(sessions[2]?.briefing.instructions).toBeUndefined();
     expect(sessions[2]?.briefing.mcpServers?.vibefield?.command).toBe(BIN);
+    // TH-1 — a plain run keeps no transcript: only a spark's own runs are recorded
+    expect(readdirSync(join(dataDir, ...LAYOUT.SPARK_FILES_DIR, spark.id))).not.toContain(
+      `${ordinary.session.runtimeRunId}.jsonl`,
+    );
     const plainProof = await poll(async () => {
       const path = join(box.envOut, "session-3.tools.json");
       return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
@@ -4739,6 +4775,13 @@ describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () =
     expect(sparkRecord(first, spark.id)?.turnedAt).toBe(at);
     scriptedEvent(first, paneId, { type: "turn:completed" });
     await rowWhere(win1, runId, (row) => row.status === "idle", "the turn's end");
+    // TH-1 — the spark's transcript holds the turn's edges after its run line
+    const before = transcriptOf(first.dataDir, spark.id, runId);
+    expect(before.map((line) => [line["kind"], line["edge"] ?? line["fresh"]])).toEqual([
+      ["run", true],
+      ["turn", "start"],
+      ["turn", "end"],
+    ]);
 
     // ── the restart: the run is released and re-attached; the attach replays nothing it counted ──
     await first.daemon.stop();
@@ -4759,6 +4802,18 @@ describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () =
     expect(record.reattach).toMatchObject({ state: "attached" });
     expect(record.turnedAt).toBe(at);
     expect(await sparkSays(win2, spark.id)).toBe(at);
+    // TH-1 — the re-attach begins nothing: no second run line, no edge replayed, at most a gap where the monitor saw
+    // the run move while fieldd was away; the next turn's line takes the next seq
+    scriptedEvent(second, paneId, { type: "turn:started" });
+    const after = await poll(async () => {
+      const lines = transcriptOf(first.dataDir, spark.id, runId);
+      return lines.length > before.length && lines.at(-1)?.["kind"] === "turn" ? lines : undefined;
+    }, 15_000);
+    const between = after.slice(before.length, -1).map((line) => line["kind"]);
+    expect(between.every((kind) => kind === "gap")).toBe(true);
+    expect(between.length).toBeLessThanOrEqual(1);
+    expect(after.at(-1)).toMatchObject({ kind: "turn", edge: "start", seq: after.length });
+    expect(after.filter((line) => line["kind"] === "run")).toHaveLength(1);
     await win2.call("terminal.terminate", { sessionId: paneId });
   }, 150_000);
 

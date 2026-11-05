@@ -346,6 +346,7 @@ import {
   ShellAbsence,
 } from "./shell-absence";
 import { ShellLease } from "./shell-lease";
+import { SparkTranscriptRecorder, SparkTranscripts } from "./spark-transcripts";
 import { createSurfaceService } from "./surface-service";
 import { oweSyncQuestion } from "./sync-question";
 import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
@@ -1156,6 +1157,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     keyPath: join(config.dataDir, ...LAYOUT.SPARK_FILES_KEY_FILE),
     logger: logger.child({ component: "compose.spark_kept" }),
   });
+  // TH-1 (TH0-Q1 = O1) — each spark's transcript, one file per run in that same folder under its key, and the recorder
+  // that writes it from the spark's own runs and from fieldd's own facts (spark-transcripts.ts)
+  const sparkTranscripts = new SparkTranscripts({
+    dir: join(config.dataDir, ...LAYOUT.SPARK_FILES_DIR),
+    keyPath: join(config.dataDir, ...LAYOUT.SPARK_FILES_KEY_FILE),
+    logger: logger.child({ component: "compose.transcripts" }),
+  });
+  const transcriptRecorder = new SparkTranscriptRecorder(
+    sparkTranscripts,
+    logger.child({ component: "compose.transcripts" }),
+  );
   const briefings: AgentBriefings = new AgentBriefings({
     spark: (id) => sparkStore.get(id),
     // CP-5a — the spark claim is the catalog's, read before the facts (the hatch and every spark birth)
@@ -1224,6 +1236,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     ...(config.agentGateway?.watch !== undefined ? { typedWatch: config.agentGateway.watch } : {}),
     logger: logger.child({ component: "agent_runtime" }),
   });
+  // TH-1 — the transcript hears a spark's own runs from their entry, a re-attach's included (before the inventory that
+  // re-attaches them), and lets each go at its end
+  agents.onSparkRunEntered((entered) => transcriptRecorder.entered(entered));
+  agents.onRunEnded((runtimeRunId) => transcriptRecorder.forget(runtimeRunId));
   // AR-5d — account usage beside the runtime that owns the adapters: one
   // reading per provider and per persona, polled on the adapter's cadence.
   // Constructed here (not started) so a provider push and a persona change
@@ -2887,11 +2903,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const inputs = new AgentInputQueues({
       dir: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_DIR),
       keyPath: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_KEY_FILE),
-      deliver: (runtimeRunId, text) => agents.submit(runtimeRunId, text),
+      deliver: (runtimeRunId, text) => {
+        // TH-1 — the turn this paste starts is its input's, never a prompt typed in the pane
+        transcriptRecorder.expectPrompt(runtimeRunId, text);
+        return agents.submit(runtimeRunId, text);
+      },
       isIdle: (runtimeRunId) => isIdleRow(agents.monitorOf(runtimeRunId)),
       onOutcome: (runtimeRunId, input, outcome, reason) => {
         // IOS-12a — the person's own words: their receipt (`compose.sparks.say` answers it again by request id)
         sayReceipts.heard(input, outcome);
+        // TH-1 — and in the spark's transcript: your words' outcome, the facts a wake told it
+        transcriptRecorder.heard(runtimeRunId, input, outcome, reason);
         // item 158, CO-Q9 (b): what became of a line that carried answers' facts is the needs queue's to hear
         if (input.items !== undefined) needs.onFactOutcome(runtimeRunId, input.items, outcome);
         if (input.from.kind !== "spark") {
@@ -3034,6 +3056,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       open: (id, principal) => sparks.open(id, principal),
       spawn: talkSpawn,
       agentLabel: agentLabelOf,
+      appendAct: (spark, runtimeRunId, act) =>
+        transcriptRecorder.act(spark, runtimeRunId, act.what, act.text),
       logger: logger.child({ component: "needs" }),
     });
     needsQueue = needs;
@@ -3179,7 +3203,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           index.search({ q, runtime, limit, ...(afterMs !== undefined ? { afterMs } : {}) }),
       },
       talk,
-      you: { queue: needs, label: runLabel },
+      you: {
+        queue: needs,
+        label: runLabel,
+        appendAct: (spark, runtimeRunId, act) =>
+          transcriptRecorder.act(spark, runtimeRunId, act.what, act.text),
+      },
+      onServed: (caller) => transcriptRecorder.served(caller.runtimeRunId),
       audit,
       version: FIELDD_VERSION,
       logger: logger.child({ component: "compose" }),
@@ -6414,6 +6444,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               );
             const { id, position } = inputs.enqueue(runtimeRunId, text, { kind: "you" }, requestId);
             sayReceipts.queued(requestId, spark, runtimeRunId, id);
+            // TH-1 — your words in the spark's transcript, with their receipt and chips, before any paste of them
+            transcriptRecorder.said(spark, runtimeRunId, {
+              text,
+              input: id,
+              requestId,
+              state: asleep ? "waking" : "queued",
+              chips: parsed.data.chips,
+            });
             return {
               spark,
               requestId,

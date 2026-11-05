@@ -142,6 +142,7 @@ import type { ProfileDraftsStore } from "./profile-drafts";
 import type { OwnPlace } from "./projects/project-groups";
 import type { LaunchRecipe } from "./projects/project-records";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
+import type { SparkRunBegun, SparkRunEntered } from "./spark-transcripts";
 import type { GrantPrincipal } from "./terminal-grants";
 import { bornWithoutTicket, type TerminalService } from "./terminal-service";
 
@@ -749,6 +750,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private readonly runEndedListeners = new Set<(runtimeRunId: string) => void>();
   /** TU-1 (Q1) — the sparks service hears each time a spark's own session is known to have worked */
   private readonly sparkTurnedListeners = new Set<(spark: SparkId, at: string) => void>();
+  /** TH-1 — the spark's transcript hears each of a spark's own runs as it enters (`onSparkRunEntered`) */
+  private readonly sparkRunEnteredListeners = new Set<(entered: SparkRunEntered) => void>();
   private publishTimer: NodeJS.Timeout | null = null;
   private disposed = false;
 
@@ -1569,6 +1572,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(previous?.origin !== undefined ? { origin: previous.origin } : {}),
         // TU-1 (Q5) — History lists conversations that have worked: this one is born turned
         turnedAt: this.now().toISOString(),
+        // TH-1 — it continues a conversation: the spark's transcript does not begin a new one here
+        resumed: true,
       });
     });
     return {
@@ -2151,6 +2156,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   onRunEnded(listener: (runtimeRunId: string) => void): () => void {
     this.runEndedListeners.add(listener);
     return () => this.runEndedListeners.delete(listener);
+  }
+
+  /** TH-1 — each of a spark's own runs as it enters the fold, and how it began: a birth, a resume, a re-attach after
+   * fieldd restarted, an adoption. Its listener subscribes to the run's events itself (`Agent.on`); a run a spark
+   * started is not the spark's own and is not told. */
+  onSparkRunEntered(listener: (entered: SparkRunEntered) => void): () => void {
+    this.sparkRunEnteredListeners.add(listener);
+    return () => this.sparkRunEnteredListeners.delete(listener);
   }
 
   /** TU-1 (Q1, D7) — a spark's own session has worked, and when: told at the stamp of its first turn, and again each
@@ -2883,6 +2896,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       spark?: SparkId | undefined;
       /** Item 124 — born without its briefing; the fold's row says so, the record never does */
       door?: "off" | undefined;
+      /** TH-1 — a resume: the run continues a conversation (the spark's transcript begins none) */
+      resumed?: true | undefined;
     } & (
       | {
           /** AR-4 — the record already exists: this run was re-attached, and the
@@ -3013,6 +3028,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.settleEarlyExit(info.terminalSessionId);
     // TU-1 (D7) — a spark's session that enters having worked tells its spark again
     if (typeof turnedAt === "string") this.sparkTurned(entry, turnedAt);
+    // TH-1 — a spark's own run is heard by its transcript from here
+    this.sparkRunEntered(entry, agent, launch);
     const current = this.runtime.monitorState(info.runtimeRunId);
     if (current !== undefined) this.applyMonitor(entry, current);
     this.logger.info(
@@ -3274,6 +3291,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(record.spark !== undefined ? { spark: record.spark } : {}),
         // TU-1 (Q1, Q5) — the same conversation continued: whether it has worked is the record's, absent kept absent
         turnedAt: record.turnedAt,
+        resumed: true,
       });
     });
   }
@@ -4668,6 +4686,34 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       "A session's first turn could not be kept on its record; its row says it until fieldd stops",
       { runtimeRunId, reason },
     );
+  }
+
+  /** TH-1 — a spark's own run entered: its listeners hear the run, its spark and how it began (`onSparkRunEntered`). */
+  private sparkRunEntered(
+    entry: ManagedEntry,
+    agent: Agent,
+    launch: { reattached?: unknown; adopted?: unknown; resumed?: true | undefined },
+  ): void {
+    const { spark } = entry;
+    if (spark === undefined) return;
+    const begun: SparkRunBegun =
+      launch.reattached !== undefined
+        ? "reattach"
+        : launch.adopted !== undefined
+          ? "adopt"
+          : launch.resumed === true
+            ? "resume"
+            : "spawn";
+    for (const listener of this.sparkRunEnteredListeners) {
+      try {
+        listener({ agent, spark, runtimeRunId: entry.info.runtimeRunId, begun });
+      } catch (err) {
+        this.logger.warn("fieldd.agents.entered_listener_failed", "A spark's run listener threw", {
+          runtimeRunId: entry.info.runtimeRunId,
+          reason: (err as Error).message,
+        });
+      }
+    }
   }
 
   /** TU-1 (Q1) — a spark's own session has worked: its listeners hear the spark and the time (`onSparkTurned`). Only

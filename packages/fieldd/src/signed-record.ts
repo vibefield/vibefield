@@ -227,6 +227,12 @@ export class RecordSigner {
     return createHmac("sha256", this.#signingKey()).update(canonicalJson(unsigned)).digest("hex");
   }
 
+  /** TH-1 — the key's bytes, for a worker of fieldd's own that verifies what this signs (the transcript worker),
+   * handed on its IPC pipe and never in its environment (EL7). Made once, as for a signature. */
+  secret(): Buffer {
+    return Buffer.from(this.#signingKey());
+  }
+
   /** Whether `signature` is this key's for `unsigned`, compared in constant time; false for a malformed one. */
   verifies(unsigned: unknown, signature: string): boolean {
     if (!HEX_32_BYTES.test(signature)) return false;

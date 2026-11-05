@@ -95,6 +95,9 @@ export interface ToolPlaneServiceOptions {
   /** CP-3's you room (ask_user, notify); absent, its rows answer `unavailable`. */
   readonly you?: YouDeps;
   readonly audit: ToolPlaneAudit;
+  /** TH-1 (TH-Q1 (ii), James) — a call a spark's own run made to this door, answered or refused: its transcript marks
+   * the run's MCP tool row ours, whose own line says what it did. Told before the room runs. */
+  onServed?(caller: { readonly sparkId: SparkId; readonly runtimeRunId: string }): void;
   /** fieldd's version, for the server's `serverInfo`. */
   readonly version: string;
   /** The door's re-ask clock (tests). */
@@ -322,6 +325,13 @@ export class ToolPlaneService {
     name: string,
     args: Record<string, unknown>,
   ): Promise<McpCallResult> {
+    if (caller.kind === "spark") {
+      try {
+        this.opts.onServed?.({ sparkId: caller.sparkId, runtimeRunId: caller.runtimeRunId });
+      } catch {
+        // the transcript's mark never stands in a call's way
+      }
+    }
     const row = toolRow(name);
     if (!row || !isServedTool(name))
       return refusal("unknown-tool", `VibeField has no tool named ${name}.`);

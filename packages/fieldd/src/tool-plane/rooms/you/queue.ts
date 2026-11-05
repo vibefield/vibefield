@@ -122,6 +122,14 @@ export interface NeedsQueueOptions {
   readonly spawn: TalkDeps["spawn"];
   /** an agent's label in the catalog (R23b: a lookup, never a compare) */
   agentLabel(agent: string): string | undefined;
+  /** TH-1 (TH-Q27 (a)) — VibeField's own act, kept in the spark's transcript: an answer you gave to a spark's item is
+   * kept in the run that raised it, so the flow says "You answered Vela: Yes" once the card leaves. Absent, nothing is
+   * kept. */
+  appendAct?(
+    spark: SparkId,
+    runtimeRunId: string,
+    act: { readonly what: string; readonly text: string },
+  ): void;
   readonly now?: () => Date;
   readonly logger?: Logger;
 }
@@ -557,6 +565,10 @@ export class NeedsQueue implements TalkHolds {
     if (this.#records.get(item.id)?.acting !== undefined) this.#stand(answered);
     else this.#keep(answered);
     this.#emit();
+    // TH-1 — your answer, in the asking spark's own transcript, by the act's words
+    const said = item.choices?.[choice];
+    if (item.from.spark !== undefined && item.from.session !== undefined && said !== undefined)
+      this.opts.appendAct?.(item.from.spark, item.from.session, { what: "answer", text: said });
     const { woke } = await this.#tellAnswer(item.id, principal);
     // the record as its telling left it: kept, or forgotten once told (and remembered for an answer again)
     const final = this.#records.get(item.id)?.item ?? this.#answered.get(item.id) ?? answered.item;

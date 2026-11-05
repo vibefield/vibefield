@@ -220,6 +220,24 @@ describe("the spark's transcript, kept (TH-1)", () => {
     expect(h.raw(VELA, RUN)).toHaveLength(1);
   });
 
+  it("sets a run's file other users could read aside, never served; the run's next line begins its file again", () => {
+    const h = harness();
+    const store = h.open();
+    store.append(VELA, RUN, { kind: "run", runtimeRunId: RUN, fresh: true });
+    chmodSync(h.file(VELA, RUN), 0o644);
+    const fresh = h.open();
+    expect(fresh.read(VELA, RUN)).toEqual({ absent: true });
+    expect(h.events.some((event) => event.event === "fieldd.transcripts.set_aside")).toBe(true);
+    expect(fresh.runs(VELA)).toEqual({ runs: [] });
+    // the next line begins again at 1, 0600, and the run is listed by it as a continuation
+    expect(fresh.append(VELA, RUN, { kind: "turn", edge: "start" })?.seq).toBe(1);
+    expect(statSync(h.file(VELA, RUN)).mode & 0o777).toBe(0o600);
+    const runs = fresh.runs(VELA);
+    expect("runs" in runs && runs.runs.map((run) => [run.runtimeRunId, run.fresh])).toEqual([
+      [RUN, false],
+    ]);
+  });
+
   it("keeps a run only under an id it can name a file by, and a spark only by its id (EL7)", () => {
     const h = harness();
     const store = h.open();
@@ -391,5 +409,41 @@ describe("the recorder (TH-1; a spark's own run's events, and VibeField's own fa
     expect(lines[2]?.["ours"]).toBe(true);
     expect(lines[3]?.["ours"]).toBeUndefined();
     expect(JSON.stringify(lines)).not.toContain("mcp__");
+  });
+
+  it("reads the input queue's outcomes: yours as outcome lines, fieldd's line told as a wake, a paste turned away let go", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    const at = "2026-11-05T04:00:00.000Z";
+    const yours = { id: "in-1", text: "rebase it", from: { kind: "you" as const }, at };
+    const facts = { id: "in-2", text: "claude·2 finished", from: { kind: "fieldd" as const }, at };
+    recorder.heard(RUN, yours, "waiting", "it is busy");
+    recorder.heard(RUN, yours, "delivered");
+    // fieldd's line: pasted marked, told once delivered, as VibeField's act
+    recorder.expectPrompt(RUN, "VibeField: claude·2 finished");
+    recorder.heard(RUN, facts, "delivered");
+    run.emit("turn:started", { turnId: "t-1", prompt: "VibeField: claude·2 finished" });
+    // a paste turned away is let go: the same words typed into the pane later are yours via the terminal
+    recorder.expectPrompt(RUN, "VibeField: claude·2 failed");
+    recorder.heard(RUN, { ...facts, id: "in-3", text: "claude·2 failed" }, "waiting");
+    run.emit("turn:started", { turnId: "t-2", prompt: "VibeField: claude·2 failed" });
+    const lines = h.raw(VELA, RUN).slice(1);
+    expect(
+      lines.map((line) => [
+        line["kind"],
+        line["state"] ?? line["what"] ?? line["via"] ?? line["edge"],
+      ]),
+    ).toEqual([
+      ["outcome", "waiting"],
+      ["outcome", "delivered"],
+      ["act", "wake"],
+      ["turn", "start"],
+      ["you", "terminal"],
+      ["turn", "start"],
+    ]);
+    expect(lines[0]).toMatchObject({ of: "in-1", reason: "it is busy" });
+    expect(lines[2]).toMatchObject({ text: "claude·2 finished" });
   });
 });

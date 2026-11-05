@@ -60,6 +60,8 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
   const queued: [string, string, string][] = [];
   const spawned: unknown[] = [];
   const opened: string[] = [];
+  /** TH-1 — VibeField's acts kept in a spark's transcript: [spark, run, what, text] */
+  const acts: [string, string, string, string][] = [];
   const runs = new Map<string, NeedsRun>([
     ["run-vela", { runtimeRunId: "run-vela", label: "Vela", spark: VELA, live: true }],
     ["run-his", { runtimeRunId: "run-his", label: "claude·2", live: true }],
@@ -123,6 +125,7 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
         return ctl.spawn();
       },
       agentLabel: (agent) => AGENT_CATALOG.find((e) => e.id === agent)?.label,
+      appendAct: (spark, run, act) => void acts.push([spark, run, act.what, act.text]),
       now: () => {
         clock += 1000;
         return new Date(clock);
@@ -150,6 +153,7 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
     ctl,
     sleep,
     changes,
+    acts,
   };
 }
 
@@ -1029,5 +1033,22 @@ describe("notify (CP3-D5 A)", () => {
       "bad-input",
     );
     expect(h.queue.list()).toEqual([]);
+  });
+});
+
+describe("TH-1 — an answer you gave a spark is kept in its transcript (TH-Q27 (a))", () => {
+  it("keeps the act's words in the run that asked, once, whatever its telling; asked again, nothing more", async () => {
+    const h = harness();
+    const id = ask(h);
+    await h.queue.answer(id, 0, principal);
+    await h.queue.answer(id, 0, principal);
+    expect(h.acts).toEqual([[VELA, "run-vela", "answer", "Push"]]);
+  });
+
+  it("keeps nothing for an answer refused", async () => {
+    const h = harness();
+    const id = ask(h);
+    expect(await refusal(() => h.queue.answer(id, 9, principal))).toBe("no-such-act");
+    expect(h.acts).toEqual([]);
   });
 });

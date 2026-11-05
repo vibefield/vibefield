@@ -31,6 +31,13 @@ export interface YouDeps {
   /** a plain run's name, as fieldd names it (daemon's runLabel: its title, else its agent's label in its folder, else
    * that label, else its id) */
   label(runtimeRunId: string): string;
+  /** TH-1 (CO-Q1 (b), James) — VibeField's own act, kept in the spark's transcript: a spark's notify is kept there,
+   * in its own run's file (DESIGN.md §9, amended). Absent, nothing is kept. */
+  appendAct?(
+    spark: SparkId,
+    runtimeRunId: string,
+    act: { readonly what: string; readonly text: string },
+  ): void;
 }
 
 export interface YouVerbs {
@@ -68,6 +75,8 @@ export function createYouVerbs(deps: YouDeps): YouVerbs {
           ? { name: caller.name, session: caller.runtimeRunId, spark: caller.sparkId }
           : { name: caller.name, session: caller.runtimeRunId };
       deps.queue.notify(from, input.text);
+      if (caller.kind === "spark")
+        deps.appendAct?.(caller.sparkId, caller.runtimeRunId, { what: "notify", text: input.text });
       return { sent: true };
     },
   };
