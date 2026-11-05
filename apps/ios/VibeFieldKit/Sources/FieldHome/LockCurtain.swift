@@ -1,6 +1,5 @@
 import FieldDesign
 import FieldLock
-import FieldSettings
 import FieldSplash
 import SwiftUI
 import UIKit

@@ -4,6 +4,10 @@ import UIKit
 /// names it, read when VibeField runs: "this iPhone", "this iPad", and "this device" where it is neither (the bible's
 /// §7 platform label, with LP-4's "this device" as the fallback). The ONE place a Settings or way-in word names the
 /// device: every sentence takes it from here, by substitution, so nothing names a phone by hand.
+///
+/// It lives in FieldDesign, the leaf every UI module imports (VF-PM 2026-11-05 03:59Z, ruled (a); Q1 had named
+/// FieldSettings), so FieldTerminal's Settings › Terminal reaches it too, and L4's word pass after 13a takes it from
+/// here: one word, one home.
 public enum DeviceWord: Equatable, Sendable {
   case iPhone
   case iPad
