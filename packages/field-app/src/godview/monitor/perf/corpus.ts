@@ -111,7 +111,7 @@ export function resolveRecipe(recipe: CorpusRecipe): ResolvedCorpusRecipe {
   };
 }
 
-/** `n=10,duration=8000,seed=2,peers=3` — the lab's and the oracle's spelling. */
+/** `n=10,duration=8000,seed=2,peers=3` — the lab's and the oracle's spelling (`fold=250` a coarser fold tick). */
 export function parseRecipe(text: string): CorpusRecipe {
   const fields = new Map<string, number>();
   for (const part of text.split(",")) {
@@ -134,6 +134,7 @@ export function parseRecipe(text: string): CorpusRecipe {
     durationMs: duration,
     ...pick("seed"),
     ...(fields.has("peers") ? { peerAgents: fields.get("peers") as number } : pick("peerAgents")),
+    ...(fields.has("fold") ? { foldTickMs: fields.get("fold") as number } : pick("foldTickMs")),
     ...pick("bareTerminals"),
     ...pick("samplesRing"),
     ...pick("statusFlipMs"),
@@ -145,12 +146,14 @@ export function parseRecipe(text: string): CorpusRecipe {
   };
 }
 
-/** `n10-8s-s1`: the file stem a corpus is kept under. */
+/** `n10-8s-s1`: the file stem a corpus is kept under. A fold tick off the product's own is in it (`n20-300s-s1-f500`,
+ *  PG-9 S5a); the product's own never is, so every pinned fixture keeps its file. */
 export function recipeName(recipe: CorpusRecipe): string {
   const resolved = resolveRecipe(recipe);
   const seconds = resolved.durationMs / 1_000;
   const span = Number.isInteger(seconds) ? `${seconds}s` : `${resolved.durationMs}ms`;
-  return `n${resolved.n}-${span}-s${resolved.seed}`;
+  const fold = resolved.foldTickMs === AGENT_FIELD.FULL_TICK_MS ? "" : `-f${resolved.foldTickMs}`;
+  return `n${resolved.n}-${span}-s${resolved.seed}${fold}`;
 }
 
 export interface CorpusPanes {
