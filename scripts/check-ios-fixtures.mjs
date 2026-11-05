@@ -45,7 +45,8 @@ function jsonFiles(dir) {
 // so the copy half now has the pin half's posture below.
 // IOS-13a: `acknowledgements-l5.lane.json` is a trimmed copy of L5's generated acknowledgements (lane `a76cc7aba`, 8 of
 // its parts and every text they name, one unknown field added), which FieldSettingsTests reads. Its origin is L5's
-// output, not a contracts golden. Once L5 lands, a row here holds its entries to the committed file.
+// output, not a contracts golden. L5 landed (02b47ba2a), so the row before the copies below holds its entries to the
+// committed file.
 const LANE_AUTHORED = new Set([
   "trf1-frames.lane.json",
   "spawn-bloom-geometry.lane.json",
@@ -329,6 +330,97 @@ for (const [set, fixtures, folders] of requiredMirrors) {
       problems.push(
         `${relative(root, join(PHONE_GODVIEW, name))} is committed but not mirrored: add it to phoneViewGoldens`,
       );
+  }
+}
+
+// IOS-13a — the trimmed acknowledgements FieldSettingsTests reads (`acknowledgements-l5.lane.json`, LANE_AUTHORED
+// above) are held to L5's committed file, apps/ios/App/Resources/acknowledgements.json, entry for entry: each part the
+// copy keeps is the committed part of the same ecosystem and name, each text the committed text of the same id, and
+// its schema, pins and tailscaleKit are the committed ones. Two differences are the lane's on purpose, and they are the
+// only two: OpenSSL's `homepage`, the one field the reader does not know (AppReviewTests' `bundled` row holds that it
+// is kept and named), and the copy's own TRIMMED line after the committed note. When L5 regenerates and an entry the
+// copy keeps moves, this is red until the copy is refreshed.
+{
+  const L5_COMMITTED = join(root, "apps/ios/App/Resources/acknowledgements.json");
+  const L5_TRIMMED = join(
+    root,
+    "apps/ios/VibeFieldKit/Tests/FieldSettingsTests/Fixtures/acknowledgements-l5.lane.json",
+  );
+  // The fields the lane added, by part name: the copy's part, less these, is the committed part.
+  const ADDED_PART_FIELDS = new Map([["OpenSSL", ["homepage"]]]);
+  const canon = (value) => {
+    if (Array.isArray(value)) return `[${value.map(canon).join(",")}]`;
+    if (value === null || typeof value !== "object") return JSON.stringify(value);
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${canon(value[key])}`).join(",")}}`;
+  };
+  const copy = relative(root, L5_TRIMMED);
+  const fix = `  fix: refresh ${copy} from ${relative(root, L5_COMMITTED)}, the same parts and every text they name`;
+  let committed = null;
+  let trimmed = null;
+  try {
+    committed = JSON.parse(readFileSync(L5_COMMITTED, "utf8"));
+    trimmed = JSON.parse(readFileSync(L5_TRIMMED, "utf8"));
+  } catch (error) {
+    problems.push(
+      `the phone's acknowledgements copy cannot be held to L5's file: ${error.message}`,
+    );
+  }
+  if (committed !== null && trimmed !== null) {
+    checked += 1;
+    const said = [];
+    const tops = new Set([...Object.keys(committed), ...Object.keys(trimmed)]);
+    for (const key of ["components", "texts", "note"]) tops.delete(key);
+    for (const key of tops) {
+      if (canon(trimmed[key]) !== canon(committed[key]))
+        said.push(`its ${key} is not the committed file's`);
+    }
+    if (
+      trimmed.note !== committed.note &&
+      !String(trimmed.note).startsWith(`${committed.note} TRIMMED `)
+    ) {
+      said.push("its note is not the committed note followed by its own TRIMMED line");
+    }
+    const parts = new Map(
+      (committed.components ?? []).map((part) => [`${part.ecosystem}/${part.name}`, part]),
+    );
+    const texts = new Map((committed.texts ?? []).map((text) => [text.id, text]));
+    const kept = trimmed.components ?? [];
+    const carried = trimmed.texts ?? [];
+    if (kept.length === 0) said.push("it keeps no parts");
+    for (const part of kept) {
+      const id = `${part.ecosystem}/${part.name}`;
+      const theirs = parts.get(id);
+      const added = ADDED_PART_FIELDS.get(part.name) ?? [];
+      const ours = Object.fromEntries(Object.entries(part).filter(([key]) => !added.includes(key)));
+      if (theirs === undefined) said.push(`it keeps ${id}, which L5's file no longer lists`);
+      else if (canon(ours) !== canon(theirs)) said.push(`its ${id} is not the committed part`);
+    }
+    for (const [name, fields] of ADDED_PART_FIELDS) {
+      const part = kept.find((candidate) => candidate.name === name);
+      for (const field of fields) {
+        if (part?.[field] === undefined)
+          said.push(`its ${name} lost the ${field} the lane added on purpose`);
+      }
+    }
+    for (const text of carried) {
+      const theirs = texts.get(text.id);
+      if (theirs === undefined)
+        said.push(`it carries text ${text.id}, which L5's file no longer has`);
+      else if (canon(text) !== canon(theirs))
+        said.push(`its text ${text.id} is not the committed text`);
+    }
+    const named = new Set(kept.flatMap((part) => part.texts ?? []));
+    const ids = new Set(carried.map((text) => text.id));
+    for (const id of named)
+      if (!ids.has(id)) said.push(`a part it keeps names text ${id}, which it does not carry`);
+    for (const id of ids)
+      if (!named.has(id)) said.push(`it carries text ${id}, which no part it keeps names`);
+    if (said.length > 0) {
+      problems.push(
+        `${copy} has moved from ${relative(root, L5_COMMITTED)}: ${said.join("; ")}\n${fix}`,
+      );
+    }
   }
 }
 
