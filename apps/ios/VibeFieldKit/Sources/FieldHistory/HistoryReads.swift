@@ -1,6 +1,7 @@
 import FieldProduct
 import Foundation
 import Observation
+import os
 
 // SP-6 (2026-10-04) — the History tab's READS over one desktop's door (H-1/
 // H-2/H-4/H-5 as built; thinking-sync-planes.md §5.4 "Catalogs on L1",
@@ -44,6 +45,18 @@ public enum HistoryReads {
   /// when it becomes ready, and two cheap reads every few seconds is a
   /// phone's pace for a state a person is watching.
   public static let indexRecheckSeconds: Int64 = 5
+  /// ITEM 109 (VF-PM's (a), N = 6, 2026-11-05) — how many pages of `pageRows` a tail reset's fill reads from
+  /// the head: 240 rows, so a reset's newest `INDEX_TAILNET_LIMITS.MAX_ROWS` (100) and a hole of up to 140
+  /// rows below them close. Past them the rows below the last page read are dropped, and the log says so.
+  public static let fillPages = 6
+
+  static let logger = Logger(subsystem: "com.jamesyong.vibefield.kit", category: "history")
+
+  /// A reader's line on the device: the unified log at the default level, every argument public (a count and
+  /// ordinals, never a row's text), so Console shows it without Include Info.
+  public static func log(_ line: String) {
+    logger.notice("\(line, privacy: .public)")
+  }
 }
 
 /// An open tail, held until it is cancelled.
@@ -111,6 +124,7 @@ public final class HistoryDesktopReader: Identifiable {
   @ObservationIgnored private let cache: HistoryCache?
   @ObservationIgnored private let agentLabel: @MainActor (String) -> String
   @ObservationIgnored private let now: @MainActor () -> Date
+  @ObservationIgnored private let log: @MainActor (String) -> Void
   @ObservationIgnored private var ledgerTask: Task<Void, Never>?
   @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
   @ObservationIgnored private var tail: (session: String, handle: HistoryTailHandle)?
@@ -127,7 +141,8 @@ public final class HistoryDesktopReader: Identifiable {
   public init(
     deviceId: String, name: String, isHome: Bool = false, door: (any HistoryDoor)?, ownsDoor: Bool = false,
     cache: HistoryCache? = nil, agentLabel: @escaping @MainActor (String) -> String = { $0 },
-    now: @escaping @MainActor () -> Date = { Date() }
+    now: @escaping @MainActor () -> Date = { Date() },
+    log: @escaping @MainActor (String) -> Void = { HistoryReads.log($0) }
   ) {
     self.deviceId = deviceId
     self.name = name
@@ -137,6 +152,7 @@ public final class HistoryDesktopReader: Identifiable {
     self.cache = cache
     self.agentLabel = agentLabel
     self.now = now
+    self.log = log
     corpus = .empty(desktop: name, deviceId: deviceId)
     standing = door == nil ? .asleep : .connected
   }
