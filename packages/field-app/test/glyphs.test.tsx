@@ -305,9 +305,13 @@ describe("the glyph set", () => {
     // DK-11 (R2): the desk bar's ONE path renderer for a kind's own drawing —
     // one component, one <svg> — and no other file of the bar's. DK-16 (R17):
     // the peers' pointer arrow, the page's drawing — one view, one <svg>.
+    // SP-1e2 (DESIGN.md §8 "Chat's crew card"): the head's ring, a meter of the
+    // members no longer at work, a track and a stroke drawn from the top — one
+    // view, one <svg>; the card's glyphs stay FieldGlyph.
     const allow = new Map<string, number>([
       // TS-D4 (DESIGN.md §13): Tailscale's logomark, a vendor mark kept exact
       ["account/tailscale-mark.tsx", 1],
+      ["chat/CrewCardView.tsx", 1],
       ["field/desk/bar/KindGlyph.tsx", 1],
       ["field/desk/peers/PeersView.tsx", 1],
       ["godview/os-marks.tsx", 1],
