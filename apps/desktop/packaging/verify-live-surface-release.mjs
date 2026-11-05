@@ -14,6 +14,7 @@ import {
   readBinEntries,
   unclassifiedBinEntries,
 } from "./codesign-entitlements.mjs";
+import { assertReleaseSigned } from "./release-signature.mjs";
 
 const execFileAsync = promisify(execFile);
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -57,6 +58,7 @@ try {
   ];
   const evidence = [];
   const policyFailures = [];
+  let appDeveloperId = false;
 
   for (const component of components) {
     await run(`${component.label} signature verification`, "/usr/bin/codesign", [
@@ -66,6 +68,9 @@ try {
     ]);
     const metadata = await describeSignature(component.path);
     const entitlementKeys = await describeEntitlements(component.path);
+    if (component.label === "app") {
+      appDeveloperId = metadata.authorities[0]?.startsWith("Developer ID Application:") === true;
+    }
     policyFailures.push(
       ...checkSignaturePolicy(component, metadata, entitlementKeys).map(
         (failure) => `${component.label}: ${failure}`,
@@ -82,7 +87,7 @@ try {
     });
   }
 
-  const entitlementCensus = await binEntitlementCensus(nativeRoot);
+  const entitlementCensus = await binEntitlementCensus(nativeRoot, appDeveloperId);
   policyFailures.push(...entitlementCensus.failures);
 
   if (policyFailures.length > 0) {
@@ -250,7 +255,13 @@ function checkSignaturePolicy(component, metadata, entitlementKeys) {
 // else; every other executable, bundle and library holds no entitlement; an executable or bundle the table does not
 // name is a failure. fieldd must be present, so the JIT it needs is proven on it rather than assumed. Data files
 // (.mjs, .cjs, .wasm) carry no code signature of their own to read and are skipped.
-async function binEntitlementCensus(nativeRoot) {
+//
+// LP-6 review (prod-builder 2026-11-05 03:38Z; VF-PM 04:30Z, SD-2's finding): the same rows carry the RELEASE SIGNATURE
+// too — release-signature.mjs's assertReleaseSigned on each (codesign --verify --strict, the frozen team, a Developer
+// ID Application leaf, a secure timestamp, the hardened runtime), so field-native, its hosts, the sidecar, the .node
+// addons and the screenshot helper no longer rest on notarization alone. Strict only when the app itself carries a
+// Developer ID authority (L1's converge rule): an unsigned build's app is ad hoc, and its rows say "not checked".
+async function binEntitlementCensus(nativeRoot, requireReleaseSignature) {
   const entries = readBinEntries(nativeRoot);
   const failures = unclassifiedBinEntries(entries).map(
     (name) => `bin/${name}: signed code no entitlement profile names (BIN_PROFILES)`,
@@ -266,7 +277,19 @@ async function binEntitlementCensus(nativeRoot) {
     failures.push(
       ...entitlementFailures(profile, keys).map((failure) => `bin/${entry.name}: ${failure}`),
     );
-    rows.push({ path: `bin/${entry.name}`, profile, entitlementKeys: keys });
+    let releaseSigned = "not checked (the app carries no Developer ID authority)";
+    if (requireReleaseSignature) {
+      try {
+        await assertReleaseSigned(desktopRoot, [join(nativeRoot, entry.name)], `bin/${entry.name}`);
+        releaseSigned = true;
+      } catch (error) {
+        releaseSigned = false;
+        failures.push(
+          `bin/${entry.name}: not release-signed (${error instanceof Error ? error.message : String(error)})`,
+        );
+      }
+    }
+    rows.push({ path: `bin/${entry.name}`, profile, entitlementKeys: keys, releaseSigned });
   }
   return { rows, failures };
 }

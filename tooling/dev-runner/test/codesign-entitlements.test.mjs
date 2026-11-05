@@ -400,3 +400,32 @@ test("on this Mac: a copy signed with entitlements.mac.native.plist reads no key
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("LP-6 review: every bin row carries the release signature on a Developer ID app; the unsigned path says not checked", () => {
+  // The gate is a darwin-only script with top-level await, so its shape is held by its source (as release.yml's are).
+  const gate = readFileSync(join(PACKAGING, "verify-live-surface-release.mjs"), "utf8");
+  assert.match(gate, /^import \{ assertReleaseSigned \} from "\.\/release-signature\.mjs";$/mu);
+  // strict exactly when the APP's leaf authority is Developer ID Application (L1's converge rule)
+  assert.match(
+    gate,
+    /if \(component\.label === "app"\) \{\n\s+appDeveloperId = metadata\.authorities\[0\]\?\.startsWith\("Developer ID Application:"\) === true;/u,
+  );
+  assert.match(gate, /await binEntitlementCensus\(nativeRoot, appDeveloperId\)/u);
+  const census = gate.slice(gate.indexOf("async function binEntitlementCensus("));
+  const body = census.slice(0, census.indexOf("\n}\n"));
+  // every Mach-O or bundle row the entitlement census visits is the row the signature check visits
+  assert.match(body, /if \(!entry\.bundle && !entry\.machO\) continue;/u);
+  assert.match(
+    body,
+    /if \(requireReleaseSignature\) \{\n\s+try \{\n\s+await assertReleaseSigned\(desktopRoot, \[join\(nativeRoot, entry\.name\)\], `bin\/\$\{entry\.name\}`\);/u,
+  );
+  assert.match(body, /failures\.push\(\n\s+`bin\/\$\{entry\.name\}: not release-signed/u);
+  assert.match(
+    body,
+    /releaseSigned = "not checked \(the app carries no Developer ID authority\)";/u,
+  );
+  assert.match(
+    body,
+    /rows\.push\(\{ path: `bin\/\$\{entry\.name\}`, profile, entitlementKeys: keys, releaseSigned \}\);/u,
+  );
+});
