@@ -513,11 +513,13 @@ export const AGENT_STOP = {
  *  - LIVE_STEPS_MAX: a run's step agents alive at once; one more waits for a slot, visibly (CP4-S7). They do not count
  *    against a spark's 8 (fieldd's `SPARK_LIVE_AGENTS_MAX`, `talk/verbs.ts`), and they bound how many PTYs one
  *    `parallel` can take.
- * CP-4a2a (4A2-Q7 (a), ruled by VF-PM 2026-11-05 08:51Z) — a run's host, its bounds, each as provisional:
- *  - HOST_HEAP_MB: the child's V8 heap in use, measured by pong, not enforced by V8 (4A2-Q7 (a) as ruled 10:57Z: a
- *    packaged SEA takes no `--max-old-space-size`, so neither build does). Each pong carries `used_heap_size`; a host
- *    past it is ended, and so is one V8 itself aborts for its heap between pongs, its run saying it used more memory
- *    than a flow may (DESIGN.md §9 "When a run's script cannot go on");
+ * CP-4a2a (4A2-Q7, ruled by VF-PM 2026-11-05 08:51Z, re-ruled (b) 11:46Z) — a run's host, its bounds, each as
+ * provisional:
+ *  - HOST_HEAP_MB: the V8 old-generation cap on the worker_threads Worker a run's script runs in, inside its host
+ *    (`resourceLimits.maxOldGenerationSizeMb`), ENFORCED by V8: a packaged SEA takes no `--max-old-space-size`, and a
+ *    worker's resourceLimits are no node option, so both builds hold it. A worker past it is ended by V8, and so is a
+ *    host V8 aborts whole for its heap, its run saying it used more memory than a flow may (DESIGN.md §9 "When a run's
+ *    script cannot go on"). Each pong's `used_heap_size` is telemetry;
  *  - HOST_PING_MS, HOST_PING_MISSES: fieldd pings a live host every HOST_PING_MS, and ends one that misses
  *    HOST_PING_MISSES in a row (a script that spins never yields to its pipe), its run saying it stopped answering. A
  *    script awaiting its calls answers every ping, so a slow step is never mistaken for a spinning script.

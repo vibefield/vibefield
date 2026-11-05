@@ -125,7 +125,7 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
       CALLS_MAX: 40,
       CALLS_MORE: 20,
       LIVE_STEPS_MAX: 8,
-      // CP-4a2a (4A2-Q7 (a)): the run's host, provisional likewise
+      // CP-4a2a (4A2-Q7 (b)): the run's host, provisional likewise
       HOST_HEAP_MB: 128,
       HOST_PING_MS: 5_000,
       HOST_PING_MISSES: 3,

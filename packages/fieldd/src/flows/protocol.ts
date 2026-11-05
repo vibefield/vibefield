@@ -12,12 +12,14 @@
 // - `run {script, input, limits}` once, after READY: the approved bytes rewritten into one script (module-script.ts),
 //   the run's input, and the bounds the child holds a call and a log line to;
 // - `answer {id, ok, value | refused}`: a call's answer, the script's `await` resolving or throwing;
-// - `ping {n}`: answered at once by `pong {n, heap}`, `heap` the child's V8 heap in use (bytes; 4A2-Q7 (a): the cap is
-//   measured, not enforced by V8); a host that misses FLOW_LIMITS.HOST_PING_MISSES in a row is ended;
+// - `ping {n}`: answered at once by the script's worker with `pong {n, heap}`, `heap` the worker's V8 heap in use
+//   (bytes; telemetry: the cap is V8's on the worker, 4A2-Q7 (b)); a host that misses FLOW_LIMITS.HOST_PING_MISSES in a
+//   row is ended;
 // - `shutdown`.
-// host → fieldd: `ready {pid}` once, after lockdown; `call {id, what, args}`; `log {text}`; `pong {n, heap}`; then one of
-// `done {value?, cut?}` (the default export returned), `threw {message}` (it threw, or the script would not
-// evaluate) or `fatal {reason}` (the host cannot run a script: lockdown failed, a second `run`).
+// host → fieldd: `ready {pid}` once, when the host's own thread is up (lockdown runs in the worker, before the script);
+// `call {id, what, args}`; `log {text}`; `pong {n, heap}`; then one of `done {value?, cut?}` (the default export
+// returned), `threw {message}` (it threw, or the script would not evaluate), `memory` (V8 ended the worker past its
+// heap) or `fatal {reason}` (the host cannot run a script: lockdown failed, a second `run`, the worker left).
 
 /** The bounds the child holds the script's own calls to, before anything is sent. */
 export interface FlowHostLimits {
@@ -48,6 +50,7 @@ export type FromFlowHost =
   | { t: "pong"; n: number; heap?: number }
   | { t: "done"; value?: unknown; cut?: true }
   | { t: "threw"; message: string }
+  | { t: "memory" }
   | { t: "fatal"; reason: string };
 
 /** Whether a value nests at most `max` arrays and objects deep (a scalar is 0, `[x]` is 1), read without recursion,
@@ -103,6 +106,8 @@ export function readFromFlowHost(raw: unknown): FromFlowHost | null {
       };
     case "threw":
       return { t: "threw", message: text(raw["message"]) };
+    case "memory":
+      return { t: "memory" };
     case "fatal":
       return { t: "fatal", reason: text(raw["reason"]) };
     default:

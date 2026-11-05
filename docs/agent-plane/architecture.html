@@ -1873,11 +1873,13 @@
                         the same way. A call the journal already answered is answered from it again, by its key and its
                         <code>#n</code>, so a child started again replays and sends nothing twice. The child holds no
                         door, no token, no key and no file access; its environment is <code>PATH</code> alone, so no
-                        <code>FIELD_*</code> or <code>FIELDD_*</code> variable reaches it (EL7; 4A2-Q6 (b)). It answers
-                        fieldd's ping with the heap it uses: fieldd ends a child that misses the ping or passes the cap,
-                        a cap measured by pong and not enforced by V8, since a packaged executable takes no heap flag, and
-                        the run says so in fieldd's words (4A2-Q7 (a); <code>FLOW_LIMITS</code>, provisional). It
-                        leaves when its pipe closes or when every call it awaits is unanswered (CP-D9). Before any run,
+                        <code>FIELD_*</code> or <code>FIELDD_*</code> variable reaches it (EL7; 4A2-Q6 (b)). The script
+                        runs in a worker thread inside the child, under V8's own cap on its heap (the worker's
+                        <code>resourceLimits</code>, which a packaged executable honours though it takes no heap flag),
+                        so a script that spins never holds the child's own thread. The worker answers fieldd's ping:
+                        fieldd ends a child that misses it, V8 ends a worker past its cap, and either way the run says so
+                        in fieldd's words (4A2-Q7 (b), re-ruled 2026-11-05; <code>FLOW_LIMITS</code>, provisional). The
+                        child leaves when its pipe closes or when every call it awaits is unanswered (CP-D9). Before any run,
                         fieldd reads a script's bytes without running them (<code>acorn</code>, the static read that a
                         proposal's card shows, CP4-Q3 (a)). Both packages are fieldd's alone, held by R32, whose host
                         clause keeps the child to <code>ses</code>, <code>node:</code> built-ins and its own protocol

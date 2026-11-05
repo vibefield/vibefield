@@ -23,10 +23,12 @@ import { type FromFlowHost, readFromFlowHost, type ToFlowHost } from "./protocol
 //   crosses whole: text is cut to fit, anything else is refused, in the words the script's `await` throws with.
 // - The host is pinged every `pingMs` once READY. A host that says nothing for `pingMisses` pings in a row is ended at
 //   once (SIGKILL: a script that spins cannot hear a `shutdown`), as `unanswered` (FLOW_HOST_ENDINGS).
-// - Its heap is MEASURED (4A2-Q7 (a) as re-ruled 10:57Z; a packaged SEA takes no `--max-old-space-size`, so neither
-//   build does): each pong says the heap the child uses, and one past `heapMb` is ended at once as `memory`. A child
-//   V8 itself aborts for its heap between pongs (SIGABRT, or its stderr's heap line) is read as `memory` too, never as
-//   a host that left, so its run is never started again.
+// - Its heap is CAPPED BY V8 (4A2-Q7 (b) as re-ruled 11:46Z): the script runs in a worker_threads Worker inside the
+//   host, under `resourceLimits.maxOldGenerationSizeMb` = `heapMb` (a packaged SEA takes no `--max-old-space-size`; a
+//   worker's resourceLimits are no node option). A worker V8 ends past it is the host's `memory`, and the run is
+//   ended as `memory`. Each pong's heap is telemetry, kept for the log. A child V8 aborts whole for its heap (SIGABRT,
+//   or its stderr's heap line, read as a bounded tail) is read as `memory` too, never as a host that left, so its run
+//   is never started again.
 // - A run's end is settled when the child has LEFT, never before: when `ended` resolves, its process is gone.
 
 /** A call the script made, as the host sent it: what it is (FLOW_CALL_WHATS, OPEN) and its arguments; `call`, its
@@ -83,7 +85,7 @@ export interface FlowHostOptions {
   readonly input: Readonly<Record<string, string>>;
   readonly handler: FlowCallHandler;
   readonly timings?: Partial<FlowHostTimings>;
-  /** the heap a host may use, MB (FLOW_LIMITS.HOST_HEAP_MB by default; tests lower it) */
+  /** the V8 old-generation cap on the host's worker, MB (FLOW_LIMITS.HOST_HEAP_MB by default; tests lower it) */
   readonly heapMb?: number;
   /** the environment the child's PATH is read from; fieldd's own by default */
   readonly environment?: NodeJS.ProcessEnv;
@@ -116,6 +118,8 @@ const V8_HEAP_LINE = /heap limit|JavaScript heap out of memory/;
 /** Lines of the child's stderr kept for fieldd's log, each cut. */
 const STDERR_LINES = 4;
 const STDERR_LINE_MAX = 512;
+/** The stderr tail V8's heap line is looked for in: a line split across writes is still read whole (bth 11:48Z). */
+const STDERR_TAIL_MAX = 4_096;
 
 const kib = (bytes: number): string => `${Math.floor(bytes / 1024)} KiB (${bytes} bytes)`;
 
@@ -180,9 +184,11 @@ class FlowHostChild {
   readonly #logger: Logger;
   readonly #proc: ChildProcess;
   readonly #stderr: string[] = [];
-  readonly #heapBytes: number;
-  /** V8 said, on the child's stderr, that it aborted it for its heap */
-  #heapLine = false;
+  readonly #heapMb: number;
+  /** the last of the child's stderr, where V8's heap line is looked for */
+  #stderrTail = "";
+  /** the heap the worker last said it used (a pong's telemetry), bytes */
+  #heap: number | undefined;
   #settle: (end: FlowHostEnd) => void = () => {};
   #ready: (pid: number | undefined) => void = () => {};
   #isReady = false;
@@ -199,7 +205,7 @@ class FlowHostChild {
     this.#opts = opts;
     this.#script = script;
     this.#t = { ...DEFAULT_TIMINGS, ...opts.timings };
-    this.#heapBytes = (opts.heapMb ?? FLOW_LIMITS.HOST_HEAP_MB) * 1024 * 1024;
+    this.#heapMb = opts.heapMb ?? FLOW_LIMITS.HOST_HEAP_MB;
     this.#logger = opts.logger ?? createNoopLogger();
     const ready = new Promise<number | undefined>((resolve) => {
       this.#ready = resolve;
@@ -263,7 +269,7 @@ class FlowHostChild {
           limits: {
             callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
             logMaxChars: FLOW_LOG_MAX,
-            heapMb: this.#heapBytes / (1024 * 1024),
+            heapMb: this.#heapMb,
           },
         });
         this.#pingTimer = setInterval(() => this.#tick(), this.#t.pingMs);
@@ -275,8 +281,10 @@ class FlowHostChild {
         if (this.#chosen === undefined) this.#opts.handler.log(cutText(message.text, FLOW_LOG_MAX));
         return;
       case "pong":
-        if (message.heap !== undefined && message.heap > this.#heapBytes)
-          this.#end({ kind: "ended", why: "memory" }, "kill");
+        if (message.heap !== undefined) this.#heap = message.heap;
+        return;
+      case "memory":
+        this.#end({ kind: "ended", why: "memory" }, "shutdown");
         return;
       case "done":
         this.#end(
@@ -358,12 +366,13 @@ class FlowHostChild {
 
   /** How a child that left on its own ended: V8's abort for its heap is `memory`; any other way, a host that left. */
   #leftAs(code: number | null, signal: NodeJS.Signals | null): FlowHostEnd {
-    if (signal === "SIGABRT" || this.#heapLine) return { kind: "ended", why: "memory" };
+    if (signal === "SIGABRT" || V8_HEAP_LINE.test(this.#stderrTail))
+      return { kind: "ended", why: "memory" };
     return { kind: "left", code, signal };
   }
 
   #heardStderr(chunk: string): void {
-    if (V8_HEAP_LINE.test(chunk)) this.#heapLine = true;
+    this.#stderrTail = (this.#stderrTail + chunk).slice(-STDERR_TAIL_MAX);
     for (const line of chunk.split("\n")) {
       if (line.trim() === "" || this.#stderr.length >= STDERR_LINES) continue;
       this.#stderr.push(line.slice(0, STDERR_LINE_MAX));
@@ -381,6 +390,10 @@ class FlowHostChild {
       this.#logger.info("fieldd.flows.host.stderr", "The flow host wrote to stderr", {
         lines: this.#stderr,
       });
+    this.#logger.debug("fieldd.flows.host.ended", "A flow host left", {
+      end: end.kind,
+      ...(this.#heap !== undefined ? { heap: this.#heap } : {}),
+    });
     this.#settle(end);
   }
 }
