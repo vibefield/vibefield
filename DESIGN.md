@@ -4547,6 +4547,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - Both entrances play at once, with no seat's 400ms: each is fieldd's fact, set once, never a
       glance. Both figures go at once when fieldd lets the hold go. The line keeps the frame's own
       1px.
+    - *CP-4 (2026-11-05; CP4-S3, CP4-Q9 (a) as restated on the 2026-11-02 ruling):* **a flow
+      run's Stop reaches its steps through these two acts and no third.** A run's Stop (its card's,
+      its board's, a spark's `flow_stop`) makes no further call, and then each live step agent the
+      run started is ended as **Stop agent** ends one (`terminal.terminate`, its pane saying
+      **Stopping agent…**), and a session the run was handed (a step's `in:`) has its working turn
+      paused as **Pause current turn** pauses one (`agent.pause`, **Pausing current turn…**), never
+      ended: it was yours before the run, and stays yours. The run's words still waiting in that
+      session's queue are withdrawn, never sent. Each pane says what its own act says, and the
+      states above hold for it as for any press; a run's Stop paints nothing of its own on a pane.
+      Its own words, **Stopped by you · 14:02** and Run again, are the run card's (CP-4b).
 - **A launch in an empty pane is one element from the click to the first frame** (QL-2, 2026-09-29 —
   James picked look C · Cells from the Minimal Pane Frame's pass 4). The click (or ⌥n, or ↵ on a
   past session) answers in its own frame: the launcher shrinks to 0.94 toward the clicked mark
@@ -5731,6 +5741,29 @@ watermark). Outside the app it is an OS notice, said only while no VibeField win
 its title is the teller, and its body the words. A click on it opens Chat, whoever told it, and chooses nothing there. A
 notify is never kept, and nothing says the person read it. A new item in the queue raises no OS notice: CP3-D5 rules
 notify alone. *Main decides, as for the link's notices (TS-5): a notice must reach someone with no window in front.*
+
+**A flow's lines** (track CO, CP-4; CP4-Q7 (a), CP4-Q11 (a) and CP4-S17 (a), ruled at the leans 2026-11-04; the words
+are open until James reads them on a run). A flow's step is an agent the run started, or a session it was handed, and
+VibeField speaks to it in three places only, each one marked line in its session's input queue (TH-Q12 (a)'s road,
+CP-2's queue: VibeField's mark, never the person's words or the script's, landing at its next idle moment, never
+pasted). ‹label› is the step's label as the script wrote it, said on one line and cut at 64 characters with "…", as a
+name is above; a step with no label is "this step". "In its form" is said only to a step whose call names a form (its
+`schema`); to one with none the line ends at "answer" or "Answer once more".
+- **The repair turn** (CP-D11 A, CP4-Q7 (a)): an answer that does not match the step's form gets one more turn, by
+  this line, once: "VibeField: your last message did not match this step's form (‹fieldd's check›). Answer once more
+  in that form." ‹fieldd's check› is fieldd's own words for the first place the answer missed, cut at 120 characters,
+  never the agent's text (MT-L6). While it repairs, the step's card says **Answering again**. A second miss holds the
+  run and asks the person (`flow-repair`); their Ask once more sends this same line again.
+- **A step lost to a Quit, resumed** (CP4-Q11 (a)): Resume the step resumes its session from fieldd's own record and
+  sends: "VibeField: VibeField quit while you were working on ‹label›. Finish it, then answer in its form."
+- **An answer VibeField did not hear** (CP4-S17 (a), until puppeteer replays what a session said while fieldd was
+  down): a step found idle after a fieldd restart, with no answer heard since its last words from the run, is asked
+  once: "VibeField: VibeField restarted and did not hear your answer to ‹label›. Answer once more in its form." Its
+  card says **Answering again**, as the repair turn's does, and a miss after it is the repair turn's.
+
+Each is sent once for the reason it names, and a line its session did not take is never sent again (CP2-D2). A step
+hears nothing else from VibeField: a gate, the call cap, a changed flow and a Stop are the person's, and a run's
+Stop reaches a step only through §8's two acts ("A run a Stop has not stopped", its CP-4 note).
 
 **The link's words** (track TS, TS-D1 and TS-D2 ruled 2026-10-27). The act is **Continue with
 Tailscale** on every button that starts it — the Connect pane, Settings → Devices, the phone — and
