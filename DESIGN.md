@@ -4790,6 +4790,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       ended: it was yours before the run, and stays yours. The run's words still waiting in that
       session's queue are withdrawn, never sent. Each pane says what its own act says, and the
       states above hold for it as for any press; a run's Stop paints nothing of its own on a pane.
+      *Amended 2026-11-05 (CP-4a2b; D19): a handed session's turn is paused only while it is the run's
+      own, its latest input the run's `in:` line; a turn of yours there is never paused by a run's
+      Stop, and the run's words still waiting are withdrawn either way.*
       Its own words, **Stopped by you · 14:02** and Run again, are the run card's (CP-4b).
 - **A launch in an empty pane is one element from the click to the first frame** (QL-2, 2026-09-29 —
   James picked look C · Cells from the Minimal Pane Frame's pass 4). The click (or ⌥n, or ↵ on a
@@ -6157,6 +6160,54 @@ A host that fieldd ended is never started again for that run: its journal stands
 A host that left for any other reason (its pipe closed under it, the child killed alone) leaves its run waiting, and
 the next wake starts a host again from the journal, which answers every call it already holds (CP-D9).
 
+**When a run can't go on, or waits** (track CO, CP-4a2b; 13a's D1–D22, Q-A1, Q-A2, J3, J7, Q-B1 and Q-B2, ruled by
+VF-PM 2026-11-05 16:24Z; the words are open until James reads them on a run). ‹flow› is the meta name, cut as above;
+a name that is, or starts with, "VibeField" shows the flow's slug instead, so a flow never speaks as VibeField (R18).
+‹label› is cut as "A flow's lines" cuts it.
+
+- **The flow's mark** (Q11 (a); Q-B1 (a), Q-B2 (a)). A run's own words, its steps' prompts and its `in:` lines, land
+  in a session's queue marked, never pasted: "‹flow› (a flow you ran) on your behalf:" for yours, and "‹flow› (a flow
+  ‹spark› ran) on your behalf:" for one a spark started. Never "VibeField:", which is VibeField's own three lines
+  alone (MT-L6).
+- **A step's call refused.** The script's `await` throws with these words, and the run's journal keeps them:
+  - "VibeField didn't start ‹label›: it names an Agent Profile this run can't use (‹profile›)."
+  - "VibeField didn't start ‹label›: it asks for ‹key›, which a step may not set."
+  - "VibeField didn't send ‹label›: that session is outside this run's Agent Profiles, isn't running, is a spark's or
+    another flow's, or is waiting on a permission."
+  - "VibeField couldn't start ‹label›: ‹the runtime's words›"
+  - "‹label› failed."
+- **A form the run can't check** (Q-A2 (a): a subset of JSON Schema, checked by fieldd):
+  - "VibeField can't check ‹label›'s form: it uses ‹keyword›, which a flow's form may not. A form takes type,
+    properties, required, items and enum."
+  - "VibeField can't check ‹label›'s form: it is larger than a flow's form may be." This covers each of its three
+    bounds: 4 KiB, 8 deep, and 64 values in one enum.
+  - An answer that misses its form is said in fieldd's words, which name JSON types and places alone, never the
+    agent's text: "the answer is missing a required field (the 2nd of 3)". An answer whose fields alone pass the
+    bound: "the answer's fields are longer than a flow may keep".
+- **The cap and its hold** (CP4-Q8 part 2; J3, J7). Every call counts toward the run's 40, `agent()` and `ask()`
+  alike, a refused one too; a `log()` never does. The 41st call holds the run and asks: Allow 20 more · Stop the run.
+  A run that waits has no process: its host is set down at the hold, and after a short idle at any other wait, and
+  started again from its journal when it can go on. A fan-out past the cap waits at the hold, and its calls are made
+  again after your Allow: "‹flow› is waiting at its 40 calls for your Allow." The flow API's own ceilings, said once:
+  "a flow may wait on 256 calls at once, and say 10,000 log lines in its life".
+- **A run's card's states** (CP-4b draws them): **Waiting for an agent slot**; **Answering again** (above); a line
+  VibeField can't tell arrived, **Sent — not confirmed**; **Ended its ‹n› agents** (CP4-Q10 (a)); **Stopped by you ·
+  ‹time›** (§8); and an answer cut short, **Answered · cut short**, whose detail says "Its answer was longer than a
+  flow may keep (64 KiB), so the script got the first 64 KiB."
+- **A run that can't go on**, beside "When a run's script cannot go on":
+  - a host that can't read the memory its run uses: "VibeField ended ‹flow›: it couldn't measure the memory it used."
+  - a host that left twice: "VibeField ended ‹flow›: its script stopped twice before it could go on."
+  - a run that never began: "VibeField couldn't begin ‹flow›: it couldn't keep the run's record. Nothing was started."
+  - a script that, run again, asks what it never asked: "VibeField set ‹flow› aside: run again, its script asked for
+    something it never asked before."
+  - a run whose journal or record is forged or gone: its `flow-lost` item says "VibeField can't trust what ‹flow›
+    kept, so it set the run aside." Its one act is Stop the run.
+- **The acts** (NEEDS_CHOICE_WORDS): Stop the run · Allow 20 more · Ask once more · Resume the step · See the change
+  · Run this version · Run the one you approved.
+- **The key's posture** (J2 (b)): a run's journal, with its gates' answers and the cap's Allow, is as strong as the
+  flows key: an agent that read that key could write an answer you never gave, as it could an approval. Nothing more
+  is claimed.
+
 **The link's words** (track TS, TS-D1 and TS-D2 ruled 2026-10-27). The act is **Continue with
 Tailscale** on every button that starts it — the Connect pane, Settings → Devices, the phone — and
 the place that holds it says **Connect your devices**; the state is **Connected**. A desktop that
@@ -6567,6 +6618,8 @@ lost (CP4-S15), and a journal the disk did not answer leaves its run waiting, re
 cut short at its end is the one change it cannot see on its own: to a fieldd started again it reads as a run that
 stopped mid-step, and the steps after the cut are asked again. The fieldd that wrote it reads the cut as lost, and
 keeping its tail in the run's own record, so a restart sees it too, is CP-4a2b's (bth's review P3, ruled 11:46Z).*
+*Corrected 2026-11-05 (CP-4a2b; 13a's D18): a journal cut short, or a run record gone, is now seen: the run's own
+record names its head and its last line, written before either, so a fieldd started again reads either as lost.*
 
 **The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
