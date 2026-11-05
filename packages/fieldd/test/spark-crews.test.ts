@@ -11,7 +11,7 @@ import {
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
-import { type CrewRow, type CrewsStore, SparkCrews } from "../src/tool-plane/crews";
+import { type CrewRow, type CrewsStore, crewActText, SparkCrews } from "../src/tool-plane/crews";
 import { SparkKeptStore } from "../src/tool-plane/spark-kept";
 
 // SP-1e2 (step0-sp1e2.md §4.1–§4.3) — a spark's crews: one per stretch of its own run's work (SPE-Q3 = RU-6), closed
@@ -51,6 +51,8 @@ function harness(storeOver?: (store: SparkKeptStore) => CrewsStore) {
   });
   const store = storeOver?.(kept) ?? kept;
   const events: { event: string; attrs: LogFields | undefined }[] = [];
+  /** each act line the crews asked to write: [the spark's run it goes to, the crew, its words] */
+  const acts: [string, CrewId, string][] = [];
   let clock = Date.parse("2026-11-05T02:10:00.000Z");
   let minted = 0;
   const now = () => {
@@ -64,6 +66,10 @@ function harness(storeOver?: (store: SparkKeptStore) => CrewsStore) {
       logger: capture(events),
       now,
       mintId: () => `cr-${String(++minted).padStart(6, "0")}` as CrewId,
+      act: (spark, sparkRun, crew, text) => {
+        expect(spark).toBe(VELA);
+        acts.push([sparkRun, crew, text]);
+      },
     });
   const crews = open();
   const changes: string[] = [];
@@ -74,7 +80,7 @@ function harness(storeOver?: (store: SparkKeptStore) => CrewsStore) {
       dir: join(root, "spark-files"),
       keyPath: join(root, "spark-files.key"),
     }).get(spark)?.crews ?? [];
-  return { root, kept, crews, open, events, changes, disk };
+  return { root, kept, crews, open, events, changes, disk, acts };
 }
 
 const claude = (runtimeRunId: string) => ({ runtimeRunId, agent: "claude", folder: "vibe-field" });
@@ -318,5 +324,104 @@ describe("the crews' door's frame (SPE-Q27 (a), SPE-Q32 (a))", () => {
     h.changes.length = 0;
     h.crews.seen(row({ runtimeRunId: "run-22", crew }));
     expect(h.changes).toEqual([VELA]);
+  });
+});
+
+describe("the crew's act line (SP-1e2's renderer half; SPE-Q39 (a), SR-Q1 (a); item 180)", () => {
+  const opus = { model: "Opus 5.5", effort: "high" };
+
+  it("A1 · the first start writes the crew's line into the spark's run it was made in; a join and a model first named rewrite it; the same words, or an end, write nothing", () => {
+    const h = harness();
+    const crew = h.crews.join(VELA, "run-vela");
+    h.crews.started(VELA, of(crew), claude("run-21"));
+    h.crews.seen(row({ runtimeRunId: "run-21", crew, ...opus }));
+    h.crews.started(VELA, of(crew), claude("run-22"));
+    h.crews.seen(row({ runtimeRunId: "run-22", crew, ...opus }));
+    h.crews.seen(row({ runtimeRunId: "run-22", crew, ...opus })); // nothing new
+    h.crews.ended("run-21", "Claude Code in vibe-field"); // an end changes no word
+    expect(h.acts).toEqual([
+      ["run-vela", crew, "Started 1 agent"],
+      ["run-vela", crew, "Started 1 agent · Opus 5.5 · high"],
+      ["run-vela", crew, "Started 2 agents"],
+      ["run-vela", crew, "Started 2 agents · Opus 5.5 · high"],
+    ]);
+  });
+
+  it("A2 · the words say the model the members share, the model alone when none names an effort, and the count alone when they differ", () => {
+    expect(crewActText([{ runtimeRunId: "r1", at: "t", agent: "claude", ...opus }])).toBe(
+      "Started 1 agent · Opus 5.5 · high",
+    );
+    const grok = { at: "t", agent: "grok", model: "Grok 4" };
+    expect(
+      crewActText([
+        { runtimeRunId: "r1", ...grok },
+        { runtimeRunId: "r2", ...grok },
+      ]),
+    ).toBe("Started 2 agents · Grok 4");
+    expect(
+      crewActText([
+        { runtimeRunId: "r1", ...grok },
+        { runtimeRunId: "r2", at: "t", agent: "claude", ...opus },
+      ]),
+    ).toBe("Started 2 agents");
+    expect(crewActText([{ runtimeRunId: "r1", at: "t", agent: "claude" }])).toBe("Started 1 agent");
+    // four in one stretch, as the floor sees them: one crew, its line rewritten in place, never a line per spawn
+    const h = harness();
+    const crew = h.crews.join(VELA, "run-vela");
+    for (const run of ["run-21", "run-22", "run-23", "run-24"]) {
+      h.crews.started(VELA, of(h.crews.join(VELA, "run-vela")), claude(run));
+      h.crews.seen(row({ runtimeRunId: run, crew, ...opus }));
+    }
+    expect(new Set(h.acts.map(([run, id]) => `${run}:${id}`))).toEqual(
+      new Set([`run-vela:${crew}`]),
+    );
+    expect(h.acts.at(-1)?.[2]).toBe("Started 4 agents · Opus 5.5 · high");
+  });
+
+  it("A3 · Allow one more after the crew closed rewrites the line in the run the crew was made in; a crew another fieldd minted writes into the run it is told", () => {
+    const h = harness();
+    const crew = h.crews.join(VELA, "run-vela");
+    h.crews.started(VELA, of(crew), claude("run-21"));
+    h.crews.sparkRow(VELA, "run-vela", true); // the crew closes
+    h.crews.join(VELA, "run-vela"); // a later stretch's crew, which the held start does not join
+    h.crews.started(VELA, of(crew), claude("run-22"));
+    expect(h.acts.at(-1)).toEqual(["run-vela", crew, "Started 2 agents"]);
+    const restarted = h.open();
+    restarted.started(VELA, of("cr-heldkept" as CrewId, "run-vela-2"), claude("run-31"));
+    expect(h.acts.at(-1)).toEqual(["run-vela-2", "cr-heldkept", "Started 1 agent"]);
+  });
+
+  it("A4 · PIN: a change the disk refuses writes no line, and a member past SPARK_CREW_MEMBERS_MAX writes none", () => {
+    const refused = harness((store) => ({
+      get: (spark) => store.get(spark),
+      list: () => store.list(),
+      update: () => {
+        throw new Error("EIO: the disk did not take it");
+      },
+    }));
+    const crew = refused.crews.join(VELA, "run-vela");
+    refused.crews.started(VELA, of(crew), claude("run-21"));
+    expect(refused.acts).toEqual([]);
+    const h = harness();
+    const full = h.crews.join(VELA, "run-vela");
+    for (let n = 0; n < SPARK_CREW_MEMBERS_MAX; n += 1)
+      h.crews.started(VELA, of(full), claude(`run-${n}`));
+    const before = h.acts.length;
+    h.crews.started(VELA, of(full), claude("run-past"));
+    expect(h.acts.length).toBe(before);
+  });
+
+  it("A5 · after a restart a line is written again only at a change, its words read from the kept record", () => {
+    const h = harness();
+    const crew = h.crews.join(VELA, "run-vela");
+    h.crews.started(VELA, of(crew), claude("run-21"));
+    h.crews.seen(row({ runtimeRunId: "run-21", crew, ...opus }));
+    const before = h.acts.length;
+    const restarted = h.open();
+    restarted.seen(row({ runtimeRunId: "run-21", crew, ...opus })); // nothing changed
+    expect(h.acts.length).toBe(before);
+    restarted.started(VELA, of(crew), claude("run-22"));
+    expect(h.acts.at(-1)).toEqual(["run-vela", crew, "Started 2 agents"]);
+    expect(h.acts.length).toBe(before + 1);
   });
 });

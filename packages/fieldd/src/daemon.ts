@@ -3036,6 +3036,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const crews = new SparkCrews({
       store: sparkKept,
       logger: logger.child({ component: "compose.crews" }),
+      // SP-1e2's renderer half (SR-Q1 (a); item 180): a crew's act line, in the spark's run it was made in
+      act: (spark, sparkRun, crew, text) =>
+        transcriptRecorder.act(spark, sparkRun, "crew", text, { crew }),
     });
     const crewWaiting = (runtimeRunId: string): number | undefined =>
       agents.isLive(runtimeRunId) ? inputs.pending(runtimeRunId).length : undefined;

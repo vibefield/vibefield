@@ -15,8 +15,10 @@ import { join } from "node:path";
 import {
   canonicalJson,
   RECORD_STORES,
+  SPARK_KEPT_FORMAT,
   SPARK_TRANSCRIPT_FORMAT,
   SPARK_TRANSCRIPT_SERVICE,
+  type SparkKeptRecord,
   sparkTranscriptLineOf,
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
@@ -28,6 +30,7 @@ import {
   SparkTranscripts,
   type TranscriptAgent,
 } from "../src/spark-transcripts";
+import { SparkCrews } from "../src/tool-plane/crews";
 
 // TH-1 (step0-th.md §4.1, §4.2; TH0-Q1 = O1) — the spark's transcript, kept: one JSONL file per run in the spark's own
 // folder (item 159's, LAYOUT.SPARK_FILES_DIR), 0600 in 0700, each line MAC'd by the folder's one key over
@@ -506,6 +509,37 @@ describe("the recorder (TH-1; a spark's own run's events, and VibeField's own fa
     expect(lines[2]?.["ours"]).toBe(true);
     expect(lines[3]?.["ours"]).toBeUndefined();
     expect(JSON.stringify(lines)).not.toContain("mcp__");
+  });
+
+  it("writes a crew's act line, naming its crew, into the run the crew was made in, and again as its words change (SP-1e2; item 180)", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    let record: SparkKeptRecord = { format: SPARK_KEPT_FORMAT, spark: VELA, updatedAt: AT };
+    const crews = new SparkCrews({
+      store: {
+        get: () => record,
+        list: () => [record],
+        update: (_spark, fn) => {
+          record = fn(record);
+          return record;
+        },
+      },
+      // daemon.ts's wire, as it is written there
+      act: (spark, sparkRun, crew, text) => recorder.act(spark, sparkRun, "crew", text, { crew }),
+    });
+    const crew = crews.join(VELA, RUN);
+    crews.started(VELA, { id: crew, sparkRun: RUN }, { runtimeRunId: "run-21", agent: "claude" });
+    crews.started(VELA, { id: crew, sparkRun: RUN }, { runtimeRunId: "run-22", agent: "claude" });
+    const lines = h.raw(VELA, RUN);
+    expect(lines.map((line) => [line["kind"], line["what"], line["crew"], line["text"]])).toEqual([
+      ["act", "crew", crew, "Started 1 agent"],
+      ["act", "crew", crew, "Started 2 agents"],
+    ]);
+    for (const line of lines)
+      expect(sparkTranscriptLineOf(line)).toMatchObject({ kind: "act", crew });
+    // VibeField's other acts name no crew, as before
+    recorder.act(VELA, RUN, "notify", "the build is green");
+    expect(h.raw(VELA, RUN).at(-1)).not.toHaveProperty("crew");
   });
 
   it("reads the input queue's outcomes: yours as outcome lines, fieldd's line told as a wake, a paste turned away let go", () => {

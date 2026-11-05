@@ -68,6 +68,12 @@ export interface SparkCrewsOptions {
   readonly logger?: Logger | undefined;
   readonly now?: () => Date;
   readonly mintId?: () => CrewId;
+  /** SP-1e2's renderer half (SR-Q1 (a); item 180) — write a crew's act line into the spark's run the crew was made in:
+   * daemon.ts hands the transcript recorder's act. Called after each kept change whose words differ from the last line
+   * written for that crew (a start, a join, a model first named), never at an end. Absent: no line is written. */
+  readonly act?:
+    | ((spark: SparkId, sparkRun: string, crew: CrewId, text: string) => void)
+    | undefined;
 }
 
 /** A crew's id: fieldd's, minted once, never reused. */
@@ -87,6 +93,14 @@ export function crewFactsOf(
     ...(model !== undefined && model !== "" ? { model: model.slice(0, 128) } : {}),
     ...(typeof effort === "string" && effort !== "" ? { effort: effort.slice(0, 32) } : {}),
   };
+}
+
+/** SP-1e2's renderer half — a crew's act line in VibeField's words (DESIGN.md §9, the crew card): "Started 4 agents ·
+ * Opus 5.5 · high", "Started 1 agent · …", the model alone when no member names an effort, and the count alone when
+ * the members differ or a model is not named yet (`crewSharedModelOf`, the rule Chat's card head reads too).
+ * (red: a skeleton) */
+export function crewActText(_members: readonly SparkCrewMember[]): string {
+  return "";
 }
 
 /** The newest SPARK_CREWS_KEPT crews, oldest first. */

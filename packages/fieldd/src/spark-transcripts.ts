@@ -11,6 +11,7 @@ import {
 import { basename, join } from "node:path";
 import {
   type ComposeSayChip,
+  type CrewId,
   RECORD_STORES,
   SPARK_TRANSCRIPT,
   SPARK_TRANSCRIPT_FORMAT,
@@ -108,7 +109,13 @@ export type TranscriptBody =
       readonly detail?: string | undefined;
       readonly ours?: true | undefined;
     }
-  | { readonly kind: "act"; readonly what: string; readonly text: string }
+  | {
+      readonly kind: "act";
+      readonly what: string;
+      readonly text: string;
+      /** SP-1e2 — the crew a `crew` act names (SPE-Q39 (a)) */
+      readonly crew?: CrewId | undefined;
+    }
   | { readonly kind: "turn"; readonly edge: string; readonly turn?: string | undefined }
   | { readonly kind: "gap"; readonly since: string };
 
@@ -605,8 +612,15 @@ export class SparkTranscriptRecorder {
     if (at >= 0) recording.prompts.splice(at, 1);
   }
 
-  /** VibeField's own act, in the spark's run's file: a wake that told it something, an answer you gave, a notify. */
-  act(spark: SparkId, runtimeRunId: string, what: string, text: string): void {
+  /** VibeField's own act, in the spark's run's file: a wake that told it something, an answer you gave, a notify, and
+   * (SP-1e2) a crew's line, which names its crew. (red: `fields` is accepted and not yet written) */
+  act(
+    spark: SparkId,
+    runtimeRunId: string,
+    what: string,
+    text: string,
+    _fields?: { readonly crew?: CrewId | undefined },
+  ): void {
     if (text.trim() === "") return;
     this.store.append(spark, runtimeRunId, { kind: "act", what, text });
   }
