@@ -53,6 +53,8 @@ export interface FlowRecordsOptions {
   readonly keyPath: string;
   readonly logger?: Logger | undefined;
   readonly now?: () => Date;
+  /** item 172 — a record file's read, a seam for a disk that does not answer (tests) */
+  readonly readFile?: ((path: string) => string) | undefined;
 }
 
 export interface FlowApproveOptions {
@@ -90,7 +92,11 @@ export class FlowRecords {
   constructor(private readonly opts: FlowRecordsOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
     this.#now = opts.now ?? (() => new Date());
-    this.#signer = new RecordSigner({ keyPath: opts.keyPath, logger: this.#logger });
+    this.#signer = new RecordSigner({
+      keyPath: opts.keyPath,
+      logger: this.#logger,
+      readFile: opts.readFile,
+    });
   }
 
   /** A new proposal's id: fieldd's, never reused. */
@@ -217,6 +223,11 @@ export class FlowRecords {
     if (!existsSync(path) || !statSync(path).isFile()) return undefined;
     const read = this.#signer.read(path);
     if ("why" in read) return this.#setAside(path, read.why);
+    // CP-4a1 (red): item 172's two answers, read as before it: a disk that did not answer as a record that is not
+    // one, and nothing there as nothing. No guard yet: a folder it cannot list throws its errno, and a newer
+    // VibeField's record fails the schema and is set aside.
+    if ("unavailable" in read) return this.#setAside(path, "unreadable");
+    if ("absent" in read) return undefined;
     const parsed = schema.safeParse(read.body);
     if (!parsed.success) return this.#setAside(path, "unreadable");
     // signed for another name: a record copied into this one's

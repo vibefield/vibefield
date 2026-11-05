@@ -21,6 +21,7 @@ import {
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { AgentInputQueues } from "../src/agent-input-queue";
+import { FlowRecords } from "../src/flows/records";
 import { RpcCallError } from "../src/native-link";
 import {
   newerFormat,
@@ -367,7 +368,46 @@ const keptCase: StoreCase = {
   },
 };
 
-const CASES = [sparksCase, needsCase, inputsCase, keptCase];
+/** CP-4a1 — the flow records, item 172's fifth store: read at each ask, as the sparks are. */
+const FLOW_BYTES = new TextEncoder().encode(
+  'export const meta = { name: "Kept" };\nexport default async function () {}\n',
+);
+
+const flowsCase: StoreCase = {
+  name: "the flow records (FlowRecords)",
+  service: RECORD_STORES.SERVICE_FLOWS,
+  retryable: true,
+  words: UNREADABLE_WORDS.flows,
+  dir: (root) => join(root, "fieldd", "flows"),
+  keyPath: (root) => join(root, "fieldd", "flows.key"),
+  seed(root, which) {
+    const flow = which === 0 ? "release-check" : "nightly-sweep";
+    new FlowRecords({ dir: this.dir(root), keyPath: this.keyPath(root) }).approve(flow, FLOW_BYTES);
+    return { file: join(this.dir(root), "approvals", `${flow}.json`), key: flow };
+  },
+  boot(root, events, readFile) {
+    const records = new FlowRecords({
+      dir: this.dir(root),
+      keyPath: this.keyPath(root),
+      logger: capture(events),
+      readFile,
+    });
+    return {
+      read: null,
+      served: () => {
+        try {
+          return records.approvals().map((record) => record.flow);
+        } catch (err) {
+          return { message: (err as Error).message };
+        }
+      },
+      refuse: () => outcome(() => records.approvals()),
+      write: (key) => outcome(() => records.approve(key, FLOW_BYTES)),
+    };
+  },
+};
+
+const CASES = [sparksCase, needsCase, inputsCase, keptCase, flowsCase];
 
 const refusalOf = (c: StoreCase) => ({
   kind: "UNAVAILABLE",
@@ -479,6 +519,7 @@ describe("item 172 — the read seam is the tests' alone", () => {
       .sort();
     expect(passes).toEqual([
       "agent-input-queue.ts: readFile: opts.readFile,",
+      "flows/records.ts: readFile: opts.readFile,",
       "tool-plane/rooms/you/store.ts: readFile: opts.readFile,",
       "tool-plane/spark-kept.ts: readFile: opts.readFile,",
       "tool-plane/sparks.ts: readFile: opts.readFile,",

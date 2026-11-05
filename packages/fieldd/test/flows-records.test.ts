@@ -14,12 +14,18 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FLOW_LIMITS, FLOW_RECORD_FORMAT, FlowApprovalRecord } from "@vibefield/contracts";
+import {
+  FLOW_LIMITS,
+  FLOW_RECORD_FORMAT,
+  FlowApprovalRecord,
+  RECORD_STORES,
+} from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { FlowLibrary } from "../src/flows/library";
 import { FlowRecords, flowHashOf } from "../src/flows/records";
-import { RecordSigner } from "../src/signed-record";
+import type { RpcCallError } from "../src/native-link";
+import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
 
 // CP-4a1 (step0-cp4.md §5.1 commit 4; CP4-Q18 (a), CP4-Q5 (a)) — the person's library and fieldd's flow records. A
 // version's bytes are kept by their SHA-256 and read back only while that is still their hash; a flow's approval and a
@@ -184,7 +190,7 @@ describe("fieldd's flow records (CP4-Q18 (a))", () => {
     expect(h.records().approval("nightly-sweep")).toBeUndefined();
   });
 
-  it("R4 · sets aside, and never serves, an approval that is unsigned, forged, exposed, unreadable or copied to another flow's name; the rest still list", () => {
+  it("R4 · sets aside, and never serves, an approval that is unsigned, forged, exposed, unreadable or copied to another flow's name; keeps a newer VibeField's; the rest still list", () => {
     const h = harness();
     const records = h.records();
     for (const flow of ["good", "forged", "exposed", "copied-from"]) records.approve(flow, RELEASE);
@@ -212,7 +218,7 @@ describe("fieldd's flow records (CP4-Q18 (a))", () => {
     writeFileSync(h.approvalFile("junk"), "{not json", { mode: 0o600 });
     // a good, signed approval copied to another flow's name
     copyFileSync(h.approvalFile("copied-from"), h.approvalFile("copied-to"));
-    // another format, signed: a newer build's record is never read as this one
+    // a newer VibeField's approval, signed (item 172): kept where it is for it, never served and never set aside
     h.signApproval({
       format: 2,
       flow: "later",
@@ -235,12 +241,15 @@ describe("fieldd's flow records (CP4-Q18 (a))", () => {
       "exposed.json": "exposed",
       "junk.json": "unreadable",
       "copied-to.json": "forged",
-      "later.json": "unreadable",
     });
-    for (const flow of ["unsigned", "forged", "exposed", "junk", "copied-to", "later"]) {
+    for (const flow of ["unsigned", "forged", "exposed", "junk", "copied-to"]) {
       expect(existsSync(h.approvalFile(flow)), flow).toBe(false);
       expect(h.records().approval(flow), flow).toBeUndefined();
     }
+    expect(existsSync(h.approvalFile("later")), "a newer VibeField's approval is kept").toBe(true);
+    expect(h.records().approval("later")).toBeUndefined();
+    // and a write over it is refused in fieldd's words, never answered by writing over it
+    expect(() => h.records().approve("later", RELEASE)).toThrow(UNREADABLE_WORDS.flows);
     expect(readFileSync(join(h.dir, "approvals", "README.txt"), "utf8")).toBe("a human's note");
   });
 
@@ -323,7 +332,56 @@ describe("fieldd's flow records (CP4-Q18 (a))", () => {
     const edge = Buffer.alloc(FLOW_LIMITS.SCRIPT_MAX_BYTES, 0x20);
     expect(h.records().bytes(h.records().keep(edge))).toEqual(edge);
   });
+
+  it("R7 · a write over a record the disk did not answer is refused in fieldd's words, and nothing is moved, set aside or written (item 172)", () => {
+    const h = harness();
+    h.records().approve("release-check", RELEASE);
+    const proposal = h
+      .records()
+      .propose({ flow: "review-until-clean", bytes: RELEASE, spark: VELA });
+    const approval = readFileSync(h.approvalFile("release-check"), "utf8");
+    const proposed = readFileSync(h.proposalFile(proposal.id), "utf8");
+    // the disk answers no record file (EMFILE, every try); the key and the bytes read as ever
+    const records = new FlowRecords({
+      dir: h.dir,
+      keyPath: h.keyPath,
+      readFile: (path) => {
+        if (path.startsWith(join(h.dir, "approvals")) || path.startsWith(join(h.dir, "proposals")))
+          throw Object.assign(new Error(`EMFILE: too many open files, open '${path}'`), {
+            code: "EMFILE",
+          });
+        return readFileSync(path, "utf8");
+      },
+    });
+    const refused = {
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: RECORD_STORES.SERVICE_FLOWS, state: RECORD_STORES.STATE_UNREADABLE },
+      message: UNREADABLE_WORDS.flows,
+    };
+    expect(outcome(() => records.approve("release-check", EDITED))).toEqual(refused);
+    expect(outcome(() => records.dropProposal(proposal.id))).toEqual(refused);
+    expect(outcome(() => records.approval("release-check"))).toEqual(refused);
+    expect(outcome(() => records.proposals())).toEqual(refused);
+    expect(readFileSync(h.approvalFile("release-check"), "utf8")).toBe(approval);
+    expect(readFileSync(h.proposalFile(proposal.id), "utf8")).toBe(proposed);
+    expect(h.records().bytes(flowHashOf(EDITED)), "the refused version's bytes").toBeUndefined();
+    expect(h.setAside("fieldd.flows.set_aside")).toEqual([]);
+  });
 });
+
+/** What an act answers: "ok", or what it threw, read as an RpcCallError (never thrown on). */
+function outcome(
+  fn: () => unknown,
+): { kind?: string; retryable?: boolean; details?: unknown; message: string } | "ok" {
+  try {
+    fn();
+    return "ok";
+  } catch (err) {
+    const e = err as RpcCallError;
+    return { kind: e.kind, retryable: e.retryable, details: e.details, message: e.message };
+  }
+}
 
 describe("the person's library (CP4-Q5 (a))", () => {
   it("L1 · lists each <slug>.flow.js against its approval: approved, changed, new, too big; by slug", () => {
