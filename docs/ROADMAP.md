@@ -774,7 +774,7 @@ phone"; DECISIONS PC
      - third-party notices on the Mac and on iOS: LANDED 2026-11-05 (M131 `02b47ba2a`, LANDED "LP-5"); the
        staged `Resources/legal` witness passed at run 133; owed: the packaged one on the first signed nightly;
      - the surface lab out of production builds (Q3): LANDED (M133, witnessed by run 133's build:renderer);
-       `package-census --assert --strict` green: OWED, its baseline its own slice now that SD-2 is on main (M138);
+       `package-census --assert --strict` green, in verify: LANDED 2026-11-05 (M145 `20eef65de`, LANDED "LP-6c");
      - LOG-39's packaged checks in `release.yml`;
      - `cargo audit` blocking again once the yanked chacha20 moves (Q28);
      - build-provenance attestations on the DMG and zip: LANDED (M136, LANDED "LP-1"); owed: the first signed
@@ -982,7 +982,9 @@ phone"; DECISIONS PC
 - A guard that every `link:` row resolves before `pnpm build`, unless preflight's refusal covers it; retires with mille's release — LANDED "The Rust toolchain is pinned".
 - `smoke:update` raises a keychain dialog with a person present (use a run keychain; the fixer's item). Row 30 runs on James's Mac, since the mini's Xcode is deferred (Q24, §5); until the run keychain is built, he cancels each run's dialog (never Reset, never a password).
 - `cargo audit` runs report-first (`audit.yml`, `continue-on-error`); chacha20 is YANKED in Cargo.lock (run 40590297837); harden it after chacha20 moves (Q28, §3 item 7).
-- Shipped Rust daemons inherit `allow-jit`; shipped binaries embed `~/.cargo/registry` paths; `package-census --assert --strict` red on MV's chunks (run it once, then update the manifest or drop the row) — `build-hf.md` M3–M5.
+- Shipped Rust daemons inherited `allow-jit`, shipped binaries embedded `~/.cargo/registry` paths, and `package-census
+  --assert --strict` was red on MV's chunks (`build-hf.md` M3–M5) — LANDED "LP-6" (each daemon its own entitlements),
+  "LP-6b" (no build paths) and "LP-6c" (the census strict in verify, on a fresh baseline).
 
 **AL and the dev runner**
 - The dev runner's SIGTERM teardown dies before `stopDaemons` under `pnpm dev` (three times 10-17); read why, fix at the cause — `draft/handover/2026-10-17-focus-audit.md`.

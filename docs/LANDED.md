@@ -33706,3 +33706,62 @@ fixtures), field-native's `registries.rs`, fieldd's package.json and 11 fieldd s
 - The iPad word pass ("this phone" → device-neutral) after IOS-13a's `FieldDesign.DeviceWord`
   (the list: `/Volumes/SamsungRed/lanes/lp-wave1/A2-device-words-list.md`), and a pass on 11- and 13-inch iPads.
 - About → Acknowledgements reading the bundled file (IOS-13a).
+
+## LP-6c — the census is main's gate: verify runs the strict census after the builds it inventories, and the baseline is drawn from 0.9's tree (2026-11-05; `c46f0ecde` → `20eef65de`, 2 commits on main `fe9270152`, lane `lp/census` in `/Volumes/SamsungRed/lanes/lp-census/vibe-field`, minted as M145 `20eef65de`, run 145)
+
+**What it rests on.**
+- LP-6's owed line, "the census baseline", and VF-PM's ruling (06:37Z): draw it after SD-2 lands, since SD-2's sound
+  player and `main/sound-worker.cjs` are the last new shipped files before 0.9's freeze, and put `--assert --strict`
+  into verify. Until now the census ran only in `package-preview.yml`, at PR time and without `--strict`, so main had
+  no census gate, and SD-2's new shipped bundle reached main with no row.
+- `--assert` refuses a tree in which any workspace package that declares a build has no `dist/` ("census assert
+  CANNOT RUN"). A bare census run on the lane showed it: the first cut built fieldd alone, and would have stopped
+  inside verify on the six plugin packages. It was corrected before anything consumed it.
+
+**What landed.**
+- The root `package.json` (PIN-CLASS by the ERE, scripts only, no dependency moves): `census:assert` builds what
+  bundle:assert leaves out (fieldd, `plugins/*` and `examples/plugins/*`, with `--if-present`; `plugin-build` runs from
+  its bin, so there is no cargo) and then runs `node scripts/package-census.mjs --assert --strict`. `verify` runs it
+  right after `bundle:assert`.
+- `tooling/dev-runner/test/package-census.test.mjs`, two rows. One holds verify's order, the builds and the flag. The
+  other holds the baseline to every bundle `stage-package.mjs` copies by a literal dist path; at C1 it failed on
+  `packages/electron-shell/dist/main/sound-worker.cjs`, the one such bundle with no row.
+- `tooling/dev-runner/project.json`: the manifest is an input of the test target, so a baseline edit re-runs the rows
+  instead of replaying a cached pass.
+- `scripts/package-census.mjs`: its header's "the flip is one flag" is corrected at the source, dated.
+- `apps/desktop/packaging/package-manifest.json` (`20eef65de`): the baseline, byte for byte what `--update` wrote on
+  the mini, +200/−78. The baseline is 104 files, 42,015,788 bytes, over 9 packages (browser-pane and simulator rowed
+  for the first time); sha256 `be5f4e8a43797faf03a7308d2f78249e4f20bd49d73be87775bdbfb095f495d9`.
+
+**Validation.**
+- This Mac, from inside the lane (nice 19, guard clear), each rc=0 but the designed red: preflight, biome and walls;
+  `node --test` the census test, 7 pass and 1 fail at `c46f0ecde` ("staged with no census row:
+  …/sound-worker.cjs"), then 8 pass and 0 fail at `20eef65de`, on the landed tip (08:45:10–19Z).
+- The mini, a9's C2 job at C1 (08:10:03Z; df 21 GiB before and after, +3 MiB): `pnpm bundle:assert` rc 0, then
+  phase 1, `pnpm census:assert` against main's 2026-10-07 manifest: rc 1, "census assert FAILED (--strict) — 12
+  missing / 39 unexpected / 2 miscounted; run --update if the change was intended", with no "CANNOT RUN" and no §7.3
+  line.
+  `--update` rc 0, "wrote apps/desktop/packaging/package-manifest.json — 104 files, 42,015,788 bytes"; then
+  `--assert --strict` rc 0, "no drift", "census assert OK — no §7.3 violation".
+- At C2, here: biome clean as written; `node --test` the census test 8 pass, 0 fail.
+- The mini, run 145: `pnpm verify` exit 0 at `20eef65de` (08:53:55Z). Inside it, right after bundle:assert,
+  census:assert built and printed "no drift" and "census assert OK — no §7.3 violation". node 445 → 447 (the two
+  LP-6c rows), `package-census.test.mjs` 8/8; vitest 12,737 passed, 0 failed, 20 skipped; cargo 545/0. No step 2: the
+  pre-mint census at `5d2527657`, on L4's tip (08:39Z, "no drift", the manifest equal to C2's), was the proof.
+
+**Found.**
+- The baseline had not moved since 2026-10-07 (DK-17). Phase 1 says what shipped unrowed until today:
+  - UNEXPECTED: `packages/electron-shell/dist/main/sound-worker.cjs` (SD-2), `plugins/browser-pane/dist/renderer.js`
+    and `plugins/simulator/dist/renderer.js`, and 36 more, all renderer assets;
+  - MISSING: 12, all renderer assets that no longer exist;
+  - COUNT: `desk-[hash].js` expected 1, found 2; `react-[hash].js` expected 1, found 3.
+  - The whole 287-line log: `/Volumes/SamsungRed/lanes/lp-wave1/census-phase1-red-98492aba7.log`, sha256
+    `64e387f5e625041436c977200ac12bdd116ada6d5cca0b6933a7230c3b30ef77`.
+- `package-preview.yml` keeps its non-strict PR-time report (release-class, not touched); verify is the gate on main.
+
+**Owed.**
+- Each later change to a shipped file carries its `--update` in the same commit, or verify is red; that is the point.
+  It is drawn after the full build (bundle:assert's and census:assert's), because `--update` does not refuse an unbuilt
+  tree, and on the mini while the HOLD stands. A2 is its first consumer (`dist/transcript-host.cjs`, VF-PM 08:44Z).
+- **James:** CLAUDE.md's verify line gains "→ census (strict)" after "bundle" (his typed word).
+- Item 178: `third-party-notices.mjs`'s rows held to every staged `.cjs`, both directions, its own slice.
