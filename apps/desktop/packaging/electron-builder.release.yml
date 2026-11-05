@@ -3,11 +3,20 @@
 # notarization into hard release requirements.
 extends: packaging/electron-builder.yml
 
+# LP-6 review (2026-11-05): the check that keeps a missing identity a hard failure. With `mac.sign` set (below),
+# electron-builder 26.15.7 no longer reports an identity the keychain lacks, so `forceCodeSigning` catches only an
+# explicit `identity: null`; the build would go on unsigned. This hook reads the signed app back (the frozen team's
+# Developer ID, a timestamp, the Hardened Runtime: release-signature.mjs) and fails the build, naming the cause, before
+# any DMG or zip is made. electron-builder emits afterSign after its macOS signing pass, a skipped one included.
+afterSign: packaging/sign-mac.mjs
+
 mac:
   # Match only a Developer ID Application certificate from the frozen team.
   # The certificate/private key itself remains in the keychain or CSC_LINK.
   identity: 9F79X9D26S
   type: distribution
+  # LP-6 review (2026-11-05): with `sign` set below, this refuses `identity: null` only; a missing or invalid
+  # identity is refused by the top-level afterSign (packaging/sign-mac.mjs `afterSign`).
   forceCodeSigning: true
   hardenedRuntime: true
   notarize: true

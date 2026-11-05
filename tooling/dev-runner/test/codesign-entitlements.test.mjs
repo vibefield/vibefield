@@ -4,7 +4,8 @@
 //
 // LP-6: and the per-binary policy the release signer (packaging/sign-mac.mjs) and the gate share — fieldd and the app
 // keep allow-jit, every other entry of Contents/Resources/bin is signed with no entitlement, and an executable the
-// table does not name refuses the signing before anything is signed.
+// table does not name refuses the signing before anything is signed. With that hook set, electron-builder no longer
+// reports a missing identity, so the overlay's afterSign reads the app's release signature back (the review's row).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -34,6 +35,8 @@ import {
   withBinEntitlements,
 } from "../../../apps/desktop/packaging/codesign-entitlements.mjs";
 import signVibeField, {
+  afterSign,
+  assertBuilderSigned,
   builderSigner,
   NATIVE_ENTITLEMENTS,
   signWithBinEntitlements,
@@ -296,6 +299,54 @@ test("LP-6: the release overlay signs through the hook, which reaches electron-b
   // electron-builder takes a module's `sign` export before its default: the hook must be the default alone
   assert.equal(NATIVE_ENTITLEMENTS, join(PACKAGING, "entitlements.mac.native.plist"));
   assert.equal(typeof builderSigner(), "function");
+});
+
+test("LP-6 review: with mac.sign set, an app electron-builder could not sign stops the build at afterSign, naming the cause", async () => {
+  // the overlay wires the check at the top level, the hook module's `afterSign` export
+  const overlay = readFileSync(join(PACKAGING, "electron-builder.release.yml"), "utf8");
+  assert.match(overlay, /^afterSign: packaging\/sign-mac\.mjs$/mu);
+  assert.match(overlay, /^ {2}forceCodeSigning: true$/mu);
+  assert.equal(typeof afterSign, "function");
+
+  const context = {
+    electronPlatformName: "darwin",
+    appOutDir: join(tmpdir(), "release", "mac-arm64"),
+    packager: { appInfo: { productFilename: "VibeField" } },
+  };
+  // a signed app: the release signature is read from the app electron-builder made, against apps/desktop's identity
+  let asked;
+  await assertBuilderSigned(context, async (root, files, what) => {
+    asked = { root, files, what };
+  });
+  assert.deepEqual(asked, {
+    root: join(PACKAGING, ".."),
+    files: [join(context.appOutDir, "VibeField.app")],
+    what: "app",
+  });
+
+  // a skipped signing (no identity in the keychain): refused, with the reason forceCodeSigning no longer gives
+  await assert.rejects(
+    assertBuilderSigned(context, async () => {
+      throw new Error("code object is not signed at all");
+    }),
+    (error) => {
+      assert.match(
+        error.message,
+        /^LP-6: electron-builder left .*VibeField\.app without the release signature/u,
+      );
+      assert.match(error.message, /no longer trips forceCodeSigning/u);
+      assert.match(error.message, /keychain or in CSC_LINK/u);
+      assert.match(error.message, /\(code object is not signed at all\)$/u);
+      return true;
+    },
+  );
+
+  // another platform's pass asks nothing
+  let called = false;
+  await assertBuilderSigned({ ...context, electronPlatformName: "win32" }, async () => {
+    called = true;
+  });
+  assert.equal(called, false);
 });
 
 test("LP-6: the three plists — the app's and the inherited one grant allow-jit alone, the native one grants nothing", () => {

@@ -20,8 +20,18 @@
 // Rejected alternatives: osx-sign's `optionsForFile` alone is not configurable from electron-builder's YAML; a re-sign
 // after electron-builder would break the notarization ticket electron-builder already stapled; `notarize: false` plus
 // a second notarization step would duplicate the credential handling run-macos-release.mjs preflights.
+//
+// LP-6 review (2026-11-05) — what setting `mac.sign` costs, and the `afterSign` below that pays it back. In
+// app-builder-lib 26.15.7, `MacTargetHelper.findSigningIdentity` reports a missing identity only while
+// `noIdentity = !config.sign && identity == null`, and `reportError` is what throws under `forceCodeSigning`. With a
+// hook set, an identity the keychain does not hold (an expired or rotated CSC_LINK, another team's certificate) makes
+// it return null, and `MacPackager.sign` returns false: no hook, no signature, no notarization and no error, and the
+// DMG and zip would be written unsigned. `MacPackager.signApp` still returns true, so electron-builder still emits
+// `afterSign`; the overlay's `afterSign` (this module's export of that name) reads the app's signature back
+// (release-signature.mjs, the check the packaged verifiers run on nested code) and fails the build there, naming the
+// cause, before any target is made.
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BIN_PROFILES,
@@ -30,6 +40,10 @@ import {
   unclassifiedBinEntries,
   withBinEntitlements,
 } from "./codesign-entitlements.mjs";
+import { assertReleaseSigned } from "./release-signature.mjs";
+
+/** apps/desktop, where release-signature.mjs reads the frozen team (packaging/release-identity.json). */
+const DESKTOP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** The no-entitlement plist every `none` entry of `bin/` is signed with. */
 export const NATIVE_ENTITLEMENTS = join(
@@ -73,8 +87,35 @@ export async function signWithBinEntitlements(options, sign) {
   });
 }
 
+/** The afterSign check's body, with the reader handed in (the test's seam): the macOS app electron-builder just
+ * signed must carry the release signature (the frozen team's Developer ID, a timestamp, the Hardened Runtime), or
+ * the build stops here, saying why the release overlay's `forceCodeSigning` did not. */
+export async function assertBuilderSigned(context, assertSigned) {
+  if (context.electronPlatformName !== "darwin") return;
+  const app = join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
+  try {
+    await assertSigned(DESKTOP_ROOT, [app], "app");
+  } catch (error) {
+    throw new Error(
+      `LP-6: electron-builder left ${app} without the release signature. With the release overlay's mac.sign set, ` +
+        "a Developer ID identity the keychain does not hold no longer trips forceCodeSigning: app-builder-lib " +
+        "26.15.7 skips the signing, the hook and notarization without an error. Is the team's Developer ID " +
+        "Application certificate in the keychain or in CSC_LINK, unexpired and valid? " +
+        `(${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+}
+
+/** electron-builder's `afterSign` hook (the release overlay's top-level `afterSign: packaging/sign-mac.mjs`, taken by
+ * this export's name, while `mac.sign` takes the default because this module exports no `sign`). electron-builder
+ * emits it after every macOS signing pass, the skipped one included. */
+export async function afterSign(context) {
+  return assertBuilderSigned(context, assertReleaseSigned);
+}
+
 /** electron-builder's `mac.sign` hook (`CustomMacSign`: the options, and the packager, which this does not need).
- * Default-exported and named nothing else: electron-builder takes a module's `sign` export before its default. */
+ * The default export, and nothing is exported as `sign`: electron-builder takes a module's `sign` export before its
+ * default. */
 export default async function signVibeField(options) {
   return signWithBinEntitlements(options, builderSigner());
 }

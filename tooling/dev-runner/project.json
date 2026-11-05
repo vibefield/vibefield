@@ -42,6 +42,7 @@
         "{workspaceRoot}/apps/desktop/packaging/entitlements.mac.inherit.plist",
         "{workspaceRoot}/apps/desktop/packaging/entitlements.mac.native.plist",
         "{workspaceRoot}/apps/desktop/packaging/sign-mac.mjs",
+        "{workspaceRoot}/apps/desktop/packaging/release-signature.mjs",
         "{workspaceRoot}/apps/desktop/packaging/electron-builder.release.yml",
         "{workspaceRoot}/scripts/siblings.mjs",
         "{workspaceRoot}/scripts/electron-binary.mjs",
