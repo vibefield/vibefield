@@ -18,8 +18,10 @@ export {
   TRAPPIST,
   tuned,
 } from "./field.ts";
+export { ENGINE_HASH, ENGINE_REVISION, nearestPlace, PREVIEW_CUES, renderKey } from "./files.ts";
 export { haptics, type Tap } from "./haptics.ts";
 export { momentaryMax } from "./loudness.ts";
+export { isQuiet, QUIET, quietEnd } from "./quiet.ts";
 export {
   clearOf,
   type Layout,
@@ -62,3 +64,4 @@ export {
   type VoiceCue,
   type VoiceStats,
 } from "./voice.ts";
+export { encodeWav } from "./wav.ts";

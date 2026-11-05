@@ -13,6 +13,7 @@ import {
   PAN_LIMIT,
   PAN_POSITIONS,
   PROFILES,
+  QUIET,
   SPACES,
   STARLIGHT,
   TAIL_FLOOR_DB,
@@ -238,5 +239,11 @@ describe("when it speaks", () => {
       p === 0 ? "the centre" : `${p < 0 ? "−" : "+"}${Math.round(Math.abs(p) * 100)}%`;
     says(`at ${WORDS[PAN_POSITIONS.length]} positions: ${PAN_POSITIONS.map(place).join(", ")}.`);
     expect(PAN_POSITIONS.at(-1)).toBe(PAN_LIMIT);
+  });
+  it("Quiet's clock (SD-2)", () => {
+    expect(QUIET.HOUR_MS).toBe(60 * 60 * 1000);
+    says(
+      `for an hour or until tomorrow: ${QUIET.MORNING_HOUR}:00 the next morning, by this Mac's clock.`,
+    );
   });
 });
