@@ -5762,6 +5762,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Acknowledgements** lists every part the app links, grouped by what it is for. Each row shows its name, version
     and licence, and opens the part's full licence texts. With no acknowledgements in the build, it says so (§9)
     above the short list.
+    - The groups are the roles as the generator names them, said as sentences: the terminal, the private network,
+      the terminal's fonts, the agents' marks and the desktops' OS marks first, then the rest by name.
+    - A row is the part's name, its version under it in mono, and its licence as the value.
+    - A part's page holds each of its texts under the text's kind, its file names beside the kind, and the body in
+      mono 12, selectable.
   - About's foot carries the non-affiliation line under Tailscale's trademark line, as one foot.
   - Every **This phone** becomes the platform's own label, read at runtime: **This iPhone**, **This iPad**, or
     **This device** where it is neither (§9).
@@ -6306,6 +6311,9 @@ reject"; where each word stands is §8 "The phone's Settings" and "The phone's w
   sentence rides with them; item 160 and the bible's §11 keep those words.
 - With no acknowledgements in the build, the page says "Acknowledgements aren't in this build." above the short list
   it has always shown.
+- When the build's acknowledgements can't be read: "This build's acknowledgements can't be read: ‹the reason›." above
+  the same short list. Never a blank page.
+- A text a part names that the file doesn't carry is named, never dropped: "This text isn't in the build: ‹its id›."
 - Under Tailscale's trademark line in About: "VibeField names agents such as Claude Code and Codex to tell sessions
   apart. It isn't affiliated with or endorsed by Anthropic or OpenAI."
 - The device is named as its platform names it, read when VibeField runs: "this iPhone", "this iPad", and "this
