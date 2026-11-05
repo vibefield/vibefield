@@ -5839,7 +5839,12 @@ delivered: ‹name›’s session ended", or, when the send is uncertain and is 
 in its pane". Every state is in words (PC-L4). A spark asleep: "‹name› is asleep · a message wakes it", with
 **Wake**. Its desktop asleep: "‹desktop› is asleep. These are as it last said; your words wait here until it
 wakes.", on a card "‹desktop› is asleep · answer when it wakes", and under a draft "Waits here until ‹desktop›
-wakes". Needs you says who asks ("‹name› asks", "research·3 asks"), an agent's own ask says **Answer in its pane**,
+wakes". Its desktop not answering the home's merge (a timeout, or unreachable: one fact to the person): "‹desktop›
+isn't answering. These are as it last said; your words wait here until it answers." Its desktop answering with a
+build the home can't merge (incompatible), never said as not answering: "‹desktop› runs a build this phone can't
+read. These are as it last said; your words wait here until it's updated." *(VF-PM 2026-11-05, at IOS-12b: the merge
+says five words and the page drew one; for James's eye.)* Needs you says who asks ("‹name› asks", "research·3
+asks"), an agent's own ask says **Answer in its pane**,
 and an answer says "You said ‹choice›". The note says "‹name› needs you". New spark says "Runs on ‹desktop›, your
 home" and **Create ‹name›**, and refuses with "‹name› is taken" or "‹profile› has no ‹agent› sign-in".
 
