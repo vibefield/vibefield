@@ -45,11 +45,23 @@
       "files": {
         "dist/main/index.cjs": {
           "count": 1,
-          "bytes": [1427390]
+          "bytes": [2753933]
+        },
+        "dist/main/sound-worker.cjs": {
+          "count": 1,
+          "bytes": [36381]
         },
         "dist/preload/index.cjs": {
           "count": 1,
-          "bytes": [690664]
+          "bytes": [940905]
+        },
+        "dist/renderer/assets/AgentsWizardPane-[hash].css": {
+          "count": 1,
+          "bytes": [2750]
+        },
+        "dist/renderer/assets/AgentsWizardPane-[hash].js": {
+          "count": 1,
+          "bytes": [5510]
         },
         "dist/renderer/assets/Caveat-500-[hash].ttf": {
           "count": 1,
@@ -59,57 +71,73 @@
           "count": 1,
           "bytes": [251816]
         },
+        "dist/renderer/assets/CopyButton-[hash].js": {
+          "count": 1,
+          "bytes": [597]
+        },
         "dist/renderer/assets/DiagnosticsSection-[hash].js": {
           "count": 1,
-          "bytes": [20533]
-        },
-        "dist/renderer/assets/FieldGlyph-[hash].css": {
-          "count": 1,
-          "bytes": [8559]
-        },
-        "dist/renderer/assets/FieldGlyph-[hash].js": {
-          "count": 1,
-          "bytes": [17145]
+          "bytes": [24841]
         },
         "dist/renderer/assets/HistoryRoomView-[hash].css": {
           "count": 1,
-          "bytes": [165446]
+          "bytes": [189884]
         },
         "dist/renderer/assets/HistoryRoomView-[hash].js": {
           "count": 1,
-          "bytes": [724068]
+          "bytes": [793307]
+        },
+        "dist/renderer/assets/HistoryWizardPane-[hash].css": {
+          "count": 1,
+          "bytes": [1526]
+        },
+        "dist/renderer/assets/HistoryWizardPane-[hash].js": {
+          "count": 1,
+          "bytes": [6185]
         },
         "dist/renderer/assets/Kalam-400-[hash].ttf": {
           "count": 1,
           "bytes": [426488]
         },
+        "dist/renderer/assets/ProfilesView-[hash].js": {
+          "count": 1,
+          "bytes": [466710]
+        },
+        "dist/renderer/assets/ProfilesWizardPane-[hash].css": {
+          "count": 1,
+          "bytes": [4379]
+        },
+        "dist/renderer/assets/ProfilesWizardPane-[hash].js": {
+          "count": 1,
+          "bytes": [13973]
+        },
+        "dist/renderer/assets/agents-words-[hash].js": {
+          "count": 1,
+          "bytes": [712]
+        },
         "dist/renderer/assets/base64-[hash].js": {
           "count": 1,
           "bytes": [4279365]
         },
-        "dist/renderer/assets/chunk-5QVYKU64-[hash].js": {
+        "dist/renderer/assets/bytes-[hash].js": {
           "count": 1,
-          "bytes": [255152]
+          "bytes": [331]
         },
-        "dist/renderer/assets/chunk-ENIFIUEP-[hash].js": {
-          "count": 1,
-          "bytes": [3224]
+        "dist/renderer/assets/chunk-[upstream-hash]-[hash].js": {
+          "count": 5,
+          "bytes": [445961, 267440, 175640, 3224, 3098]
         },
-        "dist/renderer/assets/chunk-HSIFKQNP-[hash].js": {
+        "dist/renderer/assets/client-[hash].js": {
           "count": 1,
-          "bytes": [437707]
+          "bytes": [178943]
         },
-        "dist/renderer/assets/chunk-OHEHS2EM-[hash].js": {
+        "dist/renderer/assets/copy-door-[hash].js": {
           "count": 1,
-          "bytes": [177704]
-        },
-        "dist/renderer/assets/chunk-RTBW5AIZ-[hash].js": {
-          "count": 1,
-          "bytes": [3098]
+          "bytes": [10737]
         },
         "dist/renderer/assets/desk-[hash].js": {
-          "count": 1,
-          "bytes": [111]
+          "count": 2,
+          "bytes": [2446, 111]
         },
         "dist/renderer/assets/desk-bytes-[hash].js": {
           "count": 1,
@@ -121,7 +149,7 @@
         },
         "dist/renderer/assets/desk-objects-[hash].js": {
           "count": 1,
-          "bytes": [383585]
+          "bytes": [383950]
         },
         "dist/renderer/assets/desk-plates-[hash].js": {
           "count": 1,
@@ -135,33 +163,73 @@
           "count": 1,
           "bytes": [37]
         },
+        "dist/renderer/assets/field-worker-[hash].js": {
+          "count": 1,
+          "bytes": [92538]
+        },
+        "dist/renderer/assets/glass-pass-[hash].js": {
+          "count": 1,
+          "bytes": [12555]
+        },
         "dist/renderer/assets/history-room-view-[hash].css": {
           "count": 1,
-          "bytes": [850]
+          "bytes": [1094]
         },
         "dist/renderer/assets/history-room-view-[hash].js": {
           "count": 1,
-          "bytes": [18086]
+          "bytes": [20050]
         },
-        "dist/renderer/assets/host-[hash].js": {
+        "dist/renderer/assets/history-words-[hash].js": {
           "count": 1,
-          "bytes": [1357]
+          "bytes": [579]
         },
         "dist/renderer/assets/jsx-runtime-[hash].js": {
           "count": 1,
           "bytes": [435]
         },
+        "dist/renderer/assets/lab-bridge-[hash].js": {
+          "count": 1,
+          "bytes": [25345]
+        },
+        "dist/renderer/assets/lab-switches-[hash].js": {
+          "count": 1,
+          "bytes": [431]
+        },
+        "dist/renderer/assets/logging-[hash].js": {
+          "count": 1,
+          "bytes": [437]
+        },
         "dist/renderer/assets/main-[hash].css": {
           "count": 1,
-          "bytes": [238667]
+          "bytes": [227769]
         },
         "dist/renderer/assets/main-[hash].js": {
           "count": 1,
-          "bytes": [226942]
+          "bytes": [59037]
+        },
+        "dist/renderer/assets/mark-white-[hash].webp": {
+          "count": 1,
+          "bytes": [9686]
+        },
+        "dist/renderer/assets/preload-helper-[hash].js": {
+          "count": 1,
+          "bytes": [1211]
+        },
+        "dist/renderer/assets/primitives-[hash].css": {
+          "count": 1,
+          "bytes": [8640]
+        },
+        "dist/renderer/assets/primitives-[hash].js": {
+          "count": 1,
+          "bytes": [17767]
+        },
+        "dist/renderer/assets/profiles-words-[hash].js": {
+          "count": 1,
+          "bytes": [18958]
         },
         "dist/renderer/assets/react-[hash].js": {
-          "count": 1,
-          "bytes": [7532]
+          "count": 3,
+          "bytes": [162271, 7532, 1205]
         },
         "dist/renderer/assets/react-dom-[hash].js": {
           "count": 1,
@@ -169,15 +237,15 @@
         },
         "dist/renderer/assets/renderer-[hash].css": {
           "count": 1,
-          "bytes": [5427]
+          "bytes": [9141]
         },
         "dist/renderer/assets/renderer-[hash].js": {
           "count": 1,
-          "bytes": [40660]
+          "bytes": [65671]
         },
         "dist/renderer/assets/rolldown-runtime-[hash].js": {
           "count": 1,
-          "bytes": [624]
+          "bytes": [751]
         },
         "dist/renderer/assets/singleton-loro-crdt.js": {
           "count": 1,
@@ -195,37 +263,37 @@
           "count": 1,
           "bytes": [1629]
         },
-        "dist/renderer/assets/singleton-vibecook-[hash].js": {
-          "count": 1,
-          "bytes": [7764]
-        },
-        "dist/renderer/assets/singleton-vibecook-ice-[hash].js": {
-          "count": 1,
-          "bytes": [3660]
-        },
         "dist/renderer/assets/singleton-vibecook-ice-desk-engine.js": {
           "count": 1,
           "bytes": [481]
         },
+        "dist/renderer/assets/singleton-vibecook-ice-desk-kit.js": {
+          "count": 1,
+          "bytes": [3790]
+        },
         "dist/renderer/assets/singleton-vibecook-ice-desk-objects.js": {
           "count": 1,
-          "bytes": [5094]
+          "bytes": [5095]
+        },
+        "dist/renderer/assets/singleton-vibecook-ice-desk.js": {
+          "count": 1,
+          "bytes": [7975]
         },
         "dist/renderer/assets/singleton-vibecook-ice.js": {
           "count": 1,
-          "bytes": [13604]
+          "bytes": [13946]
         },
-        "dist/renderer/assets/singleton-vibefield-plugin-[hash].js": {
+        "dist/renderer/assets/singleton-vibefield-plugin-sdk-behavior.js": {
           "count": 1,
-          "bytes": [5000]
-        },
-        "dist/renderer/assets/singleton-vibefield-plugin-sdk-[hash].js": {
-          "count": 1,
-          "bytes": [586]
+          "bytes": [581]
         },
         "dist/renderer/assets/singleton-vibefield-plugin-sdk-canvas.js": {
           "count": 1,
           "bytes": [567]
+        },
+        "dist/renderer/assets/singleton-vibefield-plugin-sdk-desk.js": {
+          "count": 1,
+          "bytes": [5451]
         },
         "dist/renderer/assets/singleton-vibefield-plugin-sdk-ui.js": {
           "count": 1,
@@ -235,57 +303,89 @@
           "count": 1,
           "bytes": [214]
         },
+        "dist/renderer/assets/sparks-[hash].js": {
+          "count": 1,
+          "bytes": [72683]
+        },
+        "dist/renderer/assets/splash-still-tall-[hash].avif": {
+          "count": 1,
+          "bytes": [62682]
+        },
+        "dist/renderer/assets/splash-still-wide-[hash].avif": {
+          "count": 1,
+          "bytes": [63658]
+        },
         "dist/renderer/assets/src-[hash].js": {
           "count": 2,
-          "bytes": [231526, 1530]
+          "bytes": [298475, 1530]
+        },
+        "dist/renderer/assets/star-spark-[hash].js": {
+          "count": 1,
+          "bytes": [41122]
         },
         "dist/renderer/assets/swarm-physics.worker-[hash].js": {
           "count": 1,
-          "bytes": [90818]
+          "bytes": [94000]
         },
         "dist/renderer/assets/terminal-render.worker-[hash].js": {
           "count": 1,
-          "bytes": [107601]
+          "bytes": [115088]
+        },
+        "dist/renderer/assets/theme-[hash].js": {
+          "count": 1,
+          "bytes": [2109]
+        },
+        "dist/renderer/assets/vibefield-splash-[hash].js": {
+          "count": 1,
+          "bytes": [76775]
+        },
+        "dist/renderer/assets/wizard-ui-[hash].css": {
+          "count": 1,
+          "bytes": [14531]
+        },
+        "dist/renderer/assets/wizard-ui-[hash].js": {
+          "count": 1,
+          "bytes": [17662]
         },
         "dist/renderer/assets/worker-[hash].js": {
           "count": 1,
-          "bytes": [240766]
+          "bytes": [304070]
         },
         "dist/renderer/assets/workspace-[hash].css": {
           "count": 1,
-          "bytes": [79085]
+          "bytes": [179960]
         },
         "dist/renderer/assets/workspace-[hash].js": {
           "count": 1,
-          "bytes": [1929283]
+          "bytes": [1721847]
         },
         "dist/renderer/index.html": {
           "count": 1,
-          "bytes": [2779]
+          "bytes": [3755]
         },
         "dist/testing/smoke.cjs": {
           "count": 1,
-          "bytes": [1579237],
+          "bytes": [2905634],
           "neverShip": ["testing-tree", "smoke-or-spike-entry"]
         }
       },
-      "bytes": 14886010,
-      "installedBytes": 15028224
+      "bytes": 19201707,
+      "installedBytes": 19410944
     },
     "packages/fieldd": {
       "name": "@vibefield/fieldd",
       "files": {
         "dist/agent-shim.cjs": {
           "count": 1,
-          "bytes": [661533]
+          "bytes": [887090]
         },
         "dist/bin.cjs": {
           "count": 1,
-          "bytes": [6802655]
+          "bytes": [8464146]
         },
         "dist/files-host.cjs": {
           "count": 1,
-          "bytes": [1070073]
+          "bytes": [1362534]
         },
         "dist/loro_wasm_bg.wasm": {
           "count": 1,
@@ -293,46 +393,68 @@
         },
         "dist/mille.darwin-arm64.node": {
           "count": 1,
-          "bytes": [5697296]
+          "bytes": [5466528]
         },
         "dist/service-harness.mjs": {
           "count": 1,
-          "bytes": [818494]
+          "bytes": [1085023]
         }
       },
-      "bytes": 18201705,
-      "installedBytes": 18210816
+      "bytes": 20416975,
+      "installedBytes": 20426752
     },
     "plugins/browser": {
       "name": "@vibefield/plugin-browser",
       "files": {
         "dist/renderer.css": {
           "count": 1,
-          "bytes": [18418]
+          "bytes": [25840]
         },
         "dist/renderer.js": {
           "count": 1,
-          "bytes": [557949]
+          "bytes": [794372]
         }
       },
-      "bytes": 576367,
-      "installedBytes": 581632
+      "bytes": 820212,
+      "installedBytes": 823296
+    },
+    "plugins/browser-pane": {
+      "name": "@vibefield/plugin-browser-pane",
+      "files": {
+        "dist/renderer.js": {
+          "count": 1,
+          "bytes": [196537]
+        }
+      },
+      "bytes": 196537,
+      "installedBytes": 196608
     },
     "plugins/comment-pad": {
       "name": "@vibefield/plugin-comment-pad",
       "files": {
         "dist/renderer.js": {
           "count": 1,
-          "bytes": [42279]
+          "bytes": [42312]
         }
       },
-      "bytes": 42279,
+      "bytes": 42312,
       "installedBytes": 45056
+    },
+    "plugins/simulator": {
+      "name": "@vibefield/plugin-simulator",
+      "files": {
+        "dist/renderer.js": {
+          "count": 1,
+          "bytes": [1287549]
+        }
+      },
+      "bytes": 1287549,
+      "installedBytes": 1290240
     }
   },
   "totals": {
-    "files": 70,
-    "bytes": 33756857,
-    "installedBytes": 33918976
+    "files": 104,
+    "bytes": 42015788,
+    "installedBytes": 42246144
   }
 }
