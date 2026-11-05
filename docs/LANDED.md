@@ -34453,3 +34453,85 @@ CP-4a2a (VF-PM, 09:03Z).
   stand-in's three files. Uncommitted work is staged and checked with `--staged`.
 
 **Owed.** Nothing of its own. The packaged notices witness on the first signed nightly stays LP-5's.
+
+## MA-0a + MA-1a — Apps, doc first and declared: DESIGN.md draws the phone's and the desk's Apps, and the contracts carry the apps your agents made as rows and six doors with no handler yet (track MA) (2026-11-05; `91c280bbf` → `f657f6dfe`, 3 commits on main `b96e52d76`, lane `ma/1-contracts` in `/Volumes/SamsungRed/lanes/ma/1/vibe-field`, stacked as M152 `f657f6dfe`, run 152)
+- James asked on 11-05 for two things. Rosetta's HTML artifact library should flow through the Artifact Hub to every
+  device. The phone should hold those pages as mini-apps, opened by a pull from the top.
+- He ruled the page *Apps in a Pocket* (MfeTjw5K) at 07:53:09–07:55:14Z: MA-D7…D9 and D11…D13 A, and MA-D10 B,
+  against the lean (an app's icon is a crop of its preview). MA-D1…D6 are carried A under his typed "good, all ruled,
+  now implement and land this properly" (08:02Z, vibe-field-19).
+- The build's rulings over its plan and critique are in `lanes/ma/RULINGS.md`.
+- This slice is the doc and the wire. Nothing calls the doors until MA-3e's handlers land, and no client lands before
+  its handler.
+
+**What landed.** 47 files, +2856 −15. Pin-class: none. Release-class: none. Rust: only the generated
+`packages/field-native/src/registries.rs`, +6.
+- `91c280bbf`, DESIGN.md first and alone (+203 −1):
+  - §2.9: one exception, a made app's fallback icon. By day, the project's ink behind a white initial; by night, the
+    dark tile with the initial in the ink.
+  - §8 "Artifacts — the Artifacts shelf's contents": the screen's noun becomes Apps. The shelf has two groups: Live
+    (the Hub's tiles, its states now speaking for Live alone) and From your agents.
+  - The window's open belongs to the answering home's fieldd, through `shell.openLink`. The window never holds
+    `shell.open`.
+  - The OS Tailscale interim until DS-9 is named.
+  - "The phone's Stories row": the band also starts the pull.
+  - A new entry, "The phone's Apps": the pull above every tab; the drop; search's cyan dot; one first peek (136 pt for
+    1.8 s); 132 pt and its haptic; App Library's shelf; the preview icon and its fallback; the zoom; the bottom glass
+    row at the bar's measure that folds on scroll; warm; the honest states; reduced motion as fades.
+  - §9 "Apps": the words. Ten are owed to James and marked ‹for James›.
+  - §13: a made app's icon is never a glyph.
+- `1d9c6e04e`, the contracts and the seam's pages (44 files, +2635 −14):
+  - `IndexCatalogApp`, the owner's replicated row. It carries no path and no byte; a row with a path key is refused.
+    Its preview is `{id, digest, pageDigest, capturedAt}` with no URL.
+  - `IndexApp`, the fold, with `foldKey` from `madeAppFoldKey` (`native:<kind>:<id>` · `hosted:<url>` ·
+    `app:<device>:<appId>`).
+  - `sources[].previewsBase`, a root URL checked by the AH §6 rule.
+  - The rosetta read mirror of `GET /api/artifacts`.
+  - Six rows: `index.apps.list`, `index.apps.subscribe`, `index.apps.catalog.subscribe` (peer only),
+    `index.artifacts`, `artifact.open {…, reveal?}` (federate) and `artifact.mark {foldKey, kept?, hidden?}`
+    (home-local intent).
+  - The scope `apps.use` in SCOPES and TAILNET_SCOPES. It is never plugin-eligible.
+  - `MADE_APP_LIMITS` and `MADE_APP_OPEN`.
+  - `MadeAppReachHost`, which refuses IP literals and every `*.ts.net` name.
+  - LAYOUT's `ARTIFACT_MADE_DIR`, `ARTIFACT_MADE_PREVIEWS_DIR` and `MESH_APPS_DIR`.
+  - The capture's optional `allowHosts` and `digest`.
+  - 28 fixtures, the rosetta-29 golden transcribed verbatim from rosetta-pin's `wire.json` at `8e8f496`.
+  - api.html (owner), system.html, architecture.html and AGENT_PLANE.md, with the door stats recounted and dated.
+  - Dated corrections at methods.ts' AH-1 comment and at `artifact.subscribe`'s "the kit reads it".
+- `f657f6dfe`, the gen: `pnpm gen` under co-plan's INSTALL mutex moved exactly `contracts/gen/layout.json` (+12) and
+  `field-native/src/registries.rs` (+6).
+
+**Validation.**
+- This Mac, in the lane, in VF-PM's FULL-light window (11:40–11:46Z, nice 19):
+  - preflight OK, with its 2 standing warnings;
+  - walls self-test and enforce clean;
+  - biome `--changed`: 43 files;
+  - `check-ios-fixtures` 86 identical (the kit's mirrors untouched);
+  - gen:check clean;
+  - tsc on contracts, fieldd, field-app and electron-shell: 0;
+  - contracts: 60 files, 1730 passed;
+  - DESIGN.md's 28 non-fieldd quoted-path readers green, one file per command.
+- The mini, run 152 (a9's mint of `f657f6dfe` on `b96e52d76`, HAS `ed533687f`): `pnpm verify` exit 0 at 11:55:52Z.
+  - vitest 12,970 passed, 0 failed, 20 skipped.
+  - contracts 1730: +74, of which made-apps 34, fixtures +28, registry +9 and shell +3.
+  - fieldd 3209|14, field-app 4008 and electron-shell 2651|2, each equal to run 151.
+  - fieldd's two DESIGN.md readers green: `record-stores.test.ts` 35 and `needs-words.test.ts` 7.
+  - cargo 545, with field-native rebuilt from the tree; `layout_vector` ok.
+  - biome 3331; census "no drift"; no step 2.
+  - The log is `/Volumes/SamsungRed/lanes/ts6/logs/mini/run152/verify.log`, sha256
+    `1d3af1f68674400dbad3ae091d312f6fb123e71750e3f160a380c9d2982744ed`.
+- The land: main fast-forwarded `b96e52d76` → `f657f6dfe` at 11:59:06Z (the fixer), 47 files +2856 −15.
+
+**Found.**
+- `mklane3.sh`'s mutex release moves the file to `released/installs/INSTALL-$name-…`. A nested lane name (`ma/1`)
+  puts a slash in that path, so the `mv -n` fails silently and INSTALL stays held. It was held for about 75 s and
+  released by hand at 09:25:38Z. VF-PM ruled flat lane names (`ma-3`), and cp-landing, whose script it is, was told.
+- The Artifact tool's `files` map names source PATHS, not content. The tool's schema says so, and so does the lead's
+  own recorded multi-file publish (the MA page, 07:48Z). Rosetta's normalizer 38 reads a string value as the page's
+  HTML. RO-34a fixes that in the drafted rosetta branch.
+
+**Owed.**
+- The 10 words marked ‹for James› in DESIGN.md §8 and §9.
+- MA's place in 0.9: James decides. The lean is 0.10, with nothing visible in build 6.
+- The six doors' handlers (MA-3e, lane `ma-3`). Until then each door answers method-not-found.
+- The record and the AH spec at draft slot 14.

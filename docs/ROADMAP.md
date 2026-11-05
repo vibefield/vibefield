@@ -400,6 +400,25 @@ phone"; DECISIONS PC
   signature, its load under the hardened runtime, `desktop.sound.rendered`); ESR §6.2's flip at the next draft slot;
   the mark's clearance check before it ships.
 
+**MA — Apps (what your agents make, open on every device)** · vibe-field-19 (lanes `lanes/ma/1`, `lanes/ma-3`) · law:
+`draft/thinking-mini-apps.md` §3–§5 and §9 (the page *Apps in a Pocket*, MfeTjw5K; sources `draft/ios-pocket/apps/`),
+`specs/artifact-hub.md`, design-06 §5, DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
+- Ruled 11-05 07:53:09–07:55:14Z (James, on the page): MA-D7…D9 and D11…D13 A; MA-D10 B, against the lean (an
+  app's icon is a crop of its preview, and its project's ink and title's initial until it has one); MA-D1…D6 carried
+  A under his typed "good, all ruled, now implement and land this properly" (08:02Z). It takes AH's rows from §4.
+- Landed 11-05: **MA-0a + MA-1a, DESIGN.md first and the contracts** (`91c280bbf` → `f657f6dfe`, stacked as M152,
+  run 152; LANDED "MA-0a + MA-1a"): the phone's and the desk's Apps in DESIGN.md; six doors declared with no handler
+  yet, the scope `apps.use`, `MADE_APP_LIMITS`, three LAYOUT rows (the gen) and the seam's pages.
+- Next: **MA-3, fieldd** (lane `ma-3`: the library reader, the `apps` table and its peer door, the fold, the made
+  serve and the six handlers) → **MA-4, the desk** (held at its mint until James rules MA's place in 0.9) · rosetta
+  0.1.4 (RO-32…RO-35, drafted in `lanes/ma/rosetta`; James files and releases it) → its EL8 → MA-3f, serving →
+  MA-3h, Keep and Hide as intent · **MA-6, the phone's shelf** after IOS-13a · **MA-5, the phone's host** after SP-4
+  and its probes P1/P2 (cp-landing's queue).
+- Owed: the 10 words marked ‹for James› in DESIGN.md §8 and §9; MA's place in 0.9 (James; the lean: 0.10, with
+  nothing visible in build 6); carried from AH: AH-4's review, its LANDED entry and its physical witnesses
+  (`cce684ce3`, on main since 08-03), AH-1's two-client witness, AH-3's physical closeout, and device-retirement GC
+  with TS's "forget a device".
+
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
   the page.
@@ -882,7 +901,6 @@ phone"; DECISIONS PC
 | Mind map pack | waits for STRING; redesign from Paper & String (MD-1…MD-15); v3's MM-D1…D14 were cut for the pre-desk canvas, MM-D14 moot (DK-D30) | STRING's thinking doc | `draft/mindmap/`, `thinking-mindmap-pack.md`, `predesign-mindmap-evidence.md` |
 | The bare mat's menu | "Paste here", "New note here": unbuilt | a desk lane | DESIGN.md §8, ICE design-015 §7 |
 | PT — PORTALS | PT-S is §2's (resumed 10-29; PT-S1 built 10-18 and 10-29, gated and looked at 10-29, LANDED 10-30 `1de84540b`; item 119's fix LANDED 10-31 `265325d09`; PT-S2 built code-only and light-green 10-30, LANDED 10-31 `e4aa3d367`; PT-S3 built code-only and light-green 10-31, LANDED 10-31 `c564de0e4`, its live run owed to James's unlock) · then PT-C, PT-T (form ruled last, PT-D10) · James's 10-14 A2, B4, the 5 s wind tail, unbuilt | PT-C, PT-T: after PT-S (PT-D11's order: the simulator, window capture, the terminal) · A2, B4, the tail: a PT lane | `thinking-portals.md`, `draft/portals-maps/`, ICE design-019 |
-| AH | AH-4's runtime on main since `cce684ce3` (08-03), unledgered by its own rule until review + witnesses · AH-1 two-client proof · AH-3 physical closeout · AH-5 the phone list · device-retirement GC | an owner; GC with TS's "forget a device" | `specs/artifact-hub.md` |
 | PLUG follow-ups | the KIT slice · third-party listing (P8e: TD registry + R2 process host; PA-24, §20.5, §21.8) · sideload · R2 `host:"process"` · PRC-5's power loss (§6) · PRC residual policies (§14–§15) · per-section undo/⌘Z/timeline (D29′, P7) | first-party publishing; third-party plugins; a Settings history design; runtime validation is tracked separately in §6 | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` |
 | TP / TC | D6's cell half, C5, D5, the lineage break (§6) · TC RATIFIED as built (Q6: TC-D1/D2 as amended by WG-D1, D3, D15, L1c at TM-1); TC-S4…S8 (vault, broker, replay, drain-migrate, warm tiers) parked · TP-S4…S6 (S4's typeable mirror struck) | a TP lane · a ghosttea next-major or a P0 witness across a floor restart · measured demand | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md` |
 | GT | G29 upstream (then GT-D22's file half) · GT-D22 (§5) · smoke row 13b: attach through DS-4e to a second staged desktop · Q2 superseded 2026-11-02: Stop ends the agent; Pause cancels its current turn and keeps it open | G29's release · the two-desktop run | `specs/godview-terminal.md` |
@@ -1163,7 +1181,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | DK — the desk migration | COMPLETE; landed 10-09 | `thinking-desk-migration.md`, `thinking-the-desk.md`, ICE design-015…018, `docs/desk-gates.md` | James's parked build rulings |
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
-| AH — Artifact Hub | PARKED; AH-1…3 landed, AH-4 unledgered | `specs/artifact-hub.md` | an owner: AH-4's review + witnesses |
+| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled); MA-0a + MA-1a landed (M152); AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3 (fieldd), then MA-4 at James's 0.9 word |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
 | PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |
