@@ -113,6 +113,27 @@ struct AppReviewTests {
     #expect(doc.unknown == ["OpenSSL.homepage"])
   }
 
+  @Test("L5's optional fields, a part's note and own, are known: kept, never named unknown")
+  func optionalFields() {
+    let json = #"""
+      {"schema": 1, "components": [
+        {"ecosystem": "swift", "name": "ghosttea", "version": "0.14.0", "licence": "MIT", "texts": [],
+         "note": "adapted for the phone", "own": true},
+        {"ecosystem": "crate", "name": "anyhow", "version": "1.0.103", "licence": "MIT", "texts": []}
+      ], "texts": []}
+      """#
+    let state = Acknowledgements.parse(Data(json.utf8))
+    guard case .bundled(let doc) = state else {
+      Issue.record("reads as \(state)")
+      return
+    }
+    #expect(doc.unknown.isEmpty)
+    let notes = doc.parts.map { $0.note }
+    let own = doc.parts.map { $0.own }
+    #expect(notes == ["adapted for the phone", nil])
+    #expect(own == [true, false])
+  }
+
   @Test("the groups: L5's roles as sentences, the fixed five first, then the rest by name")
   func groups() throws {
     let doc = try fixture()
