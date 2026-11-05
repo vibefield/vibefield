@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FLOW_LIMITS, flowAnswerBytes } from "@vibefield/contracts";
 import { afterEach, describe, expect, inject, it } from "vitest";
@@ -638,6 +638,56 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       expect(ended).toMatchObject({ kind: "fatal" });
       expect((ended as { reason?: string }).reason).toMatch(/^the flow host did not start: /);
       expect(await never.ready).toBeUndefined();
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H19: `ready` is the child fieldd started, never the pid it says, and a Stop before READY sends it no `run` and no ping (finding 9)",
+    async () => {
+      const marks = mkdtempSync(join(inject("fielddRunRoot"), "vf-fh-ready-marks-"));
+      const dir = mkdtempSync(join(inject("fielddRunRoot"), "vf-fh-ready-"));
+      const file = join(dir, "stand-in.cjs");
+      // a stand-in whose READY was on its way when fieldd stopped it: it says READY, with a pid of its own making,
+      // only once it hears the shutdown, and it marks every `run` and `ping` it is sent after that
+      writeFileSync(
+        file,
+        standInSource([
+          "const fs = require('node:fs');",
+          "const path = require('node:path');",
+          `const marks = ${JSON.stringify(marks)};`,
+          "let said = false;",
+          "on((m) => {",
+          "  if (m && m.t === 'shutdown' && !said) {",
+          "    said = true;",
+          "    say({ t: 'ready', pid: 1 });",
+          "    setTimeout(() => process.exit(0), 500);",
+          "    return;",
+          "  }",
+          "  if (m && (m.t === 'run' || m.t === 'ping')) fs.writeFileSync(path.join(marks, m.t), '');",
+          "});",
+        ]),
+      );
+      let child: ChildProcess | undefined;
+      const run = startFlowHost({
+        launch: { kind: "launch", launch: { command: process.execPath, args: [file] } },
+        bytes: flow("return 1;"),
+        input: {},
+        handler: scripted().handler,
+        environment: PATH_ONLY,
+        timings: { pingMs: 50, stopGraceMs: 2_000 },
+        spawn: (command, args, options) => {
+          child = spawn(command, args, options);
+          return child;
+        },
+      });
+      runs.push(run);
+      expect(await within(run.stop())).toEqual({ kind: "stopped" });
+      expect(readdirSync(marks), "a Stop before READY: no run, no ping").toEqual([]);
+      expect(typeof child?.pid).toBe("number");
+      expect(await within(run.ready), "the child fieldd started, not the pid it said").toBe(
+        child?.pid,
+      );
     },
     ROW_MS,
   );
