@@ -398,6 +398,8 @@ function buildZip(root, keys, trustRoot) {
   // LP-6: through THE release build's one entry, never a `cargo build --release` of its own — the entry remaps the
   // builder's paths through rustflags, and two release builds with different rustflags in one target directory rebuild
   // each other's whole graph (package:stage below runs the same entry, now a no-op)
+  // *(Corrected 2026-11-05, LP-6b: the entry remaps only under the release switch, VIBEFIELD_REMAP_BUILD_PATHS=1, which
+  // this smoke never sets; the one entry still keeps both runs one build, so package:stage's stays a no-op.)*
   timing.native = step(
     "field-native (release)",
     process.execPath,

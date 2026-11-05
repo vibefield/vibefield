@@ -24,7 +24,9 @@
 // `--remap-path-prefix`), and the packaged app's gate (`--app`) scans `Contents/Resources/bin` for the markers: a hit in
 // the floor's set — the binaries that build remaps — fails; a hit in anything else there (rosettad, mille's .node,
 // truffle's sidecar: each built by its own project's build) is said and not failed, so the gap stays visible until
-// that build remaps too.
+// that build remaps too. *(Corrected 2026-11-05, LP-6b: the scan covers every Mach-O of the package, not bin/ alone, and
+// rosettad's and mille's builds are ours and now remap, so a hit in either FAILS; truffle's sidecar is the one named
+// exception, and the release build remaps only under the release switch. Below.)*
 //
 // LP-6b (item 170, 2026-11-05) — EVERY shipped Mach-O, counted. prod-builder's strings scan of the published
 // nightly-20261104 counted field-native 790, field-terminal-host 378 and field-freeway-host 199 registry paths, rosettad
