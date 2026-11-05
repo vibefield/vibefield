@@ -979,15 +979,18 @@ describe("the catalog's composer plates (docs/UI_SYSTEM.md: the shipping view on
   }
   const box = (): HTMLElement | null =>
     host?.querySelector<HTMLElement>(".vf-chat-composer") ?? null;
+  const threadless: readonly ChatState[] = ["empty", "opening", "unavailable"];
 
-  it("draws every state's composer, and none where no thread is shown", async () => {
-    const threadless: readonly ChatState[] = ["empty", "opening", "unavailable"];
-    for (const state of CHAT_STATES) {
+  // A row per state (item 183): one `it` that rendered every plate crossed vitest's 5 s bound
+  // on a loaded runner; each plate alone sits well under it, and a red names its state.
+  it.each(CHAT_STATES)(
+    "draws the %s plate's composer, or none where no thread is shown",
+    async (state) => {
       await plate(state);
       if (threadless.includes(state)) expect(box(), state).toBeNull();
       else expect(box()?.getAttribute("aria-label"), state).toMatch(/^Message /u);
-    }
-  });
+    },
+  );
 
   it("draws the typing, @, agent's model and chips plates in the shipping composer's own parts", async () => {
     await plate("typing");
