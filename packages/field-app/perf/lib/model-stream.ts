@@ -160,8 +160,9 @@ export function floorOfPanes(panes: CorpusPanes, agentPtys: ReadonlySet<string>)
   })) as TerminalInfo[];
 }
 
-/** The peer's floor: its agents' PTYs (the corpus gives the peer no panes). */
-function floorOfRows(rows: readonly AgentSessionSummary[]): TerminalInfo[] {
+/** The peer's floor: its agents' PTYs (the corpus gives the peer no panes).
+ * Shared with the mesh bench (PG-9 S4a, `mesh-bench.ts`), which hosts the peer too. */
+export function floorOfRows(rows: readonly AgentSessionSummary[]): TerminalInfo[] {
   const floor: TerminalInfo[] = [];
   for (const row of rows) {
     const terminal = row.terminal;

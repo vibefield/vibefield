@@ -1,6 +1,13 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { AGENT_FIELD } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
+import {
+  busySwitchPass,
+  type MeshBenchResult,
+  prepareMeshCorpus,
+  streamPass,
+} from "./lib/mesh-bench";
 import {
   BENCH_CUTS,
   type BenchCounts,
@@ -13,7 +20,7 @@ import {
   prepareCorpus,
   timeCut,
 } from "./lib/projection-bench";
-import { IN_REPO_RECIPES, parseRecipeList } from "./lib/recipes";
+import { IN_REPO_RECIPES, MESH_RECIPES, parseRecipeList } from "./lib/recipes";
 import { withVirtualTime } from "./lib/virtual-time";
 
 // THE PROJECTION BENCH (PG-1e0, `perf/lib/projection-bench.ts`): what each of
@@ -31,10 +38,18 @@ import { withVirtualTime } from "./lib/virtual-time";
 // own. The CPU passes run only when `VF_GODVIEW_BENCH_CPU` names a number of
 // rounds, on a quiet host: each round is the baseline (no cut) before every
 // cut, so a cut's figure is its pass less the baseline beside it.
+//
+// PG-9 S4a adds the phone's MESH (`perf/lib/mesh-bench.ts`): the wire bytes its
+// home sends at the phone's floor, busy and idle, and what an app switch costs
+// by cursor against a whole open. Deterministic, over `MESH_RECIPES` (n5, n20)
+// unless `VF_GODVIEW_MESH_RECIPES` names its own; `mesh-wire.json` beside the
+// counts when `VF_GODVIEW_BENCH_OUT` is set.
 
 const out = process.env["VF_GODVIEW_BENCH_OUT"];
 const asked = process.env["VF_GODVIEW_BENCH_RECIPES"];
 const recipes = asked ? parseRecipeList(asked) : IN_REPO_RECIPES;
+const askedMesh = process.env["VF_GODVIEW_MESH_RECIPES"];
+const meshRecipes = askedMesh ? parseRecipeList(askedMesh) : MESH_RECIPES;
 
 const counted = (prepared: PreparedCorpus, cut: BenchCut) =>
   withVirtualTime(prepared.baseWall, (time) => countCut(prepared, cut, time));
@@ -154,5 +169,56 @@ describe("the projection bench (PG-1e0)", () => {
       }
     }
     process.stdout.write(`${lines.join("\n")}${written("projection-cpu.json", results)}\n`);
+  });
+
+  it("measures the phone's mesh on the wire: busy, idle, and an app switch by cursor (PG-9 S4a)", async () => {
+    const results: MeshBenchResult[] = [];
+    const lines: string[] = [];
+    const kb = (bytes: number) => `${bytes.toLocaleString("en-US")} B`;
+    for (const recipe of meshRecipes) {
+      const prepared = prepareMeshCorpus(recipe);
+      const stream = await withVirtualTime(prepared.baseWall, (time) => streamPass(prepared, time));
+      const busySwitch = await withVirtualTime(prepared.baseWall, (time) =>
+        busySwitchPass(prepared, time),
+      );
+      const result: MeshBenchResult = {
+        recipe: prepared.name,
+        n: recipe.n,
+        durationMs: prepared.durationMs,
+        floorMs: AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS,
+        ...stream,
+        switches: [...stream.switches, busySwitch],
+      };
+      results.push(result);
+      const ask = result.upstreamAsk;
+      lines.push(
+        `${result.recipe}: ${result.open.devices} desktops, ${result.open.rows} rows at the open (${kb(result.open.bytes)}); the phone's floor ${result.floorMs} ms; the peer asked at ${ask.minIntervalMs} ms, heartbeat ${ask.heartbeatMs ?? "none"} ms`,
+      );
+      for (const [name, t] of [
+        ["busy", result.busy],
+        ["idle", result.idle],
+      ] as const) {
+        lines.push(
+          `  ${name} ${(t.windowMs / 1_000).toFixed(1)} s: ${t.bytesPerSecond} B/s · ${t.frames} frames (${t.heartbeats} heartbeats, ${t.resets} resets, ${t.states} states, ${t.resyncs} resyncs) · ${t.upserts} upserts, ${t.removed} removed · ${kb(t.bytes)}`,
+        );
+      }
+      for (const s of result.switches) {
+        const a = s.answers;
+        const saved =
+          s.wholeBytes === 0 ? 0 : Math.round((1 - s.bytes / s.wholeBytes) * 1_000) / 10;
+        lines.push(
+          `  switch, ${s.name}: ${a.resumed} resumed, ${a.delta} delta, ${a.whole} whole, ${a.unanswered} unanswered · ${s.rows} rows · ${kb(s.bytes)} against ${kb(s.wholeBytes)} whole (${saved}% saved); the floor after: ${s.after.frames} frames, ${s.after.resets} resets, ${kb(s.after.bytes)}`,
+        );
+        // every comeback answers every desktop the open held, one way
+        expect(
+          a.resumed + a.delta + a.whole + a.unanswered,
+          `${result.recipe} ${s.name}: answered`,
+        ).toBe(result.open.devices);
+      }
+      expect(result.busy.frames, `${result.recipe}: the busy window heard frames`).toBeGreaterThan(
+        0,
+      );
+    }
+    process.stdout.write(`${lines.join("\n")}${written("mesh-wire.json", results)}\n`);
   });
 });

@@ -18,6 +18,14 @@ export const LANE_RECIPES: readonly CorpusRecipe[] = [
   { n: 60, durationMs: 8_000, seed: 1 },
 ];
 
+/** PG-9 S4a — the phone's mesh bench: n5 (a new recipe, the size a person runs
+ * by hand) and n20, each 8 s of the corpus's activity. The phone's floor is 1 s,
+ * so a shorter corpus would be a handful of frames. */
+export const MESH_RECIPES: readonly CorpusRecipe[] = [
+  { n: 5, durationMs: 8_000, seed: 1 },
+  { n: 20, durationMs: 8_000, seed: 1 },
+];
+
 /** The lab's recipe spelling for the lane set: `n=10,duration=8000,seed=1`. */
 export function recipeText(recipe: CorpusRecipe): string {
   return [`n=${recipe.n}`, `duration=${recipe.durationMs}`, `seed=${recipe.seed ?? 1}`].join(",");
