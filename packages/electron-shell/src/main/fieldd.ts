@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import {
+  FIELDD_DEBUG_SWARM_CORPUS_ENV,
   FIELDD_TRUST_ROOT_ENV,
   FIELDD_TRUST_ROOT_KEYS_ENV,
   PLUGIN_LIMITS,
@@ -122,7 +123,8 @@ export function buildSupervisor(opts: {
   // WP8-D9: a PACKAGED app's plugin roots and trust anchor come from its layout and its staged identity, never
   // from the environment it was launched in — an ambient FIELDD_PLUGIN_ROOTS / _DEV_ROOTS / FIELDD_TRUST_ROOT
   // would point a package at an unverified tree. The development layout keeps the passthrough (the smokes key
-  // a staged bundled root that way).
+  // a staged bundled root that way). PG-9 S4c: likewise a package plays no debug swarm — FIELDD_DEBUG_SWARM_CORPUS
+  // is blanked for it (and a packaged fieldd handed one anyway refuses to boot); development passes it through.
   const packaged = opts.resources.packaged;
   const trust = readBundledTrust(opts.resources);
   if (packaged && trust === null) {
@@ -143,6 +145,7 @@ export function buildSupervisor(opts: {
     ? {
         FIELDD_PLUGIN_ROOTS: pluginRoots.bundled.join(delimiter),
         FIELDD_PLUGIN_DEV_ROOTS: "",
+        [FIELDD_DEBUG_SWARM_CORPUS_ENV]: "",
         [FIELDD_TRUST_ROOT_ENV]: trust?.trustRootPath ?? "",
         [FIELDD_TRUST_ROOT_KEYS_ENV]: trust?.rootKeys.join(",") ?? "",
       }

@@ -37,6 +37,11 @@ async function main(): Promise<void> {
     await import("./boot-env");
   // AL-1 — before anything writes: this process outlives the shell that reads its stdio (boot-env.ts).
   outliveStdioReaders();
+  // PG-9 S4c — DEBUG, development only: a recorded synthetic swarm for this desktop's boards. A
+  // packaged fieldd handed one fails its boot here, by name, before it writes a root or loads the
+  // daemon — never a silent ignore (debug/swarm-replay.ts; the shell blanks it for a package too)
+  const { debugSwarmCorpusOf } = await import("./debug/swarm-replay");
+  const debugSwarmCorpus = debugSwarmCorpusOf(process.env, isSea());
   // FS-1a — the daemon's module graph loads HERE, never at the bundle's top:
   // the same bundle runs as the files worker and the agent shim (below), which
   // must not carry it
@@ -186,6 +191,7 @@ async function main(): Promise<void> {
     ...(spawnNative !== undefined ? { nativeSpawner: spawnNative } : {}),
     ...(rosettadBin !== undefined ? { rosettadBin } : {}),
     ...(agentSearchPath !== undefined ? { agentSearchPath } : {}),
+    ...(debugSwarmCorpus !== undefined ? { debugSwarmCorpus } : {}),
     // AR-S1c — this is the product's daemon: read the agents' installs at boot.
     agentInventoryWarm: true,
     ...(process.env["FIELDD_BUILD_ID"] ? { buildId: process.env["FIELDD_BUILD_ID"] } : {}),

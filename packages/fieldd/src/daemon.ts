@@ -241,6 +241,7 @@ import {
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint, splitPathList } from "./boot-env";
+import { openSwarmReplay } from "./debug/swarm-replay";
 import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
@@ -1277,6 +1278,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // re-attaches them), and lets each go at its end
   agents.onSparkRunEntered((entered) => transcriptRecorder.entered(entered));
   agents.onRunEnded((runtimeRunId) => transcriptRecorder.forget(runtimeRunId));
+  // PG-9 S4c — DEBUG: a recorded synthetic swarm plays this desktop's boards and monitor in place of
+  // the runtime's fold and bus; the runtime above stands, unread by them (debug/swarm-replay.ts)
+  const swarm =
+    config.debugSwarmCorpus === undefined
+      ? null
+      : openSwarmReplay({
+          path: config.debugSwarmCorpus,
+          deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+          logger: logger.child({ component: "debug.swarm" }),
+        });
+  const boardFold = swarm ?? agents;
   // AR-5d — account usage beside the runtime that owns the adapters: one
   // reading per provider and per persona, polled on the adapter's cadence.
   // Constructed here (not started) so a provider push and a persona change
@@ -4222,7 +4234,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             state: "starting",
           });
         const board = createModelSubscription({
-          fold: { list: () => agents.list(), subscribe: (fn) => agents.subscribe(fn) },
+          fold: boardFold,
           monitor: service,
           emit,
           epoch,
@@ -4248,7 +4260,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             state: "starting",
           });
         const board = createRemoteSubscription({
-          fold: { list: () => agents.list(), subscribe: (fn) => agents.subscribe(fn) },
+          fold: boardFold,
           monitor: service,
           emit,
           epoch,
@@ -4263,8 +4275,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         return gated(board, epoch);
       }
       const board = createFieldSubscription({
-        list: () => agents.list(),
-        subscribe: (fn) => agents.subscribe(fn),
+        list: () => boardFold.list(),
+        subscribe: (fn) => boardFold.subscribe(fn),
         emit,
         epoch,
         project: projectFieldRow,
@@ -4408,6 +4420,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     };
     api.register("agent.lastRun", (ctx) => {
       refuseLastRun(ctx.principal.kind);
+      if (swarm !== null) return { state: "none" } satisfies AgentLastRunResult; // PG-9 S4c: no picture
       if (lastRun === null)
         throw new RpcCallError("UNAVAILABLE", "the agent monitor is starting", true, {
           service: "agent-last-run",
@@ -4876,8 +4889,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // one model out, which the board cuts per audience. Project colours are
     // dealt from the identity file (L4), so a restart reshuffles nothing.
     monitor = createAgentMonitorService({
-      runtime: agents.runtime,
-      fold: { list: () => agents.list(), subscribe: (emit) => agents.subscribe(emit) },
+      runtime: swarm?.runtime ?? agents.runtime,
+      fold: boardFold,
       terminals: {
         creationIdOf: (id) => terminals.creationIdOf(id),
         list: () => (terminals.observation() !== undefined ? terminals.list() : undefined),
@@ -4943,7 +4956,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       continuable: (runtimeRunId) => agents.continuable(runtimeRunId),
       logger: logger.child({ component: "agent.last-run" }),
     });
-    lastRun.start();
+    // PG-9 S4c — a replayed swarm keeps no picture (it would land in AGENT_LAST_BOARD_FILE): the
+    // keeper is never started, and let go, so no stop takes one either (agent.lastRun says none)
+    if (swarm === null) lastRun.start();
+    else lastRun = null;
     // D1 (2026-10-01) — a peer that dialled before the roster could vouch for
     // it was admitted as `tailnet`; once the roster shows its node as a
     // desktop, its connection closes for a fresh hello (ProductApi)
