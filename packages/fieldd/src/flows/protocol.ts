@@ -33,6 +33,8 @@ export interface FlowHostLimits {
   readonly logMaxChars: number;
   /** the V8 old-generation cap the script's worker runs under, MB (FLOW_LIMITS.HOST_HEAP_MB; 4A2-Q7 (b)) */
   readonly heapMb: number;
+  /** how deep a call's arguments, and the run's result, may nest (FLOW_LIMITS.ARGS_DEPTH_MAX; bth's review P1) */
+  readonly argsDepthMax: number;
 }
 
 export type ToFlowHost =

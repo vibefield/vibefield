@@ -756,7 +756,7 @@ function flowsHostProbe({ exe, deadlineMs = 30_000 }) {
           t: "run",
           script,
           input: {},
-          limits: { callMaxBytes: 64 * 1024, logMaxChars: 200, heapMb: 128 },
+          limits: { callMaxBytes: 64 * 1024, logMaxChars: 200, heapMb: 128, argsDepthMax: 32 },
         });
       } else if (m?.t === "call") {
         result.call = m.what;

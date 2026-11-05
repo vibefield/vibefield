@@ -344,6 +344,7 @@ class FlowHostChild {
             callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
             logMaxChars: FLOW_LOG_MAX,
             heapMb: this.#heapMb,
+            argsDepthMax: FLOW_LIMITS.ARGS_DEPTH_MAX,
           },
         });
         this.#pingTimer = setInterval(() => this.#tick(), this.#t.pingMs);

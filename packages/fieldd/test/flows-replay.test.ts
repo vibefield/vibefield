@@ -208,6 +208,28 @@ describe("CP-4a2a — replay by a call's key and #n (CP-D9)", () => {
     expect(calls).toEqual([]);
   });
 
+  it("P8: an answer nested past ARGS_DEPTH_MAX is refused to the script and journaled as a refusal, so its journal reads back (bth's review P1)", async () => {
+    let deep: unknown = "x";
+    for (let i = 0; i < FLOW_LIMITS.ARGS_DEPTH_MAX + 1; i++) deep = [deep];
+    const { handler, calls } = inner(() => ({ ok: true, value: deep }));
+    const appended: FlowJournalEntry[] = [];
+    const replay = new FlowReplay({
+      prior: [],
+      append: (entry) => appended.push(entry),
+      inner: handler,
+    });
+    await expect(replay.call({ what: "agent", args: ["a"] })).resolves.toMatchObject({
+      ok: false,
+      refused: expect.stringMatching(/nest/),
+    });
+    expect(calls).toHaveLength(1);
+    expect(appended.at(-1)).toMatchObject({
+      kind: "answer",
+      call: 1,
+      refused: expect.stringMatching(/nest/),
+    });
+  });
+
   it("P7: an answer is journaled as the pipe carries it: an undefined in a list is null, kept, and replayed so", async () => {
     const root = mkdtempSync(join(tmpdir(), "vf-flows-replay-"));
     try {

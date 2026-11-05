@@ -161,6 +161,7 @@ function runOf(file: Uint8Array): ToFlowHost {
       callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
       logMaxChars: 200,
       heapMb: FLOW_LIMITS.HOST_HEAP_MB,
+      argsDepthMax: FLOW_LIMITS.ARGS_DEPTH_MAX,
     },
   };
 }
@@ -571,6 +572,46 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
         kind: "done",
         value: FLOW_LIMITS.HOST_CALLS_WAITING_MAX,
       });
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H22: the child holds a call's arguments, and the run's result, to ARGS_DEPTH_MAX before it sends them (bth's review P1)",
+    async () => {
+      const deep = `let d = "x";\nfor (let i = 0; i < ${FLOW_LIMITS.ARGS_DEPTH_MAX + 1}; i += 1) d = [d];`;
+      const { handler, calls } = scripted(() => ({ ok: true, value: "answered" }));
+      const asked = await host(
+        flow(
+          `${deep}\ntry { await agent("Review", d); return "sent"; } catch (error) { return error.message; }`,
+        ),
+        { handler },
+      );
+      const ended = await within(asked.ended);
+      expect(ended).toMatchObject({ kind: "done" });
+      expect((ended as { value?: string }).value).toMatch(/nest/);
+      expect(calls).toEqual([]);
+      // a result nested past the bound is no result a run keeps: the run says so
+      const returned = await host(flow(`${deep}\nreturn d;`));
+      const end = await within(returned.ended);
+      expect(end).toMatchObject({ kind: "threw" });
+      expect((end as { message?: string }).message).toMatch(/nest/);
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H23: fieldd reads a frame nested past ARGS_DEPTH_MAX and its envelope as a child that broke its bounds: `protocol`, never handed on (bth's review P1)",
+    async () => {
+      const { handler, calls } = scripted(() => ({ ok: true, value: "answered" }));
+      const run = await host(flow("return 1;"), {
+        handler,
+        launch: standIn({
+          onRun: `let d = "x"; for (let i = 0; i < ${FLOW_LIMITS.ARGS_DEPTH_MAX + 8}; i += 1) d = [d]; say({ t: "call", id: 1, what: "agent", args: [d] });`,
+        }),
+      });
+      expect(await within(run.ended)).toEqual({ kind: "ended", why: "protocol" });
+      expect(calls).toEqual([]);
     },
     ROW_MS,
   );

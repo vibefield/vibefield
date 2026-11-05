@@ -248,6 +248,23 @@ describe("CP-4a2a — a run's journal, kept by the flows store (CP4-S15)", () =>
     expect(after).not.toContain('"ki{');
   });
 
+  it("J9: a line nested past the journal's bound, however deep, reads the run as lost, never thrown (bth's review P1)", () => {
+    for (const depth of [64, 200_000]) {
+      const s = written();
+      const [head, call] = linesOf(s.file);
+      const line = `{"format":1,"seq":3,"kind":"answer","call":1,"value":${"[".repeat(depth)}1${"]".repeat(depth)},"at":"2026-11-05T12:00:00.000Z","mac":"${"0".repeat(64)}"}`;
+      writeFileSync(s.file, `${head}\n${call}\n${line}\n`, { mode: 0o600 });
+      const restarted = new FlowRecords({ dir: s.dir, keyPath: s.keyPath });
+      let read: unknown;
+      try {
+        read = restarted.readRun(RUN);
+      } catch (error) {
+        read = { threw: (error as Error).message };
+      }
+      expect(read, `a line ${depth} deep`).toMatchObject({ kind: "lost", line: 3 });
+    }
+  });
+
   it("J8: a journal cut short reads kept to the cut after a restart (no anchor yet), but the store that wrote it knows its tail", () => {
     const s = written();
     const [head, call] = linesOf(s.file);
