@@ -617,6 +617,31 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
   );
 
   it(
+    "H24: a handler that throws as it is called never throws at fieldd's pipe: its call is refused, its log line passed over (bth's review P1)",
+    async () => {
+      const handler: FlowCallHandler = {
+        call() {
+          throw new Error("the handler broke");
+        },
+        log() {
+          throw new Error("the log broke");
+        },
+      };
+      const run = await host(
+        flow(
+          'log("first");\ntry { await agent("Review"); return "answered"; } catch (error) { return error.message; }',
+        ),
+        { handler },
+      );
+      expect(await within(run.ended)).toEqual({
+        kind: "done",
+        value: "VibeField could not answer this call.",
+      });
+    },
+    ROW_MS,
+  );
+
+  it(
     "H10: a script past SCRIPT_MAX_BYTES is refused before any host starts",
     async () => {
       const big = flow(`// ${"x".repeat(FLOW_LIMITS.SCRIPT_MAX_BYTES)}\nreturn 1;`);
