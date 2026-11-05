@@ -986,18 +986,13 @@ public struct HomeScreen: View {
     return names
   }
 
-  /// The desktops whose sparks are their last word (PC-L4): every one the
-  /// merge says did not answer, or the home itself while no door answers —
-  /// asleep when the tailnet no longer lists it, else not answering.
+  /// The desktops that did not answer (PC-L4), each its last word or never
+  /// heard (`ChatAway.lines`): every one the merge says did not answer, or
+  /// the home itself while no door answers — asleep when the tailnet no
+  /// longer lists it, else not answering.
   private var chatAway: [ChatAway] {
-    let reading = chat.reading
-    guard reading.connected else {
-      let listed = linkDesktops.contains { $0.deviceId == linkHome }
-      return [ChatAway(device: linkHome ?? "", name: chatName(nil), standing: listed ? .silent : .asleep)]
-    }
-    return reading.desktops.filter { $0.known != .answered }.map { desktop in
-      ChatAway(device: desktop.device, name: chatName(desktop.device), standing: ChatAway.Standing(desktop.known))
-    }
+    ChatAway.lines(
+      chat.reading, home: linkHome, homeListed: linkDesktops.contains { $0.deviceId == linkHome }, name: chatName)
   }
 
   private var searchTab: some View {

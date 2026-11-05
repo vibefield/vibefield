@@ -33,18 +33,26 @@ enum ChatWords {
     return "\(names.dropLast().joined(separator: ", ")) and \(last)"
   }
 
-  /// A desktop whose rows are its last word (PC-L4), in the fact that holds: asleep; not answering (a timeout, or
+  /// A desktop that did not answer (PC-L4), in the fact that holds: asleep; not answering (a timeout, or
   /// unreachable — the same fact to the person); or answering with a build the phone can't read (VF-PM's ruling,
-  /// 2026-11-05: never "isn't answering" about a desktop that answered and was refused).
-  static func away(_ desktop: String, _ standing: ChatAway.Standing) -> String {
-    switch standing {
-    case .asleep:
+  /// 2026-11-05: never "isn't answering" about a desktop that answered and was refused). `carried`: the list holds a
+  /// row of it, its last word; else the phone never heard it, and says so, never "as it last said" (§9, VF-PM
+  /// 2026-11-05 02:06Z).
+  static func away(_ desktop: String, _ standing: ChatAway.Standing, carried: Bool) -> String {
+    switch (standing, carried) {
+    case (.asleep, true):
       "\(desktop) is asleep. These are as it last said; your words wait here until it wakes."
-    case .silent:
+    case (.silent, true):
       "\(desktop) isn't answering. These are as it last said; your words wait here until it answers."
-    case .incompatible:
+    case (.incompatible, true):
       "\(desktop) runs a build this phone can't read. These are as it last said; "
         + "your words wait here until it's updated."
+    case (.asleep, false):
+      "\(desktop) is asleep. Its sparks show here when it wakes."
+    case (.silent, false):
+      "\(desktop) isn't answering. Its sparks show here when it answers."
+    case (.incompatible, false):
+      "\(desktop) runs a build this phone can't read. Its sparks show here when it's updated."
     }
   }
 
@@ -61,7 +69,7 @@ enum ChatWords {
   }
 }
 
-/// One desktop line under the subtitle: a desktop whose sparks are its last word, and why.
+/// One desktop line under the subtitle: a desktop that did not answer, why, and whether the list holds its last word.
 struct ChatAway: Equatable, Identifiable {
   enum Standing: Equatable {
     case asleep
@@ -83,7 +91,33 @@ struct ChatAway: Equatable, Identifiable {
   let device: String
   let name: String
   let standing: Standing
+  /// The list holds a spark or an ask of it: its last word. Else the phone never heard it.
+  let carried: Bool
   var id: String { device }
+
+  /// The lines under the subtitle, in the merge's order (PC-L4; §9, VF-PM 2026-11-05 02:06Z). A desktop the merge
+  /// says did not answer says its last word only while the reading carries a spark or an ask of it, and is said as
+  /// never heard otherwise. With no door the home answers for every desktop: it says the whole list's last word while
+  /// the reading carries any row, and is never heard otherwise (a cold start, the common case: the list lives in
+  /// memory). `homeListed`: the tailnet still lists the home, so it is not answering rather than asleep. `name(nil)`
+  /// is the home's name (the page's own, on the main actor).
+  @MainActor
+  static func lines(
+    _ reading: ChatReading, home: String?, homeListed: Bool, name: @MainActor (String?) -> String
+  ) -> [ChatAway] {
+    guard reading.connected else {
+      let carried = !reading.sparks.isEmpty || !reading.items.isEmpty
+      return [
+        ChatAway(device: home ?? "", name: name(nil), standing: homeListed ? .silent : .asleep, carried: carried)
+      ]
+    }
+    let held = Set(reading.sparks.compactMap { $0.device } + reading.items.compactMap { $0.device })
+    return reading.desktops.filter { $0.known != .answered }.map { desktop in
+      ChatAway(
+        device: desktop.device, name: name(desktop.device), standing: Standing(desktop.known),
+        carried: held.contains(desktop.device))
+    }
+  }
 }
 
 struct ChatPage: View {
@@ -157,7 +191,7 @@ struct ChatPage: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
           Image(systemName: "moon")
             .font(.system(size: 12, weight: .medium))
-          Text(ChatWords.away(desktop.name, desktop.standing))
+          Text(ChatWords.away(desktop.name, desktop.standing, carried: desktop.carried))
             .font(ChromeType.sans(13))
             .fixedSize(horizontal: false, vertical: true)
         }
