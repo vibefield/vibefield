@@ -40,6 +40,10 @@ export interface FlowHostLimits {
   readonly rssMb: number;
   /** how deep a call's arguments, and the run's result, may nest (FLOW_LIMITS.ARGS_DEPTH_MAX; bth's review P1) */
   readonly argsDepthMax: number;
+  /** how long a leaving host waits for its worker to go before it kills itself, ms: fieldd's own grace after a
+   * `shutdown` (FlowHostTimings.stopGraceMs). Absent, the host's own 2 s: a sender that predates it, such as the SEA
+   * builder's probe C3, still runs (CP-4a2b, O1) */
+  readonly leaveMs?: number;
 }
 
 export type ToFlowHost =

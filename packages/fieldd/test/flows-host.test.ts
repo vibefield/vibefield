@@ -726,6 +726,133 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
     ROW_MS,
   );
 
+  // CP-4a2b (§13a slices 1–2, M-h) — the host's Owed tail from CP-4a2a: its own deadline at a leave (O1), a count it
+  // cannot read (O2) and no inspector by a signal (P6). The stub is a preload a row hands its direct host alone
+  // (test/fixtures/flows/heap-stats-stub.cjs; D20): it needs no builtin and no allocation, so each row holds on any
+  // host's speed and under any globals list.
+  const HEAP_STATS_STUB = join(import.meta.dirname, "fixtures", "flows", "heap-stats-stub.cjs");
+  const stubbed = (modes: string) =>
+    directHost({ ...PATH_ONLY, VF_HOST_STUB: modes }, ["--require", HEAP_STATS_STUB]);
+
+  it(
+    "H30: a host whose worker never goes still leaves: past its run's `leaveMs` it kills itself, with fieldd gone (O1)",
+    async () => {
+      // `stuck` makes the worker's terminate never settle, the state one long builtin under the cap makes. fieldd is
+      // gone (its pipe closed), so only the host's own deadline can end it
+      const base = runOf(flow('await ask("hold");')) as Extract<ToFlowHost, { t: "run" }>;
+      const direct = await stubbed("stuck");
+      children.push(direct.child);
+      const exited = exitOf(direct.child);
+      expect(await heardOf(direct.heard, "ready")).toEqual({ t: "ready", pid: direct.child.pid });
+      direct.tell({ ...base, limits: { ...base.limits, leaveMs: 100 } });
+      expect(await heardOf(direct.heard, "call")).toMatchObject({ t: "call", what: "ask" });
+      direct.close();
+      expect(await within(exited)).toEqual({ code: null, signal: "SIGKILL" });
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H31: a worker's count the host cannot read ends its run `fatal`, never a cap that NaN is never past (O2)",
+    async () => {
+      // `missing` drops `external_memory` from the worker's count, as a later Node that renamed it would: the sum is
+      // NaN, and NaN is past no cap. The script waits on a hold, so only the host's read of its count can end it
+      const direct = await stubbed("missing");
+      children.push(direct.child);
+      expect(await heardOf(direct.heard, "ready")).toEqual({ t: "ready", pid: direct.child.pid });
+      direct.tell(runOf(flow('await ask("hold");')));
+      expect(await answeredToEnd(direct, { holds: "hold" })).toEqual({
+        t: "fatal",
+        reason: expect.stringContaining("cannot read its worker's memory"),
+      });
+    },
+    ROW_MS,
+  );
+
+  /** Node's words when SIGUSR1 opens its inspector, or fails to (a port in use). */
+  const INSPECTOR_SAID = /Debugger listening|inspector/i;
+
+  /** P6's door: a host started by `launch` through fieldd's own supervisor, its stderr kept, sent SIGUSR1 while its
+   * script waits on its one ask, which is answered once the row's window has passed. What the host wrote to stderr,
+   * and how its run ended. */
+  async function afterSigusr1(
+    launch: FlowsHostLaunch,
+  ): Promise<{ stderr: string; ended: Awaited<FlowHostRun["ended"]> | "timeout" }> {
+    let stderr = "";
+    let asked: () => void = () => {};
+    const askedOnce = new Promise<void>((resolve) => {
+      asked = resolve;
+    });
+    let answer: (answer: FlowHostAnswer) => void = () => {};
+    const held = new Promise<FlowHostAnswer>((resolve) => {
+      answer = resolve;
+    });
+    const run = startFlowHost({
+      launch: { kind: "launch", launch },
+      bytes: flow('return await ask("hold");'),
+      input: {},
+      handler: {
+        call: () => {
+          asked();
+          return held;
+        },
+        log: () => {},
+      },
+      environment: PATH_ONLY,
+      spawn: (command, args, options) => {
+        const child = spawn(command, args, options);
+        child.stderr?.on("data", (chunk: Buffer | string) => {
+          stderr += String(chunk);
+        });
+        return child;
+      },
+    });
+    runs.push(run);
+    const pid = await within(run.ready);
+    expect(typeof pid, "the host said READY").toBe("number");
+    expect(await within(askedOnce), "the script made its ask").toBeUndefined();
+    process.kill(pid as number, "SIGUSR1");
+    // an inspector says so on stderr within milliseconds: a second is the row's whole window
+    const deadline = Date.now() + 1_000;
+    while (Date.now() < deadline && !INSPECTOR_SAID.test(stderr))
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    answer({ ok: true, value: "went on" });
+    return { stderr, ended: await within(run.ended) };
+  }
+
+  it(
+    "H32: the development host opens no inspector on SIGUSR1: its launch passes --disable-sigusr1 before the bundle, and its held run goes on (P6)",
+    async () => {
+      const bundle = (await flowsHostLaunch()).args.at(-1) as string;
+      const choice = chooseFlowsHostLaunch({
+        sea: false,
+        execPath: process.execPath,
+        bundleDir: join(bundle, ".."),
+        exists: (path) => path === bundle,
+      });
+      expect(choice.kind).toBe("launch");
+      const said = await afterSigusr1((choice as { launch: FlowsHostLaunch }).launch);
+      expect(said.stderr).not.toMatch(INSPECTOR_SAID);
+      expect(said.ended).toEqual({ kind: "done", value: "went on" });
+      expect(choice).toEqual({
+        kind: "launch",
+        launch: { command: process.execPath, args: ["--disable-sigusr1", bundle] },
+      });
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H32b: a host started without the flag opens no inspector either: it takes SIGUSR1 itself from its first statement, as under every launch (P6)",
+    async () => {
+      const bundle = (await flowsHostLaunch()).args.at(-1) as string;
+      const said = await afterSigusr1({ command: process.execPath, args: [bundle] });
+      expect(said.stderr).not.toMatch(INSPECTOR_SAID);
+      expect(said.ended).toEqual({ kind: "done", value: "went on" });
+    },
+    ROW_MS,
+  );
+
   it(
     "H9: a host that misses its pings is ended, its reason `unanswered`: a script that spins",
     async () => {
@@ -1132,7 +1259,10 @@ describe("CP-4a2a — fieldd's side of the host: the rewrite, the role, the laun
       }),
     ).toEqual({
       kind: "launch",
-      launch: { command: "/usr/local/bin/node", args: ["/B/dist/flows-host.cjs"] },
+      launch: {
+        command: "/usr/local/bin/node",
+        args: ["--disable-sigusr1", "/B/dist/flows-host.cjs"],
+      },
     });
     expect(
       chooseFlowsHostLaunch({
