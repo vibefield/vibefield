@@ -229,6 +229,7 @@ describe("the kept record keeps each crew (SPE-Q6′ (b), SPE-Q14 (a))", () => {
     const crew = h.crews.join(VELA, "run-vela");
     for (let i = 0; i <= SPARK_CREW_MEMBERS_MAX; i++)
       h.crews.started(VELA, of(crew), claude(`run-${i}`));
+    expect(h.disk(VELA)[0], "the crew is kept").toBeDefined();
     expect(h.disk(VELA)[0]?.members).toHaveLength(SPARK_CREW_MEMBERS_MAX);
     expect(h.events.map((e) => e.event)).toContain("fieldd.crews.full");
   });
