@@ -1,3 +1,4 @@
+import FieldAgents
 import Testing
 
 @testable import FieldHome
@@ -7,11 +8,20 @@ import Testing
 /// had to agree with `Glyphs.xcassets` by hand; the folder itself is the table
 /// now, looked up by the catalog's mark key. These rows read the real bundle.
 @Suite struct AgentGlyphTests {
-  /// The three vendor glyphs the folder ships draw as themselves.
+  /// The two vendor glyphs the folder ships draw as themselves.
   @Test func aMarkWithAnImagesetDrawsIt() {
     #expect(AgentGlyph.drawnAsset(for: "claude") == "agent-claude")
     #expect(AgentGlyph.drawnAsset(for: "codex") == "agent-codex")
-    #expect(AgentGlyph.drawnAsset(for: "grok") == "agent-grok")
+  }
+
+  /// LP-4 (2026-11-05) — James kept Claude's and Codex's logos for v1 and no
+  /// other: Grok's imageset left the folder, so Grok wears its letter, the
+  /// card's own fallback, exactly as the swarm does. On the main actor:
+  /// `drawnAsset(for:)` is a View's static (ListDrawingTests' note).
+  @MainActor
+  @Test func onlyTheKeptVendorMarksAreDrawn() {
+    #expect(AgentGlyph.drawnAsset(for: "grok") == nil)
+    #expect(AgentProvider(rawValue: "grok").markLetter == "G")
   }
 
   /// The card's glyphs are NOT the swarm's atlas: kimi has a tile there and no

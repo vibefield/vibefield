@@ -101,11 +101,27 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
   @Test func theTilesAndTheLetterFallback() {
     #expect(MarksAtlas.tile(for: "claude") == MarksAtlas.Tile(x: 0, y: 0))
     #expect(MarksAtlas.tile(for: "codex") == MarksAtlas.Tile(x: 198, y: 0))
-    #expect(MarksAtlas.tile(for: "pi") == MarksAtlas.Tile(x: 0, y: 198))
+    #expect(MarksAtlas.tile(for: "pi") == nil)
+    #expect(MarksAtlas.letter(for: "pi") == "P")
     #expect(MarksAtlas.tile(for: "acp") == nil)
     #expect(MarksAtlas.letter(for: "acp") == "A")
     #expect(MarksAtlas.letter(for: "zed") == "Z")
     #expect(MarksAtlas.candidates.count == 20)
+  }
+
+  /// LP-4 (2026-11-05) — James kept Claude's and Codex's logos for v1 and no
+  /// other: every other vendor's pick stays recorded (`chosen`, the lab's ✓)
+  /// but is not drawn, so that agent wears its letter, the swarm's own path for
+  /// an agent with no tile.
+  @Test func onlyClaudeAndCodexMarksAreDrawn() {
+    #expect(MarksAtlas.providers == ["claude", "codex"])
+    #expect(MarksAtlas.candidates.filter(\.drawn).map(\.id) == ["claudecode", "codex"])
+    for mark in ["grok", "kimi", "opencode", "hermes", "antigravity", "copilot", "pi"] {
+      #expect(MarksAtlas.tile(for: mark) == nil, "\(mark)")
+      #expect(MarksAtlas.letter(for: mark) == String(mark.prefix(1)).uppercased(), "\(mark)")
+    }
+    // The design's picks are still on record for the lab.
+    #expect(MarksAtlas.candidates.filter(\.chosen).count == 9)
   }
 }
 

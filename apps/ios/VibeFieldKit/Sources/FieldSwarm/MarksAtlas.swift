@@ -10,7 +10,16 @@ import UIKit
 // research/svg-sdf's generator: 64-texel tiles, spread 8, pxRange 16, 0.5 at
 // the edge, the field in the red channel). The atlas carries each agent's own
 // mark plus the neighbours it could be confused with, so the lab can show the
-// choice; the app draws only the chosen ones.
+// choice; the app draws only the chosen ones that are KEPT.
+//
+// LP-4 (2026-11-05, the 0.9 launch; James kept two vendor logos in v1): only
+// Claude's and Codex's marks are kept. Every other vendor's mark is a third
+// party's trademark the app has no leave to draw, so every other agent — its
+// pick still recorded as `chosen` for the lab — wears its LETTER, the swarm's
+// own path for an agent with no tile (`SwarmRenderer`'s watermark fallback).
+// The png still carries the never-drawn tiles byte for byte: its generator
+// (research/svg-sdf) lives outside this repo, so re-baking it without them is
+// owed there, and `FieldSwarmTests`' pixel digest pins the bytes until then.
 //
 // THE ALLOW-LISTED PRESENTATION TABLE (AC-5, R23b). `candidates` below is the
 // one place in this target that names agents, and it is allowed to because it
@@ -43,8 +52,15 @@ public enum MarksAtlas {
     /// The catalog mark key (the agent's catalog id) this mark belongs with,
     /// when it is a candidate for one.
     public var provider: String?
-    /// The mark the app draws for that provider.
+    /// The mark the design picked for that provider (the lab's ✓).
     public var chosen: Bool
+    /// Whether the app may draw that pick (LP-4): a vendor's logo is its
+    /// owner's, and only the two James kept for v1 are drawn. Unkept, the
+    /// provider wears its letter.
+    public var kept: Bool = false
+
+    /// The app draws this tile: the design's pick, and a mark it keeps.
+    public var drawn: Bool { chosen && kept }
   }
 
   private static func at(_ index: Int) -> Tile {
@@ -53,10 +69,10 @@ public enum MarksAtlas {
 
   /// Atlas order is the bake order; index → tile.
   public static let candidates: [Candidate] = [
-    Candidate(id: "claudecode", title: "Claude Code", tile: at(0), provider: "claude", chosen: true),
+    Candidate(id: "claudecode", title: "Claude Code", tile: at(0), provider: "claude", chosen: true, kept: true),
     Candidate(id: "claude", title: "Claude", tile: at(1), provider: "claude", chosen: false),
     Candidate(id: "anthropic", title: "Anthropic", tile: at(2), provider: "claude", chosen: false),
-    Candidate(id: "codex", title: "Codex", tile: at(3), provider: "codex", chosen: true),
+    Candidate(id: "codex", title: "Codex", tile: at(3), provider: "codex", chosen: true, kept: true),
     Candidate(id: "openai", title: "OpenAI", tile: at(4), provider: "codex", chosen: false),
     Candidate(id: "grok", title: "Grok", tile: at(5), provider: "grok", chosen: true),
     Candidate(id: "xai", title: "xAI", tile: at(6), provider: "grok", chosen: false),
@@ -75,13 +91,15 @@ public enum MarksAtlas {
     Candidate(id: "inflection", title: "Inflection", tile: at(19), provider: "pi", chosen: false),
   ]
 
-  /// The mark keys with a chosen tile, in atlas order — a subset of the keys
-  /// the catalog decides on (`FieldSwarmTests`), never a roster of its own.
-  public static let providers: [String] = candidates.filter(\.chosen).compactMap(\.provider)
+  /// The mark keys the app draws a tile for — chosen AND kept — in atlas
+  /// order: a subset of the keys the catalog decides on (`FieldSwarmTests`),
+  /// never a roster of its own.
+  public static let providers: [String] = candidates.filter(\.drawn).compactMap(\.provider)
 
-  /// The tile for a mark key, or nil for one with only a letter.
+  /// The tile for a mark key, or nil for one with only a letter (no tile, or
+  /// a vendor's mark the app does not keep, LP-4).
   public static func tile(for mark: String) -> Tile? {
-    candidates.first { $0.chosen && $0.provider == mark }?.tile
+    candidates.first { $0.drawn && $0.provider == mark }?.tile
   }
 
   /// The letter a mark key without a tile wears (the reference's `LETTER_MARKS`).

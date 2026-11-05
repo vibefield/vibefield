@@ -31,6 +31,11 @@ struct BubbleGlyph: View {
 /// Icons v5.14.0 (MIT) — the same set the desktop godview embeds — so the
 /// two surfaces draw identical marks.
 ///
+/// LP-4 (2026-11-05, the 0.9 launch): the folder keeps Claude's and Codex's
+/// marks only — the two vendor logos James kept for v1. Grok's left it (a
+/// third party's trademark the app has no leave to draw), so Grok wears its
+/// letter here as it does in the swarm (`MarksAtlas`' `kept`).
+///
 /// A mark with no drawn glyph wears its LETTER, which is the reference's own
 /// fallback (`AgentIcon.tsx`): an agent you can see and read, rather than one
 /// that could not be drawn and therefore was not shown.
@@ -41,8 +46,8 @@ struct BubbleGlyph: View {
 /// Until AC-5 that answer was `AgentProvider.hasDrawnMark`, a three-vendor list
 /// in code that had to agree with this folder by hand — a roster of its own. It
 /// is also NOT the swarm's atlas: `MarksAtlas` tiles nine marks and this folder
-/// holds three glyphs, so "the atlas has a tile" would have sent six agents to
-/// an image that is not here and drawn them as nothing.
+/// held three glyphs (two since LP-4), so "the atlas has a tile" would have sent
+/// six agents to an image that is not here and drawn them as nothing.
 struct AgentGlyph: View {
   let mark: String
   /// The letter's size. A drawn mark fits whatever frame it is given; the
