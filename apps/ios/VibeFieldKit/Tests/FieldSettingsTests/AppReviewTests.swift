@@ -21,4 +21,25 @@ struct AppReviewTests {
     #expect(privacy == "https://vibefield.dev/privacy")
     #expect(support == "https://vibefield.dev/support")
   }
+
+  // MARK: - S2: About
+
+  @Test("About reaches the privacy policy and support, in Apple's own words, from the one pair")
+  func aboutLinks() {
+    let links = SettingsModel.aboutLinks
+    let titles = links.map { $0.title }
+    let urls = links.map { $0.url }
+    #expect(titles == ["Privacy Policy", "Support"])
+    #expect(urls == [VibeFieldSite.privacy, VibeFieldSite.support])
+  }
+
+  @Test("About's foot: Tailscale's trademark line, then the non-affiliation line, word for word")
+  func aboutFoot() {
+    #expect(
+      SettingsModel.aboutFoot == [
+        "Tailscale is a registered trademark of Tailscale Inc.",
+        "VibeField names agents such as Claude Code and Codex to tell sessions apart. "
+          + "It isn't affiliated with or endorsed by Anthropic or OpenAI.",
+      ])
+  }
 }
