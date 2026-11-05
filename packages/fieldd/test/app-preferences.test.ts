@@ -26,7 +26,28 @@ describe("app preferences", () => {
       confirmQuit: true,
       connectAsks: true,
       keepRunningOnQuit: false,
+      sounds: true,
     });
+  });
+
+  it("plays sounds from the first run, until the person turns them off (SD-2, SD-D19)", () => {
+    expect(effectiveAppPreferences({}).sounds).toBe(true);
+    expect(effectiveAppPreferences({ [APP_PREFERENCE_KEYS.SOUNDS]: false }).sounds).toBe(false);
+    expect(effectiveAppPreferences({ [APP_PREFERENCE_KEYS.SOUNDS]: "off" }).sounds).toBe(true);
+  });
+
+  it("is quiet only until a moment it was given, and a cleared or unreadable Quiet is no Quiet (SD-D22)", () => {
+    const until = Date.UTC(2026, 10, 6, 8);
+    expect(effectiveAppPreferences({}).soundsQuietUntil).toBeUndefined();
+    expect(
+      effectiveAppPreferences({ [APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL]: until }).soundsQuietUntil,
+    ).toBe(until);
+    // Turn sounds back on writes null: the doc keeps the key, the snapshot drops it
+    for (const cleared of [null, -5, 1.5, "tomorrow", true]) {
+      const read = effectiveAppPreferences({ [APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL]: cleared });
+      expect(read.soundsQuietUntil, String(cleared)).toBeUndefined();
+      expect("soundsQuietUntil" in read, String(cleared)).toBe(false);
+    }
   });
 
   it("asks before a quit that ends sessions by default, and respects 'Do not ask again' (AL-3)", () => {

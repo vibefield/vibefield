@@ -326,6 +326,9 @@ importers:
       '@vibefield/screenshot':
         specifier: workspace:*
         version: link:../screenshot
+      '@vibefield/sound':
+        specifier: workspace:*
+        version: link:../sound
       '@vibefield/trust':
         specifier: workspace:*
         version: link:../trust
@@ -441,6 +444,9 @@ importers:
       '@vibefield/rosetta-room':
         specifier: 0.1.3
         version: 0.1.3(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@vibefield/sound':
+        specifier: workspace:*
+        version: link:../sound
       loro-crdt:
         specifier: ^1.13.8
         version: 1.13.8

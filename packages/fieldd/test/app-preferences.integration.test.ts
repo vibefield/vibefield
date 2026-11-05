@@ -60,6 +60,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       confirmQuit: true,
       connectAsks: true,
       keepRunningOnQuit: false,
+      sounds: true,
     });
 
     await shell.call("storage.appPreferences.set", {
@@ -82,6 +83,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       confirmQuit: true,
       connectAsks: true,
       keepRunningOnQuit: false,
+      sounds: true,
     });
 
     const rendererGrant = daemon.tokens.mint(["settings.manage"], "test-window");
@@ -94,6 +96,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       confirmQuit: true,
       connectAsks: true,
       keepRunningOnQuit: false,
+      sounds: true,
     });
     await renderer.call("storage.appPreferences.set", {
       key: "desktop.screenshotHotkey",
@@ -111,6 +114,31 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     expect(await shell.call("storage.appPreferences.get", {})).toMatchObject({
       screenshotHotkey: false,
     });
+  });
+
+  it("quiets the sounds until a moment, and a null ends Quiet (SD-2, SD-D22)", async () => {
+    const daemon = await fixture();
+    const shell = await connect(daemon, daemon.shellToken, "shell-main");
+    const until8 = Date.UTC(2026, 10, 6, 8);
+    await shell.call("storage.appPreferences.set", {
+      key: "desktop.soundsQuietUntil",
+      value: until8,
+    });
+    expect(await shell.call("storage.appPreferences.get", {})).toMatchObject({
+      sounds: true,
+      soundsQuietUntil: until8,
+    });
+    await shell.call("storage.appPreferences.set", {
+      key: "desktop.soundsQuietUntil",
+      value: null,
+    });
+    const after = (await shell.call("storage.appPreferences.get", {})) as Record<string, unknown>;
+    expect("soundsQuietUntil" in after).toBe(false);
+    await shell.call("storage.appPreferences.set", { key: "desktop.sounds", value: false });
+    expect(await shell.call("storage.appPreferences.get", {})).toMatchObject({ sounds: false });
+    await expect(
+      shell.call("storage.appPreferences.set", { key: "desktop.soundsQuietUntil", value: true }),
+    ).rejects.toThrow();
   });
 
   it("requires both the local scope and a trusted desktop client kind", async () => {

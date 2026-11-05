@@ -46,7 +46,10 @@ const COLOUR_LITERAL = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch)\(|\b(?:black|whi
 
 describe("the glyph set", () => {
   it("has every name drawn, in one box, in currentColor and nothing else", () => {
-    expect(GLYPH_NAMES.length).toBe(64);
+    // SD-2 (DESIGN.md §13): `sound`, Settings → Sound's rail, is the 65th
+    expect(GLYPH_NAMES.length).toBe(65);
+    expect(GLYPH_NAMES).toContain("sound");
+    expect(GLYPHS.sound.kind).toBe("instrument");
     for (const name of GLYPH_NAMES) {
       const svg = glyphSvg(name);
       expect(svg, name).toMatch(

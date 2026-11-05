@@ -454,3 +454,67 @@ describe("updateMenuEntry — the update item both menus wear", () => {
     expect(updateMenuEntry({ kind: "idle" }, {}, true)).not.toHaveProperty("click");
   });
 });
+
+// SD-2 (DESIGN.md §14 "Quiet", SD-D22) — the status item's Quiet row, above Settings…, in title case as macOS
+// menus are: Quiet Sounds ▸ For an Hour · Until Tomorrow; while quiet, "Quiet Until 8:00 AM", checked, which ends
+// Quiet. No row while Play sounds is off, or while there is no player to quiet.
+describe("the Quiet row (SD-2)", () => {
+  const sounds = (patch: Partial<NonNullable<TraySnapshot["sounds"]>> = {}) =>
+    ({ on: true, player: "ready", ...patch }) as NonNullable<TraySnapshot["sounds"]>;
+  it("sits above Settings…, offering an hour or until tomorrow", () => {
+    const quietSounds = vi.fn();
+    const menu = buildTrayMenu(
+      snapshot({ sounds: sounds() }),
+      { ...actions(), quietSounds },
+      "darwin",
+    );
+    const ids = menu.map((item) => item.id ?? item.type);
+    expect(ids.indexOf("quiet-sounds")).toBe(ids.indexOf("settings") - 1);
+    const row = byId(menu, "quiet-sounds");
+    expect(row.label).toBe("Quiet Sounds");
+    expect(row.submenu?.map((item) => item.label)).toEqual(["For an Hour", "Until Tomorrow"]);
+    row.submenu?.[0]?.click?.();
+    row.submenu?.[1]?.click?.();
+    expect(quietSounds.mock.calls).toEqual([["hour"], ["tomorrow"]]);
+  });
+  it("while quiet, reads until when, checked, and choosing it turns the sounds back on", () => {
+    const quietSounds = vi.fn();
+    const row = byId(
+      buildTrayMenu(
+        snapshot({ sounds: sounds({ quietUntilText: "8:00 AM" }) }),
+        { ...actions(), quietSounds },
+        "darwin",
+      ),
+      "quiet-sounds",
+    );
+    expect(row).toMatchObject({ label: "Quiet Until 8:00 AM", type: "checkbox", checked: true });
+    expect(row.submenu).toBeUndefined();
+    row.click?.();
+    expect(quietSounds).toHaveBeenCalledWith(null);
+  });
+  it("is not drawn while Play sounds is off, without a player, or before main can quiet", () => {
+    const has = (s: TraySnapshot, a: TrayActions) =>
+      buildTrayMenu(s, a, "darwin").some((item) => item.id === "quiet-sounds");
+    const quietSounds = vi.fn();
+    expect(has(snapshot({ sounds: sounds({ on: false }) }), { ...actions(), quietSounds })).toBe(
+      false,
+    );
+    expect(
+      has(snapshot({ sounds: sounds({ player: "missing" }) }), { ...actions(), quietSounds }),
+    ).toBe(false);
+    expect(has(snapshot(), { ...actions(), quietSounds })).toBe(false);
+    expect(has(snapshot({ sounds: sounds() }), actions())).toBe(false);
+  });
+  it("is held still while quitting", () => {
+    const row = byId(
+      buildTrayMenu(
+        snapshot({ sounds: sounds(), quitting: true }),
+        { ...actions(), quietSounds: vi.fn() },
+        "darwin",
+      ),
+      "quiet-sounds",
+    );
+    expect(row.enabled).toBe(false);
+    expect(row.submenu?.every((item) => item.click === undefined)).toBe(true);
+  });
+});

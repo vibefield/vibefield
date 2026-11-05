@@ -51,6 +51,7 @@
     "@vibefield/plugin-comment-pad": "workspace:*",
     "@vibefield/plugin-runtime": "workspace:*",
     "@vibefield/plugin-sdk": "workspace:*",
+    "@vibefield/sound": "workspace:*",
     "loro-crdt": "^1.13.6",
     "matter-js": "0.19.0",
     "react": "catalog:",
