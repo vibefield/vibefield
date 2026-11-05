@@ -40,7 +40,9 @@
         "history": true,
         "usage": true,
         "distribution": true,
-        "personas": true
+        "personas": true,
+        "invoke": true,
+        "spark": true
       },
       "history": "indexed",
       "lastLaunchedAt": 1789232460000

@@ -20,6 +20,10 @@ export const SCRIPTED_ROW: AgentCatalogEntry = {
     personas: true,
     // the scripted provider composes no launch port, so no native grammar (AR-7a)
     invoke: false,
+    // CP-5a — the spark tests' agent: it declares the whole briefing on a terminal where a test composes it, and this
+    // table is the test seam's, never R23's, so its claim stands on a preview row (THE table claims it on a supported
+    // row alone, CP5-Q9)
+    spark: true,
   },
   admitted: "2026-09-22",
   decision: "test fixture — the scripted adapter beside the real rows",

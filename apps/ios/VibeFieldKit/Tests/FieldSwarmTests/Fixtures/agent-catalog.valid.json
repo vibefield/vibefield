@@ -21,10 +21,11 @@
         "usage": true,
         "distribution": true,
         "personas": true,
-        "invoke": true
+        "invoke": true,
+        "spark": true
       },
       "admitted": "2026-09-22",
-      "decision": "AC-D6 — supported: spawn, re-attach and the real-daemon history join witnessed here",
+      "decision": "AC-D6 — supported: spawn, re-attach and the real-daemon history join witnessed here; spark claimed 2026-11-04 (CP-5a), its hand witness owed",
       "surfaces": {
         "desktop": true,
         "phone": true
@@ -51,7 +52,8 @@
         "usage": true,
         "distribution": true,
         "personas": true,
-        "invoke": true
+        "invoke": true,
+        "spark": false
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — supported: spawn witnessed here, the join on the scripted daemon; real-daemon join owed",
@@ -84,7 +86,8 @@
         "usage": true,
         "distribution": true,
         "personas": true,
-        "invoke": true
+        "invoke": true,
+        "spark": false
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
@@ -114,7 +117,8 @@
         "usage": true,
         "distribution": true,
         "personas": true,
-        "invoke": true
+        "invoke": true,
+        "spark": false
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
@@ -144,7 +148,8 @@
         "usage": false,
         "distribution": true,
         "personas": true,
-        "invoke": true
+        "invoke": true,
+        "spark": false
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
@@ -174,7 +179,8 @@
         "usage": false,
         "distribution": true,
         "personas": true,
-        "invoke": true
+        "invoke": true,
+        "spark": false
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
@@ -204,7 +210,8 @@
         "usage": true,
         "distribution": true,
         "personas": true,
-        "invoke": true
+        "invoke": true,
+        "spark": false
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here; personas re-claimed 2026-09-25 at puppeteer 63bf175 (the adapter's profiles port declares supported again — the 2026-09-22 erratum that narrowed it is reversed)",
@@ -234,7 +241,8 @@
         "usage": false,
         "distribution": true,
         "personas": true,
-        "invoke": true
+        "invoke": true,
+        "spark": false
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
@@ -264,7 +272,8 @@
         "usage": false,
         "distribution": true,
         "personas": true,
-        "invoke": true
+        "invoke": true,
+        "spark": false
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview: the real-daemon history join is witnessed here, a live spawn is not",
@@ -292,7 +301,8 @@
         "usage": false,
         "distribution": false,
         "personas": false,
-        "invoke": false
+        "invoke": false,
+        "spark": false
       },
       "admitted": "2026-09-22",
       "decision": "AC-D7, narrowed by Q17 (2026-10-27) — preview, no spawn until fieldd supplies an ACP connector: a protocol, not a vendor; no ledger, no personas",

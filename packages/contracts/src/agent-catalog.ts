@@ -81,7 +81,15 @@ export const AGENT_VISIBLE_STATUSES = ["supported", "preview", "deprecated"] as 
  * is a regular command, AR7-D12), and only a session is managed or refused. A
  * grammar that does not classify cannot tell `--version` from a session, so
  * its row does not claim it; a row that does not claim it gets no launcher,
- * and its name runs as the shell would run it. */
+ * and its name runs as the shell would run it.
+ * `spark` (CP-5a; CP5-Q9 (a), ruled 2026-11-04) is whether VibeField lets the
+ * agent be a spark: a decision, not a fact the pin reports. It is claimed only
+ * on a `supported` row, after a live spark of that agent is witnessed here, and
+ * a `deprecated` row may keep it, because its sparks still wake (AC-D3). R23
+ * holds it to the pin's `descriptor.briefing`: all three fields, and a process
+ * the door can name (`mcpServerProcess: "terminal"`). The hatch's gate reads
+ * it before those facts (fieldd's `spark-not-offered`), and the New spark
+ * sheet reads it through `agent.providers` (`offers.spark`), never the facts. */
 export const AgentOffers = z.object({
   spawn: z.boolean(),
   resume: z.boolean(),
@@ -91,6 +99,7 @@ export const AgentOffers = z.object({
   distribution: z.boolean(),
   personas: z.boolean(),
   invoke: z.boolean(),
+  spark: z.boolean(),
 });
 export type AgentOffers = z.infer<typeof AgentOffers>;
 export type AgentCapability = keyof AgentOffers;
@@ -103,6 +112,7 @@ export const AGENT_CAPABILITIES = [
   "distribution",
   "personas",
   "invoke",
+  "spark",
 ] as const satisfies readonly AgentCapability[];
 
 /** Which surfaces show the row. A protocol agent (ACP) is desktop-only. */
@@ -187,6 +197,8 @@ const OFFERS_FULL: AgentOffers = {
   distribution: true,
   personas: true,
   invoke: false,
+  // claimed a row at a time, on a supported row's live witness (CP5-Q9)
+  spark: false,
 };
 const OFFERS_NO_USAGE: AgentOffers = { ...OFFERS_FULL, usage: false };
 // `invoke` is claimed a row at a time: a launcher goes only to an agent whose
@@ -205,14 +217,21 @@ export const AGENT_CATALOG = [
     // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): a grammar is not the
     // licence; the claim stands because the adapter classifies
     // (`nativeInvocation.classifies: true` at puppeteer 2b83e2c; R23 reads it).
+    // 2026-11-04 CP-5a (CP5-Q9 (a), ruled 2026-11-04): `spark` claimed — the
+    // pin's adapter declares the whole briefing on a terminal (R23 reads
+    // `descriptor.briefing`). Its live witness here, a spark
+    // by hand on Claude Code (hatch, Ready, the audit's `tools.agents_list` line
+    // naming its run, Stop), is James's, OWED at the claim; the date it is run
+    // goes in `decision`.
     id: "claude",
     label: "Claude Code",
     status: "supported",
     seams: { puppeteer: { provider: "claude" }, rosetta: { kind: "claude-code" } },
     layoutRoot: "~/.claude",
-    offers: { ...OFFERS_WITH_INVOKE, reattach: true },
+    offers: { ...OFFERS_WITH_INVOKE, reattach: true, spark: true },
     admitted: "2026-09-22",
-    decision: "AC-D6 — supported: spawn, re-attach and the real-daemon history join witnessed here",
+    decision:
+      "AC-D6 — supported: spawn, re-attach and the real-daemon history join witnessed here; spark claimed 2026-11-04 (CP-5a), its hand witness owed",
     surfaces: { desktop: true, phone: true },
   },
   {
@@ -429,6 +448,7 @@ export const AGENT_CATALOG = [
       distribution: false,
       personas: false,
       invoke: false,
+      spark: false,
     },
     admitted: "2026-09-22",
     decision:

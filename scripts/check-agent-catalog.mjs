@@ -27,7 +27,9 @@
 //     the grammar's presence; AR7-D15 (ruled 2026-09-27) narrowed it, because
 //     a strict host refuses in its panes what it cannot manage, and an adapter
 //     that cannot tell a version query from a session would have its
-//     `--version` refused)
+//     `--version` refused) · a `descriptor.briefing` declaring mcpServers,
+//     allowTools and instructions with mcpServerProcess `terminal` ⇒ spark
+//     (CP-5a: the hatch gate's facts, clause for clause)
 //     and the native layout root, read the way fieldd's `kindFor` reads it
 //     (agent-runtime.ts: `runtime.profiles(id)` → the native-default profile →
 //     `runtime.profileObservationRoot`) and folded to `~/…` as fieldd's `tilde`
@@ -77,6 +79,9 @@
 //   kind-undecided  rosetta registers a kind no row decides on
 //   history-seam    a row claims history with no rosetta seam (a table fact:
 //                   enforced even when rosettad is absent)
+//   claim-status    a row claims a capability its status may not claim — spark
+//                   on a row neither supported nor deprecated (CP-5a; a table
+//                   fact, enforced whatever the pins)
 //   candidate       WARN — the pin implements what an offered row does not claim
 //   unverified      WARN — no rosettad to ask (AC-D10); a FAIL under
 //                   --require-rosetta, which `pnpm siblings:pin` passes and
@@ -166,6 +171,7 @@ const CAPABILITIES = [
   "distribution",
   "personas",
   "invoke",
+  "spark",
 ];
 /** The puppeteer port that implements each puppeteer-owned capability. */
 const PORT_FOR = {
@@ -176,6 +182,7 @@ const PORT_FOR = {
   distribution: "distribution",
   personas: "profiles",
   invoke: "launch.provider.nativeInvocation.classifies",
+  spark: "descriptor.briefing",
 };
 /** The capabilities rosetta supplies: a claim to one needs a rosetta seam
  * (history-seam) and a kind the pin registers (kind-registered). */
@@ -210,6 +217,14 @@ const STATUSES = new Set(["supported", "preview", "deprecated", "declined"]);
 /** A row under these statuses is being OFFERED, so an unclaimed port on it is a
  * candidate worth a warning; a deprecated or declined row already decided. */
 const OFFERED = new Set(["supported", "preview"]);
+/** CP-5a (CP5-Q9 (a), ruled 2026-11-04) — the capabilities a row may claim only
+ * under some statuses. `spark` is claimed on a `supported` row, after a live
+ * spark of that agent is witnessed here, and kept by a `deprecated` one, whose
+ * sparks still wake (AC-D3). A claim under any other status is red
+ * (claim-status), and a pin implementing it under a row that may not claim it is
+ * no candidate: a preview row's spark waits for its promotion. */
+const CLAIM_STATUSES = { spark: new Set(["supported", "deprecated"]) };
+const mayClaim = (capability, status) => CLAIM_STATUSES[capability]?.has(status) ?? true;
 /** The packages this script loads from the puppeteer pin — both inside fieldd's
  * R20 door (scripts/check-import-boundaries.mjs), both resolved from fieldd's
  * manifest. The walls' textual matcher sees `import`/`require` of a literal, not
@@ -232,6 +247,7 @@ const VERDICT_CLASSES = [
   "kind-root",
   "kind-undecided",
   "history-seam",
+  "claim-status",
 ];
 const CLASSES = new Set([
   ...VERDICT_CLASSES,
@@ -509,10 +525,17 @@ function judgePuppeteer(rows, facts) {
             row.id,
             refused
               ? `the catalog claims \`personas\` for \`${row.id}\`; the pin's \`profiles\` port declares support.supported: false (puppeteer refuses to create a profile for it)`
-              : `the catalog claims \`${c}\` for \`${row.id}\`; the pin implements no \`${PORT_FOR[c]}\``,
+              : c === "spark"
+                ? `the catalog claims \`spark\` for \`${row.id}\`; the pin's \`descriptor.briefing\` does not declare mcpServers, allowTools and instructions with mcpServerProcess \`terminal\` (a process the door can name)`
+                : `the catalog claims \`${c}\` for \`${row.id}\`; the pin implements no \`${PORT_FOR[c]}\``,
           ),
         );
-      } else if (!row.offers[c] && pin.ports[c] && OFFERED.has(row.status)) {
+      } else if (
+        !row.offers[c] &&
+        pin.ports[c] &&
+        OFFERED.has(row.status) &&
+        mayClaim(c, row.status)
+      ) {
         findings.push(
           warn(
             "candidate",
@@ -568,6 +591,25 @@ function judgeHistorySeams(rows) {
           "history-seam",
           row.id,
           `the catalog claims \`${c}\` for \`${row.id}\`; the row has no rosetta seam`,
+        ),
+      );
+    }
+  }
+  return findings;
+}
+
+/** A claim its row's status may not make (CLAIM_STATUSES) — a table fact, so it
+ * holds with or without a pin to ask, beside the history seam. */
+function judgeClaimStatuses(rows) {
+  const findings = [];
+  for (const row of rows) {
+    for (const [c, statuses] of Object.entries(CLAIM_STATUSES)) {
+      if (!row.offers[c] || statuses.has(row.status)) continue;
+      findings.push(
+        fail(
+          "claim-status",
+          row.id,
+          `the catalog claims \`${c}\` for \`${row.id}\`, a ${row.status} row; it is claimed on a ${[...statuses].join(" or ")} row alone (supported after a live witness here; kept by a deprecated one)`,
         ),
       );
     }
@@ -642,6 +684,7 @@ function judge(rows, puppeteer, rosetta, { requireRosetta = false } = {}) {
   if (puppeteer.ok) findings.push(...judgePuppeteer(rows, puppeteer));
   else findings.push(fail(puppeteer.cls, "puppeteer", puppeteer.message));
   findings.push(...judgeHistorySeams(rows));
+  findings.push(...judgeClaimStatuses(rows));
   if (rosetta.ok) findings.push(...judgeRosetta(rows, rosetta));
   else if (rosetta.cls === "unverified") {
     findings.push(
@@ -682,9 +725,15 @@ function tilde(path, home, separator = sep) {
  * a normalizer that does not classify answers `rejected` for a version query as
  * for a session it cannot carry, so a launcher over it would refuse `--version`.
  * One that classifies tells a utility, a one-shot and an agent that lives
- * elsewhere apart from a session, and those run as typed. */
+ * elsewhere apart from a session, and those run as typed.
+ * `spark` (CP-5a) is the descriptor's briefing declaration WHOLE on a terminal:
+ * the facts fieldd's hatch gate reads (`sparkFactsRefusal`, agent-briefing.ts),
+ * clause for clause — all three fields true, and `mcpServerProcess: "terminal"`,
+ * the one topology the door can name today. A helper's process is not spark
+ * until CP-5c widens this to a host-spawned helper, one per run. */
 function portsOf(provider) {
   const profilesPort = provider.profiles !== undefined && provider.profiles !== null;
+  const briefing = provider.descriptor?.briefing;
   return {
     id: provider.descriptor.id,
     label: provider.descriptor.label,
@@ -696,6 +745,11 @@ function portsOf(provider) {
       distribution: provider.distribution !== undefined && provider.distribution !== null,
       personas: profilesPort && provider.profiles.provider?.support?.supported === true,
       invoke: provider.launch?.provider?.nativeInvocation?.classifies === true,
+      spark:
+        briefing?.mcpServers === true &&
+        briefing.allowTools === true &&
+        briefing.instructions === true &&
+        briefing.mcpServerProcess === "terminal",
     },
     profilesPort,
   };

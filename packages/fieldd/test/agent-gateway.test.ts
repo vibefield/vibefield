@@ -999,6 +999,7 @@ describe("who is given a launcher — the offered set (AR-7b)", () => {
       distribution: false,
       personas: false,
       invoke: true,
+      spark: false,
     };
     const row = (id: string, over: Partial<AgentCatalogEntry> = {}): AgentCatalogEntry => ({
       id,
