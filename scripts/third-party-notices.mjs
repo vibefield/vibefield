@@ -1852,6 +1852,12 @@ export const NODE_BUNDLES = [
     base: "packages/electron-shell",
     role: "the app's preload",
   },
+  // SD-2: the sound renders' worker thread, a bundle of its own beside main's (app/shell/main/sound-worker.cjs).
+  {
+    file: "packages/electron-shell/dist/main/sound-worker.cjs",
+    base: "packages/electron-shell",
+    role: "the app's sound worker",
+  },
   {
     file: "packages/fieldd/dist/bin.cjs",
     base: "packages/fieldd",
