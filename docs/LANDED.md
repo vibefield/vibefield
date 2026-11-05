@@ -33765,3 +33765,186 @@ fixtures), field-native's `registries.rs`, fieldd's package.json and 11 fieldd s
   tree, and on the mini while the HOLD stands. A2 is its first consumer (`dist/transcript-host.cjs`, VF-PM 08:44Z).
 - **James:** CLAUDE.md's verify line gains "→ census (strict)" after "bundle" (his typed word).
 - Item 178: `third-party-notices.mjs`'s rows held to every staged `.cjs`, both directions, its own slice.
+
+## SP-1e2 — the crew's fieldd half: the agents a spark starts in one stretch of its work are one crew, kept in its record and served whole, with no card drawing it yet (track CO) (2026-11-05; `4c2c7dfde` → `068cab410`, 5 commits on main `95812bf26`, lane `co/sp1e2` in `/Volumes/SamsungRed/lanes/co-sp1e2/vibe-field`, the mini's mint M146 = T `068cab410` (tree `37b96f47f84b`), landed by fast-forward, run 146)
+
+**What it rests on.**
+- The CO round: James's page `Druyc3Ua6BWycRe1SzzeCz`, 68 of 68 picked (read 2026-11-04 23:14Z). Every SPE mark this
+  slice builds is at its lean, SPE-Q35 (b) by his own click (23:12Z).
+- The plan of record, `lanes/co-plan/plans/step0-sp1e2.md` (its map `reader-sp1e2-sp1e4.json`), with VF-PM's rulings
+  (SPE-Q26, Q27, Q29–Q34 and Q36–Q40 at their leans, 23:22Z). SP-1e2 is the crew card; this lane is its fieldd half,
+  and the card's renderer half is not in it. It builds:
+  - **SPE-Q3 = RU-6**: one crew per stretch of the spark's own run's work. It closes at that run's first idle seen
+    while none of its talk calls is in flight (**SPE-Q29 (a)**), or at the run's end; a wake's run is a new crew.
+  - **SPE-Q6′ (b)**: the crew is kept, in item 159's kept record's `crews` section; **SPE-Q14 (a)**: its members are
+    kept after they end.
+  - **SPE-Q28 (b)**'s bound: the newest `SPARK_CREWS_KEPT` (256) crews, each of at most `SPARK_CREW_MEMBERS_MAX` (64)
+    members.
+  - **SPE-Q30 (a)**: a resumed member is followed (`continues`). **SPE-Q32 (a)**: the frame's `waiting` is the pending
+    inputs of the live members, never kept. **SPE-Q38 (a)**: a held spawn keeps its crew, and Allow one more joins it.
+  - **SPE-Q27 (a)**'s door, as X2-crews restated it (VF-PM 01:22Z): `compose.sparks.crews.subscribe`, the person's,
+    `sparks.use` and `federate`, with `device?` (the method's suffix, SPE-Q40).
+  - **SPE-Q35 (b)**: DESIGN.md §6's note, a working row's mark breathes.
+- It stands on item 159 (`9b3164ccf`, run 129): each spark's one signed kept record, its sections whole across
+  writers. The crews write its `crews` section.
+- And on item 172 (`caf52425c`, run 132): the record signer's four answers and its `StoreGuard`. The crews catch
+  every throw the guard raises (Found 1).
+
+**What** (33 files, +2,060 −42 against main `95812bf26`): DESIGN.md and `docs/UI_SYSTEM.md`, three seam pages, 15 in
+contracts (7 of them fixtures), 5 fieldd sources and 8 fieldd tests.
+- **DESIGN.md** (`4c2c7dfde`, +123 −1 with UI_SYSTEM.md): §8 "Chat's crew card", a top-level entry after Chat's
+  composer; §6's breath note; §8's handle note (CO-Q3 (a)); §9's crew-card words; §13's Send line; UI_SYSTEM.md's
+  names. "job" → crew (ER-C38) is a dated correction inside the new entry.
+- **Contracts** (`0f23ebff4`, 19 files):
+  - the seam pages first: api.html's crews door row, the `agent_spawn` and `agents_list` notes, item 159's sentence
+    and the needs.answer note; system.html; architecture.html's compose paragraph;
+  - `CrewId` and `AgentSessionOrigin.crew?`; `SparkCrew`, `SparkCrewMember` and `SparkKeptRecord.crews?`, with
+    `SPARK_CREWS_KEPT` and `SPARK_CREW_MEMBERS_MAX`; `NeedsHeldLaunch.crew?`; the door's params, and its frame with
+    `waiting?`;
+  - 6 fixtures. Item 159's `spark-kept-record.unknown-section.json` names its unknown section `later`, since `crews`
+    is a known section now. `gen/tools.ts` is `pnpm gen`'s output; `contracts.rs` and `registries.rs` regenerate
+    byte for byte.
+- **The red** (`3dd82c8d0`, 10 files): `crews.ts` as a skeleton; the talk verbs and daemon.ts wired to it; two new
+  test files, `spark-crews.test.ts` (15) and `spark-crews-door.test.ts` (3), and rows in tool-plane-talk,
+  needs-queue, agent-field, agent-remote-cut and compose-verbs.
+- **The green** (`12f6757fb`, 5 files):
+  - `SparkCrews` in `crews.ts`. The talk room joins each `agent_spawn` to its caller's crew, and every talk verb holds
+    the crew open while it runs.
+  - The needs queue keeps a held spawn's crew. `originOf` carries `crew` on the field row and on the remote cut.
+  - daemon.ts makes the crews, feeds them the board, the ends and the settle, and serves the door.
+- **The test fix** (`068cab410`, test-only, +1): K6 asserts the kept crew before it reads its members (Found 3).
+
+**Validation.**
+- **The reds and the greens on the mini** (a9; logs under `ts6/logs/mini/co-sp1e2-f615fb30a/`):
+  1. **The red** (R1, at `674134ce6`, now `3dd82c8d0`; `sp1e2-1f301352f/R1-the-red.log`): the 7 lane files, "Tests
+     22 failed | 113 passed (135)", all 22 AssertionError, the 22 the brief named. The pins C4 (the restart split)
+     and D3 (the refusals) pass.
+  2. **K6's re-proof** (at `f0ea2c051`, now `068cab410`; `k6-f0ea2c051/`): K6 alone on the red's sources, "Tests  1
+     failed | 14 skipped (15)", its first line "AssertionError: the crew is kept: expected undefined to be defined"
+     (:232:49); then spark-crews, "Tests  15 passed (15)".
+  3. **The green** (at `1f301352f`, now `12f6757fb`; `sp1e2-1f301352f/`): the 7 files, "Tests  135 passed (135)"; the
+     prefix's rows, 9 files, "285 passed | 2 skipped (287)"; the full fieldd suite, "Test Files  236 passed | 4
+     skipped (240)" and "Tests  3073 passed | 14 skipped (3087)", 0 failed; fieldd typecheck 0. field-native was
+     built from the tree (29,511,408 bytes).
+  4. **The pre-mint** (at `f615fb30a` on `b4512ca40`; `sp1e2pm-f615fb30a/`, rc 0 at 06:48:18Z): the lane's 8 fieldd
+     files, "Tests  141 passed (141)"; the full fieldd suite, "Test Files  237 passed | 4 skipped (241)" and "Tests
+     3108 passed | 14 skipped (3122)", 0 failed; fieldd typecheck 0.
+- **The moves since the pre-mint**, each 5/5 with no conflict, the lane's +/- lines md5
+  `76e55a445e004b48f561cc1db827bafc` at every one (logs in `lanes/co-plan/lanes/co-sp1e2/logs/`):
+  - `f615fb30a` → `15f317c1c`, onto `eb8d90d59` (A3's records; SD-2, L8, S4a and A3 under it), 07:39Z: 6 of the
+    lane's 33 files moved under it, all clean merges; a frozen install under the INSTALL mutex; re-lit, all 0.
+  - `15f317c1c` → `22b2bb2cf`, onto `b8c013220` (S4a's records), 07:42Z: docs only; packages unchanged.
+  - `22b2bb2cf` → `fb906fac4`, onto CP-4a1's T `1a3ca5f24`, 08:01Z, the first by the code-move checks (VF-PM 07:54Z
+    and 07:56Z):
+    - 8 shared files, each named (below); the lock moved, so a frozen install under INSTALL;
+    - the tree and packages equal an in-memory replay's (`f2e24e12c28b`, `a91e59577677`);
+    - (1a) 5/5 patch-ids; (1b) the 8 shared files' +/- lines identical; (1c) 25/25 unshared files byte-identical;
+    - carry-check v3: CARRY HOLDS; re-lit, all 0.
+  - `fb906fac4` → `3ec02afd8`, onto CP-4a1's records `470f16af9`, 08:27Z: docs only; packages unchanged
+    (`a91e59577677`); carry-check v3: CARRY HOLDS.
+  - `3ec02afd8` → `4b2c62e69`, onto L4's records `fe9270152`, 08:49Z, rehearsed first onto L4's tip `1e2023717`:
+    - DESIGN.md shared alone, with no merged region; packages `63d72363d4c1`, the replay's (L4's field-app
+      `os-marks.tsx` moved them);
+    - (1a) 5/5; (1b) DESIGN.md identical; (1c) 32/32; carry-check v3: CARRY HOLDS; re-lit at 08:52Z, all 0.
+  - `4b2c62e69` → `068cab410`, onto LP-6c's records `95812bf26`, 09:03Z, rehearsed first onto `20eef65de`:
+    - 0 shared files, the lock unmoved; the tree `37b96f47f84b` and packages `63d72363d4c1` are the replay's;
+    - (1a) 5/5; (1b) the whole lane identical; (1c) 33/33; carry-check v3: CARRY HOLDS;
+    - re-lit in cp-landing's window (09:03:12Z → 09:04:03Z): fieldd and contracts tsc, biome, the walls, preflight
+      and gen:check under INSTALL, all 0; pairwise exit 0.
+  - Before the pre-mint: `33b71901c` → `6f1972b67`, onto item 172's `caf52425c` (05:03Z), then → `f615fb30a`, onto
+    `b4512ca40` (06:32Z), each 5/5 with the same md5.
+- **Nine shared files, three merged hunk regions**, named as ALLOW hunks are. These are the lane's files that main
+  changed since the pre-mint (`b4512ca40..95812bf26`; `bin/shared-hunks.py` at T, a hunk "merged" within 3 lines of
+  the other side's). The lines are changed lines at T.
+  1. `packages/contracts/test/fixtures.test.ts`, the tail of `SCHEMA_BY_PREFIX`, one merged region. In order: this
+     lane's `compose-sparks-crews` (:930–933), IOS-8f's `user-me`, SD-2's `app-preferences`, CP-4a1's eleven
+     (:938–948).
+  2. `docs/agent-plane/api.html`, two merged regions:
+     - (a) this lane's crews door row (:2035–2043) closes the compose door table, and CP-4a1's `cat-flows` section
+       (:2048–2138) follows;
+     - (b) this lane's `agent_spawn` and `agents_list` notes (:2286–2287), then `agent_stop`, then CP-4a1's
+       `flow_run` row (:2294–2297).
+  3. Separate, every hunk more than 3 lines from the other side's: DESIGN.md (L4's and CP-4a1's; the nearest pair 13
+     lines apart, §9 :6135 and :6148), architecture.html, contracts' `compose.ts`, `methods.ts`, `registries.ts` and
+     `registry.test.ts`, and fieldd's `daemon.ts` (CP-5a's spark-claim lines and SD-2's preferences message, apart
+     from the lane's eight hunks).
+- **The census**: this slice adds no built output (6 fixtures, `crews.ts` inside fieldd's one bundle `dist/bin.cjs`,
+  and 2 tests), so "no drift" was expected; run 146's census assert says it (below).
+- **Run 146** (`068cab410`, tree `37b96f47f84b`, the landing mint; the mini; `lanes/ts6/logs/mini/run146/`):
+  - Before it (`run146-next.out`, from `20eef65d`): "HEAD 068cab41 (1219 on e23fa8a1); tree 37b96f47"; "the locks stand:
+    no re-install"; "field-native 29511408 bytes"; "preflight exit 0 · 1 WARN/FAIL lines", R23's `acp` candidate as on
+    main.
+  - The verdict (`run146.out`): "verify exit 0 09:17:00Z"; "test target:  NX   Successfully ran target test for 29
+    projects"; "cargo test results: ok 34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+  - Counted in `verify.clean.log`: vitest 12,771 passed / 0 failed / 20 skipped over 914 files, +34 tests and +2 files
+    against run 145 (`20eef65de`), all this slice's:
+    - fieldd "Tests  3149 passed | 14 skipped (3163)" (+22): `spark-crews.test.ts` (15 tests) and
+      `spark-crews-door.test.ts` (3 tests) new; tool-plane-talk, needs-queue, agent-field and agent-remote-cut +1
+      each;
+    - contracts "Tests  1619 passed (1619)" (+12): `compose.test.ts` 45 (+6) and `fixtures.test.ts` 615 (+6, the six
+      new fixtures parsed);
+    - node 447/0; cargo 545/0 over its 34 results.
+  - Its lines: "Checked 3238 files in 1615ms. No fixes applied."; "R29:   0  [enforce] packages/fieldd/src/tool-plane
+    imports no @vibefield/puppeteer-* and no @vibefield/rosetta-*…". gen:check is the chain's last stage.
+  - **The census** (LP-6c's gate): "census assert — against apps/desktop/packaging/package-manifest.json", "no
+    drift", "census assert OK — no §7.3 violation".
+  - **The two witnesses**, that the bundled fieldd still starts: "✓ test/pair-log-root.test.ts (1 test) 1484ms" and
+    "✓ test/agent-shim-role.test.ts (10 tests) 3379ms".
+  - Step 2: none. No install and no stage pass were owed: no manifest, lock or Rust moved.
+- **Landed:** The fixer's ff `95812bf26` → `068cab410` at 2026-11-05T09:20:03Z
+
+**What is real, what is stubbed.**
+- Real:
+  - DESIGN.md's crew card and its lines; the contracts above; the seam pages.
+  - fieldd: one crew per stretch of the spark's own run's work, closed at that run's first idle with no talk call in
+    flight, or at its end. A held spawn keeps its crew, and Allow one more joins it, even after a restart.
+  - The crew is kept in item 159's record. A member is kept with its first-named model and effort; it gets its end
+    time and fieldd's name for its run when it ends; it is kept from its board row when its start was missed; and it
+    is followed with `continues` when it is resumed in a new run. Once the re-attach settles, a member whose run did
+    not come back is Ended.
+  - `originOf` carries `crew`. `compose.sparks.crews.subscribe` serves a spark's crews whole, with `waiting`, to the
+    person's windows and devices; the phone goes through its home.
+- Not here:
+  - the card itself (field-app's `crewCardOf`, `CrewCardView` and the catalog plate), SP-1e2's renderer half;
+  - the act line's `crew?` on TH-1's transcript (SPE-Q39 (a));
+  - Stop all and Pause all (SP-1e4).
+
+**Found.**
+1. **An unreadable kept record read as absent and was written over** (the lane's note (1)). Item 172's green closed
+   it. The crews catch every throw its guard raises (`fieldd.crews.keep_failed`, `fieldd.crews.reconcile_failed`),
+   and the door's frame lets the refusal through, so a subscribe answers UNAVAILABLE {compose, records-unreadable},
+   never "no crews".
+2. **A directory at kept.json** throws at the update. The crews log it, and the card's live members are found by
+   their board rows (`origin.crew`). Every crews call site holds a contract-parsed SparkId.
+3. **K6 was red by chai's null-target message** ("Target cannot be null or undefined."): the assertion class, but not
+   the wrong value. On VF-PM's ruling, one test-only commit (`068cab410`) asserts the kept crew first, and the mini
+   re-proved it (Validation 2).
+4. **Residuals, as the tests pin them:** a fieldd restart mid-turn splits that turn's crew in two (C4); a member
+   resumed after a restart joins as a new member; a member whose run ends while fieldd re-attaches is Ended at the
+   settle with no name; a crew past 64 members keeps its first 64 and logs `fieldd.crews.full`.
+5. **A plain mock never runs the re-attach**, so a booted test that needs the settle passes the floor's lifecycle
+   snapshot (item 158's NO_TERMINALS). The red was amended so before any bundle.
+6. **`agents_list` carries a spark's origin whole** (`rooms/compose/verbs.ts:162`), so the crew reaches it with no
+   change (compose-verbs pins it), and so does any passthrough key. It is named for the compose room's owner.
+7. **The moves' tooling**, found on this lane:
+   - `git patch-id --stable` hashes context lines, so (1a) is a STOP only for a commit that touches no shared file
+     (cp-landing 07:57Z);
+   - `carry-check.sh` compared names in two collations and called a CARRY STOP falsely; v3 sets `LC_ALL=C` (VF-PM's
+     standing rule, 08:08Z);
+   - `pnpm exec` set off an implicit install outside the INSTALL mutex (04:59Z; the tools run from `node_modules/.bin`
+     since 05:07Z).
+8. **Departures from step0-sp1e2.md**, each accepted at its commit:
+   - the crew card is a top-level §8 entry; X2-crews' door over the plan's §4.3;
+   - the act line's `crew?` is left for TH-1's transcript;
+   - two additions the plan did not list, `SPARK_CREW_MEMBERS_MAX` and the frame's `waiting`; the name `sparkRun`;
+   - a spawn's crew reaches it as `{id, sparkRun}`, so Allow one more after a restart makes the crew in the spark run
+     that asked.
+
+**Owed.**
+- SP-1e2's renderer half: the card (`crewCardOf`, `CrewCardView`, the catalog plate), off TH's tip.
+- After TH-1 lands: the act line's `crew?` (SPE-Q39 (a)), and commit 1's DESIGN.md edits on A2's text (the crew in
+  TH-1's flow rows, its "still come with SP-1e" sentence, GV-D4's "a crew row in Chat").
+- SP-1e4: Stop all and Pause all (SPE-Q8 (a), SPE-Q26). SP-1e3, the watch card, stays HELD.
+- The plan's other records (cp-landing 09:21Z), at the renderer half's: SPE-Q37 (a)'s Sparks marks row in
+  DECISIONS (the marks are the card's); desk-gates row 23's cell (11m's crew step) and architecture.html's Built cell
+  (SP-1e2's SHAs), each incomplete at T, not false.
