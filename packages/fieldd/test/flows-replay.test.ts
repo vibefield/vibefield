@@ -235,12 +235,13 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
     expect(heard).not.toContain(key);
     // no 64-hex string at all (a MAC, a key, a call's replay key): the host is handed values, never the journal
     expect(heard).not.toMatch(/[0-9a-f]{64}/);
-    // and the journal holds the call and its answer, MAC'd
+    // and the journal holds the call, its answer and the stand-in's log line (the host's own `log`), each MAC'd
     const kept = records.readRun(run);
     expect(kept.kind === "kept" ? kept.lines.map((line) => line.kind) : kept.kind).toEqual([
       "head",
       "call",
       "answer",
+      "log",
     ]);
   });
 });

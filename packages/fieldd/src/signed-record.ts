@@ -274,6 +274,13 @@ export class RecordSigner {
     }
   }
 
+  /** CP-4a2a — a file's text, read as `read` reads a record's (tried READ_TRIES times; a file open to other users, a
+   * folder at the path, nothing there and a disk that did not answer each said so), for a store whose file is not one
+   * signed body: a run's journal, each of its lines MAC'd (flows/journal.ts). */
+  readText(path: string): string | Exclude<SignedRead, { readonly body: Record<string, unknown> }> {
+    return this.#text(path);
+  }
+
   /** The file's text, tried READ_TRIES times while the disk does not answer; or why there is none to read. */
   #text(path: string): string | Exclude<SignedRead, { readonly body: Record<string, unknown> }> {
     let code = "unknown";

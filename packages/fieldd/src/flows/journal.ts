@@ -1,4 +1,9 @@
-import type { FlowJournalHead, FlowJournalKnownLine, FlowRunId } from "@vibefield/contracts";
+import {
+  type FlowJournalHead,
+  type FlowJournalKnownLine,
+  type FlowRunId,
+  flowJournalLineOf,
+} from "@vibefield/contracts";
 import type { SetAsideWhy } from "../signed-record";
 
 // CP-4a2a (CP4-S15, CP-D9; 4A2-Q10 (a), ruled by VF-PM 2026-11-05 08:51Z) — a run's journal, its lines: one JSONL file
@@ -8,7 +13,11 @@ import type { SetAsideWhy } from "../signed-record";
 // breaks the chain and its run is set aside as lost. This file is the lines' rule and imports no fs: the store reads
 // and writes the file.
 //
-// SKELETON (the red, commit 8): nothing verifies.
+// A journal's text reads line by line, in item 172's order: a line that does not parse is `unreadable`, one with no
+// `mac` `unsigned`, one whose MAC does not verify against the line before it, or whose seq is not its place, or that
+// names another run, `forged`. The head is the file's first line; a head a newer VibeField wrote (its MAC verified,
+// its format above this build's) is kept for it. A verified line of a kind this build never heard of is passed over,
+// never served, and the chain goes on through it (the tolerant reader).
 
 /** The journals' folder in the flows store, and a journal's file suffix. */
 export const RUNS_DIR = "runs";
@@ -72,20 +81,59 @@ export type JournalVerdict =
 
 /** What a line's MAC is over. */
 export function journalMacInput(
-  _run: FlowRunId,
-  _prev: string,
-  _line: Record<string, unknown>,
+  run: FlowRunId,
+  prev: string,
+  line: Record<string, unknown>,
 ): unknown {
-  return {};
+  const { mac: _mac, ...unsigned } = line;
+  return { run, prev, line: unsigned };
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Read a journal's text. `verifies` is the store's signer's check. A last piece with no newline after it is a line the
  * disk never finished (a crash mid-write): not a line, never served, and no proof of anything. */
 export function readJournal(
-  _text: string,
-  _run: FlowRunId,
-  _verifies: (unsigned: unknown, mac: string) => boolean,
-  _ownFormat: number,
+  text: string,
+  run: FlowRunId,
+  verifies: (unsigned: unknown, mac: string) => boolean,
+  ownFormat: number,
 ): JournalVerdict {
-  return { kind: "lost", why: "unreadable", line: 0 };
+  const pieces = text.split("\n");
+  pieces.pop();
+  if (pieces.length === 0) return { kind: "lost", why: "unreadable", line: 1 };
+  const lines: FlowJournalKnownLine[] = [];
+  let head: FlowJournalHead | undefined;
+  let prev = "";
+  for (const [index, piece] of pieces.entries()) {
+    const place = index + 1;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(piece);
+    } catch {
+      return { kind: "lost", why: "unreadable", line: place };
+    }
+    if (!isRecord(parsed)) return { kind: "lost", why: "unreadable", line: place };
+    const mac = parsed["mac"];
+    if (typeof mac !== "string") return { kind: "lost", why: "unsigned", line: place };
+    if (!verifies(journalMacInput(run, prev, parsed), mac))
+      return { kind: "lost", why: "forged", line: place };
+    if (parsed["seq"] !== place) return { kind: "lost", why: "forged", line: place };
+    if (place === 1) {
+      const format = parsed["format"];
+      if (typeof format === "number" && Number.isInteger(format) && format > ownFormat)
+        return { kind: "newer", format };
+    }
+    prev = mac;
+    const known = flowJournalLineOf(parsed);
+    if (place === 1) {
+      if (known?.kind !== "head" || known.run !== run)
+        return { kind: "lost", why: "forged", line: place };
+      head = known;
+    } else if (known?.kind === "head") return { kind: "lost", why: "forged", line: place };
+    if (known !== undefined) lines.push(known);
+  }
+  if (head === undefined) return { kind: "lost", why: "unreadable", line: 1 };
+  return { kind: "kept", head, lines, tail: { seq: pieces.length, mac: prev } };
 }

@@ -126,9 +126,9 @@ function flowsHostEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return path === undefined ? {} : { PATH: path };
 }
 
-/** An answer as the pipe may carry it: whole up to FLOW_LIMITS.RESULT_MAX_BYTES; past it, text cut to fit and
- * anything else refused. */
-function boundedAnswer(answer: FlowHostAnswer): FlowHostAnswer {
+/** An answer as the pipe may carry it, and as a run's journal keeps it (replay.ts): whole up to
+ * FLOW_LIMITS.RESULT_MAX_BYTES; past it, text cut to fit (`cut`) and anything else refused. */
+export function boundedAnswer(answer: FlowHostAnswer): FlowHostAnswer & { readonly cut?: true } {
   const max = FLOW_LIMITS.RESULT_MAX_BYTES;
   if (!answer.ok) return { ok: false, refused: cutText(answer.refused, FLOW_LOG_MAX) };
   if (flowAnswerBytes(answer.value) <= max) return answer;
@@ -144,7 +144,7 @@ function boundedAnswer(answer: FlowHostAnswer): FlowHostAnswer {
   }
   // never half a surrogate pair
   if (/[\uD800-\uDBFF]$/.test(text)) text = text.slice(0, -1);
-  return { ok: true, value: text };
+  return { ok: true, value: text, cut: true };
 }
 
 const cutText = (text: string, max: number): string =>
