@@ -21739,6 +21739,11 @@ untouched. The PR is his to close after this landing.
     and Grok declare `'helper'` and ACP `'external'`, so their hatch is refused as `spark-door-identity-unsupported`
     (read in the pinned packages, 2026-10-31). Claude Code's and Codex's native delivery has its own isolated proof
     upstream (PU-F); fieldd's witness uses a scripted provider.
+  > *Corrected 2026-11-05 (CP-5a's records; ER-C31): only Codex was refused as `spark-door-identity-unsupported`. Grok
+  > and ACP declare neither `allowTools` nor `instructions` (read at the pin, puppeteer 0.3.3), and the gate read the
+  > briefing's fields before its process (`packages/fieldd/src/agent-briefing.ts:111-122` at `c4b8a6868`), so they
+  > were refused as `spark-briefing-unsupported`. Since CP-5a every row that does not claim `spark` (Codex, Grok, ACP)
+  > is refused `spark-not-offered` before its facts are read (LANDED "CP-5a").*
   - A plain run gets nothing until MT-0.
   - A typed launch that puppeteer adopts in a managed pane holds no door until petition PU-J.
 
@@ -33067,3 +33072,228 @@ C12 is that line, at the end of the "Wire truth" bullet, and its commit body quo
   release that does not change the floor's code keeps the person's sessions.
 - The witness on two signed nightlies with an unchanged field-native: `touched` names no field-native, and a live
   terminal survives the apply (the mini; W11's PTY clause).
+
+## CP-5a — the spark claim: the catalog says which agents VibeField lets be a spark, fieldd's hatch reads that claim first, and the New spark sheet lists by it (track CO) (2026-11-05; `70e8647af` → `fc70097e3`, 6 commits on main `e5f385d65`, lane `co/cp5a` in `/Volumes/SamsungRed/lanes/co-cp5a/vibe-field`, the mini's mint M140 = T `fc70097e3` (tree `4a4a9b4cf6de`), stacked, landed by fast-forward, run 140)
+
+**What it rests on.**
+- The CO round: James's page `Druyc3Ua6BWycRe1SzzeCz`, 68 of 68 picked (read 2026-11-04 23:14Z). CP5-Q1 (b), Q2 (d),
+  Q3 (a) and Q4 (a) are at the section's leans (23:11Z). CP5-Q9 (a), VF-PM's, is at its lean in the register.
+- The plan of record, `lanes/co-plan/plans/step0-cp5.md`: RULED 23:16Z, with every §12 question at its lean (VF-PM
+  23:22Z). CP-5a is its first part: one mint, no pin. It builds:
+  - **CP5-Q1 (b)**: the sheet lists the agents the catalog lets be a spark first, then the installed ones it does not
+    let yet, disabled. An agent not installed is not listed.
+  - **CP5-Q9 (a)**: a catalog claim decides which agents may be sparks, held to the pin. It is read with §12 Q9: a
+    `deprecated` row keeps its claim, so its sparks still wake. VF-PM accepted that reading on 2026-11-05 at 03:02Z
+    (Found 1).
+  - **§12 Q2**: DESIGN.md's turn early, for the sheet's subsection only, and the same early turn in `api.html`
+    `#cat-agent` and in `architecture.html`'s catalog paragraph.
+  - **§12 Q6**: a plain run's door reads no claim (MT-D9).
+  - **§12 Q10**: the sheet's named fallback for a daemon older than the claim.
+  - **§12 Q17**: Claude Code's claim cites one hand run, owed (below).
+- It stands on:
+  - AC: the catalog and its readers, wall R23, AC-D3's statuses, AC-D5 ("a claim ≤ the pins") and AC-D6 (a live
+    witness);
+  - CP-1d: the briefing at every birth and its gate;
+  - SP-1c: the New spark sheet;
+  - MT-0: a plain run's own briefing.
+
+**What** (28 files, +814 −172 against main `e5f385d65`): DESIGN.md, three agent-plane docs, five in contracts and the
+kit's five fixture mirrors, three fieldd sources and five fieldd tests, five in field-app, and R23's script.
+- **DESIGN.md first** (`70e8647af`). §8's New spark sheet:
+  - The menu lists the agents the catalog lets be a spark first, then those installed here that it does not let yet,
+    disabled, with why ("can't take VibeField's tools yet").
+  - An agent not installed here is not listed.
+  - Both kinds are read from `agent.providers[]`: the rows' `offers.spark` and `available`.
+  - A dated `*Amended 2026-11-04*` note keeps the old sentence (ER-C42).
+- **The seam pages** (`1c91ade3b`):
+  - api.html: the `agent.providers` row says `offers.spark`.
+  - architecture.html: the catalog paragraph says what `spark` claims and who reads it.
+  - spark-briefings.md: a new section, "The catalog's spark claim (CP-5a)", and ER-C32's dated correction under
+    "Process identity".
+- **Red** (`cb60d492a`), on a skeleton. Every red is a spark row: R23's self-test 7 of 30; contracts 1; fieldd 5 and
+  1; field-app 3. Typecheck is red in three test files, on the `spark` key only.
+- **Contracts and R23, one commit** (`c7f3f83ce`). It has to be one commit: R23 refuses a projection whose `offers`
+  keys differ from its own list.
+  - `AgentOffers.spark` is on the table and on the wire. Claude Code's row claims it; every other row says `false`.
+  - `AGENT_CAPABILITIES` gains `spark`. The regenerated files are `gen/agent-catalog.json`,
+    `fixtures/agent-catalog.valid.json` and the kit's five mirrors.
+  - `fixtures/agent-providers.valid.json`'s claude row carries `invoke` and `spark`.
+  - R23 holds the claim to the pin's `descriptor.briefing`: all three fields (`mcpServers`, `allowTools`,
+    `instructions`), and `mcpServerProcess: "terminal"`.
+  - A new verdict class, `claim-status`, holds it to the row's status. `supported` may claim it, `deprecated` keeps
+    it, and `preview` and `declined` are red.
+  - The spark `candidate` WARN fires only on a row that may claim it.
+- **fieldd** (`5c0753576`).
+  - The hatch reads `isOffered(id, "spark")` first. A row that does not claim it is refused `spark-not-offered`
+    ("VibeField does not offer this agent as a spark") before any fact is read, so it leaves no folder and no record.
+    The facts refusals follow, as before.
+  - A later birth of a spark already hatched reads `isVisible(id)` and the claim (§12 Q9). `forRun` reads no claim.
+  - `agent.providers` masks `spark` with the same exported predicate, `sparkHatchRefusal`, so a row's `offers.spark`
+    is the hatch's own verdict on this device. There is no second copy of the rule.
+  - `daemon.ts` gains two lines: the catalog reader handed to `AgentBriefings`.
+- **field-app** (`fc70097e3`). `sparkAgentsOf` lists by `offers.spark` (CP5-Q1 (b)).
+  - A row with no `spark` key is read by the briefing it declares, as that daemon's own hatch reads it (§12 Q10).
+  - The catalog's fixture providers carry `offers.spark`, and one fixture provider is not installed.
+
+**Validation.**
+- Red, then green, on f599761bc (`lanes/co-plan/lanes/co-cp5a/logs/`):
+  - At `c7f3f83ce` (measured as `521e99001`):
+    - R23's self-test passes 30/30.
+    - R23 `--enforce` on the real pins passes over 10 rows with 1 WARN (acp's spawn candidate, as on main), and its
+      facts table shows `spark` for claude alone.
+    - **`pnpm preflight` OK (2 warnings)**, the lane's own proof.
+    - contracts 1532; ios-fixtures 230.
+  - At `5c0753576` (as `3f6c77b5a`): agent-briefing and compose-sparks 42; agent-runtime's catalog rows 7;
+    agent-session and spark-doors 89 (2 skipped, the REAL_AGENT opt-in).
+  - At `fc70097e3` (as `df246901c`): new-spark and new-spark-sheet 28; field-app 3,937 | 3 skipped.
+- **Eight rebases**, onto 3d96c43d7, 8255a10b3, 9b3164ccf, c4b8a6868, 913838ff5, 9e5b6eec8, ffa578fbd and `e5f385d65`,
+  each 6/6 with no conflict and no hand-resolve.
+  - The lane's +/- lines are byte-identical at every re-cut since 9b3164ccf, `e5f385d65`'s included (md5 of the diff
+    bodies).
+  - At 9b3164ccf, five files had changed on both sides: DESIGN.md, api.html, architecture.html, fieldd `daemon.ts` and
+    `agent-gateway.test.ts`.
+- **The light lines on `10585b358`** (on 9b3164ccf; this Mac, nice 19, no cargo build), every row exit 0:
+  - walls; preflight; typecheck of 3 projects, no cache; biome (17 files); gen:check; ios-fixtures 249 / 86;
+    diff --check;
+  - contracts 1,543 and field-app 3,938 | 3 skipped, through the vitest slot;
+  - sound's 3 DESIGN.md readers, 96 passed; pairwise clean.
+- **fieldd on the mini at `10585b358`** (a9, 04:03:14Z → 04:07:16Z). It is superseded as the fieldd proof by run
+  140's own full suite, because `packages/` moved with main:
+  - `agent-gateway.test.ts`, the named row (shared with L2's `45c3680a3`): 95 passed.
+  - The lane's six fieldd files: 270 passed | 2 skipped.
+  - The full suite: 234 files | 4 skipped; 3,059 passed | 14 skipped; 0 failed.
+  - typecheck 0.
+  - field-native was built from the tree in 7.93 s, the crate alone.
+- **Run 130's T** (`bc7151694`, on `c4b8a6868`):
+  - Its tree, `81ce72891e41`, equals a9's `merge-tree(c4b8a6868, 10585b358)`.
+  - `git diff 10585b358 T` is main's three records docs. `packages`, `apps`, `scripts`, `plugins`, `DESIGN.md` and the
+    root locks and manifests are identical by hash, so fieldd's proof carries by tree.
+  - preflight 0, diff --check 0, pairwise exit 0. Pin-class is empty, there is no Rust in the lane's diff, and no
+    ALLOW.
+- **Run 130** (`bc7151694`, tree `81ce72891e41`, stacked; GO 04:13Z):
+  - `pnpm verify` exited 0 at 04:19:23Z.
+  - vitest 12,420 passed / 0 failed / 21 skipped over 889 files; node 365/0; cargo 545/0; iOS fixtures 249 and pins
+    86.
+  - +12 tests over run 129, all this slice's: agent-briefing +6, agent-catalog +2, new-spark +2, agent-runtime +1,
+    compose-sparks +1.
+  - electron-shell's 12 DESIGN.md readers: 241 passed.
+  - packaged-typed-agent.test.ts is 3 SKIPPED: it needs the packaged app (desk-gates row 34).
+- **The re-cuts after run 130**, each by `recut.sh` (the rebase, the kit assert, an install only if the lock moved,
+  the re-light, pairwise, the bundles):
+  - onto 913838ff5 (`8c512e689`, 05:52Z) and onto 9e5b6eec8, SD-2 (`1dfb88567`, 06:49Z), each with the full
+    re-light;
+  - onto ffa578fbd, docs only (`a10492150`, 06:57Z): the tree the kit re-ran on;
+  - onto `e5f385d65`, L8 and its records (07:07:30Z → 07:08:25Z, exit 0; no install, neither lock moved). Every re-light
+    row exited 0: preflight, walls, biome (24 files), tsc of contracts, field-app and fieldd, gen:check under the
+    INSTALL mutex, ios-fixtures, diff --check, pairwise.
+  - T = `fc70097e3` on `e5f385d65` (tree `4a4a9b4cf6de`), 6/6 with no conflict.
+  - The lane's kit diff over main is exactly the five `agent-catalog.valid.json` copies, and VibeFieldKit is
+    `7320f52ba430` at `fc70097e3`. PG-9 moved FieldLink inside VibeFieldKit, so the kit run at `bc7151694` (VibeFieldKit
+    `b6f37d8e653f`) is SPENT: a kit witness carries only while VibeFieldKit's tree is unchanged (VF-PM 06:39Z).
+  - `packages/` differs by main's code, so run 140's own full fieldd suite is the fieldd proof.
+- **Run 140** (`fc70097e3`, tree `4a4a9b4cf6de`, stacked, the landing mint; the mini, `ts6/logs/mini/run140/`):
+  - `pnpm verify` exited 0 at 07:16:56Z.
+  - vitest 12,653 passed / 0 failed / 20 skipped over 907 files; node 445/0; cargo 545/0; biome 3,194 files;
+    gen:check 0; R23 green; iOS fixtures 251 and pins 86.
+  - +12 tests over run 139, all this slice's: agent-briefing +6, agent-catalog +2, new-spark +2, agent-runtime +1,
+    compose-sparks +1.
+  - Its full fieldd suite, the fieldd proof: 235 files | 4 skipped; 3,098 passed | 14 skipped; 0 failed.
+  - field-app 294 files, 3,965 passed; contracts 1,571; electron-shell 2,647 | 2 skipped.
+  - packaged-typed-agent.test.ts is 3 SKIPPED: it needs the packaged app.
+- **The kit, the land gate**, re-run at `a10492150` after PG-9 moved FieldLink; it carries by hash to `fc70097e3`
+  (VibeFieldKit `7320f52ba430` at both; VF-PM 06:39Z). GREEN: a9, 07:04Z, on the mini; logs
+  `ts6/logs/mini/co-cp5a-a3/kit-a10492150/tree-8cd6414d5ae1-final/`.
+  - kit-build exited 0 in 65 s (`** TEST BUILD SUCCEEDED **`, 0 errors).
+  - kit-test exited 0 in 31 s (`** TEST EXECUTE SUCCEEDED **`): 4 runs, 52 tests, 0 red, 0 issues, 0 crashes.
+  - All 9 of the brief's suites passed, FieldLinkCatalogTests among them (0.481 s), and with them the row
+    `theGoldenCatalogReadsInItsDisplayOrder()`.
+  - The simulator, `1F155533-579F-408B-9B90-FC4AD8B318B0`, was shut down at 07:03:22Z.
+  - The first kit run, at `bc7151694`, was green: a9 05:45Z, 4 runs, 52 tests, 0 red, all 9 suites, iPhone 17
+    `1F155533` shut down 05:43:22Z. It was spent when VibeFieldKit's tree moved.
+- **Landed:** main fast-forwarded `e5f385d65` → `fc70097e3` on VF-PM's GO (tree `4a4a9b4cf6de`), 28 files +814 −172.
+  - The fixer's ff `e5f385d65` → `fc70097e3` at 2026-11-05T07:20:12Z (its stamp, relayed by cp-landing 07:21Z).
+
+**What is real, what is stubbed.**
+- Real:
+  - the claim on the table and the wire;
+  - R23's hold of the claim to the pin and to the row's status;
+  - the hatch's gate, on desktop and phone (IOS-12a's forwarded hatch is the same SparkService call);
+  - every later spark birth;
+  - `agent.providers`' verdict;
+  - the sheet.
+- Owed, not stubbed:
+  - the claim's live witness (below);
+  - the Studio plate ("Agent menu", `pnpm dev:design`), not yet looked at by eye.
+- Out:
+  - CP-5b, the door names a helper;
+  - CP-5c, the EL8 and Codex's claim;
+  - CP-5d, Grok, re-planned at PU-O's probes.
+
+**Found.**
+1. **A `deprecated` row KEEPS `spark`** (`scripts/check-agent-catalog.mjs`, `CLAIM_STATUSES`). ACCEPTED by VF-PM on
+   2026-11-05 at 03:02Z by the clock (its label 03:04Z), as CP5-Q9 read with §12 Q9.
+   - The plan's line (`step0-cp5.md:383`, dated E6 under it) said "a FAIL when a non-`supported` row claims it". Read
+     literally, a deprecated agent's row would have to drop the claim, and every spark of that agent could no longer
+     wake.
+   - The rule built is "claimed on `supported`, kept by `deprecated`": a hatch reads `isOffered`, and a wake reads
+     `isVisible` and the claim. `preview` and `declined` claims are red.
+2. **A new R23 verdict class, `claim-status`.** The plan named none. It is a table fact, judged with or without the
+   pins, and the self-test's rotten catalog provokes it.
+3. **Claude Code's `decision` names its witness as OWED, undated.** The claude row in `agent-catalog.ts` reads "spark
+   claimed 2026-11-04 (CP-5a), its hand witness owed".
+   - §12 Q17's lean asked for a dated hand run. VF-PM ruled it owed, not a gate (01:22Z; again at 04:32Z).
+   - Dating it is a contracts commit (gen:schema and the five kit mirrors), not a docs edit.
+4. `fixtures/agent-providers.valid.json`'s claude row gained `invoke: true` beside `spark: true`, because fieldd sends
+   both. The plan said "one row gains spark".
+5. **`sparkHatchRefusal(catalog, provider, () => facts)` takes a reader**, so no fact is read before the claim, and
+   fieldd's tests count the reads. `AgentBriefings` gets its own
+   `createAgentCatalogReaders(config.agentCatalog ?? AGENT_CATALOG)`, the daemon's pattern, because `agents.catalog`
+   is declared after it.
+6. **The fieldd test seam's `SCRIPTED_ROW` claims `spark` on a `preview` row** (`agent-catalog-fixture.ts`). R23 never
+   reads that test table, and its comment says so.
+7. **agent-gateway.test.ts is shared with L2** (`45c3680a3`, AR-7j).
+   - This lane's edit there is one line: `spark: false` in the test's whole `offers`.
+   - The text merged clean. The combination was re-proved by name on the mini at `10585b358` (95 passed) and carries
+     to T by tree.
+8. **"Row 34" was never this slice's.** L2 landed desk-gates row 34 as `agents:package`.
+   - The plan's "row 34, a spark by hand" is a PROPOSED hand row (`step0-cp5.md:525`, `:540`, `:630`, `:652`, `:682`,
+     `:689`, dated E7 at `:532`).
+   - It takes the number free on main when its line lands.
+9. **The base moved Rust under the lane.** A1 changed `packages/field-native/src/registries.rs` (item 159's LAYOUT
+   rows) between 8255a10b3 and 9b3164ccf. The lane's own Rust diff stayed empty, and fieldd's proof built field-native
+   from the tree.
+10. **The re-cut's `pnpm install --frozen-lockfile` ran without the INSTALL mutex** (03:53:41Z), against the wave rules
+    (`plans/wave-b-builder-rules.md`). It was a 333 ms "Already up to date". Accepted by cp-landing at 04:02Z as named.
+11. **On this Mac, a fieldd suite builds field-native whenever field-native's inputs changed**
+    (`fieldd/test/global-setup.ts`).
+    - The lane's suite-slot runs at 02:04Z and 02:14Z compiled outside the HOLD.
+    - The rebased run was stopped at 02:56Z on the rule, and every fieldd row after that went to the mini.
+    - The packet's Found 10 said "always compiles"; its dated correction (E9) carries cp-landing's 04:02Z premise: G12
+      measured repeats as no-ops.
+12. **Messages missed while polling.** cp-landing's 02:03Z–02:58Z messages reached the lane at about 03:00Z.
+    - A `hold.sh acquire` queued at 02:21Z never took the HOLD, and cp-landing ended it.
+    - No xcodebuild ran on this Mac.
+
+**Owed.**
+- **The claim's live witness: the proposed hand row, owed to James's hand** (VF-PM 2026-11-05 01:22Z: owed, not a
+  gate).
+  - Its steps on Claude Code: hatch a spark; it reads Ready; the audit's `tools.agents_list` line names its run; Stop
+    ends it.
+  - Its desk-gates number is READ here, not reserved: the table ends at 34 (L2's `agents:package`), so 35 is free on
+    main today. The number is taken when CP-5c's line lands (§12 Q15).
+  - When the hand run is made, the claude row's `decision` is dated in a contracts commit.
+  - The thread drawn from the app-data transcript cannot be witnessed before TH-1 lands. CP5-Q9's restated clause binds
+    every claim made after it.
+- The Studio plate, by eye.
+- The phone's New spark sheet (IOS-12, PC-D8 A) reads `offers.spark`, never the briefing facts (inferred
+  coordination).
+- ER-B12…B15, at VF-PM's next draft slot.
+- **Not closed by this entry.** LANDED's four "not yet" lines stand:
+  - CP-1d `:21738`, with its refusal reason corrected at its source (ER-C31, dated under it);
+  - MT-0 `:22107`;
+  - CP-2 `:22544`;
+  - SP-1c `:23455`.
+
+  These are this commit's lines, read after E1's insert.
+
+  Claude is still the only spark. CP-5c's and CP-5d's entries close these lines by name.

@@ -502,7 +502,8 @@ phone"; DECISIONS PC
   02:11:50Z), LANDED 10-31 (`ef5fb6161`, the mini's run 25; LANDED "CP-1d").
   - puppeteer 0.3.2's per-run `mcpServers`, `allowTools` and `instructions` carry the `vibefield` server and the
     spark's brief at hatch, at both resumes and at a pending run's replacement, so a spark's own session holds the door.
-  - Claude only, until CP-5: in 0.3.2 only the Claude adapter declares a terminal MCP process.
+  - Claude only, until CP-5c: at puppeteer 0.3.3, as at 0.3.2, only the Claude adapter declares a terminal MCP
+    process. Since CP-5a the catalog's `spark` claim is read first, and Claude Code's row alone makes it.
 - **MT-0, the tool plane's first slice**: LANDED 10-31 (`b3a0cc95a`, the mini's run 29; LANDED "MT-0").
   - `contracts/src/tools.ts` is the one catalog, with audience and scope columns, and `fieldd/src/tool-plane/` serves
     each caller its rows: a spark every served row, a plain run History and the projects list, by its own briefing.
@@ -568,17 +569,32 @@ phone"; DECISIONS PC
     needs.subscribe) and field-app's needs board.
   - For James's eye (draft words; not a hold): a dropped answer's "Vela's session ended before it took this", and
     CO-1b's names ("Claude Code in vibe-field"; "…: it ended"; "work is not one of Vela's Agent Profiles").
+- **CP-5a, the spark claim**: LANDED 11-05 (`fc70097e3`, the mini's mint M140, run 140, stacked; LANDED "CP-5a"), on
+  the CO round's CP5-Q1 (b) and CP5-Q9 (a) and the step-0 plan (`step0-cp5.md`, RULED 23:16Z; §12 at its leans, 23:22Z).
+  - The catalog's `offers.spark` says which agents VibeField lets be a spark. Claude Code's row alone claims it.
+  - R23 holds the claim to the pin's briefing (all three fields, a terminal MCP process) and to the row's status: it is
+    claimed on `supported`, and a `deprecated` row keeps it, so its sparks still wake.
+  - fieldd's hatch reads the claim before the facts (`spark-not-offered`), and `agent.providers` sends it as the
+    hatch's verdict.
+  - The New spark sheet lists the agents that can be sparks first, then the installed ones that cannot yet, disabled.
+  - Owed:
+    - the claim's live witness, the proposed hand row, owed to James's hand (its desk-gates number is taken when CP-5c's
+      line lands);
+    - the Studio plate, by eye;
+    - the phone's New spark sheet reading `offers.spark` (IOS-12).
+  - For James's eye (draft words; not a hold): the sheet's two kinds, and fieldd's new refusal "VibeField does not
+    offer this agent as a spark".
 - Next, in order (the CO waves matrix, `lanes/co-plan/plans/co-waves-matrix.md`):
   - **TH-1 and TH-2**, one mint (lane `co/th`): the spark's thread as its transcript, Send through
     `compose.sparks.say`, Jump to, Wake, Pause. Its first half (DESIGN.md, contracts, the renderer) is building in
     its lane; its fieldd half (the recorder, the store in 159's folder) follows this stack on the compose block's chain.
-  - **CP-5a**, the spark claim (lane `co/cp5a`): Claude Code's catalog row offers `spark`. James's hand witness is owed
-    before its records.
   - **SP-1e2 → SP-1e4** (SP-1e: CH-D2's live cards in Chat's thread): crews, the kept record's `crews` section, and
     their card's acts; its prefix (DESIGN.md + contracts, lane `co/sp1e2`) building since 03:38Z.
   - **CP-4a1** (lane `co/cp4a1`, building since 03:38Z): the library, approvals and static read, no daemon wiring;
     **CP-4a2** (host, journal, runs) after TH lands; then the desk applier.
-  - **CP-5b…5d**, which is MT-7: Codex and Grok, once their MCP processes can be named.
+  - **CP-5b…5d**, which is MT-7: Codex and Grok, once their MCP processes can be named; Grok also once it takes a
+    spark's brief and allowance (PU-O). Only CP-5c's Codex claim commit waits for step 7's profile card (CP5-Q2 (d),
+    §12 Q11).
 
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
@@ -1114,7 +1130,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — the sound identity | ACTIVE since 11-05 (SD-D1…D22 ruled at the leans); SD-1 landed 11-05 (DESIGN.md §14 and `@vibefield/sound`, M126 `1ebe7b461`, run 126); SD-2 landed 11-05 (the desktop hears it, M138 `9e5b6eec8`, run 138) | DESIGN.md §14; `draft/sound/design-sound.md` | SD-3, away |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100) and items 158 and 159 with CO-1b (`9b3164ccf`, mint M129) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | TH-1/TH-2 · CP-5a · SP-1e2/1e4 · CP-4 · CP-5b…d |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129) and CP-5a (`fc70097e3`, mint M140) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | TH-1/TH-2 · SP-1e2/1e4 · CP-4 · CP-5b…d |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
