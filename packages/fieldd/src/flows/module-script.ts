@@ -68,11 +68,22 @@ export interface Edit {
   readonly text: string;
 }
 
-/** `text` with `edits` applied in one pass, in the text's order, the result built once (N4). */
+/** Two of the rewrite's edits cover the same text: a bug in the rewrite, never in the flow. */
+export class EditsOverlap extends Error {
+  override readonly name = "EditsOverlap";
+}
+
+/** `text` with `edits` applied in one pass, in the text's order, the result built once (N4). Edits may touch, and a
+ * zero-width edit may stand where another starts; one that starts before the last one ended throws `EditsOverlap`,
+ * since applying it would duplicate or drop text without a word (bth-1345Z, L3). */
 export function applyEdits(text: string, edits: readonly Edit[]): string {
   const parts: string[] = [];
   let at = 0;
   for (const edit of [...edits].sort((a, b) => a.start - b.start || a.end - b.end)) {
+    if (edit.start < at)
+      throw new EditsOverlap(
+        `two of the rewrite's edits overlap: one starts at ${edit.start}, inside one that ends at ${at}`,
+      );
     parts.push(text.slice(at, edit.start), edit.text);
     at = edit.end;
   }
@@ -319,8 +330,15 @@ export function flowScriptOf(bytes: Uint8Array): FlowScript {
   }
 
   // one pass, in the text's order (no two edits overlap: a token or comment inside an export's span is skipped), the
-  // script built once
-  const body = applyEdits(text, edits);
+  // script built once; were two ever to overlap, the flow is refused in those words, never handed on as another script
+  let body: string;
+  try {
+    body = applyEdits(text, edits);
+  } catch (error) {
+    if (error instanceof EditsOverlap)
+      return refused(`fieldd could not rewrite it: ${error.message}`);
+    throw error;
+  }
   // the opening stays on the module's first line, so every line keeps its number
   return { kind: "script", script: `(async () => {${body}\nreturn ${defaultName};\n})()` };
 }
