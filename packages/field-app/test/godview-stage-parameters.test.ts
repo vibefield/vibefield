@@ -32,10 +32,11 @@ import {
 } from "@vibefield/puppeteer-views";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type MonitorTuning,
   monitorTuningSections,
+  storedStageParameters,
   useMonitorTuning,
 } from "../src/godview/monitor/monitor-tuning";
 import { STAGE_PARAMETER_GROUPS } from "../src/godview/monitor/stage-parameters";
@@ -215,6 +216,60 @@ describe("a view's tunables are stored per view and per revision (AR-5)", () => 
     localStorage.setItem(VIEW_KEY, "a-view-that-was-removed");
     const tuning = await mountTuning();
     expect(tuning().view.id).toBe(DEFAULT_MONITOR_VIEW_ID);
+  });
+});
+
+describe("a production build draws every tunable at its default (LP-6, HK Q3)", () => {
+  it("never reads what an earlier build's System control saved, never writes it back, and still remembers the chosen view", async () => {
+    // System control, the only control that sets or resets these, is the
+    // surface lab and development's alone. A value saved by a build that still
+    // shipped it must not stay on screen with nothing in the app to undo it.
+    const view = monitorViewFor(DEFAULT_MONITOR_VIEW_ID);
+    const control = view.parameterGroups[0]?.controls[0];
+    expect(control, "the default view declares no controls").toBeDefined();
+    const step = control?.step as number;
+    const fallback = control?.defaultValue as number;
+    const tuned = fallback + step <= (control?.max as number) ? fallback + step : fallback - step;
+    const viewKey = `${PARAMETERS_PREFIX}:${view.id}${view.parametersRevision ? `:${view.parametersRevision}` : ""}`;
+    const savedView = JSON.stringify({ [control?.key as string]: tuned });
+    const savedStage = JSON.stringify({ scanlineDensity: 4 });
+    localStorage.setItem(viewKey, savedView);
+    localStorage.setItem(STAGE_STORAGE_KEY, savedStage);
+    localStorage.setItem(VIEW_KEY, view.id);
+
+    // vitest reads `import.meta.env` at run time; `vite build` folds the same
+    // literal to false, so this is the production renderer's branch
+    vi.stubEnv("DEV", false);
+    try {
+      const tuning = await mountTuning();
+      expect(tuning().view.id).toBe(view.id);
+      expect(tuning().parameters).toEqual(monitorParameterDefaults(view.parameterGroups));
+      expect(tuning().stageParameters).toEqual(monitorParameterDefaults(STAGE_PARAMETER_GROUPS));
+      // Settings → Terminal's miniature draws what Godview draws
+      expect(storedStageParameters()).toEqual(monitorParameterDefaults(STAGE_PARAMETER_GROUPS));
+      // nothing is written back: what the lab saved stays as it was
+      expect(localStorage.getItem(viewKey)).toBe(savedView);
+      expect(localStorage.getItem(STAGE_STORAGE_KEY)).toBe(savedStage);
+
+      // the view CHOICE is no tunable (the monitor's head switches it): it persists
+      const other = MONITOR_VIEWS.find((entry) => entry.id !== view.id);
+      expect(other, "the registry holds one view").toBeDefined();
+      await act(async () => tuning().selectView(other?.id as string));
+      expect(tuning().view.id).toBe(other?.id);
+      expect(localStorage.getItem(VIEW_KEY)).toBe(other?.id);
+      expect(tuning().parameters).toEqual(monitorParameterDefaults(other?.parameterGroups ?? []));
+      expect(Object.keys(storedParameterKeys())).toEqual([viewKey]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("a development build still reads the lab's values back (the case every row above runs under)", async () => {
+    expect(import.meta.env.DEV).toBe(true);
+    localStorage.setItem(STAGE_STORAGE_KEY, JSON.stringify({ scanlineDensity: 4 }));
+    expect(storedStageParameters()["scanlineDensity"]).toBe(4);
+    const tuning = await mountTuning();
+    expect(tuning().stageParameters["scanlineDensity"]).toBe(4);
   });
 });
 

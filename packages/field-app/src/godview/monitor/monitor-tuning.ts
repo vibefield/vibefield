@@ -24,7 +24,9 @@ import { STAGE_PARAMETER_GROUPS } from "./stage-parameters";
 // life outside a session (its own comment says so). These are a view's own
 // tunables: a swarm radius James settles on should survive a close, and with the
 // stage unmounting on every one of them, memory-only would mean re-tuning from
-// defaults every single open.
+// defaults every single open. *(Since LP-6, 2026-11-05: in development builds,
+// where System control tunes them; a production build draws the defaults —
+// `loadTunables`.)*
 
 const VIEW_STORAGE_KEY = "vf-godview-monitor-view-v1";
 const STAGE_STORAGE_KEY = "vf-godview-monitor-stage-v1";
@@ -46,11 +48,29 @@ function storedViewId(): string {
   }
 }
 
+/** A bag of tunables as this build draws it. The only control that sets or
+ * resets them is System control, the surface lab, which is development's alone
+ * (LP-6, HK Q3: James 2026-10-28 "B"). So a production build draws every view
+ * and the stage at their defaults, and never reads what an earlier build's
+ * panel saved: a value the shipped app offers no control to change or reset
+ * never reaches its picture. Storage is left as it was. The view CHOICE is not
+ * a tunable (the monitor's own head switches it) and persists in every build.
+ * The literal `import.meta.env.DEV` is what `vite build` folds. */
+function loadTunables(
+  storageKey: string,
+  groups: readonly MonitorParameterGroup[],
+): MonitorParameters {
+  return import.meta.env.DEV
+    ? loadMonitorParameters(storageKey, groups)
+    : monitorParameterDefaults(groups);
+}
+
 /** The stage's saved tunables, read once — for a surface that draws Godview
  * without being it (Settings → Terminal's miniature, GT-7): it shows the CRT
- * lines and vignette the user actually tuned, and never writes them. */
+ * lines and vignette the user actually tuned, and never writes them (in a
+ * production build, the defaults Godview itself draws: `loadTunables`). */
 export function storedStageParameters(): MonitorParameters {
-  return loadMonitorParameters(STAGE_STORAGE_KEY, STAGE_PARAMETER_GROUPS);
+  return loadTunables(STAGE_STORAGE_KEY, STAGE_PARAMETER_GROUPS);
 }
 
 export interface MonitorTuning {
@@ -68,10 +88,10 @@ export function useMonitorTuning(): MonitorTuning {
   const [viewId, setViewId] = useState(storedViewId);
   const view = monitorViewFor(viewId);
   const [parametersByView, setParametersByView] = useState<Record<string, MonitorParameters>>(
-    () => ({ [view.id]: loadMonitorParameters(viewParametersKey(view), view.parameterGroups) }),
+    () => ({ [view.id]: loadTunables(viewParametersKey(view), view.parameterGroups) }),
   );
   const [stageParameters, setStageParameters] = useState<MonitorParameters>(() =>
-    loadMonitorParameters(STAGE_STORAGE_KEY, STAGE_PARAMETER_GROUPS),
+    loadTunables(STAGE_STORAGE_KEY, STAGE_PARAMETER_GROUPS),
   );
 
   // Seeded on boot and on every switch, so the fallback is a guard rather than a
@@ -90,10 +110,14 @@ export function useMonitorTuning(): MonitorTuning {
     }
   }, [viewId]);
 
+  // A production build writes no tunable back either (`loadTunables`): the
+  // defaults it draws are not a tune, and what the lab saved stays the lab's.
   useEffect(() => {
-    saveMonitorParameters(viewParametersKey(view), parameters);
+    if (import.meta.env.DEV) saveMonitorParameters(viewParametersKey(view), parameters);
   }, [parameters, view]);
-  useEffect(() => saveMonitorParameters(STAGE_STORAGE_KEY, stageParameters), [stageParameters]);
+  useEffect(() => {
+    if (import.meta.env.DEV) saveMonitorParameters(STAGE_STORAGE_KEY, stageParameters);
+  }, [stageParameters]);
 
   const selectView = useCallback((nextViewId: string): void => {
     const next = monitorViewFor(nextViewId);
@@ -102,7 +126,7 @@ export function useMonitorTuning(): MonitorTuning {
         ? current
         : {
             ...current,
-            [next.id]: loadMonitorParameters(viewParametersKey(next), next.parameterGroups),
+            [next.id]: loadTunables(viewParametersKey(next), next.parameterGroups),
           },
     );
     setViewId(next.id);
