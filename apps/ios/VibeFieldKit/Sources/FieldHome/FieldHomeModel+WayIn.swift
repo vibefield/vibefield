@@ -1,4 +1,5 @@
 import FieldLock
+import FieldSettings
 import Foundation
 
 // WI-1/WI-2 (DESIGN.md §9 "The way in", §8 "The phone's way in") — what the way in draws for each of its
@@ -66,6 +67,9 @@ extension FieldHomeModel {
       case computerWaiting
       /// Tailscale's mark beside its line, on the glass (its media kit keeps it off the field).
       case tailscale(String)
+      /// IOS-13a — the welcome's foot: the privacy policy and support, links to Safari from the site's one pair, the
+      /// glass's last line (§8 "The phone's way in", amended 2026-11-05). Links, never claims (item 160).
+      case legal([SettingsModel.AboutLink])
     }
 
     var steps: Steps?
@@ -150,6 +154,7 @@ extension FieldHomeModel {
           .primary(words.continueWithTailscale, .continueWithTailscale),
           .secondary(words.scanTheCode, .scanCode, glyph: "qrcode.viewfinder"),
           .link(words.seeHowItWorks, .seeHowItWorks),
+          .legal(SettingsModel.aboutLinks),
         ])
 
     case .page(.fromCode(let desktop, let login)):

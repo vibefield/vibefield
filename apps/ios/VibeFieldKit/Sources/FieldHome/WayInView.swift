@@ -252,6 +252,19 @@ struct WayInView: View {
         .foregroundStyle(ChromePalette.inkSecondary)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
+    case .legal(let links):
+      // IOS-13a — 12, the tertiary ink, two links to Safari with a dot between (§8, amended 2026-11-05)
+      HStack(spacing: 6) {
+        ForEach(Array(links.enumerated()), id: \.element.id) { index, link in
+          if index > 0 {
+            Text("·").accessibilityHidden(true)
+          }
+          Link(link.title, destination: link.url)
+        }
+      }
+      .font(ChromeType.sans(12))
+      .foregroundStyle(ChromePalette.inkTertiary)
+      .tint(ChromePalette.inkTertiary)
     case .thisPhone(let machine):
       thisPhone(machine)
     case .computerWaiting:
