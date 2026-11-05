@@ -5476,10 +5476,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **The bar, with three tabs** (PC-D1 A): **Field** · **History** · **Chat** in the same capsule. The row stays 62
     tall, 21 from the sides and the foot (IOS-9e). The capsule stays 188 wide: 8 inset and three tabs of 57⅓. The pill
     is the tab plus 8, the overhang today's 94 has on 86: 65⅓ × 54. The glyphs: Field's asset at 26, History's symbol
-    at 22, and Chat's §13 message cut as `tab-chat`, as the Mac's cell wears it. The labels are 10 semibold; "History",
-    37 wide, sits under the tab's 57. The badge (PC-D5 A) is §2.5's orange with the count of sparks that need you, 20;
-    with none, a cyan dot of 10 while a thread is unread. In a thread the bar steps aside and the composer takes its
-    place, as Messages does, and back brings it back (380ms).
+    at 22, and Chat's §13 message cut as `tab-chat`, as the Mac's cell wears it, at 22, History's size (VF-PM
+    2026-11-05, at IOS-12b; the design page drew the two non-Field glyphs at 23). The labels are 10 semibold;
+    "History", 37 wide, sits under the tab's 57. The badge (PC-D5 A) is §2.5's orange with the count of sparks that
+    need you, 20; with none, a cyan dot of 10 while a thread is unread. One need is one count: Field's badge counts
+    only your own agents (a run with no spark, and not started by one), and a spark's need, or its agents' asks, is
+    counted once, on Chat. In a thread the bar steps aside and the composer takes its place, as Messages does, and
+    back brings it back (380ms).
   - **A spark's row** (CH-D1, newest activity first): 76 tall, 16 from the sides, its separator from the words' edge.
     Its face is 48, framed, live while it works (§2.10). The name is 17 semibold and the time 15 tertiary, by the
     Mac's rule (now, 9:41 AM, a weekday, a date). Its status's word is 15 tertiary, and in the attention ink for
