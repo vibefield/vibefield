@@ -28,6 +28,12 @@ export const FILES_HOST_ROLE_ARG = "--vibefield-role=files-host";
 /** The files worker's bundle, beside fieldd's. */
 export const FILES_HOST_BUNDLE = "files-host.cjs";
 
+/** The argument that makes the executable the transcript worker (TH-1, TH0-Q5 (b)): mille-free, it serves a spark's
+ * transcript to a window on its own loopback socket. */
+export const TRANSCRIPT_HOST_ROLE_ARG = "--vibefield-role=transcript-host";
+/** The transcript worker's bundle, beside fieldd's. */
+export const TRANSCRIPT_HOST_BUNDLE = "transcript-host.cjs";
+
 /** The argument that makes the executable an agent's launcher runtime (AR-7j):
  * the program every launcher in a packaged build execs on the shim. */
 export const AGENT_SHIM_ROLE_ARG = "--vibefield-role=agent-shim";
@@ -64,7 +70,7 @@ export function unknownRoleLine(name: string | undefined): string {
   return `VibeField: ${agent} was not started: it was set up by another version of VibeField. Open VibeField, then try again.`;
 }
 
-export type FielddRole = "files-host" | "agent-shim";
+export type FielddRole = "files-host" | "transcript-host" | "agent-shim";
 
 /** The role the process's FIRST argument names; `"unknown"` when that argument
  * asks for a role (`ROLE_ARG_PREFIX`) this build does not have; none otherwise

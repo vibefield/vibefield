@@ -99,6 +99,8 @@ export const workspacePaths = Object.freeze({
   // FS-1a (L1) — the files worker's bundle and mille's native engine, beside
   // the daemon's bundle (fieldd resolves both against its own directory)
   filesHostOutput: join(repoRoot, "packages", "fieldd", "dist", "files-host.cjs"),
+  // TH-1 (TH0-Q5 (b)) — the transcript worker's bundle, beside the daemon's (mille-free: no engine beside it)
+  transcriptHostOutput: join(repoRoot, "packages", "fieldd", "dist", "transcript-host.cjs"),
   milleNativeOutput: join(
     repoRoot,
     "packages",

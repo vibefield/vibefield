@@ -381,6 +381,8 @@ import {
 } from "./tool-plane/spark-doors";
 import { SparkKeptStore } from "./tool-plane/spark-kept";
 import { SparkService, SparkStore } from "./tool-plane/sparks";
+import { type TranscriptHostLaunch, transcriptHostLaunchSpec } from "./transcripts/launch";
+import { TranscriptHostSupervisor, type TranscriptHostTimings } from "./transcripts/supervisor";
 import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
@@ -631,6 +633,13 @@ export interface FielddConfig {
    * that keeps the system's folders from being places (a test's temporary
    * folder on macOS lives under `/private`, which is never exported). */
   filesHostTimings?: Partial<FilesHostTimings>;
+  /** TH-1 (TH0-Q5 (b)) — the transcript worker (transcripts/supervisor.ts): always on, started with this daemon and
+   * stopped with it, by the files worker's rule. Absent = resolved from this process: `transcript-host.cjs` beside
+   * fieldd's bundle, or the packaged executable's `transcript-host` role; a source run reads `unconfigured`,
+   * honestly. `false` = OFF, a test-only knob that no environment variable reaches. A launch = a test's own worker. */
+  transcriptHost?: false | TranscriptHostLaunch;
+  /** TH-1 test seam: the transcript worker's supervision timings. */
+  transcriptHostTimings?: Partial<TranscriptHostTimings>;
   workspace?: {
     browse?: () => BrowseFacts;
     rootsPollMs?: number;
@@ -789,6 +798,8 @@ export interface FielddDaemon {
   /** FS-1a — the files service: the roots registry, the worker's supervisor
    * and the doors (tests kill the worker and watch its generation move). */
   workspace: WorkspaceService;
+  /** TH-1 — the transcript worker's supervisor (tests wait for it, kill it and watch its generation move). */
+  transcripts: { supervisor: TranscriptHostSupervisor };
   stop(): Promise<void>;
   /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
    * (its own graceful shutdown: stop() then exit). The `system.shutdown`
@@ -1168,6 +1179,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     sparkTranscripts,
     logger.child({ component: "compose.transcripts" }),
   );
+  // TH-1 (TH0-Q5 (b)) — the worker that serves a window the spark's transcript on a loopback socket of its own (EL2),
+  // mille-free, its key handed on its pipe; it starts once boot has committed and stops with the daemon, as the files
+  // worker does. Each line written nudges it by ids; the door mints its tickets
+  const transcriptHost = new TranscriptHostSupervisor({
+    launch: transcriptHostLaunchSpec(
+      config.transcriptHost,
+      typeof __dirname === "string" ? __dirname : undefined,
+    ),
+    dir: join(config.dataDir, ...LAYOUT.SPARK_FILES_DIR),
+    key: () => sparkTranscripts.secret(),
+    allowedOrigins: config.allowedOrigins ?? [],
+    ...(config.transcriptHostTimings !== undefined
+      ? { timings: config.transcriptHostTimings }
+      : {}),
+    logger: logger.child({ component: "transcript_host" }),
+  });
   const briefings: AgentBriefings = new AgentBriefings({
     spark: (id) => sparkStore.get(id),
     // CP-5a — the spark claim is the catalog's, read before the facts (the hatch and every spark birth)
@@ -8006,6 +8033,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       agentGateway: gateway,
       terminals,
       workspace,
+      transcripts: { supervisor: transcriptHost },
       stop,
       onShutdownRequest(callback) {
         shutdownRequested = callback;

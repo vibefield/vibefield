@@ -37,6 +37,7 @@ async function fixture(t) {
     fielddWasm: join(source, "loro.wasm"),
     agentShimOutput: join(source, "agent-shim.cjs"),
     filesHostOutput: join(source, "files-host.cjs"),
+    transcriptHostOutput: join(source, "transcript-host.cjs"),
     milleNativeOutput: join(source, "mille.test-triple.node"),
     nativeOutput: join(source, "field-native"),
     cellOutput: join(source, "field-terminal-host"),
@@ -52,6 +53,7 @@ async function fixture(t) {
     writeFile(paths.fielddWasm, "wasm-one"),
     writeFile(paths.agentShimOutput, "shim-one"),
     writeFile(paths.filesHostOutput, "files-host-one"),
+    writeFile(paths.transcriptHostOutput, "transcript-host-one"),
     writeFile(paths.milleNativeOutput, "mille-one"),
     writeFile(paths.nativeOutput, "native-one"),
     writeFile(paths.cellOutput, "cell-one"),
@@ -107,13 +109,18 @@ test("publishes one immutable, executable runtime generation", async (t) => {
     await readFile(join(runtime.root, "fieldd", "mille.test-triple.node"), "utf8"),
     "mille-one",
   );
+  // TH-1 — and the transcript worker
+  assert.equal(
+    await readFile(join(runtime.root, "fieldd", "transcript-host.cjs"), "utf8"),
+    "transcript-host-one",
+  );
   assert.equal(await readFile(runtime.nativeOutput, "utf8"), "native-one");
 
   await writeFile(paths.mainOutput, "main-two");
   assert.equal(await readFile(join(runtime.appRoot, "main", "index.cjs"), "utf8"), "main-one");
 });
 
-test("hands the daemon fieldd's six files, the agent shim and the files worker beside bin.cjs", async (t) => {
+test("hands the daemon fieldd's seven files, the agent shim, the files worker and the transcript worker beside bin.cjs", async (t) => {
   // The gateway looks for `agent-shim.cjs` beside the daemon's own bundle and
   // offers no launcher without it (AR-7b), so a shim left in dist/ reaches no
   // one: the daemon runs from this directory.
@@ -132,6 +139,7 @@ test("hands the daemon fieldd's six files, the agent shim and the files worker b
     "loro_wasm_bg.wasm",
     "mille.test-triple.node",
     "service-harness.mjs",
+    "transcript-host.cjs",
   ]);
 });
 

@@ -77,6 +77,7 @@ test("a rebuilt shim moves the daemon identity, so the pair restarts as for bin.
     fielddWasm: join(root, "loro_wasm_bg.wasm"),
     agentShimOutput: join(root, "agent-shim.cjs"),
     filesHostOutput: join(root, "files-host.cjs"),
+    transcriptHostOutput: join(root, "transcript-host.cjs"),
     milleNativeOutput: join(root, "mille.test-triple.node"),
     nativeOutput: join(root, "field-native"),
     cellOutput: join(root, "field-terminal-host"),
@@ -202,6 +203,7 @@ test("a rebuilt files worker moves the daemon identity, never the shell's", asyn
     fielddWasm: join(root, "loro_wasm_bg.wasm"),
     agentShimOutput: join(root, "agent-shim.cjs"),
     filesHostOutput: join(root, "files-host.cjs"),
+    transcriptHostOutput: join(root, "transcript-host.cjs"),
     milleNativeOutput: join(root, "mille.test-triple.node"),
     nativeOutput: join(root, "field-native"),
     cellOutput: join(root, "field-terminal-host"),
@@ -217,4 +219,86 @@ test("a rebuilt files worker moves the daemon identity, never the shell's", asyn
   assert.notEqual(await daemonIdentity(), afterWorker);
   for (const file of [paths.filesHostOutput, paths.milleNativeOutput])
     assert.equal(shellPlaneInputs(paths).includes(file), false);
+});
+
+// TH-1 (TH0-Q5 (b)) — the transcript worker's bundle: fieldd's own definition (scripts/transcript-host-build.mjs), as
+// the files worker's is, and mille-free.
+function transcriptHostDefinition(paths = workspacePaths) {
+  const definition = esbuildDefinitions(paths).find(
+    (candidate) => candidate.name === "fieldd-transcript-host",
+  );
+  assert.ok(
+    definition,
+    "no fieldd-transcript-host definition: under pnpm dev fieldd has no transcript worker",
+  );
+  return definition;
+}
+
+test("the runner builds the transcript worker beside the daemon's bundle, with fieldd's own options and no engine", async () => {
+  const definition = transcriptHostDefinition();
+  const options = await definition.options();
+  assert.equal(options.outfile, workspacePaths.transcriptHostOutput);
+  assert.equal(dirname(options.outfile), dirname(workspacePaths.fielddOutput));
+  assert.equal(options.absWorkingDir, FIELDD_ROOT);
+  assert.ok(
+    options.plugins.some((plugin) => plugin.name === "vibefield-transcript-host-no-mille"),
+    "the transcript worker's build lost the plugin that keeps mille out of it",
+  );
+  assert.equal(definition.afterBuild, undefined, "the transcript worker stages no engine");
+});
+
+test("the runner's transcript worker is byte-identical to the one fieldd's own build makes, and carries no mille", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "vf-dev-transcript-host-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const runnerOutput = join(root, "runner", "transcript-host.cjs");
+  const fielddOutput = join(root, "fieldd", "transcript-host.cjs");
+  const runner = await context(
+    await transcriptHostDefinition({
+      ...workspacePaths,
+      transcriptHostOutput: runnerOutput,
+    }).options(),
+  );
+  try {
+    await runner.rebuild();
+  } finally {
+    await runner.dispose();
+  }
+  const own = await import(join(FIELDD_ROOT, "scripts", "transcript-host-build.mjs"));
+  const fieldd = await context(own.transcriptHostBuildOptions({ outfile: fielddOutput }));
+  try {
+    await fieldd.rebuild();
+  } finally {
+    await fieldd.dispose();
+  }
+  const [ours, theirs] = await Promise.all([readFile(runnerOutput), readFile(fielddOutput)]);
+  assert.ok(ours.length > 0, "the runner's build wrote an empty worker");
+  assert.ok(ours.equals(theirs), "the runner's transcript worker differs from fieldd's build");
+  assert.equal(ours.includes("@vibecook/mille"), false, "the transcript worker carries mille");
+});
+
+test("a rebuilt transcript worker moves the daemon identity, never the shell's", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "vf-dev-transcript-host-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const paths = {
+    repoRoot: root,
+    mainOutput: join(root, "main.cjs"),
+    preloadOutput: join(root, "preload.cjs"),
+    studioPreloadOutput: join(root, "studio.cjs"),
+    fielddOutput: join(root, "bin.cjs"),
+    serviceHarnessOutput: join(root, "service-harness.mjs"),
+    fielddWasm: join(root, "loro_wasm_bg.wasm"),
+    agentShimOutput: join(root, "agent-shim.cjs"),
+    filesHostOutput: join(root, "files-host.cjs"),
+    transcriptHostOutput: join(root, "transcript-host.cjs"),
+    milleNativeOutput: join(root, "mille.test-triple.node"),
+    nativeOutput: join(root, "field-native"),
+    cellOutput: join(root, "field-terminal-host"),
+    freewayOutput: join(root, "field-freeway-host"),
+  };
+  const daemonIdentity = () => computeBuildId(root, daemonPlaneInputs(paths, []));
+  await writeFile(paths.transcriptHostOutput, "worker-one");
+  const before = await daemonIdentity();
+  await writeFile(paths.transcriptHostOutput, "worker-two");
+  assert.notEqual(await daemonIdentity(), before);
+  assert.equal(shellPlaneInputs(paths).includes(paths.transcriptHostOutput), false);
 });

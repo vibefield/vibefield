@@ -20,6 +20,7 @@ async function fixture(t) {
     fielddWasm: join(root, "loro_wasm_bg.wasm"),
     agentShimOutput: join(root, "agent-shim.cjs"),
     filesHostOutput: join(root, "files-host.cjs"),
+    transcriptHostOutput: join(root, "transcript-host.cjs"),
     milleNativeOutput: join(root, "mille.test-triple.node"),
     nativeOutput: join(root, "field-native"),
     cellOutput: join(root, "field-terminal-host"),
