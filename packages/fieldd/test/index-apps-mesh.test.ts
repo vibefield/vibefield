@@ -1,6 +1,14 @@
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -30,6 +38,7 @@ import {
 import type { IndexCatalog } from "../src/index-catalog";
 import { IndexMesh, type MeshLink, type MeshRoster } from "../src/index-mesh";
 import { RpcCallError } from "../src/native-link";
+import type { PeerLinkState } from "../src/peer-link";
 
 // MA-3d — the made apps' aggregator (index-apps-mesh.ts) over in-memory owners: each "desktop" holds an `apps`
 // CatalogTable served through the REAL rows pump, its owner's standing (`libraryReady`, `previewsBase`) stamped on
@@ -150,7 +159,10 @@ function owner(device: string, standing?: Standing, epoch = `${device}-boot-1`):
 }
 
 /** The owner's standing moved with no row: every live apps subscription hears it at once, on a frame with no rows
- * (the heartbeat's shape, which a copy applies as a no-op). */
+ * at the revision the reader holds (the heartbeat's shape, which a copy applies as a no-op). That is the frame 3a's
+ * producer sends (index-apps.ts' `pump`, its `tell`: "the table's revision moves only with a row"). A frame whose
+ * revision moved with no row would put the copy past the owner's table, and the table's next real delta
+ * (`since: r, revision: r + 1`) would read as already held and be dropped. */
 function say(desk: Owner, standing: Standing): void {
   desk.standing = standing;
   const revision = desk.apps.revision;
@@ -224,6 +236,8 @@ function link(owners: Map<string, Owner>, behaviour: Map<string, Behaviour>) {
   const refusals: Array<{ device: string; method: string; kind: string }> = [];
   const drops = new Map<string, Set<() => void>>();
   const pumps = new Map<string, Set<{ dispose: () => void }>>();
+  /** the link's own state per device (PeerLink's), absent: unknown */
+  const linkStates = new Map<string, PeerLinkState>();
   const meshLink: MeshLink = {
     async subscribe(device, method, params, onEvent, onDrop, opts) {
       const desk = owners.get(device);
@@ -314,12 +328,13 @@ function link(owners: Map<string, Owner>, behaviour: Map<string, Behaviour>) {
     async request(_device, method) {
       throw new RpcCallError("NOT_FOUND", `no unary door in this fake: ${method}`, false);
     },
-    linkState: () => undefined,
+    linkState: (device) => linkStates.get(device),
   };
   return {
     meshLink,
     asks,
     refusals,
+    linkStates,
     /** the link under a device dies: its pumps stop and every owner hears onDrop once */
     drop(device: string) {
       for (const pump of [...(pumps.get(device) ?? [])]) pump.dispose();
@@ -336,6 +351,8 @@ interface PeerSpec {
   /** the roster's AUTHENTICATED MagicDNS name (absent: no transport binding) */
   dns?: string;
   state?: DeviceState;
+  /** the build its published slice names */
+  bootId?: string;
 }
 
 function roster(self: string, peers: PeerSpec[]) {
@@ -352,6 +369,7 @@ function roster(self: string, peers: PeerSpec[]) {
         lastSeenAt: 1,
         ...(peer.state !== undefined ? { state: peer.state } : {}),
         ...(peer.dns !== undefined ? { tailnetDnsName: peer.dns } : {}),
+        ...(peer.bootId !== undefined ? { bootId: peer.bootId } : {}),
       })),
     ];
     events.emit("changed", list);
@@ -386,6 +404,9 @@ function appsMesh(
     intents?: MadeAppIntentReader;
     joinProject?: (device: string, rootSessionId: string) => AppProjectJoin | undefined;
     exportReady?: (device: string) => boolean;
+    now?: () => number;
+    staleAfterMs?: number;
+    persistIntervalMs?: number;
   } = {},
 ) {
   const dir = opts.dir ?? tmpDir("vf-apps-mesh-");
@@ -402,8 +423,9 @@ function appsMesh(
     },
     ...(opts.intents !== undefined ? { intents: opts.intents } : {}),
     ...(opts.exportReady !== undefined ? { exportReady: opts.exportReady } : {}),
-    staleAfterMs: 5_000,
-    persistIntervalMs: 20,
+    ...(opts.now !== undefined ? { now: opts.now } : {}),
+    staleAfterMs: opts.staleAfterMs ?? 5_000,
+    persistIntervalMs: opts.persistIntervalMs ?? 20,
     retryMinMs: 30,
     retryMaxMs: 120,
     changesMinIntervalMs: 20,
@@ -701,6 +723,196 @@ describe("AppsMesh — the replica (MA-3d)", () => {
     );
     expect(source?.asOf).toMatch(/Z$/);
   });
+
+  it("loading the kept folder: a dead write's .tmp is removed, a kept row carrying a path is never listed yet keeps its key (DS-6b), and a file naming another device is ignored", async () => {
+    const a = owner("dev-a");
+    const b = owner("dev-b");
+    const pathRow = {
+      ...app("dev-b", "b-path", 100),
+      path: "/Users/x/b-path.html",
+    } as unknown as IndexCatalogApp;
+    b.apps.upsert([app("dev-b", "b1", 200), pathRow]);
+    const seeded = b.apps.revision;
+    const dir = tmpDir("vf-apps-kept-");
+    const debris = join(dir, "dev-b.json.4242.tmp");
+    writeFileSync(debris, "{");
+    writeFileSync(
+      join(dir, "dev-b.json"),
+      JSON.stringify({
+        format: 1,
+        device: "dev-b",
+        heardAt: 1_000,
+        epoch: b.apps.epoch,
+        revision: seeded,
+        rows: b.apps.rows(),
+      }),
+      { mode: 0o600 },
+    );
+    writeFileSync(
+      join(dir, "dev-c.json"),
+      JSON.stringify({
+        format: 1,
+        device: "dev-x",
+        heardAt: 1_000,
+        epoch: "dev-c-boot-1",
+        revision: 1,
+        rows: [app("dev-c", "c1", 300)],
+      }),
+    );
+    const w = world("dev-a", [a, b], [{ deviceId: "dev-b", online: false }]);
+    const { mesh } = appsMesh(w, a, { dir });
+
+    expect(existsSync(debris), "a dead write's temporary file is removed at load").toBe(false);
+    expect(
+      titles(mesh.list({ scope: "mesh" }, windowCtx)),
+      "the kept row carrying a path is never listed (EL2)",
+    ).toEqual(["App b1"]);
+    expect(mesh.replica("dev-c"), "a file naming another device is ignored").toBeUndefined();
+
+    // B returns: the copy resumes its kept cursor, and the next write keeps the path row's KEY, never its row
+    w.people.set([{ deviceId: "dev-b", online: true }]);
+    b.apps.upsert([app("dev-b", "b2", 300)]);
+    const file = join(dir, "dev-b.json");
+    const keptTitles = (): string[] => {
+      try {
+        const rows = (JSON.parse(readFileSync(file, "utf8")) as { rows?: unknown }).rows;
+        return Array.isArray(rows)
+          ? rows.map((row) => String((row as { title?: unknown }).title)).sort()
+          : [];
+      } catch {
+        return [];
+      }
+    };
+    // the seeded file holds two raw rows (b1 and the path row): wait for B's new app, then read what was written
+    const rewritten = await settle(() => keptTitles().includes("App b2"));
+    expect(keptTitles(), `rewritten after B's next app (settled: ${rewritten})`).toEqual([
+      "App b1",
+      "App b2",
+    ]);
+    const kept = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    expect(kept["unreadable"], "the path row's key is kept as unreadable").toEqual([pathRow.appId]);
+    expect(
+      w.wire.asks.find((ask) => ask.device === "dev-b" && ask.method === APPS_DOOR)?.params[
+        "since"
+      ],
+      "the attach resumed the kept cursor",
+    ).toEqual({ epoch: b.apps.epoch, revision: seeded });
+  });
+
+  it("a change heard inside the persist window is on disk once the aggregator stops", async () => {
+    const a = owner("dev-a");
+    const b = owner("dev-b");
+    b.apps.upsert([app("dev-b", "b1", 200)]);
+    const w = world("dev-a", [a, b], [{ deviceId: "dev-b", online: true }]);
+    const { mesh, dir } = appsMesh(w, a, { persistIntervalMs: 60_000 });
+    const landed = await settle(() => mesh.replica("dev-b")?.length === 1);
+    const file = join(dir, "dev-b.json");
+    expect(existsSync(file), `not written inside the window (landed: ${landed})`).toBe(false);
+    mesh.dispose();
+    expect(existsSync(file), "written at dispose: what was heard is kept").toBe(true);
+    const kept = JSON.parse(readFileSync(file, "utf8")) as { rows?: unknown[] };
+    expect(kept.rows?.length, "B's app is kept").toBe(1);
+  });
+
+  it("DS-L9: a peer the roster reads incompatible is never asked and reads so; once the roster stops saying it, it is asked; a link that reads incompatible says so", async () => {
+    const a = owner("dev-a");
+    const b = owner("dev-b");
+    const c = owner("dev-c");
+    b.apps.upsert([app("dev-b", "b1", 200)]);
+    c.apps.upsert([app("dev-c", "c1", 300)]);
+    const w = world(
+      "dev-a",
+      [a, b, c],
+      [
+        { deviceId: "dev-b", online: true, state: "incompatible" },
+        { deviceId: "dev-c", online: true },
+      ],
+    );
+    const { mesh } = appsMesh(w, a);
+    const settled = await settle(() => mesh.replica("dev-c")?.length === 1);
+    const askedOf = (device: string) =>
+      w.wire.asks.filter((ask) => ask.device === device && ask.method === APPS_DOOR).length;
+    const stateOf = (device: string) =>
+      mesh.sources("mesh").find((source) => source.device === device)?.state;
+    expect(askedOf("dev-b"), `B is never asked (settled: ${settled})`).toBe(0);
+    expect(stateOf("dev-b"), "B's apps read incompatible").toBe("incompatible");
+
+    // the roster reads B compatible again (B updated) while it stays online: asked, and its apps land
+    w.people.set([
+      { deviceId: "dev-b", online: true },
+      { deviceId: "dev-c", online: true },
+    ]);
+    const landed = await settle(() => mesh.replica("dev-b")?.length === 1);
+    expect(
+      mesh.replica("dev-b")?.map((row) => row.title),
+      `B's apps land once the roster reads it compatible (settled: ${landed})`,
+    ).toEqual(["App b1"]);
+    expect(stateOf("dev-b")).toBe("live");
+
+    // the link under C reads incompatible: its source says so
+    w.wire.linkStates.set("dev-c", "incompatible");
+    expect(stateOf("dev-c"), "C's link reads incompatible").toBe("incompatible");
+  });
+
+  it("a refusal is latched against the build it was asked of: the roster naming the same build again does not ask, a new bootId while the peer stays online does", async () => {
+    const a = owner("dev-a");
+    const b = owner("dev-b");
+    const w = world(
+      "dev-a",
+      [a, b],
+      [{ deviceId: "dev-b", online: true, bootId: "boot-1" }],
+      new Map([["dev-b", { refuseApps: true }]]),
+    );
+    const { mesh } = appsMesh(w, a);
+    const refusedB = () =>
+      w.wire.refusals.filter(
+        (refusal) => refusal.device === "dev-b" && refusal.method === APPS_DOOR,
+      ).length;
+    const stateOf = () => mesh.sources("mesh").find((source) => source.device === "dev-b")?.state;
+    const first = await settle(() => refusedB() === 1 && stateOf() === "incompatible");
+    expect(stateOf(), `B's apps read unsupported (settled: ${first})`).toBe("incompatible");
+
+    // the same build, said again: not asked (the retry floor here is 30 ms)
+    w.people.set([{ deviceId: "dev-b", online: true, bootId: "boot-1" }]);
+    await sleep(200);
+    expect(refusedB(), "the same build is not asked again").toBe(1);
+
+    // B's fieldd updated in place: its tailnet node never went offline, its slice names a new boot, and it has the
+    // door now
+    w.behaviour.set("dev-b", {});
+    b.apps.upsert([app("dev-b", "b1", 200)]);
+    w.people.set([{ deviceId: "dev-b", online: true, bootId: "boot-2" }]);
+    const landed = await settle(() => mesh.replica("dev-b")?.length === 1);
+    expect(
+      mesh.replica("dev-b")?.map((row) => row.title),
+      `the new build is asked and its apps land (settled: ${landed})`,
+    ).toEqual(["App b1"]);
+    expect(stateOf()).toBe("live");
+  });
+
+  it("a peer gone quiet past staleAfterMs reads stale, and the standing's timer tells a mesh page", async () => {
+    const a = owner("dev-a");
+    const b = owner("dev-b");
+    b.apps.upsert([app("dev-b", "b1", 200)]);
+    let clock = Date.now();
+    const w = world("dev-a", [a, b], [{ deviceId: "dev-b", online: true }]);
+    const { mesh } = appsMesh(w, a, { now: () => clock, staleAfterMs: 400 });
+    const stateOf = () => mesh.sources("mesh").find((source) => source.device === "dev-b")?.state;
+    const live = await settle(() => stateOf() === "live");
+    expect(stateOf(), `B is live once its first frame lands (settled: ${live})`).toBe("live");
+    const pings: unknown[] = [];
+    const sub = mesh.changes({ scope: "mesh" }, (payload) => pings.push(payload));
+    sub.start();
+    cleanup.push(() => sub.dispose());
+
+    clock += 1_000; // nothing heard from B for longer than staleAfterMs
+    const told = await settle(() => pings.length > 0);
+    expect(
+      pings.length,
+      `the standing's timer told the mesh page (settled: ${told})`,
+    ).toBeGreaterThan(0);
+    expect(stateOf(), "B reads stale").toBe("stale");
+  });
 });
 
 describe("AppsMesh — the fold (MA-D4)", () => {
@@ -830,6 +1042,10 @@ describe("AppsMesh — the fold (MA-D4)", () => {
     expect(titles(all)).toEqual(["App kept", "App hidden", "App plain", "App missing"]);
     expect(all.rows[1]).toMatchObject({ hidden: true, openable: false });
     expect(titles(mesh.list({ scope: "local", kept: true }, windowCtx))).toEqual(["App kept"]);
+    expect(
+      titles(mesh.list({ scope: "local", kept: false }, windowCtx)),
+      "`kept: false` narrows to the apps not kept (the hidden one still dropped)",
+    ).toEqual(["App plain", "App missing"]);
 
     // the intent moves: the fold follows at once
     intent.set(madeAppFoldKey(hidden), undefined);
@@ -839,6 +1055,32 @@ describe("AppsMesh — the fold (MA-D4)", () => {
       "App plain",
       "App missing",
     ]);
+  });
+
+  it("openable asks the SERVING desktop whether it exports, and no desktop exports by default (rosetta 0.1.3)", async () => {
+    const a = owner("dev-a");
+    const b = owner("dev-b");
+    a.apps.upsert([app("dev-a", "r-a", 100, { nativeId: "review" })]);
+    b.apps.upsert([app("dev-b", "r-b", 200, { nativeId: "review" })]);
+    const w = world("dev-a", [a, b], [{ deviceId: "dev-b", online: true }]);
+    const exporting = appsMesh(w, a, { exportReady: (device) => device === "dev-b" });
+    const settled = await settle(() => exporting.mesh.replica("dev-b")?.length === 1);
+    const served = exporting.mesh.list({ scope: "mesh" }, windowCtx).rows[0];
+    expect(
+      [served?.device, served?.openable],
+      `B serves the fold and exports (settled: ${settled})`,
+    ).toEqual(["dev-b", true]);
+    const narrowed = exporting.mesh.list({ scope: "mesh", devices: ["dev-a"] }, windowCtx).rows[0];
+    expect(
+      [narrowed?.device, narrowed?.openable],
+      "narrowed to A, A serves, and A does not export",
+    ).toEqual(["dev-a", false]);
+
+    const plain = appsMesh(world("dev-a", [a], []), a);
+    expect(
+      plain.mesh.list({ scope: "local" }, windowCtx).rows.map((row) => row.openable),
+      "a captured app with no exporter is not openable",
+    ).toEqual([false]);
   });
 
   it("`q` keeps the apps whose title or file name holds it, case-folded", async () => {
@@ -965,9 +1207,18 @@ describe("AppsMesh — sources, the project join and the doors' callers", () => 
     say(b, { libraryReady: true });
     await settle(() => of("dev-b")?.previewsBase === undefined);
     expect(of("dev-b")?.previewsBase, "the newest frame said no base").toBeUndefined();
-    // a base that is not a root URL in AH's range is no base
-    say(b, { libraryReady: true, previewsBase: `${baseOf("dev-b", 14211)}?v=1` });
-    await sleep(50);
+    // a base that is not a root URL in AH's range is no base: from a bound base, the frame that names one with a
+    // query (and moves libraryReady, so the frame is seen applied) leaves none
+    say(b, { libraryReady: true, previewsBase: baseOf("dev-b", 14211) });
+    const bound = await settle(() => of("dev-b")?.previewsBase === baseOf("dev-b", 14211));
+    expect(of("dev-b")?.previewsBase, `B's base is bound again (settled: ${bound})`).toBe(
+      baseOf("dev-b", 14211),
+    );
+    say(b, { libraryReady: false, previewsBase: `${baseOf("dev-b", 14211)}?v=1` });
+    const applied = await settle(() => of("dev-b")?.libraryReady === false);
+    expect(of("dev-b")?.libraryReady, `the query frame was applied (settled: ${applied})`).toBe(
+      false,
+    );
     expect(of("dev-b")?.previewsBase, "a base with a query is stripped").toBeUndefined();
   });
 
@@ -1010,6 +1261,69 @@ describe("AppsMesh — sources, the project join and the doors' callers", () => 
     ]);
   });
 
+  it("this door's own columns are never taken from a replicated row: a peer's projectKey, place, ink, kept and hidden are read as none, and the join's and the intent's stand", async () => {
+    const a = owner("dev-a");
+    const b = owner("dev-b");
+    const claims = {
+      projectKey: "p9:x",
+      place: { device: "dev-b", placeId: "place-9" },
+      ink: 7,
+      kept: true,
+      hidden: true,
+      openable: true,
+      devices: ["dev-z"],
+    };
+    const lone = {
+      ...app("dev-b", "lone", 200, { sessionId: "ses-lone" }),
+      ...claims,
+    } as unknown as IndexCatalogApp;
+    const joined = {
+      ...app("dev-b", "joined", 100, { sessionId: "ses-joined" }),
+      ...claims,
+    } as unknown as IndexCatalogApp;
+    b.apps.upsert([lone, joined]);
+    const intent = intentsOf([[madeAppFoldKey(joined), { kept: true }]]);
+    const w = world("dev-a", [a, b], [{ deviceId: "dev-b", online: true }]);
+    const { mesh } = appsMesh(w, a, {
+      intents: intent.reader,
+      joinProject: (_device, root) =>
+        root === "ses-joined" ? { projectKey: "p1:alpha", ink: 2 } : undefined,
+    });
+    const settled = await settle(() => mesh.replica("dev-b")?.length === 2);
+
+    const page = mesh.list({ scope: "mesh" }, windowCtx);
+    expect(
+      titles(page),
+      `both listed: the row's own hidden is no intent (settled: ${settled})`,
+    ).toEqual(["App lone", "App joined"]);
+    const [first, second] = page.rows;
+    expect(
+      ["projectKey", "place", "ink", "kept", "hidden"].filter((key) => key in (first ?? {})),
+      "no join and no intent: none of the row's claims reaches the door",
+    ).toEqual([]);
+    expect(first?.devices, "the fold names its holders").toEqual(["dev-b"]);
+    expect(first?.openable, "openable is the door's: no desktop exports here").toBe(false);
+    expect(
+      [
+        second?.projectKey,
+        second?.ink,
+        second?.kept,
+        "place" in (second ?? {}),
+        "hidden" in (second ?? {}),
+      ],
+      "the join's and the intent's values, never the row's",
+    ).toEqual(["p1:alpha", 2, true, false, false]);
+    expect(
+      titles(mesh.list({ scope: "mesh", kept: true }, windowCtx)),
+      "kept narrows by the intent",
+    ).toEqual(["App joined"]);
+    expect(
+      titles(mesh.list({ scope: "mesh", projectKey: "p9:x" }, windowCtx)),
+      "a row's own key never narrows",
+    ).toEqual([]);
+    expect(IndexAppsResult.safeParse(page).success, "the page is the contract's").toBe(true);
+  });
+
   it("DS-L4: a routed call (peer-fieldd) is answered only this desktop's own apps, and never the project column", async () => {
     const a = owner("dev-a");
     const b = owner("dev-b");
@@ -1032,6 +1346,25 @@ describe("AppsMesh — sources, the project join and the doors' callers", () => 
       "a peer daemon never receives the project column",
     ).toBeUndefined();
     expect(routed.sources.map((source) => source.device)).toEqual(["dev-a"]);
+  });
+
+  it("DS-L4: a routed call that names a projectKey is refused with a word, never answered an empty page", async () => {
+    const a = owner("dev-a");
+    a.apps.upsert([app("dev-a", "a1", 100, { sessionId: "ses-root-1" })]);
+    const w = world("dev-a", [a], []);
+    const { mesh, joins } = appsMesh(w, a, {
+      joinProject: () => ({ projectKey: "p1:alpha" }),
+    });
+    const refused = refusalOf(() => mesh.list({ scope: "local", projectKey: "p1:alpha" }, peerCtx));
+    expect(refused?.kind, "a project narrows at the asking desktop's own door").toBe(
+      "PRECONDITION_FAILED",
+    );
+    expect(refused?.message, "it says why").toMatch(/DS-L4/);
+    expect(joins, "nothing was joined for a peer daemon").toEqual([]);
+    expect(
+      titles(mesh.list({ scope: "local", projectKey: "p1:alpha" }, windowCtx)),
+      "the window narrows by it",
+    ).toEqual(["App a1"]);
   });
 
   it("DS-L8: a local page before the first walk is UNAVAILABLE in the apps' words, never an empty shelf", async () => {
@@ -1062,10 +1395,15 @@ describe("AppsMesh — its own pings", () => {
     const intent = intentsOf([]);
     const w = world("dev-a", [a, b], [{ deviceId: "dev-b", online: true, dns: dnsOf("dev-b") }]);
     const { mesh } = appsMesh(w, a, { intents: intent.reader });
-    const attached = await settle(() => mesh.replica("dev-b") !== undefined);
-    expect(mesh.replica("dev-b"), `B's (empty) replica is attached (settled: ${attached})`).toEqual(
-      [],
+    // the open answer landed (a copy alone exists from the roster's first read, before any answer)
+    const attached = await settle(
+      () => mesh.sources("mesh").find((source) => source.device === "dev-b")?.state === "live",
     );
+    expect(
+      mesh.sources("mesh").find((source) => source.device === "dev-b")?.state,
+      `B's (empty) replica is attached and live (settled: ${attached})`,
+    ).toBe("live");
+    expect(mesh.replica("dev-b"), "B holds no app yet").toEqual([]);
     const meshPings: Array<Record<string, unknown>> = [];
     const localPings: Array<Record<string, unknown>> = [];
     const meshSub = mesh.changes({ scope: "mesh" }, (payload) =>
@@ -1079,8 +1417,9 @@ describe("AppsMesh — its own pings", () => {
     cleanup.push(() => meshSub.dispose());
     cleanup.push(() => localSub.dispose());
 
+    expect(meshPings.length, "nothing told before B's app moves").toBe(0);
     b.apps.upsert([app("dev-b", "b1", 100)]);
-    const heard = await settle(() => meshPings.length > 0);
+    const heard = await settle(() => mesh.replica("dev-b")?.length === 1 && meshPings.length > 0);
     expect(meshPings.length, `a mesh page hears B's app (settled: ${heard})`).toBeGreaterThan(0);
     expect(meshPings.at(-1)?.["upserts"], "pings carry no rows").toEqual([]);
     expect(meshPings.at(-1)?.["devices"]).toEqual(["dev-b"]);
@@ -1103,10 +1442,63 @@ describe("AppsMesh — its own pings", () => {
     // this desktop's own app
     const ownBefore = localPings.length;
     a.apps.upsert([app("dev-a", "a1", 100)]);
-    await settle(() => localPings.length > ownBefore);
-    const ping = localPings.at(-1) as { since?: number; revision?: number } | undefined;
-    expect(ping?.revision ?? 0, "a local page hears its own").toBeGreaterThan(ping?.since ?? 0);
+    const own = await settle(() => localPings.length > ownBefore);
+    expect(localPings.length, `a local page hears its own (settled: ${own})`).toBeGreaterThan(
+      ownBefore,
+    );
+    const ping = localPings.at(-1) as
+      | { since?: number; revision?: number; devices?: string[] }
+      | undefined;
+    expect(ping?.revision ?? 0, "its revision moved").toBeGreaterThan(ping?.since ?? 0);
+    expect(ping?.devices, "the ping names this desktop").toEqual(["dev-a"]);
     expect(meshSub.open).toMatchObject({ snapshot: { rows: [] } });
+  });
+
+  it("the pings resume their own chain from a cursor they issued; another scope's cursor, or one ahead, opens a snapshot", async () => {
+    const a = owner("dev-a");
+    const w = world("dev-a", [a], []);
+    const { mesh } = appsMesh(w, a);
+    const first = mesh.changes({ scope: "mesh" }, () => {});
+    const held = (first.open as { snapshot?: RowsCursor }).snapshot;
+    first.dispose();
+    expect(held?.epoch, "the mesh chain's own epoch").toMatch(/^apps-changes-mesh-/);
+
+    // a change while nobody listens
+    a.apps.upsert([app("dev-a", "a1", 100)]);
+    const cursor: RowsCursor = { epoch: held?.epoch ?? "", revision: held?.revision ?? -1 };
+    const pings: Array<Record<string, unknown>> = [];
+    const resumed = mesh.changes({ scope: "mesh", since: cursor }, (payload) =>
+      pings.push(payload as Record<string, unknown>),
+    );
+    cleanup.push(() => resumed.dispose());
+    expect(resumed.open, "its own cursor resumes").toEqual({ resumed: cursor });
+    resumed.start();
+    const caught = await settle(() => pings.length > 0);
+    expect(pings[0], `the missed change is told at once (settled: ${caught})`).toMatchObject({
+      epoch: cursor.epoch,
+      since: cursor.revision,
+      upserts: [],
+    });
+    expect(pings[0]?.["revision"] as number, "past the cursor").toBeGreaterThan(cursor.revision);
+
+    const local = mesh.changes({ scope: "local" }, () => {});
+    const localHeld = (local.open as { snapshot?: RowsCursor }).snapshot;
+    local.dispose();
+    const crossed = mesh.changes(
+      { scope: "mesh", since: { epoch: localHeld?.epoch ?? "", revision: 0 } },
+      () => {},
+    );
+    expect(crossed.open, "a local cursor never resumes the mesh chain").toMatchObject({
+      snapshot: { epoch: cursor.epoch, rows: [] },
+    });
+    const ahead = mesh.changes(
+      { scope: "mesh", since: { epoch: cursor.epoch, revision: 10_000 } },
+      () => {},
+    );
+    expect(
+      "snapshot" in (ahead.open as object),
+      "a cursor ahead of the chain opens a snapshot",
+    ).toBe(true);
   });
 
   it("PIN: the apps replica rides its own door and its own pings — a co-running IndexMesh never asks the apps door, and hears nothing when an app moves", async () => {
