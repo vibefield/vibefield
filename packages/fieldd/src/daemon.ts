@@ -540,6 +540,9 @@ export interface FielddConfig {
    * Setting the search path also isolates the home the inventory searches each
    * provider's install directories under (`agentInstallHome`, puppeteer 0.3.1). */
   agentSearchPath?: string;
+  /** PG-9 S4c — DEBUG: the recorded swarm this desktop's boards play in place of its agents
+   * (`debug/swarm-replay.ts`); bin.ts reads FIELDD_DEBUG_SWARM_CORPUS and refuses it in a package. */
+  debugSwarmCorpus?: string;
   agentFetch?: typeof fetch;
   /** AR-S1c — read the agents' installs in the background once boot has
    * committed (every agent's version command: seconds), so Settings → Agents
