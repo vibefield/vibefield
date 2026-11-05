@@ -139,4 +139,61 @@ private final class Recorded: @unchecked Sendable {
     board.cancel()
     roster.cancel()
   }
+
+  /// PG-9 S4b — a whole-board snapshot mid-stream (the home's PG-1c resync of a phone behind its cap, or an owner's
+  /// reset) is counted as a RESET in its window, beside the frames and the bytes: M2's reading under the link
+  /// conditioner is how many whole boards crossed, not only how many bytes.
+  @Test func aMidStreamSnapshotIsCountedAsAResetInItsWindow() async throws {
+    let clock = ManualProductClock()
+    let recorded = Recorded()
+    let ack = try Fixture.json("hello-ack.valid")
+    let open = try Fixture.json("agent-remote-mesh-open.valid")
+    let door = FakeDoor(clock: clock) { method, id, _ in
+      switch method {
+      case "system.hello": return [Frame.result(id: id, ack)]
+      case "agent.subscribe":
+        return [
+          recorded.sent(
+            Frame.result(id: id, .object(["subId": .string("sub-m"), "snapshot": open])), to: "sub-m")
+        ]
+      default: return []
+      }
+    }
+    let client = FieldProductClient(
+      url: URL(string: "ws://studio.tail1234.ts.net/t/3q2fN8pXvKb0aH5sYw1LrTz9cUeD7RgM")!,
+      transport: door,
+      options: .init(
+        maxBackoff: .milliseconds(1), callTimeout: .seconds(5), clock: clock,
+        trafficLog: { recorded.add($0) }, logLabel: "dev-studio"))
+    defer { client.close() }
+    let board = try await client.subscribe(
+      "agent.subscribe", params: nil, onSnapshot: { _ in }, onDelta: { _ in })
+    let socket = try #require(await door.latest)
+    for second in 1...9 {
+      clock.advance(by: .seconds(1))
+      if second == 3 {
+        // the home's resync: the whole mesh again, as one `.snapshot`
+        await socket.deliver(
+          recorded.sent(
+            Frame.subscriptionEvent(method: "agent.subscribe.snapshot", subId: "sub-m", payload: open), to: "sub-m"))
+      }
+      if second == 5 {
+        let frame = JSONValue.object([
+          "device": .string("dev-01HQ9S7UD1"), "state": .string("live"), "asOf": .string("x"),
+        ])
+        await socket.deliver(
+          recorded.sent(
+            Frame.subscriptionEvent(method: "agent.subscribe.delta", subId: "sub-m", payload: frame), to: "sub-m"))
+      }
+      await settle(clock, parked: 3)
+    }
+    clock.advance(by: .seconds(1))
+    try await waitUntil("the window's line") { recorded.lines.count == 1 }
+    let line = try #require(recorded.lines.first)
+    #expect(line.frames == 3)
+    #expect(line.resets == 1)
+    #expect(line.bytes == recorded.bytes(to: "sub-m"))
+    #expect(line.line.contains("3 frames, 1 reset,"))
+    board.cancel()
+  }
 }

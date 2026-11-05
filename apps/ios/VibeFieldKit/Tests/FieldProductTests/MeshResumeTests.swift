@@ -258,3 +258,19 @@ import Testing
     #expect(after[Remote.loft] != nil)
   }
 }
+
+@Suite struct MeshOpenAnswersTests {
+  /// S4b — an open says how each desktop was answered (the line M1's app switch is read by): by cursor, `resumed` or a
+  /// delta, or whole; a desktop that has not answered carries none.
+  @Test func anOpenSaysHowEachDesktopWasAnswered() throws {
+    let resumeJSON = try Fixture.json("agent-remote-mesh-open.resume")
+    let resume = MeshOpenAnswers(try AgentRemoteMeshOpen(json: resumeJSON))
+    #expect(resume == MeshOpenAnswers(resumed: 1, delta: 1, whole: 1, unanswered: 0))
+    #expect(resume.line == "3 desktops: 1 resumed, 1 delta, 1 whole, 0 unanswered")
+    let witnessJSON = try Fixture.json("agent-remote-mesh-open.witness")
+    let witness = MeshOpenAnswers(try AgentRemoteMeshOpen(json: witnessJSON))
+    #expect(witness == MeshOpenAnswers(resumed: 0, delta: 0, whole: 3, unanswered: 0))
+    let none = MeshOpenAnswers(AgentRemoteMeshOpen(devices: [], unknownFields: []))
+    #expect(none.line == "0 desktops: 0 resumed, 0 delta, 0 whole, 0 unanswered")
+  }
+}

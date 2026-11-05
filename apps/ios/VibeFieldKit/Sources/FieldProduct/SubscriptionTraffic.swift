@@ -19,16 +19,19 @@ public struct SubscriptionTraffic: Sendable, Equatable {
   /// open answer, its deltas, its snapshots.
   public let bytes: Int
   public let frames: Int
+  /// PG-9 S4b — of `frames`, the whole-board snapshots that arrived mid-stream (a home's PG-1c resync, a reset).
+  public let resets: Int
   public let window: Duration
 
   public init(
-    label: String?, method: String, subId: String?, bytes: Int, frames: Int, window: Duration
+    label: String?, method: String, subId: String?, bytes: Int, frames: Int, resets: Int = 0, window: Duration
   ) {
     self.label = label
     self.method = method
     self.subId = subId
     self.bytes = bytes
     self.frames = frames
+    self.resets = 0
     self.window = window
   }
 
