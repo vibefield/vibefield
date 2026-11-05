@@ -11,16 +11,23 @@ import {
   NeedsScript,
   needsKindOf,
 } from "../src/compose";
+import { ErrorData, UnavailableDetails } from "../src/errors";
 import {
+  FLOW_CALL_WHATS,
   FLOW_ENTRY_STATES,
   FLOW_FILE_SUFFIX,
+  FLOW_HOST_ENDINGS,
+  FLOW_JOURNAL_KINDS,
   FLOW_READ_REFUSALS,
   FLOW_RECORD_FORMAT,
   FLOW_RUN_STATES,
   FLOW_STEP_STATES,
   FlowApprovalRecord,
+  FlowCallKey,
   FlowGate,
   FlowHash,
+  FlowJournalHead,
+  FlowJournalLine,
   FlowMeta,
   FlowProposalRecord,
   FlowRead,
@@ -32,13 +39,22 @@ import {
   FlowsScriptParams,
   FlowsScriptResult,
   FlowsStopResult,
+  flowAnswerBytes,
   flowEntryStateOf,
+  flowJournalLineOf,
   flowRefusalOf,
   flowRunStateOf,
   flowStepStateOf,
 } from "../src/flows";
 import { METHODS, reachableFromTailnet } from "../src/methods";
-import { FLOW_LIMITS, LAYOUT, LAYOUT_ROOT_LEVEL, PRODUCT_API_LIMITS } from "../src/registries";
+import {
+  FLOW_HOST,
+  FLOW_LIMITS,
+  LAYOUT,
+  LAYOUT_ROOT_LEVEL,
+  PRODUCT_API_LIMITS,
+  RECORD_STORES,
+} from "../src/registries";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 const fixture = (name: string): unknown =>
@@ -109,6 +125,10 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
       CALLS_MAX: 40,
       CALLS_MORE: 20,
       LIVE_STEPS_MAX: 8,
+      // CP-4a2a (4A2-Q7 (a)): the run's host, provisional likewise
+      HOST_HEAP_MB: 128,
+      HOST_PING_MS: 5_000,
+      HOST_PING_MISSES: 3,
     });
   });
 
@@ -285,5 +305,124 @@ describe("CP-4a1 — a flow's items in the person's one queue (CP-D12)", () => {
     }
     // a step is counted from 1, as a step's session record counts it (origin.call)
     expect(NeedsRun.safeParse({ run: "fr-k3v9q2m7x1", flow: "f", call: 0 }).success).toBe(false);
+  });
+});
+
+describe("CP-4a2a — a run's journal (CP4-S15, CP-D9; the fixtures' MACs are real, under fieldd's fixture key)", () => {
+  const HEX_64 = /^[0-9a-f]{64}$/;
+  const answerFixture = () => fixture("flow-journal-line.answer") as Record<string, unknown>;
+
+  it("F17: the head names the run, its flow, the approved bytes and who started it, as the file's first line", () => {
+    const head = FlowJournalHead.parse(fixture("flow-journal-head.valid"));
+    expect(head).toMatchObject({
+      format: FLOW_RECORD_FORMAT,
+      seq: 1,
+      kind: "head",
+      run: "fr-k3v9q2m7x1",
+      flow: "release-check",
+      name: "Release check",
+      starter: { by: "you" },
+      input: { target: "session-7f3a2c" },
+    });
+    expect(FlowHash.safeParse(head.hash).success).toBe(true);
+    expect((head as { mac?: unknown }).mac).toMatch(HEX_64);
+    expect(flowJournalLineOf(head)?.kind).toBe("head");
+    for (const bad of [
+      { ...head, seq: 2 },
+      { ...head, run: "run-12" },
+      { ...head, flow: "Release check" },
+      { ...head, hash: "abc" },
+      { ...head, n: 0 },
+    ])
+      expect(FlowJournalHead.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+
+  it("F18: a call names its number, what it is, its replay key and its n; its answer names the same call", () => {
+    const call = flowJournalLineOf(fixture("flow-journal-line.call"));
+    expect(call).toMatchObject({
+      kind: "call",
+      seq: 2,
+      call: 1,
+      what: "agent",
+      n: 1,
+      label: "review",
+    });
+    expect(call?.kind === "call" && FlowCallKey.safeParse(call.key).success).toBe(true);
+    const answer = flowJournalLineOf(answerFixture());
+    expect(answer).toMatchObject({ kind: "answer", seq: 3, call: 1, value: { verdict: "clean" } });
+    for (const bad of [
+      { ...answerFixture(), call: 0 },
+      { ...(call as object), key: "abc" },
+    ])
+      expect(flowJournalLineOf(bad), JSON.stringify(bad)).toBeUndefined();
+  });
+
+  it("F19: an answer is a value or a refusal, never both and never neither; `cut` marks a text cut short", () => {
+    const { value: _value, ...bare } = answerFixture();
+    const refused = flowJournalLineOf({ ...bare, refused: "VibeField ended this step." });
+    expect(refused?.kind).toBe("answer");
+    expect(flowJournalLineOf({ ...answerFixture(), refused: "both" })).toBeUndefined();
+    expect(flowJournalLineOf(bare)).toBeUndefined();
+    expect(flowJournalLineOf({ ...bare, value: null })?.kind).toBe("answer");
+    const cutText = flowJournalLineOf({ ...bare, value: "the step's last message", cut: true });
+    expect(cutText?.kind).toBe("answer");
+    expect(flowJournalLineOf({ ...bare, value: { cut: "not text" }, cut: true })).toBeUndefined();
+  });
+
+  it("F20: an answer's value is bounded at RESULT_MAX_BYTES of its JSON's UTF-8 bytes", () => {
+    const { value: _value, ...bare } = answerFixture();
+    const max = FLOW_LIMITS.RESULT_MAX_BYTES;
+    const fits = "x".repeat(max - 2); // the JSON string's two quotes
+    expect(flowAnswerBytes(fits)).toBe(max);
+    expect(flowJournalLineOf({ ...bare, value: fits })?.kind).toBe("answer");
+    expect(flowJournalLineOf({ ...bare, value: `${fits}x` })).toBeUndefined();
+    // bytes, not characters: "é" is two
+    expect(flowAnswerBytes("é")).toBe(4);
+    expect(flowJournalLineOf({ ...bare, value: `${"x".repeat(max - 3)}é` })).toBeUndefined();
+  });
+
+  it("F21: the open head reads a newer format and a kind it never heard of; the known reader takes neither", () => {
+    for (const line of [
+      { ...answerFixture(), format: FLOW_RECORD_FORMAT + 1 },
+      { ...answerFixture(), kind: "checkpoint" },
+    ]) {
+      expect(FlowJournalLine.safeParse(line).success, JSON.stringify(line)).toBe(true);
+      expect(flowJournalLineOf(line), JSON.stringify(line)).toBeUndefined();
+    }
+  });
+
+  it("F22: the forged line has a line's shape and the original's MAC: the contract reads it, fieldd checks", () => {
+    const forged = fixture("flow-journal-line.forged") as Record<string, unknown>;
+    const answer = answerFixture();
+    expect(forged["mac"]).toBe(answer["mac"]);
+    expect(forged["value"]).not.toEqual(answer["value"]);
+    expect(flowJournalLineOf(forged)?.kind).toBe("answer");
+  });
+
+  it("F23: the journal's open words, and an end that names why fieldd ended its host", () => {
+    expect(FLOW_JOURNAL_KINDS).toEqual(["head", "call", "answer", "log", "end"]);
+    expect(FLOW_CALL_WHATS).toEqual(["agent", "ask"]);
+    expect(FLOW_HOST_ENDINGS).toEqual(["unanswered", "memory"]);
+    const end = { format: 1, seq: 4, kind: "end", at: "2026-11-05T11:10:00.000Z", state: "failed" };
+    const ended = flowJournalLineOf({ ...end, host: "unanswered" });
+    expect(ended).toMatchObject({ state: "failed", host: "unanswered" });
+    // OPEN: a newer VibeField's reason and state read, as none this build names
+    expect(flowJournalLineOf({ ...end, state: "paused", host: "tired" })?.kind).toBe("end");
+    expect(flowJournalLineOf({ ...end, threw: "x".repeat(201) })).toBeUndefined();
+    const log = { format: 1, seq: 4, kind: "log", at: end.at, text: "reviewed 3 files" };
+    expect(flowJournalLineOf(log)?.kind).toBe("log");
+    expect(flowJournalLineOf({ ...log, text: "" })).toBeUndefined();
+  });
+
+  it("F24: a host this copy cannot start is UNAVAILABLE flows `unconfigured`, not retryable", () => {
+    expect(FLOW_HOST).toEqual({ SERVICE: "flows", STATE_UNCONFIGURED: "unconfigured" });
+    expect(FLOW_HOST.SERVICE).toBe(RECORD_STORES.SERVICE_FLOWS);
+    const data = ErrorData.parse(fixture("error-data.flows-host-unavailable"));
+    expect(data.kind).toBe("UNAVAILABLE");
+    expect(data.retryable).toBe(false);
+    expect(UnavailableDetails.parse(data.details)).toMatchObject({
+      service: FLOW_HOST.SERVICE,
+      state: FLOW_HOST.STATE_UNCONFIGURED,
+    });
   });
 });

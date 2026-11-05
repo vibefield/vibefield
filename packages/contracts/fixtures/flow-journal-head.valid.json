@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "seq": 1,
+  "kind": "head",
+  "at": "2026-11-05T11:02:00.000Z",
+  "run": "fr-k3v9q2m7x1",
+  "flow": "release-check",
+  "name": "Release check",
+  "n": 3,
+  "hash": "ffe093265fa8ada081e77b87d6311a7a0079580e98c7739307e85d3c6c471870",
+  "starter": {
+    "by": "you"
+  },
+  "input": {
+    "target": "session-7f3a2c"
+  },
+  "mac": "91c6a9938d469fbee2f412020a7ff10464ba333f7de5c14e0225cda32dae29b9"
+}

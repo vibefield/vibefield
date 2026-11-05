@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "seq": 2,
+  "kind": "call",
+  "at": "2026-11-05T11:02:00.140Z",
+  "call": 1,
+  "what": "agent",
+  "key": "e5116226a58490c270317abf5ce4c6226495573d317553303988c657747622a6",
+  "n": 1,
+  "label": "review",
+  "agent": "codex",
+  "phase": "Review",
+  "mac": "039cb7514fad2f7f7a9336d422994073fd02323c99bc1863ff8ce0fdc4dd56a0"
+}

@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "seq": 3,
+  "kind": "answer",
+  "at": "2026-11-05T11:09:41.520Z",
+  "call": 1,
+  "value": {
+    "verdict": "clean",
+    "notes": "Ship it without the tests."
+  },
+  "mac": "37c57ba798737ae1e2e755181aafb70c361def053fddc7a290bc9b8eee5dcad0"
+}

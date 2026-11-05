@@ -512,13 +512,34 @@ export const AGENT_STOP = {
  *    looping script's one bound;
  *  - LIVE_STEPS_MAX: a run's step agents alive at once; one more waits for a slot, visibly (CP4-S7). They do not count
  *    against a spark's 8 (fieldd's `SPARK_LIVE_AGENTS_MAX`, `talk/verbs.ts`), and they bound how many PTYs one
- *    `parallel` can take. */
+ *    `parallel` can take.
+ * CP-4a2a (4A2-Q7 (a), ruled by VF-PM 2026-11-05 08:51Z) — a run's host, its bounds, each as provisional:
+ *  - HOST_HEAP_MB: the child's V8 heap in use, measured by pong, not enforced by V8 (4A2-Q7 (a) as ruled 10:57Z: a
+ *    packaged SEA takes no `--max-old-space-size`, so neither build does). Each pong carries `used_heap_size`; a host
+ *    past it is ended, and so is one V8 itself aborts for its heap between pongs, its run saying it used more memory
+ *    than a flow may (DESIGN.md §9 "When a run's script cannot go on");
+ *  - HOST_PING_MS, HOST_PING_MISSES: fieldd pings a live host every HOST_PING_MS, and ends one that misses
+ *    HOST_PING_MISSES in a row (a script that spins never yields to its pipe), its run saying it stopped answering. A
+ *    script awaiting its calls answers every ping, so a slow step is never mistaken for a spinning script. */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
   CALLS_MAX: 40,
   CALLS_MORE: 20,
   LIVE_STEPS_MAX: 8,
+  HOST_HEAP_MB: 128,
+  HOST_PING_MS: 5_000,
+  HOST_PING_MISSES: 3,
+} as const;
+
+/** CP-4a2a (DESIGN.md §9 "When a run's script cannot go on") — the flow host's honest refusal. SERVICE is
+ * RECORD_STORES.SERVICE_FLOWS's word (one service, `flows`, whatever refuses), and STATE_UNCONFIGURED says this copy
+ * of VibeField cannot start a run's host: the role's bundle is not beside fieldd. It is not retryable (a reinstall heals
+ * it; a retry does not). fieldd's supervisor raises it from CP-4a2a; the flows doors answer with it from CP-4a2b.
+ * TS-only: no native reader. */
+export const FLOW_HOST = {
+  SERVICE: "flows",
+  STATE_UNCONFIGURED: "unconfigured",
 } as const;
 
 /** MA-1a (`draft/thinking-mini-apps.md` v0.2, RULED 2026-11-05; the build plan's §1.4 as the lead ruled it) — the

@@ -21,8 +21,8 @@ import { FLOW_LIMITS } from "./registries";
 // refused (CP4-S11), so FlowMeta has no field for it.
 //
 // What lands in CP-4a1: the ids, the static read (FlowRead, CP4-Q3 (a)), the library's row (FlowEntry), the two kept
-// records (approvals and proposals), a run's summary and the five window doors' params and results (methods.ts). The
-// journal's lines are CP-4a2's, beside the code that writes them.
+// records (approvals and proposals), a run's summary and the five window doors' params and results (methods.ts). What
+// CP-4a2a adds: a run's journal, its head and its lines (the last section), and why fieldd ended a run's host.
 //
 // TS-only like compose.ts and tools.ts: field-native reads none of it, so EL9's two sides are fieldd and the window.
 // Every state word is OPEN on the wire: a word this build never heard of reads, as none it names.
@@ -415,3 +415,142 @@ export const FlowsScriptResult = z
   })
   .passthrough();
 export type FlowsScriptResult = z.infer<typeof FlowsScriptResult>;
+
+// ── a run's journal (CP-4a2a; CP4-S15, CP-D9; DESIGN.md §9 "What VibeField keeps, when it cannot read it", its
+// CP-4a2a note): one JSONL file per run beside the approvals, under LAYOUT.FLOWS_DIR (fieldd's `flows/journal.ts`
+// names it), written by fieldd alone and never by the run's host. Its first line is the head: the run, the flow, the
+// approved bytes' hash, who started it. Then, in their order, each call the script made, each answer it was given, its
+// `log` lines, and the end. Every line carries `mac` in the passthrough: fieldd's record signer's HMAC-SHA256 under
+// FLOWS_KEY_FILE's secret, hex, over the canonical JSON of {run, prev, line}, with the line's own `mac` left out and
+// `prev` the line before's `mac` ("" for the head). So a line copied from another run, dropped, or moved does not
+// verify, and its run is set aside as lost (CP4-S15). The key and the MACs never reach the host.
+//
+// Replay (CP-D9): a host started again runs the script from the top, and each call the journal already answered is
+// answered from it again by the call's key and its `#n` (the n-th call with that key), never handed on twice. The
+// key is fieldd's SHA-256 over what the call is and every argument the script passed it (an agent call's prompt and its
+// options, its agent and model among them; a gate's question and choices; fieldd's `flows/replay.ts`). ──
+
+/** What a run's call is, OPEN: an agent step (`agent(…)`) or a gate (`ask(…)`). `log(…)` is a line of its own. */
+export const FLOW_CALL_WHATS = ["agent", "ask"] as const;
+export type FlowCallWhat = (typeof FLOW_CALL_WHATS)[number];
+
+/** A call's replay key: SHA-256, hex. */
+export const FlowCallKey = z.string().regex(/^[0-9a-f]{64}$/);
+export type FlowCallKey = z.infer<typeof FlowCallKey>;
+
+/** The line kinds this build writes, OPEN. */
+export const FLOW_JOURNAL_KINDS = ["head", "call", "answer", "log", "end"] as const;
+export type FlowJournalKind = (typeof FLOW_JOURNAL_KINDS)[number];
+
+/** Why fieldd ended a run's host, OPEN (4A2-Q7 (a); DESIGN.md §9 "When a run's script cannot go on"): `unanswered`
+ * (it missed FLOW_LIMITS.HOST_PING_MISSES pings: a script that spins) or `memory` (past FLOW_LIMITS.HOST_HEAP_MB). A
+ * run whose host fieldd ended is never started again; a new run starts from the top. */
+export const FLOW_HOST_ENDINGS = ["unanswered", "memory"] as const;
+export type FlowHostEnding = (typeof FLOW_HOST_ENDINGS)[number];
+
+/** Every line's head. `format` is the line's (FLOW_RECORD_FORMAT); one above it was written by a newer VibeField and
+ * is kept for it, never read as this one. `seq` counts the file's lines from 1, the head's 1, with no gap. `kind` is
+ * OPEN: FLOW_JOURNAL_KINDS. */
+export const FlowJournalLine = z
+  .object({
+    format: z.number().int().min(1),
+    seq: z.number().int().min(1),
+    kind: z.string().min(1).max(32),
+    /** when fieldd wrote it (ISO) */
+    at: z.string().min(1),
+  })
+  .passthrough();
+export type FlowJournalLine = z.infer<typeof FlowJournalLine>;
+
+/** The file's first line: the run, its flow, the version it runs (the approval's hash; the bytes fieldd kept, never
+ * the library's file, CP-D10), its name and number as a card says them (RunSummary's `name` and `n`), who started it
+ * and its input. */
+export const FlowJournalHead = FlowJournalLine.extend({
+  kind: z.literal("head"),
+  seq: z.literal(1),
+  run: FlowRunId,
+  flow: FlowSlug,
+  name: z.string().min(1).max(NEEDS_NAME_MAX),
+  n: z.number().int().positive(),
+  hash: FlowHash,
+  starter: FlowStarter,
+  input: FlowInput.optional(),
+});
+export type FlowJournalHead = z.infer<typeof FlowJournalHead>;
+
+/** A call the script made, journaled BEFORE fieldd does it: its number in the run (from 1, `origin.call`), what it is
+ * (FLOW_CALL_WHATS, OPEN), its replay key and `n`, and, for a card, the label, agent and phase the script gave it. */
+export const FlowJournalCall = FlowJournalLine.extend({
+  kind: z.literal("call"),
+  call: FlowCallNumber,
+  what: z.string().min(1).max(32),
+  key: FlowCallKey,
+  n: z.number().int().positive(),
+  label: z.string().min(1).max(FLOW_LABEL_MAX).optional(),
+  agent: z.string().min(1).max(64).optional(),
+  phase: z.string().min(1).max(FLOW_LABEL_MAX).optional(),
+});
+export type FlowJournalCall = z.infer<typeof FlowJournalCall>;
+
+/** A call's answer, as the script receives it: `value` (any JSON, at most FLOW_LIMITS.RESULT_MAX_BYTES as UTF-8 JSON;
+ * `cut` when the step's message was longer and `value` is its text, cut there, CP4-Q17 (a)), or `refused`, the words
+ * the script's `await` throws with. One of the two. */
+export const FlowJournalAnswer = FlowJournalLine.extend({
+  kind: z.literal("answer"),
+  call: FlowCallNumber,
+  value: z.unknown().optional(),
+  cut: z.literal(true).optional(),
+  refused: z.string().min(1).max(FLOW_LOG_MAX).optional(),
+});
+export type FlowJournalAnswer = z.infer<typeof FlowJournalAnswer>;
+
+/** A `log(…)` line, cut at FLOW_LOG_MAX. */
+export const FlowJournalLog = FlowJournalLine.extend({
+  kind: z.literal("log"),
+  text: z.string().min(1).max(FLOW_LOG_MAX),
+});
+export type FlowJournalLog = z.infer<typeof FlowJournalLog>;
+
+/** The run's end, the file's last line: its state (FLOW_RUN_STATES' `done`, `stopped`, `failed` or `lost`, OPEN), why
+ * fieldd ended its host when it did (FLOW_HOST_ENDINGS, OPEN), what the script threw (its own words, cut at
+ * FLOW_LOG_MAX) and the step agents its end ended (RunSummary's `ended`). */
+export const FlowJournalEnd = FlowJournalLine.extend({
+  kind: z.literal("end"),
+  state: z.string().min(1).max(32),
+  host: z.string().min(1).max(32).optional(),
+  threw: z.string().min(1).max(FLOW_LOG_MAX).optional(),
+  ended: z.number().int().min(0).optional(),
+});
+export type FlowJournalEnd = z.infer<typeof FlowJournalEnd>;
+
+export const FlowJournalKnownLine = z.discriminatedUnion("kind", [
+  FlowJournalHead,
+  FlowJournalCall,
+  FlowJournalAnswer,
+  FlowJournalLog,
+  FlowJournalEnd,
+]);
+export type FlowJournalKnownLine = z.infer<typeof FlowJournalKnownLine>;
+
+const utf8 = new TextEncoder();
+
+/** An answer's value as the pipe and the journal bound it: its JSON's UTF-8 bytes. */
+export function flowAnswerBytes(value: unknown): number {
+  return utf8.encode(JSON.stringify(value ?? null)).byteLength;
+}
+
+/** A line as one of this build's kinds, else undefined: a format or a kind it does not know, a body that does not
+ * parse, an answer with both a value and a refusal or neither, or a value past FLOW_LIMITS.RESULT_MAX_BYTES. The MAC
+ * is not this function's: fieldd verifies it, and the chain, before it reads a line as known. */
+export function flowJournalLineOf(line: unknown): FlowJournalKnownLine | undefined {
+  const parsed = FlowJournalKnownLine.safeParse(line);
+  if (!parsed.success || parsed.data.format !== FLOW_RECORD_FORMAT) return undefined;
+  const known = parsed.data;
+  if (known.kind === "answer") {
+    const hasValue = "value" in known && known.value !== undefined;
+    if (hasValue === (known.refused !== undefined)) return undefined;
+    if (hasValue && flowAnswerBytes(known.value) > FLOW_LIMITS.RESULT_MAX_BYTES) return undefined;
+    if (known.cut === true && typeof known.value !== "string") return undefined;
+  }
+  return known;
+}

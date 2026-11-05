@@ -176,6 +176,8 @@ import { Hello, HelloAck, RpcRequest, RpcResponse, TerminalRouteSnapshot } from 
 import { ErrorData } from "../src/errors";
 import {
   FlowApprovalRecord,
+  FlowJournalHead,
+  FlowJournalKnownLine,
   FlowProposalRecord,
   FlowRead,
   FlowsListResult,
@@ -1011,6 +1013,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "flow-read": FlowRead,
   "flow-approval-record": FlowApprovalRecord,
   "flow-proposal-record": FlowProposalRecord,
+  // CP-4a2a — a run's journal: its head, a call, its answer, and that answer forged after it was signed (a line's shape,
+  // its MAC the original's: the contract reads the shape, fieldd's journal checks the MAC and the chain)
+  "flow-journal-head": FlowJournalHead,
+  "flow-journal-line": FlowJournalKnownLine,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.
