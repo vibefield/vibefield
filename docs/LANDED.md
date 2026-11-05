@@ -31573,3 +31573,162 @@ design-kit, two in electron-shell, one each in field-app, DESIGN.md, DECISIONS, 
   (NOT landed) and builds nothing of it; 12d needs you, which waits on 12a §D and 12c; 12e the star in Metal; 12f New
   spark on the phone.
 - Item 169 (filed). cp3 §5's line at the draft queue, on VF-PM's word. The two-desktop run (James).
+
+## SD-1 — the sound identity's law and its code: DESIGN.md §14 Sound, and `@vibefield/sound` beside contracts (2026-11-05; `8b22e7b01` → `1ebe7b461`, 3 commits on main `f599761bc`, lane `sd/1-sound-law` in `/Volumes/SamsungRed/lanes/sd1/vibe-field`, stacked as M126 `1ebe7b461`, run 126)
+
+**What it rests on.**
+- James ruled the page *Hear What Needs You* (https://claude.ai/artifact/Lq2MXZkT3fGs18ieDYxjkP, db `decisions`;
+  sources `draft/sound/`) on 2026-11-05, 00:40:17–00:42:43Z: SD-D1…D22, all twenty-two at the leans, no notes. The
+  store held no `tuning` and no `trials`, so the engine's values as the record states them are the ruled ones. At
+  00:43:25Z he typed "all ruled with your lean, now land this nicely" to the sound lead (vibe-field-61), who relayed
+  it; VF-PM recorded it at 00:48Z as his word, relayed.
+- SND-0, the record's listening week (Name that sound per voice, a week on the lean, fatigue after a hundred plays),
+  is skipped by that ruling.
+- SD had been a §4 Parked row since the housekeeping page (Q27, 2026-10-28: James's lab, to re-enter when "James
+  picks it up"). The record is `draft/sound/design-sound.md`, round 2 "Deep Field" (2026-10-02) over round 1
+  (`round1/`); its §14 reads the rulings back from the store and its §15 is the build. The page was republished at
+  00:39Z on the account the sessions now run on (version 1); the original, UFooqHGC, is on the other account and
+  held no picks.
+- VF-PM set the path at 00:48Z (light passes on this Mac at nice 19 under the guard; heavy builds under
+  `lanes/co-plan/HOLD` on "Mac free"; packet, pre-check, a9's mint, the fixer) and ACCEPTED the engine's home at
+  00:58Z: a zero-dependency package, not a design-kit leaf (Found 1).
+- The lane was made at 00:48Z on `5d8f230ca` (push 82) and reset onto `f599761bc` at 00:51:53Z, before SD-1's first
+  commit, on VF-PM's 00:50Z word: James's PR #15 merge edits DESIGN.md, so §14 starts from his text. Its siblings sit
+  at the lock's pins (rosetta `8e8f496`, mille `c8160d5`). Its own mille checkout was built under the HOLD, taken at
+  00:56:23Z and released at 00:58:01Z.
+
+**What** (24 files, +3,374 −5: 19 in `packages/sound`, then DESIGN.md, README, DECISIONS, UI_SYSTEM, the walls
+script and the lock):
+- **DESIGN.md first** (`8b22e7b01`, +162 −1): §14 "Sound — the field, heard", after §13, and the Authority line
+  ("looks, moves, sounds and speaks"). It holds the eight laws S1–S8, the field (every note a harmonic of D♭1,
+  34.648 Hz, tuned just) and TRAPPIST-1's chord, the family's table (what each sound says, its strikes, notes and
+  rate, the field's answer, its desktop and phone targets), Starlight, the three spaces, the masters, the phone's
+  touch, when it speaks (rules 1–9 with their numbers), where it plays, where it lives, and its limits. SD-D10's
+  evidence line is dated 2026-11-05 (Validation).
+- **Red** (`efa3783e8`, 9 files): the package's manifest, two tsconfigs, the vitest config, the lock's importer and
+  four test files, before any source:
+  - `engine.test.ts` (54 rows): each sound's count at its rate, at exact times; its target in day, night and far,
+    within 0.05 LU of BS.1770's momentary max, with no sample above −13 dBFS; the phone 20 dB louder and limited at
+    −1.5 dBFS; the status sounds within 1.5 LU; the lengths; `clear` at the last strike + 450 ms; one render per
+    input; the takes; the Done chord; reminders; the pan's limit; the phone's octave; the haptics.
+  - `voice.test.ts` (20 rows): the voice on a virtual clock, at exact times. One Done at 1,320 ms; three Dones as
+    one chord at 1,400; an approval, a Done and a question in one breath at 780, 1,690 and 5,100; reminders at
+    120,780 and 600,780; focus, far, the budget and the takes.
+  - `design-md.test.ts` (22 rows): every number §14 states, read from DESIGN.md and held to the package's constants.
+  - `plain-node.test.ts` (1 row): the repo's node imports `@vibefield/sound` by name and renders a Done (VF-PM's
+    note 5: SD-3's package-time render depends on it).
+- **Green** (`1ebe7b461`, 14 files): `packages/sound/src`, ten files that import only each other:
+  - `field` (D♭1, the just degrees, TRAPPIST-1), `dsp` (seeded noise, biquads, partials, the limiter), `layers`
+    (core, bloom, sub, knock, ash, stars), `space` (the eight-line FDN, the octave-up, the swell) and `loudness`;
+  - `score` (§14's constants: `STARLIGHT`, `SPACES`, `PROFILES`, `CUES`, `PAN_POSITIONS`), `render` (`layout`,
+    `clearOf`, `render`), `haptics`, and `voice` (`createVoice` on an injected clock and player: meaning, hold,
+    focus, gather, All quiet, spacing, budget, reminders, place);
+  - `.ts` specifiers under `allowImportingTsExtensions` and `erasableSyntaxOnly`, so plain node strips the types
+    and runs it; the source typechecks with `types: []` and lib ES2022, so it can reach neither Node nor the DOM.
+- **Wall R31** (`scripts/check-import-boundaries.mjs`, +41): `packages/sound/src` imports only its own files,
+  enforce:true. Three probes (node:fs, react, `@vibefield/contracts`) and three cleans (its own file, Electron main
+  and field-app importing it). DECISIONS' wall range moves from R1–R30 to R1–R31 in both its lines.
+- **README** gains the `packages/sound` row. **UI_SYSTEM** gains sound's projection rule: a constant changes in §14
+  first, then in the package, never in the kit or `tokens.css`, and `design-md.test.ts` holds the two together.
+- Nothing in the product imports it yet. SD-2 is its first consumer.
+
+**Validation.**
+- **DESIGN.md's readers** on `8c3efbbdf` (01:03:50–01:04:59Z, nice 19, the guard clear): field-app's 21 files that
+  read DESIGN.md 447/447, plugins/simulator 19/19, electron-shell's smoke-first-run 50/50. fieldd's two readers were
+  read, not run (its setup builds field-native): needs-words checks §9's facts against the whole text, and
+  agent-gateway names DESIGN.md only in a comment.
+- **Red** at `efa3783e8` (01:29:22Z): 4 files failed, 1 test failed. engine, voice and design-md cannot load
+  `../src/index.ts`, and the plain-node row fails with ERR_MODULE_NOT_FOUND on the package's entry
+  (`lanes/sd1/light/sound-red.log`).
+- **Green** on T's source (01:29:52–01:30:44Z, nice 19, the guard clear, no kit slot; logs in `lanes/sd1/light/`):
+  - `packages/sound` vitest 97/97 (engine 54, voice 20, design-md 22, plain-node 1; 19.5 s); its typecheck 0;
+  - the walls: the self-test all passed (R31's three probes fire, its three cleans pass), `--enforce` clean;
+  - preflight OK with its one standing warning (R23's `acp` candidate); check:deps ok;
+  - field-app's ui-system-boundaries 46/46;
+  - biome: one format error (R31's description line, over the width), reformatted before T and re-run clean at
+    01:31:20Z (19 files, no fixes).
+- **DESIGN.md's readers on T** (01:32:19–01:32:55Z): 447/447, 19/19 and 50/50.
+- **The design-md rows bite** (01:26:47Z, a mutation probe): moving the voice's Done hold from 900 to 800 ms fails a
+  row with "DESIGN.md §14 should say: Done 800 ms, Question and Approval 450 ms, Failed 250 ms". Restored, 22/22.
+- **Bit-identity** (01:22:30Z, on T's source, 201 s): under plain node v26.5.0, 223 of 223 renders are sample for
+  sample the lab engine's (`draft/sound/site/sound-engine.js`), 65.3 M samples, 0 differ, and the six sounds'
+  haptics match. That covers every sound in day, night and far, desktop and phone, five takes each, plus Done
+  chords of 2–5, reminders and pans. So the record's measurements of Starlight (its §7: the targets, the peaks, the
+  lengths, every strike heard) are this package's.
+- **SD-D10 meets SD-D21** (00:52Z): the system-sound path cannot turn a playing sound down, so the round-2 review's
+  pairs test (`draft/sound/tools/pairs.mjs`) was re-run from a scratch copy with the duck removed. Starlight lost
+  the second sound's count in 0 of 300 pairs, and the clear rule failed in 0 of 300. §14's rule 6 says so, dated.
+- **The packet**: STACKED, T = `1ebe7b461` on `f599761bc` (tree `d6c5b439b586`), sent at 01:33Z. VF-PM accepted it
+  at 01:34Z, pre-checked from James's checkout at 01:33:29Z: linear 3, 0 merges, markers 0, draft 0, apps/ios 0; the
+  lock's diff is the `packages/sound` importer alone (catalog pins, nothing moved); CLAUDE.md untouched.
+- **Run 126** (`1ebe7b461`, minted by a9 as `mint/sd1` on VF-PM's GO, stacked on `f599761bc`: the run is T, tree
+  `d6c5b439b586`): "== ts6-mini verify done (verify 0) 01:41:42Z; HEAD 1ebe7b4612a86f6392c06eb6744cfbcbd10c5937".
+  `pnpm verify` exit 0: vitest 12,353 passed / 0 failed / 18 skipped over 887 files (run 125 +100: SD-1's new
+  design-md 22, engine 54, voice 20 and plain-node 1; PR #15's face-picker +1 and its new onboarding-connect-view 2),
+  node 365, cargo 545/0 in 34 suites (+1, PR #15), Nx's test target over 29 projects (`@vibefield/sound` the new
+  one), biome 3,130 files, R31's probes PASS, the iOS fixtures 230 copies identical, pins 67, 0 FAIL rows. The frozen
+  re-install took the new importer in 1.4 s and no sibling pin moved; no re-run. VF-PM read it as MATCHING at 01:56Z.
+- **Landed:** main fast-forwarded `f599761bc` → `1ebe7b461` on VF-PM's GO (2026-11-05T01:56:55Z, the fixer's stamp;
+  merge-tree = T's tree `d6c5b439b586`), 24 files +3,374 −5.
+
+**Not witnessed (said).**
+- **No sound was heard.** Every check is a machine's: the loudness meter, the onset detector, the sample compare.
+  Nothing was played through speakers in a build (§14's limits), and the Name-that-sound runs were skipped by the
+  ruling.
+- **Nothing plays it.** No product code imports `@vibefield/sound`. How the system path behaves on a real Mac (the
+  alert volume, the "Play sound effects through" device, and whether it drives "Flash the screen") is SD-2's to
+  verify.
+
+**Found (said).**
+1. **The engine's home: a package, not a kit leaf.** The record, and VF-PM's 00:48Z path, put the engine in the
+   design kit. Wall R2 keeps the design kit out of Electron main and preload, and main is where the sound must run:
+   SD-D15's away path works with no window open (closing one destroys its renderer), and SD-D21's system path is a
+   main-side player. Widening R2 for one entry is the ad-hoc path, so `@vibefield/sound` is a second
+   zero-dependency root beside contracts: every plane may import it, and it imports none of them. VF-PM ACCEPTED it
+   at 00:58Z with five notes (its kind in the taxonomy and README's row; R31 read from the script; SD-2's
+   `quietUntil` OPTIONAL; DESIGN.md first; the plain-node proof). No catalog section in SD-1: with no shipping view
+   to mount, a harness would be the replica the boundaries test refuses.
+2. **Two of the voice's behaviours change from the lab's** (`draft/sound/site/sound-voice.js`), each held by a row:
+   - a new blocker id while an agent is still blocked is a new request. The lab compared the status and the kind
+     alone, so a second permission prompt in a row was silent ("a new prompt while still blocked is a new request");
+   - an unknown blocker kind ranks after permission, question and failure. The lab sorted by `indexOf`, which gives
+     an unknown kind −1 and so ranked it FIRST: a permission beside it played as Failed ("an unknown blocker never
+     outranks a permission").
+   And one change of structure: the take belongs to the voice, which cycles each sound's five takes and spaces by
+   the `clearOf` of the take and stretch it plays.
+3. **The walls read a JSDoc as an import.** `STATIC_IMPORT_PATTERNS` (`scripts/check-import-boundaries.mjs:825`)
+   matches `from` and a quoted string anywhere in a line, and only R7 strips comments. So `dsp.ts`'s comment
+   "from `at` seconds" read as an import of `at`, and R31 fired. The comment was reworded ("starting `at` seconds
+   after it"); the scanner is unchanged, and nothing is filed.
+4. **0.7071, kept.** biome's noApproximativeNumericConstant asks for √½, but the lab's Butterworth Q is 0.7071, and
+   √½ would move every render off the measured ones. `BUTTERWORTH_Q` keeps 0.7071 with a biome-ignore that says why.
+
+**Rulings during the build** (VF-PM):
+- 00:48Z: the path above; light passes granted; reports go to VF-PM alone, and nothing is spawned; the
+  `pnpm commit-draft` of `draft/sound` is QUEUED.
+- 00:50Z: rebase onto `f599761bc` before the first commit. 00:54Z: the mille build is next under the HOLD.
+- 00:58Z: the package ACCEPTED (Found 1), with its five notes; no catalog section in SD-1.
+- 01:03Z: light passes may run beside anything on this Mac except a running kit slot (`xcodebuild test`), whose rows
+  are timing-sensitive (item 157's class).
+- 01:34Z: the packet accepted, and the amend below owned and fine.
+
+**Errata, corrected at their sources.**
+- DESIGN.md: §14's first commit was `8c3efbbdf` (01:02:20Z). At 01:18:23Z it was amended to `8b22e7b01` with two
+  phrases: "in the octave above D♭5" (C6 is not in the fifth octave, which the first text implied) and the five
+  takes, which §14 had to state before the code used them. Nothing was built on `8c3efbbdf`.
+- The record, `draft/sound/design-sound.md`: its Status header's "then the design-kit leaf" and its §14's lane base
+  `5d8f230ca` carry dated corrections (the package; `f599761bc`). They ride `pnpm commit-draft` on VF-PM's word.
+
+**Owed.**
+- SD-2, the desktop hears it: main's agent subscription (the mesh, for far), the voice in main, the window's
+  attention (the pane being typed into; places from the panes' rects), the alert-path player (a native addon, after
+  `desktop-haptics.node`), a render worker and its cache, Settings → Sound, and Quiet in the tray and in Settings
+  (`quietUntil` OPTIONAL in AppPreferences, contracts first).
+- SD-3, away: §9's "a new item raises no OS notice" line moves in DESIGN.md first, with a dated erratum where it
+  stood; then the notices' sounds, rendered at package time, five takes each.
+- SD-4, the phone: its masters and its touch, Swift reading the exported files and never the code, on its own kit
+  slot. SD-5: the mark (first launch and setup's end), a terminal's bell, and the bloom when an agent joins.
+- CLAUDE.md's taxonomy line for `sound` is James's typed word, never an agent's. The proposed line, for the end of
+  the "Wire truth" bullet: "Beside it, `sound` (DESIGN.md §14 in code, track SD) is a second zero-dependency root
+  that Electron main, the renderer and plain-node tools all import; wall R31 keeps its source to its own files."
+- `pnpm commit-draft` of `draft/sound` (VF-PM's queue). The mark's clearance check before it ships (§14's limits).

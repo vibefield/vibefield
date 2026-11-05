@@ -36,10 +36,10 @@
   Since the audit's base (`bb1a2c823`): AL-9, items 82–84, TS-8a/8b, the TS-3a erratum, AO-6b3 and QW1 stack A landed;
   then HK, the EL8 to puppeteer 0.3.0 (`1469639a6`) and QW1 stack B (10-28).
 - **The live program.** §2: TS, AO, FG, AL, **AU (updates that wait)**, **PG (the phone's Godview)**, **WI (the
-  phone's way in)**, **IOS-12 (the phone's Chat, since 11-04)**, **HN (Cards in Hand: the line, the hand, Artifacts
-  in the head)**, QW1 (the Godview swarm's fix wave 1), PT-S (PORTALS' phone, resumed 10-29), **CO (the compose plane:
-  sparks and the tool plane, re-entered 10-28)**, the release rails, the EL8 watch, the fixer, upstream. The
-  first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
+  phone's way in)**, **IOS-12 (the phone's Chat, since 11-04)**, **SD (the sound identity, since 11-05)**, **HN
+  (Cards in Hand: the line, the hand, Artifacts in the head)**, QW1 (the Godview swarm's fix wave 1), PT-S (PORTALS'
+  phone, resumed 10-29), **CO (the compose plane: sparks and the tool plane, re-entered 10-28)**, the release rails,
+  the EL8 watch, the fixer, upstream. The first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
 
 ## 2 Now — the active tracks
 
@@ -356,6 +356,24 @@ DECISIONS PC
   it. 12d (needs you) waits on 12a §D and on 12c.
 - Owed: item 169 (a say delivered before a fieldd restart is forgotten; filed, 152's class); cp3 §5's line at the
   draft queue; the two-desktop run of the merge and a forwarded say (James).
+
+**SD — the sound identity** · vibe-field-61, the sound lead (lane `lanes/sd1`) · law: DESIGN.md §14 "Sound — the
+field, heard"; the page *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`) and `draft/sound/design-sound.md`
+§14–§15; DECISIONS SD
+- Ruled 11-05 00:40:17–00:42:43Z (James, on the page): SD-D1…D22, all at the leans, with no tuning and no trials
+  saved; his word at 00:43Z, "all ruled with your lean, now land this nicely". SND-0's listening week is skipped by
+  that ruling. It left §4, where Q27 had parked it until James picked it up.
+- Landed 11-05: **SD-1, the law and its code** (`8b22e7b01` → `1ebe7b461`, stacked as M126, run 126; LANDED
+  "SD-1"): DESIGN.md §14; `@vibefield/sound`, a second zero-dependency root beside contracts (the field, Starlight,
+  the spaces, the masters, the family, the touch and the voice), sample for sample the lab engine; wall R31.
+  Nothing in the product plays it yet.
+- Next: **SD-2, the desktop hears it**: main's agent subscription (the mesh, for far), the voice in main, the
+  window's attention (the pane typed into; places from the panes' rects), the alert-path player (a native addon), a
+  render worker and its cache, Settings → Sound, and Quiet in the tray (`quietUntil` OPTIONAL). Then SD-3, away
+  (§9's notice line moves in DESIGN.md first); SD-4, the phone (its own kit slot); SD-5, the mark, a terminal's
+  bell and the bloom.
+- Owed: CLAUDE.md's taxonomy line for `sound` (James's typed word; the line is in LANDED "SD-1", Owed);
+  `pnpm commit-draft` of `draft/sound`; the mark's clearance check before it ships.
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -711,7 +729,6 @@ DECISIONS PC
 | Native push (APNs) | SP-D8: the relay after AR-6; pairing is the account; README's `services/push-relay` row is deferred | AR-6 | `thinking-native-push.md`, design-06 L4 |
 | LOG | LOG-39 (beta list) · LOG-V5 (rides Windows) · LOG-V8 retention (James's product call) · LOG-V7 optional | the beta checklist | `specs/logging-and-diagnostics.md` |
 | SNAP | live checks (§5) · a still onto the desk as a `desk.photo` dragged from the tray → SNAP-2 under `surface.capture` → SNAP-4 (Windows round) · the perf review's leads | a SNAP lane | `thinking-screenshot-tool.md`, `draft/reviews/screenshot-performance-2026-09-24.md` |
-| SD — sound | James's lab, a proposal only: round 2 "Deep Field" (10-02) over round 1; SD-D1…SD-D22 on its page. A Parked row by his ruling (Q27) | James picks it up | `draft/sound/design-sound.md` |
 | WIN | WIN-5 visual · WIN-7 live mesh (`TRUFFLE_TEST_AUTHKEY` via TS-1's authKey) · WIN-8 = RM-4's Windows leg (Azure signing, EDP-39) · WIN-D6…D9 (James) · residue: the win32-gated concurrent-edit doc-sync rows (their skip text claims coverage behind `TRUFFLE_TEST_AUTHKEY`), group-kill → Job Objects, snapshot-prune EBUSY (`doc-service.ts`) · LSF §18's Windows rows (LSF-3/3C/6; the LSF-3C spike's re-run reads `draft/archive/executed/specs/live-surfaces-agent-browser-spike.md`), PRC-5's Windows filesystem, M11, predesign-03 §6's coexistence ask, SNAP-4 ride it · a pipe-name squatter makes field-native fail closed (deliberate) | a Windows leg on the release rails | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` |
 
 ## 5 Owed by James — live surfaces only
@@ -993,7 +1010,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | LOG — logging and audit | PARKED; item 78 landed | `specs/logging-and-diagnostics.md` | LOG-39 for the beta |
 | UI — design system | COMPLETE; owed slices | `DESIGN.md`, `docs/UI_SYSTEM.md` | InlineNotice tones; the desk sweep |
 | SNAP — screenshot tool | PARKED; SNAP-0/1/1a/3/3a/3b landed | `thinking-screenshot-tool.md`, `draft/composer/build-edge-trays.md` | live checks; the still as `desk.photo` |
-| SD — sound | PARKED (James's lab, Q27) | `draft/sound/design-sound.md` | James's call |
+| SD — the sound identity | ACTIVE since 11-05 (SD-D1…D22 ruled at the leans); SD-1 landed 11-05 (DESIGN.md §14 and `@vibefield/sound`, M126 `1ebe7b461`, run 126) | DESIGN.md §14; `draft/sound/design-sound.md` | SD-2, the desktop hears it |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
 | CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96) and the handle (`045f10ec7`, mint M100) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | SP-1e · CP-4 · CP-5 |
