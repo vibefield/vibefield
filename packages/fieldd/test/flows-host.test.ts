@@ -1319,3 +1319,36 @@ describe("CP-4a2a — fieldd's side of the host: the rewrite, the role, the laun
     ).toMatchObject({ kind: "unconfigured", reason: expect.stringMatching(/source run/) });
   });
 });
+
+describe("CP-4a2b — P5: a smoke sees its flow host (Q-B5 (a); §13b.13)", () => {
+  it(
+    "P5a: the child's environment is PATH and, when fieldd has it, the smoke's run mark VF_SMOKE_RUN; nothing else of fieldd's",
+    async () => {
+      const { handler, logs } = scripted();
+      await host(flow("return 1;"), {
+        handler,
+        launch: standIn({
+          onRun:
+            "say({ t: 'log', text: JSON.stringify([Object.keys(process.env).sort(), process.env.VF_SMOKE_RUN]) });",
+        }),
+        environment: {
+          PATH: PATH_ONLY.PATH,
+          VF_SMOKE_RUN: "vf-smoke-x",
+          FIELDD_TOKEN: "a daemon secret",
+          FIELD_NATIVE_SOCKET: "/tmp/x.sock",
+        },
+      });
+      const said = await logged(logs);
+      expect(said).not.toBe("timeout");
+      const [keys, mark] = JSON.parse(said) as [string[], string | undefined];
+      // the macOS loader's own key, as H4 says
+      expect(keys.filter((key) => key !== "__CF_USER_TEXT_ENCODING")).toEqual([
+        "PATH",
+        "VF_SMOKE_RUN",
+      ]);
+      // the census finds a smoke's processes by this mark (electron-shell's smoke-census.mjs), so a leaked host is seen
+      expect(mark).toBe("vf-smoke-x");
+    },
+    ROW_MS,
+  );
+});

@@ -377,3 +377,25 @@ describe.skipIf(process.platform === "win32")(
     });
   },
 );
+
+describe("a fieldd role is named by its role, before the executable that runs it (CP-4a2b, Q-B5 (a); §13b.13's P5b)", () => {
+  it("names each host fieldd starts in both spellings: the packaged executable's role and the development bundle", () => {
+    for (const role of ["flows-host", "transcript-host", "files-host"]) {
+      expect(
+        processName(
+          `/Applications/VibeField.app/Contents/Resources/bin/fieldd --vibefield-role=${role}`,
+        ),
+      ).toBe(role);
+      expect(
+        processName(`/usr/local/bin/node /a/vibe-field/packages/fieldd/dist/${role}.cjs`),
+      ).toBe(role);
+    }
+    // fieldd itself is still fieldd, in both spellings
+    expect(processName("/Applications/VibeField.app/Contents/Resources/bin/fieldd --serve")).toBe(
+      "fieldd",
+    );
+    expect(processName("/usr/local/bin/node /a/vibe-field/packages/fieldd/dist/bin.cjs")).toBe(
+      "fieldd",
+    );
+  });
+});
