@@ -835,4 +835,68 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     expect(seen()).toBe(released);
     await ipad.call("system.unsubscribe", { subId: ipadMesh.subId });
   }, 60_000);
+
+  // PG-9 (PG-L4.4's cursor half) — the phone's app switch over the real door: it unsubscribes (FieldLink.pause), the
+  // hub lingers (PG-9a), and it subscribes again naming the cursor it holds for each desktop. Nothing moved, so every
+  // desktop is answered `resumed` and no row crosses the tailnet again: the open is a few hundred bytes, where the
+  // whole board's is many times that.
+  it("PG-9 — the phone back from an app switch names its cursors and is answered `resumed` for every desktop, in under 1 KiB", async () => {
+    const { A, B } = await bootPair();
+    const phone = await phoneOn(A.door);
+    const mesh = await openMesh(phone);
+    await until(
+      () =>
+        heldBoard(mesh.open, meshFrames(phone, mesh.subId), "dev-b").has(B.run) &&
+        heldBoard(mesh.open, meshFrames(phone, mesh.subId), "dev-a").has(A.run),
+      5_000,
+    );
+    // the board goes quiet: no frame for two and a half beats
+    let heard = -1;
+    let quietSince = Date.now();
+    await until(
+      () => {
+        const count = meshFrames(phone, mesh.subId).length;
+        if (count !== heard) {
+          heard = count;
+          quietSince = Date.now();
+        }
+        return Date.now() - quietSince >= 2.5 * AGENT_FIELD.MESH_HEARTBEAT_MS;
+      },
+      15_000,
+      "the board goes quiet",
+    );
+    // the cursor the phone holds for each desktop: its open, then every frame it applied
+    const cursors: Record<string, { epoch: string; revision: number }> = {};
+    for (const entry of mesh.open.devices)
+      if (entry.snapshot !== undefined)
+        cursors[entry.device] = { epoch: entry.snapshot.epoch, revision: entry.snapshot.revision };
+    for (const frame of meshFrames(phone, mesh.subId)) {
+      if ("snapshot" in frame)
+        cursors[frame.device] = { epoch: frame.snapshot.epoch, revision: frame.snapshot.revision };
+      if ("delta" in frame)
+        cursors[frame.device] = { epoch: frame.delta.epoch, revision: frame.delta.revision };
+    }
+    expect(Object.keys(cursors).sort()).toEqual(["dev-a", "dev-b"]);
+    await phone.call("system.unsubscribe", { subId: mesh.subId });
+
+    const back = (await phone.call("agent.subscribe", {
+      projection: "remote",
+      scope: "mesh",
+      since: cursors,
+    })) as { subId: string; snapshot: AgentMeshOpen };
+    expect(back.snapshot.devices.map((entry) => entry.device)).toEqual(["dev-a", "dev-b"]);
+    for (const entry of back.snapshot.devices) {
+      expect(entry.resumed, entry.device).toEqual(cursors[entry.device]);
+      expect(entry, entry.device).not.toHaveProperty("snapshot");
+      expect(entry, entry.device).not.toHaveProperty("delta");
+    }
+    const resumedBytes = JSON.stringify(back.snapshot).length;
+    expect(resumedBytes).toBeLessThan(1_024);
+    // the same question without cursors is today's whole open
+    await phone.call("system.unsubscribe", { subId: back.subId });
+    const whole = await openMesh(phone);
+    expect(whole.open.devices.every((entry) => entry.snapshot !== undefined)).toBe(true);
+    expect(JSON.stringify(whole.open).length).toBeGreaterThan(resumedBytes);
+    await phone.call("system.unsubscribe", { subId: whole.subId });
+  }, 60_000);
 });

@@ -20,6 +20,7 @@ import {
   malformedBoardAsk,
   projectFieldRow,
   refuseBoardAsk,
+  routedBoardAsk,
 } from "../src/agent-field";
 import { managedSummary as summary } from "./agent-field-summary";
 
@@ -108,6 +109,36 @@ describe("refuseBoardAsk — who may ask which board", () => {
     }
     expect(refused("tailnet", { projection: "field", scope: "mesh" })).toBeNull();
     expect(refused("local-token", { projection: "field", scope: "mesh" })).toBeNull();
+  });
+
+  it("PG-9 — a cursor is asked of the mesh board alone: `since` on one desktop's board or the full fold is refused, and a routed ask never carries one", () => {
+    const since = { "dev-b": { epoch: "boot-dev-b.3", revision: 41 } };
+    // the mesh board answers cursors: a phone and a window may name them there
+    expect(refused("tailnet", { projection: "remote", scope: "mesh", since })).toBeNull();
+    expect(refused("local-token", { projection: "model", scope: "mesh", since })).toBeNull();
+    // one desktop's board keeps no cursor answer, and an option that cannot be honoured is refused (MF-1h)
+    for (const ask of [
+      { projection: "remote" as const, since },
+      { projection: "field" as const, since },
+      { since },
+    ])
+      for (const principal of ["local-token", "peer-fieldd", "tailnet"] as const) {
+        const answer = refused(principal, ask);
+        expect(answer, `${principal} ${JSON.stringify(ask)}`).not.toBeNull();
+        expect(answer?.kind === "PRECONDITION_FAILED" || answer?.kind === "FORBIDDEN_SCOPE").toBe(
+          true,
+        );
+      }
+    expect(refused("local-token", { projection: "remote", since })?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+    // a routed board ask is one desktop's board at its owner: a cursor never rides it to an owner
+    expect(() =>
+      routedBoardAsk("tailnet", { projection: "remote", device: "dev-b", since }),
+    ).toThrow(expect.objectContaining({ kind: "PRECONDITION_FAILED" }));
+    expect(routedBoardAsk("tailnet", { projection: "remote", device: "dev-b" })).not.toHaveProperty(
+      "since",
+    );
   });
 
   it("lets the content-free field through for everyone who reaches the door", () => {

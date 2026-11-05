@@ -6,7 +6,12 @@ import {
   type DeviceInfo,
 } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type BoardProjection, MeshBoard, type MeshBoardFrame } from "../src/mesh-board";
+import {
+  type BoardProjection,
+  MeshBoard,
+  type MeshBoardFrame,
+  type MeshBoardOpen,
+} from "../src/mesh-board";
 import { RpcCallError } from "../src/native-link";
 
 // DS-3 (DS-D4) — the mesh board's multiplexer against fakes: the roster
@@ -178,10 +183,15 @@ function harness(rows: DeviceInfo[], selfDevice: () => string = () => SELF): Har
   return { board, ready, roster, links, upstreams, local };
 }
 
-/** A reader, and the frames it has heard. */
-function reader(h: Harness, projection: BoardProjection = "remote", floor = 100) {
+/** A reader, and the frames it has heard. PG-9 — `since`, the cursors it names (absent: today's ask). */
+function reader(
+  h: Harness,
+  projection: BoardProjection = "remote",
+  floor = 100,
+  since?: Record<string, { epoch: string; revision: number }>,
+) {
   const frames: MeshBoardFrame[] = [];
-  const opened = h.board.open(projection, floor, (frame) => frames.push(frame));
+  const opened = h.board.open(projection, floor, (frame) => frames.push(frame), since);
   return { ...opened, frames };
 }
 
@@ -1189,5 +1199,421 @@ describe("PG-9a — a mesh hub lingers after its last reader (item 135)", () => 
     vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
     expect(h.board.size).toBe(0);
     expect(h.upstreams.standing()).toEqual([]);
+  });
+});
+
+// PG-9 (PG-L4.4's cursor half; VF-PM's P1 (b), 2026-11-05) — a reader back at its hub names, per device, the last
+// `{epoch, revision}` it applied, and the open answers each device ONE way: `resumed` (its copy is the head), a
+// `delta` from its cursor to the head on the same chain, or a `snapshot` (anything the hub cannot vouch for: a new
+// epoch, a cursor below what the hub held or above its head, a removal it has forgotten, a same-epoch re-present).
+// A reader that names no cursor is answered today's open. The hub never passes a cursor to an owner.
+describe("PG-9 — a reader resumes from its cursors (PG-L4.4)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-11-05T02:00:00.000Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const PHONE = AGENT_FIELD.REMOTE_PHONE_MIN_INTERVAL_MS;
+  type Cursor = { epoch: string; revision: number };
+  type Board = { epoch: string; revision: number; rows: Map<string, unknown> };
+  type Copy = Map<string, Board>;
+  type Answer = {
+    device: string;
+    snapshot?: { epoch: string; revision: number; rows: Array<{ runtimeRunId: string }> };
+    resumed?: Cursor;
+    delta?: {
+      epoch: string;
+      since: number;
+      revision: number;
+      upserts: Array<{ runtimeRunId: string }>;
+      removed: string[];
+    };
+  };
+
+  const boardOf = (snapshot: NonNullable<Answer["snapshot"]>): Board => ({
+    epoch: snapshot.epoch,
+    revision: snapshot.revision,
+    rows: new Map(snapshot.rows.map((entry) => [entry.runtimeRunId, entry])),
+  });
+
+  /** What a reader holds after its open and its frames: per device, its chain and its rows. */
+  function copyOf(open: MeshBoardOpen, frames: MeshBoardFrame[] = []): Copy {
+    const copy: Copy = new Map();
+    for (const entry of open.devices as Answer[])
+      if (entry.snapshot !== undefined) copy.set(entry.device, boardOf(entry.snapshot));
+    for (const frame of frames) {
+      if ("snapshot" in frame) copy.set(frame.device, boardOf(frame.snapshot));
+      if (!("delta" in frame)) continue;
+      const board = copy.get(frame.device);
+      if (
+        board === undefined ||
+        board.epoch !== frame.delta.epoch ||
+        board.revision !== frame.delta.since
+      )
+        throw new Error(`a gap on ${frame.device}`);
+      for (const upsert of frame.delta.upserts) board.rows.set(upsert.runtimeRunId, upsert);
+      for (const id of frame.delta.removed) board.rows.delete(id);
+      board.revision = frame.delta.revision;
+    }
+    return copy;
+  }
+
+  const sinceOf = (copy: Copy): Record<string, Cursor> =>
+    Object.fromEntries(
+      [...copy].map(([device, board]) => [
+        device,
+        { epoch: board.epoch, revision: board.revision },
+      ]),
+    );
+
+  /** The reader's copy after a resumed open: each device by its ONE answer, applied to what it held. */
+  function resumedCopy(before: Copy, open: MeshBoardOpen): Copy {
+    const after: Copy = new Map();
+    for (const entry of open.devices as Answer[]) {
+      const answers = [entry.snapshot, entry.resumed, entry.delta].filter((a) => a !== undefined);
+      if (answers.length > 1) throw new Error(`${entry.device} answered more than one way`);
+      const held = before.get(entry.device);
+      if (entry.snapshot !== undefined) after.set(entry.device, boardOf(entry.snapshot));
+      if (entry.resumed !== undefined) {
+        if (held === undefined) throw new Error(`${entry.device} resumed with no copy`);
+        expect(entry.resumed, entry.device).toEqual({ epoch: held.epoch, revision: held.revision });
+        after.set(entry.device, { ...held, rows: new Map(held.rows) });
+      }
+      if (entry.delta !== undefined) {
+        if (held === undefined) throw new Error(`${entry.device} answered a delta with no copy`);
+        expect([entry.delta.epoch, entry.delta.since], entry.device).toEqual([
+          held.epoch,
+          held.revision,
+        ]);
+        const rows = new Map(held.rows);
+        for (const upsert of entry.delta.upserts) rows.set(upsert.runtimeRunId, upsert);
+        for (const id of entry.delta.removed) rows.delete(id);
+        after.set(entry.device, { epoch: held.epoch, revision: entry.delta.revision, rows });
+      }
+    }
+    return after;
+  }
+
+  const answerKinds = (open: MeshBoardOpen): Array<[string, string]> =>
+    (open.devices as Answer[]).map((entry) => [
+      entry.device,
+      entry.resumed !== undefined
+        ? "resumed"
+        : entry.delta !== undefined
+          ? "delta"
+          : entry.snapshot !== undefined
+            ? "snapshot"
+            : "none",
+    ]);
+
+  const cSnapshot = () => ({
+    epoch: "boot-dev-c.9",
+    revision: 5,
+    rows: [row("run-c", "dev-c", 2)],
+  });
+
+  /** a phone's hub with both peers attached and answered */
+  async function liveHub() {
+    const h = harness([selfRow, desktop("dev-b"), desktop("dev-c")]);
+    const phone = reader(h, "remote", PHONE);
+    const [b, c] = h.upstreams.attaches;
+    if (b === undefined || c === undefined) throw new Error("no upstreams");
+    h.upstreams.answer(b, peerSnapshot());
+    h.upstreams.answer(c, cSnapshot());
+    await tick();
+    return { h, phone, b, c };
+  }
+
+  it("PG-9 S1 — an app switch with nothing moved: every device answered `resumed` at the cursor the phone holds, no row sent again", async () => {
+    const { h, phone, b } = await liveHub();
+    const held = copyOf(phone.open, phone.frames);
+    phone.dispose(); // FieldLink.pause
+    vi.advanceTimersByTime(2_000);
+    const back = reader(h, "remote", PHONE, sinceOf(held));
+    expect(answerKinds(back.open)).toEqual([
+      [SELF, "resumed"],
+      ["dev-b", "resumed"],
+      ["dev-c", "resumed"],
+    ]);
+    for (const entry of back.open.devices as Answer[]) {
+      expect(entry.resumed, entry.device).toEqual(sinceOf(held)[entry.device]);
+      expect(entry, entry.device).not.toHaveProperty("snapshot");
+    }
+    expect(resumedCopy(held, back.open)).toEqual(copyOf(reader(h, "remote", PHONE).open));
+    // and the chain goes on from the cursor
+    const next = {
+      epoch: "boot-dev-b.3",
+      since: 41,
+      revision: 42,
+      upserts: [row("run-b", "dev-b", 8)],
+      removed: [],
+    };
+    b.emit(next);
+    expect(back.frames.at(-1)).toEqual({ device: "dev-b", delta: next });
+  });
+
+  it("PG-9 S2 — what moved while away is ONE delta per device from its cursor to the head, and the copy it builds is the head's board", async () => {
+    const { h, phone, b, c } = await liveHub();
+    const held = copyOf(phone.open, phone.frames);
+    phone.dispose();
+    // this desktop's own row moves
+    h.local.emit?.({ since: 1, revision: 2, upserts: [row("run-here", SELF, 2)], removed: [] });
+    // a row born and gone while away never reaches the reader; a changed one does
+    b.emit({
+      epoch: "boot-dev-b.3",
+      since: 41,
+      revision: 42,
+      upserts: [row("run-b2", "dev-b", 1)],
+      removed: [],
+    });
+    const blocked = { ...row("run-b", "dev-b", 8), status: "blocked" };
+    b.emit({ epoch: "boot-dev-b.3", since: 42, revision: 43, upserts: [blocked], removed: [] });
+    b.emit({ epoch: "boot-dev-b.3", since: 43, revision: 44, upserts: [], removed: ["run-b2"] });
+    // a row the reader held is removed, and another arrives
+    c.emit({
+      epoch: "boot-dev-c.9",
+      since: 5,
+      revision: 6,
+      upserts: [row("run-c2", "dev-c", 1)],
+      removed: ["run-c"],
+    });
+
+    const back = reader(h, "remote", PHONE, sinceOf(held));
+    expect(answerKinds(back.open)).toEqual([
+      [SELF, "delta"],
+      ["dev-b", "delta"],
+      ["dev-c", "delta"],
+    ]);
+    const [self, onB, onC] = back.open.devices as Answer[];
+    expect(self?.delta).toEqual({
+      epoch: "self-boot.1",
+      since: 1,
+      revision: 2,
+      upserts: [row("run-here", SELF, 2)],
+      removed: [],
+    });
+    expect(onB?.delta).toEqual({
+      epoch: "boot-dev-b.3",
+      since: 41,
+      revision: 44,
+      upserts: [blocked],
+      removed: [],
+    });
+    expect(onC?.delta).toEqual({
+      epoch: "boot-dev-c.9",
+      since: 5,
+      revision: 6,
+      upserts: [row("run-c2", "dev-c", 1)],
+      removed: ["run-c"],
+    });
+    expect(resumedCopy(held, back.open)).toEqual(copyOf(reader(h, "remote", PHONE).open));
+  });
+
+  it("PG-9 S3 — what the hub cannot vouch for is a snapshot: an owner's new epoch, a cursor below the hub's first revision, a cursor past its head", async () => {
+    const { h, phone, b } = await liveHub();
+    phone.dispose();
+    // B's chain breaks while the phone is away: the hub asks it again, and B answers on a new epoch
+    b.emit({ epoch: "boot-dev-b.3", since: 50, revision: 51, upserts: [], removed: [] });
+    expect(b.disposed).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const again = h.upstreams.attaches.at(-1);
+    if (again === undefined || again === b) throw new Error("no re-attach");
+    h.upstreams.answer(again, {
+      epoch: "boot-dev-b.4",
+      revision: 3,
+      rows: [row("run-b", "dev-b", 9)],
+    });
+    await tick();
+
+    const back = reader(h, "remote", PHONE, {
+      [SELF]: { epoch: "self-boot.1", revision: 9 }, // past the head
+      "dev-b": { epoch: "boot-dev-b.3", revision: 41 }, // the old chain
+      "dev-c": { epoch: "boot-dev-c.9", revision: 4 }, // below the revision the hub first held
+    });
+    expect(answerKinds(back.open)).toEqual([
+      [SELF, "snapshot"],
+      ["dev-b", "snapshot"],
+      ["dev-c", "snapshot"],
+    ]);
+    const [, onB] = back.open.devices as Answer[];
+    expect(onB?.snapshot).toMatchObject({ epoch: "boot-dev-b.4", revision: 3 });
+    expect(copyOf(back.open)).toEqual(copyOf(reader(h, "remote", PHONE).open));
+  });
+
+  it("PG-9 S4 — no `since` is today's open, every device whole; a device the cursors do not name is whole; one the hub does not list is not invented; the PG-1c resync stays whole", async () => {
+    const { h, phone } = await liveHub();
+    const held = copyOf(phone.open, phone.frames);
+    phone.dispose();
+    const today = reader(h, "remote", PHONE);
+    expect(answerKinds(today.open)).toEqual([
+      [SELF, "snapshot"],
+      ["dev-b", "snapshot"],
+      ["dev-c", "snapshot"],
+    ]);
+    const { "dev-c": _c, ...partial } = sinceOf(held);
+    const sent: Array<[unknown, string | undefined]> = [];
+    const install = h.board.subscribe(
+      "remote",
+      PHONE,
+      (payload, kind) => sent.push([payload, kind]),
+      { ...partial, "dev-gone": { epoch: "boot-dev-gone.1", revision: 3 } },
+    );
+    expect(answerKinds(install.snapshot)).toEqual([
+      [SELF, "resumed"],
+      ["dev-b", "resumed"],
+      ["dev-c", "snapshot"],
+    ]);
+    // PG-1c — the door's resync is the whole mesh as it stands, whatever the reader once named
+    install.resync();
+    const [resync, kind] = sent.at(-1) ?? [];
+    expect(kind).toBe("snapshot");
+    expect(answerKinds(resync as MeshBoardOpen)).toEqual([
+      [SELF, "snapshot"],
+      ["dev-b", "snapshot"],
+      ["dev-c", "snapshot"],
+    ]);
+    install.dispose();
+    today.dispose();
+  });
+
+  it("PG-9 S5 — the hub remembers MESH_RESUME_TOMBSTONES removals a device: at the bound a cursor is answered its delta; one past it, a snapshot, never a delta short of a removal", async () => {
+    const bound = AGENT_FIELD.MESH_RESUME_TOMBSTONES;
+    const h = harness([selfRow, desktop("dev-b")]);
+    const phone = reader(h, "remote", PHONE);
+    const [b] = h.upstreams.attaches;
+    if (b === undefined) throw new Error("no upstream");
+    const ids = Array.from({ length: bound + 1 }, (_, i) => `run-${i}`);
+    h.upstreams.answer(b, {
+      epoch: "boot-dev-b.3",
+      revision: 10,
+      rows: ids.map((id) => row(id, "dev-b")),
+    });
+    await tick();
+    const at10 = copyOf(phone.open, phone.frames);
+    phone.dispose();
+
+    // `bound` removals: still answerable from revision 10
+    b.emit({
+      epoch: "boot-dev-b.3",
+      since: 10,
+      revision: 11,
+      upserts: [],
+      removed: ids.slice(0, bound),
+    });
+    const atBound = reader(h, "remote", PHONE, sinceOf(at10));
+    expect(answerKinds(atBound.open)).toEqual([
+      [SELF, "resumed"],
+      ["dev-b", "delta"],
+    ]);
+    expect((atBound.open.devices[1] as Answer).delta?.removed).toHaveLength(bound);
+    const at11 = resumedCopy(at10, atBound.open);
+    expect(at11).toEqual(copyOf(reader(h, "remote", PHONE).open));
+    atBound.dispose();
+
+    // one more: the oldest removal is forgotten, so revision 10 can no longer be answered as a delta
+    b.emit({
+      epoch: "boot-dev-b.3",
+      since: 11,
+      revision: 12,
+      upserts: [],
+      removed: [ids[bound] as string],
+    });
+    const past = reader(h, "remote", PHONE, sinceOf(at10));
+    expect(answerKinds(past.open)).toEqual([
+      [SELF, "resumed"],
+      ["dev-b", "snapshot"],
+    ]);
+    expect((past.open.devices[1] as Answer).snapshot).toMatchObject({ revision: 12, rows: [] });
+    // a reader that applied revision 11 had already removed it: its delta stands
+    const after11 = reader(h, "remote", PHONE, sinceOf(at11));
+    expect((after11.open.devices[1] as Answer).delta).toEqual({
+      epoch: "boot-dev-b.3",
+      since: 11,
+      revision: 12,
+      upserts: [],
+      removed: [ids[bound]],
+    });
+  });
+
+  it("PG-9 S6 — a re-present on the SAME epoch is a new board: a cursor at its revision is answered a snapshot, never `resumed`; one past it resumes", () => {
+    const h = harness([selfRow]);
+    const phone = reader(h, "remote", PHONE);
+    const held = copyOf(phone.open, phone.frames);
+    phone.dispose();
+    // PG-1d — the gate flips while the phone is away: the same revision, other rows
+    const represented = {
+      epoch: "self-boot.1",
+      revision: 1,
+      rows: [{ ...row("run-here", SELF), status: "idle" }],
+    };
+    h.local.emit?.(represented, "snapshot");
+    const back = reader(h, "remote", PHONE, sinceOf(held));
+    expect(answerKinds(back.open)).toEqual([[SELF, "snapshot"]]);
+    expect((back.open.devices[0] as Answer).snapshot).toEqual(represented);
+    // the next delta: a reader that holds it resumes
+    h.local.emit?.({ since: 1, revision: 2, upserts: [row("run-here", SELF, 2)], removed: [] });
+    const at2 = copyOf(back.open, back.frames);
+    back.dispose();
+    const again = reader(h, "remote", PHONE, sinceOf(at2));
+    expect(answerKinds(again.open)).toEqual([[SELF, "resumed"]]);
+  });
+
+  it("PG-9 S7 — the hub never passes a reader's `since` upstream: every owner is asked {projection, minIntervalMs, heartbeatMs} alone, and a new hub's kept boards answer the cursor until the owner answers afresh", async () => {
+    const { h, phone } = await liveHub();
+    const held = copyOf(phone.open, phone.frames);
+    phone.dispose();
+    vi.advanceTimersByTime(AGENT_FIELD.MESH_HUB_LINGER_MS);
+    expect(h.board.size).toBe(0);
+    const back = reader(h, "remote", PHONE, sinceOf(held));
+    expect(h.upstreams.attaches).toHaveLength(4);
+    for (const attach of h.upstreams.attaches)
+      expect(Object.keys(attach.params as object).sort(), attach.device).toEqual([
+        "heartbeatMs",
+        "minIntervalMs",
+        "projection",
+      ]);
+    // the peers' last boards, kept past the hub (DS-L8), are what the phone holds: resumed, then replaced
+    expect(answerKinds(back.open).slice(1)).toEqual([
+      ["dev-b", "resumed"],
+      ["dev-c", "resumed"],
+    ]);
+    const [, , freshB] = h.upstreams.attaches;
+    if (freshB === undefined) throw new Error("no fresh upstream");
+    h.upstreams.answer(freshB, {
+      epoch: "boot-dev-b.5",
+      revision: 1,
+      rows: [row("run-b", "dev-b", 9)],
+    });
+    await tick();
+    expect(back.frames).toContainEqual(
+      expect.objectContaining({
+        device: "dev-b",
+        snapshot: expect.objectContaining({ epoch: "boot-dev-b.5" }),
+      }),
+    );
+  });
+
+  it("PG-9 S8 — the bytes of an app switch: an idle n20 board's resumed open is under 1 KiB; its whole open is many times that", async () => {
+    const h = harness([selfRow, desktop("dev-b"), desktop("dev-c")]);
+    const phone = reader(h, "remote", PHONE);
+    const [b, c] = h.upstreams.attaches;
+    if (b === undefined || c === undefined) throw new Error("no upstreams");
+    const twenty = (device: string) =>
+      Array.from({ length: 20 }, (_, i) => ({
+        ...row(`run-${device}-${i}`, device, i + 1),
+        status: "working",
+      }));
+    h.upstreams.answer(b, { epoch: "boot-dev-b.3", revision: 41, rows: twenty("dev-b") });
+    h.upstreams.answer(c, { epoch: "boot-dev-c.9", revision: 5, rows: twenty("dev-c") });
+    await tick();
+    const held = copyOf(phone.open, phone.frames);
+    phone.dispose();
+    const back = reader(h, "remote", PHONE, sinceOf(held));
+    const whole = reader(h, "remote", PHONE);
+    const resumedBytes = JSON.stringify(back.open).length;
+    const wholeBytes = JSON.stringify(whole.open).length;
+    expect(resumedBytes).toBeLessThan(1_024);
+    expect(wholeBytes).toBeGreaterThan(10 * resumedBytes);
   });
 });
