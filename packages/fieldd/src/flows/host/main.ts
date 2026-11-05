@@ -27,7 +27,11 @@ import type { FlowWorkerData, FromFlowWorker, ToFlowWorker } from "./worker";
 // - what V8's cap cannot see, a typed array's backing store (outside the heap, and left in every compartment by
 //   SES), this thread holds: it reads the host's resident memory every RSS_POLL_MS, and past the run's `rssMb`
 //   (FLOW_LIMITS.HOST_RSS_MB) it says `memory` and SIGKILLs the host (bth's re-read N1, ruled 13:24Z). The worker's
-//   loop may be inside one long builtin then, so the host never waits for it to end.
+//   loop may be inside one long builtin then, so the host never waits for it to end;
+// - that read goes on past the run's end, until the host has left (bth's second re-read R1, VF-PM 13:48Z): at the
+//   end the worker is terminated, and every leave terminates it and exits once it has gone, never by a
+//   `process.exit()` that would hold this thread until one long builtin ends. Past the cap after the run's end, the
+//   host is killed with no word: its end was said.
 // This thread does not lock itself down: it is another isolate than the script's, it evaluates no script text, and
 // nothing but structured-clone data crosses from the worker to it (4A2-Q7 (b): "decide, and say so").
 //
@@ -42,8 +46,10 @@ export const FLOW_WORKER_ROLE = "vibefield-flow-worker";
 
 let pipe: Socket | undefined;
 let worker: Worker | undefined;
-/** the run's end was said: `done`, `threw`, `fatal` or `memory` */
+/** the run's end was said (`done`, `threw`, `fatal` or `memory`), or the host is leaving: nothing more is said */
 let said = false;
+/** the host is leaving: its worker is being terminated, and it exits once that is done */
+let leaving = false;
 /** the host's own read of its resident memory, while its script runs */
 let rssTimer: NodeJS.Timeout | undefined;
 
@@ -59,24 +65,44 @@ function send(message: FromFlowHost): void {
 
 const textOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-/** Say the run's end, once. */
+/** Say the run's end, once, and terminate the worker: its script has nothing more to say. The resident read goes on
+ * (bth's second re-read R1): a script can go on allocating after its end. */
 function end(message: Extract<FromFlowHost, { t: "done" | "threw" | "fatal" | "memory" }>): void {
   if (said) return;
   said = true;
-  clearInterval(rssTimer);
   send(message);
+  worker?.terminate().catch(() => {});
+}
+
+/** Leave with `code`, never blocking this thread on the worker: `process.exit()` waits for the worker's thread to end,
+ * and a worker inside one long builtin does not end mid-call. So the worker is terminated, the host exits once it has
+ * gone, and the resident read runs meanwhile (bth's second re-read R1). Nothing more is said. */
+function leave(code: number): void {
+  if (leaving) return;
+  leaving = true;
+  said = true;
+  const running = worker;
+  if (running === undefined) process.exit(code);
+  running.terminate().then(
+    () => process.exit(code),
+    () => process.exit(code),
+  );
 }
 
 /** Past the resident cap: say `memory`, then SIGKILL this host, never `process.exit()`, which waits for the worker
  * to end, and one long builtin (a `fill` of gigabytes) is not interrupted mid-call. fieldd reads the frame before
- * the child's close, so the run ends `memory`; were the frame not written in the grace, the kill comes anyway. */
+ * the child's close, so the run ends `memory`; were the frame not written in the grace, the kill comes anyway. After
+ * the run's end, or once the host is leaving, there is nothing to say: the kill alone. */
 function pastResidentCap(): void {
-  if (said) return;
-  said = true;
   clearInterval(rssTimer);
   const kill = (): void => {
     process.kill(process.pid, "SIGKILL");
   };
+  if (said) {
+    kill();
+    return;
+  }
+  said = true;
   setTimeout(kill, RSS_KILL_GRACE_MS);
   if (pipe?.writable === true) pipe.write(frameOf({ t: "memory" }), kill);
   else kill();
@@ -145,7 +171,8 @@ function hear(bundle: string, raw: unknown): void {
     case "run":
       if (worker !== undefined) {
         send({ t: "fatal", reason: "a host runs one script; it was handed a second" });
-        process.exit(1);
+        leave(1);
+        return;
       }
       start(bundle, message);
       return;
@@ -158,7 +185,7 @@ function hear(bundle: string, raw: unknown): void {
       else send({ t: "pong", n: message.n, heap: getHeapStatistics().used_heap_size });
       return;
     case "shutdown":
-      process.exit(0);
+      leave(0);
   }
 }
 
@@ -187,15 +214,15 @@ export function runFlowsHost(bundle: string): void {
     (raw) => hear(bundle, raw),
     () => {
       send({ t: "fatal", reason: "fieldd's pipe carried a frame this host does not read" });
-      process.exit(1);
+      leave(1);
     },
   );
   pipe.on("data", (chunk: Buffer) => reader.read(chunk));
   // fieldd died (or closed the pipe): the host leaves with it, and its worker with it
-  pipe.on("end", () => process.exit(0));
-  pipe.on("close", () => process.exit(0));
-  pipe.on("error", () => process.exit(0));
-  process.on("SIGTERM", () => process.exit(0));
-  process.on("SIGINT", () => process.exit(0));
+  pipe.on("end", () => leave(0));
+  pipe.on("close", () => leave(0));
+  pipe.on("error", () => leave(0));
+  process.on("SIGTERM", () => leave(0));
+  process.on("SIGINT", () => leave(0));
   send({ t: "ready", pid: process.pid });
 }
