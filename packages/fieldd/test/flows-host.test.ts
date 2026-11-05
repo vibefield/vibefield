@@ -700,6 +700,19 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
   );
 
   it(
+    "H29: the run fieldd sized is the run it sends: a caller's input changed after the start never reaches the host (bth's second re-read L2)",
+    async () => {
+      // fieldd sizes the `run` frame at the start (N6) and sends it at READY, which comes later. The input is the
+      // caller's object: changed in between, a frame built again at READY would carry what was never sized
+      const input: Record<string, string> = { word: "sized" };
+      const run = await host(flow("return input.word;"), { input });
+      input["word"] = "changed after the start";
+      expect(await within(run.ended)).toEqual({ kind: "done", value: "sized" });
+    },
+    ROW_MS,
+  );
+
+  it(
     "H9: a host that misses its pings is ended, its reason `unanswered`: a script that spins",
     async () => {
       const run = await host(flow("while (true) {}"), {
