@@ -68,6 +68,40 @@ struct WayInScreenTests {
     }
   }
 
+  /// IOS-13a S3b (VF-PM 23:38Z) — what the acts' glass DRAWS, not only what the screen holds: the glass has three
+  /// slots and a foot. The welcome's legal line is its foot, under the third slot (§8, amended 2026-11-05); before
+  /// S3b the glass drew `acts.prefix(3)` and the welcome's fourth act, the legal line, was never on the screen (the
+  /// stills at ea3e37465 were the first witness that could see it). No screen may hold an act its glass drops.
+  @Test("IOS-13a: the acts' glass draws three slots and the welcome's legal line under them; no act is ever dropped")
+  func glass() {
+    let welcome = screen(.welcome(failure: nil))
+    let drawn = WayInView.glass(welcome.acts)
+    let slots = Array(welcome.acts.prefix(3))
+    #expect(drawn == WayInView.Glass(slots: slots, foot: .legal(SettingsModel.aboutLinks)))
+    let console = URL(string: "https://login.tailscale.com/admin/machines")
+    var steps: [FieldHomeModel.WayInStep] = (0...3).map { .tour($0) }
+    steps += [
+      .page(.welcome(failure: nil)), .page(.welcome(failure: "Sign-in didn’t finish.")),
+      .page(.welcome(failure: nil, expecting: login)), .page(.fromCode(desktop: "Studio", login: login)),
+      .page(.approval(machine: "iphone-17-pro", adminConsole: nil)),
+      .page(.approval(machine: "iphone-17-pro", adminConsole: console)), .page(.signInAgain(note: nil)),
+      .page(.anotherAccount(current: "a@b", expected: "c@d", from: "Mini", byLink: true)),
+      .page(.anotherAccount(current: "a@b", expected: "c@d", from: "Mini", byLink: false)),
+      .page(.joining(login: login, note: nil)), .page(.looking(login: login)), .page(.noDesktops(login: login)),
+      .found(name: "James", desktop: "studio"),
+    ]
+    for method in [LockMethod.faceID, .touchID, .passcode] {
+      steps += [.lockOffer(method), .locked(method)]
+    }
+    for step in steps {
+      let acts = FieldHomeModel.wayInScreen(step, device: .iPhone).acts
+      let glass = WayInView.glass(acts)
+      let shown = glass.slots.count + (glass.foot == nil ? 0 : 1)
+      #expect(glass.slots.count <= 3, "\(step)")
+      #expect(shown == acts.count, "\(step): the glass drops an act")
+    }
+  }
+
   /// An act's own words; approval's row carries Tailscale's machine name, which is not ours to say.
   private func said(_ act: Screen.Act) -> String {
     switch act {
