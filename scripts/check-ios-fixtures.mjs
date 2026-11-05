@@ -253,6 +253,8 @@ const requiredMirrors = [
   ["remote", [...remoteFixtures, "phone-fold.golden.json"], ["Tests/FieldProductTests"]],
   // IOS-12b — the sparks' and the needs' lists, and each kind of item, read by Chat on the phone
   ["sparks", sparkFixtures, ["Tests/FieldProductTests"]],
+  // and the two merged lists Chat's demo door answers under `-vf-mock` (ChatFixtureDoor, DEBUG)
+  ["sparks", ["compose-sparks-list.merged.json", "needs-list.merged.json"], ["Sources/FieldHome"]],
   // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's;
   // PG-3e — the body golden, which the drawn rows' bubbles are held to (PhoneBodyParityTests)
   [
