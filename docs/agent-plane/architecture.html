@@ -1849,29 +1849,46 @@
                       <p>
                         <code>packages/contracts/src/flows.ts</code><br />
                         <code>packages/fieldd/src/flows/</code> (<code>library.ts</code> · <code>records.ts</code> ·
-                        <code>static-read.ts</code>; the host at <code>flows/host/</code>, CP-4a2)
+                        <code>static-read.ts</code>; CP-4a2a: the child at <code>flows/host/</code> ·
+                        <code>protocol.ts</code> · <code>launch.ts</code> · <code>supervisor.ts</code> ·
+                        <code>module-script.ts</code> · <code>journal.ts</code> · <code>replay.ts</code>)<br />
+                        <code>packages/fieldd/src/roles.ts</code> (the <code>flows-host</code> role) ·
+                        <code>scripts/flows-host-build.mjs</code> (<code>dist/flows-host.cjs</code>)
                       </p>
                     </td>
                     <td>
                       <p>
-                        A flow's script runs in ONE Node child per run, never in fieldd: the child locks itself down
-                        with Hardened JavaScript (<code>ses</code>) and evaluates the approved bytes fieldd hands it in
-                        one compartment whose only globals are the flow API (CP-D8). Every call that touches the world
-                        (<code>agent</code>, <code>ask</code>, <code>log</code>) is a message on the child's IPC pipe;
-                        fieldd journals it, holds it to the run's scope and does it with its own services, and the
-                        journal's answers come back the same way. The child holds no door, no token and no file access;
-                        its environment is scrubbed of <code>FIELD_*</code> and <code>FIELDD_*</code> (EL7), and it
+                        A flow's script runs in ONE Node child per run, never in fieldd (4A2-Q1 (a)): fieldd's own
+                        executable re-run in its closed <code>flows-host</code> role
+                        (<code>--vibefield-role=flows-host</code>), loading <code>flows-host.cjs</code> sealed beside it,
+                        as the files and transcript workers are. The child locks itself down with Hardened JavaScript
+                        (<code>ses</code>) before anything else runs, and evaluates the approved bytes fieldd hands it
+                        (the file's two exports rewritten by acorn into one script, CP4-S4 (a)) in one compartment whose
+                        only globals are the flow API (CP-D8). Every call that touches the world (<code>agent</code>,
+                        <code>ask</code>, <code>log</code>) is a message on the child's IPC pipe, and the pipe carries
+                        bounded control alone: the script once, at most 64 KiB, and each answer at most 64 KiB, marked
+                        <code>cut</code> past it (EL2 as CP4-S10 reads it; 4A2-Q5 (a)). fieldd journals each call, every
+                        line MAC'd under <code>fieldd/flows.key</code>, which never leaves fieldd (CP4-S15); it holds the
+                        call to the run's scope and does it with its own services, and the journal's answers come back
+                        the same way. A call the journal already answered is answered from it again, by its key and its
+                        <code>#n</code>, so a child started again replays and sends nothing twice. The child holds no
+                        door, no token, no key and no file access; its environment is <code>PATH</code> alone, so no
+                        <code>FIELD_*</code> or <code>FIELDD_*</code> variable reaches it (EL7; 4A2-Q6 (b)). It answers
+                        fieldd's ping with the heap it uses: fieldd ends a child that misses the ping or passes the cap,
+                        a cap measured by pong and not enforced by V8, since a packaged executable takes no heap flag, and
+                        the run says so in fieldd's words (4A2-Q7 (a); <code>FLOW_LIMITS</code>, provisional). It
                         leaves when its pipe closes or when every call it awaits is unanswered (CP-D9). Before any run,
                         fieldd reads a script's bytes without running them (<code>acorn</code>, the static read that a
-                        proposal's card shows, CP4-Q3 (a)). Both packages are fieldd's alone, held by R32, and
-                        <code>flows/</code> imports no puppeteer or rosetta package: a step's result reaches it through
+                        proposal's card shows, CP4-Q3 (a)). Both packages are fieldd's alone, held by R32, whose host
+                        clause keeps the child to <code>ses</code>, <code>node:</code> built-ins and its own protocol
+                        file; and <code>flows/</code> imports no puppeteer or rosetta package: a step's result reaches it through
                         a fieldd interface over the runtime's events, never a vendor's file (AR-L1). The design:
                         <code>step0-cp4.md</code> §5.1, on the round's CP-4 marks, ruled 2026-11-04.
                       </p>
                     </td>
                     <td>
                       <span class="badge tone-designed">Designed</span>
-                      <p>CP-4a1 (2026-11-05) built the library, the signed approvals and proposals, and the static read; the host, the journal and the runs are CP-4a2's. The seam's owner is api's <a href="api.html#cat-flows"><code>flows.*</code> doors</a>.</p>
+                      <p>CP-4a1 (2026-11-05) built the library, the signed approvals and proposals, and the static read. CP-4a2a builds the host, its packaging, the journal and replay; the runs, a step's lines, the doors' handlers and the verbs are CP-4a2b's (4A2-Q2 (b), ruled by VF-PM 2026-11-05 08:51Z). The seam's owner is api's <a href="api.html#cat-flows"><code>flows.*</code> doors</a>.</p>
                     </td>
                   </tr>
                   <tr>
