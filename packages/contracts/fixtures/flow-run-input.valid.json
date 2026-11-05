@@ -1,0 +1,6 @@
+{
+  "flow": "release-check",
+  "input": {
+    "target": "run-51"
+  }
+}

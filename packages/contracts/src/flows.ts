@@ -429,6 +429,17 @@ export const FlowRunRecord = z
   .passthrough();
 export type FlowRunRecord = z.infer<typeof FlowRunRecord>;
 
+/** CP-4a2b (13b.3's C4, C11) — RED STUBS: 13b.4 builds a step's `cut` and the bounded list. */
+export function flowStepCutOf(_step: FlowRunStep): boolean {
+  return false;
+}
+export function flowsListOf(
+  _live: readonly RunSummary[],
+  _ended: readonly RunSummary[],
+): { runs: RunSummary[]; earlier?: number } {
+  return { runs: [] };
+}
+
 // ── the window's doors (methods.ts: agents.manage, local; VF-PM 2026-11-05 01:22Z) ──
 
 /** flows.list and flows.subscribe: this desktop's library and runs. */
@@ -501,6 +512,13 @@ export const FlowsScriptResult = z
   })
   .passthrough();
 export type FlowsScriptResult = z.infer<typeof FlowsScriptResult>;
+
+/** CP-4a2b (13b.3's C8) — RED STUBS: 13b.4 builds the verbs' shapes. */
+export const FlowRunInput: z.ZodType<unknown> = z.never();
+export const FlowReadInput: z.ZodType<unknown> = z.never();
+export const FlowReadOutput: z.ZodType<unknown> = z.never();
+export const FlowProposeInput: z.ZodType<unknown> = z.never();
+export const FlowProposeOutput: z.ZodType<unknown> = z.never();
 
 // ── a run's journal (CP-4a2a; CP4-S15, CP-D9; DESIGN.md §9 "What VibeField keeps, when it cannot read it", its
 // CP-4a2a note): one JSONL file per run beside the approvals, under LAYOUT.FLOWS_DIR (fieldd's `flows/journal.ts`

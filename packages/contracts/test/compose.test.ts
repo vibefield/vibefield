@@ -2,10 +2,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { AgentFieldSnapshot, AgentRemoteRow } from "../src/agent-field";
 import { AgentSessionRecord, AgentSessionSummary, CrewId } from "../src/agent-session";
 import {
   AgentInputQueueFile,
+  AgentInputSender,
+  AgentQueuedInput,
   COMPOSE_DESKTOP_STATES,
   COMPOSE_SAY_CHIPS_MAX,
   COMPOSE_SAY_STATES,
@@ -24,6 +27,7 @@ import {
   composeDesktopStateOf,
   composeSayStateOf,
   crewSharedModelOf,
+  flowLineOf,
   NEEDS_CHOICE_MAX,
   NEEDS_CHOICE_WORDS,
   NEEDS_JOINED_ITEMS_MAX,
@@ -795,5 +799,75 @@ describe("CP-4a2b — a flow's seven acts, one authority (13b.3's C7; DESIGN.md 
         expect(own.has(act), act).toBe(true);
       }
     }
+  });
+});
+
+describe("CP-4a2b — a flow's words in a session's queue (13b.3's C1–C3; Q9 (a), Q-B1 (a), Q-B2 (a))", () => {
+  const fromOf = (name: string) =>
+    (AgentInputQueueFile.parse(fixture(name)).inputs[0] as { from: AgentInputSender }).from;
+
+  it("C1: VibeField's own line to a flow's step names its run, call, reason and n; flowLineOf reads the reason", () => {
+    const from = fromOf("agent-input-queue.flow-line");
+    expect(from).toMatchObject({
+      kind: "fieldd",
+      flow: { run: "fr-k3v9q2m7x1", call: 39, line: "repair", n: 1 },
+    });
+    expect(flowLineOf(from)).toBe("repair");
+    for (const line of ["repair", "resume", "unheard"])
+      expect(
+        flowLineOf({
+          kind: "fieldd",
+          flow: { run: "fr-x", call: 1, line, n: 1 },
+        } as AgentInputSender),
+        line,
+      ).toBe(line);
+    // OPEN: a reason a newer build sends reads as none this build names; and `flow` is optional
+    expect(
+      flowLineOf({
+        kind: "fieldd",
+        flow: { run: "fr-x", call: 1, line: "later", n: 1 },
+      } as AgentInputSender),
+    ).toBeUndefined();
+    expect(flowLineOf({ kind: "fieldd" })).toBeUndefined();
+    expect(fromOf("agent-input-queue.valid")).toBeDefined();
+  });
+
+  it("C2: a flow's own words ride the closed `flow` sender: its slug, its name for the mark, its run and call, and who ran it", () => {
+    expect(fromOf("agent-input-queue.flow-in")).toEqual({
+      kind: "flow",
+      flow: "release-check",
+      name: "Release check",
+      run: "fr-k3v9q2m7x1",
+      call: 39,
+      ran: "Vela",
+    });
+    const yours = {
+      kind: "flow",
+      flow: "release-check",
+      name: "Release check",
+      run: "fr-k3v9q2m7x1",
+      call: 1,
+    };
+    expect(AgentInputSender.safeParse(yours).success).toBe(true);
+    expect(AgentInputSender.safeParse({ ...yours, run: undefined }).success).toBe(false);
+    expect(AgentInputSender.safeParse({ ...yours, call: 0 }).success).toBe(false);
+    expect(
+      AgentInputSender.safeParse({ ...yours, name: "x".repeat(NEEDS_NAME_MAX + 1) }).success,
+    ).toBe(false);
+  });
+
+  it("C3 (a pin, the downgrade edge): an older build sets a file with a `flow` input aside whole; a `fieldd` line with `flow` still reads", () => {
+    // today's union, copied: the senders a build before CP-4a2b knows
+    const before = z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("spark") }).passthrough(),
+      z.object({ kind: z.literal("fieldd") }).passthrough(),
+      z.object({ kind: z.literal("you") }).passthrough(),
+    ]);
+    const older = AgentInputQueueFile.extend({
+      inputs: z.array(AgentQueuedInput.extend({ from: before })).min(1),
+    });
+    // the whole file, the person's own queued words in it included, is set aside and none of it delivered
+    expect(older.safeParse(fixture("agent-input-queue.flow-in")).success).toBe(false);
+    expect(older.safeParse(fixture("agent-input-queue.flow-line")).success).toBe(true);
   });
 });

@@ -1,0 +1,19 @@
+{
+  "proposal": "fp-9d4e2a7c1b",
+  "hash": "ffe093265fa8ada081e77b87d6311a7a0079580e98c7739307e85d3c6c471870",
+  "item": "ny-2a9c4e6b8d0f1357",
+  "read": {
+    "meta": {
+      "name": "Release check"
+    },
+    "calls": [
+      {
+        "line": 3,
+        "label": "review"
+      }
+    ],
+    "gates": [],
+    "unlisted": false,
+    "refusals": []
+  }
+}

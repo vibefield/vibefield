@@ -613,6 +613,11 @@ export const AgentInputSender = z.discriminatedUnion("kind", [
 ]);
 export type AgentInputSender = z.infer<typeof AgentInputSender>;
 
+/** CP-4a2b (13b.3's C1) — RED STUB: 13b.4 reads a VibeField line's reason to a flow's step. */
+export function flowLineOf(_sender: { readonly kind: string }): string | undefined {
+  return undefined;
+}
+
 /** The needs-you items one joined wake may carry (item 158, CO-Q9 (b)): twice NEEDS_OPEN_PER_SPARK, for a spark's
  * open items and the facts of their answers. A wake at the bound starts a new input. Stated here, before its use,
  * since the needs bounds are declared below. */

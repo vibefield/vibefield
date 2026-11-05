@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  AgentInputSender,
   NEEDS_CHOICES_MAX,
   NEEDS_ITEM_KINDS,
   NeedsItem,
@@ -21,6 +22,7 @@ import {
   FLOW_READ_REFUSALS,
   FLOW_RECORD_FORMAT,
   FLOW_RUN_STATES,
+  FLOW_RUNS_LISTED_MAX,
   FLOW_STEP_STATES,
   FlowApprovalRecord,
   FlowCallKey,
@@ -30,8 +32,13 @@ import {
   FlowJournalLine,
   FlowMeta,
   FlowProposalRecord,
+  FlowProposeInput,
+  FlowProposeOutput,
   FlowRead,
+  FlowReadInput,
+  FlowReadOutput,
   FlowRunId,
+  FlowRunInput,
   FlowRunRecord,
   FlowSlug,
   FlowsListResult,
@@ -39,13 +46,17 @@ import {
   FlowsRunResult,
   FlowsScriptParams,
   FlowsScriptResult,
+  FlowsStopParams,
   FlowsStopResult,
   flowAnswerBytes,
   flowEntryStateOf,
   flowJournalLineOf,
   flowRefusalOf,
   flowRunStateOf,
+  flowStepCutOf,
   flowStepStateOf,
+  flowsListOf,
+  type RunSummary,
 } from "../src/flows";
 import { METHODS, reachableFromTailnet } from "../src/methods";
 import {
@@ -522,5 +533,86 @@ describe("CP-4a2b — a run's record, its states and its bounds (13b.3's C6, C9,
   it("C12: `stopping` is a run's state: a Stop sent and not yet heard (D4)", () => {
     expect(flowRunStateOf({ state: "stopping" })).toBe("stopping");
     expect(FLOW_RUN_STATES).toContain("stopping");
+  });
+});
+
+describe("CP-4a2b — the runs on the wire (13b.3's C4, C8, C10, C11)", () => {
+  const summary = (run: string, startedAt: string, endedAt?: string): RunSummary => ({
+    run,
+    flow: "release-check",
+    name: "Release check",
+    n: 1,
+    hash: createHash("sha256").update(run).digest("hex"),
+    state: endedAt === undefined ? "running" : "done",
+    calls: 0,
+    steps: [],
+    starter: { by: "you" },
+    startedAt,
+    ...(endedAt !== undefined ? { endedAt } : {}),
+  });
+
+  it("C4: a step whose answer was cut says so, and flowStepCutOf reads it", () => {
+    const list = FlowsListResult.parse(fixture("flows-list.cut"));
+    const step = list.runs[0]?.steps[0];
+    if (step === undefined) throw new Error("the fixture's run has no step");
+    expect(step).toMatchObject({ call: 40, cut: true });
+    expect(flowStepCutOf(step)).toBe(true);
+    expect(flowStepCutOf({ call: 1, state: "answered" })).toBe(false);
+  });
+
+  it("C8: the verbs' shapes: flow_run takes a flow and its input and never a starter; flow_read a run; flow_propose its text", () => {
+    expect(FlowRunInput.safeParse(fixture("flow-run-input.valid")).success).toBe(true);
+    // the starter is the caller's, never the input's (CL-E7-1)
+    for (const named of [{ spark: "sp-7k2m9q4x" }, { starter: { by: "you" } }])
+      expect(
+        FlowRunInput.safeParse({ flow: "release-check", ...named }).success,
+        Object.keys(named)[0],
+      ).toBe(false);
+    expect(FlowReadInput.safeParse(fixture("flow-read-input.valid")).success).toBe(true);
+    expect(FlowReadOutput.safeParse(fixture("flow-read-output.valid")).success).toBe(true);
+    expect(FlowProposeInput.safeParse(fixture("flow-propose-input.valid")).success).toBe(true);
+    // past 64 KiB as UTF-8, however few its characters (é is two bytes)
+    const big = "é".repeat(FLOW_LIMITS.SCRIPT_MAX_BYTES / 2 + 1);
+    expect(FlowProposeInput.safeParse({ flow: "big", text: big }).success).toBe(false);
+    expect(FlowProposeOutput.safeParse(fixture("flow-propose-output.valid")).success).toBe(true);
+    // flow_stop is the window's own pair, FlowsStopParams and FlowsStopResult
+    expect(FlowsStopParams.safeParse({ run: "fr-k3v9q2m7x1" }).success).toBe(true);
+  });
+
+  it("C10: a flow's sender in a session's queue takes the strict forms flows.ts holds, the longest of each", () => {
+    const run = `fr-${"z".repeat(32)}`;
+    const flow = "x".repeat(63);
+    expect(FlowRunId.safeParse(run).success).toBe(true);
+    expect(FlowSlug.safeParse(flow).success).toBe(true);
+    const sender = { kind: "flow", flow, name: "N", run, call: 1 };
+    expect(AgentInputSender.safeParse(sender).success).toBe(true);
+    expect(
+      AgentInputSender.safeParse({ kind: "fieldd", flow: { run, call: 1, line: "repair", n: 1 } })
+        .success,
+    ).toBe(true);
+  });
+
+  it("C11: a list takes every live run, then the latest ended, to 64 in all, latest first, and counts what it leaves out", () => {
+    const live = [1, 3, 2].map((i) => summary(`fr-live00${i}`, `2026-11-05T0${i}:00:00.000Z`));
+    const ended = Array.from({ length: 70 }, (_, i) =>
+      summary(
+        `fr-ended${String(i).padStart(3, "0")}`,
+        "2026-11-04T00:00:00.000Z",
+        `2026-11-04T${String(i % 24).padStart(2, "0")}:${String(i).padStart(2, "0").slice(-2)}:00.000Z`,
+      ),
+    );
+    const listed = flowsListOf(live, ended);
+    expect(listed.runs).toHaveLength(FLOW_RUNS_LISTED_MAX);
+    expect(listed.runs.slice(0, 3).map((r) => r.run)).toEqual([
+      "fr-live003",
+      "fr-live002",
+      "fr-live001",
+    ]);
+    expect(listed.earlier).toBe(9);
+    const kept = listed.runs.slice(3).map((r) => r.endedAt ?? "");
+    expect(kept).toEqual([...kept].sort().reverse());
+    // a list that leaves nothing out says no `earlier`
+    expect(flowsListOf(live, ended.slice(0, 2)).earlier).toBeUndefined();
+    expect(FlowsListResult.parse(fixture("flows-list.cut")).earlier).toBe(9);
   });
 });

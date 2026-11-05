@@ -1,0 +1,4 @@
+{
+  "flow": "release-check",
+  "text": "export const meta = { name: \"Release check\" };\nexport default async function () {\n  return await agent(\"review the diff\", { label: \"review\" });\n}\n"
+}

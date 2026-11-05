@@ -179,7 +179,12 @@ import {
   FlowJournalHead,
   FlowJournalKnownLine,
   FlowProposalRecord,
+  FlowProposeInput,
+  FlowProposeOutput,
   FlowRead,
+  FlowReadInput,
+  FlowReadOutput,
+  FlowRunInput,
   FlowRunRecord,
   FlowsListResult,
   FlowsRunParams,
@@ -1021,6 +1026,13 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // CP-4a2b — a run's record (13a's §13a.0b): the valid one, and one whose tail a same-uid agent forged (a shape still;
   // the store finds the forgery by the journal's MACs)
   "flow-run-record": FlowRunRecord,
+  // CP-4a2b (13b.3's C8; Q-B6 (a): the verbs' shapes, unserved until CP-4b) — flow_run, flow_read and flow_propose;
+  // flow_stop is the window's own pair ("flows-stop")
+  "flow-run-input": FlowRunInput,
+  "flow-read-input": FlowReadInput,
+  "flow-read-output": FlowReadOutput,
+  "flow-propose-input": FlowProposeInput,
+  "flow-propose-output": FlowProposeOutput,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

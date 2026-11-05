@@ -1,0 +1,44 @@
+{
+  "flows": [],
+  "runs": [
+    {
+      "run": "fr-k3v9q2m7x1",
+      "flow": "release-check",
+      "name": "Release check",
+      "n": 14,
+      "hash": "ffe093265fa8ada081e77b87d6311a7a0079580e98c7739307e85d3c6c471870",
+      "state": "holding",
+      "calls": 2,
+      "steps": [
+        {
+          "call": 40,
+          "label": "notes",
+          "agent": "codex",
+          "session": "run-2b9f4c61",
+          "state": "answered",
+          "cut": true
+        }
+      ],
+      "starter": {
+        "by": "you"
+      },
+      "startedAt": "2026-11-05T02:51:10.000Z"
+    },
+    {
+      "run": "fr-m4n6p8r0t2",
+      "flow": "release-check",
+      "name": "Release check",
+      "n": 13,
+      "hash": "ffe093265fa8ada081e77b87d6311a7a0079580e98c7739307e85d3c6c471870",
+      "state": "done",
+      "calls": 2,
+      "steps": [],
+      "starter": {
+        "by": "you"
+      },
+      "startedAt": "2026-11-05T01:40:00.000Z",
+      "endedAt": "2026-11-05T01:52:31.000Z"
+    }
+  ],
+  "earlier": 9
+}
