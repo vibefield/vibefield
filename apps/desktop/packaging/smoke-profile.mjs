@@ -11,10 +11,12 @@ import { join } from "node:path";
 //
 // BP-1c (BP-D9 (a), `draft/thinking-browser-profile.md` §3·8) — a smoke's HOME (`mintSmokeHome`): ONE fresh directory
 // under the short socket root that is both the run's Electron userData and its data root, as a packaged app's
-// `appData/VibeField` is both. Main knows a handed home by its name and roots the daemons in it (main/fieldd.ts
-// `dataRoot`), so the desk browser's profiles (`<home>/users/<fuid>/browser/profiles`) lie inside userData, where
-// Chromium writes their cookie database. `mintSmokeProfile` (the profile alone, under the OS temp) stays for the
-// launchers whose runs keep the two apart: the first-run walks and the soaks.
+// `appData/VibeField` is both. Main takes a handed home as the run's by its name, the run's mark naming it (`VF_SMOKE_RUN`,
+// which run-smoke.mjs sets to the home's name) and its freshness (no `DATA_ROOT_MARKS` in it yet: main's
+// `smokeHomeRefusal`), and roots the daemons in it (main/fieldd.ts `dataRoot`), so the desk browser's profiles
+// (`<home>/users/<fuid>/browser/profiles`) lie inside userData, where Chromium writes their cookie database.
+// `mintSmokeProfile` (the profile alone, under the OS temp) stays for the launchers whose runs keep the two apart: the
+// first-run walks and the soaks.
 
 /** Same prefix main mints under (`SMOKE_PROFILE_PREFIX`). */
 export const SMOKE_PROFILE_PREFIX = "vf-smoke-profile-";
