@@ -14,6 +14,12 @@ const STUDIO_PATH = /(^|\/)studio([-./]|$)/i;
 // drops the module, so finding the marker here means the fold stopped working —
 // which is the only way lab instrumentation could reach a packaged renderer.
 const PERF_LAB_MARKER = "vibefield-terminal-perf-lab-only";
+// LP-6 (HK Q3: James 2026-10-28 "B"): Godview's System control, the surface lab,
+// is development's alone. GodviewOverlay mounts GodviewTuningPanel only under the
+// literal `import.meta.env.DEV`, which this build folds to false, so rollup drops
+// the component and the attribute value below, which only its body carries.
+// Finding it means the fold stopped working and the lab ships.
+const SYSTEM_CONTROL_MARKER = "vibefield-godview-system-control-dev-only";
 
 function walk(directory, output = []) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -43,6 +49,9 @@ for (const absolute of files) {
     }
     if (contents.includes(STUDIO_MARKER)) leaks.push(`${path} contains the Studio marker`);
     if (contents.includes(PERF_LAB_MARKER)) leaks.push(`${path} contains the perf-lab marker`);
+    if (contents.includes(SYSTEM_CONTROL_MARKER)) {
+      leaks.push(`${path} contains Godview's System control (the surface lab)`);
+    }
   }
 }
 
@@ -68,5 +77,5 @@ if (entryTags?.length !== 1 || !entryTags[0].includes('blocking="render"')) {
 
 const bytes = files.reduce((total, file) => total + statSync(file).size, 0);
 process.stdout.write(
-  `production UI boundary OK — ${files.length} files, ${bytes.toLocaleString("en-US")} bytes; Studio, Design System catalog, and perf lab absent\n`,
+  `production UI boundary OK — ${files.length} files, ${bytes.toLocaleString("en-US")} bytes; Studio, Design System catalog, perf lab and System control absent\n`,
 );

@@ -193,6 +193,11 @@ export function GodviewTuningPanel({
       id="vf-godview-tweak-panel"
       className={`vf-godview-tweak-panel theme-${theme}`}
       aria-label="Godview system controls"
+      // LP-6 (HK Q3): the surface lab is development's alone. This literal lives
+      // only in this component's body, so it reaches a bundle only with the
+      // panel's code: electron-shell's verify-production-renderer.mjs fails
+      // `build:renderer` if the production renderer carries it.
+      data-vibefield-dev-only="vibefield-godview-system-control-dev-only"
     >
       <header className="vf-godview-tweak-header">
         <span>SYSTEM CONTROL</span>

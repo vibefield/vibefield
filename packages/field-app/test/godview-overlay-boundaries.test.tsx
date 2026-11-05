@@ -20,6 +20,9 @@
  * real one, on fieldd's real backend through the scripted model board.
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { FrameViewState } from "@vibefield/contracts";
 import { act, useEffect, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -399,6 +402,25 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it("the panel carries the marker the production renderer's gate refuses, so every `build:renderer` proves the fold (LP-6, Q3)", async () => {
+    // vitest cannot see `vite build` drop the panel; electron-shell's
+    // verify-production-renderer.mjs can, by this one literal in its body
+    await mountOverlay();
+    await toggleSystemControl();
+    const marker = document
+      .getElementById("vf-godview-tweak-panel")
+      ?.getAttribute("data-vibefield-dev-only");
+    expect(marker).toBe("vibefield-godview-system-control-dev-only");
+    const gate = readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../electron-shell/scripts/verify-production-renderer.mjs",
+      ),
+      "utf8",
+    );
+    expect(gate).toContain(`const SYSTEM_CONTROL_MARKER = "${marker}";`);
   });
 
   it("lends the frame's Peek its Live now while Godview shows, and withdraws it when it closes (P2 — Find left the stage)", async () => {
