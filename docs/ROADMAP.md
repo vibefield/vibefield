@@ -414,11 +414,15 @@ phone"; DECISIONS PC
 - Landed 11-05: **MA-0a + MA-1a, DESIGN.md first and the contracts** (`91c280bbf` → `f657f6dfe`, stacked as M152,
   run 152; LANDED "MA-0a + MA-1a"): the phone's and the desk's Apps in DESIGN.md; six doors declared with no handler
   yet, the scope `apps.use`, `MADE_APP_LIMITS`, three LAYOUT rows (the gen) and the seam's pages.
-- Next: **MA-3, fieldd** (lane `ma-3`: the library reader, the `apps` table and its peer door, the fold, the made
-  serve and the six handlers) → **MA-4, the desk** (held at its mint until James rules MA's place in 0.9) · rosetta
-  0.1.4 (RO-32…RO-35, drafted in `lanes/ma/rosetta`; James files and releases it) → its EL8 → MA-3f, serving →
-  MA-3h, Keep and Hide as intent · **MA-6, the phone's shelf** after IOS-13a · **MA-5, the phone's host** after SP-4
-  and its probes P1/P2 (cp-landing's queue).
+- Landed 11-05: **MA-3a, 3b, 3d and 3c, M-A** (`82b5c18fe` → `32192ed1f`, stacked as M157, run 157; LANDED "MA-3a,
+  3b, 3d and 3c (M-A)"): the library reader and the `apps` table, the made-app service, the replica and the fold, and
+  Electron's capture of a made app. They are tested modules with nothing wired, so the six doors still answer
+  method-not-found.
+- Next: **MA-3e, M-B** (lane `ma-3`: the wiring in `daemon.ts`, the six handlers, the home's reveal, the two-daemon
+  e2e) → **MA-4, the desk** (held at its mint until James rules MA's place in 0.9) · rosetta 0.1.4 (RO-32…RO-35,
+  drafted in `lanes/ma/rosetta`; James files and releases it) → its EL8 → MA-3f, serving → MA-3h, Keep and Hide as
+  intent · **MA-6, the phone's shelf** after IOS-13a · **MA-5, the phone's host** after SP-4 and its probes P1/P2
+  (cp-landing's queue).
 - Owed: the 10 words marked ‹for James› in DESIGN.md §8 and §9; MA's place in 0.9 (James; the lean: 0.10, with
   nothing visible in build 6); carried from AH: AH-4's review, its LANDED entry and its physical witnesses
   (`cce684ce3`, on main since 08-03), AH-1's two-client witness, AH-3's physical closeout, and device-retirement GC

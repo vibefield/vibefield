@@ -34895,3 +34895,78 @@ clean-Mac row meets", and ruled with prod-builder from 11:33Z to 11:54Z. Item 18
   (`dad367812`), and Chat draws it with its crew's card.
 - The records beyond LANDED, ROADMAP and DECISIONS: desk-gates row 23's 11m clause names the owed crew step, and
   architecture.html's compose row gains SP-1e2's two halves in its Built cell.
+
+## MA-3a, 3b, 3d and 3c (M-A) — the made apps' fieldd modules and Electron's capture of a made app, tested and not yet wired: the six MA doors still answer method-not-found until M-B (track MA) (2026-11-05; `82b5c18fe` → `32192ed1f`, 8 commits on main `0e4fc5306`, lane `ma/3-fieldd` in `/Volumes/SamsungRed/lanes/ma-3/vibe-field`, re-cut by `git replay` as `ma/3a-T`, stacked as M157 `32192ed1f`, run 157)
+- MA-3 is split into two mints (VF-PM, 13:38Z). This one, M-A, is four slices, each red then green: the library reader
+  and the `apps` table, the made-app service, the replica and the fold, and Electron's capture. They are modules with
+  their own tests, built to the contracts MA-1a landed (M152) and to `lanes/ma/RULINGS.md`.
+- **The honest state: nothing in `daemon.ts` constructs them.** `index.apps.*`, `index.artifacts`, `artifact.open`
+  and `artifact.mark` still answer method-not-found. M-B (3e) wires the three modules and answers the doors, and its
+  two-daemon e2e is its witness.
+
+**What landed.** 16 files, +10279 −5.
+- Pin-class: none. Release-class: none. Rust: none (field-native unchanged). Locks: 0. No contracts `src` changed.
+- The lane's proven tip `7782a89bf` was replayed onto main with no worktree: range-diff 8/8 `=`, and every file's
+  lines identical. It shares 0 files with what landed since `f657f6dfe`.
+- **3a, the reader and the table** (`agent-index.ts` +94, `index-apps.ts` new):
+  - `IndexService.artifacts` reads rosetta's `GET /api/artifacts` in its own spelling. A 410 is cursor-expired and a
+    400 is bad-filter. A malformed page is UNAVAILABLE `malformed`, said once per member path and never the ask (EL7).
+  - `IndexApps` walks the library into one table capped at `MADE_APP_LIMITS.ROWS`. Only a completed walk removes a
+    row (L13), and it reads one page at a time. It re-reads after a `sessions` change, at its floor.
+  - Each frame carries its owner's standing (`libraryReady`, a claim-checked `previewsBase`). Each row is built
+    member by member, so a path can't ride one, and the agent comes through the catalog's reader.
+- **3b, the made-app service** (`made-app-service.ts` new; `artifact-service.ts`'s one option):
+  - A private registry, durable first (0600).
+  - `open` refuses in the contract's order, exports into `made/<appId>/<digest>/`, assigns a port once by the made
+    rule in AH's range, and serves through Truffle's routes. It answers `serving` only on a URL that passes the AH §6
+    claim, the app's port and this desktop's MagicDNS name, and `starting` otherwise.
+  - The idle close, the shared ceiling with AH's 128, and the stray sweep.
+  - One previews serve over `artifacts/made-previews/`. Each capture is hard-linked there with `fs.link`, never read
+    (EL2).
+  - Intent is read by fold key and is unknown until the table speaks.
+  - The exporter is an interface. At rosetta 0.1.3 it answers `export-unbuilt`.
+- **3d, the replica and the fold** (`index-apps-mesh.ts` new):
+  - One `index.apps.catalog.subscribe` per online self peer. A peer that refuses the door marks only its apps
+    unsupported, never the peer.
+  - Copies are persisted per device, 0600, and an asleep peer's rows are kept.
+  - The fold runs through `madeAppFoldKey`, with the newest presentation serving.
+  - A peer's `previewsBase` is kept only when its host is that peer's MagicDNS name. Otherwise it is stripped, never
+    rewritten (C16).
+  - Its own change pings, never IndexMesh's.
+- **3c, Electron's capture** (`artifact-preview-capture.ts`, `shell-provider.ts`):
+  - The guard admits https subresources whose host is exactly one of `allowHosts`, with no port and no credentials.
+    It never admits a document (`mainFrame`, `subFrame`, `object`).
+  - Every capture answers its JPEG's sha256 as `digest`.
+  - A live artifact's guard behaves as before.
+
+**Validation.**
+- The MacBook, targeted lights only (VF-PM's 12:16Z ruling, the Mac pinned by its own load), at nice 19. The fieldd
+  files ran as the SPEED tool with no global setup (speed, not proof):
+  - `agent-index-artifacts`: red 1 failed | 15 passed, by assertion; green 16/16.
+  - `index-apps`: red 7 failed | 27 passed, by assertion; green 34/34.
+  - `made-app-service`: 35/35.
+  - `index-apps-mesh`: 27/27, and 4 failed | 23 passed against the red, by assertion.
+  - The electron-shell files (real vitest): `artifact-preview-capture` 21/21, `shell-provider` 20/20.
+  - tsc on fieldd and electron-shell: 0.
+  - Two adversarial lenses reviewed each slice, and their fixes ride the greens.
+- The mini, run 157 (a9's mint of `32192ed1f` on `0e4fc5306`, HAS `320d4b882`): `pnpm verify` exit 0 at 14:25:50Z.
+  - fieldd 3328|14 (+113): agent-index-artifacts 16, index-apps 34, index-apps-mesh 27 and made-app-service 35, all
+    new; artifact-service 43 → 44.
+  - electron-shell 2668|2 (+17): capture 8 → 21, provider 16 → 20.
+  - vitest 13,133 passed, 0 failed, 20 skipped; biome 3352.
+  - contracts 1734, field-app 4031, node 466 and cargo 545, each unchanged; census "no drift"; no step 2.
+  - The log is `/Volumes/SamsungRed/lanes/ts6/logs/mini/run157/verify.log`, sha256
+    `b0580a3ca28b65440569367a870938bf41c23b5f9e8928b9fec925b77fe47450`.
+- The land: main fast-forwarded `0e4fc5306` → `32192ed1f` at 14:27:59Z (the fixer), 16 files +10279 −5.
+
+**Found.**
+- 3c refuses a document from a page's CDN hosts as well as other origins (`object` included). An agent page's own
+  frames stay on its origin; that is inside MA-L7, and the lead let it stand.
+- 3b renamed the rows' readiness `speaks()` ("the first walk landed AND rosetta's last `canonical_ready`"), so an
+  intent is never read from a table that has not spoken.
+
+**Owed.**
+- M-B (3e): the wiring in `daemon.ts`, the six handlers, the home's `reveal`, and the two-daemon e2e, re-cut onto
+  this entry's records.
+- 3h: Keep and Hide as replicated intent.
+- 3f: serving, after rosetta 0.1.4's EL8.
