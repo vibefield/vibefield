@@ -113,6 +113,25 @@ export interface SwitchResult {
   after: { frames: number; resets: number; bytes: number };
 }
 
+/** What the idle window's upserts changed (VF-PM, 2026-11-05 06:35Z): each upsert diffed, leaf by leaf, against
+ * the row the phone last held, and classed by the monitor row's field it touched. `revision` (every upsert's own
+ * stamp) is not a change. The raw paths are kept beside the classes, so the classing can be checked. */
+export interface IdleAttribution {
+  upserts: number;
+  /** only `monitorRow.cost` or `.tokens` changed: the backend's cost step (PU-I) */
+  costOnly: number;
+  /** only recency and status fields changed (`RECENCY_FIELDS`) */
+  recencyOnly: number;
+  /** cost and recency fields, and nothing else */
+  costAndRecency: number;
+  /** any other field, or a row new to the phone */
+  other: number;
+  /** each changed path, and how many idle upserts changed it */
+  paths: Record<string, number>;
+  /** each idle frame that carried upserts, by its offset from the window's start */
+  frameAtMs: number[];
+}
+
 export interface MeshBenchResult {
   recipe: string;
   n: number;
@@ -123,6 +142,7 @@ export interface MeshBenchResult {
   open: { devices: number; rows: number; bytes: number };
   busy: WireTally;
   idle: WireTally;
+  idleAttribution: IdleAttribution;
   switches: SwitchResult[];
 }
 
@@ -265,6 +285,75 @@ function emptyTally(): WireTally {
   };
 }
 
+/** The monitor row's fields an upsert changes when nothing but the clock moved: the backend's cost step. */
+const COST_FIELDS = new Set(["cost", "tokens"]);
+/** ...and the fields that flip as a row ages: its status, recency and liveness. */
+const RECENCY_FIELDS = new Set([
+  "status",
+  "statusSince",
+  "stale",
+  "alive",
+  "activity",
+  "wait",
+  "observed",
+  "pending",
+]);
+
+function emptyAttribution(): IdleAttribution {
+  return {
+    upserts: 0,
+    costOnly: 0,
+    recencyOnly: 0,
+    costAndRecency: 0,
+    other: 0,
+    paths: {},
+    frameAtMs: [],
+  };
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The leaf paths where two rows differ; an array is one leaf. */
+function changedPaths(before: unknown, after: unknown, at: string, out: string[]): void {
+  if (JSON.stringify(before) === JSON.stringify(after)) return;
+  if (isRecord(before) && isRecord(after)) {
+    for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      changedPaths(before[key], after[key], at === "" ? key : `${at}.${key}`, out);
+    }
+    return;
+  }
+  out.push(at);
+}
+
+/** One idle upsert against the row the phone held: its class, and its paths into the tally. */
+function attribute(into: IdleAttribution, before: unknown, after: unknown): void {
+  into.upserts += 1;
+  if (before === undefined) {
+    into.other += 1;
+    into.paths["(a row new to the phone)"] = (into.paths["(a row new to the phone)"] ?? 0) + 1;
+    return;
+  }
+  const paths: string[] = [];
+  changedPaths(before, after, "", paths);
+  let cost = false;
+  let recency = false;
+  let other = false;
+  for (const path of paths) {
+    if (path === "revision") continue;
+    into.paths[path] = (into.paths[path] ?? 0) + 1;
+    const [head, field] = path.split(".");
+    if (head === "monitorRow" && field !== undefined && COST_FIELDS.has(field)) cost = true;
+    else if (head === "monitorRow" && field !== undefined && RECENCY_FIELDS.has(field))
+      recency = true;
+    else other = true;
+  }
+  if (other || (!cost && !recency)) into.other += 1;
+  else if (cost && recency) into.costAndRecency += 1;
+  else if (cost) into.costOnly += 1;
+  else into.recencyOnly += 1;
+}
+
 function closed(tally: WireTally, windowMs: number): WireTally {
   return {
     ...tally,
@@ -279,9 +368,44 @@ class Phone {
   tally = emptyTally();
   #reader: { dispose: () => void } | null = null;
   readonly #board: MeshBoard;
+  /** the rows the phone holds, by desktop then run: what an idle upsert is diffed against */
+  readonly #rows = new Map<string, Map<string, unknown>>();
+  #attributing: { into: IdleAttribution; since: number; now: () => number } | null = null;
 
   constructor(board: MeshBoard) {
     this.#board = board;
+  }
+
+  /** From now, class each upsert heard by what it changed, until `stopAttributing`. */
+  attribute(now: () => number): IdleAttribution {
+    const into = emptyAttribution();
+    this.#attributing = { into, since: now(), now };
+    return into;
+  }
+
+  stopAttributing(): void {
+    this.#attributing = null;
+  }
+
+  #hold(device: string, rows: readonly unknown[]): void {
+    const held = new Map<string, unknown>();
+    for (const row of rows) held.set((row as { runtimeRunId: string }).runtimeRunId, row);
+    this.#rows.set(device, held);
+  }
+
+  #apply(device: string, upserts: readonly unknown[], removed: readonly string[]): void {
+    const held = this.#rows.get(device) ?? new Map<string, unknown>();
+    this.#rows.set(device, held);
+    const attributing = this.#attributing;
+    if (attributing !== null && upserts.length > 0) {
+      attributing.into.frameAtMs.push(attributing.now() - attributing.since);
+    }
+    for (const row of upserts) {
+      const id = (row as { runtimeRunId: string }).runtimeRunId;
+      if (attributing !== null) attribute(attributing.into, held.get(id), row);
+      held.set(id, row);
+    }
+    for (const id of removed) held.delete(id);
   }
 
   /** Subscribe, naming the cursors held (none on a first open); the open's bytes and answers. */
@@ -311,6 +435,7 @@ class Phone {
     if (kind === "snapshot") {
       this.tally.resyncs += 1;
       this.cursors.clear();
+      this.#rows.clear();
       this.#follow(read as MeshBoardOpen);
       return;
     }
@@ -320,9 +445,11 @@ class Phone {
       this.tally.removed += frame.delta.removed.length;
       if (frame.delta.upserts.length === 0 && frame.delta.removed.length === 0)
         this.tally.heartbeats += 1;
+      this.#apply(frame.device, frame.delta.upserts, frame.delta.removed);
       this.cursors.set(frame.device, { epoch: frame.delta.epoch, revision: frame.delta.revision });
     } else if ("snapshot" in frame) {
       this.tally.resets += 1;
+      this.#hold(frame.device, frame.snapshot.rows);
       this.cursors.set(frame.device, {
         epoch: frame.snapshot.epoch,
         revision: frame.snapshot.revision,
@@ -343,6 +470,7 @@ class Phone {
       } else if (entry.delta !== undefined) {
         answers.delta += 1;
         rows += entry.delta.upserts.length;
+        this.#apply(entry.device, entry.delta.upserts, entry.delta.removed);
         this.cursors.set(entry.device, {
           epoch: entry.delta.epoch,
           revision: entry.delta.revision,
@@ -350,6 +478,7 @@ class Phone {
       } else if (entry.snapshot !== undefined) {
         answers.whole += 1;
         rows += entry.snapshot.rows.length;
+        this.#hold(entry.device, entry.snapshot.rows);
         this.cursors.set(entry.device, {
           epoch: entry.snapshot.epoch,
           revision: entry.snapshot.revision,
@@ -454,7 +583,9 @@ export async function streamPass(
   const busy = closed(phone.tally, time.now() - busyStart);
 
   phone.tally = emptyTally();
+  const idleAttribution = phone.attribute(() => time.now());
   await time.advance(IDLE_MS);
+  phone.stopAttributing();
   const idle = closed(phone.tally, IDLE_MS);
 
   const switches: SwitchResult[] = [];
@@ -475,7 +606,7 @@ export async function streamPass(
   );
   phone.leave();
   pair.dispose();
-  return { upstreamAsk: { ...pair.upstreamAsk }, open, busy, idle, switches };
+  return { upstreamAsk: { ...pair.upstreamAsk }, open, busy, idle, idleAttribution, switches };
 }
 
 /** BUSY SWITCH: away for AWAY_BUSY_MS from the corpus's halfway, while the swarm works on. */

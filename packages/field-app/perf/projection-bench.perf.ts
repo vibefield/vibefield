@@ -202,6 +202,19 @@ describe("the projection bench (PG-1e0)", () => {
           `  ${name} ${(t.windowMs / 1_000).toFixed(1)} s: ${t.bytesPerSecond} B/s · ${t.frames} frames (${t.heartbeats} heartbeats, ${t.resets} resets, ${t.states} states, ${t.resyncs} resyncs) · ${t.upserts} upserts, ${t.removed} removed · ${kb(t.bytes)}`,
         );
       }
+      // what the idle upserts changed: the cost step (PU-I) against the rows' ageing (VF-PM 06:35Z)
+      const at = result.idleAttribution;
+      const paths = Object.entries(at.paths)
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([path, count]) => `${path} ×${count}`)
+        .join(", ");
+      lines.push(
+        `  idle's upserts: ${at.costOnly} cost only, ${at.recencyOnly} recency/status only, ${at.costAndRecency} both, ${at.other} other (of ${at.upserts}); frames at ${at.frameAtMs.map((ms) => `+${ms / 1_000} s`).join(", ") || "none"}; paths: ${paths || "none"}`,
+      );
+      expect(
+        at.costOnly + at.recencyOnly + at.costAndRecency + at.other,
+        `${result.recipe}: every idle upsert is classed`,
+      ).toBe(result.idle.upserts);
       for (const s of result.switches) {
         const a = s.answers;
         const saved =
