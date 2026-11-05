@@ -1,8 +1,8 @@
 {
-  "version": 1,
+  "version": 2,
   "channel": "stable",
   "yanked": [],
   "killSwitch": false,
   "requireUserConfirmation": false,
-  "floors": {}
+  "floors": { "os": "14.0" }
 }

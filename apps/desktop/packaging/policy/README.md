@@ -11,6 +11,10 @@ yank for stable rides the next nightly without a stable re-cut (`docs` → `draf
 - `yanked` lists versions no client may install or stay offered.
 - `requireUserConfirmation: true` forces the person's explicit yes (the silent apply never runs).
 - `floors.os` (and `floors.glibc` on Linux) is the oldest host the newest release runs on; an older host is not offered
-  the update. Empty until a release raises the floor on purpose (the packaging config sets no `minimumSystemVersion`).
+  the update. Every channel says macOS `14.0` since policy version 2 (LP-1, 2026-11-05), the same number
+  `electron-builder.yml` declares as `mac.minimumSystemVersion` (the app's `LSMinimumSystemVersion`): the screenshot
+  helper targets `arm64-apple-macos14.0` (`build-screenshot-helper.mjs`) and the Node 26 binaries need 13.5. Until then
+  the floors were empty and the shipped Info.plist said 12.0, electron-builder's default. Raise the two together, with
+  a version bump in all three files.
 
 The shape is `UpdatePolicySource` in `packages/contracts/src/update-policy.ts`.

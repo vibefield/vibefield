@@ -1,5 +1,16 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -12,8 +23,26 @@ import {
   UpdatePolicySource,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  type Exec,
+  finalizeDmg,
+  isTransient,
+  NotarizeDmgError,
+  notaryCredentials,
+  RETRIES,
+  TEAM_ID,
+} from "../../../../apps/desktop/packaging/notarize-dmg.mjs";
 import { auditAppUpdate } from "../../../../scripts/audit-app-update.mjs";
 import { asarFiles, auditAsar, readAsarHeader } from "../../../../scripts/audit-asar.mjs";
+import {
+  checkReleaseAssets,
+  dmgOfFeed,
+  feedEntries,
+  ReleaseAssetsError,
+  refreshFeedEntry,
+  STABLE_DMG_ALIAS,
+  stableDmgAlias,
+} from "../../../../scripts/release-assets.mjs";
 import { hashPlanes, mergeManifest, planeOf } from "../../../../scripts/release-manifest.mjs";
 import {
   capLine,
@@ -912,11 +941,582 @@ describe("audit-asar (D12): every asar path is in the stage's app/ census, and n
   });
 });
 
+// LP-1 (the 0.9 launch's rails) — the DMG a stranger downloads is signed, notarized and stapled AFTER electron-builder
+// wrote it and its feed, so the feed's DMG entry is re-read from the stapled bytes and the DMG's blockmap dropped; the
+// stable channel carries a fixed-name copy; release-verify holds every directory to those rules. Apple's tools are a
+// fake here (`exec`): the real ones meet the first signed release, which is James's run.
+describe("LP-1: the DMG — signed, notarized, stapled; the feed re-read; the stable download's fixed name", () => {
+  // nightly-20261028's latest-mac.yml, byte for byte (`gh release download nightly-20261028 --pattern latest-mac.yml`)
+  const NIGHTLY_ZIP = "VibeField-0.1.0-nightly.20261028-arm64-mac.zip";
+  const NIGHTLY_DMG = "VibeField-0.1.0-nightly.20261028-arm64.dmg";
+  const ZIP_SHA =
+    "2JUAZL3zVWceLCdu5KbCIfoIyAc2BvUkb2u/4I165D7nhpv+7iQMezt2iBCF9m/xMei7jzXYRwckZz+qwSepAg==";
+  const NIGHTLY_FEED = [
+    "version: 0.1.0-nightly.20261028",
+    "files:",
+    `  - url: ${NIGHTLY_ZIP}`,
+    `    sha512: ${ZIP_SHA}`,
+    "    size: 198875667",
+    `  - url: ${NIGHTLY_DMG}`,
+    "    sha512: 0YigFnYM5e5pz0LJfZGmyXdHZGjkzLx1yWepf+ZqG29zIOGD7qD3lKKszHEq+0XjM3rWSJy2EBaXuR5BxPYskg==",
+    "    size: 206468135",
+    `path: ${NIGHTLY_ZIP}`,
+    `sha512: ${ZIP_SHA}`,
+    "releaseDate: '2026-10-28T16:56:06.353Z'",
+    "",
+  ].join("\n");
+  const SUBMISSION = "2efe2717-52ef-43a5-96dc-0797e4ca1041";
+  const IDENTITY_HASH = "A1".repeat(20);
+  const APPLE_ENV = {
+    CSC_LINK: `data:application/x-pkcs12;base64,${Buffer.from("the fixture's p12 bytes").toString("base64")}`,
+    CSC_KEY_PASSWORD: "fixture-p12-password",
+    APPLE_API_KEY: "/runner/temp/AuthKey_FIXTUREKEY1.p8",
+    APPLE_API_KEY_ID: "FIXTUREKEY1",
+    APPLE_API_ISSUER: "00000000-1111-2222-3333-444444444444",
+  };
+  const sha512Of = (path: string) =>
+    createHash("sha512").update(readFileSync(path)).digest("base64");
+
+  /** What electron-builder leaves in `release/`: the zip, the DMG, both blockmaps and the feed naming both. */
+  function built(version = "0.9.0") {
+    const dir = scratch();
+    const zip = `VibeField-${version}-arm64-mac.zip`;
+    const dmg = `VibeField-${version}-arm64.dmg`;
+    writeFileSync(join(dir, zip), "the zip's bytes");
+    writeFileSync(join(dir, `${zip}.blockmap`), "the zip's blockmap");
+    writeFileSync(join(dir, dmg), "the disk image's bytes");
+    writeFileSync(join(dir, `${dmg}.blockmap`), "the disk image's blockmap");
+    const feed = [
+      `version: ${version}`,
+      "files:",
+      `  - url: ${zip}`,
+      `    sha512: ${sha512Of(join(dir, zip))}`,
+      `    size: ${statSync(join(dir, zip)).size}`,
+      `  - url: ${dmg}`,
+      `    sha512: ${sha512Of(join(dir, dmg))}`,
+      `    size: ${statSync(join(dir, dmg)).size}`,
+      `path: ${zip}`,
+      `sha512: ${sha512Of(join(dir, zip))}`,
+      "releaseDate: '2026-11-05T01:00:00.000Z'",
+      "",
+    ].join("\n");
+    writeFileSync(join(dir, "latest-mac.yml"), feed);
+    return { dir, zip, dmg, feed };
+  }
+
+  /** A Mac's signing tools, as a fake: codesign, security, notarytool, stapler and spctl answer as Apple's do, the
+   * staple appends a "ticket" to the DMG (so its bytes change), and every call is recorded. */
+  function fakeMac(
+    options: {
+      stapleFailures?: string[];
+      verdict?: string;
+      gatekeeper?: "on" | "off" | "rejects";
+      signed?: boolean;
+    } = {},
+  ) {
+    const calls: string[][] = [];
+    let signed = options.signed ?? false;
+    let stapled = options.signed ?? false;
+    const stapleFailures = [...(options.stapleFailures ?? [])];
+    const ok = (stdout = "", stderr = "") => ({ code: 0, stdout, stderr });
+    const exec: Exec = (command, args) => {
+      calls.push([command, ...args]);
+      const tool = command.split("/").pop();
+      const target = args[args.length - 1] ?? "";
+      if (tool === "security") {
+        if (args[0] === "list-keychains" && args.length === 3)
+          return ok('    "/Users/runner/Library/Keychains/login.keychain-db"\n');
+        if (args[0] === "find-identity")
+          return ok(
+            `  1) ${IDENTITY_HASH} "Developer ID Application: James Yong (${TEAM_ID})"\n     1 valid identities found\n`,
+          );
+        return ok();
+      }
+      if (tool === "codesign") {
+        if (args[0] === "--sign") {
+          signed = true;
+          return ok();
+        }
+        if (!signed)
+          return { code: 1, stdout: "", stderr: `${target}: code object is not signed at all\n` };
+        if (args[0] === "--display" && args.includes("--verbose=4"))
+          return ok(
+            "",
+            [
+              `Executable=${target}`,
+              `Authority=Developer ID Application: James Yong (${TEAM_ID})`,
+              "Authority=Developer ID Certification Authority",
+              "Authority=Apple Root CA",
+              "Timestamp=Nov 5, 2026 at 01:00:00",
+              `TeamIdentifier=${TEAM_ID}`,
+              "",
+            ].join("\n"),
+          );
+        return ok();
+      }
+      if (tool === "xcrun" && args[0] === "notarytool") {
+        if (args[1] === "submit")
+          return ok(JSON.stringify({ id: SUBMISSION, message: "Successfully uploaded file" }));
+        if (args[1] === "wait")
+          return ok(
+            JSON.stringify({
+              id: SUBMISSION,
+              status: options.verdict ?? "Accepted",
+              message: "Processing complete",
+            }),
+          );
+        if (args[1] === "log")
+          return ok(
+            JSON.stringify({ issues: [{ message: "The signature of the binary is invalid." }] }),
+          );
+      }
+      if (tool === "xcrun" && args[0] === "stapler") {
+        if (args[1] === "staple") {
+          const failure = stapleFailures.shift();
+          if (failure !== undefined) return { code: 65, stdout: "", stderr: failure };
+          appendFileSync(target, "+ticket");
+          stapled = true;
+          return ok("The staple and validate action worked!\n");
+        }
+        if (args[1] === "validate")
+          return stapled
+            ? ok("The validate action worked!\n")
+            : { code: 65, stdout: "", stderr: `${target} does not have a ticket stapled to it.\n` };
+      }
+      if (tool === "spctl") {
+        if (options.gatekeeper === "rejects")
+          return {
+            code: 3,
+            stdout: "",
+            stderr: `${target}: rejected\nsource=no usable signature\n`,
+          };
+        return ok(
+          "",
+          options.gatekeeper === "off"
+            ? `${target}: accepted\noverride=security disabled\n`
+            : `${target}: accepted\nsource=Notarized Developer ID\norigin=Developer ID Application: James Yong (${TEAM_ID})\n`,
+        );
+      }
+      return { code: 99, stdout: "", stderr: `the fake has no ${command} ${args.join(" ")}` };
+    };
+    /** each call as "<tool> <verb>" (notarytool and stapler by their subcommand) */
+    const steps = () =>
+      calls.map(([command, ...args]) => {
+        const tool = command?.split("/").pop();
+        return tool === "xcrun" ? `${tool} ${args[0]} ${args[1]}` : `${tool} ${args[0]}`;
+      });
+    return { exec, calls, steps };
+  }
+
+  it("re-states ONLY the DMG's entry from its bytes: the zip's entry, path and top-level sha512 stay byte for byte", () => {
+    expect(feedEntries(NIGHTLY_FEED)).toEqual([
+      { url: NIGHTLY_ZIP, sha512: ZIP_SHA, size: 198875667 },
+      {
+        url: NIGHTLY_DMG,
+        sha512:
+          "0YigFnYM5e5pz0LJfZGmyXdHZGjkzLx1yWepf+ZqG29zIOGD7qD3lKKszHEq+0XjM3rWSJy2EBaXuR5BxPYskg==",
+        size: 206468135,
+      },
+    ]);
+    expect(dmgOfFeed(NIGHTLY_FEED)).toBe(NIGHTLY_DMG);
+    const stapledSha = `${"B".repeat(86)}==`;
+    const refreshed = refreshFeedEntry(NIGHTLY_FEED, {
+      url: NIGHTLY_DMG,
+      sha512: stapledSha,
+      size: 206474321,
+    });
+    const before = NIGHTLY_FEED.split("\n");
+    const after = refreshed.split("\n");
+    expect(after).toHaveLength(before.length);
+    expect(after.filter((line, i) => line !== before[i])).toEqual([
+      `    sha512: ${stapledSha}`,
+      "    size: 206474321",
+    ]);
+    // a blockMapSize names a blockmap the release no longer publishes: the re-stated entry drops it
+    const withBlockmap = NIGHTLY_FEED.replace(
+      "    size: 206468135\n",
+      "    size: 206468135\n    blockMapSize: 215204\n",
+    );
+    expect(
+      refreshFeedEntry(withBlockmap, { url: NIGHTLY_DMG, sha512: stapledSha, size: 206474321 }),
+    ).toBe(refreshed);
+    // a payload the feed does not name, or names twice, refuses — never a guess
+    expect(() =>
+      refreshFeedEntry(NIGHTLY_FEED, { url: "VibeField-other.dmg", sha512: stapledSha, size: 1 }),
+    ).toThrow(ReleaseAssetsError);
+    const twoDmgs = NIGHTLY_FEED.replace(
+      `path: ${NIGHTLY_ZIP}`,
+      `  - url: x.dmg\n    sha512: ${stapledSha}\n    size: 1\npath: ${NIGHTLY_ZIP}`,
+    );
+    expect(() => dmgOfFeed(twoDmgs)).toThrow(/names 2 DMGs/);
+  });
+
+  it("signs the DMG in a keychain of its own, notarizes, staples through a transient -1005, assesses, then re-reads the feed", () => {
+    const { dir, zip, dmg, feed } = built();
+    const mac = fakeMac({
+      stapleFailures: [
+        'Error Domain=NSURLErrorDomain Code=-1005 "The network connection was lost."',
+      ],
+    });
+    const sleeps: number[] = [];
+    const logs: string[] = [];
+    const keychains = scratch();
+    const result = finalizeDmg({
+      dir,
+      mode: "signed",
+      env: APPLE_ENV,
+      exec: mac.exec,
+      sleep: (ms) => sleeps.push(ms),
+      log: (line) => logs.push(line),
+      cwd: dir,
+      scratch: keychains,
+    });
+    expect(mac.steps()).toEqual([
+      "codesign --display", // not yet signed: this step signs the DMG electron-builder just wrote
+      "security list-keychains",
+      "security create-keychain",
+      "security set-keychain-settings",
+      "security unlock-keychain",
+      "security import",
+      "security set-key-partition-list",
+      "security list-keychains",
+      "security find-identity",
+      "codesign --sign",
+      "security list-keychains", // the user's search list restored
+      "security delete-keychain",
+      "xcrun notarytool submit",
+      "xcrun notarytool wait",
+      "xcrun stapler staple", // NSURLErrorDomain -1005 (run 41726990250's failure)…
+      "xcrun stapler staple", // …retried once, after the first bounded delay
+      "codesign --verify",
+      "codesign --display",
+      "xcrun stapler validate",
+      "spctl --assess",
+    ]);
+    expect(sleeps).toEqual([RETRIES.staple[0]]);
+    const sign = mac.calls.find((call) => call[1] === "--sign") ?? [];
+    expect(sign.slice(1, 6)).toEqual([
+      "--sign",
+      IDENTITY_HASH,
+      "--timestamp",
+      "--keychain",
+      expect.stringContaining(keychains),
+    ]);
+    expect(sign[sign.length - 1]).toBe(join(dir, dmg));
+    const submit = mac.calls.find((call) => call[2] === "submit") ?? [];
+    expect(submit).toEqual(
+      expect.arrayContaining(["--key-id", APPLE_ENV.APPLE_API_KEY_ID, "--output-format", "json"]),
+    );
+    expect(mac.calls.find((call) => call[1] === "--assess")?.slice(1, 6)).toEqual([
+      "--assess",
+      "--type",
+      "open",
+      "--context",
+      "context:primary-signature",
+    ]);
+    // the feed names the STAPLED bytes; the zip's lines are untouched; the DMG's blockmap is gone, the zip's stays
+    const stapled = readFileSync(join(dir, dmg));
+    expect(stapled.toString()).toBe("the disk image's bytes+ticket");
+    expect(result).toMatchObject({
+      mode: "signed",
+      dmg,
+      size: stapled.length,
+      submission: SUBMISSION,
+    });
+    const refreshed = readFileSync(join(dir, "latest-mac.yml"), "utf8");
+    expect(feedEntries(refreshed)).toEqual([
+      feedEntries(feed)[0],
+      { url: dmg, sha512: sha512Of(join(dir, dmg)), size: stapled.length },
+    ]);
+    expect(readdirSync(dir).sort()).toEqual([dmg, zip, `${zip}.blockmap`, "latest-mac.yml"].sort());
+    expect(checkReleaseAssets({ dir, tag: "v0.9.0", channel: "stable" })).toEqual({
+      checked: [zip, dmg],
+    });
+    // the run's keychain and its p12 are gone; no secret reached the log
+    expect(readdirSync(keychains)).toEqual([]);
+    const password = mac.calls.find((call) => call[1] === "create-keychain")?.[3] ?? "";
+    expect(password.length).toBeGreaterThan(16);
+    const log = logs.join("\n");
+    for (const secret of [
+      password,
+      APPLE_ENV.CSC_KEY_PASSWORD,
+      APPLE_ENV.APPLE_API_KEY_ID,
+      APPLE_ENV.APPLE_API_ISSUER,
+      APPLE_ENV.CSC_LINK,
+    ])
+      expect(log.includes(secret), secret).toBe(false);
+    expect(log).toMatch(/transient network failure \(attempt 1 of 5\)/);
+  });
+
+  it("an Invalid verdict fetches Apple's log, never staples or retries, and leaves the feed and keychains as they were", () => {
+    const { dir, feed } = built();
+    const mac = fakeMac({ verdict: "Invalid" });
+    const sleeps: number[] = [];
+    const keychains = scratch();
+    let message = "";
+    try {
+      finalizeDmg({
+        dir,
+        env: APPLE_ENV,
+        exec: mac.exec,
+        sleep: (ms) => sleeps.push(ms),
+        log: () => {},
+        cwd: dir,
+        scratch: keychains,
+      });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/answered Invalid .*submission 2efe2717/);
+    expect(message).toContain("The signature of the binary is invalid.");
+    for (const secret of [APPLE_ENV.APPLE_API_KEY_ID, APPLE_ENV.APPLE_API_ISSUER])
+      expect(message.includes(secret)).toBe(false);
+    expect(mac.steps()).toContain("xcrun notarytool log");
+    expect(mac.steps().some((step) => step.startsWith("xcrun stapler"))).toBe(false);
+    expect(sleeps).toEqual([]);
+    expect(readFileSync(join(dir, "latest-mac.yml"), "utf8")).toBe(feed);
+    expect(readdirSync(keychains)).toEqual([]);
+  });
+
+  it("retries a staple only on a transient failure, and only a bounded number of times", () => {
+    expect(
+      isTransient(
+        'Error Domain=NSURLErrorDomain Code=-1005 "The network connection was lost."',
+        "wait",
+      ),
+    ).toBe(true);
+    expect(isTransient('CloudKit query failed due to "Record not found"', "staple")).toBe(true);
+    expect(isTransient('CloudKit query failed due to "Record not found"', "submit")).toBe(false);
+    expect(isTransient('{"status":"Invalid"}', "wait")).toBe(false);
+    expect(isTransient("HTTP status code: 401. Unable to authenticate.", "submit")).toBe(false);
+
+    const propagating = built();
+    const slow = fakeMac({
+      stapleFailures: Array.from({ length: 5 }, () => 'failed due to "Record not found"'),
+    });
+    const sleeps: number[] = [];
+    expect(() =>
+      finalizeDmg({
+        dir: propagating.dir,
+        env: APPLE_ENV,
+        exec: slow.exec,
+        sleep: (ms) => sleeps.push(ms),
+        log: () => {},
+        cwd: propagating.dir,
+        scratch: scratch(),
+      }),
+    ).toThrow(/stapler staple failed \(exit 65, attempt 5 of 5\)/);
+    expect(sleeps).toEqual([...RETRIES.staple]);
+
+    const broken = built();
+    const refused = fakeMac({
+      stapleFailures: ["The staple and validate action failed! Error 68."],
+    });
+    const none: number[] = [];
+    expect(() =>
+      finalizeDmg({
+        dir: broken.dir,
+        env: APPLE_ENV,
+        exec: refused.exec,
+        sleep: (ms) => none.push(ms),
+        log: () => {},
+        cwd: broken.dir,
+        scratch: scratch(),
+      }),
+    ).toThrow(/attempt 1 of 5/);
+    expect(none).toEqual([]);
+  });
+
+  it("the unsigned path signs nothing, says so, drops the DMG's blockmap, and leaves a true feed byte for byte", () => {
+    const { dir, zip, dmg, feed } = built();
+    const mac = fakeMac();
+    const logs: string[] = [];
+    finalizeDmg({ dir, mode: "unsigned", env: {}, exec: mac.exec, log: (line) => logs.push(line) });
+    expect(mac.calls).toEqual([]);
+    expect(logs[0]).toMatch(/^::warning title=Unsigned DMG::.*not signed, notarized or stapled/);
+    expect(readFileSync(join(dir, "latest-mac.yml"), "utf8")).toBe(feed);
+    expect(readdirSync(dir).sort()).toEqual([dmg, zip, `${zip}.blockmap`, "latest-mac.yml"].sort());
+  });
+
+  it("the credential modes are the preflight's: exactly one complete mode, refused before anything is signed", () => {
+    expect(notaryCredentials(APPLE_ENV)).toEqual({
+      mode: "app-store-connect-api-key",
+      args: [
+        "--key",
+        APPLE_ENV.APPLE_API_KEY,
+        "--key-id",
+        APPLE_ENV.APPLE_API_KEY_ID,
+        "--issuer",
+        APPLE_ENV.APPLE_API_ISSUER,
+      ],
+    });
+    expect(notaryCredentials({ APPLE_KEYCHAIN_PROFILE: "vibefield" }).mode).toBe(
+      "keychain-profile",
+    );
+    expect(() => notaryCredentials({ ...APPLE_ENV, APPLE_API_ISSUER: "" })).toThrow(
+      /must be supplied together/,
+    );
+    expect(() => notaryCredentials({ ...APPLE_ENV, APPLE_KEYCHAIN_PROFILE: "vibefield" })).toThrow(
+      /exactly one complete notarization credential mode/,
+    );
+    expect(() =>
+      notaryCredentials({ APPLE_ID: "a@b.invalid", APPLE_APP_SPECIFIC_PASSWORD: "x-y-z-w" }),
+    ).toThrow(/APPLE_TEAM_ID must be the frozen team/);
+    const { dir } = built();
+    const mac = fakeMac();
+    expect(() =>
+      finalizeDmg({
+        dir,
+        env: { ...APPLE_ENV, APPLE_API_KEY_ID: "" },
+        exec: mac.exec,
+        log: () => {},
+      }),
+    ).toThrow(NotarizeDmgError);
+    expect(mac.calls).toEqual([]);
+  });
+
+  it("validate-only assesses every DMG in a directory; a Gatekeeper that is off is said, a rejection is red", () => {
+    const { dir, dmg } = built();
+    const logs: string[] = [];
+    expect(
+      finalizeDmg({
+        dir,
+        mode: "validate-only",
+        exec: fakeMac({ signed: true }).exec,
+        log: (line) => logs.push(line),
+      }),
+    ).toEqual({ mode: "validate-only", dmgs: [dmg] });
+    expect(logs).toEqual([
+      expect.stringContaining(`${dmg} — Developer ID (${TEAM_ID}), notarized, stapled`),
+    ]);
+    const off: string[] = [];
+    finalizeDmg({
+      dir,
+      mode: "validate-only",
+      exec: fakeMac({ signed: true, gatekeeper: "off" }).exec,
+      log: (line) => off.push(line),
+    });
+    expect(off[0]).toMatch(/^::warning title=Gatekeeper is off on this host::/);
+    expect(() =>
+      finalizeDmg({
+        dir,
+        mode: "validate-only",
+        exec: fakeMac({ signed: true, gatekeeper: "rejects" }).exec,
+        log: () => {},
+      }),
+    ).toThrow(/spctl --assess failed \(exit 3/);
+    // nightly-20261028's DMG: not signed at all
+    expect(() =>
+      finalizeDmg({ dir, mode: "validate-only", exec: fakeMac().exec, log: () => {} }),
+    ).toThrow(/codesign --verify failed/);
+  });
+
+  it("the stable download's fixed name: a byte copy on a stable, never on a nightly or a beta", () => {
+    const { dir, dmg } = built("0.9.0");
+    expect(stableDmgAlias({ dir, channel: "nightly", version: "0.9.0" })).toBeNull();
+    expect(stableDmgAlias({ dir, channel: "beta", version: "0.9.0" })).toBeNull();
+    expect(readdirSync(dir)).not.toContain(STABLE_DMG_ALIAS);
+    expect(stableDmgAlias({ dir, channel: "stable", version: "0.9.0" })).toEqual({
+      source: dmg,
+      alias: "VibeField-mac-arm64.dmg",
+    });
+    expect(readFileSync(join(dir, STABLE_DMG_ALIAS))).toEqual(readFileSync(join(dir, dmg)));
+    expect(() => stableDmgAlias({ dir, channel: "stable", version: "0.9.0" })).toThrow(); // never replaced
+    expect(() => stableDmgAlias({ dir: scratch(), channel: "stable", version: "0.9.0" })).toThrow(
+      /VibeField-0\.9\.0-arm64\.dmg is not in/,
+    );
+    expect(() => stableDmgAlias({ dir, channel: "stable", version: "0.9.0-beta.1" })).toThrow(
+      /not a stable version/,
+    );
+  });
+
+  it("checkReleaseAssets: no DMG blockmap, the alias only on a stable and only as the versioned DMG's bytes, every payload its feed's", () => {
+    const stale = built();
+    expect(() => checkReleaseAssets({ dir: stale.dir, tag: "v0.9.0", channel: "stable" })).toThrow(
+      /blockmap goes stale/,
+    );
+    rmSync(join(stale.dir, `${stale.dmg}.blockmap`));
+    expect(checkReleaseAssets({ dir: stale.dir, tag: "v0.9.0", channel: "stable" })).toEqual({
+      checked: [stale.zip, stale.dmg],
+    });
+    // stapled after the feed was written, its entry not re-read
+    appendFileSync(join(stale.dir, stale.dmg), "+ticket");
+    expect(() => checkReleaseAssets({ dir: stale.dir, tag: "v0.9.0", channel: "stable" })).toThrow(
+      /VibeField-0\.9\.0-arm64\.dmg's sha512 or size is not its bytes'/,
+    );
+
+    const aliased = built();
+    rmSync(join(aliased.dir, `${aliased.dmg}.blockmap`));
+    stableDmgAlias({ dir: aliased.dir, channel: "stable", version: "0.9.0" });
+    expect(() =>
+      checkReleaseAssets({ dir: aliased.dir, tag: "v0.9.0", channel: "stable" }),
+    ).not.toThrow();
+    for (const [tag, channel] of [
+      ["nightly-20261105", "nightly"],
+      ["v0.9.0-beta.1", "beta"],
+    ] as const)
+      expect(() => checkReleaseAssets({ dir: aliased.dir, tag, channel })).toThrow(
+        new RegExp(`a ${channel} release never carries it`),
+      );
+    writeFileSync(join(aliased.dir, STABLE_DMG_ALIAS), "other bytes");
+    expect(() =>
+      checkReleaseAssets({ dir: aliased.dir, tag: "v0.9.0", channel: "stable" }),
+    ).toThrow(/is not a byte copy of VibeField-0\.9\.0-arm64\.dmg/);
+  });
+
+  it("release-verify holds a release directory to the asset rules before the chain, signed or not", async () => {
+    const dir = releaseDir();
+    writeFileSync(join(dir, "VibeField-mac.zip"), "not the feed's bytes");
+    await expect(
+      verifyReleaseDir({
+        dir,
+        tag: "nightly-20261016",
+        channel: "nightly",
+        rootKeys: [],
+        now: NOW,
+      }),
+    ).rejects.toThrow(/latest-mac\.yml: VibeField-mac\.zip's sha512 or size is not its bytes'/);
+    const nightly = releaseDir();
+    writeFileSync(join(nightly, STABLE_DMG_ALIAS), "a disk image");
+    await expect(
+      verifyReleaseDir({
+        dir: nightly,
+        tag: "nightly-20261016",
+        channel: "nightly",
+        rootKeys: [],
+        now: NOW,
+      }),
+    ).rejects.toThrow(/a nightly release never carries it/);
+  });
+
+  it("the floor is one number in two places: electron-builder's minimumSystemVersion and every channel's floors.os", () => {
+    const builder = readFileSync(join(REPO, "apps/desktop/packaging/electron-builder.yml"), "utf8");
+    const declared = /^ {2}minimumSystemVersion: "([0-9.]+)"/m.exec(builder)?.[1];
+    expect(declared).toBe("14.0");
+    for (const ch of ["nightly", "beta", "stable"]) {
+      const source = UpdatePolicySource.parse(
+        JSON.parse(readFileSync(join(POLICIES, `${ch}.json`), "utf8")),
+      );
+      expect(source.floors.os, ch).toBe(declared);
+      // the floor changed the body that nightly-20261028 published at version 1 (D5: a bump with every body change)
+      expect(source.version, ch).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("package:mac:release finalizes the DMG after electron-builder wrote it, in the step that holds the credentials", () => {
+    const driver = readFileSync(join(REPO, "apps/desktop/packaging/run-macos-release.mjs"), "utf8");
+    const finalize = driver.indexOf('"packaging/notarize-dmg.mjs", "--dir", "release"');
+    expect(finalize).toBeGreaterThan(driver.indexOf('"packaging/run-electron-builder.mjs"'));
+    expect(finalize).toBeGreaterThan(driver.indexOf('"packaging/verify-live-surface-release.mjs"'));
+    expect(driver.slice(finalize)).not.toMatch(/--unsigned|--validate-only/);
+  });
+});
+
 // The WORKFLOW LINT that runs in every verify (actionlint is the second one, by hand: `actionlint
 // .github/workflows/*.yml`). release.yml is read as text — its jobs are its two-space keys under `jobs:` and its steps
 // the `- ` items — and held to the PM's permissions table (2026-10-15 14:47Z): every secret in the ONE step that uses
-// it, only the build and sign jobs in `release-signing`, only tag and publish writing (tag since 2026-10-26), every
-// third-party action SHA-pinned.
+// it, only the build and sign jobs in `release-signing`, only tag and publish writing contents (tag since 2026-10-26),
+// only attest minting an OIDC token and writing attestations (LP-1, 2026-11-05), every third-party action SHA-pinned.
 describe("release.yml's shape — the permissions table, as a test", () => {
   const WORKFLOWS = join(REPO, ".github", "workflows");
   const yml = readFileSync(join(WORKFLOWS, "release.yml"), "utf8");
@@ -948,6 +1548,7 @@ describe("release.yml's shape — the permissions table, as a test", () => {
       "build",
       "sign",
       "converge",
+      "attest",
       "publish",
     ]);
     expect(permissionsOf("plan")).toEqual({ contents: "read", actions: "read" });
@@ -955,7 +1556,169 @@ describe("release.yml's shape — the permissions table, as a test", () => {
       expect(permissionsOf(job), job).toEqual({ contents: "read" });
     for (const job of ["tag", "publish"])
       expect(permissionsOf(job), job).toEqual({ contents: "write" });
+    // LP-1: provenance — the one job that may mint an OIDC token and write attestations
+    expect(permissionsOf("attest")).toEqual({
+      contents: "read",
+      "id-token": "write",
+      attestations: "write",
+    });
   });
+
+  // LP-1: the OIDC token can sign as this repository's workflow (Sigstore) — so it reaches the pinned attest action
+  // alone: no other job is granted it, and the attest job checks nothing out, installs nothing and runs no shell.
+  it("LP-1: only attest mints an OIDC token or writes attestations, over the final DMG and zip, before publish", () => {
+    for (const [job, text] of jobs)
+      if (job !== "attest") expect(text, job).not.toMatch(/id-token|attestations:/);
+    expect(yml.slice(0, yml.indexOf("\njobs:\n"))).not.toMatch(
+      /\n {2}id-token:|\n {2}attestations:/,
+    );
+    const attest = jobs.get("attest") ?? "";
+    expect(attest).toMatch(/\n {4}needs: converge\n/);
+    expect(attest).not.toMatch(/actions\/checkout|setup-node|pnpm|\n {8}run: /);
+    expect(attest).not.toMatch(/environment:/);
+    const steps = stepsOf("attest");
+    expect(steps.map((step) => step.text.match(/uses: ([^@\s]+)@/)?.[1])).toEqual([
+      "actions/download-artifact",
+      "actions/attest-build-provenance",
+    ]);
+    expect(steps[0]?.text).toMatch(/\n {10}name: release-final\n/);
+    expect(steps[1]?.text).toMatch(
+      /\n {10}subject-path: \|\n {12}release-out\/\*\.dmg\n {12}release-out\/\*\.zip(\n|$)/,
+    );
+    expect(jobs.get("publish")).toMatch(/\n {4}needs: \[plan, converge, attest\]\n/);
+    // the header's PERMISSIONS table states the row
+    expect(yml).toMatch(/\n# {3}attest {5}— {18}contents: read, id-token: write, {5}/);
+  });
+
+  // LP-1: the DMG is signed, notarized and stapled INSIDE package:mac:release (the step that holds the Apple
+  // credentials), so every later reader — the copy into the build artifact, the feed's sha512 the sign job signs,
+  // release-verify, SHA256SUMS and the attestation — reads the final bytes.
+  it("LP-1: the DMG is final before anything copies or hashes it; the DMG's blockmap is never published", () => {
+    const build = stepsOf("build");
+    const names = build.map((step) => step.name);
+    const signed = build.find(
+      (step) => step.name === "Package, signed (J4 — the Apple credentials exist)",
+    );
+    expect(signed?.text).toMatch(/APPLE_API_KEY="\$key" pnpm run package:mac:release/);
+    expect(names.indexOf("Package, signed (J4 — the Apple credentials exist)")).toBeLessThan(
+      names.indexOf("Hash the planes (D11)"),
+    );
+    const unsignedChecks = build.find(
+      (step) =>
+        step.name === "The packaged app's checks (as package:mac:release runs them, unsigned)",
+    );
+    expect(unsignedChecks?.text).toMatch(
+      /\n {10}node packaging\/notarize-dmg\.mjs --dir release --unsigned\n/,
+    );
+    const copy = build.find((step) => step.name === "Hash the planes (D11)")?.text ?? "";
+    expect(copy).toMatch(/-name '\*\.zip\.blockmap'/);
+    expect(copy).not.toMatch(/-name '\*\.blockmap'|-name '\*\.dmg\.blockmap'/);
+    // the checksums are converge's, which waits on sign, which waits on build
+    expect(jobs.get("sign")).toMatch(/\n {4}needs: \[plan, build\]\n/);
+    expect(jobs.get("converge")).toMatch(/\n {4}needs: \[plan, sign\]\n/);
+    const converge = stepsOf("converge").map((step) => step.name);
+    const at = (name: string) => {
+      const index = converge.indexOf(name);
+      expect(index, name).toBeGreaterThan(-1);
+      return index;
+    };
+    expect(at("The stable download's fixed name (LP-1 — stable only)")).toBeLessThan(
+      at("Verify again, on the bytes about to be published (D8)"),
+    );
+    expect(at("The published DMG is signed, notarized and stapled (LP-1)")).toBeLessThan(
+      at("Checksums"),
+    );
+    expect(at("Verify again, on the bytes about to be published (D8)")).toBeLessThan(
+      at("Checksums"),
+    );
+    // the upload of release-final is the job's last step, after the sums
+    expect(stepsOf("converge").at(-1)?.text).toMatch(/^ {6}- uses: actions\/upload-artifact@/);
+  });
+
+  it("LP-1: the fixed-name DMG is made on a stable alone, by the real script", () => {
+    const step = stepsOf("converge").find(
+      (entry) => entry.name === "The stable download's fixed name (LP-1 — stable only)",
+    );
+    expect(step?.text).toMatch(/\n {8}if: needs\.plan\.outputs\.channel == 'stable'\n/);
+    const command = /\n {8}run: (node scripts\/release-assets\.mjs alias [^\n]+)/.exec(
+      step?.text ?? "",
+    )?.[1];
+    expect(command).toBe(
+      'node scripts/release-assets.mjs alias --dir release-out --channel "$CHANNEL" --version "$VERSION"',
+    );
+    // the name lives in release-assets.mjs; the workflow says it once, in that step's comment
+    expect(yml.match(/VibeField-mac-arm64\.dmg/g)).toHaveLength(1);
+    const script = realpathSync(join(REPO, "scripts", "release-assets.mjs"));
+    const runnable = command!.replace(
+      "node scripts/release-assets.mjs",
+      `"${process.execPath}" "${script}"`,
+    );
+    for (const channel of ["nightly", "beta", "stable"]) {
+      const dir = scratch();
+      mkdirSync(join(dir, "release-out"));
+      writeFileSync(join(dir, "release-out", "VibeField-0.9.0-arm64.dmg"), "the stapled DMG");
+      execFileSync("bash", ["-euc", runnable], {
+        cwd: dir,
+        encoding: "utf8",
+        env: { ...process.env, CHANNEL: channel, VERSION: "0.9.0" },
+      });
+      const names = readdirSync(join(dir, "release-out")).sort();
+      expect(names, channel).toEqual(
+        channel === "stable"
+          ? ["VibeField-0.9.0-arm64.dmg", STABLE_DMG_ALIAS]
+          : ["VibeField-0.9.0-arm64.dmg"],
+      );
+    }
+  });
+
+  it.each(["signed", "unsigned", "absent"])(
+    "LP-1: converge assesses the published DMG strictly whenever the app inside is signed (%s app)",
+    (app) => {
+      const step = stepsOf("converge").find(
+        (entry) => entry.name === "The published DMG is signed, notarized and stapled (LP-1)",
+      );
+      expect(step).toBeDefined();
+      const dir = scratch();
+      mkdirSync(join(dir, "bin"));
+      if (app !== "absent") mkdirSync(join(dir, "unzipped", "VibeField.app"), { recursive: true });
+      // codesign answers for the app; `node` records what the step asks of the assessor
+      writeFileSync(join(dir, "bin", "codesign"), `#!/bin/sh\n[ "$APP_SIGNED" = "signed" ]\n`, {
+        mode: 0o755,
+      });
+      writeFileSync(
+        join(dir, "bin", "node"),
+        '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$NODE_CALLS"\n',
+        {
+          mode: 0o755,
+        },
+      );
+      const shell = step!.text.split("        run: |\n")[1]!.replace(/^ {10}/gm, "");
+      const result = spawnSync("bash", ["-euc", shell], {
+        cwd: dir,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+          APP_SIGNED: app,
+          NODE_CALLS: join(dir, "node-calls"),
+        },
+      });
+      expect(result.status, result.stderr).toBe(0);
+      const calls = readdirSync(dir).includes("node-calls")
+        ? readFileSync(join(dir, "node-calls"), "utf8").trim().split("\n")
+        : [];
+      if (app === "signed") {
+        expect(calls).toEqual([
+          "apps/desktop/packaging/notarize-dmg.mjs --dir release-out --validate-only",
+        ]);
+      } else {
+        expect(calls).toEqual([]);
+        expect(result.stdout).toContain(
+          app === "unsigned" ? "::warning title=Unsigned macOS build::" : "no macOS app",
+        );
+      }
+    },
+  );
 
   // 2026-10-26: GitHub refuses GITHUB_TOKEN a tag (and so a release that would create one) at a commit whose
   // .github/workflows differ from main's head. Nightly 40342606623's publish met that twice, after a push that changed
@@ -1148,7 +1911,7 @@ esac
     expect(stepsOf("converge").map((s) => s.name)).toContain(
       "Verify again, on the bytes about to be published (D8)",
     );
-    expect(/needs: \[plan, converge\]/.test(jobs.get("publish") ?? "")).toBe(true);
+    expect(/needs: \[plan, converge, attest\]/.test(jobs.get("publish") ?? "")).toBe(true);
   });
 
   // AU-6 (LC-18; X8): the plan time rides from the plan job to every stage step, beside the channel, and the stager

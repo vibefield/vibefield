@@ -10,6 +10,11 @@
 // with no `latest*.yml` is an UNSIGNED release (the sign step ran without the secret): it verifies trivially, and says
 // so.
 //
+// LP-1 (2026-11-05): before the chain, signed or not, the downloadable assets' rules (`release-assets.mjs`
+// `checkReleaseAssets`): no `.dmg.blockmap`, the stable channel's fixed-name DMG only on a stable and then the same bytes
+// as its versioned DMG, and every payload a feed names that is in the directory matching the feed's sha512 and size —
+// the DMG is stapled after electron-builder writes the feed, so a stale DMG entry is refused here.
+//
 // usage: node scripts/release-verify.mjs --dir <release dir> --tag <tag> --channel <nightly|beta|stable>
 //          [--root-keys <comma-separated base64 keys>] [--now <ms>]
 //        (without --root-keys: the frozen ledger's trustRootKeys, apps/desktop/packaging/release-identity.json)
@@ -18,6 +23,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { checkReleaseAssets, ReleaseAssetsError } from "./release-assets.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -62,6 +68,12 @@ export class ReleaseVerifyError extends Error {}
 
 /** Verify `dir` as the newest release `tag` on `channel`. Resolves to the verified feeds; throws on any refusal. */
 export async function verifyReleaseDir({ dir, tag, channel, rootKeys, now = Date.now() }) {
+  try {
+    checkReleaseAssets({ dir, tag, channel });
+  } catch (error) {
+    if (error instanceof ReleaseAssetsError) throw new ReleaseVerifyError(error.message);
+    throw error;
+  }
   const feeds = readdirSync(dir).filter(isFeed);
   // an UNSIGNED release (D8: no secret, no metadata) has nothing to verify, so it needs no anchor and must not fail
   // here; a signed one is verified by `--root-keys`, else the ledger's frozen trustRootKeys (frozen at TD-1, 2026-10-21)

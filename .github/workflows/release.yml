@@ -1,5 +1,5 @@
 # The RELEASE workflow (WP12e — build-wp12-updater.md §4, D4–D8, D11, D12; EDP §12; TD-3). Its shape:
-#   plan → verify (THE gate) → build (matrix) → sign → converge → publish.
+#   plan → verify (THE gate) → build (matrix) → sign → converge → attest → publish.
 #
 # HONEST LIMIT: this workflow cannot run on the developer's Mac. Its witnesses are its scripts' tests
 # (`packages/electron-shell/test/updates/release-scripts.test.ts`) and a workflow lint (actionlint, plus the
@@ -15,8 +15,12 @@
 #                                                                      the Apple credentials in the signed-package step
 #   sign       release-signing    contents: read                       VIBEFIELD_RELEASE_SECRET in the sign step
 #   converge   —                  contents: read                       none
+#   attest     —                  contents: read, id-token: write,     none (GITHUB_TOKEN and the run's OIDC token, to
+#                                 attestations: write                  the pinned attest action alone — LP-1)
 #   publish    —                  contents: write                      none (GITHUB_TOKEN only)
-# Only tag and publish write. GitHub's required reviewers gate EVERY deployment to `release-signing`, so a SCHEDULED
+# Only tag and publish write contents. attest writes attestations alone, and is the one job that may mint an OIDC token
+# (Sigstore's signing identity): it runs no checkout, no install and no repository code (LP-1, 2026-11-05).
+# GitHub's required reviewers gate EVERY deployment to `release-signing`, so a SCHEDULED
 # nightly waits for an approval at the build job and again at the sign job (J2: "daily when approved" until James rules).
 # THE TAG IS MADE AT PLAN TIME (2026-10-26, VF-PM's ruling A): GitHub refuses GITHUB_TOKEN a tag at a commit whose
 # .github/workflows differ from main's head, and the first signed nightly (run 40342606623) met that twice at publish
@@ -237,6 +241,10 @@ jobs:
           fi
           printf '%s\n' 'block return out quick proto udp from any to any port 443' | sudo pfctl -f -
           sudo pfctl -E
+      # package:mac:release (run-macos-release.mjs): electron-builder signs, notarizes and staples the APP; then, with the
+      # same credentials in this step alone, packaging/notarize-dmg.mjs signs the DMG (the same Developer ID, a secure
+      # timestamp), notarizes it as the outermost container, staples and assesses it, and re-reads latest-mac.yml's DMG
+      # entry from the stapled bytes, its blockmap dropped (LP-1). Everything after this step reads the final DMG.
       - name: Package, signed (J4 — the Apple credentials exist)
         if: vars.VIBEFIELD_MAC_SIGNING == 'true'
         working-directory: apps/desktop
@@ -285,6 +293,9 @@ jobs:
           node packaging/verify-history-package.mjs --native-root "$app/Contents/Resources/bin"
           node packaging/verify-plugins-package.mjs --app "$app" --require-release-key
           node packaging/verify-live-surface-release.mjs --app "$app" --enumerate-only
+          # LP-1: no credentials, so the DMG is not signed, notarized or stapled — it says so; the feed's DMG entry is
+          # still re-read from its bytes and its blockmap dropped, so both paths publish the same set of names
+          node packaging/notarize-dmg.mjs --dir release --unsigned
       # BP-1b's gate on the packaged app, signed or not (the stage's verify ran it on the stage): every Mach-O — field-native,
       # its cell, the sidecar, Electron's helpers, every .node and .dylib — loads only /usr/lib, /System or the bundle's own
       # paths, and the native binaries START (`--version`, under the hardened runtime once signed). Nothing else in this job
@@ -311,8 +322,10 @@ jobs:
           mkdir -p release-build
           node scripts/release-manifest.mjs hash --app "apps/desktop/release/$OUT/VibeField.app" --platform "$PLATFORM" \
             --out "release-build/hashes-$PLATFORM.json"
-          # the payloads and the UNSIGNED feed electron-builder wrote beside them (the sign job signs it, D8)
-          find apps/desktop/release -maxdepth 1 -type f \( -name '*.zip' -o -name '*.dmg' -o -name '*.blockmap' \
+          # the payloads and the UNSIGNED feed electron-builder wrote beside them (the sign job signs it, D8); the DMG is
+          # already stapled and its feed entry re-read (LP-1). The zip's blockmap rides for differential downloads; a
+          # DMG's never does (stale once stapled, read by nothing: electron-updater updates a Mac from the zip)
+          find apps/desktop/release -maxdepth 1 -type f \( -name '*.zip' -o -name '*.zip.blockmap' -o -name '*.dmg' \
             -o -name 'latest*.yml' \) -exec cp {} release-build/ \;
           ls release-build/latest*.yml >/dev/null
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -448,6 +461,16 @@ jobs:
         with:
           name: release-out
           path: release-out
+      # LP-1: the stable channel's fixed-name download, a byte copy of this release's (stapled) DMG, so
+      # https://github.com/vibefield/vibefield/releases/latest/download/VibeField-mac-arm64.dmg always resolves (only a
+      # stable is GitHub's `latest`, D4). Made before the verify (which holds it to the versioned DMG's bytes) and the
+      # checksums (which list it). Never for a nightly or a beta; the verify refuses one that carries it.
+      - name: The stable download's fixed name (LP-1 — stable only)
+        if: needs.plan.outputs.channel == 'stable'
+        env:
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: node scripts/release-assets.mjs alias --dir release-out --channel "$CHANNEL" --version "$VERSION"
       - name: Verify again, on the bytes about to be published (D8)
         env:
           TAG: ${{ needs.plan.outputs.tag }}
@@ -464,6 +487,21 @@ jobs:
           else
             echo "::warning title=Unsigned macOS build::the published zip is unsigned (J4); the nested-signature audit runs once it is signed"
           fi
+      # LP-1: the DMG a stranger downloads, on the bytes about to be published (the stable alias too): the team's
+      # Developer ID with a secure timestamp, a stapled ticket, and Gatekeeper's `open` assessment accepting it. Strict
+      # whenever the app inside is signed — a signed app in an unsigned DMG was nightly-20261028's defect.
+      - name: The published DMG is signed, notarized and stapled (LP-1)
+        run: |
+          set -euo pipefail
+          app=""
+          if [ -d unzipped ]; then app=$(find unzipped -maxdepth 2 -name '*.app' | head -n 1); fi
+          if [ -z "$app" ]; then echo "no macOS app in this release"; exit 0; fi
+          if codesign --display "$app" >/dev/null 2>&1; then
+            node apps/desktop/packaging/notarize-dmg.mjs --dir release-out --validate-only
+          else
+            echo "::warning title=Unsigned macOS build::the published DMG is unsigned (J4); it is signed, notarized and stapled once the app is"
+          fi
+      # After every byte is final (the DMG stapled in build, its alias made above), so the sums are the published bytes'.
       - name: Checksums
         run: |
           cd release-out
@@ -478,8 +516,32 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # LP-1: build provenance for the bytes a person downloads (`gh attestation verify <file> --repo vibefield/vibefield`):
+  # the DMG (the stable alias is the same digest) and the zip, exactly as converge left them for publish, signed through
+  # Sigstore with this run's OIDC identity and stored by GitHub's attestations API. A job of its own, so the token that
+  # can mint that identity reaches the pinned action alone: no checkout, no install, no repository code runs here.
+  # Before publish, so a published release always has its provenance.
+  attest:
+    needs: converge
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-final
+          path: release-out
+      - name: Build provenance for the DMG and the zip (LP-1)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            release-out/*.dmg
+            release-out/*.zip
+
   publish:
-    needs: [plan, converge]
+    needs: [plan, converge, attest]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

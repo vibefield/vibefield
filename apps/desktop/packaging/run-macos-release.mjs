@@ -79,6 +79,13 @@ await run(process.execPath, [
   "--enumerate-only",
 ]);
 
+// LP-1: the DMG a stranger downloads. electron-builder notarizes and staples the APP before it builds the DMG, and
+// leaves the DMG itself unsigned (nightly-20261028: "not signed at all"). notarize-dmg.mjs signs it with the same
+// Developer ID and a secure timestamp, notarizes it with the credential mode this preflight accepted, staples and
+// assesses it, then re-reads the feed's DMG entry from the stapled bytes and drops the DMG's blockmap — LAST, after
+// every check above passed, and before the workflow copies or hashes anything.
+await run(process.execPath, ["packaging/notarize-dmg.mjs", "--dir", "release"]);
+
 function signingPreflight() {
   const linkedCertificate = nonempty("CSC_LINK");
   const linkedPassword = nonempty("CSC_KEY_PASSWORD");

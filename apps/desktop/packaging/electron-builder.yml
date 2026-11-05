@@ -164,6 +164,7 @@ publish:
 
 mac:
   target: [dmg, zip]
+  minimumSystemVersion: "14.0" # LP-1: the real floor (the screenshot helper targets macos14.0); = policy/*.json floors.os
   icon: packaging/icons/app.icon
   # Explicit nested-code inventory. It is inert while identity remains null,
   # but becomes the inside-out signing list when WP10 enables signing; the SCK
