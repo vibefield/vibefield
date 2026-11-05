@@ -11,6 +11,7 @@ import {
 import { ARTIFACT_LIMITS } from "../src/artifacts";
 import { DEVICE_LIMITS } from "../src/devices";
 import { RpcNotification } from "../src/envelope";
+import { ErrorData, UnavailableDetails } from "../src/errors";
 import { KEYED_FORWARD_METHODS } from "../src/forwarding";
 import {
   defineMethod,
@@ -36,6 +37,7 @@ import {
   PORTS,
   PRODUCT_API_LIMITS,
   PROJECT_DOORS,
+  RECORD_STORES,
   ROWS,
   SCOPES,
   SOCKETS,
@@ -840,5 +842,40 @@ describe("IOS-8f — user.me, the desktop's own person", () => {
 
   it("names its honest UNAVAILABLE: a daemon with no user id has no person to answer", () => {
     expect(USER_ME).toEqual({ SERVICE: "user", STATE_NO_USER: "no-user" });
+  });
+});
+
+describe("item 172 — fieldd's signed stores when the disk does not answer (RECORD_STORES)", () => {
+  it("names its tries and its honest UNAVAILABLE, one state for every store", () => {
+    expect(RECORD_STORES).toEqual({
+      READ_TRIES: 3,
+      SERVICE_COMPOSE: "compose",
+      SERVICE_NEEDS: "needs",
+      STATE_UNREADABLE: "records-unreadable",
+    });
+  });
+
+  it("its three refusals parse as ErrorData, each an UNAVAILABLE with the row's service and state", () => {
+    const refusals = [
+      ["error-data.compose-records-unreadable.json", RECORD_STORES.SERVICE_COMPOSE, true],
+      ["error-data.compose-inputs-unreadable.json", RECORD_STORES.SERVICE_COMPOSE, false],
+      ["error-data.needs-records-unreadable.json", RECORD_STORES.SERVICE_NEEDS, false],
+    ] as const;
+    for (const [file, service, retryable] of refusals) {
+      const data = ErrorData.parse(
+        JSON.parse(
+          readFileSync(
+            join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", file),
+            "utf8",
+          ),
+        ),
+      );
+      expect(data.kind, file).toBe("UNAVAILABLE");
+      expect(data.retryable, file).toBe(retryable);
+      expect(UnavailableDetails.parse(data.details), file).toMatchObject({
+        service,
+        state: RECORD_STORES.STATE_UNREADABLE,
+      });
+    }
   });
 });

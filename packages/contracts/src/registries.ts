@@ -853,6 +853,21 @@ export const USER_ME = {
   STATE_NO_USER: "no-user",
 } as const;
 
+/** Item 172 (DESIGN.md §9 "What VibeField keeps, when it cannot read it") — fieldd's signed stores (a spark's record,
+ * LAYOUT.SPARKS_DIR; the needs-you queue, NEEDS_DIR; the sessions' input queues, AGENT_INPUTS_DIR; each spark's kept
+ * record, SPARK_FILES_DIR) when the disk does not answer. READ_TRIES: how many times one read is tried before the
+ * store says it cannot read; the file stays where it is, never set aside and never written over. A door that reads a
+ * store that cannot answer refuses UNAVAILABLE {service, state: STATE_UNREADABLE}, never with an empty list:
+ * SERVICE_COMPOSE for the spark doors (the sparks, read at each ask, so retryable) and for a say or a spark's send (the
+ * input queues, read once at boot, so not until fieldd restarts), SERVICE_NEEDS for the needs-you doors (read once at
+ * boot). TS-only: no native reader. */
+export const RECORD_STORES = {
+  READ_TRIES: 3,
+  SERVICE_COMPOSE: "compose",
+  SERVICE_NEEDS: "needs",
+  STATE_UNREADABLE: "records-unreadable",
+} as const;
+
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
  * one receipt per idempotency key for RECEIPT_TTL_MS, at most
  * RECEIPT_JOURNAL_DEPTH of them; a forward cut mid-flight is recorded

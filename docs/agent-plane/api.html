@@ -1975,6 +1975,14 @@
               (<code>SparkKeptRecord</code>, one signed file) for what later slices keep per spark across a restart, and,
               with TH-1, its runs' transcript files. No door serves it yet. CP-1c <code>f98d0d2b</code> ·
               <code>1060d4b2</code>; IOS-12a <code>8513806fa</code>.
+              <em>Item 172 (2026-11-05):</em> when the disk does not answer a read of the sparks fieldd keeps (after
+              <code>RECORD_STORES.READ_TRIES</code> tries; a folder it cannot list, a file it may not read), the list,
+              open and hatch refuse <code>UNAVAILABLE {service: "compose", state: "records-unreadable"}</code>,
+              retryable, in fieldd's words ("VibeField can't read the sparks it keeps; nothing was changed"), never an
+              empty list and never a write over what it could not read. A say, and a spark's send, refuse the same
+              details, not retryable, when the sessions' input queues could not be read at boot. A record a newer
+              VibeField wrote is kept for it, never served and never written over (DESIGN.md §9 "What VibeField keeps,
+              when it cannot read it"; <code>error-data.compose-*-unreadable</code>).
               <em>Corrected 2026-11-05 (CO lane): this said the window's three doors, held under
               <code>agents.manage</code> and all three <code>local</code>, with no say. IOS-12a (2026-11-04; PC-D3 A,
               PC-D7 A, PC-L2) made them the person's four, under <code>sparks.use</code>, as
@@ -2056,6 +2064,12 @@
               until PG ruled its scope. IOS-12a (2026-11-04; PC-D4 A, PC-D7 A) moved the list, the subscription and the
               answer to <code>sparks.use</code>, federated through the home, as <code>methods.ts</code> has said since;
               this page had not followed.</em>
+              <em>Item 172 (2026-11-05):</em> the queue is read once, at boot. When the disk does not answer that read
+              (after <code>RECORD_STORES.READ_TRIES</code> tries), fieldd starts anyway, the files stay where they are,
+              and the list, the subscription and the answer refuse
+              <code>UNAVAILABLE {service: "needs", state: "records-unreadable"}</code>, not retryable until fieldd
+              restarts, in fieldd's words ("VibeField can't read what waits on you; nothing was changed"), never an
+              empty queue (<code>error-data.needs-records-unreadable</code>).
             </p>
             <div class="table-wrap">
               <table class="reference-table">

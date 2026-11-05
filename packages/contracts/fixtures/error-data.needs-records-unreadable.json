@@ -1,0 +1,5 @@
+{
+  "kind": "UNAVAILABLE",
+  "retryable": false,
+  "details": { "service": "needs", "state": "records-unreadable" }
+}
