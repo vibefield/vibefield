@@ -16,9 +16,10 @@ if (process.env.VIBEFIELD_REMAP_BUILD_PATHS !== "1") {
   const value = process.env.VIBEFIELD_REMAP_BUILD_PATHS;
   fail(
     `VIBEFIELD_REMAP_BUILD_PATHS is ${value === undefined ? "unset" : JSON.stringify(value)}, and a release build remaps ` +
-      "its builder paths only under it: export VIBEFIELD_REMAP_BUILD_PATHS=1, run `pnpm siblings:build` and " +
-      "`node scripts/siblings.mjs build-js mille` again under it (the stage copies what they built), then run " +
-      "package:mac:release again",
+      "its builder paths only under it: export VIBEFIELD_REMAP_BUILD_PATHS=1 in the release shell only, run " +
+      "`pnpm siblings:build` and `node scripts/siblings.mjs build-js mille` again under it (the stage copies what " +
+      "they built), then run package:mac:release again. The switch changes the rustflags, so the shared cargo " +
+      "target rebuilds when a dev build runs without it again, and the other way round",
   );
 }
 if (process.platform !== "darwin") fail("macOS release packaging must run on darwin");

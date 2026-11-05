@@ -1541,6 +1541,8 @@ describe("LP-1: the DMG — signed, notarized, stapled; the feed re-read; the st
       expect(refusal.error).toContain(`VIBEFIELD_REMAP_BUILD_PATHS is ${said}`);
       expect(refusal.error).toContain("pnpm siblings:build");
       expect(refusal.error).toContain("build-js mille");
+      // prod-builder 04:11Z: the switch belongs to the release shell alone (the shared target rebuilds both ways)
+      expect(refusal.error).toContain("in the release shell only");
     }
     const source = readFileSync(driver, "utf8");
     const guard = source.indexOf('process.env.VIBEFIELD_REMAP_BUILD_PATHS !== "1"');
