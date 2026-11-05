@@ -252,9 +252,18 @@ class FlowHostChild {
       stdio: ["ignore", "ignore", "pipe", "pipe"],
       env: flowsHostEnvironment(opts.environment ?? process.env),
     });
-    this.#proc.on("error", (error) =>
-      this.#finish({ kind: "fatal", reason: `the flow host did not start: ${error.message}` }),
-    );
+    // ChildProcess says 'error' for a spawn that failed, and also for a kill or a write that failed while the child
+    // lives (bth's review finding 8): only the first settles the run; the others are logged, and the child's own exit
+    // (`close`) settles it, with its own end
+    this.#proc.on("error", (error) => {
+      if (this.#proc.pid === undefined) {
+        this.#finish({ kind: "fatal", reason: `the flow host did not start: ${error.message}` });
+        return;
+      }
+      this.#logger.warn("fieldd.flows.host.error", "The flow host's process said an error", {
+        error: error.message,
+      });
+    });
     this.#pipe = this.#proc.stdio[3] as Duplex;
     const reader = new FrameReader(
       FLOW_LIMITS.RESULT_MAX_BYTES + FLOW_FRAME_ENVELOPE,

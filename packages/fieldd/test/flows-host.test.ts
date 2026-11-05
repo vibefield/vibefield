@@ -630,6 +630,14 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       answer({ ok: true, value: "answered" });
       expect(await within(run.ended)).toEqual({ kind: "done", value: "answered" });
       expect(alive(child?.pid as number)).toBe(false);
+      // a spawn that failed (no pid) is still the run's end, at once, in its own words
+      const never = await host(flow("return 1;"), {
+        launch: { command: "/nonexistent/vibefield-flows-host", args: [] },
+      });
+      const ended = await within(never.ended);
+      expect(ended).toMatchObject({ kind: "fatal" });
+      expect((ended as { reason?: string }).reason).toMatch(/^the flow host did not start: /);
+      expect(await never.ready).toBeUndefined();
     },
     ROW_MS,
   );
