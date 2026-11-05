@@ -1641,8 +1641,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - The pill opens the agent menu (§5: a solid menu, 300 wide), placed as a macOS pop-up so the chosen row lands on
       the pill. It holds each agent's models as its picker lists them (`agent.models`), the profile whose sign-in it
       thinks under on that agent's head, and Effort as a small segmented control.
-    - An agent that cannot take the briefing yet is listed, disabled, with why ("can't take VibeField's tools yet"),
-      read from `agent.providers[].briefing`.
+    - The menu lists the agents the catalog lets be a spark first, then the ones installed here that it does not let
+      yet, disabled, with why ("can't take VibeField's tools yet"). An agent not installed here is not listed. Both
+      are read from `agent.providers[]`: `offers.spark`, fieldd's word on the catalog's spark claim for this device,
+      and `available`. A row with no `spark` key, from a daemon older than the claim, is read by the briefing it
+      declares, as that daemon's own hatch reads it.
+      *Amended 2026-11-04 (CP-5a; CP5-Q1 (b), ruled by James on the CO round's page, 2026-11-04; ER-C42):* this said
+      "An agent that cannot take the briefing yet is listed, disabled, with why …, read from
+      `agent.providers[].briefing`". The sheet read fieldd's gate a second time, from the facts, and listed every
+      agent, installed or not.
     - When its agents can't be read (`agent.providers`), the sheet lists none and its foot says "VibeField can't list
       its agents right now". @'s list in Chat says the same sentence (§8 "Chat's composer").
   - **Its profiles** (NS-D5), once there is more than This Mac: a row of chips, 28 tall, corners 14, 12.5 medium. A
