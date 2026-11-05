@@ -5,7 +5,15 @@ import { lstat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { ENTITLEMENT_ARGS, entitlementKeys } from "./codesign-entitlements.mjs";
+import {
+  BIN_ROOT,
+  ENTITLEMENT_ARGS,
+  entitlementFailures,
+  entitlementKeys,
+  entitlementProfile,
+  readBinEntries,
+  unclassifiedBinEntries,
+} from "./codesign-entitlements.mjs";
 
 const execFileAsync = promisify(execFile);
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -15,7 +23,6 @@ const expected = {
   helperId: "com.jamesyong.vibefield.live-surface-capture-helper",
   adapterId: "com.jamesyong.vibefield.live-surface-adapter",
 };
-const allowedEntitlements = new Set(["com.apple.security.cs.allow-jit"]);
 
 if (process.platform !== "darwin") {
   process.stderr.write(
@@ -36,10 +43,17 @@ try {
   await assertRegularFile(helperPath, "capture helper", true);
   await assertRegularFile(adapterPath, "IOSurface adapter", false);
 
+  // LP-6: the app keeps V8's JIT; the helper and its adapter are native code signed with no entitlement at all
+  // (entitlements.mac.native.plist, by packaging/sign-mac.mjs).
   const components = [
-    { label: "app", path: appPath, identifier: expected.appId, requireJit: true },
-    { label: "capture-helper", path: helperPath, identifier: expected.helperId },
-    { label: "iosurface-adapter", path: adapterPath, identifier: expected.adapterId },
+    { label: "app", path: appPath, identifier: expected.appId, profile: "jit" },
+    { label: "capture-helper", path: helperPath, identifier: expected.helperId, profile: "none" },
+    {
+      label: "iosurface-adapter",
+      path: adapterPath,
+      identifier: expected.adapterId,
+      profile: "none",
+    },
   ];
   const evidence = [];
   const policyFailures = [];
@@ -67,6 +81,9 @@ try {
       cdHash: metadata.cdHash,
     });
   }
+
+  const entitlementCensus = await binEntitlementCensus(nativeRoot);
+  policyFailures.push(...entitlementCensus.failures);
 
   if (policyFailures.length > 0) {
     throw new Error(`signature policy failed: ${policyFailures.join("; ")}`);
@@ -96,6 +113,7 @@ try {
       architecture: process.arch,
       expectedTeamIdentifier: expected.teamId,
       exactNestedSignatures: evidence,
+      binEntitlements: entitlementCensus.rows,
       deepSignature: true,
       gatekeeperAccepted: true,
       stapleValid: true,
@@ -223,12 +241,34 @@ function checkSignaturePolicy(component, metadata, entitlementKeys) {
   }
   if (!metadata.runtime) failures.push("Hardened Runtime flag is absent");
   if (!metadata.timestamped) failures.push("secure timestamp is absent");
-  const unexpected = entitlementKeys.filter((key) => !allowedEntitlements.has(key));
-  if (unexpected.length > 0) failures.push(`unexpected entitlements: ${unexpected.join(", ")}`);
-  if (component.requireJit && !entitlementKeys.includes("com.apple.security.cs.allow-jit")) {
-    failures.push("V8 JIT entitlement is absent");
-  }
+  failures.push(...entitlementFailures(component.profile, entitlementKeys));
   return failures;
+}
+
+// LP-6 (2026-11-05): every signed entry of Contents/Resources/bin read back against the table the signer used
+// (codesign-entitlements.mjs BIN_PROFILES; packaging/sign-mac.mjs): fieldd, the Node SEA, holds allow-jit and nothing
+// else; every other executable, bundle and library holds no entitlement; an executable or bundle the table does not
+// name is a failure. fieldd must be present, so the JIT it needs is proven on it rather than assumed. Data files
+// (.mjs, .cjs, .wasm) carry no code signature of their own to read and are skipped.
+async function binEntitlementCensus(nativeRoot) {
+  const entries = readBinEntries(nativeRoot);
+  const failures = unclassifiedBinEntries(entries).map(
+    (name) => `bin/${name}: signed code no entitlement profile names (BIN_PROFILES)`,
+  );
+  if (!entries.some((entry) => entry.name === "fieldd" && entry.executable)) {
+    failures.push("bin/fieldd: absent — its V8 JIT entitlement cannot be proven");
+  }
+  const rows = [];
+  for (const entry of entries) {
+    if (!entry.bundle && !entry.machO) continue;
+    const profile = entitlementProfile([...BIN_ROOT, entry.name].join("/"));
+    const keys = await describeEntitlements(join(nativeRoot, entry.name));
+    failures.push(
+      ...entitlementFailures(profile, keys).map((failure) => `bin/${entry.name}: ${failure}`),
+    );
+    rows.push({ path: `bin/${entry.name}`, profile, entitlementKeys: keys });
+  }
+  return { rows, failures };
 }
 
 async function verifyPackagedRuntime(nativeRoot, captureArguments) {

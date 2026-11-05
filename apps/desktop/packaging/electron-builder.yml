@@ -195,6 +195,9 @@ mac:
     # only a stage that has it (release packaging stages with --require-complete first).
     # It inherits entitlements.mac.inherit.plist like every nested binary here; it needs
     # none of it (no JIT), and this builder has no per-file entitlements to say so.
+    # *(Corrected 2026-11-05, LP-6: it no longer inherits it. The release overlay's sign hook,
+    # packaging/sign-mac.mjs, signs every entry below but fieldd with entitlements.mac.native.plist
+    # (no key) by codesign-entitlements.mjs's BIN_PROFILES; fieldd, the Node SEA, keeps allow-jit.)*
     # verify-history-package.mjs --require-signed checks its actual nested signature.
     - Contents/Resources/bin/rosettad
   # Hardened runtime is on from the first package even though nothing is signed yet, so the

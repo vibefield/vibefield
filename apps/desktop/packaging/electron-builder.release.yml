@@ -15,3 +15,11 @@ mac:
   preAutoEntitlements: false
   entitlements: packaging/entitlements.mac.plist
   entitlementsInherit: packaging/entitlements.mac.inherit.plist
+  # LP-6 (2026-11-05): per-binary entitlements. electron-builder has none of its own (every nested binary took
+  # entitlementsInherit, allow-jit, which the Rust daemons, the Go sidecar and the native helpers never use), so this
+  # hook is electron-builder's own signer with each entry of Contents/Resources/bin mapped by BIN_PROFILES
+  # (packaging/codesign-entitlements.mjs): fieldd keeps entitlementsInherit (V8), every other entry is signed with
+  # packaging/entitlements.mac.native.plist (no key), and an executable the table does not name refuses the build.
+  # Notarization is unchanged (electron-builder notarizes after the hook returns). verify-live-surface-release.mjs
+  # reads every signature back against the same table.
+  sign: packaging/sign-mac.mjs

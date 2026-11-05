@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- LP-6: the native code beside the app, signed with NO entitlement. The Rust
+       daemons (field-native, field-terminal-host, field-freeway-host, rosettad),
+       truffle's Go sidecar, the ScreenCaptureKit helpers (Screen Recording is a
+       TCC consent, not an entitlement) and the .node libraries execute no JIT, so
+       the Hardened Runtime runs them with nothing granted. Which entry takes this
+       file is codesign-entitlements.mjs's BIN_PROFILES; packaging/sign-mac.mjs
+       hands it to the signer and verify-live-surface-release.mjs reads it back. -->
+</dict>
+</plist>
