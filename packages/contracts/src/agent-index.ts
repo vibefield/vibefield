@@ -1411,8 +1411,9 @@ export type IndexAppsSubscribeParams = z.infer<typeof IndexAppsSubscribeParams>;
 
 /** `index.artifacts`: one desktop's library as rosetta pages it, for the History room's `artifacts` port and the
  * phone's Versions (the plan's L5). `device` routes it (`federate`; absent: this desktop). `q` searches titles;
- * `kind` is rosetta's agent kind; `projectKey` is a PJ project, which fieldd resolves to that desktop's rosetta project
- * ids; `appId` asks for one app's every presentation (Versions). `cursor` is the previous page's, opaque, and `limit`
+ * `kind` is rosetta's agent kind; `projectKey` is a PJ project, which narrows this desktop's own library only: a routed
+ * page is not narrowed (the home refuses a routed `projectKey`), and each entry carries the project the asking desktop
+ * joins; `appId` asks for one app's every presentation (Versions). `cursor` is the previous page's, opaque, and `limit`
  * is 1..100, rosetta's own. */
 export const IndexArtifactsParams = z
   .object({
