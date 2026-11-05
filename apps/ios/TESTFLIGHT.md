@@ -42,6 +42,18 @@ Organizer**, select the verified archive, then **Distribute App > TestFlight
 Internal Only > Distribute**. Build 3's processing, encryption questionnaire,
 test notes, and assignment to **Personal iPhone** are complete.
 
+Build **0.1 (4)** was archived on September 20, 2026 (`archive-4.log`); its upload,
+`testflight.sh upload 4` on September 21, stopped at the same **Failed to Use
+Accounts** before any transfer (`upload-4.log`). Build **0.1 (5)** was archived on
+September 24, 2026 and never uploaded (no `upload-5.log`). Both archives stay under
+`apps/ios/build/testflight/`; neither reached App Store Connect, whose newest build
+is still **3**. *(Read 2026-11-05, LP-4, from that directory on James's Mac.)*
+
+**The fix (LP-4, 2026-11-05):** the helper now authenticates with an **App Store
+Connect API key** for both the archive and the export, instead of xcodebuild's
+lookup of the Apple account signed in to Xcode, which is the step that failed for
+builds 2–4. See [The App Store Connect API key](#the-app-store-connect-api-key).
+
 ## App identity and prerequisites
 
 | Setting | Value |
@@ -53,7 +65,7 @@ test notes, and assignment to **Personal iPhone** are complete.
 | Marketing version | `0.1` |
 | Minimum iPhone / iPad OS | `18.1` |
 | Swift dependencies | Ghosttea `0.13.7` (exact) · Truffle `0.7.23` (exact; the two agree since ghosttea 0.13.7 declares truffle 0.7.23). *Corrected 2026-10-27, the EL8 to ghosttea 0.13.7 with truffle 0.7.23: this said "Ghosttea `0.13.6` (exact) · Truffle `0.7.22` (exact)", true from 2026-10-26. Corrected 2026-10-26, the EL8 to ghosttea 0.13.6: this said "Ghosttea `0.13.5` (exact)", true earlier that day. Corrected 2026-10-26, the EL8 to ghosttea 0.13.5: this said "Ghosttea `0.13.4` (exact)", true earlier that day. Corrected 2026-10-26, the EL8 to ghosttea 0.13.4: this said "Ghosttea `0.13.1` (exact) · Truffle `0.7.19` (exact)", true from 2026-10-23. Corrected 2026-10-23, the EL8 to ghosttea 0.13.1: this said "Ghosttea `0.10.1` (exact) · Truffle by the path package `VibeFieldKit/.window/truffle`, at the tag `truffle-v0.7.19`", true from the RFC 025 window until then; and before that, "Truffle `0.7.12` (exact pins)".* |
-| Distribution | App Store Connect, internal TestFlight only |
+| Distribution | App Store Connect: internal TestFlight (`ExportOptions.plist`), or the App Store and external TestFlight (`ExportOptions-AppStore.plist`) |
 
 The team must have an active Apple Developer Program membership. In Xcode >
 Settings > Apple Accounts, sign in to an account with access to that team and
@@ -95,30 +107,81 @@ Each build is available for up to **90 days**.
 Run from the repository root:
 
 ```sh
-# Builds 1–3 are archived and build 3 is uploaded. Use 4, 5, ... for new builds.
-bash apps/ios/scripts/testflight.sh archive 4
+# The App Store Connect API key (see below); never commit or print these.
+export ASC_KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8
+export ASC_KEY_ID=XXXXXXXXXX
+export ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
-# Upload that exact archive using the Apple account already in Xcode.
-bash apps/ios/scripts/testflight.sh upload 4
+# Builds 1–5 are archived on this Mac; 1 and 3 are uploaded. The next archive is 6.
+bash apps/ios/scripts/testflight.sh archive 6
+
+# Upload that exact archive for internal TestFlight only (the default) ...
+bash apps/ios/scripts/testflight.sh upload 6
+# ... or for the App Store and external TestFlight.
+bash apps/ios/scripts/testflight.sh upload 6 store
 ```
+
+*Corrected 2026-11-05 (LP-4):* this block said "Builds 1–3 are archived and build 3
+is uploaded. Use 4, 5, ... for new builds" and showed `archive 4` / `upload 4`.
+Build 4's archive exists and its upload failed (above), and build 5's archive exists
+too, so the helper (which never overwrites an archive) takes **6** next. App Store
+Connect's newest build is 3, so 6 is free there as well.
 
 For build N, the archive is `apps/ios/build/testflight/VibeField-N.xcarchive`. Logs and
 upload output are beside it, under the gitignored `build/` directory. A
 completed archive is never overwritten. Xcode may increase the uploaded build
 number to avoid conflicts; App Store Connect displays the final number.
 
-`ExportOptions.plist` explicitly uploads to internal TestFlight with automatic
-signing and dSYMs for crash symbolication. It does not publish an App Store
-release. Builds produced with `testFlightInternalTestingOnly=true` cannot later
-be used for external testing or the App Store: create a new archive with that
-setting changed deliberately when you want broader distribution.
+There are two exports of the same archive, chosen at upload:
+
+| Export | Options file | Where the build can go |
+| --- | --- | --- |
+| `internal` (default) | `ExportOptions.plist` | internal TestFlight only (`testFlightInternalTestingOnly`) |
+| `store` | `ExportOptions-AppStore.plist` | the App Store (App Review) and external TestFlight |
+
+Both use `method` `app-store-connect`, `destination` `upload`, automatic signing
+for team `9F79X9D26S`, Xcode-managed build numbers, and dSYMs for crash
+symbolication. A build uploaded with `testFlightInternalTestingOnly=true` can
+never be used for external testing or the App Store, so a build meant for App
+Review is uploaded with `store` from the start; neither export publishes a
+release by itself (submitting for review is done in App Store Connect).
+`MARKETING_VERSION` stays `0.1` until the beta cut moves it.
 
 The helper selects `/Applications/Xcode.app/Contents/Developer` without changing
 the machine's global `xcode-select`. Override `DEVELOPER_DIR` if necessary. It
 requires the committed app lockfile, preserves its exact versions while allowing
 Git cache refreshes, and uses the same Metal-plugin validation flag as the existing
 iOS build commands. Credentials
-remain in Xcode/Keychain. Never commit signing keys, passwords, or `.p8` files.
+are the API key's three environment variables (below) or, when asked, Xcode's
+account and Keychain. Never commit signing keys, passwords, or `.p8` files.
+
+## The App Store Connect API key
+
+The helper passes `-allowProvisioningUpdates -authenticationKeyPath
+-authenticationKeyID -authenticationKeyIssuerID` to both `xcodebuild archive` and
+`xcodebuild -exportArchive` when all three of these are set:
+
+| Variable | Value |
+| --- | --- |
+| `ASC_KEY_PATH` | the downloaded `AuthKey_<KEY ID>.p8`, kept outside the repository |
+| `ASC_KEY_ID` | the key's ID (the `<KEY ID>` in the file name) |
+| `ASC_ISSUER_ID` | the issuer ID shown above the team keys |
+
+1. In App Store Connect, **Users and Access > Integrations > App Store Connect
+   API > Team Keys**, generate a key for the Shikang Yong team. Give it the
+   **Admin** role: automatic signing with `-allowProvisioningUpdates` may create
+   the cloud-managed Apple Distribution certificate and profiles, which a
+   narrower role may not be allowed to do.
+2. Download the `.p8` once (Apple keeps no copy) into a directory outside the
+   repository, such as `~/.appstoreconnect/private_keys/`, and `chmod 600` it.
+3. Export the three variables in the shell that runs the helper (nothing loads
+   them from a file in the repository). The helper prints only their names.
+
+Without the key, `archive` still uses Xcode's signed-in account, and `upload`
+refuses: set `ASC_AUTH=xcode` to try Xcode's account anyway, or use Xcode
+Organizer as described above. The helper refuses a key path inside the
+repository and a partial set of the three variables. Revoke the key in the same
+App Store Connect page if it is ever exposed.
 
 On Xcode 26.6 build `17F113`, the helper supplies
 `-Xfrontend -disable-large-loadable-types-reg2mem`. Without it, Swift 6.3.3 crashes

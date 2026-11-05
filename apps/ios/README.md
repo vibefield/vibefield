@@ -195,12 +195,16 @@ a refusal's code and an error's domain and number are the most it says.
 
 For installation and updates on an iPhone away from the Mac, follow
 [the TestFlight setup](TESTFLIGHT.md). The release helper builds a signed
-device archive and uploads it using Xcode's existing Apple account:
+device archive and uploads it, authenticated by an App Store Connect API key
+(`ASC_KEY_PATH`, `ASC_KEY_ID`, `ASC_ISSUER_ID`; TESTFLIGHT.md says how; LP-4,
+2026-11-05 — until then it used Xcode's Apple account, whose command-line lookup
+failed as "Failed to Use Accounts"):
 
 ```sh
 # From the repository root. N = the next unused build number (TESTFLIGHT.md names the last).
 bash apps/ios/scripts/testflight.sh archive N
-bash apps/ios/scripts/testflight.sh upload N
+bash apps/ios/scripts/testflight.sh upload N          # internal TestFlight only
+bash apps/ios/scripts/testflight.sh upload N store    # the App Store and external TestFlight
 ```
 
 **The splash** (FieldSplash; DESIGN.md §8 "The phone's splash") is vibefield-splash's iPhone look
