@@ -605,13 +605,19 @@ phone"; DECISIONS PC
   - The crews are kept in item 159's record, members kept after they end, and served whole, with what each live member
     waits on, by `compose.sparks.crews.subscribe` to the person's windows and devices.
   - Not here: the card itself (SP-1e2's renderer half), the act line's `crew?` (after TH-1), Stop all (SP-1e4).
+- **TH-1 and TH-2, Chat's thread as the spark's conversation**: LANDED 11-05 (`d5c6995fb`, the mini's mint M147,
+  run 147; LANDED "TH-1 and TH-2"), on the CO round's TH, TH0 and CO marks (TH-Q3 (b) James's click, the rest at the
+  leans) and the step-0 plan (`step0-th.md`, RULED 2026-11-04 23:16Z).
+  - fieldd keeps each of a spark's runs as its transcript in the spark's own folder, each line MAC'd, and a worker
+    of its own serves it to the person's windows by ticket.
+  - Chat's thread draws that conversation; Send goes through `compose.sparks.say`; the pane leaves Chat; the head
+    carries Jump to, Wake and Pause.
+  - Not here: Copy a message, TH-3's marks, the crew card's act line (SP-1e2's renderer half, next).
 - Next, in order (the CO waves matrix, `lanes/co-plan/plans/co-waves-matrix.md`):
-  - **TH-1 and TH-2**, one mint (lane `co/th`): the spark's thread as its transcript, Send through
-    `compose.sparks.say`, Jump to, Wake, Pause. Its first half (DESIGN.md, contracts, the renderer) is building in
-    its lane; its fieldd half (the recorder, the store in 159's folder) follows this stack on the compose block's chain.
-  - **SP-1e2's renderer half → SP-1e4** (SP-1e: CH-D2's live cards in Chat's thread): the crew card in field-app, off
-    TH's tip, with the act line's `crew?` once TH-1 lands; then SP-1e4, Stop all and Pause all. SP-1e3 stays HELD.
-  - **CP-4a2** (the host and `ses`, the journal, the runs, the doors' handlers) after TH-1 lands (CP4-S16); then
+  - **SP-1e2's renderer half → SP-1e4** (SP-1e: CH-D2's live cards in Chat's thread): the crew card in field-app, on
+    TH's thread, with the act line's `crew?` now that TH-1 has landed; then SP-1e4, Stop all and Pause all. SP-1e3
+    stays HELD.
+  - **CP-4a2** (the host and `ses`, the journal, the runs, the doors' handlers), TH-1 having landed (CP4-S16); then
     CP-4b…4f: Chat, the desk applier, Godview's flow mark, the watchdog, the board's light edits.
   - **CP-5b…5d**, which is MT-7: Codex and Grok, once their MCP processes can be named; Grok also once it takes a
     spark's brief and allowance (PU-O). Only CP-5c's Codex claim commit waits for step 7's profile card (CP5-Q2 (d),
@@ -1160,7 +1166,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — the sound identity | ACTIVE since 11-05 (SD-D1…D22 ruled at the leans); SD-1 landed 11-05 (DESIGN.md §14 and `@vibefield/sound`, M126 `1ebe7b461`, run 126); SD-2 landed 11-05 (the desktop hears it, M138 `9e5b6eec8`, run 138) | DESIGN.md §14; `draft/sound/design-sound.md` | SD-3, away |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143) and SP-1e2's fieldd half (`068cab410`, mint M146) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | TH-1/TH-2 · SP-1e2's card, SP-1e4 · CP-4a2…4f · CP-5b…d |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146) and TH-1/TH-2 (`d5c6995fb`, mint M147) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e2's card, SP-1e4 · CP-4a2…4f · CP-5b…d |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
