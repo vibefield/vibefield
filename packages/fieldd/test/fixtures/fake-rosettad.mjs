@@ -125,6 +125,38 @@
 // `status` answers every ask with it, e.g. 404 for a daemon without the
 // route). A window that holds no time is the route's own 400.
 //
+// MA-3a — rosetta's LIBRARY as the pin has it (0.1.3, protocol 29; rosetta
+// crates/store/src/html_artifacts.rs `list`, crates/server/src/http/artifacts.rs):
+// `GET /api/artifacts?q&agent&project&artifact_id&cursor&limit`, bearer-only
+// (a grant is `wrong-route`: `grantRoute` admits no list), scripted by
+// FAKE_ROSETTAD_ARTIFACTS, a JSON file re-read per request:
+//
+//   {
+//     "entries": [ ArtifactEntry … ],   // EVERY presentation, passed through as written
+//     "canonical_ready": true,           // default true
+//     "revision": 1,                     // the library's revision; default 1
+//     "status": 503,                     // optional: answer every list with it
+//     "content": { "<publication id>": "<html>" }   // the content route's bytes
+//   }
+//
+// The list answers as the real one does: without `artifact_id` the newest
+// presentation of each artifact, with it that artifact's whole history; `q`
+// matches the title, the file name and the session title case-insensitively;
+// `agent` (rosetta's kind) and `project` filter; the order is `sort_at DESC, id
+// DESC` with `sort_at = published_at ?? 0`; `limit` is 50 when absent and
+// clamped to 1..100 (a limit that is not a number is axum's 400). The cursor is
+// the server's own JSON, `{epoch, revision, query, at, id}`: one that is not a
+// cursor, or was minted for another ask, is the 400 `bad_request` "invalid
+// artifact filter or cursor"; one minted under another `revision` is the 410
+// `cursor_expired` — how a test moves the library under a walk is to rewrite
+// the file with the next revision. The bounds are rosetta's (q ≤ 512, each
+// filter ≤ 256, the cursor ≤ 4,096; else 400). Each list is a request-log line.
+// `/api/sessions/{sid}/artifacts/{publication}/content` answers the scripted
+// bytes as INERT octets with rosetta's headers (octet-stream, attachment,
+// nosniff, `sandbox; default-src 'none'`, no-store), and rosetta's 404 for a
+// publication that is not that session's or has no bytes. It is matched BEFORE
+// the `/api/sessions/` prefix, which would read the rest of the path as an id.
+//
 // Item 65 — FAKE_ROSETTAD_LATE_STDERR_MS: the last words reach stderr AFTER this process has exited. A refusal
 // (crash-on-start), the old binary's flag error and the schema mismatch are then written by a grandchild that holds
 // the inherited stderr pipe, that many milliseconds after this process exits (item 92: measured from the exit, the
@@ -579,6 +611,147 @@ const searchScript = () => {
     hits: Array.isArray(source.hits) ? source.hits : [],
   };
 };
+// MA-3a — the library (see the header)
+const ARTIFACTS_EPOCH = "library-1";
+const artifactScript = () => {
+  const script = scripted("FAKE_ROSETTAD_ARTIFACTS", {});
+  const source = script !== null && typeof script === "object" ? script : {};
+  return {
+    entries: (Array.isArray(source.entries) ? source.entries : []).filter(
+      (entry) =>
+        entry !== null &&
+        typeof entry === "object" &&
+        entry.publication !== null &&
+        typeof entry.publication === "object",
+    ),
+    canonicalReady: source.canonical_ready !== false,
+    revision: Number.isInteger(source.revision) ? source.revision : 1,
+    status: typeof source.status === "number" ? source.status : null,
+    content: source.content !== null && typeof source.content === "object" ? source.content : {},
+  };
+};
+/** rosetta's `sort_at`: `published_at.unwrap_or(0)` */
+const artifactSortAt = (entry) =>
+  typeof entry.publication.published_at === "number" ? entry.publication.published_at : 0;
+const artifactId = (entry) => String(entry.publication.id);
+/** `ORDER BY sort_at DESC, id DESC` */
+const artifactsNewestFirst = (a, b) =>
+  artifactSortAt(b) - artifactSortAt(a) ||
+  (artifactId(a) < artifactId(b) ? 1 : artifactId(a) > artifactId(b) ? -1 : 0);
+/** rosetta's `html_artifacts::list` over the scripted entries: `{status: 200, body}` or an
+ * error's `{status, code, message}` */
+const artifactList = (params) => {
+  const script = artifactScript();
+  if (script.status !== null && script.status !== 200) {
+    return { status: script.status, code: "internal", message: "scripted" };
+  }
+  const query = {
+    q: params.get("q"),
+    agent: params.get("agent"),
+    project: params.get("project"),
+    artifact_id: params.get("artifact_id"),
+  };
+  const cursorText = params.get("cursor");
+  const limitText = params.get("limit");
+  const invalid = {
+    status: 400,
+    code: "bad_request",
+    message: "invalid artifact filter or cursor",
+  };
+  if (
+    (query.q !== null && query.q.length > 512) ||
+    [query.agent, query.project, query.artifact_id].some((v) => v !== null && v.length > 256) ||
+    (cursorText !== null && cursorText.length > 4096) ||
+    (limitText !== null && !/^\d+$/.test(limitText))
+  ) {
+    return invalid;
+  }
+  const limit = limitText === null ? 50 : Math.min(Math.max(Number(limitText), 1), 100);
+  let after = null;
+  if (cursorText !== null) {
+    let cursor = null;
+    try {
+      cursor = JSON.parse(cursorText);
+    } catch {
+      cursor = null;
+    }
+    if (
+      cursor === null ||
+      typeof cursor !== "object" ||
+      typeof cursor.at !== "number" ||
+      typeof cursor.id !== "string" ||
+      JSON.stringify(cursor.query) !== JSON.stringify(query)
+    ) {
+      return invalid;
+    }
+    if (cursor.epoch !== ARTIFACTS_EPOCH || cursor.revision !== script.revision) {
+      return {
+        status: 410,
+        code: "cursor_expired",
+        message: "the library moved under the cursor; refetch from the head",
+      };
+    }
+    after = { at: cursor.at, id: cursor.id };
+  }
+  const q = query.q === null ? null : query.q.toLowerCase();
+  let rows = script.entries.filter((entry) => {
+    const publication = entry.publication;
+    if (query.artifact_id !== null && publication.artifact_id !== query.artifact_id) return false;
+    if (query.agent !== null && entry.agent !== query.agent) return false;
+    if (query.project !== null && entry.project_id !== query.project) return false;
+    if (
+      q !== null &&
+      ![publication.title, publication.filename, entry.session_title].some(
+        (text) => typeof text === "string" && text.toLowerCase().includes(q),
+      )
+    ) {
+      return false;
+    }
+    return true;
+  });
+  rows.sort(artifactsNewestFirst);
+  if (query.artifact_id === null) {
+    // the newest presentation of each artifact
+    const seen = new Set();
+    rows = rows.filter((entry) => {
+      if (seen.has(entry.publication.artifact_id)) return false;
+      seen.add(entry.publication.artifact_id);
+      return true;
+    });
+  }
+  if (after !== null) {
+    rows = rows.filter(
+      (entry) =>
+        artifactSortAt(entry) < after.at ||
+        (artifactSortAt(entry) === after.at && artifactId(entry) < after.id),
+    );
+  }
+  const entries = rows.slice(0, limit);
+  const last = entries.at(-1);
+  const nextCursor =
+    rows.length > limit && last !== undefined
+      ? JSON.stringify({
+          epoch: ARTIFACTS_EPOCH,
+          revision: script.revision,
+          query,
+          at: artifactSortAt(last),
+          id: artifactId(last),
+        })
+      : null;
+  return {
+    status: 200,
+    body: { entries, next_cursor: nextCursor, canonical_ready: script.canonicalReady },
+  };
+};
+/** rosetta's error body (`{error: {code, message}}`) beside the protocol header */
+const apiError = (res, status, code, message) => {
+  res.statusCode = status;
+  res.setHeader("x-rosetta-protocol-version", String(protocol));
+  res.setHeader("content-type", "application/json");
+  res.end(JSON.stringify({ error: { code, message } }));
+};
+const ARTIFACT_CONTENT = /^\/api\/sessions\/([^/?]+)\/artifacts\/([^/?]+)\/content(?:\?.*)?$/;
+
 const logRequest = (url) => {
   const log = process.env.FAKE_ROSETTAD_REQUEST_LOG;
   if (log === undefined) return;
@@ -928,6 +1101,33 @@ if (mode === "silent") {
       json(res, timelinePage(id, limit, before));
       return;
     }
+    // MA-3a — one presentation's bytes, as inert octets: BEFORE the session
+    // prefix below, which would read the rest of the path as a session id
+    const contentRoute = req.url === undefined ? null : ARTIFACT_CONTENT.exec(req.url);
+    if (contentRoute !== null) {
+      logRequest(req.url);
+      const sessionId = decodeURIComponent(contentRoute[1]);
+      const publicationId = decodeURIComponent(contentRoute[2]);
+      const script = artifactScript();
+      const entry = script.entries.find(
+        (candidate) =>
+          candidate.publication.session_id === sessionId &&
+          candidate.publication.id === publicationId,
+      );
+      const bytes = entry === undefined ? undefined : script.content[publicationId];
+      if (typeof bytes !== "string") {
+        apiError(res, 404, "not_found", "no captured artifact content");
+        return;
+      }
+      res.setHeader("x-rosetta-protocol-version", String(protocol));
+      res.setHeader("content-type", "application/octet-stream");
+      res.setHeader("content-disposition", "attachment; filename=artifact.html");
+      res.setHeader("x-content-type-options", "nosniff");
+      res.setHeader("content-security-policy", "sandbox; default-src 'none'");
+      res.setHeader("cache-control", "private, no-store");
+      res.end(bytes);
+      return;
+    }
     // AR-5e — one session by canonical id: how a hit inside a delegated child
     // is walked up to the root a reader navigates to. An id the index does not
     // hold is a 404, exactly as the real server answers it.
@@ -995,6 +1195,20 @@ if (mode === "silent") {
       });
       // truncation is how a test makes fieldd's `clipped` true
       json(res, { state, hits: Number.isFinite(limit) ? hits.slice(0, limit) : hits });
+      return;
+    }
+    // MA-3a — the library (see the header)
+    if (
+      req.url !== undefined &&
+      (req.url === "/api/artifacts" || req.url.startsWith("/api/artifacts?"))
+    ) {
+      logRequest(req.url);
+      const answer = artifactList(new URL(req.url, "http://127.0.0.1").searchParams);
+      if (answer.status !== 200) {
+        apiError(res, answer.status, answer.code, answer.message);
+        return;
+      }
+      json(res, answer.body);
       return;
     }
     res.statusCode = 404;

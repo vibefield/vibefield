@@ -19,6 +19,7 @@ import {
   type IndexActivityResult,
   type IndexAdmissionCourse,
   IndexAdmissionCourse as IndexAdmissionCourseSchema,
+  type IndexArtifactPageResponse,
   IndexContributionResponse,
   IndexDayUsageResponse,
   type IndexDiscoveriesResult,
@@ -422,6 +423,23 @@ export interface RosettaProjectBackfill {
   readonly sessionsDone: number;
   readonly bytesTotal: number;
   readonly bytesStreamed: number;
+}
+
+/** MA-3a — one ask of rosetta's library (`GET /api/artifacts`, `IndexService.artifacts`), in fieldd's spelling; the
+ * reader sends it in rosetta's (`artifact_id`). Absent members are not sent. */
+export interface IndexArtifactsRead {
+  /** titles, file names and session titles that hold it (rosetta matches case-insensitively; ≤ 512) */
+  readonly q?: string | undefined;
+  /** rosetta's agent KIND (the catalog maps it; ≤ 256) */
+  readonly agent?: string | undefined;
+  /** rosetta's project id (≤ 256) */
+  readonly project?: string | undefined;
+  /** one app's every presentation, newest first (Versions); absent: the newest presentation of each app */
+  readonly artifactId?: string | undefined;
+  /** the previous page's `next_cursor`, opaque; minted for the same ask */
+  readonly cursor?: string | undefined;
+  /** the page, 1..100 (rosetta's own bound) */
+  readonly limit: number;
 }
 
 /** AO-4 — how `index.status` answers one caller. */
@@ -1721,6 +1739,30 @@ export class IndexService {
       clipped: params.boundedBelow && page.entries.length >= params.limit,
       watermark: page.watermark,
     };
+  }
+
+  /** MA-3a (`draft/thinking-mini-apps.md` v0.2 §4.1; the build plan's 3a, L5 and
+   * L13) — one page of this desktop's LIBRARY, rosetta's `GET /api/artifacts`:
+   * the newest presentation of each app newest first, or one app's every
+   * presentation (`artifactId`, Versions). The ask is spelled as rosetta spells
+   * it (`q`, `agent`, `project`, `artifact_id`, `cursor`, `limit`; an absent
+   * one is not sent). The page is PARSED (`IndexArtifactPageResponse`), never
+   * cast, and comes back in rosetta's spelling: the projection is the caller's
+   * (the apps table builds rows from it, the door builds entries), and neither
+   * ever spreads it — its `publication.path`, `recovered_from` and `asset.url`
+   * are rosetta's and the contracts refuse a row that carries one. A 410
+   * (rosetta's `cursor_expired`: an ingest moved the library's revision under
+   * the cursor) is PRECONDITION_FAILED `{service:"index", reason:
+   * "cursor-expired"}`, the caller's to read again from the head; a 400
+   * (rosetta's `bad_request`: a filter past its bound, or a cursor that is not
+   * one or was minted for another ask) is PRECONDITION_FAILED `{reason:
+   * "bad-filter"}`; a body fieldd cannot vouch for is `malformed`. A log line
+   * names the route, never the ask (EL7: `q` is the reader's own words). */
+  async artifacts(params: IndexArtifactsRead): Promise<IndexArtifactPageResponse> {
+    // MA-3a RED — the skeleton: no read, an empty page that is not ready. The
+    // green reads the route through `getBody` with the error map above.
+    void params;
+    return { entries: [], next_cursor: null, canonical_ready: false };
   }
 
   /** One aggregate GET, parsed. A 503 is rosetta's "not before canonical
