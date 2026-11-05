@@ -203,6 +203,17 @@ describe("CP-4a1 — the static read's shape (CP4-Q3 (a))", () => {
     expect(FLOW_READ_REFUSALS).toEqual(["syntax", "meta", "default", "choices", "size"]);
   });
 
+  it("C5: the read refuses the sandbox's three shapes in known words: import, eval and html-comment (CP-4a2b, Q-B3 (a))", () => {
+    // the same read fieldd gives the fieldd fixture `real-calls.flow.js` (flows-static-read.test.ts, EL9)
+    const refused = FlowRead.parse(fixture("flow-read.refused-import"));
+    expect(refused.refusals.map((r) => flowRefusalOf(r))).toEqual([
+      "import",
+      "eval",
+      "html-comment",
+    ]);
+    expect(refused.refusals.map((r) => r.line)).toEqual([3, 4, 6]);
+  });
+
   it("F9: a gate takes at most four choices of the script's own: Stop the run takes the item's fifth place", () => {
     const four = ["a", "b", "c", "d"];
     expect(FlowGate.safeParse({ line: 1, choices: four }).success).toBe(true);

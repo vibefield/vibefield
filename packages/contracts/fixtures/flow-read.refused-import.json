@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "name": "Loader"
+  },
+  "calls": [],
+  "gates": [],
+  "unlisted": true,
+  "refusals": [
+    {
+      "reason": "import",
+      "words": "it calls import(), which a flow may not",
+      "line": 3
+    },
+    {
+      "reason": "eval",
+      "words": "it calls eval(), which a flow may not",
+      "line": 4
+    },
+    {
+      "reason": "html-comment",
+      "words": "it has <!-- or --> in its code, which a flow may not",
+      "line": 6
+    }
+  ]
+}
