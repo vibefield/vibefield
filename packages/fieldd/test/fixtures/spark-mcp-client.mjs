@@ -1,8 +1,9 @@
 // A real terminal child runs the briefing's bridge. Its caller identity must come from the floor's process walk.
 // The briefing file may name the calls to make (CP-3), in order; absent, one agents_list. With `typed`, what the
-// terminal hands the process (an input fieldd's queue delivered) is kept there.
+// terminal hands the process (an input fieldd's queue delivered) is kept there. The output is written beside and renamed
+// (CO-1b), so a test that polls for it reads one whole file, never one half-written.
 import { spawn } from "node:child_process";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 const {
@@ -24,6 +25,12 @@ lines.on("line", (line) => {
   if (message.error) waiter.reject(new Error(JSON.stringify(message.error)));
   else waiter.resolve(message.result);
 });
+/** The output, written beside and renamed onto its name: it appears whole or not at all. */
+function writeWhole(value) {
+  const temp = `${output}.${process.pid}.tmp`;
+  writeFileSync(temp, JSON.stringify(value));
+  renameSync(temp, output);
+}
 let nextId = 0;
 function request(method, params) {
   const id = ++nextId;
@@ -49,9 +56,9 @@ try {
   const listed = await request("tools/list", {});
   const answers = [];
   for (const call of calls) answers.push(await request("tools/call", call));
-  writeFileSync(output, JSON.stringify({ listed, called: answers[0], calls: answers }));
+  writeWhole({ listed, called: answers[0], calls: answers });
 } catch (error) {
-  writeFileSync(output, JSON.stringify({ error: error.message }));
+  writeWhole({ error: error.message });
 }
 // Keep the terminal alive so the ordinary run exit/teardown path owns both processes.
 setInterval(() => {}, 60_000);
