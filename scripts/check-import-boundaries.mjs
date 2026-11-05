@@ -635,6 +635,18 @@ const RULES = [
       importsModule(s, "@vibefield/electron-shell") ||
       /(?:^|\/)plugins\//.test(s),
   },
+  {
+    id: "R31",
+    // SD-1 (the sound identity, DESIGN.md §14): `@vibefield/sound` is a second zero-dependency root beside contracts.
+    // Electron main composes its voice (the away path, the system-sound path), the window plays its renders and the
+    // package-time tools run it under plain node, so its source imports nothing but its own files: no Node, no DOM
+    // library, no React, not even contracts. Every plane may import it; it imports none of them.
+    enforce: true,
+    description:
+      "packages/sound/src imports only its own files (a zero-dependency root, like contracts)",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/sound/src"),
+    importTest: (s) => !(s.startsWith("./") || s.startsWith("../")),
+  },
 ];
 
 // P2 (R26) — the Peek's watch-only pane, by its directory or its module names.
@@ -1333,8 +1345,37 @@ function runSelfTest() {
       file: "packages/fieldd/src/tool-plane/rooms/pages/uses-plugin.ts",
       body: 'import { definePlugin } from "@vibefield/plugin-sdk";\nexport const p = definePlugin;\n',
     },
+    // SD-1 (R31): the sound's source imports nothing but its own files — not Node, not React, not even contracts.
+    {
+      id: "R31",
+      file: "packages/sound/src/uses-node.ts",
+      body: 'import { writeFileSync } from "node:fs";\nexport const w = writeFileSync;\n',
+    },
+    {
+      id: "R31",
+      file: "packages/sound/src/uses-react.ts",
+      body: 'import { useState } from "react";\nexport const u = useState;\n',
+    },
+    {
+      id: "R31",
+      file: "packages/sound/src/uses-contracts.ts",
+      body: 'import type { AgentStatus } from "@vibefield/contracts";\nexport type S = AgentStatus;\n',
+    },
   ];
   const cleans = [
+    // SD-1: the sound's own files (a `.ts` specifier, a parent's) pass R31; field-app and Electron main may import it.
+    {
+      file: "packages/sound/src/clean-sound.ts",
+      body: 'import { render } from "./render.ts";\nimport type { CueId } from "../src/score.ts";\nexport const r = render;\nexport type C = CueId;\n',
+    },
+    {
+      file: "packages/electron-shell/src/main/uses-sound.ts",
+      body: 'import { createVoice } from "@vibefield/sound";\nexport const v = createVoice;\n',
+    },
+    {
+      file: "packages/field-app/src/uses-sound.ts",
+      body: 'import { render } from "@vibefield/sound";\nexport const r = render;\n',
+    },
     // MT-0: a room's own imports (contracts, fieldd's services) pass R29 and R30, so neither overfires on the plane.
     {
       file: "packages/fieldd/src/tool-plane/rooms/compose/clean-room.ts",

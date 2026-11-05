@@ -316,10 +316,11 @@ treat G1′ as canonical.
   attach, the last GT rung*, while `LANDED.md` §GT-5 records `127df5c`/`95cbd7e`/`69e8a99`/
   `17365fd` as *the code review's findings, fixed*. The attach work shipped as **IOS-3**
   instead. Cite the slice ids, not "GT-5".
-- **`R` is THREE namespaces:** walls R1–R30 (`scripts/check-import-boundaries.mjs`; R23 is
+- **`R` is THREE namespaces:** walls R1–R31 (`scripts/check-import-boundaries.mjs`; R23 is
   `scripts/check-agent-catalog.mjs` — R1–R17 all enforce:true as of 2026-08-02; R18 joined at LSF-1 and R19 at
-  SNAP-0 on 2026-09-09, both enforce:true; the range refreshed from R1–R19 on 2026-10-28, and from R1–R28 on
-  2026-10-31 for CP-1b's R29 and MT-0's R30; R8's scope stops at `apps/desktop/packaging/` since 2026-10-31, item
+  SNAP-0 on 2026-09-09, both enforce:true; the range refreshed from R1–R19 on 2026-10-28, from R1–R28 on
+  2026-10-31 for CP-1b's R29 and MT-0's R30, and from R1–R30 on 2026-11-05 for SD-1's R31, `@vibefield/sound` a
+  zero-dependency root, enforce:true; R8's scope stops at `apps/desktop/packaging/` since 2026-10-31, item
   116: node-run scripts the archive's `files:` never takes) · predesign-01 standing rules R1–R12 · trust rungs R0–R3
   (plugin spec §20.5). Walls R11 ≠ predesign R11 — they conflict numerically.
   Docket and plan rulings reuse R too (the Files & History docket's R1–R16 in the FS row, the BP rows' R1–R6, the
@@ -336,7 +337,7 @@ treat G1′ as canonical.
   added 2026-10-28). `M9` in the FS row is the mille petition; `M9` in the AR-8 rows is build-hf's. `C2` / `C5` / `P0` / `L0` / `A*` / `V-*` / `F-*` are
   similarly overloaded — resolve against the home doc. D33/D37 vs EDP-33/37 is numeric
   coincidence.
-- **Outside-draft ID sources:** walls R1–R30 live in code (`check-import-boundaries.mjs`; R23 in
+- **Outside-draft ID sources:** walls R1–R31 live in code (`check-import-boundaries.mjs`; R23 in
   `check-agent-catalog.mjs`); motion rules M1/M3/M5/M6 live in
   repo-root `DESIGN.md`.
 - **`T1` names TWO petitions:** the FILED `T1-truffle-identity-surfaces.md` (RESOLVED upstream at

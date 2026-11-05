@@ -13,6 +13,7 @@ landing, design-00's desk amendment of 2026-10-08.)*
 | Path | What |
 |---|---|
 | `packages/contracts` | `@vibefield/contracts` — zod-first source of every VibeField-owned protocol; `gen/` JSON Schema → typify'd Rust |
+| `packages/sound` | `@vibefield/sound` — the sound identity, DESIGN.md §14 in code (track SD): the field and its chord, the Starlight voice, the spaces, the masters, the family, the phone's touch, and the voice policy that decides when the field speaks. A second zero-dependency root beside contracts: Electron main, the window, the package-time tools and plain `node` all run it (`.ts` specifiers, erasable syntax); wall R31 keeps its source to its own files |
 | `packages/field-native` | Rust native-plane daemon: mgmt server, D8 pairing, MeshGateway (truffle node), and the TerminalUnit that supervises the `field-terminal-host` cells — the native floor that outlives fieldd (NF-0…7). Ghosttea's `TerminalService` runs in each CELL binary (TC-S2), and a cell's door is reached remotely over the sidecar's route (T). *(Row corrected 2026-09-14 by the TM review: it named an embedded TerminalService and an NF-remote half, which retired at TM-1 `afc35b15`.)* |
 | `packages/fieldd` | Node product-plane daemon: NativeLink, TokenService, ProductAPI (dual-WS), MeshClient, DocumentService, ArtifactService |
 | `packages/users` | the multi-persona layer: the users.json lock, per-user roots, mint/migrate (UA track) |
