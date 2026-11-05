@@ -154,7 +154,10 @@ The catalog currently mounts these shipping views directly:
   the product's own `sessionHandlesOf` (`chat-fixtures.ts`), never a copy of its markup or CSS —
   starting, "1 of 4 done" with a member's ask held at the foot, "All done", a member ended and the
   others renumbered, after a reload, its crews unreadable (the bound), the board unreadable, Vela
-  asleep with its line, and two crews in one thread at their times — and the card live, a fixture
+  asleep with its line, and two crews in one thread at their times; *added 2026-11-05 (SP-1e2's
+  renderer half, SR-Q11):* "1 of 4 done · 1 ended", "All ended", members that differ, a shared model
+  that names no effort, neither door readable, a narrow thread, and the plates by the Moon's light
+  — and the card live, a fixture
   door stepping a crew from starting to "All done", as the needs-you card's live plate does. Its
   rows and its foot open nothing outside the plate
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the

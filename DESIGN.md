@@ -1736,6 +1736,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   on you at the foot. It is read from the spark's transcript, which VibeField keeps (below). The spark's terminal is
   not in Chat: it stays the agent's, in Godview, where ⌃C, slash commands, scrollback and the program's own menus are.
   The live cards (CH-D2) still come with **SP-1e**, which writes their entry here first; they stand in the flow.
+  *Since SP-1e2's renderer half (2026-11-05):* the first of them stands, a crew's card under its act line (§8 "Chat's
+  crew card"); the review loop and the watch (SP-1e3) still come with SP-1e.
   *Amended 2026-11-05 (TH-1):* this entry was "Chat's thread — the spark's own pane, at first light" (SP-1d,
   2026-10-31). The thread was the spark's session in its own terminal, mounted in the thread's column as a second view
   of its floor session, in a well, with the keyboard and the session's size, and "no messages are drawn: the pane is the
@@ -1840,8 +1842,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         words"), 6 apart; pressed again, it folds. Never a tool's own name, from any agent (AR-L1). VibeField's own
         tools leave the count, since what they did stands as its own line.
       - **VibeField's own acts** (CO-Q1 (b), James; TH-Q12 (a)): a wake that told it something (`resume`), an answer
-        you gave (`check`), a notify (`message`), and SP-1e's crew. They are typed lines in the record, never words read
-        for a prefix, so nothing a person or an agent types is drawn as one.
+        you gave (`check`), a notify (`message`), and a crew's start (`agents`; since SP-1e2's renderer half, its card
+        under it, §8 "Chat's crew card"). They are typed lines in the record, never words read for a prefix, so nothing
+        a person or an agent types is drawn as one.
     - **Thinking…** stands at the flow's foot while Vela's own run works (its board row, TH-Q2 (a)): three dots, 5
       round and 4 apart, in tertiary ink, then "Thinking…" in the quiet lines' words, in the lead's place. It carries
       no text: a reply is drawn once it is whole. The dots are a breath (§6).
@@ -2335,36 +2338,45 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     stand. A crew stands in the run it was made in, so an earlier run's crews stand in that run's conversation
     (TH-Q14 (b)).
   - **Its act line,** "Started 4 agents · Opus 5.5 · high" (`agents` 13), is VibeField's own quiet line in the flow:
-    an `act` line in the spark's transcript, written by fieldd's talk room at the crew's first start and replaced in
-    place as members join, carrying the crew's id (SPE-Q39 (a)). The card hangs under it by that id. The starts are
-    VibeField's own tools, so they leave the turn's "Used n tools" (TH-Q1 (a)+(ii)) and "Started 4 agents" stands
-    alone. When the members differ in model or effort it says "Started 4 agents".
+    an `act` line in the spark's transcript, written by fieldd at the crew's first start and replaced in place
+    whenever its words change, as a member joins or a model is first named, never at an end; it carries the crew's id
+    (SPE-Q39 (a)). The card hangs under it by that id. The starts are VibeField's own tools, so they leave the turn's
+    "Used n tools" (TH-Q1 (a)+(ii)) and "Started 4 agents" stands alone. When the members differ in model or effort,
+    or a model is not named yet, it says "Started 4 agents"; when they share a model and none names an effort, it says
+    the model alone, "Started 4 agents · Grok 4" (J2). *At the lean until James's pick (J2, the page
+    `FCt3B8hw6AsAQ3fDHYRS1m`).* *Corrected 2026-11-05 (SP-1e2's renderer half; SR-Q1 (a), VF-PM 11:03Z):* this said
+    "written by fieldd's talk room … replaced in place as members join". fieldd's crews write it: they see the talk
+    room's starts, Allow one more's and the models the board first names; the talk room sees only its own.
   - **The card** wears the needs-you card's chrome as it is once it waits on no one: solid chrome, corners 16, the
     island shadow, ringed by the strong hairline, and never the orange ring, since a crew waits on no one. Inside
     stand the plate's three parts, a hairline (`--vf-hairline`) between each:
     - **the head,** 44 tall, padded 0 14 0 16: "4 agents" in 13.5/600 primary ink, then " · Opus 5.5 · high" in its
-      regular weight in tertiary ink, the members' model label and effort as their board rows name them; "4 agents"
-      alone when they differ. At its end, 12/500 in tertiary ink, the count, then 6, then the ring;
+      regular weight in tertiary ink, the members' model label and effort as their board rows name them, by the act
+      line's one rule: the model alone when none names an effort (J2), and "4 agents" alone when they differ or a
+      model is not named yet. At its end, 12/500 in tertiary ink, the count, then 6, then the ring;
     - **the rows,** padded 4 8, one per member, in the order they started, as @ numbers them;
     - **the foot,** padded 6 8 8: **Open in Godview** (`panes` 14), the kit's quiet button at the needs-you card's act
       size (28 tall, corners 14, padded 0 12, 12.5/500), its glyph, then 6, then its word. It opens Godview (RU-7).
       After it, at the foot's end, one line at most, 12 regular in tertiary ink (below).
   - **The count and the ring** (SPE-Q31 (a)): "2 of 4 done"; "1 of 4 done · 1 ended" once one has ended; `check` 13
-    and "All done", with no ring, when every member is Done or Ended and one is Done; "All ended" when every member
-    ended. Ended is never counted done. The ring is 16 round, drawn from the top: a track of 2.5 in the strong
-    hairline, and over it 2.5 in `--vf-ink-healthy` with round caps, filled by the members no longer at work. It eases
-    400ms on `--vf-ease-island` at each change, and changes at once under reduced motion.
+    and "All done", with no ring, when every member is Done or Ended and one is Done; "All ended", alone, with no ring
+    and no glyph, when every member ended (J1). *At the lean until James's pick (J1, the page
+    `FCt3B8hw6AsAQ3fDHYRS1m`).* Ended is never counted done. The ring is 16 round, drawn from the top: a track of 2.5
+    in the strong hairline, and over it 2.5 in `--vf-ink-healthy` with round caps, filled by the members no longer at
+    work. It eases 400ms on `--vf-ease-island` at each change, and changes at once under reduced motion.
   - **A row** is 38 tall, padded 0 8, corners 10, its parts 10 apart: the agent's mark at 18, from the agent catalog
     by the run's own agent id (R23, as @'s rows read it); the member's name, 12.5/500 mono in primary ink; its model
     label and effort, "Opus 5.5 · high", 13 regular in secondary ink, cut with "…" where the row is narrow; and at its
     end its state, 12/500, at least 96 wide and set to the right:
-    - **Starting**, secondary, until its first turn (TU-1's fact);
+    - **Starting**, secondary, until its first turn (TU-1's fact); its model stands empty until its row names one,
+      never a guess (SR-Q5 (ii));
     - **Working**, in `--vf-ink-healthy`, after its mark, which breathes (Motion, below);
     - **Needs you**, @'s word, in `--vf-ink-attention`, while it waits on you; its ask is the card at the foot;
     - **Done**, secondary, after `check` 12, when it is idle with nothing left in its input. An agent idle between
       two tasks it was given stays Working (SPE-Q32 (a)), so the count never goes backwards;
-    - **Ended**, secondary, once its run has ended (SPE-Q14 (a)). It stays, named as fieldd named it at its end
-      (CO-Q4 (b)), and takes no press: there is no pane to show.
+    - **Ended**, secondary, once its run has ended (SPE-Q14 (a)), or once the board, read, no longer holds it before
+      fieldd's end reaches the record (SR-Q5 (i)). It stays, named as fieldd named it at its end (CO-Q4 (b)), and takes
+      no press: there is no pane to show.
     No task words (SPE-Q5 (a)): your bubble and Vela's words say the tasks, and a done row carries no note.
   - **Its names** are @'s (CO-Q3 (a)). A member is named by its handle, as @ names it in this thread (§8 "Chat's
     composer", two sessions with one name): "vibe-field", "vibe-field·2". They renumber live, as @'s do. Godview's
@@ -2386,7 +2398,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       their names and lose their states;
     - "Vela is asleep — it hears these when it wakes", while Vela sleeps and a member has not ended (CP3-D7 A: its
       wakes wait for its next open; SPE-Q24).
-    A fieldd that keeps no crews draws the board-only card with the bound and no line. Never a blank.
+    A fieldd that keeps no crews draws the board-only card with the bound and no line. When neither the crews nor the
+    board can be read, the card stands in its chrome with no rows, its head "Agents", its line the first above and
+    Open in Godview (SR-Q6). Never a blank.
   - **Motion.** The card comes with its act line, as the flow's lines land, with no entrance of its own. Its rows and
     its ring change in place, and a member that joins takes its row in place. A Working row's mark breathes (SPE-Q35
     (b), James's plate): the plate's spinner drawn as §6's breath, a whole ring 10 round of 1.5 in the word's ink,
@@ -2405,7 +2419,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     on its origin, so its board row and `agents_list` say it; fieldd keeps each crew in the spark's kept record; and
     Chat reads them on a door of their own beside the sparks' doors, `compose.sparks.crews.subscribe` (the person's,
     as the needs-you queue's is): ids, times, agent ids, folder names and model labels, never words. The card takes
-    the record's members first, then any board row whose crew is this one and which the record lacks.
+    the record's members first, then any board row whose crew is this one and which the record lacks. The line and
+    the crews come on two roads, so a line can land a beat before its crew: it stands alone until the door names its
+    crew, and the card then comes in place (SR-Q3).
   - *Not here:* Stop all and Pause all (SP-1e4, owed: SPE-Q8 (a), James; SPE-Q25, SPE-Q26), a row's task words
     (SPE-Q5 (a)), answering a member's ask on the card (AR-6), a member's face in Godview (TH-3; TH-Q20 (b)+(i)), the
     watch card (SP-1e3), the phone (PC).
@@ -4656,21 +4672,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     "Minimized") is a pane like any. **⌘D still splits without limit, and it is the one deliberate
     way to more panes**: no door opens one. A pane held fullscreen over where a session lands is
     let go first, so nothing is focused out of sight; landing in the fullscreen pane leaves it up.
-    Every door that selects a session places it so — a body, a list row, a rain column, a
-    timeline lane, a spend row, a search result, History's Resume and Jump to, the Peek's Open, a
-    peer's attach, Chat's head's Jump to and the needs-you card's Show (*added 2026-11-05, TH-2*:
-    both take History's Jump to path; the head's says what History's does, the card's only what it
-    could not show) — and what it says follows: **"… in the active pane"** where it took the focused
-    pane, **"… is in the active pane"** for one the focused pane already showed; each door's own
-    entry in this section says it so (the line's New terminal, History's Resume and Jump to, the
-    Peek's Open), corrected the same day. *This re-rules GV-D4's 10-02 answer* ("Beside the
-    focused pane, up to three"): from 2026-10-11 a session opened **beside the focused pane** —
-    ⌘D's split, to its right — while fewer than three panes showed and took its place after, one
-    a pane already showed was focused where it was, and the doors said **"… in a new pane"** for
-    beside. Its "never mounted twice" came from the ruled drawing's code, never from the ruling.
-    The rule returns to GT-D17 (James, 2026-08-05: "clicking a remote bubble attaches the
-    CURRENT ACTIVE pane") and to the original Godview's select, "Show this agent in the active
-    pane", whose panes mirror a session.
+    Every door that selects a session places it so — a body, a list row, a rain column, a timeline
+    lane, a spend row, a search result, History's Resume and Jump to, the Peek's Open, a peer's
+    attach, Chat's head's Jump to and the needs-you card's Show (*added 2026-11-05, TH-2*: both
+    take History's Jump to path; the head's says what History's does, the card's only what it could
+    not show), and a row of Chat's crew card (*added 2026-11-05, SP-1e2's renderer half*: the same
+    path, saying what the head's says) — and what it says follows: **"… in the active pane"** where
+    it took the focused pane, **"… is in the active pane"** for one the focused pane already
+    showed; each door's own entry in this section says it so (the line's New terminal, History's
+    Resume and Jump to, the Peek's Open), corrected the same day. *This re-rules GV-D4's 10-02
+    answer* ("Beside the focused pane, up to three"): from 2026-10-11 a session opened **beside the
+    focused pane** — ⌘D's split, to its right — while fewer than three panes showed and took its
+    place after, one a pane already showed was focused where it was, and the doors said **"… in a
+    new pane"** for beside. Its "never mounted twice" came from the ruled drawing's code, never
+    from the ruling. The rule returns to GT-D17 (James, 2026-08-05: "clicking a remote bubble
+    attaches the CURRENT ACTIVE pane") and to the original Godview's select, "Show this agent in
+    the active pane", whose panes mirror a session.
     **Each door's turn ends** (2026-10-11): the deck places one session at a time (AR-4b), and a
     door's turn waits on a read of the floor it places from — this desktop's, or the peer's whose
     session it is — bounded at **10 s**. One that never answers fails its own door in words,
@@ -5766,8 +5783,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - A fact is a wake ("VibeField: …"), drawn centred at 12 and never as your words.
     - The receipt sits under your last words at 11.5: Queued, Delivered, Waking ‹name›… (PC-D3 A; CP2-D2).
     - New rows that arrive while you read up the page show History's arrival pill, "3 new ↓", 36.
-    - Live cards (CH-D2 A: a crew, a review loop, a watch) wait on SP-1e's data, as the Mac's do; until then the
-      thread shows words and acts.
+    - Live cards (CH-D2 A: a crew, a review loop, a watch) wait on SP-1e's data; until then the
+      thread shows words and acts. *Corrected 2026-11-05 (SP-1e2's renderer half):* this said "as the Mac's do". The
+      Mac draws a crew's card since then (§8 "Chat's crew card"); the phone's waits on PC.
     - Its pane is one tap away in ⋯, never inside the thread.
   - **The composer**: + at 48 and the field 48 tall, 16 from the sides and 21 from the foot; over the keys, 10 and 8.
     The draft is 17 regular on one line, "Message ‹name›…", with the mic inside it until there are words, then send
@@ -6392,9 +6410,9 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   > not a session, so it keeps its words.
 - The crew card (SP-1e2; §8 "Chat's crew card"):
   - its act line, "Started 4 agents · Opus 5.5 · high" ("Started 1 agent · …"), and "Started 4 agents" when its
-    members differ;
-  - its head, "4 agents · Opus 5.5 · high", and its count, "2 of 4 done" · "1 of 4 done · 1 ended" · "All done" · "All
-    ended", or the bound, "2 still running";
+    members differ, or "Started 4 agents · Grok 4" when they share a model that names no effort (J2, at the lean);
+  - its head, "4 agents · Opus 5.5 · high" ("4 agents · Grok 4"; "Agents" when nothing of its members can be read),
+    and its count, "2 of 4 done" · "1 of 4 done · 1 ended" · "All done" · "All ended", or the bound, "2 still running";
   - its rows' states, Starting · Working · Needs you · Done · Ended, and a row's name, "vibe-field·2, Opus 5.5, high,
     Working";
   - its foot, "Open in Godview", and a row's press, "Jumped to its pane" · "Could not jump — …";
