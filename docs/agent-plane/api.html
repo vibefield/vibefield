@@ -2034,6 +2034,97 @@
               </table>
             </div>
 
+            <h3 id="cat-flows">flows.* — the window's doors to runs</h3>
+            <p class="section-note">
+              CP-4, flows and the desk applier (track CO; the round's CP-4 marks, RULED 2026-11-04 at the leans;
+              <code>packages/contracts/src/flows.ts</code>). A flow is a <code>.flow.js</code> file, an ES module whose
+              <code>meta</code> names it and whose default export runs its steps through <code>agent</code>,
+              <code>ask</code> and <code>log</code> (FL-D1). The person keeps one library per user,
+              <code>LAYOUT.FLOWS_LIBRARY_DIR</code>, <code>flows/&lt;slug&gt;.flow.js</code>, theirs to edit as a spark's
+              home is. fieldd never runs a file there: it runs the bytes it kept when the person approved them (CP-D10,
+              CP4-Q18 (a)), each version's bytes kept by their SHA-256 under <code>LAYOUT.FLOWS_DIR</code> and its
+              approval a record signed with <code>FLOWS_KEY_FILE</code>'s secret, the flow's slug inside, so a record
+              copied to another flow's name is set aside as forged. A file that changed since its approval, or was never
+              approved, asks once (CP4-Q5 (a)): See the change, Run this version, Run the one you approved, Not now. A
+              spark's proposal (<code>flow_propose</code>) is kept the same way, its bytes inline and bounded
+              (<code>FLOW_LIMITS.SCRIPT_MAX_BYTES</code>, 64 KiB), so what the person reads is what they approve.
+              What a proposal or a library row shows of a script is fieldd's static read of its bytes, never a run of
+              them (CP4-Q3 (a)): its <code>meta</code> (name, phases, input), each <code>agent(…)</code> with its agent,
+              model, phase and label, "chosen as it runs" where the script computes one and "in a loop" where it sits in
+              one, and each <code>ask(…)</code>; a script that starts agents the read cannot list says so
+              (<code>unlisted</code>), and one the read refuses (it does not parse, its <code>meta</code> is not plain
+              values, an <code>ask</code> offers more than four choices) says why. No budget and no money (James,
+              2026-11-02 13:08Z): <code>meta.budget</code> is not read, shown or refused. These five doors are the
+              window's (and the quit box's, from main): <code>agents.manage</code>, <code>local</code> (VF-PM,
+              2026-11-05 01:22Z), so no phone and no peer reaches a run. A run's gates, a proposal, a changed flow, a
+              second missed form, the call cap and a step lost to a Quit wait in the person's queue as needs-you items
+              (CP-D12, one queue) of the kinds <code>flow-proposal</code>, <code>flow-gate</code>,
+              <code>flow-changed</code>, <code>flow-repair</code>, <code>flow-cap</code> and <code>flow-lost</code>
+              (open words), each naming its run (<code>run</code>) and, for a proposal or a changed flow, the bytes it
+              is about (<code>script</code>), and are answered through <a href="#cat-needs"><code>needs.answer</code></a>,
+              never a door of their own. A run's Stop ends the step agents the run started and pauses the turn of a
+              session it was handed, never ending it (CP4-Q9 (a) on James's 2026-11-02 Stop/Pause ruling). The run's
+              bounds are <code>FLOW_LIMITS</code>, provisional until measured: 40 calls, then the run holds and asks
+              (20 more at a time); 8 live steps; a step's answer kept whole up to 64 KiB.
+              <em>CP-4a1 (2026-11-05):</em> the contracts, the library's read, the signed approvals and proposals and
+              the static read are built; no door is served, and fieldd registers none of them until CP-4a2 builds the
+              host, the journal and the runs.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Door</th><th>Params → result</th><th>Scope</th><th>Idem</th><th>Wraps upstream</th><th>Status</th><th>Witness</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="route">flows.list</span></td>
+                    <td><p><code>FlowsListParams {}</code> → <code>FlowsListResult {flows: FlowEntry[], runs: RunSummary[]}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>nothing upstream: the library read against fieldd's signed approvals, and its runs. An entry is <code>{flow, name?, hash, approved?, state, bytes}</code>: <code>flow</code> the file's slug, <code>hash</code> its bytes' SHA-256, <code>approved</code> the version the person approved, and <code>state</code> an open word, <code>approved</code> (the file is that version), <code>changed</code>, <code>new</code> (never approved) or <code>too-big</code> (past <code>SCRIPT_MAX_BYTES</code>, never read). A file whose name is not a slug is passed over and logged. A run is <code>{run, flow, name, n, hash, state, calls, steps, earlier?, log?, starter, startedAt, endedAt?, ended?}</code>, <code>state</code> an open word (<code>running</code>, <code>waiting</code> on a step, <code>holding</code> on the person, <code>done</code>, <code>stopped</code>, <code>failed</code>, <code>lost</code>), a row per agent call with its own open word. An unaudited read, as <code>needs.list</code> is.</p></td>
+                    <td><span class="badge tone-designed">Designed</span></td>
+                    <td><p><code>flows.test.ts</code> (contracts) · <code>flows-records.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">flows.subscribe</span></td>
+                    <td><p><code>FlowsListParams {}</code> → snapshot, then frames, of <code>FlowsListResult</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>the list, whole, at open and on every change, as <code>needs.subscribe</code> is (CP4-Q21 (a): one local subscription, the run card's and the board's).</p></td>
+                    <td><span class="badge tone-designed">Designed</span></td>
+                    <td><p><code>flows.test.ts</code> (contracts)</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">flows.run</span></td>
+                    <td><p><code>FlowsRunParams {flow, input?, spark?}</code> → <code>FlowsRunResult {run?, waits?}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p><strong>no</strong></p></td>
+                    <td><p>starts a run as the person: from the board with every Agent Profile they have, or in a spark's thread (<code>spark</code>) with that spark's (CP4-Q20 (a)), always from the approved bytes fieldd kept. A changed or never-approved flow starts nothing and answers <code>waits</code>, the <code>flow-changed</code> item the run waits in (CP4-Q5 (a)); refusals are <code>PRECONDITION_FAILED</code> with a <code>reason</code> in the details, put into words.</p></td>
+                    <td><span class="badge tone-designed">Designed</span></td>
+                    <td><p><code>flows.test.ts</code> (contracts)</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">flows.stop</span></td>
+                    <td><p><code>FlowsStopParams {run}</code> → <code>FlowsStopResult {run}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>declarative: a run that has ended is answered as it is. The run makes no further call; each live step agent it started is ended, the act the window's <code>terminal.terminate</code> is ("Stopping agent…"), a session it was handed has its turn paused, the act of <code>agent.pause</code>, never ended, and its journal stays (CP4-Q9 (a)). Run again starts from the top.</p></td>
+                    <td><span class="badge tone-designed">Designed</span></td>
+                    <td><p><code>flows.test.ts</code> (contracts)</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">flows.script</span></td>
+                    <td><p><code>FlowsScriptParams {flow?, hash?}</code> → <code>FlowsScriptResult {hash, text, flow?}</code></p></td>
+                    <td><p><code>agents.manage</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>a script's bytes as text: the library's file by its <code>flow</code>, or a version fieldd kept, approved or proposed, by its <code>hash</code> (Read the script; See the change reads two). Text up to 64 KiB rides the RPC, as Settings' terminal config does, never a ticket (CP4-S10, EL2 read as it was for that document). Kept bytes whose SHA-256 is not their name are set aside, never served.</p></td>
+                    <td><span class="badge tone-designed">Designed</span></td>
+                    <td><p><code>flows.test.ts</code> (contracts) · <code>flows-records.test.ts</code></p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
             <h3 id="cat-needs">needs.* — the person's queue</h3>
             <p class="section-note">
               CP-3, the person (<code>draft/compose-plane/cp3-the-person.md</code>, CP3-D1…D8 ruled A 2026-10-31;
@@ -2189,10 +2280,10 @@
                   <tr><td><span class="route">agent_send</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Words to a session the person or the spark started, landing at its next idle moment marked as the spark's, sent on the person's behalf (CP2-D1). The spark's first words to a session the person started answer <code>{queued: false, held}</code> and wait in the needs-you queue for his OK, which lasts for that run (CP-3, CP-D3, CP3-D3 B); words to an agent it started itself are never held. <em>TU-1 (2026-11-01):</em> the session is placed by the rule above, so a session filed under no profile is reached by the sparks of the profile listing its persona, and a persona no profile lists is reached by no spark. <em>Item 158 (2026-11-04):</em> the words wait in the session's input queue, kept across a fieldd restart; words a restart broke into while they were being sent are never sent again, and the spark is told that VibeField cannot tell whether they arrived (DESIGN.md §9).</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_interrupt</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Stops a session's current turn; the session stays.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agent_stop</span></td><td><p><code>talk</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-2</p></td><td><p>Ends a session the spark started.</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">flow_run</span></td><td><p><code>flows</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-4</p></td><td><p>Runs a flow the person approved, with its input; a wake when it asks or ends.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
-                  <tr><td><span class="route">flow_read</span></td><td><p><code>flows</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-4</p></td><td><p>A run's steps, rounds and spend.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
-                  <tr><td><span class="route">flow_stop</span></td><td><p><code>flows</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-4</p></td><td><p>Stops a run; its journal stays.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
-                  <tr><td><span class="route">flow_propose</span></td><td><p><code>flows</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-4</p></td><td><p>A flow file the spark wrote, sent to the person; it never runs before they approve it.</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
+                  <tr><td><span class="route">flow_run</span></td><td><p><code>flows</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-4</p></td><td><p>Runs a flow the person approved, with its input; a wake when it asks or ends. <em>CP-4 (2026-11-05, planned):</em> a flow that changed since its approval, or was never approved, answers the needs-you item the run waits in, as <code>agent_spawn</code> past its cap does (CP4-Q5 (a)); the run takes the spark's Agent Profiles (CP4-Q20 (a)).</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
+                  <tr><td><span class="route">flow_read</span></td><td><p><code>flows</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-4</p></td><td><p>A run's steps, rounds and spend. <em>CP-4 (2026-11-05, planned):</em> no spend; a run shows no money (James, 2026-11-02 13:08Z), and the description drops the word when the row is served (CP-4b). It reads the runs the spark started and the runs started in its thread (CP4-Q22 (a)).</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
+                  <tr><td><span class="route">flow_stop</span></td><td><p><code>flows</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-4</p></td><td><p>Stops a run; its journal stays. <em>CP-4 (2026-11-05, planned; CP4-Q9 (a) on James's 2026-11-02 Stop/Pause ruling):</em> it ends the step agents the run started and pauses the turn of a session the run was handed, never ending it, as <code>flows.stop</code> does; the description says so when the row is served (CP-4b). A spark stops only the runs it started (CP4-Q22 (a)).</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
+                  <tr><td><span class="route">flow_propose</span></td><td><p><code>flows</code></p></td><td><p><code>spark</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-4</p></td><td><p>A flow file the spark wrote, sent to the person; it never runs before they approve it. <em>CP-4 (2026-11-05, planned):</em> its bytes ride inline, at most 64 KiB, and the person's card shows fieldd's static read of them, never the spark's summary (CP4-Q3 (a)), with no spend (James, 2026-11-02 13:08Z: the description's "what it may spend" goes when the row is served, CP-4b).</p></td><td><span class="badge tone-designed">Designed</span></td></tr>
                   <tr><td><span class="route">history_search</span></td><td><p><code>history</code></p></td><td><p><code>agent</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-1</p></td><td><p>Past sessions under the caller's profiles, asked once per runtime with the hits merged: the matching turns with their session, agent, folder and time.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">history_read</span></td><td><p><code>history</code></p></td><td><p><code>agent</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-1</p></td><td><p>A past session's turns from History, bounded; <code>before</code> pages back.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">projects_list</span></td><td><p><code>projects</code></p></td><td><p><code>agent</code></p></td><td><p><code>device</code></p></td><td><p>CP-1</p></td><td><p>The person's projects, each with its name and the folders it has on this desktop.</p></td><td><span class="badge tone-built">Built</span></td></tr>

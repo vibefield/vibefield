@@ -1816,6 +1816,39 @@
                       <p>MT-0, drafted on the compose stack. The seam's owner is api's <a href="api.html#cat-compose-door"><code>vibefield</code> door</a>.</p>
                     </td>
                   </tr>
+                  <tr>
+                    <td><span class="route">the flow host (CP-4a)</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        <code>packages/contracts/src/flows.ts</code><br />
+                        <code>packages/fieldd/src/flows/</code> (<code>library.ts</code> · <code>records.ts</code> ·
+                        <code>static-read.ts</code>; the host at <code>flows/host/</code>, CP-4a2)
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        A flow's script runs in ONE Node child per run, never in fieldd: the child locks itself down
+                        with Hardened JavaScript (<code>ses</code>) and evaluates the approved bytes fieldd hands it in
+                        one compartment whose only globals are the flow API (CP-D8). Every call that touches the world
+                        (<code>agent</code>, <code>ask</code>, <code>log</code>) is a message on the child's IPC pipe;
+                        fieldd journals it, holds it to the run's scope and does it with its own services, and the
+                        journal's answers come back the same way. The child holds no door, no token and no file access;
+                        its environment is scrubbed of <code>FIELD_*</code> and <code>FIELDD_*</code> (EL7), and it
+                        leaves when its pipe closes or when every call it awaits is unanswered (CP-D9). Before any run,
+                        fieldd reads a script's bytes without running them (<code>acorn</code>, the static read that a
+                        proposal's card shows, CP4-Q3 (a)). Both packages are fieldd's alone, held by R32, and
+                        <code>flows/</code> imports no puppeteer or rosetta package: a step's result reaches it through
+                        a fieldd interface over the runtime's events, never a vendor's file (AR-L1). The design:
+                        <code>step0-cp4.md</code> §5.1, on the round's CP-4 marks, ruled 2026-11-04.
+                      </p>
+                    </td>
+                    <td>
+                      <span class="badge tone-designed">Designed</span>
+                      <p>CP-4a1 (2026-11-05) built the library, the signed approvals and proposals, and the static read; the host, the journal and the runs are CP-4a2's. The seam's owner is api's <a href="api.html#cat-flows"><code>flows.*</code> doors</a>.</p>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -1868,7 +1901,8 @@
               <code>scripts/check-import-boundaries.mjs</code> decide which package may import which sibling, and they
               have been <code>enforce: true</code> from birth; the fourth, R23 in
               <code>scripts/check-agent-catalog.mjs</code> (AC-2, 2026-09-22), holds the catalog to both pins. Their
-              descriptions are quoted verbatim.
+              descriptions are quoted verbatim. <em>CP-4a1 (2026-11-05):</em> R32, the flow host's, is listed after
+              them: it keeps the siblings out of fieldd's flow folder, and the folder's parser and sandbox in it.
             </p>
             <div class="contract-list">
               <div class="contract-row">
@@ -1895,6 +1929,17 @@
                   "no puppeteer or rosetta import outside packages/fieldd and packages/field-app (D2: the runtime lives
                   in fieldd; A4/R10 elsewhere)". Contracts stays dependency-free, plugins see only the SDK, Electron
                   main carries no product logic, and the spine libraries never learn what an agent is.
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>R32</strong>
+                <p>
+                  "acorn only under packages/fieldd/src/flows and ses only under packages/fieldd/src/flows/host (the
+                  flow host's child); packages/fieldd/src/flows imports no @vibefield/puppeteer-* and no
+                  @vibefield/rosetta-* package" (CP-4a1, 2026-11-05). The flow host's own rule, which R29 reserved for it:
+                  the parser and the sandbox stay in the one folder that runs scripts, so no other daemon code parses or
+                  evaluates a person's script, and a step's result reaches flows through fieldd's own interface, never
+                  a vendor's package (AR-L1). The plan named it R31; SD-1's sound wall took R31 first.
                 </p>
               </div>
             </div>
