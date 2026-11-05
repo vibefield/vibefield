@@ -83,6 +83,22 @@ describe("a transcript line (TH0-Q1 = O1)", () => {
     }
   });
 
+  it("keeps a crew's act line with its crew's id, and an act line without one as before (SP-1e2; item 180)", () => {
+    const line = sparkTranscriptLineOf(fixture("spark-transcript-line.act-crew"));
+    expect(line?.kind).toBe("act");
+    if (line?.kind !== "act") return;
+    expect([line.what, line.crew, line.text]).toEqual([
+      "crew",
+      "cr-4f1c2a9e0b7d3c61",
+      "Started 4 agents · Opus 5.5 · high",
+    ]);
+    const notify = sparkTranscriptLineOf(fixture("spark-transcript-line.act"));
+    expect(notify?.kind === "act" ? notify.crew : "not an act").toBeUndefined();
+    // a crew is an id, never a word: a line naming one in words is not this build's
+    for (const crew of ["Vela's crew", "", "cr-"])
+      expect(sparkTranscriptLineOf({ ...line, crew }), crew).toBeUndefined();
+  });
+
   it("skips a kind this build does not know, while its head reads", () => {
     const unknown = fixture("spark-transcript-line.unknown-kind");
     expect(SparkTranscriptLine.parse(unknown).kind).toBe("plan");

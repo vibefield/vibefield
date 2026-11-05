@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SparkId } from "./agent-session";
+import { CrewId, SparkId } from "./agent-session";
 import { ComposeSayChip, ComposeSayRequestId, composeChipsFit } from "./compose";
 import { SPARK_TRANSCRIPT } from "./registries";
 import { WorkspaceCredential, WorkspaceLoopbackSocket } from "./workspace";
@@ -110,11 +110,16 @@ export const SparkTranscriptToolLine = SparkTranscriptLine.extend({
 
 /** VibeField's own act, typed, never words read for a prefix (TH-Q12 (a)). `what` is OPEN: `wake` (a wake that told
  * the spark something: `text` the facts it told), `answer` (an answer you gave: `text` your choice's words), `notify`
- * (the spark told you: `text` its words), `crew` (SP-1e2's). */
+ * (the spark told you: `text` its words), `crew` (SP-1e2: agents the spark started, `text` the whole line in
+ * VibeField's words, "Started 4 agents · Opus 5.5 · high"). `crew` names that crew (SPE-Q39 (a); item 180): fieldd
+ * writes a crew's line into the run it was made in at its first start, and again whenever its words change (a member
+ * joins, or a model is first named), and a later line with the same `crew` replaces it where it first stood, as a reply
+ * is replaced by its `messageId`. Chat's crew card hangs under it. A reader that does not know `crew` draws `text`. */
 export const SparkTranscriptActLine = SparkTranscriptLine.extend({
   kind: z.literal("act"),
   what: z.string().min(1).max(32),
   text: z.string().min(1),
+  crew: CrewId.optional(),
 });
 
 /** A turn's edge (`turn:started`, `turn:completed`, `turn:failed`): `edge` OPEN, start | end | failed. */

@@ -23,6 +23,7 @@ import {
   composeChipsFit,
   composeDesktopStateOf,
   composeSayStateOf,
+  crewSharedModelOf,
   NEEDS_CHOICE_WORDS,
   NEEDS_JOINED_ITEMS_MAX,
   NEEDS_OPEN_PER_SPARK,
@@ -709,5 +710,29 @@ describe("SP-1e2 — a spark's crews: the crew on the origin, the held spawn's c
       { ...live, waiting: [{ runtimeRunId: "run-22", tasks: 0.5 }] },
     ])
       expect(ComposeSparksCrewsFrame.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+});
+
+describe("a crew's shared model (SP-1e2, SR-Q2: the act line's words and the card's head read one rule)", () => {
+  it("C7: says the model and effort every member shares, the model alone when none names an effort, and nothing when they differ or one is not named yet", () => {
+    const opus = { model: "Opus 5.5", effort: "high" };
+    expect(crewSharedModelOf([opus, opus, opus, opus])).toEqual({
+      model: "Opus 5.5",
+      effort: "high",
+    });
+    // J2 at its lean (a): one model, no effort named by any member
+    expect(crewSharedModelOf([{ model: "Grok 4" }, { model: "Grok 4" }])).toEqual({
+      model: "Grok 4",
+    });
+    expect(crewSharedModelOf([{ model: "Grok 4" }])).not.toHaveProperty("effort");
+    for (const differ of [
+      [opus, { model: "Sonnet 5.5", effort: "high" }],
+      [opus, { model: "Opus 5.5", effort: "low" }],
+      [opus, { model: "Opus 5.5" }],
+      [opus, {}],
+      [{}, opus],
+      [],
+    ])
+      expect(crewSharedModelOf(differ), JSON.stringify(differ)).toBeNull();
   });
 });

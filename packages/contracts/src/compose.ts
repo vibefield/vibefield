@@ -147,6 +147,23 @@ export const SparkCrew = z
   .passthrough();
 export type SparkCrew = z.infer<typeof SparkCrew>;
 
+/** SP-1e2 (SR-Q2, VF-PM 2026-11-05 11:03Z) — the model and effort a crew's members share, as their rows first named
+ * them: the ONE rule fieldd's act line ("Started 4 agents · Opus 5.5 · high") and Chat's crew card head ("4 agents ·
+ * Opus 5.5 · high") both say, so the two never disagree. Null when there is no member, when a member's model is not
+ * named yet, or when they differ in model or in effort (one naming an effort and another none is a difference). Every
+ * member on one model with no effort named shares the model alone (J2, at its lean until James's pick). */
+export function crewSharedModelOf(
+  members: readonly { readonly model?: string | undefined; readonly effort?: string | undefined }[],
+): { readonly model: string; readonly effort?: string } | null {
+  const first = members[0];
+  if (first?.model === undefined) return null;
+  for (const member of members)
+    if (member.model !== first.model || member.effort !== first.effort) return null;
+  return first.effort === undefined
+    ? { model: first.model }
+    : { model: first.model, effort: first.effort };
+}
+
 /** Item 159 (TH0-Q11 (b)) — what fieldd keeps for one spark beyond its record, for the slices that keep something per
  * spark across a restart: one file, SPARK_KEPT_FILE, in the spark's folder, signed with SPARK_FILES_KEY_FILE's secret by
  * fieldd's one record signer. The schema is the unsigned body; the file adds its `signature`, and `spark` is inside it
