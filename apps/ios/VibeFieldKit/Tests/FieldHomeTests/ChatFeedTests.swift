@@ -220,19 +220,93 @@ struct ChatFeedTests {
   @Test("a desktop's last word is said in the fact that holds: asleep, not answering, or a build it can't read")
   func away() {
     #expect(
-      ChatWords.away("studio", .asleep)
+      ChatWords.away("studio", .asleep, carried: true)
         == "studio is asleep. These are as it last said; your words wait here until it wakes.")
     #expect(
-      ChatWords.away("loft", .silent)
+      ChatWords.away("loft", .silent, carried: true)
         == "loft isn't answering. These are as it last said; your words wait here until it answers.")
     #expect(
-      ChatWords.away("mini", .incompatible)
+      ChatWords.away("mini", .incompatible, carried: true)
         == "mini runs a build this phone can't read. These are as it last said; "
         + "your words wait here until it's updated.")
+    // a desktop the phone never heard: the same fact, never a last word (VF-PM 02:06Z, §9)
+    #expect(
+      ChatWords.away("studio", .asleep, carried: false) == "studio is asleep. Its sparks show here when it wakes.")
+    #expect(
+      ChatWords.away("loft", .silent, carried: false) == "loft isn't answering. Its sparks show here when it answers.")
+    #expect(
+      ChatWords.away("mini", .incompatible, carried: false)
+        == "mini runs a build this phone can't read. Its sparks show here when it's updated.")
     // the merge's words, as the person reads them: a timeout and unreachable are one fact; a newer word is no answer
     let standings = [ComposeDesktopState.asleep, .timeout, .unreachable, .incompatible, nil].map(ChatAway.Standing.init)
     #expect(standings == [.asleep, .silent, .silent, .incompatible, .silent])
     #expect(ChatWords.emptyTitle == "No sparks yet.")
     #expect(ChatWords.emptyText == "A spark is an agent VibeField starts to run your other agents.")
+  }
+
+  /// The merged list's own desktops (`compose-sparks-list.merged`): studio and the loft answered, mini is asleep and
+  /// holds no spark.
+  static func merged() throws -> ChatReading {
+    let list = try ComposeSparksList(json: try #require(ChatFixtureDoor.fixture("compose-sparks-list.merged")))
+    var reading = ChatReading()
+    reading.connected = true
+    reading.heard = true
+    reading.sparks = list.sparks
+    reading.desktops = list.desktops
+    return reading
+  }
+
+  static func name(_ device: String?) -> String {
+    ChatFixtureDoor.names[device ?? ChatFixtureDoor.home] ?? "your desktop"
+  }
+
+  @Test("a desktop never heard is said as never heard, never as its last word")
+  func neverHeard() throws {
+    // mini is asleep with no spark of its own in the reading: "as it last said" would claim a last word the phone
+    // never heard (VF-PM 2026-11-05, IOS-12b's Found, ruled (a) then (i)); it is said as never heard
+    var reading = try Self.merged()
+    let mini = ChatAway(device: "dev-01HQ9S7Y44", name: "mini", standing: .asleep, carried: false)
+    let calm = ChatAway.lines(reading, home: ChatFixtureDoor.home, homeListed: true, name: Self.name)
+    #expect(calm == [mini])
+    let said = ChatWords.away(mini.name, mini.standing, carried: mini.carried)
+    #expect(said == "mini is asleep. Its sparks show here when it wakes.")
+
+    // the loft stops answering while Kiwi is carried from the last reading: its last word, as not answering
+    let silent = try ComposeSparksList(
+      json: .object([
+        "sparks": .array([]),
+        "desktops": .array([
+          .object(["device": .string("dev-01HQ9S7UD1"), "state": .string("answered")]),
+          .object(["device": .string("dev-01HQ9S7XZ2"), "state": .string("timeout")]),
+          .object(["device": .string("dev-01HQ9S7Y44"), "state": .string("asleep")]),
+        ]),
+      ]))
+    reading.desktops = silent.desktops
+    let loft = ChatAway(device: "dev-01HQ9S7XZ2", name: "loft", standing: .silent, carried: true)
+    let away = ChatAway.lines(reading, home: ChatFixtureDoor.home, homeListed: true, name: Self.name)
+    #expect(away == [loft, mini])
+
+    // an item alone is a row of its desktop: mini, asleep, holding an ask carried from before, says its last word
+    let needsJSON = try #require(ChatFixtureDoor.fixture("needs-list.merged"))
+    guard case .object(var fields)? = needsJSON["items"]?.arrayValue?.first else {
+      Issue.record("no item in the golden")
+      return
+    }
+    fields["device"] = .string("dev-01HQ9S7Y44")
+    reading.items = [try NeedsItem(json: .object(fields))]
+    let asked = ChatAway.lines(reading, home: ChatFixtureDoor.home, homeListed: true, name: Self.name)
+    #expect(asked == [loft, ChatAway(device: "dev-01HQ9S7Y44", name: "mini", standing: .asleep, carried: true)])
+
+    // no door: the whole list is the home's last word while the reading carries any row, in the fact that holds
+    // (listed on the tailnet and silent, else asleep)
+    reading.connected = false
+    let listed = ChatAway.lines(reading, home: ChatFixtureDoor.home, homeListed: true, name: Self.name)
+    #expect(listed == [ChatAway(device: ChatFixtureDoor.home, name: "studio", standing: .silent, carried: true)])
+    let asleep = ChatAway.lines(reading, home: ChatFixtureDoor.home, homeListed: false, name: Self.name)
+    #expect(asleep == [ChatAway(device: ChatFixtureDoor.home, name: "studio", standing: .asleep, carried: true)])
+
+    // a cold start with the home asleep, the common case: nothing heard, so never "as it last said", and never a blank
+    let cold = ChatAway.lines(ChatReading(), home: ChatFixtureDoor.home, homeListed: false, name: Self.name)
+    #expect(cold == [ChatAway(device: ChatFixtureDoor.home, name: "studio", standing: .asleep, carried: false)])
   }
 }
