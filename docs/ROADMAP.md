@@ -315,9 +315,13 @@
   At n5 and n20, busy is 5.1 and 18.1 KB/s and idle 218 and 855 B/s at the phone's floor, and a 5 s app
   switch by cursor saves 53% and 91% against a whole open. Every idle byte is PU-I's 30 s cost step
   (`monitorRow.cost.series.lastStepAt`), bar four stale flips at n20.
-- Next: S4c (the DEBUG replay seam: a corpus played once, then held), then S5, James's device run on the 120 s
-  corpora, its recipe page first: M1 the n5/n20 rates with the Energy Log, M2 the cap under the link
-  conditioner. PU-I is filed by James; on the phone's cut, idle is its cost step alone (PG-9 S4a).
+  **PG-9 S4c**, the replay seam (`5b0780458` → `fbfc51c96`, 4 commits on `3e767108d`,
+  M150 `fbfc51c96`, run 150; LANDED "PG-9 S4c"): a dev desktop's fieldd plays a recorded synthetic swarm through
+  the real door (`FIELDD_DEBUG_SWARM_CORPUS`), one pass of a corpus and then a hold, and a package refuses it
+  by name.
+- Next: S5, James's device run on the 120 s corpora: the corpora and S4a's bench on them first, then his recipe
+  page. M1 the n5/n20 rates with the Energy Log, M2 the cap under the link conditioner. PU-I is filed by
+  James; on the phone's cut, idle is its cost step alone (PG-9 S4a).
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both
   on the shed; the cap read on the phone under the link conditioner (PG-9, S5); from PG-1d, the F-H2 rider (the board's
   gate and the ticket mint read different things) and an old owner's run-id fallback (a design question); from PG-2,
@@ -1142,7 +1146,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6, FG-5, FG-6c, FG-O2, FG-O2's judge and its fix, FG-6's catalog, FG-6's frozen frame 10-31, FG-6's follow-up 3, the catalog judged and its follow-up 1 11-01 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | the glass's literals (item 136) → James's product question |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
-| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31; PG-3 (3a…3f), PG-9a and PG-4s 11-01…11-02; PG-4t, then PG-7, PG-5 and PG-8 as one stacked mint, then PG-6, 11-04; PG-9 (S1–S4b, then S4a), 11-05 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-9's S4c; S5 is James's |
+| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31; PG-3 (3a…3f), PG-9a and PG-4s 11-01…11-02; PG-4t, then PG-7, PG-5 and PG-8 as one stacked mint, then PG-6, 11-04; PG-9 (S1–S4b, then S4a and S4c), 11-05 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | S5, James's device run (its recipe page first) |
 | HN — Cards in Hand | BUILT; B1–B3 (HN-0…HN-8) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | the console-window smoke rows; D10 (James) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |

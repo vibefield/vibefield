@@ -34287,3 +34287,99 @@ under its new 30,000 ms limit.
 - **Closed by this entry:**
   - item 177 (FILED in "Item 172", Found 1, and named in its Owed);
   - "CP-3"'s Owed line "SessionRecordStore is still on its own HMAC, with a base64 key…".
+
+## PG-9 S4c — a dev desktop plays a recorded synthetic swarm through the real door: one pass of a corpus, then a hold, and a package plays none (2026-11-05; `5b0780458` → `fbfc51c96`, 4 commits on main `3e767108d`, lane `pg/9-s4c` in `/Volumes/SamsungRed/lanes/pg9/vibe-field`, stacked as M150 `fbfc51c96`, run 150)
+
+**What it rests on.**
+- P3 (b) (VF-PM, 02:21Z): the n20 rates come from a DEBUG replay seam, not from paid agents. Its design was
+  `lanes/pg9/S4c-DESIGN.md`, and VF-PM's rulings shaped it:
+  - S4c-1 (A) at 03:18Z: a corpus FILE; fieldd imports nothing from field-app; refused when packaged.
+  - S4c-2: after cp-landing's `daemon.ts` waves (A1 landed at 03:51Z).
+  - 06:42Z: one pass, then a hold, no loop, so a real phone has an idle row.
+- `daemon.ts` is cp-landing's hotspot:
+  - S4c's touch was named to the waves' file matrix first (06:30Z).
+  - Its seam sits below the `AgentRuntimeService` constructor, so A2's and A3's inserts above it stay clear.
+  - Its one textual meeting with A2 (co/th) is resolved as the ruled UNION, A2's listeners first (VF-PM 07:06Z;
+    co-plan/EXPECTED `co/th pg/9-s4c daemon.ts`).
+  - Item 177 meets it in `registries.ts` without a conflict: 177's `RECORD_STORES` row at :930, S4c's variable at
+    :1632.
+
+**What landed** (10 files, +1,510 −8).
+- `FIELDD_DEBUG_SWARM_CORPUS` (contracts `FIELDD_DEBUG_SWARM_CORPUS_ENV`; `.env.example`) takes a corpus `.jsonl.gz`,
+  field-app's generator output. It plays the corpus once, then holds its last state (rows alive and quiet); restart
+  fieldd to replay.
+- fieldd `src/debug/swarm-replay.ts` (new):
+  - It reads the JSONL tolerantly:
+    - a torn line, a non-object, or an unknown kind or field is each said once;
+    - a row that breaks the fold's contract is dropped and said once;
+    - a corpus with no fold frame is refused, and an unreadable file is named with the variable.
+  - It gives a fold and a monitor runtime, production twins of the test fixtures' `scriptedFold`/`scriptedRuntime`.
+  - Each frame plays once at its own time, stamped with this desktop's device id and with its timestamps rebased to
+    the playback clock, and only while something listens. A late listener is caught up.
+  - Only this desktop's board plays; the corpus's peer half is unused.
+- fieldd `bin.ts`: a packaged fieldd (`isSea()`) handed the variable fails its boot BY NAME, before it writes a root or
+  loads the daemon's module graph.
+- fieldd `daemon.ts`:
+  - the config field, and one seam (`swarm`, `boardFold = swarm ?? agents`) below the runtime's constructor;
+  - the model, remote and field boards and the monitor read it;
+  - `LastRunKeeper` is never started under a replay, so a fake swarm never lands in `AGENT_LAST_BOARD_FILE`, and
+    `agent.lastRun` answers `{state: "none"}`;
+  - the normal path passes `agents` itself as the fold, since every consumer calls it as a method.
+- electron-shell `main/fieldd.ts`: a packaged app blanks the variable, beside `FIELDD_PLUGIN_DEV_ROOTS`.
+- The tests:
+  - fieldd `swarm-replay.test.ts` (14 rows);
+  - `swarm-replay.e2e.test.ts` (2): a daemon booted on the in-repo `n10-2s-s1` corpus serves its 10 runs to a tailnet
+    phone through `{remote, mesh}` and to a window's model board. It holds the last frame past the corpus's span,
+    keeps `daemon.agents`' own fold empty, answers `agent.lastRun` with none, and leaves a seeded
+    `AGENT_LAST_BOARD_FILE` byte for byte;
+  - `swarm-replay-packaged.test.ts` (1);
+  - electron-shell `fieldd-debug-swarm.test.ts` (2).
+
+**Validation.**
+- The mini (a9, 07:17:35–07:19:02Z, a fresh `checkout -f --detach` per commit with its tree hash checked):
+  - RED 1 `ddfbd074d`: exactly 17, every one an assertion (swarm-replay 13 of 14, e2e 2 of 2, packaged 1 of 1,
+    electron-shell 1 of 2);
+  - RED 2 `859a7f92a` (the hold): exactly 3;
+  - GREEN `012bdd814`: 19 of 19; fieldd tsc 0; agent-model-daemon, agent-shim-role, mesh-board.e2e and
+    agent-inventory-age 29 of 29.
+  - Logs: `lanes/ts6/logs/mini/pg9s4c/s4c-012bdd814/`.
+- The builder's light passes (nice 19, the guard clear): biome clean; contracts tsc and vitest 1,557/1,557;
+  electron-shell tsc.
+- The re-cut: three moves from the witnessed `012bdd814` on `b4512ca40`.
+  - Onto A2's records `9dca71d7d`: one conflict, `daemon.ts`'s ruled union (range-diff `= ! = =`, the `!` context
+    only), and `registries.ts` and `bin.ts` auto-merged. Lit then at `05f55c09f`: a frozen install, biome on the 9
+    changed files, contracts tsc and vitest 1,654/1,654, electron-shell tsc 0.
+  - Onto item 179's records `af6a2ccc9`: byte-identical (carry (1c)), `cadfe5dc7`.
+  - Onto item 177's records `3e767108d` by carry (1b): `git patch-id --stable` equal for all four, and the diff equal
+    with index lines and hunk headers stripped. It moved in two lines, `registries.ts`'s index and one hunk header
+    (:1629 → :1632). Re-lit at `fbfc51c96`: biome on the 9 changed files, contracts tsc and vitest 1,656/1,656,
+    electron-shell tsc 0.
+  - Shared with main: 3 files, 12 of S4c's hunk regions.
+- Run 150: a9, `pnpm verify` exit 0 at 11:01:29Z (armed 10:56:04Z): vitest 12,896 passed, 0 failed, 20 skipped.
+  - fieldd 3,209 (+17) and electron-shell 2,651 (+2), the four new files' 19 rows exactly as counted at T:
+    swarm-replay 14, its e2e 2 (6,455 ms), the packaged row 1 and electron-shell's 2.
+  - node 450; cargo 545/0; the census without drift.
+  - The packaged row is green in the full verify; RED 1's ENOENT stderr does not recur at T.
+  - Logs: `lanes/ts6/logs/mini/run150/`.
+- Landed: main fast-forwarded `3e767108d` → `fbfc51c96` at 11:04:06Z (the fixer).
+
+**Found.**
+1. **A red whose received value is an ENOENT can still be the right kind** (VF-PM 07:21Z, refining the red-row rule).
+   - At RED 1 the packaged row failed on its own stderr assertion. The ENOENT (loro's wasm) was only what a
+     non-refusing fieldd prints as it boots on.
+   - The rule is about a death BEFORE the assertion.
+2. **The loop was built before the hold ruling reached the builder.** The hold landed as its own red/green pair, not a
+   rewrite, because a pairwise check watches the branch.
+3. **Under a replay, swarm rows promise an attach to PTYs no cell holds, and the dev desktop's real shells still
+   appear as bare rows.** Neither moves a byte measurement. S5's recipe says to close extra terminals.
+4. **Built beyond the design, and needed:** device stamping per frame, and timestamps rebased to the playback clock.
+5. **A carry's shared-file read belongs to the lane that carries.** At 10:48Z, 177's file list was read as touching none
+   of S4c's ten. The lane's own read of the two diffs found `registries.ts` before the carry, so the byte-identity
+   carry (1c) could not hold and (1b) was ruled (VF-PM 10:50Z; the error corrected in VF-PM's docket).
+
+**Owed.**
+- S5:
+  - the 120 s corpora (`n5-120s-s1`, `n20-120s-s1`), then S4a's bench on exactly those;
+  - then James's recipe page;
+  - then his device run (M1, M2).
+- Any reading on this seam says it was a synthetic swarm and names its corpus.
