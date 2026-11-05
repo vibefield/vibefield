@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // `.ts` specifiers and erasable syntax only: plain Node runs this package as it stands (the package-time sounds
+    // and the phone's export are node scripts), and every bundler reads it the same way.
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "noEmit": true,
+    // the source sees no environment at all (no DOM, no Node): it runs in Electron main, the window and plain node
+    "types": []
+  },
+  "include": ["src"]
+}
