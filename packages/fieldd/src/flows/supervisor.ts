@@ -10,6 +10,7 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { FlowsHostLaunch, FlowsHostLaunchChoice } from "./launch";
 import { flowScriptOf } from "./module-script";
 import {
+  FLOW_CUT_MARK,
   FLOW_FRAME_DEPTH_ENVELOPE,
   FLOW_FRAME_ENVELOPE,
   FrameReader,
@@ -151,7 +152,10 @@ function flowsHostEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 }
 
 /** An answer as the pipe may carry it, and as a run's journal keeps it (replay.ts): whole up to
- * FLOW_LIMITS.RESULT_MAX_BYTES; past it, text cut to fit (`cut`) and anything else refused. */
+ * FLOW_LIMITS.RESULT_MAX_BYTES; past it, text cut to fit and marked `cut`, and anything else refused. A cut text leaves
+ * room for FLOW_CUT_MARK, which the script's worker adds to it (finding 7, ruled (a) 12:48Z), so the script hears at
+ * most RESULT_MAX_BYTES and a replay of the journal's text hears the same, byte for byte. An answer already marked (a
+ * replay's) passes as it is. */
 export function boundedAnswer(answer: FlowHostAnswer): FlowHostAnswer & { readonly cut?: true } {
   const max = FLOW_LIMITS.RESULT_MAX_BYTES;
   if (!answer.ok) return { ok: false, refused: cutText(answer.refused, FLOW_LOG_MAX) };
@@ -161,7 +165,11 @@ export function boundedAnswer(answer: FlowHostAnswer): FlowHostAnswer & { readon
       ok: false,
       refused: `VibeField can't hand this answer on: an answer is at most ${kib(max)}`,
     };
-  return { ok: true, value: longestWithin(answer.value, max), cut: true };
+  return {
+    ok: true,
+    value: longestWithin(answer.value, max - Buffer.byteLength(FLOW_CUT_MARK, "utf8")),
+    cut: true,
+  };
 }
 
 const isHigh = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
@@ -473,7 +481,13 @@ class FlowHostChild {
     const bounded = boundedAnswer(answer);
     this.#send(
       bounded.ok
-        ? { t: "answer", id, ok: true, value: bounded.value }
+        ? {
+            t: "answer",
+            id,
+            ok: true,
+            value: bounded.value,
+            ...(bounded.cut === true ? { cut: true as const } : {}),
+          }
         : { t: "answer", id, ok: false, refused: bounded.refused },
     );
   }

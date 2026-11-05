@@ -2,6 +2,7 @@ import "ses";
 import { getHeapStatistics } from "node:v8";
 import { parentPort } from "node:worker_threads";
 import {
+  FLOW_CUT_MARK,
   FLOW_HOST_TEXT_MAX,
   type FlowHostLimits,
   type FromFlowHost,
@@ -159,7 +160,14 @@ function hear(message: ToFlowWorker): void {
       const waiting = pending.get(message.id);
       if (waiting === undefined) return;
       pending.delete(message.id);
-      if (message.ok) waiting.resolve(message.value);
+      // a cut text ends in the mark, so the script hears that it was cut (finding 7, ruled (a)): fieldd's bound left
+      // room for it
+      if (message.ok)
+        waiting.resolve(
+          message.cut === true && typeof message.value === "string"
+            ? `${message.value}${FLOW_CUT_MARK}`
+            : message.value,
+        );
       else waiting.reject(new Error(String(message.refused)));
       return;
     }

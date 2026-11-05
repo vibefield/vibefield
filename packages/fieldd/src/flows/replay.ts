@@ -24,7 +24,8 @@ import {
 // - A call journaled and never answered (the host left mid-call) is handed on again under its own number: what its
 //   step then is (resumed, or lost to a Quit, CP4-Q11 (a)) is the runs' to say (CP-4a2b), by `call`.
 // - The answer journaled is the one the pipe carries: JSON's own value (an undefined in a list is null, as the pipe
-//   says it), then `boundedAnswer` (a text past RESULT_MAX_BYTES cut and marked). The script hears what is journaled.
+//   says it), then `boundedAnswer` (a text past RESULT_MAX_BYTES cut and marked `cut`). The script hears what is
+//   journaled, and a cut text with FLOW_CUT_MARK after it, added by its worker; a replay hands on the same `cut`.
 // - A log line the journal holds is not said again; the next is journaled, then heard.
 // - A journal that does not take a line (the disk refused it) hands nothing on: the call is refused to the script.
 // - `call` never throws at fieldd's pipe (bth's review P1/P3): arguments nested past FLOW_LIMITS.ARGS_DEPTH_MAX, or
@@ -99,7 +100,7 @@ export class FlowReplay implements FlowCallHandler {
           line.call,
           line.refused !== undefined
             ? { ok: false, refused: line.refused }
-            : { ok: true, value: line.value },
+            : { ok: true, value: line.value, ...(line.cut === true ? { cut: true as const } : {}) },
         );
       } else if (line.kind === "log") logs += 1;
     }
@@ -192,6 +193,8 @@ export class FlowReplay implements FlowCallHandler {
       // the step's answer is not kept, so the script does not hear it: a restart asks the step again
       return { ok: false, refused: JOURNAL_REFUSED };
     }
-    return answer.ok ? { ok: true, value: answer.value } : answer;
+    return answer.ok
+      ? { ok: true, value: answer.value, ...(answer.cut === true ? { cut: true as const } : {}) }
+      : answer;
   }
 }
