@@ -259,6 +259,8 @@ pub mod layout {
     pub const REGISTRIES_DIR: &[&str] = &["registries"];
     pub const DOCS_DIR: &[&str] = &["docs"];
     pub const ARTIFACT_PREVIEWS_DIR: &[&str] = &["artifacts", "previews"];
+    pub const ARTIFACT_MADE_DIR: &[&str] = &["artifacts", "made"];
+    pub const ARTIFACT_MADE_PREVIEWS_DIR: &[&str] = &["artifacts", "made-previews"];
     pub const AUDIT_DIR: &[&str] = &["audit"];
     pub const PLUGINS_INSTALLED_DIR: &[&str] = &["plugins", "installed"];
     pub const NATIVE_DIR: &[&str] = &["native"];
@@ -306,6 +308,7 @@ pub mod layout {
     pub const INDEX_TOKEN_FILE: &[&str] = &["index", "auth", "token"];
     pub const INDEX_GRANT_KEY_FILE: &[&str] = &["index", "auth", "grant.key"];
     pub const MESH_CATALOG_DIR: &[&str] = &["mesh", "catalog"];
+    pub const MESH_APPS_DIR: &[&str] = &["mesh", "apps"];
     pub const AGENTS_DIR: &[&str] = &["agents"];
     pub const AGENT_PROFILES_FILE: &[&str] = &["agents", "profiles.json"];
     pub const AGENT_PROFILE_SETS_DIR: &[&str] = &["agents", "profiles"];
@@ -340,6 +343,8 @@ pub mod layout {
         ("REGISTRIES_DIR", REGISTRIES_DIR),
         ("DOCS_DIR", DOCS_DIR),
         ("ARTIFACT_PREVIEWS_DIR", ARTIFACT_PREVIEWS_DIR),
+        ("ARTIFACT_MADE_DIR", ARTIFACT_MADE_DIR),
+        ("ARTIFACT_MADE_PREVIEWS_DIR", ARTIFACT_MADE_PREVIEWS_DIR),
         ("AUDIT_DIR", AUDIT_DIR),
         ("PLUGINS_INSTALLED_DIR", PLUGINS_INSTALLED_DIR),
         ("NATIVE_DIR", NATIVE_DIR),
@@ -387,6 +392,7 @@ pub mod layout {
         ("INDEX_TOKEN_FILE", INDEX_TOKEN_FILE),
         ("INDEX_GRANT_KEY_FILE", INDEX_GRANT_KEY_FILE),
         ("MESH_CATALOG_DIR", MESH_CATALOG_DIR),
+        ("MESH_APPS_DIR", MESH_APPS_DIR),
         ("AGENTS_DIR", AGENTS_DIR),
         ("AGENT_PROFILES_FILE", AGENT_PROFILES_FILE),
         ("AGENT_PROFILE_SETS_DIR", AGENT_PROFILE_SETS_DIR),

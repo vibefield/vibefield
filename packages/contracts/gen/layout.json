@@ -32,6 +32,14 @@
     "artifacts",
     "previews"
   ],
+  "ARTIFACT_MADE_DIR": [
+    "artifacts",
+    "made"
+  ],
+  "ARTIFACT_MADE_PREVIEWS_DIR": [
+    "artifacts",
+    "made-previews"
+  ],
   "AUDIT_DIR": [
     "audit"
   ],
@@ -220,6 +228,10 @@
   "MESH_CATALOG_DIR": [
     "mesh",
     "catalog"
+  ],
+  "MESH_APPS_DIR": [
+    "mesh",
+    "apps"
   ],
   "AGENTS_DIR": [
     "agents"
