@@ -1952,18 +1952,28 @@
               set, so the same set twice writes nothing and restarts nothing.
             </p>
 
-            <h3 id="cat-compose">compose.sparks.* — the window's doors to the sparks</h3>
+            <h3 id="cat-compose">compose.sparks.* — the person's doors to the sparks</h3>
             <p class="section-note">
               The compose plane, version 2 (ruled 2026-10-29; <code>packages/contracts/src/compose.ts</code>). A spark
               is an agent of the person's that may start agents. fieldd keeps it as a signed record
               (<code>LAYOUT.SPARKS_DIR</code>, an HMAC-SHA256 under <code>SPARKS_KEY_FILE</code>'s secret) outside its
               own folder (<code>LAYOUT.SPARK_HOMES_DIR</code>), so an agent that edits files cannot widen its Agent
-              Profiles. Chat's list, the New spark sheet and waking a spark call these three doors. They hold
-              <code>agents.manage</code>, like the other acts a person takes on this machine's agents: hatching an
-              agent that may start agents is not a plugin's call to make. All three are <code>local</code>, because a
-              spark lives on the desktop that hatched it. A refusal is <code>PRECONDITION_FAILED</code> with its
-              <code>reason</code> in the details, for the sheet to put into words. CP-1c <code>f98d0d2b</code> ·
-              <code>1060d4b2</code>.
+              Profiles. Chat's list, the New spark sheet, waking a spark and the person's own words to it call these four
+              doors, from the window and from the phone. They hold <code>sparks.use</code>, which the window's token and
+              the phone's preset hold and no plugin table names: hatching an agent that may start agents is not a
+              plugin's call to make. Every read and act rides the phone's home (PC-L2): the list is
+              <code>federate</code>, the home merging each self desktop's sparks, each naming its <code>device</code>;
+              open and say are <code>federate</code>, carrying the spark's <code>device</code>, and the home forwards
+              them there (design-04 §6, DS-2). Hatch stays <code>local</code>: a spark is made on the desktop the call
+              reaches, which for the phone is its home (PC-D8 A). They answer the person's own screens alone (the window,
+              the shell, a phone whose login is matched), and a peer daemon only as the carrier of a forwarded act, or
+              for its own rows on the list, never the home's aggregate (DS-L4, DS-L7; <code>spark-doors.ts</code>). A
+              refusal is <code>PRECONDITION_FAILED</code> with its <code>reason</code> in the details, for the sheet to
+              put into words. CP-1c <code>f98d0d2b</code> · <code>1060d4b2</code>; IOS-12a <code>8513806fa</code>.
+              <em>Corrected 2026-11-05 (CO lane): this said the window's three doors, held under
+              <code>agents.manage</code> and all three <code>local</code>, with no say. IOS-12a (2026-11-04; PC-D3 A,
+              PC-D7 A, PC-L2) made them the person's four, under <code>sparks.use</code>, as
+              <code>packages/contracts/src/methods.ts</code> has said since; this page had not followed.</em>
             </p>
             <div class="table-wrap">
               <table class="reference-table">
@@ -1973,17 +1983,17 @@
                 <tbody>
                   <tr>
                     <td><span class="route">compose.sparks.list</span></td>
-                    <td><p><code>—</code> → <code>ComposeSparksListResult {sparks: SparkSummary[]}</code></p></td>
-                    <td><p><code>agents.manage</code></p></td>
+                    <td><p><code>ComposeSparksListParams {scope?, device?}</code> → <code>ComposeSparksListResult {sparks: SparkSummary[], desktops?}</code></p></td>
+                    <td><p><code>sparks.use</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>nothing upstream: fieldd's verified records, each joined to the fold's runs. A summary carries its session's <code>runtimeRunId</code>, its pane while it has one, and <code>live</code> (awake while its process runs, asleep otherwise, CP-D14). A record that is unsigned, does not verify, does not parse, or is exposed to other users is set aside and never served. <em>TU-1 (2026-11-01):</em> a summary carries <code>turnedAt</code>, from the signed record: the time fieldd first saw one of the spark's own sessions take a turn, <code>null</code> for a spark that has never worked (a hatch writes it), absent for one from before TU-1.</p></td>
+                    <td><p>nothing upstream: fieldd's verified records, each joined to the fold's runs. A summary carries its session's <code>runtimeRunId</code>, its pane while it has one, and <code>live</code> (awake while its process runs, asleep otherwise, CP-D14). A record that is unsigned, does not verify, does not parse, or is exposed to other users is set aside and never served. <em>TU-1 (2026-11-01):</em> a summary carries <code>turnedAt</code>, from the signed record: the time fieldd first saw one of the spark's own sessions take a turn, <code>null</code> for a spark that has never worked (a hatch writes it), absent for one from before TU-1.</p><p><em>IOS-12a (2026-11-04):</em> <code>scope</code> is <code>local</code> by default, the desktop the call reaches; <code>mesh</code>, which the phone asks, is the home's merge of every self desktop, each summary naming its <code>device</code> and <code>desktops</code> saying how each answered (answered, asleep, timeout, incompatible or unreachable, open words). A peer daemon asking <code>mesh</code> is answered its own rows.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
-                    <td><p><code>compose-sparks.test.ts</code></p></td>
+                    <td><p><code>compose-sparks.test.ts</code> · <code>spark-doors.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">compose.sparks.hatch</span></td>
                     <td><p><code>ComposeSparksHatchParams {name, face, agent, modelSelection?, profiles, thinksUnder}</code> → <code>ComposeSparksHatchResult {spark}</code></p></td>
-                    <td><p><code>agents.manage</code></p></td>
+                    <td><p><code>sparks.use</code></p></td>
                     <td><p><strong>no</strong></p></td>
                     <td><p>the New spark sheet's answers (NS-D1, NS-D2 B, NS-D5). Refused before anything is written: a profile that does not exist (<code>{reason: "unknown-profile", profile}</code>), a <code>thinksUnder</code> profile with no sign-in for the agent (<code>{reason: "no-sign-in", agent, profile}</code>), and a name another spark holds (<code>{reason: "name-taken"}</code>). Then fieldd writes the record and makes the folder with its brief (<code>CLAUDE.md</code>, written once and the person's to edit after). The spark's session is born as <code>agent.spawn</code>'s is (<code>runtime.spawn()</code>), in the folder, under <code>thinksUnder</code>'s sign-in and with the spark's model, its origin <code>you</code> and the spark's id on its signed session record.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
@@ -1991,12 +2001,21 @@
                   </tr>
                   <tr>
                     <td><span class="route">compose.sparks.open</span></td>
-                    <td><p><code>ComposeSparksOpenParams {spark}</code> → <code>ComposeSparksOpenResult {spark}</code></p></td>
-                    <td><p><code>agents.manage</code></p></td>
+                    <td><p><code>ComposeSparksOpenParams {spark, device?}</code> → <code>ComposeSparksOpenResult {spark}</code></p></td>
+                    <td><p><code>sparks.use</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p><p><em>Added 2026-11-01 (SP-1d):</em> one wake per spark. A second open while a wake is under way (another window's, or the shell's) is answered with that same wake, its run or its refusal, so two opens never wake one spark into two runs; each caller is still authorized and audited at the door. Not joined yet: a resume of the spark's session already under way through <code>agent.resume</code>. The daemon's resume wrapper (<code>daemon.ts</code>) reads its <code>PRECONDITION_FAILED</code> (state <code>resuming</code> or <code>replaced</code>) as a session that cannot be resumed, so the wake starts the spark again beside it; the fix is owed to that wrapper.</p><p><em>Added 2026-11-01 (CP-3):</em> an answer to a sleeping spark's needs-you item (<a href="#cat-needs"><code>needs.answer</code></a>) wakes it through this same joined wake, so an answer and an open asked meanwhile are one wake and one run.</p></td>
+                    <td><p>wakes a spark (CR-D11, CP-D14). Declarative: a live spark is answered as it is. A sleeping one is resumed in its last session (<code>runtime.resume()</code>, as <code>agent.resume</code> does), or started again in its folder when that session cannot be resumed. An unknown id is <code>NOT_FOUND</code>.</p><p><em>Added 2026-11-01 (SP-1d):</em> one wake per spark. A second open while a wake is under way (another window's, or the shell's) is answered with that same wake, its run or its refusal, so two opens never wake one spark into two runs; each caller is still authorized and audited at the door. Not joined yet: a resume of the spark's session already under way through <code>agent.resume</code>. The daemon's resume wrapper (<code>daemon.ts</code>) reads its <code>PRECONDITION_FAILED</code> (state <code>resuming</code> or <code>replaced</code>) as a session that cannot be resumed, so the wake starts the spark again beside it; the fix is owed to that wrapper.</p><p><em>Added 2026-11-01 (CP-3):</em> an answer to a sleeping spark's needs-you item (<a href="#cat-needs"><code>needs.answer</code></a>) wakes it through this same joined wake, so an answer and an open asked meanwhile are one wake and one run.</p><p><em>IOS-12a (2026-11-04):</em> from another screen it carries the spark's <code>device</code>, and the home forwards it there.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>compose-sparks.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">compose.sparks.say</span></td>
+                    <td><p><code>ComposeSparksSayParams {spark, text, requestId, device?}</code> → <code>ComposeSparksSayResult {spark, requestId, state, queued: true, position?}</code></p></td>
+                    <td><p><code>sparks.use</code></p></td>
+                    <td><p><strong>no</strong>, keyed by <code>requestId</code></p></td>
+                    <td><p>the person's own words to a spark (IOS-12a, PC-D3 A): into its session's input queue as yours and unmarked (the <code>you</code> sender), never pasted, landing at its next idle moment as a spark's sends do (CP2-D2). A spark asleep is woken first, through <code>compose.sparks.open</code>'s own wake. The answer is the send's receipt, <code>state</code> an open word: <code>queued</code>, <code>waking</code>, <code>waiting</code>, <code>delivered</code>, <code>uncertain</code> or <code>dropped</code>. The same <code>requestId</code> again reads that receipt instead of queueing the words twice, and one in flight is joined; a request id another spark's say used is <code>PRECONDITION_FAILED</code>. Across a fieldd restart a say still waiting is found in the queue by the request id its kept input carries. <em>Item 158 (2026-11-05):</em> one a restart broke into while it was being sent answers <code>uncertain</code> and is never sent again, and whatever the queue says of a kept say after the restart is kept by that request id; one delivered before the restart is not remembered, so its retry queues the words again (item 169). From another screen it carries the spark's <code>device</code>, and the home forwards it there, retried once if the forward is cut. Audited as <code>compose.spark.say</code> with its request id and its length, never its words.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>spark-doors.test.ts</code></p></td>
                   </tr>
                 </tbody>
               </table>
@@ -2017,12 +2036,21 @@
               another item than its file does (a record copied to another item's name, set aside as forged) is set
               aside and never served. That holds against an edit, not against an agent that reads the key: the key is
               0600 to the same uid, as the sparks' is (EL7). An agent's ask is derived from its run's blockers and never
-              kept. Chat's list and thread call these doors. They hold <code>agents.manage</code> and are
-              <code>local</code>, beside <code>compose.sparks.*</code> (CP3-D6 A), because an answer may start an agent or
-              send words on the person's behalf, an act of the person at this desktop. <code>approval.respond</code>
-              stays reserved for AR-6's answers to an agent's own asks, and the phone reaches none of these until PG
-              rules its scope. An item's <code>kind</code> and <code>state</code> are open words, so an item of a kind
-              this build never heard of still reads. Its acts' words are DESIGN.md §9's ("The person's queue's words").
+              kept. Chat's list and thread call these doors, on the window and on the phone. <code>needs.list</code>,
+              <code>needs.subscribe</code> and <code>needs.answer</code> hold <code>sparks.use</code> and are
+              <code>federate</code>, beside <code>compose.sparks.*</code>, and admit the person's own screens as the
+              spark doors do: the home's list merges every self desktop's queue, each item naming its
+              <code>device</code>; a subscription is one desktop's queue, through the home when <code>device</code>
+              names another; an answer carries its item's <code>device</code> and is answered there, once for every
+              window and device. <code>needs.notices.subscribe</code> stays <code>agents.manage</code> and
+              <code>local</code>: main's OS notice and the window's status line. <code>approval.respond</code> stays
+              reserved for AR-6's answers to an agent's own asks. An item's <code>kind</code> and <code>state</code> are
+              open words, so an item of a kind this build never heard of still reads. Its acts' words are DESIGN.md §9's
+              ("The person's queue's words"). <em>Corrected 2026-11-05 (CO lane): this said every door here held
+              <code>agents.manage</code> and was <code>local</code> (CP3-D6 A), and that the phone reached none of them
+              until PG ruled its scope. IOS-12a (2026-11-04; PC-D4 A, PC-D7 A) moved the list, the subscription and the
+              answer to <code>sparks.use</code>, federated through the home, as <code>methods.ts</code> has said since;
+              this page had not followed.</em>
             </p>
             <div class="table-wrap">
               <table class="reference-table">
@@ -2032,26 +2060,26 @@
                 <tbody>
                   <tr>
                     <td><span class="route">needs.list</span></td>
-                    <td><p><code>—</code> → <code>NeedsListResult {items: NeedsItem[]}</code></p></td>
-                    <td><p><code>agents.manage</code></p></td>
+                    <td><p><code>NeedsListParams {scope?, device?}</code> → <code>NeedsListResult {items: NeedsItem[], desktops?}</code></p></td>
+                    <td><p><code>sparks.use</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>nothing upstream: the open items, oldest first, whole. An item is <code>{id, kind, state, from, spark?, asked, words?, cut?, choices?, count?, answer?}</code>; <code>answer</code> is an answered item's, as <code>needs.answer</code> hands it back, so no item this list holds carries one. <code>from</code> names who asks as fieldd names it: a spark by its name, a run by its title, else its agent's catalog label, else its id; <code>spark</code> is the thread that shows it (the asker, or the spark that started the asking agent); <code>choices</code> are its acts in order, absent for an agent's ask. A held send adds <code>to</code>, a held spawn <code>agent</code>, <code>folder</code> and <code>live</code>, an agent's ask <code>ask</code> and <code>tool</code>. What an Allow acts on (the held words, the resolved launch) stays in the record and never rides the wire. An unaudited read, as <code>compose.sparks.list</code> is.</p></td>
+                    <td><p>nothing upstream: the open items, oldest first, whole. An item is <code>{id, kind, state, from, spark?, device?, asked, words?, cut?, choices?, count?, answer?}</code>; <code>answer</code> is an answered item's, as <code>needs.answer</code> hands it back, so no item this list holds carries one. <code>from</code> names who asks as fieldd names it: a spark by its name, a run by its title, else its agent's catalog label, else its id; <code>spark</code> is the thread that shows it (the asker, or the spark that started the asking agent); <code>choices</code> are its acts in order, absent for an agent's ask. A held send adds <code>to</code>, a held spawn <code>agent</code>, <code>folder</code> and <code>live</code>, an agent's ask <code>ask</code> and <code>tool</code>. What an Allow acts on (the held words, the resolved launch) stays in the record and never rides the wire. An unaudited read, as <code>compose.sparks.list</code> is. <em>IOS-12a (2026-11-04):</em> <code>mesh</code> is the home's merge of every self desktop's items, <code>desktops</code> saying how each answered, as the sparks' list does; a peer daemon asking is answered its own items.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>needs-doors.test.ts</code> · <code>needs-queue.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">needs.subscribe</span></td>
-                    <td><p><code>—</code> → snapshot, then frames, of <code>NeedsListResult</code></p></td>
-                    <td><p><code>agents.manage</code></p></td>
+                    <td><p><code>NeedsSubscribeParams {device?}</code> → snapshot, then frames, of <code>NeedsListResult</code></p></td>
+                    <td><p><code>sparks.use</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>the list, whole, at open and on every change (state transfer, never edges). An item answered in one window leaves every window's list.</p></td>
+                    <td><p>the list, whole, at open and on every change (state transfer, never edges). An item answered in one window leaves every window's list. <em>IOS-12a (2026-11-04):</em> a frame is one desktop's queue, the one its <code>device</code> names (through the home when that is another), whole lists at the product API's stream floor, so a burst of answers reaches a phone as one frame.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>needs-doors.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">needs.answer</span></td>
-                    <td><p><code>NeedsAnswerParams {item, choice}</code> → <code>NeedsAnswerResult {item}</code></p></td>
-                    <td><p><code>agents.manage</code></p></td>
+                    <td><p><code>NeedsAnswerParams {item, choice, device?}</code> → <code>NeedsAnswerResult {item}</code></p></td>
+                    <td><p><code>sparks.use</code></p></td>
                     <td><p>yes</p></td>
                     <td><p><code>choice</code> is the act's index into the item's <code>choices</code>, never its word, so rewording an act in DESIGN.md changes nothing here. Declarative: answered once, an item is answered for every window, and the same answer again answers it as it is; another is <code>PRECONDITION_FAILED {reason: "answered"}</code>. Two answers to one item at once are one: the second waits for the first. An agent's ask is <code>PRECONDITION_FAILED {reason: "in-its-pane"}</code>, a held send whose session ended before an answer is <code>PRECONDITION_FAILED {reason: "ended"}</code>, an act the item does not offer is <code>PRECONDITION_FAILED {reason: "no-such-act"}</code>, an item of a kind this fieldd cannot act on (an open word, as a newer build's record may carry) is <code>PRECONDITION_FAILED {reason: "unknown-kind"}</code>, and an id fieldd does not know is <code>NOT_FOUND</code>. <em>TU-1 (2026-11-01):</em> an Allow of a held send to a session fieldd cannot place yet, because it has not read the Agent Profiles (the tool plane's note, below), is <code>PRECONDITION_FAILED {reason: "profiles-unread"}</code>, retryable: nothing is spent, the item stays open, the spark is told nothing, and the same answer is taken once the monitor's first frame lands (<code>needs-queue.test.ts</code>). A question's answer is a fact. Allow queues a held send's words, marked as the spark's, and keeps the yes for that run until the run ends, through a fieldd restart that finds the answer's record kept (the one path where it is not is below). Allow one more starts the held spawn past the cap, with its tasks. Not now drops what waited. Each answer is told to the spark as one marked line through its input queue (DESIGN.md §9), and an answer to a sleeping spark resumes it through <code>compose.sparks.open</code>'s own wake (CP3-D7 A), so an answer and an open asked while it wakes are one wake and one run. The result's <code>answer</code> keeps the act apart from its telling: <code>outcome</code> is the act's (<code>done</code> or <code>failed</code>, open, with a <code>reason</code>), and <code>told</code> is false while the spark could not be woken, with <code>waits</code> saying why; it hears the answer when it wakes. <em>Item 158 (2026-11-04, CO-Q9 (b)):</em> <code>told</code> keeps its meaning, the fact is in the spark's input queue, and fieldd keeps the fact owed until the spark's session confirms it took the line. A session that ends before then flips <code>told</code> back to false, with <code>waits</code>, and the spark's next session hears it; a line VibeField cannot confirm is never sent again (CP2-D2). An act a restart finds begun and never recorded done is never done again, and the spark is told that VibeField cannot tell whether it finished (DESIGN.md §9). An act that began stands once it is done, for every window and the spark, even when the record after it could not be written; a restart before that record is kept finds the act begun, so the spark may hear what the act did and, after the restart, that VibeField cannot tell whether it finished: words true in either order. On that path the restart keeps no yes, an Allow done and told included: the held send's uncertain fact also says the spark's later words to that session are held again, and they are (<code>needs-queue.test.ts</code>). Its answer reads <code>outcome: "failed"</code>, an act not recorded done, with that for its <code>reason</code>. Audited as <code>needs.answer</code> on a <code>needs-item</code> target, its choice by index and never the words, in the own-actions ledger; the outcome names the item's kind, the act's outcome, whether the spark was told, and the run an answer woke.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
