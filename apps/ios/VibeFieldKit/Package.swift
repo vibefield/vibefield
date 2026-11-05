@@ -366,6 +366,7 @@ let package = Package(
       dependencies: ["FieldDesign"],
       // IOS-8f — the contracts' face-deal vector, copied in (EL9 on the third plane): the deck, the hash and the
       // deal the desktop computes are the ones these read. `pnpm check:ios-fixtures` keeps the word "copy" true.
+      // IOS-12a — beside it the design kit's spark-DNA golden, which the phone's spark face is held to (IOS-12b).
       resources: [.copy("Fixtures")]
     ),
     .testTarget(

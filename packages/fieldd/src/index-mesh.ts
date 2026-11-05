@@ -665,6 +665,13 @@ export class IndexMesh extends EventEmitter {
     return new Set(wanted === undefined ? all : all.filter((device) => wanted.includes(device)));
   }
 
+  /** IOS-12a (PC-L2) — every self peer desktop the aggregator knows, by id: the desktops the home's merges ask
+   * (`compose.sparks.list`, `needs.list`) through `ask`, which answers an asleep or incompatible one by its
+   * standing. */
+  peerDevices(): string[] {
+    return this.#knownPeerDevices();
+  }
+
   /** Every peer the aggregator has rows or a roster entry for. */
   #knownPeerDevices(): string[] {
     const self = this.#opts.roster.currentDeviceId();

@@ -90,7 +90,8 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
         enqueue: (run, text, from) => {
           ctl.duringEnqueue?.();
           queued.push([run, text, from.kind === "spark" ? from.name : "VibeField"]);
-          return { position: queued.filter(([r]) => r === run).length };
+          // IOS-12a — the queue answers the kept input's id beside its place
+          return { id: `in-${queued.length}`, position: queued.filter(([r]) => r === run).length };
         },
       },
       run: (id) => runs.get(id),

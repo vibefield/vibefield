@@ -123,7 +123,7 @@ function harness(
   const notices: unknown[] = [];
   const needs = new NeedsQueue({
     store: new NeedsStore({ dir: join(root, "needs"), keyPath: join(root, "needs.key") }),
-    inputs: { wake: () => undefined, enqueue: () => ({ position: 1 }) },
+    inputs: { wake: () => undefined, enqueue: () => ({ id: "in-1", position: 1 }) },
     run: () => undefined,
     personaSets: () => personaSets,
     sparkSession: () => "run-12",

@@ -108,8 +108,14 @@ describe("the input queue (CP-L5, CP-2)", () => {
 
   it("holds an input while the session works, and delivers one at each idle moment, in order", async () => {
     const h = harness();
-    expect(h.queues.enqueue("run-1", "first", VELA)).toEqual({ position: 1 });
-    expect(h.queues.enqueue("run-1", "second", VELA)).toEqual({ position: 2 });
+    expect(h.queues.enqueue("run-1", "first", VELA)).toEqual({
+      id: expect.any(String),
+      position: 1,
+    });
+    expect(h.queues.enqueue("run-1", "second", VELA)).toEqual({
+      id: expect.any(String),
+      position: 2,
+    });
     await h.flush();
     expect(h.delivered).toEqual([]);
     h.idle.add("run-1");

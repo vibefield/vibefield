@@ -23,6 +23,8 @@ import { RecordSigner, type SetAsideWhy, setAsideFile } from "./signed-record";
 // and fieldd delivers the head when the session is idle: its turn has ended and nothing waits on the person.
 // - The text lands marked by its source (CP2-D1): a spark's words under "<name> (your spark) on your behalf:", a wake
 //   as "VibeField: …". No wording is a boundary; the boundaries are the door, the holds and the record.
+//   IOS-12a (PC-D3 A): the person's own words to a spark (`compose.sparks.say`) land UNMARKED, as yours, and carry
+//   the say's request id, so a retried say finds the input it already queued (`findRequest`).
 // - A receipt decides the head (puppeteer's submitPrompt). Confirmed, it is done. Rejected (a dialog is open, another
 //   injection runs, or the person's keystrokes came between), it waits for the next idle. Uncertain (no echo within
 //   the adapter's bound), it is never sent again and its sender is told (CP2-D2).
@@ -37,7 +39,7 @@ import { RecordSigner, type SetAsideWhy, setAsideFile } from "./signed-record";
 // - CP2-D7 (wait for his quiet) needs a fact the floor does not give fieldd yet: when his last keystroke in the pane
 //   was. Until it does, the terminal service's ordering against accepted human input is the guard (the mark's B).
 
-/** Who an input is from: a spark, by id and by the name its words are marked with; or fieldd's own wake. */
+/** Who an input is from: a spark, by id and by the name its words are marked with; fieldd's own wake; or you. */
 export type InputSender = AgentInputSender;
 
 /** One input that waits, as it is kept (contracts' `AgentQueuedInput`). */
@@ -72,11 +74,13 @@ export interface InputQueueOptions {
   readonly now?: () => Date;
 }
 
-/** The text an input lands as (CP2-D1). */
+/** The text an input lands as (CP2-D1): a spark's and fieldd's marked, yours as you wrote it (IOS-12a). */
 export const markedText = (input: QueuedInput): string =>
   input.from.kind === "spark"
     ? `${input.from.name} (your spark) on your behalf:\n${input.text}`
-    : `VibeField: ${input.text}`;
+    : input.from.kind === "you"
+      ? input.text
+      : `VibeField: ${input.text}`;
 
 /** A file name a run id can be kept under; ids are fieldd's own, and anything else is refused. */
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -111,13 +115,37 @@ export class AgentInputQueues {
     return waiting;
   }
 
-  /** Queue an input for a run; its place, 1 being next. */
-  enqueue(runtimeRunId: string, text: string, from: InputSender): { position: number } {
+  /** Queue an input for a run; its id, and its place, 1 being next. A say's request id (IOS-12a) is kept with it. */
+  enqueue(
+    runtimeRunId: string,
+    text: string,
+    from: InputSender,
+    requestId?: string,
+  ): { id: string; position: number } {
     const queue = this.#queueOf(runtimeRunId);
-    queue.push({ id: randomBytes(6).toString("hex"), text, from, at: this.#now().toISOString() });
+    const id = randomBytes(6).toString("hex");
+    queue.push({
+      id,
+      text,
+      from,
+      at: this.#now().toISOString(),
+      ...(requestId !== undefined ? { requestId } : {}),
+    });
     this.#keep(runtimeRunId);
     void this.poke(runtimeRunId);
-    return { position: queue.length };
+    return { id, position: queue.length };
+  }
+
+  /** IOS-12a — the input a say's request id queued, while it still waits: its run, the input and its place. Kept
+   * inputs carry their request id across a restart, so a retried say finds them there too. */
+  findRequest(
+    requestId: string,
+  ): { runtimeRunId: string; input: QueuedInput; position: number } | undefined {
+    for (const [runtimeRunId, queue] of this.#queues) {
+      const at = queue.findIndex((input) => input.requestId === requestId);
+      if (at >= 0) return { runtimeRunId, input: queue[at]!, position: at + 1 };
+    }
+    return undefined;
   }
 
   /** fieldd's own wake for a run (CP-D4): facts only, and wakes that wait join into one line. */
