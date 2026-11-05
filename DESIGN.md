@@ -5559,8 +5559,9 @@ a line break or a run of spaces in a question, a choice or a name is said as one
 characters and a question at 120, the last of them "…". An answer to a sleeping spark wakes it, and lands as its first
 input (CP3-D7 A); a spark that cannot be woken hears it when it next wakes. An answer counts as heard only once the
 spark's session confirms it took the line (item 158, CO-Q9 B): a session that ends before then leaves the answer owed,
-and the spark's next session hears it; a line VibeField cannot confirm is never sent again (CP2-D2). A card's "Vela
-hears it when it wakes" keeps its meaning: the fact is not in the spark's queue yet (below, the needs-you card).
+its card reading "Vela hears it when it wakes: Vela's session ended before it took this" (the needs-you card's words,
+below), and the spark's next session hears it; a line VibeField cannot confirm is never sent again (CP2-D2). A card's
+"Vela hears it when it wakes" keeps its meaning: the fact is not in the spark's queue yet.
 - an answer: "VibeField: you answered Vela's question "Push the fix?": Yes" — Not now is said the same way;
 - a held send allowed: "VibeField: you allowed Vela's words to Claude Code; they wait for its next idle moment, and its
   later words to Claude Code are not held"; not allowed: "VibeField: you held back Vela's words to Claude Code (Not
