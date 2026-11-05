@@ -38,6 +38,7 @@ export * from "./release-identity";
 export * from "./remote-endpoints";
 export * from "./rows";
 export * from "./screenshot";
+export * from "./session-name";
 export * from "./setup";
 export * from "./shell";
 export * from "./shell-lease";

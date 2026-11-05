@@ -1,8 +1,9 @@
 import {
   NEEDS_CHOICE_MAX,
-  NEEDS_NAME_MAX,
   NEEDS_NOTICE_CHARS,
   NEEDS_REASON_MAX,
+  nameWords,
+  oneLineWords as oneLine,
 } from "@vibefield/contracts";
 
 // CP-3 — what VibeField tells a spark about the person's answers, one authority: DESIGN.md §9 "The person's queue's
@@ -15,49 +16,16 @@ import {
 /** A question as a fact quotes it. */
 export const FACT_QUESTION_CHARS = 120;
 
-/** `s` cut to at most `n` UTF-16 units, the last of them "…", never splitting a surrogate pair (zod's `max` counts the
- * same units). */
-export function clip(s: string, n: number): string {
-  if (s.length <= n) return s;
-  let cut = s.slice(0, Math.max(0, n - 1));
-  const last = cut.charCodeAt(cut.length - 1);
-  if (last >= 0xd800 && last <= 0xdbff) cut = cut.slice(0, -1);
-  return `${cut}…`;
-}
-
-/** Whitespace runs, line breaks among them, said as one space; trimmed. */
-export const collapse = (s: string): string => s.replace(/\s+/g, " ").trim();
-
-/** One line of at most `n`. */
-export const oneLine = (s: string, n: number): string => clip(collapse(s), n);
-
-/** A name as an item or a fact says it: a session's title, an agent's label, a spark's name. */
-export const nameWords = (s: string): string => oneLine(s, NEEDS_NAME_MAX);
-
-/** What fieldd names a session by (daemon.ts's runLabel reads them from the run's row). */
-export interface SessionNaming {
-  /** the session's own title */
-  readonly title?: string | undefined;
-  /** its agent's label in the catalog (AC-D4) */
-  readonly label?: string | undefined;
-  /** the folder it works in, as @ and the board name it (agent-field.ts's folderNameOf) */
-  readonly folder?: string | undefined;
-  readonly id: string;
-}
-
-/** CO-1b (CO-Q4 (b)) — a session as fieldd names it in a wake, an item and a notice: its title, else its agent's label
- * in its folder ("Claude Code in vibe-field"), else that label, else its id; one line, cut at NEEDS_NAME_MAX. Two
- * untitled sessions in one folder still read alike here (the handle tells them apart where @ offers one). */
-export function sessionName(run: SessionNaming): string {
-  const said = (s: string | undefined): string | undefined =>
-    s === undefined || collapse(s) === "" ? undefined : collapse(s);
-  const title = said(run.title);
-  if (title !== undefined) return nameWords(title);
-  const label = said(run.label);
-  if (label === undefined) return nameWords(run.id);
-  const folder = said(run.folder);
-  return nameWords(folder === undefined ? label : `${label} in ${folder}`);
-}
+// The session-naming rule and its line helpers live in contracts since SP-1e2's renderer half (SR-Q4 (a)), one rule for
+// fieldd and the window; they are re-exported here under the names this room's words have always used.
+export {
+  clipWords as clip,
+  collapseWords as collapse,
+  nameWords,
+  oneLineWords as oneLine,
+  type SessionNaming,
+  sessionName,
+} from "@vibefield/contracts";
 
 /** fieldd's own words for why an act stopped, on one line. */
 export const reasonWords = (s: string): string => oneLine(s, NEEDS_REASON_MAX);

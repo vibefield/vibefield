@@ -26,6 +26,7 @@ import {
   crewSharedModelOf,
   NEEDS_CHOICE_WORDS,
   NEEDS_JOINED_ITEMS_MAX,
+  NEEDS_NAME_MAX,
   NEEDS_OPEN_PER_SPARK,
   NeedsAnswerParams,
   NeedsAnswerResult,
@@ -55,6 +56,7 @@ import {
   SPARK_CREWS_KEPT,
   TAILNET_SCOPES,
 } from "../src/registries";
+import { sessionName } from "../src/session-name";
 
 // CO — the compose plane, version 2 (ruled 2026-10-29; draft/compose-plane/v2/). What these hold: the window's spark
 // doors are local agents.manage rows; a spark thinks under one of its own profiles; and a run's origin is read the way
@@ -734,5 +736,21 @@ describe("a crew's shared model (SP-1e2, SR-Q2: the act line's words and the car
       [],
     ])
       expect(crewSharedModelOf(differ), JSON.stringify(differ)).toBeNull();
+  });
+});
+
+describe("a session's name where no handle is said (SP-1e2, SR-Q4 (a): one rule for fieldd and the window)", () => {
+  it("C8: its title, else its agent's label in its folder, else that label, else its id; one line, cut at NEEDS_NAME_MAX", () => {
+    expect(sessionName({ title: " Fix\nthe restore ", label: "Claude Code", id: "run-1" })).toBe(
+      "Fix the restore",
+    );
+    expect(sessionName({ label: "Claude Code", folder: "vibe-field", id: "run-1" })).toBe(
+      "Claude Code in vibe-field",
+    );
+    expect(sessionName({ label: "Claude Code", folder: " ", id: "run-1" })).toBe("Claude Code");
+    expect(sessionName({ id: "run-1" })).toBe("run-1");
+    const long = sessionName({ title: "x".repeat(200), id: "run-1" });
+    expect(long).toHaveLength(NEEDS_NAME_MAX);
+    expect(long.endsWith("…")).toBe(true);
   });
 });
