@@ -13,7 +13,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
-import { AgentListResult, AgentMeshFrame, AgentMeshOpen, DeviceInfo } from "@vibefield/contracts";
+import {
+  AGENT_FIELD,
+  AgentListResult,
+  AgentMeshFrame,
+  AgentMeshOpen,
+  DeviceInfo,
+} from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { projectDeskRow } from "../../fieldd/src/agent-field";
 import {
@@ -69,6 +75,34 @@ describe("the recipe", () => {
       peerAgents: 6,
     });
     expect(() => parseRecipe("seed=1")).toThrow(/names n and duration/);
+  });
+
+  // PG-9 S5a (VF-PM 11:15Z, (a)): a device run's corpus is minutes long, so its fold tick is coarser than the
+  // product's own (a 16 ms frame is every row whole); the recipe spells it, and its name says it
+  it("parses a fold tick, in its short and its long spelling (PG-9 S5a)", () => {
+    expect(parseRecipe("n=20,duration=8000,seed=1,fold=250")).toEqual({
+      n: 20,
+      durationMs: 8_000,
+      seed: 1,
+      foldTickMs: 250,
+    });
+    expect(parseRecipe("n=5, duration=300000, foldTickMs=500")).toEqual({
+      n: 5,
+      durationMs: 300_000,
+      foldTickMs: 500,
+    });
+  });
+
+  it("names a fold tick off the product's own, and never the product's own (PG-9 S5a)", () => {
+    expect(recipeName({ n: 20, durationMs: 8_000, foldTickMs: 250 })).toBe("n20-8s-s1-f250");
+    expect(recipeName(parseRecipe("n=5,duration=300000,seed=1,fold=500"))).toBe("n5-300s-s1-f500");
+    // the product's tick, spelled or not, names exactly as before: every pinned fixture keeps its file
+    expect(recipeName({ n: 20, durationMs: 8_000, foldTickMs: AGENT_FIELD.FULL_TICK_MS })).toBe(
+      "n20-8s-s1",
+    );
+    expect(recipeName(parseRecipe(`n=10,duration=2000,fold=${AGENT_FIELD.FULL_TICK_MS}`))).toBe(
+      "n10-2s-s1",
+    );
   });
 
   it("is the membership the proof audit expects (scripts/perf-godview-proof.mjs keeps a copy)", async () => {
