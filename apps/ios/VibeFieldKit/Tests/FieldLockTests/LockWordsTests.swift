@@ -86,7 +86,7 @@ struct LockWordsTests {
   @Test("the ask's own reason, where iOS shows it (Touch ID, the passcode): one sentence for every method")
   func reason() {
     for method in [LockMethod.faceID, .touchID, .passcode] {
-      #expect(LockWords(method).reason == "Only you can open VibeField on this iPhone.")
+      #expect(LockWords(method).reason == "Only you can open VibeField on this device.")
     }
   }
 

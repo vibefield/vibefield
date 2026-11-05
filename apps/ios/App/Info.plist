@@ -7,6 +7,19 @@
          every CADisplayLink and MTKView is held at 60 (2026-10-18). -->
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
+    <!-- LP-4 (2026-11-05, the 0.9 launch) — ONE WINDOW in v1. Every window's HomeScreen builds its own
+         MeshModel, and every MeshModel opens truffle's node on the same Tailscale state directory, so a second
+         iPad window would run a second node over the first one's state. The scene manifest is therefore written
+         here rather than generated (the target's INFOPLIST_KEY_UIApplicationSceneManifest_Generation is NO):
+         the generated one said UIApplicationSupportsMultipleScenes = true (build 5's Info.plist). iPad keeps
+         Split View and Slide Over; it cannot open a second VibeField window. -->
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+        <key>UISceneConfigurations</key>
+        <dict/>
+    </dict>
     <!-- The phone's splash (DESIGN.md §8 "The phone's splash"): the launch screen is its first
          frame's mark on the field's ground — black by night, white by day, the system's own plain
          launch colours — so launch, the splash and its live field are one picture. SplashMark is

@@ -95,7 +95,7 @@ struct FieldLockTests {
     #expect(ask.asks == 0, "the ask waits for the scene to be active")
     await lock.phase(.active)?.value
     #expect(ask.asks == 1)
-    #expect(ask.reasons == ["Only you can open VibeField on this iPhone."])
+    #expect(ask.reasons == ["Only you can open VibeField on this device."])
     #expect(lock.state == .open)
     #expect(!lock.covers)
   }

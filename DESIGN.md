@@ -5886,7 +5886,7 @@ When Tailscale asks a remembered phone again, the way in comes back with your fa
 **The lock** (WI-3; WI-D3…D7 A). It is offered as the way in's last step, on by default: **Lock VibeField with
 Face ID.** · "This phone can type into your agents’ terminals. Face ID keeps that to you." · **Lock with Face
 ID** · **Not now** · "You can change this in Settings › Lock." iOS asks once, with VibeField's reason: "VibeField
-uses Face ID so only you can open it on this iPhone." The lock is the splash (WI-L5): on opening VibeField, on
+uses Face ID so only you can open it on this device." The lock is the splash (WI-L5): on opening VibeField, on
 coming back after the lock's time (1 minute to start; Immediately, 1, 5 or 15 minutes), and after **Lock now**
 (the corner's menu, while the lock is on), the splash stands and Face ID asks over it, and nothing of yours shows
 until it passes. A miss or a Cancel says **VibeField is locked.** · **Unlock with Face ID** · "Your iPhone
@@ -5908,7 +5908,9 @@ terminals. Your passcode keeps that to you." · **Lock with passcode** · **Not 
 locked.** · **Unlock with passcode**, and "Your iPhone passcode works too." goes, since the passcode is the method;
 Settings says "Your iPhone passcode opens VibeField.", **Require passcode**, "Changing these asks for your
 passcode first." and "VibeField opens without your passcode. …". Where iOS shows the app's own reason with the ask
-(Touch ID and the passcode; Face ID shows the one above), it says "Only you can open VibeField on this iPhone."
+(Touch ID and the passcode; Face ID shows the one above), it says "Only you can open VibeField on this device."
+*(Corrected 2026-11-05, LP-4: both reasons said "on this iPhone"; the app runs on iPad too, where most models ask
+with Touch ID, so the two sentences iOS shows for VibeField say "this device".)*
 With no passcode set the phone cannot lock: the way in offers nothing and has two steps, and a lock that was on
 stands down (VibeField opens, the switch is off and the no-passcode foot shows), since a lock that cannot ask must
 not hold the door.

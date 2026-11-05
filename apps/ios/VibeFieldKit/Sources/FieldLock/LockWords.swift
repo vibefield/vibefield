@@ -42,8 +42,9 @@ public struct LockWords: Equatable, Sendable {
   /// Said under Unlock only where the passcode is the fallback, not the method.
   public var passcodeToo: String? { biometric ? "Your iPhone passcode works too." : nil }
   /// What iOS shows with the ask where Face ID's own reason (the app's Info.plist) does not stand: Touch ID and the
-  /// passcode.
-  public var reason: String { "Only you can open VibeField on this iPhone." }
+  /// passcode. "This device", as the Info.plist's reason says since LP-4 (2026-11-05): the app runs on iPad too, and
+  /// most iPads ask with Touch ID.
+  public var reason: String { "Only you can open VibeField on this device." }
 
   // MARK: Settings › This phone › Lock
 

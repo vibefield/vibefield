@@ -2,7 +2,7 @@ import LocalAuthentication
 
 /// WI-3 — the app's ask: LocalAuthentication's `.deviceOwnerAuthentication`, so Face ID or Touch ID asks first and
 /// iOS's own passcode is the fallback (and the lockout's way back). Face ID shows the app's own reason, the Info.plist's
-/// `NSFaceIDUsageDescription` (DESIGN.md §9: "VibeField uses Face ID so only you can open it on this iPhone.");
+/// `NSFaceIDUsageDescription` (DESIGN.md §9: "VibeField uses Face ID so only you can open it on this device.");
 /// Touch ID and the passcode show `reason`.
 @MainActor
 public final class DeviceOwnerAuthenticator: LockAuthenticator {
