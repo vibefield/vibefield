@@ -193,11 +193,34 @@ struct WayInView: View {
 
   // MARK: The bottom: the acts' glass
 
+  /// What the acts' glass draws: its three slots, the primary always in the first, and under them its foot, the
+  /// welcome's legal line (IOS-13a, §8 "The phone's way in", amended 2026-11-05). S3b: the glass drew
+  /// `acts.prefix(3)` before, so the welcome's fourth act, its legal line, never reached the screen.
+  struct Glass: Equatable {
+    var slots: [FieldHomeModel.WayInScreen.Act]
+    var foot: FieldHomeModel.WayInScreen.Act?
+  }
+
+  /// Every act is a slot but the legal line, which is the foot. A screen never holds more than three slots
+  /// (WayInScreenTests' sweep), so nothing a screen says is dropped. Pure, and nonisolated, so a test holds it.
+  nonisolated static func glass(_ acts: [FieldHomeModel.WayInScreen.Act]) -> Glass {
+    var glass = Glass(slots: [], foot: nil)
+    for act in acts {
+      if case .legal = act {
+        glass.foot = act
+      } else {
+        glass.slots.append(act)
+      }
+    }
+    return glass
+  }
+
   private var actsGlass: some View {
     let shape = UnevenRoundedRectangle(
       topLeadingRadius: 32, bottomLeadingRadius: 47, bottomTrailingRadius: 47, topTrailingRadius: 32,
       style: .continuous)
-    let acts = Array(screen.acts.prefix(3))
+    let glass = Self.glass(screen.acts)
+    let acts = glass.slots
     let shown = risen && !acts.isEmpty
     return ZStack(alignment: .top) {
       ChromeMaterial.glass(in: shape)
@@ -209,6 +232,10 @@ struct WayInView: View {
           }
           if acts.count > 2 {
             slot(acts[2]).frame(minHeight: 22).padding(.top, 14)
+          }
+          // the foot under the third slot: 18 + 50 + 10 + 50 + 14 + 22 = 164, then 10 and a 12 pt line, inside 210
+          if let foot = glass.foot {
+            slot(foot).padding(.top, 10)
           }
         }
         .padding(.horizontal, Measure.slotInset)

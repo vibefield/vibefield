@@ -54,7 +54,8 @@ extension FieldHomeModel {
       var hold = false
     }
 
-    /// The acts' glass holds three slots: the primary always in the first.
+    /// The acts' glass holds three slots, the primary always in the first, and a foot under them: the welcome's
+    /// legal line (`WayInView.glass`, IOS-13a S3b). A screen holds no more acts than its glass draws.
     enum Act: Equatable {
       case primary(String, WayInAct, glyph: String? = nil)
       case secondary(String, WayInAct, glyph: String? = nil)
