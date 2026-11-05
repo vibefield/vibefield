@@ -217,7 +217,14 @@ describe("CP-4a2a — the flow host: lockdown, the compartment, the environment"
           HOME: "/Users/someone",
         },
       });
-      expect(await logged(logs)).toBe(JSON.stringify(["PATH"]));
+      const said = await logged(logs);
+      expect(said).not.toBe("timeout");
+      // macOS adds its own __CF_USER_TEXT_ENCODING to every process it starts, whatever env it was handed (measured on
+      // this Mac, 2026-11-05): the system's, never fieldd's
+      const keys = (JSON.parse(said) as string[]).filter(
+        (key) => key !== "__CF_USER_TEXT_ENCODING",
+      );
+      expect(keys).toEqual(["PATH"]);
     },
     ROW_MS,
   );
