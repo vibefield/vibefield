@@ -6505,7 +6505,8 @@ drawer, until HN-8 retired them, §8) — and, on the desk, two named exceptions
 **Kept exact, outside this set:** the tray and app masters (James's selected
 `vibefield-icon-collection-v2`, 2026-11-03, superseding the previous masters; reviewed
 source pixels and recipe in `apps/desktop/packaging/icon-source`, packaging mapping in
-`icon-collection.mjs`), the three vendor marks (AR-L1),
+`icon-collection.mjs`), the three vendor marks (AR-L1; the phone keeps two of them, Claude's and Codex's, since LP-4,
+2026-11-05 — every other agent wears its letter there, in the swarm and on the card),
 the OS marks the device chip wears (Windows' and Linux's are Simple Icons, drawn inline in
 `os-marks.tsx` — the test's one other allowed file; James, DS-3: "do not use texts, use OS icons
 instead"), the file-tree family (§8), **the living mark**
