@@ -30,6 +30,7 @@ import {
   type SetAsideWhy,
   StoreGuard,
   setAsideFile,
+  UNREADABLE_WORDS,
 } from "./signed-record";
 import {
   isKeptRunId,
@@ -64,13 +65,6 @@ import {
 // fieldd's own facts as the daemon hands them: your words as a say queued them (`said`), what the input queue made of
 // them (`outcome`), VibeField's acts (`act`), and the calls the tool plane served (`served`). Its agents' runs, plain
 // runs and a flow's steps are not recorded at TH-1.
-
-/** Item 172's words for the transcript, when its folder, a run's file or the key does not answer (DESIGN.md §8 "Chat's
- * thread", under §9 "What VibeField keeps, when it cannot read it"). Held here, beside the store, rather than as a row
- * of signed-record.ts's UNREADABLE_WORDS while two other stores add their rows to that table in the same lines; it
- * joins the table once they have landed. */
-export const TRANSCRIPTS_UNREADABLE =
-  "VibeField can't read this spark's conversation; nothing was changed";
 
 /** A run line is small: the first line of a run's file is read in at most this many bytes. */
 const FIRST_LINE_BYTES = 64 * 1024;
@@ -211,7 +205,7 @@ export class SparkTranscripts {
       store: "spark-transcripts",
       format: SPARK_TRANSCRIPT_FORMAT,
       refusal: () =>
-        recordsUnreadable(SPARK_TRANSCRIPT_SERVICE.SERVICE, TRANSCRIPTS_UNREADABLE, true),
+        recordsUnreadable(SPARK_TRANSCRIPT_SERVICE.SERVICE, UNREADABLE_WORDS.transcripts, true),
       logger: this.#logger,
     });
   }

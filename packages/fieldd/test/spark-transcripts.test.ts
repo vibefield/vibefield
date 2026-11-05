@@ -22,11 +22,10 @@ import {
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { RpcCallError } from "../src/native-link";
-import { RecordSigner } from "../src/signed-record";
+import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
 import {
   SparkTranscriptRecorder,
   SparkTranscripts,
-  TRANSCRIPTS_UNREADABLE,
   type TranscriptAgent,
 } from "../src/spark-transcripts";
 
@@ -123,7 +122,7 @@ function answerOf(call: () => unknown): unknown {
 const unreadable = () => ({
   kind: "UNAVAILABLE",
   retryable: true,
-  message: TRANSCRIPTS_UNREADABLE,
+  message: UNREADABLE_WORDS.transcripts,
   details: { service: SPARK_TRANSCRIPT_SERVICE.SERVICE, state: RECORD_STORES.STATE_UNREADABLE },
 });
 
@@ -270,9 +269,9 @@ describe("the spark's transcript, kept (TH-1)", () => {
     expect(answerOf(() => h.open().runs(VELA))).toEqual(unreadable());
     chmodSync(join(h.dir, VELA), 0o700);
     expect(h.raw(VELA, RUN)).toHaveLength(1);
-    // fieldd's words are DESIGN.md's (§8 "Chat's thread", under §9's rule), quoted whole
+    // fieldd's words are DESIGN.md's (§9 "What VibeField keeps", and §8 "Chat's thread"), quoted whole
     const design = readFileSync(join(import.meta.dirname, "../../../DESIGN.md"), "utf8");
-    expect(design.replace(/\s+/g, " ")).toContain(`"${TRANSCRIPTS_UNREADABLE}"`);
+    expect(design.replace(/\s+/g, " ")).toContain(`"${UNREADABLE_WORDS.transcripts}"`);
   });
 
   it("sets aside what is not a record (a folder where a run's file is), and keeps a run a newer VibeField wrote in for it, never written to (item 172's rule)", () => {

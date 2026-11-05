@@ -11,7 +11,8 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { RpcCallError } from "../src/native-link";
-import { SparkTranscripts, TRANSCRIPTS_UNREADABLE } from "../src/spark-transcripts";
+import { UNREADABLE_WORDS } from "../src/signed-record";
+import { SparkTranscripts } from "../src/spark-transcripts";
 import type { HostOps, TicketRegistration } from "../src/transcripts/protocol";
 import { TranscriptHostRefusal, TranscriptHostUnavailable } from "../src/transcripts/supervisor";
 import { SparkTranscriptTickets } from "../src/transcripts/tickets";
@@ -208,7 +209,7 @@ describe("compose.sparks.transcript.openTicket, fieldd's gate and answer (TH-1)"
     ).toEqual([
       "UNAVAILABLE",
       true,
-      TRANSCRIPTS_UNREADABLE,
+      UNREADABLE_WORDS.transcripts,
       {
         service: SPARK_TRANSCRIPT_SERVICE.SERVICE,
         state: RECORD_STORES.STATE_UNREADABLE,

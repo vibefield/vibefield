@@ -59,6 +59,8 @@ export const UNREADABLE_WORDS = {
   inputs: "VibeField can't keep words for its sessions; nothing was sent",
   // CP-4a1 — the flow records, item 172's fifth store
   flows: "VibeField can't read the flows it keeps; nothing was changed",
+  /** TH-1 — a spark's transcript (spark-transcripts.ts): its folder, a run's file or the key its lines are checked by */
+  transcripts: "VibeField can't read this spark's conversation; nothing was changed",
 } as const;
 
 /** Item 172 — a store that cannot read what it keeps: UNAVAILABLE {service, state: RECORD_STORES.STATE_UNREADABLE}, in

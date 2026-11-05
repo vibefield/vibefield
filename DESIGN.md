@@ -6226,10 +6226,10 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   screen, in the pane, as part of what you send". Chat puts it on screen nowhere now: your bubble draws the chip by its
   words, and the id stays in the record.
 
-**What VibeField keeps, when it cannot read it** (track CO, item 172; 2026-11-05). VibeField keeps five kinds of
+**What VibeField keeps, when it cannot read it** (track CO, item 172; 2026-11-05). VibeField keeps six kinds of
 record in signed files of its own: a spark's record, what waits on you (CP-3), the words that wait for a session,
-each spark's kept record, and a flow's records (CP-4a1: the version of a flow you approved, and a spark's proposed
-flow). Reading one comes out one of four ways, and only the first is served:
+each spark's kept record, a flow's records (CP-4a1: the version of a flow you approved, and a spark's proposed flow),
+and each spark's transcript (TH-1). Reading one comes out one of four ways, and only the first is served:
 - **It is a record VibeField wrote:** served.
 - **It is not one** (it does not parse, is unsigned or edited, names another spark, item, session, flow or proposal
   than its file, is open to other users, or is a folder): set aside beside itself for a person to look at, never
@@ -6249,6 +6249,10 @@ sparks and the flows are read again at the next ask. What waits on you and the w
 boot, so they read again when fieldd restarts on a disk that answers.
 *Amended 2026-11-05 (CP-4a1): the flow records are the fifth kind, read at each ask (`FlowRecords`, fieldd's
 `flows/records.ts`); a record a newer VibeField wrote is kept for it there too.*
+
+*Amended 2026-11-05 (TH-1): a spark's transcript is kept by these four ways line by line (§8 "Chat's thread"). Its
+door says "VibeField can't read this spark's conversation; nothing was changed" (Chat's thread, after "Couldn't read
+Vela's conversation:"), and its runs are read again at each ask.*
 
 **The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
