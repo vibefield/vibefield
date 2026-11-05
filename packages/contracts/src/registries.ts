@@ -541,7 +541,18 @@ export const AGENT_STOP = {
  *    ceilings (bth's re-read N2, 13:22Z). A `parallel` is `Promise.all`, which sends every call before any answer
  *    or hold reaches it, so a fan-out of more than 256 at once ends `flood` at its 257th call, before CALLS_MAX's
  *    hold (CP-4a2b's) could ask at the 41st; and a run that logs once an item ends `flood` at its 10,001st line.
- *    Whether a held run refuses its calls fast, or DESIGN.md says the ceiling, is CP-4a2b's. */
+ *    Whether a held run refuses its calls fast, or DESIGN.md says the ceiling, is CP-4a2b's. *Ruled 2026-11-05
+ *    16:24Z (N2 re-ruled, J3 = Q-A3 = 13a's D1): neither refuses fast. A held run's host is parked at the cap's hold,
+ *    so a call past it is never heard, and it is made again after an Allow; DESIGN.md §9 says both ceilings ("When a
+ *    run can't go on, or waits").*
+ * CP-4a2b (13a's D3 and D12, Q-A7; J4 (a); each as provisional):
+ *  - RUNS_LIVE_MAX, RUNS_PER_SPARK_MAX: the runs alive on one desktop at once, and a spark's own share of them. One
+ *    more is refused at its start, in DESIGN.md §9's words, and nothing is started;
+ *  - HOSTS_LIVE_MAX: the flow hosts alive at once. A run that waits has no process (D1), so a live host is a run
+ *    whose script moves; one more run that would move waits for a host;
+ *  - FORM_BYTES_MAX, FORM_DEPTH_MAX, FORM_ENUM_MAX: a step's form (its `schema`, Q-A2 (a)'s subset, checked by fieldd)
+ *    as canonical JSON's bytes, its nesting, and one `enum`'s values. A form past any is refused before the step
+ *    starts. No node count (J4 (a)): the byte bound already holds the check's work. */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
@@ -555,6 +566,12 @@ export const FLOW_LIMITS = {
   ARGS_DEPTH_MAX: 32,
   HOST_CALLS_WAITING_MAX: 256,
   HOST_LOG_LINES_MAX: 10_000,
+  RUNS_LIVE_MAX: 8,
+  RUNS_PER_SPARK_MAX: 2,
+  HOSTS_LIVE_MAX: 4,
+  FORM_BYTES_MAX: 4_096,
+  FORM_DEPTH_MAX: 8,
+  FORM_ENUM_MAX: 64,
 } as const;
 
 /** CP-4a2a (DESIGN.md §9 "When a run's script cannot go on") — the flow host's honest refusal. SERVICE is

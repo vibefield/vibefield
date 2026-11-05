@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AgentProfileSetId, AgentProviderId } from "./agent-index";
 import { AgentModelSelection, AgentSessionOrigin, CrewId, SparkId } from "./agent-session";
-import { SPARK_CREW_MEMBERS_MAX, SPARK_CREWS_KEPT } from "./registries";
+import { FLOW_LIMITS, SPARK_CREW_MEMBERS_MAX, SPARK_CREWS_KEPT } from "./registries";
 
 // The compose plane, version 2 (track CO; `draft/compose-plane/v2/`, ruled by James on its page 2026-10-29
 // 09:42–09:57Z; the study's §15 and §16). A spark is an agent session VibeField starts in a folder of its own, under
@@ -786,11 +786,20 @@ export const NEEDS_HELD_SENDS_MAX = 16;
 export const NEEDS_OPEN_PER_SPARK = 8;
 
 /** The acts' words (DESIGN.md §9 "The person's queue's words"): one authority for fieldd, the window and tests. A
- * question's own choices come first and Not now is always last; a held item's yes is always first. */
+ * question's own choices come first and Not now is always last; a held item's yes is always first. CP-4a2b (13b.3's
+ * C7; DESIGN.md §9 "When a run can't go on, or waits"): and a flow's seven, its items' acts. Stop the run is a run's
+ * every item's last; the cap's Allow lets FLOW_LIMITS.CALLS_MORE more calls through, and says so. */
 export const NEEDS_CHOICE_WORDS = {
   allow: "Allow",
   allowOneMore: "Allow one more",
   notNow: "Not now",
+  stopRun: "Stop the run",
+  allowMore: `Allow ${FLOW_LIMITS.CALLS_MORE} more`,
+  askOnceMore: "Ask once more",
+  resumeStep: "Resume the step",
+  seeChange: "See the change",
+  runThisVersion: "Run this version",
+  runApproved: "Run the one you approved",
 } as const;
 
 /** The kinds and states, OPEN on the wire like COMPOSE_SESSION_STATES: a word this build never heard of must not refuse

@@ -278,12 +278,14 @@ export const FlowStarter = z
 export type FlowStarter = z.infer<typeof FlowStarter>;
 
 /** A run's state, OPEN: `running` (its script moves), `waiting` (on a step's agent), `holding` (on the person: a gate,
- * the cap, a repair miss, a changed flow, a lost step), then `done`, `stopped` (by a Stop), `failed` (the script threw)
- * or `lost` (its journal did not verify, set aside and never replayed; CP4-S15). */
+ * the cap, a repair miss, a changed flow, a lost step), `stopping` (CP-4a2b, 13a's D4: a Stop sent, its step agents not
+ * yet heard ending), then `done`, `stopped` (by a Stop), `failed` (the script threw) or `lost` (its journal or its
+ * record did not verify, set aside and never replayed; CP4-S15, 13a's D18). */
 export const FLOW_RUN_STATES = [
   "running",
   "waiting",
   "holding",
+  "stopping",
   "done",
   "stopped",
   "failed",
@@ -354,8 +356,78 @@ export const RunSummary = z
   .passthrough();
 export type RunSummary = z.infer<typeof RunSummary>;
 
-/** CP-4a2b (13b.3's C6) — RED STUB: 13b.4 builds the run's record, verbatim from §13a.0b. */
-export const FlowRunRecord: z.ZodType<unknown> = z.never();
+// ── a run's record (CP-4a2b; 13a's §13a.0b, v2.7, copied verbatim into §13b's C6) — one file per run beside its
+// journal, signed by the flows store, written FIRST (13a's D18: before the journal's head, naming the head's MAC, so a
+// missing record or a journal cut short reads `lost`). A run's summary (RunSummary) is projected from it alone, so
+// `flows.list` never reads a journal whole; a wake reads the journal. ──
+
+/** One step of a run's record, for `open` and `steps` (v2.6): its call, the script's label, agent and phase, the
+ * runtime run it runs in (D2), `handed` for an `in:` session (never ended, CP4-Q10), its state (FLOW_STEP_STATES,
+ * OPEN), and each line VibeField sent it, recorded BEFORE it is queued (D5): which line (`prompt`, `in`, `repair`,
+ * `resume`, `unheard`), its `n`, and what is known of its sending (`sending`, `queued`, `uncertain`, OPEN). */
+export const FlowRunRecordStep = z
+  .object({
+    call: FlowCallNumber,
+    label: z.string().min(1).max(FLOW_LABEL_MAX).optional(),
+    agent: z.string().min(1).max(64).optional(),
+    phase: z.string().min(1).max(FLOW_LABEL_MAX).optional(),
+    session: z.string().min(1).max(128).optional(), // the runtime run it runs in (D2)
+    handed: z.literal(true).optional(), // an `in:` session, never ended (CP4-Q10)
+    state: z.string().min(1).max(32), // FLOW_STEP_STATES, OPEN
+    lines: z
+      .array(
+        // D5: recorded BEFORE each is queued
+        z
+          .object({
+            line: z.string().min(1).max(32), // prompt · in · repair · resume · unheard
+            n: z.number().int().positive(),
+            sent: z.string().min(1).max(32), // sending · queued · uncertain, OPEN (D5)
+          })
+          .passthrough(),
+      )
+      .max(16)
+      .optional(),
+  })
+  .passthrough();
+export type FlowRunRecordStep = z.infer<typeof FlowRunRecordStep>;
+
+/** A run's record: `open` holds every step not yet answered (to the host's own ceiling, HOST_CALLS_WAITING_MAX: a
+ * 257th ends the host `flood`), `steps` the latest answered or ended (FLOW_RUN_STEPS_MAX), and `earlier` the answered
+ * steps before them. `calls` counts the journaled call lines toward the cap and `allowed` is where the cap holds next
+ * (CALLS_MAX, and CALLS_MORE per Allow; D10, J7); `held` names the item a held run waits in; `host` is
+ * FLOW_HOST_ENDINGS' word when fieldd ended its host. */
+export const FlowRunRecord = z
+  .object({
+    format: z.literal(1),
+    run: FlowRunId,
+    flow: FlowSlug,
+    name: z.string().min(1).max(NEEDS_NAME_MAX), // meta.name, as the mark says it (D9)
+    n: z.number().int().positive(), // the flow's runs on this desktop, from 1
+    hash: FlowHash, // the bytes every wake runs (D8)
+    starter: FlowStarter, // {by, spark?}; ownership reads it [CL-E7-12]
+    scope: z.array(z.string().min(1).max(128)).max(64), // profile ids, frozen at start (D8)
+    head: z.string().regex(/^[0-9a-f]{64}$/), // the head line's MAC, written before the head (D18)
+    state: z.string().min(1).max(32), // FLOW_RUN_STATES + `stopping`, OPEN
+    tail: z
+      .object({ seq: z.number().int().positive(), mac: z.string().regex(/^[0-9a-f]{64}$/) })
+      .passthrough(),
+    calls: z.number().int().min(0), // journaled call lines (D10)
+    allowed: z.number().int().positive(), // CALLS_MAX + 20 per Allow
+    log: z.string().min(1).max(FLOW_LOG_MAX).optional(),
+    open: z.array(FlowRunRecordStep).max(FLOW_LIMITS.HOST_CALLS_WAITING_MAX), // every step not yet answered
+    steps: z.array(FlowRunRecordStep).max(FLOW_RUN_STEPS_MAX), // the latest answered or ended steps
+    earlier: z.number().int().min(0).optional(), // answered steps before `steps`
+    held: z
+      .object({ item: NeedsItemId, kind: z.string().min(1).max(32) })
+      .passthrough()
+      .optional(),
+    host: z.string().min(1).max(32).optional(), // FLOW_HOST_ENDINGS' word, when fieldd ended one
+    startedAt: z.string().min(1),
+    endedAt: z.string().min(1).optional(),
+    ended: z.number().int().min(0).optional(), // "Ended its N agents"
+  })
+  .passthrough();
+export type FlowRunRecord = z.infer<typeof FlowRunRecord>;
 
 // ── the window's doors (methods.ts: agents.manage, local; VF-PM 2026-11-05 01:22Z) ──
 
