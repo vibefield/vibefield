@@ -29848,6 +29848,47 @@ gate remains required for this follow-up. CI and final review status are tracked
 [PR #12](https://github.com/vibefield/vibefield/pull/12); no consumer merge is included. The latency and
 additional hardware/network qualification limits recorded above remain unchanged.
 
+## FG — onboarding copy, navigation and profile scrolling (2026-11-03)
+
+The desktop QA refinements from November 1 are prepared against current main. Welcome, agent, account,
+history, device and completion copy now names the choice and its later Settings destination directly.
+Back stands at the leading edge of the footer; secondary choices precede the primary action. Device
+privacy and alternate sign-in details use the full scrolling body, clear of the footer, and return
+keyboard focus to the link that opened them. Auth-key submission follows the form's own submit path.
+
+The face-frame switch has equal, compact choices and obeys its disabled state while saving. Profile
+card headings stay visible during scrolling, with the scrollport clipped to their rounded outline so
+the card's square edge cannot show behind them. Long account and plan names wrap. Add a profile stays
+below the scrolling cards until opened, when its steps and sign-in join the list and scroll into view.
+The design authority and existing catalog, consent, navigation and profile tests move with the views;
+focused regressions cover disabled frame changes, disclosure focus and auth-key submission.
+
+The full `pnpm verify` gate passes, including 12,191 Vitest tests and 544 Rust tests. The physical
+day, night and no-WebGPU onboarding walks pass; day required an unchanged retry after the first
+launch missed the live-field startup assertions. The catalog walk still reports contrast failures
+on its first day-mode Welcome capture and the ChatGPT Pro plan label in the day/night ready-profile
+fixtures. Those desktop findings remain open before merge; this slice is being committed and pushed
+with the successful code gate and the original captures retained for follow-up.
+
+### CI follow-up — terminal route publication is one transition (2026-11-04)
+
+PR #15's verify run `41751926663` failed before the model-selection test could launch an agent:
+both terminal cells were serving at +177 ms, but fieldd held revision 3 with only the agent cell
+for the entire 30-second readiness budget. Each supervisor updated the route registry under its
+mutex, then released that mutex before publishing its copied snapshot. Concurrent announcements
+could therefore publish out of order, giving a stale snapshot a newer revision. Concurrent
+endings could similarly resurrect removed rows in the published snapshot.
+
+The registry mutex now covers mutation, composition and publication for both upsert and removal.
+The regression runs eight concurrent cell writers through 256 birth/end cycles and checks the
+complete snapshot and revision after each group finishes. It failed on the unchanged code with
+five ended cells still published, and passes with the atomic publication. Readiness budgets,
+retry policies and CI assertions are unchanged.
+
+Main `bf4e834b9` is integrated to resolve the PR's conflicts. The refined onboarding structure and
+form submission remain, with main's shared field styles supplying the token colors, placeholder
+ink and focus treatment for both inputs. The unused parallel input style is removed.
+
 ## Item 161 — a set that never comes up waits longer before each re-mint, and stops waiting at the dial when its one deadline runs out (2026-11-02; `e88415106` → `7f2a86ab9`, two commits on main `30d8ae4fe`, re-stacked from `789a12c38` → `818f6fd65` on `cf50fede4`, lane `fix/item161` in `/Volumes/SamsungRed/lanes/item161`, in the mini's mint M112 `7f2a86ab9`, stacked, run 112)
 
 **What it rests on.** Found during item 157 (C8): another process held a door's port and answered every WebSocket

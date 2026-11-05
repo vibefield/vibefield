@@ -140,6 +140,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   label,
   size = "regular",
+  disabled = false,
   className = "",
   ref,
 }: {
@@ -149,6 +150,7 @@ export function SegmentedControl<T extends string>({
   label: string;
   /** `small` (DESIGN.md §8): a switch inside a composition, not heading one. */
   size?: "regular" | "small";
+  disabled?: boolean;
   className?: string;
   /** The track itself (a composition that scrolls it reads its scroll — the pegboard's filters, DK-13). */
   ref?: Ref<HTMLFieldSetElement> | undefined;
@@ -200,6 +202,7 @@ export function SegmentedControl<T extends string>({
   }, [chosen, ids]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLFieldSetElement>): void => {
+    if (disabled) return;
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const el = track.current;
     const all = el === null ? [] : [...el.querySelectorAll<HTMLButtonElement>(":scope > button")];
@@ -223,6 +226,7 @@ export function SegmentedControl<T extends string>({
       ref={setTrack}
       className={`vf-ui-segmented ${className}`.trim()}
       aria-label={label}
+      disabled={disabled}
       data-size={size === "small" ? "small" : undefined}
       onKeyDown={onKeyDown}
     >

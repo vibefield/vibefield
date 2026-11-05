@@ -909,7 +909,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(frame("connect").textContent).toContain('the local user "Work" is already linked');
     await choose("connect", "ask");
     expect(frame("connect").textContent).toContain("Your field, on every device.");
-    expect(frame("connect").textContent).toContain("Private network by Tailscale.");
+    expect(frame("connect").textContent).toContain("Private connections with Tailscale.");
     await choose("connect", "what it sees");
     expect(frame("connect").textContent).toContain("Only you can reach this Mac.");
     await choose("connect", "devices");
@@ -928,7 +928,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     await choose("setting-up", "ready");
     expect(said("setting-up")).toEqual([
       "Welcome to your field, James.",
-      "Your face in the bottom-left corner opens Settings — so does ⌘,.",
+      "Open Settings from your face in the bottom-left corner, or press ⌘,.",
     ]);
     expect(standing("setting-up")?.getAttribute("data-ink")).toBe("true");
     // the answers being written: the desk's line, nothing under it yet
@@ -943,7 +943,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(said("setting-up")).toEqual(["Discovering conversations…", "1,215 files checked"]);
     expect(frame("setting-up").textContent).toContain("Start now");
     expect(frame("setting-up").textContent).toContain(
-      "Finding sessions in a history this size takes longer. It carries on in History.",
+      "Your history is still loading. You can start now and follow its progress in History.",
     );
     await choose("setting-up", "ready");
     expect(said("setting-up")[0]).toBe("Welcome to your field, James.");
@@ -982,7 +982,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
 
     // AO-5 — the Profiles pane: This Mac's own sign-ins and the offer, then Add
     // a profile… grown in place, a step at a time.
-    expect(frame("profiles").textContent).toContain("Every subscription, side by side.");
+    expect(frame("profiles").textContent).toContain("Your accounts, side by side.");
     expect(frame("profiles").querySelector(".vf-profiles-pane-add")).not.toBeNull();
     await choose("profiles", "second person");
     expect(frame("profiles").textContent).toContain(
@@ -995,7 +995,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(frame("profiles").textContent).toContain("Finish or cancel the sign-in first.");
     await choose("profiles", "ready");
     expect(frame("profiles").textContent).toContain(
-      "Work is ready. It starts with clean settings: its own skills and servers.",
+      "Work is ready, with its own settings, skills, and servers.",
     );
   });
 

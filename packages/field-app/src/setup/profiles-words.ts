@@ -4,14 +4,14 @@
 
 export const PROFILES_WORDS = {
   eyebrow: "Profiles",
-  title: "Every subscription, side by side.",
+  title: "Your accounts, side by side.",
   voice:
-    "A profile holds one sign-in for each agent. This Mac is your first: it uses the accounts your agents are already signed in to.",
-  offer: "Another plan, for work or a client? Give it a profile.",
+    "This Mac uses your agents' existing sign-ins. Add a profile for another set of accounts, with one sign-in per agent.",
+  offer: "Keep work, personal, or client accounts separate.",
   add: "Add a profile…",
-  fact: "Profiles keep their sign-ins apart, so they work at the same time and never sign each other out.",
+  fact: "Use accounts side by side without signing each other out.",
   /** W3 — where the question went */
-  later: "Add one anytime in Settings → Agent Profiles.",
+  later: "Manage profiles in Settings → Agent Profiles.",
   reading: "Reading who is signed in…",
   signIn: "Sign in…",
   /** a sign-in that lapsed */
@@ -20,13 +20,12 @@ export const PROFILES_WORDS = {
   shared: "These sign-ins belong to this Mac, so everyone using VibeField here shares them.",
   /** the add, one field a step */
   nameLabel: "Name this profile",
-  namePlaceholder: "Work, a client, Personal…",
+  namePlaceholder: "Work, Personal, or a client name",
   next: "Next",
   cancel: "Cancel",
   agentTitle: (name: string) => `Sign in to an agent in ${name}`,
-  making: "Making…",
-  ready: (name: string) =>
-    `${name} is ready. It starts with clean settings: its own skills and servers.`,
+  making: "Creating profile…",
+  ready: (name: string) => `${name} is ready, with its own settings, skills, and servers.`,
   /** the sign-in ended before the agent said who: the profile is not kept */
   againTitle: "Sign in again",
   /** Continue waits while a sign-in is open */

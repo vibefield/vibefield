@@ -86,13 +86,13 @@ export function HistoryWizardPaneView({
       voice={HISTORY_WORDS.voice}
       later={parts.choosing ? HISTORY_WORDS.later : undefined}
       onSubmit={parts.onPrimary}
+      back={<BackAction onBack={onBack} />}
       actions={
         <>
+          {parts.choosing && <SkipAction label={HISTORY_WORDS.notNow} onSkip={parts.onLater} />}
           <button type="submit" className={primaryCls} disabled={parts.primaryBusy}>
             {parts.primaryLabel}
           </button>
-          {parts.choosing && <SkipAction label={HISTORY_WORDS.notNow} onSkip={parts.onLater} />}
-          <BackAction onBack={onBack} />
         </>
       }
     >

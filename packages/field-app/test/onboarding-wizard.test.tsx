@@ -459,8 +459,8 @@ async function pastLook(done: () => boolean): Promise<void> {
 /** AO-5 — Profiles has nothing to explain from this harness (its daemon has no
  * profiles feed), so once its code arrives it moves on by itself (AO-L2). */
 async function pastProfiles(): Promise<void> {
-  await arrive(() => title() !== "Every subscription, side by side.");
-  expect(title()).not.toBe("Every subscription, side by side.");
+  await arrive(() => title() !== "Your accounts, side by side.");
+  expect(title()).not.toBe("Your accounts, side by side.");
 }
 
 async function tick(ms: number): Promise<void> {
@@ -488,9 +488,7 @@ describe("Setup Assistant", () => {
 
     // 1 — Welcome. One decision, and it is not a question (W1).
     expect(text()).toContain("Welcome.");
-    expect(text()).toContain(
-      "Manage all your agents and compose your agentic workflow in one place.",
-    );
+    expect(text()).toContain("Your agents, sessions, and projects. Together in one field.");
     await click("Get started");
 
     // 2 — the mandatory core: a name, PRE-FILLED (W2).
@@ -581,7 +579,7 @@ describe("Setup Assistant", () => {
     await boot(bootAt("handing-over"));
     expect(holdLine()).toBe("Welcome to your field, James.");
     expect(standingWords()?.getAttribute("data-ink")).toBe("true");
-    expect(holdSub()).toContain("Your face in the bottom-left corner opens Settings — so does");
+    expect(holdSub()).toContain("Open Settings from your face in the bottom-left corner, or press");
     // ...and holds it one beat before the glass hands the window over (W5).
     await tick(WELCOME_BEAT_MS - 1);
     expect(onReveal).not.toHaveBeenCalled();
@@ -664,7 +662,7 @@ describe("Setup Assistant", () => {
       onReveal,
     });
 
-    expect(text()).toContain("Your field now lives in a user");
+    expect(text()).toContain("Welcome back.");
     await click("Continue"); // → the name pane
     expect(container?.querySelector('input[aria-label="Your name"]')).not.toBeNull();
     await click("Continue"); // → straight to Setting up; no connect
@@ -697,10 +695,8 @@ describe("Setup Assistant", () => {
 
     // §6.2 — the name, then the rest. There is no Welcome: the field is already
     // set up and only this person is new.
-    expect(text()).not.toContain(
-      "Manage all your agents and compose your agentic workflow in one place.",
-    );
-    expect(text()).not.toContain("Your field now lives in a user");
+    expect(text()).not.toContain("Your agents, sessions, and projects. Together in one field.");
+    expect(text()).not.toContain("Welcome back.");
     expect(container?.querySelector('input[aria-label="Your name"]')).not.toBeNull();
     // the band stands on You: on the glass it names the step, where "New user" was the pane's eyebrow (FG-L7)
     expect(band()).toContain("you:now");
@@ -855,8 +851,8 @@ describe("Setup Assistant", () => {
     await click("Not now");
     // The variant drops the greeting, never the honesty that goes with it.
     expect(onComplete).not.toHaveBeenCalled();
-    expect(text()).toContain("Setup could not be recorded");
-    expect(text()).toContain("setup asks again next time");
+    expect(text()).toContain("Your setup couldn't be saved");
+    expect(text()).toContain("you'll see setup again next time");
 
     failFlag = false;
     await click("Try again");
@@ -875,9 +871,7 @@ describe("Setup Assistant", () => {
     // A pre-v0.3 record's accent means pane 2 was answered before faces
     // existed, and no link means pane 4 is the first thing still unanswered.
     expect(text()).toContain("Your field, on every device.");
-    expect(text()).not.toContain(
-      "Manage all your agents and compose your agentic workflow in one place.",
-    );
+    expect(text()).not.toContain("Your agents, sessions, and projects. Together in one field.");
     expect(container?.querySelector('input[aria-label="Your name"]')).toBeNull();
   });
 
@@ -1006,7 +1000,7 @@ describe("Setup Assistant", () => {
     });
 
     expect(title()).toBe("Your field, on every device.");
-    expect(text()).toContain("Private network by Tailscale.");
+    expect(text()).toContain("Private connections with Tailscale.");
     // ...and the sentence that was false since UA-P-0a is gone with its face.
     expect(text()).not.toContain("FIELD_NATIVE_MESH");
 
@@ -1141,7 +1135,7 @@ describe("Setup Assistant", () => {
 
     expect(title()).toBe("Waiting for approval.");
     expect(text()).toContain("truffle-vibefield-studio");
-    expect(button("Copy a request for your admin")).not.toBeUndefined();
+    expect(button("Copy approval request")).not.toBeUndefined();
     await click("Tell me when it's approved");
     expect(title()).not.toBe("Waiting for approval.");
   });
@@ -1176,7 +1170,7 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    const copy = button("Copy a request for your admin");
+    const copy = button("Copy approval request");
     const box = { left: 420, top: 560, width: 220, height: 32 };
     vi.spyOn(copy, "getBoundingClientRect").mockReturnValue(box as DOMRect);
     await act(async () => {
@@ -1322,8 +1316,8 @@ describe("Setup Assistant", () => {
     await click("Not now"); // Connect → Setting up, whose first act is the write
     // The hold is NOT released: nothing durable says setup happened.
     expect(onComplete).not.toHaveBeenCalled();
-    expect(text()).toContain("Setup could not be recorded");
-    expect(text()).toContain("setup asks again next time");
+    expect(text()).toContain("Your setup couldn't be saved");
+    expect(text()).toContain("you'll see setup again next time");
 
     failFlag = false;
     await click("Try again");
@@ -1412,7 +1406,7 @@ describe("Setup Assistant", () => {
     ]);
     const foot = pane?.querySelector(".vf-wizard-pane-foot");
     expect(Array.from(foot?.children ?? [], (part) => part.className)).toEqual([
-      "vf-wizard-actions",
+      "vf-wizard-navigation",
       "vf-wizard-later",
     ]);
     // a pane that names no later home still draws the line, so its room is kept and the actions never move
@@ -2044,7 +2038,7 @@ describe("Setup Assistant", () => {
       const out = container?.querySelector(".vf-wizard-hold-out");
       expect(out?.hasAttribute("data-late")).toBe(false);
       expect(out?.querySelector(".vf-wizard-hold-why")?.textContent).toBe(
-        "Finding sessions in a history this size takes longer. It carries on in History.",
+        "Your history is still loading. You can start now and follow its progress in History.",
       );
       expect(holdLine()).toBe("Discovering conversations…");
       await click("Start now");
@@ -2187,9 +2181,7 @@ describe("BootRoot during onboarding", () => {
     // mark gone under the glass (track FG).
     expect(container?.querySelector('[role="progressbar"]')).toBeNull();
     expect(ground?.querySelector(".vf-field")?.getAttribute("data-mark")).toBe("hidden");
-    expect(text()).toContain(
-      "Manage all your agents and compose your agentic workflow in one place.",
-    );
+    expect(text()).toContain("Your agents, sessions, and projects. Together in one field.");
   });
 
   it("stands the glass on the splash's own field: one node from the first paint, its mark gone under the glass (track FG)", async () => {

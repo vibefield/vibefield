@@ -74,6 +74,10 @@
 - Owed: the desk rows (`pnpm smoke`, `smoke:studio`, `smoke:godview` on a display); the first-run spike (`thinking-agent-onboarding.md` §9).
 
 **FG — the first run on the field** · vibe-field-a5 (lane `fg/build`) · law `draft/thinking-first-run-glass.md` §7, DESIGN.md §2.1/§5/§6/§8/§13 (page sources `draft/first-run-glass/`)
+- Desktop QA refinement (2026-11-01, prepared for push 2026-11-03): clearer onboarding copy, Back separated
+  from forward actions, full-width device details above the footer, a balanced face-frame switch, and profile
+  cards whose pinned headings clip cleanly while the Add a profile offer stays reachable. DESIGN.md records
+  the composition; the existing authentication and profile flows remain the owners of their state.
 - Ruled 10-29 09:29–09:35Z (James on *First run on the field*: the lean on eight, D15 C, D10 B, D14 B), and FG-D24 in
   his words on version 6 (the field draws the glass).
 - Landed 10-30: **FG-0** (records only: DESIGN.md first), **FG-1** (`88457494e`, the field: the website's splash

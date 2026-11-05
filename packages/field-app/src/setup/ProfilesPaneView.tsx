@@ -322,6 +322,19 @@ export function ProfilesPaneBody({
   // Add a profile… grows into the pane (M1): while it is open, This Mac folds
   // to one line, so the new profile's steps and its login have the room
   const adding = step.kind !== "offer" && step.kind !== "ready";
+  const addCard = (
+    <AddProfileCard
+      step={step}
+      addable={model.addable}
+      signIn={signIn}
+      onAdd={onAdd}
+      onName={onName}
+      onNext={onNext}
+      onPick={onPick}
+      onCancel={onCancelAdd}
+      onAgain={onAgain}
+    />
+  );
   return (
     <div className="vf-profiles-pane">
       <div className="vf-profiles-pane-cards">
@@ -365,18 +378,9 @@ export function ProfilesPaneBody({
             )}
           </section>
         ))}
-        <AddProfileCard
-          step={step}
-          addable={model.addable}
-          signIn={signIn}
-          onAdd={onAdd}
-          onName={onName}
-          onNext={onNext}
-          onPick={onPick}
-          onCancel={onCancelAdd}
-          onAgain={onAgain}
-        />
+        {step.kind !== "offer" && addCard}
       </div>
+      {step.kind === "offer" && addCard}
       <p className="vf-profiles-pane-note">{PROFILES_WORDS.fact}</p>
       {notice !== null && (
         <InlineNotice tone={notice.tone} role={notice.tone === "error" ? "alert" : "status"}>
@@ -408,16 +412,14 @@ export function ProfilesWizardPaneView({
       title={PROFILES_WORDS.title}
       voice={PROFILES_WORDS.voice}
       later={holding ? PROFILES_WORDS.finishFirst : PROFILES_WORDS.later}
+      back={<BackAction onBack={holding ? undefined : onBack} />}
       onSubmit={() => {
         if (!holding) onContinue();
       }}
       actions={
-        <>
-          <button type="submit" className={primaryCls} disabled={holding}>
-            Continue
-          </button>
-          <BackAction onBack={holding ? undefined : onBack} />
-        </>
+        <button type="submit" className={primaryCls} disabled={holding}>
+          Continue
+        </button>
       }
     >
       {body}

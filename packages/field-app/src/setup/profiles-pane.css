@@ -16,8 +16,9 @@
 }
 
 /* On the glass the pane never scrolls (FG-L3, FG-4a): the cards do, within
-   themselves, on the face deck's rule (DESIGN.md §4 `--vf-scroll-fade`), the
-   fact and a notice standing under them. Its body holds 322: five agents on This
+   themselves, on the face deck's rule (DESIGN.md §4 `--vf-scroll-fade`). The
+   Add a profile offer, fact and notice stand under them, clear of the fade.
+   Once opened, the add's steps scroll with the cards. Its body holds 322: five agents on This
    Mac are 336, Add a profile…'s list of agents 344 from four, and a login more.
    A step the add opens comes into view clear of the fade. */
 .vf-wizard-shell[data-size="glass"] .vf-profiles-pane {
@@ -29,6 +30,10 @@
   margin: -4px -4px 0;
   padding: 4px 4px var(--vf-scroll-fade);
   overflow-y: auto;
+  /* The pinned heading sits at the scrollport's top. Clip the card behind its
+     rounded corners too: 4px focus padding minus the 1px hairline, and the
+     card's 12px radius plus that hairline. Keep the bottom scroll fade. */
+  clip-path: inset(-1px 3px 0 round 13px 13px 0 0);
   scroll-padding-bottom: var(--vf-scroll-fade);
   mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);
   scrollbar-width: none;
@@ -79,11 +84,12 @@
 
 .vf-profiles-pane-row {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) fit-content(34%);
   align-items: center;
   column-gap: 10px;
   min-height: 40px;
   border-bottom: 1px solid var(--vf-hairline);
+  padding-block: 6px;
 }
 
 .vf-profiles-pane-row:last-child {
@@ -107,6 +113,22 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
+  overflow-wrap: anywhere;
+}
+
+.vf-profiles-pane-plan {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.vf-wizard-shell[data-size="glass"] .vf-profiles-pane-card-head {
+  position: sticky;
+  z-index: 1;
+  top: -4px;
+  margin: -10px -12px 0;
+  padding: 10px 12px;
+  border-radius: 12px 12px 0 0;
+  background: var(--vf-chrome-solid);
 }
 
 .vf-profiles-pane-label {
@@ -117,13 +139,10 @@
 }
 
 .vf-profiles-pane-fact {
-  overflow: hidden;
   margin: 0;
   color: var(--vf-text-secondary);
   font-size: 11.5px;
   line-height: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .vf-profiles-pane-plan {
@@ -149,6 +168,7 @@
 
 .vf-profiles-pane-add {
   display: grid;
+  flex: none;
   grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
   column-gap: 8px;

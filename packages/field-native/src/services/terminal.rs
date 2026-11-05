@@ -321,6 +321,9 @@ struct Shared {
     /// snapshot in the deterministic order the create-target discipline
     /// assumes (interactive class, agent class, then solos by instance — so
     /// the legacy `cells[0]` mirror stays the interactive host).
+    /// Hold this lock through publication to `routes`: otherwise concurrent
+    /// supervisors can publish their snapshots out of order, assigning a newer
+    /// revision to stale rows and losing a live cell or resurrecting an ended one.
     route_rows: Mutex<BTreeMap<u32, TerminalRouteCell>>,
     /// F1 — each running cell's stdin, for a line the floor relays to every cell (the freeway
     /// host's `revokeClient`). A generation registers its sender right after its hello and BEFORE
@@ -449,14 +452,11 @@ impl Shared {
     /// recompose. EVERY transition publishes (state transfer is the protocol —
     /// readers repair from any snapshot).
     fn route_upsert(&self, instance: u32, row: TerminalRouteCell) {
-        let cells = {
-            let mut rows = self.route_rows.lock().unwrap();
-            rows.insert(instance, row);
-            compose_route_rows(&rows)
-        };
+        let mut rows = self.route_rows.lock().unwrap();
+        rows.insert(instance, row);
         self.routes.send_modify(|snapshot| {
             snapshot.revision += 1;
-            snapshot.cells = cells;
+            snapshot.cells = compose_route_rows(&rows);
         });
     }
 
@@ -469,16 +469,13 @@ impl Shared {
     /// of serving cells in step; that count fed a watch whose only subscriber
     /// was the in-process floor's inventory pump, and TM-1 retired both.
     fn route_remove(&self, instance: u32) {
-        let cells = {
-            let mut rows = self.route_rows.lock().unwrap();
-            if rows.remove(&instance).is_none() {
-                return;
-            }
-            compose_route_rows(&rows)
-        };
+        let mut rows = self.route_rows.lock().unwrap();
+        if rows.remove(&instance).is_none() {
+            return;
+        }
         self.routes.send_modify(|snapshot| {
             snapshot.revision += 1;
-            snapshot.cells = cells;
+            snapshot.cells = compose_route_rows(&rows);
         });
     }
 
@@ -6119,6 +6116,60 @@ mod tests {
         assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a, b);
         assert_ne!(a, mint_token());
+    }
+
+    /// The class supervisors publish concurrently. Once every announcement has
+    /// completed the snapshot must contain every live cell; once every ending
+    /// has completed it must contain none. Barriers keep each observation between
+    /// transitions, so a missing or resurrected row cannot be an in-flight update.
+    #[test]
+    fn concurrent_route_transitions_never_lose_or_resurrect_cells() {
+        const CELLS: u32 = 8;
+        const ROUNDS: u32 = 256;
+        let shared = test_shared();
+        shared.publish_routes_capability();
+        let barrier = std::sync::Barrier::new(CELLS as usize + 1);
+        let mut observations = Vec::new();
+        std::thread::scope(|scope| {
+            for instance in 1..=CELLS {
+                let shared = &shared;
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    for _ in 0..ROUNDS {
+                        barrier.wait();
+                        shared.route_upsert(instance, fake_route(instance, "test-control"));
+                        barrier.wait();
+                        barrier.wait();
+                        shared.route_remove(instance);
+                        barrier.wait();
+                    }
+                });
+            }
+            for _ in 0..ROUNDS {
+                barrier.wait();
+                barrier.wait();
+                observations.push(shared.routes.borrow().clone());
+                barrier.wait();
+                barrier.wait();
+                observations.push(shared.routes.borrow().clone());
+            }
+        });
+        // Assert only after joining: a failed assertion must not strand writers
+        // at a barrier and hang the suite instead of reporting the lost snapshot.
+        let live: Vec<i64> = (1..=CELLS).map(i64::from).collect();
+        for (transition, snapshot) in observations.iter().enumerate() {
+            let expected: &[i64] = if transition % 2 == 0 { &live } else { &[] };
+            let actual: Vec<i64> = snapshot
+                .cells
+                .iter()
+                .map(|cell| cell.cell_instance_id)
+                .collect();
+            assert_eq!(actual, expected, "completed transition {transition}");
+            assert_eq!(
+                snapshot.revision,
+                1 + (transition as i64 + 1) * i64::from(CELLS)
+            );
+        }
     }
 
     #[test]

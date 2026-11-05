@@ -11,8 +11,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
-import { FaceDeck, FacePicker } from "../src/account/FacePicker";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { FaceDeck, FaceFrameSwitch, FacePicker } from "../src/account/FacePicker";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,6 +39,17 @@ const held = new Map<string, string>();
 const noop = (): void => {};
 
 describe("an off face picker says so the way assistive tech reads it (DESIGN.md §7)", () => {
+  it("disables the frame choices while saving, including their arrow keys", () => {
+    const onChange = vi.fn();
+    const host = mount(createElement(FaceFrameSwitch, { value: face, disabled: true, onChange }));
+    const frame = host.querySelector("fieldset");
+    expect(frame?.disabled).toBe(true);
+    act(() => {
+      frame?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      host.querySelector<HTMLButtonElement>('button[data-id="Coin"]')?.click();
+    });
+    expect(onChange).not.toHaveBeenCalled();
+  });
   for (const [name, element] of [
     [
       "the wizard's deck",
