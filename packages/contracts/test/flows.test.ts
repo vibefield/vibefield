@@ -200,7 +200,16 @@ describe("CP-4a1 — the static read's shape (CP4-Q3 (a))", () => {
     expect(refused.meta).toBeUndefined();
     expect(refused.refusals.map((r) => flowRefusalOf(r))).toEqual(["meta", "choices"]);
     expect(flowRefusalOf({ reason: "too-clever" })).toBeUndefined();
-    expect(FLOW_READ_REFUSALS).toEqual(["syntax", "meta", "default", "choices", "size"]);
+    expect(FLOW_READ_REFUSALS).toEqual([
+      "syntax",
+      "meta",
+      "default",
+      "choices",
+      "size",
+      "import",
+      "eval",
+      "html-comment",
+    ]);
   });
 
   it("C5: the read refuses the sandbox's three shapes in known words: import, eval and html-comment (CP-4a2b, Q-B3 (a))", () => {

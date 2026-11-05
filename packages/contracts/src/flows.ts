@@ -146,8 +146,19 @@ export type FlowGate = z.infer<typeof FlowGate>;
 
 /** Why the read refuses a script, OPEN: it does not parse as a module (`syntax`); its `meta` is missing or not plain
  * values (`meta`); it has no default export to run (`default`); an `ask` offers more than NEEDS_CHOICES_MAX choices, or
- * none (`choices`); its bytes are past SCRIPT_MAX_BYTES (`size`). A refused script never runs. */
-export const FLOW_READ_REFUSALS = ["syntax", "meta", "default", "choices", "size"] as const;
+ * none (`choices`); its bytes are past SCRIPT_MAX_BYTES (`size`). CP-4a2b (Q-B3 (a)): its code holds one of the three
+ * shapes the run's sandbox refuses, a dynamic `import(` (`import`), a direct-looking `eval(` (`eval`), or `<!--` or
+ * `-->` (`html-comment`), as ses 2.3.0 reads them over the script the run evaluates. A refused script never runs. */
+export const FLOW_READ_REFUSALS = [
+  "syntax",
+  "meta",
+  "default",
+  "choices",
+  "size",
+  "import",
+  "eval",
+  "html-comment",
+] as const;
 export type FlowReadRefusalReason = (typeof FLOW_READ_REFUSALS)[number];
 
 export const FlowRefusal = z
