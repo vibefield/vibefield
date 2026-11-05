@@ -532,6 +532,22 @@ and per-room deals (D-i13, AR5-D3; the History room's own 333° wheel and puppet
   stroked in it — never a round dot, which reads as state (PJ-L7). Godview's swarm and timeline wake
   still wear puppeteer's own deal (§2.6's exception) until they take this ink (PJ-5). A device
   never gets an ink (§2.8, PJ-D24): a desktop is its OS mark.
+- **The one exception: a made app's fallback icon** (added 2026-11-05, track MA; MA-D10 (b), ruled by
+  James on the page *Apps in a Pocket*; §8 "The phone's Apps", the icon). A made app's icon is its
+  preview, which wears no ink. Until it has one, its squircle is drawn from its project's ink and its
+  title's initial, as the page drew it. **By day** the squircle is filled with the ink (`projectInk(ink)`,
+  the theme's lightness and chroma) behind the initial in white. **By night** the squircle is the dark
+  tile, `#232326` (the page's; a new constant, stated here first, so the kit and `tokens.css` take it
+  as a named token when MA-6 and MA-4 draw it), with the initial in the ink. It is the only place an
+  ink is the ground behind a letter or draws one (the ink already fills a shape solid elsewhere: the
+  phone History's cap, §8 "The phone's History"; a project folder's name on the phone's shelf is
+  James's question, open: §8 "The phone's Apps"), and the initial is a mark, never a word that is
+  read: the system stack (§3) at 650, 26 on a 60 squircle (the page's). At other sizes it keeps that
+  proportion, about 0.43 of the side: the page drew 26 at every size, so the ratio is this line's,
+  not the page's. It is held to the 3:1 floor for a mark. By day white on the ink is the ink's own
+  3.3–4.3:1 against white. By night the ink on `#232326` falls inside the night's 5.6–9.7:1, because
+  `#232326` lies between `#1C1C1E` and `#2C2C2E` (inferred from the measured range, not measured).
+  An app with no project takes the theme's fill (`--vf-fill`) with its initial in the primary ink.
 - **Where it lives in code:** the design kit's `projectInk(ink)` answers the CSS colour,
   `oklch(var(--vf-project-ink-l) var(--vf-project-ink-c) <hue>)`, so it follows the theme on its
   own; `projectInkHue(ink)` the hue, and `projectInkHex(ink, theme)` the sRGB hex for a surface
@@ -1375,6 +1391,34 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the catalog, while errors stay inline with a plain corrective sentence. The confirm step
   carries one `/50` factual line: “Opens on devices connected to this tailnet with Tailscale”;
   it is not a warning banner or a green reachability promise.
+  *Amended 2026-11-05 (track MA; MA-D9 and MA-D13 (a), MA-D10 (b), ruled by James on the page Apps in
+  a Pocket; `draft/thinking-mini-apps.md` §4.8):* **the shelf is Apps.** This entry keeps its name, so
+  the code and the lines that cite it still find it, and the internal names stay as they are: the
+  `artifacts` surface, `.vf-artifact-*`, `vibefield.browser.artifacts`, `data-shelf`. "Artifact" stays
+  the inside word. Every screen word above, and in "The head", that names the shelf reads Apps
+  (§9 "Apps"), except the Hub's header above the tiles, which reads "Live" (below); the code changes
+  at MA-4, after this line. The package keeps its glyph (§13). The shelf holds two groups:
+  - **Live** comes first, as the shelf is today, under the Hub's header, which now reads "Live":
+    Publish… first, then the Proxy and Folder tiles. The Hub's states above (its four with no Hub
+    bound, and its empty catalog's) now speak for Live alone, in §9's words.
+  - **From your agents** follows: the pages your agents made, newest first, by day, with a search
+    field in the group's head that searches them (the frame's Peek, ⌘F, does not find apps yet). field-app
+    draws it beside the hosted Hub, since its doors are no plugin's, so it stands whether a Hub is
+    bound or not.
+  - **A made tile keeps the tile form.** Its 16:10 well (corners 10, the hairline ring) holds the
+    app's preview, AH-4's still. Until it has one, the fallback squircle (§2.9's one exception; §8
+    "The phone's Apps", the icon) stands centred in the well at 60, the phone's Recent size. Under the
+    well sit its name, the fact line `Claude Code · vibe-field` (the agent's label from the catalog,
+    then the project), and its desktop and its state: the status dot (§2.5) beside its desktop's
+    name, with the state's word when it is not serving ("mini · asleep"). Serving is green, failed is
+    red, and starting, not kept, too large and not yet written out are muted, each with its words
+    (§9 "Apps"). Its menu adds **Keep** (or **Stop keeping**), **Versions** and **Hide from Apps**.
+  - **A made tile opens through `artifact.open`**, as History's Open will, in the system browser as a
+    live tile opens: the fieldd the window asks (the answering home, never the app's own desktop)
+    opens the URL it validated through its shell's `shell.openLink`, as a terminal's link opens, and
+    the window never holds `shell.open`. Until DS-9 the open, the tile's image and its capture reach
+    the tailnet through the OS Tailscale app (AH's sanctioned interim), and the words for a desktop
+    where it is not up are owed to James (§9 "Apps").
 - **Edge trays — the notch and its drawer** — *retired 2026-10-30 (HN-8; PL-D1…PL-D3 ruled by James
   2026-10-29, Cards in Hand; HN-L7: the edges' drawers retire with the edges).* What it was
   (2026-09-23, James; the record is `draft/composer/compact.html` §15–19 and `compact.md` Parts
@@ -2562,6 +2606,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   in. **Under a cover** the pill and the readout are the desk's and hide with it (§8 "The covers
   over the desk"), and the left slot holds **the package circle** (below). No keycaps and no plus
   anywhere in it (FR-3, FR-5; F1, F2).
+  *Amended 2026-11-05 (track MA; MA-D13 (a), ruled by James on the page Apps in a Pocket):* the
+  shelf's screen words below read Apps: the package's tooltip and name "Apps" ("Close the apps"),
+  its dot's "Apps — …", the sheet's two shelves Fields and Apps, and the covered sheet's name "Apps"
+  (§8 "Artifacts — the Artifacts shelf's contents", as amended; §9 "Apps"). The code changes at
+  MA-4; until then the words below are what it draws.
   - **The name pill** — the line's glass (§5), corners 20, padded 0 6 0 16: the field's name at
     13/500 in primary ink, then **the chevron** — a 28 round button, `chevron` 12 turned down in
     tertiary ink (the ready fill and primary under the pointer) — which grows the pill's sheet on its
@@ -2862,6 +2911,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       top and keeps its own words below it; the swarm steers by it as an obstacle across the stage's top, the bar
       band's twin. A view's stage ends at the bar's band; the swarm's alone runs under the bar (its manifest's
       `stageAllocation: 'full'`), steering by the band.
+    - **The band also starts Apps' door** (added 2026-11-05, track MA; MA-D7 (a), ruled by James on the page *Apps
+      in a Pocket*): a downward drag that begins in the row's band, outside a circle, pulls the phone's Apps down
+      once it has travelled 12 down and more than twice as far down as across (§8 "The phone's Apps"). A tap on a
+      circle still picks its view, and every other touch stays the swarm's. The row moves only as the whole tab
+      does, with the pull.
     - **The stage dissolves under the row**, whatever the view: clear at the row's axis (its top + 22, **78** on an
       island phone) to whole at the reserve, a 30 ramp, as the desktop's dissolves from 28 to 56. The stage is
       masked, never the row, the bar, or the swarm's scanlines and vignette; what shows through is the phone's
@@ -5722,6 +5776,102 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     hot. Return sends: no pane stands in front of you, so nothing waits for a second Return (PC-D3 A).
   - **New spark** (PC-D8 A): the sheet at touch pitch makes the spark on your home desktop, said and not asked; its
     sky is the hatch, free, at 120 (§2.10).
+- **The phone's Apps** (track MA, ruled 2026-11-05 from the design page *Apps in a Pocket*: MA-D7…D9 and MA-D11…D13
+  A, MA-D10 B, James; MA-D1…D6 carried A under his "all ruled"; the laws MA-L1…L10). Nothing is drawn yet: MA-6
+  draws the door, the cues and the shelf, and MA-5 the open app on SP-4's web view. Until MA-5 a hosted app opens its
+  link in Safari and any other opens its About (§9 "Apps"). The phone holds every app the person's agents made, and
+  every live one they published, from any of their desktops, read through the phone's home. The numbers are the
+  page's (an iPhone 17 Pro, 402 × 874) and the record's (`draft/thinking-mini-apps.md` §5); where the two differ, the
+  record's stand. Its words are §9 "Apps".
+  - **The door, above every tab** (MA-D7 A): pull down from the top.
+    - **On History and Chat** the root list overscrolls past its large title. A pushed screen (a project, a session)
+      keeps its own scroll.
+    - **On Field** it is a downward drag that begins in the Stories row's band (its reserve, 108 on an island phone,
+      §8 "The phone's Stories row"), outside a circle, once it has travelled 12 down and more than twice as far down
+      as across. Every other touch stays the swarm's and the circles' (P6, on a device).
+    - A drag that starts on the status bar is the system's (Notification Center), never the door's.
+    - **As you pull**, the tab follows the finger, and the four Recent icons pour out of the island at 36 toward a
+      row 50 apart, with a line fading in under them: "Pull down for your apps".
+    - **At 132** a light haptic ticks (impact `.light`, as `InputHaptics` names it) and the line reads "Release for
+      your apps". Past 132 the tab follows at a third of the finger's travel: the rubber band is a linear factor on
+      the drag, not a curve.
+    - **Let go** at or past 132 and the shelf opens. Short of it, everything springs back on the bar's own spring
+      (`AppBar.motion`, the system spring the bar's glass moves and morphs on: response 0.42, damping 0.84), so §6
+      gains no curve.
+    - **Open**, the bar steps aside, the tab recedes to a card at the foot (at 0.92, 106 of it showing, its top
+      corners 44, a grabber 40 × 5 at 30%), and the shelf fills the screen. Pushing the card up, or tapping it, goes
+      back.
+    - **Search opens on Apps as well.** Before you type, a strip headed **Apps** stands above History's search: the
+      Recent row and **All apps**. The place is one tap from a control that is always on screen, and typed words
+      match apps' titles too. History keeps its own **Recent** for searches.
+  - **The cues** (MA-D8 A).
+    - **The drop.** A new app arrives as a glass capsule (`liquidGlassCapsule`) that falls out of the Dynamic Island:
+      316 × 60, corners 30, its icon at 40, **New app** over its name. It stands **4 s**. A tap opens the app, a
+      swipe up sends it away, and it never covers the bar. Its top is 4 under the island's foot: 52 on the page's
+      frame, whose island ends at 48. *Carried erratum:* the iPhone 17 Pro's own island ends at 50.7, where the drop
+      would stand 1.3 under it; whether it stands 4 under each phone's own island is James's, open, with the Stories
+      row's (§8 "The phone's Stories row"). It grows down out of the island on §6's island curve (560ms) and goes
+      back into it (360ms). One drop shows at a time, and a burst of new apps within 4 s becomes one drop that
+      counts them (its words ‹for James›, §9). It is not shown on search, over the account menu, or while an app
+      is open.
+    - **The dot.** While an app you have not seen waits, search's circle wears a **10** dot of `--vf-cyan`
+      (`ChromePalette.info`): TabMark's unread grammar (PC-D5: cyan is unread, orange is what needs you). Its top
+      right stands 12 in from the 62 circle's, ringed 2 in the bar's glass. It rides the circle, never the morph into
+      the search field, and is said "a new app". An app is seen once it has shown on the open shelf, or been opened.
+      The ledger is the account's, kept on the phone and cleared at sign-out, and its first reading is no news, as
+      Chat's notes are.
+    - **The first peek.** Once per account per phone, when the first app reaches it, the current root tab slides
+      down **136** with no sheet open, to show the shelf's edge: the four Recent icons and "Pull down anytime for
+      your apps". It stands **1.8 s** and springs back on the bar's spring.
+  - **The shelf** (MA-D9 A): App Library's grammar at the bar's measure, on paper (`ChromePalette.paper`), 21 from
+    the sides, as the bar stands (`AppBar.margin`). The page drew it 20 from the sides, History's lists'
+    (`HistoryParts.sidePadding`); the record's measure stands.
+    - The search field at the top: **48** tall, glass, "Search apps".
+    - **Recent**, four across: each icon 60, its name under it in 11/13, at most two lines, 14 between rows.
+    - **Kept**, in the same grid.
+    - **Projects** as folders, two across, 16 between rows and 14 between columns. Each is a square tile of the
+      inset fill (`ChromePalette.fill`, corners 28, 13 in) holding three icons at 62 and a cluster of the next four
+      at 27, its name under it at 13/600 in the project's ink ‹for James: §2.9 says an ink is never text, and by day
+      it is 3.3–4.3:1 against white; the page drew the name in the ink. A second exception, or the name in the
+      primary ink beside the folder mark?›. A folder opens in place.
+    - A group's head is its name at 20/650 with its count at 13 in the tertiary ink.
+    - The foot says what is true (§9).
+  - **The icon** (MA-D10 B): a squircle at iOS's continuous corner (22.5% of its side) holding the app's preview,
+    AH-4's still of the page's top at the desktop's 640 × 400 capture. The squircle aspect-fills from it, taking its
+    full height and the middle 400 of its width, drawn as captured in both themes, with a 0.5 hairline in the
+    theme's separator (`ChromePalette.separator`) so white paper keeps its edge on a white shelf.
+    - **Until it has a preview** (never opened, its capture owed or failed, or an asleep desktop's image this phone
+      never held), the icon is the fallback, §2.9's one exception. By day the squircle is filled with its project's
+      ink behind its title's initial in white. By night it is the dark tile, `#232326`, with the initial in the ink.
+      No glyph (§13).
+    - A live app wears a **12** green dot (`--vf-green`, §2.5's healthy); an app you have not opened, a cyan one.
+      The dot sits at the squircle's top right, 3 outside it, ringed 2 in the paper.
+    - An asleep desktop's apps stand at 45%.
+    - A long press opens the system's context menu over the preview: Open, Keep, Versions, About, Hide.
+  - **The open app** (MA-D11 A, MA-D12 A): it zooms out of its icon (iOS 18's `navigationTransition(.zoom)`) and
+    fills the screen, edge to edge.
+    - One glass row stands at the bottom, Safari's iOS 26 grammar at the bar's measure: 62 tall, 21 from the sides
+      and the foot, as the bar (`AppBar.height`, `AppBar.margin`). It holds a ✕ circle (the system's `xmark`, §13),
+      a capsule, and a ··· circle (`ellipsis`). The circles are 62, and the capsule stands 24 from each, as the
+      bar's does, so on the page's 402 it is the bar's 188 wide. The capsule holds the app's icon at 30, its name
+      (15/600) and its desktop (12 in the tertiary ink, its OS mark at 11). The page drew the row smaller (52
+      tall, 16 from the sides and 24 from the foot, the circles 52 and 12 from the capsule); the record's measure
+      stands.
+    - Scrolling down folds the row to a small title pill, 30 tall with the name at 13/600, and the circles fade.
+      Scrolling up, or a tap on the pill, brings it back.
+    - The page's layout ends above the row (P3), so the row never covers the page's own controls.
+    - ✕ or an edge swipe zooms it back into its icon.
+    - ··· holds Reload · Keep (or Stop keeping) · Versions · Open on ‹desktop› · Open in ‹host› (when it has a
+      hosted link) · About this app · Hide from Apps. A live app adds Copy link.
+    - A page-only app says so in a glass note above the row, never over the page's own head.
+  - **Warm:** the last app stays loaded for **10 minutes** after you leave it. It is the one web view
+    (`PHONE_BUDGET.WEB_VIEWS`), released before the next is taken, and it heads Recent with a ring that says it
+    opens at once: 2 in the bar's ink, 2.5 out from the squircle. Opening another replaces it. In the background the
+    page pauses (SP-L7).
+  - **Honest states** (MA-L10), each in §9's words: nothing is a blank, and no spinner stands without words. An app
+    that cannot open shows its icon at 92 over its state's words on paper, with its one act under them.
+  - **Reduced motion** (M6): the zoom becomes a fade (140ms), and the drop and the peek appear in place.
+  - The desktop's half is §8 "Artifacts — the Artifacts shelf's contents", as amended 2026-11-05.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -6117,6 +6267,48 @@ is a false claim; for James's eye.)* Needs you says who asks ("‹name› asks",
 asks"), an agent's own ask says **Answer in its pane**,
 and an answer says "You said ‹choice›". The note says "‹name› needs you". New spark says "Runs on ‹desktop›, your
 home" and **Create ‹name›**, and refuses with "‹name› is taken" or "‹profile› has no ‹agent› sign-in".
+
+**Apps** (track MA, ruled 2026-11-05 from the page *Apps in a Pocket*: MA-D13 (a), Apps everywhere; the words are
+`draft/thinking-mini-apps.md` §5.8 and §5.9; where each word stands is §8 "The phone's Apps" and "Artifacts — the
+Artifacts shelf's contents"). A person opens and uses these, so on the phone and on the desktop they are **Apps**,
+and one is an **app**. "Artifact" is the code's word, never the screen's. ‹app› is an app's title, ‹desktop› the
+field's name for a desktop, and ‹agent› the catalog's label for an agent (R23b; never a literal). ‹host› is the host
+of an app's recorded hosted link, claude.ai today, and never says whose account. Words marked ‹for James› are owed to
+him and are not invented here.
+- **The door and the cues.** The first peek teaches "Pull down anytime for your apps". A pull short of the threshold
+  reads "Pull down for your apps" (the ruled page's words), and past it "Release for your apps". A new one says **New
+  app** and its name. A burst of new apps within 4 s is one drop that counts them, its words ‹for James: "‹n› new
+  apps"›. VoiceOver says search's dot as "a new app".
+- **The groups.** The phone's are **Recent**, **Kept** and **Projects**. Search's strip is **Apps**, with **All
+  apps**, and search's placeholder is **Search**: the bar's field said "Search sessions", a word no line here held.
+  History keeps its own **Recent** for searches. The shelf's field says "Search apps" (the page's). The desktop's
+  groups are **Live**, the Hub's header, and **From your agents**.
+- **The foot** counts what is true: "142 apps on 2 desktops · mini is asleep — 23 of its apps wait for it".
+- **The acts.** An app's acts are **Open**, **Keep** (or **Stop keeping**), **Versions**, **About this app**, **Hide
+  from Apps**, **Reload**, **Open on ‹desktop›**, **Open in ‹host›** (only with a hosted link) and, for a live app,
+  **Copy link**.
+- **About** says "Made by ‹agent›", its session and project, "on ‹desktop›" and its date, and opens the session in
+  History. Before an app has a preview it says "No preview yet — it's drawn the first time the app opens".
+  ‹for James: the line for a capture that failed›. ‹for James: the line for an app this phone cannot run yet,
+  before MA-5›.
+- **The states.** "Opening on ‹desktop›…" (late: nothing for 120ms, then a fade) · "‹desktop› is asleep", over
+  "This app runs on ‹desktop›. It opens when ‹desktop› wakes.", with **Open in ‹host›** when it has a hosted link ·
+  "Can't reach ‹desktop›" with its reason · "This page wasn't kept", with the hosted link · "Its 3 other files
+  weren't kept, so parts of it may be missing" (page only) · "Too large to keep" · a live app's "vite on ‹desktop›
+  isn't running" · "‹desktop› is still reading its history" while a desktop's library is still being read, never an
+  empty shelf · ‹for James: the words while ‹desktop› cannot write an app out yet (rosetta 0.1.3), with **Open in
+  ‹host›** when it has a hosted link› · ‹for James: on the desktop, the words when the OS Tailscale app is not up
+  (until DS-9)›.
+- **The desktop's shelf.** The package's name and tooltip are **Apps** ("Close the apps" while its shelf shows), and
+  its dot says "Apps — vibe-field's source is unavailable" or "Apps — 2 sources unavailable". The Hub's states speak
+  for **Live** alone, since **From your agents** is drawn whether a Hub is bound or not (§8). With no Hub bound, Live
+  says why in one of §8's four states, over §8's second lines ‹for James: their headings; renamed as they stand,
+  "Apps are off", "Apps can't run", "Opening Apps…" and "Apps aren't starting" would say the whole shelf is down
+  while your agents' apps still open›. An empty Live says **"No apps yet"** with its one **Publish…** ‹for James:
+  that heading, false while your agents' pages stand below it, and its second line›. ‹for James: the Live header's
+  quiet count ("4 shared"), and whether the made group has one›.
+- **History is the one named exception.** Inside History the room's library says Artifacts, as rosetta wrote it,
+  until rosetta's room takes the host's words (RO-37), by the room rule below.
 
 **The agents' words** (track AO, ruled 2026-10-27; AO-L8, no machinery on screen). One word per thing,
 in the Setup Assistant, Settings, History and the launcher alike. An **agent** is named by the
@@ -6633,7 +6825,8 @@ selection bar's Copy (HN-D3), its notch having left with the clipboard's tray (H
 beside the face is not a glyph: it is the badge slot's state (§2.8 I-5, §2.5). The status item's update image — the
 mark with one plain dot, no bang (EDP §6.4, AU-D12) — is generated from the tray master (`tray-master.svg`, by
 `generate-icons.mjs`, as its siblings are), kept exact outside this set (below).
-**`package`** is Artifacts' (PL-D1, PL-D2; built at HN-8): the pill's button and the covered views'
+**`package`** is Artifacts' (PL-D1, PL-D2; built at HN-8; *amended 2026-11-05, MA-D13 (a): the shelf it opens
+says Apps, and the glyph stays, below*): the pill's button and the covered views'
 circle (§8 "The head"), folded into the terminals' title bar with search. It was the right notch's
 from FR-4 (2026-10-03) to HN-8, when its role in the drawings ("reserved for the Artifacts twin")
 was rewritten, as `sidepanel`'s was. **`sidepanel`** is no longer Artifacts' — it was
@@ -6676,6 +6869,15 @@ the desk's chrome draws it from this set by this table, never by a guess:
 **The phone's lock** (WI-3, 2026-11-04): Settings › This phone › **Lock** wears `tape`, the shut padlock, named
 `lock` in the phone's set (`FieldGlyphName.lock`), as ICE's `lock` is drawn by it above; `tape` joins the iOS
 picks (`tooling/glyphs/picks.json`).
+
+**A made app's icon is never a glyph** (added 2026-11-05, track MA; MA-D10 (b), ruled by James on the page *Apps in
+a Pocket*). It is a crop of the app's own preview, a picture kept outside this set as the OS marks are (below). Until
+it has one, it is its title's initial drawn with its project's ink (on the ink by day, in it by night: §2.9's one
+exception), the way a Stories circle whose view draws no mark shows its label's initial (§8). The publish's icon
+word, should rosetta keep it, maps to no glyph.
+The open app's row (§8 "The phone's Apps") draws ··· as `ellipsis`, already among the phone's picks, and ✕ as the
+system's `xmark`, as the bar's search field draws it, so nothing joins the picks. **`package` stays the shelf's
+mark:** the desktop's door to Apps is still `package` (above), and only its noun moved, to Apps (MA-D13 (a)).
 
 **`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
 hatches — for a name the set does not hold; an act that declares no glyph at all shows its label
