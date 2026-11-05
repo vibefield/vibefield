@@ -109,6 +109,52 @@ describe("SES's source tests meet a person's words (finding 5)", () => {
   });
 });
 
+describe("what the two parsers read differently stays code (cp-landing 12:40Z; VF-PM 12:41Z, required)", () => {
+  // acorn's MODULE goal reads `<!--` and `-->` as operators; V8's SCRIPT goal (SES's evaluate) reads them as comments.
+  // A template that spans lines can then look like words to acorn while V8 would see a real `import(` on its middle
+  // line. The rewrite touches only what acorn reads as words or comments, so the code-level pattern survives it and SES
+  // refuses the script whole: nothing in it runs (no call reaches the handler, no import is made).
+  const head =
+    'export const meta = { name: "Differential" };\nexport default async function () {\n';
+  const middle = '\nawait agent("reached"); import("node:fs")\n// `\nreturn "parsed";\n}\n';
+
+  it("D1 · `<!--` mid-line before a line-spanning template: the rewrite leaves it, and SES refuses the script", async () => {
+    const text = `${head}let a = 1, b = 2;\nconst c = a <!--b + \`${middle}`;
+    const script = scriptOf(text);
+    expect(script).toContain("const c = a <!--b + `");
+    expect(sesWouldRefuse(script)).toContain(String(/(?:<!--|-->)/));
+    const heard = await runOnHost(bytesOf(text));
+    expect(heard.end).toMatchObject({ kind: "threw" });
+    expect((heard.end as { message?: string }).message).toMatch(/SES_HTML_COMMENT_REJECTED/);
+    expect(heard.calls).toEqual([]);
+  });
+
+  it("D2 · `-->` at a line's start (alone, or after a comment holding a line break) is no module: refused before any host", async () => {
+    for (const lead of ["const y = 1; let x = y\n", "let y = 1; let x = y /*\n*/ "]) {
+      const text = `${head}${lead}--> \`${middle}`;
+      expect(flowScriptOf(bytesOf(text))).toMatchObject({
+        kind: "refused",
+        reason: expect.stringMatching(/^it does not parse/),
+      });
+      const heard = await runOnHost(bytesOf(text));
+      expect(heard.end).toMatchObject({ kind: "refused" });
+      expect(heard.calls).toEqual([]);
+    }
+  });
+
+  it("D3 · a real import() inside a template's substitution is code: SES refuses it; an indirect eval runs powerless", async () => {
+    const inside = await runOnHost(
+      bytesOf(flow('const t = `a ${import("node:fs")} b`;\nreturn t;')),
+    );
+    expect(inside.end).toMatchObject({ kind: "threw" });
+    expect((inside.end as { message?: string }).message).toMatch(/:3\b.*SES_IMPORT_REJECTED/);
+    const indirect = await runOnHost(
+      bytesOf(flow('return [(0, eval)("typeof process"), (0, eval)("typeof agent")];')),
+    );
+    expect(indirect.end).toEqual({ kind: "done", value: ["undefined", "function"] });
+  });
+});
+
 describe("the default export and the lines (findings 6 and 10)", () => {
   it("F6 · a parenthesized default export runs", async () => {
     const text = `export const meta = { name: "Parens" };\nexport default (async (input) => {\n  return "ran";\n});\n`;

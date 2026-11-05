@@ -11,7 +11,15 @@ import { type Comment, type Node, parse, type Token, tokTypes } from "acorn";
 // takes out keeps its line breaks, so `export` alone on its line moves no later line (finding 10). A flow imports
 // nothing (its API is the compartment's globals, `agent`, `ask`, `log` and `phase`), so an `import` or a re-export is
 // refused here, before any host starts; a real dynamic `import()` or direct `eval(…)` is left as written, for SES to
-// refuse when the host evaluates it, with its line (the lines are kept, so SES's line is the file's).
+// refuse when the host evaluates it, with its line (the lines are kept, so SES's line is the file's): one refuser, SES's
+// own censor (VF-PM 12:40Z, superseding 11:30Z's "acorn refuses"). So is a real call inside a template's substitution,
+// `${import("x")}`: it is code, never a template's part. An indirect eval, `(0, eval)(…)`, is left too: SES's censor
+// lets it pass, and the compartment's own eval runs it in the compartment's scope (evalTaming "safe-eval"), powerless.
+//
+// acorn reads the MODULE goal, where `<!--` and `-->` are operators; V8 under SES evaluates a SCRIPT, where they open
+// and close comments. A text that differs only there keeps its code-level `<!--` or `-->` (the rewrite touches only
+// what acorn reads as words or comments), so SES's censor refuses it, SES_HTML_COMMENT_REJECTED; a `-->` at a line's
+// start does not parse as a module at all, so it is refused here (the cp-landing 12:40Z rows, flows-module-script.test.ts).
 //
 // SES refuses a source whose TEXT looks like `import(` (or `import //`, `import /*`), a direct `eval(`, `<!--` or
 // `-->`, wherever it stands, strings and comments included (ses 2.3.0, transforms.js and compartment-evaluate.js). A
