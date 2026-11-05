@@ -4,6 +4,7 @@ import {
   type AgentProfileSet,
   type AgentProviderSummary,
   type DeviceInfo,
+  type IndexArtifactEntry,
   type IndexArtifactsResult,
   type IndexCatalogSource,
   type IndexSession,
@@ -388,21 +389,154 @@ function fixtureFigures(demo: RoomDemo, key: string): ProjectFiguresResult {
 // read-through. The room keeps the library's launcher dormant until RO-37,
 // so no plate draws it yet; 4d's plate opens it over this.
 
-/** `index.artifacts`, as the fixture fieldd answers the plate. */
-function fixtureArtifacts(demo: RoomDemo, params: Record<string, unknown>): IndexArtifactsResult {
-  // MA-4b RED — the skeleton: an empty library, read whole. The green builds
-  // the demo's apps and narrows them by the ask.
-  void demo;
-  void params;
-  return { entries: [], canonicalReady: true };
+/** One presentation of the fixture library, and its document when it was
+ * kept. */
+interface FixturePage {
+  readonly entry: IndexArtifactEntry;
+  readonly document: string | null;
 }
 
-/** A kept page's bytes, for the plate's library port. */
+/** An id in rosetta's spelling (the contract's `MadeAppId`: 64 lowercase hex),
+ * the same for the same seed: FNV-1a over the seed, eight salted rounds. */
+function fixtureId(seed: string): string {
+  let out = "";
+  for (let round = 0; round < 8; round += 1) {
+    let hash = 2166136261;
+    for (const char of `${round}:${seed}`) {
+      hash ^= char.charCodeAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    out += (hash >>> 0).toString(16).padStart(8, "0");
+  }
+  return out;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+/** A kept page: a plain HTML document, its title the app's. */
+function pageDocument(title: string, project: string, version: number): string {
+  const name = escapeHtml(title);
+  return [
+    "<!doctype html>",
+    '<html lang="en">',
+    `<head><meta charset="utf-8"><title>${name}</title></head>`,
+    `<body><h1>${name}</h1><p>${escapeHtml(project)} · version ${version}</p></body>`,
+    "</html>",
+  ].join("\n");
+}
+
+/** A page's file name, a basename from its title (the contract's
+ * `MadeAppFilename`). */
+function filenameOf(title: string): string {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return `${slug.replace(/^-|-$/g, "") || "page"}.html`;
+}
+
+/** The library as the fixture fieldd holds it, newest first (above). */
+function fixtureLibrary(demo: RoomDemo): FixturePage[] {
+  const kinds = new Map(demo.meta.runtimes.map((runtime) => [runtime.id, runtime.kind]));
+  const newest = new Map<string, RoomDemo["meta"]["sessions"][number]>();
+  for (const row of demo.meta.sessions) {
+    if (row.project_id === null) continue;
+    const seen = newest.get(row.project_id);
+    if (seen === undefined || row.updated_at > seen.updated_at) newest.set(row.project_id, row);
+  }
+  const made = demo.meta.projects.flatMap((project) => {
+    const session = newest.get(project.id);
+    return session === undefined ? [] : [{ project, session }];
+  });
+  const pages = made.flatMap(({ project, session }, index): FixturePage[] => {
+    const kind = kinds.get(session.runtime_id);
+    const provider = kind === undefined ? undefined : AGENT_CATALOG_READERS.idForKind(kind);
+    const title = session.title ?? project.name;
+    const kept = index < made.length - 1;
+    const presented = index === 0 ? 2 : 1;
+    return Array.from({ length: presented }, (_, older): FixturePage => {
+      const version = presented - older;
+      const publishedAt = session.updated_at - 60_000 - older * 20 * 60_000;
+      const document = kept ? pageDocument(title, project.name, version) : null;
+      return {
+        document,
+        entry: {
+          device: FIXTURE_DESKTOP,
+          presentationId: fixtureId(`page:${project.id}:${version}`),
+          appId: fixtureId(`app:${project.id}`),
+          sessionId: session.id,
+          timelineId: `artifact-${session.id}-${version}`,
+          title,
+          filename: filenameOf(title),
+          version: String(version),
+          publishedAt,
+          ...(document !== null
+            ? {
+                capturedAt: publishedAt + 5_000,
+                mediaType: "text/html; charset=utf-8",
+                byteLen: new TextEncoder().encode(document).byteLength,
+              }
+            : {}),
+          availability: document !== null ? "captured" : "not_captured",
+          recovered: false,
+          ...(kind !== undefined ? { kind } : {}),
+          ...(provider !== undefined ? { provider } : {}),
+          ...(session.title !== null ? { sessionTitle: session.title } : {}),
+          projectId: project.id,
+          projectName: project.name,
+          projectKey: keyOf(project.name),
+          versions: presented,
+        },
+      };
+    });
+  });
+  return pages.sort((a, b) => (b.entry.publishedAt ?? 0) - (a.entry.publishedAt ?? 0));
+}
+
+/** `index.artifacts`, as the fixture fieldd answers the plate: narrowed by
+ * the ask's words, kind and project, then one app's every presentation
+ * (`appId`) or each app's newest; one page, read whole. */
+function fixtureArtifacts(demo: RoomDemo, params: Record<string, unknown>): IndexArtifactsResult {
+  const word = (name: string): string | null => {
+    const value = params[name];
+    return typeof value === "string" ? value : null;
+  };
+  const q = word("q")?.toLowerCase() ?? null;
+  const kind = word("kind");
+  const projectKey = word("projectKey");
+  const appId = word("appId");
+  const seen = new Set<string>();
+  const entries = fixtureLibrary(demo)
+    .map((page) => page.entry)
+    .filter(
+      (entry) =>
+        (q === null || entry.title.toLowerCase().includes(q)) &&
+        (kind === null || entry.kind === kind) &&
+        (projectKey === null || entry.projectKey === projectKey),
+    )
+    .filter((entry) => {
+      if (appId !== null) return entry.appId === appId;
+      if (seen.has(entry.appId)) return false;
+      seen.add(entry.appId);
+      return true;
+    });
+  const limit = typeof params["limit"] === "number" ? params["limit"] : entries.length;
+  return { entries: entries.slice(0, limit), canonicalReady: true };
+}
+
+/** A kept page's bytes, for the plate's library port, in place of the
+ * session port's read-through. */
 function fixtureArtifactReader(demo: RoomDemo): ArtifactReader {
-  // MA-4b RED — the skeleton: no bytes. The green answers each kept page's
-  // document.
-  void demo;
-  return async () => new Uint8Array();
+  const pages = fixtureLibrary(demo);
+  return async (sessionId, publicationId) => {
+    const page = pages.find((candidate) => candidate.entry.presentationId === publicationId);
+    if (page === undefined || page.entry.sessionId !== sessionId || page.document === null)
+      throw new Error("the catalog kept no page for this presentation; these are fixtures");
+    return new TextEncoder().encode(page.document);
+  };
 }
 
 /** A fieldd that answers History's doors from the demo, as a window is

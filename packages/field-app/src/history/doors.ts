@@ -1,7 +1,9 @@
 import {
   AGENT_CATALOG_READERS,
+  AgentKind,
   INDEX_MESH,
   type IndexArtifactEntry,
+  IndexArtifactsResult,
   type IndexCatalogSource,
   type IndexPhase,
   type IndexSearchBuildProgress,
@@ -12,10 +14,12 @@ import {
   type IndexThread,
   type IndexThreadDelegation,
   IndexThreadsResult,
+  MadeAppId,
   PROJECT_DOORS,
   ProjectChangesDelta,
   ProjectFiguresDayResult,
   ProjectFiguresResult,
+  ProjectKey,
   ProjectListResult,
   type ProjectRegrouped,
   type ProjectSummary,
@@ -30,6 +34,7 @@ import type {
   DayUsageResponse,
   HeatmapDay,
   HourTotal,
+  HtmlArtifactAvailability,
   IngestPhase,
   IngestProgress,
   MetaState,
@@ -50,6 +55,7 @@ import type {
   SubscriptionStatus,
   UsageResponse,
 } from "@vibefield/rosetta-protocol";
+import { CursorExpiredError } from "@vibefield/rosetta-protocol";
 import type {
   CatalogPort,
   CatalogSearch,
@@ -533,6 +539,14 @@ export function dayUsageOf(result: ProjectFiguresDayResult): DayUsageResponse {
 // paths on its desktop and its `asset.url` a daemon-relative one, so the room
 // is handed `path: null`, `recovered_from: null` and `asset: null` (the
 // contract carries none of them; nothing here synthesizes one).
+//
+// OWED TO RO-37 (2026-11-05, the 4b review): the contract's `recovered` bit
+// (a page recovered from a file other than the one the tool wrote) has no
+// home in rosetta 0.1.3's entry but the PATH `recovered_from`, and the room
+// keys its "Recovered copy" words on that path alone. So a recovered page
+// reaches the room as an ordinary capture: the state is LOST here until the
+// room takes a non-path `recovered` bit (or the host's words for it), and
+// History's half of MA-4 does not sign off while it is.
 
 /** The page `index.artifacts` admits at most (`IndexArtifactsParams`' `limit`:
  * rosetta's own bound). */
@@ -546,6 +560,20 @@ export type ArtifactReader = (
   signal?: AbortSignal,
 ) => Promise<Uint8Array>;
 
+/** The longest words `index.artifacts` searches by (`IndexArtifactsParams`'
+ * `q`). */
+const ARTIFACT_QUERY_MAX_CHARS = 512;
+
+/** The availabilities rosetta's room reads; any other is no local copy. */
+const ROOM_AVAILABILITIES: ReadonlySet<string> = new Set<HtmlArtifactAvailability>([
+  "captured",
+  "not_captured",
+  "missing",
+  "too_large",
+  "unsupported",
+  "changed_during_read",
+]);
+
 /** The room's library ask as `index.artifacts`' params, or null when nothing
  * can match it (a project or an app id outside the contract's grammar — no
  * project or app is spelled so), which the port answers as an empty page
@@ -558,10 +586,29 @@ export type ArtifactReader = (
  * cursor as the previous page answered it; the limit clamped to 1..100. An
  * absent member is not sent. */
 export function artifactParamsOf(request: ArtifactListRequest): Record<string, unknown> | null {
-  // MA-4b RED — the skeleton: asks for nothing the room asked. The green
-  // spells each filter as the contract does.
-  void request;
-  return {};
+  const params: Record<string, unknown> = {};
+  const q = request.q?.trim() ?? "";
+  if (q !== "") params["q"] = q.slice(0, ARTIFACT_QUERY_MAX_CHARS);
+  if (
+    request.agent !== null &&
+    AgentKind.safeParse(request.agent).success &&
+    AGENT_CATALOG_READERS.idForKind(request.agent) !== undefined
+  )
+    params["kind"] = request.agent;
+  if (request.project !== null) {
+    if (!ProjectKey.safeParse(request.project).success) return null;
+    params["projectKey"] = request.project;
+  }
+  if (request.artifact_id !== null) {
+    if (!MadeAppId.safeParse(request.artifact_id).success) return null;
+    params["appId"] = request.artifact_id;
+  }
+  if (request.cursor !== null && request.cursor !== "") params["cursor"] = request.cursor;
+  if (request.limit !== null)
+    params["limit"] = Number.isFinite(request.limit)
+      ? Math.max(1, Math.min(ARTIFACT_PAGE_MAX_LIMIT, Math.trunc(request.limit)))
+      : ARTIFACT_PAGE_MAX_LIMIT;
+  return params;
 }
 
 /** One presentation `index.artifacts` answered, as rosetta's `ArtifactEntry`.
@@ -581,35 +628,51 @@ export function artifactEntryOf(
   entry: IndexArtifactEntry,
   projectNames: ReadonlyMap<string, string>,
 ): ArtifactEntry {
-  // MA-4b RED — the skeleton: a typed entry that carries none of the
-  // contract's facts. The green maps each column as above.
-  void entry;
-  void projectNames;
+  const project = entry.projectKey ?? null;
   return {
     publication: {
-      id: "",
-      artifact_id: "",
-      session_id: "",
-      timeline_id: "",
-      title: "",
-      filename: "",
+      id: entry.presentationId,
+      artifact_id: entry.appId,
+      session_id: entry.sessionId,
+      timeline_id: entry.timelineId,
+      title: entry.title,
+      filename: entry.filename,
       path: null,
-      url: null,
-      native_id: null,
-      version: null,
-      published_at: null,
+      url: entry.hostedUrl ?? null,
+      native_id: entry.nativeId ?? null,
+      version: entry.version ?? null,
+      published_at: entry.publishedAt ?? null,
       source_offset: 0,
     },
-    availability: "not_captured",
-    captured_at: null,
+    availability: ROOM_AVAILABILITIES.has(entry.availability)
+      ? (entry.availability as HtmlArtifactAvailability)
+      : "not_captured",
+    captured_at: entry.capturedAt ?? null,
+    // never a path; `entry.recovered` has no other home yet (OWED TO RO-37, above)
     recovered_from: null,
     asset: null,
-    agent: "unknown",
-    session_title: null,
-    project_id: null,
-    project_name: null,
-    presentations: 0,
+    agent: runtimeKindOf(entry.provider),
+    session_title: entry.sessionTitle ?? null,
+    project_id: project,
+    project_name: project === null ? null : (projectNames.get(project) ?? null),
+    presentations: entry.versions,
   };
+}
+
+/** The room's project names by id, as the newest listing names its rows
+ * (`projectRowOf`: the name and the folder that tells two alike apart). */
+function projectNamesOf(meta: MetaState | null): Map<string, string> {
+  return new Map((meta?.projects ?? []).map((row) => [row.id, row.name]));
+}
+
+/** A library page fieldd refused, as the room reads it: a cursor the library
+ * moved under is rosetta's own `cursor_expired` (the room's loader reads again
+ * from the head, as against rosettad); anything else in fieldd's words. */
+function libraryRefusalOf(cause: unknown): Error {
+  const refusal = refusalOf(cause);
+  if (refusal.kind === "PRECONDITION_FAILED" && refusal.details?.["reason"] === "cursor-expired")
+    return new CursorExpiredError(refusalWords(cause));
+  return new Error(refusalWords(cause));
 }
 
 /* ── words: the index's state as the frame says it ──────────────────────── */
@@ -1187,6 +1250,39 @@ export function catalogPortOver(
     return feed;
   }
 
+  /** MA-4b — the room's library (see "the library" above, and the port's
+   * member below), over the reader its host handed it. */
+  const readArtifact = options.readArtifact;
+  function libraryOver(reader: ArtifactReader): NonNullable<CatalogPort["artifacts"]> {
+    return {
+      async list(request: ArtifactListRequest, signal?: AbortSignal): Promise<ArtifactPage> {
+        const params = artifactParamsOf(request);
+        // nothing can match it: no page will ever hold an entry for it
+        if (params === null) return { entries: [], next_cursor: null, canonical_ready: true };
+        let answer: unknown;
+        try {
+          answer = await withSignal(client.request("index.artifacts", params), signal);
+        } catch (cause) {
+          if (signal?.aborted === true) throw cause;
+          throw libraryRefusalOf(cause);
+        }
+        const page = IndexArtifactsResult.parse(answer);
+        const names = projectNamesOf(lastMeta);
+        return {
+          // the room's agent filter on the kinds it files sessions under: a
+          // kind the catalog maps narrowed at the library already; the room's
+          // "unknown" (no catalog row) is only ever narrowed here
+          entries: page.entries
+            .map((entry) => artifactEntryOf(entry, names))
+            .filter((entry) => request.agent === null || entry.agent === request.agent),
+          next_cursor: page.nextCursor ?? null,
+          canonical_ready: page.canonicalReady,
+        };
+      },
+      read: (sessionId, publicationId, signal) => reader(sessionId, publicationId, signal),
+    };
+  }
+
   return {
     subscribeMeta,
 
@@ -1302,22 +1398,9 @@ export function catalogPortOver(
     // under (fieldd's PRECONDITION_FAILED `cursor-expired`) is rosetta's own
     // `CursorExpiredError`, so the room's loader reads again from the head;
     // any other refusal is said in fieldd's words. `read` is the reader's.
-    artifacts: {
-      // MA-4b RED — the skeleton: an empty page that is not ready, and no
-      // bytes. The green asks the door and the reader, and is offered only
-      // with `options.readArtifact`.
-      async list(request: ArtifactListRequest, signal?: AbortSignal): Promise<ArtifactPage> {
-        void request;
-        void signal;
-        return { entries: [], next_cursor: null, canonical_ready: false };
-      },
-      async read(sessionId: string, publicationId: string, signal?: AbortSignal) {
-        void sessionId;
-        void publicationId;
-        void signal;
-        return new Uint8Array();
-      },
-    },
+    // Offered only with a reader: a host that cannot read a page offers no
+    // library, and the room then draws none.
+    ...(readArtifact === undefined ? {} : { artifacts: libraryOver(readArtifact) }),
 
     setActive(next) {
       if (active === next) return;

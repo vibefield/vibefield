@@ -54,10 +54,11 @@ import type { SessionClient, SessionPort } from "@vibefield/rosetta-room";
 // `open()` releases any lease already held for the session, which would cut
 // the room's own stream of the transcript it is reading. A lease open on the
 // session lends its grant (renewed once, as every lease read is); otherwise
-// the read mints ONE ticket of its own, outside `leases` — from the session's
-// own desktop (DS-7, `homeOf`), never renewed, nothing left behind. A page is
-// bounded at `ARTIFACT_READ_MAX_BYTES`: a larger one is refused in the room's
-// own words, its body not read past the bound.
+// the read mints a ticket of its own, outside `leases` — from the session's
+// own desktop (DS-7, `homeOf`) — asked again at most once, when rosettad
+// refuses its grant (never for its reach); no timer, nothing left behind. A
+// page is bounded at `ARTIFACT_READ_MAX_BYTES`: a larger one is refused in the
+// room's own words, its body not read past the bound.
 
 /** How long before a grant's `expiresAt` its lease asks for the next one
  * (`INDEX_TICKET.TTL_MS` is ten minutes); a shorter grant renews at half its
@@ -228,6 +229,66 @@ function originOf(ticket: IndexOpenTicket): string {
   return parsed.data.restUrl.replace(/\/$/, "");
 }
 
+/** The transport's fetch, as rosetta's client calls it. */
+type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+/** MA-4b — rosettad's route for one presentation's captured bytes. */
+const ARTIFACT_CONTENT_ROUTE = /^\/api\/sessions\/[^/]+\/artifacts\/[^/]+\/content$/;
+
+function pathOf(input: RequestInfo | URL): string | null {
+  const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  try {
+    return new URL(href).pathname;
+  } catch {
+    return null;
+  }
+}
+
+/** MA-4b — the transport's fetch with a page's bound. The content route
+ * answers at most `ARTIFACT_READ_MAX_BYTES`, refused past it in the room's
+ * words: before any body is read when its declared length says so, else as
+ * soon as the body passes the bound, never read to its end. The answer keeps
+ * its status and headers (rosetta's client reads its protocol version off
+ * them); every other route, and every refusal, passes untouched. */
+function boundedArtifactFetch(inner: FetchLike): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const response = await inner(input, init);
+    const path = pathOf(input);
+    if (path === null || !ARTIFACT_CONTENT_ROUTE.test(path) || !response.ok) return response;
+    const body = response.body;
+    if (body === null) return response;
+    const length = response.headers.get("content-length");
+    if (length !== null && Number(length) > ARTIFACT_READ_MAX_BYTES) {
+      await body.cancel().catch(() => undefined);
+      throw new Error(ARTIFACT_TOO_LARGE);
+    }
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > ARTIFACT_READ_MAX_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error(ARTIFACT_TOO_LARGE);
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(total);
+    let at = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, at);
+      at += chunk.byteLength;
+    }
+    return new Response(bytes, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  }) as typeof fetch;
+}
+
 export function sessionPortOver(
   client: TicketClient,
   options: SessionPortOptions = {},
@@ -236,9 +297,15 @@ export function sessionPortOver(
 ): HistorySessionPort {
   const now = options.now ?? (() => Date.now());
   const leases = new Map<string, Lease>();
+  /** MA-4b — the one-shot page reads in flight (never leases): what
+   * `dispose` stops asking. */
+  const oneShots = new Set<Lease>();
   const transport = {
     ...(options.WebSocketImpl !== undefined ? { WebSocketImpl: options.WebSocketImpl } : {}),
-    ...(options.fetchFn !== undefined ? { fetchFn: options.fetchFn } : {}),
+    // MA-4b — a page read through ANY client of this port is bounded
+    fetchFn: boundedArtifactFetch(
+      options.fetchFn ?? ((input, init) => globalThis.fetch(input, init)),
+    ),
   };
 
   const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -402,6 +469,69 @@ export function sessionPortOver(
     if (leases.get(lease.sessionId) === lease) leases.delete(lease.sessionId);
   }
 
+  /** MA-4b — one read of a session no lease holds: ONE ticket of its own,
+   * outside `leases` (never `open()`, which releases a lease already held for
+   * the session), from the session's own desktop (DS-7) — an asleep one said
+   * at once and never asked, a road refusal said at once in its name. A grant
+   * rosettad refused (expired, or a generation that is gone) is renewed once
+   * by one more ticket, never for a refusal of its reach. It schedules no
+   * renewal and leaves nothing behind: `anyClient()` never hands it out. */
+  async function readOnce<T>(
+    sessionId: string,
+    run: (session: RosettaClient) => Promise<T>,
+    signal: AbortSignal | undefined,
+  ): Promise<T> {
+    const once: Lease = {
+      sessionId,
+      home: homeOf(sessionId),
+      client: null,
+      timer: null,
+      renewing: null,
+      closed: false,
+      streams: new Map(),
+    };
+    if (once.home?.asleep === true) throw new Error(asleepWords(once.home.name));
+    signal?.throwIfAborted();
+    // a cancelled read stops asking (a ticket fieldd cannot mint YET is
+    // asked again only while the read stands)
+    const stop = (): void => {
+      once.closed = true;
+    };
+    signal?.addEventListener("abort", stop, { once: true });
+    oneShots.add(once);
+    const ask = async (): Promise<IndexOpenTicket> => {
+      try {
+        return await ticketFor(once, true);
+      } catch (cause) {
+        signal?.throwIfAborted();
+        throw new Error(ticketRefusalWords(cause, once.home?.name));
+      }
+    };
+    try {
+      const first = await ask();
+      const session = new RosettaClient({
+        baseUrl: originOf(first),
+        credential: grantOf(first),
+        ...transport,
+      });
+      try {
+        return await run(session);
+      } catch (cause) {
+        if (!(cause instanceof UnauthorizedError) || once.closed || reachRefused(cause))
+          throw cause;
+        const next = await ask();
+        session.setCredential(grantOf(next));
+        const origin = originOf(next);
+        if (origin !== session.baseUrl) session.setBaseUrl(origin);
+        return await run(session);
+      }
+    } finally {
+      once.closed = true;
+      signal?.removeEventListener("abort", stop);
+      oneShots.delete(once);
+    }
+  }
+
   return {
     async open(sessionId) {
       const previous = leases.get(sessionId);
@@ -445,15 +575,17 @@ export function sessionPortOver(
       return open[open.length - 1]?.client ?? null;
     },
     async readArtifact(sessionId, publicationId, signal) {
-      // MA-4b RED — the skeleton: no ticket, no read, no bytes. The green
-      // reads through the open lease or a one-shot ticket, bounded.
-      void sessionId;
-      void publicationId;
-      void signal;
-      return new Uint8Array();
+      const page = (session: RosettaClient) =>
+        session.readArtifact(sessionId, publicationId, signal);
+      // the room's own lease on the session lends its grant, renewed once
+      const held = leases.get(sessionId);
+      if (held !== undefined && !held.closed && held.client !== null) return read(held, page);
+      return readOnce(sessionId, page, signal);
     },
     dispose() {
       for (const lease of [...leases.values()]) release(lease);
+      for (const once of [...oneShots]) once.closed = true;
+      oneShots.clear();
     },
   };
 }

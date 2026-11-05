@@ -48,6 +48,7 @@ import {
   PROTOCOL_VERSION,
   RosettaClient,
   type SubscriptionStatus,
+  UnauthorizedError,
 } from "@vibefield/rosetta-protocol";
 import { createRoomDemo } from "@vibefield/rosetta-room/fixtures";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -85,6 +86,7 @@ import {
   FILE_TARGET_REFUSAL,
   sessionPortOver,
   TICKET_RENEW_LEAD_MS,
+  TICKET_RETRY_MIN_MS,
   ticketRefusalWords,
 } from "../src/history/session-port";
 
@@ -1554,7 +1556,13 @@ describe("MA-4b — the room's library: index.artifacts as rosetta's ArtifactPag
         cursor: "c1",
         limit: 100,
       }),
-    ).toEqual({ q: "checkout", kind: "claude-code", projectKey: VIBE_FIELD, cursor: "c1", limit: 100 });
+    ).toEqual({
+      q: "checkout",
+      kind: "claude-code",
+      projectKey: VIBE_FIELD,
+      cursor: "c1",
+      limit: 100,
+    });
     expect(artifactParamsOf(ASK)).toEqual({ limit: 100 });
     expect(artifactParamsOf({ ...ASK, limit: null })).toEqual({});
     expect(artifactParamsOf({ ...ASK, artifact_id: KEPT.appId })).toEqual({
@@ -1619,13 +1627,21 @@ describe("MA-4b — the room's library: index.artifacts as rosetta's ArtifactPag
 
   it("a cursor the library moved under is rosetta's own cursor_expired — the room's loader reads again from the head; any other refusal is said in fieldd's words", async () => {
     let refuse: () => never = () => {
-      throw Object.assign(new Error("the library moved under the cursor; read again from the head"), {
-        kind: "PRECONDITION_FAILED",
-        retryable: false,
-        details: { service: "index", reason: "cursor-expired" },
-      });
+      throw Object.assign(
+        new Error("the library moved under the cursor; read again from the head"),
+        {
+          kind: "PRECONDITION_FAILED",
+          retryable: false,
+          details: { service: "index", reason: "cursor-expired" },
+        },
+      );
     };
-    const library = libraryOf(catalogPortOver(libraryDoor(() => refuse()), { readArtifact: noRead }));
+    const library = libraryOf(
+      catalogPortOver(
+        libraryDoor(() => refuse()),
+        { readArtifact: noRead },
+      ),
+    );
     const expired = await library.list({ ...ASK, cursor: "c2" }).then(
       () => null,
       (error: unknown) => error,
@@ -1640,6 +1656,16 @@ describe("MA-4b — the room's library: index.artifacts as rosetta's ArtifactPag
       });
     };
     await expect(library.list(ASK)).rejects.toThrow("The agent index is starting (starting)");
+  });
+
+  it("a page the room's loader cancels comes back as its own cancel, never re-worded as fieldd's refusal", async () => {
+    const door = libraryDoor(() => new Promise(() => undefined));
+    const library = libraryOf(catalogPortOver(door, { readArtifact: noRead }));
+    const controller = new AbortController();
+    const listing = library.list(ASK, controller.signal);
+    controller.abort();
+    await expect(listing, "the loader's cancel, as it came").rejects.toBe(controller.signal.reason);
+    expect(libraryCalls(door), "the page was asked").toEqual([{ limit: 100 }]);
   });
 
   it("an ask nothing can match is an empty page, settled, and the door is never asked", async () => {
@@ -1769,7 +1795,11 @@ describe("MA-4b — the session port reads a page outside its leases", () => {
 
   it("an expired grant on a page read is renewed once and read again — a one-shot's by one more ticket, a lease's by its own renewal", async () => {
     const route = `/api/sessions/s1/artifacts/${PUB}/content`;
-    const once = [ticket(44400, "g1", Date.now() + 600_000), ticket(44400, "g2", Date.now() + 600_000)];
+    // the second ticket names a new origin: a restarted rosettad binds a new loopback port
+    const once = [
+      ticket(44400, "g1", Date.now() + 600_000),
+      ticket(44401, "g2", Date.now() + 600_000),
+    ];
     const door = client({ "index.openTicket": () => once.shift() });
     const rest = pageFetch(new Set([route]));
     const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
@@ -1778,6 +1808,10 @@ describe("MA-4b — the session port reads a page outside its leases", () => {
       "Rosetta-Grant g1",
       "Rosetta-Grant g2",
     ]);
+    expect(
+      rest.reads.map((read) => read.url),
+      "read again at the renewed ticket's origin",
+    ).toEqual([content(44400), content(44401)]);
     expect(port.anyClient(), "no lease is left behind").toBeNull();
     port.dispose();
 
@@ -1788,14 +1822,46 @@ describe("MA-4b — the session port reads a page outside its leases", () => {
     const leaseDoor = client({ "index.openTicket": () => leased.shift() });
     const leaseRest = pageFetch(new Set([route]));
     const leasePort = sessionPortOver(leaseDoor, { fetchFn: leaseRest.fetchFn });
-    await leasePort.open("s1");
+    const room = await leasePort.open("s1");
+    const lease = leasePort.anyClient();
     expect([...(await leasePort.readArtifact("s1", PUB))], "a lease's page").toEqual(PAGE_BYTES);
     expect(leaseRest.reads.map((read) => read.authorization)).toEqual([
       "Rosetta-Grant g1",
       "Rosetta-Grant g2",
     ]);
     expect(ticketCalls(leaseDoor)).toHaveLength(2);
+    // the LEASE was renewed, not passed by: the room's next read presents the
+    // new grant on the same client, and asks no third ticket
+    await expect(room.timelineEntry("s1", "t1")).resolves.toMatchObject({ timeline_id: "t1" });
+    expect(leaseRest.reads.at(-1)?.authorization, "the lease's own grant, renewed").toBe(
+      "Rosetta-Grant g2",
+    );
+    expect(ticketCalls(leaseDoor), "no third ticket").toHaveLength(2);
+    expect(leasePort.anyClient(), "the room's lease keeps its one client").toBe(lease);
     leasePort.dispose();
+  });
+
+  it("a one-shot's read refused for the grant's REACH is never renewed: one ticket, one read, rosetta's refusal as it came", async () => {
+    for (const reason of ["wrong-scope", "wrong-route"]) {
+      const door = client({ "index.openTicket": () => ticket(44450, "g1", Date.now() + 600_000) });
+      const rest = pageFetch(
+        new Set(),
+        (headers) =>
+          new Response("", { status: 401, headers: { ...headers, "x-rosetta-auth": reason } }),
+      );
+      const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
+      const refused = await port.readArtifact("s1", PUB).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(refused, reason).toBeInstanceOf(UnauthorizedError);
+      expect((refused as UnauthorizedError).reason, reason).toBe(reason);
+      expect(ticketCalls(door), `${reason}: one ticket`).toHaveLength(1);
+      expect(rest.reads, `${reason}: one read`).toEqual([
+        { url: content(44450), authorization: "Rosetta-Grant g1" },
+      ]);
+      port.dispose();
+    }
   });
 
   it(`bounded at ${ARTIFACT_READ_MAX_BYTES} bytes: a page at the bound reads whole; one past it is refused in the room's words, its body not read past the bound — nor at all when its length says so`, async () => {
@@ -1839,6 +1905,40 @@ describe("MA-4b — the session port reads a page outside its leases", () => {
     );
     expect(pulls, "a declared length past the bound reads no body").toBe(0);
     port.dispose();
+
+    // through the room's own lease on the session: the same bound, and the
+    // lease is left as it was — its client, its stream, no ticket of the read's
+    FakeSocket.opened = [];
+    const leaseDoor = client({
+      "index.openTicket": () => ticket(44601, "g1", Date.now() + 600_000),
+    });
+    const leasePort = sessionPortOver(leaseDoor, {
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      fetchFn: rest.fetchFn,
+    });
+    const room = await leasePort.open("s1");
+    room.subscribeSession("s1", {});
+    const socket = FakeSocket.opened[0];
+    socket?.serve({ frame: "hello", protocol_version: PROTOCOL_VERSION, stamp: null });
+    socket?.serve({ frame: "caught_up", stamp: { epoch: 1, seq: 0 } });
+    const lease = leasePort.anyClient();
+    pulls = 0;
+    serve = (headers) => new Response(stream(), { status: 200, headers });
+    // a page read whole is said by its size, never printed (64 MiB would not print)
+    const leaseRead = await leasePort.readArtifact("s1", PUB).then(
+      (bytes) => `${bytes.byteLength} bytes read`,
+      (error: unknown) => error,
+    );
+    expect(leaseRead, "a streamed page past the bound, through the lease").toBeInstanceOf(Error);
+    expect((leaseRead as Error).message).toBe(ARTIFACT_TOO_LARGE);
+    expect(pulls, "the lease's body is not read past the bound").toBeLessThanOrEqual(
+      ARTIFACT_READ_MAX_BYTES / MIB + 2,
+    );
+    expect(rest.reads.at(-1)?.url, "read at the lease's origin").toBe(content(44601));
+    expect(ticketCalls(leaseDoor), "the lease's grant, no ticket of the read's").toHaveLength(1);
+    expect(leasePort.anyClient(), "the room's lease stands").toBe(lease);
+    expect(socket?.closed, "the room's stream stays open").toBe(false);
+    leasePort.dispose();
   });
 
   it("DS-7: a page on a session another desktop holds is read by that desktop's ticket; one the listing calls asleep is said so at once, never asked", async () => {
@@ -1897,6 +1997,69 @@ describe("MA-4b — the session port reads a page outside its leases", () => {
     );
     expect(ticketCalls(road), "said at once").toHaveLength(1);
   });
+
+  /** fieldd cannot mint the ticket YET: a refusal the port asks again for. */
+  const starting = () =>
+    Object.assign(new Error("the agent index is starting"), {
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "index", state: "starting" },
+    });
+
+  it("a one-shot read the room cancels stops asking fieldd for its ticket, and answers the room's own cancel — never a ticket refusal", async () => {
+    vi.useFakeTimers({ now: 3_000_000 });
+    const door = client({
+      "index.openTicket": () => {
+        throw starting();
+      },
+    });
+    const port = sessionPortOver(door, { fetchFn: pageFetch().fetchFn });
+    const controller = new AbortController();
+    let outcome: unknown = "still reading";
+    void port.readArtifact("s1", PUB, controller.signal).then(
+      () => {
+        outcome = "read";
+      },
+      (error: unknown) => {
+        outcome = error;
+      },
+    );
+    await vi.advanceTimersByTimeAsync(TICKET_RETRY_MIN_MS);
+    const asked = ticketCalls(door).length;
+    expect(asked, "asked again while the read stands").toBeGreaterThan(1);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(outcome, "the room's own cancel, as it came").toBe(controller.signal.reason);
+    expect(ticketCalls(door), "never asked again once cancelled").toHaveLength(asked);
+    port.dispose();
+  });
+
+  it("dispose() stops a one-shot read's asking too: it ends in the room's words for the refusal, and fieldd is asked no more", async () => {
+    vi.useFakeTimers({ now: 3_000_000 });
+    const door = client({
+      "index.openTicket": () => {
+        throw starting();
+      },
+    });
+    const port = sessionPortOver(door, { fetchFn: pageFetch().fetchFn });
+    let outcome: unknown = "still reading";
+    void port.readArtifact("s1", PUB).then(
+      () => {
+        outcome = "read";
+      },
+      (error: unknown) => {
+        outcome = error;
+      },
+    );
+    await vi.advanceTimersByTimeAsync(TICKET_RETRY_MIN_MS);
+    const asked = ticketCalls(door).length;
+    expect(asked, "asked again while the read stands").toBeGreaterThan(1);
+    port.dispose();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(outcome, "the read ends").toBeInstanceOf(Error);
+    expect((outcome as Error).message, "in the room's words").toBe(ticketRefusalWords(starting()));
+    expect(ticketCalls(door), "never asked again once disposed").toHaveLength(asked);
+  });
 });
 
 describe("MA-4b — the History plate's fixture library (the projects plate)", () => {
@@ -1932,6 +2095,29 @@ describe("MA-4b — the History plate's fixture library (the projects plate)", (
     );
     expect(narrowed.entries.every((entry) => entry.projectKey === key)).toBe(true);
     expect(narrowed.entries.length).toBeLessThan(answer.entries.length);
+    // by words: one app's title, in any case, is that app alone
+    const first = answer.entries[0];
+    const byWords = IndexArtifactsResult.parse(
+      await door.request("index.artifacts", { q: first?.title.toUpperCase() }),
+    );
+    expect(
+      byWords.entries.map((entry) => entry.appId),
+      "an app's title narrows to it",
+    ).toEqual([first?.appId]);
+    // by the agent's kind: each demo runtime's kind holds its own apps and no other's
+    const sizes: number[] = [];
+    for (const { kind } of demo.meta.runtimes) {
+      const byKind = IndexArtifactsResult.parse(await door.request("index.artifacts", { kind }));
+      expect(
+        byKind.entries.map((entry) => entry.appId),
+        kind,
+      ).toEqual(answer.entries.filter((entry) => entry.kind === kind).map((entry) => entry.appId));
+      sizes.push(byKind.entries.length);
+    }
+    expect(
+      sizes.some((size) => size < answer.entries.length),
+      "a kind narrows",
+    ).toBe(true);
   });
 
   it("through the SHIPPING library port the plate's apps reach the room as rosetta's entries — no path — and each kept page reads as an HTML document", async () => {
@@ -1951,5 +2137,20 @@ describe("MA-4b — the History plate's fixture library (the projects plate)", (
       );
       expect(text.toLowerCase().startsWith("<!doctype html>"), entry.publication.title).toBe(true);
     }
+    // the reader serves a kept page to its own session alone, and no page that was not kept
+    const refusal = "the catalog kept no page for this presentation; these are fixtures";
+    const notKept = page.entries.find((entry) => entry.availability !== "captured");
+    expect(notKept, "an app whose page was not kept").toBeDefined();
+    await expect(
+      library.read(notKept?.publication.session_id ?? "", notKept?.publication.id ?? ""),
+      "a page that was not kept",
+    ).rejects.toThrow(refusal);
+    const [one, other] = kept;
+    expect(other, "two kept apps, in two sessions").toBeDefined();
+    expect(one?.publication.session_id).not.toBe(other?.publication.session_id);
+    await expect(
+      library.read(other?.publication.session_id ?? "", one?.publication.id ?? ""),
+      "a kept page asked under another session",
+    ).rejects.toThrow(refusal);
   });
 });
