@@ -217,7 +217,7 @@ import {
   type ShellIntegration,
 } from "./agent-gateway";
 import { DEFAULT_SEARCH_LIMIT, EnrollmentStore, IndexService } from "./agent-index";
-import { AgentInputQueues } from "./agent-input-queue";
+import { AgentInputQueues, RESTARTED } from "./agent-input-queue";
 import { LastRunKeeper, modelBoardSource } from "./agent-last-run";
 import { createModelSubscription, createRemoteSubscription } from "./agent-model-board";
 import { type AgentMonitorService, createAgentMonitorService } from "./agent-monitor";
@@ -359,7 +359,7 @@ import {
 import { TokenService } from "./token-service";
 import { composeProjects, ToolPlaneService } from "./tool-plane";
 import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
-import { NeedsQueue } from "./tool-plane/rooms/you/queue";
+import { NeedsQueue, type NeedsRun } from "./tool-plane/rooms/you/queue";
 import { NeedsStore } from "./tool-plane/rooms/you/store";
 import { oneLine } from "./tool-plane/rooms/you/words";
 import { SparkService, SparkStore } from "./tool-plane/sparks";
@@ -2859,9 +2859,28 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       deliver: (runtimeRunId, text) => agents.submit(runtimeRunId, text),
       isIdle: (runtimeRunId) => isIdleRow(agents.monitorOf(runtimeRunId)),
       onOutcome: (runtimeRunId, input, outcome, reason) => {
-        if (input.from.kind !== "spark") return;
-        // CP2-D2: an uncertain delivery is never sent again, and its sender is told
-        if (outcome === "uncertain") waker.uncertain(input.from.spark, runtimeRunId);
+        // item 158, CO-Q9 (b): what became of a line that carried answers' facts is the needs queue's to hear
+        if (input.items !== undefined) needs.onFactOutcome(runtimeRunId, input.items, outcome);
+        if (input.from.kind !== "spark") {
+          // the waker's own facts in a line no session took are not told again (§8 Q5 (a); item 152 owns its keeping)
+          if (outcome === "dropped" || outcome === "uncertain")
+            logger.info(
+              "fieldd.inputs.wake_unheard",
+              "A wake's line was not heard; it is not told again",
+              {
+                runtimeRunId,
+                outcome,
+                ...(reason ? { reason } : {}),
+              },
+            );
+          return;
+        }
+        // CP2-D2: an uncertain delivery is never sent again, and its sender is told; a restart that broke into it is
+        // said as such (item 158, TH-Q32 (a))
+        if (outcome === "uncertain") {
+          if (reason === RESTARTED) waker.restarted(input.from.spark, runtimeRunId);
+          else waker.uncertain(input.from.spark, runtimeRunId);
+        }
         if (outcome === "waiting") return;
         // CP-L6: what became of a spark's words, written down as the spark's
         const spark = input.from.spark;
@@ -2932,6 +2951,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // and every run's own ask, read from its blockers. An answer is told to its spark through its input queue, and
     // resumes a sleeping spark through compose.sparks.open's own wake, so a window's open meanwhile is that same wake
     // (CP3-D7 A; SparkService.open joins it per spark).
+    /** A run the fold holds, managed or re-attaching, as the needs queue reads it; the input queue's settle reconcile
+     * reads "no longer holds" by the same test (item 158). */
+    const needsRun = (runtimeRunId: string): NeedsRun | undefined => {
+      const row = runRow(runtimeRunId);
+      // an exited row is a dead pane the deck still shows: no run to send to
+      if (row === undefined || row.continuation?.exited === true) return undefined;
+      return {
+        runtimeRunId,
+        label: runLabel(runtimeRunId),
+        spark: row.spark,
+        startedBy: row.origin?.by === "spark" ? row.origin.spark : undefined,
+        profileSet: row.profileSet,
+        profileId: row.profileId,
+        live: agents.isLive(runtimeRunId),
+      };
+    };
     const needs = new NeedsQueue({
       store: new NeedsStore({
         dir: join(config.dataDir, ...LAYOUT.NEEDS_DIR),
@@ -2939,20 +2974,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         logger: logger.child({ component: "needs" }),
       }),
       inputs,
-      run: (runtimeRunId) => {
-        const row = runRow(runtimeRunId);
-        // an exited row is a dead pane the deck still shows: no run to send to
-        if (row === undefined || row.continuation?.exited === true) return undefined;
-        return {
-          runtimeRunId,
-          label: runLabel(runtimeRunId),
-          spark: row.spark,
-          startedBy: row.origin?.by === "spark" ? row.origin.spark : undefined,
-          profileSet: row.profileSet,
-          profileId: row.profileId,
-          live: agents.isLive(runtimeRunId),
-        };
-      },
+      run: needsRun,
       personaSets,
       sparkSession: sparkSessionOf,
       spark: (id) => sparks.get(id),
@@ -2989,7 +3011,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       logger.info("fieldd.needs.restored", "Kept needs-you records wait for the person", {
         kept: keptNeeds,
       });
-    needs.reconcileWhenSettled(() => agents.reattachSettled());
+    // item 158 (CO-Q9 (b)): an answer telling at a run whose kept queue no longer carries its line is owed again; a
+    // stamped head still carries its items, and is said at its run's first monitor row (`inputs.poke`, above)
+    needs.reconcileTelling((runtimeRunId, item) =>
+      inputs.pending(runtimeRunId).some((input) => input.items?.includes(item) === true),
+    );
+    // once the re-attach has settled, on the one poll: the needs queue's reconcile, then the input queue's (D3), whose
+    // queues for runs the fold no longer holds are forgotten, a stamped head said uncertain and the rest dropped
+    needs.reconcileWhenSettled(
+      () => agents.reattachSettled(),
+      () => inputs.reconcile((runtimeRunId) => needsRun(runtimeRunId) !== undefined),
+    );
     const talkSession = (row: ReturnType<typeof runRow>): TalkSession | undefined =>
       row === undefined
         ? undefined

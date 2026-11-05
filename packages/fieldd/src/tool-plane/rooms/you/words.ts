@@ -68,6 +68,11 @@ export const spawnNotNowFact = (spark: string, max: number): string =>
 export const spawnFailedFact = (spark: string, reason: string): string =>
   `the agent you allowed ${n(spark)} could not start: ${reasonWords(reason)}`;
 
+/** Why an answer waits again (its `waits`, drawn after the card's "Vela hears it when it wakes:"; item 158, CO-Q9 (b)):
+ * the spark's session that held its fact ended before it took the line. */
+export const sessionEndedWaits = (spark: string): string =>
+  `${n(spark)}'s session ended before it took this`;
+
 // An act a restart finds begun and never recorded done is never done again (CP2-D2). The restart may have broken into
 // it, or have come after it was done and told, once the disk did not take the record of its end (queue.ts's `#stand`):
 // so what the spark hears then is true in both orders, whether or not it heard what the act did before. Either way the

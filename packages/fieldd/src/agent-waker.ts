@@ -96,8 +96,13 @@ export class AgentWaker {
   }
 
   /** A send a fieldd restart broke into while it was being sent (item 158, TH-Q32 (a)): its sender is told, and it is
-   * never sent again (DESIGN.md §9). Item 158 (red): its sender is not told yet. */
-  restarted(_spark: string, _runtimeRunId: string): void {}
+   * never sent again (DESIGN.md §9). Said once the run is known, so it is named by its label, never its id. */
+  restarted(spark: string, runtimeRunId: string): void {
+    this.#wake(
+      spark,
+      `VibeField restarted while your words to ${this.opts.label(runtimeRunId)} were being sent, and cannot tell whether they arrived (read the session to see); they will not be sent again`,
+    );
+  }
 
   /** A spark's own session came alive: the wakes held for it land there. */
   onSparkLive(spark: string, runtimeRunId: string): void {

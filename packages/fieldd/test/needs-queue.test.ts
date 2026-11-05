@@ -798,8 +798,11 @@ describe("item 158 — an answer is owed until its session takes it (CO-Q9 (b))"
     const [record] = h.kept();
     expect(record?.owed).toBe(PUSH);
     expect(record?.telling).toBeUndefined();
-    // the card says "Vela hears it when it wakes" again (words open: DESIGN.md §9 first if they are drawn)
-    expect(record?.item.answer).toMatchObject({ told: false, waits: expect.any(String) });
+    // the card says "Vela hears it when it wakes: Vela's session ended before it took this" (DESIGN.md §9)
+    expect(record?.item.answer).toMatchObject({
+      told: false,
+      waits: "Vela's session ended before it took this",
+    });
     liveAt(h, "run-vela-2");
     for (let i = 0; i < 3; i += 1) h.queue.onSparkLive(VELA, "run-vela-2");
     expect(h.woken).toEqual([

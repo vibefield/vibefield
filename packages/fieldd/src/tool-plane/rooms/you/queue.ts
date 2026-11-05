@@ -55,6 +55,12 @@ import * as words from "./words";
 //   spark has heard it. The spark hears it as one marked line of facts in its own input queue (CP3-D2 A, words.ts); a
 //   sleeping spark is resumed for it through compose.sparks.open's own wake, one per spark (CP3-D7 A), and a spark that
 //   cannot be woken hears it when its session is next live. Never into a pending run: AR-4 may replace it.
+// - Heard only once its session takes it (item 158, CO-Q9 (b)): a fact queued keeps the record `owed`, `telling` at
+//   that run, until the input queue says what became of the line (`onFactOutcome`). Delivered, it is heard; dropped
+//   (the session ended first), it is owed again, `told` false with its `waits`, and the spark's next session hears it;
+//   uncertain, it is never told again. `told` keeps its meaning on the wire: the fact is in the spark's input queue
+//   (§8 Q1 (b)). A record already telling is never queued twice, and a boot whose kept queue lost its line owes it
+//   again (`reconcileTelling`).
 // - A held send's Allow is the allowance (one authority, no second table): the answered record stays until its run
 //   ends, through a fieldd restart that finds it kept, and the spark's later words to that run are not held. A restart
 //   that finds its act begun instead (`#uncertain`) leaves no allowance, and its spark is told the later words are held
@@ -194,13 +200,15 @@ export class NeedsQueue implements TalkHolds {
   }
 
   /** Once this boot's re-attach has settled, a held send or an allowance whose run the fold no longer holds ended
-   * while fieldd was down: no exit event will say so (critique 3). Asked once, after `settled()` first holds. */
-  reconcileWhenSettled(settled: () => boolean): void {
+   * while fieldd was down: no exit event will say so (critique 3). Asked once, after `settled()` first holds; then
+   * `alongside`, the same moment's reconcile of another store (the input queue's, item 158). */
+  reconcileWhenSettled(settled: () => boolean, alongside?: () => void): void {
     if (this.#settle !== undefined) return;
     this.#settle = setInterval(() => {
       if (!settled()) return;
       this.stop();
       this.reconcile();
+      if (alongside !== undefined) this.#guard("reconcile", alongside);
     }, SETTLE_POLL_MS);
     this.#settle.unref?.();
   }
@@ -445,24 +453,58 @@ export class NeedsQueue implements TalkHolds {
     this.#emit();
   }
 
-  /** A spark's own session is live: what it is owed lands there, oldest first. */
+  /** A spark's own session is live: what it is owed lands there, oldest first. A fact already in a queue is not
+   * queued again (`#delivered`), so a monitor row that comes again changes nothing. */
   onSparkLive(spark: SparkId, runtimeRunId: string): void {
     const owed = [...this.#records.values()].filter(
       (record) => record.owed !== undefined && record.item.from.spark === spark,
     );
     if (owed.length === 0 || !this.opts.run(runtimeRunId)?.live) return;
     owed.sort((a, b) => a.item.asked.localeCompare(b.item.asked));
-    for (const record of owed) this.#stand(this.#delivered(record, runtimeRunId));
+    for (const record of owed) {
+      const told = this.#delivered(record, runtimeRunId);
+      if (told !== record) this.#stand(told);
+    }
   }
 
   /** What became of a line that carried answers' facts (item 158, CO-Q9 (b)), as the input queue told it: delivered,
    * they are heard; dropped, they are owed again; uncertain, they are never told again. Only a record telling at `run`
-   * moves. Item 158 (red): nothing moves yet. */
-  onFactOutcome(_run: string, _items: readonly NeedsItemId[], _outcome: DeliveryOutcome): void {}
+   * moves, so a late word from a run whose line was dropped, and told elsewhere since, changes nothing. */
+  onFactOutcome(run: string, items: readonly NeedsItemId[], outcome: DeliveryOutcome): void {
+    if (outcome === "waiting") return;
+    for (const id of items) {
+      const record = this.#records.get(id);
+      if (record === undefined || record.telling?.run !== run) continue;
+      const { owed: _owed, telling: _telling, ...heard } = record;
+      if (outcome === "dropped") {
+        this.#stand(this.#owedAgain(record, words.sessionEndedWaits(record.item.from.name)));
+        continue;
+      }
+      if (outcome === "uncertain")
+        this.#logger.warn(
+          "fieldd.needs.fact_uncertain",
+          "An answer's fact was sent and its session gave no sign it took it; it is not told again",
+          { item: id, run },
+        );
+      this.#stand(heard);
+    }
+  }
 
-  /** At boot, after restore (item 158): a record telling at a run whose kept queue no longer carries its item (a file
-   * set aside, unkept or lost) is owed again. Item 158 (red): nothing is owed again yet. */
-  reconcileTelling(_carries: (run: string, item: NeedsItemId) => boolean): void {}
+  /** At boot, after both stores are read (item 158): a record telling at a run whose kept queue no longer carries its
+   * item (a file set aside, unkept or lost) is owed again. A stamped head still carries its items: its report settles
+   * them. */
+  reconcileTelling(carries: (run: string, item: NeedsItemId) => boolean): void {
+    for (const record of [...this.#records.values()]) {
+      const { telling } = record;
+      if (telling === undefined || carries(telling.run, record.item.id)) continue;
+      this.#logger.info(
+        "fieldd.needs.fact_owed_again",
+        "An answer's fact is no longer in its session's kept queue; it is owed again",
+        { item: record.item.id, run: telling.run },
+      );
+      this.#stand(this.#owedAgain(record));
+    }
+  }
 
   // ── inside ──
 
@@ -616,7 +658,8 @@ export class NeedsQueue implements TalkHolds {
   async #tellAnswer(id: NeedsItemId, principal: GrantPrincipal): Promise<{ woke?: string }> {
     const record = this.#records.get(id);
     const sparkId = record?.item.from.spark;
-    if (record?.owed === undefined || sparkId === undefined) return {};
+    if (record?.owed === undefined || record.telling !== undefined || sparkId === undefined)
+      return {};
     const live = this.opts.sparkSession(sparkId);
     if (live !== undefined) {
       this.#stand(this.#delivered(record, live));
@@ -630,31 +673,55 @@ export class NeedsQueue implements TalkHolds {
       return {};
     }
     const woke = summary.session?.runtimeRunId;
-    // the spark's session came alive meanwhile and took it already (onSparkLive)
+    // the spark's session came alive meanwhile and took it already (onSparkLive): its fact is queued, or heard
     const now = this.#records.get(id);
-    if (now?.owed === undefined) return woke !== undefined ? { woke } : {};
+    if (now?.owed === undefined || now.telling !== undefined)
+      return woke !== undefined ? { woke } : {};
     if (woke !== undefined && summary.session?.live === true && this.opts.run(woke)?.live)
       this.#stand(this.#delivered(now, woke));
     else this.#waits(id, `${summary.name}'s session is not running yet`);
     return woke !== undefined ? { woke } : {};
   }
 
-  /** The record once its fact is in the spark's input queue at `run` (never a pending run's). */
+  /** The record once its fact is in the spark's input queue at `run` (never a pending run's): still owed, and telling
+   * there, until that session takes the line (item 158, CO-Q9 (b)). The one guard against telling twice: a record
+   * already telling is left as it is, and nothing is queued. */
   #delivered(record: NeedsRecord, run: string | undefined): NeedsRecord {
-    if (record.owed === undefined || run === undefined) return record;
-    this.opts.inputs.wake(run, record.owed);
-    const { owed: _owed, ...rest } = record;
+    if (record.owed === undefined || record.telling !== undefined || run === undefined)
+      return record;
+    this.opts.inputs.wake(run, record.owed, record.item.id);
+    const telling: NeedsRecord = { ...record, telling: { run, at: this.#now().toISOString() } };
     const { answer } = record.item;
-    if (answer === undefined) return rest;
+    if (answer === undefined) return telling;
     const { waits: _waits, ...told } = answer;
-    return { ...rest, item: { ...record.item, answer: { ...told, told: true } } };
+    return { ...telling, item: { ...record.item, answer: { ...told, told: true } } };
   }
 
-  /** The answer is kept owed, and says why its spark has not heard it. */
+  /** A record whose fact is no longer in any queue: owed again, its spark not told yet, and why when it is known. */
+  #owedAgain(record: NeedsRecord, why?: string): NeedsRecord {
+    const { telling: _telling, ...owed } = record;
+    const answer = record.item.answer;
+    if (answer === undefined) return owed;
+    const { waits: _waits, ...rest } = answer;
+    return {
+      ...owed,
+      item: {
+        ...record.item,
+        answer: {
+          ...rest,
+          told: false,
+          ...(why !== undefined ? { waits: words.reasonWords(why) } : {}),
+        },
+      },
+    };
+  }
+
+  /** The answer is kept owed, and says why its spark has not heard it. One whose fact is in a queue already is left as
+   * it is: it is not "not running yet". */
   #waits(id: NeedsItemId, why: string): void {
     const record = this.#records.get(id);
     const answer = record?.item.answer;
-    if (record?.owed === undefined || answer === undefined) return;
+    if (record?.owed === undefined || record.telling !== undefined || answer === undefined) return;
     this.#stand({
       ...record,
       item: { ...record.item, answer: { ...answer, told: false, waits: words.reasonWords(why) } },
