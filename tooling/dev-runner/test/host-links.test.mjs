@@ -12,11 +12,7 @@ import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import {
-  RELEASE_BUILD_ARGS,
-  releaseBuildEnv,
-  remapFlags,
-} from "../../../apps/desktop/packaging/build-native-release.mjs";
+import { RELEASE_BUILD_ARGS } from "../../../apps/desktop/packaging/build-native-release.mjs";
 import {
   auditBuilderPaths,
   auditHostLinks,
@@ -422,57 +418,4 @@ test("LP-6b: this host's own target directories are markers too — the SSD's in
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("LP-6: the release build remaps the checkout, CARGO_HOME and RUSTUP_HOME, shortest prefix first", () => {
-  const real = new Map([["/Users/me/.cargo", "/Volumes/ssd/cargo-home"]]);
-  const flags = remapFlags({
-    repo: "/Users/me/src/vibe-field",
-    env: {},
-    home: "/Users/me",
-    realpath: (path) => real.get(path) ?? path,
-  });
-  assert.deepEqual(flags, [
-    "--remap-path-prefix=/Users/me/.cargo=/cargo",
-    "--remap-path-prefix=/Users/me/.rustup=/rustup",
-    "--remap-path-prefix=/Volumes/ssd/cargo-home=/cargo",
-    "--remap-path-prefix=/Users/me/src/vibe-field=/vibefield",
-  ]);
-  // CI's own homes, given in the environment; a checkout nested in CARGO_HOME is written by its own, later mapping
-  assert.deepEqual(
-    remapFlags({
-      repo: "/Users/runner/.cargo/git/checkouts/vibefield",
-      env: { CARGO_HOME: "/Users/runner/.cargo/", RUSTUP_HOME: "/Users/runner/.rustup" },
-      home: "/nowhere",
-      realpath: () => null,
-    }),
-    [
-      "--remap-path-prefix=/Users/runner/.cargo=/cargo",
-      "--remap-path-prefix=/Users/runner/.rustup=/rustup",
-      "--remap-path-prefix=/Users/runner/.cargo/git/checkouts/vibefield=/vibefield",
-    ],
-  );
-});
-
-test("LP-6: the remap rides CARGO_ENCODED_RUSTFLAGS after the caller's own flags, which it never drops", () => {
-  const flags = ["--remap-path-prefix=/Users/John Doe/.cargo=/cargo"];
-  assert.deepEqual(releaseBuildEnv({ PATH: "/bin" }, flags), {
-    PATH: "/bin",
-    CARGO_ENCODED_RUSTFLAGS: flags[0],
-  });
-  // RUSTFLAGS is folded in as cargo splits it (whitespace), then dropped: the encoded form wins in cargo anyway
-  assert.deepEqual(releaseBuildEnv({ RUSTFLAGS: "  -C target-cpu=native   -Dwarnings " }, flags), {
-    CARGO_ENCODED_RUSTFLAGS: ["-C", "target-cpu=native", "-Dwarnings", flags[0]].join("\x1f"),
-  });
-  // an encoded list is appended to as it stands
-  assert.deepEqual(
-    releaseBuildEnv(
-      { CARGO_ENCODED_RUSTFLAGS: "-C\x1fdebuginfo=1", RUSTFLAGS: "-Dwarnings" },
-      flags,
-    ),
-    { CARGO_ENCODED_RUSTFLAGS: ["-C", "debuginfo=1", flags[0]].join("\x1f") },
-  );
-  assert.deepEqual(releaseBuildEnv({ CARGO_ENCODED_RUSTFLAGS: "" }, flags), {
-    CARGO_ENCODED_RUSTFLAGS: flags[0],
-  });
 });

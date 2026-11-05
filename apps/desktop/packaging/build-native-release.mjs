@@ -26,18 +26,40 @@
 //     with a space survives. An existing RUSTFLAGS is carried into it, as cargo would have split it; an existing
 //     CARGO_ENCODED_RUSTFLAGS is appended to. Like any RUSTFLAGS, it overrides a config file's `build.rustflags` and
 //     `target.<triple>.rustflags`; neither the repo nor James's `~/.cargo/config.toml` sets any (read 2026-11-05).
+//     *(Corrected 2026-11-05, LP-6b: only when the environment already carries rustflags; otherwise the flags ride
+//     `--config build.rustflags`, which cargo JOINS with a config file's instead of overriding it — and only under the
+//     release switch, below.)*
 //   - Cache: rustflags are part of every unit's fingerprint, so the first release build after this lands recompiles
 //     the whole field-native release graph once; later builds with the same paths reuse it. A release build without
 //     these flags in the same target directory (the shared one on James's Mac) and this one would rebuild each other —
 //     which is why run-update-smoke.mjs now builds through this entry instead of its own `cargo build --release`.
 //     CI's release job is cache-free by design (EDP §12.1), so it pays nothing extra.
+//
+// LP-6b (item 170, 2026-11-05): the remap moved to scripts/build-paths.mjs, where rosettad's and mille's builds take it
+// too, and it runs only under THE release switch (`VIBEFIELD_REMAP_BUILD_PATHS=1`, release.yml's build job). The paths
+// LP-6 remapped name the checkout, so in the shared target directory every lane's release build would have rebuilt the
+// graph over every other's; unset, this entry builds as it did before LP-6 and says the gate would refuse the result.
+// It now remaps the workspace's TARGET directory too (→ /target: a build script's OUT_DIR, which the shared target puts
+// outside the checkout), and takes the door that appends: flags already in the environment are appended to there, else
+// `--config build.rustflags=[…]`, which cargo joins after any config file's own (scripts/build-paths.mjs says why). The
+// scan after the build counts every marker the packaged app's gate fails on, this host's target directories among them.
 import { spawnSync } from "node:child_process";
-import { realpathSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cargoBinaries } from "../../../scripts/cargo-target.mjs";
-import { BUILDER_PATH_MARKERS, builderPathsIn } from "../../../scripts/host-links.mjs";
+import {
+  cargoRemap,
+  REMAP_SWITCH,
+  REMAP_TARGETS,
+  readConfigRustflags,
+  remapFlags,
+  remapRequested,
+} from "../../../scripts/build-paths.mjs";
+import { cargoBinaries, workspaceTargetDir } from "../../../scripts/cargo-target.mjs";
+import {
+  BUILDER_PATH_MARKERS,
+  builderPathCounts,
+  hostTargetMarkers,
+} from "../../../scripts/host-links.mjs";
 import { FLOOR_BINARIES } from "../../../scripts/native-floor.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -45,63 +67,59 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", ".
 /** The release build's arguments. */
 export const RELEASE_BUILD_ARGS = ["build", "--release", "--locked", "-p", "field-native"];
 
-/** The neutral prefix each build-host directory is written as. */
-export const REMAP_TARGETS = { repo: "/vibefield", cargoHome: "/cargo", rustupHome: "/rustup" };
-
-function realpathOrNull(path) {
-  try {
-    return realpathSync(path);
-  } catch {
-    return null;
-  }
-}
-
-/** The `--remap-path-prefix` flags for this build host: the checkout, CARGO_HOME and RUSTUP_HOME (each as given and as
- * its real path, when that differs). rustc applies the LAST mapping that matches, so the list runs from the shortest
- * prefix to the longest: a directory nested in another is written by its own, more specific mapping. */
-export function remapFlags({
-  repo,
+/** THE release build's invocation: `{ args, env, flags, door }`. Without the switch it is the plain build (no flags, no
+ * door); with it, the checkout and its target directory join CARGO_HOME and RUSTUP_HOME in the remap, through the door
+ * that appends (`cargoRemap`). `targetDir` may be null (cargo could not say): the build then remaps the rest. */
+export function releaseInvocation({
+  repo = repoRoot,
   env = process.env,
-  home = homedir(),
-  realpath = realpathOrNull,
-}) {
-  const sources = [
-    [repo, REMAP_TARGETS.repo],
-    [env.CARGO_HOME || join(home, ".cargo"), REMAP_TARGETS.cargoHome],
-    [env.RUSTUP_HOME || join(home, ".rustup"), REMAP_TARGETS.rustupHome],
-  ];
-  const byPrefix = new Map();
-  for (const [given, target] of sources) {
-    for (const path of [given, realpath(given)]) {
-      if (typeof path !== "string" || path === "" || path === "/") continue;
-      const prefix = path.length > 1 ? path.replace(/\/+$/u, "") : path;
-      if (!byPrefix.has(prefix)) byPrefix.set(prefix, target);
-    }
-  }
-  return [...byPrefix]
-    .sort(([a], [b]) => a.length - b.length || (a < b ? -1 : 1))
-    .map(([prefix, target]) => `--remap-path-prefix=${prefix}=${target}`);
-}
-
-/** The build's environment: `flags` appended to the caller's own rustflags, carried as CARGO_ENCODED_RUSTFLAGS (which
- * cargo reads before RUSTFLAGS, so RUSTFLAGS is folded in, as cargo splits it, and dropped). */
-export function releaseBuildEnv(env, flags) {
-  const encoded = env.CARGO_ENCODED_RUSTFLAGS;
-  const existing =
-    encoded !== undefined
-      ? encoded.split("\x1f").filter((flag) => flag !== "")
-      : (env.RUSTFLAGS ?? "").split(/\s+/u).filter((flag) => flag !== "");
-  const next = { ...env, CARGO_ENCODED_RUSTFLAGS: [...existing, ...flags].join("\x1f") };
-  delete next.RUSTFLAGS;
-  return next;
+  targetDir = null,
+  configs = [],
+  home,
+  realpath,
+} = {}) {
+  if (!remapRequested(env))
+    return { args: [...RELEASE_BUILD_ARGS], env: { ...env }, flags: [], door: null };
+  const flags = remapFlags({
+    roots: [
+      [repo, REMAP_TARGETS.repo],
+      [targetDir, REMAP_TARGETS.target],
+    ],
+    env,
+    ...(home === undefined ? {} : { home }),
+    ...(realpath === undefined ? {} : { realpath }),
+  });
+  return { ...cargoRemap({ args: RELEASE_BUILD_ARGS, env, flags, configs }), flags };
 }
 
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
-  const flags = remapFlags({ repo: repoRoot });
-  console.log(`build-native-release: cargo ${RELEASE_BUILD_ARGS.join(" ")}`);
-  console.log(`build-native-release: rustflags += ${flags.join(" ")}`);
-  const env = releaseBuildEnv(process.env, flags);
-  const run = spawnSync("cargo", RELEASE_BUILD_ARGS, {
+  let targetDir = null;
+  try {
+    targetDir = workspaceTargetDir(repoRoot, process.env);
+  } catch {
+    // cargo says the same, and louder, when it runs
+  }
+  let invocation;
+  try {
+    invocation = releaseInvocation({
+      env: process.env,
+      targetDir,
+      configs: remapRequested(process.env) ? readConfigRustflags(repoRoot) : [],
+    });
+  } catch (error) {
+    console.error(
+      `build-native-release: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exit(2);
+  }
+  const { args, env, flags, door } = invocation;
+  console.log(`build-native-release: cargo ${args.join(" ")}`);
+  console.log(
+    door === null
+      ? `build-native-release: ${REMAP_SWITCH} unset — a development build, its paths NOT remapped (the packaged app's gate refuses them)`
+      : `build-native-release: ${REMAP_SWITCH}=1 — rustflags += ${flags.join(" ")} (through ${door})`,
+  );
+  const run = spawnSync("cargo", args, {
     cwd: repoRoot,
     env,
     stdio: "inherit",
@@ -111,19 +129,25 @@ if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
     process.exit(2);
   }
   if (run.status !== 0) process.exit(run.status ?? 1);
-  // The scan the packaged app's gate runs (host-links.mjs), here on what this build just wrote.
+  // The scan the packaged app's gate runs (host-links.mjs), here on what this build just wrote: it fails a remapped
+  // build, and says what an unremapped one carries.
+  const markers = [...new Set([...BUILDER_PATH_MARKERS, ...hostTargetMarkers()])];
   const leaks = [];
   for (const binary of cargoBinaries(repoRoot, "release", FLOOR_BINARIES, { env })) {
-    const found = builderPathsIn(binary.path);
-    if (found.length > 0) leaks.push(`${binary.name}: ${found.join(", ")}`);
+    const counts = builderPathCounts(binary.path, markers);
+    const found = markers.filter((marker) => counts[marker] > 0);
+    if (found.length > 0)
+      leaks.push(`${binary.name}: ${found.map((m) => `${m} ×${counts[m]}`).join(", ")}`);
   }
-  if (leaks.length > 0) {
+  if (leaks.length > 0 && door !== null) {
     console.error(
-      `build-native-release: builder paths survived the remap (${BUILDER_PATH_MARKERS.join(", ")}):\n  ${leaks.join("\n  ")}`,
+      `build-native-release: builder paths survived the remap:\n  ${leaks.join("\n  ")}`,
     );
     process.exit(1);
   }
   console.log(
-    `build-native-release: ${FLOOR_BINARIES.join(", ")} carry no builder path (${BUILDER_PATH_MARKERS.join(", ")})`,
+    leaks.length > 0
+      ? `build-native-release: not remapped, as asked — ${leaks.join("; ")}`
+      : `build-native-release: ${FLOOR_BINARIES.join(", ")} carry no builder path (${markers.join(", ")})`,
   );
 }

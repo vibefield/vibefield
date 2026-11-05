@@ -35,6 +35,8 @@
         "{workspaceRoot}/packages/electron-shell/src/testing/smoke-census.mjs",
         "{workspaceRoot}/apps/desktop/packaging/build-native-release.mjs",
         "{workspaceRoot}/scripts/host-links.mjs",
+        "{workspaceRoot}/scripts/build-paths.mjs",
+        "{workspaceRoot}/.github/workflows/release.yml",
         "{workspaceRoot}/scripts/native-floor.mjs",
         "{workspaceRoot}/scripts/cargo-target.mjs",
         "{workspaceRoot}/scripts/package-census.mjs",

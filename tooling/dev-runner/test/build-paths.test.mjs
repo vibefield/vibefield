@@ -1,0 +1,435 @@
+// LP-6b (item 170): THE release switch and the build-path remap every shipped native build takes under it
+// (scripts/build-paths.mjs) — field-native's release entry, rosettad's and mille's sibling builds, a go sibling's — each
+// through the door that APPENDS to the flags cargo would otherwise have used, never clobbering them. Unset, every build is
+// the plain one, so a development build in the shared target directory keeps its cache.
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+import {
+  RELEASE_BUILD_ARGS,
+  releaseInvocation,
+} from "../../../apps/desktop/packaging/build-native-release.mjs";
+import {
+  cargoRemap,
+  configRustflags,
+  envRustflags,
+  napiRemapEnv,
+  REMAP_SWITCH,
+  readConfigRustflags,
+  remapFlags,
+  remapRequested,
+} from "../../../scripts/build-paths.mjs";
+import { goBuildArgs, siblingCargoInvocation, siblingPnpmEnv } from "../../../scripts/siblings.mjs";
+
+const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+const ON = { [REMAP_SWITCH]: "1" };
+// a host with no real directories behind it: nothing resolves, no config file exists
+const HOST = { CARGO_HOME: "/nowhere/cargo-home", RUSTUP_HOME: "/nowhere/rustup-home" };
+const unresolved = () => null;
+
+test('the switch is VIBEFIELD_REMAP_BUILD_PATHS: "1" remaps, unset, empty or "0" does not, anything else is refused', () => {
+  assert.equal(REMAP_SWITCH, "VIBEFIELD_REMAP_BUILD_PATHS");
+  assert.equal(remapRequested(ON), true);
+  for (const env of [{}, { [REMAP_SWITCH]: "" }, { [REMAP_SWITCH]: "0" }])
+    assert.equal(remapRequested(env), false, JSON.stringify(env));
+  for (const value of ["true", "yes", "2"])
+    assert.throws(() => remapRequested({ [REMAP_SWITCH]: value }), /the switch is "1"/);
+});
+
+test("the remap: the roots, CARGO_HOME and RUSTUP_HOME, each as given and as its real path, shortest prefix first", () => {
+  const real = new Map([["/Users/me/.cargo", "/Volumes/ssd/cargo-home"]]);
+  assert.deepEqual(
+    remapFlags({
+      roots: [
+        ["/Users/me/src/vibe-field", "/vibefield"],
+        ["/Volumes/SamsungRed/rust/target", "/target"],
+        [null, "/target"],
+      ],
+      env: {},
+      home: "/Users/me",
+      realpath: (path) => real.get(path) ?? path,
+    }),
+    [
+      "--remap-path-prefix=/Users/me/.cargo=/cargo",
+      "--remap-path-prefix=/Users/me/.rustup=/rustup",
+      "--remap-path-prefix=/Volumes/ssd/cargo-home=/cargo",
+      "--remap-path-prefix=/Users/me/src/vibe-field=/vibefield",
+      "--remap-path-prefix=/Volumes/SamsungRed/rust/target=/target",
+    ],
+  );
+  // CI's own homes, given in the environment: the target nested in the checkout is written by its own, later mapping
+  assert.deepEqual(
+    remapFlags({
+      roots: [
+        ["/Users/runner/work/vibefield/rosetta-pin", "/rosetta"],
+        ["/Users/runner/work/vibefield/rosetta-pin/target", "/target"],
+      ],
+      env: { CARGO_HOME: "/Users/runner/.cargo/", RUSTUP_HOME: "/Users/runner/.rustup" },
+      home: "/nowhere",
+      realpath: unresolved,
+    }),
+    [
+      "--remap-path-prefix=/Users/runner/.cargo=/cargo",
+      "--remap-path-prefix=/Users/runner/.rustup=/rustup",
+      "--remap-path-prefix=/Users/runner/work/vibefield/rosetta-pin=/rosetta",
+      "--remap-path-prefix=/Users/runner/work/vibefield/rosetta-pin/target=/target",
+    ],
+  );
+});
+
+test("a config file's rustflags are read as build or target, by table header or dotted key", () => {
+  assert.deepEqual(configRustflags('[build]\ntarget-dir = "/Volumes/ssd/t"\n'), {
+    build: false,
+    target: false,
+  });
+  assert.deepEqual(configRustflags('[build]\nrustflags = ["-C", "debuginfo=1"]\n'), {
+    build: true,
+    target: false,
+  });
+  assert.deepEqual(configRustflags('build.rustflags = "-Dwarnings"\n'), {
+    build: true,
+    target: false,
+  });
+  assert.deepEqual(
+    configRustflags('[target.aarch64-apple-darwin]\nlinker = "cc"\nrustflags = ["-C", "x"]\n'),
+    { build: false, target: true },
+  );
+  assert.deepEqual(
+    configRustflags(`[target.'cfg(target_os = "macos")']\nrustflags = ["-C", "x"]\n`),
+    { build: false, target: true },
+  );
+  assert.deepEqual(configRustflags('target.x86_64-apple-darwin.rustflags = ["-C", "y"]\n'), {
+    build: false,
+    target: true,
+  });
+  // a comment, an array element holding '=', a [[table]] and a key that only ends in the word are none of them
+  assert.deepEqual(
+    configRustflags(
+      '# rustflags = ["-C"]\n[build]\nnot-rustflags = 1\nflags = [\n  "--remap-path-prefix=/a=/b",\n]\n[[alias]]\nrustflags = 1\n',
+    ),
+    { build: false, target: false },
+  );
+});
+
+test("the config files cargo reads for a build in a directory: every .cargo/ above it, then CARGO_HOME's", () => {
+  const files = {
+    "/w/mille-pin/.cargo/config.toml": '[build]\nrustflags = ["-C", "a"]\n',
+    "/w/.cargo/config": '[build]\ntarget-dir = "/t"\n',
+    "/h/config.toml": '[target.aarch64-apple-darwin]\nrustflags = ["-C", "b"]\n',
+  };
+  const read = (path) => files[path] ?? null;
+  assert.deepEqual(
+    readConfigRustflags("/w/mille-pin/packages/mille", { env: { CARGO_HOME: "/h" }, read }),
+    [
+      { file: "/w/mille-pin/.cargo/config.toml", build: true, target: false },
+      { file: "/h/config.toml", build: false, target: true },
+    ],
+  );
+  assert.deepEqual(readConfigRustflags("/elsewhere", { env: {}, home: "/nobody", read }), []);
+});
+
+test("a cargo WE run: --config build.rustflags (joined with a config's own) unless the environment carries flags, then appended there", () => {
+  const flags = [
+    "--remap-path-prefix=/Users/John Doe/.cargo=/cargo",
+    "--remap-path-prefix=/w=/vibefield",
+  ];
+  // no environment flags: cargo's own config arrays join, so the flags ride --config, a space in a path intact
+  const plain = cargoRemap({ args: RELEASE_BUILD_ARGS, env: { PATH: "/bin" }, flags });
+  assert.equal(plain.door, "--config build.rustflags");
+  assert.deepEqual(plain.args, [
+    "--config",
+    'build.rustflags=["--remap-path-prefix=/Users/John Doe/.cargo=/cargo","--remap-path-prefix=/w=/vibefield"]',
+    ...RELEASE_BUILD_ARGS,
+  ]);
+  assert.deepEqual(plain.env, { PATH: "/bin" });
+  // a config's build.rustflags is joined, not refused
+  const joined = cargoRemap({
+    args: ["build"],
+    env: {},
+    flags,
+    configs: [{ file: "/w/.cargo/config.toml", build: true, target: false }],
+  });
+  assert.equal(joined.door, "--config build.rustflags");
+  // the environment's RUSTFLAGS is folded in as cargo splits it, then dropped: CARGO_ENCODED_RUSTFLAGS is read first
+  assert.deepEqual(
+    cargoRemap({
+      args: ["build"],
+      env: { RUSTFLAGS: "  -C target-cpu=native   -Dwarnings " },
+      flags,
+    }),
+    {
+      args: ["build"],
+      env: {
+        CARGO_ENCODED_RUSTFLAGS: ["-C", "target-cpu=native", "-Dwarnings", ...flags].join("\x1f"),
+      },
+      door: "CARGO_ENCODED_RUSTFLAGS",
+    },
+  );
+  // an encoded list is appended to as it stands (and wins over RUSTFLAGS, as in cargo); an empty one is still "set"
+  assert.deepEqual(
+    cargoRemap({
+      args: ["build"],
+      env: { CARGO_ENCODED_RUSTFLAGS: "-C\x1fdebuginfo=1", RUSTFLAGS: "-Dwarnings" },
+      flags,
+    }).env,
+    { CARGO_ENCODED_RUSTFLAGS: ["-C", "debuginfo=1", ...flags].join("\x1f") },
+  );
+  assert.deepEqual(envRustflags({ CARGO_ENCODED_RUSTFLAGS: "" }), []);
+  assert.equal(envRustflags({}), null);
+  // a config's TARGET rustflags would make cargo drop every build.rustflags, ours too: refused, by name
+  assert.throws(
+    () =>
+      cargoRemap({
+        args: ["build"],
+        env: {},
+        flags,
+        configs: [{ file: "/h/config.toml", build: false, target: true }],
+      }),
+    /\/h\/config\.toml sets target rustflags, so cargo would ignore the remap's build\.rustflags/,
+  );
+  // … unless the environment's flags already override every config: then appended there, as above
+  assert.equal(
+    cargoRemap({
+      args: ["build"],
+      env: { RUSTFLAGS: "-Dwarnings" },
+      flags,
+      configs: [{ file: "/h/config.toml", build: false, target: true }],
+    }).door,
+    "CARGO_ENCODED_RUSTFLAGS",
+  );
+});
+
+test("napi's door is RUSTFLAGS, composed as napi reads it; whitespace and a config's rustflags are refused", () => {
+  const flags = ["--remap-path-prefix=/w/mille-pin=/mille", "--remap-path-prefix=/h=/cargo"];
+  assert.deepEqual(napiRemapEnv({ env: { PATH: "/bin" }, flags }), {
+    env: { PATH: "/bin", RUSTFLAGS: flags.join(" ") },
+    door: "RUSTFLAGS",
+  });
+  // napi reads `RUSTFLAGS ?? CARGO_BUILD_RUSTFLAGS`: both are kept ahead of ours
+  assert.equal(
+    napiRemapEnv({ env: { CARGO_BUILD_RUSTFLAGS: "-C opt-level=3" }, flags }).env.RUSTFLAGS,
+    ["-C", "opt-level=3", ...flags].join(" "),
+  );
+  assert.equal(
+    napiRemapEnv({ env: { RUSTFLAGS: "-Dwarnings", CARGO_BUILD_RUSTFLAGS: "-C x" }, flags }).env
+      .RUSTFLAGS,
+    ["-Dwarnings", ...flags].join(" "),
+  );
+  // cargo reads CARGO_ENCODED_RUSTFLAGS before napi's RUSTFLAGS: appended there
+  assert.deepEqual(napiRemapEnv({ env: { CARGO_ENCODED_RUSTFLAGS: "-Dwarnings" }, flags }), {
+    env: { CARGO_ENCODED_RUSTFLAGS: ["-Dwarnings", ...flags].join("\x1f") },
+    door: "CARGO_ENCODED_RUSTFLAGS",
+  });
+  assert.throws(
+    () => napiRemapEnv({ env: {}, flags: ["--remap-path-prefix=/Users/John Doe/.cargo=/cargo"] }),
+    /holds whitespace, which RUSTFLAGS \(napi's door\) splits on/,
+  );
+  assert.throws(
+    () =>
+      napiRemapEnv({
+        env: {},
+        flags,
+        configs: [{ file: "/w/mille-pin/.cargo/config.toml", build: true, target: false }],
+      }),
+    /\/w\/mille-pin\/\.cargo\/config\.toml sets rustflags, which napi's RUSTFLAGS would replace/,
+  );
+});
+
+test("field-native's release build: plain without the switch; under it, the checkout and its target remapped through --config", () => {
+  assert.deepEqual(releaseInvocation({ env: { PATH: "/bin" } }), {
+    args: RELEASE_BUILD_ARGS,
+    env: { PATH: "/bin" },
+    flags: [],
+    door: null,
+  });
+  const on = releaseInvocation({
+    repo: "/Users/runner/work/vibefield/vibefield",
+    env: { ...ON, CARGO_HOME: "/Users/runner/.cargo", RUSTUP_HOME: "/Users/runner/.rustup" },
+    targetDir: "/Users/runner/work/vibefield/vibefield/target",
+    realpath: unresolved,
+  });
+  assert.deepEqual(on.flags, [
+    "--remap-path-prefix=/Users/runner/.cargo=/cargo",
+    "--remap-path-prefix=/Users/runner/.rustup=/rustup",
+    "--remap-path-prefix=/Users/runner/work/vibefield/vibefield=/vibefield",
+    "--remap-path-prefix=/Users/runner/work/vibefield/vibefield/target=/target",
+  ]);
+  assert.equal(on.door, "--config build.rustflags");
+  assert.deepEqual(on.args, [
+    "--config",
+    `build.rustflags=${JSON.stringify(on.flags)}`,
+    ...RELEASE_BUILD_ARGS,
+  ]);
+  // the caller's RUSTFLAGS: the environment door, its flags first
+  const folded = releaseInvocation({
+    repo: "/w",
+    env: { ...ON, ...HOST, RUSTFLAGS: "-Dwarnings" },
+    realpath: unresolved,
+  });
+  assert.deepEqual(folded.args, RELEASE_BUILD_ARGS);
+  assert.equal(folded.env.CARGO_ENCODED_RUSTFLAGS.split("\x1f")[0], "-Dwarnings");
+  assert.equal(folded.env.RUSTFLAGS, undefined);
+  // a target config with no environment flags refuses before cargo runs
+  assert.throws(
+    () =>
+      releaseInvocation({
+        repo: "/w",
+        env: { ...ON, ...HOST },
+        configs: [{ file: "/w/.cargo/config.toml", build: false, target: true }],
+        realpath: unresolved,
+      }),
+    /sets target rustflags/,
+  );
+});
+
+test("rosettad's build: plain without the switch; under it, its checkout (/rosetta) and its own target (/target) remapped", () => {
+  const args = ["build", "--release", "-p", "rosettad"];
+  const off = siblingCargoInvocation({
+    name: "rosetta",
+    dir: "/nowhere/rosetta-pin",
+    args,
+    env: HOST,
+  });
+  assert.deepEqual(off, { args, env: HOST, remap: null });
+  const on = siblingCargoInvocation({
+    name: "rosetta",
+    dir: "/nowhere/rosetta-pin",
+    args,
+    env: { ...ON, ...HOST },
+    targetDirOf: (dir) => {
+      assert.equal(dir, "/nowhere/rosetta-pin");
+      return "/Volumes/SamsungRed/rust-target/rosetta-pin";
+    },
+    realpath: unresolved,
+  });
+  assert.deepEqual(on.remap.flags, [
+    "--remap-path-prefix=/nowhere/cargo-home=/cargo",
+    "--remap-path-prefix=/nowhere/rosetta-pin=/rosetta",
+    "--remap-path-prefix=/nowhere/rustup-home=/rustup",
+    "--remap-path-prefix=/Volumes/SamsungRed/rust-target/rosetta-pin=/target",
+  ]);
+  assert.equal(on.remap.door, "--config build.rustflags");
+  assert.deepEqual(on.args.slice(2), args);
+  assert.equal(on.env.RUSTFLAGS, undefined);
+  assert.equal(on.env.CARGO_ENCODED_RUSTFLAGS, undefined);
+});
+
+test("mille's napi build: RUSTFLAGS under the switch, the lane override's target remapped; never for an install or a non-cargo sibling", () => {
+  const off = siblingPnpmEnv(
+    { ...HOST, CARGO_TARGET_DIR: "/lane/target" },
+    { name: "mille", dir: "/nowhere/mille-pin", build: true, isCargo: () => true },
+  );
+  assert.deepEqual(off, {
+    env: { ...HOST, CARGO_TARGET_DIR: "/lane/target/siblings/mille" },
+    remap: null,
+  });
+  const on = siblingPnpmEnv(
+    { ...ON, ...HOST, CARGO_TARGET_DIR: "/lane/target" },
+    {
+      name: "mille",
+      dir: "/nowhere/mille-pin",
+      build: true,
+      isCargo: () => true,
+      targetDirOf: () => assert.fail("the override names the target"),
+      realpath: unresolved,
+    },
+  );
+  assert.equal(on.remap.door, "RUSTFLAGS");
+  assert.deepEqual(on.remap.flags, [
+    "--remap-path-prefix=/nowhere/mille-pin=/mille",
+    "--remap-path-prefix=/nowhere/cargo-home=/cargo",
+    "--remap-path-prefix=/nowhere/rustup-home=/rustup",
+    "--remap-path-prefix=/lane/target/siblings/mille=/target",
+  ]);
+  assert.equal(on.env.RUSTFLAGS, on.remap.flags.join(" "));
+  assert.equal(on.env.CARGO_TARGET_DIR, "/lane/target/siblings/mille");
+  // no override: the target cargo names for the checkout
+  assert.match(
+    siblingPnpmEnv(
+      { ...ON, ...HOST },
+      {
+        name: "mille",
+        dir: "/nowhere/mille-pin",
+        build: true,
+        isCargo: () => true,
+        targetDirOf: () => "/Volumes/SamsungRed/rust/target",
+        realpath: unresolved,
+      },
+    ).env.RUSTFLAGS,
+    /--remap-path-prefix=\/Volumes\/SamsungRed\/rust\/target=\/target$/,
+  );
+  // an install, and a sibling whose checkout holds no cargo workspace (ice's TypeScript), stay plain
+  assert.equal(
+    siblingPnpmEnv(
+      { ...ON, ...HOST },
+      { name: "mille", dir: "/nowhere/mille-pin", isCargo: () => true },
+    ).remap,
+    null,
+  );
+  assert.equal(
+    siblingPnpmEnv(
+      { ...ON, ...HOST },
+      { name: "ice", dir: "/nowhere/ice", build: true, isCargo: () => false },
+    ).remap,
+    null,
+  );
+});
+
+test("a go sibling's build adds -trimpath under the switch, and only then", () => {
+  assert.deepEqual(goBuildArgs("/r/target/debug/sidecar-slim", {}), [
+    "build",
+    "-o",
+    "/r/target/debug/sidecar-slim",
+    ".",
+  ]);
+  assert.deepEqual(goBuildArgs("/r/target/debug/sidecar-slim", ON), [
+    "build",
+    "-trimpath",
+    "-o",
+    "/r/target/debug/sidecar-slim",
+    ".",
+  ]);
+});
+
+test("release.yml's build job sets the switch, and nothing else in .github or the scripts does; the switch is read in one helper", () => {
+  const release = readFileSync(join(REPO_ROOT, ".github", "workflows", "release.yml"), "utf8");
+  const build = release.slice(release.indexOf("\n  build:\n"), release.indexOf("\n  sign:\n"));
+  assert.match(
+    build,
+    /\n {4}env:\n(?: {6}#[^\n]*\n| {6}[A-Z_]+: [^\n]+\n)* {6}VIBEFIELD_REMAP_BUILD_PATHS: "1"\n/u,
+  );
+  assert.equal(
+    release.split("VIBEFIELD_REMAP_BUILD_PATHS:").length,
+    2,
+    "set once, in the build job",
+  );
+  const github = join(REPO_ROOT, ".github");
+  const yamls = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true }))
+      if (entry.isDirectory()) walk(join(dir, entry.name));
+      else if (/\.ya?ml$/u.test(entry.name)) yamls.push(join(dir, entry.name));
+  };
+  walk(github);
+  for (const file of yamls.filter((f) => !f.endsWith(join("workflows", "release.yml"))))
+    assert.doesNotMatch(readFileSync(file, "utf8"), /VIBEFIELD_REMAP_BUILD_PATHS/u, file);
+  // the builds ask remapRequested, never the variable itself
+  for (const rel of [
+    "apps/desktop/packaging/build-native-release.mjs",
+    "scripts/siblings.mjs",
+    "scripts/stage-package.mjs",
+  ]) {
+    const source = readFileSync(join(REPO_ROOT, rel), "utf8");
+    assert.doesNotMatch(
+      source,
+      /env\.VIBEFIELD_REMAP_BUILD_PATHS|\[["']VIBEFIELD_REMAP_BUILD_PATHS/u,
+      rel,
+    );
+  }
+  assert.match(
+    readFileSync(join(REPO_ROOT, "apps/desktop/packaging/build-native-release.mjs"), "utf8"),
+    /if \(!remapRequested\(env\)\)/u,
+  );
+});

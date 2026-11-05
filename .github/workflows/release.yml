@@ -182,6 +182,9 @@ jobs:
     # silent fallback. The matrix's move to macos-26 (default Xcode 26.6, the dev Mac's) is ROADMAP's follow-on.
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      # LP-6b (item 170): THE release switch — every shipped native build in this job remaps its build paths
+      # (scripts/build-paths.mjs); set nowhere else, so a development build keeps its cache
+      VIBEFIELD_REMAP_BUILD_PATHS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

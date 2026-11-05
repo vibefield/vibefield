@@ -66,6 +66,12 @@
 //           cargo sibling, `go build -o <repo>/target/debug/<binary>` in the go
 //           sibling's module
 //   bin     print the built rosettad path (exit 1 when it is not built)
+//
+// LP-6b (item 170): under THE release switch (VIBEFIELD_REMAP_BUILD_PATHS=1, release.yml's build job) `build` and
+// `build-js` pass the build-path remap to every shipped native build they run — rosettad's cargo through the door that
+// appends (`--config build.rustflags`, or the environment's own flags), mille's napi build through RUSTFLAGS, the go
+// sibling's with `-trimpath` — and the pinned checkouts stay untouched: only flags in OUR environment and arguments reach
+// them (scripts/build-paths.mjs). Unset, every build is what it was.
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -83,6 +89,15 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  cargoRemap,
+  napiRemapEnv,
+  REMAP_SWITCH,
+  REMAP_TARGETS,
+  readConfigRustflags,
+  remapFlags,
+  remapRequested,
+} from "./build-paths.mjs";
 import { ensureElectronBinary } from "./electron-binary.mjs";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -1802,9 +1817,42 @@ export function alignHostPeers(root, entry) {
   }
 }
 
-function runPnpm(dir, args) {
-  const env = { ...process.env };
+/** The environment a sibling's pnpm run gets (`{ env, remap }`): the caller's, with a lane's CARGO_TARGET_DIR moved under
+ * `siblings/mille` — and, for a BUILD of a sibling whose checkout is a cargo workspace (mille's napi binding) under the
+ * release switch (LP-6b), the build-path remap of its checkout (→ /<name>), its cargo target (→ /target), CARGO_HOME and
+ * RUSTUP_HOME through napi's own door (`napiRemapEnv`: napi composes RUSTFLAGS and runs cargo itself). `remap` is
+ * `{ flags, door }` or null. The target is the override's when one is set, else what cargo says for the checkout. */
+export function siblingPnpmEnv(
+  base = process.env,
+  {
+    name,
+    dir,
+    build = false,
+    targetDirOf = cargoTargetDir,
+    isCargo = (checkout) => existsSync(join(checkout, "Cargo.toml")),
+    home,
+    realpath,
+  } = {},
+) {
+  const env = { ...base };
   if (env.CARGO_TARGET_DIR) env.CARGO_TARGET_DIR = join(env.CARGO_TARGET_DIR, "siblings", "mille");
+  if (!build || !remapRequested(env) || !isCargo(dir)) return { env, remap: null };
+  const host = home === undefined ? {} : { home };
+  const flags = remapFlags({
+    roots: [
+      [dir, `/${name}`],
+      [env.CARGO_TARGET_DIR ?? targetDirOf(dir), REMAP_TARGETS.target],
+    ],
+    env,
+    ...host,
+    ...(realpath === undefined ? {} : { realpath }),
+  });
+  const configs = readConfigRustflags(dir, { env, ...host });
+  const { env: remapped, door } = napiRemapEnv({ env, flags, configs });
+  return { env: remapped, remap: { flags, door } };
+}
+
+function runPnpm(dir, args, env = siblingPnpmEnv(process.env).env) {
   const run = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, {
     cwd: dir,
     stdio: "inherit",
@@ -1872,9 +1920,16 @@ export function buildJavaScript(root, names = []) {
     }
     if (entry.pnpm) {
       alignHostPeers(root, entry);
-      result = runPnpm(siblingDir(root, entry), entry.pnpm.build);
+      const dir = siblingDir(root, entry);
+      // LP-6b: a shipped native build (mille's napi binding) remaps its paths under the release switch
+      const { env, remap } = siblingPnpmEnv(process.env, { name, dir, build: true });
+      if (remap !== null)
+        console.log(
+          `siblings: ${name}: ${REMAP_SWITCH}=1 — rustflags += ${remap.flags.join(" ")} (through ${remap.door})`,
+        );
+      result = runPnpm(dir, entry.pnpm.build, env);
       if (result !== 0) return result;
-      if (entry.pnpm.afterBuild) result = runPnpm(siblingDir(root, entry), entry.pnpm.afterBuild);
+      if (entry.pnpm.afterBuild) result = runPnpm(dir, entry.pnpm.afterBuild, env);
       if (result !== 0) return result;
       alignHostPeers(root, entry);
     }
@@ -2181,6 +2236,41 @@ function pin(root, names, { skipTypecheck = false } = {}) {
   return 0;
 }
 
+/** The cargo sibling's build invocation (`{ args, env, remap }`): the plain build in `siblingCargoEnv`, or — under the
+ * release switch (LP-6b) — the remap of its checkout (→ /<name>), its target directory (→ /target), CARGO_HOME and
+ * RUSTUP_HOME, through the door that appends (`cargoRemap`: the environment's own flags, else `--config
+ * build.rustflags`, which cargo joins with the sibling's own config). `remap` is `{ flags, door }` or null. */
+export function siblingCargoInvocation({
+  name,
+  dir,
+  args,
+  env = siblingCargoEnv(),
+  targetDirOf = cargoTargetDir,
+  home,
+  realpath,
+}) {
+  if (!remapRequested(env)) return { args: [...args], env: { ...env }, remap: null };
+  const host = home === undefined ? {} : { home };
+  const flags = remapFlags({
+    roots: [
+      [dir, `/${name}`],
+      [targetDirOf(dir), REMAP_TARGETS.target],
+    ],
+    env,
+    ...host,
+    ...(realpath === undefined ? {} : { realpath }),
+  });
+  const configs = readConfigRustflags(dir, { env, ...host });
+  const remapped = cargoRemap({ args, env, flags, configs });
+  return { args: remapped.args, env: remapped.env, remap: { flags, door: remapped.door } };
+}
+
+/** The go sibling's build arguments: under the release switch (LP-6b) `-trimpath`, so a sidecar built here carries none
+ * of the GOROOT, module-cache and checkout paths truffle's own release build writes today (item 170's petition). */
+export function goBuildArgs(output, env = process.env) {
+  return ["build", ...(remapRequested(env) ? ["-trimpath"] : []), "-o", output, "."];
+}
+
 function buildCargo(root) {
   const bin = rosettadBinary(root);
   if (bin === null) return null; // no cargo sibling: nothing owed here
@@ -2201,12 +2291,24 @@ function buildCargo(root) {
       `siblings:build WARN: ${bin.name} HEAD ${head.slice(0, 12)} ≠ pin ${entry.sha.slice(0, 12)} — building an unpinned revision (pnpm siblings:pin to accept it)`,
     );
   }
-  const args = ["build", `--${entry.cargo.profile ?? "release"}`, "-p", entry.cargo.crate];
-  console.log(`siblings:build: cargo ${args.join(" ")}  (in ${bin.dir})`);
+  const invocation = siblingCargoInvocation({
+    name: bin.name,
+    dir: bin.dir,
+    args: ["build", `--${entry.cargo.profile ?? "release"}`, "-p", entry.cargo.crate],
+  });
+  if (invocation.remap !== null)
+    console.log(
+      `siblings:build: ${REMAP_SWITCH}=1 — rustflags += ${invocation.remap.flags.join(" ")} (through ${invocation.remap.door})`,
+    );
+  console.log(`siblings:build: cargo ${invocation.args.join(" ")}  (in ${bin.dir})`);
   // rustup picks the sibling's own rust-toolchain.toml from the cwd; the build
   // lands where `cargo metadata` said it would, because both run under the
   // same environment (`siblingCargoEnv`: no lane target-dir override).
-  const run = spawnSync("cargo", args, { cwd: bin.dir, stdio: "inherit", env: siblingCargoEnv() });
+  const run = spawnSync("cargo", invocation.args, {
+    cwd: bin.dir,
+    stdio: "inherit",
+    env: invocation.env,
+  });
   if (run.status !== 0) return run.status ?? 1;
   if (!existsSync(bin.path)) {
     console.error(`siblings:build FAIL: cargo succeeded but ${bin.path} does not exist`);
@@ -2234,12 +2336,13 @@ function buildGo(root) {
     );
   }
   mkdirSync(dirname(sidecar.path), { recursive: true });
-  console.log(`siblings:build: go build -o ${sidecar.path} .  (in ${sidecar.moduleDir})`);
+  const goArgs = goBuildArgs(sidecar.path);
+  console.log(`siblings:build: go ${goArgs.join(" ")}  (in ${sidecar.moduleDir})`);
   // GOTOOLCHAIN=auto: the module names an exact toolchain in its go.mod, which
   // this machine may not have installed — auto lets the go command fetch the one
   // the sibling asks for instead of refusing. The toolchain is the sibling's
   // choice, the same way rustup takes the cargo sibling's rust-toolchain.toml.
-  const run = spawnSync("go", ["build", "-o", sidecar.path, "."], {
+  const run = spawnSync("go", goArgs, {
     cwd: sidecar.moduleDir,
     stdio: "inherit",
     env: { ...process.env, GOTOOLCHAIN: "auto" },
