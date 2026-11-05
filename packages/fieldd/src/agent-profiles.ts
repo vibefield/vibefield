@@ -102,6 +102,9 @@ export interface PersonaSessions {
   forgetUnder(profileIds: ReadonlySet<string>): void;
   /** The persona's open login pane, when it has one. */
   signingIn(profileId: string): { sessionId: string; since: string } | undefined;
+  /** Item 177 — throws the sessions' refusal (UNAVAILABLE {service: "agents", state: "records-unreadable"}) while
+   * their records cannot be read: a sign-out and a set's delete ask it before they change anything. */
+  readable(): void;
 }
 
 /** AC-3 — how long an enrollment waits for a ready daemon's first census (the

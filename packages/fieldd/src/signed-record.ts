@@ -55,6 +55,8 @@ export type SignedRead =
  * cannot read it"): never a path or an error's name. */
 export const UNREADABLE_WORDS = {
   sparks: "VibeField can't read the sparks it keeps; nothing was changed",
+  // item 177 — the sessions' records (SessionRecordStore), the sixth store: a sign-out and a set's delete refuse first
+  sessions: "VibeField can't read the sessions it keeps; nothing was changed",
   needs: "VibeField can't read what waits on you; nothing was changed",
   inputs: "VibeField can't keep words for its sessions; nothing was sent",
   // CP-4a1 — the flow records, item 172's fifth store
@@ -210,6 +212,9 @@ export interface RecordSignerOptions {
   readonly logger?: Logger | undefined;
   /** a record file's read (utf8): a seam for a disk that does not answer (EMFILE), in tests */
   readonly readFile?: ((path: string) => string) | undefined;
+  /** Item 177 — how the key is written in its file: hex (every store since SparkStore), or base64 (the sessions' key,
+   * AR-4b's, read and made as it always was). SKELETON (the red): not read yet. */
+  readonly keyEncoding?: "hex" | "base64" | undefined;
 }
 
 export class RecordSigner {

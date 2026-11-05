@@ -66,7 +66,14 @@ export class SessionRecordStore {
   private launched: Map<string, { at: number; runtimeRunId: string }> | undefined;
 
   constructor(
-    private readonly opts: { dir: string; keyPath: string; now: () => Date; logger?: Logger },
+    private readonly opts: {
+      dir: string;
+      keyPath: string;
+      now: () => Date;
+      logger?: Logger;
+      /** item 177 — a record file's read, for the one signer (a test's seam). SKELETON (the red): not read yet. */
+      readFile?: ((path: string) => string) | undefined;
+    },
   ) {
     this.logger = opts.logger ?? createNoopLogger();
   }

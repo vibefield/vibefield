@@ -7,7 +7,12 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AGENT_CATALOG_READERS, AgentsProfileSetsListResult, LAYOUT } from "@vibefield/contracts";
+import {
+  AGENT_CATALOG_READERS,
+  AgentsProfileSetsListResult,
+  LAYOUT,
+  RECORD_STORES,
+} from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
 import type { AgentProfile } from "@vibefield/puppeteer-core";
 import type { AgentRuntime, ProfileSetInfo } from "@vibefield/puppeteer-runtime";
@@ -15,6 +20,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IndexService } from "../src/agent-index";
 import { AgentProfileService, type PersonaSessions } from "../src/agent-profiles";
 import { ProfileDraftsStore } from "../src/profile-drafts";
+import { recordsUnreadable, UNREADABLE_WORDS } from "../src/signed-record";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -109,6 +115,7 @@ const idleSessions: PersonaSessions = {
   endLogins: async () => undefined,
   forgetUnder: () => undefined,
   signingIn: () => undefined,
+  readable: () => undefined,
 };
 
 function service(
@@ -508,5 +515,60 @@ describe("AO-5a — a profile Add a profile… made is kept at its first sign-in
     const { profiles } = service(root, stubRuntime(state));
     expect(await profiles.discardSet("work")).toEqual({ discarded: false, stopped: 0 });
     expect(state.sets).toHaveLength(1);
+  });
+});
+
+describe("item 177 — a sign-out and a set's delete refuse before they change anything, when the sessions' records cannot be read", () => {
+  /** The sessions' records cannot be read: every read of them refuses as SessionRecordStore's would. */
+  function unreadableSessions() {
+    const calls: string[] = [];
+    const refuse = (): never => {
+      throw recordsUnreadable(RECORD_STORES.SERVICE_AGENTS, UNREADABLE_WORDS.sessions, true);
+    };
+    const sessions: PersonaSessions = {
+      readable: refuse,
+      liveUnder: refuse,
+      stopUnder: async () => refuse(),
+      endLogins: async () => void calls.push("endLogins"),
+      forgetUnder: refuse,
+      signingIn: () => undefined,
+    };
+    return { sessions, calls };
+  }
+
+  const refused = {
+    kind: "UNAVAILABLE",
+    retryable: true,
+    message: UNREADABLE_WORDS.sessions,
+    details: { service: RECORD_STORES.SERVICE_AGENTS, state: RECORD_STORES.STATE_UNREADABLE },
+  };
+
+  it("S2 · a sign-out (agents.profiles.delete) refuses in fieldd's words: the sign-in is not retired, its login pane not ended", async () => {
+    const root = userRoot();
+    const work = account(root, "work", "p-claude");
+    mkdirSync(work.dataRoot, { recursive: true });
+    const state = { sets: [managedSet(root, "work")], profiles: [work] };
+    const { sessions, calls } = unreadableSessions();
+    const { profiles } = service(root, stubRuntime(state), sessions);
+    await expect(profiles.signOut("p-claude")).rejects.toMatchObject(refused);
+    // never retired: the refusal came before any act
+    expect(state.profiles[0]?.retiredAt).toBeUndefined();
+    expect(calls).toEqual([]);
+    expect(existsSync(work.dataRoot)).toBe(true);
+  });
+
+  it("S3 · a set's delete (agents.profileSets.delete) refuses in fieldd's words: no sign-in in it is retired, nothing is deleted", async () => {
+    const root = userRoot();
+    const work = account(root, "work", "p-kimi", "kimi");
+    mkdirSync(work.dataRoot, { recursive: true });
+    const state = { sets: [managedSet(root, "work")], profiles: [work] };
+    const { sessions, calls } = unreadableSessions();
+    const { profiles } = service(root, stubRuntime(state), sessions);
+    await expect(profiles.deleteSet("work")).rejects.toMatchObject(refused);
+    // never retired: the refusal came before any act
+    expect(state.profiles[0]?.retiredAt).toBeUndefined();
+    expect(state.sets).toHaveLength(1);
+    expect(calls).toEqual([]);
+    expect(existsSync(work.dataRoot)).toBe(true);
   });
 });

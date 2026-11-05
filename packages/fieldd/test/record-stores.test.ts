@@ -1,3 +1,4 @@
+import { createHmac, randomBytes } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -12,6 +13,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   AGENT_CATALOG,
+  AGENT_SESSION_RECORD_FORMAT,
+  type AgentSessionRecord,
   NEEDS_RECORD_FORMAT,
   type NeedsRecord,
   RECORD_STORES,
@@ -21,6 +24,7 @@ import {
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { AgentInputQueues } from "../src/agent-input-queue";
+import { SessionRecordStore } from "../src/agent-sessions";
 import { FlowRecords } from "../src/flows/records";
 import { RpcCallError } from "../src/native-link";
 import {
@@ -144,6 +148,7 @@ function resign(
   file: string,
   keyPath: string,
   mutate: (body: Record<string, unknown>) => Record<string, unknown>,
+  keyEncoding?: "hex" | "base64",
 ) {
   const { signature: _s, ...body } = JSON.parse(readFileSync(file, "utf8")) as Record<
     string,
@@ -152,7 +157,7 @@ function resign(
   const next = mutate(body);
   writeFileSync(
     file,
-    `${JSON.stringify({ ...next, signature: new RecordSigner({ keyPath }).sign(next) })}\n`,
+    `${JSON.stringify({ ...next, signature: new RecordSigner({ keyPath, keyEncoding }).sign(next) })}\n`,
     {
       mode: 0o600,
     },
@@ -201,6 +206,8 @@ interface StoreCase {
   readonly words: string;
   dir(root: string): string;
   keyPath(root: string): string;
+  /** how its key is written (item 177: the sessions' is base64, AR-4b's); hex when unsaid */
+  readonly keyEncoding?: "hex" | "base64";
   /** a valid record kept by the store itself; its file and its key */
   seed(root: string, which: 0 | 1): { file: string; key: string };
   /** the store as a fresh fieldd opens it, through its boot read */
@@ -246,6 +253,61 @@ const sparksCase: StoreCase = {
       },
       refuse: () => outcome(() => store.list()),
       write: (key) => outcome(() => store.write(spark(key, key === VELA ? "Vela" : "Lyra"))),
+    };
+  },
+};
+
+const sessionRecord = (runtimeRunId: string): AgentSessionRecord => ({
+  format: AGENT_SESSION_RECORD_FORMAT,
+  runtimeRunId,
+  runtimeEpoch: 1,
+  provider: AGENT,
+  cwd: "/repo",
+  continuation: { providerId: AGENT, nativeSessionId: `native-${runtimeRunId}` },
+  createdAt: "2026-11-05T04:00:00.000Z",
+  updatedAt: "2026-11-05T04:00:00.000Z",
+});
+
+const NOW = () => new Date("2026-11-05T05:00:00.000Z");
+
+/** Item 177 — the sessions' records (SessionRecordStore), the sixth store: read at each ask, as the sparks are. */
+const sessionsCase: StoreCase = {
+  name: "the sessions' records (SessionRecordStore, read at each ask)",
+  service: RECORD_STORES.SERVICE_AGENTS,
+  retryable: true,
+  words: UNREADABLE_WORDS.sessions,
+  keyEncoding: "base64",
+  dir: (root) => join(root, "agents", "sessions"),
+  keyPath: (root) => join(root, "agents", "sessions.key"),
+  seed(root, which) {
+    const store = new SessionRecordStore({
+      dir: this.dir(root),
+      keyPath: this.keyPath(root),
+      now: NOW,
+    });
+    const record = sessionRecord(which === 0 ? "run-ada" : "run-ben");
+    store.write(record);
+    return { file: store.path(record.runtimeRunId), key: record.runtimeRunId };
+  },
+  boot(root, events, readFile) {
+    const store = new SessionRecordStore({
+      dir: this.dir(root),
+      keyPath: this.keyPath(root),
+      now: NOW,
+      logger: capture(events),
+      readFile,
+    });
+    return {
+      read: null,
+      served: () => {
+        try {
+          return store.list().map((record) => record.runtimeRunId);
+        } catch (err) {
+          return { message: (err as Error).message };
+        }
+      },
+      refuse: () => outcome(() => store.list()),
+      write: (key) => outcome(() => store.write(sessionRecord(key))),
     };
   },
 };
@@ -407,7 +469,7 @@ const flowsCase: StoreCase = {
   },
 };
 
-const CASES = [sparksCase, needsCase, inputsCase, keptCase, flowsCase];
+const CASES = [sparksCase, needsCase, inputsCase, keptCase, flowsCase, sessionsCase];
 
 const refusalOf = (c: StoreCase) => ({
   kind: "UNAVAILABLE",
@@ -519,6 +581,7 @@ describe("item 172 — the read seam is the tests' alone", () => {
       .sort();
     expect(passes).toEqual([
       "agent-input-queue.ts: readFile: opts.readFile,",
+      "agent-sessions.ts: readFile: opts.readFile,",
       "flows/records.ts: readFile: opts.readFile,",
       "tool-plane/rooms/you/store.ts: readFile: opts.readFile,",
       "tool-plane/spark-kept.ts: readFile: opts.readFile,",
@@ -582,7 +645,7 @@ describe.each(CASES)("item 172 — $name, when the disk does not answer", (c) =>
     const root = tmp();
     const newer = c.seed(root, 0);
     const other = c.seed(root, 1);
-    resign(newer.file, c.keyPath(root), (body) => ({ ...body, format: 2 }));
+    resign(newer.file, c.keyPath(root), (body) => ({ ...body, format: 2 }), c.keyEncoding);
     const bytes = readFileSync(newer.file, "utf8");
     const events: Events = [];
     const booted = c.boot(root, events);
@@ -616,5 +679,46 @@ describe("item 172 — the sparks set aside as the other stores do", () => {
       expect.stringMatching(/^sp-vela00000000\.json\.unsigned-\d+$/),
     ]);
     expect(events.filter((e) => e.event === "fieldd.compose.spark_set_aside")).toHaveLength(1);
+  });
+});
+
+/** What SessionRecordStore wrote before item 177 (AR-4b): its own HMAC-SHA256 over its record's JSON with the keys
+ * sorted at every level, its key 32 random bytes in base64, the record pretty-printed with its signature inside. */
+function writtenBefore177(root: string, record: AgentSessionRecord) {
+  const keyPath = sessionsCase.keyPath(root);
+  mkdirSync(dirname(keyPath), { recursive: true, mode: 0o700 });
+  const keyText = `${randomBytes(32).toString("base64")}\n`;
+  writeFileSync(keyPath, keyText, { mode: 0o600, flag: "wx" });
+  const sorted = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(sorted);
+    if (value === null || typeof value !== "object") return value;
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, inner]) => inner !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return Object.fromEntries(entries.map(([key, inner]) => [key, sorted(inner)]));
+  };
+  const signature = createHmac("sha256", Buffer.from(keyText.trim(), "base64"))
+    .update(JSON.stringify(sorted(record)))
+    .digest("hex");
+  const dir = sessionsCase.dir(root);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const file = join(dir, `${encodeURIComponent(record.runtimeRunId)}.json`);
+  writeFileSync(file, `${JSON.stringify({ ...record, signature }, null, 2)}\n`, { mode: 0o600 });
+  return { file, keyPath, keyText };
+}
+
+describe("item 177 — the sessions' records move onto the one signer, their key read as it is written", () => {
+  it("S1 · a record signed before item 177 verifies through the one signer, and its base64 key is never set aside", () => {
+    const root = tmp();
+    const record = sessionRecord("run-ada");
+    const { file, keyPath, keyText } = writtenBefore177(root, record);
+    expect(new RecordSigner({ keyPath, keyEncoding: "base64" }).read(file)).toEqual({
+      body: record,
+    });
+    expect(readFileSync(keyPath, "utf8")).toBe(keyText);
+    expect(asides(dirname(keyPath))).toEqual([]);
+    // a fresh fieldd's store serves it, and keeps the key as it was
+    expect(sessionsCase.boot(root, []).served()).toEqual(["run-ada"]);
+    expect(readFileSync(keyPath, "utf8")).toBe(keyText);
   });
 });
