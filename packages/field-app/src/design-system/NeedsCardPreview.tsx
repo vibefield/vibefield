@@ -16,7 +16,8 @@ import {
 
 // The needs-you card on fixtures (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card; docs/UI_SYSTEM.md): the
 // SHIPPING card (`NeedsCardView`) on the product's own reading of fixture items (`needsCardOf`, in `chat-fixtures.ts`)
-// — each kind as it waits, a kind this build does not know, and what an answer does to it — by this page's light and
+// — each kind as it waits (since TH-1 the spark's own run's ask among them, in its name), a kind this build does not
+// know, and what an answer does to it — by this page's light and
 // by the Moon's, and in a narrow thread. Its sessions are named as Vela's @ names them (`NEEDS_HANDLES`, the
 // product's `sessionHandlesOf` on the fixture board): a held send to "vibe-field", another to "vibe-field·2".
 // And the card live: the product's own controller (`useNeedsCard`) standing it in the thread's items

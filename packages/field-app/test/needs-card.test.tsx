@@ -41,6 +41,7 @@ import {
   needsCardWords,
   needsNamesOf,
   needsSaid,
+  waitingCardOf,
 } from "../src/chat/needs-card";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
@@ -374,6 +375,37 @@ describe('what the card says (DESIGN.md §8 "Chat\'s thread", the needs-you card
     ]);
   });
 
+  it("says the spark's own run's ask in its name, the word alone, and stands it first (TH-1; TH-Q29 (a), CO-Q12 (b))", () => {
+    // Vela's own run (run-12, her own session on the board) asks, after her question and claude·2's ask
+    const own = NeedsItem.parse({
+      ...AGENT_ASK,
+      id: "ny-ownask00001",
+      from: { name: AGENT.label, session: "run-12" },
+    });
+    const card = waitingCardOf(entryOf([QUESTION, AGENT_ASK, own]));
+    expect([card?.item.id, card?.own]).toEqual([own.id, true]);
+    const said = card === null ? null : needsCardWords(card);
+    expect([said?.eyebrow, said?.question, said?.sub, said?.show, said?.place]).toEqual([
+      "Needs your OK",
+      "Vela asks to run Bash",
+      "Answer it in its pane.",
+      true,
+      "1 of 3",
+    ]);
+    const words = (over: Partial<NeedsItem>) => {
+      const item = NeedsItem.parse({ ...own, ...over });
+      return needsCardWords(needsCardOf(entryOf([item]), item)).question;
+    };
+    expect([
+      words({ tool: undefined }),
+      words({ ask: "question", tool: undefined }),
+      words({ ask: "elicitation", tool: undefined }),
+    ]).toEqual(["Vela asks for your OK", "Vela has a question", "Vela needs you"]);
+    // none of its own waiting: the oldest stands, and an agent's ask is said with its asker
+    const oldest = waitingCardOf(entryOf([AGENT_ASK, QUESTION]));
+    expect([oldest?.item.id, oldest?.own]).toEqual([AGENT_ASK.id, false]);
+  });
+
   it("says an agent's own ask with its asker, answered in its pane: Show alone", () => {
     const said = needsCardWords(needsCardOf(entryOf([AGENT_ASK]), AGENT_ASK));
     expect(said.eyebrow).toBe("Needs your OK · claude·2");
@@ -464,6 +496,10 @@ describe('what the card says (DESIGN.md §8 "Chat\'s thread", the needs-you card
       "Claude Code has a question",
       "Claude Code needs you",
       "Vela needs you",
+      // the spark's own run's ask, in its name (TH-1; TH-Q29 (a))
+      "Vela asks to run Bash",
+      "Vela asks for your OK",
+      "Vela has a question",
       "and 2 more",
       "Your yes lasts until Claude Code ends.",
       "8 of Vela's agents are running, the most a spark may run.",

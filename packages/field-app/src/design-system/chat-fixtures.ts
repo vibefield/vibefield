@@ -210,9 +210,10 @@ const HATCHED_RUN = row({
 });
 
 /** The needs-you queue's open items, oldest first, as needs.subscribe would say them (CP-3): the ask of Vela's own run,
- * which her row's blocker already says (read once, there), and Kiwi's held send to the first vibe-field — Kiwi asked,
- * then slept, and an answer would wake it (CP3-D7). Names as fieldd's `runLabel` gives them (a session's title, else
- * its agent's label); the card names a session @ offers by its handle instead (`chatHandlesOf`). */
+ * read once with her row's blocker, and since TH-1 her card (TH-Q29 (a)); and Kiwi's held send to the first
+ * vibe-field — Kiwi asked, then slept, and an answer would wake it (CP3-D7). Names as fieldd's `runLabel` gives them (a
+ * session's title, else its agent's label); the card names a session @ offers by its handle instead
+ * (`chatHandlesOf`), and the spark's own run by the spark's name. */
 const ITEMS: readonly NeedsItem[] = [
   {
     id: "ny-velaown0001",
@@ -273,6 +274,8 @@ export const CHAT_STATES = [
   "thread-reading",
   "thread-unreadable",
   "thread-hello",
+  "thread-asks",
+  "thread-hello-asks",
   "empty",
   "opening",
   "unavailable",
@@ -314,6 +317,8 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   "thread-reading": "Reading",
   "thread-unreadable": "Can't read",
   "thread-hello": "Hello, drawn",
+  "thread-asks": "Its own ask, at the foot",
+  "thread-hello-asks": "Hello, and an ask",
   empty: "No sparks",
   opening: "Opening",
   unavailable: "Unavailable",
@@ -380,7 +385,15 @@ export function chatReadingOf(state: ChatState): SparksReading {
         entries: sparkEntriesOf([HATCHED, ...SPARKS], [HATCHED_RUN, ...ROWS]),
       };
     case "waiting":
+    case "thread-asks":
       return { state: "ready", entries: sparkEntriesOf(SPARKS, ROWS, { items: ITEMS }) };
+    case "thread-hello-asks":
+      return {
+        state: "ready",
+        entries: sparkEntriesOf([HATCHED, ...SPARKS], [HATCHED_RUN, ...ROWS], {
+          items: [HATCHED_ASKS],
+        }),
+      };
     case "empty":
       return { state: "ready", entries: [] };
     case "opening":
@@ -464,6 +477,8 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   "thread-reading": "sp-juno0001",
   "thread-unreadable": "sp-juno0001",
   "thread-hello": HATCHED.id,
+  "thread-asks": "sp-vela0001",
+  "thread-hello-asks": HATCHED.id,
   empty: null,
   opening: null,
   unavailable: null,
@@ -945,6 +960,41 @@ export const CHAT_FLOW: Partial<Record<ChatState, FlowPlate>> = {
   },
   "thread-reading": { reading: { state: "reading" } },
   "thread-unreadable": { reading: { state: "unreadable", reason: FIELDD_GONE } },
+  "thread-asks": {
+    reading: transcriptReadingOf(
+      [run("run-vela", HATCH, true)],
+      new Map([
+        [
+          "run-vela",
+          [
+            said(1, "run", HATCH, { runtimeRunId: "run-vela", fresh: true }),
+            said(2, "you", minutesAgo(3), {
+              via: "chat",
+              text: "Push the composer fix once the suite is green",
+              input: "in-v",
+              state: "queued",
+            }),
+            said(3, "outcome", minutesAgo(3), { of: "in-v", state: "delivered" }),
+            said(4, "reply", minutesAgo(1), {
+              messageId: "m-v",
+              text: "The suite is green. Before I push: to `main`, or a branch for review?",
+            }),
+          ],
+        ],
+      ]),
+    ),
+  },
+  "thread-hello-asks": {
+    reading: transcriptReadingOf(
+      [run("run-polaris", minutesAgo(0), true)],
+      new Map([
+        [
+          "run-polaris",
+          [said(1, "run", minutesAgo(0), { runtimeRunId: "run-polaris", fresh: true })],
+        ],
+      ]),
+    ),
+  },
   "thread-hello": {
     reading: transcriptReadingOf(
       [run("run-polaris", minutesAgo(0), true)],
@@ -959,6 +1009,19 @@ export const CHAT_FLOW: Partial<Record<ChatState, FlowPlate>> = {
 };
 
 // ── the needs-you card's plates (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card) ──
+
+/** The hatched spark's own run asks before it has ever worked (its trust menu at launch): an ask is no turn, so its
+ * hello stands first in the flow and the card at the foot (CO-Q2 (b)). */
+const HATCHED_ASKS: NeedsItem = {
+  id: "ny-polarisask01",
+  kind: "agent-ask",
+  state: "open",
+  from: { name: AGENT.label, session: "run-polaris" },
+  spark: HATCHED.id,
+  asked: minutesAgo(0),
+  ask: "permission",
+  count: 1,
+};
 
 /** Vela, awake, with a transcript behind her: the spark whose thread every card plate stands in. */
 const VELA = SPARKS[0] as SparkSummary;
@@ -1025,6 +1088,19 @@ const AGENT_ASK: NeedsItem = {
   tool: "Bash",
   count: 1,
 };
+/** Vela's own run asks to run a tool (TH-Q29 (a)): its card since TH-1, in her name, and first at the foot though
+ * the agent's ask is older (CO-Q12 (b)). */
+const OWN_ASK: NeedsItem = {
+  id: "ny-plateownask1",
+  kind: "agent-ask",
+  state: "open",
+  from: { name: AGENT.label, session: "run-vela" },
+  spark: VELA.id,
+  asked: minutesAgo(0),
+  ask: "permission",
+  tool: "Bash",
+  count: 1,
+};
 /** A kind this build never heard of (a flow's gate, say): drawn, never dropped. */
 const UNKNOWN = velaItem({
   id: "ny-plateunknown",
@@ -1083,6 +1159,7 @@ export const NEEDS_KIND_PLATES: readonly NeedsPlate[] = [
   ),
   plate("held-spawn", "A held spawn, past the cap", [HELD_SPAWN], HELD_SPAWN),
   plate("agent-ask", "An agent's own ask: Show", [AGENT_ASK], AGENT_ASK),
+  plate("own-ask", "The spark's own run asks: first, in its name", [AGENT_ASK, OWN_ASK], OWN_ASK),
   plate("unknown", "A kind this build does not know", [UNKNOWN], UNKNOWN),
 ];
 

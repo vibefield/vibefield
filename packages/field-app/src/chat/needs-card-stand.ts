@@ -18,8 +18,8 @@ import type { SparkEntry } from "./spark-status";
 
 // THE NEEDS-YOU CARD, KEPT STANDING (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card: answering, answered here,
 // answered in another window, motion, the keyboard). Chat's controller (`ChatView`) asks this for the card its shown
-// thread stands, and hands it the presses. One card at a time, the oldest first: it rises in, stands while its item
-// waits, and leaves — at once when its item no longer waits (answered in another window, or ended); answered or
+// thread stands, and hands it the presses. One card at a time, its own run's ask first, then the oldest (CO-Q12 (b),
+// TH-1), held at the thread's foot: it rises in, stands while its item waits, and leaves — at once when its item no longer waits (answered in another window, or ended); answered or
 // refused here, after a note's time and once its item has left the queue, a refused one's acts quiet meanwhile — and
 // the next rises only once it has gone.
 // A card this window is answering stands from the press until fieldd's answer returns, whatever the queue says
@@ -64,7 +64,7 @@ function letGo(held: Answering | undefined, state: "said" | "refused"): Answerin
 }
 
 /** The card the thread should stand now: the one this window answers, while it holds or its item still waits; else
- * the oldest item waiting. */
+ * what waits first (`waitingCardOf`: its own run's ask, then the oldest). */
 function wantedOf(
   entry: SparkEntry | undefined,
   answering: AnswerMap,
@@ -93,6 +93,7 @@ function sameCard(a: NeedsCard, b: NeedsCard): boolean {
     a.leaving === b.leaving &&
     a.spark.id === b.spark.id &&
     a.spark.name === b.spark.name &&
+    a.own === b.own &&
     a.names.from === b.names.from &&
     a.names.to === b.names.to
   );

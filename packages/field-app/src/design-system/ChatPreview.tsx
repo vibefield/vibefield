@@ -7,7 +7,7 @@ import { draftBlank } from "../chat/composer-draft";
 import { waitingCardOf } from "../chat/needs-card";
 import { SparkPaneView } from "../chat/SparkPaneView";
 import { ThreadFlowView } from "../chat/ThreadFlowView";
-import { threadItemsOf, threadQuiet } from "../chat/thread-items";
+import { footItemsOf, threadItemsOf, threadQuiet } from "../chat/thread-items";
 import { transcriptItemsOf } from "../chat/transcript-items";
 import {
   CHAT_ACT,
@@ -84,14 +84,15 @@ export function ChatPreview({
     );
   // a catalog window has sent nothing, and its pane holds no keyboard: the hello leaves only for a draft; it answers
   // nothing, so a thread with something waiting on you stands that card (the waiting plate's)
+  const card =
+    shown === undefined ? null : waitingCardOf(shown, { handles: chatHandlesOf(shown.spark) });
+  // a drawn thread's foot holds its card alone: the hello is the flow's first row (TH-1)
   const items =
-    shown === undefined || flow !== undefined
+    shown === undefined
       ? []
-      : threadItemsOf(
-          shown,
-          threadQuiet(shown, draftBlank(drafted?.seed ?? []), false),
-          waitingCardOf(shown, { handles: chatHandlesOf(shown.spark) }),
-        );
+      : flow !== undefined
+        ? footItemsOf(card)
+        : threadItemsOf(shown, threadQuiet(shown, draftBlank(drafted?.seed ?? []), false), card);
   const marks = chatMarksOf(
     reading.state === "ready" ? reading.entries : [],
     shown?.spark.id ?? null,

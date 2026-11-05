@@ -166,6 +166,27 @@ describe("the thread's plates (TH-1)", () => {
   });
 });
 
+describe("the needs-you card at the foot (TH-1; TH-Q26 (a), TH-Q29 (a))", () => {
+  it("holds the spark's own run's ask at the foot, above the composer, in its name", async () => {
+    await plate("thread-asks");
+    const card = $(".vf-chat-foot[data-flow] .vf-chat-items > .vf-needs-card");
+    expect(card?.hasAttribute("data-own")).toBe(true);
+    expect(words(card?.querySelector(".vf-needs-eyebrow"))).toBe("Asking you");
+    expect(words(card?.querySelector(".vf-needs-question"))).toBe("Vela has a question");
+    expect(words(card?.querySelector(".vf-needs-act"))).toBe("Show");
+    // the flow stands beside it, never under it
+    expect(rows()).toEqual(["day", "you", "reply"]);
+    expect($(".vf-chat-flow .vf-needs-card")).toBeNull();
+  });
+
+  it("keeps the hello first in the flow while an ask stands at the foot (CO-Q2 (b))", async () => {
+    await plate("thread-hello-asks");
+    expect(rows()).toEqual(["hello"]);
+    expect($$(".vf-chat-items > .vf-needs-card")).toHaveLength(1);
+    expect(words($(".vf-needs-question"))).toBe("Polaris asks for your OK");
+  });
+});
+
 describe("an agent's words are never markup (EL7)", () => {
   it("draws markup, a link and an image as text", async () => {
     await mount(

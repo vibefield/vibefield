@@ -686,6 +686,7 @@ describe("the thread's items never move or resize the pane (VF-PM's Q2: one rule
         item: VELA_ASKS,
         names: needsNamesOf(VELA_ASKS, NO_HANDLES),
         spark: { id: VELA.id, name: VELA.name },
+        own: false,
         of: 1,
         waits: true,
         act: NEEDS_IDLE,

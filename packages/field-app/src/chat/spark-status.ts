@@ -35,10 +35,15 @@ export interface SparkEntry {
    * how the run stands — at work, idle or waiting on you in its pane. Send's R-4 wait reads this, never the word. */
   readonly heard: boolean;
   /** The needs-you queue's open items for it, oldest first (CP-3): its question, its held send or spawn, an ask from
-   * an agent it started. The asks of its own run are its row's blocker, read there once. */
+   * an agent it started, and since TH-1 the ask of its own run (TH-Q29 (a)), which draws its card now the pane has
+   * left Chat (`isOwnAsk`). */
   readonly items: readonly NeedsItem[];
+  /** The runs that are its own session: the one its record names, and any the board says is its own. An agent's ask
+   * from one of them is its own run's (`isOwnAsk`). */
+  readonly ownRuns: readonly string[];
   /** The keys of what needs you, each a need of its own for the views track's note (a reading of CP3-D8): its own
-   * run's blockers while it runs, then its items. */
+   * run's blockers while it runs, then its items. Its own run's blocker and that run's item are one need, read once:
+   * its key is the item's (TH-1; §8 "Chat's list"). */
   readonly needs: readonly string[];
   /** when it last did anything, as epoch ms: its own run, the agents it started, or its record */
   readonly activityAt: number;
@@ -66,24 +71,28 @@ export function agentRunsOf(spark: SparkId, rows: readonly AgentFieldRow[]): Age
   return rows.filter((row) => row.origin?.by === "spark" && row.origin.spark === spark);
 }
 
-/** The spark's items in the queue, oldest first as fieldd lists them: those whose `spark` is it, but for the asks of
- * its own run (by the run its record names, or any run the board says is its own session), which its row's blocker
- * already says. A question the spark asked itself (`ask_user`) is from its own run too, and is its item. */
-function sparkItemsOf(
-  spark: SparkSummary,
-  rows: readonly AgentFieldRow[],
-  items: readonly NeedsItem[],
-): NeedsItem[] {
+/** The runs that are the spark's own session: the run its record names, and any the board says is its own. */
+function ownRunsOf(spark: SparkSummary, rows: readonly AgentFieldRow[]): string[] {
   const own = new Set(rows.filter((row) => row.spark === spark.id).map((row) => row.runtimeRunId));
   if (spark.session !== undefined) own.add(spark.session.runtimeRunId);
-  return items.filter(
-    (item) =>
-      item.spark === spark.id &&
-      !(
-        needsKindOf(item) === "agent-ask" &&
-        item.from.session !== undefined &&
-        own.has(item.from.session)
-      ),
+  return [...own];
+}
+
+/** The spark's items in the queue, oldest first as fieldd lists them: those whose `spark` is it. *Amended at TH-1
+ * (TH-Q29 (a); ER-C2):* the asks of its own run were left out here, since its row's blocker said them and the thread
+ * was that run's pane. The pane left Chat, so its own ask is its item and draws its card, read once with the blocker
+ * (`needsOf`). A question the spark asked itself (`ask_user`) is from its own run too, and was always its item. */
+function sparkItemsOf(spark: SparkSummary, items: readonly NeedsItem[]): NeedsItem[] {
+  return items.filter((item) => item.spark === spark.id);
+}
+
+/** An agent's ask from the spark's own run (TH-Q29 (a)): its card names the spark by its name, never its run's
+ * title, and stands first at the foot (CO-Q12 (b)). */
+export function isOwnAsk(entry: Pick<SparkEntry, "ownRuns">, item: NeedsItem): boolean {
+  return (
+    needsKindOf(item) === "agent-ask" &&
+    item.from.session !== undefined &&
+    entry.ownRuns.includes(item.from.session)
   );
 }
 
@@ -145,10 +154,16 @@ export function sparkStatusOf(
 }
 
 /** The keys of what needs you (`SparkEntry.needs`): each blocker of its own run while it waits on you there (`blocked`:
- * that run, else null; the run itself when it is blocked with none named), then each item. */
+ * that run, else null; the run itself when it is blocked with none named), then each item. A blocked run whose ask the
+ * queue holds is that item, read once (TH-1): the item's key alone. */
 function needsOf(blocked: AgentFieldRow | null, items: readonly NeedsItem[]): string[] {
+  const queued =
+    blocked !== null &&
+    items.some(
+      (item) => needsKindOf(item) === "agent-ask" && item.from.session === blocked.runtimeRunId,
+    );
   const asks =
-    blocked === null
+    blocked === null || queued
       ? []
       : blocked.blockers.length > 0
         ? blocked.blockers.map((blocker) => `${blocked.runtimeRunId}:${blocker.id}`)
@@ -172,7 +187,7 @@ export function sparkEntriesOf(
     .map((spark): SparkEntry => {
       const run = ownRunOf(spark, rows);
       const agents = agentRunsOf(spark.id, rows);
-      const mine = sparkItemsOf(spark, rows, items);
+      const mine = sparkItemsOf(spark, items);
       const status = sparkStatusOf(spark, run, agents, mine);
       const awake = awakeOf(spark, run);
       const blocked = awake && waitsOn(run);
@@ -186,6 +201,7 @@ export function sparkEntriesOf(
         blocked,
         heard: heardOf(run),
         items: mine,
+        ownRuns: ownRunsOf(spark, rows),
         needs: needsOf(blocked ? run : null, mine),
         activityAt: Math.max(...times.map((at) => (at ? timeOf(at) : 0))),
       };

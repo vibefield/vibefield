@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   activityWords,
   agentRunsOf,
+  isOwnAsk,
   ownRunOf,
   sparkEntriesOf,
   sparkStatusOf,
@@ -185,19 +186,30 @@ describe("the needs-you queue's items (CP-3; DESIGN.md §8 \"Chat's list\", the 
     expect(sparkEntriesOf([spark()], [row()], { items: [gate] })[0]?.needsYou).toBe(true);
   });
 
-  it("reads the asks of its own run once, as its row's blocker; an agent it started asking is its item", () => {
+  it("reads its own run's ask as its item since TH-1, one need with its row's blocker (TH-Q29 (a)); an agent it started asking is its item", () => {
     const own = agentAsk("question", "run-vela");
     const theirs = agentAsk("permission");
     const asks = row({ status: "blocked", blockers: [{ id: "q-1", kind: "question", since: AT }] });
     const [entry] = sparkEntriesOf([spark()], [asks], { items: [own, theirs] });
-    expect(entry?.items).toEqual([theirs]);
+    expect(entry?.items).toEqual([own, theirs]);
     expect(entry?.status).toBe("asking");
-    // before the board is read, the record names its own run: its ask is still not an item
+    expect(entry && [isOwnAsk(entry, own), isOwnAsk(entry, theirs)]).toEqual([true, false]);
+    // read once: the item's key, never the blocker's beside it
+    expect(entry?.needs).toEqual([own.id, theirs.id]);
+    // before the board is read, the record names its own run: its ask is its own still
     const [unread] = sparkEntriesOf([spark()], [], { items: [own] });
-    expect(unread?.items).toEqual([]);
-    expect(unread?.needsYou).toBe(false);
-    // a question the spark itself asked (ask_user) is from its own run too, and is its item
-    expect(sparkEntriesOf([spark()], [row()], { items: [QUESTION] })[0]?.items).toEqual([QUESTION]);
+    expect(unread?.items).toEqual([own]);
+    expect(unread && isOwnAsk(unread, own)).toBe(true);
+    // a run the board says is its own, though its record names another, is its own too
+    const older = row({ runtimeRunId: "run-old" });
+    const [both] = sparkEntriesOf([spark()], [older, asks], {
+      items: [agentAsk("question", "run-old")],
+    });
+    expect(both?.ownRuns).toEqual(["run-old", "run-vela"]);
+    // a question the spark itself asked (ask_user) is its item, and no run's ask
+    const [asked] = sparkEntriesOf([spark()], [row()], { items: [QUESTION] });
+    expect(asked?.items).toEqual([QUESTION]);
+    expect(asked && isOwnAsk(asked, QUESTION)).toBe(false);
   });
 
   it("takes only its own: an item for another spark, or for no spark (a person's own run asking), is not its", () => {
@@ -220,6 +232,11 @@ describe("the needs-you queue's items (CP-3; DESIGN.md §8 \"Chat's list\", the 
     ]);
     // blocked with no blocker named is one need of its run
     expect(keys([row({ status: "blocked" })])).toEqual(["run-vela:blocked"]);
+    // its ask in the queue is the same need, read once: the item's key (TH-1)
+    const own = agentAsk("question", "run-vela");
+    expect(keys([asks], [own, QUESTION])).toEqual([own.id, "ny-question01"]);
+    // an agent it started asking is no blocker of its own run's: both stand
+    expect(keys([asks], [agentAsk("permission")])).toEqual(["run-vela:q-1", "ny-askpermisa"]);
     // a run that has stopped waits on no one
     expect(keys([{ ...asks, alive: false }], [QUESTION])).toEqual(["ny-question01"]);
   });

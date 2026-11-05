@@ -6,7 +6,9 @@ import type { SparkEntry } from "./spark-status";
 // a thread over its pane. THE SEAM every slice that draws in a thread extends: NS-D4's hello and its starters, CP-3's
 // needs-you card (CP3-D8), SP-1e's live cards (CH-D2). One rule holds them all (`ThreadItemsView`): they stand in the
 // thread's foot, over the pane's bottom rows, and never move or resize the pane, so a live agent's screen never
-// reflows under them. Pure: Chat's reading of a spark in, what stands in its thread out.
+// reflows under them. Pure: Chat's reading of a spark in, what stands in its thread out. TH-1: under a drawn
+// conversation the items stand in the foot above the composer, covering nothing, and the hello is the flow's first
+// row (`footItemsOf`).
 
 /** One starter: a job the hello offers, pressed to be sent as Send sends. */
 export interface Starter {
@@ -61,8 +63,16 @@ export function threadQuiet(entry: SparkEntry, draftBlank: boolean, helloLeft: b
   return draftBlank && !helloLeft && entry.items.length === 0 && sparkIsNew(entry);
 }
 
+/** What stands in the shown thread's foot while its conversation is drawn (TH-1; TH-Q26 (a)): the needs-you card while
+ * one stands, its way out included, above the composer and covering nothing. The hello is the flow's first row then
+ * (`transcriptItemsOf`), so a card no longer takes it away (CO-Q2 (b)). */
+export function footItemsOf(card: NeedsCard | null): readonly ThreadItem[] {
+  return card === null ? [] : [card];
+}
+
 /** What stands in the shown thread over its pane, one item at a time: the needs-you card while one stands (CP-3; its
- * way out included, so the hello never stands beside it), else the hello and its starters while the thread is quiet. */
+ * way out included, so the hello never stands beside it), else the hello and its starters while the thread is quiet.
+ * The pane's own reading, until the pane leaves Chat (TH-1's commit 8); a drawn thread's foot is `footItemsOf`. */
 export function threadItemsOf(
   entry: SparkEntry,
   quiet: boolean,

@@ -8,7 +8,7 @@ import {
 } from "@vibefield/contracts";
 import { sparkStatusWord } from "@vibefield/design-kit/spark-face";
 import { NO_HANDLES } from "./at-rows";
-import { type SparkEntry, statusOfItem } from "./spark-status";
+import { isOwnAsk, type SparkEntry, statusOfItem } from "./spark-status";
 
 // THE NEEDS-YOU CARD, AS DATA (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card; §9 "The person's queue's
 // words", "Chat's words"; CP3-D1, CP3-D4, CP3-D8). The thread item CP-3 adds to SP-1d's seam (`thread-items.ts`): the
@@ -64,6 +64,9 @@ export interface NeedsCard {
   readonly names: NeedsNames;
   /** the thread's spark */
   readonly spark: { readonly id: SparkId; readonly name: string };
+  /** TH-1 — its own run's ask (TH-Q29 (a)): the spark asks, so the card names it by its name and its eyebrow is the
+   * word alone */
+  readonly own: boolean;
   /** how many wait on you in the thread, this one with them: "1 of 3" when more than one */
   readonly of: number;
   /** its item still waits in the queue; one that has left (answered in another window, or ended) answers nothing
@@ -96,11 +99,14 @@ export function needsCardOf(
   { leaving = false, reduced = false, handles = NO_HANDLES }: NeedsCardOptions = {},
 ): NeedsCard {
   const waits = entry.items.some((each) => each.id === item.id);
+  const own = isOwnAsk(entry, item);
   return {
     kind: "needs",
     item,
-    names: needsNamesOf(item, handles),
+    // its own run asks as the spark, never by its run's title
+    names: own ? { from: entry.spark.name, to: null } : needsNamesOf(item, handles),
     spark: { id: entry.spark.id, name: entry.spark.name },
+    own,
     of: entry.items.length + (waits ? 0 : 1),
     waits,
     act,
@@ -109,9 +115,10 @@ export function needsCardOf(
   };
 }
 
-/** The card a thread stands while this window answers none of its items: the oldest waiting, or none. */
+/** The card a thread stands while this window answers none of its items: what holds its own run first, its own run's
+ * ask, then the oldest waiting (CO-Q12 (b), James); or none. */
 export function waitingCardOf(entry: SparkEntry, options: NeedsCardOptions = {}): NeedsCard | null {
-  const first = entry.items[0];
+  const first = entry.items.find((item) => isOwnAsk(entry, item)) ?? entry.items[0];
   return first === undefined ? null : needsCardOf(entry, first, NEEDS_IDLE, options);
 }
 
@@ -195,7 +202,8 @@ export function needsCardWords(card: NeedsCard): NeedsCardWords {
   const { item, spark, names } = card;
   const asker = names.from;
   const word = sparkStatusWord(statusOfItem(item));
-  const other = item.from.spark !== spark.id;
+  // its own run's ask is the spark's: the word alone (TH-Q29 (a))
+  const other = !card.own && item.from.spark !== spark.id;
   const question = questionOf(item, names);
   const kind = needsKindOf(item);
   // the asker's own words, for the kinds whose question is not them
