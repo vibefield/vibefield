@@ -32365,6 +32365,10 @@ fieldd sources and 9 fieldd tests):
    than ENOENT. So a same-uid file or a mode-000 folder where its folder is, or one record the disk does not answer,
    throws every list(). The boot's re-attach reads are among them (agent-runtime.ts:1066, :2474, :2524, :2608; the
    files service's seed :1029). Its plan is `lanes/co-plan/plans/item-177-session-record-store-own-hmac-rule.md`.
+  > *Corrected 2026-11-05 by cp-landing at item 177's step 0:* the boot never stops. Its re-attach
+  > (`agent-runtime.ts:3403`), :1029, :1066, :1101 and :3372 catch the throw, warn and answer empty. What it stops is
+  > a sign-out, a set delete and the sweep: liveUnder :2474, stopUnder :2524 and forgetUnder :2608, under
+  > `agent-profiles.ts` signOut :597, deleteSet :352/:379 and finish :964, the first two after retiring (:594, :345).
 2. **SparkStore never renamed what it set aside** (`tool-plane/sparks.ts:101-111` at `9b3164ccf`). Its `#setAside`
    only logged, so the file stayed and every list said it again. It is renamed now, and U5 holds that. compose-sparks'
    TU-1 forged row now expects the `.forged-…` file, with its bytes kept.
@@ -32396,3 +32400,88 @@ fieldd sources and 9 fieldd tests):
   not a hold.
 - **Closed by this entry:** item 172 (FILED in "Items 158 and 159, and CO-1b", Found 9 and Owed), its three legs
   for all four RecordSigner stores.
+
+## LP-6 — the release build hardened: each program in bin signed with its own entitlements and the release signature read back, builder paths remapped, and System control out of the production renderer (2026-11-05; `6da74bbef` → `f514215f4`, 11 commits on main `764913ca5`, lane `lp/harden` in `/Volumes/SamsungRed/lanes/lp-harden/vibe-field`, minted as M133 `f514215f4`, run 133)
+
+**What it rests on.**
+- The 0.9 launch plan's phase 1: each shipped daemon its own entitlements with no inherited `allow-jit`; no build paths
+  in shipped binaries (item 170, with `lp/paths` stacked on this lane); the surface lab out of production builds (Q3:
+  James, 2026-10-28, "B"); and `package-census --assert --strict` green. James ruled the plan at the leans on
+  2026-11-05 at 01:04Z (DECISIONS LP).
+- The lane was built code-only in wave 1 off `f599761bc` and reviewed through two lenses. Its fixes landed as 5 more
+  commits. prod-builder's review (03:38Z) raised one objection, a release signature for every program, ruled in by
+  VF-PM (04:30Z); prod-builder RE-GO'd at `4bcec6070`. That folded SD-2's routed finding (A5).
+- Rebased twice before the mint, onto `005d713c2` and then onto `764913ca5` (item 172 and its records). Every one of its
+  28 files is equal by patch-id, with no context drift. The pre-rebase tip `4bcec6070` is kept as
+  `lp/harden-pre-rebase`. VF-PM's times are the receiver's (VF-PM's clock erratum, 03:50Z).
+
+**What landed.**
+- Per-binary entitlements:
+  - `apps/desktop/packaging/sign-mac.mjs` is the release overlay's `mac.sign` hook. electron-builder 26.15.7 has no
+    per-file entitlements, so every Rust daemon, the Go sidecar and both ScreenCaptureKit helpers had carried
+    `allow-jit`.
+  - The hook refuses an unnamed program in `Contents/Resources/bin` before anything is signed, signs each `none`
+    entry with the new `entitlements.mac.native.plist` (an empty dict), and calls electron-builder's own signer.
+  - `codesign-entitlements.mjs` holds the ONE table (`BIN_PROFILES`): fieldd `jit`; field-native, field-terminal-host,
+    field-freeway-host, rosettad, sidecar-slim and both capture helpers `none`.
+  - A program is what its Mach-O header says (`MH_EXECUTE`), never its mode, so a library staged 0755 never refuses
+    the release.
+- The release signature is read back:
+  - The overlay's top-level `afterSign` (the same module) fails the build when a Developer ID the keychain lacks made
+    electron-builder skip signing silently. `mac.sign` had silenced `forceCodeSigning`.
+  - The LSF-4 gate's `binEntitlementCensus` runs `assertReleaseSigned` on every program and bundle in bin when the app
+    carries a Developer ID authority (strict), and says "not checked" on an unsigned build. All eleven bin entries of
+    `nightly-20261104` pass it (prod-builder, 03:44Z).
+- Builder paths: `build-native-release.mjs` remaps the checkout, CARGO_HOME and RUSTUP_HOME
+  (`--remap-path-prefix`, appended to the caller's flags) and scans what it built. `scripts/host-links.mjs --app`
+  gained the builder-path gate. Its widening to every shipped Mach-O, rosettad's and mille's builds, and the one
+  release switch are LP-6b's (LANDED "LP-6b").
+- Q3: GodviewOverlay mounts GodviewTuningPanel ("System control") and lists its palette act only under the literal
+  `import.meta.env.DEV`, which `vite build` folds away.
+  - The panel carries `data-vibefield-dev-only="vibefield-godview-system-control-dev-only"`, so every
+    `build:renderer` (verify's bundle stage included) refuses a production renderer that kept it.
+  - A production build draws every monitor tunable at its default and never reads the lab's saved bags.
+  - DESIGN.md §1.1 and §8 and the catalog's Godview title are corrected at their source.
+- The census: `scripts/package-census.mjs` reads a host singleton as an exact name and a dependency's esbuild chunk
+  hash as a counted hash shape. Its test moved to `tooling/dev-runner/test/` and now runs in `pnpm test`.
+
+**Validation.**
+- This Mac, from inside the lane (nice 19, guard clear), each rc=0:
+  - at `58e074462` on `caf52425c` (05:03:41–05:05:54Z): preflight, field-app and electron-shell typecheck, vitest of
+    the 5 touched field-app files 66/66, and `node --test` codesign-entitlements, host-links, package-census and
+    update-smoke 39/39, plus biome and walls;
+  - at `f514215f4` (05:10:59–05:11:06Z), the docs-only move: preflight, biome and walls.
+- The mini (a9), run 133: minted `mint/lp-harden` = `f514215f4` (tree `980f0fbe93e0`, stacked on `764913ca5`), and
+  `pnpm verify` armed at 05:16:06Z, exit 0 at 05:22:58Z.
+  - vitest 12,443 passed, 0 failed, 21 skipped. Its +5 are all in L6's files: overlay-boundaries +2, stage-parameters
+    +2, head-model +1.
+  - `node --test` 407/0. Its +21 are LP-6's 18 rows plus the 3 census rows the move put into `pnpm test`, among them
+    "entitlements.mac.native.plist reads no key" on the mini.
+  - cargo 545/0, 29 projects, biome 3148 files, gen:check exit 0. Logs: `lanes/ts6/logs/mini/run133/`.
+- Step 2 on the same tree, Q3: `build:renderer` exit 0, "production UI boundary OK — 85 files, 12,550,458 bytes;
+  Studio, Design System catalog, perf lab and System control absent". The `system-control-dev-only` marker was found
+  0 times.
+- Step 2, L5's staged witness (LP-5's OWED row, now closed): `package:stage` exit 0 (80 s), then
+  `stage-package --verify --require-complete` exit 0, "stage verify OK — 148 files, 297,426,755 bytes (283.65 MB);
+  complete".
+  - The notices: 649 components and 329 licence texts, 11 left out (another platform's, or not built here). No
+    INCOMPLETE, GAP or STALE line.
+  - `legal/` holds exactly `LICENSE.electron.txt`, `LICENSE.node.txt`, `LICENSES.chromium.html` and
+    `THIRD_PARTY_NOTICES.txt`, with 0 `/Users/`, `/Volumes/` or `/home/runner` paths.
+  - The stage ran on the official Node v26.5.0 and was DEV-keyed, as expected. Logs:
+    `lanes/ts6/logs/mini/run133/l6w-f514215f4/`.
+
+**Found.**
+- No macOS VibeField before this one signed its daemons without `allow-jit`, or read back their release signature.
+- The census's test had been run by nothing (no Nx target, script or workflow) until it moved into dev-runner.
+
+**Owed.**
+- **The census baseline:** `pnpm build && node scripts/package-census.mjs --update && --assert --strict`, and the new
+  `package-manifest.json` committed. It rides a later slice once SD-2 is on main, so the baseline holds SD-2's
+  `main/sound-worker.cjs`. SD-2 was not on main at this mint (VF-PM's ruling).
+- The signed witnesses at the first signed release (prod-builder's W rows): binEntitlements (fieldd `allow-jit`, every
+  other row no key and `releaseSigned: true`), afterSign passing, and the remap's own scan line. W11 runs a real
+  session without `allow-jit`.
+- The release notes say that a production build draws Godview's tunables at their defaults.
+- audit.yml's chacha20 `--precise` bump (a yanked version, Q28), a later cargo step.
+- Item 170 stays OPEN. It narrows at LP-6b to the sidecar's T14 petition.

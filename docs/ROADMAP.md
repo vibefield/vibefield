@@ -728,11 +728,13 @@ field, heard"; the page *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`)
      - the real macOS floor, 14 (LP-D4: `mac.minimumSystemVersion` and every policy's `floors.os`; `lp/rails`);
      - a clean-Mac install row on macOS 14, 15 and 26 VMs on the mini, quarantined as a browser downloads it (new);
      - a usage string for every system prompt the clean-Mac row meets;
-     - each shipped daemon its own entitlements, with no inherited `allow-jit` (`lp/harden`);
+     - each shipped daemon its own entitlements, with no inherited `allow-jit`, and its release signature read
+       back: LANDED 2026-11-05 (M133 `f514215f4`, LANDED "LP-6"); owed: the signed witnesses (W rows);
      - no build paths in shipped binaries (`lp/paths`, item 170);
-     - third-party notices on the Mac and on iOS: LANDED 2026-11-05 (M131 `02b47ba2a`, LANDED "LP-5"); owed: the
-       staged `Resources/legal` witness at L6's mint, and the packaged one on the first nightly carrying both;
-     - the surface lab out of production builds (Q3), and `package-census --assert --strict` green (`lp/harden`);
+     - third-party notices on the Mac and on iOS: LANDED 2026-11-05 (M131 `02b47ba2a`, LANDED "LP-5"); the
+       staged `Resources/legal` witness passed at run 133; owed: the packaged one on the first signed nightly;
+     - the surface lab out of production builds (Q3): LANDED (M133, witnessed by run 133's build:renderer);
+       `package-census --assert --strict` green: OWED, its baseline drawn once SD-2 is on main;
      - LOG-39's packaged checks in `release.yml`;
      - `cargo audit` blocking again once the yanked chacha20 moves (Q28);
      - build-provenance attestations on the DMG and zip;
