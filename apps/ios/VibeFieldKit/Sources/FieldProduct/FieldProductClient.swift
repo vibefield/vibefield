@@ -783,11 +783,13 @@ public final class FieldProductClient {
 
   /// Count one frame against its subscription's open window, opening one (and
   /// arming the shared timer) when none is open.
-  private func account(_ bytes: Int, to key: Int) {
+  private func account(_ bytes: Int, to key: Int, reset: Bool = false) {
     guard var entry = subs[key] else { return }
     if entry.windowStart == nil { entry.windowStart = options.clock.now() }
     entry.windowBytes += bytes
     entry.windowFrames += 1
+    // PG-9 S4b — a whole board mid-stream (a home's PG-1c resync, a reset) is counted apart
+    if reset { entry.windowResets += 1 }
     subs[key] = entry
     if trafficTask == nil { armTrafficTimer() }
   }
@@ -820,10 +822,12 @@ public final class FieldProductClient {
       else { continue }
       let traffic = SubscriptionTraffic(
         label: options.logLabel, method: entry.method, subId: entry.subId,
-        bytes: entry.windowBytes, frames: entry.windowFrames, window: SubscriptionTraffic.window)
+        bytes: entry.windowBytes, frames: entry.windowFrames, resets: entry.windowResets,
+        window: SubscriptionTraffic.window)
       entry.windowStart = nil
       entry.windowBytes = 0
       entry.windowFrames = 0
+      entry.windowResets = 0
       subs[key] = entry
       options.trafficLog(traffic)
     }
@@ -875,6 +879,8 @@ public final class FieldProductClient {
     var windowStart: Duration?
     var windowBytes = 0
     var windowFrames = 0
+    /// PG-9 S4b — of the window's frames, the mid-stream snapshots
+    var windowResets = 0
 
     init(
       method: String, params: JSONValue?, shape: SubscriptionShape,
@@ -1070,7 +1076,7 @@ public final class FieldProductClient {
 
     case .subscriptionEvent(_, let subId, let kind, let payload):
       guard let key = subRoutes[subId], subs[key] != nil else { return }
-      account(bytes, to: key)
+      account(bytes, to: key, reset: kind == .snapshot)
       deliverEvent(kind, payload, key: key)
 
     case .notification(let method, let params):

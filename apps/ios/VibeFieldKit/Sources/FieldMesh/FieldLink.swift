@@ -1692,6 +1692,9 @@ public final class FieldLink {
     // A paused link applies nothing the door sends, and a closed home's late
     // answer must not put its board back behind the next home's.
     guard !isPaused, homeClient === client else { return }
+    // PG-9 S4b — the open's apply on Instruments' Points of Interest, beside the Energy Log
+    let signpost = SubscriptionTraffic.begin("mesh open")
+    defer { signpost.end() }
     let open: AgentRemoteMeshOpen
     do {
       open = try AgentRemoteMeshOpen(json: payload)
@@ -1699,6 +1702,8 @@ public final class FieldLink {
       refuseOpen(deviceId, error)
       return
     }
+    // PG-9 S4b — how the home answered each desktop: M1 reads an app switch's `resumed` here
+    SubscriptionTraffic.note("door[\(deviceId)] mesh open: \(MeshOpenAnswers(open).line)")
     let outcome = remote.open(open, now: wireNow())
     boardFrom = deviceId
     for entry in open.devices {
@@ -1782,6 +1787,8 @@ public final class FieldLink {
   private func applyMeshFrame(_ payload: JSONValue, from deviceId: String, client: FieldProductClient)
   {
     guard !isPaused, homeClient === client, boardFrom == deviceId else { return }
+    let signpost = SubscriptionTraffic.begin("mesh frame")
+    defer { signpost.end() }
     guard let frame = try? AgentRemoteMeshFrame(json: payload) else {
       // PG-3e — a frame that does not read is a gap, as the window's is: ask again (it was "dropped and named").
       repair("\(deviceId) sent a mesh frame that did not read")

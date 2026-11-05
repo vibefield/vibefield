@@ -16,8 +16,27 @@ public struct MeshOpenAnswers: Sendable, Equatable {
   }
 
   public init(_ open: AgentRemoteMeshOpen) {
-    self.init(resumed: 0, delta: 0, whole: 0, unanswered: 0)
+    var resumed = 0
+    var delta = 0
+    var whole = 0
+    var unanswered = 0
+    for entry in open.devices {
+      if entry.resumed != nil {
+        resumed += 1
+      } else if entry.delta != nil {
+        delta += 1
+      } else if entry.snapshot != nil {
+        whole += 1
+      } else {
+        unanswered += 1
+      }
+    }
+    self.init(resumed: resumed, delta: delta, whole: whole, unanswered: unanswered)
   }
 
-  public var line: String { "" }
+  /// "3 desktops: 1 resumed, 1 delta, 1 whole, 0 unanswered"
+  public var line: String {
+    let desktops = resumed + delta + whole + unanswered
+    return "\(desktops) desktops: \(resumed) resumed, \(delta) delta, \(whole) whole, \(unanswered) unanswered"
+  }
 }

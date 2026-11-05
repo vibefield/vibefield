@@ -31,7 +31,7 @@ public struct SubscriptionTraffic: Sendable, Equatable {
     self.subId = subId
     self.bytes = bytes
     self.frames = frames
-    self.resets = 0
+    self.resets = resets
     self.window = window
   }
 
@@ -46,7 +46,7 @@ public struct SubscriptionTraffic: Sendable, Equatable {
     let door = label.map { "door[\($0)]" } ?? "door"
     let rate = Int(bytesPerSecond.rounded())
     return "\(door) \(method) \(subId ?? "-"): \(rate) B/s over \(window.components.seconds) s "
-      + "(\(frames) frames, \(bytes) B)"
+      + "(\(frames) frames, \(resets) reset\(resets == 1 ? "" : "s"), \(bytes) B)"
   }
 
   /// One window's length: one line per this long per subscription, at most.
@@ -59,5 +59,27 @@ public struct SubscriptionTraffic: Sendable, Equatable {
   /// The default sink.
   public static let log: @Sendable (SubscriptionTraffic) -> Void = { traffic in
     logger.debug("\(traffic.line, privacy: .public)")
+  }
+
+  /// PG-9 S4b — one more measuring line on the same channel (a mesh open's answers), at DEBUG like the rest: never a
+  /// URL, never a payload.
+  public static func note(_ text: String) {
+    logger.debug("\(text, privacy: .public)")
+  }
+
+  /// PG-9 S4b — Instruments' Points of Interest, so the Energy Log and the frames line up on one timeline. Free when
+  /// nothing records.
+  static let signposter = OSSignposter(subsystem: "com.jamesyong.vibefield.kit", category: .pointsOfInterest)
+
+  /// An interval begun on the Points of Interest lane; `end()` closes it.
+  public struct Interval: Sendable {
+    let name: StaticString
+    let state: OSSignpostIntervalState
+    public func end() { SubscriptionTraffic.signposter.endInterval(name, state) }
+  }
+
+  /// PG-9 S4b — begin an interval named `name` (a mesh open, a mesh frame).
+  public static func begin(_ name: StaticString) -> Interval {
+    Interval(name: name, state: signposter.beginInterval(name))
   }
 }
