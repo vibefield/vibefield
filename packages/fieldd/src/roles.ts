@@ -1,5 +1,5 @@
-// THE ROLES of fieldd's own executable (FS-1a's files worker; AR-7j's agent
-// shim). A packaged fieldd is a Node single-executable application (EDP-14): it
+// THE ROLES of fieldd's own executable (FS-1a's files worker; TH-1's transcript
+// worker; CP-4a2a's flow host; AR-7j's agent shim). A packaged fieldd is a Node single-executable application (EDP-14): it
 // runs nothing but its own blob, its RunAsNode fuse is closed, and it carries no
 // Node a second program could be handed. So whatever else must run as Node runs
 // as fieldd ITSELF, in a role, and each role loads ONE bundle sealed beside the
@@ -33,6 +33,12 @@ export const FILES_HOST_BUNDLE = "files-host.cjs";
 export const TRANSCRIPT_HOST_ROLE_ARG = "--vibefield-role=transcript-host";
 /** The transcript worker's bundle, beside fieldd's. */
 export const TRANSCRIPT_HOST_BUNDLE = "transcript-host.cjs";
+
+/** The argument that makes the executable a run's flow host (CP-4a2a, 4A2-Q1 (a)): one child per run, its script in
+ * a locked-down compartment, its one door its IPC pipe. */
+export const FLOWS_HOST_ROLE_ARG = "--vibefield-role=flows-host";
+/** The flow host's bundle, beside fieldd's. */
+export const FLOWS_HOST_BUNDLE = "flows-host.cjs";
 
 /** The argument that makes the executable an agent's launcher runtime (AR-7j):
  * the program every launcher in a packaged build execs on the shim. */
@@ -70,7 +76,7 @@ export function unknownRoleLine(name: string | undefined): string {
   return `VibeField: ${agent} was not started: it was set up by another version of VibeField. Open VibeField, then try again.`;
 }
 
-export type FielddRole = "files-host" | "transcript-host" | "agent-shim";
+export type FielddRole = "files-host" | "transcript-host" | "flows-host" | "agent-shim";
 
 /** The role the process's FIRST argument names; `"unknown"` when that argument
  * asks for a role (`ROLE_ARG_PREFIX`) this build does not have; none otherwise
@@ -81,6 +87,7 @@ export function roleOf(argv: readonly string[]): FielddRole | "unknown" | undefi
   const first = argv[2];
   if (first === FILES_HOST_ROLE_ARG) return "files-host";
   if (first === TRANSCRIPT_HOST_ROLE_ARG) return "transcript-host";
+  if (first === FLOWS_HOST_ROLE_ARG) return "flows-host";
   if (first === AGENT_SHIM_ROLE_ARG) return "agent-shim";
   if (first?.startsWith(ROLE_ARG_PREFIX) === true) return "unknown";
   return undefined;

@@ -1,6 +1,14 @@
-import type { FlowHostEnding } from "@vibefield/contracts";
-import type { Logger } from "@vibefield/logging";
-import type { FlowsHostLaunchChoice } from "./launch";
+import { type ChildProcess, spawn as nodeSpawn } from "node:child_process";
+import {
+  FLOW_LIMITS,
+  FLOW_LOG_MAX,
+  type FlowHostEnding,
+  flowAnswerBytes,
+} from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
+import type { FlowsHostLaunch, FlowsHostLaunchChoice } from "./launch";
+import { flowScriptOf } from "./module-script";
+import { type FromFlowHost, readFromFlowHost, type ToFlowHost } from "./protocol";
 
 // CP-4a2a (CP-D8, CP-D9; 4A2-Q1 (a), 4A2-Q5 (a), 4A2-Q6 (b), 4A2-Q7 (a), ruled by VF-PM 2026-11-05 08:51Z) — ONE
 // run's flow host: fieldd starts a child for the run (launch.ts), hands it the approved bytes rewritten into one script
@@ -8,7 +16,14 @@ import type { FlowsHostLaunchChoice } from "./launch";
 // environment is PATH alone. A run's calls reach the world only through the handler: in CP-4a2a a scripted one in the
 // tests, behind the journal's replay (replay.ts); the runs (CP-4a2b) implement it.
 //
-// SKELETON (the red, commit 5): nothing is started; every run ends at once as a host that left.
+// - Before any child: bytes past FLOW_LIMITS.SCRIPT_MAX_BYTES, and bytes the rewrite refuses, are `refused`; a copy that
+//   cannot start a host is `unconfigured`. Nothing is spawned for either.
+// - The pipe carries bounded control (4A2-Q5 (a)): the script once; a call whose arguments are past
+//   FLOW_LIMITS.RESULT_MAX_BYTES is refused (the child holds the same bound before it sends); an answer past it never
+//   crosses whole: text is cut to fit, anything else is refused, in the words the script's `await` throws with.
+// - The host is pinged every `pingMs` once READY. A host that says nothing for `pingMisses` pings in a row is ended at
+//   once (SIGKILL: a script that spins cannot hear a `shutdown`), as `unanswered` (FLOW_HOST_ENDINGS).
+// - A run's end is settled when the child has LEFT, never before: when `ended` resolves, its process is gone.
 
 /** A call the script made, as the host sent it: what it is (FLOW_CALL_WHATS, OPEN) and its arguments. */
 export interface FlowHostCall {
@@ -75,8 +90,268 @@ export interface FlowHostRun {
   stop(): Promise<FlowHostEnd>;
 }
 
-/** Start a run's host. */
-export function startFlowHost(_opts: FlowHostOptions): FlowHostRun {
-  const ended: Promise<FlowHostEnd> = Promise.resolve({ kind: "left", code: null, signal: null });
+/** How long fieldd waits for a host's READY before it ends the child and says so: fieldd's own timing, as the files
+ * and transcript workers' are (cp-landing 11:17Z, upheld), not a run's bound. */
+const HOST_READY_MS = 10_000;
+
+/** The host's clock by default: FLOW_LIMITS' ping, fieldd's READY wait, and a `shutdown`'s grace before SIGKILL. */
+const DEFAULT_TIMINGS: FlowHostTimings = {
+  readyMs: HOST_READY_MS,
+  pingMs: FLOW_LIMITS.HOST_PING_MS,
+  pingMisses: FLOW_LIMITS.HOST_PING_MISSES,
+  stopGraceMs: 2_000,
+};
+
+/** Lines of the child's stderr kept for fieldd's log, each cut. */
+const STDERR_LINES = 4;
+const STDERR_LINE_MAX = 512;
+
+const kib = (bytes: number): string => `${Math.floor(bytes / 1024)} KiB (${bytes} bytes)`;
+
+/** The child's environment: PATH alone (4A2-Q6 (b)), so no FIELD_* or FIELDD_* variable, and nothing else of
+ * fieldd's, reaches a person's script or the runtime under it (EL7). */
+function flowsHostEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const path = source["PATH"];
+  return path === undefined ? {} : { PATH: path };
+}
+
+/** An answer as the pipe may carry it: whole up to FLOW_LIMITS.RESULT_MAX_BYTES; past it, text cut to fit and
+ * anything else refused. */
+function boundedAnswer(answer: FlowHostAnswer): FlowHostAnswer {
+  const max = FLOW_LIMITS.RESULT_MAX_BYTES;
+  if (!answer.ok) return { ok: false, refused: cutText(answer.refused, FLOW_LOG_MAX) };
+  if (flowAnswerBytes(answer.value) <= max) return answer;
+  if (typeof answer.value !== "string")
+    return {
+      ok: false,
+      refused: `VibeField can't hand this answer on: an answer is at most ${kib(max)}`,
+    };
+  let text = answer.value.slice(0, max);
+  while (text.length > 0 && flowAnswerBytes(text) > max) {
+    const over = flowAnswerBytes(text) - max;
+    text = text.slice(0, text.length - Math.max(1, Math.ceil(over / 4)));
+  }
+  // never half a surrogate pair
+  if (/[\uD800-\uDBFF]$/.test(text)) text = text.slice(0, -1);
+  return { ok: true, value: text };
+}
+
+const cutText = (text: string, max: number): string =>
+  text.length <= max ? text : `${text.slice(0, Math.max(0, max - 1))}…`;
+
+/** A run that never had a host: its end, at once. */
+function settled(end: FlowHostEnd): FlowHostRun {
+  const ended = Promise.resolve(end);
   return { ready: Promise.resolve(undefined), ended, stop: () => ended };
+}
+
+/** Start a run's host. */
+export function startFlowHost(opts: FlowHostOptions): FlowHostRun {
+  const size = opts.bytes.byteLength;
+  if (size > FLOW_LIMITS.SCRIPT_MAX_BYTES)
+    return settled({
+      kind: "refused",
+      reason: `a flow's script is at most ${kib(FLOW_LIMITS.SCRIPT_MAX_BYTES)}; this one is ${size} bytes`,
+    });
+  if (opts.launch.kind === "unconfigured")
+    return settled({ kind: "unconfigured", reason: opts.launch.reason });
+  const read = flowScriptOf(opts.bytes);
+  if (read.kind === "refused") return settled({ kind: "refused", reason: read.reason });
+  return new FlowHostChild(opts.launch.launch, read.script, opts).run;
+}
+
+/** One child, from its spawn to its exit. */
+class FlowHostChild {
+  readonly run: FlowHostRun;
+  readonly #opts: FlowHostOptions;
+  readonly #script: string;
+  readonly #t: FlowHostTimings;
+  readonly #logger: Logger;
+  readonly #proc: ChildProcess;
+  readonly #stderr: string[] = [];
+  #settle: (end: FlowHostEnd) => void = () => {};
+  #ready: (pid: number | undefined) => void = () => {};
+  #isReady = false;
+  #settled = false;
+  /** the end fieldd chose before the child left (its script's end, `ended`, `stopped`) */
+  #chosen: FlowHostEnd | undefined;
+  #heardAt = 0;
+  #pingN = 0;
+  #readyTimer: NodeJS.Timeout | undefined;
+  #pingTimer: NodeJS.Timeout | undefined;
+  #killTimer: NodeJS.Timeout | undefined;
+
+  constructor(launch: FlowsHostLaunch, script: string, opts: FlowHostOptions) {
+    this.#opts = opts;
+    this.#script = script;
+    this.#t = { ...DEFAULT_TIMINGS, ...opts.timings };
+    this.#logger = opts.logger ?? createNoopLogger();
+    const ready = new Promise<number | undefined>((resolve) => {
+      this.#ready = resolve;
+    });
+    const ended = new Promise<FlowHostEnd>((resolve) => {
+      this.#settle = resolve;
+    });
+    this.run = { ready, ended, stop: () => this.#stop() };
+    this.#proc = nodeSpawn(launch.command, [...launch.args], {
+      stdio: ["ignore", "ignore", "pipe", "ipc"],
+      env: flowsHostEnvironment(opts.environment ?? process.env),
+      serialization: "json",
+    });
+    this.#proc.on("error", (error) =>
+      this.#finish({ kind: "fatal", reason: `the flow host did not start: ${error.message}` }),
+    );
+    this.#proc.on("message", (raw) => this.#hear(raw));
+    this.#proc.on("exit", (code, signal) =>
+      this.#finish(this.#chosen ?? { kind: "left", code, signal }),
+    );
+    this.#proc.stderr?.setEncoding("utf8");
+    this.#proc.stderr?.on("data", (chunk: string) => this.#heardStderr(chunk));
+    this.#readyTimer = setTimeout(
+      () =>
+        this.#end(
+          {
+            kind: "fatal",
+            reason: `the flow host did not say it was ready in ${this.#t.readyMs} ms`,
+          },
+          "kill",
+        ),
+      this.#t.readyMs,
+    );
+  }
+
+  #send(message: ToFlowHost): void {
+    if (this.#proc.connected) this.#proc.send(message);
+  }
+
+  #hear(raw: unknown): void {
+    const message: FromFlowHost | null = readFromFlowHost(raw);
+    if (message === null) {
+      this.#logger.warn(
+        "fieldd.flows.host.unread",
+        "The flow host sent a message fieldd does not read",
+      );
+      return;
+    }
+    this.#heardAt = Date.now();
+    switch (message.t) {
+      case "ready":
+        if (this.#isReady) return;
+        this.#isReady = true;
+        clearTimeout(this.#readyTimer);
+        this.#ready(message.pid);
+        this.#send({
+          t: "run",
+          script: this.#script,
+          input: this.#opts.input,
+          limits: { callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES, logMaxChars: FLOW_LOG_MAX },
+        });
+        this.#pingTimer = setInterval(() => this.#tick(), this.#t.pingMs);
+        return;
+      case "call":
+        this.#call(message.id, message.what, message.args);
+        return;
+      case "log":
+        if (this.#chosen === undefined) this.#opts.handler.log(cutText(message.text, FLOW_LOG_MAX));
+        return;
+      case "pong":
+        return;
+      case "done":
+        this.#end(
+          {
+            kind: "done",
+            ...("value" in message ? { value: message.value } : {}),
+            ...(message.cut === true ? { cut: true as const } : {}),
+          },
+          "shutdown",
+        );
+        return;
+      case "threw":
+        this.#end({ kind: "threw", message: message.message }, "shutdown");
+        return;
+      case "fatal":
+        this.#end({ kind: "fatal", reason: message.reason }, "shutdown");
+        return;
+    }
+  }
+
+  #call(id: number, what: string, args: unknown[]): void {
+    if (this.#chosen !== undefined) return;
+    if (flowAnswerBytes(args) > FLOW_LIMITS.RESULT_MAX_BYTES) {
+      this.#answer(id, {
+        ok: false,
+        refused: `VibeField can't send this ${what}: a call is at most ${kib(FLOW_LIMITS.RESULT_MAX_BYTES)}`,
+      });
+      return;
+    }
+    this.#opts.handler.call({ what, args }).then(
+      (answer) => this.#answer(id, answer),
+      (error: unknown) => {
+        this.#logger.warn("fieldd.flows.host.handler", "A flow call's handler failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        this.#answer(id, { ok: false, refused: "VibeField could not answer this call." });
+      },
+    );
+  }
+
+  #answer(id: number, answer: FlowHostAnswer): void {
+    if (this.#chosen !== undefined) return;
+    const bounded = boundedAnswer(answer);
+    this.#send(
+      bounded.ok
+        ? { t: "answer", id, ok: true, value: bounded.value }
+        : { t: "answer", id, ok: false, refused: bounded.refused },
+    );
+  }
+
+  /** One ping: a host silent for `pingMisses` pings in a row is ended, as `unanswered`. */
+  #tick(): void {
+    if (Date.now() - this.#heardAt >= this.#t.pingMs * this.#t.pingMisses) {
+      this.#end({ kind: "ended", why: "unanswered" }, "kill");
+      return;
+    }
+    this.#pingN += 1;
+    this.#send({ t: "ping", n: this.#pingN });
+  }
+
+  #stop(): Promise<FlowHostEnd> {
+    this.#end({ kind: "stopped" }, "shutdown");
+    return this.run.ended;
+  }
+
+  /** Choose the run's end, once, and see the child out: `shutdown` with a grace, or SIGKILL now. */
+  #end(end: FlowHostEnd, how: "shutdown" | "kill"): void {
+    if (this.#chosen !== undefined || this.#settled) return;
+    this.#chosen = end;
+    clearTimeout(this.#readyTimer);
+    clearInterval(this.#pingTimer);
+    if (how === "kill") {
+      this.#proc.kill("SIGKILL");
+      return;
+    }
+    this.#send({ t: "shutdown" });
+    this.#killTimer = setTimeout(() => this.#proc.kill("SIGKILL"), this.#t.stopGraceMs);
+  }
+
+  #heardStderr(chunk: string): void {
+    for (const line of chunk.split("\n")) {
+      if (line.trim() === "" || this.#stderr.length >= STDERR_LINES) continue;
+      this.#stderr.push(line.slice(0, STDERR_LINE_MAX));
+    }
+  }
+
+  #finish(end: FlowHostEnd): void {
+    if (this.#settled) return;
+    this.#settled = true;
+    clearTimeout(this.#readyTimer);
+    clearInterval(this.#pingTimer);
+    clearTimeout(this.#killTimer);
+    if (!this.#isReady) this.#ready(undefined);
+    if (this.#stderr.length > 0)
+      this.#logger.info("fieldd.flows.host.stderr", "The flow host wrote to stderr", {
+        lines: this.#stderr,
+      });
+    this.#settle(end);
+  }
 }

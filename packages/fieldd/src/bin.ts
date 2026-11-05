@@ -21,6 +21,7 @@ import {
   agentShimArgv,
   agentShimUnavailable,
   FILES_HOST_BUNDLE,
+  FLOWS_HOST_BUNDLE,
   roleOf,
   TRANSCRIPT_HOST_BUNDLE,
   unknownRoleLine,
@@ -291,6 +292,13 @@ if (role === "files-host") {
   // its IPC pipe, and the folder's key reaches it there, never in its environment (EL7).
   refuseInspectorSignal();
   const script = join(sealedDirectory(), TRANSCRIPT_HOST_BUNDLE);
+  createRequire(script)(script);
+} else if (role === "flows-host") {
+  // CP-4a2a (4A2-Q1 (a)) — a run's flow host's ROLE, the transcript worker's pattern: fieldd starts one per run as ITSELF
+  // with this argument (flows/launch.ts), and the role loads its bundle staged beside the executable. Its environment
+  // is PATH alone, it locks itself down before a script is handed to it, and it speaks only on its IPC pipe.
+  refuseInspectorSignal();
+  const script = join(sealedDirectory(), FLOWS_HOST_BUNDLE);
   createRequire(script)(script);
 } else if (role === "agent-shim") {
   // AR-7j — the agents' launcher runtime in a packaged build: every launcher
