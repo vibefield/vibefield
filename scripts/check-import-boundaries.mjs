@@ -1479,6 +1479,18 @@ function runSelfTest() {
       file: "packages/fieldd/src/flows/protocol.ts",
       body: 'import { FlowRecords } from "./records";\nexport const r = FlowRecords;\n',
     },
+    // CP-4a2b (Q-B11 (a), CL-H1): nothing outside the child's folder imports a file under it, so `ses` never reaches
+    // fieldd's own bundle through one: a flow-folder file beside the host, and a test reaching the compartment
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/runs-evaluate.ts",
+      body: 'import { evaluateFlow } from "./host/compartment";\nexport const e = evaluateFlow;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/fieldd/test/evaluates-a-flow.test.ts",
+      body: 'import { evaluateFlow } from "../src/flows/host/compartment.ts";\nexport const e = evaluateFlow;\n',
+    },
   ];
   const cleans = [
     // CP-4a1: the static read takes acorn in the flow folder, the host's child takes ses there, and both take
