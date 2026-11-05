@@ -376,6 +376,7 @@ import {
   mergeAtHome,
   SayReceipts,
 } from "./tool-plane/spark-doors";
+import { SparkKeptStore } from "./tool-plane/spark-kept";
 import { SparkService, SparkStore } from "./tool-plane/sparks";
 import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
@@ -1146,6 +1147,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     dir: join(config.dataDir, ...LAYOUT.SPARKS_DIR),
     keyPath: join(config.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
     logger: logger.child({ component: "compose.sparks" }),
+  });
+  // item 159 (TH0-Q11 (b)) — fieldd's own folder for each spark, and its kept record in it, under the folder's one key
+  const sparkKept = new SparkKeptStore({
+    dir: join(config.dataDir, ...LAYOUT.SPARK_FILES_DIR),
+    keyPath: join(config.dataDir, ...LAYOUT.SPARK_FILES_KEY_FILE),
+    logger: logger.child({ component: "compose.spark_kept" }),
   });
   const briefings: AgentBriefings = new AgentBriefings({
     spark: (id) => sparkStore.get(id),
@@ -3020,6 +3027,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // TU-1 (Q1) — a spark has worked once one of its own sessions has: its record keeps the first time told
     agents.onSparkTurned((spark, at) => sparks.turned(spark, at));
+    // item 159 — each spark's kept record, read once before any run re-attaches; one that does not verify, or names
+    // another spark, is set aside here. No section is this item's: each slice that keeps one per spark reads it here
+    const keptSparks = sparkKept.list().length;
+    if (keptSparks > 0)
+      logger.info("fieldd.spark_kept.restored", "Kept spark records read", { kept: keptSparks });
     const kept = inputs.restore();
     if (kept > 0)
       logger.info("fieldd.inputs.restored", "Kept inputs wait for their sessions", { kept });
@@ -3034,11 +3046,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     needs.reconcileTelling((runtimeRunId, item) =>
       inputs.pending(runtimeRunId).some((input) => input.items?.includes(item) === true),
     );
-    // once the re-attach has settled, on the one poll: the needs queue's reconcile, then the input queue's (D3), whose
-    // queues for runs the fold no longer holds are forgotten, a stamped head said uncertain and the rest dropped
-    needs.reconcileWhenSettled(
-      () => agents.reattachSettled(),
-      () => inputs.reconcile((runtimeRunId) => needsRun(runtimeRunId) !== undefined),
+    // once the re-attach has settled, on the one poll: the needs queue's reconcile, then each joiner in the order it
+    // joined (item 159, X5). The input queue's (D3): queues for runs the fold no longer holds are forgotten, a stamped
+    // head said uncertain and the rest dropped
+    needs.reconcileWhenSettled(() => agents.reattachSettled());
+    needs.joinSettle("inputs", () =>
+      inputs.reconcile((runtimeRunId) => needsRun(runtimeRunId) !== undefined),
     );
     const talkSession = (row: ReturnType<typeof runRow>): TalkSession | undefined =>
       row === undefined

@@ -179,6 +179,9 @@ export class NeedsQueue implements TalkHolds {
   readonly #notices = new Set<(notice: NeedsNotice) => void>();
   #shown = "[]";
   #settle: ReturnType<typeof setInterval> | undefined;
+  /** the settle's joiners, in the order they joined (item 159, X5); none is kept once the settle has run them */
+  readonly #joiners: { readonly name: string; readonly fn: () => void }[] = [];
+  #settled = false;
   readonly #now: () => Date;
   readonly #logger: Logger;
 
@@ -201,23 +204,26 @@ export class NeedsQueue implements TalkHolds {
 
   /** Once this boot's re-attach has settled, a held send or an allowance whose run the fold no longer holds ended
    * while fieldd was down: no exit event will say so (critique 3). Asked once, after `settled()` first holds; then
-   * `alongside`, the same moment's reconcile of another store (the input queue's, item 158). */
-  reconcileWhenSettled(settled: () => boolean, alongside?: () => void): void {
+   * each joiner (`joinSettle`), the same moment's reconcile of another store. */
+  reconcileWhenSettled(settled: () => boolean): void {
     if (this.#settle !== undefined) return;
     this.#settle = setInterval(() => {
       if (!settled()) return;
       this.stop();
       this.reconcile();
-      if (alongside !== undefined) this.#guard("reconcile", alongside);
+      this.#settled = true;
+      for (const { name, fn } of this.#joiners.splice(0)) this.#guard(`settle joiner ${name}`, fn);
     }, SETTLE_POLL_MS);
     this.#settle.unref?.();
   }
 
   /** Item 159 (X5) — another store's reconcile at the same settle moment, run once, after this queue's own, in the
    * order joined, each guarded so one that throws stops none of the others; one that joins after the settle runs at
-   * once. Each slice that keeps something per run joins with one line (the input queue's, 1′'s, SP-1e2's). Item 159
-   * (red): joiners are not kept yet. */
-  joinSettle(_name: string, _fn: () => void): void {}
+   * once. Each slice that keeps something per run joins with one line (the input queue's, 1′'s, SP-1e2's). */
+  joinSettle(name: string, fn: () => void): void {
+    if (this.#settled) this.#guard(`settle joiner ${name}`, fn);
+    else this.#joiners.push({ name, fn });
+  }
 
   /** The reconcile itself: every run a held send or an allowance waits on is judged against the fold, now. */
   reconcile(): void {

@@ -9,11 +9,12 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // store per user root, so an edit is refused: a file that is unsigned, does not verify, does not parse, or is exposed
 // to other users is set aside by its store and never served. SparkStore signs here (a spark's record bounds what its
 // verbs reach, TL-D5), so do the sessions' input queues (agent-input-queue.ts: what a kept queue holds is pasted into
-// a session, marked as a spark's words or as VibeField's), and so does the needs-you queue (tool-plane/rooms/you/
-// store.ts: what an Allow acts on). Each store has a key of its own. SessionRecordStore (agent-sessions.ts) still
-// keeps its own copy of the same HMAC and key rule, its key in base64. Moving it here needs this signer to read that
-// key as it is written: read as hex it is unreadable, and setting it aside would make every session record it signed
-// read as forged.
+// a session, marked as a spark's words or as VibeField's), so does the needs-you queue (tool-plane/rooms/you/
+// store.ts: what an Allow acts on), and so does each spark's kept record (tool-plane/spark-kept.ts, item 159: what
+// fieldd keeps for one spark across a restart, in the spark's own folder). Each store has a key of its own.
+// SessionRecordStore (agent-sessions.ts) still keeps its own copy of the same HMAC and key rule, its key in base64.
+// Moving it here needs this signer to read that key as it is written: read as hex it is unreadable, and setting it
+// aside would make every session record it signed read as forged.
 //
 // What it holds against is an EDIT. The key is 0600 to the same uid, so an agent that reads it can sign (EL7): the
 // signature is evidence against a careless or partial adversary, never a wall against one that reads fieldd's files.
