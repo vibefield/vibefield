@@ -231,7 +231,9 @@ function runFrameOf(script: string, opts: FlowHostOptions): Extract<ToFlowHost, 
 
 /** Start a run's host. Its `run` is built and sized first: a frame past the host's bound (TO_FLOW_HOST_FRAME_MAX)
  * would be refused by the host's own reader, so fieldd refuses it before any host starts, in its own words
- * (bth's re-read N6). The script's bound and the input's each hold alone; together they can pass the host's. */
+ * (bth's re-read N6). The script's bound and the input's each hold alone; together they can pass the host's. The
+ * line sized is the line the child is sent at READY, never built again from the caller's input, which may change
+ * in between (bth's second re-read L2). */
 export function startFlowHost(opts: FlowHostOptions): FlowHostRun {
   const size = opts.bytes.byteLength;
   if (size > FLOW_LIMITS.SCRIPT_MAX_BYTES)
@@ -243,22 +245,22 @@ export function startFlowHost(opts: FlowHostOptions): FlowHostRun {
     return settled({ kind: "unconfigured", reason: opts.launch.reason });
   const read = flowScriptOf(opts.bytes);
   if (read.kind === "refused") return settled({ kind: "refused", reason: read.reason });
-  const run = runFrameOf(read.script, opts);
-  const frameBytes = Buffer.byteLength(frameOf(run), "utf8");
+  const runLine = frameOf(runFrameOf(read.script, opts));
+  const frameBytes = Buffer.byteLength(runLine, "utf8");
   if (frameBytes > TO_FLOW_HOST_FRAME_MAX)
     return settled({
       kind: "refused",
       reason: `a flow's run is at most ${kib(TO_FLOW_HOST_FRAME_MAX)} on its host's pipe, its script and its input together; this one is ${frameBytes} bytes`,
     });
-  return new FlowHostChild(opts.launch.launch, run, opts).run;
+  return new FlowHostChild(opts.launch.launch, runLine, opts).run;
 }
 
 /** One child, from its spawn to its exit. */
 class FlowHostChild {
   readonly run: FlowHostRun;
   readonly #opts: FlowHostOptions;
-  /** the `run` sent at READY, sized before the child was started */
-  readonly #runFrame: Extract<ToFlowHost, { t: "run" }>;
+  /** the `run` frame's line, written as it is at READY: sized before the child was started */
+  readonly #runLine: string;
   readonly #t: FlowHostTimings;
   readonly #logger: Logger;
   readonly #proc: ChildProcess;
@@ -285,13 +287,9 @@ class FlowHostChild {
   #pingTimer: NodeJS.Timeout | undefined;
   #killTimer: NodeJS.Timeout | undefined;
 
-  constructor(
-    launch: FlowsHostLaunch,
-    runFrame: Extract<ToFlowHost, { t: "run" }>,
-    opts: FlowHostOptions,
-  ) {
+  constructor(launch: FlowsHostLaunch, runLine: string, opts: FlowHostOptions) {
     this.#opts = opts;
-    this.#runFrame = runFrame;
+    this.#runLine = runLine;
     this.#t = { ...DEFAULT_TIMINGS, ...opts.timings };
     this.#logger = opts.logger ?? createNoopLogger();
     const ready = new Promise<number | undefined>((resolve) => {
@@ -402,7 +400,7 @@ class FlowHostChild {
         // a run fieldd already ended (a Stop before READY) is sent no script and is never pinged: its child is on its
         // way out under the shutdown's grace
         if (this.#chosen !== undefined) return;
-        this.#send(this.#runFrame);
+        if (this.#pipe.writable && !this.#pipe.destroyed) this.#pipe.write(this.#runLine);
         this.#pingTimer = setInterval(() => this.#tick(), this.#t.pingMs);
         return;
       case "call":
