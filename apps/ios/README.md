@@ -202,7 +202,8 @@ that file's lifetime exposes; LP-4,
 2026-11-05 — until then the upload used Xcode's Apple account, whose command-line
 lookup failed as "Failed to Use Accounts"). It refuses to read the key while a
 `claude`, `codex` or `fieldd` runs as you, a guard against accidents and no
-boundary; TESTFLIGHT.md recommends releasing from a macOS account with no agents:
+boundary. Releases run in James's own account, with every agent CLI, VibeField and any `pnpm dev` stopped for
+the upload (TESTFLIGHT.md):
 
 ```sh
 # From the repository root. N = the next unused build number (TESTFLIGHT.md names the last).

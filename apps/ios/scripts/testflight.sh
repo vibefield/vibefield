@@ -56,8 +56,12 @@ running as you can rename itself.
                   reads the key with agents running anyway. Then revoke the key
                   in App Store Connect when the run ends. Any other value is
                   refused.
-The recommended route is a macOS user account kept for releases, with no agent
-and no dev app under it (apps/ios/TESTFLIGHT.md).
+Releases run in your own macOS account (James, 2026-11-05). For the length of the
+upload, quit every agent CLI (claude, codex, and any other you run; the guard's
+three names are a sample, not the set), quit VibeField (Cmd-Q, which stops its
+daemons) and stop any pnpm dev (Ctrl-C in its terminal, which reaps its pair), or
+upload from Xcode's Organizer by hand
+(apps/ios/TESTFLIGHT.md).
 
 Archives and logs are in apps/ios/build/testflight/. Choose a new build number
 for each archive: an existing archive is never overwritten. Xcode also manages

@@ -175,15 +175,19 @@ as archives 1–5 did, and gets the key only when `ASC_ARCHIVE_KEY=1` asks:
 | `ASC_ARCHIVE_KEY` | *optional:* `1` makes `archive` use the key too, for an archive Xcode's account cannot sign; the key is then decoded for the whole Release build |
 | `VIBEFIELD_ASC_AGENTS_RUNNING` | *optional:* `revoke-the-key-afterwards` reads the key although agents run as you (the guard below); then revoke the key (step 4) |
 
-**The recommended route: a release account.** Release from a macOS user account
-kept for releases alone, not James's own. The key lives in THAT account's login
-keychain (steps 2 and 3 run there), Xcode is signed in to the team there, and the
-archive and the upload run there, from a checkout of its own. No agent and no dev
-app run under it, so it is the only place where "no agent runs as the same user"
-is true by construction. Creating that account is James's hand. Xcode's
-Organizer, used by hand (above), stays the fallback no agent can reach: it reads
-no key file. The rest of this section is the route in James's own account, and
-what it does not cover.
+**The route: James's own account.** James ruled on 2026-11-05: "just use my
+current account, I'm an individual developer". The key lives in his login keychain
+(steps 2 and 3), Xcode is signed in to the team there, and the archive and the
+upload run there, where his agents also run. So the upload is when they stop.
+For the length of `upload`, quit every agent CLI (`claude`, `codex`, and any other
+you run), quit VibeField (⌘Q, which stops its daemons through the census), and
+stop any `pnpm dev` (Ctrl-C in its terminal, which reaps its pair: quitting the
+dev app alone leaves them running, and its fieldd runs under Electron's name, so
+the guard does not count it). The guard's three names are a sample, not the set.
+Or upload by hand
+from Xcode's Organizer (above), which reads no key file. If an agent ran while the
+key was decoded, treat the key as exposed and revoke it (step 4). The rest of this
+section says what the keychain covers in this account, and what it does not.
 
 **Why the keychain (EL7).** This Mac runs many agents as James's own user, and
 same-user agents are the adversary (CLAUDE.md, EL7). A `.p8` kept as a file is
