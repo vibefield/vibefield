@@ -14,7 +14,7 @@
 // is allowed; upgrade to real TS/ESM parsing only if textual checks get ambiguous).
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // This script's own home, so manifest-derived rules (R5) read the REAL packages
@@ -657,11 +657,16 @@ const RULES = [
     // code, no test and no other package parses or evaluates a script. And as R29 says of the tool plane, the flow
     // folder composes fieldd's own services: no puppeteer and no rosetta package, so a step's result reaches it through
     // fieldd's interface over the runtime's events, never a vendor's (AR-L1). Like R24, the verdict depends on WHERE.
+    // CP-4a2a (step0-cp4a2.md §12 commit 4; the host clause, landed before the host so its first line is held to it):
+    // the child itself imports only `ses`, `@endo/*`, `node:` built-ins, its own files and the flow folder's
+    // `protocol.ts` (import-free, as transcripts/protocol.ts is). No contracts, no acorn (the rewrite is fieldd's,
+    // module-script.ts) and no other daemon file: the child holds no key, no door and no record (EL7, 4A2-Q6 (b)).
     enforce: true,
     description:
-      "acorn only under packages/fieldd/src/flows and ses only under packages/fieldd/src/flows/host (the flow host's child); packages/fieldd/src/flows imports no @vibefield/puppeteer-* and no @vibefield/rosetta-* package",
+      "acorn only under packages/fieldd/src/flows and ses only under packages/fieldd/src/flows/host (the flow host's child); packages/fieldd/src/flows imports no @vibefield/puppeteer-* and no @vibefield/rosetta-* package; packages/fieldd/src/flows/host imports only ses, @endo/*, node: built-ins, its own files and ../protocol",
     applies: (p) => SOURCE_EXT.test(p),
     importTest: (s, p) => {
+      if (under(p, FLOWS_HOST_DIR)) return !flowsHostMayImport(s, p);
       if (importsModule(s, "acorn")) return !under(p, FLOWS_SRC_DIR);
       if (importsModule(s, "ses") || s.startsWith("@endo/")) return !under(p, FLOWS_HOST_DIR);
       if (under(p, FLOWS_SRC_DIR))
@@ -794,6 +799,20 @@ const MILLE_WORKER_DIR = "packages/fieldd/src/workspace/host";
 // place `ses` evaluates one (CP-4a2).
 const FLOWS_SRC_DIR = "packages/fieldd/src/flows";
 const FLOWS_HOST_DIR = "packages/fieldd/src/flows/host";
+// CP-4a2a (R32's host clause) — the one file outside the child's folder that it may import: fieldd ⇄ host messages.
+const FLOWS_PROTOCOL = "packages/fieldd/src/flows/protocol";
+
+// Whether a file of the host's child may import `spec`: `ses`, `@endo/*`, a `node:` built-in, or a relative path that
+// lands in the child's folder or on FLOWS_PROTOCOL (an extension, if written, is dropped). Textual, as every rule here.
+function flowsHostMayImport(spec, relPath) {
+  if (importsModule(spec, "ses") || spec.startsWith("@endo/") || spec.startsWith("node:"))
+    return true;
+  if (!(spec.startsWith("./") || spec.startsWith("../"))) return false;
+  const target = posix
+    .normalize(posix.join(posix.dirname(relPath), spec))
+    .replace(/\.(?:[cm]?[jt]sx?)$/, "");
+  return under(target, FLOWS_HOST_DIR) || target === FLOWS_PROTOCOL;
+}
 
 // AR-0 walls (R20/R21): the packages each plane may import — the SAME sets the
 // sibling block in pnpm-workspace.yaml and packages/*/package.json declare.
@@ -1419,6 +1438,37 @@ function runSelfTest() {
       file: "packages/fieldd/src/flows/host/reads-history.ts",
       body: 'import { RosettaClient } from "@vibefield/rosetta-protocol";\nexport const c = RosettaClient;\n',
     },
+    // CP-4a2a (R32's host clause): the child reaches nothing of fieldd's but its own files and the protocol.
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/host/parses-again.ts",
+      body: 'import { parse } from "acorn";\nexport const p = parse;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/host/reads-limits.ts",
+      body: 'import { FLOW_LIMITS } from "@vibefield/contracts";\nexport const l = FLOW_LIMITS;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/host/reads-records.ts",
+      body: 'import { FlowRecords } from "../records";\nexport const r = FlowRecords;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/host/signs-lines.ts",
+      body: 'import { RecordSigner } from "../../signed-record";\nexport const s = RecordSigner;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/host/bare-builtin.ts",
+      body: 'import { readFileSync } from "fs";\nexport const r = readFileSync;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/host/escapes-by-dots.ts",
+      body: 'import { RecordSigner } from "./../../signed-record.ts";\nexport const s = RecordSigner;\n',
+    },
   ];
   const cleans = [
     // CP-4a1: the static read takes acorn in the flow folder, the host's child takes ses there, and both take
@@ -1427,9 +1477,11 @@ function runSelfTest() {
       file: "packages/fieldd/src/flows/clean-static-read.ts",
       body: 'import { parse } from "acorn";\nimport { FlowRead } from "@vibefield/contracts";\nimport { flowHashOf } from "./records";\nexport const p = parse;\nexport const r = FlowRead;\nexport const h = flowHashOf;\n',
     },
+    // CP-4a2a: the host clause narrows the child's row: acorn left it (the rewrite is fieldd's), and the protocol is the
+    // flow folder's `../protocol`, beside its own files and `@endo/*`.
     {
       file: "packages/fieldd/src/flows/host/clean-host.ts",
-      body: 'import "ses";\nimport { parse } from "acorn";\nimport { stdin } from "node:process";\nimport { MESSAGE } from "./protocol";\nexport const s = stdin;\nexport const m = MESSAGE;\nexport const p = parse;\n',
+      body: 'import "ses";\nimport { getEnvironmentOption } from "@endo/env-options";\nimport { stdin } from "node:process";\nimport { MESSAGE } from "../protocol";\nimport { PROTOCOL } from "../protocol.ts";\nimport { compartmentOf } from "./compartment";\nexport const s = stdin;\nexport const m = MESSAGE;\nexport const t = PROTOCOL;\nexport const g = getEnvironmentOption;\nexport const c = compartmentOf;\n',
     },
     // SD-1: the sound's own files (a `.ts` specifier, a parent's) pass R31; field-app and Electron main may import it.
     {
