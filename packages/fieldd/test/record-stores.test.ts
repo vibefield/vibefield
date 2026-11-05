@@ -15,7 +15,6 @@ import {
   AGENT_CATALOG,
   AGENT_SESSION_RECORD_FORMAT,
   type AgentSessionRecord,
-  canonicalJson,
   NEEDS_RECORD_FORMAT,
   type NeedsRecord,
   RECORD_STORES,
@@ -761,22 +760,12 @@ describe("item 177 — the sessions' records move onto the one signer, their key
 const PRE177 = join(import.meta.dirname, "fixtures", "sessions-pre177");
 
 describe("item 177 — the canonical form the sessions' records were signed in", () => {
-  it("S5 · PIN — contracts' canonicalJson gives the bytes agent-sessions.ts' own copy signed: every pre-177 fixture verifies under it, and the store serves all three", () => {
+  it("S5 · the one signer verifies what agent-sessions.ts' own copy signed before item 177 (red-2's PIN; that copy is gone): every pre-177 fixture reads as its record, and the store serves all three", () => {
     const keyFile = join(PRE177, "sessions.key");
     expect(existsSync(keyFile), "the pre-177 fixtures' key is kept").toBe(true);
-    const key = Buffer.from(readFileSync(keyFile, "utf8").trim(), "base64");
     const names = readdirSync(join(PRE177, "sessions")).sort();
     expect(names).toEqual(["run-nested.json", "run-ordered.json", "run-plain.json"]);
-    for (const name of names) {
-      const { signature, ...unsigned } = JSON.parse(
-        readFileSync(join(PRE177, "sessions", name), "utf8"),
-      ) as Record<string, unknown>;
-      expect(
-        createHmac("sha256", key).update(canonicalJson(unsigned)).digest("hex"),
-        `${name}: its signature is over contracts' canonical bytes`,
-      ).toBe(signature);
-    }
-    // the store reads them from a copy, so a set-aside could never touch the committed fixtures
+    // read from a copy, so a set-aside could never touch the committed fixtures
     const root = tmp();
     mkdirSync(sessionsCase.dir(root), { recursive: true, mode: 0o700 });
     writeFileSync(sessionsCase.keyPath(root), readFileSync(keyFile), { mode: 0o600 });
@@ -786,6 +775,16 @@ describe("item 177 — the canonical form the sessions' records were signed in",
         readFileSync(join(PRE177, "sessions", name)),
         { mode: 0o600 },
       );
+    const signer = new RecordSigner({ keyPath: sessionsCase.keyPath(root), keyEncoding: "base64" });
+    for (const name of names) {
+      const { signature: _signature, ...unsigned } = JSON.parse(
+        readFileSync(join(PRE177, "sessions", name), "utf8"),
+      ) as Record<string, unknown>;
+      expect(
+        signer.read(join(sessionsCase.dir(root), name)),
+        `${name}: its signature verifies over the signer's canonical bytes`,
+      ).toEqual({ body: unsigned });
+    }
     const served = sessionsCase.boot(root, []).served();
     expect(Array.isArray(served) ? [...served].sort() : served).toEqual([
       "run-nested",
@@ -793,5 +792,8 @@ describe("item 177 — the canonical form the sessions' records were signed in",
       "run-plain",
     ]);
     expect(asides(sessionsCase.dir(root))).toEqual([]);
+    expect(readFileSync(sessionsCase.keyPath(root)), "the key is kept as it was").toEqual(
+      readFileSync(keyFile),
+    );
   });
 });

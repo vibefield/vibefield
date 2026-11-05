@@ -23,9 +23,9 @@ import { RpcCallError } from "./native-link";
 // a session, marked as a spark's words or as VibeField's), so does the needs-you queue (tool-plane/rooms/you/
 // store.ts: what an Allow acts on), and so does each spark's kept record (tool-plane/spark-kept.ts, item 159: what
 // fieldd keeps for one spark across a restart, in the spark's own folder). Each store has a key of its own.
-// SessionRecordStore (agent-sessions.ts) still keeps its own copy of the same HMAC and key rule, its key in base64.
-// Moving it here needs this signer to read that key as it is written: read as hex it is unreadable, and setting it
-// aside would make every session record it signed read as forged.
+// Item 177: so do the managed sessions' records (agent-sessions.ts, AR-3/AR-4b: what the boot re-attaches to and
+// resume-when-idle terminates), whose key is base64 as it always was (`keyEncoding`): read as hex it would be
+// unreadable, and setting it aside would make every session record it signed read as forged.
 //
 // What it holds against is an EDIT. The key is 0600 to the same uid, so an agent that reads it can sign (EL7): the
 // signature is evidence against a careless or partial adversary, never a wall against one that reads fieldd's files.
@@ -36,9 +36,10 @@ import { RpcCallError } from "./native-link";
 // human, never deleted.
 
 /** The secret's bytes, and the signature's: each written as hex (the key as SparkStore's always was), read in
- * either case. */
+ * either case. Item 177: the sessions' key is base64, 32 bytes with its padding, as AR-4b made it. */
 const KEY_BYTES = 32;
 const HEX_32_BYTES = /^[0-9a-f]{64}$/i;
+const BASE64_32_BYTES = /^[A-Za-z0-9+/]{43}=$/;
 
 /** Why a signed file is not served. */
 export type SetAsideWhy = "exposed" | "unsigned" | "forged" | "unreadable";
@@ -213,7 +214,7 @@ export interface RecordSignerOptions {
   /** a record file's read (utf8): a seam for a disk that does not answer (EMFILE), in tests */
   readonly readFile?: ((path: string) => string) | undefined;
   /** Item 177 — how the key is written in its file: hex (every store since SparkStore), or base64 (the sessions' key,
-   * AR-4b's, read and made as it always was). SKELETON (the red): not read yet. */
+   * AR-4b's, read and made as it always was). */
   readonly keyEncoding?: "hex" | "base64" | undefined;
 }
 
@@ -222,11 +223,13 @@ export class RecordSigner {
   readonly #keyPath: string;
   readonly #logger: Logger;
   readonly #readFile: (path: string) => string;
+  readonly #keyEncoding: "hex" | "base64";
 
   constructor(opts: RecordSignerOptions) {
     this.#keyPath = opts.keyPath;
     this.#logger = opts.logger ?? createNoopLogger();
     this.#readFile = opts.readFile ?? ((path) => readFileSync(path, "utf8"));
+    this.#keyEncoding = opts.keyEncoding ?? "hex";
   }
 
   /** HMAC-SHA256 over the record's canonical JSON, hex. */
@@ -302,7 +305,9 @@ export class RecordSigner {
       }
       if (found !== "absent") this.#setKeyAside(found);
       try {
-        writeFileSync(this.#keyPath, randomBytes(KEY_BYTES).toString("hex"), {
+        // the sessions' key ends with a newline, as AR-4b wrote it
+        const made = randomBytes(KEY_BYTES).toString(this.#keyEncoding);
+        writeFileSync(this.#keyPath, this.#keyEncoding === "base64" ? `${made}\n` : made, {
           mode: 0o600,
           flag: "wx",
         });
@@ -318,7 +323,8 @@ export class RecordSigner {
     try {
       if (exposed(this.#keyPath)) return "exposed";
       const text = readFileSync(this.#keyPath, "utf8").trim();
-      return HEX_32_BYTES.test(text) ? Buffer.from(text, "hex") : "unreadable";
+      const shape = this.#keyEncoding === "base64" ? BASE64_32_BYTES : HEX_32_BYTES;
+      return shape.test(text) ? Buffer.from(text, this.#keyEncoding) : "unreadable";
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return "absent";
       throw error;

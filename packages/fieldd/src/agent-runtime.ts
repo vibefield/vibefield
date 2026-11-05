@@ -2462,9 +2462,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   // ── the sessions a persona holds (PersonaSessions, for agent-profiles.ts) ──
 
-  /** Item 177 — throws the sessions' refusal while their records cannot be read (PersonaSessions.readable).
-   * SKELETON (the red): it answers nothing yet. */
-  readable(): void {}
+  /** Item 177 — throws the sessions' refusal while their records cannot be read (PersonaSessions.readable). */
+  readable(): void {
+    this.records.readable();
+  }
 
   /** Sessions still running under any of these personas — anything that
    * could still write into their roots: attached, pending, held for the

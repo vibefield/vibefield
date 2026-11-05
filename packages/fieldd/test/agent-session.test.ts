@@ -67,6 +67,7 @@ import {
   NeedsAnswerResult,
   NeedsListResult,
   type PlaceFacts,
+  RECORD_STORES,
   SOCKETS,
   type SparkRecord,
   TERMINAL_INVENTORY,
@@ -104,6 +105,7 @@ import { EXIT_GRACE_MS } from "../src/agent-runtime";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
+import { UNREADABLE_WORDS } from "../src/signed-record";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { SparkStore } from "../src/tool-plane/sparks";
 import { RootsRegistry } from "../src/workspace/roots";
@@ -3436,6 +3438,63 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
       return terminals.some((row) => row.sessionId === paneId) ? undefined : true;
     }, 15_000);
   }, 60_000);
+
+  // Item 177 (DESIGN.md §9; EL7) — the sessions' records are read at each ask. A same-uid file where their folder is
+  // never stops fieldd's boot (the re-attach goes on with none), and a sign-out, which needs them to know what still
+  // runs under the sign-in, refuses before it changes anything.
+  it("B177 · a same-uid file where agents/sessions is: fieldd boots, and agents.profiles.delete refuses UNAVAILABLE {agents, records-unreadable} in fieldd's words, the sign-in not retired", async () => {
+    const config = { floor: "real", profiles: true } as const;
+    const first = await setup(config);
+    const win1 = await window(first.daemon, DECK, "b177a");
+    const work = await signedIn(win1, first.dataDir, "Work");
+    await first.daemon.stop();
+
+    const sessionsDir = join(first.dataDir, ...LAYOUT.AGENT_SESSIONS_DIR);
+    rmSync(sessionsDir, { recursive: true, force: true });
+    mkdirSync(dirname(sessionsDir), { recursive: true, mode: 0o700 });
+    writeFileSync(sessionsDir, "not a folder", { mode: 0o600 });
+
+    let second: Box | undefined;
+    const booted = await setup({ ...config, restartOf: first }).then(
+      (box) => {
+        second = box;
+        return "booted";
+      },
+      (err: Error) => err.message,
+    );
+    expect(booted, "fieldd boots with a file where the sessions' records are").toBe("booted");
+    expect(second, "the second fieldd").toBeDefined();
+    const win2 = await window(second!.daemon, DECK, "b177b");
+
+    const refused = await win2.callErr("agents.profiles.delete", { profileId: work.profileId });
+    expect(refused.message).toBe(UNREADABLE_WORDS.sessions);
+    expect(refused.data).toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: RECORD_STORES.SERVICE_AGENTS, state: RECORD_STORES.STATE_UNREADABLE },
+    });
+
+    // nothing was changed: the sign-in is in its profile still, not retired, its root kept
+    const { sets } = (await win2.call(
+      "agents.profileSets.list",
+      {},
+    )) as AgentsProfileSetsListResult;
+    expect(
+      sets.find((set) => set.id === work.set)?.personas.map((persona) => persona.profileId),
+      "the sign-in is in its profile still",
+    ).toEqual([work.profileId]);
+    const registryFile = join(first.dataDir, ...LAYOUT.AGENT_PROFILES_FILE);
+    expect(existsSync(registryFile), "the sign-ins' registry is kept").toBe(true);
+    const registry = JSON.parse(readFileSync(registryFile, "utf8")) as {
+      profiles: { id: string; retiredAt?: string }[];
+    };
+    const kept = registry.profiles.find((profile) => profile.id === work.profileId);
+    expect(kept, "the sign-in is registered still").toBeDefined();
+    expect(kept?.retiredAt).toBeUndefined();
+    expect(existsSync(work.root), "its root is kept").toBe(true);
+    // and the file is where the agent put it, never moved or written over
+    expect(readFileSync(sessionsDir, "utf8")).toBe("not a folder");
+  }, 90_000);
 });
 
 describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {

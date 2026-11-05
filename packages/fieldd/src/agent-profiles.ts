@@ -332,6 +332,8 @@ export class AgentProfileService {
         state: "deleting",
       });
     }
+    // item 177: the sessions' records say what runs in the set; one that cannot read them refuses before anything
+    this.opts.sessions.readable();
     this.deletingSets.add(setId);
     // every account the set holds, a retired one still waiting included
     const members = () =>
@@ -581,6 +583,9 @@ export class AgentProfileService {
   async signOut(profileId: string): Promise<AgentsProfilesDeleteResult> {
     const profile = await this.requirePersona(profileId);
     const credential = this.credentialClaim(profile.provider);
+    // item 177: a managed sign-out reads the sessions' records (what still runs under it); one that cannot read them
+    // refuses here, before a login pane is ended or the sign-in retired (This Mac's reads none)
+    if (profile.kind === "managed") this.opts.sessions.readable();
     await this.opts.sessions.endLogins(new Set([profileId]));
     if (profile.kind !== "managed") {
       const outcome = await this.opts.runtime.signOutProfile(profileId);

@@ -1,15 +1,6 @@
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import {
-  chmodSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { chmodSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import {
   AGENT_SESSION_RECORD_FORMAT,
   type AgentModelSelection,
@@ -22,6 +13,7 @@ import {
   type AgentSessionSummary,
   type AgentStatus,
   type AgentStopState,
+  RECORD_STORES,
   type SparkId,
   type TerminalInfo,
 } from "@vibefield/contracts";
@@ -34,6 +26,14 @@ import type {
 } from "@vibefield/puppeteer-core";
 import type { AgentSessionInfo } from "@vibefield/puppeteer-runtime";
 import { isTypedRun, SPAWNED_BY_SHELL } from "./agent-typed-run";
+import {
+  RecordSigner,
+  recordsUnreadable,
+  type SetAsideWhy,
+  StoreGuard,
+  setAsideFile,
+  UNREADABLE_WORDS,
+} from "./signed-record";
 
 // The managed-session records and the fold's projection (AR-3;
 // thinking-ar-agent-plane.md §5/§7/§9 as ruled). Pure where it can be: the
@@ -43,8 +43,16 @@ import { isTypedRun, SPAWNED_BY_SHELL } from "./agent-typed-run";
 /** `users/<fuid>/agents/sessions/<runtimeRunId>.json` — one record per
  * managed session (LAYOUT.AGENT_SESSIONS_DIR), 0600, private temp + durable
  * rename, the directory 0700. Read at resume and at re-attach; a record that
- * cannot be read is set aside for a human, never overwritten and never a
- * boot failure. The continuation inside is puppeteer's and opaque.
+ * is not one is set aside for a human, never overwritten and never a boot
+ * failure. The continuation inside is puppeteer's and opaque.
+ *
+ * ITEM 177 (DESIGN.md §9 "What VibeField keeps, when it cannot read it"):
+ * the sixth of fieldd's signed stores, read through the one signer
+ * (signed-record.ts) and its StoreGuard, as the other five are. A folder it
+ * cannot list, or a record (or the key) the disk does not answer, is left
+ * where it is and refuses UNAVAILABLE {service: "agents", state:
+ * "records-unreadable"}, retryable: the records are read at each ask. A
+ * record a newer VibeField wrote is kept for it, never served or written over.
  *
  * TAMPER EVIDENCE (AR-4b, EL7): a record is a control input to the daemon's
  * own acts — the boot re-attaches to the PTY it names and resume-when-idle
@@ -52,13 +60,16 @@ import { isTypedRun, SPAWNED_BY_SHELL } from "./agent-typed-run";
  * not be able to point fieldd at a terminal it never spawned. Every record
  * fieldd writes carries an HMAC-SHA256 over its canonical JSON, keyed by a
  * 32-byte secret minted once per user root (`LAYOUT.AGENT_SESSIONS_KEY_FILE`,
- * 0600, created without overwrite). A record without a signature, with a
+ * 0600, created without overwrite, written in base64 as it always was). A record without a signature, with a
  * signature that does not verify, or exposed to other users by its mode, is
  * SET ASIDE at read (a distinct log event each) and never acted on. The
  * pattern is puppeteer's own for its claims (`installation.key`). */
 export class SessionRecordStore {
   private readonly logger: Logger;
-  private key: Buffer | undefined;
+  /** Item 177 — the one signer (signed-record.ts), its key read and made as AR-4b wrote it: base64. */
+  readonly #signer: RecordSigner;
+  /** Item 177 — a folder it cannot list, a record the disk did not answer, a record a newer VibeField wrote. */
+  readonly #guard: StoreGuard;
   /** QL — the newest record CREATION per provider (and the run it names),
    * seeded from one `list()` at first ask and then kept by this store's own
    * `write`/`remove`, which every record passes through. Undefined = not
@@ -71,11 +82,24 @@ export class SessionRecordStore {
       keyPath: string;
       now: () => Date;
       logger?: Logger;
-      /** item 177 — a record file's read, for the one signer (a test's seam). SKELETON (the red): not read yet. */
+      /** item 177 — a record file's read, for the one signer (a test's seam) */
       readFile?: ((path: string) => string) | undefined;
     },
   ) {
     this.logger = opts.logger ?? createNoopLogger();
+    this.#signer = new RecordSigner({
+      keyPath: opts.keyPath,
+      keyEncoding: "base64",
+      logger: this.logger,
+      readFile: opts.readFile,
+    });
+    this.#guard = new StoreGuard({
+      store: "sessions",
+      format: AGENT_SESSION_RECORD_FORMAT,
+      refusal: () =>
+        recordsUnreadable(RECORD_STORES.SERVICE_AGENTS, UNREADABLE_WORDS.sessions, true),
+      logger: this.logger,
+    });
   }
 
   path(runtimeRunId: string): string {
@@ -83,20 +107,22 @@ export class SessionRecordStore {
   }
 
   /** The record, when it exists AND verifies; a record that does not verify
-   * is set aside and reads as absent. */
+   * is set aside and reads as absent, and so does one a newer VibeField wrote
+   * (kept where it is for it). Item 177: one the disk does not answer refuses
+   * UNAVAILABLE {service: "agents"} in fieldd's words. */
   read(runtimeRunId: string): AgentSessionRecord | undefined {
     return this.readPath(this.path(runtimeRunId));
   }
 
-  /** Every readable, VERIFIED record, newest first. */
+  /** Every readable, VERIFIED record, newest first. Item 177: a folder it
+   * cannot list, or a record the disk does not answer, refuses UNAVAILABLE
+   * {service: "agents"} in fieldd's words, never answered with fewer records;
+   * nothing in it is moved or written over. */
   list(): AgentSessionRecord[] {
-    let names: string[];
-    try {
-      names = readdirSync(this.opts.dir).filter((name) => name.endsWith(".json"));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw error;
-    }
+    const names = this.#guard
+      .entries(this.opts.dir)
+      .map((entry) => entry.name)
+      .filter((name) => name.endsWith(".json"));
     const records: AgentSessionRecord[] = [];
     for (const name of names) {
       const record = this.readPath(join(this.opts.dir, name));
@@ -107,15 +133,24 @@ export class SessionRecordStore {
     );
   }
 
+  /** Item 177 — throws the store's refusal while its records cannot be read:
+   * one whole listing, so an act that needs them (a sign-out, a set's delete)
+   * refuses before it changes anything. */
+  readable(): void {
+    this.list();
+  }
+
   /** Sign and publish: the directory made (and kept) owner-only, the bytes
    * written to a private temp file that cannot pre-exist (`wx`, a random
    * suffix — a temp name an adversary could plant first would inherit its
-   * mode), renamed durably, the mode re-asserted on the result. */
+   * mode), renamed durably, the mode re-asserted on the result. Item 177: a
+   * run whose record a newer VibeField wrote is refused, never written over. */
   write(record: AgentSessionRecord): void {
+    this.#guard.writable(record.runtimeRunId);
     mkdirSync(this.opts.dir, { recursive: true, mode: 0o700 });
     ownerOnly(this.opts.dir, 0o700);
     const { signature: _previous, ...unsigned } = record;
-    const signed: AgentSessionRecord = { ...unsigned, signature: this.sign(unsigned) };
+    const signed: AgentSessionRecord = { ...unsigned, signature: this.#signer.sign(unsigned) };
     const path = this.path(record.runtimeRunId);
     const tmp = `${path}.${randomUUID()}.tmp`;
     writeFileSync(tmp, `${JSON.stringify(signed, null, 2)}\n`, { mode: 0o600, flag: "wx" });
@@ -164,157 +199,42 @@ export class SessionRecordStore {
   verifies(record: AgentSessionRecord): boolean {
     if (record.signature === undefined) return false;
     const { signature, ...unsigned } = record;
-    const expected = Buffer.from(this.sign(unsigned), "hex");
-    const given = Buffer.from(signature, "hex");
-    return given.length === expected.length && timingSafeEqual(given, expected);
+    return this.#signer.verifies(unsigned, signature);
   }
 
-  private sign(unsigned: Omit<AgentSessionRecord, "signature">): string {
-    return createHmac("sha256", this.signingKey()).update(canonicalJson(unsigned)).digest("hex");
-  }
-
-  /** The root's signing key: read, or minted once (32 random bytes, base64,
-   * 0600, created without overwrite so two writers cannot both mint). A key
-   * that other users could read is worthless as evidence: set aside, re-minted,
-   * and every record signed with it reads as untrusted from then on. An exposed
-   * key and a malformed one are each replaced on the pass that finds them, and
-   * the second pass reads what was minted (the one record signer,
-   * signed-record.ts, carries the same rule). */
-  private signingKey(): Buffer {
-    if (this.key !== undefined) return this.key;
-    const path = this.opts.keyPath;
-    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        if (exposed(path)) {
-          const aside = `${path}.exposed-${Date.now()}`;
-          this.logger.error(
-            "fieldd.agents.session_key_exposed",
-            "The session-record signing key was readable by other users; set aside and re-minted",
-            undefined,
-            { aside },
-          );
-          renameSync(path, aside);
-        } else {
-          const key = Buffer.from(readFileSync(path, "utf8").trim(), "base64");
-          if (key.length === 32) {
-            this.key = key;
-            return key;
-          }
-          const aside = `${path}.unreadable-${Date.now()}`;
-          this.logger.error(
-            "fieldd.agents.session_key_unreadable",
-            "The session-record signing key is malformed; set aside and re-minted",
-            undefined,
-            { aside },
-          );
-          renameSync(path, aside);
-        }
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      }
-      try {
-        writeFileSync(path, `${randomBytes(32).toString("base64")}\n`, {
-          mode: 0o600,
-          flag: "wx",
-        });
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-        // another writer minted it first: read theirs on the next pass
-      }
-    }
-    throw new Error(`the session-record signing key at ${path} could not be read or minted`);
-  }
-
+  /** One record through the one signer (item 177): exposed, unparseable,
+   * unsigned or forged is set aside; the disk not answering refuses; a newer
+   * VibeField's is held; what verifies is parsed with its schema. */
   private readPath(path: string): AgentSessionRecord | undefined {
-    let text: string;
-    try {
-      text = readFileSync(path, "utf8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-      throw error;
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = undefined;
-    }
-    const record = AgentSessionRecordSchema.safeParse(parsed);
+    const read = this.#signer.read(path);
+    if ("unavailable" in read) return this.#guard.unavailable(path, read.unavailable);
+    if ("absent" in read) return undefined;
+    if ("why" in read) return this.setAside(path, read.why, {});
+    const runtimeRunId = decodeURIComponent(basename(path, ".json"));
+    if (this.#guard.newer(runtimeRunId, path, read.body)) return undefined;
+    const record = AgentSessionRecordSchema.safeParse(read.body);
     if (!record.success) {
-      this.setAside(path, "unreadable", "fieldd.agents.session_record_unreadable", {
-        issue: record.error.issues[0]?.message ?? "invalid json",
+      return this.setAside(path, "unreadable", {
+        issue: record.error.issues[0]?.message ?? "invalid record",
       });
-      return undefined;
     }
-    if (exposed(path)) {
-      this.setAside(path, "exposed", "fieldd.agents.session_record_exposed", {
-        runtimeRunId: record.data.runtimeRunId,
-      });
-      return undefined;
-    }
-    if (record.data.signature === undefined) {
-      this.setAside(path, "unsigned", "fieldd.agents.session_record_unsigned", {
-        runtimeRunId: record.data.runtimeRunId,
-      });
-      return undefined;
-    }
-    if (!this.verifies(record.data)) {
-      this.setAside(path, "forged", "fieldd.agents.session_record_forged", {
-        runtimeRunId: record.data.runtimeRunId,
-      });
-      return undefined;
-    }
-    return record.data;
+    // the signature it was read with: it verified, so it is this key's over these bytes (a caller's copy keeps it)
+    return { ...record.data, signature: this.#signer.sign(read.body) };
   }
 
   /** A record fieldd will not act on is moved out of the listing for a human
-   * to look at; never deleted, never overwritten, never silently ignored. */
-  private setAside(
-    path: string,
-    why: "unreadable" | "exposed" | "unsigned" | "forged",
-    event: string,
-    attrs: Record<string, unknown>,
-  ): void {
-    const aside = `${path}.${why}-${Date.now()}`;
+   * to look at (renamed beside itself, `setAsideFile`); never deleted, never
+   * overwritten, never silently ignored. */
+  private setAside(path: string, why: SetAsideWhy, attrs: Record<string, unknown>): undefined {
+    const aside = setAsideFile(path, why);
     this.logger.error(
-      event,
+      `fieldd.agents.session_record_${why}`,
       `A managed-session record is ${why}; set aside, never acted on`,
       undefined,
-      { aside, ...attrs },
+      { aside, runtimeRunId: decodeURIComponent(basename(path, ".json")), ...attrs },
     );
-    try {
-      renameSync(path, aside);
-    } catch {
-      // nothing else to do: the next write of this id replaces it
-    }
+    return undefined;
   }
-}
-
-/** Stable bytes for the signature: object keys sorted at every level (records
- * are plain JSON; arrays keep their order). */
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortKeys(value));
-}
-
-function sortKeys(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortKeys);
-  if (value !== null && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      const inner = (value as Record<string, unknown>)[key];
-      if (inner !== undefined) out[key] = sortKeys(inner);
-    }
-    return out;
-  }
-  return value;
-}
-
-/** Whether a path's mode lets group or others at it (never true on win32,
- * where the mode bits say nothing). */
-function exposed(path: string): boolean {
-  if (process.platform === "win32") return false;
-  return (statSync(path).mode & 0o077) !== 0;
 }
 
 /** Re-assert an owner-only mode: a directory or file that pre-existed with a
