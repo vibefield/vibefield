@@ -39,8 +39,10 @@
     "@vibefield/plugin-runtime": "workspace:*",
     "@vibefield/plugin-sdk": "workspace:*",
     "@vibefield/users": "workspace:*",
+    "acorn": "8.19.0",
     "ajv": "^8.17.1",
     "loro-crdt": "^1.13.8",
+    "ses": "2.3.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

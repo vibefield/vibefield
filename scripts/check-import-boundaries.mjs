@@ -647,6 +647,28 @@ const RULES = [
     applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/sound/src"),
     importTest: (s) => !(s.startsWith("./") || s.startsWith("../")),
   },
+  {
+    id: "R32",
+    // CP-4a1 (step0-cp4.md §5.1 commit 5; CP4-S4, ruled 2026-11-04 at the lean): the flow host's own rule, which R29
+    // reserved for it (the plan's "R31"; SD-1's sound wall took that number first). A person's flow script is parsed
+    // and run in ONE folder of fieldd: `acorn` (the static read, CP4-Q3 (a)) is imported only under
+    // packages/fieldd/src/flows, and `ses` (Hardened JavaScript; with its `@endo/*` parts, the sandbox CP-4a2's child
+    // locks itself down with, CP-D8) only under packages/fieldd/src/flows/host, the child's own entry. No other daemon
+    // code, no test and no other package parses or evaluates a script. And as R29 says of the tool plane, the flow
+    // folder composes fieldd's own services: no puppeteer and no rosetta package, so a step's result reaches it through
+    // fieldd's interface over the runtime's events, never a vendor's (AR-L1). Like R24, the verdict depends on WHERE.
+    enforce: true,
+    description:
+      "acorn only under packages/fieldd/src/flows and ses only under packages/fieldd/src/flows/host (the flow host's child); packages/fieldd/src/flows imports no @vibefield/puppeteer-* and no @vibefield/rosetta-* package",
+    applies: (p) => SOURCE_EXT.test(p),
+    importTest: (s, p) => {
+      if (importsModule(s, "acorn")) return !under(p, FLOWS_SRC_DIR);
+      if (importsModule(s, "ses") || s.startsWith("@endo/")) return !under(p, FLOWS_HOST_DIR);
+      if (under(p, FLOWS_SRC_DIR))
+        return s.startsWith("@vibefield/puppeteer-") || s.startsWith("@vibefield/rosetta-");
+      return false;
+    },
+  },
 ];
 
 // P2 (R26) — the Peek's watch-only pane, by its directory or its module names.
@@ -767,6 +789,11 @@ function retiredImport(spec, rel) {
 // FS-1a (R24) — the files worker's directory: the one place mille's engine is
 // imported (packages/fieldd/src/workspace/host/main.ts is its entry).
 const MILLE_WORKER_DIR = "packages/fieldd/src/workspace/host";
+
+// CP-4a1 (R32) — the flow folder, where the static read parses a script with acorn, and its host's child, the one
+// place `ses` evaluates one (CP-4a2).
+const FLOWS_SRC_DIR = "packages/fieldd/src/flows";
+const FLOWS_HOST_DIR = "packages/fieldd/src/flows/host";
 
 // AR-0 walls (R20/R21): the packages each plane may import — the SAME sets the
 // sibling block in pnpm-workspace.yaml and packages/*/package.json declare.
@@ -1361,8 +1388,49 @@ function runSelfTest() {
       file: "packages/sound/src/uses-contracts.ts",
       body: 'import type { AgentStatus } from "@vibefield/contracts";\nexport type S = AgentStatus;\n',
     },
+    // CP-4a1 (R32): the parser and the sandbox stay in the flow folder, and the siblings stay out of it.
+    {
+      id: "R32",
+      file: "packages/fieldd/src/agent-runtime-parses.ts",
+      body: 'import { parse } from "acorn";\nexport const p = parse;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/fieldd/test/parses-a-flow.test.ts",
+      body: 'import { parse } from "acorn";\nexport const p = parse;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/locks-down.ts",
+      body: 'import "ses";\nexport const l = 1;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/field-app/src/sandbox.ts",
+      body: 'import { makeModuleSource } from "@endo/module-source";\nexport const m = makeModuleSource;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/runs-uses-runtime.ts",
+      body: 'import { createRuntime } from "@vibefield/puppeteer-runtime";\nexport const r = createRuntime;\n',
+    },
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/host/reads-history.ts",
+      body: 'import { RosettaClient } from "@vibefield/rosetta-protocol";\nexport const c = RosettaClient;\n',
+    },
   ];
   const cleans = [
+    // CP-4a1: the static read takes acorn in the flow folder, the host's child takes ses there, and both take
+    // contracts, node: built-ins and their own files, so R32 does not overfire on the folder it guards.
+    {
+      file: "packages/fieldd/src/flows/clean-static-read.ts",
+      body: 'import { parse } from "acorn";\nimport { FlowRead } from "@vibefield/contracts";\nimport { flowHashOf } from "./records";\nexport const p = parse;\nexport const r = FlowRead;\nexport const h = flowHashOf;\n',
+    },
+    {
+      file: "packages/fieldd/src/flows/host/clean-host.ts",
+      body: 'import "ses";\nimport { parse } from "acorn";\nimport { stdin } from "node:process";\nimport { MESSAGE } from "./protocol";\nexport const s = stdin;\nexport const m = MESSAGE;\nexport const p = parse;\n',
+    },
     // SD-1: the sound's own files (a `.ts` specifier, a parent's) pass R31; field-app and Electron main may import it.
     {
       file: "packages/sound/src/clean-sound.ts",
