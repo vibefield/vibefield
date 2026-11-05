@@ -44,14 +44,16 @@ import {
 //
 // Two passes per recipe, each on fresh desktops and a fresh clock (deterministic: any host serves):
 //   · STREAM — the phone opens on a warm hub at t0 and reads the whole corpus (BUSY), then IDLE_MS with no tick
-//     (IDLE: the heartbeats, and whatever the backend's own clock moves). Then it switches away twice: for
+//     (IDLE: the heartbeats, and whatever the backend's own clock moves), begun half a step off the usage
+//     ledger's boundaries so it holds one cost step wherever the corpus ended (PG-9 S5a). Both windows are also
+//     tallied by desktop (`byDevice`). Then it switches away twice: for
 //     AWAY_IDLE_MS (the hub lingers, MESH_HUB_LINGER_MS) and for PAST_LINGER_MS (the hub is gone; the boards
 //     come back on new chains).
 //   · BUSY SWITCH — the phone leaves halfway through the corpus for AWAY_BUSY_MS while the swarm works on.
 // Each comeback names the cursors the phone held, as FieldLink does (`params.resuming(remote.cursors)`), and a
 // whole open is taken beside it at the same instant: the saving is measured, never assumed.
 
-/** The idle tail after the corpus: thirty heartbeats. */
+/** The idle tail after the corpus: thirty heartbeats, and one step of the usage ledger (its 30 s `stepMs`). */
 export const IDLE_MS = 30_000;
 /** A short app switch, well inside the hub's linger. */
 export const AWAY_IDLE_MS = 5_000;
@@ -369,12 +371,25 @@ function attribute(into: IdleAttribution, before: unknown, after: unknown): void
   else into.recencyOnly += 1;
 }
 
+const rate = (bytes: number, windowMs: number): number =>
+  Math.round((bytes / (windowMs / 1_000)) * 10) / 10;
+
 function closed(tally: WireTally, windowMs: number): WireTally {
-  return {
-    ...tally,
-    windowMs,
-    bytesPerSecond: Math.round((tally.bytes / (windowMs / 1_000)) * 10) / 10,
-  };
+  const byDevice: Record<string, DeviceTally> = {};
+  for (const [device, part] of Object.entries(tally.byDevice)) {
+    byDevice[device] = { ...part, bytesPerSecond: rate(part.bytes, windowMs) };
+  }
+  return { ...tally, windowMs, bytesPerSecond: rate(tally.bytes, windowMs), byDevice };
+}
+
+/** A desktop's share of the tally, begun at nothing. */
+function shareOf(tally: WireTally, device: string): DeviceTally {
+  let part = tally.byDevice[device];
+  if (part === undefined) {
+    part = { frames: 0, upserts: 0, removed: 0, bytes: 0, bytesPerSecond: 0 };
+    tally.byDevice[device] = part;
+  }
+  return part;
 }
 
 /** The phone: one subscription through the door's own install, the cursors FieldLink keeps, and a tally. */
@@ -400,6 +415,26 @@ class Phone {
 
   stopAttributing(): void {
     this.#attributing = null;
+  }
+
+  /**
+   * How long until a window starts half a step off the usage ledger's boundaries (PG-9 S5a), read from the rows'
+   * own cost series (`stepMs`, `lastStepAt`, puppeteer-monitor's step): a window of one step then holds exactly
+   * one, wherever the corpus ended. 0 when no row the phone holds is priced.
+   */
+  untilHalfStep(now: number): number {
+    for (const rows of this.#rows.values()) {
+      for (const row of rows.values()) {
+        const series = (
+          row as { monitorRow?: { cost?: { series?: { stepMs?: unknown; lastStepAt?: unknown } } } }
+        ).monitorRow?.cost?.series;
+        const stepMs = series?.stepMs;
+        const lastStepAt = series?.lastStepAt;
+        if (typeof stepMs !== "number" || typeof lastStepAt !== "number" || stepMs <= 0) continue;
+        return (((lastStepAt + stepMs / 2 - now) % stepMs) + stepMs) % stepMs;
+      }
+    }
+    return 0;
   }
 
   #hold(device: string, rows: readonly unknown[]): void {
@@ -445,8 +480,16 @@ class Phone {
 
   #heard(payload: unknown, kind: "delta" | "snapshot"): void {
     const read = wire(payload);
+    const bytes = frameBytes(read, kind);
     this.tally.frames += 1;
-    this.tally.bytes += frameBytes(read, kind);
+    this.tally.bytes += bytes;
+    // a delta, a reset or a state names its desktop; the whole mesh again (a resync) names them all at once
+    const share = shareOf(
+      this.tally,
+      kind === "snapshot" ? EVERY_DESKTOP : (read as MeshBoardFrame).device,
+    );
+    share.frames += 1;
+    share.bytes += bytes;
     if (kind === "snapshot") {
       this.tally.resyncs += 1;
       this.cursors.clear();
@@ -458,6 +501,8 @@ class Phone {
     if ("delta" in frame) {
       this.tally.upserts += frame.delta.upserts.length;
       this.tally.removed += frame.delta.removed.length;
+      share.upserts += frame.delta.upserts.length;
+      share.removed += frame.delta.removed.length;
       if (frame.delta.upserts.length === 0 && frame.delta.removed.length === 0)
         this.tally.heartbeats += 1;
       this.#apply(frame.device, frame.delta.upserts, frame.delta.removed);
@@ -597,6 +642,9 @@ export async function streamPass(
   await time.advance(PHONE_FLOOR_MS);
   const busy = closed(phone.tally, time.now() - busyStart);
 
+  // IDLE on the ledger's own clock (PG-9 S5a): a window from the corpus's end caught the cost step, or missed it by
+  // a millisecond when the corpus's span landed on a step boundary (the 300 s corpora read idle 0)
+  await time.advance(phone.untilHalfStep(time.now()));
   phone.tally = emptyTally();
   const idleAttribution = phone.attribute(() => time.now());
   await time.advance(IDLE_MS);

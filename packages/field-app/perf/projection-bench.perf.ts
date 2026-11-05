@@ -201,6 +201,14 @@ describe("the projection bench (PG-1e0)", () => {
         lines.push(
           `  ${name} ${(t.windowMs / 1_000).toFixed(1)} s: ${t.bytesPerSecond} B/s · ${t.frames} frames (${t.heartbeats} heartbeats, ${t.resets} resets, ${t.states} states, ${t.resyncs} resyncs) · ${t.upserts} upserts, ${t.removed} removed · ${kb(t.bytes)}`,
         );
+        // each desktop's share (PG-9 S5a): fieldd's replay plays this desktop's half of a corpus alone
+        const shares = Object.entries(t.byDevice)
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(
+            ([device, part]) =>
+              `${device} ${part.bytesPerSecond} B/s (${part.frames} frames, ${part.upserts} upserts, ${kb(part.bytes)})`,
+          );
+        lines.push(`    by desktop: ${shares.join(" · ") || "none"}`);
       }
       // what the idle upserts changed: the cost step (PU-I) against the rows' ageing (VF-PM 06:35Z)
       const at = result.idleAttribution;
