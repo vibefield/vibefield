@@ -5843,7 +5843,13 @@ wakes". Its desktop not answering the home's merge (a timeout, or unreachable: o
 isn't answering. These are as it last said; your words wait here until it answers." Its desktop answering with a
 build the home can't merge (incompatible), never said as not answering: "‹desktop› runs a build this phone can't
 read. These are as it last said; your words wait here until it's updated." *(VF-PM 2026-11-05, at IOS-12b: the merge
-says five words and the page drew one; for James's eye.)* Needs you says who asks ("‹name› asks", "research·3
+says five words and the page drew one; for James's eye.)* "As it last said" stands only while the list carries a
+spark or an ask of that desktop (with no door, of any desktop: the home's last word). A desktop the phone has never
+heard is said in its own line for the same fact, never as a last word and never as a blank. The list lives in memory,
+so a cold start is the common case: "‹desktop› is asleep. Its sparks show here when it wakes.", "‹desktop› isn't
+answering. Its sparks show here when it answers.", "‹desktop› runs a build this phone can't read. Its sparks show
+here when it's updated." *(VF-PM 2026-11-05 02:06Z, at IOS-12b's Found: "as it last said" about a desktop never heard
+is a false claim; for James's eye.)* Needs you says who asks ("‹name› asks", "research·3
 asks"), an agent's own ask says **Answer in its pane**,
 and an answer says "You said ‹choice›". The note says "‹name› needs you". New spark says "Runs on ‹desktop›, your
 home" and **Create ‹name›**, and refuses with "‹name› is taken" or "‹profile› has no ‹agent› sign-in".
