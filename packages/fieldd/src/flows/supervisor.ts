@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn as nodeSpawn } from "node:child_process";
+import { type ChildProcess, spawn as nodeSpawn, type SpawnOptions } from "node:child_process";
 import type { Duplex } from "node:stream";
 import {
   FLOW_LIMITS,
@@ -102,6 +102,8 @@ export interface FlowHostOptions {
   /** the environment the child's PATH is read from; fieldd's own by default */
   readonly environment?: NodeJS.ProcessEnv;
   readonly logger?: Logger;
+  /** how the child is started: Node's own spawn; a test hands its own to reach the child it started */
+  readonly spawn?: (command: string, args: string[], options: SpawnOptions) => ChildProcess;
 }
 
 export interface FlowHostRun {
@@ -246,7 +248,7 @@ class FlowHostChild {
       this.#settle = resolve;
     });
     this.run = { ready, ended, stop: () => this.#stop() };
-    this.#proc = nodeSpawn(launch.command, [...launch.args], {
+    this.#proc = (opts.spawn ?? nodeSpawn)(launch.command, [...launch.args], {
       stdio: ["ignore", "ignore", "pipe", "pipe"],
       env: flowsHostEnvironment(opts.environment ?? process.env),
     });

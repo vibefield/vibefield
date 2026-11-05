@@ -1,4 +1,4 @@
-import type { ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FLOW_LIMITS, flowAnswerBytes } from "@vibefield/contracts";
@@ -588,6 +588,51 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       expect(high(cut.charCodeAt(cut.length - 1))).toBe(false);
     }
   });
+
+  it(
+    "H18: an 'error' from a child that started never settles its run: fieldd logs it and waits for the child to leave (finding 8)",
+    async () => {
+      let child: ChildProcess | undefined;
+      let answer: (reply: FlowHostAnswer) => void = () => {};
+      const calls: FlowHostCall[] = [];
+      const handler: FlowCallHandler = {
+        call(call) {
+          calls.push(call);
+          return new Promise<FlowHostAnswer>((resolve) => {
+            answer = resolve;
+          });
+        },
+        log() {},
+      };
+      const run = startFlowHost({
+        launch: { kind: "launch", launch: await flowsHostLaunch() },
+        bytes: flow('return await agent("Review");'),
+        input: {},
+        handler,
+        environment: PATH_ONLY,
+        spawn: (command, args, options) => {
+          child = spawn(command, args, options);
+          return child;
+        },
+      });
+      runs.push(run);
+      expect(typeof (await within(run.ready))).toBe("number");
+      const deadline = Date.now() + WAIT_MS;
+      while (calls.length === 0 && Date.now() < deadline)
+        await new Promise((r) => setTimeout(r, 25));
+      expect(calls).toHaveLength(1);
+      // a write or a kill that failed while the child lives (ChildProcess emits 'error' for both, not only a spawn)
+      child?.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }));
+      expect(await within(run.ended, 500), "the run is not settled while its child lives").toBe(
+        "timeout",
+      );
+      // the child's own end is the run's: its answer reaches it, and it returns
+      answer({ ok: true, value: "answered" });
+      expect(await within(run.ended)).toEqual({ kind: "done", value: "answered" });
+      expect(alive(child?.pid as number)).toBe(false);
+    },
+    ROW_MS,
+  );
 
   it(
     "H15: a call past RESULT_MAX_BYTES is refused in the child before it is sent: the handler never hears it",
