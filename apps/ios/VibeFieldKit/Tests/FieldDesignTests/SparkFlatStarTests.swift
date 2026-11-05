@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Testing
 
@@ -105,6 +106,20 @@ struct SparkFlatStarTests {
     #expect(SparkFlatStar.faceScale(size: 32) == 1.25)
     #expect(SparkFlatStar.faceScale(size: 48) == 1.12)
     #expect(SparkFlatStar.faceScale(size: 120) == 1)
+  }
+
+  /// IOS-12b — the face the rows draw (`SparkFlatFace`, design-kit's `FlatStarView`): the SVG's viewBox in the star's
+  /// radii, the disc's box when framed (radius 1.26, the star 0.06 below its centre), else the star's; and the
+  /// palette the engine deals.
+  @Test("the flat face's box is FlatStarView's: the disc's when framed, the star's when free")
+  func faceBox() {
+    #expect(SparkFlatFace.viewBox(framed: true) == CGRect(x: -1.26, y: -1.32, width: 2.52, height: 2.52))
+    #expect(SparkFlatFace.viewBox(framed: false) == CGRect(x: -1.26, y: -1.26, width: 2.52, height: 2.52))
+    for seed: UInt32 in [0, 2_846_113_027, 1_048_573, UInt32.max] {
+      let palette = SparkFlatFace.palette(of: seed)
+      let dealt = SparkEngine.palettes[SparkEngine.agentDNA(seed).palette]
+      #expect(palette.name == dealt.name)
+    }
   }
 
   @Test("the desktop's rounding: to three places, a half toward +∞, and no negative zero")
