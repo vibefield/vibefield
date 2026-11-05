@@ -164,6 +164,47 @@ struct ChatFeedTests {
     #expect(answered.isEmpty)
   }
 
+  // MARK: - The note (S-4)
+
+  @Test("the note says a need that STARTS while another page stands; the first whole reading is no news")
+  func note() throws {
+    let sparks = try ComposeSparksList(json: try #require(ChatFixtureDoor.fixture("compose-sparks-list.merged"))).sparks
+    let needsJSON = try #require(ChatFixtureDoor.fixture("needs-list.merged"))
+    let items = try NeedsList(json: needsJSON).items
+    // a new item for Vela: the first one, under a new id
+    guard case .object(var fields)? = needsJSON["items"]?.arrayValue?.first else {
+      Issue.record("no item in the golden")
+      return
+    }
+    fields["id"] = .string("ny-0new0item0vela")
+    let fresh = try NeedsItem(json: .object(fields))
+    let calm = SparkEntries.entries(sparks: sparks, rows: [], items: items)
+    let more = SparkEntries.entries(sparks: sparks, rows: [], items: items + [fresh])
+    let vela = try #require(calm.first { $0.spark.name == "Vela" })
+    let keys = ChatNotes.keys(vela)
+    #expect(keys == items.map { $0.id })
+
+    var notes = ChatNotes()
+    // the queue not heard yet: nothing is said, nothing is known
+    let unheard = notes.read(calm, elsewhere: true, whole: false)
+    // the first whole reading: Vela's two items stand, and are no news
+    let first = notes.read(calm, elsewhere: true, whole: true)
+    let again = notes.read(calm, elsewhere: true, whole: true)
+    // a new item, on another page: said, once
+    let said = notes.read(more, elsewhere: true, whole: true)
+    let saidAgain = notes.read(more, elsewhere: true, whole: true)
+    #expect(unheard == nil && first == nil && again == nil && saidAgain == nil)
+    let saidName = try #require(said).spark.name
+    #expect(saidName == "Vela")
+    // on Chat's own page: never said, but known
+    var onChat = ChatNotes()
+    _ = onChat.read(calm, elsewhere: false, whole: true)
+    let onPage = onChat.read(more, elsewhere: false, whole: true)
+    let afterwards = onChat.read(more, elsewhere: true, whole: true)
+    #expect(onPage == nil && afterwards == nil)
+    #expect(ChatWords.note("Vela") == "Vela needs you")
+  }
+
   // MARK: - The words (§9 "Chat on the phone")
 
   @Test("the subtitle counts what is true: the sparks, where they live, and how many need you")
