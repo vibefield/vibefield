@@ -30,6 +30,19 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 // price overruns the budget, and whoever queued last dies — by lottery, with a
 // different victim each run.
 //
+// *Corrected 2026-11-05 (G12, measured; the CO lane, VF-PM's ruling):* at
+// ghosttea 0.14.0 a repeat build is a no-op. a9 on the Mac mini (M4) ran
+// `cargo build -p field-native` twice more after a build: 0.06 s each, no
+// Compiling line, no stale fingerprint (CARGO_LOG fingerprint=info). A switch
+// of build env (verify's CARGO_INCREMENTAL=0 and no debuginfo against
+// vitest's) recompiles the field-native crate alone, in about 4 s. So this
+// setup still runs cargo on every run, and cargo compiles only when
+// field-native's inputs changed: a first build, a Rust or gen change, a
+// rebase. The one build above stands for that case, and a lane cannot cheaply
+// know its binary is fresh, which is why a fieldd suite still takes the Mac's
+// HOLD. Logs: /Volumes/SamsungRed/lanes/ts6/logs/mini/co-th-a2/a2-8474c3aef/
+// field-native-repeat2.log and field-native-repeat3.log.
+//
 // globalSetup runs once in the vitest host process before the first worker, so
 // the binary is on disk when the suites open: the same guarantee the hooks
 // were making, minus the queue. When G12 lands upstream this stays correct and
