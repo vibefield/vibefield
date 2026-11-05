@@ -86,7 +86,8 @@ const row = (
   }) as AgentSessionSummary;
 
 const RUNS = [
-  row("run-work", "work", { origin: { by: "spark", spark: "sp-7k2m9q4x" } }),
+  // SP-1e2 — a spark's agent, in the crew it joined
+  row("run-work", "work", { origin: { by: "spark", spark: "sp-7k2m9q4x", crew: "cr-3n8w5t1v" } }),
   row("run-native", undefined, {
     status: "blocked",
     monitor: { blockers: [{ id: "b", kind: "permission", since: "x" }] } as never,
@@ -203,7 +204,8 @@ describe("the read verbs, held to a spark's profiles (CP-1b; TL-D5)", () => {
       profile: "work",
       usd: 0.31,
       effort: "high",
-      origin: { by: "spark" },
+      // SP-1e2 — the crew rides the origin a spark reads (a pin: agents_list carries the origin whole)
+      origin: { by: "spark", crew: "cr-3n8w5t1v" },
     });
     expect(live.sessions[1]).toMatchObject({
       state: "asking",

@@ -9,6 +9,7 @@ import {
   type ComposeAgentSpawnOutput,
   type ComposeAgentStopOutput,
   type ComposeAgentWatchOutput,
+  type CrewId,
   type NeedsHeldLaunch,
   type NeedsItemId,
   profileSetOfRun,
@@ -61,10 +62,25 @@ export interface HoldSender extends TalkSender {
   readonly session: string;
 }
 
-/** A spawn after its defaults, and its tasks: what Allow one more starts, as the needs-you record keeps it. */
+/** A spawn after its defaults, and its tasks: what Allow one more starts, as the needs-you record keeps it, and the
+ * crew it was asked in (SP-1e2), which Allow one more joins. */
 export type HeldLaunch = Readonly<
-  Pick<NeedsHeldLaunch, "agent" | "profileSet" | "cwd" | "model" | "tasks">
+  Pick<NeedsHeldLaunch, "agent" | "profileSet" | "cwd" | "model" | "tasks" | "crew">
 >;
+
+/** SP-1e2 — the crew a spawn joins, and the spark's own run it was asked in (the crew's `sparkRun`). */
+export interface SpawnCrew {
+  readonly id: CrewId;
+  readonly sparkRun: string;
+}
+
+/** SP-1e2 — the spark's crews, as the room asks them (tool-plane/crews.ts answers). */
+export interface TalkCrews {
+  /** a talk call of this spark's is in flight until the answer is called: its crew stays open meanwhile (SPE-Q29 (a)) */
+  busy(spark: SparkId): () => void;
+  /** the crew this spark's spawn joins: its open crew in its own run `sparkRun`, else a new one (SPE-Q3 = RU-6) */
+  join(spark: SparkId, sparkRun: string): CrewId;
+}
 
 /** CP-3 — the needs-you queue's holds, as the room asks them (rooms/you/queue.ts answers). */
 export interface TalkHolds {
@@ -82,7 +98,8 @@ export interface TalkDeps {
   sessions(): readonly TalkSession[];
   /** TU-1 — each persona to the profile listing it (the monitor's latest frame); null until fieldd has read one */
   personaSets(): ReadonlyMap<string, AgentProfileSetId> | null;
-  /** start an agent for a spark: origin `spark` on its record, the spark named (CP-D15) */
+  /** start an agent for a spark: origin `spark` on its record, the spark named (CP-D15), and the crew it joins
+   * (SP-1e2; absent for a held spawn kept before SP-1e2) */
   spawn(
     launch: {
       readonly agent: string;
@@ -91,6 +108,7 @@ export interface TalkDeps {
       readonly model?: AgentModelSelection | undefined;
     },
     spark: SparkId,
+    crew?: SpawnCrew,
   ): Promise<{ runtimeRunId: string }>;
   /** queue words for a session (CP-L5); their place in its queue, 1 being next */
   enqueue(runtimeRunId: string, text: string, from: TalkSender): { position: number };
@@ -102,6 +120,8 @@ export interface TalkDeps {
   watch(spark: SparkId, runtimeRunId: string, on: boolean): void;
   /** CP-3 — the person's holds. Required: CP-2's unheld send must not survive by default. */
   readonly holds: TalkHolds;
+  /** SP-1e2 — the spark's crews. Required: a spawn joins one. */
+  readonly crews: TalkCrews;
 }
 
 /** Who a talk verb answers: a settled spark (the door's caller, with its record's facts). */

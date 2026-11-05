@@ -53,6 +53,7 @@ import {
   appVersionOfBuildId,
   type CallerContext,
   CONTRACTS_VERSION,
+  ComposeSparksCrewsSubscribeParams,
   ComposeSparksHatchParams,
   ComposeSparksListParams,
   ComposeSparksOpenParams,
@@ -365,6 +366,7 @@ import {
 } from "./terminal-service";
 import { TokenService } from "./token-service";
 import { composeProjects, ToolPlaneService } from "./tool-plane";
+import { SparkCrews } from "./tool-plane/crews";
 import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
 import { NeedsQueue, type NeedsRun } from "./tool-plane/rooms/you/queue";
 import { NeedsStore } from "./tool-plane/rooms/you/store";
@@ -2958,6 +2960,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       label: runLabel,
       logger: logger.child({ component: "waker" }),
     });
+    // SP-1e2 — each spark's crews: minted by the talk room, kept in the spark's kept record (tool-plane/crews.ts), and
+    // served to Chat on compose.sparks.crews.subscribe, with how many tasks wait for each member on the board
+    const crews = new SparkCrews({
+      store: sparkKept,
+      logger: logger.child({ component: "compose.crews" }),
+    });
+    const crewWaiting = (runtimeRunId: string): number | undefined =>
+      agents.isLive(runtimeRunId) ? inputs.pending(runtimeRunId).length : undefined;
     // the one spawn a spark's agents start by: the talk room's, and the needs-you queue's Allow one more
     const talkSpawn: TalkDeps["spawn"] = async (launch, spark) => {
       const result = await agents.spawn(
@@ -3089,6 +3099,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       end: (runtimeRunId) => agents.endRun(runtimeRunId),
       watch: (spark, runtimeRunId, on) => waker.watch(spark, runtimeRunId, on),
       holds: needs,
+      crews,
     };
     toolPlane = new ToolPlaneService({
       native,
@@ -6416,6 +6427,30 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
         emit,
         { onError: streamFrameFailed("needs.subscribe") },
+      );
+      return { snapshot: door.snapshot, dispose: door.dispose };
+    });
+    // SP-1e2 (SPE-Q27 (a), SPE-Q40; X2-crews) — one spark's crews, for Chat's crew card: `sparks.use`, admitted as the
+    // needs-you doors are, the home forwarding a subscription whose `device` names another desktop; whole lists at the
+    // stream floor, re-read at each change of the spark's crews or of a member's row. An unaudited read.
+    api.registerSubscription("compose.sparks.crews.subscribe", (ctx, params, emit) => {
+      admitSparkReader(ctx, "compose.sparks.crews.subscribe");
+      const parsed = ComposeSparksCrewsSubscribeParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { spark, device? }", false);
+      const { spark } = parsed.data;
+      if (sparks.get(spark) === undefined)
+        throw new RpcCallError("NOT_FOUND", "no such spark", false);
+      const door = wholeValueDoor(
+        {
+          read: () => crews.frame(spark, crewWaiting),
+          onChange: (listener) =>
+            crews.onChange((changed) => {
+              if (changed === spark) listener();
+            }),
+        },
+        emit,
+        { onError: streamFrameFailed("compose.sparks.crews.subscribe") },
       );
       return { snapshot: door.snapshot, dispose: door.dispose };
     });

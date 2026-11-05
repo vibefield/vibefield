@@ -118,8 +118,8 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
         } else runs.set(run, { runtimeRunId: run, label: "Vela", spark: VELA, live: false });
         return { ...spark, session: { runtimeRunId: run, live: true } };
       },
-      spawn: async (launch, spark) => {
-        spawned.push({ ...launch, spark });
+      spawn: async (launch, spark, crew) => {
+        spawned.push({ ...launch, spark, ...(crew !== undefined ? { crew } : {}) });
         return ctl.spawn();
       },
       agentLabel: (agent) => AGENT_CATALOG.find((e) => e.id === agent)?.label,
@@ -753,6 +753,26 @@ describe("the held spawn (CP-D7, CP3-D4 A)", () => {
     expect(await refusal(other)).toBe("answered");
     expect(h.spawned).toHaveLength(1);
     expect(h.woken).toHaveLength(1);
+  });
+
+  it("SP-1e2 — the held spawn keeps the crew it was asked in, across a restart; Allow one more joins that crew, made in the spark's run that asked (SPE-Q38 (a))", async () => {
+    const h = harness();
+    const id = h.queue.spawn(VELA_FROM, { ...launch, crew: "cr-3n8w5t1v" }, 8);
+    expect(h.kept().map((record) => record.launch?.crew)).toEqual(["cr-3n8w5t1v"]);
+    // the crew is no row until it is allowed: the item names no crew
+    expect(JSON.stringify(listed(h.queue))).not.toContain("cr-3n8w5t1v");
+    const again = h.make();
+    expect(again.restore()).toBe(1);
+    await again.answer(id, 0, principal);
+    expect(h.spawned).toEqual([
+      {
+        agent: AGENT.id,
+        profileSet: "native",
+        cwd: launch.cwd,
+        spark: VELA,
+        crew: { id: "cr-3n8w5t1v", sparkRun: "run-vela" },
+      },
+    ]);
   });
 });
 

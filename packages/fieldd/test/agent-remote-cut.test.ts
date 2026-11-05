@@ -153,6 +153,20 @@ describe("PG-2 — the remote cut, as its owner cuts it", () => {
     monitor.service.dispose();
   });
 
+  it("SP-1e2 — a spark's agent's crew rides the remote row's origin, so the phone's card finds its live members", async () => {
+    const crewed: AgentSessionSummary = {
+      ...working,
+      origin: { by: "spark", spark: "sp-7k2m9q4x", crew: "cr-3n8w5t1v" },
+    };
+    const monitor = await testMonitor({ summaries: [crewed] });
+    const row = AgentRemoteRow.parse({
+      ...projectRemoteRow(crewed, monitor.row("run-working")),
+      revision: 1,
+    });
+    expect(row.origin).toEqual({ by: "spark", spark: "sp-7k2m9q4x", crew: "cr-3n8w5t1v" });
+    monitor.service.dispose();
+  });
+
   it("F-M4 — an owner whose doors are down withholds every join and attach promise, a bare terminal's too; a gate flip re-presents the board as ONE snapshot at its revision", async () => {
     const monitor = await testMonitor({ summaries: [working], terminals: [floorTerminal()] });
     monitor.rows();

@@ -361,6 +361,20 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     expect(plain).not.toContain("origin");
   });
 
+  it("SP-1e2 — a spark's agent carries its crew on the origin, rebuilt like the rest", () => {
+    const crewed = projectFieldRow({
+      ...summary({}),
+      origin: { by: "spark", spark: "sp-vela01", crew: "cr-3n8w5t1v", note: "stays home" },
+    });
+    expect(crewed.origin).toEqual({ by: "spark", spark: "sp-vela01", crew: "cr-3n8w5t1v" });
+    // an origin with no crew carries no crew key
+    const uncrewed = projectFieldRow({
+      ...summary({}),
+      origin: { by: "spark", spark: "sp-vela01" },
+    });
+    expect(uncrewed.origin).toEqual({ by: "spark", spark: "sp-vela01" });
+  });
+
   it("ST-D5 — carries the person's Stop, rebuilt from its named fields", () => {
     const stop = {
       sentAt: "2026-09-13T10:05:30.000Z",

@@ -1,3 +1,4 @@
+import type { CrewId } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import type { RpcCallError } from "../src/native-link";
 import {
@@ -13,8 +14,9 @@ import {
 // held at every call to its Agent Profiles (CP-L4), the cap (CP-D7), and spawn's tasks queued for the agent's first idle
 // moment. CP-3 (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31) holds a spark's first send into the person's
 // session (CP3-D3 B) and a spawn past the cap (CP3-D4 A) in the needs-you queue. TU-1 (Q3) places every session it
-// reaches by the one rule (`profileSetOfRun`). fieldd's services are faked; the queue, the waker and the needs-you
-// queue have their own files.
+// reaches by the one rule (`profileSetOfRun`). SP-1e2 — each spawn joins the crew the room names for the spark's own
+// run, and every call keeps that crew open until it answers (SPE-Q29 (a)). fieldd's services are faked; the queue, the
+// waker, the needs-you queue and the crews have their own files.
 
 const VELA: TalkCaller = {
   sparkId: "sp-vela00000000000",
@@ -71,12 +73,17 @@ function harness(
   const watched: string[] = [];
   const stopped: string[] = [];
   const ended: string[] = [];
+  /** SP-1e2 — what the room asked the crews, and how many of its calls were in flight at each spawn */
+  const crewLog: string[] = [];
+  const busyAtSpawn: number[] = [];
+  let inFlight = 0;
   const verbs = createTalkVerbs({
     session: (run) => sessions.find((s) => s.runtimeRunId === run),
     sessions: () => sessions,
     personaSets: () => personaSets,
-    spawn: async (launch, spark) => {
-      spawned.push({ ...launch, spark });
+    spawn: async (launch, spark, crew) => {
+      busyAtSpawn.push(inFlight);
+      spawned.push({ ...launch, spark, ...(crew !== undefined ? { crew } : {}) });
       const runtimeRunId = `run-new-${spawned.length}`;
       sessions.push({ runtimeRunId, origin: { by: "spark", spark }, live: true });
       return { runtimeRunId };
@@ -104,8 +111,34 @@ function harness(
         return "ny-held0spawn";
       },
     },
+    crews: {
+      busy: (spark) => {
+        inFlight++;
+        crewLog.push(`busy ${spark}`);
+        return () => {
+          inFlight--;
+          crewLog.push(`done ${spark}`);
+        };
+      },
+      join: (spark, sparkRun) => {
+        crewLog.push(`join ${spark} ${sparkRun}`);
+        return "cr-000001" as CrewId;
+      },
+    },
   });
-  return { verbs, queued, spawned, watched, stopped, ended, heldSends, heldSpawns };
+  return {
+    verbs,
+    queued,
+    spawned,
+    watched,
+    stopped,
+    ended,
+    heldSends,
+    heldSpawns,
+    crewLog,
+    busyAtSpawn,
+    inFlight: () => inFlight,
+  };
 }
 
 /** A call's answer, or the fact its refusal names. */
@@ -261,7 +294,13 @@ describe("the talk room's start (TL-D2, CP-D7)", () => {
       }),
     ).toEqual({ session: "run-new-1", queued: 2 });
     expect(h.spawned).toEqual([
-      { agent: "claude", profileSet: "native", cwd: "/f/sparks/vela", spark: VELA.sparkId },
+      {
+        agent: "claude",
+        profileSet: "native",
+        cwd: "/f/sparks/vela",
+        spark: VELA.sparkId,
+        crew: { id: "cr-000001", sparkRun: "run-vela" },
+      },
     ]);
     expect(h.queued.map((q) => q.text)).toEqual(["read the README", "run the tests"]);
     expect(await fact(h.verbs.agent_spawn(VELA, { agent: "claude", profile: "work" }))).toBe(
@@ -285,9 +324,42 @@ describe("the talk room's start (TL-D2, CP-D7)", () => {
     expect(h.heldSpawns).toEqual([
       {
         from: { spark: VELA.sparkId, name: "Vela", session: "run-vela" },
-        launch: { agent: "claude", profileSet: "native", cwd: "/p/vibe-field", tasks: ["review"] },
+        launch: {
+          agent: "claude",
+          profileSet: "native",
+          cwd: "/p/vibe-field",
+          tasks: ["review"],
+          crew: "cr-000001",
+        },
         live: SPARK_LIVE_AGENTS_MAX,
       },
+    ]);
+  });
+
+  it("SP-1e2 — a spawn joins the crew the room names for the spark's own run; every call keeps that crew open until it answers, refused or not (SPE-Q29 (a))", async () => {
+    const h = harness();
+    await h.verbs.agent_spawn(VELA, { agent: "claude", tasks: ["read the README"] });
+    // the call was in flight while its agent started
+    expect(h.busyAtSpawn).toEqual([1]);
+    expect(h.inFlight()).toBe(0);
+    // a refused spawn joins no crew; a refused send and a watch answer too
+    expect(await fact(h.verbs.agent_spawn(VELA, { agent: "claude", profile: "work" }))).toBe(
+      "outside",
+    );
+    expect(await fact(h.verbs.agent_send(VELA, { session: "run-orin", text: "x" }))).not.toBe("ok");
+    await h.verbs.agent_watch(VELA, { session: "run-his" });
+    expect(h.inFlight()).toBe(0);
+    const v = VELA.sparkId;
+    expect(h.crewLog).toEqual([
+      `busy ${v}`,
+      `join ${v} run-vela`,
+      `done ${v}`,
+      `busy ${v}`,
+      `done ${v}`,
+      `busy ${v}`,
+      `done ${v}`,
+      `busy ${v}`,
+      `done ${v}`,
     ]);
   });
 });
