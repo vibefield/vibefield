@@ -506,15 +506,26 @@ describe("the Quiet row (SD-2)", () => {
     expect(has(snapshot({ sounds: sounds() }), actions())).toBe(false);
   });
   it("is held still while quitting", () => {
-    const row = byId(
-      buildTrayMenu(
-        snapshot({ sounds: sounds(), quitting: true }),
-        { ...actions(), quietSounds: vi.fn() },
-        "darwin",
-      ),
-      "quiet-sounds",
+    // the availability rule: Electron does not support `enabled` on a top-level macOS tray item, so there the
+    // submenu's own items are disabled and nothing acts; elsewhere the row itself is disabled too
+    const quiet = (platform: "darwin" | "linux", quietUntilText?: string) =>
+      byId(
+        buildTrayMenu(
+          snapshot({
+            sounds: sounds(quietUntilText === undefined ? {} : { quietUntilText }),
+            quitting: true,
+          }),
+          { ...actions(), quietSounds: vi.fn() },
+          platform,
+        ),
+        "quiet-sounds",
+      );
+    const mac = quiet("darwin");
+    expect(mac).not.toHaveProperty("enabled");
+    expect(mac.submenu?.every((item) => item.enabled === false && item.click === undefined)).toBe(
+      true,
     );
-    expect(row.enabled).toBe(false);
-    expect(row.submenu?.every((item) => item.click === undefined)).toBe(true);
+    expect(quiet("linux").enabled).toBe(false);
+    expect(quiet("darwin", "8:00 AM").click).toBeUndefined();
   });
 });

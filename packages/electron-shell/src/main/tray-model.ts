@@ -1,4 +1,4 @@
-import type { UpdateView } from "@vibefield/contracts";
+import type { SoundPlayerState, UpdateView } from "@vibefield/contracts";
 import { stagedTrayLabel } from "./updates/apply";
 
 export type TrayLinkState = "starting" | "ready" | "reconnecting" | "unavailable";
@@ -64,6 +64,14 @@ export interface TraySnapshot {
   /** AL-6 (AL-D2, §5.8) — a person's quit kept VibeField running (Keep running when VibeField quits): no window, no
    * Dock icon, and the status item says so first. Absent or false hides the row. */
   readonly inBackground?: boolean;
+  /** SD-2 (DESIGN.md §14 "Quiet", SD-D22) — the field's sounds as the Quiet row needs them: Play sounds, whether this
+   * Mac can play, and while Quiet holds, when it ends in this Mac's time format. Absent hides the row (preferences
+   * not read yet, older callers, tests). */
+  readonly sounds?: {
+    readonly on: boolean;
+    readonly player: SoundPlayerState;
+    readonly quietUntilText?: string;
+  };
 }
 
 export type TrayPlatform = "darwin" | "win32" | "linux" | "other";
@@ -85,6 +93,8 @@ export interface TrayActions {
   switchUser?: (userId: string) => void;
   /** UA-5 — mint-and-attach; the reloaded window runs the §6.2 wizard. */
   newUser?: () => void;
+  /** SD-2 — Quiet for an hour, until tomorrow, or (null) the sounds back on; absent hides the row. */
+  quietSounds?: (quiet: "hour" | "tomorrow" | null) => void;
   quit(): void;
 }
 
@@ -230,6 +240,53 @@ function updateItem(
 
 /** Pure tray projection. Localization can replace these labels later without
  * moving policy into Electron callbacks. */
+/**
+ * SD-2 (DESIGN.md §14 "Quiet", SD-D22) — the status item's Quiet row, above Settings…, in title case as macOS menus
+ * are: Quiet Sounds ▸ For an Hour · Until Tomorrow; while quiet, "Quiet Until 8:00 AM", checked, which turns the sounds
+ * back on. Not drawn while Play sounds is off (§8), where no player can play, or before main can quiet.
+ */
+function quietItem(
+  snapshot: TraySnapshot,
+  actions: TrayActions,
+  platform: TrayPlatform,
+  actionable: boolean,
+): TrayMenuItem[] {
+  const sounds = snapshot.sounds;
+  const quiet = actions.quietSounds;
+  if (sounds === undefined || !sounds.on || sounds.player !== "ready" || quiet === undefined) {
+    return [];
+  }
+  if (sounds.quietUntilText !== undefined) {
+    return [
+      {
+        id: "quiet-sounds",
+        type: "checkbox",
+        label: `Quiet Until ${sounds.quietUntilText}`,
+        checked: true,
+        ...availability(platform, actionable),
+        ...(actionable ? { click: () => quiet(null) } : {}),
+      },
+    ];
+  }
+  const choice = (id: string, label: string, kind: "hour" | "tomorrow"): TrayMenuItem => ({
+    id,
+    label,
+    enabled: actionable,
+    ...(actionable ? { click: () => quiet(kind) } : {}),
+  });
+  return [
+    {
+      id: "quiet-sounds",
+      label: "Quiet Sounds",
+      ...availability(platform, actionable),
+      submenu: [
+        choice("quiet-sounds-hour", "For an Hour", "hour"),
+        choice("quiet-sounds-tomorrow", "Until Tomorrow", "tomorrow"),
+      ],
+    },
+  ];
+}
+
 export function buildTrayMenu(
   snapshot: TraySnapshot,
   actions: TrayActions,
@@ -328,6 +385,7 @@ export function buildTrayMenu(
           },
         ]
       : []),
+    ...quietItem(snapshot, actions, platform, actionable),
     {
       id: "settings",
       label: "Settings…",

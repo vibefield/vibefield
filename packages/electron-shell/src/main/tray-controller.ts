@@ -86,6 +86,8 @@ export interface TrayControllerActions {
   newUser?: () => Promise<void>;
   /** TS-4 — Connect Your Devices…: absent hides the row. */
   connectDevices?: () => Promise<void>;
+  /** SD-2 — Quiet Sounds: an hour, until tomorrow, or (null) the sounds back on; absent hides the row. */
+  quietSounds?: (quiet: "hour" | "tomorrow" | null) => Promise<void>;
   quit(): void;
 }
 
@@ -458,6 +460,12 @@ export class TrayController {
         ? {
             connectDevices: () =>
               this.runAction("connectDevices", this.options.actions.connectDevices!),
+          }
+        : {}),
+      ...(this.options.actions.quietSounds !== undefined
+        ? {
+            quietSounds: (quiet: "hour" | "tomorrow" | null) =>
+              this.runAction("quietSounds", () => this.options.actions.quietSounds!(quiet)),
           }
         : {}),
       setBackgroundShell: (enabled) =>

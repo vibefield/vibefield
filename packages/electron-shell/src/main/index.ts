@@ -39,6 +39,7 @@ import {
 } from "@vibefield/fieldd-supervisor";
 import { type Logger, resolvePlatformLogRoot } from "@vibefield/logging";
 import { ScreenshotTool } from "@vibefield/screenshot";
+import { isQuiet, quietEnd } from "@vibefield/sound";
 import {
   createUser,
   ensureUsersRoot,
@@ -904,6 +905,34 @@ async function main(
   let desktopSound: DesktopSound | null = null;
   /** SD-2 — the attached user's voice; the attention door speaks to whichever is current */
   let soundObserver: SoundObserver | null = null;
+  /** SD-2 — the status item's Quiet row: Play sounds, the player, and while Quiet holds, when it ends (in this Mac's
+   * time format). Quiet ends by itself, so the row is redrawn at its moment. */
+  let quietEnds: ReturnType<typeof setTimeout> | null = null;
+  const publishSounds = (): void => {
+    if (quietEnds !== null) clearTimeout(quietEnds);
+    quietEnds = null;
+    if (soundPreferences === null || desktopSound === null) return;
+    const until = soundPreferences.quietUntil;
+    const quiet = until !== undefined && isQuiet(until, Date.now());
+    trayController?.update({
+      sounds: {
+        on: soundPreferences.sounds,
+        player: desktopSound.state(),
+        ...(quiet
+          ? {
+              quietUntilText: new Intl.DateTimeFormat(undefined, {
+                hour: "numeric",
+                minute: "2-digit",
+              }).format(new Date(until)),
+            }
+          : {}),
+      },
+    });
+    if (quiet) {
+      quietEnds = setTimeout(publishSounds, Math.min(until - Date.now() + 50, 2 ** 31 - 1));
+      quietEnds.unref();
+    }
+  };
   const applyPreferences = (raw: unknown): void => {
     observedSnapshots.preferences = raw;
     observedSnapshots.hasPreferences = true;
@@ -931,6 +960,7 @@ async function main(
         : { quietUntil: parsed.data.soundsQuietUntil }),
     };
     desktopSound?.prepare();
+    publishSounds();
     enforceBackgroundEscapeHatch();
   };
   const applyEvidenceHealth = (raw: unknown): void => {
@@ -1503,6 +1533,7 @@ async function main(
     log: soundLogger,
   });
   desktopSound = sound;
+  publishSounds();
   registerSoundDoors(registry, windowInFront, {
     attention: (attention) => soundObserver?.attention(attention),
     preview: (cue) => sound.preview(cue),
@@ -2390,7 +2421,8 @@ async function main(
   };
   const setAppPreference = async (
     key: (typeof APP_PREFERENCE_KEYS)[keyof typeof APP_PREFERENCE_KEYS],
-    value: boolean,
+    // a switch, or (SD-2) Quiet's end in epoch ms, or null to end it
+    value: boolean | number | null,
   ): Promise<void> => {
     const handle = await ensureFieldd();
     await handle.client.request("storage.appPreferences.set", { key, value });
@@ -2681,6 +2713,12 @@ async function main(
       setBackgroundShell: (enabled) =>
         setAppPreference(APP_PREFERENCE_KEYS.BACKGROUND_SHELL, enabled),
       setTrayVisible: (enabled) => setAppPreference(APP_PREFERENCE_KEYS.SHOW_TRAY, enabled),
+      // SD-2 (§14 "Quiet") — the status item's Quiet row: the person's synced preference, as Settings → Sound sets it
+      quietSounds: (quiet) =>
+        setAppPreference(
+          APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL,
+          quiet === null ? null : quietEnd(quiet, new Date()),
+        ),
       switchUser: async (userId: string) => {
         await attachUser(userId);
       },
