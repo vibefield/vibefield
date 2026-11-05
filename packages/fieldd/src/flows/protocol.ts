@@ -12,9 +12,10 @@
 // - `run {script, input, limits}` once, after READY: the approved bytes rewritten into one script (module-script.ts),
 //   the run's input, and the bounds the child holds a call and a log line to;
 // - `answer {id, ok, value | refused}`: a call's answer, the script's `await` resolving or throwing;
-// - `ping {n}`: answered at once by `pong {n}`; a host that misses FLOW_LIMITS.HOST_PING_MISSES in a row is ended;
+// - `ping {n}`: answered at once by `pong {n, heap}`, `heap` the child's V8 heap in use (bytes; 4A2-Q7 (a): the cap is
+//   measured, not enforced by V8); a host that misses FLOW_LIMITS.HOST_PING_MISSES in a row is ended;
 // - `shutdown`.
-// host → fieldd: `ready {pid}` once, after lockdown; `call {id, what, args}`; `log {text}`; `pong {n}`; then one of
+// host → fieldd: `ready {pid}` once, after lockdown; `call {id, what, args}`; `log {text}`; `pong {n, heap}`; then one of
 // `done {value?, cut?}` (the default export returned), `threw {message}` (it threw, or the script would not
 // evaluate) or `fatal {reason}` (the host cannot run a script: lockdown failed, a second `run`).
 
@@ -42,7 +43,7 @@ export type FromFlowHost =
   | { t: "ready"; pid: number }
   | { t: "call"; id: number; what: string; args: unknown[] }
   | { t: "log"; text: string }
-  | { t: "pong"; n: number }
+  | { t: "pong"; n: number; heap?: number }
   | { t: "done"; value?: unknown; cut?: true }
   | { t: "threw"; message: string }
   | { t: "fatal"; reason: string };
@@ -72,7 +73,10 @@ export function readFromFlowHost(raw: unknown): FromFlowHost | null {
     case "log":
       return typeof raw["text"] === "string" ? { t: "log", text: raw["text"] } : null;
     case "pong":
-      return isCount(raw["n"]) ? { t: "pong", n: raw["n"] } : null;
+      if (!isCount(raw["n"])) return null;
+      return isCount(raw["heap"])
+        ? { t: "pong", n: raw["n"], heap: raw["heap"] }
+        : { t: "pong", n: raw["n"] };
     case "done":
       return {
         t: "done",

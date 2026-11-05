@@ -23,6 +23,10 @@ import { type FromFlowHost, readFromFlowHost, type ToFlowHost } from "./protocol
 //   crosses whole: text is cut to fit, anything else is refused, in the words the script's `await` throws with.
 // - The host is pinged every `pingMs` once READY. A host that says nothing for `pingMisses` pings in a row is ended at
 //   once (SIGKILL: a script that spins cannot hear a `shutdown`), as `unanswered` (FLOW_HOST_ENDINGS).
+// - Its heap is MEASURED (4A2-Q7 (a) as re-ruled 10:57Z; a packaged SEA takes no `--max-old-space-size`, so neither
+//   build does): each pong says the heap the child uses, and one past `heapMb` is ended at once as `memory`. A child
+//   V8 itself aborts for its heap between pongs (SIGABRT, or its stderr's heap line) is read as `memory` too, never as
+//   a host that left, so its run is never started again.
 // - A run's end is settled when the child has LEFT, never before: when `ended` resolves, its process is gone.
 
 /** A call the script made, as the host sent it: what it is (FLOW_CALL_WHATS, OPEN) and its arguments. */
@@ -77,7 +81,7 @@ export interface FlowHostOptions {
   readonly input: Readonly<Record<string, string>>;
   readonly handler: FlowCallHandler;
   readonly timings?: Partial<FlowHostTimings>;
-  /** the heap a host may use, MB (FLOW_LIMITS.HOST_HEAP_MB by default; tests lower it). RED (Q7's rows): not read yet */
+  /** the heap a host may use, MB (FLOW_LIMITS.HOST_HEAP_MB by default; tests lower it) */
   readonly heapMb?: number;
   /** the environment the child's PATH is read from; fieldd's own by default */
   readonly environment?: NodeJS.ProcessEnv;
@@ -103,6 +107,9 @@ const DEFAULT_TIMINGS: FlowHostTimings = {
   pingMisses: FLOW_LIMITS.HOST_PING_MISSES,
   stopGraceMs: 2_000,
 };
+
+/** V8's own words when it aborts a process for its heap ("Reached heap limit", "JavaScript heap out of memory"). */
+const V8_HEAP_LINE = /heap limit|JavaScript heap out of memory/;
 
 /** Lines of the child's stderr kept for fieldd's log, each cut. */
 const STDERR_LINES = 4;
@@ -171,6 +178,9 @@ class FlowHostChild {
   readonly #logger: Logger;
   readonly #proc: ChildProcess;
   readonly #stderr: string[] = [];
+  readonly #heapBytes: number;
+  /** V8 said, on the child's stderr, that it aborted it for its heap */
+  #heapLine = false;
   #settle: (end: FlowHostEnd) => void = () => {};
   #ready: (pid: number | undefined) => void = () => {};
   #isReady = false;
@@ -187,6 +197,7 @@ class FlowHostChild {
     this.#opts = opts;
     this.#script = script;
     this.#t = { ...DEFAULT_TIMINGS, ...opts.timings };
+    this.#heapBytes = (opts.heapMb ?? FLOW_LIMITS.HOST_HEAP_MB) * 1024 * 1024;
     this.#logger = opts.logger ?? createNoopLogger();
     const ready = new Promise<number | undefined>((resolve) => {
       this.#ready = resolve;
@@ -204,8 +215,9 @@ class FlowHostChild {
       this.#finish({ kind: "fatal", reason: `the flow host did not start: ${error.message}` }),
     );
     this.#proc.on("message", (raw) => this.#hear(raw));
-    this.#proc.on("exit", (code, signal) =>
-      this.#finish(this.#chosen ?? { kind: "left", code, signal }),
+    // `close`, not `exit`: the child has left AND its stderr is read to its end (V8's heap line is often its last)
+    this.#proc.on("close", (code, signal) =>
+      this.#finish(this.#chosen ?? this.#leftAs(code, signal)),
     );
     this.#proc.stderr?.setEncoding("utf8");
     this.#proc.stderr?.on("data", (chunk: string) => this.#heardStderr(chunk));
@@ -257,6 +269,8 @@ class FlowHostChild {
         if (this.#chosen === undefined) this.#opts.handler.log(cutText(message.text, FLOW_LOG_MAX));
         return;
       case "pong":
+        if (message.heap !== undefined && message.heap > this.#heapBytes)
+          this.#end({ kind: "ended", why: "memory" }, "kill");
         return;
       case "done":
         this.#end(
@@ -336,7 +350,14 @@ class FlowHostChild {
     this.#killTimer = setTimeout(() => this.#proc.kill("SIGKILL"), this.#t.stopGraceMs);
   }
 
+  /** How a child that left on its own ended: V8's abort for its heap is `memory`; any other way, a host that left. */
+  #leftAs(code: number | null, signal: NodeJS.Signals | null): FlowHostEnd {
+    if (signal === "SIGABRT" || this.#heapLine) return { kind: "ended", why: "memory" };
+    return { kind: "left", code, signal };
+  }
+
   #heardStderr(chunk: string): void {
+    if (V8_HEAP_LINE.test(chunk)) this.#heapLine = true;
     for (const line of chunk.split("\n")) {
       if (line.trim() === "" || this.#stderr.length >= STDERR_LINES) continue;
       this.#stderr.push(line.slice(0, STDERR_LINE_MAX));

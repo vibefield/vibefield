@@ -1,4 +1,5 @@
 import "ses";
+import { getHeapStatistics } from "node:v8";
 import type { FlowHostLimits, FromFlowHost, ToFlowHost } from "../protocol";
 import { evaluateFlow, type FlowApi } from "./compartment";
 
@@ -14,7 +15,8 @@ import { evaluateFlow, type FlowApi } from "./compartment";
 //   3. take ONE `run`: evaluate the script in its compartment (compartment.ts), call its default export with the
 //      run's input, and say how it ended (`done`, `threw`); a second `run` is `fatal`;
 //   4. each `agent(…)` and `ask(…)` is a `call` on the pipe, bounded here before it is sent, and its `answer` resolves
-//      or throws the script's `await`; `log(…)` is a `log` line, cut; every `ping` is answered at once;
+//      or throws the script's `await`; `log(…)` is a `log` line, cut; every `ping` is answered at once, with the heap
+//      the host uses;
 //   5. leave when told (`shutdown`) or when the pipe closes (fieldd died): it never outlives the daemon.
 
 const pending = new Map<
@@ -133,7 +135,9 @@ function hear(raw: unknown): void {
       return;
     }
     case "ping":
-      send({ t: "pong", n: message.n });
+      // the heap this host uses, for fieldd's cap (4A2-Q7 (a)): measured here, since a packaged executable takes no
+      // V8 heap flag
+      send({ t: "pong", n: message.n, heap: getHeapStatistics().used_heap_size });
       return;
     case "shutdown":
       process.exit(0);
