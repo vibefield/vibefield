@@ -59,7 +59,10 @@ struct WayInScreenTests {
     ]
     for step in steps {
       let acts = FieldHomeModel.wayInScreen(step, device: .iPhone).acts
-      let legal = acts.contains { if case .legal = $0 { true } else { false } }
+      let legal = acts.contains { act in
+        if case .legal = act { return true }
+        return false
+      }
       #expect(!legal, "\(step)")
     }
   }

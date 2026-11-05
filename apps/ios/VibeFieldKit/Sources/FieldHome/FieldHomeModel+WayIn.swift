@@ -284,8 +284,7 @@ extension FieldHomeModel {
         words: .init(
           title: "No VibeField account.",
           line: AttributedString(
-            "\(device.This) reaches your computer over your own Tailscale network, encrypted end to end. "
-              + "VibeField runs no session relay.")),
+            "\(device.This) reaches your computer over your own Tailscale network, encrypted end to end. VibeField runs no session relay.")),
         acts: [next, .tailscale("Connecting your devices requires a Tailscale account.")])
     default:
       var line = AttributedString("Get VibeField at ")
