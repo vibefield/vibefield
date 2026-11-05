@@ -14,8 +14,11 @@ import {
   FLOW_RECORD_FORMAT,
   FlowApprovalRecord,
   FlowHash,
+  type FlowJournalHead,
+  type FlowJournalKnownLine,
   FlowProposalId,
   FlowProposalRecord,
+  type FlowRunId,
   FlowSlug,
   type NeedsItemId,
   RECORD_STORES,
@@ -30,6 +33,7 @@ import {
   setAsideFile,
   UNREADABLE_WORDS,
 } from "../signed-record";
+import type { FlowJournalEntry, FlowJournalHeadEntry, JournalVerdict } from "./journal";
 
 // CP-4a1 (step0-cp4.md §5.1 commit 4; CP4-Q18 (a), CP-D10) — fieldd's own flow records under LAYOUT.FLOWS_DIR. fieldd
 // never runs a file in the person's library: it runs the bytes it kept when they approved them, so a run of a version
@@ -95,6 +99,10 @@ function refuseTooBig(size: number): never {
     `a flow's script is at most 64 KiB (${FLOW_LIMITS.SCRIPT_MAX_BYTES} bytes); this one is ${size} bytes`,
   );
 }
+
+/** A run's journal read back: what its lines say (journal.ts), or nothing kept under its id. A journal the disk did not
+ * answer is refused in the store's words, never read as nothing (item 172). */
+export type FlowRunRead = JournalVerdict | { readonly kind: "absent" };
 
 export class FlowRecords {
   readonly #signer: RecordSigner;
@@ -229,6 +237,38 @@ export class FlowRecords {
     if (this.proposal(id) === undefined) return;
     this.#guard.writable(this.#key(PROPOSALS_DIR, id));
     rmSync(join(this.opts.dir, PROPOSALS_DIR, `${id}${RECORD_SUFFIX}`), { force: true });
+  }
+
+  /** CP-4a2a — begin a run's journal (CP4-S15): its head, the file's first line, written once. SKELETON (the red, commit
+   * 8): nothing is written. */
+  beginRun(head: FlowJournalHeadEntry): FlowJournalHead {
+    return {
+      ...head,
+      format: FLOW_RECORD_FORMAT,
+      seq: 1,
+      kind: "head",
+      at: this.#now().toISOString(),
+    } as FlowJournalHead;
+  }
+
+  /** CP-4a2a — append a line to a run's journal, chained to the one before it. SKELETON: nothing is written. */
+  appendRun(_run: FlowRunId, entry: FlowJournalEntry): FlowJournalKnownLine {
+    return {
+      ...entry,
+      format: FLOW_RECORD_FORMAT,
+      seq: 0,
+      at: "",
+    } as unknown as FlowJournalKnownLine;
+  }
+
+  /** CP-4a2a — a run's journal read back. SKELETON: there is none. */
+  readRun(_run: FlowRunId): FlowRunRead {
+    return { kind: "absent" };
+  }
+
+  /** CP-4a2a — the runs whose journals are kept and verify. SKELETON: none. */
+  runs(): FlowRunId[] {
+    return [];
   }
 
   /** The record names in one of the records' directories, sorted: a file that is no record's name is passed over. A

@@ -212,6 +212,8 @@ interface StoreCase {
   seed(root: string, which: 0 | 1): { file: string; key: string };
   /** the store as a fresh fieldd opens it, through its boot read */
   boot(root: string, events: Events, readFile?: (path: string) => string): Booted;
+  /** a record re-signed as a newer VibeField's, for a store whose files are not one signed body (`resign` otherwise) */
+  newer?(file: string, keyPath: string): void;
 }
 
 const readOf = (fn: () => number): number | { message: string } => {
@@ -469,7 +471,60 @@ const flowsCase: StoreCase = {
   },
 };
 
-const CASES = [sparksCase, needsCase, inputsCase, keptCase, flowsCase, sessionsCase];
+/** CP-4a2a (4A2-Q10 (a)) — a run's journal, kept by the same flows store and read at each ask: one JSONL file per run,
+ * each line chained by its MAC (flows/journal.ts), so its newer form is a head re-signed with a newer format. */
+const journalsCase: StoreCase = {
+  name: "the runs' journals (FlowRecords, runs/)",
+  service: RECORD_STORES.SERVICE_FLOWS,
+  retryable: true,
+  words: UNREADABLE_WORDS.flows,
+  dir: (root) => join(root, "fieldd", "flows"),
+  keyPath: (root) => join(root, "fieldd", "flows.key"),
+  seed(root, which) {
+    const run = which === 0 ? "fr-journal0001" : "fr-journal0002";
+    new FlowRecords({ dir: this.dir(root), keyPath: this.keyPath(root) }).beginRun({
+      run,
+      flow: "release-check",
+      name: "Release check",
+      n: which + 1,
+      hash: "f".repeat(64),
+      starter: { by: "you" },
+    });
+    const file = join(this.dir(root), "runs", `${run}.jsonl`);
+    // the rows read the seeded file themselves: they do so after the store is seen to have written it
+    expect(existsSync(file), "the store wrote the run's journal").toBe(true);
+    return { file, key: run };
+  },
+  boot(root, events, readFile) {
+    const records = new FlowRecords({
+      dir: this.dir(root),
+      keyPath: this.keyPath(root),
+      logger: capture(events),
+      readFile,
+    });
+    return {
+      read: null,
+      served: () => {
+        try {
+          return records.runs();
+        } catch (err) {
+          return { message: (err as Error).message };
+        }
+      },
+      refuse: () => outcome(() => records.runs()),
+      write: (key) => outcome(() => records.appendRun(key, { kind: "log", text: "more" })),
+    };
+  },
+  newer(file, keyPath) {
+    const [first] = readFileSync(file, "utf8").split("\n");
+    const { mac: _mac, ...head } = JSON.parse(first as string) as Record<string, unknown>;
+    const next = { ...head, format: 2 };
+    const mac = new RecordSigner({ keyPath }).sign({ run: head["run"], prev: "", line: next });
+    writeFileSync(file, `${JSON.stringify({ ...next, mac })}\n`, { mode: 0o600 });
+  },
+};
+
+const CASES = [sparksCase, needsCase, inputsCase, keptCase, flowsCase, sessionsCase, journalsCase];
 
 const refusalOf = (c: StoreCase) => ({
   kind: "UNAVAILABLE",
@@ -645,7 +700,8 @@ describe.each(CASES)("item 172 — $name, when the disk does not answer", (c) =>
     const root = tmp();
     const newer = c.seed(root, 0);
     const other = c.seed(root, 1);
-    resign(newer.file, c.keyPath(root), (body) => ({ ...body, format: 2 }), c.keyEncoding);
+    if (c.newer !== undefined) c.newer(newer.file, c.keyPath(root));
+    else resign(newer.file, c.keyPath(root), (body) => ({ ...body, format: 2 }), c.keyEncoding);
     const bytes = readFileSync(newer.file, "utf8");
     const events: Events = [];
     const booted = c.boot(root, events);

@@ -29,10 +29,12 @@ import { type FromFlowHost, readFromFlowHost, type ToFlowHost } from "./protocol
 //   a host that left, so its run is never started again.
 // - A run's end is settled when the child has LEFT, never before: when `ended` resolves, its process is gone.
 
-/** A call the script made, as the host sent it: what it is (FLOW_CALL_WHATS, OPEN) and its arguments. */
+/** A call the script made, as the host sent it: what it is (FLOW_CALL_WHATS, OPEN) and its arguments; `call`, its
+ * number in the run's journal, once replay (replay.ts) has journaled it, so a step's origin can name it. */
 export interface FlowHostCall {
   readonly what: string;
   readonly args: readonly unknown[];
+  readonly call?: number;
 }
 
 /** A call's answer: the script's `await` resolves with `value`, or throws with `refused`'s words. */
