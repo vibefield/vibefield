@@ -1,11 +1,11 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FLOW_LIMITS } from "@vibefield/contracts";
 import { afterEach, describe, expect, inject, it } from "vitest";
 import { chooseFlowsHostLaunch, type FlowsHostLaunch } from "../src/flows/launch";
 import { flowScriptOf } from "../src/flows/module-script";
-import type { ToFlowHost } from "../src/flows/protocol";
+import { FLOW_HOST_TEXT_MAX, type ToFlowHost } from "../src/flows/protocol";
 import {
   type FlowCallHandler,
   type FlowHostAnswer,
@@ -15,7 +15,7 @@ import {
   startFlowHost,
 } from "../src/flows/supervisor";
 import { roleOf } from "../src/roles";
-import { flowsHostBundle, flowsHostLaunch } from "./flows-host-bundle";
+import { directHost, flowsHostLaunch, standInSource } from "./flows-host-bundle";
 
 // CP-4a2a (step0-cp4a2.md §12 commit 5; CP-D8, CP-D9; 4A2-Q1, Q5, Q6, Q7 (a), ruled by VF-PM 2026-11-05 08:51Z) — a
 // run's flow host, end to end: the REAL child (fieldd's own build of `flows-host.cjs`, flows-host-bundle.ts) started by
@@ -105,8 +105,8 @@ async function host(
   return run;
 }
 
-/** A stand-in child that speaks the protocol: at `run` it does `onRun` (JavaScript, in the child), and it answers each
- * ping with `heap` bytes in use (a heap fact the row states; the real allocation is the mini's). */
+/** A stand-in child that speaks the protocol on fd 3: at `run` it does `onRun` (JavaScript, in the child), and it
+ * answers each ping with `heap` bytes in use (a heap fact the row states; the real allocation is the mini's). */
 function standIn({
   onRun = "",
   heap = 4 * 1024 * 1024,
@@ -118,14 +118,14 @@ function standIn({
   const file = join(dir, "stand-in.cjs");
   writeFileSync(
     file,
-    [
-      "process.send({ t: 'ready', pid: process.pid });",
-      "process.on('message', (m) => {",
+    standInSource([
+      "say({ t: 'ready', pid: process.pid });",
+      "on((m) => {",
       `  if (m && m.t === 'run') { ${onRun} }`,
-      `  if (m && m.t === 'ping') process.send({ t: 'pong', n: m.n, heap: ${heap} });`,
+      `  if (m && m.t === 'ping') say({ t: 'pong', n: m.n, heap: ${heap} });`,
       "  if (m && m.t === 'shutdown') process.exit(0);",
       "});",
-    ].join("\n"),
+    ]),
   );
   return { command: process.execPath, args: [file] };
 }
@@ -142,6 +142,26 @@ async function heardOf(heard: readonly unknown[], t: string, ms = WAIT_MS): Prom
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   return "timeout";
+}
+
+/** How a child left, once it has. */
+const exitOf = (child: ChildProcess): Promise<{ code: number | null; signal: string | null }> =>
+  new Promise((resolve) => child.on("exit", (code, signal) => resolve({ code, signal })));
+
+/** The `run` fieldd would send for a flow file, at FLOW_LIMITS' bounds. */
+function runOf(file: Uint8Array): ToFlowHost {
+  const read = flowScriptOf(file);
+  expect(read.kind, "the rewrite reads the row's flow").toBe("script");
+  return {
+    t: "run",
+    script: (read as { script: string }).script,
+    input: {},
+    limits: {
+      callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
+      logMaxChars: 200,
+      heapMb: FLOW_LIMITS.HOST_HEAP_MB,
+    },
+  };
 }
 
 async function logged(logs: readonly string[], ms = WAIT_MS): Promise<string | "timeout"> {
@@ -235,8 +255,7 @@ describe("CP-4a2a — the flow host: lockdown, the compartment, the environment"
       await host(flow("return 1;"), {
         handler,
         launch: standIn({
-          onRun:
-            "process.send({ t: 'log', text: JSON.stringify(Object.keys(process.env).sort()) });",
+          onRun: "say({ t: 'log', text: JSON.stringify(Object.keys(process.env).sort()) });",
         }),
         environment: {
           PATH: PATH_ONLY.PATH,
@@ -315,24 +334,13 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
   );
 
   it(
-    "H7: a pipe that closes ends the child: it never outlives fieldd",
+    "H7: a pipe that closes ends the child: it never outlives fieldd (fd 3, a plain pipe)",
     async () => {
-      const child = spawn(process.execPath, [await flowsHostBundle()], {
-        stdio: ["ignore", "ignore", "ignore", "ipc"],
-        env: PATH_ONLY,
-      });
-      children.push(child);
-      const exited = new Promise<{ code: number | null; signal: string | null }>((resolve) =>
-        child.on("exit", (code, signal) => resolve({ code, signal })),
-      );
-      const ready = new Promise<unknown>((resolve) =>
-        child.on("message", (message) => resolve(message)),
-      );
-      const first = await within(
-        Promise.race([ready, exited.then((exit) => ({ exitedFirst: exit }))]),
-      );
-      expect(first).toEqual({ t: "ready", pid: child.pid });
-      child.disconnect();
+      const direct = await directHost(PATH_ONLY);
+      children.push(direct.child);
+      const exited = exitOf(direct.child);
+      expect(await heardOf(direct.heard, "ready")).toEqual({ t: "ready", pid: direct.child.pid });
+      direct.close();
       expect(await within(exited)).toEqual({ code: 0, signal: null });
     },
     ROW_MS,
@@ -341,40 +349,77 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
   it(
     "H7b: a spinning script's host still leaves when its pipe closes, and on SIGTERM: the script never holds the host's own thread (4A2-Q7 (b))",
     async () => {
-      const read = flowScriptOf(flow('log("spinning");\nwhile (true) {}'));
-      expect(read.kind).toBe("script");
-      const run: ToFlowHost = {
-        t: "run",
-        script: (read as { script: string }).script,
-        input: {},
-        limits: {
-          callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
-          logMaxChars: 200,
-          heapMb: FLOW_LIMITS.HOST_HEAP_MB,
-        },
-      };
-      for (const leave of ["disconnect", "SIGTERM"] as const) {
-        const child = spawn(process.execPath, [await flowsHostBundle()], {
-          stdio: ["ignore", "ignore", "ignore", "ipc"],
-          env: PATH_ONLY,
+      const run = runOf(flow('log("spinning");\nwhile (true) {}'));
+      for (const leave of ["close", "SIGTERM"] as const) {
+        const direct = await directHost(PATH_ONLY);
+        children.push(direct.child);
+        const exited = exitOf(direct.child);
+        expect(await heardOf(direct.heard, "ready")).toEqual({
+          t: "ready",
+          pid: direct.child.pid,
         });
-        children.push(child);
-        const exited = new Promise<{ code: number | null; signal: string | null }>((resolve) =>
-          child.on("exit", (code, signal) => resolve({ code, signal })),
-        );
-        const heard: unknown[] = [];
-        child.on("message", (message) => heard.push(message));
-        expect(await heardOf(heard, "ready")).toEqual({ t: "ready", pid: child.pid });
-        child.send(run);
+        direct.tell(run);
         // the script said it is about to spin: from here it never yields
-        expect(await heardOf(heard, "log")).toEqual({ t: "log", text: "spinning" });
-        if (leave === "disconnect") child.disconnect();
-        else child.kill("SIGTERM");
+        expect(await heardOf(direct.heard, "log")).toEqual({ t: "log", text: "spinning" });
+        if (leave === "close") direct.close();
+        else direct.child.kill("SIGTERM");
         expect(await within(exited), `a spinning host leaves on ${leave}`).toEqual({
           code: 0,
           signal: null,
         });
       }
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H16: a script's throw is cut in the child (finding 1), and a throw no text reads still ends its run (finding 4)",
+    async () => {
+      // the child says at most FLOW_HOST_TEXT_MAX characters of a thrown message: fieldd never reads the rest
+      const direct = await directHost(PATH_ONLY);
+      children.push(direct.child);
+      expect(await heardOf(direct.heard, "ready")).toMatchObject({ t: "ready" });
+      direct.tell(runOf(flow('throw new Error("x".repeat(2 ** 22));')));
+      const threw = await heardOf(direct.heard, "threw");
+      expect(threw).toMatchObject({ t: "threw" });
+      expect((threw as { message?: string }).message?.length).toBeLessThanOrEqual(
+        FLOW_HOST_TEXT_MAX,
+      );
+      // a thrown value with no text, a message that throws when read, a message that is no string: each ends `threw`
+      for (const body of [
+        "throw Object.create(null);",
+        'const e = new Error("x"); Object.defineProperty(e, "message", { get() { throw new Error("no"); } }); throw e;',
+        'const e = new Error("x"); e.message = 1n; throw e;',
+      ]) {
+        const run = await host(flow(body));
+        const ended = await within(run.ended);
+        expect(ended, body).toMatchObject({ kind: "threw", message: expect.any(String) });
+      }
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H17: fieldd reads its pipe itself (bth's review P2): a frame past 64 KiB and its envelope, or one that is not JSON, ends the run `protocol`",
+    async () => {
+      // the frame never ends: fieldd refuses it before it holds 64 KiB and its envelope, never at its newline
+      const endless = await host(flow("return 1;"), {
+        launch: standIn({
+          onRun: `pipe.write("x".repeat(${FLOW_LIMITS.RESULT_MAX_BYTES + 8 * 1024}));`,
+        }),
+      });
+      expect(await within(endless.ended)).toEqual({ kind: "ended", why: "protocol" });
+      const garbled = await host(flow("return 1;"), {
+        launch: standIn({ onRun: "pipe.write('{not json}\\n');" }),
+      });
+      expect(await within(garbled.ended)).toEqual({ kind: "ended", why: "protocol" });
+      // a `done` whose value is past RESULT_MAX_BYTES, inside the frame's envelope, is read as cut: fieldd bounds it too
+      const over = await host(flow("return 1;"), {
+        launch: standIn({
+          onRun: `say({ t: "done", value: "x".repeat(${FLOW_LIMITS.RESULT_MAX_BYTES - 2 + 256}) });`,
+        }),
+      });
+      expect(await within(over.ended)).toEqual({ kind: "done", cut: true });
     },
     ROW_MS,
   );

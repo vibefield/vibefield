@@ -13,6 +13,7 @@ import {
   type FlowHostRun,
   startFlowHost,
 } from "../src/flows/supervisor";
+import { standInSource } from "./flows-host-bundle";
 
 // CP-4a2a (step0-cp4a2.md §12 commit 8; CP-D9) — replay: a run's calls answered from its journal by their key and
 // `#n`, never handed on twice; a new call journaled before it is handed on, then its answer. And J7: the journal's key
@@ -283,16 +284,16 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
     const file = join(dir, "stand-in.cjs");
     writeFileSync(
       file,
-      [
+      standInSource([
         "const heard = [];",
-        "process.send({ t: 'ready', pid: process.pid });",
-        "process.on('message', (m) => {",
+        "say({ t: 'ready', pid: process.pid });",
+        "on((m) => {",
         "  heard.push(m);",
-        "  if (m && m.t === 'run') process.send({ t: 'call', id: 1, what: 'agent', args: ['Review'] });",
-        "  if (m && m.t === 'answer') process.send({ t: 'log', text: JSON.stringify(heard) });",
+        "  if (m && m.t === 'run') say({ t: 'call', id: 1, what: 'agent', args: ['Review'] });",
+        "  if (m && m.t === 'answer') say({ t: 'log', text: JSON.stringify(heard) });",
         "  if (m && m.t === 'shutdown') process.exit(0);",
         "});",
-      ].join("\n"),
+      ]),
     );
     const { handler, logs } = inner(() => ({ ok: true, value: { verdict: "clean" } }));
     const read = records.readRun(run);
