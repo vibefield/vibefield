@@ -70,6 +70,11 @@ said `"left": []`.
 
 `pnpm verify`'s chain is rows 1–14 in that order. `pnpm gate:landing` is rows 15–23, then 32 (behind Godview), then 24–26 and 29; `--with-stages` puts 1–14 first. Row 30 is landing-only: `pnpm smoke:update` runs once per WP12 landing, beside the gate, never inside `gate:landing` (WP12 L4, the PM's ruling 2026-10-15 21:41Z: ten minutes is the zip build and five packaged launches). Row 31 is landing-only too: `pnpm --filter @vibefield/desktop smoke:profile` runs on a SIGNED package, beside the gate, never inside `gate:landing` (BP-D7, VF-PM 2026-10-26). So is row 33: `pnpm smoke:phone` (with `:none` and `:cost`) runs on James's unlock, beside the gate, never inside `gate:landing` (PT-S3, VF-PM 2026-10-31). Row 34 is the release's: `package:mac:release` runs it on the signed app after the History verifier, and by hand it runs on any built app's `Resources/bin`; never inside `gate:landing` (AR-7j, LP-D1). `release.yml`'s unsigned path ("The packaged app's checks", its copy of `package:mac:release`'s verifiers) does not run it yet: that line is owed at AR-7j's landing.
 
+*Added 2026-11-05 (LP-5; VF-PM's ruling on prod-builder's L5 review): a release stage copies the `LICENSE` beside the
+running node's executable into `Resources/legal` (the Node fieldd's SEA embeds). A Homebrew node carries none, and
+`--require-complete`, which both release paths run, refuses the gap. So release from a nodejs.org or nvm node, the
+version `.nvmrc` names.*
+
 **Re-run at DK-19, on main merged in** (`695ff9d1`; `pnpm gate:landing --with-stages`, 2026-10-08 09:32→09:47Z, load 3, 124
 under the test stage, 5 at the end; `field-native` rebuilt from the merge first). The same 26 gates, red only by preflight
 (MAIN's ghosttea row), check:deps (MAIN's three mille rows) and test — fieldd `2 failed | 2106 passed`: AR-7b row 1 (MAIN's)
