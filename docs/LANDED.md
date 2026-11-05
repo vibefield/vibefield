@@ -32619,3 +32619,73 @@ fieldd sources and 9 fieldd tests):
 - Item 170 NARROWS to truffle's sidecar: T14, the `-trimpath` petition (`draft/launch/truffle-trimpath-petition.md`), at
   James's hand. Item 176 waits on loro's own release build, at an EL8 or by a loro petition.
 - LP-1's local-release guard, which requires this switch, lands next (`lp/rails`).
+
+## LP-1 — the DMG a stranger downloads is signed, notarized and stapled: the app declares its real macOS floor (14), a stable carries a fixed-name download, releases carry build provenance, and a local release refuses without the build-path switch (2026-11-05; `33ec194a2` → `650877282`, 7 commits on main `2f5225a55`, lane `lp/rails` in `/Volumes/SamsungRed/lanes/lp-rails/vibe-field`, minted as M136 `650877282`, run 136)
+
+**What it rests on.**
+- The 0.9 launch plan's phase 1, "the DMG a stranger downloads", and LP-D4 (the real floor, 14), ruled at the leans
+  by James on 2026-11-05 (01:04Z). Before this, `spctl -t open` rejected the published container while the app inside
+  was notarized, and Info.plist said 12.0.
+- The lane was built code-only in wave 1 off `f599761bc` and reviewed through two lenses. Findings 1, 2 and 4 were
+  fixed in `9b40ef7c3`; finding 3 became item 173. VF-PM's rulings were folded as commits: the blockmap at 01:59Z,
+  the typed-agent witness at 03:17Z, the switch at 03:58Z. prod-builder's review (03:20Z) and its re-GO of
+  `75ea6123f` (04:11Z) each carried a note, both folded.
+- RELEASE-CLASS (`.github/workflows/release.yml`, the new `apple-tickets-over-tcp` action, `policy/`), so the lane
+  waited for James's eye: "L6b L1 L8 L7 ok" (05:40Z).
+- Re-cut onto `2f5225a55` (LP-6b's records), because its guard reads LP-6b's switch: `diff 2f5225a55..650877282`
+  equals `diff f599761bc..93036c696`, 14 files with `git patch-id --stable` equal for all 14.
+
+**What landed.**
+- `apps/desktop/packaging/notarize-dmg.mjs` (new), run LAST by `package:mac:release`, inside release.yml's "Package,
+  signed" step:
+  - It signs the DMG with the team's Developer ID Application identity and `--timestamp`, in a keychain of its own,
+    because electron-builder deletes its own keychain when its build ends.
+  - It submits to notarytool (an Invalid verdict prints Apple's log and is never retried), staples the ticket, then
+    assesses: `codesign --verify --strict`, team `9F79X9D26S` with a Developer ID Application authority and a secure
+    timestamp, `stapler validate`, and `spctl -a -t open --context context:primary-signature`.
+  - Transient network failures retry a bounded number of times. No command line is logged, and captured output is
+    scrubbed of every credential (EL7).
+- The DMG's blockmap is DROPPED, not regenerated. electron-updater 6.8.9 updates a Mac from the zip
+  (MacUpdater.js:81, :102, :105; AppUpdater.js:649; Provider.js:22-25), so nothing reads a DMG blockmap.
+  latest-mac.yml's DMG entry is re-stated from the stapled bytes (`scripts/release-assets.mjs`), and the zip's entry
+  stays byte for byte.
+- release-verify runs `checkReleaseAssets` first. converge gains:
+  - "The published DMG is signed, notarized and stapled", strict on a Developer ID app alone;
+  - the stable-only fixed-name download `VibeField-mac-arm64.dmg`, listed in SHA256SUMS;
+  - Apple's ticket lookups over TCP through ONE composite, `.github/actions/apple-tickets-over-tcp`, shared with
+    build.
+- Provenance: a new `attest` job runs `actions/attest-build-provenance` v4.2.2 (pinned by commit) over the DMG and
+  the zip. `id-token: write` and `attestations: write` are granted to that job alone.
+- The floor: `mac.minimumSystemVersion: "14.0"`, and `policy/{nightly,beta,stable}.json` at version 2 with `"floors":
+  { "os": "14.0" }`. The policy README says `floors.os` binds every platform (item 173).
+- The unsigned path runs AR-7j's typed-agent witness (`verify-agents-package.mjs`) too, right after the History
+  verifier.
+- A LOCAL `package:mac:release` refuses unless `VIBEFIELD_REMAP_BUILD_PATHS=1`, before any preflight or build. It
+  names the value it read, says to export the switch in the release shell only, and says to rebuild rosettad and
+  mille under it. It then runs `scripts/host-links.mjs --app` before notarize-dmg finalizes the DMG, as release.yml's
+  step does.
+
+**Validation.**
+- This Mac, from inside the lane (nice 19, guard clear), each rc=0:
+  - at `ba84b6502` on LP-6b's tip (05:48:18–05:50:08Z): preflight; electron-shell typecheck; release-scripts 70/70;
+    `node --check` on run-macos-release, notarize-dmg, release-assets and release-verify; the three policy JSONs
+    parsed; dev-runner:test with no Nx cache; biome; walls; actionlint;
+  - at `650877282` (05:58:31–05:58:42Z), the docs-only move: preflight, biome, walls and actionlint.
+- The mini (a9), run 136: minted `mint/lp-rails` = `650877282` (tree `2023860f9e13`, stacked on `2f5225a55`), and
+  `pnpm verify` armed after the simulator job, exit 0 at 06:09:09Z.
+  - vitest 12,495 passed, 0 failed, 20 skipped. Its +22 are all release-scripts.test.ts, 48 → 70 (this Mac's 70/70).
+  - `node --test` 443/0 (unchanged), cargo 545/0, biome 3158 files, gen:check exit 0 (policy version 2 moves no
+    generated shape). Logs: `lanes/ts6/logs/mini/run136/`.
+- No mini-side step 2: L1's witnesses are the first signed release's.
+
+**Found.**
+- Every unsigned build's app carries an ad hoc signature (after-pack's fuses run `codesign --sign - --force --deep`),
+  so a check that a signature exists is no check that it is a Developer ID one. converge reads the authority line.
+- `floors.os` is one value per channel and is compared with the host OS on every platform: item 173, latent for 0.9
+  (no non-mac feed). The fix is a contract call before such a feed ships.
+
+**Owed.**
+- The first signed release with this lane (prod-builder's W rows): a notarized and stapled DMG that `spctl -t open`
+  accepts, the fixed-name stable download, the attestation, and Info.plist's `LSMinimumSystemVersion` 14.0.
+- The blockmap re-read at an electron-updater bump.
+- The clean-Mac install row on macOS 14, 15 and 26 VMs (phase 1, new).

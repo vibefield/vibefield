@@ -723,9 +723,9 @@ field, heard"; the page *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`)
      passed on it at 01:24Z; `release-signing` takes main and `v*` only (LP-D20, 01:09Z). Its manifest's `touched`
      line is LP-D16's first data point.
    - **Phase 1, the DMG a stranger downloads** (5–10 Nov, the release lane):
-     - the DMG itself signed, notarized and stapled before SHA256SUMS (`lp/rails`; today `spctl -t open` rejects the
-       container, while the app inside is notarized);
-     - the real macOS floor, 14 (LP-D4: `mac.minimumSystemVersion` and every policy's `floors.os`; `lp/rails`);
+     - the DMG itself signed, notarized and stapled before SHA256SUMS, a stable's fixed-name download, and build
+       provenance: LANDED 2026-11-05 (M136 `650877282`, LANDED "LP-1"); owed: the first signed release's W rows;
+     - the real macOS floor, 14 (LP-D4: `mac.minimumSystemVersion` and every policy's `floors.os`): LANDED (M136);
      - a clean-Mac install row on macOS 14, 15 and 26 VMs on the mini, quarantined as a browser downloads it (new);
      - a usage string for every system prompt the clean-Mac row meets;
      - each shipped daemon its own entitlements, with no inherited `allow-jit`, and its release signature read
