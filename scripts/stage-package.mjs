@@ -45,6 +45,8 @@ import { FLOOR_BINARIES, floorSetProblems } from "./native-floor.mjs";
 // siblings.lock.json (CLAUDE.md §Machine setup), and staging is its fourth
 // consumer after preflight, the Nx cache stamp and the dev runner.
 import { cargoBuildFreshness, rosettadBinary, sidecarStagingSource } from "./siblings.mjs";
+// LP-5 — the third-party notices, generated from the trees this stage copies (scripts/third-party-notices.mjs).
+import { NOTICES_FILE, stageExternals, stageNotices } from "./third-party-notices.mjs";
 
 const args = process.argv.slice(2);
 const argValue = (flag) => {
@@ -382,6 +384,25 @@ const PLAN = [
     mode: DATA_MODE,
     produce: "pnpm --filter @vibefield/desktop icons:generate",
   })),
+  // LP-5 (the 0.9 launch): the licence files that travel BESIDE the generated notices in `legal/` (Resources/legal
+  // in the app). Electron's two are copied out of the installed runtime because electron-builder 26.15.7 DELETES
+  // them from a macOS app (app-builder-lib `out/electron/electronMac.js:219-220`), so no macOS VibeField had shipped
+  // them. Node's is the runtime fieldd's SEA embeds (a copy of the Node running this stager, build-fieldd-sea.mjs),
+  // beside that Node as nodejs.org's archives lay it out; absent there, it is a declared optional gap, fatal under
+  // --require-complete. THIRD_PARTY_NOTICES.txt itself is generated below, not copied.
+  ...stageExternals({ repoRoot }).map((external) => ({
+    stage: external.stage,
+    from: external.from,
+    kind: "file",
+    mode: DATA_MODE,
+    ...(external.optional
+      ? {
+          optional: `${external.what} is absent beside the Node running this stager — the notices cannot carry it`,
+          produce:
+            "stage with a Node installed from a nodejs.org archive (its LICENSE beside bin/)",
+        }
+      : { produce: "pnpm install --frozen-lockfile" }),
+  })),
 ];
 
 // ---- the produced outputs (WP8b) ----------------------------------------------
@@ -425,7 +446,8 @@ const runProducer = (command, extra = []) => {
 // missing, and it DROPS an empty one (the WP8 plan's addendum: no bundle examined before WP8 had a
 // Resources/plugins) — since WP8 the bundled root and identity/ are produced, so neither is empty by
 // construction. The tray is required and validated by the icon gate before staging.
-const STAGE_ROOTS = ["app", "bin", "tray", "icons", "plugins/bundled", "identity"];
+// `legal/` (LP-5) holds the generated notices and the licence files beside them; it is never empty.
+const STAGE_ROOTS = ["app", "bin", "tray", "icons", "plugins/bundled", "identity", "legal"];
 
 // ---- §7.3 "must never ship" ------------------------------------------------
 // package-census.mjs owns the canonical list; this is the same policy applied to STAGE-relative
@@ -702,7 +724,7 @@ const walkStage = (absDir, prefix, out) => {
   }
 };
 
-const verify = ({ files, manifest }, produced) => {
+const verify = ({ files, manifest }, produced, notices) => {
   if (!existsSync(outAbs)) {
     fail(`no stage at ${outRel} — run \`node scripts/stage-package.mjs\` first`);
   }
@@ -711,6 +733,11 @@ const verify = ({ files, manifest }, produced) => {
 
   const expected = new Map(files.map((f) => [f.stage, f]));
   expected.set("app/package.json", { stage: "app/package.json", mode: DATA_MODE, generated: true });
+  // LP-5: the notices are generated, so they are held to what THIS tree generates, byte for byte — a stage whose
+  // dependencies moved after it was written is stale, and --verify is the check that can see it. A generator that
+  // failed wrote nothing, so a fresh stage then expects no file (its failure is reported below instead).
+  if (notices.text !== null || verifyOnly)
+    expected.set(notices.rel, { stage: notices.rel, mode: DATA_MODE, generated: true });
   // WP8b: what the producer's verifier vouched for (signature, every hash, the sources) is expected too —
   // and ONLY that: a file under plugins/bundled or identity it did not name is UNEXPECTED below.
   for (const rel of produced.files ?? [])
@@ -745,6 +772,24 @@ const verify = ({ files, manifest }, produced) => {
         `LEAKS BUILD PATH  ${f.rel} — the build machine's repo path is inlined (§13.2)`,
       );
     }
+  }
+
+  // LP-5 — the staged notices against the ones this tree generates now (missing is already MISSING above).
+  const noticesAbs = join(outAbs, notices.rel);
+  if (
+    notices.text !== null &&
+    existsSync(noticesAbs) &&
+    readFileSync(noticesAbs, "utf8") !== notices.text
+  ) {
+    problems.push(
+      `STALE  ${notices.rel} — not the notices this tree generates (a dependency moved after staging); restage`,
+    );
+  }
+  // An unreadable input or an unknown licence makes the notices incomplete, never the app unbootable: like the
+  // declared optional gaps, fatal under --require-complete (the release stage) and warned about otherwise.
+  if (requireComplete) {
+    for (const p of notices.problems) problems.push(`NOTICES  ${p}`);
+    for (const g of notices.gaps) problems.push(`NOTICES GAP  ${g}`);
   }
 
   // TC-S2, widened at F1 — field-native's binaries (the floor's set, `native-floor.mjs`) ship as a SET or not at all.
@@ -816,7 +861,36 @@ if (!verifyOnly) {
     fail(`bundled plugins were not produced: ${(produced.problems ?? []).join("; ")}`);
 }
 const bundled = runProducer("verify", requireReleaseKey ? ["--require-release-key"] : []);
-const { found, problems } = verify(plan, bundled);
+
+// LP-5 — the third-party notices: generated from the very trees this stage copied (the bundles' module comments, the
+// renderer's and the bundled plugins' production closures, the Cargo.lock graphs whose crates cargo extracted to build
+// this host's binaries, the sidecar's Go build info), written to `legal/` when staging and regenerated when verifying.
+// Why generated here and not committed: a snapshot goes stale at every dependency move and its freshness test would
+// need these same inputs, so it would add a second truth without removing one (the script's header says more).
+// Its problems (an input it cannot read) and gaps (a component whose licence is unknown) fail the stage under
+// --require-complete, the release stage, and are warned about otherwise; a stale staged copy fails it always.
+const sidecarRow = PLAN.find((entry) => entry.stage === `bin/${truffleSidecarName}`);
+let notices;
+try {
+  notices = await stageNotices({
+    repoRoot,
+    stageDir: outAbs,
+    sidecarPath: sidecarRow?.from ? resolve(repoRoot, sidecarRow.from) : null,
+    write: !verifyOnly,
+  });
+} catch (error) {
+  notices = {
+    rel: `legal/${NOTICES_FILE}`,
+    text: null,
+    problems: [
+      `the notices generator failed: ${error instanceof Error ? error.message : String(error)}`,
+    ],
+    gaps: [],
+    summary: "not generated",
+  };
+}
+if (!verifyOnly && notices.text !== null) chmodSync(join(outAbs, notices.rel), DATA_MODE);
+const { found, problems } = verify(plan, bundled, notices);
 
 const n = (v) => v.toLocaleString("en-US");
 const mb = (v) => `${(v / 1024 / 1024).toFixed(2)} MB`;
@@ -863,6 +937,17 @@ if (bundled.keyClass === "dev")
       : "  DEV-KEYED: the trust-root and the bundled index were signed by keys minted for this stage only — " +
           "a release stage needs VIBEFIELD_BUNDLED_INDEX_SECRET and James's trust-root (TD-1)",
   );
+
+// The notices report line (LP-5): how many components the shipped app carries others' work from, and what is unknown.
+console.log(`\n${notices.rel}: ${notices.summary}`);
+const noticeIssues = [...notices.problems, ...notices.gaps];
+if (noticeIssues.length > 0) {
+  console.warn(
+    `  NOTICES INCOMPLETE: ${notices.problems.length} unreadable input(s), ${notices.gaps.length} component(s) whose ` +
+      `licence is not established${requireComplete ? " (fatal: --require-complete)" : " — a release stage refuses this"}:`,
+  );
+  for (const issue of noticeIssues) console.warn(`    ${issue}`);
+}
 
 if (plan.missing.length > 0) {
   const bar = "─".repeat(78);

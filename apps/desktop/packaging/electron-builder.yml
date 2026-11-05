@@ -115,6 +115,11 @@ extraResources:
   # and root keys (FIELDD_TRUST_ROOT, FIELDD_TRUST_ROOT_KEYS); outside app.asar so fieldd reads it as a file.
   - from: build/stage/identity
     to: identity
+  # LP-5: the third-party notices the stager generates (THIRD_PARTY_NOTICES.txt) and the licence files beside them —
+  # Electron's LICENSE and LICENSES.chromium.html, which this builder deletes from a macOS app's root, and Node's for
+  # fieldd's runtime. Outside app.asar so a person (and Finder) can read them as files.
+  - from: build/stage/legal
+    to: legal
 
 # NO `electronFuses:` BLOCK HERE — deliberately, not by omission. EDP-31 split the packaging
 # surface: electron-security-packaging.md §9.1 owns the single fuse matrix (including the
