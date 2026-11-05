@@ -28,6 +28,10 @@ import type { FlowWorkerData, FromFlowWorker, ToFlowWorker } from "./worker";
 //   SES), this thread holds: it reads the host's resident memory every RSS_POLL_MS, and past the run's `rssMb`
 //   (FLOW_LIMITS.HOST_RSS_MB, 512 provisional) it says `memory` and SIGKILLs the host (bth's re-read N1, ruled by
 //   VF-PM 13:26Z). The worker's loop may be inside one long builtin then, so the host never waits for it to end;
+// - the memory it holds to that cap is the higher of the resident size and the worker's own count, its external
+//   memory (every typed array's backing store) and its heap, `worker.getHeapStatistics()` (bth's second re-read
+//   R2, VF-PM 13:48Z): under memory pressure macOS's resident size leaves out compressed and swapped pages, and
+//   the worker's count does not;
 // - that read goes on past the run's end, until the host has left (bth's second re-read R1, VF-PM 13:48Z): at the
 //   end the worker is terminated, and every leave terminates it and exits once it has gone, never by a
 //   `process.exit()` that would hold this thread until one long builtin ends. Past the cap after the run's end, the
@@ -159,8 +163,28 @@ function start(bundle: string, message: Extract<ToFlowHost, { t: "run" }>): void
   });
   worker.on("exit", (code) => end({ t: "fatal", reason: `the flow's worker left (code ${code})` }));
   const capBytes = rssMb * 1024 * 1024;
+  // the host's memory is the higher of its resident size and its worker's own count (bth's second re-read R2):
+  // the resident size is read at once every tick; the worker answers its count at its next interrupt check, so
+  // one ask is out at a time, and a worker inside one long builtin, which cannot answer, leaves the resident
+  // size to hold. A worker that has gone answers nothing, and the resident size holds alone
+  let counting = false;
   rssTimer = setInterval(() => {
-    if (process.memoryUsage.rss() > capBytes) pastResidentCap();
+    if (process.memoryUsage.rss() > capBytes) {
+      pastResidentCap();
+      return;
+    }
+    const running = worker;
+    if (counting || running === undefined) return;
+    counting = true;
+    running.getHeapStatistics().then(
+      (count) => {
+        counting = false;
+        if (count.external_memory + count.used_heap_size > capBytes) pastResidentCap();
+      },
+      () => {
+        counting = false;
+      },
+    );
   }, RSS_POLL_MS);
 }
 

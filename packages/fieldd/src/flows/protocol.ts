@@ -23,7 +23,7 @@
 // host → fieldd: `ready {pid}` once, when the host's own thread is up (lockdown runs in the worker, before the script);
 // `call {id, what, args}`; `log {text}`; `pong {n, heap}`; then one of `done {value?, cut?}` (the default export
 // returned), `threw {message}` (it threw, or the script would not evaluate), `memory` (V8 ended the worker past its
-// heap, or the host's resident memory passed `rssMb`, the host then killing itself) or `fatal {reason}` (the host
+// heap, or the host's memory passed `rssMb`, the host then killing itself) or `fatal {reason}` (the host
 // cannot run a script: lockdown failed, a second `run`, the worker left).
 
 /** The bounds the child holds the script's own calls to, before anything is sent. */
@@ -34,8 +34,9 @@ export interface FlowHostLimits {
   readonly logMaxChars: number;
   /** the V8 old-generation cap the script's worker runs under, MB (FLOW_LIMITS.HOST_HEAP_MB; 4A2-Q7 (b)) */
   readonly heapMb: number;
-  /** the host's resident memory cap, MB, measured by its own thread (FLOW_LIMITS.HOST_RSS_MB; bth's re-read N1): what
-   * V8's heap cap cannot see, a typed array's backing store */
+  /** the host's memory cap, MB, measured by its own thread (FLOW_LIMITS.HOST_RSS_MB; bth's re-read N1): what V8's heap
+   * cap cannot see, a typed array's backing store. The memory is the resident size, or the worker's external memory
+   * and heap, whichever is higher (bth's second re-read R2) */
   readonly rssMb: number;
   /** how deep a call's arguments, and the run's result, may nest (FLOW_LIMITS.ARGS_DEPTH_MAX; bth's review P1) */
   readonly argsDepthMax: number;

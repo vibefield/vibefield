@@ -523,9 +523,12 @@ export const AGENT_STOP = {
  *  - HOST_RSS_MB: the host's resident memory, MEASURED by the host's own thread (`process.memoryUsage.rss()`, every
  *    50 ms; bth's re-read N1, ruled by VF-PM 2026-11-05 13:26Z; 512 provisional). V8's cap holds the worker's heap
  *    and nothing outside it, and a typed array's backing store is outside it (SES leaves ArrayBuffer and Uint8Array in
- *    every compartment), so a script that keeps them and awaits between them passes HOST_HEAP_MB and every ping. Past
- *    it the host says `memory` and SIGKILLs itself (an exit can wait out one long builtin), and its run ends as V8's
- *    cap's does;
+ *    every compartment), so a script that keeps them and awaits between them passes HOST_HEAP_MB and every ping.
+ *    The memory held to it is the resident size, or the worker's external memory and heap
+ *    (`worker.getHeapStatistics()`), whichever is higher (bth's second re-read R2, VF-PM 13:48Z): under memory
+ *    pressure macOS's resident size leaves out compressed and swapped pages. Past it the host says `memory` and
+ *    SIGKILLs itself (an exit can wait out one long builtin), and its run ends as V8's cap's does. It holds until
+ *    the host leaves, past the run's end (bth's second re-read R1);
  *  - HOST_PING_MS, HOST_PING_MISSES: fieldd pings a live host every HOST_PING_MS, and ends one that misses
  *    HOST_PING_MISSES in a row (a script that spins never yields to its pipe), its run saying it stopped answering. A
  *    script awaiting its calls answers every ping, so a slow step is never mistaken for a spinning script.
