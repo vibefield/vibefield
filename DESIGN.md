@@ -3039,6 +3039,26 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and the room's own state while it imports, in the room's words. Changing a switch asks once more
   only when it turns reading off. Profiles' own folders are read by construction and are listed with
   their profile's name, not a switch.
+- **Settings → Sound** (track SD, SD-D19 and SD-D22 ruled 2026-11-05; built at SD-2; the law is §14): the field's
+  sounds, one page in the Preferences group after Appearance, its rail glyph `sound` (§13), its line "How agents
+  sound when they need you, and when they keep quiet." In order:
+  - **Play sounds**, the page's switch, on from the first run (SD-D19). Its line: "A sound when an agent
+    finishes, asks you something, needs your approval or stops on an error." It is the person's, as every
+    preference here is, so off means off on each of their desktops; and with it off the status item's Quiet row
+    is not drawn.
+  - **The sounds**, one row each in §14's family order: Failed · Done · Question · Approval · All quiet. The mark
+    is not listed: it plays at first launch and at setup's end, nowhere else (SD-D18). A row is the sound's name,
+    what it says (§14's Says, word for word) and **Play**, a quiet button. Play plays the sound now, centred, in
+    the space the theme gives it, through the path an agent's sound takes, so it is as loud as an agent will be.
+    It plays while Quiet holds, because you asked for it, and it is disabled while Play sounds is off.
+  - **Quiet**: **For an hour** · **Until tomorrow**, two quiet buttons. While quiet the row reads "Quiet until
+    8:00 AM." (the time in this Mac's own format) with **Turn sounds back on**.
+  - The foot, in the muted ink: "Sounds follow your Mac's alert volume and the output chosen for sound effects
+    in System Settings → Sound." Until SD-3 lands, a second sentence: "For now they play only while a VibeField
+    window is in front."
+  Where there is no system-sound player, the switch is off and disabled and its line says why: off macOS, "Sounds
+  play on macOS."; in a build made without one, "This build has no sound player."; and where it would not start,
+  "The sound player didn't start." Never a switch that silently does nothing.
 - **The moments** (track AO, AO-D11 and AO-D15 ruled 2026-10-27; AO-L6): a reminder is tied to a
   moment of need and shown once, as one row with its act; **Not now** retires it for good. What was
   retired, and what was acted on, is kept in the setup ledger beside the steps (`setup.moment`), so it
@@ -6309,14 +6329,14 @@ Every functional icon the chrome draws — the line's create and the views track
 pill and its chevron and package, the package circle, the 40px round buttons, the Settings rail, the
 agent rows, the plugins' toolbars (and the edge trays, until HN-8), the phone's composer and keypad, the swarm's
 marks, the desk's bar, the tools in hand and the wrapper around Godview's terminals — is one of
-**64 named glyphs** in one **24-unit box**,
+**65 named glyphs** in one **24-unit box**,
 optical centre at 12,12, live area 2 to 22, drawn in `currentColor` and nothing else. The host says
 the size and the colour, the way it says them for text (§2.4); a glyph never carries state (§2.5,
 I-5) and never a colour of its own. Two constructions, one set:
 
 | Construction | Glyphs | Law |
 |---|---|---|
-| **Instrument** (54) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Instrument** (55) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls; the pill's package at 15) ·
@@ -6332,7 +6352,7 @@ outward · link · return · backspace · ellipsis · start · resume · jump ·
 pen · eraser · today · minimize · maximize · restore · sparkle; navigation: chevron · arrow; places and objects:
 gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
 moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
-mic · scantext · snippets · prompt; signals: message · key · question · exclaim · flame · missing · importing;
+mic · scantext · snippets · prompt · sound; signals: message · key · question · exclaim · flame · missing · importing;
 Studio only: document · layers. *Corrected 2026-10-31 (SP-1d, at its source):* `sparkle` stood here,
 Studio only, after SP-1c gave it to New spark, Chat's create (§8 "The line"). It is an action, and the
 catalog's callout still wears it. **`history`** (2026-10-03, One Frame §13) is the views
@@ -6340,6 +6360,10 @@ track's History cell (§10): a clock turning back, the dial at `globe`'s radius 
 turns it. **`importing`** (2026-10-27, AO-4b) is History's arc (§6, the arc; §8, the views track): a fifth of
 that dial, from twelve o'clock, drawn only over the History cell's glyph while History imports and turned by the
 host, which says the turn and the rest; it is never drawn alone.
+**`sound`** (2026-11-05, track SD, SD-2) is Settings → Sound's rail (§8): a speaker, a short body and its cone
+opening to the right, with two arcs beside the cone for the field's answer. It is an Instrument glyph and the
+desktop's alone: it is not among the phone's picks. The set was 64 until it came, so every "among the 64" in this
+section was true when it was written.
 **`start`** and **`resume`** (2026-10-03, One Frame §13; Session Glyphs' picks of 30 Sep, spawn-T3
 and resume-play-T3) are the line's create in Godview and in History — `start` in both since HN-7,
 `resume` History's until then and the chosen session's act since (§8, the line; §8 "History"): `terminal`'s
@@ -6599,8 +6623,11 @@ sharper), +0.25 for a knock and −0.2 for a muted strike. Approval's knocks are
 **Where it plays.**
 - **In VibeField (SD-D12, SD-D21).** While a VibeField window is in front, through macOS's system-sound path, so
   the sounds follow the alert volume and the "Play sound effects through" device like every other alert on the
-  Mac (whether that path also drives "Flash the screen" is verified at SD-2). The place is baked into the sound at
-  five positions: −60%, −30%, the centre, +30%, +60%.
+  Mac. Each plays as a system sound, never as an alert sound, so it never flashes the screen, and it plays whether
+  or not "Play user interface sound effects" is on, because an agent's state is not an interface sound (S1).
+  *Settled 2026-11-05 (SD-2): this line said "whether that path also drives 'Flash the screen' is verified at
+  SD-2".* The place is baked into the sound at five positions: −60%, −30%, the centre, +30%, +60%. Until SD-3
+  lands, a sound that comes due while no VibeField window is in front is not played; Godview still shows it.
 - **Away (SD-D15).** While no VibeField window is in front, or none is open, an OS notice carries the sound, so
   Focus and the notification settings decide whether it plays. *Lands with SD-3, when §9's notice line moves.*
 - **The phone (SD-D16, SD-D17).** Our sounds, the phone's masters, each with its touch. A question is
@@ -6614,7 +6641,11 @@ sharper), +0.25 for a knock and −0.2 for a muted strike. Approval's knocks are
   one click away.
 - **Quiet (SD-D22).** macOS does not tell an app your Focus, so sounds played inside VibeField cannot follow it
   (the away path's notices can). One click, in the menu bar and in Settings, quiets every sound for an hour or
-  until tomorrow.
+  until tomorrow: 8:00 the next morning, by this Mac's clock. Quiet is the person's, so their desktops go quiet
+  together, and it ends by itself. The status item's row sits above Settings…: **Quiet Sounds**, with **For an
+  Hour** and **Until Tomorrow**; while quiet, **Quiet Until 8:00 AM**, checked (the time in this Mac's own
+  format), and choosing it turns the sounds back on. With Play sounds off (§8 "Settings → Sound") the row is not
+  drawn. A sound or a reminder that comes due while quiet is not played, and is not saved for later.
 
 **Where it lives.** `@vibefield/sound` (`packages/sound`) is this section in code: the field, the voice, the
 spaces, the masters, the family, the touch and the voice policy, with no dependencies, so Electron main, the
