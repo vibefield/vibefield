@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -43,7 +44,12 @@ import {
   STABLE_DMG_ALIAS,
   stableDmgAlias,
 } from "../../../../scripts/release-assets.mjs";
-import { hashPlanes, mergeManifest, planeOf } from "../../../../scripts/release-manifest.mjs";
+import {
+  hashPlanes,
+  mergeManifest,
+  planeOf,
+  ReleaseManifestError,
+} from "../../../../scripts/release-manifest.mjs";
 import {
   capLine,
   computeNotes,
@@ -612,6 +618,125 @@ describe("release-manifest (D11): the planes are computed from bytes", () => {
       "bin/field-native: by its cdhash",
       "bin/field-native: by its bytes (not a Mach-O)",
     ]);
+  });
+
+  // TD-4's strict mode (VF-PM's ruling, 2026-11-05 01:59Z): a SIGNED macOS release refuses a field-native member read by
+  // its bytes, naming each one and why; without the flag (dev, unsigned and non-mac builds) the fallback is unchanged.
+  describe("TD-4: --require-cdhash, the signed release's strict mode", () => {
+    const SCRIPT = join(REPO, "scripts", "release-manifest.mjs");
+    const sha256 = (bytes: string | Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+    /** `fakeApp` with more floor members beside `bin/field-native` (the cell, the sidecar). */
+    const withMembers = (app: string, members: Record<string, string | Uint8Array>) => {
+      for (const [name, bytes] of Object.entries(members))
+        writeFileSync(join(app, "Contents", "Resources", "bin", name), bytes);
+      return app;
+    };
+    const hashCommand = (...argv: string[]) =>
+      spawnSync(process.execPath, [SCRIPT, "hash", ...argv], { encoding: "utf8" });
+
+    it("without the flag, a member that is not signed reads by its bytes: the byte rule's own digest, as before", () => {
+      const planes = hashPlanes(fakeApp("native-1"));
+      expect(planes["field-native"].digest).toBe(sha256(`bin/field-native\0${sha256("native-1")}`));
+      const unsigned = machO("floor code", null).bytes;
+      expect(hashPlanes(fakeApp(unsigned))["field-native"].digest).toBe(
+        sha256(`bin/field-native\0${sha256(unsigned)}`),
+      );
+    });
+
+    it("strict, every member signed: the same planes as without the flag", () => {
+      const app = withMembers(fakeApp(machO("floor code").bytes), {
+        "field-terminal-host": machO("cell code").bytes,
+        "sidecar-slim": machO("sidecar code").bytes,
+      });
+      const strict = hashPlanes(app, undefined, { requireCdhash: true });
+      expect(strict).toEqual(hashPlanes(app));
+      expect(strict["field-native"].members).toEqual([
+        "bin/field-native",
+        "bin/field-terminal-host",
+        "bin/sidecar-slim",
+      ]);
+    });
+
+    it("strict: a member read by its bytes is an error naming it and why, after every member is logged", () => {
+      const app = withMembers(fakeApp(machO("floor code").bytes), {
+        "field-terminal-host": machO("cell code", null).bytes,
+        "sidecar-slim": "#!/bin/sh\nexit 0\n",
+      });
+      const heard: string[] = [];
+      let refused: unknown;
+      try {
+        hashPlanes(app, (line) => heard.push(line), { requireCdhash: true });
+      } catch (error) {
+        refused = error;
+      }
+      expect(refused).toBeInstanceOf(ReleaseManifestError);
+      const message = (refused as Error).message;
+      expect(message).toMatch(/^--require-cdhash: /);
+      expect(message).toContain("bin/field-terminal-host (unsigned)");
+      expect(message).toContain("bin/sidecar-slim (not a Mach-O)");
+      expect(message).not.toContain("bin/field-native (");
+      expect(heard).toEqual([
+        "bin/field-native: by its cdhash",
+        "bin/field-terminal-host: by its bytes (unsigned)",
+        "bin/sidecar-slim: by its bytes (not a Mach-O)",
+      ]);
+      // the same app without the flag: the fallback stands, nothing refused
+      expect(hashPlanes(app)["field-native"].files).toBe(3);
+    });
+
+    it("strict: a plane with no field-native member is refused, never a vacuous pass", () => {
+      const app = fakeApp("native-1");
+      rmSync(join(app, "Contents", "Resources", "bin", "field-native"));
+      expect(() => hashPlanes(app, undefined, { requireCdhash: true })).toThrow(
+        /--require-cdhash: .* has no field-native member/,
+      );
+      expect(hashPlanes(app)["field-native"]).toMatchObject({ files: 0, members: [] });
+    });
+
+    it("the hash command: --require-cdhash exits non-zero naming the member and writes nothing; signed, it writes", () => {
+      const out = join(scratch(), "hashes-mac-arm64.json");
+      const unsignedApp = fakeApp("native-1");
+      // the switch takes no value, wherever it stands among the pairs
+      const refused = hashCommand(
+        "--require-cdhash",
+        "--app",
+        unsignedApp,
+        "--platform",
+        "mac-arm64",
+        "--out",
+        out,
+      );
+      expect(refused.status).toBe(1);
+      expect(refused.stdout).toContain(
+        "release-manifest: field-native bin/field-native: by its bytes (not a Mach-O)",
+      );
+      expect(refused.stderr).toContain("release-manifest: --require-cdhash: ");
+      expect(refused.stderr).toContain("bin/field-native (not a Mach-O)");
+      expect(existsSync(out)).toBe(false);
+      // without the flag, the same app hashes as before
+      const loose = hashCommand("--app", unsignedApp, "--platform", "mac-arm64", "--out", out);
+      expect(loose.status, loose.stderr).toBe(0);
+      expect(JSON.parse(readFileSync(out, "utf8"))).toEqual({
+        platform: "mac-arm64",
+        planes: hashPlanes(unsignedApp),
+      });
+      rmSync(out);
+      const signedApp = fakeApp(machO("floor code").bytes);
+      const passed = hashCommand(
+        "--app",
+        signedApp,
+        "--platform",
+        "mac-arm64",
+        "--out",
+        out,
+        "--require-cdhash",
+      );
+      expect(passed.status, passed.stderr).toBe(0);
+      expect(passed.stdout).toContain(
+        "release-manifest: field-native bin/field-native: by its cdhash",
+      );
+      expect(JSON.parse(readFileSync(out, "utf8")).planes).toEqual(hashPlanes(signedApp));
+    });
   });
 
   it("names the field-native plane's members, resources-relative — the client compares the set (B3)", () => {
@@ -1988,6 +2113,65 @@ esac
         expect(calls).toEqual(["pfctl -s info"]);
         expect(readdirSync(dir)).not.toContain("rules");
       }
+    },
+  );
+
+  // TD-4's strict mode (VF-PM's ruling, 2026-11-05 01:59Z) rides the SIGNED macOS path alone: the hash step runs on both
+  // paths, its env says "true" only under the signed package's own condition (on a macOS runner, as the TCP step), and
+  // its shell passes --require-cdhash only then. The workflow's real shell runs here with `node` stubbed.
+  it.each([
+    ["true", true],
+    ["", false],
+  ])(
+    "passes --require-cdhash to the hash step on the signed macOS path alone (SIGNED_MAC=%j)",
+    (signedMac, strict) => {
+      const steps = stepsOf("build");
+      const step = steps.find((entry) => entry.name === "Hash the planes (D11)");
+      expect(step).toBeDefined();
+      expect(step!.text).not.toMatch(/\n {8}if:/);
+      expect(
+        steps.find((entry) => entry.name === "Package, signed (J4 — the Apple credentials exist)")
+          ?.text,
+      ).toMatch(/\n {8}if: vars\.VIBEFIELD_MAC_SIGNING == 'true'\n/);
+      expect(step!.text).toMatch(
+        /\n {10}SIGNED_MAC: \$\{\{ runner\.os == 'macOS' && vars\.VIBEFIELD_MAC_SIGNING == 'true' && 'true' \|\| '' \}\}\n/,
+      );
+      expect(step!.text).toMatch(
+        / --out "release-build\/hashes-\$PLATFORM\.json" \$\{SIGNED_MAC:\+--require-cdhash\}\n/,
+      );
+      // the flag is on this one call and nowhere else in the workflow
+      expect(yml.split("--require-cdhash").length - 1).toBe(1);
+      const dir = scratch();
+      mkdirSync(join(dir, "bin"));
+      mkdirSync(join(dir, "apps", "desktop", "release"), { recursive: true });
+      writeFileSync(join(dir, "apps", "desktop", "release", "latest-mac.yml"), "unsigned feed");
+      writeFileSync(join(dir, "bin", "node"), '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$NODE_ARGS"\n', {
+        mode: 0o755,
+      });
+      const shell = step!.text.split("        run: |\n")[1]!.replace(/^ {10}/gm, "");
+      execFileSync("bash", ["-euc", shell], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+          PLATFORM: "mac-arm64",
+          OUT: "mac-arm64",
+          SIGNED_MAC: signedMac,
+          NODE_ARGS: join(dir, "node-args"),
+        },
+      });
+      expect(readFileSync(join(dir, "node-args"), "utf8").trim().split("\n")).toEqual([
+        "scripts/release-manifest.mjs",
+        "hash",
+        "--app",
+        "apps/desktop/release/mac-arm64/VibeField.app",
+        "--platform",
+        "mac-arm64",
+        "--out",
+        "release-build/hashes-mac-arm64.json",
+        ...(strict ? ["--require-cdhash"] : []),
+      ]);
+      expect(readdirSync(join(dir, "release-build"))).toEqual(["latest-mac.yml"]);
     },
   );
 

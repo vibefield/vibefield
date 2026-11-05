@@ -20,12 +20,18 @@
 // keeps the byte rule (`bin/<name>\0<sha256>`; the other planes' every line). The rule is ONE copy, main's
 // `code-directory.mjs`, which the client's `native-plane.ts` reads too. `hash` says which way each member was read.
 //
+// TD-4's strict mode (VF-PM's ruling, 2026-11-05 01:59Z): `hash --require-cdhash` REFUSES a field-native member read by
+// its bytes, naming each such member and why, and exits non-zero before it writes the hashes. The release workflow
+// passes it on the signed macOS path alone: there every floor member is signed, so a byte read means the signature was
+// not read whole, and a silent fallback would read every release touched again. Without the flag (dev, unsigned and
+// non-mac builds) the fallback stands as before.
+//
 // AU-6 (AU-D10 A; LC-19): `merge --notes` writes the release's notes (`scripts/release-notes.mjs`'s output) INTO the
 // manifest before the sign step signs it, so they ride under its one `release` signature: no new signature, no new key.
 // A notes file that is absent (a first release of its channel) leaves the field out.
 //
 // usage: node scripts/release-manifest.mjs hash --app <VibeField.app | unpacked dir> --platform <mac-arm64|…>
-//          --out <platform-hashes.json>
+//          --out <platform-hashes.json> [--require-cdhash]
 //        node scripts/release-manifest.mjs merge --hashes <a.json,b.json,…> --version <v> --tag <t> --channel <c>
 //          --commit <sha> [--previous <previous release-manifest.json>] [--notes <notes.json>]
 //          --out <release-manifest.json>
@@ -90,13 +96,16 @@ function walk(root, dir, out) {
  * A line's path is resources-relative for a file inside the resources directory, app-relative otherwise; the
  * field-native plane also names its members (sorted), each line by `code-directory.mjs` (TD-4: a signed Mach-O by its
  * cdhash).
- * `log` hears how each field-native member was read. */
-export function hashPlanes(app, log = () => {}) {
+ * `log` hears how each field-native member was read. `requireCdhash` (TD-4's strict mode, a signed macOS release): a
+ * field-native member read by its bytes, or a plane with no member at all, is a ReleaseManifestError naming each member
+ * and why — thrown after every member is read and logged, so the build log shows the whole plane. */
+export function hashPlanes(app, log = () => {}, { requireCdhash = false } = {}) {
   const resources = resourcesDirOf(app);
   const files = [];
   walk(app, app, files);
   const lines = { shell: [], fieldd: [], "field-native": [] };
   const nativeMembers = [];
+  const byBytes = [];
   for (const path of files) {
     const inResources = path.startsWith(resources + sep);
     const rel = relative(inResources ? resources : app, path)
@@ -112,10 +121,19 @@ export function hashPlanes(app, log = () => {}) {
       lines[plane].push(lineOf(rel, member));
       nativeMembers.push(rel);
       log(`${rel}: by ${member.by === "cdhash" ? "its cdhash" : `its bytes (${member.why})`}`);
+      if (member.by === "bytes") byBytes.push(`${rel} (${member.why})`);
     } else {
       lines[plane].push(`${rel}\0${createHash("sha256").update(content).digest("hex")}`);
     }
   }
+  if (requireCdhash && nativeMembers.length === 0)
+    throw new ReleaseManifestError(
+      `--require-cdhash: ${app} has no field-native member to read by its CodeDirectory`,
+    );
+  if (requireCdhash && byBytes.length > 0)
+    throw new ReleaseManifestError(
+      `--require-cdhash: a signed release reads every field-native member by its CodeDirectory (TD-4), never by its bytes — read by its bytes: ${byBytes.join("; ")}`,
+    );
   const planes = {};
   for (const plane of PLANES) {
     planes[plane] = {
@@ -158,12 +176,17 @@ export function mergeManifest({ version, tag, channel, commit, builds, previous,
   };
 }
 
+/** The flags that take no value (TD-4's strict mode); every other flag takes the argument after it. */
+const SWITCHES = new Set(["require-cdhash"]);
+
 function args(argv) {
   const out = {};
-  for (let i = 0; i < argv.length; i += 2) {
+  for (let i = 0; i < argv.length; i++) {
     const key = argv[i];
     if (!key?.startsWith("--")) throw new ReleaseManifestError(`unexpected argument "${key}"`);
-    out[key.slice(2)] = argv[i + 1];
+    const name = key.slice(2);
+    if (SWITCHES.has(name)) out[name] = true;
+    else out[name] = argv[++i];
   }
   return out;
 }
@@ -175,8 +198,10 @@ if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
     if (command === "hash") {
       if (!a.app || !a.platform || !a.out)
         throw new ReleaseManifestError("hash needs --app, --platform and --out");
-      const planes = hashPlanes(a.app, (line) =>
-        console.log(`release-manifest: field-native ${line}`),
+      const planes = hashPlanes(
+        a.app,
+        (line) => console.log(`release-manifest: field-native ${line}`),
+        { requireCdhash: a["require-cdhash"] === true },
       );
       writeFileSync(a.out, `${JSON.stringify({ platform: a.platform, planes }, null, 2)}\n`);
       console.log(`release-manifest: hashed ${a.app} for ${a.platform}`);
