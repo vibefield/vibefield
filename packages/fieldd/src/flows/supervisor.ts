@@ -323,7 +323,11 @@ class FlowHostChild {
         if (this.#isReady) return;
         this.#isReady = true;
         clearTimeout(this.#readyTimer);
-        this.#ready(message.pid);
+        // the child fieldd started, never the pid a message says (bth's review finding 9)
+        this.#ready(this.#proc.pid);
+        // a run fieldd already ended (a Stop before READY) is sent no script and is never pinged: its child is on its
+        // way out under the shutdown's grace
+        if (this.#chosen !== undefined) return;
         this.#send({
           t: "run",
           script: this.#script,
