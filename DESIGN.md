@@ -1099,6 +1099,10 @@ launch, §8): a **breath** — `ease-in-out`, alternate, 1.1s, scale 1 → 1.06 
 **travel** on the island curve (the launch's ripple, 1.1s). Both stop the moment the fact
 arrives, and neither runs under reduced motion.
 
+*Since SP-1e2 (2026-11-05; SPE-Q35 (b), on James's plate RU-18):* a Working row's mark on Chat's crew card (§8
+"Chat's crew card") is a breath on its timing that breathes ink, not scale: a ring 10 round scaled by 1.06 moves less
+than a pixel. It stops when the row's state changes, and stands still under reduced motion.
+
 **Motion laws:**
 - **M1 — One element morphs.** A role change (the name pill into its sheet, the package circle
   into the same sheet, the line's plus into ✕) is one element transitioning; never
@@ -2014,6 +2018,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       filters them, so a row keeps its handle while you type, and a chip keeps the handle it was taken with.
       - *Added 2026-11-02 (the handle):* the needs-you card in the thread names a session by this handle, the same
         rule read for the same spark, so the card and @ never name one session two ways (§8 "Chat's thread").
+      - *Added 2026-11-05 (SP-1e2; CO-Q3 (a)):* so does the crew card, each member by this rule read for its spark
+        (§8 "Chat's crew card").
     - **Start an agent**, above it: each agent signed in under one of the spark's profiles, the same list its
       `agents_available` tool answers (TL-D2). Each row is 36 tall: the agent's mark at 20, then the catalog's label,
       as that tool says it. When the spark has more than one profile there is a row for each agent and profile, and
@@ -2214,6 +2220,101 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (§10).
   - **The rule** — 1 × 18 in the strong hairline, 8 after create and 6 before the draft — was the
     line's own, and left with it.
+- **Chat's crew card — the agents Vela started, at their time in its thread** (SP-1e2, track CO; RU-18, James's plate,
+  CH-D2 A, 2026-10-29 and 10-30, on the Sparks page's `crewCard`, `sparks/src/kit.js`, and its `.k-card` in `vf.css`;
+  the CO round's page, `Druyc3Ua6BWycRe1SzzeCz`, ruled 2026-11-04 23:13Z: SPE-Q2 (a), Q5 (a), Q6′ (b), Q8 (a), Q14
+  (a), Q28 (b), Q35 (b), CO-Q3 (a), CO-Q4 (b), TH-Q7 (b) and TH-Q26 (a), James's; SPE-Q3, Q4, Q7, Q15 and Q16 by
+  VF-PM 2026-11-04 04:31Z, and SPE-Q25…Q40 at their leans 23:22Z; the plan `step0-sp1e2.md`). When Vela starts agents,
+  Chat shows them as one card in its thread, at the moment it started them, and keeps their state live on it: who, on
+  what model, and whether each is starting, working, waiting on you, done or ended. It is Vela's work reported by
+  VibeField, drawn by Chat, never by the spark (CP-D12). It is the first of the live cards (CH-D2) that Chat's thread
+  said SP-1e would bring, and it stands in the thread's flow (§8 "Chat's thread", TH-1).
+  *Corrected 2026-11-05 (SPE-Q4; ER-C38):* Chat's thread at SP-1d named this data "a job that groups a spark's
+  spawns". It is a **crew**. TH-1 rewrites that sentence whole, so the correction is said here, beside the card.
+  - **A crew** is the agents Vela starts in one stretch of its own work (SPE-Q3 = RU-6, VF-PM): every agent its
+    session starts while its run works, until the run is next idle with none of its asks to VibeField in flight, is one
+    crew and one card. Two asks in one turn make one card; the agents a later turn starts (a wake's, say) make a second
+    card at its own time. A crew is only ever its own spark's.
+  - **Where it stands** (SPE-Q2 (a), James): in the flow, at its time, as one of Vela's items: beside Vela's face (the
+    face leads once per run of Vela's rows), 40 in by a message's lead and its gap, under its act line. It covers
+    nothing. A member's ask is the needs-you card's, held at the foot (TH-Q26 (a)) in CO-Q12 (b)'s order, and both
+    stand. A crew stands in the run it was made in, so an earlier run's crews stand in that run's conversation
+    (TH-Q14 (b)).
+  - **Its act line,** "Started 4 agents · Opus 5.5 · high" (`agents` 13), is VibeField's own quiet line in the flow:
+    an `act` line in the spark's transcript, written by fieldd's talk room at the crew's first start and replaced in
+    place as members join, carrying the crew's id (SPE-Q39 (a)). The card hangs under it by that id. The starts are
+    VibeField's own tools, so they leave the turn's "Used n tools" (TH-Q1 (a)+(ii)) and "Started 4 agents" stands
+    alone. When the members differ in model or effort it says "Started 4 agents".
+  - **The card** wears the needs-you card's chrome as it is once it waits on no one: solid chrome, corners 16, the
+    island shadow, ringed by the strong hairline, and never the orange ring, since a crew waits on no one. Inside
+    stand the plate's three parts, a hairline (`--vf-hairline`) between each:
+    - **the head,** 44 tall, padded 0 14 0 16: "4 agents" in 13.5/600 primary ink, then " · Opus 5.5 · high" in its
+      regular weight in tertiary ink, the members' model label and effort as their board rows name them; "4 agents"
+      alone when they differ. At its end, 12/500 in tertiary ink, the count, then 6, then the ring;
+    - **the rows,** padded 4 8, one per member, in the order they started, as @ numbers them;
+    - **the foot,** padded 6 8 8: **Open in Godview** (`panes` 14), the kit's quiet button at the needs-you card's act
+      size (28 tall, corners 14, padded 0 12, 12.5/500), its glyph, then 6, then its word. It opens Godview (RU-7).
+      After it, at the foot's end, one line at most, 12 regular in tertiary ink (below).
+  - **The count and the ring** (SPE-Q31 (a)): "2 of 4 done"; "1 of 4 done · 1 ended" once one has ended; `check` 13
+    and "All done", with no ring, when every member is Done or Ended and one is Done; "All ended" when every member
+    ended. Ended is never counted done. The ring is 16 round, drawn from the top: a track of 2.5 in the strong
+    hairline, and over it 2.5 in `--vf-ink-healthy` with round caps, filled by the members no longer at work. It eases
+    400ms on `--vf-ease-island` at each change, and changes at once under reduced motion.
+  - **A row** is 38 tall, padded 0 8, corners 10, its parts 10 apart: the agent's mark at 18, from the agent catalog
+    by the run's own agent id (R23, as @'s rows read it); the member's name, 12.5/500 mono in primary ink; its model
+    label and effort, "Opus 5.5 · high", 13 regular in secondary ink, cut with "…" where the row is narrow; and at its
+    end its state, 12/500, at least 96 wide and set to the right:
+    - **Starting**, secondary, until its first turn (TU-1's fact);
+    - **Working**, in `--vf-ink-healthy`, after its mark, which breathes (Motion, below);
+    - **Needs you**, @'s word, in `--vf-ink-attention`, while it waits on you; its ask is the card at the foot;
+    - **Done**, secondary, after `check` 12, when it is idle with nothing left in its input. An agent idle between
+      two tasks it was given stays Working (SPE-Q32 (a)), so the count never goes backwards;
+    - **Ended**, secondary, once its run has ended (SPE-Q14 (a)). It stays, named as fieldd named it at its end
+      (CO-Q4 (b)), and takes no press: there is no pane to show.
+    No task words (SPE-Q5 (a)): your bubble and Vela's words say the tasks, and a done row carries no note.
+  - **Its names** are @'s (CO-Q3 (a)). A member is named by its handle, as @ names it in this thread (§8 "Chat's
+    composer", two sessions with one name): "vibe-field", "vibe-field·2". They renumber live, as @'s do. Godview's
+    Stop ends an agent (§8 "Godview's terminal deck"), and an ended agent leaves @, so its namesakes renumber while
+    you read. A member @ offers no handle is named as fieldd names a run, as the needs-you card names one.
+  - **A press on a row** shows that agent's pane in Godview (RU-7), by the one reveal Chat's head's Jump to and the
+    needs-you card's Show use (TH-2): the row is read again at the press, placed as every door places a session
+    (GV-D4, §8 "Godview's terminal deck"), and never said to be shown with no terminal on this desktop's floor. The
+    line's note says "Jumped to its pane" (TH-Q7 (b)), or "Could not jump — ‹why›". Under the pointer a row that takes
+    a press takes `--vf-fill`.
+  - **Kept** (SPE-Q6′ (b), James). The card stays at its time after its agents end, after their panes close, and
+    after a reload, and "1 of 4 done" holds: fieldd keeps each crew, its members and their ends in the spark's kept
+    record. A spark keeps its newest 256 crews (SPE-Q28 (b), James; provisional until measured): an older crew's card
+    leaves, and its act line stands alone. Crews made before SP-1e2 have no card.
+  - **One line at the foot's end,** when one holds, the first that holds:
+    - "VibeField can't read Vela's crews right now", when its crews can't be read. The card stands on the board's rows
+      alone, its live members found by their crew, and its count is a bound, "2 still running", with no ring;
+    - "VibeField can't read what's running right now" (@'s sentence), when the board can't be read. The rows keep
+      their names and lose their states;
+    - "Vela is asleep — it hears these when it wakes", while Vela sleeps and a member has not ended (CP3-D7 A: its
+      wakes wait for its next open; SPE-Q24).
+    A fieldd that keeps no crews draws the board-only card with the bound and no line. Never a blank.
+  - **Motion.** The card comes with its act line, as the flow's lines land, with no entrance of its own. Its rows and
+    its ring change in place, and a member that joins takes its row in place. A Working row's mark breathes (SPE-Q35
+    (b), James's plate): the plate's spinner drawn as §6's breath, a whole ring 10 round of 1.5 in the word's ink,
+    breathing its ink from 35% to all of it on the breath's timing (1.1s, alternate, `ease-in-out`), since a ring that
+    small scaled by 1.06 moves less than a pixel. It stops when the row's state changes, and under reduced motion it
+    stands still, whole.
+  - **The keyboard and its names.** The rows that take a press, then Open in Godview, are buttons in the card's
+    order, each with the kit's focus ring; an Ended row is not one. The card is a group named by its head, "4 agents ·
+    Opus 5.5 · high, 2 of 4 done", and a row is named "vibe-field·2, Opus 5.5, high, Working".
+  - **A held start** (SPE-Q38 (a)): a start Vela asked past its limit is the needs-you card's (Allow one more), never
+    a row. Allowed, it joins the crew it was asked in, even after that crew has closed, and its row stands at that
+    card's time.
+  - **The head's second line** (RU-19) is the slice's that places it (TH0-Q12 (a)). Placed, it says "2 of 4 done" for
+    the newest crew at work, read from this card's door, and nothing of crews when none works (SPE-Q36).
+  - **Where it comes from** (the seam's page, `docs/agent-plane/api.html`). Each member's run carries its crew's id
+    on its origin, so its board row and `agents_list` say it; fieldd keeps each crew in the spark's kept record; and
+    Chat reads them on a door of their own beside the sparks' doors, `compose.sparks.crews.subscribe` (the person's,
+    as the needs-you queue's is): ids, times, agent ids, folder names and model labels, never words. The card takes
+    the record's members first, then any board row whose crew is this one and which the record lacks.
+  - *Not here:* Stop all and Pause all (SP-1e4, owed: SPE-Q8 (a), James; SPE-Q25, SPE-Q26), a row's task words
+    (SPE-Q5 (a)), answering a member's ask on the card (AR-6), a member's face in Godview (TH-3; TH-Q20 (b)+(i)), the
+    watch card (SP-1e3), the phone (PC).
 - **The hand — the clipboard you can see** (Cards in Hand: HN-D1…HN-D10 ruled by James 2026-10-29,
   all at their leans — HN-D1 his own pick on the page; the record is `thinking-cards-in-hand.md`;
   built at HN-1, HN-2 and HN-4; it replaced the clipboard's edge tray): every copy made in VibeField,
@@ -6022,6 +6123,16 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   > name a session are now the fallback's, for a session @ offers no handle; the last row is added for one it offers
   > (§8 "Chat's thread", the eyebrow's note). The held spawn's "Claude Code in vibe-field" names the agent asked for,
   > not a session, so it keeps its words.
+- The crew card (SP-1e2; §8 "Chat's crew card"):
+  - its act line, "Started 4 agents · Opus 5.5 · high" ("Started 1 agent · …"), and "Started 4 agents" when its
+    members differ;
+  - its head, "4 agents · Opus 5.5 · high", and its count, "2 of 4 done" · "1 of 4 done · 1 ended" · "All done" · "All
+    ended", or the bound, "2 still running";
+  - its rows' states, Starting · Working · Needs you · Done · Ended, and a row's name, "vibe-field·2, Opus 5.5, high,
+    Working";
+  - its foot, "Open in Godview", and a row's press, "Jumped to its pane" · "Could not jump — …";
+  - its line, "VibeField can't read Vela's crews right now" · "VibeField can't read what's running right now" (@'s) ·
+    "Vela is asleep — it hears these when it wakes".
 - A notify on the status line: "Vela — the build is green".
 - A row's lasting mark, in its accessible name after the status word: "unread" · "needed you" ("Asleep, needed you",
   "Ready, unread").
@@ -6419,7 +6530,9 @@ create is a bare plus). Their Hardware records are the page's T4 column, drawn a
 **Send** (Chat's composer, §8) needs no glyph of its own: it is `arrow`, as drawn (up). No `attach`:
 @ is typed (FC-D1). Chat's starters (§8 "Chat's thread") wear `agents`, `panes` and `duplicate`, already
 among the 64. The needs-you card (§8 "Chat's thread") needs none of its own either: its answered line
-wears `check`, and `exclaim` when the act was not done. **The hand's indexes** (Cards in Hand, HN-D1,
+wears `check`, and `exclaim` when the act was not done. Nor does the crew card (§8 "Chat's crew card", SP-1e2): its
+act line wears `agents`, its foot's Open in Godview `panes`, and Done and All done `check`, all among the 64; its
+Working mark is a ring, never a glyph. **The hand's indexes** (Cards in Hand, HN-D1,
 2026-10-29): a card prints its kind's glyph twice, as a playing card prints its rank — `snippets` (text) ·
 `capture` (a picture; the line's snapshot wears it too) · `code` (a file) · `agents` (an agent) ·
 `terminal` · `message` — in the card's index ink, never a colour of its own (§5). `clipboard` is the

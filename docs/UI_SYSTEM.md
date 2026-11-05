@@ -143,6 +143,15 @@ The catalog currently mounts these shipping views directly:
   own holds a held send to the second session in a folder of that name (vibe-field·2), and the
   agent's ask, from a run @ does not offer, says fieldd's name. Its acts answer nothing outside the
   plate
+- Chat's crew card (SP-1e2, DESIGN.md §8 "Chat's crew card"): in a specimen of its own
+  (`CrewCardPreview`), the shipping `CrewCardView` inside the shipping thread view, over the
+  product's own reading (`crewCardOf`) of fixture crews, board rows and Agent Profiles, its names by
+  the product's own `sessionHandlesOf` (`chat-fixtures.ts`), never a copy of its markup or CSS —
+  starting, "1 of 4 done" with a member's ask held at the foot, "All done", a member ended and the
+  others renumbered, after a reload, its crews unreadable (the bound), the board unreadable, Vela
+  asleep with its line, and two crews in one thread at their times — and the card live, a fixture
+  door stepping a crew from starting to "All done", as the needs-you card's live plate does. Its
+  rows and its foot open nothing outside the plate
 - the line (One Frame FR-2; shortened by Cards in Hand, HN-2): `ComposerLineView` in every state the
   Cards in Hand page's line plates draw — at rest, the snapshot under the pointer, in flight and
   waiting with no capture door, Objects out, Godview's New terminal, History's New terminal in the
