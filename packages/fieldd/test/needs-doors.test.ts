@@ -27,6 +27,7 @@ import {
   NeedsAnswerResult,
   NeedsListResult,
   type NeedsRecord,
+  RECORD_STORES,
   SOCKETS,
   SPARK_KEPT_FILE,
   SPARK_KEPT_FORMAT,
@@ -34,7 +35,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
-import { RecordSigner } from "../src/signed-record";
+import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { NeedsStore } from "../src/tool-plane/rooms/you/store";
 import { SparkStore } from "../src/tool-plane/sparks";
@@ -443,4 +444,54 @@ describe("the needs-you queue's doors (CP3-D6 A)", () => {
     expect(sub.subId).toMatch(/^ps-/);
     expect(sub.snapshot).toEqual({ notices: [] });
   });
+});
+
+describe("item 172 — a store fieldd cannot read never stops its boot (EL7; DESIGN.md §9)", () => {
+  it("B172 · same-uid files where the needs, inputs, spark-files and sparks folders are: fieldd boots, and needs.list and compose.sparks.list refuse UNAVAILABLE in fieldd's words", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-needs-doors-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+    for (const row of [
+      LAYOUT.NEEDS_DIR,
+      LAYOUT.AGENT_INPUTS_DIR,
+      LAYOUT.SPARK_FILES_DIR,
+      LAYOUT.SPARKS_DIR,
+    ]) {
+      mkdirSync(join(dataDir, ...row.slice(0, -1)), { recursive: true, mode: 0o700 });
+      writeFileSync(join(dataDir, ...row), "not a folder", { mode: 0o600 });
+    }
+    let daemon: FielddDaemon | undefined;
+    const booted = await boot(dataDir).then(
+      (d) => {
+        daemon = d;
+        return "booted";
+      },
+      (err: Error) => err.message,
+    );
+    expect(booted).toBe("booted");
+    const one = await window(daemon!, ["sparks.use"], "one");
+    const needs = await one.callErr("needs.list", {});
+    expect(needs.message).toBe(UNREADABLE_WORDS.needs);
+    expect(needs.data).toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: false,
+      details: { service: RECORD_STORES.SERVICE_NEEDS, state: RECORD_STORES.STATE_UNREADABLE },
+    });
+    const sparks = await one.callErr("compose.sparks.list", {});
+    expect(sparks.message).toBe(UNREADABLE_WORDS.sparks);
+    expect(sparks.data).toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: RECORD_STORES.SERVICE_COMPOSE, state: RECORD_STORES.STATE_UNREADABLE },
+    });
+    // nothing was moved or written over: each file is where the agent put it
+    for (const row of [
+      LAYOUT.NEEDS_DIR,
+      LAYOUT.AGENT_INPUTS_DIR,
+      LAYOUT.SPARK_FILES_DIR,
+      LAYOUT.SPARKS_DIR,
+    ])
+      expect(readFileSync(join(dataDir, ...row), "utf8")).toBe("not a folder");
+  }, 60_000);
 });

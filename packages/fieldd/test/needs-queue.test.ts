@@ -92,6 +92,7 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
         wake: (run, fact, item) => {
           woken.push([run, fact]);
           wokenItems.push([run, item]);
+          return true;
         },
         enqueue: (run, text, from) => {
           ctl.duringEnqueue?.();

@@ -26,6 +26,8 @@ export interface SparkKeptStoreOptions {
   readonly keyPath: string;
   readonly logger?: Logger | undefined;
   readonly now?: () => Date;
+  /** item 172 — the record file's read, a seam for a disk that does not answer (tests) */
+  readonly readFile?: ((path: string) => string) | undefined;
 }
 
 export class SparkKeptStore {
@@ -36,7 +38,11 @@ export class SparkKeptStore {
   constructor(private readonly opts: SparkKeptStoreOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
     this.#now = opts.now ?? (() => new Date());
-    this.#signer = new RecordSigner({ keyPath: opts.keyPath, logger: this.#logger });
+    this.#signer = new RecordSigner({
+      keyPath: opts.keyPath,
+      logger: this.#logger,
+      readFile: opts.readFile,
+    });
   }
 
   /** One spark's record, when it verifies. */
@@ -55,6 +61,12 @@ export class SparkKeptStore {
         const record = this.#read(spark);
         return record !== undefined ? [record] : [];
       });
+  }
+
+  /** Item 172 — the boot's one read: how many records verify. It never throws: a store that cannot be read says so
+   * and fieldd boots on. */
+  restore(): number {
+    return this.list().length;
   }
 
   /** Re-read the spark's record (a fresh one when it has none), apply `fn`, and keep what it answers, signed and
@@ -87,6 +99,7 @@ export class SparkKeptStore {
     if (!existsSync(path) || !statSync(path).isFile()) return undefined;
     const read = this.#signer.read(path);
     if ("why" in read) return this.#setAside(path, spark, read.why);
+    if (!("body" in read)) return undefined;
     const parsed = SparkKeptRecord.safeParse(read.body);
     if (!parsed.success) return this.#setAside(path, spark, "unreadable");
     // signed for another spark: a record copied into this spark's folder

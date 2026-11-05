@@ -19,6 +19,8 @@ export interface NeedsStoreOptions {
   /** LAYOUT.NEEDS_KEY_FILE, absolute */
   readonly keyPath: string;
   readonly logger?: Logger | undefined;
+  /** item 172 — the record file's read, a seam for a disk that does not answer (tests) */
+  readonly readFile?: ((path: string) => string) | undefined;
 }
 
 export class NeedsStore {
@@ -27,7 +29,11 @@ export class NeedsStore {
 
   constructor(private readonly opts: NeedsStoreOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
-    this.#signer = new RecordSigner({ keyPath: opts.keyPath, logger: this.#logger });
+    this.#signer = new RecordSigner({
+      keyPath: opts.keyPath,
+      logger: this.#logger,
+      readFile: opts.readFile,
+    });
   }
 
   /** A new item's id: fieldd's, never reused. */
@@ -80,6 +86,7 @@ export class NeedsStore {
   #read(path: string, id: string): NeedsRecord | undefined {
     const read = this.#signer.read(path);
     if ("why" in read) return this.#setAside(path, read.why);
+    if (!("body" in read)) return undefined;
     const parsed = NeedsRecord.safeParse(read.body);
     if (!parsed.success) return this.#setAside(path, "unreadable");
     // signed for another item: a record copied into this id's name

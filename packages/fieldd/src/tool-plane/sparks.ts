@@ -31,6 +31,8 @@ export interface SparkStoreOptions {
   readonly dir: string;
   readonly keyPath: string;
   readonly logger?: Logger;
+  /** item 172 — the record file's read, a seam for a disk that does not answer (tests) */
+  readonly readFile?: ((path: string) => string) | undefined;
 }
 
 export class SparkStore {
@@ -39,7 +41,11 @@ export class SparkStore {
 
   constructor(private readonly opts: SparkStoreOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
-    this.#signer = new RecordSigner({ keyPath: opts.keyPath, logger: this.#logger });
+    this.#signer = new RecordSigner({
+      keyPath: opts.keyPath,
+      logger: this.#logger,
+      readFile: opts.readFile,
+    });
   }
 
   /** A new spark's id: never reused, never its name. */
@@ -94,6 +100,7 @@ export class SparkStore {
   #read(path: string): SparkRecord | undefined {
     const read = this.#signer.read(path);
     if ("why" in read) return this.#setAside(path, read.why);
+    if (!("body" in read)) return undefined;
     const parsed = SparkRecord.safeParse(read.body);
     return parsed.success ? parsed.data : this.#setAside(path, "unreadable");
   }

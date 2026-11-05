@@ -162,6 +162,7 @@ describe("a signed file read back: why it is not served", () => {
     expect(signer.read(path)).toEqual({ why: "unreadable" });
     writeFileSync(path, "null", { mode: 0o600 });
     expect(signer.read(path)).toEqual({ why: "unreadable" });
-    expect(signer.read(join(root, "fieldd", "absent.json"))).toEqual({ why: "unreadable" });
+    // item 172: nothing there is absent, never a record to set aside (record-stores.test.ts R3)
+    expect(signer.read(join(root, "fieldd", "absent.json"))).toEqual({ absent: true });
   });
 });

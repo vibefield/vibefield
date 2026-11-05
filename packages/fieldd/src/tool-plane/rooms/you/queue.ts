@@ -246,6 +246,10 @@ export class NeedsQueue implements TalkHolds {
     this.#settle = undefined;
   }
 
+  /** Item 172 — throws UNAVAILABLE {service: "needs"} in fieldd's words while the store could not be read at boot; the
+   * doors and the verbs that keep a record ask it first. */
+  readable(): void {}
+
   /** The open items, oldest asked first, whole. */
   list(): NeedsItem[] {
     const open = [...this.#records.values()]

@@ -1,8 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
-import { canonicalJson } from "@vibefield/contracts";
+import { canonicalJson, RECORD_STORES } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { RpcCallError } from "./native-link";
 
 // The one record signer (CP-3; LEANS P3). fieldd keeps records it later acts on in files a same-uid agent can write.
 // Each record carries an HMAC-SHA256 over its canonical JSON (contracts' one form), keyed by a secret made once per
@@ -32,23 +33,59 @@ const HEX_32_BYTES = /^[0-9a-f]{64}$/i;
 /** Why a signed file is not served. */
 export type SetAsideWhy = "exposed" | "unsigned" | "forged" | "unreadable";
 
-/** A signed file read back: its body without the signature, or why it must be set aside. */
-export type SignedRead = { readonly body: Record<string, unknown> } | { readonly why: SetAsideWhy };
+/** A signed file read back: its body without the signature; why it must be set aside (it is not a record); the
+ * errno of a disk that did not answer (item 172: left where it is, never set aside); or nothing there. */
+export type SignedRead =
+  | { readonly body: Record<string, unknown> }
+  | { readonly why: SetAsideWhy }
+  | { readonly unavailable: string }
+  | { readonly absent: true };
+
+/** Item 172 — fieldd's words when a store cannot read what it keeps (DESIGN.md §9 "What VibeField keeps, when it
+ * cannot read it"): never a path or an error's name. */
+export const UNREADABLE_WORDS = {
+  sparks: "VibeField can't read the sparks it keeps; nothing was changed",
+  needs: "VibeField can't read what waits on you; nothing was changed",
+  inputs: "VibeField can't keep words for its sessions; nothing was sent",
+} as const;
+
+/** Item 172 — a store that cannot read what it keeps: UNAVAILABLE {service, state: RECORD_STORES.STATE_UNREADABLE}, in
+ * fieldd's words. Retryable where the store reads at each ask; not where it read once, at boot. */
+export function recordsUnreadable(
+  service: string,
+  words: string,
+  retryable: boolean,
+): RpcCallError {
+  return new RpcCallError("UNAVAILABLE", words, retryable, {
+    service,
+    state: RECORD_STORES.STATE_UNREADABLE,
+  });
+}
+
+/** Item 172 — the format a newer VibeField wrote a record in, when it is above this build's own (`own`): such a record
+ * is kept where it is for that VibeField, never served and never written over. */
+export function newerFormat(_body: Record<string, unknown>, _own: number): number | undefined {
+  return undefined;
+}
 
 export interface RecordSignerOptions {
   /** the secret's file (a LAYOUT `*_KEY_FILE` row), made once, 0600, in a 0700 directory */
   readonly keyPath: string;
   readonly logger?: Logger | undefined;
+  /** a record file's read (utf8): a seam for a disk that does not answer (EMFILE), in tests */
+  readonly readFile?: ((path: string) => string) | undefined;
 }
 
 export class RecordSigner {
   #key: Buffer | undefined;
   readonly #keyPath: string;
   readonly #logger: Logger;
+  readonly #readFile: (path: string) => string;
 
   constructor(opts: RecordSignerOptions) {
     this.#keyPath = opts.keyPath;
     this.#logger = opts.logger ?? createNoopLogger();
+    this.#readFile = opts.readFile ?? ((path) => readFileSync(path, "utf8"));
   }
 
   /** HMAC-SHA256 over the record's canonical JSON, hex. */
@@ -67,10 +104,7 @@ export class RecordSigner {
   read(path: string): SignedRead {
     try {
       if (exposed(path)) return { why: "exposed" };
-      const { signature, ...body } = JSON.parse(readFileSync(path, "utf8")) as Record<
-        string,
-        unknown
-      >;
+      const { signature, ...body } = JSON.parse(this.#readFile(path)) as Record<string, unknown>;
       if (typeof signature !== "string") return { why: "unsigned" };
       return this.verifies(body, signature) ? { body } : { why: "forged" };
     } catch {

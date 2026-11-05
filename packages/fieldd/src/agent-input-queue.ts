@@ -84,6 +84,8 @@ export interface InputQueueOptions {
   ): void;
   readonly logger?: Logger;
   readonly now?: () => Date;
+  /** item 172 — the record file's read, a seam for a disk that does not answer (tests) */
+  readonly readFile?: ((path: string) => string) | undefined;
 }
 
 /** The text an input lands as (CP2-D1): a spark's and fieldd's marked, yours as you wrote it (IOS-12a). */
@@ -117,7 +119,11 @@ export class AgentInputQueues {
   constructor(private readonly opts: InputQueueOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
     this.#now = opts.now ?? (() => new Date());
-    this.#signer = new RecordSigner({ keyPath: opts.keyPath, logger: this.#logger });
+    this.#signer = new RecordSigner({
+      keyPath: opts.keyPath,
+      logger: this.#logger,
+      readFile: opts.readFile,
+    });
   }
 
   /** Read every kept queue back at boot (CP2-D3): only what fieldd signed for that run (LEANS P3). A stamped head stays
@@ -173,8 +179,9 @@ export class AgentInputQueues {
 
   /** fieldd's own wake for a run (CP-D4): facts only, and wakes that wait join into one line. `item` is the needs-you
    * item whose fact it is (item 158, CO-Q9 (b)): a joined line carries their union, NEEDS_JOINED_ITEMS_MAX at most, and
-   * a wake past that starts a line of its own. A head in flight, or one a restart broke into, joins nothing. */
-  wake(runtimeRunId: string, fact: string, item?: NeedsItemId): void {
+   * a wake past that starts a line of its own. A head in flight, or one a restart broke into, joins nothing. True when
+   * the fact is queued (item 172: false while the queues cannot be read, so nothing is told that no queue holds). */
+  wake(runtimeRunId: string, fact: string, item?: NeedsItemId): boolean {
     const queue = this.#queueOf(runtimeRunId);
     const last = queue.at(-1);
     const items = joined(last?.items, item);
@@ -198,6 +205,7 @@ export class AgentInputQueues {
         ...(item !== undefined ? { items: [item] } : {}),
       });
     void this.#deliver(runtimeRunId);
+    return true;
   }
 
   /** The inputs that wait for a run, oldest first. */
@@ -329,6 +337,7 @@ export class AgentInputQueues {
     const path = join(this.opts.dir, file);
     const read = this.#signer.read(path);
     if ("why" in read) return this.#setAside(path, runtimeRunId, read.why);
+    if (!("body" in read)) return undefined;
     const kept = AgentInputQueueFile.safeParse(read.body);
     if (!kept.success) return this.#setAside(path, runtimeRunId, "unreadable");
     // signed for another run: a file copied into this run's name

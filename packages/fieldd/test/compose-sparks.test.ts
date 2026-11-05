@@ -386,7 +386,8 @@ describe("TU-1 (Q1) — a spark says whether it has worked", () => {
     h.svc.turned(older.id, T2);
     expect(h.svc.get(older.id)).toEqual({ ...older, turnedAt: T2 });
 
-    // one an agent edited is set aside: not read, not written over
+    // one an agent edited is set aside: not read, not written over (item 172: renamed beside itself, as the other
+    // stores' are, where it was only said before)
     const forged = spark({ id: "sp-fedcba9876543210", name: "Lyra", folder: "/f/sparks/lyra" });
     store(h.root).write(forged);
     const path = store(h.root).path(forged.id);
@@ -396,7 +397,11 @@ describe("TU-1 (Q1) — a spark says whether it has worked", () => {
     });
     const bytes = readFileSync(path, "utf8");
     expect(() => h.svc.turned(forged.id, T1)).not.toThrow();
-    expect(readFileSync(path, "utf8")).toBe(bytes);
+    const asides = readdirSync(join(h.root, "fieldd", "sparks")).filter((name) =>
+      name.startsWith(`${forged.id}.json.forged-`),
+    );
+    expect(asides).toHaveLength(1);
+    expect(readFileSync(join(h.root, "fieldd", "sparks", asides[0] ?? ""), "utf8")).toBe(bytes);
     expect(() => h.svc.turned("sp-0000000000000000", T1)).not.toThrow();
 
     // a record that cannot be written keeps what it says, and the caller hears no throw
