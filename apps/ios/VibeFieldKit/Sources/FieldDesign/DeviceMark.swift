@@ -2,11 +2,14 @@ import SwiftUI
 
 /// PJ-7 — A DEVICE IS ITS OPERATING SYSTEM'S MARK (`thinking-project-places.md`
 /// §6.0, PJ-D24; DESIGN.md §8 "The phone's History is one ledger of projects").
-/// The marks are the desktop's own — Simple Icons, kept exact (§13), copied as
-/// template SVGs into `OSMarks.xcassets` from `os-marks.tsx` and held to it by
+/// The marks are the desktop's own — copied as template SVGs into
+/// `OSMarks.xcassets` from `os-marks.tsx` and held to it by
 /// `pnpm check:ios-fixtures` — drawn in the text's ink, never a hue of their
-/// own. A desktop whose platform is not said yet is a plain screen, never a
-/// guess.
+/// own. Windows and Linux are Simple Icons, kept exact (§13). A Mac is a plain
+/// laptop, never Apple's logo (LP-4, 2026-11-05: Apple's marks are not an
+/// app's to draw, App Review guideline 5.2.5), and still says "macOS" to a
+/// screen reader (`label`). A desktop whose platform is not said yet is a
+/// plain screen, never a guess.
 public struct DeviceMark: View {
   public enum OS: String, Sendable, CaseIterable {
     case macos, windows, linux, unknown

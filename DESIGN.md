@@ -4962,7 +4962,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Temporary stay its own: listing them is the project list's to design (PJ), not DS-7's.*
     - **A project's colour is its ink** (§2.9), never the room's dealt tint.
     - **A project row** leads its path line with one OS mark per desktop it lives on (§6.0 of the
-      record, PJ-D24: Simple Icons' marks, 11 px, in the path line's ink), left-aligned in the
+      record, PJ-D24: Simple Icons' marks — the Mac's a laptop since LP-4, §13 — 11 px, in the path line's ink), left-aligned in the
       listing's order, this desktop's first; an asleep desktop's mark is in the tertiary ink.
       Under the path, in the room's second-line type, what the others hold: **"4 sessions on
       Studio"** (and "(asleep)" after one that is). Its time slot says **"n live"** while its
@@ -5262,7 +5262,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   §6.3, PJ-D24, PJ-L7): the tab reads the projects every desktop groups alike from ONE door — the
   home's, or another answering desktop's while the home sleeps — and is no longer grouped by desktop
   (SP-D10's grouping is superseded). **A device is its OS mark** — the kept-exact Simple Icons
-  marks (§13), template assets on the phone, in the text's ink — and never a hue. The **ledger row**
+  marks (§13; the Mac's a laptop since LP-4, 2026-11-05), template assets on the phone, in the text's ink — and never a hue. The **ledger row**
   keeps identity · location · quantity; location is the marks, **one per desktop the project lives
   on, left-aligned** in the roster's order (the home first) at 13 pt in `inkFaint`, a sleeping
   desktop's at 40% — the path never shows. The **scope line** ends in the marks of the desktops
@@ -6504,10 +6504,9 @@ drawer, until HN-8 retired them, §8) — and, on the desk, two named exceptions
 `vibefield-icon-collection-v2`, 2026-11-03, superseding the previous masters; reviewed
 source pixels and recipe in `apps/desktop/packaging/icon-source`, packaging mapping in
 `icon-collection.mjs`), the three vendor marks (AR-L1),
-the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
-other allowed file; a phone, wherever a surface marks one, wears the mark macOS wears, Apple's,
-since iOS's own is a word — James, DS-3: "do not use texts, use OS icons instead" — and no surface
-marks one today), the file-tree family (§8), **the living mark**
+the OS marks the device chip wears (Windows' and Linux's are Simple Icons, drawn inline in
+`os-marks.tsx` — the test's one other allowed file; James, DS-3: "do not use texts, use OS icons
+instead"), the file-tree family (§8), **the living mark**
 (track FG, 2026-10-29: the website's splash's own mark, drawn by the field at its centre and over the
 Setup Assistant's glass as its logo — white on smoke, inverted on milk with its colours kept; its still is
 the website's `mark-white.webp`), and
@@ -6524,7 +6523,14 @@ Tailscale Inc.". The phone's copy (TS-7) is FieldDesign's `TailscaleMark` in
 `ChromePalette.tailscaleInk`, drawn from the same constants and held to them by
 `pnpm check:ios-fixtures`; the phone's About carries the trademark line at its foot, as the
 desktop's does (IOS-10a; until the phone had an About, TS-7 put it at the foot of its terminal
-settings sheet). On the
+settings sheet). *Corrected 2026-11-05 (LP-4, the 0.9 launch; at its source):* this list kept Apple's logo, Simple
+Icons' `apple`, as the Mac's mark, and said a phone would wear it too. Apple's logo is Apple's to
+license and App Review (guideline 5.2.5) refuses an app that borrows Apple's marks, so **the Mac
+wears a computer**: a plain laptop drawn in the `unknown` screen's own construction — one `evenodd`
+silhouette, 2-unit walls, the 24-unit box, live area 2 to 22, `currentColor` — kept beside the other
+three in `os-marks.tsx` and its phone copy, and still named "macOS" to a screen reader. A phone,
+wherever a surface marks one, wears a device of its own drawing, never Apple's logo; no surface
+marks one today. On the
 phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
 copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
 `resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the

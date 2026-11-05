@@ -7,10 +7,16 @@ import type { MonitorDeviceFacet } from "./monitor/types";
 // §6.2 draws them there (the swarm's bodies wear the LINE marks instead, which are
 // puppeteer-views' to draw, lane pu-device).
 //
-// The three marks are Simple Icons 16.13.0 (via @iconify-json/simple-icons 1.2.75,
+// Windows and Linux wear Simple Icons 16.13.0 (via @iconify-json/simple-icons 1.2.75,
 // CC0-1.0), unmodified and monochrome as that project asks: they name an operating
 // system and nothing else, and the marks belong to their owners, so they are kept
 // exact and never redrawn.
+// LP-4 (2026-11-05, the 0.9 launch): the Mac wears a COMPUTER, never Apple's logo.
+// Apple's logo is Apple's to license (its trademark guidelines), and App Review
+// (guideline 5.2.5) refuses an app that borrows Apple's marks, so the Mac's mark is a plain laptop in the
+// `unknown` screen's own construction (one evenodd silhouette, 2-unit walls, the
+// 24-unit box, live area 2 to 22). It still says "macOS" to a screen reader
+// (`OS_LABEL`). The phone's `OSMarks.xcassets` copy follows this path exactly.
 // `unknown` is a plain screen: a desktop whose platform the roster has not heard is
 // drawn as a device, never as a guess.
 
@@ -21,7 +27,8 @@ interface MarkPath {
 
 const MARKS: Record<MonitorDeviceFacet["os"], MarkPath> = {
   macos: {
-    d: "M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04c-2.04.027-3.91 1.183-4.961 3.014c-2.117 3.675-.546 9.103 1.519 12.09c1.013 1.454 2.208 3.09 3.792 3.039c1.52-.065 2.09-.987 3.935-.987c1.831 0 2.35.987 3.96.948c1.637-.026 2.676-1.48 3.676-2.948c1.156-1.688 1.636-3.325 1.662-3.415c-.039-.013-3.182-1.221-3.22-4.857c-.026-3.04 2.48-4.494 2.597-4.559c-1.429-2.09-3.623-2.324-4.39-2.376c-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83c-1.207.052-2.662.805-3.532 1.818c-.78.896-1.454 2.338-1.273 3.714c1.338.104 2.715-.688 3.559-1.701",
+    d: "M4 6.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9H4ZM6 6.5v7h12v-7ZM2 17h20v1a1.5 1.5 0 0 1-1.5 1.5h-17A1.5 1.5 0 0 1 2 18Z",
+    evenOdd: true,
   },
   windows: {
     d: "M0 0h11.377v11.372H0Zm12.623 0H24v11.372H12.623ZM0 12.623h11.377V24H0Zm12.623 0H24V24H12.623",
