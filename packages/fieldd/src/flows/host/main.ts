@@ -26,8 +26,8 @@ import type { FlowWorkerData, FromFlowWorker, ToFlowWorker } from "./worker";
 // - a script past its heap is ended by V8 (ERR_WORKER_OUT_OF_MEMORY), and this thread says `memory`;
 // - what V8's cap cannot see, a typed array's backing store (outside the heap, and left in every compartment by
 //   SES), this thread holds: it reads the host's resident memory every RSS_POLL_MS, and past the run's `rssMb`
-//   (FLOW_LIMITS.HOST_RSS_MB) it says `memory` and SIGKILLs the host (bth's re-read N1, ruled 13:24Z). The worker's
-//   loop may be inside one long builtin then, so the host never waits for it to end;
+//   (FLOW_LIMITS.HOST_RSS_MB, 512 provisional) it says `memory` and SIGKILLs the host (bth's re-read N1, ruled by
+//   VF-PM 13:26Z). The worker's loop may be inside one long builtin then, so the host never waits for it to end;
 // - that read goes on past the run's end, until the host has left (bth's second re-read R1, VF-PM 13:48Z): at the
 //   end the worker is terminated, and every leave terminates it and exits once it has gone, never by a
 //   `process.exit()` that would hold this thread until one long builtin ends. Past the cap after the run's end, the

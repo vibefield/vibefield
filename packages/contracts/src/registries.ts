@@ -521,7 +521,7 @@ export const AGENT_STOP = {
  *    host V8 aborts whole for its heap, its run saying it used more memory than a flow may (DESIGN.md §9 "When a run's
  *    script cannot go on"). Each pong's `used_heap_size` is telemetry;
  *  - HOST_RSS_MB: the host's resident memory, MEASURED by the host's own thread (`process.memoryUsage.rss()`, every
- *    50 ms; bth's re-read N1, ruled 2026-11-05 13:24Z; 512 pending VF-PM's number). V8's cap holds the worker's heap
+ *    50 ms; bth's re-read N1, ruled by VF-PM 2026-11-05 13:26Z; 512 provisional). V8's cap holds the worker's heap
  *    and nothing outside it, and a typed array's backing store is outside it (SES leaves ArrayBuffer and Uint8Array in
  *    every compartment), so a script that keeps them and awaits between them passes HOST_HEAP_MB and every ping. Past
  *    it the host says `memory` and SIGKILLs itself (an exit can wait out one long builtin), and its run ends as V8's
