@@ -113,9 +113,11 @@ export ASC_KEY_ID=XXXXXXXXXX
 export ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 # Builds 1–5 are archived on this Mac; 1 and 3 are uploaded. The next archive is 6.
+# The archive signs with Xcode's account; the key is read at upload only.
 bash apps/ios/scripts/testflight.sh archive 6
 
-# Upload that exact archive for internal TestFlight only (the default) ...
+# Stop the agents running as you, then upload that exact archive for internal
+# TestFlight only (the default) ...
 bash apps/ios/scripts/testflight.sh upload 6
 # ... or for the App Store and external TestFlight.
 bash apps/ios/scripts/testflight.sh upload 6 store
@@ -151,16 +153,17 @@ The helper selects `/Applications/Xcode.app/Contents/Developer` without changing
 the machine's global `xcode-select`. Override `DEVELOPER_DIR` if necessary. It
 requires the committed app lockfile, preserves its exact versions while allowing
 Git cache refreshes, and uses the same Metal-plugin validation flag as the existing
-iOS build commands. Credentials
-are the API key (its two IDs in the environment, the key in the login keychain;
-below) or, when asked, Xcode's account and Keychain. Never commit signing keys,
-passwords, or `.p8` files.
+iOS build commands. The archive signs with Xcode's account and Keychain; the
+upload authenticates with the API key (its two IDs in the environment, the key in
+the login keychain; below) or, when asked, Xcode's account. Never commit signing
+keys, passwords, or `.p8` files.
 
 ## The App Store Connect API key
 
 The helper passes `-allowProvisioningUpdates -authenticationKeyPath
--authenticationKeyID -authenticationKeyIssuerID` to both `xcodebuild archive` and
-`xcodebuild -exportArchive` when the key's two IDs are set:
+-authenticationKeyID -authenticationKeyIssuerID` to `xcodebuild -exportArchive`
+when the key's two IDs are set. `xcodebuild archive` signs with Xcode's account,
+as archives 1–5 did, and gets the key only when `ASC_ARCHIVE_KEY=1` asks:
 
 | Variable | Value |
 | --- | --- |
@@ -168,6 +171,7 @@ The helper passes `-allowProvisioningUpdates -authenticationKeyPath
 | `ASC_ISSUER_ID` | the issuer ID shown above the team keys |
 | `ASC_KEYCHAIN_SERVICE` | *optional:* the keychain item's service (default `vibefield-asc`) |
 | `ASC_KEY_PATH` | *optional override:* a `.p8` file outside the repository, read instead of the keychain |
+| `ASC_ARCHIVE_KEY` | *optional:* `1` makes `archive` use the key too, for an archive Xcode's account cannot sign; the key is then decoded for the whole Release build |
 
 **Why the keychain (EL7).** This Mac runs many agents as James's own user, and
 same-user agents are the adversary (CLAUDE.md, EL7). A `.p8` kept as a file is
@@ -175,10 +179,17 @@ readable by every one of them whatever its mode (`chmod 600` stops other users,
 not the same one), and this is an **Admin** key for the whole team: whoever holds
 it can upload and submit builds, change the app's metadata and invite users, and
 nobody is asked. So the key lives in the login keychain with no application
-trusted to read it silently: every read asks the person at the Mac. The helper
-reads it once per run, decodes it into a private temporary directory for
-xcodebuild alone, and removes it when it exits, so the file exists only while
-xcodebuild runs.
+trusted to read it silently: every read asks the person at the Mac.
+
+**What the keychain does not cover.** The prompt guards the read, not what
+follows it. xcodebuild takes the key only as a file, so the helper decodes it
+into a temporary directory (mode 700, the file 600) and removes it when it exits.
+While xcodebuild runs, any process running as James can read that file without a
+prompt, at the path `ps` shows in xcodebuild's arguments; the modes stop other
+users, not the same one. So the helper decodes the key only for the export (the
+length of `upload`), never for the Release compile unless `ASC_ARCHIVE_KEY=1`
+asks. Run `upload` with no agent running as James. If one was running, treat the
+key as exposed and revoke it (step 4).
 
 1. In App Store Connect, **Users and Access > Integrations > App Store Connect
    API > Team Keys**, generate a key for the Shikang Yong team. Give it the
@@ -217,16 +228,18 @@ the helper masks the key file's path and the two IDs as `<ASC_KEY_PATH>`,
 since xcodebuild escapes it in that echo; the keychain's temporary path has
 none. The key's contents never reach a command line or an output stream.
 While xcodebuild runs, its own arguments (visible to `ps`) still carry the path
-and the IDs; with the keychain, that path is a temporary file that is gone when
-the helper exits.
+and the IDs, and the file at that path is readable as above until the helper
+exits.
 
-Without the key, `archive` still uses Xcode's signed-in account, and `upload`
-refuses: set `ASC_AUTH=xcode` to try Xcode's account anyway, or use Xcode
-Organizer as described above. The helper refuses a key path inside the
-repository, one ID without the other (or `ASC_KEY_PATH` without both), a key ID
-that is not letters and digits, and a keychain item that does not decode to a
-`.p8` key. Every refusal that needs no key (an existing archive, a missing one,
-the wrong bundle ID or team) comes before the keychain is asked.
+`archive` uses Xcode's signed-in account unless `ASC_ARCHIVE_KEY=1`, and never
+asks the keychain then. Without the key, `upload` refuses: set `ASC_AUTH=xcode`
+to try Xcode's account anyway, or use Xcode Organizer as described above. The
+helper refuses a key path inside the repository, one ID without the other (or
+`ASC_KEY_PATH` without both), a key ID that is not letters and digits, a keychain
+item that does not decode to a `.p8` key, `ASC_ARCHIVE_KEY=1` without the IDs,
+and an `ASC_ARCHIVE_KEY` other than `1` or unset. Every refusal that needs no key
+(an existing archive, a missing one, the wrong bundle ID or team) comes before
+the keychain is asked.
 
 On Xcode 26.6 build `17F113`, the helper supplies
 `-Xfrontend -disable-large-loadable-types-reg2mem`. Without it, Swift 6.3.3 crashes

@@ -1,7 +1,9 @@
 #!/bin/bash
-# No passwords or API keys live in the repo. Signing and upload authenticate with an
-# App Store Connect API key (its IDs in the environment, the key itself in the login
-# keychain; below), or, when asked explicitly, with Xcode's own Apple account.
+# No passwords or API keys live in the repo. The archive signs with Xcode's own Apple
+# account; the upload authenticates with an App Store Connect API key (its IDs in the
+# environment, the key itself in the login keychain; below), or, when asked
+# explicitly, with Xcode's account too. The archive takes the key only on
+# ASC_ARCHIVE_KEY=1.
 set -euo pipefail
 
 ios_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -18,25 +20,32 @@ Usage: bash apps/ios/scripts/testflight.sh archive BUILD_NUMBER
   upload 6 store     Upload it for the App Store and external TestFlight
                      (ExportOptions-AppStore.plist). Same archive, other export.
 
-Authentication (both archive and upload): an App Store Connect API key.
+Authentication: `archive` signs with Xcode's signed-in account (as archives 1-5
+did); `upload` uses an App Store Connect API key.
   ASC_KEY_ID      the key's ID
   ASC_ISSUER_ID   the team's issuer ID (App Store Connect > Users and Access >
                   Integrations > App Store Connect API)
   The key itself is read from the login keychain (service "vibefield-asc",
   account = the key ID; ASC_KEYCHAIN_SERVICE names another service). macOS asks
   you to allow each read: choose Allow, never Always Allow. It is decoded into a
-  private temporary directory that is removed when the helper exits.
+  temporary file for xcodebuild and removed when the helper exits. WHILE
+  xcodebuild runs, any process running as you can read that file without a
+  prompt, at the path `ps` shows in xcodebuild's arguments: run it with no
+  agent running as you, and revoke the key if one was (apps/ios/TESTFLIGHT.md).
   ASC_KEY_PATH    optional: an AuthKey_<KEY ID>.p8 file instead of the keychain,
                   kept OUTSIDE this repository (every process running as you
                   can read it; see apps/ios/TESTFLIGHT.md).
+  ASC_ARCHIVE_KEY optional: 1 makes `archive` use the key too, for an archive
+                  Xcode's account cannot sign. The key is then decoded for the
+                  whole Release build, not only for the export.
 They reach xcodebuild as -authenticationKeyPath / -authenticationKeyID /
 -authenticationKeyIssuerID with -allowProvisioningUpdates. The helper prints only
 the variables' names, and masks the key's path and IDs in xcodebuild's echo of
 its own command line before the terminal and the logs see it. The key's contents
 are never printed.
-Without them, `archive` uses Xcode's signed-in account; `upload` refuses, since
-xcodebuild's account lookup is what failed as "Failed to Use Accounts" for builds
-2-4. ASC_AUTH=xcode makes `upload` try Xcode's account anyway.
+Without them, `upload` refuses, since xcodebuild's account lookup is what failed
+as "Failed to Use Accounts" for builds 2-4. ASC_AUTH=xcode makes `upload` try
+Xcode's account anyway.
 
 Archives and logs are in apps/ios/build/testflight/. Choose a new build number
 for each archive: an existing archive is never overwritten. Xcode also manages
@@ -97,6 +106,13 @@ case "$action" in
       echo "Archive already exists: $archive. Choose a new build number." >&2
       exit 1
     fi
+    case "${ASC_ARCHIVE_KEY:-}" in
+      "" | 0 | 1) ;;
+      *)
+        echo "ASC_ARCHIVE_KEY is 1 (archive with the API key) or unset (archive with Xcode's account)." >&2
+        exit 2
+        ;;
+    esac
     ;;
   upload)
     if [[ ! -f "$archive/Info.plist" ]]; then
@@ -120,8 +136,17 @@ esac
 # readable by every process of this user, whatever its mode, and this is a
 # team-wide Admin key. So by default it lives in the login keychain, stored as
 # one base64 line with an empty trusted-application list (`-T ""`), so every read
-# asks the person at the Mac. It is decoded into a private temporary directory
-# for xcodebuild alone and removed on exit. ASC_KEY_PATH is the file override.
+# asks the person at the Mac. ASC_KEY_PATH is the file override.
+#
+# The prompt guards the READ, not what follows it: xcodebuild takes the key only
+# as a file, so it is decoded into a temporary directory (700, umask 077) and
+# removed on exit, and WHILE xcodebuild runs any process of this uid can read it
+# without a prompt, at the path xcodebuild's argv shows to `ps`. Modes stop other
+# users, not this one. So the key is decoded only where it is needed: for the
+# export (`upload`), which "Failed to Use Accounts" without it (builds 2-4).
+# `archive` signs with Xcode's account, as archives 1-5 did, and takes the key
+# only on ASC_ARCHIVE_KEY=1, since that holds it decoded for a whole Release
+# build.
 key_mode=""
 key_path=""
 key_tmp=""
@@ -136,7 +161,14 @@ ids_set=0
 for name in ASC_KEY_ID ASC_ISSUER_ID; do
   if [[ -n "${!name:-}" ]]; then ids_set=$((ids_set + 1)); fi
 done
-if [[ $ids_set -eq 1 || ($ids_set -eq 0 && -n "${ASC_KEY_PATH:-}") ]]; then
+if [[ "$action" == archive && "${ASC_ARCHIVE_KEY:-}" != 1 ]]; then
+  # The key is never asked for here, so neither is the keychain.
+  if [[ $ids_set -gt 0 || -n "${ASC_KEY_PATH:-}" ]]; then
+    echo "Archiving with Xcode's signed-in Apple account: the API key is read at upload only (ASC_ARCHIVE_KEY=1 archives with it)."
+  else
+    echo "No App Store Connect API key set: archiving with Xcode's signed-in Apple account."
+  fi
+elif [[ $ids_set -eq 1 || ($ids_set -eq 0 && -n "${ASC_KEY_PATH:-}") ]]; then
   missing=()
   for name in ASC_KEY_ID ASC_ISSUER_ID; do
     if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
@@ -188,8 +220,11 @@ elif [[ "$action" == upload && "${ASC_AUTH:-}" != xcode ]]; then
   echo "login keychain, or ASC_KEY_PATH); xcodebuild's Apple-account lookup failed with \"Failed to Use Accounts\"" >&2
   echo "for builds 2-4. Or set ASC_AUTH=xcode to try Xcode's signed-in account. See apps/ios/TESTFLIGHT.md." >&2
   exit 1
+elif [[ "$action" == archive ]]; then
+  echo "ASC_ARCHIVE_KEY=1 asks to archive with the App Store Connect API key, but ASC_KEY_ID and ASC_ISSUER_ID are not set." >&2
+  exit 1
 else
-  echo "No App Store Connect API key set: using Xcode's signed-in Apple account."
+  echo "No App Store Connect API key set: ASC_AUTH=xcode, using Xcode's signed-in Apple account."
 fi
 
 auth=()
