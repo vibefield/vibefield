@@ -72,42 +72,87 @@ const lockTarget = (fs, path) => {
 };
 
 /**
+ * Where an entry is copied before it takes its name: a dot-named sibling in the new folder (the same filesystem, so taking
+ * the name is one rename). An entry is in the new folder WHOLE or not at all: a copy that fails partway (a full disk, a
+ * file it may not read) is discarded, and one a stopped runner left behind is cleared before the carry does anything else.
+ * The carry runs once (`already-moved`), so a half-copied LevelDB or OPFS store would never be repaired: Chromium would
+ * open it as corrupt.
+ */
+export const STAGING_PREFIX = ".bp1c-carry-";
+
+/** Remove a staging copy, never throwing (one that will not go is dot-named, and Chromium never reads it). */
+const discard = (fs, path) => {
+  try {
+    fs.rmSync(path, { recursive: true, force: true });
+  } catch {
+    /* the loop below refuses to copy into it */
+  }
+};
+
+const messageOf = (error) => (error instanceof Error ? error.message : String(error));
+
+/**
  * Carry a dev desk's own state from the folder Electron used before into the one it uses now, ONCE, by copy. Answers what
- * it did: `carried` (the entries copied) and, when it copied nothing, `reason`:
+ * it did: `carried` (the entries copied), `failed` (when any entry could not be: `{ name, error }` each, the entry absent
+ * from the new folder), and, when it copied nothing and nothing failed, `reason`:
  *  - `same-folder` — the two are one (no move to make);
  *  - `no-old-folder` — nothing was ever there;
  *  - `already-moved` — Chromium has run on the new folder (`Local State`): the move happened before;
  *  - `old-folder-in-use` — the old folder holds a live Electron's lock (`lockHolderAlive`): a live profile is never
  *    copied. A STALE lock (a crashed Electron's, its pid gone on this host) does not stop the carry;
  *  - `nothing-to-carry` — no entry of `CARRIED_ENTRIES` is in the old folder that the new one lacks.
- * An entry the new folder already has is never overwritten. `fs` and `lockAlive` are the seams (node's by default).
+ * An entry the new folder already has is never overwritten, and each one is copied to its staging name first and renamed
+ * into place only once whole (`STAGING_PREFIX`). `fs` and `lockAlive` are the seams (node's by default).
  */
 export function carryLegacyElectronState({ from, to, fs = nodeFs, lockAlive = lockHolderAlive }) {
   if (from === to) return { carried: [], reason: "same-folder" };
   if (!present(fs, from)) return { carried: [], reason: "no-old-folder" };
+  const staging = (name) => join(to, `${STAGING_PREFIX}${name}`);
+  // a runner stopped mid-copy left its staging copies: cleared whatever this run then does
+  for (const name of CARRIED_ENTRIES) discard(fs, staging(name));
   if (present(fs, join(to, CHROMIUM_RAN))) return { carried: [], reason: "already-moved" };
   const lock = join(from, LIVE_LOCK);
   if (present(fs, lock) && lockAlive(lockTarget(fs, lock)))
     return { carried: [], reason: "old-folder-in-use" };
   const carried = [];
+  const failed = [];
   for (const name of CARRIED_ENTRIES) {
     const source = join(from, name);
     const target = join(to, name);
+    const stage = staging(name);
     if (!present(fs, source) || present(fs, target)) continue;
-    fs.cpSync(source, target, {
-      recursive: true,
-      force: false,
-      errorOnExist: false,
-      preserveTimestamps: true,
-      verbatimSymlinks: true,
-    });
-    carried.push(name);
+    if (present(fs, stage)) {
+      // never copied INTO a staging copy that would not go: the two would merge
+      failed.push({ name, error: `its staging copy ${stage} could not be cleared` });
+      continue;
+    }
+    try {
+      fs.cpSync(source, stage, {
+        recursive: true,
+        force: false,
+        errorOnExist: false,
+        preserveTimestamps: true,
+        verbatimSymlinks: true,
+      });
+      fs.renameSync(stage, target);
+      carried.push(name);
+    } catch (error) {
+      discard(fs, stage);
+      failed.push({ name, error: messageOf(error) });
+    }
   }
+  if (failed.length > 0) return { carried, failed };
   return carried.length === 0 ? { carried, reason: "nothing-to-carry" } : { carried };
 }
 
-/** The runner's one line for what the carry did (none for a run with nothing to say). */
+/** The runner's one line for what the carry did (none for a run with nothing to say). A carry with a `failed` entry is
+ * the runner's warning: it names what could not come across, which starts afresh in the new folder. */
 export function carryWords(result, { from, to }) {
+  if (result.failed !== undefined && result.failed.length > 0) {
+    const came = result.carried.length > 0 ? `carried ${result.carried.join(", ")}; ` : "";
+    const lost = result.failed.map((f) => `${f.name} (${f.error})`).join(", ");
+    return `BP-1c: Electron's userData is now ${to}; ${came}could not carry ${lost} from ${from}, so ${result.failed.length === 1 ? "it starts" : "they start"} afresh in the new folder (nothing half-copied is left there), and the old folder is left as it was`;
+  }
   if (result.carried.length > 0) {
     return `BP-1c: Electron's userData is now ${to} (the desk browser keeps its sign-ins there); carried ${result.carried.join(", ")} from ${from}, which is left as it was`;
   }

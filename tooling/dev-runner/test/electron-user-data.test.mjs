@@ -3,6 +3,7 @@
 // is carried ONCE, by copy: never a cache, never a live profile, never over what the new folder has, and the old folder
 // left exactly as it was.
 import assert from "node:assert/strict";
+import * as nodeFs from "node:fs";
 import {
   existsSync,
   lstatSync,
@@ -22,6 +23,7 @@ import {
   carryLegacyElectronState,
   carryWords,
   lockHolderAlive,
+  STAGING_PREFIX,
 } from "../src/electron-user-data.mjs";
 
 /** A dev root with the old folder laid out as James's was (2026-11-05): the desk's own state beside Chromium's caches. */
@@ -87,8 +89,102 @@ test("carries the theme and the renderer's storage once, and nothing of Chromium
       "Crashpad",
     ])
       assert.equal(existsSync(join(d.to, never)), false, never);
+    // each entry took its name whole: no staging copy is left beside it
+    assert.deepEqual(
+      readdirSync(d.to).filter((n) => n.startsWith(STAGING_PREFIX)),
+      [],
+    );
     // the old folder is left exactly as it was
     assert.deepEqual(snapshot(d.from), before);
+  } finally {
+    d.done();
+  }
+});
+
+test("a copy that fails partway leaves no half entry: the rest come across, and the words name what could not", () => {
+  const d = devRoot();
+  try {
+    const before = snapshot(d.from);
+    // a full disk midway through the desk's OPFS store: one file of it written, then ENOSPC
+    const fs = {
+      ...nodeFs,
+      cpSync(source, target, options) {
+        if (!source.endsWith("File System")) return nodeFs.cpSync(source, target, options);
+        nodeFs.mkdirSync(join(target, "000", "t"), { recursive: true });
+        nodeFs.writeFileSync(join(target, "000", "t", "half"), "half a still");
+        throw Object.assign(new Error("ENOSPC: no space left on device, write"), {
+          code: "ENOSPC",
+        });
+      },
+    };
+    const result = carryLegacyElectronState({ from: d.from, to: d.to, fs });
+    assert.deepEqual(
+      result.carried,
+      CARRIED_ENTRIES.filter((n) => n !== "File System"),
+    );
+    assert.deepEqual(result.failed, [
+      { name: "File System", error: "ENOSPC: no space left on device, write" },
+    ]);
+    assert.equal(result.reason, undefined);
+    // the failed entry is ABSENT, never half there, and its staging copy is gone
+    assert.equal(existsSync(join(d.to, "File System")), false);
+    assert.deepEqual(
+      readdirSync(d.to).filter((n) => n.startsWith(STAGING_PREFIX)),
+      [],
+    );
+    // what did come across is whole
+    assert.equal(
+      readFileSync(join(d.to, "Local Storage", "leveldb", "000003.log"), "utf8"),
+      "desk-local-storage",
+    );
+    assert.deepEqual(snapshot(d.from), before);
+    const words = carryWords(result, d);
+    assert.match(words, /could not carry File System \(ENOSPC: no space left on device, write\)/);
+    assert.match(words, /it starts afresh in the new folder \(nothing half-copied is left there\)/);
+    assert.match(words, /carried vibefield-theme\.json, Local Storage, IndexedDB, WebStorage; /);
+  } finally {
+    d.done();
+  }
+});
+
+test("a staging copy a stopped runner left behind is cleared first, and the entry comes across whole", () => {
+  const d = devRoot();
+  try {
+    const stale = join(d.to, `${STAGING_PREFIX}Local Storage`);
+    mkdirSync(join(stale, "leveldb"), { recursive: true });
+    writeFileSync(join(stale, "leveldb", "stale.log"), "half of an earlier copy");
+    const result = carryLegacyElectronState({ from: d.from, to: d.to });
+    assert.deepEqual(result, { carried: [...CARRIED_ENTRIES] });
+    assert.equal(existsSync(stale), false);
+    assert.equal(existsSync(join(d.to, "Local Storage", "leveldb", "stale.log")), false);
+    assert.equal(
+      readFileSync(join(d.to, "Local Storage", "leveldb", "000003.log"), "utf8"),
+      "desk-local-storage",
+    );
+  } finally {
+    d.done();
+  }
+});
+
+test("a staging copy that will not go is never copied into: that entry fails, named, and nothing merges", () => {
+  const d = devRoot();
+  try {
+    const stuck = join(d.to, `${STAGING_PREFIX}IndexedDB`);
+    mkdirSync(stuck, { recursive: true });
+    writeFileSync(join(stuck, "left"), "an earlier copy");
+    const fs = {
+      ...nodeFs,
+      rmSync(path, options) {
+        if (path === stuck) throw Object.assign(new Error("EACCES"), { code: "EACCES" });
+        return nodeFs.rmSync(path, options);
+      },
+    };
+    const result = carryLegacyElectronState({ from: d.from, to: d.to, fs });
+    assert.deepEqual(result.failed, [
+      { name: "IndexedDB", error: `its staging copy ${stuck} could not be cleared` },
+    ]);
+    assert.equal(existsSync(join(d.to, "IndexedDB")), false);
+    assert.deepEqual(readdirSync(stuck), ["left"]);
   } finally {
     d.done();
   }
