@@ -196,7 +196,8 @@ a refusal's code and an error's domain and number are the most it says.
 For installation and updates on an iPhone away from the Mac, follow
 [the TestFlight setup](TESTFLIGHT.md). The release helper builds a signed
 device archive and uploads it, authenticated by an App Store Connect API key
-(`ASC_KEY_PATH`, `ASC_KEY_ID`, `ASC_ISSUER_ID`; TESTFLIGHT.md says how; LP-4,
+(its IDs in `ASC_KEY_ID` and `ASC_ISSUER_ID`, the key in the login keychain;
+TESTFLIGHT.md says how; LP-4,
 2026-11-05 — until then it used Xcode's Apple account, whose command-line lookup
 failed as "Failed to Use Accounts"):
 

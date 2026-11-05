@@ -107,8 +107,8 @@ Each build is available for up to **90 days**.
 Run from the repository root:
 
 ```sh
-# The App Store Connect API key (see below); never commit or print these.
-export ASC_KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8
+# The App Store Connect API key's two IDs (see below). The key itself is in the
+# login keychain; never commit it, print it or leave it in a file.
 export ASC_KEY_ID=XXXXXXXXXX
 export ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
@@ -152,36 +152,81 @@ the machine's global `xcode-select`. Override `DEVELOPER_DIR` if necessary. It
 requires the committed app lockfile, preserves its exact versions while allowing
 Git cache refreshes, and uses the same Metal-plugin validation flag as the existing
 iOS build commands. Credentials
-are the API key's three environment variables (below) or, when asked, Xcode's
-account and Keychain. Never commit signing keys, passwords, or `.p8` files.
+are the API key (its two IDs in the environment, the key in the login keychain;
+below) or, when asked, Xcode's account and Keychain. Never commit signing keys,
+passwords, or `.p8` files.
 
 ## The App Store Connect API key
 
 The helper passes `-allowProvisioningUpdates -authenticationKeyPath
 -authenticationKeyID -authenticationKeyIssuerID` to both `xcodebuild archive` and
-`xcodebuild -exportArchive` when all three of these are set:
+`xcodebuild -exportArchive` when the key's two IDs are set:
 
 | Variable | Value |
 | --- | --- |
-| `ASC_KEY_PATH` | the downloaded `AuthKey_<KEY ID>.p8`, kept outside the repository |
-| `ASC_KEY_ID` | the key's ID (the `<KEY ID>` in the file name) |
+| `ASC_KEY_ID` | the key's ID (the `<KEY ID>` in the downloaded file's name) |
 | `ASC_ISSUER_ID` | the issuer ID shown above the team keys |
+| `ASC_KEYCHAIN_SERVICE` | *optional:* the keychain item's service (default `vibefield-asc`) |
+| `ASC_KEY_PATH` | *optional override:* a `.p8` file outside the repository, read instead of the keychain |
+
+**Why the keychain (EL7).** This Mac runs many agents as James's own user, and
+same-user agents are the adversary (CLAUDE.md, EL7). A `.p8` kept as a file is
+readable by every one of them whatever its mode (`chmod 600` stops other users,
+not the same one), and this is an **Admin** key for the whole team: whoever holds
+it can upload and submit builds, change the app's metadata and invite users, and
+nobody is asked. So the key lives in the login keychain with no application
+trusted to read it silently: every read asks the person at the Mac. The helper
+reads it once per run, decodes it into a private temporary directory for
+xcodebuild alone, and removes it when it exits, so the file exists only while
+xcodebuild runs.
 
 1. In App Store Connect, **Users and Access > Integrations > App Store Connect
    API > Team Keys**, generate a key for the Shikang Yong team. Give it the
    **Admin** role: automatic signing with `-allowProvisioningUpdates` may create
    the cloud-managed Apple Distribution certificate and profiles, which a
    narrower role may not be allowed to do.
-2. Download the `.p8` once (Apple keeps no copy) into a directory outside the
-   repository, such as `~/.appstoreconnect/private_keys/`, and `chmod 600` it.
-3. Export the three variables in the shell that runs the helper (nothing loads
-   them from a file in the repository). The helper prints only their names.
+2. Download the `.p8` once (Apple keeps no copy), store it in the login keychain
+   and delete the download. By hand, in Terminal, not from an agent: for the
+   moment `security` runs, the encoded key is on its command line.
+
+   ```sh
+   security add-generic-password -s vibefield-asc -a <KEY ID> -T "" -U \
+     -w "$(base64 -i ~/Downloads/AuthKey_<KEY ID>.p8)"
+   rm ~/Downloads/AuthKey_<KEY ID>.p8
+   ```
+
+   `-T ""` empties the item's trusted-application list (by default `security`
+   itself, and so anything that runs it, would read it without asking). The key
+   is stored as one base64 line because the keychain hands multi-line data back
+   as hex.
+3. Export `ASC_KEY_ID` and `ASC_ISSUER_ID` in the shell that runs the helper
+   (nothing loads them from a file in the repository). At each run macOS asks to
+   let `security` use the item: choose **Allow**, never **Always Allow**, which
+   would trust `security`, and every process that runs it, from then on. In a
+   session with no screen to ask on (SSH), the read fails; `ASC_KEY_PATH` is the
+   fallback there.
+4. Revoke the key on the same App Store Connect page at once if it is ever
+   exposed. With `ASC_KEY_PATH`, revoke it when the release session ends and
+   delete the file.
+
+**What is printed.** The helper prints only the variables' names. xcodebuild
+opens its output with its whole command line ("Command line invocation:"), so
+the helper masks the key file's path and the two IDs as `<ASC_KEY_PATH>`,
+`<ASC_KEY_ID>` and `<ASC_ISSUER_ID>` before the terminal and `archive-N.log` /
+`upload-N.log` see them. A key path containing spaces may not be masked whole,
+since xcodebuild escapes it in that echo; the keychain's temporary path has
+none. The key's contents never reach a command line or an output stream.
+While xcodebuild runs, its own arguments (visible to `ps`) still carry the path
+and the IDs; with the keychain, that path is a temporary file that is gone when
+the helper exits.
 
 Without the key, `archive` still uses Xcode's signed-in account, and `upload`
 refuses: set `ASC_AUTH=xcode` to try Xcode's account anyway, or use Xcode
 Organizer as described above. The helper refuses a key path inside the
-repository and a partial set of the three variables. Revoke the key in the same
-App Store Connect page if it is ever exposed.
+repository, one ID without the other (or `ASC_KEY_PATH` without both), a key ID
+that is not letters and digits, and a keychain item that does not decode to a
+`.p8` key. Every refusal that needs no key (an existing archive, a missing one,
+the wrong bundle ID or team) comes before the keychain is asked.
 
 On Xcode 26.6 build `17F113`, the helper supplies
 `-Xfrontend -disable-large-loadable-types-reg2mem`. Without it, Swift 6.3.3 crashes
