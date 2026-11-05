@@ -4,7 +4,8 @@ import Testing
 @testable import FieldDesign
 
 /// IOS-12b (PC-D6 A; DESIGN.md §2.10; VF-PM's Q3) — the flat star the phone draws is design-kit's `flat-star.ts`, held
-/// to `spark-flat-star.golden.json` (written beside the DNA golden by `packages/design-kit/scripts/spark-dna-golden.mjs`,
+/// to `spark-flat-star.golden.json` (written beside the DNA golden by
+/// `packages/design-kit/scripts/spark-dna-golden.mjs`,
 /// held to flat-star.ts by field-app's spark-face test, copied in byte for byte by `pnpm check:ios-fixtures`).
 ///
 /// The eyes are arithmetic and match exactly. The outline goes through `cos` and `sin`, and Darwin's libm and V8's may
