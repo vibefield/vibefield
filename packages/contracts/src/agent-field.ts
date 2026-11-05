@@ -9,14 +9,16 @@ import {
   SparkId,
 } from "./agent-session";
 import type { Principal } from "./envelope";
-import { INDEX_ACTIVITY } from "./registries";
+import { AGENT_FIELD, INDEX_ACTIVITY } from "./registries";
 import {
   MeshScope,
   meshRowsFrame,
   meshRowsOpen,
+  RowsCursor,
   type RowsDelta,
   type RowsDeviceState,
   RowsEpoch,
+  type RowsResumed,
   type RowsSnapshot,
 } from "./rows";
 
@@ -507,6 +509,17 @@ export const AgentSubscribeParams = z
      * stop looking alike (DS-L8); the mesh board's upstreams ask for
      * `AGENT_FIELD.MESH_HEARTBEAT_MS`. Absent: no heartbeat, today's stream. */
     heartbeatMs: z.number().int().min(250).max(60_000).optional(),
+    /** PG-9 (PG-L4.4) — `scope: "mesh"` only: per device, the last `{epoch, revision}` the reader APPLIED (its
+     * copy's chain), at most `AGENT_FIELD.MESH_RESUME_DEVICES_MAX` of them. The open answers each listed device
+     * `resumed`, a `delta` from that revision, or a `snapshot` (`meshDeviceEntry`). Absent: today's open, every
+     * device's whole board. A reader sends only cursors it holds now, never one from an earlier subscribe. An
+     * older daemon ignores it (passthrough) and answers today's open. */
+    since: z
+      .record(z.string().min(1), RowsCursor)
+      .refine((since) => Object.keys(since).length <= AGENT_FIELD.MESH_RESUME_DEVICES_MAX, {
+        message: `at most ${AGENT_FIELD.MESH_RESUME_DEVICES_MAX} cursors`,
+      })
+      .optional(),
   })
   .passthrough();
 export type AgentSubscribeParams = z.infer<typeof AgentSubscribeParams>;
@@ -592,8 +605,12 @@ export type AgentBoardKeyDelta = z.infer<typeof AgentBoardKeyDelta>;
  * client's own replay after a reconnect, and the door's resync of a phone that
  * fell behind its cap (PG-1c, `PRODUCT_API_LIMITS.TAILNET_QUEUED_BYTES`). The
  * reader replaces its whole board, each device at its owner's `{epoch,
- * revision}`, and the next delta continues from there. */
-export const AgentMeshOpen = meshRowsOpen(AgentFieldRow);
+ * revision}`, and the next delta continues from there.
+ *
+ * Typed by its written-out interface below, as the remote and model opens are: with PG-9's `resumed` and `delta`
+ * arms the inferred type passes what the compiler will serialize (TS7056). */
+export const AgentMeshOpen: z.ZodType<AgentMeshOpen, z.ZodTypeDef, unknown> =
+  meshRowsOpen(AgentFieldRow);
 /** One device's entry in the open. Written out rather than inferred: the
  * passthrough inference gives every arm a string index signature, and a
  * reader's `"snapshot" in entry` would then narrow to `unknown`. The schema
@@ -604,6 +621,9 @@ export interface AgentMeshDevice {
   /** ISO-8601 — when `state` was last established */
   asOf: string;
   snapshot?: RowsSnapshot<AgentFieldRow> | undefined;
+  /** PG-9 — only to a reader that sent `since`: one of `snapshot`, `resumed`, `delta` */
+  resumed?: RowsResumed | undefined;
+  delta?: RowsDelta<AgentFieldRow> | undefined;
 }
 export interface AgentMeshOpen {
   devices: AgentMeshDevice[];
@@ -842,6 +862,9 @@ export interface AgentRemoteMeshDevice {
   state: RowsDeviceState;
   asOf: string;
   snapshot?: RowsSnapshot<AgentRemoteRow> | undefined;
+  /** PG-9 — only to a reader that sent `since`: one of `snapshot`, `resumed`, `delta` */
+  resumed?: RowsResumed | undefined;
+  delta?: RowsDelta<AgentRemoteRow> | undefined;
 }
 export interface AgentRemoteMeshOpen {
   devices: AgentRemoteMeshDevice[];
@@ -872,6 +895,9 @@ export interface AgentModelMeshDevice {
   state: RowsDeviceState;
   asOf: string;
   snapshot?: RowsSnapshot<AgentModelMeshRow> | undefined;
+  /** PG-9 — only to a reader that sent `since`: one of `snapshot`, `resumed`, `delta` */
+  resumed?: RowsResumed | undefined;
+  delta?: RowsDelta<AgentModelMeshRow> | undefined;
 }
 export interface AgentModelMeshOpen {
   devices: AgentModelMeshDevice[];

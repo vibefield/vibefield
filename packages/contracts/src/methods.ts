@@ -39,7 +39,10 @@ export type Locality = (typeof LOCALITIES)[number];
  *
  *   · `rows` — `rows.ts`'s protocol (DS-L3): the open answers `{resumed}` or
  *     `{snapshot: {epoch, revision, rows, more?}}` (or the mesh pair,
- *     `meshRowsOpen`/`meshRowsFrame`); later frames are deltas `{epoch, since,
+ *     `meshRowsOpen`/`meshRowsFrame`, whose open answers each device by the
+ *     reader's cursor for it: `snapshot`, `resumed` or `delta`, PG-9,
+ *     2026-11-05; before PG-9 the mesh open was always whole, and this line
+ *     promised a resume it never had); later frames are deltas `{epoch, since,
  *     revision, upserts, removed}`, or a snapshot that resets. A kept cursor
  *     resumes; a gap re-subscribes from the reader's own cursor.
  *   · `snapshot-delta` — the field board's pair (`agent-field.ts`): the open

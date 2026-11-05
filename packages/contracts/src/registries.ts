@@ -449,7 +449,17 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * and an upstream on every peer each, beyond what the per-connection subscription cap bounds (EL7). Past the bound
  * the OLDEST lingering hub closes at once. Honest readers stand up two or three hubs: the phone's (`field|250`
  * today, `remote|1000` from PG-3e), a window's `model`, and a window's `remote` where one is read, so 4 keeps
- * each of them lingering with room for one more. */
+ * each of them lingering with room for one more.
+ *
+ * PG-9 (PG-L4.4's cursor half, VF-PM's P1 (b), 2026-11-05) — a reader re-joining a hub names, per device, the last
+ * `{epoch, revision}` it applied (`AgentSubscribeParams.since`), and the hub answers each device `resumed`, a
+ * `delta` from that revision to its head, or a `snapshot` (`meshDeviceEntry`). The hub keeps no frame journal: each
+ * held row carries the revision it last changed at, and the hub remembers the device's REMOVALS since its upstream
+ * last opened, at most MESH_RESUME_TOMBSTONES of them. A removal past the bound evicts the oldest, and a cursor older
+ * than the oldest removal still kept is answered a `snapshot`, never a delta that would miss a removal. 1,024
+ * removals is far past what one desktop's board drops inside a linger (a busy board's runs end by the handful a
+ * minute); its cost is a run id and a revision each. MESH_RESUME_DEVICES_MAX bounds the cursors one subscribe may
+ * name (a person's desktops are a handful; a same-uid reader cannot make the hub weigh an unbounded map, EL7). */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
@@ -465,6 +475,8 @@ export const AGENT_FIELD = {
   CARRIED_SCREENS_PER_PEER: 64,
   MESH_HUB_LINGER_MS: 60_000,
   MESH_LINGERING_HUBS_MAX: 4,
+  MESH_RESUME_TOMBSTONES: 1_024,
+  MESH_RESUME_DEVICES_MAX: 64,
 } as const;
 
 /** Item 87 (2026-10-29) — a managed run's exit, as fieldd closes it. puppeteer's `handleProcessExit`

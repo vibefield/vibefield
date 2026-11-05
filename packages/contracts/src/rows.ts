@@ -141,7 +141,15 @@ export type RowsDeviceState = z.infer<typeof RowsDeviceState>;
 /** One device's entry in a mesh-scoped open: its state, when that was last
  * true, and — when it has answered — its table. A device that has not
  * answered carries no snapshot and is still LISTED (its copy, if the reader
- * persisted one, stays). */
+ * persisted one, stays).
+ *
+ * PG-9 (PG-L4.4's cursor half, 2026-11-05) — a reader that subscribed with
+ * `since` (a cursor per device) is answered each device ONE way: `snapshot`
+ * (replace the copy, as before), `resumed` (the copy at that cursor is
+ * current: the hub's head is the cursor) or `delta` (the same epoch, from the
+ * cursor's revision to the hub's head: apply it as a delta). A reader that
+ * sent no `since` is never answered `resumed` or `delta`. An entry carrying
+ * two answers is refused: a reader must never guess which one to apply. */
 export function meshDeviceEntry<TRow extends z.ZodTypeAny>(row: TRow) {
   return z
     .object({
@@ -150,8 +158,16 @@ export function meshDeviceEntry<TRow extends z.ZodTypeAny>(row: TRow) {
       /** ISO-8601 — when `state` was last established. */
       asOf: z.string().min(1),
       snapshot: rowsSnapshot(row).optional(),
+      resumed: RowsResumed.optional(),
+      delta: rowsDelta(row).optional(),
     })
-    .passthrough();
+    .passthrough()
+    .refine(
+      (entry) =>
+        [entry.snapshot, entry.resumed, entry.delta].filter((answer) => answer !== undefined)
+          .length <= 1,
+      { message: "a device is answered one way: snapshot, resumed or delta" },
+    );
 }
 
 /** The OPEN answer of a mesh-scoped rows subscription: every self device the
