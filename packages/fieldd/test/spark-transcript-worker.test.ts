@@ -49,13 +49,31 @@ afterEach(async () => {
   }
 });
 
-async function until(test: () => boolean, ms = 15_000): Promise<void> {
+/** How long a row waits for the worker before it says it never came. */
+const WAIT_MS = 15_000;
+
+/** The message a bounded wait's assertion carries: what it waited for, and how long. */
+const waited = (what: string, ms = WAIT_MS) => `waited ${ms} ms for ${what}; none came`;
+
+/** Whether `test` came true within `ms`: a bounded wait the row asserts on (`waited`), never a bare timeout. */
+async function came(test: () => boolean, ms = WAIT_MS): Promise<boolean> {
   const deadline = Date.now() + ms;
   while (!test()) {
-    if (Date.now() > deadline) throw new Error("not in time");
+    if (Date.now() > deadline) return false;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
+  return true;
 }
+
+/** Whether `promise` settled within `ms`. */
+const settled = (promise: Promise<unknown>, ms = WAIT_MS): Promise<boolean> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), ms);
+    void promise.then(() => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
 
 /** A spark's folder as fieldd's store keeps it. */
 function folder() {
@@ -85,7 +103,10 @@ async function read(endpoint: string, ticket: string, runs: string[]) {
     ws.once("error", reject);
   });
   ws.send(JSON.stringify({ type: "open", ticket, runs: runs.map((run) => ({ run })) }));
-  await until(() => frames.some((f) => f.type === "caught-up" || f.type === "refused"));
+  expect(
+    await came(() => frames.some((f) => f.type === "caught-up" || f.type === "refused")),
+    waited("the window's caught-up or refused frame"),
+  ).toBe(true);
   return { ws, frames, closed };
 }
 
@@ -113,7 +134,10 @@ describe("the transcript worker, a real child of fieldd's (TH-1)", () => {
     });
     cleanup.push(() => supervisor.stop());
     supervisor.start();
-    await until(() => supervisor.health().phase === "ready");
+    expect(
+      await came(() => supervisor.health().phase === "ready"),
+      waited("the worker to say ready"),
+    ).toBe(true);
     const key = f.store.secret();
     const [first] = spawned;
     expect(first).toBeDefined();
@@ -140,7 +164,10 @@ describe("the transcript worker, a real child of fieldd's (TH-1)", () => {
     // the tail, at the store's nudge through the supervisor
     f.store.onAppend((spark, run) => supervisor.appended(spark, run));
     f.store.append(VELA, RUN, { kind: "turn", edge: "end" });
-    await until(() => window.frames.some((fr) => fr.type === "line" && fr.line.seq === 4));
+    expect(
+      await came(() => window.frames.some((fr) => fr.type === "line" && fr.line.seq === 4)),
+      waited("line 4, the tail's"),
+    ).toBe(true);
   }, 60_000);
 
   it("restarts as a new generation: the sockets it served close, and a new ticket serves on the next", async () => {
@@ -159,7 +186,10 @@ describe("the transcript worker, a real child of fieldd's (TH-1)", () => {
     });
     cleanup.push(() => supervisor.stop());
     supervisor.start();
-    await until(() => supervisor.health().phase === "ready");
+    expect(
+      await came(() => supervisor.health().phase === "ready"),
+      waited("the worker to say ready"),
+    ).toBe(true);
     const ticket = randomBytes(32).toString("base64url");
     const { port } = await supervisor.request("registerTicket", {
       ticket,
@@ -169,10 +199,15 @@ describe("the transcript worker, a real child of fieldd's (TH-1)", () => {
     });
     const window = await read(`ws://127.0.0.1:${port}/transcripts`, ticket, [RUN]);
     child?.kill("SIGKILL");
-    await window.closed;
-    await until(
-      () => supervisor.health().phase === "ready" && supervisor.health().generation === 2,
+    expect(await settled(window.closed), waited("the killed generation's socket to close")).toBe(
+      true,
     );
+    expect(
+      await came(
+        () => supervisor.health().phase === "ready" && supervisor.health().generation === 2,
+      ),
+      waited("generation 2 to say ready"),
+    ).toBe(true);
     const again = randomBytes(32).toString("base64url");
     const next = await supervisor.request("registerTicket", {
       ticket: again,
@@ -231,7 +266,10 @@ describe("the ticket door end to end (TH-1; compose.sparks.transcript.openTicket
       transcriptHostTimings: { RESTART_BASE_MS: 50, RESTART_MAX_MS: 200 },
     });
     cleanup.push(() => daemon.stop());
-    await until(() => daemon.transcripts.supervisor.health().phase === "ready", 20_000);
+    expect(
+      await came(() => daemon.transcripts.supervisor.health().phase === "ready", 20_000),
+      waited("the daemon's transcript worker to say ready", 20_000),
+    ).toBe(true);
     return { daemon, dataDir };
   }
 
@@ -279,6 +317,6 @@ describe("the ticket door end to end (TH-1; compose.sparks.transcript.openTicket
       shell.call("compose.sparks.transcript.openTicket", { spark: VELA }),
     ).rejects.toThrow();
     await shell.call("system.revokeWindowToken", { tokenId });
-    await window.closed;
+    expect(await settled(window.closed), waited("the revoked window's socket to close")).toBe(true);
   }, 60_000);
 });

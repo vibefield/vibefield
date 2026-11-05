@@ -87,12 +87,18 @@ function harness() {
       },
     });
   const file = (spark: string, run: string) => join(dir, spark, `${run}.jsonl`);
-  const raw = (spark: string, run: string) =>
-    readFileSync(file(spark, run), "utf8")
+  /** That the store kept a run's file: asserted before the row reads or touches it, so a store that kept nothing
+   * fails the row by this assertion, never by the row's own fs call. */
+  const kept = (spark: string, run: string) =>
+    expect(existsSync(file(spark, run)), `${run}'s file is kept in ${spark}'s folder`).toBe(true);
+  const raw = (spark: string, run: string) => {
+    kept(spark, run);
+    return readFileSync(file(spark, run), "utf8")
       .split("\n")
       .filter((line) => line !== "")
       .map((line) => JSON.parse(line) as Record<string, unknown>);
-  return { root, dir, keyPath, events, open, file, raw };
+  };
+  return { root, dir, keyPath, events, open, file, kept, raw };
 }
 
 /** What a call answered, or what it threw as a door would answer it: an RpcCallError's kind, retryability, words and
@@ -112,14 +118,14 @@ function answerOf(call: () => unknown): unknown {
   }
 }
 
-/** Item 172's refusal, the transcript store's: UNAVAILABLE {spark-transcripts, records-unreadable}, in DESIGN.md §9's
- * words, retryable (the store reads at each ask). */
-const UNREADABLE = {
+/** Item 172's refusal, the transcript store's: UNAVAILABLE {spark-transcripts, records-unreadable}, in DESIGN.md §8's
+ * words, retryable (the store reads at each ask). Read when a row asks, never at the file's load. */
+const unreadable = () => ({
   kind: "UNAVAILABLE",
   retryable: true,
   message: TRANSCRIPTS_UNREADABLE,
   details: { service: SPARK_TRANSCRIPT_SERVICE.SERVICE, state: RECORD_STORES.STATE_UNREADABLE },
-};
+});
 
 /** A run as puppeteer's Agent hands it to the recorder: its `.on` surface, and its monitor's evidence. */
 function fakeAgent(lastEvidenceAt?: string) {
@@ -178,8 +184,8 @@ describe("the spark's transcript, kept (TH-1)", () => {
     expect(statSync(join(h.dir, VELA)).mode & 0o777).toBe(0o700);
     // the key a worker of fieldd's own verifies with, handed on its pipe (EL7)
     const [first] = lines;
-    if (first === undefined) throw new Error("no line");
-    const { mac, ...unsigned } = first;
+    expect(first, "the run's first line").toBeDefined();
+    const { mac, ...unsigned } = first ?? {};
     expect(
       createHmac("sha256", store.secret())
         .update(canonicalJson({ spark: VELA, run: RUN, line: unsigned }))
@@ -195,6 +201,8 @@ describe("the spark's transcript, kept (TH-1)", () => {
     store.append(VELA, RUN, { kind: "turn", edge: "end" });
     store.append(KIWI, "run-kiwi-1", { kind: "run", runtimeRunId: "run-kiwi-1", fresh: true });
     store.append(KIWI, "run-kiwi-1", { kind: "reply", messageId: "m-9", text: "Kiwi's words" });
+    h.kept(VELA, RUN);
+    h.kept(KIWI, "run-kiwi-1");
     const text = readFileSync(h.file(VELA, RUN), "utf8").split("\n");
     const kiwis = readFileSync(h.file(KIWI, "run-kiwi-1"), "utf8").split("\n");
     // an edit: the reply's words changed, its MAC kept
@@ -204,12 +212,13 @@ describe("the spark's transcript, kept (TH-1)", () => {
       mode: 0o600,
     });
     const read = store.read(VELA, RUN);
-    if (!("lines" in read)) throw new Error("not read");
-    expect(read.lines.map((line) => [line.seq, line.kind])).toEqual([
+    expect(read, "the run's file, read").toHaveProperty("lines");
+    const held = "lines" in read ? read : { lines: [], dropped: 0 };
+    expect(held.lines.map((line) => [line.seq, line.kind])).toEqual([
       [1, "run"],
       [3, "turn"],
     ]);
-    expect(read.dropped).toBe(3);
+    expect(held.dropped).toBe(3);
   });
 
   it("continues a run's seq across a restart, reading the file first, and never skips a number", () => {
@@ -225,9 +234,10 @@ describe("the spark's transcript, kept (TH-1)", () => {
     const store = h.open();
     store.append(VELA, "run-vela-2", { kind: "run", runtimeRunId: "run-vela-2", fresh: false });
     store.append(VELA, RUN, { kind: "run", runtimeRunId: RUN, fresh: true });
+    h.kept(VELA, "run-vela-2");
+    h.kept(VELA, RUN);
     // the first written began later: its run line says when
     const runs = store.runs(VELA);
-    if (!("runs" in runs)) throw new Error("not read");
     expect(runs.runs.map((run) => [run.runtimeRunId, run.fresh])).toEqual([
       ["run-vela-2", false],
       [RUN, true],
@@ -241,7 +251,7 @@ describe("the spark's transcript, kept (TH-1)", () => {
     const h = harness();
     const store = h.open();
     store.append(VELA, RUN, { kind: "run", runtimeRunId: RUN, fresh: true });
-    expect(existsSync(h.file(VELA, RUN)), "the run's line is kept").toBe(true);
+    h.kept(VELA, RUN);
     // a run's file the disk will not hand over (EACCES, every try): a fresh store must not begin its seq again over it
     chmodSync(h.file(VELA, RUN), 0o000);
     expect(
@@ -253,11 +263,11 @@ describe("the spark's transcript, kept (TH-1)", () => {
       "the store says it could not read the run's file",
     ).toContain("fieldd.transcripts.unreadable");
     // the door's listing: item 172's refusal, the store's own, in fieldd's words
-    expect(answerOf(() => h.open().runs(VELA))).toEqual(UNREADABLE);
+    expect(answerOf(() => h.open().runs(VELA))).toEqual(unreadable());
     chmodSync(h.file(VELA, RUN), 0o600);
     // a folder the disk refuses: the same refusal, never an empty list
     chmodSync(join(h.dir, VELA), 0o000);
-    expect(answerOf(() => h.open().runs(VELA))).toEqual(UNREADABLE);
+    expect(answerOf(() => h.open().runs(VELA))).toEqual(unreadable());
     chmodSync(join(h.dir, VELA), 0o700);
     expect(h.raw(VELA, RUN)).toHaveLength(1);
     // fieldd's words are DESIGN.md's (§8 "Chat's thread", under §9's rule), quoted whole
@@ -311,6 +321,7 @@ describe("the spark's transcript, kept (TH-1)", () => {
     const h = harness();
     const store = h.open();
     store.append(VELA, RUN, { kind: "run", runtimeRunId: RUN, fresh: true });
+    h.kept(VELA, RUN);
     chmodSync(h.file(VELA, RUN), 0o644);
     const fresh = h.open();
     expect(fresh.read(VELA, RUN)).toEqual({ absent: true });
@@ -503,6 +514,7 @@ describe("the recorder (TH-1; a spark's own run's events, and VibeField's own fa
     const recorder = new SparkTranscriptRecorder(h.open());
     const run = fakeAgent();
     recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    h.kept(VELA, RUN);
     const at = "2026-11-05T04:00:00.000Z";
     const yours = { id: "in-1", text: "rebase it", from: { kind: "you" as const }, at };
     const facts = { id: "in-2", text: "claude·2 finished", from: { kind: "fieldd" as const }, at };

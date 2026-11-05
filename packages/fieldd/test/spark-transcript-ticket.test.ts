@@ -102,6 +102,19 @@ function world(opts: { refuse?: Error } = {}) {
   return { root, store, tickets, registered, now, times };
 }
 
+/** The door's answer as the contract parses it, or what it refused with: the row asserts on it, so a door that
+ * refuses fails the row by that assertion, never by the refusal thrown into it. */
+const answered = async (call: Promise<unknown>) => {
+  try {
+    const parsed = SparkTranscriptOpenTicketResult.safeParse(await call);
+    return parsed.success ? parsed.data : { unparsed: parsed.error.issues };
+  } catch (error) {
+    return {
+      refused: error instanceof RpcCallError ? `${error.kind}: ${error.message}` : String(error),
+    };
+  }
+};
+
 const refused = async (call: Promise<unknown>) => {
   try {
     await call;
@@ -118,15 +131,14 @@ describe("compose.sparks.transcript.openTicket, fieldd's gate and answer (TH-1)"
     w.times.push("2026-11-05T03:00:00.000Z", "2026-11-04T20:00:00.000Z");
     w.store.append(VELA, "run-vela-2", { kind: "run", runtimeRunId: "run-vela-2", fresh: false });
     w.store.append(VELA, "run-vela-1", { kind: "run", runtimeRunId: "run-vela-1", fresh: true });
-    const first = SparkTranscriptOpenTicketResult.parse(
-      await w.tickets.open(WINDOW, { spark: VELA }),
-    );
-    expect(first).toMatchObject({
+    const answer = await answered(w.tickets.open(WINDOW, { spark: VELA }));
+    expect(answer, "the door's answer to this desktop's window").toMatchObject({
       spark: VELA,
       endpoint: "ws://127.0.0.1:53817/transcripts",
       expiresAt: w.now + SPARK_TRANSCRIPT.TICKET_TTL_MS,
       generation: 2,
     });
+    const first = answer as SparkTranscriptOpenTicketResult;
     expect(first.runs.map((run) => [run.runtimeRunId, run.fresh])).toEqual([
       ["run-vela-1", true],
       ["run-vela-2", false],
@@ -139,10 +151,9 @@ describe("compose.sparks.transcript.openTicket, fieldd's gate and answer (TH-1)"
       expiresAt: first.expiresAt,
     });
     // never idempotent: each answer is a new credential
-    const second = SparkTranscriptOpenTicketResult.parse(
-      await w.tickets.open(WINDOW, { spark: VELA }),
-    );
-    expect(second.ticket).not.toBe(first.ticket);
+    const second = await answered(w.tickets.open(WINDOW, { spark: VELA }));
+    expect(second, "the door's second answer").toHaveProperty("ticket");
+    expect((second as SparkTranscriptOpenTicketResult).ticket).not.toBe(first.ticket);
     expect(w.registered).toHaveLength(2);
   });
 
