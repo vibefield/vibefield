@@ -225,28 +225,31 @@ private struct LabClusterSection: View {
   }
 }
 
-/// The contact sheet: each agent's mark from the signed-distance atlas beside
-/// the neighbours it could be confused with. The chosen one is full ink; the
-/// others are dimmed.
+/// The marks the atlas holds, as the field draws them. LP-4 (VF-PM's ruling
+/// (a), 2026-11-05): a shipped lab, even a DEBUG-only one, shows only what the
+/// atlas holds. So the sheet lists `MarksAtlas`' KEPT candidates and no other:
+/// the neighbours the design weighed beside them are blank in `marks.png`, and
+/// every other agent wears its letter. The kept set is read from the table,
+/// never listed here a second time.
 private struct LabMarksSection: View {
   private let columns = 5
   private let cell: CGFloat = 64
   private let caption: CGFloat = 30
+  private let marks = MarksAtlas.candidates.filter(\.kept)
 
   var body: some View {
-    let candidates = MarksAtlas.candidates
-    let rows = (candidates.count + columns - 1) / columns
+    let rows = (marks.count + columns - 1) / columns
     VStack(alignment: .leading, spacing: 12) {
       LabLede(
         title: "Marks",
-        lede: "Each agent’s mark from the signed-distance atlas, beside the neighbours it could be confused with. The chosen one is full ink; the others are dimmed.")
+        lede: "The marks the signed-distance atlas holds, as the field draws them. Every other agent wears its letter.")
       GeometryReader { proxy in
         let cellWidth = proxy.size.width / CGFloat(columns)
         ZStack(alignment: .topLeading) {
-          LabMarksSurface(cellWidth: cellWidth, cell: cell, caption: caption, columns: columns)
-          ForEach(Array(candidates.enumerated()), id: \.element.id) { index, candidate in
+          LabMarksSurface(marks: marks, cellWidth: cellWidth, cell: cell, caption: caption, columns: columns)
+          ForEach(Array(marks.enumerated()), id: \.element.id) { index, candidate in
             VStack(spacing: 1) {
-              Text(candidate.title + (candidate.chosen ? " ✓" : ""))
+              Text(candidate.title)
                 .font(FieldType.mono(7, .heavy))
                 .foregroundStyle(FieldPalette.textMain)
               Text(candidate.provider.map { "for \($0)" } ?? candidate.id)
@@ -265,6 +268,9 @@ private struct LabMarksSection: View {
 }
 
 private struct LabMarksSurface: UIViewRepresentable {
+  /// The kept candidates, in atlas order; each is a pick the app draws, so each
+  /// is full ink.
+  let marks: [MarksAtlas.Candidate]
   let cellWidth: CGFloat
   let cell: CGFloat
   let caption: CGFloat
@@ -284,15 +290,16 @@ private struct LabMarksSurface: UIViewRepresentable {
     let cell = cell
     let caption = caption
     let columns = columns
+    let kept = marks
     view.frameSource = { _, _, _ in
-      let marks = MarksAtlas.candidates.enumerated().map { index, candidate in
+      let sheet = kept.enumerated().map { index, candidate in
         RenderMark(
           tile: candidate.tile, size: 40,
           x: Double(CGFloat(index % columns) * cellWidth + cellWidth / 2),
           y: Double(CGFloat(index / columns) * (cell + caption) + cell / 2),
-          colour: theme.ink, alpha: candidate.chosen ? 1 : 0.4)
+          colour: theme.ink, alpha: 1)
       }
-      return ([], nil, marks)
+      return ([], nil, sheet)
     }
   }
 }

@@ -9,20 +9,23 @@ import UIKit
 // from @lobehub/icons-static-svg@1.94.0 by research/svg-sdf's generator:
 // 64-texel tiles, spread 8, pxRange 16, 0.5 at the edge, the field in the red
 // channel). The bake carried each agent's own mark plus the neighbours it
-// could be confused with, so the lab could show the choice; the app draws only
-// the chosen ones that are KEPT.
+// could be confused with, so the design could weigh the choice; the app draws
+// only the chosen ones that are KEPT.
 //
 // LP-4 (2026-11-05, the 0.9 launch; James kept two vendor logos in v1): only
 // Claude's and Codex's marks are kept. Every other vendor's mark is a third
 // party's trademark the app has no leave to draw, so every other agent — its
-// pick still recorded as `chosen` for the lab — wears its LETTER, the swarm's
-// own path for an agent with no tile (`SwarmRenderer`'s watermark fallback).
-// The png ships those two tiles alone: every other tile is blanked IN PLACE
-// (every channel 0, alpha 0) by `apps/ios/scripts/blank-unkept-marks.mjs`,
+// pick still recorded as `chosen`, the design's record — wears its LETTER, the
+// swarm's own path for an agent with no tile (`SwarmRenderer`'s watermark
+// fallback). The png ships those two tiles alone: every other tile is blanked
+// IN PLACE (every channel 0, alpha 0) by `apps/ios/scripts/blank-unkept-marks.mjs`,
 // which holds its table to `candidates` below and prints the pixel digest
 // `FieldSwarmTests` pins. The kept tiles are the bake's bytes and no tile
-// moved; the lab's contact sheet draws the blanked candidates as empty cells.
-// A re-bake is the generator's, and the generator is not in this repo.
+// moved. The DEBUG lab's sheet (`-vf-swarm-lab=marks`) lists the kept marks
+// alone, read from this table (VF-PM's ruling (a)): a shipped lab shows only
+// what the atlas holds. The design's record of the blanked candidates is the
+// gitignored draft/launch/swarm-marks-candidates.md. A re-bake is the
+// generator's, and the generator is not in this repo.
 //
 // THE ALLOW-LISTED PRESENTATION TABLE (AC-5, R23b). `candidates` below is the
 // one place in this target that names agents, and it is allowed to because it
@@ -55,7 +58,7 @@ public enum MarksAtlas {
     /// The catalog mark key (the agent's catalog id) this mark belongs with,
     /// when it is a candidate for one.
     public var provider: String?
-    /// The mark the design picked for that provider (the lab's ✓).
+    /// The mark the design picked for that provider.
     public var chosen: Bool
     /// Whether the app may draw that pick (LP-4): a vendor's logo is its
     /// owner's, and only the two James kept for v1 are drawn. Unkept, the
