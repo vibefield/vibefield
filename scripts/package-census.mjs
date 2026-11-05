@@ -117,8 +117,30 @@ const walk = (absDir, relBase, out) => {
 // 17 KB one). So a shape carries a COUNT, and the checker compares counts too — the
 // first draft keyed the manifest by shape alone and silently dropped one of the pair,
 // under-reporting the census by a file. A third `main-*.js` must read as drift.
+//
+// LP-6 (2026-11-05) — two names the rule above misread, which is half of why `--assert
+// --strict` sat red on the renderer (the other half is a baseline older than MV, the
+// onboarding panes and ICE 0.16: that takes a real build and `--update`, never a rule):
+//   - The host singletons are UNHASHED BY DESIGN (electron-shell/src/vite/host-singletons.ts:
+//     `SINGLETON_CHUNK_PREFIX`, "nothing else in the renderer output may start with it";
+//     the import map names them byte for byte and main admits that map by CSP hash). Vite's
+//     hash alphabet includes `-`, so any slug whose last eight characters look like one was
+//     shaped as hashed: `singleton-vibecook-ice-desk.js` read `singleton-vibecook-[hash].js`,
+//     `…-plugin-sdk-behavior.js` read `…-plugin-sdk-[hash].js`. A singleton is an address,
+//     compared exactly: a renamed one breaks every plugin's import and must be drift.
+//   - A dependency bundled with esbuild code-splitting (ICE's `dist/chunk-ENIFIUEP.js` …)
+//     reaches the renderer named after its file, so its chunk carries a SECOND content hash,
+//     the dependency's own (esbuild's: eight characters of base32, A–Z and 2–7). Every ICE
+//     release renamed them all, a missing/unexpected pair per chunk that said nothing. That
+//     hash is a hash: the shape is `chunk-[upstream-hash]-[hash].js` and it is COUNTED, so a
+//     chunk ICE adds or drops still diffs, as a rebuilt Vite chunk does not.
 const HASHED = /^(.*\/assets\/.*)-[A-Za-z0-9_-]{8}(\.[^./]+)$/;
-const shapeOf = (rel) => rel.replace(HASHED, "$1-[hash]$2");
+const SINGLETON = /\/assets\/singleton-[^/]+$/u;
+const UPSTREAM_CHUNK = /(\/assets\/chunk-)[A-Z2-7]{8}(?=-\[hash\]\.[^./]+$)/u;
+const shapeOf = (rel) =>
+  SINGLETON.test(rel)
+    ? rel
+    : rel.replace(HASHED, "$1-[hash]$2").replace(UPSTREAM_CHUNK, "$1[upstream-hash]");
 
 // ---- §7.3 "must never ship" classes ----------------------------------------
 // Path-shaped tests only, and deliberately narrow ones: this list is the single fatal
