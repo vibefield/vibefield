@@ -1262,3 +1262,16 @@ export function needsLiveAnswerOf(item: NeedsItem, choice: number): NeedsItem {
     return answeredOf(item, choice, { told: false, waits: "Vela's session is not running yet" });
   return answeredOf(item, choice);
 }
+
+// SP-1e2's renderer half — what the crew card's fixtures (`crew-fixtures.ts`) stand on: this file's clock, its record
+// lines, its board rows, its Agent Profiles and its Vela, so the card's plates are dealt as every Chat plate is.
+export {
+  AGENT as FIXTURE_AGENT,
+  HATCH as FIXTURE_HATCH,
+  minutesAgo as fixtureMinutesAgo,
+  PROFILE_SETS as FIXTURE_PROFILE_SETS,
+  row as fixtureRow,
+  run as fixtureRun,
+  said as fixtureLine,
+  VELA as FIXTURE_VELA,
+};

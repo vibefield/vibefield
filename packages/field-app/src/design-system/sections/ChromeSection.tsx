@@ -40,6 +40,7 @@ import {
 import { ChatSpecimen } from "../ChatPreview";
 import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
+import { CrewCardLivePlate, CrewCardPlates } from "../CrewCardPreview";
 import { DeskPreview } from "../DeskPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { NeedsCardLivePlate, NeedsCardPlates } from "../NeedsCardPreview";
@@ -263,6 +264,27 @@ export function ChromeSection({
           the cap, an agent's ask with Show alone, a kind this build does not know — then answering,
           refused, answered three ways and a narrow thread, by this page's light and by the Moon's.
           Fixture items read by the product's own card.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="Chat's crew card — the agents Vela started, at their time in its thread"
+        source="chat/CrewCardView.tsx · chat/crew-card.ts · chat/crews-port.ts · DESIGN.md §8 “Chat's crew card”, §9 “Chat's words”"
+        bleed
+      >
+        <CrewCardLivePlate />
+        <CrewCardPlates />
+        <p className="vf-ds-stage-caption">
+          SP-1e2: when Vela starts agents, one card under its act line, kept live. Live, the
+          product's own reader over a fixture door, stepping a crew a beat at a time: four Starting
+          with no model named, their models named, then Done one by one to All done, the ring easing
+          as each finishes. Still, starting, 1 of 4 done with a member's ask at the foot, All done,
+          a member ended and the others renumbered, after a reload, its crews unreadable (the
+          bound), the board unreadable, Vela asleep, two crews at their times, 1 of 4 done · 1
+          ended, All ended, members that differ, a shared model with no effort, neither door
+          readable and a narrow thread, by this page's light and by the Moon's. Fixture crews, board
+          rows and Agent Profiles read by the product's own card; its rows and its foot open nothing
+          here.
         </p>
       </Specimen>
 

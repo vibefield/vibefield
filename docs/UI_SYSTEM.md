@@ -150,8 +150,10 @@ The catalog currently mounts these shipping views directly:
   plate
 - Chat's crew card (SP-1e2, DESIGN.md §8 "Chat's crew card"): in a specimen of its own
   (`CrewCardPreview`), the shipping `CrewCardView` inside the shipping thread view, over the
-  product's own reading (`crewCardOf`) of fixture crews, board rows and Agent Profiles, its names by
-  the product's own `sessionHandlesOf` (`chat-fixtures.ts`), never a copy of its markup or CSS —
+  product's own reading (`crewCardsOf`) of fixture crews, board rows and Agent Profiles, its names
+  by the product's own `sessionHandlesOf` (`crew-fixtures.ts`, on `chat-fixtures.ts`'s clock, board
+  helpers and Vela), never a copy of its markup or CSS (*corrected 2026-11-05, SP-1e2's renderer
+  half, at the build: this said `crewCardOf` and `chat-fixtures.ts`*) —
   starting, "1 of 4 done" with a member's ask held at the foot, "All done", a member ended and the
   others renumbered, after a reload, its crews unreadable (the bound), the board unreadable, Vela
   asleep with its line, and two crews in one thread at their times; *added 2026-11-05 (SP-1e2's

@@ -18,7 +18,7 @@ import { NO_HANDLES, sessionHandlesOf } from "./at-rows";
 import { ChatComposer, type ComposerPort } from "./ChatComposer";
 import { type ChatAct, ChatPanelView, shownOf } from "./ChatPanelView";
 import type { DraftMessage, DraftPart } from "./composer-draft";
-import { crewCardsOf } from "./crew-card";
+import { crewCardsOf, crewsOfFlow } from "./crew-card";
 import { CREWS_READING, type CrewsDoor, type CrewsReading, useSparkCrews } from "./crews-port";
 import { NO_PAUSE, type PauseAct, pauseTurn, type SparkPauser, turnOf } from "./head-act";
 import { useNeedsCard } from "./needs-card-stand";
@@ -392,12 +392,7 @@ export function ChatView({
     for (const row of rows)
       if (row.origin?.crew !== undefined) seenRuns.current.add(row.runtimeRunId);
   const crewIds = useMemo(
-    () =>
-      threadFlow?.state === "ready"
-        ? threadFlow.items.flatMap((item) =>
-            item.kind === "act" && item.crew !== undefined ? [item.crew] : [],
-          )
-        : [],
+    () => (threadFlow === undefined ? [] : crewsOfFlow(threadFlow)),
     [threadFlow],
   );
   const cards = useMemo(

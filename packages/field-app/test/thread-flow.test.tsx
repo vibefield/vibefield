@@ -11,6 +11,7 @@ import type { CrewCard } from "../src/chat/crew-card";
 import { ThreadFlowView } from "../src/chat/ThreadFlowView";
 import { FLOW_WORDS } from "../src/chat/transcript-items";
 import { ChatPreview } from "../src/design-system/ChatPreview";
+import { CrewCardPlates } from "../src/design-system/CrewCardPreview";
 import type { ChatState } from "../src/design-system/chat-fixtures";
 
 let host: HTMLElement | null = null;
@@ -325,5 +326,90 @@ describe("a crew's card in the flow (SP-1e2's renderer half; DESIGN.md §8 'Chat
     );
     expect($('[data-row="act"]')).not.toBeNull();
     expect($(".vf-crew-card")).toBeNull();
+  });
+});
+
+describe("the crew card's plates (SP-1e2's renderer half; docs/UI_SYSTEM.md, SR-Q11)", () => {
+  /** each plate's first card: its head's words, its rows' states, its names, its foot's line */
+  const cardIn = (id: string) => {
+    const plate = $(`.vf-ds-crew-plates:not(.dark) [data-plate="${id}"]`);
+    const card = plate?.querySelector<HTMLElement>(".vf-crew-card") ?? null;
+    return {
+      plate,
+      head: words(card?.querySelector(".vf-crew-head")),
+      states: [...(card?.querySelectorAll<HTMLElement>(".vf-crew-row") ?? [])].map(
+        (row) => row.dataset.state ?? null,
+      ),
+      names: [...(card?.querySelectorAll<HTMLElement>(".vf-crew-name") ?? [])].map(words),
+      line: words(card?.querySelector(".vf-crew-line")),
+    };
+  };
+
+  it("draws every plate on the product's reading, by this page's light and the Moon's", async () => {
+    await mount(<CrewCardPlates locale="en-US" />);
+    expect($$(".vf-ds-crew-plates")).toHaveLength(2);
+    expect($$(".vf-ds-crew-plates.dark .vf-crew-card").length).toBe(
+      $$(".vf-ds-crew-plates:not(.dark) .vf-crew-card").length,
+    );
+    const head = "4 agents · Opus 5.5 · high";
+    const running = ["done", "working", "needs", "working"];
+    const table: [string, string, (string | null)[], string][] = [
+      ["starting", "4 agents 0 of 4 done", Array(4).fill("starting"), ""],
+      ["running", `${head} 1 of 4 done`, running, ""],
+      ["all-done", `${head} All done`, Array(4).fill("done"), ""],
+      ["renumbered", `${head} 1 of 4 done · 1 ended`, ["ended", "working", "working", "done"], ""],
+      ["reload", `${head} All done`, ["done", "ended", "ended", "ended"], ""],
+      [
+        "crews-unreadable",
+        `${head} 4 still running`,
+        running,
+        "VibeField can't read Vela's crews right now",
+      ],
+      [
+        "board-unreadable",
+        head,
+        [null, null, null, null],
+        "VibeField can't read what's running right now",
+      ],
+      [
+        "asleep",
+        `${head} 2 of 4 done`,
+        ["done", "working", "working", "done"],
+        "Vela is asleep — it hears these when it wakes",
+      ],
+      ["done-ended", `${head} 1 of 4 done · 1 ended`, ["done", "ended", "working", "working"], ""],
+      ["all-ended", `${head} All ended`, Array(4).fill("ended"), ""],
+      ["differ", "4 agents 1 of 4 done", ["working", "working", "done", "working"], ""],
+      [
+        "no-effort",
+        "4 agents · Opus 5.5 1 of 4 done",
+        ["done", "working", "working", "working"],
+        "",
+      ],
+      ["blind", "Agents", [], "VibeField can't read Vela's crews right now"],
+      ["narrow", `${head} 1 of 4 done`, running, ""],
+    ];
+    for (const [id, words, states, line] of table) {
+      const card = cardIn(id);
+      expect([card.head, card.states, card.line], id).toEqual([words, states, line]);
+    }
+    // names follow @: one ended and named as fieldd named it, the others renumbered
+    expect(cardIn("renumbered").names).toEqual([
+      "Claude Code in vibe-field",
+      "vibe-field",
+      "vibe-field·2",
+      "vibe-field·3",
+    ]);
+    // the board unreadable: @ offers no handle, so each is named as fieldd names a run
+    expect(cardIn("board-unreadable").names).toEqual(Array(4).fill("Claude Code in vibe-field"));
+    // a member's ask at the foot, under the card; a narrow thread
+    expect(cardIn("running").plate?.querySelector(".vf-needs-card")).not.toBeNull();
+    expect(cardIn("narrow").plate?.hasAttribute("data-narrow")).toBe(true);
+    // two crews, each under its own line
+    const two = cardIn("two-crews").plate;
+    expect([...(two?.querySelectorAll<HTMLElement>(".vf-crew-head") ?? [])].map(words)).toEqual([
+      `${head} 1 of 4 done`,
+      "1 agent · Opus 5.5 · high 0 of 1 done",
+    ]);
   });
 });

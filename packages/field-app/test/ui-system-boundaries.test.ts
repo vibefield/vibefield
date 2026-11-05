@@ -255,6 +255,36 @@ describe("UI system ownership boundaries", () => {
     expect(source("design-system/sections/ChromeSection.tsx")).toMatch(/<NeedsCardPlates\s*\/>/u);
   });
 
+  it("keeps the crew card's fixture an ADAPTER — the shipping card in the shipping flow over the product's reading (SP-1e2)", () => {
+    // The catalog stands in for what fieldd answers — Vela's record lines, the crews it keeps, the board's rows — and
+    // runs them through the PRODUCT's own readings (`transcriptItemsOf`, `crewsOfFlow`, `crewCardsOf`, @'s
+    // `sessionHandlesOf`); the card it mounts is the shipping one, inside the shipping flow (`ThreadFlowView`), and
+    // the live plate reads its fixture door through the product's own reader (`useSparkCrews`). Never the card's
+    // classes, never a stylesheet, never the product's doors, its feed, the line, the reveal or Godview.
+    const preview = source("design-system/CrewCardPreview.tsx");
+    const fixtures = source("design-system/crew-fixtures.ts");
+    expect(preview).toMatch(/<ThreadFlowView\s/u);
+    expect(preview).toContain("useSparkCrews(");
+    expect(fixtures).toContain("crewCardsOf(");
+    expect(fixtures).toContain("crewsOfFlow(");
+    expect(fixtures).toContain("sessionHandlesOf(");
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/className="vf-crew/);
+      expect(file).not.toMatch(/className="vf-chat/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("crewsDoorOver");
+      expect(file).not.toContain("startSparksFeed");
+      expect(file).not.toContain("sayOnLine");
+      expect(file).not.toContain("revealRun");
+      expect(file).not.toContain("requestView");
+    }
+    const chrome = source("design-system/sections/ChromeSection.tsx");
+    expect(chrome).toMatch(/<CrewCardLivePlate\s*\/>/u);
+    expect(chrome).toMatch(/<CrewCardPlates\s*\/>/u);
+  });
+
   it("never reaches a terminal from Chat's catalog — the thread is the shipping flow, never a pane (SP-1d; TH-1)", () => {
     // A catalog holds no terminal pool ("a host, never a painter"): the pool is never reached from Chat's plates, and
     // no picture of a terminal stands in. *TH-1, the pane leaves Chat:* the pane's place was the shipping
@@ -1183,6 +1213,8 @@ describe("UI system ownership boundaries", () => {
       "chat/ThreadFlowView.tsx",
       // CP-3 — the needs-you card
       "chat/NeedsCardView.tsx",
+      // SP-1e2 — the crew card
+      "chat/CrewCardView.tsx",
       // SP-1d — Chat's composer
       "chat/ChatComposer.tsx",
       "chat/ChatComposerView.tsx",
@@ -1232,6 +1264,7 @@ describe("UI system ownership boundaries", () => {
       "chat/chat-composer.css",
       "chat/new-spark-sheet.css",
       "chat/needs-card.css",
+      "chat/crew-card.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }

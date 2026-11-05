@@ -1473,6 +1473,60 @@
   margin: 0 auto;
 }
 
+/* Chat's crew card on fixtures (SP-1e2's renderer half): each still plate a box as wide as Chat's thread column (a
+   narrow thread's half of it) on the canvas's ground, the product's flow in it at its own padding with the foot's card
+   under it; the live plate one such box. The card's own rules, and the flow's, are the product's. */
+.vf-ds-crew-plates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px;
+  margin: 0;
+  padding: 24px;
+  background: var(--vf-canvas-bg);
+}
+
+.vf-ds-crew-plate {
+  display: grid;
+  gap: 8px;
+  width: 696px;
+  max-width: 100%;
+  margin: 0;
+}
+
+.vf-ds-crew-plate[data-narrow] {
+  width: 376px;
+}
+
+.vf-ds-crew-plate-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+}
+
+.vf-ds-crew-plate-box > .vf-chat-items {
+  padding: 0 28px;
+}
+
+.vf-ds-crew-plate-label {
+  color: var(--vf-ds-muted);
+  font-size: 10px;
+  font-weight: 550;
+}
+
+.vf-ds-crew-live {
+  display: grid;
+  gap: 12px;
+  padding: 12px 24px 0;
+  background: var(--vf-canvas-bg);
+}
+
+.vf-ds-crew-live > .vf-ds-crew-plate-box {
+  width: 696px;
+  max-width: 100%;
+}
+
 /* The New spark sheet on fixtures (SP-1c): Chat's plate with the sheet over it, drawn into
    the plate as the product draws it into the window; Chat recedes behind it by the product's
    rule (`data-peek-recede`). The sheet's own rules are the product's. */

@@ -9,6 +9,7 @@ import {
 import { AT_WORDS } from "./at-rows";
 import type { CrewsReading } from "./crews-port";
 import type { BoardRows } from "./sparks-feed";
+import type { Flow } from "./transcript-items";
 
 // CHAT'S CREW CARD, AS DATA (SP-1e2's renderer half; DESIGN.md §8 "Chat's crew card", §9 its words). Pure: the crews
 // fieldd keeps for the shown spark (`compose.sparks.crews.subscribe`, as the window read it), the board's rows, @'s
@@ -102,6 +103,15 @@ export interface CrewCardInputs {
   /** the runs this window has seen on the board: a member the board, read, no longer holds is Ended, one it has not
    * held yet is Starting (absent: none seen) */
   readonly seen?: ReadonlySet<string> | undefined;
+}
+
+/** The crews the flow's act lines name, in their order: the cards it hangs (Chat's controller and the catalog's). */
+export function crewsOfFlow(flow: Flow): CrewId[] {
+  return flow.state === "ready"
+    ? flow.items.flatMap((item) =>
+        item.kind === "act" && item.crew !== undefined ? [item.crew] : [],
+      )
+    : [];
 }
 
 /** One member as the card reads it: the record's, the board's, or both. */
