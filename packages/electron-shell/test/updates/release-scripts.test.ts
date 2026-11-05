@@ -1610,6 +1610,10 @@ describe("release.yml's shape — the permissions table, as a test", () => {
     expect(unsignedChecks?.text).toMatch(
       /\n {10}node packaging\/notarize-dmg\.mjs --dir release --unsigned\n/,
     );
+    // AR-7j (row 34): the unsigned path runs the typed-agent witness as package:mac:release does, right after History's
+    expect(unsignedChecks?.text).toMatch(
+      /verify-history-package\.mjs --native-root "\$app\/Contents\/Resources\/bin"\n {10}node packaging\/verify-agents-package\.mjs --native-root "\$app\/Contents\/Resources\/bin"\n/,
+    );
     const copy = build.find((step) => step.name === "Hash the planes (D11)")?.text ?? "";
     expect(copy).toMatch(/-name '\*\.zip\.blockmap'/);
     expect(copy).not.toMatch(/-name '\*\.blockmap'|-name '\*\.dmg\.blockmap'/);

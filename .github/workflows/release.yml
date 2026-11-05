@@ -284,6 +284,7 @@ jobs:
           app="release/$OUT/VibeField.app"
           node packaging/verify-files-package.mjs --native-root "$app/Contents/Resources/bin"
           node packaging/verify-history-package.mjs --native-root "$app/Contents/Resources/bin"
+          node packaging/verify-agents-package.mjs --native-root "$app/Contents/Resources/bin"
           node packaging/verify-plugins-package.mjs --app "$app" --require-release-key
           node packaging/verify-live-surface-release.mjs --app "$app" --enumerate-only
           # LP-1: no credentials, so the DMG is not signed, notarized or stapled — it says so; the feed's DMG entry is
