@@ -1,0 +1,14 @@
+{
+  "id": "ny-a07c3e19d2b8f456",
+  "kind": "agent-ask",
+  "state": "open",
+  "from": {
+    "name": "claude·2",
+    "session": "run-31"
+  },
+  "spark": "sp-7k2m9q4x",
+  "asked": "2026-10-31T16:07:40.250Z",
+  "ask": "permission",
+  "tool": "Bash",
+  "count": 1
+}

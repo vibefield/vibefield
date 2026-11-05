@@ -209,6 +209,21 @@ const remoteFixtures = [
   "agent-report-shown.routed.json",
   ...remoteWitness,
 ];
+// IOS-12b — Chat on the phone: the home's lists of the sparks and of the needs-you queue (`scope: "mesh"`, IOS-12a),
+// and an item of each kind, which the kit's `SparkSummary` / `NeedsItem` readers (FieldProductTests) parse.
+const sparkFixtures = [
+  "compose-sparks-list.valid.json",
+  "compose-sparks-list.merged.json",
+  "compose-sparks-list.turned.json",
+  "needs-list.valid.json",
+  "needs-list.merged.json",
+  "needs-item.question.json",
+  "needs-item.held-send.json",
+  "needs-item.held-send-cut.json",
+  "needs-item.held-spawn.json",
+  "needs-item.agent-ask.json",
+  "needs-item.unknown-kind.json",
+];
 const requiredMirrors = [
   ["freeway", freewayFixtures, ["Tests/FieldFreewayTests"]],
   ["tp", tpFixtures, ["Tests/FieldRoutedTerminalTests"]],
@@ -236,6 +251,8 @@ const requiredMirrors = [
   // PG-3c — the remote cut's readers' goldens; PG-3d — the fold's parity golden beside them, which
   // the phone's copy of its home's board is held to step by step (PhoneFoldParityTests)
   ["remote", [...remoteFixtures, "phone-fold.golden.json"], ["Tests/FieldProductTests"]],
+  // IOS-12b — the sparks' and the needs' lists, and each kind of item, read by Chat on the phone
+  ["sparks", sparkFixtures, ["Tests/FieldProductTests"]],
   // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's;
   // PG-3e — the body golden, which the drawn rows' bubbles are held to (PhoneBodyParityTests)
   [

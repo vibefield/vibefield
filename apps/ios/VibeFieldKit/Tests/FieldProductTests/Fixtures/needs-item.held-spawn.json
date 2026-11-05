@@ -1,0 +1,17 @@
+{
+  "id": "ny-5e2b7d90c1a4f863",
+  "kind": "held-spawn",
+  "state": "open",
+  "from": {
+    "name": "Vela",
+    "session": "run-12",
+    "spark": "sp-7k2m9q4x"
+  },
+  "spark": "sp-7k2m9q4x",
+  "asked": "2026-10-31T16:06:02.004Z",
+  "words": "review the input queue's restore for a forged file",
+  "choices": ["Allow one more", "Not now"],
+  "agent": "claude",
+  "folder": "vibe-field",
+  "live": 8
+}
