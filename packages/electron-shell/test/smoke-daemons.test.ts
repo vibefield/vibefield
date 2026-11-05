@@ -294,7 +294,7 @@ describe("smokeHome — the vf-smoke-* root above the user root, and nothing els
 
 // `smokeHome` reads a Unix path (its `/users` parent); the smoke homes are /tmp's on Unix
 describe.skipIf(process.platform === "win32")(
-  "removeSmokeRoot — BP-1c: a home the launcher handed as userData is the launcher's to remove",
+  "removeSmokeRoot — BP-1c: a home that is the run's own userData is never removed while Electron lives",
   () => {
     const saved = {
       data: process.env["FIELDD_DATA_DIR"],
@@ -334,28 +334,46 @@ describe.skipIf(process.platform === "win32")(
     it("a green run removes its user root and leaves the handed home whole, saying who removes it", () => {
       const h = home();
       const argv = ["electron", ".", `--user-data-dir=${h.home}`, "--smoke-canvas"];
-      expect(said(() => removeSmokeRoot(h.userRoot, true, argv))).toEqual([
+      // the home IS this run's userData (Electron honours the handed `--user-data-dir`)
+      expect(said(() => removeSmokeRoot(h.userRoot, true, h.home, argv))).toEqual([
         `SMOKE_HOME ${JSON.stringify({ home: h.home, removed: false, removedBy: "launcher" })}\n`,
       ]);
       expect(existsSync(h.userRoot)).toBe(false);
       expect(existsSync(h.home)).toBe(true);
     });
 
-    it("a green run whose home it minted itself (no launcher handed it) removes the home whole, as before", () => {
+    it("a green run on a home main MINTED as its own userData (a smoke started by hand) never removes it while Electron lives: left for the OS", () => {
       const h = home();
-      expect(said(() => removeSmokeRoot(h.userRoot, true, ["electron", "."]))).toEqual([
+      // no `--user-data-dir`: main minted the home and set it as userData (isolateSmokeProfile)
+      expect(said(() => removeSmokeRoot(h.userRoot, true, h.home, ["electron", "."]))).toEqual([
+        `SMOKE_HOME ${JSON.stringify({ home: h.home, removed: false, removedBy: "os" })}\n`,
+      ]);
+      expect(existsSync(h.userRoot)).toBe(false);
+      // Chromium's profile, whole: the run never reported a folder removed that Chromium then writes again
+      expect(existsSync(join(h.home, "logs"))).toBe(true);
+    });
+
+    it("a green run whose home is NOT its userData (a profile apart, `dataRoot` minted the home) removes the home whole, as before", () => {
+      const h = home();
+      const profile = join(tmpdir(), "vf-smoke-profile-apart");
+      const argv = ["electron", ".", `--user-data-dir=${profile}`];
+      expect(said(() => removeSmokeRoot(h.userRoot, true, profile, argv))).toEqual([
         `SMOKE_HOME ${JSON.stringify({ home: h.home, removed: true })}\n`,
       ]);
       expect(existsSync(h.home)).toBe(false);
     });
 
-    it("a red run keeps the home and names it, handed or not", () => {
-      const h = home();
-      const argv = ["electron", ".", `--user-data-dir=${h.home}`];
-      expect(said(() => removeSmokeRoot(h.userRoot, false, argv))).toEqual([
-        `SMOKE_HOME ${JSON.stringify({ home: h.home, removed: false })}\n`,
-      ]);
-      expect(existsSync(join(h.home, "logs"))).toBe(true);
+    it("a red run keeps the home and names it, handed, minted or apart", () => {
+      for (const userData of ["handed", "minted", "apart"] as const) {
+        const h = home();
+        const own = userData === "apart" ? join(tmpdir(), "vf-smoke-profile-apart") : h.home;
+        const argv =
+          userData === "minted" ? ["electron", "."] : ["electron", ".", `--user-data-dir=${own}`];
+        expect(said(() => removeSmokeRoot(h.userRoot, false, own, argv))).toEqual([
+          `SMOKE_HOME ${JSON.stringify({ home: h.home, removed: false })}\n`,
+        ]);
+        expect(existsSync(join(h.home, "logs")), userData).toBe(true);
+      }
     });
   },
 );

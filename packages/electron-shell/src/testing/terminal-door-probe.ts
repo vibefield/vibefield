@@ -313,7 +313,7 @@ export async function runTerminalDoorProbe(opts: {
     process.stdout.write(`SMOKE_TEARDOWN ${JSON.stringify(daemons)}\n`);
     await opts.beforeExit().catch(() => undefined);
     try {
-      removeSmokeRoot(opts.root, code === 0);
+      removeSmokeRoot(opts.root, code === 0, app.getPath("userData"));
     } catch {
       /* the exit is unconditional */
     }

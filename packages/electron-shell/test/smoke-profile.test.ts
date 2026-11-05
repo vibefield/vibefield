@@ -1,17 +1,20 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   handedAsUserData,
   isolateSmokeProfile,
   isSmokeHome,
+  SMOKE_HOME_DATA_ROOT_MARKS,
   SMOKE_HOME_PREFIX,
   SMOKE_PROFILE_PREFIX,
+  sameDirectory,
   sharedProfilePath,
   smokeHomeParent,
+  smokeHomeRefusal,
   userDataDirArg,
 } from "../src/main/smoke-profile";
 import { fakeElectron as installFakeElectron } from "./fake-electron";
@@ -37,13 +40,52 @@ describe("main's smoke profile", () => {
     expect(set).toEqual([]);
   });
 
-  it("BP-1c: a handed smoke HOME is known by its name — its data root is the same directory", () => {
+  it("BP-1c: a handed smoke HOME minted for THIS run, still fresh, is its home — its data root is the same directory", () => {
     const profile = isolateSmokeProfile(
       "smoke-canvas",
       ["electron", ".", "--user-data-dir=/tmp/vf-smoke-hnUors", "--smoke-canvas"],
-      { setUserData: () => undefined, mintDir: () => "/never" },
+      {
+        setUserData: () => undefined,
+        mintDir: () => "/never",
+        // run-smoke.mjs names the run after the home it minted (`VF_SMOKE_RUN`)
+        env: { VF_SMOKE_RUN: "vf-smoke-hnUors" },
+        holdsDataRoot: () => false,
+      },
     );
     expect(profile).toEqual({ userData: "/tmp/vf-smoke-hnUors", minted: false, home: true });
+  });
+
+  it("BP-1c: the name alone never makes a handed folder the run's home — not this run's, or already used, it roots its data apart", () => {
+    const handed = (
+      env: Record<string, string | undefined>,
+      holdsDataRoot: boolean,
+    ): ReturnType<typeof isolateSmokeProfile> =>
+      isolateSmokeProfile(
+        "smoke-canvas",
+        ["electron", ".", "--user-data-dir=/private/tmp/vf-smoke-Ab12Cd", "--smoke-canvas"],
+        { setUserData: () => undefined, env, holdsDataRoot: () => holdsDataRoot },
+      );
+    const userData = "/private/tmp/vf-smoke-Ab12Cd";
+    // handed by hand (no mark), or by a launcher whose run is another
+    const others: Record<string, string | undefined>[] = [
+      {},
+      { VF_SMOKE_RUN: "vf-smoke-Zz99Yy" },
+      { VF_SMOKE_RUN: "" },
+    ];
+    for (const env of others)
+      expect(handed(env, false)).toEqual({
+        userData,
+        minted: false,
+        home: false,
+        refusedHome: "not-this-run",
+      });
+    // the right mark, but a run's data root is in it already (a red run's kept evidence)
+    expect(handed({ VF_SMOKE_RUN: "vf-smoke-Ab12Cd" }, true)).toEqual({
+      userData,
+      minted: false,
+      home: false,
+      refusedHome: "already-used",
+    });
   });
 
   it("BP-1c: a smoke home's name is the prefix and mkdtemp's six — never a profile alone or a scratch", () => {
@@ -68,6 +110,28 @@ describe("main's smoke profile", () => {
     expect(smokeHomeParent("darwin")).toBe("/tmp");
     expect(smokeHomeParent("linux")).toBe("/tmp");
     expect(smokeHomeParent("win32")).toBe(tmpdir());
+  });
+
+  it("BP-1c: a kept home is read off the disk — its logs or its users file say a run's data root is in it", () => {
+    expect(SMOKE_HOME_DATA_ROOT_MARKS).toEqual(["logs", "users.json"]);
+    const kept = mkdtempSync(join(tmpdir(), SMOKE_HOME_PREFIX));
+    try {
+      const env = { VF_SMOKE_RUN: basename(kept) };
+      // fresh, as run-smoke.mjs hands it: this run's
+      expect(smokeHomeRefusal(kept, env)).toBeNull();
+      // what a red run leaves: its logs (main's first write in its data root)
+      mkdirSync(join(kept, "logs"));
+      expect(smokeHomeRefusal(kept, env)).toBe("already-used");
+      expect(smokeHomeRefusal(kept, {})).toBe("not-this-run");
+    } finally {
+      rmSync(kept, { recursive: true, force: true });
+    }
+  });
+
+  it("BP-1c: two spellings of one directory are one (`/tmp` is `/private/tmp` on macOS)", () => {
+    const real = (p: string): string => p.replace(/^\/tmp\//u, "/private/tmp/").replace(/\/$/u, "");
+    expect(sameDirectory("/tmp/vf-smoke-hnUors", "/private/tmp/vf-smoke-hnUors/", real)).toBe(true);
+    expect(sameDirectory("/tmp/vf-smoke-hnUors", "/tmp/vf-smoke-other1", real)).toBe(false);
   });
 
   it("BP-1c: only the directory a run was handed as `--user-data-dir` is its launcher's to remove", () => {
@@ -450,8 +514,14 @@ describe("the smoke home's settling (apps/desktop/packaging/smoke-profile.mjs) �
   });
 
   it("names its homes as main does, under the same short root", async () => {
-    const { SMOKE_HOME_PREFIX: launcherPrefix, smokeHomeParent: launcherParent } = await load();
+    const {
+      SMOKE_HOME_PREFIX: launcherPrefix,
+      smokeHomeParent: launcherParent,
+      DATA_ROOT_MARKS,
+    } = await load();
     expect(launcherPrefix).toBe(SMOKE_HOME_PREFIX);
+    // what says a home holds a run's data root: the launcher keeps a home for it, main refuses a handed one with it
+    expect(DATA_ROOT_MARKS).toEqual([...SMOKE_HOME_DATA_ROOT_MARKS]);
     for (const platform of ["darwin", "linux", "win32"] as const)
       expect(launcherParent(platform)).toBe(smokeHomeParent(platform));
   });

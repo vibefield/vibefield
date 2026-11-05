@@ -76,7 +76,7 @@ import {
 import { LiveSurfaceTicketTable } from "../main/live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "../main/live-surfaces/window-host";
 import type { ElectronLogging } from "../main/logging";
-import { isSmokeHome, sharedProfilePath, smokeHomeParent } from "../main/smoke-profile";
+import { sharedProfilePath, smokeHomeParent } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { deckAwayRung, deckEdgeRung, deckMaximizeRung } from "./deck-away-rungs";
@@ -299,7 +299,8 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
  * outlived every smoke), then remove the root ONLY if this run created it (an
  * injected FIELDD_DATA_DIR is someone else's data) — and, the run green, its
  * whole HOME (the `vf-smoke-*` root above the user root: its logs; a red run
- * keeps them, named by `SMOKE_HOME`). */
+ * keeps them, named by `SMOKE_HOME`) — BP-1c: never a home that is this run's
+ * Electron userData, which is Chromium's until Electron is gone. */
 async function teardown(
   supervisor: FielddSupervisor,
   root: string,
@@ -310,7 +311,7 @@ async function teardown(
   const daemons = await stopRunDaemons(process.env[SMOKE_RUN_ENV], process.pid);
   console.log(`SMOKE_TEARDOWN ${JSON.stringify(daemons)}`);
   await beforeExit();
-  removeSmokeRoot(root, ok);
+  removeSmokeRoot(root, ok, app.getPath("userData"));
 }
 
 export async function runSmoke(
@@ -1842,9 +1843,9 @@ function smokeProfileFailures(): string[] {
   const underTemp = [tmpdir(), smokeHomeParent()].some((temp) =>
     `${real(userData)}/`.startsWith(`${real(temp)}/`),
   );
-  console.log(
-    `SMOKE_PROFILE ${JSON.stringify({ userData, underTemp, home: isSmokeHome(userData), shared })}`,
-  );
+  // BP-1c: whether this run's data root is in its userData is main's `desktop.smoke.profile` line (`home`, and
+  // `refusedHome` for a folder named as a home that was not this run's), never read off the name here
+  console.log(`SMOKE_PROFILE ${JSON.stringify({ userData, underTemp, shared })}`);
   return real(userData) === real(shared)
     ? [`the smoke ran on the app's shared profile (${shared})`]
     : [];

@@ -3039,6 +3039,11 @@ if (!hasInstanceLock) {
         userData: SMOKE_PROFILE.userData,
         minted: SMOKE_PROFILE.minted,
         home: SMOKE_PROFILE.home,
+        // BP-1c — a handed folder NAMED as a smoke home that is not this run's (or holds a run's data root already):
+        // the run rooted its data apart, so its teardown never touches what is there
+        ...(SMOKE_PROFILE.refusedHome === undefined
+          ? {}
+          : { refusedHome: SMOKE_PROFILE.refusedHome }),
       });
     }
     if (!isSmokeLike(MODE)) {

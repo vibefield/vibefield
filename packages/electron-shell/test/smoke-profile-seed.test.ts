@@ -46,6 +46,8 @@ describe("smoke:profile (row 31)", () => {
   it("phase A's root is kept ONLY by the runner's switch, and said; without it the root goes, as every smoke's does", () => {
     const home = mkdtempSync(join(tmpdir(), "vf-smoke-"));
     const root = join(home, "users", "u-1");
+    // BP-1c — this run's Electron profile lies apart from the home here, so a green run removes the home whole
+    const userData = join(tmpdir(), "vf-smoke-profile-seed");
     try {
       vi.stubEnv("FIELDD_DATA_DIR", "");
       mkdirSync(root, { recursive: true });
@@ -55,13 +57,13 @@ describe("smoke:profile (row 31)", () => {
         said.push(String(chunk));
         return true;
       });
-      removeSmokeRoot(root, true);
+      removeSmokeRoot(root, true, userData);
       write.mockRestore();
       expect(existsSync(root)).toBe(true);
       expect(said.join("")).toContain(`SMOKE_ROOT_KEPT ${JSON.stringify({ root, home })}`);
       vi.stubEnv("VF_SMOKE_KEEP_ROOT", "");
       const quiet = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-      removeSmokeRoot(root, true);
+      removeSmokeRoot(root, true, userData);
       quiet.mockRestore();
       expect(existsSync(root)).toBe(false);
       expect(existsSync(home)).toBe(false);

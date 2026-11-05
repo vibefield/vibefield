@@ -25,7 +25,7 @@
 
 import { existsSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
-import { handedAsUserData } from "../main/smoke-profile";
+import { handedAsUserData, sameDirectory } from "../main/smoke-profile";
 import {
   goneByKernel,
   listRunProcesses,
@@ -175,13 +175,17 @@ export function smokeHome(userRoot: string): string | null {
 
 /** The run's root, removed ONLY if this run created it (an injected FIELDD_DATA_DIR is someone else's data) — and, the run
  * green, its whole HOME (DK-18: the logs; a red run keeps them and `SMOKE_HOME` names them, so a sweep never hunts by time).
- * BP-1c — a HOME handed to this run as its `--user-data-dir` (run-smoke.mjs's smoke home: Electron's profile and the data
- * root in one directory, main/smoke-profile.ts) is Chromium's until Electron is gone, so a green run leaves it whole to the
- * launcher that handed it, which removes it once Electron has exited (DK-5; packaging/smoke-profile.mjs
- * `settleSmokeHome`), and says so (`removedBy`). `argv` is the seam (this process's by default). */
+ * BP-1c — a HOME that is this run's Electron `userData` (a smoke home: Electron's profile and the data root in one
+ * directory, main/smoke-profile.ts) is Chromium's until Electron is gone, and Electron is alive here, so a green run never
+ * removes it: it leaves it whole and says who does (`removedBy`). The launcher that handed it as `--user-data-dir`
+ * removes it once Electron has exited (DK-5; packaging/smoke-profile.mjs `settleSmokeHome`); one main minted itself (a
+ * smoke started by hand, no launcher) is left under the temp root for the OS to clear, as DK-5's minted profile always
+ * was. `userData` is this run's (`app.getPath("userData")`, which the callers pass); `argv` is the seam (this process's by
+ * default). */
 export function removeSmokeRoot(
   root: string,
   ok: boolean,
+  userData: string,
   argv: readonly string[] = process.argv,
 ): void {
   if (process.env["FIELDD_DATA_DIR"]) return;
@@ -194,10 +198,9 @@ export function removeSmokeRoot(
   rmSync(root, { recursive: true, force: true });
   const home = smokeHome(root);
   if (home === null) return;
-  if (ok && handedAsUserData(home, argv)) {
-    process.stdout.write(
-      `SMOKE_HOME ${JSON.stringify({ home, removed: false, removedBy: "launcher" })}\n`,
-    );
+  if (ok && sameDirectory(home, userData)) {
+    const removedBy = handedAsUserData(home, argv) ? "launcher" : "os";
+    process.stdout.write(`SMOKE_HOME ${JSON.stringify({ home, removed: false, removedBy })}\n`);
     return;
   }
   if (ok) rmSync(home, { recursive: true, force: true });
