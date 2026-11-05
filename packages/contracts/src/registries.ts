@@ -756,6 +756,18 @@ export const WORKSPACE_LIMITS = {
   RETRY_MAX_MS: 10_000,
 } as const;
 
+/** TH-1 (TH0-Q5 (b)) — the spark's transcript, read through its own worker. A ticket bounds its redemption only
+ * (TICKET_TTL_MS, the files erratum of 2026-10-07): an open socket has no timer. A ticket names at most RUNS_MAX runs,
+ * the newest kept. A window that has not heard `ready` within OPEN_TIMEOUT_MS asks again, as one whose socket closed
+ * does, after RETRY_MIN_MS doubling to RETRY_MAX_MS. TS-only: no native reader. */
+export const SPARK_TRANSCRIPT = {
+  TICKET_TTL_MS: 60_000,
+  RUNS_MAX: 256,
+  OPEN_TIMEOUT_MS: 10_000,
+  RETRY_MIN_MS: 500,
+  RETRY_MAX_MS: 10_000,
+} as const;
+
 /** FS-1a — the files service's honest refusal vocabulary
  * (`UnavailableDetails`): `service` on every UNAVAILABLE a `workspace.*` door
  * answers, and the worker's phases a reader branches on. STARTING: the first

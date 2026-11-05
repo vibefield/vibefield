@@ -7,6 +7,7 @@ import { AgentSessionRecord, AgentSessionSummary, CrewId } from "../src/agent-se
 import {
   AgentInputQueueFile,
   COMPOSE_DESKTOP_STATES,
+  COMPOSE_SAY_CHIPS_MAX,
   COMPOSE_SAY_STATES,
   ComposeAgentSendOutput,
   ComposeAgentSpawnOutput,
@@ -19,6 +20,7 @@ import {
   ComposeSparksOpenParams,
   ComposeSparksSayParams,
   ComposeSparksSayResult,
+  composeChipsFit,
   composeDesktopStateOf,
   composeSayStateOf,
   NEEDS_CHOICE_WORDS,
@@ -159,6 +161,39 @@ describe("your words to a spark (IOS-12a; PC-D3 A, CP2-D2)", () => {
     const [, yours] = kept.inputs;
     expect(yours?.from).toEqual({ kind: "you" });
     expect(yours?.requestId).toBe("say-01JC4M8Q2V7T");
+  });
+
+  it("carry their chips as spans inside the words, and refuse one outside them (TH-1; TH-Q25 (a))", () => {
+    const say = ComposeSparksSayParams.parse(fixture("compose-sparks-say-params.chips"));
+    const [chip] = say.chips ?? [];
+    expect(chip?.kind).toBe("session");
+    expect(say.text.slice(chip?.start, (chip?.start ?? 0) + (chip?.length ?? 0))).toBe(
+      "Claude Code in vibe-field (session run-7f3c2a)",
+    );
+    // a say from a desktop before TH-1 carries none, and still reads
+    expect(ComposeSparksSayParams.parse(fixture("compose-sparks-say-params.valid")).chips).toBe(
+      undefined,
+    );
+    const at = (start: number, length: number) => ({
+      ...say,
+      chips: [{ start, length, kind: "card" }],
+    });
+    expect(ComposeSparksSayParams.safeParse(at(say.text.length - 2, 3)).success).toBe(false);
+    expect(ComposeSparksSayParams.safeParse(at(-1, 3)).success).toBe(false);
+    expect(ComposeSparksSayParams.safeParse(at(0, 0)).success).toBe(false);
+    // in order, none overlapping
+    const two = (a: number, b: number) => ({
+      ...say,
+      chips: [
+        { start: a, length: 4, kind: "agent" },
+        { start: b, length: 4, kind: "agent" },
+      ],
+    });
+    expect(ComposeSparksSayParams.safeParse(two(0, 4)).success).toBe(true);
+    expect(ComposeSparksSayParams.safeParse(two(0, 3)).success).toBe(false);
+    expect(ComposeSparksSayParams.safeParse(two(8, 0)).success).toBe(false);
+    expect(composeChipsFit("ab", [])).toBe(true);
+    expect(COMPOSE_SAY_CHIPS_MAX).toBe(64);
   });
 });
 

@@ -274,6 +274,13 @@ import {
   SystemShellLeaveParams,
 } from "../src/shell-lease";
 import {
+  SparkTranscriptLine,
+  SparkTranscriptOpen,
+  SparkTranscriptOpenTicketParams,
+  SparkTranscriptOpenTicketResult,
+  SparkTranscriptServerFrame,
+} from "../src/spark-transcript";
+import {
   TerminalBindingsFile,
   TerminalCreateParams,
   TerminalListResult,
@@ -911,6 +918,15 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // IOS-12a (PC-D3 A) — your words to a spark, and the send's receipt
   "compose-sparks-say-params": ComposeSparksSayParams,
   "compose-sparks-say": ComposeSparksSayResult,
+  // TH-1 — the spark's transcript: each line by its head (one per kind, the person's words from Chat and from the
+  // terminal, an uncertain outcome, VibeField's own served tool; a forged line, whose MAC no key of fieldd's made, and
+  // a kind this build does not know, both of which parse here and are refused or skipped by their readers), the
+  // ticket's ask and answer, and the wire both ways
+  "spark-transcript-line": SparkTranscriptLine,
+  "spark-transcript-ticket-params": SparkTranscriptOpenTicketParams,
+  "spark-transcript-ticket": SparkTranscriptOpenTicketResult,
+  "spark-transcript-open": SparkTranscriptOpen,
+  "spark-transcript-frame": SparkTranscriptServerFrame,
   "compose-agents-available": ComposeAgentsAvailableOutput,
   "compose-agents-list": ComposeAgentsListOutput,
   "compose-agent-read": ComposeReadOutput,

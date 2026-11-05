@@ -1989,6 +1989,9 @@
               <code>agents.manage</code> and all three <code>local</code>, with no say. IOS-12a (2026-11-04; PC-D3 A,
               PC-D7 A, PC-L2) made them the person's four, under <code>sparks.use</code>, as
               <code>packages/contracts/src/methods.ts</code> has said since; this page had not followed.</em>
+              <em>TH-1 (2026-11-05):</em> a fifth door, <code>compose.sparks.transcript.openTicket</code>, is
+              <code>local</code> and a renderer window's alone: it opens the spark's own transcript on a worker of its
+              own (<a href="#spark-transcript">the reader's wire</a>).
             </p>
             <div class="table-wrap">
               <table class="reference-table">
@@ -2025,12 +2028,20 @@
                   </tr>
                   <tr>
                     <td><span class="route">compose.sparks.say</span></td>
-                    <td><p><code>ComposeSparksSayParams {spark, text, requestId, device?}</code> → <code>ComposeSparksSayResult {spark, requestId, state, queued: true, position?}</code></p></td>
+                    <td><p><code>ComposeSparksSayParams {spark, text, requestId, device?, chips?}</code> → <code>ComposeSparksSayResult {spark, requestId, state, queued: true, position?}</code></p></td>
                     <td><p><code>sparks.use</code></p></td>
                     <td><p><strong>no</strong>, keyed by <code>requestId</code></p></td>
-                    <td><p>the person's own words to a spark (IOS-12a, PC-D3 A): into its session's input queue as yours and unmarked (the <code>you</code> sender), never pasted, landing at its next idle moment as a spark's sends do (CP2-D2). A spark asleep is woken first, through <code>compose.sparks.open</code>'s own wake. The answer is the send's receipt, <code>state</code> an open word: <code>queued</code>, <code>waking</code>, <code>waiting</code>, <code>delivered</code>, <code>uncertain</code> or <code>dropped</code>. The same <code>requestId</code> again reads that receipt instead of queueing the words twice, and one in flight is joined; a request id another spark's say used is <code>PRECONDITION_FAILED</code>. Across a fieldd restart a say still waiting is found in the queue by the request id its kept input carries. <em>Item 158 (2026-11-05):</em> one a restart broke into while it was being sent answers <code>uncertain</code> and is never sent again, and whatever the queue says of a kept say after the restart is kept by that request id; one delivered before the restart is not remembered, so its retry queues the words again (item 169). From another screen it carries the spark's <code>device</code>, and the home forwards it there, retried once if the forward is cut. Audited as <code>compose.spark.say</code> with its request id and its length, never its words.</p></td>
-                    <td><span class="badge tone-built">Built</span></td>
-                    <td><p><code>spark-doors.test.ts</code></p></td>
+                    <td><p>the person's own words to a spark (IOS-12a, PC-D3 A): into its session's input queue as yours and unmarked (the <code>you</code> sender), never pasted, landing at its next idle moment as a spark's sends do (CP2-D2). A spark asleep is woken first, through <code>compose.sparks.open</code>'s own wake. The answer is the send's receipt, <code>state</code> an open word: <code>queued</code>, <code>waking</code>, <code>waiting</code>, <code>delivered</code>, <code>uncertain</code> or <code>dropped</code>. The same <code>requestId</code> again reads that receipt instead of queueing the words twice, and one in flight is joined; a request id another spark's say used is <code>PRECONDITION_FAILED</code>. Across a fieldd restart a say still waiting is found in the queue by the request id its kept input carries. <em>Item 158 (2026-11-05):</em> one a restart broke into while it was being sent answers <code>uncertain</code> and is never sent again, and whatever the queue says of a kept say after the restart is kept by that request id; one delivered before the restart is not remembered, so its retry queues the words again (item 169). From another screen it carries the spark's <code>device</code>, and the home forwards it there, retried once if the forward is cut. Audited as <code>compose.spark.say</code> with its request id and its length, never its words.</p><p><em>Added 2026-11-05 (TH-1, TH-Q25 (a)):</em> <code>chips</code>, each <code>{start, length, kind}</code>, a span inside <code>text</code>, in order and none overlapping (<code>composeChipsFit</code>; a say whose chips do not fit is refused). The spark's transcript keeps them on your words' line, so Chat draws a chip from the record, never from words that look like one. A desktop before TH-1 passes them through and keeps none.</p></td>
+                    <td><span class="badge tone-built">Built</span> · chips <span class="badge tone-contract">Contract</span></td>
+                    <td><p><code>spark-doors.test.ts</code>; <code>compose.test.ts</code></p></td>
+                  <tr>
+                    <td><span class="route">compose.sparks.transcript.openTicket</span></td>
+                    <td><p><code>SparkTranscriptOpenTicketParams {spark}</code> → <code>SparkTranscriptOpenTicketResult {spark, endpoint, ticket, expiresAt, generation, runs}</code></p></td>
+                    <td><p><code>sparks.use</code>, <code>local</code>; a renderer window of this desktop alone</p></td>
+                    <td><p><strong>no</strong>: each answer is a fresh credential</p></td>
+                    <td><p>TH-1 (TH-Q30 (a′); VF-PM's X2): a single-use credential for the spark's transcript on the transcript worker's loopback listener (<a href="#spark-transcript">the reader's wire</a>), in the files worker's shape. The scope is the family's, and fieldd's gate is narrower: shell-main, a plugin, an MCP agent, a plain local token, a phone and a peer daemon are refused (EL7), as the files doors gate by principal. <code>runs</code> are the spark's, oldest first (<code>{runtimeRunId, startedAt, fresh}</code>), so the window draws the latest conversation and offers the earlier ones. <code>expiresAt</code> bounds redemption alone (<code>SPARK_TRANSCRIPT.TICKET_TTL_MS</code>); <code>generation</code> is the worker's, and a restart closes every socket.</p></td>
+                    <td><span class="badge tone-contract">Contract</span></td>
+                    <td><p><code>spark-transcript.test.ts</code> (contracts); fieldd's in TH-1's fieldd half</p></td>
                   </tr>
                   <tr>
                     <td><span class="route">compose.sparks.crews.subscribe</span></td>
@@ -2762,6 +2773,37 @@
               "browser client/port/remote"; there is no <code>/browser</code> entry, at the
               wall or at the pin. The read-only git port remains the
               interim implementation pending the upstream GitService switch.</p>
+          </section>
+
+          <section id="spark-transcript">
+            <h2>The spark's transcript — the reader's wire</h2>
+            <p class="section-note">TH-1, 2026-11-05 (contracts first; <code>packages/contracts/src/spark-transcript.ts</code>).
+              The ticket is <a href="#cat-compose"><code>compose.sparks.transcript.openTicket</code></a>. A renderer
+              window dials the transcript worker's loopback endpoint itself (the window's <code>connect-src</code>
+              already admits <code>ws://127.0.0.1:*</code>); no transcript byte rides fieldd RPC or Electron main
+              (EL2). The worker is mille-free and fieldd's own (TH0-Q5 (b)), and verifies every line under the key its
+              IPC pipe hands it, never its env.</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Frame</th><th>Carries</th><th>When</th></tr></thead>
+              <tbody>
+                <tr><td><code>open</code> (window)</td><td><code>{ticket, runs: [{run, after?}]}</code></td>
+                  <td>Once, first. The runs to read, oldest first, each after the last line the window holds.</td></tr>
+                <tr><td><code>ready</code></td><td><code>{generation}</code></td>
+                  <td>The ticket redeemed: single use, refused past <code>expiresAt</code>, from a foreign Origin, or for a run
+                    not the spark's.</td></tr>
+                <tr><td><code>line</code></td><td><code>{run, line}</code></td>
+                  <td>Each verified line, in order within its run (<code>SparkTranscriptLine</code>, its kind OPEN).</td></tr>
+                <tr><td><code>caught-up</code></td><td><code>{dropped}</code></td>
+                  <td>Every named run served; the tail follows. <code>dropped</code> counts the lines that failed their
+                    check and were never served.</td></tr>
+                <tr><td><code>run</code></td><td><code>{run: {runtimeRunId, startedAt, fresh}}</code></td>
+                  <td>A run of the spark began after the open (a wake); its lines follow.</td></tr>
+                <tr><td><code>refused</code></td><td><code>{reason}</code></td>
+                  <td>The open is refused in the worker's word, then the socket closes. The window asks for a ticket
+                    again, as it does when a socket closes.</td></tr>
+              </tbody>
+            </table></div>
+            <span class="badge tone-contract">Contract</span>
           </section>
 
           <section id="versioning">

@@ -1792,6 +1792,7 @@
                     <td>
                       <span class="badge tone-built">Built</span>
                       <p>CP-1b <code>42748065</code> · <code>3e93ba71</code>; CP-1c <code>f98d0d2b</code> · <code>1060d4b2</code>. The seam's owner is api's <a href="api.html#cat-compose-door"><code>vibefield</code> MCP door</a>, and the person's <a href="api.html#cat-compose"><code>compose.sparks.*</code></a> doors, the window's and the phone's, are beside it (<em>corrected 2026-11-05 (CO lane): this said the window's; IOS-12a made them <code>sparks.use</code>, through the phone's home</em>). Since CP-3 the person's queue's <a href="api.html#cat-needs"><code>needs.*</code></a> doors stand beside it too: a spark's questions, its held sends and spawns, and the agents' own asks, each waiting on the person.</p>
+                      <p><em>TH-1 (2026-11-05, contracts first):</em> the spark's own conversation is VibeField's record, written by fieldd from puppeteer's provider-neutral events and its own facts, and read by Chat over a ticket on a worker of its own (<a href="#spark-transcript">the spark's transcript seam</a>). Your words reach the spark through <a href="api.html#cat-compose"><code>compose.sparks.say</code></a> (IOS-12a), unmarked, with their chips.</p>
                     </td>
                   </tr>
                   <tr>
@@ -1900,6 +1901,25 @@
               imports it, and mille at the pin exports none. The sibling window pins mille and
               mille-ui together at <code>c8160d5</code> (<em>2026-10-08:</em> moved from
               <code>baa0de8</code>, EL8); release publication closes the window.</p>
+          </section>
+
+          <section id="spark-transcript">
+            <h2>The spark's transcript seam</h2>
+            <p>TH-1 (TH0-Q1 = O1, ruled by VF-PM 2026-11-04 05:01Z; contracts first 2026-11-05, the worker with TH-1's
+              fieldd half). A spark's conversation is kept by VibeField as its own record: fieldd subscribes to the
+              spark's own run (<code>Agent.on</code>: a reply, a turn's edges, a tool asked for by its
+              provider-neutral kind) and adds VibeField's own facts (your words with their chips and receipt, a wake,
+              an answer, a notify), one JSONL file per run in app data under the spark's custody, each line MAC'd by
+              fieldd's record signer (<code>packages/contracts/src/spark-transcript.ts</code>). No vendor file is
+              read here and no tool's native name is kept (AR-L1); History is not the road. R20 and R29 hold: the
+              recorder is fieldd's, outside <code>tool-plane/</code>, and the tool plane writes its acts through an
+              interface.</p>
+            <p>The read is ticketed (EL2): <code>compose.sparks.transcript.openTicket</code> mints a single-use
+              credential for a renderer window of this desktop; the window dials a mille-free transcript worker of
+              fieldd's own (TH0-Q5 (b), in the files worker's pattern, so a thread never waits on mille's engine),
+              which verifies each line under a key handed over its IPC pipe and never serves one that fails. No
+              transcript byte crosses fieldd RPC or Electron main. <a href="api.html#spark-transcript">The API page
+              owns the door and the wire.</a> Its gap, what finishes while fieldd is down, is petition PU-Q's.</p>
           </section>
 
           <section id="walls">

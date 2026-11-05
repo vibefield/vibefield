@@ -1,0 +1,19 @@
+{
+  "spark": "sp-9q2wloft1",
+  "endpoint": "ws://127.0.0.1:53817/transcripts",
+  "ticket": "Qm9pZ2hUcmFuc2NyaXB0VGlja2V0X0V4YW1wbGUwMDE",
+  "expiresAt": 1762298000000,
+  "generation": 2,
+  "runs": [
+    {
+      "runtimeRunId": "run-01JC2Z9X0A",
+      "startedAt": "2026-11-02T09:12:00.000Z",
+      "fresh": true
+    },
+    {
+      "runtimeRunId": "run-01JC4MA2K3",
+      "startedAt": "2026-11-04T23:10:40.002Z",
+      "fresh": false
+    }
+  ]
+}

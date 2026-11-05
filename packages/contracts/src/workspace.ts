@@ -397,8 +397,8 @@ export const WorkspaceGitPortTranscript = z
   .passthrough();
 export type WorkspaceGitPortTranscript = z.infer<typeof WorkspaceGitPortTranscript>;
 
-/** FS-1b: an attached tree and git port on the same worker listener. */
-const WorkspaceLoopbackSocket = z
+/** FS-1b: an attached tree and git port on the same worker listener. TH-1: the transcript worker's too. */
+export const WorkspaceLoopbackSocket = z
   .string()
   .url()
   .refine((value) => {

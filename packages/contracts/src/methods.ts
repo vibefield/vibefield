@@ -2945,6 +2945,18 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "federate",
   }),
+  // TH-1 (TH-Q30 (a′); spark-transcript.ts) — a ticket for the spark's transcript, read on its worker's loopback
+  // socket, never over this RPC (EL2). The family's `sparks.use`, but `local` and narrower than the scope: fieldd
+  // serves a renderer window of this desktop alone (VF-PM's X2, 2026-11-05; EL7), and refuses shell-main, a plugin, an
+  // MCP agent, a plain local token, a phone and a peer daemon, as the files doors gate by principal. The phone reads its
+  // thread later, by a road of its own (IOS-12c). Every answer is a fresh credential, so it is not idempotent.
+  defineMethod({
+    surface: "product",
+    method: "compose.sparks.transcript.openTicket",
+    scope: "sparks.use",
+    idempotent: false,
+    locality: "local",
+  }),
   // CP-3 (`draft/compose-plane/cp3-the-person.md`, CP3-D6 A) — the needs-you queue's doors, beside the sparks'.
   // `approval.respond` stays reserved for AR-6's answers to an agent's own asks. *Corrected 2026-11-04 (IOS-12a;
   // PC-D4 A, PC-D7 A): CP3-D6 put them under `agents.manage`, local, "the phone reaches none of them until PG rules

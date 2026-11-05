@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "seq": 6,
+  "mac": "b1e5b1e5b1e5b1e5b1e5b1e5b1e5b1e5b1e5b1e5b1e5b1e5b1e5b1e5b1e5b1e5",
+  "kind": "tool",
+  "at": "2026-11-04T23:10:54.440Z",
+  "toolCallId": "toolu_01H9",
+  "turn": "turn-4",
+  "toolKind": "mcp",
+  "ours": true
+}

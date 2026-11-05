@@ -650,6 +650,34 @@ export type AgentInputQueueFile = z.infer<typeof AgentInputQueueFile>;
 export const ComposeSayRequestId = z.string().regex(/^[A-Za-z0-9_-]{8,64}$/);
 export type ComposeSayRequestId = z.infer<typeof ComposeSayRequestId>;
 
+/** TH-1 (TH-Q25 (a)) — a chip in your words: where its words stand in `text` (UTF-16 units, as the window counts),
+ * and what it stands for, OPEN (agent | session | card). The record keeps it, so your bubble draws a chip from these
+ * spans and never from words that look like one. */
+export const ComposeSayChip = z
+  .object({
+    start: z.number().int().min(0),
+    length: z.number().int().min(1),
+    kind: z.string().min(1).max(32),
+  })
+  .passthrough();
+export type ComposeSayChip = z.infer<typeof ComposeSayChip>;
+
+/** The chips a message carries at most: more than a draft holds. */
+export const COMPOSE_SAY_CHIPS_MAX = 64;
+
+/** Every chip stands inside `text`, in order, none overlapping another. */
+export function composeChipsFit(
+  text: string,
+  chips: readonly { readonly start: number; readonly length: number }[],
+): boolean {
+  let end = 0;
+  for (const chip of chips) {
+    if (chip.start < end || chip.start + chip.length > text.length) return false;
+    end = chip.start + chip.length;
+  }
+  return true;
+}
+
 export const ComposeSparksSayParams = z
   .object({
     spark: SparkId,
@@ -657,8 +685,19 @@ export const ComposeSparksSayParams = z
     requestId: ComposeSayRequestId,
     /** the spark's desktop, from another screen: the home forwards there (PC-L2) */
     device: ComposeDevice.optional(),
+    /** TH-1 — the chips in `text`, in order. A desktop before TH-1 passes them through and keeps none, so its bubble
+     * draws the chips' words as words. */
+    chips: z.array(ComposeSayChip).max(COMPOSE_SAY_CHIPS_MAX).optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((say, ctx) => {
+    if (say.chips !== undefined && !composeChipsFit(say.text, say.chips))
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["chips"],
+        message: "each chip stands inside the text, in order, none overlapping",
+      });
+  });
 export type ComposeSparksSayParams = z.infer<typeof ComposeSparksSayParams>;
 
 /** A send's receipt, OPEN words (DESIGN.md §9 "Chat on the phone"): `queued` (in the queue, waiting for the spark's
