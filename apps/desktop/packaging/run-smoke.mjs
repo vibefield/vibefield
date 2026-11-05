@@ -1,14 +1,20 @@
 #!/usr/bin/env node
 // `node packaging/run-smoke.mjs <electron flags…>` — one Electron smoke (or lab) on a
 // FRESH profile (DK-5): every `pnpm smoke:*` runs through here instead of `electron .`.
-// It mints the profile under the OS temp, starts Electron on this app with it as
-// `--user-data-dir` and the flags it was given, and once Electron has exited removes
-// the profile and exits with Electron's own code — so the app's shared profile (the
-// owner's theme, renderer storage, the desk's byte store) is never written by a smoke.
+// It mints the profile, starts Electron on this app with it as `--user-data-dir` and
+// the flags it was given, and once Electron has exited removes the profile and exits
+// with Electron's own code — so the app's shared profile (the owner's theme, renderer
+// storage, the desk's byte store) is never written by a smoke.
 // DK-18 (39): the run is MARKED (`VF_SMOKE_RUN`, the profile's name, in Electron's
 // environment — every process the smoke starts inherits it), and once Electron has exited
 // the row is taken: no daemon of the run lives (`smoke-daemons.mjs`, `SMOKE_DAEMONS`). One
 // left is reaped and makes the run red.
+// BP-1c (BP-D9 (a)): the profile is the run's HOME (`smoke-profile.mjs` `mintSmokeHome`): one
+// fresh directory under the short socket root (`/tmp` on Unix) that main also roots the run's
+// daemons in, as a packaged app's `appData/VibeField` is both its userData and its data root.
+// The desk browser's profiles then lie inside userData, where Chromium writes their cookies.
+// A red run (or one asked to keep its root, `VF_SMOKE_KEEP_ROOT`) whose data root main kept
+// keeps the home whole: its logs are named by main's `SMOKE_HOME` or `SMOKE_ROOT_KEPT`.
 
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -16,14 +22,15 @@ import { constants } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { leftByRun, leftNames, SMOKE_RUN_ENV } from "./smoke-daemons.mjs";
-import { mintSmokeProfile } from "./smoke-profile.mjs";
+import { mintSmokeHome } from "./smoke-profile.mjs";
 
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const electronPath = createRequire(import.meta.url)("electron");
-const profile = mintSmokeProfile();
-const mark = basename(profile.dir);
+const home = mintSmokeHome();
+const mark = basename(home.dir);
+const keepRoot = process.env["VF_SMOKE_KEEP_ROOT"] === "1";
 
-const child = spawn(electronPath, [desktopRoot, profile.arg, ...process.argv.slice(2)], {
+const child = spawn(electronPath, [desktopRoot, home.arg, ...process.argv.slice(2)], {
   cwd: desktopRoot,
   env: { ...process.env, [SMOKE_RUN_ENV]: mark },
   stdio: "inherit",
@@ -40,11 +47,10 @@ const settle = async (code) => {
       `run-smoke: ${daemons.left.length} process(es) of this run outlived the smoke (reaped): ${leftNames(daemons)}\n`,
     );
   }
-  const removed = profile.remove();
-  process.stdout.write(
-    `SMOKE_PROFILE_REMOVED ${JSON.stringify({ userData: profile.dir, removed })}\n`,
-  );
-  const clean = removed && daemons.left.length === 0;
+  const settled = home.settle({ code, keepRoot });
+  process.stdout.write(`SMOKE_PROFILE_REMOVED ${JSON.stringify(settled)}\n`);
+  // a home kept for its data root (a red run's logs, phase A's board) is the run's choice, never a leak
+  const clean = (settled.removed || settled.kept !== undefined) && daemons.left.length === 0;
   process.exit(clean ? code : code === 0 ? 1 : code);
 };
 child.once("error", (error) => {

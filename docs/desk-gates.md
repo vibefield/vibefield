@@ -153,6 +153,10 @@ lane's field-native, rebuilt after gen:check), the dev runner's 131. The orchest
 
 - **Its own profile** (DK-5): `apps/desktop/packaging/run-smoke.mjs` mints an Electron profile under the OS temp, hands it as
   `--user-data-dir`, removes it once Electron has exited (`SMOKE_PROFILE_REMOVED`). The app's shared profile is never touched.
+  *(BP-1c, 2026-11-05: the profile is the run's smoke HOME, `/tmp/vf-smoke-XXXXXX` by its real path, and main roots the
+  run's daemons in it too, so its userData and its data root are one directory as a packaged app's are (BP-D9 (a)). A red
+  run, or one asked to keep its root (`VF_SMOKE_KEEP_ROOT`), whose data root is still in it keeps the home whole
+  (`SMOKE_PROFILE_REMOVED`'s `kept`); a green run's is removed whole, by the launcher.)*
   smoke:godview and smoke:terminal-direct run through MV's `scripts/smoke-godview.mjs` since DK-19's merge of MV: an isolated
   lab profile whose proof the runner checks, Electron spawned with no shell, the two occlusion switches — and, from DK-19's
   merge fix (`ed9706db`), the same run mark and daemon row as `run-smoke.mjs`.

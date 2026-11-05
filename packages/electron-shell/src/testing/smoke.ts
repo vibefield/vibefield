@@ -76,7 +76,7 @@ import {
 import { LiveSurfaceTicketTable } from "../main/live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "../main/live-surfaces/window-host";
 import type { ElectronLogging } from "../main/logging";
-import { sharedProfilePath } from "../main/smoke-profile";
+import { isSmokeHome, sharedProfilePath, smokeHomeParent } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { deckAwayRung, deckEdgeRung, deckMaximizeRung } from "./deck-away-rungs";
@@ -1830,16 +1830,21 @@ async function runSmokeCatalog(opts: {
 /**
  * DK-5 — THE SMOKE'S OWN PROFILE, said and held: Electron's `userData` for this run is the one
  * `main/smoke-profile.ts` gave it — handed by `packaging/run-smoke.mjs` as a fresh `--user-data-dir`
- * under the OS temp, or minted there — and never the app's shared profile, where the owner's own app
- * keeps its theme file, its renderer storage and the desk's byte store. What a smoke writes (a
- * theme, a still, a cleared localStorage) is the run's, and leaves with the profile.
+ * (BP-1c: the run's smoke HOME under the short root, `/tmp` on Unix, also its data root), or minted
+ * there — and never the app's shared profile, where the owner's own app keeps its theme file, its
+ * renderer storage and the desk's byte store. What a smoke writes (a theme, a still, a cleared
+ * localStorage) is the run's, and leaves with the profile.
  */
 function smokeProfileFailures(): string[] {
   const userData = app.getPath("userData");
   const shared = sharedProfilePath(app.getPath("appData"), app.getName());
   const real = (path: string): string => (existsSync(path) ? realpathSync(path) : path);
-  const underTemp = `${real(userData)}/`.startsWith(`${real(tmpdir())}/`);
-  console.log(`SMOKE_PROFILE ${JSON.stringify({ userData, underTemp, shared })}`);
+  const underTemp = [tmpdir(), smokeHomeParent()].some((temp) =>
+    `${real(userData)}/`.startsWith(`${real(temp)}/`),
+  );
+  console.log(
+    `SMOKE_PROFILE ${JSON.stringify({ userData, underTemp, home: isSmokeHome(userData), shared })}`,
+  );
   return real(userData) === real(shared)
     ? [`the smoke ran on the app's shared profile (${shared})`]
     : [];

@@ -4,9 +4,11 @@
  * asked, every one waited for, what outlives the bound killed; Electron and its own Chromium children never the teardown's.
  * And the home a green run removes whole.
  */
-import { dirname, resolve } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { type Ps, type PsSpelling, psTables } from "../src/testing/smoke-census.mjs";
 import {
   censusDeps,
@@ -14,6 +16,7 @@ import {
   processName,
   RUN_STOP,
   type RunProcess,
+  removeSmokeRoot,
   runProcesses,
   type StopRunDeps,
   smokeHome,
@@ -288,3 +291,71 @@ describe("smokeHome — the vf-smoke-* root above the user root, and nothing els
     expect(smokeHome("/tmp/vf-smoke-godview-x")).toBeNull();
   });
 });
+
+// `smokeHome` reads a Unix path (its `/users` parent); the smoke homes are /tmp's on Unix
+describe.skipIf(process.platform === "win32")(
+  "removeSmokeRoot — BP-1c: a home the launcher handed as userData is the launcher's to remove",
+  () => {
+    const saved = {
+      data: process.env["FIELDD_DATA_DIR"],
+      keep: process.env["VF_SMOKE_KEEP_ROOT"],
+    };
+    const homes: string[] = [];
+    afterEach(() => {
+      vi.restoreAllMocks();
+      for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
+      if (saved.data === undefined) delete process.env["FIELDD_DATA_DIR"];
+      else process.env["FIELDD_DATA_DIR"] = saved.data;
+      if (saved.keep === undefined) delete process.env["VF_SMOKE_KEEP_ROOT"];
+      else process.env["VF_SMOKE_KEEP_ROOT"] = saved.keep;
+    });
+    /** A smoke home holding a user root and its logs, as a run leaves it at teardown. */
+    const home = (): { home: string; userRoot: string } => {
+      delete process.env["FIELDD_DATA_DIR"];
+      delete process.env["VF_SMOKE_KEEP_ROOT"];
+      const dir = mkdtempSync(join(tmpdir(), "vf-smoke-"));
+      homes.push(dir);
+      const userRoot = join(dir, "users", "1");
+      mkdirSync(userRoot, { recursive: true });
+      mkdirSync(join(dir, "logs"), { recursive: true });
+      return { home: dir, userRoot };
+    };
+    const said = (run: () => void): string[] => {
+      const lines: string[] = [];
+      vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+        lines.push(String(chunk));
+        return true;
+      });
+      run();
+      vi.restoreAllMocks();
+      return lines;
+    };
+
+    it("a green run removes its user root and leaves the handed home whole, saying who removes it", () => {
+      const h = home();
+      const argv = ["electron", ".", `--user-data-dir=${h.home}`, "--smoke-canvas"];
+      expect(said(() => removeSmokeRoot(h.userRoot, true, argv))).toEqual([
+        `SMOKE_HOME ${JSON.stringify({ home: h.home, removed: false, removedBy: "launcher" })}\n`,
+      ]);
+      expect(existsSync(h.userRoot)).toBe(false);
+      expect(existsSync(h.home)).toBe(true);
+    });
+
+    it("a green run whose home it minted itself (no launcher handed it) removes the home whole, as before", () => {
+      const h = home();
+      expect(said(() => removeSmokeRoot(h.userRoot, true, ["electron", "."]))).toEqual([
+        `SMOKE_HOME ${JSON.stringify({ home: h.home, removed: true })}\n`,
+      ]);
+      expect(existsSync(h.home)).toBe(false);
+    });
+
+    it("a red run keeps the home and names it, handed or not", () => {
+      const h = home();
+      const argv = ["electron", ".", `--user-data-dir=${h.home}`];
+      expect(said(() => removeSmokeRoot(h.userRoot, false, argv))).toEqual([
+        `SMOKE_HOME ${JSON.stringify({ home: h.home, removed: false })}\n`,
+      ]);
+      expect(existsSync(join(h.home, "logs"))).toBe(true);
+    });
+  },
+);

@@ -1,13 +1,17 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  handedAsUserData,
   isolateSmokeProfile,
+  isSmokeHome,
+  SMOKE_HOME_PREFIX,
   SMOKE_PROFILE_PREFIX,
   sharedProfilePath,
+  smokeHomeParent,
   userDataDirArg,
 } from "../src/main/smoke-profile";
 import { fakeElectron as installFakeElectron } from "./fake-electron";
@@ -25,8 +29,56 @@ describe("main's smoke profile", () => {
       ["electron", ".", "--user-data-dir=/tmp/vf-smoke-profile-given", "--smoke-canvas"],
       { setUserData: (path) => set.push(path), mintDir: () => "/never" },
     );
-    expect(profile).toEqual({ userData: "/tmp/vf-smoke-profile-given", minted: false });
+    expect(profile).toEqual({
+      userData: "/tmp/vf-smoke-profile-given",
+      minted: false,
+      home: false,
+    });
     expect(set).toEqual([]);
+  });
+
+  it("BP-1c: a handed smoke HOME is known by its name — its data root is the same directory", () => {
+    const profile = isolateSmokeProfile(
+      "smoke-canvas",
+      ["electron", ".", "--user-data-dir=/tmp/vf-smoke-hnUors", "--smoke-canvas"],
+      { setUserData: () => undefined, mintDir: () => "/never" },
+    );
+    expect(profile).toEqual({ userData: "/tmp/vf-smoke-hnUors", minted: false, home: true });
+  });
+
+  it("BP-1c: a smoke home's name is the prefix and mkdtemp's six — never a profile alone or a scratch", () => {
+    expect(SMOKE_HOME_PREFIX).toBe("vf-smoke-");
+    expect(isSmokeHome("/tmp/vf-smoke-hnUors")).toBe(true);
+    expect(isSmokeHome("/private/tmp/vf-smoke-A1b2C3")).toBe(true);
+    expect(isSmokeHome("C:\\Users\\x\\AppData\\Local\\Temp\\vf-smoke-zp6IXf")).toBe(
+      process.platform === "win32",
+    );
+    for (const not of [
+      "/T/vf-smoke-profile-AbC123",
+      "/tmp/vf-smoke-godview-o3xiDp",
+      "/tmp/vf-smoke-",
+      "/tmp/vf-smoke-abc",
+      "/Users/x/Library/Application Support/VibeField",
+      "/r/.vibefield/dev",
+    ])
+      expect(isSmokeHome(not), not).toBe(false);
+  });
+
+  it("BP-1c: a home lives under the short socket root — /tmp on Unix, the OS temp on Windows", () => {
+    expect(smokeHomeParent("darwin")).toBe("/tmp");
+    expect(smokeHomeParent("linux")).toBe("/tmp");
+    expect(smokeHomeParent("win32")).toBe(tmpdir());
+  });
+
+  it("BP-1c: only the directory a run was handed as `--user-data-dir` is its launcher's to remove", () => {
+    const argv = ["electron", ".", "--user-data-dir=/tmp/vf-smoke-hnUors", "--smoke"];
+    expect(handedAsUserData("/tmp/vf-smoke-hnUors", argv)).toBe(true);
+    expect(handedAsUserData("/tmp/vf-smoke-hnUors/", argv)).toBe(true);
+    expect(handedAsUserData("/tmp/vf-smoke-other1", argv)).toBe(false);
+    expect(handedAsUserData("/tmp/vf-smoke-hnUors", ["electron", "."])).toBe(false);
+    // read as the filesystem names both: the users package roots the data under the real path
+    const real = (p: string): string => p.replace(/^\/tmp\//u, "/private/tmp/");
+    expect(handedAsUserData("/private/tmp/vf-smoke-hnUors", argv, real)).toBe(true);
   });
 
   it("mints its own and sets it as userData when a smoke-like run was handed none", () => {
@@ -41,16 +93,25 @@ describe("main's smoke profile", () => {
         setUserData: (path) => set.push(path),
         mintDir: () => `/tmp/${SMOKE_PROFILE_PREFIX}minted`,
       });
-      expect(profile).toEqual({ userData: `/tmp/${SMOKE_PROFILE_PREFIX}minted`, minted: true });
+      expect(profile).toEqual({
+        userData: `/tmp/${SMOKE_PROFILE_PREFIX}minted`,
+        minted: true,
+        home: false,
+      });
       expect(set).toEqual([`/tmp/${SMOKE_PROFILE_PREFIX}minted`]);
     }
   });
 
-  it("mints under the OS temp by default", () => {
+  it("BP-1c: mints a smoke HOME under the short root by default — userData and data root in one", () => {
     const set: string[] = [];
     const profile = isolateSmokeProfile("smoke-canvas", [], { setUserData: (p) => set.push(p) });
     try {
-      expect(profile?.userData.startsWith(join(tmpdir(), SMOKE_PROFILE_PREFIX))).toBe(true);
+      // by its real path (`/private/tmp` on macOS), as the users package roots the data in it
+      expect(
+        profile?.userData.startsWith(join(realpathSync(smokeHomeParent()), SMOKE_HOME_PREFIX)),
+      ).toBe(true);
+      expect(profile?.home).toBe(true);
+      expect(set).toEqual([profile?.userData]);
       expect(existsSync(profile?.userData ?? "")).toBe(true);
     } finally {
       if (profile !== null) rmSync(profile.userData, { recursive: true, force: true });
@@ -234,7 +295,12 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
         expect(seen.args[0]).toBe(desktopRoot);
         expect(seen.args.slice(2)).toEqual(["--smoke-canvas", "--disable-gpu"]);
         const profile = (seen.args[1] ?? "").slice("--user-data-dir=".length);
-        expect(profile.startsWith(join(tmpdir(), SMOKE_PROFILE_PREFIX))).toBe(true);
+        // BP-1c: the profile is the run's smoke HOME, under the short socket root
+        expect(profile.startsWith(join(realpathSync(smokeHomeParent()), SMOKE_HOME_PREFIX))).toBe(
+          true,
+        );
+        expect(isSmokeHome(profile)).toBe(true);
+        // red, but main never reached its data root in it (no logs, no users.json): removed whole
         const removed = JSON.parse(/SMOKE_PROFILE_REMOVED (.*)/.exec(run.stdout)?.[1] ?? "null");
         expect(removed).toEqual({ userData: profile, removed: true });
         expect(existsSync(profile)).toBe(false);
@@ -243,4 +309,150 @@ describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
       }
     },
   );
+
+  /** A stand-in that writes what main writes into a smoke home it roots its data in (its logs, the users file) beside
+   * Chromium's own, then exits with `code`. */
+  const homeWriter = (code: number): string =>
+    `const fs = require("node:fs"), path = require("node:path");\n` +
+    `const dir = process.argv.slice(2).find((a) => a.startsWith("--user-data-dir=")).slice("--user-data-dir=".length);\n` +
+    `fs.mkdirSync(path.join(dir, "logs"), { recursive: true });\n` +
+    `fs.writeFileSync(path.join(dir, "users.json"), "{}");\n` +
+    `fs.writeFileSync(path.join(dir, "Preferences"), "{}");\n` +
+    `process.exit(${code});\n`;
+  const runWith = (dist: string, env: Record<string, string> = {}) =>
+    spawnSync(process.execPath, [launcher, "--smoke-canvas"], {
+      cwd: desktopRoot,
+      encoding: "utf8",
+      env: { ...process.env, ELECTRON_OVERRIDE_DIST_PATH: dist, ...env },
+    });
+  const settled = (stdout: string) =>
+    JSON.parse(/SMOKE_PROFILE_REMOVED (.*)/.exec(stdout)?.[1] ?? "null") as {
+      userData: string;
+      removed: boolean;
+      kept?: string;
+    };
+
+  it.skipIf(process.platform === "win32")(
+    "BP-1c: a RED run whose home holds main's data root keeps it whole — its logs are the run's evidence — and keeps Electron's code",
+    { timeout: LAUNCHER_ROW_BUDGET_MS },
+    () => {
+      const dist = mkdtempSync(join(tmpdir(), "bp-1c-fake-electron-"));
+      let home = "";
+      try {
+        fakeElectron(dist, homeWriter(2));
+        const run = runWith(dist);
+        const said = settled(run.stdout);
+        home = said.userData;
+        expect(said).toEqual({ userData: home, removed: false, kept: "red" });
+        expect(existsSync(join(home, "logs"))).toBe(true);
+        expect(run.status).toBe(2);
+      } finally {
+        if (home !== "") rmSync(home, { recursive: true, force: true });
+        rmSync(dist, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "BP-1c: a run asked to keep its root (smoke:profile's phase A) keeps the home whole and stays green",
+    { timeout: LAUNCHER_ROW_BUDGET_MS },
+    () => {
+      const dist = mkdtempSync(join(tmpdir(), "bp-1c-fake-electron-"));
+      let home = "";
+      try {
+        fakeElectron(dist, homeWriter(0));
+        const run = runWith(dist, { VF_SMOKE_KEEP_ROOT: "1" });
+        const said = settled(run.stdout);
+        home = said.userData;
+        expect(said).toEqual({ userData: home, removed: false, kept: "asked" });
+        expect(existsSync(join(home, "users.json"))).toBe(true);
+        expect(run.status).toBe(0);
+      } finally {
+        if (home !== "") rmSync(home, { recursive: true, force: true });
+        rmSync(dist, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "BP-1c: a GREEN run's home is removed whole, whatever main left in it",
+    { timeout: LAUNCHER_ROW_BUDGET_MS },
+    () => {
+      const dist = mkdtempSync(join(tmpdir(), "bp-1c-fake-electron-"));
+      try {
+        fakeElectron(dist, homeWriter(0));
+        const run = runWith(dist);
+        const said = settled(run.stdout);
+        expect(said).toEqual({ userData: said.userData, removed: true });
+        expect(existsSync(said.userData)).toBe(false);
+        expect(run.status).toBe(0);
+      } finally {
+        rmSync(dist, { recursive: true, force: true });
+      }
+    },
+  );
+});
+
+describe("the smoke home's settling (apps/desktop/packaging/smoke-profile.mjs) — BP-1c", () => {
+  const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../apps/desktop");
+  type Settle = (
+    home: string,
+    outcome: { code: number; keepRoot: boolean },
+    fs: { existsSync: (p: string) => boolean; rmSync: (p: string, o: unknown) => void },
+  ) => { userData: string; removed: boolean; kept?: string };
+  const load = async () =>
+    (await import(pathToFileURL(join(desktopRoot, "packaging", "smoke-profile.mjs")).href)) as {
+      settleSmokeHome: Settle;
+      DATA_ROOT_MARKS: readonly string[];
+      SMOKE_HOME_PREFIX: string;
+      smokeHomeParent: (platform?: string) => string;
+    };
+  /** A home whose entries are `names`; removing it empties it. */
+  const fakeFs = (home: string, names: string[]) => {
+    const there = new Set(names.map((n) => join(home, n)));
+    let gone = false;
+    return {
+      removed: () => gone,
+      existsSync: (p: string) => !gone && (p === home || there.has(p)),
+      rmSync: (p: string) => {
+        if (p === home) gone = true;
+      },
+    };
+  };
+
+  it("keeps a home only for main's data root, on a red run or one that asked", async () => {
+    const { settleSmokeHome, DATA_ROOT_MARKS } = await load();
+    expect(DATA_ROOT_MARKS).toEqual(["logs", "users.json"]);
+    const home = "/tmp/vf-smoke-hnUors";
+    for (const [names, outcome, kept] of [
+      [["logs", "Preferences"], { code: 2, keepRoot: false }, "red"],
+      [["users.json"], { code: 0, keepRoot: true }, "asked"],
+      [["users.json", "logs"], { code: 1, keepRoot: true }, "asked"],
+    ] as const) {
+      const fs = fakeFs(home, [...names]);
+      expect(settleSmokeHome(home, outcome, fs)).toEqual({ userData: home, removed: false, kept });
+      expect(fs.removed()).toBe(false);
+    }
+  });
+
+  it("removes it whole otherwise: a green run, or a red one that never reached its data root", async () => {
+    const { settleSmokeHome } = await load();
+    const home = "/tmp/vf-smoke-hnUors";
+    for (const [names, outcome] of [
+      [["logs", "users.json", "Preferences"], { code: 0, keepRoot: false }],
+      [["Preferences", "Local State"], { code: 3, keepRoot: false }],
+      [["Preferences"], { code: 0, keepRoot: true }],
+    ] as const) {
+      const fs = fakeFs(home, [...names]);
+      expect(settleSmokeHome(home, outcome, fs)).toEqual({ userData: home, removed: true });
+      expect(fs.removed()).toBe(true);
+    }
+  });
+
+  it("names its homes as main does, under the same short root", async () => {
+    const { SMOKE_HOME_PREFIX: launcherPrefix, smokeHomeParent: launcherParent } = await load();
+    expect(launcherPrefix).toBe(SMOKE_HOME_PREFIX);
+    for (const platform of ["darwin", "linux", "win32"] as const)
+      expect(launcherParent(platform)).toBe(smokeHomeParent(platform));
+  });
 });

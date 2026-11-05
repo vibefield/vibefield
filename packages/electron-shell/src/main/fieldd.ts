@@ -1,5 +1,4 @@
 import { existsSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import {
   FIELDD_TRUST_ROOT_ENV,
@@ -12,6 +11,7 @@ import { app } from "electron";
 import { APP_ORIGIN } from "./app-protocol";
 import { isSmokeLike, type ShellMode, shutdownPolicy } from "./modes";
 import { type DesktopResources, readBundledTrust } from "./resources";
+import { SMOKE_HOME_PREFIX, type SmokeProfile, smokeHomeParent } from "./smoke-profile";
 
 // The supervisor owns adopt/spawn/probe/readiness (ESR §5.3); this builder
 // owns only what a supervisor must never know: Electron paths, the runner
@@ -23,16 +23,22 @@ import { type DesktopResources, readBundledTrust } from "./resources";
 // owns teardown); successive dev shells adopt the pair through the
 // buildId-gated probe.
 
-export function dataRoot(mode: ShellMode): string {
+export function dataRoot(mode: ShellMode, smoke: SmokeProfile | null = null): string {
   const injected = process.env["FIELDD_DATA_DIR"];
   if (injected) return injected;
   if (isSmokeLike(mode)) {
+    // BP-1c (BP-D9 (a)) — a smoke HOME (main/smoke-profile.ts) is this run's Electron userData AND its data root, one
+    // directory, as a packaged app's `appData/VibeField` is both: the desk browser's profiles then lie inside userData,
+    // where Chromium writes their cookie database. It was minted fresh for this run, under the same short root as below.
+    if (smoke?.home === true) return smoke.userData;
     // Unix domain sockets inherit macOS's 104-byte sun_path ceiling. Its
     // per-session tmpdir is already roughly 50 bytes long, and the user-root
     // suffix can push an otherwise valid isolated smoke root over the edge.
     // `/tmp` is the deliberate short-root authority on Unix; Windows has named
     // pipes rather than sun_path and must keep using its platform temp root.
-    return mkdtempSync(join(process.platform === "win32" ? tmpdir() : "/tmp", "vf-smoke-"));
+    // A run whose profile is not a home (the first-run walks, the soaks, Godview's lab) keeps the two apart, and the
+    // desk browser says it cannot keep sign-ins there (live-surfaces/browser-profiles-placement.ts).
+    return mkdtempSync(join(smokeHomeParent(), SMOKE_HOME_PREFIX));
   }
   return join(app.getPath("appData"), "VibeField");
 }

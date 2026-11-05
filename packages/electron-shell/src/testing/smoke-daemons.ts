@@ -25,6 +25,7 @@
 
 import { existsSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
+import { handedAsUserData } from "../main/smoke-profile";
 import {
   goneByKernel,
   listRunProcesses,
@@ -173,8 +174,16 @@ export function smokeHome(userRoot: string): string | null {
 }
 
 /** The run's root, removed ONLY if this run created it (an injected FIELDD_DATA_DIR is someone else's data) — and, the run
- * green, its whole HOME (DK-18: the logs; a red run keeps them and `SMOKE_HOME` names them, so a sweep never hunts by time). */
-export function removeSmokeRoot(root: string, ok: boolean): void {
+ * green, its whole HOME (DK-18: the logs; a red run keeps them and `SMOKE_HOME` names them, so a sweep never hunts by time).
+ * BP-1c — a HOME handed to this run as its `--user-data-dir` (run-smoke.mjs's smoke home: Electron's profile and the data
+ * root in one directory, main/smoke-profile.ts) is Chromium's until Electron is gone, so a green run leaves it whole to the
+ * launcher that handed it, which removes it once Electron has exited (DK-5; packaging/smoke-profile.mjs
+ * `settleSmokeHome`), and says so (`removedBy`). `argv` is the seam (this process's by default). */
+export function removeSmokeRoot(
+  root: string,
+  ok: boolean,
+  argv: readonly string[] = process.argv,
+): void {
   if (process.env["FIELDD_DATA_DIR"]) return;
   // BP-D7 — `smoke:profile`'s PHASE A keeps its root for PHASE B (the packaged app is launched on its data root, the
   // board this run laid its pane on). The row's runner sets the switch and removes the root itself once it has judged.
@@ -185,6 +194,12 @@ export function removeSmokeRoot(root: string, ok: boolean): void {
   rmSync(root, { recursive: true, force: true });
   const home = smokeHome(root);
   if (home === null) return;
+  if (ok && handedAsUserData(home, argv)) {
+    process.stdout.write(
+      `SMOKE_HOME ${JSON.stringify({ home, removed: false, removedBy: "launcher" })}\n`,
+    );
+    return;
+  }
   if (ok) rmSync(home, { recursive: true, force: true });
   process.stdout.write(
     `SMOKE_HOME ${JSON.stringify({ home, removed: ok && !existsSync(home) })}\n`,

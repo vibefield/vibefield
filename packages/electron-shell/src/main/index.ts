@@ -2860,7 +2860,7 @@ registerShellSchemes();
 // and of the RunAsNode fuse: three controls, three surfaces, no substitutes.
 app.enableSandbox();
 // DK-5 — a smoke-like run never touches the app's SHARED profile (main/smoke-profile.ts): its
-// own `--user-data-dir`, or one minted under the OS temp here, before ready.
+// own `--user-data-dir`, or (BP-1c) a smoke HOME minted under the short root here, before ready.
 const SMOKE_PROFILE = isolateSmokeProfile(MODE, process.argv, {
   setUserData: (path) => app.setPath("userData", path),
 });
@@ -2887,7 +2887,8 @@ if (!hasInstanceLock) {
 } else {
   void (async () => {
     performance.mark("vf:shell:boot-start");
-    const root = dataRoot(MODE);
+    // BP-1c — a smoke HOME (SMOKE_PROFILE.home) is this run's data root too: its userData and its data root are one
+    const root = dataRoot(MODE, SMOKE_PROFILE);
     const logRoot = isSmokeLike(MODE)
       ? join(root, "logs")
       : resolvePlatformLogRoot({ allowOverride: MODE === "dev" });
@@ -3019,6 +3020,7 @@ if (!hasInstanceLock) {
       logger.info("desktop.smoke.profile", "A smoke-like run has its own Electron profile", {
         userData: SMOKE_PROFILE.userData,
         minted: SMOKE_PROFILE.minted,
+        home: SMOKE_PROFILE.home,
       });
     }
     if (!isSmokeLike(MODE)) {

@@ -22,7 +22,8 @@ vi.mock("@vibefield/fieldd-supervisor", () => ({
   },
 }));
 
-const { buildSupervisor, sayFatalSmokeHome } = await import("../src/main/fieldd");
+const { buildSupervisor, dataRoot, sayFatalSmokeHome } = await import("../src/main/fieldd");
+const { isSmokeHome, smokeHomeParent } = await import("../src/main/smoke-profile");
 const { resolveDevelopmentResources } = await import("../src/main/resources");
 
 const cleanup: (() => void)[] = [];
@@ -123,5 +124,36 @@ describe("sayFatalSmokeHome — a smoke gone fatal before its run names its kept
     expect(said(() => sayFatalSmokeHome("production", home))).toEqual([]);
     process.env["FIELDD_DATA_DIR"] = home;
     expect(said(() => sayFatalSmokeHome("smoke", home))).toEqual([]);
+  });
+});
+
+describe("dataRoot — BP-1c: a smoke HOME is the run's data root as well as its userData", () => {
+  it("roots a smoke-like run in the home it was handed, minting nothing", () => {
+    delete process.env["FIELDD_DATA_DIR"];
+    const smoke = { userData: "/tmp/vf-smoke-hnUors", minted: false, home: true };
+    expect(dataRoot("smoke-canvas", smoke)).toBe("/tmp/vf-smoke-hnUors");
+    expect(dataRoot("smoke-godview", smoke)).toBe("/tmp/vf-smoke-hnUors");
+  });
+
+  it("a smoke whose profile is not a home mints its own root under the short root, as before", () => {
+    delete process.env["FIELDD_DATA_DIR"];
+    const root = dataRoot("smoke-canvas", {
+      userData: "/var/folders/x/T/vf-smoke-profile-AbC123",
+      minted: false,
+      home: false,
+    });
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    expect(root.startsWith(join(smokeHomeParent(), "vf-smoke-"))).toBe(true);
+    expect(isSmokeHome(root)).toBe(true);
+  });
+
+  it("an injected FIELDD_DATA_DIR wins over a home; production keeps appData/VibeField", () => {
+    process.env["FIELDD_DATA_DIR"] = "/someone/else";
+    expect(
+      dataRoot("smoke-canvas", { userData: "/tmp/vf-smoke-hnUors", minted: false, home: true }),
+    ).toBe("/someone/else");
+    delete process.env["FIELDD_DATA_DIR"];
+    // the mocked app answers every getPath with the OS temp
+    expect(dataRoot("production")).toBe(join(tmpdir(), "VibeField"));
   });
 });
