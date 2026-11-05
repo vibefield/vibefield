@@ -1,4 +1,5 @@
 import FieldLock
+import FieldSettings
 import Foundation
 import Testing
 
@@ -34,7 +35,33 @@ struct WayInScreenTests {
         .primary("Continue with Tailscale", .continueWithTailscale),
         .secondary("Scan the code on your computer", .scanCode, glyph: "qrcode.viewfinder"),
         .link("New to VibeField? See how it works", .seeHowItWorks),
+        .legal(SettingsModel.aboutLinks),
       ])
+  }
+
+  @Test("IOS-13a: the welcome's glass ends with Privacy Policy · Support, and no other screen's does")
+  func legal() {
+    let welcome = screen(.welcome(failure: nil))
+    let last = welcome.acts.last
+    #expect(last == .legal(SettingsModel.aboutLinks))
+    let titles = SettingsModel.aboutLinks.map { $0.title }
+    #expect(titles == ["Privacy Policy", "Support"])
+    // a code that named the account, or a first sign-in that failed: still the welcome, still its foot
+    let named = screen(.welcome(failure: nil, expecting: login)).acts.last
+    #expect(named == .legal(SettingsModel.aboutLinks))
+    // every other screen of the way in: no legal line (Q3, VF-PM 02:29Z; WI-L4's three places stand)
+    var steps: [FieldHomeModel.WayInStep] = (0...3).map { .tour($0) }
+    steps += [
+      .page(.fromCode(desktop: "Studio", login: login)), .page(.signInAgain(note: nil)),
+      .page(.noDesktops(login: login)), .page(.joining(login: login, note: nil)), .page(.looking(login: login)),
+      .page(.approval(machine: "iphone-17-pro", adminConsole: nil)), .found(name: "James", desktop: "studio"),
+      .lockOffer(.faceID), .locked(.faceID),
+    ]
+    for step in steps {
+      let acts = FieldHomeModel.wayInScreen(step).acts
+      let legal = acts.contains { if case .legal = $0 { true } else { false } }
+      #expect(!legal, "\(step)")
+    }
   }
 
   @Test("the welcome's note: the account a code named, or why a first sign-in failed")
