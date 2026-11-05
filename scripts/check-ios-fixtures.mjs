@@ -943,6 +943,36 @@ pins.push(
   ),
 );
 
+// IOS-12b — a spark's words (DESIGN.md §2.10): Chat's list on the phone says design-kit's own. The ids are read
+// from `statuses.ts`, so a status added there with no word on the phone is a pin nobody can read: red.
+const SPARK_STATUSES_TS = "packages/design-kit/src/spark-face/statuses.ts";
+const SPARK_ENTRIES_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldProduct/SparkEntries.swift";
+{
+  let ids = [];
+  try {
+    const table = readFileSync(join(root, SPARK_STATUSES_TS), "utf8");
+    ids = [...table.matchAll(/\{ id: "([a-z]+)", word: "[^"]+" \}/g)].map((match) => match[1]);
+  } catch {
+    ids = [];
+  }
+  if (ids.length === 0) problems.push(`no spark statuses read from ${SPARK_STATUSES_TS}`);
+  pins.push(
+    ...ids.map((id) => ({
+      name: `SPARK_STATUSES.${id}`,
+      origin: {
+        file: SPARK_STATUSES_TS,
+        pattern: new RegExp(`\\{ id: "${id}", word: "([^"]+)" \\}`),
+        label: `SPARK_STATUSES ${id}`,
+      },
+      copy: {
+        file: SPARK_ENTRIES_SWIFT,
+        pattern: new RegExp(`^ {4}case \\.${id}: "([^"]+)"$`, "m"),
+        label: `SparkStatus.${id}.word`,
+      },
+    })),
+  );
+}
+
 const pinProblems = [];
 const notices = [];
 
