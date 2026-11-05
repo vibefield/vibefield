@@ -2136,9 +2136,12 @@ esac
       expect(step!.text).toMatch(
         /\n {10}SIGNED_MAC: \$\{\{ runner\.os == 'macOS' && vars\.VIBEFIELD_MAC_SIGNING == 'true' && 'true' \|\| '' \}\}\n/,
       );
+      // the switch rides the call's first line: the `--out` line and the copy below it (LP-1's blockmap rule) stay
+      // byte for byte, so this hunk and LP-1's never touch the same lines
       expect(step!.text).toMatch(
-        / --out "release-build\/hashes-\$PLATFORM\.json" \$\{SIGNED_MAC:\+--require-cdhash\}\n/,
+        /\n {10}node scripts\/release-manifest\.mjs hash \$\{SIGNED_MAC:\+--require-cdhash\} --app /,
       );
+      expect(step!.text).toMatch(/\n {12}--out "release-build\/hashes-\$PLATFORM\.json"\n/);
       // the flag is on this one call and nowhere else in the workflow
       expect(yml.split("--require-cdhash").length - 1).toBe(1);
       const dir = scratch();
@@ -2163,13 +2166,13 @@ esac
       expect(readFileSync(join(dir, "node-args"), "utf8").trim().split("\n")).toEqual([
         "scripts/release-manifest.mjs",
         "hash",
+        ...(strict ? ["--require-cdhash"] : []),
         "--app",
         "apps/desktop/release/mac-arm64/VibeField.app",
         "--platform",
         "mac-arm64",
         "--out",
         "release-build/hashes-mac-arm64.json",
-        ...(strict ? ["--require-cdhash"] : []),
       ]);
       expect(readdirSync(join(dir, "release-build"))).toEqual(["latest-mac.yml"]);
     },

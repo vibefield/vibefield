@@ -24,7 +24,11 @@
 // its bytes, naming each such member and why, and exits non-zero before it writes the hashes. The release workflow
 // passes it on the signed macOS path alone: there every floor member is signed, so a byte read means the signature was
 // not read whole, and a silent fallback would read every release touched again. Without the flag (dev, unsigned and
-// non-mac builds) the fallback stands as before.
+// non-mac builds) the fallback stands as before. It checks HOW each member was read, never WHO signed it: an ad-hoc
+// signature reads by its cdhash too and passes. This plane's Developer ID rests on notarization alone
+// (electron-builder.release.yml's `notarize: true`); the `--require-signed` verifiers (verify-files-package,
+// verify-history-package) read fieldd, mille's addon and rosettad, no member of this plane, and host-links' `--version`
+// launch of the floor's binaries proves they start, not who signed them.
 //
 // AU-6 (AU-D10 A; LC-19): `merge --notes` writes the release's notes (`scripts/release-notes.mjs`'s output) INTO the
 // manifest before the sign step signs it, so they ride under its one `release` signature: no new signature, no new key.

@@ -316,8 +316,8 @@ jobs:
           SIGNED_MAC: ${{ runner.os == 'macOS' && vars.VIBEFIELD_MAC_SIGNING == 'true' && 'true' || '' }}
         run: |
           mkdir -p release-build
-          node scripts/release-manifest.mjs hash --app "apps/desktop/release/$OUT/VibeField.app" --platform "$PLATFORM" \
-            --out "release-build/hashes-$PLATFORM.json" ${SIGNED_MAC:+--require-cdhash}
+          node scripts/release-manifest.mjs hash ${SIGNED_MAC:+--require-cdhash} --app "apps/desktop/release/$OUT/VibeField.app" --platform "$PLATFORM" \
+            --out "release-build/hashes-$PLATFORM.json"
           # the payloads and the UNSIGNED feed electron-builder wrote beside them (the sign job signs it, D8); the DMG is
           # already stapled and its feed entry re-read (LP-1). The zip's blockmap rides for differential downloads; a
           # DMG's never does (stale once stapled, read by nothing: electron-updater updates a Mac from the zip)
