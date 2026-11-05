@@ -2,7 +2,8 @@
 # carries the facts triage needs.
 blank_issues_enabled: false
 contact_links:
-  # OWNER: A PLACEHOLDER — fill it in before testers arrive. Read 2026-11-04 (read-only `gh api`): this repository
+  # SET BY JAMES (VF-PM, 2026-11-05 02:01Z): the private contact is his to choose, and no address is invented here.
+  # It must be set before beta.1's cohort arrives. Read 2026-11-04 (read-only `gh api`): this repository
   # has no SECURITY.md (GitHub's community profile lists no security policy), private vulnerability reporting is
   # off, and the vibefield org has no `.github` repository to inherit one from. Either add a SECURITY.md that names a
   # private contact (this url then shows it), or turn on private vulnerability reporting and point this url at
