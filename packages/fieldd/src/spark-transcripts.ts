@@ -22,9 +22,9 @@ import {
   sparkTranscriptLineOf,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import type { Agent } from "@vibefield/puppeteer-runtime";
 import { markedText, type QueuedInput } from "./agent-input-queue";
 import { RpcCallError } from "./native-link";
+import { ownLive, type RunEntered, type RunEnteredAgent } from "./run-entry";
 import {
   RecordSigner,
   recordsUnreadable,
@@ -72,10 +72,6 @@ const FIRST_LINE_BYTES = 64 * 1024;
 
 /** A tool's `detail`, at most (the contract's bound). */
 const DETAIL_MAX = 2_000;
-
-/** How a run of a spark came to be entered: a birth begins a conversation; a resume continues one; a re-attach is the
- * same run again after fieldd restarted; an adoption is a run typed in a pane. */
-export type SparkRunBegun = "spawn" | "resume" | "reattach" | "adopt";
 
 /** A line's body as a writer hands it: its kind's own fields, `at` when it is not now. */
 export type TranscriptBody =
@@ -406,15 +402,11 @@ export class SparkTranscripts {
   }
 }
 
-/** What the recorder hears a run by: puppeteer's Agent, its one `.on(...)` surface and its monitor. */
-export type TranscriptAgent = Pick<Agent, "on" | "monitor">;
+/** What the recorder hears a run by: puppeteer's Agent, its one `.on(...)` surface and its monitor (run-entry.ts). */
+export type TranscriptAgent = RunEnteredAgent;
 
-export interface SparkRunEntered {
-  readonly agent: TranscriptAgent;
-  readonly spark: SparkId;
-  readonly runtimeRunId: string;
-  readonly begun: SparkRunBegun;
-}
+/** A spark's own run as it entered (run-entry.ts's `RunEntered`), its own spark named: the one a transcript records. */
+export type SparkRunEntered = RunEntered & { readonly spark: SparkId };
 
 /** How many pasted prompts a run holds while it waits for their turns, at most. */
 const PROMPTS_KEPT = 16;
@@ -433,11 +425,6 @@ interface Recording {
   /** calls fieldd served before their tool was asked for (none in practice): the next MCP tool's */
   credits: number;
 }
-
-/** An event the spark's own conversation made, live: never a subagent's (a non-root actor), never one reconstructed
- * from history (a replay). */
-const ownLive = (envelope: { readonly agentId?: string; readonly replay?: boolean }): boolean =>
-  envelope.agentId === undefined && envelope.replay !== true;
 
 export class SparkTranscriptRecorder {
   readonly #runs = new Map<string, Recording>();

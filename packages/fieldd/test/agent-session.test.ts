@@ -105,6 +105,7 @@ import { EXIT_GRACE_MS } from "../src/agent-runtime";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
+import type { RunEntered } from "../src/run-entry";
 import { UNREADABLE_WORDS } from "../src/signed-record";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { SparkStore } from "../src/tool-plane/sparks";
@@ -5125,6 +5126,148 @@ describe("S1 — a run born whose ticket cannot be minted", () => {
     expect(ticket.endpoints.controlUrl).toMatch(/^ws:/);
     expect(ticket).toHaveProperty("attachGrant");
   }, 60_000);
+});
+
+// CP-4a2b (§13a slice 3; Q8, D6) — every run that enters the agent runtime is told to `onRunEntered`, with its
+// record's origin and its own spark: a flow's steps are heard by this door (flow-step-events.ts), and a spark's
+// transcript reads the own-session `spark` alone, never `origin`. Over the REAL floor, the runs fieldd starts for
+// itself are spawned as the daemon's own doors spawn them (talkSpawn: the runtime's `spawn` with compose facts), after
+// one plain birth has found the floor.
+describe("CP-4a2b — every run entered is told, with its origin and its own spark (Q8, D6)", () => {
+  /** A flow run's step as the runs start it (CP-D15): its run and its call, and no own spark. */
+  const FLOW_ORIGIN = { by: "flow", run: "fr-e1a2b3c4", call: 1 } as const;
+  /** The door principal a run fieldd starts for itself is spawned under (daemon.ts's talkSpawn). */
+  const SELF = { kind: "mcp-agent" } as const;
+  /** What a row reads of a run heard entering. */
+  const told = (entered: RunEntered) => ({
+    runtimeRunId: entered.runtimeRunId,
+    begun: entered.begun,
+    origin: entered.origin,
+    spark: entered.spark,
+  });
+
+  it("E1, E3: a plain spawn and a spawn with an origin are each heard as they enter, the origin with it; its resume is heard too, keeping the origin", async () => {
+    const box = await setup({ floor: "real" });
+    const win = await window(box.daemon, DECK, "e1");
+    const heard: RunEntered[] = [];
+    box.daemon.agents.onRunEntered((entered) => heard.push(entered));
+    const plain = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    const step = await box.daemon.agents.spawn(
+      { provider: "scripted", cwd: box.envOut },
+      SELF,
+      undefined,
+      { origin: FLOW_ORIGIN },
+    );
+    const stepRun = step.session.runtimeRunId;
+    // E1: every run is told, never a spark's own alone; a plain run's record names no origin, so none is heard
+    expect(heard.map(told)).toEqual([
+      {
+        runtimeRunId: plain.session.runtimeRunId,
+        begun: "spawn",
+        origin: undefined,
+        spark: undefined,
+      },
+      { runtimeRunId: stepRun, begun: "spawn", origin: FLOW_ORIGIN, spark: undefined },
+    ]);
+
+    // E3: the step's run ends, and its resume is a run of its own, heard as it enters, its record's origin kept
+    await win.call("terminal.terminate", { sessionId: step.terminal.sessionId });
+    await poll(async () => (readRecord(box.dataDir, stepRun).exited ? true : undefined), 15_000);
+    const resumed = (await born(win, "agent.resume", {
+      runtimeRunId: stepRun,
+    })) as AgentSpawnResult;
+    expect(readRecord(box.dataDir, resumed.session.runtimeRunId).origin).toEqual(FLOW_ORIGIN);
+    expect(heard.map(told).at(-1)).toEqual({
+      runtimeRunId: resumed.session.runtimeRunId,
+      begun: "resume",
+      origin: FLOW_ORIGIN,
+      spark: undefined,
+    });
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+    await win.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
+  }, 90_000);
+
+  it("E2: a run re-attached after fieldd restarted is heard as it enters the second fieldd, with the origin its record carries", async () => {
+    const first = await setup({ floor: "real", attach: true });
+    const win1 = await window(first.daemon, DECK, "e2a");
+    await born(win1, "agent.spawn", { provider: "scripted", cwd: first.envOut });
+    const step = await first.daemon.agents.spawn(
+      { provider: "scripted", cwd: first.envOut },
+      SELF,
+      undefined,
+      { origin: FLOW_ORIGIN },
+    );
+    const runId = step.session.runtimeRunId;
+    await joinedRow(win1, runId);
+    await first.daemon.stop();
+    // the second fieldd's own listener is registered as it boots, before its first inventory re-attaches: a row
+    // adds its ear to that registration, on the class, and takes it off after
+    const heard: RunEntered[] = [];
+    const runtime = Object.getPrototypeOf(first.daemon.agents) as typeof first.daemon.agents;
+    const registered = runtime.onRunEntered;
+    const ear = vi.spyOn(runtime, "onRunEntered").mockImplementation(function (
+      this: typeof first.daemon.agents,
+      listener,
+    ) {
+      return registered.call(this, (entered) => {
+        heard.push(entered);
+        listener(entered);
+      });
+    });
+    try {
+      const second = await setup({ floor: "real", attach: true, restartOf: first });
+      const win2 = await window(second.daemon, DECK, "e2b");
+      await poll(async () => {
+        const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+        const row = sessions.find((r) => r.runtimeRunId === runId);
+        return row?.continuation?.reattached === true ? row : undefined;
+      }, 20_000);
+      expect(heard.map(told).filter((entered) => entered.runtimeRunId === runId)).toEqual([
+        { runtimeRunId: runId, begun: "reattach", origin: FLOW_ORIGIN, spark: undefined },
+      ]);
+      await win2.call("terminal.terminate", { sessionId: step.terminal.sessionId });
+    } finally {
+      ear.mockRestore();
+    }
+  }, 120_000);
+
+  it("E5 (D6): a run a spark started, and a flow's step with a spark in its origin, never enter a transcript: only a spark's OWN run does", async () => {
+    const box = await setup({ floor: "real" });
+    const win = await window(box.daemon, DECK, "e5");
+    const spark = "sp-7k2m9q4x";
+    await born(win, "agent.spawn", { provider: "scripted", cwd: box.envOut });
+    const started = await box.daemon.agents.spawn(
+      { provider: "scripted", cwd: box.envOut },
+      SELF,
+      undefined,
+      { origin: { by: "spark", spark } },
+    );
+    const stepped = await box.daemon.agents.spawn(
+      { provider: "scripted", cwd: box.envOut },
+      SELF,
+      undefined,
+      { origin: { ...FLOW_ORIGIN, spark } },
+    );
+    // the spark's own session, as the hatch spawns it (daemon.ts): `{origin: {by: "you"}, spark}`
+    const own = await box.daemon.agents.spawn(
+      { provider: "scripted", cwd: box.envOut },
+      SELF,
+      undefined,
+      { origin: { by: "you" }, spark },
+    );
+    const ownRun = own.session.runtimeRunId;
+    // the own run's transcript opens with its run line (TH-1); the other two keep none
+    expect(
+      await poll(async () => transcriptOf(box.dataDir, spark, ownRun)[0], 10_000),
+    ).toMatchObject({ kind: "run", runtimeRunId: ownRun, fresh: true });
+    expect(transcriptOf(box.dataDir, spark, started.session.runtimeRunId)).toEqual([]);
+    expect(transcriptOf(box.dataDir, spark, stepped.session.runtimeRunId)).toEqual([]);
+    for (const run of [started, stepped, own])
+      await win.call("terminal.terminate", { sessionId: run.terminal.sessionId });
+  }, 90_000);
 });
 
 describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {

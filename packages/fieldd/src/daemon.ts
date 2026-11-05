@@ -1382,7 +1382,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   });
   // TH-1 — the transcript hears a spark's own runs from their entry, a re-attach's included (before the inventory that
   // re-attaches them), and lets each go at its end
-  agents.onSparkRunEntered((entered) => transcriptRecorder.entered(entered));
+  agents.onRunEntered(({ spark, ...entered }) => {
+    // D6 — a spark's OWN run alone, read by its own-session `spark`, never by `origin`
+    if (spark !== undefined) transcriptRecorder.entered({ ...entered, spark });
+  });
   agents.onRunEnded((runtimeRunId) => transcriptRecorder.forget(runtimeRunId));
   // PG-9 S4c — DEBUG: a recorded synthetic swarm plays this desktop's boards and monitor in place of
   // the runtime's fold and bus; the runtime above stands, unread by them (debug/swarm-replay.ts)
