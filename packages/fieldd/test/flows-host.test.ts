@@ -853,6 +853,51 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
     ROW_MS,
   );
 
+  // CP-4a2b (§13a slice 2, M-h; test only) — rows on built code: the resident read alone (O3) and a stopped run's
+  // later calls never heard (D1's N2). Each red is a named mutation, shown on a scratch copy in the commit's body.
+  it(
+    "H33: the resident read alone ends a run `memory`: with the worker's count refused, a host past its cap is still ended (O3)",
+    async () => {
+      // `rss` makes the resident size read past any cap and `reject` refuses the worker's count, so only the resident
+      // read can end the held run. It is the one measure for memory that is neither heap nor external (V8's malloced
+      // zone memory, for one), and since R2 no other row holds it alone: either reading can end H25
+      const direct = await stubbed("rss,reject");
+      children.push(direct.child);
+      const exited = exitOf(direct.child);
+      expect(await heardOf(direct.heard, "ready")).toEqual({ t: "ready", pid: direct.child.pid });
+      direct.tell(runOf(flow('await ask("hold");')));
+      expect(await answeredToEnd(direct, { holds: "hold" })).toEqual({ t: "memory" });
+      expect(await within(exited)).toEqual({ code: null, signal: "SIGKILL" });
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H35: a run stopped inside its 41st of 300 parallel calls is never heard again: the handler was called 41 times, and the run ends `stopped`, never `flood` (D1's N2)",
+    async () => {
+      // the supervisor reads the host's frames in order and calls the handler as each arrives, so the Stop made
+      // inside the 41st call is fieldd's word before the 42nd is read: every later call is dropped unheard, and the
+      // waiting count never nears HOST_CALLS_WAITING_MAX (256). This is N2's "never heard", which needs no host code
+      let heard = 0;
+      let run: FlowHostRun | undefined;
+      const handler: FlowCallHandler = {
+        call: () => {
+          heard += 1;
+          if (heard === 41) void run?.stop();
+          return new Promise<FlowHostAnswer>(() => {});
+        },
+        log: () => {},
+      };
+      run = await host(
+        flow('await Promise.all(Array.from({ length: 300 }, (_, i) => agent("step " + i)));'),
+        { handler },
+      );
+      expect(await within(run.ended)).toEqual({ kind: "stopped" });
+      expect(heard).toBe(41);
+    },
+    ROW_MS,
+  );
+
   it(
     "H9: a host that misses its pings is ended, its reason `unanswered`: a script that spins",
     async () => {

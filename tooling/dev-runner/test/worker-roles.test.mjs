@@ -52,3 +52,20 @@ test("a run's flow host is a role like the others: its probe's argument is roles
     "the SEA builder has no flows-host probe",
   );
 });
+
+// CP-4a2b (§13a slice 2, M-h; Q-A6 (a), ruled 2026-11-05 16:24Z; prod-builder's NOTE of 14:21Z) — probe C3 spells the
+// flow host's two caps as literals in the run it sends, and their truth is FLOW_LIMITS in the contracts' registries.ts.
+// Both are read as TEXT here: a cap moved in one place and not the other fails this row, not a packaged probe.
+test("probe C3's caps are FLOW_LIMITS' own: its heapMb and rssMb equal registries.ts's HOST_HEAP_MB and HOST_RSS_MB", () => {
+  const registries = read("packages/contracts/src/registries.ts");
+  /** The one `<name>: <digits>,` in `text`: exactly one, or the row says how many it found. */
+  const only = (text, name, where) => {
+    const found = [...text.matchAll(new RegExp(`\\b${name}: (\\d+),`, "g"))].map(
+      (match) => match[1],
+    );
+    assert.equal(found.length, 1, `${where} spells ${name} once (found ${found.length})`);
+    return Number(found[0]);
+  };
+  assert.equal(only(SEA, "heapMb", "probe C3"), only(registries, "HOST_HEAP_MB", "registries.ts"));
+  assert.equal(only(SEA, "rssMb", "probe C3"), only(registries, "HOST_RSS_MB", "registries.ts"));
+});
