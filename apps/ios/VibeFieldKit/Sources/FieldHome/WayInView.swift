@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldSettings
 import SwiftUI
 import UIKit
 
@@ -234,7 +235,7 @@ struct WayInView: View {
     case .secondary(let words, let what, let glyph):
       pill(words, glyph: glyph, kind: .secondary) { onAct(what) }
     case .share(let words, let primary):
-      ShareLink(item: FieldHomeModel.vibeFieldSite) {
+      ShareLink(item: VibeFieldSite.home) {
         HStack(spacing: 8) {
           Image(systemName: "square.and.arrow.up")
           Text(words)

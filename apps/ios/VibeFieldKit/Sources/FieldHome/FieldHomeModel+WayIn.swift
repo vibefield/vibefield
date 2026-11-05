@@ -99,9 +99,6 @@ extension FieldHomeModel {
     case unlock
   }
 
-  /// VibeField's site, where How it works sends a newcomer and No desktops yet sends its link.
-  static let vibeFieldSite = URL(string: "https://vibefield.dev")!
-
   /// The way in's words, held to DESIGN.md §9 "The way in" (the VibeField product bible 0.3 behind them).
   enum WayInWords {
     static let welcomeTitle = "Your agents, in your pocket."
