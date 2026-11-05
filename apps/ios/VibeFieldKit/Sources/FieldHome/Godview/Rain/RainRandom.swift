@@ -1,3 +1,4 @@
+import FieldDesign
 import Foundation
 
 // PG-8 — THE RAIN'S DICE: `Math.random()`'s place in the rain (puppeteer-views 0.3.3 dist `views/rain/RainView.js`: a
@@ -17,20 +18,9 @@ struct SystemRainRandom: RainRandom, Sendable {
   mutating func next() -> Double { Double.random(in: 0..<1) }
 }
 
-/// mulberry32, transcribed in UInt32's wrapping arithmetic: `| 0`, `>>> 0`, `Math.imul` and `^` agree with it bit for
-/// bit, because JavaScript's 32-bit operators read a signed and an unsigned word alike.
-struct Mulberry32: RainRandom, Equatable, Sendable {
-  private(set) var state: UInt32
-
-  init(seed: UInt32) { state = seed }
-
-  mutating func next() -> Double {
-    state &+= 0x6d2b_79f5
-    var t = (state ^ (state >> 15)) &* (1 | state)
-    t = (t &+ ((t ^ (t >> 7)) &* (61 | t))) ^ t
-    return Double(t ^ (t >> 14)) / 4_294_967_296
-  }
-}
+/// mulberry32 (FieldDesign's, since IOS-12b: the spark face deals from the same transcription) rolls the rain's seeded
+/// dice.
+extension Mulberry32: RainRandom {}
 
 extension Mulberry32 {
   /// `-vf-godview-rain-seed=<n>` (fd's Q7): the seed a still is rolled with.
