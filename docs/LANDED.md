@@ -33435,3 +33435,184 @@ kit's five fixture mirrors, three fieldd sources and five fieldd tests, five in 
 - **James:** the security contact, before beta.1's cohort arrives: a SECURITY.md with a private contact, or private
   vulnerability reporting turned on. Until then the form's security link opens an empty page.
 - The first tester's report through the form, with the version, macOS and chip filled in (the first beta).
+
+## CP-4a1 — flows, the first part: the person's flow library, fieldd's signed flow records and the static read, with nothing calling them yet (track CO) (2026-11-05; `4ca17b341` → `1a3ca5f24`, 13 commits on main `ce4842372`, lane `co/cp4a1` in `/Volumes/SamsungRed/lanes/co-cp4a1/vibe-field`, the mini's mint M143 = T `1a3ca5f24` (tree `321857fb1d1a`), stacked, landed by fast-forward, run 143)
+
+**What it rests on.**
+- The CO round: James's page `Druyc3Ua6BWycRe1SzzeCz`, 68 of 68 picked (read 2026-11-04 23:14Z). Every CP-4 mark is
+  at its lean, CP4-Q1, Q3 and Q12 by his own clicks (badged).
+- The plan of record, `lanes/co-plan/plans/step0-cp4.md`: RULED 23:16Z, with CP4-S1…S6, S8…S11 and S13…S19 at their
+  leans (VF-PM 23:22Z). CP-4a is the run engine; CP-4a1 is its first part: the library, the approvals by hash and the
+  static read, with no daemon wiring. It builds:
+  - **CP4-Q3 (a)**'s read: a proposal's facts come from its bytes, read without running them.
+  - **CP4-Q5 (a)**'s keeping: fieldd keeps a flow's bytes at approval, by their hash, so a run can start from them,
+    and a file that differs from them reads `changed`.
+  - **CP4-Q8 (a)**'s cap as `FLOW_LIMITS` (`CALLS_MAX` 40, `CALLS_MORE` 20), provisional as every FLOW_LIMITS number
+    is.
+  - **CP4-S4**: `acorn` and `ses` in fieldd only, behind a wall of their own.
+  - **CP4-S17 (a)**: DESIGN.md §9's third line, "An answer VibeField did not hear".
+- It stands on item 172 (`caf52425c`, run 132): the record signer's four answers and its `StoreGuard`. The flow
+  records are that guard's fifth store (VF-PM's (B), 05:10Z; Found 3).
+- CP-4a2 (the host and `ses`, the journal and its replay, the runs, the doors' handlers) waits for TH-1 (CP4-S16).
+
+**What** (49 files, +3,577 −21 against main `ce4842372`): DESIGN.md, three docs, 30 in contracts (21 of them
+fixtures), field-native's `registries.rs`, fieldd's package.json and 11 fieldd sources, tests and fixtures,
+`pnpm-lock.yaml` and the walls' script.
+- **The seam pages first** (`4ca17b341`): api.html's five `flows.*` doors and the flow tool rows' notes;
+  architecture.html's flow host seam and wall R32.
+- **DESIGN.md** (`6956c815d`): §9 "A flow's lines", the three lines a step hears from VibeField, and how a run's Stop
+  reaches its steps (CP4-S3); §8's dated note.
+- **Contracts** (`b8ce772d6`):
+  - `flows.ts`: the static read, the library row, the two kept records, a run's summary and the five doors' shapes;
+  - `FLOW_LIMITS`, and three LAYOUT rows (`flows/`, `fieldd/flows/`, `fieldd/flows.key`) with their Rust twin in
+    `registries.rs` (`pnpm gen`'s output);
+  - six needs-you kinds (`flow-proposal`, `flow-gate`, `flow-changed`, `flow-repair`, `flow-cap`, `flow-lost`), and
+    `NeedsItem.run` and `NeedsItem.script`;
+  - 20 fixtures. The five doors (`flows.list`, `.subscribe`, `.run`, `.stop`, `.script`) are declared in methods.ts
+    with no handler.
+- **The library and the records** (red `43b73374e`, green `d1b19e8b4`):
+  - `FlowLibrary` reads the person's `flows/` folder as four states (`approved`, `changed`, `new`, `too-big`) and
+    logs what it passed over.
+  - `FlowRecords` keeps a flow's bytes by their hash, a signed approval per flow and a signed proposal per id, and
+    sets aside what is not its own.
+- **The pins and the wall** (`7fcdc74ae`):
+  - `acorn` 8.19.0 (published 2026-10-05, no dependencies) and `ses` 2.3.0 (published 2026-08-13; three `@endo`
+    packages), pinned exact in fieldd's package.json. Both are past the 7-day bar, and neither is an EL8 plane.
+  - `pnpm-lock.yaml` +37, by one install under the INSTALL mutex; `check:deps` 0.
+  - Wall R32, enforce: `acorn` only under fieldd's `src/flows`, `ses` and `@endo/*` only under `src/flows/host`, and
+    no puppeteer or rosetta package in `src/flows`.
+  - `ses` is imported by nothing yet. It is pinned now for CP-4a2's host child.
+- **The static read** (red `36ee0c123`, green `58a85c64c`): a flow's meta, its `agent()` calls and its gates, read
+  with acorn and never run. What it cannot list it says (`unlisted`), and what it refuses it names.
+- **The test fix** (`3bb22d92d`, test-only): flows-records R1–R5 assert the kept file before they read it, so the red
+  fails on its assertion (Found 2).
+- **(B), the fifth store** (VF-PM 05:10Z; four commits on the rebase onto item 172):
+  - `555026e76`, DESIGN.md §9: the flow records are the fifth kind VibeField keeps, with their words, "VibeField
+    can't read the flows it keeps; nothing was changed" (PROPOSED, on James's list), and a dated *Amended 2026-11-05
+    (CP-4a1)* line.
+  - `a12095961`, contracts: `RECORD_STORES.SERVICE_FLOWS` ("flows") and its refusal fixture.
+  - `03c5febf6` (red) and `1a3ca5f24` (green): `FlowRecords` reads through item 172's `StoreGuard`. A disk that does
+    not answer is refused `UNAVAILABLE {service: "flows", state: "records-unreadable"}`, a newer VibeField's record is
+    kept and never served, and nothing is written after a refusal. The bytes are content-addressed, not a signed
+    record, so they are not guarded.
+
+**Validation.**
+- **The reds and the greens on the mini** (a9; logs under `ts6/logs/mini/co-cp4a1/`):
+  1. **Every red fails on its assertion.**
+     - c5 (04:44Z; each red's sources under the fixed tests of `6495dd794`, now `3bb22d92d`): the records red, 10
+       failed, all AssertionError, R1–R5 "…: expected false to be true"; the static read's red, 14 failed, all
+       AssertionError.
+     - c6 (05:26:15Z, at the (B) red `dc9ce0656`, now `03c5febf6`): 6 failed | 33 passed, 6 AssertionError, 0
+       timeouts, 0 load failures. The 33 passes are pins, named in its body.
+  2. **The full fieldd suite at the (B) green** (c6, at `812c44173`, now `1a3ca5f24`): 237 files | 4 skipped; 3,105
+     passed | 14 skipped; 0 failed. fieldd typecheck 0; check:walls 0, R32 0 [enforce].
+  - Before them, c4 (at the records green `370181c57`, now `d1b19e8b4`): field-native built from the tree,
+    `layout_vector` 1 passed; the full suite 3,061 passed, 0 failed.
+- **The two ALLOW hunks**, resolved by hand at the cut onto main with SD-2, as ruled and as rehearsed:
+  1. `docs/desk-gates.md` row 2, at `7fcdc74ae`: R1–R32, with SD-2's dated note kept whole and this lane's words cut
+     to R32 alone, "…; and from R1–R31 on 2026-11-05 for CP-4a1's R32, the flow host's" (VF-PM 04:19Z).
+  2. `packages/contracts/test/fixtures.test.ts`, the tail of `SCHEMA_BY_PREFIX`, at `b8ce772d6`: the union, SD-2's
+     two `"app-preferences"` lines first, then this lane's eleven (cp-landing 04:29Z).
+- **The moves since c6**, each 13/13 with no conflict and pairwise exit 0 (logs in `lanes/co-plan/lanes/co-cp4a1/`):
+  - `812c44173` → `cc60852bf`, onto `eb8d90d59` (A3's records; SD-2, L8, S4a and A3 under it), 07:38Z. Rehearsed
+    first; the two hunks applied as rehearsed; the tree is the rehearsal's (`f8037dd4aec3`), packages
+    `bdd385586c30`. Re-light: under the INSTALL mutex, `pnpm install --frozen-lockfile` 0 and `pnpm gen:check` 0;
+    fieldd and contracts tsc 0; biome 0 (3,226 files); the walls `--self-test` then `--enforce` 0; preflight OK.
+  - `cc60852bf` → `f3d76107d`, onto `b8c013220` (S4a's records), 07:41Z: docs only, `docs/LANDED.md` and
+    `docs/ROADMAP.md`; packages unchanged.
+  - `f3d76107d` → `56903c6e3`, onto `d48b6fe6d` (L7: 9 files, 6 in field-app), 07:53:41Z, by the three checks of
+    a code-base move (cp-landing 07:52Z; VF-PM 07:54Z): 0 shared files and the lock unmoved; the tree and packages
+    equal an in-memory replay made before the rebase (`e960b3641c00`, `15e5bb61eeb7`); and the lane's diff over its
+    base is byte-identical.
+  - `56903c6e3` → `1a3ca5f24`, onto `ce4842372` (L7's records), 07:55:41Z: docs only; packages unchanged
+    (`15e5bb61eeb7`). The three checks over the whole range `b8c013220..ce4842372`: the diff identical (194,540 B
+    each), 0 shared files, the lock unmoved. The range-diff is `=` on 13 of 13.
+- **Run 143** (`1a3ca5f24`, tree `321857fb1d1a`, stacked, the landing mint; the mini; `lanes/ts6/logs/mini/run143/`):
+  - Before it (`run143-next.out`): "no sibling pin moved"; the frozen re-install, "a lock moved"; "field-native
+    29511408 bytes", built from the tree; "preflight exit 0 · 1 WARN/FAIL lines", R23's `acp` candidate as on main.
+  - The verdict (`run143.out`): "verify exit 0 08:06:44Z"; "test target:  NX   Successfully ran target test for 29
+    projects"; "cargo test results: ok 34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+  - Counted in `verify.clean.log`: vitest 12,733 passed / 0 failed / 20 skipped over 907 files, +65 tests and +3
+    files, all this slice's (`flows.test.ts` 16, `flows-static-read.test.ts` 14, `flows-records.test.ts` 11,
+    `fixtures.test.ts` 609 (+20), `record-stores.test.ts` 28 (+4)); node 445/0; cargo 545/0 over its 34 results,
+    with field-native's generated `registries.rs` built.
+  - Its lines: "Checked 3228 files in 1617ms. No fixes applied."; "R32:   0  [enforce] acorn only under
+    packages/fieldd/src/flows and ses only under packages/fieldd/src/flows/host (the flow host's child)…", its six
+    self-test fixtures each "PASS  R32 detected in …"; "check-single-copy: ok — one copy each of …". gen:check is
+    the chain's last stage.
+  - **The two witnesses**, that the bundled fieldd still starts:
+    "✓ test/pair-log-root.test.ts (1 test) 1707ms" and "✓ test/agent-shim-role.test.ts (10 tests) 3691ms".
+- **Step 2, the stage pass** (`cp4stage-1a3ca5f24.out`, 08:07:33Z → 08:08:19Z): "(package:stage) exit 0 in 46 s";
+  "(stage-package --verify --require-complete) exit 0 in 0 s"; "stage verify OK — 150 files, 297,734,424 bytes
+  (283.94 MB); complete".
+  - The notices: "legal/THIRD_PARTY_NOTICES.txt: 649 components, 329 distinct licence texts, 11 left out (another
+    platform's, or not built on this host)", L5's 649 / 329 / 11 unchanged; "acorn / ses / @endo: ALL ABSENT";
+    legal/ holds its 4 entries, host-path count 0.
+  - notices unchanged at this land; acorn ships in bin.cjs at the first slice that wires src/flows (TH-1/CP4-S16);
+    ses at CP-4a2's host child = item 178's class.
+- **Landed:** The fixer's ff `ce4842372` → `1a3ca5f24` at 2026-11-05T08:17:18Z.
+  - By land-stack5.sh, exit 0, every gate re-read (cp-landing 08:18Z).
+
+**What is real, what is stubbed.**
+- Real:
+  - the contracts: `flows.ts`, the five doors' shapes, six kinds, `NeedsItem.run` and `.script`, `FLOW_LIMITS`, the
+    three LAYOUT rows with their Rust twin, `RECORD_STORES.SERVICE_FLOWS`;
+  - the records: bytes by hash, signed approvals and proposals, set-asides, item 172's guard;
+  - the library: four states and the passed-over log;
+  - the static read: meta, calls, gates, `unlisted`, refusals;
+  - wall R32, the two pins, the seam pages and DESIGN.md's lines.
+- Nothing calls it yet. `FlowLibrary`, `FlowRecords` and `readFlow` have no caller in daemon code, and the five
+  `flows.*` doors have no handler (`system.capabilities` lists them; nothing reads that list).
+- Not built, CP-4a2 and later: the host and `ses`, the journal and its replay, runs, `agent()`, `ask()` and `log()`,
+  the repair turn, the cap, Stop, the quit's lost step, the doors' handlers, the tool verbs (still Designed), every
+  card.
+
+**Found.**
+1. **The wall is R32, not the plan's R31.** SD-1's sound wall took R31 on main first. desk-gates row 2's range moves
+   to R1–R32 (ALLOW 1), and DECISIONS' wall lines with it. This closes SD-2's Found 5 line ("CP-4a1, which lands after
+   SD-2, moves it to R32").
+2. **The first records red was not a red by the rule** (c4, at `3387a32f1`, now `43b73374e`): R1–R5 failed by an
+   ENOENT thrown from the test's own fs calls, because the skeleton keeps nothing. On VF-PM's FINAL (04:27Z, no
+   rewrite), one test-only commit (`3bb22d92d`) asserts each file before it is touched; c5 re-proved the red, all
+   AssertionError. S5's latent throw on a read with no refusal was fixed in the same commit.
+3. **Item 172 widened the signer's answer under the lane** (the rebase onto `caf52425c`, 9/9, textually clean).
+   fieldd tsc went red at `records.ts` (`.body` on the four-way answer), and two of the lane's rows contradicted item
+   172's rule: R4 set a newer VibeField's approval aside, and nothing guarded a disk that did not answer. The lane
+   stopped; VF-PM ruled (B) at 05:10Z: the flow records become the guard's fifth store, in four commits, no rewrite.
+4. **fieldd typecheck is not bisectable from `d1b19e8b4` to `a12095961`** (seven commits; measured at their old SHAs,
+   05:27Z, `logs/tsc-span.log`). Each fails on the one TS2339 in `records.ts`; it compiles again at the (B) red
+   `03c5febf6`.
+5. **Departures from step0-cp4.md**, each named in its commit:
+   - `NeedsItem.script` (`{flow, hash, approved?}`) beside the plan's `run?`: a proposal's card needs the bytes' hash;
+   - `NeedsRun` and `NeedsScript` live in compose.ts, since flows.ts imports compose.ts (flows.test F16 holds them to
+     flows.ts's ids);
+   - `FLOW_LIMITS.CALLS_MORE` 20 (CP4-Q8 (a)'s "Allow 20 more") and the `too-big` state, both provisional;
+   - the journal's shapes moved to CP-4a2, beside the code that writes them;
+   - the plan's commit 5 is cut in three (the pins and the wall alone, the read's red, its green);
+   - R32's host clause is "ses only in flows/host"; what the host itself may import is set when it exists;
+   - the plan's registry.test additions live in flows.test (F1–F4).
+6. **biome formats every `.js` in the tree**, test fixtures included, so at the read's red the seven contracts
+   fixtures of release-check moved to biome's form (its hash, lines and size).
+7. **A property's name is not a reference** (`static-read.ts`, `KEYED`): without it, `{ agent: "codex" }` set
+   `unlisted` on every script. It was caught before the green was committed.
+8. **`flows` joins the users package's v1 migration manifest** (LAYOUT's first segments). migrate.test is green;
+   nothing pins the list.
+9. **The phone reads a flow item as an unknown kind.** The kit's `NeedsItemKind` has CP-3's four, and the needs doors
+   federate, so a flow item reaches the phone's list as "Needs your OK". Flows on the phone are out of scope.
+10. **`pnpm exec` set off an implicit install outside the INSTALL mutex** (4.3 s, no lock moved), found at the (B)
+    stop. Since then the lane's tools run from `node_modules/.bin`, and any `pnpm` script only under the mutex
+    (VF-PM 06:24Z).
+11. **L7 moved code under the lane** (`d48b6fe6d`, 6 files in field-app), so "packages unchanged" could not hold for
+    that move. The three checks above replace it for every code-base move (VF-PM 07:54Z).
+12. **Hygiene:** an interrupted checkout loop left the lane's worktree detached at `f632610bb` (now `6956c815d`) from
+    05:25:36Z to 05:30:58Z, with no commit and no file changed; `git checkout co/cp4a1` returned it.
+
+**Owed.**
+- **CP-4a2**: the host and `ses`, the journal and its replay, the runs, the doors' handlers, after TH-1 (CP4-S16);
+  then CP-4b…4f.
+- For James's eye (draft words; not a hold): "VibeField can't read the flows it keeps; nothing was changed".
+- The notices move when acorn first ships in bin.cjs (the first slice that wires `src/flows`) and when ses ships in
+  CP-4a2's host child (item 178's class).
+- Errata at VF-PM's draft slot (step0-cp4.md §11): `V2/index.html:407` and `:621` (no budget; CP4-Q5 (a)'s witness),
+  `flows:407-419` and round §3 D (CP4-Q17, re-ruled 13:24Z), `flows:277-289` (CP4-Q9 restated, CP4-S3); and the
+  plan's own "R31" (§1, §5.1, CP4-S4) takes a dated pointer to R32, at the plan's owner's hand.

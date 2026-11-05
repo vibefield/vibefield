@@ -589,14 +589,23 @@ phone"; DECISIONS PC
     - the phone's New spark sheet reading `offers.spark` (IOS-12).
   - For James's eye (draft words; not a hold): the sheet's two kinds, and fieldd's new refusal "VibeField does not
     offer this agent as a spark".
+- **CP-4a1, flows' first part**: LANDED 11-05 (`1a3ca5f24`, the mini's mint M143, run 143, stacked; LANDED "CP-4a1"),
+  on the CO round's CP-4 marks (all at the leans) and the step-0 plan (`step0-cp4.md`, RULED 23:16Z; CP4-S at the
+  leans, 23:22Z).
+  - fieldd reads the person's flow library (`flows/`) as approved, changed, new or too big, and keeps a flow's bytes
+    by their hash, its approval and a spark's proposal, signed: item 172's fifth store.
+  - The static read says what a flow's bytes will call (its meta, its `agent()` calls, its gates) without running
+    them. `acorn` and `ses` are pinned in fieldd behind wall R32.
+  - Nothing calls it yet: the five `flows.*` doors are declared with no handler.
+  - For James's eye (draft words; not a hold): "VibeField can't read the flows it keeps; nothing was changed".
 - Next, in order (the CO waves matrix, `lanes/co-plan/plans/co-waves-matrix.md`):
   - **TH-1 and TH-2**, one mint (lane `co/th`): the spark's thread as its transcript, Send through
     `compose.sparks.say`, Jump to, Wake, Pause. Its first half (DESIGN.md, contracts, the renderer) is building in
     its lane; its fieldd half (the recorder, the store in 159's folder) follows this stack on the compose block's chain.
   - **SP-1e2 → SP-1e4** (SP-1e: CH-D2's live cards in Chat's thread): crews, the kept record's `crews` section, and
     their card's acts; its prefix (DESIGN.md + contracts, lane `co/sp1e2`) building since 03:38Z.
-  - **CP-4a1** (lane `co/cp4a1`, building since 03:38Z): the library, approvals and static read, no daemon wiring;
-    **CP-4a2** (host, journal, runs) after TH lands; then the desk applier.
+  - **CP-4a2** (the host and `ses`, the journal, the runs, the doors' handlers) after TH-1 lands (CP4-S16); then
+    CP-4b…4f: Chat, the desk applier, Godview's flow mark, the watchdog, the board's light edits.
   - **CP-5b…5d**, which is MT-7: Codex and Grok, once their MCP processes can be named; Grok also once it takes a
     spark's brief and allowance (PU-O). Only CP-5c's Codex claim commit waits for step 7's profile card (CP5-Q2 (d),
     §12 Q11).
@@ -1138,7 +1147,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — the sound identity | ACTIVE since 11-05 (SD-D1…D22 ruled at the leans); SD-1 landed 11-05 (DESIGN.md §14 and `@vibefield/sound`, M126 `1ebe7b461`, run 126); SD-2 landed 11-05 (the desktop hears it, M138 `9e5b6eec8`, run 138) | DESIGN.md §14; `draft/sound/design-sound.md` | SD-3, away |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129) and CP-5a (`fc70097e3`, mint M140) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | TH-1/TH-2 · SP-1e2/1e4 · CP-4 · CP-5b…d |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140) and CP-4a1 (`1a3ca5f24`, mint M143) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | TH-1/TH-2 · SP-1e2/1e4 · CP-4a2…4f · CP-5b…d |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
