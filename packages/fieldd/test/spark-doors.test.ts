@@ -266,3 +266,69 @@ describe("your words to a spark (PC-D3 A, CP2-D2)", () => {
     expect(receipts.receipt(VELA, "say-00000000")).toEqual({ state: "queued", position: 1 });
   });
 });
+
+describe("item 158 — a say a restart broke into answers its retry uncertain, never queued again", () => {
+  const VELA = "sp-vela00000000";
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  /** Two fieldds on one root: the first killed with `kill`'s say in flight (its delivery never answers), the second
+   * restored over the same files, its receipts hearing its queue's outcomes as the daemon wires them. */
+  async function restarted(kill: { run: string; requestId: string } | undefined, waiting = false) {
+    const root = mkdtempSync(join(tmpdir(), "vf-say-158-"));
+    dirs.push(root);
+    const paths = { dir: join(root, "inputs"), keyPath: join(root, "inputs.key") };
+    const killed = new AgentInputQueues({
+      ...paths,
+      deliver: () => new Promise<DeliveryReceipt>(() => undefined),
+      isIdle: () => !waiting,
+    });
+    if (kill !== undefined) killed.enqueue(kill.run, "Push it", { kind: "you" }, kill.requestId);
+    await flush();
+    const delivered: string[] = [];
+    const idle = new Set<string>();
+    const heard: { receipts?: SayReceipts } = {};
+    const inputs = new AgentInputQueues({
+      ...paths,
+      deliver: async (_run, text) => {
+        delivered.push(text);
+        return { status: "confirmed" };
+      },
+      isIdle: (run) => idle.has(run),
+      onOutcome: (_run, input, outcome) => heard.receipts?.heard(input, outcome),
+    });
+    const receipts = new SayReceipts(inputs);
+    heard.receipts = receipts;
+    const restored = inputs.restore();
+    return { inputs, receipts, delivered, idle, restored };
+  }
+
+  it("S1 · before its head is said, the retry of a say whose kept input is a stamped head answers uncertain, never queued", async () => {
+    const h = await restarted({ run: "run-1", requestId: "say-broken0001" });
+    // the stamped head is no input waiting
+    expect(h.restored).toBe(0);
+    // the say door answers a kept receipt and queues nothing (daemon.ts, compose.sparks.say)
+    expect(h.receipts.receipt(VELA, "say-broken0001")).toEqual({ state: "uncertain" });
+    expect(h.inputs.pending("run-1")).toHaveLength(1);
+    expect(h.delivered).toEqual([]);
+  });
+
+  it("S2 · after its head is said at its run's first monitor row, the retry still answers uncertain, and nothing was sent", async () => {
+    const h = await restarted({ run: "run-1", requestId: "say-broken0002" });
+    h.idle.add("run-1");
+    await h.inputs.poke("run-1");
+    expect(h.inputs.pending("run-1")).toEqual([]);
+    expect(h.receipts.receipt(VELA, "say-broken0002")).toEqual({ state: "uncertain" });
+    expect(h.delivered).toEqual([]);
+  });
+
+  it("S3 · heard() keeps a restored say's outcome by its own request id when this boot never queued it", async () => {
+    // the first fieldd kept the say waiting (its session was busy) and stopped; the next one delivers it
+    const h = await restarted({ run: "run-1", requestId: "say-waited0001" }, true);
+    expect(h.restored).toBe(1);
+    h.idle.add("run-1");
+    await h.inputs.poke("run-1");
+    expect(h.delivered).toEqual(["Push it"]);
+    // a retry reads its receipt, never queues the words a second time
+    expect(h.receipts.receipt(VELA, "say-waited0001")).toEqual({ state: "delivered" });
+  });
+});
