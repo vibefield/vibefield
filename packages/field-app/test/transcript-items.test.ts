@@ -386,3 +386,36 @@ describe('the words (§9 "Chat\'s words")', () => {
     }
   });
 });
+
+describe("a crew's act line (SP-1e2's renderer half; SPE-Q39 (a))", () => {
+  it("draws it once, where it first stood, in its latest words, naming its crew; another act keeps its own row", () => {
+    const crewAct = fixture("spark-transcript-line.act-crew");
+    const at = (minute: number) => `2026-11-04T23:${minute}:00.000Z`;
+    const reading = transcriptReadingOf(
+      [FIRST, LATEST],
+      new Map([
+        [
+          RUN,
+          [
+            fixture("spark-transcript-line.run"),
+            { ...crewAct, seq: 2, at: at(11), text: "Started 1 agent" },
+            { ...fixture("spark-transcript-line.reply"), seq: 3, at: at(12) },
+            { ...crewAct, seq: 4, at: at(13), text: "Started 4 agents · Opus 5.5 · high" },
+            { ...fixture("spark-transcript-line.act"), seq: 5, at: at(14) },
+          ],
+        ],
+      ]),
+    );
+    const items = itemsOf(reading);
+    expect(kinds(items)).toEqual(["day", "act", "reply", "act"]);
+    expect(items[1]).toMatchObject({
+      kind: "act",
+      key: "act:crew:cr-4f1c2a9e0b7d3c61",
+      what: "crew",
+      crew: "cr-4f1c2a9e0b7d3c61",
+      words: "Started 4 agents · Opus 5.5 · high",
+    });
+    expect(items[3]).toMatchObject({ kind: "act", what: "notify" });
+    expect(items[3]).not.toHaveProperty("crew");
+  });
+});

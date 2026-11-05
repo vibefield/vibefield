@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { CrewCard } from "./crew-card";
 import { chipWordsOf, FLOW_WORDS, type Flow, type FlowItem } from "./transcript-items";
 import { type InlineRun, type MarkdownBlock, markdownBlocksOf } from "./transcript-markdown";
 import "./thread-flow.css";
@@ -35,6 +36,14 @@ export interface ThreadFlowViewProps {
   onEarlier?: (() => void) | undefined;
   /** the tool lines that open drawn opened (their keys): a catalog plate's */
   opened?: readonly string[] | undefined;
+  /** SP-1e2 — each crew's card, by its id, hung under its act line (`crewCardsOf`; absent: none) */
+  crews?: ReadonlyMap<string, CrewCard> | undefined;
+  /** a crew card's row pressed: that member's pane in Godview (absent: the catalog) */
+  onCrewRow?: ((runtimeRunId: string) => void) | undefined;
+  /** a crew card's Open in Godview pressed (absent: the catalog) */
+  onOpenGodview?: (() => void) | undefined;
+  /** the members whose reveal runs now */
+  revealing?: ReadonlySet<string> | undefined;
 }
 
 const ACT_GLYPHS: Readonly<Record<string, GlyphName>> = {

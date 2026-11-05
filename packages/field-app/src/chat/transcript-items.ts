@@ -1,5 +1,6 @@
 import {
   type ComposeSayChip,
+  type CrewId,
   composeSayStateOf,
   type SparkTranscriptKnownLine,
   type SparkTranscriptRun,
@@ -77,6 +78,8 @@ export type FlowItem =
       readonly what: string;
       readonly words: string;
       readonly lead: boolean;
+      /** SP-1e2 — a crew's line names its crew: its card hangs under it, and a later line of the crew replaces it */
+      readonly crew?: CrewId | undefined;
     }
   | { readonly kind: "thinking"; readonly key: string; readonly lead: boolean };
 

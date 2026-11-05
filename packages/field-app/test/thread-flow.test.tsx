@@ -7,6 +7,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
+import type { CrewCard } from "../src/chat/crew-card";
 import { ThreadFlowView } from "../src/chat/ThreadFlowView";
 import { FLOW_WORDS } from "../src/chat/transcript-items";
 import { ChatPreview } from "../src/design-system/ChatPreview";
@@ -218,5 +219,111 @@ describe("an agent's words are never markup (EL7)", () => {
     expect($("b")).toBeNull();
     expect(words($('[data-row="reply"]'))).toBe('<img src=x onerror="alert(1)"> press p');
     expect(words($('[data-row="you"]'))).toBe("<b>bold?</b>");
+  });
+});
+
+describe("a crew's card in the flow (SP-1e2's renderer half; DESIGN.md §8 'Chat's crew card')", () => {
+  const CARD: CrewCard = {
+    id: "cr-000001",
+    title: "2 agents",
+    dim: " · Opus 5.5 · high",
+    count: { words: "1 of 2 done", ring: 0.5, check: false },
+    rows: [
+      {
+        runtimeRunId: "run-21",
+        agent: "claude",
+        name: "vibe-field",
+        model: "Opus 5.5 · high",
+        state: "done",
+        pressable: true,
+        label: "vibe-field, Opus 5.5, high, Done",
+      },
+      {
+        runtimeRunId: "run-22",
+        agent: "claude",
+        name: "vibe-field·2",
+        model: "Opus 5.5 · high",
+        state: "working",
+        pressable: true,
+        label: "vibe-field·2, Opus 5.5, high, Working",
+      },
+      {
+        runtimeRunId: "run-23",
+        agent: "claude",
+        name: "Claude Code in vibe-field",
+        model: "Opus 5.5 · high",
+        state: "ended",
+        pressable: false,
+        label: "Claude Code in vibe-field, Opus 5.5, high, Ended",
+      },
+    ],
+    line: null,
+    label: "2 agents · Opus 5.5 · high, 1 of 2 done",
+  };
+  const crewFlow = (crew: string) =>
+    ({
+      state: "ready",
+      items: [
+        {
+          kind: "act",
+          key: `act:crew:${crew}`,
+          what: "crew",
+          words: "Started 2 agents · Opus 5.5 · high",
+          lead: true,
+          crew,
+        },
+      ],
+    }) as const;
+
+  it("hangs the card under its act line in the line's body, a group named by its head, its rows and foot in order", async () => {
+    const pressed: string[] = [];
+    let opened = 0;
+    await mount(
+      <ThreadFlowView
+        name="Vela"
+        face={{ seed: 1, status: "ready" }}
+        flow={crewFlow("cr-000001")}
+        crews={new Map([["cr-000001", CARD]])}
+        onCrewRow={(run) => pressed.push(run)}
+        onOpenGodview={() => {
+          opened += 1;
+        }}
+      />,
+    );
+    const card = $('[data-row="act"] .vf-chat-msg-body > .vf-crew-card');
+    expect(card).not.toBeNull();
+    expect(words($('[data-row="act"] .vf-chat-quiet'))).toBe("Started 2 agents · Opus 5.5 · high");
+    expect(card?.getAttribute("role")).toBe("group");
+    expect(card?.getAttribute("aria-label")).toBe(CARD.label);
+    expect(words($(".vf-crew-head"))).toBe("2 agents · Opus 5.5 · high 1 of 2 done");
+    expect($$(".vf-crew-row").map((r) => r.dataset.state)).toEqual(["done", "working", "ended"]);
+    // a working row's mark breathes; an Ended row is no button
+    expect($$(".vf-crew-row")[1]?.querySelector(".vf-crew-breath")).not.toBeNull();
+    expect($$(".vf-crew-row").map((r) => r.tagName)).toEqual(["BUTTON", "BUTTON", "DIV"]);
+    expect($$(".vf-crew-row")[1]?.getAttribute("aria-label")).toBe(
+      "vibe-field·2, Opus 5.5, high, Working",
+    );
+    // the ring, filled by the members no longer at work
+    expect($(".vf-crew-ring")?.dataset.fill).toBe("0.5");
+    await act(async () => $$(".vf-crew-row")[1]?.click());
+    await act(async () => $$(".vf-crew-row")[2]?.click());
+    expect(pressed).toEqual(["run-22"]);
+    const open = $(".vf-crew-foot button");
+    expect(words(open)).toBe("Open in Godview");
+    await act(async () => open?.click());
+    expect(opened).toBe(1);
+  });
+
+  it("stands a crew's act line alone when there is no card for its crew", async () => {
+    await mount(
+      <ThreadFlowView
+        name="Vela"
+        face={{ seed: 1, status: "ready" }}
+        flow={crewFlow("cr-000009")}
+        crews={new Map([["cr-000001", CARD]])}
+      />,
+    );
+    expect($('[data-row="act"]')).not.toBeNull();
+    expect($(".vf-crew-card")).toBeNull();
   });
 });

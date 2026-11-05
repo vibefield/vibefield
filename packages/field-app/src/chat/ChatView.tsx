@@ -17,6 +17,7 @@ import { NO_HANDLES, sessionHandlesOf } from "./at-rows";
 import { ChatComposer, type ComposerPort } from "./ChatComposer";
 import { type ChatAct, ChatPanelView, shownOf } from "./ChatPanelView";
 import type { DraftMessage, DraftPart } from "./composer-draft";
+import type { CrewsDoor } from "./crews-port";
 import { NO_PAUSE, type PauseAct, pauseTurn, type SparkPauser, turnOf } from "./head-act";
 import { useNeedsCard } from "./needs-card-stand";
 import {
@@ -99,6 +100,9 @@ export function ChatView({
   port: ComposerPort;
   /** the window's door to its sparks' transcripts (`transcriptDoorOver`): fieldd's ticket, the worker's socket */
   transcripts: TranscriptDoor;
+  /** SP-1e2 — the window's door to the shown spark's crews (`crewsDoorOver`); absent: no crew card is drawn
+   * (red: not read yet) */
+  crews?: CrewsDoor | undefined;
 }): ReactElement {
   const reading = useSparksReading();
   // the Agent Profiles, read once for every thread's @ (on Chat's first show, and again as @ opens)

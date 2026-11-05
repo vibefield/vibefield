@@ -28,6 +28,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComposerPort } from "../src/chat/ChatComposer";
 import { type ChatAct, ChatPanelView, type ChatPanelViewProps } from "../src/chat/ChatPanelView";
 import { ChatView } from "../src/chat/ChatView";
+import type { CrewsDoor } from "../src/chat/crews-port";
 import { STILL_RUNNING } from "../src/chat/head-act";
 import { pendingSaysNow, resetPendingSaysForTest, standPendingSay } from "../src/chat/pending-says";
 import { sparkEntriesOf } from "../src/chat/spark-status";
@@ -56,6 +57,14 @@ import {
 const shown = vi.hoisted(() => ({
   opened: [] as { readonly row: unknown; readonly from: unknown }[],
   outcome: { state: "shown" } as { state: "shown" } | { state: "refused"; reason: string },
+}));
+/** SP-1e2 — the views a crew card's Open in Godview asked for. */
+const views = vi.hoisted(() => ({ asked: [] as unknown[] }));
+vi.mock("../src/frame/view-state", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  requestView: async (view: unknown) => {
+    views.asked.push(view);
+  },
 }));
 vi.mock("../src/frame/live-open", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -148,10 +157,12 @@ function Chat({
   active = true,
   port = PORT,
   transcripts = NO_TRANSCRIPTS,
+  crews,
 }: {
   active?: boolean;
   port?: ComposerPort;
   transcripts?: ScriptedTranscripts["door"];
+  crews?: CrewsDoor;
 }): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>(null);
   return (
@@ -161,6 +172,7 @@ function Chat({
       onSurfaceChange={setSurface}
       port={port}
       transcripts={transcripts}
+      {...(crews === undefined ? {} : { crews })}
     />
   );
 }
@@ -189,6 +201,7 @@ afterEach(() => {
   stopHearing = null;
   shown.opened = [];
   shown.outcome = { state: "shown" };
+  views.asked = [];
 });
 
 function mount(element: ReactElement): HTMLElement {
@@ -1020,6 +1033,79 @@ describe("Chat, live (the feed and its acts)", () => {
     const buttons = [...(host?.querySelectorAll<HTMLElement>(".vf-chat-thread-head button") ?? [])];
     expect(buttons.map(words)).toEqual(["Jump to"]);
     expect($(".vf-chat-foot .vf-chat-composer")).not.toBeNull();
+  });
+
+  it("hangs a crew's card under its act line: a row's press shows that member's pane and says so, an Ended row takes none, and Open in Godview opens it (SP-1e2)", async () => {
+    const { door, move } = scripted([VELA]);
+    const transcripts = scriptedTranscripts();
+    transcripts.keep(
+      "sp-vela0001",
+      [{ runtimeRunId: "run-Vela", startedAt: AT, fresh: true }],
+      new Map([
+        [
+          "run-Vela",
+          [
+            transcriptLine(1, "run", AT, { runtimeRunId: "run-Vela", fresh: true }),
+            transcriptLine(2, "act", "2026-10-31T05:20:00.000Z", {
+              what: "crew",
+              text: "Started 2 agents · Opus 5.5 · high",
+              crew: "cr-000001",
+            }),
+          ],
+        ],
+      ]),
+    );
+    const member = { at: AT, agent: "claude", folder: "Vela", model: "Opus 5.5", effort: "high" };
+    const frame = {
+      spark: "sp-vela0001",
+      crews: [
+        {
+          id: "cr-000001",
+          sparkRun: "run-Vela",
+          at: AT,
+          members: [
+            { runtimeRunId: "run-m1", ...member },
+            { runtimeRunId: "run-m2", ...member, endedAt: AT, name: "Claude Code in Vela" },
+          ],
+        },
+      ],
+      waiting: [],
+    };
+    const asked: string[] = [];
+    const crews: CrewsDoor = {
+      watch: async (spark, onFrame) => {
+        asked.push(spark);
+        onFrame(frame);
+        return () => undefined;
+      },
+      onReconnected: () => () => undefined,
+    };
+    const MEMBER = row({
+      runtimeRunId: "run-m1",
+      status: "working",
+      turnedAt: AT,
+      origin: { by: "spark", spark: "sp-vela0001", crew: "cr-000001" },
+      terminal: { hosted: "local", runtimeSessionId: "pty-m1" },
+      model: { id: "claude-opus-5-5", displayName: "Opus 5.5" },
+      effort: { value: "high" },
+    });
+    stop = startSparksFeed(door);
+    mount(<Chat transcripts={transcripts.door} crews={crews} />);
+    await settle();
+    await act(async () => move([VELA_ASKS, MEMBER]));
+    await settle();
+    expect(asked).toEqual(["sp-vela0001"]);
+    const card = $('.vf-chat-flow [data-row="act"] .vf-crew-card');
+    expect(card).not.toBeNull();
+    const rows = [...(card?.querySelectorAll<HTMLElement>(".vf-crew-row") ?? [])];
+    expect(rows.map((r) => r.dataset.state)).toEqual(["working", "ended"]);
+    expect(rows[1]?.tagName).toBe("DIV");
+    await act(async () => rows[0]?.click());
+    await settle();
+    expect(shown.opened.at(-1)?.row).toMatchObject({ id: "run-m1", floorSessionId: "pty-m1" });
+    expect(noted.at(-1)).toBe("Jumped to its pane");
+    await act(async () => card?.querySelector<HTMLElement>(".vf-crew-foot button")?.click());
+    expect(views.asked).toEqual(["godview"]);
   });
 
   it("reads a thread's record only while Chat is the view, and lets a bubble go once the record shows its send (TH-1)", async () => {
