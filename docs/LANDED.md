@@ -34730,3 +34730,168 @@ clean-Mac row meets", and ruled with prod-builder from 11:33Z to 11:54Z. Item 18
   entitlement in `entitlements.mac.plist` alone with its string, and `sign-mac.mjs:81`'s line, in one commit.
 - James's reap of the 580M witness package on the mini
   (`/Users/jasper/vf-lanes/verify/vibe-field/apps/desktop/release/`).
+
+## SP-1e2's renderer half — the crew card, drawn: Chat hangs each crew's card under the act line fieldd's crews now write, live from the crews door and the board, and item 180 closes (track CO) (2026-11-05; `b9a61d5e4` → `320d4b882`, 11 commits on main `18bb15a74`, lane `sp-1e2r` in `/Volumes/SamsungRed/lanes/co-sp1e2/vibe-field`, stacked as M156 `320d4b882`, run 156)
+
+**What it rests on.**
+- SP-1e2's fieldd half (`4c2c7dfde` → `068cab410`, M146, run 146; LANDED "SP-1e2"): the crews, kept in each spark's
+  record and served whole on `compose.sparks.crews.subscribe`. This half is the card that reads them, on the CO
+  round's marks: SPE-Q2 (a), Q5 (a), Q6′ (b), Q14 (a), Q28 (b), Q31 (a), Q32 (a), Q35 (b) and Q39 (a); CO-Q3 (a)
+  and CO-Q4 (b); TH-Q7 (b) and TH-Q26 (a) (James's 68 of 68, read 2026-11-04 23:14Z).
+- The plan of record is bsp's `lanes/co-plan/plans/step0-sp1e2r.md`, GO'd by VF-PM at 11:03Z: SR-Q1…Q8, Q10 and
+  Q11 at their leans, and SR-Q9 (b′), the act line's commits first. VF-PM ruled SR-Q5 (i) at 11:59Z: the guard as
+  built, no card clock, and fieldd's settle the one truth-writer. It is folded into DESIGN.md (`617280542`) and
+  into the plan's §2 and §10 at their source.
+- SR-Q7 was re-read at the landing: no nightly tag contains `068cab410` (`git tag --contains`, the newest
+  `nightly-20261104`). No shipped build keeps a crew without its line, so (a) stands.
+- J1 and J2 (the page `FCt3B8hw6AsAQ3fDHYRS1m`) are at their leans, each marked on its DESIGN.md line "At the lean
+  until James's pick". James's eye is owed.
+- TH-1's flow (`d5c6995fb`), and TH-2's one reveal (`revealRun`, `jumpNote`).
+- Item 180, filed by VF-PM at 10:57Z: since TH-1, a spawn turn drew neither "Used n tools" nor an act line.
+
+**What** (37 files, +2,770 −125 against main `18bb15a74`; no Rust, no pin-class file):
+- **The act line** (item 180; SR-Q1 (a), SR-Q2 (a)), in three commits:
+  - contracts `b9a61d5e4`: `SparkTranscriptActLine.crew?` (SPE-Q39 (a)); `crewSharedModelOf`, the one rule for the
+    model a crew shares; the `act-crew` fixture; api.html's transcript note.
+  - the fieldd red `359141167`: the `act` sink and `crewActText` as skeletons; A1–A5 and the pipe row.
+  - the fieldd green `dad367812`: `SparkCrews` writes "Started 4 agents · Opus 5.5 · high" into the run the crew was
+    made in, after each kept start or member row whose words changed. It never writes at an end, a `continues`, or a
+    row with nothing new. A sink that throws is logged (`fieldd.crews.act_failed`) and never stops the crew.
+- **DESIGN.md and UI_SYSTEM.md** `d7851aa03`, J1 and J2 at their leans: the act line is the crews'; SR-Q3, Q5 and
+  Q6; GV-D4's doors gain the crew card's row; §9's model-alone forms and "Agents"; UI_SYSTEM.md's SR-Q11 plates.
+  `617280542` folds SR-Q5 (i), as ruled, into §8's Ended.
+- **The naming rule** `b6f624119` (SR-Q4 (a)): `sessionName` and its line helpers move to contracts unchanged, and
+  fieldd's `rooms/you/words.ts` re-exports them.
+- **The field-app red and green** `0acd7a652`, `da9e69042`: `crew-card.ts` (`crewCardsOf`, pure), `crews-port.ts`
+  (`readCrews`, `useSparkCrews`), `CrewCardView.tsx` and `crew-card.css` (tokens only).
+  - The flow hangs a card under its crew's line, and draws a crew's line once, where it first stood (SPE-Q39 (a)).
+  - ChatView reads the door, the board and @'s handles. A row press reveals that member's pane by TH-2's path.
+  - ChromeLayer builds the door.
+- **The catalog** `8903e3e06`: `CrewCardPreview.tsx` and `crew-fixtures.ts`, 15 plates by both lights and the live
+  plate, the shipping card in the shipping flow; three ui-system-boundaries rows; UI_SYSTEM.md's reading names
+  corrected at their source.
+- **api.html** `d57a9d960`: `agent_spawn`'s crew, Contract → Built, with a dated note. The errata commit `b96e52d76`
+  took the crews door and `agents_list`'s crew ahead of this lane.
+- **The glyph allowlist** `320d4b882` (test-only): glyphs.test.tsx names CrewCardView.tsx's ring, a meter drawn as one
+  `<svg>`, not an icon (run 154's red row; VF-PM 12:49Z). The card's glyphs stay FieldGlyph.
+
+**The commits** (oldest first; every re-cut left every patch-id as it was):
+1. `b9a61d5e4` contracts: the act line's `crew`, the shared-model rule, the fixture (item 180).
+2. `359141167` the fieldd red (item 180).
+3. `dad367812` the fieldd green: the crews write their act line (closes item 180).
+4. `d7851aa03` DESIGN.md and UI_SYSTEM.md: the crew card drawn, J1 and J2 at their leans.
+5. `b6f624119` contracts: `sessionName`, one rule for fieldd and the window.
+6. `0acd7a652` the field-app red.
+7. `da9e69042` the field-app green: Chat draws each crew's card under its act line.
+8. `8903e3e06` the catalog.
+9. `d57a9d960` api.html: `agent_spawn`'s crew is Built.
+10. `617280542` DESIGN.md: Ended off the board only once this window saw the board hold it (SR-Q5 (i), as ruled).
+11. `320d4b882` test: the glyph allowlist names the crew card's ring (run 154's red row).
+
+**Validation.**
+- **The act line's red and green, on the mini** (a9's gap job, 11:26:39–11:28:53Z, rc 0;
+  `lanes/co-plan/lanes/sp-1e2r/logs/a9-mini-sp1e2r-2ca865986.out`), at the pre-re-cut `74ab87b66` and `2ca865986` on
+  `06dc17086`:
+  - the red: spark-crews and spark-transcripts, "Tests  5 failed | 30 passed (35)". All 5 are AssertionErrors, and
+    A4's pin passed.
+  - the green: the two files 35/35; the 8 neighbours 90/90; the full fieldd suite "3215 passed | 14 skipped (3229)",
+    main's 3209 + 6; the fieldd typecheck 0.
+- **This Mac** (light; one named file each; for fieldd, speed and not proof):
+  - contracts spark-transcript 13, compose 48, and fixtures 639 on the first base and 667 on the merged tree;
+  - fieldd spark-crews 20/20, spark-transcripts 15/15, needs-words 7/7;
+  - field-app crew-card 11, crews-port 4, transcript-items 17, thread-flow 16, chat-view 40, ui-system-boundaries 47,
+    design-system 8, frame-owner 9, cards 37, package-circle 13;
+  - tsc 0 on contracts, fieldd and field-app, and biome clean on each commit's files.
+  - Logs: `lanes/co-plan/lanes/sp-1e2r/logs/`.
+- **The moves.** The first eight commits were cut on `06dc17086` and carried, never re-proven:
+  - onto `be195e5b4` (ma/1's records). 2 files were shared (DESIGN.md, api.html). carry-check v3: 8/8 patch-ids
+    equal, 34/34 unshared files byte-identical, the shared files' +/- lines equal, CARRY HOLDS
+    (`logs/recut-carry-check.log`). The targeted re-lights on the merged tree (VF-PM 12:16Z): contracts, fieldd and
+    field-app tsc 0; fixtures 667; ui-system-boundaries 47, thread-flow 16, needs-card 46, transcript-items 17 and
+    chat-view 40. Then the api.html and SR-Q5 (i) commits went on top (`dcc612674`, `a59ceca24`);
+  - onto `bcf2a58dd` (S5a's records), as `818deb29a` … `b78598f7a`. No file was shared with S5a, and `git range-diff`
+    read 10/10 "=" (`logs/recut2-range-diff.log`). Then `21b03774f` went on top (cp-landing, 12:45Z), after run 154's
+    red;
+  - onto `18bb15a74` (item 181 and its records, and S5a's LANDED erratum), as `b9a61d5e4` … `320d4b882`. No file was
+    shared, and `git range-diff` read 11/11 "=" (`logs/recut-18bb15a74-range-diff.log`).
+- **Run 154**, the mini's mint of `b78598f7a` (12:37:22–12:41:01Z; `lanes/ts6/logs/mini/run154/`): verify exit 1 on
+  ONE row, field-app `test/glyphs.test.tsx` › "the glyph set › refuses an inline `<svg>` icon in product code (the
+  silhouettes are the allowlist)": "AssertionError: expected { …(5) } to deeply equal { …(4) }", the received map
+  adding `"chat/CrewCardView.tsx": 1`.
+  - Every other count was the prediction's: contracts 1734; fieldd 3215 | 14; field-app 4030 passed and that 1 failed
+    (4031); vitest 13,002 | 1 | 20 (928 files run); node 460. The rest run (12:42:31–12:44:29Z): cargo 545/0 in 34
+    suites, gen:check 0.
+  - `21b03774f` (now `320d4b882`) fixed it, and VF-PM ruled at 12:49Z that the allowlist row stands.
+- **Pin-class:** the one ERE over `18bb15a74..320d4b882` (37 files) has no hit, and nothing is release-class.
+- **The expected counts** (bth's parser at both commits; every loop- and `.each`-made row across all test files was
+  listed at both ends, 986 → 988 files, and the listings are identical), against run 155 (main `18bb15a74`'s code):
+  - contracts 1730 → 1734: compose +2, spark-transcript +1, fixtures.test +1 (the `act-crew` fixture);
+  - fieldd 3209 → 3215 | 14: spark-crews +5, spark-transcripts +1;
+  - field-app 4010 → 4031: crew-card 11 and crews-port 4 (two new files), thread-flow +3, and transcript-items,
+    chat-view and ui-system-boundaries +1 each;
+  - vitest 12,972 → 13,003 | 0 | 20, with 2 more test files (926 → 928 run; fieldd's 4 opt-in files skipped whole);
+    node 466; cargo 545.
+  - `320d4b882` adds no row (glyphs.test.tsx 10 → 10).
+- **Run 156** (`320d4b882`, tree `2a667e50734a`, the landing mint; the mini; `lanes/ts6/logs/mini/run156/`):
+  - `run156.out` (sha256 `7557b0303544f53eb8d9220d2bc692e2cfbac621f49b612ada23bedab2e73275`): "ts6-mini verify ARMED
+    13:09:07Z"; "verify exit 0 13:14:37Z"; "test target:  NX   Successfully ran target test for 29 projects";
+    "cargo test results: ok 34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+  - `verify.log` (sha256 `0d0e4e56c0f2273eee29aabf185ddbec64f49f80e8415bd15483c52976e8f075`; its clean copy
+    `verify.clean.log`, `fe8bda972c1a0d8b9e2de00250380600954fd8c70b4379ff598e73bdbb0ee356`): contracts "Tests  1734
+    passed (1734)"; fieldd "Tests  3215 passed | 14 skipped (3229)"; field-app "Tests  4031 passed (4031)", glyphs
+    "(10 tests)" passing; electron-shell "Tests  2651 passed | 2 skipped (2653)"; node "ℹ tests 466", "ℹ fail 0";
+    biome "Checked 3344 files"; cargo 545 in 34 suites, clippy at `-D warnings` clean; the census "TOTAL 105 files",
+    "no drift". Every count the packet expected held: vitest 13,003 | 0 | 20.
+  - vitest's files: 928 ran (a9's count). The parser's 932 is the same set with fieldd's 4 opt-in files, which
+    "Test Files  246 passed | 4 skipped (250)" skips whole (the packaged and mint-hop rows).
+  - The lane's files read crew-card "(11 tests)" and crews-port "(4 tests)" (new), chat-view 40, thread-flow 16,
+    transcript-items 17, ui-system-boundaries 47, compose 48, fixtures 667, spark-transcript 13, spark-crews 20 and
+    spark-transcripts 15, against run 155's 39, 13, 16, 46, 46, 666, 12, 15 and 14.
+  - `run156-next.out` (`00e3589467e01c652e4ffbfabdcd4d9cfd83e072da07db20c4b38e997410a0f2`): "preflight exit 0 · 1
+    WARN/FAIL lines", R23's `acp` candidate (the standing warning).
+  - `run156-hid.log` (`f3bd7501b362439d0c3b30df6050e11143a146961238d31f2a90135c96c47efa`): the console locked, HID
+    idle, from 13:09:06Z to 13:14:37Z.
+- **Landed:** The fixer's ff `18bb15a74` → `320d4b882` at 2026-11-05T13:27:05Z
+
+**What is real, what is stubbed.**
+- Real: a spawn turn draws its crew's line again, and Chat hangs the crew's card under it. Each member's state is
+  live from the crews door and the board, with the count and its ring. A row press reveals that member's pane, the
+  foot opens Godview, and the honest lines stand where a door cannot be read. The catalog mounts the shipping card.
+- Stubbed: nothing.
+- Not here: Stop all and Pause all (SP-1e4); the watch card (SP-1e3, HELD); a row's task words (SPE-Q5 (a));
+  answering a member's ask on the card (AR-6); the phone's card (PC); the head's second line (RU-19).
+
+**Found.**
+1. **Item 180.** Since TH-1, a spawn turn drew no act line. The talk room's calls are VibeField's own, so they leave
+   the turn's tools, and nothing wrote the line DESIGN.md promised. fieldd's crews write it now.
+2. **The start race.** fieldd keeps a member at its start (daemon.ts's `talkSpawn`) before puppeteer's monitor puts
+   its run on the board. Reading "off a read board" alone as Ended would flash Ended at every start. A member reads
+   Ended off the board only once this window has seen it there (DESIGN.md's "no longer holds it"); before that it is
+   Starting. After a window reload inside fieldd's restart window, it reads Starting, not Ended, until the settle
+   writes `endedAt`. VF-PM ruled that (11:59Z): the guard as built, no card clock.
+3. **Docs wrong at main, corrected at their sources.** The errata commit `b96e52d76` took api.html's crews door and
+   `agents_list`'s crew to Built, and fixed desk-gates row 23's 11m (TH-1 retired its steps). This lane flips
+   `agent_spawn`'s crew. UI_SYSTEM.md said `crewCardOf` and `chat-fixtures.ts` for what was built as `crewCardsOf`
+   and `crew-fixtures.ts`.
+4. **Duplicate act lines after a restart (R2).** The crews' memory of the words they wrote is fieldd's own, so a
+   restarted fieldd writes a crew's line again at its next change. The window draws one line, replaced in place.
+5. **Crews with no line (R3, SR-Q7).** A crew kept between `068cab410` and this landing has a record and no act line,
+   so it has no card. No nightly tag contains `068cab410`, read at the landing.
+6. **The mint caught what the targeted re-lights did not.** Run 154's red row, "refuses an inline `<svg>` icon in
+   product code", received `"chat/CrewCardView.tsx": 1`: the card's ring is an inline `<svg>` the glyph allowlist did
+   not name. The ring is a meter, not an icon (DESIGN.md §8's 16-round track and stroke, drawn from the top), so the
+   allowlist names it (`320d4b882`). FieldRing is the primitive to cut when a second meter appears.
+7. **The lesson for the re-lights.** A lane that adds a product view runs the renderer's design-kit walls in its
+   targeted re-lights (glyphs, ui-system-boundaries, hex-literal), not only its own files' readers.
+
+**Owed.**
+- J1 and J2 by James's eye (the page `FCt3B8hw6AsAQ3fDHYRS1m`). A pick against a lean is a fix-up.
+- The crew rung (SPE-Q34 (a)): the smoke's stub agent has no MCP, so no crew can start there. desk-gates row 23 now
+  says so.
+- Eyes on the plates in a window (the catalog's specimen): no Electron or catalog launch ran on this Mac.
+- The phone's crew card (PC).
+- SP-1e4 next; SP-1e3 stays HELD; the head's second line (RU-19).
+- **Closed by this entry:** item 180 (filed by VF-PM 2026-11-05 10:57Z). fieldd's crews write the act line
+  (`dad367812`), and Chat draws it with its crew's card.
+- The records beyond LANDED, ROADMAP and DECISIONS: desk-gates row 23's 11m clause names the owed crew step, and
+  architecture.html's compose row gains SP-1e2's two halves in its Built cell.
