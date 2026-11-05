@@ -13,7 +13,9 @@ export const REPORT_PROBLEM_ISSUES_URL = "https://github.com/vibefield/vibefield
 export const REPORT_PROBLEM_TEMPLATE = "bug_report.yml";
 
 /** The bug form's fields a link fills in, each the `id` of an `input` in bug_report.yml; `report-problem.test.ts`
- * reads the form and holds these to it, so a renamed field fails the suite rather than a tester's link. */
+ * reads the form and holds these to it, so a renamed field fails the suite rather than a tester's link. The forms
+ * are an input of field-app's `test` target (its package.json, `nx.targets.test.inputs`), so an edit to a form alone
+ * re-runs that test rather than replaying a cached pass. */
 export const REPORT_PROBLEM_FIELDS = {
   version: "version",
   macos: "macos",

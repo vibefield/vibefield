@@ -10,6 +10,15 @@
         "sharedGlobals",
         "siblings"
       ]
+    },
+    "targets": {
+      "test": {
+        "inputs": [
+          "default",
+          "^default",
+          "{workspaceRoot}/.github/ISSUE_TEMPLATE/*.yml"
+        ]
+      }
     }
   },
   "exports": {

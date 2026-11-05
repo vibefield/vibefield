@@ -116,6 +116,21 @@ describe("the bug form the link fills in (LP-7)", () => {
       /^blank_issues_enabled: false$/m,
     );
   });
+
+  it("is an input of this package's test target, so an edit to a form alone re-runs these tests", () => {
+    // The forms live outside the package root, so Nx neither hashes them into the cached result nor marks
+    // field-app affected unless the test target names them; without this a renamed id replays a cached pass.
+    const manifest = JSON.parse(
+      readFileSync(join(REPO_ROOT, "packages", "field-app", "package.json"), "utf8"),
+    ) as { nx?: { targets?: { test?: { inputs?: unknown[] } } } };
+    expect(manifest.nx?.targets?.test?.inputs).toEqual(
+      expect.arrayContaining([
+        "default",
+        "^default",
+        "{workspaceRoot}/.github/ISSUE_TEMPLATE/*.yml",
+      ]),
+    );
+  });
 });
 
 describe("Report a problem's words (LP-7)", () => {

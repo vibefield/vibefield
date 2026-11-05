@@ -1,7 +1,9 @@
 # LP-7 (LP-D18) — the testers' one place to report a problem, with the facts triage needs. Every field has an id, so
 # a link can fill it in: Settings → Diagnostics → Report a problem opens this form with `version`, `macos` and `chip`
 # filled in (packages/field-app/src/panels/report-problem.ts). packages/field-app/test/report-problem.test.ts reads
-# this file and holds those three ids to it, so renaming one here fails that test rather than a tester's link.
+# this file and holds those three ids to it, so renaming one here fails that test rather than a tester's link. The
+# forms are an input of that test (packages/field-app/package.json, `nx.targets.test.inputs`), so an edit to this file
+# alone re-runs it rather than replaying a cached pass.
 name: Report a problem
 description: Something in VibeField didn't work as it should.
 title: ""
