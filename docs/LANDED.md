@@ -34537,6 +34537,8 @@ CP-4a2a (VF-PM, 09:03Z).
 - The record and the AH spec at draft slot 14.
 
 ## PG-9 S5a — S5's corpora run on a coarser fold tick: a recipe spells it, its name says it, and a fidelity row picks it (2026-11-05; `7fb2cd6b5` → `fdfd2fa3c`, 2 commits on main `be195e5b4`, lane `pg/9-s5a` in `/Volumes/SamsungRed/lanes/pg9s5a/vibe-field`, stacked as M153 `fdfd2fa3c`, run 153)
+  > **Erratum (2026-11-05 12:43Z):** the heading's "2 commits" is 4: `7fb2cd6b5`, `8bf66cb10`, `849d71a56`,
+  > `fdfd2fa3c`.
 
 **What it rests on.**
 - S5's step 0 (fd, 11:13Z): the plan's 120 s corpora cannot exist.
