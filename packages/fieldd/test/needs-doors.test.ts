@@ -28,6 +28,8 @@ import {
   NeedsListResult,
   type NeedsRecord,
   SOCKETS,
+  SPARK_KEPT_FILE,
+  SPARK_KEPT_FORMAT,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -406,6 +408,29 @@ describe("the needs-you queue's doors (CP3-D6 A)", () => {
     ]);
     // uncertain drops both owed and telling: the answer's record holds nothing more
     expect(readdirSync(needsDir).filter((f) => f.startsWith(ITEM_B))).toEqual([]);
+  });
+
+  it("B2 · a boot reads every spark's kept record once, and sets aside one copied into another spark's folder (item 159)", async () => {
+    const dataDir = seeded();
+    const sparkFiles = join(dataDir, ...LAYOUT.SPARK_FILES_DIR);
+    const signer = new RecordSigner({ keyPath: join(dataDir, ...LAYOUT.SPARK_FILES_KEY_FILE) });
+    const kept = (spark: string) => join(sparkFiles, spark, SPARK_KEPT_FILE);
+    mkdirSync(join(sparkFiles, VELA), { recursive: true, mode: 0o700 });
+    const body = { format: SPARK_KEPT_FORMAT, spark: VELA, updatedAt: "2026-11-05T01:00:00.000Z" };
+    writeFileSync(kept(VELA), JSON.stringify({ ...body, signature: signer.sign(body) }), {
+      mode: 0o600,
+    });
+    // Vela's own signed record, put in another spark's folder
+    const KIWI = "sp-kiwi00000000";
+    mkdirSync(join(sparkFiles, KIWI), { mode: 0o700 });
+    writeFileSync(kept(KIWI), readFileSync(kept(VELA)), { mode: 0o600 });
+    const before = readFileSync(kept(VELA), "utf8");
+    await boot(dataDir);
+    expect(existsSync(kept(KIWI))).toBe(false);
+    expect(readdirSync(join(sparkFiles, KIWI))).toEqual([
+      expect.stringMatching(/^kept\.json\.forged-\d+$/),
+    ]);
+    expect(readFileSync(kept(VELA), "utf8")).toBe(before);
   });
 
   it("needs.notices.subscribe answers an empty snapshot: a notice is an event, never kept", async () => {

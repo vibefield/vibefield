@@ -213,6 +213,12 @@ export class NeedsQueue implements TalkHolds {
     this.#settle.unref?.();
   }
 
+  /** Item 159 (X5) — another store's reconcile at the same settle moment, run once, after this queue's own, in the
+   * order joined, each guarded so one that throws stops none of the others; one that joins after the settle runs at
+   * once. Each slice that keeps something per run joins with one line (the input queue's, 1′'s, SP-1e2's). Item 159
+   * (red): joiners are not kept yet. */
+  joinSettle(_name: string, _fn: () => void): void {}
+
   /** The reconcile itself: every run a held send or an allowance waits on is judged against the fold, now. */
   reconcile(): void {
     const targets = new Set<string>();

@@ -626,6 +626,32 @@ describe("the held send (CP-D3, CP3-D3 B)", () => {
     vi.advanceTimersByTime(5_000);
     expect(reconcile).toHaveBeenCalledTimes(1);
   });
+
+  it("J1 · runs each settle joiner once, after its own reconcile, in the order they joined; one that throws stops none of the others (item 159, X5)", () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.queue.send(VELA_FROM, "run-gone", "a");
+    const ran: string[] = [];
+    let settled = false;
+    h.queue.joinSettle("inputs", () => ran.push(`inputs after ${h.queue.list().length} open`));
+    h.queue.reconcileWhenSettled(() => settled);
+    h.queue.joinSettle("broken", () => {
+      ran.push("broken");
+      throw new Error("a joiner's own fault");
+    });
+    h.queue.joinSettle("waker", () => ran.push("waker"));
+    vi.advanceTimersByTime(3_000);
+    expect(ran).toEqual([]);
+    settled = true;
+    vi.advanceTimersByTime(1_000);
+    // the needs queue's own reconcile ran first: the held send for a gone run had ended
+    expect(ran).toEqual(["inputs after 0 open", "broken", "waker"]);
+    vi.advanceTimersByTime(5_000);
+    expect(ran).toHaveLength(3);
+    // one that joins after the settle runs at once, once
+    h.queue.joinSettle("late", () => ran.push("late"));
+    expect(ran.at(-1)).toBe("late");
+  });
 });
 
 describe("the held spawn (CP-D7, CP3-D4 A)", () => {
