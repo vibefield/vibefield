@@ -2375,8 +2375,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **Done**, secondary, after `check` 12, when it is idle with nothing left in its input. An agent idle between
       two tasks it was given stays Working (SPE-Q32 (a)), so the count never goes backwards;
     - **Ended**, secondary, once its run has ended (SPE-Q14 (a)), or once the board, read, no longer holds it before
-      fieldd's end reaches the record (SR-Q5 (i)). It stays, named as fieldd named it at its end (CO-Q4 (b)), and takes
-      no press: there is no pane to show.
+      fieldd's end reaches the record (SR-Q5 (i)). "No longer" means this window has seen the board hold it: fieldd
+      keeps a member at its start before its run reaches the board, so one the board has not held yet is Starting.
+      The card keeps no clock, and fieldd's settle writing the end is the one truth: after a window reload inside
+      fieldd's restart window a member can read Starting until that settle (*ruled 2026-11-05, VF-PM 11:59Z*). It
+      stays, named as fieldd named it at its end (CO-Q4 (b)), and takes no press: there is no pane to show.
     No task words (SPE-Q5 (a)): your bubble and Vela's words say the tasks, and a done row carries no note.
   - **Its names** are @'s (CO-Q3 (a)). A member is named by its handle, as @ names it in this thread (§8 "Chat's
     composer", two sessions with one name): "vibe-field", "vibe-field·2". They renumber live, as @'s do. Godview's
