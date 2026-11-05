@@ -1,4 +1,6 @@
+import { flowRefusalOf } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
+import { readFlow } from "../src/flows/static-read";
 import { bytesOf, runOnHost } from "./flows-run-harness";
 
 // CP-4a2a (the review bth-1142Z, "None survived, per area", its suggested H2b rows written out; cp-landing 12:22Z) —
@@ -149,5 +151,65 @@ describe("H2b · the sandbox, from inside the compartment", () => {
       ),
     );
     expect(heard.end).toEqual({ kind: "done", value: [1, "string", true, "threw"] });
+  });
+});
+
+describe("S19 · one refuser: the read refuses exactly what the sandbox refuses (CP-4a2b, Q-B3 (a); §13b.9's S5)", () => {
+  // Each case is read, then run on the real host. The read's real-call refusal and the sandbox's own censor
+  // (SES_*_REJECTED, ses 2.3.0) must agree on the shape and on its line, and a case neither refuses runs to `done`. The
+  // EL8 coupling: a ses bump that moves its censor re-lights these rows.
+  const CENSOR = {
+    import: "SES_IMPORT_REJECTED",
+    eval: "SES_EVAL_REJECTED",
+    "html-comment": "SES_HTML_COMMENT_REJECTED",
+  } as const;
+  type Shape = keyof typeof CENSOR;
+  const REAL_CALLS: readonly string[] = Object.keys(CENSOR);
+  /** name, body (its first line is the file's third), and the refusal both must give, or null where both admit it */
+  const CASES: readonly (readonly [string, string, readonly [Shape, number] | null])[] = [
+    ["a dynamic import()", 'const m = await import("node:fs");\nreturn m;', ["import", 3]],
+    [
+      "an import() in a template's substitution",
+      'return `${await import("node:fs")}`;',
+      ["import", 3],
+    ],
+    ["a direct eval(…)", 'return eval("1 + 1");', ["eval", 3]],
+    [
+      "a member written `o. eval(…)`",
+      "const o = { eval: (x) => x };\nreturn o. eval(5);",
+      ["eval", 4],
+    ],
+    ["`<!--` in code", "let a = 1, b = 2;\nreturn a <!--b;", ["html-comment", 4]],
+    ["`-->` in code, mid-line", "let a = 3, b = 1;\nreturn a-->b;", ["html-comment", 4]],
+    ["a parenthesized eval, `(eval)(…)`", 'return (eval)("1 + 1");', null],
+    ["an indirect eval, `(0, eval)(…)`", 'return (0, eval)("2 + 2");', null],
+    ["a method named eval, `o.eval(…)`", "const o = { eval: (x) => x };\nreturn o.eval(5);", null],
+    [
+      "a person's words in a string",
+      'return await agent("replace the import() and eval( <!-- -->");',
+      null,
+    ],
+    ["String.raw's alias", "const raw = String.raw;\nreturn raw`import( and eval( -->`;", null],
+    ["a regex and a comment", "// import( eval( <!--\nreturn /import\\(|-->/.source;", null],
+  ];
+
+  it.each(CASES)("%s", async (_name, body, refused) => {
+    const bytes = flow(body);
+    const read = readFlow(bytes)
+      .refusals.filter((r) => REAL_CALLS.includes(flowRefusalOf(r) ?? ""))
+      .map((r) => [flowRefusalOf(r), r.line]);
+    const heard = await runOnHost(bytes);
+    if (refused === null) {
+      expect(read).toEqual([]);
+      expect(heard.end).toMatchObject({ kind: "done" });
+      return;
+    }
+    const [shape, line] = refused;
+    expect(read).toEqual([[shape, line]]);
+    expect(heard.end).toMatchObject({ kind: "threw" });
+    expect((heard.end as { message?: string }).message).toMatch(
+      new RegExp(`:${line}\\b.*${CENSOR[shape]}`),
+    );
+    expect(heard.calls).toEqual([]);
   });
 });

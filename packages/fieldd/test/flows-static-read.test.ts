@@ -322,3 +322,75 @@ describe("unlisted, computed, loops and phases", () => {
     expect(enough.unlisted).toBe(false);
   });
 });
+
+describe("the sandbox's three shapes, refused before any run (CP-4a2b, Q-B3 (a); §13b.9's S1–S4)", () => {
+  // The run's sandbox (ses 2.3.0) refuses a script whose code holds a dynamic `import(`, a direct-looking `eval(`, or
+  // `<!--` or `-->`. The read refuses the same three, read over the same rewritten script, each with its line, so a
+  // card never offers a flow its run would refuse at once (flows-sandbox.test.ts's S19 holds the two to one verdict).
+  // The script stays inline here, not a fixture file: biome would format `a <!--b` as `a < !--b` and lint the eval.
+  const IMPORT = "it calls import(), which a flow may not";
+  const EVAL = "it calls eval(), which a flow may not";
+  const HTML = "it has <!-- or --> in its code, which a flow may not";
+
+  it("S15 · a dynamic import() is refused as `import`, on its line, however it is spaced", () => {
+    for (const call of [
+      'import("x")',
+      'import ("x")',
+      'import /* a module */ ("x")',
+      'import //\n("x")',
+    ])
+      expect(refusalsOf(readFlow(flow(`return await ${call};`)))).toEqual([["import", IMPORT, 3]]);
+    // in a template's substitution it is code, never the template's words
+    expect(refusalsOf(readFlow(flow('return `${await import("x")}`;')))).toEqual([
+      ["import", IMPORT, 3],
+    ]);
+  });
+
+  it("S16 · a direct-looking eval(…) is refused as `eval`, once a line; one the sandbox lets pass is not", () => {
+    for (const call of ["eval(code)", "eval (code)", "eval(a) + eval(b)", "o. eval(code)"])
+      expect(refusalsOf(readFlow(flow(`return ${call};`)))).toEqual([["eval", EVAL, 3]]);
+    for (const passes of ["(eval)(code)", "(0, eval)(code)", "o.eval(code)", "o?.eval(code)"])
+      expect(refusalsOf(readFlow(flow(`return ${passes};`)))).toEqual([]);
+  });
+
+  it("S17 · `<!--` or `-->` in code is refused as `html-comment`", () => {
+    expect(refusalsOf(readFlow(flow("let a = 1, b = 2;\nreturn a <!--b;")))).toEqual([
+      ["html-comment", HTML, 4],
+    ]);
+    expect(refusalsOf(readFlow(flow("let a = 3, b = 1;\nreturn a-->b;")))).toEqual([
+      ["html-comment", HTML, 4],
+    ]);
+  });
+
+  it("S18 · a person's words that say them are never refused: strings, templates, String.raw, its alias, regexes, comments", () => {
+    const words =
+      "replace the dynamic import() and eval( here, and keep <!-- notes --> as they are";
+    const body = [
+      `await agent(${JSON.stringify(words)});`,
+      "const where = 'loader.ts';",
+      "await agent(`In ${where}: import (x) --> eval(y) <!-- z`);",
+      "await agent(String.raw`a import( ${where} <!--`);",
+      "const raw = String.raw;",
+      "await agent(raw`import( and eval( -->`);",
+      "await agent(/import\\(x\\)|eval\\(|-->/.source);",
+      "// a comment with import( and eval( and <!-- in it",
+      "/* and a block: import /* --> */",
+      "return 'ran';",
+    ].join("\n");
+    expect(readFlow(flow(body)).refusals).toEqual([]);
+  });
+
+  it("S15–S17 · each refusal on its own line, in the text's order: the contracts fixture's read (EL9)", () => {
+    const text = [
+      'export const meta = { name: "Loader" };',
+      "export default async function () {",
+      '  const fs = await import("node:fs");',
+      '  const two = eval("1 + 1");',
+      "  let a = 1, b = 2;",
+      "  return [fs, two, a <!--b];",
+      "}",
+      "",
+    ].join("\n");
+    expect(readFlow(text)).toEqual(contracts("flow-read.refused-import"));
+  });
+});

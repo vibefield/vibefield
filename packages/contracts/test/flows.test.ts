@@ -213,7 +213,7 @@ describe("CP-4a1 — the static read's shape (CP4-Q3 (a))", () => {
   });
 
   it("C5: the read refuses the sandbox's three shapes in known words: import, eval and html-comment (CP-4a2b, Q-B3 (a))", () => {
-    // the same read fieldd gives the fieldd fixture `real-calls.flow.js` (flows-static-read.test.ts, EL9)
+    // the same read fieldd gives its Loader script (flows-static-read.test.ts, "S15–S17 · each refusal …", EL9)
     const refused = FlowRead.parse(fixture("flow-read.refused-import"));
     expect(refused.refusals.map((r) => flowRefusalOf(r))).toEqual([
       "import",
