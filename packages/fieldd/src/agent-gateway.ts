@@ -42,6 +42,7 @@ import type { AgentAdoption, SystemAudit } from "./agent-runtime";
 import { SPAWNED_BY_SHELL } from "./agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
+import { AGENT_SHIM_BUNDLE, AGENT_SHIM_ROLE_ARG } from "./roles";
 
 // A TYPED AGENT IS A MANAGED AGENT (AR-7b; thinking-ar7-typed-agents.md §5.2,
 // design-04 §8.4/§8.5 as amended 2026-09-12): the agent's name typed at the
@@ -258,15 +259,25 @@ export interface LauncherRuntimeFacts {
   shimDirectories: readonly (string | undefined)[];
   /** asks a candidate for its version (default: run it, no shell, bounded) */
   probe?: ((command: string) => Promise<string | undefined>) | undefined;
+  /** whether a file stands, readable, at a path (default: this machine's) —
+   * what a single executable's sealed shim is looked for with */
+  exists?: ((path: string) => boolean) | undefined;
 }
 
 export type LauncherRuntimeChoice =
   | {
       runtime: SpawnThroughShimRuntime;
-      source: "configured" | "own-node" | "path-node";
+      source: "configured" | "own-node" | "own-executable" | "path-node";
       version?: string | undefined;
     }
   | { runtime: undefined; reason: string };
+
+/** The sealed shim a single executable's agent-shim role runs: beside the
+ * executable (build-fieldd-sea.mjs seals it there; stage-package.mjs stages it
+ * at `Resources/bin`). */
+export function sealedAgentShim(execPath: string): string {
+  return join(dirname(execPath), AGENT_SHIM_BUNDLE);
+}
 
 /** THE LAUNCHER'S RUNTIME — the program every launcher execs on the shim —
  * chosen once, at the gateway's start.
@@ -282,16 +293,22 @@ export type LauncherRuntimeChoice =
  *  1. the configured runtime, when one is given;
  *  2. fieldd under a real Node (not Electron, not a single executable) whose
  *     own version can exec in place: that Node, with no extra environment;
- *  3. otherwise, unless fieldd is a single executable: the first `node` on
- *     fieldd's own PATH (shim directories excluded), asked ONCE for its version
- *     — it qualifies when it has `process.execve`. A launcher naming a Node
- *     without it makes the shim leave 127 on every typed agent;
+ *  2b. fieldd as a single executable (a packaged build, AR-7j) whose Node can
+ *     exec in place and whose sealed shim stands beside it: fieldd's OWN
+ *     executable in its agent-shim role (`--vibefield-role=agent-shim`,
+ *     roles.ts), which runs that sealed shim and never the home's copy. A
+ *     single executable that is not this is case 4 — it NEVER falls to a node
+ *     on PATH: a packaged build names no program the person installed;
+ *  3. otherwise: the first `node` on fieldd's own PATH (shim directories
+ *     excluded), asked ONCE for its version — it qualifies when it has
+ *     `process.execve`. A launcher naming a Node without it makes the shim
+ *     leave 127 on every typed agent;
  *  4. none. The gateway then offers no launcher and removes any it finds, and
  *     a name typed in a pane runs as the shell runs it.
  *
- * A packaged build is case 4 until its own slice (AR-7j): its fieldd is a
- * single executable, its RunAsNode fuse is off, and nothing here pretends
- * otherwise. */
+ * The packaged build's RunAsNode fuse stays closed: the role is ONE closed
+ * entry of fieldd's own (bin.ts dispatches it on the first argument alone),
+ * which runs one sealed file and nothing a caller names. */
 export async function chooseLauncherRuntime(
   facts: LauncherRuntimeFacts,
 ): Promise<LauncherRuntimeChoice> {
@@ -304,10 +321,23 @@ export async function chooseLauncherRuntime(
         };
   }
   if (facts.sea) {
+    if (!nodeCanExecInPlace(facts.nodeVersion)) {
+      return {
+        runtime: undefined,
+        reason: `fieldd is a single executable whose Node ${facts.nodeVersion} cannot exec in place (22.15, 23.11 or later); a single executable never runs a launcher on a node from PATH`,
+      };
+    }
+    const sealed = sealedAgentShim(facts.execPath);
+    if (!(facts.exists ?? isReadableFile)(sealed)) {
+      return {
+        runtime: undefined,
+        reason: `fieldd is a single executable and its sealed shim is not beside it (${sealed}); a single executable never runs a launcher on a node from PATH`,
+      };
+    }
     return {
-      runtime: undefined,
-      reason:
-        "fieldd is a single executable and carries no Node a launcher can run; a packaged build's launcher runtime is its own slice (AR-7j)",
+      runtime: { command: facts.execPath, args: [AGENT_SHIM_ROLE_ARG] },
+      source: "own-executable",
+      version: facts.nodeVersion,
     };
   }
   if (facts.electron === undefined && nodeCanExecInPlace(facts.nodeVersion)) {
@@ -995,6 +1025,8 @@ export class AgentGatewayService {
       this.logger.info("fieldd.agents.gateway_launcher_runtime", "The launcher's runtime", {
         source: this.choice.source,
         command: this.choice.runtime.command,
+        // AR-7j — the role a single executable runs its launchers in
+        ...(this.choice.runtime.args !== undefined ? { args: [...this.choice.runtime.args] } : {}),
         ...(this.choice.version !== undefined ? { version: this.choice.version } : {}),
       });
     }
@@ -1105,7 +1137,7 @@ export class AgentGatewayService {
   private bundledShim(): string | undefined {
     const script =
       this.opts.shimScript ??
-      (typeof __dirname === "string" ? join(__dirname, "agent-shim.cjs") : undefined);
+      (typeof __dirname === "string" ? join(__dirname, AGENT_SHIM_BUNDLE) : undefined);
     if (script !== undefined && isReadableFile(script)) return script;
     this.sayOnce("no-bundle", () =>
       this.logger.warn(

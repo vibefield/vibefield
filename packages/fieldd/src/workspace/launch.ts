@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { FILES_HOST_BUNDLE, FILES_HOST_ROLE_ARG } from "../roles";
 
 // FS-1a (L1) — HOW fieldd starts its files worker, decided once per boot.
 //
@@ -26,10 +27,10 @@ import { dirname, join } from "node:path";
 // worker is then UNCONFIGURED, honestly, and a test that exercises files
 // passes a launch of its own (FielddConfig.filesHost).
 
-/** The argument that makes the packaged executable a files worker. */
-export const FILES_HOST_ROLE_ARG = "--vibefield-role=files-host";
-/** The worker's bundle, beside fieldd's. */
-export const FILES_HOST_BUNDLE = "files-host.cjs";
+// The role's argument and the worker's bundle are named with every role of the
+// executable's, in roles.ts (AR-7j), which bin.ts dispatches on before anything
+// of the daemon's loads; re-exported here for the files service's readers.
+export { FILES_HOST_BUNDLE, FILES_HOST_ROLE_ARG };
 
 export interface FilesHostLaunch {
   command: string;
