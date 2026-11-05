@@ -34383,3 +34383,73 @@ under its new 30,000 ms limit.
   - then James's recipe page;
   - then his device run (M1, M2).
 - Any reading on this seam says it was a synthetic swarm and names its corpus.
+
+## Item 178 — every Node bundle the stage copies names its notices row, and every notices row names a file the stage ships: fieldd's sidecars are one table (2026-11-05)
+
+(2026-11-05; one commit `ed533687f` on lane `lp/notices178` over main `06dc17086`, vibe-field-42's; M151 is `ed533687f`,
+run 151, landed 2026-11-05T11:20:44Z; drafted as `c4165044f` over a stand-in of A2's three rows on
+`95812bf26`, amended once as `a0b30edd5`, cut onto A2's records as `a68ed0425`, then re-cut onto 179's, 177's and
+S4c's records with its diff unchanged.) Filed by VF-PM at 05:46Z from SD-2's Found 7; ordered after A2 and before
+CP-4a2a (VF-PM, 09:03Z).
+
+**What it rests on.**
+- LP-5's notices name the esbuild bundles by hand (`third-party-notices.mjs` `NODE_BUNDLES`), and a bundle with no
+  row attributes nothing, silently. SD-2's `main/sound-worker.cjs` shipped with none until its own C11 added one, and
+  TH-1's `transcript-host.cjs` joined `build-fieldd-sea.mjs`'s sidecars with neither a stage row nor a notices row
+  (found before A2 landed, and fixed in its lane).
+- Two owed lines name this slice: LP-6c's "Item 178: … its own slice", and TH-1 and TH-2's "Item 178: the three-table
+  check and SIDECARS' data module, closed by 178's own entry". Both close in this entry.
+- Item 179's Owed closes: push 93's verify attempt 2 (run `42001017462`, `95812bf26`) completed SUCCESS at
+  2026-11-05T10:41:29Z, its seed-fuzz row at 3643 ms under the old 5,000 ms default (read from its log, 11:13Z).
+- prod-builder's design (06:20Z, 08:40Z): the check runs at the stage over its own row table, never a scan of the
+  staged tree, in three tables, both ways. Its review (09:05Z, 09:08Z) set the data module, the generated rows, the
+  notices declarations, the strict text reader, and the split between a refusal and a ledger problem.
+
+**What landed.** 9 files, +584 −126; pin-class none; release-adjacent `scripts/stage-package.mjs` 42/65,
+`apps/desktop/packaging/build-fieldd-sea.mjs` 6/55 and `scripts/third-party-notices.mjs` 43/5.
+- `apps/desktop/packaging/fieldd-sidecars.mjs` (new, builtins only) holds fieldd's sidecars as ONE table: each row's
+  name, why, and a `notices` declaration, `{ bundle }`, `{ npm: "loro-crdt" }` or `{ engine: "mille" }`. A `sidecar()`
+  helper fills `stage: bin/<name>`, `from: packages/fieldd/dist/<name>` and `kind` from the one name. It also holds
+  `MILLE_NATIVE` and `FIELDD_EXE`, so mille's triple and the executable's name are spelled once, not twice.
+- `build-fieldd-sea.mjs` imports it (its own `SIDECARS`, `milleTriple` and `AGENT_SHIM_BUNDLE` are gone), and
+  `stage-package.mjs` spreads it into its PLAN, each row as data (`DATA_MODE`, every row's default before). A sidecar
+  can no longer join one script and miss the other.
+- `scripts/notices-rows.mjs` (new, pure): (a) each sidecar staged exactly once, as `bin/<name>`, and nothing else
+  staged from fieldd's `dist/`; (b) every staged Node bundle (a `dist/` `.cjs`, `.mjs` or `.js` file row) names a
+  `NODE_BUNDLES` row, and each sidecar declares one notices source, a bundle only if it is JavaScript; (c) every
+  `NODE_BUNDLES` row is a staged source, or its `embeddedIn` names a staged row (`bin.cjs`, inside `bin/fieldd`).
+- The stager runs it on its live PLAN at the top level and refuses every stage, `--verify` included, before it copies
+  anything: "stage REFUSED: the notices rows and the stage's rows disagree (item 178, scripts/notices-rows.mjs):".
+- `third-party-notices.mjs`: `sidecarNoticesProblems` holds each declared npm package or engine to the generated
+  ledger and joins `stageNotices`' problems, fatal under `--require-complete` (every release stage) and a warning on a
+  dev stage, as every ledger problem is. `MILLE_ENGINE_ROLE` names mille's role once, for both roles that carry it.
+- `tooling/dev-runner/test/notices-rows.test.mjs` (new, 10 rows). `project.json`'s test inputs gain the data module,
+  `notices-rows.mjs` and `build-fieldd-sea.mjs`, so Nx re-runs the rows on an edit to any table they read.
+- LP-6c's census row (b) reads fieldd's sidecars from the table, and mille's `.node` by the baseline's shape (exactly
+  one `dist/mille.<triple>.node` under fieldd), so it reads the same on any verify host (VF-PM, 09:21Z). A dated note
+  at its source says so. `build-paths.test.mjs` follows the stager's `MILLE_NATIVE`.
+
+**Validation.**
+- This Mac, at the cut onto A2's records (10:16:43–10:17:07Z, nice 19, in VF-PM's window): preflight, both stage
+  scripts parse, the seven dev-runner files that read these tables (89 passed, 0 failed), biome and walls. The draft's
+  one red, transcript-host's census row, read green there on A2's baseline.
+- The rows: main's tables green; A2's tables before its fix, as a fixture, red naming `transcript-host.cjs` twice,
+  then green with its rows; SD-2's case red; every row of the three tables dropped one at a time, 22 of 22 red, each
+  naming its file; the text reader refusing a `dist/` row it cannot read as literals.
+- The mini, run 151 (a9's mint at `ed533687f`): `pnpm verify` exit 0 at 11:16:49Z. node 460 passed, 0 failed (+10, every
+  "item 178: …" row green); `package-census.test.mjs` 8 rows; census:assert "no drift"; vitest 12,896 passed, 0
+  failed, 20 skipped, unchanged.
+- W0 and W1, run 151: W0 found run 147's stage (151 files, its notices `5e6079b1…`). W1, a fresh `package:stage` on
+  T: rc 0, no refusal line; then, under `--require-complete`, "stage verify OK — 151 files, 298,948,600 bytes
+  (285.10 MB); complete" and "649 components, 329 distinct licence texts, 11 left out". The same file set as run 147's
+  stage, and `THIRD_PARTY_NOTICES.txt` byte-equal to it: the PLAN reshape shipped what it shipped before.
+- W2, run 151: on a scratch copy of W1's stage, with transcript-host's `NODE_BUNDLES` row deleted, the stager exited 1
+  with the three refusal lines, diffed equal to the brief's. The copy held at 175 entries, so it copied nothing, and
+  `git status` was empty after the checkout.
+- The land: main fast-forwarded `06dc17086` → `ed533687f` at 11:20:44Z (the fixer), 9 files +584 −126.
+
+**Found.**
+- `biome check --changed` reads the commit range, not the working tree: on uncommitted work it checked only the
+  stand-in's three files. Uncommitted work is staged and checked with `--staged`.
+
+**Owed.** Nothing of its own. The packaged notices witness on the first signed nightly stays LP-5's.

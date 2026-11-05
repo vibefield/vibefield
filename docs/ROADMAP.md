@@ -796,6 +796,7 @@ phone"; DECISIONS PC
        remapped release's witnesses, and truffle's sidecar (item 170, petition T14);
      - third-party notices on the Mac and on iOS: LANDED 2026-11-05 (M131 `02b47ba2a`, LANDED "LP-5"); the
        staged `Resources/legal` witness passed at run 133; owed: the packaged one on the first signed nightly;
+       and every staged bundle has its notices row, both ways: LANDED 2026-11-05 (M151 `ed533687f`, LANDED "Item 178");
      - the surface lab out of production builds (Q3): LANDED (M133, witnessed by run 133's build:renderer);
        `package-census --assert --strict` green, in verify: LANDED 2026-11-05 (M145 `20eef65de`, LANDED "LP-6c");
      - LOG-39's packaged checks in `release.yml`;
