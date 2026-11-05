@@ -179,3 +179,96 @@ describe("the default export and the lines (findings 6 and 10)", () => {
     expect(lineOf(script)).toBe(5);
   });
 });
+
+/** Every line terminator ECMAScript counts (line feed, carriage return, U+2028, U+2029), as V8 and acorn count lines. */
+const terminatorsIn = (text: string): number => text.match(/[\n\r\u2028\u2029]/g)?.length ?? 0;
+
+describe("the re-read's residuals (bth-1322Z: N3, N4, N5)", () => {
+  it("N3a · a string continued across a line (`\\` and a line feed) keeps that line: SES's later refusal names the file's", async () => {
+    const continued = 'const s = "Replace the dynamic import() \\\nin loader.ts";';
+    const said = await runOnHost(
+      bytesOf(flow([continued, "await agent(s);", "return 'ran';"].join("\n"))),
+    );
+    expect(said.end).toEqual({ kind: "done", value: "ran" });
+    expect(said.calls.map((call) => call.args[0])).toEqual([
+      "Replace the dynamic import() in loader.ts",
+    ]);
+    // the continued string is lines 3 and 4, so the real call is line 5 of the file
+    const text = flow([continued, 'import("node:fs");', "return s;"].join("\n"));
+    expect(terminatorsIn(scriptOf(text))).toBe(terminatorsIn(text) + 2);
+    const refused = await runOnHost(bytesOf(text));
+    expect(refused.end).toMatchObject({ kind: "threw" });
+    expect((refused.end as { message?: string }).message).toMatch(/:5\b.*SES_IMPORT_REJECTED/);
+  });
+
+  it("N3b · a raw U+2028 in a person's words stays raw: no line terminator is lost, and the words arrive byte-identical", async () => {
+    const words = "A --> B\u2028C";
+    const text = flow([`const s = "${words}";`, "await agent(s);", "return 'ran';"].join("\n"));
+    const script = scriptOf(text);
+    // the wrapper adds two line feeds; the string's own U+2028 is still one, raw
+    expect(terminatorsIn(script)).toBe(terminatorsIn(text) + 2);
+    expect(sesWouldRefuse(script)).toEqual([]);
+    const heard = await runOnHost(bytesOf(text));
+    expect(heard.end).toEqual({ kind: "done", value: "ran" });
+    expect(heard.calls.map((call) => call.args[0])).toEqual([words]);
+    // SES counts line feeds alone (ses 2.3.0 transforms.js getLineNumber), so its own line does not move either way;
+    // V8's and acorn's do, which the count above holds
+    const later = await runOnHost(
+      bytesOf(flow([`const s = "${words}";`, 'import("node:fs");'].join("\n"))),
+    );
+    expect((later.end as { message?: string }).message).toMatch(/:4\b.*SES_IMPORT_REJECTED/);
+  });
+
+  it("N4 · the rewrite is one pass: 87,200 comments cost about what 87,200 empty statements do", () => {
+    // four times SCRIPT_MAX_BYTES, so a pass's cost per edit shows past the noise of a loaded host (measured on this
+    // Mac, 13:34Z: copying the script once per edit costs ~94× a parse here, ~11× at 64 KiB; one pass costs ~1×)
+    const count = 87_200;
+    const comments = flow(`${"//\n".repeat(count)}return 1;`);
+    const statements = flow(`${";\n".repeat(count)}return 1;`);
+    const best = (text: string): number => {
+      let least = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < 3; i++) {
+        const t0 = performance.now();
+        scriptOf(text);
+        least = Math.min(least, performance.now() - t0);
+      }
+      return least;
+    };
+    const parsed = best(statements);
+    const rewritten = best(comments);
+    // every comment is an edit, so the rewrite's cost over the parse's is the apply's alone
+    expect(rewritten / Math.max(parsed, 1)).toBeLessThan(10);
+  }, 120_000);
+
+  it("N5a · a regex holding a pattern is the realm's own RegExp, whatever the script binds to the name", async () => {
+    const text = flow(
+      [
+        "function RegExp() { return { shadowed: true }; }",
+        "const r = /A --> B/i;",
+        "return [typeof r.test, r.source, r.flags, r.test('a --> b')];",
+      ].join("\n"),
+    );
+    const heard = await runOnHost(bytesOf(text));
+    expect(heard.end).toEqual({ kind: "done", value: ["function", "A --> B", "i", true] });
+  });
+
+  it("N5b · a script's own tag gets its strings and substitutions as written; only `.raw` shows the escapes", async () => {
+    const text = flow(
+      [
+        "const tag = (strings, ...values) =>",
+        "  [strings.length, values.length, strings.join('|'), strings.raw.join('|')];",
+        "return tag`A --> B, then import(x) ${1} and eval(y)`;",
+      ].join("\n"),
+    );
+    const heard = await runOnHost(bytesOf(text));
+    expect(heard.end).toEqual({
+      kind: "done",
+      value: [
+        2,
+        1,
+        "A --> B, then import(x) | and eval(y)",
+        "A -\\u002d> B, then impor\\u0074(x) | and eva\\u006c(y)",
+      ],
+    });
+  });
+});
