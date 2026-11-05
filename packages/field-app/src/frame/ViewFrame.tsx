@@ -13,6 +13,7 @@ import { emitViewKeyMarker } from "../development-console";
 import { listenForProductChord } from "../field/product-chords";
 import { historyImporting, useIndexStatus } from "../history/first-reading";
 import { getHost } from "../host";
+import { useSoundAttention } from "../sound/useSoundAttention";
 import { Composer, type LineActs } from "./Composer";
 import type { FrameSurface } from "./frame-surface";
 import { type CoverState, coverAfter, coverAt, ViewCoverView } from "./ViewCover";
@@ -61,6 +62,8 @@ export function ViewFrame({
 }): ReactElement {
   const view = useActiveView();
   const [keys] = useState(() => viewKeysOf(getHost().platform));
+  // SD-2 — where this window's agents are, for the field's sounds (§14 rules 3 and 9)
+  useSoundAttention();
   const [held, setHeld] = useState(false);
   const [press, setPress] = useState<ViewKeyPress | null>(null);
   const presses = useRef(0);

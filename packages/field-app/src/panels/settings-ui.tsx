@@ -52,15 +52,19 @@ export function SettingsRow({
   children,
   divider = true,
   align = "center",
+  marks,
 }: {
   title: ReactNode;
   description?: ReactNode;
   children: ReactNode;
   divider?: boolean;
   align?: "center" | "start";
+  /** `data-*` marks on the row itself, for a reader that finds rows by name (Settings → Sound's `data-sound-row`). */
+  marks?: Readonly<Record<`data-${string}`, string>>;
 }): ReactElement {
   return (
     <div
+      {...marks}
       className={`vf-settings-row flex min-h-14 gap-5 py-3 ${align === "start" ? "items-start" : "items-center"} ${
         divider ? "border-b border-black/5 last:border-b-0 dark:border-white/10" : ""
       }`}

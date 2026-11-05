@@ -53,6 +53,7 @@ import {
   SettingsSection,
   SettingsSwitch,
 } from "./settings-ui";
+import { SoundSection } from "./sound/SoundSection";
 import { TerminalSettings } from "./terminal/TerminalSettings";
 import { UpdatesDevicesSection } from "./UpdatesDevicesSection";
 import { UpdatesDoctorSection, UpdatesSection } from "./UpdatesSection";
@@ -514,6 +515,9 @@ export function SettingsPanel({
   } else if (activePage === "appearance") {
     // One Frame FC-D5: the SAME setting as the Me menu's Theme.
     pageContent = <AppearanceSection />;
+  } else if (activePage === "sound") {
+    // SD-2 (DESIGN.md §8 "Settings → Sound"): Play sounds, the family, Quiet
+    pageContent = <SoundSection />;
   } else if (activePage === "canvas") {
     pageContent = (
       <div className="space-y-4">

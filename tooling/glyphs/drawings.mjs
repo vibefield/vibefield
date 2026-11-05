@@ -48,6 +48,21 @@ export const capsule = (x1, y1, x2, y2, hw) => {
   const ny = (dx / l) * hw;
   return `M${f2(x1 + nx)} ${f2(y1 + ny)}L${f2(x2 + nx)} ${f2(y2 + ny)}A${hw} ${hw} 0 0 0 ${f2(x2 - nx)} ${f2(y2 - ny)}L${f2(x1 - nx)} ${f2(y1 - ny)}A${hw} ${hw} 0 0 0 ${f2(x1 + nx)} ${f2(y1 + ny)}Z`;
 };
+/**
+ * A band along the arc from (x1, y1) to (x2, y2), radius r, bowing right, half-width hw, with round caps: the
+ * hardware form of an instrument arc `M x1 y1 A r r 0 0 1 x2 y2` (the field's answer beside `sound`'s cone).
+ */
+const answerArc = (x1, y1, x2, y2, r, hw) => {
+  const half = Math.hypot(x2 - x1, y2 - y1) / 2;
+  const cx = (x1 + x2) / 2 - Math.sqrt(r * r - half * half);
+  const cy = (y1 + y2) / 2;
+  const a1 = Math.atan2(y1 - cy, x1 - cx);
+  const a2 = Math.atan2(y2 - cy, x2 - cx);
+  const at = (radius, a) => `${f2(cx + radius * Math.cos(a))} ${f2(cy + radius * Math.sin(a))}`;
+  const ro = r + hw;
+  const ri = r - hw;
+  return `M${at(ro, a1)}A${f2(ro)} ${f2(ro)} 0 0 1 ${at(ro, a2)}A${hw} ${hw} 0 0 1 ${at(ri, a2)}A${f2(ri)} ${f2(ri)} 0 0 0 ${at(ri, a1)}A${hw} ${hw} 0 0 1 ${at(ro, a1)}Z`;
+};
 /** Two crossed bars at ±45° as one outline (an X). */
 export const xPoly = (cx, cy, L, hw) => {
   const s = Math.SQRT1_2;
@@ -657,6 +672,15 @@ export const DRAWINGS = {
     role: "A peer's bare shell on the phone's field; the rail's terminal key",
     instrument: { s: P("M5 6.5l6.5 5.5L5 17.5M13.5 17.5h6") },
     hardware: { d: `M4 4.5l9.5 7.5L4 19.5V15l5-3-5-3Z${rectPath(13.5, 15.5, 7, 4, 0.6)}` },
+  },
+  sound: {
+    label: "Sound",
+    group: "objects",
+    role: "Settings → Sound's rail: a speaker and the field's answer (SD-2; desktop only)",
+    instrument: { s: P("M4 9.5h3l5-4v13l-5-4H4ZM15 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11") },
+    hardware: {
+      d: `M3.5 9H7l5.5-4.5v15L7 15H3.5Z${answerArc(15, 9, 15, 15, 4, 1.1)}${answerArc(18, 6.5, 18, 17.5, 7.5, 1.1)}`,
+    },
   },
   message: {
     label: "Message",

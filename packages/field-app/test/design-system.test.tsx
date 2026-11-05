@@ -234,9 +234,9 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(away?.getAttribute("data-godview-deck")).toBe("away");
     expect(away?.querySelector(".vf-godview-terminal-deck")?.hasAttribute("inert")).toBe(true);
     expect(away?.querySelector(".vf-godview-monitor-stage")).not.toBeNull();
-    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 64 —
-    // the wrapper's three (round 3) among them, drawn by the shipping component.
-    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(64);
+    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 65 (SD-2's
+    // `sound` the 65th) — the wrapper's three (round 3) among them, drawn by the shipping component.
+    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(65);
     for (const name of ["minimize", "maximize", "restore"]) {
       const tile = [...(container?.querySelectorAll("#glyphs .vf-ds-glyph") ?? [])].find(
         (figure) => figure.querySelector("code")?.textContent === name,

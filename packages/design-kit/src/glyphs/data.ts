@@ -20,7 +20,7 @@ export interface GlyphMeta {
   readonly role: string;
 }
 
-export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","jump","duplicate","tape","lift","trash","pen","eraser","today","minimize","maximize","restore","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","message","key","question","exclaim","flame","missing","importing","document","layers","sparkle"] as const;
+export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","jump","duplicate","tape","lift","trash","pen","eraser","today","minimize","maximize","restore","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","sound","message","key","question","exclaim","flame","missing","importing","document","layers","sparkle"] as const;
 export type GlyphName = (typeof GLYPH_NAMES)[number];
 
 export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
@@ -78,6 +78,7 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   scantext: {"label":"Scan text","group":"objects","role":"Scan text in the plus menu, and its unsupported state"},
   snippets: {"label":"Snippets","group":"objects","role":"Snippets in the plus menu"},
   prompt: {"label":"Prompt","group":"objects","role":"A peer's bare shell on the phone's field; the rail's terminal key"},
+  sound: {"label":"Sound","group":"objects","role":"Settings → Sound's rail: a speaker and the field's answer (SD-2; desktop only)"},
   message: {"label":"Message","group":"signals","role":"The swarm's said-something mark"},
   key: {"label":"Permission","group":"signals","role":"The swarm's waiting-on-a-permission mark"},
   question: {"label":"Question","group":"signals","role":"The swarm's asked-you-something mark"},
@@ -145,6 +146,7 @@ export const GLYPHS: Readonly<Record<GlyphName, GlyphDrawing>> = {
   scantext: {"kind":"instrument","strokes":[["path",{"d":"M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M8 10h8M8 14h5"}]],"fills":[]},
   snippets: {"kind":"instrument","strokes":[["path",{"d":"M4 7h16M4 12h10M4 17h6M17 14v6M14 17h6"}]],"fills":[]},
   prompt: {"kind":"instrument","strokes":[["path",{"d":"M5 6.5l6.5 5.5L5 17.5M13.5 17.5h6"}]],"fills":[]},
+  sound: {"kind":"instrument","strokes":[["path",{"d":"M4 9.5h3l5-4v13l-5-4H4ZM15 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"}]],"fills":[]},
   message: {"kind":"instrument","strokes":[["path",{"d":"M20 14a2 2 0 0 1-2 2H9l-4.5 3.5V6a2 2 0 0 1 2-2h11.5a2 2 0 0 1 2 2Z"}]],"fills":[]},
   key: {"kind":"instrument","strokes":[["circle",{"cx":"8","cy":"8","r":"3.5"}],["path",{"d":"M10.5 10.5 19 19M15.5 15.5l2-2M13 13l2-2"}]],"fills":[]},
   question: {"kind":"instrument","strokes":[["path",{"d":"M9 9.5a3 3 0 1 1 4.2 2.7c-.8.4-1.2 1-1.2 1.8v.5"}]],"fills":[["circle",{"cx":"12","cy":"17.75","r":"1.35"}]]},

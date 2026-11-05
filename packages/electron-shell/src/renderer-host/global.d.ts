@@ -9,6 +9,10 @@ import type {
   ScreenshotPreviewResult,
   ShellCommand,
   ShellPlatform,
+  SoundAttention,
+  SoundPlayerState,
+  SoundPreviewCue,
+  SoundPreviewResult,
   ThemePreference,
   ThemeState,
   UpdateChannel,
@@ -73,6 +77,12 @@ declare global {
     vibefield: {
       readonly platform: ShellPlatform;
       readonly haptics: { zoomTick(): void };
+      /** SD-2 — the window's sound doors (preload `sound`). */
+      readonly sound: {
+        attention(attention: SoundAttention): void;
+        preview(cue: SoundPreviewCue): Promise<SoundPreviewResult>;
+        state(): Promise<SoundPlayerState>;
+      };
       claimLiveSurfacePortBridge(): string;
       submitRendererLogs(serializedBatch: string): boolean;
       getConnection(): Promise<WindowConnection>;

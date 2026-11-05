@@ -19,6 +19,10 @@ import type {
   ScreenshotPreviewResult,
   ShellCommand,
   ShellPlatform,
+  SoundAttention,
+  SoundPlayerState,
+  SoundPreviewCue,
+  SoundPreviewResult,
   ThemePreference,
   ThemeState,
   UpdateChannel,
@@ -152,6 +156,14 @@ export interface FieldViewHost {
  * Dark · Auto, Auto following the OS — main's, because main is where the OS's
  * theme is known. The renderer draws what it is told and asks by name; it
  * never keeps a theme of its own (`theme.ts`). */
+/** SD-2 (DESIGN.md §14, §8 "Settings → Sound") — main's three sound doors: where this window's agents are (heard
+ * only from the window in front), a Play in Settings → Sound, and whether this Mac can play at all. */
+export interface FieldSoundHost {
+  attention(attention: SoundAttention): void;
+  preview(cue: SoundPreviewCue): Promise<SoundPreviewResult>;
+  state(): Promise<SoundPlayerState>;
+}
+
 export interface FieldThemeHost {
   set(preference: ThemePreference): Promise<ThemeState>;
   onState(handler: (state: ThemeState) => void): () => void;
@@ -243,6 +255,8 @@ export interface FieldHost {
   readonly clipboard?: FieldClipboardHost;
   /** Optional native tactile feedback; browser hosts provide no implementation. */
   readonly haptics?: { zoomTick(): void };
+  /** SD-2 — the field's sounds (`FieldSoundHost`); absent where no main plays them (a browser harness). */
+  readonly sound?: FieldSoundHost;
   readonly platform?: ShellPlatform;
   readonly view?: FieldViewHost;
   /** Optional like `view`: a browser harness has no main to own the theme, and

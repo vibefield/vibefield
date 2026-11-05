@@ -43,6 +43,7 @@ import {
   PROFILES_FIXTURE_STATES,
   type ProfilesFixtureState,
 } from "../profiles-fixtures";
+import { SoundSettingsPreview } from "../SoundSettingsPreview";
 import { TerminalSettingsPreview } from "../TerminalSettingsPreview";
 import { TERMINAL_FIXTURE_STATES, type TerminalFixtureState } from "../terminal-settings-fixtures";
 import {
@@ -111,6 +112,9 @@ export function SurfacesSection(): ReactElement {
             {settingsPage === "appearance" ? (
               // The shipping Appearance page (One Frame FC-D5), on fixture state.
               <AppearanceSectionView preference={appearancePick} onChange={setAppearancePick} />
+            ) : settingsPage === "sound" ? (
+              // SD-2 — Settings → Sound, the shipping view on a fixture model (Play sounds on).
+              <SoundSettingsPreview key={settingsVisit} state="on" />
             ) : settingsPage === "agents" ? (
               <AgentsSettingsPreview
                 key={settingsVisit}

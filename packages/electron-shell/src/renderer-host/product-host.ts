@@ -75,6 +75,12 @@ export function mountProductHost(
       forceOnboarding: __VIBEFIELD_FORCE_ONBOARDING__,
       platform: window.vibefield.platform,
       haptics: { zoomTick: () => window.vibefield.haptics.zoomTick() },
+      // SD-2 — main's sound doors, straight onto the preload's narrow set
+      sound: {
+        attention: (attention) => window.vibefield.sound.attention(attention),
+        preview: (cue) => window.vibefield.sound.preview(cue),
+        state: () => window.vibefield.sound.state(),
+      },
       logger: logging.logger,
       diagnostics: {
         query: (query) => window.vibefield.diagnostics.query(query),

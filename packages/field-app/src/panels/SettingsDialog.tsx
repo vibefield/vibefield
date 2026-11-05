@@ -16,6 +16,7 @@ export type SettingsPage =
   | "account"
   | "general"
   | "appearance"
+  | "sound"
   | "canvas"
   | "agents"
   | "profiles"
@@ -35,6 +36,7 @@ interface PageMeta {
     | "person"
     | "sliders"
     | "sun"
+    | "sound"
     | "canvas"
     | "agents"
     | "profiles"
@@ -65,6 +67,13 @@ const PAGES: readonly PageMeta[] = [
     label: "Appearance",
     description: "The color mode used by app chrome and cards.",
     icon: "sun",
+  },
+  {
+    // SD-2 (DESIGN.md §8 "Settings → Sound"): one page in Preferences, after Appearance
+    id: "sound",
+    label: "Sound",
+    description: "How agents sound when they need you, and when they keep quiet.",
+    icon: "sound",
   },
   {
     id: "canvas",
@@ -142,7 +151,7 @@ interface NavGroup {
 
 const NAV_GROUPS: ReadonlyArray<NavGroup> = [
   { id: "account", label: "Account", pages: ["account", "devices"] },
-  { id: "preferences", label: "Preferences", pages: ["general", "appearance", "canvas"] },
+  { id: "preferences", label: "Preferences", pages: ["general", "appearance", "sound", "canvas"] },
   { id: "workspace", label: "Workspace", pages: ["agents", "history", "plugins", "terminal"] },
   { id: "support", label: "Support", pages: ["updates", "diagnostics", "advanced"] },
 ];
@@ -391,6 +400,7 @@ const PAGE_GLYPH: Record<PageMeta["icon"], GlyphName> = {
   person: "person",
   sliders: "sliders",
   sun: "sun",
+  sound: "sound",
   canvas: "canvas",
   agents: "agents",
   profiles: "profiles",
