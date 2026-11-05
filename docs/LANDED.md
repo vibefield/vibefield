@@ -32689,3 +32689,147 @@ fieldd sources and 9 fieldd tests):
   accepts, the fixed-name stable download, the attestation, and Info.plist's `LSMinimumSystemVersion` 14.0.
 - The blockmap re-read at an electron-updater bump.
 - The clean-Mac install row on macOS 14, 15 and 26 VMs (phase 1, new).
+
+## PG-9 — the phone resumes from its cursors: an app switch costs a few bytes, not the whole board, and its instruments say how each open was answered (2026-11-05; `866f7201e` → `77e3add01`, 8 commits on main `67831d02f`, lane `pg/9` in `/Volumes/SamsungRed/lanes/pg9/vibe-field`, stacked as M137 `77e3add01`, run 137)
+
+**What it rests on.**
+- PG-L4.4, the per-device cursors (PG-D9 (a) left them to PG-9; PG-9a landed the linger half). The plan is
+  `lanes/ios/PG9-PLAN.md`, GOed by VF-PM at 02:08Z, with the lane's GO at 02:21Z.
+- VF-PM's marks (02:21Z):
+  - P1 (b): rows stamped with the revision they changed at, and removals remembered to a bound.
+  - P3 (b): the n20 rates come from a DEBUG replay seam (S4c), not from paid agents.
+  - P2: PG-L4.6's `agent.get` HELD for James at fd's lean (B).
+- **James picked P2 (B)** at 05:51Z on the page `ER5MqaW2mVgHggTk6NpCce` (decisions/P2), and confirmed it in chat at
+  05:57Z. The open card shows the 280 cut until a phone screen needs whole text (Found 4).
+- VF-PM's rulings in the lane:
+  - 03:10Z: the cursors are sent after a gap too, by rows.ts's own rule (Found 2).
+  - 03:26Z: ONE stacked mint of S1–S4b, with S4a and S4c as slices of their own.
+  - 03:44Z: S4b accepted as built (Found 3b).
+  - 06:30Z: the mini's slot right after L1, re-cut onto L1's records.
+- rows.ts's DS-L3 rule: a cursor is `{epoch, revision}`, answered `resumed` or by a delta from `since`. The mesh open
+  did not carry it until now.
+
+**What landed** (29 files, +1,978 −45).
+- **The contract** (S1; `packages/contracts`, 9 files +355 −7):
+  - `AgentSubscribeParams.since` carries one RowsCursor per device, at most
+    `AGENT_FIELD.MESH_RESUME_DEVICES_MAX` (64).
+  - Each device entry of a mesh open answers ONE of `snapshot`, `resumed` or `delta` (a `.refine`).
+  - `MESH_RESUME_TOMBSTONES` is 1,024.
+  - Two fixtures: `agent-remote-mesh-open.resume.json` and `agent-subscribe-params.mesh-since.json`.
+  - `methods.ts`' rows comment is corrected and dated.
+- **The hub** (S2; `packages/fieldd`, 6 files +663 −27):
+  - `mesh-board.ts` stamps each held row `{added, changed}` and keeps removals up to the bound. `answersFrom` is the
+    first revision the hub can vouch for.
+  - `answerFor` answers `resumed` at the head. It answers a delta of what changed after the cursor, plus the removals of
+    rows the reader held. Anything else gets a snapshot: a new epoch, or a cursor below `answersFrom` or past the head.
+  - `agent-field.ts` refuses `since` off the mesh (`cursorOffTheMesh`), so no cursor reaches an owner upstream.
+  - `daemon.ts` passes `since` to `meshBoard.subscribe`, in one line.
+- **The phone** (S3; `apps/ios/VibeFieldKit`, the bulk of 13 files +957 −11):
+  - `RemoteMeshCopy` keeps the wire's own image of each desktop (`WireBoard`), and its chains are the cursors.
+  - An answer by cursor is EXPANDED into the whole open it stands for. The screen, the fold, the replica and
+    PhoneFoldParity are untouched, and no golden moves.
+  - An answer the copy cannot honour is a gap, and only that desktop's cursor goes.
+  - `FieldProductClient.subscribe(paramsAtSend:)` reads the params at every send: a subscribe, a resnapshot and a
+    re-dial's replay. A cursor is never stored with the subscription.
+  - `FieldLink` names `params.resuming(remote.cursors)`. The first ask is `phoneRemote` byte for byte.
+- **The phone's instruments** (S4b), which James's device run reads:
+  - `SubscriptionTraffic` counts a mid-stream whole board as a reset in its 10 s DEBUG line.
+  - `MeshOpenAnswers` says each open's "N desktops: r resumed, d delta, w whole, u unanswered".
+  - "mesh open" and "mesh frame" are signpost intervals on Points of Interest, beside the Energy Log.
+- `check:ios-fixtures`: 251 copies (main's 249 + 2), 86 pins.
+
+**Validation.**
+- The desk:
+  - S2 on the mini (a9, 02:48–02:50Z, before the first rebase): RED exactly 9 by assertion (agent-field 1,
+    mesh-board 7, e2e 1). GREEN: agent-field 43, mesh-board 45, mesh-board.e2e 9, tailnet-backpressure 10,
+    agent-screens 22, device-routing 26, federated-subs 17; contracts 1,540; fieldd tsc 0.
+  - Main touched four of PG-9's files after `dbb8c76ad` (`registries.ts`, `fixtures.test.ts`, `registry.test.ts`,
+    `daemon.ts`), so `packages/contracts` and `packages/fieldd` no longer matched that witness by hash. The merge was
+    clean and the hunks were disjoint.
+  - Run 137 is S2's witness at T′ (a9, `pnpm verify` exit 0, 06:16:24–06:21:36Z), each suite with 0 failed: fieldd's
+    agent-field 71, mesh-board 45, mesh-board.e2e 9, tailnet-backpressure 10, agent-screens 22, device-routing 26,
+    federated-subs 17; fieldd tsc 0. Contracts' own agent-field.test.ts reads 43, and S2's "agent-field 43" above
+    was that file.
+  - The run: vitest 12,515 passed, 0 failed, 20 skipped (891 files); node 443/0; cargo 545/0; biome 3,160 files;
+    gen:check 0; `check:ios-fixtures` 251/86. Its +20 against run 136 are all in PG-9's files (contracts +4, fieldd
+    +16). Logs: `lanes/ts6/logs/mini/run137/`.
+- The phone, host lights on the mini (a9, 03:06–03:09Z, swift 6.4.2, Xcode 27.2):
+  - S3: red exactly 9 (missing none, extra none), green 219/219.
+  - S4b: red exactly 2, green 221/221.
+  - The tip rebased onto `dbb8c76ad` (`f2419589d`): 243/243, 0 warnings.
+- The kit (a9, iPhone 17 `1F155533`, Xcode 27.2, iOS 27.0, at the `dbb8c76ad` chain):
+  - RED `abc2b9e11`: EXACT. 565 tests, and exactly 11 failed by expectation ("missing []; extra []"):
+    MeshResumeTests 8, FieldProductClientTests 1, FieldLinkRemoteTests 2 (L13 and L14, on `named ==`). IOS-12b's
+    suites passed.
+  - GREEN `f2419589d`, built alone in a fresh tree with fresh derived data (06:00:45–06:02Z): 16 runs, 1,836 tests,
+    exactly 1 failed, `TerminalSurfaceKeyboardTests.swift:31` (item 167). All 7 named rows and IOS-12b's 5 suites
+    passed.
+  - It CARRIES to T′ by hash: `apps/ios/VibeFieldKit` is `c8ce159f988b` at `f2419589d` and at `77e3add01`.
+- This Mac, from inside the lane (nice 19, the guard clear):
+  - At T `c43d25f0e` (06:05Z): biome clean on PG-9's 16 TS/JSON files; `check:ios-fixtures` 251/86; contracts tsc 0;
+    contracts vitest 1,557/1,557.
+  - At T′ (06:14Z), whose contracts, fieldd and apps/ios trees are T's: biome and `check:ios-fixtures`, the same.
+- The re-cuts, all clean:
+  - Onto `dbb8c76ad` (03:07Z): range-diff 7 "=" and 1 "!" (S3 red's fixtures-script hunk, context only).
+  - Onto `2f5225a55` (06:05Z) and onto `67831d02f` (06:14Z): 8 of 8 "=". Each tip's tree equals the merge-tree of its
+    base and the chain before it. L1 shares no file with PG-9.
+
+**Found.**
+1. **The same-epoch re-present trap.**
+   - PG-1d re-presents a board on the SAME epoch, at the SAME revision, with OTHER rows: a hub's own board after its
+     local resync, or a peer's after a re-open.
+   - A hub that answered "cursor at the head, so `resumed`" would tell a returning phone it holds rows it does not.
+   - The fix: `held(snapshot, previous)` sets `answersFrom = revision + 1` on a same-epoch re-present, for the hub's
+     own board and for a peer's, and `answerFor` answers whole below it.
+   - Held by `mesh-board.test.ts` "PG-9 S6 — a re-present on the SAME epoch is a new board".
+2. **The plan's "no `since` after a gap" is superseded** (VF-PM 03:10Z). The cursors are sent after a gap too, and
+   the copy drops only the cursor it could not honour. Held by C3 and L14.
+3. **The plan's other S3 claims were built otherwise.**
+   - "`delta` applies through the fold's existing delta path": no. The copy expands each answer instead.
+   - "phone-fold.golden.json gains a step 'resume'", with a re-bless: none. No golden moved, and C2 holds the claim on
+     the copy.
+4. **The plan's S4b was built otherwise.**
+   - There is no `-vf-traffic-summary` flag and no 60 s summary. The 10 s DEBUG line counts resets, each open notes its
+     answers, and signposts mark the opens and the frames.
+   - The bytes an open saves are measured on the desk by S4a, beside a whole open at the same instant. The phone
+     cannot know a whole open's size without asking for one.
+   - An S4b2 (the summary and the flag) is built only if James's M1 recipe asks for it.
+5. **PG-L4.6's premise was already retired.**
+   - `agent.get` was to "retire ownerDoor's second connection for reads". That read was `FieldLink.latestReply`, which
+     item 155 retired on 2026-11-02 (`6016207a1`), and no screen ever called it.
+   - What L4.6 still named was "the one open card's whole text". PG-D2 (a) bounds the list's and the card's text at
+     280; L4.6 was the tap-for-more on top of it.
+   - James held it (P2 (B)). The open card shows the 280 cut until a phone screen needs whole text, and that door is
+     then its own decision.
+   - The P2 page under-drew L4.6's own screen: it drew A as "no screen calls it" and pointed B's later use at phone
+     Chat alone. fd said so in chat before James confirmed (B), and the page carries a dated correction.
+6. **The phone's owner doors stay** (`FieldLink.swift:732-842` at `dbb8c76ad`): workspaces, the catalog, spawn and
+   resume, and terminal tickets, each to its owner on purpose (DS-L4). Retiring them (P2's C) would be a track of its
+   own.
+7. **A harness fault, not the code's.** The kit's first green build failed at link: undefined
+   `SubscriptionTraffic.begin`/`note`/`Interval.end` from `FieldMesh.o`.
+   - The rebase commits a chain inside one second, so `git archive` gave `SubscriptionTraffic.swift` the same mtime at
+     red and at green.
+   - Overlaid in one tree with one derived dir, Xcode never recompiled it. Built alone, it compiled.
+   - The rule: never overlay archives of same-second commits into one incremental build.
+
+**Errata, corrected at their sources (2026-11-05).**
+- `lanes/ios/PG9-PLAN.md`: S3's four lines (Found 2 and 3) and S4b's (Found 4).
+- `draft/thinking-phone-godview.md`: PG-L4.6 and §8's PG-9 line (Found 5), for draft slot 12's sweep.
+- The P2 page: its first publish cited the lane's line numbers (v2, 03:10Z), and its options under-drew the open card
+  (v3, 05:59Z). The pick stands.
+
+**Owed.**
+- S4a, the bench: WRITTEN as its own slice (`1d546b4c9` on `pg/9-s4a`, re-cut onto main when it lands).
+  - It measures busy and idle B/s at the phone's floor, and three app switches by cursor against a whole open at the
+    same instant: 5 s, 90 s (past the linger) and 2 s while busy, with the floor after each.
+  - Its run waits for a quiet host (load < 20, swap free > 4 GiB), with its load line said.
+- S4c, the DEBUG replay seam (P3 (b), ruled (A) at 03:18Z):
+  - A corpus FILE played by a dev desktop's fieldd behind a `FIELDD_`-prefixed variable, refused when packaged.
+  - It is written after cp-landing's `daemon.ts` chain, at its three sites (the runtime, the local board, the
+    monitor), with `LastRunKeeper` off while it stands.
+  - Any reading on it says it was a synthetic swarm and names its corpus.
+- S5, James's hands on a device:
+  - M1: the n5/n20 rates with the Energy Log.
+  - M2: the 256 KiB cap under the link conditioner (PG-D11's on-phone reading).
+  - A recipe page comes first.

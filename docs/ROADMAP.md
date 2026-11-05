@@ -304,16 +304,23 @@
   names' fade (timeline.css's stacking). PG-8's dropped doc line is restored byte for byte. The registry's order is a
   hand check: git auto-merged `case timeline` under the swarm with no conflict (LANDED "PG-6"). The Stories row now
   draws all five views, and PG-D3 is built (DECISIONS PG).
-- Next: PG-9 (the per-device resume cursors, `agent.get`, the measured rates; L4.4's linger half is PG-9a's). PU-I is
-  filed by James.
+- Landed 11-05: **PG-9**, the phone resumes from its cursors (`866f7201e` → `77e3add01`, 8 commits on `67831d02f`,
+  stacked as M137 `77e3add01`, run 137; LANDED "PG-9"): the mesh subscribe names one cursor per desktop, the hub
+  answers each `resumed`, a delta or a snapshot from rows it stamps and removals it keeps to a bound, and the phone
+  expands each answer into the whole open it stands for, so no view and no golden moved. Its instruments count a
+  mid-stream reset, say how each open was answered, and signpost opens and frames. P2 (James, 11-05): PG-L4.6's
+  `agent.get` HELD, (B); the open card shows the 280 cut until a screen needs whole text.
+- Next: PG-9's S4a run (the bench, on a quiet host) and S4c (the DEBUG replay seam, after cp-landing's `daemon.ts`
+  chain), then S5, James's device run: M1 the n5/n20 rates with the Energy Log, M2 the cap under the link
+  conditioner. PU-I is filed by James.
 - Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both
-  on the shed; the cap read on the phone under the link conditioner (PG-9); from PG-1d, the F-H2 rider (the board's
+  on the shed; the cap read on the phone under the link conditioner (PG-9, S5); from PG-1d, the F-H2 rider (the board's
   gate and the ticket mint read different things) and an old owner's run-id fallback (a design question); from PG-2,
   the draft queue's amendments (design-06's SP-L4, DS-D4 and limits "not built" clauses, design-mv §1, build-mv L8
   and M29, the design record's §8 as built), and `field`'s retirement one release of skew after the kit ships
   (PG-L1); from PG-3a, at a draft slot PG-L2's dated clarification (J1) and PG-1e0's erratum (item 144: the bench's
   remote-cut self-check); from PG-9a, a failed release's empty carried again (not built), and at a draft slot the
-  dated notes at thinking-desktop-sync-plane :201 (PF6's close) and thinking-phone-godview §8's PG-9 line; from
+  dated note at thinking-desktop-sync-plane :201 (PF6's close; §8's PG-9 line is written, 11-05); from
   PG-3e, James's live look (J-E4, §5); from PG-4t, J-R3 (James's: the dissolve over Rain, (a) built, (b) not built),
   the island question (James's, 4t's packet §5.6: the row at 56 as built, or 8 under each phone's own island, the
   iPhone 17 Pro's ending at 50.7), the tap at y 56–62 (James's hand row), a device's 120 Hz frame meter, and the
@@ -1072,7 +1079,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6, FG-5, FG-6c, FG-O2, FG-O2's judge and its fix, FG-6's catalog, FG-6's frozen frame 10-31, FG-6's follow-up 3, the catalog judged and its follow-up 1 11-01 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | the glass's literals (item 136) → James's product question |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
-| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31; PG-3 (3a…3f), PG-9a and PG-4s 11-01…11-02; PG-4t, then PG-7, PG-5 and PG-8 as one stacked mint, then PG-6, 11-04 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-9 |
+| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31; PG-3 (3a…3f), PG-9a and PG-4s 11-01…11-02; PG-4t, then PG-7, PG-5 and PG-8 as one stacked mint, then PG-6, 11-04; PG-9 (S1–S4b), 11-05 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | PG-9's S4a run and S4c; S5 is James's |
 | HN — Cards in Hand | BUILT; B1–B3 (HN-0…HN-8) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | the console-window smoke rows; D10 (James) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
