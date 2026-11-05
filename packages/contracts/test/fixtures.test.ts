@@ -123,6 +123,8 @@ import {
   ComposeReadOutput,
   ComposeSparksHatchParams,
   ComposeSparksListResult,
+  ComposeSparksSayParams,
+  ComposeSparksSayResult,
   NeedsAnswerParams,
   NeedsAnswerResult,
   NeedsItem,
@@ -885,6 +887,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "compose-spark-record": SparkRecord,
   "compose-sparks-list": ComposeSparksListResult,
   "compose-sparks-hatch-params": ComposeSparksHatchParams,
+  // IOS-12a (PC-D3 A) — your words to a spark, and the send's receipt
+  "compose-sparks-say-params": ComposeSparksSayParams,
+  "compose-sparks-say": ComposeSparksSayResult,
   "compose-agents-available": ComposeAgentsAvailableOutput,
   "compose-agents-list": ComposeAgentsListOutput,
   "compose-agent-read": ComposeReadOutput,

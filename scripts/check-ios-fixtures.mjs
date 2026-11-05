@@ -67,6 +67,9 @@ const phoneViewGoldens = [
 // which reads no FieldProduct and so could never run the golden.)
 const OTHER_ORIGINS = new Map([
   ["project-ink.golden.json", join(root, "packages/design-kit/fixtures/project-ink.golden.json")],
+  // IOS-12a (PC-D6 A) — the spark face's DNA golden, generated from the vendored engine by
+  // packages/design-kit/scripts/spark-dna-golden.mjs, which the phone's agentDNA (IOS-12b) is held to
+  ["spark-dna.golden.json", join(root, "packages/design-kit/fixtures/spark-dna.golden.json")],
   [
     "phone-fold.golden.json",
     join(root, "packages/field-app/test/fixtures/phone-godview/phone-fold.golden.json"),
@@ -193,6 +196,8 @@ const remoteWitness = [
 const remoteFixtures = [
   "agent-remote-row.valid.json",
   "agent-remote-row.terminal.json",
+  // IOS-12a — a spark's own run on the remote cut (`spark`, `origin`), which Chat on the phone reads
+  "agent-remote-row.spark.json",
   "agent-remote-mesh-open.valid.json",
   "agent-remote-mesh-frames.valid.json",
   "monitor-agent-row.valid.json",
@@ -215,6 +220,8 @@ const requiredMirrors = [
   ["phone-code", ["phone-code.vector.json"], ["Tests/FieldMeshTests"]],
   // IOS-8f — the face deal's vector: the phone deals from the desktop's own deck and hash
   ["face", ["face-deal.vector.json"], ["Tests/FieldDesignTests"]],
+  // IOS-12a (PC-D6 A) — the spark face's DNA golden: the phone deals a spark's face from the desktop's own engine
+  ["spark-face", ["spark-dna.golden.json"], ["Tests/FieldDesignTests"]],
   // IOS-8f — `user.me`'s answers, read by the kit's own `UserMeResult`
   ["user-me", ["user-me.valid.json", "user-me.dealt.json"], ["Tests/FieldProductTests"]],
   // PG-3c — the remote cut's readers' goldens; PG-3d — the fold's parity golden beside them, which

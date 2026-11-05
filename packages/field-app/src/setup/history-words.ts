@@ -5,8 +5,7 @@
 export const HISTORY_WORDS = {
   eyebrow: "History",
   title: "Bring in your past sessions.",
-  voice:
-    "Search everything your agents did on this Mac, and pick up any session where it left off.",
+  voice: "Find your agents' past conversations on this Mac and pick up where you left off.",
   bringIn: "Bring in history",
   without: "Continue without history",
   notNow: "Not now",
@@ -14,7 +13,7 @@ export const HISTORY_WORDS = {
   later: "Bring it in anytime from History.",
   looking: "Looking for past sessions…",
   unavailable: "History isn't available right now. You can bring sessions in later from History.",
-  privacy: "Your history stays on your devices. VibeField reads it here and never uploads it.",
+  privacy: "Your history stays on your devices. Nothing is uploaded.",
   /** AO-6b — a new agent with a past, at History's head, once per agent */
   newAgent: (label: string) => `${label} has history on this Mac.`,
   bringItIn: "Bring it in",

@@ -178,13 +178,11 @@ export function AgentsWizardPaneView({
       voice={agentsVoice(inventory)}
       later={first ? AGENTS_WORDS.later : undefined}
       onSubmit={onContinue}
+      back={<BackAction onBack={onBack} />}
       actions={
-        <>
-          <button type="submit" className={primaryCls}>
-            Continue
-          </button>
-          <BackAction onBack={onBack} />
-        </>
+        <button type="submit" className={primaryCls}>
+          Continue
+        </button>
       }
     >
       <AgentsPaneBody

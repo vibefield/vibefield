@@ -2900,23 +2900,29 @@ export const METHODS: MethodDef[] = [
       },
     },
   }),
-  // CO (the compose plane, version 2, ruled 2026-10-29; compose.ts) — the sparks' doors for the window: Chat's list,
-  // the New spark sheet, and waking one. `agents.manage`, like the other acts on this machine's agents a person takes at
-  // this device (the window holds it; no tailnet preset and no plugin eligibility table does), because a spark is an
-  // agent that may start agents: hatching one is not a plugin's call to make. `local`: a spark lives on the desktop
-  // that hatched it (sparks on the phone are not designed yet). The spark's own tools are not METHODS rows: they are
-  // compose.ts's catalog, served by fieldd's MCP server, and their names are a tool's, not a dotted method's.
+  // CO (the compose plane, version 2, ruled 2026-10-29; compose.ts) — the sparks' doors: Chat's list, the New spark
+  // sheet, waking one, and your words to it. *Corrected 2026-11-04 (IOS-12a; PC-D7 A, PC-L2, the design page Chat in a
+  // Pocket): they were `agents.manage` and `local`, the window's alone, "sparks on the phone are not designed yet".
+  // They are designed: `sparks.use`, which the window's token and the phone's preset hold and no plugin table names (a
+  // spark is an agent that may start agents, so hatching one is never a plugin's call), and every read and act rides
+  // the phone's home. The list is `federate`: the home merges each self desktop's sparks, each naming its `device`.
+  // Open and say are `federate`: they carry the spark's `device` and the home forwards them there (design-04 §6, DS-2);
+  // say is keyed, so a forward cut in flight is retried once (and its `requestId` dedups at the queue besides). Hatch
+  // stays `local`: a spark is made on the desktop the call reaches, which for the phone is its home (PC-D8 A), and a
+  // peer daemon never hatches one. fieldd admits a peer daemon only as the carrier of a forwarded act, or for its own
+  // rows on the list, never the home's aggregate (DS-L4, DS-L7).* The spark's own tools are not METHODS rows: they are
+  // tools.ts's catalog, served by fieldd's MCP server, and their names are a tool's, not a dotted method's.
   defineMethod({
     surface: "product",
     method: "compose.sparks.list",
-    scope: "agents.manage",
+    scope: "sparks.use",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   defineMethod({
     surface: "product",
     method: "compose.sparks.hatch",
-    scope: "agents.manage",
+    scope: "sparks.use",
     idempotent: false,
     locality: "local",
   }),
@@ -2924,37 +2930,49 @@ export const METHODS: MethodDef[] = [
   defineMethod({
     surface: "product",
     method: "compose.sparks.open",
-    scope: "agents.manage",
+    scope: "sparks.use",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
-  // CP-3 (`draft/compose-plane/cp3-the-person.md`, CP3-D6 A) — the needs-you queue's doors for the window, beside the
-  // sparks': `agents.manage` and `local`, because answering an item may start an agent or send words on the person's
-  // behalf, an act of the person at this device. `approval.respond` stays reserved for AR-6's answers to an agent's own
-  // asks. Not reachable from the tailnet, so each subscription is a bare `true`: the phone reaches none of them until
-  // PG rules its scope.
+  // IOS-12a (PC-D3 A) — your words into the spark's input queue, as yours and unmarked, with a receipt.
+  defineMethod({
+    surface: "product",
+    method: "compose.sparks.say",
+    scope: "sparks.use",
+    idempotent: false,
+    locality: "federate",
+  }),
+  // CP-3 (`draft/compose-plane/cp3-the-person.md`, CP3-D6 A) — the needs-you queue's doors, beside the sparks'.
+  // `approval.respond` stays reserved for AR-6's answers to an agent's own asks. *Corrected 2026-11-04 (IOS-12a;
+  // PC-D4 A, PC-D7 A): CP3-D6 put them under `agents.manage`, local, "the phone reaches none of them until PG rules
+  // its scope", while cp3 §5 said the window's token and the phone ask them; the two could not both hold. They are
+  // `sparks.use` and `federate`: the home's needs.list merges every self desktop's queue, each item naming its
+  // `device`; needs.subscribe is one desktop's queue, through the home when `device` names another, a stream of whole
+  // lists at the product API's stream floor (a burst of answers reaches a phone as one frame); needs.answer carries
+  // the item's `device` and is answered there, once for every window and device. needs.notices.subscribe stays
+  // `agents.manage` and local: main's OS notice and the window's status line.*
   defineMethod({
     surface: "product",
     method: "needs.list",
-    scope: "agents.manage",
+    scope: "sparks.use",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   defineMethod({
     surface: "product",
     method: "needs.subscribe",
-    scope: "agents.manage",
+    scope: "sparks.use",
     idempotent: true,
-    locality: "local",
-    subscription: true,
+    locality: "federate",
+    subscription: { shape: "stream", cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS },
   }),
   // Declarative: answered once, an item is answered for every window; the same answer again answers it as it is.
   defineMethod({
     surface: "product",
     method: "needs.answer",
-    scope: "agents.manage",
+    scope: "sparks.use",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   // notify's carrier (CP3-D5 A): an event, never kept, heard by every window's status line and by main's OS notice.
   defineMethod({

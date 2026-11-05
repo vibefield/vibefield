@@ -54,7 +54,10 @@ import {
   type CallerContext,
   CONTRACTS_VERSION,
   ComposeSparksHatchParams,
+  ComposeSparksListParams,
   ComposeSparksOpenParams,
+  ComposeSparksSayParams,
+  type ComposeSparksSayResult,
   createAgentCatalogReaders,
   DEVICE_LIMITS,
   DeviceGetParams,
@@ -110,6 +113,9 @@ import {
   type NativeRestartReason,
   NEEDS_NAME_MAX,
   NeedsAnswerParams,
+  NeedsItem,
+  NeedsListParams,
+  NeedsSubscribeParams,
   needsOutcomeOf,
   PluginsDisableParams,
   PluginsEnableParams,
@@ -152,6 +158,7 @@ import {
   ShellOpenExternalParams,
   type ShellOpenExternalResult,
   SOCKETS,
+  SparkSummary,
   STORES,
   SystemNativeRestartParams,
   type SystemNativeRestartResult,
@@ -362,6 +369,13 @@ import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
 import { NeedsQueue, type NeedsRun } from "./tool-plane/rooms/you/queue";
 import { NeedsStore } from "./tool-plane/rooms/you/store";
 import { oneLine } from "./tool-plane/rooms/you/words";
+import {
+  admitSparkActor,
+  admitSparkReader,
+  type DesktopAsk,
+  mergeAtHome,
+  SayReceipts,
+} from "./tool-plane/spark-doors";
 import { SparkService, SparkStore } from "./tool-plane/sparks";
 import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
@@ -2859,11 +2873,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       deliver: (runtimeRunId, text) => agents.submit(runtimeRunId, text),
       isIdle: (runtimeRunId) => isIdleRow(agents.monitorOf(runtimeRunId)),
       onOutcome: (runtimeRunId, input, outcome, reason) => {
+        // IOS-12a — the person's own words: their receipt (`compose.sparks.say` answers it again by request id)
+        sayReceipts.heard(input, outcome);
         // item 158, CO-Q9 (b): what became of a line that carried answers' facts is the needs queue's to hear
         if (input.items !== undefined) needs.onFactOutcome(runtimeRunId, input.items, outcome);
         if (input.from.kind !== "spark") {
           // the waker's own facts in a line no session took are not told again (§8 Q5 (a); item 152 owns its keeping)
-          if (outcome === "dropped" || outcome === "uncertain")
+          if (input.from.kind === "fieldd" && (outcome === "dropped" || outcome === "uncertain"))
             logger.info(
               "fieldd.inputs.wake_unheard",
               "A wake's line was not heard; it is not told again",
@@ -2915,6 +2931,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
       logger: logger.child({ component: "inputs" }),
     });
+    // IOS-12a (PC-D3 A) — the says this desktop queued, by request id: a retried say reads its receipt
+    const sayReceipts = new SayReceipts(inputs);
     const waker = new AgentWaker({
       queues: inputs,
       spawnerOf: (runtimeRunId) => {
@@ -6178,13 +6196,62 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       setupLedger.answer(parsed.data.step, parsed.data.state);
       return setupLedger.snapshot();
     });
-    // CP-1c — the sparks' doors (compose.ts; METHODS rows under agents.manage, local): the window's, and audited.
-    api.register("compose.sparks.list", (ctx) => {
-      requireDesktopCaller(ctx);
-      return { sparks: sparks.list() };
+    // CP-1c — the sparks' doors (compose.ts), audited. *Corrected 2026-11-04 (IOS-12a; PC-D7 A, PC-L2): they were
+    // `agents.manage`, local, the window's alone (`requireDesktopCaller`). They are `sparks.use`, the person's from any of
+    // their screens, every read and act through the phone's home: `admitSparkReader` / `admitSparkActor`
+    // (spark-doors.ts) admit the window, the shell and a self phone; a peer daemon only for its own rows on a read
+    // (DS-L4) or as the carrier of a forwarded act (DS-L7). A forward never reaches these handlers on the home:
+    // ProductApi carries a call whose `device` names another desktop there, and strips this desktop's own.*
+    // The home's merges (a list's `mesh` scope, the phone's) ask each self peer through the index mesh, by search's
+    // rules. The Mac's Chat lists `local`, as it always has.
+    const homeAsk: DesktopAsk = {
+      get self() {
+        return devicesForAgents?.currentDeviceId() ?? "local";
+      },
+      peers: () => indexMesh?.peerDevices() ?? [],
+      ask: (device, method, params) =>
+        indexMesh !== null
+          ? indexMesh.ask(device, method, params)
+          : Promise.resolve({
+              answered: false as const,
+              source: { device, state: "timeout" },
+            }),
+    };
+    /** A peer's rows, each read on its own (the tolerant reader); undefined: its answer holds no such list. */
+    const peerRows =
+      <Row>(member: string, parse: (value: unknown) => { success: boolean; data?: Row }) =>
+      (value: unknown): (Row | undefined)[] | undefined => {
+        const list =
+          typeof value === "object" && value !== null
+            ? (value as Record<string, unknown>)[member]
+            : undefined;
+        if (!Array.isArray(list)) return undefined;
+        return list.map((row) => {
+          const read = parse(row);
+          return read.success ? read.data : undefined;
+        });
+      };
+    api.register("compose.sparks.list", async (ctx, params) => {
+      const reader = admitSparkReader(ctx, "compose.sparks.list");
+      const parsed = ComposeSparksListParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { scope?: local|mesh }", false);
+      const own = sparks.list();
+      // `local` (the Mac's Chat, as it has always listed) and every peer daemon: this desktop's own
+      if (reader === "own" || parsed.data.scope !== "mesh")
+        return { sparks: own.map((spark) => ({ ...spark, device: homeAsk.self })) };
+      const merged = await mergeAtHome({
+        own,
+        method: "compose.sparks.list",
+        ask: homeAsk,
+        rows: peerRows("sparks", (row) => SparkSummary.safeParse(row)),
+      });
+      return { sparks: merged.rows, desktops: merged.desktops };
     });
+    // Hatch stays `local` (PC-D8 A): a spark is made on the desktop the call reaches, the phone's home; the registry's
+    // locality gate refuses a peer daemon before this runs.
     api.register("compose.sparks.hatch", async (ctx, params) => {
-      requireDesktopCaller(ctx);
+      admitSparkActor(ctx, "compose.sparks.hatch");
       const parsed = ComposeSparksHatchParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError(
@@ -6204,41 +6271,133 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             thinksUnder: ask.thinksUnder,
           },
         },
-        async () => ({ spark: await sparks.hatch(ask, ctx.principal) }),
+        async () => ({
+          spark: { ...(await sparks.hatch(ask, ctx.principal)), device: homeAsk.self },
+        }),
         (result) => ({ outcome: "succeeded", attrs: { spark: result.spark.id } }),
       );
     });
     api.register("compose.sparks.open", async (ctx, params) => {
-      requireDesktopCaller(ctx);
+      admitSparkActor(ctx, "compose.sparks.open");
       const parsed = ComposeSparksOpenParams.safeParse(params);
       if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { spark }", false);
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { spark, device? }", false);
       const id = parsed.data.spark;
       return await audit.required(
         ctx,
         { action: "compose.spark.open", target: { kind: "spark", id } },
-        async () => ({ spark: await sparks.open(id, ctx.principal) }),
+        async () => ({
+          spark: { ...(await sparks.open(id, ctx.principal)), device: homeAsk.self },
+        }),
         () => ({ outcome: "succeeded" }),
       );
     });
-    // CP-3 — the needs-you queue's doors (compose.ts; METHODS rows under agents.manage, local, CP3-D6 A): the
-    // window's. The list and its subscription are unaudited reads, as compose.sparks.list is; an answer is audited.
-    api.register("needs.list", (ctx) => {
-      requireDesktopCaller(ctx);
-      return { items: needs.list() };
+    // IOS-12a (PC-D3 A) — your words to a spark: into its session's input queue as yours and unmarked, the spark woken
+    // first when it sleeps, the answer the send's receipt. The same request id again reads that receipt (a retry
+    // over a dropped leg queues nothing twice); one in flight is joined. The words are never audited, only their
+    // length.
+    const saysInFlight = new Map<string, Promise<ComposeSparksSayResult>>();
+    api.register("compose.sparks.say", async (ctx, params) => {
+      admitSparkActor(ctx, "compose.sparks.say");
+      const parsed = ComposeSparksSayParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { spark, text, requestId, device? }: text of 1 to 32,000 characters and a request id of 8 to 64 letters, digits, _ or -",
+          false,
+        );
+      const { spark, text, requestId } = parsed.data;
+      const inFlight = saysInFlight.get(requestId);
+      if (inFlight !== undefined) return await inFlight;
+      const kept = sayReceipts.receipt(spark, requestId);
+      if (kept !== undefined)
+        return {
+          spark,
+          requestId,
+          queued: true,
+          state: kept.state,
+          ...(kept.position !== undefined ? { position: kept.position } : {}),
+        } satisfies ComposeSparksSayResult;
+      const say = audit
+        .required(
+          ctx,
+          {
+            action: "compose.spark.say",
+            target: { kind: "spark", id: spark },
+            attrs: { requestId, chars: text.length },
+          },
+          async (): Promise<ComposeSparksSayResult> => {
+            const asleep = sparks.list().find((one) => one.id === spark)?.session?.live !== true;
+            const awake = await sparks.open(spark, ctx.principal);
+            const runtimeRunId = awake.session?.runtimeRunId;
+            if (runtimeRunId === undefined)
+              throw new RpcCallError(
+                "UNAVAILABLE",
+                "the spark has no session to take your words yet",
+                true,
+                { service: "compose", state: "no-session" },
+              );
+            const { id, position } = inputs.enqueue(runtimeRunId, text, { kind: "you" }, requestId);
+            sayReceipts.queued(requestId, spark, runtimeRunId, id);
+            return {
+              spark,
+              requestId,
+              queued: true,
+              state: asleep ? "waking" : "queued",
+              position,
+            };
+          },
+          (result) => ({ outcome: "succeeded", attrs: { state: result.state } }),
+        )
+        .finally(() => saysInFlight.delete(requestId));
+      saysInFlight.set(requestId, say);
+      return await say;
     });
-    api.registerSubscription("needs.subscribe", (ctx, _params, emit) => {
-      requireDesktopCaller(ctx);
-      const off = needs.onChange((items) => emit({ items }));
-      return { snapshot: { items: needs.list() }, dispose: off };
+    // CP-3 — the needs-you queue's doors (compose.ts), beside the sparks'. *Corrected 2026-11-04 (IOS-12a; PC-D4 A,
+    // PC-D7 A): they were `agents.manage`, local, the window's alone. They are `sparks.use`, admitted as the spark doors
+    // are: the home's needs.list merges every self desktop's queue; needs.subscribe is ONE desktop's queue (this one;
+    // the home forwards a subscription whose `device` names another), whole lists at the stream floor; an answer is
+    // made where its item is.* The list and its subscription are unaudited reads, as compose.sparks.list is; an answer
+    // is audited.
+    api.register("needs.list", async (ctx, params) => {
+      const reader = admitSparkReader(ctx, "needs.list");
+      const parsed = NeedsListParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { scope?: local|mesh }", false);
+      const own = needs.list();
+      if (reader === "own" || parsed.data.scope !== "mesh")
+        return { items: own.map((item) => ({ ...item, device: homeAsk.self })) };
+      const merged = await mergeAtHome({
+        own,
+        method: "needs.list",
+        ask: homeAsk,
+        rows: peerRows("items", (row) => NeedsItem.safeParse(row)),
+      });
+      // the open items, oldest asked first, whichever desktop holds them
+      const items = merged.rows.sort((a, b) => a.asked.localeCompare(b.asked));
+      return { items, desktops: merged.desktops };
+    });
+    api.registerSubscription("needs.subscribe", (ctx, params, emit) => {
+      admitSparkReader(ctx, "needs.subscribe");
+      if (!NeedsSubscribeParams.safeParse(params ?? {}).success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { device? }", false);
+      const door = wholeValueDoor(
+        {
+          read: () => ({ items: needs.list().map((item) => ({ ...item, device: homeAsk.self })) }),
+          onChange: (listener) => needs.onChange(() => listener()),
+        },
+        emit,
+        { onError: streamFrameFailed("needs.subscribe") },
+      );
+      return { snapshot: door.snapshot, dispose: door.dispose };
     });
     api.register("needs.answer", async (ctx, params) => {
-      requireDesktopCaller(ctx);
+      admitSparkActor(ctx, "needs.answer");
       const parsed = NeedsAnswerParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { item, choice }, the choice an act's place among the item's choices",
+          "expected { item, choice, device? }, the choice an act's place among the item's choices",
           false,
         );
       const { item, choice } = parsed.data;
@@ -6258,7 +6417,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           },
         }),
       );
-      return { item: answered.item };
+      return { item: { ...answered.item, device: homeAsk.self } };
     });
     // notify's carrier (CP3-D5 A): an event, never kept, so the snapshot is empty by design
     api.registerSubscription("needs.notices.subscribe", (ctx, _params, emit) => {

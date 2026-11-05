@@ -544,6 +544,28 @@ extension AgentFieldStop {
   }
 }
 
+/// IOS-12a — who started a run fieldd launched (`AgentSessionOrigin`, CP-D15; `agent-session.ts`). `by` is OPEN, kept
+/// as it came (`you`, `spark` or `flow` today; 1 to 32 UTF-16 units): a word this build never heard of must not refuse
+/// a row. A spark's agent names its spark; a flow's step, its run and the call that started it.
+public struct AgentSessionOrigin: Sendable, Equatable {
+  public let by: String
+  public let spark: String?
+  /// a flow run's id (CP-4)
+  public let run: String?
+  /// the run's call that started it, counted from 1 in the run's journal
+  public let call: Int64?
+  public let unknownFields: [String]
+
+  init(remote json: JSONValue) throws {
+    var object = try WireObject(shape: "AgentSessionOrigin", value: json)
+    by = try object.text("by", 1...32)
+    spark = try object.strict("spark") { try AgentRemoteRow.sparkId($0, shape: "AgentSessionOrigin", key: "spark") }
+    run = try object.typedString("run", 1...64)
+    call = try object.typedInt("call", atLeast: 1)
+    unknownFields = object.unknownFields
+  }
+}
+
 /// A row of the remote cut (`AgentRemoteRow`): an agent, or (`kind: "terminal"`) a bare terminal. Keyed on the board
 /// by `runtimeRunId`, which is NOT `monitorRow.id`.
 public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
@@ -561,6 +583,12 @@ public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
   public let nativeSessionId: String?
   /// ST-D5 — the person's durable Stop while fieldd holds one.
   public let stop: AgentFieldStop?
+  /// IOS-12a (PC-D1…D8) — the spark whose own session this run is: the field row's `spark` (SP-1b), cut by the owner.
+  /// Chat on the phone reads a spark's status by it. Absent on every other run, on a bare terminal's row, and on a row
+  /// from a daemon before IOS-12a.
+  public let spark: String?
+  /// IOS-12a — who started the run (CP-D15). Absent reads `you`, as on the field row.
+  public let origin: AgentSessionOrigin?
   public let monitorRow: MonitorAgentRow
   public let unknownFields: [String]
 
@@ -576,14 +604,34 @@ public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
     monitorRow = try object.requiredObject("monitorRow", MonitorAgentRow.init(json:))
     if isTerminal, terminal != nil {
       // The window's union reads a bare terminal with a pane join as `AgentDeskTerminalRow`, which does not look at
-      // `nativeSessionId` or `stop`: kept when they read, named unknown when they do not, never a refusal.
+      // `nativeSessionId`, `stop`, `spark` or `origin`: kept when they read, named unknown when they do not, never a
+      // refusal.
       nativeSessionId = object.tolerant("nativeSessionId", Self.sessionId)
       stop = object.tolerant("stop", AgentFieldStop.init(remote:))
+      spark = object.tolerant("spark") { try Self.sparkId($0, shape: "AgentRemoteRow", key: "spark") }
+      origin = object.tolerant("origin", AgentSessionOrigin.init(remote:))
     } else {
       nativeSessionId = try object.strict("nativeSessionId", Self.sessionId)
       stop = try object.strictObject("stop", AgentFieldStop.init(remote:))
+      spark = try object.strict("spark") { try Self.sparkId($0, shape: "AgentRemoteRow", key: "spark") }
+      origin = try object.strictObject("origin", AgentSessionOrigin.init(remote:))
     }
     unknownFields = object.unknownFields
+  }
+
+  /// `SparkId` (`agent-session.ts`): `/^sp-[0-9a-z]{6,32}$/`, ASCII only.
+  static func sparkId(_ raw: JSONValue, shape: String, key: String) throws -> String {
+    guard let text = raw.stringValue else {
+      throw WireObject.empty(shape: shape).mismatch(key, "a string")
+    }
+    let bytes = Array(text.utf8)
+    let tail = bytes.dropFirst(3)
+    guard bytes.starts(with: Array("sp-".utf8)), (6...32).contains(tail.count),
+      tail.allSatisfy({ (0x30...0x39).contains($0) || (0x61...0x7A).contains($0) })
+    else {
+      throw WireDecodeError(shape: shape, reason: "`\(key)` is not a spark id")
+    }
+    return text
   }
 
   private enum RootKind: String { case terminal }

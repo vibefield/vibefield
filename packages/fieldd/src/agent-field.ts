@@ -819,7 +819,10 @@ export type ProjectedRemoteRow = (typeof ProjectedRemoteRowSchema)["_output"];
 
 /** A run's row on the remote cut: its model row as a peer reads it, its pane
  * join, its conversation id and the person's Stop. A run the backend has not
- * assembled has no model row and so no remote row: the caller leaves it out. */
+ * assembled has no model row and so no remote row: the caller leaves it out.
+ * IOS-12a — and whose session the run is and who started it, as the field row
+ * carries them (SP-1b): static for the run's life, the origin rebuilt from its
+ * named fields, so Chat on the phone reads a spark's status as the Mac does. */
 export function projectRemoteRow(
   summary: AgentSessionSummary,
   monitorRow: MonitorAgentRow,
@@ -831,6 +834,8 @@ export function projectRemoteRow(
     ...(summary.terminal !== undefined ? { terminal: summary.terminal } : {}),
     nativeSessionId: summary.sessionId,
     ...(summary.stop !== undefined ? { stop: stopOf(summary.stop) } : {}),
+    ...(summary.spark !== undefined ? { spark: summary.spark } : {}),
+    ...(summary.origin !== undefined ? { origin: originOf(summary.origin) } : {}),
     monitorRow: peerMonitorRow(monitorRow, chars),
   };
 }

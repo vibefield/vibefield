@@ -29848,6 +29848,47 @@ gate remains required for this follow-up. CI and final review status are tracked
 [PR #12](https://github.com/vibefield/vibefield/pull/12); no consumer merge is included. The latency and
 additional hardware/network qualification limits recorded above remain unchanged.
 
+## FG — onboarding copy, navigation and profile scrolling (2026-11-03)
+
+The desktop QA refinements from November 1 are prepared against current main. Welcome, agent, account,
+history, device and completion copy now names the choice and its later Settings destination directly.
+Back stands at the leading edge of the footer; secondary choices precede the primary action. Device
+privacy and alternate sign-in details use the full scrolling body, clear of the footer, and return
+keyboard focus to the link that opened them. Auth-key submission follows the form's own submit path.
+
+The face-frame switch has equal, compact choices and obeys its disabled state while saving. Profile
+card headings stay visible during scrolling, with the scrollport clipped to their rounded outline so
+the card's square edge cannot show behind them. Long account and plan names wrap. Add a profile stays
+below the scrolling cards until opened, when its steps and sign-in join the list and scroll into view.
+The design authority and existing catalog, consent, navigation and profile tests move with the views;
+focused regressions cover disabled frame changes, disclosure focus and auth-key submission.
+
+The full `pnpm verify` gate passes, including 12,191 Vitest tests and 544 Rust tests. The physical
+day, night and no-WebGPU onboarding walks pass; day required an unchanged retry after the first
+launch missed the live-field startup assertions. The catalog walk still reports contrast failures
+on its first day-mode Welcome capture and the ChatGPT Pro plan label in the day/night ready-profile
+fixtures. Those desktop findings remain open before merge; this slice is being committed and pushed
+with the successful code gate and the original captures retained for follow-up.
+
+### CI follow-up — terminal route publication is one transition (2026-11-04)
+
+PR #15's verify run `41751926663` failed before the model-selection test could launch an agent:
+both terminal cells were serving at +177 ms, but fieldd held revision 3 with only the agent cell
+for the entire 30-second readiness budget. Each supervisor updated the route registry under its
+mutex, then released that mutex before publishing its copied snapshot. Concurrent announcements
+could therefore publish out of order, giving a stale snapshot a newer revision. Concurrent
+endings could similarly resurrect removed rows in the published snapshot.
+
+The registry mutex now covers mutation, composition and publication for both upsert and removal.
+The regression runs eight concurrent cell writers through 256 birth/end cycles and checks the
+complete snapshot and revision after each group finishes. It failed on the unchanged code with
+five ended cells still published, and passes with the atomic publication. Readiness budgets,
+retry policies and CI assertions are unchanged.
+
+Main `bf4e834b9` is integrated to resolve the PR's conflicts. The refined onboarding structure and
+form submission remain, with main's shared field styles supplying the token colors, placeholder
+ink and focus treatment for both inputs. The unused parallel input style is removed.
+
 ## Item 161 — a set that never comes up waits longer before each re-mint, and stops waiting at the dial when its one deadline runs out (2026-11-02; `e88415106` → `7f2a86ab9`, two commits on main `30d8ae4fe`, re-stacked from `789a12c38` → `818f6fd65` on `cf50fede4`, lane `fix/item161` in `/Volumes/SamsungRed/lanes/item161`, in the mini's mint M112 `7f2a86ab9`, stacked, run 112)
 
 **What it rests on.** Found during item 157 (C8): another process held a door's port and answered every WebSocket
@@ -31393,3 +31434,142 @@ Found on the way: during an EL8 that moves the rows, `pnpm siblings use --none` 
 before it un-aligns the overlay, so the hidden hoist keeps pointing into the checkout; `unalignOverlay` run by
 hand restored the store's 0.1.3 copies. A second `use --none` after the install does not: the overlay is
 already gone, so it has nothing to un-align. Owed: `use --none` should un-align before its install.
+
+## IOS-12a — phone Chat's cross-plane changes: the sparks and the needs-you queue answer the person's every screen, through the phone's home (2026-11-05; `362d1b8be` → `4fcb471af`, 4 commits on main `33d4090b7`, lane `ios/12a` in `/Volumes/SamsungRed/lanes/ios12/vibe-field`, stacked as M125 `4fcb471af`, run 125)
+
+**What it rests on.**
+- James ruled the page *Chat in a Pocket* (https://claude.ai/artifact/M6kri6s5EK66xiAPgNMGCr, db `decisions`;
+  sources `draft/ios-pocket/chat/`) on 2026-11-04, 02:59:12–03:02:49Z: PC-D1 and PC-D3…D8 all A, the leans, no
+  notes ("Chat in a Pocket all ruled", ~03:03Z). PC-D2 is the carried A, the IOS session's reading of his
+  2026-11-02 05:26Z (b), left standing under "all ruled". VF-PM confirmed the readback at 03:06Z.
+- The CP/spark build hold of 2026-11-02 06:02Z lifted on 2026-11-04 at 23:16Z (VF-PM, on James's 23:13Z word on
+  the CO round). VF-PM ordered IOS-12a first: red first, contracts first.
+- The plan is the lane's record, `lanes/ios12/IOS-12a-record.md` (a lane file). VF-PM approved its three corrections
+  at 23:25Z; each of its §A…§G carries a dated correction at its source (Errata, below).
+- It stands on CP-3 (LANDED "CP-3": the needs-you queue and its doors), SP-1b (the field row's `spark` and
+  `origin`), DS-2's forward (ProductApi's `device` routing; PeerLink's `forward.onBehalfOf`) and the index mesh's
+  `ask`, which search's federation already rides.
+- The lane was drafted on `cefec2473` and rebased onto `33d4090b7` (James's PR #16, the EL8 to Rosetta 0.1.3) on
+  VF-PM's "base ready" at 23:53Z: `f160f99eb` = `362d1b8be` (range-diff "="). Its siblings sit at the lock's pins
+  (rosetta `8e8f496`, mille `c8160d5`), and `pnpm install --frozen-lockfile` and preflight passed in the lane.
+
+**What** (41 files, +6,476 −122: 15 in contracts, 11 in fieldd, six under `apps/ios/VibeFieldKit`, two in
+design-kit, two in electron-shell, one each in field-app, DESIGN.md, DECISIONS, biome.jsonc and the fixtures check):
+- **DESIGN.md first** (`362d1b8be`): §8 "The phone's Chat" (the bar's third tab: the 188 capsule, three tabs of
+  57⅓, the pill 65⅓ × 54; a spark's row 76; Needs you; the thread; the composer; New spark), §2.10's sizes on the
+  phone (PC-D6 A) and §9 "Chat on the phone".
+- **The scope** (PC-D7 A): `sparks.use` joins SCOPES and TAILNET_SCOPES, so a self phone holds it, and
+  PEER_FIELDD_SCOPES derives it. The window's token gains it (`bootstrap.ts`). No plugin table names it.
+- **The doors** (`methods.ts`): compose.sparks.list, `.open` and `.say` and needs.list, `.subscribe` and `.answer`
+  are `sparks.use` and `federate`. compose.sparks.hatch stays `local` (PC-D8 A: a spark is made on the desktop the
+  call reaches). needs.notices.subscribe stays `agents.manage`, local. needs.subscribe is a `stream` at the product
+  API's floor (`PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS`, 250 ms) of whole lists, one desktop's queue.
+- **Who they answer** (`packages/fieldd/src/tool-plane/spark-doors.ts`): `admitSparkReader` gives the person's
+  screens (the window, the shell, a self tailnet phone) the home's answer and a peer daemon its own rows (DS-L4).
+  `admitSparkActor` admits the person's screens, and a peer daemon only as the carrier of a person's forwarded act
+  (`onBehalfOf.clientKind` renderer, shell-main or ios; DS-L7). Everyone else is `FORBIDDEN_SCOPE`.
+- **The home's merge** (PC-L2, PC-L4): `mergeAtHome` asks each self peer through `IndexMesh.ask` (its new
+  `peerDevices()`), stamps every row with the desktop it asked, and answers `desktops`: answered, asleep, timeout,
+  incompatible or unreachable. The lists take `scope: "local" | "mesh"`, local by default: the Mac's Chat lists its
+  own sparks as before, and the phone asks `mesh`. A peer daemon gets its own rows. (Ruling 1, below.)
+- **Your words to a spark** (PC-D3 A): `compose.sparks.say {spark, text, requestId, device?}` answers
+  `{spark, requestId, state, queued: true, position?}`. The words enter the run's input queue unmarked, as a new
+  `AgentInputSender` `{kind: "you"}`; a sleeping spark is opened first (`waking`). The states are queued, waking,
+  waiting, delivered, uncertain and dropped. `SayReceipts` answers a retry by request id, a say in flight is joined,
+  and another spark's use of an id is refused. The queue keeps the request id on the input (`findRequest`), and
+  `enqueue` answers `{id, position}`. The audit records the request id and the length, never the words.
+- **The remote row** (`agent-field.ts`): `AgentRemoteRow` carries optional `spark` and `origin`, which fieldd's
+  `projectRemoteRow` fills. The kit's `AgentRemoteShapes.swift` reads them as strictly as zod (the `SparkId`
+  pattern; a new `AgentSessionOrigin` whose `by` is OPEN, 1…32), and tolerantly on a pane-joined bare terminal.
+- **The face golden** (PC-D6 A): `packages/design-kit/scripts/spark-dna-golden.mjs` writes
+  `packages/design-kit/fixtures/spark-dna.golden.json` (54,602 bytes) from the vendored engine: 24 seeds, each with
+  `agentDNA`, `makeBody` and `makeEyes`, and the first twelve palettes (`name`, `c`, `deep`). field-app's
+  spark-face test holds it to the engine; the kit's copy is in `Tests/FieldDesignTests` with SparkDnaGoldenTests;
+  `check:ios-fixtures` names both new copies. biome leaves the golden to its generator.
+- **The goldens**: compose-sparks-list.merged, compose-sparks-say-params.valid, compose-sparks-say.queued,
+  `.waking` and `.delivered`, needs-list.merged, agent-input-queue.you and agent-remote-row.spark.
+
+**Validation.**
+- **Red** at `0d52435d7` (the green source stashed, nice 19, under the guard): contracts 16 failed | 641 passed,
+  every failure an IOS-12a row. fieldd (spark-doors, needs-doors, agent-session; field-native built into the lane's
+  own target, 2m06s) 7 failed | 79 passed | 2 skipped, and spark-doors.test.ts cannot load its module. The causes
+  are "unknown scope requested", "requires agents.manage" and the missing module. The guards are green at red by
+  design: electron-shell's bootstrap row (15) and field-app's spark-face (18). The kit has no buildable red: red's
+  tests name `AgentSessionOrigin` and the row's `spark`, which only green adds.
+- **Green** at `8513806fa`: contracts 750 passed (compose, fixtures, registry, agent-field, agent-index). fieldd's
+  18 files that touch the change: 264 passed | 2 skipped. electron-shell bootstrap 15, field-app spark-face 18 and
+  chat-view 31. Typecheck is clean in contracts, fieldd, electron-shell, field-app and design-kit. Biome, the walls
+  (`check-import-boundaries --enforce`), gen:check and `spark-dna-golden.mjs --check` are clean.
+  `check:ios-fixtures` reads 230 copies identical.
+- **The kit slot** (VF-PM's "MAC FREE" 00:15Z; `lanes/ios12/ios12a-kit-slot.sh` under `lanes/co-plan/HOLD`):
+  - the first run, at `8513806fa`, was RED at build (Found 4);
+  - the re-run at `4fcb471af` (tree `a93d00c2c801`, apps/ios `b76d5a7325e1`): "IOS-12a KIT SLOT at 4fcb471af (tree
+    a93d00c2c801): GREEN — FieldProductTests and FieldDesignTests, no issue, no failure, no crash 00:24:20Z";
+  - build-for-testing 142 s, test 229 s: 2 runs, 228 tests, 0 issues. aRowThisBuildCannotReadIsRefusedByKey ran 25
+    cases (the six new spark and origin refusals among them), everyRemoteGoldenDecodes eight;
+  - the simulator iPhone 17 Pro `F93EABF3-4281-4EB5-A5F6-A550FBE95CDC` booted at 00:20:29Z and was shut down at
+    00:24:23Z. The HOLD was taken at 00:17:47Z and released at 00:24:24Z.
+- **The packet**: STACKED, T = `4fcb471af` on `33d4090b7`; VF-PM accepted it at 00:26Z.
+- **Run 125** (`4fcb471af`, minted by a9 as `mint/ios12a` on VF-PM's GO, stacked on `33d4090b7`: the run is T, tree
+  `a93d00c2c801`): "== ts6-mini verify done (verify 0) 00:33:16Z; HEAD 4fcb471af12ac6f11854498aaa04a292ba6e01bc".
+  `pnpm verify` exit 0: vitest 12,253 passed / 0 failed / 18 skipped over 882 files (run 124 +36: IOS-12a's +30 are
+  bootstrap 14→15, compose 24→32, fixtures 570→578, needs-doors 4→6, the new spark-doors.test.ts 9 and spark-face
+  16→18; PR #16's +6), node 365/0, cargo 544/0 in 34 suites, biome 3,111 files with no fixes (the golden's exclude
+  holds), the iOS fixtures 230 copies identical (+2), pins 67, 0 error TS, 0 FAIL rows; no re-run.
+- **Landed:** main fast-forwarded `33d4090b7` → `4fcb471af` on VF-PM's GO (2026-11-05T00:35:01Z, the fixer's stamp;
+  merge-tree = T's tree `a93d00c2c801`), 41 files +6,476 −122.
+
+**Not witnessed (said).**
+- **Two desktops.** The merge's rows are held with a stand-in `DesktopAsk` (spark-doors.test.ts), and the phone's
+  row in needs-doors runs one desktop (`desktops` is the home alone). No peer answered its own rows through the
+  mesh, and no say crossed PeerLink: the two-desktop run is James's, with DS's.
+- **The phone's Chat.** IOS-12a draws nothing; the tab, the list and the thread are IOS-12b on.
+
+**Found (said).**
+1. **`you`'s downgrade edge.** `AgentInputSender` gains `{kind: "you"}`. A fieldd before IOS-12a reading a queue
+   file that holds a `you` input cannot parse it, so it sets the whole file aside and delivers none of that run's
+   waiting inputs, as it does any file it cannot read. It bites only on a downgrade while a say waits.
+2. **Item 169: a say delivered before a fieldd restart is forgotten** (filed by VF-PM 00:15Z; 152's class, not
+   12a's to fix; the behaviour stays as built). The reproduction:
+   1. a phone's `compose.sparks.say {spark: S, text, requestId: R}` is queued and DELIVERED on S's desktop, and its
+      answer is lost on the way back;
+   2. S's desktop's fieldd restarts: `SayReceipts` lives in memory, and a delivered input has left the queue file;
+   3. the phone retries with the same R;
+   4. `SayReceipts.receipt(S, R)` finds no entry and `findRequest(R)` finds nothing, so the door enqueues again: the
+      words reach the agent twice, and the retry reads `queued`.
+   Expected: the retry reads the first send's `delivered`. The code: `SayReceipts.receipt` (its `findRequest`
+   fallback) in `packages/fieldd/src/tool-plane/spark-doors.ts`, and `compose.sparks.say` in
+   `packages/fieldd/src/daemon.ts`.
+3. **Green-only fixes** (ruling 2; red cannot mint `sparks.use`): TU-1's six windows in agent-session.test.ts reach
+   the spark doors through `hatchVela` and now hold `sparks.use` (three rows); the input queue's order row reads
+   `{id, position}`; two stubs of the queue's port (needs-queue, tool-plane-service) answer an id. Green's first
+   fieldd run named the four reds, and the re-run was 131 passed | 2 skipped.
+4. **The kit slot's build red at `8513806fa`.** RemoteShapeTests.swift:271 built an `AgentSessionOrigin` by
+   memberwise init, and a struct that declares `init(remote:)` in its body has none. Nothing ran. The fix is the
+   fourth commit, `4fcb471af` (the row reads `by`, `spark`, `run` and `call` one by one; test only), not a rewrite.
+5. **The plan's "`pnpm gen` owes registries.rs" was wrong.** No generated Rust carries the scope list: `pnpm gen`
+   writes nothing new, and gen:check is clean.
+
+**Rulings during the build** (VF-PM):
+- 23:25Z: the record's corrections 1–3. A forwarded act arrives as `peer-fieldd` with `onBehalfOf`, so the doors
+  narrow a peer rather than refuse it. Hatch stays local, and needs.notices.subscribe stays the window's. The golden
+  is the DNA only, and the stills are IOS-12e's.
+- 00:15Z (rulings 1–4): the lists' `scope` (local by default) APPROVED; the green-only fixes accepted; item 169
+  filed; the downgrade edge named.
+
+**Errata, corrected at their sources.**
+- In the code: `registries.ts`' `agents.manage` comment (the person's spark acts moved to `sparks.use`);
+  `methods.ts`' spark rows ("sparks on the phone are not designed yet") and needs rows (CP3-D6's `agents.manage`,
+  local, "the phone reaches none of them"); `compose.ts`' doors header; needs-doors.test.ts' header.
+- In DECISIONS: the CP-3 row's dated amendment (CP3-D6's scope). cp3 §5's own line waits on the draft queue.
+- In the lane's record, a dated line at each source: §A (not "refuse every peer"), §B (hatch local, the list's
+  `scope`, approved), §C (the say door as built, the states without `unknown`, the dedup by request id, the
+  downgrade edge, item 169), §D (the subscription's shape), §E (the kit reader is `AgentRemoteShapes.swift`; no
+  witness golden moves), §F (no stills; no `sky`) and §G (ProductApi's own forward). In the lane's briefs: 12c's
+  says SP-7 is not landed, and 12f's "federated `hatch` (forwarded to the home)" is corrected to `local`.
+
+**Owed.**
+- IOS-12b…f, per `lanes/ios12/IOS-12b-f-briefs.md`: 12b the tab and the list; 12c the thread, which waits on SP-7
+  (NOT landed) and builds nothing of it; 12d needs you, which waits on 12a §D and 12c; 12e the star in Metal; 12f New
+  spark on the phone.
+- Item 169 (filed). cp3 §5's line at the draft queue, on VF-PM's word. The two-desktop run (James).

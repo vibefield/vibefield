@@ -379,7 +379,7 @@ describe("the Agents pane on the wizard's glass", () => {
     expect(text()).toContain("Looking on this Mac…");
     expect(hold?.querySelector("button")).toBeNull();
     // nothing found yet, so nothing claimed found (found by eye at the AO-6a gate)
-    expect(text()).not.toContain("VibeField found these");
+    expect(text()).not.toContain("These agents are on this Mac");
     await act(async () => {
       vi.advanceTimersByTime(15_000);
     });
@@ -389,7 +389,7 @@ describe("the Agents pane on the wizard's glass", () => {
     // the page's §10 row, word for word, on the pane, with Try again (a fresh read)
     expect(heading()).toBe("Your agents.");
     expect(text()).toContain("VibeField couldn't read the agents on this Mac.");
-    expect(text()).not.toContain("VibeField found these");
+    expect(text()).not.toContain("These agents are on this Mac");
     await click("Try again");
     expect(client.request).toHaveBeenCalledWith("agents.installs", { refresh: true });
     await flush();

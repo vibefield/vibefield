@@ -370,6 +370,11 @@ async function mint(
     // PJ-3: project.read — the `project.*` reads (History's project page,
     // Godview's project chip), the person's own: never plugin-eligible. The
     // acts (`project.intent`) ride settings.manage, already held (P2).
+    // IOS-12a (PC-D7 A): sparks.use — Chat's spark doors and the needs-you
+    // queue (`compose.sparks.*`, `needs.list`/`.subscribe`/`.answer`) moved
+    // off agents.manage so the phone can hold them; the window keeps every
+    // door it had. agents.manage stays for the distribution record and
+    // `needs.notices.subscribe`. Never plugin-eligible.
     scopes: [
       "doc.read",
       "doc.write",
@@ -393,6 +398,7 @@ async function mint(
       "agents.manage",
       "terminal.link",
       "project.read",
+      "sparks.use",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

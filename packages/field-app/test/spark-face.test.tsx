@@ -95,6 +95,32 @@ async function draw(element: ReactElement): Promise<HTMLElement> {
 }
 const face = (props: SparkFaceProps): ReactElement => createElement(SparkFace, props);
 
+describe("DESIGN.md §2.10 — the phone's face golden (IOS-12a, PC-D6 A)", () => {
+  // The DNA the iOS port is held to (IOS-12b's `agentDNA` in Swift), over a byte-identical copy
+  // `pnpm check:ios-fixtures` keeps. A row that fails here means the vendored engine moved: regenerate the golden on
+  // purpose (`node packages/design-kit/scripts/spark-dna-golden.mjs`), never by hand, and the phone's copy with it.
+  const GOLDEN = JSON.parse(readFileSync(join(KIT, "fixtures/spark-dna.golden.json"), "utf8")) as {
+    seeds: Array<{ seed: number; dna: unknown; body: unknown; eyes: unknown }>;
+    palettes: unknown[];
+  };
+
+  it("is what the engine deals for every seed: the DNA, the star's points and the eyes built from it", () => {
+    expect(GOLDEN.seeds).toHaveLength(24);
+    for (const row of GOLDEN.seeds) {
+      const dna = engines.agentDNA(row.seed);
+      expect(dna, `dna ${row.seed}`).toEqual(row.dna);
+      expect(engines.makeBody(row.seed, dna.body), `body ${row.seed}`).toEqual(row.body);
+      expect(engines.makeEyes(row.seed, dna.eyes), `eyes ${row.seed}`).toEqual(row.eyes);
+    }
+  });
+
+  it("holds the twelve palettes a spark draws from, each its colours and its backdrop", () => {
+    expect(GOLDEN.palettes).toEqual(
+      engines.PALETTES.slice(0, 12).map(({ name, c, deep }) => ({ name, c, deep })),
+    );
+  });
+});
+
 describe("the vendored engine (DESIGN.md §2.10)", () => {
   it("is James's file byte for byte, at the revision §2.10 names", () => {
     const bytes = readFileSync(join(KIT, VENDORED.file));

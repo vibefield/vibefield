@@ -293,6 +293,8 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
       "services.subscribe": stream,
       "agents.profileSets.subscribe": stream,
       "index.catalog.subscribe": { shape: "rows", cadenceFloorMs: ROWS.MIN_INTERVAL_MS },
+      // IOS-12a (PC-D4 A) — one desktop's needs-you queue, whole lists through the home
+      "needs.subscribe": stream,
       "index.changes.subscribe": {
         shape: "rows",
         cadenceFloorMs: INDEX_MESH.CHANGES_MIN_INTERVAL_MS,

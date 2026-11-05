@@ -37,7 +37,7 @@ export function OnboardingUsersPaneView({
     <WizardPane
       eyebrow="Users"
       title="Choose a user"
-      voice="Each user has their own field on this machine. Open one, or carry on setting up the new one."
+      voice="Everyone on this computer has their own field. Choose yours, or continue setting up a new one."
       onSubmit={onContinue}
       actions={
         <button type="submit" className={primaryCls} disabled={opening !== null}>

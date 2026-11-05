@@ -1577,7 +1577,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     };
     const box = await setup({ floor: "real", profiles: true, briefing, exerciseDoor: true });
     const { daemon, dataDir, sessions } = box;
-    const win = await window(daemon, [...DECK, "agents.manage"], "cp1d");
+    const win = await window(daemon, [...DECK, "agents.manage", "sparks.use"], "cp1d");
     await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
     const providers = (await win.call("agent.providers", {})) as AgentProvidersResult;
     expect(providers.providers.find((p) => p.id === "scripted")?.briefing).toEqual(briefing);
@@ -1686,7 +1686,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       ],
     });
     const { daemon, dataDir } = box;
-    const win = await window(daemon, [...DECK, "agents.manage"], "cp3");
+    const win = await window(daemon, [...DECK, "agents.manage", "sparks.use"], "cp3");
     await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
     // a notice is an event: only a window listening when it is told hears it
     const notices = (await win.call("needs.notices.subscribe", {})) as { subId: string };
@@ -1777,7 +1777,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       },
     });
     const { daemon, dataDir } = box;
-    const win = await window(daemon, [...DECK, "agents.manage"], "cp3-wake");
+    const win = await window(daemon, [...DECK, "agents.manage", "sparks.use"], "cp3-wake");
     await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
     const { spark } = (await win.call("compose.sparks.hatch", {
       name: "Vela",
@@ -4673,7 +4673,7 @@ describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () =
   it("tells a spark its own session has worked, and a re-attach keeps the run's time though nothing is replayed (Q1; the kill matrix)", async () => {
     const config = { ...SPARKS, attach: true, observed: true };
     const first = await setup(config);
-    const win1 = await window(first.daemon, [...DECK, "agents.manage"], "tu1d1");
+    const win1 = await window(first.daemon, [...DECK, "agents.manage", "sparks.use"], "tu1d1");
     const { spark, runId, paneId } = await hatchVela(first, win1);
     expect(await sparkSays(win1, spark.id)).toBeNull();
     scriptedEvent(first, paneId, { type: "turn:started" });
@@ -4692,7 +4692,7 @@ describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () =
     // ── the restart: the run is released and re-attached; the attach replays nothing it counted ──
     await first.daemon.stop();
     const second = await setup({ ...config, restartOf: first });
-    const win2 = await window(second.daemon, [...DECK, "agents.manage"], "tu1d2");
+    const win2 = await window(second.daemon, [...DECK, "agents.manage", "sparks.use"], "tu1d2");
     const row = await rowWhere(
       win2,
       runId,
@@ -4784,7 +4784,7 @@ describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () =
   it("TU-1 G4 — the down-window gap, named (Q4): a turn no fieldd saw stays unseen", async () => {
     const config = { ...SPARKS, attach: true, observed: true };
     const first = await setup(config);
-    const win1 = await window(first.daemon, [...DECK, "agents.manage"], "tu1g1");
+    const win1 = await window(first.daemon, [...DECK, "agents.manage", "sparks.use"], "tu1g1");
     const { spark, runId, paneId } = await hatchVela(first, win1);
     const hatched = {
       record: readRecord(first.dataDir, runId).turnedAt,
@@ -4796,7 +4796,7 @@ describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () =
     // ── fieldd down, the pane alive; the turn taken there is one fieldd never sees ──
     await first.daemon.stop();
     const second = await setup({ ...config, restartOf: first });
-    const win2 = await window(second.daemon, [...DECK, "agents.manage"], "tu1g2");
+    const win2 = await window(second.daemon, [...DECK, "agents.manage", "sparks.use"], "tu1g2");
     const row = await rowWhere(
       win2,
       runId,
@@ -4822,11 +4822,11 @@ describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () =
   // unseen too.
   it("TU-1 G4 — the pending tail, named (Q3): a run no restart could re-attach is resumed still saying it has never worked", async () => {
     const first = await setup(SPARKS);
-    const win1 = await window(first.daemon, [...DECK, "agents.manage"], "tu1p1");
+    const win1 = await window(first.daemon, [...DECK, "agents.manage", "sparks.use"], "tu1p1");
     const { spark, runId } = await hatchVela(first, win1);
     await first.daemon.stop();
     const second = await setup({ ...SPARKS, restartOf: first });
-    const win2 = await window(second.daemon, [...DECK, "agents.manage"], "tu1p2");
+    const win2 = await window(second.daemon, [...DECK, "agents.manage", "sparks.use"], "tu1p2");
     const held = await rowWhere(
       win2,
       runId,

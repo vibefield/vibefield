@@ -96,10 +96,18 @@ export const SparkRecord = z
   .superRefine(thinksUnderItsProfiles);
 export type SparkRecord = z.infer<typeof SparkRecord>;
 
+/** IOS-12a (PC-L2) — a desktop, as the spark doors name it: the device id the field and the roster use. */
+export const ComposeDevice = z.string().min(1).max(128);
+export type ComposeDevice = z.infer<typeof ComposeDevice>;
+
 /** One spark, as the window's doors answer it: the record and whether its session is running now. */
 export const SparkSummary = z
   .object({
     ...sparkFields,
+    /** IOS-12a (PC-L2) — the desktop the spark lives on, the one that hatched it: what a door carries as `device` to
+     * reach it from another screen. Every row of the home's merged list names it; absent on a row from a daemon
+     * before IOS-12a, which a reader takes as the desktop it asked. */
+    device: ComposeDevice.optional(),
     session: z
       .object({
         runtimeRunId: z.string().min(1),
@@ -114,10 +122,56 @@ export const SparkSummary = z
   .passthrough();
 export type SparkSummary = z.infer<typeof SparkSummary>;
 
-// ── compose.sparks.* — the window's doors (METHODS rows; `agents.manage`, local, as the other doors that start
-// agents for the person at this device) ──
+// ── compose.sparks.* — the person's doors (METHODS rows). *Corrected 2026-11-04 (IOS-12a; PC-D7 A, the design page
+// Chat in a Pocket): this said they were the window's, `agents.manage` and local. They are `sparks.use`, held by the
+// window's token and the phone's preset, and every read and act rides the phone's home (PC-L2): the list and
+// needs.list merge each self desktop's rows at the home, and open, say and needs.answer carry the spark's `device`,
+// which the home forwards to (design-04 §6's `device?`; DS-2). Hatch stays local: a spark is made on the desktop the
+// call reaches, which for the phone is its home (PC-D8 A).* ──
 
-export const ComposeSparksListResult = z.object({ sparks: z.array(SparkSummary) }).passthrough();
+/** IOS-12a (PC-L2, PC-L4) — how each self desktop answered the home's merge: OPEN words, so a newer home's word still
+ * reads. `answered`; `asleep` (the roster says it is not up, so it was not asked); `timeout` (asked, no answer in
+ * time); `incompatible` (its fieldd speaks another major version); `unreachable` (asked, and the link failed).
+ * A reader shows a desktop that did not answer as such, never as one with no sparks. */
+export const COMPOSE_DESKTOP_STATES = [
+  "answered",
+  "asleep",
+  "timeout",
+  "incompatible",
+  "unreachable",
+] as const;
+export type ComposeDesktopState = (typeof COMPOSE_DESKTOP_STATES)[number];
+export const ComposeDesktop = z
+  .object({ device: ComposeDevice, state: z.string().min(1).max(32) })
+  .passthrough();
+export type ComposeDesktop = z.infer<typeof ComposeDesktop>;
+
+/** A desktop's state as this build names it, else undefined: a word a newer home may say. */
+export function composeDesktopStateOf(desktop: {
+  readonly state: string;
+}): ComposeDesktopState | undefined {
+  return COMPOSE_DESKTOP_STATES.find((known) => known === desktop.state);
+}
+
+/** IOS-12a (PC-L2) — which desktops a list answers for: `local` (the default), the desktop the call reaches, as the
+ * Mac's Chat has always listed; `mesh`, the home's merge of every self desktop, which the phone asks. A peer daemon
+ * asking `mesh` is answered `local` (DS-L4: a daemon never aggregates another's aggregate). */
+export const ComposeListScope = z.enum(["local", "mesh"]);
+export type ComposeListScope = z.infer<typeof ComposeListScope>;
+
+export const ComposeSparksListParams = z
+  .object({ scope: ComposeListScope.optional(), device: ComposeDevice.optional() })
+  .passthrough();
+export type ComposeSparksListParams = z.infer<typeof ComposeSparksListParams>;
+
+/** The list: the sparks of the desktop it reaches, or (`mesh`) of every self desktop at the home, each naming its
+ * `device`, and `desktops` saying how each desktop answered the merge. */
+export const ComposeSparksListResult = z
+  .object({
+    sparks: z.array(SparkSummary),
+    desktops: z.array(ComposeDesktop).max(64).optional(),
+  })
+  .passthrough();
 export type ComposeSparksListResult = z.infer<typeof ComposeSparksListResult>;
 
 /** NS-D1, NS-D2 B, NS-D5 — the New spark sheet's answers. fieldd refuses a name another spark of this user holds, an
@@ -139,8 +193,11 @@ export type ComposeSparksHatchParams = z.infer<typeof ComposeSparksHatchParams>;
 export const ComposeSparksHatchResult = z.object({ spark: SparkSummary }).passthrough();
 export type ComposeSparksHatchResult = z.infer<typeof ComposeSparksHatchResult>;
 
-/** Wake a spark: its last session is resumed when it sleeps (CR-D11), and a live one is answered as it is. */
-export const ComposeSparksOpenParams = z.object({ spark: SparkId }).passthrough();
+/** Wake a spark: its last session is resumed when it sleeps (CR-D11), and a live one is answered as it is. From
+ * another screen it carries the spark's `device`, and the home forwards the call there (IOS-12a, PC-L2). */
+export const ComposeSparksOpenParams = z
+  .object({ spark: SparkId, device: ComposeDevice.optional() })
+  .passthrough();
 export type ComposeSparksOpenParams = z.infer<typeof ComposeSparksOpenParams>;
 
 export const ComposeSparksOpenResult = z.object({ spark: SparkSummary }).passthrough();
@@ -430,10 +487,15 @@ export type ComposeAgentStopOutput = z.infer<typeof ComposeAgentStopOutput>;
 // ── a session's input queue, as fieldd keeps it (CP2-D3; signed since CP-3, LEANS P3) ──
 
 /** Who a kept input is from: a spark, by id and by the name its words are marked with; or fieldd's own wake. CLOSED:
- * an input lands marked by its source (CP2-D1), so one from a source this build cannot mark is never delivered. */
+ * an input lands marked by its source (CP2-D1), so one from a source this build cannot mark is never delivered.
+ * IOS-12a (PC-D3 A) — or `you`: the person's own words to a spark (`compose.sparks.say`), which land UNMARKED, since
+ * they are yours. A queue file an older build reads with a `you` input in it does not parse, so that build sets the
+ * file aside and delivers none of it, as it does any file it cannot read (the downgrade edge, said in IOS-12a's
+ * record). */
 export const AgentInputSender = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("spark"), spark: SparkId, name: SparkName }).passthrough(),
   z.object({ kind: z.literal("fieldd") }).passthrough(),
+  z.object({ kind: z.literal("you") }).passthrough(),
 ]);
 export type AgentInputSender = z.infer<typeof AgentInputSender>;
 
@@ -451,6 +513,9 @@ export const AgentQueuedInput = z
     from: AgentInputSender,
     /** when it was queued (ISO) */
     at: z.string().min(1),
+    /** IOS-12a (PC-D3 A) — the say's request id (`you` only): the queue keeps one input per (run, request id), so a
+     * retried say over a dropped leg is queued once, and a second ask reads the first one's receipt */
+    requestId: z.string().min(1).max(64).optional(),
     /** when its delivery began (ISO), the head only (item 158, TH-Q32 (a)): kept before it is pasted, so a restart
      * that finds it never sends it again, and its sender is told it is uncertain */
     sending: z.string().min(1).optional(),
@@ -478,6 +543,63 @@ export const AgentInputQueueFile = z
   })
   .passthrough();
 export type AgentInputQueueFile = z.infer<typeof AgentInputQueueFile>;
+
+// ── compose.sparks.say — your words to a spark (IOS-12a; PC-D3 A, the design page Chat in a Pocket). They join the
+// spark's session's input queue as yours and unmarked (the `you` sender), never pasted, and land at its next idle
+// moment as a spark's sends do (CP2-D2). A spark asleep is woken first. The answer is the send's receipt, and asking
+// again with the same `requestId` reads that receipt instead of queueing the words twice. ──
+
+/** A say's request id: the caller's, unique per send, kept with the input. */
+export const ComposeSayRequestId = z.string().regex(/^[A-Za-z0-9_-]{8,64}$/);
+export type ComposeSayRequestId = z.infer<typeof ComposeSayRequestId>;
+
+export const ComposeSparksSayParams = z
+  .object({
+    spark: SparkId,
+    text: z.string().min(1).max(COMPOSE_TEXT_MAX),
+    requestId: ComposeSayRequestId,
+    /** the spark's desktop, from another screen: the home forwards there (PC-L2) */
+    device: ComposeDevice.optional(),
+  })
+  .passthrough();
+export type ComposeSparksSayParams = z.infer<typeof ComposeSparksSayParams>;
+
+/** A send's receipt, OPEN words (DESIGN.md §9 "Chat on the phone"): `queued` (in the queue, waiting for the spark's
+ * next idle moment), `waking` (queued behind a wake: the spark was asleep), `waiting` (a delivery was turned away, a
+ * dialog open or the person typing in its pane, and it waits for the next idle moment), `delivered` (puppeteer
+ * confirmed it), `uncertain` (the delivery's answer was lost: never resent, and the person is told to look in its
+ * pane), `dropped` (its session ended before it landed). Whether the spark waits on the person ("it lands after you
+ * answer") is the needs-you queue's to say, not the receipt's. */
+export const COMPOSE_SAY_STATES = [
+  "queued",
+  "waking",
+  "waiting",
+  "delivered",
+  "uncertain",
+  "dropped",
+] as const;
+export type ComposeSayState = (typeof COMPOSE_SAY_STATES)[number];
+
+/** A receipt's state as this build names it, else undefined. */
+export function composeSayStateOf(receipt: {
+  readonly state: string;
+}): ComposeSayState | undefined {
+  return COMPOSE_SAY_STATES.find((known) => known === receipt.state);
+}
+
+export const ComposeSparksSayResult = z
+  .object({
+    spark: SparkId,
+    requestId: ComposeSayRequestId,
+    /** COMPOSE_SAY_STATES, OPEN */
+    state: z.string().min(1).max(32),
+    /** the words are fieldd's to deliver: always true, since a person's words are never held (CP-D3 holds a spark's) */
+    queued: z.literal(true),
+    /** its place in the session's queue, 1 being next, while it waits */
+    position: z.number().int().min(1).optional(),
+  })
+  .passthrough();
+export type ComposeSparksSayResult = z.infer<typeof ComposeSparksSayResult>;
 
 // ── CP-3: the person (`draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31 06:31:34Z: CP3-D1…D8 at A). The
 // needs-you queue (CP-D12) is fieldd's one list of what waits on the person: a spark's question (`ask_user`), its first
@@ -593,6 +715,9 @@ export const NeedsItem = z
     from: NeedsFrom,
     /** the spark whose thread shows it: the asker, or the spark that started the asking agent */
     spark: SparkId.optional(),
+    /** IOS-12a (PC-L2) — the desktop whose queue holds it, where an answer goes: every item of the home's merged list
+     * names it; absent on an item from a daemon before IOS-12a, which a reader takes as the desktop it asked */
+    device: ComposeDevice.optional(),
     /** when it was asked (ISO) */
     asked: z.string().min(1),
     /** the asker's own words: the question, the held words, a held spawn's first task (absent: none) */
@@ -624,13 +749,29 @@ export const NeedsItem = z
   .passthrough();
 export type NeedsItem = z.infer<typeof NeedsItem>;
 
-/** needs.list's answer and every needs.subscribe frame: the open items, oldest first, whole. */
-export const NeedsListResult = z.object({ items: z.array(NeedsItem) }).passthrough();
+/** needs.list's answer and every needs.subscribe frame: the open items, oldest first, whole. IOS-12a (PC-L2): every
+ * item names its `device`; the home's `mesh` list merges every self desktop's items, and `desktops` says how each
+ * answered (as the sparks' list does); a needs.subscribe frame is ONE desktop's queue, the one its `device` named. A
+ * peer daemon asking is answered its own items alone (DS-L4). */
+export const NeedsListResult = z
+  .object({ items: z.array(NeedsItem), desktops: z.array(ComposeDesktop).max(64).optional() })
+  .passthrough();
 export type NeedsListResult = z.infer<typeof NeedsListResult>;
 
-/** needs.answer: the act by its place among the item's choices (DESIGN.md §9), so rewording an act is no wire change. */
+/** needs.list: this desktop's queue, or (`mesh`) the home's merge of every self desktop's (IOS-12a, PC-L2). */
+export const NeedsListParams = z
+  .object({ scope: ComposeListScope.optional(), device: ComposeDevice.optional() })
+  .passthrough();
+export type NeedsListParams = z.infer<typeof NeedsListParams>;
+
+/** needs.subscribe: one desktop's queue, through the home when `device` names another (IOS-12a, PC-L2). */
+export const NeedsSubscribeParams = z.object({ device: ComposeDevice.optional() }).passthrough();
+export type NeedsSubscribeParams = z.infer<typeof NeedsSubscribeParams>;
+
+/** needs.answer: the act by its place among the item's choices (DESIGN.md §9), so rewording an act is no wire change.
+ * From another screen it carries the item's `device`, and the home forwards it there (IOS-12a, PC-L2). */
 export const NeedsAnswerParams = z
-  .object({ item: NeedsItemId, choice: NeedsChoiceIndex })
+  .object({ item: NeedsItemId, choice: NeedsChoiceIndex, device: ComposeDevice.optional() })
   .passthrough();
 export type NeedsAnswerParams = z.infer<typeof NeedsAnswerParams>;
 

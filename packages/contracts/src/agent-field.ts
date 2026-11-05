@@ -792,6 +792,17 @@ export const AgentRemoteRow = z
     /** ST-D5 — the person's durable Stop while fieldd holds one for the run: on
      * every audience's row, so a phone's Stop reads what a window's does */
     stop: AgentStopState.optional(),
+    /** IOS-12a (PC-D1…D8; the design page Chat in a Pocket) — the run is this
+     * spark's own session: the field row's `spark` (SP-1b), cut by the owner
+     * as every remote field is (DS-D4). Chat on the phone reads a spark's
+     * status by it, as the Mac's Chat does from its field row. Static for the
+     * run's life. Absent on every other run, on a bare terminal's row, and on
+     * a row from a daemon before IOS-12a. */
+    spark: SparkId.optional(),
+    /** IOS-12a — who started the run (CP-D15): the field row's `origin`,
+     * rebuilt from its named fields and never spread. Chat reads a spark's
+     * agents by it. Absent reads `you`, as on the field row. */
+    origin: AgentSessionOrigin.optional(),
     /** the model's row, cut for a peer: no `project.seq`, texts bounded, and a
      * bare terminal's `detail` its folder, never its path */
     monitorRow: MonitorAgentRow,

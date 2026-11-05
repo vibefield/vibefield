@@ -1244,8 +1244,12 @@ export const SCOPES = [
   // record — the active executable per provider, updates — the native.admin
   // posture. Both are local-only forever: consent is an act of the person at
   // this device; neither enters TAILNET_SCOPES or any plugin eligibility table.
-  // Since CP-0 and CP-3 `agents.manage` is also the person's acts on the agents
-  // and sparks of this device: the `compose.sparks.*` and `needs.*` doors.
+  // *Corrected 2026-11-04 (IOS-12a; PC-D7 A, the design page Chat in a
+  // Pocket): this said that since CP-0 and CP-3 `agents.manage` was also the
+  // person's acts on the agents and sparks of this device, the
+  // `compose.sparks.*` and `needs.*` doors. They moved to `sparks.use` below,
+  // so the phone can hold them; `agents.manage` keeps the distribution record
+  // and `needs.notices.subscribe`, main's OS notice and the window's line.*
   "index.manage",
   "agents.manage",
   // AR-5b (the review's EL7 lens) — two CONTENT reads, split off the census
@@ -1280,6 +1284,17 @@ export const SCOPES = [
   // The acts (`project.intent`) are not this scope's: they ride
   // `settings.manage`, a desktop window's (P2 (a)).
   "project.read",
+  // IOS-12a (PC-D7 A, the design page Chat in a Pocket, ruled 2026-11-04) —
+  // the person's sparks and the needs-you queue, from any of their screens:
+  // `compose.sparks.*` (list, hatch, open, say) and `needs.list`,
+  // `.subscribe` and `.answer`. The window's token and the phone's preset
+  // (TAILNET_SCOPES) hold it, and NOTHING else: a spark is an agent that
+  // starts agents, so this is never plugin-eligible (`plugins.ts` names it
+  // nowhere; AR-5b's precedent). A self peer DAEMON holds it only because
+  // PEER_FIELDD_SCOPES is DERIVED from the preset, and the doors admit it
+  // only as the carrier of a forwarded act (DS-L7: `forward.onBehalfOf`) or
+  // for its OWN rows on a read, never the home's aggregate (DS-L4).
+  "sparks.use",
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 
@@ -1302,7 +1317,12 @@ export type Scope = (typeof SCOPES)[number];
  * `.subscribe`), naming a place only by `PlaceRef`, never by a path; the
  * answer to a self phone may carry a place's path. It reaches the peer
  * preset by derivation, and every `project.*` handler refuses a peer
- * daemon. */
+ * daemon.
+ * IOS-12a (PC-D7 A, 2026-11-04) — `sparks.use` joins: the phone lists,
+ * hatches, wakes and talks to the person's sparks and answers the needs-you
+ * queue, every read and act through its home (PC-L2). It reaches the peer
+ * preset by derivation; the doors admit a peer daemon only as the carrier of
+ * a forwarded act, or for its own rows (DS-L4, DS-L7). */
 export const TAILNET_SCOPES: readonly Scope[] = [
   "canvas.read",
   "canvas.write",
@@ -1316,6 +1336,7 @@ export const TAILNET_SCOPES: readonly Scope[] = [
   "workspace.read",
   "mcp.consume",
   "project.read",
+  "sparks.use",
 ] as const;
 
 /** UA-4 (spec §7.3, UA-D5): the guest preset — a WhoIs-verified tailnet peer

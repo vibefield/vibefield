@@ -570,6 +570,7 @@ export function WizardPane({
   voice,
   children,
   actions,
+  back,
   later,
   onSubmit,
   track,
@@ -579,6 +580,8 @@ export function WizardPane({
   voice?: ReactNode;
   children?: ReactNode;
   actions: ReactNode;
+  /** Back or Cancel, separate from the forward actions and first in keyboard order. */
+  back?: ReactNode;
   /** The line under the actions: where a skip says the question's later home
    * (W3), or what a pane says last. */
   later?: ReactNode;
@@ -610,7 +613,10 @@ export function WizardPane({
       </div>
       <div className="vf-wizard-pane-body">{children}</div>
       <div className="vf-wizard-pane-foot">
-        <div className="vf-wizard-actions">{actions}</div>
+        <div className="vf-wizard-navigation">
+          <div className="vf-wizard-back">{back}</div>
+          <div className="vf-wizard-actions">{actions}</div>
+        </div>
         <p className="vf-wizard-later">{later}</p>
       </div>
     </form>

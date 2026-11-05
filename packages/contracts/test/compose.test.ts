@@ -2,22 +2,34 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { AgentRemoteRow } from "../src/agent-field";
 import { AgentSessionRecord, AgentSessionSummary } from "../src/agent-session";
 import {
   AgentInputQueueFile,
+  COMPOSE_DESKTOP_STATES,
+  COMPOSE_SAY_STATES,
   ComposeAgentSendOutput,
   ComposeAgentSpawnOutput,
   ComposeAskUserInput,
   ComposeSparksHatchParams,
+  ComposeSparksListParams,
   ComposeSparksListResult,
+  ComposeSparksOpenParams,
+  ComposeSparksSayParams,
+  ComposeSparksSayResult,
+  composeDesktopStateOf,
+  composeSayStateOf,
   NEEDS_CHOICE_WORDS,
   NEEDS_JOINED_ITEMS_MAX,
   NEEDS_OPEN_PER_SPARK,
   NeedsAnswerParams,
   NeedsAnswerResult,
   NeedsItem,
+  NeedsListParams,
+  NeedsListResult,
   NeedsNotices,
   NeedsRecord,
+  NeedsSubscribeParams,
   needsKindOf,
   needsNoticesOf,
   needsOutcomeOf,
@@ -26,7 +38,13 @@ import {
   SparkSummary,
 } from "../src/compose";
 import { METHODS, reachableFromTailnet } from "../src/methods";
-import { LAYOUT, LAYOUT_ROOT_LEVEL } from "../src/registries";
+import {
+  LAYOUT,
+  LAYOUT_ROOT_LEVEL,
+  PEER_FIELDD_SCOPES,
+  PRODUCT_API_LIMITS,
+  TAILNET_SCOPES,
+} from "../src/registries";
 
 // CO — the compose plane, version 2 (ruled 2026-10-29; draft/compose-plane/v2/). What these hold: the window's spark
 // doors are local agents.manage rows; a spark thinks under one of its own profiles; and a run's origin is read the way
@@ -36,13 +54,115 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures")
 const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), "utf8"));
 
-describe("the window's spark doors (CP-0)", () => {
-  it("are local agents.manage rows, as the other doors that start agents for the person here", () => {
-    for (const m of ["compose.sparks.list", "compose.sparks.hatch", "compose.sparks.open"]) {
-      const row = METHODS.find((r) => r.method === m);
-      expect(row?.scope, m).toBe("agents.manage");
-      expect(row?.locality, m).toBe("local");
+describe("the spark doors (CP-0; IOS-12a, PC-D7 A: the person's, from any screen, through the home)", () => {
+  const row = (m: string) => METHODS.find((r) => r.method === m);
+
+  it("ride sparks.use, which the phone's preset holds and a peer daemon holds only by derivation", () => {
+    for (const m of [
+      "compose.sparks.list",
+      "compose.sparks.hatch",
+      "compose.sparks.open",
+      "compose.sparks.say",
+    ])
+      expect(row(m)?.scope, m).toBe("sparks.use");
+    expect(TAILNET_SCOPES).toContain("sparks.use");
+    expect(PEER_FIELDD_SCOPES).toContain("sparks.use");
+  });
+
+  it("federate the list, open and say through the home, and hatch where the call lands (PC-L2, PC-D8 A)", () => {
+    expect(row("compose.sparks.list")?.locality).toBe("federate");
+    expect(row("compose.sparks.open")?.locality).toBe("federate");
+    expect(row("compose.sparks.say")?.locality).toBe("federate");
+    expect(row("compose.sparks.hatch")?.locality).toBe("local");
+    // a say is a mutation, so a forward of it is keyed; open is declarative
+    expect(row("compose.sparks.say")?.idempotent).toBe(false);
+    expect(row("compose.sparks.open")?.idempotent).toBe(true);
+    for (const m of ["compose.sparks.list", "compose.sparks.open", "compose.sparks.say"])
+      expect(reachableFromTailnet(row(m)!), m).toBe(true);
+  });
+
+  it("name a spark's desktop on every merged row, and say how each desktop answered (PC-L4)", () => {
+    const merged = ComposeSparksListResult.parse(fixture("compose-sparks-list.merged"));
+    expect(merged.sparks.map((s) => s.device)).toEqual(["dev-01HQ9S7UD1", "dev-01HQ9S7XZ2"]);
+    expect(merged.desktops?.map((d) => composeDesktopStateOf(d))).toEqual([
+      "answered",
+      "answered",
+      "asleep",
+    ]);
+    // a word a newer home says still reads, as none this build names
+    expect(composeDesktopStateOf({ state: "migrating" })).toBeUndefined();
+    expect(COMPOSE_DESKTOP_STATES).toEqual([
+      "answered",
+      "asleep",
+      "timeout",
+      "incompatible",
+      "unreachable",
+    ]);
+    // a row from a daemon before IOS-12a names no desktop and still reads
+    expect(ComposeSparksListResult.parse(fixture("compose-sparks-list.valid")).desktops).toBe(
+      undefined,
+    );
+    expect(ComposeSparksOpenParams.parse({ spark: "sp-7k2m9q4x" }).device).toBeUndefined();
+  });
+
+  it("list this desktop's own unless the home's merge is asked for: the Mac's Chat lists as it always has", () => {
+    for (const Params of [ComposeSparksListParams, NeedsListParams]) {
+      expect(Params.parse({}).scope).toBeUndefined();
+      expect(Params.parse({ scope: "mesh" }).scope).toBe("mesh");
+      expect(Params.safeParse({ scope: "everywhere" }).success).toBe(false);
     }
+  });
+});
+
+describe("your words to a spark (IOS-12a; PC-D3 A, CP2-D2)", () => {
+  it("carry a request id and the spark's desktop, at a spark's send's bound", () => {
+    const say = ComposeSparksSayParams.parse(fixture("compose-sparks-say-params.valid"));
+    expect(say.device).toBe("dev-01HQ9S7XZ2");
+    for (const requestId of ["short", "has space in it", "x".repeat(65), ""])
+      expect(ComposeSparksSayParams.safeParse({ ...say, requestId }).success, requestId).toBe(
+        false,
+      );
+    expect(ComposeSparksSayParams.safeParse({ ...say, text: "" }).success).toBe(false);
+    expect(ComposeSparksSayParams.safeParse({ ...say, text: "x".repeat(32_001) }).success).toBe(
+      false,
+    );
+  });
+
+  it("answer a receipt that is always queued, with a place while it waits", () => {
+    const queued = ComposeSparksSayResult.parse(fixture("compose-sparks-say.queued"));
+    expect([queued.state, queued.position]).toEqual(["queued", 1]);
+    expect(ComposeSparksSayResult.parse(fixture("compose-sparks-say.waking")).state).toBe("waking");
+    const delivered = ComposeSparksSayResult.parse(fixture("compose-sparks-say.delivered"));
+    expect([delivered.state, delivered.position]).toEqual(["delivered", undefined]);
+    // a person's words are never held: a receipt that is not queued is no receipt
+    expect(ComposeSparksSayResult.safeParse({ ...queued, queued: false }).success).toBe(false);
+    expect(composeSayStateOf({ state: "migrated" })).toBeUndefined();
+    expect(COMPOSE_SAY_STATES).toEqual([
+      "queued",
+      "waking",
+      "waiting",
+      "delivered",
+      "uncertain",
+      "dropped",
+    ]);
+  });
+
+  it("are kept as yours, unmarked, with the say's request id", () => {
+    const kept = AgentInputQueueFile.parse(fixture("agent-input-queue.you"));
+    const [, yours] = kept.inputs;
+    expect(yours?.from).toEqual({ kind: "you" });
+    expect(yours?.requestId).toBe("say-01JC4M8Q2V7T");
+  });
+});
+
+describe("a spark on the remote cut (IOS-12a; PG-2, SP-1b)", () => {
+  it("carries the run's spark and origin, as the field row does, and a row without them still reads", () => {
+    const own = AgentRemoteRow.parse(fixture("agent-remote-row.spark"));
+    expect(own.spark).toBe("sp-7k2m9q4x");
+    expect(own.origin).toEqual({ by: "you" });
+    const plain = AgentRemoteRow.parse(fixture("agent-remote-row.valid"));
+    expect([plain.spark, plain.origin]).toEqual([undefined, undefined]);
+    expect(AgentRemoteRow.safeParse({ ...own, spark: "Vela" }).success).toBe(false);
   });
 });
 
@@ -147,7 +267,7 @@ describe("a run's origin (CP-D15)", () => {
 describe("a session's kept input queue (CP2-D3; signed since CP-3, LEANS P3)", () => {
   const kept = AgentInputQueueFile.parse(fixture("agent-input-queue.valid"));
 
-  it("is one run's, its inputs marked as a spark's or as VibeField's, and its signature rides beside the body", () => {
+  it("is one run's, its inputs marked as a spark's, as VibeField's or as yours, and its signature rides beside the body", () => {
     expect(kept.run).toBe("run-12");
     expect(kept.inputs.map((input) => input.from.kind)).toEqual(["spark", "fieldd"]);
     expect(kept.signature).toMatch(/^[0-9a-f]{64}$/);
@@ -198,17 +318,38 @@ describe("CP-3 — the held answers and the person's doors (cp3-the-person.md, r
     ).toBe(false);
   });
 
-  it("the needs doors are local agents.manage rows beside the spark doors, never on approval.respond (CP3-D6 A)", () => {
-    for (const m of ["needs.list", "needs.subscribe", "needs.answer", "needs.notices.subscribe"]) {
+  it("the needs doors ride sparks.use through the home, the notices stay the window's, never on approval.respond (CP3-D6 A, corrected by IOS-12a)", () => {
+    for (const m of ["needs.list", "needs.subscribe", "needs.answer"]) {
       const row = METHODS.find((r) => r.method === m);
-      expect(row?.scope, m).toBe("agents.manage");
-      expect(row?.locality, m).toBe("local");
-      expect(row && reachableFromTailnet(row), m).toBe(false);
+      expect(row?.scope, m).toBe("sparks.use");
+      expect(row?.locality, m).toBe("federate");
+      expect(row && reachableFromTailnet(row), m).toBe(true);
     }
     expect(METHODS.find((r) => r.method === "needs.answer")?.idempotent).toBe(true);
-    expect(METHODS.find((r) => r.method === "needs.subscribe")?.subscription).toBe(true);
+    // one desktop's queue per subscription, whole lists at the product API's stream floor
+    expect(METHODS.find((r) => r.method === "needs.subscribe")?.subscription).toEqual({
+      shape: "stream",
+      cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS,
+    });
+    expect(NeedsSubscribeParams.parse({ device: "dev-01HQ9S7XZ2" }).device).toBe("dev-01HQ9S7XZ2");
+    // main's OS notice and the window's status line: the window's alone
+    const notices = METHODS.find((r) => r.method === "needs.notices.subscribe");
+    expect([notices?.scope, notices?.locality, notices?.subscription]).toEqual([
+      "agents.manage",
+      "local",
+      true,
+    ]);
     // AR-6's answers to an agent's own asks keep the scope; nothing rides it yet
     expect(METHODS.some((r) => r.scope === "approval.respond")).toBe(false);
+  });
+
+  it("the home's merged queue names each item's desktop and how each desktop answered (IOS-12a, PC-L2)", () => {
+    const merged = NeedsListResult.parse(fixture("needs-list.merged"));
+    expect(merged.items.map((item) => item.device)).toEqual(["dev-01HQ9S7UD1", "dev-01HQ9S7UD1"]);
+    expect(merged.desktops?.map((d) => d.state)).toEqual(["answered", "timeout", "asleep"]);
+    expect(NeedsAnswerParams.parse({ item: "ny-3f9a1c0b7e2d4a61", choice: 0 }).device).toBe(
+      undefined,
+    );
   });
 
   it("a question offers 1–4 distinct one-line choices of at most 40, and never VibeField's own Not now", () => {

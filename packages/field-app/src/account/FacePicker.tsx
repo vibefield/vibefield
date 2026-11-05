@@ -44,6 +44,7 @@ export function FaceFrameSwitch({
       options={FRAMES}
       value={frame === "coin" ? "Coin" : "Sticker"}
       size={size}
+      disabled={disabled}
       onChange={(next) => {
         if (disabled) return;
         onChange({ emoji: value.emoji, frame: next === "Coin" ? "coin" : "sticker" });

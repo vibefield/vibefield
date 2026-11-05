@@ -1,8 +1,10 @@
-// CP-3 — the needs-you queue's window doors (`draft/compose-plane/cp3-the-person.md`, CP3-D6 A), against the mock
-// mgmt server (no cargo, no floor): needs.list, needs.subscribe, needs.answer and needs.notices.subscribe are local
-// agents.manage rows that only a trusted desktop caller opens; an answer clears the item in every window's list and is
-// one audited `needs.answer` pair in the own-actions ledger, its act by index and never its words. Items are raised
-// without a floor by seeding the signed store before boot, with the spark they ask for (critique 20f).
+// CP-3 — the needs-you queue's doors (`draft/compose-plane/cp3-the-person.md`, CP3-D6 A), against the mock mgmt
+// server (no cargo, no floor). An answer clears the item in every window's list and is one audited `needs.answer` pair
+// in the own-actions ledger, its act by index and never its words. Items are raised without a floor by seeding the
+// signed store before boot, with the spark they ask for (critique 20f).
+// *Corrected 2026-11-04 (IOS-12a; PC-D4 A, PC-D7 A): needs.list, needs.subscribe and needs.answer are `sparks.use`
+// rows the person's own screens open, a self phone among them (the home names each item's desktop); only
+// needs.notices.subscribe stays agents.manage, the window's and the shell's.*
 import {
   chmodSync,
   existsSync,
@@ -18,6 +20,8 @@ import { join } from "node:path";
 import {
   AGENT_CATALOG,
   AGENT_INPUT_QUEUE_FORMAT,
+  CONTRACTS_VERSION,
+  ComposeSparksListResult,
   LAYOUT,
   NEEDS_RECORD_FORMAT,
   NeedsAnswerResult,
@@ -32,6 +36,7 @@ import { RecordSigner } from "../src/signed-record";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { NeedsStore } from "../src/tool-plane/rooms/you/store";
 import { SparkStore } from "../src/tool-plane/sparks";
+import { productDoorPath, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
@@ -89,15 +94,46 @@ function seeded(): string {
 }
 
 /** `observedState`, when given, is the floor's lifecycle snapshot: its terminals are the boot's first inventory, which
- * starts the re-attach (a plain mock lists none, so the re-attach never runs). */
+ * starts the re-attach (a plain mock lists none, so the re-attach never runs; item 158). */
 async function boot(dataDir: string, observedState?: unknown): Promise<FielddDaemon> {
+  return (await bootWithMock(dataDir, observedState)).daemon;
+}
+
+async function bootWithMock(
+  dataDir: string,
+  observedState?: unknown,
+): Promise<{ daemon: FielddDaemon; mock: MockMgmtServer }> {
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   if (observedState !== undefined) mock.observedState = observedState;
   await mock.start();
   cleanup.push(() => mock.stop());
   const daemon = await bootstrap({ dataDir, controlPort: 0 });
   cleanup.push(() => daemon.stop());
-  return daemon;
+  return { daemon, mock };
+}
+
+/** IOS-12a — the person's phone over its home's product door: a tailnet principal whose login is the linked one. */
+async function phoneOf(
+  daemon: FielddDaemon,
+  mock: MockMgmtServer,
+  login: string = TEST_LOGIN,
+): Promise<WsRpc> {
+  await until(() => mock.meshServes.get("product") !== undefined, 15_000);
+  const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}${productDoorPath(mock)}`, {
+    headers: { "Tailscale-User-Login": login },
+  });
+  cleanup.push(() => ws.close());
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", () => resolve());
+    ws.once("error", reject);
+  });
+  const rpc = new WsRpc(ws);
+  await rpc.call("system.hello", {
+    contractsVersion: CONTRACTS_VERSION,
+    minCompatible: CONTRACTS_VERSION,
+    clientKind: "ios",
+  });
+  return rpc;
 }
 
 async function connect(daemon: FielddDaemon, token: string, clientKind = "renderer") {
@@ -140,8 +176,8 @@ describe("the needs-you queue's doors (CP3-D6 A)", () => {
   it("a window lists, subscribes to and answers the queue; the item leaves every window's list", async () => {
     const dataDir = seeded();
     const daemon = await boot(dataDir);
-    const one = await window(daemon, ["agents.manage"], "one");
-    const two = await window(daemon, ["agents.manage"], "two");
+    const one = await window(daemon, ["sparks.use"], "one");
+    const two = await window(daemon, ["sparks.use"], "two");
     const listed = NeedsListResult.parse(await one.call("needs.list", {}));
     expect(listed.items.map((i) => [i.id, i.kind, i.state, i.choices])).toEqual([
       [QUESTION, "question", "open", ["Push", "Hold", "Not now"]],
@@ -189,38 +225,80 @@ describe("the needs-you queue's doors (CP3-D6 A)", () => {
     ).toBe("NOT_FOUND");
   });
 
-  it("refuses a token without agents.manage at the registry, and a local token of another client kind as no desktop caller", async () => {
+  it("refuses a token without the doors' scopes at the registry, and a local token of another client kind as none of the person's screens", async () => {
     const daemon = await boot(seeded());
     const observer = await window(daemon, ["agent.observe"], "observer");
-    for (const method of [
-      "needs.list",
-      "needs.subscribe",
-      "needs.answer",
-      "needs.notices.subscribe",
-    ]) {
+    for (const [method, scope] of [
+      ["needs.list", "sparks.use"],
+      ["needs.subscribe", "sparks.use"],
+      ["needs.answer", "sparks.use"],
+      ["needs.notices.subscribe", "agents.manage"],
+    ] as const) {
       const refused = await observer.callErr(method, { item: QUESTION, choice: 0 });
       expect(refused.data?.kind, method).toBe("FORBIDDEN_SCOPE");
-      expect(refused.message, method).toContain("agents.manage");
+      expect(refused.message, method).toContain(scope);
     }
-    // a local token that holds the scope, from a client that is no window (critique 20b)
-    const grant = daemon.tokens.mint(["agents.manage"], "debug-client");
+    // a local token that holds the scopes, from a client that is no window (critique 20b)
+    const grant = daemon.tokens.mint(["sparks.use", "agents.manage"], "debug-client");
     const debug = await connect(daemon, grant.token, "debug");
-    for (const method of [
-      "needs.list",
-      "needs.subscribe",
-      "needs.answer",
-      "needs.notices.subscribe",
-    ]) {
+    for (const [method, words] of [
+      ["needs.list", "own windows and devices"],
+      ["needs.subscribe", "own windows and devices"],
+      ["needs.answer", "own windows and devices"],
+      ["needs.notices.subscribe", "trusted desktop caller"],
+    ] as const) {
       const refused = await debug.callErr(method, { item: QUESTION, choice: 0 });
       expect(refused.data?.kind, method).toBe("FORBIDDEN_SCOPE");
-      expect(refused.message, method).toContain("trusted desktop caller");
+      expect(refused.message, method).toContain(words);
+    }
+  });
+
+  it("IOS-12a — the person's phone lists the queue and the sparks through its home, each naming this desktop, and answers there", async () => {
+    const dataDir = seeded();
+    writeLinkFixture(dataDir);
+    const { daemon, mock } = await bootWithMock(dataDir);
+    const phone = await phoneOf(daemon, mock);
+    const listed = NeedsListResult.parse(await phone.call("needs.list", { scope: "mesh" }));
+    expect(listed.items.map((item) => item.id)).toEqual([QUESTION]);
+    const here = listed.items[0]?.device;
+    expect(here).toEqual(expect.any(String));
+    // the home asked every self desktop it knows; with no peer, it answered alone
+    expect(listed.desktops).toEqual([{ device: here, state: "answered" }]);
+    const sparks = ComposeSparksListResult.parse(
+      await phone.call("compose.sparks.list", { scope: "mesh" }),
+    );
+    expect(sparks.sparks.map((spark) => [spark.id, spark.device])).toEqual([[VELA, here]]);
+    expect(sparks.desktops).toEqual([{ device: here, state: "answered" }]);
+    // `local`, the Mac's list: this desktop's own, with no merge note
+    expect(NeedsListResult.parse(await phone.call("needs.list", {})).desktops).toBeUndefined();
+    // one desktop's queue, this one's, whole
+    const sub = (await phone.call("needs.subscribe", {})) as { snapshot: unknown };
+    expect(NeedsListResult.parse(sub.snapshot).items.map((item) => item.device)).toEqual([here]);
+    // its own device named on the act is this desktop: served here, not forwarded
+    const answered = NeedsAnswerResult.parse(
+      await phone.call("needs.answer", { item: QUESTION, choice: 1, device: here }),
+    );
+    expect(answered.item).toMatchObject({ id: QUESTION, state: "answered", device: here });
+    // the window's notices stay the window's: the phone's preset does not hold agents.manage
+    const notices = await phone.callErr("needs.notices.subscribe", {});
+    expect(notices.data?.kind).toBe("FORBIDDEN_SCOPE");
+  });
+
+  it("IOS-12a — a tailnet login this desktop has not linked holds none of the doors", async () => {
+    const dataDir = seeded();
+    writeLinkFixture(dataDir);
+    const { daemon, mock } = await bootWithMock(dataDir);
+    const stranger = await phoneOf(daemon, mock, "someone-else@example.com");
+    for (const method of ["needs.list", "compose.sparks.list", "needs.answer"]) {
+      const refused = await stranger.callErr(method, { item: QUESTION, choice: 0 });
+      expect(refused.data?.kind, method).toBe("FORBIDDEN_SCOPE");
     }
   });
 
   it("an answer is one needs.answer pair in the own-actions ledger, its act by index and never the words", async () => {
     const dataDir = seeded();
     const daemon = await boot(dataDir);
-    const win = await window(daemon, ["agents.manage"], "audit");
+    const win = await window(daemon, ["sparks.use"], "audit");
     await win.call("needs.answer", { item: QUESTION, choice: 1 });
     await until(() =>
       ownActions(dataDir).some((l) => l.action === "needs.answer" && l.phase === "outcome"),
