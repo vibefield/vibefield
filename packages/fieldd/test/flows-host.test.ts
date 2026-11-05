@@ -175,18 +175,20 @@ async function peakRssMb(pid: number, until: Promise<unknown>): Promise<number> 
   return peak / 1024;
 }
 
-/** Answer every `call` a direct host sends with "yes" until it says its run's end: that end's frame, or "timeout". */
+/** Answer every `call` a direct host sends with "yes" until it says its run's end: that end's frame, or "timeout".
+ * A call whose first argument is `holds` is never answered: the script waits on it for good. */
 async function answeredToEnd(
   direct: { readonly heard: readonly unknown[]; tell: (message: ToFlowHost) => void },
-  ms = WAIT_MS,
+  { ms = WAIT_MS, holds }: { ms?: number; holds?: string } = {},
 ): Promise<unknown> {
   const deadline = Date.now() + ms;
   let answered = 0;
   while (Date.now() < deadline) {
-    const frames = direct.heard as readonly { t?: string; id?: number }[];
+    const frames = direct.heard as readonly { t?: string; id?: number; args?: unknown[] }[];
     const calls = frames.filter((frame) => frame.t === "call");
     for (const call of calls.slice(answered))
-      direct.tell({ t: "answer", id: call.id as number, ok: true, value: "yes" });
+      if (holds === undefined || call.args?.[0] !== holds)
+        direct.tell({ t: "answer", id: call.id as number, ok: true, value: "yes" });
     answered = calls.length;
     const end = frames.find((frame) =>
       ["done", "threw", "fatal", "memory"].includes(frame.t ?? ""),
@@ -569,7 +571,14 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       // is answered and the old generation stays small: neither V8's cap nor the ping can end it, the host's RSS cap
       // must. The host idles near 76 MB with its worker locked down (measured 13:27Z), so 160 MB is passed at the
       // second array; the real number's row is the mini's (4 × 256 MiB under HOST_RSS_MB).
-      const { handler, calls } = scripted(() => ({ ok: true, value: "yes" }));
+      // The script then waits on "hold", which is never answered, so the run cannot end on its own: the cap is the only
+      // way out. Without the hold the row was timing-bound. On a fast host the six fills, their asks and the return
+      // all fit inside one 50 ms read (run 158, the mini alone: 84 ms for the whole row, ended `done 6`), and the
+      // cap holds only to within one read (N1's Found). On a slow host the cap fires mid-allocation instead, before
+      // the hold, so the row asserts the end and the first ask, never which ask came last
+      const { handler, calls } = scripted((call) =>
+        call.args[0] === "hold" ? "never" : { ok: true, value: "yes" },
+      );
       const run = await host(
         flow(
           [
@@ -579,6 +588,7 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
             "  kept.push(new Uint8Array(64 * 1024 * 1024).fill(1));",
             '  await ask("more?");',
             "}",
+            'await ask("hold");',
             "return kept.length;",
           ].join("\n"),
         ),
@@ -587,9 +597,8 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       const pid = await within(run.ready);
       expect(typeof pid).toBe("number");
       expect(await within(run.ended)).toEqual({ kind: "ended", why: "memory" });
-      // it started under its cap, and was ended before its script finished
+      // it started under its cap (its first ask was heard)
       expect(calls[0]?.args).toEqual(["start"]);
-      expect(calls.length).toBeLessThan(7);
       expect(alive(pid as number)).toBe(false);
     },
     ROW_MS,
@@ -665,7 +674,12 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       // memory pressure can read far under what it holds (macOS's resident size leaves out compressed and swapped
       // pages). The worker's `getHeapStatistics()` (Node's own, on this repo's Node: .nvmrc says 26) still counts
       // the typed arrays it keeps. The script keeps six filled 64 MiB arrays, an answered ask after each, under
-      // `rssMb: 160`. A host that reads its resident size alone never sees them, and the run ends `done`
+      // `rssMb: 160`. A host that reads its resident size alone never sees them.
+      // The script then waits on "hold", which is never answered, so the run cannot end on its own: the cap is the only
+      // way out. Without the hold the row was timing-bound. On a fast host the six fills, their asks and the return
+      // all fit inside one 50 ms read (run 158, the mini alone: 84 ms for the whole row, ended `done 6`), and the
+      // cap holds only to within one read (N1's Found). On a slow host the cap fires mid-allocation instead, before
+      // the hold, so the row asserts the end and the first ask, never which ask came last
       const dir = mkdtempSync(join(inject("fielddRunRoot"), "vf-fh-rss-"));
       const readsLow = join(dir, "rss-reads-low.cjs");
       writeFileSync(readsLow, "process.memoryUsage.rss = () => 1;\n");
@@ -678,6 +692,7 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
             "  kept.push(new Uint8Array(64 * 1024 * 1024).fill(1));",
             '  await ask("more?");',
             "}",
+            'await ask("hold");',
             "return kept.length;",
           ].join("\n"),
         ),
@@ -687,13 +702,12 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       const exited = exitOf(direct.child);
       expect(await heardOf(direct.heard, "ready")).toEqual({ t: "ready", pid: direct.child.pid });
       direct.tell({ ...base, limits: { ...base.limits, rssMb: 160 } });
-      expect(await answeredToEnd(direct)).toEqual({ t: "memory" });
-      // it started under its cap (its first ask was heard), and was ended before its script's end
-      const asks = (direct.heard as readonly { t?: string }[]).filter(
+      expect(await answeredToEnd(direct, { holds: "hold" })).toEqual({ t: "memory" });
+      // it started under its cap (its first ask was heard)
+      const asks = (direct.heard as readonly { t?: string; args?: unknown[] }[]).filter(
         (frame) => frame.t === "call",
       );
-      expect(asks.length).toBeGreaterThanOrEqual(1);
-      expect(asks.length).toBeLessThan(7);
+      expect(asks[0]?.args).toEqual(["start"]);
       expect(await within(exited)).toEqual({ code: null, signal: "SIGKILL" });
     },
     ROW_MS,
