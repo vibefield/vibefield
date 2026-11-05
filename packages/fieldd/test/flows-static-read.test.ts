@@ -100,7 +100,8 @@ describe("what the read refuses, and what it never does", () => {
     expect(broken.refusals[0]?.words).toMatch(/^it does not parse as a module: /);
     expect(broken.refusals[0]?.line).toBe(1);
     // a CommonJS file is no module flow: `require` would never resolve in its compartment, and `module` is unread
-    expect(flowRefusalOf(readFlow("module.exports = {};\n").refusals[0]!)).toBe("meta");
+    // read through map, so a read with no refusal fails on this assertion, never by a TypeError
+    expect(readFlow("module.exports = {};\n").refusals.map(flowRefusalOf)[0]).toBe("meta");
     const big = flow(`// ${"x".repeat(FLOW_LIMITS.SCRIPT_MAX_BYTES)}`);
     expect(refusalsOf(readFlow(big))).toEqual([
       [

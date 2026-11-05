@@ -109,6 +109,8 @@ describe("fieldd's flow records (CP4-Q18 (a))", () => {
     const hash = h.records().keep(RELEASE);
     expect(hash).toBe(createHash("sha256").update(RELEASE).digest("hex"));
     expect(hash).toBe(flowHashOf(RELEASE));
+    // each kept file is asserted before it is read, so a regression fails here, never by a thrown errno
+    expect(existsSync(h.bytesFile(hash)), "the bytes are kept by their hash").toBe(true);
     expect(readFileSync(h.bytesFile(hash))).toEqual(RELEASE);
     expect(statSync(h.bytesFile(hash)).mode & 0o777).toBe(0o600);
     expect(statSync(join(h.dir, "bytes")).mode & 0o777).toBe(0o700);
@@ -126,6 +128,7 @@ describe("fieldd's flow records (CP4-Q18 (a))", () => {
     const h = harness();
     const records = h.records();
     const hash = records.keep(RELEASE);
+    expect(existsSync(h.bytesFile(hash)), "the bytes are kept by their hash").toBe(true);
     // an agent rewrites the approved version's bytes in place
     writeFileSync(h.bytesFile(hash), EDITED, { mode: 0o600 });
     expect(h.records().bytes(hash)).toBeUndefined();
@@ -155,6 +158,10 @@ describe("fieldd's flow records (CP4-Q18 (a))", () => {
       by: "you",
       proposal: "fp-9d4e2a7c1b",
     });
+    expect(existsSync(h.approvalFile("release-check")), "the approval is kept by its flow").toBe(
+      true,
+    );
+    expect(existsSync(h.keyPath), "the records' key is kept").toBe(true);
     const onDisk = JSON.parse(readFileSync(h.approvalFile("release-check"), "utf8"));
     expect(onDisk.signature).toMatch(/^[0-9a-f]{64}$/);
     expect(FlowApprovalRecord.parse(onDisk)).toMatchObject({ flow: "release-check" });
@@ -181,6 +188,9 @@ describe("fieldd's flow records (CP4-Q18 (a))", () => {
     const h = harness();
     const records = h.records();
     for (const flow of ["good", "forged", "exposed", "copied-from"]) records.approve(flow, RELEASE);
+    for (const flow of ["good", "forged", "exposed", "copied-from"]) {
+      expect(existsSync(h.approvalFile(flow)), `${flow}'s approval is kept by its flow`).toBe(true);
+    }
     // unsigned: a record no signer made
     mkdirSync(join(h.dir, "approvals"), { recursive: true });
     writeFileSync(
@@ -261,6 +271,10 @@ describe("fieldd's flow records (CP4-Q18 (a))", () => {
     });
     expect(first.id).toMatch(/^fp-[0-9a-f]{16}$/);
     expect(first.id).not.toBe(second.id);
+    expect(existsSync(h.proposalFile(first.id)), "the first proposal is kept by its id").toBe(true);
+    expect(existsSync(h.proposalFile(second.id)), "the second proposal is kept by its id").toBe(
+      true,
+    );
     expect(statSync(h.proposalFile(first.id)).mode & 0o777).toBe(0o600);
     expect(h.records().bytes(first.hash)).toEqual(RELEASE);
     expect(h.records().proposal(first.id)).toEqual(first);
