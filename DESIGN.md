@@ -4184,6 +4184,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   splash runs under the curtain, so two of the splash's surfaces draw until Face ID passes. Locking folds the
   card's keyboard by the card's own fold, as another device taking the seat does. The corner's **Lock now** stands
   just above **Settings…** while the lock is on, wearing SF Symbols' `lock`, as the corner's other rows wear theirs.
+  *Amended 2026-11-05 (IOS-13a; VF-PM 02:29Z):* the welcome's glass ends with **Privacy Policy · Support** (12,
+  `inkTertiary`, two links), under its link. Only the welcome carries them, so WI-L4's three places stand and nothing
+  moves.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -5753,6 +5756,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *As built 2026-11-04 (WI-3):* **This phone** › **Lock** wears the desk's shut padlock (§13: `tape`, the phone's
   `lock`) and reads **On** or **Off**. Its page holds §9's switch and line, **Require Face ID** with its four times
   and its foot, and the off and no-passcode feet. A change asks first, and a miss or a Cancel leaves it as it was.
+  *Amended 2026-11-05 (IOS-13a, the 0.9 launch; VF-PM 02:29Z):*
+  - **About** gains two rows, **Privacy Policy** and **Support**. Each is trailed by §13's `outward` and opens
+    vibefield.dev/privacy or vibefield.dev/support in Safari (one pair of addresses, `VibeFieldSite`).
+  - **Acknowledgements** lists every part the app links, grouped by what it is for. Each row shows its name, version
+    and licence, and opens the part's full licence texts. With no acknowledgements in the build, it says so (§9)
+    above the short list.
+  - About's foot carries the non-affiliation line under Tailscale's trademark line, as one foot.
+  - Every **This phone** becomes the platform's own label, read at runtime: **This iPhone**, **This iPad**, or
+    **This device** where it is neither (§9).
 - **The phone's Chat** (track IOS, ruled 2026-11-04 from the design page *Chat in a Pocket*: PC-D1 and PC-D3…D8 A,
   James; PC-D2 carried A; the laws PC-L1…L5). Nothing is drawn yet: IOS-12a carries the wire, and IOS-12b…g draw it,
   in that order. One Chat, two sizes (PC-L1): the Mac's sparks, words, statuses and rulings at touch pitch. Every
@@ -6288,6 +6300,21 @@ With no passcode set the phone cannot lock: the way in offers nothing and has tw
 stands down (VibeField opens, the switch is off and the no-passcode foot shows), since a lock that cannot ask must
 not hold the door.
 
+**The phone's legal words** (track IOS, IOS-13a, 2026-11-05, from the 0.9 launch's "Fix what App Review would
+reject"; where each word stands is §8 "The phone's Settings" and "The phone's way in").
+- **Privacy Policy** and **Support** open vibefield.dev's own pages. They are links, never claims, so no privacy
+  sentence rides with them; item 160 and the bible's §11 keep those words.
+- With no acknowledgements in the build, the page says "Acknowledgements aren't in this build." above the short list
+  it has always shown.
+- Under Tailscale's trademark line in About: "VibeField names agents such as Claude Code and Codex to tell sessions
+  apart. It isn't affiliated with or endorsed by Anthropic or OpenAI."
+- The device is named as its platform names it, read when VibeField runs: "this iPhone", "this iPad", and "this
+  device" where it is neither. This is the bible's §7 platform label, with LP-4's "this device" for iOS's own lock
+  prompts as the fallback.
+- *Owed to L4 at its landing (the lock's own file):* "Your iPhone passcode works too." and "Anyone holding this
+  phone unlocked…".
+
+*(VF-PM 2026-11-05 02:29Z, at IOS-13a; for James's eye.)*
 **The freeway's refusals** (track FW, F1b's kit half; FW-D5; added 2026-11-01). The phone asks its home desktop to
 approve its connection to each desktop, and when a desktop says no, the phone says it in these words. ‹desktop› is
 the field's name for that desktop, the way the attach card names it ("couldn't reach studio's terminal"). The
