@@ -960,7 +960,8 @@
         </div>
         <div class="stats">
           <div class="stat"><strong>3</strong><span>repositories, one product</span></div>
-          <div class="stat"><strong>9</strong><span>seams named in section 4</span></div>
+          <!-- 2026-11-05 (MA-1a, recounted from section 4's table, one seam a row): 18 seams, MA's "rosetta's library → fieldd's apps table" the 18th. There were 17 at 068cab410, so the 9 this stat said was already stale before MA -->
+          <div class="stat"><strong>18</strong><span>seams named in section 4</span></div>
           <div class="stat"><strong>4</strong><span>walls (R20 · R21 · R22 · R23)</span></div>
           <div class="stat"><strong>3</strong><span>data domains: device · user · login</span></div>
         </div>
@@ -1566,6 +1567,20 @@
                         body is read. Six routes in total — status, runtimes, discoveries, search, sessions by native
                         id, and one session. No WebSocket, no assets, no timeline.
                       </p>
+                      <p>
+                        <em>Corrected 2026-11-05 (MA-1a, recounted at the pin, rosetta <code>8e8f496</code>, 0.1.3,
+                        protocol 29):</em> not six routes and two files any more. fieldd dials 15 of rosettad's 32
+                        routes: 13 <code>GET</code> routes (status, discoveries, runtimes, sessions and one session, a
+                        session's timeline, search, projects, a project's heatmap, usage, contribution and day, and
+                        activity) and two sockets, <code>/ws/meta</code> and <code>/ws/sessions/{id}</code>. Four fieldd
+                        files import the package: <code>agent-index.ts</code> (the seven types above),
+                        <code>daemon.ts</code> (the constant), <code>index-serve.ts</code> (<code>/grants</code>:
+                        <code>mintGrant</code> and the grant's scopes, for <code>index.openTicket</code>) and
+                        <code>index-tail.ts</code>, which does import <code>RosettaClient</code>, for the session tail
+                        (SP-6). <code>index-catalog.ts</code> and <code>rosettad-supervisor.ts</code> name the package
+                        only in comments. The doors page's <a href="api.html#upstream">upstream map</a> has the routes,
+                        door by door.
+                      </p>
                     </td>
                     <td><span class="badge tone-built">Built</span><p>AR-0 / AR-1; search at AR-5</p></td>
                   </tr>
@@ -1856,6 +1871,38 @@
                     <td>
                       <span class="badge tone-designed">Designed</span>
                       <p>CP-4a1 (2026-11-05) built the library, the signed approvals and proposals, and the static read; the host, the journal and the runs are CP-4a2's. The seam's owner is api's <a href="api.html#cat-flows"><code>flows.*</code> doors</a>.</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">rosetta's library → fieldd's <code>apps</code> table (MA)</span></td>
+                    <td><span class="badge tone-rosetta">rosetta</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        rosetta <code>crates/server/src/http/artifacts.rs</code> (<code>GET /api/artifacts</code>, the
+                        content route; the export petitioned, RO-32)<br />
+                        <code>packages/contracts/src/agent-index.ts</code> · <code>artifacts.ts</code> (MA-1a);
+                        <code>packages/fieldd/src/agent-index.ts</code> · <code>index-apps.ts</code> ·
+                        <code>index-apps-mesh.ts</code> · <code>made-app-service.ts</code> (MA-3)
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Rows, never pages. fieldd will list rosetta's library with the daemon bearer and keep one row per
+                        app an agent presented, with no path and no byte, in a replicated table of its own,
+                        <code>apps</code>: beside the catalog's <code>projects</code> and <code>sessions</code>, never
+                        inside them, so a self peer will copy it on a door of its own
+                        (<code>index.apps.catalog.subscribe</code>) and an older peer's refusal will cost only its apps.
+                        rosetta stays the only reader of transcripts (MA-L1, AR-L1). A page will run only at its own
+                        origin: at a person's open (<code>artifact.open</code>), rosetta will write it into a folder
+                        fieldd names (RO-32), and the native plane will serve it there; fieldd will never open the file
+                        (EL2). Keep and Hide will be the person's intent, carried in the replicated settings document,
+                        never facts on the rows (MA-L2). The design: <code>draft/thinking-mini-apps.md</code>, ruled 2026-11-05.
+                      </p>
+                    </td>
+                    <td>
+                      <span class="badge tone-designed">Designed</span>
+                      <p>MA-1a (2026-11-05) declares the contracts and the six doors, with no handler; fieldd's half is MA-3, and the export waits on rosetta 0.1.4 (RO-32, RO-33, RO-34a and RO-35, one release). The seam's owner is api's <a href="api.html#upstream">upstream map</a>; its doors are api's <a href="api.html#cat-index"><code>index.apps.*</code> and <code>index.artifacts</code></a> and <a href="api.html#cat-artifact"><code>artifact.open</code> and <code>artifact.mark</code></a>.</p>
                     </td>
                   </tr>
                 </tbody>

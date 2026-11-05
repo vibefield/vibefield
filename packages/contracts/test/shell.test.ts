@@ -6,6 +6,7 @@ import { SURFACE_LIMITS } from "../src/live-surfaces";
 import { METHODS } from "../src/methods";
 import {
   IPC_CHANNELS,
+  MADE_APP_LIMITS,
   SCREENSHOT_STILL,
   SHELL_CLIPBOARD,
   TERMINAL_PIPELINE,
@@ -1039,5 +1040,63 @@ describe("AH-3/AH-4 static shell provider", () => {
         title: "x".repeat(129),
       }).success,
     ).toBe(false);
+  });
+
+  // MA-1a (MA-D10 (b); the build plan's §2.3, L11) — a made app's capture names
+  // the hosts its served shell loads from, and answers the JPEG's digest.
+  const madeCapture = {
+    artifactId: "01JC4MA0PV0000000000000001",
+    url: "https://studio.tail1234.ts.net:13377/",
+  };
+  const at = (allowHosts: string[]) =>
+    ShellWebContentsCaptureArtifactPreviewParams.safeParse({ ...madeCapture, allowHosts }).success;
+
+  it("admits a made app's hosts as bare canonical names, at most REACH_HOSTS of them", () => {
+    const hosts = ["cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"];
+    expect(
+      ShellWebContentsCaptureArtifactPreviewParams.parse({ ...madeCapture, allowHosts: hosts }),
+    ).toEqual({ ...madeCapture, allowHosts: hosts });
+    // absent is every live artifact's capture, as before
+    expect(ShellWebContentsCaptureArtifactPreviewParams.parse(madeCapture)).toEqual(madeCapture);
+    expect(MADE_APP_LIMITS.REACH_HOSTS).toBe(16);
+    const many = (n: number) => Array.from({ length: n }, (_, i) => `cdn${i}.example.com`);
+    expect(at(many(16))).toBe(true);
+    expect(at(many(17))).toBe(false);
+    expect(at([])).toBe(true);
+  });
+
+  it("refuses a scheme, a port, a path, a wildcard, an IP, a tailnet name or a non-canonical host", () => {
+    for (const host of [
+      "https://cdn.jsdelivr.net",
+      "cdn.jsdelivr.net:443",
+      "cdn.jsdelivr.net/npm",
+      "*.jsdelivr.net",
+      "*",
+      "CDN.jsdelivr.net",
+      "cdn.jsdelivr.net.",
+      "localhost",
+      "10.0.0.1",
+      "[::1]",
+      "-cdn.example.com",
+      "cdn..example.com",
+      "laptop.tail1234.ts.net",
+      "ts.net",
+      " unpkg.com",
+      "",
+      `${"a".repeat(64)}.example.com`,
+    ]) {
+      expect(at([host]), host).toBe(false);
+    }
+  });
+
+  it("answers the JPEG's SHA-256 in lowercase hex, and an older shell's silence still parses", () => {
+    const digest = "7c9d5a180100e785385597f03324ba6969664076be51cd52dd7798ed96aaa739";
+    const result = (value: unknown) =>
+      ShellWebContentsCaptureArtifactPreviewResult.safeParse({ captured: true, digest: value });
+    expect(result(digest).success).toBe(true);
+    const refused = [digest.toUpperCase(), digest.slice(1), `${digest}0`, `sha256:${digest}`, 7];
+    for (const bad of refused) expect(result(bad).success, String(bad)).toBe(false);
+    const silent = ShellWebContentsCaptureArtifactPreviewResult.parse({ captured: true });
+    expect(silent.digest).toBeUndefined();
   });
 });

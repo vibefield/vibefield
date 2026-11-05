@@ -1,0 +1,21 @@
+{
+  "//": "MA-1a — a page a DELEGATED session presented: `sessionId` is the subagent's, and the origin resolved its root through `threads` (`rootSessionId`), which is where the door joins the project from. No hosted link and no native id, so its fold key is the app on its desktop. Never opened: no preview yet, and the icon is the fallback. A newer rosetta's `description` and `droppedFiles` (0.1.4) ride beside it, and an unknown availability word folds to `unknown` without losing the row.",
+  "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+  "appId": "060768c1cc73afc3a8c98c3d72a93b89aed96199e591f3cde19738a9dc140596",
+  "presentationId": "93e85f6087d842e8e7d718e31f8e488ea95dd9b6a5f1f37e722e5ec728ba05f5",
+  "title": "Token usage by day",
+  "filename": "usage-chart.html",
+  "kind": "claude-code",
+  "provider": "claude",
+  "projectId": "p-4f1c2a9e",
+  "sessionId": "ses-child-41c2",
+  "rootSessionId": "ses-9b2f0c7d",
+  "timelineId": "artifact-message-7",
+  "versions": 1,
+  "capturedAt": 1793750400000,
+  "availability": "captured_partially",
+  "byteLen": 9120,
+  "digest": "ca993afe38b485f74ad7e34ee7695128197afc47819a95291c9e71be9aea5c98",
+  "description": "A bar chart of the week's tokens, one bar per day.",
+  "droppedFiles": 2
+}

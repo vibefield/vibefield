@@ -73,6 +73,11 @@ const FORBIDDEN_RESPELLINGS = [
   '"meshdata.sock"',
   '"door.sock"',
   '"artifacts", "previews"',
+  // MA-1a — the made apps' folders, their previews serve's folder, and their replicas'. Slice 3e
+  // names the files that join them (`LAYOUT_CONSUMERS`), when those files exist.
+  '"artifacts", "made"',
+  '"artifacts", "made-previews"',
+  '"mesh", "apps"',
   '"plugins", "installed"',
   '"fieldd", "device-id"',
   '"fieldd", "settings"',

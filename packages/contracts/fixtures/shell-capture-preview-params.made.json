@@ -1,0 +1,6 @@
+{
+  "//": "MA-1a — fieldd asking Electron main to capture a MADE app: keyed by the preview id it minted (so the capture's folder rule is AH's), at the app's own root URL, and with the hosts the served shell loads from, which the capture's guard admits beside the target's origin (bare names: no scheme, no port, no wildcard).",
+  "artifactId": "01JC4MA0PV0000000000000001",
+  "url": "https://studio.tail1234.ts.net:13377/",
+  "allowHosts": ["cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"]
+}

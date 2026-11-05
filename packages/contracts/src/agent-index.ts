@@ -1,11 +1,20 @@
 import { z } from "zod";
+import {
+  ArtifactRootUrl,
+  Blake3Hex,
+  MadeAppFoldKey,
+  MadeAppHostedUrl,
+  MadeAppId,
+  MadeAppPreview,
+} from "./artifacts";
 import { isAbsoluteDesktopPath } from "./paths";
 import { PlaceFactsList, PlaceRef, ProjectKey } from "./project-places";
-import { INDEX_ACTIVITY, INDEX_TICKET, INDEX_TIMELINE } from "./registries";
+import { INDEX_ACTIVITY, INDEX_TICKET, INDEX_TIMELINE, MADE_APP_LIMITS } from "./registries";
 import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
   MeshScope,
   RowsDeviceState,
+  RowsResumed,
   RowsSubscribeParams,
   rowsDelta,
   rowsOpen,
@@ -1112,6 +1121,367 @@ export const IndexChangesSubscribeParams = RowsSubscribeParams.extend({
   scope: MeshScope.optional(),
 }).passthrough();
 export type IndexChangesSubscribeParams = z.infer<typeof IndexChangesSubscribeParams>;
+
+// ── MA-1a — the made apps across desktops (`draft/thinking-mini-apps.md` v0.2 §4, RULED 2026-11-05; the build plan's
+// §1 as the lead ruled it, 2026-11-05 09:30Z) ──
+//
+// Each desktop's rosetta keeps a LIBRARY of the pages its agents presented (`GET /api/artifacts`). That desktop's
+// fieldd walks it and republishes a FACT table, `apps`, as rows (DS-L3), stamped by the origin alone and keyed by
+// `appId` within `device` (DS-L2). The table has its OWN peer door, `index.apps.catalog.subscribe` (the plan's L1):
+// INDEX_CATALOG_TABLES and INDEX_REPLICATED_TABLES do not name it, so an older peer refuses that one door and nothing
+// else, and History's pings never fire on an app. A window and the phone never read the rows raw. They page the FOLD
+// through `index.apps.list`: one app however many desktops hold it, its newest presentation serving it (MA-D4). They
+// re-page on `index.apps.subscribe`'s pings (DS-L4: the daemon aggregates, a client never merges). `index.artifacts` is
+// the History room's read of one desktop's library, and the phone's Versions.
+//
+// A row is safe metadata (AH-D5): never a path, never bytes, never a daemon-relative URL (MA §4.2, EL2, MA-L5).
+// rosetta's entry carries three such keys: `publication.path`, `recovered_from` and `asset` (its `url`). Every shape
+// below names them `never`, so a producer that spreads rosetta's entry into a row is refused rather than carried
+// through by `.passthrough()`. Keep and hide are not on the row: they are the person's intent (`MadeAppIntentRow`,
+// artifacts.ts; slice 3h), joined at the door. The reads ride `index.search` (the history's content); the acts ride
+// `apps.use` (artifacts.ts).
+
+/** rosetta `AssetRef`, NARROWED to what fieldd joins on: the page's blake3 digest, its size and its type. Its
+ * daemon-relative `url` is rosetta's and is not declared, because nothing fieldd builds may carry it. */
+export const IndexArtifactAssetRow = z
+  .object({
+    digest: z.string(),
+    media_type: z.string(),
+    byte_len: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type IndexArtifactAssetRow = z.infer<typeof IndexArtifactAssetRow>;
+
+/** rosetta `HtmlArtifactPublication`, narrowed. Its `path` (an absolute path on its desktop) is not declared: fieldd
+ * never reads it. Every locator is nullish, as rosetta sends it, and `published_at` is nullable there (H6). */
+export const IndexArtifactPublicationRow = z
+  .object({
+    id: z.string().min(1),
+    artifact_id: z.string().min(1),
+    session_id: z.string().min(1),
+    timeline_id: z.string().min(1),
+    title: z.string(),
+    filename: z.string(),
+    url: z.string().nullish(),
+    native_id: z.string().nullish(),
+    version: z.string().nullish(),
+    published_at: z.number().finite().nullish(),
+  })
+  .passthrough();
+export type IndexArtifactPublicationRow = z.infer<typeof IndexArtifactPublicationRow>;
+
+/** rosetta `ArtifactEntry` (protocol 29), as fieldd READS it. `availability` stays an open string here and is folded by
+ * `MadeAppAvailability` in the projection. `recovered_from` is read for one bit (`recovered`) and never carried.
+ * `agent` is rosetta's KIND, mapped to the catalog's provider where the seam is crossed (R23b). `project_id` and
+ * `project_name` come through the ROOT session. */
+export const IndexArtifactEntryRow = z
+  .object({
+    publication: IndexArtifactPublicationRow,
+    availability: z.string(),
+    captured_at: z.number().finite().nullish(),
+    recovered_from: z.string().nullish(),
+    asset: IndexArtifactAssetRow.nullish(),
+    agent: z.string(),
+    session_title: z.string().nullish(),
+    project_id: z.string().nullish(),
+    project_name: z.string().nullish(),
+    presentations: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type IndexArtifactEntryRow = z.infer<typeof IndexArtifactEntryRow>;
+
+/** rosetta `ArtifactPage`, the body of `GET /api/artifacts`: parsed, never cast. `canonical_ready` is false while the
+ * library may still grow during the first ingestion. */
+export const IndexArtifactPageResponse = z
+  .object({
+    entries: z.array(IndexArtifactEntryRow),
+    next_cursor: z.string().nullish(),
+    canonical_ready: z.boolean(),
+  })
+  .passthrough();
+export type IndexArtifactPageResponse = z.infer<typeof IndexArtifactPageResponse>;
+
+/** rosetta's `HtmlArtifactAvailability` words (protocol 29), and `unknown` for a word this build has not heard. An
+ * open vocabulary (`IndexPhase`'s pattern): a word rosetta adds costs the app its state, never its row. */
+export const MADE_APP_AVAILABILITIES = [
+  "captured",
+  "not_captured",
+  "missing",
+  "too_large",
+  "unsupported",
+  "changed_during_read",
+  "unknown",
+] as const;
+export const MadeAppAvailability = z.enum(MADE_APP_AVAILABILITIES).catch("unknown");
+export type MadeAppAvailability = (typeof MADE_APP_AVAILABILITIES)[number];
+
+/** A page's file name as its agent's tool named it: a basename and never a path, so no `/`, no `\`, no NUL, and never
+ * `.` or `..`; at most 255 (a file name's bound). The producer drops a row whose name is not one. */
+export const MadeAppFilename = z
+  .string()
+  .min(1)
+  .max(255)
+  .refine(isBasename, "a basename, never a path");
+export type MadeAppFilename = z.infer<typeof MadeAppFilename>;
+
+function isBasename(name: string): boolean {
+  return !/[/\\]/.test(name) && !name.includes("\0") && name !== "." && name !== "..";
+}
+
+/** The keys no made-app row or door shape may carry (MA §4.2, EL2): rosetta's paths on its desktop and its
+ * daemon-relative asset, each refused rather than carried through by `.passthrough()`. */
+const NEVER_A_PATH = {
+  path: z.never().optional(),
+  recoveredFrom: z.never().optional(),
+  recovered_from: z.never().optional(),
+  asset: z.never().optional(),
+} as const;
+
+/** One made app as its OWNER republishes it: the newest presentation of one `appId` in its desktop's library, keyed by
+ * `appId` within `device` and stamped by the origin alone (DS-L2).
+ *  - device: the desktop whose rosetta holds the copy (MA §4.2's `origin`, renamed to every catalog row's owner
+ *    column).
+ *  - appId, presentationId: rosetta's `artifact_id` and the newest `publication.id`.
+ *  - title: the producer clips it to ARTIFACT_LIMITS.TITLE_CHARS, since rosetta's is unbounded (H7), and falls back to
+ *    the filename when it is empty. A reader never refuses a row for a title's length.
+ *  - filename: a basename (`MadeAppFilename`).
+ *  - kind, provider: the agent named twice, rosetta's kind and the catalog id it maps to (`IndexCatalogSession`'s
+ *    pattern; R23b).
+ *  - projectId: rosetta's, through the ROOT session. The door joins `projectKey` (PJ-4); this row never carries one.
+ *  - sessionId, rootSessionId, timelineId: where the page was presented, and the session's root, which the origin
+ *    resolves through `threads` (absent: the session is its own root).
+ *  - versions: rosetta's `presentations`.
+ *  - publishedAt, capturedAt: rosetta's `published_at` is nullable (H6); the order is
+ *    `publishedAt ?? capturedAt ?? 0`.
+ *  - availability: rosetta's six words, open (`MadeAppAvailability`).
+ *  - byteLen, digest: the page's size and rosetta's blake3 of it. Never the bytes, never their URL.
+ *  - hostedUrl, nativeId: the fold keys (L6), never fetched.
+ *  - description, droppedFiles: rosetta 0.1.4's (RO-A2 is RO-33, RO-A3a is RO-34a; the lead's ruling on L19). Absent
+ *    is unknown; `droppedFiles > 0` is a page served without its files ("page only").
+ *  - preview: the app's face (MA-D10 (b); `MadeAppPreview`), which carries no URL.
+ * What a reader cannot read: the identities (device, appId, presentationId, sessionId, timelineId, filename) and the
+ * two joins whose absence says something (projectId absent is "no project", rootSessionId absent is "its own root")
+ * are strict, so a bad one refuses the row. Every other optional fact (kind, provider, the two times, byteLen,
+ * digest, hostedUrl, nativeId, description, droppedFiles, preview) costs that fact, never the row. */
+export const IndexCatalogApp = z
+  .object({
+    device: z.string().min(1),
+    appId: MadeAppId,
+    presentationId: MadeAppId,
+    title: z.string().min(1),
+    filename: MadeAppFilename,
+    kind: AgentKind.optional().catch(undefined),
+    provider: AgentProviderId.optional().catch(undefined),
+    projectId: z.string().min(1).optional(),
+    sessionId: z.string().min(1),
+    rootSessionId: z.string().min(1).optional(),
+    timelineId: z.string().min(1),
+    versions: z.number().int().nonnegative(),
+    publishedAt: z.number().finite().optional().catch(undefined),
+    capturedAt: z.number().finite().optional().catch(undefined),
+    availability: MadeAppAvailability,
+    byteLen: z.number().int().nonnegative().optional().catch(undefined),
+    digest: Blake3Hex.optional().catch(undefined),
+    hostedUrl: MadeAppHostedUrl.optional().catch(undefined),
+    nativeId: z.string().min(1).max(MADE_APP_LIMITS.NATIVE_ID_CHARS).optional().catch(undefined),
+    description: z.string().max(MADE_APP_LIMITS.DESCRIPTION_CHARS).optional().catch(undefined),
+    droppedFiles: z.number().int().nonnegative().optional().catch(undefined),
+    preview: MadeAppPreview.optional().catch(undefined),
+    ...NEVER_A_PATH,
+  })
+  .passthrough();
+export type IndexCatalogApp = z.infer<typeof IndexCatalogApp>;
+
+/** `index.apps.catalog.subscribe`: this desktop's `apps` table as rows (the base's `rowsOpen` answer, then `.delta` and
+ * `.snapshot` frames and the key-digest heartbeat), as `index.catalog.subscribe` serves its two tables. Like that
+ * door it is SELF PEERS ONLY, admitted to a `peer-fieldd` principal and no other. It is its own door (L1), so its
+ * params name no table. An older peer without it refuses the door, which a reader reads as a desktop with no apps to
+ * show (DS-L9), never as a red. A delta's `removed` carries `appId`s. */
+export const IndexAppsCatalogSubscribeParams = RowsSubscribeParams;
+export type IndexAppsCatalogSubscribeParams = z.infer<typeof IndexAppsCatalogSubscribeParams>;
+
+/** The owner's standing, declared on every frame of `index.apps.catalog.subscribe`: the only road by which a home
+ * learns the two facts its `sources[]` entry for that peer carries (`IndexAppsSource`).
+ *  - libraryReady: rosetta's `canonical_ready` on the owner.
+ *  - previewsBase: the root https URL of the owner's previews serve, as the owner's own listener reported it.
+ * The owner stamps both on every frame it sends: the open answer (either arm), each snapshot page and each delta, the
+ * key-digest heartbeat included. A change in either with no row moved is sent at once as a delta with no rows (its
+ * revision moves, as for any frame). A reader takes the newest frame's values. A fact a frame lacks, or one this build
+ * cannot read, is unknown: an owner from before MA, a library not heard yet, or no previews serve up.
+ * The home puts a peer's `previewsBase` into that peer's `sources[]` entry only once it passes `IndexAppsSource`'s
+ * check, its host equal to that peer's MagicDNS name as the home's own roster authenticates it (AH's
+ * `projectCatalogEntry` rule). On a mismatch, or with no authenticated name, the home strips it. It never rewrites a
+ * base onto another host (validate or strip, the lead's C16). */
+const OWNER_STANDING = {
+  libraryReady: z.boolean().optional().catch(undefined),
+  previewsBase: ArtifactRootUrl.optional().catch(undefined),
+} as const;
+
+export const IndexAppsCatalogSnapshotPage = rowsSnapshot(IndexCatalogApp).extend(OWNER_STANDING);
+export type IndexAppsCatalogSnapshotPage = z.infer<typeof IndexAppsCatalogSnapshotPage>;
+export const IndexAppsCatalogDelta = rowsDelta(IndexCatalogApp).extend(OWNER_STANDING);
+export type IndexAppsCatalogDelta = z.infer<typeof IndexAppsCatalogDelta>;
+/** The open answer: `rowsOpen`'s two arms, with the standing beside `resumed` (a resumed reader is sent no page) and
+ * inside the snapshot's page. */
+export const IndexAppsCatalogOpen = z.union([
+  z.object({ resumed: RowsResumed, ...OWNER_STANDING }).passthrough(),
+  z.object({ snapshot: IndexAppsCatalogSnapshotPage }).passthrough(),
+]);
+export type IndexAppsCatalogOpen = z.infer<typeof IndexAppsCatalogOpen>;
+
+/** A desktop's standing in an apps answer: `IndexCatalogSource`'s, and two facts of its own. The answering desktop
+ * reads its own from its rosetta and its own listener, and a peer's from that peer's newest frame on
+ * `index.apps.catalog.subscribe` (the standing declared above).
+ *  - libraryReady: rosetta's `canonical_ready` on that desktop. While it is false the library is still reading its
+ *    history, which a reader says ("‹desktop› is still reading its history") instead of drawing an empty shelf.
+ *    Absent: unknown (an older desktop, or one not heard yet).
+ *  - previewsBase: the root https URL of that desktop's previews serve, as its own listener reported it (the lead's
+ *    ruling on L2 and C6). A reader validates it as AH §6 validates an artifact URL (`artifactRootUrlClaim`: a root
+ *    path, no query, a port in AH's range) and requires its host to equal that desktop's MagicDNS name, or drops it
+ *    (C16). One this build cannot read is no base. An image's address is derived from it (`madeAppPreviewUrl`), never
+ *    stored. */
+export const IndexAppsSource = IndexCatalogSource.extend({
+  libraryReady: z.boolean().optional(),
+  previewsBase: ArtifactRootUrl.optional().catch(undefined),
+}).passthrough();
+export type IndexAppsSource = z.infer<typeof IndexAppsSource>;
+
+/** One app as the fold answers it (MA-D4; the answering daemon composes it, DS-L4): the SERVING row, the newest
+ * presentation among every desktop that holds the app, with its columns (bar `projectId`) and what this door joins.
+ *  - appKey: `${device}:${appId}` of the serving row. Opaque: compared, never parsed.
+ *  - foldKey: the app's fold key (`madeAppFoldKey`, artifacts.ts), what `artifact.mark` names. A client passes it back
+ *    as it came.
+ *  - device, appId: the serving row's, which is `artifact.open`'s target. devices: every desktop that holds the app.
+ *  - projectKey, place, ink: joined at THIS door from the root session's cwd (PJ-4), never replicated. `ink` is the
+ *    project's deal index (`ProjectSummary.ink`), the fallback icon's colour (MA-D10 (b)).
+ *  - kept, hidden: the person's merged intent for the fold key, joined at this door (slice 3h; absent until then).
+ *  - openable: the app has a verified copy, is not hidden, and its desktop can export it. */
+export const IndexApp = IndexCatalogApp.omit({ projectId: true })
+  .extend({
+    appKey: z.string().min(1),
+    foldKey: MadeAppFoldKey,
+    devices: z.array(z.string().min(1)).min(1),
+    projectKey: ProjectKey.optional(),
+    place: PlaceRef.optional(),
+    ink: z.number().int().nonnegative().optional(),
+    kept: z.literal(true).optional(),
+    hidden: z.literal(true).optional(),
+    openable: z.boolean(),
+  })
+  .passthrough();
+export type IndexApp = z.infer<typeof IndexApp>;
+
+/** `index.apps.list`: a page of the fold, newest first (the serving row's `publishedAt ?? capturedAt ?? 0`, then the
+ * app key), by keyset; `cursor` is the previous answer's, opaque. `scope` is `index.sessions`' (`local`: this
+ * desktop's library; `mesh`: the merged replica of every self desktop, an asleep one's apps listed and greyed by
+ * `sources`, DS-L8). `devices` narrows to some desktops, `projectKey` to one project, `q` to titles that hold it, and
+ * `kept` to the kept apps. A hidden app is dropped unless `includeHidden`. A tailnet caller's page is cut at
+ * INDEX_TAILNET_LIMITS.MAX_ROWS, and `clipped` says so. */
+export const IndexAppsParams = z
+  .object({
+    scope: MeshScope.optional(),
+    devices: z.array(z.string().min(1).max(256)).min(1).max(64).optional(),
+    projectKey: ProjectKey.optional(),
+    q: z.string().min(1).max(512).optional(),
+    kept: z.boolean().optional(),
+    includeHidden: z.boolean().optional(),
+    cursor: z.string().min(1).max(1024).optional(),
+    limit: z.number().int().min(1).max(500).optional(),
+  })
+  .passthrough();
+export type IndexAppsParams = z.infer<typeof IndexAppsParams>;
+
+export const IndexAppsResult = z
+  .object({
+    rows: z.array(IndexApp),
+    cursor: z.string().min(1).optional(),
+    sources: z.array(IndexAppsSource),
+    clipped: z.boolean().optional(),
+  })
+  .passthrough();
+export type IndexAppsResult = z.infer<typeof IndexAppsResult>;
+
+/** `index.apps.subscribe`: invalidation pings for a visible shelf, `index.changes.subscribe`'s pattern. Its rows are
+ * always EMPTY and its revision moves whenever the answering scope's fold moves (an app on any desktop, a desktop's
+ * standing, the merged intent). A reader re-pages what it shows; an app that arrived is a diff of the first page. */
+export const IndexAppsSubscribeParams = RowsSubscribeParams.extend({
+  scope: MeshScope.optional(),
+}).passthrough();
+export type IndexAppsSubscribeParams = z.infer<typeof IndexAppsSubscribeParams>;
+
+/** `index.artifacts`: one desktop's library as rosetta pages it, for the History room's `artifacts` port and the
+ * phone's Versions (the plan's L5). `device` routes it (`federate`; absent: this desktop). `q` searches titles;
+ * `kind` is rosetta's agent kind; `projectKey` is a PJ project, which fieldd resolves to that desktop's rosetta project
+ * ids; `appId` asks for one app's every presentation (Versions). `cursor` is the previous page's, opaque, and `limit`
+ * is 1..100, rosetta's own. */
+export const IndexArtifactsParams = z
+  .object({
+    device: z.string().min(1).max(256).optional(),
+    q: z.string().min(1).max(512).optional(),
+    kind: AgentKind.optional(),
+    projectKey: ProjectKey.optional(),
+    appId: MadeAppId.optional(),
+    cursor: z.string().min(1).max(4096).optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+  })
+  .passthrough();
+export type IndexArtifactsParams = z.infer<typeof IndexArtifactsParams>;
+
+/** One presentation as `index.artifacts` answers it: rosetta's entry in VibeField's vocabulary, with no path for ANY
+ * caller. Its `publication.path` and `recovered_from` are paths on its desktop and its `asset.url` a daemon-relative
+ * one; the recovered-from path becomes a flag; the agent leaves as its kind and the catalog's provider; the project is
+ * joined at this door.
+ *  - device: the desktop whose library answered.
+ *  - presentationId, appId: rosetta's `publication.id` and `artifact_id`.
+ *  - title, filename: as on the catalog row (the producer clips the title and falls back to the filename).
+ *  - hostedUrl, nativeId, version: the tool's record (`version` is rosetta's open string).
+ *  - recovered: the page's bytes were recovered from a file other than the one the tool wrote.
+ *  - mediaType, byteLen, digest: from rosetta's asset, when it kept one.
+ *  - versions: rosetta's `presentations`, the app's count.
+ * What a reader cannot read: the identities (device, presentationId, appId, sessionId, timelineId, filename) and the
+ * project joins (projectId, projectKey; absent is "no project") are strict, so a bad one refuses the entry. Every
+ * other optional fact costs that fact, never the entry, as on the catalog row. */
+export const IndexArtifactEntry = z
+  .object({
+    device: z.string().min(1),
+    presentationId: MadeAppId,
+    appId: MadeAppId,
+    sessionId: z.string().min(1),
+    timelineId: z.string().min(1),
+    title: z.string().min(1),
+    filename: MadeAppFilename,
+    hostedUrl: MadeAppHostedUrl.optional().catch(undefined),
+    nativeId: z.string().min(1).max(MADE_APP_LIMITS.NATIVE_ID_CHARS).optional().catch(undefined),
+    version: z.string().min(1).max(256).optional().catch(undefined),
+    publishedAt: z.number().finite().optional().catch(undefined),
+    capturedAt: z.number().finite().optional().catch(undefined),
+    availability: MadeAppAvailability,
+    recovered: z.boolean(),
+    mediaType: z.string().min(1).max(256).optional().catch(undefined),
+    byteLen: z.number().int().nonnegative().optional().catch(undefined),
+    digest: Blake3Hex.optional().catch(undefined),
+    kind: AgentKind.optional().catch(undefined),
+    provider: AgentProviderId.optional().catch(undefined),
+    sessionTitle: z.string().optional().catch(undefined),
+    projectId: z.string().min(1).optional(),
+    projectName: z.string().optional().catch(undefined),
+    projectKey: ProjectKey.optional(),
+    versions: z.number().int().nonnegative(),
+    ...NEVER_A_PATH,
+  })
+  .passthrough();
+export type IndexArtifactEntry = z.infer<typeof IndexArtifactEntry>;
+
+/** `index.artifacts`' answer: a page of entries, the next page's cursor (absent on the last), and whether that
+ * desktop's library has finished its first reading. */
+export const IndexArtifactsResult = z
+  .object({
+    entries: z.array(IndexArtifactEntry),
+    nextCursor: z.string().min(1).optional(),
+    canonicalReady: z.boolean(),
+  })
+  .passthrough();
+export type IndexArtifactsResult = z.infer<typeof IndexArtifactsResult>;
 
 // ── AR-8 — delegated threads (build-hf.md L1, the lead's decision 2026-10-08) ──
 //

@@ -521,6 +521,77 @@ export const FLOW_LIMITS = {
   LIVE_STEPS_MAX: 8,
 } as const;
 
+/** MA-1a (`draft/thinking-mini-apps.md` v0.2, RULED 2026-11-05; the build plan's §1.4 as the lead ruled it) — the
+ * made apps' bounds. PROVISIONAL marks a number that is a starting value until it is measured on James's desktops, as
+ * FLOW_LIMITS' are.
+ *  - ROWS: the apps one desktop republishes (`IndexCatalogApp`, agent-index.ts). The producer keeps its newest ROWS, by
+ *    `publishedAt ?? capturedAt ?? 0`, and drops the rest; a reader never clamps (the plan's L13).
+ *  - WALK_PAGE: the page the library walk asks rosetta for (`/api/artifacts`, whose own limit is 1..100).
+ *  - WALK_RESTARTS: how often one walk starts again from the head on `410 cursor_expired` before it waits for the next
+ *    re-snapshot. A walk that gives up removes nothing: removals come only from a walk that completed (L13).
+ *  - REREAD_DELAY_MS, REREAD_PAGE, REREAD_MIN_INTERVAL_MS: after a `sessions` change the newest REREAD_PAGE apps are
+ *    read again REREAD_DELAY_MS later, at most once per REREAD_MIN_INTERVAL_MS. PROVISIONAL, and it retires with
+ *    RO-A4's library signal (RO-35), when the re-read follows `artifacts_changed` instead.
+ *  - IDLE_CLOSE_MS: a serve nobody has opened for this long closes; its port stays reserved. A kept app never closes
+ *    (MA §4.4).
+ *  - OPEN_WAIT_MS: how long `artifact.open` waits for its serve's URL before it answers `starting` with none.
+ *    PROVISIONAL: probe P4 measures a first add's latency.
+ *  - DESCRIPTION_CHARS: an app's description (RO-A2, which is RO-33 in rosetta 0.1.4 by the lead's ruling on L19). A
+ *    longer one costs the field, never the row.
+ *  - REACH_HOSTS: the hosts a served shell names (RO-A1's answer, as data, MA-L9): the open answer's `reach` and the
+ *    capture's `allowHosts` (shell.ts).
+ *  - INTENTS: the apps one person's keep-and-hide rows hold (`MadeAppIntentRow`, artifacts.ts; slice 3h) and the serve
+ *    records one desktop keeps (`MadeAppRegistry`). A port reservation lasts for the app's life, so this bounds the
+ *    reservations too.
+ *  - NATIVE_ID_CHARS: an app's native id (rosetta's `native_id`, a fold key, L6). rosetta admits 4,096; 256 is
+ *    rosetta's own bound on a filter value. A longer one costs the field, and the fold falls back to the hosted link.
+ * TS-only: no native reader. */
+export const MADE_APP_LIMITS = {
+  ROWS: 4096,
+  WALK_PAGE: 100,
+  WALK_RESTARTS: 3,
+  REREAD_DELAY_MS: 2_000,
+  REREAD_MIN_INTERVAL_MS: 10_000,
+  REREAD_PAGE: 20,
+  IDLE_CLOSE_MS: 24 * 60 * 60_000,
+  OPEN_WAIT_MS: 4_000,
+  DESCRIPTION_CHARS: 512,
+  REACH_HOSTS: 16,
+  INTENTS: 4096,
+  NATIVE_ID_CHARS: 256,
+} as const;
+
+/** MA-1a (MA-L10, honest states) — `artifact.open`'s refusals, INDEX_TICKET's pattern: `UnavailableDetails.service`
+ * and the states a reader branches on (`MadeAppOpenRefusal`, artifacts.ts). Each is a contract string, never a
+ * sentence, and names the desktop it is about (`device`) when the open was forwarded there.
+ * STATE_EXPORT_UNBUILT: the app's desktop runs a rosetta with no export door (0.1.3; RO-A1 is RO-32, in 0.1.4).
+ *   Retryable false: nothing a retry changes until that desktop's rosetta moves.
+ * STATE_NOT_KEPT: rosetta keeps no verified bytes for the presentation (its availability is `not_captured`, `missing`
+ *   or `changed_during_read`). Retryable false.
+ * STATE_TOO_LARGE: rosetta did not keep the page, which is past its size bound (`too_large`). Retryable false.
+ * STATE_UNSUPPORTED: rosetta found a page it cannot keep (`unsupported`). Retryable false.
+ * STATE_READING: the desktop's library is still reading its history (`canonical_ready: false`) and holds no row for
+ *   the app yet. Retryable true.
+ * STATE_EXPORT_FAILED: rosetta's export, or the serve's declare, failed. Retryable true.
+ * STATE_NOT_LINKED: the desktop has no linked login, so no serve can carry its `allow` (AH's `not_linked`). Retryable
+ *   true: a link can come.
+ * A hidden app, or one no row names, is NOT_FOUND: a hidden app never opens, raw URL or not (MA §4.4). When every live
+ * serve under ARTIFACT_LIMITS.LOCAL_OBJECTS is kept, so none can be closed for a new one, the open is
+ * RESOURCE_EXHAUSTED `{resource: RESOURCE}`. TS-only: no native reader. */
+export const MADE_APP_OPEN = {
+  /** `UnavailableDetails.service` on every refusal */
+  SERVICE: "apps",
+  STATE_EXPORT_UNBUILT: "export-unbuilt",
+  STATE_NOT_KEPT: "not-kept",
+  STATE_TOO_LARGE: "too-large",
+  STATE_UNSUPPORTED: "unsupported",
+  STATE_READING: "library-reading",
+  STATE_EXPORT_FAILED: "export-failed",
+  STATE_NOT_LINKED: "not-linked",
+  /** RESOURCE_EXHAUSTED's `resource` at the serve ceiling */
+  RESOURCE: "apps",
+} as const;
+
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
  * above SNAPSHOT_PAGE_BYTES is paged with `more: true`; a source keeps a
  * journal of JOURNAL_DEPTH changed-key frames per table, below which a kept
@@ -1378,6 +1449,15 @@ export const SCOPES = [
   // only as the carrier of a forwarded act (DS-L7: `forward.onBehalfOf`) or
   // for its OWN rows on a read, never the home's aggregate (DS-L4).
   "sparks.use",
+  // MA-1a (`draft/thinking-mini-apps.md` v0.2, RULED 2026-11-05; the build plan's L4 as the lead ruled it) — the
+  // person's two acts on the apps their agents made: `artifact.open` (serve the app and answer its URL) and
+  // `artifact.mark` (keep it, or hide it). The window's token (Electron main's literal list, `bootstrap.ts`, from
+  // MA-4a) and the phone's preset (TAILNET_SCOPES) hold it, and NOTHING else: an open puts up a listener that serves
+  // what an agent wrote, so this is never plugin-eligible (`plugins.ts` names it nowhere; AR-5b's precedent). A self
+  // peer DAEMON holds it only because PEER_FIELDD_SCOPES is DERIVED from the preset: it carries a forwarded open
+  // (DS-L7), and `artifact.mark` is `local`, so the D36 wall refuses it to a peer. The reads (`index.apps.*`,
+  // `index.artifacts`) are the history's content and ride `index.search`, not this.
+  "apps.use",
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 
@@ -1405,7 +1485,15 @@ export type Scope = (typeof SCOPES)[number];
  * hatches, wakes and talks to the person's sparks and answers the needs-you
  * queue, every read and act through its home (PC-L2). It reaches the peer
  * preset by derivation; the doors admit a peer daemon only as the carrier of
- * a forwarded act, or for its own rows (DS-L4, DS-L7). */
+ * a forwarded act, or for its own rows (DS-L4, DS-L7).
+ * MA-1a (MA-D1…D13 RULED 2026-11-05; the build plan's L4) — `apps.use` joins:
+ * the phone opens an app an agent made (`artifact.open`, through its home,
+ * which forwards it to the app's desktop) and keeps or hides it
+ * (`artifact.mark`, answered by the home). A phone's grant is this list, read
+ * at every hello (`product-api.ts` copies it into the connection's scopes), so
+ * a phone that paired before this line holds the scope at its next connect;
+ * nothing freezes it at pairing. It reaches the peer preset by derivation, and
+ * a peer daemon is admitted only as the carrier of a forwarded open. */
 export const TAILNET_SCOPES: readonly Scope[] = [
   "canvas.read",
   "canvas.write",
@@ -1420,6 +1508,7 @@ export const TAILNET_SCOPES: readonly Scope[] = [
   "mcp.consume",
   "project.read",
   "sparks.use",
+  "apps.use",
 ] as const;
 
 /** UA-4 (spec §7.3, UA-D5): the guest preset — a WhoIs-verified tailnet peer
@@ -1756,6 +1845,15 @@ export const LAYOUT = {
   REGISTRIES_DIR: ["registries"],
   DOCS_DIR: ["docs"],
   ARTIFACT_PREVIEWS_DIR: ["artifacts", "previews"],
+  /** MA-1a (MA §4.4; the build plan's L7 and L20) — the made apps' folders: under `artifacts/made/<appId>/`, the
+   * runnable document rosetta's export writes for an app's serve (RO-A1), one folder per page digest (the serve
+   * re-points, and fieldd removes the old folder). A cache VibeField can rebuild at any time (MA-L4): rosetta's copy is
+   * the truth, and fieldd names the folder and never opens a file in it. */
+  ARTIFACT_MADE_DIR: ["artifacts", "made"],
+  /** MA-1a (the lead's ruling on L12 and C6) — what the previews serve serves: made apps' previews ONLY, never AH's
+   * live-artifact previews. After each capture fieldd hard-links the JPEG from ARTIFACT_PREVIEWS_DIR into
+   * `made-previews/<previewId>/thumbnail.jpg` (`fs.link`, never a read), and removes a hidden app's link. */
+  ARTIFACT_MADE_PREVIEWS_DIR: ["artifacts", "made-previews"],
   AUDIT_DIR: ["audit"],
   PLUGINS_INSTALLED_DIR: ["plugins", "installed"],
   NATIVE_DIR: ["native"],
@@ -1909,6 +2007,11 @@ export const LAYOUT = {
    * sleeps (DS-L8), replaced on a reset. Never this desktop's own rows: those
    * are rosetta's, followed live. */
   MESH_CATALOG_DIR: ["mesh", "catalog"],
+  /** MA-1a (the build plan's L1) — the made apps' REPLICAS of this user's other desktops: one file per desktop, its
+   * `IndexCatalogApp` rows as last heard and the cursor to resume from, kept while the desktop sleeps (DS-L8), replaced
+   * on a reset. The `apps` table has its own peer door (`index.apps.catalog.subscribe`), so its replicas have their own
+   * folder beside the history catalog's. Never this desktop's own rows: those are rosetta's library, walked live. */
+  MESH_APPS_DIR: ["mesh", "apps"],
   /** AR-1 (AR-D18/D20) — this user's personas: puppeteer's profile registry
    * (`ProfileRegistrySnapshot`, through fieldd's injected store) and the
    * managed roots beneath it (0700 — the agent's own data folder, bound at

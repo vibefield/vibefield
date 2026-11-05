@@ -1,0 +1,4 @@
+{
+  "//": "MA-1a — the serve is on its way up (a first add, a certificate not issued yet): no URL until its listener reports one, never a synthesized address. The caller asks again.",
+  "state": "starting"
+}

@@ -1,0 +1,5 @@
+{
+  "//": "MA-1a — the phone opening an app through its home: the serving row's `appId` on the desktop that holds it (`device` forwards the call WHOLE; `federate`). The phone never sets `reveal`.",
+  "appId": "cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+  "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF"
+}

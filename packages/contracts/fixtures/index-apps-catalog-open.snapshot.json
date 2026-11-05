@@ -1,0 +1,28 @@
+{
+  "//": "MA-1a — `index.apps.catalog.subscribe`'s open answer when the replica must RESET: the owner's `apps` table as a snapshot (one page here), with the owner's standing declared on the page: `libraryReady` (rosetta's `canonical_ready`) and `previewsBase` (its previews serve's root, which the home validates against this peer's MagicDNS name or strips).",
+  "snapshot": {
+    "epoch": "apps-7b1e4c90-3f2a-4d6b-8e15-9c0a2d4f6b81",
+    "revision": 41,
+    "rows": [
+      {
+        "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+        "appId": "cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+        "presentationId": "ff82c000262f76cf6e33a271983f71d2775ea6b3288cc3c395a7f36495528f0e",
+        "title": "Checkout design review",
+        "filename": "checkout.html",
+        "kind": "claude-code",
+        "provider": "claude",
+        "projectId": "p-4f1c2a9e",
+        "sessionId": "ses-9b2f0c7d",
+        "timelineId": "artifact-message-1",
+        "versions": 2,
+        "publishedAt": 1793836800000,
+        "availability": "captured",
+        "hostedUrl": "https://claude.ai/code/artifact/review",
+        "nativeId": "review"
+      }
+    ],
+    "libraryReady": true,
+    "previewsBase": "https://studio.tail1234.ts.net:14211/"
+  }
+}

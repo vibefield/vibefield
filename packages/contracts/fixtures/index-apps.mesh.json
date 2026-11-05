@@ -1,0 +1,62 @@
+{
+  "//": "MA-1a — `index.apps.list {scope: \"mesh\"}` while the laptop sleeps (DS-L8): its app is listed from the replica, greyed by its source, and not openable (its desktop cannot export it now). Its source also says its library had not finished its first reading when it was last heard (`libraryReady: false`), which a reader says in words rather than drawing an empty shelf; an asleep desktop names no previews root, so the images this device already holds stand.",
+  "rows": [
+    {
+      "appKey": "01J9ZK3M5Q8XR2V7N4B6C1D0EF:290eb6966da36e27726c603bf735ae22390bcc29f8570acb139fde96a0849b39",
+      "foldKey": "app:01J9ZK3M5Q8XR2V7N4B6C1D0EF:290eb6966da36e27726c603bf735ae22390bcc29f8570acb139fde96a0849b39",
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "appId": "290eb6966da36e27726c603bf735ae22390bcc29f8570acb139fde96a0849b39",
+      "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],
+      "presentationId": "cfa7d7deb85b6b32d3841e965a40ac10e5553ce204cae0eeb7380228a610f877",
+      "title": "Release notes, 0.9",
+      "filename": "release-notes.html",
+      "kind": "claude-code",
+      "provider": "claude",
+      "sessionId": "ses-2a7e5d10",
+      "timelineId": "artifact-message-3",
+      "versions": 1,
+      "publishedAt": 1793750400000,
+      "availability": "captured",
+      "openable": true
+    },
+    {
+      "appKey": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9:da363d2fb4b072da2da2368c70e030640499ed4f94eddb44ef9b14b3d59d9101",
+      "foldKey": "app:01J9ZM0PQ7W3E6R8T2Y4U1I5O9:da363d2fb4b072da2da2368c70e030640499ed4f94eddb44ef9b14b3d59d9101",
+      "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+      "appId": "da363d2fb4b072da2da2368c70e030640499ed4f94eddb44ef9b14b3d59d9101",
+      "devices": ["01J9ZM0PQ7W3E6R8T2Y4U1I5O9"],
+      "presentationId": "110e46aad806a8c54fb52387eaae6171a0291b38e1e745107ff90d601f0c8bff",
+      "title": "Launch checklist",
+      "filename": "checklist.html",
+      "kind": "codex",
+      "provider": "codex",
+      "sessionId": "ses-71c0aa42",
+      "timelineId": "artifact-message-2",
+      "versions": 1,
+      "publishedAt": 1793664000000,
+      "availability": "captured",
+      "openable": false
+    }
+  ],
+  "sources": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "name": "studio",
+      "self": true,
+      "state": "live",
+      "asOf": "2026-11-05T08:00:00.000Z",
+      "rows": 1,
+      "libraryReady": true,
+      "previewsBase": "https://studio.tail1234.ts.net:14211/"
+    },
+    {
+      "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+      "name": "laptop",
+      "self": false,
+      "state": "asleep",
+      "asOf": "2026-11-03T02:12:44.000Z",
+      "rows": 1,
+      "libraryReady": false
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "//": "rosetta's library page (the body of GET /api/artifacts) at protocol 29, transcribed VERBATIM (the `//` note apart) from the pinned checkout's committed golden crates/protocol/tests/golden/wire.json, key `artifact_page`, at revision 8e8f49688e4b4d610643df2472b43e26ea87f46d (siblings.lock.json), sha256 579ef202012070c391c810bf78be6da7a3428346a0328cfec4a440b41ee27cf2. fieldd PARSES this body (IndexArtifactPageResponse; never casts it). Its `publication.path`, `recovered_from` and `asset.url` are rosetta's and reach no row and no door (MA §4.2, EL2): a wire change upstream reds the contracts suite here rather than surfacing as an empty shelf.",
+  "canonical_ready": true,
+  "entries": [
+    {
+      "agent": "claude-code",
+      "asset": {
+        "byte_len": 15,
+        "digest": "b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e",
+        "media_type": "text/html; charset=utf-8",
+        "url": "/api/assets/b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e.html"
+      },
+      "availability": "captured",
+      "captured_at": 3700000,
+      "presentations": 2,
+      "project_id": "p1",
+      "project_name": "Rosetta",
+      "publication": {
+        "artifact_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "filename": "checkout.html",
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "native_id": "review",
+        "path": "/tmp/checkout.html",
+        "published_at": 3608000,
+        "session_id": "s1",
+        "source_offset": 4096,
+        "timeline_id": "artifact-message-1",
+        "title": "Checkout design review",
+        "url": "https://claude.ai/code/artifact/review",
+        "version": "2"
+      },
+      "recovered_from": "/archive/checkout.html",
+      "session_title": "Review checkout"
+    }
+  ],
+  "next_cursor": "opaque"
+}

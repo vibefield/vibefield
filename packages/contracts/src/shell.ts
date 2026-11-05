@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ARTIFACT_LIMITS, ArtifactId, ArtifactTitle } from "./artifacts";
+import { ARTIFACT_LIMITS, ArtifactId, ArtifactTitle, MadeAppReach, Sha256Hex } from "./artifacts";
 import { ClientKind, SemverString } from "./envelope";
 import { ErrorKind } from "./errors";
 import {
@@ -833,15 +833,33 @@ export const ShellArtifactPreviewUrl = z
   });
 export type ShellArtifactPreviewUrl = z.infer<typeof ShellArtifactPreviewUrl>;
 
+/** MA-1a (MA-D10 (b); the build plan's §2.3 and L11) — a made app's capture photographs the page as it runs, so its
+ * guard must admit what the page loads besides its own origin. `allowHosts` names those hosts: the served shell's,
+ * from RO-A1's answer, as data (MA-L9). Each is a BARE canonical DNS name (`MadeAppReachHost`: no scheme, no port, no
+ * wildcard, no IP literal, no tailnet name), at most MADE_APP_LIMITS.REACH_HOSTS, and the guard admits HTTPS to
+ * exactly those hosts on their default port, beside the target's own origin. Absent (every live artifact's capture):
+ * the target's origin alone, as before. `artifactId` stays a ULID: a made app's capture is keyed by the preview id
+ * fieldd mints for it (`MadeAppPreviewId`), so the capture's folder rule is unchanged. */
 export const ShellWebContentsCaptureArtifactPreviewParams = z
-  .object({ artifactId: ArtifactId, url: ShellArtifactPreviewUrl })
+  .object({
+    artifactId: ArtifactId,
+    url: ShellArtifactPreviewUrl,
+    allowHosts: MadeAppReach.optional(),
+  })
   .passthrough();
 export type ShellWebContentsCaptureArtifactPreviewParams = z.infer<
   typeof ShellWebContentsCaptureArtifactPreviewParams
 >;
 
+/** MA-1a (MA-D10 (b)) — `digest` is the SHA-256 of the JPEG the capture wrote, lowercase hex: the key every device
+ * keeps a made app's preview by (`MadeAppPreview.digest`). Optional, because a shell that predates MA-3c answers
+ * without it; fieldd then has no preview to stamp on a made app's row, and a live artifact's capture never needs one. */
 export const ShellWebContentsCaptureArtifactPreviewResult = z
-  .object({ captured: z.literal(true), title: ArtifactTitle.optional() })
+  .object({
+    captured: z.literal(true),
+    title: ArtifactTitle.optional(),
+    digest: Sha256Hex.optional(),
+  })
   .passthrough();
 export type ShellWebContentsCaptureArtifactPreviewResult = z.infer<
   typeof ShellWebContentsCaptureArtifactPreviewResult

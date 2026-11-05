@@ -1,0 +1,5 @@
+{
+  "//": "MA-1a — a visible shelf asking to be told when the fold moves (pings: rows always empty, the revision moves), at the History page's floor.",
+  "scope": "mesh",
+  "minIntervalMs": 500
+}

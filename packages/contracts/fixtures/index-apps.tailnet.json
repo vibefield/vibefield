@@ -1,0 +1,47 @@
+{
+  "//": "MA-1a — the phone's page (a `tailnet` caller): cut at INDEX_TAILNET_LIMITS.MAX_ROWS, `clipped` saying so and `cursor` asking for the next page. Shown here with one row for brevity; the shape is the answer's, whatever its length.",
+  "rows": [
+    {
+      "appKey": "01J9ZK3M5Q8XR2V7N4B6C1D0EF:cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+      "foldKey": "native:claude-code:review",
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "appId": "cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+      "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],
+      "presentationId": "ff82c000262f76cf6e33a271983f71d2775ea6b3288cc3c395a7f36495528f0e",
+      "title": "Checkout design review",
+      "filename": "checkout.html",
+      "kind": "claude-code",
+      "provider": "claude",
+      "sessionId": "ses-9b2f0c7d",
+      "timelineId": "artifact-message-1",
+      "versions": 2,
+      "publishedAt": 1793836800000,
+      "availability": "captured",
+      "hostedUrl": "https://claude.ai/code/artifact/review",
+      "nativeId": "review",
+      "preview": {
+        "id": "01JC4MA0PV0000000000000001",
+        "digest": "7c9d5a180100e785385597f03324ba6969664076be51cd52dd7798ed96aaa739",
+        "pageDigest": "b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e",
+        "capturedAt": 1793837000000
+      },
+      "projectKey": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+      "ink": 3,
+      "openable": true
+    }
+  ],
+  "cursor": "eyJ0IjoxNzkzODM2ODAwMDAwLCJrIjoiMDFKOVpLM001UThYUjJWN040QjZDMUQwRUY6Y2RjOSJ9",
+  "sources": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "name": "studio",
+      "self": true,
+      "state": "live",
+      "asOf": "2026-11-05T08:00:00.000Z",
+      "rows": 142,
+      "libraryReady": true,
+      "previewsBase": "https://studio.tail1234.ts.net:14211/"
+    }
+  ],
+  "clipped": true
+}

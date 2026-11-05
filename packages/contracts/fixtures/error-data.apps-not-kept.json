@@ -1,0 +1,9 @@
+{
+  "kind": "UNAVAILABLE",
+  "retryable": false,
+  "details": {
+    "service": "apps",
+    "state": "not-kept",
+    "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF"
+  }
+}

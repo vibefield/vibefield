@@ -1,0 +1,27 @@
+{
+  "//": "MA-1a — one `apps` row as its OWNER republishes it: the newest presentation of one app in that desktop's library, keyed by `appId` within `device`, the agent named twice (rosetta's kind, the catalog id), rosetta's project through the root session, the fold keys (a native id and a hosted link, never fetched) and the preview, which carries no URL. No path, no bytes, no asset URL.",
+  "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+  "appId": "cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+  "presentationId": "ff82c000262f76cf6e33a271983f71d2775ea6b3288cc3c395a7f36495528f0e",
+  "title": "Checkout design review",
+  "filename": "checkout.html",
+  "kind": "claude-code",
+  "provider": "claude",
+  "projectId": "p-4f1c2a9e",
+  "sessionId": "ses-9b2f0c7d",
+  "timelineId": "artifact-message-1",
+  "versions": 2,
+  "publishedAt": 1793836800000,
+  "capturedAt": 1793836805000,
+  "availability": "captured",
+  "byteLen": 18342,
+  "digest": "b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e",
+  "hostedUrl": "https://claude.ai/code/artifact/review",
+  "nativeId": "review",
+  "preview": {
+    "id": "01JC4MA0PV0000000000000001",
+    "digest": "7c9d5a180100e785385597f03324ba6969664076be51cd52dd7798ed96aaa739",
+    "pageDigest": "b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e",
+    "capturedAt": 1793837000000
+  }
+}

@@ -1101,12 +1101,12 @@
           idempotent) → <b class="product">handler</b> → <b class="native">audit record</b>
         </div>
         <div class="stats">
-          <!-- 2026-11-01 (PG-3b, the 3b review [11]; recounted from methods.ts): 64 rows = 12 agent.* · 33 agents.* · 19 index.*, 43 local · 16 federate · 5 stream. 2026-10-04: 56 rows = 8 agent.* · 32 agents.* · 16 index.* (methods.ts; SP-6 added index.timeline and index.session.subscribe); 54 on 2026-10-03, 46 when QL wrote this -->
-          <div class="stat"><strong>64</strong><span>agent-plane doors</span></div>
+          <!-- 2026-11-05 (MA-1a, recounted from methods.ts's defineMethod rows named agent.*, agents.* or index.*): 69 rows = 13 agent.* · 33 agents.* · 23 index.*, 43 local · 19 federate · 7 stream. MA-1a's four index.* rows are the 66th to 69th (index.apps.list and index.artifacts federate, index.apps.subscribe and index.apps.catalog.subscribe stream); artifact.open and artifact.mark are artifact.* and not counted here. 65 at 068cab410 (43 · 17 · 5): agent.pause (GV, 2026-11-02) the 65th. 2026-11-01 (PG-3b, the 3b review [11]; recounted from methods.ts): 64 rows = 12 agent.* · 33 agents.* · 19 index.*, 43 local · 16 federate · 5 stream. 2026-10-04: 56 rows = 8 agent.* · 32 agents.* · 16 index.* (methods.ts; SP-6 added index.timeline and index.session.subscribe); 54 on 2026-10-03, 46 when QL wrote this -->
+          <div class="stat"><strong>69</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>8</strong><span>scopes that gate them</span></div>
           <div class="stat"><strong>15</strong><span>audited mutations</span></div>
-          <!-- 2026-11-01 (PG-3b, the 3b review [11]): 16 federate, recounted from methods.ts, agent.reportShown the 16th (15 before it). 2026-10-03: 12 of them federate since DS-2 (2026-10-01); 0 when this page was written -->
-          <div class="stat"><strong>16</strong><span>that federate</span></div>
+          <!-- 2026-11-05 (MA-1a): 19 federate, recounted from methods.ts: agent.pause the 17th (GV, 2026-11-02), index.apps.list and index.artifacts the 18th and 19th. 2026-11-01 (PG-3b, the 3b review [11]): 16 federate, recounted from methods.ts, agent.reportShown the 16th (15 before it). 2026-10-03: 12 of them federate since DS-2 (2026-10-01); 0 when this page was written -->
+          <div class="stat"><strong>19</strong><span>that federate</span></div>
         </div>
         <div class="legend">
           <span><span class="badge tone-built">BUILT</span> in the code at the stated revision, cited.</span>
@@ -1200,6 +1200,11 @@
                   agent-plane doors are <code>local</code>, <code>stream</code> or <code>federate</code>: of the 64
                   in <code>methods.ts</code> today, 43 are local, 16 federate (a foreign <code>device</code> forwards
                   the call whole to its owner) and 5 stream.
+                  <em>Corrected 2026-11-05 (MA-1a, recounted from <code>methods.ts</code>):</em> of the 69 there
+                  now, 43 are local, 19 federate and 7 stream. <code>agent.pause</code> (GV, 2026-11-02) federates,
+                  and MA-1a's four <code>index.*</code> doors add two that federate (<code>index.apps.list</code>,
+                  <code>index.artifacts</code>) and two that stream (<code>index.apps.subscribe</code>,
+                  <code>index.apps.catalog.subscribe</code>).
                 </p>
               </div>
             </div>
@@ -1869,6 +1874,10 @@
                   <tr><td><span class="route">index.timeline</span></td><td><p><code>IndexTimelineParams {sessionId, cursor?, limit? (1..INDEX_TIMELINE.PAGE_MAX_LIMIT)}</code> → <code>IndexTimelineResult {sessionId, entries: IndexTimelineRow[], nextCursor, clipped, watermark}</code> (SP-6, 2026-10-04: one BACKWARD page of one session's transcript — oldest first within the page, <code>nextCursor</code> to the older page, null at the top; each row the projection of rosetta's <code>TimelineEntry</code>: the kind, the stamps, the turn group and the reply it belongs to, the words bounded to <code>INDEX_TIMELINE.TEXT_CHARS</code> with <code>textClipped</code>, a tool line's name · family · status · failed · object · result · duration, attachments as REFS — <code>{id, kind, name?, mediaType?, byteLen?, available, reason?}</code>, never bytes, never rosettad's address — the usage buckets and a priced cost; a tailnet caller's page is cut at <code>INDEX_TAILNET_LIMITS.MAX_ROWS</code> and says <code>clipped</code>; a cursor the session was rewritten under is <code>PRECONDITION_FAILED {service: "index", reason: "cursor-expired"}</code>, read again from the head; a session the index lacks is <code>NOT_FOUND</code>)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>local</code></p></td><td><p><code>GET /api/sessions/{id}/timeline?limit=…&amp;cursor=…</code>, parsed (<code>IndexTimelinePageResponse</code>); rosetta's 410 <code>cursor_expired</code> is the refusal above</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.session.subscribe</span></td><td><p><code>IndexSessionSubscribeParams {sessionId, since?, minIntervalMs?}</code> → the open <code>{snapshot: {epoch, revision, rows}}</code>, then <code>index.session.subscribe.delta {epoch, since, revision, upserts, removed}</code> keyed by <code>timelineId</code> and <code>index.session.subscribe.snapshot</code> on a reset (fieldd's ProductAPI names a subscription's frames <code>&lt;method&gt;.delta</code> / <code>&lt;method&gt;.snapshot</code> and the kit's codec routes on that suffix — corrected 2026-10-04 evening; the first draft of this row said <code>index.session.delta</code>; SP-6: one session's LIVE TAIL as rows, SP-L4 — the open is rosetta's own socket snapshot, cut to the newest <code>INDEX_TAILNET_LIMITS.MAX_ROWS</code> rows for a tailnet caller (the rows before them are <code>index.timeline</code>'s); a reset follows rosetta's <code>resync</code> barrier, a rewrite, a dropped socket or the daemon's restart; the open always answers a snapshot — each subscription is its own chain, a kept cursor never resumes; the open WAITS for rosetta's first snapshot, never an empty page, and refuses in words — UNAVAILABLE with the index's phase, INCOMPATIBLE naming both protocol numbers, NOT_FOUND for a session the index lacks)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>stream</code> · <code>{shape: "rows", cadenceFloorMs: INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS}</code> (1 s)</p></td><td><p><code>WS /ws/sessions/{id}</code> through rosetta's OWN client (<code>RosettaClient.subscribeSession</code>, the bearer on the subprotocol pair), one socket per session shared by its subscribers (<code>index-tail.ts</code>), re-aimed at the daemon's next generation</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.threads</span></td><td><p><code>IndexThreadsParams {cursor?, limit? (1..500)}</code> → <code>IndexThreadsResult {rows: IndexThread[], cursor?}</code> (AR-8, build-hf.md L1, 2026-10-08: a page of this desktop's DELEGATED threads — a subagent's or a team member's session — by keyset in a stable order, by root then by id. Each row is <code>IndexCatalogSession</code>'s columns without a <code>device</code> (a thread never leaves its desktop) plus <code>parentSessionId</code>, <code>rootSessionId</code>, <code>role</code> (rosetta's <code>subagent</code> · <code>team</code>, an OPEN vocabulary, absent when rosetta reported none) and <code>delegation</code> (rosetta's <code>SessionDelegation</code> projected to VibeField's spelling on a passthrough object — <code>parentToolNativeId</code>, <code>workflowRunId</code>, <code>team</code>, <code>color</code>, <code>configuredModel</code> — or null; the History port maps it BACK to rosetta's <code>SessionDelegation</code> for the room, <code>threadRowOf</code> in <code>field-app/src/history/doors.ts</code>, a colour outside rosetta's eight becoming null, and a role the room does not draw becoming <code>subagent</code>). A window's door alone: the handler refuses a plugin, an MCP agent, the phone and a guest <code>FORBIDDEN_SCOPE {method, principal}</code>, and the D36 wall a peer daemon; a catalog that has not read the index is <code>UNAVAILABLE</code>, never "none")</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>local</code></p></td><td><p><code>WS /ws/meta</code> — the children the catalog's follower used to drop, held in its local-only <code>threads</code> table</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">index.apps.list</span></td><td><p><code>IndexAppsParams {scope?, devices?, projectKey?, q?, kept?, includeHidden?, cursor?, limit? (1..500)}</code> → <code>IndexAppsResult {rows: IndexApp[], cursor?, sources, clipped?}</code> (track MA, <code>draft/thinking-mini-apps.md</code>, ruled 2026-11-05: the apps the person's agents made, each an HTML page an agent presented, one row per app, newest presentation first. A row will be the serving row's columns — its <code>device</code> and <code>appId</code> (<code>artifact.open</code>'s target), the title, the filename, the catalog <code>kind</code> and <code>provider</code>, the root session, <code>versions</code>, the times, <code>availability</code> in rosetta's open words, the page's <code>digest</code> and size, its hosted link and native id — plus <code>appKey</code> (the serving row's <code>device:appId</code>, opaque: compared, never parsed), <code>foldKey</code> (the app's fold key, what <code>artifact.mark</code> names, passed back as it came), <code>devices</code> (every desktop that holds the app), <code>projectKey</code>, <code>place</code> and <code>ink</code> joined at this door (PJ-4), <code>kept?</code> and <code>hidden?</code> (the person's merged intent for the fold key, joined at this door from slice 3h, each present only when set and both absent until then), <code>openable</code>, and <code>preview {id, digest, pageDigest, capturedAt}</code>, which carries no URL. One app across desktops will be folded by its fold key, <code>native:&lt;kind&gt;:&lt;nativeId&gt;</code> (only when both are known, so two agents' native ids never collide), else <code>hosted:&lt;hostedUrl&gt;</code>, else <code>app:&lt;device&gt;:&lt;appId&gt;</code> (<code>madeAppFoldKey</code>, <code>artifacts.ts</code>, the one spelling), and its newest presentation will serve (MA-L6). Each <code>sources[]</code> entry is <code>index.projects</code>' source plus <code>libraryReady</code> (rosetta's <code>canonical_ready</code>: that desktop is still reading its history) and <code>previewsBase</code>, the root of that desktop's previews serve, validated as an artifact's URL is (a root path, no query, a port in 10000–19999, the host that desktop's MagicDNS name); a reader will derive the image, <code>${previewsBase}${id}/thumbnail.jpg?v=${digest}</code>, and never stores it. The fold will read the merged Keep and Hide intent (<code>artifact.mark</code>): a hidden app is left out unless <code>includeHidden</code>. No path and no byte rides a row (MA-L5, EL2). A tailnet caller's page stops at <code>INDEX_TAILNET_LIMITS.MAX_ROWS</code> and says <code>clipped</code>; a plugin, an MCP agent and a guest are <code>FORBIDDEN_SCOPE</code>)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>federate</code></p></td><td><p>nothing at the door: fieldd's own <code>apps</code> table, which each desktop will fill by walking <code>GET /api/artifacts</code> with the daemon bearer (newest first, <code>MADE_APP_LIMITS.WALK_PAGE</code> a page, again every <code>INDEX_MESH.META_RESNAPSHOT_MS</code>, and the newest page re-read after a <code>sessions</code> change, at a floor), and the copies its self peers serve on <code>index.apps.catalog.subscribe</code></p></td><td><p>—</p></td><td><span class="badge tone-designed">Designed</span> (MA-1a)</td></tr>
+                  <tr><td><span class="route">index.apps.subscribe</span></td><td><p><code>IndexAppsSubscribeParams</code> (<code>index.changes.subscribe</code>'s) → pings (track MA: a frame will say the apps moved and carry no row, and the reader pages <code>index.apps.list</code> again; the phone's cue for a new app will be a diff of its first page. The same callers as the list)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>stream</code> · as <code>index.changes.subscribe</code>, at <code>INDEX_MESH.CHANGES_MIN_INTERVAL_MS</code></p></td><td><p>nothing upstream: a move of the fold — this desktop's <code>apps</code> table or a self peer's copy</p></td><td><p>—</p></td><td><span class="badge tone-designed">Designed</span> (MA-1a)</td></tr>
+                  <tr><td><span class="route">index.apps.catalog.subscribe</span></td><td><p><code>IndexAppsCatalogSubscribeParams {since?, minIntervalMs?}</code> (<code>index.catalog.subscribe</code>'s, with no <code>table</code>) → the open <code>{snapshot}</code>, then <code>.delta</code> and <code>.snapshot</code> frames of <code>IndexCatalogApp</code> rows (track MA: the origin's own rows, keyed by <code>appId</code> within its <code>device</code> and stamped by the origin alone — what a self peer copies to fold. Every frame (the open answer's two arms, each snapshot page and each delta) also declares the owner's standing, <code>libraryReady?</code> and <code>previewsBase?</code>: the only road by which a home learns them for that peer's <code>sources[]</code> entry. The home checks the base's host against that peer's MagicDNS name and strips it on a mismatch, never rewriting it. A peer daemon's door alone, as <code>index.catalog.subscribe</code> is (DS-L4); every other principal is <code>FORBIDDEN_SCOPE</code>. A door of its own rather than a third table on <code>index.catalog.subscribe</code>, whose <code>INDEX_CATALOG_TABLES</code> and <code>INDEX_REPLICATED_TABLES</code> stay as they are: a peer from before MA that refuses it leaves only its apps <code>unsupported</code>, and its projects and sessions stay live)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>stream</code> · as <code>index.catalog.subscribe</code>, at <code>ROWS.MIN_INTERVAL_MS</code></p></td><td><p>nothing upstream: this desktop's <code>apps</code> table, the walk of <code>GET /api/artifacts</code> in <code>index.apps.list</code>'s row</p></td><td><p>—</p></td><td><span class="badge tone-designed">Designed</span> (MA-1a)</td></tr>
+                  <tr><td><span class="route">index.artifacts</span></td><td><p><code>IndexArtifactsParams {device?, q?, kind?, projectKey?, appId?, cursor?, limit? (1..100)}</code> → <code>IndexArtifactsResult {entries: IndexArtifactEntry[], nextCursor?, canonicalReady}</code> (track MA: one desktop's library as rosetta pages it, a presentation an entry; with <code>appId</code>, that app's whole history, its Versions. An entry is rosetta's <code>ArtifactEntry</code> in VibeField's spelling: <code>recovered</code> a flag where rosetta names <code>recovered_from</code>, the agent's kind in and the catalog <code>provider</code> out, <code>projectKey</code> joined at this door, and <code>path</code> stripped for every caller (MA-L5). A <code>projectKey</code> will be resolved to that desktop's rosetta project ids. Versions on both hosts and the History room's library port (MA-4b) will read it. A cursor the library moved under is <code>PRECONDITION_FAILED {service: "index", reason: "cursor-expired"}</code>, read again from the head, and a filter rosetta refuses <code>{reason: "bad-filter"}</code>; a tailnet caller's page stops at <code>INDEX_TAILNET_LIMITS.MAX_ROWS</code>)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>federate</code></p></td><td><p><code>GET /api/artifacts?q&amp;agent&amp;project&amp;artifact_id&amp;cursor&amp;limit</code> with the daemon bearer, parsed (<code>IndexArtifactPageResponse</code>); rosetta's 410 and 400 are the two refusals</p></td><td><p>—</p></td><td><span class="badge tone-designed">Designed</span> (MA-1a)</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1951,6 +1960,48 @@
               <code>index.enroll</code> is idempotent by being declarative — it names the complete consented
               set, so the same set twice writes nothing and restarts nothing.
             </p>
+            <p class="contract-caption">
+              <em>Designed 2026-11-05 (track MA, MA-1a; <code>draft/thinking-mini-apps.md</code>, ruled by James
+              2026-11-05):</em> four doors join the table for Apps, the pages the person's agents make. rosetta keeps
+              the library — every HTML page an agent presented, which rosetta alone reads from the transcripts (MA-L1,
+              AR-L1) — and fieldd will copy that library's rows, never a page, into a table of its own,
+              <code>apps</code>, kept beside the catalog's <code>projects</code> and <code>sessions</code> and never
+              inside them: <code>index.apps.list</code> and <code>index.apps.subscribe</code> for the screens,
+              <code>index.apps.catalog.subscribe</code> for a self peer's copy, and <code>index.artifacts</code> for
+              one app's versions and the History room's library. All four ride <code>index.search</code>, the consent
+              that already buys the history's content, and are bounded for a tailnet caller the SP-D13 way. A made app
+              will open through <a href="#cat-artifact"><code>artifact.open</code></a>, below. MA-1a declares the
+              contracts with no handler; fieldd will serve them from MA-3, and no client will call them before.
+            </p>
+
+            <h3 id="cat-artifact">artifact.open · artifact.mark — a made app's two acts</h3>
+            <p class="section-note">
+              Track MA (<code>draft/thinking-mini-apps.md</code>, ruled 2026-11-05;
+              <code>packages/contracts/src/artifacts.ts</code>). These are not the Artifact Hub's <code>artifact.*</code>
+              doors, which carry the live artifacts a plugin or an agent publishes: publish, update, unpublish and
+              refreshPreview, which stay source-local (AH-1), and list and subscribe, the synced global catalog
+              (<code>sync</code>) that a tailnet caller reads. These two act on an app an agent made, a row of
+              <code>index.apps.*</code>; no door joins the two kinds, and a shelf will draw them as two groups. They hold
+              <code>apps.use</code>, a new scope that the tailnet preset and the window's set will hold and no plugin
+              table names. A phone will reach both through its home (D35), its <code>onBehalfOf</code> recorded and never
+              taken as authority. Nothing an agent wrote will listen until a person opens it (MA-L3), and a page will run
+              only at its own origin, reaching that origin and the hosts it was written for (MA-L7). The refusals' words
+              live in <code>MADE_APP_OPEN</code> (<code>registries.ts</code>), their details' shape in
+              <code>artifacts.ts</code>. MA-1a declares both with no handler; fieldd will serve them from MA-3, and the
+              export waits on rosetta 0.1.4 (RO-32): until that release is pinned, every open will answer
+              <code>export-unbuilt</code>.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Door</th><th>Params → result</th><th>Scope</th><th>Idem</th><th>Locality</th><th>Wraps upstream</th><th>Audited</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td><span class="route">artifact.open</span></td><td><p><code>ArtifactOpenParams {appId, device?, presentationId?, reveal?}</code> → <code>ArtifactOpenResult {state: "serving" | "starting", url?, reach?}</code> (a person opens an app. Declarative, as <code>compose.sparks.open</code> is: an app already serving will be answered as it is, and <code>starting</code> is asked again. On the app's own desktop fieldd will have rosetta write the runnable page into a folder fieldd names, serve that folder at the app's one origin on that desktop, for life (MA-L6; an origin includes its host), and answer the URL its listener reported, validated against that desktop's MagicDNS name and never synthesized. <code>presentationId</code> opens one version. <code>reach</code> is the served shell's hosts from rosetta's export answer, as data (MA-L9), for the phone's rule list. <code>reveal: true</code> is the window's: the answering home will open the validated URL through its shell's <code>shell.openLink</code>, as <code>terminal.link.open</code> does, and answer as usual; the window holds no <code>shell.open</code>, and the phone never sets it. From another screen the call carries the app's <code>device</code>, and the home will forward it there and validate the URL it hears or strip it, never rewriting it. An owed preview will be captured at the next open on this desktop, never on a timer, and an app not opened for <code>MADE_APP_LIMITS.IDLE_CLOSE_MS</code> will stop listening unless it is kept. Refusals: <code>UNAVAILABLE {service: "apps", state}</code>, the state one of <code>MADE_APP_OPEN</code>'s words — <code>export-unbuilt</code>, <code>not-kept</code>, <code>too-large</code>, <code>unsupported</code>, <code>library-reading</code>, <code>export-failed</code>, <code>not-linked</code>; a hidden or unknown app <code>NOT_FOUND</code>; at the ceiling <code>RESOURCE_EXHAUSTED {resource: "apps"}</code>)</p></td><td><p><code>apps.use</code></p></td><td><p>yes</p></td><td><p><code>federate</code></p></td><td><p>on the app's own desktop, <code>POST /api/sessions/{id}/artifacts/{publication_id}/export</code> (RO-32, petitioned; not in rosetta 0.1.3), then the native plane's serve of that folder; fieldd never opens the page (EL2)</p></td><td><p><code>made-app</code> (<code>artifact.made.open</code>)</p></td><td><span class="badge tone-designed">Designed</span> (MA-1a)</td></tr>
+                  <tr><td><span class="route">artifact.mark</span></td><td><p><code>ArtifactMarkParams {foldKey, kept?, hidden?}</code> (at least one flag) → <code>ArtifactMarkResult {foldKey, kept, hidden}</code> (Keep and Hide, which are the person's intent, never facts on the origin's rows (MA-L2). The call names the app by its fold key, <code>native:&lt;kind&gt;:&lt;nativeId&gt;</code> (only when both are known, so two agents' native ids never collide), else <code>hosted:&lt;hostedUrl&gt;</code>, else <code>app:&lt;device&gt;:&lt;appId&gt;</code>: opaque, passed back as <code>index.apps.list</code>'s row gave it, and never a <code>device</code>, which this <code>local</code> door does not take. The home will write the flags into its replica of the replicated settings document (design-06 §1's own example), keyed by that fold key and bounded by <code>MADE_APP_LIMITS.INTENTS</code>; the replica will carry them to every desktop, an asleep one when it wakes. Every origin will read the merged intent for its serves: kept, no idle close; hidden, the serve retires and <code>artifact.open</code> answers <code>NOT_FOUND</code>; and <code>index.apps.list</code> leaves a hidden app out unless <code>includeHidden</code>. Set semantics: <code>true</code> sets a flag, <code>false</code> clears it and an absent flag is left as it is, so the same mark twice changes nothing; the answer says both flags as the home holds them once the write is made, and hidden wins over kept)</p></td><td><p><code>apps.use</code></p></td><td><p>yes</p></td><td><p><code>local</code> — answered by the desktop the call reaches, the phone's home</p></td><td><p>nothing upstream: the settings document (fieldd <code>app-preferences.ts</code>, <code>doc-sync.ts</code>)</p></td><td><p><code>made-app</code> (<code>artifact.made.mark</code>)</p></td><td><span class="badge tone-designed">Designed</span> (MA-1a)</td></tr>
+                </tbody>
+              </table>
+            </div>
 
             <h3 id="cat-compose">compose.sparks.* — the person's doors to the sparks</h3>
             <p class="section-note">
@@ -2553,6 +2604,21 @@
               and a daemon whose ready line does not say it enforces both is refused as the wrong binary.
               <code>@vibefield/rosetta-protocol/grants</code> joins the imports, for the mint.
             </p>
+            <p class="section-note">
+              <em>Corrected 2026-11-05 (MA-1a, recounted at the pin, rosetta <code>8e8f496</code>, 0.1.3, protocol
+              29):</em> the counts above were read at earlier pins and are stale. rosettad's router registers 32 routes
+              (<code>.route(</code> in <code>crates/server/src/http.rs</code>): 29 under <code>/api/</code> (25
+              <code>GET</code>, 4 <code>POST</code>) and 3 WebSocket routes under <code>/ws/</code>. fieldd dials 15 of
+              them: 13 <code>GET</code> routes — twelve in the table below, its designed rows aside, and
+              <code>/api/sessions/{id}/timeline</code> (<code>index.timeline</code>, SP-6), which the table does not
+              list — and two sockets, <code>/ws/meta</code> (the catalog, DS-6) and <code>/ws/sessions/{id}</code> (the
+              session tail, <code>index.session.subscribe</code>, SP-6), which the table does not list either. That tail
+              is opened through rosetta's own client object, <code>RosettaClient</code> (<code>index-tail.ts</code>), so
+              "does not use a rosetta client object" no longer holds. Four fieldd files import the package:
+              <code>agent-index.ts</code> (the seven types), <code>daemon.ts</code> (<code>PROTOCOL_VERSION</code>, 29 at
+              this pin), <code>index-serve.ts</code> (<code>/grants</code>, the mint) and <code>index-tail.ts</code> (the
+              client).
+            </p>
             <div class="table-wrap">
               <table class="reference-table">
                 <thead><tr><th>rosettad route</th><th>VibeField door</th><th>Types read</th></tr></thead>
@@ -2570,9 +2636,22 @@
                   <tr><td><span class="route">WS /ws/meta</span></td><td><p>the history catalog's follower (DS-6), behind the bearer since AR-8b; since AR-8 (L1) its children feed the local-only <code>threads</code> table, <code>index.threads</code></p></td><td><p>rosetta's topology frames, folded into rows</p></td></tr>
                   <tr><td><span class="route">--token-file</span>, <span class="route">--grant-key-file</span>, <span class="route">--allow-origin</span> (CLI flags)</td><td><p>the supervisor, every start (AR-8b); <code>index.openTicket</code> mints with the key</p></td><td><p>the ready line's <code>auth: {bearer, grants, origins}</code></p></td></tr>
                   <tr><td><span class="route">--enroll FILE</span> (a CLI flag, not a route)</td><td><p><code>index.enroll</code> / <code>index.retire</code> write the file and restart the daemon</p></td><td><p>format 1, validated the way rosetta validates it</p></td></tr>
+                  <tr><td><span class="route">GET /api/artifacts</span></td><td><p>the <code>apps</code> table's walk (MA-3: <code>index.apps.list</code>, <code>index.apps.catalog.subscribe</code>) and <code>index.artifacts</code>, with the daemon bearer, which alone lists the library: a grant opens no list (rosetta <code>crates/server/src/auth.rs</code>) <span class="badge tone-designed">Designed</span></p></td><td><p>parsed against VibeField's own mirror (<code>IndexArtifactPageResponse</code>, <code>IndexArtifactEntryRow</code>: rosetta's <code>ArtifactPage</code> and <code>ArtifactEntry</code>, with <code>.passthrough()</code>), never cast; <code>publication.path</code>, <code>recovered_from</code> and <code>asset.url</code> reach no row</p></td></tr>
+                  <tr><td><span class="route">GET /api/sessions/{id}/artifacts/{publication_id}/content</span></td><td><p>never through fieldd: the History room's library preview (MA-4b) will read it over the session's grant, as a transcript is read; the route is on the grant's allow-list (<code>GRANT_SESSION_ROUTES</code>) <span class="badge tone-designed">Designed</span></p></td><td><p>inert bytes, never parsed: <code>application/octet-stream</code>, an attachment, <code>Content-Security-Policy: sandbox; default-src 'none'</code></p></td></tr>
+                  <tr><td><span class="route">POST /api/sessions/{id}/artifacts/{publication_id}/export</span> (RO-32, petitioned; not in rosetta 0.1.3)</td><td><p><code>artifact.open</code>'s first step on the app's own desktop (MA-3f, after the EL8 to rosetta 0.1.4): rosetta will write the runnable page into a folder under the root fieldd names at the daemon's start, and fieldd will never open the file (EL2, MA-L5). Until then every open will answer <code>export-unbuilt</code> <span class="badge tone-designed">Designed</span></p></td><td><p>a small answer and no page bytes: <code>{written, digest, shell_version, hosts}</code>, the served shell's <code>hosts</code> as data (<code>artifact.open</code>'s <code>reach</code>)</p></td></tr>
                 </tbody>
               </table>
             </div>
+            <p class="section-note">
+              <em>Designed 2026-11-05 (track MA, MA-1a; <code>draft/thinking-mini-apps.md</code>, ruled 2026-11-05):</em>
+              Apps read rosetta's library, never its transcripts (MA-L1). The last three rows are the seam's VibeField
+              side; rosetta's <code>docs/daemon-api.html</code> owns the interface. The two <code>GET</code> routes are
+              at the pin; the export is petitioned. rosetta 0.1.4 is asked as one release — RO-32 (the export), RO-33
+              (an app's description), RO-34a (the count of files a page dropped) and RO-35 (a signal that the library
+              changed) — so one EL8 sits before an app is served; 0.1.5 is asked to carry RO-34b (a page with its
+              files, whole). Until RO-35 is pinned, fieldd's walk will re-read the library's newest page after a
+              <code>sessions</code> change, at a floor.
+            </p>
 
             <h3>What is not wrapped</h3>
             <p class="section-note">
@@ -2621,6 +2700,13 @@
                   re-homed onto the window's own egress route, the grant untouched (the tickets
                   convention above). The phone's ticket stays SP-7's.
                 </p>
+                <p>
+                  <em>Corrected 2026-11-05 (MA-1a, read at the pin <code>8e8f496</code>):</em> fieldd holds two
+                  sockets, not one. Beside the catalog's <code>/ws/meta</code> (DS-6) it holds
+                  <code>/ws/sessions/{id}</code>, one session's tail for <code>index.session.subscribe</code>
+                  (SP-6), opened through rosetta's own <code>RosettaClient</code> (<code>index-tail.ts</code>), one
+                  socket per session shared by its subscribers. The rosetta section's recount above names both.
+                </p>
                 <span class="badge tone-built">Built</span> <span class="badge tone-designed">Designed</span>
               </div>
               <div class="card">
@@ -2634,6 +2720,17 @@
                   <em>Update 2026-10-03 (AR-8b):</em> the four project routes are wrapped, by
                   <code>index.project</code> and <code>index.projectDay</code>. The session-scoped routes and
                   the assets are the ticket's — a window reads them with its grant, never through fieldd.
+                </p>
+                <p>
+                  <em>Corrected 2026-11-05 (MA-1a, recounted at the pin <code>8e8f496</code>):</em> rosettad has 32
+                  routes, not 24, and fieldd dials 15 of them (the rosetta section above). Of the other 17, a window's
+                  grant opens the session-scoped reads (collaboration, a timeline entry, command, work, plan, plan
+                  revisions, and the recorded file with <code>files</code>), <code>/api/assets/{name}</code>,
+                  <code>/ws/collaboration/{id}</code> and the artifact content route; nothing in VibeField dials the
+                  ingestion routes (<code>/api/ingestions/{id}</code>, its pause and its resume),
+                  <code>/api/runtimes/enable</code>, <code>/api/ingest/boost</code>, <code>/api/pricing</code> or
+                  <code>/api/artifacts</code>. <em>Designed 2026-11-05 (track MA):</em> the library and its content are
+                  named for Apps, MA-3 and MA-4 (the rosetta table above).
                 </p>
                 <span class="badge tone-owed">Owed</span>
               </div>

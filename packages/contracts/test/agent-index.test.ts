@@ -129,6 +129,22 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: false,
         locality: "federate",
       },
+      // MA-1a — the made apps: the fold, the shelf's pings, the apps table's peer door, one
+      // library's page — the history's content, so index.search
+      { method: "index.apps.list", scope: "index.search", idempotent: true, locality: "federate" },
+      {
+        method: "index.apps.subscribe",
+        scope: "index.search",
+        idempotent: true,
+        locality: "stream",
+      },
+      {
+        method: "index.apps.catalog.subscribe",
+        scope: "index.search",
+        idempotent: true,
+        locality: "stream",
+      },
+      { method: "index.artifacts", scope: "index.search", idempotent: true, locality: "federate" },
       // SP-6 — one session's transcript over the door until the ticket: the
       // page door is `local` (the connected desktop's own history — the phone
       // dials each desktop, SP-D2 (a)), the tail a rows stream; both read the
@@ -344,6 +360,12 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       "index.projectDay",
       // TL — the timeline's past, asked of the desktop that recorded it
       "index.activity",
+      // MA-1a — the made apps leave the device as the history does: the fold
+      // and one library's page federate, the pings and the peer door stream
+      "index.apps.list",
+      "index.apps.subscribe",
+      "index.apps.catalog.subscribe",
+      "index.artifacts",
       // SP-6 — the tail is a stream; the page door `index.timeline` is NOT
       // here: it stays `local` like `index.recent` (the phone dials each
       // desktop; DS-7 may federate it with the ticket)
@@ -374,6 +396,9 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
           // DS-6 — the catalog's rows and the History page's pings
           m.method === "index.catalog.subscribe" ||
           m.method === "index.changes.subscribe" ||
+          // MA-1a — the shelf's pings and the apps table's peer door
+          m.method === "index.apps.subscribe" ||
+          m.method === "index.apps.catalog.subscribe" ||
           // SP-6 — one session's live tail over the door
           m.method === "index.session.subscribe" ||
           // AO-4b — the first reading, pushed whole
@@ -417,6 +442,12 @@ describe("SP-D13 — the phone's own history, bounded", () => {
       // TL — the lanes' past (the backend's) and the record's turns under it
       "agent.recordedLanes",
       "index.activity",
+      // MA-1a — the made apps: the peer door (refused the phone by its handler,
+      // as the catalog door is), the fold, the shelf's pings, one library's page
+      "index.apps.catalog.subscribe",
+      "index.apps.list",
+      "index.apps.subscribe",
+      "index.artifacts",
       "index.catalog.subscribe",
       "index.changes.subscribe",
       // AR-8b — the History room's three reads

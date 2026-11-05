@@ -110,6 +110,11 @@ Design corpus (`draft/`, tracked on the local-only `dev-local` branch, never on 
 - `draft/thinking-ar-views-port.md` — the views port as built. `draft/thinking-ar-approvals-prompts.md` — the design AR-6 will run. **current**
 - `draft/thinking-agent-onboarding.md` — Bring Your Agents (track AO): the agent plane's first run, its marks and
   build ladder. **RULED 2026-10-27; built through AO-6b3** (LANDED §AO); AO-7 waits on a puppeteer release
+- `draft/thinking-mini-apps.md` — Apps (track MA): the HTML pages agents present, read from rosetta's library into
+  fieldd's own replicated `apps` table and served on open by their desktop; the seam is on api's
+  [upstream map](agent-plane/api.html#upstream), its six doors in api's catalogue, four under
+  [index.*](agent-plane/api.html#cat-index) and two under [artifact.*](agent-plane/api.html#cat-artifact).
+  **RULED 2026-11-05** (MA-D1…D13; D10 (b)); MA-1a declares the contracts
 - `draft/design-00…design-04` — the governing specification in authority order. The agent plane defers to these for
   mechanics. **current, with fold-backs owed** (ROADMAP's records): the D1–D4 name fold-back (chopsticks and
   spaghetti → puppeteer and rosetta) and design-03's desk fold

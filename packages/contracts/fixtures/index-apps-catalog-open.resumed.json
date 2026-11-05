@@ -1,0 +1,6 @@
+{
+  "//": "MA-1a — `index.apps.catalog.subscribe`'s open answer when the journal covered the cursor: nothing to replace, and the catch-up delta follows as the first `index.apps.catalog.delta`. A resumed reader is sent no page, so the owner's standing rides beside `resumed`: its library is still reading (`libraryReady: false`), and its previews serve is up at `previewsBase`.",
+  "resumed": { "epoch": "apps-7b1e4c90-3f2a-4d6b-8e15-9c0a2d4f6b81", "revision": 42 },
+  "libraryReady": false,
+  "previewsBase": "https://studio.tail1234.ts.net:14211/"
+}

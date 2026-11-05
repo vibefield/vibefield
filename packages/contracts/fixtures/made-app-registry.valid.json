@@ -1,0 +1,39 @@
+{
+  "//": "MA-1a — an origin's PRIVATE serve registry (`field.made-apps.v1.json`, fieldd's alone; never replicated, never answered by a door): the previews serve's port, then one record per app it has served. The first is open, with its folder's presentation and digest, its preview, and the hosts its shell named. The second was idle a day and closed; its port stays reserved for life. Keep and hide are not here: they are the person's intent (`MadeAppIntentRow`).",
+  "v": 1,
+  "previewsListenPort": 14211,
+  "apps": [
+    {
+      "appId": "cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+      "listenPort": 13377,
+      "previewId": "01JC4MA0PV0000000000000001",
+      "exportedPresentationId": "ff82c000262f76cf6e33a271983f71d2775ea6b3288cc3c395a7f36495528f0e",
+      "exportedDigest": "b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e",
+      "state": "open",
+      "lastOpenedAt": 1793836900000,
+      "retiringServeIds": [],
+      "lastServedUrl": "https://studio.tail1234.ts.net:13377",
+      "preview": {
+        "id": "01JC4MA0PV0000000000000001",
+        "digest": "7c9d5a180100e785385597f03324ba6969664076be51cd52dd7798ed96aaa739",
+        "pageDigest": "b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e",
+        "capturedAt": 1793837000000
+      },
+      "reach": ["cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"],
+      "createdAt": 1793836890000,
+      "updatedAt": 1793837000000
+    },
+    {
+      "appId": "290eb6966da36e27726c603bf735ae22390bcc29f8570acb139fde96a0849b39",
+      "listenPort": 18802,
+      "previewId": "01JC4MA0PV0000000000000002",
+      "exportedPresentationId": "cfa7d7deb85b6b32d3841e965a40ac10e5553ce204cae0eeb7380228a610f877",
+      "exportedDigest": "9d6a2998c069ad28b3e35b30fd5cda314072fdba9c760f10aa36e16f82c4bff2",
+      "state": "closed",
+      "lastOpenedAt": 1793664000000,
+      "retiringServeIds": [],
+      "createdAt": 1793664000000,
+      "updatedAt": 1793750400000
+    }
+  ]
+}

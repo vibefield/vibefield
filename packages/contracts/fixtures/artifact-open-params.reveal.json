@@ -1,0 +1,7 @@
+{
+  "//": "MA-1a — the desktop WINDOW opening an older version on another desktop and asking its own desktop to show it in the browser (`reveal`): the answering home opens the validated URL through its shell's `shell.openLink`, as `terminal.link.open` does. The window never holds `shell.open`.",
+  "appId": "da363d2fb4b072da2da2368c70e030640499ed4f94eddb44ef9b14b3d59d9101",
+  "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+  "presentationId": "110e46aad806a8c54fb52387eaae6171a0291b38e1e745107ff90d601f0c8bff",
+  "reveal": true
+}

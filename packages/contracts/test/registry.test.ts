@@ -5,10 +5,13 @@ import { describe, expect, it } from "vitest";
 import {
   INDEX_CATALOG_TABLES,
   INDEX_REPLICATED_TABLES,
+  IndexAppsCatalogSubscribeParams,
+  IndexAppsParams,
+  IndexArtifactsParams,
   IndexCatalogSubscribeParams,
   IndexOpenTicketParams,
 } from "../src/agent-index";
-import { ARTIFACT_LIMITS } from "../src/artifacts";
+import { ARTIFACT_LIMITS, ArtifactMarkParams, ArtifactOpenParams } from "../src/artifacts";
 import { DEVICE_LIMITS } from "../src/devices";
 import { RpcNotification } from "../src/envelope";
 import { ErrorData, UnavailableDetails } from "../src/errors";
@@ -303,6 +306,14 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
         shape: "rows",
         cadenceFloorMs: INDEX_MESH.CHANGES_MIN_INTERVAL_MS,
       },
+      // MA-1a (L1, L3) — the shelf's pings at the History page's pace, and the
+      // `apps` table's own peer door at ROWS' floor (its handler admits a peer
+      // daemon alone, as the catalog door's does)
+      "index.apps.subscribe": {
+        shape: "rows",
+        cadenceFloorMs: INDEX_MESH.CHANGES_MIN_INTERVAL_MS,
+      },
+      "index.apps.catalog.subscribe": { shape: "rows", cadenceFloorMs: ROWS.MIN_INTERVAL_MS },
       // SP-6 — one session's live tail, a reader's pace: a second, not the
       // room's 16 ms (the rows before the tail are index.timeline's pages)
       "index.session.subscribe": {
@@ -829,6 +840,163 @@ describe("SP-3 — index.openTicket, declared", () => {
     expect(IndexOpenTicketParams.safeParse({ sessionId: "" }).success).toBe(false);
     expect(IndexOpenTicketParams.safeParse({ device: "dev-a" }).success).toBe(false);
     expect(IndexOpenTicketParams.safeParse({ sessionId: "s1", device: "" }).success).toBe(false);
+  });
+});
+
+// MA-1a (`draft/thinking-mini-apps.md` v0.2, RULED 2026-11-05; the build plan's
+// §1.3 as the lead ruled it) — the six doors of the apps your agents made,
+// declared with no handler (L9). Four reads on `index.search`, two acts on the
+// new `apps.use`; every one idempotent, so none is keyed and none journals a
+// receipt.
+describe("MA-1a — the six made-app doors, declared", () => {
+  const row = (method: string) => METHODS.find((m) => m.method === method);
+  const appId = "cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c";
+
+  it("names exactly six, four reads and two acts", () => {
+    const doors = METHODS.filter(
+      (m) =>
+        m.method.startsWith("index.apps.") ||
+        m.method === "index.artifacts" ||
+        m.method === "artifact.open" ||
+        m.method === "artifact.mark",
+    ).map((m) => m.method);
+    expect(doors.sort()).toEqual([
+      "artifact.mark",
+      "artifact.open",
+      "index.apps.catalog.subscribe",
+      "index.apps.list",
+      "index.apps.subscribe",
+      "index.artifacts",
+    ]);
+    for (const m of doors) {
+      expect(KEYED_FORWARD_METHODS.has(m), m).toBe(false);
+      expect(reachableFromTailnet(row(m)!), m).toBe(true);
+      expect(row(m)?.guestOk, m).toBeUndefined();
+    }
+  });
+
+  it("index.apps.list pages the fold — index.search, federate, a read", () => {
+    expect(row("index.apps.list")).toEqual({
+      surface: "product",
+      method: "index.apps.list",
+      scope: "index.search",
+      idempotent: true,
+      locality: "federate",
+    });
+    expect(IndexAppsParams.parse({})).toEqual({});
+    expect(IndexAppsParams.safeParse({ scope: "mesh", limit: 500 }).success).toBe(true);
+    expect(IndexAppsParams.safeParse({ limit: 501 }).success).toBe(false);
+  });
+
+  it("index.apps.subscribe is the shelf's pings, at the History page's floor", () => {
+    expect(row("index.apps.subscribe")).toEqual({
+      surface: "product",
+      method: "index.apps.subscribe",
+      scope: "index.search",
+      idempotent: true,
+      locality: "stream",
+      subscription: { shape: "rows", cadenceFloorMs: INDEX_MESH.CHANGES_MIN_INTERVAL_MS },
+    });
+  });
+
+  it("index.apps.catalog.subscribe is the apps table's own peer door, naming no table (L1)", () => {
+    expect(row("index.apps.catalog.subscribe")).toEqual({
+      surface: "product",
+      method: "index.apps.catalog.subscribe",
+      scope: "index.search",
+      idempotent: true,
+      locality: "stream",
+      subscription: { shape: "rows", cadenceFloorMs: ROWS.MIN_INTERVAL_MS },
+    });
+    // the history catalog's door and its two tables do not move
+    expect(INDEX_CATALOG_TABLES).toEqual(["projects", "sessions", "threads"]);
+    expect(INDEX_REPLICATED_TABLES).toEqual(["projects", "sessions"]);
+    expect(IndexCatalogSubscribeParams.safeParse({ table: "apps" }).success).toBe(false);
+    expect(IndexAppsCatalogSubscribeParams.safeParse({ minIntervalMs: 1000 }).success).toBe(true);
+  });
+
+  it("index.artifacts reads one desktop's library — federate, routed by device", () => {
+    expect(row("index.artifacts")).toEqual({
+      surface: "product",
+      method: "index.artifacts",
+      scope: "index.search",
+      idempotent: true,
+      locality: "federate",
+    });
+    expect(IndexArtifactsParams.parse({ device: "dev-a", appId })).toEqual({
+      device: "dev-a",
+      appId,
+    });
+    expect(IndexArtifactsParams.safeParse({ device: "" }).success).toBe(false);
+    // rosetta's own page bound
+    expect(IndexArtifactsParams.safeParse({ limit: 100 }).success).toBe(true);
+    expect(IndexArtifactsParams.safeParse({ limit: 101 }).success).toBe(false);
+  });
+
+  it("artifact.open is apps.use, federate and declarative (compose.sparks.open's precedent)", () => {
+    expect(row("artifact.open")).toEqual({
+      surface: "product",
+      method: "artifact.open",
+      scope: "apps.use",
+      idempotent: true,
+      locality: "federate",
+    });
+    expect(ArtifactOpenParams.parse({ appId, device: "dev-a" })).toEqual({
+      appId,
+      device: "dev-a",
+    });
+    expect(ArtifactOpenParams.safeParse({ appId, device: "" }).success).toBe(false);
+  });
+
+  it("artifact.mark is apps.use and LOCAL: the home answers it, the D36 wall refuses a peer", () => {
+    expect(row("artifact.mark")).toEqual({
+      surface: "product",
+      method: "artifact.mark",
+      scope: "apps.use",
+      idempotent: true,
+      locality: "local",
+    });
+    // no `device`: a local method is refused its routing before the forwarder
+    const mark = { foldKey: "native:claude-code:review", kept: true };
+    expect(ArtifactMarkParams.safeParse(mark).success).toBe(true);
+  });
+
+  it("apps.use is the window's and the phone's: in the tailnet preset, the peer's by derivation, never plugin-eligible", () => {
+    expect(SCOPES).toContain("apps.use");
+    expect(TAILNET_SCOPES).toContain("apps.use");
+    expect(PEER_FIELDD_SCOPES).toContain("apps.use");
+    expect([...PEER_FIELDD_SCOPES]).toEqual([...new Set([...TAILNET_SCOPES, "index.search"])]);
+    expect(PLUGIN_CAPABILITY_ELIGIBILITY).not.toHaveProperty(["apps.use"]);
+    for (const source of ["bundled", "dev-linked", "registry", "sideload"] as const) {
+      const grants = computeEffectiveGrants({
+        requested: ["apps.use"],
+        hasRenderer: true,
+        hasService: true,
+        source,
+      });
+      expect(grants.granted, source).toEqual([]);
+      expect(grants.denied, source).toEqual([{ capability: "apps.use", reason: "entry-kind" }]);
+    }
+    // the two acts are the scope's only doors
+    const acts = METHODS.filter((m) => m.scope === "apps.use").map((m) => m.method);
+    expect(acts.sort()).toEqual(["artifact.mark", "artifact.open"]);
+  });
+
+  it("leaves the live artifacts' doors as they were: local mutations, sync reads", () => {
+    const isLive = (m: (typeof METHODS)[number]) =>
+      m.method.startsWith("artifact.") && m.scope !== "apps.use";
+    const live = Object.fromEntries(
+      METHODS.filter(isLive).map((m) => [m.method, [m.scope, m.locality]]),
+    );
+    expect(live).toEqual({
+      "artifact.publish": ["artifact.publish", "local"],
+      "artifact.update": ["artifact.publish", "local"],
+      "artifact.unpublish": ["artifact.publish", "local"],
+      "artifact.refreshPreview": ["artifact.publish", "local"],
+      "artifact.list": ["workspace.read", "sync"],
+      "artifact.subscribe": ["workspace.read", "sync"],
+    });
+    expect(TAILNET_SCOPES).not.toContain("artifact.publish");
   });
 });
 

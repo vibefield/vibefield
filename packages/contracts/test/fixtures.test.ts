@@ -55,6 +55,16 @@ import {
   IndexActivityParams,
   IndexActivityResponse,
   IndexActivityResult,
+  IndexAppsCatalogDelta,
+  IndexAppsCatalogOpen,
+  IndexAppsCatalogSubscribeParams,
+  IndexAppsParams,
+  IndexAppsResult,
+  IndexAppsSubscribeParams,
+  IndexArtifactPageResponse,
+  IndexArtifactsParams,
+  IndexArtifactsResult,
+  IndexCatalogApp,
   IndexCatalogDelta,
   IndexCatalogOpen,
   IndexCatalogProject,
@@ -109,10 +119,16 @@ import {
 import { AgentAccountUsageBatch } from "../src/agent-usage";
 import {
   ArtifactCatalogSlice,
+  ArtifactMarkParams,
+  ArtifactMarkResult,
+  ArtifactOpenParams,
+  ArtifactOpenResult,
   ArtifactPublishV2Params,
   ArtifactStatus,
   ArtifactView,
   LocalArtifactIntent,
+  MadeAppIntentRow,
+  MadeAppRegistry,
 } from "../src/artifacts";
 import {
   AgentInputQueueFile,
@@ -264,7 +280,11 @@ import {
   ScreenshotHelperEvent,
 } from "../src/screenshot";
 import { SetupAnswerParams, SetupLedger, SetupMomentParams } from "../src/setup";
-import { AppPreferences } from "../src/shell";
+import {
+  AppPreferences,
+  ShellWebContentsCaptureArtifactPreviewParams,
+  ShellWebContentsCaptureArtifactPreviewResult,
+} from "../src/shell";
 import {
   DiagnosticsLastExitResult,
   ShellExitRecord,
@@ -418,6 +438,19 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "artifact-status": ArtifactStatus,
   "artifact-catalog": ArtifactCatalogSlice,
   "artifact-view": ArtifactView,
+  // MA-1a — the acts on a made app: the phone's open and the window's (`.reveal`), the two answers
+  // (`.serving`, `.starting`), a mark and its answer. The open's refusals ride the ErrorData prefix
+  // (`error-data.apps-*`; their rows in made-apps.test.ts). The origin's private serve registry, the
+  // keep-and-hide row slice 3h writes, and the capture's two new members (a made app's hosts, the
+  // JPEG's digest).
+  "artifact-open-params": ArtifactOpenParams,
+  "artifact-open": ArtifactOpenResult,
+  "artifact-mark-params": ArtifactMarkParams,
+  "artifact-mark": ArtifactMarkResult,
+  "made-app-registry": MadeAppRegistry,
+  "made-app-intent": MadeAppIntentRow,
+  "shell-capture-preview-params": ShellWebContentsCaptureArtifactPreviewParams,
+  "shell-capture-preview-result": ShellWebContentsCaptureArtifactPreviewResult,
   "native-health": NativeHealth,
   "desired-state": DesiredState,
   // IL-D4 (draft/thinking-inventory-latency.md §4.1) — three floors on purpose: a judging floor
@@ -658,6 +691,22 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // T4 — rosetta's own body for `/api/activity` (protocol 27), transcribed
   // from the checkout's wire golden, which fieldd parses
   "index-activity-response": IndexActivityResponse,
+  // MA-1a — the made apps across desktops: the owner's row (a child session's
+  // among them), the fold's ask and its answers (this desktop's, the mesh with
+  // an asleep laptop, the phone's clipped page, two holders folded), the
+  // shelf's pings, the peer door's ask and frames, and `index.artifacts`' ask
+  // and answer over rosetta's library page, transcribed from the pin's
+  // protocol-29 wire golden (revision and digest in its `//` note).
+  "index-catalog-app": IndexCatalogApp,
+  "index-apps-params": IndexAppsParams,
+  "index-apps": IndexAppsResult,
+  "index-apps-subscribe-params": IndexAppsSubscribeParams,
+  "index-apps-catalog-subscribe-params": IndexAppsCatalogSubscribeParams,
+  "index-apps-catalog-open": IndexAppsCatalogOpen,
+  "index-apps-catalog-delta": IndexAppsCatalogDelta,
+  "index-artifacts-params": IndexArtifactsParams,
+  "index-artifacts": IndexArtifactsResult,
+  "index-artifacts-response": IndexArtifactPageResponse,
   // AO-2 — the Setup Assistant's ledger, as fieldd keeps it and a window reads
   // it: a row per step, Finish setting up hidden or not; and one from a newer
   // build (a step and a state this one has never heard of, a top-level key) that

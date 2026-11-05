@@ -1,0 +1,6 @@
+{
+  "//": "MA-1a — the app is up: the root URL its own listener reported (validated, never synthesized; AH §6) and the hosts its served shell loads from, as rosetta's export named them (MA-L9). A host's web view admits its origin and these, nothing else (MA-L7).",
+  "state": "serving",
+  "url": "https://studio.tail1234.ts.net:13377",
+  "reach": ["cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"]
+}

@@ -936,6 +936,14 @@ export const METHODS: MethodDef[] = [
   // AH-1 — ArtifactService mutations are source-local. Local plugin/agent
   // principals may be explicitly granted artifact.publish, but tailnet callers
   // and D35 device? routing may only read the eventual global catalog.
+  // *Corrected 2026-11-05 (MA-1a; MA-D1…D13 RULED, the build plan's L4): this
+  // holds for the LIVE artifacts' mutations below, which stay `local`; it does
+  // not hold for the artifact family. A tailnet caller (the phone) and D35's
+  // `device?` routing now act on a MADE app through `artifact.open`
+  // (`federate`: the phone asks its home, which forwards to the app's desktop),
+  // and a tailnet caller keeps or hides one through `artifact.mark` (`local`,
+  // answered by its home). Both ride `apps.use`, never `artifact.publish`:
+  // nothing a tailnet caller sends ever publishes or reshapes a serve.*
   defineMethod({
     surface: "product",
     method: "artifact.publish",
@@ -976,6 +984,12 @@ export const METHODS: MethodDef[] = [
   // SP-1 — the catalog as whole lists, the newest standing (the kit and the
   // browser plugin read it so), at the stream floor: a slice relay that churns
   // costs a phone one list per window, not one per change.
+  // *Corrected 2026-11-05 (MA-1a): the kit reads no `artifact.*` door; a grep
+  // of `apps/ios/VibeFieldKit` finds no caller. The browser plugin and the
+  // frame's head (`head-artifacts.ts`) read it. The kit reads it from MA-6,
+  // when MA-1b mirrors `ArtifactView` and the phone's shelf shows live apps
+  // beside made ones (the plan's L10). It still carries only the two LIVE
+  // kinds: a made app never rides this stream (H2).*
   defineMethod({
     surface: "product",
     method: "artifact.subscribe",
@@ -983,6 +997,42 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "sync",
     subscription: WHOLE_VALUE_STREAM,
+  }),
+  // MA-1a (`draft/thinking-mini-apps.md` v0.2 §4.4, RULED 2026-11-05; the
+  // build plan's L4 as the lead ruled it) — open a MADE app: its desktop
+  // exports the page, serves it at the app's own origin and answers the URL
+  // its listener reported (`ArtifactOpenParams`, `ArtifactOpenResult`). Its
+  // own scope, `apps.use` (the window's and the phone's, never
+  // plugin-eligible): an open puts up a listener that serves what an agent
+  // wrote. `federate`: the phone asks its home and the home forwards the call
+  // WHOLE to the app's desktop, which answers from its own rule; a peer daemon
+  // is admitted only as that carrier (DS-L7). Idempotent, the
+  // `compose.sparks.open` precedent: an open is declarative, and a second one
+  // finds the serve up and answers it as it is, so a forwarded open is not
+  // keyed and journals no receipt. `reveal` (the window's alone) is the HOME's
+  // act on its own answer, never forwarded. Declared with no handler (the
+  // plan's L9): MA-3e registers it, and no client calls it before then.
+  defineMethod({
+    surface: "product",
+    method: "artifact.open",
+    scope: "apps.use",
+    idempotent: true,
+    locality: "federate",
+  }),
+  // MA-1a (the lead's ruling on L8 and C5) — keep a made app, or hide it:
+  // the person's INTENT, written to the HOME's replica of the settings
+  // document, keyed by the app's fold key, which carries it to every desktop
+  // (`ArtifactMarkParams`). `local`: the desktop the caller is connected to
+  // answers it, so the D36 wall refuses it to a peer daemon, and an asleep
+  // holder misses nothing. Idempotent: set semantics, so the same mark twice
+  // leaves the same intent. `apps.use`, as `artifact.open`. Declared with no
+  // handler (L9): slice 3h answers it.
+  defineMethod({
+    surface: "product",
+    method: "artifact.mark",
+    scope: "apps.use",
+    idempotent: true,
+    locality: "local",
   }),
 
   // C4 — DeviceService (design-04 D31, P1-lite: roster only; PeerLink/D32 and
@@ -2109,6 +2159,69 @@ export const METHODS: MethodDef[] = [
     method: "index.openTicket",
     scope: "index.read",
     idempotent: false,
+    locality: "federate",
+  }),
+  // MA-1a (`draft/thinking-mini-apps.md` v0.2 §4, RULED 2026-11-05; the build
+  // plan's L1, L3 and L5 as the lead ruled them) — the apps your agents made,
+  // across desktops (agent-index.ts' MA block). All four read the history's
+  // content (titles, the sessions they came from), so all four ride
+  // `index.search`, the consent AR-5b gave that content, which the phone holds
+  // (SP-D13) and no plugin does. Declared with no handler (the plan's L9):
+  // MA-3e registers them, and no client calls them before then. They sit
+  // before SP-6's two, so `index.session.subscribe` stays the last index row
+  // and the `project.*` doors still follow it (project-doors.test.ts).
+  // `index.apps.list` pages the FOLD (`IndexAppsParams`) for a window
+  // (local-token, shell-main) and a self phone (tailnet), whose page is cut at
+  // INDEX_TAILNET_LIMITS.MAX_ROWS. `federate` like `index.sessions`: a
+  // `device` routes the call to that desktop, where it arrives from the home's
+  // daemon as `peer-fieldd`, and that principal is answered ONLY the
+  // answering desktop's own rows (its `scope` read as `local`, as
+  // `index.sessions`' handler reads it). A daemon never pages another's fold
+  // (DS-L4: it never aggregates another's aggregate): a peer copies the
+  // table through `index.apps.catalog.subscribe`.
+  defineMethod({
+    surface: "product",
+    method: "index.apps.list",
+    scope: "index.search",
+    idempotent: true,
+    locality: "federate",
+  }),
+  // The shelf's PINGS (L3), `index.changes.subscribe`'s pattern and floor: the
+  // rows are always empty, the client re-pages, and a radio has no use for a
+  // faster pace than the History page's.
+  defineMethod({
+    surface: "product",
+    method: "index.apps.subscribe",
+    scope: "index.search",
+    idempotent: true,
+    locality: "stream",
+    subscription: { shape: "rows", cadenceFloorMs: INDEX_MESH.CHANGES_MIN_INTERVAL_MS },
+  }),
+  // The `apps` table's PEER replication door (L1), `index.catalog.subscribe`'s
+  // pattern and floor, and like it admitted to a `peer-fieldd` principal and no
+  // other (its handler's gate). Its own door rather than a third table on the
+  // catalog's, so an older peer refuses this door alone and History's two
+  // tables and their pings never move.
+  defineMethod({
+    surface: "product",
+    method: "index.apps.catalog.subscribe",
+    scope: "index.search",
+    idempotent: true,
+    locality: "stream",
+    subscription: { shape: "rows", cadenceFloorMs: ROWS.MIN_INTERVAL_MS },
+  }),
+  // One desktop's LIBRARY as rosetta pages it (L5; `IndexArtifactsParams`): the
+  // History room's `artifacts` port and the phone's Versions. `federate` with
+  // `device`, as `index.session` is: the routed call reaches the library's
+  // desktop as `peer-fieldd`, the carrier, and is answered from that
+  // desktop's own library, the only one this door reads. Every answer is a
+  // projection with no path for ANY caller: rosetta's publication path and
+  // recovered-from path are paths on its desktop, and neither leaves fieldd.
+  defineMethod({
+    surface: "product",
+    method: "index.artifacts",
+    scope: "index.search",
+    idempotent: true,
     locality: "federate",
   }),
   // SP-6 (thinking-sync-planes.md §5.4 "until RO-1"; SP-D5 (a), 2026-10-03;
