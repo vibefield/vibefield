@@ -32997,3 +32997,73 @@ C12 is that line, at the end of the "Wire truth" bullet, and its commit body quo
 - **SD-3, away:** sounds with no VibeField window in front, through the notices (§8's foot says "For now they play
   only while a VibeField window is in front"); then SD-4, the phone, and SD-5, the mark, a terminal's bell and the
   bloom. The mark's clearance check before it ships (§14's limits).
+
+## TD-4 — the native plane reads a signed member by its CodeDirectory, so a release that signs the same field-native again keeps the person's sessions, and a signed release refuses a member read by its bytes (LP-D16; 2026-11-05; `d130735dc` → `05994b8c5`, 4 commits on main `ffa578fbd`, lane `lp/td4` in `/Volumes/SamsungRed/lanes/lp-td4/vibe-field`, minted as M139 `bb49a3eab`, run 139)
+
+**What it rests on.**
+- A Developer ID signature embeds a CMS blob with a signing time and a secure timestamp, so the same field-native signed
+  to new bytes every release. Read by its bytes, every release read field-native "touched", and every apply asked to
+  end the person's sessions. `nightly-20261104`'s manifest `touched` line was LP-D16's first data point.
+- James ruled LP-D16 on 2026-11-05 (01:04Z): a signed Mach-O member of the field-native plane is digested by its
+  CodeDirectory hash, not its file bytes. VF-PM ruled at 01:59Z and 02:01Z that a SIGNED macOS release fails loudly when
+  a member falls back to its bytes.
+- The lane was built code-only in wave 1, stacked on LP-1 (`lp/rails`), and reviewed through two lenses. The EL7
+  finding (a SHA-384 CodeDirectory the kernel ranks first) was fixed in `1457ea8e6`. The release.yml placement
+  finding was fixed in `05994b8c5`, so the strict switch merges clean beside LP-1's lines.
+- RELEASE-CLASS (`.github/workflows/release.yml`), so the lane waited for James's eye: "L6b L1 L8 L7 ok" (05:40Z).
+- Re-cut onto `ffa578fbd` (SD-2's records, on SD-2's M138 `9e5b6eec8`). `diff ffa578fbd..bb49a3eab` equals `diff
+  93036c696..0a4a0d069` (the GO'd tip), 11 files with `git patch-id --stable` equal for all 11. No file is shared with
+  SD-2. The lane took a frozen install under co-plan/INSTALL (06:49:43–06:49:45Z) for SD-2's new `@vibefield/sound`
+  workspace link before its light.
+
+**What landed.**
+- `packages/electron-shell/src/main/updates/code-directory.mjs` (+ `.d.mts`, new): ONE copy of the rule, plain
+  JavaScript beside native-plane.ts, imported by main from TypeScript and by `scripts/release-manifest.mjs` from node.
+  It is pure over bytes, uses node:crypto only, and never throws.
+  - It reads a thin Mach-O, or a universal file slice by slice. The signature must END the image, and the
+    CodeDirectory's `codeLimit` must BE the signature's offset, so every byte before it is a hashed page. Every code
+    page and every special slot is hashed again and compared. The CMS blob is bounds-checked and left out.
+  - The CodeDirectory read is the one the kernel enforces. A signature with a SHA-384 CodeDirectory, an unknown hash
+    type, or one hash type twice reads by its bytes.
+  - Anything it does not read whole (unsigned, not a Mach-O, a symlink, a malformed or truncated signature, code that
+    no longer matches its CodeDirectory, an unsigned slice) falls back to sha256(bytes) with its reason. A doubt can
+    only read TOUCHED, never untouched (EL7).
+- The line: `bin/<name>\0cdhash:<hex>` for a signed member, `bin/<name>\0<sha256>` by bytes. The plane's combination
+  rule, `members` and `files` are unchanged, and the fieldd and shell planes keep the byte rule. Both hashers use it:
+  native-plane.ts `hashNativePlane` and release-manifest.mjs `hashPlanes`, whose `hash` command logs how it read each
+  field-native member.
+- `hash --require-cdhash`: a field-native member read by its bytes is an error naming EVERY such member and its reason,
+  and so is a plane with no field-native member. release.yml's "Hash the planes (D11)" step passes it on the signed
+  macOS path alone (`${SIGNED_MAC:+--require-cdhash}` on the call's first line). Dev, unsigned and non-mac builds keep
+  the byte fallback.
+- `packages/contracts/src/update-policy.ts`: two comments that stated the `path\0sha256` line are corrected at their
+  source, dated. The shape and the generated schemas do not move.
+
+**Validation.**
+- This Mac, from inside the lane (nice 19, guard clear), each rc=0:
+  - at `8c784434f` on LP-1's trial tip (05:50:57–05:52:07Z): preflight; contracts and electron-shell typecheck;
+    code-directory, native-plane and release-scripts 97/97; `node --check` on release-manifest and code-directory;
+    biome; walls; actionlint;
+  - at `7306bd853` on SD-2's M138 (06:50:02–06:51:09Z), direct (no pnpm): preflight; contracts and electron-shell
+    typecheck (main and renderer); code-directory, native-plane and release-scripts 97/97; contracts fixtures.test.ts
+    589/589; biome; walls; actionlint;
+  - at `bb49a3eab` (06:52:52Z), the docs-only move: preflight, biome, walls and actionlint.
+- The mini (a9), run 139: minted `mint/td4` = `bb49a3eab` (tree `8ce8ac981b71`, stacked on `ffa578fbd`), and `pnpm
+  verify` armed at 06:55:27Z, exit 0 at 07:00:52Z.
+  - vitest 12,641 passed, 0 failed, 20 skipped over 903 files. Its +19 are L8's: code-directory.test.ts 10 (new),
+    native-plane 9 (+1), release-scripts 78 (+8).
+  - `node --test` 445/0, cargo 545/0, biome 3194 files, gen:check exit 0 (update-policy.ts changes comments only). Logs:
+    `lanes/ts6/logs/mini/run139/`.
+  - No step 2: L8's witnesses are signed nightlies'.
+
+**Found.**
+- The review's SHA-384 finding: before `1457ea8e6`, a same-uid process could add a CodeDirectory the kernel enforces
+  above the SHA-256 one, and the digest would not move. The reader now reads by its bytes whenever the CodeDirectory it
+  verifies is not the one the kernel enforces.
+
+**Owed.**
+- Migration, said: an installed client from before TD-4 hashes its plane by bytes, so it reads the FIRST TD-4 release
+  as touched once, and that release's manifest lists field-native in `touched` once. From the second TD-4 release on, a
+  release that does not change the floor's code keeps the person's sessions.
+- The witness on two signed nightlies with an unchanged field-native: `touched` names no field-native, and a live
+  terminal survives the apply (the mini; W11's PTY clause).

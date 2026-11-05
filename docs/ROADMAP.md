@@ -747,8 +747,10 @@ phone"; DECISIONS PC
        `package-census --assert --strict` green: OWED, its baseline its own slice now that SD-2 is on main (M138);
      - LOG-39's packaged checks in `release.yml`;
      - `cargo audit` blocking again once the yanked chacha20 moves (Q28);
-     - build-provenance attestations on the DMG and zip;
-     - the version-less `VibeField-mac-arm64.dmg` on stables (LP-D17).
+     - build-provenance attestations on the DMG and zip: LANDED (M136, LANDED "LP-1"); owed: the first signed
+       release's witness;
+     - the version-less `VibeField-mac-arm64.dmg` on stables (LP-D17): LANDED (M136, LANDED "LP-1"); owed: the
+       first signed release's witness.
    - **Phase 2, the product blockers** (5–18 Nov, parallel lanes):
      - **A** BP-D9 (a) as ruled: LANDED 2026-11-05 (BP-1c, M134 `da1a3d695`) → R4, row 31 (`smoke:profile`) on a
        signed nightly · R3 (the mini) → BP-2, downloads (BP-D2: "at the first beta") → BP-D5's row with UA's user
@@ -757,7 +759,8 @@ phone"; DECISIONS PC
        "AR-7j"). Owed: its packaged row `verify-agents-package` (desk-gates row 34) green on the first signed build,
        with the start cost measured.
      - **C** sessions survive an update that leaves the daemons alone: D11's measurement, then TD-4 by code hash
-       (LP-D16; `lp/td4`) and a byte-stable field-native. W11's PTY clause rides it.
+       (LP-D16): LANDED 2026-11-05 (M139 `bb49a3eab`, LANDED "TD-4"); owed: two signed nightlies with an unchanged
+       field-native, `touched` naming none, a live terminal surviving the apply. W11's PTY clause rides it.
      - **D** RD-6, CI in prod shape: rosetta's published `rosettad` archive pinned by checksum (RD-D7), then mille's
        release (PR #44) and an exact pin.
      - **E** the scope freeze (VF-PM, James; `draft/launch/scope-freeze-proposal.md`): what 0.9 holds, and item 152
