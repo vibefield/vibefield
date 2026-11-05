@@ -154,13 +154,19 @@ export class AgentInputQueues {
   }
 
   /** IOS-12a — the input a say's request id queued, while it still waits: its run, the input and its place. Kept
-   * inputs carry their request id across a restart, so a retried say finds them there too. */
+   * inputs carry their request id across a restart, so a retried say finds them there too; `restarted` says the
+   * restart broke into its delivery (item 158: stamped, and not in flight), so it is never sent again. */
   findRequest(
     requestId: string,
-  ): { runtimeRunId: string; input: QueuedInput; position: number } | undefined {
+  ):
+    | { runtimeRunId: string; input: QueuedInput; position: number; restarted: boolean }
+    | undefined {
     for (const [runtimeRunId, queue] of this.#queues) {
       const at = queue.findIndex((input) => input.requestId === requestId);
-      if (at >= 0) return { runtimeRunId, input: queue[at]!, position: at + 1 };
+      if (at < 0) continue;
+      const input = queue[at]!;
+      const restarted = input.sending !== undefined && !this.#busy.has(runtimeRunId);
+      return { runtimeRunId, input, position: at + 1, restarted };
     }
     return undefined;
   }

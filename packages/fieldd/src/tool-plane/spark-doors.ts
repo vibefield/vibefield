@@ -149,19 +149,28 @@ export const SAY_RECEIPTS_KEPT = 512;
 
 /** IOS-12a (PC-D3 A) — the says this desktop queued, by request id, and what became of each: a retried say over a
  * dropped leg answers the first one's receipt instead of queueing the words twice. Kept in memory, the newest
- * SAY_RECEIPTS_KEPT. Across a fieldd restart a say still waiting is found in the queue itself (its kept input carries
- * the request id); one already delivered is not remembered, so a retry after a restart would queue its words again
- * (said in IOS-12a's record). */
+ * SAY_RECEIPTS_KEPT. Across a fieldd restart (item 158) a say still waiting is found in the queue itself (its kept
+ * input carries the request id), and one the restart broke into answers `uncertain` there; whatever the queue says of
+ * a kept say after the restart is kept by that request id. One delivered before the restart left the queue and is not
+ * remembered, so its retry would queue its words again (item 169). */
 export class SayReceipts {
   readonly #byRequest = new Map<string, SayEntry>();
   readonly #byInput = new Map<string, string>();
+  /** item 158 — how a say this boot never queued ended, by the request id its kept input carried (a restart's) */
+  readonly #restored = new Map<string, DeliveryOutcome>();
 
   constructor(
     private readonly queue: {
       pending(runtimeRunId: string): readonly QueuedInput[];
-      findRequest(
-        requestId: string,
-      ): { runtimeRunId: string; input: QueuedInput; position: number } | undefined;
+      findRequest(requestId: string):
+        | {
+            runtimeRunId: string;
+            input: QueuedInput;
+            position: number;
+            /** the head a restart broke into (item 158): never sent again */
+            restarted?: boolean;
+          }
+        | undefined;
     },
   ) {}
 
@@ -183,7 +192,16 @@ export class SayReceipts {
     if (input.from.kind !== "you") return;
     const requestId = this.#byInput.get(input.id) ?? input.requestId;
     const entry = requestId !== undefined ? this.#byRequest.get(requestId) : undefined;
-    if (entry !== undefined && entry.inputId === input.id) entry.outcome = outcome;
+    if (entry !== undefined && entry.inputId === input.id) {
+      entry.outcome = outcome;
+      return;
+    }
+    // a say a restart kept (item 158): by its own request id, once it has ended; while it waits, the queue holds it
+    if (input.requestId === undefined || outcome === "waiting") return;
+    this.#restored.delete(input.requestId);
+    this.#restored.set(input.requestId, outcome);
+    while (this.#restored.size > SAY_RECEIPTS_KEPT)
+      this.#restored.delete(this.#restored.keys().next().value as string);
   }
 
   /** The receipt a request id has here, for this spark; undefined: this desktop never queued it (or forgot it). A
@@ -194,9 +212,13 @@ export class SayReceipts {
   ): { state: ComposeSayState; position?: number | undefined } | undefined {
     const entry = this.#byRequest.get(requestId);
     if (entry === undefined) {
-      // kept across a restart: a say that still waits is in the queue, with its request id
+      // kept across a restart: how it ended since, or, while it is in the queue still, waiting there with its request
+      // id, unless the restart broke into its delivery (item 158), which is never sent again
+      const ended = this.#restored.get(requestId);
+      if (ended !== undefined) return { state: ended };
       const found = this.queue.findRequest(requestId);
       if (found === undefined) return undefined;
+      if (found.restarted === true) return { state: "uncertain" };
       return { state: "queued", position: found.position };
     }
     if (entry.spark !== spark)
