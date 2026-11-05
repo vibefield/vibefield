@@ -4,6 +4,7 @@
 // one audited `needs.answer` pair in the own-actions ledger, its act by index and never its words. Items are raised
 // without a floor by seeding the signed store before boot, with the spark they ask for (critique 20f).
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -16,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AGENT_CATALOG,
+  AGENT_INPUT_QUEUE_FORMAT,
   LAYOUT,
   NEEDS_RECORD_FORMAT,
   NeedsAnswerResult,
@@ -26,6 +28,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
+import { RecordSigner } from "../src/signed-record";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { NeedsStore } from "../src/tool-plane/rooms/you/store";
 import { SparkStore } from "../src/tool-plane/sparks";
@@ -41,6 +44,8 @@ afterEach(async () => {
 const VELA = "sp-vela00000000";
 const QUESTION = "ny-0000000000c0ffee";
 const QUESTION_WORDS = "Push the fix to main now, or hold it for the review?";
+/** item 158 — an answered question whose fact was in flight when fieldd was killed */
+const ITEM_B = "ny-0000000000b0b0b0";
 
 /** A user root with Vela's record and her question kept, signed, as a fieldd before this one left them. */
 function seeded(): string {
@@ -83,8 +88,11 @@ function seeded(): string {
   return dataDir;
 }
 
-async function boot(dataDir: string): Promise<FielddDaemon> {
+/** `observedState`, when given, is the floor's lifecycle snapshot: its terminals are the boot's first inventory, which
+ * starts the re-attach (a plain mock lists none, so the re-attach never runs). */
+async function boot(dataDir: string, observedState?: unknown): Promise<FielddDaemon> {
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+  if (observedState !== undefined) mock.observedState = observedState;
   await mock.start();
   cleanup.push(() => mock.stop());
   const daemon = await bootstrap({ dataDir, controlPort: 0 });
@@ -231,6 +239,95 @@ describe("the needs-you queue's doors (CP3-D6 A)", () => {
       .join("\n");
     expect(ledger).not.toContain("Push the fix");
     expect(ledger).not.toContain('"Hold"');
+  });
+
+  it("B1 · a boot settles the stamped heads a killed fieldd left: a spark's words are audited uncertain (restarted), and a wake's answer is neither telling nor owed again (item 158)", async () => {
+    const dataDir = seeded();
+    const inputsDir = join(dataDir, ...LAYOUT.AGENT_INPUTS_DIR);
+    mkdirSync(inputsDir, { recursive: true, mode: 0o700 });
+    chmodSync(inputsDir, 0o700);
+    const signer = new RecordSigner({ keyPath: join(dataDir, ...LAYOUT.AGENT_INPUTS_KEY_FILE) });
+    /** a queue file as the killed fieldd kept it: signed for its run, its head stamped */
+    const keepQueue = (run: string, inputs: unknown[]) => {
+      const unsigned = { format: AGENT_INPUT_QUEUE_FORMAT, run, inputs };
+      const file = join(inputsDir, `${run}.json`);
+      writeFileSync(file, JSON.stringify({ ...unsigned, signature: signer.sign(unsigned) }), {
+        mode: 0o600,
+      });
+      chmodSync(file, 0o600);
+    };
+    const sending = "2026-11-04T16:02:11.402Z";
+    // run-a: a spark's words, in flight when fieldd was killed
+    keepQueue("run-a", [
+      {
+        id: "a1a1a1a1a1a1",
+        text: "run the tests",
+        from: { kind: "spark", spark: VELA, name: "Vela" },
+        at: "2026-11-04T16:02:10.118Z",
+        sending,
+      },
+    ]);
+    // run-b: fieldd's wake carrying an answer's fact, in flight; the answer's record says it is telling there
+    const fact = 'you answered Vela\'s question "Ship it?": Push';
+    keepQueue("run-b", [
+      {
+        id: "b2b2b2b2b2b2",
+        text: fact,
+        from: { kind: "fieldd" },
+        at: "2026-11-04T16:02:10.500Z",
+        sending,
+        items: [ITEM_B],
+      },
+    ]);
+    const needsDir = join(dataDir, ...LAYOUT.NEEDS_DIR);
+    new NeedsStore({ dir: needsDir, keyPath: join(dataDir, ...LAYOUT.NEEDS_KEY_FILE) }).write({
+      format: NEEDS_RECORD_FORMAT,
+      item: {
+        id: ITEM_B,
+        kind: "question",
+        state: "answered",
+        from: { name: "Vela", session: "run-b", spark: VELA },
+        spark: VELA,
+        asked: "2026-11-04T16:01:00.000Z",
+        words: "Ship it?",
+        choices: ["Push", "Hold", "Not now"],
+        answer: { choice: 0, at: "2026-11-04T16:02:10.400Z", outcome: "done", told: true },
+      },
+      owed: fact,
+      telling: { run: "run-b", at: "2026-11-04T16:02:10.500Z" },
+    });
+    // a floor that lists no terminal: neither run exists, and its first inventory starts the re-attach, which settles
+    // with no record to hold; then the settle reconcile finds both kept queues' runs gone
+    const daemon = await boot(dataDir, {
+      generation: 1,
+      bootId: "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
+      terminals: [],
+      workers: [{ id: "w1", state: "up" }],
+      inventoryBoundMs: 10_000,
+    });
+    await until(() => daemon.agents.reattachSettled(), 5_000, "the re-attach ran");
+    const queues = () => readdirSync(inputsDir).filter((f) => f.endsWith(".json"));
+    await until(() => queues().length === 0, 5_000, "the kept queues settled").catch(
+      () => undefined,
+    );
+    expect(queues()).toEqual([]);
+    // the line is the own-actions ledger's: a ledger is chosen by the action's name, never by its principal
+    await until(() =>
+      ownActions(dataDir).some(
+        (l) => l.action === "tools.agent_send.delivery" && l.phase === "outcome",
+      ),
+    ).catch(() => undefined);
+    const delivery = ownActions(dataDir).filter(
+      (l) => l.action === "tools.agent_send.delivery" && l.phase === "attempt",
+    );
+    expect(delivery).toEqual([
+      expect.objectContaining({
+        target: expect.objectContaining({ kind: "run", id: "run-a" }),
+        attrs: expect.objectContaining({ spark: VELA, outcome: "uncertain", reason: "restarted" }),
+      }),
+    ]);
+    // uncertain drops both owed and telling: the answer's record holds nothing more
+    expect(readdirSync(needsDir).filter((f) => f.startsWith(ITEM_B))).toEqual([]);
   });
 
   it("needs.notices.subscribe answers an empty snapshot: a notice is an event, never kept", async () => {

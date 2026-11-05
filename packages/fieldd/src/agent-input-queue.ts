@@ -14,6 +14,7 @@ import {
   AgentInputQueueFile,
   type AgentInputSender,
   type AgentQueuedInput,
+  type NeedsItemId,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RecordSigner, type SetAsideWhy, setAsideFile } from "./signed-record";
@@ -120,8 +121,10 @@ export class AgentInputQueues {
     return { position: queue.length };
   }
 
-  /** fieldd's own wake for a run (CP-D4): facts only, and wakes that wait join into one line. */
-  wake(runtimeRunId: string, fact: string): void {
+  /** fieldd's own wake for a run (CP-D4): facts only, and wakes that wait join into one line. `item` is the needs-you
+   * item whose fact it is (item 158, CO-Q9 (b)): a joined line carries their union, NEEDS_JOINED_ITEMS_MAX at most.
+   * Item 158 (red): `item` is not kept yet. */
+  wake(runtimeRunId: string, fact: string, _item?: NeedsItemId): void {
     const queue = this.#queueOf(runtimeRunId);
     const last = queue.at(-1);
     if (last !== undefined && last.from.kind === "fieldd" && !this.#busy.has(runtimeRunId)) {
@@ -173,6 +176,11 @@ export class AgentInputQueues {
     this.#keep(runtimeRunId);
     for (const input of queue) this.opts.onOutcome?.(runtimeRunId, input, "dropped");
   }
+
+  /** Once this boot's re-attach has settled (item 158, D3): a kept queue whose run the fold no longer holds ended while
+   * fieldd was down, and no exit event will say so. It is forgotten: a head a restart broke into is uncertain
+   * (`restarted`), and the rest are dropped. Item 158 (red): nothing is forgotten yet. */
+  reconcile(_holds: (runtimeRunId: string) => boolean): void {}
 
   #queueOf(runtimeRunId: string): QueuedInput[] {
     let queue = this.#queues.get(runtimeRunId);

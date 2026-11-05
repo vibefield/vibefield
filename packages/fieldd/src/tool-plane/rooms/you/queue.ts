@@ -27,7 +27,7 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { folderNameOf, projectBlocker } from "../../../agent-field";
-import type { AgentInputQueues } from "../../../agent-input-queue";
+import type { AgentInputQueues, DeliveryOutcome } from "../../../agent-input-queue";
 import { RpcCallError } from "../../../native-link";
 import type { GrantPrincipal } from "../../../terminal-grants";
 import {
@@ -454,6 +454,15 @@ export class NeedsQueue implements TalkHolds {
     owed.sort((a, b) => a.item.asked.localeCompare(b.item.asked));
     for (const record of owed) this.#stand(this.#delivered(record, runtimeRunId));
   }
+
+  /** What became of a line that carried answers' facts (item 158, CO-Q9 (b)), as the input queue told it: delivered,
+   * they are heard; dropped, they are owed again; uncertain, they are never told again. Only a record telling at `run`
+   * moves. Item 158 (red): nothing moves yet. */
+  onFactOutcome(_run: string, _items: readonly NeedsItemId[], _outcome: DeliveryOutcome): void {}
+
+  /** At boot, after restore (item 158): a record telling at a run whose kept queue no longer carries its item (a file
+   * set aside, unkept or lost) is owed again. Item 158 (red): nothing is owed again yet. */
+  reconcileTelling(_carries: (run: string, item: NeedsItemId) => boolean): void {}
 
   // ── inside ──
 

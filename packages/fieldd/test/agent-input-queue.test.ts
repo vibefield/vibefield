@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { NEEDS_JOINED_ITEMS_MAX } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -19,6 +20,7 @@ import {
   type DeliveryOutcome,
   type DeliveryReceipt,
   markedText,
+  type QueuedInput,
 } from "../src/agent-input-queue";
 import { RecordSigner } from "../src/signed-record";
 
@@ -46,25 +48,50 @@ function capture(events: { event: string; attrs: LogFields | undefined }[]): Log
   return logger;
 }
 
-function harness(receipts: DeliveryReceipt[] = [], dir?: string) {
+/** A run's kept file's inputs, as the disk holds them now (none: no file). */
+function readKept(inputs: string, run: string): QueuedInput[] {
+  const file = join(inputs, `${run}.json`);
+  return existsSync(file) ? (readJson(file).inputs as QueuedInput[]) : [];
+}
+
+/** `deliverWith`, when given, answers each delivery in place of `receipts` (item 158: a row reads the kept file
+ * mid-delivery, or holds the receipt open). */
+function harness(
+  receipts: DeliveryReceipt[] = [],
+  dir?: string,
+  deliverWith?: (run: string, text: string) => Promise<DeliveryReceipt>,
+) {
   const root = dir ?? mkdtempSync(join(tmpdir(), "vf-inputs-"));
   if (dir === undefined) dirs.push(root);
   const inputs = join(root, "inputs");
   const keyPath = join(root, "inputs.key");
   const idle = new Set<string>();
   const delivered: { run: string; text: string }[] = [];
-  const outcomes: { run: string; text: string; outcome: DeliveryOutcome; reason?: string }[] = [];
+  const outcomes: {
+    run: string;
+    text: string;
+    outcome: DeliveryOutcome;
+    reason?: string;
+    items?: readonly string[];
+  }[] = [];
   const events: { event: string; attrs: LogFields | undefined }[] = [];
   const queues = new AgentInputQueues({
     dir: inputs,
     keyPath,
     deliver: async (run, text) => {
       delivered.push({ run, text });
+      if (deliverWith !== undefined) return deliverWith(run, text);
       return receipts.shift() ?? { status: "confirmed" };
     },
     isIdle: (run) => idle.has(run),
     onOutcome: (run, input, outcome, reason) =>
-      outcomes.push({ run, text: input.text, outcome, ...(reason ? { reason } : {}) }),
+      outcomes.push({
+        run,
+        text: input.text,
+        outcome,
+        ...(reason ? { reason } : {}),
+        ...(input.items ? { items: input.items } : {}),
+      }),
     logger: capture(events),
   });
   const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -74,7 +101,20 @@ function harness(receipts: DeliveryReceipt[] = [], dir?: string) {
       .filter((e) => e.event === "fieldd.inputs.set_aside")
       .map((e) => `${String(e.attrs?.file)}.${String(e.attrs?.why)}`)
       .sort();
-  return { root, inputs, keyPath, queues, idle, delivered, outcomes, events, setAside, flush };
+  const kept = (run: string) => readKept(inputs, run);
+  return {
+    root,
+    inputs,
+    keyPath,
+    queues,
+    idle,
+    delivered,
+    outcomes,
+    events,
+    setAside,
+    flush,
+    kept,
+  };
 }
 
 /** Restore, then offer every run an idle moment: what would reach a session. */
@@ -269,7 +309,7 @@ describe("the kept queue is signed: a same-uid file can no longer speak as a spa
     expect(again.setAside()).toEqual(expected.sort());
   });
 
-  it("keeps no queue it could not sign, so none waits that would not verify, and says so", () => {
+  it("keeps no queue it could not sign, so none waits that would not verify, and says so", async () => {
     const h = harness();
     // a key that cannot be read (here a directory, private, so not set aside as exposed) signs nothing
     mkdirSync(h.keyPath, { recursive: true, mode: 0o700 });
@@ -277,7 +317,207 @@ describe("the kept queue is signed: a same-uid file can no longer speak as a spa
     h.queues.enqueue("run-1", "words", VELA);
     expect(existsSync(join(h.inputs, "run-1.json"))).toBe(false);
     expect(h.events.map((e) => e.event)).toContain("fieldd.inputs.unkept");
-    // the queue in memory still delivers this boot
+    // item 158, Q2 (a): the queue in memory waits, and delivers nothing this boot, since its head's stamp is not kept
     expect(h.queues.pending("run-1").map((i) => i.text)).toEqual(["words"]);
+    h.idle.add("run-1");
+    await h.queues.poke("run-1");
+    expect(h.delivered).toEqual([]);
+  });
+});
+
+const ITEM_A = "ny-0000000000000aaa";
+const ITEM_B = "ny-0000000000000bbb";
+const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+/** A delivery fieldd never hears back from: the fieldd that began it was killed. */
+const never = () => new Promise<DeliveryReceipt>(() => undefined);
+
+/** Queue A then B for run-1 and begin A's delivery, which never answers: the fieldd is killed with A in flight. The
+ * head as the disk held it while A was being pasted is `during`. */
+async function brokenInto() {
+  const seen: { during: QueuedInput | undefined } = { during: undefined };
+  const h = harness([], undefined, (run) => {
+    seen.during = readKept(h.inputs, run)[0];
+    return never();
+  });
+  h.queues.enqueue("run-1", "A", VELA);
+  h.queues.enqueue("run-1", "B", VELA);
+  h.idle.add("run-1");
+  void h.queues.poke("run-1");
+  await h.flush();
+  return { h, during: seen.during };
+}
+
+describe("item 158 — the in-flight head (TH-Q32 (a)) and the items a line carries (CO-Q9 (b))", () => {
+  it("Q1 · a restart that broke into a delivery never sends it again: the head is stamped before it is pasted, and its sender is told uncertain (restarted)", async () => {
+    const { h, during } = await brokenInto();
+    expect(during).toMatchObject({ text: "A", sending: expect.stringMatching(ISO) });
+    // a second fieldd on the same files: the stamped head is not waiting, B is
+    const again = harness([], h.root);
+    expect(again.queues.restore()).toBe(1);
+    again.idle.add("run-1");
+    await again.queues.poke("run-1");
+    await again.queues.poke("run-1");
+    expect(again.delivered.map((d) => d.text)).toEqual(["Vela (your spark) on your behalf:\nB"]);
+    expect(again.outcomes.filter((o) => o.text === "A")).toEqual([
+      { run: "run-1", text: "A", outcome: "uncertain", reason: "restarted" },
+    ]);
+    expect(again.kept("run-1").map((i) => i.text)).not.toContain("A");
+  });
+
+  it("Q2 · a rejected head loses its stamp and waits for the next idle", async () => {
+    const seen: { during: QueuedInput | undefined } = { during: undefined };
+    const h = harness([], undefined, async (run) => {
+      seen.during = readKept(h.inputs, run)[0];
+      return { status: "rejected", reason: "a dialog is open" };
+    });
+    h.queues.enqueue("run-1", "A", VELA);
+    h.idle.add("run-1");
+    await h.queues.poke("run-1");
+    expect(seen.during).toMatchObject({ text: "A", sending: expect.stringMatching(ISO) });
+    expect(h.kept("run-1").map((i) => [i.text, i.sending])).toEqual([["A", undefined]]);
+    expect(h.queues.pending("run-1").map((i) => [i.text, i.sending])).toEqual([["A", undefined]]);
+    expect(h.outcomes).toEqual([
+      { run: "run-1", text: "A", outcome: "waiting", reason: "a dialog is open" },
+    ]);
+  });
+
+  it("Q3 · a stamp the disk does not take holds the delivery (Q2 (a)), and says so once", async () => {
+    const h = harness();
+    h.queues.enqueue("run-1", "A", VELA);
+    expect(h.kept("run-1").map((i) => i.text)).toEqual(["A"]);
+    // the disk refuses the next write: a directory stands where the queue's file is written beside, then renamed
+    // (#keep makes the inputs directory 0700 before every write, so a read-only directory would not refuse it)
+    const part = join(h.inputs, "run-1.json.part");
+    mkdirSync(part);
+    h.idle.add("run-1");
+    await h.queues.poke("run-1");
+    await h.queues.poke("run-1");
+    expect(h.delivered).toEqual([]);
+    expect(h.events.filter((e) => e.event === "fieldd.inputs.unstamped")).toHaveLength(1);
+    expect(h.queues.pending("run-1").map((i) => i.text)).toEqual(["A"]);
+    // the disk takes it again: the next idle delivers it
+    rmSync(part, { recursive: true });
+    await h.queues.poke("run-1");
+    expect(h.delivered.map((d) => d.text)).toEqual(["Vela (your spark) on your behalf:\nA"]);
+  });
+
+  it("Q4 · a run that ends mid-delivery reports its head once (D2): its receipt says what became of it", async () => {
+    for (const [status, outcome] of [
+      ["confirmed", "delivered"],
+      ["rejected", "dropped"],
+    ] as const) {
+      let answer: ((receipt: DeliveryReceipt) => void) | undefined;
+      const h = harness(
+        [],
+        undefined,
+        () =>
+          new Promise<DeliveryReceipt>((resolve) => {
+            answer = resolve;
+          }),
+      );
+      h.queues.enqueue("run-1", "A", VELA);
+      h.queues.enqueue("run-1", "B", VELA);
+      h.idle.add("run-1");
+      const delivering = h.queues.poke("run-1");
+      await h.flush();
+      h.queues.forget("run-1");
+      // the head in flight is its receipt's to report, never forget's
+      expect(h.outcomes, status).toEqual([{ run: "run-1", text: "B", outcome: "dropped" }]);
+      answer?.({ status });
+      await delivering;
+      expect(h.outcomes, status).toEqual([
+        { run: "run-1", text: "B", outcome: "dropped" },
+        { run: "run-1", text: "A", outcome },
+      ]);
+      expect(existsSync(join(h.inputs, "run-1.json")), status).toBe(false);
+    }
+  });
+
+  it("Q5 · a wake never joins a stamped head, in flight or restored", async () => {
+    // in flight: the busy run holds it in memory (as built)
+    const h = harness([], undefined, never);
+    h.queues.wake("run-spark", "Ada finished");
+    h.idle.add("run-spark");
+    void h.queues.poke("run-spark");
+    await h.flush();
+    h.queues.wake("run-spark", "Ben is asking you");
+    expect(h.queues.pending("run-spark").map((i) => i.text)).toEqual([
+      "Ada finished",
+      "Ben is asking you",
+    ]);
+    // restored: the stamp holds it across the restart
+    const killed = harness([], undefined, never);
+    killed.queues.wake("run-spark", "Ada finished");
+    killed.idle.add("run-spark");
+    void killed.queues.poke("run-spark");
+    await killed.flush();
+    const again = harness([], killed.root);
+    again.queues.restore();
+    again.queues.wake("run-spark", "Ben is asking you");
+    expect(again.queues.pending("run-spark").map((i) => i.text)).toEqual([
+      "Ada finished",
+      "Ben is asking you",
+    ]);
+    expect(again.queues.pending("run-spark")[0]).toMatchObject({
+      sending: expect.stringMatching(ISO),
+    });
+  });
+
+  it("Q6 · joined wakes carry the union of their items, bounded at NEEDS_JOINED_ITEMS_MAX", async () => {
+    const h = harness();
+    h.queues.wake("run-spark", "f1", ITEM_A);
+    h.queues.wake("run-spark", "f2", ITEM_B);
+    expect(h.queues.pending("run-spark").map((i) => [i.text, i.items])).toEqual([
+      ["f1 · f2", [ITEM_A, ITEM_B]],
+    ]);
+    h.idle.add("run-spark");
+    await h.queues.poke("run-spark");
+    expect(h.outcomes).toEqual([
+      { run: "run-spark", text: "f1 · f2", outcome: "delivered", items: [ITEM_A, ITEM_B] },
+    ]);
+    // a joined line at the bound starts a new input
+    const bounded = harness();
+    const items = Array.from(
+      { length: NEEDS_JOINED_ITEMS_MAX + 1 },
+      (_, i) => `ny-${String(i).padStart(16, "0")}`,
+    );
+    for (const [i, item] of items.entries()) bounded.queues.wake("run-spark", `f${i}`, item);
+    expect(bounded.queues.pending("run-spark").map((i) => i.items)).toEqual([
+      items.slice(0, NEEDS_JOINED_ITEMS_MAX),
+      items.slice(NEEDS_JOINED_ITEMS_MAX),
+    ]);
+  });
+
+  it("Q7 · a restored stamped head is reported at its run's first poke, never at restore, and nothing behind it moves until then", async () => {
+    const { h } = await brokenInto();
+    const again = harness([], h.root);
+    again.queues.restore();
+    // at restore no run is known yet, so nothing is said
+    expect(again.outcomes).toEqual([]);
+    // its run's first monitor row, not idle: the head is said, and nothing is delivered
+    await again.queues.poke("run-1");
+    expect(again.outcomes).toEqual([
+      { run: "run-1", text: "A", outcome: "uncertain", reason: "restarted" },
+    ]);
+    expect(again.delivered).toEqual([]);
+    again.idle.add("run-1");
+    await again.queues.poke("run-1");
+    expect(again.delivered.map((d) => d.text)).toEqual(["Vela (your spark) on your behalf:\nB"]);
+  });
+
+  it("Q8 · reconcile forgets a queue whose run is gone: its stamped head uncertain (restarted), the rest dropped", async () => {
+    const { h } = await brokenInto();
+    h.queues.enqueue("run-2", "C", VELA);
+    const again = harness([], h.root);
+    again.queues.restore();
+    again.queues.reconcile((run) => run === "run-2");
+    expect(again.outcomes).toEqual([
+      { run: "run-1", text: "A", outcome: "uncertain", reason: "restarted" },
+      { run: "run-1", text: "B", outcome: "dropped" },
+    ]);
+    expect(existsSync(join(h.inputs, "run-1.json"))).toBe(false);
+    // a run the fold still holds keeps its queue
+    expect(again.queues.pending("run-2").map((i) => i.text)).toEqual(["C"]);
+    expect(again.kept("run-2").map((i) => i.text)).toEqual(["C"]);
   });
 });

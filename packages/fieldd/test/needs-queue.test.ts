@@ -6,6 +6,7 @@ import {
   NEEDS_RECORD_FORMAT,
   NEEDS_WORDS_MAX,
   NeedsItem,
+  type NeedsItemId,
   NeedsNotice,
   type NeedsRecord,
   type SparkRecord,
@@ -54,6 +55,8 @@ const sparkRecord = (id: string, name: string, profiles = ["native"]): SparkReco
 function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
   if (!dirs.includes(root)) dirs.push(root);
   const woken: [string, string][] = [];
+  /** item 158 — the item each wake's fact is for, as the input queue is told it (CO-Q9 (b)) */
+  const wokenItems: [string, NeedsItemId | undefined][] = [];
   const queued: [string, string, string][] = [];
   const spawned: unknown[] = [];
   const opened: string[] = [];
@@ -86,7 +89,10 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
     new NeedsQueue({
       store: new NeedsStore({ dir: join(root, "needs"), keyPath: join(root, "needs.key") }),
       inputs: {
-        wake: (run, fact) => void woken.push([run, fact]),
+        wake: (run, fact, item) => {
+          woken.push([run, fact]);
+          wokenItems.push([run, item]);
+        },
         enqueue: (run, text, from) => {
           ctl.duringEnqueue?.();
           queued.push([run, text, from.kind === "spark" ? from.name : "VibeField"]);
@@ -123,11 +129,16 @@ function harness(root = mkdtempSync(join(tmpdir(), "vf-needs-queue-"))) {
   const queue = make();
   const changes: number[] = [];
   queue.onChange((items) => void changes.push(items.length));
+  /** the records the disk keeps now (needs/*.json), each verified */
+  const kept = () =>
+    new NeedsStore({ dir: join(root, "needs"), keyPath: join(root, "needs.key") }).list();
   return {
     root,
     queue,
     make,
     woken,
+    wokenItems,
+    kept,
     queued,
     spawned,
     opened,
@@ -177,6 +188,9 @@ describe("a spark's question (ask_user; CP3-D2 A, CP3-D7 A)", () => {
     expect(woke).toBeUndefined();
     expect(h.woken).toEqual([["run-vela", 'you answered Vela\'s question "Push the fix?": Push']]);
     expect(h.queue.list()).toEqual([]);
+    // CO-Q9 (b): the record is kept until the spark's session confirms it took the line
+    expect(readdirSync(join(h.root, "needs")).filter((f) => f.endsWith(".json"))).toHaveLength(1);
+    h.queue.onFactOutcome("run-vela", [id], "delivered");
     expect(readdirSync(join(h.root, "needs"))).toEqual([]);
     expect(h.changes).toEqual([1, 0]);
   });
@@ -240,6 +254,8 @@ describe("a spark's question (ask_user; CP3-D2 A, CP3-D7 A)", () => {
     expect(h.woken).toEqual([
       ["run-vela-3", 'you answered Vela\'s question "Push the fix?": Push'],
     ]);
+    // CO-Q9 (b): heard once run-vela-3 confirms it took the line
+    again.onFactOutcome("run-vela-3", [id], "delivered");
     expect(readdirSync(join(h.root, "needs")).filter((f) => f.endsWith(".json"))).toEqual([]);
   });
 
@@ -381,6 +397,8 @@ describe("the held send (CP-D3, CP3-D3 B)", () => {
     expect(h.queue.list()).toEqual([]);
     h.queue.onRunEnded("run-his");
     expect(h.queue.allowed(VELA, "run-his")).toBe(false);
+    // CO-Q9 (b): its fact is heard once run-vela confirms it took the line
+    h.queue.onFactOutcome("run-vela", [id], "delivered");
     expect(readdirSync(join(h.root, "needs"))).toEqual([]);
   });
 
@@ -643,6 +661,8 @@ describe("the held spawn (CP-D7, CP3-D4 A)", () => {
     expect(h.woken).toEqual([
       ["run-vela", words.spawnAllowedFact("Vela", AGENT.label, "run-new-1")],
     ]);
+    // CO-Q9 (b): its fact is heard once run-vela confirms it took the line
+    h.queue.onFactOutcome("run-vela", [id], "delivered");
     expect(readdirSync(join(h.root, "needs"))).toEqual([]);
   });
 
@@ -728,12 +748,139 @@ describe("an act a restart broke into (CP2-D2, critique 15)", () => {
       ["run-vela", words.actUncertainFact("Vela", "claude·2")],
       ["run-vela", words.spawnUncertainFact("Vela")],
     ]);
-    // a restart after that finds nothing to tell again
+    // a restart after that finds nothing to tell again, CO-Q9 (b): once run-vela confirms it took both facts
+    h.queue.onFactOutcome("run-vela", ["ny-0000000000000aaa", "ny-0000000000000bbb"], "delivered");
     h.woken.length = 0;
     const again = h.make();
     expect(again.restore()).toBe(0);
     again.onSparkLive(VELA, "run-vela");
     expect(h.woken).toEqual([]);
+  });
+});
+
+describe("item 158 — an answer is owed until its session takes it (CO-Q9 (b))", () => {
+  const PUSH = 'you answered Vela\'s question "Push the fix?": Push';
+  /** Vela's session `run` is live, and is her own */
+  const liveAt = (h: ReturnType<typeof harness>, run: string) => {
+    h.runs.set(run, { runtimeRunId: run, label: "Vela", spark: VELA, live: true });
+    h.sessions.set(VELA, run);
+  };
+  /** A question answered Push while Vela's session is live: its fact is in run-vela's queue. */
+  const answered = async (h: ReturnType<typeof harness>) => {
+    const id = ask(h);
+    const { item } = await h.queue.answer(id, 0, principal);
+    return { id, item };
+  };
+
+  it("N1 · the record stays owed while its fact is in the queue, and goes once its session took it", async () => {
+    const h = harness();
+    const { id, item } = await answered(h);
+    // told keeps its built meaning (§8 Q1 (b)): the fact is in the spark's input queue
+    expect(item.answer?.told).toBe(true);
+    expect(h.kept()).toEqual([
+      expect.objectContaining({
+        item: expect.objectContaining({ id }),
+        owed: PUSH,
+        telling: { run: "run-vela", at: expect.any(String) },
+      }),
+    ]);
+    h.queue.onFactOutcome("run-vela", [id], "delivered");
+    expect(h.kept()).toEqual([]);
+  });
+
+  it("N2 · a session that ends before its idle leaves the answer owed, and the next session hears it exactly once", async () => {
+    const h = harness();
+    const { id } = await answered(h);
+    // Vela's session ends with the line still in its queue: the input queue drops it
+    h.sleep();
+    h.queue.onFactOutcome("run-vela", [id], "dropped");
+    expect(h.kept()).toHaveLength(1);
+    const [record] = h.kept();
+    expect(record?.owed).toBe(PUSH);
+    expect(record?.telling).toBeUndefined();
+    // the card says "Vela hears it when it wakes" again (words open: DESIGN.md §9 first if they are drawn)
+    expect(record?.item.answer).toMatchObject({ told: false, waits: expect.any(String) });
+    liveAt(h, "run-vela-2");
+    for (let i = 0; i < 3; i += 1) h.queue.onSparkLive(VELA, "run-vela-2");
+    expect(h.woken).toEqual([
+      ["run-vela", PUSH],
+      ["run-vela-2", PUSH],
+    ]);
+  });
+
+  it("N3 · an uncertain line is never queued again", async () => {
+    const h = harness();
+    const { id } = await answered(h);
+    expect(h.kept()).toHaveLength(1);
+    h.queue.onFactOutcome("run-vela", [id], "uncertain");
+    expect(h.kept()).toEqual([]);
+    h.queue.onSparkLive(VELA, "run-vela");
+    expect(h.woken).toEqual([["run-vela", PUSH]]);
+  });
+
+  it("N4 · repeated monitor changes queue a telling record once", async () => {
+    const h = harness();
+    const { id } = await answered(h);
+    for (let i = 0; i < 3; i += 1) h.queue.onSparkLive(VELA, "run-vela");
+    expect(h.woken).toHaveLength(1);
+    expect(h.kept().map((record) => record.item.id)).toEqual([id]);
+  });
+
+  it("N5 · a boot whose kept queue lost the item owes it again; one that still carries it does not", async () => {
+    const h = harness();
+    const { id } = await answered(h);
+    // a restart whose kept queue still carries the item (a stamped head among them): nothing is owed again
+    const carried = h.make();
+    expect(carried.restore()).toBe(1);
+    carried.reconcileTelling((run, item) => run === "run-vela" && item === id);
+    carried.onSparkLive(VELA, "run-vela");
+    expect(h.woken).toHaveLength(1);
+    expect(h.kept()[0]?.telling).toMatchObject({ run: "run-vela" });
+    // a restart whose kept queue lost it (set aside, unkept or lost): owed again, and heard at the next live session
+    const lost = h.make();
+    expect(lost.restore()).toBe(1);
+    lost.reconcileTelling(() => false);
+    expect(h.kept()).toEqual([expect.objectContaining({ owed: PUSH })]);
+    expect(h.kept()[0]?.telling).toBeUndefined();
+    lost.onSparkLive(VELA, "run-vela");
+    expect(h.woken).toEqual([
+      ["run-vela", PUSH],
+      ["run-vela", PUSH],
+    ]);
+  });
+
+  it("N6 · a late outcome from a run that is not the record's telling run changes nothing", async () => {
+    const h = harness();
+    const { id } = await answered(h);
+    h.sleep();
+    h.queue.onFactOutcome("run-vela", [id], "dropped");
+    liveAt(h, "run-vela-2");
+    h.queue.onSparkLive(VELA, "run-vela-2");
+    // run-vela's line was dropped; a late word from it is not run-vela-2's
+    h.queue.onFactOutcome("run-vela", [id], "delivered");
+    expect(h.kept().map((record) => record.telling?.run)).toEqual(["run-vela-2"]);
+    h.queue.onFactOutcome("run-vela-2", [id], "delivered");
+    expect(h.kept()).toEqual([]);
+  });
+
+  it("N7 · the fact carries its item into the queue", async () => {
+    const h = harness();
+    const { id } = await answered(h);
+    expect(h.wokenItems).toEqual([["run-vela", id]]);
+  });
+
+  it("N8 · an answer whose session comes alive while the answer resumes it is queued once, never told 'not running yet' (the guard)", async () => {
+    const h = harness();
+    const id = ask(h);
+    h.sleep();
+    h.ctl.duringOpen = () => {
+      liveAt(h, "run-vela-2");
+      h.queue.onSparkLive(VELA, "run-vela-2");
+    };
+    const { item } = await h.queue.answer(id, 0, principal);
+    expect(item.answer).toMatchObject({ told: true });
+    expect(item.answer?.waits).toBeUndefined();
+    expect(h.woken).toEqual([["run-vela-2", PUSH]]);
   });
 });
 

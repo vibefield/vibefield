@@ -84,4 +84,16 @@ describe("the waker (CP-D4, CP2-D6)", () => {
       },
     ]);
   });
+
+  it("W1 · tells a sender its words a restart broke into, by the run's label, never its id (item 158, TH-Q32 (a))", () => {
+    const h = harness();
+    h.waker.restarted("sp-vela", "run-ada");
+    // the input queue marks it "VibeField: …" (DESIGN.md §9)
+    expect(h.woken).toEqual([
+      {
+        run: "run-vela",
+        fact: "VibeField restarted while your words to Ada were being sent, and cannot tell whether they arrived (read the session to see); they will not be sent again",
+      },
+    ]);
+  });
 });

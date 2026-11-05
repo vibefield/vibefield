@@ -95,6 +95,10 @@ export class AgentWaker {
     );
   }
 
+  /** A send a fieldd restart broke into while it was being sent (item 158, TH-Q32 (a)): its sender is told, and it is
+   * never sent again (DESIGN.md §9). Item 158 (red): its sender is not told yet. */
+  restarted(_spark: string, _runtimeRunId: string): void {}
+
   /** A spark's own session came alive: the wakes held for it land there. */
   onSparkLive(spark: string, runtimeRunId: string): void {
     const held = this.#held.get(spark);
