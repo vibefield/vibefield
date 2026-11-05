@@ -250,6 +250,9 @@ const PLAN = [
     // bundled with. Staged, it is found — and a packaged gateway still offers no
     // launcher until a launcher runtime exists for a single executable (AR-7j):
     // the shim is the file a launcher runs, not the Node that runs it.
+    // *(Corrected 2026-11-05, AR-7j, M128 `45c3680a3`: the runtime exists. A packaged gateway offers fieldd's own
+    // executable in its closed `--vibefield-role=agent-shim` role, and that role runs only this staged, sealed copy,
+    // never the home's.)*
     stage: "bin/agent-shim.cjs",
     from: "packages/fieldd/dist/agent-shim.cjs",
     kind: "file",
