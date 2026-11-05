@@ -25,6 +25,7 @@ import {
   FlowProposalId,
   FlowProposalRecord,
   FlowRunId,
+  type FlowRunRecord,
   FlowSlug,
   flowJournalLineOf,
   type NeedsItemId,
@@ -90,7 +91,21 @@ export interface FlowRecordsOptions {
   readonly now?: () => Date;
   /** item 172 — a record file's read, a seam for a disk that does not answer (tests) */
   readonly readFile?: ((path: string) => string) | undefined;
+  /** CP-4a2b (D13) — a journal's fsync, a seam for a row that counts them (tests) */
+  readonly sync?: ((fd: number) => void) | undefined;
 }
+
+/** CP-4a2b (D18) — the runs' records' folder in the flows store: `run-records/<run>.json`, one signed record per run
+ * beside its journal (`runs/<run>.jsonl`). */
+export const RUN_RECORDS_DIR = "run-records";
+
+/** CP-4a2b (D18) — what the runs choose of a run's record. The store adds the rest: the run's own facts from its
+ * head, the head's MAC and the journal's last synced line. A run's start passes it whole, with no default. */
+export type FlowRunStart = Pick<
+  FlowRunRecord,
+  "scope" | "state" | "calls" | "allowed" | "open" | "steps"
+> &
+  Partial<Pick<FlowRunRecord, "log" | "earlier" | "held" | "host" | "endedAt" | "ended">>;
 
 export interface FlowApproveOptions {
   /** the spark's proposal the approval came from */
@@ -121,7 +136,10 @@ function refuseTooBig(size: number): never {
 
 /** A run's journal read back: what its lines say (journal.ts), or nothing kept under its id. A journal the disk did not
  * answer is refused in the store's words, never read as nothing (item 172). */
-export type FlowRunRead = JournalVerdict | { readonly kind: "absent" };
+export type FlowRunRead =
+  | JournalVerdict
+  | { readonly kind: "absent" }
+  | { readonly kind: "unbegun"; readonly record: FlowRunRecord };
 
 export class FlowRecords {
   readonly #signer: RecordSigner;
@@ -262,7 +280,7 @@ export class FlowRecords {
 
   /** CP-4a2a — begin a run's journal (CP4-S15): its head, the file's first line, signed and written beside then
    * renamed. A run's id is fieldd's and never reused: a journal already under it is refused, never written over. */
-  beginRun(entry: FlowJournalHeadEntry): FlowJournalHead {
+  beginRun(entry: FlowJournalHeadEntry, _record: FlowRunStart): FlowJournalHead {
     const run = FlowRunId.parse(entry.run);
     const key = this.#key(RUNS_DIR, run);
     this.#guard.writable(key);
@@ -367,6 +385,22 @@ export class FlowRecords {
     else this.#guard.newer(this.#key(RUNS_DIR, run), path, { format: verdict.format });
     return verdict;
   }
+
+  /** CP-4a2b (D18) — SKELETON (slice 5's red): keeps nothing yet. */
+  writeRunRecord(_run: FlowRunId, _fields: FlowRunStart): void {}
+
+  /** CP-4a2b (D18) — SKELETON (slice 5's red): reads nothing yet. */
+  runRecord(_run: string): FlowRunRecord | undefined {
+    return undefined;
+  }
+
+  /** CP-4a2b (D18) — SKELETON (slice 5's red): reads nothing yet. */
+  runRecords(): FlowRunRecord[] {
+    return [];
+  }
+
+  /** CP-4a2b (D13) — SKELETON (slice 5's red): syncs nothing yet. */
+  syncRun(_run: FlowRunId): void {}
 
   /** CP-4a2a — the runs whose journals are kept and verify, sorted; each one that is not VibeField's is set aside as
    * it is read. A folder the disk cannot list is refused (item 172). */

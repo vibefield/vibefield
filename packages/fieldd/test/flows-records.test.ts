@@ -22,10 +22,12 @@ import {
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
+import { JOURNAL_SUFFIX, RUNS_DIR } from "../src/flows/journal";
 import { FlowLibrary } from "../src/flows/library";
-import { FlowRecords, flowHashOf } from "../src/flows/records";
+import { FlowRecords, flowHashOf, RUN_RECORDS_DIR } from "../src/flows/records";
 import type { RpcCallError } from "../src/native-link";
 import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
+import { beganRun, RUN_START } from "./flows-run-records";
 
 // CP-4a1 (step0-cp4.md §5.1 commit 4; CP4-Q18 (a), CP4-Q5 (a)) — the person's library and fieldd's flow records. A
 // version's bytes are kept by their SHA-256 and read back only while that is still their hash; a flow's approval and a
@@ -476,5 +478,247 @@ describe("the person's library (CP4-Q5 (a))", () => {
       { flow: "release-check", hash: flowHashOf(EDITED), state: "new", bytes: EDITED.length },
     ]);
     expect(h.setAside("fieldd.flows.set_aside")).toEqual([["release-check.json", "forged"]]);
+  });
+});
+
+// CP-4a2b (§13a slice 5; D18, bth's 1555Z HIGH 3, D13, D5) — a run's own signed record is its journal's durable anchor.
+// At a run's start the RECORD is written first (its `head` the head line's MAC, its `tail` the head), then the head;
+// every later anchor writes the journal line first and the record after, so a record never names a line the disk
+// lacks. The reader's five rules: a journal with no record is lost; a record with no journal is a run that never began;
+// a journal short of the record's tail, or with another MAC there, is lost; a journal at or past it is kept; a head
+// whose MAC is not the record's `head` is lost.
+const RUN = "fr-jt7a8b9c0d";
+const HEAD = {
+  run: RUN,
+  flow: "release-check",
+  name: "Release check",
+  n: 1,
+  hash: "f".repeat(64),
+  starter: { by: "you" },
+} as const;
+const CALL_1 = { kind: "call", call: 1, what: "agent", key: "a".repeat(64), n: 1 } as const;
+const ANSWER_1 = { kind: "answer", call: 1, value: "clean" } as const;
+
+describe("CP-4a2b — a run's record, its journal's anchor (D18)", () => {
+  const journalOf = (h: ReturnType<typeof harness>) =>
+    join(h.dir, RUNS_DIR, `${RUN}${JOURNAL_SUFFIX}`);
+  const recordOf = (h: ReturnType<typeof harness>) => join(h.dir, RUN_RECORDS_DIR, `${RUN}.json`);
+  const linesOf = (file: string) => readFileSync(file, "utf8").split("\n").filter(Boolean);
+  /** A run the store began and journaled to its first answer, its record written after the answer, as the runs write
+   * it at that anchor; the row's own reads of the files come after the store is seen to have written them. */
+  function journaled(h: ReturnType<typeof harness>) {
+    const records = h.records();
+    beganRun(records, HEAD);
+    records.appendRun(RUN, CALL_1);
+    records.appendRun(RUN, ANSWER_1);
+    records.writeRunRecord(RUN, {
+      ...RUN_START,
+      calls: 1,
+      steps: [{ call: 1, state: "answered" }],
+    });
+    expect(existsSync(journalOf(h)), "the store wrote the run's journal").toBe(true);
+    expect(existsSync(recordOf(h)), "the store wrote the run's record").toBe(true);
+    return records;
+  }
+  /** The record re-signed as a writer that holds the key would sign it. */
+  const resigned = (
+    h: ReturnType<typeof harness>,
+    edit: (body: Record<string, unknown>) => void,
+  ) => {
+    const { signature: _s, ...body } = JSON.parse(readFileSync(recordOf(h), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    edit(body);
+    const signature = new RecordSigner({ keyPath: h.keyPath }).sign(body);
+    writeFileSync(recordOf(h), JSON.stringify({ ...body, signature }), { mode: 0o600 });
+  };
+
+  it("JT1: a journal cut short reads lost by a NEW store: the record names the line the cut took", () => {
+    const h = harness();
+    journaled(h);
+    const [head, call] = linesOf(journalOf(h));
+    writeFileSync(journalOf(h), `${head}\n${call}\n`, { mode: 0o600 });
+    expect(h.records().readRun(RUN)).toMatchObject({ kind: "lost", why: "forged" });
+    expect(h.records().runs()).toEqual([]);
+  });
+
+  it("JT2: a journal past its anchor reads kept: calls and logs written since, or a crash between the two writes", () => {
+    const h = harness();
+    const records = journaled(h);
+    records.appendRun(RUN, { kind: "log", text: "reviewed" });
+    records.appendRun(RUN, { ...CALL_1, call: 2, key: "b".repeat(64) });
+    expect(h.records().runRecord(RUN)?.tail.seq).toBe(3);
+    const read = h.records().readRun(RUN);
+    expect(read).toMatchObject({ kind: "kept", tail: { seq: 5 } });
+  });
+
+  it("JT3: an unsigned record, or one edited by hand, reads its run lost", () => {
+    for (const edit of ["unsigned", "edited"] as const) {
+      const h = harness();
+      journaled(h);
+      const { signature: _s, ...body } = JSON.parse(readFileSync(recordOf(h), "utf8")) as Record<
+        string,
+        unknown
+      >;
+      const text =
+        edit === "unsigned"
+          ? JSON.stringify(body)
+          : JSON.stringify({ ...body, tail: { seq: 1, mac: "0".repeat(64) }, signature: _s });
+      writeFileSync(recordOf(h), text, { mode: 0o600 });
+      expect(h.records().readRun(RUN), edit).toMatchObject({ kind: "lost" });
+    }
+  });
+
+  it("JT4: a record the disk does not answer (EMFILE) is left where it is, and the run is refused in the flows' words", () => {
+    const h = harness();
+    journaled(h);
+    const bytes = readFileSync(recordOf(h), "utf8");
+    const records = new FlowRecords({
+      dir: h.dir,
+      keyPath: h.keyPath,
+      readFile: (path) => {
+        if (path === recordOf(h))
+          throw Object.assign(new Error("too many open files"), { code: "EMFILE" });
+        return readFileSync(path, "utf8");
+      },
+    });
+    let refused: unknown;
+    try {
+      records.readRun(RUN);
+    } catch (error) {
+      refused = error;
+    }
+    expect(refused).toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: RECORD_STORES.SERVICE_FLOWS, state: RECORD_STORES.STATE_UNREADABLE },
+      message: UNREADABLE_WORDS.flows,
+    });
+    expect(readFileSync(recordOf(h), "utf8")).toBe(bytes);
+    expect(readdirSync(join(h.dir, RUN_RECORDS_DIR))).toEqual([`${RUN}.json`]);
+  });
+
+  it("JT5: log lines are synced with the next call or answer, never each alone, and a record names only a synced line (D13)", () => {
+    const h = harness();
+    const synced: number[] = [];
+    const records = new FlowRecords({
+      dir: h.dir,
+      keyPath: h.keyPath,
+      sync: (fd) => void synced.push(fd),
+    });
+    beganRun(records, HEAD);
+    records.appendRun(RUN, CALL_1);
+    expect(synced).toHaveLength(1);
+    records.appendRun(RUN, { kind: "log", text: "one" });
+    records.appendRun(RUN, { kind: "log", text: "two" });
+    expect(synced, "a log line waits for the next line that is synced").toHaveLength(1);
+    // the record is written now: its tail is the call, the last line synced, never a log the disk may not hold
+    records.writeRunRecord(RUN, { ...RUN_START, calls: 1 });
+    expect(records.runRecord(RUN)?.tail.seq).toBe(2);
+    records.appendRun(RUN, ANSWER_1);
+    expect(synced).toHaveLength(2);
+    records.writeRunRecord(RUN, { ...RUN_START, calls: 1 });
+    expect(h.records().runRecord(RUN)?.tail.seq).toBe(5);
+    // a park syncs what it has (`syncRun`)
+    records.appendRun(RUN, { kind: "log", text: "three" });
+    records.syncRun(RUN);
+    expect(synced).toHaveLength(3);
+  });
+
+  it("JT6: a run's summary is drawn from its record alone: the journal is read zero times", () => {
+    const h = harness();
+    journaled(h);
+    const read: string[] = [];
+    const records = new FlowRecords({
+      dir: h.dir,
+      keyPath: h.keyPath,
+      readFile: (path) => {
+        read.push(path);
+        return readFileSync(path, "utf8");
+      },
+    });
+    expect(records.runRecord(RUN)).toMatchObject({
+      run: RUN,
+      flow: HEAD.flow,
+      name: HEAD.name,
+      calls: 1,
+      tail: { seq: 3 },
+    });
+    expect(records.runRecords().map((record) => record.run)).toEqual([RUN]);
+    expect(read.filter((path) => path.endsWith(JOURNAL_SUFFIX))).toEqual([]);
+  });
+
+  it("JT7: a journal whose record was deleted reads lost, cut or whole: no key is needed to delete a record", () => {
+    for (const cut of [false, true]) {
+      const h = harness();
+      journaled(h);
+      rmSync(recordOf(h));
+      if (cut) {
+        const [head, call] = linesOf(journalOf(h));
+        writeFileSync(journalOf(h), `${head}\n${call}\n`, { mode: 0o600 });
+      }
+      expect(h.records().readRun(RUN), cut ? "cut" : "whole").toMatchObject({
+        kind: "lost",
+        why: "forged",
+      });
+    }
+  });
+
+  it("JT8: the record is on disk before the head: a disk that refuses the head leaves the record alone, a run that never began, never replayed", () => {
+    const h = harness();
+    // the journals' folder is a file the head cannot be written under: the disk refuses the head, and only the head
+    mkdirSync(h.dir, { recursive: true, mode: 0o700 });
+    writeFileSync(join(h.dir, RUNS_DIR), "not a folder", { mode: 0o600 });
+    expect(() => beganRun(h.records(), HEAD)).toThrow();
+    rmSync(join(h.dir, RUNS_DIR));
+    expect(existsSync(recordOf(h)), "the record was written first").toBe(true);
+    expect(existsSync(journalOf(h)), "and the head never was").toBe(false);
+    expect(h.records().readRun(RUN)).toMatchObject({
+      kind: "unbegun",
+      record: { run: RUN, state: "starting", tail: { seq: 1 } },
+    });
+    expect(h.records().runs()).toEqual([]);
+  });
+
+  it("JT9: a head whose MAC is not the record's `head`, or a MAC at the record's tail that is not its `tail.mac`, reads lost", () => {
+    for (const field of ["head", "tail"] as const) {
+      const h = harness();
+      journaled(h);
+      resigned(h, (body) => {
+        if (field === "head") body["head"] = "0".repeat(64);
+        else body["tail"] = { seq: 3, mac: "0".repeat(64) };
+      });
+      expect(h.records().readRun(RUN), field).toMatchObject({ kind: "lost", why: "forged" });
+    }
+  });
+
+  it("JT10: a record is on disk when its write returns, a line's intent with it; a write the disk refuses throws, the record left as it was (D5)", () => {
+    const h = harness();
+    const records = journaled(h);
+    records.writeRunRecord(RUN, {
+      ...RUN_START,
+      calls: 1,
+      open: [{ call: 1, state: "starting", lines: [{ line: "prompt", n: 1, sent: "sending" }] }],
+    });
+    expect(h.records().runRecord(RUN)?.open[0]?.lines).toEqual([
+      { line: "prompt", n: 1, sent: "sending" },
+    ]);
+    // the disk refuses the next write: the file it is written to first, beside the record, is a folder
+    const bytes = readFileSync(recordOf(h), "utf8");
+    const beside = `${recordOf(h)}.${process.pid}.tmp`;
+    mkdirSync(beside);
+    try {
+      expect(() =>
+        records.writeRunRecord(RUN, {
+          ...RUN_START,
+          calls: 1,
+          open: [{ call: 1, state: "starting", lines: [{ line: "prompt", n: 1, sent: "queued" }] }],
+        }),
+      ).toThrow();
+    } finally {
+      rmSync(beside, { recursive: true });
+    }
+    expect(readFileSync(recordOf(h), "utf8")).toBe(bytes);
   });
 });

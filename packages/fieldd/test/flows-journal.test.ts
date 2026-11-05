@@ -15,9 +15,9 @@ import { join } from "node:path";
 import { FLOW_RECORD_FORMAT, type FlowJournalHead, RECORD_STORES } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { JOURNAL_SUFFIX, RUNS_DIR } from "../src/flows/journal";
-import { FlowRecords } from "../src/flows/records";
+import { FlowRecords, RUN_RECORDS_DIR } from "../src/flows/records";
 import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
-import { beganRun } from "./flows-run-records";
+import { beganRun, RUN_START } from "./flows-run-records";
 
 // CP-4a2a (step0-cp4a2.md §12 commit 8; CP4-S15, CP-D9; 4A2-Q10 (a), ruled by VF-PM 2026-11-05 08:51Z) — a run's
 // journal, kept by the flows store (FlowRecords) beside the approvals: lines that chain, a line that is not VibeField's
@@ -110,10 +110,38 @@ describe("CP-4a2a — a run's journal, kept by the flows store (CP4-S15)", () =>
   it("J1b: contracts' fixtures, a chain of head, call and answer, read back under the key they were signed with", () => {
     const s = store({ key: FIXTURE_KEY });
     mkdirSync(join(s.dir, RUNS_DIR), { recursive: true, mode: 0o700 });
-    const text = ["flow-journal-head.valid", "flow-journal-line.call", "flow-journal-line.answer"]
-      .map((name) => JSON.stringify(JSON.parse(fixtureText(name))))
-      .join("\n");
+    const lines = [
+      "flow-journal-head.valid",
+      "flow-journal-line.call",
+      "flow-journal-line.answer",
+    ].map((name) => JSON.parse(fixtureText(name)) as Record<string, unknown>);
+    const text = lines.map((line) => JSON.stringify(line)).join("\n");
     writeFileSync(s.file, `${text}\n`, { mode: 0o600 });
+    // CP-4a2b (D18): a journal is kept only beside its run's record, signed under the same key, naming the head's MAC
+    // and the last line's
+    const head = lines[0] as Record<string, unknown>;
+    const record = {
+      ...RUN_START,
+      format: FLOW_RECORD_FORMAT,
+      run: RUN,
+      flow: head["flow"],
+      name: head["name"],
+      n: head["n"],
+      hash: head["hash"],
+      starter: head["starter"],
+      head: head["mac"],
+      tail: { seq: 3, mac: lines[2]?.["mac"] },
+      startedAt: head["at"],
+    };
+    mkdirSync(join(s.dir, RUN_RECORDS_DIR), { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(s.dir, RUN_RECORDS_DIR, `${RUN}.json`),
+      JSON.stringify({
+        ...record,
+        signature: new RecordSigner({ keyPath: s.keyPath }).sign(record),
+      }),
+      { mode: 0o600 },
+    );
     const read = s.records.readRun(RUN);
     expect(read.kind).toBe("kept");
     expect((read as { lines?: { kind: string }[] }).lines?.map((line) => line.kind)).toEqual([
@@ -266,17 +294,18 @@ describe("CP-4a2a — a run's journal, kept by the flows store (CP4-S15)", () =>
     }
   });
 
-  it("J8: a journal cut short reads kept to the cut after a restart (no anchor yet), but the store that wrote it knows its tail", () => {
+  it("J8: a journal cut short reads lost after a restart too: the run's own record names its last line (D18), and the run is set aside", () => {
     const s = written();
+    // the runs write the record after the answer, its anchor (D18), and the cut then takes the answer off
+    s.records.writeRunRecord(RUN, { ...RUN_START, calls: 1 });
     const [head, call] = linesOf(s.file);
     writeFileSync(s.file, `${head}\n${call}\n`, { mode: 0o600 });
-    // fieldd started again: a store that never wrote this journal cannot tell the cut from a crash between a call and
-    // its answer. The anchor, the tail kept in the run's own signed record, is CP-4a2b's (Owed); DESIGN.md §9 says so.
+    // CP-4a2b, a meaning ruled by D18: fieldd started again reads the cut from the record's tail, never as a crash
+    // between a call and its answer (until 4a2b, with no anchor, it read kept to the cut and DESIGN.md §9 said so)
     const restarted = new FlowRecords({ dir: s.dir, keyPath: s.keyPath });
-    const read = restarted.readRun(RUN);
-    expect(read).toMatchObject({ kind: "kept", tail: { seq: 2 } });
-    // the store that wrote it to seq 3 reads seq 2 as a cut, never as a crash: the run is set aside, never replayed
-    expect(s.records.readRun(RUN)).toEqual({ kind: "lost", why: "forged", line: 3 });
+    expect(restarted.readRun(RUN)).toMatchObject({ kind: "lost", why: "forged" });
+    // the restarted store set the run aside, never to be replayed: the store that wrote it finds nothing more
+    expect(s.records.readRun(RUN)).toEqual({ kind: "absent" });
     expect(asides(s.dir)).toHaveLength(1);
   });
 

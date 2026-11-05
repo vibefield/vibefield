@@ -25,7 +25,7 @@ import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { AgentInputQueues } from "../src/agent-input-queue";
 import { SessionRecordStore } from "../src/agent-sessions";
-import { FlowRecords } from "../src/flows/records";
+import { FlowRecords, RUN_RECORDS_DIR } from "../src/flows/records";
 import { RpcCallError } from "../src/native-link";
 import {
   newerFormat,
@@ -37,7 +37,7 @@ import { NeedsQueue } from "../src/tool-plane/rooms/you/queue";
 import { NeedsStore } from "../src/tool-plane/rooms/you/store";
 import { SparkKeptStore } from "../src/tool-plane/spark-kept";
 import { SparkStore } from "../src/tool-plane/sparks";
-import { beganRun } from "./flows-run-records";
+import { beganRun, RUN_START } from "./flows-run-records";
 
 // Item 172 (DESIGN.md §9 "What VibeField keeps, when it cannot read it"; co-plan's item-172 plan) — the one record
 // signer and its four stores tell a record from a disk that did not answer. What must hold, for every store alike:
@@ -525,7 +525,62 @@ const journalsCase: StoreCase = {
   },
 };
 
-const CASES = [sparksCase, needsCase, inputsCase, keptCase, flowsCase, sessionsCase, journalsCase];
+/** CP-4a2b (D18) — each run's own record, its journal's anchor, kept by the same flows store and read at each ask: one
+ * signed record per run under `run-records/`, written first at the run's start. */
+const runRecordsCase: StoreCase = {
+  name: "the runs' records (FlowRecords, run-records/)",
+  service: RECORD_STORES.SERVICE_FLOWS,
+  retryable: true,
+  words: UNREADABLE_WORDS.flows,
+  dir: (root) => join(root, "fieldd", "flows"),
+  keyPath: (root) => join(root, "fieldd", "flows.key"),
+  seed(root, which) {
+    const run = which === 0 ? "fr-record0001" : "fr-record0002";
+    beganRun(new FlowRecords({ dir: this.dir(root), keyPath: this.keyPath(root) }), {
+      run,
+      flow: "release-check",
+      name: "Release check",
+      n: which + 1,
+      hash: "f".repeat(64),
+      starter: { by: "you" },
+    });
+    const file = join(this.dir(root), RUN_RECORDS_DIR, `${run}.json`);
+    // the rows read the seeded file themselves: they do so after the store is seen to have written it
+    expect(existsSync(file), "the store wrote the run's record").toBe(true);
+    return { file, key: run };
+  },
+  boot(root, events, readFile) {
+    const records = new FlowRecords({
+      dir: this.dir(root),
+      keyPath: this.keyPath(root),
+      logger: capture(events),
+      readFile,
+    });
+    return {
+      read: null,
+      served: () => {
+        try {
+          return records.runRecords().map((record) => record.run);
+        } catch (err) {
+          return { message: (err as Error).message };
+        }
+      },
+      refuse: () => outcome(() => records.runRecords()),
+      write: (key) => outcome(() => records.writeRunRecord(key, { ...RUN_START, calls: 1 })),
+    };
+  },
+};
+
+const CASES = [
+  sparksCase,
+  needsCase,
+  inputsCase,
+  keptCase,
+  flowsCase,
+  sessionsCase,
+  journalsCase,
+  runRecordsCase,
+];
 
 const refusalOf = (c: StoreCase) => ({
   kind: "UNAVAILABLE",
