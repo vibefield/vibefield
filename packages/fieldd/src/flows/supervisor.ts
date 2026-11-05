@@ -33,8 +33,12 @@ import {
 // - The pipe carries bounded control (4A2-Q5 (a)): the script once; a call whose arguments are past
 //   FLOW_LIMITS.RESULT_MAX_BYTES is refused (the child holds the same bound before it sends); an answer past it never
 //   crosses whole: text is cut to fit, anything else is refused, in the words the script's `await` throws with.
-// - The host is pinged every `pingMs` once READY. A host that says nothing for `pingMisses` pings in a row is ended at
-//   once (SIGKILL: a script that spins cannot hear a `shutdown`), as `unanswered` (FLOW_HOST_ENDINGS).
+// - The host is pinged every `pingMs` once READY. A host that answers no ping for `pingMisses` pings in a row is ended
+//   at once (SIGKILL), as `unanswered` (FLOW_HOST_ENDINGS). Liveness is the pong ALONE: a script's worker answers its
+//   own pings, so one that spins misses them, whatever else it says (a log line, a call) between them.
+// - A run that floods fieldd is ended at once as `flood` (bth's review P1): more than
+//   FLOW_LIMITS.HOST_CALLS_WAITING_MAX calls waiting on their answers at once, or more than HOST_LOG_LINES_MAX log
+//   lines in its life. A script that yields each turn answers its pings, so the ping never bounds it.
 // - Its heap is CAPPED BY V8 (4A2-Q7 (b) as re-ruled 11:46Z): the script runs in a worker_threads Worker inside the
 //   host, under `resourceLimits.maxOldGenerationSizeMb` = `heapMb` (a packaged SEA takes no `--max-old-space-size`; a
 //   worker's resourceLimits are no node option). A worker V8 ends past it is the host's `memory`, and the run is
@@ -229,7 +233,11 @@ class FlowHostChild {
   #settled = false;
   /** the end fieldd chose before the child left (its script's end, `ended`, `stopped`) */
   #chosen: FlowHostEnd | undefined;
+  /** when the host last answered a ping (or said READY): liveness is the pong alone */
   #heardAt = 0;
+  /** the calls waiting on their answers, and the log lines said, in this run */
+  #waiting = 0;
+  #logLines = 0;
   #pingN = 0;
   #readyTimer: NodeJS.Timeout | undefined;
   #pingTimer: NodeJS.Timeout | undefined;
@@ -317,11 +325,11 @@ class FlowHostChild {
       );
       return;
     }
-    this.#heardAt = Date.now();
     switch (message.t) {
       case "ready":
         if (this.#isReady) return;
         this.#isReady = true;
+        this.#heardAt = Date.now();
         clearTimeout(this.#readyTimer);
         // the child fieldd started, never the pid a message says (bth's review finding 9)
         this.#ready(this.#proc.pid);
@@ -344,9 +352,15 @@ class FlowHostChild {
         this.#call(message.id, message.what, message.args);
         return;
       case "log":
+        this.#logLines += 1;
+        if (this.#logLines > FLOW_LIMITS.HOST_LOG_LINES_MAX) {
+          this.#flood("log lines");
+          return;
+        }
         if (this.#chosen === undefined) this.#opts.handler.log(cutText(message.text, FLOW_LOG_MAX));
         return;
       case "pong":
+        this.#heardAt = Date.now();
         if (message.heap !== undefined) this.#heap = message.heap;
         return;
       case "memory":
@@ -386,15 +400,33 @@ class FlowHostChild {
       });
       return;
     }
+    if (this.#waiting >= FLOW_LIMITS.HOST_CALLS_WAITING_MAX) {
+      this.#flood("calls waiting");
+      return;
+    }
+    this.#waiting += 1;
     this.#opts.handler.call({ what, args }).then(
-      (answer) => this.#answer(id, answer),
+      (answer) => {
+        this.#waiting -= 1;
+        this.#answer(id, answer);
+      },
       (error: unknown) => {
+        this.#waiting -= 1;
         this.#logger.warn("fieldd.flows.host.handler", "A flow call's handler failed", {
           error: error instanceof Error ? error.message : String(error),
         });
         this.#answer(id, { ok: false, refused: "VibeField could not answer this call." });
       },
     );
+  }
+
+  /** A run past one of its bounds on what it sends fieldd is ended at once (bth's review P1). */
+  #flood(what: "calls waiting" | "log lines"): void {
+    if (this.#chosen !== undefined) return;
+    this.#logger.warn("fieldd.flows.host.flood", "A flow run sent fieldd more than a run may", {
+      what,
+    });
+    this.#end({ kind: "ended", why: "flood" }, "kill");
   }
 
   #answer(id: number, answer: FlowHostAnswer): void {

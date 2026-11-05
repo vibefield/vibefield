@@ -407,7 +407,7 @@ describe("CP-4a2a — a run's journal (CP4-S15, CP-D9; the fixtures' MACs are re
   it("F23: the journal's open words, and an end that names why fieldd ended its host", () => {
     expect(FLOW_JOURNAL_KINDS).toEqual(["head", "call", "answer", "log", "end"]);
     expect(FLOW_CALL_WHATS).toEqual(["agent", "ask"]);
-    expect(FLOW_HOST_ENDINGS).toEqual(["unanswered", "memory", "protocol"]);
+    expect(FLOW_HOST_ENDINGS).toEqual(["unanswered", "memory", "protocol", "flood"]);
     const end = { format: 1, seq: 4, kind: "end", at: "2026-11-05T11:10:00.000Z", state: "failed" };
     const ended = flowJournalLineOf({ ...end, host: "unanswered" });
     expect(ended).toMatchObject({ state: "failed", host: "unanswered" });

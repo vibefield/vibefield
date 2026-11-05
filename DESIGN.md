@@ -6109,6 +6109,8 @@ flow's name as its file's `meta` says it, on one line and cut at 64 characters w
 - **A host that broke its pipe's bounds** (a message past 64 KiB, or one that is not JSON; reachable only when the
   host itself is not VibeField's, CP-4a2a's `protocol`): "VibeField ended ‹flow›: it sent something VibeField can't
   read."
+- **A run that sent more than a flow may** (more calls waiting at once, or more log lines in its life, than
+  `FLOW_LIMITS` allows, CP-4a2a's `flood`): "VibeField ended ‹flow›: it sent more than a flow may."
 - **A host this copy cannot start** (its file is not beside fieldd): "VibeField can't run flows: this copy of
   VibeField is missing the file it runs them with. Reinstall VibeField." It is the agents' sentence for the same loss
   (`roles.ts`, `agentShimUnavailable`), and a development run that has no host says so in fieldd's log alone.
