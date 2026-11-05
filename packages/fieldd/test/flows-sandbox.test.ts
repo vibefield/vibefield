@@ -213,3 +213,88 @@ describe("S19 · one refuser: the read refuses exactly what the sandbox refuses 
     expect(heard.calls).toEqual([]);
   });
 });
+
+describe("H2c · WebAssembly, SharedArrayBuffer and Atomics are pinned undefined in the compartment (CP-4a2b, Q-B4 (a); §13b.11)", () => {
+  // SES 2.3.0 omits all three from every compartment (VF-PM accepted the finding 16:36Z), so H2c-n and H2c-i are green
+  // at red: they hold what SES does today. The pin is VibeField's own, so a ses bump cannot re-admit them, and H2c-own
+  // is its witness. Typed arrays, ArrayBuffer, DataView, TextEncoder and Compartment stay: their one harm is memory,
+  // which the host's cap holds and H25, H27, H28 and H2b-7 prove (H2c-0 pins that they are still there).
+  const PINNED = ["WebAssembly", "SharedArrayBuffer", "Atomics"] as const;
+
+  it.each(PINNED)("H2c-n · `typeof %s` is undefined inside the compartment", async (name) => {
+    const heard = await runOnHost(flow(`return typeof ${name};`));
+    expect(heard.end).toEqual({ kind: "done", value: "undefined" });
+  });
+
+  it("H2c-own · each is the compartment's OWN property, its value undefined: the pin, which a ses bump cannot undo", async () => {
+    const heard = await runOnHost(
+      flow(
+        [
+          `return ${JSON.stringify(PINNED)}.map((name) => {`,
+          "  const own = Object.getOwnPropertyDescriptor(globalThis, name);",
+          "  return [name, own !== undefined && 'value' in own && own.value === undefined];",
+          "});",
+        ].join("\n"),
+      ),
+    );
+    expect(heard.end).toEqual({ kind: "done", value: PINNED.map((name) => [name, true]) });
+  });
+
+  it("H2c-i · none is reached another way: through eval, Function or a nested compartment, an instance's buffer, or the compartment's whole object graph", async () => {
+    const heard = await runOnHost(
+      flow(
+        [
+          ATTEMPTS,
+          "attempt('eval', () => (0, eval)('typeof WebAssembly'));",
+          "attempt('Function', () => Function('return typeof Atomics')());",
+          "attempt('nested', () => new Compartment().evaluate('typeof SharedArrayBuffer'));",
+          "const tag = (v) => Object.prototype.toString.call(v);",
+          "attempt('typed', () => tag(new Uint8Array(8).buffer));",
+          "attempt('encoded', () => tag(new TextEncoder().encode('x').buffer));",
+          "attempt('view', () => tag(new DataView(new ArrayBuffer(8)).buffer));",
+          // every object and function reachable from globalThis by descriptors alone (no getter is called), bounded
+          "const seen = new Set();",
+          "const queue = [globalThis];",
+          "const hits = [];",
+          "for (let i = 0; i < queue.length && seen.size < 50000; i++) {",
+          "  const v = queue[i];",
+          "  if (v === null || (typeof v !== 'object' && typeof v !== 'function') || seen.has(v)) continue;",
+          "  seen.add(v);",
+          "  const own = (key) => Object.getOwnPropertyDescriptor(v, key)?.value;",
+          "  if (['WebAssembly', 'Atomics'].includes(own(Symbol.toStringTag))) hits.push(own(Symbol.toStringTag));",
+          "  if (typeof v === 'function' && own('name') === 'SharedArrayBuffer') hits.push('SharedArrayBuffer');",
+          "  queue.push(Object.getPrototypeOf(v));",
+          "  for (const key of Reflect.ownKeys(v)) {",
+          "    const d = Object.getOwnPropertyDescriptor(v, key);",
+          "    if (d !== undefined) queue.push(...('value' in d ? [d.value] : [d.get, d.set]));",
+          "  }",
+          "}",
+          "return [tries, hits, seen.size];",
+        ].join("\n"),
+      ),
+    );
+    expect(heard.end).toMatchObject({ kind: "done" });
+    const [tries, hits, walked] = (heard.end as { value: [unknown, unknown, number] }).value;
+    expect(tries).toEqual({
+      eval: "undefined",
+      Function: "undefined",
+      nested: "undefined",
+      typed: "[object ArrayBuffer]",
+      encoded: "[object ArrayBuffer]",
+      view: "[object ArrayBuffer]",
+    });
+    expect(hits).toEqual([]);
+    // the walk saw the whole graph (about 900 objects under ses 2.3.0), never a stub of it, and ended inside its bound
+    expect(walked).toBeGreaterThan(500);
+    expect(walked).toBeLessThan(50_000);
+  });
+
+  it("H2c-0 · what stays is still there: a typed array, TextEncoder, DataView and a nested Compartment, the memory rows' road", async () => {
+    const heard = await runOnHost(
+      flow(
+        "return [new Uint8Array(4).fill(1).length, new TextEncoder().encode('xy').length, new DataView(new ArrayBuffer(2)).byteLength, typeof Compartment];",
+      ),
+    );
+    expect(heard.end).toEqual({ kind: "done", value: [4, 2, 2, "function"] });
+  });
+});
