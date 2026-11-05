@@ -268,7 +268,8 @@ enum Remote {
     // IOS-12a — a spark's own run: Chat on the phone reads the spark's status by it
     let spark = try AgentRemoteRow(json: try Fixture.json("agent-remote-row.spark"))
     #expect(spark.spark == "sp-7k2m9q4x")
-    #expect(spark.origin == AgentSessionOrigin(by: "you", spark: nil, run: nil, call: nil, unknownFields: []))
+    let origin = try #require(spark.origin)
+    #expect(origin.by == "you" && origin.spark == nil && origin.run == nil && origin.call == nil)
     #expect(Remote.unknowns(spark) == [:])
 
     let model = try MonitorAgentRow(json: try Fixture.json("monitor-agent-row.valid"))
