@@ -541,12 +541,33 @@ field, heard"; the page *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`)
   - The needs-you card names a session as @ does, one rule read twice: two untitled sessions in vibe-field read
     "vibe-field" and "vibe-field·2", never two "Claude Code"s. fieldd's name stands only where @ offers none.
   - Chat reads its Agent Profiles once, in its controller, for every thread's @ and the card.
-  - Owed, each named, none built: whether a title should win in @ (Q1, James's; §9 below); fieldd's reason after a
-    colon still names a session by runLabel (Q3, a fieldd follow-up); notify's teller names by fieldd's label (Q7).
-- Next, in order:
-  - **SP-1e**: CH-D2's live cards in Chat's thread, and Chat's pane as a card target.
-  - **CP-4**: flows and the desk applier.
-  - **CP-5**, which is MT-7: Codex and Grok, once their MCP processes can be named.
+  - Owed: whether a title should win in @ (Q1, James's; §9 below). Q3 closed with CO-1b (fieldd's reason says "it"),
+    and Q7 in part (notify's teller reads fieldd's CO-1b name).
+- **Items 158 and 159, and CO-1b, one stack**: LANDED 11-05 (`9b3164ccf`, the mini's mint M129, run 129; LANDED
+  "Items 158 and 159, and CO-1b"), on the CO round (James's page Druyc3Ua, 68/68 picked, read 11-04 23:14Z; the
+  CP/spark hold lifted 23:16Z) and the step-0 plan (RULED 23:16Z): TH-Q32 (a), CO-Q9 (b), TH0-Q11 (b), CO-Q4 (b).
+  - **158**: the input queue stamps its head before it sends it; a send a restart broke into is said uncertain once and
+    never sent again, a say's retry included. An answer stays owed until its session takes the line (CO-Q9 (b)).
+  - **159**: each spark keeps one signed record, `spark-files/<spark>/kept.json`, its sections whole across writers.
+    Nothing writes it yet: 1′, SP-1e2 and TH-1 each add theirs. Later slices join the settle with one `joinSettle`.
+  - **CO-1b**: fieldd names an untitled session by its agent in its folder ("Claude Code in vibe-field"), and a reason
+    after a colon says "it" for a session its sentence names.
+  - Owed: item 169 (a say delivered before a fieldd restart is forgotten) · item 172 (the record signer's set-aside and
+    boot read) · 1′'s held wakes (item 152) · CO-Q9's second half (fieldd's own wakes, unaudited) · CO-1b's trailing
+    words in field-app and electron-shell, at A2's rebase.
+  - For James's eye (draft words; not a hold): a dropped answer's "Vela's session ended before it took this", and
+    CO-1b's names ("Claude Code in vibe-field"; "…: it ended"; "work is not one of Vela's Agent Profiles").
+- Next, in order (the CO waves matrix, `lanes/co-plan/plans/co-waves-matrix.md`):
+  - **TH-1 and TH-2**, one mint (lane `co/th`): the spark's thread as its transcript, Send through
+    `compose.sparks.say`, Jump to, Wake, Pause. Its first half (DESIGN.md, contracts, the renderer) is building in
+    its lane; its fieldd half (the recorder, the store in 159's folder) follows this stack on the compose block's chain.
+  - **CP-5a**, the spark claim (lane `co/cp5a`): Claude Code's catalog row offers `spark`. James's hand witness is owed
+    before its records.
+  - **SP-1e2 → SP-1e4** (SP-1e: CH-D2's live cards in Chat's thread): crews, the kept record's `crews` section, and
+    their card's acts; its prefix (DESIGN.md + contracts, lane `co/sp1e2`) building since 03:38Z.
+  - **CP-4a1** (lane `co/cp4a1`, building since 03:38Z): the library, approvals and static read, no daemon wiring;
+    **CP-4a2** (host, journal, runs) after TH lands; then the desk applier.
+  - **CP-5b…5d**, which is MT-7: Codex and Grok, once their MCP processes can be named.
 
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
@@ -1074,7 +1095,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | SD — the sound identity | ACTIVE since 11-05 (SD-D1…D22 ruled at the leans); SD-1 landed 11-05 (DESIGN.md §14 and `@vibefield/sound`, M126 `1ebe7b461`, run 126) | DESIGN.md §14; `draft/sound/design-sound.md` | SD-2, the desktop hears it |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
-| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96) and the handle (`045f10ec7`, mint M100) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; DESIGN.md §2.10 | SP-1e · CP-4 · CP-5 |
+| CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100) and items 158 and 159 with CO-1b (`9b3164ccf`, mint M129) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | TH-1/TH-2 · CP-5a · SP-1e2/1e4 · CP-4 · CP-5b…d |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**

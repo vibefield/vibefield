@@ -31996,3 +31996,159 @@ packet says so.
   `draft/launch/` for the next draft slot.
 - `scripts/stage-package.mjs:244-249` still says a packaged gateway offers no launcher. L5's packet carries a dated
   correction.
+
+## Items 158 and 159, and CO-1b — a send a restart broke into is never sent again, an answer is heard only when its session takes it, each spark keeps one signed record in its own folder, and fieldd names an untitled session by its agent in its folder (track CO) (2026-11-05; `d6d5797f4` → `347c69806`, 17 commits and four merges of main (`3ef5148ec` f599761bc, `d6c71109c` 3d96c43d7, `970ada9ab` dbb8c76ad, `33b71901c` 45c3680a3) begun on main `33d4090b7`, lane `co/items158-159` in `/Volumes/SamsungRed/lanes/items158-159/vibe-field`, in the mini's mint M129 `9b3164ccf` = merge(`33b71901c`, `6d7dfca6e`) (tree `de3e0cb886ed`), landed by fast-forward, run 129)
+
+**What it rests on.**
+- The CO round: James's page `Druyc3Ua6BWycRe1SzzeCz`, 68 of 68 picked (read 2026-11-04 23:14Z;
+  `lanes/co-plan/decisions-Druyc3Ua-1104-2312Z.tsv`). His word at 23:13Z: "the co round page all ruled, resume compose
+  and spark work". VF-PM lifted the CP/spark hold (2026-11-02 06:02Z) at 23:16Z.
+- The plan of record, `lanes/co-plan/plans/step0-items-158-159.md`: RULED 23:16Z; Q1 (b) and Q2–Q15 at their leans;
+  one lane, base `33d4090b7` (VF-PM 23:22Z). The marks it builds:
+  - **TH-Q32 (a)** (VF-PM 2026-11-02 10:28Z): the double send across a restart is its own item, before TH-1's door.
+    That is item 158.
+  - **CO-Q9 (b)** (VF-PM 10:28Z, riding TH-Q32's item): an answer is told only once its session takes the line; a
+    dropped fact is owed again.
+  - **TH0-Q11 (b)** (the matrix's X3): one folder per spark holds 159's kept record and TH-1's run files, under one key.
+  - **CO-Q4 (b)** (James's click, 2026-11-04 04:32Z): fieldd's own words name an untitled session by its agent in its
+    folder. That is CO-1b, built at VF-PM's four accepted leans (01:22Z), fieldd-only by lean (a).
+- It stands on CP-2 (the input queue; CP2-D2 an uncertain delivery never resent, CP2-D3 the queue kept across a
+  restart), CP-3 (the needs-you queue and its `told`), IOS-12a (the `you` sender, `compose.sparks.say`, `SayReceipts`)
+  and the handle (@'s rule; fieldd's name only where @ offers none).
+- The CO waves matrix (`lanes/co-plan/plans/co-waves-matrix.md`, ~01:20Z) put the stack first in the compose block's
+  one chain: 158 → 159 → CO-1b → TH-1's fieldd → SP-1e2 → SP-1e4 → CP-4a.
+
+**What** (32 files, +1,827 −175 against main: DESIGN.md, two agent-plane pages, 10 in contracts, `registries.rs`, 9
+fieldd sources and 9 fieldd tests):
+- **DESIGN.md first.** §9 for 158 (`d6d5797f4`, `b4efd8a5f`): an answer is heard only once its session takes the line;
+  the words a restart broke into ("…they will not be sent again"), said once; a dropped answer's card reads "Vela hears
+  it when it wakes: Vela's session ended before it took this". §8 and §9 for CO-1b (`79a2933e0`, `dda4ed861`): fieldd
+  names an untitled session "Claude Code in vibe-field", and a ‹reason› after a colon names no session its sentence
+  already names ("Couldn't send Vela's words to vibe-field·2: it ended").
+- **Item 158** (`82af46edc` contracts, `2d5e8a446` red, `05b17378d`, `b933e4b0a`, `057d840aa` red, `f8fe16cb1`):
+  - Contracts: `AgentQueuedInput`'s delivery stamp `sending` and the `items` its line carries; a needs record's
+    `telling`; fixtures `agent-input-queue.sending` and `needs-record.telling`.
+  - The input queue stamps its head in its file before it delivers it. Restore reads a stamped head as `uncertain`
+    (RESTARTED): said once, at its run's first poke, and never sent again. `forget` answers `uncertain`, never
+    `dropped`, for a restored stamped head.
+  - CO-Q9 (b): an answer's fact stays `owed`, with `telling: {run, at}`, until its session takes the line. A drop owes
+    it again (`told` false, the `waits` words). A queue whose run ended while fieldd was down is forgotten at settle.
+  - The say, on merge 1's tree: a `you` input a restart broke into answers its retry `uncertain` and is never queued
+    again (`SayReceipts`' restored map; `heard()` records a restored input by its request id).
+  - `docs/agent-plane/api.html` and `architecture.html:1785` (`a1523a766`, X1): the sparks and needs doors as IOS-12a
+    built them, an erratum at its source.
+- **Item 159** (`d97827870` contracts, `2ae733112` red, `8232ad06f`):
+  - Contracts: `SparkKeptRecord` (`{format: 1, spark, updatedAt}`, passthrough); `LAYOUT.SPARK_FILES_DIR`
+    (`["fieldd", "spark-files"]`) and `LAYOUT.SPARK_FILES_KEY_FILE` (`["fieldd", "spark-files.key"]`);
+    `SPARK_KEPT_FILE` "kept.json" and `SPARK_KEPT_FORMAT` 1. `pnpm gen` wrote `registries.rs` +4; the layout vector and
+    two fixtures (valid, an unknown section); api.html's seam sentence, with no door.
+  - fieldd: `SparkKeptStore` (`tool-plane/spark-kept.ts`) reads and signs `spark-files/<spark>/kept.json`, keeps every
+    section across writers (`update(spark, fn)` re-reads before it writes), and sets a forged or mismatched copy aside
+    (`fieldd.spark_kept.set_aside`). The boot lists it once (`fieldd.spark_kept.restored`), beside the queues' restore.
+  - X5: `NeedsQueue.joinSettle(name, fn)`; 158's inputs reconcile is the first joiner ("inputs").
+- **CO-1b** (`7c876a98c` red, `f6b75aac7`, `347c69806`):
+  - `sessionName({title, label, folder, id})` (`rooms/you/words.ts`): the title, else the label in its folder, else the
+    label, else the id. runLabel reads the folder from the run's monitor row. The held send's reasons are "it ended"
+    and "it is not running".
+  - The door client (`fixtures/spark-mcp-client.mjs`) writes its tools.json whole, beside then renamed, and
+    `f6b75aac7`'s per-row tolerance is taken back out.
+- **The merges.** Merge 1 (`3ef5148ec`, f599761bc): five hunks in four files, by hand (contracts compose.ts,
+  agent-input-queue.ts, daemon.ts, needs-doors.test.ts; the packet's ALLOW). Merges 2–4 auto-merged.
+
+**Validation.**
+- Red, then green, per item (`lanes/co-plan/lanes/items158-159/logs/`):
+  - 158: contracts red 3 (C2–C4), green 1520; fieldd red 19 failed / 48 guards; green 67/67 at `b933e4b0a`; on merge 1's
+    tree, five files 78; the say red 3 (S1–S3), green 81/81 at `f8fe16cb1`.
+  - 159: contracts red 3 (K1–K3), green 1541; `cargo build -p field-native` 13.4 s and `layout_vector` 1 passed under
+    the HOLD (01:42Z); gen:check 0; fieldd red 7 (P1–P5, J1, B2) / 46 guards; green 88 at `8232ad06f`.
+  - CO-1b: the canon rows green after DESIGN.md (needs-words 6; field-app 55); red: words 1, queue 3, the booted row 1
+    ("Scripted" against "Scripted in vibe-field"); green 111 at `f6b75aac7`; the booted row 1 passed in each of three
+    runs (booted-4/5/6); the door client's four rows, three runs, 4 passed each.
+- The light lines, every row exit 0: on `b933e4b0a` (fieldd 231 files | 3 skipped, 2,996 passed | 30 skipped); on
+  `f8fe16cb1` (232 | 3, 3,010 | 30); on `d6c71109c`, the last tree the whole fieldd suite ran on: preflight, walls,
+  deps, typecheck (5 projects, no cache), biome (46 checked), contracts 1541, gen, sound 97, field-app's 58 DESIGN.md
+  readers 1358, **fieldd 233 files | 3 skipped, 3,020 passed | 30 skipped**, diff --check.
+- `397a3e036` (the merge of 8255a10b3) re-proved light (preflight, walls, deps, ios-fixtures 249, biome, typecheck,
+  contracts, gen, the DESIGN.md readers 1359, sound) and carried to `970ada9ab`: their diff is dbb8c76ad's three docs.
+- On `33b71901c`, T (tree `a9837ca5b60c`): preflight 0, diff --check 0, pairwise exit 0. a9's post-L2 re-proof on the
+  mini (VF-PM 03:17Z: exactly these): agent-gateway 95, agent-shim-role 10, packaged-typed-agent **3 SKIPPED** by its
+  own `skipIf(!FIELDD_TEST_AGENTS_PACKAGE)` (desk-gates row 34); field-native built from this tree, 3.11 s.
+- The disjoint set: against the true merge-base dbb8c76ad, L2's 14 files and the lane's 32 share none. Pin-class
+  against `6d7dfca6e` is empty. The Rust delta is `registries.rs` +4, generated.
+- **Run 129** (`9b3164ccf`, a9's mint-main.sh merge of `6d7dfca6e` into `33b71901c`, tree `de3e0cb886ed`; its delta
+  from T is main's three records docs; GO 03:42:18Z, M settled 03:42:47Z): `pnpm verify` exit 0 at 03:49:36Z. vitest
+  12,408 passed / 0 failed / 21 skipped over 889 files, node 365/0, cargo 545/0. packaged-typed-agent.test.ts is 3
+  SKIPPED there too: it needs the packaged app (desk-gates row 34).
+- **Landed:** main fast-forwarded `6d7dfca6e` → `9b3164ccf` on VF-PM's GO (2026-11-05T03:51:55Z, the fixer's stamp;
+  tree `de3e0cb886ed`), 32 files +1,827 −175.
+
+**What is real, what is stubbed.**
+- 158 is real end to end. Still waiting: item 169 (a say DELIVERED before a restart is forgotten; it needs a receipt
+  on disk); 1′'s held wakes (item 152's); and fieldd's own wakes, which are still unaudited.
+- 159's store is real and nothing writes to it yet: no door serves it, and no section is 159's. 1′ (watches, held) and
+  SP-1e2 (crews) add theirs through `update(spark, fn)`; TH-1's run files go in the same folder under the same key.
+- CO-1b is real and fieldd-only. field-app and electron-shell are untouched.
+
+**Found.**
+1. **Q3, the plan's line** (VF-PM 00:16Z): the red plan said "make the inputs dir read-only (`chmod 0o500`)". `#keep`
+   re-chmods the dir to 0700 before every write (`agent-input-queue.ts:226-227`), so the row blocks the `.part` path
+   instead, on every platform.
+2. **B1, the plan's line** (VF-PM 00:16Z): the plan said "wait for `daemon.agents.reattachSettled()` … (inferred: the
+   mock's first inventory starts the re-attach)". The plain mock's `observedState` is null (`testing/mock-mgmt.ts:227`,
+   `:395`), so no inventory comes and the re-attach never starts (`agent-runtime.ts:2343-2345`); `boot()` now takes a
+   floor snapshot that lists no terminal.
+3. **Two existing rows amended for CO-Q9 (b)** (00:16Z): the held send's Allow and the held spawn's Allow read the
+   needs dir empty right after a told answer. B1's ledger is own-actions, chosen by the action's name
+   (`packages/audit/src/index.ts:114-119`).
+4. **Eight departures from the plan's §3.2** (VF-PM 00:56Z, accepted). Two have a sentence of their own:
+   - A run id that is not a file name now holds its delivery instead of delivering unkept; no id fieldd mints is
+     affected (`run-…`, `pty-…`).
+   - `forget` answers `uncertain`, never `dropped`, for a restored stamped head (the rule the say commit extends).
+   - The other six: the restored head's report rides the public `poke` only (enqueue and wake use a private
+     `#deliver`); the settle seam (now X5's joiners); `reconcileTelling` owes the fact again with `told` false and no
+     `waits`; `onSparkLive` rewrites only a record that changed; a dropped or uncertain fieldd wake logs
+     `fieldd.inputs.wake_unheard`; an owed-again fact waits for its spark's next monitor row.
+5. **Item 169 stays OPEN** (VF-PM 01:27Z): the say commit closes only the stamped-head half. A say delivered before a
+   fieldd restart is forgotten, and a retry re-queues it; that needs a receipt on disk, which is not 158's.
+6. **Merge 1 (`3ef5148ec`) was hand-resolved in four files (five hunks)**: contracts compose.ts, agent-input-queue.ts,
+   daemon.ts and needs-doors.test.ts, the four `git merge-tree --write-tree b933e4b0a f599761bc` conflicts in. The
+   resolution was read per file by the fixer (03:43Z) and accepted by VF-PM 03:44Z: `3ef5148ec`'s tree differs from
+   git's merge-tree of its parents in exactly those four (+20/−44), each a real combination of both sides.
+7. **X5's shape is a registration** (cp-landing 01:58Z): `NeedsQueue.joinSettle(name, fn)`, and
+   `reconcileWhenSettled` keeps one argument. The same intent (one line per later slice; the settle line is never
+   rewritten), a different signature than the matrix's "takes a list".
+8. **159's boot listing runs at boot, not as a settle joiner** (cp-landing 01:58Z): 1′'s waker restore must come before
+   the first monitor row, and 159 has no settle work of its own.
+9. **Filed, item 172** (02:13Z): the record signer and its stores. A transient errno or a newer format sets a valid
+   record aside, and an unguarded boot read lets a same-uid file or a mode-000 dir at spark-files, needs or inputs stop
+   fieldd's boot (`lanes/co-plan/plans/item-172-record-signer-set-aside-and-boot-read.md`). Not this stack's scope.
+   The review of 159 (wf_c6832dc1-c10) raised 7 findings, none a defect of 159's: 4–6 are item 172, and 1–3 are notes
+   for the record's first writer (`lanes/co-plan/plans/notes-spark-kept-first-writer.md`).
+10. **The example named an arm profileSet makes unreachable** (`dda4ed861`; VF-PM's words 02:17Z): `79a2933e0`'s §9
+    example "Claude Code is in none of Vela's Agent Profiles" is one fieldd can never say. `NeedsHeldLaunch.profileSet`
+    is required (`compose.ts:886`), so the held spawn's `#sparkRefusal` never reaches the "in none of" arm
+    (`queue.ts:630` at `dda4ed861`). The example is now "work is not one of Vela's Agent Profiles".
+11. **The door client wrote its tools.json in one call** (02:21Z; `347c69806`): four booted rows (six reads) could read
+    it mid-write (seen once in 6 runs: `1b-green-booted-3.log`, "Unexpected end of JSON input"); now written whole.
+    The 02:21Z record said "6 booted rows", reads counted as rows; the repo has four rows and six reads
+    (`agent-session.test.ts` :1601, :1623 and :1650 in one row; :1702; :1780; :1842).
+12. **The merged-tree fieldd suite ran outside the HOLD** (VF-PM 03:20Z): "the merged-tree fieldd suite ran through
+    suite-slot outside the HOLD under mac-pressure: fieldd's global setup runs cargo build -p field-native (G12) and the
+    lead's premise was wrong; the result stands". The row rebuilt field-native (02:30:07Z). RULED: on this Mac a fieldd
+    suite IS a cargo build and takes the HOLD; the mini is the default.
+13. **Not covered by CO-1b** (02:21Z): names already kept stay as they were taken (items' `to.name`/`from.name`, the
+    waker's texts), so an item asked before fieldd read the folder keeps "Claude Code"; two untitled sessions in one
+    folder still read alike where @ offers no handle (CO-Q4 (b)'s named cost).
+
+**Owed.**
+- **To A2 (TH), at its rebase onto main after this land** (02:15Z; the fieldd-only lean): field-app
+  `chat-fixtures.ts:210-213`, `:612-615`, `:776` (`${SESSION_NAME} ended`); electron-shell `needs-notices.ts:7-10`; and
+  needs-card.test.tsx's "claude·2 ended" fixtures, green but stale. Named here as owed, not done.
+- Item 169 (OPEN) · item 172 (FILED) · 1′'s held wakes (item 152) · CO-Q9's second half (fieldd's own wakes,
+  unaudited) · the packaged row of packaged-typed-agent (desk-gates row 34, on the first signed package).
+- At their sources, each in a slot of its own: CP2-D3's line (`draft/compose-plane/cp2-talk-room.md:218`) at the next
+  draft slot; the co-plan plans' old names for 159 (SPARK_KEPT_DIR); James's draft words (the waits words; CO-1b's
+  names).
+- **Closed by this entry:** CO-Q9's owed line, its first half (LANDED "CP-3", `:27808-27809`: "An answer's fact … is
+  dropped by `inputs.forget` … while the item still reads `told`"); the handle's Q3 (`:28835-28838`); and the handle's
+  Q7 in part (`:28851-28853`: the teller now reads fieldd's CO-1b name).
