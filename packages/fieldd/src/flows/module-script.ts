@@ -11,15 +11,17 @@ import { type Comment, type Node, parse, type Token, tokTypes } from "acorn";
 // takes out keeps its line breaks, so `export` alone on its line moves no later line (finding 10). A flow imports
 // nothing (its API is the compartment's globals, `agent`, `ask`, `log` and `phase`), so an `import` or a re-export is
 // refused here, before any host starts; a real dynamic `import()` or direct `eval(…)` is left as written, for SES to
-// refuse when the host evaluates it, with its line (the lines are kept, so SES's line is the file's): one refuser, SES's
-// own censor (VF-PM 12:40Z, superseding 11:30Z's "acorn refuses"). So is a real call inside a template's substitution,
-// `${import("x")}`: it is code, never a template's part. An indirect eval, `(0, eval)(…)`, is left too: SES's censor
-// lets it pass, and the compartment's own eval runs it in the compartment's scope (evalTaming "safe-eval"), powerless.
+// refuse when the host evaluates it, with its line (the lines are kept, so SES's line is the file's): one refuser,
+// SES's own censor (VF-PM 12:40Z, superseding 11:30Z's "acorn refuses"). So is a real call inside a template's
+// substitution, `${import("x")}`: it is code, never a template's part. An indirect eval, `(0, eval)(…)`, is left too:
+// SES's censor lets it pass, and the compartment's own eval runs it in the compartment's scope (evalTaming
+// "safe-eval"), powerless.
 //
 // acorn reads the MODULE goal, where `<!--` and `-->` are operators; V8 under SES evaluates a SCRIPT, where they open
 // and close comments. A text that differs only there keeps its code-level `<!--` or `-->` (the rewrite touches only
 // what acorn reads as words or comments), so SES's censor refuses it, SES_HTML_COMMENT_REJECTED; a `-->` at a line's
-// start does not parse as a module at all, so it is refused here (the cp-landing 12:40Z rows, flows-module-script.test.ts).
+// start does not parse as a module at all, so it is refused here (the cp-landing 12:40Z rows,
+// flows-module-script.test.ts).
 //
 // SES refuses a source whose TEXT looks like `import(` (or `import //`, `import /*`), a direct `eval(`, `<!--` or
 // `-->`, wherever it stands, strings and comments included (ses 2.3.0, transforms.js and compartment-evaluate.js). A
@@ -34,7 +36,11 @@ import { type Comment, type Node, parse, type Token, tokTypes } from "acorn";
 // - an untagged template's part holding one, and String.raw's, is split by an empty substitution, `${""}`, at each
 //   place: the cooked value is identical, and so is String.raw's. A script's own tag gets a string's escapes in its
 //   raw text instead, so its strings and substitutions are the ones it wrote, and only its `.raw` shows the escapes
-//   (`\u0074`, `\u006c` or `\u002d`; N5). A tag spelled `String.raw` is String.raw, whatever the script binds there;
+//   (`\u0074`, `\u006c` or `\u002d`; N5). Only a tag WRITTEN `String.raw` or `String["raw"]`, parenthesized or not,
+//   is String.raw, whatever the script binds there. An alias is a script's own tag to the rewrite (the second re-read
+//   bth-1345Z, L1): `const raw = String.raw; raw\`…\``, `(0, String.raw)\`…\`` or `globalThis.String.raw\`…\``
+//   gets the escapes in its parts, so String.raw through it returns them as text (`impor\u0074(` where the words said
+//   `import(`), and so does any tag that reads `.raw` (a dedent, say);
 // - a regex literal holding one becomes `new (/(?:)/.constructor)(source, flags)`, its source and flags as escaped
 //   strings: the realm's own RegExp, whatever the script binds to the name `RegExp` (N5);
 // - a comment's text is blanked, its line breaks kept (a comment with none becomes one space).
@@ -156,7 +162,9 @@ const templatePartOf = (raw: string): string => {
   return out + raw.slice(from);
 };
 
-/** A tag that is `String.raw` as written (parenthesized or not, `String.raw` or `String["raw"]`). */
+/** A tag that is `String.raw` as written (parenthesized or not, `String.raw` or `String["raw"]`). An alias, such as
+ * `const raw = String.raw`, `(0, String.raw)` or `globalThis.String.raw`, is not: the walk reads the tag's spelling,
+ * never what it evaluates to (bth-1345Z, L1; the header says what such a tag then receives). */
 function isStringRaw(tag: unknown): boolean {
   type Part = { type?: string; name?: string; value?: unknown; expression?: unknown };
   let node = tag as Part & { computed?: boolean; object?: Part; property?: Part };
