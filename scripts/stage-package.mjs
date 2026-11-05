@@ -36,6 +36,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // WP8-D6: the bundled list's one home, shared with smoke:bundled's stager.
 import { BUNDLED_PLUGINS } from "../apps/desktop/packaging/bundled-list.mjs";
+// Item 178 — fieldd's sidecars, one table with the SEA builder's: the PLAN below spreads it, and the executable's name
+// and mille's triple come from it too.
+import { FIELDD_EXE, MILLE_NATIVE, SIDECARS } from "../apps/desktop/packaging/fieldd-sidecars.mjs";
 // LP-6b (item 170) — mille's .node leaves the stage with no build path as its own install name.
 import { setInstallName } from "./build-paths.mjs";
 // Tooling (a) — field-native's binaries are read where cargo builds them, never `<repo>/target` by guess.
@@ -43,12 +46,19 @@ import { cargoBinaries } from "./cargo-target.mjs";
 import { auditHostLinks, launchCheck } from "./host-links.mjs";
 // FW (F1) — the floor's set: field-native and the two binaries it resolves beside itself, one release build.
 import { FLOOR_BINARIES, floorSetProblems } from "./native-floor.mjs";
+// Item 178 — the notices rows held to what this stage copies, both ways (scripts/notices-rows.mjs).
+import { noticesRowProblems } from "./notices-rows.mjs";
 // Not a dependency — a repo script. scripts/siblings.mjs is the ONE reader of
 // siblings.lock.json (CLAUDE.md §Machine setup), and staging is its fourth
 // consumer after preflight, the Nx cache stamp and the dev runner.
 import { cargoBuildFreshness, rosettadBinary, sidecarStagingSource } from "./siblings.mjs";
 // LP-5 — the third-party notices, generated from the trees this stage copies (scripts/third-party-notices.mjs).
-import { NOTICES_FILE, stageExternals, stageNotices } from "./third-party-notices.mjs";
+import {
+  NODE_BUNDLES,
+  NOTICES_FILE,
+  stageExternals,
+  stageNotices,
+} from "./third-party-notices.mjs";
 
 const args = process.argv.slice(2);
 const argValue = (flag) => {
@@ -115,14 +125,6 @@ try {
 } catch (error) {
   nativeUnknown = error instanceof Error ? error.message : String(error);
 }
-const fielddName = process.platform === "win32" ? "fieldd.exe" : "fieldd";
-// FS-1a — mille's napi triple (fieldd workspace/launch.ts `milleTriple`)
-const milleNativeName = (() => {
-  if (process.platform === "darwin") return `mille.darwin-${process.arch}.node`;
-  if (process.platform === "win32") return `mille.win32-${process.arch}-msvc.node`;
-  const musl = !process.report?.getReport()?.header?.glibcVersionRuntime;
-  return `mille.linux-${process.arch}-${musl ? "musl" : "gnu"}.node`;
-})();
 const truffleSidecarName = process.platform === "win32" ? "sidecar-slim.exe" : "sidecar-slim";
 const trufflePlatform = `${process.platform}-${process.arch}`;
 const truffleSidecarPackages = new Set([
@@ -226,64 +228,22 @@ const PLAN = [
     // (EDP-14), so `bin.cjs` is gone and `bin/fieldd[.exe]` is the stable §7.4 name. The shell
     // execs this directly — no Electron-as-node, which is what let the RunAsNode fuse close.
     // ~145 MB, because a SEA embeds the whole Node runtime; that cost buys the fuse.
-    stage: `bin/${fielddName}`,
-    from: `apps/desktop/build/fieldd-sea/${fielddName}`,
+    stage: `bin/${FIELDD_EXE}`,
+    from: `apps/desktop/build/fieldd-sea/${FIELDD_EXE}`,
     kind: "file",
     mode: EXEC_MODE,
     produce: "pnpm --filter @vibefield/desktop run package:sea",
   },
-  {
-    // Outside the ASAR because `new Worker(path)` needs a real file on disk (§7.4, P-A).
-    stage: "bin/service-harness.mjs",
-    from: "packages/fieldd/dist/service-harness.mjs",
-    kind: "file",
-  },
-  {
-    // 3.1 MB, and loro resolves it via __dirname — unembeddable, hence a resource (§7.4, P-A).
-    stage: "bin/loro_wasm_bg.wasm",
-    from: "packages/fieldd/dist/loro_wasm_bg.wasm",
-    kind: "file",
-  },
-  {
-    // FS-1a (L1): the files worker's bundle. The packaged fieldd re-runs ITSELF with
-    // `--vibefield-role=files-host`, and that role loads this file from beside the
-    // executable — a real file on disk, as the service harness is.
-    stage: "bin/files-host.cjs",
-    from: "packages/fieldd/dist/files-host.cjs",
-    kind: "file",
-  },
-  {
-    // TH-1: the transcript worker's bundle. The packaged fieldd re-runs ITSELF with
-    // `--vibefield-role=transcript-host`, and that role loads this file from beside the executable
-    // (bin.ts, transcripts/launch.ts), as the files worker's role loads its own. It carries no mille.
-    stage: "bin/transcript-host.cjs",
-    from: "packages/fieldd/dist/transcript-host.cjs",
-    kind: "file",
-  },
-  {
-    // AR-7: the spawn-through shim the agent gateway writes its launchers over. The
-    // gateway looks for it beside the daemon (agent-gateway.ts `bundledShim`), so
-    // beside the SEA it goes; fieldd's build bundles it from the kit the daemon was
-    // bundled with. Staged, it is found — and a packaged gateway still offers no
-    // launcher until a launcher runtime exists for a single executable (AR-7j):
-    // the shim is the file a launcher runs, not the Node that runs it.
-    // *(Corrected 2026-11-05, AR-7j, M128 `45c3680a3`: the runtime exists. A packaged gateway offers fieldd's own
-    // executable in its closed `--vibefield-role=agent-shim` role, and that role runs only this staged, sealed copy,
-    // never the home's.)*
-    stage: "bin/agent-shim.cjs",
-    from: "packages/fieldd/dist/agent-shim.cjs",
-    kind: "file",
-  },
-  {
-    // FS-1a: mille's native file engine, dlopened by the worker from the explicit path
-    // fieldd hands it (workspace/launch.ts) — staged by fieldd's build from the installed
-    // per-platform package, named by mille's own triple.
-    stage: `bin/${milleNativeName}`,
-    from: `packages/fieldd/dist/${milleNativeName}`,
-    kind: "file",
+  // fieldd's sidecars (item 178): the SEA builder's own table (apps/desktop/packaging/fieldd-sidecars.mjs, each row's
+  // why there), so a file cannot sit beside the executable in one script and miss the stage in the other. Each is
+  // staged as `bin/<name>` from fieldd's dist/, outside the ASAR (§7.4, P-A), as data: none of them executes alone.
+  ...SIDECARS.map(({ stage, from, kind, produce }) => ({
+    stage,
+    from,
+    kind,
     mode: DATA_MODE,
-    produce: "pnpm --filter @vibefield/fieldd build",
-  },
+    ...(produce ? { produce } : {}),
+  })),
   // tooling (a) — field-native's binaries (NATIVE_BINARIES): each from where cargo builds it, the
   // place looked said in the gap
   ...NATIVE_BINARIES.map((binary, i) => {
@@ -434,6 +394,22 @@ const PLAN = [
       : { produce: "pnpm install --frozen-lockfile" }),
   })),
 ];
+
+// Item 178 — the notices name every Node bundle this stage copies, every notices row names a file it ships (or the one
+// embedding it), and fieldd's sidecars are staged exactly as the SEA builder lists them. Pure on the tables, so every
+// stage refuses here, --verify included, before anything is copied and long before electron-builder.
+const rowProblems = noticesRowProblems({
+  plan: PLAN,
+  sidecars: SIDECARS,
+  nodeBundles: NODE_BUNDLES,
+});
+if (rowProblems.length > 0) {
+  console.error(
+    "stage REFUSED: the notices rows and the stage's rows disagree (item 178, scripts/notices-rows.mjs):",
+  );
+  for (const problem of rowProblems) console.error(`  - ${problem}`);
+  process.exit(1);
+}
 
 // ---- the produced outputs (WP8b) ----------------------------------------------
 // `plugins/bundled/` and `identity/` are not copies of a build tree: they are PRODUCED, signed, for this stage —
@@ -742,13 +718,13 @@ const stage = ({ files, manifest }) => {
   // steps alike), and on the signed path @electron/osx-sign finds the .node as binary code and signs it again with the
   // Developer ID (electron-builder.yml's `binaries` note).
   if (process.platform === "darwin") {
-    const mille = join(outAbs, `bin/${milleNativeName}`);
+    const mille = join(outAbs, `bin/${MILLE_NATIVE}`);
     if (existsSync(mille)) {
       try {
-        setInstallName(mille, `@rpath/${milleNativeName}`);
+        setInstallName(mille, `@rpath/${MILLE_NATIVE}`);
       } catch (error) {
         fail(
-          `bin/${milleNativeName}: its install name could not be rewritten — ${error instanceof Error ? error.message : String(error)}`,
+          `bin/${MILLE_NATIVE}: its install name could not be rewritten — ${error instanceof Error ? error.message : String(error)}`,
         );
       }
       chmodSync(mille, DATA_MODE);
@@ -927,6 +903,7 @@ try {
     repoRoot,
     stageDir: outAbs,
     sidecarPath: sidecarRow?.from ? resolve(repoRoot, sidecarRow.from) : null,
+    sidecars: SIDECARS,
     write: !verifyOnly,
   });
 } catch (error) {

@@ -673,7 +673,7 @@ test("the stage rewrites mille's install name on macOS after the copy, and stage
   const stage = readFileSync(join(REPO_ROOT, "scripts/stage-package.mjs"), "utf8");
   assert.match(stage, /import \{ setInstallName \} from "\.\/build-paths\.mjs";/u);
   const copy = stage.indexOf("copyFileSync(f.abs, dest);");
-  const rewrite = stage.search(/setInstallName\(mille, `@rpath\/\$\{milleNativeName\}`\)/u);
+  const rewrite = stage.search(/setInstallName\(mille, `@rpath\/\$\{MILLE_NATIVE\}`\)/u);
   assert.ok(copy > -1 && rewrite > copy, "the rewrite follows the copy");
   assert.match(stage.slice(copy, rewrite), /if \(process\.platform === "darwin"\) \{/u);
   // package:mac:release (run-macos-release.mjs; release.yml's signed path): the stage, its verify, then electron-builder

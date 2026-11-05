@@ -11,6 +11,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { MILLE_NATIVE, SIDECARS } from "../../../apps/desktop/packaging/fieldd-sidecars.mjs";
 
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const CENSUS = join(REPO, "scripts", "package-census.mjs");
@@ -211,13 +212,23 @@ test("LP-6c: verify runs the census strict, after the build it inventories", () 
 // bundle (SD-2's main/sound-worker.cjs was the one that had none) cannot reach a package without its census row. Rows
 // whose path is computed (fieldd's SEA, mille's per-arch .node) and directories (the renderer's assets) are the
 // census's own shapes, held by the strict assert itself.
+// *(Item 178, 2026-11-05: fieldd's sidecars left the stager's text for the table it spreads,
+// apps/desktop/packaging/fieldd-sidecars.mjs, so they are read from there. mille's .node is named by the reading
+// host's triple and the baseline by the host it was drawn on, so it is held by its shape instead, the same on every
+// verify host: the baseline names exactly one `dist/mille.<triple>.node` under fieldd.)*
 test("LP-6c: the baseline names every bundle the stager copies by a literal dist path", () => {
   const stager = readFileSync(join(REPO, "scripts/stage-package.mjs"), "utf8");
   const manifest = JSON.parse(
     readFileSync(join(REPO, "apps/desktop/packaging/package-manifest.json"), "utf8"),
   );
+  const fielddFiles = Object.keys(manifest.packages["packages/fieldd"]?.files ?? {});
+  const milles = fielddFiles.filter((file) => /^dist\/mille\.[^/]+\.node$/u.test(file));
+  assert.equal(milles.length, 1, `the baseline's mille engine rows: ${milles.join(", ")}`);
   const rows = [
     ...stager.matchAll(/from: "(packages\/[^/"]+)\/(dist\/[^"]+\.(?:cjs|mjs|js|wasm|node))"/gu),
+    ...SIDECARS.filter((s) => s.name !== MILLE_NATIVE).map((s) =>
+      /^(packages\/[^/]+)\/(dist\/.+)$/u.exec(s.from),
+    ),
   ];
   assert.ok(rows.length >= 6, `the stager's literal dist rows: found ${rows.length}`);
   const unnamed = rows

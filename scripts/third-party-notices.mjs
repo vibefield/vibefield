@@ -66,7 +66,7 @@
 //   node scripts/third-party-notices.mjs --refresh-go-modules [--gomodcache <dir>]
 //       rewrites apps/desktop/packaging/notices/go-modules.json from the installed sidecar binary
 //
-// Node >=22 ESM, builtins only.
+// Node >=22 ESM, builtins only (and the builtins-only table of fieldd's sidecars, for the executable's name).
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -79,6 +79,7 @@ import {
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { FIELDD_EXE } from "../apps/desktop/packaging/fieldd-sidecars.mjs";
 
 const RULE = "=".repeat(80);
 const THIN = "-".repeat(80);
@@ -1840,6 +1841,35 @@ export const BUILD_OUTPUT = [
   { name: "esbuild", from: "packages/fieldd", role: "its runtime helpers are in the Node bundles" },
 ];
 
+/** The role every component of mille's native engine carries, built from a checkout or a released package. */
+export const MILLE_ENGINE_ROLE = "mille's native file engine";
+
+/**
+ * Item 178 — each sidecar of the fieldd executable that is not a bundle declares where its notices come from
+ * (apps/desktop/packaging/fieldd-sidecars.mjs); the ledger must hold that source, or the file ships unattributed. A
+ * bundle's own row is scripts/notices-rows.mjs's to check, on the stage's tables alone.
+ */
+export function sidecarNoticesProblems(ledger, sidecars) {
+  const components = [...ledger.components.values()];
+  const problems = [];
+  for (const s of sidecars) {
+    const n = s.notices ?? {};
+    if (
+      typeof n.npm === "string" &&
+      !components.some((c) => c.ecosystem === "npm" && c.name === n.npm)
+    ) {
+      problems.push(`${s.stage}: its notices are ${n.npm}'s, and the notices hold no ${n.npm}`);
+    }
+    if (
+      n.engine === "mille" &&
+      !components.some((c) => c.roles.some((role) => role.startsWith(MILLE_ENGINE_ROLE)))
+    ) {
+      problems.push(`${s.stage}: mille's native engine, and the notices hold nothing of it`);
+    }
+  }
+  return problems;
+}
+
 /** The esbuild bundles: each file, the directory its module comments are relative to, and its role. */
 export const NODE_BUNDLES = [
   {
@@ -1862,6 +1892,8 @@ export const NODE_BUNDLES = [
     file: "packages/fieldd/dist/bin.cjs",
     base: "packages/fieldd",
     role: "fieldd (the bundle its executable embeds)",
+    // Item 178: never staged as a file of its own, it ships inside the executable (scripts/notices-rows.mjs (c)).
+    embeddedIn: `bin/${FIELDD_EXE}`,
   },
   {
     file: "packages/fieldd/dist/files-host.cjs",
@@ -2083,7 +2115,7 @@ export async function desktopInputs(repoRoot, { sidecarPath = null, env = proces
               lockFile: join(mille.cargo, "Cargo.lock"),
               workspaceRoot: mille.cargo,
               roots: ["mille-binding"],
-              role: "mille's native file engine",
+              role: MILLE_ENGINE_ROLE,
               sibling: { name: "mille (Rust crates)" },
             },
           ]
@@ -2094,7 +2126,7 @@ export async function desktopInputs(repoRoot, { sidecarPath = null, env = proces
       ? [
           {
             dir: mille.npm,
-            role: "mille's native file engine (its released package)",
+            role: `${MILLE_ENGINE_ROLE} (its released package)`,
             native: true,
           },
         ]
@@ -2202,7 +2234,13 @@ export function stageExternals({ repoRoot, execPath = process.execPath }) {
  * puts them at `legal/THIRD_PARTY_NOTICES.txt` in the stage. Returns the staged path, the text,
  * hard problems (an unreadable input) and gaps (a component whose licence is unknown).
  */
-export async function stageNotices({ repoRoot, stageDir, sidecarPath = null, write = true }) {
+export async function stageNotices({
+  repoRoot,
+  stageDir,
+  sidecarPath = null,
+  sidecars = [],
+  write = true,
+}) {
   const inputs = await desktopInputs(repoRoot, { sidecarPath });
   const externals = stageExternals({ repoRoot }).filter((e) => e.from && existsSync(e.from));
   const { text, ledger } = desktopNotices(inputs, { externals });
@@ -2212,7 +2250,7 @@ export async function stageNotices({ repoRoot, stageDir, sidecarPath = null, wri
   return {
     rel,
     text,
-    problems: ledger.errors,
+    problems: [...ledger.errors, ...sidecarNoticesProblems(ledger, sidecars)],
     gaps: ledger.gaps,
     summary:
       `${third.length} components, ${new Set(third.flatMap((c) => c.texts)).size} distinct licence texts` +

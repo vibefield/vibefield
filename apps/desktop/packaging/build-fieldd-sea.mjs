@@ -38,6 +38,8 @@ import { createRequire } from "node:module";
 import { constants as osConstants, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { FLOOR_BINARIES } from "../../../scripts/native-floor.mjs";
+// Item 178 — the sidecars are ONE table with the stager's (it spreads these rows into its PLAN).
+import { AGENT_SHIM_BUNDLE, MILLE_NATIVE, SIDECARS } from "./fieldd-sidecars.mjs";
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
 const args = process.argv.slice(2);
@@ -55,66 +57,15 @@ const BUILD_CMD = "pnpm --filter @vibefield/fieldd build";
 const EXE_NAME = "fieldd";
 const MANIFEST_NAME = "fieldd.sea.manifest.json";
 
-// F-10: neither of these can live inside the blob, and both resolve against the
-// EXECUTABLE'S directory (F-11: __dirname in a SEA is the executable's dir, not the cwd),
-// so whatever stages the package must copy them beside the binary. The manifest below
-// re-states this so the stager reads it off the artifact instead of off this comment.
-// mille's napi triple (fieldd workspace/launch.ts `milleTriple`; mille's own loader names
-// its per-platform binaries the same way)
-function milleTriple() {
-  if (process.platform === "darwin") return `darwin-${process.arch}`;
-  if (process.platform === "win32") return `win32-${process.arch}-msvc`;
-  const musl = !process.report?.getReport()?.header?.glibcVersionRuntime;
-  return `linux-${process.arch}-${musl ? "musl" : "gnu"}`;
-}
-const MILLE_NATIVE = `mille.${milleTriple()}.node`;
+// F-10: none of the sidecars can live inside the blob, and each resolves against the EXECUTABLE'S directory (F-11:
+// __dirname in a SEA is the executable's dir, not the cwd), so whatever stages the package must copy them beside the
+// binary. Their table, with each one's why, is fieldd-sidecars.mjs; the manifest below re-states it off the artifact.
+
 // The executable's closed roles (packages/fieldd/src/roles.ts, spelled again here: this
 // script imports no TypeScript). bin.ts dispatches on the FIRST argument alone.
 const FILES_HOST_ROLE_ARG = "--vibefield-role=files-host";
 const TRANSCRIPT_HOST_ROLE_ARG = "--vibefield-role=transcript-host";
 const AGENT_SHIM_ROLE_ARG = "--vibefield-role=agent-shim";
-const AGENT_SHIM_BUNDLE = "agent-shim.cjs";
-
-const SIDECARS = [
-  {
-    name: "service-harness.mjs",
-    why: "PluginHost worker entry — `new Worker(path)` needs a real path on disk",
-  },
-  {
-    name: "loro_wasm_bg.wasm",
-    why: "loro-crdt reads it with readFileSync(join(__dirname, …)); bundling the JS carries none of it",
-  },
-  // FS-1a (L1) — the files worker. The executable re-runs ITSELF with
-  // `--vibefield-role=files-host` and that role loads this bundle from beside it
-  // (bin.ts), so it must be a real file next to the executable, like the harness.
-  {
-    name: "files-host.cjs",
-    why: "the files worker's bundle — the executable's files-host role loads it from beside itself",
-  },
-  // TH-1 (TH0-Q5 (b)) — the transcript worker, mille-free. The executable re-runs ITSELF with
-  // `--vibefield-role=transcript-host` and that role loads this bundle from beside it (bin.ts).
-  {
-    name: "transcript-host.cjs",
-    why: "the transcript worker's bundle — the executable's transcript-host role loads it from beside itself",
-  },
-  // mille's native engine: `process.dlopen` needs a real path, and fieldd hands
-  // the worker this one explicitly (workspace/launch.ts); never embeddable.
-  {
-    name: MILLE_NATIVE,
-    why: "mille's native file engine — the files worker dlopens it by the explicit path fieldd hands it",
-  },
-  // AR-7j (LP-D1) — puppeteer's spawn-through shim, SEALED beside the executable. Every
-  // launcher in a packaged build execs the executable in its agent-shim role, and the role
-  // runs THIS copy (bin.ts) — never the one in the user's shim home, so rewriting that copy
-  // steers nothing. The shim home's launchers and rendezvous stay writable by the same uid,
-  // as under `pnpm dev`: the role does not close that (roles.ts `agentShimArgv`). fieldd's
-  // build bundles it from the pinned kit (package.json's third step); the gateway finds it
-  // here too (agent-gateway.ts `bundledShim`, `sealedAgentShim`).
-  {
-    name: AGENT_SHIM_BUNDLE,
-    why: "puppeteer's spawn-through shim — the executable's agent-shim role runs this sealed copy, never the shim home's",
-  },
-];
 
 // AR-7j (electron-security-packaging.md §9.3, fuse-matrix.mjs's RunAsNode row) — the role makes
 // this executable the program every typed agent's launcher runs, in a pane whose environment a
