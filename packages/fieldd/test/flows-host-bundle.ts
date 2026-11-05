@@ -62,13 +62,17 @@ export function standInSource(body: readonly string[]): string {
 
 /** The built bundle started as fieldd starts it (fd 3 a plain pipe, `environment` its whole environment), with every
  * message it says kept in `heard`, `tell` to say one to it, and `close` to close fieldd's end of the pipe. */
-export async function directHost(environment: NodeJS.ProcessEnv): Promise<{
+export async function directHost(
+  environment: NodeJS.ProcessEnv,
+  /** node's own options before the bundle (a row's preload door); none by default */
+  nodeArgs: readonly string[] = [],
+): Promise<{
   child: ChildProcess;
   heard: unknown[];
   tell: (message: ToFlowHost) => void;
   close: () => void;
 }> {
-  const child = spawn(process.execPath, [await flowsHostBundle()], {
+  const child = spawn(process.execPath, [...nodeArgs, await flowsHostBundle()], {
     stdio: ["ignore", "ignore", "ignore", "pipe"],
     env: environment,
   });

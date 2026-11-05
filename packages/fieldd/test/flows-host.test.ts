@@ -175,6 +175,28 @@ async function peakRssMb(pid: number, until: Promise<unknown>): Promise<number> 
   return peak / 1024;
 }
 
+/** Answer every `call` a direct host sends with "yes" until it says its run's end: that end's frame, or "timeout". */
+async function answeredToEnd(
+  direct: { readonly heard: readonly unknown[]; tell: (message: ToFlowHost) => void },
+  ms = WAIT_MS,
+): Promise<unknown> {
+  const deadline = Date.now() + ms;
+  let answered = 0;
+  while (Date.now() < deadline) {
+    const frames = direct.heard as readonly { t?: string; id?: number }[];
+    const calls = frames.filter((frame) => frame.t === "call");
+    for (const call of calls.slice(answered))
+      direct.tell({ t: "answer", id: call.id as number, ok: true, value: "yes" });
+    answered = calls.length;
+    const end = frames.find((frame) =>
+      ["done", "threw", "fatal", "memory"].includes(frame.t ?? ""),
+    );
+    if (end !== undefined) return end;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return "timeout";
+}
+
 /** How a child left, once it has. */
 const exitOf = (child: ChildProcess): Promise<{ code: number | null; signal: string | null }> =>
   new Promise((resolve) => child.on("exit", (code, signal) => resolve({ code, signal })));
@@ -632,6 +654,47 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       // and it still leaves when its pipe closes
       direct.close();
       expect(await within(exited)).not.toBe("timeout");
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H28: memory the host's resident size does not show, as a paged-out host's, is still read: the worker's own external memory and heap end a run `memory` (bth's second re-read R2)",
+    async () => {
+      // the door: the REAL host, started with a preload that makes its resident size read 1 byte, as a host under
+      // memory pressure can read far under what it holds (macOS's resident size leaves out compressed and swapped
+      // pages). The worker's `getHeapStatistics()` (Node's own, on this repo's Node: .nvmrc says 26) still counts
+      // the typed arrays it keeps. The script keeps six filled 64 MiB arrays, an answered ask after each, under
+      // `rssMb: 160`. A host that reads its resident size alone never sees them, and the run ends `done`
+      const dir = mkdtempSync(join(inject("fielddRunRoot"), "vf-fh-rss-"));
+      const readsLow = join(dir, "rss-reads-low.cjs");
+      writeFileSync(readsLow, "process.memoryUsage.rss = () => 1;\n");
+      const base = runOf(
+        flow(
+          [
+            'await ask("start");',
+            "const kept = [];",
+            "for (let i = 0; i < 6; i += 1) {",
+            "  kept.push(new Uint8Array(64 * 1024 * 1024).fill(1));",
+            '  await ask("more?");',
+            "}",
+            "return kept.length;",
+          ].join("\n"),
+        ),
+      ) as Extract<ToFlowHost, { t: "run" }>;
+      const direct = await directHost(PATH_ONLY, ["--require", readsLow]);
+      children.push(direct.child);
+      const exited = exitOf(direct.child);
+      expect(await heardOf(direct.heard, "ready")).toEqual({ t: "ready", pid: direct.child.pid });
+      direct.tell({ ...base, limits: { ...base.limits, rssMb: 160 } });
+      expect(await answeredToEnd(direct)).toEqual({ t: "memory" });
+      // it started under its cap (its first ask was heard), and was ended before its script's end
+      const asks = (direct.heard as readonly { t?: string }[]).filter(
+        (frame) => frame.t === "call",
+      );
+      expect(asks.length).toBeGreaterThanOrEqual(1);
+      expect(asks.length).toBeLessThan(7);
+      expect(await within(exited)).toEqual({ code: null, signal: "SIGKILL" });
     },
     ROW_MS,
   );
