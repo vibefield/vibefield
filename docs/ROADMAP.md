@@ -691,23 +691,77 @@ field, heard"; the page *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`)
      becomes a lazy chunk, measured before and after.
    - Q21: TP-S3f's stated limit (a deliberate own kill never gets an event-driven face), verified after item 59
      (`eebb518b0`), then kept or struck at its source.
-7. **The first beta** (release rails; RL6 betas `v0.9.0-beta.N`):
-   - BP-D9's ruling → its fix lane → R4 (row 31 `smoke:profile` on the signed package) · R3 (the mini) · BP-2,
-     downloads (BP-D2: "at the first beta") · BP-D5's row with UA's user removal.
-   - D11's signing-only measurement (two nightlies sharing an unchanged plane; W11's PTY-survival clause rides it).
-   - The build job's image to `macos-26` (the Xcode 26.3 pin stands until then) · EDP-22's universal macOS build
-     (`release.yml:171` builds mac-arm64 alone).
-   - RD-6, CI in prod shape only: mille's first npm release (no tag past v0.3.4; release PR #44) and adopting the published
-     rosettad archives (RD-D7; RO-4's remainder).
-   - AR-7j, the launcher runtime in a packaged build (`agent-gateway.ts:310` still refuses a strict packaged fieldd).
-   - LOG-39's packaged checks in `release.yml`'s verify · `allow-jit` on every shipped Rust daemon · shipped binaries
-     embedding `~/.cargo/registry` paths · `package-census --assert --strict` red on MV's renderer chunks.
-   - The surface lab (GodviewTuningPanel) is dev-only: gated out of production builds (Q3).
-   - `cargo audit` hardened: `continue-on-error` dropped once the yanked chacha20 moves (Q28).
-   - The next TestFlight build (build 4, carrying P0-H1 and everything since 09-13), then external TestFlight (Beta App
-     Review; App Review 2.1's "access" question is James's).
-8. Then stable `v0.9.0` after a soak. 1.0 adds Linux (RL3 (a); no Linux leg exists) and, on James's call, Windows
-   (RM-4; the 10-26 production-readiness read put it out of scope; Azure signing unstarted).
+7. **The first beta, `v0.9.0-beta.1`** (release rails; RL6 betas `v0.9.0-beta.N`). The plan is the page *VibeField 0.9
+   Launch* (2rsVWUF9); James ruled its calls, LP-D1…D20, at the leans on 2026-11-05 at 01:04Z (DECISIONS LP). The target
+   is 19 Nov if the lanes land as sized, and the beta date is the one that moves. Wave 1 builds code-only, off
+   `f599761bc`: `lp/rails` · `lp/ar7j` · `lp/bp9` · `lp/ios-store` · `lp/notices` · `lp/harden` (with `lp/paths`,
+   item 170) · `lp/feedback` · `lp/td4`. The operating drafts are in `draft/launch/`.
+   - **Phase 0, unstick the nightly** (done 11-05): `nightly-20261104` published at 00:25Z (run 41848947270), and W10
+     passed on it at 01:24Z; `release-signing` takes main and `v*` only (LP-D20, 01:09Z). Its manifest's `touched`
+     line is LP-D16's first data point.
+   - **Phase 1, the DMG a stranger downloads** (5–10 Nov, the release lane):
+     - the DMG itself signed, notarized and stapled before SHA256SUMS (`lp/rails`; today `spctl -t open` rejects the
+       container, while the app inside is notarized);
+     - the real macOS floor, 14 (LP-D4: `mac.minimumSystemVersion` and every policy's `floors.os`; `lp/rails`);
+     - a clean-Mac install row on macOS 14, 15 and 26 VMs on the mini, quarantined as a browser downloads it (new);
+     - a usage string for every system prompt the clean-Mac row meets;
+     - each shipped daemon its own entitlements, with no inherited `allow-jit` (`lp/harden`);
+     - no build paths in shipped binaries (`lp/paths`, item 170);
+     - third-party notices on the Mac and on iOS (`lp/notices`);
+     - the surface lab out of production builds (Q3), and `package-census --assert --strict` green (`lp/harden`);
+     - LOG-39's packaged checks in `release.yml`;
+     - `cargo audit` blocking again once the yanked chacha20 moves (Q28);
+     - build-provenance attestations on the DMG and zip;
+     - the version-less `VibeField-mac-arm64.dmg` on stables (LP-D17).
+   - **Phase 2, the product blockers** (5–18 Nov, parallel lanes):
+     - **A** BP-D9 (a) as ruled (`lp/bp9`) → R4, row 31 (`smoke:profile`) on a signed nightly · R3 (the mini) → BP-2,
+       downloads (BP-D2: "at the first beta") → BP-D5's row with UA's user removal.
+     - **B** AR-7j, typed agents managed in the packaged app (LP-D1, D2): LANDED 2026-11-05 (M128 `45c3680a3`, LANDED
+       "AR-7j"). Owed: its packaged row `verify-agents-package` (desk-gates row 34) green on the first signed build,
+       with the start cost measured.
+     - **C** sessions survive an update that leaves the daemons alone: D11's measurement, then TD-4 by code hash
+       (LP-D16; `lp/td4`) and a byte-stable field-native. W11's PTY clause rides it.
+     - **D** RD-6, CI in prod shape: rosetta's published `rosettad` archive pinned by checksum (RD-D7), then mille's
+       release (PR #44) and an exact pin.
+     - **E** the scope freeze (VF-PM, James; `draft/launch/scope-freeze-proposal.md`): what 0.9 holds, and item 152
+       and 169 (a say forgotten across a fieldd restart, 152's class) fixed, or the feature they touch kept out.
+   - **Phase 3, iPhone and iPad to external TestFlight** (5–19 Nov, the iOS lane and James):
+     - the App Store export and uploads signed in with an App Store Connect API key (build 4's upload failed on 09-20,
+       and build 5 was archived but never uploaded, so the next build is 6, carrying P0-H1 and everything since 09-13);
+     - MARKETING_VERSION 0.9.0 (RL6);
+     - what App Review would reject (`lp/ios-store`): Apple's logo as the Mac's mark, "Better CRT (legacy)" (CC
+       BY-NC-SA) left out, the acknowledgements' full texts, and the privacy and support links where a signed-out person
+       can reach them (IOS-13a);
+     - Tailscale's log upload turned off on iOS (a truffle Swift option);
+     - iPad: one window in v1, its words, and a pass on 11- and 13-inch iPads;
+     - build 6 internal, then the owed device checks;
+     - the marks' permission emails (James);
+     - the review Mac, the review identity and the filmed video (LP-D5, D6; `draft/launch/review-mac-runbook.md`);
+     - external TestFlight through Beta App Review;
+     - the Mac's add-phone door naming the App Store.
+   - **Phase 4, the gate and the cut** (target 19 Nov):
+     - The gate: phase 1 done; A, B and D done; C measured, and fixed or said in the notes; the scope frozen; James on a
+       signed nightly every day for five days (RL6); and one person who isn't James installs from vibefield.dev on a
+       clean Mac and gets an agent running.
+     - Owed before the cut: measure the order of `releases.atom` and of the sign job's "previous" pick on a scratch
+       repository (`draft/launch/policy-only-release.md` §4.3). If they follow commit dates, F1 (carry by publish
+       order) and F2 (tag on a fresh cut commit) land first, on James's call.
+     - The cut: 0.9.0 committed in `apps/desktop/package.json` and the iOS MARKETING_VERSION; `release/0.9` made
+       (LP-D3); James pushes `v0.9.0-beta.1` and approves twice. Its rows: W10, the clean-Mac row from the website, and
+       a channel row.
+   - Dropped for 0.9: EDP-22's universal build (LP-D9: Apple silicon only; revisited at 1.0 if Intel users ask). Still
+     owed: the build job's `macos-26` image (the Xcode 26.3 pin stands until then).
+8. **Then the soak, and stable `v0.9.0`** (target 3 Dec).
+   - The soak:
+     - betas from `release/0.9`, each with W10 and the beta-to-beta update on two Macs;
+     - a yank drill on the beta channel through the policy-only path (LP-D19);
+     - iPhone and iPad 0.9.0 submitted by 24 Nov with manual release (LP-D10), released the same hour as the Mac stable.
+   - The exit: seven days on the newest beta with no open crash, data-loss, security or update-failure bug; a
+     beta-to-beta update witnessed; clean installs passing on every supported macOS; and App Review's approval.
+   - Main moves to 0.10.0 the same day.
+   - Before 1 Feb 2027: a Developer ID certificate under G2, in CI, with its swap drill.
+   - 1.0 adds Linux (RL3 (a); no Linux leg exists) and, on James's call, Windows (RM-4; the 10-26 production-readiness
+     read put it out of scope; Azure signing unstarted).
 
 ## 4 Parked — valid, unscheduled
 
@@ -720,7 +774,7 @@ field, heard"; the page *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`)
 | FS | FS-3 the files consumer on the desk (a kind or panel; `pickFolder()` → `attach(root)` is built) · FS-4 over DS-7's road (one route per owner desktop, `OwnerRoutes`; the workspace serve needs its DS-L6 claim) · FS-5 the phone viewer · GitService replaces the interim git port (R2; M5) | a desk lane · mille's release | `thinking-files-service.md`, `draft/files-service/build-fs.md` |
 | FW — the freeway | F1's device round before leaving `-vf-freeway`, which witnesses F1b's exit (the kit asks through its home since 11-01, `284e4af9d`; LANDED "F1b's kit half") · FD1/FD2 (truffle precondition met; need an owner), FD3/FD4, F4, FW-D10's slice, FW-R1…R10 · FW-DF-1/DF-2 (§6) | James's device round; an owner for FD1/FD2 (History lead) | `draft/thinking-freeway.md` v0.3 §13/§14/§16; LANDED "F1b — the forwarded phone approval", "F1b's kit half" |
 | AR-6 — approvals + prompts | Phase 0 paid (P0-H, 09-25); AG-1 shipped as AR-S1/AR-S2. Waits on AR6-D1…D9 (unindexed; re-verify §0's anchors at the pinned puppeteer). PU-15 rides it. A 1.0 exit | James rules AR6-D1…D9 | `thinking-ar-approvals-prompts.md` |
-| AR-7 later slices · AR-S4e3 | AR-7f leak detector, AR-7h bash/fish, AR-7i prewarm (AR-7j is a beta blocker) · S4e3 options, Needs/Needed by, EX6/EX7, other profiles | an AR lane | `thinking-ar7-typed-agents.md` §5.6, `thinking-ar-agents-settings.md` |
+| AR-7 later slices · AR-S4e3 | AR-7f leak detector, AR-7h bash/fish, AR-7i prewarm (AR-7j LANDED 2026-11-05, M128 `45c3680a3`) · S4e3 options, Needs/Needed by, EX6/EX7, other profiles | an AR lane | `thinking-ar7-typed-agents.md` §5.6, `thinking-ar-agents-settings.md` |
 | MV-8b ruling 8 | the transcript-provider migration: puppeteer 0.2.3 still ships adapter-claude's `observation/transcript/provider.ts` | its own track after MV | DECISIONS MV-8b, `docs/agent-plane/architecture.html` |
 | MV · SB | third-party views (MV-D14) · SB-4, SB-6 (after DS); SB's M4/L7/M5/L8 RULED at the built leans (Q14); SB-5 was delivered by PJ-7 (PJ-7's own Q4) | the next MV slot | `design-mv.md`, `thinking-spawn-bloom.md` |
 | Desk Phase 6 | STRING (ports on objects, ICE's wires, the Wire tool DK-D29) · OBJECT KIT (panel, controls, screens, cables, `process`) · AGENT'S EYES, now the tool plane's rooms (`thinking-tool-plane.md` §13; the `canvas_*` rows for DK-D26's MCP canvas tools; DT-5's control lane, the reserved `surface.control` scope) · UPLOAD PLANE + the mini-app bridge (SP-D9/SP-D7; UP v0.1 and MB v0.1 drafted 10-01; UP-D1…D8, MB-D1…D9 unruled; AH-D10's cross-device CAS rides it). It replaces the four dogfood packs (Q9); the microservice pack retires or becomes an OBJECT KIT `process` candidate | a thinking doc each; STRING first | `thinking-desk-migration.md`, `thinking-upload-plane.md`, `thinking-mini-app-bridge.md` |
@@ -995,7 +1049,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
 | EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); Swift rejoin; mille's release |
-| AR — agent runtime | PARKED; AR-3…AR-5b, AR-7, AR-S1…S4e2, AR-S5 landed | `thinking-ar-agent-plane.md`, `thinking-ar-data-topology.md`, `thinking-ar7-typed-agents.md`, `thinking-ar-agents-settings.md` | AR-6 on AR6-D; AR-7j for the beta |
+| AR — agent runtime | PARKED; AR-3…AR-5b, AR-7, AR-7j, AR-S1…S4e2, AR-S5 landed | `thinking-ar-agent-plane.md`, `thinking-ar-data-topology.md`, `thinking-ar7-typed-agents.md`, `thinking-ar-agents-settings.md` | AR-6 on AR6-D; AR-7j LANDED (M128 `45c3680a3`) |
 | MV — monitor views | PARKED; landed 10-08 | `draft/monitor-view-sdk/design-mv.md`; DESIGN.md §8 | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); item 39 and the tuck wait on a later release; QL ratifications |
 | History (AR-8) / PJ | PARKED; PJ-1…4, 6, 7 landed; DS-7 hands the room another desktop's sessions | `build-hf.md`, `thinking-ar-history-room.md`, `thinking-project-places.md` | R8/R9; B-D4/B-D5; PJ-5 re-judged; PJ-8 (unblocked) |
 | DS / SP — sync planes (was C — mesh) | PARKED; waves 1–3 and DS-7 landed | design-04, `design-06-sync-planes.md`, `thinking-desktop-sync-plane.md`, `thinking-sync-planes.md`, `thinking-c6-meshdata.md` | the two-desktop run (James); DS-9; SP-7 |
