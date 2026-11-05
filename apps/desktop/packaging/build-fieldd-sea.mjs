@@ -1075,9 +1075,10 @@ async function verify({ exe, manifest }) {
         : `transcript-host role: ${c2.reason ?? `the ticket's port ${c2.ticketPort} is not the listener's ${c2.port}`}${c2.stderr ? ` — stderr: ${c2.stderr.trim().split("\n").slice(-3).join(" / ")}` : ""}`,
     );
 
-    // Probe C3 (CP-4a2a) — the executable in its flows-host ROLE: the host loads its bundle staged beside it, locks the
-    // realm down, says ready on its IPC pipe, runs one script whose one call fieldd answers, and reports the realm
-    // frozen and no `process` in the compartment. The packaged half of a run's host.
+    // Probe C3 (CP-4a2a) — the executable in its flows-host ROLE: the host loads its bundle staged beside it, says
+    // ready on its pipe (fd 3, one JSON message a line), starts the script's worker from the same bundle, which locks
+    // its realm down, runs one script whose one call fieldd answers, and reports the realm frozen and no `process` in
+    // the compartment. The packaged half of a run's host.
     const c3 = await flowsHostProbe({ exe: cleanExe });
     say(
       c3.ok === true,

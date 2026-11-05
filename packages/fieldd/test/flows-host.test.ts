@@ -268,8 +268,9 @@ describe("CP-4a2a — the flow host: lockdown, the compartment, the environment"
       });
       const said = await logged(logs);
       expect(said).not.toBe("timeout");
-      // macOS adds its own __CF_USER_TEXT_ENCODING to every process it starts, whatever env it was handed (measured on
-      // this Mac, 2026-11-05): the system's, never fieldd's
+      // __CF_USER_TEXT_ENCODING is the macOS loader's own key: CoreFoundation's loader sets it in every process the
+      // system starts, whatever environment it was handed (measured on this Mac, 2026-11-05), so it is the system's,
+      // never fieldd's, and the one key past PATH this row lets through
       const keys = (JSON.parse(said) as string[]).filter(
         (key) => key !== "__CF_USER_TEXT_ENCODING",
       );

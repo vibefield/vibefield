@@ -145,7 +145,8 @@ const STDERR_TAIL_MAX = 4_096;
 const kib = (bytes: number): string => `${Math.floor(bytes / 1024)} KiB (${bytes} bytes)`;
 
 /** The child's environment: PATH alone (4A2-Q6 (b)), so no FIELD_* or FIELDD_* variable, and nothing else of
- * fieldd's, reaches a person's script or the runtime under it (EL7). */
+ * fieldd's, reaches a person's script or the runtime under it (EL7). On macOS the child also holds
+ * __CF_USER_TEXT_ENCODING: the macOS loader's own key, which the system sets in every process it starts. */
 function flowsHostEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const path = source["PATH"];
   return path === undefined ? {} : { PATH: path };
