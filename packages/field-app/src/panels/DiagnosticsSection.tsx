@@ -215,7 +215,7 @@ export interface DiagnosticsSectionProps {
   appVersion?: string | undefined;
 }
 
-export function DiagnosticsSection({ appVersion }: DiagnosticsSectionProps = {}): ReactElement {
+export function DiagnosticsSection({ appVersion }: DiagnosticsSectionProps): ReactElement {
   const client = useFielddClient();
   const host = getHost().diagnostics;
   const [openFeed, setOpenFeed] = useState(true);
