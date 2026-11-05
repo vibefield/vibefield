@@ -137,6 +137,10 @@ public final class HistoryDesktopReader: Identifiable {
   @ObservationIgnored private var liveSince: [String: String] = [:]
   @ObservationIgnored private var paused = false
   @ObservationIgnored private var closed = false
+  /// ITEM 109 — per session, the running fill's number (a newer reset's fill supersedes it) and the newest held
+  /// ordinal it reads down to
+  @ObservationIgnored private var fillNumbers: [String: Int] = [:]
+  @ObservationIgnored private var fillTargets: [String: Double] = [:]
 
   public init(
     deviceId: String, name: String, isHome: Bool = false, door: (any HistoryDoor)?, ownsDoor: Bool = false,
@@ -320,11 +324,7 @@ public final class HistoryDesktopReader: Identifiable {
       } catch {
         // the session was rewritten under the cursor: the head is read again
         if let refusal = error as? FieldProductError, refusal.kind == "PRECONDITION_FAILED" {
-          headers[sessionId] = nil
-          rows[sessionId] = nil
-          cursors[sessionId] = nil
-          closeTail()
-          openSession(sessionId)
+          reopen(sessionId)
           return
         }
         refused(error)
@@ -386,7 +386,7 @@ public final class HistoryDesktopReader: Identifiable {
     guard let snapshot = try? IndexSessionTailSnapshot(json: payload) else { return }
     var held = rows[sessionId] ?? [:]
     let before = held.values.map(\.ordinal).max() ?? -1
-    // the snapshot is the newest rows; what the pages read before it stays
+    // the snapshot is the newest rows; what the pages read before it stays, and a hole between is filled
     let oldest = snapshot.rows.map(\.ordinal).min() ?? 0
     for (id, row) in held where row.ordinal >= oldest { held[id] = nil }
     for row in snapshot.rows { held[row.timelineId] = row }
@@ -394,6 +394,7 @@ public final class HistoryDesktopReader: Identifiable {
     let appended = snapshot.rows.filter { $0.ordinal > before }.count
     if appended > 0, before >= 0 { arrivals[sessionId, default: 0] += appended }
     rebuildDocument(sessionId)
+    if before >= 0, oldest > before { fillHole(sessionId, below: oldest, reaching: before) }
   }
 
   private func tailDelta(_ sessionId: String, _ payload: JSONValue) {
@@ -409,6 +410,97 @@ public final class HistoryDesktopReader: Identifiable {
     rows[sessionId] = held
     if appended > 0 { arrivals[sessionId, default: 0] += appended }
     rebuildDocument(sessionId)
+  }
+
+  // MARK: The hole (item 109)
+
+  /// ITEM 109 — a tail reset (the tail re-opened after a pause, rosetta's resync, a rewrite, fieldd's restart)
+  /// carries a tailnet caller's newest `INDEX_TAILNET_LIMITS.MAX_ROWS` rows. When more than those arrived after the
+  /// newest row held, the rows between are in no page a cursor reaches: the older cursor points below the first
+  /// page read.
+  ///
+  /// The head is read again by `index.timeline`, page after page, until a page holds a row at or below the newest
+  /// held ordinal, or the session's top, at most `HistoryReads.fillPages` pages. The pages' rows land by timeline id
+  /// below the reset's oldest (the tail's own rows above it are newer). A fill that meets no held row drops the held
+  /// rows below its last page, says so in the log, and re-seats the cursor on that page's, so the copy is contiguous
+  /// and the older pages read on as after a fresh open. Overlap is read by ordinal alone, never by its density. A
+  /// reset during a fill restarts it, reading down to the lower of the two; a rewrite under its cursor re-opens the
+  /// session as the older pages do.
+  private func fillHole(_ sessionId: String, below oldest: Double, reaching newestHeld: Double) {
+    guard let door, !closed else { return }
+    let target = min(newestHeld, fillTargets[sessionId] ?? newestHeld)
+    let number = (fillNumbers[sessionId] ?? 0) + 1
+    fillTargets[sessionId] = target
+    fillNumbers[sessionId] = number
+    tasks["fill/\(sessionId)"]?.cancel()
+    tasks["fill/\(sessionId)"] = Task { [weak self] in
+      guard let self else { return }
+      var cursor: String?
+      var read: [IndexTimelineRow] = []
+      var met = false
+      var pagesRead = 0
+      do {
+        while pagesRead < HistoryReads.fillPages {
+          var params: [String: JSONValue] = [
+            "sessionId": .string(sessionId), "limit": .int(Int64(HistoryReads.pageRows)),
+          ]
+          if let cursor { params["cursor"] = .string(cursor) }
+          let page = try await door.call("index.timeline", params: .object(params)).decode(IndexTimelineResult.self)
+          guard !Task.isCancelled, fillNumbers[sessionId] == number else { return }
+          pagesRead += 1
+          read += page.entries
+          cursor = page.nextCursor
+          if page.entries.contains(where: { $0.ordinal <= target }) {
+            met = true
+            break
+          }
+          if cursor == nil { break }
+        }
+      } catch {
+        guard !Task.isCancelled, fillNumbers[sessionId] == number else { return }
+        endFill(sessionId)
+        if let refusal = error as? FieldProductError, refusal.kind == "PRECONDITION_FAILED" {
+          reopen(sessionId)
+          return
+        }
+        refused(error)
+        return
+      }
+      endFill(sessionId)
+      var held = rows[sessionId] ?? [:]
+      for row in read where row.ordinal < oldest { held[row.timelineId] = row }
+      if !met, let lastPageOldest = read.map(\.ordinal).min() {
+        let dropped = held.values.map(\.ordinal).filter { $0 < lastPageOldest }
+        for (id, row) in held where row.ordinal < lastPageOldest { held[id] = nil }
+        cursors[sessionId] = cursor
+        if let low = dropped.min(), let high = dropped.max() {
+          let reason =
+            cursor == nil
+            ? "the session's pages hold no row at or below it, and its top is \(ordinalText(lastPageOldest))"
+            : "the fill did not reach it in \(pagesRead) pages; the older pages read on from "
+              + ordinalText(lastPageOldest)
+          self.log(
+            "history[\(deviceId)] \(sessionId): a tail reset left a hole above ordinal \(ordinalText(target)); "
+              + "dropped \(dropped.count) rows, ordinals \(ordinalText(low))–\(ordinalText(high)); \(reason)")
+        }
+      }
+      rows[sessionId] = held
+      rebuildDocument(sessionId)
+    }
+  }
+
+  private func endFill(_ sessionId: String) {
+    tasks["fill/\(sessionId)"] = nil
+    fillTargets[sessionId] = nil
+  }
+
+  /// A session rewritten under a cursor: what was held goes, and the head is read again.
+  private func reopen(_ sessionId: String) {
+    headers[sessionId] = nil
+    rows[sessionId] = nil
+    cursors[sessionId] = nil
+    closeTail()
+    openSession(sessionId)
   }
 
   // MARK: Search
@@ -469,4 +561,9 @@ public final class HistoryDesktopReader: Identifiable {
       standing = .asleep
     }
   }
+}
+
+/// An ordinal as a log line says it: rosetta's are whole numbers.
+private func ordinalText(_ ordinal: Double) -> String {
+  ordinal.rounded() == ordinal && abs(ordinal) < 1e15 ? String(Int64(ordinal)) : String(ordinal)
 }
