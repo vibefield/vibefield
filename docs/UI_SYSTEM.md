@@ -125,10 +125,18 @@ The catalog currently mounts these shipping views directly:
     panel — a spark just hatched saying hello with its three starters, which send nothing there,
     the same starters waiting while a starter's send runs, and none where the shown spark has
     had a turn
+  - the flow (TH-1, DESIGN.md §8 "Chat's thread"): the shipping `ThreadFlowView`, handed to the
+    panel in the pane's place, over the product's own projection (`transcriptItemsOf`) of fixture
+    transcript lines and the product's own receipt words (`chat-fixtures.ts`), never a copy of its
+    markup or CSS — a new spark with its hello, a worked thread with its tools folded and one opened,
+    a long reply in the markdown subset, a spark asleep, two runs joined and "Earlier
+    conversations", every receipt, Thinking…, the three honest lines, and the conversation reading
+    and unreadable. *Dated 2026-11-05 (TH-1; ER-C21):* the pane's plates above (`SparkPaneView`'s
+    words) stand until the pane leaves Chat, TH-1's last commit, and the flow's take their place
 - Chat's needs-you card (CP-3, DESIGN.md §8 "Chat's list", "Chat's thread"): a plate of the shipping
   `ChatPanelView` with a spark asleep while the needs-you queue holds its held send (its word Needs
   your OK, its line still asleep with Wake, and Vela's own run's ask read once, as her row's
-  blocker), where the product's own `waitingCardOf` stands its card in the thread in the hello's
+  blocker; since TH-1 that ask is a card too, held at the flow's foot), where the product's own `waitingCardOf` stands its card in the thread in the hello's
   place; and in a specimen of its own (`NeedsCardPreview`), the shipping `NeedsCardView` over the
   product's own `needsCardOf` of fixture items — a spark's question (1 of 3), a held send, a held
   spawn past the cap, an agent's ask with Show alone, a kind this build does not know, answering,

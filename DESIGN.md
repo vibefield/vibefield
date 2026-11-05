@@ -594,7 +594,7 @@ is the star alone, with no disc.
 |---|---|---|
 | Chat's list row (CH-D1) | 40 px | framed, live while it works |
 | A thread's head | 40 px | framed, live |
-| A message's lead, in its thread (since SP-1d, the hello's: §8 "Chat's thread") | 28 px | framed |
+| A message's lead, in its thread (since SP-1d, the hello's; since TH-1, Vela's rows, once per run of them: §8 "Chat's thread") | 28 px | framed, a still |
 | @'s menu row · a chip in the line (no wearer since SP-1d: Chat's @ lists no sparks, S-5) | 24 px · 18 px | framed |
 | The New spark sheet's hatch | 104 px | free |
 | Its profile card | 64 px | free |
@@ -1097,7 +1097,9 @@ HN-8, §8 "The head"). Under reduced motion the deck is at its end at once.
 Loops are for an indicator waiting on a fact it cannot predict, never for decoration (QL-2's
 launch, §8): a **breath** — `ease-in-out`, alternate, 1.1s, scale 1 → 1.06 — and a repeating
 **travel** on the island curve (the launch's ripple, 1.1s). Both stop the moment the fact
-arrives, and neither runs under reduced motion.
+arrives, and neither runs under reduced motion. *Since TH-1 (2026-11-05):* Chat's Thinking… dots (§8 "Chat's thread")
+are a breath on its timing that breathes ink, not scale: each dot from 35% of its ink to all of it, a third of a
+breath after the dot before. Under reduced motion they stand still at 60%.
 
 *Since SP-1e2 (2026-11-05; SPE-Q35 (b), on James's plate RU-18):* a Working row's mark on Chat's crew card (§8
 "Chat's crew card") is a breath on its timing that breathes ink, not scale: a ring 10 round scaled by 1.06 moves less
@@ -1527,7 +1529,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - Under the pointer the row takes the foreground at 4%; the chosen row takes the ready fill.
   - **The thread it shows** is the chosen spark's. Chat opens on the newest spark and keeps it until you choose
     another: by its row, or by the New spark sheet's hatch (SP-1c). A spark whose activity is newer moves up the list
-    and never takes the thread, nor the keyboard in its pane.
+    and never takes the thread. *(Dated 2026-11-05, TH-1; ER-C1: "nor the keyboard in its pane" left with the pane.)*
   - **Needs you (S-4):**
     - A spark needs you while its own run waits on you (a blocker on its own row), and, since CP-3, while the needs-you
       queue holds an item for it: its question, its held send or spawn, or an ask from an agent it started (§8 "Chat's
@@ -1591,6 +1593,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       you in its pane (a run fieldd is waiting to resume says nothing yet). Send waits for that before it pastes (§8
       "Chat's composer"). The queue also lists the asks of the spark's own run; Chat reads each of them once, as its
       own row's blocker.
+      *Amended 2026-11-05 (TH-1; ER-C2):* no pane is mounted in Chat, and Send waits on nothing before it queues: fieldd
+      delivers at the run's idle (§8 "Chat's composer"). Vela's own run's ask draws its card (TH-Q29 (a)), and its row's
+      blocker and its item are read once, as one need: its key for the views track's note is the item's.
   - **The thread's column at SP-1b:** the chosen spark's head, 72 tall (padding 0 18 0 24, the hairline at its foot):
     the face at 40, framed and live, the name 15 semibold, and the status word under it (12, tertiary). Under the head
     is one line in secondary ink with one act:
@@ -1672,72 +1677,107 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Created, the face flies to its row in Chat (§2.10), the sheet folds, and Chat chooses the new spark.
   - **Reduced motion:** no falling star and no flight; the face fades in, and the sheet appears and leaves by opacity
     alone.
-- **Chat's thread — the spark's own pane, at first light** (SP-1d; its row in `draft/compose-plane/
-  thinking-roled-agents.md` §17; CH-D5 and NS-D4 ruled A by James on 2026-10-30, on the Sparks page; the thread's seam,
-  the deck's pane and the hand ruled by VF-PM 2026-10-31 16:35Z, James's to overturn). The thread is the spark's own
-  session, in its own terminal, in Chat's thread column. No messages are drawn: the pane is the transcript. The live
-  cards (CH-D2) are not drawn at SP-1d. They come with **SP-1e**, which writes their entry here first, with their data:
-  a job that groups a spark's spawns, and a door that lists its watches. Chat's thread pane takes no card at SP-1d: it
-  joins the places that take one with SP-1e.
-  - **The column is a fixed box:** the head, the pane, then the foot, in one column centred under the head, as wide as
-    the composer: 640, or the thread's width less 56 where that is narrower.
-    - The head stays SP-1b's (72): the face at 40, framed and live, the name and the status word. It is the pane's head.
-    - The pane stands 16 under the head's hairline and takes every height the head and the foot leave.
-    - The foot holds the composer, 12 under the pane and 16 above the panel's foot.
-    - Nothing the thread shows changes the pane's size: what stands in the thread stands over it (below).
-    - At 1180 × 780 the pane is 640 × 472, x 406–1046, y 140–612: about 80 columns and 24 rows.
-  - **The pane** is the deck's pane, mounted. It is a second view of the spark's floor session, as the Peek's is (one
-    decode, two presents), in the deck's own theme, effects and cell grid (§2.7), so it reads as the pane Godview
-    shows. It is the bare terminal, with no pane frame: no badge, readout or Stop. The thread's head is its head.
-    - It sits in a well: corners `--vf-godview-deck-well-radius` (10), the terminal 1 in from its edge and clipped at
-      9, and the hairline (`--vf-hairline`) drawn over it as a 1px inner ring.
-    - The well is painted in the terminal's own ground, `--vf-godview-terminal-bg`, projected from the theme the pane
-      is handed, as the deck sheet is. The pane keeps the panes' own 82% ground, which over its own colour composites
-      to it exactly, so Chat's white never shows through.
-  - **It takes input.** A click puts the keyboard in it, and keys go to the session as they do in Godview. The pane
-    that holds the keyboard sizes the session's terminal (DS-D5). The thread's pane takes the size when it takes the
-    keyboard, by a press in it or a send (§8 "Chat's composer"), and keeps it until another pane takes the keyboard.
-    Shown, it takes the size only when no pane holds it. Mounted under another view's cover (a wake, a terminal named
-    late) it claims no size at all until Chat shows it. Until then it draws the terminal at the size the last pane
-    gave it, cut at its edges where that is larger. ⌘W stays the window's, as in every view but Godview.
-    - It holds the keyboard only while Chat is the view, and lets it go when Chat stops being the view. A send whose
-      paste lands after you left Chat (its wait outlived your stay) pastes without taking the keyboard or the size.
-      Back in Chat, the pane takes them only on a press or a send.
-  - **It draws only while Chat is the view.** Under another view's cover it stops, as the deck does. Godview's pane on
-    the same session stays Godview's: only the one on screen draws, and the keyboard is in at most one of them.
-  - **When there is no pane to draw,** the pane's place stands without its well, on the panel's own chrome, and says
-    why in 13 regular secondary ink, centred, as the line under the head is drawn. It is never a blank:
-    - "Finding Vela's pane…" while its terminal is being found: the floor's sessions are being read, or the spark is
-      awake and fieldd has not named its terminal yet, as just after a hatch or a wake. It waits up to 20 s.
-    - "Vela's terminal is not on this desktop's floor." when the floor answers and holds no such terminal, or none was
-      named in those 20 s.
-    - "Couldn't find Vela's pane: …", in the floor's own words, when the floor did not answer ("the floor did not
-      answer in 10 s"), or in the window's own when its terminals could not start. A floor that did not answer is
-      never said not to hold the terminal.
-    - Until its pane is drawn, it is asked again whenever the floor may have moved: when the floor's sessions are read
-      again (the deck reads them), or this window's terminals start or are replaced. So a terminal that appears later
-      is drawn.
-    - "This window has no terminals to show it with." in a window with no terminals (the catalog, a browser): the
-      Peek's words.
-    - Asleep or not started there is no pane. The line under the head says so, with its act (§8 "Chat's list").
-  - **The thread's items** stand over the pane, never in its flow. They stand in the foot, as wide as the composer,
-    their foot 12 above the composer's top (at 1180 × 780, y 612, the pane's own foot), and they grow upward over the
-    pane. One rule holds every item: it covers the pane's bottom rows and never moves or resizes
-    the pane, so a live agent's screen never reflows under it. The rows it covers are where an agent's own input box
-    sits, so each item's entry says what it covers and when it leaves. @'s list stands over the items.
-    - At SP-1d the one item is the hello and its starters (below). CP-3's needs-you card (CP3-D8) joins them by the
-      same rule, with its own entry here when its slice draws it, and so do the live cards at SP-1e. *Drawn at CP-3,
-      2026-10-31:* the needs-you card, its entry below the hello's. One item stands at a time: while a card stands, the
-      hello does not.
-    - A question the spark's own agent asks in its pane (a permission, a question) draws no item: the pane shows the
-      ask itself, and the row's word says it (Needs your OK, Asking you).
+- **Chat's thread — the spark's conversation, drawn** (TH-1, track CO; the thread's round ruled by James on the CO
+  round's page, `Druyc3Ua6BWycRe1SzzeCz`, 2026-11-02 and 2026-11-04, every mark at its lean but TH-Q3 (b), and by
+  VF-PM 2026-11-04 05:01Z and 23:22Z, TH0-Q1…Q15; the plan `step0-th.md`). The thread is the spark's own conversation,
+  drawn as one: your words in bubbles at the right, Vela's beside its face, what it did as quiet lines, and what waits
+  on you at the foot. It is read from the spark's transcript, which VibeField keeps (below). The spark's terminal is
+  not in Chat: it stays the agent's, in Godview, where ⌃C, slash commands, scrollback and the program's own menus are.
+  The live cards (CH-D2) still come with **SP-1e**, which writes their entry here first; they stand in the flow.
+  *Amended 2026-11-05 (TH-1):* this entry was "Chat's thread — the spark's own pane, at first light" (SP-1d,
+  2026-10-31). The thread was the spark's session in its own terminal, mounted in the thread's column as a second view
+  of its floor session, in a well, with the keyboard and the session's size, and "no messages are drawn: the pane is the
+  transcript"; the thread's items stood over the pane's bottom rows. The pane leaves Chat with TH-1. Its rules are in
+  git (`git log -p -- DESIGN.md`); its place's words, which the pane says until it leaves, are kept in §9 "Chat's
+  words".
+  - **The column:** the head, the flow, then the foot, in one column centred under the head, as wide as the composer:
+    640, or the thread's width less 56 where that is narrower.
+    - The head stays SP-1b's (72): the face at 40, framed and live, the name and the status word. It is the thread's
+      one live face; every lead in the flow is a still (§2.10).
+    - The flow stands under the head's hairline and takes every height the head and the foot leave. It scrolls with no
+      bar, as the list's rows do, padded 6 at its top and 26 at its foot, its items 14 apart. It opens at its foot and
+      stays there while new lines land; scrolled up, it stays where you put it.
+    - The foot holds what waits on you (the needs-you card, below), then the composer, 12 under the flow and 16 above
+      the panel's foot.
+  - **The spark's transcript** (TH0-Q1 = O1, VF-PM 2026-11-04 05:01Z; AR-L1). VibeField keeps the spark's
+    conversation as its own record: never the agent's own file, and never History's. fieldd writes it from the agent
+    runtime's provider-neutral events (a reply, a turn's start and end, a tool asked for, by its kind) and from
+    VibeField's own facts (your words with their chips, their receipt, a wake, an answer, a notify), one file per run,
+    in VibeField's app data under the spark's custody, outside History by construction. Each line is checked under
+    fieldd's own key, and a line that fails is never served. The window reads it through a ticket, never through
+    fieldd's own wire (EL2).
+    - It starts at TH-1's landing. A spark's turns before then are in its terminal only (the honest lines, below).
+    - It keeps no reasoning, no compaction, and no permission or question event: the needs-you card holds an ask.
+    - It is a second copy, the agent's own file the first: a `/clear` or a rewind in the terminal changes that file,
+      never the record, and the terminal stays the truth.
+    - While it is first read, the flow says "Reading Vela's conversation…". When it can't be read, the flow says
+      "Couldn't read Vela's conversation: ‹fieldd's words›". Each is 13 regular in secondary ink, centred in the flow,
+      as Chat's other honest lines are, and the window asks again when its client is connected again. Never a blank.
+  - **Every run, one conversation** (TH-Q14 (b), James 2026-11-04 23:03Z; TH0-Q6 (c)). A wake resumes the spark's
+    conversation in a new run, and the flow joins those runs as one. A wake that cannot resume starts a new
+    conversation. The flow shows the latest. The earlier ones open from one quiet row at its top, "Earlier
+    conversations (3)", in the quiet lines' look with `chevron` turned up at 13. Pressed, they stand above in order,
+    each opened by a day line, "A new conversation · Nov 3", and the row leaves.
+  - **Its rows, from the top:**
+    - **Day lines,** where the day changes: centred, 11/500 in tertiary ink, padded 14 at their top (the Sparks page's
+      `m-day`). "Today", "Yesterday", else the weekday and the date ("Mon, Nov 2"), by the window's own clock.
+    - **Your words** stand at the right in a bubble: at most 76% of the column wide, padded 9 14, corners 18, on
+      `--vf-fill`, in 14 regular at 1.45 in primary ink, their line breaks kept. Under it, at its right, its receipt
+      (below).
+      - A chip you sent is drawn as a chip in it (TH-Q25 (a)): padded 1 6, corners 6, 12.5/500 mono, on solid chrome
+        ringed by the strong hairline. Chips are read from the record's spans, never from words that look like one, so
+        words typed like a chip are your words. A session chip is drawn by its words ("Claude Code in vibe-field");
+        the run id it carries for the spark's tools is in the record and never drawn.
+      - Words typed into Vela's terminal in Godview are yours too, drawn the same way, with no receipt.
+    - **Vela's words** stand beside its face, 28, framed and still (§2.10, a message's lead), then 12. The face leads
+      once per run of Vela's rows: a reply, a quiet line or Thinking… after another of Vela's rows does not repeat it.
+      The words are 14 regular at 1.55 in primary ink, padded 4 at their top.
+      - Each reply is drawn whole when it lands, never streamed (TH-Q2 (a)), and whole however long (TH-Q10 (a);
+        TH0-Q9: no reading bound and no Show the rest). A reply the agent rewrites is drawn again in its place.
+      - They are its text, escaped first, then drawn in a named subset (TH-Q35 (a)): paragraphs and line breaks,
+        **bold** and *italic*, `code` (padded 1 5, corners 5, 12.5/500 mono, on `--vf-fill`), fenced code (the same
+        mono at 1.45 on `--vf-fill`, corners 8, padded 8 10, scrolling within itself), lists, and quotes (a 2-wide
+        hairline at their left, padded 10). A heading is a bold paragraph. A link is drawn as its words, inert: an
+        agent's text is the adversary's (EL7), so a link, or an act drawn inside it, is a lure. Nothing else is read as
+        markup.
+    - **What it did, as quiet lines** (TH-Q12 (a)), in the lead's place: 12.5 regular at 1.3 in tertiary ink, 22 tall
+      at least, its glyph at 13, then 7.
+      - **Its tools, one line a turn** (TH-Q1 (a + ii), James): "Used 3 tools" (`code`). Pressed, it opens its rows,
+        one per tool in the turn, each by its kind in VibeField's words, then what it touched in mono (§9 "Chat's
+        words"), 6 apart; pressed again, it folds. Never a tool's own name, from any agent (AR-L1). VibeField's own
+        tools leave the count, since what they did stands as its own line.
+      - **VibeField's own acts** (CO-Q1 (b), James; TH-Q12 (a)): a wake that told it something (`resume`), an answer
+        you gave (`check`), a notify (`message`), and SP-1e's crew. They are typed lines in the record, never words read
+        for a prefix, so nothing a person or an agent types is drawn as one.
+    - **Thinking…** stands at the flow's foot while Vela's own run works (its board row, TH-Q2 (a)): three dots, 5
+      round and 4 apart, in tertiary ink, then "Thinking…" in the quiet lines' words, in the lead's place. It carries
+      no text: a reply is drawn once it is whole. The dots are a breath (§6).
+  - **The honest lines** (TH0-Q7 (a), James's; each a defect state, never a choice), in the quiet lines' look with
+    no glyph:
+    - over a spark that worked before its record began: "Earlier messages are in Vela's terminal", at the flow's top;
+    - where fieldd was not listening while Vela moved (a restart mid-turn; written only on that evidence): "Part of
+      this conversation happened while VibeField restarted — it's in Vela's terminal";
+    - where a line failed its check and was not served: "Part of this conversation couldn't be checked, so it isn't
+      shown", said once, at the flow's top.
+  - **Your bubble's receipt** (TH-Q4 (a); PC-L1, one Chat: §9 "Chat on the phone"'s words): 11.5 regular in tertiary
+    ink, 6 under the bubble at its right. Your words are queued to the spark's input (Send, §8 "Chat's composer"),
+    never pasted, and land at its next idle moment:
+    - the bubble is drawn at the press, with no receipt until fieldd answers the send;
+    - "Waking Vela…" while the spark is woken for it;
+    - "Queued" while it waits its turn; "Queued · Vela is busy; it lands when it's done" while Vela works; "Queued · it
+      lands after you answer Vela" while Vela waits on you, by a card at the foot or an ask in its terminal;
+    - "Delivered" once the agent has it;
+    - "Not delivered: Vela's session ended";
+    - "Vela may not have it: look in its pane", in the attention ink, when its delivery's answer was lost: it is never
+      resent (TH-Q32 (a));
+    - a word this build does not know says nothing.
+    The receipt is the record's, so a reload, or another window, says the same. Only your last bubble says
+    "Delivered"; an earlier one delivered says nothing more.
   - **The hello and three starters** (NS-D4 A, "Hello, and three starters"; CH-D5, "Starters show while a thread is
-    quiet"). A new spark says what it does, as its first words. They stand on one card of solid chrome, the thread's own
-    ground as the Sparks page draws it: corners 16, padding 14 16, ringed by the strong hairline, with the island
-    shadow.
-    - Its face at 28, framed (§2.10, a message's lead). 12 after it, in 14 regular at 1.55 (a message's measure) in
-      primary ink: "Hi, I'm Vela. I can start agents for you, keep track of the ones you run, and carry work between
-      them. What first?"
+    quiet"; TH-Q36 (a), ruled; CO-Q2 (b), James). A new spark says what it does, as its first words: the flow's first
+    row, drawn as Vela's words are, beside its face, with the starters under them.
+    - "Hi, I'm Vela. I can start agents for you, keep track of the ones you run, and carry work between them. What
+      first?"
     - 8 under the words and 40 in (the lead and its gap), the three starters, one per job, one under another, 8 apart:
       - `agents` "Spawn 4 Grok agents to research a topic each"
       - `panes` "Keep track of my agents in vibe-field"
@@ -1749,33 +1789,23 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **A starter** is 34 tall, corners 17, padded 0 14 0 11, on solid chrome ringed by the strong hairline, as wide as
       its words. Its glyph is 14 in secondary ink, then 8, then its words in 13/500 primary ink. Under the pointer it
       takes `--vf-fill` and rises 1, in 180ms on `--vf-ease-lift`. Pressed, it is sent as Send sends (§8 "Chat's
-      composer"): pasted into the pane, with Return left to you, its note Send's own. A thread takes one act at a
-      time, Wake's, a starter's or Send's, and a press while one runs does nothing. While a send runs, the starters
-      wait (busy), Send waits and Wake cannot be pressed, so two messages never sit in the agent's one input for a
-      single Return to send as one. While Wake's wake runs, Send and the starters wait, so a send never wakes the
-      spark a second time.
-    - **A send that is not taken** leaves the hello standing when it was refused before the pane took the keyboard:
-      the window has no terminals, the pane was not found or not heard, you left the thread or the spark fell asleep
-      before its pane was ready, Chat could not read its list, its input did not open, or the spark waits on you.
-      Once the pane has taken the keyboard for a send, the hello leaves with it, pasted or not, since the pane then
-      holds the keyboard.
-    - **What it covers:** at 1180 × 780 the card is about 200 tall, y 412–612, so while it shows it covers about the
-      pane's last ten rows, where a new agent's input box waits. It leaves the moment you write, so nothing you type is
-      under it. *TU-1 (2026-11-01; Q2 A, James, on a frame that drew the hello over the ask):* an ask is no turn
-      (below), so when a new spark's own agent asks before it has worked (a trust or permission menu at launch, a
-      question), the hello stands over that ask too. The head's word says it (Needs your OK, Asking you), and the ask
-      shows once you click into the pane, which takes the hello away, or write. That is the cost James chose.
-    - **When they show:** while the thread is quiet. Quiet means four things hold:
-      - the spark is new: it has never worked (below);
-      - its draft is empty;
-      - the pane does not hold the keyboard;
-      - nothing has been sent to it from this window.
-      The hello and starters leave the moment the draft holds anything, and come back if it is emptied. The pane
-      taking the keyboard, or the first send, takes them away for the window's life. A new window keeps no memory of
-      them (HN-D9's rule), so a spark that is still new says hello again.
-      *Amended 2026-10-31 (CP-3):* quiet takes a fifth, that nothing in the thread waits on you. While a needs-you card
-      stands (below), the hello and the starters do not show, and they come back when it leaves if the other four still
-      hold: a thread with something waiting on you is not quiet (NS-D4).
+      composer"): queued as your words, its bubble in the flow, its refusal Send's own note. A thread takes one act at a
+      time, Wake's, a starter's or Send's, and a press while one runs does nothing: while a send runs, the starters
+      wait (busy), Send waits and Wake cannot be pressed; while Wake's wake runs, Send and the starters wait, so a send
+      never wakes the spark a second time.
+    - **When they show:** while the spark is new (below) and its conversation holds none of your words and none of
+      Vela's: no bubble, drawn from the record or sent from this window and not in it yet, and no reply. The first send
+      takes them away, its bubble the conversation's first; a send refused leaves no bubble, so they stand. A needs-you
+      card at the foot does not take them away (CO-Q2 (b)): the hello stands first in the flow and the card at the
+      foot.
+      *Amended 2026-11-05 (TH-1; TH-Q36 (a), CO-Q2 (b)):* quiet said four things, then five: the spark new, its draft
+      empty, the pane not holding the keyboard, nothing sent to it from this window, and (CP-3) nothing in the thread
+      waiting on you. The hello was a card of solid chrome over the pane's last rows, "about the pane's last ten rows,
+      where a new agent's input box waits", so it left the moment you wrote. It is a row of the flow now and covers
+      nothing, so a draft no longer takes it away, nor does a card; the pane's keyboard left with the pane. "A send that
+      is not taken leaves the hello standing when it was refused before the pane took the keyboard" went with the paste
+      road. And an ask "is no turn", so the hello still stands while Vela's own first ask waits, now with its card at
+      the foot (TU-1, Q2 A).
     - **How "new" is read:** fieldd keeps it, and the window reads it.
       - A spark's record says whether it has ever worked: the time fieldd first saw one of its own sessions take a
         turn, or that none has yet. A turn is work: the agent at work, tokens spent, or an answer written. An ask
@@ -1790,17 +1820,21 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         refused): nothing says fieldd watches it.
       - A spark woken into its last session, or started afresh, is new only if it has never worked. A spark from
         before fieldd kept the fact, whose record says neither, is new only if it never started.
-      - Asleep, a spark that has never worked is still new. Its hello stands in the thread's foot under the line "Vela
-        is asleep" and its **Wake**, as a spark that has not started yet has its hello under "Vela hasn't started yet".
-        A starter is sent as Send sends (§8 "Chat's composer"), so it wakes the spark first.
-      - One case is open: a turn no fieldd saw. While fieldd is down, and after a restart that could not re-attach a
+      - Asleep, a spark that has never worked is still new. Its hello stands in the flow under the head, as a spark
+        that has not started yet has its hello. A starter is sent as Send sends (§8 "Chat's composer"), so it wakes the
+        spark first.
+      - *Narrowed 2026-11-05 (TH-1):* the case left open below, a turn no fieldd saw, now also waits on the record: a
+        conversation the record holds is no new spark's, and a gap the recorder finds (its honest line, above) is
+        none either. What no fieldd heard at all, with no evidence left at re-attach, is still unseen.
+        One case is open: a turn no fieldd saw. While fieldd is down, and after a restart that could not re-attach a
         run until fieldd resumes it at its next idle, the run's pane lives on and can still be typed into. If that turn
         has ended by the time fieldd watches the conversation again (a re-attach, or the resume that replaces the run),
         nothing reports it: the agent runtime replays only open work at attach, and an agent's transcript read back is
         a silent baseline. Its record then says no turn yet, so for a spark that had not worked before, the hello can
         stand over a conversation you had while nothing watched it. A run still mid-turn when fieldd attaches is seen
         at work, and its turn is kept then. Closing the case needs a reading of the conversation from outside fieldd's
-        watch at that moment: the agent runtime reporting the transcript it reads back, or the History index's turns.
+        watch at that moment: the agent runtime reporting the transcript it reads back (PU-Q, the petition), or the
+        History index's turns.
       *Amended 2026-11-01 (TU-1; Q1 and Q2 ruled A by James, Q3 to Q5 by VF-PM):* quiet's first said "its session has
       had no turn yet", and this read "new" from the board, cautiously: the spark's own run born within a minute of
       the spark's record, fieldd watching it, and no turn this window had seen (at work, waiting on you, or tokens
@@ -1813,20 +1847,26 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - They come in over 420ms on `--vf-ease-island`, from 8 below at opacity 0, and they go at once. With reduced
       motion they fade in over 120ms, and a starter's rise takes 90ms on ease-out (M6).
     - The hello is VibeField's words for what a spark does, drawn in its voice. It is never sent to the session and is
-      not in its transcript.
+      not in its transcript, VibeField's record included.
   - **The needs-you card — what waits on you, in the thread** (CP-3; CP3-D1, CP3-D4 and CP3-D8 ruled A by James
     2026-10-31 06:31:34Z; its drawing ruled by VF-PM 2026-10-31 16:35Z, James's to overturn, on the Sparks page's plates
     `qCard` and `askCard`, `sparks/src/kit.js`, and their `.k-card.ask` in `vf.css`). It is the needs-you queue's item
     for the thread's spark (§9 "The person's queue's words"), drawn by Chat, never by the spark (CP-D12). CP3-D8 named
     the thread's line at SP-1b for it, then SP-1d's card. CP-3 lands after SP-1d (VF-PM's order, 2026-10-31), so the
     line never carries an item.
-    - **What it shows:** the items for the thread's spark, the oldest first, one card at a time: its own questions, its
-      held sends and spawns, and the asks of the agents it started. The asks of its own run draw no card, since the
-      thread is that run's pane (above, the thread's items). When more than one waits, "1 of 3" stands at the eyebrow's
-      right, in data small, tertiary.
-    - **Where:** the thread's items' place (above), by their one rule: as wide as the composer, its foot 12 above the
-      composer's top, grown upward over the pane, which it never moves or resizes. @'s list stands over it, and a
-      pointer on it lifts none of the hand's cards (§8 "The hand", while Chat shows).
+    - **What it shows:** the items for the thread's spark, one card at a time: its own questions, its held sends and
+      spawns, the asks of the agents it started, and since TH-1 the asks of its own run (TH-Q29 (a), ruled), read once:
+      its row's blocker and its item are one need, counted once (§8 "Chat's list"). What holds a run comes first, its
+      own run's ask, then the rest oldest first (CO-Q12 (b), James). When more than one waits, "1 of 3" stands at the
+      eyebrow's right, in data small, tertiary.
+      *Amended 2026-11-05 (TH-1; ER-C7):* this said "the oldest first" and "the asks of its own run draw no card, since
+      the thread is that run's pane". The pane left Chat, so Vela's own ask is a card like any agent's, answered in its
+      terminal (Show).
+    - **Where:** held at the foot (TH-Q26 (a)): between the flow and the composer, as wide as the composer, its foot 12
+      above the composer's top. It covers nothing: the flow gives way to it, so a reader scrolled up still sees it. @'s
+      list stands over it, and a pointer on it lifts none of the hand's cards (§8 "The hand", while Chat shows).
+      *Amended 2026-11-05 (TH-1):* it stood in the thread's items' place, "grown upward over the pane, which it never
+      moves or resizes".
     - **The card:** solid chrome, corners 16, padding 14 16 and the island shadow, as the hello's. While it waits on you
       (its item waits in the queue, or your answer to it runs) it is ringed 1.5 in `--vf-orange` at 75%, in place of the
       strong hairline (the plate's open card). Once it says what you said, or its item no longer waits, it waits on no
@@ -1860,7 +1900,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         the folder when fieldd names one); "Claude Code asks to run Bash", or "Claude Code asks for your OK" when its
         permission names no tool; "Claude Code has a question"; "Claude Code needs you" for an ask of a kind this build
         does not know. A session @ offers is said by its handle, as the eyebrow names it (the note above): "Vela wants
-        to send to vibe-field·2".
+        to send to vibe-field·2". Vela's own run's ask (TH-Q29 (a)) names Vela by its name now, never its run's title,
+        and its eyebrow is the word alone: "Vela asks to run Bash", "Vela asks for your OK", "Vela has a question",
+        "Vela needs you".
       - **the words**, for a held send or spawn alone: 13 regular in secondary ink at 1.45, the asker's own words as
         they will be sent. For a send they are its first held words, then "and 2 more" in tertiary ink when more wait;
         for a spawn, its first task. Words fieldd cut (past 2,000 characters) end in "…". *The plates have no such
@@ -1917,10 +1959,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       line is said on the status line instead (§8 "The status line"), as a plain notice in the same words, so what a
       failed or unheard answer came to is always said: "You said Allow one more · Couldn't start the agent: ‹reason›".
       A refusal that returns off screen is said there too, in the card's words, "Couldn't answer: ‹fieldd's words›".
-      An answer that went as asked says nothing there, since the pane's line of facts says it (§9).
-      *A deviation from the plate, said:* the Sparks page's answered card stays in the thread, "You said Push". Here the
-      thread's items are an overlay, not a transcript. The pane is the spark's transcript, and VibeField's line of facts
-      says the answer there (§9), so the card leaves.
+      An answer that went as asked says nothing there, since the flow says it (below).
+      **Then the flow says it** (TH-Q27 (a)): once the card leaves, your answer stands in the flow as VibeField's quiet
+      line, "You answered Vela: Yes" (`check`), at its place in the conversation, from the record.
+      *Amended 2026-11-05 (TH-1; ER-C8):* this was "a deviation from the plate, said": the Sparks page's answered card
+      stays in the thread, "You said Push", while here "the thread's items are an overlay, not a transcript. The pane is
+      the spark's transcript, and VibeField's line of facts says the answer there (§9), so the card leaves". The card
+      still leaves after its 2.4 s, and the flow's line takes the plate's place.
     - **Answered in another window**, or no longer waiting (its session ended, or the agent was answered in its pane),
       it leaves here at once and says nothing, because this window did not see the answer. A card this window is
       answering is none of these: it stands until its answer returns (above).
@@ -1931,22 +1976,21 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       count reads its new place. With reduced motion each way is a 120ms fade in place (M6). A thread you leave takes
       its card with it at once, as the hello goes; an answer it was running still returns, and when it did not go as
       asked the status line says so (above).
-    - **The keyboard.** A card that arrives never takes the keyboard, so a key meant for the pane or the draft never
-      answers it. Its acts stand before the composer in the tab order, so ⇧Tab from the draft reaches them, the last
-      act first, each with the kit's focus ring. A pressed act puts the keyboard on the card itself, where "You said …"
-      is then read. When a card leaves holding the keyboard, the keyboard goes to the card that takes its place (the
+    - **The keyboard.** A card that arrives never takes the keyboard, so a key meant for the draft never answers it.
+      Its acts stand before the composer in the tab order, so ⇧Tab from the draft reaches them, the last act first,
+      each with the kit's focus ring. A pressed act puts the keyboard on the card itself, where "You said …" is then
+      read. When a card leaves holding the keyboard, the keyboard goes to the card that takes its place (the
       card, never its first act, so a held Return answers nothing), else to the draft.
     - **What it is named.** The card is a group, named by its eyebrow and its question ("Asking you: Push the fix?",
       "Needs your OK, Claude Code: Claude Code asks to run Bash"), then its place when more wait ("1 of 3"). Its words
       and its sub describe it. It is announced once, politely, when it arrives, and its "You said …" line is a status,
       spoken once.
-    - **What it covers.** At 1180 × 780 a card with a one-line question and its acts is about 110 tall, y 502–612, over
-      the pane's last six rows, where an agent's input box sits. The tallest, a held send with six lines of words and
-      its sub, is about 250 tall, about thirteen rows. While it stands, what the agent shows there is under it, and a
-      Send still pastes into the pane (§8 "Chat's composer"). Unlike the hello, it does not leave when you write,
-      because it waits on you. Answer it, and those rows are back.
+    - **It covers nothing** (TH-1). It does not leave when you write, because it waits on you, and a Send while it
+      stands is queued behind it: "Queued · it lands after you answer Vela" (§8 "Chat's composer").
+      *Amended 2026-11-05 (TH-1; ER-C9):* "What it covers" said a card with a one-line question was about 110 tall over
+      the pane's last six rows, and the tallest about thirteen rows, "and a Send still pastes into the pane".
     - *Not here: answering an agent's own ask in place (AR-6), Godview's bubble (EW-D1), the phone (PG).*
-  - **Listening** (§2.10) is not reported: typing in the draft, or a paste, is not a report (§8 "Chat's list").
+  - **Listening** (§2.10) is not reported: typing in the draft is not a report (§8 "Chat's list").
 - **Chat's composer — the line's draft, moved into the thread** (LN-D3 ruled by James 2026-10-29, Cards in Hand;
   built at SP-1d from the line's code in git at `0e2ad08bc`, the parent of HN-2's deletion; CH-D5 A and EW-D4 rule @'s
   rows). *Amended 2026-10-31 (SP-1d):* this entry said "not built — CO's SP-1d builds it", and that the line's canon
@@ -2062,7 +2106,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **A session:** its mark at 15, then its handle in mono ("vibe-field", "vibe-field·2").
     - **A card:** its kind's index glyph at 13 (§8 "The hand"), then its name as an outcome says it (one line, cut at
       60), in mono for a terminal card. A picture's chip wears `capture` on the select blue at 14%.
-  - **What a send carries** is the message as it is pasted, in the draft's order:
+  - **What a send carries** is the message as it is queued, in the draft's order:
     - the words as typed, their ends trimmed;
     - an agent chip as its words: "Claude Code", or "Claude Code at Opus 5.5 · high", either followed by " under Work"
       when the spark has more than one profile;
@@ -2073,104 +2117,55 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - a card chip as a pane takes the card (§8 "The hand"): its words, a file's path, a picture's file's path, or an
       agent card's handle. A chip that carries more than one line stands on lines of its own, with its line breaks kept;
     - never a trailing line break.
-  - **Send** pastes the message into the thread's pane, the road ⌘V takes: bracketed when its program asked for it,
-    with Return never pressed for you. Return in the draft and the send button both send. ⇧Return types nothing: the
-    draft is one line. The thread takes one act at a time, Send's, a starter's or Wake's (§8 "Chat's thread"): while
-    one runs, send waits (busy), and a press does nothing. The thread's own hold turns the press away, the one Wake and
-    the starters read, not the button drawn busy, so a Return in the same moment as a Wake press sends nothing, says
-    nothing and lets go of nothing.
-    - The pane takes the keyboard just before the paste (§8 "Chat's thread"), so it takes the session's size, and the
-      keyboard stays there, where Return sends it. Sent, the words and chips it carried are cleared, and the line's
-      note (§8 "The line") says so once: "Pasted into Vela's pane — Return sends it". The draft stays a field while a
-      send runs, so what was typed or added after them meanwhile stays; a draft changed within what was sent stays
-      whole, so no word is lost.
-    - **A message wakes it** (§2.10). Asleep or not started, Send wakes the spark first (`compose.sparks.open`; the
-      line reads "Waking…"). It waits up to 20 s for the spark to be heard and its pane to appear, then up to 1.5 s for
-      the pane's input to open, then pastes. An awake spark whose pane is still being found ("Finding Vela's pane…", §8
-      "Chat's thread"), or that has not been heard yet (Hello, as just after a hatch), is waited for in the same 20 s,
-      with no wake. Nothing is pasted into a spark before it is heard: a program not yet up may not read a paste as
-      one, and a line break inside the message would read as Return.
-      *Amended 2026-10-31 (CP-3; written into the sentences above that day, and moved into this note 2026-11-01):*
-      heard is read from its own run's row, never from its word (§8 "Chat's list", the status): the row is on the
-      board, alive, and says how the run stands. Its word is Hello before it is heard only while nothing waits on you,
-      since an item's word stands over Hello and over Asleep: a sleeping spark with a card says Asking you or Needs
-      your OK before Send's wake and after it, so it is heard only once its woken run says so.
+    With it go its chips, as spans of those words (start and length), each inside them, so your bubble draws a chip
+    as a chip from the record and never from words that look like one (TH-Q25 (a); §8 "Chat's thread").
+    *Amended 2026-11-05 (TH-1):* "as it is pasted" became "as it is queued", and the spans are new.
+  - **Send** queues the message to the spark's input as yours (`compose.sparks.say`, IOS-12a's door; your words land
+    unmarked, since they are yours). Nothing is pasted, and in Chat, Send is your Return (TH-Q37 (a), James): fieldd
+    submits it at Vela's next idle moment, one input at a time, as it does a spark's words (CP2-D2). Return in the
+    draft and the send button both send. ⇧Return types nothing: the draft is one line. The thread takes one act at a
+    time, Send's, a starter's or Wake's (§8 "Chat's thread"): while one runs, send waits (busy), and a press does
+    nothing. The thread's own hold turns the press away, the one Wake and the starters read, not the button drawn busy,
+    so a Return in the same moment as a Wake press sends nothing, says nothing and lets go of nothing.
+    - Sent, your bubble stands in the flow at once, the words and chips it carried are cleared, and its receipt says
+      the rest (§8 "Chat's thread"); the line's note says nothing. The draft stays a field while a send runs, so what
+      was typed or added after them meanwhile stays; a draft changed within what was sent stays whole, so no word is
+      lost.
+    - **A message wakes it** (§2.10). Asleep or not started, the send wakes the spark first, in fieldd, joining the one
+      wake a spark has (below), and the receipt reads "Waking Vela…". What fieldd held for it while it slept lands
+      first, then your words (TH-Q33 (a)), so Vela reads what happened before it reads you.
     - **A spark wakes once.** fieldd answers an open asked while another is under way (a second window's:
       `compose.sparks.open` is this desktop's own door, its shell's and its windows') with that same wake, its run or
       its refusal, so two opens never wake one spark into two runs. A resume under way through another door
       (`agent.resume`, as Godview's Resume asks it) is not joined yet: the wake reads that resume's refusal as a session
       that cannot be resumed and starts the spark again. Joining it is owed to fieldd's resume wrapper.
-    - **While the spark waits on you** (Asking you, Needs your OK, Stuck), Send pastes nothing, because a menu in the
-      pane would read the paste as its answer. The note says "Vela is waiting on you — answer it in its pane", and the
-      draft stays. It is read when Send is pressed, and again after the last wait, just before the paste: a woken or
-      just-started agent puts up its first menu as its input opens. A menu the board has not heard of yet is not
-      seen.
-      *Amended 2026-10-31 (CP-3), a reading of SP-1d's ruled lean ("Send while the spark waits on the person pastes
-      nothing", VF-PM 2026-10-31 16:35Z) for CP-3's wider needs-you, recorded for the DECISIONS row, James's to
-      strike:* that holds while its own run waits on you in its pane, a blocker on its own row, at both reads. A
-      needs-you card in the thread (§8 "Chat's thread") does not stop Send. The card is answered on the card, and the
-      pane holds no menu for it, so a paste there is not an answer. The cost is said: a paste made while a card stands
-      lies under the card, unseen, until it leaves, and the paste's hazard (below) holds for the answer's facts, which
-      are submitted together with it. Struck, a card stops Send as the blocker does, and the note points at the card,
-      not the pane.
-    - When the paste is not taken, the draft stays whole and the note says why, in the hand's words where the outcome
-      is the hand's own (§8 "The hand"):
-      - "Not pasted — Vela's pane is not taking input" (its input did not open within 1.5 s, or a spark that is awake
-        was not heard in the 20 s), never for a spark Chat reads asleep then, nor while Chat cannot read its list, nor
-        for a pane no longer drawn when a wait ends or the paste is asked: each of those is said below;
-      - "Not pasted — that snapshot is no longer kept";
-      - "Not pasted into Vela's pane — 300 KB, and one paste carries 261 KB of it" (D6, said once);
-      - "Not sent — Vela didn't wake in 20 seconds", only for a spark this send woke that was not heard in them;
-      - "Not sent — Vela's terminal is not on this desktop's floor", at once when the floor holds no such terminal,
-        and after the 20 s for a spark that is awake, or was heard, but whose terminal was not named in them. A spark
-        that is awake is never said not to have woken. A thread still on screen whose pane is not drawn yet when the
-        20 s end (a spark heard just as they end) is a pane still being found, so it is said this too;
-      - "Not sent — you left Vela's thread before its pane was ready", after the 20 s, when no pane of the thread
-        has settled and the thread is not on screen then: you left Chat, or chose another thread, while its pane was
-        being found or had not appeared. The pane is only found while its thread is shown, so its terminal is never
-        said to be off the floor then. Once the pane is found, it is read again after each wait (for the spark to be
-        heard, for its input) and at the paste. The send pastes into the pane its thread draws then, so a thread left
-        and shown again is pasted into: a pane being found again is waited for in what is left of the 20 s, and a pane
-        drawn again has its own input waited for (1.5 s) before the paste. A pane still drawn under another view's
-        cover takes the paste (§8 "Chat's thread"). A pane no longer drawn when a wait ends is said as no pane at the
-        20 s is: a thread left while the send waited for the spark to be heard, or for its input, says this, never that
-        its pane is not taking input, and a pane still being found is never said to be off the floor before the 20 s
-        end;
-      - "Not sent — Vela fell asleep before its pane was ready", after the 20 s, when the spark fell asleep while the
-        send waited. An asleep thread draws no pane, so none could be ready, and you are never said to have left it.
-        While the send waits for the pane of a thread on screen, it is said the moment that pane goes, not at the
-        20 s. It is read too when an awake spark is not heard, when its input does not open, and wherever the pane is
-        read again. Still at the 20 s: a spark that falls asleep off screen, where no pane goes, or after its pane was
-        found and before it was heard, which that wait reads from the list alone;
-      - "Not sent — Chat is opening again" and "Not sent — Chat can't read your sparks", when Chat's list is not read
-        at the moment the send reads why it cannot go on, said as the list stands then (§8 "Chat's list"). A send is
-        pressed only on a list read, so the list is unread then only when the window's feed started again under the
-        running send: opening again, where the list reads "Opening Chat…", or unreadable, its list refused before that
-        feed first read it, in the list's own words. A fieldd restart never does that: it replaces the window's
-        document, and the send with it (main's boot fence, §8 "Chat's list"), and the new document's list reads
-        "Opening Chat…" with no thread drawn, so no send is pressed there. Within one document the feed starts once, so
-        today these only guard a feed restarted in place, which no product path does. With no list read no thread is
-        drawn and no spark is heard, so "you left", "didn't wake" and "not taking input" are never said then;
-      - "Couldn't find Vela's pane: …", at once, in the floor's or the window's own words, while the pane's place says
-        it (§8 "Chat's thread");
-      - "Not sent — this window has no terminals", at once, in a window with no terminals (the catalog, a browser),
-        where the pane's place says the Peek's words. Send is still drawn there, so its states can be seen;
+    - **While the spark waits on you** (Asking you, Needs your OK, Stuck), Send still queues. Your words wait in the
+      queue, which delivers only at an idle moment with nothing blocking, so a menu never reads them as its answer.
+      The receipt says "Queued · it lands after you answer Vela".
+    - **Each send once.** A send carries its own request id, so asking again after a lost answer reads the first
+      one's receipt instead of queueing the words twice (IOS-12a). A delivery whose answer was lost is never resent
+      (item 158's stamp, TH-Q32 (a)): its receipt says to look in the pane.
+    - When the send is not taken, the draft stays whole, no bubble stands, and the note says why:
+      - "Not sent — a message holds 32,000 characters at most" (TH-Q34 (a): the door's bound, a spark's words' own);
+      - "Not sent — that snapshot is no longer kept" (a card's still main no longer keeps, read at the press);
       - "Couldn't wake Vela: …", in fieldd's words, as the line says it;
-      - "Couldn't send to Vela: …", in the words of the step that broke (main's still door, the pane's paste), so a
-        send that fails is never a blank.
+      - "Couldn't send to Vela: …", in fieldd's words, so a send that fails is never a blank.
       A starter is sent as Send sends, so its outcomes are these.
     - Chat has **no clipboard road**. A message is never copied in place of a send: the hand holds what you copied
-      (HN-L1). "Pasted into" is never said for a paste the pane did not take.
-    - **A pasted draft is the agent's until you press Return** (ruled by VF-PM 2026-10-31 16:35Z). What Send pasted
-      and you did not send stays in the agent's own input, where VibeField cannot see it. The next delivery VibeField's
-      queue makes into that session (CP-2: a wake's line of facts, or a spark's words) is submitted together with it.
-      Send joins the session's queue only through a window door into it, `compose.say`, which is a later slice.
-      *Amended 2026-10-31 (CP-3; written into the sentence above that day, and moved into this note 2026-11-01):*
-      the facts of an answer you gave the spark (§9 "The person's queue's words") are such a delivery too, so a draft
-      left there is submitted together with them.
+      (HN-L1).
+    - **Chat leaves nothing in the agent's input.** Words typed into Vela's terminal in Godview and left there unsent
+      are still the agent's: the next delivery VibeField's queue makes into that session (your words, a wake's line of
+      facts, a spark's words) is submitted together with them, and its receipt can read uncertain.
+    *Amended 2026-11-05 (TH-1; ER-C10, ER-C11, ER-C12):* Send pasted the message into the thread's pane, the road ⌘V
+    takes, "with Return never pressed for you". The pane took the keyboard just before the paste; Send waited up to 20 s
+    for the spark to be heard and its pane to appear, then up to 1.5 s for its input to open; it pasted nothing while
+    the spark waited on you in its pane ("a menu in the pane would read the paste as its answer"); and a pasted draft
+    was the agent's until you pressed Return, "Send joins the session's queue only through a window door into it,
+    `compose.say`, which is a later slice". That door landed as IOS-12a's `compose.sparks.say`, and TH-1 sends through
+    it. The paste road's notes are kept in §9 "Chat's words" until the pane leaves Chat; the rest is in git.
   - **The draft is the thread's.** Each spark keeps its own for the window's life, written nowhere (HN-D9's rule).
     Leaving Chat or choosing another spark keeps it, and coming back finds it. A send still running when you leave
-    clears what it carried from the draft you come back to, once it is pasted, and keeps what you typed there
+    clears what it carried from the draft you come back to, once fieldd has it, and keeps what you typed there
     meanwhile.
   - **A card from the hand** (§8 "The hand"):
     - Carried over the composer, a card rings it at its own corners (26), 1.5px `--vf-select`, and says "Add to your
@@ -2181,6 +2176,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - What a pane cannot take, the composer cannot take either, in the same words: "A picture with no file can't be
       pasted yet", "A file with no path can't be pasted yet".
     - A drag from another app let go on the composer plays straight in, as it does on a pane.
+    - *Since TH-1 (2026-11-05; TH-Q15 (a), TH-Q37 (a), James):* the flow is the composer's place too. A card carried
+      over it rings the composer and says the composer's words; let go there, it lands as a chip in the draft, the
+      same. A card let go on the thread is a chip, never a send.
   - **Keys:** Esc closes @ and keeps what was typed; with @ closed it gives the keyboard back (CB-2). While the draft
     holds the caret it is a field (`isField`): ⌫ edits it and never removes a card, and ⌘V pastes into it as plain text
     on one line and deals no card.
@@ -2194,6 +2192,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *At SP-1d (2026-10-31) Chat keeps from it the draft, the mic, send, @'s keys and chrome, the chip, and the interim
   send's road with its "Pasted into" rule. CH-D5 re-ruled @'s rows (above). The aim is gone, because in Chat the thread
   is the aim (CH-D5). The clipboard road left: a send that is not taken keeps its draft.*
+  *Dated 2026-11-05 (TH-1; ER-C13):* the interim send's road and its "Pasted into" rule left Chat with the pane: Send
+  queues your words (§8 "Chat's composer", above).
   - **@'s list's rows** — read bottom-up, nearest first: **Send to** nearest the line ("Send to a
     pane" in Godview, where the panes lead) — what the deck shows, each named by its folder as the
     swarm names its body, with what runs there and its state word; above it **Add** — From the
@@ -2382,7 +2382,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     History and in Chat's thread, and another app's copy brought in — ⌘V with no caret anywhere, or a
     drag let go away from a pane and the prompt — deal as their doors arrive (*as built*, below).
     *(SP-1d: Chat's thread at first light is its pane, whose ⌘C waits on G30 with every pane's. Chat's
-    own Copy comes with drawn messages.)*
+    own Copy comes with drawn messages.)* *Since TH-1 (2026-11-05; ER-C14):* the messages are drawn, and Chat's own
+    Copy of one is owed: TH-Q13 (a) keeps it out of TH-1.
     Another app's clipboard is never read on its own: what is copied elsewhere, passwords included,
     stays out. Every other copy VibeField makes deals the same way, as a text card — Settings' (a
     sign-in link, a device's name, the exact version, a diagnostics record) from the button pressed,
@@ -2427,7 +2428,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (HN-D7); a file or an agent says the desk can't hold it yet. **Chat's composer** takes a card as a
     chip (§8 "Chat's composer"): "Add to your message to Vela", then "Added to your message to
     Vela". *(SP-1d, 2026-10-31: Chat's thread pane takes no card yet; it joins the places that take one
-    with SP-1e.)* Over the line the carried card ducks to 0.55; **held over a view's
+    with SP-1e.)* *Since TH-1 (2026-11-05; ER-C15):* the thread's flow takes a card as the composer does, a chip in
+    the draft (§8 "Chat's composer", a card from the hand). Over the line the carried card ducks to 0.55; **held over a view's
     cell for 520ms** (HN-D6) that view opens under it, the cell saying "Opening Godview" with its
     progress — copy in History and play in Godview in one drag.
   - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its notebook — it flies
@@ -5775,6 +5777,8 @@ are words fieldd hands every window, so each is said once, here. A question's ac
 four, each on one line, then **Not now**. A held send's are **Allow** and **Not now**; a held spawn's, **Allow one
 more** and **Not now**. An agent's own ask has no answer here, only **Show**: it is answered in its pane (CP-L4). A
 spark's own run's ask draws no card in that spark's thread at all, since the thread is that pane (§8 "Chat's thread").
+*Amended 2026-11-05 (TH-1; ER-C16; TH-Q29 (a)):* the pane left Chat, so it does: Show alone, "Answer it in its pane.",
+the asker named as the spark, "Vela asks to run Bash".
 A window answers by the act's place among the item's acts, never by its word, so rewording an act here changes nothing
 on the wire.
 A send is held for the person's OK when it is a spark's first send into a session the person started, whatever that
@@ -5840,7 +5844,10 @@ status line's note (§8 "The status line"). At most two of one teller's notices 
 the same teller sheds that teller's oldest waiting one, so one agent's notices never hold back another's (PF4's
 watermark). Outside the app it is an OS notice, said only while no VibeField window is in front, and never in a smoke:
 its title is the teller, and its body the words. A click on it opens Chat, whoever told it, and chooses nothing there. A
-notify is never kept, and nothing says the person read it. A new item in the queue raises no OS notice: CP3-D5 rules
+notify is never kept, and nothing says the person read it. *Amended 2026-11-05 (TH-1; ER-C41; CO-Q1 (b), James):* a
+spark's notify is kept now, in its own transcript, and its thread draws it as VibeField's quiet line, "Vela told you: the
+build is green" (§8 "Chat's thread"); an agent's notify is still never kept, and nothing says the person read either.
+A new item in the queue raises no OS notice: CP3-D5 rules
 notify alone. *Main decides, as for the link's notices (TS-5): a notice must reach someone with no window in front.*
 
 **A flow's lines** (track CO, CP-4; CP4-Q7 (a), CP4-Q11 (a) and CP4-S17 (a), ruled at the leans 2026-11-04; the words
@@ -6093,24 +6100,42 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - The hello and its starters: "Hi, I'm Vela. I can start agents for you, keep track of the ones you run, and carry
   work between them. What first?" · "Spawn 4 Grok agents to research a topic each" · "Keep track of my agents in
   vibe-field" · "Have Codex review claude·2's work until it's clean".
-- The pane's place: "Finding Vela's pane…" · "Vela's terminal is not on this desktop's floor." · "Couldn't find Vela's
-  pane: …" (Send's note says it too) · "This window has no terminals to show it with."
+- The thread (TH-1): "Reading Vela's conversation…" · "Couldn't read Vela's conversation: …" · "Earlier
+  conversations (3)" · "A new conversation · Nov 3" · its day lines, "Today" · "Yesterday" · "Mon, Nov 2" · and
+  "Thinking…".
+- Its quiet lines (TH-1): the tools' line, "Used 3 tools" ("Used 1 tool"), and its rows, one word for each of the
+  agent runtime's seven kinds, never a tool's own name: "Ran a command" · "Searched the web" · "Read a file" · "Edited
+  a file" · "Used the browser" · "Used a tool" (an MCP tool, any other, and a kind this build does not know), each then
+  what it touched. VibeField's own: "VibeField told Vela: ‹what it told›" · "You answered Vela: Yes" · "Vela told you:
+  the build is green"; an act this build does not know is drawn in its own words.
+- The honest lines (TH-1): "Earlier messages are in Vela's terminal" · "Part of this conversation happened while
+  VibeField restarted — it's in Vela's terminal" · "Part of this conversation couldn't be checked, so it isn't shown".
+- Your bubble's receipt (TH-1; the phone's words, "Chat on the phone" above, with Chat's straight apostrophes):
+  "Waking Vela…" · "Queued" · "Queued · Vela is busy; it lands when it's done" · "Queued · it lands after you answer
+  Vela" · "Delivered" · "Not delivered: Vela's session ended" · "Vela may not have it: look in its pane".
+- The pane's place, at SP-1d, kept here until the pane leaves Chat (TH-1, its last commit): "Finding Vela's pane…" ·
+  "Vela's terminal is not on this desktop's floor." · "Couldn't find Vela's pane: …" (Send's note says it too) · "This
+  window has no terminals to show it with."
 - @: "Running in its profiles" · "Start an agent" · "Reading its agents…" · `Nothing called "cla"` · "Nothing to add
   from Vela's profiles" · "VibeField can't list its agents right now" (the New spark sheet's own sentence) ·
   "VibeField can't read what's running right now" (the sessions' group, while the board can't be read); a session's
   word, Working · Idle · Needs you.
-- Send's notes: "Pasted into Vela's pane — Return sends it" · "Vela is waiting on you — answer it in its pane" · "Not
-  pasted — Vela's pane is not taking input" · "Not pasted — that snapshot is no longer kept" · "Not pasted into Vela's
-  pane — 300 KB, and one paste carries 261 KB of it" · "Not sent — Vela didn't wake in 20 seconds" · "Not sent — Vela's
-  terminal is not on this desktop's floor" · "Not sent — you left Vela's thread before its pane was ready" · "Not sent
-  — Vela fell asleep before its pane was ready" · "Not sent — Chat is opening again" · "Not sent — Chat can't read your
-  sparks" · "Not sent — this window has no terminals" · "Couldn't wake Vela: …" · "Couldn't send to Vela: …". A card's: "Add to your message to Vela" ·
-  "Added to your message to Vela".
+- Send's notes (TH-1): "Not sent — a message holds 32,000 characters at most" · "Not sent — that snapshot is no longer
+  kept" · "Couldn't wake Vela: …" · "Couldn't send to Vela: …". A card's: "Add to your message to Vela" · "Added to
+  your message to Vela".
+- Send's notes on the paste road, at SP-1d, kept here until it retires (TH-1): "Pasted into Vela's pane — Return
+  sends it" · "Vela is waiting on you — answer it in its pane" · "Not pasted — Vela's pane is not taking input" · "Not
+  pasted — that snapshot is no longer kept" · "Not pasted into Vela's pane — 300 KB, and one paste carries 261 KB of
+  it" · "Not sent — Vela didn't wake in 20 seconds" · "Not sent — Vela's terminal is not on this desktop's floor" ·
+  "Not sent — you left Vela's thread before its pane was ready" · "Not sent — Vela fell asleep before its pane was
+  ready" · "Not sent — Chat is opening again" · "Not sent — Chat can't read your sparks" · "Not sent — this window has
+  no terminals".
 - The needs-you card (CP-3; §8 "Chat's thread"; its acts' words are "The person's queue's words", above):
   - its eyebrows, Asking you · Needs your OK · "Needs your OK · Claude Code", and "1 of 3";
   - its questions, "Vela wants to send to Claude Code" · "Vela wants another agent: Claude Code in vibe-field" ·
     "Claude Code asks to run Bash" · "Claude Code asks for your OK" · "Claude Code has a question" · "Claude Code needs
-    you" · "Vela needs you";
+    you" · "Vela needs you"; and since TH-1, Vela's own run's ask, "Vela asks to run Bash" · "Vela asks for your OK" ·
+    "Vela has a question";
   - its words' "and 2 more", and its subs, "Your yes lasts until Claude Code ends." · "8 of Vela's agents are running,
     the most a spark may run." · "Answer it in its pane.";
   - while it answers, "Allow…"; refused, "Couldn't answer: …";
@@ -6142,8 +6167,10 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - Where an outcome is the hand's, the words are the hand's (§8 "The hand"), so one outcome is never said two ways.
 - Each note is under 70 characters beside the spark's name, so it is read in the note's 2.4 s. A refusal from fieldd
   is said in its own words after the colon, as the line says it.
-- A session chip's id is pasted for the spark's tools, which address a session by it. It is the one runtime id Chat
-  puts on screen, in the pane, as part of what you send, and never in Chat's own chrome.
+- A session chip's id is sent for the spark's tools, which address a session by it, and is never in Chat's own
+  chrome. *Amended 2026-11-05 (TH-1; ER-C18):* it said "pasted", and that it was "the one runtime id Chat puts on
+  screen, in the pane, as part of what you send". Chat puts it on screen nowhere now: your bubble draws the chip by its
+  words, and the id stays in the record.
 
 **What VibeField keeps, when it cannot read it** (track CO, item 172; 2026-11-05). VibeField keeps five kinds of
 record in signed files of its own: a spark's record, what waits on you (CP-3), the words that wait for a session,
