@@ -45,11 +45,9 @@ public struct TerminalSettingsPage: View {
           ChromeRow("Effects", value: TerminalSettingsModel.effectsWord(appearance.shaderEffects))
         }
       } header: {
-        ChromeListHead("Look", tags: [FactTag("This phone"), FactTag("Live")])
+        ChromeListHead("Look", tags: [FactTag(TerminalSettingsWords.tag(DeviceWord.current)), FactTag("Live")])
       } footer: {
-        ChromeListFoot(
-          "A terminal’s text is drawn on the desktop that runs it, so its type and colours are "
-            + "that desktop’s. These set the ground this phone draws under it.")
+        ChromeListFoot(TerminalSettingsWords.lookFoot(DeviceWord.current))
       }
       .chromeRows()
     }
@@ -234,7 +232,8 @@ struct TerminalEffectsPage: View {
           .accessibilityLabel(TerminalSettingsModel.effectAccessibilityLabel(shader, in: selection))
         }
       } header: {
-        ChromeListHead("Drawn over the terminal", tags: [FactTag("This phone"), FactTag("Live")])
+        ChromeListHead(
+          "Drawn over the terminal", tags: [FactTag(TerminalSettingsWords.tag(DeviceWord.current)), FactTag("Live")])
       } footer: {
         ChromeListFoot(TerminalSettingsModel.effectsOrderFoot(selection))
       }
@@ -516,5 +515,18 @@ public enum TerminalCredits {
 
   public static var effects: [Effect] {
     GhostteaShaderOption.available.map { Effect(name: $0.name, licence: $0.license) }
+  }
+}
+
+/// IOS-13a S5b (DESIGN.md §9 "The phone's legal words"; VF-PM 2026-11-05 03:59Z) — Settings › Terminal's words that
+/// name the device, by substitution from `DeviceWord`, as every Settings word does.
+enum TerminalSettingsWords {
+  /// The tag on Look and on Drawn over the terminal: whose these settings are.
+  static func tag(_ device: DeviceWord) -> String { device.This }
+
+  /// Look's foot.
+  static func lookFoot(_ device: DeviceWord) -> String {
+    "A terminal’s text is drawn on the desktop that runs it, so its type and colours are "
+      + "that desktop’s. These set the ground \(device.this) draws under it."
   }
 }
