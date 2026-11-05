@@ -73,15 +73,17 @@ describe("SES's source tests meet a person's words (finding 5)", () => {
     expect(sesWouldRefuse(script)).toEqual([]);
   });
 
-  it("M5 · a real import() or eval(…) call is refused with its line, before any host starts", () => {
-    expect(flowScriptOf(bytesOf(flow("const m = await import('node:fs');\nreturn m;")))).toEqual({
-      kind: "refused",
-      reason: expect.stringMatching(/import\(\).*line 3/),
-    });
-    expect(flowScriptOf(bytesOf(flow("\nreturn eval('1 + 1');")))).toEqual({
-      kind: "refused",
-      reason: expect.stringMatching(/eval.*line 4/),
-    });
+  it("M5 · a real import() or eval(…) call is left as written, and SES refuses it with its line (H2)", async () => {
+    // acorn's tokens tell code from words: the call is not rewritten, so SES finds it, on the file's own line
+    expect(
+      sesWouldRefuse(scriptOf(flow("const m = await import('node:fs');\nreturn m;"))),
+    ).toHaveLength(1);
+    const imports = await runOnHost(bytesOf(flow("const m = await import('node:fs');\nreturn m;")));
+    expect(imports.end).toMatchObject({ kind: "threw" });
+    expect((imports.end as { message?: string }).message).toMatch(/:3\b.*SES_IMPORT_REJECTED/);
+    const evals = await runOnHost(bytesOf(flow("\nreturn eval('1 + 1');")));
+    expect(evals.end).toMatchObject({ kind: "threw" });
+    expect((evals.end as { message?: string }).message).toMatch(/:4\b.*SES_EVAL_REJECTED/);
   });
 
   it("M6 · a prompt holding all four patterns runs, and its words arrive byte-identical at the agent", async () => {
