@@ -1,6 +1,6 @@
 # DESIGN.md — VibeField Art Direction
 
-**Authority:** this document governs how every VibeField surface looks, moves, and speaks —
+**Authority:** this document governs how every VibeField surface looks, moves, sounds and speaks —
 the frame (the head, the line, the hand, the corner), the desk's chrome, Godview, History,
 Settings, Setup, the phone, and every empty state. Structure and mechanics
 live in the design corpus (`draft/design-03*`); *look and feel* live here. When they seem to
@@ -6394,3 +6394,164 @@ weights of one drawing; pass 2 drew three constructions — a 9×9 dot matrix on
 solid hardware with transport-control verbs, and generated brush strokes — beside the quiet
 monoline baseline. The choice mixed the baseline with ten hardware verbs; the other constructions
 remain in `drawings.mjs` and on the page, not in the product.
+
+---
+
+## 14. Sound — the field, heard
+
+**Ruled 2026-11-05 (James, the Hear What Needs You page: SD-D1…SD-D22, every lean; the record is
+`draft/sound/design-sound.md` §14).** Track SD. This section is the sound's art direction: what VibeField sounds
+like, when it speaks and where it plays. `@vibefield/sound` is this section in code (SD-1); until SD-2 lands,
+nothing in the product plays it. The ask (James, 2026-10-02): "more epic, space vibe … field theory in physics …
+deep space … the kind of SFX you would likely to hear in monument valley game".
+
+**The idea.** A field fills space, and every particle is an excitation of one of its modes. Every VibeField sound
+is an excitation of one field whose modes are a harmonic series: struck, it rings in the field's own tuning, and the
+field answers around it with a sung glow, a sub you feel, a few stars and a dark, wide space. The size is in the
+register, the space and the time, never in the level. The craft is Monument Valley's: every touch a note in one
+key, warm physical instruments, the colour drained for a loss, a breath before the big moment.
+
+**Eight laws.**
+- **S1 Quiet chrome, honest state.** The interface is silent: no click, hover, typing, navigation or window sound.
+  Only an agent's state sounds, and the mark.
+- **S2 One field.** Every note is a harmonic of D♭1 (34.648 Hz), tuned just, so any number of sounds ringing
+  together are partials of one tone and do not beat.
+- **S3 One phrase.** Every sound is cut from the mark: D♭ A♭ E♭, asked; C A♭ D♭, answered. Question is its first
+  three notes, Done its last two, Approval the answer's A♭ knocked at the door, All quiet TRAPPIST-1's chord struck
+  planet by planet.
+- **S4 Count and shape are the meaning.** Failed 1 strike · Done 2 · Question 3 · Approval 4 · All quiet 7. Rate
+  is the urgency (Done 320 ms apart; Question 150 ms, rising; Approval knocked two and two); loudness never is: the
+  four status sounds sit within 1.5 LU of each other.
+- **S5 An excitation and the field's answer.** A core (modal synthesis: each mode a damped sinusoid) and, around
+  it, the bloom, the sub, the stars, the space and its shimmer.
+- **S6 One voice, three spaces.** Starlight in every sound; the space is day (the light theme), night (the dark
+  theme) or far (another desktop's agent).
+- **S7 Vast, not loud.** A strike carries 9 dB (day) and 6.5 dB (night) more energy than its tail; tails overlap;
+  only the mark swells; a loss drains the tone.
+- **S8 Honest and few.** One request and one chord per moment; never the agent you are typing into; reminders
+  twice, then never; past six sounds a minute, Dones fold.
+
+**The field (SD-D2).** The tonic D♭ is equal-tempered (A4 = 440 Hz); every other degree is the just ratio above
+it. The notes are D♭ E♭ F A♭ C: 1 · 9/8 · 5/4 · 3/2 · 15/8, harmonics 16 · 18 · 20 · 24 · 30 of D♭1 in the octave
+above D♭5 (D♭5 554.37 Hz · E♭5 623.66 Hz · F5 692.96 Hz · A♭5 831.55 Hz · C6 1039.43 Hz). F sits 13.7 ¢ and C 11.7 ¢
+under a piano's: a trained ear may hear it beside another app's sounds, and the field stays in tune with itself.
+
+**The chord (SD-D3).** TRAPPIST-1's resonant chain: D♭3 A♭3 D♭4 A♭4 E♭5 C6 A♭6, harmonics 4 · 6 · 8 · 12 · 18 ·
+30 · 48 of D♭1, seven planets' orbits sped up about 225 million times so that planet h sounds D♭3 (Agol et al.
+2021's periods; the real ones run 23 to 60 ¢ sharp of the exact resonances). It opens under All quiet's landing
+and the mark's.
+
+**The family.**
+
+| Sound | Says | Strikes | Notes | Rate | The field answers | Desktop | Phone |
+|---|---|---|---|---|---|---|---|
+| Failed | An agent stopped on an error. | 1 | F4 + A♭4 + F3, muted | — | a knock (F3), the colour drained (the ash), a darker, drier space, no stars, no shimmer | −26 LUFS | −6 LUFS |
+| Done | An agent finished. Your turn. | 2 | A♭5 → D♭5 | 320 ms | the bloom (D♭4 A♭4), half the sub, stars | −27 LUFS | −7 LUFS |
+| Question | An agent is asking you something. | 3 | D♭5 A♭5 E♭6, the last lifting 30 ¢ | 150 ms | a soft bloom (A♭4 E♭5); no stars | −26 LUFS | −6 LUFS |
+| Approval | An agent is stopped until you allow something. | 4 | A♭5, knocked | 100 · 260 · 100 ms | a knock (A♭3) under each; no stars | −25.5 LUFS | −5.5 LUFS |
+| All quiet | The last working agent stopped. Every agent is waiting for you. | 7 | A♭6 C6 E♭5 A♭4 D♭4 A♭3, then D♭3 + D♭4 + D♭5 | 90 → 245 ms, slowing | TRAPPIST-1's chord, the sub, stars | −27 LUFS | −7 LUFS |
+| The mark | VibeField's own phrase: a question, and its answer. | 6 | D♭5 A♭5 E♭6 (stopped) · C6 A♭5 D♭5 + D♭4 | 150 ms; a breath; 180 · 320 ms | the space breathes in (0.55 s); TRAPPIST-1's chord, the sub, stars | −23 LUFS | −3 LUFS |
+
+Several Dones in one moment land as one chord climbing the field: the landing, then its fifth, ninth and twelfth,
+strummed 22 ms apart. One agent is a note, two an open fifth, four the field's own chord: fuller, never louder.
+Done's first note is always A♭ (SD-D5), so it becomes a sound you know. Stars come only where something arrived —
+Done, All quiet, the mark (SD-D7) — never on a request. Failed is the family's one sound without its colour
+(SD-D4): a knock, a puff of noise where the chord would be, a trace of F minor. The mark is the only sound allowed
+to be big, and it plays whole (SD-D8): the space breathes in, the question stops open, a breath of near-silence,
+the answer falls home and the chord opens around it. *Measured on the phone's masters: Failed lands about 1.6 dB
+under its target and the mark about 1.4 dB under (the limiter holds them).*
+
+**The voice: Starlight (SD-D1).** Struck crystal, harmonic where it rings (modes 1 · 2 · 3, ringing 2.6 · 1.4 ·
+0.8 s at 880 Hz and shorter for higher notes by (880/f)^0.55), with a bell's inharmonic modes only in the strike
+(2.756 · 5.404 · 8.933, gone in 0.3 · 0.12 · 0.05 s); every mode is a doublet 2.2 ¢ wide; the mallet's contact
+is 0.3 ms and its onset 1.4 ms. Around it, in dB against the strike: the bloom −16 (organ harmonics 1 · 0.32 ·
+0.11 · 0.05, a 120 ms attack, ringing 3.4 s, two voices 6 ¢ apart drifting about ±2 ¢), the sub −21 (D♭2
+settling 35 ¢ into pitch, with its second and third harmonics for a laptop's speakers), the stars −31 (the field's
+harmonics 48 to 128, A♭6 to D♭8, none in the first 120 ms, each rising over 15 ms: seven after a Done by day,
+twelve by night), the knock −14, the ash −10 (a noise puff whose band falls from 3 kHz to 700 Hz as it dies), the
+swell −15 (the mark only) and the shimmer −10 (the tail an octave up, once round the space).
+
+**The spaces (SD-D6, SD-D14).**
+
+| Space | When | Ring (RT60) | Tail | Pre-delay | Also |
+|---|---|---|---|---|---|
+| Day | the light theme | 2.0 s | −9 dB | 22 ms | stars ×0.8 |
+| Night | the dark theme | 3.4 s | −6.5 dB | 34 ms | shimmer +3 dB, stars ×1.3, −2 dB above 3 kHz, a softer mallet, −2 dB |
+| Far | another desktop's agent | 3.0 s | −1.5 dB | 18 ms | shimmer −4 dB, stars ×0.3, −4 dB above 3 kHz, low-passed at 2.8 kHz, −6 dB |
+
+The tail is its energy against the strike's. Far is heard as if across the field: dimmer, nearly as much tail as
+strike, the same shapes. Its moments gather apart from this Mac's.
+
+**The masters.** Loudness is BS.1770's momentary maximum (its loudest 400 ms). **Desktop:** beside macOS's own
+alerts (measured −22.6 to −29 LUFS); high-passed at 30 Hz; measured true peaks at −13 dBFS or under; the file ends
+once it has fallen under −72 dBFS. **Phone (SD-D16):** beside iOS's tones, which are mastered about 20 dB
+hotter, so 20 dB louder; high-passed at 320 Hz with +3.5 dB above 2.5 kHz; drier (3 dB less tail, the space
+ringing ×0.65 and the voice ×0.6); no stars; limited at −1.5 dBFS; the file ends 46 dB under its peak, because iOS
+turns your music down for as long as a notification's sound plays; All quiet an octave higher, since nothing under
+about 300 Hz survives the speaker.
+
+**The phone's touch (SD-D16).** Each sound's haptic keeps its rhythm: one transient per strike; its intensity
+from the strongest note struck then (0.35 + 0.6 × its velocity), its sharpness from the lowest (higher is
+sharper), +0.25 for a knock and −0.2 for a muted strike. Approval's knocks are the sharpest taps in the family
+(0.85), Failed's one tap the dullest (0.05), Question rises (0.5 → 0.7) and Done falls (0.6 → 0.5).
+
+**When it speaks (SD-D9 … SD-D13).**
+1. **Meaning.** Working → idle is Done; → blocked is Approval (a permission), Question (a question) or Failed (a
+   failure, or a blocker without a name). A blocker wins over a headline "working": a prompt under a running
+   subagent still sounds. Starting work, an unknown state and an agent that vanished are silent. The first thing
+   heard about an agent is a fact, not news: VibeField opening onto three blocked agents shows them and says nothing.
+2. **Hold.** A state must hold before it sounds: Done 900 ms, Question and Approval 450 ms, Failed 250 ms. An
+   auto-approved prompt, or a 300 ms idle between two tool calls, never reaches you.
+3. **Focus (SD-D12).** Every agent sounds except the one you are typing into: you are already there.
+4. **Gather (SD-D9).** Changes that come due close together are one moment. It closes after 320 ms of quiet and
+   never later than 1.2 s after it opened, and it plays at most one request (Approval, then Question, then Failed)
+   and one Done chord for everyone who finished. A request folded into a louder one is not dropped: it plays on
+   its own 4 s later if it still waits.
+5. **All quiet.** When the last working agent stops, and two agents or more are in the field, Done becomes All
+   quiet.
+6. **Spacing (SD-D10).** A sound starts once the last has said itself, its last strike plus 450 ms and never
+   sooner than 620 ms after it began, while the last one's tail still rings: every tail is a partial of the same
+   chord. *Measured 2026-11-05 (the pairs test: every first sound into every status sound, three spaces, five
+   takes): the second sound kept its count in all 300 pairs with the old tail turned down 6 dB, and in all 300
+   without. Where VibeField mixes the sounds itself it turns the old tail down; on the Mac both paths are the
+   system's, which cannot turn a playing sound down, so spacing alone holds the counts there.*
+7. **Budget.** Past six sounds a minute, Dones fold silently (Godview still shows them); a request is never
+   dropped.
+8. **Reminders (SD-D13).** An agent stopped on you that nobody answered is said again, 6 dB softer and a quarter
+   slower, at 2 minutes and at 10 minutes, then never again. A finished agent is never reminded.
+9. **Where it comes from (SD-D11).** Each sound is placed toward its agent on screen, its pane or its card, never
+   more than 60% of the way to a side, so headphones never feel lopsided; the space stays wide around it. In a Done
+   chord each agent's note comes from its own side.
+
+**Where it plays.**
+- **In VibeField (SD-D12, SD-D21).** While a VibeField window is in front, through macOS's system-sound path, so
+  the sounds follow the alert volume and the "Play sound effects through" device like every other alert on the
+  Mac (whether that path also drives "Flash the screen" is verified at SD-2). The place is baked into the sound at
+  five positions: −60%, −30%, the centre, +30%, +60%.
+- **Away (SD-D15).** While no VibeField window is in front, or none is open, an OS notice carries the sound, so
+  Focus and the notification settings decide whether it plays. *Lands with SD-3, when §9's notice line moves.*
+- **The phone (SD-D16, SD-D17).** Our sounds, the phone's masters, each with its touch. A question is
+  time-sensitive, as an approval is (foundations §2.10); a completion is active. *Phone notifications are planned
+  (§9).*
+- **The mark (SD-D18).** At first launch and when setup finishes, and nowhere else in the app, so it stays an
+  event.
+- **A terminal's bell (SD-D20).** An input to the voice, one per pane: in an agent's pane its state already speaks
+  and the bell stays silent; in a plain shell a bell is one soft knock in the field's key. *Lands with SD-5.*
+- **Out of the box (SD-D19).** On from the first run, at the level of the Mac's own alerts, with Settings → Sound
+  one click away.
+- **Quiet (SD-D22).** macOS does not tell an app your Focus, so sounds played inside VibeField cannot follow it
+  (the away path's notices can). One click, in the menu bar and in Settings, quiets every sound for an hour or
+  until tomorrow.
+
+**Where it lives.** `@vibefield/sound` (`packages/sound`) is this section in code: the field, the voice, the
+spaces, the masters, the family, the touch and the voice policy, with no dependencies, so Electron main, the
+window, the package-time tools and the tests all run the same code; a render is a pure function of its score and
+its seed. Each sound cycles through five takes, the canonical one first: a take nudges each strike by at most ±6% in
+force, ±4 ms in time (never the first strike) and ±2 ¢ in pitch, and scatters the stars anew; the notes and the
+contour never change. `packages/sound/test/design-md.test.ts`
+holds this section's numbers to the package: a change moves here first, then the code.
+
+**Limits, honestly.** Designed from physics, research and measurement: nothing has been auditioned by ear in a
+build (every check plays muted), and the Name-that-sound runs were skipped by the ruling. The mark's arpeggios
+share three-note contours with four iPhone tones in other keys (iOS 17's Illuminate, Silk, Stargaze and Radial),
+and All quiet's C6 → E♭5 is the opening pair of Quad; a clearance check is owed before the mark ships.
