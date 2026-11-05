@@ -778,6 +778,22 @@ describe("the held spawn (CP-D7, CP3-D4 A)", () => {
       },
     ]);
   });
+
+  it("TH-1 × SP-1e2 — Allow one more into the crew it was asked in: the member joins that crew, and the answer is kept once in the asking run's transcript", async () => {
+    const h = harness();
+    const id = h.queue.spawn(VELA_FROM, { ...launch, crew: "cr-3n8w5t1v" }, 8);
+    await h.queue.answer(id, 0, principal);
+    expect(h.spawned).toEqual([
+      {
+        agent: AGENT.id,
+        profileSet: "native",
+        cwd: launch.cwd,
+        spark: VELA,
+        crew: { id: "cr-3n8w5t1v", sparkRun: "run-vela" },
+      },
+    ]);
+    expect(h.acts).toEqual([[VELA, "run-vela", "answer", "Allow one more"]]);
+  });
 });
 
 describe("an act a restart broke into (CP2-D2, critique 15)", () => {
