@@ -12,10 +12,20 @@
 //     every slice is signed;
 //   - exactly one LC_CODE_SIGNATURE, its SuperBlob (0xfade0cc0) ending the image (nothing after it, nothing between the
 //     code and it): the CodeDirectory's codeLimit is the signature's offset, so every byte before it is a hashed page;
-//   - the CodeDirectory read is the SHA-256 one (0xfade0c02, slot 0 or an alternate at 0x1000…0x1004), else the
-//     kernel's best; its every code page is hashed again and compared, and every component the SuperBlob carries
+//   - the CodeDirectory read is the one the KERNEL enforces (its flags, identifier, team and special slots are the
+//     ones that bind the running code): XNU's hashPriorities rank SHA-384 > SHA-256 > SHA-256 truncated > SHA-1, and
+//     the ruling reads SHA-256 (0xfade0c02, slot 0 or an alternate at 0x1000…0x1004), so a signature carrying a
+//     SHA-384 CodeDirectory reads by its bytes, and without one the reader's pick is the kernel's pick by the same
+//     order. A hash type the kernel does not know, or one hash type twice (the kernel refuses both), reads by bytes.
+//     The other CodeDirectories are not in the digest: the kernel enforces only the one it ranks first;
+//   - that CodeDirectory's every code page is hashed again and compared, and every component the SuperBlob carries
 //     beside it (requirements, entitlements, …) against its special slot. A file whose code no longer matches its
 //     CodeDirectory is NOT signed for this digest: its bytes are.
+//
+// Errata (2026-11-05, TD-4's review): this reader first ranked SHA-256 ABOVE SHA-384 and checked the other
+// CodeDirectories for their magic and length alone, so a SHA-384 CodeDirectory added beside the SHA-256 one (other
+// flags, another identifier) left the digest unmoved while the kernel enforced the added one — an untouched read of a
+// floor whose enforced signing changed, against this header's "a doubt can only read TOUCHED".
 //
 // ONE copy, two readers: main's `native-plane.ts` (the installed plane) and `scripts/release-manifest.mjs` (the release
 // workflow's) import this file, so the two cannot disagree on a rule. Plain JavaScript so node runs it unbuilt, as
@@ -52,10 +62,11 @@ const HASH_TYPES = new Map([
   [3, { algorithm: "sha256", size: 20 }], // SHA-256, truncated
   [4, { algorithm: "sha384", size: 48 }],
 ]);
-/** which CodeDirectory is read when a signature carries several: SHA-256 (the ruling), then the kernel's own order */
+/** the one hash type XNU's hashPriorities rank above SHA-256: the kernel would enforce it, the ruling reads SHA-256 */
+const CS_HASHTYPE_SHA384 = 4;
+/** which CodeDirectory the kernel enforces when a signature carries several: XNU's hashPriorities, SHA-384 refused */
 const RANK = new Map([
-  [2, 4],
-  [4, 3],
+  [2, 3],
   [3, 2],
   [1, 1],
 ]);
@@ -118,12 +129,22 @@ function readImage(bytes, view, start, end) {
         blob.type < CSSLOT_ALTERNATE_CODEDIRECTORIES + CSSLOT_ALTERNATE_CODEDIRECTORY_COUNT),
   );
   if (directories.length === 0) unread("a signature with no CodeDirectory");
+  // every CodeDirectory is one the kernel would load, and none is one it would enforce over the SHA-256 one: so the
+  // CodeDirectory read here is always the kernel's
+  const hashTypes = new Set();
   let best = null;
   for (const directory of directories) {
     if (directory.magic !== CSMAGIC_CODEDIRECTORY)
       unread("a CodeDirectory slot holds another blob");
     if (directory.length < CD_FIXED_HEADER) unread("a short CodeDirectory");
-    const rank = RANK.get(view.getUint8(directory.start + 37)) ?? 0;
+    const hashType = view.getUint8(directory.start + 37);
+    const hash = HASH_TYPES.get(hashType);
+    if (hash === undefined || view.getUint8(directory.start + 36) !== hash.size)
+      unread("a CodeDirectory of an unknown hash type");
+    if (hashTypes.has(hashType)) unread("two CodeDirectories of one hash type");
+    hashTypes.add(hashType);
+    if (hashType === CS_HASHTYPE_SHA384) unread("a CodeDirectory the kernel ranks above SHA-256");
+    const rank = RANK.get(hashType) ?? 0;
     if (best === null || rank > best.rank) best = { directory, rank };
   }
   if (best.rank === 0) unread("a CodeDirectory of an unknown hash type");

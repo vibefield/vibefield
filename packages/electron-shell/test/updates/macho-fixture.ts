@@ -18,7 +18,7 @@ export interface Signing {
   /** an entitlements plist, carried as its own blob (slot 5) and bound by special slot 5 */
   readonly entitlements?: string;
   /** the CodeDirectories' hash types in slot order: the first at slot 0, the rest alternates from 0x1000 */
-  readonly hashTypes?: readonly (1 | 2)[];
+  readonly hashTypes?: readonly HashType[];
   /** LC_CODE_SIGNATURE's datasize: the space codesign reserves for the SuperBlob (zeros after it) */
   readonly reserve?: number;
   /** log2 of the code page size (codesign's 4 KiB) */
@@ -31,9 +31,13 @@ export interface Image {
   readonly directories: readonly Buffer[];
 }
 
+/** CS_HASHTYPE_*: SHA-1, SHA-256, and SHA-384 (the one XNU ranks above SHA-256, which codesign never writes for macOS) */
+export type HashType = 1 | 2 | 4;
+
 const HASHES = {
   1: { algorithm: "sha1", size: 20 },
   2: { algorithm: "sha256", size: 32 },
+  4: { algorithm: "sha384", size: 48 },
 } as const;
 const CD_HEADER = 88; // a version 0x20400 CodeDirectory's fields, through execSegFlags
 
@@ -46,7 +50,7 @@ function blob(magic: number, body: Buffer): Buffer {
 
 function codeDirectory(
   image: Buffer,
-  hashType: 1 | 2,
+  hashType: HashType,
   components: ReadonlyMap<number, Buffer>,
   signing: Signing,
 ): Buffer {
@@ -130,7 +134,7 @@ export function machO(
   if (signing.entitlements !== undefined)
     components.set(5, blob(0xfade7171, Buffer.from(signing.entitlements)));
   const options: Signing = signing;
-  const hashTypes: readonly (1 | 2)[] = signing.hashTypes ?? [2];
+  const hashTypes: readonly HashType[] = signing.hashTypes ?? [2];
   const directories = hashTypes.map((hashType) =>
     codeDirectory(image, hashType, components, options),
   );

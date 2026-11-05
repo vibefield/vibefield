@@ -5,8 +5,8 @@
 export type CodeDirectorySlice = {
   cputype: number;
   cpusubtype: number;
-  /** CS_HASHTYPE_*: 1 SHA-1, 2 SHA-256, 3 SHA-256 truncated, 4 SHA-384 */
-  hashType: 1 | 2 | 3 | 4;
+  /** CS_HASHTYPE_*: 1 SHA-1, 2 SHA-256, 3 SHA-256 truncated (a signature with a SHA-384 one, 4, reads by bytes) */
+  hashType: 1 | 2 | 3;
   /** hex SHA-256 of the CodeDirectory blob, all 32 bytes (a SHA-256 CodeDirectory's: Apple's full cdhash) */
   cdhash: string;
 };

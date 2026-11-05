@@ -99,6 +99,51 @@ describe("the member digest: a signed Mach-O by its CodeDirectory (TD-4)", () =>
     });
   });
 
+  // TD-4's review: XNU's hashPriorities rank SHA-384 above SHA-256 and the kernel enforces the CodeDirectory it ranks
+  // first (its flags, identifier, team, special slots), so the digest's CodeDirectory must always be the kernel's.
+  it("reads the CodeDirectory the kernel enforces: one beside a SHA-384 one, of an unknown hash type, or twice reads by bytes", () => {
+    const alone = machO(CODE);
+    const added = machO(CODE, { hashTypes: [2, 4] });
+    // the SHA-256 CodeDirectory is the same blob either way: only the added SHA-384 one differs
+    expect(added.directories[0]?.equals(alone.directories[0]!)).toBe(true);
+    // ... and the added one with the hardened runtime cleared, the SHA-256 one left as signed
+    const cleared = Buffer.from(added.bytes);
+    const sha384 = cleared.indexOf(added.directories[1]!);
+    expect(sha384).toBeGreaterThan(0);
+    cleared.writeUInt32BE(0, sha384 + 12); // the CodeDirectory's flags: CS_RUNTIME gone
+    for (const bytes of [added.bytes, cleared]) {
+      expect(memberDigest(bytes)).toEqual({
+        by: "bytes",
+        digest: sha256(bytes),
+        why: "a CodeDirectory the kernel ranks above SHA-256",
+      });
+      expect(memberDigest(bytes).digest).not.toBe(memberDigest(alone.bytes).digest);
+    }
+    expect(memberDigest(machO(CODE, { hashTypes: [4] }).bytes)).toMatchObject({
+      by: "bytes",
+      why: "a CodeDirectory the kernel ranks above SHA-256",
+    });
+    // one hash type twice: the kernel refuses the signature
+    expect(memberDigest(machO(CODE, { hashTypes: [2, 2] }).bytes)).toMatchObject({
+      by: "bytes",
+      why: "two CodeDirectories of one hash type",
+    });
+    // an alternate of a hash type the kernel does not know: the kernel refuses the signature
+    const both = machO(CODE, { hashTypes: [2, 1] });
+    expect(memberDigest(both.bytes)).toEqual({
+      by: "cdhash",
+      digest: sha256(both.directories[0]!),
+    });
+    const unknown = Buffer.from(both.bytes);
+    const alternate = unknown.indexOf(both.directories[1]!);
+    expect(alternate).toBeGreaterThan(0);
+    unknown.writeUInt8(9, alternate + 37); // the alternate's hashType
+    expect(memberDigest(unknown)).toMatchObject({
+      by: "bytes",
+      why: "a CodeDirectory of an unknown hash type",
+    });
+  });
+
   it("an unsigned Mach-O, a script, a symlink's text and nothing are read by their bytes — the byte rule's own line", () => {
     for (const [bytes, why] of [
       [machO(CODE, null).bytes, "unsigned"],
