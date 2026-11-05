@@ -35448,3 +35448,67 @@ One LOW, O3, goes to Owed 4a2b; it predates `c07039551`.
     (`unconfigured`)
   - and §9's amendment on a run's journal, with its cut-tail sentence.
 - The records beyond LANDED, ROADMAP and DECISIONS: architecture.html's flow host row reads Built, at `c07039551`.
+
+## Item 183 — the catalog's composer plates are a row per state: one `it` drew all 39 of Chat's states and crossed vitest's 5 s bound on CI's push 99; now each state is its own row, and a red names it (2026-11-05)
+(2026-11-05; one commit `382e5f564` on lane `fix/183-chat-composer` over main `8aea8fe58`, b5a's, in
+`/Volumes/SamsungRed/lanes/items177/vibe-field`; M161 is `382e5f564` itself, a fast-forward of main `8aea8fe58`,
+run 161, landed 2026-11-05T16:09:31Z.) Filed by VF-PM at 15:36Z from push 99's verify.
+
+**The red.** Push 99's verify (run `42047807158`, main `266a70c37`, attempt 1, 14:43:44Z → 15:26:20Z) failed on one
+row: `@vibefield/field-app`'s `test/chat-composer.test.tsx` › "the catalog's composer plates (docs/UI_SYSTEM.md: the
+shipping view on fixtures)" › "draws every state's composer, and none where no thread is shown", at 5196 ms with
+"Test timed out in 5000ms." (`chat-composer.test.tsx:983:3`).
+- field-app read "Test Files  1 failed | 303 passed (304)" and "Tests  1 failed | 4030 passed (4031)"; Nx's one
+  failed task was `@vibefield/field-app:test`.
+- The row rendered every `ChatState` (`CHAT_STATES`, 39) in one `it`, a full React render each, under vitest's
+  default 5,000 ms: neither the file nor field-app's `vitest.config.ts` sets a bound.
+- The same row read 1,611 ms on CI's push-98 green (run `42038964625`, head `0e4fc5306`) and 1,994 and 2,341 ms on
+  the mini (runs 157 and 159, their verify logs). So the red was a loop's sum against a per-row bound on a loaded
+  runner: item 179's class.
+
+**The fix.** `packages/field-app/test/chat-composer.test.tsx`, +8 −5: the loop becomes `it.each(CHAT_STATES)`, so
+each of the 39 states is its own row under the bound, named "draws the %s plate's composer, or none where no thread
+is shown".
+- The same `plate()` (the catalog's mount of the shipping `ChatPreview`), the same `threadless` list (empty,
+  opening, unavailable; now at the describe's scope) and the same two expectations, each still carrying the state
+  as its message.
+- No bound was raised. Nothing is stubbed, nothing skipped.
+
+**The lights,** on this Mac (pinned, so targeted only; nice 19, one at a time; b5a's logs in
+`lanes/co-plan/lanes/item183/logs/`):
+- chat-composer.test.tsx alone: "Tests  71 passed (71)", the file's 32 other rows and the 39 state rows (the old
+  single row is gone). The slowest state row took 102 ms (`typing`), and the 39 sum to 755 ms.
+- The design-kit walls: glyphs.test.tsx "Tests  10 passed (10)"; ui-system-boundaries.test.ts "Tests  47 passed
+  (47)", which holds the hex-literal rule.
+- field-app `tsc --noEmit` exit 0, biome on the file clean, and `git diff --check` clean (T's body).
+
+**The witness.**
+- The mini's run 161 (a9's mint, M161 the commit itself, stacked on `8aea8fe58`; the bundle
+  `item183-382e5f564.bundle`, 22,832 B, sha256 `c89a23d0ed55…`, requiring only `c07039551`):
+  - `lanes/ts6/logs/mini/run161/run161.out` (sha256
+    `9bcc0742b34cb907c900936c1cec9b2a7498df4009f57ea5613d2d02625ad4c8`): "ts6-mini verify ARMED 15:58:28Z";
+    "verify exit 0 16:04:00Z"; "test target:  NX   Successfully ran target test for 29 projects"; "cargo test
+    results: ok 34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+  - `verify.log` (sha256 `fe949aaf905cb887131171bc089f55855e1dcdd9a978fa5a523207efe112087c`; its clean copy
+    `verify.clean.log`, `fc74ccb25bc100c06b158aad98d96df1ba27eb776b9243f2108fa3ff80384e06`):
+    - field-app "Tests  4069 passed (4069)", run 159's 4031 − 1 + 39 (the one row gone, the 39 state rows in), and
+      in it "✓ test/chat-composer.test.tsx (71 tests) 2850ms";
+    - fieldd "Tests  3416 passed | 14 skipped (3430)", contracts "Tests  1747 passed (1747)" and electron-shell
+      "Tests  2668 passed | 2 skipped (2670)", each as at run 159;
+    - vitest 13,272 | 0 | 20 over 937 files run (4 skipped whole), run 159's 13,234 + 38; node "ℹ tests 472",
+      "ℹ fail 0"; biome "Checked 3376 files"; cargo 545 passed in 34 suites ("test result: ok" each);
+    - the census "TOTAL 106 files across 9 packages: 43,892,178 bytes", "no drift", "census assert OK — no §7.3
+      violation".
+  - `run161-next.out` (`ffed4d31d2531143a073434e4b92ca76efc2099aedc02f4246852636b54294c2`): "the locks stand: no
+    re-install"; "preflight exit 0 · 1 WARN/FAIL lines", R23's `acp` candidate (the standing warning).
+  - `run161-hid.log` (`072299f6c21261cded70651bde7b699bc4a54d88e41ba63bf1c48fb61702c665`): the console locked, HID
+    idle, from 15:58:28Z to 16:04:00Z.
+  - The witness, after the verify (`w183-382e5f564.out`, sha256
+    `6fdd81e385b893473db8e736dc03a471a73bf828aa0b235ba65c41d1fff39717`; a9, 16:07:51–16:07:53Z, HEAD `382e5f564`,
+    clean): chat-composer.test.tsx alone and verbose, "Tests  71 passed (71)" in 1.88 s
+    (`w183-382e5f564/chat-composer-alone.log`, `e1e36fd3…`). The 39 state rows (`state-rows.txt`, `a787e5ba…`),
+    each its own row and each ✓: the slowest 6 ms (`menu-failed`), 142 ms summed. The summary's "× 1" is a row's
+    own name ("removes a chip with its ×"), not a red.
+- The land (the fixer's, 2026-11-05T16:09:31Z): main fast-forwarded from `8aea8fe58`, 1 file +8 −5.
+
+Item 183 closes in this entry.
