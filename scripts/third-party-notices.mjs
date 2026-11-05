@@ -38,11 +38,15 @@
 //     whose OUTPUT ships are named too: tailwindcss (its preflight is in the CSS), vite (its preload
 //     helper), esbuild (its runtime helpers).
 //   - cargo: field-native and its two host binaries (this repo's Cargo.lock), rosettad (the rosetta
-//     checkout's lock) and mille's Node-API engine (the mille checkout's lock), walked from the root
-//     crates over normal and build edges whose `cfg(...)` holds for this target. rosetta is the
+//     checkout's lock) and mille's Node-API engine (the lock of the checkout its addon was built in,
+//     or, once mille is released, its prebuilt package's own files — `milleEngine`), walked from the
+//     root crates over normal and build edges whose `cfg(...)` holds for this target. rosetta is the
 //     owner's own and UNLICENSED: it is listed as VibeField's own component, never as third-party.
-//     A -sys crate that links a native library others made brings that library in (NATIVE_LINKS):
-//     ghosttea-vt-sys links Ghostty's VT core (libghostty-vt, MIT) into the terminal cell.
+//     Code others made that a crate compiles in or links beyond its root licence is a component of
+//     its own (NATIVE_LINKS): Ghostty's VT core (libghostty-vt, MIT) and the simdutf, Highway, Wuffs
+//     and Zig compiler_rt its static library carries (ghosttea-vt-sys), libwebp (libwebp-sys), zstd
+//     (zstd-sys), and fiat-crypto and once_cell (ring). A crate that compiles native code with licence
+//     files below its root, or with none at all, and no NATIVE_LINKS row is a gap.
 //   - Go: the sidecar's build info, its texts from the committed snapshot.
 //   - Vendored art: the desk's handwriting fonts (OFL-1.1), Simple Icons' OS marks (CC0-1.0), Lobe
 //     Icons' agent marks (MIT), and the CC BY 3.0 credit for "Sparks from Fire" while ghosttea-react
@@ -198,10 +202,13 @@ export function classifyText(body, file = "") {
   return "Other";
 }
 
-/** A text's group from its words and the names of the files that carry it. */
+/**
+ * A text's group from its words and the names of the files that carry it — each file's own name, never the directory
+ * it sits in (`third_party/fiat/LICENSE` is a licence, whatever its folder is called).
+ */
 const NOTICE_NAME = /notice|third[-_ ]?party/i;
 function kindOfText(body, files) {
-  const names = [...files];
+  const names = [...files].map((f) => basename(f));
   return names.length > 0 && names.every((f) => NOTICE_NAME.test(f))
     ? "Notices"
     : classifyText(body);
@@ -842,6 +849,7 @@ export function parseManifest(text) {
     version: null,
     license: null,
     licenseFile: null,
+    links: null,
     deps: [],
     workspace: null,
   };
@@ -919,6 +927,7 @@ export function parseManifest(text) {
       else if (key[0] === "version") out.version = unquote(value);
       else if (key[0] === "license") out.license = unquote(value);
       else if (key[0] === "license-file") out.licenseFile = unquote(value);
+      else if (key[0] === "links") out.links = unquote(value);
       continue;
     }
     if (table.length === 1 && table[0] === "package" && key[1] === "workspace") {
@@ -1211,9 +1220,23 @@ export function collectCargo(
         );
       ledger.add({ ecosystem: "crate", name: p.name, version: p.version, licence, texts, role });
       crates++;
-      // A -sys crate that links a native library others made: that library is a component too.
-      const linked = NATIVE_LINKS[p.name]?.(dir);
-      if (linked) ledger.add(linked);
+      // Code others made that a crate compiles in or links, beyond what its root licence covers: a component each.
+      const linked = NATIVE_LINKS[p.name]?.(dir, { name: p.name, version: p.version, role });
+      for (const row of linked?.components ?? []) ledger.add(row);
+      for (const gap of linked?.gaps ?? []) ledger.gaps.push(gap);
+      // ... and the guard for the next one: a crate that compiles native code with licence files below its root
+      // (a vendored library's own), or with no licence text at all, is a gap until NATIVE_LINKS names it.
+      if (!NATIVE_LINKS[p.name] && compilesNative(m)) {
+        const below = vendoredLicenceFiles(dir, m);
+        if (below.length > 0 || texts.length === 0)
+          ledger.gaps.push(
+            `${p.name} ${p.version} compiles native code ` +
+              (below.length > 0
+                ? `whose licence files below its root (${below.join(", ")}) are not read`
+                : "and carries no licence text of its own") +
+              " — add its row to NATIVE_LINKS in scripts/third-party-notices.mjs",
+          );
+      }
     } else {
       seen.add(key);
       ledger.gaps.push(`${p.name} ${p.version}: source ${p.source} is not read by this tool`);
@@ -1481,23 +1504,245 @@ SOFTWARE.`;
 // MIT with one copyright line, so it is kept here and the revision is read from the crate (`artifacts.json`).
 export const GHOSTTY_LICENCE = `MIT License\n\nCopyright (c) 2024 Mitchell Hashimoto, Ghostty contributors\n\n${MIT_BODY}`;
 
-/** The native libraries a crate links, keyed by the crate: each gives the component it brings in. */
+// Highway's BSD-3-Clause half (it is Apache-2.0 OR BSD-3-Clause), verbatim as numpy 2.4.4 vendors Highway's LICENSE.
+const HIGHWAY_BSD = `Copyright (c) The Highway Project Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1.  Redistributions of source code must retain the above copyright notice, this
+    list of conditions and the following disclaimer.
+
+2.  Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+
+3.  Neither the name of the copyright holder nor the names of its
+    contributors may be used to endorse or promote products derived from
+    this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.`;
+
+/**
+ * The libraries Ghostty VT's static library carries beside Ghostty's own code. Neither the bundle's `LICENSES/` (it
+ * holds Ghostty.txt alone) nor its `sbom.spdx.json` (it names Ghostty VT alone) carries them, so each text is kept
+ * here WORD FOR WORD (an MIT grant in MIT_BODY's wrapping, which keeps its text id) as read on 2026-11-05 from a
+ * copy of that project's own licence: simdutf's from Node.js v26.5.0's
+ * LICENSE (deps/v8/third_party/simdutf), Highway's BSD-3-Clause half from numpy 2.4.4's vendored copy, Wuffs's MIT
+ * half from Chromium's licences as Electron ships them, and Zig's from Zig 0.17.0's LICENSE (the Zig ghosttea-vt-sys's
+ * build recipe names; compiler_rt is Zig's own runtime library, under Zig's licence). A dual-licensed library is
+ * carried under the half whose text is named.
+ */
+export const GHOSTTY_VT_LIBRARIES = {
+  simdutf: {
+    name: "simdutf",
+    licence: "Apache-2.0 OR MIT",
+    file: "LICENSE-MIT (simdutf)",
+    body: `Copyright 2021 The simdutf authors\n\n${MIT_BODY}`,
+    line: /Copyright 2021 The simdutf authors/,
+  },
+  highway: {
+    name: "Highway",
+    licence: "Apache-2.0 OR BSD-3-Clause",
+    file: "LICENSE-BSD3 (Highway)",
+    body: HIGHWAY_BSD,
+    line: /Copyright \(c\) The Highway Project Authors/,
+  },
+  wuffs: {
+    name: "Wuffs",
+    licence: "Apache-2.0 OR MIT",
+    file: "LICENSE-MIT (Wuffs)",
+    body: `Copyright 2023 The Wuffs Authors\n\n${MIT_BODY}`,
+    line: /Copyright 2023 The Wuffs Authors/,
+  },
+  compiler_rt: {
+    name: "Zig compiler_rt",
+    licence: "MIT",
+    file: "LICENSE (Zig)",
+    body: `The MIT License (Expat)\n\nCopyright (c) Zig contributors\n\n${MIT_BODY}`,
+    line: /Copyright \(c\) Zig contributors/,
+  },
+};
+
+/**
+ * What Ghostty VT's static library carries, by the Ghostty commit it was built from (the commit ghosttea-vt-sys's
+ * `artifacts.json` and ghosttea's iOS notices both name). MEASURED, never inferred: `ar -t` on the bundle
+ * ghosttea-vt-sys 0.14.0 downloads (`ghostty-vt/lib/libghostty-vt.a`) and on GhostteaAppleNative's archive (every
+ * slice) lists simdutf.o, highway_zcu.o with per_target.o and targets.o, wuffs-v0.4.o and compiler_rt.o, and `nm` on
+ * the shipped field-terminal-host finds simdutf, hwy and wuffs symbols (2026-11-05). A commit this table does not hold
+ * is a gap until someone measures it, which fires exactly at the EL8 that moves ghosttea.
+ */
+export const GHOSTTY_VT_BUNDLED = {
+  "83fb95624b0439ee660c2679b43b38c8b63769cd": ["simdutf", "highway", "wuffs", "compiler_rt"],
+};
+
+/** The rows for what Ghostty VT's library carries at `commit`, or the gap that says it is not measured. */
+export function ghosttyVtBundled(commit, role) {
+  const keys = GHOSTTY_VT_BUNDLED[commit];
+  if (!keys)
+    return {
+      components: [],
+      gaps: [
+        `Ghostty VT ${commit || "(no commit)"}: what its static library carries beside Ghostty is not measured — ` +
+          "list its members (`ar -t libghostty-vt.a`) and add the commit to GHOSTTY_VT_BUNDLED",
+      ],
+    };
+  return {
+    components: keys.map((key) => {
+      const lib = GHOSTTY_VT_LIBRARIES[key];
+      return {
+        ecosystem: "other",
+        name: lib.name,
+        version: `in Ghostty VT ${commit.slice(0, 8)}`,
+        licence: lib.licence,
+        texts: [{ file: lib.file, body: lib.body }],
+        role,
+      };
+    }),
+    gaps: [],
+  };
+}
+
+/** A component whose texts are files of a crate's own tree (`files`, crate-relative); a file gone is a gap. */
+function treeRow(dir, crate, { files, ...row }) {
+  const texts = [];
+  const gaps = [];
+  for (const rel of files) {
+    const abs = join(dir, rel);
+    if (existsSync(abs)) texts.push({ file: rel, body: readFileSync(abs, "utf8") });
+    else
+      gaps.push(
+        `${crate.name} ${crate.version}: ${rel} is gone — ${row.name}'s licence is not read`,
+      );
+  }
+  return { components: [{ ecosystem: "other", ...row, texts }], gaps };
+}
+
+/**
+ * Code others made that a crate compiles in or links beyond what its root licence covers, keyed by the crate: each
+ * gives `{ components, gaps }`. The crates here were found by reading every crate of the desktop graphs that compiles
+ * native code (2026-11-05); the guard in collectCargo (`compilesNative`, `vendoredLicenceFiles`) makes the next one a
+ * gap rather than a silent omission.
+ */
 export const NATIVE_LINKS = {
+  // Ghostty's VT core, downloaded as a static library and linked into the terminal cell, and what that library carries.
   "ghosttea-vt-sys": (dir) => {
     let commit = "";
     try {
       commit = readJson(join(dir, "artifacts.json"))?.source?.commit ?? "";
     } catch {}
+    const bundled = ghosttyVtBundled(
+      commit,
+      "inside Ghostty VT's static library (libghostty-vt), linked into field-native's terminal",
+    );
     return {
-      ecosystem: "other",
-      name: "Ghostty VT (libghostty-vt)",
-      version: commit,
-      licence: "MIT",
-      texts: [{ file: "LICENSE (Ghostty)", body: GHOSTTY_LICENCE }],
-      role: "the terminal engine, linked into field-native's terminal through ghosttea-vt-sys",
+      components: [
+        {
+          ecosystem: "other",
+          name: "Ghostty VT (libghostty-vt)",
+          version: commit,
+          licence: "MIT",
+          texts: [{ file: "LICENSE (Ghostty)", body: GHOSTTY_LICENCE }],
+          role: "the terminal engine, linked into field-native's terminal through ghosttea-vt-sys",
+        },
+        ...bundled.components,
+      ],
+      gaps: bundled.gaps,
+    };
+  },
+  // libwebp's C, compiled from vendor/ by its build script. The crate declares MIT for its binding and carries no
+  // licence file at its root; libwebp's BSD-3-Clause and its patent grant live in vendor/ alone.
+  "libwebp-sys": (dir, crate) => {
+    let version = "";
+    try {
+      version =
+        /AC_INIT\(\[libwebp\],\s*\[([^\]]+)\]/.exec(
+          readFileSync(join(dir, "vendor/configure.ac"), "utf8"),
+        )?.[1] ?? "";
+    } catch {}
+    return treeRow(dir, crate, {
+      name: "libwebp",
+      version,
+      licence: "BSD-3-Clause",
+      files: ["vendor/COPYING", "vendor/PATENTS"],
+      role: `${crate.role}: WebP images, compiled in by libwebp-sys ${crate.version}`,
+    });
+  },
+  // zstd's C, compiled from zstd/. zstd is BSD-3-Clause OR GPL-2.0-only; its BSD text alone is carried (zstd/COPYING
+  // is the GPL alternative, never the licence VibeField takes). The crate's root copy is an older Facebook spelling.
+  "zstd-sys": (dir, crate) =>
+    treeRow(dir, crate, {
+      name: "Zstandard (zstd)",
+      version: /\+zstd\.(.+)$/.exec(crate.version)?.[1] ?? "",
+      licence: "BSD-3-Clause",
+      note: "zstd is BSD-3-Clause OR GPL-2.0-only; it is used here under BSD-3-Clause",
+      files: ["zstd/LICENSE"],
+      role: `${crate.role}: compression, compiled in by zstd-sys ${crate.version}`,
+    }),
+  // ring's root LICENSE points to the licences of the code it took in: fiat-crypto's generated field arithmetic
+  // (third_party/fiat) and its once_cell polyfill.
+  ring: (dir, crate) => {
+    const fiat = treeRow(dir, crate, {
+      name: "fiat-crypto",
+      version: `in ring ${crate.version}`,
+      licence: "Apache-2.0",
+      files: ["third_party/fiat/LICENSE"],
+      role: `${crate.role}: compiled into ring`,
+    });
+    const onceCell = treeRow(dir, crate, {
+      name: "once_cell",
+      version: `in ring ${crate.version}`,
+      licence: "MIT OR Apache-2.0",
+      files: ["src/polyfill/once_cell/LICENSE-APACHE", "src/polyfill/once_cell/LICENSE-MIT"],
+      role: `${crate.role}: ring's polyfill`,
+    });
+    return {
+      components: [...fiat.components, ...onceCell.components],
+      gaps: [...fiat.gaps, ...onceCell.gaps],
     };
   },
 };
+
+/** Whether a crate compiles native code: it build-depends on `cc` or `cmake` (an optional one too). */
+export function compilesNative(manifest) {
+  return Boolean(manifest?.deps.some((d) => d.kind === "build" && /^(cc|cmake)$/.test(d.crate)));
+}
+
+/**
+ * Licence files below a crate's root where vendored native code keeps its own: `vendor/` and each directory in it,
+ * each directory in `third_party/` (or `third-party/`), and the directory its `links` key names. Crate-relative, sorted.
+ */
+export function vendoredLicenceFiles(dir, manifest) {
+  const subdirs = (rel) => {
+    try {
+      return readdirSync(join(dir, rel), { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => `${rel}/${e.name}`);
+    } catch {
+      return [];
+    }
+  };
+  const places = [
+    "vendor",
+    ...subdirs("vendor"),
+    ...subdirs("third_party"),
+    ...subdirs("third-party"),
+    ...(manifest?.links && /^[A-Za-z0-9_.-]+$/.test(manifest.links) ? [manifest.links] : []),
+  ];
+  const out = new Set();
+  for (const rel of places)
+    for (const t of licenceFiles(join(dir, rel))) out.add(`${rel}/${t.file}`);
+  return [...out].sort();
+}
 
 // Lobe Icons' npm packages ship no LICENSE file; the copyright line is the one their README states
 // ("Copyright © 2023 LobeHub. This project is MIT licensed.", @lobehub/icons-static-svg 1.94.0).
@@ -1633,10 +1878,39 @@ export const NODE_BUNDLES = [
 // Each test reads a line only that attribution carries: Ghostty's copyright line, not its author's name alone
 // (mitchellh/go-ps, a Go module of the sidecar, is MIT under the same name and would satisfy a bare match).
 const GHOSTTY_LINE = /Copyright \(c\) 2024 Mitchell Hashimoto, Ghostty contributors/;
+const hasCrate = (ledger, name) =>
+  [...ledger.components.values()].some((c) => c.ecosystem === "crate" && c.name === name);
+// Each library Ghostty VT's static library carries, required while a Ghostty VT in the ledger is at a commit whose
+// measured members include it (GHOSTTY_VT_BUNDLED).
+const GHOSTTY_VT_REQUIRED = Object.entries(GHOSTTY_VT_LIBRARIES).map(([key, lib]) => ({
+  what: `${lib.name}'s licence (inside Ghostty VT's static library)`,
+  test: lib.line,
+  when: (ledger) =>
+    [...ledger.components.values()].some(
+      (c) => /^Ghostty VT\b/.test(c.name) && GHOSTTY_VT_BUNDLED[c.version]?.includes(key),
+    ),
+}));
 export const REQUIRED_DESKTOP = [
   {
     what: "Ghostty's MIT notice (the terminal engine, through ghosttea-vt-sys)",
     test: GHOSTTY_LINE,
+  },
+  ...GHOSTTY_VT_REQUIRED,
+  // Each test reads a line only that library's text carries: React's MIT is also "Meta Platforms, Inc. and affiliates".
+  {
+    what: "libwebp's BSD-3-Clause notice (compiled in by libwebp-sys)",
+    test: /Copyright \(c\) 2010, Google Inc\. All rights reserved\.\s+Redistribution/,
+    when: (ledger) => hasCrate(ledger, "libwebp-sys"),
+  },
+  {
+    what: "libwebp's WebM patent grant (compiled in by libwebp-sys)",
+    test: /codecs distributed by Google as part of the WebM Project/,
+    when: (ledger) => hasCrate(ledger, "libwebp-sys"),
+  },
+  {
+    what: "Zstandard's BSD-3-Clause notice (compiled in by zstd-sys)",
+    test: /For Zstandard software\s+Copyright \(c\) Meta Platforms, Inc\. and affiliates\./,
+    when: (ledger) => hasCrate(ledger, "zstd-sys"),
   },
   {
     what: "the CC BY 3.0 credit for Sparks from Fire (ghosttea-react's effects)",
@@ -1647,6 +1921,7 @@ export const REQUIRED_DESKTOP = [
 ];
 export const REQUIRED_IOS = [
   { what: "Ghostty's MIT notice (the terminal engine, through ghosttea)", test: GHOSTTY_LINE },
+  ...GHOSTTY_VT_REQUIRED,
   {
     what: "Tailscale's BSD-3-Clause licence (TailscaleKit)",
     test: /Tailscale Inc|Tailscale & AUTHORS/,
@@ -1682,6 +1957,54 @@ function addVendored(ledger, rows, repoRoot) {
 
 // ---- the desktop -----------------------------------------------------------------------------------
 /**
+ * Where the mille engine a stage ships was made, read off the addon itself: fieldd's build copies it from
+ * `@vibecook/mille` as fieldd resolves it (packages/fieldd/scripts/files-host-build.mjs `installedMilleNativeFile`,
+ * the one reader, so the two never disagree). An addon inside a checkout was built there by cargo, so the nearest
+ * Cargo.lock above it is its graph (`{ cargo }`); one inside node_modules is a released platform package, whose own
+ * licence and notices files speak for it (`{ npm }`). Never the lock's checkout by name: at mille's release
+ * (`needsCheckout` false, RD-5) the checkout may be gone, or present at a revision the shipped binary was not built
+ * from. `null` where mille ships no engine for this host; `{ problem }` when the engine cannot be found.
+ */
+export async function milleEngine(repoRoot) {
+  const fielddRoot = join(repoRoot, "packages/fieldd");
+  let found;
+  try {
+    const { installedMilleNativeFile } = await import(
+      "../packages/fieldd/scripts/files-host-build.mjs"
+    );
+    found = installedMilleNativeFile(fielddRoot);
+  } catch (error) {
+    return {
+      problem: `mille's native engine is not installed beside fieldd (${error.code ?? error.message}) — its crates cannot be read`,
+    };
+  }
+  if (found === null) return null;
+  const file = realOrNull(found.file);
+  if (!file)
+    return {
+      problem: `mille's native engine ${basename(found.file)} is not built — its crates cannot be read`,
+    };
+  if (file.split(sep).includes("node_modules")) {
+    const dir = namedPackageDir(dirname(file));
+    return dir
+      ? { npm: dir }
+      : {
+          problem: `mille's native engine ${basename(file)} is in no package — its licence cannot be read`,
+        };
+  }
+  for (let at = dirname(file); ; at = dirname(at)) {
+    if (existsSync(join(at, "Cargo.lock"))) return { cargo: at };
+    if (existsSync(join(at, ".git")) || dirname(at) === at)
+      return {
+        problem: `mille's native engine ${basename(file)} was built in a checkout with no Cargo.lock — its crates cannot be read`,
+      };
+  }
+}
+
+/** A released native package's notices for what it links: a package that carries none leaves its crates unlisted. */
+const NOTICES_NAME = /^(third[-_]party[-_]notices|notices?)([-._].*)?$/i;
+
+/**
  * Every input the desktop notices read, from a repository root. Exported so a test (or another tool)
  * can name a fixture's inputs instead.
  */
@@ -1705,7 +2028,7 @@ export async function desktopInputs(repoRoot, { sidecarPath = null, env = proces
       process.platform === "win32" ? "sidecar-slim.exe" : "sidecar-slim",
     );
   const rosetta = sibling("rosetta");
-  const mille = sibling("mille");
+  const mille = await milleEngine(repoRoot);
   const desktopPkg = readJson(join(repoRoot, "apps/desktop/package.json"));
   return {
     repoRoot,
@@ -1741,11 +2064,12 @@ export async function desktopInputs(repoRoot, { sidecarPath = null, env = proces
             },
           ]
         : []),
-      ...(mille
+      // mille's engine as the stage ships it (milleEngine): built from a checkout, that checkout's graph
+      ...(mille?.cargo
         ? [
             {
-              lockFile: join(mille, "Cargo.lock"),
-              workspaceRoot: mille,
+              lockFile: join(mille.cargo, "Cargo.lock"),
+              workspaceRoot: mille.cargo,
               roots: ["mille-binding"],
               role: "mille's native file engine",
               sibling: { name: "mille (Rust crates)" },
@@ -1753,6 +2077,17 @@ export async function desktopInputs(repoRoot, { sidecarPath = null, env = proces
           ]
         : []),
     ],
+    // ... or a released platform package, which must carry the notices for what it links
+    packages: mille?.npm
+      ? [
+          {
+            dir: mille.npm,
+            role: "mille's native file engine (its released package)",
+            native: true,
+          },
+        ]
+      : [],
+    problems: mille?.problem ? [mille.problem] : [],
     sidecar,
     goSnapshotFile: join(repoRoot, GO_SNAPSHOT),
     goCache: env.VIBEFIELD_NOTICES_GOMODCACHE ?? null,
@@ -1777,6 +2112,16 @@ export function desktopNotices(inputs, { externals = [] } = {}) {
   }
   for (const g of inputs.cargo)
     collectCargo(ledger, { ...g, target: inputs.target, registryDirs: inputs.registryDirs });
+  for (const p of inputs.packages ?? []) {
+    const c = addNpmPackage(ledger, p.dir, { repoRoot, role: p.role });
+    // A prebuilt native package links crates others made, its owner's own or not; their notices are its to carry.
+    if (c && p.native && !licenceFiles(p.dir).some((t) => NOTICES_NAME.test(t.file)))
+      ledger.gaps.push(
+        `${c.name} ${c.version} is a prebuilt native package with no third-party notices for the crates it links — ` +
+          "ask its owner to ship them, or build it from its pinned checkout",
+      );
+  }
+  for (const p of inputs.problems ?? []) ledger.errors.push(p);
   if (inputs.sidecar) {
     if (!existsSync(inputs.sidecar))
       ledger.gaps.push(`no mesh sidecar at ${relativeTo(repoRoot, inputs.sidecar)}`);
@@ -2108,6 +2453,15 @@ export function iosAcknowledgements({
         texts,
         role: font ? "the terminal's fonts" : "the terminal (ghosttea)",
       });
+      // ghosttea's notices name Ghostty VT alone; GhostteaAppleNative's archive carries what its library carries too.
+      if (c.name === "Ghostty VT") {
+        const bundled = ghosttyVtBundled(
+          c.version,
+          "inside Ghostty VT, in ghosttea's native library (GhostteaAppleNative)",
+        );
+        for (const row of bundled.components) ledger.add(row);
+        for (const gap of bundled.gaps) ledger.gaps.push(gap);
+      }
     }
   ledger.add({
     ecosystem: "swift",

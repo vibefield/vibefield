@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
@@ -8,17 +16,22 @@ import {
   bundleModulePaths,
   cfgMatches,
   classifyText,
+  compilesNative,
   createLedger,
   desktopNotices,
   forThisHost,
   GHOSTTY_LICENCE,
+  GHOSTTY_VT_BUNDLED,
+  GHOSTTY_VT_LIBRARIES,
   GO_SNAPSHOT,
   ghostteaEcosystem,
+  ghosttyVtBundled,
   goBuildInfo,
   hostTarget,
   IOS_OUTPUT,
   kindOfExpression,
   MIT_BODY,
+  milleEngine,
   NOTICES_FILE,
   nodeModulesPackage,
   normalizeText,
@@ -39,6 +52,8 @@ import {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const RULE = "=".repeat(80);
+// The Ghostty commit ghosttea-vt-sys 0.14.0 links, whose library's members GHOSTTY_VT_BUNDLED records.
+const GHOSTTY_COMMIT = "83fb95624b0439ee660c2679b43b38c8b63769cd";
 
 const mit = (holder) => `MIT License\n\nCopyright (c) 2020 ${holder}\n\n${MIT_BODY}\n`;
 const APACHE =
@@ -195,9 +210,44 @@ function tree(t) {
   crate("devcrate", "1.0.0", "MIT", { LICENSE: mit("Dev crate") });
   crate("ghosttea-vt-sys", "0.14.0", "MIT", {
     LICENSE: mit("James Yong"),
-    "artifacts.json": { schemaVersion: 1, source: { commit: "83fb95624b04" } },
+    "artifacts.json": { schemaVersion: 1, source: { commit: GHOSTTY_COMMIT } },
   });
   return root;
+}
+
+/**
+ * Add a registry crate to a fixture tree as a direct dependency of root-crate: its lock entry, the root's declaration
+ * and its extracted source (`manifest` is appended to its [package] table; `files` are crate-relative).
+ */
+function addCrate(root, { name, version, license = null, manifest = "", files = {} }) {
+  const lockFile = join(root, "Cargo.lock");
+  // root-crate's own list is the lock's only one naming winonly
+  const lock = readFileSync(lockFile, "utf8").replace(
+    ' "winonly",\n',
+    ` "winonly",\n "${name}",\n`,
+  );
+  writeFileSync(
+    lockFile,
+    `${lock}\n[[package]]\nname = "${name}"\nversion = "${version}"\n` +
+      'source = "registry+https://github.com/rust-lang/crates.io-index"\n',
+  );
+  const rootManifest = join(root, "crates/root/Cargo.toml");
+  writeFileSync(
+    rootManifest,
+    readFileSync(rootManifest, "utf8").replace(
+      "[dependencies]\n",
+      `[dependencies]\n${name} = "${version}"\n`,
+    ),
+  );
+  const dir = join(root, "registry/index", `${name}-${version}`);
+  const head = `[package]\nname = "${name}"\nversion = "${version}"\n${license ? `license = "${license}"\n` : ""}`;
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "Cargo.toml"), `${head}${manifest}`);
+  for (const [rel, body] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, rel)), { recursive: true });
+    writeFileSync(join(dir, rel), body);
+  }
+  return dir;
 }
 
 const inputsOf = (root, overrides = {}) => ({
@@ -395,13 +445,17 @@ test("the desktop notices: what ships, each distinct text once, grouped by licen
   assert.deepEqual(ledger.errors, []);
   assert.deepEqual(ledger.gaps, []);
   assert.deepEqual(names(ledger), [
-    "Ghostty VT (libghostty-vt) 83fb95624b04",
+    `Ghostty VT (libghostty-vt) ${GHOSTTY_COMMIT}`,
+    "Highway in Ghostty VT 83fb9562",
+    "Wuffs in Ghostty VT 83fb9562",
+    "Zig compiler_rt in Ghostty VT 83fb9562",
     "alpha 1.0.0",
     "ghosttea-vt-sys 0.14.0",
     "pkg-a 1.2.3",
     "pkg-b 2.0.0",
     "pkg-c 3.0.0",
     "pkg-shared 0.1.0",
+    "simdutf in Ghostty VT 83fb9562",
   ]);
   // never a devDependency, another platform's optional package, a cfg(windows) crate or a dev-dependency
   for (const absent of [
@@ -431,16 +485,29 @@ test("the desktop notices: what ships, each distinct text once, grouped by licen
   assert.equal(alpha.licence, "MIT OR Apache-2.0");
   assert.ok(alpha.texts.includes(b.texts[0]));
 
-  // Ghostty's own notice rides with the -sys crate that links it (the guard REQUIRED_DESKTOP holds)
+  // Ghostty's own notice rides with the -sys crate that links it (the guard REQUIRED_DESKTOP holds), and so does each
+  // library its static library carries at that commit (GHOSTTY_VT_BUNDLED), each text the library's own
   assert.ok(text.includes(GHOSTTY_LICENCE.split("\n")[2]));
-  assert.match(text, /Ghostty VT \(libghostty-vt\) 83fb95624b04\n {4}Licence: MIT\n/);
+  assert.match(
+    text,
+    new RegExp(`Ghostty VT \\(libghostty-vt\\) ${GHOSTTY_COMMIT}\\n {4}Licence: MIT\\n`),
+  );
+  for (const line of [
+    "Copyright 2021 The simdutf authors",
+    "Copyright (c) The Highway Project Authors. All rights reserved.",
+    "Copyright 2023 The Wuffs Authors",
+    "Copyright (c) Zig contributors",
+  ])
+    assert.ok(text.includes(line), line);
+  assert.match(text, /simdutf in Ghostty VT 83fb9562\n {4}Licence: Apache-2\.0 OR MIT\n/);
 
-  // grouped by licence, in KIND_ORDER: MIT, then Apache-2.0, then ISC
+  // grouped by licence, in KIND_ORDER: MIT, then Apache-2.0, then BSD-3-Clause (Highway's), then ISC
   const at = (kind) => text.indexOf(`${RULE}\n${kind}\n${RULE}`);
   assert.ok(at("MIT") > 0 && at("MIT") < at("Apache-2.0") && at("Apache-2.0") < at("ISC"));
+  assert.ok(at("Apache-2.0") < at("BSD-3-Clause") && at("BSD-3-Clause") < at("ISC"));
   assert.ok(text.indexOf("COMPONENT INDEX") < at("MIT"));
   assert.match(text, /^VibeField 0\.9\.0 — third-party notices\n/);
-  assert.match(text, /Components: 7 \(4 npm packages, 2 Rust crates, 1 other component\)/);
+  assert.match(text, /Components: 11 \(4 npm packages, 2 Rust crates, 5 other components\)/);
 
   // plain text a person reads: no host path, no trailing blanks, one final newline
   assert.ok(!text.includes(root), "no absolute path of the building host");
@@ -481,10 +548,209 @@ test("a required attribution that no text carries is a gap, never a silent drop"
   writeFileSync(join(root, "Cargo.lock"), lock.replace(' "ghosttea-vt-sys",\n', ""));
   writeFileSync(join(root, "app/node_modules/pkg-b/LICENSE"), mit("Mitchell Hashimoto"));
   const { ledger } = desktopNotices(inputsOf(root));
-  assert.ok(!ledger.components.has("other\u0000Ghostty VT (libghostty-vt)\u000083fb95624b04"));
+  assert.ok(!ledger.components.has(`other\u0000Ghostty VT (libghostty-vt)\u0000${GHOSTTY_COMMIT}`));
+  // ... and with no Ghostty VT in the graph, nothing asks for what its library carries
   assert.deepEqual(ledger.gaps, [
     "missing a required attribution: Ghostty's MIT notice (the terminal engine, through ghosttea-vt-sys)",
   ]);
+});
+
+// libwebp's own words, as libwebp-sys vendors them (vendor/COPYING's head, vendor/PATENTS's head)
+const WEBP_COPYING =
+  "Copyright (c) 2010, Google Inc. All rights reserved.\n\nRedistribution and use in source and binary forms, with or " +
+  "without\nmodification, are permitted provided that the following conditions are\nmet:\n\n  * Neither the name of " +
+  "Google nor the names of its contributors may\n    be used to endorse or promote products derived from this " +
+  "software\n    without specific prior written permission.\n";
+const WEBP_PATENTS =
+  'Additional IP Rights Grant (Patents)\n------------------------------------\n\n"These implementations" means the ' +
+  "copyrightable works that implement the WebM\ncodecs distributed by Google as part of the WebM Project.\n";
+
+test("vendored native code is a component of its own: libwebp from libwebp-sys's vendor/, its texts required while the crate ships", (t) => {
+  const root = tree(t);
+  const sys = addCrate(root, {
+    name: "libwebp-sys",
+    version: "0.9.6",
+    license: "MIT",
+    manifest: '\n[build-dependencies.cc]\nversion = "1"\n',
+    files: {
+      "vendor/COPYING": WEBP_COPYING,
+      "vendor/PATENTS": WEBP_PATENTS,
+      "vendor/configure.ac":
+        "AC_INIT([libwebp], [1.3.1],\n        [https://issues.webmproject.org],,\n",
+    },
+  });
+  const { text, ledger } = desktopNotices(inputsOf(root));
+  assert.deepEqual(ledger.gaps, []);
+  const webp = ledger.components.get("other\u0000libwebp\u00001.3.1");
+  assert.ok(webp, "libwebp is listed beside the crate that compiles it");
+  assert.equal(webp.licence, "BSD-3-Clause");
+  assert.deepEqual(webp.texts.map((id) => ledger.texts.get(id).kind).sort(), [
+    "BSD-3-Clause",
+    "Patent grant",
+  ]);
+  assert.ok(text.includes("Copyright (c) 2010, Google Inc. All rights reserved."));
+  assert.ok(text.includes("codecs distributed by Google as part of the WebM Project."));
+  assert.match(text, /vendor\/COPYING/, "the file is named where the crate keeps it");
+  // the binding itself declares MIT and carries no text: listed as declared, never standing in for libwebp's BSD
+  assert.deepEqual(ledger.components.get("crate\u0000libwebp-sys\u00000.9.6").texts, []);
+
+  // the patent grant gone from the crate: a gap where it was read, and the guard's own
+  rmSync(join(sys, "vendor/PATENTS"));
+  const gaps = desktopNotices(inputsOf(root)).ledger.gaps;
+  assert.ok(
+    gaps.includes("libwebp-sys 0.9.6: vendor/PATENTS is gone — libwebp's licence is not read"),
+  );
+  assert.ok(
+    gaps.includes(
+      "missing a required attribution: libwebp's WebM patent grant (compiled in by libwebp-sys)",
+    ),
+  );
+});
+
+test("the next vendored library is a gap, not a silence: a crate compiling native code with licence files below its root, or none", (t) => {
+  const root = tree(t);
+  const cc = '\n[build-dependencies]\ncc = "1"\n';
+  addCrate(root, {
+    name: "vendc-sys",
+    version: "1.0.0",
+    license: "MIT",
+    manifest: cc,
+    files: { LICENSE: mit("Binding"), "vendor/libvend/COPYING": mit("Vend C") },
+  });
+  addCrate(root, { name: "bare-sys", version: "2.0.0", license: "MIT", manifest: cc });
+  addCrate(root, {
+    name: "linked-sys",
+    version: "3.0.0",
+    license: "MIT",
+    manifest: `links = "linked"\n${cc}`,
+    files: { LICENSE: mit("Linked binding"), "linked/LICENSE": mit("Linked C") },
+  });
+  // a crate that compiles C under its own root licence only, and one with a vendored folder but no native build
+  addCrate(root, {
+    name: "own-c",
+    version: "1.0.0",
+    license: "MIT",
+    manifest: cc,
+    files: { LICENSE: mit("Own C") },
+  });
+  addCrate(root, {
+    name: "pure",
+    version: "1.0.0",
+    license: "MIT",
+    files: { LICENSE: mit("Pure"), "vendor/x/LICENSE": mit("X") },
+  });
+  const { ledger } = desktopNotices(inputsOf(root));
+  assert.deepEqual(ledger.gaps.sort(), [
+    "bare-sys 2.0.0 compiles native code and carries no licence text of its own — add its row to NATIVE_LINKS in scripts/third-party-notices.mjs",
+    "linked-sys 3.0.0 compiles native code whose licence files below its root (linked/LICENSE) are not read — add its row to NATIVE_LINKS in scripts/third-party-notices.mjs",
+    "vendc-sys 1.0.0 compiles native code whose licence files below its root (vendor/libvend/COPYING) are not read — add its row to NATIVE_LINKS in scripts/third-party-notices.mjs",
+  ]);
+  assert.equal(compilesNative(parseManifest(`[package]\nname = "a"\n${cc}`)), true);
+  assert.equal(compilesNative(parseManifest('[package]\nname = "a"\n')), false);
+  assert.equal(parseManifest('[package]\nname = "a"\nlinks = "zstd"\n').links, "zstd");
+});
+
+test("what Ghostty VT's library carries is measured per commit: a commit the table lacks is a gap until someone measures it", (t) => {
+  // the table and the texts agree, and each row's text is its library's own
+  for (const [commit, keys] of Object.entries(GHOSTTY_VT_BUNDLED)) {
+    assert.match(commit, /^[0-9a-f]{40}$/);
+    const { components, gaps } = ghosttyVtBundled(commit, "the terminal");
+    assert.deepEqual(gaps, []);
+    assert.equal(components.length, keys.length);
+    for (const [i, key] of keys.entries()) {
+      const lib = GHOSTTY_VT_LIBRARIES[key];
+      assert.ok(lib, key);
+      assert.equal(components[i].name, lib.name);
+      assert.equal(components[i].version, `in Ghostty VT ${commit.slice(0, 8)}`);
+      assert.match(components[i].texts[0].body, lib.line);
+    }
+  }
+  assert.equal(classifyText(GHOSTTY_VT_LIBRARIES.highway.body), "BSD-3-Clause");
+  for (const key of ["simdutf", "wuffs", "compiler_rt"])
+    assert.equal(classifyText(GHOSTTY_VT_LIBRARIES[key].body), "MIT", key);
+
+  // ghosttea moves to a Ghostty the table has not measured: the desktop says so, and still lists Ghostty itself
+  const root = tree(t);
+  const artifacts = join(root, "registry/index/ghosttea-vt-sys-0.14.0/artifacts.json");
+  writeFileSync(
+    artifacts,
+    JSON.stringify({ schemaVersion: 1, source: { commit: "f".repeat(40) } }),
+  );
+  const { ledger } = desktopNotices(inputsOf(root));
+  assert.ok(ledger.components.has(`other\u0000Ghostty VT (libghostty-vt)\u0000${"f".repeat(40)}`));
+  assert.ok(![...ledger.components.values()].some((c) => c.name === "simdutf"));
+  assert.deepEqual(ledger.gaps, [
+    `Ghostty VT ${"f".repeat(40)}: what its static library carries beside Ghostty is not measured — ` +
+      "list its members (`ar -t libghostty-vt.a`) and add the commit to GHOSTTY_VT_BUNDLED",
+  ]);
+});
+
+test("mille's crates follow the engine the stage ships: a checkout's lock while it is built there, the package's own files once released", async (t) => {
+  if (process.platform === "win32") return t.skip("the fixture links packages with symlinks");
+  // installedMilleNativeFile's triple, as fieldd's build reads it
+  const glibc =
+    process.platform === "linux" && process.report?.getReport()?.header?.glibcVersionRuntime;
+  const triple = {
+    darwin: `darwin-${process.arch}`,
+    linux: `linux-${process.arch}-${glibc ? "gnu" : "musl"}`,
+  }[process.platform];
+  if (!triple || !["arm64", "x64"].includes(process.arch))
+    return t.skip("mille ships no engine here");
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "vf-notices-mille-")));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const write = (rel, body) => {
+    mkdirSync(dirname(join(root, rel)), { recursive: true });
+    writeFileSync(join(root, rel), typeof body === "string" ? body : JSON.stringify(body));
+  };
+  const link = (target, rel) => {
+    rmSync(join(root, rel), { recursive: true, force: true });
+    mkdirSync(dirname(join(root, rel)), { recursive: true });
+    symlinkSync(join(root, target), join(root, rel));
+  };
+  const fielddMille = "a/packages/fieldd/node_modules/@vibecook/mille";
+
+  // nothing installed: a problem that names it, never a silent omission
+  assert.match((await milleEngine(join(root, "a"))).problem, /not installed beside fieldd/);
+
+  // unreleased (a link: row): the addon is built inside the pinned checkout, so that checkout's lock is its graph
+  write("mille-pin/Cargo.lock", "version = 4\n");
+  mkdirSync(join(root, "mille-pin/.git"), { recursive: true });
+  write("mille-pin/packages/mille/package.json", { name: "@vibecook/mille", version: "0.1.0" });
+  write(`mille-pin/packages/mille/mille.${triple}.node`, "addon");
+  link("mille-pin/packages/mille", fielddMille);
+  assert.deepEqual(await milleEngine(join(root, "a")), { cargo: join(root, "mille-pin") });
+
+  // released (RD-5): the checkout is gone and the addon comes from the platform package beside mille's own
+  rmSync(join(root, "mille-pin"), { recursive: true, force: true });
+  const store = "a/node_modules/.pnpm/@vibecook+mille@1.0.0/node_modules/@vibecook";
+  write(`${store}/mille/package.json`, { name: "@vibecook/mille", version: "1.0.0" });
+  write(`${store}/mille-${triple}/package.json`, {
+    name: `@vibecook/mille-${triple}`,
+    version: "1.0.0",
+    license: "MIT",
+    main: `mille.${triple}.node`,
+  });
+  write(`${store}/mille-${triple}/mille.${triple}.node`, "addon");
+  write(`${store}/mille-${triple}/LICENSE`, mit("Mille"));
+  link(`${store}/mille`, fielddMille);
+  const engine = await milleEngine(join(root, "a"));
+  assert.deepEqual(engine, { npm: join(root, `${store}/mille-${triple}`) });
+
+  // the package speaks for itself; one that carries no notices for the crates it links is a gap, one that does is not
+  const notices = (pkgDir) => {
+    const fixture = tree(t);
+    return desktopNotices(
+      inputsOf(fixture, { packages: [{ dir: pkgDir, role: "mille's engine", native: true }] }),
+    ).ledger;
+  };
+  const bare = notices(engine.npm);
+  assert.ok(bare.components.has(`npm\u0000@vibecook/mille-${triple}\u00001.0.0`));
+  assert.deepEqual(bare.gaps, [
+    `@vibecook/mille-${triple} 1.0.0 is a prebuilt native package with no third-party notices for the crates it ` +
+      "links — ask its owner to ship them, or build it from its pinned checkout",
+  ]);
+  write(`${store}/mille-${triple}/THIRD_PARTY_NOTICES.txt`, mit("A crate mille links"));
+  assert.deepEqual(notices(engine.npm).gaps, []);
 });
 
 test("the acknowledgements JSON: each text once, every id a component names present, the same bytes twice", () => {
@@ -710,6 +976,17 @@ test("the committed records are the pins' own: the iOS acknowledgements and the 
     doc.components.some((c) => c.licence === "OFL-1.1"),
     "the terminal's fonts",
   );
+  // what Ghostty VT's library carries rides with it (measured for its commit), and a C library is never a Rust crate
+  const ghosttyVt = doc.components.find((c) => c.name === "Ghostty VT");
+  assert.ok(GHOSTTY_VT_BUNDLED[ghosttyVt.version], `Ghostty VT ${ghosttyVt.version} is measured`);
+  for (const key of GHOSTTY_VT_BUNDLED[ghosttyVt.version])
+    assert.ok(
+      doc.components.some((c) => c.name === GHOSTTY_VT_LIBRARIES[key].name),
+      key,
+    );
+  for (const c of doc.components.filter((c) => c.ecosystem === "crate"))
+    assert.match(c.version, /^\d+\.\d+\.\d+/, c.name);
+  assert.equal(doc.components.find((c) => c.name === "libssh2")?.ecosystem, "other");
 
   // The release host has no Go toolchain, so the sidecar's Go texts are committed; the stager checks them against
   // the binary's own build info, and this holds the record to the version apps/desktop installs.
