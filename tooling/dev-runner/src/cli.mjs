@@ -7,6 +7,7 @@ import { classifyCriticalChange, discoverPluginProjects } from "./critical-chang
 import { watchCriticalRoots } from "./critical-watcher.mjs";
 import { acquireDevLock } from "./dev-lock.mjs";
 import { createElectronStack } from "./electron-stack.mjs";
+import { carryLegacyElectronState, carryWords } from "./electron-user-data.mjs";
 import { startEsbuildWatches } from "./esbuild-watches.mjs";
 import { log } from "./log.mjs";
 import { startNxWatcher } from "./nx-watcher.mjs";
@@ -99,6 +100,19 @@ async function main() {
     dataRoot: paths.dataRoot,
     repoRoot,
   });
+  // BP-1c — Electron's userData is the dev root now (paths.mjs `devLayoutFor`): the desk's own state is carried once
+  // from the folder it used before, under the lock (no other runner starts an Electron meanwhile), before any Electron
+  // starts; the old folder is left as it was. A failed carry is said and never stops the run.
+  try {
+    const from = paths.legacyElectronUserData;
+    const to = paths.electronUserData;
+    const words = carryWords(carryLegacyElectronState({ from, to }), { from, to });
+    if (words !== null) log.info(words);
+  } catch (error) {
+    log.warn(
+      `BP-1c: the desk's own state was not carried from ${paths.legacyElectronUserData}: ${error instanceof Error ? error.message : String(error)} (the old folder is left as it was)`,
+    );
+  }
   commandServer = await startRunnerCommandServer({
     endpoint: paths.commandEndpoint,
     bootId: devLock.record.bootId,

@@ -12,7 +12,26 @@ export function devRootFor(root, env = process.env) {
   return given !== undefined && given !== "" ? given : join(root, ".vibefield", "dev");
 }
 
+/**
+ * BP-1c (BP-D9 (a), `draft/thinking-browser-profile.md` §3·8) — where a dev run's two roots lie: Electron's userData IS
+ * the dev root, and the daemon data root is `data/` under it. The desk browser's profiles live under the data root
+ * (`<data root>/users/<fuid>/browser/profiles`, PT-4), and Chromium writes a `session.fromPath` profile's cookie
+ * database only inside userData (four Electron 43.1.1 probes, 2026-10-26): with the two roots siblings, the dev desk
+ * forgot every sign-in at each restart. The data root stays where it was, so a developer's boards, users and agents are
+ * untouched; only Electron's own files move, from `electron-user-data/` (`legacyElectronUserData`, left in place: the
+ * runner carries the desk's own state out of it once, `electron-user-data.mjs`) to the dev root itself. The data root
+ * cannot go deeper either: the sockets under it are held to macOS's sun_path budget (fieldd-supervisor `paths.ts`).
+ */
+export function devLayoutFor(developmentRoot) {
+  return Object.freeze({
+    dataRoot: join(developmentRoot, "data"),
+    electronUserData: developmentRoot,
+    legacyElectronUserData: join(developmentRoot, "electron-user-data"),
+  });
+}
+
 const devRoot = devRootFor(repoRoot);
+const devLayout = devLayoutFor(devRoot);
 const devBuildRoot = join(devRoot, "build");
 const nativeName = process.platform === "win32" ? "field-native.exe" : "field-native";
 const cellName = process.platform === "win32" ? "field-terminal-host.exe" : "field-terminal-host";
@@ -29,9 +48,10 @@ const commandEndpoint = commandEndpointFor(repoRoot, devRoot);
 export const workspacePaths = Object.freeze({
   repoRoot,
   devRoot,
-  dataRoot: join(devRoot, "data"),
+  dataRoot: devLayout.dataRoot,
   logRoot: join(devRoot, "logs"),
-  electronUserData: join(devRoot, "electron-user-data"),
+  electronUserData: devLayout.electronUserData,
+  legacyElectronUserData: devLayout.legacyElectronUserData,
   lockDir: join(devRoot, "runner.lock"),
   commandEndpoint,
   runtimeRoot: join(devRoot, "runtime"),
