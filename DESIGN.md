@@ -6226,10 +6226,11 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   screen, in the pane, as part of what you send". Chat puts it on screen nowhere now: your bubble draws the chip by its
   words, and the id stays in the record.
 
-**What VibeField keeps, when it cannot read it** (track CO, item 172; 2026-11-05). VibeField keeps six kinds of
-record in signed files of its own: a spark's record, what waits on you (CP-3), the words that wait for a session,
+**What VibeField keeps, when it cannot read it** (track CO, items 172 and 177; 2026-11-05). VibeField keeps seven kinds
+of record in signed files of its own: a spark's record, what waits on you (CP-3), the words that wait for a session,
 each spark's kept record, a flow's records (CP-4a1: the version of a flow you approved, and a spark's proposed flow),
-and each spark's transcript (TH-1). Reading one comes out one of four ways, and only the first is served:
+each spark's transcript (TH-1), and the record of each session it manages (AR-3). Reading one comes out one of four
+ways, and only the first is served:
 - **It is a record VibeField wrote:** served.
 - **It is not one** (it does not parse, is unsigned or edited, names another spark, item, session, flow or proposal
   than its file, is open to other users, or is a folder): set aside beside itself for a person to look at, never
@@ -6243,6 +6244,11 @@ and each spark's transcript (TH-1). Reading one comes out one of four ways, and 
   reads a flow's approval or a spark's proposal: the flows doors, from CP-4a2).
 - **A newer VibeField wrote it** (its format is above this one's): kept where it is for that VibeField, never served
   and never written over, and said in fieldd's log as kept for a newer VibeField.
+
+The sessions' records (item 177) are read again at each ask, as the sparks are. Where an act needs them, it refuses
+before it changes anything: signing out of an agent, and deleting a set, say "VibeField can't read the sessions it
+keeps; nothing was changed". Where VibeField only looks at them (re-attaching its sessions as it starts, Timeline's
+past runs, the order agents are offered in, a folder's places), it says so in fieldd's log and goes on with none.
 
 A store that cannot be read at boot never stops VibeField: fieldd starts, and that store says it cannot read. The
 sparks and the flows are read again at the next ask. What waits on you and the words that wait are read once, at
