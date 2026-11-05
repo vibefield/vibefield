@@ -87,8 +87,12 @@ export const FLOW_FRAME_ENVELOPE = 1_024;
  * string can grow up to six times in its escapes. fieldd is the host's one writer; the bound keeps a reader bounded. */
 export const TO_FLOW_HOST_FRAME_MAX = 6 * 64 * 1024 + FLOW_FRAME_ENVELOPE;
 
-/** Why a FrameReader stopped reading: a line past its bound, or one that is not JSON. */
-export type FrameRefusal = "too-big" | "not-json";
+/** How deep a host's frame may nest past its deepest value: the message itself and a call's `args` list. A frame
+ * deeper than FLOW_LIMITS.ARGS_DEPTH_MAX and this is no child's that holds its own bounds (bth's review P1). */
+export const FLOW_FRAME_DEPTH_ENVELOPE = 2;
+
+/** Why a reader stopped reading: a line past its bound, one that is not JSON, or one nested past its bound. */
+export type FrameRefusal = "too-big" | "not-json" | "too-deep";
 
 /** One JSON message a line, read from a byte stream. A line past `max` bytes is refused BEFORE it is held whole, and
  * one that is not JSON is refused; after a refusal, nothing more is read. */

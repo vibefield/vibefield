@@ -1,10 +1,12 @@
 import {
+  FLOW_LIMITS,
   type FlowJournalHead,
   type FlowJournalKnownLine,
   type FlowRunId,
   flowJournalLineOf,
 } from "@vibefield/contracts";
 import type { SetAsideWhy } from "../signed-record";
+import { nestsWithin } from "./protocol";
 
 // CP-4a2a (CP4-S15, CP-D9; 4A2-Q10 (a), ruled by VF-PM 2026-11-05 08:51Z) — a run's journal, its lines: one JSONL file
 // per run under the flows store (`runs/<run>.jsonl` in LAYOUT.FLOWS_DIR, flows/records.ts keeps it), written by fieldd
@@ -23,6 +25,11 @@ import type { SetAsideWhy } from "../signed-record";
 // stopped mid-step, and its steps after the cut are asked again. The store that wrote it knows its own tail and reads
 // the cut as forged (flows/records.ts); across a restart, the anchor that would say so is the run's own signed record,
 // CP-4a2b's (bth's review P3, ruled 2026-11-05 11:51Z), and DESIGN.md §9 says it plainly until then.
+
+/** How deep a journal's line may nest: a value at most FLOW_LIMITS.ARGS_DEPTH_MAX deep (replay refuses a deeper
+ * answer, journaling the refusal), inside the line's own fields. A line deeper is no line fieldd wrote, and it is read
+ * as forged before its MAC is checked, so no recursive read meets it (bth's review P1, ruled 11:46Z and 12:27Z). */
+export const JOURNAL_LINE_DEPTH_MAX = FLOW_LIMITS.ARGS_DEPTH_MAX + 4;
 
 /** The journals' folder in the flows store, and a journal's file suffix. */
 export const RUNS_DIR = "runs";
@@ -122,10 +129,19 @@ export function readJournal(
       return { kind: "lost", why: "unreadable", line: place };
     }
     if (!isRecord(parsed)) return { kind: "lost", why: "unreadable", line: place };
+    if (!nestsWithin(parsed, JOURNAL_LINE_DEPTH_MAX))
+      return { kind: "lost", why: "forged", line: place };
     const mac = parsed["mac"];
     if (typeof mac !== "string") return { kind: "lost", why: "unsigned", line: place };
-    if (!verifies(journalMacInput(run, prev, parsed), mac))
-      return { kind: "lost", why: "forged", line: place };
+    let verified: boolean;
+    try {
+      verified = verifies(journalMacInput(run, prev, parsed), mac);
+    } catch (error) {
+      // a line too deep for the MAC's own canonical JSON is no line fieldd wrote; any other throw is the key's
+      if (error instanceof RangeError) return { kind: "lost", why: "forged", line: place };
+      throw error;
+    }
+    if (!verified) return { kind: "lost", why: "forged", line: place };
     if (parsed["seq"] !== place) return { kind: "lost", why: "forged", line: place };
     if (place === 1) {
       const format = parsed["format"];

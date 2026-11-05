@@ -10,11 +10,13 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { FlowsHostLaunch, FlowsHostLaunchChoice } from "./launch";
 import { flowScriptOf } from "./module-script";
 import {
+  FLOW_FRAME_DEPTH_ENVELOPE,
   FLOW_FRAME_ENVELOPE,
   FrameReader,
   type FrameRefusal,
   type FromFlowHost,
   frameOf,
+  nestsWithin,
   readFromFlowHost,
   type ToFlowHost,
 } from "./protocol";
@@ -275,7 +277,11 @@ class FlowHostChild {
     this.#pipe = this.#proc.stdio[3] as Duplex;
     const reader = new FrameReader(
       FLOW_LIMITS.RESULT_MAX_BYTES + FLOW_FRAME_ENVELOPE,
-      (raw) => this.#hear(raw),
+      // a frame nested past its bound is read as one that broke its bounds, before anything recursive reads it
+      (raw) =>
+        nestsWithin(raw, FLOW_LIMITS.ARGS_DEPTH_MAX + FLOW_FRAME_DEPTH_ENVELOPE)
+          ? this.#hear(raw)
+          : this.#unread("too-deep"),
       (why) => this.#unread(why),
     );
     this.#pipe.on("data", (chunk: Buffer) => reader.read(chunk));

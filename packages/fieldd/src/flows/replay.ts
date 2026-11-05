@@ -29,6 +29,8 @@ import {
 // - A journal that does not take a line (the disk refused it) hands nothing on: the call is refused to the script.
 // - `call` never throws at fieldd's pipe (bth's review P1/P3): arguments nested past FLOW_LIMITS.ARGS_DEPTH_MAX, or
 //   that no canonical JSON keys, are refused to the script, and so is a call or an answer its journal did not take.
+//   An answer nested past it is refused and journaled as that refusal, so the journal's read (journal.ts) never
+//   meets a line it would set aside.
 
 /** A call's replay key: SHA-256 over the canonical JSON of what it is and the arguments the script passed it. */
 export function flowCallKey(what: string, args: readonly unknown[]): FlowCallKey {
@@ -161,7 +163,14 @@ export class FlowReplay implements FlowCallHandler {
     let answer: ReturnType<typeof boundedAnswer>;
     try {
       // an answer of nothing is kept, and replayed, as null: the journal's answer is a value or a refusal
-      answer = boundedAnswer(said.ok ? { ok: true, value: asCarried(said.value) } : said);
+      const carried = said.ok ? asCarried(said.value) : undefined;
+      answer =
+        said.ok && !nestsWithin(carried, FLOW_LIMITS.ARGS_DEPTH_MAX)
+          ? {
+              ok: false,
+              refused: `VibeField can't hand this ${call.what}'s answer on: it nests deeper than ${FLOW_LIMITS.ARGS_DEPTH_MAX}`,
+            }
+          : boundedAnswer(said.ok ? { ok: true, value: carried } : said);
     } catch {
       answer = {
         ok: false,

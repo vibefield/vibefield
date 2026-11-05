@@ -5,6 +5,7 @@ import {
   FLOW_HOST_TEXT_MAX,
   type FlowHostLimits,
   type FromFlowHost,
+  nestsWithin,
   type ToFlowHost,
 } from "../protocol";
 import { evaluateFlow, type FlowApi } from "./compartment";
@@ -91,6 +92,13 @@ function lockdownFirst(): string | undefined {
 /** The flow API over the host's thread, holding each call to the run's bounds before it is posted. */
 function flowApi(limits: FlowHostLimits): FlowApi {
   const call = (what: "agent" | "ask", args: unknown[]): Promise<unknown> => {
+    // held to the run's depth before anything recursive reads it (a cycle nests past any bound too)
+    if (!args.every((arg) => nestsWithin(arg, limits.argsDepthMax)))
+      return Promise.reject(
+        new Error(
+          `VibeField can't send this ${what}: its arguments nest deeper than ${limits.argsDepthMax}`,
+        ),
+      );
     let json: string;
     try {
       json = JSON.stringify(args);
@@ -131,6 +139,10 @@ async function run(data: FlowWorkerData): Promise<void> {
     const main = await evaluateFlow(data.script, flowApi(data.limits));
     if (typeof main !== "function") throw new TypeError("its default export is not a function");
     const value: unknown = await (main as (input: unknown) => unknown)(harden({ ...data.input }));
+    if (!nestsWithin(value, data.limits.argsDepthMax))
+      throw new Error(
+        `VibeField can't keep this flow's result: it nests deeper than ${data.limits.argsDepthMax}`,
+      );
     const json = value === undefined ? undefined : JSON.stringify(value);
     if (json === undefined) post({ t: "done" });
     else if (Buffer.byteLength(json, "utf8") > data.limits.callMaxBytes)
