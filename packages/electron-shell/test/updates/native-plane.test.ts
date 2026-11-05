@@ -9,11 +9,15 @@ import {
   type NativePlane,
   nativeVerdict,
 } from "../../src/main/updates/native-plane";
+import { machO } from "./macho-fixture";
 
 // WP12d (L3b-i, build-wp12-updater.md §12 B3; the PM's ruling 2026-10-15 16:03Z) — the native plane read by DIGEST.
 // The release workflow's hasher (`release-manifest.mjs`) and main's (`native-plane.ts`) are two implementations of one
 // rule; this file holds them to ONE digest and ONE member set on the same app, and judges the verdict's every branch:
 // untouched only when the members AND the digest match.
+//
+// TD-4 (LP-D16, 2026-11-05): a signed Mach-O member is read by its CodeDirectory on both sides, so a release whose floor
+// was signed again over the same code (a new CMS blob: a new signing time, a new timestamp) leaves the plane untouched.
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -22,7 +26,7 @@ afterEach(() => {
 
 /** A built app's shape: the floor, its cell, its freeway host and its sidecar beside fieldd's binaries, a helper bundle,
  * the shell. */
-function app(files: Record<string, string>): { app: string; resources: string } {
+function app(files: Record<string, string | Uint8Array>): { app: string; resources: string } {
   const root = mkdtempSync(join(tmpdir(), "vf-native-"));
   dirs.push(root);
   const appDir = join(root, "VibeField.app");
@@ -105,6 +109,60 @@ describe("the native plane: one rule, two hashers (B3)", () => {
     expect((await hashNativePlane(built.resources)).digest).toBe(
       hashPlanes(built.app)["field-native"].digest,
     );
+  });
+
+  it("TD-4: a signed member is read by its cdhash on both sides — a floor signed again over the same code is untouched", async () => {
+    /** the plane's four members as signed Mach-O images, every one signed at `when` */
+    const signed = (when: string, cell = "cell code") => ({
+      ...BUILD,
+      "bin/field-native": machO("floor code", { cms: `signed ${when}` }).bytes,
+      "bin/field-terminal-host": machO(cell, { cms: `signed ${when}` }).bytes,
+      "bin/field-freeway-host": machO("host code", { cms: `signed ${when}` }).bytes,
+      "bin/sidecar-slim": machO("sidecar code", { cms: `signed ${when}` }).bytes,
+    });
+    const installed = await hashNativePlane(app(signed("Monday 01:00Z")).resources);
+    const release = hashPlanes(app(signed("Tuesday 01:00Z, another timestamp")).app)[
+      "field-native"
+    ];
+    expect(release.members).toEqual(installed.members);
+    expect(release.digest).toBe(installed.digest);
+    // one rule: the workflow's hasher and main's agree on the same signed app
+    const same = app(signed("Monday 01:00Z"));
+    expect(hashPlanes(same.app)["field-native"].digest).toBe(
+      (await hashNativePlane(same.resources)).digest,
+    );
+    const manifestOf = (native: typeof release) =>
+      ReleaseManifest.parse({
+        schemaVersion: 1,
+        version: "0.9.1",
+        tag: "v0.9.1",
+        channel: "stable",
+        commit: "a".repeat(40),
+        builds: { "mac-arm64": { "field-native": native } },
+        touched: [],
+        previous: "v0.9.0",
+      });
+    // the apply keeps the person's sessions
+    expect(nativeVerdict(manifestOf(release), "mac-arm64", installed)).toEqual({ touched: false });
+    // a change to one member's code is a change to the plane
+    const rebuilt = hashPlanes(app(signed("Tuesday 01:00Z", "cell code, rebuilt")).app)[
+      "field-native"
+    ];
+    expect(nativeVerdict(manifestOf(rebuilt), "mac-arm64", installed)).toEqual({
+      touched: true,
+      why: "digest",
+    });
+    // an installed floor whose code no longer matches its signature is read by its bytes: never untouched
+    const tampered = signed("Monday 01:00Z");
+    const floor = Buffer.from(tampered["bin/field-native"]);
+    floor[50] = (floor[50] ?? 0) ^ 0xff;
+    const drifted = await hashNativePlane(
+      app({ ...tampered, "bin/field-native": floor }).resources,
+    );
+    expect(nativeVerdict(manifestOf(release), "mac-arm64", drifted)).toEqual({
+      touched: true,
+      why: "digest",
+    });
   });
 
   it("a missing bin directory is an empty plane, never a throw", async () => {

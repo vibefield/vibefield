@@ -61,6 +61,7 @@ import { verifyReleaseDir } from "../../../../scripts/release-verify.mjs";
 // what `release-sign` writes must be exactly what `verifyUpdateChain` accepts, and `release-verify` is that chain run
 // over a directory. DEV keys minted per run; no secret leaves the test.
 import * as keygen from "../../../../scripts/trust-keygen.mjs";
+import { machO } from "./macho-fixture";
 
 const NOW = Date.parse("2026-10-16T03:00:00Z");
 const REPO = join(import.meta.dirname, "..", "..", "..", "..");
@@ -535,7 +536,7 @@ describe("release-manifest (D11): the planes are computed from bytes", () => {
     expect(planeOf(null)).toBe("shell");
   });
 
-  function fakeApp(nativeBytes: string): string {
+  function fakeApp(nativeBytes: string | Uint8Array): string {
     const app = join(scratch(), "VibeField.app");
     const res = join(app, "Contents", "Resources");
     mkdirSync(join(res, "bin"), { recursive: true });
@@ -573,6 +574,44 @@ describe("release-manifest (D11): the planes are computed from bytes", () => {
     });
     expect(changed.touched).toEqual(["field-native"]);
     expect(changed.previous).toBe("nightly-20261015");
+  });
+
+  // TD-4 (LP-D16, 2026-11-05): a signed floor is read by its CodeDirectory, so a release that signs the same code again
+  // (a new CMS blob: a new signing time, a new timestamp) touches no plane, and the hash step says how it read each one.
+  it("TD-4: a floor signed again over the same code touches nothing; a change to its code touches field-native", () => {
+    const at = (
+      tag: string,
+      floor: Uint8Array,
+      previous: ReturnType<typeof mergeManifest> | null,
+    ) =>
+      mergeManifest({
+        version: `0.1.0-${tag.replace("-", ".")}`,
+        tag,
+        channel: "nightly",
+        commit: "b".repeat(40),
+        builds: { "mac-arm64": hashPlanes(fakeApp(floor)) },
+        previous,
+      });
+    const first = at("nightly-20261015", machO("floor code", { cms: "signed 10-15" }).bytes, null);
+    const resigned = at(
+      "nightly-20261016",
+      machO("floor code", { cms: "signed 10-16, another timestamp" }).bytes,
+      first,
+    );
+    expect(ReleaseManifest.parse(resigned).touched).toEqual([]);
+    const rebuilt = at(
+      "nightly-20261016",
+      machO("floor code, rebuilt", { cms: "signed 10-16" }).bytes,
+      first,
+    );
+    expect(rebuilt.touched).toEqual(["field-native"]);
+    const heard: string[] = [];
+    hashPlanes(fakeApp(machO("floor code").bytes), (line) => heard.push(line));
+    hashPlanes(fakeApp("native-1"), (line) => heard.push(line));
+    expect(heard).toEqual([
+      "bin/field-native: by its cdhash",
+      "bin/field-native: by its bytes (not a Mach-O)",
+    ]);
   });
 
   it("names the field-native plane's members, resources-relative — the client compares the set (B3)", () => {

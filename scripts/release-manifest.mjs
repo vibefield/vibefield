@@ -14,6 +14,12 @@
 //     it supervises) and `plugins/` (the roots it reads at spawn);
 //   - shell: every other file in the app (Electron, the asar, the frameworks, the identity).
 //
+// TD-4 (LP-D16, 2026-11-05): a field-native member that is a signed Mach-O is digested by its CodeDirectory (its line
+// `bin/<name>\0cdhash:<hex>`), never its bytes: a Developer ID signature's CMS blob carries a signing time and a secure
+// timestamp, so the same code signed to new bytes every release and field-native read touched every time. Anything else
+// keeps the byte rule (`bin/<name>\0<sha256>`; the other planes' every line). The rule is ONE copy, main's
+// `code-directory.mjs`, which the client's `native-plane.ts` reads too. `hash` says which way each member was read.
+//
 // AU-6 (AU-D10 A; LC-19): `merge --notes` writes the release's notes (`scripts/release-notes.mjs`'s output) INTO the
 // manifest before the sign step signs it, so they ride under its one `release` signature: no new signature, no new key.
 // A notes file that is absent (a first release of its channel) leaves the field out.
@@ -35,6 +41,10 @@ import {
 } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  lineOf,
+  memberDigest,
+} from "../packages/electron-shell/src/main/updates/code-directory.mjs";
 import { FLOOR_BINARIES } from "./native-floor.mjs";
 
 export const PLANES = ["shell", "fieldd", "field-native"];
@@ -78,8 +88,10 @@ function walk(root, dir, out) {
 
 /** Every file of the app, hashed (a symlink by its target text: a bundle's framework links are part of its bytes).
  * A line's path is resources-relative for a file inside the resources directory, app-relative otherwise; the
- * field-native plane also names its members (sorted). */
-export function hashPlanes(app) {
+ * field-native plane also names its members (sorted), each line by `code-directory.mjs` (TD-4: a signed Mach-O by its
+ * cdhash).
+ * `log` hears how each field-native member was read. */
+export function hashPlanes(app, log = () => {}) {
   const resources = resourcesDirOf(app);
   const files = [];
   walk(app, app, files);
@@ -95,8 +107,14 @@ export function hashPlanes(app) {
     const content = stat.isSymbolicLink()
       ? Buffer.from(`link:${readlinkSync(path)}`)
       : readFileSync(path);
-    lines[plane].push(`${rel}\0${createHash("sha256").update(content).digest("hex")}`);
-    if (plane === "field-native") nativeMembers.push(rel);
+    if (plane === "field-native") {
+      const member = memberDigest(content);
+      lines[plane].push(lineOf(rel, member));
+      nativeMembers.push(rel);
+      log(`${rel}: by ${member.by === "cdhash" ? "its cdhash" : `its bytes (${member.why})`}`);
+    } else {
+      lines[plane].push(`${rel}\0${createHash("sha256").update(content).digest("hex")}`);
+    }
   }
   const planes = {};
   for (const plane of PLANES) {
@@ -157,10 +175,10 @@ if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
     if (command === "hash") {
       if (!a.app || !a.platform || !a.out)
         throw new ReleaseManifestError("hash needs --app, --platform and --out");
-      writeFileSync(
-        a.out,
-        `${JSON.stringify({ platform: a.platform, planes: hashPlanes(a.app) }, null, 2)}\n`,
+      const planes = hashPlanes(a.app, (line) =>
+        console.log(`release-manifest: field-native ${line}`),
       );
+      writeFileSync(a.out, `${JSON.stringify({ platform: a.platform, planes }, null, 2)}\n`);
       console.log(`release-manifest: hashed ${a.app} for ${a.platform}`);
     } else if (command === "merge") {
       const builds = {};

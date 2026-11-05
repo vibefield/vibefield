@@ -103,7 +103,13 @@ export type UpdatePolicySource = z.infer<typeof UpdatePolicySource>;
  * (`field-terminal-host`; `field-freeway-host`, F1; `sidecar-slim` or `truffle-sidecar`, whichever it finds), so the
  * manifest NAMES the plane's members and a missing or extra member reads as touched. Each digest line is
  * `path\0sha256`, the path relative to the app's resources directory for a file inside it (`bin/field-native`) and
- * relative to the app otherwise. */
+ * relative to the app otherwise.
+ *
+ * TD-4 (LP-D16, 2026-11-05; corrected at its source): a field-native member that is a signed Mach-O is read by its
+ * CodeDirectory, its line `path\0cdhash:<hex>` (the CodeDirectory blob's SHA-256), never its bytes — a Developer ID
+ * signature's CMS blob carries a signing time and a timestamp, so the same code signed to new bytes every release. Its
+ * other members, and the other planes' every file, keep `path\0sha256`. The rule's one copy is electron-shell's
+ * `code-directory.mjs`. The shape is unchanged. */
 export const RELEASE_MANIFEST_FILE = "release-manifest.json" as const;
 
 /** The release workflow's platform keys (`builds` below; `release.yml`'s matrix): `<mac|win|linux>-<arch>`. */
@@ -129,7 +135,8 @@ export const ReleaseManifest = z
     channel: UpdateChannel,
     /** the source commit the release was built from */
     commit: z.string().regex(/^[0-9a-f]{40}$/),
-    /** per platform build, per plane: a sha256 over the plane's sorted `path\0sha256` lines, and its file count */
+    /** per platform build, per plane: a sha256 over the plane's sorted `path\0sha256` lines (a signed field-native
+     * member's `path\0cdhash:<hex>`, TD-4), and its file count */
     builds: z.record(
       z.string().min(1).max(32),
       z.record(z.enum(UPDATE_PLANES_LIST), ReleasePlaneDigest),

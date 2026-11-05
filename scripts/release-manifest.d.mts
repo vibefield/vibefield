@@ -5,7 +5,8 @@ export declare const PLANES: readonly Plane[];
 export declare class ReleaseManifestError extends Error {}
 export declare function planeOf(resourcesRelative: string | null): Plane;
 export declare function resourcesDirOf(app: string): string;
-export declare function hashPlanes(app: string): PlaneHashes;
+/** TD-4: `log` hears how each field-native member was read (`bin/<name>: by its cdhash`, or by its bytes and why). */
+export declare function hashPlanes(app: string, log?: (line: string) => void): PlaneHashes;
 export declare function mergeManifest(input: {
   version: string;
   tag: string;
