@@ -48,6 +48,8 @@ struct ChatReading: Equatable {
   var desktops: [ComposeDesktop] = []
   /// The home has answered the sparks' list at least once.
   var heard = false
+  /// …and the queue's: with both, a reading is whole (the note's first reading is no news).
+  var needsHeard = false
   /// The last ask failed, in the door's words (logs and Diagnostics, never the page).
   var failure: String?
 
@@ -170,9 +172,11 @@ final class ChatFeed {
       guard let self, ask == self.needsAsk else { return }
       self.needsInFlight = false
       if let list {
-        let items = ChatReading.carry(
+        var next = self.reading
+        next.items = ChatReading.carry(
           self.reading.items, into: list.items, desktops: list.desktops, device: { $0.device })
-        if items != self.reading.items { self.reading.items = items }
+        next.needsHeard = true
+        if next != self.reading { self.reading = next }
       }
       if self.needsAgain {
         self.needsAgain = false

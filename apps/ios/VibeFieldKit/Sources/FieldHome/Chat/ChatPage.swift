@@ -16,6 +16,9 @@ enum ChatWords {
   static let emptyText = "A spark is an agent VibeField starts to run your other agents."
   static let wake = "Wake"
 
+  /// The note over the bar (§9): "Vela needs you".
+  static func note(_ name: String) -> String { "\(name) needs you" }
+
   /// "4 sparks on studio · 2 need you": what is true, the desktops the sparks live on by name.
   static func subtitle(sparks: Int, on desktops: [String], needing: Int) -> String {
     let count = sparks == 1 ? "1 spark" : "\(sparks) sparks"

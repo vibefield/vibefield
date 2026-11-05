@@ -125,6 +125,10 @@ public struct HomeScreen: View {
   /// marks (SP-1d): both for the app's life, written nowhere.
   @State private var chat = ChatFeed()
   @State private var chatLedger = ThreadLedger()
+  /// The note over the bar (S-4): which needs are new, and the spark it says.
+  @State private var chatNotes = ChatNotes()
+  @State private var chatNote: SparkSummary?
+  @State private var chatNoteSaid = 0
   /// The History tab's stack, its landed search and whether its scroll has
   /// folded the bar — shared with search, so a hit can land across the switch.
   @State private var history = HistoryRouter()
@@ -813,6 +817,7 @@ public struct HomeScreen: View {
     }
     .background { chatHooks }
     .overlay { bar }
+    .overlay(alignment: .bottom) { chatNoteOverlay }
     .background {
       GeometryReader { geo in
         Color.clear
@@ -896,10 +901,46 @@ public struct HomeScreen: View {
         .onChange(of: mockActive) { syncChatDoor() }
       #endif
       .onChange(of: link?.rows) { _, rows in chat.board((rows ?? []).map(\.board)) }
-      .onChange(of: chatEntries) { _, entries in chatLedger.read(entries) }
+      .onChange(of: chatEntries) { _, entries in
+        chatLedger.read(entries)
+        noteIfNew(entries)
+      }
+      .onChange(of: selectedTab) { _, tab in
+        if tab == .chat { chatNote = nil }
+      }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { chat.refresh() }
       }
+  }
+
+  /// S-4 — a spark that starts to need you while another page stands says so
+  /// over the bar for 2.4 s; the first whole reading is no news.
+  private func noteIfNew(_ entries: [SparkEntry]) {
+    let whole = chat.reading.heard && chat.reading.needsHeard
+    guard let entry = chatNotes.read(entries, elsewhere: selectedTab != .chat, whole: whole) else { return }
+    chatNoteSaid += 1
+    let said = chatNoteSaid
+    withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : FieldMotion.island(0.42)) { chatNote = entry.spark }
+    Task {
+      try? await Task.sleep(for: ChatNoteView.lasts)
+      guard said == chatNoteSaid else { return }
+      withAnimation(.easeInOut(duration: 0.2)) { chatNote = nil }
+    }
+  }
+
+  /// The note, 12 above the bar's row, while another page stands (search keeps the bar's place).
+  @ViewBuilder
+  private var chatNoteOverlay: some View {
+    if let spark = chatNote, selectedTab != .chat, selectedTab != .search, !accountMenuOpen {
+      ChatNoteView(spark: spark) {
+        chatNote = nil
+        selectedTab = .chat
+      }
+      .padding(.bottom, AppBar.bottomGap(homeInset: homeInset) + AppBar.height + ChatNoteView.gap)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+      .ignoresSafeArea(.container, edges: .bottom)
+      .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
   }
 
   /// Chat's door: the home's own client while the home answers; none while
