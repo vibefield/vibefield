@@ -1,0 +1,29 @@
+{
+  "format": 1,
+  "item": {
+    "id": "ny-3f9a1c0b7e2d4c19",
+    "kind": "question",
+    "state": "answered",
+    "from": {
+      "name": "Vela",
+      "session": "run-12",
+      "spark": "sp-7k2m9q4x"
+    },
+    "spark": "sp-7k2m9q4x",
+    "asked": "2026-11-04T16:02:10.118Z",
+    "words": "Push the fix?",
+    "choices": ["Push", "Hold", "Not now"],
+    "answer": {
+      "choice": 0,
+      "at": "2026-11-04T16:04:51.490Z",
+      "outcome": "done",
+      "told": true
+    }
+  },
+  "owed": "you answered Vela's question \"Push the fix?\": Push",
+  "telling": {
+    "run": "run-12",
+    "at": "2026-11-04T16:04:52.118Z"
+  },
+  "signature": "9e3a5c7b1d0f2e4a6c8b0d2f4e6a8c0b2d4f6e8a0c2e4b6d8f0a2c4e6b8d0f19"
+}

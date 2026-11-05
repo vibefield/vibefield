@@ -437,6 +437,11 @@ export const AgentInputSender = z.discriminatedUnion("kind", [
 ]);
 export type AgentInputSender = z.infer<typeof AgentInputSender>;
 
+/** The needs-you items one joined wake may carry (item 158, CO-Q9 (b)): twice NEEDS_OPEN_PER_SPARK, for a spark's
+ * open items and the facts of their answers. A wake at the bound starts a new input. Stated here, before its use,
+ * since the needs bounds are declared below. */
+export const NEEDS_JOINED_ITEMS_MAX = 16;
+
 /** One input that waits for a session's next idle moment. Its text has no bound here: fieldd's wakes that wait join
  * into one line (CP-D4), and a spark's own words were bounded at its call (COMPOSE_TEXT_MAX). */
 export const AgentQueuedInput = z
@@ -446,6 +451,12 @@ export const AgentQueuedInput = z
     from: AgentInputSender,
     /** when it was queued (ISO) */
     at: z.string().min(1),
+    /** when its delivery began (ISO), the head only (item 158, TH-Q32 (a)): kept before it is pasted, so a restart
+     * that finds it never sends it again, and its sender is told it is uncertain */
+    sending: z.string().min(1).optional(),
+    /** the needs-you items whose facts its line carries, a wake's only (CO-Q9 (b)): each is heard once its session
+     * confirms it took the line, and owed again when the line is dropped */
+    items: z.array(NeedsItemId).min(1).max(NEEDS_JOINED_ITEMS_MAX).optional(),
   })
   .passthrough();
 export type AgentQueuedInput = z.infer<typeof AgentQueuedInput>;
@@ -563,7 +574,8 @@ export const NeedsAnswer = z
     outcome: z.string().min(1).max(32),
     /** why the act failed, in fieldd's words */
     reason: z.string().min(1).max(NEEDS_REASON_MAX).optional(),
-    /** the spark has been told: the answer's fact is in its input queue */
+    /** the spark has been told: the answer's fact is in its input queue (a line its session dropped flips it back to
+     * false, with `waits`: item 158, CO-Q9 (b)) */
     told: z.boolean(),
     /** why it has not been told yet (told false): it hears the answer when it next wakes */
     waits: z.string().min(1).max(NEEDS_REASON_MAX).optional(),
@@ -735,8 +747,14 @@ export const NeedsRecord = z
     launch: NeedsHeldLaunch.optional(),
     /** the spark's name its words are marked with (CP2-D1) */
     sender: SparkName.optional(),
-    /** the fact owed to its spark, until it is in the spark's input queue */
+    /** the fact owed to its spark, until the spark's session confirms it (item 158, CO-Q9 (b)) */
     owed: z.string().min(1).max(NEEDS_WORDS_MAX).optional(),
+    /** the owed fact is in this run's input queue since `at` (ISO): heard once that run confirms it took the line,
+     * owed again when the line is dropped, and never told again when its delivery is uncertain (item 158) */
+    telling: z
+      .object({ run: z.string().min(1), at: z.string().min(1) })
+      .passthrough()
+      .optional(),
     /** the act an answer began and did not record done: after a restart the spark is told it is uncertain, and it is
      * never done again (CP2-D2) */
     acting: z

@@ -11,6 +11,8 @@ import {
   ComposeSparksHatchParams,
   ComposeSparksListResult,
   NEEDS_CHOICE_WORDS,
+  NEEDS_JOINED_ITEMS_MAX,
+  NEEDS_OPEN_PER_SPARK,
   NeedsAnswerParams,
   NeedsAnswerResult,
   NeedsItem,
@@ -283,5 +285,67 @@ describe("CP-3 — the held answers and the person's doors (cp3-the-person.md, r
     expect(LAYOUT.NEEDS_KEY_FILE).toEqual(["fieldd", "needs.key"]);
     expect(LAYOUT_ROOT_LEVEL).not.toContain("NEEDS_DIR");
     expect(LAYOUT_ROOT_LEVEL).not.toContain("NEEDS_KEY_FILE");
+  });
+});
+
+describe("item 158 — a kept input's delivery stamp and the items its line carries; a needs record's telling (TH-Q32 (a), CO-Q9 (b))", () => {
+  const kept = AgentInputQueueFile.parse(fixture("agent-input-queue.valid"));
+  /** `n` distinct needs-you item ids */
+  const ids = (n: number) =>
+    Array.from({ length: n }, (_, i) => `ny-${String(i).padStart(6, "0")}`);
+  /** CP-3's file, its wake carrying `items` */
+  const carrying = (items: unknown) => ({
+    ...kept,
+    inputs: [kept.inputs[0], { ...kept.inputs[1], items }],
+  });
+
+  it("C1: a CP-3 kept queue, with no stamp and no items, reads as before (the format stays 1)", () => {
+    expect(kept.format).toBe(1);
+    expect(kept.inputs.map((input) => [input.sending, input.items])).toEqual([
+      [undefined, undefined],
+      [undefined, undefined],
+    ]);
+  });
+
+  it("C2: a head stamped when its delivery began, and a joined wake that carries its items, read", () => {
+    const stamped = AgentInputQueueFile.parse(fixture("agent-input-queue.sending"));
+    const [head, wake] = stamped.inputs;
+    expect(head).toMatchObject({ from: { kind: "spark" }, sending: "2026-11-04T16:02:11.402Z" });
+    expect(head?.items).toBeUndefined();
+    expect(wake?.from.kind).toBe("fieldd");
+    expect(wake?.sending).toBeUndefined();
+    expect(wake?.items).toEqual(["ny-8c41d2e09a77b305", "ny-3f9a1c0b7e2d4c19"]);
+  });
+
+  it("C3: refuses a line that carries no item, a seventeenth item, an item that is no id, and a stamp that is no time", () => {
+    expect(AgentInputQueueFile.safeParse(carrying([])).success).toBe(false);
+    expect(AgentInputQueueFile.safeParse(carrying(ids(17))).success).toBe(false);
+    expect(AgentInputQueueFile.safeParse(carrying(["Vela"])).success).toBe(false);
+    expect(AgentInputQueueFile.safeParse(carrying(ids(16))).success).toBe(true);
+    const stampedWith = (sending: unknown) => ({
+      ...kept,
+      inputs: [{ ...kept.inputs[0], sending }, kept.inputs[1]],
+    });
+    expect(AgentInputQueueFile.safeParse(stampedWith("")).success).toBe(false);
+    expect(AgentInputQueueFile.safeParse(stampedWith(1_762_272_131_402)).success).toBe(false);
+    // twice what one spark may have waiting on the person: its open items' facts, joined into one line
+    expect(NEEDS_JOINED_ITEMS_MAX).toBe(2 * NEEDS_OPEN_PER_SPARK);
+  });
+
+  it("C4: a needs record keeps the run whose queue holds its owed fact, and refuses a telling that names none", () => {
+    const record = NeedsRecord.parse(fixture("needs-record.held-send"));
+    const at = "2026-11-04T16:04:52.000Z";
+    expect(NeedsRecord.safeParse({ ...record, telling: {} }).success).toBe(false);
+    expect(NeedsRecord.safeParse({ ...record, telling: { run: "", at } }).success).toBe(false);
+    expect(NeedsRecord.safeParse({ ...record, telling: { run: "run-12" } }).success).toBe(false);
+    expect(NeedsRecord.parse({ ...record, telling: { run: "run-12", at } }).telling).toEqual({
+      run: "run-12",
+      at,
+    });
+    const telling = NeedsRecord.parse(fixture("needs-record.telling"));
+    expect(telling.telling).toEqual({ run: "run-12", at: "2026-11-04T16:04:52.118Z" });
+    // owed until the spark's session confirms it, while `told` says it is in the spark's queue (§8 Q1 (b))
+    expect(telling.owed).toBeDefined();
+    expect(telling.item.answer).toMatchObject({ outcome: "done", told: true });
   });
 });
