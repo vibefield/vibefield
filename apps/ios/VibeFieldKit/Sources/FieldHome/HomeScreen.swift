@@ -117,10 +117,14 @@ public struct HomeScreen: View {
   /// destructive, and the sentence says what goes and what stays.
   @State private var signOutPending = false
   // --- IOS-9a/9e: the two tabs, search, and the account in one bar ---------
-  /// Which page stands: the field, History, or search.
+  /// Which page stands: the field, History, Chat (IOS-12b), or search.
   @State private var selectedTab: AppTab = .field
   /// The page search goes back to when it closes.
   @State private var tabBeforeSearch: AppTab = .field
+  /// IOS-12b — Chat's mark on the bar (PC-D5 A): the sparks that need you,
+  /// else the cyan dot while a thread is unread. The list's commit feeds it
+  /// from the home's sparks; until then it is none.
+  @State private var chatMark: TabMark = .none
   /// The History tab's stack, its landed search and whether its scroll has
   /// folded the bar — shared with search, so a hit can land across the switch.
   @State private var history = HistoryRouter()
@@ -804,6 +808,7 @@ public struct HomeScreen: View {
     ZStack {
       fieldTab.page(visible: selectedTab == .field)
       historyTab.page(visible: selectedTab == .history)
+      chatTab.page(visible: selectedTab == .chat)
       searchTab.page(visible: selectedTab == .search)
     }
     .overlay { bar }
@@ -850,6 +855,12 @@ public struct HomeScreen: View {
     .safeAreaInset(edge: .bottom, spacing: 0) {
       Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing || slotProject != nil || slotSession != nil))
     }
+  }
+
+  /// IOS-12b (PC-D1 A) — Chat's page: History's paper, which its list (the
+  /// list's commit, SP-1b's rule over the home's sparks) is drawn on.
+  private var chatTab: some View {
+    ChromePalette.paper.ignoresSafeArea()
   }
 
   private var searchTab: some View {
@@ -924,7 +935,8 @@ public struct HomeScreen: View {
                 .padding(.leading, AppBar.margin)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-              TabCapsule(selection: $selectedTab, waiting: waitingCount, pill: tabPill)
+              TabCapsule(
+                selection: $selectedTab, field: .field(waiting: waitingCount), chat: chatMark, pill: tabPill)
                 .liquidGlassCapsule()
                 .glassID("tabs", in: barGlass)
             }
@@ -1205,8 +1217,9 @@ public struct HomeScreen: View {
     withAnimation(AccountCornerView.grow) { accountMenuOpen = open }
   }
 
-  /// The Field tab's orange count (§2.5): the agents waiting on the person.
-  private var waitingCount: Int { bubbles.filter { $0.status == .blocked }.count }
+  /// The Field tab's orange count (§2.5): your own agents waiting on you. A
+  /// spark's runs are counted on Chat, once (PC-D5 A, one need, one count).
+  private var waitingCount: Int { TabMark.fieldWaiting(bubbles) }
 
   /// SP-6 — what History reads: the link's self desktops, each over its own
   /// door (the home's shared, the rest opened for the reading — SP-D2 (a)),
@@ -1301,7 +1314,7 @@ public struct HomeScreen: View {
         // tailnet. The account is `MockAccount`'s (signed in, 🦊, studio up
         // and mini asleep; every act in the corner moves its standing), the
         // field is the scripted fleet, History is the records' corpus and
-        // search runs over it. `-vf-mock-tab=history|search` opens a page,
+        // search runs over it. `-vf-mock-tab=history|chat|search` opens a page,
         // `-vf-mock-open` grows the corner's menu, `-vf-mock-signed-out`
         // starts on the `Sign in` circle, `-vf-mock-search=<q>` fills the
         // search field, `-vf-mock-landed` lands the second hit of the first
@@ -1321,6 +1334,7 @@ public struct HomeScreen: View {
           if let tab = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-tab=") }) {
             switch tab.dropFirst("-vf-mock-tab=".count) {
             case "history": selectedTab = .history
+            case "chat": selectedTab = .chat
             case "search": openSearch()
             default: selectedTab = .field
             }

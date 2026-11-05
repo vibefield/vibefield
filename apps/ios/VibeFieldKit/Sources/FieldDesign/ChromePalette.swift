@@ -213,6 +213,9 @@ public enum ChromePalette {
   public static let green = solid(0x30D158)
   /// `--vf-red`: failed / destructive.
   public static let red = solid(0xFF453A)
+  /// `--vf-cyan`: info. On the bar, Chat's unread dot while no spark needs you (IOS-12b; DESIGN.md §8 "The phone's
+  /// Chat", PC-D5 A).
+  public static let info = solid(0x5AC8FA)
 
   // MARK: - Paper (the History tab, IOS-9b)
 

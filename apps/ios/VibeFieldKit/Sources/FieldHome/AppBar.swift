@@ -1,13 +1,28 @@
+import FieldAgents
 import FieldDesign
 import FieldHistory
 import SwiftUI
 
-/// The phone's two views and search (D-i10): Field, History, and search as a
-/// page of its own that the bar's circle opens.
+/// The phone's views and search (D-i10): Field, History and, since IOS-12b,
+/// Chat (PC-D1 A), and search as a page of its own that the bar's circle opens.
 enum AppTab: Hashable {
   case field
   case history
+  case chat
   case search
+
+  /// The capsule's tabs, in order: Chat stands third (PC-D1 A).
+  static let capsule: [AppTab] = [.field, .history, .chat]
+
+  /// The label under a tab's icon, and its accessible name.
+  var title: String {
+    switch self {
+    case .field: "Field"
+    case .history: "History"
+    case .chat: "Chat"
+    case .search: "Search"
+    }
+  }
 }
 
 /// The bar (IOS-9e): the account at the LEFT, the two tabs in a capsule at the
@@ -26,22 +41,39 @@ enum AppTab: Hashable {
 /// tabs; the selected pill 94 × 54; icons 26 pt over 10 pt semibold labels;
 /// the badge 20 pt at (+17, −8) from the icon's centre; the search glyph 22 pt.
 /// Every one of them is pinned by `AppBarTests`.
+///
+/// **Three tabs (IOS-12b, PC-D1 A; DESIGN.md §8 "The phone's Chat").** Chat
+/// joins the capsule and the capsule keeps the system's 188 and its 8 pt
+/// inset: the three tabs share what the two 86s did, 57⅓ each, and the pill
+/// is the tab plus the 8 the system's 94 had over its 86, so it still stands
+/// 4 pt inside. The circles and every other number stay. Chat's glyph is
+/// History's 22, and its mark is the count of the sparks that need you, else a
+/// cyan dot of 10 while a thread is unread (`TabMark`).
 enum AppBar {
   /// The row: the capsule's height, and both circles' diameter.
   static let height: CGFloat = 62
   /// From the screen's side edges.
   static let margin: CGFloat = 21
-  static let tabWidth: CGFloat = 86
+  /// The system's capsule, which three tabs now share.
+  static let capsuleWidth: CGFloat = 188
   static let capsuleInset: CGFloat = 8
-  static let capsuleWidth: CGFloat = capsuleInset * 2 + tabWidth * 2
-  static let pillWidth: CGFloat = 94
+  /// 172 / 3 = 57⅓ (the system's two were 86).
+  static let tabWidth: CGFloat = (capsuleWidth - capsuleInset * 2) / CGFloat(AppTab.capsule.count)
+  /// The tab plus 8, the system pill's overhang (94 on 86).
+  static let pillWidth: CGFloat = tabWidth + 8
   static let pillHeight: CGFloat = 54
   static let iconHeight: CGFloat = 28
   static let fieldGlyph: CGFloat = 26
   static let symbolSize: CGFloat = 22
+  /// Chat's `tab-chat`, at History's size (VF-PM's Q1; DESIGN.md §8).
+  static let chatGlyph: CGFloat = 22
   static let labelSize: CGFloat = 10
   static let badgeSize: CGFloat = 20
   static let badgeOffset = CGSize(width: 17, height: -8)
+  /// Chat's unread dot: 10 pt of `--vf-cyan`, where the design page sets it off
+  /// the glyph's centre.
+  static let dotSize: CGFloat = 10
+  static let dotOffset = CGSize(width: 13, height: -9)
   static let searchGlyph: CGFloat = 22
   /// Where two glass shapes begin to melt into one — under the 24 pt that
   /// separates the capsule from each circle, so at rest they stand apart.
@@ -95,28 +127,62 @@ enum AppBar {
   static let motion: Animation = .spring(response: 0.42, dampingFraction: 0.84)
 }
 
-/// The two tabs in one capsule: an icon over a 10 pt label each, the selected
-/// one on a pill that slides between them, and the Field tab's orange count
-/// (§2.5 — the agents waiting on the person, never decorative). The capsule's
-/// glass is its container's (`liquidGlassCapsule` at the call site).
+/// The mark a tab wears (§2.5, never decorative; PC-D5 A, one need, one
+/// count): an orange count, Chat's cyan dot, or nothing. History wears none.
+enum TabMark: Equatable {
+  case none
+  case count(Int)
+  /// Chat's cyan dot: no spark needs you, and a thread is unread.
+  case unread
+
+  /// Field's: your own agents waiting on you.
+  static func field(waiting: Int) -> TabMark { waiting > 0 ? .count(waiting) : .none }
+
+  /// Chat's: the sparks that need you, theirs and their agents' asks, each
+  /// spark once; with none, the cyan dot while a thread is unread.
+  static func chat(needing: Int, unread: Bool) -> TabMark {
+    needing > 0 ? .count(needing) : unread ? .unread : .none
+  }
+
+  /// Field's count: the bodies waiting on you whose run is no spark's. A
+  /// spark's own run and an agent it started are counted on Chat, with their
+  /// spark, never twice; their bodies still turn orange.
+  static func fieldWaiting(_ bubbles: [FieldBubble]) -> Int {
+    bubbles.filter { $0.status == .blocked && !$0.ofSpark }.count
+  }
+}
+
+/// The three tabs in one capsule: an icon over a 10 pt label each, the
+/// selected one on a pill that slides between them, and each tab's mark —
+/// Field's orange count of the agents waiting on you, Chat's of the sparks
+/// that need you or its cyan dot (`TabMark`). The capsule's glass is its
+/// container's (`liquidGlassCapsule` at the call site).
 struct TabCapsule: View {
   @Binding var selection: AppTab
-  let waiting: Int
+  let field: TabMark
+  let chat: TabMark
   /// The pill's matched geometry — its own namespace, not the glass one.
   let pill: Namespace.ID
 
   var body: some View {
     HStack(spacing: 0) {
-      item(.field, title: "Field") {
+      item(.field, mark: field) {
         Image("tab-field", bundle: .module)
           .renderingMode(.template)
           .resizable()
           .scaledToFit()
           .frame(width: AppBar.fieldGlyph, height: AppBar.fieldGlyph)
       }
-      item(.history, title: "History") {
+      item(.history, mark: .none) {
         Image(systemName: "clock.arrow.circlepath")
           .font(.system(size: AppBar.symbolSize, weight: .medium))
+      }
+      item(.chat, mark: chat) {
+        Image("tab-chat", bundle: .module)
+          .renderingMode(.template)
+          .resizable()
+          .scaledToFit()
+          .frame(width: AppBar.chatGlyph, height: AppBar.chatGlyph)
       }
     }
     .padding(.horizontal, AppBar.capsuleInset)
@@ -124,9 +190,8 @@ struct TabCapsule: View {
     .accessibilityElement(children: .contain)
   }
 
-  private func item<Icon: View>(_ tab: AppTab, title: String, @ViewBuilder icon: () -> Icon) -> some View {
+  private func item<Icon: View>(_ tab: AppTab, mark: TabMark, @ViewBuilder icon: () -> Icon) -> some View {
     let selected = selection == tab
-    let count = tab == .field ? waiting : 0
     return Button {
       selection = tab
     } label: {
@@ -134,11 +199,13 @@ struct TabCapsule: View {
         icon()
           .frame(height: AppBar.iconHeight)
           .overlay {
-            if count > 0 {
-              TabBadge(count: count).offset(AppBar.badgeOffset)
+            switch mark {
+            case .count(let count): TabBadge(count: count).offset(AppBar.badgeOffset)
+            case .unread: UnreadDot().offset(AppBar.dotOffset)
+            case .none: EmptyView()
             }
           }
-        Text(title)
+        Text(tab.title)
           .font(.system(size: AppBar.labelSize, weight: .semibold))
           .lineLimit(1)
       }
@@ -155,9 +222,20 @@ struct TabCapsule: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .accessibilityLabel(title)
-    .accessibilityValue(count > 0 ? "\(count) waiting" : "")
+    .accessibilityLabel(tab.title)
+    .accessibilityValue(Self.spoken(mark, on: tab))
     .accessibilityAddTraits(selected ? [.isSelected] : [])
+  }
+
+  /// A mark is a picture, so it is said: Field's agents are waiting, Chat's
+  /// sparks need you, and the dot says a thread is unread (the Mac's cell's
+  /// words, DESIGN.md §8).
+  private static func spoken(_ mark: TabMark, on tab: AppTab) -> String {
+    switch mark {
+    case .count(let count): tab == .chat ? "\(count) need you" : "\(count) waiting"
+    case .unread: "a thread is unread"
+    case .none: ""
+    }
   }
 }
 
@@ -174,6 +252,17 @@ private struct TabBadge: View {
       .frame(minWidth: AppBar.badgeSize, minHeight: AppBar.badgeSize)
       .background(Capsule().fill(ChromePalette.attention))
       .fixedSize()
+      .accessibilityHidden(true)
+  }
+}
+
+/// Chat's unread dot: 10 pt of `--vf-cyan` (§2.5's info), worn only while no
+/// spark needs you.
+private struct UnreadDot: View {
+  var body: some View {
+    Circle()
+      .fill(ChromePalette.info)
+      .frame(width: AppBar.dotSize, height: AppBar.dotSize)
       .accessibilityHidden(true)
   }
 }

@@ -79,7 +79,9 @@ struct AppBarTests {
     #expect(AppBar.chatGlyph == AppBar.symbolSize)
     #expect(AppBar.fieldGlyph == 26)
     #expect(AppTab.chat.title == "Chat")
-    #expect(AppTab.capsule.map(\.title) == ["Field", "History", "Chat"])
+    // hoisted: no key path inside an #expect argument (T10f's kit trap)
+    let titles = AppTab.capsule.map { $0.title }
+    #expect(titles == ["Field", "History", "Chat"])
   }
 
   /// PC-D5 A, "one need, one count" (VF-PM's Q2; DESIGN.md §8): Chat's mark is the orange count of the sparks that

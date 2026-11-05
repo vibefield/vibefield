@@ -466,6 +466,72 @@ const OS_MARKS_IOS = join(
   );
 }
 
+// IOS-12b — Chat's tab glyph (DESIGN.md §8 "The phone's Chat": §13's
+// `message` cut as `tab-chat`, as the Mac's cell wears it): a template SVG
+// beside `tab-field`, held to design-kit's glyph data — its one stroke, at
+// §13's weight of 2.
+{
+  const GLYPHS = "packages/design-kit/src/glyphs/data.ts";
+  const COPY =
+    "apps/ios/VibeFieldKit/Sources/FieldHome/Resources/Glyphs.xcassets/tab-chat.imageset/chat.svg";
+  const read = (file) => {
+    try {
+      return readFileSync(join(root, file), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const d =
+    /^ {2}message: \{"kind":"instrument","strokes":\[\["path",\{"d":"([^"]+)"\}\]\],"fills":\[\]\},$/m.exec(
+      read(GLYPHS),
+    )?.[1];
+  const svg = read(COPY);
+  checked += 1;
+  if (d === undefined || !svg.includes(` d="${d}"`) || !svg.includes('stroke-width="2"')) {
+    problems.push(
+      `${COPY} is not ${GLYPHS}'s \`message\` (${d === undefined ? "its stroke is unreadable" : "path or weight differ"})\n` +
+        "  fix: copy the glyph's path exactly, stroked at 2 in its 24 box (or move this script's pattern with the data)",
+    );
+  }
+}
+
+// IOS-12b — §2.5's hues on the phone's chrome (DESIGN.md §2.5; the bar's cyan
+// dot, §8 "The phone's Chat", PC-D5 A): each state colour `ChromePalette`
+// names is tokens.css's own, read from both files and compared.
+{
+  const TOKENS = "packages/design-kit/src/tokens.css";
+  const PALETTE_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldDesign/ChromePalette.swift";
+  const read = (file) => {
+    try {
+      return readFileSync(join(root, file), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const tokens = read(TOKENS);
+  const palette = read(PALETTE_SWIFT);
+  for (const [name, token] of [
+    ["attention", "orange"],
+    ["green", "green"],
+    ["red", "red"],
+    ["info", "cyan"],
+  ]) {
+    checked += 1;
+    const hex = (pattern, text) => pattern.exec(text)?.[1]?.toLowerCase() ?? null;
+    const origin = hex(new RegExp(`^\\s*--vf-${token}: #([0-9a-fA-F]{6});$`, "m"), tokens);
+    const copy = hex(
+      new RegExp(`^ {2}public static let ${name} = solid\\(0x([0-9A-Fa-f]{6})\\)$`, "m"),
+      palette,
+    );
+    if (origin === null || copy === null || origin !== copy) {
+      problems.push(
+        `${PALETTE_SWIFT}'s ${name} is ${copy ?? "unreadable"} but ${TOKENS}'s --vf-${token} is ${origin ?? "unreadable"}\n` +
+          "  fix: copy the token's value exactly (or move this script's pattern with the declaration)",
+      );
+    }
+  }
+}
+
 // PG-4t — the phone's monitor skin (DESIGN.md §2.7; §8 "The monitor view owns
 // its drawing"): the nine colours of puppeteer-view-sdk's MONITOR_SKIN, which
 // `GodviewSkin.swift` carries one line each as `(.key, 0xLIGHT, 0xDARK)`. Each

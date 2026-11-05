@@ -128,5 +128,5 @@ public func fieldBubble(
   return FieldBubble(
     id: row.visualId, project: project, detail: detail, status: status, identityKey: identityKey,
     createdAt: createdAt, agent: facet, stale: stale, unread: monitor.unread && !suppressUnread, host: host,
-    modelId: row.id, runKey: row.key)
+    modelId: row.id, runKey: row.key, ofSpark: board.ofSpark)
 }

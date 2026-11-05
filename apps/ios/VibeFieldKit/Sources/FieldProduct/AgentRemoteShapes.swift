@@ -594,6 +594,11 @@ public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
 
   public var id: String { runtimeRunId }
 
+  /// IOS-12b (PC-D5 A, one need, one count; DESIGN.md §8 "The phone's Chat") — the run is a spark's: its own session
+  /// (`spark`, whoever its origin names), or an agent a spark started (`origin.by == "spark"`, as SP-1b's `agentRunsOf`
+  /// reads it). Its wait is counted on Chat, with its spark; Field's badge counts only the runs that are no spark's.
+  public var ofSpark: Bool { spark != nil || origin?.by == "spark" }
+
   public init(json: JSONValue) throws {
     var object = try WireObject(shape: "AgentRemoteRow", value: json)
     runtimeRunId = try object.text("runtimeRunId", 1...Int.max)
