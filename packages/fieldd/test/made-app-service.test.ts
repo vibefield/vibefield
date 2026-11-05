@@ -14,6 +14,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -143,29 +144,42 @@ function appRow(n: number, over: Record<string, unknown> = {}): IndexCatalogApp 
 const digestOf = (row: IndexCatalogApp) => row.digest ?? "<no digest>";
 const glob = (login: string) => serveAllowGlob(login);
 
+/** One call the bridge saw, in order: a declare names every id it carried, a remove whether it converged. */
+type BridgeEvent = { op: "declare"; ids: string[] } | { op: "remove"; id: string; ok: boolean };
+
 class FakeBridge implements ArtifactServeBridge {
   declared: ServeSpec[][] = [];
   desired: ServeSpec[] = [];
   native = new Map<string, ServeState>();
   listeners = new Set<() => void>();
   removeAttempts: string[] = [];
+  events: BridgeEvent[] = [];
   failRemoveCount = 0;
+  /** ids whose removal fails while they are named here */
+  failRemove = new Set<string>();
+  /** AH's FakeBridge's: the declare throws (a non-mesh-down failure) */
+  failDeclare = false;
+  /** the floor refuses every add: a carried serve's fused state is `error` with no URL */
+  errorOnAdd = false;
   autoCarry = true;
   observedOverride: ObservedServe[] | null = null;
   afterDeclare: ((specs: ServeSpec[]) => void) | null = null;
 
   async declare(specs: ServeSpec[]): Promise<void> {
     this.declared.push(structuredClone(specs));
+    this.events.push({ op: "declare", ids: specs.map((spec) => spec.serveId ?? spec.name) });
+    if (this.failDeclare) throw new RpcCallError("INTERNAL", "scripted declare failure", true);
     this.desired = specs;
     if (this.autoCarry) {
       for (const spec of specs) {
         const id = spec.serveId ?? spec.name;
         if (!this.native.has(id)) {
-          this.native.set(id, {
-            ...spec,
-            status: "active",
-            url: `https://${HOST}:${spec.listenPort}`,
-          });
+          this.native.set(
+            id,
+            this.errorOnAdd
+              ? { ...spec, status: "error", error: "scripted add failure" }
+              : { ...spec, status: "active", url: `https://${HOST}:${spec.listenPort}` },
+          );
         }
       }
     }
@@ -174,12 +188,24 @@ class FakeBridge implements ArtifactServeBridge {
 
   async remove(serveId: string): Promise<{ removed: boolean }> {
     this.removeAttempts.push(serveId);
-    if (this.failRemoveCount > 0) {
-      this.failRemoveCount -= 1;
+    if (this.failRemoveCount > 0 || this.failRemove.has(serveId)) {
+      if (this.failRemoveCount > 0) this.failRemoveCount -= 1;
+      this.events.push({ op: "remove", id: serveId, ok: false });
       throw new RpcCallError("INTERNAL", "scripted remove failure", true);
     }
     this.native.delete(serveId);
+    this.events.push({ op: "remove", id: serveId, ok: true });
     return { removed: true };
+  }
+
+  /** Where `serveId`'s first converged removal sits in the call order (-1: never). */
+  removedAt(serveId: string): number {
+    return this.events.findIndex((e) => e.op === "remove" && e.id === serveId && e.ok);
+  }
+
+  /** Where the first declare that carried `serveId` sits in the call order (-1: never). */
+  firstDeclaredAt(serveId: string): number {
+    return this.events.findIndex((e) => e.op === "declare" && e.ids.includes(serveId));
   }
 
   states(): ServeState[] {
@@ -227,10 +253,15 @@ class FakeBridge implements ArtifactServeBridge {
   }
 }
 
+/** 3a's `IndexApps` as 3e adapts it: the table's rows, its first walk (`ready`) and rosetta's last `canonical_ready`
+ * (`libraryReady`), joined exactly as the seam's doc says 3e joins them. */
 class FakeRows implements MadeAppRows {
   apps = new Map<string, IndexCatalogApp>();
   versions = new Map<string, MadeAppPresentation>();
-  ready = true;
+  /** IndexApps.ready: this boot's first walk completed */
+  walked = true;
+  /** IndexApps.libraryReady: rosetta's last canonical_ready (undefined: no page read) */
+  canonicalReady: boolean | undefined = true;
 
   add(row: IndexCatalogApp): IndexCatalogApp {
     this.apps.set(row.appId, row);
@@ -241,8 +272,8 @@ class FakeRows implements MadeAppRows {
     return this.apps.get(appId);
   }
 
-  libraryReady(): boolean {
-    return this.ready;
+  speaks(): boolean {
+    return this.walked && this.canonicalReady === true;
   }
 
   async presentation(
@@ -327,6 +358,10 @@ class FakeTimers implements MadeAppTimers {
  * new inode each time) and answers its SHA-256. */
 class FakeCapture {
   calls: ShellWebContentsCaptureArtifactPreviewParams[] = [];
+  /** a hostile capture: `thumbnail.jpg` is a symlink to this file instead of a JPEG */
+  symlinkTo: string | null = null;
+  /** a shell that answers `{captured: true}` and no digest */
+  noDigest = false;
   #count = 0;
 
   constructor(readonly dataDir: string) {}
@@ -339,10 +374,15 @@ class FakeCapture {
     if (!existsSync(dir)) throw new Error(`the preview folder ${dir} does not exist`);
     this.#count += 1;
     const bytes = Buffer.from(`jpeg ${params.artifactId} #${this.#count}`);
+    if (this.symlinkTo !== null) {
+      rmSync(join(dir, "thumbnail.jpg"), { force: true });
+      symlinkSync(this.symlinkTo, join(dir, "thumbnail.jpg"));
+      return { captured: true, digest: sha256(bytes) };
+    }
     const tmp = join(dir, ".thumbnail.jpg.tmp");
     writeFileSync(tmp, bytes);
     renameSync(tmp, join(dir, "thumbnail.jpg"));
-    return { captured: true, digest: sha256(bytes) };
+    return this.noDigest ? { captured: true } : { captured: true, digest: sha256(bytes) };
   };
 }
 
@@ -472,6 +512,15 @@ const appSpecOf = (bridge: FakeBridge, appId: string) =>
     .last()
     .find((spec) => spec.serveId?.startsWith(`artifact-made-${appId.slice(0, 16)}-`) === true);
 const previewsSpecOf = (bridge: FakeBridge) => bridge.last().find(isPreviewsSpec);
+/** A listener already on the floor (field-native outlived fieldd), not declared by this service. */
+const liveServe = (serveId: string, listenPort: number): ServeState => ({
+  serveId,
+  name: serveId,
+  listenPort,
+  target: { kind: "dir", path: "/elsewhere" },
+  status: "active",
+  url: `https://${HOST}:${listenPort}`,
+});
 const appPort = (row: IndexCatalogApp) => candidateOf(MADE_APP_PORT_DOMAIN, row.appId);
 
 describe("MadeAppService (MA-3b unit)", () => {
@@ -663,7 +712,8 @@ describe("MadeAppService (MA-3b unit)", () => {
     const one = p.rows.add(appRow(1));
     const two = p.rows.add(appRow(2));
     const ah = new Set<number>([appPort(one)]);
-    const svc = made(p, { otherReservedPorts: () => ah });
+    // a fresh Set per call, as 3e's real getter answers: a reference held from an earlier call goes stale
+    const svc = made(p, { otherReservedPorts: () => new Set(ah) });
     await svc.start();
     p.bridge.observedOverride = [
       { serveId: "other", name: "other", listenPort: probed(appPort(one)) },
@@ -721,8 +771,18 @@ describe("MadeAppService (MA-3b unit)", () => {
     const cases: Record<string, (p: Parts) => IndexCatalogApp | string> = {
       unknown: () => hex("never made"),
       reading: (p) => {
-        p.rows.ready = false;
+        p.rows.canonicalReady = false;
         return hex("not read yet");
+      },
+      // rosetta's canonical_ready is true from the walk's first page while the table is partial (DS-L8)
+      walking: (p) => {
+        p.rows.walked = false;
+        p.rows.canonicalReady = true;
+        return hex("on a later page");
+      },
+      no_page_read: (p) => {
+        p.rows.canonicalReady = undefined;
+        return hex("nothing read");
       },
       hidden: (p) => {
         const row = p.rows.add(appRow(1));
@@ -753,6 +813,8 @@ describe("MadeAppService (MA-3b unit)", () => {
     expect(actual).toMatchObject({
       unknown: notFound,
       reading: refused("library-reading", true),
+      walking: refused("library-reading", true),
+      no_page_read: refused("library-reading", true),
       hidden: notFound,
       not_captured: refused("not-kept", false),
       missing: refused("not-kept", false),
@@ -901,11 +963,17 @@ describe("MadeAppService (MA-3b unit)", () => {
     await svc.settled();
     expect(p.timers.delays(), "no idle timer for a kept app").toEqual([]);
     p.clock.now += 3 * MADE_APP_LIMITS.IDLE_CLOSE_MS;
-    expect(appSpecOf(p.bridge, row.appId), "a kept app stays up").toBeDefined();
+    const serveId = appSpecOf(p.bridge, row.appId)?.serveId;
+    expect(serveId, "a kept app stays up").toBeDefined();
     p.intents.set(madeAppFoldKey(row), undefined);
     await svc.settled();
     expect(appSpecOf(p.bridge, row.appId), "lifted and overdue, it closes").toBeUndefined();
     expect(recordOf(p, row.appId)?.state).toBe("closed");
+    // MeshClient never removes an `artifact-` stray: undeclared is not gone, so the removal itself is asserted
+    expect(p.bridge.removeAttempts, "its listener is removed, not only undeclared").toContain(
+      serveId,
+    );
+    expect(p.bridge.native.has(serveId ?? "<none>"), "nothing listens on it").toBe(false);
   });
 
   it("hides: the serve retires, its preview link goes, and an open is NOT_FOUND; unhidden, the link comes back", async () => {
@@ -947,6 +1015,8 @@ describe("MadeAppService (MA-3b unit)", () => {
     p.clock.now += 1_000;
     await svc.open({ appId: one.appId });
     p.clock.now += 1_000;
+    const twoId = appSpecOf(p.bridge, two.appId)?.serveId;
+    expect(twoId, "two is up before the third opens").toBeDefined();
     expect(await opened(svc, three.appId), "room is made for the third").toEqual(
       serving(appPort(three)),
     );
@@ -958,6 +1028,10 @@ describe("MadeAppService (MA-3b unit)", () => {
       "the least recently opened goes",
     ).toEqual({ one: true, two: false });
     expect(recordOf(p, two.appId)?.state).toBe("closed");
+    expect(p.bridge.removeAttempts, "the evicted listener is removed").toContain(twoId);
+    expect(p.bridge.native.has(twoId ?? "<none>"), "so the ceiling bounds live listeners").toBe(
+      false,
+    );
 
     p.intents.set(madeAppFoldKey(one), { kept: true });
     p.intents.set(madeAppFoldKey(three), { kept: true });
@@ -967,6 +1041,64 @@ describe("MadeAppService (MA-3b unit)", () => {
       retryable: false,
       details: { resource: "apps", limit: ARTIFACT_LIMITS.LOCAL_OBJECTS },
     });
+
+    // AH's objects alone fill it: no made app holds it, so a retry may succeed once one goes
+    const q = parts();
+    const solo = q.rows.add(appRow(4));
+    const full = made(q, { otherLiveObjects: () => ARTIFACT_LIMITS.LOCAL_OBJECTS });
+    await full.start();
+    expect(await opened(full, solo.appId), "live artifacts hold every place").toEqual({
+      kind: "RESOURCE_EXHAUSTED",
+      retryable: true,
+      details: { resource: "apps", limit: ARTIFACT_LIMITS.LOCAL_OBJECTS },
+    });
+    expect(q.exporter.calls, "the ceiling refuses before any export").toEqual([]);
+  });
+
+  it("evicts as many closable serves as AH's objects push past the ceiling, and an all-kept refusal exports nothing", async () => {
+    const p = parts();
+    const [one, two, three, four] = [1, 2, 3, 4].map((n) => p.rows.add(appRow(n))) as [
+      IndexCatalogApp,
+      IndexCatalogApp,
+      IndexCatalogApp,
+      IndexCatalogApp,
+    ];
+    let others = 0;
+    const svc = made(p, { otherLiveObjects: () => others });
+    await svc.start();
+    for (const row of [one, two, three]) {
+      expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
+      p.clock.now += 1_000;
+    }
+    const ids = [one, two].map((row) => appSpecOf(p.bridge, row.appId)?.serveId);
+    // AH published past the made side's count: three open + 30 + the new one is two over
+    others = ARTIFACT_LIMITS.LOCAL_OBJECTS - 2;
+    expect(await opened(svc, four.appId), "room is made for the fourth").toEqual(
+      serving(appPort(four)),
+    );
+    expect(
+      Object.fromEntries(
+        [one, two, three, four].map((row, i) => [i + 1, recordOf(p, row.appId)?.state]),
+      ),
+      "the two least recently opened go",
+    ).toEqual({ 1: "closed", 2: "closed", 3: "open", 4: "open" });
+    expect(p.bridge.removeAttempts, "both evicted listeners are removed").toEqual(
+      expect.arrayContaining(ids),
+    );
+
+    // every open serve kept, and a new app (its folder holds nothing): refused before the export
+    p.intents.set(madeAppFoldKey(three), { kept: true });
+    p.intents.set(madeAppFoldKey(four), { kept: true });
+    await svc.settled();
+    const fifth = p.rows.add(appRow(5));
+    const calls = p.exporter.calls.length;
+    expect(await opened(svc, fifth.appId)).toEqual({
+      kind: "RESOURCE_EXHAUSTED",
+      retryable: false,
+      details: { resource: "apps", limit: ARTIFACT_LIMITS.LOCAL_OBJECTS },
+    });
+    expect(p.exporter.calls.length, "no export for a refused open").toBe(calls);
+    expect(existsSync(madeFolder(p, fifth)), "and no folder").toBe(false);
   });
 
   it("re-gates to the linked login at every declare: a new login replaces both serves on their ports; unlinked, both go", async () => {
@@ -982,9 +1114,21 @@ describe("MadeAppService (MA-3b unit)", () => {
     await svc.relink();
     const app = appSpecOf(p.bridge, row.appId);
     const previews = previewsSpecOf(p.bridge);
-    expect(p.bridge.removeAttempts, "the old gates are removed first").toEqual(
-      expect.arrayContaining([oldApp?.serveId, oldPreviews?.serveId]),
-    );
+    const order = (oldId: string | undefined, newId: string | undefined) => {
+      const removed = p.bridge.removedAt(oldId ?? "<none>");
+      const declared = p.bridge.firstDeclaredAt(newId ?? "<none>");
+      return { removed: removed >= 0, declared: declared >= 0, removedFirst: removed < declared };
+    };
+    expect(
+      {
+        app: order(oldApp?.serveId, app?.serveId),
+        previews: order(oldPreviews?.serveId, previews?.serveId),
+      },
+      "each old gate's removal converges before its replacement is first declared",
+    ).toEqual({
+      app: { removed: true, declared: true, removedFirst: true },
+      previews: { removed: true, declared: true, removedFirst: true },
+    });
     expect({ app: app?.allow, previews: previews?.allow }).toEqual({
       app: [glob("someone@else.example")],
       previews: [glob("someone@else.example")],
@@ -1008,6 +1152,114 @@ describe("MadeAppService (MA-3b unit)", () => {
     expect(appSpecOf(p.bridge, row.appId)?.allow, "linked again, the open app is back").toEqual([
       glob(TEST_LOGIN),
     ]);
+  });
+
+  it("remove-before-add: a re-gate or a re-point whose old serve will not go declares nothing new, then lands on the same port once the removal converges", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
+    await svc.settled();
+    const oldApp = appSpecOf(p.bridge, row.appId);
+    const oldPreviews = previewsSpecOf(p.bridge);
+    expect({ app: oldApp, previews: oldPreviews }, "both serves are up").toMatchObject({
+      app: { listenPort: appPort(row) },
+      previews: { listenPort: VECTOR.previewsPortCandidate },
+    });
+    const oldAppId = oldApp?.serveId ?? "<none>";
+    const oldPreviewsId = oldPreviews?.serveId ?? "<none>";
+
+    // a re-gate whose old listeners refuse to go
+    p.bridge.failRemove = new Set([oldAppId, oldPreviewsId]);
+    p.login = "someone@else.example";
+    await svc.relink();
+    const allow = [glob("someone@else.example")];
+    const regated = (spec: ServeSpec | undefined) => spec?.allow?.[0] === allow[0];
+    expect(
+      {
+        app: p.bridge.declared.some((specs) => specs.some((s) => regated(s) && !isPreviewsSpec(s))),
+        previews: p.bridge.declared.some((specs) =>
+          specs.some((s) => regated(s) && isPreviewsSpec(s)),
+        ),
+      },
+      "no new gate is declared beside an old one still listening on its port",
+    ).toEqual({ app: false, previews: false });
+    expect(recordOf(p, row.appId)?.retiringServeIds, "the old app id is retiring, durably").toEqual(
+      [oldAppId],
+    );
+    expect(p.timers.delays(), "a retry is owed on the one timer").toContain(10_000);
+
+    p.bridge.failRemove.clear();
+    expect(p.timers.fire(), "the retry fires").toBe(true);
+    await svc.settled();
+    const app = appSpecOf(p.bridge, row.appId);
+    const previews = previewsSpecOf(p.bridge);
+    expect(
+      { app: [app?.listenPort, app?.allow], previews: [previews?.listenPort, previews?.allow] },
+      "the new gates land on the same ports",
+    ).toEqual({ app: [appPort(row), allow], previews: [VECTOR.previewsPortCandidate, allow] });
+    expect(
+      {
+        app: p.bridge.removedAt(oldAppId) < p.bridge.firstDeclaredAt(app?.serveId ?? "<none>"),
+        previews:
+          p.bridge.removedAt(oldPreviewsId) <
+          p.bridge.firstDeclaredAt(previews?.serveId ?? "<none>"),
+      },
+      "each removal converged before its replacement's first declare",
+    ).toEqual({ app: true, previews: true });
+    expect(recordOf(p, row.appId)?.retiringServeIds).toEqual([]);
+
+    // a re-point (a new presentation) whose old serve refuses to go
+    const gatedId = app?.serveId ?? "<none>";
+    const v2 = p.rows.add(
+      appRow(1, { presentationId: hex("presentation-1-2"), digest: hex("page-1-2"), versions: 2 }),
+    );
+    p.bridge.failRemove = new Set([gatedId]);
+    expect(
+      await opened(svc, v2.appId),
+      "the new page is not up while the old one holds the port",
+    ).toEqual(starting);
+    const pointsAtV2 = (s: ServeSpec) =>
+      s.target.kind === "dir" && s.target.path === madeFolder(p, v2);
+    expect(
+      p.bridge.declared.some((specs) => specs.some(pointsAtV2)),
+      "the re-pointed serve is never declared beside the old one",
+    ).toBe(false);
+    expect(recordOf(p, v2.appId)?.retiringServeIds).toEqual([gatedId]);
+    p.bridge.failRemove.clear();
+    expect(p.timers.fire(), "the retry fires").toBe(true);
+    await svc.settled();
+    const repointed = appSpecOf(p.bridge, v2.appId);
+    expect({ target: repointed?.target, port: repointed?.listenPort }).toEqual({
+      target: { kind: "dir", path: madeFolder(p, v2) },
+      port: appPort(row),
+    });
+    expect(
+      p.bridge.removedAt(gatedId) < p.bridge.firstDeclaredAt(repointed?.serveId ?? "<none>"),
+      "the old serve's removal converged first",
+    ).toBe(true);
+  });
+
+  it("retries a hidden app's failed removal on the one timer, without another open (RULINGS L8: hidden means retire)", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
+    await svc.settled();
+    const serveId = appSpecOf(p.bridge, row.appId)?.serveId ?? "<none>";
+    p.bridge.failRemoveCount = 1;
+    p.intents.set(madeAppFoldKey(row), { hidden: true });
+    await svc.settled();
+    expect(p.bridge.native.has(serveId), "the first removal failed: it still listens").toBe(true);
+    expect(recordOf(p, row.appId)).toMatchObject({ state: "closed", retiringServeIds: [serveId] });
+    expect(p.timers.delays(), "a bounded retry, at AH's maintenance cadence").toEqual([10_000]);
+    expect(p.timers.fire(), "the retry fires").toBe(true);
+    await svc.settled();
+    expect(p.bridge.native.has(serveId), "retried, it is gone").toBe(false);
+    expect(recordOf(p, row.appId)?.retiringServeIds).toEqual([]);
+    expect(p.timers.delays(), "nothing is owed, nothing is open: no timer").toEqual([]);
   });
 
   it("after a restart: resumes a removal that failed, closes what is overdue and re-declares what is open", async () => {
@@ -1159,7 +1411,14 @@ describe("MadeAppService (MA-3b unit)", () => {
       path: { kind: "dir", path: madeFolder(p, v2) },
       port: oldSpec?.listenPort,
     });
-    expect(p.bridge.removeAttempts, "the old serve is removed first").toContain(oldSpec?.serveId);
+    const removed = p.bridge.removedAt(oldSpec?.serveId ?? "<none>");
+    expect(
+      {
+        removed: removed >= 0,
+        first: removed < p.bridge.firstDeclaredAt(spec?.serveId ?? "<none>"),
+      },
+      "the old serve's removal converges before the re-pointed one is first declared",
+    ).toEqual({ removed: true, first: true });
     expect(
       existsSync(madeFolder(p, v1)),
       "the old digest's folder goes once the old serve is removed",
@@ -1167,6 +1426,15 @@ describe("MadeAppService (MA-3b unit)", () => {
     expect(existsSync(madeFolder(p, v2))).toBe(true);
     expect(p.capture.calls, "the new page is photographed").toHaveLength(2);
     expect(recordOf(p, v2.appId)?.preview).toMatchObject({ id: previewId, pageDigest: v2.digest });
+    // L12: the link is replaced after each capture, so the previews serve never serves the old bytes under the new ?v=
+    expect(existsSync(linkedFile(p, previewId)), "the new capture is linked").toBe(true);
+    expect(
+      statSync(linkedFile(p, previewId)).ino,
+      "the link is the new capture's file, not the first's",
+    ).toBe(statSync(capturedFile(p, previewId)).ino);
+    expect(recordOf(p, v2.appId)?.preview?.digest, "the stamp names the new JPEG").toBe(
+      sha256(readFileSync(capturedFile(p, previewId))),
+    );
   });
 
   it("opens an older version: that presentation is exported into its own folder and the app's one serve re-points to it", async () => {
@@ -1219,7 +1487,9 @@ describe("MadeAppService (MA-3b unit)", () => {
       details: { service: "made-app-storage", state: "failed", code: "ENOSPC" },
     });
     expect(appSpecOf(p.bridge, row.appId), "nothing is declared").toBeUndefined();
+    expect(previewsSpecOf(p.bridge), "no previews serve on an unpersisted port").toBeUndefined();
     expect(svc.reservedPorts().has(appPort(row)), "nothing is reserved").toBe(false);
+    expect(svc.reservedPorts().size, "not even the previews port").toBe(0);
     expect(svc.health().storage).toBe("failed");
   });
 
@@ -1256,11 +1526,336 @@ describe("MadeAppService (MA-3b unit)", () => {
       ...options
     } = baseOptions(p);
     const svc = new MadeAppService(options);
+    const stamps: string[][] = [];
+    svc.on("previews-changed", (appIds) => stamps.push(appIds));
     cleanup.push(() => svc.dispose());
     await svc.start();
     await svc.open({ appId: row.appId });
     await svc.settled();
-    expect(p.capture.calls).toEqual([]);
-    expect(svc.of(row.appId)?.preview).toBeUndefined();
+    // what a capture would leave, observed from outside (the fake is unreachable from these options)
+    const previewId = previewIdOf(p, row.appId);
+    expect({
+      stamps,
+      linked: existsSync(join(p.dataDir, "artifacts", "made-previews", previewId)),
+      recorded: recordOf(p, row.appId)?.preview,
+      stamp: svc.of(row.appId)?.preview,
+    }).toEqual({ stamps: [], linked: false, recorded: undefined, stamp: undefined });
+  });
+
+  it("after a restart, keeps, hides and idle-closes nothing until the library's rows speak: a kept app is never closed before the walk (RULINGS L8)", async () => {
+    const p = parts();
+    const [kept, hidden, plain] = [1, 2, 3].map((n) => p.rows.add(appRow(n))) as [
+      IndexCatalogApp,
+      IndexCatalogApp,
+      IndexCatalogApp,
+    ];
+    const first = made(p);
+    await first.start();
+    for (const row of [kept, hidden, plain]) await first.open({ appId: row.appId });
+    const ids = Object.fromEntries(
+      [kept, hidden, plain].map((row, i) => [i, appSpecOf(p.bridge, row.appId)?.serveId]),
+    );
+    await first.dispose();
+    // while fieldd was down: the person kept one and hid another (native-keyed intents), and a day and more passed
+    p.intents.set(madeAppFoldKey(kept), { kept: true });
+    p.intents.set(madeAppFoldKey(hidden), { hidden: true });
+    p.clock.now += 3 * MADE_APP_LIMITS.IDLE_CLOSE_MS;
+
+    const bridge = new FakeBridge();
+    bridge.native = new Map(p.bridge.native);
+    const rows = new FakeRows();
+    rows.walked = false; // 3a's first walk has not landed: the table holds no row yet
+    const q = parts({ dataDir: p.dataDir, clock: p.clock, intents: p.intents, bridge, rows });
+    let others = 0;
+    const second = made(q, { otherLiveObjects: () => others });
+    await second.start();
+    await second.settled();
+    expect(
+      {
+        removed: bridge.removeAttempts,
+        states: [kept, hidden, plain].map((row) => recordOf(q, row.appId)?.state),
+        declared: [kept, hidden, plain].map((row) => appSpecOf(bridge, row.appId)?.serveId),
+        timers: q.timers.delays(),
+      },
+      "before the walk nothing is decided: every serve stays as it was, no idle timer",
+    ).toEqual({
+      removed: [],
+      states: ["open", "open", "open"],
+      declared: [ids[0], ids[1], ids[2]],
+      timers: [],
+    });
+
+    // the ceiling never evicts an app whose keep is not read (a page-one row may open meanwhile): refused, retryable
+    const fourth = rows.add(appRow(4));
+    others = ARTIFACT_LIMITS.LOCAL_OBJECTS - 3;
+    expect(await opened(second, fourth.appId), "no unread app is evicted").toEqual({
+      kind: "RESOURCE_EXHAUSTED",
+      retryable: true,
+      details: { resource: "apps", limit: ARTIFACT_LIMITS.LOCAL_OBJECTS },
+    });
+    expect(bridge.removeAttempts, "nothing was closed for it").toEqual([]);
+    others = 0;
+
+    // the walk lands: 3e's IndexApps `changed` → reconsider()
+    for (const row of [kept, hidden, plain]) rows.add(row);
+    rows.walked = true;
+    await second.reconsider();
+    await second.settled();
+    expect(
+      {
+        states: [kept, hidden, plain].map((row) => recordOf(q, row.appId)?.state),
+        live: [ids[0], ids[1], ids[2]].map((id) => bridge.native.has(id ?? "<none>")),
+      },
+      "read: the kept app stays up, the hidden one retires, the overdue one closes",
+    ).toEqual({ states: ["open", "closed", "closed"], live: [true, false, false] });
+    expect(q.timers.delays(), "a kept app arms no idle close").toEqual([]);
+  });
+
+  it("answers export-failed, never starting, when the serve's declare fails or the floor refuses its add (MADE_APP_OPEN)", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    p.bridge.failDeclare = true;
+    expect(await opened(svc, row.appId), "the declare threw").toEqual(
+      refused("export-failed", true),
+    );
+    p.bridge.failDeclare = false;
+    expect(await opened(svc, row.appId), "a retry serves").toEqual(serving(appPort(row)));
+
+    const q = parts();
+    q.bridge.errorOnAdd = true;
+    const two = q.rows.add(appRow(2));
+    const failing = made(q, { openWaitMs: 2_000 });
+    await failing.start();
+    const began = Date.now();
+    expect(await opened(failing, two.appId), "the floor's add failed").toEqual(
+      refused("export-failed", true),
+    );
+    expect(Date.now() - began, "an error ends the wait: it is not a URL still coming").toBeLessThan(
+      1_500,
+    );
+  });
+
+  it("sweeps, before it declares, every made listener it does not hold: a login changed while fieldd was down; never AH's, never an open app's", async () => {
+    const p = parts();
+    const [one, two] = [1, 2].map((n) => p.rows.add(appRow(n))) as [
+      IndexCatalogApp,
+      IndexCatalogApp,
+    ];
+    const first = made(p);
+    await first.start();
+    await first.open({ appId: one.appId });
+    await first.open({ appId: two.appId });
+    const oldApp = appSpecOf(p.bridge, one.appId)?.serveId ?? "<none>";
+    const oldPreviews = previewsSpecOf(p.bridge)?.serveId ?? "<none>";
+    const twoId = appSpecOf(p.bridge, two.appId)?.serveId ?? "<none>";
+    await first.dispose();
+
+    // two's capture folder cannot be made at the restart: its spec is skipped, but its listener is still wanted
+    const twoPreviewDir = join(p.dataDir, "artifacts", "previews", previewIdOf(p, two.appId));
+    rmSync(twoPreviewDir, { recursive: true, force: true });
+    writeFileSync(twoPreviewDir, "not a folder");
+
+    const bridge = new FakeBridge();
+    bridge.native = new Map(p.bridge.native);
+    const strayId = `artifact-made-${"f".repeat(16)}-aaaaaaaaaaaaaaaa`;
+    const ahId = "artifact-01JC4MA0PV0000000000000001-bbbbbbbbbbbbbbbb";
+    bridge.native.set(strayId, liveServe(strayId, 19_999));
+    bridge.native.set(ahId, liveServe(ahId, 19_997));
+    const q = parts({ dataDir: p.dataDir, rows: p.rows, clock: p.clock, bridge });
+    q.login = "someone@else.example"; // the login changed while fieldd was down
+    const second = made(q);
+    await second.start();
+    const newApp = appSpecOf(bridge, one.appId)?.serveId ?? "<none>";
+    const newPreviews = previewsSpecOf(bridge)?.serveId ?? "<none>";
+    expect(
+      {
+        stray: bridge.native.has(strayId),
+        ah: bridge.native.has(ahId),
+        oldApp: bridge.native.has(oldApp),
+        oldPreviews: bridge.native.has(oldPreviews),
+      },
+      "the made strays and the old login's serves go; AH's listener is AH's",
+    ).toEqual({ stray: false, ah: true, oldApp: false, oldPreviews: false });
+    expect(
+      {
+        app:
+          bridge.removedAt(oldApp) >= 0 &&
+          bridge.removedAt(oldApp) < bridge.firstDeclaredAt(newApp),
+        previews:
+          bridge.removedAt(oldPreviews) >= 0 &&
+          bridge.removedAt(oldPreviews) < bridge.firstDeclaredAt(newPreviews),
+      },
+      "each old-login listener is removed before the new login's serve is declared on its port",
+    ).toEqual({ app: true, previews: true });
+    expect(
+      { declared: appSpecOf(bridge, two.appId), removed: bridge.removeAttempts.includes(twoId) },
+      "two's folder failed: not declared this pass, and its old-login listener was a stray",
+    ).toEqual({ declared: undefined, removed: true });
+
+    // same login, same failed folder: two's live listener is wanted, so the relink's sweep spares it
+    const r = parts({ dataDir: p.dataDir, rows: p.rows, clock: p.clock, bridge: new FakeBridge() });
+    r.bridge.native = new Map(bridge.native);
+    const sameId = madeAppServeId({
+      appId: two.appId,
+      listenPort: appPort(two),
+      allow: [glob("someone@else.example")],
+      previewDir: twoPreviewDir,
+      folder: madeFolder(p, two),
+    });
+    r.bridge.native.set(sameId, liveServe(sameId, appPort(two)));
+    r.login = "someone@else.example";
+    const third = made(r);
+    await third.start();
+    const later = `artifact-made-${"e".repeat(16)}-cccccccccccccccc`;
+    r.bridge.native.set(later, liveServe(later, 19_998));
+    await third.relink();
+    expect(
+      {
+        two: r.bridge.native.has(sameId),
+        stray: r.bridge.native.has(later),
+        ah: r.bridge.native.has(ahId),
+      },
+      "an open app whose spec could not be made this pass keeps its listener; a stray goes at a relink",
+    ).toEqual({ two: true, stray: false, ah: true });
+  });
+
+  it("names a folder only by a blake3 digest (EL7): a version digest like ../../x, or none, is export-failed with no export", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const hostile: MadeAppPresentation = {
+      presentationId: hex("presentation-1-0"),
+      sessionId: "ses-1-hostile",
+      digest: "../../x",
+      availability: "captured",
+    };
+    p.rows.versions.set(`${row.appId}:${hostile.presentationId}`, hostile);
+    const bare = p.rows.add(appRow(2, { digest: undefined }));
+    const svc = made(p);
+    await svc.start();
+    expect({
+      hostile: await opened(svc, row.appId, hostile.presentationId),
+      noDigest: await opened(svc, bare.appId),
+    }).toEqual({
+      hostile: refused("export-failed", true),
+      noDigest: refused("export-failed", true),
+    });
+    expect(p.exporter.calls, "no export is asked").toEqual([]);
+    const artifacts = join(p.dataDir, "artifacts");
+    expect(
+      { x: existsSync(join(artifacts, "x")), made: existsSync(join(artifacts, "made")) },
+      "no folder is made, inside made/ or out of it",
+    ).toEqual({ x: false, made: false });
+  });
+
+  it("refuses to link a capture that is not a regular file (EL7), and stamps nothing for a capture with no digest", async () => {
+    const p = parts();
+    const outside = join(p.dataDir, "secret.txt");
+    writeFileSync(outside, "not a preview");
+    p.capture.symlinkTo = outside;
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
+    await svc.settled();
+    const previewId = previewIdOf(p, row.appId);
+    expect(p.capture.calls, "the capture ran").toHaveLength(1);
+    expect(
+      {
+        linked: existsSync(join(p.dataDir, "artifacts", "made-previews", previewId)),
+        stamps: p.stamps,
+        preview: recordOf(p, row.appId)?.preview,
+      },
+      "a symlink is never linked, stamped or announced",
+    ).toEqual({ linked: false, stamps: [], preview: undefined });
+
+    const q = parts();
+    q.capture.noDigest = true;
+    const two = q.rows.add(appRow(2));
+    const undigested = made(q);
+    await undigested.start();
+    expect(await opened(undigested, two.appId)).toEqual(serving(appPort(two)));
+    await undigested.settled();
+    expect(q.capture.calls, "the capture ran").toHaveLength(1);
+    expect(
+      { stamps: q.stamps, preview: recordOf(q, two.appId)?.preview },
+      "no digest, no stamp",
+    ).toEqual({ stamps: [], preview: undefined });
+  });
+
+  it("loads its registry record by record: one bad record is dropped alone and the good one keeps its port", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const port = probed(appPort(row), 7); // not the first candidate: only the record can name it
+    mkdirSync(join(p.dataDir, "registries"), { recursive: true });
+    writeFileSync(
+      registryPath(p),
+      JSON.stringify({
+        v: 1,
+        apps: [
+          {
+            appId: "not an app id",
+            listenPort: 1,
+            retiringServeIds: [],
+            createdAt: 0,
+            updatedAt: 0,
+          },
+          {
+            appId: row.appId,
+            listenPort: port,
+            state: "closed",
+            retiringServeIds: [],
+            createdAt: T0,
+            updatedAt: T0,
+          },
+        ],
+      }),
+    );
+    const svc = made(p);
+    await svc.start();
+    expect(svc.health().apps, "the good record is kept").toBe(1);
+    expect(await opened(svc, row.appId), "and it opens on its own port").toEqual(serving(port));
+    expect(
+      readdirSync(join(p.dataDir, "registries")).some((name) => name.includes(".bad-")),
+      "the file is not quarantined for one record",
+    ).toBe(false);
+  });
+
+  it("holds at most MADE_APP_LIMITS.INTENTS reservations: a new app past them is RESOURCE_EXHAUSTED, with no export", async () => {
+    const p = parts();
+    const apps = Array.from({ length: MADE_APP_LIMITS.INTENTS }, (_, i) => ({
+      appId: hex(`reserved-${i}`),
+      listenPort: ARTIFACT_LIMITS.LISTEN_PORT_MIN + (i % 10_000),
+      state: "closed",
+      retiringServeIds: [],
+      createdAt: T0,
+      updatedAt: T0,
+    }));
+    mkdirSync(join(p.dataDir, "registries"), { recursive: true });
+    writeFileSync(registryPath(p), JSON.stringify({ v: 1, apps }));
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    expect(svc.health().apps).toBe(MADE_APP_LIMITS.INTENTS);
+    expect(await opened(svc, row.appId)).toEqual({
+      kind: "RESOURCE_EXHAUSTED",
+      retryable: false,
+      details: { resource: "apps", limit: MADE_APP_LIMITS.INTENTS },
+    });
+    expect(p.exporter.calls, "no export").toEqual([]);
+  });
+
+  it("refuses an open after dispose: UNAVAILABLE made-apps stopping, never an apps state", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    await svc.dispose();
+    expect(await opened(svc, row.appId)).toEqual({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "made-apps", state: "stopping" },
+    });
   });
 });

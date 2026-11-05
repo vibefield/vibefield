@@ -262,6 +262,7 @@ export class ArtifactService {
       ) => Promise<ShellWebContentsCaptureArtifactPreviewResult>)
     | undefined;
   readonly #capturePreviewAvailable: () => boolean;
+  readonly #otherReservedPorts: () => ReadonlySet<number>;
   readonly #registryDir: string;
   readonly #intentPath: string;
   readonly #legacyPath: string;
@@ -325,6 +326,7 @@ export class ArtifactService {
     this.#capturePreview = opts.capturePreview;
     this.#capturePreviewAvailable =
       opts.capturePreviewAvailable ?? (() => opts.capturePreview !== undefined);
+    this.#otherReservedPorts = opts.otherReservedPorts ?? (() => new Set<number>());
     this.#registryDir = join(opts.dataDir, ...LAYOUT.REGISTRIES_DIR);
     this.#intentPath = join(this.#registryDir, ARTIFACT_INTENT_FILE);
     this.#legacyPath = join(this.#registryDir, `${STORES.ARTIFACTS}.json`);
@@ -824,7 +826,7 @@ export class ArtifactService {
   }
 
   async #allocatePort(artifactId: string): Promise<number> {
-    const used = new Set<number>();
+    const used = new Set<number>(this.#otherReservedPorts());
     for (const entry of this.#entries.values()) used.add(entry.listenPort);
     try {
       for (const serve of await this.#bridge.observed()) {

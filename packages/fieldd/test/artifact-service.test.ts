@@ -887,7 +887,9 @@ describe("ArtifactService (AH-1 unit)", () => {
       linkedLogin: () => TEST_LOGIN,
       meshBus: true,
       probe: async () => true,
-      otherReservedPorts: () => made,
+      // a fresh Set per call, as 3e's `() => madeApps.reservedPorts()` answers: a reference held from an earlier
+      // call (read once, not at every allocation) goes stale and fails B's step
+      otherReservedPorts: () => new Set(made),
     });
     cleanup.push(() => svc.dispose());
     await svc.start();
