@@ -116,7 +116,7 @@ if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   console.log(`build-native-release: cargo ${args.join(" ")}`);
   console.log(
     door === null
-      ? `build-native-release: ${REMAP_SWITCH} unset — a development build, its paths NOT remapped (the packaged app's gate refuses them)`
+      ? `build-native-release: ${REMAP_SWITCH} unset — a development build, its paths NOT remapped (\`host-links.mjs --app\` refuses them; a local release exports ${REMAP_SWITCH}=1 for this build, siblings:build and build-js mille)`
       : `build-native-release: ${REMAP_SWITCH}=1 — rustflags += ${flags.join(" ")} (through ${door})`,
   );
   const run = spawnSync("cargo", args, {

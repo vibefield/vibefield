@@ -18,17 +18,21 @@
 // and a stable toolchain refuses `cargo-features`. So the flag rustc has stabilized since 1.0 it is.
 //
 // THE DOORS — appended, never clobbering. cargo takes rustflags from the FIRST of: CARGO_ENCODED_RUSTFLAGS, RUSTFLAGS,
-// every matching `target.<triple|cfg>.rustflags`, `build.rustflags` (config files, `--config`, CARGO_BUILD_RUSTFLAGS —
-// config ARRAYS join across those). An environment variable REPLACES every config file's rustflags; `--config` arrays merge.
+// every matching `target.<triple|cfg>.rustflags` (or CARGO_TARGET_<TRIPLE>_RUSTFLAGS), `build.rustflags` (config files,
+// `--config`, CARGO_BUILD_RUSTFLAGS — config ARRAYS join across those). An environment variable REPLACES every config
+// file's rustflags; `--config` arrays merge.
 //   - `cargoRemap`, a cargo WE run (field-native's release build, rosettad's): flags already in the environment → ours are
 //     appended there (CARGO_ENCODED_RUSTFLAGS; cargo reads that first and was ignoring the config files anyway); else
-//     `--config build.rustflags=[…]`, which cargo joins after any config file's build.rustflags. A config's
-//     `target.….rustflags` would make cargo ignore every build.rustflags, ours too — refused by name, never built quietly.
+//     `--config build.rustflags=[…]`, which cargo joins after any config file's build.rustflags. Target rustflags — a
+//     config's `target.….rustflags` (a table, a dotted key, an inline table) or CARGO_TARGET_<TRIPLE>_RUSTFLAGS — would
+//     make cargo ignore every build.rustflags, ours too: refused by name, never built quietly.
 //   - `napiRemapEnv`, mille's napi build: napi runs cargo itself and composes RUSTFLAGS (`RUSTFLAGS ?? CARGO_BUILD_RUSTFLAGS`,
 //     then its own musl/strip flags; @napi-rs/cli 3.6.2 `setEnvs`), so RUSTFLAGS is the only door that keeps napi's own
 //     composition: ours are appended to what napi would read, a flag with whitespace is refused (RUSTFLAGS splits on it),
-//     and a config file's rustflags is refused (RUSTFLAGS would replace it). CARGO_ENCODED_RUSTFLAGS already set → appended
-//     there, since cargo reads it before napi's RUSTFLAGS.
+//     and a config file's rustflags or a CARGO_TARGET_<TRIPLE>_RUSTFLAGS is refused (RUSTFLAGS would replace it) — the
+//     config files cargo reads from the directory napi runs it in, the PACKAGE's (`pnpm --filter … build` runs there, and
+//     napi spawns cargo with that cwd; cargo discovers config from its cwd, never from the manifest). CARGO_ENCODED_RUSTFLAGS
+//     already set → appended there, since cargo reads it before napi's RUSTFLAGS.
 // Read 2026-11-05, read-only: neither ~/.cargo/config.toml (target-dir alone), ../rosetta-pin/.cargo/config.toml (target-dir
 // alone) nor ../mille-pin (no .cargo/) sets any rustflags, and the release job's runner has no user config — so today
 // every door is a pure append; the refusals are for the day one of them does.
@@ -103,11 +107,57 @@ export function remapFlags({
     .map(([prefix, target]) => `--remap-path-prefix=${prefix}=${target}`);
 }
 
-/** The rustflags a cargo config file's text sets: under `build` (cargo joins them with ours) or under a `target.…` table
- * (which makes cargo ignore every `build.rustflags`). Read as TOML's table headers and dotted keys, line by line — a
- * question about two keys, not a TOML parser. */
+/** The index of the first `char` in `line` from `start` that stands outside a TOML string ('literal' or "basic", the
+ * latter with its backslash escapes), or -1. A dotted key's quoted segment may hold `=` or `]`
+ * (`target.'cfg(target_os = "macos")'.rustflags`), and an array's strings may hold `=` (`"link-arg=-fuse-ld=lld"`). */
+function outsideQuotes(line, char, start = 0) {
+  let quote = null;
+  for (let i = start; i < line.length; i += 1) {
+    const c = line[i];
+    if (quote === '"' && c === "\\") i += 1;
+    else if (quote !== null) {
+      if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === char) return i;
+  }
+  return -1;
+}
+
+/** A key as the classifier compares it: whitespace outside its quoted segments dropped (inside them it is kept as written,
+ * so `'cfg(target_os = "macos")'` stays one segment). */
+function keyText(text) {
+  let out = "";
+  let quote = null;
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    if (quote !== null) {
+      out += c;
+      if (quote === '"' && c === "\\") {
+        i += 1;
+        out += text[i] ?? "";
+      } else if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+      out += c;
+    } else if (!/\s/u.test(c)) out += c;
+  }
+  return out;
+}
+
+const RUSTFLAGS_KEY = /(^|\.)(rustflags|"rustflags"|'rustflags')$/u;
+const INLINE_RUSTFLAGS = /[{,]\s*(rustflags|"rustflags"|'rustflags')\s*=/u;
+
+/** The rustflags a cargo config file's text sets: under `build` (cargo joins them with ours) or under a `target` table
+ * (which makes cargo ignore every `build.rustflags`). Read as TOML's table headers, dotted keys and one-line inline tables
+ * — `[target.'cfg(…)']`, `target.'cfg(target_os = "macos")'.rustflags = […]`, `[target]` then
+ * `aarch64-apple-darwin = { rustflags = […] }`, `build = { rustflags = […] }` — line by line, the `=` and `]` that matter
+ * found outside quotes: a question about two keys, not a TOML parser. */
 export function configRustflags(text) {
   const found = { build: false, target: false };
+  const mark = (key) => {
+    if (key === "build" || key.startsWith("build.")) found.build = true;
+    else if (key === "target" || key.startsWith("target.")) found.target = true;
+  };
   let table = "";
   for (const raw of text.split(/\r?\n/u)) {
     const line = raw.trim();
@@ -116,19 +166,27 @@ export function configRustflags(text) {
       table = "";
       continue;
     }
-    const header = /^\[([^\]]+)\]/u.exec(line);
-    if (header !== null) {
-      table = header[1].replace(/\s+/gu, "");
+    if (line.startsWith("[")) {
+      const close = outsideQuotes(line, "]", 1);
+      table = close === -1 ? "" : keyText(line.slice(1, close));
       continue;
     }
-    const eq = line.indexOf("=");
+    const eq = outsideQuotes(line, "=");
     if (eq === -1) continue;
-    const key = [table, line.slice(0, eq).replace(/\s+/gu, "")].filter(Boolean).join(".");
-    if (!/(^|\.)rustflags$/u.test(key)) continue;
-    if (key.startsWith("build.")) found.build = true;
-    else if (key.startsWith("target.")) found.target = true;
+    const key = [table, keyText(line.slice(0, eq))].filter(Boolean).join(".");
+    // the key names rustflags, or its value is an inline table that does at any depth (`{ x = { rustflags = … } }`)
+    if (RUSTFLAGS_KEY.test(key) || INLINE_RUSTFLAGS.test(line.slice(eq + 1))) mark(key);
   }
   return found;
+}
+
+/** The environment's own target rustflags — `CARGO_TARGET_<TRIPLE>_RUSTFLAGS`, cargo's environment form of
+ * `target.<triple>.rustflags`, which (like the config's) makes cargo ignore every `build.rustflags`, and which RUSTFLAGS
+ * replaces. Their names, sorted. */
+export function envTargetRustflags(env) {
+  return Object.keys(env)
+    .filter((key) => /^CARGO_TARGET_[A-Z0-9_]+_RUSTFLAGS$/u.test(key))
+    .sort();
 }
 
 function readTextOrNull(path) {
@@ -176,8 +234,9 @@ export function envRustflags(env) {
  *  - the environment carries rustflags → `flags` appended to them as CARGO_ENCODED_RUSTFLAGS (RUSTFLAGS folded in as
  *    cargo splits it, then dropped); cargo was ignoring every config file's already;
  *  - otherwise `--config build.rustflags=[…]` before the subcommand: cargo joins it after any config's build.rustflags;
- *  - a config's `target.….rustflags` (in `configs`, readConfigRustflags's answer) with no environment flags is REFUSED:
- *    cargo would ignore build.rustflags, ours with it, and build unremapped. */
+ *  - target rustflags with no environment flags — a config's `target.….rustflags` (in `configs`, readConfigRustflags's
+ *    answer) or the environment's `CARGO_TARGET_<TRIPLE>_RUSTFLAGS` — are REFUSED: cargo would ignore build.rustflags,
+ *    ours with it, and build unremapped. */
 export function cargoRemap({ args, env, flags, configs = [] }) {
   const existing = envRustflags(env);
   if (existing !== null) {
@@ -185,11 +244,14 @@ export function cargoRemap({ args, env, flags, configs = [] }) {
     delete next.RUSTFLAGS;
     return { args: [...args], env: next, door: "CARGO_ENCODED_RUSTFLAGS" };
   }
-  const targeted = configs.filter((config) => config.target).map((config) => config.file);
+  const targeted = [
+    ...configs.filter((config) => config.target).map((config) => config.file),
+    ...envTargetRustflags(env),
+  ];
   if (targeted.length > 0)
     throw new Error(
       `${targeted.join(", ")} sets target rustflags, so cargo would ignore the remap's build.rustflags — ` +
-        "export the config's flags with the remap in CARGO_ENCODED_RUSTFLAGS, or move them to [build]",
+        "export those flags with the remap in CARGO_ENCODED_RUSTFLAGS, or move them to [build]",
     );
   return {
     args: ["--config", `build.rustflags=${JSON.stringify(flags)}`, ...args],
@@ -201,8 +263,8 @@ export function cargoRemap({ args, env, flags, configs = [] }) {
 /** The remap through napi's build (napi composes RUSTFLAGS and runs cargo itself): `{ env, door }`.
  *  - CARGO_ENCODED_RUSTFLAGS set → appended there (cargo reads it before RUSTFLAGS);
  *  - else RUSTFLAGS = what napi would read (`RUSTFLAGS ?? CARGO_BUILD_RUSTFLAGS`) + `flags`, napi appending its own after;
- *    a flag holding whitespace is refused (RUSTFLAGS splits on it), and so is any config file's rustflags (`configs`),
- *    which RUSTFLAGS would replace. */
+ *    a flag holding whitespace is refused (RUSTFLAGS splits on it), and so is any config file's rustflags (`configs`)
+ *    or the environment's `CARGO_TARGET_<TRIPLE>_RUSTFLAGS`, which RUSTFLAGS would replace. */
 export function napiRemapEnv({ env, flags, configs = [] }) {
   if (env.CARGO_ENCODED_RUSTFLAGS !== undefined) {
     const existing = env.CARGO_ENCODED_RUSTFLAGS.split("\x1f").filter((flag) => flag !== "");
@@ -216,9 +278,10 @@ export function napiRemapEnv({ env, flags, configs = [] }) {
     throw new Error(
       `${spaced.join(" ")} holds whitespace, which RUSTFLAGS (napi's door) splits on — build from a path without it`,
     );
-  if (configs.length > 0)
+  const replaced = [...configs.map((config) => config.file), ...envTargetRustflags(env)];
+  if (replaced.length > 0)
     throw new Error(
-      `${configs.map((config) => config.file).join(", ")} sets rustflags, which napi's RUSTFLAGS would replace — ` +
+      `${replaced.join(", ")} sets rustflags, which napi's RUSTFLAGS would replace — ` +
         "export them with the remap in CARGO_ENCODED_RUSTFLAGS",
     );
   const existing = (env.RUSTFLAGS ?? env.CARGO_BUILD_RUSTFLAGS ?? "")

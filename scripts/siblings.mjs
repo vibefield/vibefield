@@ -1817,16 +1817,43 @@ export function alignHostPeers(root, entry) {
   }
 }
 
+/** The directories a sibling's pnpm run (`args`) executes its scripts in (`{ dirs, unmapped }`): each package a
+ * `--filter`/`-F` names, at the directory the lock's `packages` maps it to inside the checkout `dir` — a filter the lock
+ * does not map lands in `unmapped` — or the checkout itself for a run that names none. A script's children run there
+ * too: `pnpm --filter @vibecook/mille build` runs `napi build --manifest-path ../../crates/mille-binding/Cargo.toml` in
+ * packages/mille, and napi (@napi-rs/cli 3.6.2: `cwd` defaults to process.cwd(); its build spawn and its `cargo
+ * metadata` take it) runs cargo there — and cargo discovers its config files from its cwd, never from the manifest. */
+export function pnpmRunDirs(dir, packages = {}, args = []) {
+  const dirs = [];
+  const unmapped = [];
+  args.forEach((arg, i) => {
+    let filter = null;
+    if (arg === "--filter" || arg === "-F") filter = args[i + 1] ?? null;
+    else if (arg.startsWith("--filter=")) filter = arg.slice("--filter=".length);
+    if (filter === null) return;
+    if (Object.hasOwn(packages, filter)) dirs.push(join(dir, packages[filter]));
+    else unmapped.push(filter);
+  });
+  return { dirs: dirs.length > 0 || unmapped.length > 0 ? dirs : [dir], unmapped };
+}
+
 /** The environment a sibling's pnpm run gets (`{ env, remap }`): the caller's, with a lane's CARGO_TARGET_DIR moved under
  * `siblings/mille` — and, for a BUILD of a sibling whose checkout is a cargo workspace (mille's napi binding) under the
  * release switch (LP-6b), the build-path remap of its checkout (→ /<name>), its cargo target (→ /target), CARGO_HOME and
  * RUSTUP_HOME through napi's own door (`napiRemapEnv`: napi composes RUSTFLAGS and runs cargo itself). `remap` is
- * `{ flags, door }` or null. The target is the override's when one is set, else what cargo says for the checkout. */
+ * `{ flags, door }` or null.
+ *
+ * `entry` is the sibling's lock entry: the runs this environment reaches (`pnpm.build`, `pnpm.afterBuild`) execute in the
+ * directories `pnpmRunDirs` names, and cargo runs THERE (packages/mille for mille), so the config files the remap must
+ * not clobber are read from each of them upward, and the target is what cargo says there (the override's when one is
+ * set). A filter the lock's `packages` does not map is refused under the switch: the remap cannot read the configs cargo
+ * will. With no entry the runs are taken to run at the checkout. */
 export function siblingPnpmEnv(
   base = process.env,
   {
     name,
     dir,
+    entry,
     build = false,
     targetDirOf = cargoTargetDir,
     isCargo = (checkout) => existsSync(join(checkout, "Cargo.toml")),
@@ -1837,18 +1864,29 @@ export function siblingPnpmEnv(
   const env = { ...base };
   if (env.CARGO_TARGET_DIR) env.CARGO_TARGET_DIR = join(env.CARGO_TARGET_DIR, "siblings", "mille");
   if (!build || !remapRequested(env) || !isCargo(dir)) return { env, remap: null };
+  const runs = [entry?.pnpm?.build, entry?.pnpm?.afterBuild].filter(Array.isArray);
+  const placed = runs.map((args) => pnpmRunDirs(dir, entry?.packages, args));
+  const unmapped = placed.flatMap((run) => run.unmapped);
+  if (unmapped.length > 0)
+    throw new Error(
+      `${name}: ${LOCK_FILE}'s packages map no directory for --filter ${unmapped.join(", ")}, so the remap cannot read the cargo config files its build runs under — map it there`,
+    );
+  const cwds = [...new Set(placed.length === 0 ? [dir] : placed.flatMap((run) => run.dirs))];
+  const targets = env.CARGO_TARGET_DIR
+    ? [env.CARGO_TARGET_DIR]
+    : [...new Set(cwds.map((cwd) => targetDirOf(cwd)))];
   const host = home === undefined ? {} : { home };
   const flags = remapFlags({
-    roots: [
-      [dir, `/${name}`],
-      [env.CARGO_TARGET_DIR ?? targetDirOf(dir), REMAP_TARGETS.target],
-    ],
+    roots: [[dir, `/${name}`], ...targets.map((target) => [target, REMAP_TARGETS.target])],
     env,
     ...host,
     ...(realpath === undefined ? {} : { realpath }),
   });
-  const configs = readConfigRustflags(dir, { env, ...host });
-  const { env: remapped, door } = napiRemapEnv({ env, flags, configs });
+  const configs = new Map();
+  for (const cwd of cwds)
+    for (const config of readConfigRustflags(cwd, { env, ...host }))
+      if (!configs.has(config.file)) configs.set(config.file, config);
+  const { env: remapped, door } = napiRemapEnv({ env, flags, configs: [...configs.values()] });
   return { env: remapped, remap: { flags, door } };
 }
 
@@ -1922,7 +1960,7 @@ export function buildJavaScript(root, names = []) {
       alignHostPeers(root, entry);
       const dir = siblingDir(root, entry);
       // LP-6b: a shipped native build (mille's napi binding) remaps its paths under the release switch
-      const { env, remap } = siblingPnpmEnv(process.env, { name, dir, build: true });
+      const { env, remap } = siblingPnpmEnv(process.env, { name, dir, entry, build: true });
       if (remap !== null)
         console.log(
           `siblings: ${name}: ${REMAP_SWITCH}=1 — rustflags += ${remap.flags.join(" ")} (through ${remap.door})`,

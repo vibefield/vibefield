@@ -5,7 +5,7 @@
 // macOS: mille's .node leaves with `@rpath/<file>` as its own install name, signed ad hoc, before electron-builder runs.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -18,6 +18,7 @@ import {
   cargoRemap,
   configRustflags,
   envRustflags,
+  envTargetRustflags,
   napiRemapEnv,
   REMAP_SWITCH,
   readConfigRustflags,
@@ -26,7 +27,12 @@ import {
   setInstallName,
 } from "../../../scripts/build-paths.mjs";
 import { builderPathCounts } from "../../../scripts/host-links.mjs";
-import { goBuildArgs, siblingCargoInvocation, siblingPnpmEnv } from "../../../scripts/siblings.mjs";
+import {
+  goBuildArgs,
+  pnpmRunDirs,
+  siblingCargoInvocation,
+  siblingPnpmEnv,
+} from "../../../scripts/siblings.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const ON = { [REMAP_SWITCH]: "1" };
@@ -115,6 +121,68 @@ test("a config file's rustflags are read as build or target, by table header or 
       '# rustflags = ["-C"]\n[build]\nnot-rustflags = 1\nflags = [\n  "--remap-path-prefix=/a=/b",\n]\n[[alias]]\nrustflags = 1\n',
     ),
     { build: false, target: false },
+  );
+});
+
+test("review: a dotted key's quoted '=', an inline table and a quoted key are read where cargo reads them", () => {
+  // the key's '=' is the first OUTSIDE quotes: a cfg's own '=' is part of the key
+  assert.deepEqual(configRustflags(`target.'cfg(target_os = "macos")'.rustflags = ["-C", "x"]\n`), {
+    build: false,
+    target: true,
+  });
+  assert.deepEqual(
+    configRustflags(`target."cfg(all(unix, target_arch = \\"aarch64\\"))".rustflags = ["-C"]\n`),
+    { build: false, target: true },
+  );
+  // inline tables, one line each (TOML's rule), at any depth
+  assert.deepEqual(
+    configRustflags('target = { aarch64-apple-darwin = { rustflags = ["-C", "x"] } }\n'),
+    { build: false, target: true },
+  );
+  assert.deepEqual(
+    configRustflags('[target]\naarch64-apple-darwin = { linker = "cc", rustflags = ["-C"] }\n'),
+    { build: false, target: true },
+  );
+  assert.deepEqual(configRustflags('build = { rustflags = ["-C", "debuginfo=1"] }\n'), {
+    build: true,
+    target: false,
+  });
+  // a quoted key segment is the same key
+  assert.deepEqual(configRustflags('[build]\n"rustflags" = ["-C"]\n'), {
+    build: true,
+    target: false,
+  });
+  // none of these: a cfg table's linker, [env]'s RUSTFLAGS (a variable for rustc's children, not cargo's flags), an
+  // inline table that does not name the key, a multi-line array's '=' inside its strings
+  assert.deepEqual(
+    configRustflags(
+      `[target.'cfg(target_os = "macos")']\nlinker = "cc"\n[env]\nRUSTFLAGS = { value = "-C x", force = true }\n[build]\nx = { y = "rustflags = 1" }\nrustdocflags = [\n  "--cfg=rustflags=1",\n]\n`,
+    ),
+    { build: false, target: false },
+  );
+});
+
+test("review: CARGO_TARGET_<TRIPLE>_RUSTFLAGS is target rustflags — refused by both doors unless cargo was ignoring it anyway", () => {
+  const flags = ["--remap-path-prefix=/w=/rosetta"];
+  const target = { CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS: "-C target-cpu=apple-m1" };
+  assert.deepEqual(envTargetRustflags({ ...target, CARGO_TARGET_DIR: "/t", RUSTFLAGS: "-D" }), [
+    "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS",
+  ]);
+  assert.deepEqual(envTargetRustflags({ CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER: "cc" }), []);
+  // a cargo we run: cargo would drop every build.rustflags, ours too — refused by name
+  assert.throws(
+    () => cargoRemap({ args: ["build"], env: { ...target }, flags }),
+    /CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS sets target rustflags, so cargo would ignore the remap's build\.rustflags/,
+  );
+  // … unless the environment's own flags already override it: appended there, as before
+  assert.equal(
+    cargoRemap({ args: ["build"], env: { ...target, RUSTFLAGS: "-Dwarnings" }, flags }).door,
+    "CARGO_ENCODED_RUSTFLAGS",
+  );
+  // napi's RUSTFLAGS would replace it: refused by name
+  assert.throws(
+    () => napiRemapEnv({ env: { ...target }, flags }),
+    /CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS sets rustflags, which napi's RUSTFLAGS would replace/,
   );
 });
 
@@ -380,6 +448,100 @@ test("mille's napi build: RUSTFLAGS under the switch, the lane override's target
     ).remap,
     null,
   );
+});
+
+test("review: a pnpm run executes in the package its --filter names, mapped by the lock's packages", () => {
+  const packages = {
+    "@vibecook/mille": "packages/mille",
+    "@vibecook/mille-ui": "packages/mille-ui",
+  };
+  assert.deepEqual(
+    pnpmRunDirs("/w/mille-pin", packages, ["--filter", "@vibecook/mille", "build"]),
+    {
+      dirs: ["/w/mille-pin/packages/mille"],
+      unmapped: [],
+    },
+  );
+  assert.deepEqual(
+    pnpmRunDirs("/w/mille-pin", packages, ["--filter=@vibecook/mille-ui", "build"]),
+    {
+      dirs: ["/w/mille-pin/packages/mille-ui"],
+      unmapped: [],
+    },
+  );
+  assert.deepEqual(pnpmRunDirs("/w/mille-pin", packages, ["-F", "@vibecook/other", "build"]), {
+    dirs: [],
+    unmapped: ["@vibecook/other"],
+  });
+  // no filter: pnpm runs at the checkout
+  assert.deepEqual(pnpmRunDirs("/w/ice", packages, ["build"]), { dirs: ["/w/ice"], unmapped: [] });
+});
+
+test("review: mille's napi build reads the cargo configs from packages/mille upward — where napi runs cargo — and refuses one there", () => {
+  // the lock's mille entry, as siblings.lock.json writes it
+  const entry = {
+    packages: { "@vibecook/mille": "packages/mille", "@vibecook/mille-ui": "packages/mille-ui" },
+    pnpm: {
+      build: ["--filter", "@vibecook/mille", "build"],
+      afterBuild: ["--filter", "@vibecook/mille-ui", "build"],
+    },
+  };
+  const root = mkdtempSync(join(tmpdir(), "vf-napi-cwd-"));
+  const dir = join(root, "mille-pin");
+  try {
+    for (const pkg of Object.values(entry.packages))
+      mkdirSync(join(dir, pkg, ".cargo"), { recursive: true });
+    const asked = [];
+    const run = () =>
+      siblingPnpmEnv(
+        { ...ON, ...HOST },
+        {
+          name: "mille",
+          dir,
+          entry,
+          build: true,
+          isCargo: () => true,
+          targetDirOf: (cwd) => {
+            asked.push(cwd);
+            return "/Volumes/SamsungRed/rust/target";
+          },
+          realpath: unresolved,
+        },
+      );
+    // no config anywhere: RUSTFLAGS, and the target asked of cargo where each run executes, remapped once
+    const plain = run();
+    assert.equal(plain.remap.door, "RUSTFLAGS");
+    assert.deepEqual(asked, [join(dir, "packages/mille"), join(dir, "packages/mille-ui")]);
+    assert.equal(
+      plain.remap.flags.filter((flag) => flag.endsWith("=/target")).join(" "),
+      "--remap-path-prefix=/Volumes/SamsungRed/rust/target=/target",
+    );
+    // a config in the PACKAGE directory — never on the walk from the checkout's root — is refused by name
+    const config = join(dir, "packages/mille/.cargo/config.toml");
+    writeFileSync(config, '[build]\nrustflags = ["-C", "target-cpu=apple-m1"]\n');
+    assert.throws(run, (error) =>
+      error.message.startsWith(`${config} sets rustflags, which napi's RUSTFLAGS would replace`),
+    );
+    // a filter the lock does not map: the remap cannot know where cargo runs, so it refuses
+    assert.throws(
+      () =>
+        siblingPnpmEnv(
+          { ...ON, ...HOST },
+          {
+            name: "mille",
+            dir,
+            entry: { ...entry, pnpm: { build: ["--filter", "@vibecook/elsewhere", "build"] } },
+            build: true,
+            isCargo: () => true,
+            targetDirOf: () => null,
+            realpath: unresolved,
+          },
+        ),
+      /packages map no directory for --filter @vibecook\/elsewhere/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("a go sibling's build adds -trimpath under the switch, and only then", () => {
