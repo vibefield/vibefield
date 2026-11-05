@@ -1,0 +1,83 @@
+# LP-7 (LP-D18) — the testers' one place to report a problem, with the facts triage needs. Every field has an id, so
+# a link can fill it in: Settings → Diagnostics → Report a problem opens this form with `version`, `macos` and `chip`
+# filled in (packages/field-app/src/panels/report-problem.ts). packages/field-app/test/report-problem.test.ts reads
+# this file and holds those three ids to it, so renaming one here fails that test rather than a tester's link.
+name: Report a problem
+description: Something in VibeField didn't work as it should.
+title: ""
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        VibeField sends nothing on its own: there is no telemetry. What you write here, and anything you attach, is public, so leave out anything you don't want seen.
+
+        In the app, **Settings → Diagnostics → Report a problem** opens this form with your VibeField version, macOS version and chip filled in.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw. Paste an error's words exactly as they appeared.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What you did, in order, so the problem can be made to happen again. Leave it empty if you don't know.
+      placeholder: |
+        1. Open Godview
+        2. Start a Claude Code session
+        3. Quit VibeField with ⌘Q
+    validations:
+      required: false
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: VibeField version
+      description: Settings → Updates shows it.
+      placeholder: 0.9.0
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      description: Apple menu → About This Mac shows it.
+      placeholder: macOS 15.6.1
+    validations:
+      required: true
+  - type: input
+    id: chip
+    attributes:
+      label: Mac chip
+      description: >-
+        Apple menu → About This Mac shows it, as Chip on Apple silicon or as Processor on an Intel Mac.
+      placeholder: Apple M3
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: iPhone or iPad, and its iOS version
+      description: >-
+        Only if the problem involves your phone or iPad. On it, Settings → General → About shows both.
+      placeholder: iPhone 15 Pro, iOS 26.1
+    validations:
+      required: false
+  - type: textarea
+    id: support-bundle
+    attributes:
+      label: Support bundle
+      description: >-
+        In the app, Settings → Diagnostics → Support bundle: Preview, then Export preview… saves a .tar.gz file.
+        Drop it here. It is redacted, but it can still hold context from your work, and here it is public:
+        open it and read it before you attach it.
+    validations:
+      required: false

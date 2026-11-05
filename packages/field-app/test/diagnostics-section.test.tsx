@@ -15,6 +15,7 @@ import { type FieldHost, setHost } from "../src/host";
 import {
   applyDiagnosticDelta,
   DiagnosticsSection,
+  type DiagnosticsSectionProps,
   diagnosticSourceOf,
   mergeDiagnosticRecords,
 } from "../src/panels/DiagnosticsSection";
@@ -144,14 +145,20 @@ afterEach(() => {
   container = null;
 });
 
-async function mount(host: FieldHost, client: FielddClient): Promise<HTMLDivElement> {
+async function mount(
+  host: FieldHost,
+  client: FielddClient,
+  props: DiagnosticsSectionProps = {},
+): Promise<HTMLDivElement> {
   setHost(host);
   const view = document.createElement("div");
   container = view;
   document.body.appendChild(view);
   root = createRoot(view);
   await act(async () => {
-    root?.render(createElement(FielddProvider, { client }, createElement(DiagnosticsSection)));
+    root?.render(
+      createElement(FielddProvider, { client }, createElement(DiagnosticsSection, props)),
+    );
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -347,5 +354,63 @@ describe("a diagnostics record's copy (HN-5)", () => {
     expect(copyText).not.toHaveBeenCalled();
     expect(cardsStore.snapshot().cards).toEqual([]);
     expect(copy.textContent).toBe("Couldn't copy");
+  });
+});
+
+// LP-7 (LP-D18) — Report a problem: the bug form's address with the version Settings hands down and the macOS version
+// and chip the client hints say, by field id, and nothing else; a link the shell hands the default browser, never a
+// window of ours. The row's words claim only the facts the link has.
+describe("Report a problem (LP-7)", () => {
+  const reportOf = (view: HTMLElement): Element | null =>
+    view.querySelector('[data-diagnostics="report-problem"]');
+  const linkOf = (view: HTMLElement): HTMLAnchorElement | null =>
+    reportOf(view)?.querySelector("a") ?? null;
+
+  /** Let the client hints' read land: the hints' promise, the read's, then the section's state. */
+  const settleFacts = async (): Promise<void> => {
+    for (let turn = 0; turn < 30; turn += 1) await Promise.resolve();
+  };
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, "userAgentData");
+  });
+
+  it("opens the bug form alone where no fact is known, and says so", async () => {
+    const view = await mount(windowHost(snapshot([])), fieldd(snapshot([])));
+    await act(settleFacts);
+    const link = linkOf(view);
+    expect(link?.getAttribute("href")).toBe(
+      "https://github.com/vibefield/vibefield/issues/new?template=bug_report.yml",
+    );
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.getAttribute("rel")).toBe("noreferrer");
+    expect(link?.textContent).toBe("Report on GitHub ↗");
+    expect(reportOf(view)?.textContent).toContain(
+      "Opens a new issue on GitHub. Issues there are public: read a support bundle before you attach it.",
+    );
+  });
+
+  it("fills in the version Settings hands down and this Mac's macOS version and chip", async () => {
+    const getHighEntropyValues = vi.fn(async (_hints: string[]) => ({
+      platform: "macOS",
+      platformVersion: "15.6.1",
+      architecture: "arm",
+    }));
+    Object.defineProperty(navigator, "userAgentData", {
+      configurable: true,
+      value: { getHighEntropyValues },
+    });
+    const view = await mount(windowHost(snapshot([])), fieldd(snapshot([])), {
+      appVersion: "0.9.0",
+    });
+    await act(settleFacts);
+    expect(getHighEntropyValues).toHaveBeenCalledOnce();
+    expect(linkOf(view)?.getAttribute("href")).toBe(
+      "https://github.com/vibefield/vibefield/issues/new?template=bug_report.yml" +
+        "&version=0.9.0&macos=macOS%2015.6.1&chip=Apple%20silicon",
+    );
+    expect(reportOf(view)?.textContent).toContain(
+      "with your VibeField version, macOS version and chip filled in, and nothing else.",
+    );
   });
 });

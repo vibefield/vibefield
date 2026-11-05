@@ -1,0 +1,12 @@
+# LP-7 (LP-D18) — blank issues are off: every report starts from a form (bug_report.yml, feature_request.yml), so it
+# carries the facts triage needs.
+blank_issues_enabled: false
+contact_links:
+  # OWNER: A PLACEHOLDER — fill it in before testers arrive. Read 2026-11-04 (read-only `gh api`): this repository
+  # has no SECURITY.md (GitHub's community profile lists no security policy), private vulnerability reporting is
+  # off, and the vibefield org has no `.github` repository to inherit one from. Either add a SECURITY.md that names a
+  # private contact (this url then shows it), or turn on private vulnerability reporting and point this url at
+  # https://github.com/vibefield/vibefield/security/advisories/new.
+  - name: Report a security problem
+    url: https://github.com/vibefield/vibefield/security/policy
+    about: Please don't open a public issue for a security problem. The security policy says how to reach us privately.

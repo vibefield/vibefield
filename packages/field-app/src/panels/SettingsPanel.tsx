@@ -673,7 +673,8 @@ export function SettingsPanel({
           description="Inspect logs, crashes, debug leases, and support bundle contents."
         >
           <Suspense fallback={<div className={labelCls}>Loading diagnostics…</div>}>
-            <LazyDiagnosticsSection />
+            {/* LP-7 — Report a problem's link carries the version Settings → Updates says */}
+            <LazyDiagnosticsSection appVersion={desktopState?.update?.currentVersion} />
           </Suspense>
         </SettingsSection>
       </div>

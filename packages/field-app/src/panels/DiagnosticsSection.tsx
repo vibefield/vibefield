@@ -18,6 +18,13 @@ import { COPY_PLACES } from "../frame/cards/cards-words";
 import { copyNamedWords, sheetOrigin } from "../frame/cards/copy-door";
 import { getHost } from "../host";
 import { lastExitWhen, lastExitWords } from "./last-exit-words";
+import {
+  type MacFacts,
+  type ReportProblemFacts,
+  readMacFacts,
+  reportProblemUrl,
+  reportProblemWords,
+} from "./report-problem";
 
 const ALL_SOURCES: readonly LogStreamV1[] = [
   LOG_STREAMS.SYSTEM_DESKTOP,
@@ -201,7 +208,14 @@ function leaseList(raw: unknown): DiagnosticLeaseListV1 | null {
     : null;
 }
 
-export function DiagnosticsSection(): ReactElement {
+export interface DiagnosticsSectionProps {
+  /** LP-7 — VibeField's version as Settings → Updates says it (`desktopState.update.currentVersion`), for Report a
+   * problem's link; absent where no updater runs. Handed down by Settings rather than read here: the shell's desktop
+   * state has ONE subscriber (the preload's bridge keeps a single handler), and that is the frame's. */
+  appVersion?: string | undefined;
+}
+
+export function DiagnosticsSection({ appVersion }: DiagnosticsSectionProps = {}): ReactElement {
   const client = useFielddClient();
   const host = getHost().diagnostics;
   const [openFeed, setOpenFeed] = useState(true);
@@ -247,6 +261,8 @@ export function DiagnosticsSection(): ReactElement {
   const [supportPreview, setSupportPreview] = useState<SupportBundlePreviewV1 | null>(null);
   const [supportStatus, setSupportStatus] = useState<string | null>(null);
   const [supportBusy, setSupportBusy] = useState(false);
+  // LP-7 — this Mac's macOS version and chip, from the renderer's client hints; none until read, none where unreadable
+  const [macFacts, setMacFacts] = useState<MacFacts>({});
   const listRef = useRef<HTMLDivElement>(null);
 
   const selectedSources = useMemo<LogStreamV1[]>(
@@ -386,6 +402,16 @@ export function DiagnosticsSection(): ReactElement {
 
   useEffect(() => {
     let cancelled = false;
+    void readMacFacts(navigator).then((facts) => {
+      if (!cancelled) setMacFacts(facts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     void client
       .request("diagnostics.lastExit")
       .then((raw) => {
@@ -496,6 +522,7 @@ export function DiagnosticsSection(): ReactElement {
     Number(remoteFeed.snapshot?.history?.truncated === true);
   const truncated =
     records.filter((record) => record.truncation !== undefined).length + transportTruncation;
+  const reportFacts: ReportProblemFacts = { version: appVersion, ...macFacts };
 
   const createLease = async (): Promise<void> => {
     let request: DiagnosticLeaseCreateV1;
@@ -1109,6 +1136,27 @@ export function DiagnosticsSection(): ReactElement {
               </div>
             )}
             {supportStatus !== null && <div className="mt-1">{supportStatus}</div>}
+          </div>
+
+          {/* LP-7 (LP-D18) — the testers' one place to report: GitHub's bug form, with this Mac's facts in its
+              address and nothing else. The link leaves as Settings' other links do: the shell denies the window
+              and hands the https address to the default browser. */}
+          <div
+            data-diagnostics="report-problem"
+            className="flex items-center justify-between gap-2 rounded border border-neutral-200 p-2 dark:border-neutral-700"
+          >
+            <div>
+              <div>Report a problem</div>
+              <div className={labelCls}>{reportProblemWords(reportFacts)}</div>
+            </div>
+            <a
+              className={`${buttonCls} flex-none`}
+              href={reportProblemUrl(reportFacts)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Report on GitHub ↗
+            </a>
           </div>
         </div>
       )}

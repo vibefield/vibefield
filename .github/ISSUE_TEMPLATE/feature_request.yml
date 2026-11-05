@@ -1,0 +1,39 @@
+# LP-7 (LP-D18) — a suggestion, beside the bug form (bug_report.yml). Every field has an id, so a link can fill it in.
+name: Suggest a feature
+description: Something VibeField could do, or do better.
+title: ""
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        What you write here is public. For something that's broken, use **Report a problem** instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The work you were doing, and where VibeField got in the way or fell short.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: What you'd like VibeField to do. Attach a sketch or a screenshot if it helps.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today instead
+      description: The workaround you use now, if there is one.
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: VibeField version
+      description: Settings → Updates shows it.
+      placeholder: 0.9.0
+    validations:
+      required: false
