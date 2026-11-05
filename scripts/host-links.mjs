@@ -37,11 +37,15 @@
 // Electron's helpers (a local package of 2026-11-03 reads the same counts, `/Users/<name>` for `/Users/runner`). So the
 // gate now walks the whole package — bin/*, every .node, the helper executables, Electron's own — and counts each marker
 // per file: CI's home, the cargo and Go caches, a target's `deps/` (a dylib's install name) and this host's own target
-// directories FAIL wherever they are found, but in the ONE named exception (truffle's sidecar, BUILDER_PATH_EXCEPTIONS:
-// Go, built by truffle's CI and installed from npm, nothing staging can rewrite — its petition asks for `-trimpath`).
-// rustc's `/rustc/<commit>/` prefix is counted and said, never failed: it is the toolchain's own virtual path for the
-// standard library, the same on every machine (Node's binary, fieldd, carries its compiler's too). The builds that make
-// the rest pass remap under the release switch (scripts/build-paths.mjs), and the stage rewrites mille's install name.
+// directories FAIL wherever they are found, but under a named exception (BUILDER_PATH_EXCEPTIONS), each a binary we do
+// not build: truffle's sidecar (Go, built by truffle's CI and installed from npm, nothing staging can rewrite; its
+// petition, T14 (the index's next free row), asks for `-trimpath`), loro's wasm (item 176: npm's `loro-crdt` as
+// shipped, /Users/runner ×74 and /.cargo/registry ×74), and fieldd (Node's binary; not ours to build — its Node build
+// host's `/Users/admin/build/ws`, ×3531, is no marker of ours, so its row REPORTS it, and a marker of ours in it still
+// fails). WebAssembly modules are scanned beside the Mach-O files (2026-11-05, VF-PM's ruling of 03:58Z). rustc's
+// `/rustc/<commit>/` prefix is counted and said, never failed: it is the toolchain's own virtual path for the standard
+// library, the same on every machine (Node's binary, fieldd, carries its compiler's too). The builds that make the rest
+// pass remap under the release switch (scripts/build-paths.mjs), and the stage rewrites mille's install name.
 //
 // Usage: node scripts/host-links.mjs (--app <VibeField.app> | --dir <dir>) [--launch <bin dir>]   (exit 1 on any; the
 // launch check needs macOS)
@@ -161,6 +165,31 @@ export function isMachO(file) {
 }
 
 /** Every regular Mach-O file under `root` (symlinks are not followed: a bundle's framework links point inside it). */
+/** A WebAssembly module by its magic, `\0asm`. */
+export function isWasm(path) {
+  const fd = openSync(path, "r");
+  try {
+    const head = Buffer.alloc(4);
+    return readSync(fd, head, 0, 4, 0) === 4 && head.equals(Buffer.from([0x00, 0x61, 0x73, 0x6d]));
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Every WebAssembly module under a tree (a shipped `.wasm`, as loro's in bin/), sorted. */
+export function wasmFiles(root) {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.isFile() && lstatSync(path).size >= 4 && isWasm(path)) out.push(path);
+    }
+  };
+  walk(root);
+  return out.sort();
+}
+
 export function machOFiles(root) {
   const out = [];
   const walk = (dir) => {
@@ -219,8 +248,18 @@ export const BUILDER_PATH_MARKERS = [
  * field-native 171, rosettad 257, fieldd 96). */
 export const TOOLCHAIN_MARKERS = ["/rustc/"];
 
-/** The ONE named exception (item 170), by file name: what it may carry, the measurement, why, and where its fix waits.
- * Any OTHER marker in it fails like anywhere else, and a row that matched nothing in a package says so (retire it). */
+/** A marker counted only in its whole SHAPE (prod-builder's L6b review, 2026-11-05 03:58Z): rustc's virtual prefix is
+ * `/rustc/<its 40-hex commit>/`, so a host path with a `rustc/` directory in it is never counted as the compiler's. Each
+ * names the fixed length of what must follow the marker, and its test. */
+export const MARKER_SHAPES = new Map([
+  ["/rustc/", { tail: 41, fits: (bytes) => /^[0-9a-f]{40}\/$/u.test(bytes.toString("latin1")) }],
+]);
+
+/** The named exceptions (item 170; widened 2026-11-05 on VF-PM's ruling of 03:58Z), by file name: the failing markers it
+ * may carry (`markers`), any further markers counted and said for that file alone (`reported`: a builder's path that is
+ * no marker of ours, so it would otherwise go unsaid), the measurement, why, and where its fix waits. Each is a binary
+ * we do not build. Any OTHER marker in it fails like anywhere else, and a row that matched nothing in a package says so
+ * (retire it). */
 export const BUILDER_PATH_EXCEPTIONS = {
   "sidecar-slim": {
     markers: ["/Users/runner", "hostedtoolcache", "/go/pkg/mod"],
@@ -231,7 +270,29 @@ export const BUILDER_PATH_EXCEPTIONS = {
       "(@vibecook/truffle-sidecar-*): the GOROOT, module-cache and checkout paths sit in the pclntab Go's own runtime " +
       "reads, which no staging step can rewrite",
     petition:
-      "the truffle -trimpath petition (draft/launch/truffle-trimpath-petition.md; upstream on James's word)",
+      "the truffle -trimpath petition, T14 (draft/launch/truffle-trimpath-petition.md; upstream on James's word)",
+  },
+  // item 176: loro's own wasm, as npm ships it
+  "loro_wasm_bg.wasm": {
+    markers: ["/Users/runner", "/.cargo/registry"],
+    measured:
+      "the 2026-11-03 local package (this gate's count, 2026-11-05): /Users/runner 74, /.cargo/registry 74 (and rustc's /rustc/ 56)",
+    reason:
+      "loro-crdt's published wasm (npm `loro-crdt`, the EL8 override), built by loro's CI and copied as shipped: its " +
+      "crates' panic locations name that runner's cargo registry, inside a wasm no staging step rebuilds",
+    petition:
+      "item 176 (upstream: loro's release build remapping its paths, at an EL8 or by a loro petition; James's hand)",
+  },
+  // Node's own binary: fieldd is Node's official release executable with the SEA blob injected
+  fieldd: {
+    markers: [],
+    reported: ["/Users/admin/build/ws"],
+    measured:
+      "the 2026-11-03 local package (this gate's count, 2026-11-05): /Users/admin/build/ws 3531 (Node's vendored crates and sources), /rustc/ 96",
+    reason:
+      "Node's binary; not ours to build (the SEA injects fieldd's bundle into the node release named by .nvmrc, and " +
+      "its paths are the Node project's build host)",
+    petition: "none: a path of ours or any failing marker in it still fails",
   },
 };
 
@@ -280,7 +341,10 @@ export function builderPathCounts(
 ) {
   const unique = [...new Set(markers)];
   const needles = unique.map((marker) => Buffer.from(marker, "utf8"));
-  const overlap = Math.max(0, ...needles.map((needle) => needle.length - 1));
+  const shapes = unique.map((marker) => MARKER_SHAPES.get(marker));
+  // a match's whole span: the marker and, for a shaped one, the tail its shape fixes
+  const spans = needles.map((needle, i) => needle.length + (shapes[i]?.tail ?? 0));
+  const overlap = Math.max(0, ...spans.map((span) => span - 1));
   const counts = Object.fromEntries(unique.map((marker) => [marker, 0]));
   const fd = openSync(file, "r");
   try {
@@ -297,8 +361,15 @@ export function builderPathCounts(
           let at = window.indexOf(needle);
           at !== -1;
           at = window.indexOf(needle, at + needle.length)
-        )
-          if (at + needle.length > carry.length) counts[unique[i]] += 1;
+        ) {
+          const end = at + spans[i];
+          // a span this window cuts is read whole by the next (the carry holds it), or ends with the file
+          if (end > window.length) break;
+          // a span ending inside the carried bytes was counted by the window before
+          if (end <= carry.length) continue;
+          if (shapes[i] === undefined || shapes[i].fits(window.subarray(at + needle.length, end)))
+            counts[unique[i]] += 1;
+        }
       });
       carry = window.subarray(Math.max(0, window.length - overlap));
     }
@@ -316,7 +387,8 @@ export function builderPathsIn(file, markers = BUILDER_PATH_MARKERS, chunkSize =
 
 const counted = (counts, markers) => markers.map((m) => `${m} ×${counts[m]}`).join(", ");
 
-/** The builder-path gate over a tree, every Mach-O in it, each marker counted per file:
+/** The builder-path gate over a tree, every Mach-O and every WebAssembly module in it (the wasm since 2026-11-05: loro's,
+ * item 176), each marker counted per file:
  *  - `problems`: `BUILDER PATH  <file>: <marker> ×<n>, …` — a failing marker (BUILDER_PATH_MARKERS and `host`, this
  *    host's own target directories) anywhere but under its file's exception row;
  *  - `excepted`: `EXCEPTION  <file>: … — <reason>; measured …; <petition>` — said, not failed;
@@ -337,19 +409,21 @@ export function auditBuilderPaths(
   const excepted = [];
   const notes = [];
   const exceptionFiles = new Map();
-  for (const file of machOFiles(root)) {
-    const counts = countsOf(file, [...failing, ...toolchain]);
+  for (const file of [...machOFiles(root), ...wasmFiles(root)].sort()) {
     const rel = relative(root, file);
     const name = basename(file).replace(/\.exe$/u, "");
     const row = Object.hasOwn(exceptions, name) ? exceptions[name] : undefined;
+    const reported = (row?.reported ?? []).filter((m) => !failing.includes(m));
+    const counts = countsOf(file, [...failing, ...toolchain, ...reported]);
     const hits = failing.filter((m) => counts[m] > 0);
     const allowed = row === undefined ? [] : hits.filter((m) => row.markers.includes(m));
     const failed = hits.filter((m) => !allowed.includes(m));
-    if (row !== undefined) exceptionFiles.set(name, [...(exceptionFiles.get(name) ?? []), allowed]);
+    const named = [...allowed, ...reported.filter((m) => counts[m] > 0)];
+    if (row !== undefined) exceptionFiles.set(name, [...(exceptionFiles.get(name) ?? []), named]);
     if (failed.length > 0) problems.push(`BUILDER PATH  ${rel}: ${counted(counts, failed)}`);
-    if (allowed.length > 0)
+    if (named.length > 0)
       excepted.push(
-        `EXCEPTION  ${rel}: ${counted(counts, allowed)} — ${row.reason}; measured ${row.measured}; ${row.petition}`,
+        `EXCEPTION  ${rel}: ${counted(counts, named)} — ${row.reason}; measured ${row.measured}; ${row.petition}`,
       );
     const said = toolchain.filter((m) => counts[m] > 0);
     if (said.length > 0)
@@ -358,9 +432,9 @@ export function auditBuilderPaths(
       );
   }
   for (const [name, seen] of exceptionFiles)
-    if (seen.every((allowed) => allowed.length === 0))
+    if (seen.every((named) => named.length === 0))
       notes.push(
-        `exception ${name}: carries none of ${exceptions[name].markers.join(", ")} now — retire its row in scripts/host-links.mjs`,
+        `exception ${name}: carries none of ${[...exceptions[name].markers, ...(exceptions[name].reported ?? [])].join(", ")} now — retire its row in scripts/host-links.mjs`,
       );
   return { problems, excepted, notes };
 }
@@ -401,15 +475,15 @@ function main(argv) {
   const problems = auditHostLinks(root);
   if (launchDir !== undefined && process.platform === "darwin")
     problems.push(...launchCheck(resolve(launchDir)).map((p) => `LAUNCH  ${p}`));
-  // LP-6b: the builder-path scan over EVERY Mach-O the tree holds (bin/*, each .node, the helpers, Electron's own), with
-  // this host's own target directories as markers beside the fixed ones
+  // LP-6b: the builder-path scan over EVERY Mach-O the tree holds (bin/*, each .node, the helpers, Electron's own) and
+  // every WebAssembly module (loro's), with this host's own target directories as markers beside the fixed ones
   const host = hostTargetMarkers();
   const builder = auditBuilderPaths(root, { host });
   problems.push(...builder.problems);
   for (const line of [...builder.excepted, ...builder.notes]) console.log(line);
   for (const p of problems) console.error(p);
   console.log(
-    `host-links: ${files.length} Mach-O file(s) under ${root}; ${problems.length === 0 ? "no host link, no builder path" : `${problems.length} problem(s)`}` +
+    `host-links: ${files.length} Mach-O file(s) and ${wasmFiles(root).length} wasm module(s) under ${root}; ${problems.length === 0 ? "no host link, no builder path" : `${problems.length} problem(s)`}` +
       `${launchDir === undefined || process.platform !== "darwin" ? "" : `; launched ${LAUNCHED.join(", ")} --version`}` +
       `; builder paths counted in every one (${[...BUILDER_PATH_MARKERS, ...host].join(", ")}; ` +
       `${builder.excepted.length} excepted: ${Object.keys(BUILDER_PATH_EXCEPTIONS).join(", ")})`,

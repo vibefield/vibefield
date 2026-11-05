@@ -25,9 +25,11 @@ import {
   hostTargetMarkers,
   imageCommands,
   isMachO,
+  isWasm,
   LAUNCHED,
   launchCheck,
   TOOLCHAIN_MARKERS,
+  wasmFiles,
 } from "../../../scripts/host-links.mjs";
 
 const HOMEBREW = "/opt/homebrew/opt/harfbuzz/lib/libharfbuzz.0.dylib";
@@ -208,12 +210,18 @@ test("LP-6b: every marker is counted, once each, across a read's edge too", () =
     assert.deepEqual(TOOLCHAIN_MARKERS, ["/rustc/"]);
     const file = join(dir, "field-native");
     // 64-byte reads: the registry path straddles the first edge, the runner's home sits far past it, and the
-    // toolchain's prefix twice more; nothing is counted twice for sitting in the carried bytes
-    const body = Buffer.alloc(400, 0x2e);
+    // toolchain's prefix twice more (the first across an edge, its commit cut by it); nothing is counted twice for
+    // sitting in the carried bytes. The prefix counts only in its SHAPE, `/rustc/<40 hex>/` (prod-builder 03:58Z): a
+    // host's own `rustc/` directory and a short commit are no compiler prefix
+    const commit = "58cf8f9c35b355199727627d07ae34a4e2846d67";
+    const body = Buffer.alloc(560, 0x2e);
     body.write("/Users/me/.cargo/registry/src/x", 50);
+    body.write("/Users/me/rustc/build/x", 120);
+    body.write("/rustc/58cf8f9c/library", 170);
     body.write("/Users/runner/work", 250);
-    body.write("/rustc/58cf8f9c/library/core", 300);
-    body.write("/rustc/58cf8f9c/library/std", 360);
+    body.write(`/rustc/${commit}/library/core`, 300);
+    body.write(`/rustc/${commit}/library/std`, 420);
+    body.write(`/rustc/${commit}`, 545);
     writeFileSync(file, body);
     const counts = builderPathCounts(file, [...BUILDER_PATH_MARKERS, ...TOOLCHAIN_MARKERS], 64);
     assert.equal(counts["/.cargo/registry"], 1);
@@ -243,6 +251,16 @@ test("LP-6b: every marker is counted, once each, across a read's edge too", () =
 });
 
 /** A tiny Mach-O stand-in (thin 64-bit magic) carrying `parts`, each [text, times]. */
+function wasmWith(path, parts) {
+  writeFileSync(
+    path,
+    Buffer.concat([
+      Buffer.from([0x00, 0x61, 0x73, 0x6d, 1, 0, 0, 0]),
+      ...parts.map(([text, times]) => Buffer.from(`${text}\0`.repeat(times))),
+    ]),
+  );
+}
+
 function machOWith(path, parts) {
   writeFileSync(
     path,
@@ -253,7 +271,7 @@ function machOWith(path, parts) {
   );
 }
 
-test("LP-6b: THE EXPECTED RED — today's artifacts at prod-builder's counts fail in every binary we build, the sidecar is the one exception", () => {
+test("LP-6b: THE EXPECTED RED — today's artifacts at prod-builder's counts fail in every binary we build; the sidecar, loro's wasm and Node's fieldd are the named exceptions", () => {
   const dir = mkdtempSync(join(tmpdir(), "vf-builder-paths-"));
   try {
     // nightly-20261104 as prod-builder's strings scan counted it (item 170), every CI path under /Users/runner
@@ -297,10 +315,15 @@ test("LP-6b: THE EXPECTED RED — today's artifacts at prod-builder's counts fai
       ["/Users/runner/go/pkg/mod/tailscale.com@v1.104.1/tsnet/tsnet.go", 921],
       ["/Users/runner/work/truffle/truffle/packages/sidecar-slim/main.go", 4],
     ]);
-    // Node's own binary: its compiler's std prefix and Node's build host, which is no marker of ours
+    // Node's own binary: its compiler's std prefix and Node's build host, which is no marker of ours (its row reports it)
     machOWith(join(bin, "fieldd"), [
       [std, 96],
-      ["/Users/admin/build/ws/deps/crates/vendor/temporal_rs/src/lib.rs", 3],
+      ["/Users/admin/build/ws/deps/crates/vendor/temporal_rs/src/lib.rs", 3531],
+    ]);
+    // loro's wasm as npm ships it (item 176), counted by this gate on the 2026-11-03 package
+    wasmWith(join(bin, "loro_wasm_bg.wasm"), [
+      [registry, 74],
+      ["/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/alloc/src/raw_vec.rs", 56],
     ]);
     machOWith(join(bin, "desktop-haptics.node"), [["@rpath/desktop-haptics.node", 1]]);
     machOWith(join(helpers, "VibeField Helper (GPU)"), [["helper", 1]]);
@@ -317,14 +340,23 @@ test("LP-6b: THE EXPECTED RED — today's artifacts at prod-builder's counts fai
       "BUILDER PATH  Contents/Resources/bin/mille.darwin-arm64.node: /Users/runner ×177, /.cargo/registry ×176, /release/deps/ ×1",
       "BUILDER PATH  Contents/Resources/bin/rosettad: /Users/runner ×450, /.cargo/registry ×450",
     ]);
-    assert.equal(gate.excepted.length, 1);
+    assert.equal(gate.excepted.length, 3);
     assert.match(
       gate.excepted[0],
-      /^EXCEPTION {2}Contents\/Resources\/bin\/sidecar-slim: \/Users\/runner ×1849, hostedtoolcache ×924, \/go\/pkg\/mod ×921 — Go, built by truffle's CI .* installed from npm .*; measured nightly-20261104 .*; the truffle -trimpath petition \(draft\/launch\/truffle-trimpath-petition\.md/u,
+      /^EXCEPTION {2}Contents\/Resources\/bin\/fieldd: \/Users\/admin\/build\/ws ×3531 — Node's binary; not ours to build .*; measured the 2026-11-03 local package .*; none: a path of ours or any failing marker in it still fails$/u,
+    );
+    assert.match(
+      gate.excepted[1],
+      /^EXCEPTION {2}Contents\/Resources\/bin\/loro_wasm_bg\.wasm: \/Users\/runner ×74, \/\.cargo\/registry ×74 — loro-crdt's published wasm .*; item 176 \(upstream: /u,
+    );
+    assert.match(
+      gate.excepted[2],
+      /^EXCEPTION {2}Contents\/Resources\/bin\/sidecar-slim: \/Users\/runner ×1849, hostedtoolcache ×924, \/go\/pkg\/mod ×921 — Go, built by truffle's CI .* installed from npm .*; measured nightly-20261104 .*; the truffle -trimpath petition, T14 \(draft\/launch\/truffle-trimpath-petition\.md/u,
     );
     assert.deepEqual(gate.notes, [
       "toolchain path (rustc's own; said, never failed)  Contents/Resources/bin/field-native: /rustc/ ×171",
       "toolchain path (rustc's own; said, never failed)  Contents/Resources/bin/fieldd: /rustc/ ×96",
+      "toolchain path (rustc's own; said, never failed)  Contents/Resources/bin/loro_wasm_bg.wasm: /rustc/ ×56",
     ]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -334,7 +366,11 @@ test("LP-6b: THE EXPECTED RED — today's artifacts at prod-builder's counts fai
 test("LP-6b: the exception names its file AND its markers — any other marker in the sidecar fails, and a clean one asks to retire the row", () => {
   const dir = mkdtempSync(join(tmpdir(), "vf-builder-paths-"));
   try {
-    assert.deepEqual(Object.keys(BUILDER_PATH_EXCEPTIONS), ["sidecar-slim"]);
+    assert.deepEqual(Object.keys(BUILDER_PATH_EXCEPTIONS), [
+      "sidecar-slim",
+      "loro_wasm_bg.wasm",
+      "fieldd",
+    ]);
     assert.deepEqual(BUILDER_PATH_EXCEPTIONS["sidecar-slim"].markers, [
       "/Users/runner",
       "hostedtoolcache",
@@ -415,6 +451,50 @@ test("LP-6b: this host's own target directories are markers too — the SSD's in
         "BUILDER PATH  mille.darwin-arm64.node: /.cargo/registry ×176, /release/deps/ ×1, /Volumes/SamsungRed/rust/target ×1",
       ],
     );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("LP-6b (VF-PM 03:58Z): a shipped wasm is scanned like a Mach-O, fieldd's row reports Node's paths and fails ours, and a text file is never read", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vf-builder-paths-"));
+  try {
+    const registry =
+      "/Users/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/x-1.0.0/src/lib.rs";
+    wasmWith(join(dir, "other_bg.wasm"), [[registry, 2]]);
+    writeFileSync(join(dir, "notes.txt"), `a text, not a module: ${registry}`);
+    writeFileSync(join(dir, "tiny.wasm"), Buffer.from([0x00, 0x61, 0x73]));
+    assert.equal(isWasm(join(dir, "other_bg.wasm")), true);
+    assert.equal(isWasm(join(dir, "notes.txt")), false);
+    assert.deepEqual(
+      wasmFiles(dir).map((f) => f.slice(dir.length + 1)),
+      ["other_bg.wasm"],
+    );
+    // a wasm under no row fails on our markers like any Mach-O
+    assert.deepEqual(auditBuilderPaths(dir).problems, [
+      "BUILDER PATH  other_bg.wasm: /Users/runner ×2, /.cargo/registry ×2",
+    ]);
+    rmSync(join(dir, "other_bg.wasm"));
+    // fieldd: Node's build host is reported (never failed); a marker of ours in it fails, row or no row
+    machOWith(join(dir, "fieldd"), [
+      ["/Users/admin/build/ws/deps/v8/src/api.cc", 4],
+      ["/Users/me/.cargo/registry/src/z.rs", 1],
+    ]);
+    const gate = auditBuilderPaths(dir);
+    assert.deepEqual(gate.problems, ["BUILDER PATH  fieldd: /.cargo/registry ×1"]);
+    assert.match(
+      gate.excepted[0],
+      /^EXCEPTION {2}fieldd: \/Users\/admin\/build\/ws ×4 — Node's binary; not ours to build /u,
+    );
+    // a fieldd that carries none of it asks to retire the row, naming the reported marker
+    machOWith(join(dir, "fieldd"), [["node", 1]]);
+    assert.deepEqual(auditBuilderPaths(dir).notes, [
+      "exception fieldd: carries none of /Users/admin/build/ws now — retire its row in scripts/host-links.mjs",
+    ]);
+    // the same Node path under another name is no marker of ours: neither failed nor said
+    rmSync(join(dir, "fieldd"));
+    machOWith(join(dir, "other-node"), [["/Users/admin/build/ws/deps/v8/src/api.cc", 4]]);
+    assert.deepEqual(auditBuilderPaths(dir), { problems: [], excepted: [], notes: [] });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
