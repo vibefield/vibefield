@@ -22,9 +22,9 @@ import { nestsWithin } from "./protocol";
 // never served, and the chain goes on through it (the tolerant reader).
 //
 // A journal cut short at its end (its last lines taken off) chains as well as a whole one: read alone it is a run that
-// stopped mid-step, and its steps after the cut are asked again. The store that wrote it knows its own tail and reads
-// the cut as forged (flows/records.ts); across a restart, the anchor that would say so is the run's own signed record,
-// CP-4a2b's (bth's review P3, ruled 2026-11-05 11:51Z), and DESIGN.md §9 says it plainly until then.
+// stopped mid-step. So a journal is never read alone: the run's own signed record (CP-4a2b, D18; bth's review P3) names
+// the head's MAC and the last line it was written after, and flows/records.ts reads the cut against it, each line's MAC
+// in hand (`macs`).
 
 /** How deep a journal's line may nest: a value at most FLOW_LIMITS.ARGS_DEPTH_MAX deep (replay refuses a deeper
  * answer, journaling the refusal), inside the line's own fields. A line deeper is no line fieldd wrote, and it is read
@@ -78,7 +78,8 @@ export interface JournalTail {
 
 /** What a journal's text says:
  * - `kept`: every whole line verified, in its order, the head first and naming this run; `bytes` is where its whole
- *   lines end, so the next line is written there (a piece past it is a line the disk never finished);
+ *   lines end, so the next line is written there (a piece past it is a line the disk never finished); `macs` is each
+ *   whole line's MAC by its place, the head's first (the run's record anchors them, D18);
  * - `lost`: a line is not VibeField's (it does not parse, is unsigned, does not verify or is out of its place), so the
  *   run is set aside, never replayed (`line`: the first that failed, from 1);
  * - `newer`: a newer VibeField wrote it; kept for it, never read as this one. */
@@ -89,6 +90,7 @@ export type JournalVerdict =
       readonly lines: readonly FlowJournalKnownLine[];
       readonly tail: JournalTail;
       readonly bytes: number;
+      readonly macs: readonly string[];
     }
   | { readonly kind: "lost"; readonly why: SetAsideWhy; readonly line: number }
   | { readonly kind: "newer"; readonly format: number };
@@ -118,6 +120,7 @@ export function readJournal(
   pieces.pop();
   if (pieces.length === 0) return { kind: "lost", why: "unreadable", line: 1 };
   const lines: FlowJournalKnownLine[] = [];
+  const macs: string[] = [];
   let head: FlowJournalHead | undefined;
   let prev = "";
   for (const [index, piece] of pieces.entries()) {
@@ -149,6 +152,7 @@ export function readJournal(
         return { kind: "newer", format };
     }
     prev = mac;
+    macs.push(mac);
     const known = flowJournalLineOf(parsed);
     if (place === 1) {
       if (known?.kind !== "head" || known.run !== run)
@@ -160,5 +164,5 @@ export function readJournal(
   if (head === undefined) return { kind: "lost", why: "unreadable", line: 1 };
   // a newline never sits inside a UTF-8 sequence, and every verified line is JSON.stringify's (surrogates escaped)
   const bytes = Buffer.byteLength(text.slice(0, text.lastIndexOf("\n") + 1), "utf8");
-  return { kind: "kept", head, lines, tail: { seq: pieces.length, mac: prev }, bytes };
+  return { kind: "kept", head, lines, tail: { seq: pieces.length, mac: prev }, bytes, macs };
 }

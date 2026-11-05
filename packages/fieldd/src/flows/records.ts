@@ -25,7 +25,7 @@ import {
   FlowProposalId,
   FlowProposalRecord,
   FlowRunId,
-  type FlowRunRecord,
+  FlowRunRecord,
   FlowSlug,
   flowJournalLineOf,
   type NeedsItemId,
@@ -68,8 +68,16 @@ import {
 // A write goes beside, then is renamed (durably), and throws when the disk does not take it, so nothing is acted on
 // that a restart would not find.
 // - `runs/<run>.jsonl` (CP-4a2a; 4A2-Q10 (a)): each run's journal (journal.ts), its head written beside and renamed, each
-//   line after it appended and fsynced before the call it names is handed on. A journal is read whole at each ask; one
-//   whose line is not VibeField's is set aside as lost, never replayed (CP4-S15).
+//   line after it appended and fsynced before the call it names is handed on (a log line is synced with the next line
+//   that is, or at a park: CP-4a2b, D13). A journal is read whole at each ask; one whose line is not VibeField's is set
+//   aside as lost, never replayed (CP4-S15).
+// - `run-records/<run>.json` (CP-4a2b; D18, bth's 1555Z HIGH 3): each run's own record, signed as the approvals are,
+//   the journal's durable anchor. At a run's start it is written FIRST, naming the head's MAC (`head`) and the head as
+//   its `tail`, and only then the head; every later write names the journal's last SYNCED line, so a record never names
+//   a line the disk lacks. A journal is kept only beside its record: one with none, one short of the record's tail or
+//   with another MAC there, or a head whose MAC is not the record's, is lost; a record with no journal is a run that
+//   never began (`unbegun`). The limit, stated: a same-uid writer that rolls back BOTH files to an earlier pair reads as
+//   that pair, the approvals' posture.
 // Item 172 (DESIGN.md §9 "What VibeField keeps, when it cannot read it"): the approvals and proposals are its fifth
 // store, read at each ask. A record the disk did not answer, or a folder it cannot list, is left where it is and refused
 // UNAVAILABLE {service: RECORD_STORES.SERVICE_FLOWS} in fieldd's words, never read as nothing; a record a newer
@@ -148,10 +156,14 @@ export class FlowRecords {
   readonly #guard: StoreGuard;
   /** each run's journal's last line, as this store last wrote or read it, and where its whole lines end (bytes) */
   readonly #tails = new Map<string, JournalTail & { readonly bytes: number }>();
+  /** CP-4a2b (D13, D18) — each run's journal's last line the disk was told to keep (fsynced): what its record names */
+  readonly #synced = new Map<string, JournalTail>();
+  readonly #sync: (fd: number) => void;
 
   constructor(private readonly opts: FlowRecordsOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
     this.#now = opts.now ?? (() => new Date());
+    this.#sync = opts.sync ?? fsyncSync;
     this.#guard = new StoreGuard({
       store: "flows",
       format: FLOW_RECORD_FORMAT,
@@ -279,13 +291,17 @@ export class FlowRecords {
   }
 
   /** CP-4a2a — begin a run's journal (CP4-S15): its head, the file's first line, signed and written beside then
-   * renamed. A run's id is fieldd's and never reused: a journal already under it is refused, never written over. */
-  beginRun(entry: FlowJournalHeadEntry, _record: FlowRunStart): FlowJournalHead {
+   * renamed. A run's id is fieldd's and never reused: a journal or a record already under it is refused, never written
+   * over. CP-4a2b (D18): the run's record, the runs' `start` with the head's facts, is written FIRST, naming the head
+   * by its MAC (computed before either write) and the head as its tail; then the head, from the same bytes. A disk that
+   * refuses the head leaves the record alone: a run that never began. */
+  beginRun(entry: FlowJournalHeadEntry, start: FlowRunStart): FlowJournalHead {
     const run = FlowRunId.parse(entry.run);
     const key = this.#key(RUNS_DIR, run);
     this.#guard.writable(key);
     const path = this.#journalPath(run);
-    if (existsSync(path)) throw new Error(`a run's journal is already kept under ${run}`);
+    if (existsSync(path) || existsSync(this.#recordPath(run)))
+      throw new Error(`a run is already kept under ${run}`);
     const head = FlowJournalHead.parse({
       ...entry,
       format: FLOW_RECORD_FORMAT,
@@ -294,9 +310,25 @@ export class FlowRecords {
       at: this.#now().toISOString(),
     });
     const mac = this.#signer.sign(journalMacInput(run, "", head));
+    this.#writeRecord(
+      FlowRunRecord.parse({
+        ...start,
+        format: FLOW_RECORD_FORMAT,
+        run,
+        flow: head.flow,
+        name: head.name,
+        n: head.n,
+        hash: head.hash,
+        starter: head.starter,
+        head: mac,
+        tail: { seq: 1, mac },
+        startedAt: head.at,
+      }),
+    );
     const text = `${JSON.stringify({ ...head, mac })}\n`;
     this.#write(this.#dir(RUNS_DIR), `${run}${JOURNAL_SUFFIX}`, text);
     this.#tails.set(run, { seq: 1, mac, bytes: Buffer.byteLength(text, "utf8") });
+    this.#synced.set(run, { seq: 1, mac });
     return head;
   }
 
@@ -334,7 +366,8 @@ export class FlowRecords {
         );
       }
       writeSync(fd, text);
-      fsyncSync(fd);
+      // D13: a log line is kept with the next line that is synced, or at a park, never alone
+      if (known.kind !== "log") this.#sync(fd);
     } finally {
       closeSync(fd);
     }
@@ -343,18 +376,28 @@ export class FlowRecords {
       mac,
       bytes: tail.bytes + Buffer.byteLength(text, "utf8"),
     });
+    if (known.kind !== "log") this.#synced.set(run, { seq: known.seq, mac });
     return known;
   }
 
   /** CP-4a2a — a run's journal read back (journal.ts): kept, every line verified; lost, its file set aside beside
    * itself and said; kept for a newer VibeField; or none under that id. A journal the disk did not answer, or a key
-   * that cannot be read, is left where it is and refused in the store's words (item 172). */
+   * that cannot be read, is left where it is and refused in the store's words (item 172).
+   * CP-4a2b (D18) — read against the run's own record, in the reader's five rules: a journal with no record is lost;
+   * a record with no journal is `unbegun`; a journal short of the record's tail, or with another MAC there, is lost; a
+   * journal at or past it is kept; a head whose MAC is not the record's `head` is lost. A lost run's record is set
+   * aside with its journal, so it never reads as a run that never began. */
   readRun(run: string): FlowRunRead {
     if (!FlowRunId.safeParse(run).success) return { kind: "absent" };
     const path = this.#journalPath(run);
     const text = this.#signer.readText(path);
     if (typeof text !== "string") {
-      if ("absent" in text) return { kind: "absent" };
+      if ("absent" in text) {
+        const record = this.#readRecord(run);
+        return record.kind === "kept"
+          ? { kind: "unbegun", record: record.record }
+          : { kind: "absent" };
+      }
       if ("unavailable" in text) return this.#guard.unavailable(path, text.unavailable);
       this.#lost(run, path, text.why);
       return { kind: "lost", why: text.why, line: 1 };
@@ -374,33 +417,89 @@ export class FlowRecords {
         (error as NodeJS.ErrnoException).code ?? "key-unreadable",
       );
     }
+    if (verdict.kind === "lost") {
+      this.#lost(run, path, verdict.why);
+      return verdict;
+    }
+    if (verdict.kind === "newer") {
+      this.#guard.newer(this.#key(RUNS_DIR, run), path, { format: verdict.format });
+      return verdict;
+    }
     // the tail this store wrote or read is an anchor while it lives: a journal shorter than it was cut, never crashed
     const anchor = this.#tails.get(run);
-    if (verdict.kind === "kept" && anchor !== undefined && verdict.tail.seq < anchor.seq) {
+    if (anchor !== undefined && verdict.tail.seq < anchor.seq) {
       this.#lost(run, path, "forged");
       return { kind: "lost", why: "forged", line: verdict.tail.seq + 1 };
     }
-    if (verdict.kind === "kept") this.#tails.set(run, { ...verdict.tail, bytes: verdict.bytes });
-    else if (verdict.kind === "lost") this.#lost(run, path, verdict.why);
-    else this.#guard.newer(this.#key(RUNS_DIR, run), path, { format: verdict.format });
+    // D18: the run's own record anchors it across a restart (a disk that does not answer it refuses, as the journal's)
+    const read = this.#readRecord(run);
+    if (read.kind === "newer") return { kind: "newer", format: read.format };
+    const cut = read.kind === "kept" ? this.#cutAgainst(verdict, read.record) : 1;
+    if (cut !== undefined) {
+      this.#lost(run, path, "forged");
+      return { kind: "lost", why: "forged", line: cut };
+    }
+    this.#tails.set(run, { ...verdict.tail, bytes: verdict.bytes });
+    this.#synced.set(run, verdict.tail);
     return verdict;
   }
 
-  /** CP-4a2b (D18) — SKELETON (slice 5's red): keeps nothing yet. */
-  writeRunRecord(_run: FlowRunId, _fields: FlowRunStart): void {}
-
-  /** CP-4a2b (D18) — SKELETON (slice 5's red): reads nothing yet. */
-  runRecord(_run: string): FlowRunRecord | undefined {
-    return undefined;
+  /** CP-4a2b (D18) — keep a run's record at an anchor, written after the journal line it follows: the runs' `fields`,
+   * the run's own facts and its head's MAC as its start kept them, and the journal's last SYNCED line as its tail, so it
+   * never names a line the disk may not hold. Durable when it returns; throws when the disk does not take it, and the
+   * store's refusal while the run's record cannot be read or a newer VibeField's holds it. */
+  writeRunRecord(run: FlowRunId, fields: FlowRunStart): void {
+    this.#guard.writable(this.#key(RUNS_DIR, run));
+    const read = this.#readRecord(run);
+    if (read.kind !== "kept")
+      throw new Error(`no run record this VibeField keeps stands under ${run}`);
+    const kept = read.record;
+    const tail = this.#synced.get(run) ?? this.#syncedOf(run);
+    this.#writeRecord(
+      FlowRunRecord.parse({
+        ...fields,
+        format: FLOW_RECORD_FORMAT,
+        run: kept.run,
+        flow: kept.flow,
+        name: kept.name,
+        n: kept.n,
+        hash: kept.hash,
+        starter: kept.starter,
+        head: kept.head,
+        tail: { seq: tail.seq, mac: tail.mac },
+        startedAt: kept.startedAt,
+      }),
+    );
   }
 
-  /** CP-4a2b (D18) — SKELETON (slice 5's red): reads nothing yet. */
+  /** CP-4a2b (D18) — a run's record alone, when it verifies: a run's summary is drawn from it, never from its journal.
+   * Throws the store's refusal when it cannot be read; nothing for one set aside or a newer VibeField's. */
+  runRecord(run: string): FlowRunRecord | undefined {
+    if (!FlowRunId.safeParse(run).success) return undefined;
+    const read = this.#readRecord(run);
+    return read.kind === "kept" ? read.record : undefined;
+  }
+
+  /** CP-4a2b (D18) — every run's record that verifies, by its run's id; throws the store's refusal when the folder or a
+   * record cannot be read. */
   runRecords(): FlowRunRecord[] {
-    return [];
+    return this.#names(RUN_RECORDS_DIR, FlowRunId).flatMap((run) => {
+      const record = this.runRecord(run);
+      return record !== undefined ? [record] : [];
+    });
   }
 
-  /** CP-4a2b (D13) — SKELETON (slice 5's red): syncs nothing yet. */
-  syncRun(_run: FlowRunId): void {}
+  /** CP-4a2b (D13) — a park: the run's journal synced as it stands, its log lines with it. */
+  syncRun(run: FlowRunId): void {
+    const tail = this.#tailOf(run);
+    const fd = openSync(this.#journalPath(run), "r");
+    try {
+      this.#sync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    this.#synced.set(run, { seq: tail.seq, mac: tail.mac });
+  }
 
   /** CP-4a2a — the runs whose journals are kept and verify, sorted; each one that is not VibeField's is set aside as
    * it is read. A folder the disk cannot list is refused (item 172). */
@@ -430,9 +529,74 @@ export class FlowRecords {
     throw new Error(`no journal this VibeField keeps stands under ${run} (${read.kind})`);
   }
 
+  /** Where a run's journal was last synced, read from its file when this store has not written or read it yet. */
+  #syncedOf(run: FlowRunId): JournalTail {
+    this.#tailOf(run);
+    const synced = this.#synced.get(run);
+    if (synced === undefined)
+      throw new Error(`no journal this VibeField keeps stands under ${run}`);
+    return synced;
+  }
+
+  /** CP-4a2b (D18) — where a kept journal breaks its record, as the line a lost read names; undefined when the journal
+   * stands at or past it. */
+  #cutAgainst(
+    verdict: Extract<JournalVerdict, { kind: "kept" }>,
+    record: FlowRunRecord,
+  ): number | undefined {
+    if (verdict.macs[0] !== record.head) return 1;
+    if (verdict.tail.seq < record.tail.seq) return verdict.tail.seq + 1;
+    if (verdict.macs[record.tail.seq - 1] !== record.tail.mac) return record.tail.seq;
+    return undefined;
+  }
+
+  #recordPath(run: string): string {
+    return join(this.opts.dir, RUN_RECORDS_DIR, `${run}${RECORD_SUFFIX}`);
+  }
+
+  /** CP-4a2b (D18) — a run's record read back, as the approvals are: one exposed, unparseable, unsigned or forged, or
+   * signed for another run, is set aside; one the disk did not answer is left where it is and refused; one a newer
+   * VibeField wrote is kept for it. Its guard's key is its journal's: a newer VibeField's run is one run. */
+  #readRecord(
+    run: string,
+  ):
+    | { readonly kind: "kept"; readonly record: FlowRunRecord }
+    | { readonly kind: "newer"; readonly format: number }
+    | { readonly kind: "none" } {
+    const path = this.#recordPath(run);
+    const read = this.#signer.read(path);
+    if ("why" in read) {
+      this.#setAside(path, read.why);
+      return { kind: "none" };
+    }
+    if ("unavailable" in read) return this.#guard.unavailable(path, read.unavailable);
+    if ("absent" in read) return { kind: "none" };
+    if (this.#guard.newer(this.#key(RUNS_DIR, run), path, read.body))
+      return { kind: "newer", format: Number(read.body["format"]) };
+    const parsed = FlowRunRecord.safeParse(read.body);
+    if (!parsed.success) {
+      this.#setAside(path, "unreadable");
+      return { kind: "none" };
+    }
+    // signed for another run: a record copied into this one's
+    if (parsed.data.run !== run) {
+      this.#setAside(path, "forged");
+      return { kind: "none" };
+    }
+    return { kind: "kept", record: parsed.data };
+  }
+
+  /** CP-4a2b (D18) — keep a run's record whole and signed under its run's id, durable when this returns. */
+  #writeRecord(record: FlowRunRecord): void {
+    this.#writeSigned(RUN_RECORDS_DIR, record.run, record);
+  }
+
+  /** A run set aside: its journal, and its record with it, so it never reads as a run that never began (D18). */
   #lost(run: string, path: string, why: SetAsideWhy): void {
     this.#tails.delete(run);
+    this.#synced.delete(run);
     this.#setAside(path, why);
+    if (existsSync(this.#recordPath(run))) this.#setAside(this.#recordPath(run), why);
   }
 
   /** The record names in one of the records' directories, sorted: a file that is no record's name is passed over. A
