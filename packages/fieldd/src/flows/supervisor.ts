@@ -59,7 +59,7 @@ export interface FlowHostCall {
 
 /** A call's answer: the script's `await` resolves with `value`, or throws with `refused`'s words. */
 export type FlowHostAnswer =
-  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: true; readonly value: unknown; readonly cut?: true }
   | { readonly ok: false; readonly refused: string };
 
 /** What answers a run's calls and hears its log lines. */

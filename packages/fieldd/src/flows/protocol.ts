@@ -44,7 +44,7 @@ export type ToFlowHost =
       input: Readonly<Record<string, string>>;
       limits: FlowHostLimits;
     }
-  | { t: "answer"; id: number; ok: true; value: unknown }
+  | { t: "answer"; id: number; ok: true; value: unknown; cut?: true }
   | { t: "answer"; id: number; ok: false; refused: string }
   | { t: "ping"; n: number }
   | { t: "shutdown" };
@@ -74,6 +74,10 @@ export function nestsWithin(value: unknown, max: number): boolean {
   }
   return true;
 }
+
+/** The mark a cut answer's text ends with in the script (finding 7, ruled (a) 12:48Z, VF-PM 12:52Z): the cutText
+ * convention, one character, 3 bytes in UTF-8 and in JSON. */
+export const FLOW_CUT_MARK = "…";
 
 /** The words a child's text is cut to, in the child before it is sent and in fieldd again (a `threw`'s message, a
  * `fatal`'s reason). */

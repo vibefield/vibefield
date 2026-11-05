@@ -5,7 +5,7 @@ import { FLOW_LIMITS, flowAnswerBytes } from "@vibefield/contracts";
 import { afterEach, describe, expect, inject, it } from "vitest";
 import { chooseFlowsHostLaunch, type FlowsHostLaunch } from "../src/flows/launch";
 import { flowScriptOf } from "../src/flows/module-script";
-import { FLOW_HOST_TEXT_MAX, type ToFlowHost } from "../src/flows/protocol";
+import { FLOW_CUT_MARK, FLOW_HOST_TEXT_MAX, type ToFlowHost } from "../src/flows/protocol";
 import {
   boundedAnswer,
   type FlowCallHandler,
@@ -669,23 +669,26 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
             'const text = await agent("text");',
             "let other;",
             'try { await agent("object"); other = "answered"; } catch (error) { other = error.message; }',
-            "return [text.length, other];",
+            'return [text.length, text.endsWith("…"), other];',
           ].join("\n"),
         ),
         { handler },
       );
       const ended = await within(run.ended);
       expect(ended).toMatchObject({ kind: "done" });
-      const [length, other] = (ended as { value?: [number, string] }).value ?? [];
-      // the JSON string's two quotes are inside the bound
-      expect(length).toBe(FLOW_LIMITS.RESULT_MAX_BYTES - 2);
+      const [length, marked, other] = (ended as { value?: [number, boolean, string] }).value ?? [];
+      // the script hears the cut: its text ends in the mark, and the mark's 3 bytes and the JSON string's two quotes
+      // are inside the bound (finding 7, ruled (a))
+      expect(marked).toBe(true);
+      expect(length).toBe(FLOW_LIMITS.RESULT_MAX_BYTES - 2 - 3 + 1);
       expect(other).toMatch(/64 KiB/);
     },
     ROW_MS,
   );
 
   it("H14b: a cut never overshoots: escape-heavy text is cut to the longest whole prefix within RESULT_MAX_BYTES, never to nothing (finding 7)", () => {
-    const max = FLOW_LIMITS.RESULT_MAX_BYTES;
+    // the pipe's text leaves room for the mark the script's text ends with (ruled (a))
+    const max = FLOW_LIMITS.RESULT_MAX_BYTES - Buffer.byteLength(FLOW_CUT_MARK);
     const high = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
     // a control character and an ANSI escape cost 6 bytes a character in JSON, é two, a pair four, x one
     for (const unit of ["\u0001", "\u001b[0m", "é", "😀", "x"]) {

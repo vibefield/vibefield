@@ -13,7 +13,7 @@ import {
   type FlowHostRun,
   startFlowHost,
 } from "../src/flows/supervisor";
-import { standInSource } from "./flows-host-bundle";
+import { flowsHostLaunch, standInSource } from "./flows-host-bundle";
 
 // CP-4a2a (step0-cp4a2.md §12 commit 8; CP-D9) — replay: a run's calls answered from its journal by their key and
 // `#n`, never handed on twice; a new call journaled before it is handed on, then its answer. And J7: the journal's key
@@ -285,6 +285,68 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
   afterEach(async () => {
     await Promise.all(runs.splice(0).map((run) => run.stop()));
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  });
+
+  it("P9: a cut answer reaches the script marked, and its replay is byte for byte the same (finding 7, ruled (a))", async () => {
+    const root = mkdtempSync(join(tmpdir(), "vf-flows-replay-"));
+    roots.push(root);
+    const records = new FlowRecords({
+      dir: join(root, "fieldd", "flows"),
+      keyPath: join(root, "fieldd", "flows.key"),
+    });
+    const run = "fr-p9cutmark1";
+    records.beginRun({
+      run,
+      flow: "release-check",
+      name: "Release check",
+      n: 1,
+      hash: "f".repeat(64),
+      starter: { by: "you" },
+    });
+    const script = new TextEncoder().encode(
+      'export const meta = { name: "P9" };\nexport default async function () {\n  return await agent("Review");\n}\n',
+    );
+    const once = async (handler: FlowCallHandler): Promise<unknown> => {
+      const read = records.readRun(run);
+      const host = startFlowHost({
+        launch: { kind: "launch", launch: await flowsHostLaunch() },
+        bytes: script,
+        input: {},
+        handler: new FlowReplay({
+          prior: read.kind === "kept" ? read.lines : [],
+          append: (entry) => records.appendRun(run, entry),
+          inner: handler,
+        }),
+        environment: { PATH: process.env["PATH"] ?? "/usr/bin:/bin" },
+      });
+      runs.push(host);
+      const deadline = Date.now() + 15_000;
+      const ended = await Promise.race([
+        host.ended,
+        new Promise((resolve) => setTimeout(() => resolve("timeout"), deadline - Date.now())),
+      ]);
+      return ended;
+    };
+    const long = inner(() => ({ ok: true, value: "x".repeat(FLOW_LIMITS.RESULT_MAX_BYTES + 100) }));
+    const first = await once(long.handler);
+    expect(first).toMatchObject({ kind: "done" });
+    const heard = (first as { value?: unknown }).value;
+    expect(typeof heard).toBe("string");
+    expect((heard as string).endsWith("…"), "the script hears the cut").toBe(true);
+    // the journal keeps the pipe's text and its `cut`: the mark is the script's, never the journal's
+    const kept = records.readRun(run);
+    const answer = (kept.kind === "kept" ? kept.lines : []).find((line) => line.kind === "answer");
+    expect(answer).toMatchObject({
+      kind: "answer",
+      call: 1,
+      cut: true,
+      value: (heard as string).slice(0, -1),
+    });
+    // a host started again from the journal hears the same text, byte for byte, and hands nothing on
+    const again = inner();
+    const second = await once(again.handler);
+    expect(second).toEqual({ kind: "done", value: heard });
+    expect(again.calls).toEqual([]);
   });
 
   it("J7: no key and no MAC ever cross the pipe: the host hears values and refusals alone", async () => {
