@@ -308,7 +308,9 @@ export function sealedAgentShim(execPath: string): string {
  *
  * The packaged build's RunAsNode fuse stays closed: the role is ONE closed
  * entry of fieldd's own (bin.ts dispatches it on the first argument alone),
- * which runs one sealed file and nothing a caller names. */
+ * which runs the sealed shim and never a script its caller names. The shim
+ * home's launchers and rendezvous stay writable by the same uid, as under
+ * `pnpm dev` (roles.ts `agentShimArgv` says what the role does not close). */
 export async function chooseLauncherRuntime(
   facts: LauncherRuntimeFacts,
 ): Promise<LauncherRuntimeChoice> {

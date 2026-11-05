@@ -44,7 +44,9 @@ import {
   agentShimUnavailable,
   FILES_HOST_BUNDLE,
   FILES_HOST_ROLE_ARG,
+  ROLE_ARG_PREFIX,
   roleOf,
+  unknownRoleLine,
 } from "../src/roles";
 import {
   FILES_HOST_BUNDLE as LAUNCH_FILES_HOST_BUNDLE,
@@ -152,11 +154,32 @@ describe("the roles are closed, and picked by the FIRST argument alone (AR-7j)",
     for (const argv of [
       [exe, exe, "--model", FILES_HOST_ROLE_ARG],
       [exe, exe, AGENT_SHIM_ROLE_ARG.toUpperCase()],
-      [exe, exe, `${AGENT_SHIM_ROLE_ARG}=x`],
-      [exe, exe, `${FILES_HOST_ROLE_ARG} `],
       [exe, AGENT_SHIM_ROLE_ARG],
     ])
       expect(roleOf(argv), JSON.stringify(argv)).toBeUndefined();
+  });
+
+  it("a first argument that ASKS for a role this build does not have is `unknown` — refused, never the daemon — and its line names the launcher, never the role's word or a path", () => {
+    const exe = "/App/Contents/Resources/bin/fieldd";
+    expect(ROLE_ARG_PREFIX).toBe("--vibefield-role=");
+    expect(AGENT_SHIM_ROLE_ARG.startsWith(ROLE_ARG_PREFIX)).toBe(true);
+    expect(FILES_HOST_ROLE_ARG.startsWith(ROLE_ARG_PREFIX)).toBe(true);
+    for (const first of [
+      "--vibefield-role=agent-shim-2",
+      `${AGENT_SHIM_ROLE_ARG}=x`,
+      `${FILES_HOST_ROLE_ARG} `,
+      ROLE_ARG_PREFIX,
+    ])
+      expect(roleOf([exe, exe, first, "/home/lib/agent-shim.cjs"]), first).toBe("unknown");
+    // only the first argument asks: further along, it is the agent's
+    expect(roleOf([exe, exe, "--model", "--vibefield-role=agent-shim-2"])).toBeUndefined();
+    expect(unknownRoleLine(TYPED_COMMAND)).toBe(
+      `VibeField: ${TYPED_COMMAND} was not started: it was set up by another version of VibeField. Open VibeField, then try again.`,
+    );
+    for (const name of [undefined, "", "../x", "a b", "-flag"])
+      expect(unknownRoleLine(name), String(name)).toContain(
+        "VibeField: the agent was not started:",
+      );
   });
 
   it("the shim's argv is `node <sealed> <the agent's arguments…>`: the home's copy at argv[3] is dropped, and every argument after it is passed on exactly", () => {
@@ -298,6 +321,44 @@ process.exit(99);
         stderr: `${agentShimUnavailable(TYPED_COMMAND)}\n`,
       });
       expect(existsSync(poisoned)).toBe(false);
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "a role this build does not have — a launcher another build wrote — is refused in one line with the kit's cannot-run status: no daemon, no readiness line, no data directory, the home's copy never run",
+    async () => {
+      const dir = scratch("vf-role-");
+      copyBundle(dir);
+      // a sealed shim stands, so nothing but the unknown role can refuse this
+      writeFileSync(join(dir, AGENT_SHIM_BUNDLE), "process.exit(42);\n");
+      const home = join(dir, "home");
+      const homeCopy = spawnThroughLayout(home).script;
+      mkdirSync(join(home, "lib"), { recursive: true });
+      const poisoned = join(dir, "POISONED");
+      writeFileSync(
+        homeCopy,
+        `require("node:fs").writeFileSync(${JSON.stringify(poisoned)}, "ran");\n`,
+      );
+      const data = join(dir, "data");
+      const ran = await run(
+        process.execPath,
+        [join(dir, "bin.cjs"), "--vibefield-role=agent-shim-2", homeCopy, "--resume", "x"],
+        {
+          PATH: process.env["PATH"] ?? "/usr/bin:/bin",
+          HOME: home,
+          PUPPETEER_SHIM_NAME: TYPED_COMMAND,
+          FIELDD_DATA_DIR: data,
+          FIELDD_CONTROL_PORT: "0",
+        },
+      );
+      expect(ran).toEqual({
+        code: SPAWN_THROUGH_EXIT_UNAVAILABLE,
+        stdout: "",
+        stderr: `${unknownRoleLine(TYPED_COMMAND)}\n`,
+      });
+      expect(existsSync(poisoned)).toBe(false);
+      expect(existsSync(data)).toBe(false);
     },
     PROCESS_BUDGET_MS,
   );

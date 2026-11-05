@@ -35,7 +35,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
+import { constants as osConstants, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { FLOOR_BINARIES } from "../../../scripts/native-floor.mjs";
 
@@ -98,9 +98,11 @@ const SIDECARS = [
   },
   // AR-7j (LP-D1) — puppeteer's spawn-through shim, SEALED beside the executable. Every
   // launcher in a packaged build execs the executable in its agent-shim role, and the role
-  // runs THIS copy (bin.ts) — never the one in the user's shim home, which any process of
-  // theirs can write. fieldd's build bundles it from the pinned kit (package.json's third
-  // step); the gateway finds it here too (agent-gateway.ts `bundledShim`, `sealedAgentShim`).
+  // runs THIS copy (bin.ts) — never the one in the user's shim home, so rewriting that copy
+  // steers nothing. The shim home's launchers and rendezvous stay writable by the same uid,
+  // as under `pnpm dev`: the role does not close that (roles.ts `agentShimArgv`). fieldd's
+  // build bundles it from the pinned kit (package.json's third step); the gateway finds it
+  // here too (agent-gateway.ts `bundledShim`, `sealedAgentShim`).
   {
     name: AGENT_SHIM_BUNDLE,
     why: "puppeteer's spawn-through shim — the executable's agent-shim role runs this sealed copy, never the shim home's",
@@ -110,11 +112,18 @@ const SIDECARS = [
 // AR-7j (electron-security-packaging.md §9.3, fuse-matrix.mjs's RunAsNode row) — the role makes
 // this executable the program every typed agent's launcher runs, in a pane whose environment a
 // same-uid process may have shaped. A SEA never parses its command line as Node's (every argument
-// is the blob's), so the two ways a closed RunAsNode fuse still leaves into a plain Node are
-// closed in the blob itself: no Node option is taken from the environment (`NODE_OPTIONS` is
-// ignored — Node 26's `execArgvExtension: "none"`), and SIGUSR1 opens no inspector
-// (`--disable-sigusr1`, sealed as the blob's own execArgv). --verify probes both.
-const SEA_EXEC_ARGV = ["--disable-sigusr1"];
+// is the blob's), so two ways into a plain Node remain past a closed RunAsNode fuse:
+//  - a Node option from the environment. Closed in the blob: `NODE_OPTIONS` is ignored (Node
+//    26's `execArgvExtension: "none"`; the blob takes no execArgv of its own).
+//  - SIGUSR1, which opens an inspector. NOT closed in the blob: `--disable-sigusr1` as the blob's
+//    execArgv leaves SIGUSR1 BLOCKED for the whole process, and the agent-shim role execs the
+//    agent in place, which keeps the mask — every typed agent, and what it starts without
+//    resetting its mask, would be born deaf to SIGUSR1, unlike under `pnpm dev` (measured on
+//    Node 26.5.0). So the daemon and the files worker take SIGUSR1 from the inspector with a
+//    listener of their own from their first statement (bin.ts `refuseInspectorSignal`); what
+//    remains is the executable's start before that statement, and the agent-shim role, which
+//    leaves SIGUSR1 to Node and holds nothing a process of the same uid lacks.
+// --verify probes each: NODE_OPTIONS and the agent's SIGUSR1 at probe D, the daemon's at probe A.
 const SEA_EXEC_ARGV_EXTENSION = "none";
 
 // postject's SEA contract. The sentinel fuse and the Mach-O segment name are Node's, not
@@ -275,7 +284,6 @@ function buildSea() {
         disableExperimentalSEAWarning: true,
         useSnapshot: false,
         useCodeCache: false,
-        execArgv: SEA_EXEC_ARGV,
         execArgvExtension: SEA_EXEC_ARGV_EXTENSION,
       },
       null,
@@ -349,8 +357,9 @@ function writeManifest({ exe, blobSha256, node }) {
       blobSha256,
       useSnapshot: false,
       useCodeCache: false,
-      execArgv: SEA_EXEC_ARGV,
       execArgvExtension: SEA_EXEC_ARGV_EXTENSION,
+      // AR-7j — not the blob's: bin.ts's own listener, in the daemon and the files worker
+      sigusr1Inspector: "refused by the daemon's and the files worker's own listener",
     },
     signature: process.platform === "darwin" ? "adhoc" : "none",
   };
@@ -465,8 +474,9 @@ function bootProbe({ exe, cwd, env, deadlineMs = 30_000, atReady }) {
 }
 
 /** AR-7j (ESP §9.3) — asked of a READY daemon: SIGUSR1, which on a plain Node opens an
- * inspector on 127.0.0.1:9229 and says "Debugger listening" on stderr. The blob's own
- * `--disable-sigusr1` makes it nothing: no inspector, and the daemon still running. */
+ * inspector on 127.0.0.1:9229 and says "Debugger listening" on stderr. The daemon's own
+ * listener (bin.ts `refuseInspectorSignal`) makes it nothing: no inspector, and the daemon
+ * still running. */
 async function sigusr1Ask({ child, stderr }) {
   const before = stderr().length;
   child.kill("SIGUSR1");
@@ -493,13 +503,17 @@ function agentShimProbe({ exe, root, deadlineMs = 30_000 }) {
   mkdirSync(join(home, "lib"), { recursive: true });
   mkdirSync(programs, { recursive: true });
   const said = join(root, "stub-said");
+  const usr1 = join(root, "stub-usr1");
   const marks = {
     homeCopy: join(root, "HOME-COPY-RAN"),
     nodeOptions: join(root, "NODE-OPTIONS-RAN"),
   };
   const name = "vf-shim-probe";
   // the program a person typed: its pid (the role execs in place: ONE pid), then each argument
-  // it was given, one a line in brackets, and it leaves 7 — so the role's status is the agent's
+  // it was given, one a line in brackets, and it leaves 7 — so the role's status is the agent's.
+  // Before it leaves it asks what SIGUSR1 does to a shell it starts: a shell born with the signal
+  // unblocked dies by it (128 + SIGUSR1), one born with it blocked lives on (0) — the mask the
+  // agent was handed, which the exec in place keeps
   const stub = join(programs, name);
   writeFileSync(
     stub,
@@ -507,6 +521,8 @@ function agentShimProbe({ exe, root, deadlineMs = 30_000 }) {
       "#!/bin/sh",
       `echo "pid=$$" > '${said}'`,
       `for argument in "$@"; do printf '[%s]\\n' "$argument"; done >> '${said}'`,
+      `usr1=$( /bin/sh -c 'kill -USR1 $$' 2>/dev/null; echo $? ) 2>/dev/null`,
+      `echo "$usr1" > '${usr1}'`,
       "exit 7",
       "",
     ].join("\n"),
@@ -568,6 +584,10 @@ function agentShimProbe({ exe, root, deadlineMs = 30_000 }) {
         stubPid: lines[0]?.startsWith("pid=") ? Number(lines[0].slice(4)) : undefined,
         stubArgs: text === undefined ? undefined : lines.slice(1),
         wantArgs: agentArgs.map((argument) => `[${argument}]`),
+        // what SIGUSR1 did to a shell the program started (`usr1` above), and what it does to one
+        // born as under a plain Node: unblocked, so it dies by the signal
+        usr1Status: existsSync(usr1) ? readFileSync(usr1, "utf8").trim() : undefined,
+        usr1Want: String(128 + osConstants.signals.SIGUSR1),
         homeCopyRan: existsSync(marks.homeCopy),
         nodeOptionsRan: existsSync(marks.nodeOptions),
         dataTouched: existsSync(data),
@@ -579,21 +599,30 @@ function agentShimProbe({ exe, root, deadlineMs = 30_000 }) {
   });
 }
 
-/** AR-7j — the role beside NO sealed shim (a damaged install): one line in the person's words
- * and the kit's cannot-run status; the home's copy, poisoned, still never runs. */
-function agentShimMissingProbe({ exe, root, deadlineMs = 30_000 }) {
+/** AR-7j — a launcher the executable cannot run: the agent-shim role beside NO sealed shim (a
+ * damaged install), or `roleArg` naming a role this build does not have (a launcher another
+ * build wrote). One line in the person's words and the kit's cannot-run status; the home's
+ * copy, poisoned, never runs, and no daemon makes the data directory fieldd's variables name. */
+function agentShimMissingProbe({ exe, root, roleArg = AGENT_SHIM_ROLE_ARG, deadlineMs = 30_000 }) {
   const home = join(root, "home");
   mkdirSync(join(home, "lib"), { recursive: true });
   const ran = join(root, "HOME-COPY-RAN");
+  const data = join(root, "data");
   const homeCopy = join(home, "lib", AGENT_SHIM_BUNDLE);
   writeFileSync(
     homeCopy,
     `require("node:fs").writeFileSync(${JSON.stringify(ran)}, "ran");\nprocess.exit(99);\n`,
   );
   return new Promise((done) => {
-    const child = spawn(exe, [AGENT_SHIM_ROLE_ARG, homeCopy, "--resume", "x"], {
+    const child = spawn(exe, [roleArg, homeCopy, "--resume", "x"], {
       cwd: "/",
-      env: { PATH: "/usr/bin:/bin", HOME: home, PUPPETEER_SHIM_NAME: "vf-shim-probe" },
+      env: {
+        PATH: "/usr/bin:/bin",
+        HOME: home,
+        PUPPETEER_SHIM_NAME: "vf-shim-probe",
+        FIELDD_DATA_DIR: data,
+        FIELDD_CONTROL_PORT: "0",
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -607,7 +636,15 @@ function agentShimMissingProbe({ exe, root, deadlineMs = 30_000 }) {
     const timer = setTimeout(() => child.kill("SIGKILL"), deadlineMs);
     const report = (code, signal, error) => {
       clearTimeout(timer);
-      done({ error, code, signal, stdout, stderr, homeCopyRan: existsSync(ran) });
+      done({
+        error,
+        code,
+        signal,
+        stdout,
+        stderr,
+        homeCopyRan: existsSync(ran),
+        dataTouched: existsSync(data),
+      });
     };
     child.once("error", (e) => report(null, null, e.message));
     // `close`, not `exit`: what the program said is all read only once its stdio has closed
@@ -849,13 +886,13 @@ async function verify({ exe, manifest }) {
         "no missing-sidecar complaint on stderr (worker harness resolved from the executable's dir)",
       );
     }
-    // AR-7j (ESP §9.3) — the blob's `--disable-sigusr1`: no debugger by a signal, and no crash either
+    // AR-7j (ESP §9.3) — the daemon's own SIGUSR1 listener: no debugger by a signal, and no crash either
     if (a.ok) {
       say(
         a.atReady?.inspector === false,
         a.atReady?.failed !== undefined
           ? `SIGUSR1 could not be asked: ${a.atReady.failed}`
-          : `SIGUSR1 opened no inspector (execArgv ${JSON.stringify(SEA_EXEC_ARGV)} sealed in the blob)`,
+          : "SIGUSR1 opened no inspector (the daemon's own listener, bin.ts refuseInspectorSignal)",
       );
       say(
         a.atReady?.alive === true,
@@ -885,8 +922,9 @@ async function verify({ exe, manifest }) {
 
     // Probe D (AR-7j, LP-D1) — the executable in its agent-shim ROLE, exactly as every
     // packaged launcher execs it: the SEALED shim beside it runs (never the home's poisoned
-    // copy), hands the typed program the agent's arguments exactly and execs it in place; no
-    // daemon, no readiness line, no Node option from the environment.
+    // copy), hands the typed program the agent's arguments exactly and execs it in place, with
+    // SIGUSR1 as a plain Node hands it on; no daemon, no readiness line, no Node option from
+    // the environment.
     const d = await agentShimProbe({ exe: cleanExe, root: join(sandbox, "shim") });
     const dTail = d.stderr ? ` — stderr: ${d.stderr.trim().split("\n").slice(-3).join(" / ")}` : "";
     say(
@@ -910,6 +948,12 @@ async function verify({ exe, manifest }) {
     say(
       !d.nodeOptionsRan,
       `agent-shim role: NODE_OPTIONS from the environment ignored (execArgvExtension "${SEA_EXEC_ARGV_EXTENSION}")`,
+    );
+    say(
+      d.usr1Status === d.usr1Want,
+      d.usr1Status === "0"
+        ? "agent-shim role: the agent was born with SIGUSR1 BLOCKED — a shell it started lived through `kill -USR1 $$`; a plain Node hands it on unblocked"
+        : `agent-shim role: the agent was born with SIGUSR1 as under a plain Node — a shell it started died by it (${d.usr1Status ?? "never asked"}, want ${d.usr1Want})`,
     );
     say(
       d.stdout === "" && d.stderr === "",
@@ -943,6 +987,27 @@ async function verify({ exe, manifest }) {
         : `agent-shim role without its sealed shim: one line in the person's words and the kit's cannot-run status (${e.signal ?? e.code}, want 127) — ${JSON.stringify(e.stderr.trim())}`,
     );
     say(!e.homeCopyRan, "agent-shim role without its sealed shim: the home's copy still never ran");
+
+    // Probe F (AR-7j) — a role this build does not have, as a launcher another build wrote would
+    // ask for it: refused in one line with the kit's cannot-run status, never the daemon.
+    const f = await agentShimMissingProbe({
+      exe: cleanExe,
+      root: join(sandbox, "no-role-run"),
+      roleArg: "--vibefield-role=no-such-role",
+    });
+    say(
+      f.error === undefined &&
+        f.code === 127 &&
+        f.stdout === "" &&
+        /^VibeField: vf-shim-probe was not started: .+ Open VibeField, then try again\.\n$/u.test(
+          f.stderr,
+        ) &&
+        !f.homeCopyRan &&
+        !f.dataTouched,
+      f.error !== undefined
+        ? `a role this build does not have: spawn failed: ${f.error}`
+        : `a role this build does not have: one line, the kit's cannot-run status, no daemon (${f.signal ?? f.code}, want 127; data directory ${f.dataTouched ? "MADE" : "untouched"}) — ${JSON.stringify(f.stderr.trim())}`,
+    );
 
     // Probe B — the same files, plus a node_modules that would break the daemon if it
     // were ever read, and cwd set to that directory so both resolution roots are hostile.
