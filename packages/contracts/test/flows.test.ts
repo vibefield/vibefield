@@ -131,6 +131,9 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
       HOST_PING_MISSES: 3,
       // bth's review P1/P3 (11:46Z): how deep a call's arguments nest
       ARGS_DEPTH_MAX: 32,
+      // bth's review P1 (11:46Z): a run's calls waiting at once, and its log lines
+      HOST_CALLS_WAITING_MAX: 256,
+      HOST_LOG_LINES_MAX: 10_000,
     });
   });
 

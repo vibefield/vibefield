@@ -522,6 +522,60 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
   );
 
   it(
+    "H20: liveness is the pong alone: a script that logs without ever yielding still misses its pings (bth's review P1)",
+    async () => {
+      // a log line a millisecond, far under the log bound, from a worker that never yields to answer a ping
+      const run = await host(
+        flow('for (;;) {\n  for (let i = 0; i < 1e6; i += 1);\n  log("busy");\n}'),
+        { timings: { pingMs: 100, pingMisses: 2 } },
+      );
+      expect(typeof (await within(run.ready))).toBe("number");
+      expect(await within(run.ended, 5_000)).toEqual({ kind: "ended", why: "unanswered" });
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H21: a run that floods fieldd is ended `flood`: past HOST_CALLS_WAITING_MAX calls waiting at once, or HOST_LOG_LINES_MAX lines (bth's review P1)",
+    async () => {
+      // calls fired without an await, none answered: a script that yields, so its pings never end it
+      const waiting = await host(
+        flow(
+          `for (let i = 0; i < ${FLOW_LIMITS.HOST_CALLS_WAITING_MAX + 10}; i += 1) agent("step " + i);\nawait new Promise(() => {});`,
+        ),
+        { handler: scripted(() => "never").handler },
+      );
+      expect(await within(waiting.ended)).toEqual({ kind: "ended", why: "flood" });
+      // log lines past the run's bound
+      const said = await host(
+        flow(
+          `for (let i = 0; i < ${FLOW_LIMITS.HOST_LOG_LINES_MAX + 10}; i += 1) log("line " + i);\nreturn 1;`,
+        ),
+      );
+      expect(await within(said.ended)).toEqual({ kind: "ended", why: "flood" });
+      // at the bounds, a run is whole: as many calls waiting as the bound, then answered, and as many lines
+      const { handler } = scripted(() => ({ ok: true, value: "ok" }));
+      const within_ = await host(
+        flow(
+          [
+            `const all = [];`,
+            `for (let i = 0; i < ${FLOW_LIMITS.HOST_CALLS_WAITING_MAX}; i += 1) all.push(agent("step " + i));`,
+            "await Promise.all(all);",
+            `for (let i = 0; i < ${FLOW_LIMITS.HOST_LOG_LINES_MAX}; i += 1) log("line " + i);`,
+            "return all.length;",
+          ].join("\n"),
+        ),
+        { handler },
+      );
+      expect(await within(within_.ended)).toEqual({
+        kind: "done",
+        value: FLOW_LIMITS.HOST_CALLS_WAITING_MAX,
+      });
+    },
+    ROW_MS,
+  );
+
+  it(
     "H10: a script past SCRIPT_MAX_BYTES is refused before any host starts",
     async () => {
       const big = flow(`// ${"x".repeat(FLOW_LIMITS.SCRIPT_MAX_BYTES)}\nreturn 1;`);
