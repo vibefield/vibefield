@@ -728,7 +728,8 @@ field, heard"; the page *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`)
      - a usage string for every system prompt the clean-Mac row meets;
      - each shipped daemon its own entitlements, with no inherited `allow-jit` (`lp/harden`);
      - no build paths in shipped binaries (`lp/paths`, item 170);
-     - third-party notices on the Mac and on iOS (`lp/notices`);
+     - third-party notices on the Mac and on iOS: LANDED 2026-11-05 (M131 `02b47ba2a`, LANDED "LP-5"); owed: the
+       staged `Resources/legal` witness at L6's mint, and the packaged one on the first nightly carrying both;
      - the surface lab out of production builds (Q3), and `package-census --assert --strict` green (`lp/harden`);
      - LOG-39's packaged checks in `release.yml`;
      - `cargo audit` blocking again once the yanked chacha20 moves (Q28);
