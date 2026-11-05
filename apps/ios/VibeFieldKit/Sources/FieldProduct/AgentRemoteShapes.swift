@@ -785,6 +785,10 @@ public struct AgentRemoteMeshDevice: Sendable, Equatable {
   public let state: AgentMeshDeviceState
   public let asOf: String
   public let snapshot: AgentRemoteMeshSnapshot?
+  /// PG-9 — only to a phone that named a cursor (`since`): its copy at that cursor is current.
+  public let resumed: SubscriptionCursor?
+  /// PG-9 — only to a phone that named a cursor: what changed since it, on the same chain.
+  public let delta: AgentRemoteMeshDelta?
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
@@ -793,17 +797,21 @@ public struct AgentRemoteMeshDevice: Sendable, Equatable {
     state = AgentMeshDeviceState(wire: try object.text("state", 1...Int.max))
     asOf = try object.text("asOf", 1...Int.max)
     snapshot = try object.strictObject("snapshot", AgentRemoteMeshSnapshot.init(json:))
+    resumed = nil
+    delta = nil
     unknownFields = object.unknownFields
   }
 
   init(
     device: String, state: AgentMeshDeviceState, asOf: String, snapshot: AgentRemoteMeshSnapshot?,
-    unknownFields: [String]
+    resumed: SubscriptionCursor? = nil, delta: AgentRemoteMeshDelta? = nil, unknownFields: [String]
   ) {
     self.device = device
     self.state = state
     self.asOf = asOf
     self.snapshot = snapshot
+    self.resumed = resumed
+    self.delta = delta
     self.unknownFields = unknownFields
   }
 }

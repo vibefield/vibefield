@@ -383,3 +383,64 @@ private final class Counter {
   private(set) var values: [Int] = []
   func record(_ value: Int) { values.append(value) }
 }
+
+/// PG-9 — what each subscribe of one subscription asked, in order. The door's script runs off the main actor.
+private final class Asked: @unchecked Sendable {
+  private let lock = NSLock()
+  private var params: [JSONValue] = []
+  func record(_ value: JSONValue) { lock.withLock { params.append(value) } }
+  var all: [JSONValue] { lock.withLock { params } }
+}
+
+/// PG-9 — what the caller holds NOW, read at every send.
+@MainActor
+private final class Holding {
+  var n: Int64 = 0
+}
+
+@MainActor
+@Suite struct ParamsAtSendTests {
+  /// P1 (PG-9) — a subscription whose params name what its caller holds NOW (the mesh's cursors) reads them at EVERY
+  /// send: the subscribe, a gap's re-subscribe, a re-dial's replay. A value stored at subscribe would replay a cursor
+  /// the copy has long moved past.
+  @Test func everySendReadsTheParamsThen() async throws {
+    let ack = try Fixture.json("hello-ack.valid")
+    let open = try Fixture.json("agent-remote-mesh-open.valid")
+    let asked = Asked()
+    let door = FakeDoor { method, id, params in
+      switch method {
+      case "system.hello": return [Frame.result(id: id, ack)]
+      case "agent.subscribe":
+        asked.record(params)
+        return [Frame.result(id: id, .object(["subId": .string("sub-\(id)"), "snapshot": open]))]
+      default: return []
+      }
+    }
+    let client = makeClient(door)
+    defer { client.close() }
+    let holding = Holding()
+    let base = AgentSubscribeParams.phoneRemote
+    let handle = try await client.subscribe(
+      "agent.subscribe", params: base.json,
+      paramsAtSend: { .object(["projection": .string("remote"), "scope": .string("mesh"), "n": .int(holding.n)]) },
+      onSnapshot: { _ in }, onDelta: { _ in })
+    let first = asked.all.map { $0["n"] }
+    #expect(first == [.int(0)])
+
+    // a gap: the re-subscribe reads what the caller holds now
+    holding.n = 1
+    handle.resnapshot(because: "a test gap")
+    try await waitUntil("the re-subscribe") { asked.all.count == 2 }
+    // a re-dial: the replay reads it again
+    holding.n = 2
+    let connection = try #require(await door.connection(0))
+    await connection.drop()
+    try await waitUntil("the replay") { asked.all.count == 3 }
+    let ns = asked.all.map { $0["n"] }
+    #expect(ns == [.int(0), .int(1), .int(2)])
+    // every send was the caller's, the projection and scope included
+    let scopes = asked.all.map { $0["scope"]?.stringValue }
+    #expect(scopes == ["mesh", "mesh", "mesh"])
+    handle.cancel()
+  }
+}

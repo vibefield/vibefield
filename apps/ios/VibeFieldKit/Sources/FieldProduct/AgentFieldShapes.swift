@@ -332,11 +332,22 @@ public struct AgentSubscribeParams: Sendable, Equatable {
   public let projection: Projection?
   public let scope: Scope?
   public let minIntervalMs: Int?
+  /// PG-9 (PG-L4.4) — the mesh's cursors, by desktop: the last `{epoch, revision}` the copy applied.
+  public let since: [String: SubscriptionCursor]?
 
-  public init(projection: Projection? = nil, scope: Scope? = nil, minIntervalMs: Int? = nil) {
+  public init(
+    projection: Projection? = nil, scope: Scope? = nil, minIntervalMs: Int? = nil,
+    since: [String: SubscriptionCursor]? = nil
+  ) {
     self.projection = projection
     self.scope = scope
     self.minIntervalMs = minIntervalMs
+    self.since = since
+  }
+
+  /// PG-9 — the same ask naming `cursors`.
+  public func resuming(_ cursors: [String: SubscriptionCursor]) -> AgentSubscribeParams {
+    self
   }
 
   // RETIRED 2026-11-02 (PG-3e): `phoneField` (the field projection at 250 ms, the phone's first ask, which no

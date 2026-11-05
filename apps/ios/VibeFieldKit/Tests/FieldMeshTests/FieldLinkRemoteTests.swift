@@ -268,6 +268,8 @@ final class HomePlan: @unchecked Sendable {
   }
 
   /// L9 — pause keeps the field ("THE FIELD STANDS"), and resume re-subscribes for a fresh open that replaces it.
+  /// *2026-11-05 (PG-9):* the resume now names the copy's cursors (L13); this home answers a whole open whatever the
+  /// phone names, as a home from before PG-9 does (it ignores `since`), and the whole open still replaces the field.
   @Test func pauseKeepsTheFieldAndResumesFresh() async throws {
     let plan = HomePlan([try R.openJSON(), try MeshFixture.json("agent-remote-mesh-open.resync")])
     let (link, _, _) = try await Self.link(plan)
@@ -282,6 +284,86 @@ final class HomePlan: @unchecked Sendable {
     let resynced = try Self.goldenDrawn("resync")
     try await waitUntil("the fresh open drawn") { link.rows.map { $0.id } == resynced }
     #expect(plan.subscribes == 2)
+  }
+
+  /// The cursors a subscribe named (`since`), by desktop: `{epoch, revision}` as the wire spells them.
+  static func since(_ params: JSONValue) -> [String: [String]] {
+    var named: [String: [String]] = [:]
+    for (device, cursor) in params["since"]?.objectValue ?? [:] {
+      named[device] = [cursor["epoch"]?.stringValue ?? "?", String(cursor["revision"]?.intValue ?? -1)]
+    }
+    return named
+  }
+
+  /// L13 (PG-9, PG-L4.4) — back from an app switch, the phone names the chain it holds for each desktop, and a home
+  /// that answers every desktop `resumed` costs no row: the field drawn before the pause is the field after it, live.
+  @Test func resumeNamesTheCopysCursorsAndAResumedOpenKeepsTheField() async throws {
+    let plan = HomePlan([try R.openJSON(), nil])
+    let (link, _, door) = try await Self.link(plan)
+    defer { link.stop() }
+    let drawn = try Self.goldenDrawn("open")
+    try await waitUntil("the witness drawn") { link.rows.map { $0.id } == drawn }
+    // the first ask names nothing: the copy held nothing
+    let first = await door.requests("agent.subscribe")
+    #expect(first.count == 1)
+    #expect(first.first?["since"] == nil)
+
+    link.pause()
+    link.resume()
+    try await waitUntil("asked again") { plan.subscribes == 2 }
+    let asks = await door.requests("agent.subscribe")
+    let named = asks.count == 2 ? Self.since(asks[1]) : [:]
+    #expect(
+      named == [
+        R.home: [R.homeEpoch, "80"], R.loft: [R.loftEpoch, "30"], R.attic: ["fieldd-0c1d7e9a4b2f6385.2", "9"],
+      ])
+    let projection = asks.last?["projection"]?.stringValue
+    #expect(projection == "remote")
+
+    // every desktop answered `resumed` at what the phone named
+    let open = try R.openJSON()
+    var entries: [JSONValue] = []
+    for entry in open["devices"]?.arrayValue ?? [] {
+      let device = entry["device"]?.stringValue ?? "?"
+      var resumed = R.edited(entry, ["snapshot"], nil)
+      let cursor = asks.last?["since"]?[device] ?? .null
+      resumed = R.edited(resumed, ["resumed"], cursor)
+      entries.append(resumed)
+    }
+    await Self.deliver(door, plan.answer(2, .object(["devices": .array(entries)])))
+    try await Task.sleep(for: .milliseconds(60))
+    let after = link.rows.map { $0.id }
+    #expect(after == drawn)
+    #expect(link.fieldIsLive)
+    // the resumed open set each chain where the phone held it: the home's next frame (80 → 81) follows it on the new
+    // subscription, and moves a row, with no gap and no third ask
+    let frames = try Self.witnessFrames()
+    let held = link.rows
+    await Self.deliver(door, meshFrame(subId: plan.current, frames[0]))
+    try await waitUntil("frame 0 drawn after the resume") { link.rows != held }
+    try await Task.sleep(for: .milliseconds(60))
+    #expect(plan.subscribes == 2)
+  }
+
+  /// L14 (PG-9) — the cursors are the copy's at the moment of each ask, never the subscribe's: a frame moves the home's
+  /// chain after the first ask, and a gap on the loft's then asks again naming the home where the frame left it, the
+  /// asleep desktop where it was, and the loft not at all (its image can no longer vouch for it).
+  @Test func aGapsAskNamesTheCursorsHeldThen() async throws {
+    let plan = HomePlan([try R.openJSON(), nil])
+    let (link, _, door) = try await Self.link(plan)
+    defer { link.stop() }
+    let drawn = try Self.goldenDrawn("open")
+    try await waitUntil("the witness drawn") { link.rows.map { $0.id } == drawn }
+    let frames = try Self.witnessFrames()
+    let before = link.rows
+    await Self.deliver(door, meshFrame(subId: plan.current, frames[0]))
+    try await waitUntil("frame 0 drawn") { link.rows != before }
+    let gap = R.deltaJSON(R.loft, epoch: R.loftEpoch, since: 999, revision: 1000)
+    await Self.deliver(door, meshFrame(subId: plan.current, gap))
+    try await waitUntil("asked again") { plan.subscribes == 2 }
+    let asks = await door.requests("agent.subscribe")
+    let named = asks.count == 2 ? Self.since(asks[1]) : [:]
+    #expect(named == [R.home: [R.homeEpoch, "81"], R.attic: ["fieldd-0c1d7e9a4b2f6385.2", "9"]])
   }
 
   /// L10 — UA-P-5: a desktop this phone established is somebody else's is held off AFTER the fold, even when the home

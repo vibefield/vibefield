@@ -68,6 +68,12 @@ public struct RemoteMeshCopy: Sendable {
     replica = RemoteModelReplica(gapBuffer: gapBuffer)
   }
 
+  /// PG-9 — the cursor the copy holds for each desktop: the last frame of its chain it applied.
+  public var cursors: [String: SubscriptionCursor] { [:] }
+
+  /// PG-9 — the board keys the wire's image holds for `device`, readable and refused (a test's witness).
+  func wireKeys(_ device: String) -> [String] { [] }
+
   /// The answering desktop.
   public var here: String? { fold.here }
   /// Every desktop the board lists, in the board's order (the home first), with its standing.

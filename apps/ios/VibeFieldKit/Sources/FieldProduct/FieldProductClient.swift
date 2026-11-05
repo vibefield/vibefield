@@ -354,6 +354,7 @@ public final class FieldProductClient {
     _ method: String,
     params: JSONValue? = nil,
     shape: SubscriptionShape = .stream,
+    paramsAtSend: (@MainActor () -> JSONValue?)? = nil,
     onSnapshot: @escaping @MainActor (JSONValue) -> Void,
     onDelta: @escaping @MainActor (JSONValue) -> Void
   ) async throws -> ProductSubscription {

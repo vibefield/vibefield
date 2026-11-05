@@ -207,6 +207,9 @@ const remoteFixtures = [
   "agent-remote-mesh-frames.valid.json",
   "monitor-agent-row.valid.json",
   "agent-report-shown.routed.json",
+  // PG-9 (PG-L4.4) — the phone's mesh subscribe naming its cursors, and the open that answers each desktop by one
+  "agent-subscribe-params.mesh-since.json",
+  "agent-remote-mesh-open.resume.json",
   ...remoteWitness,
 ];
 // IOS-12b — Chat on the phone: the home's lists of the sparks and of the needs-you queue (`scope: "mesh"`, IOS-12a),

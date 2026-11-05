@@ -1,0 +1,18 @@
+{
+  "projection": "remote",
+  "scope": "mesh",
+  "since": {
+    "dev-01HQ9S7UD1": {
+      "epoch": "fieldd-9b04c1e27a6d5f30.13",
+      "revision": 84
+    },
+    "dev-01HQ9S7XZ2": {
+      "epoch": "fieldd-5d2c8f1a0b7e4c93.5",
+      "revision": 2
+    },
+    "dev-01HQ9S7Y44": {
+      "epoch": "fieldd-0c1d7e9a4b2f6385.1",
+      "revision": 7
+    }
+  }
+}
