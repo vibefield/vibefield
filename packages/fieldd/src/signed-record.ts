@@ -1,5 +1,13 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import {
+  type Dirent,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname } from "node:path";
 import { canonicalJson, RECORD_STORES } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -8,7 +16,9 @@ import { RpcCallError } from "./native-link";
 // The one record signer (CP-3; LEANS P3). fieldd keeps records it later acts on in files a same-uid agent can write.
 // Each record carries an HMAC-SHA256 over its canonical JSON (contracts' one form), keyed by a secret made once per
 // store per user root, so an edit is refused: a file that is unsigned, does not verify, does not parse, or is exposed
-// to other users is set aside by its store and never served. SparkStore signs here (a spark's record bounds what its
+// to other users is set aside by its store and never served. Item 172: a disk that does not answer (an errno, after
+// RECORD_STORES.READ_TRIES tries; a key that cannot be read) is no proof a file is not a record, so such a file is left
+// where it is and its store refuses (StoreGuard, below), and a record a newer VibeField wrote is kept for it. SparkStore signs here (a spark's record bounds what its
 // verbs reach, TL-D5), so do the sessions' input queues (agent-input-queue.ts: what a kept queue holds is pasted into
 // a session, marked as a spark's words or as VibeField's), so does the needs-you queue (tool-plane/rooms/you/
 // store.ts: what an Allow acts on), and so does each spark's kept record (tool-plane/spark-kept.ts, item 159: what
@@ -64,8 +74,130 @@ export function recordsUnreadable(
 
 /** Item 172 — the format a newer VibeField wrote a record in, when it is above this build's own (`own`): such a record
  * is kept where it is for that VibeField, never served and never written over. */
-export function newerFormat(_body: Record<string, unknown>, _own: number): number | undefined {
-  return undefined;
+export function newerFormat(body: Record<string, unknown>, own: number): number | undefined {
+  const { format } = body;
+  return typeof format === "number" && Number.isInteger(format) && format > own
+    ? format
+    : undefined;
+}
+
+/** An error's errno (`ENOENT`, `EMFILE`, …), when it carries one. */
+function errnoOf(error: unknown): string | undefined {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return typeof code === "string" ? code : undefined;
+}
+
+export interface StoreGuardOptions {
+  /** the store's name in fieldd's log */
+  readonly store: string;
+  /** the format this build writes: a record above it is a newer VibeField's */
+  readonly format: number;
+  /** the store's refusal while it cannot read (`recordsUnreadable`, in its words) */
+  refusal(): RpcCallError;
+  readonly logger: Logger;
+}
+
+/** Item 172 — what every signed store answers alike when its disk does not answer, or a newer VibeField wrote a record:
+ * - a folder it cannot list, or a file the disk did not answer (after READ_TRIES tries), is said in fieldd's log and
+ *   refused UNAVAILABLE in the store's words, never answered as nothing, and nothing is moved or written over;
+ * - a store read once at boot (`boot`) whose read failed refuses every read and write after, until fieldd restarts on a
+ *   disk that answers; the boot itself goes on (EL7: a same-uid file where a folder is never stops fieldd);
+ * - a record a newer VibeField wrote is held: kept where it is, never served, said once, and a write to its key is
+ *   refused, never answered by writing over it. */
+export class StoreGuard {
+  /** the boot read failed, with its errno: every read and write refuses until a restart */
+  #failed: string | undefined;
+  /** the keys a newer VibeField's records hold */
+  readonly #held = new Set<string>();
+  /** the boot read's failure was said already (by the listing) */
+  #said = false;
+  /** the errno of the last read the disk did not answer */
+  #code: string | undefined;
+
+  constructor(private readonly opts: StoreGuardOptions) {}
+
+  /** The store's boot read: its answer, or `empty` when it could not read (said; the store refuses after). Never
+   * throws. */
+  boot<T>(read: () => T, empty: T): T {
+    this.#said = false;
+    try {
+      return read();
+    } catch (error) {
+      this.#failed = errnoOf(error) ?? this.#code ?? "unknown";
+      if (!this.#said)
+        this.opts.logger.error(
+          "fieldd.records.store_unavailable",
+          "A store fieldd keeps could not be read at boot; it refuses until fieldd restarts on a disk that answers",
+          error instanceof RpcCallError ? undefined : error,
+          { store: this.opts.store, code: this.#failed },
+        );
+      return empty;
+    }
+  }
+
+  /** Throws the store's refusal while its boot read has failed. */
+  check(): void {
+    if (this.#failed !== undefined) throw this.opts.refusal();
+  }
+
+  /** Whether a write to `key` would be kept: the store reads, and no newer VibeField's record holds the key. */
+  keeps(key: string): boolean {
+    return this.#failed === undefined && !this.#held.has(key);
+  }
+
+  /** Throws the store's refusal unless a write to `key` would be kept. */
+  writable(key: string): void {
+    this.check();
+    if (this.#held.has(key)) throw this.opts.refusal();
+  }
+
+  /** A folder's entries, tried READ_TRIES times; nothing for a folder that is not there. A folder it cannot list is
+   * said and refused. */
+  entries(dir: string): Dirent[] {
+    let code = "unknown";
+    for (let attempt = 0; attempt < RECORD_STORES.READ_TRIES; attempt += 1) {
+      try {
+        return readdirSync(dir, { withFileTypes: true });
+      } catch (error) {
+        code = errnoOf(error) ?? "unknown";
+        if (code === "ENOENT") return [];
+      }
+    }
+    this.#said = true;
+    this.#code = code;
+    this.opts.logger.error(
+      "fieldd.records.store_unavailable",
+      "A store fieldd keeps could not list its folder; nothing in it is served, moved or written over",
+      undefined,
+      { store: this.opts.store, code },
+    );
+    throw this.opts.refusal();
+  }
+
+  /** A file the disk did not answer (`code`): left where it is, said, and refused. */
+  unavailable(path: string, code: string): never {
+    this.#code = code;
+    this.opts.logger.warn(
+      "fieldd.records.unavailable",
+      "A record the disk did not answer is left where it is, never set aside or written over",
+      { store: this.opts.store, file: basename(path), code },
+    );
+    throw this.opts.refusal();
+  }
+
+  /** Whether `body` is a newer VibeField's record: its key is held, said once, and it is not served. */
+  newer(key: string, path: string, body: Record<string, unknown>): boolean {
+    const format = newerFormat(body, this.opts.format);
+    if (format === undefined) return false;
+    if (!this.#held.has(key))
+      this.opts.logger.warn(
+        "fieldd.records.newer",
+        "A record a newer VibeField wrote is kept for it, never served or written over",
+        { store: this.opts.store, file: basename(path), format },
+      );
+    this.#held.add(key);
+    return true;
+  }
 }
 
 export interface RecordSignerOptions {
@@ -99,17 +231,47 @@ export class RecordSigner {
     return timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(this.sign(unsigned), "hex"));
   }
 
-  /** Read a signed file: one exposed to other users, unparseable, unsigned or forged is refused, in that order. The
-   * store parses the body with its own schema, and sets aside what this refuses. */
+  /** Read a signed file: one exposed to other users, unparseable, unsigned or forged is refused, in that order, and
+   * the store parses the body with its own schema and sets aside what this refuses. Item 172: a disk that does not
+   * answer is no proof a file is not a record. A read that fails by an errno is tried READ_TRIES times, then answered
+   * `unavailable`, and so is a key that cannot be read; nothing there (ENOENT, or ENOTDIR: a file where its folder
+   * would be) is `absent`, and a folder at the path is not a record. */
   read(path: string): SignedRead {
+    const text = this.#text(path);
+    if (typeof text !== "string") return text;
+    let parsed: unknown;
     try {
-      if (exposed(path)) return { why: "exposed" };
-      const { signature, ...body } = JSON.parse(this.#readFile(path)) as Record<string, unknown>;
-      if (typeof signature !== "string") return { why: "unsigned" };
-      return this.verifies(body, signature) ? { body } : { why: "forged" };
+      parsed = JSON.parse(text);
     } catch {
       return { why: "unreadable" };
     }
+    if (parsed === null) return { why: "unreadable" };
+    const { signature, ...body } = parsed as Record<string, unknown>;
+    if (typeof signature !== "string") return { why: "unsigned" };
+    try {
+      return this.verifies(body, signature) ? { body } : { why: "forged" };
+    } catch (error) {
+      // the key could not be read: the record is not judged by it
+      return { unavailable: errnoOf(error) ?? "key-unreadable" };
+    }
+  }
+
+  /** The file's text, tried READ_TRIES times while the disk does not answer; or why there is none to read. */
+  #text(path: string): string | Exclude<SignedRead, { readonly body: Record<string, unknown> }> {
+    let code = "unknown";
+    for (let attempt = 0; attempt < RECORD_STORES.READ_TRIES; attempt += 1) {
+      try {
+        if (exposed(path)) return { why: "exposed" };
+        return this.#readFile(path);
+      } catch (error) {
+        code = errnoOf(error) ?? "unknown";
+        // nothing there, or no folder for it to be in (a file where its folder would be): no record to read or keep
+        if (code === "ENOENT" || code === "ENOTDIR") return { absent: true };
+        // a folder where a record's file is: not a record
+        if (code === "EISDIR") return { why: "unreadable" };
+      }
+    }
+    return { unavailable: code };
   }
 
   /** The key: read, or made once (flag "wx", so a second fieldd that races the first reads the winner's). Two passes

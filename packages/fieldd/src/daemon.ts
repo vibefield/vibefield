@@ -3034,8 +3034,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // TU-1 (Q1) — a spark has worked once one of its own sessions has: its record keeps the first time told
     agents.onSparkTurned((spark, at) => sparks.turned(spark, at));
     // item 159 — each spark's kept record, read once before any run re-attaches; one that does not verify, or names
-    // another spark, is set aside here. No section is this item's: each slice that keeps one per spark reads it here
-    const keptSparks = sparkKept.list().length;
+    // another spark, is set aside here. No section is this item's: each slice that keeps one per spark reads it here.
+    // Item 172: none of these boot reads throws. A store fieldd cannot read (a same-uid file where its folder is, a
+    // folder it may not open, a disk that does not answer) says so, refuses until fieldd restarts, and fieldd boots on
+    const keptSparks = sparkKept.restore();
     if (keptSparks > 0)
       logger.info("fieldd.spark_kept.restored", "Kept spark records read", { kept: keptSparks });
     const kept = inputs.restore();
@@ -6383,6 +6385,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const parsed = NeedsListParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { scope?: local|mesh }", false);
+      // item 172: a queue fieldd could not read at boot refuses, never answers an empty list
+      needs.readable();
       const own = needs.list();
       if (reader === "own" || parsed.data.scope !== "mesh")
         return { items: own.map((item) => ({ ...item, device: homeAsk.self })) };
@@ -6400,6 +6404,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       admitSparkReader(ctx, "needs.subscribe");
       if (!NeedsSubscribeParams.safeParse(params ?? {}).success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { device? }", false);
+      needs.readable();
       const door = wholeValueDoor(
         {
           read: () => ({ items: needs.list().map((item) => ({ ...item, device: homeAsk.self })) }),
@@ -6420,6 +6425,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           false,
         );
       const { item, choice } = parsed.data;
+      needs.readable();
       const answered = await audit.required(
         ctx,
         // the act by its place, never the words (CP-L6): an item's words are an agent's

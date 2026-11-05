@@ -195,7 +195,8 @@ export class NeedsQueue implements TalkHolds {
    * recorded done becomes its uncertain fact, owed to its spark, and is never done again. Returns how many records were
    * kept. */
   restore(): number {
-    for (const record of this.opts.store.list()) {
+    // item 172: a store that cannot be read answers nothing here, and refuses after (`readable`)
+    for (const record of this.opts.store.boot()) {
       const kept = record.acting === undefined ? record : this.#uncertain(record);
       this.#records.set(kept.item.id, kept);
     }
@@ -248,7 +249,9 @@ export class NeedsQueue implements TalkHolds {
 
   /** Item 172 — throws UNAVAILABLE {service: "needs"} in fieldd's words while the store could not be read at boot; the
    * doors and the verbs that keep a record ask it first. */
-  readable(): void {}
+  readable(): void {
+    this.opts.store.readable();
+  }
 
   /** The open items, oldest asked first, whole. */
   list(): NeedsItem[] {

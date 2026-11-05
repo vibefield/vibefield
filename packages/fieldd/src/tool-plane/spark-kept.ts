@@ -1,8 +1,21 @@
-import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { SPARK_KEPT_FILE, SPARK_KEPT_FORMAT, SparkId, SparkKeptRecord } from "@vibefield/contracts";
+import {
+  RECORD_STORES,
+  SPARK_KEPT_FILE,
+  SPARK_KEPT_FORMAT,
+  SparkId,
+  SparkKeptRecord,
+} from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
-import { RecordSigner, type SetAsideWhy, setAsideFile } from "../signed-record";
+import {
+  RecordSigner,
+  recordsUnreadable,
+  type SetAsideWhy,
+  StoreGuard,
+  setAsideFile,
+  UNREADABLE_WORDS,
+} from "../signed-record";
 
 // Item 159 (step0-items-158-159.md §4; TH0-Q11 (b), ruled 2026-11-04) — the spark's kept record: what fieldd keeps for
 // one spark beyond its SparkRecord, for the slices that keep something per spark across a restart (1′'s watches and
@@ -17,7 +30,11 @@ import { RecordSigner, type SetAsideWhy, setAsideFile } from "../signed-record";
 // - An update re-reads the file first, so a section another writer kept meanwhile survives, and so does one this build
 //   does not know (the record is OPEN). It is written through, and throws when the disk does not take it, so a writer
 //   acts only on what a restart finds.
-// - Read once at boot (`list`). No door serves it, and no section is this item's: each slice adds its own.
+// - Read once at boot (`restore`). No door serves it, and no section is this item's: each slice adds its own.
+// - Item 172: a folder it cannot list, or a record the disk does not answer, is left where it is; a boot read that
+//   fails never stops fieldd, and every update refuses after, until fieldd restarts on a disk that answers. A record a
+//   newer VibeField wrote is kept for it, never served or written over (StoreGuard, signed-record.ts). A folder where
+//   a record's file is, is not a record: it is set aside like one.
 
 export interface SparkKeptStoreOptions {
   /** LAYOUT.SPARK_FILES_DIR, absolute */
@@ -34,9 +51,17 @@ export class SparkKeptStore {
   readonly #signer: RecordSigner;
   readonly #logger: Logger;
   readonly #now: () => Date;
+  readonly #guard: StoreGuard;
 
   constructor(private readonly opts: SparkKeptStoreOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
+    this.#guard = new StoreGuard({
+      store: "spark-kept",
+      format: SPARK_KEPT_FORMAT,
+      refusal: () =>
+        recordsUnreadable(RECORD_STORES.SERVICE_COMPOSE, UNREADABLE_WORDS.sparks, false),
+      logger: this.#logger,
+    });
     this.#now = opts.now ?? (() => new Date());
     this.#signer = new RecordSigner({
       keyPath: opts.keyPath,
@@ -45,16 +70,20 @@ export class SparkKeptStore {
     });
   }
 
-  /** One spark's record, when it verifies. */
+  /** One spark's record, when it verifies; throws the store's refusal when it cannot be read. */
   get(spark: SparkId): SparkKeptRecord | undefined {
+    this.#guard.check();
     return this.#read(spark);
   }
 
   /** Every record that verifies, by its spark's id: a folder not named as a spark, or one with no kept record (only
-   * the files later slices keep there), is passed over. Read at boot. */
+   * the files later slices keep there), is passed over, and so is a name that is no folder. Throws the store's refusal
+   * when its folder or a record cannot be read. */
   list(): SparkKeptRecord[] {
-    if (!existsSync(this.opts.dir)) return [];
-    return readdirSync(this.opts.dir)
+    return this.#guard
+      .entries(this.opts.dir)
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
       .filter((name) => SparkId.safeParse(name).success)
       .sort()
       .flatMap((spark) => {
@@ -66,13 +95,15 @@ export class SparkKeptStore {
   /** Item 172 — the boot's one read: how many records verify. It never throws: a store that cannot be read says so
    * and fieldd boots on. */
   restore(): number {
-    return this.list().length;
+    return this.#guard.boot(() => this.list().length, 0);
   }
 
   /** Re-read the spark's record (a fresh one when it has none), apply `fn`, and keep what it answers, signed and
    * written through, the spark and the time its own; the record kept is answered. Throws when the contract refuses it
    * or the disk does not take it. */
   update(spark: SparkId, fn: (kept: SparkKeptRecord) => SparkKeptRecord): SparkKeptRecord {
+    // item 172: never written over what could not be read, or what a newer VibeField kept
+    this.#guard.writable(spark);
     const now = this.#now().toISOString();
     const current = this.#read(spark) ?? { format: SPARK_KEPT_FORMAT, spark, updatedAt: now };
     const { signature: _previous, ...next } = SparkKeptRecord.parse({
@@ -81,6 +112,8 @@ export class SparkKeptStore {
       spark,
       updatedAt: now,
     }) as SparkKeptRecord & { signature?: string };
+    // the re-read above may have found a newer VibeField's record
+    this.#guard.writable(spark);
     const signature = this.#signer.sign(next);
     mkdirSync(this.opts.dir, { recursive: true, mode: 0o700 });
     chmodSync(this.opts.dir, 0o700);
@@ -96,10 +129,11 @@ export class SparkKeptStore {
 
   #read(spark: string): SparkKeptRecord | undefined {
     const path = join(this.opts.dir, spark, SPARK_KEPT_FILE);
-    if (!existsSync(path) || !statSync(path).isFile()) return undefined;
     const read = this.#signer.read(path);
     if ("why" in read) return this.#setAside(path, spark, read.why);
-    if (!("body" in read)) return undefined;
+    if ("unavailable" in read) return this.#guard.unavailable(path, read.unavailable);
+    if ("absent" in read) return undefined;
+    if (this.#guard.newer(spark, path, read.body)) return undefined;
     const parsed = SparkKeptRecord.safeParse(read.body);
     if (!parsed.success) return this.#setAside(path, spark, "unreadable");
     // signed for another spark: a record copied into this spark's folder

@@ -1,18 +1,27 @@
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import {
   type AgentModelSelection,
   type AgentProfileSet,
   type AgentSessionSummary,
   type ComposeSparksHatchParams,
+  RECORD_STORES,
+  SPARK_RECORD_FORMAT,
   type SparkId,
   SparkRecord,
   type SparkSummary,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "../native-link";
-import { RecordSigner, type SetAsideWhy } from "../signed-record";
+import {
+  RecordSigner,
+  recordsUnreadable,
+  type SetAsideWhy,
+  StoreGuard,
+  setAsideFile,
+  UNREADABLE_WORDS,
+} from "../signed-record";
 import type { GrantPrincipal } from "../terminal-grants";
 
 // CP-1c — the sparks fieldd keeps, and the three doors the window calls (the compose plane, version 2; compose.ts;
@@ -23,6 +32,9 @@ import type { GrantPrincipal } from "../terminal-grants";
 // under a secret made once per user root (LAYOUT.SPARKS_KEY_FILE). A spark's profiles bound what its verbs reach
 // (TL-D5), so an agent that edits the file must not widen them: a record that is unsigned, does not verify, does not
 // parse, or is exposed to other users is set aside and never served.
+// Item 172: it is read at each ask. A folder it cannot list, or a record the disk does not answer, is left where it is,
+// and the ask is refused UNAVAILABLE {service: "compose"} in fieldd's words, never answered with fewer sparks; a record
+// a newer VibeField wrote is kept for it, never served or written over (StoreGuard, signed-record.ts).
 //
 // CP-1d wires route A (co-spark-door-route): AgentRuntimeService rebuilds the briefing at every process birth,
 // through AgentSparkBriefings. Keeping that handoff at the runtime also covers resumes outside this service.
@@ -38,9 +50,17 @@ export interface SparkStoreOptions {
 export class SparkStore {
   readonly #signer: RecordSigner;
   readonly #logger: Logger;
+  readonly #guard: StoreGuard;
 
   constructor(private readonly opts: SparkStoreOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
+    this.#guard = new StoreGuard({
+      store: "sparks",
+      format: SPARK_RECORD_FORMAT,
+      refusal: () =>
+        recordsUnreadable(RECORD_STORES.SERVICE_COMPOSE, UNREADABLE_WORDS.sparks, true),
+      logger: this.#logger,
+    });
     this.#signer = new RecordSigner({
       keyPath: opts.keyPath,
       logger: this.#logger,
@@ -57,10 +77,11 @@ export class SparkStore {
     return join(this.opts.dir, `${id}.json`);
   }
 
-  /** Every spark that verifies, oldest first. */
+  /** Every spark that verifies, oldest first. Throws the store's refusal when its folder or a record cannot be read. */
   list(): SparkRecord[] {
-    if (!existsSync(this.opts.dir)) return [];
-    return readdirSync(this.opts.dir)
+    return this.#guard
+      .entries(this.opts.dir)
+      .map((entry) => entry.name)
       .filter((name) => name.endsWith(".json"))
       .flatMap((name) => {
         const record = this.#read(join(this.opts.dir, name));
@@ -69,9 +90,9 @@ export class SparkStore {
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
+  /** The spark's record, when it verifies; throws the store's refusal when the disk does not answer it. */
   get(id: SparkId): SparkRecord | undefined {
-    const path = this.path(id);
-    return existsSync(path) ? this.#read(path) : undefined;
+    return this.#read(this.path(id));
   }
 
   /** The spark already called this, compared without case (@ finds a spark by its name, EW-D3). */
@@ -81,6 +102,7 @@ export class SparkStore {
   }
 
   write(record: SparkRecord): void {
+    this.#guard.writable(record.id);
     const { signature: _previous, ...unsigned } = SparkRecord.parse(record) as SparkRecord & {
       signature?: string;
     };
@@ -100,19 +122,21 @@ export class SparkStore {
   #read(path: string): SparkRecord | undefined {
     const read = this.#signer.read(path);
     if ("why" in read) return this.#setAside(path, read.why);
-    if (!("body" in read)) return undefined;
+    if ("unavailable" in read) return this.#guard.unavailable(path, read.unavailable);
+    if ("absent" in read) return undefined;
+    if (this.#guard.newer(basename(path, ".json"), path, read.body)) return undefined;
     const parsed = SparkRecord.safeParse(read.body);
     return parsed.success ? parsed.data : this.#setAside(path, "unreadable");
   }
 
+  /** A record fieldd will not serve: renamed beside itself for a human, as the other stores' are (item 172: it was only
+   * said here, so each list said it again), and never read again. */
   #setAside(path: string, why: SetAsideWhy): undefined {
+    const aside = setAsideFile(path, why);
     this.#logger.warn(
       "fieldd.compose.spark_set_aside",
       "A spark's record was set aside and is not served",
-      {
-        file: basename(path),
-        why,
-      },
+      { file: basename(path), why, aside: basename(aside) },
     );
     return undefined;
   }
@@ -321,9 +345,10 @@ export class SparkService {
    * it stands (Chat's list moves on the session's activity, not on this). A spark gone or set aside is left alone, and
    * a write that fails is logged: the session's own record keeps the fact, and its next entry tells the spark again. */
   turned(id: SparkId, at: string): void {
-    const current = this.opts.store.get(id);
-    if (current === undefined || typeof current.turnedAt === "string") return;
     try {
+      // item 172: a record the disk does not answer is refused here too, and logged below like a write that fails
+      const current = this.opts.store.get(id);
+      if (current === undefined || typeof current.turnedAt === "string") return;
       this.opts.store.write({ ...current, turnedAt: at });
     } catch (error) {
       this.#logger.warn(

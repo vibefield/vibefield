@@ -1,9 +1,16 @@
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { NeedsItemId, NeedsRecord } from "@vibefield/contracts";
+import { NEEDS_RECORD_FORMAT, NeedsItemId, NeedsRecord, RECORD_STORES } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
-import { RecordSigner, type SetAsideWhy, setAsideFile } from "../../../signed-record";
+import {
+  RecordSigner,
+  recordsUnreadable,
+  type SetAsideWhy,
+  StoreGuard,
+  setAsideFile,
+  UNREADABLE_WORDS,
+} from "../../../signed-record";
 
 // CP-3 (cp3-the-person.md §5.1) — the needs-you queue's store: one `NeedsRecord` per item, its file named by the item's
 // id, 0600 in a 0700 directory per user root (LAYOUT.NEEDS_DIR), each signed by fieldd's one record signer under a key
@@ -12,6 +19,9 @@ import { RecordSigner, type SetAsideWhy, setAsideFile } from "../../../signed-re
 // mouth. A file that is unsigned, does not verify, does not parse, is exposed to other users, or names another item than
 // its file does (a record copied to another id) is set aside for a human and never served. That holds against an edit.
 // It is no wall against an agent that reads the key, which is 0600 to the same uid as the sparks' is (EL7).
+// Item 172: it is read once, at boot (`boot`). A folder it cannot list, or a record the disk does not answer, leaves
+// every file where it is, and the store refuses UNAVAILABLE {service: "needs"} until fieldd restarts; a record a newer
+// VibeField wrote is kept for it, never served or written over (StoreGuard, signed-record.ts).
 
 export interface NeedsStoreOptions {
   /** LAYOUT.NEEDS_DIR, absolute */
@@ -26,9 +36,16 @@ export interface NeedsStoreOptions {
 export class NeedsStore {
   readonly #signer: RecordSigner;
   readonly #logger: Logger;
+  readonly #guard: StoreGuard;
 
   constructor(private readonly opts: NeedsStoreOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
+    this.#guard = new StoreGuard({
+      store: "needs",
+      format: NEEDS_RECORD_FORMAT,
+      refusal: () => recordsUnreadable(RECORD_STORES.SERVICE_NEEDS, UNREADABLE_WORDS.needs, false),
+      logger: this.#logger,
+    });
     this.#signer = new RecordSigner({
       keyPath: opts.keyPath,
       logger: this.#logger,
@@ -46,10 +63,23 @@ export class NeedsStore {
     return `nt-${randomBytes(8).toString("hex")}`;
   }
 
-  /** Every record that verifies, oldest asked first. Read at boot: the queue holds them in memory after. */
+  /** The boot's one read (`list`): never throws. A store it could not read answers nothing, says so, and refuses every
+   * read and write after (`readable`), until fieldd restarts. */
+  boot(): NeedsRecord[] {
+    return this.#guard.boot(() => this.list(), []);
+  }
+
+  /** Throws UNAVAILABLE {service: "needs"} in fieldd's words while the boot read has failed. */
+  readable(): void {
+    this.#guard.check();
+  }
+
+  /** Every record that verifies, oldest asked first. Read at boot: the queue holds them in memory after. Throws the
+   * store's refusal when its folder or a record cannot be read. */
   list(): NeedsRecord[] {
-    if (!existsSync(this.opts.dir)) return [];
-    return readdirSync(this.opts.dir)
+    return this.#guard
+      .entries(this.opts.dir)
+      .map((entry) => entry.name)
       .flatMap((file) => {
         if (!file.endsWith(".json")) return [];
         const id = file.slice(0, -".json".length);
@@ -63,6 +93,7 @@ export class NeedsStore {
   /** Keep a record whole and signed: written beside, then renamed, 0600 in 0700. Throws when it cannot be kept, so
    * nothing is acted on that a restart would not find. */
   write(record: NeedsRecord): void {
+    this.#guard.writable(record.item.id);
     const { signature: _previous, ...unsigned } = NeedsRecord.parse(record) as NeedsRecord & {
       signature?: string;
     };
@@ -76,6 +107,7 @@ export class NeedsStore {
   }
 
   remove(id: NeedsItemId): void {
+    this.#guard.writable(id);
     rmSync(this.#path(id), { force: true });
   }
 
@@ -86,7 +118,9 @@ export class NeedsStore {
   #read(path: string, id: string): NeedsRecord | undefined {
     const read = this.#signer.read(path);
     if ("why" in read) return this.#setAside(path, read.why);
-    if (!("body" in read)) return undefined;
+    if ("unavailable" in read) return this.#guard.unavailable(path, read.unavailable);
+    if ("absent" in read) return undefined;
+    if (this.#guard.newer(id, path, read.body)) return undefined;
     const parsed = NeedsRecord.safeParse(read.body);
     if (!parsed.success) return this.#setAside(path, "unreadable");
     // signed for another item: a record copied into this id's name

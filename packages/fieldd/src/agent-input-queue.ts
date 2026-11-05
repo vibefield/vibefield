@@ -1,13 +1,5 @@
 import { randomBytes } from "node:crypto";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import {
   AGENT_INPUT_QUEUE_FORMAT,
@@ -16,9 +8,17 @@ import {
   type AgentQueuedInput,
   NEEDS_JOINED_ITEMS_MAX,
   type NeedsItemId,
+  RECORD_STORES,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import { RecordSigner, type SetAsideWhy, setAsideFile } from "./signed-record";
+import {
+  RecordSigner,
+  recordsUnreadable,
+  type SetAsideWhy,
+  StoreGuard,
+  setAsideFile,
+  UNREADABLE_WORDS,
+} from "./signed-record";
 
 // CP-L5 (ruled 2026-10-29) and CP-2's marks (`draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31 03:49:24Z).
 // Every session has ONE input queue in fieldd. A spark's agent_send, its spawn's tasks and fieldd's own wakes join it,
@@ -115,10 +115,19 @@ export class AgentInputQueues {
   readonly #logger: Logger;
   readonly #now: () => Date;
   readonly #signer: RecordSigner;
+  /** item 172 — the queues' folder and files when the disk does not answer, and a newer VibeField's queues */
+  readonly #guard: StoreGuard;
 
   constructor(private readonly opts: InputQueueOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
     this.#now = opts.now ?? (() => new Date());
+    this.#guard = new StoreGuard({
+      store: "inputs",
+      format: AGENT_INPUT_QUEUE_FORMAT,
+      refusal: () =>
+        recordsUnreadable(RECORD_STORES.SERVICE_COMPOSE, UNREADABLE_WORDS.inputs, false),
+      logger: this.#logger,
+    });
     this.#signer = new RecordSigner({
       keyPath: opts.keyPath,
       logger: this.#logger,
@@ -128,11 +137,18 @@ export class AgentInputQueues {
 
   /** Read every kept queue back at boot (CP2-D3): only what fieldd signed for that run (LEANS P3). A stamped head stays
    * where it is, said at its run's first monitor row (item 158). Returns how many inputs wait, the stamped never
-   * among them. */
+   * among them. Item 172: it never throws. Queues it cannot read (their folder, or one the disk does not answer) stay
+   * where they are, none is held in memory, and every queue refuses words after (`enqueue`, `wake`) until fieldd
+   * restarts on a disk that answers; a newer VibeField's queue is kept for it, and its run takes no words. */
   restore(): number {
-    if (!existsSync(this.opts.dir)) return 0;
+    const waiting = this.#guard.boot(() => this.#restoreAll(), undefined);
+    if (waiting === undefined) this.#queues.clear();
+    return waiting ?? 0;
+  }
+
+  #restoreAll(): number {
     let waiting = 0;
-    for (const file of readdirSync(this.opts.dir)) {
+    for (const { name: file } of this.#guard.entries(this.opts.dir)) {
       if (!file.endsWith(".json")) continue;
       const runtimeRunId = file.slice(0, -".json".length);
       const kept = this.#read(file, runtimeRunId);
@@ -150,6 +166,8 @@ export class AgentInputQueues {
     from: InputSender,
     requestId?: string,
   ): { id: string; position: number } {
+    // item 172: words no queue can keep are refused, never queued in memory alone
+    this.#guard.writable(runtimeRunId);
     const queued = this.#push(runtimeRunId, {
       text,
       from,
@@ -182,6 +200,16 @@ export class AgentInputQueues {
    * a wake past that starts a line of its own. A head in flight, or one a restart broke into, joins nothing. True when
    * the fact is queued (item 172: false while the queues cannot be read, so nothing is told that no queue holds). */
   wake(runtimeRunId: string, fact: string, item?: NeedsItemId): boolean {
+    if (!this.#guard.keeps(runtimeRunId)) {
+      this.#logger.warn(
+        "fieldd.inputs.wake_unkept",
+        "A wake could not be kept; its fact is not told",
+        {
+          runtimeRunId,
+        },
+      );
+      return false;
+    }
     const queue = this.#queueOf(runtimeRunId);
     const last = queue.at(-1);
     const items = joined(last?.items, item);
@@ -337,7 +365,9 @@ export class AgentInputQueues {
     const path = join(this.opts.dir, file);
     const read = this.#signer.read(path);
     if ("why" in read) return this.#setAside(path, runtimeRunId, read.why);
-    if (!("body" in read)) return undefined;
+    if ("unavailable" in read) return this.#guard.unavailable(path, read.unavailable);
+    if ("absent" in read) return undefined;
+    if (this.#guard.newer(runtimeRunId, path, read.body)) return undefined;
     const kept = AgentInputQueueFile.safeParse(read.body);
     if (!kept.success) return this.#setAside(path, runtimeRunId, "unreadable");
     // signed for another run: a file copied into this run's name
@@ -394,6 +424,7 @@ export class AgentInputQueues {
    * does not take it, or the run's id is no file name. */
   #write(runtimeRunId: string): void {
     if (!SAFE_ID.test(runtimeRunId)) throw new Error("the run's id is no file name");
+    this.#guard.writable(runtimeRunId);
     const file = join(this.opts.dir, `${runtimeRunId}.json`);
     const queue = this.#queues.get(runtimeRunId);
     if (queue === undefined || queue.length === 0) {

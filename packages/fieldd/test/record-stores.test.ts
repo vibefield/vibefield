@@ -465,6 +465,27 @@ describe("item 172 — the signer tells a record from a disk that did not answer
   });
 });
 
+describe("item 172 — the read seam is the tests' alone", () => {
+  it("R7 · no production code hands a store or the signer a read of its own: each store only passes its option on", () => {
+    const src = join(import.meta.dirname, "../src");
+    const passes = (readdirSync(src, { recursive: true, encoding: "utf8" }) as string[])
+      .filter((file) => file.endsWith(".ts"))
+      .flatMap((file) =>
+        readFileSync(join(src, file), "utf8")
+          .split("\n")
+          .filter((line) => /\breadFile\s*:/.test(line) && !line.trim().startsWith("readonly"))
+          .map((line) => `${file.split("\\").join("/")}: ${line.trim()}`),
+      )
+      .sort();
+    expect(passes).toEqual([
+      "agent-input-queue.ts: readFile: opts.readFile,",
+      "tool-plane/rooms/you/store.ts: readFile: opts.readFile,",
+      "tool-plane/spark-kept.ts: readFile: opts.readFile,",
+      "tool-plane/sparks.ts: readFile: opts.readFile,",
+    ]);
+  });
+});
+
 describe.each(CASES)("item 172 — $name, when the disk does not answer", (c) => {
   it("U1 · a same-uid file where its folder is: the boot read goes on, and the store refuses in fieldd's words (EL7)", () => {
     const root = tmp();
