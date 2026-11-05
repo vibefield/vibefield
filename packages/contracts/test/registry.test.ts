@@ -374,6 +374,13 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
     expect(AGENT_FIELD.MESH_LINGERING_HUBS_MAX).toBe(4);
   });
 
+  it("PG-9 — a lingering hub answers a cursor from what it remembers: 1,024 removals a device, 64 cursors an ask", () => {
+    // VF-PM's P1 (b): a removal past the bound is forgotten, so a cursor older than the oldest kept removal is
+    // answered a snapshot, never a wrong delta (the registry's note beside the constants)
+    expect(AGENT_FIELD.MESH_RESUME_TOMBSTONES).toBe(1_024);
+    expect(AGENT_FIELD.MESH_RESUME_DEVICES_MAX).toBe(64);
+  });
+
   it("keeps a census of the scope-null product subscriptions, whose reach is their handler's", () => {
     // `scope: null` passes every hello'd principal through the registry's
     // gate — a phone included — and only a handler can narrow it, which the

@@ -39,6 +39,7 @@ import {
   AgentRemoteMeshOpen,
   AgentRemoteRow,
   AgentReportShownParams,
+  AgentSubscribeParams,
   MonitorAgentRow,
 } from "../src/agent-field";
 import {
@@ -758,6 +759,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-remote-row": AgentRemoteRow,
   "agent-remote-mesh-open": AgentRemoteMeshOpen,
   "agent-remote-mesh-frames": z.array(AgentRemoteMeshFrame),
+  // PG-9 (PG-L4.4) — the phone's mesh subscribe naming its cursors, one per device (the open it is answered
+  // is `agent-remote-mesh-open.resume`: resumed, a delta, a snapshot).
+  "agent-subscribe-params": AgentSubscribeParams,
   "agent-report-shown": AgentReportShownParams,
   // TL (B-D6 (a)) — the lanes' past as the backend derives it (the SDK's
   // `MonitorPastSnapshot`): the ask; a live row's past with a silence across

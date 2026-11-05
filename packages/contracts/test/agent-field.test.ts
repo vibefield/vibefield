@@ -1230,3 +1230,101 @@ describe("AgentBoardRowKey — the relay reads each row's key alone", () => {
     expect(AgentBoardRowKey.safeParse({ runtimeRunId: "run-a" }).success).toBe(false);
   });
 });
+
+// PG-9 (PG-L4.4, VF-PM's P1 (b), 2026-11-05) — a mesh reader resumes from its cursors: the subscribe names, per
+// device, the last `{epoch, revision}` the reader APPLIED, and the open answers each device by it — `resumed` (the
+// copy is current), a `delta` from the cursor to the hub's head on the same epoch, or a `snapshot` (a new epoch, a
+// cursor older than what the hub can answer for). A reader that sends no `since` is answered today's open.
+describe("PG-9 — a mesh reader resumes from its cursors (PG-L4.4)", () => {
+  const HOME = "dev-01HQ9S7UD1";
+  const LOFT = "dev-01HQ9S7XZ2";
+  const ATTIC = "dev-01HQ9S7Y44";
+  const cursor = { epoch: "fieldd-9b04c1e27a6d5f30.13", revision: 84 };
+  type Entry = { device: string; resumed?: unknown; delta?: unknown; snapshot?: unknown };
+  const entries = (value: unknown): Entry[] => (value as { devices: Entry[] }).devices;
+
+  it("R1 — the subscribe carries one cursor per device, the cursors the open then answers", () => {
+    const params = AgentSubscribeParams.parse(golden("agent-subscribe-params.mesh-since.json"));
+    const since = (params as { since?: Record<string, unknown> }).since;
+    expect(Object.keys(since ?? {})).toEqual([HOME, LOFT, ATTIC]);
+    expect(since?.[HOME]).toEqual(cursor);
+  });
+
+  it("R2 — the subscribe refuses a cursor it could not answer: a negative revision, no epoch, a bare value", () => {
+    const mesh = { projection: "remote", scope: "mesh" } as const;
+    for (const bad of [
+      { [HOME]: { epoch: cursor.epoch, revision: -1 } },
+      { [HOME]: { revision: 84 } },
+      { [HOME]: { epoch: "", revision: 84 } },
+      { [HOME]: 84 },
+      "since",
+    ])
+      expect(
+        AgentSubscribeParams.safeParse({ ...mesh, since: bad }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
+  });
+
+  it("R3 — a subscribe names at most AGENT_FIELD.MESH_RESUME_DEVICES_MAX cursors: a person's desktops, bounded", () => {
+    const max = AGENT_FIELD.MESH_RESUME_DEVICES_MAX;
+    expect(max).toBe(64);
+    const many = (n: number) =>
+      Object.fromEntries(Array.from({ length: n }, (_, i) => [`dev-${i}`, cursor]));
+    const ask = (n: number) =>
+      AgentSubscribeParams.safeParse({ projection: "remote", scope: "mesh", since: many(n) })
+        .success;
+    expect(ask(max)).toBe(true);
+    expect(ask(max + 1)).toBe(false);
+  });
+
+  it("R4 — the open answers each device by its cursor: resumed, a delta on its chain, or a snapshot", () => {
+    const open = AgentRemoteMeshOpen.parse(golden("agent-remote-mesh-open.resume.json"));
+    const [home, loft, attic] = entries(open);
+    // the home's copy is current: nothing but the cursor it holds
+    expect(home).toMatchObject({ device: HOME, resumed: cursor });
+    expect(home && "snapshot" in home).toBe(false);
+    // the peer moved on the SAME epoch since the reader's revision 2: what changed, and what left
+    expect(loft?.delta).toMatchObject({
+      epoch: "fieldd-5d2c8f1a0b7e4c93.5",
+      since: 2,
+      revision: 4,
+    });
+    expect((loft?.delta as { removed?: string[] } | undefined)?.removed).toEqual(["run-p-done"]);
+    // the asleep desktop's cursor names an older epoch: its board whole
+    expect(attic?.device).toBe(ATTIC);
+    expect(attic?.snapshot).toMatchObject({ epoch: "fieldd-0c1d7e9a4b2f6385.2", revision: 9 });
+  });
+
+  it("R5 — a device is answered ONE way: an entry carrying two answers is refused, not guessed", () => {
+    const base = entries(golden("agent-remote-mesh-open.resume.json"));
+    const [home, loft, attic] = base;
+    const twice = [
+      { ...home, snapshot: attic?.snapshot },
+      { ...loft, resumed: cursor },
+      { ...attic, resumed: cursor },
+    ];
+    for (const entry of twice)
+      expect(AgentRemoteMeshOpen.safeParse({ devices: [entry] }).success, entry.device).toBe(false);
+  });
+
+  it("R6 — a resumed answer and a resume delta are read as strictly as a snapshot: no epoch, no answer", () => {
+    const [home, loft] = entries(golden("agent-remote-mesh-open.resume.json"));
+    const badResumed = { ...home, resumed: { epoch: "", revision: 84 } };
+    const badDelta = { ...loft, delta: { ...(loft?.delta as object), since: -1 } };
+    expect(AgentRemoteMeshOpen.safeParse({ devices: [badResumed] }).success).toBe(false);
+    expect(AgentRemoteMeshOpen.safeParse({ devices: [badDelta] }).success).toBe(false);
+  });
+
+  it("R7 — today's opens still read: no `since` asked, a snapshot or nothing per device", () => {
+    for (const name of [
+      "agent-remote-mesh-open.valid.json",
+      "agent-remote-mesh-open.witness.json",
+      "agent-remote-mesh-open.resync.json",
+    ])
+      expect(AgentRemoteMeshOpen.safeParse(golden(name)).success, name).toBe(true);
+    expect(AgentSubscribeParams.parse({ projection: "remote", scope: "mesh" })).toEqual({
+      projection: "remote",
+      scope: "mesh",
+    });
+  });
+});

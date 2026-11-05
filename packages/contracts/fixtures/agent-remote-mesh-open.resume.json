@@ -1,0 +1,164 @@
+{
+  "devices": [
+    {
+      "device": "dev-01HQ9S7UD1",
+      "state": "live",
+      "asOf": "2026-09-30T21:20:00.000Z",
+      "resumed": {
+        "epoch": "fieldd-9b04c1e27a6d5f30.13",
+        "revision": 84
+      }
+    },
+    {
+      "device": "dev-01HQ9S7XZ2",
+      "state": "live",
+      "asOf": "2026-09-30T21:20:14.000Z",
+      "delta": {
+        "epoch": "fieldd-5d2c8f1a0b7e4c93.5",
+        "since": 2,
+        "revision": 4,
+        "upserts": [
+          {
+            "runtimeRunId": "run-p-ask",
+            "revision": 1,
+            "device": "dev-01HQ9S7XZ2",
+            "terminal": {
+              "hosted": "local",
+              "runtimeSessionId": "pty-p3",
+              "workloadClass": "agent"
+            },
+            "nativeSessionId": "5e9c3a7f-2b4d-4f18-8a6c-1d7e5b9f3a20",
+            "monitorRow": {
+              "id": "pty-p3",
+              "kind": "agent",
+              "createdAt": 1790800200000,
+              "status": "working",
+              "statusSince": 1790803260000,
+              "stale": false,
+              "alive": true,
+              "observed": true,
+              "detail": "Keeping each desktop's rows in the board's order.",
+              "activity": {
+                "kind": "tool",
+                "line": "Edit · model-board.ts",
+                "since": 1790803262000
+              },
+              "project": {
+                "name": "puppeteer",
+                "branch": "mv/land"
+              },
+              "provider": {
+                "id": "claude",
+                "label": "Claude Code"
+              },
+              "model": "Opus 5.5",
+              "effort": {
+                "value": "high",
+                "intent": "observed"
+              },
+              "context": {
+                "usedPercent": 44
+              },
+              "reply": {
+                "text": "Keeping each desktop's rows in the board's order.",
+                "at": 1790803261000,
+                "final": false
+              },
+              "cost": {
+                "usd": 1.31,
+                "coverage": "complete",
+                "burnPerHour": 2.4,
+                "series": {
+                  "stepMs": 30000,
+                  "steps": [0, 0, 0, 0.02, 0.05],
+                  "lastStepAt": 1790803260000
+                }
+              },
+              "tokens": {
+                "total": 139600,
+                "perMinute": 5700
+              },
+              "unread": false,
+              "device": {
+                "id": "dev-01HQ9S7XZ2",
+                "name": "Loft",
+                "os": "linux"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": true,
+              "writable": true
+            }
+          }
+        ],
+        "removed": ["run-p-done"]
+      }
+    },
+    {
+      "device": "dev-01HQ9S7Y44",
+      "state": "asleep",
+      "asOf": "2026-09-29T07:02:10.000Z",
+      "snapshot": {
+        "epoch": "fieldd-0c1d7e9a4b2f6385.2",
+        "revision": 9,
+        "rows": [
+          {
+            "runtimeRunId": "run-a-idle",
+            "revision": 4,
+            "device": "dev-01HQ9S7Y44",
+            "terminal": {
+              "hosted": "none"
+            },
+            "nativeSessionId": "8d2f6b0a-4c7e-4a19-b3d5-0e6a2c8f4b73",
+            "monitorRow": {
+              "id": "run-a-idle",
+              "kind": "agent",
+              "createdAt": 1790650000000,
+              "status": "idle",
+              "statusSince": 1790660000000,
+              "stale": false,
+              "alive": true,
+              "observed": true,
+              "detail": "Ready.",
+              "activity": {
+                "kind": "idle",
+                "since": 1790660000000
+              },
+              "project": {
+                "name": "dotfiles",
+                "branch": "main"
+              },
+              "provider": {
+                "id": "claude",
+                "label": "Claude Code"
+              },
+              "model": "Haiku 5.5",
+              "context": {
+                "usedPercent": 9
+              },
+              "cost": {
+                "usd": 0.4,
+                "coverage": "complete",
+                "burnPerHour": 0
+              },
+              "tokens": {
+                "total": 61000,
+                "perMinute": 0
+              },
+              "unread": false,
+              "device": {
+                "id": "dev-01HQ9S7Y44",
+                "name": "Attic",
+                "os": "windows"
+              },
+              "tier": "managed",
+              "profileSet": "native",
+              "attachable": false,
+              "writable": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
