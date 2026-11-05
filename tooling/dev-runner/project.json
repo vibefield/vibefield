@@ -37,6 +37,8 @@
         "{workspaceRoot}/scripts/host-links.mjs",
         "{workspaceRoot}/scripts/native-floor.mjs",
         "{workspaceRoot}/scripts/cargo-target.mjs",
+        "{workspaceRoot}/scripts/package-census.mjs",
+        "{workspaceRoot}/packages/electron-shell/src/vite/host-singletons.ts",
         "{workspaceRoot}/apps/desktop/packaging/codesign-entitlements.mjs",
         "{workspaceRoot}/apps/desktop/packaging/entitlements.mac.plist",
         "{workspaceRoot}/apps/desktop/packaging/entitlements.mac.inherit.plist",

@@ -1,9 +1,19 @@
+// The package census (scripts/package-census.mjs): each row copies the census into a workspace of its own and runs it
+// there, so the census's repo root is that workspace. FS (the handwritten plugin entries) and LP-6 (the host singletons
+// read as addresses, a dependency's esbuild chunk hash as a counted hash).
+//
+// LP-6 review (2026-11-05): moved here from scripts/package-census.test.mjs, which no target ran (verify, CI and the Nx
+// graph all missed it). dev-runner's `test` target runs test/*.test.mjs and is in `pnpm test`, and its inputs name the
+// census, as they name the other release scripts whose tests live here.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+
+const REPO = join(import.meta.dirname, "..", "..", "..");
+const CENSUS = join(REPO, "scripts", "package-census.mjs");
 
 function fixture(t, entry, files = {}) {
   const root = mkdtempSync(join(tmpdir(), "vf-census-"));
@@ -15,10 +25,7 @@ function fixture(t, entry, files = {}) {
   };
   write("pnpm-workspace.yaml", 'packages:\n  - "plugins/*"\n');
   write("scripts/package-census.mjs", "");
-  copyFileSync(
-    join(import.meta.dirname, "package-census.mjs"),
-    join(root, "scripts/package-census.mjs"),
-  );
+  copyFileSync(CENSUS, join(root, "scripts/package-census.mjs"));
   write(
     "plugins/built/package.json",
     JSON.stringify({ name: "built", scripts: { build: "builder" } }),
@@ -72,10 +79,7 @@ function rendererRoot(t, assets) {
   const root = mkdtempSync(join(tmpdir(), "vf-census-shapes-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, "scripts"), { recursive: true });
-  copyFileSync(
-    join(import.meta.dirname, "package-census.mjs"),
-    join(root, "scripts/package-census.mjs"),
-  );
+  copyFileSync(CENSUS, join(root, "scripts/package-census.mjs"));
   writeFileSync(join(root, "pnpm-workspace.yaml"), 'packages:\n  - "packages/*"\n');
   mkdirSync(join(root, "packages/shell"), { recursive: true });
   writeFileSync(
@@ -175,12 +179,12 @@ test("LP-6: a dependency release that renames its chunks is no drift; one that a
 
 test("LP-6: the census's singleton rule names the prefix the renderer build reserves", () => {
   const source = readFileSync(
-    join(import.meta.dirname, "..", "packages/electron-shell/src/vite/host-singletons.ts"),
+    join(REPO, "packages/electron-shell/src/vite/host-singletons.ts"),
     "utf8",
   );
   assert.match(source, /export const SINGLETON_CHUNK_PREFIX = "singleton-";/u);
   assert.match(
-    readFileSync(join(import.meta.dirname, "package-census.mjs"), "utf8"),
+    readFileSync(CENSUS, "utf8"),
     /const SINGLETON = \/\\\/assets\\\/singleton-\[\^\/\]\+\$\/u;/u,
   );
 });
