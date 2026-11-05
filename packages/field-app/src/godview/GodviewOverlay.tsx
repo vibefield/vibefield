@@ -217,8 +217,12 @@ export function GodviewOverlay({
   // GV-D1 — System control is the palette's act now (the instrument bar that
   // held its control left VibeField): while Godview is the window's view it
   // lends the frame the one verb that toggles the panel, and takes it back.
+  // LP-6 (Q3, James 2026-10-28 "B"): the panel is the surface LAB, a developer's
+  // instrument — a development build lends the verb, a production one never
+  // does (`import.meta.env.DEV` folds to false in `vite build`, so the palette
+  // has no act to list and no panel to open; `palette-acts.ts` says the same).
   useEffect(() => {
-    if (!open) return;
+    if (!open || !import.meta.env.DEV) return;
     publishSystemControlDoor({ toggle: () => setTuningOpen((current) => !current) });
     return () => publishSystemControlDoor(null);
   }, [open]);
@@ -383,21 +387,28 @@ export function GodviewOverlay({
             />
           ) : undefined
         }
+        // LP-6 (Q3): System control is the surface lab — development builds
+        // only. The literal `import.meta.env.DEV` (never a constant read from
+        // another module) is what the bundler folds, so a production renderer
+        // drops this branch and, with it, the panel's code; the catalog stages
+        // the same panel through `GodviewPreview`, its own entry.
         tuningPanel={
-          <ChromeBoundary name="System control" retryKey={tuningRetryKey}>
-            <GodviewTuningPanel
-              open={open && tuningOpen}
-              theme={theme}
-              value={tuning}
-              appearance={appearance}
-              monitorSections={monitorTuningSections(monitor)}
-              rendererBackend={rendererBackend}
-              onClose={() => setTuningOpen(false)}
-              onChange={changeTuning}
-              onReset={resetTuning}
-              onResetMonitor={monitor.resetParameters}
-            />
-          </ChromeBoundary>
+          import.meta.env.DEV ? (
+            <ChromeBoundary name="System control" retryKey={tuningRetryKey}>
+              <GodviewTuningPanel
+                open={open && tuningOpen}
+                theme={theme}
+                value={tuning}
+                appearance={appearance}
+                monitorSections={monitorTuningSections(monitor)}
+                rendererBackend={rendererBackend}
+                onClose={() => setTuningOpen(false)}
+                onChange={changeTuning}
+                onReset={resetTuning}
+                onResetMonitor={monitor.resetParameters}
+              />
+            </ChromeBoundary>
+          ) : undefined
         }
         // The sheet's edge is this viewer's, remembered (DESIGN.md §8).
         deckEdge={DECK_EDGE_PERSISTED}

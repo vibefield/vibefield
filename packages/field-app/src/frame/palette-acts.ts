@@ -124,7 +124,10 @@ export function frameActGroups(
   // System control is Godview's (GV-D1): §1.1's temporary panel, toggled from
   // here since the instrument bar left. No key, and no glyph: `sliders` is
   // General settings, and a glyph is one drawing per meaning (§13).
-  if (view === "godview") {
+  // LP-6 (Q3): the panel is the surface lab, in development builds only
+  // (`GodviewOverlay` mounts it and lends its door there alone), so a
+  // production palette lists no act that could never run.
+  if (view === "godview" && import.meta.env.DEV) {
     onView.push({
       id: "system-control",
       name: "System control",

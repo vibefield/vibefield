@@ -374,6 +374,33 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
   });
 
+  it("a production build mounts no System control and lends the palette no door: the surface lab is development's alone (LP-6, Q3)", async () => {
+    // vitest reads `import.meta.env` at run time; `vite build` folds the same
+    // literal to false, so this is the production renderer's branch
+    vi.stubEnv("DEV", false);
+    try {
+      const host = await mountOverlay();
+      expect(getSystemControlDoor()).toBeNull();
+      let ran = true;
+      await act(async () => {
+        ran = runSystemControl();
+      });
+      await settle();
+      expect(ran).toBe(false);
+      expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
+      expect(host.querySelector(".vf-godview")?.getAttribute("data-godview-tuning-open")).toBe(
+        "false",
+      );
+      // another view and back: still no door, still no panel
+      await setView("canvas");
+      await setView("godview");
+      expect(getSystemControlDoor()).toBeNull();
+      expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("lends the frame's Peek its Live now while Godview shows, and withdraws it when it closes (P2 — Find left the stage)", async () => {
     const host = await mountOverlay();
     // no sheet of its own: the stage mounts no Find, and the head has no FIND

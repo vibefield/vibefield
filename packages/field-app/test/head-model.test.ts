@@ -223,6 +223,22 @@ describe("the palette's table of the frame's acts (One Frame §7)", () => {
     ]);
   });
 
+  it("lists no System control in a production build: the surface lab is development's alone (LP-6, Q3)", () => {
+    // as under vitest, a development build lists it (the case above)
+    expect(import.meta.env.DEV).toBe(true);
+    vi.stubEnv("DEV", false);
+    try {
+      expect(frameActGroups("godview", "mac")[1]?.acts.map((act) => act.id)).toEqual(["create"]);
+      expect(
+        frameActGroups("godview", "other", null, false, "Godview is still opening")
+          .flatMap((group) => group.acts)
+          .some((act) => act.id === "system-control"),
+      ).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("says every view runs, Chat's too (SP-1b), and the keys the Windows way", () => {
     const views = frameActGroups("canvas", "other")[0]?.acts ?? [];
     expect(views.map((act) => act.waits)).toEqual([null, null, null, null]);
