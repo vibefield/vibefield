@@ -155,18 +155,22 @@ export function judgeChatCardPlay(play: CardPlaySeen | null): string[] {
   return problems;
 }
 
-/** What 11m saw as it went (SP-1d's witness: Chat's thread and composer). Null is "not reached". */
+/** What 11m saw as it went (SP-1d's witness, TH-1's since the pane left Chat: Chat's thread and composer). Null is
+ * "not reached". *TH-1 (2026-11-05):* it held the floor session the thread's pane showed, the pane's `inputAllowed`
+ * before the harness's Return, and the wait for that input; they retired with the pane. */
 export interface ChatSendEvidence {
   /** the spark the rung hatched */
   spark: string | null;
-  /** the floor session its thread's pane shows */
-  session: string | null;
+  /** its conversation opened with its hello (a new spark's first row) */
+  hello: boolean | null;
   /** the file the stub records each submitted line in (`StubRecords.lines`) */
   readonly lines: string;
   /** what the sent line carries, so the record names this rung's line and no other */
   readonly nonce: string;
-  /** the line's note after Send */
+  /** the line's note after Send, if Send changed it (a queued send says nothing there) */
   note: string | null;
+  /** your bubble's receipt as it stood at once, then once the record's line took its place */
+  readonly receipts: (string | null)[];
   /** the sheet's Create as the rung pressed it, or as it last read when it never could (item 149: Create waits on the
    * sheet's reads): enabled or disabled (absent: no Create drawn), its box in window px ("left,top,width,height"), and
    * how long the wait took */
@@ -184,51 +188,44 @@ export interface ChatSendEvidence {
     draft: { height: number; enabled: boolean } | null;
     heard: Record<string, number> | null;
   };
-  /** the pane's `inputAllowed`, by its latest marker, sampled before its Return */
-  readonly inputAllowed: { Return: boolean | null };
   /** what the lab door answered the card played onto the composer */
   play: CardPlaySeen | null;
-  /** how long the waits took: the spark heard ("Ready"), and the pane's input before its Return */
-  readonly waitedMs: { ready: number | null; inputBeforeReturn: number | null };
+  /** how long the waits took: the spark heard ("Ready"), and from Send's press until the stub was given the line and
+   * until the bubble said "Delivered" */
+  readonly waitedMs: { ready: number | null; given: number | null; delivered: number | null };
 }
 
 export function newChatSendEvidence(lines: string, nonce: string): ChatSendEvidence {
   return {
     spark: null,
-    session: null,
+    hello: null,
     lines,
     nonce,
     note: null,
+    receipts: [],
     create: null,
     typing: { focus: null, caret: null, draft: null, heard: null },
-    inputAllowed: { Return: null },
     play: null,
-    waitedMs: { ready: null, inputBeforeReturn: null },
+    waitedMs: { ready: null, given: null, delivered: null },
   };
 }
 
 /** 11m's evidence line's prefix in the smoke's log. */
 export const CHAT_SEND_EVIDENCE = "SMOKE_CHAT_SEND ";
 
-/** 11m's one line, printed when the rung passes and when it fails: the cause (null when it passed), what it saw, and
- * the pane's gate as it is now. */
-export function chatSendEvidenceLine(
-  evidence: ChatSendEvidence,
-  cause: unknown,
-  gateNow: RoutedGateFacts | null,
-): string {
+/** 11m's one line, printed when the rung passes and when it fails: the cause (null when it passed), and what it saw. */
+export function chatSendEvidenceLine(evidence: ChatSendEvidence, cause: unknown): string {
   return `${CHAT_SEND_EVIDENCE}${JSON.stringify({
     failed: cause === null ? null : cause instanceof Error ? cause.message : String(cause),
     spark: evidence.spark,
-    session: evidence.session,
+    hello: evidence.hello,
     lines: evidence.lines,
     nonce: evidence.nonce,
     note: evidence.note,
+    receipts: evidence.receipts,
     create: evidence.create,
     typing: evidence.typing,
-    inputAllowed: evidence.inputAllowed,
     play: evidence.play,
     waitedMs: evidence.waitedMs,
-    gateNow,
   })}`;
 }

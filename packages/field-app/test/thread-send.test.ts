@@ -2,8 +2,8 @@
 /**
  * TH-1 — Send, queued (DESIGN.md §8 "Chat's composer": Send, a message wakes it, each send once, when the send is not
  * taken). Every effect comes through scripted deps: the wake, the say (`compose.sparks.say`), main's still door. The
- * composer's DOM is `chat-composer.test.tsx`'s. The pane's door (`thread-pane-door.ts`) is tested at the foot until the
- * pane leaves Chat.
+ * composer's DOM is `chat-composer.test.tsx`'s. *TH-1, the pane leaves Chat:* the pane's door (`thread-pane-door.ts`)
+ * was tested at the foot; it retired with the pane.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -18,13 +18,6 @@ import { FielddRpcError } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type DraftPart, draftMessage } from "../src/chat/composer-draft";
 import {
-  publishSparkPane,
-  SPARK_WAKE_WAIT_MS,
-  type SparkPaneDoor,
-  type SparkPaneReport,
-  whenSparkPane,
-} from "../src/chat/thread-pane-door";
-import {
   type SayAsk,
   sayRequestId,
   sendNote,
@@ -35,7 +28,6 @@ import {
 
 afterEach(() => {
   vi.useRealTimers();
-  publishSparkPane("sp-vela0001", null);
 });
 
 const RECEIPT: ComposeSparksSayResult = {
@@ -273,71 +265,5 @@ describe("what a send carries (TH-Q25 (a))", () => {
     expect(message.text).toBe("Look at\nline one\nline two\nplease");
     expect(message.chips).toEqual([{ start: 8, length: 17, kind: "card" }]);
     expect(composeChipsFit(message.text, message.chips)).toBe(true);
-  });
-});
-
-/** A live pane's door that records what it was handed (the pane's own door, until the pane leaves Chat). */
-function doorOf(over: Partial<SparkPaneDoor> = {}): SparkPaneDoor & { pasted: string[] } {
-  const pasted: string[] = [];
-  return {
-    pasted,
-    drawn: () => true,
-    whenInputOpen: async () => true,
-    paste: (text) => {
-      pasted.push(text);
-      return "pasted";
-    },
-    ...over,
-  };
-}
-
-const live = (door: SparkPaneDoor): SparkPaneReport => ({ state: "live", door });
-
-describe("the thread's pane, waited for (thread-pane-door.ts)", () => {
-  it("answers a settled report at once, a later one when it is published, and the latest at the timeout", async () => {
-    vi.useFakeTimers();
-    const door = doorOf();
-    const never = () => false;
-    publishSparkPane("sp-vela0001", live(door));
-    expect((await whenSparkPane("sp-vela0001", 1_000, never))?.state).toBe("live");
-    publishSparkPane("sp-vela0001", { state: "finding", door: null });
-    const later = whenSparkPane("sp-vela0001", 1_000, never);
-    publishSparkPane("sp-vela0001", { state: "gone", door: null });
-    expect((await later)?.state).toBe("gone");
-    publishSparkPane("sp-vela0001", { state: "finding", door: null });
-    const lapsed = whenSparkPane("sp-vela0001", 1_000, never);
-    await vi.advanceTimersByTimeAsync(1_000);
-    expect((await lapsed)?.state).toBe("finding");
-    publishSparkPane("sp-vela0001", null);
-    const none = whenSparkPane("sp-vela0001", 500, never);
-    await vi.advanceTimersByTimeAsync(500);
-    expect(await none).toBeNull();
-  });
-
-  it("ends early once its wait is over: at once when it already is, else at the publication that finds it so (final critique: a spark asleep mid-send)", async () => {
-    vi.useFakeTimers();
-    let asleep = true;
-    const over = () => asleep;
-    // asleep as the wait starts: no pane will be drawn, so it answers at once, as the pane stands
-    const atOnce = whenSparkPane("sp-vela0001", SPARK_WAKE_WAIT_MS, over);
-    let answered: SparkPaneReport | null | "waiting" = "waiting";
-    void atOnce.then((report) => {
-      answered = report;
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(answered).toBeNull();
-    // awake while its pane is being found, then asleep: the pane goes, and that publication ends the wait
-    asleep = false;
-    publishSparkPane("sp-vela0001", { state: "finding", door: null });
-    let heard: SparkPaneReport | null | "waiting" = "waiting";
-    void whenSparkPane("sp-vela0001", SPARK_WAKE_WAIT_MS, over).then((report) => {
-      heard = report;
-    });
-    await vi.advanceTimersByTimeAsync(1_000);
-    expect(heard).toBe("waiting");
-    asleep = true;
-    publishSparkPane("sp-vela0001", null);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(heard).toBeNull();
   });
 });

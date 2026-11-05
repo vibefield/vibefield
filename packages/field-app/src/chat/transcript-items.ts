@@ -231,6 +231,17 @@ const timeOf = (at: string): number => {
   return Number.isNaN(ms) ? 0 : ms;
 };
 
+/** The request ids of your sends the record shows (its `you` lines that carry one): their bubbles are the record's,
+ * and this window's own are let go (`letGoPendingSays`). */
+export function saidRequestsOf(reading: TranscriptReading): ReadonlySet<string> {
+  const said = new Set<string>();
+  if (reading.state !== "ready") return said;
+  for (const run of reading.runs)
+    for (const line of reading.lines.get(run.runtimeRunId) ?? [])
+      if (line.kind === "you" && line.requestId) said.add(line.requestId);
+  return said;
+}
+
 /** The flow's rows, top to bottom. */
 export function transcriptItemsOf({
   entry,
@@ -262,8 +273,7 @@ export function transcriptItemsOf({
   if (before && hidden === 0)
     items.push({ kind: "honest", key: "before", which: "before", words: FLOW_WORDS.before(name) });
 
-  const said = new Set<string>();
-  for (const line of lines) if (line.kind === "you" && line.requestId) said.add(line.requestId);
+  const said = saidRequestsOf(reading);
   const latest: Row[] = [];
   let latestSince: number | null = null;
   shown.forEach((runs, index) => {

@@ -21,6 +21,7 @@ import { ChatView } from "../chat/ChatView";
 import { NewSparkSheet } from "../chat/NewSparkSheet";
 import { newSparkPortOver } from "../chat/new-spark";
 import { sparksPortOver, startSparksFeed } from "../chat/sparks-feed";
+import { transcriptDoorOver } from "../chat/transcript-port";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
 import { Cards } from "../frame/cards/Cards";
@@ -157,6 +158,9 @@ export function ChromeLayer({
   // Chat's create (SP-1c): the New spark sheet asks fieldd through the same client — and so do @'s rows in Chat's
   // composer (SP-1d), whose list is one of the frame's open surfaces (`at`), so Chat is handed the one owner's value.
   const newSparkPort = useMemo(() => newSparkPortOver(fieldd), [fieldd]);
+  // Chat's thread (TH-1): the shown spark's transcript, a ticket from fieldd through the same client and the
+  // transcript worker's socket dialled by the window itself (EL2)
+  const transcripts = useMemo(() => transcriptDoorOver(fieldd), [fieldd]);
   const chatView = useCallback(
     (active: boolean) => (
       <ChatView
@@ -164,9 +168,10 @@ export function ChromeLayer({
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         port={newSparkPort}
+        transcripts={transcripts}
       />
     ),
-    [newSparkPort, onSurfaceChange, surface],
+    [newSparkPort, onSurfaceChange, surface, transcripts],
   );
   const closeNewSpark = useCallback(
     () => onSurfaceChange(foldSurface(surface, "new-spark")),

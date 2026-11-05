@@ -269,34 +269,12 @@ describe("what a spark's session is doing, read from the session, never from its
     expect(card?.blocked).toBe(false);
   });
 
-  it("hears a spark only from its own run's row: on the board, alive, watched, saying how it stands", () => {
-    const heard = (record: SparkSummary, rows: AgentFieldRow[], items: NeedsItem[] = []) =>
-      sparkEntriesOf([record], rows, { items })[0]?.heard;
-    expect(heard(spark(), [row()])).toBe(true);
-    expect(heard(spark(), [row({ status: "working" })])).toBe(true);
-    expect(heard(spark(), [row({ status: "blocked", blockers: [blocker("question")] })])).toBe(
-      true,
-    );
-    // not heard from yet: Hello's last rule
-    expect(heard(spark(), [row({ status: "unknown" })])).toBe(false);
-    expect(heard(spark(), [])).toBe(false);
-    // a run fieldd is waiting to resume says nothing yet
-    expect(heard(spark(), [row({ status: "unknown", pending: "resume-when-idle" })])).toBe(false);
-    expect(heard(spark(), [row({ pending: "resume-when-idle" })])).toBe(false);
-    // an agent it started at work is not its own run heard (Running is not heard)
-    expect(heard(spark(), [row({ status: "unknown" }), agent({ status: "working" })])).toBe(false);
-  });
-
-  it("does not hear a sleeping spark with an item until its run is: its word is Asking you before the wake and after it", () => {
-    const record = { ...ASLEEP };
-    expect(sparkEntriesOf([record], [row({ alive: false })], { items: [QUESTION] })[0]?.heard).toBe(
-      false,
-    );
-    // woken: fieldd names the new run, which the board has not shown yet
+  it("says a sleeping spark's item in its word before the wake and after it, until its own run's row says otherwise", () => {
+    // *TH-1 (2026-11-05, the pane leaves Chat):* this row also held `heard`, the run's row on the board, alive and
+    // watched, which Send waited for before it pasted into the pane; Send queues now, and `heard` retired with the wait
     const woken = spark({ session: { runtimeRunId: "run-vela2", live: true } });
     const [waking] = sparkEntriesOf([woken], [row({ alive: false })], { items: [QUESTION] });
     expect(waking?.status).toBe("asking");
-    expect(waking?.heard).toBe(false);
     const [up] = sparkEntriesOf(
       [woken],
       [row({ alive: false }), row({ runtimeRunId: "run-vela2" })],
@@ -305,7 +283,6 @@ describe("what a spark's session is doing, read from the session, never from its
       },
     );
     expect(up?.status).toBe("asking");
-    expect(up?.heard).toBe(true);
   });
 });
 

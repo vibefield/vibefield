@@ -169,7 +169,7 @@ describe("the thread's plates (TH-1)", () => {
 describe("the needs-you card at the foot (TH-1; TH-Q26 (a), TH-Q29 (a))", () => {
   it("holds the spark's own run's ask at the foot, above the composer, in its name", async () => {
     await plate("thread-asks");
-    const card = $(".vf-chat-foot[data-flow] .vf-chat-items > .vf-needs-card");
+    const card = $(".vf-chat-foot .vf-chat-items > .vf-needs-card");
     expect(card?.hasAttribute("data-own")).toBe(true);
     expect(words(card?.querySelector(".vf-needs-eyebrow"))).toBe("Asking you");
     expect(words(card?.querySelector(".vf-needs-question"))).toBe("Vela has a question");

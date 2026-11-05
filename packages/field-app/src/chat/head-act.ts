@@ -10,7 +10,7 @@ import type { SparkEntry } from "./spark-status";
 // and is never sent twice for one turn. fieldd answers `accepted` when the cancellation was DELIVERED, never when the
 // agent obeyed it, so the head reads what came of it from the board: the row's `stop`, held as sent until fieldd hears
 // the turn stop, and marked `unheardAt` when it never does. Chat has no End run: ending a spark's run is its terminal's,
-// in Godview.
+// in Godview. A refused Wake is said in the same place, Wake standing (TH-1, when the line under the head left).
 
 /** The head's own Pause, for the shown spark: in flight, sent (accepted) or refused, each for the turn it was pressed
  * in, so the next turn starts clean. */
@@ -47,11 +47,27 @@ export function pauseWords(name: string, reason: string): string {
   return `Couldn't pause ${name}'s turn: ${reason}`;
 }
 
-export function headActOf(entry: SparkEntry, pause: PauseAct = NO_PAUSE): HeadAct {
+export function wakeWords(name: string, reason: string): string {
+  return `Couldn't wake ${name}: ${reason}`;
+}
+
+/** The head's act for the shown spark, with its own Pause and the reason its Wake was refused, if it was: said in the
+ * status's place while it sleeps, Wake standing (TH-1: the line under the head said it until the pane left Chat). */
+export function headActOf(
+  entry: SparkEntry,
+  pause: PauseAct = NO_PAUSE,
+  wakeRefused: string | null = null,
+): HeadAct {
   const main =
     entry.run === null && entry.spark.session === undefined ? null : entry.awake ? "jump" : "wake";
   const turn = turnOf(entry);
-  if (turn === null) return { main, pause: null, says: null };
+  if (turn === null)
+    return {
+      main,
+      pause: null,
+      says:
+        main === "wake" && wakeRefused !== null ? wakeWords(entry.spark.name, wakeRefused) : null,
+    };
   const stop = entry.run?.stop;
   const holding = stop !== undefined && stop.stage !== "heard";
   if (holding && stop.unheardAt !== undefined) return { main, pause: "held", says: STILL_RUNNING };

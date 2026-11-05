@@ -95,15 +95,11 @@ The catalog currently mounts these shipping views directly:
   latch from what the plates' window read with the shown thread on screen (a need's orange dot,
   and since SP-1d a thread unread in cyan, and a need that has ended still orange, "needed you"
   in the row's name); and, since SP-1d (§8 "Chat's thread", "Chat's composer"), the thread:
-  - the line in the pane's place: the shipping panel's own words for Wake under way (its button
-    waiting, the thread held, so send is busy) and refused in fieldd's words, and for a spark whose
-    session never started, each a fixture act (`CHAT_ACT`, handed to the panel's `act` as Chat's
-    controller hands it) or a fixture spark with no session;
-  - the pane's place: the shipping `SparkPaneView` in the words a window with no terminals says,
-    and on three plates its words while it is being found, when this desktop's floor does not hold
-    it, and when the floor did not answer. No catalog holds a terminal pool ("a host, never a
-    painter"), so the live pane (`SparkPane`) is never mounted there, and no picture of a terminal
-    stands in for it;
+  - the head's act: the shipping panel's own Jump to, Wake and Pause current turn (TH-2), Wake
+    under way (its button waiting, the thread held, so send is busy) and refused in fieldd's words
+    in the status's place, and none for a spark whose session never started, each a fixture act
+    (`CHAT_ACT`, handed to the panel's `act` as Chat's controller hands it) or a fixture spark with
+    no session;
   - the composer: the shipping `ChatComposerView` at the thread's foot, its `AtRowsView` over
     fixture agents, profiles and rows read by the product's own `atRowsOf`, and an agent's menu
     read by the controller's own `agentChipMenuOf` (the New spark sheet's agent menu for the
@@ -120,24 +116,25 @@ The catalog currently mounts these shipping views directly:
     and when the read fails; and a send under way, Send's over its draft and a starter's, one fact
     (`CHAT_SENDING`, which holds Wake's too) handed to the panel's `sending` and the composer's
     `busy`, as Chat's controller hands its thread's one act to both;
-  - the hello: what stands in the thread over its pane is the product's own `threadItemsOf` over
-    the shown spark and the plate's draft, drawn by the shipping `ThreadItemsView` inside the
-    panel — a spark just hatched saying hello with its three starters, which send nothing there,
-    the same starters waiting while a starter's send runs, and none where the shown spark has
-    had a turn
   - the flow (TH-1, DESIGN.md §8 "Chat's thread"): the shipping `ThreadFlowView`, handed to the
-    panel in the pane's place, over the product's own projection (`transcriptItemsOf`) of fixture
-    transcript lines and the product's own receipt words (`chat-fixtures.ts`), never a copy of its
-    markup or CSS — a new spark with its hello, a worked thread with its tools folded and one opened,
-    a long reply in the markdown subset, a spark asleep, two runs joined and "Earlier
-    conversations", every receipt, Thinking…, the three honest lines, and the conversation reading
-    and unreadable. *Dated 2026-11-05 (TH-1; ER-C21):* the pane's plates above (`SparkPaneView`'s
-    words) stand until the pane leaves Chat, TH-1's last commit, and the flow's take their place
+    panel under the head on every plate that shows a thread, over the product's own projection
+    (`transcriptItemsOf`) of fixture transcript lines and the product's own receipt words
+    (`chat-fixtures.ts`: the plate's own conversation, else the shown spark's, `chatFlowOf`), never
+    a copy of its markup or CSS — a new spark with its hello as the first row and its three
+    starters, which send nothing there and wait while a starter's send runs, a worked thread with
+    its tools folded and one opened, a long reply in the markdown subset, a spark asleep, two runs
+    joined and "Earlier conversations", every receipt, Thinking…, the three honest lines, and the
+    conversation reading and unreadable.
+    *Dated 2026-11-05 (TH-1, the pane leaves Chat; ER-C21):* the thread's plates were the line in
+    the pane's place, the pane's place itself (the shipping `SparkPaneView` in the words a window
+    with no terminals says, and on three plates its words while it was found, off this desktop's
+    floor, and when the floor did not answer; the live `SparkPane` never mounted), and the hello
+    standing over it (`threadItemsOf`). They left with the pane; the paragraph is in git
 - Chat's needs-you card (CP-3, DESIGN.md §8 "Chat's list", "Chat's thread"): a plate of the shipping
   `ChatPanelView` with a spark asleep while the needs-you queue holds its held send (its word Needs
-  your OK, its line still asleep with Wake, and Vela's own run's ask read once, as her row's
-  blocker; since TH-1 that ask is a card too, held at the flow's foot), where the product's own `waitingCardOf` stands its card in the thread in the hello's
-  place; and in a specimen of its own (`NeedsCardPreview`), the shipping `NeedsCardView` over the
+  your OK, with Wake in its head, and Vela's own run's ask read once, as her row's blocker; since
+  TH-1 that ask is a card too), where the product's own `waitingCardOf` stands its card in the
+  thread's foot, above the composer; and in a specimen of its own (`NeedsCardPreview`), the shipping `NeedsCardView` over the
   product's own `needsCardOf` of fixture items — a spark's question (1 of 3), a held send, a held
   spawn past the cap, an agent's ask with Show alone, a kind this build does not know, answering,
   refused (its acts live while it waits; quiet, and its ring gone, once another window has answered

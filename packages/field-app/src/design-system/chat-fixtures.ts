@@ -29,7 +29,6 @@ import { type ModelsReading, modelWords } from "../chat/new-spark";
 import { type SparkEntry, sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
 import { ThreadLedger, type ThreadMark, threadMarksOf } from "../chat/thread-marks";
-import type { SparkPanePlace } from "../chat/thread-pane-door";
 import type { PendingSay } from "../chat/transcript-items";
 import { type TranscriptReading, transcriptReadingOf } from "../chat/transcript-port";
 import { paneTextOf } from "../frame/cards/card-text";
@@ -100,7 +99,7 @@ function row(over: Partial<AgentFieldRow> & Pick<AgentFieldRow, "runtimeRunId">)
   };
 }
 
-/** An awake spark's session: its run, and the floor terminal fieldd named for it (SP-1d: the thread's pane). */
+/** An awake spark's session: its run, and the floor terminal fieldd named for it (Jump to's pane in Godview). */
 const live = (name: string) => ({
   runtimeRunId: `run-${name}`,
   terminalSessionId: `pty-${name}`,
@@ -257,9 +256,6 @@ export const CHAT_STATES = [
   "menu-reading",
   "menu-failed",
   "chips",
-  "finding",
-  "gone",
-  "fault",
   "asleep",
   "waking",
   "wake-refused",
@@ -303,9 +299,6 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   "menu-reading": "Its picker reading",
   "menu-failed": "Its picker failed",
   chips: "Chips",
-  finding: "Finding",
-  gone: "Off the floor",
-  fault: "No answer",
   asleep: "Asleep",
   waking: "Waking",
   "wake-refused": "Wake refused",
@@ -332,16 +325,6 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   unavailable: "Unavailable",
 };
 
-/** What the shown thread's pane says on a plate (SP-1d). A catalog holds no terminals, so the live pane is never
- * mounted here: absent, the panel says what a window with no terminals says; else the pane's own words for the place
- * the product's pane would be in — fieldd has not named the terminal yet, the floor holds no such terminal, or the
- * floor did not answer (the pool's own words for its lapse). */
-export const CHAT_PANE: Partial<Record<ChatState, SparkPanePlace>> = {
-  finding: { state: "finding" },
-  gone: { state: "gone" },
-  fault: { state: "fault", reason: "the floor did not answer in 10 s" },
-};
-
 export function chatReadingOf(state: ChatState): SparksReading {
   switch (state) {
     case "list":
@@ -357,9 +340,6 @@ export function chatReadingOf(state: ChatState): SparksReading {
     case "menu-reading":
     case "menu-failed":
     case "chips":
-    case "finding":
-    case "gone":
-    case "fault":
     case "asleep":
     case "waking":
     case "wake-refused":
@@ -475,8 +455,8 @@ export function chatMarksOf(
 }
 
 /** The spark a plate opens on: the newest (Polaris, just hatched, on the hello's), Juno (awake and Ready) for the
- * pane's words and the composer, Kiwi asleep (on the waiting plate with its held send in the queue, so its word is
- * Needs your OK while its line still says it sleeps: CP-3), or Polaris not started. */
+ * composer and its conversation, Kiwi asleep (on the waiting plate with its held send in the queue, so its word is
+ * Needs your OK while Wake still stands in its head: CP-3), or Polaris not started. */
 export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   list: null,
   hello: HATCHED.id,
@@ -493,9 +473,6 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   "menu-reading": "sp-juno0001",
   "menu-failed": "sp-juno0001",
   chips: "sp-juno0001",
-  finding: "sp-juno0001",
-  gone: "sp-juno0001",
-  fault: "sp-juno0001",
   asleep: "sp-kiwi0001",
   waking: "sp-kiwi0001",
   "wake-refused": "sp-kiwi0001",
@@ -899,6 +876,47 @@ export interface FlowPlate {
 const READ_JUNO = transcriptReadingOf(JUNO_RUNS, JUNO_LINES);
 const READ_JUNO_WHOLE = transcriptReadingOf(JUNO_RUNS, JUNO_LINES, { whole: true });
 
+/** Kiwi asleep: its last run's one reply, five hours ago. */
+const READ_KIWI = transcriptReadingOf(
+  [run("run-kiwi", HATCH, true)],
+  new Map([
+    [
+      "run-kiwi",
+      [
+        said(1, "run", minutesAgo(60 * 5), { runtimeRunId: "run-kiwi", fresh: true }),
+        said(2, "reply", minutesAgo(60 * 5 - 2), {
+          messageId: "m-kiwi",
+          text: "The tests in packages/fieldd are done: two fail, both in the kill matrix.",
+        }),
+      ],
+    ],
+  ]),
+);
+
+/** Vela awake, asking before it pushes: your words, delivered, then its question. */
+const READ_VELA = transcriptReadingOf(
+  [run("run-vela", HATCH, true)],
+  new Map([
+    [
+      "run-vela",
+      [
+        said(1, "run", HATCH, { runtimeRunId: "run-vela", fresh: true }),
+        said(2, "you", minutesAgo(3), {
+          via: "chat",
+          text: "Push the composer fix once the suite is green",
+          input: "in-v",
+          state: "queued",
+        }),
+        said(3, "outcome", minutesAgo(3), { of: "in-v", state: "delivered" }),
+        said(4, "reply", minutesAgo(1), {
+          messageId: "m-v",
+          text: "The suite is green. Before I push: to `main`, or a branch for review?",
+        }),
+      ],
+    ],
+  ]),
+);
+
 /** The plates whose thread is drawn (TH-1), each through the product's own reading of fixture lines. */
 export const CHAT_FLOW: Partial<Record<ChatState, FlowPlate>> = {
   thread: { reading: READ_JUNO },
@@ -924,23 +942,7 @@ export const CHAT_FLOW: Partial<Record<ChatState, FlowPlate>> = {
       ]),
     ),
   },
-  "thread-asleep": {
-    reading: transcriptReadingOf(
-      [run("run-kiwi", HATCH, true)],
-      new Map([
-        [
-          "run-kiwi",
-          [
-            said(1, "run", minutesAgo(60 * 5), { runtimeRunId: "run-kiwi", fresh: true }),
-            said(2, "reply", minutesAgo(60 * 5 - 2), {
-              messageId: "m-kiwi",
-              text: "The tests in packages/fieldd are done: two fail, both in the kill matrix.",
-            }),
-          ],
-        ],
-      ]),
-    ),
-  },
+  "thread-asleep": { reading: READ_KIWI },
   "thread-earlier": { reading: READ_JUNO_WHOLE, earlier: true },
   "thread-receipts": {
     reading: transcriptReadingOf(
@@ -1008,30 +1010,7 @@ export const CHAT_FLOW: Partial<Record<ChatState, FlowPlate>> = {
   },
   "thread-reading": { reading: { state: "reading" } },
   "thread-unreadable": { reading: { state: "unreadable", reason: FIELDD_GONE } },
-  "thread-asks": {
-    reading: transcriptReadingOf(
-      [run("run-vela", HATCH, true)],
-      new Map([
-        [
-          "run-vela",
-          [
-            said(1, "run", HATCH, { runtimeRunId: "run-vela", fresh: true }),
-            said(2, "you", minutesAgo(3), {
-              via: "chat",
-              text: "Push the composer fix once the suite is green",
-              input: "in-v",
-              state: "queued",
-            }),
-            said(3, "outcome", minutesAgo(3), { of: "in-v", state: "delivered" }),
-            said(4, "reply", minutesAgo(1), {
-              messageId: "m-v",
-              text: "The suite is green. Before I push: to `main`, or a branch for review?",
-            }),
-          ],
-        ],
-      ]),
-    ),
-  },
+  "thread-asks": { reading: READ_VELA },
   "thread-hello-asks": {
     reading: transcriptReadingOf(
       [run("run-polaris", minutesAgo(0), true)],
@@ -1055,6 +1034,25 @@ export const CHAT_FLOW: Partial<Record<ChatState, FlowPlate>> = {
     ),
   },
 };
+
+/** Each fixture spark's own conversation, on every plate that draws no thread of its own (TH-1, the pane leaves Chat:
+ * every thread is drawn): Juno's two runs joined, Vela's ask, Kiwi's last reply. A spark with no record (Polaris,
+ * hatched or not started) reads an empty one, so its hello is the flow's first row. */
+const FLOW_OF_SPARK: Readonly<Record<string, FlowPlate>> = {
+  "sp-juno0001": { reading: READ_JUNO },
+  "sp-vela0001": { reading: READ_VELA },
+  "sp-kiwi0001": { reading: READ_KIWI },
+};
+
+const NO_RECORD: FlowPlate = { reading: transcriptReadingOf([], new Map()) };
+
+/** What a plate's thread draws for the spark it shows: the plate's own conversation for the spark it opens on, else
+ * the spark's (another row chosen on the plate shows that spark's own). */
+export function chatFlowOf(state: ChatState, spark: SparkId): FlowPlate {
+  const own = CHAT_FLOW[state];
+  if (own !== undefined && CHAT_CHOSEN[state] === spark) return own;
+  return FLOW_OF_SPARK[spark] ?? NO_RECORD;
+}
 
 // ── the needs-you card's plates (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card) ──
 

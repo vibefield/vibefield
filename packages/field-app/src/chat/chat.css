@@ -184,8 +184,7 @@
   background: var(--vf-cyan);
 }
 
-/* ── the thread's column (SP-1b, SP-1d): a fixed box — the head, the pane (or, asleep or not started, one honest
-   line), then the foot ── */
+/* ── the thread's column (SP-1b, TH-1): a fixed box — the head, the flow (thread-flow.css), then the foot ── */
 
 .vf-chat-thread {
   position: relative;
@@ -257,220 +256,26 @@
   color: var(--vf-text-primary);
 }
 
-.vf-chat-thread-line {
-  margin: 0;
-  padding: 18px 24px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--vf-text-secondary);
-}
+/* ── the thread's foot (TH-1; DESIGN.md §8 "Chat's thread", the column) ── */
 
-/* ── the thread at SP-1d (DESIGN.md §8 "Chat's thread") ── */
-
-/* The pane's place: one column centred under the head, as wide as the composer (640, or the thread less 28 at each
-   side), 16 under the head's hairline and 12 over the foot, taking every height the head and the foot leave. Nothing
-   the thread shows is in its flow, so its size never depends on them. */
-.vf-chat-pane {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  width: calc(100% - 56px);
-  max-width: 640px;
-  margin: 16px auto 12px;
-  border-radius: var(--vf-godview-deck-well-radius);
-}
-
-/* Live, the well: painted in the terminal's own ground (projected from the theme the pane is handed, as the deck
-   sheet is), so the pane's translucent ground composites to its own colour and the panel never shows through; the
-   hairline drawn over it as a 1px inner ring. */
-.vf-chat-pane[data-pane-state="live"] {
-  background: var(--vf-godview-terminal-bg);
-}
-
-.vf-chat-pane[data-pane-state="live"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border-radius: inherit;
-  box-shadow: inset 0 0 0 1px var(--vf-hairline);
-  pointer-events: none;
-}
-
-/* the terminal, 1 in from the well's edge and clipped at 9 */
-.vf-chat-pane-surface {
-  position: absolute;
-  inset: 1px;
-  overflow: hidden;
-  border-radius: calc(var(--vf-godview-deck-well-radius) - 1px);
-  isolation: isolate;
-}
-
-/* No pane to draw: the place's words, without the well, on the panel's chrome — the line's look, centred. */
-.vf-chat-pane:not([data-pane-state="live"]) {
-  display: grid;
-  place-items: center;
-}
-
-.vf-chat-pane-words {
-  margin: 0;
-  padding: 0 24px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--vf-text-secondary);
-  text-align: center;
-}
-
-/* The foot: as wide as the pane, 16 above the panel's foot, at the column's foot whatever stands above it.
-   Positioned, so the thread's items stand over the pane from here. */
+/* The foot: as wide as the composer (640, or the thread less 28 at each side), 12 under the flow and 16 above the
+   panel's foot, at the column's foot whatever stands above it. What waits on you stands in it above the composer, 12
+   over it, covering nothing.
+   *Amended 2026-11-05 (TH-1, the pane leaves Chat):* the pane's place (its well and its words) stood here, and the
+   items stood positioned over its bottom rows; they are in git. */
 .vf-chat-foot {
-  position: relative;
   flex: none;
   width: calc(100% - 56px);
   max-width: 640px;
-  margin: auto auto 16px;
+  margin: 12px auto 16px;
 }
 
-/* The thread's items: one rule for every item — as wide as the foot, their foot 12 above it, grown upward over the
-   pane's bottom rows, never in the column's flow. */
-.vf-chat-items {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(100% + 12px);
-  z-index: 2;
-}
-
-/* TH-1 — under a flow the foot stands 12 under it, and its items are held in it above the composer, covering
-   nothing: the flow gives way to them. */
-.vf-chat-foot[data-flow] {
-  margin-top: 12px;
-}
-
-.vf-chat-foot[data-flow] .vf-chat-items {
-  position: static;
-}
-
-.vf-chat-foot[data-flow] .vf-chat-items:not(:empty) {
+.vf-chat-items:not(:empty) {
   margin-bottom: 12px;
-}
-
-/* ── the thread's items: NS-D4's hello and its starters (DESIGN.md §8 "Chat's thread") ── */
-
-/* One card of solid chrome, the thread's own ground as the Sparks page draws it: corners 16, padding 14 16, the
-   strong hairline ring and the island shadow. It comes in over 420ms on the island curve, from 8 below; it goes at
-   once. */
-.vf-chat-hello {
-  display: grid;
-  gap: 8px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: var(--vf-chrome-solid);
-  box-shadow:
-    0 0 0 1px var(--vf-hairline-strong),
-    var(--vf-shadow-island);
-  animation: vf-chat-item-in 420ms var(--vf-ease-island) both;
-}
-
-@keyframes vf-chat-item-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* the face at 28, framed (a message's lead), then 12, then the words at a message's measure */
-.vf-chat-hello-lead {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
-
-.vf-chat-hello-words {
-  margin: 0;
-  padding-top: 4px;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.55;
-  color: var(--vf-text-primary);
-}
-
-/* 8 under the words and 40 in (the lead and its gap): one under another, 8 apart, each as wide as its words */
-.vf-chat-starters {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding-left: 40px;
-}
-
-.vf-chat-starters[aria-busy="true"] .vf-chat-starter {
-  cursor: progress;
-}
-
-/* A starter: the kit's button (`UiButton`), 34 tall, corners 17, padded 0 14 0 11, on solid chrome ringed by the
-   strong hairline; its glyph 14 in secondary ink, then 8, then its words in 13/500 primary. Under the pointer it takes
-   the fill and rises 1, in 180ms on the lift curve. */
-.vf-ui-button.vf-chat-starter {
-  height: 34px;
-  padding: 0 14px 0 11px;
-  border-radius: 17px;
-  gap: 8px;
-  color: var(--vf-text-primary);
-  background: var(--vf-chrome-solid);
-  box-shadow: 0 0 0 1px var(--vf-hairline-strong);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  transition:
-    background-color 180ms var(--vf-ease-lift),
-    transform 180ms var(--vf-ease-lift);
-}
-
-.vf-ui-button.vf-chat-starter:hover:not(:disabled) {
-  color: var(--vf-text-primary);
-  background: var(--vf-fill);
-  transform: translateY(-1px);
-}
-
-.vf-chat-starter .vf-glyph {
-  flex: none;
-  color: var(--vf-text-secondary);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .vf-chat-row {
     transition: none;
-  }
-
-  /* reduced motion (M6): the hello fades in over 120ms where it stands; a starter's rise is half as long, on ease-out */
-  .vf-chat-hello {
-    animation: vf-chat-item-fade 120ms ease both;
-  }
-
-  .vf-ui-button.vf-chat-starter {
-    transition:
-      background-color 90ms ease-out,
-      transform 90ms ease-out;
-  }
-
-  @keyframes vf-chat-item-fade {
-    from {
-      opacity: 0;
-    }
-
-    to {
-      opacity: 1;
-    }
   }
 }

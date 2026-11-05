@@ -217,6 +217,69 @@
   color: var(--vf-text-secondary);
 }
 
+/* ── the hello and its starters (NS-D4; DESIGN.md §8 "Chat's thread", the hello): the flow's first row, drawn as
+   Vela's words are. It comes in over 420ms on the island curve, from 8 below at opacity 0, and goes at once. Moved
+   here from chat.css with the foot's hello card (TH-1, the pane leaves Chat). ── */
+.vf-chat-msg[data-row="hello"] {
+  animation: vf-chat-hello-in 420ms var(--vf-ease-island) both;
+}
+
+@keyframes vf-chat-hello-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 8 under the words and 40 in (the lead and its gap): one under another, 8 apart, each as wide as its words */
+.vf-chat-starters {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-left: 40px;
+}
+
+.vf-chat-starters[aria-busy="true"] .vf-chat-starter {
+  cursor: progress;
+}
+
+/* A starter: the kit's button (`UiButton`), 34 tall, corners 17, padded 0 14 0 11, on solid chrome ringed by the
+   strong hairline; its glyph 14 in secondary ink, then 8, then its words in 13/500 primary. Under the pointer it takes
+   the fill and rises 1, in 180ms on the lift curve. */
+.vf-ui-button.vf-chat-starter {
+  height: 34px;
+  padding: 0 14px 0 11px;
+  border-radius: 17px;
+  gap: 8px;
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  box-shadow: 0 0 0 1px var(--vf-hairline-strong);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background-color 180ms var(--vf-ease-lift),
+    transform 180ms var(--vf-ease-lift);
+}
+
+.vf-ui-button.vf-chat-starter:hover:not(:disabled) {
+  color: var(--vf-text-primary);
+  background: var(--vf-fill);
+  transform: translateY(-1px);
+}
+
+.vf-chat-starter .vf-glyph {
+  flex: none;
+  color: var(--vf-text-secondary);
+}
+
 /* ── the quiet lines: what it did, VibeField's acts, Thinking… ── */
 
 .vf-chat-quiet {
@@ -307,6 +370,27 @@ button.vf-chat-quiet:hover {
   .vf-chat-dots i {
     animation: none;
     opacity: 0.6;
+  }
+
+  /* reduced motion (M6): the hello fades in over 120ms where it stands; a starter's rise is half as long, on ease-out */
+  .vf-chat-msg[data-row="hello"] {
+    animation: vf-chat-hello-fade 120ms ease both;
+  }
+
+  .vf-ui-button.vf-chat-starter {
+    transition:
+      background-color 90ms ease-out,
+      transform 90ms ease-out;
+  }
+
+  @keyframes vf-chat-hello-fade {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
   }
 
   .vf-chat-flow-earlier {

@@ -204,11 +204,12 @@ describe("UI system ownership boundaries", () => {
     const fixtures = source("design-system/chat-fixtures.ts");
     expect(preview).toMatch(/<ChatPanelView\s/u);
     expect(fixtures).toContain("sparkEntriesOf");
-    // SP-1d: the thread's items are the product's own reading of the shown spark, never a drawn copy of the hello
-    expect(preview).toContain("threadItemsOf");
+    // SP-1d: the thread's items are the product's own reading of the shown spark (TH-1: its foot, `footItemsOf`), never
+    // a drawn copy of a card
+    expect(preview).toContain("footItemsOf(");
     expect(preview).not.toMatch(/<ThreadItemsView\s/u);
-    // TH-1: the thread's plates mount the shipping flow over the product's own projection of fixture record lines,
-    // read as the reader reads them — never a drawn conversation
+    // TH-1: every thread's plate mounts the shipping flow over the product's own projection of fixture record lines,
+    // read as the reader reads them — never a drawn conversation, nor a copy of the hello
     expect(preview).toMatch(/<ThreadFlowView\s/u);
     expect(preview).toContain("transcriptItemsOf(");
     expect(fixtures).toContain("transcriptReadingOf(");
@@ -254,16 +255,16 @@ describe("UI system ownership boundaries", () => {
     expect(source("design-system/sections/ChromeSection.tsx")).toMatch(/<NeedsCardPlates\s*\/>/u);
   });
 
-  it("never mounts the thread's live pane in Chat's catalog — the pane's place is the shipping view's words (SP-1d)", () => {
-    // A catalog holds no terminal pool ("a host, never a painter"): the live pane (`SparkPane`, the controller) and the
-    // pool are never reached from Chat's plates, and no picture of a terminal stands in. The pane's place is the
-    // shipping `SparkPaneView`, in the words the product's pane says for the state a plate shows.
+  it("never reaches a terminal from Chat's catalog — the thread is the shipping flow, never a pane (SP-1d; TH-1)", () => {
+    // A catalog holds no terminal pool ("a host, never a painter"): the pool is never reached from Chat's plates, and
+    // no picture of a terminal stands in. *TH-1, the pane leaves Chat:* the pane's place was the shipping
+    // `SparkPaneView` in the words the product's pane said; the pane, its view and its door retired, so no plate names
+    // them.
     const preview = source("design-system/ChatPreview.tsx");
     const fixtures = source("design-system/chat-fixtures.ts");
-    expect(preview).toMatch(/<SparkPaneView\s/u);
     for (const file of [preview, fixtures]) {
       expect(file).not.toMatch(/<SparkPane[\s/>]/u);
-      expect(file).not.toMatch(/from "\.\.\/chat\/SparkPane"/u);
+      expect(file).not.toMatch(/from "\.\.\/chat\/(SparkPane|SparkPaneView|thread-pane-door)"/u);
       expect(file).not.toContain("terminal/pool");
       expect(file).not.toContain("useTerminalPool");
       expect(file).not.toContain("terminalPoolRuntime");
@@ -1176,9 +1177,7 @@ describe("UI system ownership boundaries", () => {
       // SP-1b — Chat
       "chat/ChatView.tsx",
       "chat/ChatPanelView.tsx",
-      // SP-1d — the thread
-      "chat/SparkPane.tsx",
-      "chat/SparkPaneView.tsx",
+      // SP-1d — the thread (its pane and the pane's view retired at TH-1)
       "chat/ThreadItemsView.tsx",
       // TH-1 — the thread's flow
       "chat/ThreadFlowView.tsx",

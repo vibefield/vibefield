@@ -2,10 +2,13 @@
 /**
  * SP-1b, SP-1d, CP-3 — Chat (DESIGN.md §8 "Chat's list", "Chat's thread"; CH-D1, CH-D3, CH-D4, CP3-D8): the panel the
  * catalog mounts on fixtures (`ChatPanelView`), the window's one feed (`sparks-feed.ts`: the field board, the sparks
- * fieldd keeps and, since CP-3, the needs-you queue) and the controller (`ChatView`: the shown spark's own pane while
- * it is awake, Wake by `compose.sparks.open` while it sleeps). The pane itself is `spark-pane.test.tsx`'s; this window
- * holds no terminal pool, so its place says what such a window says. The live witness of the list is James's first
- * sight in `pnpm dev`; the board's own rows are fieldd's (agent-field.test.ts there), the queue's needs-queue.test.ts.
+ * fieldd keeps and, since CP-3, the needs-you queue) and the controller (`ChatView`: since TH-1 the shown spark's
+ * conversation, read from its transcript through a scripted door, `transcript-door-fixture.ts`; Wake by
+ * `compose.sparks.open` while it sleeps). The flow's own rows are `thread-flow.test.tsx`'s and `transcript-items.test.ts`'s.
+ * The live witness of the list is James's first sight in `pnpm dev`; the board's own rows are fieldd's
+ * (agent-field.test.ts there), the queue's needs-queue.test.ts.
+ * *TH-1, the pane leaves Chat:* the controller mounted the shown spark's own pane while it was awake
+ * (`spark-pane.test.tsx`'s, retired with it), and a window with no terminal pool said so in its place.
  */
 
 import { readFileSync } from "node:fs";
@@ -26,6 +29,7 @@ import type { ComposerPort } from "../src/chat/ChatComposer";
 import { type ChatAct, ChatPanelView, type ChatPanelViewProps } from "../src/chat/ChatPanelView";
 import { ChatView } from "../src/chat/ChatView";
 import { STILL_RUNNING } from "../src/chat/head-act";
+import { pendingSaysNow, resetPendingSaysForTest, standPendingSay } from "../src/chat/pending-says";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import {
   FieldBoard,
@@ -35,22 +39,18 @@ import {
 } from "../src/chat/sparks-feed";
 import { sparkIsNew } from "../src/chat/thread-items";
 import { THREAD_MARK_WORDS, type ThreadMark } from "../src/chat/thread-marks";
-import { sparkPaneOf } from "../src/chat/thread-pane-door";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import type { ChatState } from "../src/design-system/chat-fixtures";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { hearLineSays } from "../src/frame/line-door";
-import { NO_TERMINALS } from "../src/terminal/terminal-words";
+import {
+  NO_TRANSCRIPTS,
+  type ScriptedTranscripts,
+  scriptedTranscripts,
+  transcriptLine,
+} from "./transcript-door-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-/** This window holds no terminal pool, as the real one says here, unless a test gives it one: Send then goes on to
- * wake the spark itself. */
-const pool = vi.hoisted(() => ({ configured: false }));
-vi.mock("../src/terminal/pool", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  terminalPoolConfigured: () => pool.configured,
-}));
 
 /** Jump to (TH-2) goes to the spark's pane in Godview by Jump to's path; scripted, so where it was sent is seen. */
 const shown = vi.hoisted(() => ({
@@ -147,12 +147,22 @@ const PORT: ComposerPort = {
 function Chat({
   active = true,
   port = PORT,
+  transcripts = NO_TRANSCRIPTS,
 }: {
   active?: boolean;
   port?: ComposerPort;
+  transcripts?: ScriptedTranscripts["door"];
 }): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>(null);
-  return <ChatView active={active} surface={surface} onSurfaceChange={setSurface} port={port} />;
+  return (
+    <ChatView
+      active={active}
+      surface={surface}
+      onSurfaceChange={setSurface}
+      port={port}
+      transcripts={transcripts}
+    />
+  );
 }
 
 let root: Root | null = null;
@@ -174,7 +184,7 @@ afterEach(() => {
   host = null;
   stop?.();
   stop = null;
-  pool.configured = false;
+  resetPendingSaysForTest();
   stopHearing?.();
   stopHearing = null;
   shown.opened = [];
@@ -346,33 +356,34 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     );
   });
 
-  it("draws an awake spark's own pane under its head, with no line, and Jump to its head's one act (SP-1d; TH-2)", () => {
-    const draw = (pane?: ReactElement) =>
+  it("draws the shown spark's conversation under its head, and Jump to its head's one act (TH-1; TH-2)", () => {
+    const draw = (flow?: ReactElement) =>
       act(() =>
         root?.render(
           <ChatPanelView
             reading={ready([VELA, KIWI, NOVA], [VELA_ASKS])}
             chosen={null}
             now={NOW}
-            {...(pane === undefined ? {} : { pane })}
+            {...(flow === undefined ? {} : { flow })}
           />,
         ),
       );
     mount(<div />);
-    draw(<div data-the-pane="vela" />);
+    draw(<div data-the-flow="vela" />);
     expect(words($(".vf-chat-thread-head"))).toBe("Vela Asking you Jump to");
-    expect($(".vf-chat-thread-line")).toBeNull();
-    expect($("[data-the-pane]")?.closest(".vf-chat-thread")).not.toBeNull();
+    expect($("[data-the-flow]")?.closest(".vf-chat-thread")).not.toBeNull();
     // SP-1d's Show returns as the head's Jump to (TH-2): the thread's one button, a run blocked offering no Pause
     expect(headActs()).toEqual([["Jump to", "jump"]]);
     expect(host?.querySelectorAll(".vf-chat-thread button")).toHaveLength(1);
-    // with no pane handed in, its place says what a window with no terminals says — never a blank
+    // with no flow handed in, the column is the head and the foot alone: nothing stands for a pane
     draw();
-    expect($(".vf-chat-pane")?.getAttribute("data-pane-state")).toBe("no-terminals");
-    expect(words($(".vf-chat-pane"))).toBe(NO_TERMINALS);
+    expect([...($(".vf-chat-thread")?.children ?? [])].map((child) => child.className)).toEqual([
+      "vf-chat-thread-head",
+      "vf-chat-foot",
+    ]);
   });
 
-  it("gives an asleep or not-started spark one honest line in the pane's place, Wake in its head, or nothing yet (TH-2)", () => {
+  it("says an asleep spark in its head, with Wake and its refusal there, and gives a spark not started no act (TH-1; TH-2)", () => {
     const onChoose = vi.fn();
     const onWake = vi.fn();
     const draw = (chosen: string | null, act$: ChatAct = { state: "idle" }) =>
@@ -385,7 +396,7 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
             act={act$}
             onChoose={onChoose}
             onWake={onWake}
-            pane={<div data-the-pane="vela" />}
+            flow={<div data-the-flow="" />}
           />,
         ),
       );
@@ -394,32 +405,34 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     act(() => rows()[1]?.click());
     expect(onChoose).toHaveBeenLastCalledWith("sp-kiwi0001");
     draw("sp-kiwi0001");
-    expect(words($(".vf-chat-thread-line"))).toBe("Kiwi is asleep");
+    // the status word says it sleeps; no line under the head (the pane's line left with it)
+    expect(words($(".vf-chat-thread-head"))).toBe("Kiwi Asleep Wake");
+    expect($(".vf-chat-thread-line")).toBeNull();
     expect(headActs()).toEqual([["Wake", "wake"]]);
-    // no pane is drawn for a spark with none, whatever the controller hands in
-    expect($("[data-the-pane]")).toBeNull();
-    expect($(".vf-chat-pane")).toBeNull();
+    // its conversation is drawn asleep too
+    expect($("[data-the-flow]")?.closest(".vf-chat-thread")).not.toBeNull();
     act(() => headAct("wake")?.click());
     expect(onWake.mock.calls[0]?.[0]?.spark.id).toBe("sp-kiwi0001");
     draw("sp-kiwi0001", { state: "busy" });
-    expect(words($(".vf-chat-thread-line"))).toBe("Kiwi is asleep");
     expect(headActs()).toEqual([["Waking…", "wake"]]);
     expect(headAct("wake")?.disabled).toBe(true);
+    // refused: fieldd's words in the status's place, in the attention ink, and Wake stands to be pressed again
+    draw("sp-kiwi0001", { state: "refused", reason: "the spark's agent has no sign-in" });
+    expect(words($(".vf-chat-thread-status"))).toBe(
+      "Couldn't wake Kiwi: the spark's agent has no sign-in",
+    );
+    expect($(".vf-chat-thread-status")?.getAttribute("data-tone")).toBe("attention");
+    expect(headActs()).toEqual([["Wake", "wake"]]);
     draw("sp-nova0001");
-    expect(words($(".vf-chat-thread-line"))).toBe("Nova hasn't started yet");
     // no act of its own: Send starts it
     expect($(".vf-chat-thread-acts")).toBeNull();
     expect($(".vf-chat-thread button")).toBeNull();
-    // Send wakes a spark that has not started (SP-1d's composer): the line says so while it does, and a refusal once
-    draw("sp-nova0001", { state: "busy" });
-    expect(words($(".vf-chat-thread-line"))).toBe("Waking…");
+    // a refusal Wake never asked for is never said for a spark with no Wake (Send says its own, in its note)
     draw("sp-nova0001", { state: "refused", reason: "the spark's agent has no sign-in" });
-    expect(words($(".vf-chat-thread-line"))).toBe(
-      "Couldn't wake Nova: the spark's agent has no sign-in",
-    );
+    expect(words($(".vf-chat-thread-status"))).not.toContain("Couldn't wake");
   });
 
-  it("says a sleeping spark's item in its word, and still says it sleeps: the line, Wake in its head, and no pane (CP-3; critique 7; TH-2)", () => {
+  it("says a sleeping spark's item in its word, and still says it sleeps: Wake in its head (CP-3; critique 7; TH-2)", () => {
     const onWake = vi.fn();
     mount(
       <ChatPanelView
@@ -427,7 +440,6 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
         chosen="sp-kiwi0001"
         now={NOW}
         onWake={onWake}
-        pane={<div data-the-pane="kiwi" />}
       />,
     );
     const kiwi = $('.vf-chat-row[data-spark="sp-kiwi0001"]');
@@ -439,10 +451,8 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     // the head says the item's word, in the attention ink; the face says the same status (S-3); its act is Wake (TH-2)
     expect(words($(".vf-chat-thread-head"))).toBe("Kiwi Needs your OK Wake");
     expect($(".vf-chat-thread-status")?.getAttribute("data-tone")).toBe("attention");
-    // awake is read from its session, never its word: asleep, with Wake, and no pane mounted
-    expect(words($(".vf-chat-thread-line"))).toBe("Kiwi is asleep");
+    // awake is read from its session, never its word: asleep, with Wake
     expect(headActs()).toEqual([["Wake", "wake"]]);
-    expect($("[data-the-pane]")).toBeNull();
     act(() => headAct("wake")?.click());
     expect(onWake.mock.calls[0]?.[0]?.spark.id).toBe("sp-kiwi0001");
   });
@@ -579,8 +589,10 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
       $('.vf-chat-row[data-spark="sp-kiwi0001"] .vf-chat-row-dot')?.getAttribute("data-mark"),
     ).toBe("needs");
     expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Kiwi's thread");
-    expect(words($(".vf-chat-thread-line"))).toBe("Kiwi is asleep");
     expect(headActs()).toEqual([["Wake", "wake"]]);
+    // its conversation stands under the head, and its card in the foot (TH-1)
+    expect($(".vf-chat-flow")?.getAttribute("data-flow-state")).toBe("ready");
+    expect($(".vf-chat-foot .vf-needs-card")).not.toBeNull();
   });
 
   it("draws the catalog's rows with the product's own marks: Vela's need orange, Lyra's unread thread cyan, and Kiwi's ended need still orange (SP-1d)", async () => {
@@ -603,29 +615,30 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     expect(mark("sp-lyra0001")).toBe("unread");
   });
 
-  it("draws the thread's line in its plates in the product's own words: Wake under way and refused, and a spark not started yet (final critique 9)", async () => {
-    const line = (): HTMLElement | null => $(".vf-chat-thread-line");
-    // Wake is the head's (TH-2); the line keeps its words
+  it("draws Wake's plates in the product's own words: under way and refused in the head, and a spark not started yet (final critique 9; TH-1)", async () => {
     const wake = (): HTMLButtonElement | null => headAct("wake");
     // Wake pressed: its pill waits, and it holds the thread, so Send waits too (one act at a time)
     await plate("waking");
-    expect(words(line())).toBe("Kiwi is asleep");
+    expect(words($(".vf-chat-thread-status"))).toBe("Asleep");
     expect(words(wake())).toBe("Waking…");
     expect(wake()?.disabled).toBe(true);
     expect($(".vf-chat-send")?.getAttribute("aria-busy")).toBe("true");
-    // …and refused, in fieldd's words, said on the line once; Wake stands to be pressed again
+    // …and refused, in fieldd's words, said in the status's place once; Wake stands to be pressed again
     await plate("wake-refused");
-    expect(words(line())).toBe(
+    expect(words($(".vf-chat-thread-status"))).toBe(
       "Couldn't wake Kiwi: fieldd is not answering (the daemon is restarting)",
     );
     expect(words(wake())).toBe("Wake");
     expect(wake()?.disabled).toBe(false);
     expect($(".vf-chat-send")?.hasAttribute("aria-busy")).toBe(false);
-    // a spark whose session never started: no act of its own, Send wakes it
+    // a spark whose session never started: no act of its own, Send wakes it; its hello is its flow's first row
     await plate("not-started");
     expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Polaris's thread");
-    expect(words(line())).toBe("Polaris hasn't started yet");
     expect(wake()).toBeNull();
+    expect($('.vf-chat-flow [data-row="hello"]')).not.toBeNull();
+    // no plate draws a line under the head, nor a pane's place (TH-1)
+    expect($(".vf-chat-thread-line")).toBeNull();
+    expect($(".vf-chat-pane")).toBeNull();
   });
 
   it("draws the head's plates on the product's reading: Jump to under way, Juno's turn pausing, and a cancellation not confirmed (TH-2)", async () => {
@@ -648,31 +661,32 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     expect(words($(".vf-chat-thread"))).not.toContain("End run");
   });
 
-  it("keeps the thread a fixed box: the pane takes every height left, and the foot is where the thread's items stand over it", () => {
+  it("keeps the thread a fixed box: the head, the flow taking every height left, then the foot, its items above the composer (TH-1)", () => {
     mount(
       <ChatPanelView
         reading={ready([VELA], [VELA_ASKS])}
         chosen={null}
         now={NOW}
-        pane={<div data-the-pane="vela" />}
+        flow={<div className="vf-chat-flow" data-the-flow="vela" />}
       />,
     );
     const column = $(".vf-chat-thread");
     expect([...(column?.children ?? [])].map((child) => child.className)).toEqual([
       "vf-chat-thread-head",
-      // the pane's chrome boundary renders its child alone
-      "",
+      // the flow's chrome boundary renders its child alone
+      "vf-chat-flow",
       "vf-chat-foot",
     ]);
-    // the items' rule, in the product's stylesheet: positioned in the foot, never in the column's flow
+    // the rules, in the product's stylesheets: the flow takes the height; the foot and its items stand in the column
     const here = dirname(fileURLToPath(import.meta.url));
     const css = readFileSync(join(here, "../src/chat/chat.css"), "utf8");
-    const rule = (selector: string) =>
-      css.match(new RegExp(`^\\${selector} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
-    expect(rule(".vf-chat-pane")).toMatch(/flex: 1 1 auto;/);
-    expect(rule(".vf-chat-foot")).toMatch(/position: relative;/);
-    expect(rule(".vf-chat-items")).toMatch(/position: absolute;/);
-    expect(rule(".vf-chat-items")).toMatch(/bottom: calc\(100% \+ 12px\);/);
+    const flowCss = readFileSync(join(here, "../src/chat/thread-flow.css"), "utf8");
+    const rule = (sheet: string, selector: string) =>
+      sheet.match(new RegExp(`^\\${selector} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
+    expect(rule(flowCss, ".vf-chat-flow")).toMatch(/flex: 1 1 auto;/);
+    expect(rule(css, ".vf-chat-foot")).toMatch(/margin: 12px auto 16px;/);
+    expect(css).not.toMatch(/position: absolute;[^}]*bottom: calc\(100% \+ 12px\)/);
+    expect(css).not.toMatch(/\.vf-chat-pane(?![a-z-])/u);
   });
 
   it("says each of its other states in words — opening, unavailable, no sparks yet — never a blank", () => {
@@ -960,22 +974,112 @@ describe("Chat, live (the feed and its acts)", () => {
     expect(port.lists).toBe(lists + 1);
   });
 
-  it("mounts an awake spark's own pane as its thread, with Jump to in its head (SP-1d; TH-2)", async () => {
+  it("draws an awake spark's conversation as its thread, read through the window's own ticket, with Jump to in its head (TH-1; TH-2)", async () => {
     const { door, move } = scripted([VELA]);
+    const transcripts = scriptedTranscripts();
+    transcripts.keep(
+      "sp-vela0001",
+      [{ runtimeRunId: "run-Vela", startedAt: AT, fresh: true }],
+      new Map([
+        [
+          "run-Vela",
+          [
+            transcriptLine(1, "run", AT, { runtimeRunId: "run-Vela", fresh: true }),
+            transcriptLine(2, "reply", "2026-10-31T05:20:00.000Z", {
+              messageId: "m-1",
+              text: "The suite is green.",
+            }),
+          ],
+        ],
+      ]),
+    );
     stop = startSparksFeed(door);
-    mount(<Chat />);
+    mount(<Chat transcripts={transcripts.door} />);
     await settle();
     await act(async () => move([VELA_ASKS]));
+    await settle();
+    expect(transcripts.asked).toEqual(["sp-vela0001"]);
+    expect($(".vf-chat-flow")?.getAttribute("data-flow-state")).toBe("ready");
+    expect(words($('.vf-chat-flow [data-row="reply"]'))).toContain("The suite is green.");
+    // a line said since: the worker's tail, drawn as it lands
+    await act(async () =>
+      transcripts.say(
+        "sp-vela0001",
+        "run-Vela",
+        transcriptLine(3, "reply", "2026-10-31T05:29:00.000Z", {
+          messageId: "m-2",
+          text: "Pushed.",
+        }),
+      ),
+    );
+    await settle();
+    expect(words($(".vf-chat-flow"))).toContain("Pushed.");
+    // no pane, and no line: the head's one act, Jump to (TH-2), and the composer's buttons
+    expect($(".vf-chat-pane")).toBeNull();
     expect($(".vf-chat-thread-line")).toBeNull();
-    // this window holds no terminal pool: the pane's place says so (the pane is spark-pane.test.tsx's)
-    expect($(".vf-chat-pane")?.getAttribute("data-pane-state")).toBe("no-terminals");
-    // the thread's buttons are its composer's (SP-1d's composer, `chat-composer.test.tsx`) and its head's one act,
-    // Jump to (TH-2)
-    const buttons = [...(host?.querySelectorAll<HTMLElement>(".vf-chat-thread button") ?? [])];
-    expect(
-      buttons.filter((button) => button.closest(".vf-chat-composer") === null).map(words),
-    ).toEqual(["Jump to"]);
+    const buttons = [...(host?.querySelectorAll<HTMLElement>(".vf-chat-thread-head button") ?? [])];
+    expect(buttons.map(words)).toEqual(["Jump to"]);
     expect($(".vf-chat-foot .vf-chat-composer")).not.toBeNull();
+  });
+
+  it("reads a thread's record only while Chat is the view, and lets a bubble go once the record shows its send (TH-1)", async () => {
+    const { door } = scripted([VELA]);
+    const transcripts = scriptedTranscripts();
+    transcripts.keep(
+      "sp-vela0001",
+      [{ runtimeRunId: "run-Vela", startedAt: AT, fresh: true }],
+      new Map([
+        ["run-Vela", [transcriptLine(1, "run", AT, { runtimeRunId: "run-Vela", fresh: true })]],
+      ]),
+    );
+    stop = startSparksFeed(door);
+    mount(<Chat active={false} transcripts={transcripts.door} />);
+    await settle();
+    // another view: nothing is asked of fieldd
+    expect(transcripts.asked).toEqual([]);
+    act(() => root?.render(<Chat transcripts={transcripts.door} />));
+    await settle();
+    expect(transcripts.asked).toEqual(["sp-vela0001"]);
+    // a send of this window's stands as its bubble until the record shows it, by its request id
+    act(() =>
+      standPendingSay("sp-vela0001", {
+        requestId: "say-th1-row",
+        text: "run the suite",
+        chips: [],
+        at: "2026-10-31T05:29:00.000Z",
+        state: "queued",
+      }),
+    );
+    await settle();
+    expect(words($(".vf-chat-flow"))).toContain("run the suite");
+    expect(pendingSaysNow("sp-vela0001")).toHaveLength(1);
+    await act(async () =>
+      transcripts.say(
+        "sp-vela0001",
+        "run-Vela",
+        transcriptLine(2, "you", "2026-10-31T05:29:01.000Z", {
+          via: "chat",
+          text: "run the suite",
+          input: "in-1",
+          requestId: "say-th1-row",
+          state: "queued",
+        }),
+      ),
+    );
+    await settle();
+    expect(pendingSaysNow("sp-vela0001")).toEqual([]);
+    // the record's bubble stands in its place, once
+    expect(
+      [...(host?.querySelectorAll(".vf-chat-flow .vf-chat-you") ?? [])].map((each) =>
+        words(each as HTMLElement),
+      ),
+    ).toHaveLength(1);
+    // another view again: nothing more is asked, and the thread keeps what it drew
+    act(() => root?.render(<Chat active={false} transcripts={transcripts.door} />));
+    await settle();
+    expect(transcripts.asked).toEqual(["sp-vela0001"]);
+    expect($(".vf-chat-flow")?.getAttribute("data-flow-state")).toBe("ready");
+    expect(words($(".vf-chat-flow"))).toContain("run the suite");
   });
 
   it("opens on the newest spark and keeps it: a newer activity elsewhere moves that row up, never the thread", async () => {
@@ -999,9 +1103,8 @@ describe("Chat, live (the feed and its acts)", () => {
     await settle();
     expect(rows().map((r) => r.dataset.spark)).toEqual(["sp-vela0001", "sp-lyra0001"]);
     expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Vela's thread");
-    const velaPane = $(".vf-chat-pane");
-    expect(velaPane).not.toBeNull();
-    expect(sparkPaneOf("sp-vela0001")).not.toBeNull();
+    const velaFlow = $(".vf-chat-flow");
+    expect(velaFlow).not.toBeNull();
     // nothing was chosen, and Lyra's run works: her activity is newer, so her row moves up
     await act(async () =>
       move([
@@ -1015,11 +1118,9 @@ describe("Chat, live (the feed and its acts)", () => {
     );
     await settle();
     expect(rows().map((r) => r.dataset.spark)).toEqual(["sp-lyra0001", "sp-vela0001"]);
-    // the thread, and the pane mounted in it, stay Vela's: the same element, never Lyra's
+    // the thread, and the flow drawn in it, stay Vela's: the same element, never Lyra's
     expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Vela's thread");
-    expect($(".vf-chat-pane")).toBe(velaPane);
-    expect(sparkPaneOf("sp-vela0001")).not.toBeNull();
-    expect(sparkPaneOf("sp-lyra0001")).toBeNull();
+    expect($(".vf-chat-flow")).toBe(velaFlow);
     expect(rows()[1]?.getAttribute("aria-pressed")).toBe("true");
     // choosing is what moves the thread
     act(() => rows()[0]?.click());
@@ -1171,7 +1272,7 @@ describe("Chat, live (the feed and its acts)", () => {
     stop = startSparksFeed(door);
     mount(<Chat />);
     await settle();
-    expect(words($(".vf-chat-thread-line"))).toBe("Kiwi is asleep");
+    expect(words($(".vf-chat-thread-status"))).toBe("Asleep");
     expect(headActs()).toEqual([["Wake", "wake"]]);
     const lists = port.lists;
     port.listed = [{ ...KIWI, session: { runtimeRunId: "run-Kiwi2", live: true } }];
@@ -1179,9 +1280,9 @@ describe("Chat, live (the feed and its acts)", () => {
     await settle();
     expect(port.woke).toEqual(["sp-kiwi0001"]);
     expect(port.lists).toBe(lists + 1);
-    // awake, its line gives way to its pane's place (being found, in a window with terminals; here, the Peek's words)
-    expect($(".vf-chat-thread-line")).toBeNull();
-    expect($(".vf-chat-pane")?.getAttribute("data-pane-state")).toBe("no-terminals");
+    // awake: its head's act is Jump to, its conversation stands where it stood
+    expect(headActs()).toEqual([["Jump to", "jump"]]);
+    expect($(".vf-chat-flow")).not.toBeNull();
   });
 
   it("wakes a spark once: Send pressed while Wake's wake runs waits, busy, and asks for no second open (SP-1d)", async () => {
@@ -1190,8 +1291,7 @@ describe("Chat, live (the feed and its acts)", () => {
     port.held = new Promise((resolve) => {
       answer = resolve;
     });
-    // a window with terminals: a Send into the asleep thread would wake the spark itself
-    pool.configured = true;
+    // a Send into the asleep thread would wake the spark itself
     stop = startSparksFeed(door);
     mount(<Chat />);
     await settle();
@@ -1227,7 +1327,7 @@ describe("Chat, live (the feed and its acts)", () => {
     expect($(".vf-chat-send")?.hasAttribute("aria-busy")).toBe(false);
   });
 
-  it("says a refused Wake in fieldd's words on the line under the head, and keeps the act in the head (TH-2)", async () => {
+  it("says a refused Wake in fieldd's words in the status's place, and keeps the act in the head (TH-1; TH-2)", async () => {
     const { port, door } = scripted([KIWI]);
     port.refuse = "the spark's agent has no sign-in";
     stop = startSparksFeed(door);
@@ -1236,7 +1336,7 @@ describe("Chat, live (the feed and its acts)", () => {
     await act(async () => headAct("wake")?.click());
     await settle();
     expect(port.woke).toEqual(["sp-kiwi0001"]);
-    expect(words($(".vf-chat-thread-line"))).toBe(
+    expect(words($(".vf-chat-thread-status"))).toBe(
       "Couldn't wake Kiwi: the spark's agent has no sign-in",
     );
     expect(headActs()).toEqual([["Wake", "wake"]]);
@@ -1330,8 +1430,6 @@ describe("Chat's words are DESIGN.md's (§8 \"Chat's list\", \"Chat's thread\")"
       "No sparks yet",
       "Opening Chat…",
       "Chat can't read your sparks",
-      "Vela is asleep",
-      "Vela hasn't started yet",
       "Vela needs you",
       "Waking…",
       "Couldn't wake Vela: …",
@@ -1343,11 +1441,6 @@ describe("Chat's words are DESIGN.md's (§8 \"Chat's list\", \"Chat's thread\")"
       "Pausing current turn…",
       "Couldn't pause Vela's turn: …",
       STILL_RUNNING,
-      // the pane's place (SP-1d)
-      "Finding Vela's pane…",
-      "Vela's terminal is not on this desktop's floor.",
-      "Couldn't find Vela's pane: …",
-      NO_TERMINALS,
       // a row's lasting mark, after its status word (SP-1d)
       `"Asleep, ${THREAD_MARK_WORDS.needs}"`,
       `"Ready, ${THREAD_MARK_WORDS.unread}"`,

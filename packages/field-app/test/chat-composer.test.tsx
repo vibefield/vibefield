@@ -35,6 +35,7 @@ import { CardTargets } from "../src/frame/cards/card-targets";
 import { listenForOtherApps } from "../src/frame/cards/cards-outside";
 import { CardStore } from "../src/frame/cards/cards-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
+import { NO_TRANSCRIPTS } from "./transcript-door-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -874,7 +875,15 @@ describe("the draft is the thread's (DESIGN.md §8 \"Chat's composer\")", () => 
     stopFeed = startSparksFeed(feed([VELA, JUNO]));
     function Owner(): ReactElement {
       const [surface, setSurface] = useState<FrameSurface | null>(null);
-      return <ChatView active surface={surface} onSurfaceChange={setSurface} port={port} />;
+      return (
+        <ChatView
+          active
+          surface={surface}
+          onSurfaceChange={setSurface}
+          port={port}
+          transcripts={NO_TRANSCRIPTS}
+        />
+      );
     }
     host = document.createElement("div");
     document.body.appendChild(host);

@@ -220,30 +220,28 @@ export function ChromeSection({
 
       <Specimen
         title="Chat — the sparks, newest activity first, and the thread"
-        source="chat/ChatPanelView.tsx · chat/SparkPaneView.tsx · chat/ThreadItemsView.tsx · chat/ChatComposerView.tsx · DESIGN.md §8 “Chat's list”, “Chat's thread”, “Chat's composer”, §2.10"
+        source="chat/ChatPanelView.tsx · chat/ThreadFlowView.tsx · chat/ThreadItemsView.tsx · chat/ChatComposerView.tsx · DESIGN.md §8 “Chat's list”, “Chat's thread”, “Chat's composer”, §2.10"
         bleed
       >
         <ChatSpecimen />
         <p className="vf-ds-stage-caption">
           The fourth view (SP-1b): the sparks fieldd keeps, each a face, a name and its status word;
           Asking you, Needs your OK and Stuck in the attention ink with the orange dot, which
-          outlasts a need that ended off screen; an unread thread in cyan. The thread (SP-1d) is the
-          spark's own pane under its head. A catalog holds no terminals, so its place says what such
-          a window says, and on three plates what the pane says while it is being found, when this
-          desktop's floor does not hold it, and when the floor did not answer. Asleep or not
-          started, one honest line with its act: Wake waiting while it wakes, and refused in
-          fieldd's words; a spark whose session never started, with none. A spark asleep with its
-          held send waiting on you (CP-3) says Needs your OK, its line still asleep with Wake, and
-          its card stands in its thread. A spark just hatched, before its first turn, says hello
-          over its pane, with its three starters (NS-D4), which wait while one is sent; a spark that
-          has had a turn shows its pane alone. At the thread's foot, its composer: the draft, the
-          mic and send, at rest, typing, and waiting while a send or a wake runs; @'s list with the
-          agents to start and the sessions running, and its words while it reads, when nothing
-          matches, when there is nothing to add, when the spark's profiles can't be read, and when
-          what is running can't be, the agents to start standing; an agent's menu in its box (its
-          model and Effort), while its picker is read and when it can't be; and the chips an agent,
-          a session and a card make. Fixture sparks, rows and agents, read by the product's own
-          readings.
+          outlasts a need that ended off screen; an unread thread in cyan. The thread (TH-1) is the
+          spark's conversation under its head, read from the transcript VibeField keeps: your words
+          in bubbles with their receipts, its replies whole beside its face, its tools one quiet
+          line a turn. Its head holds the thread's act (TH-2): Jump to awake, Wake asleep — waiting
+          while it wakes, and refused in fieldd's words in the status's place — and none for a spark
+          whose session never started. A spark asleep with its held send waiting on you (CP-3) says
+          Needs your OK, with Wake, and its card stands in its thread's foot. A spark that has never
+          worked says hello as its conversation's first row, with its three starters (NS-D4), which
+          wait while one is sent. At the thread's foot, its composer: the draft, the mic and send,
+          at rest, typing, and waiting while a send or a wake runs; @'s list with the agents to
+          start and the sessions running, and its words while it reads, when nothing matches, when
+          there is nothing to add, when the spark's profiles can't be read, and when what is running
+          can't be, the agents to start standing; an agent's menu in its box (its model and Effort),
+          while its picker is read and when it can't be; and the chips an agent, a session and a
+          card make. Fixture sparks, rows and agents, read by the product's own readings.
         </p>
       </Specimen>
 
@@ -255,7 +253,7 @@ export function ChromeSection({
         <NeedsCardLivePlate />
         <NeedsCardPlates />
         <p className="vf-ds-stage-caption">
-          CP-3: the queue's item for the thread's spark, one card at a time over the pane, drawn by
+          CP-3: the queue's item for the thread's spark, one card at a time in its foot, drawn by
           Chat. Live, the product's own controller over three of Vela's items, answered by a fixture
           door after a beat: an act pressed waits with its word and an ellipsis, then says what you
           said (a send that could not go, a spawn its sleeping spark has not heard) for a note's

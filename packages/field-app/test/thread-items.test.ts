@@ -1,27 +1,18 @@
 /**
  * SP-1d — THE THREAD'S ITEMS, as data (DESIGN.md §8 "Chat's thread": the thread's items, the hello and three
- * starters; NS-D4 A; CH-D5 A "Starters show while a thread is quiet"; critique finding 17, LEANS "a NEW spark"). What
- * stands in a thread over its pane is read here, purely: a new spark's hello and its starters while the thread is
- * quiet, and nothing else at SP-1d; since CP-3 the needs-you card in its place (`needs-card.test.tsx`). The drawing and
- * the controller are `chat-thread-items.test.tsx`'s.
+ * starters; NS-D4 A; critique finding 17, LEANS "a NEW spark"): whether a spark is new, the hello's words and its
+ * starters, and what stands in the thread's foot (the needs-you card, `needs-card.test.tsx`). The hello is the flow's
+ * first row (`transcript-items.test.ts`); the drawing and the controller are `chat-thread-items.test.tsx`'s.
+ * *TH-1, the pane leaves Chat:* quiet (`threadQuiet`) and the hello over the pane (`threadItemsOf`) were read here;
+ * they retired with the pane.
  */
 
-import {
-  AGENT_CATALOG,
-  type AgentFieldRow,
-  NeedsItem,
-  type SparkSummary,
-} from "@vibefield/contracts";
+import { AGENT_CATALOG, type AgentFieldRow, type SparkSummary } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { sparkEntriesOf } from "../src/chat/spark-status";
-import {
-  helloWords,
-  STARTERS,
-  sparkIsNew,
-  type ThreadItem,
-  threadItemsOf,
-  threadQuiet,
-} from "../src/chat/thread-items";
+import { helloWords, STARTERS, sparkIsNew } from "../src/chat/thread-items";
+import { transcriptItemsOf } from "../src/chat/transcript-items";
+import { transcriptReadingOf } from "../src/chat/transcript-port";
 
 const AT = "2026-10-31T05:00:00.000Z";
 const AGENT = AGENT_CATALOG[0];
@@ -124,7 +115,7 @@ describe("a new spark: it has never worked (NS-D4; TU-1, Q1)", () => {
     });
     const resumed = row({ runtimeRunId: "run-Vela2", createdAt: hoursLater(3), turnedAt: null });
     expect(sparkIsNew(entryOf(woken, resumed))).toBe(true);
-    // woken after it had worked, its resumed run carrying the conversation's time: its pane alone
+    // woken after it had worked, its resumed run carrying the conversation's time: no hello
     const worked = { ...woken, turnedAt: TURNED };
     expect(sparkIsNew(entryOf(worked, { ...resumed, turnedAt: TURNED }))).toBe(false);
   });
@@ -139,7 +130,7 @@ describe("a new spark: it has never worked (NS-D4; TU-1, Q1)", () => {
     expect(sparkIsNew(entryOf(older, null))).toBe(false);
   });
 
-  it("W5: is still new while its own agent asks before it has worked: an ask is no turn (Q2), and the hello stands over it", () => {
+  it("W5: is still new while its own agent asks before it has worked: an ask is no turn (Q2), and the hello stands", () => {
     const asks = entryOf(
       spark(),
       row({ status: "blocked", blockers: [{ id: "q-1", kind: "question", since: AT }] }),
@@ -147,10 +138,13 @@ describe("a new spark: it has never worked (NS-D4; TU-1, Q1)", () => {
     expect(asks.status).toBe("asking");
     expect(asks.blocked).toBe(true);
     expect(sparkIsNew(asks)).toBe(true);
-    // James's Q2 A: the hello stands over the pane's ask until the pane takes the keyboard, or a draft is written
-    expect(threadQuiet(asks, true, false)).toBe(true);
-    expect(threadQuiet(asks, true, true)).toBe(false);
-    expect(threadQuiet(asks, false, false)).toBe(false);
+    // James's Q2 A, as TH-1 draws it: the hello stands first in the flow, the ask's card at the foot (CO-Q2 (b))
+    const flow = transcriptItemsOf({
+      entry: asks,
+      reading: transcriptReadingOf([], new Map()),
+      now: Date.parse(AT),
+    });
+    expect(flow.state === "ready" ? flow.items[0]?.kind : null).toBe("hello");
   });
 
   it("W6: is never new while fieldd waits to resume its run, whatever its record says: nothing watches it (D10)", () => {
@@ -169,15 +163,21 @@ describe("a new spark: it has never worked (NS-D4; TU-1, Q1)", () => {
     expect(sparkIsNew(entryOf(older, null))).toBe(false);
   });
 
-  it("W8: is not new while awake with its run not on the board yet: nothing says fieldd watches its pane (D10)", () => {
+  it("W8: is not new while awake with its run not on the board yet: nothing says fieldd watches its run (D10)", () => {
     // its record says awake and never worked, but the board does not show its run: just after a hatch, before the
-    // board's first snapshot, or a run fieldd waits to resume while the board is refused — the pane may be one fieldd
-    // does not drive, so the hello does not stand over it
+    // board's first snapshot, or a run fieldd waits to resume while the board is refused — the run may be one fieldd
+    // does not drive, so the hello does not stand
     const awake = entryOf(spark(), null);
     expect(awake.awake).toBe(true);
     expect(sparkIsNew(awake)).toBe(false);
-    expect(threadQuiet(awake, true, false)).toBe(false);
-    expect(threadItemsOf(awake, threadQuiet(awake, true, false), null)).toEqual([]);
+    const flow = transcriptItemsOf({
+      entry: awake,
+      reading: transcriptReadingOf([], new Map()),
+      now: Date.parse(AT),
+    });
+    expect(flow.state === "ready" ? flow.items.map((item) => item.kind) : null).not.toContain(
+      "hello",
+    );
     // the board shows its run: new again
     expect(sparkIsNew(entryOf(spark(), row()))).toBe(true);
   });
@@ -187,59 +187,22 @@ describe("a new spark: it has never worked (NS-D4; TU-1, Q1)", () => {
   // row null after a re-attach; a turn the person took while fieldd was down, ended before it attached, is unseen.
   it("G4's window half: a spark whose facts read null after a re-attach is new, and its hello stands (the named gap)", () => {
     const reattached = entryOf(spark(), row({ turnedAt: null, lastActivityAt: hoursLater(1) }));
-    const quiet = threadQuiet(reattached, true, false);
-    const hello = threadItemsOf(reattached, quiet, null).map((item) => item.kind);
-    console.log(
-      `TU1_G4 ${JSON.stringify({ case: "window", new: sparkIsNew(reattached), quiet, hello })}`,
-    );
+    // the flow's hello (TH-1): the record holds none of your words or the spark's yet
+    const flow = transcriptItemsOf({
+      entry: reattached,
+      reading: transcriptReadingOf([], new Map()),
+      now: Date.parse(AT),
+    });
+    const hello = (flow.state === "ready" ? flow.items : [])
+      .map((item) => item.kind)
+      .filter((kind) => kind === "hello");
+    console.log(`TU1_G4 ${JSON.stringify({ case: "window", new: sparkIsNew(reattached), hello })}`);
     expect(sparkIsNew(reattached)).toBe(true);
     expect(hello).toEqual(["hello"]);
   });
 });
 
-describe('quiet, and the items it brings (DESIGN.md §8 "Chat\'s thread", when they show)', () => {
-  it("is quiet only while the spark is new, its draft is empty and its hello has not left", () => {
-    expect(threadQuiet(entryOf(), true, false)).toBe(true);
-    expect(threadQuiet(entryOf(), false, false)).toBe(false);
-    expect(threadQuiet(entryOf(), true, true)).toBe(false);
-    expect(
-      threadQuiet(entryOf(spark(), row({ status: "working", turnedAt: TURNED })), true, false),
-    ).toBe(false);
-    // at work as it launches (puppeteer's `starting` span) is no turn yet, so fieldd stamps nothing: still quiet
-    expect(threadQuiet(entryOf(spark(), row({ status: "working" })), true, false)).toBe(true);
-  });
-
-  it("is not quiet while something in the queue waits on you in its thread (CP-3: quiet's fifth)", () => {
-    // held apart from "new": a card stands in the hello's place, and the spark is still new under it
-    const item = NeedsItem.parse({
-      id: "ny-quietfifth01",
-      kind: "question",
-      state: "open",
-      from: { name: "Vela", session: "run-Vela", spark: "sp-vela0001" },
-      spark: "sp-vela0001",
-      asked: AT,
-      words: "Push it?",
-      choices: ["Push", "Not now"],
-    });
-    const waiting = { ...entryOf(), items: [item] };
-    expect(sparkIsNew(waiting)).toBe(true);
-    expect(threadQuiet(waiting, true, false)).toBe(false);
-  });
-
-  it("brings the hello and its three starters while quiet, with the spark's own face as its lead", () => {
-    const entry = entryOf();
-    const items = threadItemsOf(entry, true, null);
-    expect(items).toEqual([
-      {
-        kind: "hello",
-        face: { seed: 7, status: "ready" },
-        words: helloWords("Vela"),
-        starters: STARTERS,
-      },
-    ] satisfies ThreadItem[]);
-    expect(threadItemsOf(entry, false, null)).toEqual([]);
-  });
-
+describe("the hello's words and its starters (DESIGN.md §8 \"Chat's thread\", the hello)", () => {
   it("says the hello and the starters in the page's words, as ruled", () => {
     expect(helloWords("Vela")).toBe(
       "Hi, I'm Vela. I can start agents for you, keep track of the ones you run, and carry work between them. What first?",

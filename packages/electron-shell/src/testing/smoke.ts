@@ -10561,22 +10561,29 @@ export async function runSmokeGodview(opts: {
     }
     verdict["newSpark"] = newSpark;
 
-    // 11m. CHAT'S THREAD AND COMPOSER (SP-1d; DESIGN.md §8 "Chat's thread", "Chat's
-    //      composer") — a spark's own pane is its thread, and Send pastes the composer's
-    //      line into it by the road ⌘V takes, Return never pressed. The rung hatches a
-    //      spark of its own (VF-PM's ruling, 2026-11-01): ⌘N in Chat and Create, under
-    //      This Mac, where the godview smoke's typed-agent stub stands signed in for the
-    //      typed agent and records each line a session of it is given (`StubRecords`) —
-    //      never a vendor's agent, since the smoke's HOME holds no sign-in (EL7). The
-    //      thread mounts its live pane and the spark reads Ready; the composer's draft,
-    //      its keyboard placed as focusDeck places a pane's (run92b), takes a line typed
-    //      a key at a time (down, its character, up: a field's road, run85b), @ opens its
-    //      list with the hot row the one nearest the composer, and Esc folds it with the
-    //      text kept; Send says "Pasted into …'s pane — Return sends it", and no line
-    //      reaches the stub until the pane's own Return, which the harness presses. A card from the hand let go on the composer becomes a chip in
-    //      its draft, the card still in the hand. The no-deck case and two surfaces on one
-    //      seat are spark-pane.test.tsx's. Back to Godview's deck for 11h, which must stay
-    //      last; the spark's session ends with the run's teardown.
+    // 11m. CHAT'S THREAD AND COMPOSER (SP-1d, TH-1; DESIGN.md §8 "Chat's thread",
+    //      "Chat's composer") — a spark's thread is its conversation, read from the
+    //      transcript VibeField keeps, and Send queues the composer's line as yours
+    //      (`compose.sparks.say`), fieldd delivering it at the run's idle. The rung
+    //      hatches a spark of its own (VF-PM's ruling, 2026-11-01): ⌘N in Chat and
+    //      Create, under This Mac, where the godview smoke's typed-agent stub stands
+    //      signed in for the typed agent and records each line a session of it is given
+    //      (`StubRecords`) — never a vendor's agent, since the smoke's HOME holds no
+    //      sign-in (EL7). The thread draws its conversation (its hello the first row) and
+    //      the spark reads Ready; the composer's draft, its keyboard placed as focusDeck
+    //      places a pane's (run92b), takes a line typed a key at a time (down, its
+    //      character, up: a field's road, run85b), @ opens its list with the hot row the
+    //      one nearest the composer, and Esc folds it with the text kept; Send stands
+    //      your bubble in the flow at once and says nothing on the line, the stub is
+    //      given the line with no key pressed for it, and the record's `you` line takes
+    //      the bubble's place, its receipt "Delivered". A card from the hand let go on
+    //      the composer becomes a chip in its draft, the card still in the hand. Back to
+    //      Godview's deck for 11h, which must stay last; the spark's session ends with the
+    //      run's teardown.
+    //      *TH-1 (2026-11-05, the pane leaves Chat):* the thread was the spark's own live
+    //      pane, Send pasted into it by the road ⌘V takes and said "Pasted into …'s pane
+    //      — Return sends it", and the harness pressed the pane's Return before the stub
+    //      was given the line. Those steps retired with the pane; they are in git.
     const stubLines = opts.typedAgent?.lines;
     if (stubLines === undefined) {
       // Honest, never a silent pass: the hatch needs the staged stub, as the typed-agent rows do
@@ -10594,15 +10601,19 @@ export async function runSmokeGodview(opts: {
         chosen: string | null;
         name: string | null;
         status: string | null;
-        pane: string | null;
-        session: string | null;
+        /** the flow's state: reading, unreadable or ready (null: no flow drawn) */
+        flow: string | null;
+        /** the hello stands as the flow's first row */
+        hello: boolean;
+        /** your bubbles in the flow that carry this rung's nonce, and the last one's receipt */
+        bubbles: number;
+        receipt: string | null;
         text: string | null;
         at: string | null;
         rows: number;
         hot: number;
         armed: boolean;
         chips: number;
-        inPane: boolean;
         inInput: boolean;
         /** where the document's caret is: "editor" inside the composer's draft, else the node it is in (null: none) */
         caret: string | null;
@@ -10611,9 +10622,14 @@ export async function runSmokeGodview(opts: {
       /** Chat's thread, its composer and the hand, as the page shows them now. */
       const THREAD_FACTS = `(() => {
         const thread = document.querySelector(".vf-chat-thread");
-        const pane = thread === null ? null : thread.querySelector(".vf-chat-pane");
-        const canvas =
-          pane === null ? null : pane.querySelector('canvas[aria-label^="Terminal session "]');
+        const flow = thread === null ? null : thread.querySelector(".vf-chat-flow");
+        const yours =
+          flow === null
+            ? []
+            : [...flow.querySelectorAll('[data-row="you"]')].filter((row) =>
+                (row.textContent ?? "").includes(${JSON.stringify(nonce)}),
+              );
+        const last = yours.length === 0 ? null : yours[yours.length - 1];
         const input = document.querySelector(".vf-chat-input");
         const at = document.querySelector(".vf-chat-at");
         const rows = at === null ? [] : [...at.querySelectorAll(".vf-chat-at-row")];
@@ -10629,20 +10645,16 @@ export async function runSmokeGodview(opts: {
           chosen: chosen === null ? null : chosen.getAttribute("data-spark"),
           name: thread?.querySelector(".vf-chat-thread-name")?.textContent ?? null,
           status: thread?.querySelector(".vf-chat-thread-status")?.textContent ?? null,
-          pane: pane === null ? null : pane.getAttribute("data-pane-state"),
-          session:
-            canvas === null
-              ? null
-              : (canvas.getAttribute("aria-label") ?? "").slice("Terminal session ".length),
+          flow: flow === null ? null : flow.getAttribute("data-flow-state"),
+          hello: flow !== null && flow.querySelector('[data-row="hello"]') !== null,
+          bubbles: yours.length,
+          receipt: last?.querySelector(".vf-chat-receipt")?.textContent ?? null,
           text: input === null ? null : input.textContent,
           at: at === null ? null : at.getAttribute("data-at"),
           rows: rows.length,
           hot: rows.findIndex((row) => row.getAttribute("data-hot") === "true"),
           armed: send !== null && send.getAttribute("data-armed") === "true",
           chips: input === null ? 0 : input.querySelectorAll(".vf-chat-chip").length,
-          inPane:
-            active !== null && pane !== null && pane.contains(active) &&
-            active.classList.contains("terminal-input"),
           inInput: active !== null && input !== null && (active === input || input.contains(active)),
           caret:
             anchor === null
@@ -10788,19 +10800,19 @@ export async function runSmokeGodview(opts: {
         );
         if (hatched.refusal !== null) throw new Error(`the hatch was refused: ${hatched.refusal}`);
         evidence.spark = hatched.chosen;
-        // 2. Its thread: the spark's own pane live, and the spark heard (Ready)
+        // 2. Its thread: its conversation drawn from the record (a new spark's hello its first row), and the spark
+        // heard (Ready)
         const readyFrom = Date.now();
-        const live = await untilThread(
-          `${name}'s thread: its pane live and ${name} Ready`,
-          (facts) => facts.pane === "live" && facts.session !== null && facts.status === "Ready",
+        const drawn = await untilThread(
+          `${name}'s thread: its conversation drawn and ${name} Ready`,
+          (facts) => facts.flow === "ready" && facts.status === "Ready",
           30_000,
         );
-        const session = live.session;
-        if (session === null) throw new Error(`${name}'s pane names no session`);
         evidence.waitedMs.ready = Date.now() - readyFrom;
-        evidence.session = session;
+        evidence.hello = drawn.hello;
+        if (!drawn.hello) throw new Error(`${name}'s conversation does not open with its hello`);
         chatThread["the hatch"] =
-          `⌘N's sheet, Create ${name}: Chat chose ${name}, its pane live on ${session}, and ` +
+          `⌘N's sheet, Create ${name}: Chat chose ${name}, its conversation drawn with its hello first, and ` +
           `${name} Ready after ${evidence.waitedMs.ready}ms`;
         // 3. The composer: a typed line, @'s list with the hot row nearest, Esc keeping the text. The draft takes the
         // keyboard as every field in this smoke takes it (`focusDeck`'s rule, which says why): the window and its
@@ -10886,51 +10898,49 @@ export async function runSmokeGodview(opts: {
           `${evidence.typing.focus?.contents}), then typed "${kept.text}" a key at a time (down, its character, up); ` +
           `@ opened its list ` +
           `(${opened.rows} rows, the hot one the nearest); Esc folded it, the text and the keyboard kept`;
-        // 4. Send: pasted, and never submitted until the pane's own Return
+        // 4. Send: queued as yours — the bubble at once and no note; the stub given the line with no key pressed for
+        // it (fieldd delivers at the run's idle); then the record's own line in the bubble's place, "Delivered"
         await untilThread("Send armed", (facts) => facts.armed, 3_000);
+        const noteBefore = (await win.webContents.executeJavaScript(
+          `document.querySelector(".vf-line-note")?.textContent ?? null`,
+        )) as string | null;
+        const sentFrom = Date.now();
         await pressAt(".vf-chat-send");
-        const note = await untilRendererValue(
-          win,
-          "the line saying Send pasted the line",
-          `document.querySelector(".vf-line-note")?.textContent ?? "no note"`,
-          25_000,
-          (value) => value.startsWith("Pasted into"),
+        const standing = await untilThread(
+          "your bubble in the flow",
+          (facts) => facts.bubbles === 1,
+          5_000,
         );
-        evidence.note = note;
-        if (!note.includes(`${name}'s pane`) || !note.endsWith("Return sends it")) {
-          throw new Error(`Send said ${JSON.stringify(note)}`);
-        }
-        await sleep(400);
-        if (givenNow().length > 0) {
-          throw new Error(
-            `Send submitted the line: ${name}'s agent was given it before its Return`,
-          );
-        }
-        await untilThread(
-          "the pane holding the keyboard after Send",
-          (facts) => facts.inPane,
-          3_000,
-        );
-        // the input the paste opened, as the deck's markers read it (bounded: Send waited for it already)
-        const gateFrom = Date.now();
-        while (!gateOpen(latestGate(direct.history(), session)) && Date.now() - gateFrom < 3_000) {
-          await sleep(50);
-        }
-        evidence.waitedMs.inputBeforeReturn = Date.now() - gateFrom;
-        evidence.inputAllowed.Return = latestGate(direct.history(), session)?.inputAllowed ?? null;
-        pressKeyOnce("Return");
-        const givenBy = Date.now() + 10_000;
+        evidence.receipts.push(standing.receipt);
+        const givenBy = Date.now() + 20_000;
         while (givenNow().length === 0 && Date.now() < givenBy) await sleep(50);
         const given = givenNow()[0];
         if (given === undefined) {
           throw new Error(
-            `the pane's Return gave ${name}'s agent no line with ${nonce} within 10000ms ` +
+            `Send gave ${name}'s agent no line with ${nonce} within 20000ms ` +
               `(${readTypedAgentLines(lines).length} line(s) recorded)`,
           );
         }
+        evidence.waitedMs.given = Date.now() - sentFrom;
+        const delivered = await untilThread(
+          "the record's line in the bubble's place, Delivered",
+          (facts) => facts.bubbles === 1 && facts.receipt === "Delivered",
+          15_000,
+        );
+        evidence.waitedMs.delivered = Date.now() - sentFrom;
+        evidence.receipts.push(delivered.receipt);
+        const noteAfter = (await win.webContents.executeJavaScript(
+          `document.querySelector(".vf-line-note")?.textContent ?? null`,
+        )) as string | null;
+        evidence.note = noteAfter;
+        // a queued send says nothing on the line: its bubble and its receipt say it
+        if (noteAfter !== null && noteAfter !== noteBefore) {
+          throw new Error(`Send said ${JSON.stringify(noteAfter)} on the line`);
+        }
         chatThread["Send"] =
-          `${note}; ${name}'s agent was given nothing for 400ms, and the pane's Return gave it ` +
-          `"${given.line}" (pid ${given.pid})`;
+          `your bubble stood at once (${standing.receipt ?? "no receipt yet"}); ${name}'s agent was given ` +
+          `"${given.line}" (pid ${given.pid}) after ${evidence.waitedMs.given}ms with no key pressed for it; ` +
+          `the record's line took the bubble's place, Delivered, after ${evidence.waitedMs.delivered}ms`;
         // 5. A card from the hand let go on the composer: a chip in the draft, the card kept
         const handBefore = (await threadFacts()).cards;
         const dealt = (await win.webContents.executeJavaScript(
@@ -10976,15 +10986,13 @@ export async function runSmokeGodview(opts: {
         chatThread["the card"] =
           `${play.played?.note ?? "?"} (${play.answer?.label ?? "?"}): a chip in the draft, the ` +
           `card still in the hand; ${emptied} card(s) cleared`;
-        console.log(chatSendEvidenceLine(evidence, null, latestGate(direct.history(), session)));
+        console.log(chatSendEvidenceLine(evidence, null));
         // back to Godview's deck for 11h, nothing focused in Chat
         await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
         pressViewKey(win, "godview");
         await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
       } catch (error) {
-        const gateNow =
-          evidence.session === null ? null : latestGate(direct.history(), evidence.session);
-        console.log(chatSendEvidenceLine(evidence, error, gateNow));
+        console.log(chatSendEvidenceLine(evidence, error));
         throw error;
       }
       verdict["chatThread"] = chatThread;

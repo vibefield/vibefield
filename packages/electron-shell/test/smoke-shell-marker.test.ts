@@ -184,15 +184,15 @@ describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
     const evidence = newChatSendEvidence("/tmp/typed-agent/lines.jsonl", "sp1d-abc");
     expect(evidence.typing).toEqual({ focus: null, caret: null, draft: null, heard: null });
     expect(evidence.create).toBeNull();
+    expect(evidence.receipts).toEqual([]);
     evidence.spark = "spark-1";
-    evidence.session = "s-pane";
-    evidence.note = "Pasted into Polaris's pane — Return sends it";
+    evidence.hello = true;
+    evidence.receipts.push(null, "Delivered");
     evidence.create = { state: "enabled", box: "612,690,96,32", waitedMs: 340 };
     evidence.typing.focus = { window: true, contents: true, document: true };
     evidence.typing.caret = { placed: "editor", held: "editor" };
     evidence.typing.draft = { height: 24, enabled: true };
     evidence.typing.heard = { "keydown@draft": 8, "keypress@draft": 8, "input@draft": 8 };
-    evidence.inputAllowed.Return = true;
     evidence.play = {
       at: { x: 760, y: 640 },
       target: "prompt",
@@ -201,16 +201,18 @@ describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
       refused: null,
     };
     evidence.waitedMs.ready = 640;
-    evidence.waitedMs.inputBeforeReturn = 12;
-    const passed = chatSendEvidenceLine(evidence, null, null);
+    evidence.waitedMs.given = 220;
+    evidence.waitedMs.delivered = 480;
+    const passed = chatSendEvidenceLine(evidence, null);
     expect(passed.startsWith(CHAT_SEND_EVIDENCE)).toBe(true);
     expect(JSON.parse(passed.slice(CHAT_SEND_EVIDENCE.length))).toEqual({
       failed: null,
       spark: "spark-1",
-      session: "s-pane",
+      hello: true,
       lines: "/tmp/typed-agent/lines.jsonl",
       nonce: "sp1d-abc",
-      note: "Pasted into Polaris's pane — Return sends it",
+      note: null,
+      receipts: [null, "Delivered"],
       create: { state: "enabled", box: "612,690,96,32", waitedMs: 340 },
       typing: {
         focus: { window: true, contents: true, document: true },
@@ -218,12 +220,10 @@ describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
         draft: { height: 24, enabled: true },
         heard: { "keydown@draft": 8, "keypress@draft": 8, "input@draft": 8 },
       },
-      inputAllowed: { Return: true },
       play: evidence.play,
-      waitedMs: { ready: 640, inputBeforeReturn: 12 },
-      gateNow: null,
+      waitedMs: { ready: 640, given: 220, delivered: 480 },
     });
-    const failed = chatSendEvidenceLine(evidence, new Error("no sp1d-abc in the lines"), null);
+    const failed = chatSendEvidenceLine(evidence, new Error("no sp1d-abc in the lines"));
     expect(JSON.parse(failed.slice(CHAT_SEND_EVIDENCE.length)).failed).toBe(
       "no sp1d-abc in the lines",
     );

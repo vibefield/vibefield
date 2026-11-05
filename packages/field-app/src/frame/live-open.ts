@@ -15,7 +15,7 @@ import { requestView } from "./view-state";
 // session here, is selected through the find door Godview publishes as it
 // opens. From Chat (SP-1b) it was a spark's Show: its own session's pane, by
 // the same path from History's. *SP-1d (2026-10-31):* Show retired — the
-// spark's pane is mounted in Chat's thread (`chat/SparkPane.tsx`), so Chat
+// spark's pane is mounted in Chat's thread (`chat/SparkPane.tsx`, retired at TH-1), so Chat
 // opened nothing here. *CP-3 (2026-10-31):* a needs-you card's Show, on an
 // agent's own ask, opens that agent's pane by the same path (`ChatView`).
 // *TH-2 (2026-11-05; ER-C28):* the pane left Chat's thread, so Show returns

@@ -16,8 +16,8 @@ import "./needs-card.css";
 
 // THE NEEDS-YOU CARD, DRAWN (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card; the Sparks page's `qCard` and
 // `askCard`) — controller-free, so the catalog draws this markup on fixtures. One of the thread's items: it stands in
-// the foot's overlay (`.vf-chat-items`) by the items' one rule, over the pane, never in its flow; under a drawn
-// conversation, held in the foot above the composer (TH-1). Since TH-1 the spark's own run's ask is a card too
+// the foot above the composer, covering nothing (TH-1; it stood over the pane's bottom rows until the pane left
+// Chat). Since TH-1 the spark's own run's ask is a card too
 // (`data-own`), its question in the spark's name and its eyebrow the word alone. Its rows stand 5
 // apart — the eyebrow (with "1 of 3" at its right), the question, the held words, the sub — then its acts, the kit's
 // buttons by their place; answered here, one line of what you said in their place. What it is doing is the card's

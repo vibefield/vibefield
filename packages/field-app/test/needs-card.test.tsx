@@ -45,7 +45,7 @@ import {
 } from "../src/chat/needs-card";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
-import { sparkIsNew, threadItemsOf, threadQuiet } from "../src/chat/thread-items";
+import { footItemsOf, sparkIsNew } from "../src/chat/thread-items";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import {
   LIVE_BEAT_MS,
@@ -55,6 +55,7 @@ import {
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { hearLineSays } from "../src/frame/line-door";
 import { resetStatusLineForTest, statusLineSaid } from "../src/frame/status-line";
+import { NO_TRANSCRIPTS } from "./transcript-door-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -727,18 +728,17 @@ describe("the card, drawn (the shipping NeedsCardView)", () => {
   });
 });
 
-describe("what stands in the thread while a card does (the thread's items, one at a time)", () => {
-  it("stands the card in the hello's place: a thread with something waiting on you is not quiet", () => {
-    // a spark that has never worked, so it is new, and the card alone is why the thread is not quiet
+describe("what stands in the thread's foot while a card does (the thread's items, one at a time)", () => {
+  it("stands the card alone in the foot, the hello first in the flow beside it (TH-1; CO-Q2 (b))", () => {
+    // a spark that has never worked, so it is new: its hello is its conversation's first row, never in the foot
     const never = { ...VELA, turnedAt: null };
     const own = row({ runtimeRunId: "run-12", spark: VELA.id, turnedAt: null });
     const entry = sparkEntriesOf([never], [own], { items: [QUESTION] })[0];
     if (entry === undefined) throw new Error("no entry");
     expect(sparkIsNew(entry)).toBe(true);
-    expect(threadQuiet(entry, true, false)).toBe(false);
     const it1 = needsCardOf(entry, QUESTION);
-    expect(threadItemsOf(entry, true, it1)).toEqual([it1]);
-    expect(threadItemsOf(entry, false, null)).toEqual([]);
+    expect(footItemsOf(it1)).toEqual([it1]);
+    expect(footItemsOf(null)).toEqual([]);
   });
 });
 
@@ -817,7 +817,13 @@ async function mountChat(
     const [active, set] = useState(true);
     setActive = set;
     return (
-      <ChatView active={active} surface={surface} onSurfaceChange={setSurface} port={composer} />
+      <ChatView
+        active={active}
+        surface={surface}
+        onSurfaceChange={setSurface}
+        port={composer}
+        transcripts={NO_TRANSCRIPTS}
+      />
     );
   }
   host = document.createElement("div");
@@ -861,7 +867,7 @@ function typeText(text: string): void {
 }
 
 describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => {
-  it("stands in the thread's foot over the pane, before the composer, and never takes the keyboard", async () => {
+  it("stands in the thread's foot, before the composer, and never takes the keyboard", async () => {
     await mountChat([QUESTION]);
     const root = card();
     expect(root?.closest(".vf-chat-items")?.parentElement?.className).toBe("vf-chat-foot");
@@ -869,8 +875,8 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     expect(foot[0]).toBe("vf-chat-items");
     expect(foot.some((name) => name.includes("vf-chat-composer"))).toBe(true);
     expect(document.activeElement).toBe(document.body);
-    // no hello while it stands, though the draft is empty
-    expect($(".vf-chat-hello")).toBeNull();
+    // Vela has worked: no hello in her conversation, and none in the foot
+    expect($('.vf-chat-flow [data-row="hello"]')).toBeNull();
   });
 
   it("an answer clears the item: sent by its place, the card stands until fieldd answers, says what you said, then leaves", async () => {

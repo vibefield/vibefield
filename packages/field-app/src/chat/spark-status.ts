@@ -13,7 +13,7 @@ import { SPARK_NEEDS_YOU, type SparkStatus } from "@vibefield/design-kit/spark-f
 // by the row's `spark` (its own session) or its `origin` (an agent it started); a row from a daemon before SP-1b
 // carries neither and is simply no spark's. An item is a spark's by its `spark`. Only the statuses the board or the
 // queue can certify are read here — the others arrive with the slices that report them, never from a guess. What its
-// session is doing (awake, heard, waiting on you in its pane) is read from the session, never from the word, which an
+// session is doing (awake, waiting on you in its terminal) is read from the session, never from the word, which an
 // item's stands over.
 
 /** One spark, as Chat's list and its cell draw it. */
@@ -24,16 +24,14 @@ export interface SparkEntry {
   readonly status: SparkStatus;
   /** S-4: Asking you, Needs your OK or Stuck (Rate limited has no signal yet) — its own run's blocker, or an item */
   readonly needsYou: boolean;
-  /** Its session runs: its own run alive on the board, else its record says so. Asleep or not, the thread's line,
-   * its Wake and its pane key on this, never on the word (an item's word stands over Asleep: CP3-D7). */
+  /** Its session runs: its own run alive on the board, else its record says so. Asleep or not, the head's act (Jump to
+   * or Wake) and whether Send wakes it first key on this, never on the word (an item's word stands over Asleep:
+   * CP3-D7). */
   readonly awake: boolean;
   /** Its own run waits on you: a blocker on its own row (or the row blocked) while its session runs. *Amended at TH-1
    * (ER-C2):* this stopped Send, since a menu in its pane would read a paste as its answer; Send now queues, and the
    * queue delivers only at an idle with nothing blocking, so it says your receipt: "it lands after you answer". */
   readonly blocked: boolean;
-  /** Heard: its own run's row is on the board, alive, watched (not waiting to resume, which says nothing yet), and says
-   * how the run stands — at work, idle or waiting on you in its pane. Send's R-4 wait reads this, never the word. */
-  readonly heard: boolean;
   /** The needs-you queue's open items for it, oldest first (CP-3): its question, its held send or spawn, an ask from
    * an agent it started, and since TH-1 the ask of its own run (TH-Q29 (a)), which draws its card now the pane has
    * left Chat (`isOwnAsk`). */
@@ -116,13 +114,6 @@ function waitsOn(own: AgentFieldRow | null): own is AgentFieldRow {
   return own !== null && (own.blockers[0] !== undefined || own.status === "blocked");
 }
 
-/** Heard: its own run's row is on the board, alive, watched, and says how the run stands. A pending row's status is
- * `unknown` (nothing observes it yet), as a run's is before it is first heard from. */
-function heardOf(own: AgentFieldRow | null): boolean {
-  if (own === null || !own.alive || own.pending !== undefined) return false;
-  return own.status !== "unknown" || own.blockers.length > 0;
-}
-
 const NO_ITEMS: readonly NeedsItem[] = Object.freeze([]);
 
 /** The first that holds is the word (DESIGN.md §8 "Chat's list", the status as SP-1b reads it, as amended at CP-3).
@@ -199,7 +190,6 @@ export function sparkEntriesOf(
         needsYou: SPARK_NEEDS_YOU.has(status),
         awake,
         blocked,
-        heard: heardOf(run),
         items: mine,
         ownRuns: ownRunsOf(spark, rows),
         needs: needsOf(blocked ? run : null, mine),

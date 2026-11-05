@@ -11,7 +11,6 @@ import { ChromeBoundary } from "@vibefield/puppeteer-views";
 import type { CSSProperties, ReactElement, ReactNode, Ref } from "react";
 import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
 import { headActOf, NO_PAUSE, type PauseAct } from "./head-act";
-import { SparkPaneView } from "./SparkPaneView";
 import { activityWords, type SparkEntry } from "./spark-status";
 import { SPARKS_UNREADABLE, type SparksReading } from "./sparks-feed";
 import { ThreadItemsView } from "./ThreadItemsView";
@@ -23,14 +22,14 @@ import "./chat.css";
 // `ch-needs`) — controller-free, so the catalog mounts this exact markup on fixtures. The list's column holds the
 // sparks fieldd keeps, newest activity first (CH-D1); a row is the face, the name and the status word (CH-D3); the
 // needs-you three take the attention ink (CH-D4), and a row wears its thread's mark: the orange dot, or unread's cyan
-// one, said in the row's name too where it outlasts the word (SP-1d). The thread's column is a fixed box: the chosen
-// spark's head, then its own pane (the controller's `SparkPane`, handed in) — or, asleep or not started, one honest
-// line with its one act — then the thread's foot: its composer, handed in, and its items standing over the pane (a new
-// spark's hello, or since CP-3 the needs-you card). TH-1: handed a `flow` (`ThreadFlowView`), the column is the head,
-// the flow and the foot, and the items stand in the foot above the composer, covering nothing; the pane goes when
-// Chat's controller hands the flow. TH-2: the head carries the thread's act in its end slot (`head-act.ts`): Jump to
-// awake, Wake asleep, and Pause current turn before Jump to while the spark's own run works; the status's place says a
-// refused Pause, or a cancellation fieldd could not confirm. The line under the head keeps its words, not its Wake.
+// one, said in the row's name too where it outlasts the word (SP-1d). The thread's column is a fixed box (TH-1): the
+// chosen spark's head, its conversation (`ThreadFlowView`, handed in), then the foot: what waits on you (the needs-you
+// card, CP-3), above the composer, covering nothing. TH-2: the head carries the thread's act in its end slot
+// (`head-act.ts`): Jump to awake, Wake asleep, and Pause current turn before Jump to while the spark's own run works;
+// the status's place says a refused Wake or Pause, or a cancellation fieldd could not confirm.
+// *Amended 2026-11-05 (TH-1, the pane leaves Chat):* the column was the head, the spark's own pane (`SparkPane`,
+// handed in) or, asleep or not started, one honest line under the head, then the foot, whose items stood over the
+// pane's bottom rows. The pane, its place's words and the line left Chat with TH-1; they are in git.
 
 /** What the chosen spark's act is doing: at rest, under way, or refused in fieldd's words. */
 export type ChatAct =
@@ -59,17 +58,13 @@ export interface ChatPanelViewProps {
   onPause?: ((entry: SparkEntry) => void) | undefined;
   /** TH-2 — the shown spark's own Pause: pressed, sent or refused, for the turn it was pressed in */
   pause?: PauseAct | undefined;
-  /** the shown spark's own pane, while it is awake (the product's `SparkPane`); absent, the pane's place says what a
-   * window with no terminals says */
-  pane?: ReactNode;
-  /** TH-1 — the shown spark's conversation, drawn (`ThreadFlowView`): handed, it stands in the pane's place, awake or
-   * asleep, and the thread's items stand in the foot above the composer, covering nothing */
+  /** TH-1 — the shown spark's conversation, drawn (the product's and the catalog's `ThreadFlowView`), under the head,
+   * awake or asleep; absent, the column is the head and the foot alone */
   flow?: ReactNode;
-  /** what stands in the shown thread over its pane, in order (`threadItemsOf`) */
+  /** what stands in the shown thread's foot, above the composer, in order (`footItemsOf`) */
   items?: readonly ThreadItem[];
-  /** a starter pressed in the thread's hello: its words, sent as Send sends */
-  onStarter?: ((words: string) => void) | undefined;
-  /** an act holds the shown thread — a send into it, a starter's or Send's, or a wake: Wake and the starters wait */
+  /** an act holds the shown thread — a send into it, a starter's or Send's, or a wake: Wake waits (the flow's starters
+   * are handed the same fact) */
   sending?: boolean | undefined;
   /** CP-3 — an act pressed on the thread's needs-you card, by its place */
   onAnswer?: ((item: NeedsItem, choice: number) => void) | undefined;
@@ -93,24 +88,6 @@ const AT_WORK: ReadonlySet<SparkStatus> = new Set([
   "focus",
 ]);
 
-/** The line the thread's column says under the head in place of a pane: asleep, or not started. */
-export type ThreadLine = "asleep" | "not-started";
-
-/** The spark's line, or null while it is awake: then its pane is the thread (DESIGN.md §8 "Chat's thread"). Read from
- * its session (`awake`), never from its word: a sleeping spark with an item says Asking you or Needs your OK, and still
- * sleeps (§8 "Chat's list", the status as amended at CP-3). */
-export function threadLineOf(entry: SparkEntry): ThreadLine | null {
-  if (entry.run === null && entry.spark.session === undefined) return "not-started";
-  if (!entry.awake) return "asleep";
-  return null;
-}
-
-/** The floor session the spark's own run's terminal is — the board's row first, else its record — or null while
- * fieldd has not named one (just after a hatch or a wake). */
-export function paneSessionOf(entry: SparkEntry): string | null {
-  return entry.run?.terminal?.runtimeSessionId ?? entry.spark.session?.terminalSessionId ?? null;
-}
-
 /** The spark the thread's column shows: the chosen one while the list holds it, else the newest. */
 export function shownOf(
   entries: readonly SparkEntry[],
@@ -131,10 +108,8 @@ export function ChatPanelView({
   jumping = false,
   onPause,
   pause = NO_PAUSE,
-  pane,
   flow,
   items = [],
-  onStarter,
   sending = false,
   onAnswer,
   onShowAsk,
@@ -206,10 +181,8 @@ export function ChatPanelView({
             jumping={jumping}
             onPause={onPause}
             pause={pause}
-            pane={pane}
             flow={flow}
             items={items}
-            onStarter={onStarter}
             sending={sending}
             onAnswer={onAnswer}
             onShowAsk={onShowAsk}
@@ -274,10 +247,8 @@ function ThreadColumn({
   jumping,
   onPause,
   pause,
-  pane,
   flow,
   items,
-  onStarter,
   sending,
   onAnswer,
   onShowAsk,
@@ -291,10 +262,8 @@ function ThreadColumn({
   jumping: boolean;
   onPause: ((entry: SparkEntry) => void) | undefined;
   pause: PauseAct;
-  pane: ReactNode;
   flow: ReactNode;
   items: readonly ThreadItem[];
-  onStarter: ((words: string) => void) | undefined;
   sending: boolean;
   onAnswer: ((item: NeedsItem, choice: number) => void) | undefined;
   onShowAsk: ((item: NeedsItem) => void) | undefined;
@@ -302,8 +271,8 @@ function ThreadColumn({
   composer: ReactNode;
 }): ReactElement {
   const { spark, status, needsYou } = entry;
-  const line = threadLineOf(entry);
-  const head = headActOf(entry, pause);
+  // a refused Wake is said in the status's place while the spark sleeps, Wake standing (TH-1, the line's words moved)
+  const head = headActOf(entry, pause, act.state === "refused" ? act.reason : null);
   return (
     <section className="vf-chat-thread" aria-label={`${spark.name}'s thread`}>
       <header className="vf-chat-thread-head">
@@ -359,48 +328,16 @@ function ThreadColumn({
           </span>
         )}
       </header>
-      {line === null && flow === undefined ? (
-        // the pane is a chrome piece of its own, tried again for the session it shows
-        <ChromeBoundary name="Spark pane" retryKey={paneSessionOf(entry) ?? spark.id}>
-          {pane ?? <SparkPaneView name={spark.name} state="no-terminals" />}
-        </ChromeBoundary>
-      ) : line === null ? null : (
-        // its words only: its Wake is the head's (TH-2)
-        <p className="vf-chat-thread-line" data-line={line} role="status">
-          <span>{lineWords(spark.name, line, act)}</span>
-        </p>
-      )}
       {flow === undefined ? null : (
         // the flow is a chrome piece of its own, tried again for the spark it draws
         <ChromeBoundary name="Spark thread" retryKey={spark.id}>
           {flow}
         </ChromeBoundary>
       )}
-      <div className="vf-chat-foot" {...(flow === undefined ? {} : { "data-flow": "" })}>
-        <ThreadItemsView
-          items={items}
-          onStarter={onStarter}
-          sending={sending}
-          onAnswer={onAnswer}
-          onShow={onShowAsk}
-          cardRef={cardRef}
-        />
+      <div className="vf-chat-foot">
+        <ThreadItemsView items={items} onAnswer={onAnswer} onShow={onShowAsk} cardRef={cardRef} />
         {composer}
       </div>
     </section>
   );
-}
-
-/** The one line under the head while there is no pane (DESIGN.md §8 "Chat's list", the thread's column as SP-1d
- * built it): asleep or not started, a wake under way, or a wake refused in fieldd's words. A refusal is said here only
- * when Wake asked; Send says its own in its note. */
-function lineWords(name: string, line: ThreadLine, act: ChatAct): string {
-  if (act.state === "refused") return `Couldn't wake ${name}: ${act.reason}`;
-  switch (line) {
-    case "asleep":
-      return `${name} is asleep`;
-    case "not-started":
-      // no act of its own: Send wakes it, and the line says so while it does
-      return act.state === "busy" ? "Waking…" : `${name} hasn't started yet`;
-  }
 }
