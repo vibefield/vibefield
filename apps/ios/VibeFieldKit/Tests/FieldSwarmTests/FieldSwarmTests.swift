@@ -63,11 +63,8 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
 }
 
 @Suite struct MarksAtlasTests {
-  /// The desktop SDK 0.3.2 uploads this PNG's red channel in top-to-bottom
-  /// order, without color conversion. Check the actual Metal bytes, including
-  /// tile gutters: a flipped upload can leave every tile coordinate correct
-  /// while showing a different agent's mark (or an empty tile).
-  @Test @MainActor func uploadedMarksMatchDesktopPixels() throws {
+  /// The atlas's red channel exactly as `makeTexture` uploads it.
+  @MainActor private func uploadedRed() throws -> [UInt8] {
     let device = try #require(MTLCreateSystemDefaultDevice())
     let texture = try #require(MarksAtlas.makeTexture(device: device))
     var red = [UInt8](repeating: 0, count: MarksAtlas.width * MarksAtlas.height)
@@ -76,8 +73,42 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
         bytes.baseAddress!, bytesPerRow: MarksAtlas.width,
         from: MTLRegionMake2D(0, 0, MarksAtlas.width, MarksAtlas.height), mipmapLevel: 0)
     }
+    return red
+  }
+
+  /// The desktop SDK 0.3.2 uploads this PNG's red channel in top-to-bottom
+  /// order, without color conversion. Check the actual Metal bytes, including
+  /// tile gutters: a flipped upload can leave every tile coordinate correct
+  /// while showing a different agent's mark (or an empty tile).
+  ///
+  /// LP-4 (2026-11-05): the pin is the atlas with every unkept tile blanked in
+  /// place (`apps/ios/scripts/blank-unkept-marks.mjs` prints it; the
+  /// generator's full bake pinned 49b54415…). The two kept tiles are the bake's
+  /// bytes and both sit in the top row, so a flipped upload still misses it.
+  @Test @MainActor func uploadedMarksMatchDesktopPixels() throws {
+    let red = try uploadedRed()
     let digest = SHA256.hash(data: Data(red)).map { String(format: "%02x", $0) }.joined()
-    #expect(digest == "49b54415b1f1018b71aaf9b4fb417dc92589ae977e2040efdd02001752dd60ac")
+    #expect(digest == "4c89a40c1c66d10382b83645eb08b2391eae29bfc7372e8ab0c73a744e867df7")
+  }
+
+  /// LP-4 — the bundle carries no vendor mark the app does not draw: every
+  /// tile that is not `drawn` uploads as an empty field (red 0, outside every
+  /// edge), and each drawn tile still carries its mark.
+  @Test @MainActor func onlyTheDrawnTilesCarryAMark() throws {
+    let red = try uploadedRed()
+    for candidate in MarksAtlas.candidates {
+      var inked = 0
+      for y in candidate.tile.y..<(candidate.tile.y + MarksAtlas.tile) {
+        for x in candidate.tile.x..<(candidate.tile.x + MarksAtlas.tile) where red[y * MarksAtlas.width + x] != 0 {
+          inked += 1
+        }
+      }
+      if candidate.drawn {
+        #expect(inked > 0, "\(candidate.id) is drawn but its tile is empty")
+      } else {
+        #expect(inked == 0, "\(candidate.id) is not drawn but its tile carries \(inked) inked texels")
+      }
+    }
   }
 
   /// AC-5 — the atlas keeps NO ROSTER OF ITS OWN. Until this lane it pinned its

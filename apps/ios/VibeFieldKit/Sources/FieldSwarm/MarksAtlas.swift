@@ -5,21 +5,24 @@ import Metal
 import UIKit
 
 // The provider marks as signed-distance tiles for the swarm's text pass —
-// the reference's `icons/AgentIcon.tsx` table over its `marks.png`, which
-// ships here byte for byte (baked from @lobehub/icons-static-svg@1.94.0 by
-// research/svg-sdf's generator: 64-texel tiles, spread 8, pxRange 16, 0.5 at
-// the edge, the field in the red channel). The atlas carries each agent's own
-// mark plus the neighbours it could be confused with, so the lab can show the
-// choice; the app draws only the chosen ones that are KEPT.
+// the reference's `icons/AgentIcon.tsx` table over its `marks.png` (baked
+// from @lobehub/icons-static-svg@1.94.0 by research/svg-sdf's generator:
+// 64-texel tiles, spread 8, pxRange 16, 0.5 at the edge, the field in the red
+// channel). The bake carried each agent's own mark plus the neighbours it
+// could be confused with, so the lab could show the choice; the app draws only
+// the chosen ones that are KEPT.
 //
 // LP-4 (2026-11-05, the 0.9 launch; James kept two vendor logos in v1): only
 // Claude's and Codex's marks are kept. Every other vendor's mark is a third
 // party's trademark the app has no leave to draw, so every other agent — its
 // pick still recorded as `chosen` for the lab — wears its LETTER, the swarm's
 // own path for an agent with no tile (`SwarmRenderer`'s watermark fallback).
-// The png still carries the never-drawn tiles byte for byte: its generator
-// (research/svg-sdf) lives outside this repo, so re-baking it without them is
-// owed there, and `FieldSwarmTests`' pixel digest pins the bytes until then.
+// The png ships those two tiles alone: every other tile is blanked IN PLACE
+// (every channel 0, alpha 0) by `apps/ios/scripts/blank-unkept-marks.mjs`,
+// which holds its table to `candidates` below and prints the pixel digest
+// `FieldSwarmTests` pins. The kept tiles are the bake's bytes and no tile
+// moved; the lab's contact sheet draws the blanked candidates as empty cells.
+// A re-bake is the generator's, and the generator is not in this repo.
 //
 // THE ALLOW-LISTED PRESENTATION TABLE (AC-5, R23b). `candidates` below is the
 // one place in this target that names agents, and it is allowed to because it
