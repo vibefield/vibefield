@@ -33616,3 +33616,93 @@ fixtures), field-native's `registries.rs`, fieldd's package.json and 11 fieldd s
 - Errata at VF-PM's draft slot (step0-cp4.md §11): `V2/index.html:407` and `:621` (no budget; CP4-Q5 (a)'s witness),
   `flows:407-419` and round §3 D (CP4-Q17, re-ruled 13:24Z), `flows:277-289` (CP4-Q9 restated, CP4-S3); and the
   plan's own "R31" (§1, §5.1, CP4-S4) takes a dated pointer to R32, at the plan's owner's hand.
+
+## LP-4 — what App Review would reject, gone from the phone: no Apple logo, two vendor marks, one window, the acknowledgements bundled, and uploads by an API key no agent can reach by accident (2026-11-05; `9f21d47ec` → `1e2023717`, 16 commits on main `470f16af9`, lane `lp/ios-store` in `/Volumes/SamsungRed/lanes/lp-ios-store/vibe-field`, minted as M144 `1e2023717`, run 144)
+
+**What it rests on.**
+- The 0.9 launch plan's phase 3, "what App Review would reject", and James's rulings with the plan (2026-11-05, on the
+  page *VibeField 0.9 Launch*; DECISIONS LP): keep the Claude and Codex logos, and keep iPad in v1.
+- The lane was built code-only in wave 1 off `f599761bc` and reviewed through two lenses. Addendum A2 then: blanked the
+  unkept marks, bundled L5's acknowledgements, and drafted the ghosttea petition, G32 (3 review findings, all fixed).
+  prod-builder's signing read was ruled in by VF-PM (04:12Z), and prod-builder re-GO'd at `223f1aaf3` (04:30Z).
+- Two rulings by James after run 133's tip `13ea39639` (relayed by VF-PM): "Better CRT on the phone: keep" (06:02Z),
+  so the three commits that withheld it left the lane; and "just use my current account, i'm a individual developer"
+  (06:22Z), so the upload route is his own account, in `1e2023717`. prod-builder re-GO'd it at `8cf6e3067` (07:51Z;
+  the same patch-id).
+- The carry against `13ea39639` (33 files): 26 are equal by `git patch-id --stable`; the 4 FieldTerminal files are
+  main's again; 3 changed by the account ruling (`TESTFLIGHT.md`, `apps/ios/README.md`, `testflight.sh`'s help
+  text). Of main's moves since, only `DESIGN.md` and `scripts/check-ios-fixtures.mjs` are shared, both merged clean.
+  `13ea39639` is kept as `lp/ios-store-pre-crt-keep`. VF-PM's times here are the receiver's (his clock erratum, 03:50Z).
+- The last move, onto CP-4a1's records `470f16af9`, by `carry-check.sh`: DESIGN.md shared; commits 16/16 equal by
+  patch-id; the 28 unshared files byte-identical; DESIGN.md's +/- lines equal (19+, 10−), its six hunks only shifted.
+
+**What landed.**
+- The Mac's mark is a plain laptop (`os-marks.tsx`, and the phone's `os-macos.svg` byte for byte), never Apple's logo
+  (guideline 5.2.5). `data-os` and the "macOS" label are unchanged. Windows' and Linux's marks stay exact.
+- Better CRT (legacy), CC BY-NC-SA 3.0 upstream, stays offered on the phone by James's word. Nothing of the phone's
+  terminal effects changed here.
+- Only Claude Code's and Codex's marks are drawn, in the swarm and on the card. Every other agent wears its letter.
+  - `marks.png` keeps those two tiles; the other 18 are blanked in place by `apps/ios/scripts/blank-unkept-marks.mjs`.
+  - `FieldSwarmTests` pins the new digest, `4c89a40c…`.
+  - `pnpm check:ios-fixtures` holds the atlas to `MarksAtlas.swift`'s table.
+  - The DEBUG swarm lab lists only the kept marks.
+- One window: Info.plist's scene manifest says no multiple scenes, and the pbxproj stops generating it. A second iPad
+  window would have opened a second truffle node over the first one's state. iPad keeps Split View and Slide Over.
+  The system's lock prompts say "this device".
+- The swarm and the rain follow their window's screen: no `UIScreen.main` read is left in the kit, and each surface
+  re-reads its screen's rate every frame.
+- The App target bundles L5's `acknowledgements.json` (the pbxproj's four lines, byte for byte).
+- DESIGN.md §13 says the phone keeps two vendor marks, and the Mac a plain computer.
+- Uploads from the command line (`apps/ios/scripts/testflight.sh`, `TESTFLIGHT.md`):
+  - `upload BUILD store` exports with the new `ExportOptions-AppStore.plist` (`app-store-connect`, no
+    internal-only flag) and an App Store Connect API key. That fixes builds 2–4's "Failed to Use Accounts".
+  - The key lives in the login keychain (`vibefield-asc`, `-T ""`, so every read prompts) and is stored through
+    `security -i`, on no command line. `security`'s own `-w` prompt is ruled out: it keeps 128 characters, and a
+    .p8's base64 is over 300.
+  - The helper decodes the key through a pipe into a 700 temporary directory that its EXIT trap removes. It masks
+    the key's path and IDs in xcodebuild's echo, and refuses a decoded item that is not a whole .p8.
+  - `archive` signs with Xcode's account unless `ASC_ARCHIVE_KEY=1`.
+  - **The accident guard:** before any key read, the helper counts the processes running as James named `claude`,
+    `codex` and `fieldd`, printing counts only. It refuses while any runs, unless
+    `VIBEFIELD_ASC_AGENTS_RUNNING=revoke-the-key-afterwards`. It prevents accidents and is no boundary.
+  - The route is James's own account. For the length of `upload`, every agent CLI is quit, VibeField is quit (⌘Q,
+    which stops its daemons through the census) and any `pnpm dev` is stopped; the guard's three names are a sample,
+    not the set. Xcode's Organizer by hand, which reads no key file, is the other way. A key decoded while an agent
+    ran is treated as exposed and revoked.
+
+**Validation.**
+- This Mac, from inside the lane on T″ `8cf6e3067` (07:42:53Z and 07:44:05–07:44:37Z) and again on the landed tip
+  `1e2023717` (08:28:48–08:29:26Z), nice 19, guard clear, each on a frozen install under co-plan/INSTALL, each rc=0:
+  - preflight, check:ios-fixtures, and the marks check (= the pin);
+  - plutil on the pbxproj, ExportOptions-AppStore.plist and Info.plist; bash -n and shellcheck on testflight.sh;
+  - `xcrun swiftc -parse` on the changed Swift files, and check-agent-catalog `--literals`;
+  - field-app typecheck, vitest os-marks 4/4, biome and walls.
+- The guard's stubbed probe matrix (stub `security`, `xcodebuild`, `xcrun` and `pgrep`; no keychain, key or build
+  touched): every refusal, the exact and wrong overrides, the clean path, and a cut key refused.
+- The mini, run 144: `pnpm verify` exit 0 at `1e2023717` (08:38:15Z). vitest 12,737 passed, 0 failed, 20 skipped
+  (os-marks.test.tsx 4/4, the one new file); node 445/0; cargo 545/0; biome over 3,229 files; check:ios-fixtures "252
+  copies identical"; 86 pins. No step 2: the kit slot's witness carries by its hashes.
+- The mini's kit slot at T″ `8cf6e3067` (`apps/ios` `e8bd7c95e81e`, VibeFieldKit `21ded75ca0af`; 07:55:44–07:58:42Z;
+  Xcode 27.2, iPhone 17 `1F155533`, iOS 27.0). The witness carries to the landed tip by those hashes, since nothing
+  under `apps/ios` moved after it:
+  - the marks check: exit 0, the atlas carries only claudecode and codex, red-channel sha256 `4c89a40c…` = the pin;
+  - `** TEST BUILD SUCCEEDED **` (65 s), then `** TEST EXECUTE SUCCEEDED **` (58 s): FieldSwarmTests, FieldHomeTests
+    and FieldLockTests, 3 runs and 419 tests, 0 red, no issue, no crash. Each of L4's 8 rows was seen passing once;
+  - the unsigned App build, `** BUILD SUCCEEDED **` (46 s), with `acknowledgements.json` in `VibeField.app` (390,940
+    bytes, 2,770 lines, equal to the tree's);
+  - simulator `1F155533` shut down at 07:57:56Z. FieldTerminalTests were not in the slot: L4 no longer touches them.
+
+**Found.**
+- The atlas's generator (`research/svg-sdf`) is not in this repo. The 18 blanked candidates are recorded in
+  `draft/launch/swarm-marks-candidates.md`, and the pre-blank PNG is in git (blob `059fd448…`).
+- The dev app's fieldd runs under Electron's name, so the guard cannot count it. macOS's pgrep matches argv[0], and a
+  process renames itself with one `exec -a`.
+- The swarm lab's code and `MarksAtlas`'s 20-row table still compile into Release, where only opening the lab is
+  DEBUG-gated. Nothing of it is drawn.
+
+**Owed.**
+- **James's hand:** a real `testflight.sh archive 6` and `upload 6 store` from his own account, with every agent,
+  VibeField and any `pnpm dev` quit for the upload. Nothing here touched a keychain or App Store Connect.
+- The iPad word pass ("this phone" → device-neutral) after IOS-13a's `FieldDesign.DeviceWord`
+  (the list: `/Volumes/SamsungRed/lanes/lp-wave1/A2-device-words-list.md`), and a pass on 11- and 13-inch iPads.
+- About → Acknowledgements reading the bundled file (IOS-13a).

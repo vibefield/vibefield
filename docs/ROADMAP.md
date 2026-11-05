@@ -800,13 +800,17 @@ phone"; DECISIONS PC
        vulnerability reporting turned on), and the first tester's report through the form.
    - **Phase 3, iPhone and iPad to external TestFlight** (5–19 Nov, the iOS lane and James):
      - the App Store export and uploads signed in with an App Store Connect API key (build 4's upload failed on 09-20,
-       and build 5 was archived but never uploaded, so the next build is 6, carrying P0-H1 and everything since 09-13);
+       and build 5 was archived but never uploaded, so the next build is 6, carrying P0-H1 and everything since 09-13):
+       LANDED 2026-11-05 (M144 `1e2023717`, LANDED "LP-4"); owed: James's `archive 6` and `upload 6 store` from his own
+       account, with every agent quit for the upload;
      - MARKETING_VERSION 0.9.0 (RL6);
-     - what App Review would reject (`lp/ios-store`): Apple's logo as the Mac's mark, "Better CRT (legacy)" (CC
-       BY-NC-SA) left out, the acknowledgements' full texts, and the privacy and support links where a signed-out person
-       can reach them (IOS-13a);
+     - what App Review would reject: Apple's logo off the Mac's mark, two vendor marks, one window and the
+       acknowledgements bundled: LANDED (M144, LANDED "LP-4"). "Better CRT (legacy)" (CC BY-NC-SA upstream) stays on
+       the phone by James's word (11-05, 06:02Z). Owed: About reading the acknowledgements' full texts, and the privacy
+       and support links where a signed-out person can reach them (IOS-13a);
      - Tailscale's log upload turned off on iOS (a truffle Swift option);
-     - iPad: one window in v1, its words, and a pass on 11- and 13-inch iPads;
+     - iPad: one window in v1: LANDED (M144). Owed: its words (after IOS-13a's `DeviceWord`), and a pass on 11- and
+       13-inch iPads;
      - build 6 internal, then the owed device checks;
      - the marks' permission emails (James);
      - the review Mac, the review identity and the filmed video (LP-D5, D6; `draft/launch/review-mac-runbook.md`);
