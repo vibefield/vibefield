@@ -661,11 +661,14 @@ const RULES = [
     // the child itself imports only `ses`, `@endo/*`, `node:` built-ins, its own files and the flow folder's
     // `protocol.ts` (import-free, as transcripts/protocol.ts is). No contracts, no acorn (the rewrite is fieldd's,
     // module-script.ts) and no other daemon file: the child holds no key, no door and no record (EL7, 4A2-Q6 (b)).
+    // CP-4a2a (the review bth-1142Z, P4): and protocol.ts is held import-free here, not only by its own text, so
+    // nothing reaches the child through the one file outside its folder it may import.
     enforce: true,
     description:
-      "acorn only under packages/fieldd/src/flows and ses only under packages/fieldd/src/flows/host (the flow host's child); packages/fieldd/src/flows imports no @vibefield/puppeteer-* and no @vibefield/rosetta-* package; packages/fieldd/src/flows/host imports only ses, @endo/*, node: built-ins, its own files and ../protocol",
+      "acorn only under packages/fieldd/src/flows and ses only under packages/fieldd/src/flows/host (the flow host's child); packages/fieldd/src/flows imports no @vibefield/puppeteer-* and no @vibefield/rosetta-* package; packages/fieldd/src/flows/host imports only ses, @endo/*, node: built-ins, its own files and ../protocol; packages/fieldd/src/flows/protocol.ts imports nothing",
     applies: (p) => SOURCE_EXT.test(p),
     importTest: (s, p) => {
+      if (p.replace(/\.(?:[cm]?[jt]sx?)$/, "") === FLOWS_PROTOCOL) return true;
       if (under(p, FLOWS_HOST_DIR)) return !flowsHostMayImport(s, p);
       if (importsModule(s, "acorn")) return !under(p, FLOWS_SRC_DIR);
       if (importsModule(s, "ses") || s.startsWith("@endo/")) return !under(p, FLOWS_HOST_DIR);
