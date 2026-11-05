@@ -14,6 +14,7 @@ import {
   AgentInputQueueFile,
   type AgentInputSender,
   type AgentQueuedInput,
+  NEEDS_JOINED_ITEMS_MAX,
   type NeedsItemId,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -29,6 +30,13 @@ import { RecordSigner, type SetAsideWhy, setAsideFile } from "./signed-record";
 //   the adapter's bound), it is never sent again and its sender is told (CP2-D2).
 // - The queue is kept across a fieldd restart (CP2-D3): each session's queue is one file under the inputs directory,
 //   0600 in a 0700 directory, rewritten whole on every change.
+// - The head is stamped before it is pasted (item 158, TH-Q32 (a)): `sending` is kept, and only then delivered. A
+//   stamp the disk does not take holds the delivery for the next idle, said once. A restart that finds a stamped head
+//   broke into its delivery: it is never sent again, and nothing behind it moves until its run's first monitor row,
+//   where it is said uncertain (`restarted`) with the run known, or the settle reconcile, for a run that never came
+//   back. A run that ends while its head is in flight leaves that head to its receipt, so it is said once.
+// - A wake's line carries the needs-you items whose facts it holds (CO-Q9 (b)), so the needs queue hears what became
+//   of them: wakes that wait join, their items with them, up to NEEDS_JOINED_ITEMS_MAX; a stamped head joins none.
 // - Each file is signed (CP-3, LEANS P3) by the one record signer under a key of the queue's own
 //   (LAYOUT.AGENT_INPUTS_KEY_FILE), with its run inside the signature. A file is a control input: what it holds is
 //   pasted into a session at its idle, marked as a spark's words or as VibeField's. So restore sets aside, and never
@@ -47,6 +55,9 @@ export type QueuedInput = AgentQueuedInput;
 /** What became of an input: delivered, waiting for the next idle, uncertain (never resent), or dropped with its
  * session. */
 export type DeliveryOutcome = "delivered" | "waiting" | "uncertain" | "dropped";
+
+/** The reason an uncertain outcome carries when a fieldd restart broke into the delivery (item 158). */
+export const RESTARTED = "restarted";
 
 /** A delivery's receipt, in puppeteer's words. */
 export interface DeliveryReceipt {
@@ -82,10 +93,19 @@ export const markedText = (input: QueuedInput): string =>
 /** A file name a run id can be kept under; ids are fieldd's own, and anything else is refused. */
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
+/** A joined line's items: the union, in the order they came. */
+const joined = (
+  items: readonly NeedsItemId[] | undefined,
+  item: NeedsItemId | undefined,
+): NeedsItemId[] | undefined =>
+  item === undefined || items?.includes(item) ? items && [...items] : [...(items ?? []), item];
+
 export class AgentInputQueues {
   readonly #queues = new Map<string, QueuedInput[]>();
   /** runs with a delivery in flight */
   readonly #busy = new Set<string>();
+  /** heads whose stamp the disk did not take, said once each */
+  readonly #unstamped = new Set<string>();
   readonly #logger: Logger;
   readonly #now: () => Date;
   readonly #signer: RecordSigner;
@@ -96,8 +116,9 @@ export class AgentInputQueues {
     this.#signer = new RecordSigner({ keyPath: opts.keyPath, logger: this.#logger });
   }
 
-  /** Read every kept queue back at boot (CP2-D3): only what fieldd signed for that run (LEANS P3). Returns how many
-   * inputs wait. */
+  /** Read every kept queue back at boot (CP2-D3): only what fieldd signed for that run (LEANS P3). A stamped head stays
+   * where it is, said at its run's first monitor row (item 158). Returns how many inputs wait, the stamped never
+   * among them. */
   restore(): number {
     if (!existsSync(this.opts.dir)) return 0;
     let waiting = 0;
@@ -107,31 +128,45 @@ export class AgentInputQueues {
       const kept = this.#read(file, runtimeRunId);
       if (kept === undefined) continue;
       this.#queues.set(runtimeRunId, kept);
-      waiting += kept.length;
+      waiting += kept.filter((input) => input.sending === undefined).length;
     }
     return waiting;
   }
 
   /** Queue an input for a run; its place, 1 being next. */
   enqueue(runtimeRunId: string, text: string, from: InputSender): { position: number } {
-    const queue = this.#queueOf(runtimeRunId);
-    queue.push({ id: randomBytes(6).toString("hex"), text, from, at: this.#now().toISOString() });
-    this.#keep(runtimeRunId);
-    void this.poke(runtimeRunId);
-    return { position: queue.length };
+    const position = this.#push(runtimeRunId, { text, from });
+    void this.#deliver(runtimeRunId);
+    return { position };
   }
 
   /** fieldd's own wake for a run (CP-D4): facts only, and wakes that wait join into one line. `item` is the needs-you
-   * item whose fact it is (item 158, CO-Q9 (b)): a joined line carries their union, NEEDS_JOINED_ITEMS_MAX at most.
-   * Item 158 (red): `item` is not kept yet. */
-  wake(runtimeRunId: string, fact: string, _item?: NeedsItemId): void {
+   * item whose fact it is (item 158, CO-Q9 (b)): a joined line carries their union, NEEDS_JOINED_ITEMS_MAX at most, and
+   * a wake past that starts a line of its own. A head in flight, or one a restart broke into, joins nothing. */
+  wake(runtimeRunId: string, fact: string, item?: NeedsItemId): void {
     const queue = this.#queueOf(runtimeRunId);
     const last = queue.at(-1);
-    if (last !== undefined && last.from.kind === "fieldd" && !this.#busy.has(runtimeRunId)) {
-      queue[queue.length - 1] = { ...last, text: `${last.text} · ${fact}` };
+    const items = joined(last?.items, item);
+    if (
+      last !== undefined &&
+      last.from.kind === "fieldd" &&
+      last.sending === undefined &&
+      !this.#busy.has(runtimeRunId) &&
+      (items?.length ?? 0) <= NEEDS_JOINED_ITEMS_MAX
+    ) {
+      queue[queue.length - 1] = {
+        ...last,
+        text: `${last.text} · ${fact}`,
+        ...(items !== undefined ? { items } : {}),
+      };
       this.#keep(runtimeRunId);
-    } else this.enqueue(runtimeRunId, fact, { kind: "fieldd" });
-    void this.poke(runtimeRunId);
+    } else
+      this.#push(runtimeRunId, {
+        text: fact,
+        from: { kind: "fieldd" },
+        ...(item !== undefined ? { items: [item] } : {}),
+      });
+    void this.#deliver(runtimeRunId);
   }
 
   /** The inputs that wait for a run, oldest first. */
@@ -139,13 +174,33 @@ export class AgentInputQueues {
     return this.#queues.get(runtimeRunId) ?? [];
   }
 
-  /** The run may be idle (its monitor state changed): deliver the head if it is. One input per idle moment, because
-   * a delivered input starts a turn; the next waits for that turn's end. */
+  /** The run's monitor row changed. A head a restart broke into is said first, idle or not, now that its run is known
+   * (item 158), and never sent; then the head is delivered if the run is idle. */
   async poke(runtimeRunId: string): Promise<void> {
     const queue = this.#queues.get(runtimeRunId);
+    const head = queue?.[0];
+    if (queue !== undefined && head?.sending !== undefined && !this.#busy.has(runtimeRunId)) {
+      // stamped and not in flight: read back at restore
+      queue.shift();
+      this.#keep(runtimeRunId);
+      this.#restarted(runtimeRunId, head);
+    }
+    return this.#deliver(runtimeRunId);
+  }
+
+  /** Deliver the head if the run is idle. One input per idle moment, because a delivered input starts a turn; the next
+   * waits for that turn's end. Nothing moves behind a head a restart broke into until its run's monitor row says it. */
+  async #deliver(runtimeRunId: string): Promise<void> {
+    const queue = this.#queues.get(runtimeRunId);
     if (queue === undefined || queue.length === 0 || this.#busy.has(runtimeRunId)) return;
-    if (!this.opts.isIdle(runtimeRunId)) return;
     const head = queue[0]!;
+    if (head.sending !== undefined || !this.opts.isIdle(runtimeRunId)) return;
+    // stamped before it is pasted (TH-Q32 (a)): a restart that finds the stamp never sends it again
+    queue[0] = { ...head, sending: this.#now().toISOString() };
+    if (!this.#stamp(runtimeRunId, head)) {
+      queue[0] = head;
+      return;
+    }
     this.#busy.add(runtimeRunId);
     let receipt: DeliveryReceipt;
     try {
@@ -155,12 +210,20 @@ export class AgentInputQueues {
     } finally {
       this.#busy.delete(runtimeRunId);
     }
+    // the run ended meanwhile (D2): forget left this head to its receipt, and keeps nothing
+    const forgotten = this.#queues.get(runtimeRunId) !== queue;
     if (receipt.status === "rejected") {
+      if (forgotten) {
+        this.opts.onOutcome?.(runtimeRunId, head, "dropped", receipt.reason);
+        return;
+      }
+      queue[0] = head;
+      this.#keep(runtimeRunId);
       this.opts.onOutcome?.(runtimeRunId, head, "waiting", receipt.reason);
       return;
     }
     queue.shift();
-    this.#keep(runtimeRunId);
+    if (!forgotten) this.#keep(runtimeRunId);
     this.opts.onOutcome?.(
       runtimeRunId,
       head,
@@ -169,18 +232,34 @@ export class AgentInputQueues {
     );
   }
 
-  /** A run ended: what waited for it is dropped, each sender told, and its kept file goes. */
+  /** A run ended: what waited for it is dropped, each sender told, and its kept file goes. A head in flight is its
+   * receipt's to tell (D2); a head a restart broke into is uncertain, never dropped. */
   forget(runtimeRunId: string): void {
     const queue = this.#queues.get(runtimeRunId) ?? [];
     this.#queues.delete(runtimeRunId);
     this.#keep(runtimeRunId);
-    for (const input of queue) this.opts.onOutcome?.(runtimeRunId, input, "dropped");
+    const inFlight = this.#busy.has(runtimeRunId) ? queue[0] : undefined;
+    for (const input of queue) {
+      if (input === inFlight) continue;
+      if (input.sending !== undefined) this.#restarted(runtimeRunId, input);
+      else this.opts.onOutcome?.(runtimeRunId, input, "dropped");
+    }
   }
 
   /** Once this boot's re-attach has settled (item 158, D3): a kept queue whose run the fold no longer holds ended while
    * fieldd was down, and no exit event will say so. It is forgotten: a head a restart broke into is uncertain
-   * (`restarted`), and the rest are dropped. Item 158 (red): nothing is forgotten yet. */
-  reconcile(_holds: (runtimeRunId: string) => boolean): void {}
+   * (`restarted`), and the rest are dropped. */
+  reconcile(holds: (runtimeRunId: string) => boolean): void {
+    for (const [runtimeRunId, queue] of [...this.#queues]) {
+      if (queue.length === 0 || holds(runtimeRunId)) continue;
+      this.#logger.info(
+        "fieldd.inputs.reconciled",
+        "A kept input queue's session ended while fieldd was down; what waited is dropped",
+        { runtimeRunId, inputs: queue.length },
+      );
+      this.forget(runtimeRunId);
+    }
+  }
 
   #queueOf(runtimeRunId: string): QueuedInput[] {
     let queue = this.#queues.get(runtimeRunId);
@@ -189,6 +268,25 @@ export class AgentInputQueues {
       this.#queues.set(runtimeRunId, queue);
     }
     return queue;
+  }
+
+  /** A new input at the queue's tail, kept; its place, 1 being next. */
+  #push(runtimeRunId: string, input: Pick<QueuedInput, "text" | "from" | "items">): number {
+    const queue = this.#queueOf(runtimeRunId);
+    queue.push({ id: randomBytes(6).toString("hex"), ...input, at: this.#now().toISOString() });
+    this.#keep(runtimeRunId);
+    return queue.length;
+  }
+
+  /** A head a restart broke into: said uncertain, once, and never sent again (TH-Q32 (a)). */
+  #restarted(runtimeRunId: string, input: QueuedInput): void {
+    const { sending: _sending, ...said } = input;
+    this.#logger.warn(
+      "fieldd.inputs.restarted",
+      "A restart broke into a delivery; it is not sent again, and its sender is told it is uncertain",
+      { runtimeRunId, sending: input.sending },
+    );
+    this.opts.onOutcome?.(runtimeRunId, said, "uncertain", RESTARTED);
   }
 
   /** A kept file's inputs, when fieldd signed them for this run; otherwise the file is set aside. */
@@ -214,33 +312,60 @@ export class AgentInputQueues {
     return undefined;
   }
 
-  /** Write a run's queue whole and signed (or remove its file when empty): written beside, then renamed, 0600 in
-   * 0700. A queue that cannot be signed is not kept, so no file waits that restore would refuse. */
+  /** Keep the stamped head before it is pasted (Q2 (a)): true when the disk took it. One it did not take holds the
+   * delivery for the next idle, and is said once. */
+  #stamp(runtimeRunId: string, head: QueuedInput): boolean {
+    try {
+      this.#write(runtimeRunId);
+      this.#unstamped.delete(head.id);
+      return true;
+    } catch (err) {
+      if (!this.#unstamped.has(head.id)) {
+        this.#unstamped.add(head.id);
+        this.#logger.warn(
+          "fieldd.inputs.unstamped",
+          "A delivery could not be stamped before it began; it waits for the next idle",
+          { runtimeRunId, reason: (err as Error).message },
+        );
+      }
+      return false;
+    }
+  }
+
+  /** Keep a run's queue, or say it could not be. */
   #keep(runtimeRunId: string): void {
     if (!SAFE_ID.test(runtimeRunId)) return;
-    const file = join(this.opts.dir, `${runtimeRunId}.json`);
-    const queue = this.#queues.get(runtimeRunId);
     try {
-      if (queue === undefined || queue.length === 0) {
-        rmSync(file, { force: true });
-        return;
-      }
-      const unsigned: AgentInputQueueFile = {
-        format: AGENT_INPUT_QUEUE_FORMAT,
-        run: runtimeRunId,
-        inputs: queue,
-      };
-      const signature = this.#signer.sign(unsigned);
-      mkdirSync(this.opts.dir, { recursive: true, mode: 0o700 });
-      chmodSync(this.opts.dir, 0o700);
-      const part = `${file}.part`;
-      writeFileSync(part, JSON.stringify({ ...unsigned, signature }), { mode: 0o600 });
-      renameSync(part, file);
+      this.#write(runtimeRunId);
     } catch (err) {
       this.#logger.warn("fieldd.inputs.unkept", "An input queue could not be kept", {
         runtimeRunId,
         reason: (err as Error).message,
       });
     }
+  }
+
+  /** Write a run's queue whole and signed (or remove its file when empty): written beside, then renamed, 0600 in
+   * 0700. A queue that cannot be signed is not kept, so no file waits that restore would refuse. Throws when the disk
+   * does not take it, or the run's id is no file name. */
+  #write(runtimeRunId: string): void {
+    if (!SAFE_ID.test(runtimeRunId)) throw new Error("the run's id is no file name");
+    const file = join(this.opts.dir, `${runtimeRunId}.json`);
+    const queue = this.#queues.get(runtimeRunId);
+    if (queue === undefined || queue.length === 0) {
+      rmSync(file, { force: true });
+      return;
+    }
+    const unsigned: AgentInputQueueFile = {
+      format: AGENT_INPUT_QUEUE_FORMAT,
+      run: runtimeRunId,
+      inputs: queue,
+    };
+    const signature = this.#signer.sign(unsigned);
+    mkdirSync(this.opts.dir, { recursive: true, mode: 0o700 });
+    chmodSync(this.opts.dir, 0o700);
+    const part = `${file}.part`;
+    writeFileSync(part, JSON.stringify({ ...unsigned, signature }), { mode: 0o600 });
+    renameSync(part, file);
   }
 }
