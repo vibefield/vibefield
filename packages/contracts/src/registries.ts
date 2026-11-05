@@ -768,6 +768,25 @@ export const SPARK_TRANSCRIPT = {
   RETRY_MAX_MS: 10_000,
 } as const;
 
+/** TH-1 (TH0-Q5 (b)) — the transcript worker's honest refusal vocabulary (`UnavailableDetails`): `service` on every
+ * UNAVAILABLE `compose.sparks.transcript.openTicket` answers, and the worker's phases, the files worker's words
+ * (WORKSPACE_SERVICE): STARTING the first generation is booting, RESTARTING a generation died and the next is on its
+ * backoff (both retryable), OFF switched off for this daemon (a test-only knob, never a user setting), UNCONFIGURED no
+ * worker to run (no bundle beside an embedded daemon), FAILED it keeps dying or cannot be spawned, STOPPED fieldd is
+ * stopping. UNREADABLE: the spark's folder, or the key its lines are checked by, the disk would not hand over; it is
+ * item 172's word (RECORD_STORES.STATE_UNREADABLE), named here until that row lands under this lane, and folds into
+ * it then. A window asks again after SPARK_TRANSCRIPT's retry bounds. TS-only: no native reader. */
+export const SPARK_TRANSCRIPT_SERVICE = {
+  SERVICE: "spark-transcripts",
+  STATE_STARTING: "starting",
+  STATE_RESTARTING: "restarting",
+  STATE_OFF: "off",
+  STATE_UNCONFIGURED: "unconfigured",
+  STATE_FAILED: "failed",
+  STATE_STOPPED: "stopped",
+  STATE_UNREADABLE: "records-unreadable",
+} as const;
+
 /** FS-1a — the files service's honest refusal vocabulary
  * (`UnavailableDetails`): `service` on every UNAVAILABLE a `workspace.*` door
  * answers, and the worker's phases a reader branches on. STARTING: the first

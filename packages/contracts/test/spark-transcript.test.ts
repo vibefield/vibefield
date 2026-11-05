@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { METHODS, reachableFromTailnet } from "../src/methods";
-import { SPARK_TRANSCRIPT } from "../src/registries";
+import { SPARK_TRANSCRIPT, SPARK_TRANSCRIPT_SERVICE } from "../src/registries";
 import {
   SPARK_TRANSCRIPT_FORMAT,
   SPARK_TRANSCRIPT_KINDS,
@@ -141,6 +141,19 @@ describe("the ticket (TH-Q30 (a′); VF-PM's X2: local, a renderer window alone,
     );
     expect(SPARK_TRANSCRIPT.RUNS_MAX).toBe(256);
     expect(SPARK_TRANSCRIPT.TICKET_TTL_MS).toBe(60_000);
+  });
+
+  it("names its honest UNAVAILABLE: the worker's phases in the files worker's words, and item 172's unreadable", () => {
+    expect(SPARK_TRANSCRIPT_SERVICE).toEqual({
+      SERVICE: "spark-transcripts",
+      STATE_STARTING: "starting",
+      STATE_RESTARTING: "restarting",
+      STATE_OFF: "off",
+      STATE_UNCONFIGURED: "unconfigured",
+      STATE_FAILED: "failed",
+      STATE_STOPPED: "stopped",
+      STATE_UNREADABLE: "records-unreadable",
+    });
   });
 });
 
