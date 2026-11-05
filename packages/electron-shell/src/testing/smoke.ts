@@ -89,7 +89,7 @@ import {
   historyNewAgentRung,
   historyResumeAtModelRung,
 } from "./history-project-rungs";
-import { jumpToRung } from "./jump-rungs";
+import { jumpToRung, mirroredInto, showingOf } from "./jump-rungs";
 import { startLiveFixture } from "./live-fixture";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
 import {
@@ -177,6 +177,7 @@ import { selectionBarRows } from "./smoke-selection-bar";
 import {
   type CardPlayEvidence,
   type CardPlaySeen,
+  type ChatSendEvidence,
   cardPlayEvidenceLine,
   chatSendEvidenceLine,
   gateOpen,
@@ -10577,9 +10578,13 @@ export async function runSmokeGodview(opts: {
     //      your bubble in the flow at once and says nothing on the line, the stub is
     //      given the line with no key pressed for it, and the record's `you` line takes
     //      the bubble's place, its receipt "Delivered". A card from the hand let go on
-    //      the composer becomes a chip in its draft, the card still in the hand. Back to
-    //      Godview's deck for 11h, which must stay last; the spark's session ends with the
-    //      run's teardown.
+    //      the composer becomes a chip in its draft, the card still in the hand. Then the
+    //      head's Jump to (TH-2): the deck split so the spark is not in its focused pane,
+    //      Jump to pressed in Chat, the window moves to Godview, the line says "Jumped to
+    //      its pane", and the focused pane shows the spark's own floor session (fieldd's
+    //      word for its run, `agent.list`), the pane count unchanged (GV-D4, "Mirror
+    //      it"). The shell's pane is focused again for 11h, which must stay last; the
+    //      spark's session ends with the run's teardown.
     //      *TH-1 (2026-11-05, the pane leaves Chat):* the thread was the spark's own live
     //      pane, Send pasted into it by the road ⌘V takes and said "Pasted into …'s pane
     //      — Return sends it", and the harness pressed the pane's Return before the stub
@@ -10608,6 +10613,8 @@ export async function runSmokeGodview(opts: {
         /** your bubbles in the flow that carry this rung's nonce, and the last one's receipt */
         bubbles: number;
         receipt: string | null;
+        /** the head's Jump to: ready, waiting while it runs, or absent (null) */
+        jump: "ready" | "busy" | null;
         text: string | null;
         at: string | null;
         rows: number;
@@ -10630,6 +10637,8 @@ export async function runSmokeGodview(opts: {
                 (row.textContent ?? "").includes(${JSON.stringify(nonce)}),
               );
         const last = yours.length === 0 ? null : yours[yours.length - 1];
+        const jump =
+          thread === null ? null : thread.querySelector('.vf-chat-thread-acts button[data-act="jump"]');
         const input = document.querySelector(".vf-chat-input");
         const at = document.querySelector(".vf-chat-at");
         const rows = at === null ? [] : [...at.querySelectorAll(".vf-chat-at-row")];
@@ -10649,6 +10658,7 @@ export async function runSmokeGodview(opts: {
           hello: flow !== null && flow.querySelector('[data-row="hello"]') !== null,
           bubbles: yours.length,
           receipt: last?.querySelector(".vf-chat-receipt")?.textContent ?? null,
+          jump: jump === null ? null : jump.disabled ? "busy" : "ready",
           text: input === null ? null : input.textContent,
           at: at === null ? null : at.getAttribute("data-at"),
           rows: rows.length,
@@ -10986,11 +10996,105 @@ export async function runSmokeGodview(opts: {
         chatThread["the card"] =
           `${play.played?.note ?? "?"} (${play.answer?.label ?? "?"}): a chip in the draft, the ` +
           `card still in the hand; ${emptied} card(s) cleared`;
-        console.log(chatSendEvidenceLine(evidence, null));
-        // back to Godview's deck for 11h, nothing focused in Chat
+        // 6. Jump to (TH-2; DESIGN.md §8 "Chat's thread", the head's act): the spark's own session in Godview by Jump
+        // to's path, in the FOCUSED pane — a split's, so the session is not there already — the pane count unchanged
+        // (GV-D4, "Mirror it"). Its floor session is fieldd's word for the spark's own run (the harness's own client,
+        // `agent.list`), never read off the deck.
+        const listed = (await opts.handle.client.request("agent.list", {})) as {
+          sessions?: Array<{ spark?: string; terminal?: { runtimeSessionId?: string } }>;
+        };
+        const floor = (listed.sessions ?? []).find(
+          (row) =>
+            row.spark === evidence.spark && typeof row.terminal?.runtimeSessionId === "string",
+        )?.terminal?.runtimeSessionId;
+        if (floor === undefined) {
+          throw new Error(`fieldd lists no floor session for ${name}'s own run (agent.list)`);
+        }
+        const jump: NonNullable<ChatSendEvidence["jump"]> = {
+          floor,
+          before: null,
+          note: null,
+          after: null,
+        };
+        evidence.jump = jump;
         await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
         pressViewKey(win, "godview");
-        await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
+        const atDeck = await deck.until(
+          (facts) => facts.active,
+          "⌘2 to the deck before Jump to",
+          30_000,
+        );
+        const shell = atDeck.activeSessionId;
+        if (shell === undefined)
+          throw new Error("the deck names no active pane to split before Jump to");
+        await focusPane(win, shell);
+        pressChord(win, SPLIT_CHORD.key, SPLIT_CHORD.shift);
+        const split = await deck.until(
+          (facts) =>
+            facts.panes === atDeck.panes + 1 &&
+            facts.activeSessionId !== undefined &&
+            facts.activeSessionId !== shell &&
+            facts.activeSessionId !== floor,
+          `${SPLIT_CHORD.label} to split the deck's ${atDeck.panes} pane(s) before Jump to`,
+          45_000,
+        );
+        jump.before = {
+          panes: split.panes,
+          active: split.activeSessionId ?? null,
+          showing: showingOf(split, floor),
+        };
+        await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+        pressViewKey(win, "assistant");
+        await untilRenderer(
+          win,
+          "⌘4 back to Chat for Jump to",
+          `${VIEW_NOW} === "assistant" ? "ok" : ${VIEW_NOW}`,
+          10_000,
+        );
+        await untilThread(
+          `${name}'s head offering Jump to`,
+          (facts) => facts.jump === "ready",
+          10_000,
+        );
+        await pressAt('.vf-chat-thread-acts button[data-act="jump"]');
+        const jumpNote = await untilRendererValue(
+          win,
+          "Jump to's note on the line",
+          `document.querySelector(".vf-line-note")?.textContent ?? "no note"`,
+          25_000,
+          (value) => value === "Jumped to its pane" || value.startsWith("Could not jump"),
+        );
+        jump.note = jumpNote;
+        if (jumpNote !== "Jumped to its pane")
+          throw new Error(`Jump to said ${JSON.stringify(jumpNote)}`);
+        await untilRenderer(
+          win,
+          "the window moving to Godview at Jump to",
+          `${VIEW_NOW} === "godview" ? "ok" : ${VIEW_NOW}`,
+          20_000,
+        );
+        const jumped = await deck.until(
+          (facts) => facts.active && facts.activeSessionId === floor,
+          `${name}'s own session in the focused pane after Jump to`,
+          30_000,
+        );
+        jump.after = {
+          panes: jumped.panes,
+          active: jumped.activeSessionId ?? null,
+          showing: showingOf(jumped, floor),
+        };
+        mirroredInto("Chat's Jump to", split, jumped, floor);
+        chatThread["Jump to"] =
+          `${jumpNote}: Godview, ${name}'s session ${floor} in the focused pane (${split.panes} pane(s) before and ` +
+          `after; ${jump.before.showing} → ${jump.after.showing} showing it)`;
+        console.log(chatSendEvidenceLine(evidence, null));
+        // the shell's pane focused again for 11h, which types into a shell; nothing focused in Chat
+        await focusPane(win, shell);
+        await deck.until(
+          (facts) => facts.active && facts.activeSessionId === shell,
+          "the shell's pane focused again for 11h",
+          10_000,
+        );
       } catch (error) {
         console.log(chatSendEvidenceLine(evidence, error));
         throw error;

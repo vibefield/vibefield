@@ -193,6 +193,15 @@ export interface ChatSendEvidence {
   /** how long the waits took: the spark heard ("Ready"), and from Send's press until the stub was given the line and
    * until the bubble said "Delivered" */
   readonly waitedMs: { ready: number | null; given: number | null; delivered: number | null };
+  /** TH-2 — the head's Jump to: the spark's own floor session (fieldd's `agent.list`), the deck as the split left it
+   * and as Jump to left it (its panes, the active pane's session, how many panes show the spark's), and the line's
+   * note */
+  jump: {
+    readonly floor: string;
+    before: { panes: number; active: string | null; showing: number } | null;
+    note: string | null;
+    after: { panes: number; active: string | null; showing: number } | null;
+  } | null;
 }
 
 export function newChatSendEvidence(lines: string, nonce: string): ChatSendEvidence {
@@ -207,6 +216,7 @@ export function newChatSendEvidence(lines: string, nonce: string): ChatSendEvide
     typing: { focus: null, caret: null, draft: null, heard: null },
     play: null,
     waitedMs: { ready: null, given: null, delivered: null },
+    jump: null,
   };
 }
 
@@ -227,5 +237,6 @@ export function chatSendEvidenceLine(evidence: ChatSendEvidence, cause: unknown)
     typing: evidence.typing,
     play: evidence.play,
     waitedMs: evidence.waitedMs,
+    jump: evidence.jump,
   })}`;
 }

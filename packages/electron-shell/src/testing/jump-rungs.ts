@@ -39,8 +39,8 @@ import type { StagedTypedAgent } from "./typed-agent";
 
 const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
 
-/** The deck's marker, as far as this rung reads it. */
-interface JumpDeckFacts {
+/** The deck's marker, as far as this rung reads it (and 11m's Jump to, TH-2). */
+export interface JumpDeckFacts {
   active: boolean;
   panes: number;
   sessionIds: readonly string[];
@@ -56,13 +56,14 @@ interface JumpDeckWatch {
 }
 
 /** How many of the deck's panes show `sessionId` (one entry per pane). */
-const showingOf = (facts: JumpDeckFacts, sessionId: string): number =>
+export const showingOf = (facts: JumpDeckFacts, sessionId: string): number =>
   facts.sessionIds.filter((id) => id === sessionId).length;
 
 /** GV-D4, re-ruled 2026-10-18 ("Mirror it"): `act` showed `sessionId` in the
  * FOCUSED pane while another pane showed it — one pane more on it, and no pane
- * added. Throws the rung's own words when the deck did anything else. */
-function mirroredInto(
+ * added. Throws the rung's own words when the deck did anything else. Chat's
+ * Jump to (11m, TH-2) is held to the same rule. */
+export function mirroredInto(
   act: string,
   before: JumpDeckFacts,
   after: JumpDeckFacts,

@@ -203,6 +203,13 @@ describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
     evidence.waitedMs.ready = 640;
     evidence.waitedMs.given = 220;
     evidence.waitedMs.delivered = 480;
+    expect(evidence.jump).toBeNull();
+    evidence.jump = {
+      floor: "pty-polaris",
+      before: { panes: 3, active: "s-split", showing: 0 },
+      note: "Jumped to its pane",
+      after: { panes: 3, active: "pty-polaris", showing: 1 },
+    };
     const passed = chatSendEvidenceLine(evidence, null);
     expect(passed.startsWith(CHAT_SEND_EVIDENCE)).toBe(true);
     expect(JSON.parse(passed.slice(CHAT_SEND_EVIDENCE.length))).toEqual({
@@ -222,6 +229,12 @@ describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
       },
       play: evidence.play,
       waitedMs: { ready: 640, given: 220, delivered: 480 },
+      jump: {
+        floor: "pty-polaris",
+        before: { panes: 3, active: "s-split", showing: 0 },
+        note: "Jumped to its pane",
+        after: { panes: 3, active: "pty-polaris", showing: 1 },
+      },
     });
     const failed = chatSendEvidenceLine(evidence, new Error("no sp1d-abc in the lines"));
     expect(JSON.parse(failed.slice(CHAT_SEND_EVIDENCE.length)).failed).toBe(
