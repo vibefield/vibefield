@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FLOW_RECORD_FORMAT, type FlowJournalKnownLine } from "@vibefield/contracts";
+import { FLOW_LIMITS, FLOW_RECORD_FORMAT, type FlowJournalKnownLine } from "@vibefield/contracts";
 import { afterEach, describe, expect, inject, it } from "vitest";
 import type { FlowJournalEntry } from "../src/flows/journal";
 import { FlowRecords } from "../src/flows/records";
@@ -19,6 +19,7 @@ import {
 // and its MACs never reach the host.
 
 const FIXTURES = join(import.meta.dirname, "..", "..", "contracts", "fixtures");
+const RUN = "fr-k3v9q2m7x1";
 const fixture = (name: string): Record<string, unknown> =>
   JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), "utf8")) as Record<string, unknown>;
 
@@ -47,7 +48,7 @@ function prior(body: FlowJournalEntry[]): FlowJournalKnownLine[] {
     seq: 1,
     kind: "head",
     at: "2026-11-05T11:00:00.000Z",
-    run: "fr-k3v9q2m7x1",
+    run: RUN,
     flow: "release-check",
     name: "Release check",
     n: 1,
@@ -169,6 +170,89 @@ describe("CP-4a2a — replay by a call's key and #n (CP-D9)", () => {
     replay.log("reviewed");
     expect(logs).toEqual(["reviewed"]);
     expect(appended).toEqual([{ kind: "log", text: "reviewed" }]);
+  });
+
+  it("P6: a call that cannot be keyed or journaled is refused to the script, never thrown at fieldd", async () => {
+    const { handler, calls } = inner();
+    const appended: FlowJournalEntry[] = [];
+    const replay = new FlowReplay({
+      prior: [],
+      append: (entry) => appended.push(entry),
+      inner: handler,
+    });
+    // arguments nested past FLOW_LIMITS.ARGS_DEPTH_MAX, and a list holding undefined (no canonical JSON keys it)
+    let deep: unknown = "x";
+    for (let i = 0; i < FLOW_LIMITS.ARGS_DEPTH_MAX + 1; i++) deep = [deep];
+    for (const args of [[deep], ["a", [undefined]]]) {
+      let said: Promise<FlowHostAnswer> | undefined;
+      expect(() => {
+        said = replay.call({ what: "agent", args });
+      }, "the handler never throws at fieldd's pipe").not.toThrow();
+      await expect(said).resolves.toMatchObject({ ok: false, refused: expect.any(String) });
+    }
+    expect(calls).toEqual([]);
+    expect(appended).toEqual([]);
+    // a journal the disk does not take: refused in the journal's words, and nothing handed on
+    const full = new FlowReplay({
+      prior: [],
+      append: () => {
+        throw Object.assign(new Error("no space left on device"), { code: "ENOSPC" });
+      },
+      inner: handler,
+    });
+    await expect(full.call({ what: "agent", args: ["a"] })).resolves.toMatchObject({
+      ok: false,
+      refused: expect.stringMatching(/journal/),
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("P7: an answer is journaled as the pipe carries it: an undefined in a list is null, kept, and replayed so", async () => {
+    const root = mkdtempSync(join(tmpdir(), "vf-flows-replay-"));
+    try {
+      const records = new FlowRecords({
+        dir: join(root, "fieldd", "flows"),
+        keyPath: join(root, "fieldd", "flows.key"),
+      });
+      records.beginRun({
+        run: RUN,
+        flow: "release-check",
+        name: "Release check",
+        n: 1,
+        hash: "f".repeat(64),
+        starter: { by: "you" },
+      });
+      const { handler } = inner(() => ({ ok: true, value: [1, undefined, "x"] }));
+      const replay = new FlowReplay({
+        prior: [],
+        append: (entry) => {
+          records.appendRun(RUN, entry);
+        },
+        inner: handler,
+      });
+      await expect(replay.call({ what: "agent", args: ["a"] })).resolves.toEqual({
+        ok: true,
+        value: [1, null, "x"],
+      });
+      const read = records.readRun(RUN);
+      expect(read).toMatchObject({ kind: "kept" });
+      const lines = (read as Extract<typeof read, { kind: "kept" }>).lines;
+      expect(lines.at(-1)).toMatchObject({ kind: "answer", call: 1, value: [1, null, "x"] });
+      // the host started again hears the same value, from the journal
+      const again = inner();
+      const replayed = new FlowReplay({
+        prior: lines,
+        append: () => undefined,
+        inner: again.handler,
+      });
+      await expect(replayed.call({ what: "agent", args: ["a"] })).resolves.toEqual({
+        ok: true,
+        value: [1, null, "x"],
+      });
+      expect(again.calls).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

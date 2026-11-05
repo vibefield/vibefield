@@ -129,6 +129,8 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
       HOST_HEAP_MB: 128,
       HOST_PING_MS: 5_000,
       HOST_PING_MISSES: 3,
+      // bth's review P1/P3 (11:46Z): how deep a call's arguments nest
+      ARGS_DEPTH_MAX: 32,
     });
   });
 

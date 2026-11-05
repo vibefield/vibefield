@@ -226,4 +226,51 @@ describe("CP-4a2a — a run's journal, kept by the flows store (CP4-S15)", () =>
     chmodSync(s.file, 0o644);
     expect(s.records.readRun(RUN)).toMatchObject({ kind: "lost", why: "exposed" });
   });
+
+  it("J6d: after a line the disk never finished, the next line starts on its own: the piece is dropped, never glued to", () => {
+    const s = written();
+    const whole = readFileSync(s.file, "utf8");
+    writeFileSync(s.file, `${whole}{"format":1,"seq":4,"ki`, { mode: 0o600 });
+    // fieldd started again after the crash: its store reads the journal's tail from the file, then appends
+    const restarted = new FlowRecords({ dir: s.dir, keyPath: s.keyPath });
+    restarted.appendRun(RUN, { kind: "log", text: "after the crash" });
+    const read = restarted.readRun(RUN);
+    expect(read).toMatchObject({ kind: "kept" });
+    const kept = read as Extract<typeof read, { kind: "kept" }>;
+    expect(kept.lines.map((line) => [line.seq, line.kind])).toEqual([
+      [1, "head"],
+      [2, "call"],
+      [3, "answer"],
+      [4, "log"],
+    ]);
+    const after = readFileSync(s.file, "utf8");
+    expect(after.startsWith(whole), "the lines before the piece are untouched").toBe(true);
+    expect(after).not.toContain('"ki{');
+  });
+
+  it("J8: a journal cut short reads kept to the cut after a restart (no anchor yet), but the store that wrote it knows its tail", () => {
+    const s = written();
+    const [head, call] = linesOf(s.file);
+    writeFileSync(s.file, `${head}\n${call}\n`, { mode: 0o600 });
+    // fieldd started again: a store that never wrote this journal cannot tell the cut from a crash between a call and
+    // its answer. The anchor, the tail kept in the run's own signed record, is CP-4a2b's (Owed); DESIGN.md §9 says so.
+    const restarted = new FlowRecords({ dir: s.dir, keyPath: s.keyPath });
+    const read = restarted.readRun(RUN);
+    expect(read).toMatchObject({ kind: "kept", tail: { seq: 2 } });
+    // the store that wrote it to seq 3 reads seq 2 as a cut, never as a crash: the run is set aside, never replayed
+    expect(s.records.readRun(RUN)).toEqual({ kind: "lost", why: "forged", line: 3 });
+    expect(asides(s.dir)).toHaveLength(1);
+  });
+
+  it("J8b: a newer format no key signed is forged, never kept for a newer VibeField (the MAC is read before the format)", () => {
+    const s = written();
+    const lines = linesOf(s.file);
+    const head = JSON.parse(lines[0] as string) as Record<string, unknown>;
+    // the format raised by hand and the store's MAC left as it was: only the key signs a newer VibeField's head
+    lines[0] = JSON.stringify({ ...head, format: FLOW_RECORD_FORMAT + 1 });
+    writeFileSync(s.file, `${lines.join("\n")}\n`, { mode: 0o600 });
+    const restarted = new FlowRecords({ dir: s.dir, keyPath: s.keyPath });
+    expect(restarted.readRun(RUN)).toEqual({ kind: "lost", why: "forged", line: 1 });
+    expect(asides(s.dir)).toHaveLength(1);
+  });
 });

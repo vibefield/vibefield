@@ -520,7 +520,10 @@ export const AGENT_STOP = {
  *    than a flow may (DESIGN.md §9 "When a run's script cannot go on");
  *  - HOST_PING_MS, HOST_PING_MISSES: fieldd pings a live host every HOST_PING_MS, and ends one that misses
  *    HOST_PING_MISSES in a row (a script that spins never yields to its pipe), its run saying it stopped answering. A
- *    script awaiting its calls answers every ping, so a slow step is never mistaken for a spinning script. */
+ *    script awaiting its calls answers every ping, so a slow step is never mistaken for a spinning script.
+ *  - ARGS_DEPTH_MAX: how deep a call's arguments may nest (arrays and objects), held by the child before it sends and
+ *    by fieldd before it keys, journals or hands a call on (bth's review P1/P3, ruled 2026-11-05 11:46Z): 64 KiB of
+ *    JSON can nest about 32,000 deep, deeper than canonical JSON's recursion goes. */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
@@ -530,6 +533,7 @@ export const FLOW_LIMITS = {
   HOST_HEAP_MB: 128,
   HOST_PING_MS: 5_000,
   HOST_PING_MISSES: 3,
+  ARGS_DEPTH_MAX: 32,
 } as const;
 
 /** CP-4a2a (DESIGN.md §9 "When a run's script cannot go on") — the flow host's honest refusal. SERVICE is
