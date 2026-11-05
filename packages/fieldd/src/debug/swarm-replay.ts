@@ -2,7 +2,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { constants, gunzipSync } from "node:zlib";
 import {
-  AGENT_FIELD,
   type AgentListResult,
   AgentSessionSummary,
   FIELDD_DEBUG_SWARM_CORPUS_ENV,
@@ -35,14 +34,18 @@ import type { AgentMonitorFold } from "../agent-monitor";
 // are known and unused: the replay serves THIS desktop's board alone, and the phone reads the dev
 // desktop as its home.
 //
-// The frames play at their own times and loop. Every row is made THIS desktop's: stamped with its
-// device id, and every instant in it moved so the frame's own wall is the moment it plays (a corpus
-// is stamped at its recipe's base wall; a board a month stale would read as a dead swarm). Each loop
-// adds one stride past the corpus's highest mirror revision, because the monitor's store takes only a
-// newer revision. The rows say they are synthetic in their own words (the generator's content).
+// It plays the corpus ONCE, each frame at its own time, then HOLDS its last state: the rows stay
+// alive and quiet, and nothing more comes from the replay itself (VF-PM 2026-11-05 06:42Z: no loop —
+// S5's M1 needs an idle row on a real phone, the one PU-I reaches James on: the backend's 30 s cost
+// step re-emitting every priced row once the swarm is quiet). Restart fieldd to replay. Every row is
+// made THIS desktop's: stamped with its device id, and every instant in it moved so the frame's own
+// wall is the moment it plays (a corpus is stamped at its recipe's base wall; a board a month stale
+// would read as a dead swarm). The rows say they are synthetic in their own words (the generator's
+// content).
 //
 // It plays only while it is heard: its first listener starts the frames and its last one leaving stops
-// them, so the daemon's own teardown (the monitor's dispose, every board's) is its stop too.
+// them, so the daemon's own teardown (the monitor's dispose, every board's) is its stop too; a late
+// listener is caught up to the clock in one frame (the held last one, once the span has passed).
 //
 // Refused when packaged, twice: bin.ts fails the boot of a single executable that is handed one
 // (`debugSwarmCorpusOf`), and the shell blanks the variable for a packaged fieldd (main/fieldd.ts).
@@ -59,12 +62,8 @@ export interface SwarmFoldFrame {
 export interface SwarmCorpus {
   /** the header's generator, when the file names one */
   generator: string | undefined;
-  /** the fold frames in time order, the first at t = 0 */
+  /** the fold frames in time order, the first at t = 0; the last is the one held */
   folds: SwarmFoldFrame[];
-  /** one pass: the last fold frame's time plus one fold tick, the gap the loop leaves */
-  periodMs: number;
-  /** what each loop adds to every mirror revision: one past the highest the corpus holds */
-  revisionStride: number;
   /** frames of kinds a generated corpus carries and the replay does not play, by kind */
   unused: Record<string, number>;
   /** frames of kinds this build has no word for, by kind */
@@ -83,8 +82,8 @@ export interface SwarmReplayOptions {
 export interface SwarmReplay extends AgentMonitorFold {
   readonly runtime: MonitorRuntimeSource;
   readonly corpus: SwarmCorpus;
-  /** where the replay stands: the pass (0 first) and the fold frame it last played */
-  position(): { pass: number; frame: number };
+  /** where the replay stands: the fold frame it last played (the last one: held) */
+  position(): { frame: number };
   dispose(): void;
 }
 
@@ -119,7 +118,6 @@ const finite = (value: unknown): value is number =>
 /** A corpus's text (JSONL, gzip already undone), read tolerantly; throws nothing. */
 export function parseSwarmCorpus(text: string, logger: Logger = createNoopLogger()): SwarmCorpus {
   let generator: string | undefined;
-  let foldTickMs: number = AGENT_FIELD.FULL_TICK_MS;
   const raw: Array<{ seq: number; t: number; wall: number; rows: unknown[] }> = [];
   const unused: Record<string, number> = {};
   const unknown: Record<string, number> = {};
@@ -143,9 +141,6 @@ export function parseSwarmCorpus(text: string, logger: Logger = createNoopLogger
     if (kind === "corpus-meta" || kind === "meta") {
       const named = value["generator"];
       if (typeof named === "string") generator = named;
-      const recipe = value["recipe"];
-      const tick = isRecord(recipe) ? recipe["foldTickMs"] : undefined;
-      if (finite(tick) && tick > 0) foldTickMs = tick;
       continue;
     }
     if (typeof kind === "string" && HEADER_KINDS.has(kind)) continue;
@@ -183,19 +178,9 @@ export function parseSwarmCorpus(text: string, logger: Logger = createNoopLogger
   raw.sort((left, right) => left.t - right.t || left.seq - right.seq);
   const t0 = raw[0]?.t ?? 0;
   const folds = raw.map((frame) => ({ t: frame.t - t0, wall: frame.wall, rows: frame.rows }));
-  let highest = 0;
-  for (const frame of folds) {
-    for (const row of frame.rows) {
-      const mirror = isRecord(row) ? row["monitor"] : undefined;
-      const revision = isRecord(mirror) ? mirror["revision"] : undefined;
-      if (finite(revision) && revision > highest) highest = revision;
-    }
-  }
   return {
     generator,
     folds,
-    periodMs: (folds.at(-1)?.t ?? 0) + foldTickMs,
-    revisionStride: Math.floor(highest) + 1,
     unused,
     unknown,
     skipped,
@@ -252,7 +237,8 @@ function rebase(value: unknown, shiftMs: number): unknown {
   return value;
 }
 
-/** The player: the corpus's first frame stands at once; the rest play as the clock reaches them. */
+/** The player: the corpus's first frame stands at once, the rest play as the clock reaches them,
+ * and the last is held. */
 export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions): SwarmReplay {
   const first = corpus.folds[0];
   if (first === undefined) {
@@ -271,7 +257,7 @@ export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions)
   const states = new Map<string, AgentMonitorState>();
   const noted = new Set<string>();
   let current: AgentListResult = { sessions: [] };
-  let played = { pass: 0, frame: 0 };
+  let played = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let disposed = false;
 
@@ -281,21 +267,16 @@ export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions)
     say();
   };
 
-  /** A frame's rows as this desktop's, at a pass: moved, stamped, revisioned, validated. */
-  const rowsOf = (frame: SwarmFoldFrame, pass: number): AgentSessionSummary[] => {
-    // the frame's own wall becomes the moment it plays: one shift per pass
-    const shift = startedAt + pass * corpus.periodMs - first.wall;
-    const bump = pass * corpus.revisionStride;
+  // the corpus's first wall becomes the replay's start: every frame's own wall, the moment it plays
+  const shift = startedAt - first.wall;
+
+  /** A frame's rows as this desktop's: moved, stamped, validated. */
+  const rowsOf = (frame: SwarmFoldFrame): AgentSessionSummary[] => {
     const device = opts.deviceId();
     const rows: AgentSessionSummary[] = [];
     frame.rows.forEach((source, index) => {
       const moved = rebase(source, shift);
-      if (isRecord(moved)) {
-        moved["device"] = device;
-        const mirror = moved["monitor"];
-        const revision = isRecord(mirror) ? mirror["revision"] : undefined;
-        if (isRecord(mirror) && finite(revision)) mirror["revision"] = revision + bump;
-      }
+      if (isRecord(moved)) moved["device"] = device;
       const parsed = AgentSessionSummary.safeParse(moved);
       if (!parsed.success) {
         const run = isRecord(moved) ? moved["runtimeRunId"] : undefined;
@@ -344,10 +325,10 @@ export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions)
 
   /** One frame played: puppeteer's states on the bus first, then the fold's publish — the order a
    * daemon hears them in (`liveTick`'s, field-app perf/lib/model-stream.ts). */
-  const play = (pass: number, index: number): void => {
+  const play = (index: number): void => {
     const frame = corpus.folds[index];
     if (frame === undefined) return;
-    const rows = rowsOf(frame, pass);
+    const rows = rowsOf(frame);
     const listed = new Set<string>();
     for (const row of rows) {
       listed.add(row.runtimeRunId);
@@ -370,46 +351,38 @@ export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions)
         tell(listener, runtimeRunId, { runtimeEpoch: state.runtimeEpoch });
     }
     current = { sessions: rows };
-    played = { pass, frame: index };
+    played = index;
     for (const emit of [...foldSubscribers]) tell(emit, current);
   };
 
   const heard = (): boolean =>
     foldSubscribers.size + stateListeners.size + removedListeners.size + noticeListeners.size > 0;
-  /** The frame the clock stands at: the last whose time is at or before its offset in its pass. */
-  const standing = (now: number): { pass: number; frame: number } => {
-    const elapsed = Math.max(0, now - startedAt);
-    const pass = Math.floor(elapsed / corpus.periodMs);
-    const offset = elapsed - pass * corpus.periodMs;
+  /** The frame the clock stands at: the last whose time is at or before it (past the span, the last). */
+  const standing = (now: number): number => {
+    const elapsed = now - startedAt;
     let low = 0;
     let high = corpus.folds.length - 1;
     while (low < high) {
       const middle = (low + high + 1) >> 1;
-      if ((corpus.folds[middle]?.t ?? Number.POSITIVE_INFINITY) <= offset) low = middle;
+      if ((corpus.folds[middle]?.t ?? Number.POSITIVE_INFINITY) <= elapsed) low = middle;
       else high = middle - 1;
     }
-    return { pass, frame: low };
+    return low;
   };
-  const dueAt = (at: { pass: number; frame: number }): number =>
-    startedAt + at.pass * corpus.periodMs + (corpus.folds[at.frame]?.t ?? 0);
-  const nextOf = (at: { pass: number; frame: number }) =>
-    at.frame + 1 < corpus.folds.length
-      ? { pass: at.pass, frame: at.frame + 1 }
-      : { pass: at.pass + 1, frame: 0 };
 
   const tick = (): void => {
     timer = null;
     if (disposed || !heard()) return;
     const at = standing(Date.now());
     // late (a loaded host, a listener back after a quiet spell): the frame the clock stands at, once
-    if (at.pass > played.pass || (at.pass === played.pass && at.frame > played.frame)) {
-      play(at.pass, at.frame);
-    }
+    if (at > played) play(at);
     arm();
   };
   const arm = (): void => {
-    if (disposed || timer !== null || !heard()) return;
-    timer = setTimeout(tick, Math.max(0, dueAt(nextOf(played)) - Date.now()));
+    const next = corpus.folds[played + 1];
+    // the last frame played: held, nothing left to schedule
+    if (disposed || timer !== null || next === undefined || !heard()) return;
+    timer = setTimeout(tick, Math.max(0, startedAt + next.t - Date.now()));
     timer.unref?.();
   };
   const quiet = (): void => {
@@ -427,7 +400,7 @@ export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions)
     };
   };
 
-  play(0, 0);
+  play(0);
   return {
     corpus,
     list: () => current,
@@ -438,10 +411,10 @@ export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions)
       // a recording carries no notification: the bus is listened on and never speaks
       onMonitorNotification: (listener) => hear(noticeListeners, listener),
       onMonitorRemoved: (listener) => hear(removedListeners, listener),
-      // a recorded run has no failure a person can take: the next pass would play it again
+      // a recorded run has no failure a person can take: the recording owns its rows
       acknowledgeFailureBlocker: async () => false,
     },
-    position: () => ({ ...played }),
+    position: () => ({ frame: played }),
     dispose() {
       disposed = true;
       if (timer !== null) clearTimeout(timer);
@@ -463,14 +436,14 @@ export function openSwarmReplay(opts: SwarmReplayOptions & { path: string }): Sw
   const runs = new Set(replay.list().sessions.map((row) => row.runtimeRunId));
   logger.warn(
     "fieldd.debug.swarm_replay",
-    "This desktop's boards play a recorded synthetic swarm, not its agents",
+    "This desktop's boards play a recorded synthetic swarm once, then hold it, in place of its agents",
     {
       variable: FIELDD_DEBUG_SWARM_CORPUS_ENV,
       file: basename(opts.path),
       ...(corpus.generator !== undefined ? { generator: corpus.generator } : {}),
       frames: corpus.folds.length,
       runs: runs.size,
-      periodMs: corpus.periodMs,
+      spanMs: corpus.folds.at(-1)?.t ?? 0,
       unused: corpus.unused,
       unknown: corpus.unknown,
       skipped: corpus.skipped,

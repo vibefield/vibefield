@@ -1633,8 +1633,9 @@ export const FIELDD_TRUST_ROOT_ENV = "FIELDD_TRUST_ROOT" as const;
 /** …and the root keys that document must be signed by, a comma-separated list (the app's embedded anchor). */
 export const FIELDD_TRUST_ROOT_KEYS_ENV = "FIELDD_TRUST_ROOT_KEYS" as const;
 /** PG-9 S4c — DEBUG, development only: a recorded synthetic swarm corpus (`.jsonl.gz`, field-app's generator output)
- * a dev desktop's fieldd plays on its boards in place of its agents (fieldd `debug/swarm-replay.ts`). A packaged
- * fieldd refuses to boot under it, and the shell blanks it for a packaged fieldd. TS-only, like the two above. */
+ * a dev desktop's fieldd plays on its boards in place of its agents (fieldd `debug/swarm-replay.ts`): it plays the
+ * corpus once, then holds its last state (rows alive and quiet); restart fieldd to replay. A packaged fieldd refuses
+ * to boot under it, and the shell blanks it for a packaged fieldd. TS-only, like the two above. */
 export const FIELDD_DEBUG_SWARM_CORPUS_ENV = "FIELDD_DEBUG_SWARM_CORPUS" as const;
 
 /** PA-29 / plugin spec §11.6 — the host-singleton externals list. React,
