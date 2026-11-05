@@ -34903,6 +34903,8 @@ clean-Mac row meets", and ruled with prod-builder from 11:33Z to 11:54Z. Item 18
 - **The honest state: nothing in `daemon.ts` constructs them.** `index.apps.*`, `index.artifacts`, `artifact.open`
   and `artifact.mark` still answer method-not-found. M-B (3e) wires the three modules and answers the doors, and its
   two-daemon e2e is its witness.
+  > *Since M-B (2026-11-05, M162 `ac2fc574f`, run 162):* the doors answer. Five of them serve; `artifact.open`
+  > answers `export-unbuilt` until rosetta 0.1.4, and `artifact.mark` `intent-unbuilt` until 3h ("MA-3e (M-B)").
 
 **What landed.** 16 files, +10279 −5.
 - Pin-class: none. Release-class: none. Rust: none (field-native unchanged). Locks: 0. No contracts `src` changed.
@@ -35512,3 +35514,101 @@ is shown".
 - The land (the fixer's, 2026-11-05T16:09:31Z): main fast-forwarded from `8aea8fe58`, 1 file +8 −5.
 
 Item 183 closes in this entry.
+
+## MA-3e (M-B) — the six MA doors answer: the apps table and its replica door, Versions, and a made app's open with the home's validate-or-strip and reveal; every open is `export-unbuilt` until rosetta 0.1.4, and Keep and Hide answer `intent-unbuilt` until 3h (track MA) (2026-11-05; `d8afd7a6e` → `ac2fc574f`, 4 commits on main `bbd7e198d`, lane `ma/3-fieldd` in `/Volumes/SamsungRed/lanes/ma-3/vibe-field`, re-cut by `git replay` as `ma/3e-T3`, stacked as M162 `ac2fc574f`, run 162)
+- MA-3's second mint (VF-PM's split, 13:38Z). `daemon.ts` builds M-A's three modules (`IndexApps`, `AppsMesh`,
+  `MadeAppService`) and answers the six doors MA-1a declared. Each door is gated by principal at the origin, and a
+  routed call is gated again at its home.
+- **The honest state:**
+  - `index.apps.list`, `index.apps.subscribe`, `index.apps.catalog.subscribe` and `index.artifacts` answer.
+  - `artifact.open` answers `UNAVAILABLE {service:"apps", state:"export-unbuilt"}` until the EL8 to rosetta 0.1.4.
+    Its exporter is a daemon stub behind `config.madeApps.exporter`, and 3f replaces it (C9 as amended).
+  - `artifact.mark` answers `UNAVAILABLE {service:"apps", state:"intent-unbuilt"}`, not retryable, until 3h.
+  - Nothing draws the doors yet. MA-4, the desk, is held at its mint for MA's place in 0.9.
+
+**What landed.** 17 files, +2225 −30.
+- **Pin-class:** `registries.ts` only: one TS-only word, `MADE_APP_OPEN.STATE_INTENT_UNBUILT`, and its doc. No
+  LAYOUT, PORTS or SCOPES row, so no gen.
+- **Release-class, Rust and locks:** none.
+- **The replay:** the lane's `5412e0886` was replayed onto main with no worktree: range-diff 4/4 `=`, and every
+  file's lines identical (17 of 17). Run 160 minted the first three commits, at `9779612db`.
+- **Shared with main since `f657f6dfe`:** 4 files, every hunk disjoint: `registries.ts` (beside CP-4a2a's
+  FLOW_LIMITS), `daemon.ts`, `api.html` and `architecture.html`.
+- **The doors** (`daemon.ts` +820 −4):
+  - `index.apps.list` and `.subscribe` go through AppsMesh. A peer daemon reads local rows with no project and is
+    refused the pings (DS-L4). A tailnet page is clipped at MAX_ROWS, and a routed tailnet ask past it is refused at
+    the home.
+  - `index.apps.catalog.subscribe` is a peer daemon's door alone. Before the first walk it answers
+    `library-reading`.
+  - `index.artifacts` projects rosetta's page entry by entry: no `path`, no `recovered_from`, no asset URL (EL2).
+    Its `projectKey` narrows this desktop's own library by the fold's rule, and a routed one is refused at the home.
+  - `artifact.open` is audited `artifact.made.open`, and a forwarded answer's URL is kept only when it is a root
+    URL on the serving desktop's MagicDNS name. Otherwise it is stripped, never rewritten (C16).
+  - The window's `reveal` opens the validated URL through the home's own shell, audited `artifact.made.reveal`, with
+    no URL in any record.
+- **One existing door changed:** `index.catalog.subscribe`, named with a `device`, is refused at the home,
+  FORBIDDEN_SCOPE (3e's review). Nothing routes it today.
+- **The pages:**
+  - `api.html`: five doors go Designed → Built, with their routed refusals; `artifact.mark` stays Designed and names
+    its answer.
+  - `architecture.html`: the seam "rosetta's library → fieldd's apps table" goes Built.
+  - `AGENT_PLANE.md` names the doors.
+  - `IndexArtifactsParams`' doc says a routed page is not narrowed.
+- **The tests:**
+  - `index-apps.e2e.test.ts`, 7 rows on two daemons: the fold, pings and an asleep peer; `export-unbuilt` with its
+    audit; EL2; C16's strip, and its keep with a reveal; the catalog gate; the project filter.
+  - `index-tailnet-bound.test.ts` +4 rows: the doors bounded at the door, and every routed refusal.
+
+**Validation.**
+- The MacBook (VF-PM's 12:16Z ruling; speed, not proof):
+  - tsc on fieldd (src and test) and on contracts: 0.
+  - contracts `made-apps.test.ts` 34/34 (33/34 at the red, by the pin's missing word); `layout.test.ts` 18/18.
+  - biome clean; `git diff --check` clean.
+  - No fieldd vitest ran: every row boots a daemon.
+  - Two adversarial lenses reviewed the green. 13 of their 15 findings were fixed, among them the HIGH one: every
+    reveal failed on the listener's slashless URL.
+- The mini, two runs:
+  - **The red,** run 160's step one at `d9b8f37cb` (`d8afd7a6e` in this cut, range-diff `=`): the 6 e2e rows and the
+    3 MA-3e tailnet rows failed BY ASSERTION, with a wrong value. 0 timeouts, 0 boot failures, and the 13 older
+    tailnet rows passed.
+  - **Run 160 at `9779612db`:** verify 1 at 15:51:38Z, fieldd 3 failed | 3424 passed | 14 skipped (Found below).
+    cargo 545/0 and gen:check 0 were read after it.
+  - **The green, run 162** (a9's mint of `ac2fc574f` on `bbd7e198d`, HAS `c07039551`): `pnpm verify` exit 0 at
+    16:25:59Z.
+    - fieldd 3427|14 (+11: index-apps.e2e 7 new, index-tailnet-bound 13 → 17).
+    - contracts 1749 (+2: layout.test.ts, one row per LAYOUT_CONSUMERS entry).
+    - vitest 13,285 passed, 0 failed, 20 skipped; biome 3377.
+    - field-app 4069, electron-shell 2668|2, node 472 and cargo 545, each unchanged; census "no drift"; no step 2.
+    - Run 160's three rows are green by name.
+    - The log is `/Volumes/SamsungRed/lanes/ts6/logs/mini/run162/verify.log`, sha256
+      `19f1ea70856c6e160a5be0b1782b78abe2f8db0ab7aba4b7639076b519c06436`.
+  - Watched: every daemon boot now walks `/api/artifacts` after the catalog's first snapshot. The request-log pins
+    that count rosettad's requests (`agent-index-search`, `index-history-doors`, `index-activity-doors`,
+    `index-timeline`) are green in run 162, with the walk filtered out of their counters (Found).
+- The land: main fast-forwarded `bbd7e198d` → `ac2fc574f` at 16:28:18Z (the fixer), 17 files +2225 −30.
+
+**Found.**
+- The shell's `ShellLinkUrl` refuses a listener's slashless root URL. The reveal hands it `new URL(url).href`, and
+  the answer keeps the listener's spelling.
+- A routed call reaches the origin as its carrier, `peer-fieldd`, so the origin's own guest and plugin refusals never
+  ran for it. Each apps door's hook now gates at the home first. `index.sessions`' routed tailnet bound has the same
+  gap; it is inherited and not touched here.
+- Run 160 was red on three rows. Each failed by assertion, and none was a product defect.
+  - Two request-log pins counted the library walk. index-timeline's last read was the walk, under the suite's load.
+    AR-4's `sessionRequests` counted every line, and `setup({restartOf})` reuses the root, so the second box's log
+    is the first boot's, walk included (read, not inferred: agent-session.test.ts:718, fake-rosettad.mjs:1205).
+  - C16's row took A's first shell call for the reveal. The owed first capture (L11) runs on the preview chain once
+    A's table speaks, so it may precede the reveal. made-app-service.ts' `#answer` doc says so, and the row finds
+    the reveal by method, asserted once beside the capture.
+- **This slice changes what five older test files count:** index-timeline, agent-index-search,
+  index-history-doors, index-activity-doors and agent-session (`ac2fc574f`). Their pins were written before any daemon
+  read the library on its own clock, and each now leaves `/api/artifacts` out and pins the reads it was about. The
+  walk stays eager (VF-PM's ruling, 15:58Z): a lazy walk would move its cost, and the honest `library-reading`,
+  onto the person to suit a test.
+
+**Owed.**
+- 3f, serving, after rosetta 0.1.4's EL8: the exporter, the export door's route, D10's tidy.
+- 3h, Keep and Hide as replicated intent.
+- MA-4, the desk, held at its mint for James's 0.9 word.
+- Not pinned: the home's cross-desktop project join on a routed `index.artifacts` page, its malformed-page refusal
+  and the `not-a-root-url` log line.
