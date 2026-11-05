@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SparkTranscriptServerFrame } from "@vibefield/contracts";
@@ -106,6 +106,16 @@ async function dial(port: number, headers?: Record<string, string>) {
     ws.send(JSON.stringify({ type: "open", ticket, runs }));
   return { ws, frames, until, closed, open };
 }
+
+/** What `promise` settles to within `ms`, or undefined: a bounded wait the row asserts on, naming what it waited for. */
+const within = <T>(promise: Promise<T>, ms: number): Promise<T | undefined> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(undefined), ms);
+    void promise.then((value) => {
+      clearTimeout(timer);
+      resolve(value);
+    });
+  });
 
 const seqs = (frames: SparkTranscriptServerFrame[], run = RUN) =>
   frames.flatMap((f) => (f.type === "line" && f.run === run ? [f.line.seq] : []));
@@ -228,6 +238,22 @@ describe("the transcript worker's listener (TH-1)", () => {
     expect(kept.ws.readyState).toBe(WebSocket.OPEN);
     expect(w.listener.closeTicket("tok-kept", keptTicket)).toBe(true);
     await kept.closed;
+  });
+
+  it("never answers an open it cannot read as nothing: a run's file the disk does not answer closes the socket before caught-up (item 172's rule)", async () => {
+    const w = await world();
+    expect(existsSync(w.file(VELA, RUN)), "the run's file is kept").toBe(true);
+    // the disk will not hand it over (EACCES, every one of RECORD_STORES.READ_TRIES tries)
+    chmodSync(w.file(VELA, RUN), 0o000);
+    const window = await dial(w.listener.port);
+    window.open(w.ticket(), [{ run: RUN }]);
+    expect(
+      await within(window.closed, 2_000),
+      "waited 2000 ms for the socket to close with 1011",
+    ).toBe(1011);
+    chmodSync(w.file(VELA, RUN), 0o600);
+    // ready came, no line and never caught-up: the window asks again, and fieldd's door says what it cannot read
+    expect(window.frames.map((frame) => frame.type)).toEqual(["ready"]);
   });
 });
 

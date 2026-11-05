@@ -1,8 +1,10 @@
 import { createHmac } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -12,15 +14,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   canonicalJson,
+  RECORD_STORES,
   SPARK_TRANSCRIPT_FORMAT,
+  SPARK_TRANSCRIPT_SERVICE,
   sparkTranscriptLineOf,
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
+import { RpcCallError } from "../src/native-link";
 import { RecordSigner } from "../src/signed-record";
 import {
   SparkTranscriptRecorder,
   SparkTranscripts,
+  TRANSCRIPTS_UNREADABLE,
   type TranscriptAgent,
 } from "../src/spark-transcripts";
 
@@ -88,6 +94,32 @@ function harness() {
       .map((line) => JSON.parse(line) as Record<string, unknown>);
   return { root, dir, keyPath, events, open, file, raw };
 }
+
+/** What a call answered, or what it threw as a door would answer it: an RpcCallError's kind, retryability, words and
+ * details. */
+function answerOf(call: () => unknown): unknown {
+  try {
+    return { answered: call() };
+  } catch (error) {
+    return error instanceof RpcCallError
+      ? {
+          kind: error.kind,
+          retryable: error.retryable,
+          message: error.message,
+          details: error.details,
+        }
+      : { threw: String(error) };
+  }
+}
+
+/** Item 172's refusal, the transcript store's: UNAVAILABLE {spark-transcripts, records-unreadable}, in DESIGN.md §9's
+ * words, retryable (the store reads at each ask). */
+const UNREADABLE = {
+  kind: "UNAVAILABLE",
+  retryable: true,
+  message: TRANSCRIPTS_UNREADABLE,
+  details: { service: SPARK_TRANSCRIPT_SERVICE.SERVICE, state: RECORD_STORES.STATE_UNREADABLE },
+};
 
 /** A run as puppeteer's Agent hands it to the recorder: its `.on` surface, and its monitor's evidence. */
 function fakeAgent(lastEvidenceAt?: string) {
@@ -205,19 +237,74 @@ describe("the spark's transcript, kept (TH-1)", () => {
     expect(store.runs(KIWI)).toEqual({ runs: [] });
   });
 
-  it("never writes over a file the disk will not hand over, and says the folder is unavailable, never empty (item 172's rule)", () => {
+  it("never writes over a run's file the disk will not hand over, and refuses a file or a folder it cannot read in fieldd's words, never with an empty list (item 172's rule)", () => {
     const h = harness();
     const store = h.open();
     store.append(VELA, RUN, { kind: "run", runtimeRunId: RUN, fresh: true });
-    // a run file that cannot be read: a fresh store must not start its seq again at 1 over it
-    mkdirSync(join(h.dir, VELA, "run-vela-dir.jsonl"), { mode: 0o700 });
-    expect(h.open().append(VELA, "run-vela-dir", { kind: "turn", edge: "start" })).toBeUndefined();
-    expect(h.events.some((event) => event.event === "fieldd.transcripts.unreadable")).toBe(true);
-    // a folder the disk refuses: its runs are unavailable in the errno's word, never an empty list
+    expect(existsSync(h.file(VELA, RUN)), "the run's line is kept").toBe(true);
+    // a run's file the disk will not hand over (EACCES, every try): a fresh store must not begin its seq again over it
+    chmodSync(h.file(VELA, RUN), 0o000);
+    expect(
+      h.open().append(VELA, RUN, { kind: "turn", edge: "start" }),
+      "a line written over a file the store could not read",
+    ).toBeUndefined();
+    expect(
+      h.events.map((event) => event.event),
+      "the store says it could not read the run's file",
+    ).toContain("fieldd.transcripts.unreadable");
+    // the door's listing: item 172's refusal, the store's own, in fieldd's words
+    expect(answerOf(() => h.open().runs(VELA))).toEqual(UNREADABLE);
+    chmodSync(h.file(VELA, RUN), 0o600);
+    // a folder the disk refuses: the same refusal, never an empty list
     chmodSync(join(h.dir, VELA), 0o000);
-    expect(h.open().runs(VELA)).toEqual({ unavailable: "EACCES" });
+    expect(answerOf(() => h.open().runs(VELA))).toEqual(UNREADABLE);
     chmodSync(join(h.dir, VELA), 0o700);
     expect(h.raw(VELA, RUN)).toHaveLength(1);
+    // fieldd's words are DESIGN.md's (§8 "Chat's thread", under §9's rule), quoted whole
+    const design = readFileSync(join(import.meta.dirname, "../../../DESIGN.md"), "utf8");
+    expect(design.replace(/\s+/g, " ")).toContain(`"${TRANSCRIPTS_UNREADABLE}"`);
+  });
+
+  it("sets aside what is not a record (a folder where a run's file is), and keeps a run a newer VibeField wrote in for it, never written to (item 172's rule)", () => {
+    const h = harness();
+    const store = h.open();
+    // a folder where a run's file is: set aside beside itself, said, and the run begins its file anew
+    mkdirSync(join(h.dir, VELA, "run-vela-dir.jsonl"), { recursive: true, mode: 0o700 });
+    expect(
+      store.append(VELA, "run-vela-dir", { kind: "run", runtimeRunId: "run-vela-dir", fresh: true })
+        ?.seq,
+      "the run's first line, written anew",
+    ).toBe(1);
+    expect(
+      readdirSync(join(h.dir, VELA)).filter((name) =>
+        name.startsWith("run-vela-dir.jsonl.unreadable-"),
+      ),
+      "the folder, set aside beside itself",
+    ).toHaveLength(1);
+    // a run whose file holds a line a newer VibeField wrote: kept for it, never written to, said once
+    const line = {
+      v: SPARK_TRANSCRIPT_FORMAT + 1,
+      seq: 1,
+      kind: "run",
+      at: AT,
+      runtimeRunId: RUN,
+      fresh: true,
+    };
+    const mac = new RecordSigner({ keyPath: h.keyPath }).sign({ spark: VELA, run: RUN, line });
+    writeFileSync(h.file(VELA, RUN), `${JSON.stringify({ ...line, mac })}\n`, { mode: 0o600 });
+    const fresh = h.open();
+    expect(
+      fresh.append(VELA, RUN, { kind: "turn", edge: "start" }),
+      "a line written to a newer VibeField's run",
+    ).toBeUndefined();
+    expect(fresh.append(VELA, RUN, { kind: "turn", edge: "end" }), "nor the next").toBeUndefined();
+    expect(
+      h.events.filter((event) => event.event === "fieldd.records.newer"),
+      "said once",
+    ).toHaveLength(1);
+    expect(h.raw(VELA, RUN)).toHaveLength(1);
+    // never served: its format is not this build's
+    expect(fresh.read(VELA, RUN)).toEqual({ lines: [], dropped: 0 });
   });
 
   it("sets a run's file other users could read aside, never served; the run's next line begins its file again", () => {

@@ -1757,6 +1757,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - While it is first read, the flow says "Reading Vela's conversation…". When it can't be read, the flow says
       "Couldn't read Vela's conversation: ‹fieldd's words›". Each is 13 regular in secondary ink, centred in the flow,
       as Chat's other honest lines are, and the window asks again when its client is connected again. Never a blank.
+    - *Amended 2026-11-05 (TH-1, the fold onto item 172):* the record is kept by §9's "What VibeField keeps, when it
+      cannot read it", line by line. A run's file open to other users, or a folder in its place, is set aside. One the
+      disk does not hand over (three tries) is left where it is and never written to, and fieldd's words are
+      "VibeField can't read this spark's conversation; nothing was changed". A run a newer VibeField wrote in is kept
+      for it and never written to again.
   - **Every run, one conversation** (TH-Q14 (b), James 2026-11-04 23:03Z; TH0-Q6 (c)). A wake resumes the spark's
     conversation in a new run, and the flow joins those runs as one. A wake that cannot resume starts a new
     conversation. The flow shows the latest. The earlier ones open from one quiet row at its top, "Earlier

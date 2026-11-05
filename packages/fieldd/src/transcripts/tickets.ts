@@ -22,8 +22,8 @@ import {
 // (workspace/tickets.ts). The method's scope is the family's `sparks.use`; this gate is narrower: a renderer window
 // of this desktop alone (its own local token, over the loopback socket, with a renderer participant). Shell-main, a
 // plugin, an MCP agent, a plain local token, a phone and a peer daemon are refused (EL7). The answer names the
-// spark's runs, oldest first, read from its folder: a folder the disk would not hand over is the honest UNAVAILABLE,
-// never an empty list.
+// spark's runs, oldest first, read from its folder: a folder the disk would not hand over is the store's own refusal
+// (item 172's guard: UNAVAILABLE {spark-transcripts, records-unreadable}), never an empty list.
 
 export interface SparkTranscriptTicketsOptions {
   readonly store: Pick<SparkTranscripts, "runs">;
@@ -68,17 +68,9 @@ export class SparkTranscriptTickets {
     const { spark } = parsed.data;
     if (!this.opts.hasSpark(spark))
       throw new RpcCallError("NOT_FOUND", "this desktop keeps no such spark", false);
+    // a folder, a run's file or the key the disk does not hand over: the store's own refusal, item 172's
+    // (UNAVAILABLE {spark-transcripts, records-unreadable}, in fieldd's words), never an empty list
     const runs = this.opts.store.runs(spark);
-    if ("unavailable" in runs)
-      throw new RpcCallError(
-        "UNAVAILABLE",
-        "VibeField can't read this spark's conversation; nothing was changed",
-        true,
-        {
-          service: SPARK_TRANSCRIPT_SERVICE.SERVICE,
-          state: SPARK_TRANSCRIPT_SERVICE.STATE_UNREADABLE,
-        },
-      );
     const ticket = randomBytes(32).toString("base64url");
     const expiresAt = this.#now() + SPARK_TRANSCRIPT.TICKET_TTL_MS;
     let port: number;

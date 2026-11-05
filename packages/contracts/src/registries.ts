@@ -773,9 +773,10 @@ export const SPARK_TRANSCRIPT = {
  * (WORKSPACE_SERVICE): STARTING the first generation is booting, RESTARTING a generation died and the next is on its
  * backoff (both retryable), OFF switched off for this daemon (a test-only knob, never a user setting), UNCONFIGURED no
  * worker to run (no bundle beside an embedded daemon), FAILED it keeps dying or cannot be spawned, STOPPED fieldd is
- * stopping. UNREADABLE: the spark's folder, or the key its lines are checked by, the disk would not hand over; it is
- * item 172's word (RECORD_STORES.STATE_UNREADABLE), named here until that row lands under this lane, and folds into
- * it then. A window asks again after SPARK_TRANSCRIPT's retry bounds. TS-only: no native reader. */
+ * stopping. A spark's folder, a run's file or the key its lines are checked by that the disk would not hand over is
+ * item 172's word under this service (RECORD_STORES.STATE_UNREADABLE, the store's own refusal). A window asks again
+ * after SPARK_TRANSCRIPT's retry bounds. TS-only: no native reader. *TH-1, 2026-11-05:* this held its own
+ * STATE_UNREADABLE until item 172 landed under the lane; it folded into RECORD_STORES' word. */
 export const SPARK_TRANSCRIPT_SERVICE = {
   SERVICE: "spark-transcripts",
   STATE_STARTING: "starting",
@@ -784,7 +785,6 @@ export const SPARK_TRANSCRIPT_SERVICE = {
   STATE_UNCONFIGURED: "unconfigured",
   STATE_FAILED: "failed",
   STATE_STOPPED: "stopped",
-  STATE_UNREADABLE: "records-unreadable",
 } as const;
 
 /** FS-1a — the files service's honest refusal vocabulary

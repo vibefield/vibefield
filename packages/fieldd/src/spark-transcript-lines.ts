@@ -108,23 +108,28 @@ export function readLines(
   return { lines, dropped, seen, rest };
 }
 
-/** The highest seq in `text` that verifies, so the next line is that plus one: the writer's own read. */
-export function lastSeqOf(text: string, spark: string, run: string, verify: LineVerifier): number {
-  let last = 0;
+/** The writer's own read of a run's file: the highest seq that verifies, so the next line is that plus one, and the
+ * highest format among the lines that verify (item 172's rule: a file a newer VibeField wrote in is never written to
+ * by this one; `SPARK_TRANSCRIPT_FORMAT` is this build's). */
+export function tailOf(
+  text: string,
+  spark: string,
+  run: string,
+  verify: LineVerifier,
+): { readonly seq: number; readonly format: number } {
+  let seq = 0;
+  let format = 0;
   for (const piece of text.split("\n")) {
     if (piece.trim() === "") continue;
     try {
       const parsed = JSON.parse(piece) as Record<string, unknown>;
       const head = SparkTranscriptLine.safeParse(parsed);
-      if (
-        head.success &&
-        head.data.seq > last &&
-        verify(macInput(spark, run, parsed), head.data.mac)
-      )
-        last = head.data.seq;
+      if (!head.success || !verify(macInput(spark, run, parsed), head.data.mac)) continue;
+      seq = Math.max(seq, head.data.seq);
+      format = Math.max(format, head.data.v);
     } catch {
       // a line that does not parse holds no seq
     }
   }
-  return last;
+  return { seq, format };
 }

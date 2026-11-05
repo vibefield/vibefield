@@ -3,6 +3,7 @@ import { open, readdir } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import { join } from "node:path";
 import {
+  RECORD_STORES,
   SPARK_TRANSCRIPT,
   SparkTranscriptOpen,
   type SparkTranscriptRun,
@@ -29,7 +30,11 @@ import { type TicketRegistration, TRANSCRIPT_PATH } from "../protocol";
 //   and the tail: a run's file that grew (fieldd's `appended` nudge) serves its next lines; a run of the spark begun
 //   after the open is announced (`run`) and served from its start;
 // - every line is read from the spark's folder and verified under the key fieldd handed on the pipe
-//   (`spark-transcript-lines.ts`): one that fails is never served, only counted.
+//   (`spark-transcript-lines.ts`): one that fails is never served, only counted;
+// - item 172's rule: a read the disk does not answer is tried RECORD_STORES.READ_TRIES times; past the last, an open
+//   is never answered as nothing — the socket closes before `caught-up`, said in the log, and the window's next ticket
+//   hears fieldd's own refusal (`records-unreadable`) while the disk still does not answer. A tail's read that fails
+//   stops where it is, and the next nudge reads on from there.
 // Read-only: the listener never writes, renames or sets aside (fieldd's store does).
 
 /** The worker's own bounds. */
@@ -64,6 +69,34 @@ export class HostFailure extends Error {
   ) {
     super(message);
   }
+}
+
+/** A read the disk did not answer, past RECORD_STORES.READ_TRIES tries (`code`: its last errno). */
+class DiskUnanswered extends Error {
+  constructor(readonly code: string) {
+    super(`the disk did not answer (${code})`);
+  }
+}
+
+const codeOf = (error: unknown): string => {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  return typeof code === "string" && code !== "" ? code : "EIO";
+};
+
+/** `read`, tried RECORD_STORES.READ_TRIES times while the disk does not answer (RecordSigner's rule): undefined for
+ * nothing there (ENOENT; ENOTDIR, a file where its folder would be) or for a folder where a run's file is (EISDIR: not
+ * a record; fieldd's store sets it aside), else its answer; past the last try, DiskUnanswered. */
+async function tried<T>(read: () => Promise<T>): Promise<T | undefined> {
+  let code = "EIO";
+  for (let attempt = 0; attempt < RECORD_STORES.READ_TRIES; attempt += 1) {
+    try {
+      return await read();
+    } catch (error) {
+      code = codeOf(error);
+      if (code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR") return undefined;
+    }
+  }
+  throw new DiskUnanswered(code);
 }
 
 interface Ticket extends TicketRegistration {
@@ -303,6 +336,26 @@ export class TranscriptListener {
       }
       asked.set(run, after ?? 0);
     }
+    try {
+      await this.#serveOpen(socket, ticket, folder, asked);
+    } catch (error) {
+      // never answered as nothing: no `caught-up`; the window asks again, and fieldd's door says what it cannot read
+      this.#opts.onLog?.(
+        "fieldd.transcripts.worker_unreadable",
+        "The transcript worker could not read a spark's runs; the window's open was closed before it caught up",
+        { spark: ticket.spark, code: error instanceof DiskUnanswered ? error.code : "internal" },
+      );
+      socket.close(1011, "unreadable");
+    }
+  }
+
+  /** An open's reading, once its ticket is spent: the runs it names, served, then `caught-up` and the tail. */
+  async #serveOpen(
+    socket: WebSocket,
+    ticket: Ticket,
+    folder: string,
+    asked: ReadonlyMap<string, number>,
+  ): Promise<void> {
     const before = new Set(await this.#runsIn(folder));
     for (const run of asked.keys())
       if (!before.has(run)) {
@@ -325,7 +378,7 @@ export class TranscriptListener {
     for (const [run, after] of asked) {
       const cursor = cursorAt(0, 0, after);
       reader.runs.set(run, cursor);
-      dropped += await this.#serve(reader, run, cursor);
+      dropped += await this.#serve(reader, run, cursor, true);
     }
     // the spark's other runs the window did not name stand where they end now: it asks for them with a ticket of its
     // own (its earlier conversations); a run begun after this open is announced (`run`) and served from its start
@@ -333,62 +386,74 @@ export class TranscriptListener {
       if (!asked.has(run)) reader.runs.set(run, await this.#endOf(reader.spark, run));
     this.#send(socket, { type: "caught-up", dropped });
     reader.caughtUp = true;
-    // what was written while the open was being served: each run read on once, each new run announced
+    // what was written while the open was being served: each run read on once, each new run announced (a folder the
+    // disk does not answer now is the tail's: the next nudge announces what it holds)
     for (const [run, cursor] of reader.runs) this.#readOn(reader, run, cursor);
-    for (const run of await this.#runsIn(folder))
-      if (!reader.runs.has(run)) void this.#announce(reader, run);
+    const since = await this.#runsIn(folder).catch(() => [] as string[]);
+    for (const run of since) if (!reader.runs.has(run)) void this.#announce(reader, run);
   }
 
-  /** The runs a spark's folder holds, by their files' names; none for a folder that is not there or not readable. */
+  /** The runs a spark's folder holds, by their files' names; none for a folder that is not there. A folder the disk
+   * does not answer throws DiskUnanswered. */
   async #runsIn(folder: string): Promise<string[]> {
-    try {
-      return (await readdir(folder)).flatMap((name) => {
-        const run = runOfFile(name);
-        return run === undefined ? [] : [run];
-      });
-    } catch {
-      return [];
-    }
+    return ((await tried(() => readdir(folder))) ?? []).flatMap((name) => {
+      const run = runOfFile(name);
+      return run === undefined ? [] : [run];
+    });
   }
 
   /** A cursor at the end of a run's file as it stands, its last whole line's: what is written after is served. */
   async #endOf(spark: string, run: string): Promise<RunCursor> {
-    try {
-      const file = await open(join(this.#opts.dir, spark, `${run}${RUN_FILE_SUFFIX}`), "r");
+    const path = join(this.#opts.dir, spark, `${run}${RUN_FILE_SUFFIX}`);
+    const end = await tried(async () => {
+      const file = await open(path, "r");
       try {
         const { size } = await file.stat();
         const buffer = Buffer.alloc(size);
         const { bytesRead } = await file.read(buffer, 0, size, 0);
-        const end = buffer.subarray(0, bytesRead).lastIndexOf(0x0a) + 1;
+        const last = buffer.subarray(0, bytesRead).lastIndexOf(0x0a) + 1;
         const read = readLines(
-          buffer.subarray(0, end).toString("utf8"),
+          buffer.subarray(0, last).toString("utf8"),
           spark,
           run,
           this.#opts.verify,
         );
-        return cursorAt(end, read.seen);
+        return cursorAt(last, read.seen);
       } finally {
-        await file.close();
+        await file.close().catch(() => undefined);
       }
-    } catch {
-      return cursorAt();
-    }
+    });
+    // gone since it was listed (set aside): what is written there anew is served from its start
+    return end ?? cursorAt();
   }
 
   /** Serve `run`'s lines from the cursor to the file's end, past what the window holds; the count of lines that
-   * failed their check. A read the disk does not answer stops here: the next nudge reads on from the same place. */
-  async #serve(reader: Reader, run: string, cursor: RunCursor): Promise<number> {
-    let dropped = 0;
-    let file: Awaited<ReturnType<typeof open>>;
+   * failed their check. Each read is tried RECORD_STORES.READ_TRIES times. For an open (`opening`), a read the disk
+   * does not answer throws DiskUnanswered, so the open is never answered as nothing; for the tail it stops here, and
+   * the next nudge reads on from the same place. */
+  async #serve(reader: Reader, run: string, cursor: RunCursor, opening = false): Promise<number> {
     try {
-      file = await open(join(this.#opts.dir, reader.spark, `${run}${RUN_FILE_SUFFIX}`), "r");
-    } catch {
+      return await this.#serveFrom(reader, run, cursor);
+    } catch (error) {
+      if (opening) throw error;
+      // the tail's: what was read stands, and the next nudge reads on
       return 0;
     }
+  }
+
+  async #serveFrom(reader: Reader, run: string, cursor: RunCursor): Promise<number> {
+    let dropped = 0;
+    const file = await tried(() =>
+      open(join(this.#opts.dir, reader.spark, `${run}${RUN_FILE_SUFFIX}`), "r"),
+    );
+    // not there (set aside since it was listed): nothing to serve
+    if (file === undefined) return 0;
     try {
       for (;;) {
         const buffer = Buffer.alloc(TRANSCRIPT_HOST_LIMITS.READ_CHUNK_BYTES);
-        const { bytesRead } = await file.read(buffer, 0, buffer.length, cursor.offset);
+        const chunk = await tried(() => file.read(buffer, 0, buffer.length, cursor.offset));
+        if (chunk === undefined) break;
+        const { bytesRead } = chunk;
         if (bytesRead === 0) break;
         cursor.offset += bytesRead;
         const bytes = Buffer.concat([cursor.rest, buffer.subarray(0, bytesRead)]);
@@ -406,8 +471,6 @@ export class TranscriptListener {
         for (const line of read.lines) this.#send(reader.socket, { type: "line", run, line });
         if (bytesRead < buffer.length) break;
       }
-    } catch {
-      // the disk did not answer: what was read stands, and the next nudge reads on
     } finally {
       await file.close().catch(() => undefined);
     }
@@ -437,23 +500,29 @@ export class TranscriptListener {
     reader.runs.set(run, cursor);
     let head: SparkTranscriptRun | undefined;
     try {
-      const file = await open(join(this.#opts.dir, reader.spark, `${run}${RUN_FILE_SUFFIX}`), "r");
-      try {
-        const buffer = Buffer.alloc(64 * 1024);
-        const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-        const firstLine = buffer.subarray(0, bytesRead).toString("utf8").split("\n")[0] ?? "";
-        const [first] = readLines(`${firstLine}\n`, reader.spark, run, this.#opts.verify).lines;
-        if (first !== undefined)
-          head = {
-            runtimeRunId: run,
-            startedAt: first.at,
-            fresh: first.kind === "run" && first.fresh,
-          };
-      } finally {
-        await file.close();
-      }
+      head = await tried(async () => {
+        const file = await open(
+          join(this.#opts.dir, reader.spark, `${run}${RUN_FILE_SUFFIX}`),
+          "r",
+        );
+        try {
+          const buffer = Buffer.alloc(64 * 1024);
+          const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+          const firstLine = buffer.subarray(0, bytesRead).toString("utf8").split("\n")[0] ?? "";
+          const [first] = readLines(`${firstLine}\n`, reader.spark, run, this.#opts.verify).lines;
+          return first === undefined
+            ? undefined
+            : {
+                runtimeRunId: run,
+                startedAt: first.at,
+                fresh: first.kind === "run" && first.fresh,
+              };
+        } finally {
+          await file.close().catch(() => undefined);
+        }
+      });
     } catch {
-      // not there yet, or not readable: the next nudge asks again
+      // the disk did not answer (READ_TRIES tries): the tail's, so the next nudge asks again
     }
     if (head === undefined) {
       reader.runs.delete(run);

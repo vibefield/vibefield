@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { METHODS, reachableFromTailnet } from "../src/methods";
-import { SPARK_TRANSCRIPT, SPARK_TRANSCRIPT_SERVICE } from "../src/registries";
+import { RECORD_STORES, SPARK_TRANSCRIPT, SPARK_TRANSCRIPT_SERVICE } from "../src/registries";
 import {
   SPARK_TRANSCRIPT_FORMAT,
   SPARK_TRANSCRIPT_KINDS,
@@ -143,7 +143,7 @@ describe("the ticket (TH-Q30 (a′); VF-PM's X2: local, a renderer window alone,
     expect(SPARK_TRANSCRIPT.TICKET_TTL_MS).toBe(60_000);
   });
 
-  it("names its honest UNAVAILABLE: the worker's phases in the files worker's words, and item 172's unreadable", () => {
+  it("names its honest UNAVAILABLE: the worker's phases in the files worker's words; unreadable is item 172's word", () => {
     expect(SPARK_TRANSCRIPT_SERVICE).toEqual({
       SERVICE: "spark-transcripts",
       STATE_STARTING: "starting",
@@ -152,8 +152,9 @@ describe("the ticket (TH-Q30 (a′); VF-PM's X2: local, a renderer window alone,
       STATE_UNCONFIGURED: "unconfigured",
       STATE_FAILED: "failed",
       STATE_STOPPED: "stopped",
-      STATE_UNREADABLE: "records-unreadable",
     });
+    // a folder or a file the disk does not hand over is the store's own refusal, in RECORD_STORES' word (TH-1's fold)
+    expect(RECORD_STORES.STATE_UNREADABLE).toBe("records-unreadable");
   });
 });
 

@@ -4,7 +4,6 @@ import {
   closeSync,
   mkdirSync,
   openSync,
-  readdirSync,
   readFileSync,
   readSync,
   statSync,
@@ -12,8 +11,10 @@ import {
 import { basename, join } from "node:path";
 import {
   type ComposeSayChip,
+  RECORD_STORES,
   SPARK_TRANSCRIPT,
   SPARK_TRANSCRIPT_FORMAT,
+  SPARK_TRANSCRIPT_SERVICE,
   type SparkId,
   type SparkTranscriptKnownLine,
   type SparkTranscriptRun,
@@ -22,15 +23,22 @@ import {
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { Agent } from "@vibefield/puppeteer-runtime";
 import { markedText, type QueuedInput } from "./agent-input-queue";
-import { RecordSigner, setAsideFile } from "./signed-record";
+import { RpcCallError } from "./native-link";
+import {
+  RecordSigner,
+  recordsUnreadable,
+  type SetAsideWhy,
+  StoreGuard,
+  setAsideFile,
+} from "./signed-record";
 import {
   isKeptRunId,
   isKeptSparkId,
   type LineVerifier,
-  lastSeqOf,
   RUN_FILE_SUFFIX,
   readLines,
   runOfFile,
+  tailOf,
 } from "./spark-transcript-lines";
 
 // TH-1 — THE SPARK'S TRANSCRIPT, KEPT (TH0-Q1 = O1, VF-PM 2026-11-04 05:01Z; DESIGN.md §8 "Chat's thread", the
@@ -42,9 +50,12 @@ import {
 //   so the spark, the run and the line's place are inside it. A reader drops and counts a line that does not verify,
 //   one copied from another file, and a replayed seq (`spark-transcript-lines.ts`, which the worker shares). That holds
 //   against an edit; the key is 0600 to the same uid, so it is no wall against an agent that reads it (EL7).
-// - Item 172's rule (`RecordSigner.read`'s four kinds, landing beside this): a file the disk does not hand over after
-//   READ_TRIES is left where it is, never served and never written over; a folder that cannot be read says so
-//   (`unavailable`, the errno's word), never an empty list.
+// - Item 172's rule (DESIGN.md §9 "What VibeField keeps, when it cannot read it"; RecordSigner's four kinds, read line
+//   by line here, through a StoreGuard of its own): a line that fails its check is never served, only counted; a run's
+//   file open to other users is set aside; a file or folder the disk does not hand over after RECORD_STORES.READ_TRIES
+//   is left where it is, never served and never written over, said in the log, and the door that reads it refuses in
+//   fieldd's words (UNAVAILABLE {spark-transcripts, records-unreadable}), never with an empty list; a run's file that
+//   holds a newer VibeField's line is never written to again.
 // - Appended, never rewritten: a line once written stands, and what a later line says (an outcome, a reply's last
 //   words) is read as the latest by the reader.
 // - Kept whole, for the spark's life: it goes when the spark is deleted, which RU-19's ⋯ owns and is unbuilt.
@@ -54,9 +65,12 @@ import {
 // them (`outcome`), VibeField's acts (`act`), and the calls the tool plane served (`served`). Its agents' runs, plain
 // runs and a flow's steps are not recorded at TH-1.
 
-/** How many times one read is tried before the store says the disk does not answer: item 172's RECORD_STORES row
- * (READ_TRIES), named here until that row lands under this lane. */
-const READ_TRIES = 3;
+/** Item 172's words for the transcript, when its folder, a run's file or the key does not answer (DESIGN.md §8 "Chat's
+ * thread", under §9 "What VibeField keeps, when it cannot read it"). Held here, beside the store, rather than as a row
+ * of signed-record.ts's UNREADABLE_WORDS while two other stores add their rows to that table in the same lines; it
+ * joins the table once they have landed. */
+export const TRANSCRIPTS_UNREADABLE =
+  "VibeField can't read this spark's conversation; nothing was changed";
 
 /** A run line is small: the first line of a run's file is read in at most this many bytes. */
 const FIRST_LINE_BYTES = 64 * 1024;
@@ -110,10 +124,10 @@ export type TranscriptRead =
   | { readonly absent: true }
   | { readonly unavailable: string };
 
-/** A spark's runs as its folder holds them, oldest first; or why the folder could not be read. */
-export type TranscriptRuns =
-  | { readonly runs: readonly SparkTranscriptRun[] }
-  | { readonly unavailable: string };
+/** A spark's runs as its folder holds them, oldest first. */
+export interface TranscriptRuns {
+  readonly runs: readonly SparkTranscriptRun[];
+}
 
 export interface SparkTranscriptsOptions {
   /** LAYOUT.SPARK_FILES_DIR, absolute: each spark's folder, item 159's */
@@ -124,8 +138,12 @@ export interface SparkTranscriptsOptions {
   readonly now?: () => Date;
 }
 
+/** A run's file read back, in RecordSigner's four kinds (item 172): its text, whose lines are each checked
+ * (`spark-transcript-lines.ts`); why it is not a record and is set aside; the errno of a disk that did not answer; or
+ * nothing there. */
 type FileRead =
-  | { readonly text: string; readonly exposed: boolean }
+  | { readonly text: string }
+  | { readonly why: Extract<SetAsideWhy, "exposed" | "unreadable"> }
   | { readonly absent: true }
   | { readonly unavailable: string };
 
@@ -134,28 +152,30 @@ const errnoOf = (error: unknown): string => {
   return typeof code === "string" && code !== "" ? code : "EIO";
 };
 
-/** Read a file, tried READ_TRIES times: absent (ENOENT), its text and whether its mode lets group or others at it, or
- * the disk's last word. Not a regular file is the disk's refusal too: nothing of fieldd's put it there. */
+/** Read a run's file by RecordSigner's rule, tried RECORD_STORES.READ_TRIES times while the disk does not answer: one
+ * whose mode lets group or others at it is exposed; a folder, or anything else that is not a regular file, is not a
+ * record; nothing there (ENOENT, or ENOTDIR: a file where its folder would be) is absent; past the last try, the
+ * disk's last word. */
 function readTried(path: string, bytes?: number): FileRead {
   let code = "EIO";
-  for (let attempt = 0; attempt < READ_TRIES; attempt += 1) {
+  for (let attempt = 0; attempt < RECORD_STORES.READ_TRIES; attempt += 1) {
     try {
       const stat = statSync(path);
-      if (!stat.isFile()) return { unavailable: "EISDIR" };
+      if (!stat.isFile()) return { why: "unreadable" };
       // the mode bits say nothing on win32 (signed-record.ts's rule)
-      const exposed = process.platform !== "win32" && (stat.mode & 0o077) !== 0;
-      if (bytes === undefined) return { text: readFileSync(path, "utf8"), exposed };
+      if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) return { why: "exposed" };
+      if (bytes === undefined) return { text: readFileSync(path, "utf8") };
       const fd = openSync(path, "r");
       try {
         const buffer = Buffer.alloc(bytes);
         const read = readSync(fd, buffer, 0, bytes, 0);
-        return { text: buffer.subarray(0, read).toString("utf8"), exposed };
+        return { text: buffer.subarray(0, read).toString("utf8") };
       } finally {
         closeSync(fd);
       }
     } catch (error) {
       code = errnoOf(error);
-      if (code === "ENOENT") return { absent: true };
+      if (code === "ENOENT" || code === "ENOTDIR") return { absent: true };
     }
   }
   return { unavailable: code };
@@ -170,6 +190,9 @@ export class SparkTranscripts {
   readonly #signer: RecordSigner;
   readonly #verify: LineVerifier;
   readonly #logger: Logger;
+  /** item 172's guard: the folder listed and a file the disk did not answer refused in fieldd's words, a newer
+   * VibeField's run held */
+  readonly #guard: StoreGuard;
   readonly #now: () => Date;
   /** each run's next seq, once its file has been read (`spark/run`) */
   readonly #next = new Map<string, number>();
@@ -184,6 +207,13 @@ export class SparkTranscripts {
     this.#now = opts.now ?? (() => new Date());
     this.#signer = new RecordSigner({ keyPath: opts.keyPath, logger: this.#logger });
     this.#verify = (unsigned, mac) => this.#signer.verifies(unsigned, mac);
+    this.#guard = new StoreGuard({
+      store: "spark-transcripts",
+      format: SPARK_TRANSCRIPT_FORMAT,
+      refusal: () =>
+        recordsUnreadable(SPARK_TRANSCRIPT_SERVICE.SERVICE, TRANSCRIPTS_UNREADABLE, true),
+      logger: this.#logger,
+    });
   }
 
   /** The folder's key, for the transcript worker that verifies each line it serves: handed on its IPC pipe, never in
@@ -200,17 +230,23 @@ export class SparkTranscripts {
     return () => this.#listeners.delete(listener);
   }
 
-  /** A run's file as the store reads it: one whose mode lets group or others at it is set aside for a human, as every
-   * signed store's is (signed-record.ts), and reads as absent; one the disk will not hand over is its word. */
-  #held(spark: SparkId, run: string, path: string, bytes?: number): FileRead {
+  /** A run's file as the store reads it: one that is not a record (open to other users, or a folder where the file
+   * is) is set aside for a human, as every signed store's is (signed-record.ts), and reads as absent; one the disk will
+   * not hand over is its word. */
+  #held(
+    spark: SparkId,
+    run: string,
+    path: string,
+    bytes?: number,
+  ): Exclude<FileRead, { why: string }> {
     const held = readTried(path, bytes);
-    if (!("text" in held) || !held.exposed) return held;
-    const aside = setAsideFile(path, "exposed");
+    if (!("why" in held)) return held;
+    const aside = setAsideFile(path, held.why);
     this.#next.delete(`${spark}/${run}`);
     this.#logger.warn(
       "fieldd.transcripts.set_aside",
-      "A spark's transcript file other users could read was set aside, never served",
-      { spark, run, why: "exposed", aside: basename(aside) },
+      "A spark's transcript file that is not a record was set aside, never served",
+      { spark, run, why: held.why, aside: basename(aside) },
     );
     return { absent: true };
   }
@@ -258,6 +294,8 @@ export class SparkTranscripts {
     body: TranscriptBody,
   ): SparkTranscriptKnownLine | undefined {
     const path = join(this.folderOf(spark), `${run}${RUN_FILE_SUFFIX}`);
+    // a newer VibeField's run is kept for it, never written to (said once, by the guard)
+    if (!this.#guard.keeps(key)) return undefined;
     let seq = this.#next.get(key);
     if (seq === undefined) {
       const held = this.#held(spark, run, path);
@@ -273,7 +311,12 @@ export class SparkTranscripts {
         return undefined;
       }
       this.#refused.delete(key);
-      seq = "absent" in held ? 1 : lastSeqOf(held.text, spark, run, this.#verify) + 1;
+      if ("absent" in held) seq = 1;
+      else {
+        const tail = tailOf(held.text, spark, run, this.#verify);
+        if (this.#guard.newer(key, path, { format: tail.format })) return undefined;
+        seq = tail.seq + 1;
+      }
     }
     const { at, ...fields } = body as TranscriptBody & { readonly at?: string };
     const unsigned = defined({
@@ -319,41 +362,31 @@ export class SparkTranscripts {
 
   /** The spark's runs, oldest first by their first line, the newest SPARK_TRANSCRIPT.RUNS_MAX. A file whose first
    * line does not verify is passed over; one whose first line is not its run line (lost, or set aside and begun again)
-   * is listed as a continuation. A spark with no folder has none; a folder the disk refuses is its word. */
+   * is listed as a continuation. A spark with no folder has none. A folder, a run's file or the key the disk does not
+   * hand over throws the store's refusal (UNAVAILABLE {spark-transcripts, records-unreadable}, in fieldd's words), said
+   * in the log: never an empty list. */
   runs(spark: SparkId): TranscriptRuns {
     if (!isKeptSparkId(spark)) return { runs: [] };
+    const folder = this.folderOf(spark);
+    const names = this.#guard.entries(folder).map((entry) => entry.name);
     try {
-      return this.#runs(spark);
+      return this.#runs(spark, folder, names);
     } catch (error) {
+      if (error instanceof RpcCallError) throw error;
       // the folder's key could not be read: nothing verifies, which is no proof the folder holds no run
-      return { unavailable: errnoOf(error) };
+      return this.#guard.unavailable(this.opts.keyPath, errnoOf(error));
     }
   }
 
-  #runs(spark: SparkId): TranscriptRuns {
-    const folder = this.folderOf(spark);
-    let names: string[] | undefined;
-    let code = "EIO";
-    for (let attempt = 0; attempt < READ_TRIES && names === undefined; attempt += 1) {
-      try {
-        names = readdirSync(folder);
-      } catch (error) {
-        code = errnoOf(error);
-        if (code === "ENOENT") return { runs: [] };
-      }
-    }
-    if (names === undefined) return { unavailable: code };
+  #runs(spark: SparkId, folder: string, names: readonly string[]): TranscriptRuns {
     const runs: SparkTranscriptRun[] = [];
     for (const name of names) {
       const run = runOfFile(name);
       if (run === undefined) continue;
-      const head = this.#held(spark, run, join(folder, name), FIRST_LINE_BYTES);
+      const path = join(folder, name);
+      const head = this.#held(spark, run, path, FIRST_LINE_BYTES);
       if ("absent" in head) continue;
-      if ("unavailable" in head) {
-        // a directory of that name is nothing of fieldd's; any other refusal is the disk's
-        if (head.unavailable === "EISDIR") continue;
-        return { unavailable: head.unavailable };
-      }
+      if ("unavailable" in head) this.#guard.unavailable(path, head.unavailable);
       const firstLine = head.text.split("\n")[0] ?? "";
       const [first] = readLines(`${firstLine}\n`, spark, run, this.#verify).lines;
       if (first === undefined) continue;

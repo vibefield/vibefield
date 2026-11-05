@@ -4,13 +4,14 @@ import { join } from "node:path";
 import {
   type CallerContext,
   type Principal,
+  RECORD_STORES,
   SPARK_TRANSCRIPT,
   SPARK_TRANSCRIPT_SERVICE,
   SparkTranscriptOpenTicketResult,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { RpcCallError } from "../src/native-link";
-import { SparkTranscripts } from "../src/spark-transcripts";
+import { SparkTranscripts, TRANSCRIPTS_UNREADABLE } from "../src/spark-transcripts";
 import type { HostOps, TicketRegistration } from "../src/transcripts/protocol";
 import { TranscriptHostRefusal, TranscriptHostUnavailable } from "../src/transcripts/supervisor";
 import { SparkTranscriptTickets } from "../src/transcripts/tickets";
@@ -185,11 +186,21 @@ describe("compose.sparks.transcript.openTicket, fieldd's gate and answer (TH-1)"
     w.store.append(VELA, "run-vela-1", { kind: "run", runtimeRunId: "run-vela-1", fresh: true });
     chmodSync(join(w.root, "spark-files", VELA), 0o000);
     const unreadable = await refused(w.tickets.open(WINDOW, { spark: VELA }));
-    expect(unreadable instanceof RpcCallError && [unreadable.kind, unreadable.details]).toEqual([
+    // item 172's refusal, the store's own (the fold): in fieldd's words, retryable
+    expect(
+      unreadable instanceof RpcCallError && [
+        unreadable.kind,
+        unreadable.retryable,
+        unreadable.message,
+        unreadable.details,
+      ],
+    ).toEqual([
       "UNAVAILABLE",
+      true,
+      TRANSCRIPTS_UNREADABLE,
       {
         service: SPARK_TRANSCRIPT_SERVICE.SERVICE,
-        state: SPARK_TRANSCRIPT_SERVICE.STATE_UNREADABLE,
+        state: RECORD_STORES.STATE_UNREADABLE,
       },
     ]);
     expect(w.registered).toEqual([]);
