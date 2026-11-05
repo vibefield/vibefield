@@ -9,11 +9,13 @@ import { ARTIFACT_SURFACE, browserManifest, browserRenderer } from "../src";
 import { createUlid, parseArtifactSnapshot, pathBasename } from "../src/ArtifactPanel";
 
 describe("plugin-browser", () => {
-  it("declares the Artifact Hub fixed surface and its complete least-power grant", () => {
+  it("declares the Hub's fixed surface, titled Apps on screen under its inside id (MA-D13 (a); L17), and its complete least-power grant", () => {
     const result = validatePluginManifest(browserManifest);
     if (!result.ok) throw new Error(result.issues.join(" · "));
+    // the inside word stays (L17): only the screen's title moved
+    expect(ARTIFACT_SURFACE).toBe("vibefield.browser.artifacts");
     expect(browserManifest.contributes?.surfaces).toEqual([
-      expect.objectContaining({ id: ARTIFACT_SURFACE, slot: "hud.side-panel", title: "Artifacts" }),
+      expect.objectContaining({ id: ARTIFACT_SURFACE, slot: "hud.side-panel", title: "Apps" }),
     ]);
     expect(browserManifest.capabilities).toEqual([
       "artifact.publish",

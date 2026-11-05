@@ -7,9 +7,10 @@
  * head's reading of the catalog fed as `artifact.subscribe` feeds it (`head-artifacts.ts`), and a
  * stand-in for the pill's sheet beside it (a section holding a button, inert while it is folded,
  * as the head's sheet is). The rows: the circle stands under a cover only; it grows the sheet on
- * Artifacts through the one value (`artifacts`) and folds it, stepping aside exactly while the
- * sheet shows; it wears the head's dot and words; the keyboard comes back to it when the sheet it
- * grew folds (the keyboard's way into the real sheet is head.test's, beside the head); and
+ * Apps (MA-4c, MA-D13 (a): the screen word) through the one value (`artifacts`, the inside
+ * word) and folds it, stepping aside exactly while the sheet shows; it wears the head's dot and
+ * words; the keyboard comes back to it when the sheet it grew folds (the keyboard's way into the
+ * real sheet is head.test's, beside the head); and
  * while Godview's terminals are maximized it stands in their title bar, stepping out and back on
  * search's own two steps (GV-D11), never apart from search. Its stylesheet is held to the entry's
  * numbers, and the frame mounts it before the head, so the sheet grows over it.
@@ -146,8 +147,8 @@ describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
     expect(circle()).not.toBeNull();
     // it stands in the window's drag strip, and takes its own press
     expect(circle()?.classList.contains("no-drag")).toBe(true);
-    expect(button()?.getAttribute("aria-label")).toBe("Artifacts");
-    expect(button()?.getAttribute("title")).toBe("Artifacts");
+    expect(button()?.getAttribute("aria-label")).toBe("Apps");
+    expect(button()?.getAttribute("title")).toBe("Apps");
     // `package` 18
     const glyph = button()?.querySelector('svg[data-glyph="package"]');
     expect(glyph?.getAttribute("width")).toBe("18");
@@ -159,20 +160,20 @@ describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
     expect(circle()).toBeNull();
   });
 
-  it("grows the pill's sheet on Artifacts through the frame's one value and folds it; opening it folds whatever was open, and anything opening folds it", () => {
+  it("grows the pill's sheet on Apps through the frame's one value and folds it; opening it folds whatever was open, and anything opening folds it", () => {
     mount({ view: "godview" });
     act(() => button()?.click());
     expect(surfaceNow).toBe("artifacts");
     // the button whose shelf shows is on, and says what pressing it again does
     expect(button()?.getAttribute("aria-expanded")).toBe("true");
     expect(button()?.getAttribute("title")).toBe("Close  Esc");
-    expect(button()?.getAttribute("aria-label")).toBe("Close the artifacts");
+    expect(button()?.getAttribute("aria-label")).toBe("Close the apps");
     // the sheet stands in its place, so it steps aside (its stylesheet's rows below)
     expect(circle()?.getAttribute("data-open")).toBe("true");
     act(() => button()?.click());
     expect(surfaceNow).toBeNull();
     expect(button()?.getAttribute("aria-expanded")).toBe("false");
-    expect(button()?.getAttribute("title")).toBe("Artifacts");
+    expect(button()?.getAttribute("title")).toBe("Apps");
     expect(circle()?.hasAttribute("data-open")).toBe(false);
     act(() => setSurfaceNow?.("palette"));
     act(() => button()?.click());
@@ -181,7 +182,7 @@ describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
     expect(button()?.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("wears the head's dot while an artifact's source is unavailable, with the sheet shut, and its words say which, or how many", () => {
+  it("wears the head's dot while a live app's source is unavailable, with the sheet shut, and its words say which, or how many", () => {
     mount({ view: "history" });
     const dot = (): Element | null => button()?.querySelector(".vf-package-dot") ?? null;
     expect(dot()).toBeNull();
@@ -191,16 +192,14 @@ describe("the package circle (PL-D2; DESIGN.md §8, the head)", () => {
     expect(dot()).not.toBeNull();
     // the words are the button's name; the dot only shows them
     expect(dot()?.getAttribute("aria-hidden")).toBe("true");
-    expect(button()?.getAttribute("title")).toBe("Artifacts — vibe-field's source is unavailable");
-    expect(button()?.getAttribute("aria-label")).toBe(
-      "Artifacts — vibe-field's source is unavailable",
-    );
+    expect(button()?.getAttribute("title")).toBe("Apps — vibe-field's source is unavailable");
+    expect(button()?.getAttribute("aria-label")).toBe("Apps — vibe-field's source is unavailable");
     act(() => setArtifactCatalog(catalog("vibe-field", "sketchbook")));
-    expect(button()?.getAttribute("title")).toBe("Artifacts — 2 sources unavailable");
+    expect(button()?.getAttribute("title")).toBe("Apps — 2 sources unavailable");
     // a standing state only: nothing at all once the sources are back
     act(() => setArtifactCatalog(catalog()));
     expect(dot()).toBeNull();
-    expect(button()?.getAttribute("title")).toBe("Artifacts");
+    expect(button()?.getAttribute("title")).toBe("Apps");
   });
 
   it("takes the keyboard back when the sheet it grew folds with the keyboard inside it, and never from what took it", () => {

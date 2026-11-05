@@ -15,7 +15,11 @@
  * why it has no Hub stand in its place), and the same sheet under a cover,
  * grown from the package circle — with the circle beside it where the two hand
  * over (its keyboard, its bar). The model is head-model.test's; delivery from
- * a focused pane is the godview smoke's 11i.
+ * a focused pane is the godview smoke's 11i. MA-4c (MA-D13 (a); DESIGN.md §8
+ * "Artifacts — the Artifacts shelf's contents" as amended 2026-11-05, §9
+ * "Apps"): the shelf's screen words are Apps — the Hub's states speak for Live
+ * alone — and the shelf holds From your agents after the Hub, asked with the
+ * window's client the head's feed hands it; the internal names stay.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -27,6 +31,8 @@ import type {
   FrameZoomAct,
   PluginRecordState,
 } from "@vibefield/contracts";
+import type { FielddClient } from "@vibefield/fieldd-client";
+import { FielddProvider } from "@vibefield/fieldd-client/react";
 import type { PluginSurfaceProps } from "@vibefield/plugin-sdk";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -42,6 +48,8 @@ import {
   HUB_START_BOUND_MS,
   resetArtifactCatalog,
   setArtifactCatalog,
+  setHeadAppsClient,
+  useArtifactCatalogFeed,
 } from "../src/frame/head-artifacts";
 import type { HeadCanvas, HeadCrumb } from "../src/frame/head-canvas";
 import { PackageCircle } from "../src/frame/PackageCircle";
@@ -213,9 +221,7 @@ function browserRegistry(
         state,
         enabled: on,
         contributions: {
-          surfaces: [
-            { id: "vibefield.browser.artifacts", title: "Artifacts", slot: "hud.side-panel" },
-          ],
+          surfaces: [{ id: "vibefield.browser.artifacts", title: "Apps", slot: "hud.side-panel" }],
         },
       },
     ],
@@ -248,11 +254,53 @@ function bindHub(): () => void {
     "hud.side-panel",
     HubSurface,
     100,
-    "Artifacts",
+    "Apps",
   );
   const unbind = () => bound.dispose();
   unbinds.push(unbind);
   return unbind;
+}
+
+/** MA-4c — the window's fieldd client as From your agents asks it (`MadeAppsClient`, structurally
+ * the window's `FielddClient`): every ask and every subscription recorded, each subscription's
+ * letting go too. Its answers are the doors' emptiest true ones — no apps, no sources, no
+ * projects — so the group stands with nothing in it; the group's own rows are made-apps.test's. */
+function appsDoor() {
+  const asked: Array<{ readonly method: string; readonly params: unknown }> = [];
+  const released: string[] = [];
+  const client = {
+    request: vi.fn(async (method: string, params: Record<string, unknown>) => {
+      asked.push({ method, params });
+      if (method === "index.apps.list") return { rows: [], sources: [] };
+      if (method === "project.list") return { rows: [], sources: [], groupingVersion: 1 };
+      return {};
+    }),
+    subscribe: vi.fn(
+      async (
+        method: string,
+        params: Record<string, unknown>,
+        _onEvent: (event: unknown) => void,
+      ) => {
+        asked.push({ method, params });
+        return {
+          snapshot: method === "artifact.subscribe" ? [] : null,
+          unsubscribe: () => {
+            released.push(method);
+          },
+        };
+      },
+    ),
+  };
+  /** The methods asked, in order. */
+  const methods = (): string[] => asked.map((call) => call.method);
+  return { client, asked, released, methods };
+}
+
+/** Let the made group's first asks and their answers land (they are promises, never timers). */
+async function settle(): Promise<void> {
+  await act(async () => {
+    for (let turn = 0; turn < 6; turn += 1) await Promise.resolve();
+  });
 }
 
 let root: Root | null = null;
@@ -276,6 +324,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   act(() => resetDocSyncStatuses());
   act(() => resetArtifactCatalog());
+  act(() => setHeadAppsClient(null));
   for (const unbind of unbinds.splice(0).reverse()) unbind();
   registry.snapshot = null;
   resetGodviewDeckDoorForTest();
@@ -1178,15 +1227,15 @@ function transitionOf(rule: string, property: string): string | undefined {
 }
 
 describe("the package (PL-D1) — the pill's second button", () => {
-  it("stands after the chevron and a 1 × 18 rule: `package`, named Artifacts", () => {
+  it("stands after the chevron and a 1 × 18 rule: `package`, named Apps", () => {
     mount();
     const rule = $(".vf-head-chev")?.nextElementSibling;
     expect(rule?.className).toBe("vf-head-rule");
     expect(rule?.getAttribute("aria-hidden")).toBe("true");
     expect(rule?.nextElementSibling).toBe(pack());
     expect(pack().querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("package");
-    expect(pack().getAttribute("aria-label")).toBe("Artifacts");
-    expect(pack().title).toBe("Artifacts");
+    expect(pack().getAttribute("aria-label")).toBe("Apps");
+    expect(pack().title).toBe("Apps");
     expect(pack().getAttribute("aria-expanded")).toBe("false");
     const drawn = ruleIn(HEAD_CSS, ".vf-head-rule");
     expect(drawn).toContain("width: 1px;");
@@ -1206,7 +1255,7 @@ describe("the package's dot (PL-D1) — standing states only, read from the cata
       ]),
     );
     expect(pack().querySelector(".vf-head-pack-dot")).not.toBeNull();
-    expect(pack().title).toBe("Artifacts — vibe-field's source is unavailable");
+    expect(pack().title).toBe("Apps — vibe-field's source is unavailable");
     expect(pack().getAttribute("aria-label")).toBe(pack().title);
     act(() =>
       setArtifactCatalog([
@@ -1214,10 +1263,10 @@ describe("the package's dot (PL-D1) — standing states only, read from the cata
         artifact("Docs", "source-unavailable", 1),
       ]),
     );
-    expect(pack().title).toBe("Artifacts — 2 sources unavailable");
+    expect(pack().title).toBe("Apps — 2 sources unavailable");
     act(() => setArtifactCatalog([artifact("vibe-field", "active", 0)]));
     expect($(".vf-head-pack-dot")).toBeNull();
-    expect(pack().title).toBe("Artifacts");
+    expect(pack().title).toBe("Apps");
     // orange, ringed in the solid chrome so it reads on the glass (§2.5: attention, never red)
     const dot = ruleIn(HEAD_CSS, ".vf-head-pack-dot");
     expect(dot).toContain("background: var(--vf-orange);");
@@ -1240,7 +1289,7 @@ describe("the package's dot (PL-D1) — standing states only, read from the cata
     mount();
     act(() => setArtifactCatalog([artifact("vibe-field", "source-unavailable")]));
     act(() => setArtifactCatalog({ artifacts: "not a list" }));
-    expect(pack().title).toBe("Artifacts — vibe-field's source is unavailable");
+    expect(pack().title).toBe("Apps — vibe-field's source is unavailable");
   });
 
   it("stands on the package while its shelf shows, the button saying Close there", () => {
@@ -1252,13 +1301,13 @@ describe("the package's dot (PL-D1) — standing states only, read from the cata
 });
 
 describe("the sheet's two shelves (PL-D1) — one surface, the button pressed shown on", () => {
-  it("opens on Artifacts from the package: it is on and says Close, the chevron names its shelf", () => {
+  it("opens on Apps from the package: it is on and says Close, the chevron names its shelf", () => {
     mount();
     act(() => pack().click());
     expect(surfaceNow).toBe("artifacts");
     expect($("[data-head-place]")?.dataset.open).toBe("true");
     expect(pack().getAttribute("aria-expanded")).toBe("true");
-    expect(pack().getAttribute("aria-label")).toBe("Close the artifacts");
+    expect(pack().getAttribute("aria-label")).toBe("Close the apps");
     expect(pack().title).toBe("Close  Esc");
     const chevron = button("Fields");
     expect(chevron.title).toBe("Fields");
@@ -1271,6 +1320,15 @@ describe("the sheet's two shelves (PL-D1) — one surface, the button pressed sh
     act(() => pack().click());
     expect(surfaceNow).toBeNull();
     expect($("[data-head-place]")?.dataset.open).toBe("false");
+  });
+
+  it('names its shelf Apps on screen and keeps the inside word: the surface `artifacts`, `data-shelf="artifacts"` (MA-D13 (a); L17)', () => {
+    mount({ open: "artifacts" });
+    expect(surfaceNow).toBe("artifacts");
+    const shown = shelf("artifacts");
+    expect(shown, "the shelf, found by its inside name").not.toBeNull();
+    expect(shown?.getAttribute("aria-label")).toBe("Apps");
+    expect(shelf("fields")?.getAttribute("aria-label")).toBe("Fields");
   });
 
   it("turns in place: the other button changes the shelf, the sheet stays out, the turn forgotten once shut", () => {
@@ -1286,7 +1344,7 @@ describe("the sheet's two shelves (PL-D1) — one surface, the button pressed sh
     act(() => button("Fields").click());
     expect(surfaceNow).toBe("fields");
     expect(button("Close the fields").title).toBe("Close  Esc");
-    expect(pack().title).toBe("Artifacts");
+    expect(pack().title).toBe("Apps");
     act(() => button("Close the fields").click());
     expect(surfaceNow).toBeNull();
     // the next opening rises in behind the morph again
@@ -1371,7 +1429,7 @@ describe("the sheet's two shelves (PL-D1) — one surface, the button pressed sh
     expect($(".vf-head-zoom-menu")).toBeNull();
   });
 
-  it("shuts on the dim from Artifacts too", () => {
+  it("shuts on the dim from Apps too", () => {
     mount({ open: "artifacts" });
     act(() => ($(".vf-head-dim") as HTMLElement).click());
     expect(surfaceNow).toBeNull();
@@ -1408,7 +1466,7 @@ describe("the sheet's two shelves (PL-D1) — one surface, the button pressed sh
   });
 });
 
-describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Artifacts shelf\'s contents")', () => {
+describe('the Apps shelf hosts the Hub, Live, and From your agents (DESIGN.md §8 "Artifacts — the Artifacts shelf\'s contents", as amended)', () => {
   it("mounts the side panel's one contribution there, in its plugin's scope; the Hub's own close shuts the sheet", () => {
     bindHub();
     mount();
@@ -1471,7 +1529,7 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
     bindHub();
     mount({ open: "artifacts" });
     const words = shelf("artifacts")?.querySelector(".vf-head-waits");
-    expect(words?.querySelector("strong")?.textContent).toBe("Artifacts are off");
+    expect(words?.querySelector("strong")?.textContent).toBe("Live apps are off");
     expect(words?.textContent).toContain("Turn on the Browser plugin in Settings › Plugins.");
     expect(words?.hasAttribute("data-late")).toBe(false);
     expect(shelf("artifacts")?.textContent).not.toContain("The Hub");
@@ -1482,7 +1540,7 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
       registry.snapshot = snapshot;
       mount({ open: "artifacts" });
       const words = shelf("artifacts")?.querySelector(".vf-head-waits");
-      expect(words?.textContent).toBe("Opening Artifacts…");
+      expect(words?.textContent).toBe("Opening live apps…");
       expect(words?.hasAttribute("data-late")).toBe(true);
       act(() => root?.unmount());
       root = null;
@@ -1508,7 +1566,7 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
     act(() => unbind());
     expect(surfaceNow).toBe("artifacts");
     expect($("[data-head-place]")?.dataset.open).toBe("true");
-    expect(shelf("artifacts")?.textContent).toBe("Opening Artifacts…");
+    expect(shelf("artifacts")?.textContent).toBe("Opening live apps…");
     act(() => {
       bindHub();
     });
@@ -1524,7 +1582,7 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
       registry.snapshot = snapshot;
       mount({ open: "artifacts" });
       const words = shelf("artifacts")?.querySelector(".vf-head-waits");
-      expect(words?.querySelector("strong")?.textContent).toBe("Artifacts can't run");
+      expect(words?.querySelector("strong")?.textContent).toBe("Live apps can't run");
       expect(words?.textContent).toContain(
         "The Browser plugin can't run in this VibeField — see Settings › Plugins.",
       );
@@ -1547,14 +1605,14 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
     ];
     expect(HUB_START_BOUND_MS).toBe(10_000);
     act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS - 1));
-    expect(words()?.textContent).toBe("Opening Artifacts…");
+    expect(words()?.textContent).toBe("Opening live apps…");
     act(() => vi.advanceTimersByTime(1));
     // the turn: the words it leaves fade out under the new ones, in one cell, and are not read
     expect(words()?.hasAttribute("data-turning")).toBe(true);
     expect(faces().map((face) => face.hasAttribute("data-leaving"))).toEqual([true, false]);
     expect(faces()[0]?.getAttribute("aria-hidden")).toBe("true");
-    expect(faces()[0]?.textContent).toBe("Opening Artifacts…");
-    expect(faces()[1]?.querySelector("strong")?.textContent).toBe("Artifacts aren't starting");
+    expect(faces()[0]?.textContent).toBe("Opening live apps…");
+    expect(faces()[1]?.querySelector("strong")?.textContent).toBe("Live apps aren't starting");
     expect(faces()[1]?.textContent).toContain(
       "Turn the Browser plugin off and on in Settings › Plugins.",
     );
@@ -1580,12 +1638,12 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
     act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS * 2));
     expect(shelf("artifacts")?.textContent).toContain("The Hub");
     act(() => unbind());
-    expect(shelf("artifacts")?.textContent).toBe("Opening Artifacts…");
+    expect(shelf("artifacts")?.textContent).toBe("Opening live apps…");
     act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS - 1));
-    expect(shelf("artifacts")?.textContent).toBe("Opening Artifacts…");
+    expect(shelf("artifacts")?.textContent).toBe("Opening live apps…");
     act(() => vi.advanceTimersByTime(1));
     const said = shelf("artifacts")?.querySelector(".vf-head-waits-face:not([data-leaving])");
-    expect(said?.querySelector("strong")?.textContent).toBe("Artifacts aren't starting");
+    expect(said?.querySelector("strong")?.textContent).toBe("Live apps aren't starting");
   });
 
   it("says the same in the catalog's live head, over its fixture doors with no plugin host: opening, and past 10 s not starting, as a window's would (HN-8)", () => {
@@ -1605,10 +1663,10 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
     const words = (): HTMLElement | null | undefined =>
       shelf("artifacts")?.querySelector<HTMLElement>(".vf-head-waits");
     act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS - 1));
-    expect(words()?.textContent).toBe("Opening Artifacts…");
+    expect(words()?.textContent).toBe("Opening live apps…");
     act(() => vi.advanceTimersByTime(1));
     const said = words()?.querySelector(".vf-head-waits-face:not([data-leaving])");
-    expect(said?.querySelector("strong")?.textContent).toBe("Artifacts aren't starting");
+    expect(said?.querySelector("strong")?.textContent).toBe("Live apps aren't starting");
   });
 
   it("crossfades that turn over 180ms `ease` in one cell, and makes it at once under reduced motion (ruling 10)", () => {
@@ -1635,10 +1693,193 @@ describe('the Artifacts shelf hosts the Hub (DESIGN.md §8 "Artifacts — the Ar
   });
 });
 
+describe('MA-4c — From your agents beside the Hub (DESIGN.md §8 "Artifacts — the Artifacts shelf\'s contents", as amended; L14, L17)', () => {
+  /** The made group in a shelf: `MadeApps`' own root, named by its heading. */
+  const madeIn = (within: Element | null | undefined): HTMLElement | null =>
+    within?.querySelector<HTMLElement>("section.vf-apps") ?? null;
+  /** Whether `later` follows `earlier` in the document. */
+  const follows = (earlier: Element | null | undefined, later: Element | null | undefined) =>
+    earlier !== null &&
+    earlier !== undefined &&
+    later !== null &&
+    later !== undefined &&
+    (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+
+  it("stands after the Hub in the shelf's one box — Live first, then From your agents — read over the window's client, the whole mesh", async () => {
+    const door = appsDoor();
+    act(() => setHeadAppsClient(door.client));
+    bindHub();
+    mount({ open: "artifacts" });
+    await settle();
+    const box = shelf("artifacts")?.querySelector<HTMLElement>(".vf-head-hub");
+    const live = box?.querySelector('[data-vf-plugin="vibefield.browser"]');
+    expect(live?.textContent).toContain("The Hub");
+    const made = madeIn(box);
+    expect(made?.getAttribute("aria-label"), "From your agents, in the shelf's one box").toBe(
+      "From your agents",
+    );
+    expect(made?.querySelector("h2")?.textContent).toBe("From your agents");
+    expect(follows(live, made), "Live comes first, From your agents follows").toBe(true);
+    // its doors are the window's, asked by the group itself (L14): the shelf's pings and its pages
+    expect(door.methods()).toContain("index.apps.subscribe");
+    expect(door.asked.find((call) => call.method === "index.apps.list")?.params).toMatchObject({
+      scope: "mesh",
+    });
+  });
+
+  it('stands whether a Hub is bound or not, under the Hub\'s words — which speak for Live alone (§9 "Apps")', async () => {
+    for (const [snapshot, heading] of [
+      [browserRegistry(false), "Live apps are off"],
+      [browserRegistry(true, "invalid"), "Live apps can't run"],
+    ] as const) {
+      const door = appsDoor();
+      act(() => setHeadAppsClient(door.client));
+      registry.snapshot = snapshot;
+      mount({ open: "artifacts" });
+      await settle();
+      const box = shelf("artifacts")?.querySelector<HTMLElement>(".vf-head-hub");
+      const made = madeIn(box);
+      expect(made?.getAttribute("aria-label"), `From your agents beside "${heading}"`).toBe(
+        "From your agents",
+      );
+      const waits = box?.querySelector(".vf-head-waits");
+      expect(follows(waits, made), "Live's words first, From your agents after them").toBe(true);
+      expect(waits?.querySelector("strong")?.textContent).toBe(heading);
+      act(() => root?.unmount());
+      root = null;
+      host?.remove();
+    }
+  });
+
+  it("is the shelf's: it asks only while the shelf shows, and lets go once the sheet's fold ends, as the Hub does", async () => {
+    vi.useFakeTimers();
+    const door = appsDoor();
+    act(() => setHeadAppsClient(door.client));
+    mount();
+    await settle();
+    expect(door.asked, "nothing asked while the sheet is shut").toEqual([]);
+    act(() => pack().click());
+    await settle();
+    expect(
+      door.methods().filter((method) => method === "index.apps.subscribe"),
+      "one subscription while the shelf shows",
+    ).toHaveLength(1);
+    act(() => pack().click());
+    await act(async () => vi.advanceTimersByTimeAsync(599));
+    expect(madeIn(shelf("artifacts")), "still in the shelf while it folds").not.toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(madeIn(shelf("artifacts"))).toBeNull();
+    expect(door.released, "its subscription let go once the fold ended").toContain(
+      "index.apps.subscribe",
+    );
+  });
+
+  it("holds the same two groups in the covered sheet, grown from the package circle (PL-D2)", async () => {
+    const door = appsDoor();
+    act(() => setHeadAppsClient(door.client));
+    bindHub();
+    mount({ view: "godview", open: "artifacts" });
+    await settle();
+    const covered = $('.vf-head-sheet [data-shelf="artifacts"]');
+    expect(covered?.getAttribute("aria-label")).toBe("Apps");
+    const live = covered?.querySelector('[data-vf-plugin="vibefield.browser"]');
+    const made = madeIn(covered);
+    expect(made?.getAttribute("aria-label"), "From your agents in the covered sheet").toBe(
+      "From your agents",
+    );
+    expect(follows(live, made), "Live comes first there too").toBe(true);
+    // the pill's own sheet, shut under the cover, holds neither
+    expect(madeIn(shelf("artifacts"))).toBeNull();
+  });
+
+  it("draws no made group where no daemon is asked — the catalog's live head, these tests — as the dot reads none (a PIN)", () => {
+    bindHub();
+    mount({ open: "artifacts" });
+    expect(
+      shelf("artifacts")?.querySelector('[data-vf-plugin="vibefield.browser"]'),
+    ).not.toBeNull();
+    expect(madeIn(shelf("artifacts"))).toBeNull();
+  });
+
+  it("is handed the window's client by the head's feed, inside FielddProvider, and loses it when the feed goes", async () => {
+    const door = appsDoor();
+    function Feed(): null {
+      useArtifactCatalogFeed();
+      return null;
+    }
+    const feedHost = document.createElement("div");
+    document.body.appendChild(feedHost);
+    const feedRoot = createRoot(feedHost);
+    try {
+      act(() =>
+        feedRoot.render(
+          <FielddProvider client={door.client as unknown as FielddClient}>
+            <Feed />
+          </FielddProvider>,
+        ),
+      );
+      await settle();
+      // the feed still streams the catalog into the package's dot
+      expect(door.methods()).toContain("artifact.subscribe");
+      mount({ open: "artifacts" });
+      await settle();
+      expect(
+        madeIn(shelf("artifacts"))?.getAttribute("aria-label"),
+        "the made group, over the client the feed handed the head",
+      ).toBe("From your agents");
+      expect(door.methods()).toContain("index.apps.subscribe");
+      act(() => feedRoot.unmount());
+      await settle();
+      expect(madeIn(shelf("artifacts")), "no client once the feed has gone").toBeNull();
+    } finally {
+      act(() => feedRoot.unmount());
+      feedHost.remove();
+    }
+  });
+
+  it("says the shelf's words as DESIGN.md §9 \"Apps\" and the head's amendment rule them (MA-D13 (a))", async () => {
+    const design = readFileSync(join(process.cwd(), "../../DESIGN.md"), "utf8");
+    const from = design.indexOf("**Apps** (track MA, ruled 2026-11-05");
+    expect(from, 'DESIGN.md §9 "Apps"').toBeGreaterThan(-1);
+    const apps = design
+      .slice(from, design.indexOf("**The agents' words**", from))
+      .replace(/\s+/gu, " ");
+    const head = design
+      .slice(
+        design.indexOf("- **The head** (One Frame FR-2"),
+        design.indexOf("- **The name pill**"),
+      )
+      .replace(/\s+/gu, " ");
+    for (const word of [
+      '"Close the apps"',
+      '"Apps — vibe-field\'s source is unavailable"',
+      '"Apps — 2 sources unavailable"',
+      "**Live**, the Hub's header, and **From your agents**",
+    ]) {
+      expect(apps, word).toContain(word);
+    }
+    expect(head).toContain('the covered sheet\'s name "Apps"');
+    // and the head says them
+    act(() => setArtifactCatalog([artifact("vibe-field", "source-unavailable", 0)]));
+    const door = appsDoor();
+    act(() => setHeadAppsClient(door.client));
+    mount({ view: "godview" });
+    expect(pack().title).toBe("Apps — vibe-field's source is unavailable");
+    act(() => setSurfaceNow?.("artifacts"));
+    await settle();
+    const sheet = $(".vf-head-sheet");
+    expect(sheet?.querySelector(".vf-head-pack")?.getAttribute("aria-label")).toBe(
+      "Close the apps",
+    );
+    expect(sheet?.querySelector(".vf-head-sheet-name")?.textContent).toBe("Apps");
+    expect(madeIn(sheet)?.querySelector("h2")?.textContent).toBe("From your agents");
+  });
+});
+
 describe("under a cover — the same sheet, grown from the package circle (PL-D2)", () => {
   const circleSheet = (): HTMLElement | null => $(".vf-head-sheet");
 
-  it("holds Artifacts alone above the cover, its head row the circle's own, outside the canvas's head", () => {
+  it("holds Apps alone above the cover, its head row the circle's own, outside the canvas's head", () => {
     bindHub();
     mount({ view: "godview", open: "artifacts" });
     const sheet = circleSheet();
@@ -1650,7 +1891,7 @@ describe("under a cover — the same sheet, grown from the package circle (PL-D2
     const own = sheet?.querySelector<HTMLButtonElement>(".vf-head-pack");
     expect(own?.getAttribute("aria-expanded")).toBe("true");
     expect(own?.title).toBe("Close  Esc");
-    expect(sheet?.querySelector(".vf-head-sheet-name")?.textContent).toBe("Artifacts");
+    expect(sheet?.querySelector(".vf-head-sheet-name")?.textContent).toBe("Apps");
     expect(sheet?.querySelector('[data-shelf="fields"]')).toBeNull();
     const hub = sheet?.querySelector('[data-shelf="artifacts"] [data-vf-plugin]');
     expect(hub?.textContent).toContain("The Hub");
@@ -1763,7 +2004,7 @@ describe("under a cover — the same sheet, grown from the package circle (PL-D2
     expect(own()?.title).toBe("Close  Esc");
     act(() => vi.advanceTimersByTime(1));
     expect(own()?.getAttribute("aria-expanded")).toBe("false");
-    expect(own()?.title).toBe("Artifacts");
+    expect(own()?.title).toBe("Apps");
   });
 
   it("is shut into the bar's own control while Godview's terminals are maximized, read step for step as the circle reads it — top 3, 30 × 24, corners 8, no glass (GV-D11; ruling 3)", () => {

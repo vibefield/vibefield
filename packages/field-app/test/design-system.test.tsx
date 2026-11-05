@@ -441,11 +441,11 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     const pack = headPlate("top")?.querySelector<HTMLButtonElement>(".vf-head-pack");
     expect(pack?.previousElementSibling?.className).toBe("vf-head-rule");
     expect(pack?.previousElementSibling?.previousElementSibling?.className).toBe("vf-head-chev");
-    expect(pack?.title).toBe("Artifacts");
+    expect(pack?.title).toBe("Apps");
     expect(pack?.querySelector(".vf-head-pack-dot")).toBeNull();
     const dotted = headPlate("package-dot")?.querySelector<HTMLButtonElement>(".vf-head-pack");
     expect(dotted?.querySelector(".vf-head-pack-dot")).not.toBeNull();
-    expect(dotted?.title).toBe("Artifacts — vibe-field's source is unavailable");
+    expect(dotted?.title).toBe("Apps — vibe-field's source is unavailable");
     const artifacts = headPlate("artifacts");
     const on = artifacts?.querySelector<HTMLButtonElement>('.vf-head-pack[aria-expanded="true"]');
     expect(on?.title).toBe("Close  Esc");
@@ -453,22 +453,29 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(
       artifacts?.querySelector('[data-shelf="artifacts"][data-shown] .vf-artifact-panel'),
     ).not.toBeNull();
+    // MA-4c (MA-D13 (a)): the shelf is Apps on screen, and the Hub's header over its tiles is Live
+    expect(
+      artifacts?.querySelector('[data-shelf="artifacts"][data-shown]')?.getAttribute("aria-label"),
+    ).toBe("Apps");
+    expect(
+      artifacts?.querySelector('[data-shelf="artifacts"] .vf-artifact-header h2')?.textContent,
+    ).toBe("Live");
     const off = headPlate("artifacts-off")?.querySelector('[data-shelf="artifacts"]');
-    expect(off?.textContent).toContain("Artifacts are off");
+    expect(off?.textContent).toContain("Live apps are off");
     expect(off?.textContent).toContain("Turn on the Browser plugin in Settings › Plugins.");
     const cantRun = headPlate("artifacts-cant-run")?.querySelector('[data-shelf="artifacts"]');
-    expect(cantRun?.textContent).toContain("Artifacts can't run");
+    expect(cantRun?.textContent).toContain("Live apps can't run");
     expect(cantRun?.textContent).toContain(
       "The Browser plugin can't run in this VibeField — see Settings › Plugins.",
     );
     expect(
       headPlate("artifacts-opening")?.querySelector(".vf-head-waits[data-late]")?.textContent,
-    ).toBe("Opening Artifacts…");
+    ).toBe("Opening live apps…");
     // past the 10 s bound the plate says so at once, with nothing left to turn from
     const stalled = headPlate("artifacts-not-starting")?.querySelector(".vf-head-waits");
     expect(stalled?.hasAttribute("data-late")).toBe(false);
     expect(stalled?.hasAttribute("data-turning")).toBe(false);
-    expect(stalled?.textContent).toContain("Artifacts aren't starting");
+    expect(stalled?.textContent).toContain("Live apps aren't starting");
     expect(stalled?.textContent).toContain(
       "Turn the Browser plugin off and on in Settings › Plugins.",
     );
@@ -476,7 +483,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(covered?.querySelector(".vf-head")?.hasAttribute("data-covered")).toBe(true);
     expect(covered?.querySelector('[data-head-place][data-open="true"]')).toBeNull();
     const circleSheet = covered?.querySelector('.vf-head-sheet[data-open="true"]');
-    expect(circleSheet?.querySelector(".vf-head-sheet-name")?.textContent).toBe("Artifacts");
+    expect(circleSheet?.querySelector(".vf-head-sheet-name")?.textContent).toBe("Apps");
     expect(
       circleSheet?.querySelector('[data-shelf="artifacts"] .vf-artifact-panel'),
     ).not.toBeNull();
@@ -581,14 +588,12 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(overGodview?.querySelector(".vf-godview .vf-stories")).not.toBeNull();
     expect(overGodview?.querySelector(".vf-package-circle")?.hasAttribute("data-bar")).toBe(false);
     expect(overGodview?.querySelector(".vf-package-dot")).toBeNull();
-    expect(overGodview?.querySelector(".vf-package-button")?.getAttribute("title")).toBe(
-      "Artifacts",
-    );
+    expect(overGodview?.querySelector(".vf-package-button")?.getAttribute("title")).toBe("Apps");
     const overHistory = packagePlate("history");
     expect(overHistory?.querySelector(".vf-history")).not.toBeNull();
     expect(overHistory?.querySelector(".vf-package-circle .vf-package-dot")).not.toBeNull();
     expect(overHistory?.querySelector(".vf-package-button")?.getAttribute("title")).toBe(
-      "Artifacts — vibe-field's source is unavailable",
+      "Apps — vibe-field's source is unavailable",
     );
     const inTheBar = packagePlate("bar");
     expect(inTheBar?.querySelector(".vf-godview")?.getAttribute("data-godview-deck")).toBe(
@@ -597,7 +602,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(inTheBar?.querySelector(".vf-package-circle")?.getAttribute("data-bar")).toBe("true");
     expect(inTheBar?.querySelector(".vf-package-circle .vf-package-dot")).not.toBeNull();
     expect(inTheBar?.querySelector(".vf-package-button")?.getAttribute("aria-label")).toBe(
-      "Artifacts — 2 sources unavailable",
+      "Apps — 2 sources unavailable",
     );
     // DK-12 — the tools in hand: a plate per specimen, the shipping bar in its hand's role, its tools in their order
     const hands = [...(container?.querySelectorAll(".vf-ds-bar-plate") ?? [])].filter((p) =>
@@ -847,7 +852,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();
     // the chrome playground's, the workbench's, and the view frame's stage (FR-1)
     expect(container?.querySelectorAll('[data-ground-renderer="unavailable"]')).toHaveLength(3);
-    expect(container?.textContent).toContain("No artifacts yet");
+    expect(container?.textContent).toContain("No apps yet");
 
     await act(async () => {
       button("populated").click();

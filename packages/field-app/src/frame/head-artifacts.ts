@@ -2,6 +2,7 @@ import { ArtifactView, type PluginRegistrySnapshot } from "@vibefield/contracts"
 import { useSubscription } from "@vibefield/fieldd-client/react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { getRendererLogger } from "../logging";
+import type { MadeAppsClient } from "./apps/made-apps";
 
 // THE HEAD'S ARTIFACTS (HN-8; PL-D1, PL-D2 ruled by James 2026-10-29; DESIGN.md §8 "The head",
 // "Artifacts — the Artifacts shelf's contents"): what the head reads for its package and the
@@ -81,6 +82,12 @@ export function useArtifactCatalogFeed(): void {
     if (sub.status === "live" && sub.data !== null) setArtifactCatalog(sub.data);
   }, [sub.status, sub.data]);
 }
+
+/** MA-4c RED SKELETON — the window's client the shelf's From your agents asks with (DESIGN.md §8
+ * "Artifacts — the Artifacts shelf's contents", as amended 2026-11-05): fed inside FielddProvider
+ * by the head's feed, null where no daemon is asked (the catalog, the tests). Not built yet: it
+ * keeps nothing, so the shelf draws no made group. */
+export function setHeadAppsClient(_client: MadeAppsClient | null): void {}
 
 /** The package's dot: the words its tooltip and name say while it stands; null while none. */
 export function useArtifactsDot(): string | null {
