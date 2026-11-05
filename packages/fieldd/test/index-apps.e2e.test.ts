@@ -747,9 +747,22 @@ describe("MA-3e — the made apps across two real daemons", () => {
       (result) => ({ ok: true as const, result }),
       (error: unknown) => ({ ok: false as const, error }),
     );
-    const revealedA = await settle(() => providerCalls(shellA).length > 0, 15_000);
+    // A is the origin too, so its first serve owes the app's preview (L11). The capture is enqueued at the serving
+    // answer (MadeAppService #answer → #maybeCapture), on its own chain beside the reveal, and only once A's table
+    // speaks, so it may reach A's shell before the reveal, after it, or not yet. It is left pending here, and the
+    // reveal is found by its method.
+    const CAPTURE = "shell.webcontents.captureArtifactPreview";
+    const openLinkOf = (calls: ShellProviderCallParams[]) =>
+      calls.find((call) => call.method === "shell.openLink");
+    const revealedA = await settle(() => openLinkOf(providerCalls(shellA)) !== undefined, 15_000);
     expect(revealedA, "A asks its own shell to open what it serves").toBe(true);
-    const callA = providerCalls(shellA)[0];
+    expect(
+      providerCalls(shellA)
+        .map((call) => call.method)
+        .filter((method) => method !== CAPTURE),
+      "beside the owed capture, A's shell is asked for the reveal alone, once",
+    ).toEqual(["shell.openLink"]);
+    const callA = openLinkOf(providerCalls(shellA));
     expect(callA).toMatchObject({ method: "shell.openLink", caller: { clientKind: "fieldd" } });
     await shellA.call("shell.provider.resolve", {
       callId: callA?.callId,

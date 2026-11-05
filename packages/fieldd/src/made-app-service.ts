@@ -740,7 +740,9 @@ export class MadeAppService {
 
   /** What an open answers, outside the chain: `serving` on its listener's validated URL, waited for up to
    * `openWaitMs`, else `starting`. Both carry the shell's hosts. An owed capture runs at a `serving` answer, or when a
-   * `starting` open's listener reports. */
+   * `starting` open's listener reports. It is enqueued on the preview chain and runs only once the table speaks, so
+   * on this desktop it may reach the shell before a window's reveal (the daemon's handler reveals after this answer),
+   * after it, or not at all yet: nothing orders the two. */
   async #answer(appId: string): Promise<ArtifactOpenResult> {
     const url =
       this.#servingUrl(appId) ??

@@ -176,7 +176,12 @@ async function setup(opts: { mode?: string; aggregates?: unknown } = {}): Promis
   return {
     daemon,
     mock,
-    asked: () => lines(files.requests).map((line) => line.slice(line.indexOf(" ") + 1)),
+    asked: () =>
+      lines(files.requests)
+        .map((line) => line.slice(line.indexOf(" ") + 1))
+        // MA-3: every daemon also walks rosetta's library (`GET /api/artifacts`) into its apps table, at boot and
+        // after a sessions change, on its own clock. This file pins its own reads, so the walk is left out.
+        .filter((path) => !/^\/api\/artifacts(?:\?|$)/.test(path)),
     decisions: () => lines(files.decisions),
     aggregates: (value) => writeFileSync(files.aggregates, JSON.stringify(value)),
     sessions: (value) => writeFileSync(files.sessions, JSON.stringify(value)),

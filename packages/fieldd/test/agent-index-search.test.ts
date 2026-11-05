@@ -240,7 +240,10 @@ async function setup(
       readFileSync(logFile, "utf8")
         .split("\n")
         .filter((line) => line !== "")
-        .map((line) => line.slice(line.indexOf(" ") + 1)),
+        .map((line) => line.slice(line.indexOf(" ") + 1))
+        // MA-3: every daemon also walks rosetta's library (`GET /api/artifacts`) into its apps table, at boot and
+        // after a sessions change, on its own clock. This file pins its own reads, so the walk is left out.
+        .filter((path) => !/^\/api\/artifacts(?:\?|$)/.test(path)),
   };
 }
 

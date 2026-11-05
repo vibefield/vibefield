@@ -1240,12 +1240,14 @@ const AGENT_ENV_ALLOWED = new Set([
   "COLORFGBG",
 ]);
 
-/** how many `/api/sessions` requests the fake rosettad has answered so far */
+/** how many `/api/sessions` requests the fake rosettad has answered so far. Only those: since MA-3 every daemon also
+ * walks the library (`/api/artifacts`) on its own clock, and a restart's box shares its first boot's log. */
 const sessionRequests = (box: Box): number =>
   existsSync(box.requestLog)
     ? readFileSync(box.requestLog, "utf8")
         .split("\n")
-        .filter((line) => line !== "").length
+        .filter((line) => line !== "")
+        .filter((line) => line.slice(line.indexOf(" ") + 1).startsWith("/api/sessions")).length
     : 0;
 
 /** AR-S4d — a keychain in a map, `service/account` → value: no test here writes the machine's. */
