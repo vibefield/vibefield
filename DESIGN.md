@@ -10328,6 +10328,26 @@ A host that fieldd ended is never started again for that run: its journal stands
 A host that left for any other reason (its pipe closed under it, the child killed alone) leaves its run waiting, and
 the next wake starts a host again from the journal, which answers every call it already holds (CP-D9).
 
+**When a run can't start** (track CO, CP-4a2b; CP4-Q20 (a) and 13a's D3, ruled 2026-11-05; the words
+are open until James reads them on a board). A Run that VibeField refuses starts nothing, and says why after
+"Couldn't run ‹flow›:", ‹flow› cut as below:
+- "VibeField can't find ‹flow› in your flows."
+- "Its file is larger than a flow may be (64 KiB)."
+- "‹flow› takes no input named ‹name›; nothing was started."
+- "None of its steps names a folder, and its input names none. Run it from a session or a project, or name a folder in
+  it." This holds for every run, a spark's too (CP4-Q20 (a), kept by Q-A9 (b)).
+- "VibeField can't find that spark; nothing was started."
+- "VibeField has no run ‹run›."
+- "That version isn't one of ‹flow›'s."
+- At the bounds (FLOW_LIMITS' RUNS_LIVE_MAX and RUNS_PER_SPARK_MAX): "VibeField is running 8 flows, as many as it runs
+  at once. Stop one, or run ‹flow› when one ends." For a spark's: "‹spark› is running 2 flows, as many as a spark may."
+- The store's sentence ("VibeField can't read the flows it keeps; nothing was changed") and the host's
+  ("VibeField can't run flows: …", above) are unchanged.
+
+A step's session is the run's, never a spark's to steer (CP4-S18). A spark that asks to send to it, or to stop its
+turn, is told, in the talk room's own voice: "that agent is a flow's step; ask its run". A spark may end a step only
+of a run it started itself, never one you started in its thread, and may watch any step.
+
 **When a run can't go on, or waits** (track CO, CP-4a2b; 13a's D1–D22, Q-A1, Q-A2, J3, J7, Q-B1 and Q-B2, ruled by
 VF-PM 2026-11-05 16:24Z; the words are open until James reads them on a run). ‹flow› is the meta name, cut as above;
 a name that is, or starts with, "VibeField" shows the flow's slug instead, so a flow never speaks as VibeField (R18).
