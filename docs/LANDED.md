@@ -34535,3 +34535,103 @@ CP-4a2a (VF-PM, 09:03Z).
 - MA's place in 0.9: James decides. The lean is 0.10, with nothing visible in build 6.
 - The six doors' handlers (MA-3e, lane `ma-3`). Until then each door answers method-not-found.
 - The record and the AH spec at draft slot 14.
+
+## PG-9 S5a — S5's corpora run on a coarser fold tick: a recipe spells it, its name says it, and a fidelity row picks it (2026-11-05; `7fb2cd6b5` → `fdfd2fa3c`, 2 commits on main `be195e5b4`, lane `pg/9-s5a` in `/Volumes/SamsungRed/lanes/pg9s5a/vibe-field`, stacked as M153 `fdfd2fa3c`, run 153)
+
+**What it rests on.**
+- S5's step 0 (fd, 11:13Z): the plan's 120 s corpora cannot exist.
+  - At the product's fold tick (`AGENT_FIELD.FULL_TICK_MS`, 16 ms), every frame is every row whole. The 8 s n20
+    corpus is 604 lines, 38.7 MB of JSON and 3.95 MB gzipped.
+  - At 120 s, n20 is about 580 MB of JSON, over V8's string cap (about 512 MiB) in both the generator's
+    `encodeCorpusJsonl` and fieldd's replay (`readFileSync` + `gunzipSync`).
+  - The generator also took no recipe list.
+- VF-PM ruled (a) at 11:15Z: a coarser fold tick for S5's corpora, still one pass and then the hold, with no fieldd
+  change. It is chosen by a fidelity row that keeps the coarsest tick within 5% of the product's own. (b), a looped
+  corpus, was rejected for a fieldd seam every 8 s that the bench would also have to model. (c), 30 s corpora, was
+  rejected as too short for the Energy Log, with half a gigabyte in a desktop's fieldd.
+
+**What landed** (7 files, +287 −15, all in `packages/field-app`).
+- `src/godview/monitor/perf/corpus.ts`:
+  - `parseRecipe` reads `fold=` (and `foldTickMs=`) into the recipe's existing `foldTickMs`.
+  - `recipeName` appends `-f<ms>` only when the tick is not the product's own, so every existing name and pinned
+    fixture keeps its file byte for byte.
+- `perf/corpora.generate.perf.ts`: the lane row takes `VF_GODVIEW_CORPORA_RECIPES`, with `LANE_RECIPES` as its
+  unchanged default.
+- `perf/mesh-fidelity.perf.ts` (new, outside `pnpm test` and `pnpm verify`):
+  - S4a's stream pass, on n20 at 8 s, at fold 16 against 250 and 500.
+  - It keeps the coarsest tick whose busy and idle B/s both stay within 5% of fold 16's. Its verdict line names the
+    tick and the margin, and the margin is its assertion.
+- `test/godview-corpus.test.ts`: two rows, the parse and the name.
+- `perf/lib/mesh-bench.ts` (VF-PM 11:42Z, after Part B's idle 0):
+  - streamPass's idle window starts half a step off the usage ledger's boundaries (`Phone.untilHalfStep`, read from
+    the rows' own `monitorRow.cost.series` `stepMs` and `lastStepAt`), so its one step-long window holds exactly one
+    cost step wherever the corpus ended;
+  - each window is tallied by desktop (`byDevice`; a whole-mesh resync under `(every desktop)`), and the parts sum to
+    the whole. `projection-bench.perf.ts` prints a `by desktop:` line under each.
+- `perf/mesh-bench.perf.ts` (new): two rows, idle hearing the step at 8 s and at 60 s, and the desktops summing to the
+  whole.
+
+**Validation.**
+- This Mac, light (nice 19, the guard clear):
+  - red 1: exactly 2 failed, by assertion; red 2: exactly 2 failed, by assertion;
+  - green: godview-corpus and godview-model-stream 25/25; mesh-bench.perf.ts 2/2;
+  - `biome check --staged` clean; field-app tsc with only the lane's known `@vibecook/mille/remote` error.
+- The mini (a9, gap job 2): Part A (11:29:46Z), Part B (11:32–11:33Z) and Part C (12:03:17Z),
+  a clean checkout per commit.
+  - RED 1 (`0fc967236`, carried byte-identical to `720dceac9`): exactly 2 failed, by assertion. GREEN 1:
+    godview-corpus and godview-model-stream 25/25, field-app tsc 0.
+  - RED 2 `77dbb56ca`: exactly 2 failed, by assertion ("n5-60s-s1-f250: idle hears a frame: expected 0 to be greater
+    than 0"; "n5-8s-s1-f250 busy: the desktops' bytes are the whole: expected +0 to be 46925").
+  - GREEN 2 `0fb105eb7`: mesh-bench.perf 2/2, 25/25 and tsc 0. `git status` clean after each run.
+  - Part B, the corpora:
+    - the generator wrote `n5-300s-s1-f250` (518 KB gzipped, 34.8 MB of JSON) and `n20-300s-s1-f250` (12.6 MB
+      gzipped, 128.5 MB of JSON);
+    - replaying them holds 46.9 and 172.9 MB of heap, peaking at 269 and 820 MB RSS while they load
+      (`replay-heap.cjs`, swarm-replay's loader).
+  - Part C, the 300 s bench at `0fb105eb7`, this desktop's share (`desk-here`; the bench's second desktop is a
+    synthetic peer of n/4 agents):
+    - n5: busy 5,002 B/s, idle 171.6 B/s (one 5,147 B cost step every 30 s);
+    - n20: busy 16,740.5 B/s, idle 663.5 B/s (19,904 B a step);
+    - the whole: n5 6,586.8 / 212.7, n20 19,893.1 / 841.8. Busy is byte-identical to Part B's; idle was 0.
+  - The landed chain is that witness carried byte-identical (range-diff 4/4 "="): `7fb2cd6b5` … `fdfd2fa3c` on
+    `be195e5b4`, with 0 files shared with ma/1's 47.
+  - Logs: `lanes/ts6/logs/mini/pg9s5a/`.
+- **The fidelity row:** fold 250 kept, within 5% of fold 16's on n20 at 8 s (busy 0.92%, idle 0.39%); fold 500
+  was out at 8.42% busy.
+  - At GREEN 2: fold 16 busy 18,102.8 and idle 930.7 B/s; fold 250 17,937 and 927.1; fold 500 16,578.1 and 927.3.
+  - Part A's idle, under the old window, read 855.3, 851.7 and 851.9. The verdict did not move.
+- Run 153: a9, `pnpm verify` exit 0 at 12:25:52Z (armed 12:20:24Z): vitest 12,972 passed, 0 failed, 20 skipped.
+  - field-app 4,010, with godview-corpus.test.ts 14 → 16 the only per-file change (the two parse and name rows).
+  - The perf files run outside verify's suites; its typecheck over them is 0.
+  - fieldd, contracts, the shell, cargo 545, node 460 and the census all equal run 152's; biome 3,333.
+  - Logs: `lanes/ts6/logs/mini/run153/`; its `verify.log` is sha256 `cbda97bf4737c2a9257aa04b108c63771d0c137a…`.
+- Landed: main fast-forwarded `be195e5b4` → `fdfd2fa3c` at 12:28:51Z (the fixer).
+
+**Found.**
+1. **A corpus's size is its frames times its rows, and at the product's tick every frame is every row.** The plan
+   had sized the corpora by duration alone. The lesson is to size a corpus against the string cap and the heap
+   before a plan names it.
+2. **`biome check --changed --since=<sha>` reads commits only, so it sees an uncommitted tree as 0 files.**
+   `--staged` is the form that puts no file list on argv for one (the fixer's guard matches argv text).
+3. **The bench's idle window rode on the corpus's span.**
+   - Puppeteer-monitor's usage ledger steps on the clock's 30 s boundaries and re-emits every priced row (PU-I).
+     The idle window ran 30.0 s from the corpus's end, the span plus the 1 s floor.
+   - So for a span that is a multiple of 30 s, the phone heard the step at idle +30.001 s, 1 ms after the window
+     closed. The 300 s corpora read idle 0 B/s, and their 5 s switch carried every priced row's step.
+   - A probe of n5 at fold 250 heard idle at 8 s and 160 s, and 0 at 60, 120, 150, 240 and 300 s.
+   - Under the half-step window, busy is byte-identical at every span.
+   - The 8 s idle moves, 217.9 to 334 B/s at n5, with the three recency upserts at +26 s now inside the window. The
+     rows' ageing after the swarm stops lands in the shifted window, where the old one closed just before it; at n20
+     the fidelity row reads 930.7 against 855.3.
+   - S4a's 8 s numbers stand as measured. The new window reads them differently, for that reason alone. No landed doc
+     or page stated an idle or 5 s-switch number measured on a span that is a multiple of 30 s.
+
+**Errata.** S4a's entry above said S5 runs on "`n5-120s-s1` and `n20-120s-s1`", and S4c's entry owed "the 120 s
+corpora". They cannot be written. S5 plays `n5-300s-s1-f250` and `n20-300s-s1-f250` (300 s at fold 250 ms)
+instead, by VF-PM's (a) at 11:15Z and this entry's fidelity row.
+
+**James's recipe page:** published 2026-11-05 12:10Z, https://claude.ai/artifact/SLvHoAA8ejZspNDAwa63Mg (n5 first;
+n20 the optional heavy pass).
+
+**Owed.**
+- James's device run, M1 and M2. Each reading names its corpus, tick included, as a synthetic swarm.
