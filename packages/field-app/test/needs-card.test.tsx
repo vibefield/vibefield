@@ -1112,7 +1112,7 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     expect(statusLineSaid()).toHaveLength(1);
   });
 
-  it("Show goes to an agent's ask's pane in Godview by Jump to's path, and a pane it cannot show is said on the line", async () => {
+  it("Show goes to an agent's ask's pane in Godview by Jump to's path, and a pane it cannot show is said on the line (TH-2: one reveal)", async () => {
     await mountChat([AGENT_ASK]);
     expect(acts().map((button) => [words(button), button.dataset.variant])).toEqual([
       ["Show", "quiet"],
@@ -1126,6 +1126,13 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     await press("Show");
     await settle();
     expect(noted).toEqual(["Could not jump — the deck did not open to show it"]);
+    // TH-2: Show is Jump to's one reveal, its row read at the press: an agent off the board is said not running, and
+    // nothing moves (before, Godview's find door was asked to select it, and "shown" said)
+    await boardFrame(ROWS.filter((each) => each.runtimeRunId !== "run-31"));
+    await press("Show");
+    await settle();
+    expect(shown.opened).toHaveLength(2);
+    expect(noted.at(-1)).toBe("Could not jump — it is not running");
   });
 });
 

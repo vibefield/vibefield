@@ -370,7 +370,8 @@ describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4)', (
 
   it("says hello under the line for a spark asleep before it ever worked, its run off the board", async () => {
     await mountChat([], { ...VELA, session: { runtimeRunId: "run-Vela", live: false } });
-    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
+    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep");
+    expect(words($('.vf-chat-thread-acts button[data-act="wake"]'))).toBe("Wake");
     expect(words(hello()?.querySelector(".vf-chat-hello-words") ?? null)).toBe(helloWords("Vela"));
     expect(starters()).toHaveLength(3);
   });
@@ -446,8 +447,10 @@ describe("one act at a time into a thread, a wake's, a starter's or Send's (DESI
       opened.push(spark);
       return asleep;
     });
+    // Wake is the head's (TH-2)
     const wake = (): HTMLButtonElement | null =>
-      host?.querySelector<HTMLButtonElement>(".vf-chat-thread-line button") ?? null;
+      host?.querySelector<HTMLButtonElement>('.vf-chat-thread-acts button[data-act="wake"]') ??
+      null;
     expect(words(wake())).toBe("Wake");
     typeText("carry on with the migration");
     // the send's own wake is the one: Wake pressed in Return's tick, before the hold is drawn, asks for none …
@@ -459,7 +462,7 @@ describe("one act at a time into a thread, a wake's, a starter's or Send's (DESI
     });
     expect(road.sent.map((send) => send.text)).toEqual(["carry on with the migration"]);
     expect(opened).toEqual([]);
-    // … and drawn, the line's Wake waits
+    // … and drawn, the head's Wake waits
     expect(wake()?.disabled).toBe(true);
     await act(async () => wake()?.click());
     expect(opened).toEqual([]);
@@ -478,8 +481,10 @@ describe("one act at a time into a thread, a wake's, a starter's or Send's (DESI
         woken = () => resolve(asleep);
       });
     });
+    // Wake is the head's (TH-2)
     const wake = (): HTMLButtonElement | null =>
-      host?.querySelector<HTMLButtonElement>(".vf-chat-thread-line button") ?? null;
+      host?.querySelector<HTMLButtonElement>('.vf-chat-thread-acts button[data-act="wake"]') ??
+      null;
     typeText("carry on with the migration");
     // Wake, then Return in the same tick: the hold is Wake's, though Send is not drawn busy yet
     await act(async () => {
@@ -604,7 +609,8 @@ describe('Send while the spark waits on you (TH-1; ER-C2; DESIGN.md §8 "Chat\'s
     const asleep = { ...WORKED, session: { runtimeRunId: "run-Vela", live: false } };
     await mountChat([own({ alive: false, turnedAt: TURNED })], asleep);
     expect(words($(".vf-chat-thread-status"))).toBe("Asking you");
-    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
+    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep");
+    expect(words($('.vf-chat-thread-acts button[data-act="wake"]'))).toBe("Wake");
     const deps = await sendNow("go on");
     expect(deps.needsWake).toBe(true);
   });
