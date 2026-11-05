@@ -225,6 +225,8 @@ function runFrameOf(script: string, opts: FlowHostOptions): Extract<ToFlowHost, 
       heapMb: opts.heapMb ?? FLOW_LIMITS.HOST_HEAP_MB,
       rssMb: opts.rssMb ?? FLOW_LIMITS.HOST_RSS_MB,
       argsDepthMax: FLOW_LIMITS.ARGS_DEPTH_MAX,
+      // a leaving host's own deadline is fieldd's grace after a `shutdown` (CP-4a2b, O1)
+      leaveMs: opts.timings?.stopGraceMs ?? DEFAULT_TIMINGS.stopGraceMs,
     },
   };
 }

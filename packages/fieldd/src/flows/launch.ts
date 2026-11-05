@@ -10,6 +10,12 @@ import { type FilesHostFacts, ownFilesHostFacts } from "../workspace/launch";
 
 export { FLOWS_HOST_BUNDLE, FLOWS_HOST_ROLE_ARG };
 
+/** The development host's own Node option, before its bundle (CP-4a2b, P6): SIGUSR1 opens no inspector from the
+ * process's start, the window before the host's own listener (host/main.ts). The flag leaves SIGUSR1 blocked for the
+ * whole process and what it execs (bin.ts's note); a flow host execs nothing, so the mask reaches no agent. A packaged
+ * executable takes no Node option on its command line: its guard is bin.ts's listener. */
+const DEV_HOST_NODE_OPTIONS = ["--disable-sigusr1"] as const;
+
 export interface FlowsHostLaunch {
   readonly command: string;
   readonly args: readonly string[];
@@ -52,5 +58,8 @@ export function chooseFlowsHostLaunch(
       kind: "unconfigured",
       reason: `the flow host's bundle is not beside fieldd's bundle (${bundle})`,
     };
-  return { kind: "launch", launch: { command: facts.execPath, args: [bundle] } };
+  return {
+    kind: "launch",
+    launch: { command: facts.execPath, args: [...DEV_HOST_NODE_OPTIONS, bundle] },
+  };
 }

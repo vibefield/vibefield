@@ -62,6 +62,11 @@ let rssTimer: NodeJS.Timeout | undefined;
 const RSS_POLL_MS = 50;
 /** How long `memory` may take to reach the pipe before the host is killed without it. */
 const RSS_KILL_GRACE_MS = 250;
+/** How long a leaving host waits for its worker to go before it kills itself, when its run names no `leaveMs`:
+ * fieldd's own grace after a `shutdown` (FlowHostTimings.stopGraceMs). */
+const LEAVE_MS_DEFAULT = 2_000;
+/** the leave's deadline: the run's `leaveMs`, once a run has started (CP-4a2b, O1) */
+let leaveMs = LEAVE_MS_DEFAULT;
 
 function send(message: FromFlowHost): void {
   if (pipe?.writable === true) pipe.write(frameOf(message));
@@ -80,16 +85,17 @@ function end(message: Extract<FromFlowHost, { t: "done" | "threw" | "fatal" | "m
 
 /** Leave with `code`, never blocking this thread on the worker: `process.exit()` waits for the worker's thread to end,
  * and a worker inside one long builtin does not end mid-call. So the worker is terminated, the host exits once it has
- * gone, and the resident read runs meanwhile (bth's second re-read R1). Nothing more is said. The bound, stated: a
- * worker that does not go (one long builtin, under the cap) holds the host until it does. When fieldd asked
- * (`shutdown`), fieldd's own SIGKILL after its grace (FlowHostTimings.stopGraceMs, 2 s) ends the host. When fieldd
- * is gone (its pipe closed), the builtin's own end does, its memory held to the cap meanwhile. */
+ * gone, and the resident read runs meanwhile (bth's second re-read R1). Nothing more is said. A worker that does not
+ * go (one long builtin, under the cap) holds the host only until the leave's own deadline, `leaveMs` (the run's, as
+ * fieldd's grace after a `shutdown`; 2 s by default): then the host SIGKILLs itself, with fieldd there or gone
+ * (CP-4a2b, O1; bth's third read). */
 function leave(code: number): void {
   if (leaving) return;
   leaving = true;
   said = true;
   const running = worker;
   if (running === undefined) process.exit(code);
+  setTimeout(() => process.kill(process.pid, "SIGKILL"), leaveMs);
   running.terminate().then(
     () => process.exit(code),
     () => process.exit(code),
@@ -145,6 +151,9 @@ function start(bundle: string, message: Extract<ToFlowHost, { t: "run" }>): void
     end({ t: "fatal", reason: "a run's limits name no resident cap for its host" });
     return;
   }
+  // a deadline that is no time is the host's own (protocol.ts): a sender that predates `leaveMs` names none
+  const named = message.limits.leaveMs;
+  if (typeof named === "number" && Number.isFinite(named) && named > 0) leaveMs = named;
   const data: FlowWorkerData & { readonly role: string } = {
     role: FLOW_WORKER_ROLE,
     script: message.script,
@@ -182,7 +191,14 @@ function start(bundle: string, message: Extract<ToFlowHost, { t: "run" }>): void
     running.getHeapStatistics().then(
       (count) => {
         counting = false;
-        if (count.external_memory + count.used_heap_size > capBytes) pastResidentCap();
+        const held = count.external_memory + count.used_heap_size;
+        // a count it cannot read (a field a later Node drops or renames) is NaN, and NaN is past no cap: the run
+        // ends `fatal`, never held to a cap it cannot see (CP-4a2b, O2; bth's third read)
+        if (!Number.isFinite(held)) {
+          end({ t: "fatal", reason: "the host cannot read its worker's memory" });
+          return;
+        }
+        if (held > capBytes) pastResidentCap();
       },
       () => {
         counting = false;
@@ -229,6 +245,12 @@ function openPipe(): Socket | undefined {
 /** Run the host: called by the bundle's own top level (entry.ts), in the development runtime and in the packaged
  * executable's `flows-host` role (bin.ts loads the bundle). `bundle` is the bundle's own file, the worker's too. */
 export function runFlowsHost(bundle: string): void {
+  // SIGUSR1 opens Node's inspector on 127.0.0.1, and a same-uid process may send it. The host takes the signal from
+  // the inspector from its first statement, under every launch (CP-4a2b, P6). The development launch also passes
+  // --disable-sigusr1 (launch.ts), which closes the window before this statement; the packaged role's is bin.ts's
+  process.on("SIGUSR1", () => {
+    // taken from the inspector, and nothing more: the run goes on
+  });
   pipe = openPipe();
   if (pipe === undefined) {
     process.stderr.write(
