@@ -5677,8 +5677,8 @@ were not sent: it is not running".
 > folder @ and the board read, and a ‹reason› says "it" for the session its sentence names, so the card's line never
 > names one session twice, by @'s handle and by fieldd's name ("Couldn't send Vela's words to vibe-field·2: it
 > ended"). A spark's own name in a reason stands ("Vela's session is not running yet"): the sentence names the spark,
-> not a session. A spawn's refusal names the agent asked for ("Couldn't start the agent: Claude Code is in none of
-> Vela's Agent Profiles"), since its sentence names none.
+> not a session. A held spawn's refusal is as it was: its sentence names no session, and what its reason names is the
+> spawn's own Agent Profile ("Couldn't start the agent: work is not one of Vela's Agent Profiles").
 
 **An agent's notify** (CP-3, CP3-D5 A) is said as its teller, named as fieldd names it (a spark by its name, a session
 by its title, else its agent's label in its folder, else that label, else its id: "Vela", "Claude Code in vibe-field",
