@@ -305,6 +305,20 @@
   z-index: 2;
 }
 
+/* TH-1 — under a flow the foot stands 12 under it, and its items are held in it above the composer, covering
+   nothing: the flow gives way to them. */
+.vf-chat-foot[data-flow] {
+  margin-top: 12px;
+}
+
+.vf-chat-foot[data-flow] .vf-chat-items {
+  position: static;
+}
+
+.vf-chat-foot[data-flow] .vf-chat-items:not(:empty) {
+  margin-bottom: 12px;
+}
+
 /* ── the thread's items: NS-D4's hello and its starters (DESIGN.md §8 "Chat's thread") ── */
 
 /* One card of solid chrome, the thread's own ground as the Sparks page draws it: corners 16, padding 14 16, the

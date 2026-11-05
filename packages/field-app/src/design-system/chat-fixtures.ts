@@ -29,6 +29,8 @@ import { type SparkEntry, sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
 import { ThreadLedger, type ThreadMark, threadMarksOf } from "../chat/thread-marks";
 import type { SparkPanePlace } from "../chat/thread-pane-door";
+import type { PendingSay } from "../chat/transcript-items";
+import { type TranscriptReading, transcriptReadingOf } from "../chat/transcript-port";
 import { paneTextOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
 import { FIXTURE_NATIVE, FIXTURE_WORK } from "./profiles-fixtures";
@@ -260,6 +262,17 @@ export const CHAT_STATES = [
   "wake-refused",
   "not-started",
   "waiting",
+  "thread",
+  "thread-tools",
+  "thread-long",
+  "thread-asleep",
+  "thread-earlier",
+  "thread-receipts",
+  "thread-thinking",
+  "thread-honest",
+  "thread-reading",
+  "thread-unreadable",
+  "thread-hello",
   "empty",
   "opening",
   "unavailable",
@@ -290,6 +303,17 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   "wake-refused": "Wake refused",
   "not-started": "Not started",
   waiting: "Waiting on you",
+  thread: "A thread, two runs joined",
+  "thread-tools": "Its tools opened",
+  "thread-long": "A long reply",
+  "thread-asleep": "Asleep, drawn",
+  "thread-earlier": "Every conversation",
+  "thread-receipts": "Receipts",
+  "thread-thinking": "Thinking",
+  "thread-honest": "Honest lines",
+  "thread-reading": "Reading",
+  "thread-unreadable": "Can't read",
+  "thread-hello": "Hello, drawn",
   empty: "No sparks",
   opening: "Opening",
   unavailable: "Unavailable",
@@ -326,11 +350,31 @@ export function chatReadingOf(state: ChatState): SparksReading {
     case "asleep":
     case "waking":
     case "wake-refused":
+    case "thread":
+    case "thread-tools":
+    case "thread-long":
+    case "thread-asleep":
+    case "thread-earlier":
+    case "thread-receipts":
+    case "thread-honest":
+    case "thread-reading":
+    case "thread-unreadable":
       return { state: "ready", entries: sparkEntriesOf(SPARKS, ROWS) };
+    case "thread-thinking":
+      return {
+        state: "ready",
+        entries: sparkEntriesOf(
+          SPARKS,
+          ROWS.map((each) =>
+            each.runtimeRunId === "run-juno" ? { ...each, status: "working" as const } : each,
+          ),
+        ),
+      };
     case "not-started":
       return { state: "ready", entries: sparkEntriesOf([UNSTARTED, ...SPARKS], ROWS) };
     case "hello":
     case "starting":
+    case "thread-hello":
       return {
         state: "ready",
         entries: sparkEntriesOf([HATCHED, ...SPARKS], [HATCHED_RUN, ...ROWS]),
@@ -409,6 +453,17 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   "wake-refused": "sp-kiwi0001",
   "not-started": UNSTARTED.id,
   waiting: "sp-kiwi0001",
+  thread: "sp-juno0001",
+  "thread-tools": "sp-juno0001",
+  "thread-long": "sp-juno0001",
+  "thread-asleep": "sp-kiwi0001",
+  "thread-earlier": "sp-juno0001",
+  "thread-receipts": "sp-juno0001",
+  "thread-thinking": "sp-juno0001",
+  "thread-honest": "sp-juno0001",
+  "thread-reading": "sp-juno0001",
+  "thread-unreadable": "sp-juno0001",
+  "thread-hello": HATCHED.id,
   empty: null,
   opening: null,
   unavailable: null,
@@ -602,6 +657,305 @@ export const CHAT_COMPOSER: Partial<Record<ChatState, ComposerPlate>> = {
     { kind: "chip", chip: CARD_CHIP },
     words(" "),
   ]),
+};
+
+// ── the thread's flow (TH-1; DESIGN.md §8 "Chat's thread") ──
+
+/** A record line as fieldd writes one: the format, its place, a MAC the reader never checks (the worker does), its
+ * kind and time, and its fields. */
+function said(
+  seq: number,
+  kind: string,
+  at: string,
+  fields: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return { v: 1, seq, mac: "0".repeat(64), kind, at, ...fields };
+}
+
+/** When the plates' sparks hatched, and their record began: no plate but the honest lines' says it began late. */
+const HATCH = minutesAgo(60 * 24 * 3);
+
+const run = (runtimeRunId: string, startedAt: string, fresh: boolean) => ({
+  runtimeRunId,
+  startedAt,
+  fresh,
+});
+
+/** Juno's conversation: an earlier one three days ago (a fresh start), and the latest, begun yesterday and resumed
+ * this morning (two runs joined). */
+const JUNO_RUNS = [
+  run("run-juno-1", minutesAgo(60 * 24 * 3), true),
+  run("run-juno-2", minutesAgo(60 * 22), true),
+  run("run-juno", minutesAgo(30), false),
+];
+
+const ASKED_WORDS = "Why does the composer test fail on main?";
+const REVIEW_WORDS = "Have Claude Code in vibe-field (session run-his-1) review the fix";
+const REVIEW_CHIP = {
+  start: 5,
+  length: "Claude Code in vibe-field (session run-his-1)".length,
+  kind: "session",
+};
+
+const JUNO_EARLIER = [
+  said(1, "run", minutesAgo(60 * 24 * 3), { runtimeRunId: "run-juno-1", fresh: true }),
+  said(2, "you", minutesAgo(60 * 24 * 3 - 1), {
+    via: "chat",
+    text: "Keep track of my agents in vibe-field",
+    input: "in-juno-01",
+    requestId: "say-juno-0001",
+    state: "queued",
+  }),
+  said(3, "outcome", minutesAgo(60 * 24 * 3 - 1), { of: "in-juno-01", state: "delivered" }),
+  said(4, "reply", minutesAgo(60 * 24 * 3 - 2), {
+    messageId: "m-juno-01",
+    text: "I'll watch the agents you start in vibe-field and tell you when one needs you.",
+  }),
+];
+
+const JUNO_YESTERDAY = [
+  said(1, "run", minutesAgo(60 * 22), { runtimeRunId: "run-juno-2", fresh: true }),
+  said(2, "you", minutesAgo(60 * 22 - 1), {
+    via: "chat",
+    text: ASKED_WORDS,
+    input: "in-juno-02",
+    requestId: "say-juno-0002",
+    state: "queued",
+  }),
+  said(3, "outcome", minutesAgo(60 * 22 - 1), { of: "in-juno-02", state: "delivered" }),
+  said(4, "turn", minutesAgo(60 * 22 - 1), { edge: "start", turn: "t-1" }),
+  said(5, "tool", minutesAgo(60 * 22 - 2), {
+    toolCallId: "tc-1",
+    turn: "t-1",
+    toolKind: "file-read",
+    detail: "packages/field-app/test/chat-composer.test.tsx",
+  }),
+  said(6, "tool", minutesAgo(60 * 22 - 2), {
+    toolCallId: "tc-2",
+    turn: "t-1",
+    toolKind: "command",
+    detail: "pnpm --filter @vibefield/field-app test chat-composer",
+  }),
+  said(7, "tool", minutesAgo(60 * 22 - 3), {
+    toolCallId: "tc-3",
+    turn: "t-1",
+    toolKind: "mcp",
+    ours: true,
+  }),
+  said(8, "tool", minutesAgo(60 * 22 - 3), {
+    toolCallId: "tc-4",
+    turn: "t-1",
+    toolKind: "file-edit",
+    detail: "packages/field-app/src/chat/ChatComposer.tsx",
+  }),
+  said(9, "reply", minutesAgo(60 * 22 - 4), {
+    messageId: "m-juno-02",
+    turn: "t-1",
+    text: "It fails because **the draft's caret** is read before the editor mounts. I moved the read into the editor's first frame, and the suite is green.",
+  }),
+  said(10, "turn", minutesAgo(60 * 22 - 4), { edge: "end", turn: "t-1" }),
+  said(11, "act", minutesAgo(60 * 22 - 5), { what: "notify", text: "the composer suite is green" }),
+];
+
+const JUNO_TODAY = [
+  said(1, "run", minutesAgo(30), { runtimeRunId: "run-juno", fresh: false }),
+  said(2, "act", minutesAgo(30), {
+    what: "wake",
+    text: 'you answered Lyra\'s question "Push the fix?": Yes',
+  }),
+  said(3, "you", minutesAgo(20), {
+    via: "chat",
+    text: REVIEW_WORDS,
+    input: "in-juno-03",
+    requestId: "say-juno-0003",
+    state: "queued",
+    chips: [REVIEW_CHIP],
+  }),
+  said(4, "outcome", minutesAgo(19), { of: "in-juno-03", state: "delivered" }),
+  said(5, "reply", minutesAgo(18), {
+    messageId: "m-juno-03",
+    text: "Sent it to vibe-field. I'll tell you what it finds.",
+  }),
+];
+
+const JUNO_LINES = new Map<string, readonly unknown[]>([
+  ["run-juno-1", JUNO_EARLIER],
+  ["run-juno-2", JUNO_YESTERDAY],
+  ["run-juno", JUNO_TODAY],
+]);
+
+/** A reply in every part of the named subset: a heading, a list, inline and fenced code, a quote, and a link, which
+ * is drawn as its words. */
+const LONG_REPLY = [
+  "## What changed",
+  "",
+  "The draft now reads its caret in the editor's **first frame**, not before it mounts:",
+  "",
+  "- `ChatComposer.tsx` waits for the editor",
+  "- `chat-composer.test.tsx` checks the *first* keystroke",
+  "",
+  "```ts",
+  "useLayoutEffect(() => editor.current?.focus(), []);",
+  "```",
+  "",
+  "> The other suites were already green.",
+  "",
+  "The run is in [the CI log](https://example.invalid/run/41943622431).",
+].join("\n");
+
+/** Every receipt a bubble of yours says, oldest first: delivered (said under the last bubble alone), its session
+ * ended, lost and never resent, then two this window has just sent — one woken for, one queued. */
+const RECEIPT_LINES = [
+  said(1, "run", minutesAgo(40), { runtimeRunId: "run-juno", fresh: true }),
+  ...[
+    ["in-r1", "Run the review loop on ds/c", "delivered"],
+    ["in-r2", "and keep it going until it's clean", "dropped"],
+    ["in-r3", "then push it", "uncertain"],
+  ].flatMap(([input, text, state], index) => [
+    said(2 + index * 2, "you", minutesAgo(39 - index), {
+      via: "chat",
+      text,
+      input,
+      requestId: `say-receipt-${index}`,
+      state: "queued",
+    }),
+    said(3 + index * 2, "outcome", minutesAgo(38 - index), { of: input, state }),
+  ]),
+  said(8, "you", minutesAgo(30), { via: "terminal", text: "/compact" }),
+];
+
+/** What a plate's flow reads: the record as the reader holds it, this window's sends it does not show yet, whether
+ * the earlier conversations are asked for, and the tool lines opened. */
+export interface FlowPlate {
+  readonly reading: TranscriptReading;
+  readonly pending?: readonly PendingSay[];
+  readonly earlier?: boolean;
+  readonly opened?: readonly string[];
+}
+
+const READ_JUNO = transcriptReadingOf(JUNO_RUNS, JUNO_LINES);
+const READ_JUNO_WHOLE = transcriptReadingOf(JUNO_RUNS, JUNO_LINES, { whole: true });
+
+/** The plates whose thread is drawn (TH-1), each through the product's own reading of fixture lines. */
+export const CHAT_FLOW: Partial<Record<ChatState, FlowPlate>> = {
+  thread: { reading: READ_JUNO },
+  "thread-tools": { reading: READ_JUNO, opened: ["tools:run-juno-2:5"], earlier: false },
+  "thread-long": {
+    reading: transcriptReadingOf(
+      [run("run-juno", HATCH, true)],
+      new Map([
+        [
+          "run-juno",
+          [
+            said(1, "run", minutesAgo(30), { runtimeRunId: "run-juno", fresh: true }),
+            said(2, "you", minutesAgo(12), {
+              via: "chat",
+              text: "What changed?",
+              input: "in-l",
+              state: "queued",
+            }),
+            said(3, "outcome", minutesAgo(12), { of: "in-l", state: "delivered" }),
+            said(4, "reply", minutesAgo(11), { messageId: "m-long", text: LONG_REPLY }),
+          ],
+        ],
+      ]),
+    ),
+  },
+  "thread-asleep": {
+    reading: transcriptReadingOf(
+      [run("run-kiwi", HATCH, true)],
+      new Map([
+        [
+          "run-kiwi",
+          [
+            said(1, "run", minutesAgo(60 * 5), { runtimeRunId: "run-kiwi", fresh: true }),
+            said(2, "reply", minutesAgo(60 * 5 - 2), {
+              messageId: "m-kiwi",
+              text: "The tests in packages/fieldd are done: two fail, both in the kill matrix.",
+            }),
+          ],
+        ],
+      ]),
+    ),
+  },
+  "thread-earlier": { reading: READ_JUNO_WHOLE, earlier: true },
+  "thread-receipts": {
+    reading: transcriptReadingOf(
+      [run("run-juno", HATCH, true)],
+      new Map([["run-juno", RECEIPT_LINES]]),
+    ),
+    pending: [
+      {
+        requestId: "say-pending-1",
+        text: "and tell me when it's done",
+        chips: [],
+        at: minutesAgo(1),
+        state: "queued",
+      },
+    ],
+  },
+  "thread-thinking": {
+    reading: transcriptReadingOf(
+      [run("run-juno", HATCH, true)],
+      new Map([
+        [
+          "run-juno",
+          [
+            said(1, "run", minutesAgo(30), { runtimeRunId: "run-juno", fresh: true }),
+            said(2, "you", minutesAgo(2), {
+              via: "chat",
+              text: ASKED_WORDS,
+              input: "in-t",
+              state: "queued",
+            }),
+            said(3, "outcome", minutesAgo(2), { of: "in-t", state: "delivered" }),
+          ],
+        ],
+      ]),
+    ),
+    pending: [
+      {
+        requestId: "say-thinking-1",
+        text: "and the phone's too",
+        chips: [],
+        at: minutesAgo(0),
+        state: "queued",
+      },
+    ],
+  },
+  "thread-honest": {
+    reading: transcriptReadingOf(
+      [run("run-juno", minutesAgo(30), false)],
+      new Map([
+        [
+          "run-juno",
+          [
+            said(1, "run", minutesAgo(30), { runtimeRunId: "run-juno", fresh: false }),
+            said(2, "reply", minutesAgo(25), {
+              messageId: "m-h1",
+              text: "Started the review loop.",
+            }),
+            said(3, "gap", minutesAgo(10), { since: minutesAgo(20) }),
+            said(4, "reply", minutesAgo(9), { messageId: "m-h2", text: "The loop is clean." }),
+          ],
+        ],
+      ]),
+      { dropped: 1 },
+    ),
+  },
+  "thread-reading": { reading: { state: "reading" } },
+  "thread-unreadable": { reading: { state: "unreadable", reason: FIELDD_GONE } },
+  "thread-hello": {
+    reading: transcriptReadingOf(
+      [run("run-polaris", minutesAgo(0), true)],
+      new Map([
+        [
+          "run-polaris",
+          [said(1, "run", minutesAgo(0), { runtimeRunId: "run-polaris", fresh: true })],
+        ],
+      ]),
+    ),
+  },
 };
 
 // ── the needs-you card's plates (CP-3; DESIGN.md §8 "Chat's thread", the needs-you card) ──

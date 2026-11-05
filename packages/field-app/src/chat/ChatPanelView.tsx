@@ -24,7 +24,9 @@ import "./chat.css";
 // one, said in the row's name too where it outlasts the word (SP-1d). The thread's column is a fixed box: the chosen
 // spark's head, then its own pane (the controller's `SparkPane`, handed in) — or, asleep or not started, one honest
 // line with its one act — then the thread's foot: its composer, handed in, and its items standing over the pane (a new
-// spark's hello, or since CP-3 the needs-you card).
+// spark's hello, or since CP-3 the needs-you card). TH-1: handed a `flow` (`ThreadFlowView`), the column is the head,
+// the flow and the foot, and the items stand in the foot above the composer, covering nothing; the pane goes when
+// Chat's controller hands the flow.
 
 /** What the chosen spark's act is doing: at rest, under way, or refused in fieldd's words. */
 export type ChatAct =
@@ -48,6 +50,9 @@ export interface ChatPanelViewProps {
   /** the shown spark's own pane, while it is awake (the product's `SparkPane`); absent, the pane's place says what a
    * window with no terminals says */
   pane?: ReactNode;
+  /** TH-1 — the shown spark's conversation, drawn (`ThreadFlowView`): handed, it stands in the pane's place, awake or
+   * asleep, and the thread's items stand in the foot above the composer, covering nothing */
+  flow?: ReactNode;
   /** what stands in the shown thread over its pane, in order (`threadItemsOf`) */
   items?: readonly ThreadItem[];
   /** a starter pressed in the thread's hello: its words, sent as Send sends */
@@ -111,6 +116,7 @@ export function ChatPanelView({
   onChoose,
   onWake,
   pane,
+  flow,
   items = [],
   onStarter,
   sending = false,
@@ -181,6 +187,7 @@ export function ChatPanelView({
             act={act}
             onWake={onWake}
             pane={pane}
+            flow={flow}
             items={items}
             onStarter={onStarter}
             sending={sending}
@@ -244,6 +251,7 @@ function ThreadColumn({
   act,
   onWake,
   pane,
+  flow,
   items,
   onStarter,
   sending,
@@ -256,6 +264,7 @@ function ThreadColumn({
   act: ChatAct;
   onWake: ((entry: SparkEntry) => void) | undefined;
   pane: ReactNode;
+  flow: ReactNode;
   items: readonly ThreadItem[];
   onStarter: ((words: string) => void) | undefined;
   sending: boolean;
@@ -280,12 +289,12 @@ function ThreadColumn({
           </span>
         </span>
       </header>
-      {line === null ? (
+      {line === null && flow === undefined ? (
         // the pane is a chrome piece of its own, tried again for the session it shows
         <ChromeBoundary name="Spark pane" retryKey={paneSessionOf(entry) ?? spark.id}>
           {pane ?? <SparkPaneView name={spark.name} state="no-terminals" />}
         </ChromeBoundary>
-      ) : (
+      ) : line === null ? null : (
         <p className="vf-chat-thread-line" data-line={line} role="status">
           <span>{lineWords(spark.name, line, act)}</span>
           {line === "asleep" ? (
@@ -295,7 +304,13 @@ function ThreadColumn({
           ) : null}
         </p>
       )}
-      <div className="vf-chat-foot">
+      {flow === undefined ? null : (
+        // the flow is a chrome piece of its own, tried again for the spark it draws
+        <ChromeBoundary name="Spark thread" retryKey={spark.id}>
+          {flow}
+        </ChromeBoundary>
+      )}
+      <div className="vf-chat-foot" {...(flow === undefined ? {} : { "data-flow": "" })}>
         <ThreadItemsView
           items={items}
           onStarter={onStarter}

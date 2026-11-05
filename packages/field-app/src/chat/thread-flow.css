@@ -1,0 +1,315 @@
+/* Chat's thread, drawn (TH-1; DESIGN.md §8 "Chat's thread"; the Sparks page's `c-body`, `m-me`, `m-them`, `m-act`,
+   `m-dots` and `m-day`, the drawing, never copied code). Tokens only. */
+
+/* The flow: under the head's hairline, every height the head and the foot leave; it scrolls with no bar, padded 6 at
+   its top and 26 at its foot. */
+.vf-chat-flow {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+  padding: 6px 28px 26px;
+}
+
+.vf-chat-flow::-webkit-scrollbar {
+  display: none;
+}
+
+/* reading, or unreadable: the words, centred, as Chat's other honest lines are */
+.vf-chat-flow:not([data-flow-state="ready"]) {
+  display: grid;
+  place-items: center;
+}
+
+.vf-chat-flow-words {
+  margin: 0;
+  padding: 0 24px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--vf-text-secondary);
+  text-align: center;
+}
+
+/* one column as wide as the composer, its rows 14 apart */
+.vf-chat-flow-col {
+  max-width: 640px;
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+
+/* ── day lines, and a conversation's opening ── */
+
+.vf-chat-day {
+  padding-top: 14px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--vf-text-tertiary);
+}
+
+/* "Earlier conversations (3)": one quiet row at the flow's top, a press */
+.vf-chat-flow-earlier {
+  justify-self: start;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--vf-text-tertiary);
+  background: transparent;
+  transition: color 160ms ease;
+}
+
+.vf-chat-flow-earlier:hover {
+  color: var(--vf-text-secondary);
+}
+
+.vf-chat-flow-earlier:focus-visible,
+.vf-chat-quiet:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 1px;
+}
+
+/* the honest lines: the quiet lines' look, with no glyph, at the column's start */
+.vf-chat-honest {
+  margin: 0;
+  min-height: 22px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--vf-text-tertiary);
+}
+
+/* ── your words ── */
+
+.vf-chat-you {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+/* at most 76% of the column, padded 9 14, corners 18, on the fill, 14 at 1.45 in primary ink */
+.vf-chat-bubble {
+  margin: 0;
+  max-width: 76%;
+  padding: 9px 14px;
+  border-radius: 18px;
+  background: var(--vf-fill);
+  color: var(--vf-text-primary);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* a chip in your words: padded 1 6, corners 6, 12.5/500 mono, on solid chrome ringed by the strong hairline */
+.vf-chat-bubble-chip {
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-family: var(--vf-font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  background: var(--vf-chrome-solid);
+  box-shadow: 0 0 0 1px var(--vf-hairline-strong);
+}
+
+/* its receipt: 11.5 in tertiary ink, under the bubble at its right */
+.vf-chat-receipt {
+  font-size: 11.5px;
+  line-height: 1.2;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-chat-receipt[data-tone="attention"] {
+  color: var(--vf-ink-attention);
+}
+
+/* ── Vela's rows: the lead (its face at 28, a still, or its gap), then 12 ── */
+
+.vf-chat-msg {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.vf-chat-msg[data-quiet] {
+  align-items: center;
+}
+
+.vf-chat-msg-gap {
+  width: 28px;
+  height: 1px;
+}
+
+.vf-chat-msg-body {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+/* Vela's words: 14 at 1.55 in primary ink, padded 4 at their top, in the named subset */
+.vf-chat-reply-text {
+  min-width: 0;
+  margin: 0;
+  padding-top: 4px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--vf-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.vf-chat-reply-text > * {
+  margin: 0;
+}
+
+.vf-chat-reply-text > * + * {
+  margin-top: 8px;
+}
+
+.vf-chat-reply-text strong {
+  font-weight: 600;
+}
+
+.vf-chat-reply-text ul,
+.vf-chat-reply-text ol {
+  padding-left: 20px;
+}
+
+/* inline code: padded 1 5, corners 5, 12.5/500 mono, on the fill */
+.vf-chat-reply-text code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-family: var(--vf-font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  background: var(--vf-fill);
+}
+
+/* fenced code: the same mono at 1.45 on the fill, corners 8, padded 8 10, scrolling within itself */
+.vf-chat-reply-text .vf-chat-code {
+  padding: 8px 10px;
+  border-radius: 8px;
+  overflow-x: auto;
+  background: var(--vf-fill);
+  font-family: var(--vf-font-mono);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.vf-chat-reply-text .vf-chat-code code {
+  padding: 0;
+  background: transparent;
+}
+
+/* a quote: a 2-wide hairline at its left, padded 10 */
+.vf-chat-reply-text blockquote {
+  padding-left: 10px;
+  box-shadow: inset 2px 0 0 var(--vf-hairline-strong);
+  color: var(--vf-text-secondary);
+}
+
+/* ── the quiet lines: what it did, VibeField's acts, Thinking… ── */
+
+.vf-chat-quiet {
+  justify-self: start;
+  margin: 0;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--vf-text-tertiary);
+  background: transparent;
+  text-align: left;
+}
+
+.vf-chat-quiet .vf-glyph {
+  flex: none;
+}
+
+button.vf-chat-quiet:hover {
+  color: var(--vf-text-secondary);
+}
+
+/* a turn's tools, opened: each by its kind's words, then what it touched in mono, 6 apart */
+.vf-chat-tool-rows {
+  margin: 0;
+  padding: 0 0 0 20px;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-chat-tool-rows li {
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+}
+
+.vf-chat-tool-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--vf-font-mono);
+}
+
+/* Thinking…: three dots, 5 round and 4 apart, a breath (§6) that breathes their ink, a third of a breath apart */
+.vf-chat-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vf-chat-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--vf-text-tertiary);
+  animation: vf-chat-breath 1.1s ease-in-out infinite alternate;
+}
+
+.vf-chat-dots i:nth-child(2) {
+  animation-delay: 0.367s;
+}
+
+.vf-chat-dots i:nth-child(3) {
+  animation-delay: 0.733s;
+}
+
+@keyframes vf-chat-breath {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-chat-dots i {
+    animation: none;
+    opacity: 0.6;
+  }
+
+  .vf-chat-flow-earlier {
+    transition: none;
+  }
+}

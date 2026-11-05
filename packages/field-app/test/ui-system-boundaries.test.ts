@@ -207,6 +207,11 @@ describe("UI system ownership boundaries", () => {
     // SP-1d: the thread's items are the product's own reading of the shown spark, never a drawn copy of the hello
     expect(preview).toContain("threadItemsOf");
     expect(preview).not.toMatch(/<ThreadItemsView\s/u);
+    // TH-1: the thread's plates mount the shipping flow over the product's own projection of fixture record lines,
+    // read as the reader reads them — never a drawn conversation
+    expect(preview).toMatch(/<ThreadFlowView\s/u);
+    expect(preview).toContain("transcriptItemsOf(");
+    expect(fixtures).toContain("transcriptReadingOf(");
     for (const file of [preview, fixtures]) {
       expect(file).not.toMatch(/className="vf-chat/);
       expect(file).not.toContain("<style");
@@ -1175,6 +1180,8 @@ describe("UI system ownership boundaries", () => {
       "chat/SparkPane.tsx",
       "chat/SparkPaneView.tsx",
       "chat/ThreadItemsView.tsx",
+      // TH-1 — the thread's flow
+      "chat/ThreadFlowView.tsx",
       // CP-3 — the needs-you card
       "chat/NeedsCardView.tsx",
       // SP-1d — Chat's composer
@@ -1222,6 +1229,7 @@ describe("UI system ownership boundaries", () => {
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",
       "chat/chat.css",
+      "chat/thread-flow.css",
       "chat/chat-composer.css",
       "chat/new-spark-sheet.css",
       "chat/needs-card.css",

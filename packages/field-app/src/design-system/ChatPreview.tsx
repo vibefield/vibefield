@@ -6,11 +6,14 @@ import { ChatPanelView, shownOf } from "../chat/ChatPanelView";
 import { draftBlank } from "../chat/composer-draft";
 import { waitingCardOf } from "../chat/needs-card";
 import { SparkPaneView } from "../chat/SparkPaneView";
+import { ThreadFlowView } from "../chat/ThreadFlowView";
 import { threadItemsOf, threadQuiet } from "../chat/thread-items";
+import { transcriptItemsOf } from "../chat/transcript-items";
 import {
   CHAT_ACT,
   CHAT_CHOSEN,
   CHAT_COMPOSER,
+  CHAT_FLOW,
   CHAT_PANE,
   CHAT_SENDING,
   CHAT_STATE_LABEL,
@@ -34,7 +37,9 @@ import {
 // product's `sessionHandlesOf` on the fixture board), whose acts answer nothing here. A plate whose thread an act holds
 // (`CHAT_SENDING`) hands that one fact to both, as Chat's controller does: Wake and the starters wait and send is
 // busy. Each row's mark is the product's own ledger and reading (`chatMarksOf`: `ThreadLedger`, `threadMarksOf`) over
-// what the plates' window read, the shown thread on screen. The markup and the CSS are the product's.
+// what the plates' window read, the shown thread on screen. TH-1: the thread's plates (`CHAT_FLOW`) hand the panel the
+// shipping `ThreadFlowView` over the product's own projection (`transcriptItemsOf`) of fixture record lines, read as
+// the reader reads them (`transcriptReadingOf`), in the pane's place. The markup and the CSS are the product's.
 
 /** One of Chat's states, in the cover's place, on the frame's ground. */
 export function ChatPreview({
@@ -52,6 +57,25 @@ export function ChatPreview({
     place === undefined || shown === undefined ? undefined : (
       <SparkPaneView name={shown.spark.name} {...place} />
     );
+  // TH-1 — a plate whose thread is drawn: the shipping flow over the product's own projection of its fixture lines,
+  // standing in the pane's place
+  const drawn = CHAT_FLOW[state];
+  const flow =
+    drawn === undefined || shown === undefined ? undefined : (
+      <ThreadFlowView
+        flow={transcriptItemsOf({
+          entry: shown,
+          reading: drawn.reading,
+          pending: drawn.pending,
+          earlier: drawn.earlier,
+          now: FIXTURE_NOW,
+          locale,
+        })}
+        name={shown.spark.name}
+        face={{ seed: shown.spark.face.seed, status: shown.status }}
+        opened={drawn.opened}
+      />
+    );
   const drafted = CHAT_COMPOSER[state];
   const sending = CHAT_SENDING.has(state);
   const composer =
@@ -61,7 +85,7 @@ export function ChatPreview({
   // a catalog window has sent nothing, and its pane holds no keyboard: the hello leaves only for a draft; it answers
   // nothing, so a thread with something waiting on you stands that card (the waiting plate's)
   const items =
-    shown === undefined
+    shown === undefined || flow !== undefined
       ? []
       : threadItemsOf(
           shown,
@@ -82,6 +106,7 @@ export function ChatPreview({
       onChoose={setChosen}
       {...(act === undefined ? {} : { act })}
       {...(pane === undefined ? {} : { pane })}
+      {...(flow === undefined ? {} : { flow })}
       items={items}
       sending={sending}
       {...(composer === undefined ? {} : { composer })}
