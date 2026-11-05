@@ -45,7 +45,9 @@ import {
 // - Its heap is CAPPED BY V8 (4A2-Q7 (b) as re-ruled 11:46Z): the script runs in a worker_threads Worker inside the
 //   host, under `resourceLimits.maxOldGenerationSizeMb` = `heapMb` (a packaged SEA takes no `--max-old-space-size`; a
 //   worker's resourceLimits are no node option). A worker V8 ends past it is the host's `memory`, and the run is
-//   ended as `memory`. Each pong's heap is telemetry, kept for the log. A child V8 aborts whole for its heap (SIGABRT,
+//   ended as `memory`. What V8's cap cannot see, a typed array's backing store, the host's own thread holds against
+//   `rssMb` (FLOW_LIMITS.HOST_RSS_MB, measured; bth's re-read N1): it says `memory` and kills itself, read as
+//   `memory` too. Each pong's heap is telemetry, kept for the log. A child V8 aborts whole for its heap (SIGABRT,
 //   or its stderr's heap line, read as a bounded tail) is read as `memory` too, never as a host that left, so its run
 //   is never started again.
 // - A run's end is settled when the child has LEFT, never before: when `ended` resolves, its process is gone.

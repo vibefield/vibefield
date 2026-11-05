@@ -23,7 +23,11 @@ import type { FlowWorkerData, FromFlowWorker, ToFlowWorker } from "./worker";
 // - a script that spins holds its worker alone: this thread still hears `disconnect` (fieldd died) and SIGTERM, and
 //   leaves, which ends the worker with it; `shutdown` too. fieldd pings THROUGH this thread to the worker, so a
 //   spinning script still misses its pings and is ended `unanswered`;
-// - a script past its heap is ended by V8 (ERR_WORKER_OUT_OF_MEMORY), and this thread says `memory`.
+// - a script past its heap is ended by V8 (ERR_WORKER_OUT_OF_MEMORY), and this thread says `memory`;
+// - what V8's cap cannot see, a typed array's backing store (outside the heap, and left in every compartment by
+//   SES), this thread holds: it reads the host's resident memory every RSS_POLL_MS, and past the run's `rssMb`
+//   (FLOW_LIMITS.HOST_RSS_MB) it says `memory` and SIGKILLs the host (bth's re-read N1, ruled 13:24Z). The worker's
+//   loop may be inside one long builtin then, so the host never waits for it to end.
 // This thread does not lock itself down: it is another isolate than the script's, it evaluates no script text, and
 // nothing but structured-clone data crosses from the worker to it (4A2-Q7 (b): "decide, and say so").
 //
@@ -40,6 +44,14 @@ let pipe: Socket | undefined;
 let worker: Worker | undefined;
 /** the run's end was said: `done`, `threw`, `fatal` or `memory` */
 let said = false;
+/** the host's own read of its resident memory, while its script runs */
+let rssTimer: NodeJS.Timeout | undefined;
+
+/** How often this thread reads the host's resident memory against the run's `rssMb`: the host's own timing, as
+ * fieldd's ping is fieldd's, not a run's bound (bth's re-read N1). */
+const RSS_POLL_MS = 50;
+/** How long `memory` may take to reach the pipe before the host is killed without it. */
+const RSS_KILL_GRACE_MS = 250;
 
 function send(message: FromFlowHost): void {
   if (pipe?.writable === true) pipe.write(frameOf(message));
@@ -51,7 +63,23 @@ const textOf = (error: unknown): string => (error instanceof Error ? error.messa
 function end(message: Extract<FromFlowHost, { t: "done" | "threw" | "fatal" | "memory" }>): void {
   if (said) return;
   said = true;
+  clearInterval(rssTimer);
   send(message);
+}
+
+/** Past the resident cap: say `memory`, then SIGKILL this host, never `process.exit()`, which waits for the worker
+ * to end, and one long builtin (a `fill` of gigabytes) is not interrupted mid-call. fieldd reads the frame before
+ * the child's close, so the run ends `memory`; were the frame not written in the grace, the kill comes anyway. */
+function pastResidentCap(): void {
+  if (said) return;
+  said = true;
+  clearInterval(rssTimer);
+  const kill = (): void => {
+    process.kill(process.pid, "SIGKILL");
+  };
+  setTimeout(kill, RSS_KILL_GRACE_MS);
+  if (pipe?.writable === true) pipe.write(frameOf({ t: "memory" }), kill);
+  else kill();
 }
 
 function fromWorker(message: FromFlowWorker): void {
@@ -75,9 +103,13 @@ function fromWorker(message: FromFlowWorker): void {
 }
 
 function start(bundle: string, message: Extract<ToFlowHost, { t: "run" }>): void {
-  const heapMb = message.limits.heapMb;
+  const { heapMb, rssMb } = message.limits;
   if (typeof heapMb !== "number" || !Number.isFinite(heapMb) || heapMb <= 0) {
     end({ t: "fatal", reason: "a run's limits name no heap for its worker" });
+    return;
+  }
+  if (typeof rssMb !== "number" || !Number.isFinite(rssMb) || rssMb <= 0) {
+    end({ t: "fatal", reason: "a run's limits name no resident cap for its host" });
     return;
   }
   const data: FlowWorkerData & { readonly role: string } = {
@@ -100,6 +132,10 @@ function start(bundle: string, message: Extract<ToFlowHost, { t: "run" }>): void
       });
   });
   worker.on("exit", (code) => end({ t: "fatal", reason: `the flow's worker left (code ${code})` }));
+  const capBytes = rssMb * 1024 * 1024;
+  rssTimer = setInterval(() => {
+    if (process.memoryUsage.rss() > capBytes) pastResidentCap();
+  }, RSS_POLL_MS);
 }
 
 function hear(bundle: string, raw: unknown): void {

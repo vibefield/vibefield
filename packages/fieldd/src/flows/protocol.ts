@@ -23,7 +23,8 @@
 // host → fieldd: `ready {pid}` once, when the host's own thread is up (lockdown runs in the worker, before the script);
 // `call {id, what, args}`; `log {text}`; `pong {n, heap}`; then one of `done {value?, cut?}` (the default export
 // returned), `threw {message}` (it threw, or the script would not evaluate), `memory` (V8 ended the worker past its
-// heap) or `fatal {reason}` (the host cannot run a script: lockdown failed, a second `run`, the worker left).
+// heap, or the host's resident memory passed `rssMb`, the host then killing itself) or `fatal {reason}` (the host
+// cannot run a script: lockdown failed, a second `run`, the worker left).
 
 /** The bounds the child holds the script's own calls to, before anything is sent. */
 export interface FlowHostLimits {
