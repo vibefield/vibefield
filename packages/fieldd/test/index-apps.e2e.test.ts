@@ -19,9 +19,13 @@
 //     A's rosettad is never asked for the page;
 //   · C16: a URL A's listener reported reaches B's window only when its host is A's MagicDNS
 //     name as B's roster authenticates it, else it is stripped, never rewritten; only a
-//     validated URL is revealed, by B (the answering home) through B's own shell;
+//     validated URL is revealed, by the answering home through its own shell, in the URL
+//     standard's own spelling (`ShellLinkUrl`), and the answer keeps the listener's;
 //   · `artifact.mark` is the home's (`local`): until slice 3h it says `intent-unbuilt`;
-//   · the apps table's peer door admits a peer daemon alone, and only once the table speaks.
+//   · the apps table's peer door admits a peer daemon alone, and only once the table speaks;
+//   · `index.artifacts {projectKey}` narrows a desktop's library by the fold's own rule (an app
+//     from a session rosetta files under no project is kept), and a project on another
+//     desktop's library is refused at the home, in words.
 // Every row boots daemons: they run on the mini (a9), never under the MacBook's HOLD. Each
 // wait is BOUNDED and asserted on (`settle`), so a red row fails on its assertion.
 import { spawn } from "node:child_process";
@@ -36,9 +40,11 @@ import {
   IndexAppsCatalogOpen,
   IndexAppsResult,
   IndexArtifactsResult,
+  IndexSessionsResult,
   MADE_APP_OPEN,
   MadeAppOpenRefusal,
   madeAppFoldKey,
+  type PlaceFacts,
   type Scope,
   SHELL_PROVIDER_METHODS,
   ShellProviderCallParams,
@@ -141,6 +147,23 @@ const sessionRow = (id: string, projectId: string, lastAt: number) => ({
 });
 
 const RUNTIMES = [{ id: "rt-claude", kind: "claude-code", data_root: "~/.claude", enabled: true }];
+
+/** One place as the place scanner reads it (project-doors-phone.test.ts' `facts`): a folder that is
+ * there and is no checkout, so it groups as its own project. */
+const placeFacts = (placeId: string, path: string): PlaceFacts => ({
+  placeId,
+  path,
+  aliases: [],
+  kind: "project",
+  caseless: true,
+  exists: true,
+  mounted: true,
+  git: false,
+  remotes: [],
+  samples: [],
+  hits: [],
+  observedAt: 1,
+});
 
 interface Library {
   entries: ArtifactEntry[];
@@ -500,6 +523,9 @@ describe("MA-3e — the made apps across two real daemons", () => {
     const { A, B } = await bootPair({ a: SCRIPT_A, b: SCRIPT_B });
     const held = await settle(() => B.daemon.appsMesh.replica("dev-a")?.length === 1, 30_000);
     expect(held, "B's replica holds A's first app").toBe(true);
+    // the page below names B's own app too: B's own first walk has landed
+    const ownRead = await settle(() => B.daemon.indexApps.ready, 30_000);
+    expect(ownRead, "B's apps table has spoken (its first walk landed)").toBe(true);
     const win = await windowOn(B);
     const sub = (await win.call("index.apps.subscribe", { scope: "mesh" })) as { subId: string };
     const pings = () =>
@@ -690,9 +716,21 @@ describe("MA-3e — the made apps across two real daemons", () => {
       requestsOf(A).filter((url) => url.includes("/content")),
       "A's rosettad was never asked for the page",
     ).toEqual([]);
+
+    // a project narrows only the library it is asked of: A cannot read B's grouping (DS-L4) and
+    // B's hook carries the ask as it came, so B refuses a routed project in words, never a blank
+    const narrowed = await win.attempt("index.artifacts", {
+      device: "dev-a",
+      projectKey: "pk-of-b",
+    });
+    expect(narrowed.ok, "B refuses a project on A's library before carrying it").toBe(false);
+    if (!narrowed.ok) {
+      expect(narrowed.error.data?.kind).toBe("PRECONDITION_FAILED");
+      expect(narrowed.error.data?.details).toEqual({ method: "index.artifacts" });
+    }
   }, 120_000);
 
-  it("C16: a URL A's listener reported, whose host is not A's MagicDNS name as B's roster knows it, is stripped at B — never rewritten — and nothing is revealed", async () => {
+  it("C16: a URL A's listener reported, whose host is not A's MagicDNS name as B's roster knows it, is stripped at B — never rewritten — and B reveals nothing; A's own window has it revealed by A's own shell", async () => {
     const { A, B } = await bootPair(
       { a: SCRIPT_A, b: SCRIPT_B },
       { aMadeApps: { exporter: servingExporter(["cdn.example.com"]) } },
@@ -700,15 +738,43 @@ describe("MA-3e — the made apps across two real daemons", () => {
     await reachable(A, B);
     const appId = appIdOf("one");
 
-    // A's own window: A serves its app on the URL its listener reported, on A's own name
-    const local = ArtifactOpenResult.parse(
-      await (await windowOn(A)).call("artifact.open", { appId }),
+    // A's own window: A serves its app on the URL its listener reported, on A's own name. Here A
+    // is both the home and the origin, so A reveals it through its OWN shell, handing the browser
+    // the URL standard's own spelling of that URL (the root's slash, never another host), and
+    // audits the reveal without the URL
+    const shellA = await shellOn(A);
+    const openingA = (await windowOn(A)).call("artifact.open", { appId, reveal: true }).then(
+      (result) => ({ ok: true as const, result }),
+      (error: unknown) => ({ ok: false as const, error }),
     );
+    const revealedA = await settle(() => providerCalls(shellA).length > 0, 15_000);
+    expect(revealedA, "A asks its own shell to open what it serves").toBe(true);
+    const callA = providerCalls(shellA)[0];
+    expect(callA).toMatchObject({ method: "shell.openLink", caller: { clientKind: "fieldd" } });
+    await shellA.call("shell.provider.resolve", {
+      callId: callA?.callId,
+      outcome: { result: { opened: true } },
+    });
+    const settledA = await openingA;
+    expect(settledA.ok, "A's own open answers as usual once the browser has it").toBe(true);
+    const local = ArtifactOpenResult.parse(settledA.ok ? settledA.result : {});
     expect(local.state, "A serves its app").toBe("serving");
     expect(local.url, "on the URL its own listener reported").toMatch(
       new RegExp(`^https://${MOCK_HOST.replaceAll(".", "\\.")}:\\d+/?$`),
     );
+    expect(
+      (callA?.params as { url?: unknown } | undefined)?.url,
+      "the browser is handed the standard's spelling of the served URL, exactly",
+    ).toBe(new URL(String(local.url)).href);
     expect(local.reach).toEqual(["cdn.example.com"]);
+    const revealsA = (await auditRecords(A.daemon)).filter(
+      (record) => record.action === "artifact.made.reveal",
+    );
+    expect(revealsA.map((record) => [record.phase, record.outcome ?? null])).toEqual([
+      ["attempt", null],
+      ["outcome", "succeeded"],
+    ]);
+    expect(JSON.stringify(revealsA), "A's reveal record names no URL").not.toContain(MOCK_HOST);
 
     // B's window asks A through B, and asks B to reveal it in the browser
     const shell = await shellOn(B);
@@ -757,17 +823,23 @@ describe("MA-3e — the made apps across two real daemons", () => {
       // an internal door: main sees fieldd, never the window that asked
       caller: { clientKind: "fieldd" },
     });
+    // the browser is handed the URL standard's own spelling: the root's slash, as the shell's
+    // `ShellLinkUrl` reads a link (the listener reports none)
     const url = (call?.params as { url?: unknown } | undefined)?.url;
-    expect(url).toMatch(new RegExp(`^https://${MOCK_HOST.replaceAll(".", "\\.")}:\\d+/?$`));
+    expect(url).toMatch(new RegExp(`^https://${MOCK_HOST.replaceAll(".", "\\.")}:\\d+/$`));
     await shell.call("shell.provider.resolve", {
       callId: call?.callId,
       outcome: { result: { opened: true } },
     });
     const settled = await opening;
     expect(settled.ok, "the open answers as usual once the browser has it").toBe(true);
-    if (settled.ok) {
-      expect(ArtifactOpenResult.parse(settled.result)).toMatchObject({ state: "serving", url });
-    }
+    const answer = ArtifactOpenResult.parse(settled.ok ? settled.result : {});
+    expect(answer.state).toBe("serving");
+    expect(answer.url, "the answer keeps the URL A's listener reported").toBeDefined();
+    expect(
+      new URL(String(answer.url)).href,
+      "what B revealed is exactly the URL A answered, in the standard's spelling",
+    ).toBe(url);
     // the home audited its reveal, and never the URL
     const homeRecords = (await auditRecords(B.daemon)).filter((record) =>
       record.action.startsWith("artifact.made."),
@@ -780,8 +852,9 @@ describe("MA-3e — the made apps across two real daemons", () => {
       ["attempt", null],
       ["outcome", "succeeded"],
     ]);
+    // no spelling of it: not the host, so neither the listener's nor the browser's
     expect(JSON.stringify(homeRecords), "the reveal's record names no URL").not.toContain(
-      String(url),
+      MOCK_HOST,
     );
     // the origin served and audited the open as B's window's; it revealed nothing itself
     const originRecords = await auditRecords(A.daemon);
@@ -862,6 +935,103 @@ describe("MA-3e — the made apps across two real daemons", () => {
         },
       });
       expect(JSON.stringify(open), "no path rides a replicated row").not.toContain(LIBRARY_PATH);
+    }
+  }, 120_000);
+
+  it("index.artifacts {projectKey} narrows A's library by the rule the fold's column reads: an app from a session rosetta files under no project is kept, rosetta's own filter is sent only where it drops nothing, and a peer daemon's project is refused in words", async () => {
+    // A: a1 and a2 work in the app's place, and rosetta files a2 under no project (its
+    // unassigned bucket); a3 works in another project's place. Each made one app.
+    const script: DeskScript = {
+      sessions: [
+        sessionRow("a1", "p-app-a", 9_000),
+        { ...sessionRow("a2", "p-app-a", 8_500), project_id: null },
+        sessionRow("a3", "p-other", 8_000),
+      ],
+      projects: [
+        { id: "p-app-a", name: "app", root_paths: ["/work/p-app-a"], git_repo: null },
+        { id: "p-other", name: "other", root_paths: ["/work/p-other"], git_repo: null },
+      ],
+      library: {
+        entries: [
+          // rosetta's `project_id` on an entry is its ROOT session's
+          { ...appEntry("one", "a1", 5_000), project_id: "p-app-a", project_name: "app" },
+          { ...appEntry("loose", "a2", 4_500), project_id: null },
+          { ...appEntry("far", "a3", 4_000), project_id: "p-other", project_name: "other" },
+        ],
+      },
+    };
+    const preA = await prepareDesk("a", script, B_NAME);
+    const A: Desk = { ...preA, daemon: await bootDaemon(preA, sidecar(new Map(), "node-a", [])) };
+    const spoken = await settle(() => A.daemon.indexApps.ready, 30_000);
+    expect(spoken, "A's apps table has spoken (its first walk landed)").toBe(true);
+    // the places, through the catalog's own write path (this world runs no files worker)
+    A.daemon.indexCatalog.setPlaces(
+      new Map([
+        ["p-app-a", [placeFacts("pl_app", "/work/p-app-a")]],
+        ["p-other", [placeFacts("pl_other", "/work/p-other")]],
+      ]),
+    );
+    A.daemon.projects.regroupNow();
+
+    const win = await windowOn(A);
+    const listing = IndexSessionsResult.parse(
+      await win.call("index.sessions", { scope: "local", limit: 50 }),
+    );
+    const keyOf = (sessionId: string): string | undefined =>
+      listing.rows.find((row) => row.sessionId === sessionId)?.projectKey;
+    const app = keyOf("a1");
+    const other = keyOf("a3");
+    expect(app, "a1's cwd joins the app's project").toBeDefined();
+    expect(keyOf("a2"), "a2, filed under no rosetta project, works in the same place").toBe(app);
+    expect(other, "a3's cwd joins the other project").toBeDefined();
+    expect(other).not.toBe(app);
+
+    /** the rosetta `project` filters A's library was asked with while `act` ran (an apps walk
+     * asks none, so its own reads never count here) */
+    const filtersDuring = async (act: () => Promise<void>): Promise<string[]> => {
+      const before = requestsOf(A).length;
+      await act();
+      return requestsOf(A)
+        .slice(before)
+        .filter((url) => url.startsWith("/api/artifacts"))
+        .map((url) => new URLSearchParams(url.slice(url.indexOf("?") + 1)).get("project"))
+        .filter((project): project is string => project !== null);
+    };
+    let appPage: IndexArtifactsResult | undefined;
+    const appFilters = await filtersDuring(async () => {
+      appPage = IndexArtifactsResult.parse(await win.call("index.artifacts", { projectKey: app }));
+    });
+    expect(
+      appPage?.entries.map((entry) => entry.appId),
+      "both apps made in the app's place, a2's included, newest first",
+    ).toEqual([appIdOf("one"), appIdOf("loose")]);
+    expect(appPage?.entries.map((entry) => entry.projectKey)).toEqual([app, app]);
+    expect(appFilters, "rosetta's filter would drop a2's app, so none is sent").toEqual([]);
+
+    let otherPage: IndexArtifactsResult | undefined;
+    const otherFilters = await filtersDuring(async () => {
+      otherPage = IndexArtifactsResult.parse(
+        await win.call("index.artifacts", { projectKey: other }),
+      );
+    });
+    expect(otherPage?.entries.map((entry) => entry.appId)).toEqual([appIdOf("far")]);
+    expect(
+      otherFilters,
+      "one rosetta project files every session that joins it: rosetta filters",
+    ).toEqual(["p-other"]);
+
+    // the fold's column reads the same rule: the shelf and the library list the same apps (MA-L10)
+    const fold = IndexAppsResult.parse(await win.call("index.apps.list", { projectKey: app }));
+    expect(fold.rows.map((row) => row.appId)).toEqual([appIdOf("one"), appIdOf("loose")]);
+
+    // a peer daemon groups its own (DS-L4): its project is refused in words, never a blank
+    await doorOf(A);
+    const peer = await peerOn(A, "node-b", "dev-b");
+    const refused = await peer.attempt("index.artifacts", { projectKey: app });
+    expect(refused.ok, "a peer daemon's project narrows nothing here").toBe(false);
+    if (!refused.ok) {
+      expect(refused.error.data?.kind).toBe("PRECONDITION_FAILED");
+      expect(refused.error.data?.details).toEqual({ principal: "peer-fieldd" });
     }
   }, 120_000);
 });

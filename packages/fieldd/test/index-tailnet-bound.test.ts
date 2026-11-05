@@ -25,7 +25,7 @@
 // the `apps` table's own replication door is the peer daemon's alone.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,6 +41,7 @@ import {
   IndexRecentResult,
   IndexSearchResult,
   IndexSessionsResult,
+  madeAppFoldKey,
   PEER_FIELDD_SCOPES,
   PRODUCT_API_LIMITS,
   type Principal,
@@ -52,7 +53,7 @@ import type { ArtifactEntry } from "@vibefield/rosetta-protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { DEFAULT_SEARCH_LIMIT } from "../src/agent-index";
-import { bootstrap, type FielddDaemon } from "../src/index";
+import { bootstrap, type FielddDaemon, verifyAuditSegment } from "../src/index";
 import { tailnetRowLimit } from "../src/tailnet-rows";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productDoorPath, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
@@ -716,7 +717,7 @@ describe("MA-3e — the made apps' doors are bounded at the door, as the history
     }
   }, 60_000);
 
-  it("the apps table's replication door is the peer daemon's alone: the phone and a window are refused by the handler's own gate, a self peer is admitted and told the owner's standing", async () => {
+  it("the apps table's replication door is the peer daemon's alone: the phone and a window are refused by the handler's own gate, and by this home when they name another desktop, a self peer is admitted and told the owner's standing", async () => {
     await appsRead();
     for (const [who, rpc] of [
       ["the phone", world.phone],
@@ -728,6 +729,23 @@ describe("MA-3e — the made apps' doors are bounded at the door, as the history
       expect(answer.error.data?.kind).toBe("FORBIDDEN_SCOPE");
       expect(answer.error.data?.details).toEqual({ method: "index.apps.catalog.subscribe" });
     }
+    // routed, the call would reach the other desktop as THIS daemon's, which its gate admits: the
+    // home never carries a replication door for a client (the history's catalog door the same)
+    for (const [who, rpc] of [
+      ["the phone", world.phone],
+      ["a window", world.window],
+    ] as const) {
+      for (const [method, params] of [
+        ["index.apps.catalog.subscribe", { device: "dev-c" }],
+        ["index.catalog.subscribe", { device: "dev-c", table: "sessions" }],
+      ] as const) {
+        const routed = await rpc.attempt(method, params);
+        expect(routed.ok, `${who} is refused ${method} of another desktop`).toBe(false);
+        if (routed.ok) continue;
+        expect(routed.error.data?.kind).toBe("FORBIDDEN_SCOPE");
+        expect(routed.error.data?.details).toEqual({ method });
+      }
+    }
     const opened = await world.peer.attempt("index.apps.catalog.subscribe", {});
     expect(opened.ok, "a self peer daemon is admitted").toBe(true);
     if (!opened.ok) return;
@@ -737,4 +755,81 @@ describe("MA-3e — the made apps' doors are bounded at the door, as the history
       snapshot: { libraryReady: true },
     });
   }, 60_000);
+
+  it("what a routed call cannot get around, and who each door refuses: the phone's page of another desktop is at most MAX_ROWS, a reveal is a desktop window's alone, a peer daemon neither follows the fold nor marks an app, and a guest is refused before any door", async () => {
+    await appsRead();
+    const appId = hex(`app:${ROWS - 1}`);
+    // asked of another desktop through this home, the phone's page is held to the bound HERE: the
+    // other desktop sees this daemon, whose ask it never bounds
+    const routedPage = await world.phone.attempt("index.apps.list", {
+      device: "dev-c",
+      limit: WINDOW_ASK,
+    });
+    expect(routedPage.ok, "the phone's routed ask for 500 is refused before it is carried").toBe(
+      false,
+    );
+    if (!routedPage.ok) {
+      expect(routedPage.error.data?.kind).toBe("PRECONDITION_FAILED");
+      expect(routedPage.error.data?.details).toEqual({ method: "index.apps.list", limit: MAX });
+    }
+    // the phone opens a URL itself: its reveal is refused here and through this home, before anything opens
+    for (const ask of [
+      { appId, reveal: true },
+      { appId, reveal: true, device: "dev-c" },
+    ]) {
+      const answer = await world.phone.attempt("artifact.open", ask);
+      expect(answer.ok, `the phone's reveal is refused (${JSON.stringify(ask)})`).toBe(false);
+      if (answer.ok) continue;
+      expect(answer.error.data?.kind).toBe("PRECONDITION_FAILED");
+      expect(answer.error.data?.details).toEqual({ method: "artifact.open" });
+    }
+    expect(
+      (await auditActions()).filter((action) => action.startsWith("artifact.made.")),
+      "nothing opened, so nothing was audited",
+    ).toEqual([]);
+
+    // PIN — a peer daemon copies the table; it never follows another desktop's fold (DS-L4)
+    const pings = await world.peer.attempt("index.apps.subscribe", {});
+    expect(pings.ok, "a peer daemon is refused the shelf's pings").toBe(false);
+    if (!pings.ok) {
+      expect(pings.error.data?.kind).toBe("FORBIDDEN_SCOPE");
+      expect(pings.error.data?.details).toEqual({ method: "index.apps.subscribe" });
+    }
+    // PIN — the mark is `local`: the D36 wall refuses a peer daemon before the handler is asked
+    const foldKey = madeAppFoldKey({ device: world.mock.meshDeviceId, appId, kind: "claude-code" });
+    const mark = await world.peer.attempt("artifact.mark", { foldKey, kept: true });
+    expect(mark.ok, "a peer daemon marks nothing").toBe(false);
+    if (!mark.ok) {
+      expect(mark.error.data?.kind).toBe("FORBIDDEN_SCOPE");
+      expect(mark.error.data?.details).toEqual({ method: "artifact.mark", locality: "local" });
+    }
+
+    // PIN — a guest passes only `guestOk` methods (UA-4's choke, before the scope gate and any
+    // handler's own), and no apps door is one: its preset is empty
+    const guest = await tailnet({ "Tailscale-User-Login": "else@example.com" }, "ios");
+    expect(guest.granted, "a guest holds no scope").toEqual([]);
+    for (const [method, params] of [
+      ["index.apps.list", {}],
+      ["index.artifacts", {}],
+      ["artifact.open", { appId }],
+    ] as const) {
+      const answer = await guest.rpc.attempt(method, params);
+      expect(answer.ok, `a guest is refused ${method}`).toBe(false);
+      if (answer.ok) continue;
+      expect(answer.error.data?.kind).toBe("FORBIDDEN_SCOPE");
+      expect(answer.error.data?.details, method).toEqual({ method });
+    }
+  }, 60_000);
 });
+
+/** Every action this world's daemon has audited, in order. */
+async function auditActions(): Promise<string[]> {
+  const root = world.daemon.audit.root;
+  const actions: string[] = [];
+  for (const name of readdirSync(root)
+    .filter((n) => n.endsWith(".jsonl"))
+    .sort()) {
+    actions.push(...(await verifyAuditSegment(join(root, name))).records.map((r) => r.action));
+  }
+  return actions;
+}

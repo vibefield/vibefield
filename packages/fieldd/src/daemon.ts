@@ -6,6 +6,7 @@ import {
   AGENT_CATALOG,
   AgentCatalogParams,
   AgentInterruptParams,
+  AgentKind,
   type AgentLastRunForgetResult,
   type AgentLastRunResult,
   AgentModelsParams,
@@ -45,15 +46,18 @@ import {
   AgentsUpdateStopParams,
   AgentsUsageParams,
   AppPreferenceSetParams,
+  ARTIFACT_LIMITS,
   ArtifactMarkParams,
   type ArtifactMarkResult,
-  type ArtifactOpenResult,
+  ArtifactOpenParams,
+  ArtifactOpenResult,
   ArtifactPublishParams,
   ArtifactPublishV2Params,
   ArtifactRefreshPreviewParams,
   ArtifactUnpublishParams,
   ArtifactUpdateParams,
   appVersionOfBuildId,
+  artifactRootUrlClaim,
   type CallerContext,
   CONTRACTS_VERSION,
   ComposeSparksCrewsSubscribeParams,
@@ -80,10 +84,17 @@ import {
   INDEX_MESH,
   INDEX_RECENT_DEFAULT_LIMIT,
   INDEX_STATUS_FEED,
+  INDEX_TAILNET_LIMITS,
   INDEX_TIMELINE,
   IndexActivityParams,
+  IndexAppsCatalogSubscribeParams,
+  IndexAppsParams,
   type IndexAppsResult,
-  type IndexArtifactsResult,
+  IndexAppsSubscribeParams,
+  IndexArtifactEntry,
+  type IndexArtifactEntryRow,
+  IndexArtifactsParams,
+  IndexArtifactsResult,
   IndexCatalogSubscribeParams,
   IndexChangesSubscribeParams,
   IndexEnrollParams,
@@ -163,6 +174,7 @@ import {
   SetupMomentParams,
   ShellDialogPickFolderParams,
   type ShellDialogPickFolderResult,
+  ShellLinkUrl,
   ShellOpenExternalParams,
   type ShellOpenExternalResult,
   SOCKETS,
@@ -269,7 +281,7 @@ import {
 } from "./freeway";
 import { clipActivity, createActivityReader, monitorHistoryPort } from "./index-activity";
 import { IndexApps } from "./index-apps";
-import { AppsMesh } from "./index-apps-mesh";
+import { type AppProjectJoin, AppsMesh } from "./index-apps-mesh";
 import { IndexCatalog } from "./index-catalog";
 import { IndexTicketForwarding } from "./index-forward";
 import { IndexMesh } from "./index-mesh";
@@ -864,6 +876,14 @@ export interface FielddDaemon {
 
 /** The daemon's own version, published in the device slice (package version). */
 const FIELDD_VERSION = "0.1.0";
+
+/** MA-3e (the 3e review) — the doors a self peer's DAEMON copies a table through (each handler admits `peer-fieldd`
+ * alone): the history's catalog (SP-1) and the made apps' `apps` table (L1). Never carried for a client by the
+ * subscription proxy (`setDeviceRouting`). */
+const PEER_REPLICATION_DOORS: ReadonlySet<string> = new Set([
+  "index.catalog.subscribe",
+  "index.apps.catalog.subscribe",
+]);
 
 // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
 // `MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS` and `mirrorWriteGrantRefusal`, FD-2's
@@ -3573,29 +3593,393 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // MA-3e — the made apps' four `index.*` doors (methods.ts' MA-1a rows): the
     // fold a window or the phone pages, its pings, the `apps` table's own peer
-    // replication door, and one desktop's library.
-    // *Red (MA-3e's skeleton): each door answers a typed EMPTY answer — no row,
-    // no ping, an empty snapshot for any caller, an empty page — so the rows
-    // that pin them fail on their assertions; the green writes the bodies.*
-    api.register("index.apps.list", (): IndexAppsResult => {
-      requireApps();
-      return { rows: [], sources: [] };
-    });
-    api.registerSubscription("index.apps.subscribe", () => {
-      requireApps();
+    // replication door, and one desktop's library. All four ride `index.search`
+    // (the history's content). The principal gate is each handler's own: a
+    // plugin, an agent's MCP session and a guest are refused whatever scope
+    // they hold, and a self peer's DAEMON is admitted only where it carries a
+    // window's routed call (`index.apps.list`, `index.artifacts`, `artifact.open`)
+    // or copies the table (`index.apps.catalog.subscribe`, its door alone).
+    // The answering desktop sees only that carrier, so a ROUTED call is held
+    // to the gate at the home, before it is carried (the forward hooks, with
+    // `carrier` false), and the peer doors are never carried at all (the
+    // subscription forwarder, `setDeviceRouting`).
+    const admitApps = (ctx: CallerContext, method: string, carrier: boolean): void => {
+      const kind = ctx.principal.kind;
+      if (kind === "local-token" || kind === "shell-main" || kind === "tailnet") return;
+      if (carrier && kind === "peer-fieldd") return;
+      throw new RpcCallError(
+        "FORBIDDEN_SCOPE",
+        carrier
+          ? `${method} answers a desktop window, the phone, or a self peer's daemon carrying their call`
+          : `${method} answers a desktop window or the phone`,
+        false,
+        { method },
+      );
+    };
+    // An app's project, joined at THIS door (PJ-4, the plan's L2): its ROOT
+    // session's cwd on the app's own desktop (this desktop's catalog, or the
+    // peer's replicated sessions) through this desktop's grouping, never a
+    // row's word; and that project's ink, the fallback icon's colour (MA-D10
+    // (b)). A peer's cwds are indexed once per move of the history's replica
+    // (`peerSessionCwds`, dropped on IndexMesh's `change` where AppsMesh is
+    // built) and the inks once per grouping, so a page of 500 rows joins each
+    // in constant time rather than scanning every peer's sessions per row.
+    let peerSessionCwds: Map<string, Map<string, string | undefined>> | null = null;
+    let projectInks: { of: object; byKey: Map<string, number> } | null = null;
+    const indexPeerSessionCwds = (): Map<string, Map<string, string | undefined>> => {
+      const indexed = new Map<string, Map<string, string | undefined>>();
+      for (const peer of indexMesh?.peerRows() ?? [])
+        indexed.set(peer.device, new Map(peer.sessions.map((row) => [row.sessionId, row.cwd])));
+      return indexed;
+    };
+    const appProjectOf = (device: string, rootSessionId: string): AppProjectJoin | undefined => {
+      let cwd: string | undefined;
+      if (device === devices.currentDeviceId()) {
+        cwd = indexCatalog.sessions.get(rootSessionId)?.cwd;
+      } else {
+        peerSessionCwds ??= indexPeerSessionCwds();
+        cwd = peerSessionCwds.get(device)?.get(rootSessionId);
+      }
+      const [joined] = projectDoors.keyed([{ device, cwd }]);
+      if (joined?.projectKey === undefined) return undefined;
+      const grouping = projectGroups.current();
+      if (grouping !== null && projectInks?.of !== grouping) {
+        projectInks = {
+          of: grouping,
+          byKey: new Map(grouping.result.projects.map((project) => [project.key, project.ink])),
+        };
+      }
+      const ink = grouping === null ? undefined : projectInks?.byKey.get(joined.projectKey);
       return {
-        snapshot: { snapshot: { epoch: "apps-changes-skeleton", revision: 0, rows: [] } },
-        dispose: () => undefined,
+        projectKey: joined.projectKey,
+        ...(joined.place !== undefined ? { place: joined.place } : {}),
+        ...(ink !== undefined ? { ink } : {}),
+      };
+    };
+    api.register("index.apps.list", (ctx, params): IndexAppsResult => {
+      admitApps(ctx, "index.apps.list", true);
+      const parsed = IndexAppsParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          'expected { scope?: "local" | "mesh", devices?, projectKey?, q?, kept?, includeHidden?, cursor?, limit? (1..500) }',
+          false,
+        );
+      // the fold's own rules (index-apps-mesh.ts): a peer daemon is answered
+      // this desktop's apps with no project column, a tailnet page is cut at
+      // INDEX_TAILNET_LIMITS.MAX_ROWS and says `clipped`, and a local page
+      // before this desktop's first walk landed is `library-reading` (DS-L8)
+      return requireApps().list(parsed.data, ctx);
+    });
+    // A ROUTED page is answered by its desktop to this daemon (`peer-fieldd`,
+    // whose ask passes unbounded, `tailnetRowLimit`), so the home holds the
+    // caller to its own gates before it carries anything: a window or the phone
+    // only, and the phone's ask at most INDEX_TAILNET_LIMITS.MAX_ROWS. A hook
+    // refuses or carries, never edits the ask (ProductApi's ForwardHook), so a
+    // larger ask is refused in words rather than cut where its cursor cannot
+    // follow.
+    api.wrapForward("index.apps.list", async (ctx, _device, params, carry) => {
+      admitApps(ctx, "index.apps.list", false);
+      const limit = (params as { limit?: unknown } | null | undefined)?.limit;
+      if (
+        ctx.principal.kind === "tailnet" &&
+        typeof limit === "number" &&
+        limit > INDEX_TAILNET_LIMITS.MAX_ROWS
+      )
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `a page of another desktop's apps is at most ${INDEX_TAILNET_LIMITS.MAX_ROWS} rows for the phone`,
+          false,
+          { method: "index.apps.list", limit: INDEX_TAILNET_LIMITS.MAX_ROWS },
+        );
+      return await carry();
+    });
+    // The shelf's PINGS (L3), `index.changes.subscribe`'s pattern and floor.
+    // A peer daemon never follows another's fold (DS-L4): it copies the table.
+    api.registerSubscription("index.apps.subscribe", (ctx, params, emit) => {
+      admitApps(ctx, "index.apps.subscribe", false);
+      const parsed = IndexAppsSubscribeParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          'expected { scope?: "local" | "mesh", since?: {epoch, revision}, minIntervalMs? }',
+          false,
+        );
+      const pings = requireApps().changes(
+        { ...parsed.data, minIntervalMs: atFloor(parsed.data.minIntervalMs, changesFloorMs) },
+        emit,
+      );
+      return { snapshot: pings.open, dispose: pings.dispose, start: pings.start };
+    });
+    // The `apps` table's PEER replication door (L1), `index.catalog.subscribe`'s
+    // pattern: a self peer's daemon copies the table and follows its cursor,
+    // and nothing else is admitted (a window or the phone pages the fold).
+    // Before this boot's first walk landed the table does not speak for the
+    // library (DS-L8), so a peer is told so, retryable, and never sent an
+    // empty table it would replace its copy with. Every frame declares the
+    // owner's standing (index-apps.ts' `pump`).
+    api.registerSubscription("index.apps.catalog.subscribe", (ctx, params, emit) => {
+      if (ctx.principal.kind !== "peer-fieldd") {
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "index.apps.catalog.subscribe is the peer replication door; windows and the phone page index.apps.list",
+          false,
+          { method: "index.apps.catalog.subscribe" },
+        );
+      }
+      const parsed = IndexAppsCatalogSubscribeParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { since?: {epoch, revision}, minIntervalMs? }",
+          false,
+        );
+      if (!indexApps.ready)
+        throw new RpcCallError(
+          "UNAVAILABLE",
+          "this desktop's apps have not been read from its library yet",
+          true,
+          { service: MADE_APP_OPEN.SERVICE, state: MADE_APP_OPEN.STATE_READING },
+        );
+      const pump = indexApps.pump({
+        since: parsed.data.since,
+        // ROWS' floor is a FLOOR at this door (methods.ts declares it)
+        minIntervalMs: atFloor(parsed.data.minIntervalMs, ROWS.MIN_INTERVAL_MS),
+        ...(config.indexCatalog?.digestIntervalMs !== undefined
+          ? { digestIntervalMs: config.indexCatalog.digestIntervalMs }
+          : {}),
+        emit,
+      });
+      return { snapshot: pump.open, dispose: () => pump.dispose(), start: () => pump.start() };
+    });
+    // One desktop's LIBRARY as rosetta pages it (L5): the History room's
+    // `artifacts` port and the phone's Versions. `federate`: a `device` carries
+    // the call to that desktop (ProductApi), which answers from its own library
+    // (the only one this door reads), and the home joins the project column on
+    // the way back (the forward hook below). Every entry is a PROJECTION
+    // (`madeEntryOf`), so rosetta's publication path, its recovered-from path
+    // and its asset's daemon-relative URL reach no caller (MA §4.2, EL2). A
+    // tailnet page is at most INDEX_TAILNET_LIMITS.MAX_ROWS, and rosettad is
+    // asked for no more. A PJ project narrows THIS desktop's library, by the
+    // rule the fold's column reads: an entry stays only when its ROOT session's
+    // cwd joins that project (`keyOf`). rosetta's own `project` filter (an
+    // entry's root session's rosetta project) is sent only when it cannot drop
+    // an entry that rule keeps: when every session here that joins the project
+    // files under ONE rosetta project. A session rosetta files under none (its
+    // unassigned bucket), or a project over several, is read unfiltered and
+    // narrowed here, in rosetta's pages until the page is full or
+    // MADE_APP_LIMITS.WALK_RESTARTS pages are read (L5's bound; each ask is the
+    // rows still wanted, so the cursor answered is rosetta's own, at a page's
+    // end, and nothing is skipped). A short page says so by its cursor.
+    const madeEntrySaid = new Set<string>();
+    /** An entry this build cannot answer is left out and said once per member (its name, never its value: EL7);
+     * `routed`: a page another desktop answered, read at the home. */
+    const sayUnreadableEntry = (
+      issue: { readonly path: ReadonlyArray<PropertyKey> } | undefined,
+      routed: boolean,
+    ): void => {
+      const member =
+        issue === undefined || issue.path.length === 0 ? "?" : issue.path.map(String).join(".");
+      const said = `${routed ? "routed" : "own"}\u0000${member}`;
+      if (madeEntrySaid.has(said)) return;
+      madeEntrySaid.add(said);
+      logger.warn(
+        "fieldd.index_artifacts.unreadable_entry",
+        routed
+          ? "Another desktop's library page holds an entry this build cannot answer; it is left out"
+          : "The library holds a page this build cannot answer; it is left out",
+        { member, routed },
+      );
+    };
+    const madeAgents = createAgentCatalogReaders(config.agentCatalog ?? AGENT_CATALOG);
+    /** At most ARTIFACT_LIMITS.TITLE_CHARS UTF-16 units, never half a surrogate pair (H7, as the row's). */
+    const clipMadeTitle = (text: string): string => {
+      if (text.length <= ARTIFACT_LIMITS.TITLE_CHARS) return text;
+      const cut = text.slice(0, ARTIFACT_LIMITS.TITLE_CHARS);
+      const last = cut.charCodeAt(cut.length - 1);
+      return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+    };
+    /** One presentation as `index.artifacts` answers it, built member by member from what the mirror
+     * declares (never a spread of rosetta's entry); one this build cannot read is left out and said
+     * once per member (its name, never its value: EL7). */
+    const madeEntryOf = (
+      entry: IndexArtifactEntryRow,
+      device: string,
+      projectKey: string | undefined,
+    ): IndexArtifactEntry | undefined => {
+      const at = entry.publication;
+      const kind = AgentKind.safeParse(entry.agent).success ? entry.agent : undefined;
+      const provider = kind === undefined ? undefined : madeAgents.idForKind(kind);
+      const asset = entry.asset ?? undefined;
+      const parsed = IndexArtifactEntry.safeParse({
+        device,
+        presentationId: at.id,
+        appId: at.artifact_id,
+        sessionId: at.session_id,
+        timelineId: at.timeline_id,
+        title: clipMadeTitle(at.title.trim() === "" ? at.filename : at.title),
+        filename: at.filename,
+        ...(typeof at.url === "string" ? { hostedUrl: at.url } : {}),
+        ...(typeof at.native_id === "string" && at.native_id !== ""
+          ? { nativeId: at.native_id }
+          : {}),
+        ...(typeof at.version === "string" && at.version !== "" ? { version: at.version } : {}),
+        ...(typeof at.published_at === "number" ? { publishedAt: at.published_at } : {}),
+        ...(typeof entry.captured_at === "number" ? { capturedAt: entry.captured_at } : {}),
+        availability: entry.availability,
+        recovered: typeof entry.recovered_from === "string" && entry.recovered_from !== "",
+        ...(asset !== undefined
+          ? { mediaType: asset.media_type, byteLen: asset.byte_len, digest: asset.digest }
+          : {}),
+        ...(kind !== undefined ? { kind } : {}),
+        ...(provider !== undefined ? { provider } : {}),
+        ...(typeof entry.session_title === "string" ? { sessionTitle: entry.session_title } : {}),
+        ...(typeof entry.project_id === "string" && entry.project_id !== ""
+          ? { projectId: entry.project_id }
+          : {}),
+        ...(typeof entry.project_name === "string" ? { projectName: entry.project_name } : {}),
+        ...(projectKey !== undefined ? { projectKey } : {}),
+        versions: entry.presentations,
+      });
+      if (parsed.success) return parsed.data;
+      sayUnreadableEntry(parsed.error.issues[0], false);
+      return undefined;
+    };
+    /** The rosetta project the library door may filter by for `key`, or why it may not: `none` when no session here
+     * joins the project (this desktop's library holds none of its apps), `unfiltered` when a session that joins it
+     * files under no rosetta project or under another one than the rest (rosetta's filter would drop its apps). */
+    const libraryFilterOf = (key: string): { project: string } | "none" | "unfiltered" => {
+      const self = devices.currentDeviceId();
+      const keyOfCwd = new Map<string, string | undefined>();
+      const filed = new Set<string | undefined>();
+      for (const session of indexCatalog.sessions.rows()) {
+        const cwd = session.cwd ?? "";
+        if (!keyOfCwd.has(cwd)) keyOfCwd.set(cwd, projectDoors.keyOf(self, cwd));
+        if (keyOfCwd.get(cwd) === key) filed.add(session.projectId);
+      }
+      const [only] = filed;
+      if (filed.size === 0) return "none";
+      return filed.size === 1 && only !== undefined ? { project: only } : "unfiltered";
+    };
+    api.register("index.artifacts", async (ctx, params): Promise<IndexArtifactsResult> => {
+      admitApps(ctx, "index.artifacts", true);
+      const parsed = IndexArtifactsParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { device?, q?, kind?, projectKey?, appId?, cursor?, limit? (1..100) }",
+          false,
+        );
+      const ask = parsed.data;
+      // PJ-4 — the project column is joined, and a project narrows, only for a
+      // caller the projects answer (never a peer daemon, DS-L4): one naming a
+      // project is refused with that word, never answered a blank
+      const joins = readsProjects(ctx);
+      if (ask.projectKey !== undefined && !joins)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          ctx.principal.kind === "peer-fieldd"
+            ? "a project narrows only the library of the desktop a window or the phone asks; a peer daemon groups its own (DS-L4)"
+            : "the projects do not answer this caller, so no project narrows its library",
+          false,
+          { principal: ctx.principal.kind },
+        );
+      const self = devices.currentDeviceId();
+      const limit =
+        tailnetRowLimit(ctx.principal, ask.limit, INDEX_MESH.PAGE_DEFAULT_LIMIT) ??
+        INDEX_MESH.PAGE_DEFAULT_LIMIT;
+      // a moved key reads the project it moved into, and one no project holds
+      // is NOT_FOUND (before this boot's first grouping, UNAVAILABLE), as every
+      // project read answers it
+      const key =
+        ask.projectKey === undefined ? undefined : projectDoors.figuresPlan(ask.projectKey).key;
+      const filter = key === undefined ? undefined : libraryFilterOf(key);
+      if (filter === "none")
+        return { entries: [], canonicalReady: indexApps.libraryReady === true };
+      const entries: IndexArtifactEntry[] = [];
+      let cursor = ask.cursor;
+      let canonicalReady = false;
+      for (let pages = 1; ; pages += 1) {
+        const page = await index.artifacts({
+          ...(ask.q !== undefined ? { q: ask.q } : {}),
+          ...(ask.kind !== undefined ? { agent: ask.kind } : {}),
+          ...(typeof filter === "object" ? { project: filter.project } : {}),
+          ...(ask.appId !== undefined ? { artifactId: ask.appId } : {}),
+          ...(cursor !== undefined ? { cursor } : {}),
+          limit: limit - entries.length,
+        });
+        canonicalReady = page.canonical_ready;
+        for (const entry of page.entries) {
+          const sessionId = entry.publication.session_id;
+          const root = indexCatalog.threads.get(sessionId)?.rootSessionId ?? sessionId;
+          const projectKey = joins
+            ? projectDoors.keyOf(self, indexCatalog.sessions.get(root)?.cwd)
+            : undefined;
+          if (key !== undefined && projectKey !== key) continue;
+          const made = madeEntryOf(entry, self, projectKey);
+          if (made !== undefined) entries.push(made);
+        }
+        const next = page.next_cursor;
+        cursor = typeof next === "string" && next !== "" ? next : undefined;
+        // only a narrowed page reads on: an unnarrowed one is rosetta's page as it came
+        if (
+          key === undefined ||
+          cursor === undefined ||
+          entries.length >= limit ||
+          pages >= MADE_APP_LIMITS.WALK_RESTARTS
+        )
+          break;
+      }
+      return {
+        entries,
+        ...(cursor !== undefined ? { nextCursor: cursor } : {}),
+        canonicalReady,
       };
     });
-    api.registerSubscription("index.apps.catalog.subscribe", () => ({
-      snapshot: { snapshot: { epoch: "apps-skeleton", revision: 0, rows: [] } },
-      dispose: () => undefined,
-    }));
-    api.register(
-      "index.artifacts",
-      (): IndexArtifactsResult => ({ entries: [], canonicalReady: false }),
-    );
+    // A routed library page. The home holds the caller to the door's gate
+    // (its desktop sees only this daemon), and a project narrows only the
+    // library of the desktop it is asked of: the answering desktop cannot read
+    // this desktop's grouping (DS-L4) and a hook never edits what it carries,
+    // so a routed `projectKey` is refused here before anything is carried; the
+    // page instead carries this desktop's join on each entry. The page comes
+    // back with no project column (its desktop answered a peer daemon), and
+    // the home joins it from the peer's replicated sessions, as the fold's
+    // column is joined, trusting no key the page carried. Each entry is read
+    // as this build reads one, and one it cannot read is left out, never
+    // handed on unread; a page it cannot read at all is UNAVAILABLE
+    // `malformed`, as the index says of its own. An entry from a delegated
+    // session (a peer's threads never replicate) goes without a key.
+    api.wrapForward("index.artifacts", async (ctx, device, params, carry) => {
+      admitApps(ctx, "index.artifacts", false);
+      if ((params as { projectKey?: unknown } | null | undefined)?.projectKey !== undefined)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "a project narrows only the library of the desktop it is asked of: ask another desktop's without one, and each entry carries the project this desktop joins",
+          false,
+          { method: "index.artifacts" },
+        );
+      const carried = (await carry()) as { entries?: unknown } | null | undefined;
+      const shell = IndexArtifactsResult.safeParse({ ...(carried ?? {}), entries: [] });
+      if (!shell.success || !Array.isArray(carried?.entries))
+        throw new RpcCallError(
+          "UNAVAILABLE",
+          "another desktop answered a library page this build cannot read",
+          true,
+          { service: "index", state: "malformed" },
+        );
+      const entries: IndexArtifactEntry[] = [];
+      for (const raw of carried.entries) {
+        const read = IndexArtifactEntry.safeParse(raw);
+        if (!read.success) {
+          sayUnreadableEntry(read.error.issues[0], true);
+          continue;
+        }
+        const { projectKey: _untrusted, ...entry } = read.data;
+        const projectKey = appProjectOf(device, entry.sessionId)?.projectKey;
+        entries.push(projectKey !== undefined ? { ...entry, projectKey } : entry);
+      }
+      return { ...shell.data, entries } satisfies IndexArtifactsResult;
+    });
     api.register("index.enroll", async (ctx, params) => {
       const parsed = IndexEnrollParams.safeParse(params);
       if (!parsed.success)
@@ -7103,13 +7487,27 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // window's routed board, are carried as before. PG-2 (PG-D8) — a routed
       // `remote` carries the floor its CALLER is served at, which the owner
       // would otherwise read as a peer window's (`routedBoardAsk`).
-      (device, method, params, ctx, emit) =>
-        federatedSubs.attach(
+      // MA-3e (the 3e review) — a PEER REPLICATION door is never carried for
+      // a client: its handler admits a `peer-fieldd` principal and no other,
+      // and a routed call would arrive at it as this daemon's, so a window or
+      // the phone naming a `device` would be handed that desktop's raw table
+      // (unbounded, the owner's own words unchecked). A daemon copies a table
+      // over PeerLink itself (IndexMesh, AppsMesh), never through this proxy.
+      (device, method, params, ctx, emit) => {
+        if (PEER_REPLICATION_DOORS.has(method))
+          throw new RpcCallError(
+            "FORBIDDEN_SCOPE",
+            `${method} is a peer daemon's replication door; it is never carried for a client`,
+            false,
+            { method },
+          );
+        return federatedSubs.attach(
           device,
           method,
           method === "agent.subscribe" ? routedBoardAsk(ctx.principal.kind, params) : params,
           emit,
-        ),
+        );
+      },
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
     // PG-3b (the 3b review [13]) — a re-dialled link to an owner is a new
@@ -7178,38 +7576,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // app's project is joined at THIS door from its ROOT session's cwd on the
     // app's own desktop — this desktop's catalog, or the peer's replicated
     // sessions — through this desktop's grouping (PJ-4), never from a row, and
-    // its ink is that project's (the fallback icon, MA-D10 (b)). Its change
-    // pings are its own: an app's move regroups no project (fieldd Q13).
+    // its ink is that project's (the fallback icon, MA-D10 (b)): `appProjectOf`,
+    // beside the doors. Its change pings are its own: an app's move regroups no
+    // project (fieldd Q13).
     // `exportReady` is left out: at rosetta 0.1.3 no desktop exports (3f).
     const { searchTimeoutMs: _searchOnly, ...historyCadences } = config.indexMesh ?? {};
-    const inkOf = (key: string): { ink?: number } => {
-      try {
-        return { ink: projectDoors.get({ key }, { paths: false, tailnet: false }).project.ink };
-      } catch {
-        return {}; // before this boot's first grouping, or a key that has left it
-      }
-    };
+    // a peer's replicated sessions moved: the join's index of their cwds is
+    // rebuilt at the next join, never per row
+    indexMesh.on("change", (event: { scope: string }) => {
+      if (event.scope === "mesh") peerSessionCwds = null;
+    });
     appsMesh = new AppsMesh({
       local: indexApps,
       roster: devices,
       link: peers,
       dir: join(config.dataDir, ...LAYOUT.MESH_APPS_DIR),
-      joinProject: (device, rootSessionId) => {
-        const cwd =
-          device === devices.currentDeviceId()
-            ? indexCatalog.sessions.get(rootSessionId)?.cwd
-            : indexMesh
-                ?.peerRows()
-                .find((peer) => peer.device === device)
-                ?.sessions.find((row) => row.sessionId === rootSessionId)?.cwd;
-        const [joined] = projectDoors.keyed([{ device, cwd }]);
-        if (joined?.projectKey === undefined) return undefined;
-        return {
-          projectKey: joined.projectKey,
-          ...(joined.place !== undefined ? { place: joined.place } : {}),
-          ...inkOf(joined.projectKey),
-        };
-      },
+      joinProject: appProjectOf,
       ...historyCadences,
       logger,
     });
@@ -7944,14 +8326,85 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // the app's desktop, which answers from its own rule and audits the act;
     // the forward hook below is the home's say over what came back.
     // `artifact.mark` is `local`: the person's intent, the home's (slice 3h).
-    // *Red (MA-3e's skeleton): open answers a typed `starting` with no URL,
-    // mark echoes an unset intent, and the hook hands the forwarded answer back
-    // as it came; the green writes the bodies.*
-    api.register("artifact.open", (): ArtifactOpenResult => {
-      requireMadeApps();
-      return { state: "starting" };
+    //  - REVEAL (the lead's ruling on L4, C1 and C2): the window never holds
+    //    `shell.open`, so it asks `reveal` and the ANSWERING HOME opens the
+    //    validated URL through its own shell's `shell.openLink`, as
+    //    `terminal.link.open` does (internal: main sees fieldd, never the
+    //    window). Only a desktop window on this machine may ask it (a local
+    //    token or the shell, over loopback); the phone opens the URL itself, so
+    //    its `reveal` is refused before anything opens. The origin ignores a
+    //    routed `reveal` (its caller is the carrier, and the hook cannot strip
+    //    what it carries). The home audits `artifact.made.reveal`, never the
+    //    URL, and a reveal the shell refused fails the call with the shell's
+    //    word (the serve stays up; a retry finds it).
+    //  - The open is audited where it is ANSWERED (`artifact.made.open`, its
+    //    attempt before its effect): on the origin, as the window or the phone
+    //    behind the carrier (`onBehalfOf`, recorded, never authority: DS-L7).
+    const revealsFor = (ctx: CallerContext): boolean =>
+      (ctx.principal.kind === "local-token" || ctx.principal.kind === "shell-main") &&
+      ctx.transport === "ws-loopback";
+    const refuseReveal = (ctx: CallerContext, asked: boolean): void => {
+      if (!asked || revealsFor(ctx) || ctx.principal.kind === "peer-fieldd") return;
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "reveal is a desktop window's ask of its own desktop; the phone opens the URL itself",
+        false,
+        { method: "artifact.open" },
+      );
+    };
+    // The browser is handed the URL standard's own spelling of the validated
+    // root URL, as `terminal.link.open` hands it (`ShellLinkUrl`: the shell
+    // judges exactly that string). A listener reports `https://host:port` and
+    // the standard writes `https://host:port/`: only the root's slash differs,
+    // never the host or the port, so it is the same URL and nothing is
+    // rewritten (C16). The answer keeps the listener's own spelling.
+    const revealMade = async (ctx: CallerContext, appId: string, url: string): Promise<void> => {
+      await audit.required(
+        ctx,
+        { action: "artifact.made.reveal", target: { kind: "made-app", id: appId } },
+        async () => {
+          const href = ShellLinkUrl.safeParse(new URL(url).href);
+          if (!href.success)
+            throw new RpcCallError(
+              "INTERNAL",
+              "the served URL has no spelling the browser can be handed",
+              false,
+            );
+          await api.openLink({ url: href.data });
+        },
+        () => ({ outcome: "succeeded" }),
+      );
+    };
+    api.register("artifact.open", async (ctx, params): Promise<ArtifactOpenResult> => {
+      admitApps(ctx, "artifact.open", true);
+      const parsed = ArtifactOpenParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { appId, device?, presentationId?, reveal?: true }",
+          false,
+        );
+      const { appId, presentationId, reveal } = parsed.data;
+      refuseReveal(ctx, reveal === true);
+      const service = requireMadeApps();
+      const answer = await audit.required(
+        ctx,
+        { action: "artifact.made.open", target: { kind: "made-app", id: appId } },
+        () => service.open({ appId, ...(presentationId !== undefined ? { presentationId } : {}) }),
+        (opened) => ({ outcome: "succeeded", attrs: { state: opened.state } }),
+      );
+      // this desktop answered its own window: the home is the origin, and the
+      // URL is the one its own listener reported (made-app-service validates it)
+      if (reveal === true && revealsFor(ctx) && answer.url !== undefined)
+        await revealMade(ctx, appId, answer.url);
+      return answer;
     });
-    api.register("artifact.mark", (_ctx, params): ArtifactMarkResult => {
+    // Until slice 3h the home has no intent document to write a keep or a hide
+    // to, so the mark says so in its own word (MADE_APP_OPEN.STATE_INTENT_UNBUILT,
+    // not retryable: nothing a retry changes before 3h), never a fake answer. A
+    // refusal with no effect writes no audit record; 3h audits the write.
+    api.register("artifact.mark", (ctx, params): ArtifactMarkResult => {
+      admitApps(ctx, "artifact.mark", false);
       const parsed = ArtifactMarkParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError(
@@ -7959,9 +8412,48 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           "expected { foldKey, kept?: boolean, hidden?: boolean }, naming at least one",
           false,
         );
-      return { foldKey: parsed.data.foldKey, kept: false, hidden: false };
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "keeping or hiding a made app is not built yet: this desktop has no intent to write it to",
+        false,
+        { service: MADE_APP_OPEN.SERVICE, state: MADE_APP_OPEN.STATE_INTENT_UNBUILT },
+      );
     });
-    api.wrapForward("artifact.open", async (_ctx, _device, _params, carry) => await carry());
+    // The home's say over a routed open (C16, "validate or strip"): the
+    // origin's URL reaches the window only when it passes AH §6's root rule
+    // (`artifactRootUrlClaim`) AND its host is the origin's MagicDNS name as
+    // THIS desktop's roster authenticates it (`projectCatalogEntry`'s rule).
+    // Otherwise the URL is stripped, never rewritten onto another host, and
+    // the rest of the answer stands. Only a validated URL is revealed. The
+    // caller is held to the door's gate here, before anything is carried (its
+    // desktop sees only this daemon).
+    api.wrapForward("artifact.open", async (ctx, device, params, carry) => {
+      admitApps(ctx, "artifact.open", false);
+      const asked = ArtifactOpenParams.safeParse(params ?? {});
+      const reveal = asked.success && asked.data.reveal === true;
+      refuseReveal(ctx, reveal);
+      const carried = await carry();
+      const read = ArtifactOpenResult.safeParse(carried);
+      // an answer this build cannot read promises nothing is up (the contract's `starting`)
+      if (!read.success) return { state: "starting" } satisfies ArtifactOpenResult;
+      // the reader already reads a URL that fails AH §6's root rule as none
+      // (`ArtifactOpenResult.url`), so the strip's reason reads what came
+      const sent = (carried as { url?: unknown } | null | undefined)?.url;
+      const { url, ...rest } = read.data;
+      const claim = url === undefined ? null : artifactRootUrlClaim(url);
+      const host = canonicalTailnetDnsName(devices.get(device)?.tailnetDnsName);
+      const bound = claim !== null && host !== undefined && claim.hostname === host;
+      if (sent !== undefined && !bound)
+        logger.info(
+          "fieldd.made_apps.forwarded_url_stripped",
+          "A routed open's URL does not name its desktop as this roster knows it; it is stripped",
+          { reason: claim === null ? "not-a-root-url" : host === undefined ? "no-name" : "host" },
+        );
+      const answer: ArtifactOpenResult = bound && url !== undefined ? { ...rest, url } : rest;
+      if (reveal && asked.success && revealsFor(ctx) && answer.url !== undefined)
+        await revealMade(ctx, asked.data.appId, answer.url);
+      return answer;
+    });
     mesh.on("reconciled", emitHealth);
     mesh.on("serves-changed", emitHealth);
 

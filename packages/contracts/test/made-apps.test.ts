@@ -547,6 +547,7 @@ describe("MADE_APP_LIMITS and MADE_APP_OPEN are pinned (a move is a deliberate e
       STATE_READING: "library-reading",
       STATE_EXPORT_FAILED: "export-failed",
       STATE_NOT_LINKED: "not-linked",
+      STATE_INTENT_UNBUILT: "intent-unbuilt",
       RESOURCE: "apps",
     });
   });

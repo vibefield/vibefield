@@ -1026,7 +1026,9 @@ export const METHODS: MethodDef[] = [
   // answers it, so the D36 wall refuses it to a peer daemon, and an asleep
   // holder misses nothing. Idempotent: set semantics, so the same mark twice
   // leaves the same intent. `apps.use`, as `artifact.open`. Declared with no
-  // handler (L9): slice 3h answers it.
+  // handler (L9); MA-3e registers one that answers UNAVAILABLE
+  // `{service:"apps", state:"intent-unbuilt"}` (MADE_APP_OPEN), not
+  // retryable, until slice 3h writes the intent.
   defineMethod({
     surface: "product",
     method: "artifact.mark",
