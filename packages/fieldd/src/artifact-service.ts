@@ -131,6 +131,13 @@ export interface ArtifactServiceOptions {
   /** Cheap liveness gate used to avoid scheduling add-time browser work when
    * no desktop provider is registered. Explicit refresh remains best-effort. */
   capturePreviewAvailable?: () => boolean;
+  /** MA-3b (the build plan's L7 and L12) — the ports another service holds in
+   * AH's range for life: the made apps' serves and the previews serve
+   * (`MadeAppService.reservedPorts()`), closed ones included. One reservation
+   * set for both, so no port is handed out twice: `#allocatePort` reads it at
+   * every allocation, beside this service's own intents and the live
+   * listeners. Absent: no other holder. */
+  otherReservedPorts?: () => ReadonlySet<number>;
 }
 
 interface IntentFileShape {

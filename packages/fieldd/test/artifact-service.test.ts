@@ -874,6 +874,36 @@ describe("ArtifactService (AH-1 unit)", () => {
     });
   });
 
+  it("MA-3b: never allocates a port a made app holds (otherReservedPorts), read at every allocation", async () => {
+    const bridge = new FakeBridge();
+    const width = ARTIFACT_LIMITS.LISTEN_PORT_MAX - ARTIFACT_LIMITS.LISTEN_PORT_MIN + 1;
+    const after = (port: number) =>
+      ARTIFACT_LIMITS.LISTEN_PORT_MIN + ((port - ARTIFACT_LIMITS.LISTEN_PORT_MIN + 1) % width);
+    const made = new Set<number>([artifactPortCandidate(A)]);
+    const svc = new ArtifactService({
+      dataDir: makeDataDir(),
+      bridge,
+      maintenanceMs: false,
+      linkedLogin: () => TEST_LOGIN,
+      meshBus: true,
+      probe: async () => true,
+      otherReservedPorts: () => made,
+    });
+    cleanup.push(() => svc.dispose());
+    await svc.start();
+    await svc.publish(proxy(A));
+    const first = bridge.last().find((spec) => spec.name === `artifact:${A}`);
+    expect(first, "AH declared A's serve").toBeDefined();
+    expect(first?.listenPort, "A skips the made app's port").toBe(after(artifactPortCandidate(A)));
+
+    made.add(artifactPortCandidate(B));
+    await svc.publish(proxy(B));
+    const second = bridge.last().find((spec) => spec.name === `artifact:${B}`);
+    expect(second?.listenPort, "the made set is read again for B").toBe(
+      after(artifactPortCandidate(B)),
+    );
+  });
+
   it("does not add or mutate memory when the durable intent write fails", async () => {
     const bridge = new FakeBridge();
     let previewPreparations = 0;

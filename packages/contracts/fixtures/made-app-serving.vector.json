@@ -1,0 +1,28 @@
+{
+  "//": "MA-3b — the made apps' serving vector (`made-app-service.ts`), as `artifact-serving.vector.json` pins AH's. The port rule is AH-D4's over the same 10000–19999 range with the made domains (`MADE_APP_PORT_DOMAIN` + appId, `MADE_APP_PREVIEWS_PORT_DOMAIN` + deviceId; artifacts.ts), `10000 + u32be(sha256(domain + id)[0..4]) % 10000`, the first candidate before any linear probe. An app's serve is AH's routes form over its digest folder (`artifacts/made/<appId>/<digest>`) with the preview route onto `artifacts/previews/<previewId>`; the previews serve is ONE route over `artifacts/made-previews` and nothing else (the lead's ruling on L12). serveId = prefix + the first 16 base32 (lowercase, RFC 4648 alphabet, unpadded) of sha256(canonical JSON), the canonical JSON being key-sorted with route order kept. Computed independently of fieldd's code.",
+  "portDomain": "made-app-port-v1\u0000",
+  "previewsPortDomain": "made-app-previews-v1\u0000",
+  "appId": "cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+  "deviceId": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+  "portCandidate": 17055,
+  "previewsPortCandidate": 15587,
+  "app": {
+    "listenPort": 17055,
+    "allow": ["me@jamesyong42.com"],
+    "previewDir": "/var/lib/vibefield/artifacts/previews/01JC4MA0PV0000000000000001",
+    "folder": "/var/lib/vibefield/artifacts/made/cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c/b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e",
+    "canonicalJson": "{\"allow\":[\"me@jamesyong42.com\"],\"listenPort\":17055,\"routes\":[{\"allow\":[],\"dir\":\"/var/lib/vibefield/artifacts/previews/01JC4MA0PV0000000000000001\",\"prefix\":\"/.vibefield/preview\",\"stripPrefix\":false},{\"allow\":[],\"dir\":\"/var/lib/vibefield/artifacts/made/cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c/b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e\",\"prefix\":\"/\",\"stripPrefix\":false}],\"tls\":true,\"v\":1}",
+    "sha256": "9f55dbaa00adb8441c4e0eea2ff203cea76e9b371aad018d49e68e173c025b1c",
+    "fingerprint": "t5k5xkqavw4eihco",
+    "serveId": "artifact-made-cdc9b5a0f9dddc65-t5k5xkqavw4eihco"
+  },
+  "previews": {
+    "listenPort": 15587,
+    "allow": ["me@jamesyong42.com"],
+    "dir": "/var/lib/vibefield/artifacts/made-previews",
+    "canonicalJson": "{\"allow\":[\"me@jamesyong42.com\"],\"listenPort\":15587,\"routes\":[{\"allow\":[],\"dir\":\"/var/lib/vibefield/artifacts/made-previews\",\"prefix\":\"/\",\"stripPrefix\":false}],\"tls\":true,\"v\":1}",
+    "sha256": "d5aa338c83cc546e97f750a12f20ab32a41fd85a4752131a261044ea08cdb75d",
+    "fingerprint": "2wvdhdedzrkg5f7x",
+    "serveId": "artifact-made-previews-2wvdhdedzrkg5f7x"
+  }
+}
